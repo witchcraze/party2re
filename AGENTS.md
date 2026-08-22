@@ -36,6 +36,12 @@ This repository is a complete, clean-room reconstruction of the game known as Pa
 
 The original Party2 implementation is used only as a reference for understanding game behavior, rules, content, and design ideas. **No existing Party2 source code is to be reused.** The implementation language and architecture may differ completely from the original.
 
+The reference game's foundational logic, standard values, and calculated values
+may generally be carried forward when they represent intended game behavior.
+They must be independently re-expressed in the new domain model and
+implementation; this does not permit copying, translating, or mechanically
+rewriting the old source code.
+
 The goal is not merely to reproduce an old implementation. The goal is to create an OSS game that preserves the important characteristics of Party2 while providing a maintainable foundation for continued feature development.
 
 One of the central characteristics identified during the initial investigation is that Party2 grew through the addition of many independent game features. The new architecture must therefore make **continued feature expansion a first-class design goal**.
@@ -51,6 +57,10 @@ One of the central characteristics identified during the initial investigation i
 - Use the existing game only as a source of behavioral and functional requirements.
 - Reconstruct the implementation from the desired domain model and requirements.
 - Existing assets, including images, are not reused. Images and other visual assets will be recreated as new assets.
+- Asset names that contain distinctive proper names or other terms strongly
+  associated with a specific game are not reused. Such names should normally be
+  replaced with generic terminology, with the replacement decided per asset or
+  content group.
 
 The original project's `README.md` is not treated as a source of requirements for this reconstruction.
 
@@ -377,6 +387,10 @@ The following actions are explicitly prohibited unless a higher-level project de
 
 - Do not copy, port, translate, or mechanically rewrite existing Party2 source code.
 - Do not reuse existing Party2 images or other visual assets.
+- Do reuse intended foundational behavior, standard values, and calculated
+  values when independently reconstructed and reviewed.
+- Do not reuse distinctive game-specific asset names; replace them with
+  reviewed generic names.
 - Do not begin substantial implementation without an Issue.
 - Do not create an Issue or PR without using the repository template.
 - Do not implement non-trivial behavior without appropriate tests.

@@ -21,6 +21,12 @@ The old archive README states that the original source and license are
 unknown. Therefore, the old source and images must not be incorporated into
 the new implementation.
 
+Foundational game logic, standard values, and calculated values may generally
+be reused as behavioral requirements when independently reconstructed in the
+new implementation. Distinctive asset names that evoke a specific game are
+not reused; those names are reviewed individually and normally replaced with
+generic terminology.
+
 ## Reference inventory
 
 The archive currently contains approximately:
