@@ -1,0 +1,18 @@
+# Reference archives and extracted legacy sources must not be committed.
+party2-main.zip
+party2-main/
+
+# Go build and test artifacts.
+/bin/
+/dist/
+*.test
+coverage.out
+
+# Local configuration and environment files.
+.env
+.env.*
+!.env.example
+
+# Local runtime data.
+/data/
+/runtime/

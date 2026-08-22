@@ -1,0 +1,16 @@
+# .github/release.yml
+
+changelog:
+  categories:
+    - title: Enhancement 🎉
+      labels:
+        - enhancement
+    - title: Bug Fix 🐛
+      labels:
+        - bug
+    - title: Migration 🏠
+      labels:
+        - migration
+    - title: Other Changes
+      labels:
+        - "*"

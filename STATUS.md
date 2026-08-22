@@ -1,0 +1,122 @@
+# Status
+
+Last updated: Initial architecture session
+
+## Current phase
+
+**Version 1.0 Reconstruction / Refactoring — In Progress**
+
+Phase 0〜2（ゲーム理解・アーキテクチャ・ドメインモデル）は完了しています。
+
+現在は、これらの設計を実装へ移しながら、Version 1.0に必要なゲームの基盤と主要な挙動を新規実装する過程です。
+Version 1.0の完成条件は、既存プロジェクトの意味のあるゲーム機能を新規実装として再構築し、必要な画像を新規制作または承認済みプレースホルダーで準備することです。旧ソースコード・旧画像の移植は完成条件に含めません。
+この「リファクタリング／再構築フェーズ」は永続的なプロジェクト方針ではありません。Version 1.0を成立させるための一時的な開発フェーズです。
+
+### 永続するもの
+
+以下はVersion 1.0完成後も継続します。
+
+- Feature拡張を中心とした設計
+- Core / Component / Featureの責務分離
+- コンポーネント境界を実装言語から独立させる考え方
+- TDD
+- Issue / PR driven development
+- Architecture Review
+- 小さなチケット単位での開発
+- 依存ソフトウェアとライセンスの管理
+
+### 一時的なもの
+
+以下はVersion 1.0の再構築に必要な対応です。
+
+- 既存Party2の調査
+- 旧実装との挙動比較
+- 旧実装を使用しない新規実装への置き換え
+- 既存アセットの再制作
+- Version 1.0のための初期機能再構築
+- 旧実装に由来する制約の整理・除去
+
+Version 1.0完成後は、これらを通常の開発作業として扱わず、必要に応じて個別のIssueとして扱います。
+
+## Next action
+
+Complete the Version 1.0 feature and asset inventory, then start Phase 3 with the minimum executable Go project and development workflow.
+
+## Confirmed decisions
+
+- Existing Party2 source code will not be reused.
+- Existing Party2 assets/images will not be reused.
+- Existing Party2 is a behavioral/design reference.
+- `Created by Merino` may be acknowledged on the project page as the origin of the game.
+- Initial implementation language is Go.
+- Components are conceptually language-independent.
+- Future replacement of individual components by another language is allowed.
+- Start as a modular monolith.
+- Do not introduce microservices or remote protocols without a concrete requirement.
+- Core should remain small.
+- Feature Modules are first-class.
+- Battle is a reusable independent component.
+- Scheduled actions are a reusable concept for delayed game activities.
+- Domain events are available for meaningful decoupling, but should be used selectively.
+- Architecture review is required for substantial feature additions.
+- Software license candidates: MIT, Apache-2.0, AGPLv3.
+- Creative asset candidates: Creative Commons licenses.
+- Final licensing will be determined after implementation dependencies are known.
+- Durable persistence will use MariaDB.
+- Valkey will be used only for concrete cache, transient-state, queue, or coordination requirements.
+- Initial Go target is Go 1.26.7, subject to updating the pinned patch version when the project deliberately changes its supported toolchain.
+
+## Current conceptual model
+
+```text
+Core
+  Player
+  Character
+  Progression
+  Item
+  Inventory
+  Equipment
+  Currency
+  Time / Scheduling
+  Domain Events
+
+Shared Components
+  Battle
+  Adventure / Quest
+
+Features
+  Guild
+  Casino
+  Alchemy
+  Auction
+  Farming
+  Collection
+  Ranking
+  Events
+  ...
+```
+
+## Not yet decided
+
+- exact Go package layout;
+- database product;
+- API framework;
+- frontend technology;
+- final project license;
+- final asset licenses;
+- first production feature set;
+- deployment architecture.
+
+Do not make these decisions merely for completeness. Decide them when the implementation requires them.
+
+## Next action
+
+Start Phase 3 by creating the minimum executable Go project and development workflow.
+
+## Document references
+
+- `AGENTS.md` — rules that apply to current and future development.
+- `docs/architecture/` — permanent architecture.
+- `docs/design/` — permanent game/design model.
+- `docs/development/` — permanent development workflow.
+- `ROADMAP.md` — phase and future-work planning.
