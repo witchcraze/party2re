@@ -55,6 +55,12 @@ Rust Battle
 
 without requiring consumers to understand the implementation language.
 
+The initial in-process contract accepts exactly two participants and returns a
+win or draw result with the winner, loser, and turn count. The initial
+resolver uses deterministic minimum damage of one and does not know why the
+battle was started. More detailed battle rules belong to a later Battle rule
+issue and must preserve this consumer-facing boundary.
+
 ## Contract rules
 
 - Do not expose private persistence structures as contracts.
@@ -94,4 +100,3 @@ The application should expose game operations through a UI-independent applicati
 Initially this may be an internal API used by the GUI, tests, CLI tools, and other components. The design should avoid coupling the contract to a specific presentation technology so that appropriate operations can be exposed externally in the future.
 
 A possible future consumer is an AI Agent that plays the game through the same game operations available to a human player. This is an example of a future capability, not a requirement for the initial release.
-
