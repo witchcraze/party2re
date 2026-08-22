@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #31 job growth rules
+Last updated: Issue #21 player account and session lifecycle in progress
 
 ## Current phase
 
@@ -44,8 +44,8 @@ Phase 3 foundation, Character persistence, delayed activities, initial character
 state, level progression, job-based stat growth rules, items, inventory,
 reusable Battle contract, detailed Battle resolution, the first
 Adventure-to-Battle reward loop, job definitions/history, skill usage
-conditions, and equipment slots are in place. The next implementation
-objective is the Player account and session lifecycle through Issue #21.
+conditions, equipment slots, and initial assets are in place. Player account
+and session lifecycle is currently being implemented through Issue #21.
 
 ## Confirmed decisions
 

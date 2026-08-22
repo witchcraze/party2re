@@ -27,6 +27,12 @@ The implementation language is intentionally not part of the component's identit
 
 Does not own game-specific character state.
 
+Player persistence stores a salted, iterated password hash and never stores the
+supplied password. Session state is a separate durable record with explicit
+expiry and revocation. The initial implementation keeps these operations behind
+UI-independent application and repository contracts; it does not require
+Valkey.
+
 ### Character
 
 **Responsibility:** the player's in-game character and its fundamental state.
