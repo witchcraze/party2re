@@ -41,9 +41,9 @@ Version 1.0完成後は、これらを通常の開発作業として扱わず、
 ## Next action
 
 Phase 3 foundation, Character persistence, delayed activities, initial character
-state, and level progression are in place. The next implementation objective is
-to establish item definitions, item instances, and durable inventory ownership
-through Issue #11.
+state, level progression, items, inventory, and the reusable Battle contract are
+in place. The next implementation objective is to complete the first
+Adventure-to-Battle reward loop through Issue #13.
 
 ## Confirmed decisions
 
