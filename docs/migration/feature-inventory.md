@@ -193,6 +193,7 @@ The next small implementation units are tracked as follows:
 | Battle | [#12](https://github.com/witchcraze/party2re/issues/12) | Reusable deterministic Battle contract |
 | Adventure | [#13](https://github.com/witchcraze/party2re/issues/13) | One delayed Adventure flow using Battle |
 | Jobs | [#17](https://github.com/witchcraze/party2re/issues/17) | Job definitions, changes, and character job history |
+| Skills | [#18](https://github.com/witchcraze/party2re/issues/18) | Skill definitions, conditions, costs, and effects |
 
 Equipment, jobs, skills, maps, social systems, and economy features remain
 separate follow-up work and should not be added to these Issues implicitly.
