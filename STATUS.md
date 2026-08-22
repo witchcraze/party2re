@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #35 atomic delayed claims implemented
+Last updated: Issue #46 container and coverage workflow completed
 
 ## Current phase
 
@@ -48,6 +48,10 @@ conditions, equipment slots, and initial assets are in place. Player account
 and session lifecycle is implemented through Issue #21. Activity and
 Adventure claim reward application is atomic under concurrency through Issue
 #35.
+
+The current Compose workflow remains the development and integration-test
+environment. CI also publishes Go coverage reports for later review without
+enforcing a percentage threshold.
 
 ## Confirmed decisions
 
