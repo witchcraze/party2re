@@ -56,10 +56,10 @@ Rust Battle
 without requiring consumers to understand the implementation language.
 
 The initial in-process contract accepts exactly two participants and returns a
-win or draw result with the winner, loser, and turn count. The initial
-resolver uses deterministic minimum damage of one and does not know why the
-battle was started. More detailed battle rules belong to a later Battle rule
-issue and must preserve this consumer-facing boundary.
+win or draw result with the winner, loser, turn count, and selected reward. The
+initial resolver uses deterministic minimum damage of one and does not know why
+the battle was started. More detailed battle rules must preserve this
+consumer-facing boundary.
 
 Skill definitions return a small `Effect` value through the same public
 contract. Skill availability checks remain outside Battle and can depend on

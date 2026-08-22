@@ -123,6 +123,7 @@ func (s *Service) Claim(ctx context.Context, id string) (Adventure, error) {
 			{ID: character.ID, HP: character.Stats.HP, Attack: character.Stats.Attack, Defense: character.Stats.Defense},
 			{ID: AdventureEnemyID, HP: 8, Attack: 1, Defense: 0},
 		},
+		VictoryReward: corebattle.Reward{Experience: value.ExperienceReward},
 	})
 	if err != nil {
 		return Adventure{}, fmt.Errorf("resolve adventure battle: %w", err)

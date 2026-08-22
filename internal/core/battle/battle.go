@@ -5,6 +5,7 @@ import "errors"
 var (
 	ErrInvalidRequest     = errors.New("battle request is invalid")
 	ErrInvalidParticipant = errors.New("battle participant is invalid")
+	ErrInvalidReward      = errors.New("battle reward is invalid")
 )
 
 type Participant struct {
@@ -15,7 +16,10 @@ type Participant struct {
 }
 
 type Request struct {
-	Participants []Participant
+	Participants  []Participant
+	VictoryReward Reward
+	DefeatReward  Reward
+	DrawReward    Reward
 }
 
 type Outcome string
@@ -30,6 +34,14 @@ type Result struct {
 	WinnerID string
 	LoserID  string
 	Turns    int
+	Reward   Reward
+}
+
+type Reward struct {
+	Experience       int
+	Currency         int
+	ItemDefinitionID string
+	ItemQuantity     int
 }
 
 type Effect struct {
@@ -57,6 +69,11 @@ func (Engine) Resolve(request Request) (Result, error) {
 	if first.ID == second.ID {
 		return Result{}, ErrInvalidRequest
 	}
+	for _, reward := range []Reward{request.VictoryReward, request.DefeatReward, request.DrawReward} {
+		if err := validateReward(reward); err != nil {
+			return Result{}, err
+		}
+	}
 
 	firstHP, secondHP := first.HP, second.HP
 	turns := 0
@@ -65,21 +82,30 @@ func (Engine) Resolve(request Request) (Result, error) {
 		secondHP -= damage(first.Attack, second.Defense)
 		if secondHP <= 0 {
 			if firstHP-damage(second.Attack, first.Defense) <= 0 {
-				return Result{Outcome: OutcomeDraw, Turns: turns}, nil
+				return Result{Outcome: OutcomeDraw, Turns: turns, Reward: request.DrawReward}, nil
 			}
-			return Result{Outcome: OutcomeWin, WinnerID: first.ID, LoserID: second.ID, Turns: turns}, nil
+			return Result{Outcome: OutcomeWin, WinnerID: first.ID, LoserID: second.ID, Turns: turns, Reward: request.VictoryReward}, nil
 		}
 		firstHP -= damage(second.Attack, first.Defense)
 	}
 	if firstHP <= 0 {
-		return Result{Outcome: OutcomeWin, WinnerID: second.ID, LoserID: first.ID, Turns: turns}, nil
+		return Result{Outcome: OutcomeWin, WinnerID: second.ID, LoserID: first.ID, Turns: turns, Reward: request.DefeatReward}, nil
 	}
-	return Result{Outcome: OutcomeWin, WinnerID: first.ID, LoserID: second.ID, Turns: turns}, nil
+	return Result{Outcome: OutcomeWin, WinnerID: first.ID, LoserID: second.ID, Turns: turns, Reward: request.VictoryReward}, nil
 }
 
 func validateParticipant(value Participant) error {
 	if value.ID == "" || value.HP <= 0 || value.Attack < 0 || value.Defense < 0 {
 		return ErrInvalidParticipant
+	}
+	return nil
+}
+
+func validateReward(value Reward) error {
+	if value.Experience < 0 || value.Currency < 0 ||
+		(value.ItemDefinitionID == "" && value.ItemQuantity != 0) ||
+		(value.ItemDefinitionID != "" && value.ItemQuantity <= 0) {
+		return ErrInvalidReward
 	}
 	return nil
 }
