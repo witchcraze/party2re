@@ -15,13 +15,33 @@ var (
 type Definition struct {
 	ID   string
 	Name string
+	Slot Slot
 }
+
+type Slot string
+
+const (
+	SlotNone      Slot = ""
+	SlotMainHand  Slot = "main-hand"
+	SlotOffHand   Slot = "off-hand"
+	SlotBody      Slot = "body"
+	SlotAccessory Slot = "accessory"
+)
 
 func NewDefinition(id, name string) (Definition, error) {
 	if strings.TrimSpace(id) == "" || strings.TrimSpace(name) == "" {
 		return Definition{}, ErrInvalidDefinition
 	}
 	return Definition{ID: strings.TrimSpace(id), Name: strings.TrimSpace(name)}, nil
+}
+
+func NewEquipmentDefinition(id, name string, slot Slot) (Definition, error) {
+	value, err := NewDefinition(id, name)
+	if err != nil || slot == SlotNone {
+		return Definition{}, ErrInvalidDefinition
+	}
+	value.Slot = slot
+	return value, nil
 }
 
 type Instance struct {
