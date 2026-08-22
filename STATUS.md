@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Phase 3 project foundation
+Last updated: Issue #20 Battle resolution
 
 ## Current phase
 
@@ -41,10 +41,11 @@ Version 1.0完成後は、これらを通常の開発作業として扱わず、
 ## Next action
 
 Phase 3 foundation, Character persistence, delayed activities, initial character
-state, level progression, items, inventory, reusable Battle contract, the first
-Adventure-to-Battle reward loop, job definitions/history, and skill usage
-conditions are in place. The next implementation objective is to establish
-equipment slots and item eligibility through Issue #19.
+state, level progression, items, inventory, reusable Battle contract, detailed
+Battle resolution, the first Adventure-to-Battle reward loop, job
+definitions/history, skill usage conditions, and equipment slots are in place.
+The next implementation objective is to apply job growth rates during
+progression through Issue #31.
 
 ## Confirmed decisions
 
