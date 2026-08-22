@@ -1,0 +1,18 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and run tests
+        run: docker compose run --rm app
+      - name: Check formatting
+        run: test -z "$(docker compose run --rm app find . -name '*.go' -exec gofmt -l {} +)"
+      - name: Run static analysis
+        run: docker compose run --rm app go vet ./...

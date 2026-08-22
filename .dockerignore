@@ -1,0 +1,10 @@
+.git
+.gitignore
+party2-main.zip
+party2-main/
+data/
+runtime/
+bin/
+dist/
+*.test
+coverage.out

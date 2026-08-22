@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Initial architecture session
+Last updated: Phase 3 project foundation
 
 ## Current phase
 
@@ -40,7 +40,10 @@ Version 1.0完成後は、これらを通常の開発作業として扱わず、
 
 ## Next action
 
-Complete the Version 1.0 feature and asset inventory, then start Phase 3 with the minimum executable Go project and development workflow.
+Phase 3 has started: the minimum executable Go project, containerized development
+workflow, MariaDB Compose service, initial SQL migration, database boundary, and
+CI checks are now in place. The next implementation objective is character
+creation and persistence through Issue #4.
 
 ## Confirmed decisions
 
@@ -108,10 +111,6 @@ Features
 - deployment architecture.
 
 Do not make these decisions merely for completeness. Decide them when the implementation requires them.
-
-## Next action
-
-Start Phase 3 by creating the minimum executable Go project and development workflow.
 
 ## Document references
 

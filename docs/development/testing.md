@@ -58,6 +58,7 @@ If testing a component requires knowledge of another component's private impleme
 ## Related documents
 
 - [`../../AGENTS.md`](../../AGENTS.md) — mandatory TDD rules.
+- [`development-environment.md`](development-environment.md) — containerized local environment.
 - [`agent-workflow.md`](agent-workflow.md) — normal agent workflow.
 - [`issue-workflow.md`](issue-workflow.md) — how acceptance criteria and PRs are handled.
 - [`../architecture/interfaces.md`](../architecture/interfaces.md) — testing through component contracts.
@@ -67,7 +68,8 @@ If testing a component requires knowledge of another component's private impleme
 
 The project uses Go for the initial implementation.
 
-The canonical commands will be defined here when the Go project skeleton is established. They should always reflect commands that actually work in the repository; do not document speculative commands.
+The canonical commands run through Docker Compose so the host machine does not
+need a Go installation or downloaded Go dependencies.
 
 At minimum, the project is expected to define commands for:
 
@@ -76,4 +78,14 @@ At minimum, the project is expected to define commands for:
 - static analysis;
 - the complete test suite.
 
-The commands documented here are the authoritative commands for agents and reviewers. When they change, update this document in the same Issue/PR that changes the development workflow.
+From the repository root:
+
+```sh
+docker compose run --rm app find . -name '*.go' -exec gofmt -w {} +
+docker compose run --rm app go test ./...
+docker compose run --rm app go vet ./...
+```
+
+The commands documented here are the authoritative commands for agents and
+reviewers. When they change, update this document in the same Issue/PR that
+changes the development workflow.

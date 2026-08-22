@@ -100,6 +100,12 @@ Architecture Review
 
 依存ソフトウェアやアセットを追加する際には、ライセンスと出所を確認します。
 
+利用している外部ソフトウェアとライセンスは
+[`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md)で管理します。
+READMEには方針と参照先のみを記載し、詳細な依存関係や配布時の注意は
+同ファイルに記録します。画像・フォントなどのクリエイティブアセットは
+[`docs/assets/`](docs/assets/)で別途管理します。
+
 ## ドキュメント
 
 プロジェクトの設計・開発方針は以下にまとめています。
@@ -113,6 +119,8 @@ Architecture Review
 - [`docs/architecture/components.md`](docs/architecture/components.md) — コンポーネント定義
 - [`docs/architecture/feature-modules.md`](docs/architecture/feature-modules.md) — Feature Moduleの設計
 - [`docs/architecture/interfaces.md`](docs/architecture/interfaces.md) — コンポーネント間のインターフェースと契約
+- [`docs/development/development-environment.md`](docs/development/development-environment.md) — コンテナ化された開発環境
+- [`docs/development/testing.md`](docs/development/testing.md) — テスト・整形・静的解析の実行方法
 
 ## 開発フェーズ
 
