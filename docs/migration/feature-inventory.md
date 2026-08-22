@@ -216,6 +216,11 @@ starts at level 1, advances when its accumulated experience reaches the
 current-level threshold, and stops advancing at level 99. Stat growth remains
 outside this issue because its rules depend on job definitions.
 
+The initial Adventure is a one-hour delayed activity. When claimed after it is
+available, it resolves one Battle through the public Battle resolver contract;
+a win awards 20 experience and a draw or loss awards nothing. The result is
+stored and can only be claimed once.
+
 ## Version 1 completion checklist
 
 - [ ] Every feature group has an implementation Issue and acceptance criteria.
