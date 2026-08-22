@@ -16,6 +16,10 @@ The CI pipeline should progressively cover:
 
 The exact workflow and commands should reflect the actual repository and must not be documented speculatively.
 
+The current workflow runs the Go checks inside the development container
+defined by `Dockerfile.dev` and `compose.yaml`. MariaDB is started by Docker
+Compose for the integration tests.
+
 ## Docker image verification
 
 A Docker image is not considered valid merely because it builds.

@@ -14,6 +14,32 @@ Check:
 
 Record the reason and license information in the Issue/PR.
 
+## License record
+
+`THIRD_PARTY_LICENSES.md` is the authoritative human-readable record for
+software dependencies.
+
+For each direct dependency, record:
+
+- package name and exact version;
+- purpose;
+- repository or source URL;
+- license;
+- relevant copyright and distribution notices;
+- relevant transitive dependency licenses when they affect distribution.
+
+Update the file in the same Issue/PR that adds or changes a dependency. Keep
+`README.md` concise: it should describe the policy and link to
+`THIRD_PARTY_LICENSES.md`, not duplicate the full dependency inventory.
+
+`go.mod` and `go.sum` remain the machine-readable dependency records.
+Software dependency records do not replace the separate provenance and license
+records for images, fonts, or other creative assets.
+
+The development workflow runs Go and resolves dependencies inside Docker
+containers. Dependencies must not be installed into the host environment as
+part of normal project setup.
+
 ## Project license
 
 Candidates are currently:

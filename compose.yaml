@@ -1,0 +1,36 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    environment:
+      PARTY2_DB_DSN: party2:party2@tcp(mariadb:3306)/party2?parseTime=true
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    volumes:
+      - .:/workspace
+      - go-build-cache:/root/.cache/go-build
+      - go-mod-cache:/go/pkg/mod
+    command: ["go", "test", "./..."]
+
+  mariadb:
+    image: mariadb:latest
+    environment:
+      MARIADB_DATABASE: party2
+      MARIADB_USER: party2
+      MARIADB_PASSWORD: party2
+      MARIADB_ROOT_PASSWORD: root
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  go-build-cache:
+  go-mod-cache:
+  mariadb-data:

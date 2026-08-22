@@ -1,0 +1,10 @@
+FROM golang:1.26.7-bookworm
+
+WORKDIR /workspace
+
+COPY go.mod ./
+RUN go mod download
+
+COPY . .
+
+CMD ["go", "test", "./..."]
