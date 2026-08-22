@@ -40,6 +40,11 @@ unknown definitions fail explicitly.
   and licenses.
 
 Content data must not contain executable code, legacy source structure, legacy
-names, legacy image paths, or copied legacy assets. Dynamic rules are modeled
-as explicit behavior with tests rather than encoded as unevaluated expressions
-in JSON.
+image paths, or copied legacy assets. For Version 1 job content, reference job
+names may be retained as behavioral/content labels after individual review;
+names with strong association to another work are replaced with generic
+equivalents. This review is performed per name rather than by discarding all
+reference terminology: ordinary genre terms may remain when they do not carry
+a distinctive association, while names with strong associations are replaced
+with neutral Japanese names. Dynamic rules are modeled as explicit behavior
+with tests rather than encoded as unevaluated expressions in JSON.
