@@ -9,6 +9,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/progression"
 )
 
 const (
@@ -118,7 +119,7 @@ func (s *Service) Claim(ctx context.Context, id string) (Activity, error) {
 	if err != nil {
 		return Activity{}, err
 	}
-	if err := character.AddExperience(value.ExperienceReward); err != nil {
+	if _, err := progression.ApplyExperience(&character, value.ExperienceReward); err != nil {
 		return Activity{}, fmt.Errorf("apply activity reward: %w", err)
 	}
 	if err := s.characters.Update(ctx, character); err != nil {

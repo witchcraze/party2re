@@ -104,7 +104,7 @@ func TestClaimTrainingAwardsExperienceOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Claim() error = %v", err)
 	}
-	if !got.Claimed || characters.value.Experience != TrainingReward {
+	if !got.Claimed || characters.value.Experience != TrainingReward || characters.value.Level != 2 {
 		t.Fatalf("Claim() result = %#v, character = %#v", got, characters.value)
 	}
 	if _, err := service.Claim(context.Background(), activity.ID); !errors.Is(err, ErrAlreadyClaimed) {
