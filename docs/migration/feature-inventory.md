@@ -211,6 +211,11 @@ The new implementation keeps these values as generic domain behavior. Job
 identifiers and gender values are treated as data, while distinctive legacy
 names and assets are not reused.
 
+Experience uses the cumulative threshold `level * level * 10`. A character
+starts at level 1, advances when its accumulated experience reaches the
+current-level threshold, and stops advancing at level 99. Stat growth remains
+outside this issue because its rules depend on job definitions.
+
 ## Version 1 completion checklist
 
 - [ ] Every feature group has an implementation Issue and acceptance criteria.

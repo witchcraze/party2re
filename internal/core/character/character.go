@@ -60,14 +60,6 @@ func (cryptoRandomSource) Intn(max int) (int, error) {
 	return int(value.Int64()), nil
 }
 
-func (c *Character) AddExperience(value int) error {
-	if value < 0 {
-		return errors.New("experience cannot be negative")
-	}
-	c.Experience += value
-	return nil
-}
-
 func New(name string) (Character, error) {
 	return NewWithOptions(name, DefaultJobID, DefaultGender, cryptoRandomSource{})
 }
