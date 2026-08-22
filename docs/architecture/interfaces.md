@@ -61,6 +61,12 @@ initial resolver uses deterministic minimum damage of one and does not know why
 the battle was started. More detailed battle rules must preserve this
 consumer-facing boundary.
 
+The three request rewards are interpreted from the first participant's
+perspective: `VictoryReward` when it wins, `DefeatReward` when it loses, and
+`DrawReward` for a draw. Battle selects and returns the reward; the initiating
+feature decides whether and how that reward is applied to a player, character,
+inventory, or another recipient.
+
 Skill definitions return a small `Effect` value through the same public
 contract. Skill availability checks remain outside Battle and can depend on
 the character's job, level, MP, and an inventory ownership callback.

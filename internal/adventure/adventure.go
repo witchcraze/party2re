@@ -21,9 +21,10 @@ const (
 )
 
 var (
-	ErrNotFound       = errors.New("adventure not found")
-	ErrNotReady       = errors.New("adventure is not ready")
-	ErrAlreadyClaimed = errors.New("adventure result already claimed")
+	ErrNotFound          = errors.New("adventure not found")
+	ErrNotReady          = errors.New("adventure is not ready")
+	ErrAlreadyClaimed    = errors.New("adventure result already claimed")
+	ErrUnsupportedReward = errors.New("adventure reward type is unsupported")
 )
 
 type Adventure struct {
@@ -130,10 +131,14 @@ func (s *Service) Claim(ctx context.Context, id string) (Adventure, error) {
 	}
 	value.BattleResult = result
 	value.Resolved = true
-	if result.Outcome == corebattle.OutcomeWin && result.WinnerID == character.ID {
-		if _, err := progression.ApplyExperience(&character, value.ExperienceReward); err != nil {
+	if result.Reward.ItemDefinitionID != "" {
+		return Adventure{}, ErrUnsupportedReward
+	}
+	if result.Reward.Experience > 0 || result.Reward.Currency > 0 {
+		if _, err := progression.ApplyExperience(&character, result.Reward.Experience); err != nil {
 			return Adventure{}, fmt.Errorf("apply adventure reward: %w", err)
 		}
+		character.Money += result.Reward.Currency
 		if err := s.characters.Update(ctx, character); err != nil {
 			return Adventure{}, err
 		}

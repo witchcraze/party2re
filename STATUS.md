@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #21 player account and session lifecycle in progress
+Last updated: Issue #36 battle reward application in progress
 
 ## Current phase
 
@@ -45,7 +45,8 @@ state, level progression, job-based stat growth rules, items, inventory,
 reusable Battle contract, detailed Battle resolution, the first
 Adventure-to-Battle reward loop, job definitions/history, skill usage
 conditions, equipment slots, and initial assets are in place. Player account
-and session lifecycle is currently being implemented through Issue #21.
+and session lifecycle is implemented through Issue #21. Battle reward
+application is currently being implemented through Issue #36.
 
 ## Confirmed decisions
 
@@ -69,6 +70,9 @@ and session lifecycle is currently being implemented through Issue #21.
 - Final licensing will be determined after implementation dependencies are known.
 - Durable persistence will use MariaDB.
 - Valkey will be used only for concrete cache, transient-state, queue, or coordination requirements.
+- Session storage is currently MariaDB as the smallest implementation for the
+  existing persistence setup; moving sessions to Valkey remains a follow-up
+  once transient-state infrastructure is needed.
 - Initial Go target is Go 1.26.7, subject to updating the pinned patch version when the project deliberately changes its supported toolchain.
 
 ## Current conceptual model
