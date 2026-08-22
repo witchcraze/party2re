@@ -44,6 +44,7 @@ func (i *Inventory) Quantity(definitionID string) int {
 	if i == nil {
 		return 0
 	}
+
 	total := 0
 	for _, value := range i.Items {
 		if value.DefinitionID == definitionID {
@@ -51,6 +52,18 @@ func (i *Inventory) Quantity(definitionID string) int {
 		}
 	}
 	return total
+}
+
+func (i *Inventory) Find(instanceID string) (item.Instance, bool) {
+	if i == nil {
+		return item.Instance{}, false
+	}
+	for _, value := range i.Items {
+		if value.ID == instanceID {
+			return value, true
+		}
+	}
+	return item.Instance{}, false
 }
 
 func (i *Inventory) Consume(instanceID string, quantity int) error {

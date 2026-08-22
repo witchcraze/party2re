@@ -42,9 +42,9 @@ Version 1.0完成後は、これらを通常の開発作業として扱わず、
 
 Phase 3 foundation, Character persistence, delayed activities, initial character
 state, level progression, items, inventory, reusable Battle contract, the first
-Adventure-to-Battle reward loop, and job definitions/history are in place. The
-next implementation objective is to establish skill definitions and usage
-conditions through Issue #18.
+Adventure-to-Battle reward loop, job definitions/history, and skill usage
+conditions are in place. The next implementation objective is to establish
+equipment slots and item eligibility through Issue #19.
 
 ## Confirmed decisions
 
