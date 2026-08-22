@@ -34,6 +34,9 @@ Coverage is reported for inspection, not enforced as a pass/fail threshold.
 The CI workflow uploads both `coverage.out` (machine-readable) and
 `coverage.txt` (human-readable) as an artifact.
 
+The report is retained as a CI artifact so changes in coverage can be
+reviewed over time without making coverage percentage a release gate.
+
 ## Content test expectations
 
 Every Job and Item definition must be covered by catalog-wide validation:
