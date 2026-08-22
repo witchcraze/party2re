@@ -61,6 +61,10 @@ resolver uses deterministic minimum damage of one and does not know why the
 battle was started. More detailed battle rules belong to a later Battle rule
 issue and must preserve this consumer-facing boundary.
 
+Skill definitions return a small `Effect` value through the same public
+contract. Skill availability checks remain outside Battle and can depend on
+the character's job, level, MP, and an inventory ownership callback.
+
 ## Contract rules
 
 - Do not expose private persistence structures as contracts.

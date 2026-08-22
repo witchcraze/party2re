@@ -32,6 +32,11 @@ type Result struct {
 	Turns    int
 }
 
+type Effect struct {
+	Kind  string
+	Power int
+}
+
 type Resolver interface {
 	Resolve(request Request) (Result, error)
 }
