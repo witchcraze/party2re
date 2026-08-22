@@ -42,3 +42,20 @@ func (r *CharacterRepository) FindByID(ctx context.Context, id string) (corechar
 	}
 	return value, nil
 }
+
+func (r *CharacterRepository) Update(ctx context.Context, value corecharacter.Character) error {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE characters
+		SET name = ?, level = ?, experience = ?
+		WHERE id = ?
+	`, value.Name, value.Level, value.Experience, value.ID)
+	if err != nil {
+		return err
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return err
+	} else if affected == 0 {
+		return corecharacter.ErrNotFound
+	}
+	return nil
+}

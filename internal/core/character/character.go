@@ -24,6 +24,14 @@ type Character struct {
 	Experience int
 }
 
+func (c *Character) AddExperience(value int) error {
+	if value < 0 {
+		return errors.New("experience cannot be negative")
+	}
+	c.Experience += value
+	return nil
+}
+
 func New(name string) (Character, error) {
 	if !utf8.ValidString(name) || containsControl(name) {
 		return Character{}, ErrInvalidName
