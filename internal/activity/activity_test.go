@@ -3,6 +3,7 @@ package activity
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,36 +15,57 @@ type testClock struct{ now time.Time }
 func (c *testClock) Now() time.Time { return c.now }
 
 type activityRepositoryStub struct {
-	value Activity
+	mu         sync.Mutex
+	value      Activity
+	characters *characterRepositoryStub
 }
 
 func (r *activityRepositoryStub) Save(_ context.Context, value Activity) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.value = value
 	return nil
 }
 func (r *activityRepositoryStub) FindByID(_ context.Context, _ string) (Activity, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.value.ID == "" {
 		return Activity{}, ErrNotFound
 	}
 	return r.value, nil
 }
-func (r *activityRepositoryStub) Claim(_ context.Context, id string) error {
-	if r.value.ID != id || r.value.Claimed {
+func (r *activityRepositoryStub) ClaimAndApply(_ context.Context, id string, character corecharacter.Character) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.value.ID != id {
+		return ErrNotFound
+	}
+	if r.value.Claimed {
 		return ErrAlreadyClaimed
 	}
 	r.value.Claimed = true
+	r.characters.mu.Lock()
+	defer r.characters.mu.Unlock()
+	r.characters.value = character
 	return nil
 }
 
-type characterRepositoryStub struct{ value corecharacter.Character }
+type characterRepositoryStub struct {
+	mu    sync.Mutex
+	value corecharacter.Character
+}
 
 func (r *characterRepositoryStub) FindByID(_ context.Context, _ string) (corecharacter.Character, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.value.ID == "" {
 		return corecharacter.Character{}, corecharacter.ErrNotFound
 	}
 	return r.value, nil
 }
 func (r *characterRepositoryStub) Update(_ context.Context, value corecharacter.Character) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.value = value
 	return nil
 }
@@ -56,6 +78,7 @@ func newTestService(t *testing.T) (*Service, *testClock, *activityRepositoryStub
 	}
 	activities := &activityRepositoryStub{}
 	characters := &characterRepositoryStub{value: character}
+	activities.characters = characters
 	service, err := NewService(activities, characters)
 	if err != nil {
 		t.Fatal(err)
@@ -109,5 +132,45 @@ func TestClaimTrainingAwardsExperienceOnce(t *testing.T) {
 	}
 	if _, err := service.Claim(context.Background(), activity.ID); !errors.Is(err, ErrAlreadyClaimed) {
 		t.Fatalf("second Claim() error = %v, want %v", err, ErrAlreadyClaimed)
+	}
+}
+
+func TestClaimTrainingAppliesRewardAtMostOnceConcurrently(t *testing.T) {
+	service, clock, repository, characters := newTestService(t)
+	value, err := service.StartTraining(context.Background(), characters.value.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.now = value.AvailableAt
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, claimErr := service.Claim(context.Background(), value.ID)
+			errs <- claimErr
+		}()
+	}
+	wg.Wait()
+	close(errs)
+
+	var successes, alreadyClaimed int
+	for claimErr := range errs {
+		switch {
+		case claimErr == nil:
+			successes++
+		case errors.Is(claimErr, ErrAlreadyClaimed):
+			alreadyClaimed++
+		default:
+			t.Fatalf("Claim() error = %v", claimErr)
+		}
+	}
+	if successes != 1 || alreadyClaimed != 1 {
+		t.Fatalf("concurrent claims: successes = %d, already claimed = %d", successes, alreadyClaimed)
+	}
+	if characters.value.Experience != TrainingReward || !repository.value.Claimed {
+		t.Fatalf("concurrent claim state = activity %#v, character %#v", repository.value, characters.value)
 	}
 }

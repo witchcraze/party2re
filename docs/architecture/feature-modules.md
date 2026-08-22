@@ -25,6 +25,10 @@ The initial activity implementation is an Activity feature. It owns the
 training rules and activity state while consuming the public Character
 contract and persistence boundary. Scheduling makes an activity executable at
 a later time, but the scheduling concept does not own the training rules.
+When a delayed result is claimed, the feature persistence boundary must expose
+one atomic claim-and-apply operation. That operation compare-and-sets the
+claimed state and applies the resulting Core character state in the same
+transaction, so concurrent requests cannot duplicate rewards.
 
 The list is illustrative, not exhaustive.
 

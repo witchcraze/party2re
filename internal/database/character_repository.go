@@ -12,6 +12,11 @@ type CharacterRepository struct {
 	db *sql.DB
 }
 
+type sqlContextExecutor interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
 func NewCharacterRepository(db *sql.DB) (*CharacterRepository, error) {
 	if db == nil {
 		return nil, errors.New("database is nil")
@@ -49,7 +54,40 @@ func (r *CharacterRepository) FindByID(ctx context.Context, id string) (corechar
 }
 
 func (r *CharacterRepository) Update(ctx context.Context, value corecharacter.Character) error {
-	result, err := r.db.ExecContext(ctx, `
+	return updateCharacter(ctx, r.db, value)
+}
+
+func updateCharacter(ctx context.Context, executor sqlContextExecutor, value corecharacter.Character) error {
+	affected, err := executeCharacterUpdate(ctx, executor, value)
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return corecharacter.ErrNotFound
+	}
+	return nil
+}
+
+func updateCharacterAtomically(ctx context.Context, executor sqlContextExecutor, value corecharacter.Character) error {
+	affected, err := executeCharacterUpdate(ctx, executor, value)
+	if err != nil {
+		return err
+	}
+	if affected != 0 {
+		return nil
+	}
+
+	var id string
+	if err := executor.QueryRowContext(ctx, "SELECT id FROM characters WHERE id = ?", value.ID).Scan(&id); errors.Is(err, sql.ErrNoRows) {
+		return corecharacter.ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	return nil
+}
+
+func executeCharacterUpdate(ctx context.Context, executor sqlContextExecutor, value corecharacter.Character) (int64, error) {
+	result, err := executor.ExecContext(ctx, `
 		UPDATE characters
 		SET name = ?, job_id = ?, gender = ?, max_hp = ?, max_mp = ?, hp = ?, mp = ?,
 			attack = ?, defense = ?, agility = ?, money = ?, level = ?, experience = ?
@@ -58,12 +96,11 @@ func (r *CharacterRepository) Update(ctx context.Context, value corecharacter.Ch
 		value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility, value.Money,
 		value.Level, value.Experience, value.ID)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	if affected, err := result.RowsAffected(); err != nil {
-		return err
-	} else if affected == 0 {
-		return corecharacter.ErrNotFound
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
 	}
-	return nil
+	return affected, nil
 }

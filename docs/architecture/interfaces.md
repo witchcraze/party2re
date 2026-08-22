@@ -71,6 +71,14 @@ Skill definitions return a small `Effect` value through the same public
 contract. Skill availability checks remain outside Battle and can depend on
 the character's job, level, MP, and an inventory ownership callback.
 
+## Delayed-result claims
+
+Activity and Adventure claim persistence exposes a public claim-and-apply
+operation. The operation accepts the feature result and the resulting Core
+character state, then compare-and-sets the claimed flag and persists the
+character state in one transaction. A failed compare-and-set returns an
+already-claimed result without applying the character state.
+
 ## Contract rules
 
 - Do not expose private persistence structures as contracts.

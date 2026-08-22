@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #36 battle reward application in progress
+Last updated: Issue #35 atomic delayed claims implemented
 
 ## Current phase
 
@@ -45,8 +45,9 @@ state, level progression, job-based stat growth rules, items, inventory,
 reusable Battle contract, detailed Battle resolution, the first
 Adventure-to-Battle reward loop, job definitions/history, skill usage
 conditions, equipment slots, and initial assets are in place. Player account
-and session lifecycle is implemented through Issue #21. Battle reward
-application is currently being implemented through Issue #36.
+and session lifecycle is implemented through Issue #21. Activity and
+Adventure claim reward application is atomic under concurrency through Issue
+#35.
 
 ## Confirmed decisions
 

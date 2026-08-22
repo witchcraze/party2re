@@ -48,12 +48,11 @@ func (realClock) Now() time.Time {
 type ActivityRepository interface {
 	Save(ctx context.Context, value Activity) error
 	FindByID(ctx context.Context, id string) (Activity, error)
-	Claim(ctx context.Context, id string) error
+	ClaimAndApply(ctx context.Context, id string, character corecharacter.Character) error
 }
 
 type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
-	Update(ctx context.Context, value corecharacter.Character) error
 }
 
 type Service struct {
@@ -122,10 +121,7 @@ func (s *Service) Claim(ctx context.Context, id string) (Activity, error) {
 	if _, err := progression.ApplyExperience(&character, value.ExperienceReward); err != nil {
 		return Activity{}, fmt.Errorf("apply activity reward: %w", err)
 	}
-	if err := s.characters.Update(ctx, character); err != nil {
-		return Activity{}, err
-	}
-	if err := s.activities.Claim(ctx, value.ID); err != nil {
+	if err := s.activities.ClaimAndApply(ctx, value.ID, character); err != nil {
 		return Activity{}, err
 	}
 	value.Claimed = true

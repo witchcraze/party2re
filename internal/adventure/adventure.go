@@ -50,11 +50,11 @@ func (realClock) Now() time.Time { return time.Now().UTC() }
 type Repository interface {
 	Save(ctx context.Context, value Adventure) error
 	FindByID(ctx context.Context, id string) (Adventure, error)
+	ClaimAndApply(ctx context.Context, value Adventure, character corecharacter.Character) error
 }
 
 type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
-	Update(ctx context.Context, value corecharacter.Character) error
 }
 
 type Service struct {
@@ -139,12 +139,9 @@ func (s *Service) Claim(ctx context.Context, id string) (Adventure, error) {
 			return Adventure{}, fmt.Errorf("apply adventure reward: %w", err)
 		}
 		character.Money += result.Reward.Currency
-		if err := s.characters.Update(ctx, character); err != nil {
-			return Adventure{}, err
-		}
 	}
 	value.Claimed = true
-	if err := s.adventures.Save(ctx, value); err != nil {
+	if err := s.adventures.ClaimAndApply(ctx, value, character); err != nil {
 		return Adventure{}, err
 	}
 	return value, nil

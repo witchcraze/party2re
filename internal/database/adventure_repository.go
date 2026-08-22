@@ -7,6 +7,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
 type AdventureRepository struct {
@@ -92,4 +93,49 @@ func nullableInt(value int, valid bool) any {
 		return nil
 	}
 	return value
+}
+
+func (r *AdventureRepository) ClaimAndApply(ctx context.Context, value adventure.Adventure, character corecharacter.Character) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	result, err := tx.ExecContext(ctx, `
+		UPDATE adventures
+		SET outcome = ?, winner_id = ?, loser_id = ?, battle_turns = ?,
+			reward_experience = ?, reward_currency = ?, reward_item_definition_id = ?,
+			reward_item_quantity = ?, resolved = TRUE, claimed = TRUE
+		WHERE id = ? AND claimed = FALSE
+	`, nullableString(string(value.BattleResult.Outcome), value.Resolved),
+		nullableString(value.BattleResult.WinnerID, value.Resolved),
+		nullableString(value.BattleResult.LoserID, value.Resolved),
+		nullableInt(value.BattleResult.Turns, value.Resolved),
+		value.BattleResult.Reward.Experience, value.BattleResult.Reward.Currency,
+		nullableString(value.BattleResult.Reward.ItemDefinitionID, value.Resolved),
+		value.BattleResult.Reward.ItemQuantity, value.ID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return claimFailure(ctx, tx, "adventures", value.ID, adventure.ErrNotFound, adventure.ErrAlreadyClaimed)
+	}
+	if err := updateCharacterAtomically(ctx, tx, character); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
+	return nil
 }

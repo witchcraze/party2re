@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/witchcraze/party2re/internal/activity"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
 type ActivityRepository struct {
@@ -52,8 +53,19 @@ func (r *ActivityRepository) FindByID(ctx context.Context, id string) (activity.
 	return value, nil
 }
 
-func (r *ActivityRepository) Claim(ctx context.Context, id string) error {
-	result, err := r.db.ExecContext(ctx, `
+func (r *ActivityRepository) ClaimAndApply(ctx context.Context, id string, character corecharacter.Character) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	result, err := tx.ExecContext(ctx, `
 		UPDATE activities
 		SET claimed = TRUE
 		WHERE id = ? AND claimed = FALSE
@@ -66,17 +78,14 @@ func (r *ActivityRepository) Claim(ctx context.Context, id string) error {
 		return err
 	}
 	if affected == 0 {
-		value, findErr := r.FindByID(ctx, id)
-		if errors.Is(findErr, activity.ErrNotFound) {
-			return activity.ErrNotFound
-		}
-		if findErr != nil {
-			return findErr
-		}
-		if value.Claimed {
-			return activity.ErrAlreadyClaimed
-		}
-		return activity.ErrNotFound
+		return claimFailure(ctx, tx, "activities", id, activity.ErrNotFound, activity.ErrAlreadyClaimed)
 	}
+	if err := updateCharacterAtomically(ctx, tx, character); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
 	return nil
 }
