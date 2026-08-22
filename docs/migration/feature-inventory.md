@@ -175,6 +175,20 @@ H. Client presentation, complete asset set, and release operations
 The graph is approximate. A later Issue may split a slice further when its
 acceptance criteria become concrete.
 
+## Current implementation Issues
+
+The next small implementation units are tracked as follows:
+
+| Slice | Issue | Scope |
+| --- | --- | --- |
+| Progression | [#10](https://github.com/witchcraze/party2re/issues/10) | Level-up rules and experience thresholds |
+| Items / Inventory | [#11](https://github.com/witchcraze/party2re/issues/11) | Item definitions, instances, and ownership |
+| Battle | [#12](https://github.com/witchcraze/party2re/issues/12) | Reusable deterministic Battle contract |
+| Adventure | [#13](https://github.com/witchcraze/party2re/issues/13) | One delayed Adventure flow using Battle |
+
+Equipment, jobs, skills, maps, social systems, and economy features remain
+separate follow-up work and should not be added to these Issues implicitly.
+
 ## Version 1 completion checklist
 
 - [ ] Every feature group has an implementation Issue and acceptance criteria.
