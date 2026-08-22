@@ -12,15 +12,15 @@ var (
 )
 
 type Definition struct {
-	ID             string
-	Name           string
-	HPGrowth       int
-	MPGrowth       int
-	AttackGrowth   int
-	DefenseGrowth  int
-	AgilityGrowth  int
-	RequiredGender string
-	MinLevel       int
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	HPGrowth       int    `json:"hp_growth"`
+	MPGrowth       int    `json:"mp_growth"`
+	AttackGrowth   int    `json:"attack_growth"`
+	DefenseGrowth  int    `json:"defense_growth"`
+	AgilityGrowth  int    `json:"agility_growth"`
+	RequiredGender string `json:"required_gender,omitempty"`
+	MinLevel       int    `json:"min_level"`
 }
 
 func NewDefinition(id, name string, hp, mp, attack, defense, agility, minLevel int, gender string) (Definition, error) {

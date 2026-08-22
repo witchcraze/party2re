@@ -37,6 +37,29 @@ Owns invariants about its own state but should not become a God object containin
 
 **Responsibility:** level, experience, stats, and other fundamental character progression.
 
+Progression consumes job growth values through the public Job definition
+contract. It does not contain a built-in catalog of job-specific data.
+
+### Job
+
+**Responsibility:** job definitions, job availability rules, and character job
+history.
+
+Job definitions are content data, not executable progression logic. The initial
+catalog is stored outside Go source as validated data under
+`internal/core/job/data/`. The Job component loads and validates that data at
+startup or construction time, then exposes definitions through a small lookup
+contract. Consumers do not access the data file or catalog map directly.
+
+The data file may contain stable IDs, display names, growth values, and simple
+requirements. Dynamic requirements and dynamic growth formulas require explicit
+rules and tests; they must not be approximated by silently replacing them with
+fixed values.
+
+Visual asset paths, provenance, and licenses are maintained separately from
+domain definitions in the asset documentation and asset manifest. Job data
+must not embed legacy image paths or legacy asset bytes.
+
 ### Item
 
 **Responsibility:** item definitions and concrete item instances.
