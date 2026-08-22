@@ -216,8 +216,10 @@ names and assets are not reused.
 
 Experience uses the cumulative threshold `level * level * 10`. A character
 starts at level 1, advances when its accumulated experience reaches the
-current-level threshold, and stops advancing at level 99. Stat growth remains
-outside this issue because its rules depend on job definitions.
+current-level threshold, and stops advancing at level 99. When a job definition
+is supplied, each level-up applies an independent random value from `0` through
+the job's growth rate for HP, MP, attack, defense, and agility. HP always gains
+one additional minimum point; current HP and MP are not restored.
 
 The initial Adventure is a one-hour delayed activity. When claimed after it is
 available, it resolves one Battle through the public Battle resolver contract;
