@@ -38,6 +38,22 @@ func TestServiceCreateSavesCharacter(t *testing.T) {
 	}
 }
 
+func TestServiceCreateWithOptionsSavesInitialIdentity(t *testing.T) {
+	repository := &repositoryStub{}
+	service, _ := NewService(repository)
+
+	got, err := service.CreateWithOptions(context.Background(), "Alice", CreationOptions{
+		JobID:  "starter-2",
+		Gender: "female",
+	})
+	if err != nil {
+		t.Fatalf("CreateWithOptions() error = %v", err)
+	}
+	if got.JobID != "starter-2" || got.Gender != "female" || repository.saved.Stats != got.Stats {
+		t.Fatalf("CreateWithOptions() = %#v, saved %#v", got, repository.saved)
+	}
+}
+
 func TestServiceCreateRejectsInvalidInputWithoutSaving(t *testing.T) {
 	repository := &repositoryStub{}
 	service, _ := NewService(repository)

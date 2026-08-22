@@ -21,19 +21,24 @@ func NewCharacterRepository(db *sql.DB) (*CharacterRepository, error) {
 
 func (r *CharacterRepository) Save(ctx context.Context, value corecharacter.Character) error {
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO characters (id, name, level, experience)
-		VALUES (?, ?, ?, ?)
-	`, value.ID, value.Name, value.Level, value.Experience)
+		INSERT INTO characters
+			(id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, value.ID, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP,
+		value.Stats.HP, value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility,
+		value.Money, value.Level, value.Experience)
 	return err
 }
 
 func (r *CharacterRepository) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
 	var value corecharacter.Character
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, name, level, experience
+		SELECT id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience
 		FROM characters
 		WHERE id = ?
-	`, id).Scan(&value.ID, &value.Name, &value.Level, &value.Experience)
+	`, id).Scan(&value.ID, &value.Name, &value.JobID, &value.Gender, &value.Stats.MaxHP, &value.Stats.MaxMP,
+		&value.Stats.HP, &value.Stats.MP, &value.Stats.Attack, &value.Stats.Defense, &value.Stats.Agility,
+		&value.Money, &value.Level, &value.Experience)
 	if errors.Is(err, sql.ErrNoRows) {
 		return corecharacter.Character{}, corecharacter.ErrNotFound
 	}
@@ -46,9 +51,12 @@ func (r *CharacterRepository) FindByID(ctx context.Context, id string) (corechar
 func (r *CharacterRepository) Update(ctx context.Context, value corecharacter.Character) error {
 	result, err := r.db.ExecContext(ctx, `
 		UPDATE characters
-		SET name = ?, level = ?, experience = ?
+		SET name = ?, job_id = ?, gender = ?, max_hp = ?, max_mp = ?, hp = ?, mp = ?,
+			attack = ?, defense = ?, agility = ?, money = ?, level = ?, experience = ?
 		WHERE id = ?
-	`, value.Name, value.Level, value.Experience, value.ID)
+	`, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP, value.Stats.HP,
+		value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility, value.Money,
+		value.Level, value.Experience, value.ID)
 	if err != nil {
 		return err
 	}

@@ -40,10 +40,10 @@ Version 1.0完成後は、これらを通常の開発作業として扱わず、
 
 ## Next action
 
-Phase 3 has started: the minimum executable Go project, containerized development
-workflow, MariaDB Compose service, initial SQL migration, database boundary, and
-CI checks are now in place. The next implementation objective is character
-creation and persistence through Issue #4.
+Phase 3 foundation, Character persistence, and the first delayed activity loop
+are in place. The next implementation objective is to complete initial
+character identity, base stats, and starting currency through Issue #24, then
+apply the resulting progression contract in Issue #10.
 
 ## Confirmed decisions
 

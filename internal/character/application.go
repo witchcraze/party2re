@@ -18,6 +18,11 @@ type Service struct {
 	repository Repository
 }
 
+type CreationOptions struct {
+	JobID  string
+	Gender string
+}
+
 func NewService(repository Repository) (*Service, error) {
 	if repository == nil {
 		return nil, errors.New("character repository is nil")
@@ -26,13 +31,24 @@ func NewService(repository Repository) (*Service, error) {
 }
 
 func (s *Service) Create(ctx context.Context, name string) (corecharacter.Character, error) {
-	value, err := corecharacter.New(name)
+	return s.CreateWithOptions(ctx, name, CreationOptions{})
+}
+
+func (s *Service) CreateWithOptions(ctx context.Context, name string, options CreationOptions) (corecharacter.Character, error) {
+	if options.JobID == "" {
+		options.JobID = corecharacter.DefaultJobID
+	}
+	if options.Gender == "" {
+		options.Gender = corecharacter.DefaultGender
+	}
+	value, err := corecharacter.NewWithOptions(name, options.JobID, options.Gender, nil)
 	if err != nil {
 		return corecharacter.Character{}, err
 	}
 	if err := s.repository.Save(ctx, value); err != nil {
 		return corecharacter.Character{}, err
 	}
+
 	return value, nil
 }
 

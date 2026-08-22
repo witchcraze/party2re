@@ -187,6 +187,7 @@ The next small implementation units are tracked as follows:
 
 | Slice | Issue | Scope |
 | --- | --- | --- |
+| Character initialization | [#24](https://github.com/witchcraze/party2re/issues/24) | Initial identity, base stats, and starting currency |
 | Progression | [#10](https://github.com/witchcraze/party2re/issues/10) | Level-up rules and experience thresholds |
 | Items / Inventory | [#11](https://github.com/witchcraze/party2re/issues/11) | Item definitions, instances, and ownership |
 | Battle | [#12](https://github.com/witchcraze/party2re/issues/12) | Reusable deterministic Battle contract |
@@ -194,6 +195,21 @@ The next small implementation units are tracked as follows:
 
 Equipment, jobs, skills, maps, social systems, and economy features remain
 separate follow-up work and should not be added to these Issues implicitly.
+
+### Initial character values
+
+The reference implementation establishes the following behavioral requirements
+for a newly created character:
+
+- level 1 and 0 experience;
+- starting currency of 200;
+- maximum HP in the inclusive range 30-32;
+- maximum MP, current MP, attack, defense, and agility in the inclusive range
+  6-8, with current HP and MP initialized to their maximum values.
+
+The new implementation keeps these values as generic domain behavior. Job
+identifiers and gender values are treated as data, while distinctive legacy
+names and assets are not reused.
 
 ## Version 1 completion checklist
 

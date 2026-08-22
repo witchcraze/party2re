@@ -1,0 +1,13 @@
+ALTER TABLE characters
+    ADD COLUMN job_id VARCHAR(64) NOT NULL DEFAULT 'starter' AFTER name,
+    ADD COLUMN gender VARCHAR(32) NOT NULL DEFAULT 'unspecified' AFTER job_id,
+    ADD COLUMN max_hp INT NOT NULL DEFAULT 30 AFTER gender,
+    ADD COLUMN max_mp INT NOT NULL DEFAULT 6 AFTER max_hp,
+    ADD COLUMN hp INT NOT NULL DEFAULT 30 AFTER max_mp,
+    ADD COLUMN mp INT NOT NULL DEFAULT 6 AFTER hp,
+    ADD COLUMN attack INT NOT NULL DEFAULT 6 AFTER mp,
+    ADD COLUMN defense INT NOT NULL DEFAULT 6 AFTER attack,
+    ADD COLUMN agility INT NOT NULL DEFAULT 6 AFTER defense,
+    ADD COLUMN money BIGINT NOT NULL DEFAULT 200 AFTER agility;
+
+INSERT IGNORE INTO schema_migrations (version) VALUES ('004_character_initial_state');
