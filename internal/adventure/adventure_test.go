@@ -37,6 +37,14 @@ func (r *characterRepositoryStub) Update(_ context.Context, value corecharacter.
 	return nil
 }
 
+type battleResolverStub struct {
+	result corebattle.Result
+}
+
+func (b battleResolverStub) Resolve(corebattle.Request) (corebattle.Result, error) {
+	return b.result, nil
+}
+
 func newTestService(t *testing.T) (*Service, *testClock, *repositoryStub, *characterRepositoryStub) {
 	t.Helper()
 	character, err := corecharacter.New("Alice")
@@ -85,5 +93,47 @@ func TestAdventureClaimsBattleResultAndAwardsRewardOnce(t *testing.T) {
 	}
 	if _, err := service.Claim(context.Background(), value.ID); !errors.Is(err, ErrAlreadyClaimed) {
 		t.Fatalf("second Claim() error = %v, want %v", err, ErrAlreadyClaimed)
+	}
+}
+
+func TestAdventureAppliesSelectedBattleCurrencyReward(t *testing.T) {
+	service, clock, repository, characters := newTestService(t)
+	service.battle = battleResolverStub{result: corebattle.Result{
+		Outcome:  corebattle.OutcomeWin,
+		WinnerID: characters.value.ID,
+		Reward:   corebattle.Reward{Currency: 15},
+	}}
+	value, err := service.Start(context.Background(), characters.value.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.now = value.AvailableAt
+
+	if _, err := service.Claim(context.Background(), value.ID); err != nil {
+		t.Fatal(err)
+	}
+	if characters.value.Money != 215 {
+		t.Fatalf("Money = %d, want 215", characters.value.Money)
+	}
+	if repository.value.BattleResult.Reward.Currency != 15 {
+		t.Fatalf("saved reward = %#v, want currency 15", repository.value.BattleResult.Reward)
+	}
+}
+
+func TestAdventureRejectsUnsupportedItemReward(t *testing.T) {
+	service, clock, _, characters := newTestService(t)
+	service.battle = battleResolverStub{result: corebattle.Result{
+		Outcome:  corebattle.OutcomeWin,
+		WinnerID: characters.value.ID,
+		Reward:   corebattle.Reward{ItemDefinitionID: "potion", ItemQuantity: 1},
+	}}
+	value, err := service.Start(context.Background(), characters.value.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.now = value.AvailableAt
+
+	if _, err := service.Claim(context.Background(), value.ID); !errors.Is(err, ErrUnsupportedReward) {
+		t.Fatalf("Claim() error = %v, want %v", err, ErrUnsupportedReward)
 	}
 }

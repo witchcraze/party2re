@@ -28,10 +28,12 @@ The implementation language is intentionally not part of the component's identit
 Does not own game-specific character state.
 
 Player persistence stores a salted, iterated password hash and never stores the
-supplied password. Session state is a separate durable record with explicit
-expiry and revocation. The initial implementation keeps these operations behind
-UI-independent application and repository contracts; it does not require
-Valkey.
+supplied password. Session state is a separate record with explicit expiry and
+revocation. It is currently stored in MariaDB because that is the configured
+persistence system; this is an implementation choice, not a claim that
+sessions are durable game data. The repository contract leaves room to move
+session storage to Valkey when a concrete transient-state requirement
+justifies introducing it.
 
 ### Character
 

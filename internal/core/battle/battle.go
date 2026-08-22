@@ -34,7 +34,10 @@ type Result struct {
 	WinnerID string
 	LoserID  string
 	Turns    int
-	Reward   Reward
+	// Reward is selected from the first participant's perspective.
+	// VictoryReward applies when the first participant wins, DefeatReward when
+	// it loses, and DrawReward for a draw.
+	Reward Reward
 }
 
 type Reward struct {
