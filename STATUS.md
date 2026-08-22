@@ -41,9 +41,10 @@ Version 1.0完成後は、これらを通常の開発作業として扱わず、
 ## Next action
 
 Phase 3 foundation, Character persistence, delayed activities, initial character
-state, level progression, items, inventory, and the reusable Battle contract are
-in place. The next implementation objective is to complete the first
-Adventure-to-Battle reward loop through Issue #13.
+state, level progression, items, inventory, reusable Battle contract, and the
+first Adventure-to-Battle reward loop are in place. The next implementation
+objective is to establish job definitions and character job history through
+Issue #17.
 
 ## Confirmed decisions
 
