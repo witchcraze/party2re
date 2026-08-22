@@ -3,6 +3,7 @@ package adventure
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,25 +15,58 @@ type testClock struct{ now time.Time }
 
 func (c *testClock) Now() time.Time { return c.now }
 
-type repositoryStub struct{ value Adventure }
+type repositoryStub struct {
+	mu         sync.Mutex
+	value      Adventure
+	characters *characterRepositoryStub
+}
 
-func (r *repositoryStub) Save(_ context.Context, value Adventure) error { r.value = value; return nil }
+func (r *repositoryStub) Save(_ context.Context, value Adventure) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.value = value
+	return nil
+}
 func (r *repositoryStub) FindByID(_ context.Context, _ string) (Adventure, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.value.ID == "" {
 		return Adventure{}, ErrNotFound
 	}
 	return r.value, nil
 }
+func (r *repositoryStub) ClaimAndApply(_ context.Context, value Adventure, character corecharacter.Character) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.value.ID != value.ID {
+		return ErrNotFound
+	}
+	if r.value.Claimed {
+		return ErrAlreadyClaimed
+	}
+	r.value = value
+	r.characters.mu.Lock()
+	defer r.characters.mu.Unlock()
+	r.characters.value = character
+	return nil
+}
 
-type characterRepositoryStub struct{ value corecharacter.Character }
+type characterRepositoryStub struct {
+	mu    sync.Mutex
+	value corecharacter.Character
+}
 
 func (r *characterRepositoryStub) FindByID(_ context.Context, _ string) (corecharacter.Character, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.value.ID == "" {
 		return corecharacter.Character{}, corecharacter.ErrNotFound
 	}
 	return r.value, nil
 }
 func (r *characterRepositoryStub) Update(_ context.Context, value corecharacter.Character) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.value = value
 	return nil
 }
@@ -53,6 +87,7 @@ func newTestService(t *testing.T) (*Service, *testClock, *repositoryStub, *chara
 	}
 	adventures := &repositoryStub{}
 	characters := &characterRepositoryStub{value: character}
+	adventures.characters = characters
 	clock := &testClock{now: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)}
 	service, err := NewServiceWithClock(adventures, characters, corebattle.Engine{}, clock)
 	if err != nil {
@@ -135,5 +170,45 @@ func TestAdventureRejectsUnsupportedItemReward(t *testing.T) {
 
 	if _, err := service.Claim(context.Background(), value.ID); !errors.Is(err, ErrUnsupportedReward) {
 		t.Fatalf("Claim() error = %v, want %v", err, ErrUnsupportedReward)
+	}
+}
+
+func TestAdventureClaimsRewardAtMostOnceConcurrently(t *testing.T) {
+	service, clock, repository, characters := newTestService(t)
+	value, err := service.Start(context.Background(), characters.value.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.now = value.AvailableAt
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, claimErr := service.Claim(context.Background(), value.ID)
+			errs <- claimErr
+		}()
+	}
+	wg.Wait()
+	close(errs)
+
+	var successes, alreadyClaimed int
+	for claimErr := range errs {
+		switch {
+		case claimErr == nil:
+			successes++
+		case errors.Is(claimErr, ErrAlreadyClaimed):
+			alreadyClaimed++
+		default:
+			t.Fatalf("Claim() error = %v", claimErr)
+		}
+	}
+	if successes != 1 || alreadyClaimed != 1 {
+		t.Fatalf("concurrent claims: successes = %d, already claimed = %d", successes, alreadyClaimed)
+	}
+	if characters.value.Experience != AdventureReward || !repository.value.Claimed {
+		t.Fatalf("concurrent claim state = adventure %#v, character %#v", repository.value, characters.value)
 	}
 }

@@ -2,7 +2,9 @@ package activity_test
 
 import (
 	"context"
+	"errors"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -88,5 +90,107 @@ func TestTrainingPersistsResultAndCharacterAcrossServiceRestart(t *testing.T) {
 	}
 	if _, err := restarted.Claim(ctx, scheduled.ID); err == nil {
 		t.Fatal("restarted service claimed activity twice")
+	}
+}
+
+func TestConcurrentTrainingClaimsApplyRewardOnce(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	ctx := context.Background()
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	characters, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	characterService, err := character.NewService(characters)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := characterService.Create(ctx, "Concurrent Training")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	start := time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)
+	clock := &fixedClock{now: start}
+	activities, err := database.NewActivityRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	starter, err := activity.NewServiceWithClock(activities, characters, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scheduled, err := starter.StartTraining(ctx, value.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.now = scheduled.AvailableAt
+
+	firstRepository, err := database.NewActivityRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondRepository, err := database.NewActivityRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := activity.NewServiceWithClock(firstRepository, characters, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := activity.NewServiceWithClock(secondRepository, characters, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	for _, service := range []*activity.Service{first, second} {
+		wg.Add(1)
+		go func(service *activity.Service) {
+			defer wg.Done()
+			_, claimErr := service.Claim(ctx, scheduled.ID)
+			errs <- claimErr
+		}(service)
+	}
+	wg.Wait()
+	close(errs)
+
+	var successes, alreadyClaimed int
+	for claimErr := range errs {
+		switch {
+		case claimErr == nil:
+			successes++
+		case errors.Is(claimErr, activity.ErrAlreadyClaimed):
+			alreadyClaimed++
+		default:
+			t.Fatalf("Claim() error = %v", claimErr)
+		}
+	}
+	if successes != 1 || alreadyClaimed != 1 {
+		t.Fatalf("concurrent claims: successes = %d, already claimed = %d", successes, alreadyClaimed)
+	}
+
+	restoredCharacter, err := characters.FindByID(ctx, value.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restoredCharacter.Experience != activity.TrainingReward {
+		t.Fatalf("character experience = %d, want %d", restoredCharacter.Experience, activity.TrainingReward)
+	}
+	restoredActivity, err := activities.FindByID(ctx, scheduled.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !restoredActivity.Claimed {
+		t.Fatal("activity was not claimed")
 	}
 }
