@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="128" viewBox="0 0 256 128">
+  <rect width="256" height="128" fill="#37474f"/>
+  <path d="M32 96 72 32l40 64zM144 96l40-64 40 64z" fill="#90a4ae"/>
+  <text x="128" y="118" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#fff">BATTLE</text>
+</svg>
