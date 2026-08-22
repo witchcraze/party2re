@@ -21,6 +21,11 @@ features/
   events/
 ```
 
+The initial activity implementation is an Activity feature. It owns the
+training rules and activity state while consuming the public Character
+contract and persistence boundary. Scheduling makes an activity executable at
+a later time, but the scheduling concept does not own the training rules.
+
 The list is illustrative, not exhaustive.
 
 ## Ownership
