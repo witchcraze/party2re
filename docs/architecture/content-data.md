@@ -48,10 +48,3 @@ reference terminology: ordinary genre terms may remain when they do not carry
 a distinctive association, while names with strong associations are replaced
 with neutral Japanese names. Dynamic rules are modeled as explicit behavior
 with tests rather than encoded as unevaluated expressions in JSON.
-
-Catalog-wide validation is part of the test contract. Every loaded definition
-is checked for required fields, valid ranges, unique identifiers, and
-resolvable references. Shared rules use table-driven boundary tests, while
-definitions selecting a special rule must have a matching special-rule test.
-Coverage is reported by CI for later review, but no percentage threshold is
-currently enforced.

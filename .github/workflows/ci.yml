@@ -11,15 +11,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - name: Build and run tests
-        run: docker compose run --rm app sh -c 'go test ./... -coverprofile=coverage.out -covermode=atomic && go tool cover -func=coverage.out > coverage.txt && cat coverage.txt'
-      - name: Upload coverage reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: go-coverage
-          path: |
-            coverage.out
-            coverage.txt
-          if-no-files-found: error
+        run: docker compose run --rm app
       - name: Check formatting
         run: test -z "$(docker compose run --rm app find . -name '*.go' -exec gofmt -l {} +)"
       - name: Run static analysis
