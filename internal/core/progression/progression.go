@@ -34,6 +34,20 @@ func ApplyExperience(value *character.Character, amount int) (int, error) {
 	return ApplyExperienceWithJob(value, amount, job.Definition{}, zeroRandomSource{})
 }
 
+func ApplyExperienceWithProvider(value *character.Character, amount int, provider job.DefinitionProvider, random character.RandomSource) (int, error) {
+	if value == nil {
+		return 0, ErrNilCharacter
+	}
+	if provider == nil {
+		return 0, ErrInvalidGrowth
+	}
+	definition, err := provider.FindByID(value.JobID)
+	if err != nil {
+		return 0, err
+	}
+	return ApplyExperienceWithJob(value, amount, definition, random)
+}
+
 // ApplyExperienceWithJob awards experience and applies job growth for each
 // earned level. Current HP and MP are intentionally not restored.
 func ApplyExperienceWithJob(value *character.Character, amount int, definition job.Definition, random character.RandomSource) (int, error) {

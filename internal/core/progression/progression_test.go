@@ -187,6 +187,28 @@ func TestApplyExperienceWithJobRejectsInvalidGrowthAndRandomSource(t *testing.T)
 	}
 }
 
+func TestApplyExperienceWithProviderUsesCharacterJobID(t *testing.T) {
+	value, err := character.New("Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	value.JobID = "job-01"
+	value.Stats = character.Stats{MaxHP: 30, HP: 30, MaxMP: 6, MP: 6, Attack: 6, Defense: 6, Agility: 6}
+	catalog, err := job.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	random := &sequenceRandomSource{values: []int{0, 0, 0, 0, 0}}
+
+	levels, err := ApplyExperienceWithProvider(&value, 10, catalog, random)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if levels != 1 || value.Stats.MaxHP != 31 || value.Stats.MaxMP != 6 {
+		t.Fatalf("levels = %d, stats = %#v", levels, value.Stats)
+	}
+}
+
 type sequenceRandomSource struct {
 	values []int
 	index  int
