@@ -405,6 +405,25 @@ The following rules apply to every coding agent session.
 
 Do not begin substantial implementation from an informal request without an Issue.
 
+### Branch strategy
+
+Keep `main` as the integration branch. Do not implement Issue work directly on
+`main`.
+
+Before editing:
+
+1. update a clean local `main` with `git pull --ff-only origin main`;
+2. create one new branch for the Issue;
+3. use a branch name that includes the Issue number and a short purpose, such
+   as `feature/issue-4-character-persistence`;
+4. confirm `git status` is clean before making changes.
+
+Commit and push only the Issue's changes to its branch. Open a PR from that
+branch to `main`, wait for CI and review, then merge the PR. After merging,
+delete the local and remote Issue branch before starting another Issue. If
+`main` advances while a PR is open, update the PR branch and rerun validation
+before merging.
+
 ### Select a bounded task
 
 Work on an existing Issue whenever possible.
