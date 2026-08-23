@@ -1,5 +1,6 @@
 .git
 .gitignore
+.github
 party2-main.zip
 party2-main/
 data/
@@ -8,3 +9,12 @@ bin/
 dist/
 *.test
 coverage.out
+coverage.txt
+Dockerfile.dev
+compose.yaml
+docs/
+assets/
+AGENTS.md
+ROADMAP.md
+STATUS.md
+THIRD_PARTY_LICENSES.md

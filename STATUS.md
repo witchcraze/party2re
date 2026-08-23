@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #51 loaded Item content catalog completed
+Last updated: Issue #88 — production container image and CI improvements
 
 ## Current phase
 
