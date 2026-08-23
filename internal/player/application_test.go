@@ -34,16 +34,23 @@ func (r *playerRepositoryStub) FindByID(context.Context, string) (coreplayer.Pla
 }
 
 type sessionRepositoryStub struct {
+	value     coreplayer.Session
 	saveErr   error
 	revokeErr error
 }
 
-func (r *sessionRepositoryStub) Save(context.Context, coreplayer.Session) error {
+func (r *sessionRepositoryStub) Save(_ context.Context, s coreplayer.Session) error {
+	if r.saveErr == nil {
+		r.value = s
+	}
 	return r.saveErr
 }
 
 func (r *sessionRepositoryStub) FindByID(context.Context, string) (coreplayer.Session, error) {
-	return coreplayer.Session{}, errors.New("session not found")
+	if r.value.ID == "" {
+		return coreplayer.Session{}, errors.New("session not found")
+	}
+	return r.value, nil
 }
 
 func (r *sessionRepositoryStub) Revoke(context.Context, string, time.Time) error {
@@ -123,5 +130,68 @@ func TestLogoutDoesNotLogSessionValue(t *testing.T) {
 	}
 	if strings.Contains(output.String(), "session-value") {
 		t.Fatalf("log contains session value: %s", output.String())
+	}
+}
+
+func TestLoginSuccessCreatesActiveSession(t *testing.T) {
+	player, err := coreplayer.New("bob", "correct-password", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions := &sessionRepositoryStub{}
+	service, err := NewService(&playerRepositoryStub{value: player}, sessions, logging.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	session, err := service.Login(context.Background(), "bob", "correct-password")
+	if err != nil {
+		t.Fatalf("Login() unexpected error: %v", err)
+	}
+	if session.ID == "" || session.PlayerID != player.ID {
+		t.Fatalf("Login() session = %#v", session)
+	}
+}
+
+func TestAuthenticateReturnsPlayerForActiveSession(t *testing.T) {
+	player, err := coreplayer.New("carol", "pass", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions := &sessionRepositoryStub{}
+	service, err := NewService(&playerRepositoryStub{value: player}, sessions, logging.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Login to create a real active session.
+	session, err := service.Login(context.Background(), "carol", "pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := service.Authenticate(context.Background(), session.ID)
+	if err != nil {
+		t.Fatalf("Authenticate() error = %v", err)
+	}
+	if got.ID != player.ID {
+		t.Fatalf("Authenticate() player = %#v, want %#v", got, player)
+	}
+}
+
+func TestAuthenticateRejectsExpiredSession(t *testing.T) {
+	player, _ := coreplayer.New("dave", "pass", time.Now())
+	sessions := &sessionRepositoryStub{}
+	service, err := NewService(&playerRepositoryStub{value: player}, sessions, logging.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Manually insert an already-expired session by manipulating stub.
+	expiredSession, _ := coreplayer.NewSession(player.ID, time.Now().Add(-48*time.Hour), SessionDuration)
+	sessions.value = expiredSession
+
+	if _, err := service.Authenticate(context.Background(), expiredSession.ID); !errors.Is(err, coreplayer.ErrAuthentication) {
+		t.Fatalf("Authenticate(expired) error = %v, want %v", err, coreplayer.ErrAuthentication)
 	}
 }

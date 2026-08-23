@@ -47,7 +47,7 @@ func NewDefinition(id, name string, price int) (Definition, error) {
 
 func NewEquipmentDefinition(id, name string, price int, slot Slot) (Definition, error) {
 	value, err := NewDefinition(id, name, price)
-	if err != nil || slot == SlotNone {
+	if err != nil || slot == SlotNone || !IsValidSlot(slot) {
 		return Definition{}, ErrInvalidDefinition
 	}
 	value.Slot = slot

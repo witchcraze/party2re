@@ -22,10 +22,13 @@ jobs:
 
       - name: Build and run tests with coverage
         run: |
-          docker compose run --rm app sh -c \
-            'go test ./... -coverprofile=coverage.out -covermode=atomic \
-             && go tool cover -func=coverage.out > coverage.txt \
-             && cat coverage.txt'
+          docker compose run --name party2re_ci_app --rm=false app sh -c \
+            'go test ./... -coverprofile=/tmp/coverage.out -covermode=atomic \
+             && go tool cover -func=/tmp/coverage.out > /tmp/coverage.txt \
+             && cat /tmp/coverage.txt'
+          docker cp party2re_ci_app:/tmp/coverage.out coverage.out || true
+          docker cp party2re_ci_app:/tmp/coverage.txt coverage.txt || true
+          docker rm party2re_ci_app 2>/dev/null || true
 
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4

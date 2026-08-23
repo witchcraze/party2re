@@ -56,3 +56,25 @@ func TestInventoryRejectsUnownedAndExcessQuantity(t *testing.T) {
 		t.Fatalf("excess quantity error = %v", err)
 	}
 }
+
+func TestInventoryFindReturnsInstanceByID(t *testing.T) {
+	inventory, _ := New("character-1")
+	value, _ := item.NewInstance("sword", 1)
+	_ = inventory.Add(value)
+
+	found, ok := inventory.Find(value.ID)
+	if !ok || found.ID != value.ID || found.DefinitionID != "sword" {
+		t.Fatalf("Find() = %#v, %v", found, ok)
+	}
+
+	if _, ok := inventory.Find("nonexistent"); ok {
+		t.Fatal("Find() returned ok for nonexistent ID")
+	}
+}
+
+func TestInventoryFindOnNilReturnsNotFound(t *testing.T) {
+	var inv *Inventory
+	if _, ok := inv.Find("any"); ok {
+		t.Fatal("nil Inventory.Find() should return false")
+	}
+}
