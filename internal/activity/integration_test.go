@@ -10,12 +10,15 @@ import (
 
 	"github.com/witchcraze/party2re/internal/activity"
 	"github.com/witchcraze/party2re/internal/character"
+	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/scheduling"
+	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
 type fixedClock struct{ now time.Time }
 
-func (c fixedClock) Now() time.Time { return c.now }
+func (c *fixedClock) Now() time.Time { return c.now }
 
 func TestTrainingPersistsResultAndCharacterAcrossServiceRestart(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
@@ -43,12 +46,12 @@ func TestTrainingPersistsResultAndCharacterAcrossServiceRestart(t *testing.T) {
 	}
 
 	start := time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)
-	clock := fixedClock{now: start}
+	clock := &fixedClock{now: start}
 	activities, err := database.NewActivityRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := activity.NewServiceWithClock(activities, characters, &clock)
+	service, err := activity.NewServiceWithClock(activities, characters, nil, nil, clock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +73,7 @@ func TestTrainingPersistsResultAndCharacterAcrossServiceRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	restarted, err := activity.NewServiceWithClock(restartedActivities, restartedCharacters, &clock)
+	restarted, err := activity.NewServiceWithClock(restartedActivities, restartedCharacters, nil, nil, clock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +127,7 @@ func TestConcurrentTrainingClaimsApplyRewardOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	starter, err := activity.NewServiceWithClock(activities, characters, clock)
+	starter, err := activity.NewServiceWithClock(activities, characters, nil, nil, clock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,11 +145,11 @@ func TestConcurrentTrainingClaimsApplyRewardOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := activity.NewServiceWithClock(firstRepository, characters, clock)
+	first, err := activity.NewServiceWithClock(firstRepository, characters, nil, nil, clock)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := activity.NewServiceWithClock(secondRepository, characters, clock)
+	second, err := activity.NewServiceWithClock(secondRepository, characters, nil, nil, clock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,4 +196,74 @@ func TestConcurrentTrainingClaimsApplyRewardOnce(t *testing.T) {
 	if !restoredActivity.Claimed {
 		t.Fatal("activity was not claimed")
 	}
+}
+
+func TestTrainingScheduledActionIntegration(t *testing.T) {
+	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("PARTY2_VALKEY_ADDR is not configured")
+	}
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	ctx := context.Background()
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	valkeyClient, err := vk.NewClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer valkeyClient.Close()
+
+	characters, _ := database.NewCharacterRepository(db)
+	characterService, _ := character.NewService(characters)
+	value, _ := characterService.Create(ctx, "Worker Training")
+
+	start := time.Now().UTC()
+	clock := &fixedClock{now: start}
+	activities, _ := database.NewActivityRepository(db)
+
+	schedRepo := scheduling.NewValkeyRepository(valkeyClient)
+	schedService := scheduling.NewService(schedRepo)
+
+	service, _ := activity.NewServiceWithClock(activities, characters, schedService, nil, clock)
+
+	scheduled, err := service.StartTraining(ctx, value.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	clock.now = scheduled.AvailableAt
+
+	due, err := schedRepo.FetchDue(ctx, clock.now, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var foundAction *core_scheduling.ScheduledAction
+	for _, a := range due {
+		if a.Params["activity_id"] == scheduled.ID {
+			foundAction = &a
+			break
+		}
+	}
+	if foundAction == nil {
+		t.Fatal("ScheduledAction was not enqueued or fetched")
+	}
+
+	handler := activity.NewTrainingHandler(service)
+	if err := handler.Handle(ctx, *foundAction); err != nil {
+		t.Fatal(err)
+	}
+
+	restoredCharacter, _ := characters.FindByID(ctx, value.ID)
+	if restoredCharacter.Experience != activity.TrainingReward {
+		t.Fatalf("restored character experience = %d, want %d", restoredCharacter.Experience, activity.TrainingReward)
+	}
+
+	valkeyClient.Do(ctx, valkeyClient.B().Del().Key("party2:scheduled:action:"+foundAction.ID).Build())
 }

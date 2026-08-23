@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	TrainingType     = "training"
-	TrainingDuration = time.Hour
-	TrainingReward   = 10
+	TrainingType                       = "training"
+	TrainingDuration                   = time.Hour
+	TrainingReward                     = 10
+	ActivityActionTypeTrainingComplete = "activity:training_complete"
 )
 
 var (
@@ -55,24 +56,41 @@ type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 }
 
+type Scheduler interface {
+	Schedule(ctx context.Context, actionType, actorID string, params map[string]string, executeAt time.Time) (string, error)
+}
+
+type Logger interface {
+	Warn(msg string, args ...any)
+}
+
+type nopLogger struct{}
+
+func (nopLogger) Warn(msg string, args ...any) {}
+
 type Service struct {
 	activities ActivityRepository
 	characters CharacterRepository
+	scheduler  Scheduler
+	logger     Logger
 	clock      Clock
 }
 
-func NewService(activities ActivityRepository, characters CharacterRepository) (*Service, error) {
-	return NewServiceWithClock(activities, characters, realClock{})
+func NewService(activities ActivityRepository, characters CharacterRepository, scheduler Scheduler, logger Logger) (*Service, error) {
+	return NewServiceWithClock(activities, characters, scheduler, logger, realClock{})
 }
 
-func NewServiceWithClock(activities ActivityRepository, characters CharacterRepository, clock Clock) (*Service, error) {
+func NewServiceWithClock(activities ActivityRepository, characters CharacterRepository, scheduler Scheduler, logger Logger, clock Clock) (*Service, error) {
 	if activities == nil || characters == nil {
 		return nil, errors.New("activity dependencies are nil")
 	}
 	if clock == nil {
 		return nil, errors.New("activity clock is nil")
 	}
-	return &Service{activities: activities, characters: characters, clock: clock}, nil
+	if logger == nil {
+		logger = nopLogger{}
+	}
+	return &Service{activities: activities, characters: characters, scheduler: scheduler, logger: logger, clock: clock}, nil
 }
 
 func (s *Service) StartTraining(ctx context.Context, characterID string) (Activity, error) {
@@ -99,6 +117,20 @@ func (s *Service) StartTraining(ctx context.Context, characterID string) (Activi
 	if err := s.activities.Save(ctx, value); err != nil {
 		return Activity{}, err
 	}
+
+	if s.scheduler != nil {
+		_, err = s.scheduler.Schedule(
+			ctx,
+			ActivityActionTypeTrainingComplete,
+			characterID,
+			map[string]string{"activity_id": value.ID},
+			value.AvailableAt,
+		)
+		if err != nil {
+			s.logger.Warn("failed to schedule training completion", "activity_id", value.ID, "error", err)
+		}
+	}
+
 	return value, nil
 }
 
