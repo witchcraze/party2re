@@ -61,6 +61,7 @@ One of the central characteristics identified during the initial investigation i
   associated with a specific game are not reused. Such names should normally be
   replaced with generic terminology, with the replacement decided per asset or
   content group.
+- **When investigating the old implementation, if you discover game rules, formulas, or state transitions that have enduring reference value, extract and record them in `docs/design/` as language-agnostic documentation. This prevents losing valuable domain knowledge while maintaining clean-room isolation.**
 
 The original project's `README.md` is not treated as a source of requirements for this reconstruction.
 
