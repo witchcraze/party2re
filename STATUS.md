@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #109 — Migrate Activity training to ScheduledAction push processing
+Last updated: Issue #110 — Migrate Adventure completion to ScheduledAction push processing
 
 ## Current phase
 
@@ -83,6 +83,12 @@ Issue #109 migrated Activity training to ScheduledAction push processing:
 - `StartTraining` enqueues a ScheduledAction (`activity:training_complete`)
 - `TrainingHandler` processes completion by claiming and applying experience rewards
 - Fallback path works if Valkey is unavailable (manual `Claim` still functions)
+
+Issue #110 migrated Adventure completion to ScheduledAction push processing:
+
+- `Start` enqueues a ScheduledAction (`adventure:complete`)
+- `AdventureCompletionHandler` resolves battle, applies rewards, and persists results at worker execution time
+- Fallback path works if Valkey is unavailable (manual `Claim` resolves and claims)
 
 ## Confirmed decisions
 
