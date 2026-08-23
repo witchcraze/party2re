@@ -1,5 +1,5 @@
 # Stage 1: build
-FROM golang:1.26.7-bookworm AS builder
+FROM golang:1.26.7-trixie AS builder
 
 WORKDIR /build
 
@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/party2 
 # Stage 2: minimal runtime image.
 # distroless/static contains CA certificates and timezone data but no shell,
 # no package manager, and no runtime toolchain.
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian13:nonroot
 
 COPY --from=builder /out/party2 /party2
 
