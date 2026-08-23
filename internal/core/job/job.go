@@ -43,6 +43,7 @@ type CharacterJob struct {
 	CharacterID  string
 	CurrentJobID string
 	History      []Change
+	MasteredJobs []string
 }
 
 func NewCharacterJob(characterID, currentJobID string) (CharacterJob, error) {
@@ -66,4 +67,30 @@ func (c *CharacterJob) ChangeTo(target Definition, level int, gender string) err
 	c.History = append(c.History, Change{FromJobID: c.CurrentJobID, ToJobID: target.ID})
 	c.CurrentJobID = target.ID
 	return nil
+}
+
+func (c *CharacterJob) Master(jobID string) {
+	if c == nil || strings.TrimSpace(jobID) == "" {
+		return
+	}
+	jobID = strings.TrimSpace(jobID)
+	for _, m := range c.MasteredJobs {
+		if m == jobID {
+			return
+		}
+	}
+	c.MasteredJobs = append(c.MasteredJobs, jobID)
+}
+
+func (c *CharacterJob) IsMastered(jobID string) bool {
+	if c == nil {
+		return false
+	}
+	jobID = strings.TrimSpace(jobID)
+	for _, m := range c.MasteredJobs {
+		if m == jobID {
+			return true
+		}
+	}
+	return false
 }

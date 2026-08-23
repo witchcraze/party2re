@@ -51,6 +51,7 @@ func TestCharacterRepositoryPersistsAndLoadsCharacter(t *testing.T) {
 	want.Experience = 20
 	want.Money = 350
 	want.Stats.HP = 25
+	want.RebirthCount = 1
 	if err := repository.Update(context.Background(), want); err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}

@@ -26,14 +26,15 @@ var (
 )
 
 type Character struct {
-	ID         string
-	Name       string
-	JobID      string
-	Gender     string
-	Stats      Stats
-	Money      int
-	Level      int
-	Experience int
+	ID           string
+	Name         string
+	JobID        string
+	Gender       string
+	Stats        Stats
+	Money        int
+	Level        int
+	Experience   int
+	RebirthCount int
 }
 
 type Stats struct {

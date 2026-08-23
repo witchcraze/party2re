@@ -75,6 +75,11 @@ func TestServiceCreateReturnsRepositoryError(t *testing.T) {
 	}
 }
 
+func (r *repositoryStub) Update(_ context.Context, value corecharacter.Character) error {
+	r.saved = value
+	return r.err
+}
+
 func TestServiceGetReturnsSavedCharacter(t *testing.T) {
 	repository := &repositoryStub{}
 	service, _ := NewService(repository)
@@ -89,5 +94,29 @@ func TestServiceGetReturnsSavedCharacter(t *testing.T) {
 	}
 	if got != created {
 		t.Fatalf("Get() = %#v, want %#v", got, created)
+	}
+}
+
+func TestServiceRebirth(t *testing.T) {
+	repository := &repositoryStub{}
+	service, _ := NewService(repository)
+	created, err := service.Create(context.Background(), "Rebirth Candidate")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Under-leveled character cannot rebirth
+	if _, err := service.Rebirth(context.Background(), created.ID); err == nil {
+		t.Fatal("expected error for level 1 character rebirth, got nil")
+	}
+
+	// Set character to level 99
+	repository.saved.Level = 99
+	rebirthed, err := service.Rebirth(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("Rebirth error: %v", err)
+	}
+	if rebirthed.Level != 1 || rebirthed.RebirthCount != 1 {
+		t.Errorf("rebirthed = %#v, want Level 1 and RebirthCount 1", rebirthed)
 	}
 }
