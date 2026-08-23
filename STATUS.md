@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #57 — Multi-stage Adventure progression and item reward drops
+Last updated: Issue #58 — Character Item Depot and storage management
 
 ## Current phase
 
@@ -110,6 +110,13 @@ Issue #57 introduced multi-stage Adventure progression and item reward drops:
 - Battle resolution executes against stage monster stats
 - Victorious adventures award experience to character, gold currency, and rolled item drop instances to character inventory
 - Defeats and draws award no rewards and update battle result record
+
+Issue #58 introduced Character Item Depot and storage management:
+
+- `internal/depot` — Service for stashing and withdrawing gold and item instances between active inventory and depot storage
+- `internal/database.DepotRepository` — Atomic single-transaction commit across character wallet, active inventory, and depot items
+- `docs/design/depot.md` — Specification of depot storage invariants and operations
+- Database schema migration `migrations/011_depot.sql` adding `character_depots` and `depot_items` tables
 
 ## Confirmed decisions
 
