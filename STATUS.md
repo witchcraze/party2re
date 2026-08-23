@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #126 — Update actions/checkout to latest version in GitHub Actions workflows
+Last updated: Issue #128 — Update production Dockerfile runtime base to distroless static-debian13
 
 ## Current phase
 
@@ -159,6 +159,8 @@ Issue #124 introduced safe database migration and reset workflows in Makefile:
 - `make check` / `make check-clean` — Automated integration into daily and clean verification pipelines
 
 Issue #126 updated GitHub Actions workflows to latest major versions (`actions/checkout@v6`, `docker/setup-buildx-action@v4`, and `docker/build-push-action@v7`).
+
+Issue #128 updated Docker images (Dockerfile, Dockerfile.dev) to Debian 13 series (`golang:1.26.7-trixie` and `gcr.io/distroless/static-debian13:nonroot`).
 
 ## Confirmed decisions
 

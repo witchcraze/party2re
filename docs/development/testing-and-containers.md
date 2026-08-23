@@ -6,8 +6,8 @@
 
 `Dockerfile` is the **production distribution image**. It uses a multi-stage build:
 
-- **builder stage** (`golang:1.26.7-bookworm`) — compiles a statically linked, stripped binary with `CGO_ENABLED=0`.
-- **runtime stage** (`gcr.io/distroless/static-debian12:nonroot`) — contains the compiled binary and CA certificates only. No shell, no package manager, no Go toolchain, no source code.
+- **builder stage** (`golang:1.26.7-trixie`) — compiles a statically linked, stripped binary with `CGO_ENABLED=0`.
+- **runtime stage** (`gcr.io/distroless/static-debian13:nonroot`) — contains the compiled binary and CA certificates only. No shell, no package manager, no Go toolchain, no source code.
 
 MariaDB remains a separate service in both development and production environments.
 
