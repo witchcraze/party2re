@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	StarterAdventure  = "starter-adventure"
-	AdventureDuration = time.Hour
-	AdventureReward   = 20
-	AdventureEnemyID  = "starter-opponent"
+	StarterAdventure            = "starter-adventure"
+	AdventureDuration           = time.Hour
+	AdventureReward             = 20
+	AdventureEnemyID            = "starter-opponent"
+	AdventureActionTypeComplete = "adventure:complete"
 )
 
 var (
@@ -57,25 +58,49 @@ type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 }
 
+type Scheduler interface {
+	Schedule(ctx context.Context, actionType, actorID string, params map[string]string, executeAt time.Time) (string, error)
+}
+
+type Logger interface {
+	Warn(msg string, args ...any)
+}
+
+type nopLogger struct{}
+
+func (nopLogger) Warn(msg string, args ...any) {}
+
 type Service struct {
 	adventures Repository
 	characters CharacterRepository
 	battle     corebattle.Resolver
+	scheduler  Scheduler
+	logger     Logger
 	clock      Clock
 }
 
-func NewService(adventures Repository, characters CharacterRepository, battle corebattle.Resolver) (*Service, error) {
-	return NewServiceWithClock(adventures, characters, battle, realClock{})
+func NewService(adventures Repository, characters CharacterRepository, battle corebattle.Resolver, scheduler Scheduler, logger Logger) (*Service, error) {
+	return NewServiceWithClock(adventures, characters, battle, scheduler, logger, realClock{})
 }
 
-func NewServiceWithClock(adventures Repository, characters CharacterRepository, battle corebattle.Resolver, clock Clock) (*Service, error) {
+func NewServiceWithClock(adventures Repository, characters CharacterRepository, battle corebattle.Resolver, scheduler Scheduler, logger Logger, clock Clock) (*Service, error) {
 	if adventures == nil || characters == nil || battle == nil {
 		return nil, errors.New("adventure dependencies are nil")
 	}
 	if clock == nil {
 		return nil, errors.New("adventure clock is nil")
 	}
-	return &Service{adventures: adventures, characters: characters, battle: battle, clock: clock}, nil
+	if logger == nil {
+		logger = nopLogger{}
+	}
+	return &Service{
+		adventures: adventures,
+		characters: characters,
+		battle:     battle,
+		scheduler:  scheduler,
+		logger:     logger,
+		clock:      clock,
+	}, nil
 }
 
 func (s *Service) Start(ctx context.Context, characterID string) (Adventure, error) {
@@ -101,6 +126,20 @@ func (s *Service) Start(ctx context.Context, characterID string) (Adventure, err
 	if err := s.adventures.Save(ctx, value); err != nil {
 		return Adventure{}, err
 	}
+
+	if s.scheduler != nil {
+		_, err = s.scheduler.Schedule(
+			ctx,
+			AdventureActionTypeComplete,
+			characterID,
+			map[string]string{"adventure_id": value.ID},
+			value.AvailableAt,
+		)
+		if err != nil {
+			s.logger.Warn("failed to schedule adventure completion", "adventure_id", value.ID, "error", err)
+		}
+	}
+
 	return value, nil
 }
 

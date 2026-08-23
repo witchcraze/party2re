@@ -36,7 +36,9 @@ Unlock or attempt additional content
         +------> social / economic / collection systems
 ```
 
-A particularly important characteristic is that many activities can be time-based: the player starts an action and a result becomes available later.
+A particularly important characteristic is that many activities are time-based: the player starts an action and a result becomes available later.
+
+Resolution (such as battle resolution and reward calculation) occurs at the scheduled completion time via background worker processing rather than being deferred until player claim time. This ensures character stats and state at the moment the activity concludes are faithfully applied to battle outcomes and progression.
 
 ## Character development
 

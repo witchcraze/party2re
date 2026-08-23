@@ -79,6 +79,33 @@ func (b battleResolverStub) Resolve(corebattle.Request) (corebattle.Result, erro
 	return b.result, nil
 }
 
+type testScheduler struct {
+	mu           sync.Mutex
+	scheduledIDs []string
+	err          error
+}
+
+func (s *testScheduler) Schedule(ctx context.Context, actionType, actorID string, params map[string]string, executeAt time.Time) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.err != nil {
+		return "", s.err
+	}
+	s.scheduledIDs = append(s.scheduledIDs, "mock-id")
+	return "mock-id", nil
+}
+
+type testLogger struct {
+	mu    sync.Mutex
+	warns []string
+}
+
+func (l *testLogger) Warn(msg string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.warns = append(l.warns, msg)
+}
+
 func newTestService(t *testing.T) (*Service, *testClock, *repositoryStub, *characterRepositoryStub) {
 	t.Helper()
 	character, err := corecharacter.New("Alice")
@@ -89,11 +116,88 @@ func newTestService(t *testing.T) (*Service, *testClock, *repositoryStub, *chara
 	characters := &characterRepositoryStub{value: character}
 	adventures.characters = characters
 	clock := &testClock{now: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)}
-	service, err := NewServiceWithClock(adventures, characters, corebattle.Engine{}, clock)
+	scheduler := &testScheduler{}
+	logger := nopLogger{}
+	service, err := NewServiceWithClock(adventures, characters, corebattle.Engine{}, scheduler, logger, clock)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return service, clock, adventures, characters
+}
+
+func TestStartSchedulesAdventure(t *testing.T) {
+	service, clock, repository, characters := newTestService(t)
+
+	got, err := service.Start(context.Background(), characters.value.ID)
+	if err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	if got.Type != StarterAdventure || got.StartedAt != clock.now || got.AvailableAt != clock.now.Add(AdventureDuration) {
+		t.Fatalf("Start() = %#v", got)
+	}
+	if repository.value.ID != got.ID {
+		t.Fatal("adventure was not saved")
+	}
+	scheduler := service.scheduler.(*testScheduler)
+	scheduler.mu.Lock()
+	defer scheduler.mu.Unlock()
+	if len(scheduler.scheduledIDs) != 1 {
+		t.Fatal("scheduler was not called")
+	}
+}
+
+func TestStartSchedulerFailsLogsWarningAndSucceeds(t *testing.T) {
+	character, err := corecharacter.New("Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adventures := &repositoryStub{}
+	characters := &characterRepositoryStub{value: character}
+	adventures.characters = characters
+	scheduler := &testScheduler{err: errors.New("valkey connection error")}
+	logger := &testLogger{}
+	clock := &testClock{now: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)}
+	service, err := NewServiceWithClock(adventures, characters, corebattle.Engine{}, scheduler, logger, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := service.Start(context.Background(), characters.value.ID)
+	if err != nil {
+		t.Fatalf("Start() expected success even when scheduler fails, got error: %v", err)
+	}
+	if got.ID == "" {
+		t.Fatal("adventure ID is empty")
+	}
+
+	logger.mu.Lock()
+	defer logger.mu.Unlock()
+	if len(logger.warns) != 1 {
+		t.Fatalf("expected 1 warning log, got %d", len(logger.warns))
+	}
+}
+
+func TestStartNilSchedulerSucceeds(t *testing.T) {
+	character, err := corecharacter.New("Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adventures := &repositoryStub{}
+	characters := &characterRepositoryStub{value: character}
+	adventures.characters = characters
+	clock := &testClock{now: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)}
+	service, err := NewServiceWithClock(adventures, characters, corebattle.Engine{}, nil, nil, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := service.Start(context.Background(), characters.value.ID)
+	if err != nil {
+		t.Fatalf("Start() expected success with nil scheduler, got error: %v", err)
+	}
+	if got.ID == "" {
+		t.Fatal("adventure ID is empty")
+	}
 }
 
 func TestAdventureRequiresCompletionTime(t *testing.T) {
@@ -218,24 +322,26 @@ func TestAdventureNewServiceNilDependencies(t *testing.T) {
 	characters := &characterRepositoryStub{}
 	battle := corebattle.Engine{}
 	clock := &testClock{}
+	scheduler := &testScheduler{}
+	logger := nopLogger{}
 
-	if _, err := NewService(nil, characters, battle); err == nil {
-		t.Fatal("NewService(nil, characters, battle) expected error, got nil")
+	if _, err := NewService(nil, characters, battle, scheduler, logger); err == nil {
+		t.Fatal("NewService(nil, ...) expected error, got nil")
 	}
-	if _, err := NewService(adventures, nil, battle); err == nil {
-		t.Fatal("NewService(adventures, nil, battle) expected error, got nil")
+	if _, err := NewService(adventures, nil, battle, scheduler, logger); err == nil {
+		t.Fatal("NewService(..., nil, ...) expected error, got nil")
 	}
-	if _, err := NewService(adventures, characters, nil); err == nil {
-		t.Fatal("NewService(adventures, characters, nil) expected error, got nil")
+	if _, err := NewService(adventures, characters, nil, scheduler, logger); err == nil {
+		t.Fatal("NewService(..., nil, ...) expected error, got nil")
 	}
-	if _, err := NewServiceWithClock(adventures, characters, battle, nil); err == nil {
-		t.Fatal("NewServiceWithClock(adventures, characters, battle, nil) expected error, got nil")
+	if _, err := NewServiceWithClock(adventures, characters, battle, scheduler, logger, nil); err == nil {
+		t.Fatal("NewServiceWithClock(..., nil) expected error, got nil")
 	}
-	if _, err := NewServiceWithClock(adventures, characters, battle, clock); err != nil {
-		t.Fatalf("NewServiceWithClock(adventures, characters, battle, clock) error = %v", err)
+	if _, err := NewServiceWithClock(adventures, characters, battle, scheduler, logger, clock); err != nil {
+		t.Fatalf("NewServiceWithClock(...) error = %v", err)
 	}
 
-	svc, err := NewService(adventures, characters, battle)
+	svc, err := NewService(adventures, characters, battle, scheduler, logger)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
