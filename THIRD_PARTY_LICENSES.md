@@ -19,7 +19,7 @@ same Issue/PR that adds or changes a dependency.
 
 | Package | Version | Purpose | License | Source |
 | --- | --- | --- | --- | --- |
-| `filippo.io/edwards25519` | v1.1.0 | Indirect dependency of the MySQL driver | BSD-3-Clause | https://github.com/FiloSottile/edwards25519 |
+| `filippo.io/edwards25519` | v1.1.1 | Indirect dependency of the MySQL driver | BSD-3-Clause | https://github.com/FiloSottile/edwards25519 |
 | `golang.org/x/sys` | v0.47.0 | Indirect dependency of valkey-go | BSD-3-Clause | https://golang.org/x/sys |
 
 ## Distribution notices

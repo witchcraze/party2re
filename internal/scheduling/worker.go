@@ -61,6 +61,13 @@ func (w *Worker) processActions(ctx context.Context) {
 }
 
 func (w *Worker) processAction(ctx context.Context, action core_scheduling.ScheduledAction) {
+	// Defense-in-depth: validate before acquiring any lock or dispatching.
+	// FetchDue already validates, but actions may arrive from other paths.
+	if err := action.Validate(); err != nil {
+		w.logger.Warn(ctx, "Skipping invalid scheduled action", slog.String("action_id", action.ID), slog.String("error_type", "validation"))
+		return
+	}
+
 	// Attempt to acquire lock to prevent duplicate processing
 	acquired, err := w.repo.AcquireLock(ctx, action.ID, 5*time.Minute)
 	if err != nil {
@@ -95,9 +102,13 @@ func (w *Worker) processAction(ctx context.Context, action core_scheduling.Sched
 	// Mark outcome
 	if handleErr != nil {
 		w.logger.Error(ctx, "Failed to process action", handleErr, slog.String("action_id", action.ID), slog.String("type", action.ActionType))
-		action.MarkFailed()
+		if err := action.MarkFailed(24 * time.Hour); err != nil {
+			w.logger.Error(ctx, "Failed to mark action as failed", err, slog.String("action_id", action.ID))
+		}
 	} else {
-		action.MarkCompleted(24 * time.Hour) // Retain completed actions for 24 hours
+		if err := action.MarkCompleted(24 * time.Hour); err != nil {
+			w.logger.Error(ctx, "Failed to mark action as completed", err, slog.String("action_id", action.ID))
+		}
 	}
 
 	if err := w.repo.Save(ctx, action); err != nil {

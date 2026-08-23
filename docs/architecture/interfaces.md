@@ -79,6 +79,60 @@ character state, then compare-and-sets the claimed flag and persists the
 character state in one transaction. A failed compare-and-set returns an
 already-claimed result without applying the character state.
 
+## ScheduledAction contract
+
+The scheduling mechanism (`internal/core/scheduling`, `internal/scheduling`)
+exposes two separate contracts.
+
+### Enqueue contract — `scheduling.Service`
+
+Feature modules schedule a future action:
+
+```go
+id, err := schedulingService.Schedule(ctx, "training_complete", characterID, params, executeAt)
+```
+
+- `actionType` is a stable string constant owned by the feature package.
+- `params` is a `map[string]string`; keys and values must fit within the
+  documented size limits (`MaxParamKeyLength`, `MaxParamValueLength`).
+- The returned `id` can be stored by the feature for status queries.
+- The scheduling service must not know what the action does.
+
+### Handler contract — `scheduling.ActionHandler`
+
+Feature modules implement one handler per action type:
+
+```go
+type ActionHandler interface {
+    Handle(ctx context.Context, action core_scheduling.ScheduledAction) error
+}
+```
+
+- A non-nil error marks the action `failed` with a 24-hour retention.
+- A nil return marks the action `completed` with a 24-hour retention.
+- Handlers must be idempotent: the lock prevents most duplicate calls,
+  but a handler should be safe to call more than once if the lock expires.
+- Handlers must not modify the `ScheduledAction` fields they receive.
+- Handlers must not embed game-rule logic that belongs to another feature.
+
+Register at startup:
+
+```go
+worker.RegisterHandler("training_complete", trainingHandler)
+```
+
+### Validation contract
+
+`ScheduledAction.Validate()` is the trust boundary between Valkey
+(external, mutable storage) and the application.
+
+- The repository calls `Validate()` on every action returned from `FetchDue`.
+- The Worker calls `Validate()` again before lock acquisition (defense-in-depth).
+- Any action that fails `Validate()` is removed from the pending queue and
+  never dispatched to a handler. It cannot cause a panic or incorrect game state.
+- Adding a new field to `ScheduledAction` requires updating `Validate()` with
+  appropriate limits.
+
 ## Contract rules
 
 - Do not expose private persistence structures as contracts.

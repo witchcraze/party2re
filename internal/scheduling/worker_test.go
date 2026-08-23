@@ -68,10 +68,11 @@ func TestWorker(t *testing.T) {
 	handler := &mockHandler{}
 	worker.RegisterHandler("test_action", handler)
 
-	// Add a pending action
+	// Add a pending action (all required fields set so Validate passes)
 	action := core_scheduling.ScheduledAction{
 		ID:         "1",
 		ActionType: "test_action",
+		ActorID:    "char-1",
 		State:      core_scheduling.StatePending,
 		ExecuteAt:  time.Now().Add(-1 * time.Hour), // Past due
 	}
@@ -105,6 +106,7 @@ func TestWorker_AlreadyLocked(t *testing.T) {
 	action := core_scheduling.ScheduledAction{
 		ID:         "2",
 		ActionType: "test_action",
+		ActorID:    "char-1",
 		State:      core_scheduling.StatePending,
 		ExecuteAt:  time.Now(),
 	}
@@ -118,3 +120,31 @@ func TestWorker_AlreadyLocked(t *testing.T) {
 		t.Error("expected handler NOT to be called when locked")
 	}
 }
+
+func TestWorker_InvalidActionRejected(t *testing.T) {
+	repo := newMockRepository()
+	logger := &mockLogger{}
+	worker := NewWorker(repo, 1*time.Millisecond, logger)
+
+	handler := &mockHandler{}
+	worker.RegisterHandler("test_action", handler)
+
+	// Action with empty ActionType fails Validate: should be skipped before lock/dispatch.
+	action := core_scheduling.ScheduledAction{
+		ID:         "bad-1",
+		ActionType: "", // invalid: empty
+		ActorID:    "char-1",
+		State:      core_scheduling.StatePending,
+		ExecuteAt:  time.Now(),
+	}
+
+	worker.processAction(context.Background(), action)
+
+	if handler.handled {
+		t.Error("expected handler NOT to be called for invalid action")
+	}
+	if repo.locked["bad-1"] {
+		t.Error("expected lock NOT to be acquired for invalid action")
+	}
+}
+

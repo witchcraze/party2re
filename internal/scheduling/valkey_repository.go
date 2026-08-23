@@ -71,13 +71,27 @@ func (r *ValkeyRepository) FetchDue(ctx context.Context, upTo time.Time, limit i
 		actionKey := actionKeyPrefix + id
 		val, err := r.client.Do(ctx, r.client.B().Get().Key(actionKey).Build()).AsBytes()
 		if err != nil {
-			continue // skip missing actions
+			// Key missing: remove stale queue entry
+			r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build())
+			continue
 		}
 		
 		var action core_scheduling.ScheduledAction
-		if err := json.Unmarshal(val, &action); err == nil {
-			actions = append(actions, action)
+		if err := json.Unmarshal(val, &action); err != nil {
+			// Malformed JSON: remove from queue and delete key to prevent re-fetch
+			r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build())
+			r.client.Do(ctx, r.client.B().Del().Key(actionKey).Build())
+			continue
 		}
+
+		// Reject actions that fail domain-level invariants (e.g. unknown state,
+		// oversized fields). Remove from queue to prevent repeated processing.
+		if err := action.Validate(); err != nil {
+			r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build())
+			continue
+		}
+
+		actions = append(actions, action)
 	}
 
 	return actions, nil

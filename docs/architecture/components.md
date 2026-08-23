@@ -92,9 +92,74 @@ Avoid hard-coding every future currency into Core.
 
 ### Game Time / Scheduling
 
-**Responsibility:** represent and process delayed actions without owning feature-specific rules.
+**Responsibility:** represent and process delayed actions without owning
+feature-specific rules.
 
-A scheduled action should identify what is scheduled and when it becomes executable; the relevant feature determines its result.
+A `ScheduledAction` records what is scheduled and when it becomes executable.
+The relevant feature module supplies the processing logic through an
+`ActionHandler` contract. The scheduling mechanism itself contains no
+game-rule logic.
+
+**Domain model** (`internal/core/scheduling`):
+
+- `ScheduledAction` — the unit of work:
+  - `ID`, `ActionType`, `ActorID`, `Params`, `ScheduledAt`, `ExecuteAt`
+  - `State` — allow-listed: `pending | processing | completed | failed`
+  - `RetainUntil` — auto-expiry time (set by `MarkCompleted`/`MarkFailed`)
+- State machine: `Pending → Processing → Completed | Failed`
+- `Validate()` — enforces field-size limits and the known-state allow-list;
+  must pass before any lock acquisition or handler dispatch.
+
+**Queue storage** — Valkey (`internal/scheduling`):
+
+| Valkey key | Type | Purpose |
+|---|---|---|
+| `party2:scheduled:pending` | sorted set | pending IDs scored by `ExecuteAt` unix timestamp |
+| `party2:scheduled:action:{id}` | string (JSON) | full action data; TTL set on completion/failure |
+| `party2:scheduled:lock:{id}` | string with TTL | distributed lock preventing duplicate execution |
+
+**Worker** (`internal/scheduling.Worker`):
+
+- polls `party2:scheduled:pending` on a configurable interval;
+- acquires a per-action `SET NX EX` lock before processing;
+- calls `Validate()` as defense-in-depth before lock acquisition;
+- dispatches to the registered `ActionHandler` for the action's type;
+- marks the action `completed` or `failed` and sets `RetainUntil` TTL;
+- runs inside the main process; the same `Run(ctx)` loop can be moved to
+  an independent Worker binary without interface changes.
+
+**ActionHandler contract** (`internal/scheduling.ActionHandler`):
+
+```go
+type ActionHandler interface {
+    Handle(ctx context.Context, action core_scheduling.ScheduledAction) error
+}
+```
+
+Feature modules implement this interface and register with the Worker:
+
+```go
+worker.RegisterHandler("training_complete", myFeature)
+```
+
+**Safety guarantees:**
+
+- `Validate()` rejects empty IDs, unknown states, oversized strings, and
+  excess parameters before any lock or dispatch occurs.
+- Malformed JSON in Valkey is detected on `FetchDue` and immediately
+  removed from the queue so it cannot block processing.
+- Stale queue entries (key missing) are cleaned up automatically.
+- The per-action lock TTL prevents duplicate execution across concurrent
+  Workers or restarts.
+
+**Adding a new action type:**
+
+1. Define the action type constant in the feature package.
+2. Implement `ActionHandler.Handle`.
+3. Call `scheduling.Service.Schedule` with the action type and params.
+4. Register the handler on `Worker` at startup.
+
+No changes to the scheduling mechanism itself are required.
 
 ### Domain Events
 
