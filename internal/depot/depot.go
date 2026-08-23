@@ -329,9 +329,12 @@ func (s *Service) DepositItem(ctx context.Context, characterID string, itemInsta
 			return ErrDepotFull
 		}
 
-		itemInstance, err := inv.Remove(itemInstanceID)
-		if err != nil {
+		itemInstance, found := inv.Find(itemInstanceID)
+		if !found {
 			return ErrItemNotFound
+		}
+		if err := inv.Consume(itemInstanceID, itemInstance.Quantity); err != nil {
+			return err
 		}
 
 		if err := dep.AddItem(itemInstance); err != nil {
@@ -375,9 +378,12 @@ func (s *Service) DepositItem(ctx context.Context, characterID string, itemInsta
 	if len(dep.Items) >= dep.Capacity {
 		return Depot{}, ErrDepotFull
 	}
-	itemInstance, err := inv.Remove(itemInstanceID)
-	if err != nil {
+	itemInstance, found := inv.Find(itemInstanceID)
+	if !found {
 		return Depot{}, ErrItemNotFound
+	}
+	if err := inv.Consume(itemInstanceID, itemInstance.Quantity); err != nil {
+		return Depot{}, err
 	}
 	if err := dep.AddItem(itemInstance); err != nil {
 		return Depot{}, err

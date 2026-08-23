@@ -191,7 +191,6 @@ func (t *sqlDepotTx) GetInventory(ctx context.Context, characterID string) (core
 
 	return coreinventory.Inventory{
 		CharacterID: characterID,
-		Capacity:    coreinventory.DefaultCapacity,
 		Items:       items,
 	}, nil
 }
