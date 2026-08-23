@@ -28,8 +28,8 @@ func TestAdventureCompletionHandler_Handle_ResolvesBattleAndStoresResult(t *test
 	if !repository.value.Claimed || !repository.value.Resolved {
 		t.Errorf("expected adventure to be claimed and resolved, got claimed=%v, resolved=%v", repository.value.Claimed, repository.value.Resolved)
 	}
-	if characters.value.Experience != AdventureReward {
-		t.Errorf("expected experience = %d, got %d", AdventureReward, characters.value.Experience)
+	if characters.value.Experience != adv.ExperienceReward {
+		t.Errorf("expected experience = %d, got %d", adv.ExperienceReward, characters.value.Experience)
 	}
 	if repository.value.BattleResult.WinnerID != characters.value.ID {
 		t.Errorf("expected WinnerID = %s, got %s", characters.value.ID, repository.value.BattleResult.WinnerID)

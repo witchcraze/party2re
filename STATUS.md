@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #56 — Stage and monster encounter definitions
+Last updated: Issue #57 — Multi-stage Adventure progression and item reward drops
 
 ## Current phase
 
@@ -100,9 +100,16 @@ Issue #56 introduced Stage and Monster encounter definitions:
 
 - `internal/adventure` — Data-driven Stage (`StageCatalog`) and Monster (`MonsterCatalog`) catalogs with JSON loaders
 - `internal/adventure/data/stages.json` — 28 stages (`stage-01` to `stage-28`) with minimum level requirements, durations, and monster encounter lists
-- `internal/adventure/data/monsters.json` — 322 monsters with stats, exp/gold rewards, and clean-room generic fantasy names replacing distinctive proper names
+- `internal/adventure/data/monsters.json` — 286 monsters with stats, exp/gold rewards, and clean-room generic fantasy names replacing distinctive proper names
 - `docs/design/stages-and-monsters.md` — Stage listing and monster content design documentation
 - Comprehensive catalog-wide validation tests in CI
+
+Issue #57 introduced multi-stage Adventure progression and item reward drops:
+
+- `StartStage` validates character level requirements against stage minimum levels
+- Battle resolution executes against stage monster stats
+- Victorious adventures award experience to character, gold currency, and rolled item drop instances to character inventory
+- Defeats and draws award no rewards and update battle result record
 
 ## Confirmed decisions
 
