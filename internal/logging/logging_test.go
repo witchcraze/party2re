@@ -84,3 +84,69 @@ func TestLoggerRecordsErrorTypeWithoutErrorMessage(t *testing.T) {
 		t.Fatalf("log does not contain operation: %s", logOutput)
 	}
 }
+
+func TestNopLoggerDiscardsOutput(t *testing.T) {
+	logger := Nop()
+	ctx := context.Background()
+	logger.Info(ctx, "test.op", slog.String("key", "val"))
+	logger.Warn(ctx, "test.op", slog.String("key", "val"))
+	logger.Error(ctx, "test.op", errors.New("err"), slog.String("key", "val"))
+}
+
+func TestNewJSONNilWriterDiscardsOutput(t *testing.T) {
+	logger := NewJSON(nil)
+	ctx := context.Background()
+	logger.Info(ctx, "test.op", slog.String("key", "val"))
+	logger.Warn(ctx, "test.op", slog.String("key", "val"))
+	logger.Error(ctx, "test.op", errors.New("err"), slog.String("key", "val"))
+}
+
+func TestLoggerWarnLevel(t *testing.T) {
+	var output bytes.Buffer
+	logger := NewJSON(&output)
+
+	logger.Warn(context.Background(), "player.warning", slog.Int("attempts", 3))
+
+	var record map[string]any
+	if err := json.Unmarshal(output.Bytes(), &record); err != nil {
+		t.Fatalf("decode log output: %v", err)
+	}
+	if record["level"] != "WARN" {
+		t.Fatalf("level = %#v, want WARN", record["level"])
+	}
+	if record["operation"] != "player.warning" {
+		t.Fatalf("operation = %#v, want player.warning", record["operation"])
+	}
+	if record["attempts"] != float64(3) {
+		t.Fatalf("attempts = %#v, want 3", record["attempts"])
+	}
+}
+
+func TestLoggerPreservesSafeNonStringAndNestedGroupAttributes(t *testing.T) {
+	var output bytes.Buffer
+	logger := NewJSON(&output)
+
+	logger.Info(context.Background(), "character.action",
+		slog.Int("level", 5),
+		slog.Bool("active", true),
+		slog.Group("metadata",
+			slog.String("region", "forest"),
+			slog.String("api_key", "secret-key-val"),
+			slog.Int("stage_id", 10),
+		),
+	)
+
+	logOutput := output.String()
+	if strings.Contains(logOutput, "secret-key-val") || strings.Contains(logOutput, "api_key") {
+		t.Fatalf("log contains nested secret: %s", logOutput)
+	}
+	if !strings.Contains(logOutput, `"level":5`) {
+		t.Fatalf("log missing int attribute: %s", logOutput)
+	}
+	if !strings.Contains(logOutput, `"active":true`) {
+		t.Fatalf("log missing bool attribute: %s", logOutput)
+	}
+	if !strings.Contains(logOutput, `"region":"forest"`) || !strings.Contains(logOutput, `"stage_id":10`) {
+		t.Fatalf("log missing safe group attributes: %s", logOutput)
+	}
+}
