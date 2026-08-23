@@ -12,12 +12,15 @@ same Issue/PR that adds or changes a dependency.
 | Package | Version | Purpose | License | Source |
 | --- | --- | --- | --- | --- |
 | `github.com/go-sql-driver/mysql` | v1.9.3 | MariaDB access through `database/sql` | MPL-2.0 | https://github.com/go-sql-driver/mysql |
+| `github.com/valkey-io/valkey-go` | v1.0.77 | Valkey connection and operations | Apache-2.0 | https://github.com/valkey-io/valkey-go |
+| `github.com/google/uuid` | v1.6.0 | Generate UUIDs for ScheduledActions | BSD-3-Clause | https://github.com/google/uuid |
 
 ## Indirect dependencies
 
 | Package | Version | Purpose | License | Source |
 | --- | --- | --- | --- | --- |
 | `filippo.io/edwards25519` | v1.1.0 | Indirect dependency of the MySQL driver | BSD-3-Clause | https://github.com/FiloSottile/edwards25519 |
+| `golang.org/x/sys` | v0.47.0 | Indirect dependency of valkey-go | BSD-3-Clause | https://golang.org/x/sys |
 
 ## Distribution notices
 
