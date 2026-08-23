@@ -264,7 +264,7 @@ func TestAdventureAppliesSelectedBattleCurrencyReward(t *testing.T) {
 }
 
 func TestAdventureRejectsUnsupportedItemReward(t *testing.T) {
-	service, clock, repository, characters := newTestService(t)
+	service, clock, _, characters := newTestService(t)
 	service.inventories = nil
 	service.battle = battleResolverStub{result: corebattle.Result{
 		Outcome:  corebattle.OutcomeWin,
@@ -439,10 +439,10 @@ func TestAdventureClaimDrawOutcome(t *testing.T) {
 }
 
 func TestAdventureRealClock(t *testing.T) {
-	clock := realClock{}
+	clock := RealClock{}
 	now := clock.Now()
 	if now.IsZero() {
-		t.Fatal("realClock.Now() returned zero time")
+		t.Fatal("RealClock.Now() returned zero time")
 	}
 }
 
