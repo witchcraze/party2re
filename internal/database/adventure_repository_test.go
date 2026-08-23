@@ -35,7 +35,7 @@ func TestAdventureRepositoryPersistsAndLoadsResult(t *testing.T) {
 	}
 
 	want := adventure.Adventure{
-		ID:               "abcdef0123456789abcdef0123456789",
+		ID:               character.ID,
 		CharacterID:      character.ID,
 		Type:             adventure.StarterAdventure,
 		StartedAt:        time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC),
