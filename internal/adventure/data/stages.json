@@ -1,0 +1,556 @@
+[
+  {
+    "id": "stage-01",
+    "name": "プニプニ平原",
+    "min_level": 1,
+    "monster_ids": [
+      "monster-001",
+      "monster-002",
+      "monster-003",
+      "monster-004",
+      "monster-005",
+      "monster-006",
+      "monster-007"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-02",
+    "name": "キノコの森",
+    "min_level": 3,
+    "monster_ids": [
+      "monster-008",
+      "monster-009",
+      "monster-010",
+      "monster-011",
+      "monster-012",
+      "monster-013",
+      "monster-014",
+      "monster-015",
+      "monster-016",
+      "monster-017"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-03",
+    "name": "幽霊城",
+    "min_level": 6,
+    "monster_ids": [
+      "monster-018",
+      "monster-019",
+      "monster-020",
+      "monster-021",
+      "monster-022",
+      "monster-023",
+      "monster-024",
+      "monster-025",
+      "monster-026",
+      "monster-027"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-04",
+    "name": "海辺の洞窟",
+    "min_level": 9,
+    "monster_ids": [
+      "monster-028",
+      "monster-029",
+      "monster-030",
+      "monster-031",
+      "monster-032",
+      "monster-033",
+      "monster-034",
+      "monster-035",
+      "monster-036"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-05",
+    "name": "地獄の砂浜",
+    "min_level": 12,
+    "monster_ids": [
+      "monster-037",
+      "monster-038",
+      "monster-039",
+      "monster-040",
+      "monster-041",
+      "monster-042",
+      "monster-043",
+      "monster-044",
+      "monster-045",
+      "monster-046",
+      "monster-047"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-06",
+    "name": "魔術師の塔",
+    "min_level": 15,
+    "monster_ids": [
+      "monster-048",
+      "monster-049",
+      "monster-050",
+      "monster-051",
+      "monster-052",
+      "monster-053",
+      "monster-054",
+      "monster-055",
+      "monster-056",
+      "monster-057",
+      "monster-058",
+      "monster-059",
+      "monster-060"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-07",
+    "name": "荒野の獣道",
+    "min_level": 18,
+    "monster_ids": [
+      "monster-061",
+      "monster-062",
+      "monster-063",
+      "monster-064",
+      "monster-065",
+      "monster-066",
+      "monster-067",
+      "monster-068",
+      "monster-069",
+      "monster-070",
+      "monster-071",
+      "monster-072",
+      "monster-073"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-08",
+    "name": "マグマ山",
+    "min_level": 21,
+    "monster_ids": [
+      "monster-074",
+      "monster-075",
+      "monster-076",
+      "monster-077",
+      "monster-078",
+      "monster-079",
+      "monster-080",
+      "monster-081",
+      "monster-082",
+      "monster-083",
+      "monster-084",
+      "monster-085",
+      "monster-086",
+      "monster-087"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-09",
+    "name": "妖精の森",
+    "min_level": 24,
+    "monster_ids": [
+      "monster-088",
+      "monster-089",
+      "monster-090",
+      "monster-091",
+      "monster-092",
+      "monster-079",
+      "monster-093",
+      "monster-094",
+      "monster-095",
+      "monster-096",
+      "monster-097"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-10",
+    "name": "スライムランド",
+    "min_level": 27,
+    "monster_ids": [
+      "monster-098",
+      "monster-099",
+      "monster-100",
+      "monster-101",
+      "monster-102",
+      "monster-103",
+      "monster-104",
+      "monster-105",
+      "monster-106",
+      "monster-107",
+      "monster-108",
+      "monster-109",
+      "monster-110",
+      "monster-111",
+      "monster-112",
+      "monster-113",
+      "monster-114",
+      "monster-115",
+      "monster-116",
+      "monster-117",
+      "monster-118"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-11",
+    "name": "死霊の沼地",
+    "min_level": 30,
+    "monster_ids": [
+      "monster-119",
+      "monster-120",
+      "monster-121",
+      "monster-122",
+      "monster-123",
+      "monster-124",
+      "monster-125",
+      "monster-126",
+      "monster-127",
+      "monster-128",
+      "monster-129",
+      "monster-130",
+      "monster-131",
+      "monster-132"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-12",
+    "name": "ドラゴンの谷",
+    "min_level": 33,
+    "monster_ids": [
+      "monster-133",
+      "monster-134",
+      "monster-135",
+      "monster-136",
+      "monster-137",
+      "monster-138",
+      "monster-139",
+      "monster-140",
+      "monster-141",
+      "monster-142",
+      "monster-143"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-13",
+    "name": "暗黒魔城",
+    "min_level": 36,
+    "monster_ids": [
+      "monster-144",
+      "monster-145",
+      "monster-146",
+      "monster-147",
+      "monster-148",
+      "monster-149",
+      "monster-150",
+      "monster-151",
+      "monster-152",
+      "monster-153",
+      "monster-154",
+      "monster-155",
+      "monster-156",
+      "monster-118"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-14",
+    "name": "死の大地",
+    "min_level": 39,
+    "monster_ids": [
+      "monster-157",
+      "monster-158",
+      "monster-159",
+      "monster-160",
+      "monster-161",
+      "monster-162",
+      "monster-163",
+      "monster-164",
+      "monster-165",
+      "monster-166",
+      "monster-167",
+      "monster-168"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-15",
+    "name": "魔界",
+    "min_level": 42,
+    "monster_ids": [
+      "monster-169",
+      "monster-170",
+      "monster-171",
+      "monster-172",
+      "monster-173",
+      "monster-174",
+      "monster-175",
+      "monster-176",
+      "monster-177",
+      "monster-178",
+      "monster-179",
+      "monster-180",
+      "monster-181"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-16",
+    "name": "鏡の世界",
+    "min_level": 25,
+    "monster_ids": [
+      "monster-182",
+      "monster-183",
+      "monster-184",
+      "monster-185"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-17",
+    "name": "マダムガーデン",
+    "min_level": 30,
+    "monster_ids": [
+      "monster-186",
+      "monster-187",
+      "monster-188",
+      "monster-117",
+      "monster-118",
+      "monster-189"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-18",
+    "name": "幻の秘境",
+    "min_level": 35,
+    "monster_ids": [
+      "monster-190",
+      "monster-191",
+      "monster-192",
+      "monster-193",
+      "monster-194",
+      "monster-195",
+      "monster-196",
+      "monster-197",
+      "monster-198",
+      "monster-199",
+      "monster-200",
+      "monster-201"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-19",
+    "name": "闇のランプ",
+    "min_level": 40,
+    "monster_ids": [
+      "monster-202",
+      "monster-203",
+      "monster-204",
+      "monster-205",
+      "monster-206",
+      "monster-207",
+      "monster-208",
+      "monster-209",
+      "monster-210"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-20",
+    "name": "封印の地",
+    "min_level": 45,
+    "monster_ids": [
+      "monster-211",
+      "monster-212"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-21",
+    "name": "天空城",
+    "min_level": 50,
+    "monster_ids": [
+      "monster-213",
+      "monster-214",
+      "monster-215",
+      "monster-216",
+      "monster-217",
+      "monster-218",
+      "monster-219"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-22",
+    "name": "カオスフィールド",
+    "min_level": 55,
+    "monster_ids": [
+      "monster-220",
+      "monster-221",
+      "monster-222",
+      "monster-223",
+      "monster-224",
+      "monster-225",
+      "monster-226",
+      "monster-227",
+      "monster-228",
+      "monster-229",
+      "monster-230",
+      "monster-231",
+      "monster-232",
+      "monster-233",
+      "monster-234",
+      "monster-235"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-23",
+    "name": "ワイルドアピアリー",
+    "min_level": 60,
+    "monster_ids": [
+      "monster-236",
+      "monster-237",
+      "monster-238",
+      "monster-239",
+      "monster-240",
+      "monster-241",
+      "monster-242",
+      "monster-243",
+      "monster-244",
+      "monster-245",
+      "monster-246"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-24",
+    "name": "プニプニ雪原",
+    "min_level": 65,
+    "monster_ids": [
+      "monster-247",
+      "monster-248",
+      "monster-249",
+      "monster-250",
+      "monster-251",
+      "monster-252",
+      "monster-253",
+      "monster-254"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-25",
+    "name": "白亜の宮殿",
+    "min_level": 70,
+    "monster_ids": [
+      "monster-255",
+      "monster-256",
+      "monster-257",
+      "monster-258",
+      "monster-259",
+      "monster-260",
+      "monster-261",
+      "monster-262",
+      "monster-263",
+      "monster-264"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-26",
+    "name": "氷の彫刻館",
+    "min_level": 75,
+    "monster_ids": [
+      "monster-265",
+      "monster-266",
+      "monster-267",
+      "monster-268",
+      "monster-269",
+      "monster-270",
+      "monster-271",
+      "monster-272",
+      "monster-273",
+      "monster-274",
+      "monster-275",
+      "monster-276",
+      "monster-277",
+      "monster-278",
+      "monster-279",
+      "monster-280",
+      "monster-281",
+      "monster-282",
+      "monster-283",
+      "monster-284",
+      "monster-285",
+      "monster-286",
+      "monster-287"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-27",
+    "name": "神秘の森",
+    "min_level": 80,
+    "monster_ids": [
+      "monster-288",
+      "monster-289",
+      "monster-290",
+      "monster-291",
+      "monster-292",
+      "monster-293",
+      "monster-007",
+      "monster-294",
+      "monster-295",
+      "monster-296",
+      "monster-297",
+      "monster-298",
+      "monster-299",
+      "monster-300",
+      "monster-301",
+      "monster-302",
+      "monster-303",
+      "monster-304",
+      "monster-305",
+      "monster-306",
+      "monster-307",
+      "monster-308",
+      "monster-309",
+      "monster-310",
+      "monster-311",
+      "monster-312",
+      "monster-313",
+      "monster-314",
+      "monster-315",
+      "monster-249",
+      "monster-252",
+      "monster-253"
+    ],
+    "duration_seconds": 3600
+  },
+  {
+    "id": "stage-28",
+    "name": "ハロウィンタウン",
+    "min_level": 85,
+    "monster_ids": [
+      "monster-316",
+      "monster-317",
+      "monster-318",
+      "monster-319",
+      "monster-320",
+      "monster-321",
+      "monster-322"
+    ],
+    "duration_seconds": 3600
+  }
+]
