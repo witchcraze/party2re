@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+echo "==> Ensuring database container is running..."
+docker compose up -d mariadb valkey >/dev/null 2>&1
+
+# Wait until MariaDB is responsive
+for i in {1..30}; do
+    if docker compose exec -T mariadb mariadb -u party2 -pparty2 -e "SELECT 1" party2 >/dev/null 2>&1; then
+        break
+    fi
+    sleep 0.5
+done
+
+# Ensure schema_migrations table exists
+docker compose exec -T mariadb mariadb -u party2 -pparty2 party2 -e \
+    "CREATE TABLE IF NOT EXISTS schema_migrations (version VARCHAR(255) PRIMARY KEY, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" >/dev/null 2>&1 || true
+
+echo "==> Applying database migrations..."
+for file in $(ls migrations/*.sql | sort); do
+    version=$(basename "$file" .sql)
+    applied=$(docker compose exec -T mariadb mariadb -u party2 -pparty2 -N -e \
+        "SELECT COUNT(1) FROM schema_migrations WHERE version = '$version';" party2 2>/dev/null | tr -d '[:space:]' || echo "0")
+    if [ "$applied" = "0" ]; then
+        echo "  -> Applying $file..."
+        docker compose exec -T mariadb mariadb -u party2 -pparty2 party2 < "$file"
+    fi
+done
+echo "==> All migrations are up to date."
