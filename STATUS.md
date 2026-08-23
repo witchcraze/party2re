@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #46 container and coverage workflow completed
+Last updated: Issue #49 structured application logging completed
 
 ## Current phase
 
@@ -52,6 +52,11 @@ Adventure claim reward application is atomic under concurrency through Issue
 The current Compose workflow remains the development and integration-test
 environment. CI also publishes Go coverage reports for later review without
 enforcing a percentage threshold.
+
+Application operations now have an injectable standard-library `log/slog`
+contract with JSON output, correlation fields, and secret-safe handling. Player
+account operations use it without logging passwords, session values, or
+credentials.
 
 ## Confirmed decisions
 

@@ -41,6 +41,8 @@ Application / API
         +-- Events
         +-- ...
   |
+  +-- Application Logging
+  |
 Persistence
 ```
 
@@ -151,3 +153,9 @@ The architecture should also avoid assumptions that would prevent exposing appro
 
 This is an architectural capability to preserve, not a requirement to expose a public network API during the initial implementation.
 
+## Application logging
+
+Application services may receive the injectable logging contract described in
+[`logging.md`](logging.md). Logging is structured JSON infrastructure, not a
+Core or Feature Module responsibility. It carries operation and optional
+correlation fields while filtering authentication and credential data.
