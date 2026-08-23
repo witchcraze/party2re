@@ -51,6 +51,17 @@ tests. Definitions that select a special rule must also have a corresponding
 special-rule test. Adding content must not silently remove an existing test
 case.
 
+The repeatable content-only validation command is:
+
+```text
+docker compose run --rm app go test ./internal/core/job ./internal/core/item
+```
+
+The current Item package has no loaded catalog, so its existing definitions
+are limited to constructor and instance behavior. A loaded Item catalog and
+its catalog-wide tests are tracked separately in
+[Issue #51](https://github.com/witchcraze/party2re/issues/51).
+
 ## Logging direction
 
 Application logs are intended for container stdout/stderr and should use the

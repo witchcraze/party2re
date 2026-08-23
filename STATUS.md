@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #49 structured application logging completed
+Last updated: Issue #50 exhaustive content behavior tests completed
 
 ## Current phase
 
@@ -57,6 +57,11 @@ Application operations now have an injectable standard-library `log/slog`
 contract with JSON output, correlation fields, and secret-safe handling. Player
 account operations use it without logging passwords, session values, or
 credentials.
+
+Issue #50 now validates every loaded Job definition through catalog-wide
+field, lookup, availability, and minimum-level boundary tests. The Item
+component still has no loaded catalog; that focused follow-up is tracked in
+Issue #51 rather than introducing speculative Item content.
 
 ## Confirmed decisions
 
