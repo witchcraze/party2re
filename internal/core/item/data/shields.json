@@ -1,0 +1,32 @@
+[
+  {
+    "id": "item-071",
+    "name": "天上の盾と兜",
+    "price": 5000,
+    "slot": "off-hand"
+  },
+  {
+    "id": "item-161",
+    "name": "闘気の盾",
+    "price": 5000,
+    "slot": "off-hand"
+  },
+  {
+    "id": "item-162",
+    "name": "金剛の盾",
+    "price": 8000,
+    "slot": "off-hand"
+  },
+  {
+    "id": "item-163",
+    "name": "水晶の盾",
+    "price": 8000,
+    "slot": "off-hand"
+  },
+  {
+    "id": "item-209",
+    "name": "神聖の盾",
+    "price": 8000,
+    "slot": "off-hand"
+  }
+]

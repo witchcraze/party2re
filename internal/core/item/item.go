@@ -13,9 +13,10 @@ var (
 )
 
 type Definition struct {
-	ID   string
-	Name string
-	Slot Slot
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Price int    `json:"price"`
+	Slot  Slot   `json:"slot,omitempty"`
 }
 
 type Slot string
@@ -28,15 +29,24 @@ const (
 	SlotAccessory Slot = "accessory"
 )
 
-func NewDefinition(id, name string) (Definition, error) {
-	if strings.TrimSpace(id) == "" || strings.TrimSpace(name) == "" {
-		return Definition{}, ErrInvalidDefinition
+func IsValidSlot(slot Slot) bool {
+	switch slot {
+	case SlotNone, SlotMainHand, SlotOffHand, SlotBody, SlotAccessory:
+		return true
+	default:
+		return false
 	}
-	return Definition{ID: strings.TrimSpace(id), Name: strings.TrimSpace(name)}, nil
 }
 
-func NewEquipmentDefinition(id, name string, slot Slot) (Definition, error) {
-	value, err := NewDefinition(id, name)
+func NewDefinition(id, name string, price int) (Definition, error) {
+	if strings.TrimSpace(id) == "" || strings.TrimSpace(name) == "" || price < 0 {
+		return Definition{}, ErrInvalidDefinition
+	}
+	return Definition{ID: strings.TrimSpace(id), Name: strings.TrimSpace(name), Price: price}, nil
+}
+
+func NewEquipmentDefinition(id, name string, price int, slot Slot) (Definition, error) {
+	value, err := NewDefinition(id, name, price)
 	if err != nil || slot == SlotNone {
 		return Definition{}, ErrInvalidDefinition
 	}

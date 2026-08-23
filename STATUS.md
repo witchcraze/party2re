@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #50 exhaustive content behavior tests completed
+Last updated: Issue #51 loaded Item content catalog completed
 
 ## Current phase
 
@@ -58,10 +58,9 @@ contract with JSON output, correlation fields, and secret-safe handling. Player
 account operations use it without logging passwords, session values, or
 credentials.
 
-Issue #50 now validates every loaded Job definition through catalog-wide
-field, lookup, availability, and minimum-level boundary tests. The Item
-component still has no loaded catalog; that focused follow-up is tracked in
-Issue #51 rather than introducing speculative Item content.
+Issue #50 and Issue #51 validate every loaded Job and Item definition through
+catalog-wide field, lookup, availability, slot, and boundary tests. Both
+catalogs are verified continuously in CI.
 
 ## Confirmed decisions
 

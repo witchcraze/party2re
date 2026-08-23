@@ -1,0 +1,218 @@
+[
+  {
+    "id": "item-012",
+    "name": "祈りの指輪",
+    "price": 2000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-036",
+    "name": "闇のロザリオ",
+    "price": 8000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-090",
+    "name": "水滴のピアス",
+    "price": 200,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-110",
+    "name": "自爆の腕輪",
+    "price": 500,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-112",
+    "name": "命の指輪",
+    "price": 1200,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-116",
+    "name": "ドクロの指輪",
+    "price": 666,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-117",
+    "name": "金のロザリオ",
+    "price": 1100,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-118",
+    "name": "金の指輪",
+    "price": 800,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-121",
+    "name": "流星の腕輪",
+    "price": 3000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-122",
+    "name": "力の指輪",
+    "price": 1500,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-123",
+    "name": "豪傑の腕輪",
+    "price": 3000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-124",
+    "name": "怪獣の指輪",
+    "price": 6000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-143",
+    "name": "魔性の首飾り",
+    "price": 1000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-145",
+    "name": "激昂の護符",
+    "price": 1000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-146",
+    "name": "ヒーリングストーン",
+    "price": 500,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-149",
+    "name": "代償の腕輪",
+    "price": 1000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-152",
+    "name": "命の宝珠",
+    "price": 5000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-153",
+    "name": "不思議な宝珠",
+    "price": 5000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-154",
+    "name": "力の宝珠",
+    "price": 5000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-155",
+    "name": "守りの宝珠",
+    "price": 5000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-156",
+    "name": "素早さの宝珠",
+    "price": 5000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-157",
+    "name": "スキルの宝珠",
+    "price": 40000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-159",
+    "name": "リインストーン",
+    "price": 5000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-160",
+    "name": "降魔の輝石",
+    "price": 5000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-167",
+    "name": "幸せのブローチ",
+    "price": 1000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-186",
+    "name": "リフライトストーン",
+    "price": 500,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-205",
+    "name": "暴走の護符",
+    "price": 500,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-212",
+    "name": "仇討の護符",
+    "price": 8000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-214",
+    "name": "見聞絵巻",
+    "price": 1000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-249",
+    "name": "星のタリスマン",
+    "price": 10000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-251",
+    "name": "光る宝珠",
+    "price": 1000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-252",
+    "name": "ひび割れた宝珠",
+    "price": 1000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-253",
+    "name": "多彩色の宝珠",
+    "price": 2000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-254",
+    "name": "黒ずんだ宝珠",
+    "price": 2000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-255",
+    "name": "妖しい宝珠",
+    "price": 5000,
+    "slot": "accessory"
+  },
+  {
+    "id": "item-256",
+    "name": "ディフラストーン",
+    "price": 5000,
+    "slot": "accessory"
+  }
+]

@@ -6,7 +6,7 @@ import (
 )
 
 func TestNewDefinitionSeparatesDefinitionIdentityFromInstances(t *testing.T) {
-	definition, err := NewDefinition(" potion ", " Recovery Potion ")
+	definition, err := NewDefinition(" potion ", " Recovery Potion ", 30)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -14,15 +14,18 @@ func TestNewDefinitionSeparatesDefinitionIdentityFromInstances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if definition.ID != "potion" || definition.Name != "Recovery Potion" ||
+	if definition.ID != "potion" || definition.Name != "Recovery Potion" || definition.Price != 30 ||
 		instance.DefinitionID != definition.ID || instance.ID == "" || instance.Quantity != 2 {
 		t.Fatalf("definition = %#v, instance = %#v", definition, instance)
 	}
 }
 
 func TestItemRejectsInvalidValues(t *testing.T) {
-	if _, err := NewDefinition("", "Potion"); !errors.Is(err, ErrInvalidDefinition) {
+	if _, err := NewDefinition("", "Potion", 10); !errors.Is(err, ErrInvalidDefinition) {
 		t.Fatalf("NewDefinition() error = %v", err)
+	}
+	if _, err := NewDefinition("potion", "Potion", -1); !errors.Is(err, ErrInvalidDefinition) {
+		t.Fatalf("NewDefinition(negative price) error = %v", err)
 	}
 	if _, err := NewInstance("", 1); !errors.Is(err, ErrInvalidInstance) {
 		t.Fatalf("NewInstance() error = %v", err)

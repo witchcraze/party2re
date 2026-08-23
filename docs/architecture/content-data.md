@@ -8,39 +8,45 @@ and allows content review without changing control flow.
 
 ## Initial format and location
 
-The initial Job catalog uses JSON loaded by the Job component from
-`internal/core/job/data/jobs.json`. Go's standard `encoding/json` package is
-used; no additional data or configuration dependency is required.
+The initial Job catalog uses JSON loaded from
+`internal/core/job/data/jobs.json`. The Item catalog is organized by category
+in `internal/core/item/data/`:
 
-Each entry contains:
+- `weapons.json` (main-hand weapons)
+- `armors.json` (body armors)
+- `shields.json` (off-hand shields)
+- `accessories.json` (accessories)
+- `consumables.json` (consumable items, quest items, and materials)
+
+Go's standard `encoding/json` package is used; no additional data or
+configuration dependency is required.
+
+Job entries contain growth and level requirements. Item entries contain:
 
 ```json
 {
-  "id": "job-01",
-  "name": "Job 01",
-  "hp_growth": 6,
-  "mp_growth": 1,
-  "attack_growth": 3,
-  "defense_growth": 5,
-  "agility_growth": 2,
-  "min_level": 5
+  "id": "weapon-01",
+  "name": "ヒノキの棒",
+  "price": 10,
+  "slot": "main-hand"
 }
 ```
 
-The loader validates IDs, names, non-negative growth values, minimum levels,
-and duplicate IDs before constructing the in-memory catalog. Invalid or
-unknown definitions fail explicitly.
+The loaders validate IDs, names, non-negative growth values, non-negative
+prices, valid slots, and duplicate IDs before constructing the in-memory
+catalog. Invalid or unknown definitions fail explicitly.
 
 ## Responsibilities
 
 - JSON: content values and simple declarative requirements.
-- Job component: loading, validation, and public definition lookup.
+- Job and Item components: loading, validation, and public definition lookup.
 - Progression: applying validated growth values using progression rules.
+- Equipment / Inventory: managing instances and equipping items by slot.
 - Asset manifest and asset documentation: image paths, dimensions, provenance,
   and licenses.
 
 Content data must not contain executable code, legacy source structure, legacy
-image paths, or copied legacy assets. For Version 1 job content, reference job
+image paths, or copied legacy assets. For Version 1 job and item content, reference
 names may be retained as behavioral/content labels after individual review;
 names with strong association to another work are replaced with generic
 equivalents. This review is performed per name rather than by discarding all
@@ -56,10 +62,7 @@ definitions selecting a special rule must have a matching special-rule test.
 Coverage is reported by CI for later review, but no percentage threshold is
 currently enforced.
 
-The current Item component has definitions and instances, but no loaded Item
-catalog. Consequently, there are no loaded Item definitions to validate yet;
-the catalog and its exhaustive tests are tracked in
-[Issue #51](https://github.com/witchcraze/party2re/issues/51). The current Job
-and Item models also have no special-behavior identifier field or registry.
-If such identifiers are introduced, the loader must reject unknown values and
-the catalog tests must require one explicit test for every registered value.
+The current Job and Item models have no special-behavior identifier field or
+registry. If such identifiers are introduced, the loader must reject unknown
+values and the catalog tests must require one explicit test for every registered
+value.

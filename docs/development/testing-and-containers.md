@@ -57,10 +57,8 @@ The repeatable content-only validation command is:
 docker compose run --rm app go test ./internal/core/job ./internal/core/item
 ```
 
-The current Item package has no loaded catalog, so its existing definitions
-are limited to constructor and instance behavior. A loaded Item catalog and
-its catalog-wide tests are tracked separately in
-[Issue #51](https://github.com/witchcraze/party2re/issues/51).
+Both Job and Item definitions are covered by catalog-wide loading, validation,
+and boundary tests.
 
 ## Logging direction
 
