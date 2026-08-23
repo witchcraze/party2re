@@ -7,11 +7,11 @@ import (
 )
 
 const (
-	MinLevelForRebirth        = 99
-	PermanentBonusPerRebirth  = 5
-	BaseInitialHP             = 30
-	BaseInitialMP             = 10
-	BaseInitialStat           = 10
+	MinLevelForRebirth       = 99
+	PermanentBonusPerRebirth = 5
+	BaseInitialHP            = 30
+	BaseInitialMP            = 10
+	BaseInitialStat          = 10
 )
 
 var (
