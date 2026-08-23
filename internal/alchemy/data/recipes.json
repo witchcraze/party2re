@@ -1,0 +1,1858 @@
+[
+  {
+    "id": "recipe-001",
+    "name": "上薬草の合成",
+    "result_item_definition_id": "item-002",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-001",
+        "quantity": 2
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-002",
+    "name": "ドラゴン草の合成",
+    "result_item_definition_id": "item-041",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-001",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-042",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-003",
+    "name": "特薬草の合成",
+    "result_item_definition_id": "item-003",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-002",
+        "quantity": 2
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-004",
+    "name": "霊樹の葉の合成",
+    "result_item_definition_id": "item-006",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-003",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-016",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-005",
+    "name": "薬草の根っこの合成",
+    "result_item_definition_id": "item-010",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-007",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-008",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-006",
+    "name": "霊樹のしずくの合成",
+    "result_item_definition_id": "item-005",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-006",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-011",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-007",
+    "name": "エルフの飲み薬の合成",
+    "result_item_definition_id": "item-013",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-011",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-005",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-008",
+    "name": "スキルの種の合成",
+    "result_item_definition_id": "item-021",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-022",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-133",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-009",
+    "name": "幸せのくつの合成",
+    "result_item_definition_id": "item-105",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-111",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-022",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-010",
+    "name": "幸福袋の合成",
+    "result_item_definition_id": "item-126",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-111",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-105",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-011",
+    "name": "幸せの帽子の合成",
+    "result_item_definition_id": "item-111",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-105",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-022",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-012",
+    "name": "幸せの種の合成",
+    "result_item_definition_id": "item-022",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-021",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-081",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-013",
+    "name": "宝物庫の鍵の合成",
+    "result_item_definition_id": "item-107",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-083",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-105",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-014",
+    "name": "身代わり石像の合成",
+    "result_item_definition_id": "item-073",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-072",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-014",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-015",
+    "name": "身代わり騎士の合成",
+    "result_item_definition_id": "item-074",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-073",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-080",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-016",
+    "name": "悪魔の粉の合成",
+    "result_item_definition_id": "item-082",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-081",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-130",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-017",
+    "name": "聖者の灰の合成",
+    "result_item_definition_id": "item-133",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-082",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-087",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-018",
+    "name": "金塊の合成",
+    "result_item_definition_id": "item-134",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-106",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-077",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-019",
+    "name": "魔獣の皮の合成",
+    "result_item_definition_id": "item-131",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-079",
+        "quantity": 1
+      },
+      {
+        "definition_id": "armor-05",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-020",
+    "name": "魔除けの聖印の合成",
+    "result_item_definition_id": "item-132",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-078",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-011",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-021",
+    "name": "モンスター銀貨の合成",
+    "result_item_definition_id": "item-025",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-024",
+        "quantity": 2
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-022",
+    "name": "モンスター金貨の合成",
+    "result_item_definition_id": "item-026",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-025",
+        "quantity": 2
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-023",
+    "name": "小さなメダルの合成",
+    "result_item_definition_id": "item-023",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-026",
+        "quantity": 2
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-024",
+    "name": "命の指輪の合成",
+    "result_item_definition_id": "item-112",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-118",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-016",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-025",
+    "name": "祈りの指輪の合成",
+    "result_item_definition_id": "item-012",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-118",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-017",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-026",
+    "name": "力の指輪の合成",
+    "result_item_definition_id": "item-122",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-118",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-018",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-027",
+    "name": "守りのルビーの合成",
+    "result_item_definition_id": "item-080",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-118",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-019",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-028",
+    "name": "はやてのリングの合成",
+    "result_item_definition_id": "item-120",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-118",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-020",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-029",
+    "name": "金のブレスレットの合成",
+    "result_item_definition_id": "item-119",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-118",
+        "quantity": 2
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-030",
+    "name": "ドクロの指輪の合成",
+    "result_item_definition_id": "item-116",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-118",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-097",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-031",
+    "name": "金のロザリオの合成",
+    "result_item_definition_id": "item-117",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-036",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-133",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-032",
+    "name": "命のブレスレットの合成",
+    "result_item_definition_id": "item-113",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-119",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-112",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-033",
+    "name": "豪傑の腕輪の合成",
+    "result_item_definition_id": "item-123",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-122",
+        "quantity": 2
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-034",
+    "name": "流星の腕輪の合成",
+    "result_item_definition_id": "item-121",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-120",
+        "quantity": 2
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-035",
+    "name": "怪獣の指輪の合成",
+    "result_item_definition_id": "item-124",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-123",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-121",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-036",
+    "name": "自爆の腕輪の合成",
+    "result_item_definition_id": "item-110",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-123",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-042",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-037",
+    "name": "怒りのタトゥーの合成",
+    "result_item_definition_id": "item-115",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-123",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-134",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-038",
+    "name": "ドクロの指輪の合成",
+    "result_item_definition_id": "item-116",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-114",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-085",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-039",
+    "name": "ソーサリーリングの合成",
+    "result_item_definition_id": "item-114",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-116",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-133",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-040",
+    "name": "鉄の槍の合成",
+    "result_item_definition_id": "weapon-42",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-01",
+        "quantity": 1
+      },
+      {
+        "definition_id": "weapon-43",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-041",
+    "name": "ロングスピアの合成",
+    "result_item_definition_id": "weapon-45",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-01",
+        "quantity": 1
+      },
+      {
+        "definition_id": "weapon-42",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-042",
+    "name": "モーニングスターの合成",
+    "result_item_definition_id": "weapon-21",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-03",
+        "quantity": 1
+      },
+      {
+        "definition_id": "weapon-16",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-043",
+    "name": "銅の剣の合成",
+    "result_item_definition_id": "weapon-08",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-06",
+        "quantity": 2
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-044",
+    "name": "聖なるナイフの合成",
+    "result_item_definition_id": "weapon-10",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-06",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-133",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-045",
+    "name": "アサシンダガーの合成",
+    "result_item_definition_id": "weapon-17",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-43",
+        "quantity": 1
+      },
+      {
+        "definition_id": "weapon-12",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-046",
+    "name": "アンデッドバスターの合成",
+    "result_item_definition_id": "weapon-55",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-15",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-132",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-047",
+    "name": "ライトシャムールの合成",
+    "result_item_definition_id": "weapon-58",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-14",
+        "quantity": 1
+      },
+      {
+        "definition_id": "armor-44",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-048",
+    "name": "聖なる槍の合成",
+    "result_item_definition_id": "weapon-19",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-45",
+        "quantity": 1
+      },
+      {
+        "definition_id": "weapon-10",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-049",
+    "name": "バトルフォークの合成",
+    "result_item_definition_id": "weapon-46",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-45",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-085",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-050",
+    "name": "悪魔の槍の合成",
+    "result_item_definition_id": "weapon-25",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-46",
+        "quantity": 1
+      },
+      {
+        "definition_id": "weapon-12",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-051",
+    "name": "悪魔の槍の合成",
+    "result_item_definition_id": "weapon-25",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-19",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-085",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-052",
+    "name": "竜の鞭の合成",
+    "result_item_definition_id": "weapon-26",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-21",
+        "quantity": 1
+      },
+      {
+        "definition_id": "weapon-23",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-053",
+    "name": "プラチナソードの合成",
+    "result_item_definition_id": "weapon-59",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-13",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-134",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-054",
+    "name": "古びた剣の合成",
+    "result_item_definition_id": "weapon-41",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-13",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-130",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-055",
+    "name": "必殺のピアスの合成",
+    "result_item_definition_id": "weapon-31",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-090",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-120",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-056",
+    "name": "竜神の杖の合成",
+    "result_item_definition_id": "weapon-36",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-34",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-041",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-057",
+    "name": "バスタードソードの合成",
+    "result_item_definition_id": "weapon-57",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-18",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-133",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-058",
+    "name": "吹雪の剣の合成",
+    "result_item_definition_id": "weapon-50",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-57",
+        "quantity": 1
+      },
+      {
+        "definition_id": "weapon-49",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-059",
+    "name": "妖精の剣の合成",
+    "result_item_definition_id": "weapon-24",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-57",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-075",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-060",
+    "name": "聖銀のレイピアの合成",
+    "result_item_definition_id": "weapon-64",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-08",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-132",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-061",
+    "name": "古びた剣の合成",
+    "result_item_definition_id": "weapon-41",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-08",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-130",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-062",
+    "name": "堕天使のレイピアの合成",
+    "result_item_definition_id": "weapon-65",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-64",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-085",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-063",
+    "name": "疾風のレイピアの合成",
+    "result_item_definition_id": "weapon-66",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-65",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-120",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-064",
+    "name": "鉄の斧の合成",
+    "result_item_definition_id": "weapon-11",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-09",
+        "quantity": 2
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-065",
+    "name": "バトルアックスの合成",
+    "result_item_definition_id": "weapon-20",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-11",
+        "quantity": 2
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-066",
+    "name": "金の斧の合成",
+    "result_item_definition_id": "weapon-47",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-11",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-134",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-067",
+    "name": "ムーンアックスの合成",
+    "result_item_definition_id": "weapon-61",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-47",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-008",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-068",
+    "name": "キングアックスの合成",
+    "result_item_definition_id": "weapon-62",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-47",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-135",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-069",
+    "name": "山賊の斧の合成",
+    "result_item_definition_id": "weapon-48",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-20",
+        "quantity": 1
+      },
+      {
+        "definition_id": "armor-48",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-070",
+    "name": "覇王の斧の合成",
+    "result_item_definition_id": "weapon-63",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-48",
+        "quantity": 1
+      },
+      {
+        "definition_id": "armor-39",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-071",
+    "name": "おおかなづちの合成",
+    "result_item_definition_id": "weapon-44",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-07",
+        "quantity": 1
+      },
+      {
+        "definition_id": "weapon-11",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-072",
+    "name": "ウォーハンマー・改の合成",
+    "result_item_definition_id": "weapon-53",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-22",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-123",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-073",
+    "name": "メガトンハンマーの合成",
+    "result_item_definition_id": "weapon-60",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-53",
+        "quantity": 1
+      },
+      {
+        "definition_id": "weapon-63",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-074",
+    "name": "疾風の剣・改の合成",
+    "result_item_definition_id": "weapon-51",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-29",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-121",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-075",
+    "name": "諸刃の剣・改の合成",
+    "result_item_definition_id": "weapon-52",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-28",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-133",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-076",
+    "name": "氷の刃の合成",
+    "result_item_definition_id": "weapon-49",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-28",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-132",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-077",
+    "name": "奇跡の剣・改の合成",
+    "result_item_definition_id": "weapon-54",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-30",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-113",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-078",
+    "name": "流銀の剣の合成",
+    "result_item_definition_id": "weapon-40",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-41",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-136",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-079",
+    "name": "王家の霊剣の合成",
+    "result_item_definition_id": "weapon-67",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-40",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-135",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-080",
+    "name": "伝説の勇者の剣の合成",
+    "result_item_definition_id": "weapon-68",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-67",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-137",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-081",
+    "name": "ドラゴンスレイヤーの合成",
+    "result_item_definition_id": "weapon-56",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-23",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-123",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-082",
+    "name": "竜神の剣の合成",
+    "result_item_definition_id": "weapon-69",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-56",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-136",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-083",
+    "name": "竜王の聖剣の合成",
+    "result_item_definition_id": "weapon-70",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "weapon-69",
+        "quantity": 1
+      },
+      {
+        "definition_id": "weapon-40",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-084",
+    "name": "旅人の服の合成",
+    "result_item_definition_id": "armor-02",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-01",
+        "quantity": 2
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-085",
+    "name": "皮の鎧の合成",
+    "result_item_definition_id": "armor-04",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-02",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-131",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-086",
+    "name": "騎士団の服の合成",
+    "result_item_definition_id": "armor-42",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-02",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-052",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-087",
+    "name": "鎖かたびらの合成",
+    "result_item_definition_id": "armor-07",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-02",
+        "quantity": 1
+      },
+      {
+        "definition_id": "weapon-16",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-088",
+    "name": "うろこの鎧の合成",
+    "result_item_definition_id": "armor-06",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-04",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-079",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-089",
+    "name": "青銅の鎧の合成",
+    "result_item_definition_id": "armor-10",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-07",
+        "quantity": 1
+      },
+      {
+        "definition_id": "weapon-08",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-090",
+    "name": "シルバーメイルの合成",
+    "result_item_definition_id": "armor-43",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-11",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-078",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-091",
+    "name": "古びた鎧の合成",
+    "result_item_definition_id": "armor-41",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-11",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-130",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-092",
+    "name": "刃の鎧の合成",
+    "result_item_definition_id": "armor-22",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-16",
+        "quantity": 1
+      },
+      {
+        "definition_id": "weapon-28",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-093",
+    "name": "古びた鎧の合成",
+    "result_item_definition_id": "armor-41",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-16",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-130",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-094",
+    "name": "あつでの鎧の合成",
+    "result_item_definition_id": "armor-45",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-16",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-131",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-095",
+    "name": "金の胸当ての合成",
+    "result_item_definition_id": "armor-46",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-19",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-134",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-096",
+    "name": "ライトアーマーの合成",
+    "result_item_definition_id": "armor-44",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-13",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-132",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-097",
+    "name": "安らぎのローブの合成",
+    "result_item_definition_id": "armor-12",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-14",
+        "quantity": 1
+      },
+      {
+        "definition_id": "armor-03",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-098",
+    "name": "闇の衣の合成",
+    "result_item_definition_id": "armor-28",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-14",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-085",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-099",
+    "name": "不死者の鎧の合成",
+    "result_item_definition_id": "armor-17",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-43",
+        "quantity": 1
+      },
+      {
+        "definition_id": "weapon-15",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-100",
+    "name": "ドラゴンメイルの合成",
+    "result_item_definition_id": "armor-26",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-43",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-131",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-101",
+    "name": "プラチナメイルの合成",
+    "result_item_definition_id": "armor-47",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-17",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-133",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-102",
+    "name": "賢者のローブの合成",
+    "result_item_definition_id": "armor-21",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-18",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-133",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-103",
+    "name": "紅蓮のローブの合成",
+    "result_item_definition_id": "armor-49",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-21",
+        "quantity": 1
+      },
+      {
+        "definition_id": "armor-29",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-104",
+    "name": "神秘の鎧の合成",
+    "result_item_definition_id": "armor-35",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-30",
+        "quantity": 1
+      },
+      {
+        "definition_id": "armor-34",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-105",
+    "name": "盗賊の衣の合成",
+    "result_item_definition_id": "armor-48",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-08",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-120",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-106",
+    "name": "巨人の鎧の合成",
+    "result_item_definition_id": "armor-51",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-38",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-123",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-107",
+    "name": "流銀の鎧の合成",
+    "result_item_definition_id": "armor-40",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-41",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-136",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-108",
+    "name": "王家の霊鎧の合成",
+    "result_item_definition_id": "armor-52",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-40",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-135",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-109",
+    "name": "伝説の勇者の鎧の合成",
+    "result_item_definition_id": "armor-53",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-52",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-137",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-110",
+    "name": "ドラゴンアーマーの合成",
+    "result_item_definition_id": "armor-50",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-26",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-123",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-111",
+    "name": "竜神の鎧の合成",
+    "result_item_definition_id": "armor-54",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-50",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-136",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  },
+  {
+    "id": "recipe-112",
+    "name": "竜王の聖鎧の合成",
+    "result_item_definition_id": "armor-55",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "armor-54",
+        "quantity": 1
+      },
+      {
+        "definition_id": "armor-40",
+        "quantity": 1
+      }
+    ],
+    "gold_fee": 100
+  }
+]

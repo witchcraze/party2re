@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #59 — Blacksmith item enhancement and refinement
+Last updated: Issue #60 — Alchemy crafting and recipe synthesis
 
 ## Current phase
 
@@ -124,6 +124,12 @@ Issue #59 introduced Blacksmith item enhancement and refinement:
 - `internal/database.BlacksmithRepository` — Atomic single-transaction commit across character wallet, active inventory, and enhanced item instance properties
 - `docs/design/blacksmith.md` — Specification of enhancement rules, cost formulas, and success probability
 - Database schema migration `migrations/012_item_enhancement.sql` adding `enhancement_level` to inventory and depot item tables
+
+Issue #60 introduced Alchemy crafting and recipe synthesis:
+
+- `internal/alchemy` — Service and data-driven RecipeCatalog (`internal/alchemy/data/recipes.json` with 80 recipes) for synthesizing items and consumables from material ingredients
+- `internal/database.AlchemyRepository` — Atomic single-transaction commit across character wallet, active inventory consumed ingredients, and synthesized output items
+- `docs/design/alchemy.md` — Specification of recipe catalog rules, crafting invariants, and atomic transaction guarantees
 
 ## Confirmed decisions
 
