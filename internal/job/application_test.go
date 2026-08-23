@@ -30,3 +30,44 @@ func TestServiceChangePersistsJobHistory(t *testing.T) {
 		t.Fatalf("got = %#v, saved = %#v", got, repository.value)
 	}
 }
+
+func TestServiceMaster(t *testing.T) {
+	state, _ := corejob.NewCharacterJob("character-1", "starter")
+	repository := &repositoryStub{value: state}
+	service, _ := NewService(repository)
+
+	got, err := service.Master(context.Background(), "character-1", "warrior")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.IsMastered("warrior") || !repository.value.IsMastered("warrior") {
+		t.Errorf("expected warrior to be mastered: %#v", got)
+	}
+}
+
+func TestServiceCheckAndApplyMastery(t *testing.T) {
+	state, _ := corejob.NewCharacterJob("character-1", "mage")
+	repository := &repositoryStub{value: state}
+	service, _ := NewService(repository)
+
+	// Level 50 does not trigger mastery
+	applied, err := service.CheckAndApplyMastery(context.Background(), "character-1", 50)
+	if err != nil || applied {
+		t.Errorf("level 50 should not apply mastery: applied=%v, err=%v", applied, err)
+	}
+
+	// Level 99 triggers mastery
+	applied, err = service.CheckAndApplyMastery(context.Background(), "character-1", 99)
+	if err != nil || !applied {
+		t.Errorf("level 99 should apply mastery: applied=%v, err=%v", applied, err)
+	}
+	if !repository.value.IsMastered("mage") {
+		t.Errorf("expected mage to be mastered in repository")
+	}
+
+	// Re-checking does not re-apply
+	applied, err = service.CheckAndApplyMastery(context.Background(), "character-1", 99)
+	if err != nil || applied {
+		t.Errorf("already mastered should not re-apply: applied=%v", applied)
+	}
+}

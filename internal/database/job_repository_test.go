@@ -35,6 +35,8 @@ func TestCharacterJobRepositoryPersistsAndLoadsHistory(t *testing.T) {
 	if err := want.ChangeTo(target, 1, "unspecified"); err != nil {
 		t.Fatal(err)
 	}
+	want.Master("vanguard")
+	want.Master("paladin")
 	repository, err := NewCharacterJobRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +49,8 @@ func TestCharacterJobRepositoryPersistsAndLoadsHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.CharacterID != want.CharacterID || got.CurrentJobID != want.CurrentJobID ||
-		len(got.History) != 1 || got.History[0] != want.History[0] {
+		len(got.History) != 1 || got.History[0] != want.History[0] ||
+		len(got.MasteredJobs) != 2 || !got.IsMastered("vanguard") || !got.IsMastered("paladin") {
 		t.Fatalf("FindByCharacterID() = %#v, want %#v", got, want)
 	}
 }

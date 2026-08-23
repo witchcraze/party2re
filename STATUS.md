@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #60 — Alchemy crafting and recipe synthesis
+Last updated: Issue #61 — Job mastery and character rebirth progression
 
 ## Current phase
 
@@ -127,9 +127,17 @@ Issue #59 introduced Blacksmith item enhancement and refinement:
 
 Issue #60 introduced Alchemy crafting and recipe synthesis:
 
-- `internal/alchemy` — Service and data-driven RecipeCatalog (`internal/alchemy/data/recipes.json` with 80 recipes) for synthesizing items and consumables from material ingredients
+- `internal/alchemy` — Service and data-driven RecipeCatalog (`internal/alchemy/data/recipes.json` with 112 clean-room recipes) for synthesizing items and consumables from material ingredients
 - `internal/database.AlchemyRepository` — Atomic single-transaction commit across character wallet, active inventory consumed ingredients, and synthesized output items
 - `docs/design/alchemy.md` — Specification of recipe catalog rules, crafting invariants, and atomic transaction guarantees
+
+Issue #61 introduced Job mastery and character rebirth progression:
+
+- `internal/core/progression.Rebirth` — Rebirth calculation resetting level to 1 while granting +5 permanent stat bonuses per rebirth
+- `internal/core/job.CharacterJob` and `internal/job.Service` — Job mastery tracking at Level 99 and mastery persistence
+- `internal/character.Service.Rebirth` — Character rebirth application service
+- `docs/design/rebirth.md` — Specification of job mastery and reincarnation rules
+- Database schema migration `migrations/013_rebirth.sql` adding `rebirth_count` to characters and creating `character_job_masteries` table
 
 ## Confirmed decisions
 

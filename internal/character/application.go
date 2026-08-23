@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/progression"
 )
 
 var ErrNotFound = corecharacter.ErrNotFound
@@ -12,6 +13,7 @@ var ErrNotFound = corecharacter.ErrNotFound
 type Repository interface {
 	Save(ctx context.Context, value corecharacter.Character) error
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
+	Update(ctx context.Context, value corecharacter.Character) error
 }
 
 type Service struct {
@@ -54,4 +56,18 @@ func (s *Service) CreateWithOptions(ctx context.Context, name string, options Cr
 
 func (s *Service) Get(ctx context.Context, id string) (corecharacter.Character, error) {
 	return s.repository.FindByID(ctx, id)
+}
+
+func (s *Service) Rebirth(ctx context.Context, id string) (corecharacter.Character, error) {
+	char, err := s.repository.FindByID(ctx, id)
+	if err != nil {
+		return corecharacter.Character{}, err
+	}
+	if err := progression.Rebirth(&char); err != nil {
+		return corecharacter.Character{}, err
+	}
+	if err := s.repository.Update(ctx, char); err != nil {
+		return corecharacter.Character{}, err
+	}
+	return char, nil
 }

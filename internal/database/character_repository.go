@@ -27,23 +27,23 @@ func NewCharacterRepository(db *sql.DB) (*CharacterRepository, error) {
 func (r *CharacterRepository) Save(ctx context.Context, value corecharacter.Character) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO characters
-			(id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			(id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, value.ID, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP,
 		value.Stats.HP, value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility,
-		value.Money, value.Level, value.Experience)
+		value.Money, value.Level, value.Experience, value.RebirthCount)
 	return err
 }
 
 func (r *CharacterRepository) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
 	var value corecharacter.Character
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience
+		SELECT id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
 		FROM characters
 		WHERE id = ?
 	`, id).Scan(&value.ID, &value.Name, &value.JobID, &value.Gender, &value.Stats.MaxHP, &value.Stats.MaxMP,
 		&value.Stats.HP, &value.Stats.MP, &value.Stats.Attack, &value.Stats.Defense, &value.Stats.Agility,
-		&value.Money, &value.Level, &value.Experience)
+		&value.Money, &value.Level, &value.Experience, &value.RebirthCount)
 	if errors.Is(err, sql.ErrNoRows) {
 		return corecharacter.Character{}, corecharacter.ErrNotFound
 	}
@@ -90,11 +90,11 @@ func executeCharacterUpdate(ctx context.Context, executor sqlContextExecutor, va
 	result, err := executor.ExecContext(ctx, `
 		UPDATE characters
 		SET name = ?, job_id = ?, gender = ?, max_hp = ?, max_mp = ?, hp = ?, mp = ?,
-			attack = ?, defense = ?, agility = ?, money = ?, level = ?, experience = ?
+			attack = ?, defense = ?, agility = ?, money = ?, level = ?, experience = ?, rebirth_count = ?
 		WHERE id = ?
 	`, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP, value.Stats.HP,
 		value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility, value.Money,
-		value.Level, value.Experience, value.ID)
+		value.Level, value.Experience, value.RebirthCount, value.ID)
 	if err != nil {
 		return 0, err
 	}

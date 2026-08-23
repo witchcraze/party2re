@@ -47,6 +47,19 @@ func (r *CharacterJobRepository) Save(ctx context.Context, value corejob.Charact
 			return err
 		}
 	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM character_job_masteries WHERE character_id = ?", value.CharacterID); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	for _, jobID := range value.MasteredJobs {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO character_job_masteries (character_id, job_id)
+			VALUES (?, ?)
+		`, value.CharacterID, jobID); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
 	return tx.Commit()
 }
 
@@ -83,5 +96,27 @@ func (r *CharacterJobRepository) FindByCharacterID(ctx context.Context, characte
 	if err := rows.Err(); err != nil {
 		return corejob.CharacterJob{}, err
 	}
+
+	masteryRows, err := r.db.QueryContext(ctx, `
+		SELECT job_id
+		FROM character_job_masteries
+		WHERE character_id = ?
+		ORDER BY job_id
+	`, characterID)
+	if err != nil {
+		return corejob.CharacterJob{}, err
+	}
+	defer masteryRows.Close()
+	for masteryRows.Next() {
+		var jobID string
+		if err := masteryRows.Scan(&jobID); err != nil {
+			return corejob.CharacterJob{}, err
+		}
+		value.MasteredJobs = append(value.MasteredJobs, jobID)
+	}
+	if err := masteryRows.Err(); err != nil {
+		return corejob.CharacterJob{}, err
+	}
+
 	return value, nil
 }
