@@ -264,7 +264,8 @@ func TestAdventureAppliesSelectedBattleCurrencyReward(t *testing.T) {
 }
 
 func TestAdventureRejectsUnsupportedItemReward(t *testing.T) {
-	service, clock, _, characters := newTestService(t)
+	service, clock, repository, characters := newTestService(t)
+	service.inventories = nil
 	service.battle = battleResolverStub{result: corebattle.Result{
 		Outcome:  corebattle.OutcomeWin,
 		WinnerID: characters.value.ID,

@@ -49,9 +49,9 @@ type Clock interface {
 	Now() time.Time
 }
 
-type realClock struct{}
+type RealClock struct{}
 
-func (realClock) Now() time.Time { return time.Now().UTC() }
+func (RealClock) Now() time.Time { return time.Now().UTC() }
 
 type Repository interface {
 	Save(ctx context.Context, value Adventure) error
@@ -101,10 +101,13 @@ func NewService(adventures Repository, characters CharacterRepository, battle co
 	if err != nil {
 		return nil, err
 	}
-	return NewServiceWithCatalogs(adventures, characters, nil, stages, monsters, battle, scheduler, logger, realClock{})
+	return NewServiceWithCatalogs(adventures, characters, nil, stages, monsters, battle, scheduler, logger, RealClock{})
 }
 
 func NewServiceWithClock(adventures Repository, characters CharacterRepository, battle corebattle.Resolver, scheduler Scheduler, logger Logger, clock Clock) (*Service, error) {
+	if clock == nil {
+		return nil, errors.New("adventure clock is nil")
+	}
 	stages, err := InitialStageCatalog()
 	if err != nil {
 		return nil, err
@@ -131,7 +134,7 @@ func NewServiceWithCatalogs(
 		return nil, errors.New("adventure dependencies are nil")
 	}
 	if clock == nil {
-		clock = realClock{}
+		return nil, errors.New("adventure clock is nil")
 	}
 	if logger == nil {
 		logger = nopLogger{}

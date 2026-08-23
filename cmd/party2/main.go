@@ -93,7 +93,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		adventureService, err := adventure.NewServiceWithCatalogs(adventureRepo, charRepo, invRepo, adventureStages, adventureMonsters, corebattle.Engine{}, schedService, nil, nil)
+		adventureService, err := adventure.NewServiceWithCatalogs(adventureRepo, charRepo, invRepo, adventureStages, adventureMonsters, corebattle.Engine{}, schedService, nil, adventure.RealClock{})
 		if err != nil {
 			return err
 		}
