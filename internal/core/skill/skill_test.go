@@ -56,3 +56,56 @@ func TestSkillRequiresOwnedItemWhenConfigured(t *testing.T) {
 		t.Fatalf("missing item error = %v", err)
 	}
 }
+
+func TestNewDefinitionValidation(t *testing.T) {
+	tests := []struct {
+		id     string
+		name   string
+		level  int
+		mpCost int
+		effect corebattle.Effect
+	}{
+		{id: "", name: "Name", level: 1, mpCost: 1, effect: corebattle.Effect{Kind: "heal", Power: 1}},
+		{id: "id", name: "", level: 1, mpCost: 1, effect: corebattle.Effect{Kind: "heal", Power: 1}},
+		{id: "id", name: "Name", level: 0, mpCost: 1, effect: corebattle.Effect{Kind: "heal", Power: 1}},
+		{id: "id", name: "Name", level: 1, mpCost: -1, effect: corebattle.Effect{Kind: "heal", Power: 1}},
+		{id: "id", name: "Name", level: 1, mpCost: 1, effect: corebattle.Effect{Kind: "", Power: 1}},
+		{id: "id", name: "Name", level: 1, mpCost: 1, effect: corebattle.Effect{Kind: "heal", Power: -1}},
+	}
+	for _, test := range tests {
+		if _, err := NewDefinition(test.id, test.name, nil, test.level, test.mpCost, test.effect); !errors.Is(err, ErrInvalidDefinition) {
+			t.Errorf("NewDefinition(%#v) error = %v, want %v", test, err, ErrInvalidDefinition)
+		}
+	}
+}
+
+func TestSkillCanUseAndUseNilCharacter(t *testing.T) {
+	definition, err := NewDefinition("heal", "Heal", nil, 1, 1, corebattle.Effect{Kind: "heal", Power: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := definition.CanUse(UseRequest{Character: nil}); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("CanUse(nil character) error = %v, want %v", err, ErrUnavailable)
+	}
+	if _, err := definition.Use(UseRequest{Character: nil}); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("Use(nil character) error = %v, want %v", err, ErrUnavailable)
+	}
+}
+
+func TestSkillUseInsufficientMPLeavesMPUnchanged(t *testing.T) {
+	value, err := corecharacter.New("Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	value.Stats.MP = 2
+	definition, err := NewDefinition("heavy-strike", "Heavy Strike", nil, 1, 5, corebattle.Effect{Kind: "damage", Power: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := definition.Use(UseRequest{Character: &value}); !errors.Is(err, ErrInsufficientMP) {
+		t.Fatalf("Use(insufficient MP) error = %v, want %v", err, ErrInsufficientMP)
+	}
+	if value.Stats.MP != 2 {
+		t.Fatalf("MP modified on failed Use: %d, want 2", value.Stats.MP)
+	}
+}

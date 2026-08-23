@@ -209,6 +209,75 @@ func TestApplyExperienceWithProviderUsesCharacterJobID(t *testing.T) {
 	}
 }
 
+func TestExperienceForNextLevelBoundary(t *testing.T) {
+	invalidLevels := []int{-5, 0, MaxLevel, MaxLevel + 1}
+	for _, lvl := range invalidLevels {
+		if _, err := ExperienceForNextLevel(lvl); !errors.Is(err, ErrInvalidCharacterLevel) {
+			t.Fatalf("ExperienceForNextLevel(%d) error = %v, want %v", lvl, err, ErrInvalidCharacterLevel)
+		}
+	}
+}
+
+func TestApplyExperienceWithProviderErrors(t *testing.T) {
+	value, err := character.New("Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := job.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	random := &sequenceRandomSource{}
+
+	if _, err := ApplyExperienceWithProvider(nil, 10, catalog, random); !errors.Is(err, ErrNilCharacter) {
+		t.Fatalf("ApplyExperienceWithProvider(nil character) error = %v, want %v", err, ErrNilCharacter)
+	}
+	if _, err := ApplyExperienceWithProvider(&value, 10, nil, random); !errors.Is(err, ErrInvalidGrowth) {
+		t.Fatalf("ApplyExperienceWithProvider(nil provider) error = %v, want %v", err, ErrInvalidGrowth)
+	}
+
+	value.JobID = "unknown-job"
+	if _, err := ApplyExperienceWithProvider(&value, 10, catalog, random); err == nil {
+		t.Fatal("ApplyExperienceWithProvider(unknown job) expected error, got nil")
+	}
+}
+
+func TestApplyExperienceWithJobRandomError(t *testing.T) {
+	value, err := character.New("Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition, err := job.NewDefinition("vanguard", "Vanguard", 1, 1, 1, 1, 1, 1, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	errRandom := errRandomSource{}
+	if _, err := ApplyExperienceWithJob(&value, 10, definition, errRandom); err == nil {
+		t.Fatal("ApplyExperienceWithJob(errRandom) expected error, got nil")
+	}
+}
+
+func TestApplyExperienceWithJobNegativeGrowthFields(t *testing.T) {
+	random := &sequenceRandomSource{values: []int{0}}
+
+	definitions := []job.Definition{
+		{ID: "bad1", HPGrowth: -1},
+		{ID: "bad2", MPGrowth: -1},
+		{ID: "bad3", AttackGrowth: -1},
+		{ID: "bad4", DefenseGrowth: -1},
+		{ID: "bad5", AgilityGrowth: -1},
+	}
+	for _, def := range definitions {
+		char, err := character.New("Alice")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ApplyExperienceWithJob(&char, 10, def, random); !errors.Is(err, ErrInvalidGrowth) {
+			t.Fatalf("ApplyExperienceWithJob(%#v) error = %v, want %v", def, err, ErrInvalidGrowth)
+		}
+	}
+}
+
 type sequenceRandomSource struct {
 	values []int
 	index  int
@@ -218,4 +287,10 @@ func (s *sequenceRandomSource) Intn(max int) (int, error) {
 	value := s.values[s.index]
 	s.index++
 	return value, nil
+}
+
+type errRandomSource struct{}
+
+func (errRandomSource) Intn(int) (int, error) {
+	return 0, errors.New("random generator failed")
 }
