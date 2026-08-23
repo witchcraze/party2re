@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #121 — Unified local verification script, Makefile, and pre-push hook
+Last updated: Issue #71 — Banking system and gold deposit with transfers
 
 ## Current phase
 
@@ -144,6 +144,13 @@ Issue #121 introduced unified local verification and pre-push hook workflow:
 - `scripts/verify.sh` and `Makefile` (`make check`, `make fmt`, `make setup-hooks`) — Unified one-command verification executing `gofmt`, `go vet`, full docker test suite, and smoke production image build
 - `.githooks/pre-push` — Git hook automatically enforcing `make check` before allowing `git push`
 - Updated development guides and agent operating rules
+
+Issue #71 introduced the Banking system and gold deposit with transfers:
+
+- `internal/bank` — Service for bank account management, gold deposits, withdrawals, and player-to-player remittances
+- `internal/database.BankRepository` — Atomic single-transaction persistence with `FOR UPDATE` concurrency locking
+- `docs/design/bank.md` — Specification of bank account rules and transfer invariants
+- Database schema migration `migrations/014_bank.sql` adding `bank_accounts` and `bank_transfers` tables
 
 ## Confirmed decisions
 
