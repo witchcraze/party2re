@@ -85,7 +85,15 @@ func run() error {
 			return err
 		}
 
-		adventureService, err := adventure.NewService(adventureRepo, charRepo, corebattle.Engine{}, schedService, nil)
+		adventureStages, err := adventure.InitialStageCatalog()
+		if err != nil {
+			return err
+		}
+		adventureMonsters, err := adventure.InitialMonsterCatalog()
+		if err != nil {
+			return err
+		}
+		adventureService, err := adventure.NewServiceWithCatalogs(adventureRepo, charRepo, invRepo, adventureStages, adventureMonsters, corebattle.Engine{}, schedService, nil, adventure.RealClock{})
 		if err != nil {
 			return err
 		}

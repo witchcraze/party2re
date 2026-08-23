@@ -1,18 +1,6 @@
 [
   {
     "id": "monster-001",
-    "name": "ビックスライム",
-    "hp": 300,
-    "mp": 0,
-    "attack": 35,
-    "defense": 10,
-    "agility": 40,
-    "exp_reward": 60,
-    "gold_reward": 20,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-002",
     "name": "ドットスライム",
     "hp": 5,
     "mp": 0,
@@ -21,10 +9,12 @@
     "agility": 7,
     "exp_reward": 1,
     "gold_reward": 2,
-    "drop_item_ids": []
+    "drop_item_ids": [
+      "item-001"
+    ]
   },
   {
-    "id": "monster-003",
+    "id": "monster-002",
     "name": "スライム",
     "hp": 7,
     "mp": 0,
@@ -36,7 +26,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-004",
+    "id": "monster-003",
     "name": "レッドスライム",
     "hp": 8,
     "mp": 0,
@@ -48,7 +38,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-005",
+    "id": "monster-004",
     "name": "チビイエティ",
     "hp": 11,
     "mp": 0,
@@ -60,7 +50,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-006",
+    "id": "monster-005",
     "name": "ナイトバット",
     "hp": 10,
     "mp": 0,
@@ -72,7 +62,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-007",
+    "id": "monster-006",
     "name": "ピヨコ",
     "hp": 12,
     "mp": 0,
@@ -84,43 +74,19 @@
     "drop_item_ids": []
   },
   {
+    "id": "monster-007",
+    "name": "ビックスライム",
+    "hp": 300,
+    "mp": 0,
+    "attack": 35,
+    "defense": 10,
+    "agility": 40,
+    "exp_reward": 60,
+    "gold_reward": 20,
+    "drop_item_ids": []
+  },
+  {
     "id": "monster-008",
-    "name": "ポイズンマッシュA",
-    "hp": 30,
-    "mp": 29,
-    "attack": 20,
-    "defense": 10,
-    "agility": 11,
-    "exp_reward": 15,
-    "gold_reward": 12,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-009",
-    "name": "トレント人面樹",
-    "hp": 500,
-    "mp": 63,
-    "attack": 40,
-    "defense": 20,
-    "agility": 25,
-    "exp_reward": 90,
-    "gold_reward": 60,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-010",
-    "name": "ポイズンマッシュB",
-    "hp": 30,
-    "mp": 29,
-    "attack": 20,
-    "defense": 10,
-    "agility": 11,
-    "exp_reward": 15,
-    "gold_reward": 12,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-011",
     "name": "魔界ナス",
     "hp": 14,
     "mp": 0,
@@ -132,7 +98,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-012",
+    "id": "monster-009",
     "name": "ゴーストマッシュ",
     "hp": 15,
     "mp": 0,
@@ -144,7 +110,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-013",
+    "id": "monster-010",
     "name": "ポイズンマッシュ",
     "hp": 18,
     "mp": 29,
@@ -156,7 +122,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-014",
+    "id": "monster-011",
     "name": "ベビーレオ",
     "hp": 20,
     "mp": 0,
@@ -168,7 +134,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-015",
+    "id": "monster-012",
     "name": "ナイトバット",
     "hp": 15,
     "mp": 0,
@@ -180,7 +146,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-016",
+    "id": "monster-013",
     "name": "スライム",
     "hp": 10,
     "mp": 0,
@@ -192,7 +158,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-017",
+    "id": "monster-014",
     "name": "ジャックランタン",
     "hp": 18,
     "mp": 0,
@@ -204,19 +170,43 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-018",
-    "name": "亡霊剣士",
-    "hp": 1000,
-    "mp": 45,
-    "attack": 60,
-    "defense": 20,
-    "agility": 50,
-    "exp_reward": 160,
-    "gold_reward": 50,
+    "id": "monster-015",
+    "name": "ポイズンマッシュA",
+    "hp": 30,
+    "mp": 29,
+    "attack": 20,
+    "defense": 10,
+    "agility": 11,
+    "exp_reward": 15,
+    "gold_reward": 12,
     "drop_item_ids": []
   },
   {
-    "id": "monster-019",
+    "id": "monster-016",
+    "name": "トレント人面樹",
+    "hp": 500,
+    "mp": 63,
+    "attack": 40,
+    "defense": 20,
+    "agility": 25,
+    "exp_reward": 90,
+    "gold_reward": 60,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-017",
+    "name": "ポイズンマッシュB",
+    "hp": 30,
+    "mp": 29,
+    "attack": 20,
+    "defense": 10,
+    "agility": 11,
+    "exp_reward": 15,
+    "gold_reward": 12,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-018",
     "name": "ゴースト",
     "hp": 20,
     "mp": 0,
@@ -228,7 +218,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-020",
+    "id": "monster-019",
     "name": "メイジゴースト",
     "hp": 26,
     "mp": 35,
@@ -240,7 +230,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-021",
+    "id": "monster-020",
     "name": "シャドー",
     "hp": 21,
     "mp": 33,
@@ -252,7 +242,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-022",
+    "id": "monster-021",
     "name": "ミイラ男",
     "hp": 50,
     "mp": 37,
@@ -264,7 +254,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-023",
+    "id": "monster-022",
     "name": "ガイコツ剣士",
     "hp": 45,
     "mp": 20,
@@ -276,7 +266,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-024",
+    "id": "monster-023",
     "name": "ナイトウィスプ",
     "hp": 25,
     "mp": 45,
@@ -288,7 +278,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-025",
+    "id": "monster-024",
     "name": "プチケルベロス",
     "hp": 41,
     "mp": 0,
@@ -300,7 +290,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-026",
+    "id": "monster-025",
     "name": "パンプキン",
     "hp": 65,
     "mp": 0,
@@ -312,7 +302,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-027",
+    "id": "monster-026",
     "name": "人食い箱",
     "hp": 120,
     "mp": 42,
@@ -324,31 +314,19 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-028",
-    "name": "キラーシェル",
-    "hp": 450,
-    "mp": 50,
-    "attack": 90,
-    "defense": 90,
-    "agility": 30,
-    "exp_reward": 100,
-    "gold_reward": 150,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-029",
-    "name": "デビルシェル",
+    "id": "monster-027",
+    "name": "亡霊剣士",
     "hp": 1000,
-    "mp": 100,
+    "mp": 45,
     "attack": 60,
-    "defense": 50,
-    "agility": 30,
-    "exp_reward": 120,
-    "gold_reward": 200,
+    "defense": 20,
+    "agility": 50,
+    "exp_reward": 160,
+    "gold_reward": 50,
     "drop_item_ids": []
   },
   {
-    "id": "monster-030",
+    "id": "monster-028",
     "name": "ヒーラースライム",
     "hp": 50,
     "mp": 45,
@@ -360,7 +338,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-031",
+    "id": "monster-029",
     "name": "しびれクラゲ",
     "hp": 60,
     "mp": 31,
@@ -372,7 +350,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-032",
+    "id": "monster-030",
     "name": "シェルスライム",
     "hp": 40,
     "mp": 43,
@@ -384,7 +362,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-033",
+    "id": "monster-031",
     "name": "メイジバット",
     "hp": 54,
     "mp": 59,
@@ -396,7 +374,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-034",
+    "id": "monster-032",
     "name": "亀戦士",
     "hp": 48,
     "mp": 15,
@@ -408,7 +386,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-035",
+    "id": "monster-033",
     "name": "チビイエティ",
     "hp": 64,
     "mp": 0,
@@ -420,7 +398,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-036",
+    "id": "monster-034",
     "name": "イエティ",
     "hp": 150,
     "mp": 24,
@@ -432,19 +410,31 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-037",
-    "name": "ゴーレム",
-    "hp": 1500,
-    "mp": 77,
-    "attack": 100,
-    "defense": 60,
-    "agility": 50,
-    "exp_reward": 150,
-    "gold_reward": 100,
+    "id": "monster-035",
+    "name": "キラーシェル",
+    "hp": 450,
+    "mp": 50,
+    "attack": 90,
+    "defense": 90,
+    "agility": 30,
+    "exp_reward": 100,
+    "gold_reward": 150,
     "drop_item_ids": []
   },
   {
-    "id": "monster-038",
+    "id": "monster-036",
+    "name": "デビルシェル",
+    "hp": 1000,
+    "mp": 100,
+    "attack": 60,
+    "defense": 50,
+    "agility": 30,
+    "exp_reward": 120,
+    "gold_reward": 200,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-037",
     "name": "泥の魔手",
     "hp": 70,
     "mp": 50,
@@ -456,7 +446,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-039",
+    "id": "monster-038",
     "name": "おおさそり",
     "hp": 34,
     "mp": 19,
@@ -468,7 +458,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-040",
+    "id": "monster-039",
     "name": "ボム",
     "hp": 50,
     "mp": 42,
@@ -480,7 +470,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-041",
+    "id": "monster-040",
     "name": "まどうし",
     "hp": 55,
     "mp": 66,
@@ -492,7 +482,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-042",
+    "id": "monster-041",
     "name": "トゲサボテン",
     "hp": 100,
     "mp": 50,
@@ -504,7 +494,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-043",
+    "id": "monster-042",
     "name": "紅トゲサボテン",
     "hp": 100,
     "mp": 50,
@@ -516,7 +506,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-044",
+    "id": "monster-043",
     "name": "トゲボウズ",
     "hp": 64,
     "mp": 24,
@@ -528,7 +518,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-045",
+    "id": "monster-044",
     "name": "チビベリー",
     "hp": 50,
     "mp": 16,
@@ -540,7 +530,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-046",
+    "id": "monster-045",
     "name": "ベロロン",
     "hp": 120,
     "mp": 34,
@@ -552,7 +542,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-047",
+    "id": "monster-046",
     "name": "チビドラゴン",
     "hp": 150,
     "mp": 14,
@@ -564,43 +554,19 @@
     "drop_item_ids": []
   },
   {
+    "id": "monster-047",
+    "name": "ゴーレム",
+    "hp": 1500,
+    "mp": 77,
+    "attack": 100,
+    "defense": 60,
+    "agility": 50,
+    "exp_reward": 150,
+    "gold_reward": 100,
+    "drop_item_ids": []
+  },
+  {
     "id": "monster-048",
-    "name": "闇の魔術士",
-    "hp": 1400,
-    "mp": 250,
-    "attack": 70,
-    "defense": 20,
-    "agility": 100,
-    "exp_reward": 180,
-    "gold_reward": 120,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-049",
-    "name": "魔法使い",
-    "hp": 144,
-    "mp": 72,
-    "attack": 50,
-    "defense": 45,
-    "agility": 76,
-    "exp_reward": 24,
-    "gold_reward": 9,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-050",
-    "name": "メイジスライム",
-    "hp": 160,
-    "mp": 84,
-    "attack": 45,
-    "defense": 30,
-    "agility": 100,
-    "exp_reward": 26,
-    "gold_reward": 8,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-051",
     "name": "まどうし",
     "hp": 55,
     "mp": 66,
@@ -612,7 +578,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-052",
+    "id": "monster-049",
     "name": "魔法使い",
     "hp": 67,
     "mp": 90,
@@ -624,7 +590,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-053",
+    "id": "monster-050",
     "name": "メイジスライム",
     "hp": 70,
     "mp": 104,
@@ -636,7 +602,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-054",
+    "id": "monster-051",
     "name": "デビルエッグ",
     "hp": 66,
     "mp": 66,
@@ -648,7 +614,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-055",
+    "id": "monster-052",
     "name": "小悪魔インプ",
     "hp": 124,
     "mp": 16,
@@ -660,7 +626,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-056",
+    "id": "monster-053",
     "name": "巨大眼球",
     "hp": 90,
     "mp": 34,
@@ -672,7 +638,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-057",
+    "id": "monster-054",
     "name": "スペクテッド",
     "hp": 100,
     "mp": 44,
@@ -684,7 +650,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-058",
+    "id": "monster-055",
     "name": "ジャイアントバット",
     "hp": 180,
     "mp": 24,
@@ -696,7 +662,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-059",
+    "id": "monster-056",
     "name": "ミミック",
     "hp": 300,
     "mp": 68,
@@ -708,7 +674,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-060",
+    "id": "monster-057",
     "name": "メタルスライム",
     "hp": 8,
     "mp": 31,
@@ -720,19 +686,43 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-061",
-    "name": "ギガンテス",
-    "hp": 2500,
-    "mp": 60,
-    "attack": 200,
+    "id": "monster-058",
+    "name": "闇の魔術士",
+    "hp": 1400,
+    "mp": 250,
+    "attack": 70,
     "defense": 20,
-    "agility": 20,
-    "exp_reward": 200,
-    "gold_reward": 5,
+    "agility": 100,
+    "exp_reward": 180,
+    "gold_reward": 120,
     "drop_item_ids": []
   },
   {
-    "id": "monster-062",
+    "id": "monster-059",
+    "name": "魔法使い",
+    "hp": 144,
+    "mp": 72,
+    "attack": 50,
+    "defense": 45,
+    "agility": 76,
+    "exp_reward": 24,
+    "gold_reward": 9,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-060",
+    "name": "メイジスライム",
+    "hp": 160,
+    "mp": 84,
+    "attack": 45,
+    "defense": 30,
+    "agility": 100,
+    "exp_reward": 26,
+    "gold_reward": 8,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-061",
     "name": "メイジマッシュ",
     "hp": 80,
     "mp": 39,
@@ -744,7 +734,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-063",
+    "id": "monster-062",
     "name": "キングコブラ",
     "hp": 100,
     "mp": 0,
@@ -756,7 +746,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-064",
+    "id": "monster-063",
     "name": "レッドアイ",
     "hp": 80,
     "mp": 61,
@@ -768,7 +758,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-065",
+    "id": "monster-064",
     "name": "ダークアイ",
     "hp": 70,
     "mp": 71,
@@ -780,7 +770,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-066",
+    "id": "monster-065",
     "name": "ビーストマスター",
     "hp": 160,
     "mp": 22,
@@ -792,7 +782,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-067",
+    "id": "monster-066",
     "name": "ベビーレオ",
     "hp": 90,
     "mp": 0,
@@ -804,7 +794,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-068",
+    "id": "monster-067",
     "name": "シャドウパンサー",
     "hp": 130,
     "mp": 19,
@@ -816,7 +806,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-069",
+    "id": "monster-068",
     "name": "ニョロロ",
     "hp": 75,
     "mp": 34,
@@ -828,7 +818,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-070",
+    "id": "monster-069",
     "name": "ラフレシア",
     "hp": 95,
     "mp": 44,
@@ -840,7 +830,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-071",
+    "id": "monster-070",
     "name": "モサモサ",
     "hp": 100,
     "mp": 59,
@@ -852,7 +842,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-072",
+    "id": "monster-071",
     "name": "デスローパー",
     "hp": 80,
     "mp": 20,
@@ -864,7 +854,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-073",
+    "id": "monster-072",
     "name": "サンダーシープ",
     "hp": 150,
     "mp": 50,
@@ -876,43 +866,19 @@
     "drop_item_ids": []
   },
   {
+    "id": "monster-073",
+    "name": "ギガンテス",
+    "hp": 2500,
+    "mp": 60,
+    "attack": 200,
+    "defense": 20,
+    "agility": 20,
+    "exp_reward": 200,
+    "gold_reward": 5,
+    "drop_item_ids": []
+  },
+  {
     "id": "monster-074",
-    "name": "ボムA",
-    "hp": 100,
-    "mp": 42,
-    "attack": 80,
-    "defense": 80,
-    "agility": 80,
-    "exp_reward": 55,
-    "gold_reward": 30,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-075",
-    "name": "火炎鳥",
-    "hp": 1800,
-    "mp": 97,
-    "attack": 160,
-    "defense": 70,
-    "agility": 80,
-    "exp_reward": 300,
-    "gold_reward": 180,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-076",
-    "name": "ボムB",
-    "hp": 100,
-    "mp": 42,
-    "attack": 80,
-    "defense": 80,
-    "agility": 80,
-    "exp_reward": 55,
-    "gold_reward": 30,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-077",
     "name": "ファイアースライム",
     "hp": 100,
     "mp": 100,
@@ -924,7 +890,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-078",
+    "id": "monster-075",
     "name": "マグマスライム",
     "hp": 130,
     "mp": 0,
@@ -936,7 +902,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-079",
+    "id": "monster-076",
     "name": "爆弾岩",
     "hp": 100,
     "mp": 42,
@@ -948,7 +914,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-080",
+    "id": "monster-077",
     "name": "チクリ",
     "hp": 111,
     "mp": 26,
@@ -960,7 +926,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-081",
+    "id": "monster-078",
     "name": "ボム",
     "hp": 70,
     "mp": 42,
@@ -972,7 +938,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-082",
+    "id": "monster-079",
     "name": "チビドラゴン",
     "hp": 120,
     "mp": 26,
@@ -984,7 +950,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-083",
+    "id": "monster-080",
     "name": "ブラックドラコ",
     "hp": 110,
     "mp": 17,
@@ -996,7 +962,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-084",
+    "id": "monster-081",
     "name": "ドラゴン",
     "hp": 200,
     "mp": 21,
@@ -1008,7 +974,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-085",
+    "id": "monster-082",
     "name": "チビエッグ",
     "hp": 80,
     "mp": 60,
@@ -1020,7 +986,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-086",
+    "id": "monster-083",
     "name": "ミニタウルス",
     "hp": 140,
     "mp": 20,
@@ -1032,7 +998,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-087",
+    "id": "monster-084",
     "name": "炎の戦士",
     "hp": 110,
     "mp": 27,
@@ -1044,19 +1010,43 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-088",
-    "name": "ベヒーモス",
-    "hp": 2800,
-    "mp": 299,
-    "attack": 185,
-    "defense": 125,
-    "agility": 145,
-    "exp_reward": 350,
-    "gold_reward": 200,
+    "id": "monster-085",
+    "name": "ボムA",
+    "hp": 100,
+    "mp": 42,
+    "attack": 80,
+    "defense": 80,
+    "agility": 80,
+    "exp_reward": 55,
+    "gold_reward": 30,
     "drop_item_ids": []
   },
   {
-    "id": "monster-089",
+    "id": "monster-086",
+    "name": "火炎鳥",
+    "hp": 1800,
+    "mp": 97,
+    "attack": 160,
+    "defense": 70,
+    "agility": 80,
+    "exp_reward": 300,
+    "gold_reward": 180,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-087",
+    "name": "ボムB",
+    "hp": 100,
+    "mp": 42,
+    "attack": 80,
+    "defense": 80,
+    "agility": 80,
+    "exp_reward": 55,
+    "gold_reward": 30,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-088",
     "name": "コボルト勇者",
     "hp": 100,
     "mp": 21,
@@ -1068,7 +1058,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-090",
+    "id": "monster-089",
     "name": "コボルト戦士",
     "hp": 120,
     "mp": 11,
@@ -1080,7 +1070,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-091",
+    "id": "monster-090",
     "name": "コボルト魔道士",
     "hp": 80,
     "mp": 61,
@@ -1092,7 +1082,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-092",
+    "id": "monster-091",
     "name": "コボルト僧侶",
     "hp": 90,
     "mp": 51,
@@ -1104,7 +1094,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-093",
+    "id": "monster-092",
     "name": "守護の岩石",
     "hp": 110,
     "mp": 62,
@@ -1116,7 +1106,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-094",
+    "id": "monster-093",
     "name": "ものまね妖魔",
     "hp": 133,
     "mp": 99,
@@ -1128,7 +1118,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-095",
+    "id": "monster-094",
     "name": "イタズラ妖精",
     "hp": 140,
     "mp": 50,
@@ -1140,7 +1130,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-096",
+    "id": "monster-095",
     "name": "ギャンブル妖精",
     "hp": 104,
     "mp": 20,
@@ -1152,7 +1142,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-097",
+    "id": "monster-096",
     "name": "マウサギ",
     "hp": 104,
     "mp": 20,
@@ -1164,67 +1154,19 @@
     "drop_item_ids": []
   },
   {
+    "id": "monster-097",
+    "name": "ベヒーモス",
+    "hp": 2800,
+    "mp": 299,
+    "attack": 185,
+    "defense": 125,
+    "agility": 145,
+    "exp_reward": 350,
+    "gold_reward": 200,
+    "drop_item_ids": []
+  },
+  {
     "id": "monster-098",
-    "name": "スライムA",
-    "hp": 150,
-    "mp": 91,
-    "attack": 120,
-    "defense": 20,
-    "agility": 100,
-    "exp_reward": 30,
-    "gold_reward": 10,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-099",
-    "name": "スライムB",
-    "hp": 150,
-    "mp": 91,
-    "attack": 120,
-    "defense": 20,
-    "agility": 100,
-    "exp_reward": 30,
-    "gold_reward": 10,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-100",
-    "name": "キングスライム",
-    "hp": 3000,
-    "mp": 400,
-    "attack": 200,
-    "defense": 150,
-    "agility": 120,
-    "exp_reward": 500,
-    "gold_reward": 400,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-101",
-    "name": "スライムC",
-    "hp": 150,
-    "mp": 91,
-    "attack": 120,
-    "defense": 20,
-    "agility": 100,
-    "exp_reward": 30,
-    "gold_reward": 10,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-102",
-    "name": "スライムD",
-    "hp": 150,
-    "mp": 91,
-    "attack": 120,
-    "defense": 20,
-    "agility": 100,
-    "exp_reward": 30,
-    "gold_reward": 10,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-103",
     "name": "ドットスライム",
     "hp": 77,
     "mp": 0,
@@ -1236,7 +1178,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-104",
+    "id": "monster-099",
     "name": "スライム",
     "hp": 90,
     "mp": 30,
@@ -1248,7 +1190,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-105",
+    "id": "monster-100",
     "name": "レッドスライム",
     "hp": 100,
     "mp": 0,
@@ -1260,7 +1202,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-106",
+    "id": "monster-101",
     "name": "バブルスライム",
     "hp": 140,
     "mp": 32,
@@ -1272,7 +1214,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-107",
+    "id": "monster-102",
     "name": "ヒーラースライム",
     "hp": 100,
     "mp": 45,
@@ -1284,7 +1226,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-108",
+    "id": "monster-103",
     "name": "しびれクラゲ",
     "hp": 120,
     "mp": 31,
@@ -1296,7 +1238,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-109",
+    "id": "monster-104",
     "name": "メイジスライム",
     "hp": 110,
     "mp": 84,
@@ -1308,7 +1250,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-110",
+    "id": "monster-105",
     "name": "シェルスライム",
     "hp": 60,
     "mp": 43,
@@ -1320,7 +1262,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-111",
+    "id": "monster-106",
     "name": "ファイアースライム",
     "hp": 125,
     "mp": 15,
@@ -1332,7 +1274,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-112",
+    "id": "monster-107",
     "name": "バットスライム",
     "hp": 100,
     "mp": 44,
@@ -1344,7 +1286,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-113",
+    "id": "monster-108",
     "name": "ハイヒーラースライム",
     "hp": 150,
     "mp": 99,
@@ -1356,7 +1298,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-114",
+    "id": "monster-109",
     "name": "マグマスライム",
     "hp": 90,
     "mp": 10,
@@ -1368,7 +1310,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-115",
+    "id": "monster-110",
     "name": "ビックスライム",
     "hp": 300,
     "mp": 0,
@@ -1380,7 +1322,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-116",
+    "id": "monster-111",
     "name": "ファラオスライム",
     "hp": 444,
     "mp": 144,
@@ -1392,7 +1334,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-117",
+    "id": "monster-112",
     "name": "メタルスライム",
     "hp": 8,
     "mp": 31,
@@ -1404,7 +1346,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-118",
+    "id": "monster-113",
     "name": "はぐれメタル",
     "hp": 14,
     "mp": 61,
@@ -1416,43 +1358,67 @@
     "drop_item_ids": []
   },
   {
+    "id": "monster-114",
+    "name": "スライムA",
+    "hp": 150,
+    "mp": 91,
+    "attack": 120,
+    "defense": 20,
+    "agility": 100,
+    "exp_reward": 30,
+    "gold_reward": 10,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-115",
+    "name": "スライムB",
+    "hp": 150,
+    "mp": 91,
+    "attack": 120,
+    "defense": 20,
+    "agility": 100,
+    "exp_reward": 30,
+    "gold_reward": 10,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-116",
+    "name": "キングスライム",
+    "hp": 3000,
+    "mp": 400,
+    "attack": 200,
+    "defense": 150,
+    "agility": 120,
+    "exp_reward": 500,
+    "gold_reward": 400,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-117",
+    "name": "スライムC",
+    "hp": 150,
+    "mp": 91,
+    "attack": 120,
+    "defense": 20,
+    "agility": 100,
+    "exp_reward": 30,
+    "gold_reward": 10,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-118",
+    "name": "スライムD",
+    "hp": 150,
+    "mp": 91,
+    "attack": 120,
+    "defense": 20,
+    "agility": 100,
+    "exp_reward": 30,
+    "gold_reward": 10,
+    "drop_item_ids": []
+  },
+  {
     "id": "monster-119",
-    "name": "死霊A",
-    "hp": 299,
-    "mp": 42,
-    "attack": 119,
-    "defense": 199,
-    "agility": 66,
-    "exp_reward": 63,
-    "gold_reward": 13,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-120",
-    "name": "死霊の騎士",
-    "hp": 5500,
-    "mp": 5000,
-    "attack": 260,
-    "defense": 180,
-    "agility": 180,
-    "exp_reward": 666,
-    "gold_reward": 444,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-121",
-    "name": "死霊B",
-    "hp": 299,
-    "mp": 42,
-    "attack": 119,
-    "defense": 199,
-    "agility": 66,
-    "exp_reward": 63,
-    "gold_reward": 13,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-122",
     "name": "血塗られた手",
     "hp": 160,
     "mp": 41,
@@ -1464,7 +1430,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-123",
+    "id": "monster-120",
     "name": "マミー",
     "hp": 170,
     "mp": 0,
@@ -1476,7 +1442,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-124",
+    "id": "monster-121",
     "name": "スカルヘッド",
     "hp": 90,
     "mp": 96,
@@ -1488,7 +1454,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-125",
+    "id": "monster-122",
     "name": "影の騎士",
     "hp": 200,
     "mp": 16,
@@ -1500,7 +1466,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-126",
+    "id": "monster-123",
     "name": "シャドー",
     "hp": 94,
     "mp": 44,
@@ -1512,7 +1478,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-127",
+    "id": "monster-124",
     "name": "あやしい影",
     "hp": 98,
     "mp": 44,
@@ -1524,7 +1490,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-128",
+    "id": "monster-125",
     "name": "バットスライム",
     "hp": 140,
     "mp": 54,
@@ -1536,7 +1502,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-129",
+    "id": "monster-126",
     "name": "死霊",
     "hp": 199,
     "mp": 42,
@@ -1548,7 +1514,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-130",
+    "id": "monster-127",
     "name": "バブルポイズン",
     "hp": 180,
     "mp": 92,
@@ -1560,7 +1526,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-131",
+    "id": "monster-128",
     "name": "デビルキャット",
     "hp": 160,
     "mp": 32,
@@ -1572,7 +1538,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-132",
+    "id": "monster-129",
     "name": "キリマ",
     "hp": 200,
     "mp": 62,
@@ -1584,31 +1550,43 @@
     "drop_item_ids": []
   },
   {
+    "id": "monster-130",
+    "name": "死霊A",
+    "hp": 299,
+    "mp": 42,
+    "attack": 119,
+    "defense": 199,
+    "agility": 66,
+    "exp_reward": 63,
+    "gold_reward": 13,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-131",
+    "name": "死霊の騎士",
+    "hp": 5500,
+    "mp": 5000,
+    "attack": 260,
+    "defense": 180,
+    "agility": 180,
+    "exp_reward": 666,
+    "gold_reward": 444,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-132",
+    "name": "死霊B",
+    "hp": 299,
+    "mp": 42,
+    "attack": 119,
+    "defense": 199,
+    "agility": 66,
+    "exp_reward": 63,
+    "gold_reward": 13,
+    "drop_item_ids": []
+  },
+  {
     "id": "monster-133",
-    "name": "竜王",
-    "hp": 8000,
-    "mp": 8000,
-    "attack": 300,
-    "defense": 240,
-    "agility": 100,
-    "exp_reward": 999,
-    "gold_reward": 500,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-134",
-    "name": "ブルーストーン",
-    "hp": 15,
-    "mp": 999,
-    "attack": 200,
-    "defense": 5000,
-    "agility": 1000,
-    "exp_reward": 70,
-    "gold_reward": 500,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-135",
     "name": "ちび勇者",
     "hp": 220,
     "mp": 61,
@@ -1620,7 +1598,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-136",
+    "id": "monster-134",
     "name": "ちび戦士",
     "hp": 250,
     "mp": 41,
@@ -1632,7 +1610,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-137",
+    "id": "monster-135",
     "name": "ちび魔道士",
     "hp": 160,
     "mp": 191,
@@ -1644,7 +1622,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-138",
+    "id": "monster-136",
     "name": "ちび僧侶",
     "hp": 170,
     "mp": 181,
@@ -1656,7 +1634,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-139",
+    "id": "monster-137",
     "name": "ブルードラゴン",
     "hp": 150,
     "mp": 38,
@@ -1668,7 +1646,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-140",
+    "id": "monster-138",
     "name": "ハクリュウ",
     "hp": 200,
     "mp": 69,
@@ -1680,7 +1658,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-141",
+    "id": "monster-139",
     "name": "サラマンダー",
     "hp": 280,
     "mp": 79,
@@ -1692,7 +1670,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-142",
+    "id": "monster-140",
     "name": "ドラゴンマット",
     "hp": 300,
     "mp": 99,
@@ -1704,7 +1682,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-143",
+    "id": "monster-141",
     "name": "マイマイ竜",
     "hp": 340,
     "mp": 99,
@@ -1716,43 +1694,31 @@
     "drop_item_ids": []
   },
   {
+    "id": "monster-142",
+    "name": "竜王",
+    "hp": 8000,
+    "mp": 8000,
+    "attack": 300,
+    "defense": 240,
+    "agility": 100,
+    "exp_reward": 999,
+    "gold_reward": 500,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-143",
+    "name": "ブルーストーン",
+    "hp": 15,
+    "mp": 999,
+    "attack": 200,
+    "defense": 5000,
+    "agility": 1000,
+    "exp_reward": 70,
+    "gold_reward": 500,
+    "drop_item_ids": []
+  },
+  {
     "id": "monster-144",
-    "name": "パープルストーン",
-    "hp": 20,
-    "mp": 999,
-    "attack": 250,
-    "defense": 6000,
-    "agility": 2000,
-    "exp_reward": 100,
-    "gold_reward": 500,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-145",
-    "name": "魔王",
-    "hp": 14000,
-    "mp": 10000,
-    "attack": 320,
-    "defense": 300,
-    "agility": 140,
-    "exp_reward": 2000,
-    "gold_reward": 1500,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-146",
-    "name": "レッドストーン",
-    "hp": 20,
-    "mp": 999,
-    "attack": 250,
-    "defense": 6000,
-    "agility": 2000,
-    "exp_reward": 100,
-    "gold_reward": 500,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-147",
     "name": "ビッグアイ",
     "hp": 180,
     "mp": 64,
@@ -1764,7 +1730,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-148",
+    "id": "monster-145",
     "name": "プチケルベロス",
     "hp": 150,
     "mp": 0,
@@ -1776,7 +1742,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-149",
+    "id": "monster-146",
     "name": "ケルベロス",
     "hp": 270,
     "mp": 33,
@@ -1788,7 +1754,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-150",
+    "id": "monster-147",
     "name": "闇の剣士",
     "hp": 230,
     "mp": 64,
@@ -1800,7 +1766,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-151",
+    "id": "monster-148",
     "name": "黒の騎士",
     "hp": 255,
     "mp": 54,
@@ -1812,7 +1778,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-152",
+    "id": "monster-149",
     "name": "スカルキング",
     "hp": 210,
     "mp": 48,
@@ -1824,7 +1790,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-153",
+    "id": "monster-150",
     "name": "バンパイア",
     "hp": 280,
     "mp": 44,
@@ -1836,7 +1802,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-154",
+    "id": "monster-151",
     "name": "ミラーナイト",
     "hp": 200,
     "mp": 94,
@@ -1848,7 +1814,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-155",
+    "id": "monster-152",
     "name": "デビルアイ",
     "hp": 180,
     "mp": 64,
@@ -1860,7 +1826,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-156",
+    "id": "monster-153",
     "name": "パンドラの魔箱",
     "hp": 900,
     "mp": 69,
@@ -1872,43 +1838,43 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-157",
-    "name": "ブラックストーン",
+    "id": "monster-154",
+    "name": "パープルストーン",
     "hp": 20,
     "mp": 999,
     "attack": 250,
     "defense": 6000,
     "agility": 2000,
     "exp_reward": 100,
-    "gold_reward": 800,
+    "gold_reward": 500,
     "drop_item_ids": []
   },
   {
-    "id": "monster-158",
-    "name": "死神",
-    "hp": 12000,
-    "mp": 14000,
-    "attack": 360,
-    "defense": 180,
-    "agility": 240,
+    "id": "monster-155",
+    "name": "魔王",
+    "hp": 14000,
+    "mp": 10000,
+    "attack": 320,
+    "defense": 300,
+    "agility": 140,
     "exp_reward": 2000,
     "gold_reward": 1500,
     "drop_item_ids": []
   },
   {
-    "id": "monster-159",
-    "name": "ブルーストーン",
+    "id": "monster-156",
+    "name": "レッドストーン",
     "hp": 20,
     "mp": 999,
     "attack": 250,
     "defense": 6000,
     "agility": 2000,
     "exp_reward": 100,
-    "gold_reward": 800,
+    "gold_reward": 500,
     "drop_item_ids": []
   },
   {
-    "id": "monster-160",
+    "id": "monster-157",
     "name": "竜魔人",
     "hp": 450,
     "mp": 85,
@@ -1920,7 +1886,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-161",
+    "id": "monster-158",
     "name": "デスサイズ",
     "hp": 250,
     "mp": 139,
@@ -1932,7 +1898,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-162",
+    "id": "monster-159",
     "name": "魔王の影",
     "hp": 200,
     "mp": 120,
@@ -1944,7 +1910,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-163",
+    "id": "monster-160",
     "name": "自動戦闘機械",
     "hp": 444,
     "mp": 111,
@@ -1956,7 +1922,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-164",
+    "id": "monster-161",
     "name": "ベヒーモス",
     "hp": 415,
     "mp": 97,
@@ -1968,7 +1934,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-165",
+    "id": "monster-162",
     "name": "ギガンテス",
     "hp": 600,
     "mp": 59,
@@ -1980,7 +1946,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-166",
+    "id": "monster-163",
     "name": "ノロイ",
     "hp": 380,
     "mp": 59,
@@ -1992,7 +1958,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-167",
+    "id": "monster-164",
     "name": "ヤミ",
     "hp": 410,
     "mp": 69,
@@ -2004,7 +1970,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-168",
+    "id": "monster-165",
     "name": "バジリスク",
     "hp": 400,
     "mp": 67,
@@ -2016,43 +1982,43 @@
     "drop_item_ids": []
   },
   {
+    "id": "monster-166",
+    "name": "ブラックストーン",
+    "hp": 20,
+    "mp": 999,
+    "attack": 250,
+    "defense": 6000,
+    "agility": 2000,
+    "exp_reward": 100,
+    "gold_reward": 800,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-167",
+    "name": "死神",
+    "hp": 12000,
+    "mp": 14000,
+    "attack": 360,
+    "defense": 180,
+    "agility": 240,
+    "exp_reward": 2000,
+    "gold_reward": 1500,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-168",
+    "name": "ブルーストーン",
+    "hp": 20,
+    "mp": 999,
+    "attack": 250,
+    "defense": 6000,
+    "agility": 2000,
+    "exp_reward": 100,
+    "gold_reward": 800,
+    "drop_item_ids": []
+  },
+  {
     "id": "monster-169",
-    "name": "イビルサンダーA",
-    "hp": 5000,
-    "mp": 999,
-    "attack": 400,
-    "defense": 300,
-    "agility": 3000,
-    "exp_reward": 300,
-    "gold_reward": 300,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-170",
-    "name": "サタン",
-    "hp": 15000,
-    "mp": 30000,
-    "attack": 600,
-    "defense": 300,
-    "agility": 250,
-    "exp_reward": 3000,
-    "gold_reward": 3000,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-171",
-    "name": "イビルサンダーB",
-    "hp": 5000,
-    "mp": 999,
-    "attack": 400,
-    "defense": 300,
-    "agility": 3000,
-    "exp_reward": 300,
-    "gold_reward": 300,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-172",
     "name": "死神の魔導機械",
     "hp": 555,
     "mp": 222,
@@ -2064,7 +2030,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-173",
+    "id": "monster-170",
     "name": "ベヒーモスロード",
     "hp": 600,
     "mp": 149,
@@ -2076,7 +2042,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-174",
+    "id": "monster-171",
     "name": "イクロプス",
     "hp": 700,
     "mp": 99,
@@ -2088,7 +2054,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-175",
+    "id": "monster-172",
     "name": "黒竜",
     "hp": 500,
     "mp": 149,
@@ -2100,7 +2066,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-176",
+    "id": "monster-173",
     "name": "ストーンゴーレム",
     "hp": 300,
     "mp": 155,
@@ -2112,7 +2078,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-177",
+    "id": "monster-174",
     "name": "深淵の巨魁",
     "hp": 420,
     "mp": 299,
@@ -2124,7 +2090,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-178",
+    "id": "monster-175",
     "name": "サイクル",
     "hp": 350,
     "mp": 149,
@@ -2136,7 +2102,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-179",
+    "id": "monster-176",
     "name": "ドラゴンゾンビ",
     "hp": 650,
     "mp": 92,
@@ -2148,7 +2114,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-180",
+    "id": "monster-177",
     "name": "ダイジャ",
     "hp": 760,
     "mp": 292,
@@ -2160,7 +2126,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-181",
+    "id": "monster-178",
     "name": "メタルキング",
     "hp": 25,
     "mp": 249,
@@ -2169,6 +2135,42 @@
     "agility": 2000,
     "exp_reward": 4000,
     "gold_reward": 100,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-179",
+    "name": "イビルサンダーA",
+    "hp": 5000,
+    "mp": 999,
+    "attack": 400,
+    "defense": 300,
+    "agility": 3000,
+    "exp_reward": 300,
+    "gold_reward": 300,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-180",
+    "name": "サタン",
+    "hp": 15000,
+    "mp": 30000,
+    "attack": 600,
+    "defense": 300,
+    "agility": 250,
+    "exp_reward": 3000,
+    "gold_reward": 3000,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-181",
+    "name": "イビルサンダーB",
+    "hp": 5000,
+    "mp": 999,
+    "attack": 400,
+    "defense": 300,
+    "agility": 3000,
+    "exp_reward": 300,
+    "gold_reward": 300,
     "drop_item_ids": []
   },
   {
@@ -2221,42 +2223,6 @@
   },
   {
     "id": "monster-186",
-    "name": "メタルキングA",
-    "hp": 25,
-    "mp": 299,
-    "attack": 200,
-    "defense": 8000,
-    "agility": 2000,
-    "exp_reward": 4000,
-    "gold_reward": 100,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-187",
-    "name": "ゴールドスライム",
-    "hp": 10,
-    "mp": 399,
-    "attack": 300,
-    "defense": 15000,
-    "agility": 8000,
-    "exp_reward": 5000,
-    "gold_reward": 10000,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-188",
-    "name": "メタルキングB",
-    "hp": 25,
-    "mp": 299,
-    "attack": 200,
-    "defense": 8000,
-    "agility": 2000,
-    "exp_reward": 4000,
-    "gold_reward": 100,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-189",
     "name": "メタルキング",
     "hp": 25,
     "mp": 199,
@@ -2268,55 +2234,43 @@
     "drop_item_ids": []
   },
   {
+    "id": "monster-187",
+    "name": "メタルキングA",
+    "hp": 25,
+    "mp": 299,
+    "attack": 200,
+    "defense": 8000,
+    "agility": 2000,
+    "exp_reward": 4000,
+    "gold_reward": 100,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-188",
+    "name": "ゴールドスライム",
+    "hp": 10,
+    "mp": 399,
+    "attack": 300,
+    "defense": 15000,
+    "agility": 8000,
+    "exp_reward": 5000,
+    "gold_reward": 10000,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-189",
+    "name": "メタルキングB",
+    "hp": 25,
+    "mp": 299,
+    "attack": 200,
+    "defense": 8000,
+    "agility": 2000,
+    "exp_reward": 4000,
+    "gold_reward": 100,
+    "drop_item_ids": []
+  },
+  {
     "id": "monster-190",
-    "name": "人食い箱",
-    "hp": 1000,
-    "mp": 500,
-    "attack": 350,
-    "defense": 50,
-    "agility": 400,
-    "exp_reward": 200,
-    "gold_reward": 400,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-191",
-    "name": "ミミック",
-    "hp": 1500,
-    "mp": 500,
-    "attack": 360,
-    "defense": 100,
-    "agility": 700,
-    "exp_reward": 400,
-    "gold_reward": 800,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-192",
-    "name": "パンドラの魔箱",
-    "hp": 2000,
-    "mp": 999,
-    "attack": 370,
-    "defense": 150,
-    "agility": 800,
-    "exp_reward": 600,
-    "gold_reward": 1000,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-193",
-    "name": "罠の小箱",
-    "hp": 2500,
-    "mp": 999,
-    "attack": 380,
-    "defense": 200,
-    "agility": 900,
-    "exp_reward": 800,
-    "gold_reward": 2000,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-194",
     "name": "コボルト勇者",
     "hp": 270,
     "mp": 200,
@@ -2328,7 +2282,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-195",
+    "id": "monster-191",
     "name": "コボルト戦士",
     "hp": 280,
     "mp": 100,
@@ -2340,7 +2294,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-196",
+    "id": "monster-192",
     "name": "コボルト魔道士",
     "hp": 240,
     "mp": 400,
@@ -2352,7 +2306,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-197",
+    "id": "monster-193",
     "name": "コボルト僧侶",
     "hp": 250,
     "mp": 300,
@@ -2364,7 +2318,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-198",
+    "id": "monster-194",
     "name": "ちび勇者",
     "hp": 320,
     "mp": 250,
@@ -2376,7 +2330,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-199",
+    "id": "monster-195",
     "name": "ちび戦士",
     "hp": 340,
     "mp": 150,
@@ -2388,7 +2342,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-200",
+    "id": "monster-196",
     "name": "ちび魔道士",
     "hp": 250,
     "mp": 300,
@@ -2400,7 +2354,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-201",
+    "id": "monster-197",
     "name": "ちび僧侶",
     "hp": 270,
     "mp": 250,
@@ -2412,43 +2366,55 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-202",
-    "name": "悪の右目",
-    "hp": 3000,
+    "id": "monster-198",
+    "name": "人食い箱",
+    "hp": 1000,
+    "mp": 500,
+    "attack": 350,
+    "defense": 50,
+    "agility": 400,
+    "exp_reward": 200,
+    "gold_reward": 400,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-199",
+    "name": "ミミック",
+    "hp": 1500,
+    "mp": 500,
+    "attack": 360,
+    "defense": 100,
+    "agility": 700,
+    "exp_reward": 400,
+    "gold_reward": 800,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-200",
+    "name": "パンドラの魔箱",
+    "hp": 2000,
+    "mp": 999,
+    "attack": 370,
+    "defense": 150,
+    "agility": 800,
+    "exp_reward": 600,
+    "gold_reward": 1000,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-201",
+    "name": "罠の小箱",
+    "hp": 2500,
     "mp": 999,
     "attack": 380,
     "defense": 200,
-    "agility": 200,
-    "exp_reward": 500,
-    "gold_reward": 100,
+    "agility": 900,
+    "exp_reward": 800,
+    "gold_reward": 2000,
     "drop_item_ids": []
   },
   {
-    "id": "monster-203",
-    "name": "悪の口",
-    "hp": 5000,
-    "mp": 3000,
-    "attack": 450,
-    "defense": 30,
-    "agility": 300,
-    "exp_reward": 700,
-    "gold_reward": 300,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-204",
-    "name": "悪の左目",
-    "hp": 3000,
-    "mp": 999,
-    "attack": 380,
-    "defense": 250,
-    "agility": 200,
-    "exp_reward": 500,
-    "gold_reward": 100,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-205",
+    "id": "monster-202",
     "name": "黒スライム",
     "hp": 250,
     "mp": 302,
@@ -2460,7 +2426,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-206",
+    "id": "monster-203",
     "name": "ダークバット",
     "hp": 330,
     "mp": 333,
@@ -2472,7 +2438,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-207",
+    "id": "monster-204",
     "name": "漆黒のものまね妖魔",
     "hp": 300,
     "mp": 362,
@@ -2484,7 +2450,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-208",
+    "id": "monster-205",
     "name": "黒ナイト",
     "hp": 380,
     "mp": 101,
@@ -2496,7 +2462,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-209",
+    "id": "monster-206",
     "name": "黒ボム",
     "hp": 350,
     "mp": 155,
@@ -2508,7 +2474,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-210",
+    "id": "monster-207",
     "name": "黒ドクロ",
     "hp": 240,
     "mp": 400,
@@ -2520,19 +2486,43 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-211",
-    "name": "封印のツボ",
-    "hp": 15000,
-    "mp": 15000,
-    "attack": 450,
-    "defense": 400,
+    "id": "monster-208",
+    "name": "悪の右目",
+    "hp": 3000,
+    "mp": 999,
+    "attack": 380,
+    "defense": 200,
     "agility": 200,
-    "exp_reward": 1000,
+    "exp_reward": 500,
     "gold_reward": 100,
     "drop_item_ids": []
   },
   {
-    "id": "monster-212",
+    "id": "monster-209",
+    "name": "悪の口",
+    "hp": 5000,
+    "mp": 3000,
+    "attack": 450,
+    "defense": 30,
+    "agility": 300,
+    "exp_reward": 700,
+    "gold_reward": 300,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-210",
+    "name": "悪の左目",
+    "hp": 3000,
+    "mp": 999,
+    "attack": 380,
+    "defense": 250,
+    "agility": 200,
+    "exp_reward": 500,
+    "gold_reward": 100,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-211",
     "name": "封印石",
     "hp": 400,
     "mp": 200,
@@ -2544,43 +2534,19 @@
     "drop_item_ids": []
   },
   {
+    "id": "monster-212",
+    "name": "封印のツボ",
+    "hp": 15000,
+    "mp": 15000,
+    "attack": 450,
+    "defense": 400,
+    "agility": 200,
+    "exp_reward": 1000,
+    "gold_reward": 100,
+    "drop_item_ids": []
+  },
+  {
     "id": "monster-213",
-    "name": "シルバーストーン",
-    "hp": 20,
-    "mp": 999,
-    "attack": 500,
-    "defense": 8000,
-    "agility": 3000,
-    "exp_reward": 100,
-    "gold_reward": 1000,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-214",
-    "name": "隻翼の堕天使",
-    "hp": 12000,
-    "mp": 30000,
-    "attack": 500,
-    "defense": 300,
-    "agility": 300,
-    "exp_reward": 3000,
-    "gold_reward": 2000,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-215",
-    "name": "ブラックストーン",
-    "hp": 20,
-    "mp": 999,
-    "attack": 500,
-    "defense": 8000,
-    "agility": 3000,
-    "exp_reward": 100,
-    "gold_reward": 1000,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-216",
     "name": "天猫青",
     "hp": 400,
     "mp": 199,
@@ -2592,7 +2558,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-217",
+    "id": "monster-214",
     "name": "天猫赤",
     "hp": 400,
     "mp": 199,
@@ -2604,7 +2570,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-218",
+    "id": "monster-215",
     "name": "天猫黄",
     "hp": 400,
     "mp": 199,
@@ -2616,7 +2582,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-219",
+    "id": "monster-216",
     "name": "天卵",
     "hp": 500,
     "mp": 164,
@@ -2628,43 +2594,43 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-220",
-    "name": "魔王",
-    "hp": 14000,
-    "mp": 10000,
-    "attack": 650,
-    "defense": 350,
-    "agility": 200,
-    "exp_reward": 2000,
-    "gold_reward": 1500,
+    "id": "monster-217",
+    "name": "シルバーストーン",
+    "hp": 20,
+    "mp": 999,
+    "attack": 500,
+    "defense": 8000,
+    "agility": 3000,
+    "exp_reward": 100,
+    "gold_reward": 1000,
     "drop_item_ids": []
   },
   {
-    "id": "monster-221",
-    "name": "カタストロフィー",
-    "hp": 15000,
+    "id": "monster-218",
+    "name": "隻翼の堕天使",
+    "hp": 12000,
     "mp": 30000,
-    "attack": 750,
-    "defense": 400,
-    "agility": 400,
-    "exp_reward": 5000,
-    "gold_reward": 3000,
+    "attack": 500,
+    "defense": 300,
+    "agility": 300,
+    "exp_reward": 3000,
+    "gold_reward": 2000,
     "drop_item_ids": []
   },
   {
-    "id": "monster-222",
-    "name": "死神",
-    "hp": 14000,
-    "mp": 14000,
-    "attack": 600,
-    "defense": 250,
-    "agility": 999,
-    "exp_reward": 2000,
-    "gold_reward": 1500,
+    "id": "monster-219",
+    "name": "ブラックストーン",
+    "hp": 20,
+    "mp": 999,
+    "attack": 500,
+    "defense": 8000,
+    "agility": 3000,
+    "exp_reward": 100,
+    "gold_reward": 1000,
     "drop_item_ids": []
   },
   {
-    "id": "monster-223",
+    "id": "monster-220",
     "name": "ビックスライム",
     "hp": 500,
     "mp": 0,
@@ -2676,7 +2642,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-224",
+    "id": "monster-221",
     "name": "トレント人面樹",
     "hp": 700,
     "mp": 263,
@@ -2688,7 +2654,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-225",
+    "id": "monster-222",
     "name": "亡霊剣士",
     "hp": 860,
     "mp": 343,
@@ -2700,7 +2666,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-226",
+    "id": "monster-223",
     "name": "キラーシェル",
     "hp": 600,
     "mp": 452,
@@ -2712,7 +2678,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-227",
+    "id": "monster-224",
     "name": "デビルシェル",
     "hp": 1000,
     "mp": 600,
@@ -2724,7 +2690,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-228",
+    "id": "monster-225",
     "name": "ゴーレム",
     "hp": 1200,
     "mp": 777,
@@ -2736,7 +2702,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-229",
+    "id": "monster-226",
     "name": "闇の魔術士",
     "hp": 800,
     "mp": 300,
@@ -2748,7 +2714,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-230",
+    "id": "monster-227",
     "name": "ギガンテス",
     "hp": 909,
     "mp": 909,
@@ -2760,7 +2726,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-231",
+    "id": "monster-228",
     "name": "火炎鳥",
     "hp": 1100,
     "mp": 997,
@@ -2772,7 +2738,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-232",
+    "id": "monster-229",
     "name": "ベヒーモス",
     "hp": 909,
     "mp": 909,
@@ -2784,7 +2750,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-233",
+    "id": "monster-230",
     "name": "キングスライム",
     "hp": 1200,
     "mp": 999,
@@ -2796,7 +2762,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-234",
+    "id": "monster-231",
     "name": "死霊の騎士",
     "hp": 1200,
     "mp": 999,
@@ -2808,7 +2774,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-235",
+    "id": "monster-232",
     "name": "竜王",
     "hp": 1500,
     "mp": 999,
@@ -2820,79 +2786,43 @@
     "drop_item_ids": []
   },
   {
+    "id": "monster-233",
+    "name": "魔王",
+    "hp": 14000,
+    "mp": 10000,
+    "attack": 650,
+    "defense": 350,
+    "agility": 200,
+    "exp_reward": 2000,
+    "gold_reward": 1500,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-234",
+    "name": "カタストロフィー",
+    "hp": 15000,
+    "mp": 30000,
+    "attack": 750,
+    "defense": 400,
+    "agility": 400,
+    "exp_reward": 5000,
+    "gold_reward": 3000,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-235",
+    "name": "死神",
+    "hp": 14000,
+    "mp": 14000,
+    "attack": 600,
+    "defense": 250,
+    "agility": 999,
+    "exp_reward": 2000,
+    "gold_reward": 1500,
+    "drop_item_ids": []
+  },
+  {
     "id": "monster-236",
-    "name": "ホーネットA",
-    "hp": 340,
-    "mp": 400,
-    "attack": 180,
-    "defense": 100,
-    "agility": 200,
-    "exp_reward": 88,
-    "gold_reward": 28,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-237",
-    "name": "ハイホーネット",
-    "hp": 2000,
-    "mp": 1000,
-    "attack": 200,
-    "defense": 150,
-    "agility": 200,
-    "exp_reward": 176,
-    "gold_reward": 88,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-238",
-    "name": "ホーネットB",
-    "hp": 340,
-    "mp": 400,
-    "attack": 180,
-    "defense": 100,
-    "agility": 200,
-    "exp_reward": 88,
-    "gold_reward": 28,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-239",
-    "name": "ハイホーネットA",
-    "hp": 1500,
-    "mp": 1000,
-    "attack": 200,
-    "defense": 150,
-    "agility": 200,
-    "exp_reward": 176,
-    "gold_reward": 88,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-240",
-    "name": "ヴァルネット",
-    "hp": 8888,
-    "mp": 5000,
-    "attack": 350,
-    "defense": 260,
-    "agility": 300,
-    "exp_reward": 888,
-    "gold_reward": 888,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-241",
-    "name": "ハイホーネットB",
-    "hp": 1500,
-    "mp": 1000,
-    "attack": 200,
-    "defense": 150,
-    "agility": 200,
-    "exp_reward": 176,
-    "gold_reward": 88,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-242",
     "name": "ビー",
     "hp": 100,
     "mp": 42,
@@ -2904,7 +2834,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-243",
+    "id": "monster-237",
     "name": "ロイヤルビー",
     "hp": 50,
     "mp": 200,
@@ -2916,7 +2846,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-244",
+    "id": "monster-238",
     "name": "ビネット",
     "hp": 130,
     "mp": 89,
@@ -2928,7 +2858,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-245",
+    "id": "monster-239",
     "name": "ポイズンビー",
     "hp": 170,
     "mp": 150,
@@ -2940,7 +2870,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-246",
+    "id": "monster-240",
     "name": "ビーポット",
     "hp": 200,
     "mp": 120,
@@ -2952,31 +2882,43 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-247",
-    "name": "雪だるま将軍A",
-    "hp": 350,
-    "mp": 30,
-    "attack": 46,
-    "defense": 28,
-    "agility": 12,
-    "exp_reward": 200,
-    "gold_reward": 70,
+    "id": "monster-241",
+    "name": "ホーネットA",
+    "hp": 340,
+    "mp": 400,
+    "attack": 180,
+    "defense": 100,
+    "agility": 200,
+    "exp_reward": 88,
+    "gold_reward": 28,
     "drop_item_ids": []
   },
   {
-    "id": "monster-248",
-    "name": "Ｓ・Ｇ雪だるま",
-    "hp": 5000,
-    "mp": 1500,
-    "attack": 130,
-    "defense": 120,
-    "agility": 10,
-    "exp_reward": 600,
-    "gold_reward": 250,
+    "id": "monster-242",
+    "name": "ハイホーネット",
+    "hp": 2000,
+    "mp": 1000,
+    "attack": 200,
+    "defense": 150,
+    "agility": 200,
+    "exp_reward": 176,
+    "gold_reward": 88,
     "drop_item_ids": []
   },
   {
-    "id": "monster-249",
+    "id": "monster-243",
+    "name": "ホーネットB",
+    "hp": 340,
+    "mp": 400,
+    "attack": 180,
+    "defense": 100,
+    "agility": 200,
+    "exp_reward": 88,
+    "gold_reward": 28,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-244",
     "name": "雪だるま",
     "hp": 10,
     "mp": 0,
@@ -2988,7 +2930,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-250",
+    "id": "monster-245",
     "name": "雪だるま",
     "hp": 11,
     "mp": 0,
@@ -3000,7 +2942,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-251",
+    "id": "monster-246",
     "name": "雪だるま",
     "hp": 8,
     "mp": 0,
@@ -3012,7 +2954,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-252",
+    "id": "monster-247",
     "name": "スノモ",
     "hp": 12,
     "mp": 0,
@@ -3024,7 +2966,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-253",
+    "id": "monster-248",
     "name": "スノピヨ",
     "hp": 13,
     "mp": 0,
@@ -3036,7 +2978,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-254",
+    "id": "monster-249",
     "name": "ヒョウ",
     "hp": 8,
     "mp": 5,
@@ -3048,55 +2990,19 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-255",
-    "name": "シエルアンジェA",
-    "hp": 5000,
-    "mp": 2000,
-    "attack": 300,
-    "defense": 300,
-    "agility": 300,
+    "id": "monster-250",
+    "name": "雪だるま将軍A",
+    "hp": 350,
+    "mp": 30,
+    "attack": 46,
+    "defense": 28,
+    "agility": 12,
     "exp_reward": 200,
-    "gold_reward": 200,
+    "gold_reward": 70,
     "drop_item_ids": []
   },
   {
-    "id": "monster-256",
-    "name": "ウラスナイト",
-    "hp": 16000,
-    "mp": 10000,
-    "attack": 480,
-    "defense": 480,
-    "agility": 480,
-    "exp_reward": 10000,
-    "gold_reward": 10000,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-257",
-    "name": "シエルアンジェB",
-    "hp": 5000,
-    "mp": 2000,
-    "attack": 300,
-    "defense": 300,
-    "agility": 300,
-    "exp_reward": 200,
-    "gold_reward": 200,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-258",
-    "name": "ウラスパラディン",
-    "hp": 25000,
-    "mp": 10000,
-    "attack": 500,
-    "defense": 500,
-    "agility": 500,
-    "exp_reward": 30000,
-    "gold_reward": 30000,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-259",
+    "id": "monster-251",
     "name": "グラディザード",
     "hp": 600,
     "mp": 300,
@@ -3108,7 +3014,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-260",
+    "id": "monster-252",
     "name": "グレイブレーダー",
     "hp": 500,
     "mp": 200,
@@ -3120,7 +3026,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-261",
+    "id": "monster-253",
     "name": "ゴルドガーディアン",
     "hp": 680,
     "mp": 500,
@@ -3132,7 +3038,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-262",
+    "id": "monster-254",
     "name": "ヒューマンスライム",
     "hp": 580,
     "mp": 800,
@@ -3144,7 +3050,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-263",
+    "id": "monster-255",
     "name": "カラクリゴーレム",
     "hp": 650,
     "mp": 700,
@@ -3156,7 +3062,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-264",
+    "id": "monster-256",
     "name": "エレティックアンジェ",
     "hp": 1100,
     "mp": 2000,
@@ -3168,139 +3074,43 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-265",
-    "name": "アイスオブジェA",
-    "hp": 2500,
-    "mp": 2400,
+    "id": "monster-257",
+    "name": "シエルアンジェA",
+    "hp": 5000,
+    "mp": 2000,
     "attack": 300,
     "defense": 300,
-    "agility": 350,
-    "exp_reward": 400,
-    "gold_reward": 400,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-266",
-    "name": "オブジェマスター",
-    "hp": 6300,
-    "mp": 1800,
-    "attack": 250,
-    "defense": 300,
-    "agility": 340,
-    "exp_reward": 750,
+    "agility": 300,
+    "exp_reward": 200,
     "gold_reward": 200,
     "drop_item_ids": []
   },
   {
-    "id": "monster-267",
-    "name": "アイスオブジェB",
-    "hp": 2500,
-    "mp": 2400,
+    "id": "monster-258",
+    "name": "ウラスナイト",
+    "hp": 16000,
+    "mp": 10000,
+    "attack": 480,
+    "defense": 480,
+    "agility": 480,
+    "exp_reward": 10000,
+    "gold_reward": 10000,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-259",
+    "name": "シエルアンジェB",
+    "hp": 5000,
+    "mp": 2000,
     "attack": 300,
     "defense": 300,
-    "agility": 350,
-    "exp_reward": 400,
-    "gold_reward": 400,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-268",
-    "name": "アイスオブジェA",
-    "hp": 1600,
-    "mp": 890,
-    "attack": 210,
-    "defense": 210,
-    "agility": 210,
-    "exp_reward": 500,
-    "gold_reward": 150,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-269",
-    "name": "アイスオブジェB",
-    "hp": 1600,
-    "mp": 890,
-    "attack": 210,
-    "defense": 210,
-    "agility": 210,
-    "exp_reward": 500,
-    "gold_reward": 150,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-270",
-    "name": "アイスオブジェA",
-    "hp": 1400,
-    "mp": 1200,
-    "attack": 240,
-    "defense": 140,
-    "agility": 150,
-    "exp_reward": 300,
-    "gold_reward": 800,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-271",
-    "name": "アイスオブジェB",
-    "hp": 1400,
-    "mp": 1200,
-    "attack": 240,
-    "defense": 140,
-    "agility": 150,
-    "exp_reward": 300,
-    "gold_reward": 800,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-272",
-    "name": "アイスオブジェA",
-    "hp": 1100,
-    "mp": 2400,
-    "attack": 300,
-    "defense": 300,
-    "agility": 350,
-    "exp_reward": 250,
+    "agility": 300,
+    "exp_reward": 200,
     "gold_reward": 200,
     "drop_item_ids": []
   },
   {
-    "id": "monster-273",
-    "name": "氷の女神像",
-    "hp": 12000,
-    "mp": 1500,
-    "attack": 380,
-    "defense": 450,
-    "agility": 410,
-    "exp_reward": 1500,
-    "gold_reward": 1500,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-274",
-    "name": "アイスオブジェB",
-    "hp": 1100,
-    "mp": 2400,
-    "attack": 300,
-    "defense": 300,
-    "agility": 350,
-    "exp_reward": 250,
-    "gold_reward": 200,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-275",
-    "name": "氷の女神",
-    "hp": 50000,
-    "mp": 15000,
-    "attack": 500,
-    "defense": 700,
-    "agility": 500,
-    "exp_reward": 15000,
-    "gold_reward": 15000,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-276",
+    "id": "monster-260",
     "name": "アイスオブジェ",
     "hp": 180,
     "mp": 76,
@@ -3312,7 +3122,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-277",
+    "id": "monster-261",
     "name": "アイスオブジェ",
     "hp": 210,
     "mp": 158,
@@ -3324,7 +3134,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-278",
+    "id": "monster-262",
     "name": "アイスオブジェ",
     "hp": 1200,
     "mp": 240,
@@ -3336,7 +3146,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-279",
+    "id": "monster-263",
     "name": "アイスオブジェ",
     "hp": 360,
     "mp": 120,
@@ -3348,7 +3158,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-280",
+    "id": "monster-264",
     "name": "アイスオブジェ",
     "hp": 380,
     "mp": 126,
@@ -3360,7 +3170,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-281",
+    "id": "monster-265",
     "name": "アイスオブジェ",
     "hp": 1100,
     "mp": 130,
@@ -3372,7 +3182,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-282",
+    "id": "monster-266",
     "name": "アイスオブジェ",
     "hp": 131,
     "mp": 45,
@@ -3384,7 +3194,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-283",
+    "id": "monster-267",
     "name": "アイスオブジェ",
     "hp": 240,
     "mp": 64,
@@ -3396,7 +3206,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-284",
+    "id": "monster-268",
     "name": "アイスオブジェ",
     "hp": 1200,
     "mp": 120,
@@ -3408,7 +3218,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-285",
+    "id": "monster-269",
     "name": "アイスオブジェ",
     "hp": 300,
     "mp": 90,
@@ -3420,7 +3230,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-286",
+    "id": "monster-270",
     "name": "アイスオブジェ",
     "hp": 350,
     "mp": 1000,
@@ -3432,7 +3242,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-287",
+    "id": "monster-271",
     "name": "アイスオブジェ",
     "hp": 1200,
     "mp": 10000,
@@ -3444,55 +3254,43 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-288",
-    "name": "フェアリークイーン",
-    "hp": 600,
-    "mp": 20,
-    "attack": 45,
-    "defense": 21,
-    "agility": 80,
-    "exp_reward": 150,
-    "gold_reward": 100,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-289",
-    "name": "イタズラ妖精",
-    "hp": 150,
-    "mp": 400,
-    "attack": 130,
-    "defense": 130,
-    "agility": 170,
-    "exp_reward": 36,
-    "gold_reward": 36,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-290",
-    "name": "フェアリークイーン",
-    "hp": 5000,
-    "mp": 800,
-    "attack": 200,
-    "defense": 180,
-    "agility": 280,
+    "id": "monster-272",
+    "name": "アイスオブジェA",
+    "hp": 2500,
+    "mp": 2400,
+    "attack": 300,
+    "defense": 300,
+    "agility": 350,
     "exp_reward": 400,
     "gold_reward": 400,
     "drop_item_ids": []
   },
   {
-    "id": "monster-291",
-    "name": "ギャンブル妖精",
-    "hp": 170,
-    "mp": 400,
-    "attack": 110,
-    "defense": 110,
-    "agility": 170,
-    "exp_reward": 36,
-    "gold_reward": 36,
+    "id": "monster-273",
+    "name": "オブジェマスター",
+    "hp": 6300,
+    "mp": 1800,
+    "attack": 250,
+    "defense": 300,
+    "agility": 340,
+    "exp_reward": 750,
+    "gold_reward": 200,
     "drop_item_ids": []
   },
   {
-    "id": "monster-292",
+    "id": "monster-274",
+    "name": "アイスオブジェB",
+    "hp": 2500,
+    "mp": 2400,
+    "attack": 300,
+    "defense": 300,
+    "agility": 350,
+    "exp_reward": 400,
+    "gold_reward": 400,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-275",
     "name": "イタズラ妖精",
     "hp": 6,
     "mp": 0,
@@ -3504,7 +3302,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-293",
+    "id": "monster-276",
     "name": "ギャンブル妖精",
     "hp": 8,
     "mp": 0,
@@ -3516,7 +3314,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-294",
+    "id": "monster-277",
     "name": "ビー",
     "hp": 8,
     "mp": 0,
@@ -3528,7 +3326,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-295",
+    "id": "monster-278",
     "name": "ゴールドバット",
     "hp": 6,
     "mp": 31,
@@ -3540,259 +3338,19 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-296",
-    "name": "パンサーロード",
-    "hp": 700,
-    "mp": 16,
-    "attack": 56,
-    "defense": 10,
-    "agility": 61,
-    "exp_reward": 200,
-    "gold_reward": 50,
+    "id": "monster-279",
+    "name": "フェアリークイーン",
+    "hp": 600,
+    "mp": 20,
+    "attack": 45,
+    "defense": 21,
+    "agility": 80,
+    "exp_reward": 150,
+    "gold_reward": 100,
     "drop_item_ids": []
   },
   {
-    "id": "monster-297",
-    "name": "ベビーレオA",
-    "hp": 220,
-    "mp": 170,
-    "attack": 160,
-    "defense": 5,
-    "agility": 50,
-    "exp_reward": 45,
-    "gold_reward": 8,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-298",
-    "name": "パンサーロード",
-    "hp": 6500,
-    "mp": 500,
-    "attack": 250,
-    "defense": 127,
-    "agility": 230,
-    "exp_reward": 500,
-    "gold_reward": 200,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-299",
-    "name": "ベビーレオB",
-    "hp": 220,
-    "mp": 170,
-    "attack": 160,
-    "defense": 5,
-    "agility": 50,
-    "exp_reward": 45,
-    "gold_reward": 8,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-300",
-    "name": "レッドアイ",
-    "hp": 8,
-    "mp": 0,
-    "attack": 9,
-    "defense": 5,
-    "agility": 7,
-    "exp_reward": 30,
-    "gold_reward": 4,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-301",
-    "name": "キングコブラ",
-    "hp": 11,
-    "mp": 0,
-    "attack": 11,
-    "defense": 5,
-    "agility": 13,
-    "exp_reward": 31,
-    "gold_reward": 5,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-302",
-    "name": "ベビーレオ",
-    "hp": 14,
-    "mp": 0,
-    "attack": 18,
-    "defense": 5,
-    "agility": 18,
-    "exp_reward": 35,
-    "gold_reward": 5,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-303",
-    "name": "プチケルベロス",
-    "hp": 12,
-    "mp": 0,
-    "attack": 15,
-    "defense": 5,
-    "agility": 15,
-    "exp_reward": 33,
-    "gold_reward": 5,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-304",
-    "name": "トレント人面樹",
-    "hp": 550,
-    "mp": 180,
-    "attack": 40,
-    "defense": 18,
-    "agility": 20,
-    "exp_reward": 50,
-    "gold_reward": 200,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-305",
-    "name": "ゴーストマッシュ",
-    "hp": 150,
-    "mp": 330,
-    "attack": 159,
-    "defense": 134,
-    "agility": 79,
-    "exp_reward": 24,
-    "gold_reward": 48,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-306",
-    "name": "トレント人面樹",
-    "hp": 5800,
-    "mp": 790,
-    "attack": 220,
-    "defense": 200,
-    "agility": 100,
-    "exp_reward": 200,
-    "gold_reward": 600,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-307",
-    "name": "ポイズンマッシュ",
-    "hp": 170,
-    "mp": 330,
-    "attack": 139,
-    "defense": 124,
-    "agility": 79,
-    "exp_reward": 24,
-    "gold_reward": 48,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-308",
-    "name": "魔界ナス",
-    "hp": 8,
-    "mp": 0,
-    "attack": 6,
-    "defense": 5,
-    "agility": 15,
-    "exp_reward": 15,
-    "gold_reward": 20,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-309",
-    "name": "ゴーストマッシュ",
-    "hp": 12,
-    "mp": 0,
-    "attack": 12,
-    "defense": 9,
-    "agility": 12,
-    "exp_reward": 18,
-    "gold_reward": 24,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-310",
-    "name": "ポイズンマッシュ",
-    "hp": 15,
-    "mp": 0,
-    "attack": 14,
-    "defense": 8,
-    "agility": 10,
-    "exp_reward": 23,
-    "gold_reward": 25,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-311",
-    "name": "ジャックランタン",
-    "hp": 17,
-    "mp": 0,
-    "attack": 16,
-    "defense": 8,
-    "agility": 3,
-    "exp_reward": 26,
-    "gold_reward": 28,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-312",
-    "name": "カマクラＵＦＯ",
-    "hp": 500,
-    "mp": 46,
-    "attack": 43,
-    "defense": 30,
-    "agility": 25,
-    "exp_reward": 100,
-    "gold_reward": 150,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-313",
-    "name": "雪だるまA",
-    "hp": 100,
-    "mp": 570,
-    "attack": 160,
-    "defense": 120,
-    "agility": 140,
-    "exp_reward": 39,
-    "gold_reward": 26,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-314",
-    "name": "カマクラＵＦＯ",
-    "hp": 4500,
-    "mp": 800,
-    "attack": 170,
-    "defense": 80,
-    "agility": 190,
-    "exp_reward": 350,
-    "gold_reward": 450,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-315",
-    "name": "雪だるまB",
-    "hp": 100,
-    "mp": 570,
-    "attack": 160,
-    "defense": 120,
-    "agility": 140,
-    "exp_reward": 39,
-    "gold_reward": 26,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-316",
-    "name": "パンパイア",
-    "hp": 500,
-    "mp": 50,
-    "attack": 50,
-    "defense": 10,
-    "agility": 30,
-    "exp_reward": 160,
-    "gold_reward": 200,
-    "drop_item_ids": []
-  },
-  {
-    "id": "monster-317",
+    "id": "monster-280",
     "name": "Ｎパンプキン",
     "hp": 30,
     "mp": 0,
@@ -3804,7 +3362,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-318",
+    "id": "monster-281",
     "name": "グリーンゴースト",
     "hp": 18,
     "mp": 0,
@@ -3816,7 +3374,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-319",
+    "id": "monster-282",
     "name": "レイススライム",
     "hp": 20,
     "mp": 0,
@@ -3828,7 +3386,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-320",
+    "id": "monster-283",
     "name": "ワーウルフ",
     "hp": 57,
     "mp": 28,
@@ -3840,7 +3398,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-321",
+    "id": "monster-284",
     "name": "魔女",
     "hp": 41,
     "mp": 50,
@@ -3852,7 +3410,7 @@
     "drop_item_ids": []
   },
   {
-    "id": "monster-322",
+    "id": "monster-285",
     "name": "トレント人面樹",
     "hp": 70,
     "mp": 35,
@@ -3861,6 +3419,18 @@
     "agility": 7,
     "exp_reward": 80,
     "gold_reward": 40,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-286",
+    "name": "パンパイア",
+    "hp": 500,
+    "mp": 50,
+    "attack": 50,
+    "defense": 10,
+    "agility": 30,
+    "exp_reward": 160,
+    "gold_reward": 200,
     "drop_item_ids": []
   }
 ]

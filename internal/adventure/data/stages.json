@@ -159,8 +159,8 @@
       "monster-089",
       "monster-090",
       "monster-091",
+      "monster-076",
       "monster-092",
-      "monster-079",
       "monster-093",
       "monster-094",
       "monster-095",
@@ -254,10 +254,10 @@
       "monster-151",
       "monster-152",
       "monster-153",
+      "monster-113",
       "monster-154",
       "monster-155",
-      "monster-156",
-      "monster-118"
+      "monster-156"
     ],
     "duration_seconds": 3600
   },
@@ -319,11 +319,11 @@
     "name": "マダムガーデン",
     "min_level": 30,
     "monster_ids": [
+      "monster-112",
+      "monster-113",
       "monster-186",
       "monster-187",
       "monster-188",
-      "monster-117",
-      "monster-118",
       "monster-189"
     ],
     "duration_seconds": 3600
@@ -426,10 +426,7 @@
       "monster-240",
       "monster-241",
       "monster-242",
-      "monster-243",
-      "monster-244",
-      "monster-245",
-      "monster-246"
+      "monster-243"
     ],
     "duration_seconds": 3600
   },
@@ -438,14 +435,13 @@
     "name": "プニプニ雪原",
     "min_level": 65,
     "monster_ids": [
+      "monster-244",
+      "monster-245",
+      "monster-246",
       "monster-247",
       "monster-248",
       "monster-249",
-      "monster-250",
-      "monster-251",
-      "monster-252",
-      "monster-253",
-      "monster-254"
+      "monster-250"
     ],
     "duration_seconds": 3600
   },
@@ -454,16 +450,15 @@
     "name": "白亜の宮殿",
     "min_level": 70,
     "monster_ids": [
+      "monster-251",
+      "monster-252",
+      "monster-253",
+      "monster-254",
       "monster-255",
       "monster-256",
       "monster-257",
       "monster-258",
-      "monster-259",
-      "monster-260",
-      "monster-261",
-      "monster-262",
-      "monster-263",
-      "monster-264"
+      "monster-259"
     ],
     "duration_seconds": 3600
   },
@@ -472,6 +467,11 @@
     "name": "氷の彫刻館",
     "min_level": 75,
     "monster_ids": [
+      "monster-260",
+      "monster-261",
+      "monster-262",
+      "monster-263",
+      "monster-264",
       "monster-265",
       "monster-266",
       "monster-267",
@@ -481,20 +481,7 @@
       "monster-271",
       "monster-272",
       "monster-273",
-      "monster-274",
-      "monster-275",
-      "monster-276",
-      "monster-277",
-      "monster-278",
-      "monster-279",
-      "monster-280",
-      "monster-281",
-      "monster-282",
-      "monster-283",
-      "monster-284",
-      "monster-285",
-      "monster-286",
-      "monster-287"
+      "monster-274"
     ],
     "duration_seconds": 3600
   },
@@ -503,38 +490,12 @@
     "name": "神秘の森",
     "min_level": 80,
     "monster_ids": [
-      "monster-288",
-      "monster-289",
-      "monster-290",
-      "monster-291",
-      "monster-292",
-      "monster-293",
-      "monster-007",
-      "monster-294",
-      "monster-295",
-      "monster-296",
-      "monster-297",
-      "monster-298",
-      "monster-299",
-      "monster-300",
-      "monster-301",
-      "monster-302",
-      "monster-303",
-      "monster-304",
-      "monster-305",
-      "monster-306",
-      "monster-307",
-      "monster-308",
-      "monster-309",
-      "monster-310",
-      "monster-311",
-      "monster-312",
-      "monster-313",
-      "monster-314",
-      "monster-315",
-      "monster-249",
-      "monster-252",
-      "monster-253"
+      "monster-275",
+      "monster-276",
+      "monster-006",
+      "monster-277",
+      "monster-278",
+      "monster-279"
     ],
     "duration_seconds": 3600
   },
@@ -543,13 +504,13 @@
     "name": "ハロウィンタウン",
     "min_level": 85,
     "monster_ids": [
-      "monster-316",
-      "monster-317",
-      "monster-318",
-      "monster-319",
-      "monster-320",
-      "monster-321",
-      "monster-322"
+      "monster-280",
+      "monster-281",
+      "monster-282",
+      "monster-283",
+      "monster-284",
+      "monster-285",
+      "monster-286"
     ],
     "duration_seconds": 3600
   }

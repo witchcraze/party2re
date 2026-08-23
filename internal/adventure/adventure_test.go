@@ -9,6 +9,7 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 )
 
 type testClock struct{ now time.Time }
@@ -118,7 +119,10 @@ func newTestService(t *testing.T) (*Service, *testClock, *repositoryStub, *chara
 	clock := &testClock{now: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)}
 	scheduler := &testScheduler{}
 	logger := nopLogger{}
-	service, err := NewServiceWithClock(adventures, characters, corebattle.Engine{}, scheduler, logger, clock)
+	inventories := newInventoryRepositoryStub()
+	stages, _ := InitialStageCatalog()
+	monsters, _ := InitialMonsterCatalog()
+	service, err := NewServiceWithCatalogs(adventures, characters, inventories, stages, monsters, corebattle.Engine{}, scheduler, logger, clock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +228,7 @@ func TestAdventureClaimsBattleResultAndAwardsRewardOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !got.Claimed || !got.Resolved || got.BattleResult.WinnerID != characters.value.ID ||
-		characters.value.Experience != AdventureReward {
+		characters.value.Experience != value.ExperienceReward {
 		t.Fatalf("Claim() = %#v, character = %#v", got, characters.value)
 	}
 	if repository.value.BattleResult != got.BattleResult {
@@ -261,6 +265,7 @@ func TestAdventureAppliesSelectedBattleCurrencyReward(t *testing.T) {
 
 func TestAdventureRejectsUnsupportedItemReward(t *testing.T) {
 	service, clock, _, characters := newTestService(t)
+	service.inventories = nil
 	service.battle = battleResolverStub{result: corebattle.Result{
 		Outcome:  corebattle.OutcomeWin,
 		WinnerID: characters.value.ID,
@@ -312,7 +317,7 @@ func TestAdventureClaimsRewardAtMostOnceConcurrently(t *testing.T) {
 	if successes != 1 || alreadyClaimed != 1 {
 		t.Fatalf("concurrent claims: successes = %d, already claimed = %d", successes, alreadyClaimed)
 	}
-	if characters.value.Experience != AdventureReward || !repository.value.Claimed {
+	if characters.value.Experience != value.ExperienceReward || !repository.value.Claimed {
 		t.Fatalf("concurrent claim state = adventure %#v, character %#v", repository.value, characters.value)
 	}
 }
@@ -434,9 +439,122 @@ func TestAdventureClaimDrawOutcome(t *testing.T) {
 }
 
 func TestAdventureRealClock(t *testing.T) {
-	clock := realClock{}
+	clock := RealClock{}
 	now := clock.Now()
 	if now.IsZero() {
-		t.Fatal("realClock.Now() returned zero time")
+		t.Fatal("RealClock.Now() returned zero time")
+	}
+}
+
+type inventoryRepositoryStub struct {
+	mu          sync.Mutex
+	inventories map[string]coreinventory.Inventory
+}
+
+func newInventoryRepositoryStub() *inventoryRepositoryStub {
+	return &inventoryRepositoryStub{inventories: make(map[string]coreinventory.Inventory)}
+}
+
+func (r *inventoryRepositoryStub) FindByCharacterID(_ context.Context, characterID string) (coreinventory.Inventory, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	inv, ok := r.inventories[characterID]
+	if !ok {
+		return coreinventory.New(characterID)
+	}
+	return inv, nil
+}
+
+func (r *inventoryRepositoryStub) Save(_ context.Context, value coreinventory.Inventory) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.inventories[value.CharacterID] = value
+	return nil
+}
+
+func TestAdventureStartStageSuccess(t *testing.T) {
+	service, clock, _, characters := newTestService(t)
+	// Elevate character to level 10 to access stage-02
+	characters.value.Level = 10
+
+	adv, err := service.StartStage(context.Background(), characters.value.ID, "stage-02")
+	if err != nil {
+		t.Fatalf("StartStage() error = %v", err)
+	}
+	if adv.StageID != "stage-02" || adv.MonsterID == "" {
+		t.Fatalf("StartStage() = %#v", adv)
+	}
+	if adv.AvailableAt != clock.now.Add(time.Hour) {
+		t.Errorf("AvailableAt = %v, want %v", adv.AvailableAt, clock.now.Add(time.Hour))
+	}
+}
+
+func TestAdventureStartStageLevelRequirementNotMet(t *testing.T) {
+	service, _, _, characters := newTestService(t)
+	characters.value.Level = 1 // MinLevel for stage-05 is 35
+
+	_, err := service.StartStage(context.Background(), characters.value.ID, "stage-05")
+	if !errors.Is(err, ErrLevelRequirementNotMet) {
+		t.Fatalf("StartStage() error = %v, want %v", err, ErrLevelRequirementNotMet)
+	}
+}
+
+func TestAdventureStartStageNotFound(t *testing.T) {
+	service, _, _, characters := newTestService(t)
+
+	_, err := service.StartStage(context.Background(), characters.value.ID, "nonexistent-stage")
+	if !errors.Is(err, ErrStageNotFound) {
+		t.Fatalf("StartStage() error = %v, want %v", err, ErrStageNotFound)
+	}
+}
+
+func TestAdventureClaimAwardsGoldAndItemDrops(t *testing.T) {
+	character, _ := corecharacter.New("Loot Collector")
+	character.Level = 10
+	character.Money = 50
+
+	adventures := &repositoryStub{}
+	characters := &characterRepositoryStub{value: character}
+	adventures.characters = characters
+	clock := &testClock{now: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)}
+	scheduler := &testScheduler{}
+	logger := nopLogger{}
+	inventories := newInventoryRepositoryStub()
+
+	stages, _ := InitialStageCatalog()
+	monsters, _ := InitialMonsterCatalog()
+
+	service, err := NewServiceWithCatalogs(adventures, characters, inventories, stages, monsters, corebattle.Engine{}, scheduler, logger, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	adv, err := service.StartStage(context.Background(), character.ID, "stage-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	clock.now = adv.AvailableAt
+
+	claimed, err := service.Claim(context.Background(), adv.ID)
+	if err != nil {
+		t.Fatalf("Claim() error = %v", err)
+	}
+
+	if !claimed.Claimed || !claimed.Resolved {
+		t.Fatalf("Claim() not resolved or claimed: %#v", claimed)
+	}
+
+	// Character money should have increased by monster gold reward
+	if characters.value.Money <= 50 {
+		t.Errorf("character money was not awarded: %d", characters.value.Money)
+	}
+
+	// Inventory should contain dropped item instance if dropped
+	if claimed.BattleResult.Reward.ItemDefinitionID != "" {
+		inv, _ := inventories.FindByCharacterID(context.Background(), character.ID)
+		if len(inv.Items) != 1 || inv.Items[0].DefinitionID != claimed.BattleResult.Reward.ItemDefinitionID {
+			t.Errorf("inventory item was not granted: %#v", inv)
+		}
 	}
 }

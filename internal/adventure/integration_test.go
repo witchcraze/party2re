@@ -110,8 +110,8 @@ func TestConcurrentAdventureClaimsApplyRewardOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if restoredCharacter.Experience != adventure.AdventureReward {
-		t.Fatalf("character experience = %d, want %d", restoredCharacter.Experience, adventure.AdventureReward)
+	if restoredCharacter.Experience != scheduled.ExperienceReward {
+		t.Fatalf("character experience = %d, want %d", restoredCharacter.Experience, scheduled.ExperienceReward)
 	}
 	restoredAdventure, err := adventures.FindByID(ctx, scheduled.ID)
 	if err != nil {
@@ -203,8 +203,8 @@ func TestAdventureScheduledActionIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if restoredCharacter.Experience != adventure.AdventureReward {
-		t.Fatalf("restored character experience = %d, want %d", restoredCharacter.Experience, adventure.AdventureReward)
+	if restoredCharacter.Experience != scheduled.ExperienceReward {
+		t.Fatalf("restored character experience = %d, want %d", restoredCharacter.Experience, scheduled.ExperienceReward)
 	}
 
 	restoredAdventure, err := adventures.FindByID(ctx, scheduled.ID)
