@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #124 — Add db-migrate, db-reset, and safe check-clean targets to Makefile
+Last updated: Issue #126 — Update actions/checkout to latest version in GitHub Actions workflows
 
 ## Current phase
 
@@ -157,6 +157,8 @@ Issue #124 introduced safe database migration and reset workflows in Makefile:
 - `scripts/migrate.sh` (`make db-migrate`) — Safely applies pending migrations without data loss
 - `scripts/reset_db.sh` (`make db-reset`) — Explicit database drop and full re-migration
 - `make check` / `make check-clean` — Automated integration into daily and clean verification pipelines
+
+Issue #126 updated GitHub Actions workflows to latest major versions (`actions/checkout@v6`, `docker/setup-buildx-action@v4`, and `docker/build-push-action@v7`).
 
 ## Confirmed decisions
 
