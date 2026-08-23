@@ -8,6 +8,7 @@ import (
 	"github.com/witchcraze/party2re/internal/activity"
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/alchemy"
+	"github.com/witchcraze/party2re/internal/bank"
 	"github.com/witchcraze/party2re/internal/blacksmith"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
@@ -84,6 +85,14 @@ func run() error {
 		return err
 	}
 	_, err = alchemy.NewServiceWithTransaction(charRepo, invRepo, alcRepo, recipeCatalog, itemCatalog)
+	if err != nil {
+		return err
+	}
+	bankRepo, err := database.NewBankRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = bank.NewService(bankRepo)
 	if err != nil {
 		return err
 	}
