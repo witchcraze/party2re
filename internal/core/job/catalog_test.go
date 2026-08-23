@@ -3,6 +3,7 @@ package job
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -55,6 +56,81 @@ func TestInitialCatalogContainsAllReferenceJobSlots(t *testing.T) {
 		if _, err := catalog.FindByID(id); err != nil {
 			t.Fatalf("missing definition %s: %v", id, err)
 		}
+	}
+}
+
+func TestInitialCatalogValidatesAndExercisesEveryDefinition(t *testing.T) {
+	catalog, err := InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	definitions := catalog.Definitions()
+	if len(definitions) != 88 {
+		t.Fatalf("definition count = %d, want 88", len(definitions))
+	}
+
+	seen := make(map[string]struct{}, len(definitions))
+	for _, definition := range definitions {
+		definition := definition
+		t.Run(definition.ID, func(t *testing.T) {
+			if strings.TrimSpace(definition.ID) == "" || strings.TrimSpace(definition.Name) == "" {
+				t.Fatal("definition must have an ID and name")
+			}
+			if definition.HPGrowth < 0 || definition.MPGrowth < 0 ||
+				definition.AttackGrowth < 0 || definition.DefenseGrowth < 0 ||
+				definition.AgilityGrowth < 0 || definition.MinLevel < 1 {
+				t.Fatalf("invalid definition = %#v", definition)
+			}
+			if _, exists := seen[definition.ID]; exists {
+				t.Fatalf("duplicate definition ID %q", definition.ID)
+			}
+			seen[definition.ID] = struct{}{}
+
+			loaded, err := catalog.FindByID(definition.ID)
+			if err != nil {
+				t.Fatalf("FindByID(%q): %v", definition.ID, err)
+			}
+			if loaded != definition {
+				t.Fatalf("FindByID(%q) = %#v, want %#v", definition.ID, loaded, definition)
+			}
+
+			state, err := NewCharacterJob("character-1", "starter")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if definition.ID == "starter" {
+				if err := state.ChangeTo(definition, definition.MinLevel, "unspecified"); !errors.Is(err, ErrJobUnavailable) {
+					t.Fatalf("starter ChangeTo() error = %v, want %v", err, ErrJobUnavailable)
+				}
+				return
+			}
+			if err := state.ChangeTo(definition, definition.MinLevel, definition.RequiredGender); err != nil {
+				t.Fatalf("ChangeTo() at minimum level: %v", err)
+			}
+		})
+	}
+}
+
+func TestInitialCatalogExercisesMinimumLevelBoundaryForEveryJob(t *testing.T) {
+	catalog, err := InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, definition := range catalog.Definitions() {
+		if definition.ID == "starter" {
+			continue
+		}
+		definition := definition
+		t.Run(definition.ID, func(t *testing.T) {
+			state, err := NewCharacterJob("character-1", "starter")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := state.ChangeTo(definition, definition.MinLevel-1, definition.RequiredGender); !errors.Is(err, ErrJobUnavailable) {
+				t.Fatalf("ChangeTo() below minimum level error = %v, want %v", err, ErrJobUnavailable)
+			}
+		})
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 )
 
 var ErrDefinitionNotFound = errors.New("job definition not found")
@@ -43,6 +44,21 @@ func (c *Catalog) FindByID(id string) (Definition, error) {
 		return Definition{}, ErrDefinitionNotFound
 	}
 	return value, nil
+}
+
+// Definitions returns all catalog entries in stable ID order.
+func (c *Catalog) Definitions() []Definition {
+	if c == nil {
+		return nil
+	}
+	values := make([]Definition, 0, len(c.definitions))
+	for _, definition := range c.definitions {
+		values = append(values, definition)
+	}
+	sort.Slice(values, func(i, j int) bool {
+		return values[i].ID < values[j].ID
+	})
+	return values
 }
 
 //go:embed data/jobs.json

@@ -55,3 +55,11 @@ resolvable references. Shared rules use table-driven boundary tests, while
 definitions selecting a special rule must have a matching special-rule test.
 Coverage is reported by CI for later review, but no percentage threshold is
 currently enforced.
+
+The current Item component has definitions and instances, but no loaded Item
+catalog. Consequently, there are no loaded Item definitions to validate yet;
+the catalog and its exhaustive tests are tracked in
+[Issue #51](https://github.com/witchcraze/party2re/issues/51). The current Job
+and Item models also have no special-behavior identifier field or registry.
+If such identifiers are introduced, the loader must reject unknown values and
+the catalog tests must require one explicit test for every registered value.

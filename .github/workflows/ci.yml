@@ -12,6 +12,8 @@ jobs:
       - uses: docker/setup-buildx-action@v3
       - name: Build and run tests
         run: docker compose run --rm app sh -c 'go test ./... -coverprofile=coverage.out -covermode=atomic && go tool cover -func=coverage.out > coverage.txt && cat coverage.txt'
+      - name: Validate content catalogs
+        run: docker compose run --rm app go test ./internal/core/job ./internal/core/item
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         with:
