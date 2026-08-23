@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #88 — production container image and CI improvements
+Last updated: Issue #106 — ScheduledAction processing with Valkey backend
 
 ## Current phase
 
@@ -61,6 +61,22 @@ credentials.
 Issue #50 and Issue #51 validate every loaded Job and Item definition through
 catalog-wide field, lookup, availability, slot, and boundary tests. Both
 catalogs are verified continuously in CI.
+
+Issue #62 introduced character resting and inn recovery.
+
+Issue #106 introduced the reusable ScheduledAction processing mechanism
+(Valkey-backed). The mechanism is available for feature modules to use:
+
+- `internal/core/scheduling` — domain model with state machine and `Validate()`
+- `internal/scheduling` — `Service` (enqueue), `Worker` (periodic poll + dispatch),
+  `ActionHandler` interface for feature modules
+- `internal/valkey` — Valkey client wrapper (`PARTY2_VALKEY_ADDR` env var)
+- Valkey is included in the Docker Compose environment with AOF + RDB persistence
+- Corrupted or oversized data from Valkey is rejected before any lock or dispatch
+
+Feature modules connect to the mechanism by implementing `ActionHandler` and
+calling `worker.RegisterHandler(actionType, handler)` at startup. No changes
+to the scheduling mechanism itself are required when adding a new action type.
 
 ## Confirmed decisions
 
