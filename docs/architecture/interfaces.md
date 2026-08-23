@@ -118,3 +118,12 @@ The application should expose game operations through a UI-independent applicati
 Initially this may be an internal API used by the GUI, tests, CLI tools, and other components. The design should avoid coupling the contract to a specific presentation technology so that appropriate operations can be exposed externally in the future.
 
 A possible future consumer is an AI Agent that plays the game through the same game operations available to a human player. This is an example of a future capability, not a requirement for the initial release.
+
+## Application logging contract
+
+Application services that need operational diagnostics receive an injected
+logger rather than using global state. The contract accepts an operation name,
+structured attributes, and (for errors) an error value. Its implementation
+emits JSON and records only the error type, so error messages cannot expose
+passwords, sessions, or database credentials. See
+[`logging.md`](logging.md) for the safety and correlation rules.

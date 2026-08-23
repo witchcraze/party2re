@@ -859,3 +859,12 @@ When requirements are ambiguous:
 10. leave the repository in a clean, understandable state.
 
 When an architectural decision is uncertain and could materially affect future feature development, stop and document the alternatives and trade-offs rather than silently choosing a complex solution.
+
+## Design rationale
+
+Historical design background, alternatives considered, and the reasons behind major
+architectural decisions are documented in
+[`docs/development/design-rationale.md`](docs/development/design-rationale.md).
+
+`AGENTS.md` defines the current rules. Consult the rationale document when historical
+context is needed to understand or reconsider a decision.
