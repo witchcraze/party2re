@@ -55,10 +55,10 @@ type characterRepositoryStub struct {
 	value corecharacter.Character
 }
 
-func (r *characterRepositoryStub) FindByID(_ context.Context, _ string) (corecharacter.Character, error) {
+func (r *characterRepositoryStub) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.value.ID == "" {
+	if r.value.ID == "" || r.value.ID != id {
 		return corecharacter.Character{}, corecharacter.ErrNotFound
 	}
 	return r.value, nil
@@ -172,5 +172,59 @@ func TestClaimTrainingAppliesRewardAtMostOnceConcurrently(t *testing.T) {
 	}
 	if characters.value.Experience != TrainingReward || !repository.value.Claimed {
 		t.Fatalf("concurrent claim state = activity %#v, character %#v", repository.value, characters.value)
+	}
+}
+
+func TestActivityNewServiceNilDependencies(t *testing.T) {
+	activities := &activityRepositoryStub{}
+	characters := &characterRepositoryStub{}
+	clock := &testClock{}
+
+	if _, err := NewService(nil, characters); err == nil {
+		t.Fatal("NewService(nil, characters) expected error, got nil")
+	}
+	if _, err := NewService(activities, nil); err == nil {
+		t.Fatal("NewService(activities, nil) expected error, got nil")
+	}
+	if _, err := NewServiceWithClock(activities, characters, nil); err == nil {
+		t.Fatal("NewServiceWithClock(activities, characters, nil) expected error, got nil")
+	}
+	if _, err := NewServiceWithClock(activities, characters, clock); err != nil {
+		t.Fatalf("NewServiceWithClock(activities, characters, clock) error = %v", err)
+	}
+
+	svc, err := NewService(activities, characters)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	if svc == nil {
+		t.Fatal("NewService() returned nil")
+	}
+}
+
+func TestActivityStartTrainingInvalidCharacter(t *testing.T) {
+	service, _, _, _ := newTestService(t)
+
+	if _, err := service.StartTraining(context.Background(), ""); !errors.Is(err, corecharacter.ErrNotFound) {
+		t.Fatalf("StartTraining(\"\") error = %v, want %v", err, corecharacter.ErrNotFound)
+	}
+	if _, err := service.StartTraining(context.Background(), "nonexistent_char"); !errors.Is(err, corecharacter.ErrNotFound) {
+		t.Fatalf("StartTraining(nonexistent) error = %v, want %v", err, corecharacter.ErrNotFound)
+	}
+}
+
+func TestActivityClaimNotFound(t *testing.T) {
+	service, _, _, _ := newTestService(t)
+
+	if _, err := service.Claim(context.Background(), "nonexistent_activity"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Claim(nonexistent) error = %v, want %v", err, ErrNotFound)
+	}
+}
+
+func TestActivityRealClock(t *testing.T) {
+	clock := realClock{}
+	now := clock.Now()
+	if now.IsZero() {
+		t.Fatal("realClock.Now() returned zero time")
 	}
 }

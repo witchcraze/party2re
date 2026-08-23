@@ -56,10 +56,10 @@ type characterRepositoryStub struct {
 	value corecharacter.Character
 }
 
-func (r *characterRepositoryStub) FindByID(_ context.Context, _ string) (corecharacter.Character, error) {
+func (r *characterRepositoryStub) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.value.ID == "" {
+	if r.value.ID == "" || r.value.ID != id {
 		return corecharacter.Character{}, corecharacter.ErrNotFound
 	}
 	return r.value, nil
@@ -210,5 +210,127 @@ func TestAdventureClaimsRewardAtMostOnceConcurrently(t *testing.T) {
 	}
 	if characters.value.Experience != AdventureReward || !repository.value.Claimed {
 		t.Fatalf("concurrent claim state = adventure %#v, character %#v", repository.value, characters.value)
+	}
+}
+
+func TestAdventureNewServiceNilDependencies(t *testing.T) {
+	adventures := &repositoryStub{}
+	characters := &characterRepositoryStub{}
+	battle := corebattle.Engine{}
+	clock := &testClock{}
+
+	if _, err := NewService(nil, characters, battle); err == nil {
+		t.Fatal("NewService(nil, characters, battle) expected error, got nil")
+	}
+	if _, err := NewService(adventures, nil, battle); err == nil {
+		t.Fatal("NewService(adventures, nil, battle) expected error, got nil")
+	}
+	if _, err := NewService(adventures, characters, nil); err == nil {
+		t.Fatal("NewService(adventures, characters, nil) expected error, got nil")
+	}
+	if _, err := NewServiceWithClock(adventures, characters, battle, nil); err == nil {
+		t.Fatal("NewServiceWithClock(adventures, characters, battle, nil) expected error, got nil")
+	}
+	if _, err := NewServiceWithClock(adventures, characters, battle, clock); err != nil {
+		t.Fatalf("NewServiceWithClock(adventures, characters, battle, clock) error = %v", err)
+	}
+
+	svc, err := NewService(adventures, characters, battle)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	if svc == nil {
+		t.Fatal("NewService() returned nil")
+	}
+}
+
+func TestAdventureStartInvalidCharacter(t *testing.T) {
+	service, _, _, _ := newTestService(t)
+
+	if _, err := service.Start(context.Background(), ""); !errors.Is(err, corecharacter.ErrNotFound) {
+		t.Fatalf("Start(\"\") error = %v, want %v", err, corecharacter.ErrNotFound)
+	}
+	if _, err := service.Start(context.Background(), "nonexistent_char"); !errors.Is(err, corecharacter.ErrNotFound) {
+		t.Fatalf("Start(nonexistent) error = %v, want %v", err, corecharacter.ErrNotFound)
+	}
+}
+
+func TestAdventureClaimNotFound(t *testing.T) {
+	service, _, _, _ := newTestService(t)
+
+	if _, err := service.Claim(context.Background(), "nonexistent_adventure"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Claim(nonexistent) error = %v, want %v", err, ErrNotFound)
+	}
+}
+
+func TestAdventureClaimDefeatOutcome(t *testing.T) {
+	service, clock, repository, characters := newTestService(t)
+	service.battle = battleResolverStub{result: corebattle.Result{
+		Outcome:  corebattle.OutcomeWin,
+		WinnerID: AdventureEnemyID,
+		LoserID:  characters.value.ID,
+		Turns:    1,
+		Reward:   corebattle.Reward{},
+	}}
+	value, err := service.Start(context.Background(), characters.value.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.now = value.AvailableAt
+
+	initialExp := characters.value.Experience
+	initialMoney := characters.value.Money
+
+	got, err := service.Claim(context.Background(), value.ID)
+	if err != nil {
+		t.Fatalf("Claim() error = %v", err)
+	}
+	if !got.Claimed || !got.Resolved || got.BattleResult.WinnerID != AdventureEnemyID {
+		t.Fatalf("Claim() result = %#v, want WinnerID == AdventureEnemyID", got)
+	}
+	if characters.value.Experience != initialExp || characters.value.Money != initialMoney {
+		t.Fatalf("character modified on loss: exp=%d, money=%d", characters.value.Experience, characters.value.Money)
+	}
+	if repository.value.BattleResult.WinnerID != AdventureEnemyID {
+		t.Fatalf("saved battle result = %#v, want WinnerID == AdventureEnemyID", repository.value.BattleResult)
+	}
+}
+
+func TestAdventureClaimDrawOutcome(t *testing.T) {
+	service, clock, repository, characters := newTestService(t)
+	service.battle = battleResolverStub{result: corebattle.Result{
+		Outcome: corebattle.OutcomeDraw,
+		Turns:   10,
+		Reward:  corebattle.Reward{},
+	}}
+	value, err := service.Start(context.Background(), characters.value.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.now = value.AvailableAt
+
+	initialExp := characters.value.Experience
+	initialMoney := characters.value.Money
+
+	got, err := service.Claim(context.Background(), value.ID)
+	if err != nil {
+		t.Fatalf("Claim() error = %v", err)
+	}
+	if !got.Claimed || !got.Resolved || got.BattleResult.Outcome != corebattle.OutcomeDraw {
+		t.Fatalf("Claim() result = %#v, want OutcomeDraw", got)
+	}
+	if characters.value.Experience != initialExp || characters.value.Money != initialMoney {
+		t.Fatalf("character modified on draw: exp=%d, money=%d", characters.value.Experience, characters.value.Money)
+	}
+	if repository.value.BattleResult.Outcome != corebattle.OutcomeDraw {
+		t.Fatalf("saved battle result = %#v, want OutcomeDraw", repository.value.BattleResult)
+	}
+}
+
+func TestAdventureRealClock(t *testing.T) {
+	clock := realClock{}
+	now := clock.Now()
+	if now.IsZero() {
+		t.Fatal("realClock.Now() returned zero time")
 	}
 }
