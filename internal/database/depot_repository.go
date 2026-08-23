@@ -40,7 +40,7 @@ func (r *DepotRepository) FindByCharacterID(ctx context.Context, characterID str
 		SELECT id, definition_id, quantity, enhancement_level
 		FROM depot_items
 		WHERE character_id = ?
-		ORDER BY created_at ASC
+		ORDER BY id
 	`, characterID)
 	if err != nil {
 		return depot.Depot{}, err
@@ -169,7 +169,7 @@ func (t *sqlDepotTx) GetInventory(ctx context.Context, characterID string) (core
 		SELECT id, definition_id, quantity, enhancement_level
 		FROM inventory_items
 		WHERE character_id = ?
-		ORDER BY created_at ASC
+		ORDER BY id
 	`, characterID)
 	if err != nil {
 		return coreinventory.Inventory{}, err
@@ -227,7 +227,7 @@ func (t *sqlDepotTx) GetDepot(ctx context.Context, characterID string) (depot.De
 		SELECT id, definition_id, quantity, enhancement_level
 		FROM depot_items
 		WHERE character_id = ?
-		ORDER BY created_at ASC
+		ORDER BY id
 	`, characterID)
 	if err != nil {
 		return depot.Depot{}, err
