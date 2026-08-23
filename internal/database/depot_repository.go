@@ -147,8 +147,8 @@ func (t *sqlDepotTx) GetCharacter(ctx context.Context, characterID string) (core
 	if err != nil {
 		return corecharacter.Character{}, err
 	}
-	value.JobID = corecharacter.JobID(jobID)
-	value.Gender = corecharacter.Gender(gender)
+	value.JobID = jobID
+	value.Gender = gender
 	return value, nil
 }
 
