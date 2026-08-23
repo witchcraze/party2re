@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #55 — Item Shop purchase and sale operations
+Last updated: Issue #56 — Stage and monster encounter definitions
 
 ## Current phase
 
@@ -95,6 +95,14 @@ Issue #55 introduced the Item Shop purchase and sale operations:
 - `internal/shop` — Service for item purchases (gold deduction and inventory addition) and sales (inventory removal and 50% price gold payout)
 - `internal/database.ShopRepository` — Atomic single-transaction commit for character wallet and inventory updates
 - `docs/design/shops.md` — Language-agnostic specification of shop purchase and resale rules
+
+Issue #56 introduced Stage and Monster encounter definitions:
+
+- `internal/adventure` — Data-driven Stage (`StageCatalog`) and Monster (`MonsterCatalog`) catalogs with JSON loaders
+- `internal/adventure/data/stages.json` — 28 stages (`stage-01` to `stage-28`) with minimum level requirements, durations, and monster encounter lists
+- `internal/adventure/data/monsters.json` — 322 monsters with stats, exp/gold rewards, and clean-room generic fantasy names replacing distinctive proper names
+- `docs/design/stages-and-monsters.md` — Stage listing and monster content design documentation
+- Comprehensive catalog-wide validation tests in CI
 
 ## Confirmed decisions
 
