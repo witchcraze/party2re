@@ -34,3 +34,25 @@ func TestItemRejectsInvalidValues(t *testing.T) {
 		t.Fatalf("NewInstance() error = %v", err)
 	}
 }
+
+func TestNewEquipmentDefinitionSetsSlotAndPrice(t *testing.T) {
+	def, err := NewEquipmentDefinition("sword-01", "Training Sword", 100, SlotMainHand)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if def.ID != "sword-01" || def.Name != "Training Sword" || def.Price != 100 || def.Slot != SlotMainHand {
+		t.Fatalf("NewEquipmentDefinition() = %#v", def)
+	}
+}
+
+func TestNewEquipmentDefinitionRejectsInvalidSlotAndPrice(t *testing.T) {
+	if _, err := NewEquipmentDefinition("sword", "Sword", 100, SlotNone); !errors.Is(err, ErrInvalidDefinition) {
+		t.Fatalf("NewEquipmentDefinition(SlotNone) error = %v", err)
+	}
+	if _, err := NewEquipmentDefinition("sword", "Sword", -1, SlotMainHand); !errors.Is(err, ErrInvalidDefinition) {
+		t.Fatalf("NewEquipmentDefinition(negative price) error = %v", err)
+	}
+	if _, err := NewEquipmentDefinition("sword", "Sword", 50, Slot("bad")); !errors.Is(err, ErrInvalidDefinition) {
+		t.Fatalf("NewEquipmentDefinition(bad slot) error = %v", err)
+	}
+}
