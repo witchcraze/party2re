@@ -125,6 +125,11 @@ ghcr.io/witchcraze/party2re:v1.0.0      # リリースタグ
 | 変数 | 説明 | 例 |
 | :--- | :--- | :--- |
 | `PARTY2_DB_DSN` | MariaDB 接続DSN | `party2:pass@tcp(db:3306)/party2?parseTime=true` |
+| `PARTY2_VALKEY_ADDR` | Valkey 接続アドレス | `valkey:6379` |
+
+### Worker プロセスについて
+
+非同期で実行される ScheduledAction (例: 行動完了時の処理など) は、Valkey をキューとして利用し Worker によって処理されます。初期段階ではメインのアプリケーションプロセス内で並行して実行可能ですが、将来的に別のプロセスとして独立して起動させることも可能な設計になっています。
 
 ### Docker Compose での起動例
 
@@ -136,8 +141,11 @@ services:
     image: ghcr.io/witchcraze/party2re:main
     environment:
       PARTY2_DB_DSN: party2:party2@tcp(mariadb:3306)/party2?parseTime=true
+      PARTY2_VALKEY_ADDR: valkey:6379
     depends_on:
       mariadb:
+        condition: service_healthy
+      valkey:
         condition: service_healthy
     ports:
       - "8080:8080"
@@ -159,8 +167,20 @@ services:
       - mariadb-data:/var/lib/mysql
       - ./migrations:/docker-entrypoint-initdb.d:ro  # リポジトリの migrations/ をコピー
 
+  valkey:
+    image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--save", "60", "1", "--appendonly", "yes"]
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
 volumes:
   mariadb-data:
+  valkey-data:
 ```
 
 **初回起動前に `migrations/` フォルダをリポジトリから取得してください。**
