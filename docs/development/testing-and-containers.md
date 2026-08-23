@@ -56,6 +56,15 @@ docker compose run --rm app go test ./internal/core/job ./internal/core/item
 Both Job and Item definitions are covered by catalog-wide loading, validation,
 and boundary tests.
 
+## Test Setup and Fixtures
+
+As the number of features grows, setting up preconditions (e.g., creating a player, character, and inventory) can become repetitive. 
+
+**Rules for Test Helpers:**
+1. Do not proactively build complex test frameworks or universal `internal/testutil` builders. Wait until test setup duplication *actually occurs* and becomes a tangible burden.
+2. When creating test helpers or fixtures, do not use excessive abstraction. If a helper hides the intent of the test (e.g., hiding which specific item was added to the inventory when the test is explicitly about consuming that item), it is an anti-pattern. 
+3. Tests must remain readable as documentation of behavior. Explicit setup is preferred over implicit magic.
+
 ## Logging direction
 
 Application logs are intended for container stdout/stderr and should use the

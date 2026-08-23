@@ -44,6 +44,21 @@ A feature owns:
 
 A feature does not own shared concepts merely because it uses them.
 
+## Internal Structure
+
+Feature Modules should follow a standard logical structure, typically distinguishing between:
+- Domain logic
+- Application services
+- Infrastructure / Persistence
+- Interfaces / API
+
+**CRITICAL RULE:** Do not create unnecessary layers or empty packages. 
+
+Every Feature Module does not need every layer. If a feature is simple and has no complex domain logic, do not create an empty `domain` package just to satisfy a template. 
+The standard structure is a *design checklist*, not a directory tree to be blindly copy-pasted.
+
+During Architecture Review, the primary focus must be on **"What boundary does this Feature have?"**, not on whether it strictly implements every layer of Clean Architecture.
+
 ## Dependencies
 
 Allowed:
