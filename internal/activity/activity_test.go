@@ -70,6 +70,33 @@ func (r *characterRepositoryStub) Update(_ context.Context, value corecharacter.
 	return nil
 }
 
+type testScheduler struct {
+	mu           sync.Mutex
+	scheduledIDs []string
+	err          error
+}
+
+func (s *testScheduler) Schedule(ctx context.Context, actionType, actorID string, params map[string]string, executeAt time.Time) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.err != nil {
+		return "", s.err
+	}
+	s.scheduledIDs = append(s.scheduledIDs, "mock-id")
+	return "mock-id", nil
+}
+
+type testLogger struct {
+	mu    sync.Mutex
+	warns []string
+}
+
+func (l *testLogger) Warn(msg string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.warns = append(l.warns, msg)
+}
+
 func newTestService(t *testing.T) (*Service, *testClock, *activityRepositoryStub, *characterRepositoryStub) {
 	t.Helper()
 	character, err := corecharacter.New("Alice")
@@ -79,7 +106,9 @@ func newTestService(t *testing.T) (*Service, *testClock, *activityRepositoryStub
 	activities := &activityRepositoryStub{}
 	characters := &characterRepositoryStub{value: character}
 	activities.characters = characters
-	service, err := NewService(activities, characters)
+	scheduler := &testScheduler{}
+	logger := nopLogger{}
+	service, err := NewService(activities, characters, scheduler, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,6 +129,66 @@ func TestStartTrainingSchedulesActivity(t *testing.T) {
 	}
 	if repository.value.ID != got.ID {
 		t.Fatal("activity was not saved")
+	}
+	scheduler := service.scheduler.(*testScheduler)
+	scheduler.mu.Lock()
+	defer scheduler.mu.Unlock()
+	if len(scheduler.scheduledIDs) != 1 {
+		t.Fatal("scheduler was not called")
+	}
+}
+
+func TestStartTrainingSchedulerFailsLogsWarningAndSucceeds(t *testing.T) {
+	character, err := corecharacter.New("Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	activities := &activityRepositoryStub{}
+	characters := &characterRepositoryStub{value: character}
+	activities.characters = characters
+	scheduler := &testScheduler{err: errors.New("valkey connection error")}
+	logger := &testLogger{}
+	clock := &testClock{now: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)}
+	service, err := NewServiceWithClock(activities, characters, scheduler, logger, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := service.StartTraining(context.Background(), characters.value.ID)
+	if err != nil {
+		t.Fatalf("StartTraining() expected success even when scheduler fails, got error: %v", err)
+	}
+	if got.ID == "" {
+		t.Fatal("activity ID is empty")
+	}
+
+	logger.mu.Lock()
+	defer logger.mu.Unlock()
+	if len(logger.warns) != 1 {
+		t.Fatalf("expected 1 warning log, got %d", len(logger.warns))
+	}
+}
+
+func TestStartTrainingNilSchedulerSucceeds(t *testing.T) {
+	character, err := corecharacter.New("Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	activities := &activityRepositoryStub{}
+	characters := &characterRepositoryStub{value: character}
+	activities.characters = characters
+	clock := &testClock{now: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)}
+	service, err := NewServiceWithClock(activities, characters, nil, nil, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := service.StartTraining(context.Background(), characters.value.ID)
+	if err != nil {
+		t.Fatalf("StartTraining() expected success with nil scheduler, got error: %v", err)
+	}
+	if got.ID == "" {
+		t.Fatal("activity ID is empty")
 	}
 }
 
@@ -179,21 +268,23 @@ func TestActivityNewServiceNilDependencies(t *testing.T) {
 	activities := &activityRepositoryStub{}
 	characters := &characterRepositoryStub{}
 	clock := &testClock{}
+	scheduler := &testScheduler{}
+	logger := nopLogger{}
 
-	if _, err := NewService(nil, characters); err == nil {
-		t.Fatal("NewService(nil, characters) expected error, got nil")
+	if _, err := NewService(nil, characters, scheduler, logger); err == nil {
+		t.Fatal("NewService(nil, ...) expected error, got nil")
 	}
-	if _, err := NewService(activities, nil); err == nil {
-		t.Fatal("NewService(activities, nil) expected error, got nil")
+	if _, err := NewService(activities, nil, scheduler, logger); err == nil {
+		t.Fatal("NewService(..., nil, ...) expected error, got nil")
 	}
-	if _, err := NewServiceWithClock(activities, characters, nil); err == nil {
-		t.Fatal("NewServiceWithClock(activities, characters, nil) expected error, got nil")
+	if _, err := NewServiceWithClock(activities, characters, scheduler, logger, nil); err == nil {
+		t.Fatal("NewServiceWithClock(..., nil) expected error, got nil")
 	}
-	if _, err := NewServiceWithClock(activities, characters, clock); err != nil {
-		t.Fatalf("NewServiceWithClock(activities, characters, clock) error = %v", err)
+	if _, err := NewServiceWithClock(activities, characters, scheduler, logger, clock); err != nil {
+		t.Fatalf("NewServiceWithClock(...) error = %v", err)
 	}
 
-	svc, err := NewService(activities, characters)
+	svc, err := NewService(activities, characters, scheduler, logger)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}

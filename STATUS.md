@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #106 — ScheduledAction processing with Valkey backend
+Last updated: Issue #109 — Migrate Activity training to ScheduledAction push processing
 
 ## Current phase
 
@@ -77,6 +77,12 @@ Issue #106 introduced the reusable ScheduledAction processing mechanism
 Feature modules connect to the mechanism by implementing `ActionHandler` and
 calling `worker.RegisterHandler(actionType, handler)` at startup. No changes
 to the scheduling mechanism itself are required when adding a new action type.
+
+Issue #109 migrated Activity training to ScheduledAction push processing:
+
+- `StartTraining` enqueues a ScheduledAction (`activity:training_complete`)
+- `TrainingHandler` processes completion by claiming and applying experience rewards
+- Fallback path works if Valkey is unavailable (manual `Claim` still functions)
 
 ## Confirmed decisions
 
