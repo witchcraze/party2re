@@ -128,4 +128,3 @@ func (a *ScheduledAction) MarkFailed(retention time.Duration) error {
 	a.RetainUntil = now.Add(retention)
 	return nil
 }
-

@@ -84,7 +84,7 @@ func (w *Worker) processAction(ctx context.Context, action core_scheduling.Sched
 		w.logger.Error(ctx, "Failed to mark action as processing", err, slog.String("action_id", action.ID))
 		return
 	}
-	
+
 	if err := w.repo.Save(ctx, action); err != nil {
 		w.logger.Error(ctx, "Failed to save action state as processing", err, slog.String("action_id", action.ID))
 		return

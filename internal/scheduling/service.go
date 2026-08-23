@@ -31,11 +31,11 @@ func (s *Service) Schedule(ctx context.Context, actionType, actorID string, para
 		ExecuteAt:   executeAt,
 		State:       core_scheduling.StatePending,
 	}
-	
+
 	err := s.repo.Schedule(ctx, action)
 	if err != nil {
 		return "", err
 	}
-	
+
 	return id, nil
 }

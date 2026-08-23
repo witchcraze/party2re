@@ -33,7 +33,7 @@ func (r *ValkeyRepository) Schedule(ctx context.Context, action core_scheduling.
 	}
 
 	actionKey := actionKeyPrefix + action.ID
-	
+
 	// Save action data
 	err = r.client.Do(ctx, r.client.B().Set().Key(actionKey).Value(string(data)).Build()).Error()
 	if err != nil {
@@ -48,7 +48,7 @@ func (r *ValkeyRepository) Schedule(ctx context.Context, action core_scheduling.
 
 func (r *ValkeyRepository) FetchDue(ctx context.Context, upTo time.Time, limit int) ([]core_scheduling.ScheduledAction, error) {
 	scoreStr := strconv.FormatInt(upTo.Unix(), 10)
-	
+
 	// Get IDs from pending queue
 	cmd := r.client.B().Zrangebyscore().Key(pendingQueueKey).Min("-inf").Max(scoreStr).Limit(0, int64(limit)).Build()
 	resp := r.client.Do(ctx, cmd)
@@ -66,7 +66,7 @@ func (r *ValkeyRepository) FetchDue(ctx context.Context, upTo time.Time, limit i
 	}
 
 	var actions []core_scheduling.ScheduledAction
-	
+
 	for _, id := range ids {
 		actionKey := actionKeyPrefix + id
 		val, err := r.client.Do(ctx, r.client.B().Get().Key(actionKey).Build()).AsBytes()
@@ -75,7 +75,7 @@ func (r *ValkeyRepository) FetchDue(ctx context.Context, upTo time.Time, limit i
 			r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build())
 			continue
 		}
-		
+
 		var action core_scheduling.ScheduledAction
 		if err := json.Unmarshal(val, &action); err != nil {
 			// Malformed JSON: remove from queue and delete key to prevent re-fetch
@@ -103,7 +103,7 @@ func (r *ValkeyRepository) AcquireLock(ctx context.Context, actionID string, loc
 	if ttlSecs < 1 {
 		ttlSecs = 1
 	}
-	
+
 	resp := r.client.Do(ctx, r.client.B().Set().Key(lockKey).Value("1").Nx().ExSeconds(ttlSecs).Build())
 	if resp.Error() != nil {
 		if valkey.IsValkeyNil(resp.Error()) {
@@ -125,10 +125,10 @@ func (r *ValkeyRepository) Save(ctx context.Context, action core_scheduling.Sche
 	if action.State == core_scheduling.StateCompleted || action.State == core_scheduling.StateFailed {
 		// Remove from pending queue
 		r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(action.ID).Build())
-		
+
 		// Delete lock
-		r.client.Do(ctx, r.client.B().Del().Key(lockKeyPrefix + action.ID).Build())
-		
+		r.client.Do(ctx, r.client.B().Del().Key(lockKeyPrefix+action.ID).Build())
+
 		// Save updated action with TTL based on RetainUntil
 		if !action.RetainUntil.IsZero() {
 			ttlSecs := int64(time.Until(action.RetainUntil).Seconds())

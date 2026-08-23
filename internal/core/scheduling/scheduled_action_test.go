@@ -13,12 +13,12 @@ func TestScheduledAction(t *testing.T) {
 			State:       StatePending,
 			ScheduledAt: time.Now(),
 		}
-		
+
 		err := action.MarkProcessing()
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
-		
+
 		if action.State != StateProcessing {
 			t.Errorf("expected state to be %s, got %s", StateProcessing, action.State)
 		}
@@ -32,7 +32,7 @@ func TestScheduledAction(t *testing.T) {
 			ID:    "2",
 			State: StateCompleted,
 		}
-		
+
 		err := action.MarkProcessing()
 		if err == nil {
 			t.Fatal("expected error on invalid transition")
@@ -44,12 +44,12 @@ func TestScheduledAction(t *testing.T) {
 			ID:    "3",
 			State: StateProcessing,
 		}
-		
+
 		err := action.MarkCompleted(24 * time.Hour)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
-		
+
 		if action.State != StateCompleted {
 			t.Errorf("expected state to be %s, got %s", StateCompleted, action.State)
 		}
@@ -60,18 +60,18 @@ func TestScheduledAction(t *testing.T) {
 			t.Error("expected RetainUntil to be set")
 		}
 	})
-	
+
 	t.Run("valid transition to failed", func(t *testing.T) {
 		action := ScheduledAction{
 			ID:    "4",
 			State: StateProcessing,
 		}
-		
+
 		err := action.MarkFailed(24 * time.Hour)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
-		
+
 		if action.State != StateFailed {
 			t.Errorf("expected state to be %s, got %s", StateFailed, action.State)
 		}
@@ -182,4 +182,3 @@ func TestScheduledAction_Validate(t *testing.T) {
 		}
 	})
 }
-

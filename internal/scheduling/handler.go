@@ -2,7 +2,7 @@ package scheduling
 
 import (
 	"context"
-	
+
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 )
 

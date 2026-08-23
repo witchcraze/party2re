@@ -56,8 +56,8 @@ func (h *mockHandler) Handle(ctx context.Context, action core_scheduling.Schedul
 
 type mockLogger struct{}
 
-func (m *mockLogger) Info(ctx context.Context, msg string, attrs ...slog.Attr) {}
-func (m *mockLogger) Warn(ctx context.Context, msg string, attrs ...slog.Attr) {}
+func (m *mockLogger) Info(ctx context.Context, msg string, attrs ...slog.Attr)             {}
+func (m *mockLogger) Warn(ctx context.Context, msg string, attrs ...slog.Attr)             {}
 func (m *mockLogger) Error(ctx context.Context, msg string, err error, attrs ...slog.Attr) {}
 
 func TestWorker(t *testing.T) {
@@ -147,4 +147,3 @@ func TestWorker_InvalidActionRejected(t *testing.T) {
 		t.Error("expected lock NOT to be acquired for invalid action")
 	}
 }
-
