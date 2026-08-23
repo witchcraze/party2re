@@ -9,18 +9,18 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 )
 
-type ShopRepository struct {
+type BlacksmithRepository struct {
 	db *sql.DB
 }
 
-func NewShopRepository(db *sql.DB) (*ShopRepository, error) {
+func NewBlacksmithRepository(db *sql.DB) (*BlacksmithRepository, error) {
 	if db == nil {
 		return nil, errors.New("database is nil")
 	}
-	return &ShopRepository{db: db}, nil
+	return &BlacksmithRepository{db: db}, nil
 }
 
-func (r *ShopRepository) CommitTransaction(ctx context.Context, character corecharacter.Character, inventory coreinventory.Inventory) error {
+func (r *BlacksmithRepository) CommitEnhancement(ctx context.Context, character corecharacter.Character, inventory coreinventory.Inventory) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err

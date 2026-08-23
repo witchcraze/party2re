@@ -55,13 +55,18 @@ func NewEquipmentDefinition(id, name string, price int, slot Slot) (Definition, 
 }
 
 type Instance struct {
-	ID           string
-	DefinitionID string
-	Quantity     int
+	ID               string
+	DefinitionID     string
+	Quantity         int
+	EnhancementLevel int
 }
 
 func NewInstance(definitionID string, quantity int) (Instance, error) {
-	if strings.TrimSpace(definitionID) == "" || quantity <= 0 {
+	return NewInstanceWithEnhancement(definitionID, quantity, 0)
+}
+
+func NewInstanceWithEnhancement(definitionID string, quantity int, enhancementLevel int) (Instance, error) {
+	if strings.TrimSpace(definitionID) == "" || quantity <= 0 || enhancementLevel < 0 {
 		return Instance{}, ErrInvalidInstance
 	}
 	id := make([]byte, 16)
@@ -69,8 +74,9 @@ func NewInstance(definitionID string, quantity int) (Instance, error) {
 		return Instance{}, err
 	}
 	return Instance{
-		ID:           hex.EncodeToString(id),
-		DefinitionID: strings.TrimSpace(definitionID),
-		Quantity:     quantity,
+		ID:               hex.EncodeToString(id),
+		DefinitionID:     strings.TrimSpace(definitionID),
+		Quantity:         quantity,
+		EnhancementLevel: enhancementLevel,
 	}, nil
 }

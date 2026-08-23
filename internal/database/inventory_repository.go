@@ -31,9 +31,9 @@ func (r *InventoryRepository) Save(ctx context.Context, value coreinventory.Inve
 	}
 	for _, instance := range value.Items {
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO inventory_items (id, character_id, definition_id, quantity)
-			VALUES (?, ?, ?, ?)
-		`, instance.ID, value.CharacterID, instance.DefinitionID, instance.Quantity); err != nil {
+			INSERT INTO inventory_items (id, character_id, definition_id, quantity, enhancement_level)
+			VALUES (?, ?, ?, ?, ?)
+		`, instance.ID, value.CharacterID, instance.DefinitionID, instance.Quantity, instance.EnhancementLevel); err != nil {
 			_ = tx.Rollback()
 			return err
 		}
@@ -47,7 +47,7 @@ func (r *InventoryRepository) FindByCharacterID(ctx context.Context, characterID
 		return coreinventory.Inventory{}, err
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, definition_id, quantity
+		SELECT id, definition_id, quantity, enhancement_level
 		FROM inventory_items
 		WHERE character_id = ?
 		ORDER BY id
@@ -58,7 +58,7 @@ func (r *InventoryRepository) FindByCharacterID(ctx context.Context, characterID
 	defer rows.Close()
 	for rows.Next() {
 		var instance item.Instance
-		if err := rows.Scan(&instance.ID, &instance.DefinitionID, &instance.Quantity); err != nil {
+		if err := rows.Scan(&instance.ID, &instance.DefinitionID, &instance.Quantity, &instance.EnhancementLevel); err != nil {
 			return coreinventory.Inventory{}, err
 		}
 		if err := value.Add(instance); err != nil {

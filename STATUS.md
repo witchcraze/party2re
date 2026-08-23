@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #58 — Character Item Depot and storage management
+Last updated: Issue #59 — Blacksmith item enhancement and refinement
 
 ## Current phase
 
@@ -117,6 +117,13 @@ Issue #58 introduced Character Item Depot and storage management:
 - `internal/database.DepotRepository` — Atomic single-transaction commit across character wallet, active inventory, and depot items
 - `docs/design/depot.md` — Specification of depot storage invariants and operations
 - Database schema migration `migrations/011_depot.sql` adding `character_depots` and `depot_items` tables
+
+Issue #59 introduced Blacksmith item enhancement and refinement:
+
+- `internal/blacksmith` — Service for enhancing equipment (+1 to +10) with level-scaling gold and material costs, success probability curve, and stats bonuses
+- `internal/database.BlacksmithRepository` — Atomic single-transaction commit across character wallet, active inventory, and enhanced item instance properties
+- `docs/design/blacksmith.md` — Specification of enhancement rules, cost formulas, and success probability
+- Database schema migration `migrations/012_item_enhancement.sql` adding `enhancement_level` to inventory and depot item tables
 
 ## Confirmed decisions
 

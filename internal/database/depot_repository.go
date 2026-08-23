@@ -37,7 +37,7 @@ func (r *DepotRepository) FindByCharacterID(ctx context.Context, characterID str
 	}
 
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, definition_id, quantity
+		SELECT id, definition_id, quantity, enhancement_level
 		FROM depot_items
 		WHERE character_id = ?
 		ORDER BY created_at ASC
@@ -50,7 +50,7 @@ func (r *DepotRepository) FindByCharacterID(ctx context.Context, characterID str
 	items := make([]item.Instance, 0)
 	for rows.Next() {
 		var instance item.Instance
-		if err := rows.Scan(&instance.ID, &instance.DefinitionID, &instance.Quantity); err != nil {
+		if err := rows.Scan(&instance.ID, &instance.DefinitionID, &instance.Quantity, &instance.EnhancementLevel); err != nil {
 			return depot.Depot{}, err
 		}
 		items = append(items, instance)
@@ -104,9 +104,9 @@ func saveDepotTx(ctx context.Context, tx *sql.Tx, value depot.Depot) error {
 
 	for _, instance := range value.Items {
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO depot_items (id, character_id, definition_id, quantity)
-			VALUES (?, ?, ?, ?)
-		`, instance.ID, value.CharacterID, instance.DefinitionID, instance.Quantity); err != nil {
+			INSERT INTO depot_items (id, character_id, definition_id, quantity, enhancement_level)
+			VALUES (?, ?, ?, ?, ?)
+		`, instance.ID, value.CharacterID, instance.DefinitionID, instance.Quantity, instance.EnhancementLevel); err != nil {
 			return err
 		}
 	}
@@ -166,7 +166,7 @@ func (t *sqlDepotTx) GetInventory(ctx context.Context, characterID string) (core
 	}
 
 	rows, err := t.tx.QueryContext(ctx, `
-		SELECT id, definition_id, quantity
+		SELECT id, definition_id, quantity, enhancement_level
 		FROM inventory_items
 		WHERE character_id = ?
 		ORDER BY created_at ASC
@@ -179,7 +179,7 @@ func (t *sqlDepotTx) GetInventory(ctx context.Context, characterID string) (core
 	items := make([]item.Instance, 0)
 	for rows.Next() {
 		var instance item.Instance
-		if err := rows.Scan(&instance.ID, &instance.DefinitionID, &instance.Quantity); err != nil {
+		if err := rows.Scan(&instance.ID, &instance.DefinitionID, &instance.Quantity, &instance.EnhancementLevel); err != nil {
 			return coreinventory.Inventory{}, err
 		}
 		items = append(items, instance)
@@ -200,9 +200,9 @@ func (t *sqlDepotTx) SaveInventory(ctx context.Context, inventory coreinventory.
 	}
 	for _, instance := range inventory.Items {
 		if _, err := t.tx.ExecContext(ctx, `
-			INSERT INTO inventory_items (id, character_id, definition_id, quantity)
-			VALUES (?, ?, ?, ?)
-		`, instance.ID, inventory.CharacterID, instance.DefinitionID, instance.Quantity); err != nil {
+			INSERT INTO inventory_items (id, character_id, definition_id, quantity, enhancement_level)
+			VALUES (?, ?, ?, ?, ?)
+		`, instance.ID, inventory.CharacterID, instance.DefinitionID, instance.Quantity, instance.EnhancementLevel); err != nil {
 			return err
 		}
 	}
@@ -224,7 +224,7 @@ func (t *sqlDepotTx) GetDepot(ctx context.Context, characterID string) (depot.De
 	}
 
 	rows, err := t.tx.QueryContext(ctx, `
-		SELECT id, definition_id, quantity
+		SELECT id, definition_id, quantity, enhancement_level
 		FROM depot_items
 		WHERE character_id = ?
 		ORDER BY created_at ASC
@@ -237,7 +237,7 @@ func (t *sqlDepotTx) GetDepot(ctx context.Context, characterID string) (depot.De
 	items := make([]item.Instance, 0)
 	for rows.Next() {
 		var instance item.Instance
-		if err := rows.Scan(&instance.ID, &instance.DefinitionID, &instance.Quantity); err != nil {
+		if err := rows.Scan(&instance.ID, &instance.DefinitionID, &instance.Quantity, &instance.EnhancementLevel); err != nil {
 			return depot.Depot{}, err
 		}
 		items = append(items, instance)
