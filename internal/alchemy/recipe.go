@@ -13,8 +13,8 @@ import (
 var recipesData []byte
 
 var (
-	ErrInvalidRecipe   = errors.New("invalid recipe definition")
-	ErrRecipeNotFound  = errors.New("recipe not found")
+	ErrInvalidRecipe  = errors.New("invalid recipe definition")
+	ErrRecipeNotFound = errors.New("recipe not found")
 )
 
 type Ingredient struct {
