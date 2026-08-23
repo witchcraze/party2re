@@ -13,21 +13,22 @@ the host machine is not required.
 Docker Compose provides:
 
 - `app` — Go 1.26.7 development container;
-- `mariadb` — MariaDB using the `latest` image.
-
-Valkey is not part of the current Compose environment. Add it only when a
-concrete cache, transient-state, queue, or coordination requirement exists.
+- `mariadb` — MariaDB using the `latest` image;
+- `valkey` — Valkey (Redis-compatible) used for the ScheduledAction queue
+  (added in Issue #106). Configured with both AOF and RDB persistence so
+  pending scheduled actions survive container restarts. The `app` service
+  connects via `PARTY2_VALKEY_ADDR: valkey:6379`.
 
 ## Starting the environment
 
 From the repository root:
 
 ```sh
-docker compose up -d mariadb
+docker compose up -d mariadb valkey
 ```
 
-The MariaDB service is considered ready only after its health check succeeds.
-The `app` service waits for this condition automatically.
+Both services must be healthy before the `app` service starts.
+The `app` service waits for both health checks automatically.
 
 Run the application database health check with:
 

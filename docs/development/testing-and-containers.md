@@ -26,6 +26,15 @@ docker compose run --rm app sh -c 'go test ./... -coverprofile=coverage.out -cov
 Integration tests that require MariaDB use `PARTY2_DB_DSN` and are skipped when
 that environment variable is absent. Compose supplies it automatically.
 
+Integration tests that require a live Valkey instance follow the same pattern:
+they check `PARTY2_VALKEY_ADDR` and call `t.Skip(...)` when it is absent.
+Compose supplies `PARTY2_VALKEY_ADDR: valkey:6379` automatically.
+
+> **Known gap**: `internal/scheduling/valkey_repository.go` (ScheduledAction
+> queue, lock acquisition, and retention logic) does not yet have integration
+> tests. Adding them is tracked as a follow-up issue. Use the
+> `PARTY2_VALKEY_ADDR` skip pattern described above when implementing them.
+
 Coverage is reported for inspection, not enforced as a pass/fail threshold.
 The CI workflow uploads both `coverage.out` (machine-readable) and
 `coverage.txt` (human-readable) as an artifact.
