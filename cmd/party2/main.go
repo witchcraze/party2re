@@ -10,6 +10,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/shop"
@@ -53,6 +54,14 @@ func run() error {
 		return err
 	}
 	_, err = shop.NewServiceWithTransaction(charRepo, invRepo, shopRepo, itemCatalog)
+	if err != nil {
+		return err
+	}
+	depotRepo, err := database.NewDepotRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = depot.NewServiceWithTransaction(depotRepo, charRepo, invRepo, depotRepo)
 	if err != nil {
 		return err
 	}
