@@ -2,20 +2,16 @@
 
 ## Container roles
 
-The current `compose.yaml` is the development and integration-test
-environment. It starts the Go test container and MariaDB together, waits for
-the database health check, and provides the repository with a reproducible
-database connection. It is not the distribution image.
+`Dockerfile.dev` and `compose.yaml` together form the **development and integration-test environment**. They start the Go test container alongside MariaDB, wait for the database health check, and provide a reproducible database connection via bind-mounted source and cached Go module/build caches.
 
-`Dockerfile.dev` contains the Go toolchain and source-oriented development
-environment. The bind mount in Compose allows tests and source changes to be
-run without rebuilding the development image.
+`Dockerfile` is the **production distribution image**. It uses a multi-stage build:
 
-The future distribution image will be built by a separate production
-`Dockerfile`. It will be a multi-stage build containing the compiled
-application, runtime content data, and required assets only. It will not
-contain the Go toolchain, tests, source mounts, or MariaDB. MariaDB remains a
-separate service.
+- **builder stage** (`golang:1.26.7-bookworm`) — compiles a statically linked, stripped binary with `CGO_ENABLED=0`.
+- **runtime stage** (`gcr.io/distroless/static-debian12:nonroot`) — contains the compiled binary and CA certificates only. No shell, no package manager, no Go toolchain, no source code.
+
+MariaDB remains a separate service in both development and production environments.
+
+The production image is published to GitHub Container Registry (`ghcr.io/witchcraze/party2re`) automatically on every push to `main` and on version tags via `.github/workflows/publish.yml`.
 
 ## Test commands
 

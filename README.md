@@ -106,6 +106,82 @@ READMEには方針と参照先のみを記載し、詳細な依存関係や配�
 同ファイルに記録します。画像・フォントなどのクリエイティブアセットは
 [`docs/assets/`](docs/assets/)で別途管理します。
 
+## デプロイ
+
+### コンテナイメージ
+
+本番用コンテナイメージは `main` ブランチへのマージ時および `v*` タグのプッシュ時に自動的に GitHub Container Registry (GHCR) へ公開されます。
+
+```text
+ghcr.io/witchcraze/party2re:main       # 最新の main ビルド
+ghcr.io/witchcraze/party2re:sha-XXXXXXX  # コミットSHAタグ
+ghcr.io/witchcraze/party2re:v1.0.0      # リリースタグ
+```
+
+イメージは `gcr.io/distroless/static-debian12:nonroot` をベースにした最小構成です。シェル、パッケージマネージャー、Go ツールチェーン、ソースコードはいずれも含まれません（約7 MB）。
+
+### 実行に必要な環境変数
+
+| 変数 | 説明 | 例 |
+| :--- | :--- | :--- |
+| `PARTY2_DB_DSN` | MariaDB 接続DSN | `party2:pass@tcp(db:3306)/party2?parseTime=true` |
+
+### Docker Compose での起動例
+
+以下の `compose.yaml` を任意のディレクトリに配置してください。
+
+```yaml
+services:
+  app:
+    image: ghcr.io/witchcraze/party2re:main
+    environment:
+      PARTY2_DB_DSN: party2:party2@tcp(mariadb:3306)/party2?parseTime=true
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  mariadb:
+    image: mariadb:latest
+    environment:
+      MARIADB_DATABASE: party2
+      MARIADB_USER: party2
+      MARIADB_PASSWORD: party2
+      MARIADB_ROOT_PASSWORD: root        # 本番環境では必ず変更してください
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./migrations:/docker-entrypoint-initdb.d:ro  # リポジトリの migrations/ をコピー
+
+volumes:
+  mariadb-data:
+```
+
+**初回起動前に `migrations/` フォルダをリポジトリから取得してください。**
+
+```bash
+# イメージを pull して起動
+docker compose pull
+docker compose up -d
+
+# ログを確認（構造化 JSON）
+docker compose logs -f app
+```
+
+### docker run での単体起動例
+
+```bash
+docker run --rm \
+  -e PARTY2_DB_DSN="party2:pass@tcp(db-host:3306)/party2?parseTime=true" \
+  ghcr.io/witchcraze/party2re:main
+```
+
 ## ドキュメント
 
 プロジェクトの設計・開発方針は以下にまとめています。
