@@ -5,8 +5,11 @@ services:
       dockerfile: Dockerfile.dev
     environment:
       PARTY2_DB_DSN: party2:party2@tcp(mariadb:3306)/party2?parseTime=true
+      PARTY2_VALKEY_ADDR: valkey:6379
     depends_on:
       mariadb:
+        condition: service_healthy
+      valkey:
         condition: service_healthy
     volumes:
       - .:/workspace
@@ -30,7 +33,19 @@ services:
       - mariadb-data:/var/lib/mysql
       - ./migrations:/docker-entrypoint-initdb.d:ro
 
+  valkey:
+    image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--save", "60", "1", "--appendonly", "yes"]
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
 volumes:
   go-build-cache:
   go-mod-cache:
   mariadb-data:
+  valkey-data:
