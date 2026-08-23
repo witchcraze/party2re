@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #110 — Migrate Adventure completion to ScheduledAction push processing
+Last updated: Issue #55 — Item Shop purchase and sale operations
 
 ## Current phase
 
@@ -89,6 +89,12 @@ Issue #110 migrated Adventure completion to ScheduledAction push processing:
 - `Start` enqueues a ScheduledAction (`adventure:complete`)
 - `AdventureCompletionHandler` resolves battle, applies rewards, and persists results at worker execution time
 - Fallback path works if Valkey is unavailable (manual `Claim` resolves and claims)
+
+Issue #55 introduced the Item Shop purchase and sale operations:
+
+- `internal/shop` — Service for item purchases (gold deduction and inventory addition) and sales (inventory removal and 50% price gold payout)
+- `internal/database.ShopRepository` — Atomic single-transaction commit for character wallet and inventory updates
+- `docs/design/shops.md` — Language-agnostic specification of shop purchase and resale rules
 
 ## Confirmed decisions
 

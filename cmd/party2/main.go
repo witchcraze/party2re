@@ -8,9 +8,11 @@ import (
 	"github.com/witchcraze/party2re/internal/activity"
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/scheduling"
+	"github.com/witchcraze/party2re/internal/shop"
 	"github.com/witchcraze/party2re/internal/valkey"
 )
 
@@ -34,6 +36,27 @@ func run() error {
 		return err
 	}
 
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		return err
+	}
+	invRepo, err := database.NewInventoryRepository(db)
+	if err != nil {
+		return err
+	}
+	shopRepo, err := database.NewShopRepository(db)
+	if err != nil {
+		return err
+	}
+	itemCatalog, err := coreitem.InitialCatalog()
+	if err != nil {
+		return err
+	}
+	_, err = shop.NewServiceWithTransaction(charRepo, invRepo, shopRepo, itemCatalog)
+	if err != nil {
+		return err
+	}
+
 	valkeyClient, err := valkey.NewClient()
 	if err != nil {
 		// Log warning but continue if Valkey is optional or fallback is acceptable.
@@ -42,10 +65,6 @@ func run() error {
 		defer valkeyClient.Close()
 
 		// Setup repositories
-		charRepo, err := database.NewCharacterRepository(db)
-		if err != nil {
-			return err
-		}
 		activityRepo, err := database.NewActivityRepository(db)
 		if err != nil {
 			return err
