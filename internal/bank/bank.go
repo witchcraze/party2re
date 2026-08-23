@@ -114,12 +114,29 @@ func (s *Service) Transfer(ctx context.Context, fromPlayerID string, toPlayerID 
 		CreatedAt:    time.Now().UTC(),
 	}
 
-	fromAcc, toAcc, err := s.repository.Transfer(ctx, record)
-	if err != nil {
+	var fromAcc, toAcc Account
+	const maxRetries = 5
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		fromAcc, toAcc, err = s.repository.Transfer(ctx, record)
+		if err == nil {
+			break
+		}
+		if isDeadlock(err) && attempt < maxRetries-1 {
+			time.Sleep(time.Duration(10*(attempt+1)) * time.Millisecond)
+			continue
+		}
 		return Account{}, Account{}, TransferRecord{}, err
 	}
 
 	return fromAcc, toAcc, record, nil
+}
+
+func isDeadlock(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "deadlock") || strings.Contains(msg, "1213")
 }
 
 func (s *Service) ListTransfers(ctx context.Context, playerID string, limit int) ([]TransferRecord, error) {

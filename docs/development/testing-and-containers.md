@@ -21,8 +21,17 @@ The repository provides a unified `Makefile` and verification script (`scripts/v
 # Auto-format Go code
 make fmt
 
-# Run all local checks (formatting check, go vet, docker tests, smoke image build)
+# Run all local checks (formatting check, go vet, db-migrate, docker tests, smoke image build)
 make check
+
+# Run clean verification with full database reset (DROP & recreate party2 DB)
+make check-clean
+
+# Apply pending database migrations safely without data loss
+make db-migrate
+
+# Reset database and reapply all migrations from scratch
+make db-reset
 
 # Optional: configure Git pre-push hook to automatically prevent broken pushes
 make setup-hooks

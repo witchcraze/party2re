@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #71 — Banking system and gold deposit with transfers
+Last updated: Issue #124 — Add db-migrate, db-reset, and safe check-clean targets to Makefile
 
 ## Current phase
 
@@ -151,6 +151,12 @@ Issue #71 introduced the Banking system and gold deposit with transfers:
 - `internal/database.BankRepository` — Atomic single-transaction persistence with `FOR UPDATE` concurrency locking
 - `docs/design/bank.md` — Specification of bank account rules and transfer invariants
 - Database schema migration `migrations/014_bank.sql` adding `bank_accounts` and `bank_transfers` tables
+
+Issue #124 introduced safe database migration and reset workflows in Makefile:
+
+- `scripts/migrate.sh` (`make db-migrate`) — Safely applies pending migrations without data loss
+- `scripts/reset_db.sh` (`make db-reset`) — Explicit database drop and full re-migration
+- `make check` / `make check-clean` — Automated integration into daily and clean verification pipelines
 
 ## Confirmed decisions
 
