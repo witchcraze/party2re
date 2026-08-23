@@ -34,7 +34,7 @@ func TestActivityRepositoryRestoresActivity(t *testing.T) {
 	}
 
 	want := activity.Activity{
-		ID:               "0123456789abcdef0123456789abcdef",
+		ID:               character.ID,
 		CharacterID:      character.ID,
 		Type:             activity.TrainingType,
 		StartedAt:        time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC),
