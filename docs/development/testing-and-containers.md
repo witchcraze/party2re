@@ -13,14 +13,26 @@ MariaDB remains a separate service in both development and production environmen
 
 The production image is published to GitHub Container Registry (`ghcr.io/witchcraze/party2re`) automatically on every push to `main` and on version tags via `.github/workflows/publish.yml`.
 
-## Test commands
+## Test commands and verification
 
-The smallest useful local checks are:
+The repository provides a unified `Makefile` and verification script (`scripts/verify.sh`) ensuring local verification matches CI exactly:
 
-```text
-docker compose run --rm app
+```bash
+# Auto-format Go code
+make fmt
+
+# Run all local checks (formatting check, go vet, docker tests, smoke image build)
+make check
+
+# Optional: configure Git pre-push hook to automatically prevent broken pushes
+make setup-hooks
+```
+
+Direct docker-compose commands remain available if needed:
+
+```bash
 docker compose run --rm app go vet ./...
-docker compose run --rm app sh -c 'go test ./... -coverprofile=coverage.out -covermode=atomic && go tool cover -func=coverage.out'
+docker compose run --rm app go test -count=1 ./...
 ```
 
 Integration tests that require MariaDB use `PARTY2_DB_DSN` and are skipped when

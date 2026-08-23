@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #61 — Job mastery and character rebirth progression
+Last updated: Issue #121 — Unified local verification script, Makefile, and pre-push hook
 
 ## Current phase
 
@@ -138,6 +138,12 @@ Issue #61 introduced Job mastery and character rebirth progression:
 - `internal/character.Service.Rebirth` — Character rebirth application service
 - `docs/design/rebirth.md` — Specification of job mastery and reincarnation rules
 - Database schema migration `migrations/013_rebirth.sql` adding `rebirth_count` to characters and creating `character_job_masteries` table
+
+Issue #121 introduced unified local verification and pre-push hook workflow:
+
+- `scripts/verify.sh` and `Makefile` (`make check`, `make fmt`, `make setup-hooks`) — Unified one-command verification executing `gofmt`, `go vet`, full docker test suite, and smoke production image build
+- `.githooks/pre-push` — Git hook automatically enforcing `make check` before allowing `git push`
+- Updated development guides and agent operating rules
 
 ## Confirmed decisions
 

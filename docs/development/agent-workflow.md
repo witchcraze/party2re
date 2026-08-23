@@ -39,12 +39,11 @@ Follow:
 ```text
 Issue
   -> acceptance criteria
-  -> tests
-  -> implementation
-  -> focused tests
-  -> broader tests
-  -> review
-  -> PR
+  -> write / update tests
+  -> implement minimum solution
+  -> make fmt
+  -> make check
+  -> open PR
 ```
 
 Keep unrelated changes out of the ticket.

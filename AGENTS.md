@@ -449,15 +449,15 @@ If the requested work is too large:
 - preserve independently testable acceptance criteria;
 - do not silently expand the current Issue.
 
-### TDD
+### TDD and local verification
 
 For non-trivial behavior:
 
 1. identify acceptance criteria;
 2. write or update tests;
 3. implement the smallest change satisfying the tests;
-4. run focused tests;
-5. run the broader test suite.
+4. auto-format code with `make fmt`;
+5. run unified local verification with `make check` (runs format check, `go vet`, full docker test suite, and smoke build).
 
 Prioritize tests of domain rules, invariants, observable component behavior, important integrations, and regressions.
 
@@ -521,9 +521,7 @@ A ticket is complete only when applicable:
 
 - acceptance criteria are satisfied;
 - behavior is covered by tests;
-- regression tests exist where appropriate;
-- focused tests pass;
-- broader tests pass;
+- unified local checks (`make check`) pass completely;
 - architecture remains valid;
 - no unrelated changes were introduced;
 - documentation/status is updated when necessary;

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "==> [Git pre-push hook] Running unified local verification..."
+./scripts/verify.sh
+echo "==> [Git pre-push hook] All checks passed. Proceeding with push."
