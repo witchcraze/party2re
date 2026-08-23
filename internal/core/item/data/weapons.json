@@ -1,0 +1,428 @@
+[
+  {
+    "id": "weapon-01",
+    "name": "ヒノキの棒",
+    "price": 10,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-02",
+    "name": "竹の槍",
+    "price": 30,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-03",
+    "name": "こんぼう",
+    "price": 50,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-04",
+    "name": "かしの杖",
+    "price": 70,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-05",
+    "name": "いばらのむち",
+    "price": 180,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-06",
+    "name": "ブロンズナイフ",
+    "price": 120,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-07",
+    "name": "おおきづち",
+    "price": 250,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-08",
+    "name": "銅の剣",
+    "price": 400,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-09",
+    "name": "鎖がま",
+    "price": 540,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-10",
+    "name": "聖なるナイフ",
+    "price": 670,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-11",
+    "name": "鉄の斧",
+    "price": 900,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-12",
+    "name": "どくばり",
+    "price": 1500,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-13",
+    "name": "鋼鉄の剣",
+    "price": 1800,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-14",
+    "name": "ルーンスタッフ",
+    "price": 2100,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-15",
+    "name": "不死殺しの剣",
+    "price": 3500,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-16",
+    "name": "チェーンクロス",
+    "price": 3700,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-17",
+    "name": "アサシンダガー",
+    "price": 5500,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-18",
+    "name": "神薙の剣",
+    "price": 8500,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-19",
+    "name": "聖なる槍",
+    "price": 7500,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-20",
+    "name": "バトルアックス",
+    "price": 7200,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-21",
+    "name": "モーニングスター",
+    "price": 9500,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-22",
+    "name": "ウォーハンマー",
+    "price": 11000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-23",
+    "name": "ドラゴンキラー",
+    "price": 15000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-24",
+    "name": "妖精の剣",
+    "price": 13000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-25",
+    "name": "悪魔の槍",
+    "price": 16000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-26",
+    "name": "竜の鞭",
+    "price": 19500,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-27",
+    "name": "ビッグボウガン",
+    "price": 22500,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-28",
+    "name": "諸刃の剣",
+    "price": 2000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-29",
+    "name": "疾風の剣",
+    "price": 21000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-30",
+    "name": "奇跡の剣",
+    "price": 17700,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-31",
+    "name": "必殺のピアス",
+    "price": 14000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-32",
+    "name": "正義の算盤",
+    "price": 18750,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-33",
+    "name": "大地の剣",
+    "price": 24000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-34",
+    "name": "理力の杖",
+    "price": 17000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-35",
+    "name": "天上の聖剣",
+    "price": 30000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-36",
+    "name": "竜神の杖",
+    "price": 22000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-37",
+    "name": "魔人の斧",
+    "price": 20000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-38",
+    "name": "茨の霊鞭",
+    "price": 28000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-39",
+    "name": "破壊の鉄球",
+    "price": 27750,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-40",
+    "name": "希少メタルの剣",
+    "price": 30000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-41",
+    "name": "古びた剣",
+    "price": 10,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-42",
+    "name": "鉄の槍",
+    "price": 740,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-43",
+    "name": "ダガーナイフ",
+    "price": 300,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-44",
+    "name": "おおかなづち",
+    "price": 850,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-45",
+    "name": "ロングスピア",
+    "price": 1100,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-46",
+    "name": "バトルフォーク",
+    "price": 2000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-47",
+    "name": "金の斧",
+    "price": 4000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-48",
+    "name": "山賊の斧",
+    "price": 6000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-49",
+    "name": "氷の刃",
+    "price": 7400,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-50",
+    "name": "吹雪の剣",
+    "price": 17000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-51",
+    "name": "疾風の剣・改",
+    "price": 27000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-52",
+    "name": "諸刃の剣・改",
+    "price": 6000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-53",
+    "name": "ウォーハンマー・改",
+    "price": 16000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-54",
+    "name": "奇跡の剣・改",
+    "price": 21100,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-55",
+    "name": "アンデッドバスター",
+    "price": 14000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-56",
+    "name": "ドラゴンスレイヤー",
+    "price": 20000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-57",
+    "name": "バスタードソード",
+    "price": 8000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-58",
+    "name": "ライトシャムール",
+    "price": 21000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-59",
+    "name": "プラチナソード",
+    "price": 16000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-60",
+    "name": "メガトンハンマー",
+    "price": 22000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-61",
+    "name": "ムーンアックス",
+    "price": 12000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-62",
+    "name": "キングアックス",
+    "price": 28000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-63",
+    "name": "覇王の斧",
+    "price": 30000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-64",
+    "name": "聖銀のレイピア",
+    "price": 7000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-65",
+    "name": "堕天使のレイピア",
+    "price": 12000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-66",
+    "name": "疾風のレイピア",
+    "price": 20000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-67",
+    "name": "王家の霊剣",
+    "price": 40000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-68",
+    "name": "伝説の勇者の剣",
+    "price": 50000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-69",
+    "name": "竜神の剣",
+    "price": 40000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-70",
+    "name": "竜王の聖剣",
+    "price": 50000,
+    "slot": "main-hand"
+  },
+  {
+    "id": "weapon-71",
+    "name": "聖剣カリバーン",
+    "price": 100000,
+    "slot": "main-hand"
+  }
+]

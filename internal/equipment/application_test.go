@@ -23,7 +23,7 @@ func TestServiceEquipAndUnequipPersistsState(t *testing.T) {
 	owned, _ := inventory.New("character-1")
 	instance, _ := item.NewInstance("sword", 1)
 	_ = owned.Add(instance)
-	definition, _ := item.NewEquipmentDefinition("sword", "Training Sword", item.SlotMainHand)
+	definition, _ := item.NewEquipmentDefinition("sword", "Training Sword", 100, item.SlotMainHand)
 	value, _ := coreequipment.New("character-1")
 	repository := &repositoryStub{value: value}
 	service, _ := NewService(repository)

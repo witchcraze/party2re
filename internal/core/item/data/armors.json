@@ -1,0 +1,332 @@
+[
+  {
+    "id": "armor-01",
+    "name": "布の服",
+    "price": 20,
+    "slot": "body"
+  },
+  {
+    "id": "armor-02",
+    "name": "旅人の服",
+    "price": 50,
+    "slot": "body"
+  },
+  {
+    "id": "armor-03",
+    "name": "ステテコパンツ",
+    "price": 70,
+    "slot": "body"
+  },
+  {
+    "id": "armor-04",
+    "name": "皮の鎧",
+    "price": 150,
+    "slot": "body"
+  },
+  {
+    "id": "armor-05",
+    "name": "皮の腰巻",
+    "price": 240,
+    "slot": "body"
+  },
+  {
+    "id": "armor-06",
+    "name": "うろこの鎧",
+    "price": 380,
+    "slot": "body"
+  },
+  {
+    "id": "armor-07",
+    "name": "鎖かたびら",
+    "price": 540,
+    "slot": "body"
+  },
+  {
+    "id": "armor-08",
+    "name": "毛皮のマント",
+    "price": 350,
+    "slot": "body"
+  },
+  {
+    "id": "armor-09",
+    "name": "粘体生物の服",
+    "price": 600,
+    "slot": "body"
+  },
+  {
+    "id": "armor-10",
+    "name": "青銅の鎧",
+    "price": 830,
+    "slot": "body"
+  },
+  {
+    "id": "armor-11",
+    "name": "鉄の鎧",
+    "price": 1200,
+    "slot": "body"
+  },
+  {
+    "id": "armor-12",
+    "name": "安らぎのローブ",
+    "price": 1700,
+    "slot": "body"
+  },
+  {
+    "id": "armor-13",
+    "name": "彷徨う鎧",
+    "price": 900,
+    "slot": "body"
+  },
+  {
+    "id": "armor-14",
+    "name": "身かわしの服",
+    "price": 2800,
+    "slot": "body"
+  },
+  {
+    "id": "armor-15",
+    "name": "粘体生物の鎧",
+    "price": 3000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-16",
+    "name": "鋼鉄の鎧",
+    "price": 3700,
+    "slot": "body"
+  },
+  {
+    "id": "armor-17",
+    "name": "不死者の鎧",
+    "price": 4400,
+    "slot": "body"
+  },
+  {
+    "id": "armor-18",
+    "name": "魔法の法衣",
+    "price": 5400,
+    "slot": "body"
+  },
+  {
+    "id": "armor-19",
+    "name": "銀の胸当て",
+    "price": 6700,
+    "slot": "body"
+  },
+  {
+    "id": "armor-20",
+    "name": "悪魔の鎧",
+    "price": 2000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-21",
+    "name": "賢者のローブ",
+    "price": 9000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-22",
+    "name": "刃の鎧",
+    "price": 7000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-23",
+    "name": "忍びの服",
+    "price": 16000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-24",
+    "name": "天使のローブ",
+    "price": 15000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-25",
+    "name": "ブラッドメイル",
+    "price": 3500,
+    "slot": "body"
+  },
+  {
+    "id": "armor-26",
+    "name": "ドラゴンメイル",
+    "price": 17500,
+    "slot": "body"
+  },
+  {
+    "id": "armor-27",
+    "name": "水の羽衣",
+    "price": 18500,
+    "slot": "body"
+  },
+  {
+    "id": "armor-28",
+    "name": "闇の衣",
+    "price": 19000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-29",
+    "name": "炎の鎧",
+    "price": 22000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-30",
+    "name": "光の鎧",
+    "price": 24000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-31",
+    "name": "地獄の鎧",
+    "price": 6000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-32",
+    "name": "戦士のパジャマ",
+    "price": 2100,
+    "slot": "body"
+  },
+  {
+    "id": "armor-33",
+    "name": "不思議なボレロ",
+    "price": 7777,
+    "slot": "body"
+  },
+  {
+    "id": "armor-34",
+    "name": "危ない水着",
+    "price": 12800,
+    "slot": "body"
+  },
+  {
+    "id": "armor-35",
+    "name": "神秘の鎧",
+    "price": 25000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-36",
+    "name": "ドラゴンローブ",
+    "price": 27000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-37",
+    "name": "天上の聖鎧",
+    "price": 30000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-38",
+    "name": "魔人の鎧",
+    "price": 18000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-39",
+    "name": "王者のマント",
+    "price": 28000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-40",
+    "name": "希少メタルの鎧",
+    "price": 30000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-41",
+    "name": "古びた鎧",
+    "price": 10,
+    "slot": "body"
+  },
+  {
+    "id": "armor-42",
+    "name": "騎士団の服",
+    "price": 1200,
+    "slot": "body"
+  },
+  {
+    "id": "armor-43",
+    "name": "シルバーメイル",
+    "price": 2400,
+    "slot": "body"
+  },
+  {
+    "id": "armor-44",
+    "name": "ライトアーマー",
+    "price": 4700,
+    "slot": "body"
+  },
+  {
+    "id": "armor-45",
+    "name": "あつでの鎧",
+    "price": 5000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-46",
+    "name": "金の胸当て",
+    "price": 16000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-47",
+    "name": "プラチナメイル",
+    "price": 20000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-48",
+    "name": "盗賊の衣",
+    "price": 14000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-49",
+    "name": "紅蓮のローブ",
+    "price": 28000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-50",
+    "name": "ドラゴンアーマー",
+    "price": 27000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-51",
+    "name": "巨人の鎧",
+    "price": 30000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-52",
+    "name": "王家の霊鎧",
+    "price": 40000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-53",
+    "name": "伝説の勇者の鎧",
+    "price": 50000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-54",
+    "name": "竜神の鎧",
+    "price": 40000,
+    "slot": "body"
+  },
+  {
+    "id": "armor-55",
+    "name": "竜王の聖鎧",
+    "price": 50000,
+    "slot": "body"
+  }
+]

@@ -73,7 +73,7 @@ func TestItemDefinitionRepositoryPersistsAndLoadsDefinition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := item.NewDefinition("potion", "Recovery Potion")
+	want, err := item.NewDefinition("potion", "Recovery Potion", 30)
 	if err != nil {
 		t.Fatal(err)
 	}
