@@ -1,7 +1,6 @@
 .git
 .gitignore
 .github
-party2-main.zip
 party2-main/
 data/
 runtime/

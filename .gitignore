@@ -1,5 +1,4 @@
 # Reference archives and extracted legacy sources must not be committed.
-party2-main.zip
 party2-main/
 
 # Go build and test artifacts.

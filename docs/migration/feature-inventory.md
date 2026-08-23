@@ -3,7 +3,7 @@
 > Temporary Version 1 reconstruction document.
 >
 > This document describes the behavior and content areas to be reconstructed
-> from `party2-main.zip`. It is not a source-code migration plan. The old
+> from the `party2-main/` reference codebase. It is not a source-code migration plan. The old
 > implementation and its assets remain reference material only.
 
 ## Scope decision
