@@ -55,14 +55,16 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ## Immediate Priorities (Next Actions)
 
-1. **Guild Battles & Territory** (Issue #77): ギルド対抗戦（GvG）戦闘機能モジュールの実装。
-2. **Player versus Player Arena** (Issue #75): 闘技場・対人対戦（PvP）機能モジュールの実装。
-3. **Core Domain Specifications** (Issue #136): `docs/design/` 配下への Core 言語非依存仕様書（戦闘、成長、ジョブ、スキル、アイテム）の整備。
-4. **Remaining Version 1.0 Feature Modules**:
-   - Guild Battles（GvG戦闘エンジン）
-   - Rankings（レベル、ジョブ、週間ランキング）
-   - Dungeon exploration（ダンジョン探索）
-   - Web Presentation UI / Client
+1. **Player versus Player Arena** (Issue #75): 闘技場・対人対戦（PvP）機能モジュールの実装。
+2. **Guild Battles & Territory** (Issue #77): ギルド対抗戦（GvG）戦闘機能モジュールの実装。
+3. **King & World Boss Battles** (Issue #73): 封印戦・ワールドボス戦闘機能モジュールの実装。
+4. **Dungeon Exploration** (Issue #74): ダンジョン探索・分岐マップ機能モジュールの実装。
+5. **Remaining Version 1.0 Feature Modules**:
+   - Battle Replays & Match History (Issue #66)
+   - Custom Skill Loadouts (Issue #69)
+   - Player Rescue & Helpers (Issue #79)
+   - Rankings (Issue #63)
+   - Web Presentation UI / Client (Issue #140)
 
 ---
 
