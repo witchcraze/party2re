@@ -84,9 +84,9 @@ func (s *stubShopService) Sell(ctx context.Context, characterID, itemInstanceID 
 // Helpers
 // -------------------------------------------------------------------
 
-func newTestHandler(t *testing.T, players apihttp.PlayerService, chars apihttp.CharacterService, advs apihttp.AdventureService, shops apihttp.ShopService) *apihttp.Handler {
+func newTestHandler(t *testing.T, players apihttp.PlayerService, chars apihttp.CharacterService, advs apihttp.AdventureService, shops apihttp.ShopService, opts ...apihttp.Option) *apihttp.Handler {
 	t.Helper()
-	h, err := apihttp.NewHandler(players, chars, advs, shops)
+	h, err := apihttp.NewHandler(players, chars, advs, shops, opts...)
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -858,4 +858,158 @@ func TestSecurityHeaders_ErrorResponse(t *testing.T) {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnsupportedMediaType)
 	}
 	assertSecurityHeaders(t, rec)
+}
+
+// -------------------------------------------------------------------
+// CORS middleware
+// -------------------------------------------------------------------
+
+func TestCORS_AllowedOrigin(t *testing.T) {
+	h := newTestHandler(t, &stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+		apihttp.WithAllowedOrigins("https://app.party2.game", "http://localhost:3000"),
+	)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set("Origin", "https://app.party2.game")
+	h.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://app.party2.game" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, "https://app.party2.game")
+	}
+	if got := rec.Header().Get("Vary"); got != "Origin" {
+		t.Errorf("Vary = %q, want %q", got, "Origin")
+	}
+}
+
+func TestCORS_DisallowedOrigin(t *testing.T) {
+	h := newTestHandler(t, &stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+		apihttp.WithAllowedOrigins("https://app.party2.game"),
+	)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set("Origin", "https://unauthorized.evil.com")
+	h.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want empty", got)
+	}
+}
+
+func TestCORS_EmptyAllowedOrigins(t *testing.T) {
+	h := newTestHandler(t, &stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set("Origin", "https://app.party2.game")
+	h.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want empty", got)
+	}
+}
+
+func TestCORS_PreflightOptions_Allowed(t *testing.T) {
+	h := newTestHandler(t, &stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+		apihttp.WithAllowedOrigins("https://app.party2.game"),
+	)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodOptions, "/characters", nil)
+	req.Header.Set("Origin", "https://app.party2.game")
+	h.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://app.party2.game" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, "https://app.party2.game")
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, DELETE" {
+		t.Errorf("Access-Control-Allow-Methods = %q, want %q", got, "GET, POST, DELETE")
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type, Authorization" {
+		t.Errorf("Access-Control-Allow-Headers = %q, want %q", got, "Content-Type, Authorization")
+	}
+	if got := rec.Header().Get("Access-Control-Max-Age"); got != "86400" {
+		t.Errorf("Access-Control-Max-Age = %q, want %q", got, "86400")
+	}
+	assertSecurityHeaders(t, rec)
+}
+
+func TestCORS_PreflightOptions_Disallowed(t *testing.T) {
+	h := newTestHandler(t, &stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+		apihttp.WithAllowedOrigins("https://app.party2.game"),
+	)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodOptions, "/characters", nil)
+	req.Header.Set("Origin", "https://unauthorized.evil.com")
+	h.Router().ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want empty", got)
+	}
+}
+
+func TestCORS_WildcardNeverEmitted(t *testing.T) {
+	h := newTestHandler(t, &stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+		apihttp.WithAllowedOrigins("*", "https://app.party2.game"),
+	)
+
+	// Request with Origin: *
+	rec1 := httptest.NewRecorder()
+	req1 := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req1.Header.Set("Origin", "*")
+	h.Router().ServeHTTP(rec1, req1)
+	if got := rec1.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want empty for Origin: *", got)
+	}
+
+	// Request with unknown origin
+	rec2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req2.Header.Set("Origin", "https://evil.com")
+	h.Router().ServeHTTP(rec2, req2)
+	if got := rec2.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want empty for unknown origin", got)
+	}
+}
+
+func TestCORS_ParseCORSOrigins(t *testing.T) {
+	input := " https://app.party2.game , https://localhost:3000 , * , , http://127.0.0.1:8080 "
+	got := apihttp.ParseCORSOrigins(input)
+	want := []string{"https://app.party2.game", "https://localhost:3000", "http://127.0.0.1:8080"}
+
+	if len(got) != len(want) {
+		t.Fatalf("ParseCORSOrigins() len = %d, want %d; got = %#v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("ParseCORSOrigins()[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestCORS_WithAllowedOriginsFromEnv(t *testing.T) {
+	t.Setenv("TEST_CORS_ORIGINS", "https://env.party2.game, https://localhost:4000")
+	h := newTestHandler(t, &stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+		apihttp.WithAllowedOriginsFromEnv("TEST_CORS_ORIGINS"),
+	)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set("Origin", "https://env.party2.game")
+	h.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://env.party2.game" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, "https://env.party2.game")
+	}
 }

@@ -120,12 +120,13 @@ ghcr.io/witchcraze/party2re:v1.0.0      # リリースタグ
 
 イメージは `gcr.io/distroless/static-debian12:nonroot` をベースにした最小構成です。シェル、パッケージマネージャー、Go ツールチェーン、ソースコードはいずれも含まれません（約7 MB）。
 
-### 実行に必要な環境変数
+### 実行環境変数
 
-| 変数 | 説明 | 例 |
-| :--- | :--- | :--- |
-| `PARTY2_DB_DSN` | MariaDB 接続DSN | `party2:pass@tcp(db:3306)/party2?parseTime=true` |
-| `PARTY2_VALKEY_ADDR` | Valkey 接続アドレス | `valkey:6379` |
+| 変数 | 区分 | 説明 | 設定例 |
+| :--- | :--- | :--- | :--- |
+| `PARTY2_DB_DSN` | **必須** | MariaDB 接続DSN | `party2:pass@tcp(db:3306)/party2?parseTime=true` |
+| `PARTY2_VALKEY_ADDR` | **必須** | Valkey 接続アドレス | `valkey:6379` |
+| `PARTY2_CORS_ORIGINS` | 任意 | 許可するCORS Origin一覧（カンマ区切り）。省略時は全クロスオリジンを拒否（同一オリジンのみ許可する安全なデフォルト）。<br>※ Webフロントエンド（SPA等）をAPIサーバーとは別ドメイン（例: `https://app.party2.game`）やローカル開発用ポート（例: `http://localhost:3000`）から配信して通信を行う構成の場合は、当環境変数に対象オリジンの指定を推奨します。 | `https://app.party2.game,http://localhost:3000` |
 
 ### Worker プロセスについて
 

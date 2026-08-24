@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #132 — HTTP Security Headers Middleware
+Last updated: Issue #133 — HTTP CORS Policy Middleware
 
 ## Current phase
 
@@ -35,7 +35,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Inn** (`internal/inn`): 宿屋・休息（HP/MP全回復）。
 
 ### API & Transport
-- **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`）。セッション認証、キャラクター所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
+- **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`）。セッション認証、キャラクター所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
 
 ### Infrastructure & Operations
 - **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `015_character_player_id.sql`、`make db-migrate` / `make db-reset`）。
@@ -48,9 +48,8 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ## Immediate Priorities (Next Actions)
 
-1. **HTTP CORS Middleware** (Issue #133): CORS policy middleware の導入。
-2. **Core Domain Specifications** (Issue #136): `docs/design/` 配下への Core 言語非依存仕様書（戦闘、成長、ジョブ、スキル、アイテム）の整備。
-3. **Remaining Version 1.0 Feature Modules**:
+1. **Core Domain Specifications** (Issue #136): `docs/design/` 配下への Core 言語非依存仕様書（戦闘、成長、ジョブ、スキル、アイテム）の整備。
+2. **Remaining Version 1.0 Feature Modules**:
    - Guild（ギルド作成、加入、管理、ギルドバトル）
    - Casino（ハイロー、インディアンポーカー、スロット、ドッペル）
    - Auction / Free Market（プレイヤー間出品・入札）

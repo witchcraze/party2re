@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
@@ -44,10 +46,59 @@ type ShopService interface {
 
 // Handler holds all HTTP handlers for the game API.
 type Handler struct {
-	players    PlayerService
-	characters CharacterService
-	adventures AdventureService
-	shops      ShopService
+	players        PlayerService
+	characters     CharacterService
+	adventures     AdventureService
+	shops          ShopService
+	allowedOrigins map[string]struct{}
+}
+
+// Option configures optional parameters for the Handler.
+type Option func(*Handler)
+
+// WithAllowedOrigins configures the whitelist of allowed CORS origins.
+// Any wildcard ("*") or empty entries are ignored/discarded.
+func WithAllowedOrigins(origins ...string) Option {
+	return func(h *Handler) {
+		h.setAllowedOrigins(origins)
+	}
+}
+
+// WithAllowedOriginsFromEnv loads allowed CORS origins from an environment variable (default: "PARTY2_CORS_ORIGINS").
+func WithAllowedOriginsFromEnv(envKey string) Option {
+	return func(h *Handler) {
+		if envKey == "" {
+			envKey = "PARTY2_CORS_ORIGINS"
+		}
+		raw := os.Getenv(envKey)
+		if raw != "" {
+			h.setAllowedOrigins(ParseCORSOrigins(raw))
+		}
+	}
+}
+
+// ParseCORSOrigins splits a comma-separated origins string, trimming whitespace and ignoring "*" and empty entries.
+func ParseCORSOrigins(s string) []string {
+	var origins []string
+	for _, part := range strings.Split(s, ",") {
+		origin := strings.TrimSpace(part)
+		if origin != "" && origin != "*" {
+			origins = append(origins, origin)
+		}
+	}
+	return origins
+}
+
+func (h *Handler) setAllowedOrigins(origins []string) {
+	if h.allowedOrigins == nil {
+		h.allowedOrigins = make(map[string]struct{})
+	}
+	for _, o := range origins {
+		trimmed := strings.TrimSpace(o)
+		if trimmed != "" && trimmed != "*" {
+			h.allowedOrigins[trimmed] = struct{}{}
+		}
+	}
 }
 
 // NewHandler constructs an HTTP Handler with the required application services.
@@ -56,6 +107,7 @@ func NewHandler(
 	characters CharacterService,
 	adventures AdventureService,
 	shops ShopService,
+	opts ...Option,
 ) (*Handler, error) {
 	if players == nil {
 		return nil, errors.New("player service is nil")
@@ -69,15 +121,22 @@ func NewHandler(
 	if shops == nil {
 		return nil, errors.New("shop service is nil")
 	}
-	return &Handler{
-		players:    players,
-		characters: characters,
-		adventures: adventures,
-		shops:      shops,
-	}, nil
+	h := &Handler{
+		players:        players,
+		characters:     characters,
+		adventures:     adventures,
+		shops:          shops,
+		allowedOrigins: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(h)
+		}
+	}
+	return h, nil
 }
 
-// Router returns an http.Handler wired to all API endpoints with standard security headers applied.
+// Router returns an http.Handler wired to all API endpoints with standard security headers and CORS policy applied.
 func (h *Handler) Router() http.Handler {
 	mux := http.NewServeMux()
 
@@ -96,7 +155,33 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /shop/purchase", h.handlePurchase)
 	mux.HandleFunc("POST /shop/sell", h.handleSell)
 
-	return securityHeadersMiddleware(mux)
+	return securityHeadersMiddleware(h.corsMiddleware(mux))
+}
+
+// corsMiddleware handles CORS headers and preflight OPTIONS requests based on allowed origins.
+func (h *Handler) corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin == "" || origin == "*" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if _, allowed := h.allowedOrigins[origin]; allowed {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+
+			if r.Method == http.MethodOptions {
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+				w.Header().Set("Access-Control-Max-Age", "86400")
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 // securityHeadersMiddleware injects standard security response headers on every response.
