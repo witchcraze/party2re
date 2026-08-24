@@ -75,7 +75,9 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Item Shop purchase & 50% resale transactions ([#55](https://github.com/witchcraze/party2re/issues/55))
 - [x] Bank accounts, gold deposits, withdrawals, and player-to-player transfers ([#71](https://github.com/witchcraze/party2re/issues/71))
 - [x] Blacksmith equipment enhancement (+1 to +10) with material/gold costs ([#59](https://github.com/witchcraze/party2re/issues/59))
-- [ ] Gem store currency and transactions
+- [ ] Gem store currency and transactions ([#72](https://github.com/witchcraze/party2re/issues/72))
+- [ ] Black Market underground trade ([#142](https://github.com/witchcraze/party2re/issues/142))
+- [ ] Small Medal collection and rare reward exchange ([#160](https://github.com/witchcraze/party2re/issues/160))
 
 ### D. Adventure, maps, stages, and battle
 - [x] Reusable deterministic Battle component & turn resolver ([#12](https://github.com/witchcraze/party2re/issues/12), [#20](https://github.com/witchcraze/party2re/issues/20), [#36](https://github.com/witchcraze/party2re/issues/36))
@@ -83,15 +85,17 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Multi-stage adventure progression with level requirements and item drop rewards ([#57](https://github.com/witchcraze/party2re/issues/57))
 - [x] Push-based background ScheduledAction completion via Valkey Worker ([#106](https://github.com/witchcraze/party2re/issues/106), [#109](https://github.com/witchcraze/party2re/issues/109), [#110](https://github.com/witchcraze/party2re/issues/110))
 - [x] Concurrency-safe atomic reward claiming ([#35](https://github.com/witchcraze/party2re/issues/35))
-- [ ] Map and dungeon progression
-- [ ] Challenge content & special battle modes (PvP, king, challenge)
+- [ ] Map and dungeon progression ([#74](https://github.com/witchcraze/party2re/issues/74))
+- [ ] Challenge content & special battle modes (PvP [#75](https://github.com/witchcraze/party2re/issues/75), King Boss [#73](https://github.com/witchcraze/party2re/issues/73), Continuous Challenge [#162](https://github.com/witchcraze/party2re/issues/162))
+- [ ] Battle replay records and match history viewer ([#66](https://github.com/witchcraze/party2re/issues/66))
 
 ### E. Social and competitive systems
 - [x] Guild creation, membership, and administration ([#76](https://github.com/witchcraze/party2re/issues/76))
-- [ ] Guild battles
-- [ ] Player communication, park, and public interactions
-- [ ] Rankings (level, job, weekly rankings, contest records)
-- [ ] Helper / rescue behavior
+- [ ] Guild battles and territory competition ([#77](https://github.com/witchcraze/party2re/issues/77))
+- [ ] Player communication, park, and public interactions ([#78](https://github.com/witchcraze/party2re/issues/78))
+- [ ] Player private home, mailbox, and letter correspondence ([#159](https://github.com/witchcraze/party2re/issues/159))
+- [ ] Helper and player rescue assistance ([#79](https://github.com/witchcraze/party2re/issues/79))
+- [ ] Rankings (level, job, weekly rankings, contest records) ([#63](https://github.com/witchcraze/party2re/issues/63))
 
 ### F. Economy and side systems
 - [x] Alchemy synthesis with 112 recipes & material requirements ([#60](https://github.com/witchcraze/party2re/issues/60))
@@ -101,6 +105,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Farm and plantation cultivation ([#84](https://github.com/witchcraze/party2re/issues/84))
 - [x] Collection and Monster Book encyclopedia ([#85](https://github.com/witchcraze/party2re/issues/85))
 - [x] Chapel prayers and blessings ([#86](https://github.com/witchcraze/party2re/issues/86))
+- [ ] Event Plaza, traveling merchant bazaar, and victory celebrations ([#161](https://github.com/witchcraze/party2re/issues/161))
 
 ### G. Presentation, assets, and operations
 - [x] UI-independent HTTP JSON Application API layer ([#87](https://github.com/witchcraze/party2re/issues/87))
