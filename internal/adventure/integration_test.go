@@ -41,7 +41,11 @@ func TestConcurrentAdventureClaimsApplyRewardOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, err := characterService.Create(ctx, "Concurrent Adventure")
+	player, err := database.CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := characterService.Create(ctx, player.ID, "Concurrent Adventure")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +155,11 @@ func TestAdventureScheduledActionIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, err := characterService.Create(ctx, "Worker Adventure")
+	player, err := database.CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := characterService.Create(ctx, player.ID, "Worker Adventure")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -25,7 +25,7 @@ The implementation language is intentionally not part of the component's identit
 
 **Responsibility:** account-level identity and authentication-related state.
 
-Does not own game-specific character state.
+Does not own game-specific character state. Owns the relationship to characters created under the account.
 
 Player persistence stores a salted, iterated password hash and never stores the
 supplied password. Session state is a separate record with explicit expiry and
@@ -39,7 +39,9 @@ justifies introducing it.
 
 **Responsibility:** the player's in-game character and its fundamental state.
 
+Linked to a owning `Player` via `player_id` (enforced via foreign key constraint).
 Owns invariants about its own state but should not become a God object containing every game system.
+Access to character operations is authorized against the authenticated session's player identity.
 
 ### Progression
 

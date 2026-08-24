@@ -93,11 +93,12 @@ func (r *BankRepository) Deposit(ctx context.Context, playerID string, character
 	var char corecharacter.Character
 	var gender, jobID string
 	err = tx.QueryRowContext(ctx, `
-		SELECT id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
+		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
 		FROM characters
 		WHERE id = ?
 	`, characterID).Scan(
 		&char.ID,
+		&char.PlayerID,
 		&char.Name,
 		&jobID,
 		&gender,
@@ -180,11 +181,12 @@ func (r *BankRepository) Withdraw(ctx context.Context, playerID string, characte
 	var char corecharacter.Character
 	var gender, jobID string
 	err = tx.QueryRowContext(ctx, `
-		SELECT id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
+		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
 		FROM characters
 		WHERE id = ?
 	`, characterID).Scan(
 		&char.ID,
+		&char.PlayerID,
 		&char.Name,
 		&jobID,
 		&gender,

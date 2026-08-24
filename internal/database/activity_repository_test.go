@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/activity"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
 func TestNewActivityRepositoryNilDB(t *testing.T) {
@@ -29,15 +28,8 @@ func TestActivityRepositoryRestoresActivity(t *testing.T) {
 	}
 	defer db.Close()
 
-	character, err := corecharacter.New("Activity Test")
+	character, err := CreateTestCharacter(context.Background(), db, "Activity Test")
 	if err != nil {
-		t.Fatal(err)
-	}
-	characters, err := NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := characters.Save(context.Background(), character); err != nil {
 		t.Fatal(err)
 	}
 
@@ -65,14 +57,12 @@ func TestActivityRepositoryRestoresActivity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindByID() error = %v", err)
 	}
-	if !got.StartedAt.Equal(want.StartedAt) || !got.AvailableAt.Equal(want.AvailableAt) ||
-		got.ID != want.ID || got.CharacterID != want.CharacterID || got.Type != want.Type ||
-		got.ExperienceReward != want.ExperienceReward || got.Claimed != want.Claimed {
+	if got != want {
 		t.Fatalf("FindByID() = %#v, want %#v", got, want)
 	}
 
-	// FindByID not found
-	if _, err := repository.FindByID(context.Background(), "nonexistent_activity"); !errors.Is(err, activity.ErrNotFound) {
+	// Nonexistent activity errors
+	if _, err := repository.FindByID(context.Background(), "nonexistent_id"); !errors.Is(err, activity.ErrNotFound) {
 		t.Fatalf("FindByID(nonexistent) error = %v, want %v", err, activity.ErrNotFound)
 	}
 }
@@ -88,15 +78,12 @@ func TestActivityRepositoryClaimAndApply(t *testing.T) {
 	}
 	defer db.Close()
 
-	character, err := corecharacter.New("Claim Activity Test")
-	if err != nil {
-		t.Fatal(err)
-	}
 	characterRepo, err := NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := characterRepo.Save(context.Background(), character); err != nil {
+	character, err := CreateTestCharacter(context.Background(), db, "Claim Activity Test")
+	if err != nil {
 		t.Fatal(err)
 	}
 

@@ -45,12 +45,12 @@ func (s *stubPlayerService) Authenticate(ctx context.Context, sessionID string) 
 }
 
 type stubCharacterService struct {
-	createFn func(ctx context.Context, name string) (corecharacter.Character, error)
+	createFn func(ctx context.Context, playerID, name string) (corecharacter.Character, error)
 	getFn    func(ctx context.Context, id string) (corecharacter.Character, error)
 }
 
-func (s *stubCharacterService) Create(ctx context.Context, name string) (corecharacter.Character, error) {
-	return s.createFn(ctx, name)
+func (s *stubCharacterService) Create(ctx context.Context, playerID, name string) (corecharacter.Character, error) {
+	return s.createFn(ctx, playerID, name)
 }
 func (s *stubCharacterService) Get(ctx context.Context, id string) (corecharacter.Character, error) {
 	return s.getFn(ctx, id)
@@ -326,12 +326,16 @@ func TestHandleLogout_MissingSession(t *testing.T) {
 
 func TestHandleCreateCharacter_Success(t *testing.T) {
 	player := coreplayer.Player{ID: "p1", Username: "alice"}
-	char := corecharacter.Character{ID: "c1", Name: "Hero", JobID: "starter", Gender: "unspecified", Level: 1}
+	char := corecharacter.Character{ID: "c1", PlayerID: "p1", Name: "Hero", JobID: "starter", Gender: "unspecified", Level: 1}
+	var createdPlayerID string
 	ps := &stubPlayerService{
 		authenticateFn: alwaysAuthPlayer(player),
 	}
 	cs := &stubCharacterService{
-		createFn: func(_ context.Context, name string) (corecharacter.Character, error) { return char, nil },
+		createFn: func(_ context.Context, playerID, name string) (corecharacter.Character, error) {
+			createdPlayerID = playerID
+			return char, nil
+		},
 	}
 	h := newTestHandler(t, ps, cs, &stubAdventureService{}, &stubShopService{})
 
@@ -343,10 +347,16 @@ func TestHandleCreateCharacter_Success(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Errorf("status = %d, want %d\nbody: %s", rec.Code, http.StatusCreated, rec.Body.String())
 	}
+	if createdPlayerID != "p1" {
+		t.Errorf("createdPlayerID = %q, want p1", createdPlayerID)
+	}
 	var resp map[string]any
 	decodeResponseBody(t, rec.Body.Bytes(), &resp)
 	if resp["id"] != "c1" {
 		t.Errorf("id = %v, want c1", resp["id"])
+	}
+	if resp["player_id"] != "p1" {
+		t.Errorf("player_id = %v, want p1", resp["player_id"])
 	}
 }
 
@@ -383,7 +393,7 @@ func TestHandleCreateCharacter_InvalidSession(t *testing.T) {
 
 func TestHandleGetCharacter_Success(t *testing.T) {
 	player := coreplayer.Player{ID: "p1"}
-	char := corecharacter.Character{ID: "c1", Name: "Hero", Level: 5}
+	char := corecharacter.Character{ID: "c1", PlayerID: "p1", Name: "Hero", Level: 5}
 	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
 	cs := &stubCharacterService{
 		getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
@@ -403,8 +413,30 @@ func TestHandleGetCharacter_Success(t *testing.T) {
 	if resp["id"] != "c1" {
 		t.Errorf("id = %v, want c1", resp["id"])
 	}
+	if resp["player_id"] != "p1" {
+		t.Errorf("player_id = %v, want p1", resp["player_id"])
+	}
 	if resp["level"] != float64(5) {
 		t.Errorf("level = %v, want 5", resp["level"])
+	}
+}
+
+func TestHandleGetCharacter_Forbidden_DifferentPlayer(t *testing.T) {
+	player := coreplayer.Player{ID: "p1"}
+	char := corecharacter.Character{ID: "c1", PlayerID: "other_player", Name: "Hero", Level: 5}
+	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
+	cs := &stubCharacterService{
+		getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
+	}
+	h := newTestHandler(t, ps, cs, &stubAdventureService{}, &stubShopService{})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/characters/c1", nil)
+	req.Header.Set("Authorization", bearerToken("sess1"))
+	h.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
 	}
 }
 
@@ -434,6 +466,7 @@ func TestHandleGetCharacter_NotFound(t *testing.T) {
 
 func TestHandleStartAdventure_Success(t *testing.T) {
 	player := coreplayer.Player{ID: "p1"}
+	char := corecharacter.Character{ID: "c1", PlayerID: "p1"}
 	now := time.Now().UTC()
 	adv := adventure.Adventure{
 		ID:          "adv1",
@@ -443,12 +476,15 @@ func TestHandleStartAdventure_Success(t *testing.T) {
 		AvailableAt: now.Add(time.Hour),
 	}
 	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
+	cs := &stubCharacterService{
+		getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
+	}
 	as := &stubAdventureService{
 		startStageFn: func(_ context.Context, charID, stageID string) (adventure.Adventure, error) {
 			return adv, nil
 		},
 	}
-	h := newTestHandler(t, ps, &stubCharacterService{}, as, &stubShopService{})
+	h := newTestHandler(t, ps, cs, as, &stubShopService{})
 
 	rec := httptest.NewRecorder()
 	req := jsonRequest(t, http.MethodPost, "/adventures", `{"character_id":"c1","stage_id":"stage-01"}`)
@@ -465,15 +501,43 @@ func TestHandleStartAdventure_Success(t *testing.T) {
 	}
 }
 
+func TestHandleStartAdventure_Forbidden_DifferentPlayer(t *testing.T) {
+	player := coreplayer.Player{ID: "p1"}
+	char := corecharacter.Character{ID: "c1", PlayerID: "other_player"}
+	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
+	cs := &stubCharacterService{
+		getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
+	}
+	as := &stubAdventureService{
+		startStageFn: func(_ context.Context, charID, stageID string) (adventure.Adventure, error) {
+			return adventure.Adventure{}, nil
+		},
+	}
+	h := newTestHandler(t, ps, cs, as, &stubShopService{})
+
+	rec := httptest.NewRecorder()
+	req := jsonRequest(t, http.MethodPost, "/adventures", `{"character_id":"c1","stage_id":"stage-01"}`)
+	req.Header.Set("Authorization", bearerToken("sess1"))
+	h.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
 func TestHandleStartAdventure_LevelRequirementNotMet(t *testing.T) {
 	player := coreplayer.Player{ID: "p1"}
+	char := corecharacter.Character{ID: "c1", PlayerID: "p1"}
 	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
+	cs := &stubCharacterService{
+		getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
+	}
 	as := &stubAdventureService{
 		startStageFn: func(_ context.Context, charID, stageID string) (adventure.Adventure, error) {
 			return adventure.Adventure{}, adventure.ErrLevelRequirementNotMet
 		},
 	}
-	h := newTestHandler(t, ps, &stubCharacterService{}, as, &stubShopService{})
+	h := newTestHandler(t, ps, cs, as, &stubShopService{})
 	rec := httptest.NewRecorder()
 	req := jsonRequest(t, http.MethodPost, "/adventures", `{"character_id":"c1","stage_id":"stage-99"}`)
 	req.Header.Set("Authorization", bearerToken("sess1"))
@@ -549,19 +613,23 @@ func TestHandleClaimAdventure_NotFound(t *testing.T) {
 
 func TestHandlePurchase_Success(t *testing.T) {
 	player := coreplayer.Player{ID: "p1"}
+	char := corecharacter.Character{ID: "c1", PlayerID: "p1"}
 	instance, _ := coreitem.NewInstance("sword-01", 1)
 	result := shop.PurchaseResult{
-		Character:    corecharacter.Character{ID: "c1"},
+		Character:    corecharacter.Character{ID: "c1", PlayerID: "p1"},
 		ItemInstance: instance,
 		TotalPrice:   100,
 	}
 	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
+	cs := &stubCharacterService{
+		getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
+	}
 	ss := &stubShopService{
 		purchaseFn: func(_ context.Context, charID, itemID string, qty int) (shop.PurchaseResult, error) {
 			return result, nil
 		},
 	}
-	h := newTestHandler(t, ps, &stubCharacterService{}, &stubAdventureService{}, ss)
+	h := newTestHandler(t, ps, cs, &stubAdventureService{}, ss)
 
 	rec := httptest.NewRecorder()
 	req := jsonRequest(t, http.MethodPost, "/shop/purchase", `{"character_id":"c1","item_definition_id":"sword-01","quantity":1}`)
@@ -578,15 +646,43 @@ func TestHandlePurchase_Success(t *testing.T) {
 	}
 }
 
+func TestHandlePurchase_Forbidden_DifferentPlayer(t *testing.T) {
+	player := coreplayer.Player{ID: "p1"}
+	char := corecharacter.Character{ID: "c1", PlayerID: "other_player"}
+	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
+	cs := &stubCharacterService{
+		getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
+	}
+	ss := &stubShopService{
+		purchaseFn: func(_ context.Context, charID, itemID string, qty int) (shop.PurchaseResult, error) {
+			return shop.PurchaseResult{}, nil
+		},
+	}
+	h := newTestHandler(t, ps, cs, &stubAdventureService{}, ss)
+
+	rec := httptest.NewRecorder()
+	req := jsonRequest(t, http.MethodPost, "/shop/purchase", `{"character_id":"c1","item_definition_id":"sword-01","quantity":1}`)
+	req.Header.Set("Authorization", bearerToken("sess1"))
+	h.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
 func TestHandlePurchase_ServiceError(t *testing.T) {
 	player := coreplayer.Player{ID: "p1"}
+	char := corecharacter.Character{ID: "c1", PlayerID: "p1"}
 	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
+	cs := &stubCharacterService{
+		getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
+	}
 	ss := &stubShopService{
 		purchaseFn: func(_ context.Context, charID, itemID string, qty int) (shop.PurchaseResult, error) {
 			return shop.PurchaseResult{}, errors.New("insufficient funds")
 		},
 	}
-	h := newTestHandler(t, ps, &stubCharacterService{}, &stubAdventureService{}, ss)
+	h := newTestHandler(t, ps, cs, &stubAdventureService{}, ss)
 
 	rec := httptest.NewRecorder()
 	req := jsonRequest(t, http.MethodPost, "/shop/purchase", `{"character_id":"c1","item_definition_id":"sword-01","quantity":1}`)
@@ -604,19 +700,23 @@ func TestHandlePurchase_ServiceError(t *testing.T) {
 
 func TestHandleSell_Success(t *testing.T) {
 	player := coreplayer.Player{ID: "p1"}
+	char := corecharacter.Character{ID: "c1", PlayerID: "p1"}
 	instance, _ := coreitem.NewInstance("sword-01", 1)
 	result := shop.SaleResult{
-		Character:    corecharacter.Character{ID: "c1"},
+		Character:    corecharacter.Character{ID: "c1", PlayerID: "p1"},
 		SoldInstance: instance,
 		TotalPayout:  50,
 	}
 	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
+	cs := &stubCharacterService{
+		getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
+	}
 	ss := &stubShopService{
 		sellFn: func(_ context.Context, charID, instID string, qty int) (shop.SaleResult, error) {
 			return result, nil
 		},
 	}
-	h := newTestHandler(t, ps, &stubCharacterService{}, &stubAdventureService{}, ss)
+	h := newTestHandler(t, ps, cs, &stubAdventureService{}, ss)
 
 	rec := httptest.NewRecorder()
 	req := jsonRequest(t, http.MethodPost, "/shop/sell", `{"character_id":"c1","item_instance_id":"inst-1","quantity":1}`)
@@ -630,6 +730,30 @@ func TestHandleSell_Success(t *testing.T) {
 	decodeResponseBody(t, rec.Body.Bytes(), &resp)
 	if resp["total_payout"] != float64(50) {
 		t.Errorf("total_payout = %v, want 50", resp["total_payout"])
+	}
+}
+
+func TestHandleSell_Forbidden_DifferentPlayer(t *testing.T) {
+	player := coreplayer.Player{ID: "p1"}
+	char := corecharacter.Character{ID: "c1", PlayerID: "other_player"}
+	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
+	cs := &stubCharacterService{
+		getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
+	}
+	ss := &stubShopService{
+		sellFn: func(_ context.Context, charID, instID string, qty int) (shop.SaleResult, error) {
+			return shop.SaleResult{}, nil
+		},
+	}
+	h := newTestHandler(t, ps, cs, &stubAdventureService{}, ss)
+
+	rec := httptest.NewRecorder()
+	req := jsonRequest(t, http.MethodPost, "/shop/sell", `{"character_id":"c1","item_instance_id":"inst-1","quantity":1}`)
+	req.Header.Set("Authorization", bearerToken("sess1"))
+	h.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
 	}
 }
 

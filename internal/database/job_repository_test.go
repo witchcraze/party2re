@@ -5,7 +5,6 @@ import (
 	"os"
 	"testing"
 
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 )
 
@@ -19,15 +18,8 @@ func TestCharacterJobRepositoryPersistsAndLoadsHistory(t *testing.T) {
 	}
 	defer db.Close()
 
-	character, err := corecharacter.New("Job Test")
+	character, err := CreateTestCharacter(context.Background(), db, "Job Test")
 	if err != nil {
-		t.Fatal(err)
-	}
-	characters, err := NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := characters.Save(context.Background(), character); err != nil {
 		t.Fatal(err)
 	}
 	want, _ := corejob.NewCharacterJob(character.ID, "starter")

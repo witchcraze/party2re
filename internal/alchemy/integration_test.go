@@ -8,7 +8,6 @@ import (
 
 	"github.com/witchcraze/party2re/internal/alchemy"
 	"github.com/witchcraze/party2re/internal/character"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
@@ -43,7 +42,11 @@ func TestAlchemyIntegrationSynthesis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	createdChar, err := charService.Create(ctx, "Alchemy Integrator")
+	player, err := database.CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	createdChar, err := charService.Create(ctx, player.ID, "Alchemy Integrator")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,9 +120,9 @@ func TestConcurrentAlchemySynthesis(t *testing.T) {
 	invRepo, _ := database.NewInventoryRepository(db)
 	alcRepo, _ := database.NewAlchemyRepository(db)
 
-	char, _ := corecharacter.New("Concurrent Alchemist")
+	char, _ := database.CreateTestCharacter(ctx, db, "Concurrent Alchemist")
 	char.Money = 500
-	_ = charRepo.Save(ctx, char)
+	_ = charRepo.Update(ctx, char)
 
 	itemCatalog, _ := item.InitialCatalog()
 	recipeCatalog, _ := alchemy.InitialRecipeCatalog()

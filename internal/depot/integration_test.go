@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/character"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -42,7 +41,11 @@ func TestDepotIntegrationGoldAndItemOperations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	createdChar, err := charService.Create(ctx, "Depot Integrator")
+	player, err := database.CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	createdChar, err := charService.Create(ctx, player.ID, "Depot Integrator")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,9 +129,9 @@ func TestConcurrentDepotGoldWithdrawal(t *testing.T) {
 	invRepo, _ := database.NewInventoryRepository(db)
 	depotRepo, _ := database.NewDepotRepository(db)
 
-	char, _ := corecharacter.New("Concurrent Depot")
+	char, _ := database.CreateTestCharacter(ctx, db, "Concurrent Depot")
 	char.Money = 500
-	_ = charRepo.Save(ctx, char)
+	_ = charRepo.Update(ctx, char)
 
 	depotService, _ := depot.NewServiceWithTransaction(depotRepo, charRepo, invRepo, depotRepo)
 

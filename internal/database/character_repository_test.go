@@ -26,6 +26,12 @@ func TestCharacterRepositoryPersistsAndLoadsCharacter(t *testing.T) {
 	}
 	defer db.Close()
 
+	ctx := context.Background()
+	player, err := CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	repository, err := NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -34,16 +40,26 @@ func TestCharacterRepositoryPersistsAndLoadsCharacter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	want.PlayerID = player.ID
 
-	if err := repository.Save(context.Background(), want); err != nil {
+	if err := repository.Save(ctx, want); err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
-	got, err := repository.FindByID(context.Background(), want.ID)
+	got, err := repository.FindByID(ctx, want.ID)
 	if err != nil {
 		t.Fatalf("FindByID() error = %v", err)
 	}
 	if got != want {
 		t.Fatalf("FindByID() = %#v, want %#v", got, want)
+	}
+
+	// FindByPlayerID
+	byPlayer, err := repository.FindByPlayerID(ctx, player.ID)
+	if err != nil {
+		t.Fatalf("FindByPlayerID() error = %v", err)
+	}
+	if len(byPlayer) != 1 || byPlayer[0] != want {
+		t.Fatalf("FindByPlayerID() = %#v, want [%#v]", byPlayer, want)
 	}
 
 	// Update character
@@ -52,11 +68,11 @@ func TestCharacterRepositoryPersistsAndLoadsCharacter(t *testing.T) {
 	want.Money = 350
 	want.Stats.HP = 25
 	want.RebirthCount = 1
-	if err := repository.Update(context.Background(), want); err != nil {
+	if err := repository.Update(ctx, want); err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
 
-	updated, err := repository.FindByID(context.Background(), want.ID)
+	updated, err := repository.FindByID(ctx, want.ID)
 	if err != nil {
 		t.Fatalf("FindByID() after update error = %v", err)
 	}
@@ -66,10 +82,10 @@ func TestCharacterRepositoryPersistsAndLoadsCharacter(t *testing.T) {
 
 	// Nonexistent character errors
 	nonexistent, _ := corecharacter.New("Nonexistent")
-	if err := repository.Update(context.Background(), nonexistent); err != corecharacter.ErrNotFound {
+	if err := repository.Update(ctx, nonexistent); err != corecharacter.ErrNotFound {
 		t.Fatalf("Update(nonexistent) error = %v, want %v", err, corecharacter.ErrNotFound)
 	}
-	if _, err := repository.FindByID(context.Background(), "nonexistent_id"); err != corecharacter.ErrNotFound {
+	if _, err := repository.FindByID(ctx, "nonexistent_id"); err != corecharacter.ErrNotFound {
 		t.Fatalf("FindByID(nonexistent) error = %v, want %v", err, corecharacter.ErrNotFound)
 	}
 }
