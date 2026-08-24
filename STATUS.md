@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #82 — Casino Indian Poker Mini-Game
+Last updated: Issue #81 — Casino Slot Machine Mini-Game
 
 ## Current phase
 
@@ -34,7 +34,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Bank** (`internal/bank`): 銀行（預金・引出・プレイヤー間送金、`FOR UPDATE` 排他ロック）。
 - **Inn** (`internal/inn`): 宿屋・休息（HP/MP全回復）。
 - **Guild** (`internal/guild`): ギルド設立（5,000 G）、階層役職管理（Leader, Officer, Member）、加入・脱退・追放・役職変更・リーダー権限譲渡、ゴールド寄付によるEXP獲得とギルドレベルアップ（最大Lv10 / 定員拡大）、お知らせ掲示板、単一ギルド所属制約。
-- **Casino** (`internal/casino`): カジノコイン両替（1 Coin = 20 G）、インディアンポーカー（52枚標準トランプモデル、ブラインド賭け、NPCディーラーAI、最大5ラウンド・レート上昇、ショーダウン勝敗判定・配当精算、トランザクション整合性）。
+- **Casino** (`internal/casino`): カジノコイン両替（1 Coin = 20 G）、インディアンポーカー（52枚標準トランプモデル、ブラインド賭け、NPCディーラーAI、最大5ラウンド・レート上昇、ショーダウン勝敗判定・配当精算）、スロットマシン（3リール・5絵柄、777 100倍ジャックポット、レート設定 $1〜$200、アトミック精算）。
 
 ### API & Transport
 - **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`）。セッション認証、キャラクター所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
@@ -50,10 +50,10 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ## Immediate Priorities (Next Actions)
 
-1. **Casino Mini-Games** (Issue #81): スロットマシンの実装。
+1. **Casino Mini-Games** (Issue #141): ドッペルゲンガー戦の実装。
 2. **Core Domain Specifications** (Issue #136): `docs/design/` 配下への Core 言語非依存仕様書（戦闘、成長、ジョブ、スキル、アイテム）の整備。
 3. **Remaining Version 1.0 Feature Modules**:
-   - Casino Mini-Games（スロットマシン、ハイロー、ドッペル）
+   - Casino Mini-Games（ハイロー、ドッペル）
    - Guild Battles（GvG戦闘エンジン）
    - Auction / Free Market（プレイヤー間出品・入札）
    - Farm / Plantation（栽培・モンスター育成）

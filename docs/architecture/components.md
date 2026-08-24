@@ -246,14 +246,14 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Character repository.
   - **Persistence:** `guilds` and `guild_members` tables in `internal/database/guild_repository.go` with single-guild foreign key uniqueness and transactional integrity.
 - **Casino** (`internal/casino`):
-  - **Responsibility:** Casino currency exchange (1 Coin = 20 G), account management, and mini-games including Indian Poker (52-card deck, blind wagering, dealer AI, showdown resolution).
+  - **Responsibility:** Casino currency exchange (1 Coin = 20 G), account management, and mini-games including Indian Poker (52-card deck, blind wagering, dealer AI, showdown resolution) and Slot Machine (3-reel, 5-symbol paytable, 100x 777 jackpot).
   - **Dependencies:** Character repository (wallet gold).
   - **Persistence:** `casino_accounts` table in `internal/database/casino_repository.go` with atomic transactional balance adjustments.
 
 ### Future Feature Modules
 
 - Guild Battles (GvG combat engine)
-- Casino Mini-Games (High & Low, Slot Machine, Doppel)
+- Casino Mini-Games (High & Low, Doppel)
 - Auction & Free Market
 - Farm & Plantation
 - Collection & Monster Book
