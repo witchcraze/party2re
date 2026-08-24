@@ -205,6 +205,11 @@ via `PlayerService.Authenticate` before delegating to the target service.
   - `X-Frame-Options: DENY` — protects against clickjacking
   - `Referrer-Policy: strict-origin-when-cross-origin` — restricts referrer header leakage
   - `Content-Security-Policy: default-src 'none'` — disables client script execution on API responses
+- CORS policy is enforced globally via configurable allowed origins (`WithAllowedOrigins` / `PARTY2_CORS_ORIGINS`):
+  - Requests from configured allowed origins receive `Access-Control-Allow-Origin: <origin>` and `Vary: Origin`.
+  - `OPTIONS` preflight requests from allowed origins receive `204 No Content` with `Access-Control-Allow-Methods: GET, POST, DELETE`, `Access-Control-Allow-Headers: Content-Type, Authorization`, and `Access-Control-Max-Age: 86400`.
+  - Wildcard origin (`*`) is explicitly prohibited and ignored if configured.
+  - Requests from unlisted origins receive no `Access-Control-Allow-Origin` headers.
 - `Content-Type: application/json` is required on all endpoints that consume a
   request body. Requests with a missing or incorrect content type receive
   `415 Unsupported Media Type`.
