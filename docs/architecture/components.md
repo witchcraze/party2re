@@ -253,13 +253,16 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Instant raffle drawings (standard/special orb tiers) and periodic 4-digit numbered lottery purchases, drawing settlement, and prize claims.
   - **Dependencies:** Character repository (wallet gold).
   - **Persistence:** `character_lottery`, `lottery_drawings`, and `lottery_tickets` tables in `internal/database/lottery_repository.go` with atomic transactional claiming.
+- **Farm & Plantation** (`internal/farm`):
+  - **Responsibility:** Multi-plot crop cultivation (planting seeds, watering for bonus yield, fertilizing for growth acceleration, time-based maturation, harvesting, and withering).
+  - **Dependencies:** Character repository (wallet gold/items).
+  - **Persistence:** `farm_plots` table in `internal/database/farm_repository.go` with unique per-character plot indexes.
 
 ### Future Feature Modules
 
 - Guild Battles (GvG combat engine)
 - Casino Mini-Games (High & Low)
 - Auction & Free Market
-- Farm & Plantation
 - Collection & Monster Book
 - Rankings (Level, Job, Weekly, Contest)
 - Chapel & Blessings
