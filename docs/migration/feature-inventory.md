@@ -100,7 +100,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Lottery and raffle ticket systems ([#83](https://github.com/witchcraze/party2re/issues/83))
 - [x] Farm and plantation cultivation ([#84](https://github.com/witchcraze/party2re/issues/84))
 - [x] Collection and Monster Book encyclopedia ([#85](https://github.com/witchcraze/party2re/issues/85))
-- [ ] Chapel prayers and blessings ([#86](https://github.com/witchcraze/party2re/issues/86))
+- [x] Chapel prayers and blessings ([#86](https://github.com/witchcraze/party2re/issues/86))
 
 ### G. Presentation, assets, and operations
 - [x] UI-independent HTTP JSON Application API layer ([#87](https://github.com/witchcraze/party2re/issues/87))
@@ -165,6 +165,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#80](https://github.com/witchcraze/party2re/issues/80) | Player Auction House and marketplace trading | Merged |
 | [#64](https://github.com/witchcraze/party2re/issues/64) | Casino mini-game foundation and High & Low | Merged |
 | [#85](https://github.com/witchcraze/party2re/issues/85) | Monster Book encyclopedia and item collection catalog | Merged |
+| [#86](https://github.com/witchcraze/party2re/issues/86) | Chapel prayer, blessings, and god worship system | Merged |
 
 ---
 

@@ -265,12 +265,15 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Illustrated monster defeat tracking (`character_monster_book`), item discovery recording (`character_item_collection`), and career completion percentage queries.
   - **Dependencies:** Character repository.
   - **Persistence:** `character_monster_book` and `character_item_collection` tables in `internal/database/collection_repository.go`.
+- **Chapel & Blessings** (`internal/chapel`):
+  - **Responsibility:** Active town church prayer registration (`character_blessings`), donation management, and reward modifier calculation (+50% EXP/Gold chance, drop bonuses).
+  - **Dependencies:** Character repository (wallet gold).
+  - **Persistence:** `character_blessings` table in `internal/database/chapel_repository.go`.
 
 ### Future Feature Modules
 
 - Guild Battles (GvG combat engine)
 - Rankings (Level, Job, Weekly, Contest)
-- Chapel & Blessings
 
 
 ## Component review criteria
