@@ -37,16 +37,18 @@ If an Issue is too large, split it before implementation.
 Follow:
 
 ```text
-Issue
-  -> acceptance criteria
-  -> write / update tests
+Issue (acceptance criteria)
+  -> write / update tests (TDD)
   -> implement minimum solution
+  -> write / update docs/design/<feature>.md (language-agnostic spec)
+  -> update docs/architecture/components.md & STATUS.md (current state)
   -> make fmt
   -> make check
   -> open PR
 ```
 
 Keep unrelated changes out of the ticket.
+
 
 ## When blocked
 

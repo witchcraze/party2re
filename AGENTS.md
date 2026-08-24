@@ -32,13 +32,17 @@ Do not put temporary Version 1.0 reconstruction status into permanent architectu
 
 ### Documentation maintenance principles
 
+- **Two-stage documentation lifecycle**:
+  1. **Stage 1 — Issue Creation (Pre-implementation)**: Do *not* create pre-emptive specification files (`docs/design/*.md`) before coding. Capture domain requirements, scope, and observable conditions concisely in the Issue's acceptance criteria.
+  2. **Stage 2 — PR Implementation (Post-implementation synchronization)**: Once behavior, formulas, and boundaries are settled through code and tests, write/update `docs/design/<feature>.md` *within the same Pull Request*. This prevents pre-implementation rework and guarantees design docs match the actual codebase 100%.
 - **STATUS.md maintenance**: `STATUS.md` must reflect *what is true now* (current component state, confirmed decisions, and immediate priorities). Do not append unbounded historical issue logs (changelogs) to `STATUS.md`.
-- **Feature documentation sync**: When implementing a feature or changing domain behavior, always synchronize:
+- **Feature documentation sync within PR**: When opening a feature or domain change PR, always synchronize in that same PR:
   1. `docs/design/<feature>.md` — language-agnostic rules, formulas, and state transitions;
   2. `docs/architecture/components.md` — component responsibility, inputs/outputs, and persistence;
   3. `docs/migration/feature-inventory.md` — feature tracking status;
   4. `STATUS.md` — update the current state summary and clear completed priorities.
 - **Single Source of Truth (SSOT)**: Do not duplicate procedural commands across multiple documents. Keep canonical verification workflows in `docs/development/testing-and-containers.md` and reference them.
+
 
 
 ## Project purpose

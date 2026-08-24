@@ -31,8 +31,12 @@ labels: ["chore"]
 
 ## Documentation impact
 
+<!-- Note: Do NOT pre-draft documentation files before coding.
+     Documentation will be updated within the implementation PR. -->
+
 - [ ] None
-- [ ] Update documentation
+- [ ] Update documentation within implementation PR
+
 
 ## Architecture impact
 
