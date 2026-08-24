@@ -167,11 +167,74 @@ Use events selectively. Immediate operations that require a direct result should
 
 ## Application API boundary
 
-The application should expose game operations through a UI-independent application API or command boundary.
+Game behavior is implemented independently of any specific UI. Major game
+operations are routed through the application service layer rather than being
+implemented directly in transport handlers.
 
-Initially this may be an internal API used by the GUI, tests, CLI tools, and other components. The design should avoid coupling the contract to a specific presentation technology so that appropriate operations can be exposed externally in the future.
+### HTTP JSON API (`internal/api/http`)
 
-A possible future consumer is an AI Agent that plays the game through the same game operations available to a human player. This is an example of a future capability, not a requirement for the initial release.
+The initial transport layer is an HTTP JSON API using only the Go standard
+library `net/http`. The `Handler` struct is constructed with injected
+application service interfaces and exposes a `ServeMux` via `Router()`.
+
+**Endpoints:**
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Health check — always public |
+| `POST` | `/players` | Player registration |
+| `POST` | `/sessions` | Login — returns a session token |
+| `DELETE` | `/sessions` | Logout — revokes the current session |
+| `POST` | `/characters` | Create a character (authenticated) |
+| `GET` | `/characters/{id}` | Get character state (authenticated) |
+| `POST` | `/adventures` | Start a stage adventure (authenticated) |
+| `POST` | `/adventures/{id}/claim` | Claim an adventure result (authenticated) |
+| `POST` | `/shop/purchase` | Purchase items (authenticated) |
+| `POST` | `/shop/sell` | Sell items (authenticated) |
+
+**Authentication:**
+
+All endpoints except `GET /health`, `POST /players`, and `POST /sessions`
+require `Authorization: Bearer <session-id>`. The handler validates the session
+via `PlayerService.Authenticate` before delegating to the target service.
+
+**Request invariants enforced at the transport layer:**
+
+- `Content-Type: application/json` is required on all endpoints that consume a
+  request body. Requests with a missing or incorrect content type receive
+  `415 Unsupported Media Type`.
+- Request bodies are limited to 64 KiB via `http.MaxBytesReader`. Bodies
+  exceeding this limit receive `400 Bad Request`.
+- Unknown JSON fields are rejected (`DisallowUnknownFields`).
+
+**Error response format:**
+
+All error responses use a consistent JSON envelope:
+
+```json
+{"error": "<message>"}
+```
+
+**Known limitation — character ownership:**
+
+The current implementation authenticates the caller (valid session?) but does
+not verify that the authenticated player owns the character referenced in the
+request. Enforcement requires `player_id` on `Character` and in the `characters`
+table. This is tracked in Issue #131.
+
+**Handler contract:**
+
+Handlers must contain no domain business logic. All game rules remain inside
+the application services. The handler's responsibility is limited to:
+
+1. extracting and validating the session;
+2. decoding and size-limiting the request body;
+3. delegating to the appropriate service;
+4. mapping service errors to HTTP status codes;
+5. encoding the service result as JSON.
+
+A future implementation could replace the HTTP layer with a gRPC, WebSocket,
+or in-process transport without changing the application service layer.
 
 ## Application logging contract
 

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #128 — Update production Dockerfile runtime base to distroless static-debian13
+Last updated: Issue #87 — HTTP Application API layer for client independence
 
 ## Current phase
 
@@ -89,6 +89,20 @@ Issue #110 migrated Adventure completion to ScheduledAction push processing:
 - `Start` enqueues a ScheduledAction (`adventure:complete`)
 - `AdventureCompletionHandler` resolves battle, applies rewards, and persists results at worker execution time
 - Fallback path works if Valkey is unavailable (manual `Claim` resolves and claims)
+
+Issue #87 introduced the HTTP Application API layer:
+
+- `internal/api/http` — `Handler` exposing game services over HTTP JSON
+- Endpoints: `GET /health`, `POST /players`, `POST/DELETE /sessions`,
+  `POST /characters`, `GET /characters/{id}`, `POST /adventures`,
+  `POST /adventures/{id}/claim`, `POST /shop/purchase`, `POST /shop/sell`
+- Session authentication via `Authorization: Bearer` header; all game endpoints require a valid session
+- Request body limited to 64 KiB (`http.MaxBytesReader`) to prevent memory exhaustion DoS
+- `Content-Type: application/json` enforced on all JSON-consuming endpoints (415 on violation)
+- `DisallowUnknownFields` on JSON decoder rejects unexpected request fields
+- Handlers contain no domain business logic; they delegate strictly to injected application services
+- Structured JSON error responses with `"error"` key on all failure paths
+- Open: `characters` table has no `player_id` column; character ownership enforcement requires a schema and domain model change tracked in Issue #131
 
 Issue #55 introduced the Item Shop purchase and sale operations:
 
