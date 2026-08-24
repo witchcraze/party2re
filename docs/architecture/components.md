@@ -203,20 +203,53 @@ Adventure may use Battle but should not own Battle's implementation.
 
 ## Feature modules
 
-Examples:
+Each feature owns its feature-specific rules and state. A feature may consume public contracts from Core or shared components, but must not access another feature's private implementation or database schema.
 
-- Guild
-- Casino
-- Alchemy
-- Auction
-- Farming
-- Collection
-- Ranking
-- Events
+### Implemented Feature Modules
 
-Each feature owns its feature-specific rules and state.
+- **Activity** (`internal/activity`):
+  - **Responsibility:** Delayed training actions and experience awards.
+  - **Dependencies:** Character repository, Core Progression, Scheduling Service.
+  - **Persistence:** `activities` table with atomic `ClaimAndApply` concurrency locking.
+- **Adventure** (`internal/adventure`):
+  - **Responsibility:** Multi-stage exploration (28 stages, 286 monsters), stage eligibility checks, Battle invocation, and drop rewards.
+  - **Dependencies:** Stage/Monster catalogs, Battle Resolver, Character & Inventory repositories, Scheduling Service.
+  - **Persistence:** `adventures` table with atomic battle outcome persistence.
+- **Shop** (`internal/shop`):
+  - **Responsibility:** Item purchases (gold deduction + inventory addition) and resale (inventory removal + 50% gold refund).
+  - **Dependencies:** Item Catalog, Character (wallet), Inventory.
+  - **Persistence:** Atomic single-transaction `ShopRepository`.
+- **Depot** (`internal/depot`):
+  - **Responsibility:** Long-term storage management for item instances and gold.
+  - **Dependencies:** Character (wallet), Inventory.
+  - **Persistence:** `character_depots` and `depot_items` tables with single-transaction commits.
+- **Blacksmith** (`internal/blacksmith`):
+  - **Responsibility:** Equipment enhancement (+1 to +10) with level-scaling gold and material costs and probability curves.
+  - **Dependencies:** Character (wallet), Inventory.
+  - **Persistence:** Atomic single-transaction `BlacksmithRepository`.
+- **Alchemy** (`internal/alchemy`):
+  - **Responsibility:** Crafting item synthesis from recipes (`recipes.json`) using inventory ingredients and gold fees.
+  - **Dependencies:** Recipe Catalog, Item Catalog, Character (wallet), Inventory.
+  - **Persistence:** Atomic single-transaction `AlchemyRepository`.
+- **Bank** (`internal/bank`):
+  - **Responsibility:** Bank account management, gold deposits, withdrawals, and player-to-player remittances.
+  - **Dependencies:** Character (wallet).
+  - **Persistence:** `bank_accounts` and `bank_transfers` tables with `FOR UPDATE` concurrency locking.
+- **Inn** (`internal/inn`):
+  - **Responsibility:** Character resting and full HP/MP recovery.
+  - **Dependencies:** Character repository.
+  - **Persistence:** Single-transaction character update.
 
-A feature may consume public contracts from Core or shared components. It should not access another feature's private implementation or persistence model.
+### Future Feature Modules
+
+- Guild (creation, membership, battles)
+- Casino (High & Low, Indian Poker, Slot Machine, Doppel)
+- Auction & Free Market
+- Farm & Plantation
+- Collection & Monster Book
+- Rankings (Level, Job, Weekly, Contest)
+- Chapel & Blessings
+
 
 ## Component review criteria
 
