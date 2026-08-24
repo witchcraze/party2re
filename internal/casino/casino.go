@@ -145,3 +145,35 @@ func (s *Service) PlayIndianPokerRound(ctx context.Context, characterID string, 
 
 	return acc, nil
 }
+
+// SpinSlot executes a slot machine spin, adjusts coins according to the outcome, and returns the result and updated account.
+func (s *Service) SpinSlot(ctx context.Context, characterID string, bet int64) (SpinResult, Account, error) {
+	if characterID == "" {
+		return SpinResult{}, Account{}, ErrInvalidCharacterID
+	}
+	if !ValidBetRates[bet] {
+		return SpinResult{}, Account{}, ErrInvalidBetRate
+	}
+
+	acc, err := s.repo.GetAccount(ctx, characterID)
+	if err != nil {
+		return SpinResult{}, Account{}, err
+	}
+	if acc.Coins < bet {
+		return SpinResult{}, acc, ErrInsufficientCoins
+	}
+
+	res, err := SpinSlotMachine(bet)
+	if err != nil {
+		return SpinResult{}, acc, err
+	}
+
+	// Net coin delta = payout - bet
+	coinDelta := res.NetCoins
+	acc, err = s.repo.AdjustCoins(ctx, characterID, coinDelta)
+	if err != nil {
+		return SpinResult{}, acc, err
+	}
+
+	return res, acc, nil
+}

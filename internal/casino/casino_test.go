@@ -113,3 +113,42 @@ func TestCasinoService_IndianPokerLifecycle(t *testing.T) {
 		t.Errorf("after fold: coins=%d, status=%v", acc.Coins, game.Status)
 	}
 }
+
+func TestCasinoService_SpinSlot(t *testing.T) {
+	ctx := context.Background()
+	var currentCoins int64 = 100
+
+	repo := &mockCasinoRepo{
+		getAccountFn: func(_ context.Context, charID string) (casino.Account, error) {
+			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
+		},
+		adjustFn: func(_ context.Context, charID string, delta int64) (casino.Account, error) {
+			currentCoins += delta
+			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
+		},
+	}
+	svc, _ := casino.NewService(repo)
+
+	// Valid spin with 10 coins
+	res, acc, err := svc.SpinSlot(ctx, "char1", 10)
+	if err != nil {
+		t.Fatalf("SpinSlot failed: %v", err)
+	}
+	if res.BetCoins != 10 {
+		t.Errorf("bet coins = %d, want 10", res.BetCoins)
+	}
+	if acc.Coins != 100+res.NetCoins {
+		t.Errorf("account coins = %d, want %d", acc.Coins, 100+res.NetCoins)
+	}
+
+	// Invalid rate
+	if _, _, err := svc.SpinSlot(ctx, "char1", 25); err != casino.ErrInvalidBetRate {
+		t.Errorf("err = %v, want ErrInvalidBetRate", err)
+	}
+
+	// Insufficient coins
+	currentCoins = 5
+	if _, _, err := svc.SpinSlot(ctx, "char1", 50); err != casino.ErrInsufficientCoins {
+		t.Errorf("err = %v, want ErrInsufficientCoins", err)
+	}
+}

@@ -95,3 +95,66 @@ func TestCasinoIndianPokerDatabaseIntegration(t *testing.T) {
 		}
 	}
 }
+
+func TestCasinoSlotMachineDatabaseIntegration(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	casinoRepo, err := database.NewCasinoRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	svc, err := casino.NewService(casinoRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Create test character with 10,000 gold
+	char, err := database.CreateTestCharacter(ctx, db, "SlotPlayer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = ? WHERE id = ?", 10000, char.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Buy 100 coins
+	acc, _, err := svc.ExchangeGoldToCoins(ctx, char.ID, 100)
+	if err != nil {
+		t.Fatalf("ExchangeGoldToCoins failed: %v", err)
+	}
+	if acc.Coins != 100 {
+		t.Fatalf("coins = %d, want 100", acc.Coins)
+	}
+
+	// 3. Spin with 10 coins
+	res, updatedAcc, err := svc.SpinSlot(ctx, char.ID, 10)
+	if err != nil {
+		t.Fatalf("SpinSlot failed: %v", err)
+	}
+	if res.BetCoins != 10 {
+		t.Errorf("bet = %d, want 10", res.BetCoins)
+	}
+	if updatedAcc.Coins != 100+res.NetCoins {
+		t.Errorf("updated coins = %d, want %d", updatedAcc.Coins, 100+res.NetCoins)
+	}
+
+	// 4. Verify durable persistence
+	dbAcc, err := svc.GetAccount(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetAccount failed: %v", err)
+	}
+	if dbAcc.Coins != updatedAcc.Coins {
+		t.Errorf("db coins = %d, memory coins = %d", dbAcc.Coins, updatedAcc.Coins)
+	}
+}
