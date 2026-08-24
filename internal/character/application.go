@@ -3,16 +3,21 @@ package character
 import (
 	"context"
 	"errors"
+	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/progression"
 )
 
-var ErrNotFound = corecharacter.ErrNotFound
+var (
+	ErrNotFound      = corecharacter.ErrNotFound
+	ErrInvalidPlayer = errors.New("player ID is required")
+)
 
 type Repository interface {
 	Save(ctx context.Context, value corecharacter.Character) error
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
+	FindByPlayerID(ctx context.Context, playerID string) ([]corecharacter.Character, error)
 	Update(ctx context.Context, value corecharacter.Character) error
 }
 
@@ -32,11 +37,15 @@ func NewService(repository Repository) (*Service, error) {
 	return &Service{repository: repository}, nil
 }
 
-func (s *Service) Create(ctx context.Context, name string) (corecharacter.Character, error) {
-	return s.CreateWithOptions(ctx, name, CreationOptions{})
+func (s *Service) Create(ctx context.Context, playerID, name string) (corecharacter.Character, error) {
+	return s.CreateWithOptions(ctx, playerID, name, CreationOptions{})
 }
 
-func (s *Service) CreateWithOptions(ctx context.Context, name string, options CreationOptions) (corecharacter.Character, error) {
+func (s *Service) CreateWithOptions(ctx context.Context, playerID, name string, options CreationOptions) (corecharacter.Character, error) {
+	playerID = strings.TrimSpace(playerID)
+	if playerID == "" {
+		return corecharacter.Character{}, ErrInvalidPlayer
+	}
 	if options.JobID == "" {
 		options.JobID = corecharacter.DefaultJobID
 	}
@@ -47,6 +56,7 @@ func (s *Service) CreateWithOptions(ctx context.Context, name string, options Cr
 	if err != nil {
 		return corecharacter.Character{}, err
 	}
+	value.PlayerID = playerID
 	if err := s.repository.Save(ctx, value); err != nil {
 		return corecharacter.Character{}, err
 	}
@@ -56,6 +66,14 @@ func (s *Service) CreateWithOptions(ctx context.Context, name string, options Cr
 
 func (s *Service) Get(ctx context.Context, id string) (corecharacter.Character, error) {
 	return s.repository.FindByID(ctx, id)
+}
+
+func (s *Service) ListByPlayer(ctx context.Context, playerID string) ([]corecharacter.Character, error) {
+	playerID = strings.TrimSpace(playerID)
+	if playerID == "" {
+		return nil, ErrInvalidPlayer
+	}
+	return s.repository.FindByPlayerID(ctx, playerID)
 }
 
 func (s *Service) Rebirth(ctx context.Context, id string) (corecharacter.Character, error) {

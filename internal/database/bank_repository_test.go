@@ -38,28 +38,29 @@ func TestBankRepositoryDepositWithdrawAndTransfer(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	char1, err := corecharacter.New("Banker 1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	char1.Money = 1000
-	if err := charRepo.Save(ctx, char1); err != nil {
-		t.Fatal(err)
-	}
-
 	// 1. Create two players
-	player1, err := coreplayer.New("bank_p1_"+char1.ID[:8], "securepass", now)
+	player1, err := coreplayer.New("bank_p1_"+time.Now().Format("20060102150405.000000"), "securepass", now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := playerRepo.Save(ctx, player1); err != nil {
 		t.Fatal(err)
 	}
-	player2, err := coreplayer.New("bank_p2_"+char1.ID[:8], "securepass", now)
+	player2, err := coreplayer.New("bank_p2_"+time.Now().Format("20060102150405.000000"), "securepass", now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := playerRepo.Save(ctx, player2); err != nil {
+		t.Fatal(err)
+	}
+
+	char1, err := corecharacter.New("Banker 1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char1.PlayerID = player1.ID
+	char1.Money = 1000
+	if err := charRepo.Save(ctx, char1); err != nil {
 		t.Fatal(err)
 	}
 

@@ -5,7 +5,6 @@ import (
 	"os"
 	"testing"
 
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 )
@@ -41,12 +40,12 @@ func TestAlchemyRepositoryCommitSynthesis(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char, err := corecharacter.New("Alchemy DB Test")
+	char, err := CreateTestCharacter(ctx, db, "Alchemy DB Test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	char.Money = 500
-	if err := charRepo.Save(ctx, char); err != nil {
+	if err := charRepo.Update(ctx, char); err != nil {
 		t.Fatal(err)
 	}
 

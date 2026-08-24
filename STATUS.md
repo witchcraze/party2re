@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #135 — Status, Roadmap, and Feature Inventory Synchronization
+Last updated: Issue #131 — Player-Character Ownership Linkage
 
 ## Current phase
 
@@ -17,7 +17,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### Core & Shared Components
 - **Player** (`internal/core/player`, `internal/player`): アカウント登録・パスワードハッシュ・セッション管理（MariaDB永続化）。
-- **Character** (`internal/core/character`, `internal/character`): 初期ステータス、能力値計算、転生（Rebirth +5永続ボーナス）。
+- **Character** (`internal/core/character`, `internal/character`): `player_id` 外部キーによるアカウント紐付け、初期ステータス、能力値計算、転生（Rebirth +5永続ボーナス）、プレイヤー別キャラクター一覧取得。
 - **Progression** (`internal/core/progression`): レベルアップ（累積経験値テーブル `level * level * 10`）、成長率適用。
 - **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): JSONカタログ（`jobs.json`）、転職、Lv99マスタリー、スキル発動・コスト計算。
 - **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理。
@@ -35,10 +35,10 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Inn** (`internal/inn`): 宿屋・休息（HP/MP全回復）。
 
 ### API & Transport
-- **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`）。セッション認証、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
+- **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`）。セッション認証、キャラクター所有権認可検証（403 Forbidden）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
 
 ### Infrastructure & Operations
-- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `014_bank.sql`、`make db-migrate` / `make db-reset`）。
+- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `015_character_player_id.sql`、`make db-migrate` / `make db-reset`）。
 - **Valkey**: 遅延アクションキュー・排他ロック（AOF+RDB永続化）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
 - **Verification**: `Makefile` (`make check`, `make fmt`, `make check-clean`)、Git pre-push hook による自動検証。
@@ -48,9 +48,8 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ## Immediate Priorities (Next Actions)
 
-1. **Player-Character Ownership Linkage** (Issue #131): `characters` テーブルへの `player_id` 追加と認可検証。
-2. **HTTP Middleware & Security** (Issue #132, #133): Security headers および CORS middleware の導入。
-3. **Core Domain Specifications** (Issue #136): `docs/design/` 配下への Core 言語非依存仕様書（戦闘、成長、ジョブ、スキル、アイテム）の整備。
+1. **HTTP Middleware & Security** (Issue #132, #133): Security headers および CORS middleware の導入。
+2. **Core Domain Specifications** (Issue #136): `docs/design/` 配下への Core 言語非依存仕様書（戦闘、成長、ジョブ、スキル、アイテム）の整備。
 4. **Remaining Version 1.0 Feature Modules**:
    - Guild（ギルド作成、加入、管理、ギルドバトル）
    - Casino（ハイロー、インディアンポーカー、スロット、ドッペル）

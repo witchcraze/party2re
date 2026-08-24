@@ -45,28 +45,29 @@ func TestBankIntegrationConcurrentDepositsAndTransfers(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	char1, err := corecharacter.New("Depositor Concurrency")
-	if err != nil {
-		t.Fatal(err)
-	}
-	char1.Money = 10000
-	if err := charRepo.Save(ctx, char1); err != nil {
-		t.Fatal(err)
-	}
-
 	// Create player and characters
-	player1, err := coreplayer.New("bank_c1_"+char1.ID[:8], "securepass", now)
+	player1, err := coreplayer.New("bank_c1_"+time.Now().Format("20060102150405.000000"), "securepass", now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := playerRepo.Save(ctx, player1); err != nil {
 		t.Fatal(err)
 	}
-	player2, err := coreplayer.New("bank_c2_"+char1.ID[:8], "securepass", now)
+	player2, err := coreplayer.New("bank_c2_"+time.Now().Format("20060102150405.000000"), "securepass", now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := playerRepo.Save(ctx, player2); err != nil {
+		t.Fatal(err)
+	}
+
+	char1, err := corecharacter.New("Depositor Concurrency")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char1.PlayerID = player1.ID
+	char1.Money = 10000
+	if err := charRepo.Save(ctx, char1); err != nil {
 		t.Fatal(err)
 	}
 

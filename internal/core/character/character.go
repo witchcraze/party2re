@@ -27,6 +27,7 @@ var (
 
 type Character struct {
 	ID           string
+	PlayerID     string
 	Name         string
 	JobID        string
 	Gender       string

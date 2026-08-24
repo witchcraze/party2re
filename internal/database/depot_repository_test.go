@@ -5,7 +5,6 @@ import (
 	"os"
 	"testing"
 
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -29,20 +28,13 @@ func TestDepotRepositorySaveAndFind(t *testing.T) {
 	defer db.Close()
 
 	ctx := context.Background()
-	charRepo, err := NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
 	depotRepo, err := NewDepotRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	char, err := corecharacter.New("Depot DB Test")
+	char, err := CreateTestCharacter(ctx, db, "Depot DB Test")
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := charRepo.Save(ctx, char); err != nil {
 		t.Fatal(err)
 	}
 
@@ -96,12 +88,12 @@ func TestDepotRepositoryExecuteTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char, err := corecharacter.New("Depot Tx Test")
+	char, err := CreateTestCharacter(ctx, db, "Depot Tx Test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	char.Money = 300
-	if err := charRepo.Save(ctx, char); err != nil {
+	if err := charRepo.Update(ctx, char); err != nil {
 		t.Fatal(err)
 	}
 

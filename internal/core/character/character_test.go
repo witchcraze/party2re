@@ -10,7 +10,7 @@ func TestNewCreatesLevelOneCharacter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	if got.ID == "" || got.Name != "Alice" || got.JobID != DefaultJobID ||
+	if got.ID == "" || got.PlayerID != "" || got.Name != "Alice" || got.JobID != DefaultJobID ||
 		got.Gender != DefaultGender || got.Level != InitialLevel || got.Experience != 0 ||
 		got.Money != InitialMoney {
 		t.Fatalf("New() = %#v", got)

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/character"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/shop"
@@ -42,7 +41,11 @@ func TestShopIntegrationPurchaseAndSell(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	createdChar, err := charService.Create(ctx, "Shop Integrator")
+	player, err := database.CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	createdChar, err := charService.Create(ctx, player.ID, "Shop Integrator")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,9 +150,9 @@ func TestConcurrentShopPurchasesPreventOverdraft(t *testing.T) {
 	invRepo, _ := database.NewInventoryRepository(db)
 	shopRepo, _ := database.NewShopRepository(db)
 
-	char, _ := corecharacter.New("Concurrent Buyer")
+	char, _ := database.CreateTestCharacter(ctx, db, "Concurrent Buyer")
 	char.Money = 150
-	_ = charRepo.Save(ctx, char)
+	_ = charRepo.Update(ctx, char)
 
 	sword, _ := item.NewEquipmentDefinition("con_sword", "Con Sword", 100, item.SlotMainHand)
 	catalog, _ := item.NewCatalog([]item.Definition{sword})

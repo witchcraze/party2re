@@ -50,7 +50,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Character/player registration & password hashing ([#21](https://github.com/witchcraze/party2re/issues/21))
 - [x] Login and session authentication lifecycle ([#21](https://github.com/witchcraze/party2re/issues/21))
 - [x] Character profile and status display ([#87](https://github.com/witchcraze/party2re/issues/87))
-- [ ] Player-character ownership verification linkage ([#131](https://github.com/witchcraze/party2re/issues/131))
+- [x] Player-character ownership verification linkage ([#131](https://github.com/witchcraze/party2re/issues/131))
 - [ ] Player deletion and maintenance behavior
 - [ ] Name changes and profile customization
 - [ ] Notifications, news, and replay/history access

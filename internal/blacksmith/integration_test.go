@@ -8,7 +8,6 @@ import (
 
 	"github.com/witchcraze/party2re/internal/blacksmith"
 	"github.com/witchcraze/party2re/internal/character"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
@@ -51,7 +50,11 @@ func TestBlacksmithIntegrationEnhancement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	createdChar, err := charService.Create(ctx, "Blacksmith Integrator")
+	player, err := database.CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	createdChar, err := charService.Create(ctx, player.ID, "Blacksmith Integrator")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,9 +127,9 @@ func TestConcurrentEnhancementPreventsOverdraft(t *testing.T) {
 	invRepo, _ := database.NewInventoryRepository(db)
 	bsRepo, _ := database.NewBlacksmithRepository(db)
 
-	char, _ := corecharacter.New("Concurrent Enhancer")
+	char, _ := database.CreateTestCharacter(ctx, db, "Concurrent Enhancer")
 	char.Money = 70 // only enough for 1 enhancement (50G)
-	_ = charRepo.Save(ctx, char)
+	_ = charRepo.Update(ctx, char)
 
 	catalog, _ := item.InitialCatalog()
 

@@ -9,7 +9,6 @@ import (
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
 func TestNewAdventureRepositoryNilDB(t *testing.T) {
@@ -30,15 +29,8 @@ func TestAdventureRepositoryPersistsAndLoadsResult(t *testing.T) {
 	}
 	defer db.Close()
 
-	character, err := corecharacter.New("Adventure Test")
+	character, err := CreateTestCharacter(context.Background(), db, "Adventure Test")
 	if err != nil {
-		t.Fatal(err)
-	}
-	characters, err := NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := characters.Save(context.Background(), character); err != nil {
 		t.Fatal(err)
 	}
 
@@ -92,15 +84,12 @@ func TestAdventureRepositoryClaimAndApply(t *testing.T) {
 	}
 	defer db.Close()
 
-	character, err := corecharacter.New("Claim Adventure Test")
-	if err != nil {
-		t.Fatal(err)
-	}
 	characterRepo, err := NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := characterRepo.Save(context.Background(), character); err != nil {
+	character, err := CreateTestCharacter(context.Background(), db, "Claim Adventure Test")
+	if err != nil {
 		t.Fatal(err)
 	}
 

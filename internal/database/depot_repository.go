@@ -121,11 +121,12 @@ func (t *sqlDepotTx) GetCharacter(ctx context.Context, characterID string) (core
 	var value corecharacter.Character
 	var gender, jobID string
 	err := t.tx.QueryRowContext(ctx, `
-		SELECT id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
+		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
 		FROM characters
 		WHERE id = ?
 	`, characterID).Scan(
 		&value.ID,
+		&value.PlayerID,
 		&value.Name,
 		&jobID,
 		&gender,
