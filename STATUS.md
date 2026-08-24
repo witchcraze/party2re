@@ -1,180 +1,66 @@
 # Status
 
-Last updated: Issue #87 — HTTP Application API layer for client independence
+Last updated: Issue #135 — Status, Roadmap, and Feature Inventory Synchronization
 
 ## Current phase
 
 **Version 1.0 Reconstruction / Refactoring — In Progress**
 
-Phase 0〜2（ゲーム理解・アーキテクチャ・ドメインモデル）は完了しています。
+Phase 0〜4（ゲーム理解・アーキテクチャ・ドメインモデル・骨格・垂直スライス）は完了しています。
 
-現在は、これらの設計を実装へ移しながら、Version 1.0に必要なゲームの基盤と主要な挙動を新規実装する過程です。
+現在は **Phase 5+（個別機能の段階的再構築）** にあり、Version 1.0に必要な主要ゲームシステムをクリーンルーム再構築として新規実装しています。
 Version 1.0の完成条件は、既存プロジェクトの意味のあるゲーム機能を新規実装として再構築し、必要な画像を新規制作または承認済みプレースホルダーで準備することです。旧ソースコード・旧画像の移植は完成条件に含めません。
-この「リファクタリング／再構築フェーズ」は永続的なプロジェクト方針ではありません。Version 1.0を成立させるための一時的な開発フェーズです。
 
-### 永続するもの
+---
 
-以下はVersion 1.0完成後も継続します。
+## Current Component State (What is True Now)
 
-- Feature拡張を中心とした設計
-- Core / Component / Featureの責務分離
-- コンポーネント境界を実装言語から独立させる考え方
-- TDD
-- Issue / PR driven development
-- Architecture Review
-- 小さなチケット単位での開発
-- 依存ソフトウェアとライセンスの管理
+### Core & Shared Components
+- **Player** (`internal/core/player`, `internal/player`): アカウント登録・パスワードハッシュ・セッション管理（MariaDB永続化）。
+- **Character** (`internal/core/character`, `internal/character`): 初期ステータス、能力値計算、転生（Rebirth +5永続ボーナス）。
+- **Progression** (`internal/core/progression`): レベルアップ（累積経験値テーブル `level * level * 10`）、成長率適用。
+- **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): JSONカタログ（`jobs.json`）、転職、Lv99マスタリー、スキル発動・コスト計算。
+- **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理。
+- **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定。
+- **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): Valkeyバックエンドの遅延アクションキュー＆分散排他ロックWorker。
 
-### 一時的なもの
+### Feature Modules
+- **Activity** (`internal/activity`): 訓練機能（Valkey Worker push型＋手動Claimフォールバック）。
+- **Adventure** (`internal/adventure`): 28ステージ（`stages.json`）、286体モンスター（`monsters.json`）、戦闘解決、ドロップ報酬、Valkey Worker連携。
+- **Shop** (`internal/shop`): アイテム売買（50%売却）、トランザクション整合性。
+- **Depot** (`internal/depot`): 倉庫（アイテム・ゴールド預入・引出）、トランザクション整合性。
+- **Blacksmith** (`internal/blacksmith`): 鍛冶屋（+1〜+10装備強化、成功率曲線、費用・素材消費）。
+- **Alchemy** (`internal/alchemy`): 錬金術（112レシピ `recipes.json`）、素材合成。
+- **Bank** (`internal/bank`): 銀行（預金・引出・プレイヤー間送金、`FOR UPDATE` 排他ロック）。
+- **Inn** (`internal/inn`): 宿屋・休息（HP/MP全回復）。
 
-以下はVersion 1.0の再構築に必要な対応です。
+### API & Transport
+- **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`）。セッション認証、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
 
-- 既存Party2の調査
-- 旧実装との挙動比較
-- 旧実装を使用しない新規実装への置き換え
-- 既存アセットの再制作
-- Version 1.0のための初期機能再構築
-- 旧実装に由来する制約の整理・除去
+### Infrastructure & Operations
+- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `014_bank.sql`、`make db-migrate` / `make db-reset`）。
+- **Valkey**: 遅延アクションキュー・排他ロック（AOF+RDB永続化）。
+- **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
+- **Verification**: `Makefile` (`make check`, `make fmt`, `make check-clean`)、Git pre-push hook による自動検証。
+- **Deployment**: Distroless (`gcr.io/distroless/static-debian13:nonroot`) ベースの最小本番イメージ（GHCR自動公開）。
 
-Version 1.0完成後は、これらを通常の開発作業として扱わず、必要に応じて個別のIssueとして扱います。
+---
 
-## Next action
+## Immediate Priorities (Next Actions)
 
-Phase 3 foundation, Character persistence, delayed activities, initial character
-state, level progression, job-based stat growth rules, items, inventory,
-reusable Battle contract, detailed Battle resolution, the first
-Adventure-to-Battle reward loop, job definitions/history, skill usage
-conditions, equipment slots, and initial assets are in place. Player account
-and session lifecycle is implemented through Issue #21. Activity and
-Adventure claim reward application is atomic under concurrency through Issue
-#35.
+1. **Player-Character Ownership Linkage** (Issue #131): `characters` テーブルへの `player_id` 追加と認可検証。
+2. **HTTP Middleware & Security** (Issue #132, #133): Security headers および CORS middleware の導入。
+3. **Core Domain Specifications** (Issue #136): `docs/design/` 配下への Core 言語非依存仕様書（戦闘、成長、ジョブ、スキル、アイテム）の整備。
+4. **Remaining Version 1.0 Feature Modules**:
+   - Guild（ギルド作成、加入、管理、ギルドバトル）
+   - Casino（ハイロー、インディアンポーカー、スロット、ドッペル）
+   - Auction / Free Market（プレイヤー間出品・入札）
+   - Farm / Plantation（栽培・モンスター育成）
+   - Collection & Monster Book（図鑑・収集記録）
+   - Rankings（レベル、ジョブ、週間ランキング）
+   - Web Presentation UI / Client
 
-The current Compose workflow remains the development and integration-test
-environment. CI also publishes Go coverage reports for later review without
-enforcing a percentage threshold.
-
-Application operations now have an injectable standard-library `log/slog`
-contract with JSON output, correlation fields, and secret-safe handling. Player
-account operations use it without logging passwords, session values, or
-credentials.
-
-Issue #50 and Issue #51 validate every loaded Job and Item definition through
-catalog-wide field, lookup, availability, slot, and boundary tests. Both
-catalogs are verified continuously in CI.
-
-Issue #62 introduced character resting and inn recovery.
-
-Issue #106 introduced the reusable ScheduledAction processing mechanism
-(Valkey-backed). The mechanism is available for feature modules to use:
-
-- `internal/core/scheduling` — domain model with state machine and `Validate()`
-- `internal/scheduling` — `Service` (enqueue), `Worker` (periodic poll + dispatch),
-  `ActionHandler` interface for feature modules
-- `internal/valkey` — Valkey client wrapper (`PARTY2_VALKEY_ADDR` env var)
-- Valkey is included in the Docker Compose environment with AOF + RDB persistence
-- Corrupted or oversized data from Valkey is rejected before any lock or dispatch
-
-Feature modules connect to the mechanism by implementing `ActionHandler` and
-calling `worker.RegisterHandler(actionType, handler)` at startup. No changes
-to the scheduling mechanism itself are required when adding a new action type.
-
-Issue #109 migrated Activity training to ScheduledAction push processing:
-
-- `StartTraining` enqueues a ScheduledAction (`activity:training_complete`)
-- `TrainingHandler` processes completion by claiming and applying experience rewards
-- Fallback path works if Valkey is unavailable (manual `Claim` still functions)
-
-Issue #110 migrated Adventure completion to ScheduledAction push processing:
-
-- `Start` enqueues a ScheduledAction (`adventure:complete`)
-- `AdventureCompletionHandler` resolves battle, applies rewards, and persists results at worker execution time
-- Fallback path works if Valkey is unavailable (manual `Claim` resolves and claims)
-
-Issue #87 introduced the HTTP Application API layer:
-
-- `internal/api/http` — `Handler` exposing game services over HTTP JSON
-- Endpoints: `GET /health`, `POST /players`, `POST/DELETE /sessions`,
-  `POST /characters`, `GET /characters/{id}`, `POST /adventures`,
-  `POST /adventures/{id}/claim`, `POST /shop/purchase`, `POST /shop/sell`
-- Session authentication via `Authorization: Bearer` header; all game endpoints require a valid session
-- Request body limited to 64 KiB (`http.MaxBytesReader`) to prevent memory exhaustion DoS
-- `Content-Type: application/json` enforced on all JSON-consuming endpoints (415 on violation)
-- `DisallowUnknownFields` on JSON decoder rejects unexpected request fields
-- Handlers contain no domain business logic; they delegate strictly to injected application services
-- Structured JSON error responses with `"error"` key on all failure paths
-- Open: `characters` table has no `player_id` column; character ownership enforcement requires a schema and domain model change tracked in Issue #131
-
-Issue #55 introduced the Item Shop purchase and sale operations:
-
-- `internal/shop` — Service for item purchases (gold deduction and inventory addition) and sales (inventory removal and 50% price gold payout)
-- `internal/database.ShopRepository` — Atomic single-transaction commit for character wallet and inventory updates
-- `docs/design/shops.md` — Language-agnostic specification of shop purchase and resale rules
-
-Issue #56 introduced Stage and Monster encounter definitions:
-
-- `internal/adventure` — Data-driven Stage (`StageCatalog`) and Monster (`MonsterCatalog`) catalogs with JSON loaders
-- `internal/adventure/data/stages.json` — 28 stages (`stage-01` to `stage-28`) with minimum level requirements, durations, and monster encounter lists
-- `internal/adventure/data/monsters.json` — 286 monsters with stats, exp/gold rewards, and clean-room generic fantasy names replacing distinctive proper names
-- `docs/design/stages-and-monsters.md` — Stage listing and monster content design documentation
-- Comprehensive catalog-wide validation tests in CI
-
-Issue #57 introduced multi-stage Adventure progression and item reward drops:
-
-- `StartStage` validates character level requirements against stage minimum levels
-- Battle resolution executes against stage monster stats
-- Victorious adventures award experience to character, gold currency, and rolled item drop instances to character inventory
-- Defeats and draws award no rewards and update battle result record
-
-Issue #58 introduced Character Item Depot and storage management:
-
-- `internal/depot` — Service for stashing and withdrawing gold and item instances between active inventory and depot storage
-- `internal/database.DepotRepository` — Atomic single-transaction commit across character wallet, active inventory, and depot items
-- `docs/design/depot.md` — Specification of depot storage invariants and operations
-- Database schema migration `migrations/011_depot.sql` adding `character_depots` and `depot_items` tables
-
-Issue #59 introduced Blacksmith item enhancement and refinement:
-
-- `internal/blacksmith` — Service for enhancing equipment (+1 to +10) with level-scaling gold and material costs, success probability curve, and stats bonuses
-- `internal/database.BlacksmithRepository` — Atomic single-transaction commit across character wallet, active inventory, and enhanced item instance properties
-- `docs/design/blacksmith.md` — Specification of enhancement rules, cost formulas, and success probability
-- Database schema migration `migrations/012_item_enhancement.sql` adding `enhancement_level` to inventory and depot item tables
-
-Issue #60 introduced Alchemy crafting and recipe synthesis:
-
-- `internal/alchemy` — Service and data-driven RecipeCatalog (`internal/alchemy/data/recipes.json` with 112 clean-room recipes) for synthesizing items and consumables from material ingredients
-- `internal/database.AlchemyRepository` — Atomic single-transaction commit across character wallet, active inventory consumed ingredients, and synthesized output items
-- `docs/design/alchemy.md` — Specification of recipe catalog rules, crafting invariants, and atomic transaction guarantees
-
-Issue #61 introduced Job mastery and character rebirth progression:
-
-- `internal/core/progression.Rebirth` — Rebirth calculation resetting level to 1 while granting +5 permanent stat bonuses per rebirth
-- `internal/core/job.CharacterJob` and `internal/job.Service` — Job mastery tracking at Level 99 and mastery persistence
-- `internal/character.Service.Rebirth` — Character rebirth application service
-- `docs/design/rebirth.md` — Specification of job mastery and reincarnation rules
-- Database schema migration `migrations/013_rebirth.sql` adding `rebirth_count` to characters and creating `character_job_masteries` table
-
-Issue #121 introduced unified local verification and pre-push hook workflow:
-
-- `scripts/verify.sh` and `Makefile` (`make check`, `make fmt`, `make setup-hooks`) — Unified one-command verification executing `gofmt`, `go vet`, full docker test suite, and smoke production image build
-- `.githooks/pre-push` — Git hook automatically enforcing `make check` before allowing `git push`
-- Updated development guides and agent operating rules
-
-Issue #71 introduced the Banking system and gold deposit with transfers:
-
-- `internal/bank` — Service for bank account management, gold deposits, withdrawals, and player-to-player remittances
-- `internal/database.BankRepository` — Atomic single-transaction persistence with `FOR UPDATE` concurrency locking
-- `docs/design/bank.md` — Specification of bank account rules and transfer invariants
-- Database schema migration `migrations/014_bank.sql` adding `bank_accounts` and `bank_transfers` tables
-
-Issue #124 introduced safe database migration and reset workflows in Makefile:
-
-- `scripts/migrate.sh` (`make db-migrate`) — Safely applies pending migrations without data loss
-- `scripts/reset_db.sh` (`make db-reset`) — Explicit database drop and full re-migration
-- `make check` / `make check-clean` — Automated integration into daily and clean verification pipelines
-
-Issue #126 updated GitHub Actions workflows to latest major versions (`actions/checkout@v6`, `docker/setup-buildx-action@v4`, and `docker/build-push-action@v7`).
-
-Issue #128 updated Docker images (Dockerfile, Dockerfile.dev) to Debian 13 series (`golang:1.26.7-trixie` and `gcr.io/distroless/static-debian13:nonroot`).
+---
 
 ## Confirmed decisions
 
@@ -182,69 +68,34 @@ Issue #128 updated Docker images (Dockerfile, Dockerfile.dev) to Debian 13 serie
 - Existing Party2 assets/images will not be reused.
 - Existing Party2 is a behavioral/design reference.
 - `Created by Merino` may be acknowledged on the project page as the origin of the game.
-- Initial implementation language is Go.
+- Initial implementation language is Go (Go 1.26.7).
 - Components are conceptually language-independent.
 - Future replacement of individual components by another language is allowed.
 - Start as a modular monolith.
 - Do not introduce microservices or remote protocols without a concrete requirement.
 - Core should remain small.
-- Feature Modules are first-class.
+- Feature Modules are first-class components.
 - Battle is a reusable independent component.
-- Scheduled actions are a reusable concept for delayed game activities.
+- Scheduled actions use Valkey-backed Worker queue with push-processing and fallback.
+- Durable persistence uses MariaDB.
+- API layer uses Go standard library `net/http` JSON handlers.
+- Production container uses Distroless minimal image.
 - Domain events are available for meaningful decoupling, but should be used selectively.
 - Architecture review is required for substantial feature additions.
-- Software license candidates: MIT, Apache-2.0, AGPLv3.
-- Creative asset candidates: Creative Commons licenses.
-- Final licensing will be determined after implementation dependencies are known.
-- Durable persistence will use MariaDB.
-- Valkey will be used only for concrete cache, transient-state, queue, or coordination requirements.
-- Session storage is currently MariaDB as the smallest implementation for the
-  existing persistence setup; moving sessions to Valkey remains a follow-up
-  once transient-state infrastructure is needed.
-- Initial Go target is Go 1.26.7, subject to updating the pinned patch version when the project deliberately changes its supported toolchain.
 
-## Current conceptual model
+---
 
-```text
-Core
-  Player
-  Character
-  Progression
-  Item
-  Inventory
-  Equipment
-  Currency
-  Time / Scheduling
-  Domain Events
+## Pending Decisions / Open Questions
 
-Shared Components
-  Battle
-  Adventure / Quest
-
-Features
-  Guild
-  Casino
-  Alchemy
-  Auction
-  Farming
-  Collection
-  Ranking
-  Events
-  ...
-```
-
-## Not yet decided
-
-- exact Go package layout;
-- database product;
-- API framework;
-- frontend technology;
-- final project license;
-- final asset licenses;
-- first production feature set;
-- deployment architecture.
+- frontend technology / web client framework;
+- final software license (candidates: MIT, Apache-2.0, AGPLv3);
+- final creative asset licenses (candidates: Creative Commons);
+- moving session storage from MariaDB to Valkey (when transient-state cache is needed);
+- final asset production and management pipeline.
 
 Do not make these decisions merely for completeness. Decide them when the implementation requires them.
+
+---
 
 ## Document references
 
@@ -253,3 +104,4 @@ Do not make these decisions merely for completeness. Decide them when the implem
 - `docs/design/` — permanent game/design model.
 - `docs/development/` — permanent development workflow.
 - `ROADMAP.md` — phase and future-work planning.
+- `docs/migration/feature-inventory.md` — Version 1.0 feature inventory.

@@ -40,124 +40,78 @@ These tasks should not be mistaken for permanent project architecture.
 
 Once Version 1.0 is established, the project should transition from **reconstruction mode** to ordinary feature development. Historical implementation details should then become increasingly irrelevant to normal development.
 
-## Completed
+---
+
+## Completed Phases
 
 ### Phase 0 — Game understanding
-
-Status: Completed in the initial design session.
-
-Outputs:
-
-- identified the core player loop;
-- identified major domain areas;
-- identified the importance of time-based actions;
-- identified Battle as a reusable component;
-- identified Feature expansion as a primary product and architecture characteristic;
-- decided that existing source code is reference material only.
+- Status: Completed.
+- Outputs: core player loop identified, domain areas outlined, Battle isolated, Feature expansion established as primary design goal.
 
 ### Phase 1 — Architecture
-
-Status: Completed in the initial design session.
-
-Decisions:
-
-- initial implementation language: Go;
-- modular monolith;
-- small Core;
-- first-class Feature Modules;
-- explicit component contracts;
-- future language replacement is allowed;
-- no premature microservices or remote protocols;
-- architecture review is required for substantial feature additions.
+- Status: Completed.
+- Decisions: Go initial language, modular monolith, small Core, first-class Feature Modules, explicit contracts, MariaDB persistence, Valkey queue.
 
 ### Phase 2 — Domain model
+- Status: Completed.
+- Initial concepts: Player, Character, Progression, Job, Skill, Item, Inventory, Equipment, Currency, Battle, Adventure, ScheduledAction.
 
-Status: Completed as an initial design.
-
-Initial concepts:
-
-- Player
-- Character
-- Progression
-- Job
-- Skill
-- Item
-- Inventory
-- Equipment
-- Currency
-- Battle
-- Adventure / Quest
-- ScheduledAction
-- Guild
-- DomainEvent
-- Feature Module
-
-These remain subject to refinement during implementation.
-
-## Current phase
-
-### Version 1.0 Reconstruction / Refactoring
-
-Status: **In progress**
-
-The project is currently in the transitional phase where the new architecture, domain model, development workflow, and initial implementation are being established while reconstructing the important behavior of Party2.
-
-This phase is temporary.
-
-Version 1.0 completion means that the meaningful functions present in the reference project have been newly reconstructed and that the images required by those functions have been newly produced or replaced with approved placeholders. It does not mean copying or mechanically translating the old implementation.
-
-The objective is not to create a permanent "refactoring project". The objective is to arrive at a maintainable Version 1.0 implementation, after which normal feature development becomes the primary activity.
-
-### Phase 3 — Project skeleton
-
-Create the minimum Go project structure and development tooling.
-
-Goals:
-
-- repository structure;
-- build/test commands;
-- initial application entry point;
-- initial Core package boundaries;
-- documentation structure;
-- CI;
-- minimal health check or equivalent executable behavior.
-- MariaDB development persistence and migration workflow.
-- Valkey connection/development workflow for concrete transient-state, caching, queue, or coordination requirements.
-
-Do not implement historical game features yet.
+### Phase 3 — Project skeleton & Infrastructure
+- Status: Completed.
+- Outputs: Go project layout, MariaDB migrations workflow (`make db-migrate`, `make db-reset`), Valkey integration, structured JSON logging, CI pipelines, unified local verification (`make check`).
 
 ### Phase 4 — First vertical slice
+- Status: Completed.
+- Outputs: Character creation -> Activity (training) / Battle -> Experience & rewards -> Level Progression loop.
 
-Choose the smallest useful end-to-end game loop.
+---
 
-The exact scope should be determined after the Phase 3 skeleton exists.
+## Current Phase: Version 1.0 Reconstruction (Phase 5+)
 
-A likely target is:
+### Phase 5 — Core Features & Economy Modules (In Progress)
 
-```text
-Character
-  -> activity
-  -> battle / result
-  -> reward
-  -> progression
-```
+#### Completed Feature Modules & Subsystems:
+- [x] **Player Lifecycle & Session Auth** (Issue #21)
+- [x] **Character Initial State & Growth** (Issue #24, #10)
+- [x] **Item Catalog & 5-Slot Equipment System** (Issue #11, #19, #51)
+- [x] **Job System & Progression Rules** (Issue #17, #31, #38, #50)
+- [x] **Skill Definitions & Cost/Condition Evaluation** (Issue #18)
+- [x] **Battle Engine & Outcome Resolution** (Issue #12, #20, #36)
+- [x] **Valkey ScheduledAction Queue & Worker** (Issue #106, #109, #110)
+- [x] **Adventure System & Multi-stage Content** (Issue #13, #56, #57 — 28 stages, 286 monsters)
+- [x] **Item Shop System** (Issue #55 — purchase & 50% resale)
+- [x] **Character Item Depot** (Issue #58 — storage for items & gold)
+- [x] **Blacksmith Enhancement** (Issue #59 — +1 to +10 equipment refinement)
+- [x] **Alchemy Synthesis** (Issue #60 — 112 recipe crafting)
+- [x] **Job Mastery & Character Rebirth** (Issue #61 — Lv99 mastery & +5 stat rebirth)
+- [x] **Inn & Resting** (Issue #62 — HP/MP recovery)
+- [x] **Banking & Player Remittance** (Issue #71 — gold deposits & player transfers)
+- [x] **HTTP JSON Application API Layer** (Issue #87)
+- [x] **Unified Local Verification & Pre-push Hook** (Issue #121, #124)
 
-The first slice should demonstrate that the architecture works rather than maximize feature count.
-The initial implementation slices are tracked in [`docs/migration/feature-inventory.md`](docs/migration/feature-inventory.md).
+#### In-Progress & Upcoming Subsystems (Version 1.0 Milestones):
 
-### Phase 5+ — Incremental features
+1. **API Security & Ownership Hardening**
+   - Player-Character ownership linkage (Issue #131)
+   - HTTP security headers & CORS middleware (Issue #132, #133)
+2. **Language-Agnostic Core Specifications**
+   - Core design specifications in `docs/design/` (Battle, Progression, Jobs, Skills, Items) (Issue #136)
+3. **Social & Guild Systems**
+   - Guild creation, management, membership, and Guild Battles
+4. **Economy & Side Mini-Games**
+   - Player Auction House & Marketplace
+   - Casino games (High & Low, Indian Poker, Slot Machine, Doppel)
+   - Lottery & Raffle tickets
+   - Farm & Plantation cultivation
+   - Collection & Monster Book encyclopedia
+   - Chapel prayer & Blessings
+5. **Competitive & Meta Systems**
+   - Rankings (Level, Job, Weekly, Contest)
+6. **Client Presentation & UI**
+   - Web application client / UI-independent presentation layer
+   - Asset placeholder mapping and production asset pipeline
 
-Add features one at a time.
-
-Each feature should:
-
-- have a clear scope;
-- own its feature-specific state;
-- include focused tests;
-- pass architecture review;
-- avoid unnecessary Core changes.
-
-Potential feature order is intentionally not fixed yet. Choose based on dependencies and the value of each vertical slice.
+---
 
 ## Weekly execution model
 
@@ -173,6 +127,8 @@ Each week:
 
 Avoid spending the weekly token budget on broad refactors unless they are necessary to unblock the next feature.
 
+---
+
 ## Document references
 
 - `STATUS.md` — current state.
@@ -180,3 +136,4 @@ Avoid spending the weekly token budget on broad refactors unless they are necess
 - `docs/architecture/` — permanent architecture.
 - `docs/design/` — permanent game/design model.
 - `docs/development/` — permanent development workflow.
+- `docs/migration/feature-inventory.md` — Version 1.0 feature inventory.
