@@ -98,7 +98,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [ ] Player Auction house and free-market operations ([#80](https://github.com/witchcraze/party2re/issues/80))
 - [ ] Casino mini-games: Slot Machine ([#81](https://github.com/witchcraze/party2re/issues/81) - Merged), Indian Poker ([#82](https://github.com/witchcraze/party2re/issues/82) - Merged), Doppel ([#141](https://github.com/witchcraze/party2re/issues/141) - Merged), High & Low
 - [x] Lottery and raffle ticket systems ([#83](https://github.com/witchcraze/party2re/issues/83))
-- [ ] Farm and plantation cultivation ([#84](https://github.com/witchcraze/party2re/issues/84))
+- [x] Farm and plantation cultivation ([#84](https://github.com/witchcraze/party2re/issues/84))
 - [ ] Collection and Monster Book encyclopedia ([#85](https://github.com/witchcraze/party2re/issues/85))
 - [ ] Chapel prayers and blessings ([#86](https://github.com/witchcraze/party2re/issues/86))
 
@@ -161,6 +161,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#81](https://github.com/witchcraze/party2re/issues/81) | Casino Slot Machine mini-game and paytable | Merged |
 | [#141](https://github.com/witchcraze/party2re/issues/141) | Casino Doppelganger transformation and odds mini-game | Merged |
 | [#83](https://github.com/witchcraze/party2re/issues/83) | Lottery and raffle ticket drawings | Merged |
+| [#84](https://github.com/witchcraze/party2re/issues/84) | Farm and plantation crop cultivation | Merged |
 
 ---
 
