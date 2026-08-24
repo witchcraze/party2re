@@ -198,8 +198,13 @@ All endpoints except `GET /health`, `POST /players`, and `POST /sessions`
 require `Authorization: Bearer <session-id>`. The handler validates the session
 via `PlayerService.Authenticate` before delegating to the target service.
 
-**Request invariants enforced at the transport layer:**
+**Request invariants and security headers enforced at the transport layer:**
 
+- Standard security headers are applied globally across all responses via middleware:
+  - `X-Content-Type-Options: nosniff` — prevents MIME-type sniffing
+  - `X-Frame-Options: DENY` — protects against clickjacking
+  - `Referrer-Policy: strict-origin-when-cross-origin` — restricts referrer header leakage
+  - `Content-Security-Policy: default-src 'none'` — disables client script execution on API responses
 - `Content-Type: application/json` is required on all endpoints that consume a
   request body. Requests with a missing or incorrect content type receive
   `415 Unsupported Media Type`.
@@ -207,20 +212,11 @@ via `PlayerService.Authenticate` before delegating to the target service.
   exceeding this limit receive `400 Bad Request`.
 - Unknown JSON fields are rejected (`DisallowUnknownFields`).
 
-**Error response format:**
+**Character ownership verification:**
 
-All error responses use a consistent JSON envelope:
-
-```json
-{"error": "<message>"}
-```
-
-**Known limitation — character ownership:**
-
-The current implementation authenticates the caller (valid session?) but does
-not verify that the authenticated player owns the character referenced in the
-request. Enforcement requires `player_id` on `Character` and in the `characters`
-table. This is tracked in Issue #131.
+All endpoints that operate on a character (`GET /characters/{id}`, `POST /adventures`, `POST /shop/*`)
+verify that the authenticated player owns the targeted character (`char.PlayerID == player.ID`).
+Cross-player requests are rejected with `403 Forbidden`.
 
 **Handler contract:**
 

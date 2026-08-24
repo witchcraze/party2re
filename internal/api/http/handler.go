@@ -77,8 +77,8 @@ func NewHandler(
 	}, nil
 }
 
-// Router returns an http.ServeMux wired to all API endpoints.
-func (h *Handler) Router() *http.ServeMux {
+// Router returns an http.Handler wired to all API endpoints with standard security headers applied.
+func (h *Handler) Router() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", h.handleHealth)
@@ -96,7 +96,18 @@ func (h *Handler) Router() *http.ServeMux {
 	mux.HandleFunc("POST /shop/purchase", h.handlePurchase)
 	mux.HandleFunc("POST /shop/sell", h.handleSell)
 
-	return mux
+	return securityHeadersMiddleware(mux)
+}
+
+// securityHeadersMiddleware injects standard security response headers on every response.
+func securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // -------------------------------------------------------------------

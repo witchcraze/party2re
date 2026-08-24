@@ -778,3 +778,84 @@ func TestErrorResponseJSON(t *testing.T) {
 		t.Error("error response missing 'error' key")
 	}
 }
+
+// -------------------------------------------------------------------
+// Security headers middleware
+// -------------------------------------------------------------------
+
+func assertSecurityHeaders(t *testing.T, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	expectedHeaders := map[string]string{
+		"X-Content-Type-Options":  "nosniff",
+		"X-Frame-Options":         "DENY",
+		"Referrer-Policy":         "strict-origin-when-cross-origin",
+		"Content-Security-Policy": "default-src 'none'",
+	}
+	for header, expectedVal := range expectedHeaders {
+		got := rec.Header().Get(header)
+		if got != expectedVal {
+			t.Errorf("Header %q = %q, want %q", header, got, expectedVal)
+		}
+	}
+}
+
+func TestSecurityHeaders_HealthEndpoint(t *testing.T) {
+	h := newTestHandler(t, &stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	h.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	assertSecurityHeaders(t, rec)
+}
+
+func TestSecurityHeaders_PostPlayers(t *testing.T) {
+	player := coreplayer.Player{ID: "p1", Username: "alice"}
+	ps := &stubPlayerService{
+		registerFn: func(_ context.Context, username, password string) (coreplayer.Player, error) {
+			return player, nil
+		},
+	}
+	h := newTestHandler(t, ps, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{})
+	rec := httptest.NewRecorder()
+	req := jsonRequest(t, http.MethodPost, "/players", `{"username":"alice","password":"password123"}`)
+	h.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	assertSecurityHeaders(t, rec)
+}
+
+func TestSecurityHeaders_AuthenticatedEndpoint(t *testing.T) {
+	player := coreplayer.Player{ID: "p1"}
+	char := corecharacter.Character{ID: "c1", PlayerID: "p1", Name: "Hero", Level: 1}
+	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
+	cs := &stubCharacterService{
+		getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
+	}
+	h := newTestHandler(t, ps, cs, &stubAdventureService{}, &stubShopService{})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/characters/c1", nil)
+	req.Header.Set("Authorization", bearerToken("sess1"))
+	h.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	assertSecurityHeaders(t, rec)
+}
+
+func TestSecurityHeaders_ErrorResponse(t *testing.T) {
+	h := newTestHandler(t, &stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/players", bytes.NewReader(nil))
+	h.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnsupportedMediaType)
+	}
+	assertSecurityHeaders(t, rec)
+}
