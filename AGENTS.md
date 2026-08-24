@@ -30,6 +30,17 @@ AGENTS.md
 Do not use `STATUS.md` or `ROADMAP.md` as substitutes for permanent architecture/design documentation.
 Do not put temporary Version 1.0 reconstruction status into permanent architecture documents.
 
+### Documentation maintenance principles
+
+- **STATUS.md maintenance**: `STATUS.md` must reflect *what is true now* (current component state, confirmed decisions, and immediate priorities). Do not append unbounded historical issue logs (changelogs) to `STATUS.md`.
+- **Feature documentation sync**: When implementing a feature or changing domain behavior, always synchronize:
+  1. `docs/design/<feature>.md` — language-agnostic rules, formulas, and state transitions;
+  2. `docs/architecture/components.md` — component responsibility, inputs/outputs, and persistence;
+  3. `docs/migration/feature-inventory.md` — feature tracking status;
+  4. `STATUS.md` — update the current state summary and clear completed priorities.
+- **Single Source of Truth (SSOT)**: Do not duplicate procedural commands across multiple documents. Keep canonical verification workflows in `docs/development/testing-and-containers.md` and reference them.
+
+
 ## Project purpose
 
 This repository is a complete, clean-room reconstruction of the game known as Party2.
@@ -401,6 +412,8 @@ The following actions are explicitly prohibited unless a higher-level project de
 - Do not add a dependency without following the dependency and license review process.
 - Do not make a substantial architectural change without documenting the decision through an Issue.
 - Do not treat `STATUS.md` or `ROADMAP.md` as substitutes for permanent architecture or design documentation.
+- Do not append unbounded historical issue logs or changelogs to `STATUS.md`; maintain only current component state and immediate priorities.
+- Do not add or modify game features without synchronizing their domain design (`docs/design/`), component boundaries (`docs/architecture/components.md`), and feature inventory status (`docs/migration/feature-inventory.md`).
 - Do not optimize for code volume at the expense of tested, reviewable, mergeable changes.
 
 When a requested action conflicts with one of these constraints, stop and resolve the conflict through the appropriate Issue or project decision rather than silently bypassing the rule.

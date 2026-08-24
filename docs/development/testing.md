@@ -66,26 +66,24 @@ If testing a component requires knowledge of another component's private impleme
 
 ## Canonical test commands
 
-The project uses Go for the initial implementation.
+The canonical commands run through the repository `Makefile` and Docker Compose, ensuring identical execution locally and in CI:
 
-The canonical commands run through Docker Compose so the host machine does not
-need a Go installation or downloaded Go dependencies.
+```bash
+# Auto-format Go code
+make fmt
 
-At minimum, the project is expected to define commands for:
+# Run all verification checks (formatting check, go vet, db-migrate, full docker test suite, smoke build)
+make check
 
-- formatting;
-- unit and integration tests;
-- static analysis;
-- the complete test suite.
-
-From the repository root:
-
-```sh
-docker compose run --rm app find . -name '*.go' -exec gofmt -w {} +
-docker compose run --rm app go test ./...
-docker compose run --rm app go vet ./...
+# Run clean verification with full database reset (DROP & recreate database)
+make check-clean
 ```
 
-The commands documented here are the authoritative commands for agents and
-reviewers. When they change, update this document in the same Issue/PR that
-changes the development workflow.
+Direct Docker Compose commands remain available for targeted sub-package testing:
+
+```bash
+docker compose run --rm app go test ./internal/core/battle
+```
+
+For complete container workflows, database migrations, and CI integration, see [`testing-and-containers.md`](testing-and-containers.md).
+

@@ -45,23 +45,29 @@ The application also accepts `PARTY2_DB_DSN` when run with another environment.
 When it is not set, it uses the local-development default for a MariaDB server
 at `localhost:3306`.
 
-## Database initialization
+## Database initialization and migration
 
-SQL files in `migrations/` are mounted into MariaDB's
-`/docker-entrypoint-initdb.d/` directory. MariaDB applies these files in name
-order when the database volume is initialized.
+SQL files in `migrations/` define the relational schema.
 
-The initial schema is defined in `migrations/001_initial.sql`. Existing
-volumes are not reinitialized automatically. To recreate the local database
-from the migration files, stop the services and remove the development volume:
+To apply pending migrations safely without dropping data:
+
+```bash
+make db-migrate
+```
+
+To recreate the local database completely from all migration files:
+
+```bash
+make db-reset
+```
+
+The database volume can also be wiped manually if needed:
 
 ```sh
 docker compose down -v
-docker compose up -d mariadb
+docker compose up -d mariadb valkey
 ```
 
-The `-v` option deletes local database data and should not be used when that
-data must be preserved.
 
 ## Stopping the environment
 

@@ -67,9 +67,12 @@ Examples:
 
 Before ending a session:
 
-- run relevant tests;
-- record important discoveries;
-- update `STATUS.md` or `ROADMAP.md` when required;
+- run relevant tests and `make check`;
+- synchronize documentation:
+  - update `STATUS.md` current component state and immediate priorities (avoid appending historical logs);
+  - update `docs/design/<feature>.md` if game mechanics or formulas were added/modified;
+  - update `docs/architecture/components.md` if component responsibilities or boundaries were added/modified;
+  - update `docs/migration/feature-inventory.md` and `ROADMAP.md` if milestones progressed;
 - leave unfinished work clearly represented by an Issue;
 - do not leave undocumented temporary architecture.
 
