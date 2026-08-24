@@ -152,3 +152,37 @@ func TestCasinoService_SpinSlot(t *testing.T) {
 		t.Errorf("err = %v, want ErrInsufficientCoins", err)
 	}
 }
+
+func TestCasinoService_PlayDoppel(t *testing.T) {
+	ctx := context.Background()
+	var currentCoins int64 = 200
+
+	repo := &mockCasinoRepo{
+		getAccountFn: func(_ context.Context, charID string) (casino.Account, error) {
+			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
+		},
+		adjustFn: func(_ context.Context, charID string, delta int64) (casino.Account, error) {
+			currentCoins += delta
+			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
+		},
+	}
+	svc, _ := casino.NewService(repo)
+
+	// Valid Doppel game with 50 coins and pool size 4
+	res, acc, err := svc.PlayDoppel(ctx, "char1", 50, 4, casino.MarkStar)
+	if err != nil {
+		t.Fatalf("PlayDoppel failed: %v", err)
+	}
+	if res.BetCoins != 50 || res.PoolSize != 4 {
+		t.Errorf("res = %+v", res)
+	}
+	if acc.Coins != 200+res.NetCoins {
+		t.Errorf("account coins = %d, want %d", acc.Coins, 200+res.NetCoins)
+	}
+
+	// Insufficient coins
+	currentCoins = 10
+	if _, _, err := svc.PlayDoppel(ctx, "char1", 50, 4, casino.MarkStar); err != casino.ErrInsufficientCoins {
+		t.Errorf("err = %v, want ErrInsufficientCoins", err)
+	}
+}

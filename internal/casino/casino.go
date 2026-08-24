@@ -177,3 +177,35 @@ func (s *Service) SpinSlot(ctx context.Context, characterID string, bet int64) (
 
 	return res, acc, nil
 }
+
+// PlayDoppel executes a Doppelganger mark-matching game, adjusts coins according to outcome, and returns the result and updated account.
+func (s *Service) PlayDoppel(ctx context.Context, characterID string, bet int64, poolSize int, playerMark DoppelMark) (DoppelResult, Account, error) {
+	if characterID == "" {
+		return DoppelResult{}, Account{}, ErrInvalidCharacterID
+	}
+	if bet < MinBaseRate || bet > MaxBaseRate {
+		return DoppelResult{}, Account{}, ErrInvalidDoppelBet
+	}
+
+	acc, err := s.repo.GetAccount(ctx, characterID)
+	if err != nil {
+		return DoppelResult{}, Account{}, err
+	}
+	if acc.Coins < bet {
+		return DoppelResult{}, acc, ErrInsufficientCoins
+	}
+
+	res, err := PlayDoppelGame(bet, poolSize, playerMark)
+	if err != nil {
+		return DoppelResult{}, acc, err
+	}
+
+	// Net coin delta = payout - bet
+	coinDelta := res.NetCoins
+	acc, err = s.repo.AdjustCoins(ctx, characterID, coinDelta)
+	if err != nil {
+		return DoppelResult{}, acc, err
+	}
+
+	return res, acc, nil
+}
