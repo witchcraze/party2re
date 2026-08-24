@@ -257,12 +257,15 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Multi-plot crop cultivation (planting seeds, watering for bonus yield, fertilizing for growth acceleration, time-based maturation, harvesting, and withering).
   - **Dependencies:** Character repository (wallet gold/items).
   - **Persistence:** `farm_plots` table in `internal/database/farm_repository.go` with unique per-character plot indexes.
+- **Auction & Marketplace** (`internal/auction`):
+  - **Responsibility:** Player item listing, starting bids, buyout instant purchases, outbid automatic refunds, duration-based expiration settlement, and cancellation.
+  - **Dependencies:** Character repository (wallet gold/items).
+  - **Persistence:** `auction_listings` table in `internal/database/auction_repository.go` with row-level transactional concurrency.
 
 ### Future Feature Modules
 
 - Guild Battles (GvG combat engine)
 - Casino Mini-Games (High & Low)
-- Auction & Free Market
 - Collection & Monster Book
 - Rankings (Level, Job, Weekly, Contest)
 - Chapel & Blessings

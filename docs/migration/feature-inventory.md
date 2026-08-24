@@ -95,7 +95,7 @@ All groups below are Version 1.0 reconstruction requirements.
 
 ### F. Economy and side systems
 - [x] Alchemy synthesis with 112 recipes & material requirements ([#60](https://github.com/witchcraze/party2re/issues/60))
-- [ ] Player Auction house and free-market operations ([#80](https://github.com/witchcraze/party2re/issues/80))
+- [x] Player Auction house and free-market operations ([#80](https://github.com/witchcraze/party2re/issues/80))
 - [ ] Casino mini-games: Slot Machine ([#81](https://github.com/witchcraze/party2re/issues/81) - Merged), Indian Poker ([#82](https://github.com/witchcraze/party2re/issues/82) - Merged), Doppel ([#141](https://github.com/witchcraze/party2re/issues/141) - Merged), High & Low
 - [x] Lottery and raffle ticket systems ([#83](https://github.com/witchcraze/party2re/issues/83))
 - [x] Farm and plantation cultivation ([#84](https://github.com/witchcraze/party2re/issues/84))
@@ -162,6 +162,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#141](https://github.com/witchcraze/party2re/issues/141) | Casino Doppelganger transformation and odds mini-game | Merged |
 | [#83](https://github.com/witchcraze/party2re/issues/83) | Lottery and raffle ticket drawings | Merged |
 | [#84](https://github.com/witchcraze/party2re/issues/84) | Farm and plantation crop cultivation | Merged |
+| [#80](https://github.com/witchcraze/party2re/issues/80) | Player Auction House and marketplace trading | Merged |
 
 ---
 
