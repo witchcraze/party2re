@@ -141,8 +141,25 @@ The target is the game's meaningful behavior and design, not its historical impl
 
 ## Related documents
 
+### Domain Design Specifications
+- [`battle.md`](battle.md) — combat formulas and deterministic resolution
+- [`progression.md`](progression.md) — experience thresholds, level growth, and rebirth
+- [`jobs-and-skills.md`](jobs-and-skills.md) — jobs, mastery, and skill execution
+- [`items-and-equipment.md`](items-and-equipment.md) — 5-category item catalog and equipment rules
+- [`activities.md`](activities.md) — delayed training activities
+- [`stages-and-monsters.md`](stages-and-monsters.md) — stage exploration and monster catalog
+- [`shops.md`](shops.md) — item purchase and 50% resale
+- [`depot.md`](depot.md) — item and currency storage
+- [`blacksmith.md`](blacksmith.md) — equipment enhancement
+- [`alchemy.md`](alchemy.md) — recipe crafting synthesis
+- [`bank.md`](bank.md) — bank accounts and remittances
+- [`resting.md`](resting.md) — inn and rest recovery
+- [`rebirth.md`](rebirth.md) — job mastery and character reincarnation
+
+### Architecture & Rules
 - [`../architecture/overview.md`](../architecture/overview.md) — how the game is structured in software.
 - [`../architecture/components.md`](../architecture/components.md) — component ownership.
 - [`../architecture/feature-modules.md`](../architecture/feature-modules.md) — feature expansion model.
 - [`../../AGENTS.md`](../../AGENTS.md) — mandatory development rules.
 - [`../../STATUS.md`](../../STATUS.md) — current reconstruction status.
+
