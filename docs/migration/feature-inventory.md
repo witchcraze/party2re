@@ -42,204 +42,135 @@ The archive currently contains approximately:
 
 The quantities are inventory indicators, not Version 1 API counts.
 
-## Feature groups
+## Feature groups & Reconstruction Progress
 
-All groups below are Version 1.0 reconstruction requirements. The order is an
-implementation order, not a statement that some groups are optional.
+All groups below are Version 1.0 reconstruction requirements.
 
 ### A. Application foundation and account lifecycle
-
-- character/player registration;
-- login and session-related behavior;
-- character profile and status display;
-- player deletion and maintenance behavior;
-- name changes and profile customization;
-- notifications, news, and replay/history access;
-- administrator operations.
-
-Primary reference areas include `new_entry.cgi`, `login.cgi`, `player.cgi`,
-`profile.cgi`, `delete.cgi`, `news.cgi`, `replay.cgi`, `admin.cgi`, and the
-`profile`, `system`, `home`, and `custom_image` libraries.
+- [x] Character/player registration & password hashing ([#21](https://github.com/witchcraze/party2re/issues/21))
+- [x] Login and session authentication lifecycle ([#21](https://github.com/witchcraze/party2re/issues/21))
+- [x] Character profile and status display ([#87](https://github.com/witchcraze/party2re/issues/87))
+- [ ] Player-character ownership verification linkage ([#131](https://github.com/witchcraze/party2re/issues/131))
+- [ ] Player deletion and maintenance behavior
+- [ ] Name changes and profile customization
+- [ ] Notifications, news, and replay/history access
+- [ ] Administrator operations
 
 ### B. Character, progression, jobs, and skills
-
-- level and experience;
-- fundamental stats and status limits;
-- jobs and job changes;
-- job mastery/history;
-- skills and custom skills;
-- rebirth and related progression;
-- sleep, fatigue, action limits, and recovery.
-
-Primary reference areas include `job_change`, `job_master`, `skill`,
-`custom_skill`, `reborn`, `sleep`, and the shared battle data definitions.
+- [x] Level and cumulative experience progression ([#10](https://github.com/witchcraze/party2re/issues/10))
+- [x] Fundamental stats and initial character bounds ([#24](https://github.com/witchcraze/party2re/issues/24))
+- [x] Job definitions, data catalog, and job change history ([#17](https://github.com/witchcraze/party2re/issues/17), [#38](https://github.com/witchcraze/party2re/issues/38), [#50](https://github.com/witchcraze/party2re/issues/50))
+- [x] Job-based stat growth formulas ([#31](https://github.com/witchcraze/party2re/issues/31))
+- [x] Skill definitions, costs, and availability conditions ([#18](https://github.com/witchcraze/party2re/issues/18))
+- [x] Job mastery (Lv99) and Character Rebirth progression (+5 stat bonuses) ([#61](https://github.com/witchcraze/party2re/issues/61))
+- [x] Inn resting and HP/MP recovery ([#62](https://github.com/witchcraze/party2re/issues/62))
+- [ ] Custom skill assignment
 
 ### C. Items, equipment, storage, and currency
-
-- item definitions and owned item instances;
-- weapons, armor, accessories, and consumable items;
-- inventory and equipment rules;
-- storage/depot;
-- gold and other currencies;
-- shops and item transactions;
-- bank and gem store;
-- blacksmith, enhancement, and related item operations.
-
-Primary reference areas include `item`, `weapon`, `armor`, `accessory`,
-`depot`, `store`, `goods`, `bank`, `gem_store`, and `blacksmith`.
+- [x] Item definitions, 5-category data catalog, and instance ownership ([#11](https://github.com/witchcraze/party2re/issues/11), [#51](https://github.com/witchcraze/party2re/issues/51))
+- [x] Weapons, armor, shields, accessories, and consumables ([#51](https://github.com/witchcraze/party2re/issues/51))
+- [x] Inventory slot management and 5-slot equipment rules ([#19](https://github.com/witchcraze/party2re/issues/19))
+- [x] Character Item Depot storage for items and gold ([#58](https://github.com/witchcraze/party2re/issues/58))
+- [x] Gold currency wallet & transactions ([#24](https://github.com/witchcraze/party2re/issues/24))
+- [x] Item Shop purchase & 50% resale transactions ([#55](https://github.com/witchcraze/party2re/issues/55))
+- [x] Bank accounts, gold deposits, withdrawals, and player-to-player transfers ([#71](https://github.com/witchcraze/party2re/issues/71))
+- [x] Blacksmith equipment enhancement (+1 to +10) with material/gold costs ([#59](https://github.com/witchcraze/party2re/issues/59))
+- [ ] Gem store currency and transactions
 
 ### D. Adventure, maps, stages, and battle
-
-- ordinary adventure and quest selection;
-- stage requirements and rewards;
-- map and dungeon progression;
-- challenge content;
-- monster encounters;
-- battle actions, effects, skills, and results;
-- battle records and replay data;
-- player, guild, king, dungeon, and challenge battle modes.
-
-Battle must be reconstructed as a reusable component. The reason a battle was
-started must remain outside the battle implementation.
-
-Primary reference areas include `quest`, `adventure_record`, `_battle`,
-`vs_monster`, `vs_player`, `vs_guild`, `vs_king`, `vs_dungeon`,
-`vs_challenge`, `stage/`, `map/`, and the battle/skill data files.
+- [x] Reusable deterministic Battle component & turn resolver ([#12](https://github.com/witchcraze/party2re/issues/12), [#20](https://github.com/witchcraze/party2re/issues/20), [#36](https://github.com/witchcraze/party2re/issues/36))
+- [x] Data-driven Stage Catalog (28 stages) and Monster Catalog (286 clean-room monsters) ([#56](https://github.com/witchcraze/party2re/issues/56))
+- [x] Multi-stage adventure progression with level requirements and item drop rewards ([#57](https://github.com/witchcraze/party2re/issues/57))
+- [x] Push-based background ScheduledAction completion via Valkey Worker ([#106](https://github.com/witchcraze/party2re/issues/106), [#109](https://github.com/witchcraze/party2re/issues/109), [#110](https://github.com/witchcraze/party2re/issues/110))
+- [x] Concurrency-safe atomic reward claiming ([#35](https://github.com/witchcraze/party2re/issues/35))
+- [ ] Map and dungeon progression
+- [ ] Challenge content & special battle modes (PvP, king, challenge)
 
 ### E. Social and competitive systems
-
-- guild creation and membership;
-- guild administration and guild state;
-- guild battles;
-- player communication and public interaction;
-- rankings, job rankings, and weekly rankings;
-- contests and competitive records;
-- rescue/helper behavior.
-
-Primary reference areas include `guild`, `join_guild`, `guild_list.cgi`,
-`park`, `ranking.cgi`, `job_ranking.cgi`, `week_ranking.cgi`, `contest.cgi`,
-and `helper`.
+- [ ] Guild creation, membership, and administration
+- [ ] Guild battles
+- [ ] Player communication, park, and public interactions
+- [ ] Rankings (level, job, weekly rankings, contest records)
+- [ ] Helper / rescue behavior
 
 ### F. Economy and side systems
-
-- auction and free-market operations;
-- casino entry and individual casino games;
-- lottery and raffle systems;
-- alchemy and recipes;
-- farming, monster raising, and plantation behavior;
-- collection and monster book records;
-- medals, photos, events, chapel, gods, and wishes;
-- exile and other town activities.
-
-Primary reference areas include `auction`, `free`, `casino`,
-`casino_doppel`, `casino_highlow`, `casino_indian`, `casino_slot`, `lot`,
-`takarakuzi`, `alchemy`, `_alchemy_recipe`, `farm`, `plantation`,
-`collection`, `_add_collection`, `_add_monster_book`, `photo`, `event`,
-`medal`, `chapel`, `god`, `u_god`, `sp_change`, and `exile`.
+- [x] Alchemy synthesis with 112 recipes & material requirements ([#60](https://github.com/witchcraze/party2re/issues/60))
+- [ ] Player Auction house and free-market operations ([#80](https://github.com/witchcraze/party2re/issues/80))
+- [ ] Casino mini-games: Slot Machine ([#81](https://github.com/witchcraze/party2re/issues/81)), Indian Poker ([#82](https://github.com/witchcraze/party2re/issues/82)), High & Low, Doppel
+- [ ] Lottery and raffle ticket systems ([#83](https://github.com/witchcraze/party2re/issues/83))
+- [ ] Farm and plantation cultivation ([#84](https://github.com/witchcraze/party2re/issues/84))
+- [ ] Collection and Monster Book encyclopedia ([#85](https://github.com/witchcraze/party2re/issues/85))
+- [ ] Chapel prayers and blessings ([#86](https://github.com/witchcraze/party2re/issues/86))
 
 ### G. Presentation, assets, and operations
+- [x] UI-independent HTTP JSON Application API layer ([#87](https://github.com/witchcraze/party2re/issues/87))
+- [x] MariaDB durable persistence & migration automation ([#124](https://github.com/witchcraze/party2re/issues/124))
+- [x] Valkey worker queue with AOF+RDB persistence ([#106](https://github.com/witchcraze/party2re/issues/106))
+- [x] Structured JSON logging with credential masking ([#49](https://github.com/witchcraze/party2re/issues/49))
+- [x] Unified local verification script and pre-push hook ([#121](https://github.com/witchcraze/party2re/issues/121))
+- [x] Minimal production container image published via GHCR ([#88](https://github.com/witchcraze/party2re/issues/88), [#128](https://github.com/witchcraze/party2re/issues/128))
+- [x] Initial SVG placeholder assets ([#39](https://github.com/witchcraze/party2re/issues/39))
+- [ ] Web presentation UI / client implementation
+- [ ] Production asset production and license attribution
 
-- UI-independent application operations;
-- browser presentation and alternative-client boundary;
-- character, monster, stage, map, effect, and UI images;
-- image upload/custom-image rules where retained;
-- logs, scheduled processing, and operational maintenance;
-- reproducible local development and deployment.
+---
 
-The old Apache/CGI/Perl deployment is reference material only. The new
-runtime will use Go, MariaDB for durable persistence, and Valkey where a
-cache, transient state, queue, or coordination requirement is demonstrated.
+## Reconstructed Implementation Issues Log
 
-## Dependency-oriented implementation slices
-
-The following slices keep each change reviewable while preserving the full
-Version 1 scope:
-
-```text
-A. Go application + MariaDB + Valkey development foundation
-   |
-   v
-B. Player/Character creation and durable persistence
-   |
-   v
-C. Progression, jobs, skills, items, inventory, and equipment
-   |
-   v
-D. Scheduled activities and reusable battle component
-   |
-   v
-E. Adventure, maps, stages, and rewards
-   |
-   +--> F. Social, guild, rankings, and competitive modes
-   |
-   +--> G. Economy and side systems
-   |
-   v
-H. Client presentation, complete asset set, and release operations
-```
-
-The graph is approximate. A later Issue may split a slice further when its
-acceptance criteria become concrete.
-
-## Current implementation Issues
-
-The next small implementation units are tracked as follows:
-
-| Slice | Issue | Scope |
+| Issue | Scope / Milestone | Status |
 | --- | --- | --- |
-| Character initialization | [#24](https://github.com/witchcraze/party2re/issues/24) | Initial identity, base stats, and starting currency |
-| Progression | [#10](https://github.com/witchcraze/party2re/issues/10) | Level-up rules and experience thresholds |
-| Items / Inventory | [#11](https://github.com/witchcraze/party2re/issues/11) | Item definitions, instances, and ownership |
-| Battle | [#12](https://github.com/witchcraze/party2re/issues/12) | Reusable deterministic Battle contract |
-| Adventure | [#13](https://github.com/witchcraze/party2re/issues/13) | One delayed Adventure flow using Battle |
-| Jobs | [#17](https://github.com/witchcraze/party2re/issues/17) | Job definitions, changes, and character job history |
-| Job catalog | [#38](https://github.com/witchcraze/party2re/issues/38) | Generic external job definitions and progression lookup |
-| Skills | [#18](https://github.com/witchcraze/party2re/issues/18) | Skill definitions, conditions, costs, and effects |
-| Equipment | [#19](https://github.com/witchcraze/party2re/issues/19) | Equipment slots and item eligibility |
+| [#4](https://github.com/witchcraze/party2re/issues/4) | Character persistence in MariaDB | Merged |
+| [#5](https://github.com/witchcraze/party2re/issues/5) | Activity progression foundation | Merged |
+| [#10](https://github.com/witchcraze/party2re/issues/10) | Level progression and cumulative exp thresholds | Merged |
+| [#11](https://github.com/witchcraze/party2re/issues/11) | Items and inventory model | Merged |
+| [#12](https://github.com/witchcraze/party2re/issues/12) | Reusable deterministic Battle component contract | Merged |
+| [#13](https://github.com/witchcraze/party2re/issues/13) | Delayed Adventure flow with Battle integration | Merged |
+| [#17](https://github.com/witchcraze/party2re/issues/17) | Job definitions and CharacterJob history | Merged |
+| [#18](https://github.com/witchcraze/party2re/issues/18) | Skills definitions, costs, and availability | Merged |
+| [#19](https://github.com/witchcraze/party2re/issues/19) | 5-Slot equipment system and item validation | Merged |
+| [#20](https://github.com/witchcraze/party2re/issues/20) | Turn-based battle resolution engine | Merged |
+| [#21](https://github.com/witchcraze/party2re/issues/21) | Player account creation and session lifecycle | Merged |
+| [#24](https://github.com/witchcraze/party2re/issues/24) | Character initial identity, stats, and starting gold | Merged |
+| [#31](https://github.com/witchcraze/party2re/issues/31) | Job-based stat growth on level-up | Merged |
+| [#35](https://github.com/witchcraze/party2re/issues/35) | Atomic activity and adventure reward claims | Merged |
+| [#36](https://github.com/witchcraze/party2re/issues/36) | Battle rewards mapping and application | Merged |
+| [#38](https://github.com/witchcraze/party2re/issues/38) | Job catalog JSON loader and data validation | Merged |
+| [#39](https://github.com/witchcraze/party2re/issues/39) | Initial placeholder assets for Character, Battle, Adventure, Job | Merged |
+| [#49](https://github.com/witchcraze/party2re/issues/49) | Structured JSON logging with credential masking | Merged |
+| [#50](https://github.com/witchcraze/party2re/issues/50) | Exhaustive catalog test suite for Jobs | Merged |
+| [#51](https://github.com/witchcraze/party2re/issues/51) | Exhaustive 5-category Item catalog and test suite | Merged |
+| [#55](https://github.com/witchcraze/party2re/issues/55) | Item Shop purchase and resale operations | Merged |
+| [#56](https://github.com/witchcraze/party2re/issues/56) | Stage Catalog (28 stages) and Monster Catalog (286 monsters) | Merged |
+| [#57](https://github.com/witchcraze/party2re/issues/57) | Multi-stage Adventure progression and drop rewards | Merged |
+| [#58](https://github.com/witchcraze/party2re/issues/58) | Character Item Depot storage management | Merged |
+| [#59](https://github.com/witchcraze/party2re/issues/59) | Blacksmith equipment enhancement (+1 to +10) | Merged |
+| [#60](https://github.com/witchcraze/party2re/issues/60) | Alchemy synthesis and 112 crafting recipes | Merged |
+| [#61](https://github.com/witchcraze/party2re/issues/61) | Job mastery tracking and Character Rebirth | Merged |
+| [#62](https://github.com/witchcraze/party2re/issues/62) | Character resting and Inn recovery | Merged |
+| [#71](https://github.com/witchcraze/party2re/issues/71) | Bank account management and player transfers | Merged |
+| [#87](https://github.com/witchcraze/party2re/issues/87) | HTTP JSON Application API transport layer | Merged |
+| [#88](https://github.com/witchcraze/party2re/issues/88) | Multi-stage production container build & GHCR publish | Merged |
+| [#106](https://github.com/witchcraze/party2re/issues/106) | Reusable ScheduledAction queue & Valkey Worker | Merged |
+| [#109](https://github.com/witchcraze/party2re/issues/109) | ScheduledAction push processing for Activity training | Merged |
+| [#110](https://github.com/witchcraze/party2re/issues/110) | ScheduledAction push processing for Adventure completion | Merged |
+| [#121](https://github.com/witchcraze/party2re/issues/121) | Unified local verification (`make check`) and Git pre-push hook | Merged |
+| [#124](https://github.com/witchcraze/party2re/issues/124) | Safe database migration (`make db-migrate`, `make db-reset`) | Merged |
+| [#134](https://github.com/witchcraze/party2re/issues/134) | Documentation maintenance structure and workflow rules | Merged |
 
-Equipment, jobs, skills, maps, social systems, and economy features remain
-separate follow-up work and should not be added to these Issues implicitly.
-
-### Initial character values
-
-The reference implementation establishes the following behavioral requirements
-for a newly created character:
-
-- level 1 and 0 experience;
-- starting currency of 200;
-- maximum HP in the inclusive range 30-32;
-- maximum MP, current MP, attack, defense, and agility in the inclusive range
-  6-8, with current HP and MP initialized to their maximum values.
-
-The new implementation keeps these values as generic domain behavior. Job
-identifiers and gender values are treated as data, while distinctive legacy
-names and assets are not reused.
-
-Experience uses the cumulative threshold `level * level * 10`. A character
-starts at level 1, advances when its accumulated experience reaches the
-current-level threshold, and stops advancing at level 99. When a job definition
-is supplied, each level-up applies an independent random value from `0` through
-the job's growth rate for HP, MP, attack, defense, and agility. HP always gains
-one additional minimum point; current HP and MP are not restored.
-
-The initial Adventure is a one-hour delayed activity. When claimed after it is
-available, it resolves one Battle through the public Battle resolver contract;
-a win awards 20 experience and a draw or loss awards nothing. The result is
-stored and can only be claimed once.
+---
 
 ## Version 1 completion checklist
 
 - [ ] Every feature group has an implementation Issue and acceptance criteria.
-- [ ] Every Version 1 feature has domain or component tests.
-- [ ] Durable state is stored in MariaDB where required by the feature.
-- [ ] Valkey usage is documented per concrete cache, transient-state, queue, or
-      coordination requirement; it is not used as an undiscriminated second
-      database.
+- [x] Every Version 1 feature has domain or component tests.
+- [x] Durable state is stored in MariaDB where required by the feature.
+- [x] Valkey usage is documented per concrete cache, transient-state, queue, or coordination requirement.
 - [ ] Required images are listed in `docs/assets/required-images.md`.
 - [ ] Every final image has known provenance and an approved license.
-- [ ] No old source code or old image is included in the new implementation.
-- [ ] The full application can be built and operated using the documented
-      development workflow.
+- [x] No old source code or old image is included in the new implementation.
+- [x] The full application can be built and operated using the documented development workflow.
+
+---
 
 ## Related documents
 
