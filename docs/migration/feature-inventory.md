@@ -87,7 +87,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [ ] Challenge content & special battle modes (PvP, king, challenge)
 
 ### E. Social and competitive systems
-- [ ] Guild creation, membership, and administration
+- [x] Guild creation, membership, and administration ([#76](https://github.com/witchcraze/party2re/issues/76))
 - [ ] Guild battles
 - [ ] Player communication, park, and public interactions
 - [ ] Rankings (level, job, weekly rankings, contest records)
@@ -156,6 +156,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#121](https://github.com/witchcraze/party2re/issues/121) | Unified local verification (`make check`) and Git pre-push hook | Merged |
 | [#124](https://github.com/witchcraze/party2re/issues/124) | Safe database migration (`make db-migrate`, `make db-reset`) | Merged |
 | [#134](https://github.com/witchcraze/party2re/issues/134) | Documentation maintenance structure and workflow rules | Merged |
+| [#76](https://github.com/witchcraze/party2re/issues/76) | Guild creation, management, and membership lifecycle | Merged |
 
 ---
 

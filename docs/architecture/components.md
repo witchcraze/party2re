@@ -241,10 +241,14 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Character resting and full HP/MP recovery.
   - **Dependencies:** Character repository.
   - **Persistence:** Single-transaction character update.
+- **Guild** (`internal/guild`):
+  - **Responsibility:** Guild creation, membership lifecycle, role management (Leader, Officer, Member), notice board, gold donations, and level/capacity progression.
+  - **Dependencies:** Character repository.
+  - **Persistence:** `guilds` and `guild_members` tables in `internal/database/guild_repository.go` with single-guild foreign key uniqueness and transactional integrity.
 
 ### Future Feature Modules
 
-- Guild (creation, membership, battles)
+- Guild Battles (GvG combat engine)
 - Casino (High & Low, Indian Poker, Slot Machine, Doppel)
 - Auction & Free Market
 - Farm & Plantation
