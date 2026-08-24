@@ -261,11 +261,14 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Player item listing, starting bids, buyout instant purchases, outbid automatic refunds, duration-based expiration settlement, and cancellation.
   - **Dependencies:** Character repository (wallet gold/items).
   - **Persistence:** `auction_listings` table in `internal/database/auction_repository.go` with row-level transactional concurrency.
+- **Collection & Monster Book** (`internal/collection`):
+  - **Responsibility:** Illustrated monster defeat tracking (`character_monster_book`), item discovery recording (`character_item_collection`), and career completion percentage queries.
+  - **Dependencies:** Character repository.
+  - **Persistence:** `character_monster_book` and `character_item_collection` tables in `internal/database/collection_repository.go`.
 
 ### Future Feature Modules
 
 - Guild Battles (GvG combat engine)
-- Collection & Monster Book
 - Rankings (Level, Job, Weekly, Contest)
 - Chapel & Blessings
 
