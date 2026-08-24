@@ -37,8 +37,10 @@ Closes #
 ## Documentation / status
 
 - [ ] No documentation update required
-- [ ] Documentation updated
-- [ ] `STATUS.md` / `ROADMAP.md` updated where required
+- [ ] `STATUS.md` updated (current state & priorities updated; unbounded changelog bloat avoided)
+- [ ] `ROADMAP.md` / `docs/migration/feature-inventory.md` updated if feature or milestone progressed
+- [ ] `docs/design/<feature>.md` added or updated for game rules/formulas
+- [ ] `docs/architecture/components.md` updated if component/module boundary introduced or changed
 
 ## Notes
 
