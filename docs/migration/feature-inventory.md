@@ -86,8 +86,8 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Multi-stage adventure progression with level requirements and item drop rewards ([#57](https://github.com/witchcraze/party2re/issues/57))
 - [x] Push-based background ScheduledAction completion via Valkey Worker ([#106](https://github.com/witchcraze/party2re/issues/106), [#109](https://github.com/witchcraze/party2re/issues/109), [#110](https://github.com/witchcraze/party2re/issues/110))
 - [x] Concurrency-safe atomic reward claiming ([#35](https://github.com/witchcraze/party2re/issues/35))
-- [ ] Map and dungeon progression ([#74](https://github.com/witchcraze/party2re/issues/74))
-- [ ] Challenge content & special battle modes (PvP [#75](https://github.com/witchcraze/party2re/issues/75), King Boss [#73](https://github.com/witchcraze/party2re/issues/73), Continuous Challenge [#162](https://github.com/witchcraze/party2re/issues/162))
+- [x] Challenge content & special battle modes: Player versus Player arena combat ([#75](https://github.com/witchcraze/party2re/issues/75))
+- [ ] Challenge content & special battle modes: King Boss ([#73](https://github.com/witchcraze/party2re/issues/73)), Continuous Challenge ([#162](https://github.com/witchcraze/party2re/issues/162))
 - [ ] Battle replay records and match history viewer ([#66](https://github.com/witchcraze/party2re/issues/66))
 
 ### E. Social and competitive systems
@@ -172,6 +172,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#64](https://github.com/witchcraze/party2re/issues/64) | Casino mini-game foundation and High & Low | Merged |
 | [#85](https://github.com/witchcraze/party2re/issues/85) | Monster Book encyclopedia and item collection catalog | Merged |
 | [#86](https://github.com/witchcraze/party2re/issues/86) | Chapel prayer, blessings, and god worship system | Merged |
+| [#75](https://github.com/witchcraze/party2re/issues/75) | Player versus Player arena combat | Merged |
 
 ---
 
