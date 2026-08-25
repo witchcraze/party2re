@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -61,7 +62,7 @@ func TestAdventureRepositoryPersistsAndLoadsResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindByID() error = %v", err)
 	}
-	if got.ID != want.ID || got.CharacterID != want.CharacterID || got.BattleResult != want.BattleResult ||
+	if got.ID != want.ID || got.CharacterID != want.CharacterID || !reflect.DeepEqual(got.BattleResult, want.BattleResult) ||
 		!got.StartedAt.Equal(want.StartedAt) || !got.AvailableAt.Equal(want.AvailableAt) ||
 		!got.Resolved || !got.Claimed {
 		t.Fatalf("FindByID() = %#v, want %#v", got, want)
@@ -136,7 +137,7 @@ func TestAdventureRepositoryClaimAndApply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !claimedAdv.Claimed || !claimedAdv.Resolved || claimedAdv.BattleResult != adv.BattleResult {
+	if !claimedAdv.Claimed || !claimedAdv.Resolved || !reflect.DeepEqual(claimedAdv.BattleResult, adv.BattleResult) {
 		t.Fatalf("claimed adventure = %#v, want %#v", claimedAdv, adv)
 	}
 

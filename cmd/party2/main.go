@@ -20,6 +20,7 @@ import (
 	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/pvp"
+	"github.com/witchcraze/party2re/internal/replay"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/shop"
 	"github.com/witchcraze/party2re/internal/valkey"
@@ -138,6 +139,14 @@ func run() error {
 		return err
 	}
 	_, err = dungeon.NewService(dungeonRepo, charRepo, corebattle.Engine{})
+	if err != nil {
+		return err
+	}
+	replayRepo, err := database.NewReplayRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = replay.NewService(replayRepo)
 	if err != nil {
 		return err
 	}
