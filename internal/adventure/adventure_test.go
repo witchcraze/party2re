@@ -3,6 +3,7 @@ package adventure
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -231,7 +232,7 @@ func TestAdventureClaimsBattleResultAndAwardsRewardOnce(t *testing.T) {
 		characters.value.Experience != value.ExperienceReward {
 		t.Fatalf("Claim() = %#v, character = %#v", got, characters.value)
 	}
-	if repository.value.BattleResult != got.BattleResult {
+	if !reflect.DeepEqual(repository.value.BattleResult, got.BattleResult) {
 		t.Fatalf("saved result = %#v, want %#v", repository.value.BattleResult, got.BattleResult)
 	}
 	if _, err := service.Claim(context.Background(), value.ID); !errors.Is(err, ErrAlreadyClaimed) {

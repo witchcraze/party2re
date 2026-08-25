@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #74 — Dungeon exploration and branching stage encounters
+Last updated: Issue #66 — Battle replay records and match history viewer
 
 ## Current phase
 
@@ -21,7 +21,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Progression** (`internal/core/progression`): レベルアップ（累積経験値テーブル `level * level * 10`）、成長率適用。
 - **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): JSONカタログ（`jobs.json`）、転職、Lv99マスタリー、スキル発動・コスト計算。
 - **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理。
-- **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定。
+- **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定、構造化ターンログ出力。
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): Valkeyバックエンドの遅延アクションキュー＆分散排他ロックWorker。
 
 ### Feature Modules
@@ -41,14 +41,16 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Collection & Monster Book** (`internal/collection`): モンスター図鑑（討伐記録・初回/最新討伐日時・コンプリート率計算）、アイテム図鑑（獲得アイテム・カテゴリ別記録・コンプリート率計算）。
 - **Chapel & Blessings** (`internal/chapel`): 教会（祈り・祝福登録、ゴールド寄付、戦闘・冒険報酬バフ補正計算）。
 - **Player versus Player Arena** (`internal/pvp`): 闘技場・対人対戦（PvP、標準Eloレーティング K=32/初期1000、近傍マッチメイキング・同一アカウント談合防止、勝敗・対戦履歴・防衛ログのMariaDB永続化、経験値・ゴールド報酬付与）。
+- **Guild versus Guild Combat** (`internal/gvg`): ギルド対抗戦（GvG、標準Eloレーティング K=32/初期1000、5段階勝利メダル・王者杯昇格システム、ギルドポイントGP、ギルドEXP獲得・レベルアップ連動、対戦履歴・ラウンド詳細ログのMariaDB永続化）。
 - **King & World Boss Battles** (`internal/boss`): 封印戦・ワールドボス（全10段階キングボス＋太古の創世神Tier、レベル制限・前提段階クリア・1日3回挑戦制限、初回討伐ボーナス・ドロップ報酬、討伐数（英雄度）・最高到達Tierリーダーボード、挑戦履歴のMariaDB永続化）。
 - **Dungeon Exploration** (`internal/dungeon`): ダンジョン探索（多層グリッドマップ探索、モンスター遭遇戦闘、トラップ・宝箱イベント、階段降下、フロアボス決戦、一時報酬台帳バッファリングと脱出・踏破時の一括アトミック確定、全滅時の戦利品没収、探索履歴・踏破記録のMariaDB永続化）。
+- **Battle Replays & Match History** (`internal/replay`): 戦闘リプレイ・対戦履歴（全戦闘モードのターン別アクションログ・ダメージ値・残りHPスナップショットの記録・忠実再生、プレイヤー別対戦履歴・全体最新リプレイ一覧、保持期間経過レコードの自動プルーニング、MariaDB永続化）。
 
 ### API & Transport
 - **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`）。セッション認証、キャラクター所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
 
 ### Infrastructure & Operations
-- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `026_dungeon_exploration.sql`、`make db-migrate` / `make db-reset`）。
+- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `027_battle_replays.sql`、`make db-migrate` / `make db-reset`）。
 - **Valkey**: 遅延アクションキュー・排他ロック（AOF+RDB永続化）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
 - **Verification**: `Makefile` (`make check`, `make fmt`, `make check-clean`)、Git pre-push hook による自動検証。
@@ -58,10 +60,9 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ## Immediate Priorities (Next Actions)
 
-1. **Battle Replays & Match History** (Issue #66): 戦闘リプレイ記録・再生機能モジュールの実装。
-2. **Continuous Endurance Challenge** (Issue #162): 勝ち抜き連戦・エンドレスチャレンジ戦闘機能モジュールの実装。
+1. **Continuous Endurance Challenge** (Issue #162): 勝ち抜き連戦・エンドレスチャレンジ戦闘機能モジュールの実装。
+2. **Custom Skill Loadouts** (Issue #69): スキルスロット・発動優先度設定モジュールの実装。
 3. **Remaining Version 1.0 Feature Modules**:
-   - Custom Skill Loadouts (Issue #69)
    - Player Rescue & Helpers (Issue #79)
    - Town Park & Announcements (Issue #78, #67)
    - Private Home & Mailbox (Issue #159)

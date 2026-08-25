@@ -285,6 +285,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Multi-floor grid dungeon navigation, branching tile event state machine (monster encounters, hazard traps, treasure chest loots, floor descent stairs, floor bosses, safe escape portals), buffered reward ledger, and atomic finalization on clear/escape vs forfeiture on wipeout.
   - **Dependencies:** Core Battle Engine, Character repository, Inventory repository, Core Progression.
   - **Persistence:** `character_dungeon_records`, `dungeon_active_expeditions`, and `dungeon_expedition_history` tables in `internal/database/dungeon_repository.go`.
+- **Battle Replays & Match History** (`internal/replay`):
+  - **Responsibility:** Recording and faithful playback of step-by-step turn logs (actions, damage/healing numbers, critical hits, logs, remaining HP snapshots) across all combat modes (PvP, GvG, Boss, Dungeon, Adventure, Challenge), character match history queries, and replay retention pruning.
+  - **Dependencies:** Core Battle Engine.
+  - **Persistence:** `battle_replays` table in `internal/database/replay_repository.go`.
 
 ### Future Feature Modules
 

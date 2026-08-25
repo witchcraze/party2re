@@ -2,6 +2,7 @@ package battle
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 )
 
@@ -19,8 +20,8 @@ func TestEngineResolvesDeterministicWinner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first != second || first.Outcome != OutcomeWin || first.WinnerID != "first" ||
-		first.LoserID != "second" || first.Turns != 3 || first.Reward.Experience != 20 {
+	if !reflect.DeepEqual(first, second) || first.Outcome != OutcomeWin || first.WinnerID != "first" ||
+		first.LoserID != "second" || first.Turns != 3 || first.Reward.Experience != 20 || len(first.Logs) == 0 {
 		t.Fatalf("Resolve() = %#v and %#v", first, second)
 	}
 }

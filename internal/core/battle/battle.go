@@ -1,6 +1,9 @@
 package battle
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var (
 	ErrInvalidRequest     = errors.New("battle request is invalid")
@@ -29,6 +32,18 @@ const (
 	OutcomeDraw Outcome = "draw"
 )
 
+type TurnLog struct {
+	Turn        int            `json:"turn"`
+	ActorID     string         `json:"actor_id"`
+	ActionName  string         `json:"action_name"`
+	TargetID    string         `json:"target_id"`
+	DamageDealt int            `json:"damage_dealt"`
+	HealingDone int            `json:"healing_done"`
+	IsCritical  bool           `json:"is_critical"`
+	Message     string         `json:"message"`
+	RemainingHP map[string]int `json:"remaining_hp"`
+}
+
 type Result struct {
 	Outcome  Outcome
 	WinnerID string
@@ -38,6 +53,7 @@ type Result struct {
 	// VictoryReward applies when the first participant wins, DefeatReward when
 	// it loses, and DrawReward for a draw.
 	Reward Reward
+	Logs   []TurnLog `json:"logs,omitempty"`
 }
 
 type Reward struct {
@@ -80,21 +96,56 @@ func (Engine) Resolve(request Request) (Result, error) {
 
 	firstHP, secondHP := first.HP, second.HP
 	turns := 0
+	var logs []TurnLog
 	for firstHP > 0 && secondHP > 0 {
 		turns++
-		secondHP -= damage(first.Attack, second.Defense)
+		dmg1 := damage(first.Attack, second.Defense)
+		secondHP -= dmg1
+		if secondHP < 0 {
+			secondHP = 0
+		}
+		logs = append(logs, TurnLog{
+			Turn:        turns,
+			ActorID:     first.ID,
+			ActionName:  "こうげき",
+			TargetID:    second.ID,
+			DamageDealt: dmg1,
+			Message:     fmt.Sprintf("%s の攻撃！ %s に %d のダメージ！", first.ID, second.ID, dmg1),
+			RemainingHP: map[string]int{
+				first.ID:  firstHP,
+				second.ID: secondHP,
+			},
+		})
+
 		if secondHP <= 0 {
 			if firstHP-damage(second.Attack, first.Defense) <= 0 {
-				return Result{Outcome: OutcomeDraw, Turns: turns, Reward: request.DrawReward}, nil
+				return Result{Outcome: OutcomeDraw, Turns: turns, Reward: request.DrawReward, Logs: logs}, nil
 			}
-			return Result{Outcome: OutcomeWin, WinnerID: first.ID, LoserID: second.ID, Turns: turns, Reward: request.VictoryReward}, nil
+			return Result{Outcome: OutcomeWin, WinnerID: first.ID, LoserID: second.ID, Turns: turns, Reward: request.VictoryReward, Logs: logs}, nil
 		}
-		firstHP -= damage(second.Attack, first.Defense)
+
+		dmg2 := damage(second.Attack, first.Defense)
+		firstHP -= dmg2
+		if firstHP < 0 {
+			firstHP = 0
+		}
+		logs = append(logs, TurnLog{
+			Turn:        turns,
+			ActorID:     second.ID,
+			ActionName:  "こうげき",
+			TargetID:    first.ID,
+			DamageDealt: dmg2,
+			Message:     fmt.Sprintf("%s の攻撃！ %s に %d のダメージ！", second.ID, first.ID, dmg2),
+			RemainingHP: map[string]int{
+				first.ID:  firstHP,
+				second.ID: secondHP,
+			},
+		})
 	}
 	if firstHP <= 0 {
-		return Result{Outcome: OutcomeWin, WinnerID: second.ID, LoserID: first.ID, Turns: turns, Reward: request.DefeatReward}, nil
+		return Result{Outcome: OutcomeWin, WinnerID: second.ID, LoserID: first.ID, Turns: turns, Reward: request.DefeatReward, Logs: logs}, nil
 	}
-	return Result{Outcome: OutcomeWin, WinnerID: first.ID, LoserID: second.ID, Turns: turns, Reward: request.VictoryReward}, nil
+	return Result{Outcome: OutcomeWin, WinnerID: first.ID, LoserID: second.ID, Turns: turns, Reward: request.VictoryReward, Logs: logs}, nil
 }
 
 func validateParticipant(value Participant) error {

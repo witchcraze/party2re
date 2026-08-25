@@ -100,7 +100,7 @@ func TestBossRepository(t *testing.T) {
 	}
 
 	// 5. Verify Leaderboard
-	leaderboard, err := bossRepo.GetLeaderboard(ctx, 10)
+	leaderboard, err := bossRepo.GetLeaderboard(ctx, 100)
 	if err != nil || len(leaderboard) == 0 {
 		t.Fatalf("GetLeaderboard failed: %v", err)
 	}
