@@ -277,6 +277,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Asynchronous guild-versus-guild multi-round roster skirmishes, Elo rating adjustments (K=32, base 1000), victory medals and championship cup tiered promotions (5:1 ratios), Guild Points (Victory Points), guild EXP leveling, and match/round history logging.
   - **Dependencies:** Core Battle Engine, Guild repository, Character repository, Core Progression.
   - **Persistence:** `gvg_standings`, `gvg_matches`, and `gvg_match_rounds` tables in `internal/database/gvg_repository.go` with transactional standing, match, and reward persistence.
+- **King & World Boss Battles** (`internal/boss`):
+  - **Responsibility:** Legendary raid/boss encounters across 10 progressive tiers and ultimate world boss tier, entry gate requirements (level gate, prerequisite tier completion, daily attempt limits), milestone first-clear bonuses, item drop rewards, and boss clear leaderboard.
+  - **Dependencies:** Core Battle Engine, Character repository, Inventory repository, Core Progression.
+  - **Persistence:** `character_boss_records` and `boss_challenge_history` tables in `internal/database/boss_repository.go` with atomic reward and record updates.
 
 ### Future Feature Modules
 
