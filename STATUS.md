@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #162 — Continuous Endurance Challenge combat survival mode
+Last updated: Issue #69 — Custom skill loadout and skill slot management
 
 ## Current phase
 
@@ -46,12 +46,13 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Dungeon Exploration** (`internal/dungeon`): ダンジョン探索（多層グリッドマップ探索、モンスター遭遇戦闘、トラップ・宝箱イベント、階段降下、フロアボス決戦、一時報酬台帳バッファリングと脱出・踏破時の一括アトミック確定、全滅時の戦利品没収、探索履歴・踏破記録のMariaDB永続化）。
 - **Battle Replays & Match History** (`internal/replay`): 戦闘リプレイ・対戦履歴（全戦闘モードのターン別アクションログ・ダメージ値・残りHPスナップショットの記録・忠実再生、プレイヤー別対戦履歴・全体最新リプレイ一覧、保持期間経過レコードの自動プルーニング、MariaDB永続化）。
 - **Continuous Endurance Challenge** (`internal/challenge`): 連戦チャレンジ・サバイバル戦闘（初級・中級・上級・奈落の全4段階Tier、ラウンド進行に伴うステータス累進スケーリング、インターラウンド20% HP回復、5連勝区切りのマイルストーンアイテムドロップ、途中撤退による全額確定精算 vs 敗北時の50%救済精算・アイテム没収、最高到達ラウンド別リーダーボード、MariaDB永続化）。
+- **Custom Skill Loadout & Slot Management** (`internal/custom_skill`): カスタムスキル・スロット管理（現在職・マスター職・宝石汎用スキルの装備制限バリデーション、スロット枠数管理、発動優先度 1〜10、重複装備防止、全戦闘モード向けアクティブスキル供給、MariaDB永続化）。
 
 ### API & Transport
 - **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`）。セッション認証、キャラクター所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
 
 ### Infrastructure & Operations
-- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `028_endurance_challenge.sql`、`make db-migrate` / `make db-reset`）。
+- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `029_custom_skills.sql`、`make db-migrate` / `make db-reset`）。
 - **Valkey**: 遅延アクションキュー・排他ロック（AOF+RDB永続化）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
 - **Verification**: `Makefile` (`make check`, `make fmt`, `make check-clean`)、Git pre-push hook による自動検証。
@@ -61,12 +62,11 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ## Immediate Priorities (Next Actions)
 
-1. **Custom Skill Loadouts** (Issue #69): スキルスロット・発動優先度設定モジュールの実装。
-2. **Player Rescue & Companion Helpers** (Issue #79): 救助要請・助っ人同行機能モジュールの実装。
+1. **Player Rescue & Companion Helpers** (Issue #79): 救助要請・助っ人同行機能モジュールの実装。
+2. **Small Medals Collection & Trade Exchange** (Issue #160): ちいさなメダル収集・交換所モジュールの実装。
 3. **Remaining Version 1.0 Feature Modules**:
    - Town Park & Announcements (Issue #78, #67)
    - Private Home & Mailbox (Issue #159)
-   - Small Medals Collection (Issue #160)
    - Rankings (Issue #63)
    - Web Presentation UI / Client (Issue #140)
 

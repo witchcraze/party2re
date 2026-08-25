@@ -65,7 +65,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Skill definitions, costs, and availability conditions ([#18](https://github.com/witchcraze/party2re/issues/18))
 - [x] Job mastery (Lv99) and Character Rebirth progression (+5 stat bonuses) ([#61](https://github.com/witchcraze/party2re/issues/61))
 - [x] Inn resting and HP/MP recovery ([#62](https://github.com/witchcraze/party2re/issues/62))
-- [ ] Custom skill assignment
+- [x] Custom skill assignment ([#69](https://github.com/witchcraze/party2re/issues/69))
 
 ### C. Items, equipment, storage, and currency
 - [x] Item definitions, 5-category data catalog, and instance ownership ([#11](https://github.com/witchcraze/party2re/issues/11), [#51](https://github.com/witchcraze/party2re/issues/51))
@@ -178,6 +178,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#74](https://github.com/witchcraze/party2re/issues/74) | Dungeon exploration and branching stage encounters | Merged |
 | [#66](https://github.com/witchcraze/party2re/issues/66) | Battle replay records and match history viewer | Merged |
 | [#162](https://github.com/witchcraze/party2re/issues/162) | Continuous Endurance Challenge combat survival mode | Merged |
+| [#69](https://github.com/witchcraze/party2re/issues/69) | Custom skill loadout and skill slot management | Merged |
 
 ---
 

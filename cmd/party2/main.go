@@ -14,6 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/custom_skill"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/dungeon"
@@ -156,6 +157,18 @@ func run() error {
 		return err
 	}
 	_, err = challenge.NewService(challengeRepo, charRepo, corebattle.Engine{})
+	if err != nil {
+		return err
+	}
+	customSkillRepo, err := database.NewCustomSkillRepository(db)
+	if err != nil {
+		return err
+	}
+	charJobRepo, err := database.NewCharacterJobRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = custom_skill.NewService(customSkillRepo, charRepo, charJobRepo)
 	if err != nil {
 		return err
 	}
