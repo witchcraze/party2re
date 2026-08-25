@@ -2,8 +2,10 @@ package custom_skill
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -11,6 +13,9 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 )
+
+//go:embed data/skills.json
+var skillsData []byte
 
 var (
 	ErrSkillNotFound       = errors.New("skill not found in catalog")
@@ -85,14 +90,10 @@ func NewService(repo Repository, charRepo CharacterProvider, jobRepo CharacterJo
 		return nil, errors.New("character provider is required")
 	}
 
-	catalog := defaultCatalog()
-	var list []SkillEntry
-	for _, entry := range catalog {
-		list = append(list, entry)
+	catalog, list, err := loadCatalog()
+	if err != nil {
+		return nil, fmt.Errorf("load custom skill catalog: %w", err)
 	}
-	sort.Slice(list, func(i, j int) bool {
-		return list[i].ID < list[j].ID
-	})
 
 	return &Service{
 		repo:        repo,
@@ -103,32 +104,27 @@ func NewService(repo Repository, charRepo CharacterProvider, jobRepo CharacterJo
 	}, nil
 }
 
-func defaultCatalog() map[string]SkillEntry {
-	entries := []SkillEntry{
-		// Generic Gemstone skills (available to all jobs)
-		{ID: "gem_strike", Name: "気合斬り", RequiredJobID: "", RequiredLevel: 1, MPCost: 5, Power: 25, Kind: "damage", Description: "集中の気を込めた渾身の一撃。"},
-		{ID: "gem_cure", Name: "小癒しの光", RequiredJobID: "", RequiredLevel: 1, MPCost: 8, Power: 30, Kind: "healing", Description: "生命力を活性化させてHPを小回復する。"},
-		{ID: "gem_barrier", Name: "水晶の守り", RequiredJobID: "", RequiredLevel: 10, MPCost: 12, Power: 20, Kind: "buff", Description: "魔力の膜を張り防御力を高める。"},
-
-		// Class specific skills
-		{ID: "slash", Name: "一閃", RequiredJobID: "job-02", RequiredLevel: 5, MPCost: 6, Power: 35, Kind: "damage", Description: "剣士の基本剣技。鋭い斬撃を放つ。"},
-		{ID: "power_strike", Name: "渾身撃", RequiredJobID: "job-01", RequiredLevel: 5, MPCost: 8, Power: 45, Kind: "damage", Description: "戦士の強打。敵の装甲を砕く。"},
-		{ID: "shield_bash", Name: "シールドバッシュ", RequiredJobID: "job-03", RequiredLevel: 5, MPCost: 7, Power: 30, Kind: "damage", Description: "盾による打撃で敵を怯ませる。"},
-		{ID: "fireball", Name: "火炎球", RequiredJobID: "job-06", RequiredLevel: 5, MPCost: 10, Power: 50, Kind: "damage", Description: "魔法使いの基本火炎術。"},
-		{ID: "heal", Name: "ヒール", RequiredJobID: "job-05", RequiredLevel: 3, MPCost: 8, Power: 45, Kind: "healing", Description: "僧侶の治癒術。味方の傷を癒やす。"},
-		{ID: "shadow_strike", Name: "急所突き", RequiredJobID: "job-09", RequiredLevel: 5, MPCost: 10, Power: 55, Kind: "damage", Description: "盗賊の暗殺技。弱点を正確に貫く。"},
-		{ID: "greater_heal", Name: "ハイヒール", RequiredJobID: "job-16", RequiredLevel: 15, MPCost: 20, Power: 100, Kind: "healing", Description: "白魔道士の高等回復術。"},
-		{ID: "dark_flame", Name: "冥界の炎", RequiredJobID: "job-19", RequiredLevel: 15, MPCost: 22, Power: 95, Kind: "damage", Description: "闇魔道士の呪詛の黒炎。"},
-		{ID: "berserk_rush", Name: "狂乱乱舞", RequiredJobID: "job-21", RequiredLevel: 15, MPCost: 15, Power: 110, Kind: "damage", Description: "バーサーカーの連続猛攻。"},
-		{ID: "dragon_breath", Name: "竜の咆哮", RequiredJobID: "job-23", RequiredLevel: 20, MPCost: 25, Power: 130, Kind: "damage", Description: "竜騎士の竜気波動。"},
-		{ID: "meteor", Name: "大隕石召喚", RequiredJobID: "job-33", RequiredLevel: 30, MPCost: 40, Power: 200, Kind: "damage", Description: "賢者の究極天変地異魔法。"},
+func loadCatalog() (map[string]SkillEntry, []SkillEntry, error) {
+	var entries []SkillEntry
+	if err := json.Unmarshal(skillsData, &entries); err != nil {
+		return nil, nil, fmt.Errorf("decode skills JSON: %w", err)
 	}
 
-	res := make(map[string]SkillEntry, len(entries))
+	catalog := make(map[string]SkillEntry, len(entries))
 	for _, e := range entries {
-		res[e.ID] = e
+		if e.ID == "" {
+			return nil, nil, fmt.Errorf("skill entry has empty id")
+		}
+		catalog[e.ID] = e
 	}
-	return res
+
+	list := make([]SkillEntry, len(entries))
+	copy(list, entries)
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].ID < list[j].ID
+	})
+
+	return catalog, list, nil
 }
 
 func (s *Service) ListCatalog() []SkillEntry {

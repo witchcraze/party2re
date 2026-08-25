@@ -291,10 +291,12 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Persistence:** `battle_replays` table in `internal/database/replay_repository.go`.
 - **Continuous Endurance Challenge** (`internal/challenge`):
   - **Responsibility:** Consecutive survival wave combat resolution, progressive wave stat scaling ($1 + \text{scale} \times (\text{round}-1)$), inter-round 20% HP recovery, milestone bonus item drops, buffered reward ledger with safe retreat cashout vs 50% consolation defeat, and all-time highest streak leaderboards.
+  - **Data Catalog:** Embedded JSON tier definitions (`internal/challenge/data/challenge_tiers.json`).
   - **Dependencies:** Core Battle Engine, Character repository, Inventory repository.
   - **Persistence:** `character_challenge_records` and `challenge_sessions` tables in `internal/database/challenge_repository.go`.
 - **Custom Skill Loadout & Slot Management** (`internal/custom_skill`):
   - **Responsibility:** Cross-job ability customization, job mastery verification, slot capacity enforcement, tactical priority configuration, and supplying active equipped loadouts to combat participants across all battle modes.
+  - **Data Catalog:** Embedded JSON skill catalog definitions (`internal/custom_skill/data/skills.json`).
   - **Dependencies:** Core Skill, Core Job, Core Character, Character repository, Character Job repository.
   - **Persistence:** `character_custom_skills` table in `internal/database/custom_skill_repository.go`.
 
