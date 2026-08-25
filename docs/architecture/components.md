@@ -289,6 +289,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Recording and faithful playback of step-by-step turn logs (actions, damage/healing numbers, critical hits, logs, remaining HP snapshots) across all combat modes (PvP, GvG, Boss, Dungeon, Adventure, Challenge), character match history queries, and replay retention pruning.
   - **Dependencies:** Core Battle Engine.
   - **Persistence:** `battle_replays` table in `internal/database/replay_repository.go`.
+- **Continuous Endurance Challenge** (`internal/challenge`):
+  - **Responsibility:** Consecutive survival wave combat resolution, progressive wave stat scaling ($1 + \text{scale} \times (\text{round}-1)$), inter-round 20% HP recovery, milestone bonus item drops, buffered reward ledger with safe retreat cashout vs 50% consolation defeat, and all-time highest streak leaderboards.
+  - **Dependencies:** Core Battle Engine, Character repository, Inventory repository.
+  - **Persistence:** `character_challenge_records` and `challenge_sessions` tables in `internal/database/challenge_repository.go`.
 
 ### Future Feature Modules
 

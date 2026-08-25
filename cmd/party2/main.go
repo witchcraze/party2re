@@ -11,6 +11,7 @@ import (
 	"github.com/witchcraze/party2re/internal/bank"
 	"github.com/witchcraze/party2re/internal/blacksmith"
 	"github.com/witchcraze/party2re/internal/boss"
+	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
@@ -147,6 +148,14 @@ func run() error {
 		return err
 	}
 	_, err = replay.NewService(replayRepo)
+	if err != nil {
+		return err
+	}
+	challengeRepo, err := database.NewChallengeRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = challenge.NewService(challengeRepo, charRepo, corebattle.Engine{})
 	if err != nil {
 		return err
 	}
