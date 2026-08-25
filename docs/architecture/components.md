@@ -281,6 +281,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Legendary raid/boss encounters across 10 progressive tiers and ultimate world boss tier, entry gate requirements (level gate, prerequisite tier completion, daily attempt limits), milestone first-clear bonuses, item drop rewards, and boss clear leaderboard.
   - **Dependencies:** Core Battle Engine, Character repository, Inventory repository, Core Progression.
   - **Persistence:** `character_boss_records` and `boss_challenge_history` tables in `internal/database/boss_repository.go` with atomic reward and record updates.
+- **Dungeon Exploration** (`internal/dungeon`):
+  - **Responsibility:** Multi-floor grid dungeon navigation, branching tile event state machine (monster encounters, hazard traps, treasure chest loots, floor descent stairs, floor bosses, safe escape portals), buffered reward ledger, and atomic finalization on clear/escape vs forfeiture on wipeout.
+  - **Dependencies:** Core Battle Engine, Character repository, Inventory repository, Core Progression.
+  - **Persistence:** `character_dungeon_records`, `dungeon_active_expeditions`, and `dungeon_expedition_history` tables in `internal/database/dungeon_repository.go`.
 
 ### Future Feature Modules
 
