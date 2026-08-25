@@ -10,6 +10,7 @@ import (
 	"github.com/witchcraze/party2re/internal/alchemy"
 	"github.com/witchcraze/party2re/internal/bank"
 	"github.com/witchcraze/party2re/internal/blacksmith"
+	"github.com/witchcraze/party2re/internal/boss"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
@@ -120,6 +121,14 @@ func run() error {
 		return err
 	}
 	_, err = gvg.NewService(gvgRepo, guildRepo, charRepo, corebattle.Engine{})
+	if err != nil {
+		return err
+	}
+	bossRepo, err := database.NewBossRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = boss.NewService(bossRepo, charRepo, corebattle.Engine{})
 	if err != nil {
 		return err
 	}
