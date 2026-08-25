@@ -83,7 +83,7 @@ All groups below are Version 1.0 reconstruction requirements.
 ### D. Adventure, maps, stages, and battle
 - [x] Reusable deterministic Battle component & turn resolver ([#12](https://github.com/witchcraze/party2re/issues/12), [#20](https://github.com/witchcraze/party2re/issues/20), [#36](https://github.com/witchcraze/party2re/issues/36))
 - [x] Data-driven Stage Catalog (28 stages) and Monster Catalog (286 clean-room monsters) ([#56](https://github.com/witchcraze/party2re/issues/56))
-- [x] Multi-stage adventure progression with level requirements and item drop rewards ([#57](https://github.com/witchcraze/party2re/issues/57))
+- [x] Multi-stage adventure and dungeon exploration with branching maps, traps, and boss encounters ([#57](https://github.com/witchcraze/party2re/issues/57), [#74](https://github.com/witchcraze/party2re/issues/74))
 - [x] Push-based background ScheduledAction completion via Valkey Worker ([#106](https://github.com/witchcraze/party2re/issues/106), [#109](https://github.com/witchcraze/party2re/issues/109), [#110](https://github.com/witchcraze/party2re/issues/110))
 - [x] Challenge content & special battle modes: Player versus Player arena combat ([#75](https://github.com/witchcraze/party2re/issues/75))
 - [x] Challenge content & special battle modes: King & World Boss challenge battles ([#73](https://github.com/witchcraze/party2re/issues/73))
@@ -175,6 +175,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#75](https://github.com/witchcraze/party2re/issues/75) | Player versus Player arena combat | Merged |
 | [#77](https://github.com/witchcraze/party2re/issues/77) | Guild versus Guild combat and territory competition | Merged |
 | [#73](https://github.com/witchcraze/party2re/issues/73) | King and World Boss challenge battles | Merged |
+| [#74](https://github.com/witchcraze/party2re/issues/74) | Dungeon exploration and branching stage encounters | Merged |
 
 ---
 

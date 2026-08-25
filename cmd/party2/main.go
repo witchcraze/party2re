@@ -15,6 +15,7 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/logging"
@@ -129,6 +130,14 @@ func run() error {
 		return err
 	}
 	_, err = boss.NewService(bossRepo, charRepo, corebattle.Engine{})
+	if err != nil {
+		return err
+	}
+	dungeonRepo, err := database.NewDungeonRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = dungeon.NewService(dungeonRepo, charRepo, corebattle.Engine{})
 	if err != nil {
 		return err
 	}
