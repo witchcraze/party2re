@@ -273,10 +273,13 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Asynchronous player-versus-player arena combat against defending character snapshots, standard Elo rating calculation (K=32, base 1000), matchmaking query with account win-trading prevention, match history, and defense logs.
   - **Dependencies:** Core Battle Engine, Character repository, Core Progression.
   - **Persistence:** `arena_ratings` and `arena_matches` tables in `internal/database/pvp_repository.go` with transactional rating adjustments and match recording.
+- **Guild versus Guild (GvG) Combat** (`internal/gvg`):
+  - **Responsibility:** Asynchronous guild-versus-guild multi-round roster skirmishes, Elo rating adjustments (K=32, base 1000), victory medals and championship cup tiered promotions (5:1 ratios), Guild Points (Victory Points), guild EXP leveling, and match/round history logging.
+  - **Dependencies:** Core Battle Engine, Guild repository, Character repository, Core Progression.
+  - **Persistence:** `gvg_standings`, `gvg_matches`, and `gvg_match_rounds` tables in `internal/database/gvg_repository.go` with transactional standing, match, and reward persistence.
 
 ### Future Feature Modules
 
-- Guild Battles (GvG combat engine)
 - Rankings (Level, Job, Weekly, Contest)
 
 

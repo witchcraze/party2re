@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #75 — Player versus Player Arena Combat
+Last updated: Issue #77 — Guild versus Guild Combat and Territory Competition
 
 ## Current phase
 
@@ -41,12 +41,13 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Collection & Monster Book** (`internal/collection`): モンスター図鑑（討伐記録・初回/最新討伐日時・コンプリート率計算）、アイテム図鑑（獲得アイテム・カテゴリ別記録・コンプリート率計算）。
 - **Chapel & Blessings** (`internal/chapel`): 教会（祈り・祝福登録、ゴールド寄付、戦闘・冒険報酬バフ補正計算）。
 - **Player versus Player Arena** (`internal/pvp`): 闘技場・対人対戦（PvP、標準Eloレーティング K=32/初期1000、近傍マッチメイキング・同一アカウント談合防止、勝敗・対戦履歴・防衛ログのMariaDB永続化、経験値・ゴールド報酬付与）。
+- **Guild versus Guild Combat** (`internal/gvg`): ギルド対抗戦（GvG、標準Eloレーティング K=32/初期1000、5段階勝利メダル・王者杯昇格システム、ギルドポイントGP、ギルドEXP獲得・レベルアップ連動、対戦履歴・ラウンド詳細ログのMariaDB永続化）。
 
 ### API & Transport
 - **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`）。セッション認証、キャラクター所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
 
 ### Infrastructure & Operations
-- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `023_pvp_arena.sql`、`make db-migrate` / `make db-reset`）。
+- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `024_gvg_combat.sql`、`make db-migrate` / `make db-reset`）。
 - **Valkey**: 遅延アクションキュー・排他ロック（AOF+RDB永続化）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
 - **Verification**: `Makefile` (`make check`, `make fmt`, `make check-clean`)、Git pre-push hook による自動検証。
@@ -56,12 +57,12 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ## Immediate Priorities (Next Actions)
 
-1. **Guild Battles & Territory** (Issue #77): ギルド対抗戦（GvG）戦闘機能モジュールの実装。
-2. **King & World Boss Battles** (Issue #73): 封印戦・ワールドボス戦闘機能モジュールの実装。
-3. **Dungeon Exploration** (Issue #74): ダンジョン探索・分岐マップ機能モジュールの実装。
+1. **King & World Boss Battles** (Issue #73): 封印戦・ワールドボス戦闘機能モジュールの実装。
+2. **Dungeon Exploration** (Issue #74): ダンジョン探索・分岐マップ機能モジュールの実装。
+3. **Battle Replays & Match History** (Issue #66): 戦闘リプレイ記録・再生機能モジュールの実装。
 4. **Remaining Version 1.0 Feature Modules**:
-   - Battle Replays & Match History (Issue #66)
    - Custom Skill Loadouts (Issue #69)
+   - Continuous Endurance Challenge (Issue #162)
    - Player Rescue & Helpers (Issue #79)
    - Rankings (Issue #63)
    - Web Presentation UI / Client (Issue #140)
