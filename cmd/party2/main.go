@@ -15,6 +15,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/shop"
 	"github.com/witchcraze/party2re/internal/valkey"
@@ -93,6 +94,14 @@ func run() error {
 		return err
 	}
 	_, err = bank.NewService(bankRepo)
+	if err != nil {
+		return err
+	}
+	pvpRepo, err := database.NewPvPRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = pvp.NewService(pvpRepo, charRepo, corebattle.Engine{})
 	if err != nil {
 		return err
 	}

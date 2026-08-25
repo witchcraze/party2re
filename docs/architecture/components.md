@@ -269,6 +269,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Active town church prayer registration (`character_blessings`), donation management, and reward modifier calculation (+50% EXP/Gold chance, drop bonuses).
   - **Dependencies:** Character repository (wallet gold).
   - **Persistence:** `character_blessings` table in `internal/database/chapel_repository.go`.
+- **Player versus Player (PvP) Arena** (`internal/pvp`):
+  - **Responsibility:** Asynchronous player-versus-player arena combat against defending character snapshots, standard Elo rating calculation (K=32, base 1000), matchmaking query with account win-trading prevention, match history, and defense logs.
+  - **Dependencies:** Core Battle Engine, Character repository, Core Progression.
+  - **Persistence:** `arena_ratings` and `arena_matches` tables in `internal/database/pvp_repository.go` with transactional rating adjustments and match recording.
 
 ### Future Feature Modules
 
