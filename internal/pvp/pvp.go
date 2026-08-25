@@ -226,16 +226,10 @@ func (s *Service) Challenge(ctx context.Context, attackerID, defenderID string) 
 	}
 
 	// 2. Prepare Battle Engine request
-	// Defender snapshot uses MaxHP as combat starting HP
-	defHP := defender.Stats.HP
-	if defHP <= 0 {
-		defHP = defender.Stats.MaxHP
-	}
-
 	req := corebattle.Request{
 		Participants: []corebattle.Participant{
-			{ID: attacker.ID, HP: attacker.Stats.HP, Attack: attacker.Stats.Attack, Defense: attacker.Stats.Defense},
-			{ID: defender.ID, HP: defHP, Attack: defender.Stats.Attack, Defense: defender.Stats.Defense},
+			corebattle.NewParticipantFromCharacter(attacker),
+			corebattle.NewParticipantFromCharacter(defender),
 		},
 	}
 

@@ -337,18 +337,8 @@ func (s *Service) ExecuteRound(ctx context.Context, sessionID string) (*RoundRes
 	mName := fmt.Sprintf("%s (Wave %d)", tier.BaseMonster.Name, round)
 
 	// Resolve Battle
-	charParticipant := corebattle.Participant{
-		ID:      char.ID,
-		HP:      session.CharacterCurrentHP,
-		Attack:  char.Stats.Attack,
-		Defense: char.Stats.Defense,
-	}
-	monsterParticipant := corebattle.Participant{
-		ID:      mName,
-		HP:      mHP,
-		Attack:  mAtk,
-		Defense: mDef,
-	}
+	charParticipant := corebattle.NewParticipantFromCharacterWithHP(char, session.CharacterCurrentHP)
+	monsterParticipant := corebattle.MustNewParticipant(mName, mHP, mAtk, mDef)
 
 	battleReq := corebattle.Request{
 		Participants: []corebattle.Participant{charParticipant, monsterParticipant},

@@ -697,18 +697,8 @@ func (s *Service) resolveMonsterCombat(
 ) (ExpeditionStepResult, error) {
 	req := corebattle.Request{
 		Participants: []corebattle.Participant{
-			{
-				ID:      char.ID,
-				HP:      exp.CurrentHP,
-				Attack:  char.Stats.Attack,
-				Defense: char.Stats.Defense,
-			},
-			{
-				ID:      monster.ID,
-				HP:      monster.HP,
-				Attack:  monster.Attack,
-				Defense: monster.Defense,
-			},
+			corebattle.NewParticipantFromCharacterWithHP(*char, exp.CurrentHP),
+			corebattle.MustNewParticipant(monster.ID, monster.HP, monster.Attack, monster.Defense),
 		},
 	}
 
@@ -751,18 +741,8 @@ func (s *Service) resolveBossCombat(
 ) (ExpeditionStepResult, error) {
 	req := corebattle.Request{
 		Participants: []corebattle.Participant{
-			{
-				ID:      char.ID,
-				HP:      exp.CurrentHP,
-				Attack:  char.Stats.Attack,
-				Defense: char.Stats.Defense,
-			},
-			{
-				ID:      bossMonster.ID,
-				HP:      bossMonster.HP,
-				Attack:  bossMonster.Attack,
-				Defense: bossMonster.Defense,
-			},
+			corebattle.NewParticipantFromCharacterWithHP(*char, exp.CurrentHP),
+			corebattle.MustNewParticipant(bossMonster.ID, bossMonster.HP, bossMonster.Attack, bossMonster.Defense),
 		},
 	}
 

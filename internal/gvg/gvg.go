@@ -350,19 +350,10 @@ func (s *Service) DeclareMatch(ctx context.Context, actorCharacterID, defenderGu
 			return DeclareResult{}, fmt.Errorf("failed to load defender character %s: %w", dMem.CharacterID, err)
 		}
 
-		cHP := cChar.Stats.HP
-		if cHP <= 0 {
-			cHP = cChar.Stats.MaxHP
-		}
-		dHP := dChar.Stats.HP
-		if dHP <= 0 {
-			dHP = dChar.Stats.MaxHP
-		}
-
 		req := corebattle.Request{
 			Participants: []corebattle.Participant{
-				{ID: cChar.ID, HP: cHP, Attack: cChar.Stats.Attack, Defense: cChar.Stats.Defense},
-				{ID: dChar.ID, HP: dHP, Attack: dChar.Stats.Attack, Defense: dChar.Stats.Defense},
+				corebattle.NewParticipantFromCharacter(cChar),
+				corebattle.NewParticipantFromCharacter(dChar),
 			},
 		}
 

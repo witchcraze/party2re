@@ -495,18 +495,8 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 	// 4. Combat Resolution
 	req := corebattle.Request{
 		Participants: []corebattle.Participant{
-			{
-				ID:      char.ID,
-				HP:      char.Stats.HP,
-				Attack:  char.Stats.Attack,
-				Defense: char.Stats.Defense,
-			},
-			{
-				ID:      boss.ID,
-				HP:      boss.HP,
-				Attack:  boss.Attack,
-				Defense: boss.Defense,
-			},
+			corebattle.NewParticipantFromCharacter(char),
+			corebattle.MustNewParticipant(boss.ID, boss.HP, boss.Attack, boss.Defense),
 		},
 	}
 
