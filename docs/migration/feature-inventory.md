@@ -87,7 +87,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Push-based background ScheduledAction completion via Valkey Worker ([#106](https://github.com/witchcraze/party2re/issues/106), [#109](https://github.com/witchcraze/party2re/issues/109), [#110](https://github.com/witchcraze/party2re/issues/110))
 - [x] Challenge content & special battle modes: Player versus Player arena combat ([#75](https://github.com/witchcraze/party2re/issues/75))
 - [x] Challenge content & special battle modes: King & World Boss challenge battles ([#73](https://github.com/witchcraze/party2re/issues/73))
-- [ ] Challenge content & special battle modes: Continuous Challenge ([#162](https://github.com/witchcraze/party2re/issues/162))
+- [x] Challenge content & special battle modes: Continuous Challenge ([#162](https://github.com/witchcraze/party2re/issues/162))
 - [x] Battle replay records and match history viewer ([#66](https://github.com/witchcraze/party2re/issues/66))
 
 ### E. Social and competitive systems
@@ -177,6 +177,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#73](https://github.com/witchcraze/party2re/issues/73) | King and World Boss challenge battles | Merged |
 | [#74](https://github.com/witchcraze/party2re/issues/74) | Dungeon exploration and branching stage encounters | Merged |
 | [#66](https://github.com/witchcraze/party2re/issues/66) | Battle replay records and match history viewer | Merged |
+| [#162](https://github.com/witchcraze/party2re/issues/162) | Continuous Endurance Challenge combat survival mode | Merged |
 
 ---
 
