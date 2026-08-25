@@ -188,14 +188,14 @@ Conceptual model:
 
 ```text
 Battle
-  - Participants
+  - Participants (Standardized Participant builder / character adapter)
   - State
   - Actions
   - Effects
-  - Result
+  - Result (Structured TurnLogs for Replay)
 ```
 
-Battle must not know whether it was initiated by a quest, guild, arena, or another feature.
+Battle must not know whether it was initiated by a quest, guild, arena, boss, dungeon, or challenge feature. All combat modes build `Participant` inputs using the shared `corebattle.NewParticipantFromCharacter`, `corebattle.NewParticipantFromCharacterWithHP`, or `corebattle.ParticipantBuilder` adapters.
 
 ### Adventure / Quest
 

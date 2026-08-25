@@ -281,8 +281,8 @@ func (s *Service) Claim(ctx context.Context, id string) (Adventure, error) {
 
 	req := corebattle.Request{
 		Participants: []corebattle.Participant{
-			{ID: character.ID, HP: character.Stats.HP, Attack: character.Stats.Attack, Defense: character.Stats.Defense},
-			{ID: enemyID, HP: enemyHP, Attack: enemyAttack, Defense: enemyDefense},
+			corebattle.NewParticipantFromCharacter(character),
+			corebattle.MustNewParticipant(enemyID, enemyHP, enemyAttack, enemyDefense),
 		},
 		VictoryReward: corebattle.Reward{
 			Experience:       rewardExp,

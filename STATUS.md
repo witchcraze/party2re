@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #69 — Custom skill loadout and skill slot management
+Last updated: Issue #171 — Standardize Battle Participant construction across combat modes
 
 ## Current phase
 
@@ -21,7 +21,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Progression** (`internal/core/progression`): レベルアップ（累積経験値テーブル `level * level * 10`）、成長率適用。
 - **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): JSONカタログ（`jobs.json`）、転職、Lv99マスタリー、スキル発動・コスト計算。
 - **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理。
-- **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定、構造化ターンログ出力。
+- **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定、構造化ターンログ出力、戦闘参加者（Participant）標準アダプタ/ビルダー（`NewParticipantFromCharacter`, `NewParticipantFromCharacterWithHP`, `ParticipantBuilder`）。
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): Valkeyバックエンドの遅延アクションキュー＆分散排他ロックWorker。
 
 ### Feature Modules
@@ -62,9 +62,11 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ## Immediate Priorities (Next Actions)
 
-1. **Player Rescue & Companion Helpers** (Issue #79): 救助要請・助っ人同行機能モジュールの実装。
-2. **Small Medals Collection & Trade Exchange** (Issue #160): ちいさなメダル収集・交換所モジュールの実装。
+1. **Externalize Challenge Tiers and Custom Skills to embedded JSON catalogs** (Issue #172): カタログデータの外部JSON化。
+2. **Standardize Battle Replay recording helper across combat modes** (Issue #173): リプレイ記録ヘルパーの共通化。
 3. **Remaining Version 1.0 Feature Modules**:
+   - Player Rescue & Helpers (Issue #79)
+   - Small Medals Collection (Issue #160)
    - Town Park & Announcements (Issue #78, #67)
    - Private Home & Mailbox (Issue #159)
    - Rankings (Issue #63)
