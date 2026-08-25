@@ -45,29 +45,12 @@ func TestReplayIntegrationFlow(t *testing.T) {
 		t.Fatalf("Resolve failed: %v", err)
 	}
 
-	// 2. Record Battle Replay
-	replayID, err := service.RecordBattle(ctx, replay.SaveReplayRequest{
-		CombatType: replay.CombatTypeBoss,
-		Initiator: replay.ParticipantSnapshot{
-			ID:      "warrior-01",
-			Name:    "Legendary Warrior",
-			MaxHP:   120,
-			Attack:  35,
-			Defense: 15,
-			Level:   20,
-		},
-		Opponent: replay.ParticipantSnapshot{
-			ID:      "dragon-boss",
-			Name:    "Red Fire Dragon",
-			MaxHP:   200,
-			Attack:  30,
-			Defense: 10,
-			Level:   25,
-		},
-		BattleResult: battleRes,
-	})
+	// 2. Record Battle Replay using standardized recording helper
+	initSnap := replay.NewParticipantSnapshot("warrior-01", "Legendary Warrior", 120, 35, 15, 12, "warrior", 20)
+	oppSnap := replay.NewParticipantSnapshot("dragon-boss", "Red Fire Dragon", 200, 30, 10, 8, "boss", 25)
+	replayID, err := service.RecordMatchFromResult(ctx, replay.CombatTypeBoss, initSnap, oppSnap, battleRes)
 	if err != nil {
-		t.Fatalf("RecordBattle failed: %v", err)
+		t.Fatalf("RecordMatchFromResult failed: %v", err)
 	}
 
 	// 3. Fetch Full Replay Log for Playback

@@ -50,3 +50,21 @@ Each action in a battle produces an immutable turn step entry:
 - **Full Replay Document**: Retrieved by unique UUID replay ID (`FindByID`), containing initial participant stat snapshots and the full ordered turn log array for step-by-step UI playback.
 - **Character Match History**: Retrieved by character ID (`initiator_id` or `opponent_id`) with optional `combat_type` filter (`FindByCharacter`).
 - **Recent Replays**: Global public match feed (`FindRecent`).
+
+---
+
+## Standardized Recording Adapter
+
+To minimize boilerplate and guarantee uniform metadata capture across different combat systems, the `replay.ReplayRecorder` contract and `replay.Service` provide standardized recording adapters:
+
+- **Constructors for Participant Snapshots**:
+  - `NewParticipantSnapshot(id, name, maxHP, attack, defense, agility, jobID, level)`: Explicit creation.
+  - `NewParticipantSnapshotFromCharacter(corecharacter.Character)`: Auto-maps character stats, job, level, and handles MaxHP fallback.
+  - `NewParticipantSnapshotFromParticipant(corebattle.Participant, name)`: Fast adapter from combat participant.
+  - `NewParticipantSnapshotFromMonster(id, name, hp, attack, defense)`: Adapter for PvE monster/boss encounters.
+- **Unified Recording Methods**:
+  - `RecordMatchFromResult(ctx, combatType, initiatorSnapshot, opponentSnapshot, corebattle.Result)`: Base result-driven recorder.
+  - `RecordCharacterVsCharacter(ctx, combatType, initiatorChar, opponentChar, result)`: PvP / duel recorder.
+  - `RecordCharacterVsMonster(ctx, combatType, initiatorChar, monsterID, monsterName, hp, atk, def, result)`: PvE boss / encounter recorder.
+  - `RecordParticipantVsParticipant(ctx, combatType, initiatorPart, initiatorName, opponentPart, opponentName, result)`: Direct participant recorder.
+

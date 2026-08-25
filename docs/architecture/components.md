@@ -286,8 +286,8 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Core Battle Engine, Character repository, Inventory repository, Core Progression.
   - **Persistence:** `character_dungeon_records`, `dungeon_active_expeditions`, and `dungeon_expedition_history` tables in `internal/database/dungeon_repository.go`.
 - **Battle Replays & Match History** (`internal/replay`):
-  - **Responsibility:** Recording and faithful playback of step-by-step turn logs (actions, damage/healing numbers, critical hits, logs, remaining HP snapshots) across all combat modes (PvP, GvG, Boss, Dungeon, Adventure, Challenge), character match history queries, and replay retention pruning.
-  - **Dependencies:** Core Battle Engine.
+  - **Responsibility:** Recording and faithful playback of step-by-step turn logs (actions, damage/healing numbers, critical hits, logs, remaining HP snapshots) across all combat modes (PvP, GvG, Boss, Dungeon, Adventure, Challenge), standardized recording adapters (`ReplayRecorder`, `RecordMatchFromResult`, `RecordCharacterVsCharacter`, `RecordCharacterVsMonster`, `RecordParticipantVsParticipant`), character match history queries, and replay retention pruning.
+  - **Dependencies:** Core Battle Engine, Core Character.
   - **Persistence:** `battle_replays` table in `internal/database/replay_repository.go`.
 - **Continuous Endurance Challenge** (`internal/challenge`):
   - **Responsibility:** Consecutive survival wave combat resolution, progressive wave stat scaling ($1 + \text{scale} \times (\text{round}-1)$), inter-round 20% HP recovery, milestone bonus item drops, buffered reward ledger with safe retreat cashout vs 50% consolation defeat, and all-time highest streak leaderboards.
