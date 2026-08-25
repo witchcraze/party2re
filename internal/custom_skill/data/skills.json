@@ -1,0 +1,142 @@
+[
+  {
+    "id": "gem_strike",
+    "name": "気合斬り",
+    "required_job_id": "",
+    "required_level": 1,
+    "mp_cost": 5,
+    "power": 25,
+    "kind": "damage",
+    "description": "集中の気を込めた渾身の一撃。"
+  },
+  {
+    "id": "gem_cure",
+    "name": "小癒しの光",
+    "required_job_id": "",
+    "required_level": 1,
+    "mp_cost": 8,
+    "power": 30,
+    "kind": "healing",
+    "description": "生命力を活性化させてHPを小回復する。"
+  },
+  {
+    "id": "gem_barrier",
+    "name": "水晶の守り",
+    "required_job_id": "",
+    "required_level": 10,
+    "mp_cost": 12,
+    "power": 20,
+    "kind": "buff",
+    "description": "魔力の膜を張り防御力を高める。"
+  },
+  {
+    "id": "slash",
+    "name": "一閃",
+    "required_job_id": "job-02",
+    "required_level": 5,
+    "mp_cost": 6,
+    "power": 35,
+    "kind": "damage",
+    "description": "剣士の基本剣技。鋭い斬撃を放つ。"
+  },
+  {
+    "id": "power_strike",
+    "name": "渾身撃",
+    "required_job_id": "job-01",
+    "required_level": 5,
+    "mp_cost": 8,
+    "power": 45,
+    "kind": "damage",
+    "description": "戦士の強打。敵の装甲を砕く。"
+  },
+  {
+    "id": "shield_bash",
+    "name": "シールドバッシュ",
+    "required_job_id": "job-03",
+    "required_level": 5,
+    "mp_cost": 7,
+    "power": 30,
+    "kind": "damage",
+    "description": "盾による打撃で敵を怯ませる。"
+  },
+  {
+    "id": "fireball",
+    "name": "火炎球",
+    "required_job_id": "job-06",
+    "required_level": 5,
+    "mp_cost": 10,
+    "power": 50,
+    "kind": "damage",
+    "description": "魔法使いの基本火炎術。"
+  },
+  {
+    "id": "heal",
+    "name": "ヒール",
+    "required_job_id": "job-05",
+    "required_level": 3,
+    "mp_cost": 8,
+    "power": 45,
+    "kind": "healing",
+    "description": "僧侶の治癒術。味方の傷を癒やす。"
+  },
+  {
+    "id": "shadow_strike",
+    "name": "急所突き",
+    "required_job_id": "job-09",
+    "required_level": 5,
+    "mp_cost": 10,
+    "power": 55,
+    "kind": "damage",
+    "description": "盗賊の暗殺技。弱点を正確に貫く。"
+  },
+  {
+    "id": "greater_heal",
+    "name": "ハイヒール",
+    "required_job_id": "job-16",
+    "required_level": 15,
+    "mp_cost": 20,
+    "power": 100,
+    "kind": "healing",
+    "description": "白魔道士の高等回復術。"
+  },
+  {
+    "id": "dark_flame",
+    "name": "冥界の炎",
+    "required_job_id": "job-19",
+    "required_level": 15,
+    "mp_cost": 22,
+    "power": 95,
+    "kind": "damage",
+    "description": "闇魔道士の呪詛の黒炎。"
+  },
+  {
+    "id": "berserk_rush",
+    "name": "狂乱乱舞",
+    "required_job_id": "job-21",
+    "required_level": 15,
+    "mp_cost": 15,
+    "power": 110,
+    "kind": "damage",
+    "description": "バーサーカーの連続猛攻。"
+  },
+  {
+    "id": "dragon_breath",
+    "name": "竜の咆哮",
+    "required_job_id": "job-23",
+    "required_level": 20,
+    "mp_cost": 25,
+    "power": 130,
+    "kind": "damage",
+    "description": "竜騎士の竜気波動。"
+  },
+  {
+    "id": "meteor",
+    "name": "大隕石召喚",
+    "required_job_id": "job-33",
+    "required_level": 30,
+    "mp_cost": 40,
+    "power": 200,
+    "kind": "damage",
+    "description": "賢者の究極天変地異魔法。"
+  }
+]

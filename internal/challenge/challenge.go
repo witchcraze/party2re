@@ -3,6 +3,7 @@ package challenge
 import (
 	"context"
 	"crypto/rand"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,9 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
+
+//go:embed data/challenge_tiers.json
+var challengeTiersData []byte
 
 var (
 	ErrSessionNotFound     = errors.New("challenge session not found")
@@ -139,7 +143,10 @@ func NewService(repo Repository, charRepo CharacterRepository, battleEngine core
 		battleEngine = corebattle.Engine{}
 	}
 
-	tiers := defaultTiers()
+	tiers, err := loadTiers()
+	if err != nil {
+		return nil, fmt.Errorf("load challenge tiers catalog: %w", err)
+	}
 	return &Service{
 		repo:         repo,
 		charRepo:     charRepo,
@@ -148,77 +155,19 @@ func NewService(repo Repository, charRepo CharacterRepository, battleEngine core
 	}, nil
 }
 
-func defaultTiers() map[string]ChallengeTier {
-	return map[string]ChallengeTier{
-		"novice": {
-			ID:          "novice",
-			Name:        "初級チャレンジ (Novice Trial)",
-			Description: "駆け出し冒険者のためのサバイバル連戦。スライムやゴブリンの群れに立ち向かう。",
-			MinLevel:    5,
-			BaseMonster: ChallengeMonster{
-				Name:        "修行スライム",
-				BaseHP:      120,
-				BaseAttack:  25,
-				BaseDefense: 10,
-				BaseExp:     15,
-				BaseGold:    8,
-			},
-			ScaleFactor:       0.08,
-			MilestoneInterval: 5,
-			MilestoneItemPool: []string{"potion_minor", "herb_medicinal"},
-		},
-		"intermediate": {
-			ID:          "intermediate",
-			Name:        "中級チャレンジ (Veteran Trial)",
-			Description: "熟練冒険者向けのエンドレス試練。オーガやスケルトンナイトが次々と襲いかかる。",
-			MinLevel:    20,
-			BaseMonster: ChallengeMonster{
-				Name:        "闘技場オーガ",
-				BaseHP:      350,
-				BaseAttack:  65,
-				BaseDefense: 35,
-				BaseExp:     60,
-				BaseGold:    35,
-			},
-			ScaleFactor:       0.10,
-			MilestoneInterval: 5,
-			MilestoneItemPool: []string{"potion_standard", "elixir_minor", "iron_ore"},
-		},
-		"master": {
-			ID:          "master",
-			Name:        "上級チャレンジ (Master Trial)",
-			Description: "歴戦の勇士に課される極限の闘技。ドラゴンやグレーターデーモンとの連戦。",
-			MinLevel:    40,
-			BaseMonster: ChallengeMonster{
-				Name:        "修羅の魔獣",
-				BaseHP:      900,
-				BaseAttack:  140,
-				BaseDefense: 80,
-				BaseExp:     220,
-				BaseGold:    120,
-			},
-			ScaleFactor:       0.12,
-			MilestoneInterval: 5,
-			MilestoneItemPool: []string{"potion_high", "elixir_standard", "mithril_ore"},
-		},
-		"abyss": {
-			ID:          "abyss",
-			Name:        "奈落チャレンジ (Abyss Trial)",
-			Description: "底知れぬ深淵の試練。神域の怪異が無限の猛威を振るう。",
-			MinLevel:    60,
-			BaseMonster: ChallengeMonster{
-				Name:        "深淵の幻影",
-				BaseHP:      2000,
-				BaseAttack:  280,
-				BaseDefense: 160,
-				BaseExp:     600,
-				BaseGold:    350,
-			},
-			ScaleFactor:       0.15,
-			MilestoneInterval: 5,
-			MilestoneItemPool: []string{"elixir_high", "orichalcum_ore", "philosophers_stone"},
-		},
+func loadTiers() (map[string]ChallengeTier, error) {
+	var list []ChallengeTier
+	if err := json.Unmarshal(challengeTiersData, &list); err != nil {
+		return nil, fmt.Errorf("decode challenge tiers JSON: %w", err)
 	}
+	tiers := make(map[string]ChallengeTier, len(list))
+	for _, t := range list {
+		if t.ID == "" {
+			return nil, fmt.Errorf("challenge tier entry has empty id")
+		}
+		tiers[t.ID] = t
+	}
+	return tiers, nil
 }
 
 func (s *Service) ListTiers() []ChallengeTier {

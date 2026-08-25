@@ -1,0 +1,70 @@
+[
+  {
+    "id": "novice",
+    "name": "初級チャレンジ (Novice Trial)",
+    "description": "駆け出し冒険者のためのサバイバル連戦。スライムやゴブリンの群れに立ち向かう。",
+    "min_level": 5,
+    "base_monster": {
+      "name": "修行スライム",
+      "base_hp": 120,
+      "base_attack": 25,
+      "base_defense": 10,
+      "base_exp": 15,
+      "base_gold": 8
+    },
+    "scale_factor": 0.08,
+    "milestone_interval": 5,
+    "milestone_item_pool": ["potion_minor", "herb_medicinal"]
+  },
+  {
+    "id": "intermediate",
+    "name": "中級チャレンジ (Veteran Trial)",
+    "description": "熟練冒険者向けのエンドレス試練。オーガやスケルトンナイトが次々と襲いかかる。",
+    "min_level": 20,
+    "base_monster": {
+      "name": "闘技場オーガ",
+      "base_hp": 350,
+      "base_attack": 65,
+      "base_defense": 35,
+      "base_exp": 60,
+      "base_gold": 35
+    },
+    "scale_factor": 0.10,
+    "milestone_interval": 5,
+    "milestone_item_pool": ["potion_standard", "elixir_minor", "iron_ore"]
+  },
+  {
+    "id": "master",
+    "name": "上級チャレンジ (Master Trial)",
+    "description": "歴戦の勇士に課される極限の闘技。ドラゴンやグレーターデーモンとの連戦。",
+    "min_level": 40,
+    "base_monster": {
+      "name": "修羅の魔獣",
+      "base_hp": 900,
+      "base_attack": 140,
+      "base_defense": 80,
+      "base_exp": 220,
+      "base_gold": 120
+    },
+    "scale_factor": 0.12,
+    "milestone_interval": 5,
+    "milestone_item_pool": ["potion_high", "elixir_standard", "mithril_ore"]
+  },
+  {
+    "id": "abyss",
+    "name": "奈落チャレンジ (Abyss Trial)",
+    "description": "底知れぬ深淵の試練。神域の怪異が無限の猛威を振るう。",
+    "min_level": 60,
+    "base_monster": {
+      "name": "深淵の幻影",
+      "base_hp": 2000,
+      "base_attack": 280,
+      "base_defense": 160,
+      "base_exp": 600,
+      "base_gold": 350
+    },
+    "scale_factor": 0.15,
+    "milestone_interval": 5,
+    "milestone_item_pool": ["elixir_high", "orichalcum_ore", "philosophers_stone"]
+  }
+]
