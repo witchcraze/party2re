@@ -14,6 +14,8 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/guild"
+	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/scheduling"
@@ -102,6 +104,22 @@ func run() error {
 		return err
 	}
 	_, err = pvp.NewService(pvpRepo, charRepo, corebattle.Engine{})
+	if err != nil {
+		return err
+	}
+	guildRepo, err := database.NewGuildRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = guild.NewService(guildRepo)
+	if err != nil {
+		return err
+	}
+	gvgRepo, err := database.NewGvGRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = gvg.NewService(gvgRepo, guildRepo, charRepo, corebattle.Engine{})
 	if err != nil {
 		return err
 	}

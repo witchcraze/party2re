@@ -92,7 +92,7 @@ All groups below are Version 1.0 reconstruction requirements.
 
 ### E. Social and competitive systems
 - [x] Guild creation, membership, and administration ([#76](https://github.com/witchcraze/party2re/issues/76))
-- [ ] Guild battles and territory competition ([#77](https://github.com/witchcraze/party2re/issues/77))
+- [x] Guild battles and territory competition: Guild versus Guild combat ([#77](https://github.com/witchcraze/party2re/issues/77))
 - [ ] Player communication, park, and public interactions ([#78](https://github.com/witchcraze/party2re/issues/78))
 - [ ] Player private home, mailbox, and letter correspondence ([#159](https://github.com/witchcraze/party2re/issues/159))
 - [ ] Helper and player rescue assistance ([#79](https://github.com/witchcraze/party2re/issues/79))
@@ -173,6 +173,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#85](https://github.com/witchcraze/party2re/issues/85) | Monster Book encyclopedia and item collection catalog | Merged |
 | [#86](https://github.com/witchcraze/party2re/issues/86) | Chapel prayer, blessings, and god worship system | Merged |
 | [#75](https://github.com/witchcraze/party2re/issues/75) | Player versus Player arena combat | Merged |
+| [#77](https://github.com/witchcraze/party2re/issues/77) | Guild versus Guild combat and territory competition | Merged |
 
 ---
 
