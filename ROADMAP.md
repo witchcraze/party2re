@@ -79,6 +79,7 @@ Once Version 1.0 is established, the project should transition from **reconstruc
 - [x] **Battle Engine & Outcome Resolution** (Issue #12, #20, #36)
 - [x] **Valkey ScheduledAction Queue & Worker** (Issue #106, #109, #110)
 - [x] **Adventure System & Multi-stage Content** (Issue #13, #56, #57 — 28 stages, 286 monsters)
+- [x] **Small Medal Exchange** (Issue #160 — deductive logic)
 - [x] **Item Shop System** (Issue #55 — purchase & 50% resale)
 - [x] **Character Item Depot** (Issue #58 — storage for items & gold)
 - [x] **Blacksmith Enhancement** (Issue #59 — +1 to +10 equipment refinement)

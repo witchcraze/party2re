@@ -27,6 +27,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ### Feature Modules
 - **Activity** (`internal/activity`): 訓練機能（Valkey Worker push型＋手動Claimフォールバック）。
 - **Adventure** (`internal/adventure`): 28ステージ（`stages.json`）、286体モンスター（`monsters.json`）、戦闘解決、ドロップ報酬、Valkey Worker連携。
+- **Medal** (`internal/medal`): 小さなメダル交換所（減算消費方式、トランザクション整合性）。
 - **Shop** (`internal/shop`): アイテム売買（50%売却）、トランザクション整合性。
 - **Depot** (`internal/depot`): 倉庫（アイテム・ゴールド預入・引出）、トランザクション整合性。
 - **Blacksmith** (`internal/blacksmith`): 鍛冶屋（+1〜+10装備強化、成功率曲線、費用・素材消費）。
@@ -64,7 +65,6 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 1. **Remaining Version 1.0 Feature Modules**:
    - Player Rescue & Helpers (Issue #79)
-   - Small Medals Collection (Issue #160)
    - Town Park & Announcements (Issue #78, #67)
    - Private Home & Mailbox (Issue #159)
    - Rankings (Issue #63)

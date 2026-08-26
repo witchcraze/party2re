@@ -50,6 +50,7 @@ type Handler struct {
 	characters     CharacterService
 	adventures     AdventureService
 	shops          ShopService
+	medals         MedalService
 	allowedOrigins map[string]struct{}
 }
 

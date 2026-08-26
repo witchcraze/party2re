@@ -36,6 +36,7 @@ type Character struct {
 	Level        int
 	Experience   int
 	RebirthCount int
+	SmallMedals  int
 }
 
 type Stats struct {

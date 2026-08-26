@@ -27,23 +27,23 @@ func NewCharacterRepository(db *sql.DB) (*CharacterRepository, error) {
 func (r *CharacterRepository) Save(ctx context.Context, value corecharacter.Character) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO characters
-			(id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			(id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count, small_medals)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, value.ID, value.PlayerID, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP,
 		value.Stats.HP, value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility,
-		value.Money, value.Level, value.Experience, value.RebirthCount)
+		value.Money, value.Level, value.Experience, value.RebirthCount, value.SmallMedals)
 	return err
 }
 
 func (r *CharacterRepository) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
 	var value corecharacter.Character
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
+		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count, small_medals
 		FROM characters
 		WHERE id = ?
 	`, id).Scan(&value.ID, &value.PlayerID, &value.Name, &value.JobID, &value.Gender, &value.Stats.MaxHP, &value.Stats.MaxMP,
 		&value.Stats.HP, &value.Stats.MP, &value.Stats.Attack, &value.Stats.Defense, &value.Stats.Agility,
-		&value.Money, &value.Level, &value.Experience, &value.RebirthCount)
+		&value.Money, &value.Level, &value.Experience, &value.RebirthCount, &value.SmallMedals)
 	if errors.Is(err, sql.ErrNoRows) {
 		return corecharacter.Character{}, corecharacter.ErrNotFound
 	}
@@ -55,7 +55,7 @@ func (r *CharacterRepository) FindByID(ctx context.Context, id string) (corechar
 
 func (r *CharacterRepository) FindByPlayerID(ctx context.Context, playerID string) ([]corecharacter.Character, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
+		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count, small_medals
 		FROM characters
 		WHERE player_id = ?
 		ORDER BY created_at ASC
@@ -70,7 +70,7 @@ func (r *CharacterRepository) FindByPlayerID(ctx context.Context, playerID strin
 		var value corecharacter.Character
 		if err := rows.Scan(&value.ID, &value.PlayerID, &value.Name, &value.JobID, &value.Gender, &value.Stats.MaxHP, &value.Stats.MaxMP,
 			&value.Stats.HP, &value.Stats.MP, &value.Stats.Attack, &value.Stats.Defense, &value.Stats.Agility,
-			&value.Money, &value.Level, &value.Experience, &value.RebirthCount); err != nil {
+			&value.Money, &value.Level, &value.Experience, &value.RebirthCount, &value.SmallMedals); err != nil {
 			return nil, err
 		}
 		characters = append(characters, value)
@@ -118,11 +118,11 @@ func executeCharacterUpdate(ctx context.Context, executor sqlContextExecutor, va
 	result, err := executor.ExecContext(ctx, `
 		UPDATE characters
 		SET name = ?, job_id = ?, gender = ?, max_hp = ?, max_mp = ?, hp = ?, mp = ?,
-			attack = ?, defense = ?, agility = ?, money = ?, level = ?, experience = ?, rebirth_count = ?
+			attack = ?, defense = ?, agility = ?, money = ?, level = ?, experience = ?, rebirth_count = ?, small_medals = ?
 		WHERE id = ?
 	`, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP, value.Stats.HP,
 		value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility, value.Money,
-		value.Level, value.Experience, value.RebirthCount, value.ID)
+		value.Level, value.Experience, value.RebirthCount, value.SmallMedals, value.ID)
 	if err != nil {
 		return 0, err
 	}
