@@ -1,4 +1,4 @@
-.PHONY: all check verify check-clean fmt vet test smoke db-migrate db-reset up down setup-hooks
+.PHONY: all check verify check-clean fmt vet test test-integration test-docker smoke db-migrate db-reset up down setup-hooks
 
 all: check
 
@@ -25,6 +25,14 @@ db-reset:
 	@./scripts/reset_db.sh
 
 test:
+	@echo "Running unit tests (skips integration tests without DB)..."
+	@go test -count=1 ./...
+
+test-integration:
+	@echo "Running integration tests against local container DB..."
+	@PARTY2_DB_DSN="party2:party2@tcp(127.0.0.1:3306)/party2?parseTime=true" PARTY2_VALKEY_ADDR="127.0.0.1:6379" go test -count=1 ./...
+
+test-docker:
 	@echo "Running tests in Docker..."
 	@docker compose run --rm app go test -count=1 ./...
 

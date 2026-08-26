@@ -7,13 +7,19 @@ cd "$ROOT_DIR"
 echo "==> Ensuring database container is running..."
 docker compose up -d mariadb valkey >/dev/null 2>&1
 
-# Wait until MariaDB is responsive
-for i in {1..30}; do
-    if docker compose exec -T mariadb mariadb -u party2 -pparty2 -e "SELECT 1" party2 >/dev/null 2>&1; then
+echo "==> Waiting for MariaDB to be healthy..."
+for i in {1..60}; do
+    HEALTH=$(docker inspect --format='{{.State.Health.Status}}' $(docker compose ps -q mariadb) 2>/dev/null || echo "unhealthy")
+    if [ "$HEALTH" = "healthy" ]; then
         break
     fi
-    sleep 0.5
+    sleep 1
 done
+
+if ! docker compose exec -T mariadb mariadb -u party2 -pparty2 -e "SELECT 1" party2 >/dev/null 2>&1; then
+    echo "ERROR: MariaDB is still not accepting connections."
+    exit 1
+fi
 
 # Ensure schema_migrations table exists
 docker compose exec -T mariadb mariadb -u party2 -pparty2 party2 -e \
