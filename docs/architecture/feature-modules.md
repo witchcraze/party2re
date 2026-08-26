@@ -9,7 +9,7 @@ A new feature should be implementable without scattering feature-specific logic 
 Examples include:
 
 ```text
-features/
+internal/
   adventure/
   guild/
   casino/
@@ -123,4 +123,4 @@ The key question is:
 - [`components.md`](components.md) — component responsibilities.
 - [`interfaces.md`](interfaces.md) — contracts between components.
 - [`../design/game-overview.md`](../design/game-overview.md) — feature/domain context.
-- [`../../AGENTS.md`](../../AGENTS.md) — mandatory feature-boundary rules.
+- [`../../.agents/rules/`](../../.agents/rules/) — mandatory feature-boundary rules.
