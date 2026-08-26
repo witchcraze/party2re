@@ -1,0 +1,17 @@
+[
+  { "cost": 3, "item_id": "armor-32" },
+  { "cost": 5, "item_id": "item-013" },
+  { "cost": 8, "item_id": "armor-33" },
+  { "cost": 10, "item_id": "weapon-32" },
+  { "cost": 15, "item_id": "item-036" },
+  { "cost": 20, "item_id": "item-035" },
+  { "cost": 25, "item_id": "item-037" },
+  { "cost": 30, "item_id": "item-034" },
+  { "cost": 35, "item_id": "item-089" },
+  { "cost": 40, "item_id": "weapon-30" },
+  { "cost": 45, "item_id": "armor-35" },
+  { "cost": 50, "item_id": "armor-40" },
+  { "cost": 60, "item_id": "item-109" },
+  { "cost": 77, "item_id": "item-107" },
+  { "cost": 100, "item_id": "item-059" }
+]
