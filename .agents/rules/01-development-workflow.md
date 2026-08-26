@@ -15,7 +15,8 @@ Before editing:
 
 ## 2. Issue and PR Workflow
 - **No substantial work without an Issue:** Do not begin substantial implementation from an informal request without an Issue.
-- **Templates:** Every Issue **must use a repository Issue template**. Every PR **must use the repository PR template**. Do not bypass templates.
+- **Templates:** Check `.github/ISSUE_TEMPLATE` and `.github/PULL_REQUEST_TEMPLATE.md`. Every Issue **must** use the provided repository Issue template. Every PR **must** use the repository PR template and all checkboxes must be honestly verified. Do not bypass templates.
+- **Study Existing Implementations:** Before generating new logic from scratch, actively search the codebase (using `fd`, `grep`, or IDE tools) for existing features that solve similar problems (e.g., if adding a new Shop, look at `internal/shop` and `internal/depot`). Adopt the same architectural patterns, variable naming conventions, and file structures.
 - **Bounded Tasks:** Select a bounded task. If the requested work is too large, split it into smaller Issues; preserve independently testable acceptance criteria; do not silently expand the current Issue.
 
 ## 3. TDD and Local Verification (Tiered Strategy)
