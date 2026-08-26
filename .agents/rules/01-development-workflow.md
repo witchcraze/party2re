@@ -18,13 +18,13 @@ Before editing:
 - **Templates:** Every Issue **must use a repository Issue template**. Every PR **must use the repository PR template**. Do not bypass templates.
 - **Bounded Tasks:** Select a bounded task. If the requested work is too large, split it into smaller Issues; preserve independently testable acceptance criteria; do not silently expand the current Issue.
 
-## 3. TDD and Local Verification
+## 3. TDD and Local Verification (Tiered Strategy)
 For non-trivial behavior:
-1. Identify acceptance criteria.
-2. Write or update tests.
+1. **Prepare Environment:** Run `make up` to ensure the local DB and Cache are running. This is required for fast integration testing and MCP tool access.
+2. Identify acceptance criteria and write/update tests.
 3. Implement the smallest change satisfying the tests.
-4. Auto-format code with `make fmt`.
-5. Run unified local verification with `make check` (runs format check, `go vet`, full docker test suite, and smoke build).
+4. **Inner Loop:** Run fast host tests continuously using `make test` (or `make test-integration`).
+5. **Outer Loop:** Auto-format code with `make fmt`, then run unified local verification with `make check` (runs format check, `go vet`, host test suite, and fast smoke build).
 
 ## 4. Definition of Done
 A ticket is complete only when applicable:
