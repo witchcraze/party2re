@@ -5,18 +5,28 @@ description: Rules for Agent operations, branch strategy, testing, and Definitio
 
 # Development Workflow
 
-## 1. Branch Strategy
-Keep `main` as the integration branch. Do not implement Issue work directly on `main`.
-Before editing:
-1. Update a clean local `main` with `git pull --ff-only origin main`.
-2. Create one new branch for the Issue (e.g., `feature/issue-4-character-persistence`).
-3. Commit and push only the Issue's changes to its branch. Open a PR from that branch to `main`.
-4. **Merge Strategy:** Always use **Squash and Merge** (or a single standardized method chosen by the project) to keep the `main` branch history clean and readable. 
+## 1. Branch Strategy (Trunk-Based Development)
+Keep `main` as the sole integration branch. Feature branches must be short-lived.
+
+**Branch Naming Convention:**
+- Use Conventional Commits prefixes: `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`.
+- Include the issue number: `<type>/<issue-number>-<short-desc>` (e.g., `feat/160-small-medals`).
+
+**Safe Branching Procedure:**
+Never branch directly from another feature branch unless explicitly stacking PRs.
+1. `git checkout main`
+2. `git pull --ff-only origin main`
+3. `git checkout -b <type>/<issue-number>-<short-description>`
+
+**Merge Strategy & PR Titles:**
+- Always use **Squash and Merge**.
+- Because of Squash and Merge, **the PR Title MUST strictly follow Conventional Commits** (e.g., `feat: implement small medals`). This ensures the `main` branch history remains pristine and automatically parsable.
 
 ## 2. Issue and PR Workflow
 - **No substantial work without an Issue:** Do not begin substantial implementation from an informal request without an Issue.
 - **Templates:** Check `.github/ISSUE_TEMPLATE` and `.github/PULL_REQUEST_TEMPLATE.md`. Every Issue **must** use the provided repository Issue template. Every PR **must** use the repository PR template and all checkboxes must be honestly verified. Do not bypass templates.
-- **Study Existing Implementations:** Before generating new logic from scratch, actively search the codebase (using `fd`, `grep`, or IDE tools) for existing features that solve similar problems (e.g., if adding a new Shop, look at `internal/shop` and `internal/depot`). Adopt the same architectural patterns, variable naming conventions, and file structures.
+- **Study Existing Implementations:** Before generating new logic from scratch, actively search the codebase (using `fd`, `grep`, or IDE tools) for existing features that solve similar problems. Adopt the same architectural patterns, variable naming conventions, and file structures.
+- **Transparent Tool Usage:** When analyzing codebases, prefer native tools (`view_file`, `grep_search`). Do NOT execute complex or opaque bash scripts (like `sed`, `awk`, or `perl` one-liners) to parse code without explicitly explaining your intent to the user first. Ensure transparency in your actions.
 - **Bounded Tasks:** Select a bounded task. If the requested work is too large, split it into smaller Issues; preserve independently testable acceptance criteria; do not silently expand the current Issue.
 
 ## 3. TDD and Local Verification (Tiered Strategy)

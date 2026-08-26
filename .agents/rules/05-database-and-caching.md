@@ -15,7 +15,12 @@ description: Guidelines for database transaction boundaries, concurrency control
   - Unique constraints to prevent duplicate insertions.
 - **Closure Pattern:** Prefer executing domain logic inside a transactional closure (`RunInTx(ctx, func(tx) error)`) to ensure that reads and writes are safely enclosed in the same database transaction boundary.
 
-## 2. Caching and Volatile Data (Valkey)
+## 2. Database Migrations (Current Script Workflow)
+Until a standard migration tool is formally adopted, all SQL migrations MUST adhere strictly to the current `scripts/migrate.sh` logic:
+- **No Annotations:** Do NOT use `sql-migrate` annotations like `-- +migrate Up` or `-- +migrate Down`. The script pipes the entire file directly to MariaDB. Doing so will execute both blocks sequentially, potentially destroying tables immediately after creation.
+- **Manual Tracking:** You MUST manually append `INSERT IGNORE INTO schema_migrations (version) VALUES ('XXX_name');` at the very end of your `.sql` file to prevent infinite re-execution on startup.
+
+## 3. Caching and Volatile Data (Valkey)
 - **SQL First:** The relational database (SQL) is the primary source of truth for critical persistent player state. Do not use Valkey as the primary persistence for critical player data.
 - **Concrete Requirements Only:** Do not introduce Valkey without a concrete feature requirement or measured performance benefit.
 - **Feature Use Cases:** Introduce Valkey when building features that inherently demand it, such as:

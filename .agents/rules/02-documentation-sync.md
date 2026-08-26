@@ -25,3 +25,8 @@ When opening a feature or domain change PR, **always synchronize in that same PR
 2. `docs/architecture/components.md` — component responsibilities.
 3. `docs/migration/feature-inventory.md` — feature tracking status.
 4. `STATUS.md` — update the current state summary and clear completed priorities.
+
+## 4. Avoiding Documentation Bloat (STATUS.md)
+- **Do not treat STATUS.md as an append-only changelog.**
+- When a task in "Current Priorities" is completed, **remove it** or move it to `ROADMAP.md` / `feature-inventory.md`.
+- `STATUS.md` must remain a slim, accurate snapshot of the *current* state and *immediate next* priorities, not an unbounded historical record.
