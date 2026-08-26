@@ -106,6 +106,33 @@ READMEには方針と参照先のみを記載し、詳細な依存関係や配�
 同ファイルに記録します。画像・フォントなどのクリエイティブアセットは
 [`docs/assets/`](docs/assets/)で別途管理します。
 
+## 開発環境 (Development Environment)
+
+総合的なローカル開発とテスト（データベースを用いたインテグレーションテスト等）を行うには、以下のいずれかの環境が必要です。
+
+### 推奨環境: Docker Compose を利用
+プロジェクトにはローカル開発用の `compose.yaml` が用意されています。Docker がインストールされていれば、以下のコマンドだけでデータベース (MariaDB) とキャッシュ (Valkey) を含む完全な開発環境が立ち上がります。
+
+```bash
+make up
+```
+コンテナ起動後は、ホストマシン側で `make test-integration` などを実行することで、透過的にコンテナ内のDBへアクセスしてテストを行うことができます。
+
+### 代替環境: ホストネイティブでの構築 (Dockerを使用しない場合)
+Docker を使用しない環境でも開発は可能です。その場合は、ホストマシンに直接以下のミドルウェアをインストールして起動してください。
+
+1. **MariaDB** (または互換性のあるMySQL)
+2. **Valkey** (または互換性のあるRedis)
+
+起動後、テスト実行時に環境変数として接続先 (DSN) を指定することで、フルスタックの検証が可能になります。
+
+```bash
+PARTY2_DB_DSN="user:pass@tcp(127.0.0.1:3306)/party2?parseTime=true" \
+PARTY2_VALKEY_ADDR="127.0.0.1:6379" \
+go test -tags=integration ./...
+```
+
+
 ## デプロイ
 
 ### コンテナイメージ
@@ -169,7 +196,7 @@ services:
       - ./migrations:/docker-entrypoint-initdb.d:ro  # リポジトリの migrations/ をコピー
 
   valkey:
-    image: valkey/valkey:8-alpine
+    image: valkey/valkey:alpine
     command: ["valkey-server", "--save", "60", "1", "--appendonly", "yes"]
     volumes:
       - valkey-data:/data

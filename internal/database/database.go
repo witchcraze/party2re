@@ -9,12 +9,10 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-const defaultDSN = "party2:party2@tcp(localhost:3306)/party2?parseTime=true"
-
 func OpenFromEnvironment() (*sql.DB, error) {
 	dsn := os.Getenv("PARTY2_DB_DSN")
 	if dsn == "" {
-		dsn = defaultDSN
+		return nil, errors.New("PARTY2_DB_DSN environment variable is required")
 	}
 
 	db, err := sql.Open("mysql", dsn)

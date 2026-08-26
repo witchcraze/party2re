@@ -5,11 +5,14 @@ WORKDIR /build
 
 # Download dependencies before copying source to leverage Docker layer cache.
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
 # Copy source and build a statically linked binary.
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/party2 ./cmd/party2
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/party2 ./cmd/party2
 
 # Stage 2: minimal runtime image.
 # distroless/static contains CA certificates and timezone data but no shell,
