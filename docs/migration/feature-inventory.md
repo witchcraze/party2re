@@ -95,7 +95,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Guild battles and territory competition: Guild versus Guild combat ([#77](https://github.com/witchcraze/party2re/issues/77))
 - [ ] Player communication, park, and public interactions ([#78](https://github.com/witchcraze/party2re/issues/78))
 - [ ] Player private home, mailbox, and letter correspondence ([#159](https://github.com/witchcraze/party2re/issues/159))
-- [ ] Helper and player rescue assistance ([#79](https://github.com/witchcraze/party2re/issues/79))
+- [x] Helper and player rescue assistance ([#79](https://github.com/witchcraze/party2re/issues/79))
 - [ ] Rankings (level, job, weekly rankings, contest records) ([#63](https://github.com/witchcraze/party2re/issues/63))
 
 ### F. Economy and side systems
@@ -179,6 +179,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#66](https://github.com/witchcraze/party2re/issues/66) | Battle replay records and match history viewer | Merged |
 | [#162](https://github.com/witchcraze/party2re/issues/162) | Continuous Endurance Challenge combat survival mode | Merged |
 | [#69](https://github.com/witchcraze/party2re/issues/69) | Custom skill loadout and skill slot management | Merged |
+| [#79](https://github.com/witchcraze/party2re/issues/79) | Player rescue and companion helper assistance | Implemented |
 
 ---
 

@@ -48,12 +48,13 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Battle Replays & Match History** (`internal/replay`): 戦闘リプレイ・対戦履歴（全戦闘モードのターン別アクションログ・ダメージ値・残りHPスナップショットの記録・忠実再生、標準化レコーダー `ReplayRecorder` / `RecordMatchFromResult` / `RecordCharacterVsCharacter` / `RecordCharacterVsMonster` / `RecordParticipantVsParticipant`、プレイヤー別対戦履歴・全体最新リプレイ一覧、保持期間経過レコードの自動プルーニング、MariaDB永続化）。
 - **Continuous Endurance Challenge** (`internal/challenge`): 連戦チャレンジ・サバイバル戦闘（初級・中級・上級・奈落の全4段階Tier JSONカタログ `challenge_tiers.json`、ラウンド進行に伴うステータス累進スケーリング、インターラウンド20% HP回復、5連勝区切りのマイルストーンアイテムドロップ、途中撤退による全額確定精算 vs 敗北時の50%救済精算・アイテム没収、最高到達ラウンド別リーダーボード、MariaDB永続化）。
 - **Custom Skill Loadout & Slot Management** (`internal/custom_skill`): カスタムスキル・スロット管理（JSONスキルカタログ `skills.json`、現在職・マスター職・宝石汎用スキルの装備制限バリデーション、スロット枠数管理、発動優先度 1〜10、重複装備防止、全戦闘モード向けアクティブスキル供給、MariaDB永続化）。
+- **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): 手助けクエスト（何でも屋 @リッカによる武器・防具・道具・モンスター納品依頼、通常・レア・ギルド専用クエスト、錬金素材・幸福袋・GP報酬、6日間期限、有効依頼アイテムのショップ除外連携）および緊急救出処理（スタック時・エラー時の状態リセット、クールダウン/睡眠ペナルティ、MariaDB永続化）。
 
 ### API & Transport
 - **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`）。セッション認証、キャラクター所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
 
 ### Infrastructure & Operations
-- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `029_custom_skills.sql`、`make db-migrate` / `make db-reset`）。
+- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `031_rescue_and_helper.sql`、`make db-migrate` / `make db-reset`）。
 - **Valkey**: 遅延アクションキュー・排他ロック（AOF+RDB永続化）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
 - **Verification**: `Makefile` (`make check`, `make fmt`, `make check-clean`)、Git pre-push hook による自動検証。
@@ -64,7 +65,6 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ## Immediate Priorities (Next Actions)
 
 1. **Remaining Version 1.0 Feature Modules**:
-   - Player Rescue & Helpers (Issue #79)
    - Town Park & Announcements (Issue #78, #67)
    - Private Home & Mailbox (Issue #159)
    - Rankings (Issue #63)

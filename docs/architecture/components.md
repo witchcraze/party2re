@@ -299,6 +299,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Data Catalog:** Embedded JSON skill catalog definitions (`internal/custom_skill/data/skills.json`).
   - **Dependencies:** Core Skill, Core Job, Core Character, Character repository, Character Job repository.
   - **Persistence:** `character_custom_skills` table in `internal/database/custom_skill_repository.go`.
+- **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`):
+  - **Responsibility:** Helper quest generation, item/monster delivery validation, alchemy material rewards, guild points contribution, and emergency state rescue recovery with cooldown penalties.
+  - **Dependencies:** Core Character, Core Inventory, Core Item, Guild repository.
+  - **Persistence:** `helper_quests` and `rescue_records` tables in `internal/database/helper_repository.go` and `internal/database/rescue_repository.go`.
 
 ### Future Feature Modules
 
