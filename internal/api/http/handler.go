@@ -69,6 +69,7 @@ type Handler struct {
 	helpers        HelperService
 	rescues        RescueService
 	notifications  NotificationService
+	homes          HomeService
 	allowedOrigins map[string]struct{}
 }
 
@@ -212,6 +213,21 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /notifications/{id}/read", h.handleMarkNotificationAsRead)
 	mux.HandleFunc("POST /notifications/read-all", h.handleMarkAllNotificationsAsRead)
 	mux.HandleFunc("DELETE /notifications/{id}", h.handleDeleteNotification)
+
+	mux.HandleFunc("GET /homes/{id}", h.handleGetHomeView)
+	mux.HandleFunc("POST /homes/{id}/settings", h.handleUpdateHomeSettings)
+	mux.HandleFunc("POST /homes/{id}/companion/phrases", h.handleTeachCompanionPhrase)
+	mux.HandleFunc("DELETE /homes/{id}/companion/phrases/{phrase_id}", h.handleForgetCompanionPhrase)
+	mux.HandleFunc("GET /homes/{id}/companion/talk", h.handleTalkToCompanion)
+	mux.HandleFunc("GET /homes/{id}/notices", h.handleListDeliveryNotices)
+	mux.HandleFunc("POST /homes/{id}/notices/clear", h.handleClearDeliveryNotices)
+
+	mux.HandleFunc("POST /letters", h.handleSendLetter)
+	mux.HandleFunc("GET /letters/inbox", h.handleListInbox)
+	mux.HandleFunc("GET /letters/outbox", h.handleListOutbox)
+	mux.HandleFunc("GET /letters/unread-count", h.handleGetUnreadLetterCount)
+	mux.HandleFunc("POST /letters/{id}/read", h.handleReadLetter)
+	mux.HandleFunc("DELETE /letters/{id}", h.handleDeleteLetter)
 
 	return securityHeadersMiddleware(h.corsMiddleware(mux))
 }
