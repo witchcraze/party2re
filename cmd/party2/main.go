@@ -21,6 +21,7 @@ import (
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/helper"
+	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/notification"
@@ -205,6 +206,15 @@ func run() error {
 		return err
 	}
 	_, err = notification.NewService(notificationRepo, notificationRepo)
+	if err != nil {
+		return err
+	}
+
+	homeRepo, err := database.NewHomeRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = home.NewService(homeRepo, charRepo)
 	if err != nil {
 		return err
 	}

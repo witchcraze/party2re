@@ -94,7 +94,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Guild creation, membership, and administration ([#76](https://github.com/witchcraze/party2re/issues/76))
 - [x] Guild battles and territory competition: Guild versus Guild combat ([#77](https://github.com/witchcraze/party2re/issues/77))
 - [x] Player communication, park, and public interactions ([#78](https://github.com/witchcraze/party2re/issues/78))
-- [ ] Player private home, mailbox, and letter correspondence ([#159](https://github.com/witchcraze/party2re/issues/159))
+- [x] Player private home, mailbox, and letter correspondence ([#159](https://github.com/witchcraze/party2re/issues/159))
 - [x] Helper and player rescue assistance ([#79](https://github.com/witchcraze/party2re/issues/79))
 - [ ] Rankings (level, job, weekly rankings, contest records) ([#63](https://github.com/witchcraze/party2re/issues/63))
 
@@ -182,7 +182,8 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#79](https://github.com/witchcraze/party2re/issues/79) | Player rescue and companion helper assistance | Merged |
 | [#78](https://github.com/witchcraze/party2re/issues/78) | Town Park and public bulletin board | Merged |
 | [#213](https://github.com/witchcraze/party2re/issues/213) | HTTP API endpoints for helper and rescue | Merged |
-| [#67](https://github.com/witchcraze/party2re/issues/67) | News, announcements, and player notification system | Implemented |
+| [#67](https://github.com/witchcraze/party2re/issues/67) | News, announcements, and player notification system | Merged |
+| [#159](https://github.com/witchcraze/party2re/issues/159) | Player private home, mailbox, and letter correspondence | Implemented |
 
 ---
 

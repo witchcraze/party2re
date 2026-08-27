@@ -311,6 +311,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** System-wide news announcement broadcasts (`news.cgi`), categorized server announcements, personalized player notification inbox for asynchronous game alerts, read state tracking, unread count queries, and retention pruning.
   - **Dependencies:** Core Player.
   - **Persistence:** `news_articles` and `player_notifications` tables in `internal/database/notification_repository.go`.
+- **Player Private Home & Mailbox** (`internal/home`):
+  - **Responsibility:** Character private estate management (`home.cgi`), home wallpaper/theme customization, visitor tracking, player-to-player letter mail correspondence (inbox/outbox), companion greeting phrase customization (`ことばをおしえる`), and delivery notices ledger.
+  - **Dependencies:** Core Character, Character repository.
+  - **Persistence:** `character_homes`, `character_letters`, `character_companion_phrases`, and `character_delivery_notices` tables in `internal/database/home_repository.go`.
 
 ### Future Feature Modules
 
