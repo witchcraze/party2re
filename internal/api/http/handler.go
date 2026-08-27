@@ -68,6 +68,7 @@ type Handler struct {
 	park           ParkService
 	helpers        HelperService
 	rescues        RescueService
+	notifications  NotificationService
 	allowedOrigins map[string]struct{}
 }
 
@@ -201,6 +202,16 @@ func (h *Handler) Router() http.Handler {
 
 	mux.HandleFunc("GET /rescues/penalty", h.handleGetRescuePenalty)
 	mux.HandleFunc("POST /rescues/request", h.handleRequestRescue)
+
+	mux.HandleFunc("GET /news", h.handleListNews)
+	mux.HandleFunc("GET /news/{id}", h.handleGetNews)
+	mux.HandleFunc("POST /news", h.handleCreateNews)
+
+	mux.HandleFunc("GET /notifications", h.handleListNotifications)
+	mux.HandleFunc("GET /notifications/unread-count", h.handleGetUnreadNotificationCount)
+	mux.HandleFunc("POST /notifications/{id}/read", h.handleMarkNotificationAsRead)
+	mux.HandleFunc("POST /notifications/read-all", h.handleMarkAllNotificationsAsRead)
+	mux.HandleFunc("DELETE /notifications/{id}", h.handleDeleteNotification)
 
 	return securityHeadersMiddleware(h.corsMiddleware(mux))
 }

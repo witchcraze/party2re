@@ -307,6 +307,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Public chat/bulletin board messages, character authorship, text sanitization, rate limiting, and NPC interactions (@町娘 talk, inspect, and 20-tier fortune divination).
   - **Dependencies:** Character repository (identity verification).
   - **Persistence:** `park_posts` table in `internal/database/park_repository.go`.
+- **News & Player Notifications** (`internal/notification`):
+  - **Responsibility:** System-wide news announcement broadcasts (`news.cgi`), categorized server announcements, personalized player notification inbox for asynchronous game alerts, read state tracking, unread count queries, and retention pruning.
+  - **Dependencies:** Core Player.
+  - **Persistence:** `news_articles` and `player_notifications` tables in `internal/database/notification_repository.go`.
 
 ### Future Feature Modules
 
