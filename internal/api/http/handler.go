@@ -15,6 +15,8 @@ import (
 	"github.com/witchcraze/party2re/internal/adventure"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/helper"
+	"github.com/witchcraze/party2re/internal/rescue"
 	"github.com/witchcraze/party2re/internal/shop"
 )
 
@@ -44,6 +46,18 @@ type ShopService interface {
 	Sell(ctx context.Context, characterID string, itemInstanceID string, quantity int) (shop.SaleResult, error)
 }
 
+// HelperService defines the helper quest operations exposed over HTTP.
+type HelperService interface {
+	ListQuests(ctx context.Context, now time.Time) ([]helper.Quest, error)
+	CompleteQuest(ctx context.Context, characterID, questID string, now time.Time) (helper.CompletionResult, error)
+}
+
+// RescueService defines the emergency rescue operations exposed over HTTP.
+type RescueService interface {
+	EmergencyRescue(ctx context.Context, characterID, reason string, now time.Time) (rescue.RescueRecord, error)
+	IsUnderPenalty(ctx context.Context, characterID string, now time.Time) (bool, time.Duration, error)
+}
+
 // Handler holds all HTTP handlers for the game API.
 type Handler struct {
 	players        PlayerService
@@ -52,11 +66,27 @@ type Handler struct {
 	shops          ShopService
 	medals         MedalService
 	park           ParkService
+	helpers        HelperService
+	rescues        RescueService
 	allowedOrigins map[string]struct{}
 }
 
 // Option configures optional parameters for the Handler.
 type Option func(*Handler)
+
+// WithHelper configures the helper quest service for the Handler.
+func WithHelper(helpers HelperService) Option {
+	return func(h *Handler) {
+		h.helpers = helpers
+	}
+}
+
+// WithRescue configures the emergency rescue service for the Handler.
+func WithRescue(rescues RescueService) Option {
+	return func(h *Handler) {
+		h.rescues = rescues
+	}
+}
 
 // WithAllowedOrigins configures the whitelist of allowed CORS origins.
 // Any wildcard ("*") or empty entries are ignored/discarded.
@@ -165,6 +195,12 @@ func (h *Handler) Router() http.Handler {
 
 	mux.HandleFunc("GET /medals/rewards", h.handleGetMedalRewards)
 	mux.HandleFunc("POST /medals/claim", h.handleClaimMedalReward)
+
+	mux.HandleFunc("GET /helpers/quests", h.handleListHelperQuests)
+	mux.HandleFunc("POST /helpers/complete", h.handleCompleteHelperQuest)
+
+	mux.HandleFunc("GET /rescues/penalty", h.handleGetRescuePenalty)
+	mux.HandleFunc("POST /rescues/request", h.handleRequestRescue)
 
 	return securityHeadersMiddleware(h.corsMiddleware(mux))
 }

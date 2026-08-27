@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #207 — Small medal drop and acquisition logic across activities
+Last updated: Issue #213 — HTTP API for Rescue and Helper systems
 
 ## Current phase
 
@@ -52,7 +52,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Town Park & Public Bulletin Board** (`internal/park`): 交流広場・公開掲示板（プレイヤー発言投稿・文字色指定・宛先指定・HTMLサニタイズ・連投レートリミット、最新投稿ページネーション、@町娘NPC会話・20種運勢＆27色ラッキーカラー占い、MariaDB永続化）。
 
 ### API & Transport
-- **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`, `/park/*`）。セッション認証、キャラクター所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
+- **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`, `/park/*`, `/medals/*`, `/helpers/*`, `/rescues/*`）。セッション認証、キャラクター所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
 
 ### Infrastructure & Operations
 - **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `032_town_park.sql`、`make db-migrate` / `make db-reset`）。
