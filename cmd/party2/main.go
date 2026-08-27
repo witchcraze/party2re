@@ -23,6 +23,7 @@ import (
 	"github.com/witchcraze/party2re/internal/helper"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/medal"
+	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/park"
 	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/replay"
@@ -198,6 +199,15 @@ func run() error {
 	}
 	txProvider := database.NewTransactionProvider(db)
 	_ = helper.NewService(helperRepo, charRepo, invRepo, nil, txProvider)
+
+	notificationRepo, err := database.NewNotificationRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = notification.NewService(notificationRepo, notificationRepo)
+	if err != nil {
+		return err
+	}
 
 	valkeyClient, err := valkey.NewClient()
 	if err != nil {

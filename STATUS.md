@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #213 — HTTP API for Rescue and Helper systems
+Last updated: Issue #67 — News, announcements, and player notification system
 
 ## Current phase
 
@@ -50,12 +50,13 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Custom Skill Loadout & Slot Management** (`internal/custom_skill`): カスタムスキル・スロット管理（JSONスキルカタログ `skills.json`、現在職・マスター職・宝石汎用スキルの装備制限バリデーション、スロット枠数管理、発動優先度 1〜10、重複装備防止、全戦闘モード向けアクティブスキル供給、MariaDB永続化）。
 - **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): 手助けクエスト（何でも屋 @リッカによる武器・防具・道具・モンスター納品依頼、通常・レア・ギルド専用クエスト、錬金素材・幸福袋・GP報酬、6日間期限、有効依頼アイテムのショップ除外連携）および緊急救出処理（スタック時・エラー時の状態リセット、クールダウン/睡眠ペナルティ、MariaDB永続化）。
 - **Town Park & Public Bulletin Board** (`internal/park`): 交流広場・公開掲示板（プレイヤー発言投稿・文字色指定・宛先指定・HTMLサニタイズ・連投レートリミット、最新投稿ページネーション、@町娘NPC会話・20種運勢＆27色ラッキーカラー占い、MariaDB永続化）。
+- **News & Player Notifications** (`internal/notification`): ニュース・お知らせ＆プレイヤー通知インボックス（全体告知 `news.cgi`、カテゴリ別お知らせ配信、プレイヤー別非同期メッセージ受信箱、既読・未読管理、一括既読化、未読件数照会、MariaDB永続化）。
 
 ### API & Transport
-- **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`, `/park/*`, `/medals/*`, `/helpers/*`, `/rescues/*`）。セッション認証、キャラクター所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
+- **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`, `/park/*`, `/medals/*`, `/helpers/*`, `/rescues/*`, `/news/*`, `/notifications/*`）。セッション認証、キャラクター・プレイヤー所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
 
 ### Infrastructure & Operations
-- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `032_town_park.sql`、`make db-migrate` / `make db-reset`）。
+- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `033_news_and_notifications.sql`、`make db-migrate` / `make db-reset`）。
 - **Valkey**: 遅延アクションキュー・排他ロック（AOF+RDB永続化）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
 - **Verification**: `Makefile` (`make check`, `make fmt`, `make check-clean`)、Git pre-push hook による自動検証。
@@ -66,10 +67,10 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ## Immediate Priorities (Next Actions)
 
 1. **Remaining Version 1.0 Feature Modules**:
-   - News & Announcements (Issue #67)
    - Private Home & Mailbox (Issue #159)
-   - Rankings (Issue #63)
+   - Player Leaderboards and Rankings (Issue #63)
    - Web Presentation UI / Client (Issue #140)
+   - Gem and Jewel special synthesis (Issue #72)
 
 ---
 

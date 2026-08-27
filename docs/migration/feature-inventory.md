@@ -54,7 +54,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [ ] Personal Access Token (API Key) generation and authentication ([#163](https://github.com/witchcraze/party2re/issues/163))
 - [ ] Player deletion and maintenance behavior
 - [ ] Name changes and profile customization
-- [ ] Notifications, news, and replay/history access
+- [x] Notifications, news, and player notification inbox ([#67](https://github.com/witchcraze/party2re/issues/67))
 - [ ] Administrator operations
 
 ### B. Character, progression, jobs, and skills
@@ -179,7 +179,10 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#66](https://github.com/witchcraze/party2re/issues/66) | Battle replay records and match history viewer | Merged |
 | [#162](https://github.com/witchcraze/party2re/issues/162) | Continuous Endurance Challenge combat survival mode | Merged |
 | [#69](https://github.com/witchcraze/party2re/issues/69) | Custom skill loadout and skill slot management | Merged |
-| [#79](https://github.com/witchcraze/party2re/issues/79) | Player rescue and companion helper assistance | Implemented |
+| [#79](https://github.com/witchcraze/party2re/issues/79) | Player rescue and companion helper assistance | Merged |
+| [#78](https://github.com/witchcraze/party2re/issues/78) | Town Park and public bulletin board | Merged |
+| [#213](https://github.com/witchcraze/party2re/issues/213) | HTTP API endpoints for helper and rescue | Merged |
+| [#67](https://github.com/witchcraze/party2re/issues/67) | News, announcements, and player notification system | Implemented |
 
 ---
 
