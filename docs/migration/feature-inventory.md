@@ -93,7 +93,7 @@ All groups below are Version 1.0 reconstruction requirements.
 ### E. Social and competitive systems
 - [x] Guild creation, membership, and administration ([#76](https://github.com/witchcraze/party2re/issues/76))
 - [x] Guild battles and territory competition: Guild versus Guild combat ([#77](https://github.com/witchcraze/party2re/issues/77))
-- [ ] Player communication, park, and public interactions ([#78](https://github.com/witchcraze/party2re/issues/78))
+- [x] Player communication, park, and public interactions ([#78](https://github.com/witchcraze/party2re/issues/78))
 - [ ] Player private home, mailbox, and letter correspondence ([#159](https://github.com/witchcraze/party2re/issues/159))
 - [x] Helper and player rescue assistance ([#79](https://github.com/witchcraze/party2re/issues/79))
 - [ ] Rankings (level, job, weekly rankings, contest records) ([#63](https://github.com/witchcraze/party2re/issues/63))

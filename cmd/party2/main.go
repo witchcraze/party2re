@@ -21,6 +21,7 @@ import (
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/park"
 	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/replay"
 	"github.com/witchcraze/party2re/internal/scheduling"
@@ -169,6 +170,14 @@ func run() error {
 		return err
 	}
 	_, err = custom_skill.NewService(customSkillRepo, charRepo, charJobRepo)
+	if err != nil {
+		return err
+	}
+	parkRepo, err := database.NewParkRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = park.NewService(parkRepo, charRepo)
 	if err != nil {
 		return err
 	}
