@@ -51,6 +51,7 @@ type Handler struct {
 	adventures     AdventureService
 	shops          ShopService
 	medals         MedalService
+	park           ParkService
 	allowedOrigins map[string]struct{}
 }
 
@@ -155,6 +156,12 @@ func (h *Handler) Router() http.Handler {
 
 	mux.HandleFunc("POST /shop/purchase", h.handlePurchase)
 	mux.HandleFunc("POST /shop/sell", h.handleSell)
+
+	mux.HandleFunc("GET /park/posts", h.handleGetParkPosts)
+	mux.HandleFunc("POST /park/posts", h.handlePostParkMessage)
+	mux.HandleFunc("POST /park/npc/talk", h.handleParkNPCTalk)
+	mux.HandleFunc("POST /park/npc/divinate", h.handleParkNPCDivinate)
+	mux.HandleFunc("GET /park/npc/inspect", h.handleParkNPCInspect)
 
 	return securityHeadersMiddleware(h.corsMiddleware(mux))
 }

@@ -303,6 +303,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Helper quest generation, item/monster delivery validation, alchemy material rewards, guild points contribution, and emergency state rescue recovery with cooldown penalties.
   - **Dependencies:** Core Character, Core Inventory, Core Item, Guild repository.
   - **Persistence:** `helper_quests` and `rescue_records` tables in `internal/database/helper_repository.go` and `internal/database/rescue_repository.go`.
+- **Town Park & Public Bulletin Board** (`internal/park`):
+  - **Responsibility:** Public chat/bulletin board messages, character authorship, text sanitization, rate limiting, and NPC interactions (@町娘 talk, inspect, and 20-tier fortune divination).
+  - **Dependencies:** Character repository (identity verification).
+  - **Persistence:** `park_posts` table in `internal/database/park_repository.go`.
 
 ### Future Feature Modules
 

@@ -1,0 +1,89 @@
+package database
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"time"
+
+	"github.com/witchcraze/party2re/internal/park"
+)
+
+type ParkRepository struct {
+	db *sql.DB
+}
+
+func NewParkRepository(db *sql.DB) (*ParkRepository, error) {
+	if db == nil {
+		return nil, errors.New("database is nil")
+	}
+	return &ParkRepository{db: db}, nil
+}
+
+func (r *ParkRepository) CreatePost(ctx context.Context, post park.Post) error {
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO park_posts (
+			id, character_id, character_name, content, color, recipient_name, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, post.ID, post.CharacterID, post.CharacterName, post.Content, post.Color, post.RecipientName, post.CreatedAt.UTC())
+	return err
+}
+
+func (r *ParkRepository) GetRecentPosts(ctx context.Context, limit int, offset int) ([]park.Post, int, error) {
+	var total int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM park_posts`).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, character_id, character_name, content, color, recipient_name, created_at
+		FROM park_posts
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
+	`, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	posts := make([]park.Post, 0)
+	for rows.Next() {
+		var p park.Post
+		if err := rows.Scan(
+			&p.ID,
+			&p.CharacterID,
+			&p.CharacterName,
+			&p.Content,
+			&p.Color,
+			&p.RecipientName,
+			&p.CreatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		posts = append(posts, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return posts, total, nil
+}
+
+func (r *ParkRepository) GetLatestPostTimeByCharacter(ctx context.Context, characterID string) (time.Time, error) {
+	var createdAt time.Time
+	err := r.db.QueryRowContext(ctx, `
+		SELECT created_at
+		FROM park_posts
+		WHERE character_id = ?
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, characterID).Scan(&createdAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	return createdAt, nil
+}
