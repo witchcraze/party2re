@@ -262,6 +262,9 @@ func TestMove_TreasureAndTraps(t *testing.T) {
 	if res.EventType != dungeon.EventTreasure || res.GoldFound <= 0 {
 		t.Errorf("expected treasure event, got %#v", res)
 	}
+	if res.MedalsFound != 1 || res.Expedition.AccumulatedMedals != 1 {
+		t.Errorf("expected 1 medal found in chest, got found=%d, accumulated=%d", res.MedalsFound, res.Expedition.AccumulatedMedals)
+	}
 	if res.Expedition.AccumulatedGold < res.GoldFound {
 		t.Errorf("expected accumulated gold >= %d, got %d", res.GoldFound, res.Expedition.AccumulatedGold)
 	}
@@ -297,6 +300,7 @@ func TestEscape_LocksInLedgerRewards(t *testing.T) {
 
 	accumulatedGold := res.Expedition.AccumulatedGold
 	accumulatedExp := res.Expedition.AccumulatedExp
+	accumulatedMedals := res.Expedition.AccumulatedMedals
 
 	// Escape from dungeon
 	escRes, err := service.Escape(ctx, "advent")
@@ -305,6 +309,9 @@ func TestEscape_LocksInLedgerRewards(t *testing.T) {
 	}
 	if escRes.EventType != dungeon.EventEscape || !escRes.IsFinished {
 		t.Errorf("expected finished escape event, got %#v", escRes)
+	}
+	if escRes.MedalsFound != accumulatedMedals {
+		t.Errorf("expected %d medals on escape, got %d", accumulatedMedals, escRes.MedalsFound)
 	}
 
 	// Verify active expedition is cleaned up
@@ -318,13 +325,16 @@ func TestEscape_LocksInLedgerRewards(t *testing.T) {
 	if savedChar.Money != 500+accumulatedGold {
 		t.Errorf("expected character money %d, got %d", 500+accumulatedGold, savedChar.Money)
 	}
+	if savedChar.SmallMedals != accumulatedMedals {
+		t.Errorf("expected character medals %d, got %d", accumulatedMedals, savedChar.SmallMedals)
+	}
 
 	// Verify history
 	history, err := service.GetHistory(ctx, "advent", 5)
 	if err != nil || len(history) != 1 {
 		t.Fatalf("expected 1 history entry, got %d (err: %v)", len(history), err)
 	}
-	if history[0].Outcome != dungeon.StatusEscaped || history[0].GoldReward != accumulatedGold || history[0].ExpReward != accumulatedExp {
+	if history[0].Outcome != dungeon.StatusEscaped || history[0].GoldReward != accumulatedGold || history[0].ExpReward != accumulatedExp || history[0].MedalsReward != accumulatedMedals {
 		t.Errorf("unexpected history record: %#v", history[0])
 	}
 }

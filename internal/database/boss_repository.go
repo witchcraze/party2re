@@ -172,10 +172,10 @@ func (r *BossRepository) RecordChallenge(
 		return err
 	}
 
-	// 3. Update character progression/stats/money
+	// 3. Update character progression/stats/money/medals
 	updateCharQuery := `
 		UPDATE characters
-		SET level = ?, experience = ?, money = ?,
+		SET level = ?, experience = ?, money = ?, small_medals = ?,
 		    hp = ?, max_hp = ?,
 		    attack = ?, defense = ?, agility = ?,
 		    rebirth_count = ?
@@ -187,6 +187,7 @@ func (r *BossRepository) RecordChallenge(
 		character.Level,
 		character.Experience,
 		character.Money,
+		character.SmallMedals,
 		character.Stats.HP,
 		character.Stats.MaxHP,
 		character.Stats.Attack,

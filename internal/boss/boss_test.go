@@ -15,6 +15,7 @@ import (
 type mockBossRepo struct {
 	records      map[string]boss.CharacterBossRecord
 	histories    map[string][]boss.BossChallengeHistory
+	charRepo     *mockCharRepo
 	savedChars   map[string]corecharacter.Character
 	awardedItems map[string][]coreitem.Instance
 }
@@ -56,6 +57,9 @@ func (m *mockBossRepo) RecordChallenge(
 	m.records[record.CharacterID] = record
 	m.histories[record.CharacterID] = append([]boss.BossChallengeHistory{history}, m.histories[record.CharacterID]...)
 	m.savedChars[character.ID] = character
+	if m.charRepo != nil {
+		m.charRepo.chars[character.ID] = character
+	}
 	if rewardItem != nil {
 		m.awardedItems[character.ID] = append(m.awardedItems[character.ID], *rewardItem)
 	}
@@ -236,6 +240,7 @@ func TestChallengeBoss_VictoryFirstClearRewards(t *testing.T) {
 			"hero": createTestChar("hero", 30, 1000, 300, 100),
 		},
 	}
+	bossRepo.charRepo = charRepo
 	battleEngine := corebattle.Engine{}
 
 	service, err := boss.NewService(bossRepo, charRepo, battleEngine)
@@ -261,6 +266,9 @@ func TestChallengeBoss_VictoryFirstClearRewards(t *testing.T) {
 	if res.GoldReward != 1500 { // 500 + 1000
 		t.Errorf("expected 1500 Gold, got %d", res.GoldReward)
 	}
+	if res.SmallMedalsReward != 2 { // 1 + 1
+		t.Errorf("expected 2 SmallMedals, got %d", res.SmallMedalsReward)
+	}
 	if res.ItemRewardID != "potion" {
 		t.Errorf("expected potion drop, got %s", res.ItemRewardID)
 	}
@@ -271,7 +279,7 @@ func TestChallengeBoss_VictoryFirstClearRewards(t *testing.T) {
 		t.Errorf("expected TotalBossDefeats=1, got %d", res.UpdatedRecord.TotalBossDefeats)
 	}
 
-	// 2. Repeat clear against King 1 (No FirstClearBonus: 300 EXP, 500 Gold)
+	// 2. Repeat clear against King 1 (No FirstClearBonus: 300 EXP, 500 Gold, 1 Medal)
 	res2, err := service.ChallengeBoss(ctx, "hero", "king-01")
 	if err != nil {
 		t.Fatalf("second challenge failed: %v", err)
@@ -285,8 +293,16 @@ func TestChallengeBoss_VictoryFirstClearRewards(t *testing.T) {
 	if res2.GoldReward != 500 {
 		t.Errorf("expected 500 Gold on repeat, got %d", res2.GoldReward)
 	}
+	if res2.SmallMedalsReward != 1 {
+		t.Errorf("expected 1 SmallMedal on repeat, got %d", res2.SmallMedalsReward)
+	}
 	if res2.UpdatedRecord.TotalBossDefeats != 2 {
 		t.Errorf("expected TotalBossDefeats=2, got %d", res2.UpdatedRecord.TotalBossDefeats)
+	}
+
+	savedChar := bossRepo.savedChars["hero"]
+	if savedChar.SmallMedals != 3 { // 2 + 1
+		t.Errorf("expected 3 total small medals on saved character, got %d", savedChar.SmallMedals)
 	}
 
 	// 3. Verify history and leaderboard

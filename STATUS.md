@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #78 — Town park and public player bulletin board
+Last updated: Issue #207 — Small medal drop and acquisition logic across activities
 
 ## Current phase
 
@@ -21,13 +21,13 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Progression** (`internal/core/progression`): レベルアップ（累積経験値テーブル `level * level * 10`）、成長率適用。
 - **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): JSONカタログ（`jobs.json`）、転職、Lv99マスタリー、スキル発動・コスト計算。
 - **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理。
-- **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定、構造化ターンログ出力、戦闘参加者（Participant）標準アダプタ/ビルダー（`NewParticipantFromCharacter`, `NewParticipantFromCharacterWithHP`, `ParticipantBuilder`）。
+- **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定（経験値・ゴールド・アイテム・ちいさなメダル）、構造化ターンログ出力、戦闘参加者（Participant）標準アダプタ/ビルダー（`NewParticipantFromCharacter`, `NewParticipantFromCharacterWithHP`, `ParticipantBuilder`）。
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): Valkeyバックエンドの遅延アクションキュー＆分散排他ロックWorker。
 
 ### Feature Modules
 - **Activity** (`internal/activity`): 訓練機能（Valkey Worker push型＋手動Claimフォールバック）。
-- **Adventure** (`internal/adventure`): 28ステージ（`stages.json`）、286体モンスター（`monsters.json`）、戦闘解決、ドロップ報酬、Valkey Worker連携。
-- **Medal** (`internal/medal`): 小さなメダル交換所（減算消費方式、トランザクション整合性）。
+- **Adventure** (`internal/adventure`): 28ステージ（`stages.json`）、286体モンスター（`monsters.json`）、戦闘解決、ドロップ報酬（メダル含む）、Valkey Worker連携。
+- **Medal** (`internal/medal`): 小さなメダル交換所（減算消費方式、トランザクション整合性）およびダンジョン宝箱・踏破、ワールドボス討伐・初回クリアによるメダル獲得連携。
 - **Shop** (`internal/shop`): アイテム売買（50%売却）、トランザクション整合性。
 - **Depot** (`internal/depot`): 倉庫（アイテム・ゴールド預入・引出）、トランザクション整合性。
 - **Blacksmith** (`internal/blacksmith`): 鍛冶屋（+1〜+10装備強化、成功率曲線、費用・素材消費）。

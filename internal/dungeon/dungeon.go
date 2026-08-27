@@ -94,20 +94,21 @@ type Dungeon struct {
 }
 
 type ActiveExpedition struct {
-	ID               string           `json:"id"`
-	CharacterID      string           `json:"character_id"`
-	DungeonID        string           `json:"dungeon_id"`
-	CurrentFloor     int              `json:"current_floor"`
-	PosX             int              `json:"pos_x"`
-	PosY             int              `json:"pos_y"`
-	CurrentHP        int              `json:"current_hp"`
-	TurnsRemaining   int              `json:"turns_remaining"`
-	AccumulatedExp   int              `json:"accumulated_exp"`
-	AccumulatedGold  int              `json:"accumulated_gold"`
-	AccumulatedItems []string         `json:"accumulated_items"`
-	Status           ExpeditionStatus `json:"status"`
-	StartedAt        time.Time        `json:"started_at"`
-	UpdatedAt        time.Time        `json:"updated_at"`
+	ID                string           `json:"id"`
+	CharacterID       string           `json:"character_id"`
+	DungeonID         string           `json:"dungeon_id"`
+	CurrentFloor      int              `json:"current_floor"`
+	PosX              int              `json:"pos_x"`
+	PosY              int              `json:"pos_y"`
+	CurrentHP         int              `json:"current_hp"`
+	TurnsRemaining    int              `json:"turns_remaining"`
+	AccumulatedExp    int              `json:"accumulated_exp"`
+	AccumulatedGold   int              `json:"accumulated_gold"`
+	AccumulatedItems  []string         `json:"accumulated_items"`
+	AccumulatedMedals int              `json:"accumulated_medals"`
+	Status            ExpeditionStatus `json:"status"`
+	StartedAt         time.Time        `json:"started_at"`
+	UpdatedAt         time.Time        `json:"updated_at"`
 }
 
 type CharacterDungeonRecord struct {
@@ -129,6 +130,7 @@ type DungeonExpeditionHistory struct {
 	Outcome          ExpeditionStatus `json:"outcome"`
 	ExpReward        int              `json:"exp_reward"`
 	GoldReward       int              `json:"gold_reward"`
+	MedalsReward     int              `json:"medals_reward"`
 	ItemsRewardCount int              `json:"items_reward_count"`
 	CreatedAt        time.Time        `json:"created_at"`
 }
@@ -147,6 +149,7 @@ type ExpeditionStepResult struct {
 	BattleResult *corebattle.Result `json:"battle_result,omitempty"`
 	DamageTaken  int                `json:"damage_taken,omitempty"`
 	GoldFound    int                `json:"gold_found,omitempty"`
+	MedalsFound  int                `json:"medals_found,omitempty"`
 	ItemFound    string             `json:"item_found,omitempty"`
 	ExpEarned    int                `json:"exp_earned,omitempty"`
 	IsFinished   bool               `json:"is_finished"`
@@ -588,7 +591,9 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 		if len(floor.Monsters) > 0 && floor.Monsters[0].DropItemID != "" {
 			itemFound = floor.Monsters[0].DropItemID
 		}
+		medalsFound := 1
 		exp.AccumulatedGold += goldFound
+		exp.AccumulatedMedals += medalsFound
 		exp.AccumulatedItems = append(exp.AccumulatedItems, itemFound)
 
 		rec, _ := s.repo.GetRecord(ctx, char.ID)
@@ -598,11 +603,12 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 			return ExpeditionStepResult{}, err
 		}
 		return ExpeditionStepResult{
-			Expedition: *exp,
-			EventType:  EventTreasure,
-			GoldFound:  goldFound,
-			ItemFound:  itemFound,
-			Message:    fmt.Sprintf("宝箱を発見した！ %d G と %s を手に入れた！", goldFound, itemFound),
+			Expedition:  *exp,
+			EventType:   EventTreasure,
+			GoldFound:   goldFound,
+			MedalsFound: medalsFound,
+			ItemFound:   itemFound,
+			Message:     fmt.Sprintf("宝箱を発見した！ %d G と %s 、ちいさなメダル %d枚を手に入れた！", goldFound, itemFound, medalsFound),
 		}, nil
 
 	case 'X': // Hazard Trap
@@ -782,6 +788,9 @@ func (s *Service) handleDungeonClear(
 		_, _ = progression.ApplyExperience(char, exp.AccumulatedExp)
 	}
 	char.Money += exp.AccumulatedGold
+	medalsBonus := dungeon.Tier
+	exp.AccumulatedMedals += medalsBonus
+	char.SmallMedals += exp.AccumulatedMedals
 
 	rewardItems := make([]coreitem.Instance, 0, len(exp.AccumulatedItems))
 	for _, defID := range exp.AccumulatedItems {
@@ -814,6 +823,7 @@ func (s *Service) handleDungeonClear(
 		Outcome:          StatusCleared,
 		ExpReward:        exp.AccumulatedExp,
 		GoldReward:       exp.AccumulatedGold,
+		MedalsReward:     exp.AccumulatedMedals,
 		ItemsRewardCount: len(rewardItems),
 		CreatedAt:        now,
 	}
@@ -825,12 +835,13 @@ func (s *Service) handleDungeonClear(
 	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
 
 	return ExpeditionStepResult{
-		Expedition: *exp,
-		EventType:  EventBoss,
-		ExpEarned:  exp.AccumulatedExp,
-		GoldFound:  exp.AccumulatedGold,
-		IsFinished: true,
-		Message:    fmt.Sprintf("ダンジョン「%s」を踏破・完全制覇した！ (EXP: +%d, Gold: +%d, アイテム: %d個)", dungeon.Name, exp.AccumulatedExp, exp.AccumulatedGold, len(rewardItems)),
+		Expedition:  *exp,
+		EventType:   EventBoss,
+		ExpEarned:   exp.AccumulatedExp,
+		GoldFound:   exp.AccumulatedGold,
+		MedalsFound: exp.AccumulatedMedals,
+		IsFinished:  true,
+		Message:     fmt.Sprintf("ダンジョン「%s」を踏破・完全制覇した！ (EXP: +%d, Gold: +%d, メダル: %d枚, アイテム: %d個)", dungeon.Name, exp.AccumulatedExp, exp.AccumulatedGold, exp.AccumulatedMedals, len(rewardItems)),
 	}, nil
 }
 
@@ -849,6 +860,7 @@ func (s *Service) handleEscape(
 		_, _ = progression.ApplyExperience(char, exp.AccumulatedExp)
 	}
 	char.Money += exp.AccumulatedGold
+	char.SmallMedals += exp.AccumulatedMedals
 
 	rewardItems := make([]coreitem.Instance, 0, len(exp.AccumulatedItems))
 	for _, defID := range exp.AccumulatedItems {
@@ -876,6 +888,7 @@ func (s *Service) handleEscape(
 		Outcome:          StatusEscaped,
 		ExpReward:        exp.AccumulatedExp,
 		GoldReward:       exp.AccumulatedGold,
+		MedalsReward:     exp.AccumulatedMedals,
 		ItemsRewardCount: len(rewardItems),
 		CreatedAt:        now,
 	}
@@ -887,12 +900,13 @@ func (s *Service) handleEscape(
 	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
 
 	return ExpeditionStepResult{
-		Expedition: *exp,
-		EventType:  EventEscape,
-		ExpEarned:  exp.AccumulatedExp,
-		GoldFound:  exp.AccumulatedGold,
-		IsFinished: true,
-		Message:    msg,
+		Expedition:  *exp,
+		EventType:   EventEscape,
+		ExpEarned:   exp.AccumulatedExp,
+		GoldFound:   exp.AccumulatedGold,
+		MedalsFound: exp.AccumulatedMedals,
+		IsFinished:  true,
+		Message:     msg,
 	}, nil
 }
 

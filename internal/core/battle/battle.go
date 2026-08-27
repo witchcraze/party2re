@@ -61,6 +61,7 @@ type Reward struct {
 	Currency         int
 	ItemDefinitionID string
 	ItemQuantity     int
+	SmallMedals      int
 }
 
 type Effect struct {

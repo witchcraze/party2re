@@ -28,21 +28,23 @@ var (
 )
 
 type Boss struct {
-	ID                  string   `json:"id"`
-	Tier                int      `json:"tier"`
-	Name                string   `json:"name"`
-	Title               string   `json:"title"`
-	MinLevel            int      `json:"min_level"`
-	HP                  int      `json:"hp"`
-	Attack              int      `json:"attack"`
-	Defense             int      `json:"defense"`
-	Agility             int      `json:"agility"`
-	ExperienceReward    int      `json:"experience_reward"`
-	GoldReward          int      `json:"gold_reward"`
-	DropItemIDs         []string `json:"drop_item_ids"`
-	FirstClearExpBonus  int      `json:"first_clear_exp_bonus"`
-	FirstClearGoldBonus int      `json:"first_clear_gold_bonus"`
-	DailyEntryLimit     int      `json:"daily_entry_limit"`
+	ID                   string   `json:"id"`
+	Tier                 int      `json:"tier"`
+	Name                 string   `json:"name"`
+	Title                string   `json:"title"`
+	MinLevel             int      `json:"min_level"`
+	HP                   int      `json:"hp"`
+	Attack               int      `json:"attack"`
+	Defense              int      `json:"defense"`
+	Agility              int      `json:"agility"`
+	ExperienceReward     int      `json:"experience_reward"`
+	GoldReward           int      `json:"gold_reward"`
+	DropItemIDs          []string `json:"drop_item_ids"`
+	FirstClearExpBonus   int      `json:"first_clear_exp_bonus"`
+	FirstClearGoldBonus  int      `json:"first_clear_gold_bonus"`
+	SmallMedalReward     int      `json:"small_medal_reward"`
+	FirstClearMedalBonus int      `json:"first_clear_medal_bonus"`
+	DailyEntryLimit      int      `json:"daily_entry_limit"`
 }
 
 type CharacterBossRecord struct {
@@ -67,17 +69,18 @@ func (r *CharacterBossRecord) ResetDailyAttemptsIfExpired(today time.Time) {
 }
 
 type BossChallengeHistory struct {
-	ID           string
-	CharacterID  string
-	BossID       string
-	Tier         int
-	Outcome      corebattle.Outcome
-	Turns        int
-	RewardExp    int
-	RewardGold   int
-	RewardItemID string
-	IsFirstClear bool
-	CreatedAt    time.Time
+	ID                string
+	CharacterID       string
+	BossID            string
+	Tier              int
+	Outcome           corebattle.Outcome
+	Turns             int
+	RewardExp         int
+	RewardGold        int
+	RewardSmallMedals int
+	RewardItemID      string
+	IsFirstClear      bool
+	CreatedAt         time.Time
 }
 
 type BossEncounterStatus struct {
@@ -89,13 +92,14 @@ type BossEncounterStatus struct {
 }
 
 type ChallengeResult struct {
-	BattleResult     corebattle.Result   `json:"battle_result"`
-	Outcome          corebattle.Outcome  `json:"outcome"`
-	ExperienceReward int                 `json:"experience_reward"`
-	GoldReward       int                 `json:"gold_reward"`
-	ItemRewardID     string              `json:"item_reward_id,omitempty"`
-	IsFirstClear     bool                `json:"is_first_clear"`
-	UpdatedRecord    CharacterBossRecord `json:"updated_record"`
+	BattleResult      corebattle.Result   `json:"battle_result"`
+	Outcome           corebattle.Outcome  `json:"outcome"`
+	ExperienceReward  int                 `json:"experience_reward"`
+	GoldReward        int                 `json:"gold_reward"`
+	SmallMedalsReward int                 `json:"small_medals_reward"`
+	ItemRewardID      string              `json:"item_reward_id,omitempty"`
+	IsFirstClear      bool                `json:"is_first_clear"`
+	UpdatedRecord     CharacterBossRecord `json:"updated_record"`
 }
 
 type BossLeaderboardEntry struct {
@@ -136,191 +140,213 @@ type Service struct {
 func DefaultBossCatalog() []Boss {
 	return []Boss{
 		{
-			ID:                  "king-01",
-			Tier:                1,
-			Name:                "レッドストーン・ガーディアン",
-			Title:               "封印の尖兵",
-			MinLevel:            15,
-			HP:                  250,
-			Attack:              45,
-			Defense:             30,
-			Agility:             20,
-			ExperienceReward:    300,
-			GoldReward:          500,
-			DropItemIDs:         []string{"potion"},
-			FirstClearExpBonus:  500,
-			FirstClearGoldBonus: 1000,
-			DailyEntryLimit:     DefaultDailyEntryLimit,
+			ID:                   "king-01",
+			Tier:                 1,
+			Name:                 "レッドストーン・ガーディアン",
+			Title:                "封印の尖兵",
+			MinLevel:             15,
+			HP:                   250,
+			Attack:               45,
+			Defense:              30,
+			Agility:              20,
+			ExperienceReward:     300,
+			GoldReward:           500,
+			DropItemIDs:          []string{"potion"},
+			FirstClearExpBonus:   500,
+			FirstClearGoldBonus:  1000,
+			SmallMedalReward:     1,
+			FirstClearMedalBonus: 1,
+			DailyEntryLimit:      DefaultDailyEntryLimit,
 		},
 		{
-			ID:                  "king-02",
-			Tier:                2,
-			Name:                "ブルーストーン・ゴーレム",
-			Title:               "氷結の守護神",
-			MinLevel:            25,
-			HP:                  500,
-			Attack:              80,
-			Defense:             60,
-			Agility:             35,
-			ExperienceReward:    600,
-			GoldReward:          1000,
-			DropItemIDs:         []string{"high-potion"},
-			FirstClearExpBonus:  1000,
-			FirstClearGoldBonus: 2000,
-			DailyEntryLimit:     DefaultDailyEntryLimit,
+			ID:                   "king-02",
+			Tier:                 2,
+			Name:                 "ブルーストーン・ゴーレム",
+			Title:                "氷結の守護神",
+			MinLevel:             25,
+			HP:                   500,
+			Attack:               80,
+			Defense:              60,
+			Agility:              35,
+			ExperienceReward:     600,
+			GoldReward:           1000,
+			DropItemIDs:          []string{"high-potion"},
+			FirstClearExpBonus:   1000,
+			FirstClearGoldBonus:  2000,
+			SmallMedalReward:     1,
+			FirstClearMedalBonus: 1,
+			DailyEntryLimit:      DefaultDailyEntryLimit,
 		},
 		{
-			ID:                  "king-03",
-			Tier:                3,
-			Name:                "エメラルド・ワイバーン",
-			Title:               "碧空の暴君",
-			MinLevel:            35,
-			HP:                  900,
-			Attack:              130,
-			Defense:             95,
-			Agility:             55,
-			ExperienceReward:    1000,
-			GoldReward:          1800,
-			DropItemIDs:         []string{"ether"},
-			FirstClearExpBonus:  1500,
-			FirstClearGoldBonus: 3000,
-			DailyEntryLimit:     DefaultDailyEntryLimit,
+			ID:                   "king-03",
+			Tier:                 3,
+			Name:                 "エメラルド・ワイバーン",
+			Title:                "碧空の暴君",
+			MinLevel:             35,
+			HP:                   900,
+			Attack:               130,
+			Defense:              95,
+			Agility:              55,
+			ExperienceReward:     1000,
+			GoldReward:           1800,
+			DropItemIDs:          []string{"ether"},
+			FirstClearExpBonus:   1500,
+			FirstClearGoldBonus:  3000,
+			SmallMedalReward:     1,
+			FirstClearMedalBonus: 2,
+			DailyEntryLimit:      DefaultDailyEntryLimit,
 		},
 		{
-			ID:                  "king-04",
-			Tier:                4,
-			Name:                "アメジスト・ロード",
-			Title:               "紫電の魔将",
-			MinLevel:            45,
-			HP:                  1400,
-			Attack:              190,
-			Defense:             140,
-			Agility:             75,
-			ExperienceReward:    1600,
-			GoldReward:          2800,
-			DropItemIDs:         []string{"high-ether"},
-			FirstClearExpBonus:  2500,
-			FirstClearGoldBonus: 5000,
-			DailyEntryLimit:     DefaultDailyEntryLimit,
+			ID:                   "king-04",
+			Tier:                 4,
+			Name:                 "アメジスト・ロード",
+			Title:                "紫電の魔将",
+			MinLevel:             45,
+			HP:                   1400,
+			Attack:               190,
+			Defense:              140,
+			Agility:              75,
+			ExperienceReward:     1600,
+			GoldReward:           2800,
+			DropItemIDs:          []string{"high-ether"},
+			FirstClearExpBonus:   2500,
+			FirstClearGoldBonus:  5000,
+			SmallMedalReward:     2,
+			FirstClearMedalBonus: 2,
+			DailyEntryLimit:      DefaultDailyEntryLimit,
 		},
 		{
-			ID:                  "king-05",
-			Tier:                5,
-			Name:                "トパーズ・キメラ",
-			Title:               "砂塵の獣王",
-			MinLevel:            55,
-			HP:                  2000,
-			Attack:              260,
-			Defense:             190,
-			Agility:             100,
-			ExperienceReward:    2400,
-			GoldReward:          4000,
-			DropItemIDs:         []string{"elixir"},
-			FirstClearExpBonus:  3500,
-			FirstClearGoldBonus: 7000,
-			DailyEntryLimit:     DefaultDailyEntryLimit,
+			ID:                   "king-05",
+			Tier:                 5,
+			Name:                 "トパーズ・キメラ",
+			Title:                "砂塵の獣王",
+			MinLevel:             55,
+			HP:                   2000,
+			Attack:               260,
+			Defense:              190,
+			Agility:              100,
+			ExperienceReward:     2400,
+			GoldReward:           4000,
+			DropItemIDs:          []string{"elixir"},
+			FirstClearExpBonus:   3500,
+			FirstClearGoldBonus:  7000,
+			SmallMedalReward:     2,
+			FirstClearMedalBonus: 3,
+			DailyEntryLimit:      DefaultDailyEntryLimit,
 		},
 		{
-			ID:                  "king-06",
-			Tier:                6,
-			Name:                "オブシディアン・ナイト",
-			Title:               "黒曜の覇者",
-			MinLevel:            65,
-			HP:                  2800,
-			Attack:              340,
-			Defense:             250,
-			Agility:             130,
-			ExperienceReward:    3400,
-			GoldReward:          5500,
-			DropItemIDs:         []string{"crystal-01"},
-			FirstClearExpBonus:  5000,
-			FirstClearGoldBonus: 10000,
-			DailyEntryLimit:     DefaultDailyEntryLimit,
+			ID:                   "king-06",
+			Tier:                 6,
+			Name:                 "オブシディアン・ナイト",
+			Title:                "黒曜の覇者",
+			MinLevel:             65,
+			HP:                   2800,
+			Attack:               340,
+			Defense:              250,
+			Agility:              130,
+			ExperienceReward:     3400,
+			GoldReward:           5500,
+			DropItemIDs:          []string{"crystal-01"},
+			FirstClearExpBonus:   5000,
+			FirstClearGoldBonus:  10000,
+			SmallMedalReward:     2,
+			FirstClearMedalBonus: 3,
+			DailyEntryLimit:      DefaultDailyEntryLimit,
 		},
 		{
-			ID:                  "king-07",
-			Tier:                7,
-			Name:                "クリスタル・ドラゴン",
-			Title:               "光彩の巨竜",
-			MinLevel:            75,
-			HP:                  3800,
-			Attack:              430,
-			Defense:             320,
-			Agility:             165,
-			ExperienceReward:    4600,
-			GoldReward:          7500,
-			DropItemIDs:         []string{"crystal-02"},
-			FirstClearExpBonus:  7000,
-			FirstClearGoldBonus: 14000,
-			DailyEntryLimit:     DefaultDailyEntryLimit,
+			ID:                   "king-07",
+			Tier:                 7,
+			Name:                 "クリスタル・ドラゴン",
+			Title:                "光彩の巨竜",
+			MinLevel:             75,
+			HP:                   3800,
+			Attack:               430,
+			Defense:              320,
+			Agility:              165,
+			ExperienceReward:     4600,
+			GoldReward:           7500,
+			DropItemIDs:          []string{"crystal-02"},
+			FirstClearExpBonus:   7000,
+			FirstClearGoldBonus:  14000,
+			SmallMedalReward:     3,
+			FirstClearMedalBonus: 4,
+			DailyEntryLimit:      DefaultDailyEntryLimit,
 		},
 		{
-			ID:                  "king-08",
-			Tier:                8,
-			Name:                "ダークネス・ベヒモス",
-			Title:               "深淵の殲滅者",
-			MinLevel:            85,
-			HP:                  5000,
-			Attack:              530,
-			Defense:             400,
-			Agility:             200,
-			ExperienceReward:    6000,
-			GoldReward:          10000,
-			DropItemIDs:         []string{"crystal-03"},
-			FirstClearExpBonus:  9500,
-			FirstClearGoldBonus: 20000,
-			DailyEntryLimit:     DefaultDailyEntryLimit,
+			ID:                   "king-08",
+			Tier:                 8,
+			Name:                 "ダークネス・ベヒモス",
+			Title:                "深淵の殲滅者",
+			MinLevel:             85,
+			HP:                   5000,
+			Attack:               530,
+			Defense:              400,
+			Agility:              200,
+			ExperienceReward:     6000,
+			GoldReward:           10000,
+			DropItemIDs:          []string{"crystal-03"},
+			FirstClearExpBonus:   9500,
+			FirstClearGoldBonus:  20000,
+			SmallMedalReward:     3,
+			FirstClearMedalBonus: 4,
+			DailyEntryLimit:      DefaultDailyEntryLimit,
 		},
 		{
-			ID:                  "king-09",
-			Tier:                9,
-			Name:                "アビス・ルーラー",
-			Title:               "黄泉の帝王",
-			MinLevel:            95,
-			HP:                  6500,
-			Attack:              640,
-			Defense:             490,
-			Agility:             245,
-			ExperienceReward:    8000,
-			GoldReward:          14000,
-			DropItemIDs:         []string{"orb-dark"},
-			FirstClearExpBonus:  13000,
-			FirstClearGoldBonus: 30000,
-			DailyEntryLimit:     DefaultDailyEntryLimit,
+			ID:                   "king-09",
+			Tier:                 9,
+			Name:                 "アビス・ルーラー",
+			Title:                "黄泉の帝王",
+			MinLevel:             95,
+			HP:                   6500,
+			Attack:               640,
+			Defense:              490,
+			Agility:              245,
+			ExperienceReward:     8000,
+			GoldReward:           14000,
+			DropItemIDs:          []string{"orb-dark"},
+			FirstClearExpBonus:   13000,
+			FirstClearGoldBonus:  30000,
+			SmallMedalReward:     4,
+			FirstClearMedalBonus: 5,
+			DailyEntryLimit:      DefaultDailyEntryLimit,
 		},
 		{
-			ID:                  "king-10",
-			Tier:                10,
-			Name:                "全てを無に還す者",
-			Title:               "終焉の破壊神",
-			MinLevel:            99,
-			HP:                  8500,
-			Attack:              760,
-			Defense:             590,
-			Agility:             300,
-			ExperienceReward:    12000,
-			GoldReward:          20000,
-			DropItemIDs:         []string{"orb-light"},
-			FirstClearExpBonus:  20000,
-			FirstClearGoldBonus: 50000,
-			DailyEntryLimit:     DefaultDailyEntryLimit,
+			ID:                   "king-10",
+			Tier:                 10,
+			Name:                 "全てを無に還す者",
+			Title:                "終焉の破壊神",
+			MinLevel:             99,
+			HP:                   8500,
+			Attack:               760,
+			Defense:              590,
+			Agility:              300,
+			ExperienceReward:     12000,
+			GoldReward:           20000,
+			DropItemIDs:          []string{"orb-light"},
+			FirstClearExpBonus:   20000,
+			FirstClearGoldBonus:  50000,
+			SmallMedalReward:     5,
+			FirstClearMedalBonus: 5,
+			DailyEntryLimit:      DefaultDailyEntryLimit,
 		},
 		{
-			ID:                  "king-world",
-			Tier:                99,
-			Name:                "太古の創世神",
-			Title:               "天界の守護龍神",
-			MinLevel:            99,
-			HP:                  12000,
-			Attack:              920,
-			Defense:             720,
-			Agility:             360,
-			ExperienceReward:    25000,
-			GoldReward:          50000,
-			DropItemIDs:         []string{"orb-rainbow"},
-			FirstClearExpBonus:  50000,
-			FirstClearGoldBonus: 100000,
-			DailyEntryLimit:     DefaultDailyEntryLimit,
+			ID:                   "king-world",
+			Tier:                 99,
+			Name:                 "太古の創世神",
+			Title:                "天界の守護龍神",
+			MinLevel:             99,
+			HP:                   12000,
+			Attack:               920,
+			Defense:              720,
+			Agility:              360,
+			ExperienceReward:     25000,
+			GoldReward:           50000,
+			DropItemIDs:          []string{"orb-rainbow"},
+			FirstClearExpBonus:   50000,
+			FirstClearGoldBonus:  100000,
+			SmallMedalReward:     10,
+			FirstClearMedalBonus: 20,
+			DailyEntryLimit:      DefaultDailyEntryLimit,
 		},
 	}
 }
@@ -506,7 +532,7 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 	}
 
 	outcome := battleResult.Outcome
-	var expGained, goldGained int
+	var expGained, goldGained, medalsGained int
 	var rewardItemID string
 	isFirstClear := false
 	var rewardItemInstance *coreitem.Instance
@@ -515,10 +541,12 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 		isFirstClear = rec.HighestTierCleared < boss.Tier
 		expGained = boss.ExperienceReward
 		goldGained = boss.GoldReward
+		medalsGained = boss.SmallMedalReward
 
 		if isFirstClear {
 			expGained += boss.FirstClearExpBonus
 			goldGained += boss.FirstClearGoldBonus
+			medalsGained += boss.FirstClearMedalBonus
 			if rec.FirstClearedAt == nil {
 				rec.FirstClearedAt = &now
 			}
@@ -542,11 +570,12 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 			}
 		}
 
-		// Apply EXP and Gold to character
+		// Apply EXP, Gold, and SmallMedals to character
 		if expGained > 0 {
 			_, _ = progression.ApplyExperience(&char, expGained)
 		}
 		char.Money += goldGained
+		char.SmallMedals += medalsGained
 	}
 
 	historyID, err := generateID()
@@ -555,17 +584,18 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 	}
 
 	history := BossChallengeHistory{
-		ID:           historyID,
-		CharacterID:  char.ID,
-		BossID:       boss.ID,
-		Tier:         boss.Tier,
-		Outcome:      outcome,
-		Turns:        battleResult.Turns,
-		RewardExp:    expGained,
-		RewardGold:   goldGained,
-		RewardItemID: rewardItemID,
-		IsFirstClear: isFirstClear,
-		CreatedAt:    now,
+		ID:                historyID,
+		CharacterID:       char.ID,
+		BossID:            boss.ID,
+		Tier:              boss.Tier,
+		Outcome:           outcome,
+		Turns:             battleResult.Turns,
+		RewardExp:         expGained,
+		RewardGold:        goldGained,
+		RewardSmallMedals: medalsGained,
+		RewardItemID:      rewardItemID,
+		IsFirstClear:      isFirstClear,
+		CreatedAt:         now,
 	}
 
 	if err := s.repo.RecordChallenge(ctx, history, rec, char, rewardItemInstance); err != nil {
@@ -573,13 +603,14 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 	}
 
 	return ChallengeResult{
-		BattleResult:     battleResult,
-		Outcome:          outcome,
-		ExperienceReward: expGained,
-		GoldReward:       goldGained,
-		ItemRewardID:     rewardItemID,
-		IsFirstClear:     isFirstClear,
-		UpdatedRecord:    rec,
+		BattleResult:      battleResult,
+		Outcome:           outcome,
+		ExperienceReward:  expGained,
+		GoldReward:        goldGained,
+		SmallMedalsReward: medalsGained,
+		ItemRewardID:      rewardItemID,
+		IsFirstClear:      isFirstClear,
+		UpdatedRecord:     rec,
 	}, nil
 }
 
