@@ -315,10 +315,15 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Character private estate management (`home.cgi`), home wallpaper/theme customization, visitor tracking, player-to-player letter mail correspondence (inbox/outbox), companion greeting phrase customization (`ことばをおしえる`), and delivery notices ledger.
   - **Dependencies:** Core Character, Character repository.
   - **Persistence:** `character_homes`, `character_letters`, `character_companion_phrases`, and `character_delivery_notices` tables in `internal/database/home_repository.go`.
+- **Player Leaderboards & Character Rankings** (`internal/ranking`):
+  - **Responsibility:** Multi-category competitive leaderboards and character rankings (`ranking.cgi`, `job_ranking.cgi`, `week_ranking.cgi`), including Level, Player Wealth, Character Wealth, Battle Victories, PvP Victories, World Boss Defeats, Adventure Victories, Job Mastery, Job Popularity, Helper Quests, Rebirth Count, and Small Medals, with deterministic tie-breaking, pagination, in-memory TTL caching, and persistent snapshots (`ranking_snapshots`).
+  - **Dependencies:** Core Character, Core Player.
+  - **Persistence:** `ranking_snapshots` table and dedicated high-performance query indexes in `internal/database/ranking_repository.go`.
 
 ### Future Feature Modules
 
-- Rankings (Level, Job, Weekly, Contest)
+- Web Presentation UI / Client
+- Photo Contest & Seasonal Events
 
 
 ## Component review criteria

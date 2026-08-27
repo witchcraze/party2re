@@ -27,6 +27,7 @@ import (
 	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/park"
 	"github.com/witchcraze/party2re/internal/pvp"
+	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/replay"
 	"github.com/witchcraze/party2re/internal/rescue"
 	"github.com/witchcraze/party2re/internal/scheduling"
@@ -215,6 +216,15 @@ func run() error {
 		return err
 	}
 	_, err = home.NewService(homeRepo, charRepo)
+	if err != nil {
+		return err
+	}
+
+	rankingRepo, err := database.NewRankingRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = ranking.NewService(rankingRepo)
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #159 — Player private home, mailbox, and letter correspondence
+Last updated: Issue #63 — Player leaderboards and character rankings
 
 ## Current phase
 
@@ -52,12 +52,13 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Town Park & Public Bulletin Board** (`internal/park`): 交流広場・公開掲示板（プレイヤー発言投稿・文字色指定・宛先指定・HTMLサニタイズ・連投レートリミット、最新投稿ページネーション、@町娘NPC会話・20種運勢＆27色ラッキーカラー占い、MariaDB永続化）。
 - **News & Player Notifications** (`internal/notification`): ニュース・お知らせ＆プレイヤー通知インボックス（全体告知 `news.cgi`、カテゴリ別お知らせ配信、プレイヤー別非同期メッセージ受信箱、既読・未読管理、一括既読化、未読件数照会、MariaDB永続化）。
 - **Player Private Home & Mailbox** (`internal/home`): 自宅・私有地管理（`home.cgi`、壁紙・テーマ・一言設定、訪問者記録、プレイヤー間手紙送受信・受信箱/送信箱・未読件数、仲間ペット言葉教え・挨拶会話、送金・譲渡通知台帳、MariaDB永続化）。
+- **Player Leaderboards & Character Rankings** (`internal/ranking`): ランキング・リーダーボード機能（`ranking.cgi`, `job_ranking.cgi`, `week_ranking.cgi`、レベル・プレイヤー総資産・キャラクター所持金・戦闘通算勝利数・PvP闘技場勝利数・ボス討伐数・冒険勝利数・職マスター数・職業人気分布・手助け達成数・転生回数・ちいさなメダル所持数の12カテゴリ、決定論的タイブレーク・ページネーション、インメモリTTLキャッシュおよび永続スナップショット `ranking_snapshots`、MariaDB永続化）。
 
 ### API & Transport
-- **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`, `/park/*`, `/medals/*`, `/helpers/*`, `/rescues/*`, `/news/*`, `/notifications/*`, `/homes/*`, `/letters/*`）。セッション認証、キャラクター・プレイヤー所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
+- **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`, `/park/*`, `/medals/*`, `/helpers/*`, `/rescues/*`, `/news/*`, `/notifications/*`, `/homes/*`, `/letters/*`, `/rankings/*`）。セッション認証、キャラクター・プレイヤー所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
 
 ### Infrastructure & Operations
-- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `034_player_home_and_mailbox.sql`、`make db-migrate` / `make db-reset`）。
+- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `035_rankings_and_leaderboards.sql`、`make db-migrate` / `make db-reset`）。
 - **Valkey**: 遅延アクションキュー・排他ロック（AOF+RDB永続化）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
 - **Verification**: `Makefile` (`make check`, `make fmt`, `make check-clean`)、Git pre-push hook による自動検証。
@@ -68,10 +69,10 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ## Immediate Priorities (Next Actions)
 
 1. **Remaining Version 1.0 Feature Modules**:
-   - Player Leaderboards and Rankings (Issue #63)
    - Notifications, News, and History Access (Issue #199)
    - Web Presentation UI / Client (Issue #140)
    - Gem and Jewel special synthesis (Issue #72)
+   - Photo Contest and Seasonal Events (Issue #186)
 
 ---
 

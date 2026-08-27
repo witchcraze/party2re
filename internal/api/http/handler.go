@@ -70,6 +70,7 @@ type Handler struct {
 	rescues        RescueService
 	notifications  NotificationService
 	homes          HomeService
+	rankings       RankingService
 	allowedOrigins map[string]struct{}
 }
 
@@ -228,6 +229,18 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /letters/unread-count", h.handleGetUnreadLetterCount)
 	mux.HandleFunc("POST /letters/{id}/read", h.handleReadLetter)
 	mux.HandleFunc("DELETE /letters/{id}", h.handleDeleteLetter)
+
+	mux.HandleFunc("GET /rankings/levels", h.handleGetLevelRanking)
+	mux.HandleFunc("GET /rankings/wealth", h.handleGetPlayerWealthRanking)
+	mux.HandleFunc("GET /rankings/characters-wealth", h.handleGetCharacterWealthRanking)
+	mux.HandleFunc("GET /rankings/battles", h.handleGetBattleRanking)
+	mux.HandleFunc("GET /rankings/job-mastery", h.handleGetJobMasteryRanking)
+	mux.HandleFunc("GET /rankings/job-popularity", h.handleGetJobPopularityRanking)
+	mux.HandleFunc("GET /rankings/helpers", h.handleGetHelperRanking)
+	mux.HandleFunc("GET /rankings/rebirths", h.handleGetRebirthRanking)
+	mux.HandleFunc("GET /rankings/medals", h.handleGetSmallMedalRanking)
+	mux.HandleFunc("GET /rankings/{type}", h.handleGetRankingByType)
+	mux.HandleFunc("POST /rankings/refresh", h.handleRefreshRankings)
 
 	return securityHeadersMiddleware(h.corsMiddleware(mux))
 }
