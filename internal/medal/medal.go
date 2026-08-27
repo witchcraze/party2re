@@ -63,6 +63,19 @@ func NewService(
 		return nil, err
 	}
 
+	return NewServiceWithRewards(characters, inventories, transactions, rewards)
+}
+
+func NewServiceWithRewards(
+	characters CharacterRepository,
+	inventories InventoryRepository,
+	transactions TransactionRepository,
+	rewards []Reward,
+) (*Service, error) {
+	if characters == nil || inventories == nil {
+		return nil, ErrNilDependency
+	}
+
 	return &Service{
 		characters:   characters,
 		inventories:  inventories,
@@ -75,14 +88,17 @@ func (s *Service) GetRewards() []Reward {
 	return s.rewards
 }
 
-func (s *Service) Claim(ctx context.Context, characterID string, cost int) (corecharacter.Character, coreinventory.Inventory, error) {
+func (s *Service) Claim(ctx context.Context, characterID string, itemID string) (corecharacter.Character, coreinventory.Inventory, error) {
 	if characterID == "" {
 		return corecharacter.Character{}, coreinventory.Inventory{}, corecharacter.ErrNotFound
+	}
+	if itemID == "" {
+		return corecharacter.Character{}, coreinventory.Inventory{}, ErrRewardNotFound
 	}
 
 	var targetReward *Reward
 	for _, r := range s.rewards {
-		if r.Cost == cost {
+		if r.ItemID == itemID {
 			targetReward = &r
 			break
 		}

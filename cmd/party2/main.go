@@ -21,6 +21,7 @@ import (
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/park"
 	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/replay"
@@ -181,6 +182,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	_, _ = medal.NewService(charRepo, invRepo, nil, "internal/medal/medal_rewards.json")
 
 	valkeyClient, err := valkey.NewClient()
 	if err != nil {
