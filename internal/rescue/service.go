@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 type RescueRepository interface {
 	Save(ctx context.Context, record RescueRecord) error
 	FindRecentByCharacterID(ctx context.Context, characterID string, since time.Time) ([]RescueRecord, error)
+	FindLatestByCharacterID(ctx context.Context, characterID string) (RescueRecord, error)
 }
 
 type CharacterRepository interface {
@@ -42,6 +44,7 @@ func NewService(
 	}
 }
 
+// EmergencyRescue resets player character state when stuck or encountering errors, applying a sleep penalty cooldown.
 func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason string, now time.Time) (RescueRecord, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return RescueRecord{}, ErrInvalidCharacterID
@@ -86,6 +89,40 @@ func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason strin
 	}
 
 	return rec, nil
+}
+
+// IsUnderPenalty checks if the character is currently restricted by a rescue penalty cooldown.
+func (s *Service) IsUnderPenalty(ctx context.Context, characterID string, now time.Time) (bool, time.Duration, error) {
+	if strings.TrimSpace(characterID) == "" {
+		return false, 0, ErrInvalidCharacterID
+	}
+
+	rec, err := s.rescues.FindLatestByCharacterID(ctx, characterID)
+	if err != nil {
+		if errors.Is(err, ErrNoRescueRecord) {
+			return false, 0, nil
+		}
+		return false, 0, err
+	}
+
+	if rec.IsActive(now) {
+		remaining := rec.ExpiresAt().Sub(now)
+		return true, remaining, nil
+	}
+
+	return false, 0, nil
+}
+
+// CheckActionAllowed returns ErrCharacterUnderPenalty if the character is currently under rescue penalty.
+func (s *Service) CheckActionAllowed(ctx context.Context, characterID string, now time.Time) error {
+	underPenalty, _, err := s.IsUnderPenalty(ctx, characterID, now)
+	if err != nil {
+		return err
+	}
+	if underPenalty {
+		return ErrCharacterUnderPenalty
+	}
+	return nil
 }
 
 func newRecordID() (string, error) {

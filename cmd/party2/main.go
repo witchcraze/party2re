@@ -20,11 +20,13 @@ import (
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/gvg"
+	"github.com/witchcraze/party2re/internal/helper"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/park"
 	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/replay"
+	"github.com/witchcraze/party2re/internal/rescue"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/shop"
 	"github.com/witchcraze/party2re/internal/valkey"
@@ -183,6 +185,19 @@ func run() error {
 		return err
 	}
 	_, _ = medal.NewService(charRepo, invRepo, nil, "internal/medal/medal_rewards.json")
+
+	rescueRepo, err := database.NewRescueRepository(db)
+	if err != nil {
+		return err
+	}
+	_ = rescue.NewService(rescueRepo, charRepo, nil)
+
+	helperRepo, err := database.NewHelperRepository(db)
+	if err != nil {
+		return err
+	}
+	txProvider := database.NewTransactionProvider(db)
+	_ = helper.NewService(helperRepo, charRepo, invRepo, nil, txProvider)
 
 	valkeyClient, err := valkey.NewClient()
 	if err != nil {
