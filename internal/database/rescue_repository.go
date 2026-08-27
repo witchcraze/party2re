@@ -21,7 +21,7 @@ func NewRescueRepository(db *sql.DB) (*RescueRepository, error) {
 }
 
 func (r *RescueRepository) Save(ctx context.Context, rec rescue.RescueRecord) error {
-	_, err := r.db.ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO rescue_records (id, character_id, reason, penalty_seconds, created_at)
 		VALUES (?, ?, ?, ?, ?)
 	`, rec.ID, rec.CharacterID, rec.Reason, rec.PenaltySeconds, rec.CreatedAt)
@@ -29,7 +29,7 @@ func (r *RescueRepository) Save(ctx context.Context, rec rescue.RescueRecord) er
 }
 
 func (r *RescueRepository) FindRecentByCharacterID(ctx context.Context, characterID string, since time.Time) ([]rescue.RescueRecord, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, character_id, reason, penalty_seconds, created_at
 		FROM rescue_records
 		WHERE character_id = ? AND created_at >= ?
