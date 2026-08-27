@@ -308,6 +308,9 @@ func (s *Service) Claim(ctx context.Context, id string) (Adventure, error) {
 		if result.Reward.Currency > 0 {
 			character.Money += result.Reward.Currency
 		}
+		if result.Reward.SmallMedals > 0 {
+			character.SmallMedals += result.Reward.SmallMedals
+		}
 		if result.Reward.ItemDefinitionID != "" {
 			if s.inventories == nil {
 				return Adventure{}, ErrUnsupportedReward

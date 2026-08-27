@@ -231,7 +231,7 @@ func (r *DungeonRepository) FinalizeExpedition(
 	if character != nil {
 		updateCharQuery := `
 			UPDATE characters
-			SET level = ?, experience = ?, money = ?,
+			SET level = ?, experience = ?, money = ?, small_medals = ?,
 			    hp = ?, max_hp = ?,
 			    attack = ?, defense = ?, agility = ?,
 			    rebirth_count = ?
@@ -243,6 +243,7 @@ func (r *DungeonRepository) FinalizeExpedition(
 			character.Level,
 			character.Experience,
 			character.Money,
+			character.SmallMedals,
 			character.Stats.HP,
 			character.Stats.MaxHP,
 			character.Stats.Attack,
