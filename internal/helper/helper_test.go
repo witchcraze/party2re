@@ -54,6 +54,10 @@ func (r *stubCharRepo) FindByID(_ context.Context, id string) (corecharacter.Cha
 	return c, nil
 }
 
+func (r *stubCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return r.FindByID(ctx, id)
+}
+
 func (r *stubCharRepo) Update(_ context.Context, c corecharacter.Character) error {
 	r.characters[c.ID] = c
 	return nil
@@ -69,6 +73,10 @@ func (r *stubInvRepo) FindByCharacterID(_ context.Context, characterID string) (
 		return coreinventory.New(characterID)
 	}
 	return inv, nil
+}
+
+func (r *stubInvRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	return r.FindByCharacterID(ctx, characterID)
 }
 
 func (r *stubInvRepo) Save(_ context.Context, inv coreinventory.Inventory) error {
@@ -105,6 +113,12 @@ func (m *mockRandomSource) Intn(max int) (int, error) {
 		return 0, nil
 	}
 	return val % max, nil
+}
+
+type stubTransactionProvider struct{}
+
+func (p *stubTransactionProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	return fn(ctx)
 }
 
 func TestGenerateQuest(t *testing.T) {
@@ -158,7 +172,7 @@ func TestCompleteQuestSuccess(t *testing.T) {
 		charGuild:   map[string]string{"char-1": "guild-1"},
 	}
 
-	svc := NewService(questRepo, charRepo, invRepo, guildRepo)
+	svc := NewService(questRepo, charRepo, invRepo, guildRepo, &stubTransactionProvider{})
 
 	quest := Quest{
 		ID:            "quest-1",
@@ -217,7 +231,7 @@ func TestCompleteGuildQuestAwardsPoints(t *testing.T) {
 		charGuild:   map[string]string{"char-1": "guild-1"},
 	}
 
-	svc := NewService(questRepo, charRepo, invRepo, guildRepo)
+	svc := NewService(questRepo, charRepo, invRepo, guildRepo, &stubTransactionProvider{})
 
 	quest := Quest{
 		ID:            "quest-g1",
@@ -260,7 +274,7 @@ func TestCompleteQuestRejectsExpired(t *testing.T) {
 	invRepo := &stubInvRepo{inventories: make(map[string]coreinventory.Inventory)}
 	guildRepo := &stubGuildRepo{charGuild: make(map[string]string)}
 
-	svc := NewService(questRepo, charRepo, invRepo, guildRepo)
+	svc := NewService(questRepo, charRepo, invRepo, guildRepo, &stubTransactionProvider{})
 
 	quest := Quest{
 		ID:            "quest-exp",
@@ -298,7 +312,7 @@ func TestGetActiveHelperItemIDs(t *testing.T) {
 		ExpiresAt: now.Add(10 * time.Hour),
 	})
 
-	svc := NewService(questRepo, &stubCharRepo{}, &stubInvRepo{}, &stubGuildRepo{})
+	svc := NewService(questRepo, &stubCharRepo{}, &stubInvRepo{}, &stubGuildRepo{}, &stubTransactionProvider{})
 	itemIDs, err := svc.GetActiveHelperItemIDs(ctx, now)
 	if err != nil {
 		t.Fatalf("GetActiveHelperItemIDs failed: %v", err)

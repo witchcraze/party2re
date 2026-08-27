@@ -12,11 +12,6 @@ type CharacterRepository struct {
 	db *sql.DB
 }
 
-type sqlContextExecutor interface {
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
-
 func NewCharacterRepository(db *sql.DB) (*CharacterRepository, error) {
 	if db == nil {
 		return nil, errors.New("database is nil")
@@ -25,7 +20,7 @@ func NewCharacterRepository(db *sql.DB) (*CharacterRepository, error) {
 }
 
 func (r *CharacterRepository) Save(ctx context.Context, value corecharacter.Character) error {
-	_, err := r.db.ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO characters
 			(id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count, small_medals, help_count)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -36,12 +31,24 @@ func (r *CharacterRepository) Save(ctx context.Context, value corecharacter.Char
 }
 
 func (r *CharacterRepository) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
-	var value corecharacter.Character
-	err := r.db.QueryRowContext(ctx, `
+	return r.findByIDWithQuery(ctx, id, `
 		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count, small_medals, help_count
 		FROM characters
 		WHERE id = ?
-	`, id).Scan(&value.ID, &value.PlayerID, &value.Name, &value.JobID, &value.Gender, &value.Stats.MaxHP, &value.Stats.MaxMP,
+	`)
+}
+
+func (r *CharacterRepository) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return r.findByIDWithQuery(ctx, id, `
+		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count, small_medals, help_count
+		FROM characters
+		WHERE id = ? FOR UPDATE
+	`)
+}
+
+func (r *CharacterRepository) findByIDWithQuery(ctx context.Context, id string, query string) (corecharacter.Character, error) {
+	var value corecharacter.Character
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query, id).Scan(&value.ID, &value.PlayerID, &value.Name, &value.JobID, &value.Gender, &value.Stats.MaxHP, &value.Stats.MaxMP,
 		&value.Stats.HP, &value.Stats.MP, &value.Stats.Attack, &value.Stats.Defense, &value.Stats.Agility,
 		&value.Money, &value.Level, &value.Experience, &value.RebirthCount, &value.SmallMedals, &value.HelpCount)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -54,7 +61,7 @@ func (r *CharacterRepository) FindByID(ctx context.Context, id string) (corechar
 }
 
 func (r *CharacterRepository) FindByPlayerID(ctx context.Context, playerID string) ([]corecharacter.Character, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count, small_medals, help_count
 		FROM characters
 		WHERE player_id = ?
@@ -82,7 +89,7 @@ func (r *CharacterRepository) FindByPlayerID(ctx context.Context, playerID strin
 }
 
 func (r *CharacterRepository) Update(ctx context.Context, value corecharacter.Character) error {
-	return updateCharacter(ctx, r.db, value)
+	return updateCharacter(ctx, ExecutorFromContext(ctx, r.db), value)
 }
 
 func updateCharacter(ctx context.Context, executor sqlContextExecutor, value corecharacter.Character) error {

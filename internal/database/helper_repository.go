@@ -21,7 +21,7 @@ func NewHelperRepository(db *sql.DB) (*HelperRepository, error) {
 }
 
 func (r *HelperRepository) Save(ctx context.Context, q helper.Quest) error {
-	_, err := r.db.ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO helper_quests (
 			id, title, kind, target_id, target_name, required_count,
 			reward_item_id, is_rare, is_guild, expires_at, completed_at, completed_by, created_at
@@ -40,7 +40,7 @@ func (r *HelperRepository) FindByID(ctx context.Context, id string) (helper.Ques
 	var completedBy sql.NullString
 	var completedAt sql.NullTime
 
-	err := r.db.QueryRowContext(ctx, `
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
 		SELECT id, title, kind, target_id, target_name, required_count,
 		       reward_item_id, is_rare, is_guild, expires_at, completed_at, completed_by, created_at
 		FROM helper_quests
@@ -67,7 +67,7 @@ func (r *HelperRepository) FindByID(ctx context.Context, id string) (helper.Ques
 }
 
 func (r *HelperRepository) ListActive(ctx context.Context, now time.Time) ([]helper.Quest, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, title, kind, target_id, target_name, required_count,
 		       reward_item_id, is_rare, is_guild, expires_at, completed_at, completed_by, created_at
 		FROM helper_quests

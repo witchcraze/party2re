@@ -21,37 +21,47 @@ func NewInventoryRepository(db *sql.DB) (*InventoryRepository, error) {
 }
 
 func (r *InventoryRepository) Save(ctx context.Context, value coreinventory.Inventory) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM inventory_items WHERE character_id = ?", value.CharacterID); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	for _, instance := range value.Items {
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO inventory_items (id, character_id, definition_id, quantity, enhancement_level)
-			VALUES (?, ?, ?, ?, ?)
-		`, instance.ID, value.CharacterID, instance.DefinitionID, instance.Quantity, instance.EnhancementLevel); err != nil {
-			_ = tx.Rollback()
+	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
+		if _, err := executor.ExecContext(txCtx, "DELETE FROM inventory_items WHERE character_id = ?", value.CharacterID); err != nil {
 			return err
 		}
-	}
-	return tx.Commit()
+		for _, instance := range value.Items {
+			if _, err := executor.ExecContext(txCtx, `
+				INSERT INTO inventory_items (id, character_id, definition_id, quantity, enhancement_level)
+				VALUES (?, ?, ?, ?, ?)
+			`, instance.ID, value.CharacterID, instance.DefinitionID, instance.Quantity, instance.EnhancementLevel); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (r *InventoryRepository) FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-	value, err := coreinventory.New(characterID)
-	if err != nil {
-		return coreinventory.Inventory{}, err
-	}
-	rows, err := r.db.QueryContext(ctx, `
+	return r.findByCharacterIDWithQuery(ctx, characterID, `
 		SELECT id, definition_id, quantity, enhancement_level
 		FROM inventory_items
 		WHERE character_id = ?
 		ORDER BY id
-	`, characterID)
+	`)
+}
+
+func (r *InventoryRepository) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	return r.findByCharacterIDWithQuery(ctx, characterID, `
+		SELECT id, definition_id, quantity, enhancement_level
+		FROM inventory_items
+		WHERE character_id = ?
+		ORDER BY id FOR UPDATE
+	`)
+}
+
+func (r *InventoryRepository) findByCharacterIDWithQuery(ctx context.Context, characterID string, query string) (coreinventory.Inventory, error) {
+	value, err := coreinventory.New(characterID)
+	if err != nil {
+		return coreinventory.Inventory{}, err
+	}
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, characterID)
 	if err != nil {
 		return coreinventory.Inventory{}, err
 	}

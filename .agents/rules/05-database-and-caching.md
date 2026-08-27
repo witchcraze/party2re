@@ -7,13 +7,14 @@ description: Guidelines for database transaction boundaries, concurrency control
 
 ## 1. Concurrency Control (Unit of Work)
 - **Atomicity:** All read-modify-write operations that alter critical state (e.g., gold, inventory, game progression) MUST occur within a single database transaction.
-- **Concurrency Protection:** Use pessimistic locking (`SELECT ... FOR UPDATE`) when concurrent modifications can cause lost updates or invariant violations, **unless** an equally safe concurrency-control mechanism is deliberately used.
+- **BANNED ANTI-PATTERNS (Lost Updates):**
+  - **Unprotected Read-Modify-Write:** Do NOT read structs (e.g., Character) outside a transaction, mutate them in Go memory, and then blindly save them back (e.g., `executeCharacterUpdate`). This will erase concurrent changes (like Adventure rewards).
+  - **Collection Wipe-and-Insert:** Do NOT implement inventory/collection updates by executing `DELETE FROM ...` followed by re-inserting all items from an unprotected in-memory slice. Use targeted `UPSERT` / `ON DUPLICATE KEY UPDATE` or atomic `DELETE` of specific rows.
+- **Concurrency Protection:** You MUST use pessimistic locking (`SELECT ... FOR UPDATE`) during the read phase of the transaction when modifying complex state that cannot be done with simple SQL statements.
 - **Alternative Safe Mechanisms:** Depending on the context, other concurrency control methods may be preferable to `FOR UPDATE`, such as:
   - Atomic `UPDATE` queries (e.g., `UPDATE ... SET money = money - X WHERE money >= X`).
-  - Optimistic locking (version columns).
-  - Database-side arithmetic and `UPSERT` / `ON DUPLICATE KEY UPDATE` strategies.
-  - Unique constraints to prevent duplicate insertions.
-- **Closure Pattern:** Prefer executing domain logic inside a transactional closure (`RunInTx(ctx, func(tx) error)`) to ensure that reads and writes are safely enclosed in the same database transaction boundary.
+  - Database-side arithmetic and `UPSERT` / `ON DUPLICATE KEY UPDATE` strategies (e.g. Casino coins).
+- **Closure Pattern:** You MUST execute complex domain logic inside a transactional closure (`RunInTx(ctx, func(tx) error)`) to ensure that reads and writes are safely enclosed in the same database transaction boundary.
 
 ## 2. Database Migrations (Current Script Workflow)
 Until a standard migration tool is formally adopted, all SQL migrations MUST adhere strictly to the current `scripts/migrate.sh` logic:
