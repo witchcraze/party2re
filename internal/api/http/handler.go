@@ -163,6 +163,9 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /park/npc/divinate", h.handleParkNPCDivinate)
 	mux.HandleFunc("GET /park/npc/inspect", h.handleParkNPCInspect)
 
+	mux.HandleFunc("GET /medals/rewards", h.handleGetMedalRewards)
+	mux.HandleFunc("POST /medals/claim", h.handleClaimMedalReward)
+
 	return securityHeadersMiddleware(h.corsMiddleware(mux))
 }
 

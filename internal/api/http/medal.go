@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strconv"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -13,16 +12,29 @@ import (
 
 type MedalService interface {
 	GetRewards() []medal.Reward
-	Claim(ctx context.Context, characterID string, cost int) (corecharacter.Character, coreinventory.Inventory, error)
+	Claim(ctx context.Context, characterID string, itemID string) (corecharacter.Character, coreinventory.Inventory, error)
 }
 
-func (h *Handler) GetMedalRewards(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, errors.New("Method not allowed"))
-		return
+// WithMedal configures the MedalService for the handler.
+func WithMedal(m MedalService) Option {
+	return func(h *Handler) {
+		h.medals = m
 	}
+}
+
+type claimMedalRewardRequest struct {
+	CharacterID string `json:"character_id"`
+	ItemID      string `json:"item_id"`
+}
+
+type claimMedalRewardResponse struct {
+	Character characterResponse       `json:"character"`
+	Inventory coreinventory.Inventory `json:"inventory"`
+}
+
+func (h *Handler) handleGetMedalRewards(w http.ResponseWriter, r *http.Request) {
 	if h.medals == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("Medal service not available"))
+		writeError(w, http.StatusNotImplemented, errors.New("medal service not available"))
 		return
 	}
 
@@ -30,45 +42,58 @@ func (h *Handler) GetMedalRewards(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rewards)
 }
 
-func (h *Handler) ClaimMedalReward(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, errors.New("Method not allowed"))
-		return
-	}
+func (h *Handler) handleClaimMedalReward(w http.ResponseWriter, r *http.Request) {
 	if h.medals == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("Medal service not available"))
+		writeError(w, http.StatusNotImplemented, errors.New("medal service not available"))
 		return
 	}
 
-	// For simplicity, we get character ID from headers or context, but let's assume it's passed somehow.
-	// Normally we would parse it from path or session.
-	characterID := r.Header.Get("X-Character-ID")
-	if characterID == "" {
-		writeError(w, http.StatusBadRequest, errors.New("Missing character ID"))
+	sessionID := sessionIDFromRequest(r)
+	if sessionID == "" {
+		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
 		return
 	}
-
-	costStr := r.URL.Query().Get("cost")
-	cost, err := strconv.Atoi(costStr)
+	player, err := h.players.Authenticate(r.Context(), sessionID)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, errors.New("Invalid cost"))
+		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
 		return
 	}
 
-	char, inv, err := h.medals.Claim(r.Context(), characterID, cost)
-	if errors.Is(err, medal.ErrInsufficientMedals) {
-		writeError(w, http.StatusBadRequest, err)
+	var req claimMedalRewardRequest
+	if !decodeJSON(w, r, &req) {
 		return
-	} else if errors.Is(err, medal.ErrRewardNotFound) {
-		writeError(w, http.StatusBadRequest, err)
+	}
+
+	char, err := h.characters.Get(r.Context(), req.CharacterID)
+	if err != nil {
+		if errors.Is(err, corecharacter.ErrNotFound) {
+			writeError(w, http.StatusNotFound, err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
 		return
-	} else if err != nil {
+	}
+	if char.PlayerID != player.ID {
+		writeError(w, http.StatusForbidden, errors.New("forbidden: character belongs to another player"))
+		return
+	}
+
+	updatedChar, updatedInv, err := h.medals.Claim(r.Context(), req.CharacterID, req.ItemID)
+	if err != nil {
+		if errors.Is(err, medal.ErrInsufficientMedals) {
+			writeError(w, http.StatusUnprocessableEntity, err)
+			return
+		}
+		if errors.Is(err, medal.ErrRewardNotFound) {
+			writeError(w, http.StatusNotFound, err)
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"character": char,
-		"inventory": inv,
+	writeJSON(w, http.StatusOK, claimMedalRewardResponse{
+		Character: toCharacterResponse(updatedChar),
+		Inventory: updatedInv,
 	})
 }

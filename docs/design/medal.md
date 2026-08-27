@@ -32,3 +32,8 @@ As directed by project requirements, this system faithfully recreates the deduct
 | 60   | item-109 |
 | 77   | item-107 |
 | 100  | item-059 |
+
+## HTTP API Endpoints
+
+- `GET /medals/rewards`: Returns the active small medal reward tiers and item definitions.
+- `POST /medals/claim`: Exchanges character small medals for a reward item (`{"character_id": "...", "item_id": "..."}`) with session authentication and character ownership verification.

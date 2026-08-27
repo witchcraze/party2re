@@ -62,7 +62,7 @@ func TestMedalService(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		updatedChar, updatedInv, err := svc.Claim(context.Background(), "char-1", 3)
+		updatedChar, updatedInv, err := svc.Claim(context.Background(), "char-1", "armor-32")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -88,9 +88,27 @@ func TestMedalService(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, _, err = svc.Claim(context.Background(), "char-1", 3)
+		_, _, err = svc.Claim(context.Background(), "char-1", "armor-32")
 		if err != medal.ErrInsufficientMedals {
 			t.Errorf("expected ErrInsufficientMedals, got %v", err)
+		}
+	})
+
+	t.Run("reward not found", func(t *testing.T) {
+		char := corecharacter.Character{ID: "char-1", SmallMedals: 10}
+		inv, _ := coreinventory.New("char-1")
+
+		charRepo := &mockCharacterRepo{char: char}
+		invRepo := &mockInventoryRepo{inv: inv}
+
+		svc, err := medal.NewService(charRepo, invRepo, nil, rewardsFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, _, err = svc.Claim(context.Background(), "char-1", "non-existent-item")
+		if err != medal.ErrRewardNotFound {
+			t.Errorf("expected ErrRewardNotFound, got %v", err)
 		}
 	})
 }
