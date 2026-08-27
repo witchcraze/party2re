@@ -87,6 +87,7 @@ Once Version 1.0 is established, the project should transition from **reconstruc
 - [x] **Job Mastery & Character Rebirth** (Issue #61 — Lv99 mastery & +5 stat rebirth)
 - [x] **Inn & Resting** (Issue #62 — HP/MP recovery)
 - [x] **Banking & Player Remittance** (Issue #71 — gold deposits & player transfers)
+- [x] **Player Rescue & Helper Quests** (Issue #79 — helper deliveries & emergency rescue recovery)
 - [x] **HTTP JSON Application API Layer** (Issue #87)
 - [x] **Unified Local Verification & Pre-push Hook** (Issue #121, #124)
 

@@ -37,6 +37,7 @@ type Character struct {
 	Experience   int
 	RebirthCount int
 	SmallMedals  int
+	HelpCount    int
 }
 
 type Stats struct {
