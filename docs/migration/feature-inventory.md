@@ -78,7 +78,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Blacksmith equipment enhancement (+1 to +10) with material/gold costs ([#59](https://github.com/witchcraze/party2re/issues/59))
 - [ ] Gem store currency and transactions ([#72](https://github.com/witchcraze/party2re/issues/72))
 - [ ] Black Market underground trade ([#142](https://github.com/witchcraze/party2re/issues/142))
-- [ ] Small Medal collection and rare reward exchange ([#160](https://github.com/witchcraze/party2re/issues/160))
+- [x] Small Medal collection and rare reward exchange ([#160](https://github.com/witchcraze/party2re/issues/160))
 
 ### D. Adventure, maps, stages, and battle
 - [x] Reusable deterministic Battle component & turn resolver ([#12](https://github.com/witchcraze/party2re/issues/12), [#20](https://github.com/witchcraze/party2re/issues/20), [#36](https://github.com/witchcraze/party2re/issues/36))
@@ -96,7 +96,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Player communication, park, and public interactions ([#78](https://github.com/witchcraze/party2re/issues/78))
 - [x] Player private home, mailbox, and letter correspondence ([#159](https://github.com/witchcraze/party2re/issues/159))
 - [x] Helper and player rescue assistance ([#79](https://github.com/witchcraze/party2re/issues/79))
-- [ ] Rankings (level, job, weekly rankings, contest records) ([#63](https://github.com/witchcraze/party2re/issues/63))
+- [x] Rankings (level, job, wealth, battle victories, helper, rebirth, medals) ([#63](https://github.com/witchcraze/party2re/issues/63))
 
 ### F. Economy and side systems
 - [x] Alchemy synthesis with 112 recipes & material requirements ([#60](https://github.com/witchcraze/party2re/issues/60))
