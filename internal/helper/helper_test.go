@@ -322,3 +322,51 @@ func TestGetActiveHelperItemIDs(t *testing.T) {
 		t.Fatalf("expected 2 active item IDs, got %d", len(itemIDs))
 	}
 }
+
+type failingTxProvider struct{}
+
+func (p *failingTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	_ = fn(ctx)
+	return errors.New("simulated tx commit failure")
+}
+
+func TestCompleteQuestTransactionFailure(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	questRepo := newStubQuestRepo()
+	charRepo := &stubCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "HelperHero"},
+		},
+	}
+	inv, _ := coreinventory.New("char-1")
+	invInst, _ := item.NewInstance("weapon-01", 3)
+	_ = inv.Add(invInst)
+
+	invRepo := &stubInvRepo{
+		inventories: map[string]coreinventory.Inventory{
+			"char-1": inv,
+		},
+	}
+	guildRepo := &stubGuildRepo{charGuild: make(map[string]string)}
+
+	quest := Quest{
+		ID:            "quest-fail-tx",
+		Title:         "Sample Quest",
+		Kind:          KindWeapon,
+		TargetID:      "weapon-01",
+		RequiredCount: 2,
+		RewardItemID:  "item-128",
+		ExpiresAt:     now.Add(6 * 24 * time.Hour),
+		CreatedAt:     now,
+	}
+	_ = questRepo.Save(ctx, quest)
+
+	svc := NewService(questRepo, charRepo, invRepo, guildRepo, &failingTxProvider{})
+
+	_, err := svc.CompleteQuest(ctx, "char-1", "quest-fail-tx", now)
+	if err == nil {
+		t.Fatal("expected error from failed transaction, got nil")
+	}
+}

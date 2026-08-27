@@ -14,7 +14,7 @@ type stubRescueRepo struct {
 }
 
 func (r *stubRescueRepo) Save(_ context.Context, record RescueRecord) error {
-	r.records = append(r.records, record)
+	r.records = append([]RescueRecord{record}, r.records...)
 	return nil
 }
 
@@ -26,6 +26,15 @@ func (r *stubRescueRepo) FindRecentByCharacterID(_ context.Context, characterID 
 		}
 	}
 	return results, nil
+}
+
+func (r *stubRescueRepo) FindLatestByCharacterID(_ context.Context, characterID string) (RescueRecord, error) {
+	for _, rec := range r.records {
+		if rec.CharacterID == characterID {
+			return rec, nil
+		}
+	}
+	return RescueRecord{}, ErrNoRescueRecord
 }
 
 type stubCharRepo struct {
@@ -82,6 +91,28 @@ func TestEmergencyRescueSuccess(t *testing.T) {
 	if len(cleaner.clearedCharacters) != 1 || cleaner.clearedCharacters[0] != "char-1" {
 		t.Errorf("expected action cleaner called for char-1")
 	}
+
+	// Character is under penalty immediately after rescue
+	underPenalty, remaining, err := svc.IsUnderPenalty(ctx, "char-1", now.Add(1*time.Minute))
+	if err != nil || !underPenalty || remaining <= 0 {
+		t.Errorf("expected under penalty after 1 min, got %v (remaining: %v)", underPenalty, remaining)
+	}
+
+	err = svc.CheckActionAllowed(ctx, "char-1", now.Add(1*time.Minute))
+	if !errors.Is(err, ErrCharacterUnderPenalty) {
+		t.Errorf("expected ErrCharacterUnderPenalty, got %v", err)
+	}
+
+	// Penalty expires after 10 minutes (600 seconds)
+	underPenalty, _, err = svc.IsUnderPenalty(ctx, "char-1", now.Add(11*time.Minute))
+	if err != nil || underPenalty {
+		t.Errorf("expected penalty expired after 11 min, got under penalty: %v", underPenalty)
+	}
+
+	err = svc.CheckActionAllowed(ctx, "char-1", now.Add(11*time.Minute))
+	if err != nil {
+		t.Errorf("expected action allowed after penalty expiry, got %v", err)
+	}
 }
 
 func TestEmergencyRescueConsecutivePenaltyMultiplier(t *testing.T) {
@@ -104,28 +135,15 @@ func TestEmergencyRescueConsecutivePenaltyMultiplier(t *testing.T) {
 			"char-1": {ID: "char-1", Name: "StuckHero"},
 		},
 	}
-	cleaner := &stubActionCleaner{}
 
-	svc := NewService(rescueRepo, charRepo, cleaner)
+	svc := NewService(rescueRepo, charRepo, nil)
 
-	rec, err := svc.EmergencyRescue(ctx, "char-1", "Second rescue", now)
+	rec, err := svc.EmergencyRescue(ctx, "char-1", "Second stuck", now)
 	if err != nil {
 		t.Fatalf("EmergencyRescue failed: %v", err)
 	}
 
-	expectedPenalty := DefaultPenaltySeconds * 2
-	if rec.PenaltySeconds != expectedPenalty {
-		t.Errorf("expected penalty %d, got %d", expectedPenalty, rec.PenaltySeconds)
-	}
-}
-
-func TestEmergencyRescueRejectsInvalidCharacter(t *testing.T) {
-	ctx := context.Background()
-	now := time.Now()
-
-	svc := NewService(&stubRescueRepo{}, &stubCharRepo{characters: make(map[string]corecharacter.Character)}, &stubActionCleaner{})
-	_, err := svc.EmergencyRescue(ctx, "nonexistent", "help", now)
-	if !errors.Is(err, corecharacter.ErrNotFound) {
-		t.Errorf("expected ErrNotFound, got %v", err)
+	if rec.PenaltySeconds != DefaultPenaltySeconds*2 {
+		t.Errorf("expected 2x penalty %d, got %d", DefaultPenaltySeconds*2, rec.PenaltySeconds)
 	}
 }

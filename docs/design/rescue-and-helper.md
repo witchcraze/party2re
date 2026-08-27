@@ -33,12 +33,14 @@ Quests are randomly generated across four categories:
 ### Purpose & Constraints
 - Serves as an in-game recovery utility for players in invalid or trapped states.
 - Cancels and clears any active scheduled action or dangling activity.
-- Applies a default cooldown/sleep penalty of **600 seconds (10 minutes)**. If consecutive rescues occur within 24 hours, the penalty is doubled to prevent abuse.
+- Applies a default cooldown/sleep penalty of **600 seconds (10 minutes)** (`DefaultPenaltySeconds`). If consecutive rescues occur within 24 hours, the penalty is doubled to prevent abuse.
+- During the penalty cooldown, character actions are restricted (`IsUnderPenalty` returns true and `CheckActionAllowed` rejects actions with `ErrCharacterUnderPenalty`).
 - Records all rescue actions in `rescue_records` for auditability and moderation.
 
 ---
 
-## 3. Data Persistence (MariaDB)
+## 3. Data Persistence & Transaction Boundaries (MariaDB)
 - `characters.help_count`: Integer counter tracking the number of completed helper quests.
 - `helper_quests`: Stores quest specifications, target items, required quantities, reward items, rarity, guild flag, and completion metadata.
 - `rescue_records`: Stores character ID, rescue reason, penalty seconds, and creation timestamp.
+- **Transaction Atomicity**: `CompleteQuest` executes within an atomic database transaction (`TransactionProvider.RunInTx`), ensuring inventory deduction, reward item addition, quest completion status update, and replacement quest generation are committed atomically.
