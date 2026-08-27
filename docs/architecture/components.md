@@ -300,7 +300,7 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Core Skill, Core Job, Core Character, Character repository, Character Job repository.
   - **Persistence:** `character_custom_skills` table in `internal/database/custom_skill_repository.go`.
 - **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`):
-  - **Responsibility:** Helper quest generation, item/monster delivery validation, alchemy material rewards, guild points contribution, and emergency state rescue recovery with cooldown penalties.
+  - **Responsibility:** Helper quest generation, item/monster delivery validation, alchemy material rewards, guild points contribution, emergency state rescue recovery with cooldown penalties, and HTTP JSON API endpoints (`/helpers/quests`, `/helpers/complete`, `/rescues/penalty`, `/rescues/request`).
   - **Dependencies:** Core Character, Core Inventory, Core Item, Guild repository.
   - **Persistence:** `helper_quests` and `rescue_records` tables in `internal/database/helper_repository.go` and `internal/database/rescue_repository.go`.
 - **Town Park & Public Bulletin Board** (`internal/park`):
