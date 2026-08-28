@@ -147,3 +147,26 @@ func TestEmergencyRescueConsecutivePenaltyMultiplier(t *testing.T) {
 		t.Errorf("expected 2x penalty %d, got %d", DefaultPenaltySeconds*2, rec.PenaltySeconds)
 	}
 }
+
+func TestEmergencyRescueInvokesActionCleaner(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+
+	rescueRepo := &stubRescueRepo{}
+	charRepo := &stubCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-42": {ID: "char-42", Name: "StuckHero"},
+		},
+	}
+	cleaner := &stubActionCleaner{}
+	svc := NewService(rescueRepo, charRepo, cleaner)
+
+	_, err := svc.EmergencyRescue(ctx, "char-42", "Stuck in infinite task", now)
+	if err != nil {
+		t.Fatalf("EmergencyRescue failed: %v", err)
+	}
+
+	if len(cleaner.clearedCharacters) != 1 || cleaner.clearedCharacters[0] != "char-42" {
+		t.Fatalf("expected cleaner invoked with char-42, got %v", cleaner.clearedCharacters)
+	}
+}

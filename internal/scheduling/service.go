@@ -39,3 +39,14 @@ func (s *Service) Schedule(ctx context.Context, actionType, actorID string, para
 
 	return id, nil
 }
+
+// CancelByActorID cancels and removes all scheduled actions for the specified actor.
+func (s *Service) CancelByActorID(ctx context.Context, actorID string) error {
+	return s.repo.CancelByActorID(ctx, actorID)
+}
+
+// ClearActiveActions clears all active and pending scheduled actions for the character,
+// fulfilling the rescue.ActionCleaner interface.
+func (s *Service) ClearActiveActions(ctx context.Context, characterID string) error {
+	return s.CancelByActorID(ctx, characterID)
+}

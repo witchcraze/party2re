@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #231 — Implement database snapshot fallback on cache miss in RankingService
+Last updated: Issue #232 — Integrate emergency rescue with scheduling service to cancel active tasks
 
 ## Current phase
 
@@ -50,7 +50,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Battle Replays & Match History** (`internal/replay`): 戦闘リプレイ・対戦履歴（全戦闘モードのターン別アクションログ・ダメージ値・残りHPスナップショットの記録・忠実再生、標準化レコーダー `ReplayRecorder` / `RecordMatchFromResult` / `RecordCharacterVsCharacter` / `RecordCharacterVsMonster` / `RecordParticipantVsParticipant`、プレイヤー別対戦履歴・全体最新リプレイ一覧、保持期間経過レコードの自動プルーニング、MariaDB永続化）。
 - **Continuous Endurance Challenge** (`internal/challenge`): 連戦チャレンジ・サバイバル戦闘（初級・中級・上級・奈落の全4段階Tier JSONカタログ `challenge_tiers.json`、ラウンド進行に伴うステータス累進スケーリング、インターラウンド20% HP回復、5連勝区切りのマイルストーンアイテムドロップ、途中撤退による全額確定精算 vs 敗北時の50%救済精算・アイテム没収、最高到達ラウンド別リーダーボード、MariaDB永続化）。
 - **Custom Skill Loadout & Slot Management** (`internal/custom_skill`): カスタムスキル・スロット管理（JSONスキルカタログ `skills.json`、現在職・マスター職・宝石汎用スキルの装備制限バリデーション、スロット枠数管理、発動優先度 1〜10、重複装備防止、全戦闘モード向けアクティブスキル供給、MariaDB永続化）。
-- **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): 手助けクエスト（何でも屋 @リッカによる武器・防具・道具・モンスター納品依頼、通常・レア・ギルド専用クエスト、錬金素材・幸福袋・GP報酬、6日間期限、有効依頼アイテムのショップ除外連携）および緊急救出処理（スタック時・エラー時の状態リセット、クールダウン/睡眠ペナルティ、MariaDB永続化）。
+- **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): 手助けクエスト（何でも屋 @リッカによる武器・防具・道具・モンスター納品依頼、通常・レア・ギルド専用クエスト、錬金素材・幸福袋・GP報酬、6日間期限、有効依頼アイテムのショップ除外連携）および緊急救出処理（スタック時・エラー時の状態リセット、Valkey スケジューリングタスク自動キャンセル連携、クールダウン/睡眠ペナルティ、MariaDB永続化）。
 - **Town Park & Public Bulletin Board** (`internal/park`): 交流広場・公開掲示板（プレイヤー発言投稿・文字色指定・宛先指定・HTMLサニタイズ・連投レートリミット、最新投稿ページネーション、@町娘NPC会話・20種運勢＆27色ラッキーカラー占い、MariaDB永続化）。
 - **News & Player Notifications** (`internal/notification`): ニュース・お知らせ＆プレイヤー通知インボックス（全体告知 `news.cgi`、カテゴリ別お知らせ配信、プレイヤー別非同期メッセージ受信箱、既読・未読管理、一括既読化、未読件数照会、MariaDB永続化）。
 - **Player Private Home & Mailbox** (`internal/home`): 自宅・私有地管理（`home.cgi`、壁紙・テーマ・一言設定、訪問者記録、プレイヤー間手紙送受信・受信箱/送信箱・未読件数、仲間ペット言葉教え・挨拶会話、送金・譲渡通知台帳、MariaDB永続化）。

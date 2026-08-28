@@ -414,3 +414,53 @@ func TestValkeyRepository_Save_ProcessingUpdatesKeyWithoutRemovingFromQueue(t *t
 		t.Errorf("processing action should have no TTL (-1=persistent), got %d", ttl)
 	}
 }
+
+func TestValkeyRepository_CancelByActorID(t *testing.T) {
+	client := openValkeyClient(t)
+	defer client.Close()
+
+	id1 := "cancel-actor-01"
+	id2 := "cancel-actor-02"
+	id3 := "cancel-other-03"
+	defer cleanupKeys(t, client, id1, id2, id3)
+
+	repo := scheduling.NewValkeyRepository(client)
+	ctx := context.Background()
+
+	a1 := validTestAction(id1, time.Now().Add(time.Hour).UTC())
+	a1.ActorID = "actor-target"
+	a2 := validTestAction(id2, time.Now().Add(2*time.Hour).UTC())
+	a2.ActorID = "actor-target"
+	a3 := validTestAction(id3, time.Now().Add(time.Hour).UTC())
+	a3.ActorID = "actor-other"
+
+	if err := repo.Schedule(ctx, a1); err != nil {
+		t.Fatalf("Schedule a1: %v", err)
+	}
+	if err := repo.Schedule(ctx, a2); err != nil {
+		t.Fatalf("Schedule a2: %v", err)
+	}
+	if err := repo.Schedule(ctx, a3); err != nil {
+		t.Fatalf("Schedule a3: %v", err)
+	}
+
+	if err := repo.CancelByActorID(ctx, "actor-target"); err != nil {
+		t.Fatalf("CancelByActorID error: %v", err)
+	}
+
+	// Verify a1 and a2 are removed from pending queue and action keys
+	_, err := client.Do(ctx, client.B().Get().Key("party2:scheduled:action:"+id1).Build()).AsBytes()
+	if err == nil {
+		t.Errorf("action %s should be deleted", id1)
+	}
+	_, err = client.Do(ctx, client.B().Get().Key("party2:scheduled:action:"+id2).Build()).AsBytes()
+	if err == nil {
+		t.Errorf("action %s should be deleted", id2)
+	}
+
+	// a3 should still exist
+	val, err := client.Do(ctx, client.B().Get().Key("party2:scheduled:action:"+id3).Build()).AsBytes()
+	if err != nil || len(val) == 0 {
+		t.Errorf("action %s should still exist", id3)
+	}
+}
