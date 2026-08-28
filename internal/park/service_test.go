@@ -3,6 +3,7 @@ package park_test
 import (
 	"context"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -205,4 +206,53 @@ func TestService_NPCInteractions(t *testing.T) {
 			t.Errorf("expected non-empty inspect dialogue")
 		}
 	})
+}
+
+func TestConcurrentNPCInteractions(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	repo := newMockRepository()
+	charReader := &mockCharacterReader{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "アリス", JobID: "hero"},
+		},
+	}
+
+	svc, err := park.NewService(repo, charReader)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	const goroutines = 100
+	const iterations = 50
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for g := 0; g < goroutines; g++ {
+		go func(id int) {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				switch (id + i) % 3 {
+				case 0:
+					d, err := svc.TalkToNPC(ctx, "char-1")
+					if err != nil || d == "" {
+						t.Errorf("unexpected TalkToNPC error: %v", err)
+					}
+				case 1:
+					res, err := svc.Divinate(ctx, "char-1")
+					if err != nil || res.Fortune == "" {
+						t.Errorf("unexpected Divinate error: %v", err)
+					}
+				case 2:
+					insp := svc.InspectNPC()
+					if insp == "" {
+						t.Errorf("unexpected InspectNPC empty result")
+					}
+				}
+			}
+		}(g)
+	}
+
+	wg.Wait()
 }

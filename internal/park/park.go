@@ -6,6 +6,7 @@ import (
 	"html"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 )
@@ -67,6 +68,7 @@ func ValidatePost(characterID, content, color, recipient string) error {
 
 // TownGirlNPC represents the @町娘 NPC in the park.
 type TownGirlNPC struct {
+	mu  sync.Mutex
 	rng *rand.Rand
 }
 
@@ -75,6 +77,15 @@ func NewTownGirlNPC(rng *rand.Rand) *TownGirlNPC {
 		rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	}
 	return &TownGirlNPC{rng: rng}
+}
+
+func (n *TownGirlNPC) randomInt(max int) int {
+	if max <= 0 {
+		return 0
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.rng.Intn(max)
 }
 
 var divinationFortunes = []string{
@@ -116,14 +127,14 @@ func (n *TownGirlNPC) Talk(jobName, characterName string) string {
 		dialogues = append(dialogues, fmt.Sprintf("%sさんの職業は%sですね？どうですか？当たりですか？", characterName, jobName))
 	}
 
-	idx := n.rng.Intn(len(dialogues))
+	idx := n.randomInt(len(dialogues))
 	return dialogues[idx]
 }
 
 // Divinate generates a fortune and lucky color.
 func (n *TownGirlNPC) Divinate(characterName string) DivinationResult {
-	fortuneIdx := n.rng.Intn(len(divinationFortunes))
-	colorIdx := n.rng.Intn(len(divinationColors))
+	fortuneIdx := n.randomInt(len(divinationFortunes))
+	colorIdx := n.randomInt(len(divinationColors))
 
 	fortune := divinationFortunes[fortuneIdx]
 	luckyColor := divinationColors[colorIdx]
@@ -138,6 +149,6 @@ func (n *TownGirlNPC) Divinate(characterName string) DivinationResult {
 
 // Inspect generates an inspection dialogue response.
 func (n *TownGirlNPC) Inspect() string {
-	idx := n.rng.Intn(len(inspectDialogues))
+	idx := n.randomInt(len(inspectDialogues))
 	return inspectDialogues[idx]
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	mrand "math/rand"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -26,6 +27,7 @@ type LetterListResult struct {
 type Service struct {
 	repo       Repository
 	charReader CharacterReader
+	rngMu      sync.Mutex
 	rng        *mrand.Rand
 	nowFunc    func() time.Time
 }
@@ -324,6 +326,15 @@ func (s *Service) ListCompanionPhrases(ctx context.Context, characterID string) 
 	return s.repo.ListCompanionPhrases(ctx, characterID)
 }
 
+func (s *Service) randomInt(max int) int {
+	if max <= 0 {
+		return 0
+	}
+	s.rngMu.Lock()
+	defer s.rngMu.Unlock()
+	return s.rng.Intn(max)
+}
+
 // TalkToCompanion returns a greeting phrase spoken by the companion.
 func (s *Service) TalkToCompanion(ctx context.Context, characterID string) (string, error) {
 	phrases, err := s.repo.ListCompanionPhrases(ctx, characterID)
@@ -335,7 +346,7 @@ func (s *Service) TalkToCompanion(ctx context.Context, characterID string) (stri
 		return "クエッ？（何か言いたそうにこちらを見つめている）", nil
 	}
 
-	idx := s.rng.Intn(len(phrases))
+	idx := s.randomInt(len(phrases))
 	return phrases[idx].Phrase, nil
 }
 
