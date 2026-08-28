@@ -2,13 +2,12 @@ package database
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/auction"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 type AuctionRepository struct {
@@ -24,7 +23,7 @@ func NewAuctionRepository(db *sql.DB) (*AuctionRepository, error) {
 
 func (r *AuctionRepository) CreateListing(ctx context.Context, listing auction.AuctionListing) (auction.AuctionListing, error) {
 	if listing.ID == "" {
-		listing.ID = generateAuctionID()
+		listing.ID = id.New()
 	}
 	if listing.CreatedAt.IsZero() {
 		listing.CreatedAt = time.Now().UTC()
@@ -399,10 +398,4 @@ func (r *AuctionRepository) CancelListing(ctx context.Context, listingID, seller
 	}
 
 	return r.GetListing(ctx, listingID)
-}
-
-func generateAuctionID() string {
-	bytes := make([]byte, 16)
-	_, _ = rand.Read(bytes)
-	return hex.EncodeToString(bytes)
 }

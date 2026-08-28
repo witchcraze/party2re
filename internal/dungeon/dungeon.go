@@ -2,8 +2,6 @@ package dungeon
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +12,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 var (
@@ -476,10 +475,7 @@ func (s *Service) StartExpedition(ctx context.Context, characterID, dungeonID st
 	}
 
 	firstFloor := dungeon.Floors[0]
-	expID, err := generateID()
-	if err != nil {
-		return nil, err
-	}
+	expID := id.New()
 
 	now := time.Now().UTC()
 	exp := ActiveExpedition{
@@ -794,15 +790,13 @@ func (s *Service) handleDungeonClear(
 
 	rewardItems := make([]coreitem.Instance, 0, len(exp.AccumulatedItems))
 	for _, defID := range exp.AccumulatedItems {
-		itemID, err := generateID()
-		if err == nil {
-			rewardItems = append(rewardItems, coreitem.Instance{
-				ID:               itemID,
-				DefinitionID:     defID,
-				Quantity:         1,
-				EnhancementLevel: 0,
-			})
-		}
+		itemID := id.New()
+		rewardItems = append(rewardItems, coreitem.Instance{
+			ID:               itemID,
+			DefinitionID:     defID,
+			Quantity:         1,
+			EnhancementLevel: 0,
+		})
 	}
 
 	// 2. Update Dungeon Record
@@ -814,7 +808,7 @@ func (s *Service) handleDungeonClear(
 	}
 
 	// 3. Save History
-	histID, _ := generateID()
+	histID := id.New()
 	history := DungeonExpeditionHistory{
 		ID:               histID,
 		CharacterID:      char.ID,
@@ -864,22 +858,20 @@ func (s *Service) handleEscape(
 
 	rewardItems := make([]coreitem.Instance, 0, len(exp.AccumulatedItems))
 	for _, defID := range exp.AccumulatedItems {
-		itemID, err := generateID()
-		if err == nil {
-			rewardItems = append(rewardItems, coreitem.Instance{
-				ID:               itemID,
-				DefinitionID:     defID,
-				Quantity:         1,
-				EnhancementLevel: 0,
-			})
-		}
+		itemID := id.New()
+		rewardItems = append(rewardItems, coreitem.Instance{
+			ID:               itemID,
+			DefinitionID:     defID,
+			Quantity:         1,
+			EnhancementLevel: 0,
+		})
 	}
 
 	rec, _ := s.repo.GetRecord(ctx, char.ID)
 	rec.TotalExpeditions++
 	rec.TotalFloorsCleared += exp.CurrentFloor
 
-	histID, _ := generateID()
+	histID := id.New()
 	history := DungeonExpeditionHistory{
 		ID:               histID,
 		CharacterID:      char.ID,
@@ -923,7 +915,7 @@ func (s *Service) handleWipeout(
 	rec, _ := s.repo.GetRecord(ctx, char.ID)
 	rec.TotalExpeditions++
 
-	histID, _ := generateID()
+	histID := id.New()
 	history := DungeonExpeditionHistory{
 		ID:               histID,
 		CharacterID:      char.ID,
@@ -966,14 +958,6 @@ func (s *Service) GetRecord(ctx context.Context, characterID string) (CharacterD
 		return CharacterDungeonRecord{}, ErrCharacterNotFound
 	}
 	return s.repo.GetRecord(ctx, characterID)
-}
-
-func generateID() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
 }
 
 func EncodeItems(items []string) string {

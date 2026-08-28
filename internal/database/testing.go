@@ -2,23 +2,18 @@ package database
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"fmt"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 // CreateTestPlayer creates and persists a player for testing purposes.
 func CreateTestPlayer(ctx context.Context, db *sql.DB) (coreplayer.Player, error) {
-	buf := make([]byte, 8)
-	if _, err := rand.Read(buf); err != nil {
-		return coreplayer.Player{}, err
-	}
-	username := fmt.Sprintf("testuser_%s", hex.EncodeToString(buf))
+	username := fmt.Sprintf("testuser_%s", id.New()[:12])
 	p, err := coreplayer.New(username, "testpassword123", time.Now().UTC())
 	if err != nil {
 		return coreplayer.Player{}, err

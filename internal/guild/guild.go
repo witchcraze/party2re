@@ -2,14 +2,12 @@ package guild
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 type Role string
@@ -156,10 +154,7 @@ func (s *Service) Create(ctx context.Context, creatorCharID string, name string)
 		return Guild{}, Member{}, corecharacter.Character{}, ErrCharacterAlreadyInGuild
 	}
 
-	guildID, err := generateID()
-	if err != nil {
-		return Guild{}, Member{}, corecharacter.Character{}, fmt.Errorf("generate guild id: %w", err)
-	}
+	guildID := id.New()
 
 	now := time.Now().UTC()
 	g := Guild{
@@ -493,12 +488,4 @@ func (s *Service) Disband(ctx context.Context, guildID string, leaderCharID stri
 	}
 
 	return s.repo.DisbandGuild(ctx, guildID)
-}
-
-func generateID() (string, error) {
-	buf := make([]byte, 16)
-	if _, err := rand.Read(buf); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(buf), nil
 }

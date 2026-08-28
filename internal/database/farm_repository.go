@@ -2,12 +2,11 @@ package database
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 
 	"github.com/witchcraze/party2re/internal/farm"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 type FarmRepository struct {
@@ -82,7 +81,7 @@ func (r *FarmRepository) GetPlot(ctx context.Context, characterID string, plotIn
 
 func (r *FarmRepository) SavePlot(ctx context.Context, plot farm.FarmPlot) error {
 	if plot.ID == "" {
-		plot.ID = generateFarmID()
+		plot.ID = id.New()
 	}
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO farm_plots (id, character_id, plot_index, seed_type, status, planted_at, matures_at, wither_at, watered, fertilized, yield)
@@ -157,10 +156,4 @@ func (r *FarmRepository) ClearPlot(ctx context.Context, characterID string, plot
 		Status:      farm.PlotStatusEmpty,
 		Yield:       1,
 	}, nil
-}
-
-func generateFarmID() string {
-	bytes := make([]byte, 16)
-	_, _ = rand.Read(bytes)
-	return hex.EncodeToString(bytes)
 }

@@ -2,8 +2,6 @@ package adventure
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -13,6 +11,7 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 const (
@@ -197,12 +196,8 @@ func (s *Service) StartStage(ctx context.Context, characterID string, stageID st
 	}
 
 	now := s.clock.Now()
-	id, err := newID()
-	if err != nil {
-		return Adventure{}, err
-	}
 	value := Adventure{
-		ID:               id,
+		ID:               id.New(),
 		CharacterID:      characterID,
 		Type:             stageID,
 		StageID:          stage.ID,
@@ -216,7 +211,7 @@ func (s *Service) StartStage(ctx context.Context, characterID string, stageID st
 	}
 
 	if s.scheduler != nil {
-		_, err = s.scheduler.Schedule(
+		if _, err := s.scheduler.Schedule(
 			ctx,
 			AdventureActionTypeComplete,
 			characterID,
@@ -226,8 +221,7 @@ func (s *Service) StartStage(ctx context.Context, characterID string, stageID st
 				"monster_id":   monster.ID,
 			},
 			value.AvailableAt,
-		)
-		if err != nil {
+		); err != nil {
 			s.logger.Warn("failed to schedule adventure completion", "adventure_id", value.ID, "error", err)
 		}
 	}
@@ -331,12 +325,4 @@ func (s *Service) Claim(ctx context.Context, id string) (Adventure, error) {
 		return Adventure{}, err
 	}
 	return value, nil
-}
-
-func newID() (string, error) {
-	value := make([]byte, 16)
-	if _, err := rand.Read(value); err != nil {
-		return "", fmt.Errorf("generate adventure ID: %w", err)
-	}
-	return hex.EncodeToString(value), nil
 }

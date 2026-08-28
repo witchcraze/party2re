@@ -2,13 +2,12 @@ package rescue
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 type RescueRepository interface {
@@ -71,10 +70,7 @@ func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason strin
 		_ = s.cleaner.ClearActiveActions(ctx, characterID)
 	}
 
-	recID, err := newRecordID()
-	if err != nil {
-		return RescueRecord{}, err
-	}
+	recID := id.New()
 
 	rec := RescueRecord{
 		ID:             recID,
@@ -123,12 +119,4 @@ func (s *Service) CheckActionAllowed(ctx context.Context, characterID string, no
 		return ErrCharacterUnderPenalty
 	}
 	return nil
-}
-
-func newRecordID() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
 }

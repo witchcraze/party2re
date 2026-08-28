@@ -2,15 +2,13 @@ package park
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
-	"math/big"
 	mrand "math/rand"
 	"strings"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 type CharacterReader interface {
@@ -65,12 +63,6 @@ func NewService(repo Repository, charReader CharacterReader, opts ...ServiceOpti
 	return s, nil
 }
 
-func generateID() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
 // PostMessage creates a new public message in the park.
 func (s *Service) PostMessage(ctx context.Context, characterID, content, color, recipient string) (Post, error) {
 	if err := ValidatePost(characterID, content, color, recipient); err != nil {
@@ -106,7 +98,7 @@ func (s *Service) PostMessage(ctx context.Context, characterID, content, color, 
 	}
 
 	post := Post{
-		ID:            generateID(),
+		ID:            id.New(),
 		CharacterID:   char.ID,
 		CharacterName: char.Name,
 		Content:       cleanContent,
@@ -164,6 +156,3 @@ func (s *Service) Divinate(ctx context.Context, characterID string) (DivinationR
 func (s *Service) InspectNPC() string {
 	return s.npc.Inspect()
 }
-
-// Ensure unused math/big import is avoided
-var _ = big.NewInt

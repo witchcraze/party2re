@@ -2,8 +2,6 @@ package gvg
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -12,6 +10,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/guild"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 const (
@@ -331,7 +330,7 @@ func (s *Service) DeclareMatch(ctx context.Context, actorCharacterID, defenderGu
 		numRounds = len(defenderMembers)
 	}
 
-	matchID := generateMatchID()
+	matchID := id.New()
 	rounds := make([]MatchRound, 0, numRounds)
 	challengerScore := 0
 	defenderScore := 0
@@ -458,14 +457,6 @@ func (s *Service) DeclareMatch(ctx context.Context, actorCharacterID, defenderGu
 		ChallengerMedalAwarded:  cMedal,
 		DefenderMedalAwarded:    dMedal,
 	}, nil
-}
-
-func generateMatchID() string {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return fmt.Sprintf("gvg_%d", time.Now().UnixNano())
-	}
-	return hex.EncodeToString(b)
 }
 
 func max(a, b int) int {

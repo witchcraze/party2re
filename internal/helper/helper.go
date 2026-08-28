@@ -2,11 +2,12 @@ package helper
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
 	"time"
+
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 type QuestKind int
@@ -230,10 +231,7 @@ func GenerateQuest(random RandomSource, now time.Time) (Quest, error) {
 		rewardID = normalRewards[rwIdx]
 	}
 
-	qid, err := newQuestID()
-	if err != nil {
-		return Quest{}, err
-	}
+	qid := id.New()
 
 	return Quest{
 		ID:            qid,
@@ -248,12 +246,4 @@ func GenerateQuest(random RandomSource, now time.Time) (Quest, error) {
 		ExpiresAt:     now.Add(6 * 24 * time.Hour),
 		CreatedAt:     now,
 	}, nil
-}
-
-func newQuestID() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
 }

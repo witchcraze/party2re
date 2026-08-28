@@ -1,10 +1,10 @@
 package item
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"strings"
+
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 var (
@@ -69,12 +69,8 @@ func NewInstanceWithEnhancement(definitionID string, quantity int, enhancementLe
 	if strings.TrimSpace(definitionID) == "" || quantity <= 0 || enhancementLevel < 0 {
 		return Instance{}, ErrInvalidInstance
 	}
-	id := make([]byte, 16)
-	if _, err := rand.Read(id); err != nil {
-		return Instance{}, err
-	}
 	return Instance{
-		ID:               hex.EncodeToString(id),
+		ID:               id.New(),
 		DefinitionID:     strings.TrimSpace(definitionID),
 		Quantity:         quantity,
 		EnhancementLevel: enhancementLevel,
