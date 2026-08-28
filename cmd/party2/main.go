@@ -249,6 +249,7 @@ func run() error {
 
 		// Setup Scheduler & Worker
 		schedService := scheduling.NewService(schedRepo)
+		_ = rescue.NewService(rescueRepo, charRepo, schedService)
 
 		// Note: logger parameter uses nop logger for now as standard pkg logger isn't typed for it.
 		// In a real app we would adapt logging.Logger to activity/adventure.Logger.

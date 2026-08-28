@@ -44,6 +44,20 @@ func (m *mockRepository) Save(ctx context.Context, action core_scheduling.Schedu
 	return nil
 }
 
+func (m *mockRepository) CancelByActorID(ctx context.Context, actorID string) error {
+	var remaining []core_scheduling.ScheduledAction
+	for _, a := range m.actions {
+		if a.ActorID != actorID {
+			remaining = append(remaining, a)
+		} else {
+			delete(m.locked, a.ID)
+			delete(m.saved, a.ID)
+		}
+	}
+	m.actions = remaining
+	return nil
+}
+
 type mockHandler struct {
 	handled bool
 	err     error

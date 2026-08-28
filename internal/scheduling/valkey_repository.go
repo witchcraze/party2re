@@ -24,6 +24,7 @@ const (
 	pendingQueueKey = "party2:scheduled:pending"
 	actionKeyPrefix = "party2:scheduled:action:"
 	lockKeyPrefix   = "party2:scheduled:lock:"
+	actorKeyPrefix  = "party2:scheduled:actor:"
 )
 
 func (r *ValkeyRepository) Schedule(ctx context.Context, action core_scheduling.ScheduledAction) error {
@@ -38,6 +39,11 @@ func (r *ValkeyRepository) Schedule(ctx context.Context, action core_scheduling.
 	err = r.client.Do(ctx, r.client.B().Set().Key(actionKey).Value(string(data)).Build()).Error()
 	if err != nil {
 		return err
+	}
+
+	// Index by actor ID if present
+	if action.ActorID != "" {
+		_ = r.client.Do(ctx, r.client.B().Sadd().Key(actorKeyPrefix+action.ActorID).Member(action.ID).Build())
 	}
 
 	// Add to pending queue sorted set
@@ -126,6 +132,11 @@ func (r *ValkeyRepository) Save(ctx context.Context, action core_scheduling.Sche
 		// Remove from pending queue
 		r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(action.ID).Build())
 
+		// Remove from actor index
+		if action.ActorID != "" {
+			r.client.Do(ctx, r.client.B().Srem().Key(actorKeyPrefix+action.ActorID).Member(action.ID).Build())
+		}
+
 		// Delete lock
 		r.client.Do(ctx, r.client.B().Del().Key(lockKeyPrefix+action.ID).Build())
 
@@ -142,4 +153,34 @@ func (r *ValkeyRepository) Save(ctx context.Context, action core_scheduling.Sche
 
 	// Just update the action data without TTL
 	return r.client.Do(ctx, r.client.B().Set().Key(actionKey).Value(string(data)).Build()).Error()
+}
+
+func (r *ValkeyRepository) CancelByActorID(ctx context.Context, actorID string) error {
+	if actorID == "" {
+		return nil
+	}
+	actorKey := actorKeyPrefix + actorID
+	membersResp := r.client.Do(ctx, r.client.B().Smembers().Key(actorKey).Build())
+	if membersResp.Error() != nil {
+		if valkey.IsValkeyNil(membersResp.Error()) {
+			return nil
+		}
+		return membersResp.Error()
+	}
+
+	ids, err := membersResp.AsStrSlice()
+	if err != nil {
+		return err
+	}
+
+	for _, id := range ids {
+		actionKey := actionKeyPrefix + id
+		lockKey := lockKeyPrefix + id
+		_ = r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build())
+		_ = r.client.Do(ctx, r.client.B().Del().Key(actionKey).Build())
+		_ = r.client.Do(ctx, r.client.B().Del().Key(lockKey).Build())
+	}
+
+	_ = r.client.Do(ctx, r.client.B().Del().Key(actorKey).Build())
+	return nil
 }

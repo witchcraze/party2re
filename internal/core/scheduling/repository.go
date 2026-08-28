@@ -21,4 +21,7 @@ type ScheduledActionRepository interface {
 	// Save updates an action's state (e.g. after processing).
 	// If it's completed/failed, it might move it to a different storage or set a TTL.
 	Save(ctx context.Context, action ScheduledAction) error
+
+	// CancelByActorID removes and cancels all pending/scheduled actions for the specified actor.
+	CancelByActorID(ctx context.Context, actorID string) error
 }
