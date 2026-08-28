@@ -77,4 +77,48 @@ func TestRankingServiceIntegration(t *testing.T) {
 	if !cachedLvlPage.IsSnapshot {
 		t.Errorf("expected IsSnapshot=true for cached page")
 	}
+
+	// 3. Snapshot retrieval
+	snap, err := svc.GetSnapshot(ctx, ranking.RankingTypeLevel)
+	if err != nil {
+		t.Fatalf("GetSnapshot failed: %v", err)
+	}
+	if snap.RankingType != ranking.RankingTypeLevel {
+		t.Errorf("expected ranking type level, got %s", snap.RankingType)
+	}
+
+	allSnaps, err := svc.GetAllSnapshots(ctx)
+	if err != nil {
+		t.Fatalf("GetAllSnapshots failed: %v", err)
+	}
+	if len(allSnaps) != 12 {
+		t.Errorf("expected 12 snapshots, got %d", len(allSnaps))
+	}
+
+	// 4. Cold-start Service instance (clean in-memory cache) falls back to database snapshot
+	freshSvc, err := ranking.NewService(rankingRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	coldLvlPage, err := freshSvc.GetLevelRanking(ctx, 10, 0, true)
+	if err != nil {
+		t.Fatalf("GetLevelRanking (cold snapshot fallback) failed: %v", err)
+	}
+	if !coldLvlPage.IsSnapshot {
+		t.Errorf("expected IsSnapshot=true for cold start snapshot query")
+	}
+
+	// 5. Warmup cache on fresh instance
+	warmupSvc, err := ranking.NewService(rankingRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := warmupSvc.WarmupCache(ctx); err != nil {
+		t.Fatalf("WarmupCache failed: %v", err)
+	}
+	warmLvlPage, err := warmupSvc.GetLevelRanking(ctx, 10, 0, true)
+	if err != nil || !warmLvlPage.IsSnapshot {
+		t.Fatalf("expected cached ranking after warmup: %v, %+v", err, warmLvlPage)
+	}
 }
