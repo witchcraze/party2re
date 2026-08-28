@@ -90,35 +90,14 @@ func (r *BankRepository) Deposit(ctx context.Context, playerID string, character
 		return bank.Account{}, corecharacter.Character{}, err
 	}
 
-	var char corecharacter.Character
-	var gender, jobID string
-	err = tx.QueryRowContext(ctx, `
-		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
+	char, err := scanCharacterRow(tx.QueryRowContext(ctx, `
+		SELECT `+characterColumns+`
 		FROM characters
 		WHERE id = ?
-	`, characterID).Scan(
-		&char.ID,
-		&char.PlayerID,
-		&char.Name,
-		&jobID,
-		&gender,
-		&char.Stats.MaxHP,
-		&char.Stats.MaxMP,
-		&char.Stats.HP,
-		&char.Stats.MP,
-		&char.Stats.Attack,
-		&char.Stats.Defense,
-		&char.Stats.Agility,
-		&char.Money,
-		&char.Level,
-		&char.Experience,
-		&char.RebirthCount,
-	)
+	`, characterID))
 	if err != nil {
 		return bank.Account{}, corecharacter.Character{}, err
 	}
-	char.JobID = jobID
-	char.Gender = gender
 
 	if err := tx.Commit(); err != nil {
 		return bank.Account{}, corecharacter.Character{}, err
@@ -178,35 +157,14 @@ func (r *BankRepository) Withdraw(ctx context.Context, playerID string, characte
 		return bank.Account{}, corecharacter.Character{}, err
 	}
 
-	var char corecharacter.Character
-	var gender, jobID string
-	err = tx.QueryRowContext(ctx, `
-		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
+	char, err := scanCharacterRow(tx.QueryRowContext(ctx, `
+		SELECT `+characterColumns+`
 		FROM characters
 		WHERE id = ?
-	`, characterID).Scan(
-		&char.ID,
-		&char.PlayerID,
-		&char.Name,
-		&jobID,
-		&gender,
-		&char.Stats.MaxHP,
-		&char.Stats.MaxMP,
-		&char.Stats.HP,
-		&char.Stats.MP,
-		&char.Stats.Attack,
-		&char.Stats.Defense,
-		&char.Stats.Agility,
-		&char.Money,
-		&char.Level,
-		&char.Experience,
-		&char.RebirthCount,
-	)
+	`, characterID))
 	if err != nil {
 		return bank.Account{}, corecharacter.Character{}, err
 	}
-	char.JobID = jobID
-	char.Gender = gender
 
 	if err := tx.Commit(); err != nil {
 		return bank.Account{}, corecharacter.Character{}, err

@@ -22,35 +22,6 @@ func NewGuildRepository(db *sql.DB) (*GuildRepository, error) {
 	return &GuildRepository{db: db}, nil
 }
 
-func scanCharacterRow(row *sql.Row) (corecharacter.Character, error) {
-	var char corecharacter.Character
-	var gender, jobID string
-	err := row.Scan(
-		&char.ID,
-		&char.PlayerID,
-		&char.Name,
-		&jobID,
-		&gender,
-		&char.Stats.MaxHP,
-		&char.Stats.MaxMP,
-		&char.Stats.HP,
-		&char.Stats.MP,
-		&char.Stats.Attack,
-		&char.Stats.Defense,
-		&char.Stats.Agility,
-		&char.Money,
-		&char.Level,
-		&char.Experience,
-		&char.RebirthCount,
-	)
-	if err != nil {
-		return corecharacter.Character{}, err
-	}
-	char.JobID = jobID
-	char.Gender = gender
-	return char, nil
-}
-
 func (r *GuildRepository) CreateGuild(ctx context.Context, g guild.Guild, creator guild.Member, fee int) (guild.Guild, guild.Member, corecharacter.Character, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -100,7 +71,7 @@ func (r *GuildRepository) CreateGuild(ctx context.Context, g guild.Guild, creato
 
 	// 4. Fetch updated character
 	char, err := scanCharacterRow(tx.QueryRowContext(ctx, `
-		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
+		SELECT `+characterColumns+`
 		FROM characters
 		WHERE id = ?
 	`, creator.CharacterID))
@@ -396,7 +367,7 @@ func (r *GuildRepository) Donate(ctx context.Context, guildID string, characterI
 	m.Role = guild.Role(roleStr)
 
 	char, err := scanCharacterRow(tx.QueryRowContext(ctx, `
-		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
+		SELECT `+characterColumns+`
 		FROM characters
 		WHERE id = ?
 	`, characterID))

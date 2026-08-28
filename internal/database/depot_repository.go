@@ -118,39 +118,11 @@ type sqlDepotTx struct {
 }
 
 func (t *sqlDepotTx) GetCharacter(ctx context.Context, characterID string) (corecharacter.Character, error) {
-	var value corecharacter.Character
-	var gender, jobID string
-	err := t.tx.QueryRowContext(ctx, `
-		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
+	return scanCharacterRow(t.tx.QueryRowContext(ctx, `
+		SELECT `+characterColumns+`
 		FROM characters
 		WHERE id = ?
-	`, characterID).Scan(
-		&value.ID,
-		&value.PlayerID,
-		&value.Name,
-		&jobID,
-		&gender,
-		&value.Stats.MaxHP,
-		&value.Stats.MaxMP,
-		&value.Stats.HP,
-		&value.Stats.MP,
-		&value.Stats.Attack,
-		&value.Stats.Defense,
-		&value.Stats.Agility,
-		&value.Money,
-		&value.Level,
-		&value.Experience,
-		&value.RebirthCount,
-	)
-	if errors.Is(err, sql.ErrNoRows) {
-		return corecharacter.Character{}, corecharacter.ErrNotFound
-	}
-	if err != nil {
-		return corecharacter.Character{}, err
-	}
-	value.JobID = jobID
-	value.Gender = gender
-	return value, nil
+	`, characterID))
 }
 
 func (t *sqlDepotTx) SaveCharacter(ctx context.Context, character corecharacter.Character) error {
