@@ -173,30 +173,7 @@ func (r *BossRepository) RecordChallenge(
 	}
 
 	// 3. Update character progression/stats/money/medals
-	updateCharQuery := `
-		UPDATE characters
-		SET level = ?, experience = ?, money = ?, small_medals = ?,
-		    hp = ?, max_hp = ?,
-		    attack = ?, defense = ?, agility = ?,
-		    rebirth_count = ?
-		WHERE id = ?
-	`
-	_, err = tx.ExecContext(
-		ctx,
-		updateCharQuery,
-		character.Level,
-		character.Experience,
-		character.Money,
-		character.SmallMedals,
-		character.Stats.HP,
-		character.Stats.MaxHP,
-		character.Stats.Attack,
-		character.Stats.Defense,
-		character.Stats.Agility,
-		character.RebirthCount,
-		character.ID,
-	)
-	if err != nil {
+	if err := updateCharacter(ctx, tx, character); err != nil {
 		return err
 	}
 

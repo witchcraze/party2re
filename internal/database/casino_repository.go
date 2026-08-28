@@ -89,7 +89,7 @@ func (r *CasinoRepository) ExchangeGoldToCoins(ctx context.Context, characterID 
 	}
 
 	char, err := scanCharacterRow(tx.QueryRowContext(ctx, `
-		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
+		SELECT `+characterColumns+`
 		FROM characters
 		WHERE id = ?
 	`, characterID))
@@ -152,7 +152,7 @@ func (r *CasinoRepository) ExchangeCoinsToGold(ctx context.Context, characterID 
 	}
 
 	char, err := scanCharacterRow(tx.QueryRowContext(ctx, `
-		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
+		SELECT `+characterColumns+`
 		FROM characters
 		WHERE id = ?
 	`, characterID))

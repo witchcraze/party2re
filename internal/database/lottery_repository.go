@@ -81,7 +81,7 @@ func (r *LotteryRepository) BuyRaffleTickets(ctx context.Context, characterID st
 	}
 
 	char, err := scanCharacterRow(tx.QueryRowContext(ctx, `
-		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
+		SELECT `+characterColumns+`
 		FROM characters
 		WHERE id = ?
 	`, characterID))
@@ -139,7 +139,7 @@ func (r *LotteryRepository) UseRaffleTickets(ctx context.Context, characterID st
 	}
 
 	char, err := scanCharacterRow(tx.QueryRowContext(ctx, `
-		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
+		SELECT `+characterColumns+`
 		FROM characters
 		WHERE id = ?
 	`, characterID))
@@ -196,7 +196,7 @@ func (r *LotteryRepository) PurchaseLotteryTicket(ctx context.Context, ticket lo
 	}
 
 	char, err := scanCharacterRow(tx.QueryRowContext(ctx, `
-		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
+		SELECT `+characterColumns+`
 		FROM characters
 		WHERE id = ?
 	`, ticket.CharacterID))
@@ -335,7 +335,7 @@ func (r *LotteryRepository) ClaimLotteryTicket(ctx context.Context, ticketID str
 	}
 
 	char, err := scanCharacterRow(tx.QueryRowContext(ctx, `
-		SELECT id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count
+		SELECT `+characterColumns+`
 		FROM characters
 		WHERE id = ?
 	`, t.CharacterID))

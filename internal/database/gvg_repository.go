@@ -372,28 +372,7 @@ func (r *GvGRepository) RecordMatchAndUpdateStandings(
 		char.Money += int(rew.Gold)
 
 		// Save character in tx
-		updateCharQuery := `
-			UPDATE characters
-			SET level = ?, experience = ?, money = ?,
-			    hp = ?, max_hp = ?,
-			    attack = ?, defense = ?, agility = ?,
-			    rebirth_count = ?
-			WHERE id = ?
-		`
-		if _, err := tx.ExecContext(
-			ctx,
-			updateCharQuery,
-			char.Level,
-			char.Experience,
-			char.Money,
-			char.Stats.HP,
-			char.Stats.MaxHP,
-			char.Stats.Attack,
-			char.Stats.Defense,
-			char.Stats.Agility,
-			char.RebirthCount,
-			char.ID,
-		); err != nil {
+		if err := updateCharacter(ctx, tx, char); err != nil {
 			return fmt.Errorf("update character %s: %w", char.ID, err)
 		}
 	}

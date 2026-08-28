@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #228 — Valkey-backed Rate Limiting Middleware and Park Spam Prevention
+Last updated: Issue #222 — Standardize database character persistence helper across repositories
 
 ## Current phase
 
