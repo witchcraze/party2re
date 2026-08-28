@@ -67,7 +67,7 @@ func NewService(repo Repository, opts ...ServiceOption) (*Service, error) {
 func (s *Service) GetLevelRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
 	limit, offset = NormalizePagination(limit, offset)
 	if useSnapshot {
-		entries, total, calcTime, found := s.getCachedCharacterRanking(RankingTypeLevel, limit, offset)
+		entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, RankingTypeLevel, limit, offset)
 		if found {
 			return RankingPage[CharacterRankingEntry]{
 				RankingType:  RankingTypeLevel,
@@ -102,7 +102,7 @@ func (s *Service) GetLevelRanking(ctx context.Context, limit, offset int, useSna
 func (s *Service) GetPlayerWealthRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[PlayerWealthRankingEntry], error) {
 	limit, offset = NormalizePagination(limit, offset)
 	if useSnapshot {
-		entries, total, calcTime, found := s.getCachedPlayerWealthRanking(RankingTypePlayerWealth, limit, offset)
+		entries, total, calcTime, found := s.getCachedPlayerWealthRanking(ctx, RankingTypePlayerWealth, limit, offset)
 		if found {
 			return RankingPage[PlayerWealthRankingEntry]{
 				RankingType:  RankingTypePlayerWealth,
@@ -137,7 +137,7 @@ func (s *Service) GetPlayerWealthRanking(ctx context.Context, limit, offset int,
 func (s *Service) GetCharacterWealthRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
 	limit, offset = NormalizePagination(limit, offset)
 	if useSnapshot {
-		entries, total, calcTime, found := s.getCachedCharacterRanking(RankingTypeCharacterWealth, limit, offset)
+		entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, RankingTypeCharacterWealth, limit, offset)
 		if found {
 			return RankingPage[CharacterRankingEntry]{
 				RankingType:  RankingTypeCharacterWealth,
@@ -172,7 +172,7 @@ func (s *Service) GetCharacterWealthRanking(ctx context.Context, limit, offset i
 func (s *Service) GetBattleVictoryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
 	limit, offset = NormalizePagination(limit, offset)
 	if useSnapshot {
-		entries, total, calcTime, found := s.getCachedCharacterRanking(RankingTypeBattleVictory, limit, offset)
+		entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, RankingTypeBattleVictory, limit, offset)
 		if found {
 			return RankingPage[CharacterRankingEntry]{
 				RankingType:  RankingTypeBattleVictory,
@@ -207,7 +207,7 @@ func (s *Service) GetBattleVictoryRanking(ctx context.Context, limit, offset int
 func (s *Service) GetPvPVictoryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
 	limit, offset = NormalizePagination(limit, offset)
 	if useSnapshot {
-		entries, total, calcTime, found := s.getCachedCharacterRanking(RankingTypePvPVictory, limit, offset)
+		entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, RankingTypePvPVictory, limit, offset)
 		if found {
 			return RankingPage[CharacterRankingEntry]{
 				RankingType:  RankingTypePvPVictory,
@@ -242,7 +242,7 @@ func (s *Service) GetPvPVictoryRanking(ctx context.Context, limit, offset int, u
 func (s *Service) GetBossDefeatRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
 	limit, offset = NormalizePagination(limit, offset)
 	if useSnapshot {
-		entries, total, calcTime, found := s.getCachedCharacterRanking(RankingTypeBossDefeat, limit, offset)
+		entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, RankingTypeBossDefeat, limit, offset)
 		if found {
 			return RankingPage[CharacterRankingEntry]{
 				RankingType:  RankingTypeBossDefeat,
@@ -277,7 +277,7 @@ func (s *Service) GetBossDefeatRanking(ctx context.Context, limit, offset int, u
 func (s *Service) GetAdventureVictoryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
 	limit, offset = NormalizePagination(limit, offset)
 	if useSnapshot {
-		entries, total, calcTime, found := s.getCachedCharacterRanking(RankingTypeAdventureVictory, limit, offset)
+		entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, RankingTypeAdventureVictory, limit, offset)
 		if found {
 			return RankingPage[CharacterRankingEntry]{
 				RankingType:  RankingTypeAdventureVictory,
@@ -312,7 +312,7 @@ func (s *Service) GetAdventureVictoryRanking(ctx context.Context, limit, offset 
 func (s *Service) GetJobMasteryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
 	limit, offset = NormalizePagination(limit, offset)
 	if useSnapshot {
-		entries, total, calcTime, found := s.getCachedCharacterRanking(RankingTypeJobMastery, limit, offset)
+		entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, RankingTypeJobMastery, limit, offset)
 		if found {
 			return RankingPage[CharacterRankingEntry]{
 				RankingType:  RankingTypeJobMastery,
@@ -363,6 +363,32 @@ func (s *Service) GetJobPopularityRanking(ctx context.Context, useSnapshot bool)
 				}, nil
 			}
 		}
+
+		// In-memory cache miss or expired: fall back to persistent database snapshot
+		snapshot, err := s.repo.GetSnapshot(ctx, RankingTypeJobPopularity)
+		if err == nil && snapshot.SnapshotData != "" {
+			var list []JobPopularityEntry
+			if err := json.Unmarshal([]byte(snapshot.SnapshotData), &list); err == nil {
+				now := s.nowFunc().UTC()
+				s.mu.Lock()
+				s.cache[RankingTypeJobPopularity] = cacheEntry{
+					data:      list,
+					total:     snapshot.TotalCount,
+					expiresAt: now.Add(s.cacheTTL),
+					updatedAt: snapshot.CalculatedAt,
+				}
+				s.mu.Unlock()
+				return RankingPage[JobPopularityEntry]{
+					RankingType:  RankingTypeJobPopularity,
+					Entries:      list,
+					Total:        len(list),
+					Limit:        len(list),
+					Offset:       0,
+					CalculatedAt: snapshot.CalculatedAt,
+					IsSnapshot:   true,
+				}, nil
+			}
+		}
 	}
 
 	entries, err := s.repo.GetJobPopularityRanking(ctx)
@@ -386,7 +412,7 @@ func (s *Service) GetJobPopularityRanking(ctx context.Context, useSnapshot bool)
 func (s *Service) GetHelperRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
 	limit, offset = NormalizePagination(limit, offset)
 	if useSnapshot {
-		entries, total, calcTime, found := s.getCachedCharacterRanking(RankingTypeHelper, limit, offset)
+		entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, RankingTypeHelper, limit, offset)
 		if found {
 			return RankingPage[CharacterRankingEntry]{
 				RankingType:  RankingTypeHelper,
@@ -421,7 +447,7 @@ func (s *Service) GetHelperRanking(ctx context.Context, limit, offset int, useSn
 func (s *Service) GetRebirthRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
 	limit, offset = NormalizePagination(limit, offset)
 	if useSnapshot {
-		entries, total, calcTime, found := s.getCachedCharacterRanking(RankingTypeRebirth, limit, offset)
+		entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, RankingTypeRebirth, limit, offset)
 		if found {
 			return RankingPage[CharacterRankingEntry]{
 				RankingType:  RankingTypeRebirth,
@@ -456,7 +482,7 @@ func (s *Service) GetRebirthRanking(ctx context.Context, limit, offset int, useS
 func (s *Service) GetSmallMedalRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
 	limit, offset = NormalizePagination(limit, offset)
 	if useSnapshot {
-		entries, total, calcTime, found := s.getCachedCharacterRanking(RankingTypeSmallMedals, limit, offset)
+		entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, RankingTypeSmallMedals, limit, offset)
 		if found {
 			return RankingPage[CharacterRankingEntry]{
 				RankingType:  RankingTypeSmallMedals,
@@ -640,7 +666,64 @@ func (s *Service) RefreshAllSnapshots(ctx context.Context) error {
 	return nil
 }
 
-func (s *Service) getCachedCharacterRanking(t RankingType, limit, offset int) ([]CharacterRankingEntry, int, time.Time, bool) {
+// GetSnapshot retrieves the raw persistent snapshot from the database repository.
+func (s *Service) GetSnapshot(ctx context.Context, rankingType RankingType) (RankingSnapshot, error) {
+	if !IsValidRankingType(rankingType) {
+		return RankingSnapshot{}, ErrInvalidRankingType
+	}
+	return s.repo.GetSnapshot(ctx, rankingType)
+}
+
+// GetAllSnapshots retrieves all raw persistent snapshots from the database repository.
+func (s *Service) GetAllSnapshots(ctx context.Context) (map[RankingType]RankingSnapshot, error) {
+	return s.repo.GetAllSnapshots(ctx)
+}
+
+// WarmupCache preloads all persistent snapshots from the database repository into the in-memory cache.
+func (s *Service) WarmupCache(ctx context.Context) error {
+	snapshots, err := s.repo.GetAllSnapshots(ctx)
+	if err != nil {
+		return err
+	}
+	now := s.nowFunc().UTC()
+	for rankingType, snapshot := range snapshots {
+		if snapshot.SnapshotData == "" {
+			continue
+		}
+		var parsedData any
+		switch rankingType {
+		case RankingTypePlayerWealth:
+			var list []PlayerWealthRankingEntry
+			if err := json.Unmarshal([]byte(snapshot.SnapshotData), &list); err == nil {
+				parsedData = list
+			}
+		case RankingTypeJobPopularity:
+			var list []JobPopularityEntry
+			if err := json.Unmarshal([]byte(snapshot.SnapshotData), &list); err == nil {
+				parsedData = list
+			}
+		default:
+			var list []CharacterRankingEntry
+			if err := json.Unmarshal([]byte(snapshot.SnapshotData), &list); err == nil {
+				parsedData = list
+			}
+		}
+
+		if parsedData != nil {
+			s.mu.Lock()
+			s.cache[rankingType] = cacheEntry{
+				data:      parsedData,
+				total:     snapshot.TotalCount,
+				expiresAt: now.Add(s.cacheTTL),
+				updatedAt: snapshot.CalculatedAt,
+			}
+			s.mu.Unlock()
+		}
+	}
+	return nil
+}
+
+func (s *Service) getCachedCharacterRanking(ctx context.Context, t RankingType, limit, offset int) ([]CharacterRankingEntry, int, time.Time, bool) {
 	s.mu.RLock()
 	cached, exists := s.cache[t]
 	s.mu.RUnlock()
@@ -650,10 +733,29 @@ func (s *Service) getCachedCharacterRanking(t RankingType, limit, offset int) ([
 			return paginateSlice(list, limit, offset), cached.total, cached.updatedAt, true
 		}
 	}
+
+	// In-memory cache miss or expired: fall back to persistent database snapshot
+	snapshot, err := s.repo.GetSnapshot(ctx, t)
+	if err == nil && snapshot.SnapshotData != "" {
+		var list []CharacterRankingEntry
+		if err := json.Unmarshal([]byte(snapshot.SnapshotData), &list); err == nil {
+			now := s.nowFunc().UTC()
+			s.mu.Lock()
+			s.cache[t] = cacheEntry{
+				data:      list,
+				total:     snapshot.TotalCount,
+				expiresAt: now.Add(s.cacheTTL),
+				updatedAt: snapshot.CalculatedAt,
+			}
+			s.mu.Unlock()
+			return paginateSlice(list, limit, offset), snapshot.TotalCount, snapshot.CalculatedAt, true
+		}
+	}
+
 	return nil, 0, time.Time{}, false
 }
 
-func (s *Service) getCachedPlayerWealthRanking(t RankingType, limit, offset int) ([]PlayerWealthRankingEntry, int, time.Time, bool) {
+func (s *Service) getCachedPlayerWealthRanking(ctx context.Context, t RankingType, limit, offset int) ([]PlayerWealthRankingEntry, int, time.Time, bool) {
 	s.mu.RLock()
 	cached, exists := s.cache[t]
 	s.mu.RUnlock()
@@ -663,6 +765,25 @@ func (s *Service) getCachedPlayerWealthRanking(t RankingType, limit, offset int)
 			return paginateSlice(list, limit, offset), cached.total, cached.updatedAt, true
 		}
 	}
+
+	// In-memory cache miss or expired: fall back to persistent database snapshot
+	snapshot, err := s.repo.GetSnapshot(ctx, t)
+	if err == nil && snapshot.SnapshotData != "" {
+		var list []PlayerWealthRankingEntry
+		if err := json.Unmarshal([]byte(snapshot.SnapshotData), &list); err == nil {
+			now := s.nowFunc().UTC()
+			s.mu.Lock()
+			s.cache[t] = cacheEntry{
+				data:      list,
+				total:     snapshot.TotalCount,
+				expiresAt: now.Add(s.cacheTTL),
+				updatedAt: snapshot.CalculatedAt,
+			}
+			s.mu.Unlock()
+			return paginateSlice(list, limit, offset), snapshot.TotalCount, snapshot.CalculatedAt, true
+		}
+	}
+
 	return nil, 0, time.Time{}, false
 }
 

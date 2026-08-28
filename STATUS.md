@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #230 — Fix concurrent data race on shared math/rand.Rand in Home and Park modules
+Last updated: Issue #231 — Implement database snapshot fallback on cache miss in RankingService
 
 ## Current phase
 

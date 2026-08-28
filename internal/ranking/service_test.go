@@ -282,3 +282,185 @@ func TestService_RefreshAllSnapshots(t *testing.T) {
 		t.Fatalf("expected 12 snapshots saved in repository, got %d", len(repo.snapshots))
 	}
 }
+
+func TestService_GetSnapshot_And_GetAllSnapshots(t *testing.T) {
+	repo := newMockRepo()
+	fixedTime := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+	repo.snapshots[ranking.RankingTypeLevel] = ranking.RankingSnapshot{
+		RankingType:  ranking.RankingTypeLevel,
+		SnapshotData: `[{"rank":1,"character_id":"c1","character_name":"Hero","score":99}]`,
+		TotalCount:   1,
+		CalculatedAt: fixedTime,
+		UpdatedAt:    fixedTime,
+	}
+
+	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// GetSnapshot
+	s, err := svc.GetSnapshot(ctx, ranking.RankingTypeLevel)
+	if err != nil {
+		t.Fatalf("unexpected error from GetSnapshot: %v", err)
+	}
+	if s.TotalCount != 1 || s.RankingType != ranking.RankingTypeLevel {
+		t.Fatalf("unexpected snapshot: %+v", s)
+	}
+
+	// GetSnapshot invalid type
+	_, err = svc.GetSnapshot(ctx, ranking.RankingType("invalid_type"))
+	if err != ranking.ErrInvalidRankingType {
+		t.Fatalf("expected ErrInvalidRankingType, got %v", err)
+	}
+
+	// GetAllSnapshots
+	all, err := svc.GetAllSnapshots(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error from GetAllSnapshots: %v", err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("expected 1 snapshot, got %d", len(all))
+	}
+}
+
+func TestService_SnapshotDatabaseFallback_OnCacheMiss(t *testing.T) {
+	repo := newMockRepo()
+	fixedTime := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+
+	// Persist snapshots in repo directly (simulating pre-existing DB snapshots on fresh server start)
+	repo.snapshots[ranking.RankingTypeLevel] = ranking.RankingSnapshot{
+		RankingType:  ranking.RankingTypeLevel,
+		SnapshotData: `[{"rank":1,"character_id":"c1","character_name":"Hero","score":99},{"rank":2,"character_id":"c2","character_name":"Mage","score":85}]`,
+		TotalCount:   2,
+		CalculatedAt: fixedTime,
+		UpdatedAt:    fixedTime,
+	}
+	repo.snapshots[ranking.RankingTypePlayerWealth] = ranking.RankingSnapshot{
+		RankingType:  ranking.RankingTypePlayerWealth,
+		SnapshotData: `[{"rank":1,"player_id":"p1","username":"Alice","total_wealth":500000}]`,
+		TotalCount:   1,
+		CalculatedAt: fixedTime,
+		UpdatedAt:    fixedTime,
+	}
+	repo.snapshots[ranking.RankingTypeJobPopularity] = ranking.RankingSnapshot{
+		RankingType:  ranking.RankingTypeJobPopularity,
+		SnapshotData: `[{"rank":1,"job_id":"hero","total_count":10,"percentage":100.0}]`,
+		TotalCount:   1,
+		CalculatedAt: fixedTime,
+		UpdatedAt:    fixedTime,
+	}
+
+	// Empty live tables in repo to guarantee live query would return empty / different data
+	repo.levelRankings = nil
+	repo.levelTotal = 0
+	repo.playerWealthRankings = nil
+	repo.playerWealthTotal = 0
+	repo.jobPopularityRankings = nil
+
+	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Character ranking snapshot DB fallback
+	levelPage, err := svc.GetLevelRanking(ctx, 10, 0, true)
+	if err != nil {
+		t.Fatalf("unexpected error for level ranking: %v", err)
+	}
+	if !levelPage.IsSnapshot || levelPage.Total != 2 || len(levelPage.Entries) != 2 {
+		t.Fatalf("expected snapshot fallback for level ranking, got %+v", levelPage)
+	}
+	if levelPage.Entries[0].CharacterName != "Hero" || levelPage.Entries[1].CharacterName != "Mage" {
+		t.Fatalf("unexpected level entries: %+v", levelPage.Entries)
+	}
+
+	// 2. Second read hits in-memory cache (modify repo snapshot to verify memory cache is used)
+	delete(repo.snapshots, ranking.RankingTypeLevel)
+	cachedLevelPage, err := svc.GetLevelRanking(ctx, 10, 0, true)
+	if err != nil {
+		t.Fatalf("unexpected error for cached level ranking: %v", err)
+	}
+	if !cachedLevelPage.IsSnapshot || cachedLevelPage.Total != 2 {
+		t.Fatalf("expected in-memory cached level page, got %+v", cachedLevelPage)
+	}
+
+	// 3. Player wealth ranking snapshot DB fallback
+	wealthPage, err := svc.GetPlayerWealthRanking(ctx, 10, 0, true)
+	if err != nil {
+		t.Fatalf("unexpected error for wealth ranking: %v", err)
+	}
+	if !wealthPage.IsSnapshot || wealthPage.Total != 1 || wealthPage.Entries[0].Username != "Alice" {
+		t.Fatalf("expected snapshot fallback for wealth ranking, got %+v", wealthPage)
+	}
+
+	// 4. Job popularity ranking snapshot DB fallback
+	jobPopPage, err := svc.GetJobPopularityRanking(ctx, true)
+	if err != nil {
+		t.Fatalf("unexpected error for job popularity: %v", err)
+	}
+	if !jobPopPage.IsSnapshot || jobPopPage.Total != 1 || jobPopPage.Entries[0].JobID != "hero" {
+		t.Fatalf("expected snapshot fallback for job popularity, got %+v", jobPopPage)
+	}
+}
+
+func TestService_WarmupCache(t *testing.T) {
+	repo := newMockRepo()
+	fixedTime := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+
+	repo.snapshots[ranking.RankingTypeLevel] = ranking.RankingSnapshot{
+		RankingType:  ranking.RankingTypeLevel,
+		SnapshotData: `[{"rank":1,"character_id":"c1","character_name":"Hero","score":99}]`,
+		TotalCount:   1,
+		CalculatedAt: fixedTime,
+		UpdatedAt:    fixedTime,
+	}
+	repo.snapshots[ranking.RankingTypePlayerWealth] = ranking.RankingSnapshot{
+		RankingType:  ranking.RankingTypePlayerWealth,
+		SnapshotData: `[{"rank":1,"player_id":"p1","username":"Alice","total_wealth":500000}]`,
+		TotalCount:   1,
+		CalculatedAt: fixedTime,
+		UpdatedAt:    fixedTime,
+	}
+	repo.snapshots[ranking.RankingTypeJobPopularity] = ranking.RankingSnapshot{
+		RankingType:  ranking.RankingTypeJobPopularity,
+		SnapshotData: `[{"rank":1,"job_id":"hero","total_count":10,"percentage":100.0}]`,
+		TotalCount:   1,
+		CalculatedAt: fixedTime,
+		UpdatedAt:    fixedTime,
+	}
+
+	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Warmup cache
+	if err := svc.WarmupCache(ctx); err != nil {
+		t.Fatalf("failed to warmup cache: %v", err)
+	}
+
+	// Delete from repo to verify all snapshots are served purely from in-memory cache
+	repo.snapshots = make(map[ranking.RankingType]ranking.RankingSnapshot)
+
+	lvl, err := svc.GetLevelRanking(ctx, 10, 0, true)
+	if err != nil || !lvl.IsSnapshot || lvl.Total != 1 {
+		t.Fatalf("expected level ranking from prewarmed cache, got %+v (err: %v)", lvl, err)
+	}
+
+	wealth, err := svc.GetPlayerWealthRanking(ctx, 10, 0, true)
+	if err != nil || !wealth.IsSnapshot || wealth.Total != 1 {
+		t.Fatalf("expected player wealth ranking from prewarmed cache, got %+v (err: %v)", wealth, err)
+	}
+
+	pop, err := svc.GetJobPopularityRanking(ctx, true)
+	if err != nil || !pop.IsSnapshot || pop.Total != 1 {
+		t.Fatalf("expected job popularity ranking from prewarmed cache, got %+v (err: %v)", pop, err)
+	}
+}
