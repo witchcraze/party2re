@@ -7,6 +7,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
+	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/medal"
 )
 
@@ -48,52 +49,26 @@ func (h *Handler) handleClaimMedalReward(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
-		return
-	}
-
-	var req claimMedalRewardRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-
-	char, err := h.characters.Get(r.Context(), req.CharacterID)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			writeError(w, http.StatusNotFound, err)
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *claimMedalRewardRequest) string {
+		return req.CharacterID
+	}, func(_ coreplayer.Player, char corecharacter.Character, req claimMedalRewardRequest) {
+		updatedChar, updatedInv, err := h.medals.Claim(r.Context(), char.ID, req.ItemID)
+		if err != nil {
+			if errors.Is(err, medal.ErrInsufficientMedals) {
+				writeError(w, http.StatusUnprocessableEntity, err)
+				return
+			}
+			if errors.Is(err, medal.ErrRewardNotFound) {
+				writeError(w, http.StatusNotFound, err)
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if char.PlayerID != player.ID {
-		writeError(w, http.StatusForbidden, errors.New("forbidden: character belongs to another player"))
-		return
-	}
 
-	updatedChar, updatedInv, err := h.medals.Claim(r.Context(), req.CharacterID, req.ItemID)
-	if err != nil {
-		if errors.Is(err, medal.ErrInsufficientMedals) {
-			writeError(w, http.StatusUnprocessableEntity, err)
-			return
-		}
-		if errors.Is(err, medal.ErrRewardNotFound) {
-			writeError(w, http.StatusNotFound, err)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, claimMedalRewardResponse{
-		Character: toCharacterResponse(updatedChar),
-		Inventory: updatedInv,
+		writeJSON(w, http.StatusOK, claimMedalRewardResponse{
+			Character: toCharacterResponse(updatedChar),
+			Inventory: updatedInv,
+		})
 	})
 }

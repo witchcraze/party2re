@@ -520,15 +520,8 @@ type statsResponse struct {
 }
 
 func (h *Handler) handleCreateCharacter(w http.ResponseWriter, r *http.Request) {
-	// Require authentication.
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
+	player, ok := h.authenticatePlayer(w, r)
+	if !ok {
 		return
 	}
 
@@ -545,33 +538,9 @@ func (h *Handler) handleCreateCharacter(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handler) handleGetCharacter(w http.ResponseWriter, r *http.Request) {
-	// Require authentication.
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
-		return
-	}
-
-	id := r.PathValue("id")
-	char, err := h.characters.Get(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			writeError(w, http.StatusNotFound, err)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if char.PlayerID != player.ID {
-		writeError(w, http.StatusForbidden, errors.New("forbidden: character belongs to another player"))
-		return
-	}
-	writeJSON(w, http.StatusOK, toCharacterResponse(char))
+	h.withAuthenticatedCharacter(w, r, r.PathValue("id"), func(_ coreplayer.Player, char corecharacter.Character) {
+		writeJSON(w, http.StatusOK, toCharacterResponse(char))
+	})
 }
 
 func toCharacterResponse(char corecharacter.Character) characterResponse {
@@ -618,54 +587,24 @@ type adventureResponse struct {
 }
 
 func (h *Handler) handleStartAdventure(w http.ResponseWriter, r *http.Request) {
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
-		return
-	}
-
-	var req startAdventureRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	char, err := h.characters.Get(r.Context(), req.CharacterID)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			writeError(w, http.StatusNotFound, err)
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *startAdventureRequest) string {
+		return req.CharacterID
+	}, func(_ coreplayer.Player, char corecharacter.Character, req startAdventureRequest) {
+		adv, err := h.adventures.StartStage(r.Context(), char.ID, req.StageID)
+		if err != nil {
+			if errors.Is(err, adventure.ErrLevelRequirementNotMet) {
+				writeError(w, http.StatusForbidden, err)
+				return
+			}
+			writeError(w, http.StatusUnprocessableEntity, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if char.PlayerID != player.ID {
-		writeError(w, http.StatusForbidden, errors.New("forbidden: character belongs to another player"))
-		return
-	}
-	adv, err := h.adventures.StartStage(r.Context(), req.CharacterID, req.StageID)
-	if err != nil {
-		if errors.Is(err, adventure.ErrLevelRequirementNotMet) {
-			writeError(w, http.StatusForbidden, err)
-			return
-		}
-		writeError(w, http.StatusUnprocessableEntity, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, toAdventureResponse(adv))
+		writeJSON(w, http.StatusCreated, toAdventureResponse(adv))
+	})
 }
 
 func (h *Handler) handleClaimAdventure(w http.ResponseWriter, r *http.Request) {
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	if _, err := h.players.Authenticate(r.Context(), sessionID); err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
+	if _, ok := h.authenticatePlayer(w, r); !ok {
 		return
 	}
 
@@ -731,86 +670,38 @@ type saleResponse struct {
 }
 
 func (h *Handler) handlePurchase(w http.ResponseWriter, r *http.Request) {
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
-		return
-	}
-
-	var req purchaseRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	char, err := h.characters.Get(r.Context(), req.CharacterID)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			writeError(w, http.StatusNotFound, err)
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *purchaseRequest) string {
+		return req.CharacterID
+	}, func(_ coreplayer.Player, char corecharacter.Character, req purchaseRequest) {
+		result, err := h.shops.Purchase(r.Context(), char.ID, req.ItemDefinitionID, req.Quantity)
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if char.PlayerID != player.ID {
-		writeError(w, http.StatusForbidden, errors.New("forbidden: character belongs to another player"))
-		return
-	}
-	result, err := h.shops.Purchase(r.Context(), req.CharacterID, req.ItemDefinitionID, req.Quantity)
-	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, purchaseResponse{
-		CharacterID:      result.Character.ID,
-		ItemDefinitionID: result.ItemInstance.DefinitionID,
-		Quantity:         result.ItemInstance.Quantity,
-		TotalCost:        result.TotalPrice,
+		writeJSON(w, http.StatusOK, purchaseResponse{
+			CharacterID:      result.Character.ID,
+			ItemDefinitionID: result.ItemInstance.DefinitionID,
+			Quantity:         result.ItemInstance.Quantity,
+			TotalCost:        result.TotalPrice,
+		})
 	})
 }
 
 func (h *Handler) handleSell(w http.ResponseWriter, r *http.Request) {
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
-		return
-	}
-
-	var req sellRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	char, err := h.characters.Get(r.Context(), req.CharacterID)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			writeError(w, http.StatusNotFound, err)
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *sellRequest) string {
+		return req.CharacterID
+	}, func(_ coreplayer.Player, char corecharacter.Character, req sellRequest) {
+		result, err := h.shops.Sell(r.Context(), char.ID, req.ItemInstanceID, req.Quantity)
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if char.PlayerID != player.ID {
-		writeError(w, http.StatusForbidden, errors.New("forbidden: character belongs to another player"))
-		return
-	}
-	result, err := h.shops.Sell(r.Context(), req.CharacterID, req.ItemInstanceID, req.Quantity)
-	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, saleResponse{
-		CharacterID: result.Character.ID,
-		InstanceID:  result.SoldInstance.ID,
-		Quantity:    result.SoldInstance.Quantity,
-		TotalPayout: result.TotalPayout,
+		writeJSON(w, http.StatusOK, saleResponse{
+			CharacterID: result.Character.ID,
+			InstanceID:  result.SoldInstance.ID,
+			Quantity:    result.SoldInstance.Quantity,
+			TotalPayout: result.TotalPayout,
+		})
 	})
 }
 

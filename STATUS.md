@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #227 — Valkey-backed Ranking Snapshot Caching and Periodic Background Worker Refresh
+Last updated: Issue #221 — Standardize authentication and session context extraction across HTTP handlers
 
 ## Current phase
 
