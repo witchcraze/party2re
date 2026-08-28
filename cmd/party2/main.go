@@ -248,12 +248,14 @@ func run() error {
 		}
 		schedRepo := scheduling.NewValkeyRepository(valkeyClient)
 		limiter := ratelimit.NewValkeyLimiter(valkeyClient)
+		rankingCache := ranking.NewValkeySnapshotCache(valkeyClient)
 
 		// Setup Scheduler, Services & Worker
 		schedService := scheduling.NewService(schedRepo)
 		_ = rescue.NewService(rescueRepo, charRepo, schedService)
 		_, _ = park.NewService(parkRepo, charRepo, park.WithRateLimiter(limiter))
 		_, _ = home.NewService(homeRepo, charRepo, home.WithVisitorLimiter(limiter, 24*time.Hour))
+		rankingService, _ := ranking.NewService(rankingRepo, ranking.WithSnapshotCache(rankingCache))
 
 		// Note: logger parameter uses nop logger for now as standard pkg logger isn't typed for it.
 		// In a real app we would adapt logging.Logger to activity/adventure.Logger.
@@ -278,6 +280,7 @@ func run() error {
 		worker := scheduling.NewWorker(schedRepo, 5*time.Second, logging.NewJSON(os.Stderr))
 		worker.RegisterHandler(activity.ActivityActionTypeTrainingComplete, activity.NewTrainingHandler(activityService))
 		worker.RegisterHandler(adventure.AdventureActionTypeComplete, adventure.NewAdventureCompletionHandler(adventureService))
+		worker.RegisterHandler(ranking.RankingActionTypeRefresh, ranking.NewRefreshHandler(rankingService))
 
 		// In a real entrypoint we would run worker.Run(ctx, interval) in a goroutine.
 		// For now, we just wire it up.

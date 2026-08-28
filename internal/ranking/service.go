@@ -22,11 +22,13 @@ type cacheEntry struct {
 
 // Service provides high-level ranking and leaderboard operations.
 type Service struct {
-	repo     Repository
-	nowFunc  func() time.Time
-	cacheTTL time.Duration
-	mu       sync.RWMutex
-	cache    map[RankingType]cacheEntry
+	repo        Repository
+	valkeyCache SnapshotCache
+	sf          group
+	nowFunc     func() time.Time
+	cacheTTL    time.Duration
+	mu          sync.RWMutex
+	cache       map[RankingType]cacheEntry
 }
 
 // ServiceOption configures optional parameters for Service.
@@ -43,6 +45,13 @@ func WithNowFunc(fn func() time.Time) ServiceOption {
 func WithCacheTTL(ttl time.Duration) ServiceOption {
 	return func(s *Service) {
 		s.cacheTTL = ttl
+	}
+}
+
+// WithSnapshotCache configures a distributed snapshot cache (e.g. Valkey) for the Service.
+func WithSnapshotCache(cache SnapshotCache) ServiceOption {
+	return func(s *Service) {
+		s.valkeyCache = cache
 	}
 }
 
@@ -346,48 +355,17 @@ func (s *Service) GetJobMasteryRanking(ctx context.Context, limit, offset int, u
 // GetJobPopularityRanking returns distribution statistics for all jobs.
 func (s *Service) GetJobPopularityRanking(ctx context.Context, useSnapshot bool) (RankingPage[JobPopularityEntry], error) {
 	if useSnapshot {
-		s.mu.RLock()
-		cached, exists := s.cache[RankingTypeJobPopularity]
-		s.mu.RUnlock()
-
-		if exists && cached.expiresAt.After(s.nowFunc()) {
-			if list, ok := cached.data.([]JobPopularityEntry); ok {
-				return RankingPage[JobPopularityEntry]{
-					RankingType:  RankingTypeJobPopularity,
-					Entries:      list,
-					Total:        len(list),
-					Limit:        len(list),
-					Offset:       0,
-					CalculatedAt: cached.updatedAt,
-					IsSnapshot:   true,
-				}, nil
-			}
-		}
-
-		// In-memory cache miss or expired: fall back to persistent database snapshot
-		snapshot, err := s.repo.GetSnapshot(ctx, RankingTypeJobPopularity)
-		if err == nil && snapshot.SnapshotData != "" {
-			var list []JobPopularityEntry
-			if err := json.Unmarshal([]byte(snapshot.SnapshotData), &list); err == nil {
-				now := s.nowFunc().UTC()
-				s.mu.Lock()
-				s.cache[RankingTypeJobPopularity] = cacheEntry{
-					data:      list,
-					total:     snapshot.TotalCount,
-					expiresAt: now.Add(s.cacheTTL),
-					updatedAt: snapshot.CalculatedAt,
-				}
-				s.mu.Unlock()
-				return RankingPage[JobPopularityEntry]{
-					RankingType:  RankingTypeJobPopularity,
-					Entries:      list,
-					Total:        len(list),
-					Limit:        len(list),
-					Offset:       0,
-					CalculatedAt: snapshot.CalculatedAt,
-					IsSnapshot:   true,
-				}, nil
-			}
+		entries, total, calcTime, found := s.getCachedJobPopularityRanking(ctx)
+		if found {
+			return RankingPage[JobPopularityEntry]{
+				RankingType:  RankingTypeJobPopularity,
+				Entries:      entries,
+				Total:        total,
+				Limit:        len(entries),
+				Offset:       0,
+				CalculatedAt: calcTime,
+				IsSnapshot:   true,
+			}, nil
 		}
 	}
 
@@ -629,6 +607,10 @@ func (s *Service) RefreshSnapshot(ctx context.Context, rankingType RankingType) 
 		return fmt.Errorf("save ranking snapshot %s: %w", rankingType, err)
 	}
 
+	if s.valkeyCache != nil {
+		_ = s.valkeyCache.Set(ctx, rankingType, snapshot, s.cacheTTL)
+	}
+
 	s.mu.Lock()
 	s.cache[rankingType] = cacheEntry{
 		data:      data,
@@ -679,7 +661,7 @@ func (s *Service) GetAllSnapshots(ctx context.Context) (map[RankingType]RankingS
 	return s.repo.GetAllSnapshots(ctx)
 }
 
-// WarmupCache preloads all persistent snapshots from the database repository into the in-memory cache.
+// WarmupCache preloads all persistent snapshots from the database repository into the in-memory cache and Valkey cache.
 func (s *Service) WarmupCache(ctx context.Context) error {
 	snapshots, err := s.repo.GetAllSnapshots(ctx)
 	if err != nil {
@@ -718,6 +700,9 @@ func (s *Service) WarmupCache(ctx context.Context) error {
 				updatedAt: snapshot.CalculatedAt,
 			}
 			s.mu.Unlock()
+			if s.valkeyCache != nil {
+				_ = s.valkeyCache.Set(ctx, rankingType, snapshot, s.cacheTTL)
+			}
 		}
 	}
 	return nil
@@ -734,21 +719,55 @@ func (s *Service) getCachedCharacterRanking(ctx context.Context, t RankingType, 
 		}
 	}
 
-	// In-memory cache miss or expired: fall back to persistent database snapshot
-	snapshot, err := s.repo.GetSnapshot(ctx, t)
-	if err == nil && snapshot.SnapshotData != "" {
-		var list []CharacterRankingEntry
-		if err := json.Unmarshal([]byte(snapshot.SnapshotData), &list); err == nil {
-			now := s.nowFunc().UTC()
-			s.mu.Lock()
-			s.cache[t] = cacheEntry{
-				data:      list,
-				total:     snapshot.TotalCount,
-				expiresAt: now.Add(s.cacheTTL),
-				updatedAt: snapshot.CalculatedAt,
+	// 1. Check Valkey distributed cache
+	if s.valkeyCache != nil {
+		if snap, found, err := s.valkeyCache.Get(ctx, t); err == nil && found && snap.SnapshotData != "" {
+			var list []CharacterRankingEntry
+			if err := json.Unmarshal([]byte(snap.SnapshotData), &list); err == nil {
+				now := s.nowFunc().UTC()
+				s.mu.Lock()
+				s.cache[t] = cacheEntry{
+					data:      list,
+					total:     snap.TotalCount,
+					expiresAt: now.Add(s.cacheTTL),
+					updatedAt: snap.CalculatedAt,
+				}
+				s.mu.Unlock()
+				return paginateSlice(list, limit, offset), snap.TotalCount, snap.CalculatedAt, true
 			}
-			s.mu.Unlock()
-			return paginateSlice(list, limit, offset), snapshot.TotalCount, snapshot.CalculatedAt, true
+		}
+	}
+
+	// 2. Cache miss: Singleflight database fallback to prevent cache stampede
+	res, err := s.sf.Do(string(t), func() (any, error) {
+		snap, err := s.repo.GetSnapshot(ctx, t)
+		if err == nil && snap.SnapshotData != "" {
+			var list []CharacterRankingEntry
+			if err := json.Unmarshal([]byte(snap.SnapshotData), &list); err == nil {
+				now := s.nowFunc().UTC()
+				s.mu.Lock()
+				s.cache[t] = cacheEntry{
+					data:      list,
+					total:     snap.TotalCount,
+					expiresAt: now.Add(s.cacheTTL),
+					updatedAt: snap.CalculatedAt,
+				}
+				s.mu.Unlock()
+				if s.valkeyCache != nil {
+					_ = s.valkeyCache.Set(ctx, t, snap, s.cacheTTL)
+				}
+				return snap, nil
+			}
+		}
+		return nil, errors.New("no snapshot available")
+	})
+
+	if err == nil {
+		if snap, ok := res.(RankingSnapshot); ok {
+			var list []CharacterRankingEntry
+			if err := json.Unmarshal([]byte(snap.SnapshotData), &list); err == nil {
+				return paginateSlice(list, limit, offset), snap.TotalCount, snap.CalculatedAt, true
+			}
 		}
 	}
 
@@ -766,21 +785,122 @@ func (s *Service) getCachedPlayerWealthRanking(ctx context.Context, t RankingTyp
 		}
 	}
 
-	// In-memory cache miss or expired: fall back to persistent database snapshot
-	snapshot, err := s.repo.GetSnapshot(ctx, t)
-	if err == nil && snapshot.SnapshotData != "" {
-		var list []PlayerWealthRankingEntry
-		if err := json.Unmarshal([]byte(snapshot.SnapshotData), &list); err == nil {
-			now := s.nowFunc().UTC()
-			s.mu.Lock()
-			s.cache[t] = cacheEntry{
-				data:      list,
-				total:     snapshot.TotalCount,
-				expiresAt: now.Add(s.cacheTTL),
-				updatedAt: snapshot.CalculatedAt,
+	// 1. Check Valkey distributed cache
+	if s.valkeyCache != nil {
+		if snap, found, err := s.valkeyCache.Get(ctx, t); err == nil && found && snap.SnapshotData != "" {
+			var list []PlayerWealthRankingEntry
+			if err := json.Unmarshal([]byte(snap.SnapshotData), &list); err == nil {
+				now := s.nowFunc().UTC()
+				s.mu.Lock()
+				s.cache[t] = cacheEntry{
+					data:      list,
+					total:     snap.TotalCount,
+					expiresAt: now.Add(s.cacheTTL),
+					updatedAt: snap.CalculatedAt,
+				}
+				s.mu.Unlock()
+				return paginateSlice(list, limit, offset), snap.TotalCount, snap.CalculatedAt, true
 			}
-			s.mu.Unlock()
-			return paginateSlice(list, limit, offset), snapshot.TotalCount, snapshot.CalculatedAt, true
+		}
+	}
+
+	// 2. Cache miss: Singleflight database fallback to prevent cache stampede
+	res, err := s.sf.Do(string(t), func() (any, error) {
+		snap, err := s.repo.GetSnapshot(ctx, t)
+		if err == nil && snap.SnapshotData != "" {
+			var list []PlayerWealthRankingEntry
+			if err := json.Unmarshal([]byte(snap.SnapshotData), &list); err == nil {
+				now := s.nowFunc().UTC()
+				s.mu.Lock()
+				s.cache[t] = cacheEntry{
+					data:      list,
+					total:     snap.TotalCount,
+					expiresAt: now.Add(s.cacheTTL),
+					updatedAt: snap.CalculatedAt,
+				}
+				s.mu.Unlock()
+				if s.valkeyCache != nil {
+					_ = s.valkeyCache.Set(ctx, t, snap, s.cacheTTL)
+				}
+				return snap, nil
+			}
+		}
+		return nil, errors.New("no snapshot available")
+	})
+
+	if err == nil {
+		if snap, ok := res.(RankingSnapshot); ok {
+			var list []PlayerWealthRankingEntry
+			if err := json.Unmarshal([]byte(snap.SnapshotData), &list); err == nil {
+				return paginateSlice(list, limit, offset), snap.TotalCount, snap.CalculatedAt, true
+			}
+		}
+	}
+
+	return nil, 0, time.Time{}, false
+}
+
+func (s *Service) getCachedJobPopularityRanking(ctx context.Context) ([]JobPopularityEntry, int, time.Time, bool) {
+	t := RankingTypeJobPopularity
+	s.mu.RLock()
+	cached, exists := s.cache[t]
+	s.mu.RUnlock()
+
+	if exists && cached.expiresAt.After(s.nowFunc()) {
+		if list, ok := cached.data.([]JobPopularityEntry); ok {
+			return list, cached.total, cached.updatedAt, true
+		}
+	}
+
+	// 1. Check Valkey distributed cache
+	if s.valkeyCache != nil {
+		if snap, found, err := s.valkeyCache.Get(ctx, t); err == nil && found && snap.SnapshotData != "" {
+			var list []JobPopularityEntry
+			if err := json.Unmarshal([]byte(snap.SnapshotData), &list); err == nil {
+				now := s.nowFunc().UTC()
+				s.mu.Lock()
+				s.cache[t] = cacheEntry{
+					data:      list,
+					total:     snap.TotalCount,
+					expiresAt: now.Add(s.cacheTTL),
+					updatedAt: snap.CalculatedAt,
+				}
+				s.mu.Unlock()
+				return list, snap.TotalCount, snap.CalculatedAt, true
+			}
+		}
+	}
+
+	// 2. Cache miss: Singleflight database fallback to prevent cache stampede
+	res, err := s.sf.Do(string(t), func() (any, error) {
+		snap, err := s.repo.GetSnapshot(ctx, t)
+		if err == nil && snap.SnapshotData != "" {
+			var list []JobPopularityEntry
+			if err := json.Unmarshal([]byte(snap.SnapshotData), &list); err == nil {
+				now := s.nowFunc().UTC()
+				s.mu.Lock()
+				s.cache[t] = cacheEntry{
+					data:      list,
+					total:     snap.TotalCount,
+					expiresAt: now.Add(s.cacheTTL),
+					updatedAt: snap.CalculatedAt,
+				}
+				s.mu.Unlock()
+				if s.valkeyCache != nil {
+					_ = s.valkeyCache.Set(ctx, t, snap, s.cacheTTL)
+				}
+				return snap, nil
+			}
+		}
+		return nil, errors.New("no snapshot available")
+	})
+
+	if err == nil {
+		if snap, ok := res.(RankingSnapshot); ok {
+			var list []JobPopularityEntry
+			if err := json.Unmarshal([]byte(snap.SnapshotData), &list); err == nil {
+				return list, snap.TotalCount, snap.CalculatedAt, true
+			}
 		}
 	}
 
