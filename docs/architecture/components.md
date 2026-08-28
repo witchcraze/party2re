@@ -329,6 +329,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Multi-category competitive leaderboards and character rankings (`ranking.cgi`, `job_ranking.cgi`, `week_ranking.cgi`), including Level, Player Wealth, Character Wealth, Battle Victories, PvP Victories, World Boss Defeats, Adventure Victories, Job Mastery, Job Popularity, Helper Quests, Rebirth Count, and Small Medals, with deterministic tie-breaking, pagination, in-memory TTL caching, and persistent snapshots (`ranking_snapshots`).
   - **Dependencies:** Core Character, Core Player.
   - **Persistence:** `ranking_snapshots` table and dedicated high-performance query indexes in `internal/database/ranking_repository.go`.
+- **Distributed Rate Limiting & Cooldown Tracking** (`internal/ratelimit`):
+  - **Responsibility:** Atomic distributed rate limiting, burst protection, public endpoint spam defense, park bulletin board posting cooldowns, and private home visitor throttling without SQL lookup overhead.
+  - **Dependencies:** Valkey (`github.com/valkey-io/valkey-go`) with in-memory thread-safe fallback.
+  - **Persistence:** Transient atomic counter keys in Valkey with TTL (`party2:ratelimit:*`).
 
 ### Future Feature Modules
 

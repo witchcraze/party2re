@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #232 — Integrate emergency rescue with scheduling service to cancel active tasks
+Last updated: Issue #228 — Valkey-backed Rate Limiting Middleware and Park Spam Prevention
 
 ## Current phase
 
@@ -57,11 +57,11 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Player Leaderboards & Character Rankings** (`internal/ranking`): ランキング・リーダーボード機能（`ranking.cgi`, `job_ranking.cgi`, `week_ranking.cgi`、レベル・プレイヤー総資産・キャラクター所持金・戦闘通算勝利数・PvP闘技場勝利数・ボス討伐数・冒険勝利数・職マスター数・職業人気分布・手助け達成数・転生回数・ちいさなメダル所持数の12カテゴリ、決定論的タイブレーク・ページネーション、インメモリTTLキャッシュおよび永続スナップショット `ranking_snapshots`、MariaDB永続化）。
 
 ### API & Transport
-- **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`, `/park/*`, `/medals/*`, `/helpers/*`, `/rescues/*`, `/news/*`, `/notifications/*`, `/homes/*`, `/letters/*`, `/rankings/*`）。セッション認証、キャラクター・プレイヤー所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
+- **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`, `/park/*`, `/medals/*`, `/helpers/*`, `/rescues/*`, `/news/*`, `/notifications/*`, `/homes/*`, `/letters/*`, `/rankings/*`）。セッション認証、キャラクター・プレイヤー所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、Valkey/In-Memory 分散レートリミットミドルウェア（公開認証エンドポイント・一般エンドポイント別制限、429 Too Many Requests、Retry-After / X-RateLimit-* ヘッダー、fail-open耐障害性）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
 
 ### Infrastructure & Operations
 - **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `035_rankings_and_leaderboards.sql`、`make db-migrate` / `make db-reset`）。
-- **Valkey**: 遅延アクションキュー・排他ロック（AOF+RDB永続化）。
+- **Valkey**: 遅延アクションキュー・排他ロック・分散レートリミット（AOF+RDB永続化）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
 - **Verification**: `Makefile` (`make check`, `make fmt`, `make check-clean`)、Git pre-push hook による自動検証。
 - **Deployment**: Distroless (`gcr.io/distroless/static-debian13:nonroot`) ベースの最小本番イメージ（GHCR自動公開）。

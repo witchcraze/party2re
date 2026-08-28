@@ -9,10 +9,15 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/ratelimit"
 )
 
 type CharacterReader interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
+}
+
+type Limiter interface {
+	Allow(ctx context.Context, key string, limit int64, window time.Duration) (ratelimit.Result, error)
 }
 
 type Service struct {
@@ -20,6 +25,7 @@ type Service struct {
 	charReader   CharacterReader
 	npc          *TownGirlNPC
 	rateLimitDur time.Duration
+	limiter      Limiter
 	nowFunc      func() time.Time
 }
 
@@ -28,6 +34,12 @@ type ServiceOption func(*Service)
 func WithRateLimit(d time.Duration) ServiceOption {
 	return func(s *Service) {
 		s.rateLimitDur = d
+	}
+}
+
+func WithRateLimiter(limiter Limiter) ServiceOption {
+	return func(s *Service) {
+		s.limiter = limiter
 	}
 }
 
@@ -79,10 +91,17 @@ func (s *Service) PostMessage(ctx context.Context, characterID, content, color, 
 
 	now := s.nowFunc().UTC()
 	if s.rateLimitDur > 0 {
-		latestTime, err := s.repo.GetLatestPostTimeByCharacter(ctx, characterID)
-		if err == nil && !latestTime.IsZero() {
-			if now.Sub(latestTime.UTC()) < s.rateLimitDur {
+		if s.limiter != nil {
+			res, err := s.limiter.Allow(ctx, "park:post:"+characterID, 1, s.rateLimitDur)
+			if err == nil && !res.Allowed {
 				return Post{}, ErrRateLimited
+			}
+		} else {
+			latestTime, err := s.repo.GetLatestPostTimeByCharacter(ctx, characterID)
+			if err == nil && !latestTime.IsZero() {
+				if now.Sub(latestTime.UTC()) < s.rateLimitDur {
+					return Post{}, ErrRateLimited
+				}
 			}
 		}
 	}

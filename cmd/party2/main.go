@@ -28,6 +28,7 @@ import (
 	"github.com/witchcraze/party2re/internal/park"
 	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/ranking"
+	"github.com/witchcraze/party2re/internal/ratelimit"
 	"github.com/witchcraze/party2re/internal/replay"
 	"github.com/witchcraze/party2re/internal/rescue"
 	"github.com/witchcraze/party2re/internal/scheduling"
@@ -246,10 +247,13 @@ func run() error {
 			return err
 		}
 		schedRepo := scheduling.NewValkeyRepository(valkeyClient)
+		limiter := ratelimit.NewValkeyLimiter(valkeyClient)
 
-		// Setup Scheduler & Worker
+		// Setup Scheduler, Services & Worker
 		schedService := scheduling.NewService(schedRepo)
 		_ = rescue.NewService(rescueRepo, charRepo, schedService)
+		_, _ = park.NewService(parkRepo, charRepo, park.WithRateLimiter(limiter))
+		_, _ = home.NewService(homeRepo, charRepo, home.WithVisitorLimiter(limiter, 24*time.Hour))
 
 		// Note: logger parameter uses nop logger for now as standard pkg logger isn't typed for it.
 		// In a real app we would adapt logging.Logger to activity/adventure.Logger.

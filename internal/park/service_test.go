@@ -9,6 +9,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/park"
+	"github.com/witchcraze/party2re/internal/ratelimit"
 )
 
 type mockRepository struct {
@@ -133,6 +134,45 @@ func TestService_PostMessage(t *testing.T) {
 			t.Fatalf("expected ErrCharacterNotFound, got %v", err)
 		}
 	})
+}
+
+func TestService_PostMessage_WithLimiter(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockRepository()
+	charReader := &mockCharacterReader{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "アリス", JobID: "hero"},
+		},
+	}
+	limiter := ratelimit.NewMemoryLimiter()
+	svc, err := park.NewService(
+		repo,
+		charReader,
+		park.WithRateLimiter(limiter),
+		park.WithRateLimit(100*time.Millisecond),
+	)
+	if err != nil {
+		t.Fatalf("unexpected init error: %v", err)
+	}
+
+	// First post succeeds
+	_, err = svc.PostMessage(ctx, "char-1", "First post", "", "")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+
+	// Immediate second post blocked by limiter
+	_, err = svc.PostMessage(ctx, "char-1", "Spam post", "", "")
+	if err != park.ErrRateLimited {
+		t.Fatalf("expected ErrRateLimited from limiter, got %v", err)
+	}
+
+	// Wait for window to expire
+	time.Sleep(120 * time.Millisecond)
+	_, err = svc.PostMessage(ctx, "char-1", "Post after window", "", "")
+	if err != nil {
+		t.Fatalf("expected post allowed after window, got %v", err)
+	}
 }
 
 func TestService_GetRecentPosts(t *testing.T) {

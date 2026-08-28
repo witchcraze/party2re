@@ -7,8 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,9 +18,33 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/helper"
+	"github.com/witchcraze/party2re/internal/ratelimit"
 	"github.com/witchcraze/party2re/internal/rescue"
 	"github.com/witchcraze/party2re/internal/shop"
 )
+
+// RateLimiter defines the rate limiting interface required by HTTP middleware.
+type RateLimiter interface {
+	Allow(ctx context.Context, key string, limit int64, window time.Duration) (ratelimit.Result, error)
+}
+
+// RateLimitConfig configures rate limiting thresholds and windows.
+type RateLimitConfig struct {
+	PublicLimit   int64
+	PublicWindow  time.Duration
+	GeneralLimit  int64
+	GeneralWindow time.Duration
+}
+
+// DefaultRateLimitConfig returns standard default rate limits.
+func DefaultRateLimitConfig() RateLimitConfig {
+	return RateLimitConfig{
+		PublicLimit:   10,
+		PublicWindow:  time.Minute,
+		GeneralLimit:  60,
+		GeneralWindow: time.Minute,
+	}
+}
 
 // PlayerService defines the player account operations exposed over HTTP.
 type PlayerService interface {
@@ -71,11 +97,25 @@ type Handler struct {
 	notifications  NotificationService
 	homes          HomeService
 	rankings       RankingService
+	limiter        RateLimiter
+	rateLimitCfg   RateLimitConfig
 	allowedOrigins map[string]struct{}
 }
 
 // Option configures optional parameters for the Handler.
 type Option func(*Handler)
+
+// WithRateLimiter configures rate limiting for the Handler.
+func WithRateLimiter(limiter RateLimiter, cfg ...RateLimitConfig) Option {
+	return func(h *Handler) {
+		h.limiter = limiter
+		if len(cfg) > 0 {
+			h.rateLimitCfg = cfg[0]
+		} else {
+			h.rateLimitCfg = DefaultRateLimitConfig()
+		}
+	}
+}
 
 // WithHelper configures the helper quest service for the Handler.
 func WithHelper(helpers HelperService) Option {
@@ -242,7 +282,88 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /rankings/{type}", h.handleGetRankingByType)
 	mux.HandleFunc("POST /rankings/refresh", h.handleRefreshRankings)
 
-	return securityHeadersMiddleware(h.corsMiddleware(mux))
+	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(mux)))
+}
+
+func extractClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		if len(parts) > 0 {
+			ip := strings.TrimSpace(parts[0])
+			if ip != "" {
+				return ip
+			}
+		}
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		if ip := strings.TrimSpace(xri); ip != "" {
+			return ip
+		}
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// rateLimitMiddleware applies distributed / in-memory rate limiting to incoming HTTP requests.
+func (h *Handler) rateLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h.limiter == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		ip := extractClientIP(r)
+		var key string
+		var limit int64
+		var window time.Duration
+
+		// Public registration/login endpoints
+		if r.Method == http.MethodPost && (r.URL.Path == "/players" || r.URL.Path == "/sessions") {
+			key = "http:public:" + ip + ":" + r.URL.Path
+			limit = h.rateLimitCfg.PublicLimit
+			window = h.rateLimitCfg.PublicWindow
+		} else {
+			if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+				sessionID := strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
+				key = "http:auth:" + sessionID
+			} else {
+				key = "http:general:" + ip
+			}
+			limit = h.rateLimitCfg.GeneralLimit
+			window = h.rateLimitCfg.GeneralWindow
+		}
+
+		if limit <= 0 || window <= 0 {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		res, err := h.limiter.Allow(r.Context(), key, limit, window)
+		if err != nil {
+			// Fail-open gracefully on limiter error
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		w.Header().Set("X-RateLimit-Limit", strconv.FormatInt(res.Limit, 10))
+		w.Header().Set("X-RateLimit-Remaining", strconv.FormatInt(res.Remaining, 10))
+		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(int64(res.ResetAfter.Seconds()), 10))
+
+		if !res.Allowed {
+			retrySec := int64(res.ResetAfter.Seconds())
+			if retrySec < 1 {
+				retrySec = 1
+			}
+			w.Header().Set("Retry-After", strconv.FormatInt(retrySec, 10))
+			writeError(w, http.StatusTooManyRequests, errors.New("rate limit exceeded"))
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 // corsMiddleware handles CORS headers and preflight OPTIONS requests based on allowed origins.

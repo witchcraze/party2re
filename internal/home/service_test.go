@@ -10,6 +10,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/ratelimit"
 )
 
 type mockCharReader struct {
@@ -231,6 +232,48 @@ func TestHomeService(t *testing.T) {
 		}
 		if updated.Theme != "#ff9933" || updated.CompanionName != "スライム" {
 			t.Errorf("unexpected updated home: %+v", updated)
+		}
+	})
+
+	t.Run("visit home with rate limiter throttling repeated hits", func(t *testing.T) {
+		repoLim := newMockHomeRepo()
+		limiter := ratelimit.NewMemoryLimiter()
+		limService, err := NewService(
+			repoLim,
+			chars,
+			WithNowFunc(func() time.Time { return fixedTime }),
+			WithVisitorLimiter(limiter, 100*time.Millisecond),
+		)
+		if err != nil {
+			t.Fatalf("failed to create service: %v", err)
+		}
+
+		// First visit increments count to 1
+		view, err := limService.GetHomeView(ctx, "char-1", "char-2")
+		if err != nil {
+			t.Fatalf("GetHomeView failed: %v", err)
+		}
+		if view.Home.VisitorCount != 1 {
+			t.Errorf("expected 1 visitor count, got %d", view.Home.VisitorCount)
+		}
+
+		// Immediate second visit by same visitor is throttled (count remains 1)
+		view, err = limService.GetHomeView(ctx, "char-1", "char-2")
+		if err != nil {
+			t.Fatalf("GetHomeView failed: %v", err)
+		}
+		if view.Home.VisitorCount != 1 {
+			t.Errorf("expected visitor count still 1 after throttled hit, got %d", view.Home.VisitorCount)
+		}
+
+		// After window expires, next visit increments to 2
+		time.Sleep(120 * time.Millisecond)
+		view, err = limService.GetHomeView(ctx, "char-1", "char-2")
+		if err != nil {
+			t.Fatalf("GetHomeView failed: %v", err)
+		}
+		if view.Home.VisitorCount != 2 {
+			t.Errorf("expected visitor count 2 after cooldown expired, got %d", view.Home.VisitorCount)
 		}
 	})
 
