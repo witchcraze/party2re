@@ -7,6 +7,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/helper"
 )
 
@@ -38,43 +39,16 @@ func (h *Handler) handleCompleteHelperQuest(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
-		return
-	}
-
-	var req completeHelperQuestRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-
-	char, err := h.characters.Get(r.Context(), req.CharacterID)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			writeError(w, http.StatusNotFound, err)
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *completeHelperQuestRequest) string {
+		return req.CharacterID
+	}, func(_ coreplayer.Player, char corecharacter.Character, req completeHelperQuestRequest) {
+		res, err := h.helpers.CompleteQuest(r.Context(), char.ID, req.QuestID, time.Now().UTC())
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if char.PlayerID != player.ID {
-		writeError(w, http.StatusForbidden, errors.New("forbidden: character belongs to another player"))
-		return
-	}
-
-	res, err := h.helpers.CompleteQuest(r.Context(), req.CharacterID, req.QuestID, time.Now().UTC())
-	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, res)
+		writeJSON(w, http.StatusOK, res)
+	})
 }
 
 type rescuePenaltyResponse struct {
@@ -94,47 +68,19 @@ func (h *Handler) handleGetRescuePenalty(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
-		return
-	}
-
 	charID := strings.TrimSpace(r.URL.Query().Get("character_id"))
-	if charID == "" {
-		writeError(w, http.StatusBadRequest, errors.New("missing character_id parameter"))
-		return
-	}
-
-	char, err := h.characters.Get(r.Context(), charID)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			writeError(w, http.StatusNotFound, err)
+	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+		isUnderPenalty, remaining, err := h.rescues.IsUnderPenalty(r.Context(), char.ID, time.Now().UTC())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if char.PlayerID != player.ID {
-		writeError(w, http.StatusForbidden, errors.New("forbidden: character belongs to another player"))
-		return
-	}
 
-	isUnderPenalty, remaining, err := h.rescues.IsUnderPenalty(r.Context(), charID, time.Now().UTC())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, rescuePenaltyResponse{
-		CharacterID:      charID,
-		IsUnderPenalty:   isUnderPenalty,
-		RemainingSeconds: int(remaining.Seconds()),
+		writeJSON(w, http.StatusOK, rescuePenaltyResponse{
+			CharacterID:      char.ID,
+			IsUnderPenalty:   isUnderPenalty,
+			RemainingSeconds: int(remaining.Seconds()),
+		})
 	})
 }
 
@@ -144,41 +90,15 @@ func (h *Handler) handleRequestRescue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
-		return
-	}
-
-	var req requestRescueRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-
-	char, err := h.characters.Get(r.Context(), req.CharacterID)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			writeError(w, http.StatusNotFound, err)
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *requestRescueRequest) string {
+		return req.CharacterID
+	}, func(_ coreplayer.Player, char corecharacter.Character, req requestRescueRequest) {
+		rec, err := h.rescues.EmergencyRescue(r.Context(), char.ID, req.Reason, time.Now().UTC())
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if char.PlayerID != player.ID {
-		writeError(w, http.StatusForbidden, errors.New("forbidden: character belongs to another player"))
-		return
-	}
 
-	rec, err := h.rescues.EmergencyRescue(r.Context(), req.CharacterID, req.Reason, time.Now().UTC())
-	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, rec)
+		writeJSON(w, http.StatusOK, rec)
+	})
 }

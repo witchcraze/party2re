@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/park"
 )
 
@@ -83,51 +84,25 @@ func (h *Handler) handlePostParkMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
-		return
-	}
-
-	var req postParkMessageRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-
-	char, err := h.characters.Get(r.Context(), req.CharacterID)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			writeError(w, http.StatusNotFound, err)
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *postParkMessageRequest) string {
+		return req.CharacterID
+	}, func(_ coreplayer.Player, char corecharacter.Character, req postParkMessageRequest) {
+		post, err := h.park.PostMessage(r.Context(), char.ID, req.Content, req.Color, req.RecipientName)
+		if err != nil {
+			if errors.Is(err, park.ErrRateLimited) {
+				writeError(w, http.StatusTooManyRequests, err)
+				return
+			}
+			if errors.Is(err, park.ErrEmptyContent) || errors.Is(err, park.ErrContentTooLong) || errors.Is(err, park.ErrInvalidColor) {
+				writeError(w, http.StatusUnprocessableEntity, err)
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if char.PlayerID != player.ID {
-		writeError(w, http.StatusForbidden, errors.New("forbidden: character belongs to another player"))
-		return
-	}
 
-	post, err := h.park.PostMessage(r.Context(), req.CharacterID, req.Content, req.Color, req.RecipientName)
-	if err != nil {
-		if errors.Is(err, park.ErrRateLimited) {
-			writeError(w, http.StatusTooManyRequests, err)
-			return
-		}
-		if errors.Is(err, park.ErrEmptyContent) || errors.Is(err, park.ErrContentTooLong) || errors.Is(err, park.ErrInvalidColor) {
-			writeError(w, http.StatusUnprocessableEntity, err)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	writeJSON(w, http.StatusCreated, post)
+		writeJSON(w, http.StatusCreated, post)
+	})
 }
 
 func (h *Handler) handleParkNPCTalk(w http.ResponseWriter, r *http.Request) {
@@ -136,43 +111,17 @@ func (h *Handler) handleParkNPCTalk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
-		return
-	}
-
-	var req parkCharacterActionRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-
-	char, err := h.characters.Get(r.Context(), req.CharacterID)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			writeError(w, http.StatusNotFound, err)
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *parkCharacterActionRequest) string {
+		return req.CharacterID
+	}, func(_ coreplayer.Player, char corecharacter.Character, req parkCharacterActionRequest) {
+		dialogue, err := h.park.TalkToNPC(r.Context(), char.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if char.PlayerID != player.ID {
-		writeError(w, http.StatusForbidden, errors.New("forbidden: character belongs to another player"))
-		return
-	}
 
-	dialogue, err := h.park.TalkToNPC(r.Context(), req.CharacterID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, parkDialogueResponse{Dialogue: dialogue})
+		writeJSON(w, http.StatusOK, parkDialogueResponse{Dialogue: dialogue})
+	})
 }
 
 func (h *Handler) handleParkNPCDivinate(w http.ResponseWriter, r *http.Request) {
@@ -181,43 +130,17 @@ func (h *Handler) handleParkNPCDivinate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
-		return
-	}
-
-	var req parkCharacterActionRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-
-	char, err := h.characters.Get(r.Context(), req.CharacterID)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			writeError(w, http.StatusNotFound, err)
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *parkCharacterActionRequest) string {
+		return req.CharacterID
+	}, func(_ coreplayer.Player, char corecharacter.Character, req parkCharacterActionRequest) {
+		result, err := h.park.Divinate(r.Context(), char.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if char.PlayerID != player.ID {
-		writeError(w, http.StatusForbidden, errors.New("forbidden: character belongs to another player"))
-		return
-	}
 
-	result, err := h.park.Divinate(r.Context(), req.CharacterID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, result)
+		writeJSON(w, http.StatusOK, result)
+	})
 }
 
 func (h *Handler) handleParkNPCInspect(w http.ResponseWriter, r *http.Request) {
