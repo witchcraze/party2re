@@ -203,6 +203,16 @@ Battle must not know whether it was initiated by a quest, guild, arena, boss, du
 
 Adventure may use Battle but should not own Battle's implementation.
 
+### Common Foundation & Cross-Cutting Packages
+
+To avoid duplicate boilerplate while preventing monolithic "junk-drawer" packages, shared cross-cutting logic is organized into single-responsibility packages:
+
+- **ID Generation (`internal/id` or `internal/common`)**: Cryptographically secure ID generation (`NewID()`) ensuring thread-safe, consistent 16-byte hex identifiers across all domain models.
+- **Pagination (`internal/pagination` or `internal/api/http/pagination`)**: Reusable generic list envelopes (`Page[T]`, `PaginationResult[T]`) and query parameter parsers with standard limit/offset normalization.
+- **Validation (`internal/validation`)**: Standardized format validators (e.g. HEX color codes `#RRGGBB`, text length bounds, HTML tag sanitization).
+- **HTTP Transport Middleware (`internal/api/http/middleware`)**: Reusable transport helpers, including session authentication, character ownership verification wrappers (`withAuthenticatedCharacter`), admin role guards, CORS policies, and rate limiters.
+- **Shared Entity Persistence Helpers (`internal/database`)**: Standardized transactional update functions for shared Core entities (e.g. updating character progression, stats, and gold) across repository boundaries.
+
 ## Feature modules
 
 Each feature owns its feature-specific rules and state. A feature may consume public contracts from Core or shared components, but must not access another feature's private implementation or database schema.
