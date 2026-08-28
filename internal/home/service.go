@@ -11,10 +11,15 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/ratelimit"
 )
 
 type CharacterReader interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
+}
+
+type Limiter interface {
+	Allow(ctx context.Context, key string, limit int64, window time.Duration) (ratelimit.Result, error)
 }
 
 type LetterListResult struct {
@@ -25,14 +30,23 @@ type LetterListResult struct {
 }
 
 type Service struct {
-	repo       Repository
-	charReader CharacterReader
-	rngMu      sync.Mutex
-	rng        *mrand.Rand
-	nowFunc    func() time.Time
+	repo            Repository
+	charReader      CharacterReader
+	rngMu           sync.Mutex
+	rng             *mrand.Rand
+	visitorLimiter  Limiter
+	visitorCooldown time.Duration
+	nowFunc         func() time.Time
 }
 
 type ServiceOption func(*Service)
+
+func WithVisitorLimiter(limiter Limiter, cooldown time.Duration) ServiceOption {
+	return func(s *Service) {
+		s.visitorLimiter = limiter
+		s.visitorCooldown = cooldown
+	}
+}
 
 func WithNowFunc(fn func() time.Time) ServiceOption {
 	return func(s *Service) {
@@ -54,10 +68,11 @@ func NewService(repo Repository, charReader CharacterReader, opts ...ServiceOpti
 		return nil, errors.New("character reader is required")
 	}
 	s := &Service{
-		repo:       repo,
-		charReader: charReader,
-		rng:        mrand.New(mrand.NewSource(time.Now().UnixNano())),
-		nowFunc:    func() time.Time { return time.Now().UTC() },
+		repo:            repo,
+		charReader:      charReader,
+		rng:             mrand.New(mrand.NewSource(time.Now().UnixNano())),
+		visitorCooldown: 24 * time.Hour,
+		nowFunc:         func() time.Time { return time.Now().UTC() },
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -79,7 +94,16 @@ func (s *Service) GetHomeView(ctx context.Context, homeCharacterID, visitorChara
 	now := s.nowFunc().UTC()
 
 	if !isOwner && visitorCharacterID != "" {
-		_ = s.repo.IncrementVisitorCount(ctx, homeCharacterID, now)
+		allowed := true
+		if s.visitorLimiter != nil && s.visitorCooldown > 0 {
+			res, err := s.visitorLimiter.Allow(ctx, "home:visit:"+homeCharacterID+":"+visitorCharacterID, 1, s.visitorCooldown)
+			if err == nil && !res.Allowed {
+				allowed = false
+			}
+		}
+		if allowed {
+			_ = s.repo.IncrementVisitorCount(ctx, homeCharacterID, now)
+		}
 	}
 
 	h, err := s.repo.GetHome(ctx, homeCharacterID)
