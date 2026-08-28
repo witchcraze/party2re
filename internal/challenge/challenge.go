@@ -2,9 +2,7 @@ package challenge
 
 import (
 	"context"
-	"crypto/rand"
 	_ "embed"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +12,7 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 //go:embed data/challenge_tiers.json
@@ -213,10 +212,7 @@ func (s *Service) StartSession(ctx context.Context, characterID string, tierID s
 		return nil, ErrActiveSessionExists
 	}
 
-	sessionID, err := generateID()
-	if err != nil {
-		return nil, err
-	}
+	sessionID := id.New()
 
 	maxHP := char.Stats.MaxHP
 	if maxHP <= 0 {
@@ -423,14 +419,6 @@ func (s *Service) GetLeaderboard(ctx context.Context, tierID string, limit int) 
 		limit = 20
 	}
 	return s.repo.GetLeaderboard(ctx, tierID, limit)
-}
-
-func generateID() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
 }
 
 func EncodeJSON(v any) string {

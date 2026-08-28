@@ -2,8 +2,6 @@ package boss
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -12,6 +10,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 const (
@@ -559,14 +558,12 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 
 		if len(boss.DropItemIDs) > 0 {
 			rewardItemID = boss.DropItemIDs[0]
-			itemInstanceID, err := generateID()
-			if err == nil {
-				rewardItemInstance = &coreitem.Instance{
-					ID:               itemInstanceID,
-					DefinitionID:     rewardItemID,
-					Quantity:         1,
-					EnhancementLevel: 0,
-				}
+			itemInstanceID := id.New()
+			rewardItemInstance = &coreitem.Instance{
+				ID:               itemInstanceID,
+				DefinitionID:     rewardItemID,
+				Quantity:         1,
+				EnhancementLevel: 0,
 			}
 		}
 
@@ -578,10 +575,7 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 		char.SmallMedals += medalsGained
 	}
 
-	historyID, err := generateID()
-	if err != nil {
-		return ChallengeResult{}, err
-	}
+	historyID := id.New()
 
 	history := BossChallengeHistory{
 		ID:                historyID,
@@ -612,12 +606,4 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 		IsFirstClear:      isFirstClear,
 		UpdatedRecord:     rec,
 	}, nil
-}
-
-func generateID() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
 }

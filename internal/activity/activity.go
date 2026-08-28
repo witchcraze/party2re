@@ -2,14 +2,13 @@ package activity
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/progression"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 const (
@@ -102,12 +101,8 @@ func (s *Service) StartTraining(ctx context.Context, characterID string) (Activi
 	}
 
 	now := s.clock.Now()
-	id, err := newID()
-	if err != nil {
-		return Activity{}, err
-	}
 	value := Activity{
-		ID:               id,
+		ID:               id.New(),
 		CharacterID:      characterID,
 		Type:             TrainingType,
 		StartedAt:        now,
@@ -119,14 +114,13 @@ func (s *Service) StartTraining(ctx context.Context, characterID string) (Activi
 	}
 
 	if s.scheduler != nil {
-		_, err = s.scheduler.Schedule(
+		if _, err := s.scheduler.Schedule(
 			ctx,
 			ActivityActionTypeTrainingComplete,
 			characterID,
 			map[string]string{"activity_id": value.ID},
 			value.AvailableAt,
-		)
-		if err != nil {
+		); err != nil {
 			s.logger.Warn("failed to schedule training completion", "activity_id", value.ID, "error", err)
 		}
 	}
@@ -158,12 +152,4 @@ func (s *Service) Claim(ctx context.Context, id string) (Activity, error) {
 	}
 	value.Claimed = true
 	return value, nil
-}
-
-func newID() (string, error) {
-	value := make([]byte, 16)
-	if _, err := rand.Read(value); err != nil {
-		return "", fmt.Errorf("generate activity ID: %w", err)
-	}
-	return hex.EncodeToString(value), nil
 }

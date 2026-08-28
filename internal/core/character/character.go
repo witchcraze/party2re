@@ -2,13 +2,14 @@ package character
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 const maxNameLength = 32
@@ -88,13 +89,8 @@ func NewWithOptions(name, jobID, gender string, random RandomSource) (Character,
 		return Character{}, fmt.Errorf("generate initial stats: %w", err)
 	}
 
-	id, err := newID()
-	if err != nil {
-		return Character{}, fmt.Errorf("generate character ID: %w", err)
-	}
-
 	return Character{
-		ID:     id,
+		ID:     id.New(),
 		Name:   name,
 		JobID:  strings.TrimSpace(jobID),
 		Gender: strings.TrimSpace(gender),
@@ -163,12 +159,4 @@ func validName(name string) bool {
 		return false
 	}
 	return !containsControl(name)
-}
-
-func newID() (string, error) {
-	value := make([]byte, 16)
-	if _, err := rand.Read(value); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(value), nil
 }

@@ -2,11 +2,11 @@ package notification
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
+
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 type NewsListResult struct {
@@ -55,12 +55,6 @@ func NewService(newsRepo NewsRepository, notifRepo NotificationRepository, opts 
 	return s, nil
 }
 
-func generateID() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
 // PublishNews creates and publishes a new system-wide news article.
 func (s *Service) PublishNews(ctx context.Context, category, title, content, author string, publishedAt time.Time) (NewsArticle, error) {
 	if err := ValidateNewsArticle(category, title, content, author); err != nil {
@@ -84,7 +78,7 @@ func (s *Service) PublishNews(ctx context.Context, category, title, content, aut
 	}
 
 	article := NewsArticle{
-		ID:          generateID(),
+		ID:          id.New(),
 		Category:    cleanCategory,
 		Title:       strings.TrimSpace(title),
 		Content:     strings.TrimSpace(content),
@@ -147,7 +141,7 @@ func (s *Service) NotifyPlayer(ctx context.Context, playerID, category, title, b
 
 	now := s.nowFunc().UTC()
 	notif := PlayerNotification{
-		ID:        generateID(),
+		ID:        id.New(),
 		PlayerID:  strings.TrimSpace(playerID),
 		Category:  cleanCategory,
 		Title:     strings.TrimSpace(title),
@@ -188,7 +182,7 @@ func (s *Service) BroadcastNotification(ctx context.Context, playerIDs []string,
 			continue
 		}
 		notifs = append(notifs, PlayerNotification{
-			ID:        generateID(),
+			ID:        id.New(),
 			PlayerID:  pid,
 			Category:  cleanCategory,
 			Title:     cleanTitle,

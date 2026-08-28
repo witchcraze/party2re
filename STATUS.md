@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #234 — Document common components guidelines and shared packages in architecture specs
+Last updated: Issue #233 — Centralize cryptographically secure ID generation utility across internal packages
 
 ## Current phase
 
@@ -23,7 +23,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理。
 - **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定（経験値・ゴールド・アイテム・ちいさなメダル）、構造化ターンログ出力、戦闘参加者（Participant）標準アダプタ/ビルダー（`NewParticipantFromCharacter`, `NewParticipantFromCharacterWithHP`, `ParticipantBuilder`）。
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): Valkeyバックエンドの遅延アクションキュー＆分散排他ロックWorker。
-- **Common Components Architecture**: 単一責務の共通パッケージ配置方針（`internal/id`, `internal/pagination`, `internal/validation`, `internal/api/http/middleware`）、Rule of Three、セキュリティ/認可の即時共通化指針の策定（`.agents/rules/03-architecture.md`, `docs/architecture/components.md`）。
+- **Common Components & Utilities**: 単一責務の共通パッケージ配置方針（`internal/id`, `internal/pagination`, `internal/validation`, `internal/api/http/middleware`）、Rule of Three、セキュリティ/認可の即時共通化指針の策定、および暗号学的に安全なID生成ユーティリティ（`internal/id`: `New()`, `Generate()`, `NewLength()`）の全ドメインパッケージへの適用・集約。
 
 
 ### Feature Modules

@@ -2,8 +2,6 @@ package pvp
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -12,6 +10,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/progression"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 const (
@@ -294,10 +293,7 @@ func (s *Service) Challenge(ctx context.Context, attackerID, defenderID string) 
 		updatedDefRating.Draws++
 	}
 
-	matchID, err := newMatchID()
-	if err != nil {
-		return ChallengeResult{}, err
-	}
+	matchID := id.New()
 
 	match := MatchRecord{
 		ID:                   matchID,
@@ -327,12 +323,4 @@ func (s *Service) Challenge(ctx context.Context, attackerID, defenderID string) 
 		AttackerLeveledUp:    attackerLeveledUp,
 		AttackerCurrentLevel: attacker.Level,
 	}, nil
-}
-
-func newMatchID() (string, error) {
-	buf := make([]byte, 16)
-	if _, err := rand.Read(buf); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(buf), nil
 }

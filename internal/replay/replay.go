@@ -2,14 +2,13 @@ package replay
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 var (
@@ -102,10 +101,7 @@ func (s *Service) RecordBattle(ctx context.Context, req SaveReplayRequest) (stri
 		return "", ErrInvalidParticipantData
 	}
 
-	replayID, err := generateID()
-	if err != nil {
-		return "", err
-	}
+	replayID := id.New()
 
 	initName := req.Initiator.Name
 	if initName == "" {
@@ -173,14 +169,6 @@ func (s *Service) PruneOldReplays(ctx context.Context, retentionDays int) (int64
 	}
 	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
 	return s.repo.DeleteOlderThan(ctx, cutoff)
-}
-
-func generateID() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
 }
 
 func EncodeJSON(v any) string {

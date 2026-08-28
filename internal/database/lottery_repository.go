@@ -2,13 +2,12 @@ package database
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/lottery"
 )
 
@@ -182,7 +181,7 @@ func (r *LotteryRepository) PurchaseLotteryTicket(ctx context.Context, ticket lo
 
 	// 2. Generate ID and insert ticket
 	if ticket.ID == "" {
-		ticket.ID = generateLotteryID()
+		ticket.ID = id.New()
 	}
 	if ticket.PurchasedAt.IsZero() {
 		ticket.PurchasedAt = time.Now().UTC()
@@ -348,10 +347,4 @@ func (r *LotteryRepository) ClaimLotteryTicket(ctx context.Context, ticketID str
 		return lottery.LotteryTicket{}, corecharacter.Character{}, err
 	}
 	return t, char, nil
-}
-
-func generateLotteryID() string {
-	bytes := make([]byte, 16)
-	_, _ = rand.Read(bytes)
-	return hex.EncodeToString(bytes)
 }

@@ -2,14 +2,12 @@ package bank
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 var (
@@ -101,10 +99,7 @@ func (s *Service) Transfer(ctx context.Context, fromPlayerID string, toPlayerID 
 		return Account{}, Account{}, TransferRecord{}, ErrInvalidAmount
 	}
 
-	recordID, err := generateID()
-	if err != nil {
-		return Account{}, Account{}, TransferRecord{}, err
-	}
+	recordID := id.New()
 
 	record := TransferRecord{
 		ID:           recordID,
@@ -114,7 +109,10 @@ func (s *Service) Transfer(ctx context.Context, fromPlayerID string, toPlayerID 
 		CreatedAt:    time.Now().UTC(),
 	}
 
-	var fromAcc, toAcc Account
+	var (
+		fromAcc, toAcc Account
+		err            error
+	)
 	const maxRetries = 5
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		fromAcc, toAcc, err = s.repository.Transfer(ctx, record)
@@ -147,12 +145,4 @@ func (s *Service) ListTransfers(ctx context.Context, playerID string, limit int)
 		limit = 20
 	}
 	return s.repository.ListTransfers(ctx, strings.TrimSpace(playerID), limit)
-}
-
-func generateID() (string, error) {
-	bytes := make([]byte, 16)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("generate id: %w", err)
-	}
-	return hex.EncodeToString(bytes), nil
 }

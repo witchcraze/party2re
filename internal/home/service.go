@@ -2,8 +2,6 @@ package home
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	mrand "math/rand"
 	"strings"
@@ -11,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 type CharacterReader interface {
@@ -62,12 +61,6 @@ func NewService(repo Repository, charReader CharacterReader, opts ...ServiceOpti
 		opt(s)
 	}
 	return s, nil
-}
-
-func generateID() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
 }
 
 // GetHomeView retrieves the aggregated home view for a character, incrementing visitor count if visited by another character.
@@ -186,7 +179,7 @@ func (s *Service) SendLetter(ctx context.Context, senderID, recipientID, content
 
 	now := s.nowFunc().UTC()
 	letter := Letter{
-		ID:                   generateID(),
+		ID:                   id.New(),
 		SenderCharacterID:    sender.ID,
 		SenderName:           sender.Name,
 		RecipientCharacterID: recipient.ID,
@@ -308,7 +301,7 @@ func (s *Service) TeachCompanionPhrase(ctx context.Context, characterID, phrase 
 
 	now := s.nowFunc().UTC()
 	cp := CompanionPhrase{
-		ID:          generateID(),
+		ID:          id.New(),
 		CharacterID: characterID,
 		Phrase:      strings.TrimSpace(phrase),
 		CreatedAt:   now,
@@ -353,7 +346,7 @@ func (s *Service) AddDeliveryNotice(ctx context.Context, characterID, noticeType
 		cleanType = "item_transfer"
 	}
 	notice := DeliveryNotice{
-		ID:          generateID(),
+		ID:          id.New(),
 		CharacterID: characterID,
 		NoticeType:  cleanType,
 		Message:     strings.TrimSpace(message),
