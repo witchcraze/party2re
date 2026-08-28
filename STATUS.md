@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #233 — Centralize cryptographically secure ID generation utility across internal packages
+Last updated: Issue #230 — Fix concurrent data race on shared math/rand.Rand in Home and Park modules
 
 ## Current phase
 

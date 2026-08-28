@@ -3,7 +3,9 @@ package home
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -329,4 +331,43 @@ func TestHomeService(t *testing.T) {
 			t.Errorf("expected 0 uncleared notices, got %d", len(notices))
 		}
 	})
+}
+
+func TestConcurrentTalkToCompanion(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	chars := &mockCharReader{
+		chars: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "Hero"},
+		},
+	}
+	repo := newMockHomeRepo()
+	service, err := NewService(repo, chars)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	for i := 0; i < 5; i++ {
+		_, _ = service.TeachCompanionPhrase(ctx, "char-1", fmt.Sprintf("phrase-%d", i))
+	}
+
+	const goroutines = 100
+	const iterations = 50
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for g := 0; g < goroutines; g++ {
+		go func() {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				phrase, err := service.TalkToCompanion(ctx, "char-1")
+				if err != nil || phrase == "" {
+					t.Errorf("unexpected TalkToCompanion result: %v, %s", err, phrase)
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
 }
