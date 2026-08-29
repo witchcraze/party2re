@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #221 — Standardize authentication and session context extraction across HTTP handlers
+Last updated: Issue #229 — Fix mutual deletion of player letters upon single-party deletion
 
 ## Current phase
 
@@ -53,7 +53,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): 手助けクエスト（何でも屋 @リッカによる武器・防具・道具・モンスター納品依頼、通常・レア・ギルド専用クエスト、錬金素材・幸福袋・GP報酬、6日間期限、有効依頼アイテムのショップ除外連携）および緊急救出処理（スタック時・エラー時の状態リセット、Valkey スケジューリングタスク自動キャンセル連携、クールダウン/睡眠ペナルティ、MariaDB永続化）。
 - **Town Park & Public Bulletin Board** (`internal/park`): 交流広場・公開掲示板（プレイヤー発言投稿・文字色指定・宛先指定・HTMLサニタイズ・連投レートリミット、最新投稿ページネーション、@町娘NPC会話・20種運勢＆27色ラッキーカラー占い、MariaDB永続化）。
 - **News & Player Notifications** (`internal/notification`): ニュース・お知らせ＆プレイヤー通知インボックス（全体告知 `news.cgi`、カテゴリ別お知らせ配信、プレイヤー別非同期メッセージ受信箱、既読・未読管理、一括既読化、未読件数照会、MariaDB永続化）。
-- **Player Private Home & Mailbox** (`internal/home`): 自宅・私有地管理（`home.cgi`、壁紙・テーマ・一言設定、訪問者記録、プレイヤー間手紙送受信・受信箱/送信箱・未読件数、仲間ペット言葉教え・挨拶会話、送金・譲渡通知台帳、MariaDB永続化）。
+- **Player Private Home & Mailbox** (`internal/home`): 自宅・私有地管理（`home.cgi`、壁紙・テーマ・一言設定、訪問者記録、プレイヤー間手紙送受信・受信箱/送信箱・未読件数、送信者・受信者の独立削除フラグ `is_deleted_by_sender`/`is_deleted_by_recipient` と双方削除時の完全パージ、仲間ペット言葉教え・挨拶会話、送金・譲渡通知台帳、MariaDB永続化）。
 - **Player Leaderboards & Character Rankings** (`internal/ranking`): ランキング・リーダーボード機能（`ranking.cgi`, `job_ranking.cgi`, `week_ranking.cgi`、レベル・プレイヤー総資産・キャラクター所持金・戦闘通算勝利数・PvP闘技場勝利数・ボス討伐数・冒険勝利数・職マスター数・職業人気分布・手助け達成数・転生回数・ちいさなメダル所持数の12カテゴリ、決定論的タイブレーク・ページネーション、インメモリTTLキャッシュ、Valkey分散スナップショットキャッシュ、Singleflightキャッシュスタンピード抑止、バックグラウンドWorker定期更新アクション `party2:ranking:refresh`、永続スナップショット `ranking_snapshots`、MariaDB永続化）。
 
 ### API & Transport

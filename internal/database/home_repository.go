@@ -100,10 +100,10 @@ func (r *HomeRepository) CreateLetter(ctx context.Context, letter home.Letter) e
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO character_letters (
 			id, sender_character_id, sender_name, recipient_character_id, recipient_name,
-			content, color, is_read, read_at, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, letter.ID, letter.SenderCharacterID, letter.SenderName, letter.RecipientCharacterID, letter.RecipientName,
-		letter.Content, letter.Color, letter.IsRead, readAt, letter.CreatedAt.UTC())
+		letter.Content, letter.Color, letter.IsRead, readAt, letter.IsDeletedBySender, letter.IsDeletedByRecipient, letter.CreatedAt.UTC())
 	return err
 }
 
@@ -114,11 +114,11 @@ func (r *HomeRepository) GetLetterByID(ctx context.Context, id string) (home.Let
 
 	err := r.db.QueryRowContext(ctx, `
 		SELECT id, sender_character_id, sender_name, recipient_character_id, recipient_name,
-		       content, color, is_read, read_at, created_at
+		       content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
 		FROM character_letters
 		WHERE id = ?
 	`, id).Scan(&l.ID, &l.SenderCharacterID, &l.SenderName, &l.RecipientCharacterID, &l.RecipientName,
-		&l.Content, &l.Color, &l.IsRead, &readAt, &l.CreatedAt)
+		&l.Content, &l.Color, &l.IsRead, &readAt, &l.IsDeletedBySender, &l.IsDeletedByRecipient, &l.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return home.Letter{}, home.ErrLetterNotFound
 	}
@@ -134,19 +134,23 @@ func (r *HomeRepository) GetLetterByID(ctx context.Context, id string) (home.Let
 	return l, nil
 }
 
-// ListInboxLetters retrieves letters received by a character.
+// ListInboxLetters retrieves letters received by a character that have not been deleted by the recipient.
 func (r *HomeRepository) ListInboxLetters(ctx context.Context, recipientID string, limit, offset int) ([]home.Letter, int, error) {
 	var total int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM character_letters WHERE recipient_character_id = ?`, recipientID).Scan(&total)
+	err := r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM character_letters
+		WHERE recipient_character_id = ? AND is_deleted_by_recipient = FALSE
+	`, recipientID).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, sender_character_id, sender_name, recipient_character_id, recipient_name,
-		       content, color, is_read, read_at, created_at
+		       content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
 		FROM character_letters
-		WHERE recipient_character_id = ?
+		WHERE recipient_character_id = ? AND is_deleted_by_recipient = FALSE
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
 	`, recipientID, limit, offset)
@@ -160,7 +164,7 @@ func (r *HomeRepository) ListInboxLetters(ctx context.Context, recipientID strin
 		var l home.Letter
 		var readAt sql.NullTime
 		if err := rows.Scan(&l.ID, &l.SenderCharacterID, &l.SenderName, &l.RecipientCharacterID, &l.RecipientName,
-			&l.Content, &l.Color, &l.IsRead, &readAt, &l.CreatedAt); err != nil {
+			&l.Content, &l.Color, &l.IsRead, &readAt, &l.IsDeletedBySender, &l.IsDeletedByRecipient, &l.CreatedAt); err != nil {
 			return nil, 0, err
 		}
 		if readAt.Valid {
@@ -176,19 +180,23 @@ func (r *HomeRepository) ListInboxLetters(ctx context.Context, recipientID strin
 	return letters, total, nil
 }
 
-// ListOutboxLetters retrieves letters sent by a character.
+// ListOutboxLetters retrieves letters sent by a character that have not been deleted by the sender.
 func (r *HomeRepository) ListOutboxLetters(ctx context.Context, senderID string, limit, offset int) ([]home.Letter, int, error) {
 	var total int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM character_letters WHERE sender_character_id = ?`, senderID).Scan(&total)
+	err := r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM character_letters
+		WHERE sender_character_id = ? AND is_deleted_by_sender = FALSE
+	`, senderID).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, sender_character_id, sender_name, recipient_character_id, recipient_name,
-		       content, color, is_read, read_at, created_at
+		       content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
 		FROM character_letters
-		WHERE sender_character_id = ?
+		WHERE sender_character_id = ? AND is_deleted_by_sender = FALSE
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
 	`, senderID, limit, offset)
@@ -202,7 +210,7 @@ func (r *HomeRepository) ListOutboxLetters(ctx context.Context, senderID string,
 		var l home.Letter
 		var readAt sql.NullTime
 		if err := rows.Scan(&l.ID, &l.SenderCharacterID, &l.SenderName, &l.RecipientCharacterID, &l.RecipientName,
-			&l.Content, &l.Color, &l.IsRead, &readAt, &l.CreatedAt); err != nil {
+			&l.Content, &l.Color, &l.IsRead, &readAt, &l.IsDeletedBySender, &l.IsDeletedByRecipient, &l.CreatedAt); err != nil {
 			return nil, 0, err
 		}
 		if readAt.Valid {
@@ -218,13 +226,13 @@ func (r *HomeRepository) ListOutboxLetters(ctx context.Context, senderID string,
 	return letters, total, nil
 }
 
-// GetUnreadLetterCount returns count of unread letters for a recipient.
+// GetUnreadLetterCount returns count of active unread letters for a recipient.
 func (r *HomeRepository) GetUnreadLetterCount(ctx context.Context, recipientID string) (int, error) {
 	var count int
 	err := r.db.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM character_letters
-		WHERE recipient_character_id = ? AND is_read = FALSE
+		WHERE recipient_character_id = ? AND is_read = FALSE AND is_deleted_by_recipient = FALSE
 	`, recipientID).Scan(&count)
 	if err != nil {
 		return 0, err
@@ -237,7 +245,7 @@ func (r *HomeRepository) MarkLetterAsRead(ctx context.Context, id, recipientID s
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE character_letters
 		SET is_read = TRUE, read_at = ?
-		WHERE id = ? AND recipient_character_id = ?
+		WHERE id = ? AND recipient_character_id = ? AND is_deleted_by_recipient = FALSE
 	`, readAt.UTC(), id, recipientID)
 	if err != nil {
 		return err
@@ -249,8 +257,9 @@ func (r *HomeRepository) MarkLetterAsRead(ctx context.Context, id, recipientID s
 	}
 	if rowsAffected == 0 {
 		var actualRecipient string
-		err = r.db.QueryRowContext(ctx, `SELECT recipient_character_id FROM character_letters WHERE id = ?`, id).Scan(&actualRecipient)
-		if errors.Is(err, sql.ErrNoRows) {
+		var isDeleted bool
+		err = r.db.QueryRowContext(ctx, `SELECT recipient_character_id, is_deleted_by_recipient FROM character_letters WHERE id = ?`, id).Scan(&actualRecipient, &isDeleted)
+		if errors.Is(err, sql.ErrNoRows) || isDeleted {
 			return home.ErrLetterNotFound
 		}
 		if err != nil {
@@ -263,34 +272,52 @@ func (r *HomeRepository) MarkLetterAsRead(ctx context.Context, id, recipientID s
 	return nil
 }
 
-// DeleteLetter deletes a letter belonging to either recipient or sender.
+// DeleteLetter marks a letter as deleted for the given character (sender or recipient), and physically purges when deleted by both.
 func (r *HomeRepository) DeleteLetter(ctx context.Context, id, characterID string) error {
-	res, err := r.db.ExecContext(ctx, `
-		DELETE FROM character_letters
-		WHERE id = ? AND (recipient_character_id = ? OR sender_character_id = ?)
-	`, id, characterID, characterID)
+	var senderID, recipientID string
+	var isDeletedSender, isDeletedRecipient bool
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT sender_character_id, recipient_character_id, is_deleted_by_sender, is_deleted_by_recipient
+		FROM character_letters
+		WHERE id = ?
+	`, id).Scan(&senderID, &recipientID, &isDeletedSender, &isDeletedRecipient)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return home.ErrLetterNotFound
+	}
 	if err != nil {
 		return err
 	}
 
-	rowsAffected, err := res.RowsAffected()
-	if err != nil {
-		return err
+	if characterID != senderID && characterID != recipientID {
+		return home.ErrForbidden
 	}
-	if rowsAffected == 0 {
-		var actualRecipient, actualSender string
-		err = r.db.QueryRowContext(ctx, `SELECT recipient_character_id, sender_character_id FROM character_letters WHERE id = ?`, id).Scan(&actualRecipient, &actualSender)
-		if errors.Is(err, sql.ErrNoRows) {
+
+	if characterID == senderID {
+		if isDeletedSender && !isDeletedRecipient {
 			return home.ErrLetterNotFound
 		}
-		if err != nil {
-			return err
-		}
-		if actualRecipient != characterID && actualSender != characterID {
-			return home.ErrForbidden
-		}
+		isDeletedSender = true
 	}
-	return nil
+	if characterID == recipientID {
+		if isDeletedRecipient && !isDeletedSender {
+			return home.ErrLetterNotFound
+		}
+		isDeletedRecipient = true
+	}
+
+	if isDeletedSender && isDeletedRecipient {
+		_, err = r.db.ExecContext(ctx, `DELETE FROM character_letters WHERE id = ?`, id)
+		return err
+	}
+
+	_, err = r.db.ExecContext(ctx, `
+		UPDATE character_letters
+		SET is_deleted_by_sender = ?, is_deleted_by_recipient = ?
+		WHERE id = ?
+	`, isDeletedSender, isDeletedRecipient, id)
+	return err
 }
 
 // AddCompanionPhrase adds a taught phrase for a character's companion.
