@@ -5,9 +5,41 @@ import (
 	"net/http"
 	"strings"
 
+	"crypto/subtle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 )
+
+// authenticateAdmin extracts administrator credentials from the request and validates them.
+// Supported credential headers:
+// 1. "X-Admin-Key: <key>"
+// 2. "Authorization: Bearer <key>"
+// Returns true if authenticated, or writes 401/403 and returns false.
+func (h *Handler) authenticateAdmin(w http.ResponseWriter, r *http.Request) bool {
+	if strings.TrimSpace(h.adminAPIKey) == "" {
+		writeError(w, http.StatusForbidden, errors.New("forbidden: admin operations disabled (no admin key configured)"))
+		return false
+	}
+
+	providedKey := r.Header.Get("X-Admin-Key")
+	if providedKey == "" {
+		if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+			providedKey = strings.TrimPrefix(authHeader, "Bearer ")
+		}
+	}
+	providedKey = strings.TrimSpace(providedKey)
+	if providedKey == "" {
+		writeError(w, http.StatusUnauthorized, errors.New("missing admin authorization credentials"))
+		return false
+	}
+
+	if subtle.ConstantTimeCompare([]byte(providedKey), []byte(h.adminAPIKey)) != 1 {
+		writeError(w, http.StatusForbidden, errors.New("forbidden: invalid admin credentials"))
+		return false
+	}
+
+	return true
+}
 
 // authenticatePlayer extracts the session from the request and authenticates the player.
 // If authentication fails, it writes an appropriate 401 Unauthorized response and returns false.

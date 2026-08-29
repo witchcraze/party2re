@@ -100,10 +100,35 @@ type Handler struct {
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
 	allowedOrigins map[string]struct{}
+	adminAPIKey    string
 }
 
 // Option configures optional parameters for the Handler.
 type Option func(*Handler)
+
+// WithAdminAPIKey configures the secret API key required for administrative endpoints (e.g. POST /news, POST /rankings/refresh).
+func WithAdminAPIKey(key string) Option {
+	return func(h *Handler) {
+		h.adminAPIKey = strings.TrimSpace(key)
+	}
+}
+
+// WithAdminAPIKeyFromEnv loads the administrator API key from an environment variable (default: "PARTY2_ADMIN_API_KEY", falling back to "ADMIN_API_KEY").
+func WithAdminAPIKeyFromEnv(envKey string) Option {
+	return func(h *Handler) {
+		if envKey != "" {
+			if val := os.Getenv(envKey); val != "" {
+				h.adminAPIKey = strings.TrimSpace(val)
+				return
+			}
+		}
+		if val := os.Getenv("PARTY2_ADMIN_API_KEY"); val != "" {
+			h.adminAPIKey = strings.TrimSpace(val)
+		} else if val := os.Getenv("ADMIN_API_KEY"); val != "" {
+			h.adminAPIKey = strings.TrimSpace(val)
+		}
+	}
+}
 
 // WithRateLimiter configures rate limiting for the Handler.
 func WithRateLimiter(limiter RateLimiter, cfg ...RateLimitConfig) Option {
@@ -196,12 +221,17 @@ func NewHandler(
 	if shops == nil {
 		return nil, errors.New("shop service is nil")
 	}
+	adminKey := os.Getenv("PARTY2_ADMIN_API_KEY")
+	if adminKey == "" {
+		adminKey = os.Getenv("ADMIN_API_KEY")
+	}
 	h := &Handler{
 		players:        players,
 		characters:     characters,
 		adventures:     adventures,
 		shops:          shops,
 		allowedOrigins: make(map[string]struct{}),
+		adminAPIKey:    strings.TrimSpace(adminKey),
 	}
 	for _, opt := range opts {
 		if opt != nil {
