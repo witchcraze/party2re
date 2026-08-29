@@ -1,7 +1,7 @@
 ---
 name: Feature
 about: Propose or implement a new game feature
-title: "[Feature] "
+title: "[Feature] <Domain>: "
 labels: ["feature"]
 ---
 
@@ -12,6 +12,12 @@ labels: ["feature"]
 ## Background
 
 <!-- Why is this needed? Include relevant game/design context. -->
+
+## Affected Components
+
+- **Packages / Modules**: `internal/<module>`
+- **Database Tables**: `<table_name>` (or "None")
+- **Legacy Reference**: `<file>.cgi` (if applicable)
 
 ## Scope
 
@@ -32,6 +38,13 @@ labels: ["feature"]
 ## Tests
 
 <!-- What behavior should be covered by tests? -->
+
+## Prerequisites & Feasibility
+
+<!-- Are underlying domain models / infrastructure available? If not, detail prerequisite options. -->
+
+- [ ] Feasible with existing codebase capabilities
+- [ ] Requires prerequisite infrastructure / specification alignment (detail below)
 
 ## Architecture considerations
 
@@ -57,4 +70,3 @@ None
 ## Related issues
 
 <!-- Link prerequisite or related Issues. -->
-

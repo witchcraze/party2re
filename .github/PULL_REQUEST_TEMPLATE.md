@@ -6,6 +6,11 @@
 
 Closes #
 
+## Affected Components
+
+- **Packages / Modules**: `internal/<module>`
+- **Database Tables / Migrations**: `migrations/<file>.sql` (or "None")
+
 ## Scope
 
 ### In scope
