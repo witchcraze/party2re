@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #178 — Atomic transactions and concurrency race protection for Shop operations
+Last updated: Issue #196 — Clean-room IP compliance for Job names and catalogs
 
 ## Current phase
 
@@ -19,7 +19,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Player** (`internal/core/player`, `internal/player`): アカウント登録・パスワードハッシュ・セッション管理（MariaDB永続化）。
 - **Character** (`internal/core/character`, `internal/character`): `player_id` 外部キーによるアカウント紐付け、初期ステータス、能力値計算、転生（Rebirth +5永続ボーナス）、プレイヤー別キャラクター一覧取得。
 - **Progression** (`internal/core/progression`): レベルアップ（累積経験値テーブル `level * level * 10`）、成長率適用。
-- **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): JSONカタログ（`jobs.json`）、転職、Lv99マスタリー、スキル発動・コスト計算。
+- **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): クリーンルーム規約に完全準拠したJSONカタログ（`jobs.json`、特定フランチャイズ固有語を排除し汎用ファンタジー名へ標準化）、転職、Lv99マスタリー、スキル発動・コスト計算。
 - **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理。
 - **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定（経験値・ゴールド・アイテム・ちいさなメダル）、構造化ターンログ出力、戦闘参加者（Participant）標準アダプタ/ビルダー（`NewParticipantFromCharacter`, `NewParticipantFromCharacterWithHP`, `ParticipantBuilder`）。
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): Valkeyバックエンドの遅延アクションキュー＆分散排他ロックWorker。

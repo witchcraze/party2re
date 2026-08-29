@@ -26,6 +26,11 @@ Job definitions are loaded from data-driven JSON (`internal/core/job/data/jobs.j
 - When a character reaches Level 99 in a job, the job can be marked as **Mastered**.
 - Mastered jobs are tracked persistently on the character (`MasteredJobs` list).
 
+### Clean-Room Naming & IP Compliance
+In compliance with `.agents/rules/00-migration-constraints.md`:
+- All job names in `jobs.json` use generic fantasy tropes (e.g. `黒魔術師`, `白魔術師`, `赤魔術師`, `青魔術師`, `時空術士`, `模倣師`, `道具使い`, `風水師`, `小悪魔`, `スライム騎手`, `数理術士`) rather than trademarked or franchise-specific terms (such as "魔道士" series, "ものまね士", "アイテム士", "算術士", "ミニデーモン").
+- Job IDs (`starter`, `job-01` through `job-87`) remain stable across versions to maintain persistent character history and database integrity.
+
 ---
 
 ## Skill System
