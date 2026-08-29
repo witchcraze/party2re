@@ -22,50 +22,46 @@ func NewCharacterJobRepository(db *sql.DB) (*CharacterJobRepository, error) {
 }
 
 func (r *CharacterJobRepository) Save(ctx context.Context, value corejob.CharacterJob) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO character_jobs (character_id, current_job_id)
-		VALUES (?, ?)
-		ON DUPLICATE KEY UPDATE current_job_id = VALUES(current_job_id)
-	`, value.CharacterID, value.CurrentJobID); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM character_job_history WHERE character_id = ?", value.CharacterID); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	for _, change := range value.History {
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO character_job_history (character_id, from_job_id, to_job_id)
-			VALUES (?, ?, ?)
-		`, value.CharacterID, change.FromJobID, change.ToJobID); err != nil {
-			_ = tx.Rollback()
-			return err
-		}
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM character_job_masteries WHERE character_id = ?", value.CharacterID); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	for _, jobID := range value.MasteredJobs {
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO character_job_masteries (character_id, job_id)
+	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
+
+		if _, err := executor.ExecContext(txCtx, `
+			INSERT INTO character_jobs (character_id, current_job_id)
 			VALUES (?, ?)
-		`, value.CharacterID, jobID); err != nil {
-			_ = tx.Rollback()
+			ON DUPLICATE KEY UPDATE current_job_id = VALUES(current_job_id)
+		`, value.CharacterID, value.CurrentJobID); err != nil {
 			return err
 		}
-	}
-	return tx.Commit()
+		if _, err := executor.ExecContext(txCtx, "DELETE FROM character_job_history WHERE character_id = ?", value.CharacterID); err != nil {
+			return err
+		}
+		for _, change := range value.History {
+			if _, err := executor.ExecContext(txCtx, `
+				INSERT INTO character_job_history (character_id, from_job_id, to_job_id)
+				VALUES (?, ?, ?)
+			`, value.CharacterID, change.FromJobID, change.ToJobID); err != nil {
+				return err
+			}
+		}
+		if _, err := executor.ExecContext(txCtx, "DELETE FROM character_job_masteries WHERE character_id = ?", value.CharacterID); err != nil {
+			return err
+		}
+		for _, jobID := range value.MasteredJobs {
+			if _, err := executor.ExecContext(txCtx, `
+				INSERT INTO character_job_masteries (character_id, job_id)
+				VALUES (?, ?)
+			`, value.CharacterID, jobID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (r *CharacterJobRepository) FindByCharacterID(ctx context.Context, characterID string) (corejob.CharacterJob, error) {
 	var value corejob.CharacterJob
-	err := r.db.QueryRowContext(ctx, `
+	executor := ExecutorFromContext(ctx, r.db)
+	err := executor.QueryRowContext(ctx, `
 		SELECT character_id, current_job_id
 		FROM character_jobs
 		WHERE character_id = ?
@@ -76,7 +72,7 @@ func (r *CharacterJobRepository) FindByCharacterID(ctx context.Context, characte
 	if err != nil {
 		return corejob.CharacterJob{}, err
 	}
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := executor.QueryContext(ctx, `
 		SELECT from_job_id, to_job_id
 		FROM character_job_history
 		WHERE character_id = ?
@@ -97,7 +93,7 @@ func (r *CharacterJobRepository) FindByCharacterID(ctx context.Context, characte
 		return corejob.CharacterJob{}, err
 	}
 
-	masteryRows, err := r.db.QueryContext(ctx, `
+	masteryRows, err := executor.QueryContext(ctx, `
 		SELECT job_id
 		FROM character_job_masteries
 		WHERE character_id = ?

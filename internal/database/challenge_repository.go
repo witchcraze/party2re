@@ -30,7 +30,7 @@ func (r *ChallengeRepository) SaveSession(ctx context.Context, s challenge.Chall
 			created_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := r.db.ExecContext(
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(
 		ctx,
 		query,
 		s.ID,
@@ -59,7 +59,7 @@ func (r *ChallengeRepository) FindSessionByID(ctx context.Context, id string) (*
 	var s challenge.ChallengeSession
 	var statusStr, itemsJSON string
 
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query, id).Scan(
 		&s.ID,
 		&s.CharacterID,
 		&s.TierID,
@@ -102,7 +102,7 @@ func (r *ChallengeRepository) FindActiveSessionByCharacter(ctx context.Context, 
 	var s challenge.ChallengeSession
 	var statusStr, itemsJSON string
 
-	err := r.db.QueryRowContext(ctx, query, characterID).Scan(
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query, characterID).Scan(
 		&s.ID,
 		&s.CharacterID,
 		&s.TierID,
@@ -141,7 +141,7 @@ func (r *ChallengeRepository) UpdateSession(ctx context.Context, s challenge.Cha
 		    updated_at = ?
 		WHERE id = ?
 	`
-	_, err := r.db.ExecContext(
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(
 		ctx,
 		query,
 		s.CurrentRound,
@@ -168,7 +168,7 @@ func (r *ChallengeRepository) SaveRecord(ctx context.Context, rec challenge.Char
 			total_victories = total_victories + VALUES(total_victories),
 			best_cleared_at = IF(VALUES(highest_round) > highest_round, VALUES(best_cleared_at), best_cleared_at)
 	`
-	_, err := r.db.ExecContext(
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(
 		ctx,
 		query,
 		rec.CharacterID,
@@ -189,7 +189,7 @@ func (r *ChallengeRepository) FindRecord(ctx context.Context, characterID string
 		WHERE character_id = ? AND tier_id = ?
 	`
 	var rec challenge.CharacterChallengeRecord
-	err := r.db.QueryRowContext(ctx, query, characterID, tierID).Scan(
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query, characterID, tierID).Scan(
 		&rec.CharacterID,
 		&rec.TierID,
 		&rec.HighestRound,
@@ -215,7 +215,7 @@ func (r *ChallengeRepository) GetLeaderboard(ctx context.Context, tierID string,
 		ORDER BY r.highest_round DESC, r.best_cleared_at ASC
 		LIMIT ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, tierID, limit)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, tierID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -240,75 +240,73 @@ func (r *ChallengeRepository) GetLeaderboard(ctx context.Context, tierID string,
 }
 
 func (r *ChallengeRepository) FinalizeSession(ctx context.Context, s challenge.ChallengeSession, expReward int, goldReward int, items []string, newStreak int) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
+	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
 
-	// 1. Update session status
-	itemsJSON := challenge.EncodeJSON(s.AccumulatedItems)
-	updateSessionQuery := `
-		UPDATE challenge_sessions
-		SET current_round = ?, character_current_hp = ?, accumulated_exp = ?,
-		    accumulated_gold = ?, accumulated_items_json = ?, status = ?,
-		    updated_at = ?
-		WHERE id = ?
-	`
-	if _, err := tx.ExecContext(
-		ctx,
-		updateSessionQuery,
-		s.CurrentRound,
-		s.CharacterCurrentHP,
-		s.AccumulatedExp,
-		s.AccumulatedGold,
-		itemsJSON,
-		string(s.Status),
-		s.UpdatedAt,
-		s.ID,
-	); err != nil {
-		return err
-	}
-
-	// 2. Award Character EXP & Gold
-	if expReward > 0 || goldReward > 0 {
-		updateCharQuery := `UPDATE characters SET experience = experience + ?, money = money + ? WHERE id = ?`
-		if _, err := tx.ExecContext(ctx, updateCharQuery, expReward, goldReward, s.CharacterID); err != nil {
-			return err
-		}
-	}
-
-	// 3. Award Items
-	for _, itemDefID := range items {
-		if itemDefID == "" {
-			continue
-		}
-		itemInstID := fmt.Sprintf("%032x", time.Now().UnixNano())
-		insertItemQuery := `
-			INSERT INTO inventory_items (id, character_id, definition_id, quantity)
-			VALUES (?, ?, ?, 1)
+		// 1. Update session status
+		itemsJSON := challenge.EncodeJSON(s.AccumulatedItems)
+		updateSessionQuery := `
+			UPDATE challenge_sessions
+			SET current_round = ?, character_current_hp = ?, accumulated_exp = ?,
+			    accumulated_gold = ?, accumulated_items_json = ?, status = ?,
+			    updated_at = ?
+			WHERE id = ?
 		`
-		if _, err := tx.ExecContext(ctx, insertItemQuery, itemInstID, s.CharacterID, itemDefID); err != nil {
+		if _, err := executor.ExecContext(
+			txCtx,
+			updateSessionQuery,
+			s.CurrentRound,
+			s.CharacterCurrentHP,
+			s.AccumulatedExp,
+			s.AccumulatedGold,
+			itemsJSON,
+			string(s.Status),
+			s.UpdatedAt,
+			s.ID,
+		); err != nil {
 			return err
 		}
-	}
 
-	// 4. Update Character Challenge Record
-	now := time.Now().UTC()
-	upsertRecordQuery := `
-		INSERT INTO character_challenge_records (
-			character_id, tier_id, highest_round, total_attempts,
-			total_victories, best_cleared_at
-		) VALUES (?, ?, ?, 1, ?, ?)
-		ON DUPLICATE KEY UPDATE
-			best_cleared_at = IF(VALUES(highest_round) > highest_round, VALUES(best_cleared_at), best_cleared_at),
-			highest_round = IF(VALUES(highest_round) > highest_round, VALUES(highest_round), highest_round),
-			total_attempts = total_attempts + 1,
-			total_victories = total_victories + VALUES(total_victories)
-	`
-	if _, err := tx.ExecContext(ctx, upsertRecordQuery, s.CharacterID, s.TierID, newStreak, newStreak, now); err != nil {
-		return err
-	}
+		// 2. Award Character EXP & Gold
+		if expReward > 0 || goldReward > 0 {
+			updateCharQuery := `UPDATE characters SET experience = experience + ?, money = money + ? WHERE id = ?`
+			if _, err := executor.ExecContext(txCtx, updateCharQuery, expReward, goldReward, s.CharacterID); err != nil {
+				return err
+			}
+		}
 
-	return tx.Commit()
+		// 3. Award Items
+		for _, itemDefID := range items {
+			if itemDefID == "" {
+				continue
+			}
+			itemInstID := fmt.Sprintf("%032x", time.Now().UnixNano())
+			insertItemQuery := `
+				INSERT INTO inventory_items (id, character_id, definition_id, quantity)
+				VALUES (?, ?, ?, 1)
+			`
+			if _, err := executor.ExecContext(txCtx, insertItemQuery, itemInstID, s.CharacterID, itemDefID); err != nil {
+				return err
+			}
+		}
+
+		// 4. Update Character Challenge Record
+		now := time.Now().UTC()
+		upsertRecordQuery := `
+			INSERT INTO character_challenge_records (
+				character_id, tier_id, highest_round, total_attempts,
+				total_victories, best_cleared_at
+			) VALUES (?, ?, ?, 1, ?, ?)
+			ON DUPLICATE KEY UPDATE
+				best_cleared_at = IF(VALUES(highest_round) > highest_round, VALUES(best_cleared_at), best_cleared_at),
+				highest_round = IF(VALUES(highest_round) > highest_round, VALUES(highest_round), highest_round),
+				total_attempts = total_attempts + 1,
+				total_victories = total_victories + VALUES(total_victories)
+		`
+		if _, err := executor.ExecContext(txCtx, upsertRecordQuery, s.CharacterID, s.TierID, newStreak, newStreak, now); err != nil {
+			return err
+		}
+
+		return nil
+	})
 }

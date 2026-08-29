@@ -22,7 +22,7 @@ func NewItemDefinitionRepository(db *sql.DB) (*ItemDefinitionRepository, error) 
 }
 
 func (r *ItemDefinitionRepository) Save(ctx context.Context, value item.Definition) error {
-	_, err := r.db.ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO item_definitions (id, name)
 		VALUES (?, ?)
 		ON DUPLICATE KEY UPDATE name = VALUES(name)
@@ -32,7 +32,7 @@ func (r *ItemDefinitionRepository) Save(ctx context.Context, value item.Definiti
 
 func (r *ItemDefinitionRepository) FindByID(ctx context.Context, id string) (item.Definition, error) {
 	var value item.Definition
-	err := r.db.QueryRowContext(ctx, `
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
 		SELECT id, name
 		FROM item_definitions
 		WHERE id = ?

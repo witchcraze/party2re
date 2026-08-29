@@ -40,7 +40,7 @@ func (r *ReplayRepository) Save(ctx context.Context, rep replay.BattleReplay) er
 			turn_logs_json, created_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := r.db.ExecContext(
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(
 		ctx,
 		query,
 		rep.ID,
@@ -73,7 +73,7 @@ func (r *ReplayRepository) FindByID(ctx context.Context, id string) (*replay.Bat
 	var winnerID, loserID sql.NullString
 	var participantsJSON, turnLogsJSON string
 
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query, id).Scan(
 		&rep.ID,
 		&rep.CombatType,
 		&rep.InitiatorID,
@@ -122,6 +122,7 @@ func (r *ReplayRepository) FindByCharacter(ctx context.Context, characterID stri
 	var rows *sql.Rows
 	var err error
 
+	executor := ExecutorFromContext(ctx, r.db)
 	if combatType != "" {
 		query := `
 			SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
@@ -131,7 +132,7 @@ func (r *ReplayRepository) FindByCharacter(ctx context.Context, characterID stri
 			ORDER BY created_at DESC
 			LIMIT ?
 		`
-		rows, err = r.db.QueryContext(ctx, query, characterID, characterID, combatType, limit)
+		rows, err = executor.QueryContext(ctx, query, characterID, characterID, combatType, limit)
 	} else {
 		query := `
 			SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
@@ -141,7 +142,7 @@ func (r *ReplayRepository) FindByCharacter(ctx context.Context, characterID stri
 			ORDER BY created_at DESC
 			LIMIT ?
 		`
-		rows, err = r.db.QueryContext(ctx, query, characterID, characterID, limit)
+		rows, err = executor.QueryContext(ctx, query, characterID, characterID, limit)
 	}
 
 	if err != nil {
@@ -156,6 +157,7 @@ func (r *ReplayRepository) FindRecent(ctx context.Context, combatType string, li
 	var rows *sql.Rows
 	var err error
 
+	executor := ExecutorFromContext(ctx, r.db)
 	if combatType != "" {
 		query := `
 			SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
@@ -165,7 +167,7 @@ func (r *ReplayRepository) FindRecent(ctx context.Context, combatType string, li
 			ORDER BY created_at DESC
 			LIMIT ?
 		`
-		rows, err = r.db.QueryContext(ctx, query, combatType, limit)
+		rows, err = executor.QueryContext(ctx, query, combatType, limit)
 	} else {
 		query := `
 			SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
@@ -174,7 +176,7 @@ func (r *ReplayRepository) FindRecent(ctx context.Context, combatType string, li
 			ORDER BY created_at DESC
 			LIMIT ?
 		`
-		rows, err = r.db.QueryContext(ctx, query, limit)
+		rows, err = executor.QueryContext(ctx, query, limit)
 	}
 
 	if err != nil {
@@ -187,7 +189,7 @@ func (r *ReplayRepository) FindRecent(ctx context.Context, combatType string, li
 
 func (r *ReplayRepository) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
 	query := `DELETE FROM battle_replays WHERE created_at < ?`
-	res, err := r.db.ExecContext(ctx, query, cutoff)
+	res, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, query, cutoff)
 	if err != nil {
 		return 0, err
 	}

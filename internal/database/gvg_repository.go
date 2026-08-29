@@ -26,6 +26,7 @@ func (r *GvGRepository) GetOrCreateStanding(ctx context.Context, guildID string)
 	var st gvg.GvGStanding
 	var gName sql.NullString
 
+	executor := ExecutorFromContext(ctx, r.db)
 	query := `
 		SELECT s.guild_id, g.name, s.rating, s.wins, s.losses, s.draws, s.victory_points,
 		       s.bronze_medals, s.silver_medals, s.gold_medals, s.trophies, s.championship_cups,
@@ -34,7 +35,7 @@ func (r *GvGRepository) GetOrCreateStanding(ctx context.Context, guildID string)
 		JOIN guilds g ON s.guild_id = g.id
 		WHERE s.guild_id = ?
 	`
-	err := r.db.QueryRowContext(ctx, query, guildID).Scan(
+	err := executor.QueryRowContext(ctx, query, guildID).Scan(
 		&st.GuildID, &gName, &st.Rating, &st.Wins, &st.Losses, &st.Draws, &st.VictoryPoints,
 		&st.BronzeMedals, &st.SilverMedals, &st.GoldMedals, &st.Trophies, &st.ChampionshipCups,
 		&st.ChampionCups, &st.UpdatedAt,
@@ -57,7 +58,7 @@ func (r *GvGRepository) GetOrCreateStanding(ctx context.Context, guildID string)
 		) VALUES (?, 1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NOW())
 		ON DUPLICATE KEY UPDATE updated_at = updated_at
 	`
-	if _, err := r.db.ExecContext(ctx, insertQuery, guildID); err != nil {
+	if _, err := executor.ExecContext(ctx, insertQuery, guildID); err != nil {
 		return gvg.GvGStanding{}, fmt.Errorf("create gvg standing: %w", err)
 	}
 
@@ -85,7 +86,7 @@ func (r *GvGRepository) FindOpponentGuilds(ctx context.Context, challengerGuildI
 		LIMIT ?
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, challengerGuildID, challengerGuildID, limit)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, challengerGuildID, challengerGuildID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("find opponent guilds: %w", err)
 	}
@@ -126,7 +127,7 @@ func (r *GvGRepository) GetLeaderboard(ctx context.Context, limit int) ([]gvg.Gv
 		ORDER BY s.rating DESC, s.victory_points DESC, s.wins DESC
 		LIMIT ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, limit)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query gvg leaderboard: %w", err)
 	}
@@ -168,7 +169,7 @@ func (r *GvGRepository) GetMatchHistory(ctx context.Context, guildID string, lim
 		ORDER BY m.created_at DESC
 		LIMIT ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, guildID, guildID, limit)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, guildID, guildID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query gvg match history: %w", err)
 	}
@@ -210,7 +211,7 @@ func (r *GvGRepository) GetMatchDetail(ctx context.Context, matchID string) (gvg
 	`
 	var m gvg.MatchRecord
 	var cgName, dgName sql.NullString
-	err := r.db.QueryRowContext(ctx, query, matchID).Scan(
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query, matchID).Scan(
 		&m.ID, &m.ChallengerGuildID, &cgName, &m.DefenderGuildID, &dgName,
 		&m.WinnerGuildID, &m.ChallengerScore, &m.DefenderScore, &m.TotalRounds,
 		&m.ChallengerRatingBefore, &m.ChallengerRatingAfter,
@@ -237,7 +238,7 @@ func (r *GvGRepository) GetMatchDetail(ctx context.Context, matchID string) (gvg
 		WHERE match_id = ?
 		ORDER BY round_index ASC
 	`
-	rRows, err := r.db.QueryContext(ctx, roundsQuery, matchID)
+	rRows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, roundsQuery, matchID)
 	if err != nil {
 		return gvg.MatchRecord{}, fmt.Errorf("query match rounds: %w", err)
 	}
@@ -266,123 +267,135 @@ func (r *GvGRepository) RecordMatchAndUpdateStandings(
 	challengerMedal, defenderMedal bool,
 	memberRewards map[string]gvg.MemberReward,
 ) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
-	}
-	defer tx.Rollback()
+	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
 
-	// 1. Insert match record
-	var winnerID sql.NullString
-	if match.WinnerGuildID != "" {
-		winnerID = sql.NullString{String: match.WinnerGuildID, Valid: true}
-	}
-
-	insertMatchQuery := `
-		INSERT INTO gvg_matches (
-			id, challenger_guild_id, defender_guild_id, winner_guild_id,
-			challenger_score, defender_score, total_rounds,
-			challenger_rating_before, challenger_rating_after,
-			defender_rating_before, defender_rating_after, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
-	if _, err := tx.ExecContext(
-		ctx,
-		insertMatchQuery,
-		match.ID,
-		match.ChallengerGuildID,
-		match.DefenderGuildID,
-		winnerID,
-		match.ChallengerScore,
-		match.DefenderScore,
-		match.TotalRounds,
-		match.ChallengerRatingBefore,
-		match.ChallengerRatingAfter,
-		match.DefenderRatingBefore,
-		match.DefenderRatingAfter,
-		match.CreatedAt,
-	); err != nil {
-		return fmt.Errorf("insert gvg match: %w", err)
-	}
-
-	// 2. Insert match rounds
-	insertRoundQuery := `
-		INSERT INTO gvg_match_rounds (
-			id, match_id, round_index, challenger_character_id, challenger_character_name,
-			defender_character_id, defender_character_name, winner_character_id, turns, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
-	for _, rd := range match.Rounds {
-		var rdWinner sql.NullString
-		if rd.WinnerCharacterID != "" {
-			rdWinner = sql.NullString{String: rd.WinnerCharacterID, Valid: true}
+		// 1. Insert match record
+		var winnerID sql.NullString
+		if match.WinnerGuildID != "" {
+			winnerID = sql.NullString{String: match.WinnerGuildID, Valid: true}
 		}
-		if _, err := tx.ExecContext(
-			ctx,
-			insertRoundQuery,
-			rd.ID,
-			rd.MatchID,
-			rd.RoundIndex,
-			rd.ChallengerCharacterID,
-			rd.ChallengerCharacterName,
-			rd.DefenderCharacterID,
-			rd.DefenderCharacterName,
-			rdWinner,
-			rd.Turns,
-			rd.CreatedAt,
+
+		insertMatchQuery := `
+			INSERT INTO gvg_matches (
+				id, challenger_guild_id, defender_guild_id, winner_guild_id,
+				challenger_score, defender_score, total_rounds,
+				challenger_rating_before, challenger_rating_after,
+				defender_rating_before, defender_rating_after, created_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`
+		if _, err := executor.ExecContext(
+			txCtx,
+			insertMatchQuery,
+			match.ID,
+			match.ChallengerGuildID,
+			match.DefenderGuildID,
+			winnerID,
+			match.ChallengerScore,
+			match.DefenderScore,
+			match.TotalRounds,
+			match.ChallengerRatingBefore,
+			match.ChallengerRatingAfter,
+			match.DefenderRatingBefore,
+			match.DefenderRatingAfter,
+			match.CreatedAt,
 		); err != nil {
-			return fmt.Errorf("insert gvg round %d: %w", rd.RoundIndex, err)
+			return fmt.Errorf("insert gvg match: %w", err)
 		}
-	}
 
-	// 3. Update challenger standing
-	if err := updateStandingInTx(ctx, tx, match.ChallengerGuildID, challengerDelta, challengerVP, challengerMedal, defenderMedal); err != nil {
-		return fmt.Errorf("update challenger standing: %w", err)
-	}
-
-	// 4. Update defender standing
-	if err := updateStandingInTx(ctx, tx, match.DefenderGuildID, defenderDelta, defenderVP, defenderMedal, challengerMedal); err != nil {
-		return fmt.Errorf("update defender standing: %w", err)
-	}
-
-	// 5. Update Guild EXP & Levels
-	if err := updateGuildExpInTx(ctx, tx, match.ChallengerGuildID, challengerExp); err != nil {
-		return fmt.Errorf("update challenger guild exp: %w", err)
-	}
-	if err := updateGuildExpInTx(ctx, tx, match.DefenderGuildID, defenderExp); err != nil {
-		return fmt.Errorf("update defender guild exp: %w", err)
-	}
-
-	// 6. Update individual participating member rewards
-	charRepo, err := NewCharacterRepository(r.db)
-	if err != nil {
-		return fmt.Errorf("new char repo: %w", err)
-	}
-
-	for charID, rew := range memberRewards {
-		char, err := charRepo.FindByID(ctx, charID)
-		if err != nil {
-			continue // ignore if character vanished
-		}
-		if rew.Experience > 0 {
-			if _, err := progression.ApplyExperience(&char, int(rew.Experience)); err != nil {
-				return fmt.Errorf("apply member exp %s: %w", charID, err)
+		// 2. Insert match rounds
+		insertRoundQuery := `
+			INSERT INTO gvg_match_rounds (
+				id, match_id, round_index, challenger_character_id, challenger_character_name,
+				defender_character_id, defender_character_name, winner_character_id, turns, created_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`
+		for _, rd := range match.Rounds {
+			var rdWinner sql.NullString
+			if rd.WinnerCharacterID != "" {
+				rdWinner = sql.NullString{String: rd.WinnerCharacterID, Valid: true}
+			}
+			if _, err := executor.ExecContext(
+				txCtx,
+				insertRoundQuery,
+				rd.ID,
+				rd.MatchID,
+				rd.RoundIndex,
+				rd.ChallengerCharacterID,
+				rd.ChallengerCharacterName,
+				rd.DefenderCharacterID,
+				rd.DefenderCharacterName,
+				rdWinner,
+				rd.Turns,
+				rd.CreatedAt,
+			); err != nil {
+				return fmt.Errorf("insert gvg round %d: %w", rd.RoundIndex, err)
 			}
 		}
-		char.Money += int(rew.Gold)
 
-		// Save character in tx
-		if err := updateCharacter(ctx, tx, char); err != nil {
-			return fmt.Errorf("update character %s: %w", char.ID, err)
+		// Lock ordering: sort guild IDs ascending to prevent deadlock
+		firstGuildID, secondGuildID := match.ChallengerGuildID, match.DefenderGuildID
+		if firstGuildID > secondGuildID {
+			firstGuildID, secondGuildID = secondGuildID, firstGuildID
 		}
-	}
 
-	return tx.Commit()
+		updateGuild := func(gid string) error {
+			if gid == match.ChallengerGuildID {
+				if err := updateStandingInTx(txCtx, executor, gid, challengerDelta, challengerVP, challengerMedal, defenderMedal); err != nil {
+					return fmt.Errorf("update challenger standing: %w", err)
+				}
+				if err := updateGuildExpInTx(txCtx, executor, gid, challengerExp); err != nil {
+					return fmt.Errorf("update challenger guild exp: %w", err)
+				}
+			} else {
+				if err := updateStandingInTx(txCtx, executor, gid, defenderDelta, defenderVP, defenderMedal, challengerMedal); err != nil {
+					return fmt.Errorf("update defender standing: %w", err)
+				}
+				if err := updateGuildExpInTx(txCtx, executor, gid, defenderExp); err != nil {
+					return fmt.Errorf("update defender guild exp: %w", err)
+				}
+			}
+			return nil
+		}
+
+		if err := updateGuild(firstGuildID); err != nil {
+			return err
+		}
+		if err := updateGuild(secondGuildID); err != nil {
+			return err
+		}
+
+		// 6. Update individual participating member rewards
+		charRepo, err := NewCharacterRepository(r.db)
+		if err != nil {
+			return fmt.Errorf("new char repo: %w", err)
+		}
+
+		for charID, rew := range memberRewards {
+			char, err := charRepo.FindByID(txCtx, charID)
+			if err != nil {
+				continue // ignore if character vanished
+			}
+			if rew.Experience > 0 {
+				if _, err := progression.ApplyExperience(&char, int(rew.Experience)); err != nil {
+					return fmt.Errorf("apply member exp %s: %w", charID, err)
+				}
+			}
+			char.Money += int(rew.Gold)
+
+			// Save character in tx
+			if err := updateCharacter(txCtx, executor, char); err != nil {
+				return fmt.Errorf("update character %s: %w", char.ID, err)
+			}
+		}
+
+		return nil
+	})
 }
 
 func updateStandingInTx(
 	ctx context.Context,
-	tx *sql.Tx,
+	executor sqlContextExecutor,
 	guildID string,
 	delta int,
 	vp int64,
@@ -399,7 +412,7 @@ func updateStandingInTx(
 		WHERE guild_id = ?
 		FOR UPDATE
 	`
-	err := tx.QueryRowContext(ctx, query, guildID).Scan(
+	err := executor.QueryRowContext(ctx, query, guildID).Scan(
 		&st.GuildID, &st.Rating, &st.Wins, &st.Losses, &st.Draws, &st.VictoryPoints,
 		&st.BronzeMedals, &st.SilverMedals, &st.GoldMedals, &st.Trophies, &st.ChampionshipCups,
 		&st.ChampionCups,
@@ -417,7 +430,7 @@ func updateStandingInTx(
 					bronze_medals, silver_medals, gold_medals, trophies, championship_cups, champion_cups, updated_at
 				) VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NOW())
 			`
-			if _, err := tx.ExecContext(ctx, initQuery, guildID, st.Rating); err != nil {
+			if _, err := executor.ExecContext(ctx, initQuery, guildID, st.Rating); err != nil {
 				return fmt.Errorf("init standing row: %w", err)
 			}
 		} else {
@@ -444,7 +457,7 @@ func updateStandingInTx(
 		    championship_cups = ?, champion_cups = ?, updated_at = NOW()
 		WHERE guild_id = ?
 	`
-	_, err = tx.ExecContext(
+	_, err = executor.ExecContext(
 		ctx,
 		updateQuery,
 		st.Rating,
@@ -463,11 +476,11 @@ func updateStandingInTx(
 	return err
 }
 
-func updateGuildExpInTx(ctx context.Context, tx *sql.Tx, guildID string, expGain int64) error {
+func updateGuildExpInTx(ctx context.Context, executor sqlContextExecutor, guildID string, expGain int64) error {
 	var currentExp int64
 	var currentLvl int
 	query := `SELECT exp, level FROM guilds WHERE id = ? FOR UPDATE`
-	if err := tx.QueryRowContext(ctx, query, guildID).Scan(&currentExp, &currentLvl); err != nil {
+	if err := executor.QueryRowContext(ctx, query, guildID).Scan(&currentExp, &currentLvl); err != nil {
 		return fmt.Errorf("query guild exp for update: %w", err)
 	}
 
@@ -475,7 +488,7 @@ func updateGuildExpInTx(ctx context.Context, tx *sql.Tx, guildID string, expGain
 	newLvl := guild.CalculateLevel(newExp)
 
 	updateQuery := `UPDATE guilds SET exp = ?, level = ?, updated_at = NOW() WHERE id = ?`
-	_, err := tx.ExecContext(ctx, updateQuery, newExp, newLvl, guildID)
+	_, err := executor.ExecContext(ctx, updateQuery, newExp, newLvl, guildID)
 	return err
 }
 

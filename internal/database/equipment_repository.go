@@ -21,24 +21,21 @@ func NewEquipmentRepository(db *sql.DB) (*EquipmentRepository, error) {
 }
 
 func (r *EquipmentRepository) Save(ctx context.Context, value coreequipment.Equipment) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM equipment_slots WHERE character_id = ?", value.CharacterID); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	for slot, instanceID := range value.Slots {
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO equipment_slots (character_id, slot, instance_id)
-			VALUES (?, ?, ?)
-		`, value.CharacterID, string(slot), instanceID); err != nil {
-			_ = tx.Rollback()
+	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
+		if _, err := executor.ExecContext(txCtx, "DELETE FROM equipment_slots WHERE character_id = ?", value.CharacterID); err != nil {
 			return err
 		}
-	}
-	return tx.Commit()
+		for slot, instanceID := range value.Slots {
+			if _, err := executor.ExecContext(txCtx, `
+				INSERT INTO equipment_slots (character_id, slot, instance_id)
+				VALUES (?, ?, ?)
+			`, value.CharacterID, string(slot), instanceID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (r *EquipmentRepository) FindByCharacterID(ctx context.Context, characterID string) (coreequipment.Equipment, error) {
@@ -46,7 +43,7 @@ func (r *EquipmentRepository) FindByCharacterID(ctx context.Context, characterID
 	if err != nil {
 		return coreequipment.Equipment{}, err
 	}
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT slot, instance_id
 		FROM equipment_slots
 		WHERE character_id = ?

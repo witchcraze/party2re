@@ -334,10 +334,18 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Valkey (`github.com/valkey-io/valkey-go`) with in-memory thread-safe fallback.
   - **Persistence:** Transient atomic counter keys in Valkey with TTL (`party2:ratelimit:*`).
 
+### Cross-Module Transaction Orchestration & Ambient Context Propagation
+
+Cross-module workflows spanning multiple distinct feature and core repositories (such as auction settlement transferring character gold, seller bank deposits, and inventory items) use the **Application Orchestrator Pattern**:
+- **Ambient Context Boundary**: Transactions are established at the application service / orchestrator level via `database.RunInTx(ctx, db, fn)`.
+- **Automatic Participation**: Repositories resolve their SQL executor via `database.ExecutorFromContext(ctx, r.db)` and automatically participate in the active transaction without explicit transaction object passing across domain layers.
+- **Deadlock Prevention**: All repositories and orchestrators observe the deterministic lock acquisition hierarchy defined in [`feature-modules.md`](feature-modules.md) and [`.agents/rules/05-database-and-caching.md`](../../.agents/rules/05-database-and-caching.md).
+
 ### Future Feature Modules
 
 - Web Presentation UI / Client
 - Photo Contest & Seasonal Events
+
 
 
 ## Component review criteria

@@ -20,14 +20,14 @@ func NewPlayerRepository(db *sql.DB) (*PlayerRepository, error) {
 }
 
 func (r *PlayerRepository) Save(ctx context.Context, value coreplayer.Player) error {
-	_, err := r.db.ExecContext(ctx, `INSERT INTO players (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)`,
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `INSERT INTO players (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)`,
 		value.ID, value.Username, value.PasswordHash, value.CreatedAt)
 	return err
 }
 
 func (r *PlayerRepository) FindByUsername(ctx context.Context, username string) (coreplayer.Player, error) {
 	var value coreplayer.Player
-	err := r.db.QueryRowContext(ctx, `SELECT id, username, password_hash, created_at FROM players WHERE username = ?`, username).
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `SELECT id, username, password_hash, created_at FROM players WHERE username = ?`, username).
 		Scan(&value.ID, &value.Username, &value.PasswordHash, &value.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return coreplayer.Player{}, ErrPlayerNotFound
@@ -37,7 +37,7 @@ func (r *PlayerRepository) FindByUsername(ctx context.Context, username string) 
 
 func (r *PlayerRepository) FindByID(ctx context.Context, id string) (coreplayer.Player, error) {
 	var value coreplayer.Player
-	err := r.db.QueryRowContext(ctx, `SELECT id, username, password_hash, created_at FROM players WHERE id = ?`, id).
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `SELECT id, username, password_hash, created_at FROM players WHERE id = ?`, id).
 		Scan(&value.ID, &value.Username, &value.PasswordHash, &value.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return coreplayer.Player{}, ErrPlayerNotFound

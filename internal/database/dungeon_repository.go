@@ -24,6 +24,7 @@ func NewDungeonRepository(db *sql.DB) (*DungeonRepository, error) {
 
 func (r *DungeonRepository) GetRecord(ctx context.Context, characterID string) (dungeon.CharacterDungeonRecord, error) {
 	var rec dungeon.CharacterDungeonRecord
+	executor := ExecutorFromContext(ctx, r.db)
 	query := `
 		SELECT character_id, highest_dungeon_cleared, total_expeditions,
 		       total_floors_cleared, total_chests_opened, total_monsters_slain,
@@ -31,7 +32,7 @@ func (r *DungeonRepository) GetRecord(ctx context.Context, characterID string) (
 		FROM character_dungeon_records
 		WHERE character_id = ?
 	`
-	err := r.db.QueryRowContext(ctx, query, characterID).Scan(
+	err := executor.QueryRowContext(ctx, query, characterID).Scan(
 		&rec.CharacterID,
 		&rec.HighestDungeonCleared,
 		&rec.TotalExpeditions,
@@ -50,7 +51,7 @@ func (r *DungeonRepository) GetRecord(ctx context.Context, characterID string) (
 				created_at, updated_at
 			) VALUES (?, 0, 0, 0, 0, 0, ?, ?)
 		`
-		if _, err := r.db.ExecContext(ctx, insertQuery, characterID, now, now); err != nil {
+		if _, err := executor.ExecContext(ctx, insertQuery, characterID, now, now); err != nil {
 			return dungeon.CharacterDungeonRecord{}, err
 		}
 		return dungeon.CharacterDungeonRecord{
@@ -77,7 +78,7 @@ func (r *DungeonRepository) GetActiveExpedition(ctx context.Context, characterID
 	var itemsJSON string
 	var statusStr string
 
-	err := r.db.QueryRowContext(ctx, query, characterID).Scan(
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query, characterID).Scan(
 		&exp.ID,
 		&exp.CharacterID,
 		&exp.DungeonID,
@@ -128,7 +129,7 @@ func (r *DungeonRepository) SaveActiveExpedition(ctx context.Context, exp dungeo
 			status = VALUES(status),
 			updated_at = VALUES(updated_at)
 	`
-	_, err := r.db.ExecContext(
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(
 		ctx,
 		query,
 		exp.ID,
@@ -151,7 +152,7 @@ func (r *DungeonRepository) SaveActiveExpedition(ctx context.Context, exp dungeo
 
 func (r *DungeonRepository) DeleteActiveExpedition(ctx context.Context, characterID string) error {
 	query := `DELETE FROM dungeon_active_expeditions WHERE character_id = ?`
-	_, err := r.db.ExecContext(ctx, query, characterID)
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, query, characterID)
 	return err
 }
 
@@ -162,105 +163,100 @@ func (r *DungeonRepository) FinalizeExpedition(
 	character *corecharacter.Character,
 	rewardItems []coreitem.Instance,
 ) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
+	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
+		now := time.Now().UTC()
 
-	now := time.Now().UTC()
-
-	// 1. Upsert Character Dungeon Record
-	upsertRecordQuery := `
-		INSERT INTO character_dungeon_records (
-			character_id, highest_dungeon_cleared, total_expeditions,
-			total_floors_cleared, total_chests_opened, total_monsters_slain,
-			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		ON DUPLICATE KEY UPDATE
-			highest_dungeon_cleared = VALUES(highest_dungeon_cleared),
-			total_expeditions = VALUES(total_expeditions),
-			total_floors_cleared = VALUES(total_floors_cleared),
-			total_chests_opened = VALUES(total_chests_opened),
-			total_monsters_slain = VALUES(total_monsters_slain),
-			updated_at = VALUES(updated_at)
-	`
-	_, err = tx.ExecContext(
-		ctx,
-		upsertRecordQuery,
-		record.CharacterID,
-		record.HighestDungeonCleared,
-		record.TotalExpeditions,
-		record.TotalFloorsCleared,
-		record.TotalChestsOpened,
-		record.TotalMonstersSlain,
-		now,
-		now,
-	)
-	if err != nil {
-		return err
-	}
-
-	// 2. Insert Dungeon Expedition History
-	insertHistoryQuery := `
-		INSERT INTO dungeon_expedition_history (
-			id, character_id, dungeon_id, floors_reached, outcome,
-			exp_reward, gold_reward, items_reward_count, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
-	_, err = tx.ExecContext(
-		ctx,
-		insertHistoryQuery,
-		history.ID,
-		history.CharacterID,
-		history.DungeonID,
-		history.FloorsReached,
-		string(history.Outcome),
-		history.ExpReward,
-		history.GoldReward,
-		history.ItemsRewardCount,
-		history.CreatedAt,
-	)
-	if err != nil {
-		return err
-	}
-
-	// 3. Update Character if rewards were applied
-	if character != nil {
-		if err := updateCharacter(ctx, tx, *character); err != nil {
-			return err
-		}
-	}
-
-	// 4. Insert rewarded item instances into inventory_items
-	for _, item := range rewardItems {
-		insertItemQuery := `
-			INSERT INTO inventory_items (id, character_id, definition_id, quantity, enhancement_level)
-			VALUES (?, ?, ?, ?, ?)
+		// 1. Upsert Character Dungeon Record
+		upsertRecordQuery := `
+			INSERT INTO character_dungeon_records (
+				character_id, highest_dungeon_cleared, total_expeditions,
+				total_floors_cleared, total_chests_opened, total_monsters_slain,
+				created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			ON DUPLICATE KEY UPDATE
+				highest_dungeon_cleared = VALUES(highest_dungeon_cleared),
+				total_expeditions = VALUES(total_expeditions),
+				total_floors_cleared = VALUES(total_floors_cleared),
+				total_chests_opened = VALUES(total_chests_opened),
+				total_monsters_slain = VALUES(total_monsters_slain),
+				updated_at = VALUES(updated_at)
 		`
-		_, err = tx.ExecContext(
-			ctx,
-			insertItemQuery,
-			item.ID,
+		_, err := executor.ExecContext(
+			txCtx,
+			upsertRecordQuery,
 			record.CharacterID,
-			item.DefinitionID,
-			item.Quantity,
-			item.EnhancementLevel,
+			record.HighestDungeonCleared,
+			record.TotalExpeditions,
+			record.TotalFloorsCleared,
+			record.TotalChestsOpened,
+			record.TotalMonstersSlain,
+			now,
+			now,
 		)
 		if err != nil {
 			return err
 		}
-	}
 
-	// 5. Delete active expedition
-	deleteActiveQuery := `DELETE FROM dungeon_active_expeditions WHERE character_id = ?`
-	if _, err := tx.ExecContext(ctx, deleteActiveQuery, record.CharacterID); err != nil {
-		return err
-	}
+		// 2. Insert Dungeon Expedition History
+		insertHistoryQuery := `
+			INSERT INTO dungeon_expedition_history (
+				id, character_id, dungeon_id, floors_reached, outcome,
+				exp_reward, gold_reward, items_reward_count, created_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`
+		_, err = executor.ExecContext(
+			txCtx,
+			insertHistoryQuery,
+			history.ID,
+			history.CharacterID,
+			history.DungeonID,
+			history.FloorsReached,
+			string(history.Outcome),
+			history.ExpReward,
+			history.GoldReward,
+			history.ItemsRewardCount,
+			history.CreatedAt,
+		)
+		if err != nil {
+			return err
+		}
 
-	return tx.Commit()
+		// 3. Update Character if rewards were applied
+		if character != nil {
+			if err := updateCharacter(txCtx, executor, *character); err != nil {
+				return err
+			}
+		}
+
+		// 4. Insert rewarded item instances into inventory_items
+		for _, item := range rewardItems {
+			insertItemQuery := `
+				INSERT INTO inventory_items (id, character_id, definition_id, quantity, enhancement_level)
+				VALUES (?, ?, ?, ?, ?)
+			`
+			_, err = executor.ExecContext(
+				txCtx,
+				insertItemQuery,
+				item.ID,
+				record.CharacterID,
+				item.DefinitionID,
+				item.Quantity,
+				item.EnhancementLevel,
+			)
+			if err != nil {
+				return err
+			}
+		}
+
+		// 5. Delete active expedition
+		deleteActiveQuery := `DELETE FROM dungeon_active_expeditions WHERE character_id = ?`
+		if _, err := executor.ExecContext(txCtx, deleteActiveQuery, record.CharacterID); err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
 
 func (r *DungeonRepository) GetHistory(ctx context.Context, characterID string, limit int) ([]dungeon.DungeonExpeditionHistory, error) {
@@ -272,7 +268,7 @@ func (r *DungeonRepository) GetHistory(ctx context.Context, characterID string, 
 		ORDER BY created_at DESC
 		LIMIT ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, characterID, limit)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, characterID, limit)
 	if err != nil {
 		return nil, err
 	}

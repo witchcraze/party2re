@@ -21,7 +21,7 @@ func NewActivityRepository(db *sql.DB) (*ActivityRepository, error) {
 }
 
 func (r *ActivityRepository) Save(ctx context.Context, value activity.Activity) error {
-	_, err := r.db.ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO activities
 			(id, character_id, activity_type, started_at, available_at, experience_reward, claimed)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -31,7 +31,7 @@ func (r *ActivityRepository) Save(ctx context.Context, value activity.Activity) 
 
 func (r *ActivityRepository) FindByID(ctx context.Context, id string) (activity.Activity, error) {
 	var value activity.Activity
-	err := r.db.QueryRowContext(ctx, `
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
 		SELECT id, character_id, activity_type, started_at, available_at, experience_reward, claimed
 		FROM activities
 		WHERE id = ?
@@ -54,38 +54,23 @@ func (r *ActivityRepository) FindByID(ctx context.Context, id string) (activity.
 }
 
 func (r *ActivityRepository) ClaimAndApply(ctx context.Context, id string, character corecharacter.Character) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
+	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
+		result, err := executor.ExecContext(txCtx, `
+			UPDATE activities
+			SET claimed = TRUE
+			WHERE id = ? AND claimed = FALSE
+		`, id)
+		if err != nil {
+			return err
 		}
-	}()
-
-	result, err := tx.ExecContext(ctx, `
-		UPDATE activities
-		SET claimed = TRUE
-		WHERE id = ? AND claimed = FALSE
-	`, id)
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return claimFailure(ctx, tx, "activities", id, activity.ErrNotFound, activity.ErrAlreadyClaimed)
-	}
-	if err := updateCharacterAtomically(ctx, tx, character); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	committed = true
-	return nil
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return claimFailure(txCtx, executor, "activities", id, activity.ErrNotFound, activity.ErrAlreadyClaimed)
+		}
+		return updateCharacterAtomically(txCtx, executor, character)
+	})
 }

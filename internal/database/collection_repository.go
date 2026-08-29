@@ -20,7 +20,7 @@ func NewCollectionRepository(db *sql.DB) (*CollectionRepository, error) {
 }
 
 func (r *CollectionRepository) RecordMonsterDefeat(ctx context.Context, characterID, monsterID, monsterName, habitat string) error {
-	_, err := r.db.ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO character_monster_book (
 			character_id, monster_id, monster_name, habitat, defeated_count, first_defeated_at, last_defeated_at
 		) VALUES (?, ?, ?, ?, 1, UTC_TIMESTAMP(), UTC_TIMESTAMP())
@@ -34,7 +34,7 @@ func (r *CollectionRepository) RecordMonsterDefeat(ctx context.Context, characte
 }
 
 func (r *CollectionRepository) GetMonsterBook(ctx context.Context, characterID string) ([]collection.MonsterBookEntry, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT character_id, monster_id, monster_name, habitat, defeated_count, first_defeated_at, last_defeated_at
 		FROM character_monster_book
 		WHERE character_id = ?
@@ -58,14 +58,14 @@ func (r *CollectionRepository) GetMonsterBook(ctx context.Context, characterID s
 
 func (r *CollectionRepository) GetMonsterBookCount(ctx context.Context, characterID string) (int, error) {
 	var count int
-	err := r.db.QueryRowContext(ctx, `
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM character_monster_book WHERE character_id = ?
 	`, characterID).Scan(&count)
 	return count, err
 }
 
 func (r *CollectionRepository) RecordItemDiscovered(ctx context.Context, characterID, itemID, itemName, category string) error {
-	_, err := r.db.ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT IGNORE INTO character_item_collection (
 			character_id, item_id, item_name, category, discovered_at
 		) VALUES (?, ?, ?, ?, UTC_TIMESTAMP())
@@ -86,7 +86,7 @@ func (r *CollectionRepository) GetItemCollection(ctx context.Context, characterI
 	}
 	query += " ORDER BY discovered_at ASC"
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func (r *CollectionRepository) GetItemCollection(ctx context.Context, characterI
 
 func (r *CollectionRepository) GetItemCollectionCount(ctx context.Context, characterID string) (int, error) {
 	var count int
-	err := r.db.QueryRowContext(ctx, `
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM character_item_collection WHERE character_id = ?
 	`, characterID).Scan(&count)
 	return count, err

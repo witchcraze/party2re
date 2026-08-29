@@ -23,7 +23,7 @@ func NewBankRepository(db *sql.DB) (*BankRepository, error) {
 
 func (r *BankRepository) GetAccount(ctx context.Context, playerID string) (bank.Account, error) {
 	var acc bank.Account
-	err := r.db.QueryRowContext(ctx, `
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
 		SELECT player_id, balance, updated_at
 		FROM bank_accounts
 		WHERE player_id = ?
@@ -42,64 +42,62 @@ func (r *BankRepository) GetAccount(ctx context.Context, playerID string) (bank.
 }
 
 func (r *BankRepository) Deposit(ctx context.Context, playerID string, characterID string, amount int) (bank.Account, corecharacter.Character, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return bank.Account{}, corecharacter.Character{}, err
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
-	res, err := tx.ExecContext(ctx, `
-		UPDATE characters
-		SET money = money - ?
-		WHERE id = ? AND money >= ?
-	`, amount, characterID, amount)
-	if err != nil {
-		return bank.Account{}, corecharacter.Character{}, err
-	}
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return bank.Account{}, corecharacter.Character{}, err
-	}
-	if affected == 0 {
-		var exists int
-		_ = tx.QueryRowContext(ctx, "SELECT COUNT(1) FROM characters WHERE id = ?", characterID).Scan(&exists)
-		if exists == 0 {
-			return bank.Account{}, corecharacter.Character{}, corecharacter.ErrNotFound
-		}
-		return bank.Account{}, corecharacter.Character{}, bank.ErrInsufficientFunds
-	}
-
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO bank_accounts (player_id, balance)
-		VALUES (?, ?)
-		ON DUPLICATE KEY UPDATE balance = balance + VALUES(balance)
-	`, playerID, int64(amount))
-	if err != nil {
-		return bank.Account{}, corecharacter.Character{}, err
-	}
-
 	var acc bank.Account
-	err = tx.QueryRowContext(ctx, `
-		SELECT player_id, balance, updated_at
-		FROM bank_accounts
-		WHERE player_id = ?
-	`, playerID).Scan(&acc.PlayerID, &acc.Balance, &acc.UpdatedAt)
-	if err != nil {
-		return bank.Account{}, corecharacter.Character{}, err
-	}
+	var char corecharacter.Character
 
-	char, err := scanCharacterRow(tx.QueryRowContext(ctx, `
-		SELECT `+characterColumns+`
-		FROM characters
-		WHERE id = ?
-	`, characterID))
-	if err != nil {
-		return bank.Account{}, corecharacter.Character{}, err
-	}
+	err := RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
 
-	if err := tx.Commit(); err != nil {
+		res, err := executor.ExecContext(txCtx, `
+			UPDATE characters
+			SET money = money - ?
+			WHERE id = ? AND money >= ?
+		`, amount, characterID, amount)
+		if err != nil {
+			return err
+		}
+		affected, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			var exists int
+			_ = executor.QueryRowContext(txCtx, "SELECT COUNT(1) FROM characters WHERE id = ?", characterID).Scan(&exists)
+			if exists == 0 {
+				return corecharacter.ErrNotFound
+			}
+			return bank.ErrInsufficientFunds
+		}
+
+		_, err = executor.ExecContext(txCtx, `
+			INSERT INTO bank_accounts (player_id, balance)
+			VALUES (?, ?)
+			ON DUPLICATE KEY UPDATE balance = balance + VALUES(balance)
+		`, playerID, int64(amount))
+		if err != nil {
+			return err
+		}
+
+		err = executor.QueryRowContext(txCtx, `
+			SELECT player_id, balance, updated_at
+			FROM bank_accounts
+			WHERE player_id = ?
+		`, playerID).Scan(&acc.PlayerID, &acc.Balance, &acc.UpdatedAt)
+		if err != nil {
+			return err
+		}
+
+		char, err = scanCharacterRow(executor.QueryRowContext(txCtx, `
+			SELECT `+characterColumns+`
+			FROM characters
+			WHERE id = ?
+		`, characterID))
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
 		return bank.Account{}, corecharacter.Character{}, err
 	}
 
@@ -107,66 +105,64 @@ func (r *BankRepository) Deposit(ctx context.Context, playerID string, character
 }
 
 func (r *BankRepository) Withdraw(ctx context.Context, playerID string, characterID string, amount int) (bank.Account, corecharacter.Character, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return bank.Account{}, corecharacter.Character{}, err
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
-	res, err := tx.ExecContext(ctx, `
-		UPDATE bank_accounts
-		SET balance = balance - ?
-		WHERE player_id = ? AND balance >= ?
-	`, int64(amount), playerID, int64(amount))
-	if err != nil {
-		return bank.Account{}, corecharacter.Character{}, err
-	}
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return bank.Account{}, corecharacter.Character{}, err
-	}
-	if affected == 0 {
-		return bank.Account{}, corecharacter.Character{}, bank.ErrInsufficientBalance
-	}
-
-	resChar, err := tx.ExecContext(ctx, `
-		UPDATE characters
-		SET money = money + ?
-		WHERE id = ?
-	`, amount, characterID)
-	if err != nil {
-		return bank.Account{}, corecharacter.Character{}, err
-	}
-	affectedChar, err := resChar.RowsAffected()
-	if err != nil {
-		return bank.Account{}, corecharacter.Character{}, err
-	}
-	if affectedChar == 0 {
-		return bank.Account{}, corecharacter.Character{}, corecharacter.ErrNotFound
-	}
-
 	var acc bank.Account
-	err = tx.QueryRowContext(ctx, `
-		SELECT player_id, balance, updated_at
-		FROM bank_accounts
-		WHERE player_id = ?
-	`, playerID).Scan(&acc.PlayerID, &acc.Balance, &acc.UpdatedAt)
-	if err != nil {
-		return bank.Account{}, corecharacter.Character{}, err
-	}
+	var char corecharacter.Character
 
-	char, err := scanCharacterRow(tx.QueryRowContext(ctx, `
-		SELECT `+characterColumns+`
-		FROM characters
-		WHERE id = ?
-	`, characterID))
-	if err != nil {
-		return bank.Account{}, corecharacter.Character{}, err
-	}
+	err := RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
 
-	if err := tx.Commit(); err != nil {
+		res, err := executor.ExecContext(txCtx, `
+			UPDATE bank_accounts
+			SET balance = balance - ?
+			WHERE player_id = ? AND balance >= ?
+		`, int64(amount), playerID, int64(amount))
+		if err != nil {
+			return err
+		}
+		affected, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return bank.ErrInsufficientBalance
+		}
+
+		resChar, err := executor.ExecContext(txCtx, `
+			UPDATE characters
+			SET money = money + ?
+			WHERE id = ?
+		`, amount, characterID)
+		if err != nil {
+			return err
+		}
+		affectedChar, err := resChar.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affectedChar == 0 {
+			return corecharacter.ErrNotFound
+		}
+
+		err = executor.QueryRowContext(txCtx, `
+			SELECT player_id, balance, updated_at
+			FROM bank_accounts
+			WHERE player_id = ?
+		`, playerID).Scan(&acc.PlayerID, &acc.Balance, &acc.UpdatedAt)
+		if err != nil {
+			return err
+		}
+
+		char, err = scanCharacterRow(executor.QueryRowContext(txCtx, `
+			SELECT `+characterColumns+`
+			FROM characters
+			WHERE id = ?
+		`, characterID))
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
 		return bank.Account{}, corecharacter.Character{}, err
 	}
 
@@ -174,8 +170,10 @@ func (r *BankRepository) Withdraw(ctx context.Context, playerID string, characte
 }
 
 func (r *BankRepository) Transfer(ctx context.Context, record bank.TransferRecord) (bank.Account, bank.Account, error) {
+	var fromAcc, toAcc bank.Account
+
 	var toPlayerExists int
-	err := r.db.QueryRowContext(ctx, "SELECT COUNT(1) FROM players WHERE id = ?", record.ToPlayerID).Scan(&toPlayerExists)
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, "SELECT COUNT(1) FROM players WHERE id = ?", record.ToPlayerID).Scan(&toPlayerExists)
 	if err != nil {
 		return bank.Account{}, bank.Account{}, err
 	}
@@ -183,94 +181,89 @@ func (r *BankRepository) Transfer(ctx context.Context, record bank.TransferRecor
 		return bank.Account{}, bank.Account{}, bank.ErrAccountNotFound
 	}
 
-	// Ensure accounts exist to avoid insert gap locks
-	_, _ = r.db.ExecContext(ctx, `
-		INSERT IGNORE INTO bank_accounts (player_id, balance)
-		VALUES (?, 0), (?, 0)
-	`, record.FromPlayerID, record.ToPlayerID)
-
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return bank.Account{}, bank.Account{}, err
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
 	p1, p2 := record.FromPlayerID, record.ToPlayerID
 	if p1 > p2 {
 		p1, p2 = p2, p1
 	}
 
-	var bal1, bal2 int64
-	err = tx.QueryRowContext(ctx, "SELECT balance FROM bank_accounts WHERE player_id = ? FOR UPDATE", p1).Scan(&bal1)
+	// Ensure accounts exist to avoid insert gap locks
+	_, _ = r.db.ExecContext(ctx, `
+		INSERT IGNORE INTO bank_accounts (player_id, balance)
+		VALUES (?, 0), (?, 0)
+	`, p1, p2)
+
+	err = RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
+
+		var bal1, bal2 int64
+		err := executor.QueryRowContext(txCtx, "SELECT balance FROM bank_accounts WHERE player_id = ? FOR UPDATE", p1).Scan(&bal1)
+		if err != nil {
+			return err
+		}
+		err = executor.QueryRowContext(txCtx, "SELECT balance FROM bank_accounts WHERE player_id = ? FOR UPDATE", p2).Scan(&bal2)
+		if err != nil {
+			return err
+		}
+
+		var fromBalance, toBalance int64
+		if record.FromPlayerID == p1 {
+			fromBalance, toBalance = bal1, bal2
+		} else {
+			fromBalance, toBalance = bal2, bal1
+		}
+
+		if fromBalance < record.Amount {
+			return bank.ErrInsufficientBalance
+		}
+
+		newFromBalance := fromBalance - record.Amount
+		_, err = executor.ExecContext(txCtx, `
+			UPDATE bank_accounts
+			SET balance = ?
+			WHERE player_id = ?
+		`, newFromBalance, record.FromPlayerID)
+		if err != nil {
+			return err
+		}
+
+		newToBalance := toBalance + record.Amount
+		_, err = executor.ExecContext(txCtx, `
+			UPDATE bank_accounts
+			SET balance = ?
+			WHERE player_id = ?
+		`, newToBalance, record.ToPlayerID)
+		if err != nil {
+			return err
+		}
+
+		_, err = executor.ExecContext(txCtx, `
+			INSERT INTO bank_transfers (id, from_player_id, to_player_id, amount, created_at)
+			VALUES (?, ?, ?, ?, ?)
+		`, record.ID, record.FromPlayerID, record.ToPlayerID, record.Amount, record.CreatedAt)
+		if err != nil {
+			return err
+		}
+
+		err = executor.QueryRowContext(txCtx, `
+			SELECT player_id, balance, updated_at
+			FROM bank_accounts
+			WHERE player_id = ?
+		`, record.FromPlayerID).Scan(&fromAcc.PlayerID, &fromAcc.Balance, &fromAcc.UpdatedAt)
+		if err != nil {
+			return err
+		}
+
+		err = executor.QueryRowContext(txCtx, `
+			SELECT player_id, balance, updated_at
+			FROM bank_accounts
+			WHERE player_id = ?
+		`, record.ToPlayerID).Scan(&toAcc.PlayerID, &toAcc.Balance, &toAcc.UpdatedAt)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 	if err != nil {
-		return bank.Account{}, bank.Account{}, err
-	}
-	err = tx.QueryRowContext(ctx, "SELECT balance FROM bank_accounts WHERE player_id = ? FOR UPDATE", p2).Scan(&bal2)
-	if err != nil {
-		return bank.Account{}, bank.Account{}, err
-	}
-
-	var fromBalance, toBalance int64
-	if record.FromPlayerID == p1 {
-		fromBalance, toBalance = bal1, bal2
-	} else {
-		fromBalance, toBalance = bal2, bal1
-	}
-
-	if fromBalance < record.Amount {
-		return bank.Account{}, bank.Account{}, bank.ErrInsufficientBalance
-	}
-
-	newFromBalance := fromBalance - record.Amount
-	_, err = tx.ExecContext(ctx, `
-		UPDATE bank_accounts
-		SET balance = ?
-		WHERE player_id = ?
-	`, newFromBalance, record.FromPlayerID)
-	if err != nil {
-		return bank.Account{}, bank.Account{}, err
-	}
-
-	newToBalance := toBalance + record.Amount
-	_, err = tx.ExecContext(ctx, `
-		UPDATE bank_accounts
-		SET balance = ?
-		WHERE player_id = ?
-	`, newToBalance, record.ToPlayerID)
-	if err != nil {
-		return bank.Account{}, bank.Account{}, err
-	}
-
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO bank_transfers (id, from_player_id, to_player_id, amount, created_at)
-		VALUES (?, ?, ?, ?, ?)
-	`, record.ID, record.FromPlayerID, record.ToPlayerID, record.Amount, record.CreatedAt)
-	if err != nil {
-		return bank.Account{}, bank.Account{}, err
-	}
-
-	var fromAcc, toAcc bank.Account
-	err = tx.QueryRowContext(ctx, `
-		SELECT player_id, balance, updated_at
-		FROM bank_accounts
-		WHERE player_id = ?
-	`, record.FromPlayerID).Scan(&fromAcc.PlayerID, &fromAcc.Balance, &fromAcc.UpdatedAt)
-	if err != nil {
-		return bank.Account{}, bank.Account{}, err
-	}
-
-	err = tx.QueryRowContext(ctx, `
-		SELECT player_id, balance, updated_at
-		FROM bank_accounts
-		WHERE player_id = ?
-	`, record.ToPlayerID).Scan(&toAcc.PlayerID, &toAcc.Balance, &toAcc.UpdatedAt)
-	if err != nil {
-		return bank.Account{}, bank.Account{}, err
-	}
-
-	if err := tx.Commit(); err != nil {
 		return bank.Account{}, bank.Account{}, err
 	}
 
@@ -278,7 +271,7 @@ func (r *BankRepository) Transfer(ctx context.Context, record bank.TransferRecor
 }
 
 func (r *BankRepository) ListTransfers(ctx context.Context, playerID string, limit int) ([]bank.TransferRecord, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, from_player_id, to_player_id, amount, created_at
 		FROM bank_transfers
 		WHERE from_player_id = ? OR to_player_id = ?
