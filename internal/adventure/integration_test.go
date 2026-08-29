@@ -228,3 +228,90 @@ func TestAdventureScheduledActionIntegration(t *testing.T) {
 
 	valkeyClient.Do(ctx, valkeyClient.B().Del().Key("party2:scheduled:action:"+foundAction.ID).Build())
 }
+
+func TestAdventureHistoryAndChronicleIntegration(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	ctx := context.Background()
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	characters, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	characterService, err := character.NewService(characters)
+	if err != nil {
+		t.Fatal(err)
+	}
+	player, err := database.CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	char, err := characterService.Create(ctx, player.ID, "Chronicle Hero")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	clock := &fixedClock{now: time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)}
+	adventures, err := database.NewAdventureRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	service, err := adventure.NewServiceWithClock(adventures, characters, corebattle.Engine{}, nil, nil, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Start and claim 2 adventures
+	adv1, err := service.StartStage(ctx, char.ID, "stage-01")
+	if err != nil {
+		t.Fatalf("StartStage(stage-01) error = %v", err)
+	}
+	clock.now = adv1.AvailableAt
+	if _, err := service.Claim(ctx, adv1.ID); err != nil {
+		t.Fatalf("Claim(adv1) error = %v", err)
+	}
+
+	adv2, err := service.StartStage(ctx, char.ID, "stage-01")
+	if err != nil {
+		t.Fatalf("StartStage(stage-01) error = %v", err)
+	}
+	clock.now = adv2.AvailableAt
+	if _, err := service.Claim(ctx, adv2.ID); err != nil {
+		t.Fatalf("Claim(adv2) error = %v", err)
+	}
+
+	// Query paginated history
+	history, err := service.ListHistory(ctx, char.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("ListHistory error = %v", err)
+	}
+	if history.Total != 2 || len(history.Adventures) != 2 {
+		t.Fatalf("expected total 2 and 2 items, got total=%d, len=%d", history.Total, len(history.Adventures))
+	}
+	if history.Adventures[0].ID != adv2.ID || history.Adventures[1].ID != adv1.ID {
+		t.Fatalf("unexpected ordering: first=%s, second=%s", history.Adventures[0].ID, history.Adventures[1].ID)
+	}
+
+	// Query chronicle
+	chronicle, err := service.GetChronicle(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetChronicle error = %v", err)
+	}
+	if chronicle.TotalAdventures != 2 {
+		t.Fatalf("expected 2 adventures, got %d", chronicle.TotalAdventures)
+	}
+	if len(chronicle.Stages) == 0 || chronicle.Stages[0].StageID != "stage-01" {
+		t.Fatalf("unexpected stage stats: %+v", chronicle.Stages)
+	}
+	if len(chronicle.Milestones) == 0 {
+		t.Fatal("expected milestones to be populated")
+	}
+}

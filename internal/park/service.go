@@ -98,7 +98,11 @@ func (s *Service) PostMessage(ctx context.Context, characterID, content, color, 
 			}
 		} else {
 			latestTime, err := s.repo.GetLatestPostTimeByCharacter(ctx, characterID)
-			if err == nil && !latestTime.IsZero() {
+			if err != nil {
+				// return error if repo fails
+				return Post{}, err
+			}
+			if !latestTime.IsZero() {
 				if now.Sub(latestTime.UTC()) < s.rateLimitDur {
 					return Post{}, ErrRateLimited
 				}

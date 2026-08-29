@@ -57,15 +57,38 @@ func (s *stubCharacterService) Get(ctx context.Context, id string) (corecharacte
 }
 
 type stubAdventureService struct {
-	startStageFn func(ctx context.Context, characterID, stageID string) (adventure.Adventure, error)
-	claimFn      func(ctx context.Context, id string) (adventure.Adventure, error)
+	startStageFn   func(ctx context.Context, characterID, stageID string) (adventure.Adventure, error)
+	claimFn        func(ctx context.Context, id string) (adventure.Adventure, error)
+	listHistoryFn  func(ctx context.Context, characterID string, limit, offset int) (adventure.PaginatedAdventures, error)
+	getChronicleFn func(ctx context.Context, characterID string) (adventure.AdventureChronicle, error)
 }
 
 func (s *stubAdventureService) StartStage(ctx context.Context, characterID, stageID string) (adventure.Adventure, error) {
-	return s.startStageFn(ctx, characterID, stageID)
+	if s.startStageFn != nil {
+		return s.startStageFn(ctx, characterID, stageID)
+	}
+	return adventure.Adventure{}, nil
 }
+
 func (s *stubAdventureService) Claim(ctx context.Context, id string) (adventure.Adventure, error) {
-	return s.claimFn(ctx, id)
+	if s.claimFn != nil {
+		return s.claimFn(ctx, id)
+	}
+	return adventure.Adventure{}, nil
+}
+
+func (s *stubAdventureService) ListHistory(ctx context.Context, characterID string, limit, offset int) (adventure.PaginatedAdventures, error) {
+	if s.listHistoryFn != nil {
+		return s.listHistoryFn(ctx, characterID, limit, offset)
+	}
+	return adventure.PaginatedAdventures{CharacterID: characterID}, nil
+}
+
+func (s *stubAdventureService) GetChronicle(ctx context.Context, characterID string) (adventure.AdventureChronicle, error) {
+	if s.getChronicleFn != nil {
+		return s.getChronicleFn(ctx, characterID)
+	}
+	return adventure.AdventureChronicle{CharacterID: characterID}, nil
 }
 
 type stubShopService struct {

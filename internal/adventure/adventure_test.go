@@ -53,6 +53,19 @@ func (r *repositoryStub) ClaimAndApply(_ context.Context, value Adventure, chara
 	return nil
 }
 
+func (r *repositoryStub) ListByCharacterID(_ context.Context, characterID string, limit, offset int) ([]Adventure, int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.value.CharacterID == characterID {
+		return []Adventure{r.value}, 1, nil
+	}
+	return nil, 0, nil
+}
+
+func (r *repositoryStub) GetAggregatedStats(_ context.Context, characterID string) (AggregatedStats, error) {
+	return AggregatedStats{}, nil
+}
+
 type characterRepositoryStub struct {
 	mu    sync.Mutex
 	value corecharacter.Character

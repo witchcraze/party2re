@@ -224,9 +224,9 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Character repository, Core Progression, Scheduling Service.
   - **Persistence:** `activities` table with atomic `ClaimAndApply` concurrency locking.
 - **Adventure** (`internal/adventure`):
-  - **Responsibility:** Multi-stage exploration (28 stages, 286 monsters), stage eligibility checks, Battle invocation, and drop rewards.
+  - **Responsibility:** Multi-stage exploration (28 stages, 286 monsters), stage eligibility checks, Battle invocation, drop rewards, paginated past adventure history logs (`GET /characters/{id}/adventures`), aggregate combat chronicle statistics (`GET /characters/{id}/adventure-chronicle`), and milestone progression unlocks (Try Mode, Image Setting, Calm Mode, Hard Mode, Avatar Setting, Extreme Mode).
   - **Dependencies:** Stage/Monster catalogs, Battle Resolver, Character & Inventory repositories, Scheduling Service.
-  - **Persistence:** `adventures` table with atomic battle outcome persistence.
+  - **Persistence:** `adventures` table with atomic battle outcome persistence and compound query indexes (`idx_adventures_character_started`, `idx_adventures_character_claimed`).
 - **Shop** (`internal/shop`):
   - **Responsibility:** Item purchases (gold deduction + inventory addition) and resale (inventory removal + 50% gold refund).
   - **Dependencies:** Item Catalog, Character (wallet), Inventory.
