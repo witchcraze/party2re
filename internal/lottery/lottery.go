@@ -175,6 +175,20 @@ func NewService(repo Repository) (*Service, error) {
 	return &Service{repo: repo}, nil
 }
 
+func (s *Service) GetRaffleTickets(ctx context.Context, characterID string) (int, error) {
+	if characterID == "" {
+		return 0, corecharacter.ErrNotFound
+	}
+	return s.repo.GetRaffleTickets(ctx, characterID)
+}
+
+func (s *Service) ListLotteryTickets(ctx context.Context, characterID string, roundID int) ([]LotteryTicket, error) {
+	if characterID == "" {
+		return nil, corecharacter.ErrNotFound
+	}
+	return s.repo.ListLotteryTickets(ctx, characterID, roundID)
+}
+
 func (s *Service) BuyRaffleTickets(ctx context.Context, characterID string, count int) (int, corecharacter.Character, error) {
 	if count <= 0 {
 		return 0, corecharacter.Character{}, ErrInvalidAmount

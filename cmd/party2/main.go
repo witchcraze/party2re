@@ -8,21 +8,30 @@ import (
 	"github.com/witchcraze/party2re/internal/activity"
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/alchemy"
+	"github.com/witchcraze/party2re/internal/auction"
 	"github.com/witchcraze/party2re/internal/bank"
 	"github.com/witchcraze/party2re/internal/blacksmith"
 	"github.com/witchcraze/party2re/internal/boss"
+	"github.com/witchcraze/party2re/internal/casino"
 	"github.com/witchcraze/party2re/internal/challenge"
+	"github.com/witchcraze/party2re/internal/chapel"
+	"github.com/witchcraze/party2re/internal/collection"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	corejob "github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/custom_skill"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/dungeon"
+	"github.com/witchcraze/party2re/internal/farm"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/helper"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/inn"
+	"github.com/witchcraze/party2re/internal/job"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/park"
@@ -226,6 +235,74 @@ func run() error {
 		return err
 	}
 	_, err = ranking.NewService(rankingRepo)
+	if err != nil {
+		return err
+	}
+
+	jobCatalog, err := corejob.InitialCatalog()
+	if err != nil {
+		return err
+	}
+	_, err = job.NewService(charJobRepo, job.WithCatalog(jobCatalog), job.WithCharacterRepository(charRepo))
+	if err != nil {
+		return err
+	}
+
+	_, err = inn.NewService(charRepo)
+	if err != nil {
+		return err
+	}
+
+	chapelRepo, err := database.NewChapelRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = chapel.NewService(chapelRepo)
+	if err != nil {
+		return err
+	}
+
+	farmRepo, err := database.NewFarmRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = farm.NewService(farmRepo)
+	if err != nil {
+		return err
+	}
+
+	collectionRepo, err := database.NewCollectionRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = collection.NewService(collectionRepo, 100, 100)
+	if err != nil {
+		return err
+	}
+
+	lotteryRepo, err := database.NewLotteryRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = lottery.NewService(lotteryRepo)
+	if err != nil {
+		return err
+	}
+
+	casinoRepo, err := database.NewCasinoRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = casino.NewService(casinoRepo)
+	if err != nil {
+		return err
+	}
+
+	auctionRepo, err := database.NewAuctionRepository(db)
+	if err != nil {
+		return err
+	}
+	_, err = auction.NewService(auctionRepo)
 	if err != nil {
 		return err
 	}

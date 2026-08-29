@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 )
 
@@ -69,5 +70,47 @@ func TestServiceCheckAndApplyMastery(t *testing.T) {
 	applied, err = service.CheckAndApplyMastery(context.Background(), "character-1", 99)
 	if err != nil || applied {
 		t.Errorf("already mastered should not re-apply: applied=%v", applied)
+	}
+}
+
+type charRepoStub struct {
+	char corecharacter.Character
+}
+
+func (c *charRepoStub) FindByID(_ context.Context, _ string) (corecharacter.Character, error) {
+	return c.char, nil
+}
+
+func (c *charRepoStub) Update(_ context.Context, char corecharacter.Character) error {
+	c.char = char
+	return nil
+}
+
+func TestServiceListAndChangeJob(t *testing.T) {
+	state, _ := corejob.NewCharacterJob("character-1", "starter")
+	repo := &repositoryStub{value: state}
+	char := corecharacter.Character{
+		ID:     "character-1",
+		JobID:  "starter",
+		Level:  10,
+		Gender: "male",
+	}
+	charRepo := &charRepoStub{char: char}
+	svc, err := NewService(repo, WithCharacterRepository(charRepo))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defs := svc.ListDefinitions()
+	if len(defs) == 0 {
+		t.Fatal("expected non-empty job definitions list")
+	}
+
+	updatedChar, updatedJob, err := svc.ChangeJob(context.Background(), "character-1", "job-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedChar.JobID != "job-01" || updatedJob.CurrentJobID != "job-01" {
+		t.Fatalf("expected job job-01, got char=%s, job=%s", updatedChar.JobID, updatedJob.CurrentJobID)
 	}
 }
