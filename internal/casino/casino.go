@@ -30,6 +30,7 @@ type Repository interface {
 	ExchangeGoldToCoins(ctx context.Context, characterID string, coins int64, goldCost int) (Account, corecharacter.Character, error)
 	ExchangeCoinsToGold(ctx context.Context, characterID string, coins int64, goldReward int) (Account, corecharacter.Character, error)
 	AdjustCoins(ctx context.Context, characterID string, coinDelta int64) (Account, error)
+	DeductBetAndCreditPayout(ctx context.Context, characterID string, bet int64, payout int64) (Account, error)
 }
 
 type Service struct {
@@ -83,8 +84,8 @@ func (s *Service) StartIndianPokerGame(ctx context.Context, characterID string, 
 		return nil, Account{}, ErrInvalidBaseRate
 	}
 
-	// Deduct initial ante
-	acc, err := s.repo.AdjustCoins(ctx, characterID, -baseRate)
+	// Deduct initial ante atomically
+	acc, err := s.repo.DeductBetAndCreditPayout(ctx, characterID, baseRate, 0)
 	if err != nil {
 		return nil, Account{}, err
 	}
@@ -92,7 +93,7 @@ func (s *Service) StartIndianPokerGame(ctx context.Context, characterID string, 
 	game, err := NewIndianPokerGame(baseRate)
 	if err != nil {
 		// Refund ante on failure
-		_, _ = s.repo.AdjustCoins(ctx, characterID, baseRate)
+		_, _ = s.repo.DeductBetAndCreditPayout(ctx, characterID, 0, baseRate)
 		return nil, Account{}, err
 	}
 
@@ -113,14 +114,10 @@ func (s *Service) PlayIndianPokerRound(ctx context.Context, characterID string, 
 		return Account{}, err
 	}
 
-	// 1. If action requires bet, deduct from account
+	// 1. If action requires bet, deduct atomically from account
 	if action == ActionCall || action == ActionShowdown {
 		neededBet := game.CurrentBet
-		if acc.Coins < neededBet {
-			return acc, ErrInsufficientCoins
-		}
-		// Deduct bet coins
-		acc, err = s.repo.AdjustCoins(ctx, characterID, -neededBet)
+		acc, err = s.repo.DeductBetAndCreditPayout(ctx, characterID, neededBet, 0)
 		if err != nil {
 			return acc, err
 		}
@@ -130,14 +127,14 @@ func (s *Service) PlayIndianPokerRound(ctx context.Context, characterID string, 
 	if err := game.PlayRound(action, acc.Coins); err != nil {
 		// Refund if round failed unexpectedly
 		if action == ActionCall || action == ActionShowdown {
-			_, _ = s.repo.AdjustCoins(ctx, characterID, game.CurrentBet)
+			_, _ = s.repo.DeductBetAndCreditPayout(ctx, characterID, 0, game.CurrentBet)
 		}
 		return acc, err
 	}
 
 	// 3. If game finished and has payout, credit account
 	if game.Status != StatusInProgress && game.PayoutCoins > 0 {
-		acc, err = s.repo.AdjustCoins(ctx, characterID, game.PayoutCoins)
+		acc, err = s.repo.DeductBetAndCreditPayout(ctx, characterID, 0, game.PayoutCoins)
 		if err != nil {
 			return acc, err
 		}
@@ -146,7 +143,7 @@ func (s *Service) PlayIndianPokerRound(ctx context.Context, characterID string, 
 	return acc, nil
 }
 
-// SpinSlot executes a slot machine spin, adjusts coins according to the outcome, and returns the result and updated account.
+// SpinSlot executes a slot machine spin, adjusts coins atomically according to the outcome, and returns the result and updated account.
 func (s *Service) SpinSlot(ctx context.Context, characterID string, bet int64) (SpinResult, Account, error) {
 	if characterID == "" {
 		return SpinResult{}, Account{}, ErrInvalidCharacterID
@@ -155,30 +152,21 @@ func (s *Service) SpinSlot(ctx context.Context, characterID string, bet int64) (
 		return SpinResult{}, Account{}, ErrInvalidBetRate
 	}
 
-	acc, err := s.repo.GetAccount(ctx, characterID)
+	res, err := SpinSlotMachine(bet)
 	if err != nil {
 		return SpinResult{}, Account{}, err
 	}
-	if acc.Coins < bet {
-		return SpinResult{}, acc, ErrInsufficientCoins
-	}
 
-	res, err := SpinSlotMachine(bet)
+	// Atomically verify/deduct bet and credit payout
+	acc, err := s.repo.DeductBetAndCreditPayout(ctx, characterID, bet, res.PayoutCoins)
 	if err != nil {
-		return SpinResult{}, acc, err
-	}
-
-	// Net coin delta = payout - bet
-	coinDelta := res.NetCoins
-	acc, err = s.repo.AdjustCoins(ctx, characterID, coinDelta)
-	if err != nil {
-		return SpinResult{}, acc, err
+		return SpinResult{}, Account{}, err
 	}
 
 	return res, acc, nil
 }
 
-// PlayDoppel executes a Doppelganger mark-matching game, adjusts coins according to outcome, and returns the result and updated account.
+// PlayDoppel executes a Doppelganger mark-matching game, adjusts coins atomically according to outcome, and returns the result and updated account.
 func (s *Service) PlayDoppel(ctx context.Context, characterID string, bet int64, poolSize int, playerMark DoppelMark) (DoppelResult, Account, error) {
 	if characterID == "" {
 		return DoppelResult{}, Account{}, ErrInvalidCharacterID
@@ -187,24 +175,15 @@ func (s *Service) PlayDoppel(ctx context.Context, characterID string, bet int64,
 		return DoppelResult{}, Account{}, ErrInvalidDoppelBet
 	}
 
-	acc, err := s.repo.GetAccount(ctx, characterID)
+	res, err := PlayDoppelGame(bet, poolSize, playerMark)
 	if err != nil {
 		return DoppelResult{}, Account{}, err
 	}
-	if acc.Coins < bet {
-		return DoppelResult{}, acc, ErrInsufficientCoins
-	}
 
-	res, err := PlayDoppelGame(bet, poolSize, playerMark)
+	// Atomically verify/deduct bet and credit payout
+	acc, err := s.repo.DeductBetAndCreditPayout(ctx, characterID, bet, res.PayoutCoins)
 	if err != nil {
-		return DoppelResult{}, acc, err
-	}
-
-	// Net coin delta = payout - bet
-	coinDelta := res.NetCoins
-	acc, err = s.repo.AdjustCoins(ctx, characterID, coinDelta)
-	if err != nil {
-		return DoppelResult{}, acc, err
+		return DoppelResult{}, Account{}, err
 	}
 
 	return res, acc, nil

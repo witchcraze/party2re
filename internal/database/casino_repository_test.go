@@ -90,4 +90,27 @@ func TestCasinoRepositoryLifecycle(t *testing.T) {
 	if acc.Coins != 200 {
 		t.Errorf("coins = %d, want 200", acc.Coins)
 	}
+
+	// 9. DeductBetAndCreditPayout: bet 50, payout 100 -> net +50 (250 total)
+	acc, err = casinoRepo.DeductBetAndCreditPayout(ctx, char.ID, 50, 100)
+	if err != nil {
+		t.Fatalf("DeductBetAndCreditPayout failed: %v", err)
+	}
+	if acc.Coins != 250 {
+		t.Errorf("coins = %d, want 250", acc.Coins)
+	}
+
+	// 10. DeductBetAndCreditPayout: bet 300 (exceeds balance 250), payout 1000 -> must fail with ErrInsufficientCoins
+	if _, err := casinoRepo.DeductBetAndCreditPayout(ctx, char.ID, 300, 1000); !errors.Is(err, casino.ErrInsufficientCoins) {
+		t.Errorf("expected ErrInsufficientCoins, got %v", err)
+	}
+
+	// Balance should remain unchanged at 250
+	checkAcc, err := casinoRepo.GetAccount(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetAccount failed: %v", err)
+	}
+	if checkAcc.Coins != 250 {
+		t.Errorf("balance after failed bet = %d, want 250", checkAcc.Coins)
+	}
 }

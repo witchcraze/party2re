@@ -50,4 +50,5 @@ The High & Low mini-game is a classic card prediction game in the Casino Feature
 
 ## Persistence & Transactions
 
-- Single-round and cash-out operations adjust the character's casino account (`casino_accounts`) atomically using database row locks.
+- Single-round, multi-round, and cash-out operations verify wagers and adjust the character's casino account (`casino_accounts`) atomically via `DeductBetAndCreditPayout` using conditional updates (`coins >= bet`).
+- Prevents concurrency exploits across spammed game rounds.
