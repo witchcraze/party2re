@@ -4,7 +4,10 @@ party2-main/
 # Go build and test artifacts.
 /bin/
 /dist/
+/out/
 *.test
+*.prof
+*.out
 coverage.out
 coverage.txt
 
@@ -16,3 +19,14 @@ coverage.txt
 # Local runtime data.
 /data/
 /runtime/
+
+# Editor and IDE metadata.
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Operating System temporary files.
+.DS_Store
+Thumbs.db

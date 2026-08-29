@@ -9,11 +9,13 @@ import (
 )
 
 type mockFarmRepo struct {
-	getPlotsFn    func(ctx context.Context, charID string) ([]farm.FarmPlot, error)
-	getPlotFn     func(ctx context.Context, charID string, plotIdx int) (farm.FarmPlot, error)
-	savePlotFn    func(ctx context.Context, plot farm.FarmPlot) error
-	harvestPlotFn func(ctx context.Context, charID string, plotIdx int, rewardGold int) (farm.FarmPlot, error)
-	clearPlotFn   func(ctx context.Context, charID string, plotIdx int) (farm.FarmPlot, error)
+	getPlotsFn      func(ctx context.Context, charID string) ([]farm.FarmPlot, error)
+	getPlotFn       func(ctx context.Context, charID string, plotIdx int) (farm.FarmPlot, error)
+	plantSeedFn     func(ctx context.Context, charID string, plotIdx int, seedType farm.SeedType, seedDef farm.SeedDefinition, now time.Time) (farm.FarmPlot, error)
+	waterPlotFn     func(ctx context.Context, charID string, plotIdx int, now time.Time) (farm.FarmPlot, error)
+	fertilizePlotFn func(ctx context.Context, charID string, plotIdx int, now time.Time) (farm.FarmPlot, error)
+	harvestPlotFn   func(ctx context.Context, charID string, plotIdx int, rewardGold int, rewardItemID string, yield int, now time.Time) (farm.FarmPlot, error)
+	clearPlotFn     func(ctx context.Context, charID string, plotIdx int) (farm.FarmPlot, error)
 }
 
 func (m *mockFarmRepo) GetPlots(ctx context.Context, charID string) ([]farm.FarmPlot, error) {
@@ -22,29 +24,70 @@ func (m *mockFarmRepo) GetPlots(ctx context.Context, charID string) ([]farm.Farm
 	}
 	return nil, nil
 }
+
 func (m *mockFarmRepo) GetPlot(ctx context.Context, charID string, plotIdx int) (farm.FarmPlot, error) {
 	if m.getPlotFn != nil {
 		return m.getPlotFn(ctx, charID, plotIdx)
 	}
 	return farm.FarmPlot{}, farm.ErrPlotNotFound
 }
-func (m *mockFarmRepo) SavePlot(ctx context.Context, plot farm.FarmPlot) error {
-	if m.savePlotFn != nil {
-		return m.savePlotFn(ctx, plot)
+
+func (m *mockFarmRepo) PlantSeed(ctx context.Context, charID string, plotIdx int, seedType farm.SeedType, seedDef farm.SeedDefinition, now time.Time) (farm.FarmPlot, error) {
+	if m.plantSeedFn != nil {
+		return m.plantSeedFn(ctx, charID, plotIdx, seedType, seedDef, now)
 	}
-	return nil
+	matures := now.Add(seedDef.GrowthDuration)
+	wither := matures.Add(seedDef.GraceDuration)
+	return farm.FarmPlot{
+		CharacterID: charID,
+		PlotIndex:   plotIdx,
+		SeedType:    seedType,
+		Status:      farm.PlotStatusGrowing,
+		PlantedAt:   &now,
+		MaturesAt:   &matures,
+		WitherAt:    &wither,
+		Yield:       seedDef.BaseYield,
+	}, nil
 }
-func (m *mockFarmRepo) HarvestPlot(ctx context.Context, charID string, plotIdx int, rewardGold int) (farm.FarmPlot, error) {
+
+func (m *mockFarmRepo) WaterPlot(ctx context.Context, charID string, plotIdx int, now time.Time) (farm.FarmPlot, error) {
+	if m.waterPlotFn != nil {
+		return m.waterPlotFn(ctx, charID, plotIdx, now)
+	}
+	return farm.FarmPlot{
+		CharacterID: charID,
+		PlotIndex:   plotIdx,
+		Status:      farm.PlotStatusGrowing,
+		Watered:     true,
+		Yield:       3,
+	}, nil
+}
+
+func (m *mockFarmRepo) FertilizePlot(ctx context.Context, charID string, plotIdx int, now time.Time) (farm.FarmPlot, error) {
+	if m.fertilizePlotFn != nil {
+		return m.fertilizePlotFn(ctx, charID, plotIdx, now)
+	}
+	return farm.FarmPlot{
+		CharacterID: charID,
+		PlotIndex:   plotIdx,
+		Status:      farm.PlotStatusGrowing,
+		Fertilized:  true,
+		Yield:       2,
+	}, nil
+}
+
+func (m *mockFarmRepo) HarvestPlot(ctx context.Context, charID string, plotIdx int, rewardGold int, rewardItemID string, yield int, now time.Time) (farm.FarmPlot, error) {
 	if m.harvestPlotFn != nil {
-		return m.harvestPlotFn(ctx, charID, plotIdx, rewardGold)
+		return m.harvestPlotFn(ctx, charID, plotIdx, rewardGold, rewardItemID, yield, now)
 	}
-	return farm.FarmPlot{Status: farm.PlotStatusEmpty}, nil
+	return farm.FarmPlot{CharacterID: charID, PlotIndex: plotIdx, Status: farm.PlotStatusEmpty, Yield: 1}, nil
 }
+
 func (m *mockFarmRepo) ClearPlot(ctx context.Context, charID string, plotIdx int) (farm.FarmPlot, error) {
 	if m.clearPlotFn != nil {
 		return m.clearPlotFn(ctx, charID, plotIdx)
 	}
-	return farm.FarmPlot{Status: farm.PlotStatusEmpty}, nil
+	return farm.FarmPlot{CharacterID: charID, PlotIndex: plotIdx, Status: farm.PlotStatusEmpty, Yield: 1}, nil
 }
 
 func TestFarmPlot_ComputeCurrentStatus(t *testing.T) {
@@ -88,13 +131,50 @@ func TestFarmService_Lifecycle(t *testing.T) {
 			}
 			return p, nil
 		},
-		savePlotFn: func(_ context.Context, plot farm.FarmPlot) error {
-			plotsMap[plot.PlotIndex] = plot
-			return nil
+		plantSeedFn: func(_ context.Context, charID string, idx int, seedType farm.SeedType, seedDef farm.SeedDefinition, now time.Time) (farm.FarmPlot, error) {
+			matures := now.Add(seedDef.GrowthDuration)
+			wither := matures.Add(seedDef.GraceDuration)
+			p := farm.FarmPlot{
+				CharacterID: charID,
+				PlotIndex:   idx,
+				SeedType:    seedType,
+				Status:      farm.PlotStatusGrowing,
+				PlantedAt:   &now,
+				MaturesAt:   &matures,
+				WitherAt:    &wither,
+				Yield:       seedDef.BaseYield,
+			}
+			plotsMap[idx] = p
+			return p, nil
 		},
-		harvestPlotFn: func(_ context.Context, charID string, idx int, rewardGold int) (farm.FarmPlot, error) {
+		waterPlotFn: func(_ context.Context, charID string, idx int, now time.Time) (farm.FarmPlot, error) {
+			p, ok := plotsMap[idx]
+			if !ok {
+				return farm.FarmPlot{}, farm.ErrPlotNotFound
+			}
+			if p.Watered {
+				return farm.FarmPlot{}, farm.ErrAlreadyWatered
+			}
+			p.Watered = true
+			p.Yield += 1
+			plotsMap[idx] = p
+			return p, nil
+		},
+		fertilizePlotFn: func(_ context.Context, charID string, idx int, now time.Time) (farm.FarmPlot, error) {
+			p, ok := plotsMap[idx]
+			if !ok {
+				return farm.FarmPlot{}, farm.ErrPlotNotFound
+			}
+			if p.Fertilized {
+				return farm.FarmPlot{}, farm.ErrAlreadyFertilized
+			}
+			p.Fertilized = true
+			plotsMap[idx] = p
+			return p, nil
+		},
+		harvestPlotFn: func(_ context.Context, charID string, idx int, rewardGold int, rewardItemID string, yield int, now time.Time) (farm.FarmPlot, error) {
 			delete(plotsMap, idx)
-			return farm.FarmPlot{CharacterID: charID, PlotIndex: idx, Status: farm.PlotStatusEmpty}, nil
+			return farm.FarmPlot{CharacterID: charID, PlotIndex: idx, Status: farm.PlotStatusEmpty, Yield: 1}, nil
 		},
 	}
 
@@ -123,7 +203,7 @@ func TestFarmService_Lifecycle(t *testing.T) {
 		t.Errorf("expected ErrAlreadyWatered, got %v", err)
 	}
 
-	// 4. Fertilize plot (halves growth time)
+	// 4. Fertilize plot
 	fertilized, err := svc.FertilizePlot(ctx, "char1", 0)
 	if err != nil {
 		t.Fatalf("FertilizePlot failed: %v", err)
@@ -148,5 +228,36 @@ func TestFarmService_Lifecycle(t *testing.T) {
 	}
 	if res.Yield != 3 || res.RewardGold != 150 || harvested.Status != farm.PlotStatusEmpty {
 		t.Errorf("harvest result: yield=%d, gold=%d, status=%v", res.Yield, res.RewardGold, harvested.Status)
+	}
+}
+
+func TestFarmService_PreconditionValidations(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockFarmRepo{}
+	svc, _ := farm.NewService(repo)
+
+	// Invalid plot indices
+	if _, err := svc.PlantSeed(ctx, "char1", -1, farm.SeedHerb); err != farm.ErrInvalidPlotIndex {
+		t.Errorf("want ErrInvalidPlotIndex, got %v", err)
+	}
+	if _, err := svc.PlantSeed(ctx, "char1", 4, farm.SeedHerb); err != farm.ErrInvalidPlotIndex {
+		t.Errorf("want ErrInvalidPlotIndex, got %v", err)
+	}
+	if _, err := svc.WaterPlot(ctx, "char1", 4); err != farm.ErrInvalidPlotIndex {
+		t.Errorf("want ErrInvalidPlotIndex, got %v", err)
+	}
+	if _, err := svc.FertilizePlot(ctx, "char1", 4); err != farm.ErrInvalidPlotIndex {
+		t.Errorf("want ErrInvalidPlotIndex, got %v", err)
+	}
+	if _, _, err := svc.HarvestPlot(ctx, "char1", 4); err != farm.ErrInvalidPlotIndex {
+		t.Errorf("want ErrInvalidPlotIndex, got %v", err)
+	}
+	if _, err := svc.ClearPlot(ctx, "char1", 4); err != farm.ErrInvalidPlotIndex {
+		t.Errorf("want ErrInvalidPlotIndex, got %v", err)
+	}
+
+	// Invalid seed type
+	if _, err := svc.PlantSeed(ctx, "char1", 0, farm.SeedType("invalid_seed")); err != farm.ErrInvalidSeedType {
+		t.Errorf("want ErrInvalidSeedType, got %v", err)
 	}
 }

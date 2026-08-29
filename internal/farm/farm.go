@@ -3,7 +3,6 @@ package farm
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 )
 
@@ -79,16 +78,20 @@ var SeedCatalog = map[SeedType]SeedDefinition{
 	},
 }
 
+const FertilizerItemID = "item_fertilizer"
+
 var (
-	ErrInvalidPlotIndex  = errors.New("invalid plot index (0 to 3)")
-	ErrInvalidSeedType   = errors.New("invalid seed type")
-	ErrPlotNotEmpty      = errors.New("plot is not empty")
-	ErrPlotNotGrowing    = errors.New("plot has no growing crop")
-	ErrPlotNotMature     = errors.New("crop is not yet mature")
-	ErrPlotWithered      = errors.New("crop has withered")
-	ErrAlreadyWatered    = errors.New("crop is already watered")
-	ErrAlreadyFertilized = errors.New("crop is already fertilized")
-	ErrPlotNotFound      = errors.New("farm plot not found")
+	ErrInvalidPlotIndex       = errors.New("invalid plot index (0 to 3)")
+	ErrInvalidSeedType        = errors.New("invalid seed type")
+	ErrPlotNotEmpty           = errors.New("plot is not empty")
+	ErrPlotNotGrowing         = errors.New("plot has no growing crop")
+	ErrPlotNotMature          = errors.New("crop is not yet mature")
+	ErrPlotWithered           = errors.New("crop has withered")
+	ErrAlreadyWatered         = errors.New("crop is already watered")
+	ErrAlreadyFertilized      = errors.New("crop is already fertilized")
+	ErrPlotNotFound           = errors.New("farm plot not found")
+	ErrInsufficientSeed       = errors.New("insufficient seed in inventory")
+	ErrInsufficientFertilizer = errors.New("insufficient fertilizer in inventory")
 )
 
 type FarmPlot struct {
@@ -130,8 +133,10 @@ type HarvestResult struct {
 type Repository interface {
 	GetPlots(ctx context.Context, characterID string) ([]FarmPlot, error)
 	GetPlot(ctx context.Context, characterID string, plotIndex int) (FarmPlot, error)
-	SavePlot(ctx context.Context, plot FarmPlot) error
-	HarvestPlot(ctx context.Context, characterID string, plotIndex int, rewardGold int) (FarmPlot, error)
+	PlantSeed(ctx context.Context, characterID string, plotIndex int, seedType SeedType, seedDef SeedDefinition, now time.Time) (FarmPlot, error)
+	WaterPlot(ctx context.Context, characterID string, plotIndex int, now time.Time) (FarmPlot, error)
+	FertilizePlot(ctx context.Context, characterID string, plotIndex int, now time.Time) (FarmPlot, error)
+	HarvestPlot(ctx context.Context, characterID string, plotIndex int, rewardGold int, rewardItemID string, yield int, now time.Time) (FarmPlot, error)
 	ClearPlot(ctx context.Context, characterID string, plotIndex int) (FarmPlot, error)
 }
 
@@ -167,110 +172,33 @@ func (s *Service) PlantSeed(ctx context.Context, characterID string, plotIndex i
 		return FarmPlot{}, ErrInvalidSeedType
 	}
 
-	plot, err := s.repo.GetPlot(ctx, characterID, plotIndex)
-	if err != nil && !errors.Is(err, ErrPlotNotFound) {
-		return FarmPlot{}, err
-	}
-
 	now := time.Now().UTC()
-	if err == nil {
-		currentStatus := plot.ComputeCurrentStatus(now)
-		if currentStatus != PlotStatusEmpty {
-			return FarmPlot{}, ErrPlotNotEmpty
-		}
-	}
-
-	maturesAt := now.Add(seedDef.GrowthDuration)
-	witherAt := maturesAt.Add(seedDef.GraceDuration)
-
-	newPlot := FarmPlot{
-		CharacterID: characterID,
-		PlotIndex:   plotIndex,
-		SeedType:    seedType,
-		Status:      PlotStatusGrowing,
-		PlantedAt:   &now,
-		MaturesAt:   &maturesAt,
-		WitherAt:    &witherAt,
-		Watered:     false,
-		Fertilized:  false,
-		Yield:       seedDef.BaseYield,
-	}
-
-	if err := s.repo.SavePlot(ctx, newPlot); err != nil {
-		return FarmPlot{}, fmt.Errorf("failed saving farm plot: %w", err)
-	}
-	return newPlot, nil
+	return s.repo.PlantSeed(ctx, characterID, plotIndex, seedType, seedDef, now)
 }
 
 func (s *Service) WaterPlot(ctx context.Context, characterID string, plotIndex int) (FarmPlot, error) {
 	if plotIndex < 0 || plotIndex >= MaxPlotsPerCharacter {
 		return FarmPlot{}, ErrInvalidPlotIndex
 	}
-	plot, err := s.repo.GetPlot(ctx, characterID, plotIndex)
-	if err != nil {
-		return FarmPlot{}, err
-	}
 
 	now := time.Now().UTC()
-	status := plot.ComputeCurrentStatus(now)
-	if status != PlotStatusGrowing {
-		return FarmPlot{}, ErrPlotNotGrowing
-	}
-	if plot.Watered {
-		return FarmPlot{}, ErrAlreadyWatered
-	}
-
-	plot.Watered = true
-	plot.Yield += 1
-	plot.Status = PlotStatusGrowing
-
-	if err := s.repo.SavePlot(ctx, plot); err != nil {
-		return FarmPlot{}, err
-	}
-	return plot, nil
+	return s.repo.WaterPlot(ctx, characterID, plotIndex, now)
 }
 
 func (s *Service) FertilizePlot(ctx context.Context, characterID string, plotIndex int) (FarmPlot, error) {
 	if plotIndex < 0 || plotIndex >= MaxPlotsPerCharacter {
 		return FarmPlot{}, ErrInvalidPlotIndex
 	}
-	plot, err := s.repo.GetPlot(ctx, characterID, plotIndex)
-	if err != nil {
-		return FarmPlot{}, err
-	}
 
 	now := time.Now().UTC()
-	status := plot.ComputeCurrentStatus(now)
-	if status != PlotStatusGrowing {
-		return FarmPlot{}, ErrPlotNotGrowing
-	}
-	if plot.Fertilized {
-		return FarmPlot{}, ErrAlreadyFertilized
-	}
-
-	plot.Fertilized = true
-	// Halve the remaining growth duration
-	if plot.MaturesAt != nil && plot.PlantedAt != nil {
-		originalDuration := plot.MaturesAt.Sub(*plot.PlantedAt)
-		halvedMaturesAt := plot.PlantedAt.Add(originalDuration / 2)
-		plot.MaturesAt = &halvedMaturesAt
-		if plot.WitherAt != nil {
-			halvedWitherAt := halvedMaturesAt.Add(DefaultGraceDuration)
-			plot.WitherAt = &halvedWitherAt
-		}
-	}
-	plot.Status = plot.ComputeCurrentStatus(now)
-
-	if err := s.repo.SavePlot(ctx, plot); err != nil {
-		return FarmPlot{}, err
-	}
-	return plot, nil
+	return s.repo.FertilizePlot(ctx, characterID, plotIndex, now)
 }
 
 func (s *Service) HarvestPlot(ctx context.Context, characterID string, plotIndex int) (HarvestResult, FarmPlot, error) {
 	if plotIndex < 0 || plotIndex >= MaxPlotsPerCharacter {
 		return HarvestResult{}, FarmPlot{}, ErrInvalidPlotIndex
 	}
+
 	plot, err := s.repo.GetPlot(ctx, characterID, plotIndex)
 	if err != nil {
 		return HarvestResult{}, FarmPlot{}, err
@@ -285,7 +213,11 @@ func (s *Service) HarvestPlot(ctx context.Context, characterID string, plotIndex
 		return HarvestResult{}, plot, ErrPlotNotMature
 	}
 
-	seedDef := SeedCatalog[plot.SeedType]
+	seedDef, exists := SeedCatalog[plot.SeedType]
+	if !exists {
+		return HarvestResult{}, FarmPlot{}, ErrInvalidSeedType
+	}
+
 	totalRewardGold := seedDef.RewardGold * plot.Yield
 	harvestRes := HarvestResult{
 		PlotIndex:    plotIndex,
@@ -295,7 +227,7 @@ func (s *Service) HarvestPlot(ctx context.Context, characterID string, plotIndex
 		RewardGold:   totalRewardGold,
 	}
 
-	clearedPlot, err := s.repo.HarvestPlot(ctx, characterID, plotIndex, totalRewardGold)
+	clearedPlot, err := s.repo.HarvestPlot(ctx, characterID, plotIndex, totalRewardGold, seedDef.RewardItemID, plot.Yield, now)
 	if err != nil {
 		return HarvestResult{}, FarmPlot{}, err
 	}
