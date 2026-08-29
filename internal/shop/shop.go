@@ -3,10 +3,15 @@ package shop
 import (
 	"context"
 	"errors"
+	"math"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
+)
+
+const (
+	MaxTransactionQuantity = 9999
 )
 
 var (
@@ -15,6 +20,7 @@ var (
 	ErrItemNotFound      = errors.New("item not found in catalog")
 	ErrUnownedItem       = errors.New("item is not owned in inventory")
 	ErrInvalidQuantity   = errors.New("invalid transaction quantity")
+	ErrPriceOverflow     = errors.New("price calculation overflow")
 )
 
 type CharacterRepository interface {
@@ -82,8 +88,18 @@ func (s *Service) CalculateSellPrice(basePrice int) int {
 	return basePrice / 2
 }
 
+func safeMultiply(a, b int) (int, error) {
+	if a <= 0 || b <= 0 {
+		return 0, nil
+	}
+	if a > math.MaxInt/b {
+		return 0, ErrPriceOverflow
+	}
+	return a * b, nil
+}
+
 func (s *Service) Purchase(ctx context.Context, characterID string, itemDefinitionID string, quantity int) (PurchaseResult, error) {
-	if quantity <= 0 {
+	if quantity <= 0 || quantity > MaxTransactionQuantity {
 		return PurchaseResult{}, ErrInvalidQuantity
 	}
 	if characterID == "" {
@@ -100,7 +116,10 @@ func (s *Service) Purchase(ctx context.Context, characterID string, itemDefiniti
 		return PurchaseResult{}, err
 	}
 
-	totalPrice := definition.Price * quantity
+	totalPrice, err := safeMultiply(definition.Price, quantity)
+	if err != nil {
+		return PurchaseResult{}, err
+	}
 	if char.Money < totalPrice {
 		return PurchaseResult{}, ErrInsufficientFunds
 	}
@@ -134,7 +153,7 @@ func (s *Service) Purchase(ctx context.Context, characterID string, itemDefiniti
 }
 
 func (s *Service) Sell(ctx context.Context, characterID string, itemInstanceID string, quantity int) (SaleResult, error) {
-	if quantity <= 0 {
+	if quantity <= 0 || quantity > MaxTransactionQuantity {
 		return SaleResult{}, ErrInvalidQuantity
 	}
 	if characterID == "" {
@@ -165,12 +184,18 @@ func (s *Service) Sell(ctx context.Context, characterID string, itemInstanceID s
 	}
 
 	sellUnitPrice := s.CalculateSellPrice(definition.Price)
-	totalPayout := sellUnitPrice * quantity
+	totalPayout, err := safeMultiply(sellUnitPrice, quantity)
+	if err != nil {
+		return SaleResult{}, err
+	}
 
 	if err := inv.Consume(itemInstanceID, quantity); err != nil {
 		return SaleResult{}, err
 	}
 
+	if math.MaxInt-char.Money < totalPayout {
+		return SaleResult{}, ErrPriceOverflow
+	}
 	char.Money += totalPayout
 
 	if err := s.commit(ctx, char, inv); err != nil {

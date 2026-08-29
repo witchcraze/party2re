@@ -363,3 +363,104 @@ func TestShopNewServiceNilDependencies(t *testing.T) {
 		t.Error("NewService(char, inv, nil) expected error, got nil")
 	}
 }
+
+func TestPurchase_QuantityBounds(t *testing.T) {
+	service, charRepo, _, _ := newTestSetup(t)
+	char := createTestCharacter(t, charRepo, "Hero", 10_000_000)
+
+	// MaxTransactionQuantity is 9999
+	// 1. Exactly MaxTransactionQuantity -> succeeds (herb is 30 gold each)
+	res, err := service.Purchase(context.Background(), char.ID, "herb", shop.MaxTransactionQuantity)
+	if err != nil {
+		t.Fatalf("Purchase(MaxTransactionQuantity) failed: %v", err)
+	}
+	if res.TotalPrice != 30*shop.MaxTransactionQuantity {
+		t.Errorf("TotalPrice = %d, want %d", res.TotalPrice, 30*shop.MaxTransactionQuantity)
+	}
+
+	// 2. MaxTransactionQuantity + 1 -> fails with ErrInvalidQuantity
+	_, err = service.Purchase(context.Background(), char.ID, "herb", shop.MaxTransactionQuantity+1)
+	if !errors.Is(err, shop.ErrInvalidQuantity) {
+		t.Errorf("Purchase(MaxTransactionQuantity + 1) error = %v, want %v", err, shop.ErrInvalidQuantity)
+	}
+
+	// 3. Negative & Zero -> fails with ErrInvalidQuantity
+	for _, q := range []int{0, -1, -999} {
+		_, err := service.Purchase(context.Background(), char.ID, "herb", q)
+		if !errors.Is(err, shop.ErrInvalidQuantity) {
+			t.Errorf("Purchase(%d) error = %v, want %v", q, err, shop.ErrInvalidQuantity)
+		}
+	}
+}
+
+func TestPurchase_IntegerOverflowProtection(t *testing.T) {
+	charRepo := newCharacterRepoStub()
+	invRepo := newInventoryRepoStub()
+	char := createTestCharacter(t, charRepo, "Hero", 100)
+
+	// Extreme price * quantity resulting in overflow
+	// e.g. price > math.MaxInt / quantity
+	hugeItem, err := item.NewDefinition("huge_item", "Huge Item", 5_000_000_000_000_000_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, _ := item.NewCatalog([]item.Definition{hugeItem})
+	service, _ := shop.NewService(charRepo, invRepo, catalog)
+
+	_, err = service.Purchase(context.Background(), char.ID, "huge_item", 2)
+	if !errors.Is(err, shop.ErrPriceOverflow) {
+		t.Errorf("Purchase with overflowing price returned %v, want %v", err, shop.ErrPriceOverflow)
+	}
+}
+
+func TestSell_QuantityBounds(t *testing.T) {
+	service, charRepo, invRepo, _ := newTestSetup(t)
+	char := createTestCharacter(t, charRepo, "Hero", 100)
+
+	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
+	herbInst, err := item.NewInstance("herb", shop.MaxTransactionQuantity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = inv.Add(herbInst)
+	_ = invRepo.Save(context.Background(), inv)
+
+	// MaxTransactionQuantity + 1 -> fails with ErrInvalidQuantity
+	_, err = service.Sell(context.Background(), char.ID, herbInst.ID, shop.MaxTransactionQuantity+1)
+	if !errors.Is(err, shop.ErrInvalidQuantity) {
+		t.Errorf("Sell(MaxTransactionQuantity + 1) error = %v, want %v", err, shop.ErrInvalidQuantity)
+	}
+
+	// Valid MaxTransactionQuantity -> succeeds
+	res, err := service.Sell(context.Background(), char.ID, herbInst.ID, shop.MaxTransactionQuantity)
+	if err != nil {
+		t.Fatalf("Sell(MaxTransactionQuantity) error = %v", err)
+	}
+	if res.TotalPayout != 15*shop.MaxTransactionQuantity {
+		t.Errorf("TotalPayout = %d, want %d", res.TotalPayout, 15*shop.MaxTransactionQuantity)
+	}
+}
+
+func TestSell_IntegerOverflowProtection(t *testing.T) {
+	// Item with base price 6_000_000_000_000_000_000 -> sell price = 3_000_000_000_000_000_000
+	// 3_000_000_000_000_000_000 * 4 overflows int64
+	hugeItem, err := item.NewDefinition("huge_gem", "Huge Gem", 6_000_000_000_000_000_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, _ := item.NewCatalog([]item.Definition{hugeItem})
+	charRepo := newCharacterRepoStub()
+	invRepo := newInventoryRepoStub()
+	service, _ := shop.NewService(charRepo, invRepo, catalog)
+
+	char := createTestCharacter(t, charRepo, "Hero", 100)
+	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
+	gemInst, _ := item.NewInstance("huge_gem", 10)
+	_ = inv.Add(gemInst)
+	_ = invRepo.Save(context.Background(), inv)
+
+	_, err = service.Sell(context.Background(), char.ID, gemInst.ID, 4)
+	if !errors.Is(err, shop.ErrPriceOverflow) {
+		t.Errorf("Sell with overflowing payout returned %v, want %v", err, shop.ErrPriceOverflow)
+	}
+}
