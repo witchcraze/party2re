@@ -131,10 +131,89 @@ func TestHomeRepository_Database(t *testing.T) {
 			t.Errorf("expected 0 unread letters, got %d", count)
 		}
 
-		// Delete letter
+		// Delete letter by recipient -> outbox for sender still has it
 		err = repo.DeleteLetter(ctx, l.ID, char2.ID)
 		if err != nil {
-			t.Fatalf("DeleteLetter failed: %v", err)
+			t.Fatalf("DeleteLetter by recipient failed: %v", err)
+		}
+
+		inbox, total, err = repo.ListInboxLetters(ctx, char2.ID, 10, 0)
+		if err != nil || total != 0 || len(inbox) != 0 {
+			t.Errorf("expected 0 inbox letters after recipient deletion, got total=%d, len=%d", total, len(inbox))
+		}
+
+		outbox, total, err = repo.ListOutboxLetters(ctx, char1.ID, 10, 0)
+		if err != nil || total != 1 || len(outbox) != 1 {
+			t.Errorf("expected 1 outbox letter retained for sender, got total=%d, len=%d", total, len(outbox))
+		}
+
+		// Delete letter by sender -> outbox for sender now empty (both deleted -> purged)
+		err = repo.DeleteLetter(ctx, l.ID, char1.ID)
+		if err != nil {
+			t.Fatalf("DeleteLetter by sender failed: %v", err)
+		}
+
+		outbox, total, err = repo.ListOutboxLetters(ctx, char1.ID, 10, 0)
+		if err != nil || total != 0 || len(outbox) != 0 {
+			t.Errorf("expected 0 outbox letters after both deleted, got total=%d, len=%d", total, len(outbox))
+		}
+
+		// Letter is now fully purged
+		_, err = repo.GetLetterByID(ctx, l.ID)
+		if !errors.Is(err, home.ErrLetterNotFound) {
+			t.Errorf("expected ErrLetterNotFound after both deleted, got %v", err)
+		}
+
+		// Sender deletes first scenario
+		letterID2 := fmt.Sprintf("letter2_%d", time.Now().UnixNano())
+		if len(letterID2) > 32 {
+			letterID2 = letterID2[:32]
+		}
+		l2 := home.Letter{
+			ID:                   letterID2,
+			SenderCharacterID:    char1.ID,
+			SenderName:           char1.Name,
+			RecipientCharacterID: char2.ID,
+			RecipientName:        char2.Name,
+			Content:              "Sender deletes first test",
+			Color:                "#00ff00",
+			IsRead:               false,
+			CreatedAt:            now,
+		}
+		if err := repo.CreateLetter(ctx, l2); err != nil {
+			t.Fatalf("CreateLetter 2 failed: %v", err)
+		}
+
+		// Sender deletes
+		if err := repo.DeleteLetter(ctx, l2.ID, char1.ID); err != nil {
+			t.Fatalf("DeleteLetter by sender failed: %v", err)
+		}
+
+		// Outbox is 0 for sender
+		outbox, total, err = repo.ListOutboxLetters(ctx, char1.ID, 10, 0)
+		if err != nil || total != 0 {
+			t.Errorf("expected 0 outbox letters, got total=%d", total)
+		}
+
+		// Recipient still has unread count 1 and can view inbox
+		count, err = repo.GetUnreadLetterCount(ctx, char2.ID)
+		if err != nil || count != 1 {
+			t.Errorf("expected 1 unread letter for recipient, got %d", count)
+		}
+
+		inbox, total, err = repo.ListInboxLetters(ctx, char2.ID, 10, 0)
+		if err != nil || total != 1 {
+			t.Errorf("expected 1 inbox letter for recipient, got total=%d", total)
+		}
+
+		// Recipient deletes
+		if err := repo.DeleteLetter(ctx, l2.ID, char2.ID); err != nil {
+			t.Fatalf("DeleteLetter by recipient failed: %v", err)
+		}
+
+		inbox, total, err = repo.ListInboxLetters(ctx, char2.ID, 10, 0)
+		if err != nil || total != 0 {
+			t.Errorf("expected 0 inbox letters for recipient, got total=%d", total)
 		}
 	})
 

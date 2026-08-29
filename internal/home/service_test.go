@@ -86,7 +86,7 @@ func (m *mockHomeRepo) GetLetterByID(ctx context.Context, id string) (Letter, er
 func (m *mockHomeRepo) ListInboxLetters(ctx context.Context, recipientID string, limit, offset int) ([]Letter, int, error) {
 	var list []Letter
 	for _, l := range m.letters {
-		if l.RecipientCharacterID == recipientID {
+		if l.RecipientCharacterID == recipientID && !l.IsDeletedByRecipient {
 			list = append(list, l)
 		}
 	}
@@ -96,7 +96,7 @@ func (m *mockHomeRepo) ListInboxLetters(ctx context.Context, recipientID string,
 func (m *mockHomeRepo) ListOutboxLetters(ctx context.Context, senderID string, limit, offset int) ([]Letter, int, error) {
 	var list []Letter
 	for _, l := range m.letters {
-		if l.SenderCharacterID == senderID {
+		if l.SenderCharacterID == senderID && !l.IsDeletedBySender {
 			list = append(list, l)
 		}
 	}
@@ -106,7 +106,7 @@ func (m *mockHomeRepo) ListOutboxLetters(ctx context.Context, senderID string, l
 func (m *mockHomeRepo) GetUnreadLetterCount(ctx context.Context, recipientID string) (int, error) {
 	var count int
 	for _, l := range m.letters {
-		if l.RecipientCharacterID == recipientID && !l.IsRead {
+		if l.RecipientCharacterID == recipientID && !l.IsRead && !l.IsDeletedByRecipient {
 			count++
 		}
 	}
@@ -115,7 +115,7 @@ func (m *mockHomeRepo) GetUnreadLetterCount(ctx context.Context, recipientID str
 
 func (m *mockHomeRepo) MarkLetterAsRead(ctx context.Context, id, recipientID string, readAt time.Time) error {
 	l, ok := m.letters[id]
-	if !ok {
+	if !ok || l.IsDeletedByRecipient {
 		return ErrLetterNotFound
 	}
 	if l.RecipientCharacterID != recipientID {
@@ -135,7 +135,25 @@ func (m *mockHomeRepo) DeleteLetter(ctx context.Context, id, characterID string)
 	if l.RecipientCharacterID != characterID && l.SenderCharacterID != characterID {
 		return ErrForbidden
 	}
-	delete(m.letters, id)
+
+	if l.SenderCharacterID == characterID {
+		if l.IsDeletedBySender && !l.IsDeletedByRecipient {
+			return ErrLetterNotFound
+		}
+		l.IsDeletedBySender = true
+	}
+	if l.RecipientCharacterID == characterID {
+		if l.IsDeletedByRecipient && !l.IsDeletedBySender {
+			return ErrLetterNotFound
+		}
+		l.IsDeletedByRecipient = true
+	}
+
+	if l.IsDeletedBySender && l.IsDeletedByRecipient {
+		delete(m.letters, id)
+	} else {
+		m.letters[id] = l
+	}
 	return nil
 }
 
@@ -309,10 +327,78 @@ func TestHomeService(t *testing.T) {
 			t.Errorf("expected ErrForbidden, got %v", err)
 		}
 
-		// Delete letter
+		// Delete letter by recipient -> recipient inbox is empty, but sender outbox still has it
 		err = service.DeleteLetter(ctx, letter.ID, "char-2")
 		if err != nil {
 			t.Fatalf("DeleteLetter failed: %v", err)
+		}
+
+		inbox, err := service.ListInbox(ctx, "char-2", 10, 0)
+		if err != nil || inbox.Total != 0 || len(inbox.Letters) != 0 {
+			t.Errorf("expected empty inbox after recipient deletion, got total=%d, len=%d", inbox.Total, len(inbox.Letters))
+		}
+
+		outbox, err := service.ListOutbox(ctx, "char-1", 10, 0)
+		if err != nil || outbox.Total != 1 || len(outbox.Letters) != 1 {
+			t.Errorf("expected sender outbox still retained, got total=%d, len=%d", outbox.Total, len(outbox.Letters))
+		}
+
+		// Delete letter by sender -> sender outbox now empty as well
+		err = service.DeleteLetter(ctx, letter.ID, "char-1")
+		if err != nil {
+			t.Fatalf("DeleteLetter by sender failed: %v", err)
+		}
+
+		outbox, err = service.ListOutbox(ctx, "char-1", 10, 0)
+		if err != nil || outbox.Total != 0 || len(outbox.Letters) != 0 {
+			t.Errorf("expected empty outbox after sender deletion, got total=%d, len=%d", outbox.Total, len(outbox.Letters))
+		}
+	})
+
+	t.Run("sender deletes letter first without affecting recipient inbox", func(t *testing.T) {
+		letter, err := service.SendLetter(ctx, "char-1", "char-2", "Secret mission!", "#ff5500")
+		if err != nil {
+			t.Fatalf("SendLetter failed: %v", err)
+		}
+
+		// Sender deletes letter from outbox immediately
+		err = service.DeleteLetter(ctx, letter.ID, "char-1")
+		if err != nil {
+			t.Fatalf("DeleteLetter by sender failed: %v", err)
+		}
+
+		// Sender outbox should be 0
+		outbox, err := service.ListOutbox(ctx, "char-1", 10, 0)
+		if err != nil || outbox.Total != 0 {
+			t.Errorf("expected 0 letters in sender outbox, got total=%d", outbox.Total)
+		}
+
+		// Recipient still has unread letter count 1 and can read inbox
+		count, err := service.GetUnreadLetterCount(ctx, "char-2")
+		if err != nil || count != 1 {
+			t.Errorf("expected 1 unread letter for recipient, got count=%d, err=%v", count, err)
+		}
+
+		inbox, err := service.ListInbox(ctx, "char-2", 10, 0)
+		if err != nil || inbox.Total != 1 || len(inbox.Letters) != 1 {
+			t.Fatalf("expected 1 letter in recipient inbox, got total=%d", inbox.Total)
+		}
+
+		// Recipient marks as read
+		err = service.ReadLetter(ctx, letter.ID, "char-2")
+		if err != nil {
+			t.Fatalf("ReadLetter failed: %v", err)
+		}
+
+		// Recipient deletes letter
+		err = service.DeleteLetter(ctx, letter.ID, "char-2")
+		if err != nil {
+			t.Fatalf("DeleteLetter by recipient failed: %v", err)
+		}
+
+		inbox, err = service.ListInbox(ctx, "char-2", 10, 0)
+		if err != nil || inbox.Total != 0 {
+			t.Errorf("expected 0 letters in recipient inbox, got total=%d", inbox.Total)
 		}
 	})
 

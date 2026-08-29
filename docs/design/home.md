@@ -35,7 +35,8 @@ Asynchronous direct messaging between characters:
   - `unread_count`: Real-time query for unread received letters.
 - **Authorization & Retention**:
   - Only the recipient may mark a letter as read.
-  - Either the sender or recipient may delete a letter from their view.
+  - **Independent Deletion Semantics**: The sender and recipient maintain independent deletion flags (`is_deleted_by_sender` and `is_deleted_by_recipient`). Deletion of a letter by one party (e.g., sender deleting sent history or recipient clearing inbox) does not remove the letter from the other party's view or alter the recipient's unread counter.
+  - **Physical Purge Lifecycle**: When both the sender and recipient have deleted the letter, the database record is physically removed.
 
 ### 3. Companion Greeting Phrases (`character_companion_phrases`)
 
@@ -73,14 +74,14 @@ Persistent ledger for incoming transfer events:
 | `GET` | `/letters/outbox` | Sender Session | List sent letters (`?character_id=...&limit=...&offset=...`) |
 | `GET` | `/letters/unread-count` | Recipient Session | Get unread letter count for character |
 | `POST` | `/letters/{id}/read` | Recipient Session | Mark a letter as read |
-| `DELETE` | `/letters/{id}` | Owner Session | Delete a letter |
+| `DELETE` | `/letters/{id}` | Sender or Recipient Session | Delete a letter from sender's outbox or recipient's inbox |
 
 ---
 
 ## Persistence
 
-Data is persisted in MariaDB via `migrations/034_player_home_and_mailbox.sql`:
+Data is persisted in MariaDB via `migrations/034_player_home_and_mailbox.sql` and `migrations/036_player_mailbox_independent_deletion.sql`:
 - `character_homes`: (character_id PRIMARY KEY, theme, motto, companion_name, visitor_count, last_visited_at, updated_at)
-- `character_letters`: (id PRIMARY KEY, sender_character_id, sender_name, recipient_character_id, recipient_name, content, color, is_read, read_at, created_at)
+- `character_letters`: (id PRIMARY KEY, sender_character_id, sender_name, recipient_character_id, recipient_name, content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at)
 - `character_companion_phrases`: (id PRIMARY KEY, character_id, phrase, created_at)
 - `character_delivery_notices`: (id PRIMARY KEY, character_id, notice_type, message, is_cleared, created_at)

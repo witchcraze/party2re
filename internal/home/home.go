@@ -57,6 +57,8 @@ type Letter struct {
 	Color                string     `json:"color"`
 	IsRead               bool       `json:"is_read"`
 	ReadAt               *time.Time `json:"read_at,omitempty"`
+	IsDeletedBySender    bool       `json:"is_deleted_by_sender"`
+	IsDeletedByRecipient bool       `json:"is_deleted_by_recipient"`
 	CreatedAt            time.Time  `json:"created_at"`
 }
 
