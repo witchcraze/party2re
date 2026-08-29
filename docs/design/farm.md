@@ -36,6 +36,7 @@ The Farm and Plantation Feature Module (`internal/farm`) allows player character
    - Increases harvest yield by $+1$.
    - Allowed once per growth cycle.
 2. **Fertilizing (`FertilizePlot`)**:
+   - Consumes 1 `item_fertilizer` atomically from the character's inventory.
    - Halves the total remaining growth duration ($T_{\text{matures}} = T_{\text{planted}} + \frac{\text{Duration}}{2}$).
    - Allowed once per growth cycle.
 
@@ -45,7 +46,7 @@ The Farm and Plantation Feature Module (`internal/farm`) allows player character
 
 - **Harvesting**:
   - Only allowed when the crop is in `MATURE` state.
-  - Awards total yield ($\text{Yield} \times \text{RewardGold}$) and associated items.
+  - Awards total yield ($\text{Yield} \times \text{RewardGold}$) to character gold and grants $\text{Yield}$ copies of `RewardItemID` into inventory.
   - Resets the plot back to `EMPTY`.
 - **Clearing**:
   - Resets a `WITHERED` or abandoned plot back to `EMPTY`.
@@ -54,5 +55,6 @@ The Farm and Plantation Feature Module (`internal/farm`) allows player character
 
 ## Persistence & Transactions
 
-- Farm plot states and character rewards are managed atomically in MariaDB (`farm_plots`).
+- Farm plot states, inventory item consumption (`seed_*`, `item_fertilizer`), harvest items, and gold rewards are managed atomically in MariaDB within explicit database transactions (Unit of Work with `FOR UPDATE` locking).
 - `UNIQUE (character_id, plot_index)` constraint ensures plot consistency per character.
+- Any precondition failure during planting, watering, fertilizing, or harvesting automatically rolls back the transaction, guaranteeing zero item loss.
