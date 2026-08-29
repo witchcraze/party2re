@@ -134,6 +134,9 @@ State-mutating feature modules (such as `shop`, `blacksmith`, `alchemy`, `bank`,
 3. **Application Orchestrator Pattern**:
    - Cross-module operations (such as purchasing an auction listing involving Buyer character wallet, Seller bank account, and Inventory transfer) should be orchestrated at the application layer inside a single `RunInTx` boundary.
    - No feature repository calls `BeginTx` directly; all repositories delegate to `RunInTx` and `ExecutorFromContext`.
+4. **High-Concurrency Stress Testing & Deadlock Verification**:
+   - Automated concurrency benchmarks (`internal/database/concurrency_stress_test.go`, `make test-stress`, `scripts/stress_test.sh`) simulate 50–100 concurrent workers hammering MariaDB with high contention.
+   - Verifies zero deadlocks (MariaDB Error 1213 / 1205), conservation of money/inventory invariants, deterministic auction buyout/bid resolution, and exact atomicity across mixed multi-domain chaos workflows.
 
 ## Related documents
 
