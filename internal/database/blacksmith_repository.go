@@ -21,36 +21,25 @@ func NewBlacksmithRepository(db *sql.DB) (*BlacksmithRepository, error) {
 }
 
 func (r *BlacksmithRepository) CommitEnhancement(ctx context.Context, character corecharacter.Character, inventory coreinventory.Inventory) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
+	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
 
-	if err := updateCharacterAtomically(ctx, tx, character); err != nil {
-		return err
-	}
-
-	if _, err := tx.ExecContext(ctx, "DELETE FROM inventory_items WHERE character_id = ?", inventory.CharacterID); err != nil {
-		return err
-	}
-	for _, instance := range inventory.Items {
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO inventory_items (id, character_id, definition_id, quantity, enhancement_level)
-			VALUES (?, ?, ?, ?, ?)
-		`, instance.ID, inventory.CharacterID, instance.DefinitionID, instance.Quantity, instance.EnhancementLevel); err != nil {
+		if err := updateCharacterAtomically(txCtx, executor, character); err != nil {
 			return err
 		}
-	}
 
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	committed = true
-	return nil
+		if _, err := executor.ExecContext(txCtx, "DELETE FROM inventory_items WHERE character_id = ?", inventory.CharacterID); err != nil {
+			return err
+		}
+		for _, instance := range inventory.Items {
+			if _, err := executor.ExecContext(txCtx, `
+				INSERT INTO inventory_items (id, character_id, definition_id, quantity, enhancement_level)
+				VALUES (?, ?, ?, ?, ?)
+			`, instance.ID, inventory.CharacterID, instance.DefinitionID, instance.Quantity, instance.EnhancementLevel); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }

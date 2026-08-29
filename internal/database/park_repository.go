@@ -21,7 +21,7 @@ func NewParkRepository(db *sql.DB) (*ParkRepository, error) {
 }
 
 func (r *ParkRepository) CreatePost(ctx context.Context, post park.Post) error {
-	_, err := r.db.ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO park_posts (
 			id, character_id, character_name, content, color, recipient_name, created_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -31,12 +31,13 @@ func (r *ParkRepository) CreatePost(ctx context.Context, post park.Post) error {
 
 func (r *ParkRepository) GetRecentPosts(ctx context.Context, limit int, offset int) ([]park.Post, int, error) {
 	var total int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM park_posts`).Scan(&total)
+	executor := ExecutorFromContext(ctx, r.db)
+	err := executor.QueryRowContext(ctx, `SELECT COUNT(*) FROM park_posts`).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := executor.QueryContext(ctx, `
 		SELECT id, character_id, character_name, content, color, recipient_name, created_at
 		FROM park_posts
 		ORDER BY created_at DESC
@@ -72,7 +73,7 @@ func (r *ParkRepository) GetRecentPosts(ctx context.Context, limit int, offset i
 
 func (r *ParkRepository) GetLatestPostTimeByCharacter(ctx context.Context, characterID string) (time.Time, error) {
 	var createdAt time.Time
-	err := r.db.QueryRowContext(ctx, `
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
 		SELECT created_at
 		FROM park_posts
 		WHERE character_id = ?

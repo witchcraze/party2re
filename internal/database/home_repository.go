@@ -25,7 +25,7 @@ func (r *HomeRepository) GetHome(ctx context.Context, characterID string) (home.
 	var h home.CharacterHome
 	var lastVisited sql.NullTime
 
-	err := r.db.QueryRowContext(ctx, `
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
 		SELECT character_id, theme, motto, companion_name, visitor_count, last_visited_at, updated_at
 		FROM character_homes
 		WHERE character_id = ?
@@ -61,7 +61,7 @@ func (r *HomeRepository) SaveHome(ctx context.Context, h home.CharacterHome) err
 		lastVisited = sql.NullTime{Time: h.LastVisitedAt.UTC(), Valid: true}
 	}
 
-	_, err := r.db.ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO character_homes (
 			character_id, theme, motto, companion_name, visitor_count, last_visited_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -78,7 +78,7 @@ func (r *HomeRepository) SaveHome(ctx context.Context, h home.CharacterHome) err
 
 // IncrementVisitorCount increments visitor count and updates last_visited_at.
 func (r *HomeRepository) IncrementVisitorCount(ctx context.Context, characterID string, visitedAt time.Time) error {
-	_, err := r.db.ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO character_homes (
 			character_id, theme, motto, companion_name, visitor_count, last_visited_at, updated_at
 		) VALUES (?, ?, '', ?, 1, ?, ?)
@@ -97,7 +97,7 @@ func (r *HomeRepository) CreateLetter(ctx context.Context, letter home.Letter) e
 		readAt = sql.NullTime{Time: letter.ReadAt.UTC(), Valid: true}
 	}
 
-	_, err := r.db.ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO character_letters (
 			id, sender_character_id, sender_name, recipient_character_id, recipient_name,
 			content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
@@ -112,7 +112,7 @@ func (r *HomeRepository) GetLetterByID(ctx context.Context, id string) (home.Let
 	var l home.Letter
 	var readAt sql.NullTime
 
-	err := r.db.QueryRowContext(ctx, `
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
 		SELECT id, sender_character_id, sender_name, recipient_character_id, recipient_name,
 		       content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
 		FROM character_letters
@@ -137,7 +137,8 @@ func (r *HomeRepository) GetLetterByID(ctx context.Context, id string) (home.Let
 // ListInboxLetters retrieves letters received by a character that have not been deleted by the recipient.
 func (r *HomeRepository) ListInboxLetters(ctx context.Context, recipientID string, limit, offset int) ([]home.Letter, int, error) {
 	var total int
-	err := r.db.QueryRowContext(ctx, `
+	executor := ExecutorFromContext(ctx, r.db)
+	err := executor.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM character_letters
 		WHERE recipient_character_id = ? AND is_deleted_by_recipient = FALSE
@@ -146,7 +147,7 @@ func (r *HomeRepository) ListInboxLetters(ctx context.Context, recipientID strin
 		return nil, 0, err
 	}
 
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := executor.QueryContext(ctx, `
 		SELECT id, sender_character_id, sender_name, recipient_character_id, recipient_name,
 		       content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
 		FROM character_letters
@@ -183,7 +184,8 @@ func (r *HomeRepository) ListInboxLetters(ctx context.Context, recipientID strin
 // ListOutboxLetters retrieves letters sent by a character that have not been deleted by the sender.
 func (r *HomeRepository) ListOutboxLetters(ctx context.Context, senderID string, limit, offset int) ([]home.Letter, int, error) {
 	var total int
-	err := r.db.QueryRowContext(ctx, `
+	executor := ExecutorFromContext(ctx, r.db)
+	err := executor.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM character_letters
 		WHERE sender_character_id = ? AND is_deleted_by_sender = FALSE
@@ -192,7 +194,7 @@ func (r *HomeRepository) ListOutboxLetters(ctx context.Context, senderID string,
 		return nil, 0, err
 	}
 
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := executor.QueryContext(ctx, `
 		SELECT id, sender_character_id, sender_name, recipient_character_id, recipient_name,
 		       content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
 		FROM character_letters
@@ -229,7 +231,7 @@ func (r *HomeRepository) ListOutboxLetters(ctx context.Context, senderID string,
 // GetUnreadLetterCount returns count of active unread letters for a recipient.
 func (r *HomeRepository) GetUnreadLetterCount(ctx context.Context, recipientID string) (int, error) {
 	var count int
-	err := r.db.QueryRowContext(ctx, `
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM character_letters
 		WHERE recipient_character_id = ? AND is_read = FALSE AND is_deleted_by_recipient = FALSE
@@ -242,7 +244,8 @@ func (r *HomeRepository) GetUnreadLetterCount(ctx context.Context, recipientID s
 
 // MarkLetterAsRead marks a letter as read.
 func (r *HomeRepository) MarkLetterAsRead(ctx context.Context, id, recipientID string, readAt time.Time) error {
-	res, err := r.db.ExecContext(ctx, `
+	executor := ExecutorFromContext(ctx, r.db)
+	res, err := executor.ExecContext(ctx, `
 		UPDATE character_letters
 		SET is_read = TRUE, read_at = ?
 		WHERE id = ? AND recipient_character_id = ? AND is_deleted_by_recipient = FALSE
@@ -258,7 +261,7 @@ func (r *HomeRepository) MarkLetterAsRead(ctx context.Context, id, recipientID s
 	if rowsAffected == 0 {
 		var actualRecipient string
 		var isDeleted bool
-		err = r.db.QueryRowContext(ctx, `SELECT recipient_character_id, is_deleted_by_recipient FROM character_letters WHERE id = ?`, id).Scan(&actualRecipient, &isDeleted)
+		err = executor.QueryRowContext(ctx, `SELECT recipient_character_id, is_deleted_by_recipient FROM character_letters WHERE id = ?`, id).Scan(&actualRecipient, &isDeleted)
 		if errors.Is(err, sql.ErrNoRows) || isDeleted {
 			return home.ErrLetterNotFound
 		}
@@ -276,8 +279,9 @@ func (r *HomeRepository) MarkLetterAsRead(ctx context.Context, id, recipientID s
 func (r *HomeRepository) DeleteLetter(ctx context.Context, id, characterID string) error {
 	var senderID, recipientID string
 	var isDeletedSender, isDeletedRecipient bool
+	executor := ExecutorFromContext(ctx, r.db)
 
-	err := r.db.QueryRowContext(ctx, `
+	err := executor.QueryRowContext(ctx, `
 		SELECT sender_character_id, recipient_character_id, is_deleted_by_sender, is_deleted_by_recipient
 		FROM character_letters
 		WHERE id = ?
@@ -308,11 +312,11 @@ func (r *HomeRepository) DeleteLetter(ctx context.Context, id, characterID strin
 	}
 
 	if isDeletedSender && isDeletedRecipient {
-		_, err = r.db.ExecContext(ctx, `DELETE FROM character_letters WHERE id = ?`, id)
+		_, err = executor.ExecContext(ctx, `DELETE FROM character_letters WHERE id = ?`, id)
 		return err
 	}
 
-	_, err = r.db.ExecContext(ctx, `
+	_, err = executor.ExecContext(ctx, `
 		UPDATE character_letters
 		SET is_deleted_by_sender = ?, is_deleted_by_recipient = ?
 		WHERE id = ?
@@ -322,7 +326,7 @@ func (r *HomeRepository) DeleteLetter(ctx context.Context, id, characterID strin
 
 // AddCompanionPhrase adds a taught phrase for a character's companion.
 func (r *HomeRepository) AddCompanionPhrase(ctx context.Context, phrase home.CompanionPhrase) error {
-	_, err := r.db.ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO character_companion_phrases (id, character_id, phrase, created_at)
 		VALUES (?, ?, ?, ?)
 	`, phrase.ID, phrase.CharacterID, phrase.Phrase, phrase.CreatedAt.UTC())
@@ -331,7 +335,8 @@ func (r *HomeRepository) AddCompanionPhrase(ctx context.Context, phrase home.Com
 
 // DeleteCompanionPhrase removes a taught phrase.
 func (r *HomeRepository) DeleteCompanionPhrase(ctx context.Context, id, characterID string) error {
-	res, err := r.db.ExecContext(ctx, `
+	executor := ExecutorFromContext(ctx, r.db)
+	res, err := executor.ExecContext(ctx, `
 		DELETE FROM character_companion_phrases
 		WHERE id = ? AND character_id = ?
 	`, id, characterID)
@@ -350,7 +355,7 @@ func (r *HomeRepository) DeleteCompanionPhrase(ctx context.Context, id, characte
 
 // ListCompanionPhrases returns all taught phrases for a character's companion.
 func (r *HomeRepository) ListCompanionPhrases(ctx context.Context, characterID string) ([]home.CompanionPhrase, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, character_id, phrase, created_at
 		FROM character_companion_phrases
 		WHERE character_id = ?
@@ -378,7 +383,7 @@ func (r *HomeRepository) ListCompanionPhrases(ctx context.Context, characterID s
 
 // AddDeliveryNotice records a new delivery notice.
 func (r *HomeRepository) AddDeliveryNotice(ctx context.Context, notice home.DeliveryNotice) error {
-	_, err := r.db.ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO character_delivery_notices (id, character_id, notice_type, message, is_cleared, created_at)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, notice.ID, notice.CharacterID, notice.NoticeType, notice.Message, notice.IsCleared, notice.CreatedAt.UTC())
@@ -404,7 +409,7 @@ func (r *HomeRepository) ListDeliveryNotices(ctx context.Context, characterID st
 		`
 	}
 
-	rows, err := r.db.QueryContext(ctx, query, characterID)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, characterID)
 	if err != nil {
 		return nil, err
 	}
@@ -427,7 +432,7 @@ func (r *HomeRepository) ListDeliveryNotices(ctx context.Context, characterID st
 
 // ClearDeliveryNotices marks all delivery notices as cleared.
 func (r *HomeRepository) ClearDeliveryNotices(ctx context.Context, characterID string) error {
-	_, err := r.db.ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		UPDATE character_delivery_notices
 		SET is_cleared = TRUE
 		WHERE character_id = ? AND is_cleared = FALSE

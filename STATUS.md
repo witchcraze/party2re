@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #254 — Complete HTTP API endpoints for remaining domain features
+Last updated: Issue #255 — Multi-module orchestration transaction propagation guideline and application service pattern
 
 ## Current phase
 
@@ -23,6 +23,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理。
 - **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定（経験値・ゴールド・アイテム・ちいさなメダル）、構造化ターンログ出力、戦闘参加者（Participant）標準アダプタ/ビルダー（`NewParticipantFromCharacter`, `NewParticipantFromCharacterWithHP`, `ParticipantBuilder`）。
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): Valkeyバックエンドの遅延アクションキュー＆分散排他ロックWorker。
+- **Database & Transaction Orchestration** (`internal/database`): 全29リポジトリのトランザクション伝播モデル（`RunInTx` と `ExecutorFromContext`）への完全統一、トランザクション境界外からの直接 `r.db.BeginTx` 呼び出しの完全排除、コンテキスト内トランザクション再利用、マルチモジュール統合テスト（コミット原子性・ロールバック整合性・ネストトランザクション伝播検証）、および決定論的行ロック獲得順序（`players` -> `characters` (昇順) -> `inventory_items` -> `character_jobs` -> `character_depots` -> `bank_accounts` -> `guilds` (昇順) -> 各種機能テーブル）によるデッドロック防止の標準化。
 - **Common Components & Utilities**: 単一責務の共通パッケージ配置方針（`internal/id`, `internal/pagination`, `internal/validation`, `internal/api/http/middleware`）、Rule of Three、セキュリティ/認可の即時共通化指針の策定、および暗号学的に安全なID生成ユーティリティ（`internal/id`: `New()`, `Generate()`, `NewLength()`）の全ドメインパッケージへの適用・集約。
 
 

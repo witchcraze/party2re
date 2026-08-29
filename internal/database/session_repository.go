@@ -19,7 +19,7 @@ func NewSessionRepository(db *sql.DB) (*SessionRepository, error) {
 }
 
 func (r *SessionRepository) Save(ctx context.Context, value coreplayer.Session) error {
-	_, err := r.db.ExecContext(ctx, `INSERT INTO player_sessions (id, player_id, created_at, expires_at, revoked_at) VALUES (?, ?, ?, ?, ?)`,
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `INSERT INTO player_sessions (id, player_id, created_at, expires_at, revoked_at) VALUES (?, ?, ?, ?, ?)`,
 		value.ID, value.PlayerID, value.CreatedAt, value.ExpiresAt, value.RevokedAt)
 	return err
 }
@@ -27,7 +27,7 @@ func (r *SessionRepository) Save(ctx context.Context, value coreplayer.Session) 
 func (r *SessionRepository) FindByID(ctx context.Context, id string) (coreplayer.Session, error) {
 	var value coreplayer.Session
 	var revoked sql.NullTime
-	err := r.db.QueryRowContext(ctx, `SELECT id, player_id, created_at, expires_at, revoked_at FROM player_sessions WHERE id = ?`, id).
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `SELECT id, player_id, created_at, expires_at, revoked_at FROM player_sessions WHERE id = ?`, id).
 		Scan(&value.ID, &value.PlayerID, &value.CreatedAt, &value.ExpiresAt, &revoked)
 	if errors.Is(err, sql.ErrNoRows) {
 		return coreplayer.Session{}, coreplayer.ErrInvalidSession
@@ -42,7 +42,7 @@ func (r *SessionRepository) FindByID(ctx context.Context, id string) (coreplayer
 }
 
 func (r *SessionRepository) Revoke(ctx context.Context, id string, now time.Time) error {
-	result, err := r.db.ExecContext(ctx, `UPDATE player_sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL`, now.UTC(), id)
+	result, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `UPDATE player_sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL`, now.UTC(), id)
 	if err != nil {
 		return err
 	}

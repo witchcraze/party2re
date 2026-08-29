@@ -22,7 +22,7 @@ func NewAdventureRepository(db *sql.DB) (*AdventureRepository, error) {
 }
 
 func (r *AdventureRepository) Save(ctx context.Context, value adventure.Adventure) error {
-	_, err := r.db.ExecContext(ctx, `
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO adventures
 			(id, character_id, adventure_type, started_at, available_at, experience_reward,
 			 outcome, winner_id, loser_id, battle_turns, reward_experience, reward_currency,
@@ -51,7 +51,7 @@ func (r *AdventureRepository) FindByID(ctx context.Context, id string) (adventur
 	var outcome, winnerID, loserID, rewardItemID sql.NullString
 	var turns sql.NullInt64
 	var rewardExperience, rewardCurrency, rewardItemQuantity int
-	err := r.db.QueryRowContext(ctx, `
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
 		SELECT id, character_id, adventure_type, started_at, available_at, experience_reward,
 			outcome, winner_id, loser_id, battle_turns, reward_experience, reward_currency,
 			reward_item_definition_id, reward_item_quantity, resolved, claimed
@@ -96,53 +96,38 @@ func nullableInt(value int, valid bool) any {
 }
 
 func (r *AdventureRepository) ClaimAndApply(ctx context.Context, value adventure.Adventure, character corecharacter.Character) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
+	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
+		result, err := executor.ExecContext(txCtx, `
+			UPDATE adventures
+			SET outcome = ?, winner_id = ?, loser_id = ?, battle_turns = ?,
+				reward_experience = ?, reward_currency = ?, reward_item_definition_id = ?,
+				reward_item_quantity = ?, resolved = TRUE, claimed = TRUE
+			WHERE id = ? AND claimed = FALSE
+		`, nullableString(string(value.BattleResult.Outcome), value.Resolved),
+			nullableString(value.BattleResult.WinnerID, value.Resolved),
+			nullableString(value.BattleResult.LoserID, value.Resolved),
+			nullableInt(value.BattleResult.Turns, value.Resolved),
+			value.BattleResult.Reward.Experience, value.BattleResult.Reward.Currency,
+			nullableString(value.BattleResult.Reward.ItemDefinitionID, value.Resolved),
+			value.BattleResult.Reward.ItemQuantity, value.ID)
+		if err != nil {
+			return err
 		}
-	}()
-
-	result, err := tx.ExecContext(ctx, `
-		UPDATE adventures
-		SET outcome = ?, winner_id = ?, loser_id = ?, battle_turns = ?,
-			reward_experience = ?, reward_currency = ?, reward_item_definition_id = ?,
-			reward_item_quantity = ?, resolved = TRUE, claimed = TRUE
-		WHERE id = ? AND claimed = FALSE
-	`, nullableString(string(value.BattleResult.Outcome), value.Resolved),
-		nullableString(value.BattleResult.WinnerID, value.Resolved),
-		nullableString(value.BattleResult.LoserID, value.Resolved),
-		nullableInt(value.BattleResult.Turns, value.Resolved),
-		value.BattleResult.Reward.Experience, value.BattleResult.Reward.Currency,
-		nullableString(value.BattleResult.Reward.ItemDefinitionID, value.Resolved),
-		value.BattleResult.Reward.ItemQuantity, value.ID)
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return claimFailure(ctx, tx, "adventures", value.ID, adventure.ErrNotFound, adventure.ErrAlreadyClaimed)
-	}
-	if err := updateCharacterAtomically(ctx, tx, character); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	committed = true
-	return nil
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return claimFailure(txCtx, executor, "adventures", value.ID, adventure.ErrNotFound, adventure.ErrAlreadyClaimed)
+		}
+		return updateCharacterAtomically(txCtx, executor, character)
+	})
 }
 
 func (r *AdventureRepository) ListByCharacterID(ctx context.Context, characterID string, limit, offset int) ([]adventure.Adventure, int, error) {
 	var total int
-	err := r.db.QueryRowContext(ctx, `
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM adventures WHERE character_id = ?
 	`, characterID).Scan(&total)
 	if err != nil {
@@ -152,7 +137,7 @@ func (r *AdventureRepository) ListByCharacterID(ctx context.Context, characterID
 		return []adventure.Adventure{}, total, nil
 	}
 
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, character_id, adventure_type, started_at, available_at, experience_reward,
 			outcome, winner_id, loser_id, battle_turns, reward_experience, reward_currency,
 			reward_item_definition_id, reward_item_quantity, resolved, claimed
@@ -200,7 +185,7 @@ func (r *AdventureRepository) ListByCharacterID(ctx context.Context, characterID
 
 func (r *AdventureRepository) GetAggregatedStats(ctx context.Context, characterID string) (adventure.AggregatedStats, error) {
 	var stats adventure.AggregatedStats
-	err := r.db.QueryRowContext(ctx, `
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
 		SELECT
 			COUNT(*),
 			COALESCE(SUM(CASE WHEN outcome = 'win' AND winner_id = ? THEN 1 ELSE 0 END), 0),
@@ -224,7 +209,7 @@ func (r *AdventureRepository) GetAggregatedStats(ctx context.Context, characterI
 		return adventure.AggregatedStats{}, err
 	}
 
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT
 			adventure_type,
 			COUNT(*) AS total_attempts,

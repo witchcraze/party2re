@@ -35,7 +35,7 @@ func (r *CustomSkillRepository) SaveLoadout(ctx context.Context, loadout custom_
 	if !loadout.UpdatedAt.IsZero() {
 		now = loadout.UpdatedAt
 	}
-	_, err := r.db.ExecContext(ctx, query, loadout.CharacterID, loadout.MaxSlots, slotsJSON, now)
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, query, loadout.CharacterID, loadout.MaxSlots, slotsJSON, now)
 	return err
 }
 
@@ -51,7 +51,7 @@ func (r *CustomSkillRepository) FindLoadout(ctx context.Context, characterID str
 		slotsJSON string
 		updatedAt time.Time
 	)
-	err := r.db.QueryRowContext(ctx, query, characterID).Scan(
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query, characterID).Scan(
 		&charID,
 		&maxSlots,
 		&slotsJSON,

@@ -25,7 +25,8 @@ func (r *PvPRepository) GetOrCreateRating(ctx context.Context, characterID strin
 	var rating pvp.ArenaRating
 	var lastMatchedAt sql.NullTime
 
-	err := r.db.QueryRowContext(ctx, `
+	executor := ExecutorFromContext(ctx, r.db)
+	err := executor.QueryRowContext(ctx, `
 		SELECT character_id, rating, wins, losses, draws, last_matched_at, created_at, updated_at
 		FROM arena_ratings
 		WHERE character_id = ?
@@ -42,7 +43,7 @@ func (r *PvPRepository) GetOrCreateRating(ctx context.Context, characterID strin
 
 	if errors.Is(err, sql.ErrNoRows) {
 		now := time.Now().UTC()
-		_, insertErr := r.db.ExecContext(ctx, `
+		_, insertErr := executor.ExecContext(ctx, `
 			INSERT INTO arena_ratings (
 				character_id, rating, wins, losses, draws, created_at, updated_at
 			) VALUES (?, ?, 0, 0, 0, ?, ?)
@@ -77,85 +78,80 @@ func (r *PvPRepository) RecordMatchAndUpdateRatings(
 	attackerRating, defenderRating pvp.ArenaRating,
 	attacker corecharacter.Character,
 ) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
+	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
+		now := time.Now().UTC()
 
-	now := time.Now().UTC()
+		// 1. Update attacker rating
+		_, err := executor.ExecContext(txCtx, `
+			INSERT INTO arena_ratings (
+				character_id, rating, wins, losses, draws, last_matched_at, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			ON DUPLICATE KEY UPDATE
+				rating = VALUES(rating),
+				wins = VALUES(wins),
+				losses = VALUES(losses),
+				draws = VALUES(draws),
+				last_matched_at = VALUES(last_matched_at),
+				updated_at = VALUES(updated_at)
+		`, attackerRating.CharacterID, attackerRating.Rating, attackerRating.Wins, attackerRating.Losses, attackerRating.Draws, now, now, now)
+		if err != nil {
+			return err
+		}
 
-	// 1. Update attacker rating
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO arena_ratings (
-			character_id, rating, wins, losses, draws, last_matched_at, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		ON DUPLICATE KEY UPDATE
-			rating = VALUES(rating),
-			wins = VALUES(wins),
-			losses = VALUES(losses),
-			draws = VALUES(draws),
-			last_matched_at = VALUES(last_matched_at),
-			updated_at = VALUES(updated_at)
-	`, attackerRating.CharacterID, attackerRating.Rating, attackerRating.Wins, attackerRating.Losses, attackerRating.Draws, now, now, now)
-	if err != nil {
-		return err
-	}
+		// 2. Update defender rating
+		_, err = executor.ExecContext(txCtx, `
+			INSERT INTO arena_ratings (
+				character_id, rating, wins, losses, draws, last_matched_at, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			ON DUPLICATE KEY UPDATE
+				rating = VALUES(rating),
+				wins = VALUES(wins),
+				losses = VALUES(losses),
+				draws = VALUES(draws),
+				last_matched_at = VALUES(last_matched_at),
+				updated_at = VALUES(updated_at)
+		`, defenderRating.CharacterID, defenderRating.Rating, defenderRating.Wins, defenderRating.Losses, defenderRating.Draws, now, now, now)
+		if err != nil {
+			return err
+		}
 
-	// 2. Update defender rating
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO arena_ratings (
-			character_id, rating, wins, losses, draws, last_matched_at, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		ON DUPLICATE KEY UPDATE
-			rating = VALUES(rating),
-			wins = VALUES(wins),
-			losses = VALUES(losses),
-			draws = VALUES(draws),
-			last_matched_at = VALUES(last_matched_at),
-			updated_at = VALUES(updated_at)
-	`, defenderRating.CharacterID, defenderRating.Rating, defenderRating.Wins, defenderRating.Losses, defenderRating.Draws, now, now, now)
-	if err != nil {
-		return err
-	}
+		// 3. Update attacker stats, money, level, exp
+		if err := updateCharacterAtomically(txCtx, executor, attacker); err != nil {
+			return err
+		}
 
-	// 3. Update attacker stats, money, level, exp
-	if err := updateCharacterAtomically(ctx, tx, attacker); err != nil {
-		return err
-	}
+		// 4. Insert match history record
+		var winnerID, loserID sql.NullString
+		if match.WinnerID != "" {
+			winnerID = sql.NullString{String: match.WinnerID, Valid: true}
+		}
+		if match.LoserID != "" {
+			loserID = sql.NullString{String: match.LoserID, Valid: true}
+		}
 
-	// 4. Insert match history record
-	var winnerID, loserID sql.NullString
-	if match.WinnerID != "" {
-		winnerID = sql.NullString{String: match.WinnerID, Valid: true}
-	}
-	if match.LoserID != "" {
-		loserID = sql.NullString{String: match.LoserID, Valid: true}
-	}
+		_, err = executor.ExecContext(txCtx, `
+			INSERT INTO arena_matches (
+				id, attacker_id, defender_id, winner_id, loser_id, outcome, turns,
+				attacker_rating_before, attacker_rating_after,
+				defender_rating_before, defender_rating_after,
+				reward_gold, reward_exp, created_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, match.ID, match.AttackerID, match.DefenderID, winnerID, loserID, string(match.Outcome), match.Turns,
+			match.AttackerRatingBefore, match.AttackerRatingAfter,
+			match.DefenderRatingBefore, match.DefenderRatingAfter,
+			match.RewardGold, match.RewardExp, match.CreatedAt)
+		if err != nil {
+			return err
+		}
 
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO arena_matches (
-			id, attacker_id, defender_id, winner_id, loser_id, outcome, turns,
-			attacker_rating_before, attacker_rating_after,
-			defender_rating_before, defender_rating_after,
-			reward_gold, reward_exp, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, match.ID, match.AttackerID, match.DefenderID, winnerID, loserID, string(match.Outcome), match.Turns,
-		match.AttackerRatingBefore, match.AttackerRatingAfter,
-		match.DefenderRatingBefore, match.DefenderRatingAfter,
-		match.RewardGold, match.RewardExp, match.CreatedAt)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit()
+		return nil
+	})
 }
 
 func (r *PvPRepository) FindOpponents(ctx context.Context, characterID string, limit int) ([]pvp.OpponentCandidate, error) {
 	// Query characters and their ratings, excluding self and same player
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT c.id, c.name, c.job_id, c.level, COALESCE(ar.rating, 1000) as rating,
 		       COALESCE(ar.wins, 0) as wins, COALESCE(ar.losses, 0) as losses, c.rebirth_count
 		FROM characters c
@@ -186,7 +182,7 @@ func (r *PvPRepository) FindOpponents(ctx context.Context, characterID string, l
 }
 
 func (r *PvPRepository) GetMatchHistory(ctx context.Context, characterID string, limit int) ([]pvp.MatchRecord, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, attacker_id, defender_id, winner_id, loser_id, outcome, turns,
 		       attacker_rating_before, attacker_rating_after,
 		       defender_rating_before, defender_rating_after,
@@ -205,7 +201,7 @@ func (r *PvPRepository) GetMatchHistory(ctx context.Context, characterID string,
 }
 
 func (r *PvPRepository) GetDefenseLogs(ctx context.Context, characterID string, limit int) ([]pvp.MatchRecord, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, attacker_id, defender_id, winner_id, loser_id, outcome, turns,
 		       attacker_rating_before, attacker_rating_after,
 		       defender_rating_before, defender_rating_after,
@@ -224,7 +220,7 @@ func (r *PvPRepository) GetDefenseLogs(ctx context.Context, characterID string, 
 }
 
 func (r *PvPRepository) GetLeaderboard(ctx context.Context, limit int) ([]pvp.OpponentCandidate, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT c.id, c.name, c.job_id, c.level, ar.rating, ar.wins, ar.losses, c.rebirth_count
 		FROM arena_ratings ar
 		JOIN characters c ON ar.character_id = c.id

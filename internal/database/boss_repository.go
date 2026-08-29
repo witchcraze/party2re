@@ -37,7 +37,7 @@ func (r *BossRepository) GetOrCreateRecord(ctx context.Context, characterID stri
 		FROM character_boss_records
 		WHERE character_id = ?
 	`
-	err := r.db.QueryRowContext(ctx, query, characterID).Scan(
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query, characterID).Scan(
 		&rec.CharacterID,
 		&rec.HighestTierCleared,
 		&rec.TotalBossDefeats,
@@ -55,7 +55,7 @@ func (r *BossRepository) GetOrCreateRecord(ctx context.Context, characterID stri
 				daily_attempts_used, daily_attempts_reset_at, created_at, updated_at
 			) VALUES (?, 0, 0, 0, ?, ?, ?)
 		`
-		_, insertErr := r.db.ExecContext(ctx, insertQuery, characterID, today, now, now)
+		_, insertErr := ExecutorFromContext(ctx, r.db).ExecContext(ctx, insertQuery, characterID, today, now, now)
 		if insertErr != nil {
 			return boss.CharacterBossRecord{}, insertErr
 		}
@@ -90,114 +90,109 @@ func (r *BossRepository) RecordChallenge(
 	character corecharacter.Character,
 	rewardItem *coreitem.Instance,
 ) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
+	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
+		now := time.Now().UTC()
 
-	now := time.Now().UTC()
+		// 1. Upsert character_boss_records
+		var firstClearedAt, lastChallengedAt sql.NullTime
+		if record.FirstClearedAt != nil {
+			firstClearedAt = sql.NullTime{Time: *record.FirstClearedAt, Valid: true}
+		}
+		if record.LastChallengedAt != nil {
+			lastChallengedAt = sql.NullTime{Time: *record.LastChallengedAt, Valid: true}
+		}
 
-	// 1. Upsert character_boss_records
-	var firstClearedAt, lastChallengedAt sql.NullTime
-	if record.FirstClearedAt != nil {
-		firstClearedAt = sql.NullTime{Time: *record.FirstClearedAt, Valid: true}
-	}
-	if record.LastChallengedAt != nil {
-		lastChallengedAt = sql.NullTime{Time: *record.LastChallengedAt, Valid: true}
-	}
-
-	upsertRecordQuery := `
-		INSERT INTO character_boss_records (
-			character_id, highest_tier_cleared, total_boss_defeats,
-			first_cleared_at, last_challenged_at, daily_attempts_used, daily_attempts_reset_at,
-			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON DUPLICATE KEY UPDATE
-			highest_tier_cleared = VALUES(highest_tier_cleared),
-			total_boss_defeats = VALUES(total_boss_defeats),
-			first_cleared_at = VALUES(first_cleared_at),
-			last_challenged_at = VALUES(last_challenged_at),
-			daily_attempts_used = VALUES(daily_attempts_used),
-			daily_attempts_reset_at = VALUES(daily_attempts_reset_at),
-			updated_at = VALUES(updated_at)
-	`
-	_, err = tx.ExecContext(
-		ctx,
-		upsertRecordQuery,
-		record.CharacterID,
-		record.HighestTierCleared,
-		record.TotalBossDefeats,
-		firstClearedAt,
-		lastChallengedAt,
-		record.DailyAttemptsUsed,
-		record.DailyAttemptsResetAt,
-		now,
-		now,
-	)
-	if err != nil {
-		return err
-	}
-
-	// 2. Insert boss_challenge_history
-	var rewardItemID sql.NullString
-	if history.RewardItemID != "" {
-		rewardItemID = sql.NullString{String: history.RewardItemID, Valid: true}
-	}
-
-	insertHistoryQuery := `
-		INSERT INTO boss_challenge_history (
-			id, character_id, boss_id, tier, outcome, turns,
-			reward_exp, reward_gold, reward_item_id, is_first_clear, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
-	_, err = tx.ExecContext(
-		ctx,
-		insertHistoryQuery,
-		history.ID,
-		history.CharacterID,
-		history.BossID,
-		history.Tier,
-		string(history.Outcome),
-		history.Turns,
-		history.RewardExp,
-		history.RewardGold,
-		rewardItemID,
-		history.IsFirstClear,
-		history.CreatedAt,
-	)
-	if err != nil {
-		return err
-	}
-
-	// 3. Update character progression/stats/money/medals
-	if err := updateCharacter(ctx, tx, character); err != nil {
-		return err
-	}
-
-	// 4. Save item drop if present
-	if rewardItem != nil {
-		insertItemQuery := `
-			INSERT INTO inventory_items (id, character_id, definition_id, quantity, enhancement_level)
-			VALUES (?, ?, ?, ?, ?)
+		upsertRecordQuery := `
+			INSERT INTO character_boss_records (
+				character_id, highest_tier_cleared, total_boss_defeats,
+				first_cleared_at, last_challenged_at, daily_attempts_used, daily_attempts_reset_at,
+				created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON DUPLICATE KEY UPDATE
+				highest_tier_cleared = VALUES(highest_tier_cleared),
+				total_boss_defeats = VALUES(total_boss_defeats),
+				first_cleared_at = VALUES(first_cleared_at),
+				last_challenged_at = VALUES(last_challenged_at),
+				daily_attempts_used = VALUES(daily_attempts_used),
+				daily_attempts_reset_at = VALUES(daily_attempts_reset_at),
+				updated_at = VALUES(updated_at)
 		`
-		_, err = tx.ExecContext(
-			ctx,
-			insertItemQuery,
-			rewardItem.ID,
-			character.ID,
-			rewardItem.DefinitionID,
-			rewardItem.Quantity,
-			rewardItem.EnhancementLevel,
+		_, err := executor.ExecContext(
+			txCtx,
+			upsertRecordQuery,
+			record.CharacterID,
+			record.HighestTierCleared,
+			record.TotalBossDefeats,
+			firstClearedAt,
+			lastChallengedAt,
+			record.DailyAttemptsUsed,
+			record.DailyAttemptsResetAt,
+			now,
+			now,
 		)
 		if err != nil {
 			return err
 		}
-	}
 
-	return tx.Commit()
+		// 2. Insert boss_challenge_history
+		var rewardItemID sql.NullString
+		if history.RewardItemID != "" {
+			rewardItemID = sql.NullString{String: history.RewardItemID, Valid: true}
+		}
+
+		insertHistoryQuery := `
+			INSERT INTO boss_challenge_history (
+				id, character_id, boss_id, tier, outcome, turns,
+				reward_exp, reward_gold, reward_item_id, is_first_clear, created_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`
+		_, err = executor.ExecContext(
+			txCtx,
+			insertHistoryQuery,
+			history.ID,
+			history.CharacterID,
+			history.BossID,
+			history.Tier,
+			string(history.Outcome),
+			history.Turns,
+			history.RewardExp,
+			history.RewardGold,
+			rewardItemID,
+			history.IsFirstClear,
+			history.CreatedAt,
+		)
+		if err != nil {
+			return err
+		}
+
+		// 3. Update character progression/stats/money/medals
+		if err := updateCharacter(txCtx, executor, character); err != nil {
+			return err
+		}
+
+		// 4. Save item drop if present
+		if rewardItem != nil {
+			insertItemQuery := `
+				INSERT INTO inventory_items (id, character_id, definition_id, quantity, enhancement_level)
+				VALUES (?, ?, ?, ?, ?)
+			`
+			_, err = executor.ExecContext(
+				txCtx,
+				insertItemQuery,
+				rewardItem.ID,
+				character.ID,
+				rewardItem.DefinitionID,
+				rewardItem.Quantity,
+				rewardItem.EnhancementLevel,
+			)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }
 
 func (r *BossRepository) GetHistory(ctx context.Context, characterID string, limit int) ([]boss.BossChallengeHistory, error) {
@@ -209,7 +204,7 @@ func (r *BossRepository) GetHistory(ctx context.Context, characterID string, lim
 		ORDER BY created_at DESC
 		LIMIT ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, characterID, limit)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, characterID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +252,7 @@ func (r *BossRepository) GetLeaderboard(ctx context.Context, limit int) ([]boss.
 		ORDER BY r.highest_tier_cleared DESC, r.total_boss_defeats DESC, r.first_cleared_at ASC
 		LIMIT ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, limit)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit)
 	if err != nil {
 		return nil, err
 	}

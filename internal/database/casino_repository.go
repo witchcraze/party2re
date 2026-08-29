@@ -23,7 +23,7 @@ func NewCasinoRepository(db *sql.DB) (*CasinoRepository, error) {
 
 func (r *CasinoRepository) GetAccount(ctx context.Context, characterID string) (casino.Account, error) {
 	var acc casino.Account
-	err := r.db.QueryRowContext(ctx, `
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
 		SELECT character_id, coins, updated_at
 		FROM casino_accounts
 		WHERE character_id = ?
@@ -42,62 +42,60 @@ func (r *CasinoRepository) GetAccount(ctx context.Context, characterID string) (
 }
 
 func (r *CasinoRepository) ExchangeGoldToCoins(ctx context.Context, characterID string, coins int64, goldCost int) (casino.Account, corecharacter.Character, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return casino.Account{}, corecharacter.Character{}, err
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
-	// 1. Deduct gold from character
-	res, err := tx.ExecContext(ctx, `
-		UPDATE characters
-		SET money = money - ?
-		WHERE id = ? AND money >= ?
-	`, goldCost, characterID, goldCost)
-	if err != nil {
-		return casino.Account{}, corecharacter.Character{}, err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return casino.Account{}, corecharacter.Character{}, err
-	}
-	if rows == 0 {
-		return casino.Account{}, corecharacter.Character{}, casino.ErrInsufficientGold
-	}
-
-	// 2. Upsert casino coins
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO casino_accounts (character_id, coins)
-		VALUES (?, ?)
-		ON DUPLICATE KEY UPDATE coins = coins + VALUES(coins)
-	`, characterID, coins)
-	if err != nil {
-		return casino.Account{}, corecharacter.Character{}, err
-	}
-
-	// 3. Scan updated account & character
 	var acc casino.Account
-	err = tx.QueryRowContext(ctx, `
-		SELECT character_id, coins, updated_at
-		FROM casino_accounts
-		WHERE character_id = ?
-	`, characterID).Scan(&acc.CharacterID, &acc.Coins, &acc.UpdatedAt)
-	if err != nil {
-		return casino.Account{}, corecharacter.Character{}, err
-	}
+	var char corecharacter.Character
 
-	char, err := scanCharacterRow(tx.QueryRowContext(ctx, `
-		SELECT `+characterColumns+`
-		FROM characters
-		WHERE id = ?
-	`, characterID))
-	if err != nil {
-		return casino.Account{}, corecharacter.Character{}, err
-	}
+	err := RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
 
-	if err := tx.Commit(); err != nil {
+		// 1. Deduct gold from character
+		res, err := executor.ExecContext(txCtx, `
+			UPDATE characters
+			SET money = money - ?
+			WHERE id = ? AND money >= ?
+		`, goldCost, characterID, goldCost)
+		if err != nil {
+			return err
+		}
+		rows, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return casino.ErrInsufficientGold
+		}
+
+		// 2. Upsert casino coins
+		_, err = executor.ExecContext(txCtx, `
+			INSERT INTO casino_accounts (character_id, coins)
+			VALUES (?, ?)
+			ON DUPLICATE KEY UPDATE coins = coins + VALUES(coins)
+		`, characterID, coins)
+		if err != nil {
+			return err
+		}
+
+		// 3. Scan updated account & character
+		err = executor.QueryRowContext(txCtx, `
+			SELECT character_id, coins, updated_at
+			FROM casino_accounts
+			WHERE character_id = ?
+		`, characterID).Scan(&acc.CharacterID, &acc.Coins, &acc.UpdatedAt)
+		if err != nil {
+			return err
+		}
+
+		char, err = scanCharacterRow(executor.QueryRowContext(txCtx, `
+			SELECT `+characterColumns+`
+			FROM characters
+			WHERE id = ?
+		`, characterID))
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
 		return casino.Account{}, corecharacter.Character{}, err
 	}
 
@@ -105,62 +103,60 @@ func (r *CasinoRepository) ExchangeGoldToCoins(ctx context.Context, characterID 
 }
 
 func (r *CasinoRepository) ExchangeCoinsToGold(ctx context.Context, characterID string, coins int64, goldReward int) (casino.Account, corecharacter.Character, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return casino.Account{}, corecharacter.Character{}, err
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
-	// 1. Deduct coins from casino account
-	res, err := tx.ExecContext(ctx, `
-		UPDATE casino_accounts
-		SET coins = coins - ?
-		WHERE character_id = ? AND coins >= ?
-	`, coins, characterID, coins)
-	if err != nil {
-		return casino.Account{}, corecharacter.Character{}, err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return casino.Account{}, corecharacter.Character{}, err
-	}
-	if rows == 0 {
-		return casino.Account{}, corecharacter.Character{}, casino.ErrInsufficientCoins
-	}
-
-	// 2. Add gold to character
-	_, err = tx.ExecContext(ctx, `
-		UPDATE characters
-		SET money = money + ?
-		WHERE id = ?
-	`, goldReward, characterID)
-	if err != nil {
-		return casino.Account{}, corecharacter.Character{}, err
-	}
-
-	// 3. Scan updated account & character
 	var acc casino.Account
-	err = tx.QueryRowContext(ctx, `
-		SELECT character_id, coins, updated_at
-		FROM casino_accounts
-		WHERE character_id = ?
-	`, characterID).Scan(&acc.CharacterID, &acc.Coins, &acc.UpdatedAt)
-	if err != nil {
-		return casino.Account{}, corecharacter.Character{}, err
-	}
+	var char corecharacter.Character
 
-	char, err := scanCharacterRow(tx.QueryRowContext(ctx, `
-		SELECT `+characterColumns+`
-		FROM characters
-		WHERE id = ?
-	`, characterID))
-	if err != nil {
-		return casino.Account{}, corecharacter.Character{}, err
-	}
+	err := RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
 
-	if err := tx.Commit(); err != nil {
+		// 1. Deduct coins from casino account
+		res, err := executor.ExecContext(txCtx, `
+			UPDATE casino_accounts
+			SET coins = coins - ?
+			WHERE character_id = ? AND coins >= ?
+		`, coins, characterID, coins)
+		if err != nil {
+			return err
+		}
+		rows, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return casino.ErrInsufficientCoins
+		}
+
+		// 2. Add gold to character
+		_, err = executor.ExecContext(txCtx, `
+			UPDATE characters
+			SET money = money + ?
+			WHERE id = ?
+		`, goldReward, characterID)
+		if err != nil {
+			return err
+		}
+
+		// 3. Scan updated account & character
+		err = executor.QueryRowContext(txCtx, `
+			SELECT character_id, coins, updated_at
+			FROM casino_accounts
+			WHERE character_id = ?
+		`, characterID).Scan(&acc.CharacterID, &acc.Coins, &acc.UpdatedAt)
+		if err != nil {
+			return err
+		}
+
+		char, err = scanCharacterRow(executor.QueryRowContext(txCtx, `
+			SELECT `+characterColumns+`
+			FROM characters
+			WHERE id = ?
+		`, characterID))
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
 		return casino.Account{}, corecharacter.Character{}, err
 	}
 
@@ -172,57 +168,53 @@ func (r *CasinoRepository) DeductBetAndCreditPayout(ctx context.Context, charact
 		return casino.Account{}, errors.New("bet and payout must be non-negative")
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return casino.Account{}, err
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
-	// 1. If bet > 0, atomically verify and deduct bet
-	if bet > 0 {
-		res, err := tx.ExecContext(ctx, `
-			UPDATE casino_accounts
-			SET coins = coins - ?
-			WHERE character_id = ? AND coins >= ?
-		`, bet, characterID, bet)
-		if err != nil {
-			return casino.Account{}, err
-		}
-		rows, err := res.RowsAffected()
-		if err != nil {
-			return casino.Account{}, err
-		}
-		if rows == 0 {
-			return casino.Account{}, casino.ErrInsufficientCoins
-		}
-	}
-
-	// 2. If payout > 0, credit payout to account
-	if payout > 0 {
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO casino_accounts (character_id, coins)
-			VALUES (?, ?)
-			ON DUPLICATE KEY UPDATE coins = coins + VALUES(coins)
-		`, characterID, payout)
-		if err != nil {
-			return casino.Account{}, err
-		}
-	}
-
-	// 3. Scan updated account
 	var acc casino.Account
-	err = tx.QueryRowContext(ctx, `
-		SELECT character_id, coins, updated_at
-		FROM casino_accounts
-		WHERE character_id = ?
-	`, characterID).Scan(&acc.CharacterID, &acc.Coins, &acc.UpdatedAt)
-	if err != nil {
-		return casino.Account{}, err
-	}
+	err := RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		executor := ExecutorFromContext(txCtx, r.db)
 
-	if err := tx.Commit(); err != nil {
+		// 1. If bet > 0, atomically verify and deduct bet
+		if bet > 0 {
+			res, err := executor.ExecContext(txCtx, `
+				UPDATE casino_accounts
+				SET coins = coins - ?
+				WHERE character_id = ? AND coins >= ?
+			`, bet, characterID, bet)
+			if err != nil {
+				return err
+			}
+			rows, err := res.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if rows == 0 {
+				return casino.ErrInsufficientCoins
+			}
+		}
+
+		// 2. If payout > 0, credit payout to account
+		if payout > 0 {
+			_, err := executor.ExecContext(txCtx, `
+				INSERT INTO casino_accounts (character_id, coins)
+				VALUES (?, ?)
+				ON DUPLICATE KEY UPDATE coins = coins + VALUES(coins)
+			`, characterID, payout)
+			if err != nil {
+				return err
+			}
+		}
+
+		// 3. Scan updated account
+		err := executor.QueryRowContext(txCtx, `
+			SELECT character_id, coins, updated_at
+			FROM casino_accounts
+			WHERE character_id = ?
+		`, characterID).Scan(&acc.CharacterID, &acc.Coins, &acc.UpdatedAt)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
 		return casino.Account{}, err
 	}
 

@@ -21,13 +21,13 @@ func NewRankingRepository(db *sql.DB) (*RankingRepository, error) {
 
 func (r *RankingRepository) countCharacters(ctx context.Context) (int, error) {
 	var total int
-	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM characters").Scan(&total)
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, "SELECT COUNT(*) FROM characters").Scan(&total)
 	return total, err
 }
 
 func (r *RankingRepository) countPlayers(ctx context.Context) (int, error) {
 	var total int
-	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM players").Scan(&total)
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, "SELECT COUNT(*) FROM players").Scan(&total)
 	return total, err
 }
 
@@ -45,7 +45,7 @@ func (r *RankingRepository) GetLevelRanking(ctx context.Context, limit, offset i
 		ORDER BY c.level DESC, c.experience DESC, c.id ASC
 		LIMIT ? OFFSET ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -77,7 +77,7 @@ func (r *RankingRepository) GetPlayerWealthRanking(ctx context.Context, limit, o
 		ORDER BY total_wealth DESC, p.id ASC
 		LIMIT ? OFFSET ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -121,7 +121,7 @@ func (r *RankingRepository) GetCharacterWealthRanking(ctx context.Context, limit
 		ORDER BY c.money DESC, c.level DESC, c.id ASC
 		LIMIT ? OFFSET ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -158,7 +158,7 @@ func (r *RankingRepository) GetBattleVictoryRanking(ctx context.Context, limit, 
 		ORDER BY total_victories DESC, c.level DESC, c.id ASC
 		LIMIT ? OFFSET ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -188,7 +188,7 @@ func (r *RankingRepository) GetPvPVictoryRanking(ctx context.Context, limit, off
 		ORDER BY pvp_wins DESC, rating DESC, c.level DESC, c.id ASC
 		LIMIT ? OFFSET ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -218,7 +218,7 @@ func (r *RankingRepository) GetBossDefeatRanking(ctx context.Context, limit, off
 		ORDER BY boss_defeats DESC, highest_tier DESC, c.level DESC, c.id ASC
 		LIMIT ? OFFSET ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -253,7 +253,7 @@ func (r *RankingRepository) GetAdventureVictoryRanking(ctx context.Context, limi
 		ORDER BY adventure_wins DESC, c.level DESC, c.id ASC
 		LIMIT ? OFFSET ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -284,7 +284,7 @@ func (r *RankingRepository) GetJobMasteryRanking(ctx context.Context, limit, off
 		ORDER BY mastered_count DESC, c.level DESC, c.id ASC
 		LIMIT ? OFFSET ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -312,7 +312,7 @@ func (r *RankingRepository) GetJobPopularityRanking(ctx context.Context) ([]rank
 		GROUP BY c.job_id
 		ORDER BY total_count DESC, c.job_id ASC
 	`
-	rows, err := r.db.QueryContext(ctx, query)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +352,7 @@ func (r *RankingRepository) GetHelperRanking(ctx context.Context, limit, offset 
 		ORDER BY c.help_count DESC, c.level DESC, c.id ASC
 		LIMIT ? OFFSET ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -379,7 +379,7 @@ func (r *RankingRepository) GetRebirthRanking(ctx context.Context, limit, offset
 		ORDER BY c.rebirth_count DESC, c.level DESC, c.experience DESC, c.id ASC
 		LIMIT ? OFFSET ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -406,7 +406,7 @@ func (r *RankingRepository) GetSmallMedalRanking(ctx context.Context, limit, off
 		ORDER BY c.small_medals DESC, c.level DESC, c.id ASC
 		LIMIT ? OFFSET ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -429,7 +429,7 @@ func (r *RankingRepository) SaveSnapshot(ctx context.Context, snapshot ranking.R
 			calculated_at = VALUES(calculated_at),
 			updated_at = VALUES(updated_at)
 	`
-	_, err := r.db.ExecContext(ctx, query, string(snapshot.RankingType), snapshot.SnapshotData, snapshot.TotalCount, snapshot.CalculatedAt, snapshot.UpdatedAt)
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, query, string(snapshot.RankingType), snapshot.SnapshotData, snapshot.TotalCount, snapshot.CalculatedAt, snapshot.UpdatedAt)
 	return err
 }
 
@@ -441,7 +441,7 @@ func (r *RankingRepository) GetSnapshot(ctx context.Context, rankingType ranking
 	`
 	var s ranking.RankingSnapshot
 	var typeStr string
-	err := r.db.QueryRowContext(ctx, query, string(rankingType)).Scan(&typeStr, &s.SnapshotData, &s.TotalCount, &s.CalculatedAt, &s.UpdatedAt)
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query, string(rankingType)).Scan(&typeStr, &s.SnapshotData, &s.TotalCount, &s.CalculatedAt, &s.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ranking.RankingSnapshot{}, ranking.ErrSnapshotNotFound
 	}
@@ -457,7 +457,7 @@ func (r *RankingRepository) GetAllSnapshots(ctx context.Context) (map[ranking.Ra
 		SELECT ranking_type, snapshot_data, total_count, calculated_at, updated_at
 		FROM ranking_snapshots
 	`
-	rows, err := r.db.QueryContext(ctx, query)
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
