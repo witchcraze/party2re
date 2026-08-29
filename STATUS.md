@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #184 — Ensure atomic transaction boundaries for Farm planting, fertilizing, and harvesting
+Last updated: Issue #179 — Enforce quantity bounds and integer overflow protection for Shop transactions
 
 ## Current phase
 
@@ -30,7 +30,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Activity** (`internal/activity`): 訓練機能（Valkey Worker push型＋手動Claimフォールバック）。
 - **Adventure** (`internal/adventure`): 28ステージ（`stages.json`）、286体モンスター（`monsters.json`）、戦闘解決、ドロップ報酬（メダル含む）、Valkey Worker連携。
 - **Medal** (`internal/medal`): 小さなメダル交換所（減算消費方式、トランザクション整合性）およびダンジョン宝箱・踏破、ワールドボス討伐・初回クリアによるメダル獲得連携。
-- **Shop** (`internal/shop`): アイテム売買（50%売却）、トランザクション整合性。
+- **Shop** (`internal/shop`): アイテム売買（50%売却）、1回あたり最大取引数量制限（`MaxTransactionQuantity = 9999`）、整数オーバーフロー安全乗算（`safeMultiply` / `ErrPriceOverflow`）、トランザクション整合性。
 - **Depot** (`internal/depot`): 倉庫（アイテム・ゴールド預入・引出）、トランザクション整合性。
 - **Blacksmith** (`internal/blacksmith`): 鍛冶屋（+1〜+10装備強化、成功率曲線、費用・素材消費）。
 - **Alchemy** (`internal/alchemy`): 錬金術（112レシピ `recipes.json`）、素材合成。

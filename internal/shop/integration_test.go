@@ -188,3 +188,43 @@ func TestConcurrentShopPurchasesPreventOverdraft(t *testing.T) {
 		t.Fatalf("character money became negative: %d", restoredChar.Money)
 	}
 }
+
+func TestShopIntegration_BulkPurchaseBounds(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	charRepo, _ := database.NewCharacterRepository(db)
+	invRepo, _ := database.NewInventoryRepository(db)
+	shopRepo, _ := database.NewShopRepository(db)
+
+	char, _ := database.CreateTestCharacter(ctx, db, "Bulk Buyer")
+	char.Money = 1_000_000
+	_ = charRepo.Update(ctx, char)
+
+	potion, _ := item.NewDefinition("bulk_potion", "Bulk Potion", 10)
+	catalog, _ := item.NewCatalog([]item.Definition{potion})
+	shopService, _ := shop.NewServiceWithTransaction(charRepo, invRepo, shopRepo, catalog)
+
+	// 1. Purchase MaxTransactionQuantity (9999)
+	res, err := shopService.Purchase(ctx, char.ID, "bulk_potion", shop.MaxTransactionQuantity)
+	if err != nil {
+		t.Fatalf("Purchase(9999) failed: %v", err)
+	}
+	if res.TotalPrice != 99990 {
+		t.Errorf("TotalPrice = %d, want 99990", res.TotalPrice)
+	}
+
+	// 2. Purchase MaxTransactionQuantity + 1 -> rejected
+	_, err = shopService.Purchase(ctx, char.ID, "bulk_potion", shop.MaxTransactionQuantity+1)
+	if err == nil {
+		t.Fatalf("expected error for quantity > MaxTransactionQuantity, got nil")
+	}
+}
