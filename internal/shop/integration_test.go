@@ -32,10 +32,6 @@ func TestShopIntegrationPurchaseAndSell(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shopRepo, err := database.NewShopRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	charService, err := character.NewService(charRepo)
 	if err != nil {
@@ -55,7 +51,8 @@ func TestShopIntegrationPurchaseAndSell(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	shopService, err := shop.NewServiceWithTransaction(charRepo, invRepo, shopRepo, catalog)
+	txProvider := database.NewTransactionProvider(db)
+	shopService, err := shop.NewService(charRepo, invRepo, catalog, shop.WithTransactionProvider(txProvider))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +145,7 @@ func TestConcurrentShopPurchasesPreventOverdraft(t *testing.T) {
 	ctx := context.Background()
 	charRepo, _ := database.NewCharacterRepository(db)
 	invRepo, _ := database.NewInventoryRepository(db)
-	shopRepo, _ := database.NewShopRepository(db)
+	txProvider := database.NewTransactionProvider(db)
 
 	char, _ := database.CreateTestCharacter(ctx, db, "Concurrent Buyer")
 	char.Money = 150
@@ -157,7 +154,7 @@ func TestConcurrentShopPurchasesPreventOverdraft(t *testing.T) {
 	sword, _ := item.NewEquipmentDefinition("con_sword", "Con Sword", 100, item.SlotMainHand)
 	catalog, _ := item.NewCatalog([]item.Definition{sword})
 
-	shopService, _ := shop.NewServiceWithTransaction(charRepo, invRepo, shopRepo, catalog)
+	shopService, _ := shop.NewService(charRepo, invRepo, catalog, shop.WithTransactionProvider(txProvider))
 
 	// Attempt two concurrent purchases of a 100G item with only 150G total
 	var wg sync.WaitGroup
@@ -182,10 +179,94 @@ func TestConcurrentShopPurchasesPreventOverdraft(t *testing.T) {
 		}
 	}
 
-	// At most 1 purchase should succeed if starting with 150 gold
+	// Exactly 1 purchase must succeed and 1 must fail due to overdraft
+	if successes != 1 {
+		t.Errorf("successes = %d, want 1", successes)
+	}
+	if failures != 1 {
+		t.Errorf("failures = %d, want 1", failures)
+	}
+
 	restoredChar, _ := charRepo.FindByID(ctx, char.ID)
-	if restoredChar.Money < 0 {
-		t.Fatalf("character money became negative: %d", restoredChar.Money)
+	if restoredChar.Money != 50 {
+		t.Errorf("restored Character.Money = %d, want 50", restoredChar.Money)
+	}
+
+	restoredInv, _ := invRepo.FindByCharacterID(ctx, char.ID)
+	if len(restoredInv.Items) != 1 {
+		t.Errorf("restored Inventory item count = %d, want 1", len(restoredInv.Items))
+	}
+}
+
+func TestConcurrentShopSalesPreventDoubleSpending(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	charRepo, _ := database.NewCharacterRepository(db)
+	invRepo, _ := database.NewInventoryRepository(db)
+	txProvider := database.NewTransactionProvider(db)
+
+	char, _ := database.CreateTestCharacter(ctx, db, "Concurrent Seller")
+	char.Money = 0
+	_ = charRepo.Update(ctx, char)
+
+	potion, _ := item.NewDefinition("con_potion", "Con Potion", 100) // sell price = 50
+	catalog, _ := item.NewCatalog([]item.Definition{potion})
+	shopService, _ := shop.NewService(charRepo, invRepo, catalog, shop.WithTransactionProvider(txProvider))
+
+	// Setup inventory with 1 potion
+	inv, _ := invRepo.FindByCharacterID(ctx, char.ID)
+	potionInst, _ := item.NewInstance("con_potion", 1)
+	_ = inv.Add(potionInst)
+	_ = invRepo.Save(ctx, inv)
+
+	// Attempt two concurrent sales of the same item instance of quantity 1
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := shopService.Sell(ctx, char.ID, potionInst.ID, 1)
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+
+	var successes, failures int
+	for err := range errs {
+		if err == nil {
+			successes++
+		} else {
+			failures++
+		}
+	}
+
+	// Exactly 1 sale must succeed and 1 must fail due to unowned / insufficient quantity
+	if successes != 1 {
+		t.Errorf("successes = %d, want 1", successes)
+	}
+	if failures != 1 {
+		t.Errorf("failures = %d, want 1", failures)
+	}
+
+	restoredChar, _ := charRepo.FindByID(ctx, char.ID)
+	if restoredChar.Money != 50 {
+		t.Errorf("restored Character.Money = %d, want 50", restoredChar.Money)
+	}
+
+	restoredInv, _ := invRepo.FindByCharacterID(ctx, char.ID)
+	if len(restoredInv.Items) != 0 {
+		t.Errorf("restored Inventory item count = %d, want 0", len(restoredInv.Items))
 	}
 }
 
@@ -203,7 +284,7 @@ func TestShopIntegration_BulkPurchaseBounds(t *testing.T) {
 	ctx := context.Background()
 	charRepo, _ := database.NewCharacterRepository(db)
 	invRepo, _ := database.NewInventoryRepository(db)
-	shopRepo, _ := database.NewShopRepository(db)
+	txProvider := database.NewTransactionProvider(db)
 
 	char, _ := database.CreateTestCharacter(ctx, db, "Bulk Buyer")
 	char.Money = 1_000_000
@@ -211,7 +292,7 @@ func TestShopIntegration_BulkPurchaseBounds(t *testing.T) {
 
 	potion, _ := item.NewDefinition("bulk_potion", "Bulk Potion", 10)
 	catalog, _ := item.NewCatalog([]item.Definition{potion})
-	shopService, _ := shop.NewServiceWithTransaction(charRepo, invRepo, shopRepo, catalog)
+	shopService, _ := shop.NewService(charRepo, invRepo, catalog, shop.WithTransactionProvider(txProvider))
 
 	// 1. Purchase MaxTransactionQuantity (9999)
 	res, err := shopService.Purchase(ctx, char.ID, "bulk_potion", shop.MaxTransactionQuantity)
