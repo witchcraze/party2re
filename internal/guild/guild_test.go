@@ -19,7 +19,7 @@ type mockGuildRepo struct {
 	transferLeadershipFn func(ctx context.Context, guildID string, oldLeaderCharID string, newLeaderCharID string) error
 	updateMemberRoleFn   func(ctx context.Context, guildID string, targetCharID string, newRole guild.Role) error
 	updateNoticeFn       func(ctx context.Context, guildID string, notice string) error
-	donateFn             func(ctx context.Context, guildID string, characterID string, amount int, newLevel int, newExp int64) (guild.Guild, guild.Member, corecharacter.Character, error)
+	donateFn             func(ctx context.Context, guildID string, characterID string, amount int) (guild.Guild, guild.Member, corecharacter.Character, error)
 	disbandGuildFn       func(ctx context.Context, guildID string) error
 }
 
@@ -86,11 +86,11 @@ func (m *mockGuildRepo) UpdateNotice(ctx context.Context, guildID string, notice
 	return nil
 }
 
-func (m *mockGuildRepo) Donate(ctx context.Context, guildID string, characterID string, amount int, newLevel int, newExp int64) (guild.Guild, guild.Member, corecharacter.Character, error) {
+func (m *mockGuildRepo) Donate(ctx context.Context, guildID string, characterID string, amount int) (guild.Guild, guild.Member, corecharacter.Character, error) {
 	if m.donateFn != nil {
-		return m.donateFn(ctx, guildID, characterID, amount, newLevel, newExp)
+		return m.donateFn(ctx, guildID, characterID, amount)
 	}
-	return guild.Guild{ID: guildID, Level: newLevel, Exp: newExp}, guild.Member{GuildID: guildID, CharacterID: characterID}, corecharacter.Character{ID: characterID}, nil
+	return guild.Guild{ID: guildID}, guild.Member{GuildID: guildID, CharacterID: characterID}, corecharacter.Character{ID: characterID}, nil
 }
 
 func (m *mockGuildRepo) DisbandGuild(ctx context.Context, guildID string) error {
@@ -486,22 +486,19 @@ func TestService_Donate(t *testing.T) {
 		}
 	})
 
-	t.Run("Success with level up", func(t *testing.T) {
-		var passedLevel int
-		var passedExp int64
-		repo.donateFn = func(_ context.Context, gID, cID string, amount, newLevel int, newExp int64) (guild.Guild, guild.Member, corecharacter.Character, error) {
-			passedLevel = newLevel
-			passedExp = newExp
-			return guild.Guild{ID: gID, Level: newLevel, Exp: newExp}, guild.Member{GuildID: gID, CharacterID: cID}, corecharacter.Character{ID: cID}, nil
+	t.Run("Success with donation delegation", func(t *testing.T) {
+		var passedAmount int
+		repo.donateFn = func(_ context.Context, gID, cID string, amount int) (guild.Guild, guild.Member, corecharacter.Character, error) {
+			passedAmount = amount
+			return guild.Guild{ID: gID, Level: 2, Exp: 10000}, guild.Member{GuildID: gID, CharacterID: cID}, corecharacter.Character{ID: cID}, nil
 		}
 
-		// Initial EXP = 5000. Donating 5000 gives 10000 EXP -> Level 2
 		g, _, _, err := svc.Donate(ctx, "g1", "char1", 5000)
 		if err != nil {
 			t.Fatalf("Donate() unexpected error: %v", err)
 		}
-		if passedLevel != 2 || passedExp != 10000 || g.Level != 2 {
-			t.Errorf("got level %d, exp %d; want level 2, exp 10000", passedLevel, passedExp)
+		if passedAmount != 5000 || g.Level != 2 || g.Exp != 10000 {
+			t.Errorf("got amount %d, level %d, exp %d; want 5000, 2, 10000", passedAmount, g.Level, g.Exp)
 		}
 	})
 }

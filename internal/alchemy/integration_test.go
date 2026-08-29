@@ -118,7 +118,6 @@ func TestConcurrentAlchemySynthesis(t *testing.T) {
 	ctx := context.Background()
 	charRepo, _ := database.NewCharacterRepository(db)
 	invRepo, _ := database.NewInventoryRepository(db)
-	alcRepo, _ := database.NewAlchemyRepository(db)
 
 	char, _ := database.CreateTestCharacter(ctx, db, "Concurrent Alchemist")
 	char.Money = 500
@@ -133,7 +132,14 @@ func TestConcurrentAlchemySynthesis(t *testing.T) {
 	_ = inv.Add(herbs)
 	_ = invRepo.Save(ctx, inv)
 
-	alcService, _ := alchemy.NewServiceWithTransaction(charRepo, invRepo, alcRepo, recipeCatalog, itemCatalog)
+	txProvider := database.NewTransactionProvider(db)
+	alcService, _ := alchemy.NewService(
+		charRepo,
+		invRepo,
+		recipeCatalog,
+		itemCatalog,
+		alchemy.WithTransactionProvider(txProvider),
+	)
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
@@ -152,7 +158,10 @@ func TestConcurrentAlchemySynthesis(t *testing.T) {
 	if restoredInv.Quantity("item-001") < 0 {
 		t.Fatalf("herb quantity became negative: %d", restoredInv.Quantity("item-001"))
 	}
-	if restoredInv.Quantity("item-002") > 1 {
-		t.Fatalf("more than 1 super herb created with only 3 herbs: %d", restoredInv.Quantity("item-002"))
+	if restoredInv.Quantity("item-002") != 1 {
+		t.Fatalf("expected exactly 1 super herb created with only 3 herbs, got: %d", restoredInv.Quantity("item-002"))
+	}
+	if restoredInv.Quantity("item-001") != 1 {
+		t.Fatalf("expected remaining herbs = 1, got: %d", restoredInv.Quantity("item-001"))
 	}
 }

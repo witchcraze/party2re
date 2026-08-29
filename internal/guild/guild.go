@@ -124,7 +124,7 @@ type Repository interface {
 	TransferLeadership(ctx context.Context, guildID string, oldLeaderCharID string, newLeaderCharID string) error
 	UpdateMemberRole(ctx context.Context, guildID string, targetCharID string, newRole Role) error
 	UpdateNotice(ctx context.Context, guildID string, notice string) error
-	Donate(ctx context.Context, guildID string, characterID string, amount int, newLevel int, newExp int64) (Guild, Member, corecharacter.Character, error)
+	Donate(ctx context.Context, guildID string, characterID string, amount int) (Guild, Member, corecharacter.Character, error)
 	DisbandGuild(ctx context.Context, guildID string) error
 }
 
@@ -455,7 +455,7 @@ func (s *Service) Donate(ctx context.Context, guildID string, characterID string
 		return Guild{}, Member{}, corecharacter.Character{}, ErrInvalidDonationAmount
 	}
 
-	g, member, err := s.repo.GetGuildByCharacter(ctx, characterID)
+	_, member, err := s.repo.GetGuildByCharacter(ctx, characterID)
 	if err != nil {
 		return Guild{}, Member{}, corecharacter.Character{}, err
 	}
@@ -463,10 +463,7 @@ func (s *Service) Donate(ctx context.Context, guildID string, characterID string
 		return Guild{}, Member{}, corecharacter.Character{}, ErrCharacterNotInGuild
 	}
 
-	newExp := g.Exp + int64(amount)
-	newLevel := CalculateLevel(newExp)
-
-	return s.repo.Donate(ctx, guildID, characterID, amount, newLevel, newExp)
+	return s.repo.Donate(ctx, guildID, characterID, amount)
 }
 
 func (s *Service) Disband(ctx context.Context, guildID string, leaderCharID string) error {

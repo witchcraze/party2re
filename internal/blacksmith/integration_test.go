@@ -125,7 +125,6 @@ func TestConcurrentEnhancementPreventsOverdraft(t *testing.T) {
 	ctx := context.Background()
 	charRepo, _ := database.NewCharacterRepository(db)
 	invRepo, _ := database.NewInventoryRepository(db)
-	bsRepo, _ := database.NewBlacksmithRepository(db)
 
 	char, _ := database.CreateTestCharacter(ctx, db, "Concurrent Enhancer")
 	char.Money = 70 // only enough for 1 enhancement (50G)
@@ -142,7 +141,14 @@ func TestConcurrentEnhancementPreventsOverdraft(t *testing.T) {
 	_ = inv.Add(materials)
 	_ = invRepo.Save(ctx, inv)
 
-	bsService, _ := blacksmith.NewServiceWithTransaction(charRepo, invRepo, bsRepo, catalog, fixedRandSource{value: 0.0})
+	txProvider := database.NewTransactionProvider(db)
+	bsService, _ := blacksmith.NewService(
+		charRepo,
+		invRepo,
+		catalog,
+		blacksmith.WithTransactionProvider(txProvider),
+		blacksmith.WithRandomSource(fixedRandSource{value: 0.0}),
+	)
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
@@ -160,5 +166,8 @@ func TestConcurrentEnhancementPreventsOverdraft(t *testing.T) {
 	restoredChar, _ := charRepo.FindByID(ctx, char.ID)
 	if restoredChar.Money < 0 {
 		t.Fatalf("character money went negative: %d", restoredChar.Money)
+	}
+	if restoredChar.Money != 20 { // 70 - 50 = 20
+		t.Errorf("character money = %d, want 20", restoredChar.Money)
 	}
 }

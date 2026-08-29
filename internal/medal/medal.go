@@ -24,11 +24,13 @@ type Reward struct {
 
 type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
+	FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
 	Update(ctx context.Context, value corecharacter.Character) error
 }
 
 type InventoryRepository interface {
 	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error)
 	Save(ctx context.Context, value coreinventory.Inventory) error
 }
 
@@ -36,10 +38,23 @@ type TransactionRepository interface {
 	CommitTransaction(ctx context.Context, character corecharacter.Character, inventory coreinventory.Inventory) error
 }
 
+type TransactionProvider interface {
+	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+type Option func(*Service)
+
+func WithTransactionProvider(txProvider TransactionProvider) Option {
+	return func(s *Service) {
+		s.txProvider = txProvider
+	}
+}
+
 type Service struct {
 	characters   CharacterRepository
 	inventories  InventoryRepository
 	transactions TransactionRepository
+	txProvider   TransactionProvider
 	rewards      []Reward
 }
 
@@ -48,6 +63,7 @@ func NewService(
 	inventories InventoryRepository,
 	transactions TransactionRepository,
 	rewardsFilePath string,
+	opts ...Option,
 ) (*Service, error) {
 	if characters == nil || inventories == nil {
 		return nil, ErrNilDependency
@@ -63,7 +79,7 @@ func NewService(
 		return nil, err
 	}
 
-	return NewServiceWithRewards(characters, inventories, transactions, rewards)
+	return NewServiceWithRewards(characters, inventories, transactions, rewards, opts...)
 }
 
 func NewServiceWithRewards(
@@ -71,21 +87,47 @@ func NewServiceWithRewards(
 	inventories InventoryRepository,
 	transactions TransactionRepository,
 	rewards []Reward,
+	opts ...Option,
 ) (*Service, error) {
 	if characters == nil || inventories == nil {
 		return nil, ErrNilDependency
 	}
 
-	return &Service{
+	s := &Service{
 		characters:   characters,
 		inventories:  inventories,
 		transactions: transactions,
 		rewards:      rewards,
-	}, nil
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s, nil
 }
 
 func (s *Service) GetRewards() []Reward {
 	return s.rewards
+}
+
+func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	if s.txProvider != nil {
+		return s.txProvider.RunInTx(ctx, fn)
+	}
+	return fn(ctx)
+}
+
+func (s *Service) findCharacter(ctx context.Context, characterID string) (corecharacter.Character, error) {
+	if s.txProvider != nil {
+		return s.characters.FindByIDForUpdate(ctx, characterID)
+	}
+	return s.characters.FindByID(ctx, characterID)
+}
+
+func (s *Service) findInventory(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	if s.txProvider != nil {
+		return s.inventories.FindByCharacterIDForUpdate(ctx, characterID)
+	}
+	return s.inventories.FindByCharacterID(ctx, characterID)
 }
 
 func (s *Service) Claim(ctx context.Context, characterID string, itemID string) (corecharacter.Character, coreinventory.Inventory, error) {
@@ -107,40 +149,52 @@ func (s *Service) Claim(ctx context.Context, characterID string, itemID string) 
 		return corecharacter.Character{}, coreinventory.Inventory{}, ErrRewardNotFound
 	}
 
-	char, err := s.characters.FindByID(ctx, characterID)
+	var updatedChar corecharacter.Character
+	var updatedInv coreinventory.Inventory
+
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		char, err := s.findCharacter(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+
+		if char.SmallMedals < targetReward.Cost {
+			return ErrInsufficientMedals
+		}
+
+		inv, err := s.findInventory(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+
+		instance, err := item.NewInstance(targetReward.ItemID, 1)
+		if err != nil {
+			return err
+		}
+
+		if err := inv.Add(instance); err != nil {
+			return err
+		}
+
+		char.SmallMedals -= targetReward.Cost
+
+		if err := s.commit(txCtx, char, inv); err != nil {
+			return err
+		}
+
+		updatedChar = char
+		updatedInv = inv
+		return nil
+	})
 	if err != nil {
 		return corecharacter.Character{}, coreinventory.Inventory{}, err
 	}
 
-	if char.SmallMedals < targetReward.Cost {
-		return corecharacter.Character{}, coreinventory.Inventory{}, ErrInsufficientMedals
-	}
-
-	inv, err := s.inventories.FindByCharacterID(ctx, characterID)
-	if err != nil {
-		return corecharacter.Character{}, coreinventory.Inventory{}, err
-	}
-
-	instance, err := item.NewInstance(targetReward.ItemID, 1)
-	if err != nil {
-		return corecharacter.Character{}, coreinventory.Inventory{}, err
-	}
-
-	if err := inv.Add(instance); err != nil {
-		return corecharacter.Character{}, coreinventory.Inventory{}, err
-	}
-
-	char.SmallMedals -= targetReward.Cost
-
-	if err := s.commit(ctx, char, inv); err != nil {
-		return corecharacter.Character{}, coreinventory.Inventory{}, err
-	}
-
-	return char, inv, nil
+	return updatedChar, updatedInv, nil
 }
 
 func (s *Service) commit(ctx context.Context, char corecharacter.Character, inv coreinventory.Inventory) error {
-	if s.transactions != nil {
+	if s.transactions != nil && s.txProvider == nil {
 		return s.transactions.CommitTransaction(ctx, char, inv)
 	}
 	if err := s.characters.Update(ctx, char); err != nil {

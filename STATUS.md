@@ -29,14 +29,14 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ### Feature Modules
 - **Activity** (`internal/activity`): 訓練機能（Valkey Worker push型＋手動Claimフォールバック）。
 - **Adventure** (`internal/adventure`): 28ステージ（`stages.json`）、286体モンスター（`monsters.json`）、戦闘解決、ドロップ報酬（メダル含む）、Valkey Worker連携。
-- **Medal** (`internal/medal`): 小さなメダル交換所（減算消費方式、トランザクション整合性）およびダンジョン宝箱・踏破、ワールドボス討伐・初回クリアによるメダル獲得連携。
+- **Medal** (`internal/medal`): 小さなメダル交換所（減算消費方式、`TransactionProvider` と `SELECT ... FOR UPDATE` 行ロックによるメダル消費・アイテム付与の完全アトミックトランザクション整合性・並行性レース防止）およびダンジョン宝箱・踏破、ワールドボス討伐・初回クリアによるメダル獲得連携。
 - **Shop** (`internal/shop`): アイテム売買（50%売却）、1回あたり最大取引数量制限（`MaxTransactionQuantity = 9999`）、整数オーバーフロー安全乗算（`safeMultiply` / `ErrPriceOverflow`）、`TransactionProvider` と `SELECT ... FOR UPDATE` 行ロックによる購入・売却のアトミックトランザクション整合性・並行性レース保護。
 - **Depot** (`internal/depot`): 倉庫（アイテム・ゴールド預入・引出）、トランザクション整合性。
-- **Blacksmith** (`internal/blacksmith`): 鍛冶屋（+1〜+10装備強化、成功率曲線、費用・素材消費）。
-- **Alchemy** (`internal/alchemy`): 錬金術（112レシピ `recipes.json`）、素材合成。
+- **Blacksmith** (`internal/blacksmith`): 鍛冶屋（+1〜+10装備強化、成功率曲線、`TransactionProvider` と `SELECT ... FOR UPDATE` 行ロックによる費用・強化素材消費・インベントリ更新の完全アトミックトランザクション整合性・二重消費防止）。
+- **Alchemy** (`internal/alchemy`): 錬金術（112レシピ `recipes.json`）、素材合成（`TransactionProvider` と `SELECT ... FOR UPDATE` 行ロックによる必要素材消費・合成物付与の完全アトミックトランザクション整合性・並行合成競合防止）。
 - **Bank** (`internal/bank`): 銀行（預金・引出・プレイヤー間送金、`FOR UPDATE` 排他ロック）。
-- **Inn** (`internal/inn`): 宿屋・休息（HP/MP全回復）。
-- **Guild** (`internal/guild`): ギルド設立（5,000 G）、階層役職管理（Leader, Officer, Member）、加入・脱退・追放・役職変更・リーダー権限譲渡、ゴールド寄付によるEXP獲得とギルドレベルアップ（最大Lv10 / 定員拡大）、お知らせ掲示板、単一ギルド所属制約。
+- **Inn** (`internal/inn`): 宿屋・休息（HP/MP全回復、`TransactionProvider` と `SELECT ... FOR UPDATE` 行ロックによる宿泊費減算と全回復の完全アトミックトランザクション整合性・残高オーバードラフト防止）。
+- **Guild** (`internal/guild`): ギルド設立（5,000 G）、階層役職管理（Leader, Officer, Member）、加入・脱退・追放・役職変更・リーダー権限譲渡、ゴールド寄付によるEXP獲得とギルドレベルアップ（最大Lv10 / 定員拡大、MariaDB `SELECT ... FOR UPDATE` 行ロックによる並行寄付時のロストアップデート完全防止）、お知らせ掲示板、単一ギルド所属制約。
 - **Casino** (`internal/casino`): カジノコイン両替（1 Coin = 20 G）、インディアンポーカー（52枚標準トランプモデル、ブラインド賭け、NPCディーラーAI、最大5ラウンド・レート上昇、ショーダウン勝敗判定・配当精算）、スロットマシン（3リール・5絵柄、777 100倍ジャックポット、レート設定 $1〜$200）、ドッペルゲンガー（8種マーク一致・秘密選択、4x/6x/8x 倍率設定）、ハイロー（トランプ数字大小予測、2倍配当、連勝継続倍々モード）。全ゲームにおいて `DeductBetAndCreditPayout` による条件付きアトミックベット減算・配当付与トランザクション処理と MariaDB 行レベルロックによって並行性エクスプロイト（残高0での無限無料スピン・不正配当獲得）を完全防止。
 - **Lottery & Raffle** (`internal/lottery`): 福引（通常3枚・特賞〜6等・ハズレ、裏福引300枚・各色オーブ）、定期4桁数字宝くじ（1等100,000 Gジャックポット、下3桁・下2桁・下1桁返還、トランザクション安全な当籤受取処理）。
 - **Farm & Plantation** (`internal/farm`): 4区画農園（薬草・マンドラゴラ・月光草・黄金の果実の種蒔き、水やり収穫数+1、肥料成長時間半減、実時間経過成熟判定・枯れ判定、収穫報酬精算）。MariaDB Unit of Work トランザクション（`FOR UPDATE` 行ロック）による種・肥料アイテム消費とプロット状態遷移の完全アトミック化により、前提条件不備時のアイテム空消費を防止し並行植え付けのレースコンディションを完全解消。

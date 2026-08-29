@@ -30,6 +30,10 @@ func (r *memoryCharRepo) FindByID(_ context.Context, id string) (corecharacter.C
 	return c, nil
 }
 
+func (r *memoryCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return r.FindByID(ctx, id)
+}
+
 func (r *memoryCharRepo) Update(_ context.Context, character corecharacter.Character) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -54,6 +58,10 @@ func (r *memoryInvRepo) FindByCharacterID(_ context.Context, characterID string)
 		return coreinventory.New(characterID)
 	}
 	return inv, nil
+}
+
+func (r *memoryInvRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	return r.FindByCharacterID(ctx, characterID)
 }
 
 func (r *memoryInvRepo) Save(_ context.Context, inventory coreinventory.Inventory) error {
@@ -159,5 +167,65 @@ func TestSynthesizeValidationErrors(t *testing.T) {
 	_, err = service.Synthesize(ctx, "", "rec-super-herb")
 	if !errors.Is(err, ErrInvalidCharacterID) {
 		t.Errorf("expected ErrInvalidCharacterID, got %v", err)
+	}
+}
+
+type dummyTxProvider struct{}
+
+func (d dummyTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	return fn(ctx)
+}
+
+func TestConcurrentSynthesize_IngredientConsumptionAtomic(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMemoryCharRepo()
+	invRepo := newMemoryInvRepo()
+
+	herb, _ := item.NewDefinition("item-001", "Herb", 30)
+	superHerb, _ := item.NewDefinition("item-002", "Super Herb", 100)
+	itemCatalog, _ := item.NewCatalog([]item.Definition{herb, superHerb})
+
+	recipe, _ := NewRecipe("rec-super-herb", "Synthesize Super Herb", "item-002", 1, []Ingredient{{"item-001", 2}}, 50)
+	recipeCatalog, _ := NewRecipeCatalog([]Recipe{recipe})
+
+	char, _ := corecharacter.New("Hero")
+	char.Money = 10000
+	charRepo.characters[char.ID] = char
+
+	inv, _ := coreinventory.New(char.ID)
+	herbInst, _ := item.NewInstance("item-001", 6) // exactly enough for 3 syntheses (2 each)
+	_ = inv.Add(herbInst)
+	invRepo.inventories[char.ID] = inv
+
+	service, _ := NewService(charRepo, invRepo, recipeCatalog, itemCatalog,
+		WithTransactionProvider(dummyTxProvider{}),
+	)
+
+	var wg sync.WaitGroup
+	results := make(chan error, 5)
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := service.Synthesize(ctx, char.ID, "rec-super-herb")
+			results <- err
+		}()
+	}
+	wg.Wait()
+	close(results)
+
+	var successCount, failCount int
+	for err := range results {
+		if err == nil {
+			successCount++
+		} else {
+			failCount++
+		}
+	}
+
+	finalInv, _ := invRepo.FindByCharacterID(ctx, char.ID)
+	remainingHerbs := finalInv.Quantity("item-001")
+	if remainingHerbs < 0 {
+		t.Fatalf("herbs became negative: %d", remainingHerbs)
 	}
 }

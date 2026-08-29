@@ -113,9 +113,13 @@ Every substantial feature should be reviewed for:
 - future extensibility;
 - unnecessary abstraction.
 
-The key question is:
+## Transactional Boundaries & Concurrency Control
 
-> Does this feature make the next similar feature easier or harder to implement?
+State-mutating feature modules (such as `shop`, `blacksmith`, `alchemy`, `bank`, `inn`, `medal`, `guild`, `casino`, `lottery`, `farm`, `auction`) must strictly adhere to the **Unit of Work** pattern and prevent race conditions / lost updates under concurrent load:
+
+1. **Transaction Provider Interface**: Services exposing multi-step state mutations must accept a `TransactionProvider` (e.g. `WithTransactionProvider(txProvider)`).
+2. **Row-Level Pessimistic Locking**: When reading mutable shared state inside a transaction (such as character wallets, inventories, guild stats, or shop stock), repositories must use `SELECT ... FOR UPDATE` (or repository methods like `FindByIDForUpdate`, `FindByCharacterIDForUpdate`).
+3. **Atomic Commit or Rollback**: All related entity mutations (e.g. currency deduction + inventory item addition/consumption) must be executed within the same database transaction boundary (`RunInTx`), guaranteeing consistency and preventing partial state updates.
 
 ## Related documents
 

@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/guild"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 func TestGuildRepositoryLifecycle(t *testing.T) {
@@ -164,7 +166,7 @@ func TestGuildRepositoryLifecycle(t *testing.T) {
 	}
 
 	// 8. Donate Gold
-	donatedG, donatedM, updatedDonor, err := guildRepo.Donate(ctx, guildID, memberChar.ID, 2000, 1, 2000)
+	donatedG, donatedM, updatedDonor, err := guildRepo.Donate(ctx, guildID, memberChar.ID, 2000)
 	if err != nil {
 		t.Fatalf("Donate failed: %v", err)
 	}
@@ -215,5 +217,116 @@ func TestGuildRepositoryLifecycle(t *testing.T) {
 	}
 	if _, _, err := guildRepo.GetGuild(ctx, guildID); !errors.Is(err, guild.ErrGuildNotFound) {
 		t.Errorf("disbanded guild err = %v, want %v", err, guild.ErrGuildNotFound)
+	}
+}
+
+func TestGuildRepository_ConcurrentDonation(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	guildRepo, err := NewGuildRepository(db)
+	if err != nil {
+		t.Fatalf("failed to create guild repo: %v", err)
+	}
+
+	charRepo, err := NewCharacterRepository(db)
+	if err != nil {
+		t.Fatalf("failed to create character repo: %v", err)
+	}
+
+	leaderChar, err := CreateTestCharacter(ctx, db, "Donate Leader")
+	if err != nil {
+		t.Fatalf("failed to create leader char: %v", err)
+	}
+	leaderChar.Money = 10000
+	_ = charRepo.Update(ctx, leaderChar)
+
+	guildID := id.New()
+	g, m, _, err := guildRepo.CreateGuild(ctx, guild.Guild{
+		ID:                guildID,
+		Name:              fmt.Sprintf("Concurrent Donators %s", guildID),
+		LeaderCharacterID: leaderChar.ID,
+		Level:             1,
+		Exp:               0,
+		Gold:              0,
+		Notice:            "",
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
+	}, guild.Member{
+		GuildID:          "",
+		CharacterID:      leaderChar.ID,
+		Role:             guild.RoleLeader,
+		JoinedAt:         time.Now().UTC(),
+		TotalDonatedGold: 0,
+	}, 0)
+	if err != nil {
+		t.Fatalf("failed to create guild: %v", err)
+	}
+	_ = m
+
+	// Create 4 members, each donating 500G concurrently
+	const numMembers = 4
+	const donationAmount = 500
+	var memberIDs []string
+	for i := 0; i < numMembers; i++ {
+		memChar, err := CreateTestCharacter(ctx, db, fmt.Sprintf("Donor %d", i+1))
+		if err != nil {
+			t.Fatalf("failed to create member char %d: %v", i+1, err)
+		}
+		memChar.Money = 1000
+		_ = charRepo.Update(ctx, memChar)
+
+		_, err = guildRepo.AddMember(ctx, guild.Member{
+			GuildID:          g.ID,
+			CharacterID:      memChar.ID,
+			Role:             guild.RoleMember,
+			JoinedAt:         time.Now().UTC(),
+			TotalDonatedGold: 0,
+		})
+		if err != nil {
+			t.Fatalf("failed to add member %d: %v", i+1, err)
+		}
+		memberIDs = append(memberIDs, memChar.ID)
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, numMembers)
+	for _, mID := range memberIDs {
+		wg.Add(1)
+		go func(charID string) {
+			defer wg.Done()
+			_, _, _, err := guildRepo.Donate(ctx, g.ID, charID, donationAmount)
+			errs <- err
+		}(mID)
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Errorf("donation returned error: %v", err)
+		}
+	}
+
+	finalGuild, _, err := guildRepo.GetGuild(ctx, g.ID)
+	if err != nil {
+		t.Fatalf("GetGuild failed: %v", err)
+	}
+
+	expectedExp := int64(numMembers * donationAmount)
+	expectedGold := int64(numMembers * donationAmount)
+	if finalGuild.Exp != expectedExp {
+		t.Errorf("final guild exp = %d, want %d", finalGuild.Exp, expectedExp)
+	}
+	if finalGuild.Gold != expectedGold {
+		t.Errorf("final guild gold = %d, want %d", finalGuild.Gold, expectedGold)
 	}
 }

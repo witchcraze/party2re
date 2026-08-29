@@ -31,21 +31,32 @@ func (r *GuildRepository) CreateGuild(ctx context.Context, g guild.Guild, creato
 		_ = tx.Rollback()
 	}()
 
-	// 1. Deduct fee from character wallet
-	res, err := tx.ExecContext(ctx, `
-		UPDATE characters
-		SET money = money - ?
-		WHERE id = ? AND money >= ?
-	`, fee, creator.CharacterID, fee)
-	if err != nil {
-		return guild.Guild{}, guild.Member{}, corecharacter.Character{}, err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return guild.Guild{}, guild.Member{}, corecharacter.Character{}, err
-	}
-	if rows == 0 {
-		return guild.Guild{}, guild.Member{}, corecharacter.Character{}, guild.ErrInsufficientFunds
+	// 1. Deduct fee from character wallet (if fee > 0)
+	if fee > 0 {
+		res, err := tx.ExecContext(ctx, `
+			UPDATE characters
+			SET money = money - ?
+			WHERE id = ? AND money >= ?
+		`, fee, creator.CharacterID, fee)
+		if err != nil {
+			return guild.Guild{}, guild.Member{}, corecharacter.Character{}, err
+		}
+		rows, err := res.RowsAffected()
+		if err != nil {
+			return guild.Guild{}, guild.Member{}, corecharacter.Character{}, err
+		}
+		if rows == 0 {
+			return guild.Guild{}, guild.Member{}, corecharacter.Character{}, guild.ErrInsufficientFunds
+		}
+	} else {
+		var charID string
+		err := tx.QueryRowContext(ctx, `SELECT id FROM characters WHERE id = ? FOR UPDATE`, creator.CharacterID).Scan(&charID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return guild.Guild{}, guild.Member{}, corecharacter.Character{}, guild.ErrCharacterNotFound
+		}
+		if err != nil {
+			return guild.Guild{}, guild.Member{}, corecharacter.Character{}, err
+		}
 	}
 
 	// 2. Insert guild record
@@ -61,6 +72,7 @@ func (r *GuildRepository) CreateGuild(ctx context.Context, g guild.Guild, creato
 	}
 
 	// 3. Insert creator as leader
+	creator.GuildID = g.ID
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO guild_members (guild_id, character_id, role, joined_at, total_donated_gold)
 		VALUES (?, ?, ?, ?, ?)
@@ -295,7 +307,7 @@ func (r *GuildRepository) UpdateNotice(ctx context.Context, guildID string, noti
 	return nil
 }
 
-func (r *GuildRepository) Donate(ctx context.Context, guildID string, characterID string, amount int, newLevel int, newExp int64) (guild.Guild, guild.Member, corecharacter.Character, error) {
+func (r *GuildRepository) Donate(ctx context.Context, guildID string, characterID string, amount int) (guild.Guild, guild.Member, corecharacter.Character, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return guild.Guild{}, guild.Member{}, corecharacter.Character{}, err
@@ -321,7 +333,25 @@ func (r *GuildRepository) Donate(ctx context.Context, guildID string, characterI
 		return guild.Guild{}, guild.Member{}, corecharacter.Character{}, guild.ErrInsufficientFunds
 	}
 
-	// 2. Update guild stats
+	// 2. Lock and retrieve current guild stats
+	var currentExp int64
+	var currentGold int64
+	err = tx.QueryRowContext(ctx, `
+		SELECT exp, gold
+		FROM guilds
+		WHERE id = ? FOR UPDATE
+	`, guildID).Scan(&currentExp, &currentGold)
+	if errors.Is(err, sql.ErrNoRows) {
+		return guild.Guild{}, guild.Member{}, corecharacter.Character{}, guild.ErrGuildNotFound
+	}
+	if err != nil {
+		return guild.Guild{}, guild.Member{}, corecharacter.Character{}, err
+	}
+
+	newExp := currentExp + int64(amount)
+	newLevel := guild.CalculateLevel(newExp)
+
+	// 3. Update guild stats
 	now := time.Now().UTC()
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE guilds
@@ -331,7 +361,7 @@ func (r *GuildRepository) Donate(ctx context.Context, guildID string, characterI
 		return guild.Guild{}, guild.Member{}, corecharacter.Character{}, err
 	}
 
-	// 3. Update member donated gold
+	// 4. Update member donated gold
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE guild_members
 		SET total_donated_gold = total_donated_gold + ?
