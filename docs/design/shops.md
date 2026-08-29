@@ -48,9 +48,18 @@ Town shops allow characters to purchase equipment and consumable items with gold
      - `TotalPayout` in gold is added to the character's wallet (`character.Money += TotalPayout`).
      - The inventory removal and currency credit must be committed atomically.
 
-### Transaction Invariants
+### Transaction Invariants & Concurrency Control
 
-- Transactions cannot create negative gold balances or exceed integer bounds.
-- Quantities outside $1 \le \text{quantity} \le 9,999$ or exceeding owned quantities are rejected (`ErrInvalidQuantity`).
-- Selling unowned items or consuming more quantity than owned is rejected.
-- Concurrent transactions must not permit double-spending of gold or duplicate selling of item instances.
+- **Atomic Unit of Work**:
+  - All purchase and sale operations are executed within a database transaction boundary managed by `TransactionProvider`.
+  - Row-level exclusive locks (`SELECT ... FOR UPDATE`) are acquired on character records (`characters`) and inventory items (`inventory_items`) upon transaction entry.
+  - Balance deductions/credits and inventory updates/insertions/deletions commit atomically or roll back on any validation failure.
+- **Race Condition Prevention**:
+  - Concurrent purchases attempting to overdraft a character's wallet are prevented by pessimistic locking; exactly one transaction proceeds while concurrent requests observe depleted balances and fail with `ErrInsufficientFunds`.
+  - Concurrent sales attempting to double-sell or consume the same item instance are prevented by row locking; exactly one transaction consumes the item and receives payout while concurrent attempts fail with `ErrUnownedItem` or `ErrInvalidQuantity`.
+- **Validation Rules**:
+  - Transactions cannot create negative gold balances or exceed integer bounds.
+  - Quantities outside $1 \le \text{quantity} \le 9,999$ or exceeding owned quantities are rejected (`ErrInvalidQuantity`).
+  - Selling unowned items or consuming more quantity than owned is rejected (`ErrUnownedItem` / `ErrInvalidQuantity`).
+  - Integer multiplications and additions are guarded by `safeMultiply` and bounds checking (`ErrPriceOverflow`).
+

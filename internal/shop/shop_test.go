@@ -31,6 +31,10 @@ func (r *characterRepoStub) FindByID(_ context.Context, id string) (corecharacte
 	return c, nil
 }
 
+func (r *characterRepoStub) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return r.FindByID(ctx, id)
+}
+
 func (r *characterRepoStub) Update(_ context.Context, value corecharacter.Character) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -57,11 +61,25 @@ func (r *inventoryRepoStub) FindByCharacterID(_ context.Context, characterID str
 	return inv, nil
 }
 
+func (r *inventoryRepoStub) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	return r.FindByCharacterID(ctx, characterID)
+}
+
 func (r *inventoryRepoStub) Save(_ context.Context, value coreinventory.Inventory) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.inventories[value.CharacterID] = value
 	return nil
+}
+
+type mockTxProvider struct {
+	mu sync.Mutex
+}
+
+func (m *mockTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return fn(ctx)
 }
 
 func newTestSetup(t *testing.T) (*shop.Service, *characterRepoStub, *inventoryRepoStub, *item.Catalog) {
@@ -462,5 +480,136 @@ func TestSell_IntegerOverflowProtection(t *testing.T) {
 	_, err = service.Sell(context.Background(), char.ID, gemInst.ID, 4)
 	if !errors.Is(err, shop.ErrPriceOverflow) {
 		t.Errorf("Sell with overflowing payout returned %v, want %v", err, shop.ErrPriceOverflow)
+	}
+}
+
+func TestConcurrentPurchase_StrictAtomicBalance(t *testing.T) {
+	// Character has 150 gold. Item costs 100 gold.
+	// 5 concurrent attempts to buy 1 item.
+	// Exactly 1 must succeed, 4 must fail with ErrInsufficientFunds.
+	// Final balance must be 50, inventory must have 1 item.
+	sword, err := item.NewEquipmentDefinition("bronze_sword", "Bronze Sword", 100, item.SlotMainHand)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, _ := item.NewCatalog([]item.Definition{sword})
+	charRepo := newCharacterRepoStub()
+	invRepo := newInventoryRepoStub()
+	txProvider := &mockTxProvider{}
+
+	service, err := shop.NewService(charRepo, invRepo, catalog, shop.WithTransactionProvider(txProvider))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char := createTestCharacter(t, charRepo, "ConcurrentHero", 150)
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 5)
+	for range 5 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := service.Purchase(context.Background(), char.ID, "bronze_sword", 1)
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+
+	var successes, failures int
+	for err := range errs {
+		if err == nil {
+			successes++
+		} else if errors.Is(err, shop.ErrInsufficientFunds) {
+			failures++
+		} else {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}
+
+	if successes != 1 {
+		t.Errorf("successes = %d, want 1", successes)
+	}
+	if failures != 4 {
+		t.Errorf("failures = %d, want 4", failures)
+	}
+
+	finalChar, _ := charRepo.FindByID(context.Background(), char.ID)
+	if finalChar.Money != 50 {
+		t.Errorf("finalChar.Money = %d, want 50", finalChar.Money)
+	}
+
+	finalInv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
+	if len(finalInv.Items) != 1 {
+		t.Errorf("finalInv items = %d, want 1", len(finalInv.Items))
+	}
+}
+
+func TestConcurrentSell_StrictAtomicQuantity(t *testing.T) {
+	// Character has 1 herb instance with quantity = 1.
+	// Base price = 30, sell price = 15.
+	// 5 concurrent attempts to sell the same instance of quantity 1.
+	// Exactly 1 must succeed, 4 must fail.
+	// Final payout must be exactly 15, inventory must have 0 items.
+	potion, err := item.NewDefinition("herb", "Herb", 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, _ := item.NewCatalog([]item.Definition{potion})
+	charRepo := newCharacterRepoStub()
+	invRepo := newInventoryRepoStub()
+	txProvider := &mockTxProvider{}
+
+	service, err := shop.NewService(charRepo, invRepo, catalog, shop.WithTransactionProvider(txProvider))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char := createTestCharacter(t, charRepo, "SellerHero", 0)
+	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
+	herbInst, _ := item.NewInstance("herb", 1)
+	_ = inv.Add(herbInst)
+	_ = invRepo.Save(context.Background(), inv)
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 5)
+	for range 5 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := service.Sell(context.Background(), char.ID, herbInst.ID, 1)
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+
+	var successes, failures int
+	for err := range errs {
+		if err == nil {
+			successes++
+		} else if errors.Is(err, shop.ErrUnownedItem) || errors.Is(err, shop.ErrInvalidQuantity) {
+			failures++
+		} else {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}
+
+	if successes != 1 {
+		t.Errorf("successes = %d, want 1", successes)
+	}
+	if failures != 4 {
+		t.Errorf("failures = %d, want 4", failures)
+	}
+
+	finalChar, _ := charRepo.FindByID(context.Background(), char.ID)
+	if finalChar.Money != 15 {
+		t.Errorf("finalChar.Money = %d, want 15", finalChar.Money)
+	}
+
+	finalInv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
+	if len(finalInv.Items) != 0 {
+		t.Errorf("finalInv items = %d, want 0", len(finalInv.Items))
 	}
 }
