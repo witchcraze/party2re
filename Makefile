@@ -1,4 +1,4 @@
-.PHONY: all check verify check-clean fmt vet test test-integration test-docker smoke db-migrate db-reset up down setup-hooks
+.PHONY: all check verify check-clean fmt vet test test-integration test-docker test-stress smoke db-migrate db-reset up down setup-hooks
 
 all: check
 
@@ -35,6 +35,10 @@ test-integration:
 test-docker:
 	@echo "Running tests in Docker..."
 	@docker compose run --rm app go test -count=1 ./...
+
+test-stress:
+	@echo "Running high-concurrency stress test..."
+	@./scripts/stress_test.sh
 
 smoke:
 	@echo "Building smoke production image..."
