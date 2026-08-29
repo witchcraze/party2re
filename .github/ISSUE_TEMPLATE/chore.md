@@ -1,13 +1,18 @@
 ---
 name: Chore / Maintenance
 about: Maintenance, tooling, documentation, or development workflow work
-title: "[Chore] "
+title: "[Chore] <Domain>: "
 labels: ["chore"]
 ---
 
 ## Goal
 
 <!-- What needs to be changed? -->
+
+## Affected Components
+
+- **Packages / Modules**: `internal/<module>`
+- **Database Tables**: `<table_name>` (or "None")
 
 ## Scope
 
@@ -29,6 +34,11 @@ labels: ["chore"]
 
 - [ ] 
 
+## Prerequisites & Feasibility
+
+- [ ] Feasible with existing codebase capabilities
+- [ ] Requires prerequisite infrastructure / specification alignment (detail below)
+
 ## Documentation impact
 
 <!-- Note: Do NOT pre-draft documentation files before coding.
@@ -36,7 +46,6 @@ labels: ["chore"]
 
 - [ ] None
 - [ ] Update documentation within implementation PR
-
 
 ## Architecture impact
 

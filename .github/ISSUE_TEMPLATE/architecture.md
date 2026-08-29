@@ -1,13 +1,18 @@
 ---
 name: Architecture decision
 about: Propose a significant architectural change or decision
-title: "[Architecture] "
+title: "[Architecture] <Domain>: "
 labels: ["architecture"]
 ---
 
 ## Problem
 
 <!-- What architectural problem needs to be solved? -->
+
+## Affected Components
+
+- **Packages / Modules**: `internal/<module>`
+- **Database Tables**: `<table_name>` (or "None")
 
 ## Context
 
