@@ -97,7 +97,7 @@
     "mp_cost": 20,
     "power": 100,
     "kind": "healing",
-    "description": "白魔道士の高等回復術。"
+    "description": "白魔術師の高等回復術。"
   },
   {
     "id": "dark_flame",
@@ -107,7 +107,7 @@
     "mp_cost": 22,
     "power": 95,
     "kind": "damage",
-    "description": "闇魔道士の呪詛の黒炎。"
+    "description": "闇魔術師の呪詛の黒炎。"
   },
   {
     "id": "berserk_rush",

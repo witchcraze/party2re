@@ -28,10 +28,14 @@ func TestInitialCatalogUsesReviewedGenericNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	for id, want := range map[string]string{
-		"job-40": "鋼のさすらい人", "job-44": "駆鳥使い", "job-45": "森の小人",
-		"job-49": "若芽剣士", "job-68": "小玉戦士", "job-69": "小型勇士",
-		"job-70": "空竜の民", "job-71": "駆鳥騎手", "job-73": "自在士",
-		"job-76": "蓮華術師", "job-79": "夜翼族",
+		"job-15": "黒魔術師", "job-16": "白魔術師", "job-19": "闇魔術師",
+		"job-27": "風水師", "job-29": "時空術士", "job-30": "赤魔術師",
+		"job-31": "青魔術師", "job-36": "模倣師", "job-40": "鋼のさすらい人",
+		"job-44": "駆鳥使い", "job-45": "森の小人", "job-49": "若芽剣士",
+		"job-50": "道具使い", "job-51": "光魔術師", "job-56": "小悪魔",
+		"job-59": "スライム騎手", "job-68": "小玉戦士", "job-69": "小型勇士",
+		"job-70": "空竜の民", "job-71": "駆鳥騎手", "job-72": "数理術士",
+		"job-73": "自在士", "job-76": "蓮華術師", "job-79": "夜翼族",
 	} {
 		value, err := catalog.FindByID(id)
 		if err != nil {
@@ -39,6 +43,25 @@ func TestInitialCatalogUsesReviewedGenericNames(t *testing.T) {
 		}
 		if value.Name != want {
 			t.Fatalf("%s name = %q, want %q", id, value.Name, want)
+		}
+	}
+}
+
+func TestInitialCatalogCompliesWithCleanRoomNaming(t *testing.T) {
+	catalog, err := InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	prohibitedSubstrings := []string{
+		"魔道士", "ものまね士", "アイテム士", "ミニデーモン", "算術士",
+	}
+
+	for _, def := range catalog.Definitions() {
+		for _, prohibited := range prohibitedSubstrings {
+			if strings.Contains(def.Name, prohibited) {
+				t.Errorf("job %s (%q) contains prohibited clean-room keyword %q", def.ID, def.Name, prohibited)
+			}
 		}
 	}
 }
