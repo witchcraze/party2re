@@ -97,11 +97,13 @@ func CalculateStatsBonus(currentLevel int, baseAttack int, baseDefense int) (bon
 
 type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
+	FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
 	Update(ctx context.Context, character corecharacter.Character) error
 }
 
 type InventoryRepository interface {
 	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error)
 	Save(ctx context.Context, inventory coreinventory.Inventory) error
 }
 
@@ -109,10 +111,31 @@ type TransactionRepository interface {
 	CommitEnhancement(ctx context.Context, character corecharacter.Character, inventory coreinventory.Inventory) error
 }
 
+type TransactionProvider interface {
+	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+type Option func(*Service)
+
+func WithTransactionProvider(txProvider TransactionProvider) Option {
+	return func(s *Service) {
+		s.txProvider = txProvider
+	}
+}
+
+func WithRandomSource(randSource RandomSource) Option {
+	return func(s *Service) {
+		if randSource != nil {
+			s.randSource = randSource
+		}
+	}
+}
+
 type Service struct {
 	characters  CharacterRepository
 	inventories InventoryRepository
 	txRepo      TransactionRepository
+	txProvider  TransactionProvider
 	catalog     item.DefinitionProvider
 	materialID  string
 	randSource  RandomSource
@@ -122,17 +145,22 @@ func NewService(
 	characters CharacterRepository,
 	inventories InventoryRepository,
 	catalog item.DefinitionProvider,
+	opts ...Option,
 ) (*Service, error) {
 	if characters == nil || inventories == nil || catalog == nil {
 		return nil, errors.New("dependencies are nil")
 	}
-	return &Service{
+	s := &Service{
 		characters:  characters,
 		inventories: inventories,
 		catalog:     catalog,
 		materialID:  DefaultMaterialDefinitionID,
 		randSource:  cryptoRandomSource{},
-	}, nil
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s, nil
 }
 
 func NewServiceWithTransaction(
@@ -141,6 +169,7 @@ func NewServiceWithTransaction(
 	txRepo TransactionRepository,
 	catalog item.DefinitionProvider,
 	randSource RandomSource,
+	opts ...Option,
 ) (*Service, error) {
 	if characters == nil || inventories == nil || catalog == nil {
 		return nil, errors.New("dependencies are nil")
@@ -148,20 +177,45 @@ func NewServiceWithTransaction(
 	if randSource == nil {
 		randSource = cryptoRandomSource{}
 	}
-	return &Service{
+	s := &Service{
 		characters:  characters,
 		inventories: inventories,
 		txRepo:      txRepo,
 		catalog:     catalog,
 		materialID:  DefaultMaterialDefinitionID,
 		randSource:  randSource,
-	}, nil
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s, nil
 }
 
 func (s *Service) SetMaterialDefinitionID(materialID string) {
 	if materialID != "" {
 		s.materialID = materialID
 	}
+}
+
+func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	if s.txProvider != nil {
+		return s.txProvider.RunInTx(ctx, fn)
+	}
+	return fn(ctx)
+}
+
+func (s *Service) findCharacter(ctx context.Context, characterID string) (corecharacter.Character, error) {
+	if s.txProvider != nil {
+		return s.characters.FindByIDForUpdate(ctx, characterID)
+	}
+	return s.characters.FindByID(ctx, characterID)
+}
+
+func (s *Service) findInventory(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	if s.txProvider != nil {
+		return s.inventories.FindByCharacterIDForUpdate(ctx, characterID)
+	}
+	return s.inventories.FindByCharacterID(ctx, characterID)
 }
 
 func (s *Service) Enhance(ctx context.Context, characterID string, itemInstanceID string) (Result, error) {
@@ -172,103 +226,111 @@ func (s *Service) Enhance(ctx context.Context, characterID string, itemInstanceI
 		return Result{}, ErrInvalidItemInstanceID
 	}
 
-	character, err := s.characters.FindByID(ctx, characterID)
+	var result Result
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		character, err := s.findCharacter(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+
+		inv, err := s.findInventory(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+
+		targetItem, found := inv.Find(itemInstanceID)
+		if !found {
+			return ErrItemNotFound
+		}
+
+		def, err := s.catalog.FindByID(targetItem.DefinitionID)
+		if err != nil {
+			return fmt.Errorf("lookup item definition: %w", err)
+		}
+
+		if def.Slot == item.SlotNone {
+			return ErrItemNotEquipment
+		}
+
+		if targetItem.EnhancementLevel >= MaxEnhancementLevel {
+			return ErrMaxEnhancementReached
+		}
+
+		goldCost, materialCost := CalculateCost(targetItem.EnhancementLevel, def.Price)
+		if character.Money < goldCost {
+			return ErrInsufficientFunds
+		}
+
+		availableMaterials := inv.Quantity(s.materialID)
+		if availableMaterials < materialCost {
+			return ErrInsufficientMaterials
+		}
+
+		// Deduct gold
+		character.Money -= goldCost
+
+		// Consume material from inventory
+		materialToConsume := materialCost
+		for _, inst := range inv.Items {
+			if inst.DefinitionID == s.materialID && inst.Quantity > 0 {
+				toTake := inst.Quantity
+				if toTake > materialToConsume {
+					toTake = materialToConsume
+				}
+				_ = inv.Consume(inst.ID, toTake)
+				materialToConsume -= toTake
+				if materialToConsume <= 0 {
+					break
+				}
+			}
+		}
+
+		// Roll success
+		successRate := CalculateSuccessRate(targetItem.EnhancementLevel)
+		roll := s.randSource.Float64()
+		success := roll < successRate
+
+		prevLevel := targetItem.EnhancementLevel
+		newLevel := prevLevel
+		if success {
+			newLevel++
+			targetItem.EnhancementLevel = newLevel
+			// Update item instance in inventory
+			for i, inst := range inv.Items {
+				if inst.ID == targetItem.ID {
+					inv.Items[i].EnhancementLevel = newLevel
+					break
+				}
+			}
+		}
+
+		// Commit atomically if transaction repository is configured (and no txProvider)
+		if s.txRepo != nil && s.txProvider == nil {
+			if err := s.txRepo.CommitEnhancement(txCtx, character, inv); err != nil {
+				return fmt.Errorf("commit enhancement transaction: %w", err)
+			}
+		} else {
+			if err := s.characters.Update(txCtx, character); err != nil {
+				return fmt.Errorf("update character: %w", err)
+			}
+			if err := s.inventories.Save(txCtx, inv); err != nil {
+				return fmt.Errorf("save inventory: %w", err)
+			}
+		}
+
+		result = Result{
+			Success:       success,
+			PreviousLevel: prevLevel,
+			NewLevel:      newLevel,
+			GoldCost:      goldCost,
+			MaterialCost:  materialCost,
+			ItemInstance:  targetItem,
+		}
+		return nil
+	})
 	if err != nil {
 		return Result{}, err
 	}
 
-	inv, err := s.inventories.FindByCharacterID(ctx, characterID)
-	if err != nil {
-		return Result{}, err
-	}
-
-	targetItem, found := inv.Find(itemInstanceID)
-	if !found {
-		return Result{}, ErrItemNotFound
-	}
-
-	def, err := s.catalog.FindByID(targetItem.DefinitionID)
-	if err != nil {
-		return Result{}, fmt.Errorf("lookup item definition: %w", err)
-	}
-
-	if def.Slot == item.SlotNone {
-		return Result{}, ErrItemNotEquipment
-	}
-
-	if targetItem.EnhancementLevel >= MaxEnhancementLevel {
-		return Result{}, ErrMaxEnhancementReached
-	}
-
-	goldCost, materialCost := CalculateCost(targetItem.EnhancementLevel, def.Price)
-	if character.Money < goldCost {
-		return Result{}, ErrInsufficientFunds
-	}
-
-	availableMaterials := inv.Quantity(s.materialID)
-	if availableMaterials < materialCost {
-		return Result{}, ErrInsufficientMaterials
-	}
-
-	// Deduct gold
-	character.Money -= goldCost
-
-	// Consume material from inventory
-	// Search and consume from matching material instances
-	materialToConsume := materialCost
-	for _, inst := range inv.Items {
-		if inst.DefinitionID == s.materialID && inst.Quantity > 0 {
-			toTake := inst.Quantity
-			if toTake > materialToConsume {
-				toTake = materialToConsume
-			}
-			_ = inv.Consume(inst.ID, toTake)
-			materialToConsume -= toTake
-			if materialToConsume <= 0 {
-				break
-			}
-		}
-	}
-
-	// Roll success
-	successRate := CalculateSuccessRate(targetItem.EnhancementLevel)
-	roll := s.randSource.Float64()
-	success := roll < successRate
-
-	prevLevel := targetItem.EnhancementLevel
-	newLevel := prevLevel
-	if success {
-		newLevel++
-		targetItem.EnhancementLevel = newLevel
-		// Update item instance in inventory
-		for i, inst := range inv.Items {
-			if inst.ID == targetItem.ID {
-				inv.Items[i].EnhancementLevel = newLevel
-				break
-			}
-		}
-	}
-
-	// Commit atomically if transaction repository is configured
-	if s.txRepo != nil {
-		if err := s.txRepo.CommitEnhancement(ctx, character, inv); err != nil {
-			return Result{}, fmt.Errorf("commit enhancement transaction: %w", err)
-		}
-	} else {
-		if err := s.characters.Update(ctx, character); err != nil {
-			return Result{}, fmt.Errorf("update character: %w", err)
-		}
-		if err := s.inventories.Save(ctx, inv); err != nil {
-			return Result{}, fmt.Errorf("save inventory: %w", err)
-		}
-	}
-
-	return Result{
-		Success:       success,
-		PreviousLevel: prevLevel,
-		NewLevel:      newLevel,
-		GoldCost:      goldCost,
-		MaterialCost:  materialCost,
-		ItemInstance:  targetItem,
-	}, nil
+	return result, nil
 }

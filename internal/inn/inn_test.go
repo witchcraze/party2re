@@ -3,6 +3,7 @@ package inn
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -11,6 +12,7 @@ import (
 // --- stub repository ---
 
 type stubRepo struct {
+	mu        sync.Mutex
 	character corecharacter.Character
 	findErr   error
 	updateErr error
@@ -18,6 +20,8 @@ type stubRepo struct {
 }
 
 func (r *stubRepo) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.findErr != nil {
 		return corecharacter.Character{}, r.findErr
 	}
@@ -27,10 +31,17 @@ func (r *stubRepo) FindByID(_ context.Context, id string) (corecharacter.Charact
 	return r.character, nil
 }
 
+func (r *stubRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return r.FindByID(ctx, id)
+}
+
 func (r *stubRepo) Update(_ context.Context, value corecharacter.Character) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.updateErr != nil {
 		return r.updateErr
 	}
+	r.character = value
 	r.updated = &value
 	return nil
 }
@@ -191,5 +202,38 @@ func TestNewServiceWithFeeCustomFee(t *testing.T) {
 	}
 	if result.Money != 44 { // 50 - 6
 		t.Errorf("Money = %d, want 44", result.Money)
+	}
+}
+
+type dummyTxProvider struct{}
+
+func (d dummyTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	return fn(ctx)
+}
+
+func TestRest_ConcurrentRestPreventsOverdraft(t *testing.T) {
+	char := newTestCharacter(5, 1, 30, 10, 8, 1) // level 1, fee = 5, char has 8G (only enough for 1 rest)
+	repo := &stubRepo{character: char}
+	svc, _ := NewService(repo, WithTransactionProvider(dummyTxProvider{}))
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := svc.Rest(context.Background(), char.ID)
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+
+	finalChar, _ := repo.FindByID(context.Background(), char.ID)
+	if finalChar.Money < 0 {
+		t.Fatalf("character money went negative: %d", finalChar.Money)
+	}
+	if finalChar.Money != 3 { // 8 - 5 = 3
+		t.Errorf("character money = %d, want 3", finalChar.Money)
 	}
 }

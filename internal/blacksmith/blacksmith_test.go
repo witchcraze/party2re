@@ -30,6 +30,10 @@ func (r *memoryCharRepo) FindByID(_ context.Context, id string) (corecharacter.C
 	return c, nil
 }
 
+func (r *memoryCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return r.FindByID(ctx, id)
+}
+
 func (r *memoryCharRepo) Update(_ context.Context, character corecharacter.Character) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -54,6 +58,10 @@ func (r *memoryInvRepo) FindByCharacterID(_ context.Context, characterID string)
 		return coreinventory.New(characterID)
 	}
 	return inv, nil
+}
+
+func (r *memoryInvRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	return r.FindByCharacterID(ctx, characterID)
 }
 
 func (r *memoryInvRepo) Save(_ context.Context, inventory coreinventory.Inventory) error {
@@ -265,5 +273,66 @@ func TestEnhanceValidationErrors(t *testing.T) {
 	_, err = service.Enhance(ctx, char.ID, "nonexistent")
 	if !errors.Is(err, ErrItemNotFound) {
 		t.Errorf("expected ErrItemNotFound, got %v", err)
+	}
+}
+
+type dummyTxProvider struct{}
+
+func (d dummyTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	return fn(ctx)
+}
+
+func TestConcurrentEnhance_MaterialConsumptionAtomic(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMemoryCharRepo()
+	invRepo := newMemoryInvRepo()
+
+	swordDef, _ := item.NewEquipmentDefinition("test_sword", "Test Sword", 100, item.SlotMainHand)
+	matDef, _ := item.NewDefinition(DefaultMaterialDefinitionID, "Upgrade Stone", 50)
+	catalog, _ := item.NewCatalog([]item.Definition{swordDef, matDef})
+
+	char, _ := corecharacter.New("Hero")
+	char.Money = 10000
+	charRepo.characters[char.ID] = char
+
+	swordInst, _ := item.NewInstance("test_sword", 1)
+	matInst, _ := item.NewInstance(DefaultMaterialDefinitionID, 5) // exactly 5 materials
+	inv, _ := coreinventory.New(char.ID)
+	_ = inv.Add(swordInst)
+	_ = inv.Add(matInst)
+	invRepo.inventories[char.ID] = inv
+
+	service, _ := NewService(charRepo, invRepo, catalog,
+		WithTransactionProvider(dummyTxProvider{}),
+		WithRandomSource(fixedRandSource{value: 0.0}), // always succeeds
+	)
+
+	// Attempt multiple enhancements
+	var wg sync.WaitGroup
+	results := make(chan error, 10)
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := service.Enhance(ctx, char.ID, swordInst.ID)
+			results <- err
+		}()
+	}
+	wg.Wait()
+	close(results)
+
+	var successCount, failCount int
+	for err := range results {
+		if err == nil {
+			successCount++
+		} else {
+			failCount++
+		}
+	}
+
+	finalInv, _ := invRepo.FindByCharacterID(ctx, char.ID)
+	remainingMaterials := finalInv.Quantity(DefaultMaterialDefinitionID)
+	if remainingMaterials < 0 {
+		t.Fatalf("materials became negative: %d", remainingMaterials)
 	}
 }
