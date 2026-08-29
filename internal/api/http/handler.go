@@ -58,6 +58,7 @@ type PlayerService interface {
 type CharacterService interface {
 	Create(ctx context.Context, playerID string, name string) (corecharacter.Character, error)
 	Get(ctx context.Context, id string) (corecharacter.Character, error)
+	Rebirth(ctx context.Context, id string) (corecharacter.Character, error)
 }
 
 // AdventureService defines the adventure operations exposed over HTTP.
@@ -99,6 +100,19 @@ type Handler struct {
 	notifications  NotificationService
 	homes          HomeService
 	rankings       RankingService
+	jobs           JobService
+	inn            InnService
+	customSkills   CustomSkillService
+	chapel         ChapelService
+	farm           FarmService
+	collections    CollectionService
+	lottery        LotteryService
+	casino         CasinoService
+	challenges     ChallengeService
+	bosses         BossService
+	dungeons       DungeonService
+	pvp            PvPService
+	auctions       AuctionService
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
 	allowedOrigins map[string]struct{}
@@ -315,6 +329,73 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /rankings/medals", h.handleGetSmallMedalRanking)
 	mux.HandleFunc("GET /rankings/{type}", h.handleGetRankingByType)
 	mux.HandleFunc("POST /rankings/refresh", h.handleRefreshRankings)
+
+	// Jobs, Rebirth & Inn
+	mux.HandleFunc("GET /jobs", h.handleListJobs)
+	mux.HandleFunc("POST /characters/{id}/change-job", h.handleChangeJob)
+	mux.HandleFunc("POST /characters/{id}/rebirth", h.handleRebirth)
+	mux.HandleFunc("POST /characters/{id}/inn", h.handleInnRest)
+
+	// Custom Skills
+	mux.HandleFunc("GET /characters/{id}/custom-skills", h.handleGetCustomSkills)
+	mux.HandleFunc("POST /characters/{id}/custom-skills", h.handleEquipCustomSkill)
+	mux.HandleFunc("DELETE /characters/{id}/custom-skills/{slot}", h.handleUnequipCustomSkill)
+
+	// Chapel
+	mux.HandleFunc("GET /characters/{id}/chapel", h.handleGetChapel)
+	mux.HandleFunc("POST /characters/{id}/chapel/pray", h.handleChapelPray)
+	mux.HandleFunc("POST /characters/{id}/chapel/donate", h.handleChapelDonate)
+
+	// Farm
+	mux.HandleFunc("GET /characters/{id}/farm", h.handleGetFarm)
+	mux.HandleFunc("POST /characters/{id}/farm/plant", h.handleFarmPlant)
+	mux.HandleFunc("POST /characters/{id}/farm/water", h.handleFarmWater)
+	mux.HandleFunc("POST /characters/{id}/farm/fertilize", h.handleFarmFertilize)
+	mux.HandleFunc("POST /characters/{id}/farm/harvest", h.handleFarmHarvest)
+	mux.HandleFunc("POST /characters/{id}/farm/clear", h.handleFarmClear)
+
+	// Collections
+	mux.HandleFunc("GET /characters/{id}/collections/monsters", h.handleGetMonsterBook)
+	mux.HandleFunc("GET /characters/{id}/collections/items", h.handleGetItemCollection)
+
+	// Lottery & Raffle
+	mux.HandleFunc("GET /characters/{id}/lottery/tickets", h.handleGetLotteryTickets)
+	mux.HandleFunc("POST /characters/{id}/lottery/buy-raffle", h.handleBuyRaffleTickets)
+	mux.HandleFunc("POST /characters/{id}/lottery/raffle", h.handlePlayRaffle)
+	mux.HandleFunc("POST /characters/{id}/lottery/buy-ticket", h.handleBuyLotteryTicket)
+	mux.HandleFunc("POST /characters/{id}/lottery/claim", h.handleClaimLotteryTicket)
+
+	// Casino
+	mux.HandleFunc("GET /characters/{id}/casino", h.handleGetCasinoAccount)
+	mux.HandleFunc("POST /characters/{id}/casino/exchange", h.handleCasinoExchange)
+	mux.HandleFunc("POST /characters/{id}/casino/slot", h.handleCasinoSlot)
+	mux.HandleFunc("POST /characters/{id}/casino/highlow", h.handleCasinoHighLow)
+	mux.HandleFunc("POST /characters/{id}/casino/doppel", h.handleCasinoDoppel)
+	mux.HandleFunc("POST /characters/{id}/casino/poker", h.handleCasinoPokerStart)
+
+	// Combat & Challenges
+	mux.HandleFunc("GET /challenges/tiers", h.handleListChallengeTiers)
+	mux.HandleFunc("GET /characters/{id}/challenges/records", h.handleGetChallengeRecords)
+	mux.HandleFunc("POST /characters/{id}/challenges/start", h.handleStartChallenge)
+	mux.HandleFunc("POST /characters/{id}/challenges/advance", h.handleAdvanceChallenge)
+	mux.HandleFunc("POST /characters/{id}/challenges/retire", h.handleRetireChallenge)
+	mux.HandleFunc("GET /characters/{id}/bosses", h.handleListBosses)
+	mux.HandleFunc("POST /characters/{id}/bosses/fight", h.handleChallengeBoss)
+	mux.HandleFunc("GET /characters/{id}/dungeons", h.handleListDungeons)
+	mux.HandleFunc("POST /characters/{id}/dungeons/start", h.handleStartDungeon)
+	mux.HandleFunc("POST /characters/{id}/dungeons/move", h.handleMoveDungeon)
+	mux.HandleFunc("POST /characters/{id}/dungeons/escape", h.handleEscapeDungeon)
+	mux.HandleFunc("GET /characters/{id}/pvp", h.handleGetPvPRating)
+	mux.HandleFunc("GET /characters/{id}/pvp/opponents", h.handleFindPvPOpponents)
+	mux.HandleFunc("POST /characters/{id}/pvp/fight", h.handlePvPFight)
+
+	// Auction House
+	mux.HandleFunc("GET /auctions", h.handleListAuctions)
+	mux.HandleFunc("GET /auctions/{id}", h.handleGetAuction)
+	mux.HandleFunc("POST /auctions", h.handleCreateAuction)
+	mux.HandleFunc("POST /auctions/{id}/bid", h.handleAuctionBid)
+	mux.HandleFunc("POST /auctions/{id}/buyout", h.handleAuctionBuyout)
+	mux.HandleFunc("POST /auctions/{id}/cancel", h.handleAuctionCancel)
 
 	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(mux)))
 }

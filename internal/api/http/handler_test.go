@@ -45,15 +45,28 @@ func (s *stubPlayerService) Authenticate(ctx context.Context, sessionID string) 
 }
 
 type stubCharacterService struct {
-	createFn func(ctx context.Context, playerID, name string) (corecharacter.Character, error)
-	getFn    func(ctx context.Context, id string) (corecharacter.Character, error)
+	createFn  func(ctx context.Context, playerID, name string) (corecharacter.Character, error)
+	getFn     func(ctx context.Context, id string) (corecharacter.Character, error)
+	rebirthFn func(ctx context.Context, id string) (corecharacter.Character, error)
 }
 
 func (s *stubCharacterService) Create(ctx context.Context, playerID, name string) (corecharacter.Character, error) {
-	return s.createFn(ctx, playerID, name)
+	if s.createFn != nil {
+		return s.createFn(ctx, playerID, name)
+	}
+	return corecharacter.Character{}, nil
 }
 func (s *stubCharacterService) Get(ctx context.Context, id string) (corecharacter.Character, error) {
-	return s.getFn(ctx, id)
+	if s.getFn != nil {
+		return s.getFn(ctx, id)
+	}
+	return corecharacter.Character{}, nil
+}
+func (s *stubCharacterService) Rebirth(ctx context.Context, id string) (corecharacter.Character, error) {
+	if s.rebirthFn != nil {
+		return s.rebirthFn(ctx, id)
+	}
+	return corecharacter.Character{}, nil
 }
 
 type stubAdventureService struct {
