@@ -183,7 +183,7 @@ func (s *Service) PlayHighLow(ctx context.Context, characterID string, betCoins 
 	res := EvaluateHighLow(c1, c2, guess, betCoins)
 
 	// Deduct bet and credit payout atomically
-	acc, err := s.repo.AdjustCoins(ctx, characterID, res.NetCoins)
+	acc, err := s.repo.DeductBetAndCreditPayout(ctx, characterID, betCoins, res.PayoutCoins)
 	if err != nil {
 		return HighLowResult{}, Account{}, err
 	}

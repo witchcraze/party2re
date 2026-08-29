@@ -37,6 +37,6 @@ Standard bet options (coins per spin):
 ## Mechanics & Concurrency
 
 - **Atomic Settlement**:
-  - Each spin verifies the character's casino account balance (`Coins >= Bet`).
-  - In a single atomic database transaction, the net coin delta ($\Delta = \text{Payout} - \text{Bet}$) is applied.
+  - Each spin verifies and deducts the wagered bet (`Coins >= Bet`) and credits payouts atomically via `DeductBetAndCreditPayout` in a single database transaction.
+  - Concurrent spin requests are strictly serialized through database row locks/conditional updates, preventing any free spins or payout exploits with insufficient balances.
   - No negative coin balances are permitted.

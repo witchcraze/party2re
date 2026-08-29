@@ -10,10 +10,11 @@ import (
 )
 
 type mockCasinoRepo struct {
-	getAccountFn func(ctx context.Context, charID string) (casino.Account, error)
-	buyCoinsFn   func(ctx context.Context, charID string, coins int64, goldCost int) (casino.Account, corecharacter.Character, error)
-	sellCoinsFn  func(ctx context.Context, charID string, coins int64, goldReward int) (casino.Account, corecharacter.Character, error)
-	adjustFn     func(ctx context.Context, charID string, delta int64) (casino.Account, error)
+	getAccountFn      func(ctx context.Context, charID string) (casino.Account, error)
+	buyCoinsFn        func(ctx context.Context, charID string, coins int64, goldCost int) (casino.Account, corecharacter.Character, error)
+	sellCoinsFn       func(ctx context.Context, charID string, coins int64, goldReward int) (casino.Account, corecharacter.Character, error)
+	adjustFn          func(ctx context.Context, charID string, delta int64) (casino.Account, error)
+	deductAndCreditFn func(ctx context.Context, charID string, bet int64, payout int64) (casino.Account, error)
 }
 
 func (m *mockCasinoRepo) GetAccount(ctx context.Context, charID string) (casino.Account, error) {
@@ -42,6 +43,13 @@ func (m *mockCasinoRepo) AdjustCoins(ctx context.Context, charID string, delta i
 		return m.adjustFn(ctx, charID, delta)
 	}
 	return casino.Account{CharacterID: charID, Coins: 1000 + delta}, nil
+}
+
+func (m *mockCasinoRepo) DeductBetAndCreditPayout(ctx context.Context, charID string, bet int64, payout int64) (casino.Account, error) {
+	if m.deductAndCreditFn != nil {
+		return m.deductAndCreditFn(ctx, charID, bet, payout)
+	}
+	return casino.Account{CharacterID: charID, Coins: 1000 - bet + payout}, nil
 }
 
 func TestCasinoService_Exchanges(t *testing.T) {
@@ -92,6 +100,13 @@ func TestCasinoService_IndianPokerLifecycle(t *testing.T) {
 			currentCoins += delta
 			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
 		},
+		deductAndCreditFn: func(_ context.Context, charID string, bet int64, payout int64) (casino.Account, error) {
+			if currentCoins < bet {
+				return casino.Account{CharacterID: charID, Coins: currentCoins}, casino.ErrInsufficientCoins
+			}
+			currentCoins = currentCoins - bet + payout
+			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
+		},
 	}
 	svc, _ := casino.NewService(repo)
 
@@ -124,6 +139,13 @@ func TestCasinoService_SpinSlot(t *testing.T) {
 		},
 		adjustFn: func(_ context.Context, charID string, delta int64) (casino.Account, error) {
 			currentCoins += delta
+			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
+		},
+		deductAndCreditFn: func(_ context.Context, charID string, bet int64, payout int64) (casino.Account, error) {
+			if currentCoins < bet {
+				return casino.Account{CharacterID: charID, Coins: currentCoins}, casino.ErrInsufficientCoins
+			}
+			currentCoins = currentCoins - bet + payout
 			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
 		},
 	}
@@ -163,6 +185,13 @@ func TestCasinoService_PlayDoppel(t *testing.T) {
 		},
 		adjustFn: func(_ context.Context, charID string, delta int64) (casino.Account, error) {
 			currentCoins += delta
+			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
+		},
+		deductAndCreditFn: func(_ context.Context, charID string, bet int64, payout int64) (casino.Account, error) {
+			if currentCoins < bet {
+				return casino.Account{CharacterID: charID, Coins: currentCoins}, casino.ErrInsufficientCoins
+			}
+			currentCoins = currentCoins - bet + payout
 			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
 		},
 	}

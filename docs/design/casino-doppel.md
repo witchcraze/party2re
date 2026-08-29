@@ -44,4 +44,6 @@ The player selects a difficulty tier determining the active symbol pool size and
 
 ## Persistence & Transactions
 
-- All wagers and payouts are settled atomically in MariaDB (`casino_accounts`) within a database transaction, guaranteeing non-negative balance constraints (`CHECK (coins >= 0)`).
+- All wagers and payouts are verified and settled atomically in MariaDB (`casino_accounts`) within a single database transaction via `DeductBetAndCreditPayout`.
+- Conditional updates (`WHERE character_id = ? AND coins >= ?`) ensure concurrent requests cannot exploit race conditions or claim winnings without sufficient bet balance.
+- Non-negative balance constraints (`CHECK (coins >= 0)`) are strictly preserved.

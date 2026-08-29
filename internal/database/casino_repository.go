@@ -167,7 +167,11 @@ func (r *CasinoRepository) ExchangeCoinsToGold(ctx context.Context, characterID 
 	return acc, char, nil
 }
 
-func (r *CasinoRepository) AdjustCoins(ctx context.Context, characterID string, delta int64) (casino.Account, error) {
+func (r *CasinoRepository) DeductBetAndCreditPayout(ctx context.Context, characterID string, bet int64, payout int64) (casino.Account, error) {
+	if bet < 0 || payout < 0 {
+		return casino.Account{}, errors.New("bet and payout must be non-negative")
+	}
+
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return casino.Account{}, err
@@ -176,22 +180,13 @@ func (r *CasinoRepository) AdjustCoins(ctx context.Context, characterID string, 
 		_ = tx.Rollback()
 	}()
 
-	if delta >= 0 {
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO casino_accounts (character_id, coins)
-			VALUES (?, ?)
-			ON DUPLICATE KEY UPDATE coins = coins + VALUES(coins)
-		`, characterID, delta)
-		if err != nil {
-			return casino.Account{}, err
-		}
-	} else {
-		deduct := -delta
+	// 1. If bet > 0, atomically verify and deduct bet
+	if bet > 0 {
 		res, err := tx.ExecContext(ctx, `
 			UPDATE casino_accounts
 			SET coins = coins - ?
 			WHERE character_id = ? AND coins >= ?
-		`, deduct, characterID, deduct)
+		`, bet, characterID, bet)
 		if err != nil {
 			return casino.Account{}, err
 		}
@@ -204,6 +199,19 @@ func (r *CasinoRepository) AdjustCoins(ctx context.Context, characterID string, 
 		}
 	}
 
+	// 2. If payout > 0, credit payout to account
+	if payout > 0 {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO casino_accounts (character_id, coins)
+			VALUES (?, ?)
+			ON DUPLICATE KEY UPDATE coins = coins + VALUES(coins)
+		`, characterID, payout)
+		if err != nil {
+			return casino.Account{}, err
+		}
+	}
+
+	// 3. Scan updated account
 	var acc casino.Account
 	err = tx.QueryRowContext(ctx, `
 		SELECT character_id, coins, updated_at
@@ -219,4 +227,11 @@ func (r *CasinoRepository) AdjustCoins(ctx context.Context, characterID string, 
 	}
 
 	return acc, nil
+}
+
+func (r *CasinoRepository) AdjustCoins(ctx context.Context, characterID string, delta int64) (casino.Account, error) {
+	if delta < 0 {
+		return r.DeductBetAndCreditPayout(ctx, characterID, -delta, 0)
+	}
+	return r.DeductBetAndCreditPayout(ctx, characterID, 0, delta)
 }

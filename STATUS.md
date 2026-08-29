@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #244 — Enforce administrative authorization on POST /news and POST /rankings/refresh endpoints
+Last updated: Issue #191 — Eliminate free spins and payout concurrency exploit in Casino minigames
 
 ## Current phase
 
@@ -37,7 +37,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Bank** (`internal/bank`): 銀行（預金・引出・プレイヤー間送金、`FOR UPDATE` 排他ロック）。
 - **Inn** (`internal/inn`): 宿屋・休息（HP/MP全回復）。
 - **Guild** (`internal/guild`): ギルド設立（5,000 G）、階層役職管理（Leader, Officer, Member）、加入・脱退・追放・役職変更・リーダー権限譲渡、ゴールド寄付によるEXP獲得とギルドレベルアップ（最大Lv10 / 定員拡大）、お知らせ掲示板、単一ギルド所属制約。
-- **Casino** (`internal/casino`): カジノコイン両替（1 Coin = 20 G）、インディアンポーカー（52枚標準トランプモデル、ブラインド賭け、NPCディーラーAI、最大5ラウンド・レート上昇、ショーダウン勝敗判定・配当精算）、スロットマシン（3リール・5絵柄、777 100倍ジャックポット、レート設定 $1〜$200、アトミック精算）、ドッペルゲンガー（8種マーク一致・秘密選択、4x/6x/8x 倍率設定、アトミック精算）、ハイロー（トランプ数字大小予測、2倍配当、連勝継続倍々モード）。
+- **Casino** (`internal/casino`): カジノコイン両替（1 Coin = 20 G）、インディアンポーカー（52枚標準トランプモデル、ブラインド賭け、NPCディーラーAI、最大5ラウンド・レート上昇、ショーダウン勝敗判定・配当精算）、スロットマシン（3リール・5絵柄、777 100倍ジャックポット、レート設定 $1〜$200）、ドッペルゲンガー（8種マーク一致・秘密選択、4x/6x/8x 倍率設定）、ハイロー（トランプ数字大小予測、2倍配当、連勝継続倍々モード）。全ゲームにおいて `DeductBetAndCreditPayout` による条件付きアトミックベット減算・配当付与トランザクション処理と MariaDB 行レベルロックによって並行性エクスプロイト（残高0での無限無料スピン・不正配当獲得）を完全防止。
 - **Lottery & Raffle** (`internal/lottery`): 福引（通常3枚・特賞〜6等・ハズレ、裏福引300枚・各色オーブ）、定期4桁数字宝くじ（1等100,000 Gジャックポット、下3桁・下2桁・下1桁返還、トランザクション安全な当籤受取処理）。
 - **Farm & Plantation** (`internal/farm`): 4区画農園（薬草・マンドラゴラ・月光草・黄金の果実の種蒔き、水やり収穫数+1、肥料成長時間半減、実時間経過成熟判定・枯れ判定、収穫報酬精算）。
 - **Auction & Marketplace** (`internal/auction`): プレイヤー間アイテム出品（開始価格・即決価格・出品期間）、入札時のゴールドエスクロー、高値更新時の自動即時返金、即決購入（即時成立・売上送金）、出品期間満了時の自動落札・返却精算、出品キャンセル、`FOR UPDATE` 排他ロック。
