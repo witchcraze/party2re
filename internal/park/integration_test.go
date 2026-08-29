@@ -38,10 +38,12 @@ func TestParkServiceIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	curTime := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
 	svc, err := park.NewService(
 		parkRepo,
 		charRepo,
-		park.WithRateLimit(100*time.Millisecond),
+		park.WithRateLimit(time.Second),
+		park.WithNowFunc(func() time.Time { return curTime }),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -62,8 +64,8 @@ func TestParkServiceIntegration(t *testing.T) {
 		t.Errorf("expected ErrRateLimited, got %v", err)
 	}
 
-	// 3. Wait for rate limit window
-	time.Sleep(150 * time.Millisecond)
+	// 3. Advance clock past rate limit window
+	curTime = curTime.Add(2 * time.Second)
 
 	// 4. Retrieve recent posts
 	posts, total, err := svc.GetRecentPosts(ctx, 10, 0)

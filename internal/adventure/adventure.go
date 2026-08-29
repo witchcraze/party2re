@@ -56,6 +56,8 @@ type Repository interface {
 	Save(ctx context.Context, value Adventure) error
 	FindByID(ctx context.Context, id string) (Adventure, error)
 	ClaimAndApply(ctx context.Context, value Adventure, character corecharacter.Character) error
+	ListByCharacterID(ctx context.Context, characterID string, limit, offset int) ([]Adventure, int, error)
+	GetAggregatedStats(ctx context.Context, characterID string) (AggregatedStats, error)
 }
 
 type InventoryRepository interface {

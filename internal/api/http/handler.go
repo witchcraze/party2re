@@ -64,6 +64,8 @@ type CharacterService interface {
 type AdventureService interface {
 	StartStage(ctx context.Context, characterID string, stageID string) (adventure.Adventure, error)
 	Claim(ctx context.Context, id string) (adventure.Adventure, error)
+	ListHistory(ctx context.Context, characterID string, limit, offset int) (adventure.PaginatedAdventures, error)
+	GetChronicle(ctx context.Context, characterID string) (adventure.AdventureChronicle, error)
 }
 
 // ShopService defines the shop operations exposed over HTTP.
@@ -256,6 +258,8 @@ func (h *Handler) Router() http.Handler {
 
 	mux.HandleFunc("POST /adventures", h.handleStartAdventure)
 	mux.HandleFunc("POST /adventures/{id}/claim", h.handleClaimAdventure)
+	mux.HandleFunc("GET /characters/{id}/adventures", h.handleListCharacterAdventures)
+	mux.HandleFunc("GET /characters/{id}/adventure-chronicle", h.handleGetAdventureChronicle)
 
 	mux.HandleFunc("POST /shop/purchase", h.handlePurchase)
 	mux.HandleFunc("POST /shop/sell", h.handleSell)

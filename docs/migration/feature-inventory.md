@@ -84,6 +84,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Reusable deterministic Battle component & turn resolver ([#12](https://github.com/witchcraze/party2re/issues/12), [#20](https://github.com/witchcraze/party2re/issues/20), [#36](https://github.com/witchcraze/party2re/issues/36))
 - [x] Data-driven Stage Catalog (28 stages) and Monster Catalog (286 clean-room monsters) ([#56](https://github.com/witchcraze/party2re/issues/56))
 - [x] Multi-stage adventure and dungeon exploration with branching maps, traps, and boss encounters ([#57](https://github.com/witchcraze/party2re/issues/57), [#74](https://github.com/witchcraze/party2re/issues/74))
+- [x] Adventure history logs, stage clear stats, and milestone progression unlocks ([#199](https://github.com/witchcraze/party2re/issues/199))
 - [x] Push-based background ScheduledAction completion via Valkey Worker ([#106](https://github.com/witchcraze/party2re/issues/106), [#109](https://github.com/witchcraze/party2re/issues/109), [#110](https://github.com/witchcraze/party2re/issues/110))
 - [x] Challenge content & special battle modes: Player versus Player arena combat ([#75](https://github.com/witchcraze/party2re/issues/75))
 - [x] Challenge content & special battle modes: King & World Boss challenge battles ([#73](https://github.com/witchcraze/party2re/issues/73))
@@ -183,7 +184,8 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#78](https://github.com/witchcraze/party2re/issues/78) | Town Park and public bulletin board | Merged |
 | [#213](https://github.com/witchcraze/party2re/issues/213) | HTTP API endpoints for helper and rescue | Merged |
 | [#67](https://github.com/witchcraze/party2re/issues/67) | News, announcements, and player notification system | Merged |
-| [#159](https://github.com/witchcraze/party2re/issues/159) | Player private home, mailbox, and letter correspondence | Implemented |
+| [#159](https://github.com/witchcraze/party2re/issues/159) | Player private home, mailbox, and letter correspondence | Merged |
+| [#199](https://github.com/witchcraze/party2re/issues/199) | Adventure history and gameplay record access (adventure_record.cgi) | Implemented |
 
 ---
 

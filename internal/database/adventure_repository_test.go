@@ -10,6 +10,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 func TestNewAdventureRepositoryNilDB(t *testing.T) {
@@ -159,5 +160,154 @@ func TestAdventureRepositoryClaimAndApply(t *testing.T) {
 	adv.ID = "nonexistent_adv"
 	if err := adventureRepo.ClaimAndApply(context.Background(), adv, character); !errors.Is(err, adventure.ErrNotFound) {
 		t.Fatalf("ClaimAndApply(nonexistent) error = %v, want %v", err, adventure.ErrNotFound)
+	}
+}
+
+func TestAdventureRepositoryListByCharacterIDAndAggregatedStats(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	character, err := CreateTestCharacter(ctx, db, "Chronicle Test Hero")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	repo, err := NewAdventureRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Date(2026, 8, 29, 10, 0, 0, 0, time.UTC)
+
+	// Insert multiple adventures
+	adv1 := adventure.Adventure{
+		ID:               id.New(),
+		CharacterID:      character.ID,
+		Type:             "stage-01",
+		StageID:          "stage-01",
+		MonsterID:        "mon-01",
+		StartedAt:        now,
+		AvailableAt:      now.Add(time.Minute),
+		ExperienceReward: 20,
+		BattleResult: corebattle.Result{
+			Outcome:  corebattle.OutcomeWin,
+			WinnerID: character.ID,
+			LoserID:  "mon-01",
+			Turns:    3,
+			Reward: corebattle.Reward{
+				Experience: 20,
+				Currency:   15,
+			},
+		},
+		Resolved: true,
+		Claimed:  true,
+	}
+
+	adv2 := adventure.Adventure{
+		ID:               id.New(),
+		CharacterID:      character.ID,
+		Type:             "stage-01",
+		StageID:          "stage-01",
+		MonsterID:        "mon-01",
+		StartedAt:        now.Add(time.Hour),
+		AvailableAt:      now.Add(time.Hour + time.Minute),
+		ExperienceReward: 20,
+		BattleResult: corebattle.Result{
+			Outcome:  corebattle.OutcomeWin,
+			WinnerID: character.ID,
+			LoserID:  "mon-01",
+			Turns:    2,
+			Reward: corebattle.Reward{
+				Experience: 20,
+				Currency:   10,
+			},
+		},
+		Resolved: true,
+		Claimed:  true,
+	}
+
+	adv3 := adventure.Adventure{
+		ID:               id.New(),
+		CharacterID:      character.ID,
+		Type:             "stage-02",
+		StageID:          "stage-02",
+		MonsterID:        "mon-02",
+		StartedAt:        now.Add(2 * time.Hour),
+		AvailableAt:      now.Add(2*time.Hour + time.Minute),
+		ExperienceReward: 50,
+		BattleResult: corebattle.Result{
+			Outcome:  corebattle.OutcomeWin,
+			WinnerID: "mon-02",
+			LoserID:  character.ID,
+			Turns:    4,
+		},
+		Resolved: true,
+		Claimed:  true,
+	}
+
+	for _, a := range []adventure.Adventure{adv1, adv2, adv3} {
+		if err := repo.Save(ctx, a); err != nil {
+			t.Fatalf("Save(%s) error = %v", a.ID, err)
+		}
+	}
+
+	// Test ListByCharacterID with pagination
+	list, total, err := repo.ListByCharacterID(ctx, character.ID, 2, 0)
+	if err != nil {
+		t.Fatalf("ListByCharacterID() error = %v", err)
+	}
+	if total != 3 {
+		t.Fatalf("expected total 3, got %d", total)
+	}
+	if len(list) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(list))
+	}
+	// Ordered by started_at DESC
+	if list[0].ID != adv3.ID || list[1].ID != adv2.ID {
+		t.Fatalf("unexpected order in list: [%s, %s]", list[0].ID, list[1].ID)
+	}
+
+	// Test second page
+	list2, total2, err := repo.ListByCharacterID(ctx, character.ID, 2, 2)
+	if err != nil {
+		t.Fatalf("ListByCharacterID() second page error = %v", err)
+	}
+	if total2 != 3 || len(list2) != 1 || list2[0].ID != adv1.ID {
+		t.Fatalf("unexpected second page result: total=%d, len=%d, item=%s", total2, len(list2), list2[0].ID)
+	}
+
+	// Test GetAggregatedStats
+	stats, err := repo.GetAggregatedStats(ctx, character.ID)
+	if err != nil {
+		t.Fatalf("GetAggregatedStats() error = %v", err)
+	}
+	if stats.TotalAdventures != 3 || stats.TotalVictories != 2 || stats.TotalDefeats != 1 || stats.TotalDraws != 0 {
+		t.Fatalf("unexpected aggregate stats: %+v", stats)
+	}
+	if stats.TotalTurns != 9 || stats.TotalExpEarned != 40 || stats.TotalGoldEarned != 25 {
+		t.Fatalf("unexpected aggregates: total_turns=%d, exp=%d, gold=%d", stats.TotalTurns, stats.TotalExpEarned, stats.TotalGoldEarned)
+	}
+	if len(stats.StageStats) != 2 {
+		t.Fatalf("expected 2 stage stats, got %d: %+v", len(stats.StageStats), stats.StageStats)
+	}
+	// stage-01 has 2 attempts, 2 clears; stage-02 has 1 attempt, 0 clears
+	for _, ss := range stats.StageStats {
+		if ss.StageID == "stage-01" {
+			if ss.TotalAttempts != 2 || ss.ClearCount != 2 {
+				t.Fatalf("unexpected stage-01 stats: %+v", ss)
+			}
+		} else if ss.StageID == "stage-02" {
+			if ss.TotalAttempts != 1 || ss.ClearCount != 0 {
+				t.Fatalf("unexpected stage-02 stats: %+v", ss)
+			}
+		}
 	}
 }

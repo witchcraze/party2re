@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #196 — Clean-room IP compliance for Job names and catalogs
+Last updated: Issue #199 — Adventure history and gameplay record access
 
 ## Current phase
 
@@ -28,7 +28,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### Feature Modules
 - **Activity** (`internal/activity`): 訓練機能（Valkey Worker push型＋手動Claimフォールバック）。
-- **Adventure** (`internal/adventure`): 28ステージ（`stages.json`）、286体モンスター（`monsters.json`）、戦闘解決、ドロップ報酬（メダル含む）、Valkey Worker連携。
+- **Adventure** (`internal/adventure`): 28ステージ（`stages.json`）、286体モンスター（`monsters.json`）、戦闘解決、ドロップ報酬（メダル含む）、Valkey Worker連携、過去冒険履歴一覧（`GET /characters/{id}/adventures`）、冒険戦績クロニクル・ステージ別クリア統計・マイルストーンアンロック状態（`GET /characters/{id}/adventure-chronicle`、トライモード/イメージ設定/カームモード/ハードモード/アバター設定/エクストリームモード）。
 - **Medal** (`internal/medal`): 小さなメダル交換所（減算消費方式、`TransactionProvider` と `SELECT ... FOR UPDATE` 行ロックによるメダル消費・アイテム付与の完全アトミックトランザクション整合性・並行性レース防止）およびダンジョン宝箱・踏破、ワールドボス討伐・初回クリアによるメダル獲得連携。
 - **Shop** (`internal/shop`): アイテム売買（50%売却）、1回あたり最大取引数量制限（`MaxTransactionQuantity = 9999`）、整数オーバーフロー安全乗算（`safeMultiply` / `ErrPriceOverflow`）、`TransactionProvider` と `SELECT ... FOR UPDATE` 行ロックによる購入・売却のアトミックトランザクション整合性・並行性レース保護。
 - **Depot** (`internal/depot`): 倉庫（アイテム・ゴールド預入・引出）、トランザクション整合性。
@@ -57,10 +57,10 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Player Leaderboards & Character Rankings** (`internal/ranking`): ランキング・リーダーボード機能（`ranking.cgi`, `job_ranking.cgi`, `week_ranking.cgi`、レベル・プレイヤー総資産・キャラクター所持金・戦闘通算勝利数・PvP闘技場勝利数・ボス討伐数・冒険勝利数・職マスター数・職業人気分布・手助け達成数・転生回数・ちいさなメダル所持数の12カテゴリ、決定論的タイブレーク・ページネーション、インメモリTTLキャッシュ、Valkey分散スナップショットキャッシュ、Singleflightキャッシュスタンピード抑止、バックグラウンドWorker定期更新アクション `party2:ranking:refresh`、永続スナップショット `ranking_snapshots`、MariaDB永続化）。
 
 ### API & Transport
-- **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/adventures`, `/shop/*`, `/park/*`, `/medals/*`, `/helpers/*`, `/rescues/*`, `/news/*`, `/notifications/*`, `/homes/*`, `/letters/*`, `/rankings/*`）。セッション認証、管理者APIキー認可（`X-Admin-Key` / `Authorization: Bearer <key>`、タイミング攻撃耐性をもつ定数時間比較、`POST /news` および `POST /rankings/refresh` を保護）、キャラクター・プレイヤー所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、Valkey/In-Memory 分散レートリミットミドルウェア（公開認証エンドポイント・一般エンドポイント別制限、429 Too Many Requests、Retry-After / X-RateLimit-* ヘッダー、fail-open耐障害性）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
+- **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/characters/{id}/adventures`, `/characters/{id}/adventure-chronicle`, `/adventures`, `/shop/*`, `/park/*`, `/medals/*`, `/helpers/*`, `/rescues/*`, `/news/*`, `/notifications/*`, `/homes/*`, `/letters/*`, `/rankings/*`）。セッション認証、管理者APIキー認可（`X-Admin-Key` / `Authorization: Bearer <key>`、タイミング攻撃耐性をもつ定数時間比較、`POST /news` および `POST /rankings/refresh` を保護）、キャラクター・プレイヤー所有権認可検証（403 Forbidden）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、Valkey/In-Memory 分散レートリミットミドルウェア（公開認証エンドポイント・一般エンドポイント別制限、429 Too Many Requests、Retry-After / X-RateLimit-* ヘッダー、fail-open耐障害性）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
 
 ### Infrastructure & Operations
-- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `035_rankings_and_leaderboards.sql`、`make db-migrate` / `make db-reset`）。
+- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `037_adventure_chronicle.sql`、`make db-migrate` / `make db-reset`）。
 - **Valkey**: 遅延アクションキュー・排他ロック・分散レートリミット・ランキングスナップショットキャッシュ（AOF+RDB永続化）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
 - **Verification**: `Makefile` (`make check`, `make fmt`, `make check-clean`)、Git pre-push hook による自動検証。
@@ -71,10 +71,11 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ## Immediate Priorities (Next Actions)
 
 1. **Remaining Version 1.0 Feature Modules**:
-   - Notifications, News, and History Access (Issue #199)
-   - Web Presentation UI / Client (Issue #140)
+   - Personal Access Token (API Key) generation and authentication (Issue #163)
    - Gem and Jewel special synthesis (Issue #72)
+   - Event Plaza and Traveling Merchant Bazaar (Issue #161)
    - Photo Contest and Seasonal Events (Issue #186)
+   - Web Presentation UI / Client (Issue #140)
 
 ---
 
