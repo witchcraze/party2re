@@ -94,6 +94,10 @@ func (h *Handler) handleCreateNews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.authenticateAdmin(w, r) {
+		return
+	}
+
 	var req createNewsRequest
 	if !decodeJSON(w, r, &req) {
 		return

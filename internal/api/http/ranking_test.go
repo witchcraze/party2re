@@ -96,7 +96,9 @@ func setupRankingHandler(mock *mockHTTPRankingService) *apihttp.Handler {
 	adventures := &stubAdventureService{}
 	shops := &stubShopService{}
 
-	opts := []apihttp.Option{}
+	opts := []apihttp.Option{
+		apihttp.WithAdminAPIKey("test-admin-key"),
+	}
 	if mock != nil {
 		opts = append(opts, apihttp.WithRanking(mock))
 	}
@@ -191,6 +193,7 @@ func TestRankingEndpoints(t *testing.T) {
 		method     string
 		url        string
 		body       string
+		headers    map[string]string
 		wantStatus int
 		checkBody  func(*testing.T, *httptest.ResponseRecorder)
 	}{
@@ -273,15 +276,41 @@ func TestRankingEndpoints(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
+			name:       "GET /rankings/player_wealth (dynamic route)",
+			method:     http.MethodGet,
+			url:        "/rankings/player_wealth",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /rankings/job_popularity (dynamic route)",
+			method:     http.MethodGet,
+			url:        "/rankings/job_popularity",
+			wantStatus: http.StatusOK,
+		},
+		{
 			name:       "GET /rankings/unknown_type (400 Bad Request)",
 			method:     http.MethodGet,
 			url:        "/rankings/unknown_type",
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name:       "POST /rankings/refresh (all)",
+			name:       "POST /rankings/refresh (missing admin credentials -> 401)",
 			method:     http.MethodPost,
 			url:        "/rankings/refresh",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "POST /rankings/refresh (invalid admin key -> 403)",
+			method:     http.MethodPost,
+			url:        "/rankings/refresh",
+			headers:    map[string]string{"X-Admin-Key": "wrong-key"},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "POST /rankings/refresh (all with X-Admin-Key)",
+			method:     http.MethodPost,
+			url:        "/rankings/refresh",
+			headers:    map[string]string{"X-Admin-Key": "test-admin-key"},
 			wantStatus: http.StatusOK,
 			checkBody: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				if !mock.refreshedAll {
@@ -290,16 +319,37 @@ func TestRankingEndpoints(t *testing.T) {
 			},
 		},
 		{
-			name:       "POST /rankings/refresh (single type)",
+			name:       "POST /rankings/refresh (all with Bearer token)",
+			method:     http.MethodPost,
+			url:        "/rankings/refresh",
+			headers:    map[string]string{"Authorization": "Bearer test-admin-key"},
+			wantStatus: http.StatusOK,
+			checkBody: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				if !mock.refreshedAll {
+					t.Fatalf("expected refreshedAll=true")
+				}
+			},
+		},
+		{
+			name:       "POST /rankings/refresh (single type with X-Admin-Key)",
 			method:     http.MethodPost,
 			url:        "/rankings/refresh",
 			body:       `{"ranking_type":"level"}`,
+			headers:    map[string]string{"X-Admin-Key": "test-admin-key"},
 			wantStatus: http.StatusOK,
 			checkBody: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				if len(mock.refreshedTypes) == 0 || mock.refreshedTypes[0] != ranking.RankingTypeLevel {
 					t.Fatalf("expected level in refreshedTypes: %+v", mock.refreshedTypes)
 				}
 			},
+		},
+		{
+			name:       "POST /rankings/refresh (invalid type with X-Admin-Key)",
+			method:     http.MethodPost,
+			url:        "/rankings/refresh",
+			body:       `{"ranking_type":"invalid_category"}`,
+			headers:    map[string]string{"X-Admin-Key": "test-admin-key"},
+			wantStatus: http.StatusBadRequest,
 		},
 	}
 
@@ -313,6 +363,9 @@ func TestRankingEndpoints(t *testing.T) {
 			}
 			req := httptest.NewRequest(tt.method, tt.url, bodyReader)
 			req.Header.Set("Content-Type", "application/json")
+			for k, v := range tt.headers {
+				req.Header.Set(k, v)
+			}
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)

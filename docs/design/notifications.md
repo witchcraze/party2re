@@ -56,7 +56,7 @@ Personalized asynchronous message delivery to player accounts:
 | --- | --- | --- | --- |
 | `GET` | `/news` | Public | List recent news articles with pagination (`limit`, `offset`) |
 | `GET` | `/news/{id}` | Public | Retrieve a specific news article by ID |
-| `POST` | `/news` | Admin | Publish a new server news article |
+| `POST` | `/news` | Admin (`X-Admin-Key` / `Bearer <key>`) | Publish a new server news article |
 | `GET` | `/notifications` | Player Session | List notifications for authenticated player (`unread_only`, `limit`, `offset`) |
 | `GET` | `/notifications/unread-count` | Player Session | Get unread notification count |
 | `POST` | `/notifications/{id}/read` | Player Session | Mark single notification as read |

@@ -219,6 +219,10 @@ func (h *Handler) handleRefreshRankings(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if !h.authenticateAdmin(w, r) {
+		return
+	}
+
 	var req refreshRankingsRequest
 	if r.ContentLength > 0 {
 		if !decodeJSON(w, r, &req) {

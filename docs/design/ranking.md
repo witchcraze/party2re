@@ -45,19 +45,19 @@ The ranking engine calculates standings across 12 distinct game metrics:
 
 ## HTTP JSON Endpoints
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `GET` | `/rankings/levels` | Character Level leaderboard (`?limit=20&offset=0&snapshot=true`) |
-| `GET` | `/rankings/wealth` | Player Total Wealth leaderboard (`?limit=20&offset=0&snapshot=true`) |
-| `GET` | `/rankings/characters-wealth` | Character Held Gold leaderboard (`?limit=20&offset=0&snapshot=true`) |
-| `GET` | `/rankings/battles` | Battle Total Victories leaderboard (`?limit=20&offset=0&snapshot=true`) |
-| `GET` | `/rankings/job-mastery` | Mastered Jobs leaderboard (`?limit=20&offset=0&snapshot=true`) |
-| `GET` | `/rankings/job-popularity` | Job distribution & popularity statistics (`?snapshot=true`) |
-| `GET` | `/rankings/helpers` | Helper Quests completed leaderboard (`?limit=20&offset=0&snapshot=true`) |
-| `GET` | `/rankings/rebirths` | Character Rebirth count leaderboard (`?limit=20&offset=0&snapshot=true`) |
-| `GET` | `/rankings/medals` | Small Medals collected leaderboard (`?limit=20&offset=0&snapshot=true`) |
-| `GET` | `/rankings/{type}` | Dynamic leaderboard by ranking type string |
-| `POST` | `/rankings/refresh` | Trigger snapshot recalculation (all or specific `ranking_type`) |
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| `GET` | `/rankings/levels` | Public | Character Level leaderboard (`?limit=20&offset=0&snapshot=true`) |
+| `GET` | `/rankings/wealth` | Public | Player Total Wealth leaderboard (`?limit=20&offset=0&snapshot=true`) |
+| `GET` | `/rankings/characters-wealth` | Public | Character Held Gold leaderboard (`?limit=20&offset=0&snapshot=true`) |
+| `GET` | `/rankings/battles` | Public | Battle Total Victories leaderboard (`?limit=20&offset=0&snapshot=true`) |
+| `GET` | `/rankings/job-mastery` | Public | Mastered Jobs leaderboard (`?limit=20&offset=0&snapshot=true`) |
+| `GET` | `/rankings/job-popularity` | Public | Job distribution & popularity statistics (`?snapshot=true`) |
+| `GET` | `/rankings/helpers` | Public | Helper Quests completed leaderboard (`?limit=20&offset=0&snapshot=true`) |
+| `GET` | `/rankings/rebirths` | Public | Character Rebirth count leaderboard (`?limit=20&offset=0&snapshot=true`) |
+| `GET` | `/rankings/medals` | Public | Small Medals collected leaderboard (`?limit=20&offset=0&snapshot=true`) |
+| `GET` | `/rankings/{type}` | Public | Dynamic leaderboard by ranking type string |
+| `POST` | `/rankings/refresh` | Admin (`X-Admin-Key` / `Bearer <key>`) | Trigger snapshot recalculation (all or specific `ranking_type`) |
 
 ---
 

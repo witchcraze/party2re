@@ -159,12 +159,14 @@ func TestNotificationEndpoints(t *testing.T) {
 	shops := &stubShopService{}
 	notifSvc := &mockNotificationService{}
 
+	const adminKey = "test-admin-key"
 	handler, err := apihttp.NewHandler(
 		players,
 		chars,
 		advs,
 		shops,
 		apihttp.WithNotification(notifSvc),
+		apihttp.WithAdminAPIKey(adminKey),
 	)
 	if err != nil {
 		t.Fatalf("failed to create handler: %v", err)
@@ -208,7 +210,7 @@ func TestNotificationEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /news - success", func(t *testing.T) {
+	t.Run("POST /news - missing credentials returns 401", func(t *testing.T) {
 		body, _ := json.Marshal(map[string]string{
 			"category": "update",
 			"title":    "New Feature",
@@ -217,6 +219,60 @@ func TestNotificationEndpoints(t *testing.T) {
 		})
 		req := httptest.NewRequest(http.MethodPost, "/news", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("POST /news - invalid admin key returns 403", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]string{
+			"category": "update",
+			"title":    "New Feature",
+			"content":  "News and Notifications implemented",
+			"author":   "Admin",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/news", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Admin-Key", "invalid-key")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("POST /news - success with X-Admin-Key", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]string{
+			"category": "update",
+			"title":    "New Feature",
+			"content":  "News and Notifications implemented",
+			"author":   "Admin",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/news", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Admin-Key", adminKey)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("expected 201 Created, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("POST /news - success with Bearer authorization", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]string{
+			"category": "update",
+			"title":    "New Feature",
+			"content":  "News and Notifications implemented",
+			"author":   "Admin",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/news", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+adminKey)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
