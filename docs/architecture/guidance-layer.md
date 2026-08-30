@@ -7,7 +7,6 @@ The **Guidance Layer** (`.arch/`) provides an AI-friendly, token-efficient seman
 ```text
 +-------------------------------------------------------------+
 |                 Guidance Layer (.arch/)                     |
-|  - system.architecture.json (Topology & Domain Map)        |
 |  - modules/*.json (Granular Lock & Transaction Coordinates) |
 +-------------------------------------------------------------+
                               |
@@ -21,7 +20,49 @@ The **Guidance Layer** (`.arch/`) provides an AI-friendly, token-efficient seman
 
 ---
 
-## 2. Module Selection Criteria
+## 2. System Architecture Topology
+
+The high-level component topology and layer boundaries of Party2Re are visually documented below via native Mermaid:
+
+```mermaid
+flowchart TB
+    subgraph Gateway ["HTTP Gateway"]
+        http["HTTP Router & Middleware<br/><code>internal/api/http</code>"]
+    end
+
+    subgraph Features ["Feature Modules (Tier 1 Priority Scope)"]
+        tavern["Tavern<br/><code>internal/tavern</code>"]
+        delivery["Delivery<br/><code>internal/delivery</code>"]
+        bank["Bank<br/><code>internal/bank</code>"]
+        auction["Auction<br/><code>internal/auction</code>"]
+        guild["Guild<br/><code>internal/guild</code>"]
+        shop["Shop<br/><code>internal/shop</code>"]
+        blacksmith["Blacksmith<br/><code>internal/blacksmith</code>"]
+        adventure["Adventure<br/><code>internal/adventure</code>"]
+    end
+
+    subgraph Core ["Shared Core Domain"]
+        character["Core Character<br/><code>internal/core/character</code>"]
+        inventory["Core Inventory<br/><code>internal/core/inventory</code>"]
+        player["Core Player<br/><code>internal/core/player</code>"]
+        battle["Core Battle<br/><code>internal/core/battle</code>"]
+    end
+
+    subgraph Infrastructure ["Infrastructure & Storage"]
+        mariadb[("MariaDB (UoW & Pessimistic Locks)<br/><code>internal/database</code>")]
+        valkey["Valkey (Async Queue & Locks)<br/><code>internal/scheduling</code>"]
+    end
+
+    http --> tavern & delivery & bank & auction & guild & shop & blacksmith & adventure
+    tavern & delivery & bank & auction & guild & shop & blacksmith & adventure --> character & inventory & player
+    adventure --> battle
+    character & inventory & player --> mariadb
+    adventure --> valkey
+```
+
+---
+
+## 3. Module Selection Criteria
 
 To prevent documentation rot and keep maintenance overhead negligible, detailed module definitions (`.arch/modules/<module>.json`) are **not** created for every Go package. Instead, modules are evaluated against four objective criteria:
 
@@ -34,23 +75,23 @@ To prevent documentation rot and keep maintenance overhead negligible, detailed 
 
 ---
 
-## 3. Target Tier Inventory
+## 4. Target Tier Inventory
 
 Based on the selection criteria above, all packages in `internal/` are triaged into three distinct tiers:
 
 ### Tier 1: High-Leverage Priority Targets (Core Guidance Scope)
 *Modules meeting at least 2 criteria (C1, C2, C3). These represent the primary deadlock and concurrency race risks in Party2Re.*
 
-| Module | Package Path | Primary Transaction Flows | Lock Hierarchy Order | Definition & Visual HTML |
+| Module | Package Path | Primary Transaction Flows | Lock Hierarchy Order | Guidance Definition |
 | :--- | :--- | :--- | :--- | :--- |
-| **Tavern** | `internal/tavern` | `OrderMeal`, `ClaimDelivery` | `characters(2) -> tavern_character_status(8)` | [tavern.html](file:///home/witchcraze/dev/party2re/docs/architecture/modules/tavern.html) |
-| **Delivery** | `internal/delivery` | `AcceptQuest`, `CompleteDelivery`, `SendParcel`, `ClaimParcel` | `characters(2) -> inventory_items(3) -> delivery_parcels(8)` | [delivery.html](file:///home/witchcraze/dev/party2re/docs/architecture/modules/delivery.html) |
-| **Bank** | `internal/bank` | `Deposit`, `Withdraw`, `Transfer` | `characters(2) -> bank_accounts(6, p1<p2) -> bank_transfers(8)` | [bank.html](file:///home/witchcraze/dev/party2re/docs/architecture/modules/bank.html) |
-| **Auction** | `internal/auction` | `CreateListing`, `PlaceBid`, `Buyout`, `CancelListing` | `auction_listings(8) -> characters(2, bidder) -> characters(2, refund)` | [auction.html](file:///home/witchcraze/dev/party2re/docs/architecture/modules/auction.html) |
-| **Guild** | `internal/guild` | `CreateGuild`, `Donate` | `characters(2) -> guilds(7) -> guild_members(7)` | [guild.html](file:///home/witchcraze/dev/party2re/docs/architecture/modules/guild.html) |
-| **Shop** | `internal/shop` | `Purchase`, `Sell` | `characters(2) -> inventory_items(3)` | [shop.html](file:///home/witchcraze/dev/party2re/docs/architecture/modules/shop.html) |
-| **Blacksmith** | `internal/blacksmith` | `Enhance` | `characters(2) -> inventory_items(3)` | [blacksmith.html](file:///home/witchcraze/dev/party2re/docs/architecture/modules/blacksmith.html) |
-| **Adventure** | `internal/adventure` | `StartStage`, `Complete` (Worker) | `characters(2) -> adventures(8) -> inventory_items(3)` | [adventure.html](file:///home/witchcraze/dev/party2re/docs/architecture/modules/adventure.html) |
+| **Tavern** | `internal/tavern` | `OrderMeal`, `ClaimDelivery` | `characters(2) -> tavern_character_status(8)` | [tavern.json](file:///home/witchcraze/dev/party2re/.arch/modules/tavern.json) |
+| **Delivery** | `internal/delivery` | `AcceptQuest`, `CompleteDelivery`, `SendParcel`, `ClaimParcel` | `characters(2) -> inventory_items(3) -> delivery_parcels(8)` | [delivery.json](file:///home/witchcraze/dev/party2re/.arch/modules/delivery.json) |
+| **Bank** | `internal/bank` | `Deposit`, `Withdraw`, `Transfer` | `characters(2) -> bank_accounts(6, p1<p2) -> bank_transfers(8)` | [bank.json](file:///home/witchcraze/dev/party2re/.arch/modules/bank.json) |
+| **Auction** | `internal/auction` | `CreateListing`, `PlaceBid`, `Buyout`, `CancelListing` | `auction_listings(8) -> characters(2, bidder) -> characters(2, refund)` | [auction.json](file:///home/witchcraze/dev/party2re/.arch/modules/auction.json) |
+| **Guild** | `internal/guild` | `CreateGuild`, `Donate` | `characters(2) -> guilds(7) -> guild_members(7)` | [guild.json](file:///home/witchcraze/dev/party2re/.arch/modules/guild.json) |
+| **Shop** | `internal/shop` | `Purchase`, `Sell` | `characters(2) -> inventory_items(3)` | [shop.json](file:///home/witchcraze/dev/party2re/.arch/modules/shop.json) |
+| **Blacksmith** | `internal/blacksmith` | `Enhance` | `characters(2) -> inventory_items(3)` | [blacksmith.json](file:///home/witchcraze/dev/party2re/.arch/modules/blacksmith.json) |
+| **Adventure** | `internal/adventure` | `StartStage`, `Complete` (Worker) | `characters(2) -> adventures(8) -> inventory_items(3)` | [adventure.json](file:///home/witchcraze/dev/party2re/.arch/modules/adventure.json) |
 
 ### Tier 2: On-Demand Targets (Secondary Scope)
 *Modules with moderate complexity or single-resource mutations. Guidance files are authored on-demand only when substantial refactoring or cross-feature coupling occurs.*
@@ -59,32 +100,19 @@ Based on the selection criteria above, all packages in `internal/` are triaged i
 ### Tier 3: Out-of-Scope (Excluded from Module-Level JSON)
 *Stateless utilities, infrastructure adapters, and self-contained domain entities where Go interfaces and docstrings provide 100% sufficient clarity.*
 - **Utilities**: `id`, `pagination`, `validation`, `logging`, `ratelimit`, `valkey`, `architecture`
-- **Core Entities**: `core/player`, `core/character`, `core/job`, `core/item`, `core/skill`, `core/progression`, `core/battle` (represented as high-level nodes in `system.architecture.json`, but require no `.arch/modules/` detail files).
-
----
-
-## 4. Visual Documentation Hierarchy (HTML Delivery)
-
-The Guidance Layer produces a two-level visual documentation suite:
-1. **System Overview & Topology** (`docs/architecture/system-overview.html`):
-   - High-level component topology, layer boundaries, and vertical slices.
-2. **Module Deep Dives** (`docs/architecture/modules/<module>.html`):
-   - Granular transaction boundaries, pessimistic lock sequence tables, and direct source links.
+- **Core Entities**: `core/player`, `core/character`, `core/job`, `core/item`, `core/skill`, `core/progression`, `core/battle`.
 
 ---
 
 ## 5. Automated Mechanical Verification (Zero-Token Overhead)
 
-All `.arch` definitions are continuously protected against syntax errors, geometry violations, and symbol renaming via automated gates:
+All `.arch` definitions are continuously protected against syntax errors, symbol renaming, and doc rot via Go AST testing:
 
-1. **Archify CLI Validation** (`make arch-validate` / `scripts/verify.sh` step `[4/7]`):
-   - Enforces Showcase profile rules (<= 12 nodes on top-level topology).
-   - Validates layout coordinates, label clearances, and Git revision bounds.
-2. **Go AST Symbol Linter** (`internal/architecture/arch_test.go`):
-   - Parses all `.arch/modules/*.json` files in **~0.02s** during standard `go test ./...`.
+1. **Go AST Symbol Linter** (`internal/architecture/arch_test.go`):
+   - Parses all `.arch/modules/*.json` files in **~0.02s** during standard `go test ./...` and `scripts/verify.sh` step `[4/7]`.
    - Verifies that every interface name, struct method, and exported type linked via `source_ref` (`path#Symbol`) strictly exists in the Go source code.
-3. **Automated HTML Generation** (`make arch-build` / `cmd/arch-build`):
-   - Compiles overview topology and standalone module HTML diagrams in sub-second execution.
+   - Requires zero external runtimes (pure Go standard library `go/parser` and `go/ast`).
+
 
 ---
 
