@@ -1,0 +1,68 @@
+{
+  "$schema": "https://archify.dev/schema/module.v1.json",
+  "module": "shop",
+  "tier": 1,
+  "description": "Item purchase and selling with deterministic character gold and inventory slot synchronization.",
+  "package": "internal/shop",
+  "implementation_package": "internal/shop",
+  "dependencies": [
+    {
+      "name": "character_repository",
+      "target_module": "core/character",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/shop/shop.go#CharacterRepository"
+    },
+    {
+      "name": "inventory_repository",
+      "target_module": "core/inventory",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/shop/shop.go#InventoryRepository"
+    },
+    {
+      "name": "transaction_provider",
+      "target_module": "database",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/shop/shop.go#TransactionProvider"
+    }
+  ],
+  "transaction_boundaries": [
+    {
+      "method": "Purchase",
+      "source_ref": "internal/shop/shop.go#Service.Purchase",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+          "note": "Lock character wallet and verify sufficient funds"
+        },
+        {
+          "table": "inventory_items",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+          "note": "Lock inventory slots to verify capacity and add item"
+        }
+      ]
+    },
+    {
+      "method": "Sell",
+      "source_ref": "internal/shop/shop.go#Service.Sell",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+          "note": "Lock character wallet"
+        },
+        {
+          "table": "inventory_items",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+          "note": "Lock inventory to verify ownership and deduct sold item"
+        }
+      ]
+    }
+  ]
+}

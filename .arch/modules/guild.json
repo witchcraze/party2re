@@ -1,0 +1,68 @@
+{
+  "$schema": "https://archify.dev/schema/module.v1.json",
+  "module": "guild",
+  "tier": 1,
+  "description": "Guild founding, membership management, and gold donation with 3-table atomic synchronization.",
+  "package": "internal/guild",
+  "implementation_package": "internal/database",
+  "dependencies": [
+    {
+      "name": "guild_repository",
+      "target_module": "database",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/guild/guild.go#Repository"
+    }
+  ],
+  "transaction_boundaries": [
+    {
+      "method": "CreateGuild",
+      "source_ref": "internal/database/guild_repository.go#GuildRepository.CreateGuild",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "UPDATE",
+          "note": "Deduct guild founding fee from founder wallet"
+        },
+        {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "INSERT",
+          "note": "Insert guild entity"
+        },
+        {
+          "table": "guild_members",
+          "tier": 7,
+          "mode": "INSERT",
+          "note": "Register founder as leader member"
+        }
+      ]
+    },
+    {
+      "method": "Donate",
+      "source_ref": "internal/database/guild_repository.go#GuildRepository.Donate",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "UPDATE",
+          "note": "Deduct donated gold from character wallet"
+        },
+        {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "SELECT ... FOR UPDATE",
+          "note": "Lock guild row to recalculate total exp and treasury gold"
+        },
+        {
+          "table": "guild_members",
+          "tier": 7,
+          "mode": "UPDATE",
+          "note": "Increment member total_donated_gold"
+        }
+      ]
+    }
+  ]
+}

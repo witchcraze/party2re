@@ -1,0 +1,81 @@
+{
+  "$schema": "https://archify.dev/schema/module.v1.json",
+  "module": "bank",
+  "tier": 1,
+  "description": "Player banking, deposit/withdrawal, and peer-to-peer bank transfers with deterministic ID-sorted row locking.",
+  "package": "internal/bank",
+  "implementation_package": "internal/database",
+  "dependencies": [
+    {
+      "name": "core_character",
+      "target_module": "core/character",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/core/character/character.go#Character"
+    },
+    {
+      "name": "bank_repository",
+      "target_module": "database",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/bank/bank.go#Repository"
+    }
+  ],
+  "transaction_boundaries": [
+    {
+      "method": "Deposit",
+      "source_ref": "internal/database/bank_repository.go#BankRepository.Deposit",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "UPDATE",
+          "note": "Deduct gold from character wallet (money >= amount)"
+        },
+        {
+          "table": "bank_accounts",
+          "tier": 6,
+          "mode": "INSERT ON DUPLICATE KEY UPDATE",
+          "note": "Credit bank balance"
+        }
+      ]
+    },
+    {
+      "method": "Withdraw",
+      "source_ref": "internal/database/bank_repository.go#BankRepository.Withdraw",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "bank_accounts",
+          "tier": 6,
+          "mode": "UPDATE",
+          "note": "Deduct bank balance (balance >= amount)"
+        },
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "UPDATE",
+          "note": "Credit character wallet"
+        }
+      ]
+    },
+    {
+      "method": "Transfer",
+      "source_ref": "internal/database/bank_repository.go#BankRepository.Transfer",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "bank_accounts",
+          "tier": 6,
+          "mode": "SELECT ... FOR UPDATE (ID Ascending Order: p1 < p2)",
+          "note": "Deterministic ascending player ID sorting to prevent two-way transfer deadlocks"
+        },
+        {
+          "table": "bank_transfers",
+          "tier": 8,
+          "mode": "INSERT",
+          "note": "Append immutable audit ledger record"
+        }
+      ]
+    }
+  ]
+}

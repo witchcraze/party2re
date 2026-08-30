@@ -1,0 +1,92 @@
+{
+  "$schema": "https://archify.dev/schema/module.v1.json",
+  "module": "auction",
+  "tier": 1,
+  "description": "Auction marketplace with bidding, instant buyout, and escrow balance refunding.",
+  "package": "internal/auction",
+  "implementation_package": "internal/database",
+  "dependencies": [
+    {
+      "name": "auction_repository",
+      "target_module": "database",
+      "relation_type": "contract_interface",
+      "source_ref": "internal/auction/auction.go#Repository"
+    }
+  ],
+  "transaction_boundaries": [
+    {
+      "method": "PlaceBid",
+      "source_ref": "internal/database/auction_repository.go#AuctionRepository.PlaceBid",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "auction_listings",
+          "tier": 8,
+          "mode": "SELECT ... FOR UPDATE",
+          "note": "Lock auction listing to prevent concurrent bid overwrite"
+        },
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "UPDATE",
+          "note": "Deduct bid amount from bidder wallet (money >= bid)"
+        },
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "UPDATE (Refund)",
+          "note": "Refund previous highest bidder wallet"
+        },
+        {
+          "table": "auction_listings",
+          "tier": 8,
+          "mode": "UPDATE",
+          "note": "Update highest bid and bidder ID"
+        }
+      ]
+    },
+    {
+      "method": "Buyout",
+      "source_ref": "internal/database/auction_repository.go#AuctionRepository.Buyout",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "auction_listings",
+          "tier": 8,
+          "mode": "SELECT ... FOR UPDATE",
+          "note": "Lock auction listing"
+        },
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "UPDATE (Buyer)",
+          "note": "Deduct buyout price from buyer wallet"
+        },
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "UPDATE (Seller Credit)",
+          "note": "Credit buyout price to seller wallet"
+        },
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "UPDATE (Bidder Refund)",
+          "note": "Refund active bidder if any"
+        },
+        {
+          "table": "inventory_items",
+          "tier": 3,
+          "mode": "INSERT",
+          "note": "Grant purchased item to buyer inventory"
+        },
+        {
+          "table": "auction_listings",
+          "tier": 8,
+          "mode": "UPDATE",
+          "note": "Mark status as SOLD and record settled_at timestamp"
+        }
+      ]
+    }
+  ]
+}

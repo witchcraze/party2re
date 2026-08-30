@@ -1,0 +1,86 @@
+{
+  "$schema": "https://archify.dev/schema/module.v1.json",
+  "module": "adventure",
+  "tier": 1,
+  "description": "Stage exploration, battle resolution, asynchronous Valkey scheduling, and victory rewards.",
+  "package": "internal/adventure",
+  "implementation_package": "internal/adventure",
+  "dependencies": [
+    {
+      "name": "adventure_repository",
+      "target_module": "database",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/adventure/adventure.go#Repository"
+    },
+    {
+      "name": "character_repository",
+      "target_module": "core/character",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/adventure/adventure.go#CharacterRepository"
+    },
+    {
+      "name": "inventory_repository",
+      "target_module": "core/inventory",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/adventure/adventure.go#InventoryRepository"
+    },
+    {
+      "name": "scheduler",
+      "target_module": "core/scheduling",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/adventure/adventure.go#Scheduler"
+    }
+  ],
+  "transaction_boundaries": [
+    {
+      "method": "StartStage",
+      "source_ref": "internal/adventure/adventure.go#Service.StartStage",
+      "transaction_type": "Direct/Async",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT",
+          "note": "Verify character level requirement against stage min level"
+        },
+        {
+          "table": "adventures",
+          "tier": 8,
+          "mode": "INSERT",
+          "note": "Persist new adventure session"
+        },
+        {
+          "table": "valkey_scheduled_jobs",
+          "tier": 9,
+          "mode": "ZADD (Schedule)",
+          "note": "Enqueue async delayed completion callback"
+        }
+      ]
+    },
+    {
+      "method": "Complete",
+      "source_ref": "internal/adventure/adventure.go#Service.Complete",
+      "transaction_type": "ClaimAndApply",
+      "lock_sequence": [
+        {
+          "table": "adventures",
+          "tier": 8,
+          "mode": "SELECT ... FOR UPDATE",
+          "note": "Lock and claim adventure session"
+        },
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "UPDATE",
+          "note": "Apply experience level-up and credit gold reward"
+        },
+        {
+          "table": "inventory_items",
+          "tier": 3,
+          "mode": "INSERT",
+          "note": "Add monster drop item to inventory"
+        }
+      ]
+    }
+  ]
+}
