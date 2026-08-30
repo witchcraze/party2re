@@ -40,9 +40,25 @@ Core
 
 という構成を基本とします。
 
-Feature Moduleは新しいゲーム機能を追加するための主要な単位です。
-
 詳しい設計方針については [`docs/architecture/`](docs/architecture/) を参照してください。
+
+### アーキテクチャ図・モジュール構成（ビジュアルマップ）
+
+ブラウザで直接閲覧可能なインタラクティブ設計図を提供しています（GitHub Pages）：
+
+- 🌐 [**システム全体概要・トポロジー図 (System Overview)**](https://witchcraze.github.io/party2re/architecture/system-overview.html)
+- 📦 **主要モジュール詳細（トランザクション境界・行ロック順序）**:
+  - [酒場 (Tavern)](https://witchcraze.github.io/party2re/architecture/modules/tavern.html)
+  - [でりばりー (Delivery)](https://witchcraze.github.io/party2re/architecture/modules/delivery.html)
+  - [銀行 (Bank)](https://witchcraze.github.io/party2re/architecture/modules/bank.html)
+  - [オークション (Auction)](https://witchcraze.github.io/party2re/architecture/modules/auction.html)
+  - [ギルド (Guild)](https://witchcraze.github.io/party2re/architecture/modules/guild.html)
+  - [ショップ (Shop)](https://witchcraze.github.io/party2re/architecture/modules/shop.html)
+  - [鍛冶屋 (Blacksmith)](https://witchcraze.github.io/party2re/architecture/modules/blacksmith.html)
+  - [冒険 (Adventure)](https://witchcraze.github.io/party2re/architecture/modules/adventure.html)
+- 📖 [アーキテクチャ・ガイダンスレイヤー仕様書](docs/architecture/guidance-layer.md)
+
+
 
 ## 主なドメイン
 

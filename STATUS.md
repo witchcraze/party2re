@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #292 — Define Criteria & Target Scope for Archify Module Guidance (.arch/)
+Last updated: Issue #295 — Rename System Overview Map & Build Standalone Tier 1 Module HTML Diagrams
 
 ## Current phase
 
@@ -16,9 +16,10 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ## Current Component State (What is True Now)
 
 ### Architecture & Repository Intelligence (Guidance Layer)
-- **Guidance Layer (.arch/)**: Archify Showcase 準拠のシステム全体図（`.arch/system.architecture.json` / `docs/architecture/system-map.html`）およびシンボルアンカー（`path#Symbol`）ベースのモジュール詳細定義（`.arch/modules/tavern.json`, `delivery.json`）。ソースコード（Ground Truth）のピンポイント探索を支援し、コンテキストトークン消費を最小化。
+- **Guidance Layer (.arch/)**: Archify Showcase 準拠のシステム全体図（`.arch/system.architecture.json` / `docs/architecture/system-overview.html`）およびシンボルアンカー（`path#Symbol`）ベースのモジュール詳細定義（`.arch/modules/*.json` / `docs/architecture/modules/*.html`）。ソースコード（Ground Truth）のピンポイント探索を支援し、コンテキストトークン消費を最小化。
 - **Module Selection Criteria & Target Tiers**: 4つの選定基準（C1: トランザクション深度, C2: 行ロック階層, C3: エスクロー/共有状態, C4: 非同期Worker）に基づくトリアージを実施（`docs/architecture/guidance-layer.md`）。Tier 1（高リスク8機能: `tavern`, `delivery`, `bank`, `auction`, `guild`, `shop`, `blacksmith`, `adventure`）、Tier 2（オンデマンド）、Tier 3（除外）の運用スコープを確立。
-- **Automated Mechanical Verification**: Go AST シンボルリント（`internal/architecture/arch_test.go`）による 0.02 秒の静的シンボル実在性チェック（`go test ./...` 統合）および `scripts/verify.sh` / Git `pre-push` フックでの Archify CLI 自動レイアウト検証。
+- **Automated Mechanical Verification**: Go AST シンボルリント（`internal/architecture/arch_test.go`）による 0.02 秒の静的シンボル実在性チェック（`go test ./...` 統合）および `scripts/verify.sh` / Git `pre-push` フックでの Archify CLI 自動レイアウト検証 & HTML ビルド自動整合性。
+
 
 ### Core & Shared Components
 - **Player** (`internal/core/player`, `internal/player`): アカウント登録・パスワードハッシュ・セッション管理（MariaDB永続化）。

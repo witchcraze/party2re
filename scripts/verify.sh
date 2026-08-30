@@ -31,7 +31,7 @@ else
     docker compose run --rm app go test -count=1 ./internal/api/http -run "OpenAPI"
 fi
 
-echo "==> [4/7] Validating .arch architecture definitions (Archify)..."
+echo "==> [4/7] Validating .arch architecture definitions & HTML delivery..."
 ARCHIFY_BIN="${HOME}/.agents/skills/archify/bin/archify.mjs"
 if [ -f "$ARCHIFY_BIN" ] && command -v node >/dev/null 2>&1; then
     node "$ARCHIFY_BIN" validate architecture .arch/system.architecture.json --quality showcase --repo-root .
@@ -39,6 +39,11 @@ if [ -f "$ARCHIFY_BIN" ] && command -v node >/dev/null 2>&1; then
 else
     echo "Archify CLI not found at ${ARCHIFY_BIN}, skipping layout validation."
 fi
+if command -v go >/dev/null 2>&1; then
+    go run ./cmd/arch-build >/dev/null
+    echo "Tier 1 module HTML generation passed."
+fi
+
 
 echo "==> [5/7] Ensuring database migrations are applied..."
 "${ROOT_DIR}/scripts/migrate.sh"

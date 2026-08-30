@@ -41,16 +41,16 @@ Based on the selection criteria above, all packages in `internal/` are triaged i
 ### Tier 1: High-Leverage Priority Targets (Core Guidance Scope)
 *Modules meeting at least 2 criteria (C1, C2, C3). These represent the primary deadlock and concurrency race risks in Party2Re.*
 
-| Module | Package Path | Primary Transaction Flows | Lock Hierarchy Order | Status |
+| Module | Package Path | Primary Transaction Flows | Lock Hierarchy Order | Definition & Visual HTML |
 | :--- | :--- | :--- | :--- | :--- |
-| **Tavern** | `internal/tavern` | `OrderMeal`, `ClaimDelivery` | `characters(2) -> tavern_character_status(8)` | ✅ Active |
-| **Delivery** | `internal/delivery` | `AcceptQuest`, `CompleteDelivery`, `SendParcel`, `ClaimParcel` | `characters(2) -> inventory_items(3) -> delivery_parcels(8)` | ✅ Active |
-| **Bank** | `internal/bank` | `Deposit`, `Withdraw`, `Transfer` | `players(1) -> bank_accounts(6, p1<p2) -> bank_transfers(8)` | 📋 Tier 1 Target |
-| **Auction** | `internal/auction` | `CreateListing`, `PlaceBid`, `BuyNow`, `CancelListing` | `characters(2) -> inventory_items(3) -> auction_listings(8)` | 📋 Tier 1 Target |
-| **Guild** | `internal/guild` | `CreateGuild`, `DonateGold`, `TransferLeadership` | `characters(2) -> guilds(7) -> guild_members(7)` | 📋 Tier 1 Target |
-| **Shop** | `internal/shop` | `Purchase`, `Sell` | `characters(2) -> inventory_items(3)` | 📋 Tier 1 Target |
-| **Blacksmith** | `internal/blacksmith` | `UpgradeEquipment` | `characters(2) -> inventory_items(3)` | 📋 Tier 1 Target |
-| **Adventure** | `internal/adventure` | `StartAdventure`, `CompleteAdventure` (Worker) | `characters(2) -> inventory_items(3) -> adventure_logs(8)` | 📋 Tier 1 Target |
+| **Tavern** | `internal/tavern` | `OrderMeal`, `ClaimDelivery` | `characters(2) -> tavern_character_status(8)` | [tavern.html](file:///home/witchcraze/dev/party2re/docs/architecture/modules/tavern.html) |
+| **Delivery** | `internal/delivery` | `AcceptQuest`, `CompleteDelivery`, `SendParcel`, `ClaimParcel` | `characters(2) -> inventory_items(3) -> delivery_parcels(8)` | [delivery.html](file:///home/witchcraze/dev/party2re/docs/architecture/modules/delivery.html) |
+| **Bank** | `internal/bank` | `Deposit`, `Withdraw`, `Transfer` | `characters(2) -> bank_accounts(6, p1<p2) -> bank_transfers(8)` | [bank.html](file:///home/witchcraze/dev/party2re/docs/architecture/modules/bank.html) |
+| **Auction** | `internal/auction` | `CreateListing`, `PlaceBid`, `Buyout`, `CancelListing` | `auction_listings(8) -> characters(2, bidder) -> characters(2, refund)` | [auction.html](file:///home/witchcraze/dev/party2re/docs/architecture/modules/auction.html) |
+| **Guild** | `internal/guild` | `CreateGuild`, `Donate` | `characters(2) -> guilds(7) -> guild_members(7)` | [guild.html](file:///home/witchcraze/dev/party2re/docs/architecture/modules/guild.html) |
+| **Shop** | `internal/shop` | `Purchase`, `Sell` | `characters(2) -> inventory_items(3)` | [shop.html](file:///home/witchcraze/dev/party2re/docs/architecture/modules/shop.html) |
+| **Blacksmith** | `internal/blacksmith` | `Enhance` | `characters(2) -> inventory_items(3)` | [blacksmith.html](file:///home/witchcraze/dev/party2re/docs/architecture/modules/blacksmith.html) |
+| **Adventure** | `internal/adventure` | `StartStage`, `Complete` (Worker) | `characters(2) -> adventures(8) -> inventory_items(3)` | [adventure.html](file:///home/witchcraze/dev/party2re/docs/architecture/modules/adventure.html) |
 
 ### Tier 2: On-Demand Targets (Secondary Scope)
 *Modules with moderate complexity or single-resource mutations. Guidance files are authored on-demand only when substantial refactoring or cross-feature coupling occurs.*
@@ -63,9 +63,19 @@ Based on the selection criteria above, all packages in `internal/` are triaged i
 
 ---
 
-## 4. Automated Mechanical Verification (Zero-Token Overhead)
+## 4. Visual Documentation Hierarchy (HTML Delivery)
 
-All `.arch` definitions are continuously protected against syntax errors, geometry violations, and symbol renaming via two automated gates:
+The Guidance Layer produces a two-level visual documentation suite:
+1. **System Overview & Topology** (`docs/architecture/system-overview.html`):
+   - High-level component topology, layer boundaries, and vertical slices.
+2. **Module Deep Dives** (`docs/architecture/modules/<module>.html`):
+   - Granular transaction boundaries, pessimistic lock sequence tables, and direct source links.
+
+---
+
+## 5. Automated Mechanical Verification (Zero-Token Overhead)
+
+All `.arch` definitions are continuously protected against syntax errors, geometry violations, and symbol renaming via automated gates:
 
 1. **Archify CLI Validation** (`make arch-validate` / `scripts/verify.sh` step `[4/7]`):
    - Enforces Showcase profile rules (<= 12 nodes on top-level topology).
@@ -73,6 +83,8 @@ All `.arch` definitions are continuously protected against syntax errors, geomet
 2. **Go AST Symbol Linter** (`internal/architecture/arch_test.go`):
    - Parses all `.arch/modules/*.json` files in **~0.02s** during standard `go test ./...`.
    - Verifies that every interface name, struct method, and exported type linked via `source_ref` (`path#Symbol`) strictly exists in the Go source code.
+3. **Automated HTML Generation** (`make arch-build` / `cmd/arch-build`):
+   - Compiles overview topology and standalone module HTML diagrams in sub-second execution.
 
 ---
 
