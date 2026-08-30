@@ -337,6 +337,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Process initialization, configuration loading (`PARTY2_DB_DSN`, `PARTY2_VALKEY_ADDR`, `PORT`/`ADDR`), full domain repository and service wiring, background scheduler worker execution, HTTP JSON API route registration, and graceful shutdown signal handling (`SIGINT`/`SIGTERM`) with connection draining.
   - **Dependencies:** All domain services and repositories, `internal/api/http`, `internal/scheduling`, `internal/database`, `internal/valkey`, `internal/ratelimit`, `internal/logging`.
   - **Persistence:** Coordinates connection lifecycles for MariaDB and Valkey.
+- **OpenAPI 3.1 Specification & Schema CI Guard** (`docs/api/openapi.json`, `internal/api/http`):
+  - **Responsibility:** Standardized machine-readable OpenAPI 3.1 REST API specification covering 100% of registered routes, request schemas, response models, parameter rules, and security schemes (`BearerAuth`, `AdminApiKey`), exposed via `GET /openapi.json`, with automated CI validation tests ensuring zero route or schema drift.
+  - **Dependencies:** Go standard library `net/http`, `//go:embed`.
+  - **Persistence:** In-memory embedded artifact and version-controlled repository document.
 
 ### Cross-Module Transaction Orchestration & Ambient Context Propagation
 

@@ -263,6 +263,7 @@ func (h *Handler) Router() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", h.handleHealth)
+	mux.HandleFunc("GET /openapi.json", h.handleOpenAPI)
 
 	mux.HandleFunc("POST /players", h.handleRegisterPlayer)
 	mux.HandleFunc("POST /sessions", h.handleLogin)
