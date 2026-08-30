@@ -44,19 +44,20 @@ Core
 
 ### アーキテクチャ図・モジュール構成（ビジュアルマップ）
 
-ブラウザで直接閲覧可能なインタラクティブ設計図を提供しています：
+ブラウザで直接閲覧可能なインタラクティブ設計図を提供しています（GitHub Pages）：
 
-- 🌐 [**システム全体概要・トポロジー図 (System Overview)**](docs/architecture/system-overview.html)
+- 🌐 [**システム全体概要・トポロジー図 (System Overview)**](https://witchcraze.github.io/party2re/architecture/system-overview.html)
 - 📦 **主要モジュール詳細（トランザクション境界・行ロック順序）**:
-  - [酒場 (Tavern)](docs/architecture/modules/tavern.html)
-  - [でりばりー (Delivery)](docs/architecture/modules/delivery.html)
-  - [銀行 (Bank)](docs/architecture/modules/bank.html)
-  - [オークション (Auction)](docs/architecture/modules/auction.html)
-  - [ギルド (Guild)](docs/architecture/modules/guild.html)
-  - [ショップ (Shop)](docs/architecture/modules/shop.html)
-  - [鍛冶屋 (Blacksmith)](docs/architecture/modules/blacksmith.html)
-  - [冒険 (Adventure)](docs/architecture/modules/adventure.html)
+  - [酒場 (Tavern)](https://witchcraze.github.io/party2re/architecture/modules/tavern.html)
+  - [でりばりー (Delivery)](https://witchcraze.github.io/party2re/architecture/modules/delivery.html)
+  - [銀行 (Bank)](https://witchcraze.github.io/party2re/architecture/modules/bank.html)
+  - [オークション (Auction)](https://witchcraze.github.io/party2re/architecture/modules/auction.html)
+  - [ギルド (Guild)](https://witchcraze.github.io/party2re/architecture/modules/guild.html)
+  - [ショップ (Shop)](https://witchcraze.github.io/party2re/architecture/modules/shop.html)
+  - [鍛冶屋 (Blacksmith)](https://witchcraze.github.io/party2re/architecture/modules/blacksmith.html)
+  - [冒険 (Adventure)](https://witchcraze.github.io/party2re/architecture/modules/adventure.html)
 - 📖 [アーキテクチャ・ガイダンスレイヤー仕様書](docs/architecture/guidance-layer.md)
+
 
 
 ## 主なドメイン
