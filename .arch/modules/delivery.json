@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "module": "delivery",
+  "domain": "でりばりー・小包配送",
+  "entrypoint": "internal/delivery/delivery.go",
+  "dependencies": [
+    {
+      "module": "core/character",
+      "relation_type": "public_service_call",
+      "methods": ["FindByID", "FindByIDForUpdate", "Update"],
+      "source_ref": "internal/delivery/delivery.go#CharacterRepository"
+    },
+    {
+      "module": "core/inventory",
+      "relation_type": "public_service_call",
+      "methods": ["FindByCharacterID", "FindByCharacterIDForUpdate", "Save"],
+      "source_ref": "internal/delivery/delivery.go#InventoryRepository"
+    },
+    {
+      "module": "core/item",
+      "relation_type": "catalog_data",
+      "methods": ["FindByID"],
+      "source_ref": "internal/delivery/delivery.go#ItemDefinitionProvider"
+    },
+    {
+      "module": "database",
+      "relation_type": "transaction_provider",
+      "methods": ["RunInTx"],
+      "source_ref": "internal/database/tx.go#TransactionProvider"
+    }
+  ],
+  "transaction_flows": [
+    {
+      "flow": "AcceptQuest (クエスト受注)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/delivery/delivery.go#Service.AcceptQuest"
+    },
+    {
+      "flow": "CompleteDelivery (クエスト納品・報酬獲得)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/delivery/delivery.go#Service.CompleteDelivery",
+      "lock_sequence": [
+        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
+        { "step": 2, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate" },
+        { "step": 3, "target": "inventory_items", "method": "InventoryRepository.Save" },
+        { "step": 4, "target": "characters", "method": "CharacterRepository.Update" },
+        { "step": 5, "target": "character_deliveries", "lock_order": 8, "method": "DeliveryRepository.UpdateCharacterDelivery" }
+      ]
+    },
+    {
+      "flow": "SendParcel (小包発送・アイテム預入)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/delivery/delivery.go#Service.SendParcel",
+      "lock_sequence": [
+        { "step": 1, "target": "characters (sender)", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
+        { "step": 2, "target": "characters (recipient check)", "method": "CharacterRepository.FindByID" },
+        { "step": 3, "target": "inventory_items (sender)", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate" },
+        { "step": 4, "target": "inventory_items", "method": "InventoryRepository.Save" },
+        { "step": 5, "target": "characters", "method": "CharacterRepository.Update" },
+        { "step": 6, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.SaveParcel" }
+      ]
+    },
+    {
+      "flow": "ClaimParcel (小包受取・アイテム獲得)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/delivery/delivery.go#Service.ClaimParcel",
+      "lock_sequence": [
+        { "step": 1, "target": "characters (recipient)", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
+        { "step": 2, "target": "characters", "method": "CharacterRepository.Update" },
+        { "step": 3, "target": "inventory_items (recipient)", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate" },
+        { "step": 4, "target": "inventory_items", "method": "InventoryRepository.Save" },
+        { "step": 5, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.UpdateParcel" }
+      ]
+    },
+    {
+      "flow": "CancelParcel (小包発送取消・アイテム返却)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/delivery/delivery.go#Service.CancelParcel",
+      "lock_sequence": [
+        { "step": 1, "target": "characters (sender)", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
+        { "step": 2, "target": "characters", "method": "CharacterRepository.Update" },
+        { "step": 3, "target": "inventory_items (sender)", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate" },
+        { "step": 4, "target": "inventory_items", "method": "InventoryRepository.Save" },
+        { "step": 5, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.UpdateParcel" }
+      ]
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-.PHONY: all check verify check-clean fmt vet openapi-check test test-integration test-docker test-stress smoke db-migrate db-reset up down setup-hooks
+.PHONY: all check verify check-clean fmt vet openapi-check test test-integration test-docker test-stress smoke db-migrate db-reset up down setup-hooks arch-validate arch-build
 
 all: check
 
@@ -60,3 +60,11 @@ setup-hooks:
 	@git config core.hooksPath .githooks
 	@chmod +x .githooks/*
 	@echo "Git hooks configured successfully (.githooks)."
+
+arch-validate:
+	@echo "Validating .arch system architecture..."
+	@node ~/.agents/skills/archify/bin/archify.mjs validate architecture .arch/system.architecture.json --quality showcase --repo-root .
+
+arch-build:
+	@echo "Building architecture system map HTML..."
+	@node ~/.agents/skills/archify/bin/archify.mjs deliver architecture .arch/system.architecture.json docs/architecture/system-map.html --quality showcase --repo-root .
