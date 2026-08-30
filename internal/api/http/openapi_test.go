@@ -189,6 +189,11 @@ func TestOpenAPIRouteCoverage(t *testing.T) {
 		{"POST", "/auctions/{id}/bid"},
 		{"POST", "/auctions/{id}/buyout"},
 		{"POST", "/auctions/{id}/cancel"},
+		{"GET", "/eventplaza"},
+		{"GET", "/eventplaza/merchant/items"},
+		{"POST", "/eventplaza/merchant/purchase"},
+		{"GET", "/eventplaza/banquets"},
+		{"POST", "/eventplaza/banquets/{id}/toast"},
 	}
 
 	for _, route := range expectedRoutes {

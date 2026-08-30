@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #267 — OpenAPI 3.1 specification generation and schema validation CI guard
+Last updated: Issue #161 — Event: Event Plaza, traveling merchant bazaar, and victory celebrations
 
 ## Current phase
 
@@ -23,7 +23,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理。
 - **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定（経験値・ゴールド・アイテム・ちいさなメダル）、構造化ターンログ出力、戦闘参加者（Participant）標準アダプタ/ビルダー（`NewParticipantFromCharacter`, `NewParticipantFromCharacterWithHP`, `ParticipantBuilder`）。
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): Valkeyバックエンドの遅延アクションキュー＆分散排他ロックWorker。
-- **Database & Transaction Orchestration** (`internal/database`): 全29リポジトリのトランザクション伝播モデル（`RunInTx` と `ExecutorFromContext`）への完全統一、トランザクション境界外からの直接 `r.db.BeginTx` 呼び出しの完全排除、コンテキスト内トランザクション再利用、マルチモジュール統合テスト（コミット原子性・ロールバック整合性・ネストトランザクション伝播検証）、決定論的行ロック獲得順序（`players` -> `characters` (昇順) -> `inventory_items` -> `character_jobs` -> `character_depots` -> `bank_accounts` -> `guilds` (昇順) -> 各種機能テーブル）によるデッドロック防止の標準化、および高並行性ストレステスト・デッドロック検出ベンチマークスイート（`internal/database/concurrency_stress_test.go`、`make test-stress`）による50並行ワーカー・1,000複合トランザクション負荷下での0デッドロック・データ保存不変条件の自動検証。さらに、全サブリソースリポジトリ（連戦セッション・宝くじ・オークション出品・ダンジョン探索・私有地手紙/挨拶台帳等）における所有権スコープ付きSQL（`WHERE id = ? AND character_id = ?`）の厳格適用によるIDOR完全防止。
+- **Database & Transaction Orchestration** (`internal/database`): 全30リポジトリのトランザクション伝播モデル（`RunInTx` と `ExecutorFromContext`）への完全統一、トランザクション境界外からの直接 `r.db.BeginTx` 呼び出しの完全排除、コンテキスト内トランザクション再利用、マルチモジュール統合テスト（コミット原子性・ロールバック整合性・ネストトランザクション伝播検証）、決定論的行ロック獲得順序（`players` -> `characters` (昇順) -> `inventory_items` -> `character_jobs` -> `character_depots` -> `bank_accounts` -> `guilds` (昇順) -> 各種機能テーブル）によるデッドロック防止の標準化、および高並行性ストレステスト・デッドロック検出ベンチマークスイート（`internal/database/concurrency_stress_test.go`、`make test-stress`）による50並行ワーカー・1,000複合トランザクション負荷下での0デッドロック・データ保存不変条件の自動検証。さらに、全サブリソースリポジトリ（連戦セッション・宝くじ・オークション出品・ダンジョン探索・私有地手紙/挨拶台帳・祝勝祝宴乾杯台帳等）における所有権スコープ付きSQL（`WHERE id = ? AND character_id = ?`）の厳格適用によるIDOR完全防止。
 - **Common Components & Utilities**: 単一責務の共通パッケージ配置方針（`internal/id`, `internal/pagination`, `internal/validation`, `internal/api/http/middleware`）、Rule of Three、セキュリティ/認可の即時共通化指針の策定、および暗号学的に安全なID生成ユーティリティ（`internal/id`: `New()`, `Generate()`, `NewLength()`）の全ドメインパッケージへの適用・集約。
 
 
@@ -46,7 +46,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Chapel & Blessings** (`internal/chapel`): 教会（祈り・祝福登録、ゴールド寄付、戦闘・冒険報酬バフ補正計算）。
 - **Player versus Player Arena** (`internal/pvp`): 闘技場・対人対戦（PvP、標準Eloレーティング K=32/初期1000、近傍マッチメイキング・同一アカウント談合防止、勝敗・対戦履歴・防衛ログのMariaDB永続化、経験値・ゴールド報酬付与）。
 - **Guild versus Guild Combat** (`internal/gvg`): ギルド対抗戦（GvG、標準Eloレーティング K=32/初期1000、5段階勝利メダル・王者杯昇格システム、ギルドポイントGP、ギルドEXP獲得・レベルアップ連動、対戦履歴・ラウンド詳細ログのMariaDB永続化）。
-- **King & World Boss Battles** (`internal/boss`): 封印戦・ワールドボス（全10段階キングボス＋太古の創世神Tier、レベル制限・前提段階クリア・1日3回挑戦制限、初回討伐ボーナス・ドロップ報酬、討伐数（英雄度）・最高到達Tierリーダーボード、挑戦履歴のMariaDB永続化）。
+- **King & World Boss Battles** (`internal/boss`): 封印戦・ワールドボス（全10段階キングボス＋太古の創世神Tier、レベル制限・前提段階クリア・1日3回挑戦制限、初回討伐ボーナス・ドロップ報酬、討伐数（英雄度）・最高到達Tierリーダーボード、挑戦履歴のMariaDB永続化、討伐時のイベント広場祝宴連動）。
 - **Dungeon Exploration** (`internal/dungeon`): ダンジョン探索（多層グリッドマップ探索、モンスター遭遇戦闘、トラップ・宝箱イベント、階段降下、フロアボス決戦、一時報酬台帳バッファリングと脱出・踏破時の一括アトミック確定、全滅時の戦利品没収、探索履歴・踏破記録のMariaDB永続化、探索者キャラクターIDスコープ検証）。
 - **Battle Replays & Match History** (`internal/replay`): 戦闘リプレイ・対戦履歴（全戦闘モードのターン別アクションログ・ダメージ値・残りHPスナップショットの記録・忠実再生、標準化レコーダー `ReplayRecorder` / `RecordMatchFromResult` / `RecordCharacterVsCharacter` / `RecordCharacterVsMonster` / `RecordParticipantVsParticipant`、プレイヤー別対戦履歴・全体最新リプレイ一覧、保持期間経過レコードの自動プルーニング、MariaDB永続化）。
 - **Continuous Endurance Challenge** (`internal/challenge`): 連戦チャレンジ・サバイバル戦闘（初級・中級・上級・奈落の全4段階Tier JSONカタログ `challenge_tiers.json`、ラウンド進行に伴うステータス累進スケーリング、インターラウンド20% HP回復、5連勝区切りのマイルストーンアイテムドロップ、途中撤退による全額確定精算 vs 敗北時の50%救済精算・アイテム没収、最高到達ラウンド別リーダーボード、挑戦セッション所有権認可・`ErrForbidden` 403 Forbidden、MariaDB永続化）。
@@ -56,13 +56,14 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **News & Player Notifications** (`internal/notification`): ニュース・お知らせ＆プレイヤー通知インボックス（全体告知 `news.cgi`、カテゴリ別お知らせ配信、プレイヤー別非同期メッセージ受信箱、既読・未読管理、一括既読化、未読件数照会、MariaDB永続化）。
 - **Player Private Home & Mailbox** (`internal/home`): 自宅・私有地管理（`home.cgi`、壁紙・テーマ・一言設定、訪問者記録、プレイヤー間手紙送受信・受信箱/送信箱・未読件数、送信者・受信者の独立削除フラグ `is_deleted_by_sender`/`is_deleted_by_recipient` と双方削除時の完全パージ、仲間ペット言葉教え・挨拶会話、送金・譲渡通知台帳、MariaDB永続化）。
 - **Player Leaderboards & Character Rankings** (`internal/ranking`): ランキング・リーダーボード機能（`ranking.cgi`, `job_ranking.cgi`, `week_ranking.cgi`、レベル・プレイヤー総資産・キャラクター所持金・戦闘通算勝利数・PvP闘技場勝利数・ボス討伐数・冒険勝利数・職マスター数・職業人気分布・手助け達成数・転生回数・ちいさなメダル所持数の12カテゴリ、決定論的タイブレーク・ページネーション、インメモリTTLキャッシュ、Valkey分散スナップショットキャッシュ、Singleflightキャッシュスタンピード抑止、バックグラウンドWorker定期更新アクション `party2:ranking:refresh`、永続スナップショット `ranking_snapshots`、MariaDB永続化）。
+- **Event Plaza, Traveling Merchant Bazaar & Victory Banquets** (`internal/eventplaza`): イベント広場・行商人バザー＆ボス討伐祝宴（人口連動行商人Tier判定、希少アイテム・素材・装備バザーカタログ `bazaar.json`、並行性安全なアトミック購入トランザクション、キングボス討伐連動の祝勝祝宴自動開催・24時間有効期限・乾杯参加ゴールド報酬・重複乾杯防止 `banquet_toasts`、MariaDB永続化）。
 
 ### API & Transport
-- **Server Entrypoint & Lifecycle Orchestration** (`cmd/party2`): MariaDB・Valkey・全ドメインリポジトリおよびサービス・スケジューリングWorker・HTTP APIルーター（全23種Option）の統合初期化、`ADDR` / `PORT` 環境変数解決（デフォルト `:8080`）、GoroutineベースのHTTPサーバー＆Worker実行、OSシグナル（`SIGINT`, `SIGTERM`）受信時のタイムアウト付きGraceful Shutdown（`http.Server.Shutdown(ctx)`、Worker Contextキャンセル待機、DB/Valkeyリソース安全開放）、起動・停止のJSON構造化ログ。
-- **HTTP JSON API & OpenAPI 3.1 Specification** (`internal/api/http`, `docs/api/openapi.json`): Go標準 `net/http` によるREST風エンドポイント（全75ルート：`/health`, `/openapi.json`, `/players`, `/sessions`, `/characters`, `/jobs`, `/characters/{id}/change-job`, `/characters/{id}/rebirth`, `/characters/{id}/inn`, `/characters/{id}/custom-skills*`, `/characters/{id}/chapel*`, `/characters/{id}/farm*`, `/characters/{id}/collections/*`, `/characters/{id}/lottery/*`, `/characters/{id}/casino/*`, `/challenges/*`, `/characters/{id}/bosses*`, `/characters/{id}/dungeons*`, `/characters/{id}/pvp*`, `/auctions*`, `/characters/{id}/adventures`, `/characters/{id}/adventure-chronicle`, `/adventures`, `/shop/*`, `/park/*`, `/medals/*`, `/helpers/*`, `/rescues/*`, `/news/*`, `/notifications/*`, `/homes/*`, `/letters/*`, `/rankings/*`）。全エンドポイントを網羅した機械可読 OpenAPI 3.1.0 スキーマ仕様（`docs/api/openapi.json`）の提供と `GET /openapi.json` による常時配信、CI自動テスト（`internal/api/http/openapi_test.go`）によるルート網羅率100%検証・スキーマバリデーション・ドキュメント同期ガード。セッション認証、管理者APIキー認可（`X-Admin-Key` / `Authorization: Bearer <key>`、タイミング攻撃耐性をもつ定数時間比較、`POST /news` および `POST /rankings/refresh` を保護）、キャラクター・プレイヤー所有権認可検証（403 Forbidden、連戦セッション・宝くじ・冒険Claim・冒険クロニクル・オークション出品取消等のサブリソースIDOR完全防御）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、Valkey/In-Memory 分散レートリミットミドルウェア（公開認証エンドポイント・一般エンドポイント別制限、429 Too Many Requests、Retry-After / X-RateLimit-* ヘッダー、fail-open耐障害性）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
+- **Server Entrypoint & Lifecycle Orchestration** (`cmd/party2`): MariaDB・Valkey・全ドメインリポジトリおよびサービス・スケジューリングWorker・HTTP APIルーター（全24種Option）の統合初期化、`ADDR` / `PORT` 環境変数解決（デフォルト `:8080`）、GoroutineベースのHTTPサーバー＆Worker実行、OSシグナル（`SIGINT`, `SIGTERM`）受信時のタイムアウト付きGraceful Shutdown（`http.Server.Shutdown(ctx)`、Worker Contextキャンセル待機、DB/Valkeyリソース安全開放）、起動・停止のJSON構造化ログ。
+- **HTTP JSON API & OpenAPI 3.1 Specification** (`internal/api/http`, `docs/api/openapi.json`): Go標準 `net/http` によるREST風エンドポイント（全80ルート：`/health`, `/openapi.json`, `/players`, `/sessions`, `/characters`, `/jobs`, `/characters/{id}/change-job`, `/characters/{id}/rebirth`, `/characters/{id}/inn`, `/characters/{id}/custom-skills*`, `/characters/{id}/chapel*`, `/characters/{id}/farm*`, `/characters/{id}/collections/*`, `/characters/{id}/lottery/*`, `/characters/{id}/casino/*`, `/challenges/*`, `/characters/{id}/bosses*`, `/characters/{id}/dungeons*`, `/characters/{id}/pvp*`, `/auctions*`, `/characters/{id}/adventures`, `/characters/{id}/adventure-chronicle`, `/adventures`, `/shop/*`, `/park/*`, `/medals/*`, `/helpers/*`, `/rescues/*`, `/news/*`, `/notifications/*`, `/homes/*`, `/letters/*`, `/rankings/*`, `/eventplaza*`）。全エンドポイントを網羅した機械可読 OpenAPI 3.1.0 スキーマ仕様（`docs/api/openapi.json`）の提供と `GET /openapi.json` による常時配信、CI自動テスト（`internal/api/http/openapi_test.go`）によるルート網羅率100%検証・スキーマバリデーション・ドキュメント同期ガード。セッション認証、管理者APIキー認可（`X-Admin-Key` / `Authorization: Bearer <key>`、タイミング攻撃耐性をもつ定数時間比較、`POST /news` および `POST /rankings/refresh` を保護）、キャラクター・プレイヤー所有権認可検証（403 Forbidden、連戦セッション・宝くじ・冒険Claim・冒険クロニクル・オークション出品取消等のサブリソースIDOR完全防御）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、Valkey/In-Memory 分散レートリミットミドルウェア（公開認証エンドポイント・一般エンドポイント別制限、429 Too Many Requests、Retry-After / X-RateLimit-* ヘッダー、fail-open耐障害性）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
 
 ### Infrastructure & Operations
-- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `037_adventure_chronicle.sql`、`make db-migrate` / `make db-reset`）。
+- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `038_eventplaza.sql`、`make db-migrate` / `make db-reset`）。
 - **Valkey**: 遅延アクションキュー・排他ロック・分散レートリミット・ランキングスナップショットキャッシュ（AOF+RDB永続化）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
 - **Verification**: `Makefile` (`make check`, `make fmt`, `make vet`, `make openapi-check`, `make test-stress`, `make check-clean`)、CIガード（OpenAPI 3.1構文・全ルート網羅テスト）、Git pre-push hook による自動検証、`scripts/stress_test.sh` による高並行ストレステスト。
@@ -75,7 +76,6 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 1. **Remaining Version 1.0 Feature Modules**:
    - Personal Access Token (API Key) generation and authentication (Issue #163)
    - Gem and Jewel special synthesis (Issue #72)
-   - Event Plaza and Traveling Merchant Bazaar (Issue #161)
    - Photo Contest and Seasonal Events (Issue #186)
    - Web Presentation UI / Client (Issue #140)
 

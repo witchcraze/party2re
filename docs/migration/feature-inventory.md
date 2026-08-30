@@ -107,7 +107,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Farm and plantation cultivation ([#84](https://github.com/witchcraze/party2re/issues/84))
 - [x] Collection and Monster Book encyclopedia ([#85](https://github.com/witchcraze/party2re/issues/85))
 - [x] Chapel prayers and blessings ([#86](https://github.com/witchcraze/party2re/issues/86))
-- [ ] Event Plaza, traveling merchant bazaar, and victory celebrations ([#161](https://github.com/witchcraze/party2re/issues/161))
+- [x] Event Plaza, traveling merchant bazaar, and victory celebrations ([#161](https://github.com/witchcraze/party2re/issues/161))
 
 ### G. Presentation, assets, and operations
 - [x] UI-independent HTTP JSON Application API layer ([#87](https://github.com/witchcraze/party2re/issues/87))
@@ -188,6 +188,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#199](https://github.com/witchcraze/party2re/issues/199) | Adventure history and gameplay record access (adventure_record.cgi) | Merged |
 | [#254](https://github.com/witchcraze/party2re/issues/254) | Complete HTTP API endpoints for remaining domain features | Merged |
 | [#266](https://github.com/witchcraze/party2re/issues/266) | Integrate HTTP API server startup, routing orchestration, and graceful shutdown in cmd/party2 | Merged |
+| [#161](https://github.com/witchcraze/party2re/issues/161) | Event Plaza, traveling merchant bazaar, and victory celebrations | Merged |
 
 ---
 

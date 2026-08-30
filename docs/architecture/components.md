@@ -341,6 +341,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Standardized machine-readable OpenAPI 3.1 REST API specification covering 100% of registered routes, request schemas, response models, parameter rules, and security schemes (`BearerAuth`, `AdminApiKey`), exposed via `GET /openapi.json`, with automated CI validation tests ensuring zero route or schema drift.
   - **Dependencies:** Go standard library `net/http`, `//go:embed`.
   - **Persistence:** In-memory embedded artifact and version-controlled repository document.
+- **Event Plaza, Traveling Merchant Bazaar & Victory Banquets** (`internal/eventplaza`):
+  - **Responsibility:** Town event plaza gathering state, dynamic population tier calculations, traveling merchant rare item bazaar catalog with tier-based unlocks and concurrency-safe purchasing transactions, and world boss victory celebration banquets with celebratory toast rewards.
+  - **Dependencies:** Core Character, Core Item, Character repository, Inventory repository.
+  - **Persistence:** `celebration_banquets` and `banquet_toasts` tables in `internal/database/eventplaza_repository.go`.
 
 ### Cross-Module Transaction Orchestration & Ambient Context Propagation
 
