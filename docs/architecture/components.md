@@ -357,6 +357,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Town Black Market contraband item trade (Level >= 10), dynamic market conditions (`Quiet`, `HotDemand`, `Crackdown`, `Bargain`) with buy price multipliers and sell buyback rates, daily purchase quotas, pessimistic inventory and gold transaction handling, and shady broker dialogue and rumor intelligence.
   - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository.
   - **Persistence:** `blackmarket_character_purchases` and `blackmarket_market_state` tables in `internal/database/blackmarket_repository.go`.
+- **Town Delivery Quests & Player Courier Service** (`internal/delivery`):
+  - **Responsibility:** Town item delivery quest generation and lifecycle (max 3 concurrent in-progress quests, atomic item verification & reward settlement), and player-to-player mail/parcel courier service with gold and item attachments, 50 G flat courier fee, and sender cancellation/refund workflow.
+  - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository.
+  - **Persistence:** `delivery_quests`, `character_deliveries`, and `delivery_parcels` tables in `internal/database/delivery_repository.go`.
 
 ### Cross-Module Transaction Orchestration & Ambient Context Propagation
 
