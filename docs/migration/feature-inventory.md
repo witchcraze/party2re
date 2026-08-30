@@ -186,7 +186,8 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#67](https://github.com/witchcraze/party2re/issues/67) | News, announcements, and player notification system | Merged |
 | [#159](https://github.com/witchcraze/party2re/issues/159) | Player private home, mailbox, and letter correspondence | Merged |
 | [#199](https://github.com/witchcraze/party2re/issues/199) | Adventure history and gameplay record access (adventure_record.cgi) | Merged |
-| [#254](https://github.com/witchcraze/party2re/issues/254) | Complete HTTP API endpoints for remaining domain features | Implemented |
+| [#254](https://github.com/witchcraze/party2re/issues/254) | Complete HTTP API endpoints for remaining domain features | Merged |
+| [#266](https://github.com/witchcraze/party2re/issues/266) | Integrate HTTP API server startup, routing orchestration, and graceful shutdown in cmd/party2 | Merged |
 
 ---
 

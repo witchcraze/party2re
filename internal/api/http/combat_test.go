@@ -90,8 +90,8 @@ func (s *stubBossService) GetCharacterRecord(ctx context.Context, characterID st
 type stubDungeonService struct {
 	listDungeonsFn        func(ctx context.Context, characterID string) ([]dungeon.DungeonOverview, error)
 	startExpeditionFn     func(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error)
-	moveFn                func(ctx context.Context, characterID string, dir dungeon.Direction) (*dungeon.ExpeditionStepResult, error)
-	escapeFn              func(ctx context.Context, characterID string) (*dungeon.ExpeditionStepResult, error)
+	moveFn                func(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
+	escapeFn              func(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
 	getActiveExpeditionFn func(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error)
 }
 
@@ -107,17 +107,17 @@ func (s *stubDungeonService) StartExpedition(ctx context.Context, characterID st
 	}
 	return &dungeon.ActiveExpedition{ID: "exp-1", CharacterID: characterID, DungeonID: dungeonID, Status: dungeon.StatusExploring}, nil
 }
-func (s *stubDungeonService) Move(ctx context.Context, characterID string, dir dungeon.Direction) (*dungeon.ExpeditionStepResult, error) {
+func (s *stubDungeonService) Move(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error) {
 	if s.moveFn != nil {
 		return s.moveFn(ctx, characterID, dir)
 	}
-	return &dungeon.ExpeditionStepResult{EventType: dungeon.EventMove, Expedition: dungeon.ActiveExpedition{Status: dungeon.StatusExploring}}, nil
+	return dungeon.ExpeditionStepResult{EventType: dungeon.EventMove, Expedition: dungeon.ActiveExpedition{Status: dungeon.StatusExploring}}, nil
 }
-func (s *stubDungeonService) Escape(ctx context.Context, characterID string) (*dungeon.ExpeditionStepResult, error) {
+func (s *stubDungeonService) Escape(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error) {
 	if s.escapeFn != nil {
 		return s.escapeFn(ctx, characterID)
 	}
-	return &dungeon.ExpeditionStepResult{EventType: dungeon.EventEscape, Expedition: dungeon.ActiveExpedition{Status: dungeon.StatusEscaped}}, nil
+	return dungeon.ExpeditionStepResult{EventType: dungeon.EventEscape, Expedition: dungeon.ActiveExpedition{Status: dungeon.StatusEscaped}}, nil
 }
 func (s *stubDungeonService) GetActiveExpedition(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error) {
 	if s.getActiveExpeditionFn != nil {

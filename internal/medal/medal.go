@@ -2,6 +2,7 @@ package medal
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"os"
@@ -10,6 +11,18 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 )
+
+//go:embed medal_rewards.json
+var defaultMedalRewardsData []byte
+
+// InitialRewards returns the default embedded small medal reward tiers.
+func InitialRewards() ([]Reward, error) {
+	var rewards []Reward
+	if err := json.Unmarshal(defaultMedalRewardsData, &rewards); err != nil {
+		return nil, err
+	}
+	return rewards, nil
+}
 
 var (
 	ErrNilDependency      = errors.New("medal dependency is nil")
@@ -69,9 +82,15 @@ func NewService(
 		return nil, ErrNilDependency
 	}
 
-	data, err := os.ReadFile(rewardsFilePath)
-	if err != nil {
-		return nil, err
+	var data []byte
+	if rewardsFilePath == "" {
+		data = defaultMedalRewardsData
+	} else {
+		var err error
+		data, err = os.ReadFile(rewardsFilePath)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var rewards []Reward

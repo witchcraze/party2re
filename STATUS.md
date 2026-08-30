@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #264 — Standardize sub-resource ownership authorization and define strict repository SQL scoping rules
+Last updated: Issue #266 — Integrate HTTP API server startup, routing orchestration, and graceful shutdown in cmd/party2
 
 ## Current phase
 
@@ -58,6 +58,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Player Leaderboards & Character Rankings** (`internal/ranking`): ランキング・リーダーボード機能（`ranking.cgi`, `job_ranking.cgi`, `week_ranking.cgi`、レベル・プレイヤー総資産・キャラクター所持金・戦闘通算勝利数・PvP闘技場勝利数・ボス討伐数・冒険勝利数・職マスター数・職業人気分布・手助け達成数・転生回数・ちいさなメダル所持数の12カテゴリ、決定論的タイブレーク・ページネーション、インメモリTTLキャッシュ、Valkey分散スナップショットキャッシュ、Singleflightキャッシュスタンピード抑止、バックグラウンドWorker定期更新アクション `party2:ranking:refresh`、永続スナップショット `ranking_snapshots`、MariaDB永続化）。
 
 ### API & Transport
+- **Server Entrypoint & Lifecycle Orchestration** (`cmd/party2`): MariaDB・Valkey・全ドメインリポジトリおよびサービス・スケジューリングWorker・HTTP APIルーター（全23種Option）の統合初期化、`ADDR` / `PORT` 環境変数解決（デフォルト `:8080`）、GoroutineベースのHTTPサーバー＆Worker実行、OSシグナル（`SIGINT`, `SIGTERM`）受信時のタイムアウト付きGraceful Shutdown（`http.Server.Shutdown(ctx)`、Worker Contextキャンセル待機、DB/Valkeyリソース安全開放）、起動・停止のJSON構造化ログ。
 - **HTTP JSON API** (`internal/api/http`): Go標準 `net/http` によるREST風エンドポイント（`/health`, `/players`, `/sessions`, `/characters`, `/jobs`, `/characters/{id}/change-job`, `/characters/{id}/rebirth`, `/characters/{id}/inn`, `/characters/{id}/custom-skills*`, `/characters/{id}/chapel*`, `/characters/{id}/farm*`, `/characters/{id}/collections/*`, `/characters/{id}/lottery/*`, `/characters/{id}/casino/*`, `/challenges/*`, `/characters/{id}/bosses*`, `/characters/{id}/dungeons*`, `/characters/{id}/pvp*`, `/auctions*`, `/characters/{id}/adventures`, `/characters/{id}/adventure-chronicle`, `/adventures`, `/shop/*`, `/park/*`, `/medals/*`, `/helpers/*`, `/rescues/*`, `/news/*`, `/notifications/*`, `/homes/*`, `/letters/*`, `/rankings/*`）。セッション認証、管理者APIキー認可（`X-Admin-Key` / `Authorization: Bearer <key>`、タイミング攻撃耐性をもつ定数時間比較、`POST /news` および `POST /rankings/refresh` を保護）、キャラクター・プレイヤー所有権認可検証（403 Forbidden、連戦セッション・宝くじ・冒険Claim・冒険クロニクル・オークション出品取消等のサブリソースIDOR完全防御）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、Valkey/In-Memory 分散レートリミットミドルウェア（公開認証エンドポイント・一般エンドポイント別制限、429 Too Many Requests、Retry-After / X-RateLimit-* ヘッダー、fail-open耐障害性）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
 
 ### Infrastructure & Operations
