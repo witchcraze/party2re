@@ -1,0 +1,49 @@
+{
+  "$schema": "https://archify.dev/schema/module.v1.json",
+  "module": "blacksmith",
+  "tier": 1,
+  "description": "Equipment enhancement, gold fee deduction, and multi-slot material consumption.",
+  "package": "internal/blacksmith",
+  "implementation_package": "internal/blacksmith",
+  "dependencies": [
+    {
+      "name": "character_repository",
+      "target_module": "core/character",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/blacksmith/blacksmith.go#CharacterRepository"
+    },
+    {
+      "name": "inventory_repository",
+      "target_module": "core/inventory",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/blacksmith/blacksmith.go#InventoryRepository"
+    },
+    {
+      "name": "transaction_provider",
+      "target_module": "database",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/blacksmith/blacksmith.go#TransactionProvider"
+    }
+  ],
+  "transaction_boundaries": [
+    {
+      "method": "Enhance",
+      "source_ref": "internal/blacksmith/blacksmith.go#Service.Enhance",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+          "note": "Lock character wallet and verify enhancement fee"
+        },
+        {
+          "table": "inventory_items",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+          "note": "Lock inventory to consume enhancement materials and update equipment level"
+        }
+      ]
+    }
+  ]
+}

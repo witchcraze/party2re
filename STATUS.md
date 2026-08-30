@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #278 — Repository Intelligence & Guidance Layer PoC (.arch/ & Archify)
+Last updated: Issue #292 — Define Criteria & Target Scope for Archify Module Guidance (.arch/)
 
 ## Current phase
 
@@ -17,6 +17,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### Architecture & Repository Intelligence (Guidance Layer)
 - **Guidance Layer (.arch/)**: Archify Showcase 準拠のシステム全体図（`.arch/system.architecture.json` / `docs/architecture/system-map.html`）およびシンボルアンカー（`path#Symbol`）ベースのモジュール詳細定義（`.arch/modules/tavern.json`, `delivery.json`）。ソースコード（Ground Truth）のピンポイント探索を支援し、コンテキストトークン消費を最小化。
+- **Module Selection Criteria & Target Tiers**: 4つの選定基準（C1: トランザクション深度, C2: 行ロック階層, C3: エスクロー/共有状態, C4: 非同期Worker）に基づくトリアージを実施（`docs/architecture/guidance-layer.md`）。Tier 1（高リスク8機能: `tavern`, `delivery`, `bank`, `auction`, `guild`, `shop`, `blacksmith`, `adventure`）、Tier 2（オンデマンド）、Tier 3（除外）の運用スコープを確立。
 - **Automated Mechanical Verification**: Go AST シンボルリント（`internal/architecture/arch_test.go`）による 0.02 秒の静的シンボル実在性チェック（`go test ./...` 統合）および `scripts/verify.sh` / Git `pre-push` フックでの Archify CLI 自動レイアウト検証。
 
 ### Core & Shared Components

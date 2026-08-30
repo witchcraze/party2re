@@ -1,6 +1,6 @@
 ---
 name: Repository Intelligence (PoC) Rules
-description: Guidelines for managing the Guidance Layer (.arch/*.json), agent navigation, automated verification, and maintenance scope.
+description: Guidelines for managing the Guidance Layer (.arch/*.json), module selection criteria, agent navigation, and automated verification.
 ---
 
 # Repository Intelligence & Guidance Layer Principles (PoC)
@@ -13,18 +13,24 @@ description: Guidelines for managing the Guidance Layer (.arch/*.json), agent na
 - **Always Verify via `source_ref`**:
   Agents must never treat `.arch` metadata as unquestionable fact without verifying the actual code linked by `source_ref` (file path and symbol anchor) before making decisions or changes.
 
-## 2. Maintenance Scope & Hierarchy (Core vs. Optional)
-To keep maintenance costs negligible and avoid documentation rot:
+## 2. Module Selection Criteria & Scope Tiers
+To prevent documentation rot and maintain zero unnecessary overhead, module-level definitions (`.arch/modules/<module>.json`) are governed by strict selection criteria (see `docs/architecture/guidance-layer.md`):
 
-### A. Core Maintained Scope (Required Baseline)
-- **File**: `.arch/system.architecture.json` (System Topology Map)
-- **Purpose**: High-level cross-module topology, storage boundaries, shared core domains, and entrypoint.
-- **Maintenance Policy**: Must be updated when cross-module boundaries, new primary domains, or storage systems are introduced. Must satisfy Archify Showcase profile constraints (<= 12 primary nodes).
+### A. Selection Criteria (C1 - C4)
+A module qualifies for a dedicated `.arch/modules/<module>.json` file only if it meets at least **two** of the following conditions:
+1. **C1 (Transaction Depth)**: Spans 2+ distinct entity tables within a single `RunInTx` boundary.
+2. **C2 (Lock Hierarchy)**: Implements deterministic `SELECT ... FOR UPDATE` pessimistic locking (multi-table order or sorted ID locks).
+3. **C3 (Shared / Escrow State)**: Manages player-to-player transfers, escrow balances, listings, or shared guild states.
+4. **C4 (Async Scheduling)**: Integrates with Valkey delayed job queues and background execution workers.
 
-### B. Module Detailed Guidance (Optional / Experimental Examples)
-- **Directory**: `.arch/modules/*.json`
-- **Current Reference Samples**: `tavern.json`, `delivery.json`
-- **Maintenance Policy**: These detailed files serve as reference implementations for fine-grained multi-resource transaction mapping. They are **not mandatory** for every module. Modules may rely solely on clean Go interfaces, single-boundary methods, and Go docstrings unless high concurrency complexity warrants a dedicated JSON definition.
+### B. Scope Tiers
+- **Tier 1 (High-Leverage Priority - 8 modules)**:
+  `tavern` (active), `delivery` (active), `bank`, `auction`, `guild`, `shop`, `blacksmith`, `adventure`.
+  *These represent the high-concurrency, high-risk core features.*
+- **Tier 2 (On-Demand - authored when modified)**:
+  `alchemy`, `dungeon`, `casino`, `medal`, `depot`, `activity`, `farm`, `park`, `home`, `collection`, `chapel`, `secretshop`, `blackmarket`, `eventplaza`, `pvp`, `gvg`, `boss`, `rescue`.
+- **Tier 3 (Out-of-Scope - No module-level JSON)**:
+  Stateless utilities (`id`, `pagination`, `validation`, `logging`, `ratelimit`, `valkey`) and core domain entities (`core/*`).
 
 ## 3. Navigation Anchors: Symbol-First Standard
 To ensure definitions remain immutable against everyday code refactorings and line shifts:
@@ -62,6 +68,12 @@ To maintain idiomatic Go design while maximizing Guidance Layer navigability:
 
 ## 6. Definition of Done (DoD) for Architecture Updates
 When updating `.arch` definitions:
-1. `[ ]` **Symbol Exactness**: Interface and method names are copied directly from Go declarations (verified by `arch_test.go`).
-2. `[ ]` **System Map Sync**: Updated components match current Go package boundaries.
-3. `[ ]` **Local Verification**: `./scripts/verify.sh` passes all 7 check suites.
+1. `[ ]` **Criteria Check**: Module qualifies under Tier 1 or Tier 2 criteria.
+2. `[ ]` **Symbol Exactness**: Interface and method names are copied directly from Go declarations (verified by `arch_test.go`).
+3. `[ ]` **System Map Sync**: Updated components match current Go package boundaries.
+4. `[ ]` **Local Verification**: `./scripts/verify.sh` passes all 7 check suites.
+
+## 7. Governance & Continuous Evolution Process
+The Guidance Layer is an evolvable system maintained via the GitHub issue lifecycle:
+1. **Tier Adjustments**: Tier promotions/demotions are proposed via Architecture Issues when concurrency characteristics change.
+2. **New Guidance Types**: Extended artifacts (e.g., shared table reverse indices, worker state graphs) can be introduced by updating schemas and linter tests via Architecture PRs.
