@@ -24,17 +24,26 @@ else
     docker compose run --rm app go vet ./...
 fi
 
-echo "==> [3/6] Validating OpenAPI 3.1 specification and route coverage..."
+echo "==> [3/7] Validating OpenAPI 3.1 specification and route coverage..."
 if command -v go >/dev/null 2>&1; then
     go test -count=1 ./internal/api/http -run "OpenAPI"
 else
     docker compose run --rm app go test -count=1 ./internal/api/http -run "OpenAPI"
 fi
 
-echo "==> [4/6] Ensuring database migrations are applied..."
+echo "==> [4/7] Validating .arch architecture definitions (Archify)..."
+ARCHIFY_BIN="${HOME}/.agents/skills/archify/bin/archify.mjs"
+if [ -f "$ARCHIFY_BIN" ] && command -v node >/dev/null 2>&1; then
+    node "$ARCHIFY_BIN" validate architecture .arch/system.architecture.json --quality showcase --repo-root .
+    echo "Architecture definition validation passed."
+else
+    echo "Archify CLI not found at ${ARCHIFY_BIN}, skipping layout validation."
+fi
+
+echo "==> [5/7] Ensuring database migrations are applied..."
 "${ROOT_DIR}/scripts/migrate.sh"
 
-echo "==> [5/6] Running full test suite..."
+echo "==> [6/7] Running full test suite..."
 if command -v go >/dev/null 2>&1; then
     PARTY2_DB_DSN="party2:party2@tcp(127.0.0.1:3306)/party2?parseTime=true" \
     PARTY2_VALKEY_ADDR="127.0.0.1:6379" \
@@ -43,7 +52,8 @@ else
     docker compose run --rm app go test ./...
 fi
 
-echo "==> [6/6] Running smoke image build..."
+echo "==> [7/7] Running smoke image build..."
 docker build -f Dockerfile -t party2re:smoke .
+
 
 echo "==> ALL VERIFICATION CHECKS PASSED!"

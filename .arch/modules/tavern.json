@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "module": "tavern",
+  "domain": "冒険者の酒場 (@エレナ)",
+  "entrypoint": "internal/tavern/tavern.go",
+  "dependencies": [
+    {
+      "module": "core/character",
+      "relation_type": "public_service_call",
+      "methods": ["FindByID", "FindByIDForUpdate", "Update"],
+      "source_ref": "internal/tavern/tavern.go#CharacterRepository"
+    },
+    {
+      "module": "lottery",
+      "relation_type": "public_service_call",
+      "optional": true,
+      "methods": ["AddRaffleTickets", "GetRaffleTickets"],
+      "source_ref": "internal/tavern/tavern.go#LotteryRepository"
+    },
+    {
+      "module": "database",
+      "relation_type": "transaction_provider",
+      "methods": ["RunInTx"],
+      "source_ref": "internal/database/tx.go#TransactionProvider"
+    }
+  ],
+  "transaction_flows": [
+    {
+      "flow": "OrderMeal (食事注文・消費)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/tavern/tavern.go#Service.OrderMeal",
+      "lock_sequence": [
+        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
+        { "step": 2, "target": "characters", "method": "CharacterRepository.Update" },
+        { "step": 3, "target": "lottery_tickets", "method": "LotteryRepository.AddRaffleTickets", "optional": true },
+        { "step": 4, "target": "tavern_character_status", "lock_order": 8, "method": "Repository.UpsertCharacterStatus" }
+      ]
+    },
+    {
+      "flow": "ClaimDelivery (配達受取・消費)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/tavern/tavern.go#Service.ClaimDelivery",
+      "lock_sequence": [
+        { "step": 1, "target": "tavern_deliveries", "method": "Repository.GetDelivery" },
+        { "step": 2, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
+        { "step": 3, "target": "characters", "method": "CharacterRepository.Update" },
+        { "step": 4, "target": "lottery_tickets", "method": "LotteryRepository.AddRaffleTickets", "optional": true },
+        { "step": 5, "target": "tavern_character_status", "lock_order": 8, "method": "Repository.UpsertCharacterStatus" },
+        { "step": 6, "target": "tavern_deliveries", "lock_order": 8, "method": "Repository.DeleteDelivery" }
+      ]
+    }
+  ]
+}
