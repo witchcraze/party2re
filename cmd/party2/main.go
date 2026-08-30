@@ -2,12 +2,22 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net"
+	nethttp "net/http"
 	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/activity"
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/alchemy"
+	"github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/auction"
 	"github.com/witchcraze/party2re/internal/bank"
 	"github.com/witchcraze/party2re/internal/blacksmith"
@@ -15,6 +25,7 @@ import (
 	"github.com/witchcraze/party2re/internal/casino"
 	"github.com/witchcraze/party2re/internal/challenge"
 	"github.com/witchcraze/party2re/internal/chapel"
+	"github.com/witchcraze/party2re/internal/character"
 	"github.com/witchcraze/party2re/internal/collection"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
@@ -35,6 +46,7 @@ import (
 	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/park"
+	"github.com/witchcraze/party2re/internal/player"
 	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/ratelimit"
@@ -47,14 +59,40 @@ import (
 
 func main() {
 	logger := logging.NewJSON(os.Stderr)
-	if err := run(); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := run(ctx, logger); err != nil {
 		logger.Error(context.Background(), "application.startup", err)
 		os.Exit(1)
 	}
-	logger.Info(context.Background(), "application.ready")
 }
 
-func run() error {
+func resolveServerAddr() string {
+	if addr := os.Getenv("PARTY2_ADDR"); addr != "" {
+		return addr
+	}
+	if addr := os.Getenv("ADDR"); addr != "" {
+		return addr
+	}
+	port := os.Getenv("PARTY2_PORT")
+	if port == "" {
+		port = os.Getenv("PORT")
+	}
+	if port == "" {
+		port = "8080"
+	}
+	if !strings.HasPrefix(port, ":") {
+		return ":" + port
+	}
+	return port
+}
+
+func run(ctx context.Context, logger logging.Logger) error {
+	if logger == nil {
+		logger = logging.Nop()
+	}
+
 	db, err := database.OpenFromEnvironment()
 	if err != nil {
 		return err
@@ -65,10 +103,29 @@ func run() error {
 		return err
 	}
 
+	// 1. Core Player & Character Repositories and Services
+	playerRepo, err := database.NewPlayerRepository(db)
+	if err != nil {
+		return err
+	}
+	sessionRepo, err := database.NewSessionRepository(db)
+	if err != nil {
+		return err
+	}
+	playerService, err := player.NewService(playerRepo, sessionRepo)
+	if err != nil {
+		return err
+	}
+
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
 		return err
 	}
+	charService, err := character.NewService(charRepo)
+	if err != nil {
+		return err
+	}
+
 	invRepo, err := database.NewInventoryRepository(db)
 	if err != nil {
 		return err
@@ -81,10 +138,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	_, err = shop.NewServiceWithTransaction(charRepo, invRepo, shopRepo, itemCatalog)
+	shopService, err := shop.NewServiceWithTransaction(charRepo, invRepo, shopRepo, itemCatalog)
 	if err != nil {
 		return err
 	}
+
 	depotRepo, err := database.NewDepotRepository(db)
 	if err != nil {
 		return err
@@ -93,6 +151,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
 	bsRepo, err := database.NewBlacksmithRepository(db)
 	if err != nil {
 		return err
@@ -101,6 +160,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
 	recipeCatalog, err := alchemy.InitialRecipeCatalog()
 	if err != nil {
 		return err
@@ -113,6 +173,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
 	bankRepo, err := database.NewBankRepository(db)
 	if err != nil {
 		return err
@@ -121,14 +182,16 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
 	pvpRepo, err := database.NewPvPRepository(db)
 	if err != nil {
 		return err
 	}
-	_, err = pvp.NewService(pvpRepo, charRepo, corebattle.Engine{})
+	pvpService, err := pvp.NewService(pvpRepo, charRepo, corebattle.Engine{})
 	if err != nil {
 		return err
 	}
+
 	guildRepo, err := database.NewGuildRepository(db)
 	if err != nil {
 		return err
@@ -137,6 +200,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
 	gvgRepo, err := database.NewGvGRepository(db)
 	if err != nil {
 		return err
@@ -145,22 +209,25 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
 	bossRepo, err := database.NewBossRepository(db)
 	if err != nil {
 		return err
 	}
-	_, err = boss.NewService(bossRepo, charRepo, corebattle.Engine{})
+	bossService, err := boss.NewService(bossRepo, charRepo, corebattle.Engine{})
 	if err != nil {
 		return err
 	}
+
 	dungeonRepo, err := database.NewDungeonRepository(db)
 	if err != nil {
 		return err
 	}
-	_, err = dungeon.NewService(dungeonRepo, charRepo, corebattle.Engine{})
+	dungeonService, err := dungeon.NewService(dungeonRepo, charRepo, corebattle.Engine{})
 	if err != nil {
 		return err
 	}
+
 	replayRepo, err := database.NewReplayRepository(db)
 	if err != nil {
 		return err
@@ -169,14 +236,16 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
 	challengeRepo, err := database.NewChallengeRepository(db)
 	if err != nil {
 		return err
 	}
-	_, err = challenge.NewService(challengeRepo, charRepo, corebattle.Engine{})
+	challengeService, err := challenge.NewService(challengeRepo, charRepo, corebattle.Engine{})
 	if err != nil {
 		return err
 	}
+
 	customSkillRepo, err := database.NewCustomSkillRepository(db)
 	if err != nil {
 		return err
@@ -185,38 +254,37 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	_, err = custom_skill.NewService(customSkillRepo, charRepo, charJobRepo)
+	customSkillService, err := custom_skill.NewService(customSkillRepo, charRepo, charJobRepo)
 	if err != nil {
 		return err
 	}
+
 	parkRepo, err := database.NewParkRepository(db)
 	if err != nil {
 		return err
 	}
-	_, err = park.NewService(parkRepo, charRepo)
+
+	txProvider := database.NewTransactionProvider(db)
+	medalService, err := medal.NewService(charRepo, invRepo, nil, "", medal.WithTransactionProvider(txProvider))
 	if err != nil {
 		return err
 	}
-	_, _ = medal.NewService(charRepo, invRepo, nil, "internal/medal/medal_rewards.json")
 
 	rescueRepo, err := database.NewRescueRepository(db)
 	if err != nil {
 		return err
 	}
-	_ = rescue.NewService(rescueRepo, charRepo, nil)
 
 	helperRepo, err := database.NewHelperRepository(db)
 	if err != nil {
 		return err
 	}
-	txProvider := database.NewTransactionProvider(db)
-	_ = helper.NewService(helperRepo, charRepo, invRepo, nil, txProvider)
 
 	notificationRepo, err := database.NewNotificationRepository(db)
 	if err != nil {
 		return err
 	}
-	_, err = notification.NewService(notificationRepo, notificationRepo)
+	notificationService, err := notification.NewService(notificationRepo, notificationRepo)
 	if err != nil {
 		return err
 	}
@@ -225,16 +293,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	_, err = home.NewService(homeRepo, charRepo)
-	if err != nil {
-		return err
-	}
 
 	rankingRepo, err := database.NewRankingRepository(db)
-	if err != nil {
-		return err
-	}
-	_, err = ranking.NewService(rankingRepo)
 	if err != nil {
 		return err
 	}
@@ -243,12 +303,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	_, err = job.NewService(charJobRepo, job.WithCatalog(jobCatalog), job.WithCharacterRepository(charRepo))
+	jobService, err := job.NewService(charJobRepo, job.WithCatalog(jobCatalog), job.WithCharacterRepository(charRepo))
 	if err != nil {
 		return err
 	}
 
-	_, err = inn.NewService(charRepo)
+	innService, err := inn.NewService(charRepo)
 	if err != nil {
 		return err
 	}
@@ -257,7 +317,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	_, err = chapel.NewService(chapelRepo)
+	chapelService, err := chapel.NewService(chapelRepo)
 	if err != nil {
 		return err
 	}
@@ -266,7 +326,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	_, err = farm.NewService(farmRepo)
+	farmService, err := farm.NewService(farmRepo)
 	if err != nil {
 		return err
 	}
@@ -275,7 +335,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	_, err = collection.NewService(collectionRepo, 100, 100)
+	collectionService, err := collection.NewService(collectionRepo, 100, 100)
 	if err != nil {
 		return err
 	}
@@ -284,7 +344,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	_, err = lottery.NewService(lotteryRepo)
+	lotteryService, err := lottery.NewService(lotteryRepo)
 	if err != nil {
 		return err
 	}
@@ -293,7 +353,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	_, err = casino.NewService(casinoRepo)
+	casinoService, err := casino.NewService(casinoRepo)
 	if err != nil {
 		return err
 	}
@@ -302,66 +362,168 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	_, err = auction.NewService(auctionRepo)
+	auctionService, err := auction.NewService(auctionRepo)
 	if err != nil {
 		return err
 	}
 
+	activityRepo, err := database.NewActivityRepository(db)
+	if err != nil {
+		return err
+	}
+	adventureRepo, err := database.NewAdventureRepository(db)
+	if err != nil {
+		return err
+	}
+	adventureStages, err := adventure.InitialStageCatalog()
+	if err != nil {
+		return err
+	}
+	adventureMonsters, err := adventure.InitialMonsterCatalog()
+	if err != nil {
+		return err
+	}
+
+	// 2. Cache, Limiter, Scheduler & Worker (with in-memory fallback)
+	var (
+		limiter        http.RateLimiter = ratelimit.NewMemoryLimiter()
+		schedService   *scheduling.Service
+		worker         *scheduling.Worker
+		rankingService *ranking.Service
+		parkService    *park.Service
+		homeService    *home.Service
+		advService     *adventure.Service
+		rescueService  = rescue.NewService(rescueRepo, charRepo, nil)
+		helperService  = helper.NewService(helperRepo, charRepo, invRepo, nil, txProvider)
+	)
+
 	valkeyClient, err := valkey.NewClient()
 	if err != nil {
-		// Log warning but continue if Valkey is optional or fallback is acceptable.
-		// For now, if we can't connect, we just won't have a scheduler.
+		logger.Warn(ctx, "valkey.connect.failed", slog.String("detail", err.Error()), slog.String("fallback", "in_memory"))
+		rankingService, _ = ranking.NewService(rankingRepo)
+		parkService, _ = park.NewService(parkRepo, charRepo, park.WithRateLimiter(limiter))
+		homeService, _ = home.NewService(homeRepo, charRepo, home.WithVisitorLimiter(limiter, 24*time.Hour))
+		advService, err = adventure.NewServiceWithCatalogs(adventureRepo, charRepo, invRepo, adventureStages, adventureMonsters, corebattle.Engine{}, nil, nil, adventure.RealClock{})
+		if err != nil {
+			return err
+		}
 	} else {
 		defer valkeyClient.Close()
-
-		// Setup repositories
-		activityRepo, err := database.NewActivityRepository(db)
-		if err != nil {
-			return err
-		}
-		adventureRepo, err := database.NewAdventureRepository(db)
-		if err != nil {
-			return err
-		}
-		schedRepo := scheduling.NewValkeyRepository(valkeyClient)
-		limiter := ratelimit.NewValkeyLimiter(valkeyClient)
+		limiter = ratelimit.NewValkeyLimiter(valkeyClient)
 		rankingCache := ranking.NewValkeySnapshotCache(valkeyClient)
+		schedRepo := scheduling.NewValkeyRepository(valkeyClient)
+		schedService = scheduling.NewService(schedRepo)
 
-		// Setup Scheduler, Services & Worker
-		schedService := scheduling.NewService(schedRepo)
-		_ = rescue.NewService(rescueRepo, charRepo, schedService)
-		_, _ = park.NewService(parkRepo, charRepo, park.WithRateLimiter(limiter))
-		_, _ = home.NewService(homeRepo, charRepo, home.WithVisitorLimiter(limiter, 24*time.Hour))
-		rankingService, _ := ranking.NewService(rankingRepo, ranking.WithSnapshotCache(rankingCache))
+		rescueService = rescue.NewService(rescueRepo, charRepo, schedService)
+		rankingService, _ = ranking.NewService(rankingRepo, ranking.WithSnapshotCache(rankingCache))
+		parkService, _ = park.NewService(parkRepo, charRepo, park.WithRateLimiter(limiter))
+		homeService, _ = home.NewService(homeRepo, charRepo, home.WithVisitorLimiter(limiter, 24*time.Hour))
 
-		// Note: logger parameter uses nop logger for now as standard pkg logger isn't typed for it.
-		// In a real app we would adapt logging.Logger to activity/adventure.Logger.
 		activityService, err := activity.NewService(activityRepo, charRepo, schedService, nil)
 		if err != nil {
 			return err
 		}
 
-		adventureStages, err := adventure.InitialStageCatalog()
-		if err != nil {
-			return err
-		}
-		adventureMonsters, err := adventure.InitialMonsterCatalog()
-		if err != nil {
-			return err
-		}
-		adventureService, err := adventure.NewServiceWithCatalogs(adventureRepo, charRepo, invRepo, adventureStages, adventureMonsters, corebattle.Engine{}, schedService, nil, adventure.RealClock{})
+		advService, err = adventure.NewServiceWithCatalogs(adventureRepo, charRepo, invRepo, adventureStages, adventureMonsters, corebattle.Engine{}, schedService, nil, adventure.RealClock{})
 		if err != nil {
 			return err
 		}
 
-		worker := scheduling.NewWorker(schedRepo, 5*time.Second, logging.NewJSON(os.Stderr))
+		worker = scheduling.NewWorker(schedRepo, 5*time.Second, logger)
 		worker.RegisterHandler(activity.ActivityActionTypeTrainingComplete, activity.NewTrainingHandler(activityService))
-		worker.RegisterHandler(adventure.AdventureActionTypeComplete, adventure.NewAdventureCompletionHandler(adventureService))
+		worker.RegisterHandler(adventure.AdventureActionTypeComplete, adventure.NewAdventureCompletionHandler(advService))
 		worker.RegisterHandler(ranking.RankingActionTypeRefresh, ranking.NewRefreshHandler(rankingService))
-
-		// In a real entrypoint we would run worker.Run(ctx, interval) in a goroutine.
-		// For now, we just wire it up.
 	}
+
+	// 3. HTTP API Handler construction
+	opts := []http.Option{
+		http.WithRateLimiter(limiter),
+		http.WithAdminAPIKeyFromEnv("PARTY2_ADMIN_API_KEY"),
+		http.WithAllowedOriginsFromEnv("PARTY2_CORS_ORIGINS"),
+		http.WithHelper(helperService),
+		http.WithRescue(rescueService),
+		http.WithMedal(medalService),
+		http.WithPark(parkService),
+		http.WithRanking(rankingService),
+		http.WithJob(jobService),
+		http.WithInn(innService),
+		http.WithChapel(chapelService),
+		http.WithFarm(farmService),
+		http.WithCollection(collectionService),
+		http.WithLottery(lotteryService),
+		http.WithCasino(casinoService),
+		http.WithChallenge(challengeService),
+		http.WithBoss(bossService),
+		http.WithDungeon(dungeonService),
+		http.WithPvP(pvpService),
+		http.WithAuction(auctionService),
+		http.WithNotification(notificationService),
+		http.WithHome(homeService),
+		http.WithCustomSkill(customSkillService),
+	}
+
+	apiHandler, err := http.NewHandler(playerService, charService, advService, shopService, opts...)
+	if err != nil {
+		return err
+	}
+
+	// 4. Server Binding & Lifecycle Orchestration
+	addr := resolveServerAddr()
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("listen on %s: %w", addr, err)
+	}
+	defer ln.Close()
+
+	server := &nethttp.Server{
+		Addr:              ln.Addr().String(),
+		Handler:           apiHandler.Router(),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := server.Serve(ln); err != nil && !errors.Is(err, nethttp.ErrServerClosed) {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+
+	workerCtx, cancelWorker := context.WithCancel(context.Background())
+	var workerWg sync.WaitGroup
+	if worker != nil {
+		workerWg.Add(1)
+		go func() {
+			defer workerWg.Done()
+			worker.Run(workerCtx)
+		}()
+	}
+
+	logger.Info(ctx, "server.ready", slog.String("addr", ln.Addr().String()))
+
+	select {
+	case <-ctx.Done():
+		logger.Info(context.Background(), "server.shutdown.started", slog.String("reason", "signal"))
+	case err := <-serverErr:
+		if err != nil {
+			cancelWorker()
+			workerWg.Wait()
+			return fmt.Errorf("server error: %w", err)
+		}
+	}
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		logger.Error(context.Background(), "server.shutdown.error", err)
+	}
+	cancelWorker()
+	workerWg.Wait()
+	logger.Info(context.Background(), "server.shutdown.completed")
 
 	return nil
 }

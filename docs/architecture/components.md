@@ -333,6 +333,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Atomic distributed rate limiting, burst protection, public endpoint spam defense, park bulletin board posting cooldowns, and private home visitor throttling without SQL lookup overhead.
   - **Dependencies:** Valkey (`github.com/valkey-io/valkey-go`) with in-memory thread-safe fallback.
   - **Persistence:** Transient atomic counter keys in Valkey with TTL (`party2:ratelimit:*`).
+- **Server Entrypoint & Lifecycle Orchestration** (`cmd/party2`):
+  - **Responsibility:** Process initialization, configuration loading (`PARTY2_DB_DSN`, `PARTY2_VALKEY_ADDR`, `PORT`/`ADDR`), full domain repository and service wiring, background scheduler worker execution, HTTP JSON API route registration, and graceful shutdown signal handling (`SIGINT`/`SIGTERM`) with connection draining.
+  - **Dependencies:** All domain services and repositories, `internal/api/http`, `internal/scheduling`, `internal/database`, `internal/valkey`, `internal/ratelimit`, `internal/logging`.
+  - **Persistence:** Coordinates connection lifecycles for MariaDB and Valkey.
 
 ### Cross-Module Transaction Orchestration & Ambient Context Propagation
 

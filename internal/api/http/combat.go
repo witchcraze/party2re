@@ -35,8 +35,8 @@ type BossService interface {
 type DungeonService interface {
 	ListDungeons(ctx context.Context, characterID string) ([]dungeon.DungeonOverview, error)
 	StartExpedition(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error)
-	Move(ctx context.Context, characterID string, dir dungeon.Direction) (*dungeon.ExpeditionStepResult, error)
-	Escape(ctx context.Context, characterID string) (*dungeon.ExpeditionStepResult, error)
+	Move(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
+	Escape(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
 	GetActiveExpedition(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error)
 }
 
@@ -351,7 +351,7 @@ type startDungeonResponse struct {
 }
 
 type dungeonStepResponse struct {
-	Result *dungeon.ExpeditionStepResult `json:"result"`
+	Result dungeon.ExpeditionStepResult `json:"result"`
 }
 
 func (h *Handler) handleListDungeons(w http.ResponseWriter, r *http.Request) {
