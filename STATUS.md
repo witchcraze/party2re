@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #195 — Delivery: Town Item Delivery Quests and Player-to-Player Parcel Courier Service (でりばりー)
+Last updated: Issue #278 — Repository Intelligence & Guidance Layer PoC (.arch/ & Archify)
 
 ## Current phase
 
@@ -14,6 +14,10 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ---
 
 ## Current Component State (What is True Now)
+
+### Architecture & Repository Intelligence (Guidance Layer)
+- **Guidance Layer (.arch/)**: Archify Showcase 準拠のシステム全体図（`.arch/system.architecture.json` / `docs/architecture/system-map.html`）およびシンボルアンカー（`path#Symbol`）ベースのモジュール詳細定義（`.arch/modules/tavern.json`, `delivery.json`）。ソースコード（Ground Truth）のピンポイント探索を支援し、コンテキストトークン消費を最小化。
+- **Automated Mechanical Verification**: Go AST シンボルリント（`internal/architecture/arch_test.go`）による 0.02 秒の静的シンボル実在性チェック（`go test ./...` 統合）および `scripts/verify.sh` / Git `pre-push` フックでの Archify CLI 自動レイアウト検証。
 
 ### Core & Shared Components
 - **Player** (`internal/core/player`, `internal/player`): アカウント登録・パスワードハッシュ・セッション管理（MariaDB永続化）。
