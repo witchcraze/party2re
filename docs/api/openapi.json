@@ -357,6 +357,37 @@
         ],
         "type": "object"
       },
+      "SecretShopItem": {
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "item_definition_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "item_definition_id",
+          "name",
+          "category",
+          "price",
+          "description"
+        ],
+        "type": "object"
+      },
       "SessionResponse": {
         "properties": {
           "expires_at": {
@@ -5144,6 +5175,510 @@
         "summary": "Rebirth Lv99 character with stat bonuses",
         "tags": [
           "Character"
+        ]
+      }
+    },
+    "/characters/{id}/secretshop": {
+      "get": {
+        "description": "Checks character eligibility and returns secret shop status and available rare items.",
+        "operationId": "getSecretShopStatus",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "character_id": {
+                      "type": "string"
+                    },
+                    "is_eligible": {
+                      "type": "boolean"
+                    },
+                    "items": {
+                      "items": {
+                        "$ref": "#/components/schemas/SecretShopItem"
+                      },
+                      "type": "array"
+                    },
+                    "location_name": {
+                      "type": "string"
+                    },
+                    "npc_name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "character_id",
+                    "location_name",
+                    "npc_name",
+                    "is_eligible",
+                    "items"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Secret shop status retrieved successfully"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Access denied (character ineligible)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get Secret Shop status and available rare items",
+        "tags": [
+          "Secret Shop"
+        ]
+      }
+    },
+    "/characters/{id}/secretshop/inspect": {
+      "post": {
+        "description": "Retrieves character inspect description for the Secret Shop sheep NPC.",
+        "operationId": "inspectSecretShopNPC",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "character_id": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "npc_name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "character_id",
+                    "npc_name",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "NPC description returned successfully"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Access denied"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Inspect Secret Shop NPC @ヒミツジ",
+        "tags": [
+          "Secret Shop"
+        ]
+      }
+    },
+    "/characters/{id}/secretshop/puffpuff": {
+      "post": {
+        "description": "Interacts with @ヒミツジ for the legendary puff-puff massage service and restorative cheer.",
+        "operationId": "experienceSecretShopPuffPuff",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "character_id": {
+                      "type": "string"
+                    },
+                    "current_hp": {
+                      "type": "integer"
+                    },
+                    "current_mp": {
+                      "type": "integer"
+                    },
+                    "hp_healed": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "mp_healed": {
+                      "type": "integer"
+                    },
+                    "npc_name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "character_id",
+                    "npc_name",
+                    "message",
+                    "hp_healed",
+                    "mp_healed",
+                    "current_hp",
+                    "current_mp"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Puff-puff service executed successfully"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Access denied"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Experience Secret Shop @ぱふぱふ service",
+        "tags": [
+          "Secret Shop"
+        ]
+      }
+    },
+    "/characters/{id}/secretshop/purchase": {
+      "post": {
+        "description": "Purchases rare item with transaction safety and updates gold/inventory.",
+        "operationId": "purchaseSecretShopItem",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "item_id": {
+                    "example": "secret_item_philosopher_stone",
+                    "type": "string"
+                  },
+                  "quantity": {
+                    "default": 1,
+                    "maximum": 99,
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "item_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "character_id": {
+                      "type": "string"
+                    },
+                    "inventory_instance_id": {
+                      "type": "string"
+                    },
+                    "item": {
+                      "$ref": "#/components/schemas/SecretShopItem"
+                    },
+                    "quantity": {
+                      "type": "integer"
+                    },
+                    "remaining_gold": {
+                      "type": "integer"
+                    },
+                    "total_price": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "character_id",
+                    "item",
+                    "quantity",
+                    "total_price",
+                    "remaining_gold",
+                    "inventory_instance_id"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Item purchased successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Insufficient gold or invalid purchase parameters"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Access denied"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character or item not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Item temporarily unavailable due to active helper request"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Purchase rare item from Secret Shop",
+        "tags": [
+          "Secret Shop"
+        ]
+      }
+    },
+    "/characters/{id}/secretshop/talk": {
+      "post": {
+        "description": "Retrieves secretive dialogue from the Secret Shop sheep NPC.",
+        "operationId": "talkSecretShopNPC",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "character_id": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "npc_name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "character_id",
+                    "npc_name",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "NPC dialogue returned successfully"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Access denied"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Talk to Secret Shop NPC @ヒミツジ",
+        "tags": [
+          "Secret Shop"
         ]
       }
     },
