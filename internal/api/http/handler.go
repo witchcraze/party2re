@@ -118,6 +118,7 @@ type Handler struct {
 	secretshop     SecretShopService
 	tavern         TavernService
 	blackmarket    BlackMarketService
+	delivery       DeliveryService
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
 	allowedOrigins map[string]struct{}
@@ -381,6 +382,17 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/blackmarket/sell", h.handleBlackMarketSell)
 	mux.HandleFunc("POST /characters/{id}/blackmarket/talk", h.handleBlackMarketTalk)
 	mux.HandleFunc("POST /characters/{id}/blackmarket/rumors", h.handleBlackMarketRumors)
+
+	// Delivery Quests & Courier Service
+	mux.HandleFunc("GET /characters/{id}/delivery/quests", h.handleGetDeliveryQuests)
+	mux.HandleFunc("GET /characters/{id}/delivery/active", h.handleGetActiveDeliveries)
+	mux.HandleFunc("POST /characters/{id}/delivery/accept", h.handleAcceptDeliveryQuest)
+	mux.HandleFunc("POST /characters/{id}/delivery/complete", h.handleCompleteDelivery)
+	mux.HandleFunc("POST /characters/{id}/delivery/cancel", h.handleCancelDelivery)
+	mux.HandleFunc("POST /characters/{id}/delivery/parcels/send", h.handleSendParcel)
+	mux.HandleFunc("GET /characters/{id}/delivery/parcels/incoming", h.handleGetIncomingParcels)
+	mux.HandleFunc("POST /characters/{id}/delivery/parcels/claim", h.handleClaimParcel)
+	mux.HandleFunc("POST /characters/{id}/delivery/parcels/cancel", h.handleCancelParcel)
 
 	// Farm
 	mux.HandleFunc("GET /characters/{id}/farm", h.handleGetFarm)

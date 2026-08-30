@@ -33,6 +33,7 @@ import (
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/custom_skill"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/delivery"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/eventplaza"
@@ -408,6 +409,21 @@ func run(ctx context.Context, logger logging.Logger) error {
 		return err
 	}
 
+	deliveryRepo, err := database.NewDeliveryRepository(db)
+	if err != nil {
+		return err
+	}
+	deliveryService, err := delivery.NewService(
+		deliveryRepo,
+		charRepo,
+		invRepo,
+		delivery.WithItemDefinitionProvider(itemCatalog),
+		delivery.WithTransactionProvider(txProvider),
+	)
+	if err != nil {
+		return err
+	}
+
 	casinoRepo, err := database.NewCasinoRepository(db)
 	if err != nil {
 		return err
@@ -523,6 +539,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 		http.WithSecretShop(secretshopService),
 		http.WithTavern(tavernService),
 		http.WithBlackMarket(blackmarketService),
+		http.WithDelivery(deliveryService),
 	}
 
 	apiHandler, err := http.NewHandler(playerService, charService, advService, shopService, opts...)

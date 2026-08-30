@@ -110,6 +110,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Event Plaza, traveling merchant bazaar, and victory celebrations ([#161](https://github.com/witchcraze/party2re/issues/161))
 - [x] Secret Underground Shop and NPC @ヒミツジ ([#192](https://github.com/witchcraze/party2re/issues/192))
 - [x] Adventurer's Tavern, menu orders, delivery reservations, and NPC @エレナ ([#185](https://github.com/witchcraze/party2re/issues/185))
+- [x] Town item delivery quests and player-to-player parcel courier service ([#195](https://github.com/witchcraze/party2re/issues/195))
 
 ### G. Presentation, assets, and operations
 - [x] UI-independent HTTP JSON Application API layer ([#87](https://github.com/witchcraze/party2re/issues/87))
@@ -193,7 +194,8 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#161](https://github.com/witchcraze/party2re/issues/161) | Event Plaza, traveling merchant bazaar, and victory celebrations | Merged |
 | [#192](https://github.com/witchcraze/party2re/issues/192) | Secret Underground Shop and NPC @ヒミツジ | Merged |
 | [#185](https://github.com/witchcraze/party2re/issues/185) | Adventurer's Tavern, menu orders, delivery reservations, and NPC @エレナ | Merged |
-| [#142](https://github.com/witchcraze/party2re/issues/142) | Town Black Market, contraband trading, dynamic pricing, and NPC @ヤミジ | In Progress |
+| [#142](https://github.com/witchcraze/party2re/issues/142) | Town Black Market, contraband trading, dynamic pricing, and NPC @ヤミジ | Merged |
+| [#195](https://github.com/witchcraze/party2re/issues/195) | Town item delivery quests and player-to-player parcel courier service | In Progress |
 
 ---
 

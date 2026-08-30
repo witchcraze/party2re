@@ -4208,6 +4208,450 @@
         ]
       }
     },
+    "/characters/{id}/delivery/accept": {
+      "post": {
+        "description": "Accepts a town delivery quest (up to a maximum of 3 concurrent active delivery quests).",
+        "operationId": "acceptDeliveryQuest",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "quest_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "quest_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Delivery quest accepted successfully"
+          },
+          "400": {
+            "description": "Quest expired, already accepted, or active limit reached"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Quest not found"
+          }
+        },
+        "summary": "Accept a town delivery quest",
+        "tags": [
+          "Delivery"
+        ]
+      }
+    },
+    "/characters/{id}/delivery/active": {
+      "get": {
+        "description": "Retrieves the character's currently active (in_progress) accepted delivery quests.",
+        "operationId": "getActiveCharacterDeliveries",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of active character deliveries"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "summary": "List active delivery quests in progress",
+        "tags": [
+          "Delivery"
+        ]
+      }
+    },
+    "/characters/{id}/delivery/cancel": {
+      "post": {
+        "description": "Cancels an in-progress accepted delivery quest.",
+        "operationId": "cancelDeliveryQuest",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "delivery_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "delivery_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Delivery cancelled successfully"
+          },
+          "400": {
+            "description": "Delivery not active"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Delivery not found"
+          }
+        },
+        "summary": "Cancel an active delivery quest",
+        "tags": [
+          "Delivery"
+        ]
+      }
+    },
+    "/characters/{id}/delivery/complete": {
+      "post": {
+        "description": "Consumes the required item quantity from inventory, completes delivery, and grants Gold, EXP, and bonus items.",
+        "operationId": "completeDeliveryQuest",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "delivery_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "delivery_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Delivery quest completed and rewards granted"
+          },
+          "400": {
+            "description": "Insufficient items or delivery not active"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Delivery not found"
+          }
+        },
+        "summary": "Complete a delivery quest and claim rewards",
+        "tags": [
+          "Delivery"
+        ]
+      }
+    },
+    "/characters/{id}/delivery/parcels/cancel": {
+      "post": {
+        "description": "Cancels a pending parcel sent by the character and refunds payload gold/items to sender.",
+        "operationId": "cancelDeliveryParcel",
+        "parameters": [
+          {
+            "description": "Sender Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "parcel_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "parcel_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Parcel cancelled and contents refunded"
+          },
+          "400": {
+            "description": "Parcel already claimed or cancelled"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Parcel not found"
+          }
+        },
+        "summary": "Cancel a dispatched courier parcel",
+        "tags": [
+          "Delivery"
+        ]
+      }
+    },
+    "/characters/{id}/delivery/parcels/claim": {
+      "post": {
+        "description": "Claims a pending parcel, receiving the attached gold and inventory items.",
+        "operationId": "claimDeliveryParcel",
+        "parameters": [
+          {
+            "description": "Recipient Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "parcel_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "parcel_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Parcel claimed successfully"
+          },
+          "400": {
+            "description": "Parcel already claimed or cancelled"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Parcel not found"
+          }
+        },
+        "summary": "Claim incoming courier parcel",
+        "tags": [
+          "Delivery"
+        ]
+      }
+    },
+    "/characters/{id}/delivery/parcels/incoming": {
+      "get": {
+        "description": "Retrieves pending courier parcels addressed to this character.",
+        "operationId": "getIncomingDeliveryParcels",
+        "parameters": [
+          {
+            "description": "Recipient Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of incoming parcels"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "summary": "List incoming courier parcels",
+        "tags": [
+          "Delivery"
+        ]
+      }
+    },
+    "/characters/{id}/delivery/parcels/send": {
+      "post": {
+        "description": "Dispatches items and/or gold to another player's character via town courier (50 G flat service fee).",
+        "operationId": "sendDeliveryParcel",
+        "parameters": [
+          {
+            "description": "Sender Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "gold_amount": {
+                    "type": "integer"
+                  },
+                  "item_instance_id": {
+                    "type": "string"
+                  },
+                  "item_quantity": {
+                    "type": "integer"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "recipient_character_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "recipient_character_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Parcel sent successfully"
+          },
+          "400": {
+            "description": "Insufficient funds or items, self-sending, or invalid payload"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Recipient character not found"
+          }
+        },
+        "summary": "Send a courier parcel to another player character",
+        "tags": [
+          "Delivery"
+        ]
+      }
+    },
+    "/characters/{id}/delivery/quests": {
+      "get": {
+        "description": "Retrieves active non-expired town delivery quests requested by NPCs with auto-replenishment.",
+        "operationId": "getAvailableDeliveryQuests",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of available delivery quests"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "summary": "List available town delivery quests",
+        "tags": [
+          "Delivery"
+        ]
+      }
+    },
     "/characters/{id}/dungeons": {
       "get": {
         "operationId": "listDungeons",
