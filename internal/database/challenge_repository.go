@@ -139,7 +139,7 @@ func (r *ChallengeRepository) UpdateSession(ctx context.Context, s challenge.Cha
 		SET current_round = ?, character_current_hp = ?, accumulated_exp = ?,
 		    accumulated_gold = ?, accumulated_items_json = ?, status = ?,
 		    updated_at = ?
-		WHERE id = ?
+		WHERE id = ? AND character_id = ?
 	`
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(
 		ctx,
@@ -152,6 +152,7 @@ func (r *ChallengeRepository) UpdateSession(ctx context.Context, s challenge.Cha
 		string(s.Status),
 		s.UpdatedAt,
 		s.ID,
+		s.CharacterID,
 	)
 	return err
 }
@@ -206,6 +207,38 @@ func (r *ChallengeRepository) FindRecord(ctx context.Context, characterID string
 	return &rec, nil
 }
 
+func (r *ChallengeRepository) FindRecordsByCharacter(ctx context.Context, characterID string) ([]challenge.CharacterChallengeRecord, error) {
+	query := `
+		SELECT character_id, tier_id, highest_round, total_attempts,
+		       total_victories, best_cleared_at
+		FROM character_challenge_records
+		WHERE character_id = ?
+		ORDER BY tier_id ASC
+	`
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []challenge.CharacterChallengeRecord
+	for rows.Next() {
+		var rec challenge.CharacterChallengeRecord
+		if err := rows.Scan(
+			&rec.CharacterID,
+			&rec.TierID,
+			&rec.HighestRound,
+			&rec.TotalAttempts,
+			&rec.TotalVictories,
+			&rec.BestClearedAt,
+		); err != nil {
+			return nil, err
+		}
+		list = append(list, rec)
+	}
+	return list, rows.Err()
+}
+
 func (r *ChallengeRepository) GetLeaderboard(ctx context.Context, tierID string, limit int) ([]challenge.LeaderboardEntry, error) {
 	query := `
 		SELECT r.character_id, c.name, c.level, c.job_id, r.highest_round, r.best_cleared_at
@@ -250,7 +283,7 @@ func (r *ChallengeRepository) FinalizeSession(ctx context.Context, s challenge.C
 			SET current_round = ?, character_current_hp = ?, accumulated_exp = ?,
 			    accumulated_gold = ?, accumulated_items_json = ?, status = ?,
 			    updated_at = ?
-			WHERE id = ?
+			WHERE id = ? AND character_id = ?
 		`
 		if _, err := executor.ExecContext(
 			txCtx,
@@ -263,6 +296,7 @@ func (r *ChallengeRepository) FinalizeSession(ctx context.Context, s challenge.C
 			string(s.Status),
 			s.UpdatedAt,
 			s.ID,
+			s.CharacterID,
 		); err != nil {
 			return err
 		}

@@ -149,4 +149,27 @@ func TestAuctionEndpoints(t *testing.T) {
 			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
+
+	t.Run("POST /auctions/{id}/cancel - forbidden for non-seller", func(t *testing.T) {
+		hForbidden := newTestHandler(
+			t,
+			pService,
+			cService,
+			&stubAdventureService{},
+			&stubShopService{},
+			apihttp.WithAuction(&stubAuctionService{
+				cancelListingFn: func(ctx context.Context, listingID, sellerID string) (auction.AuctionListing, error) {
+					return auction.AuctionListing{}, auction.ErrUnauthorizedSeller
+				},
+			}),
+		)
+		req := jsonRequest(t, http.MethodPost, "/auctions/auc-1/cancel", `{"seller_character_id":"c1"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		hForbidden.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden, got %d", rec.Code)
+		}
+	})
 }

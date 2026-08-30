@@ -25,6 +25,7 @@ var (
 	ErrTierNotFound        = errors.New("challenge tier not found")
 	ErrLevelTooLow         = errors.New("character level is too low for this tier")
 	ErrCharacterNotFound   = errors.New("character not found")
+	ErrForbidden           = errors.New("forbidden: character does not own this challenge session")
 )
 
 type SessionStatus string
@@ -120,6 +121,7 @@ type Repository interface {
 	UpdateSession(ctx context.Context, session ChallengeSession) error
 	SaveRecord(ctx context.Context, record CharacterChallengeRecord) error
 	FindRecord(ctx context.Context, characterID string, tierID string) (*CharacterChallengeRecord, error)
+	FindRecordsByCharacter(ctx context.Context, characterID string) ([]CharacterChallengeRecord, error)
 	GetLeaderboard(ctx context.Context, tierID string, limit int) ([]LeaderboardEntry, error)
 	FinalizeSession(ctx context.Context, session ChallengeSession, expReward int, goldReward int, items []string, newStreak int) error
 }
@@ -244,23 +246,26 @@ func (s *Service) StartSession(ctx context.Context, characterID string, tierID s
 	return &session, nil
 }
 
-func (s *Service) ExecuteRound(ctx context.Context, sessionID string) (*RoundResult, error) {
+func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionID string) (*RoundResult, *ChallengeSession, error) {
 	session, err := s.repo.FindSessionByID(ctx, sessionID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	if session.CharacterID != characterID {
+		return nil, nil, ErrForbidden
 	}
 	if session.Status != StatusActive {
-		return nil, ErrSessionNotActive
+		return nil, nil, ErrSessionNotActive
 	}
 
 	tier, err := s.GetTier(session.TierID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	char, err := s.charRepo.FindByID(ctx, session.CharacterID)
 	if err != nil {
-		return nil, ErrCharacterNotFound
+		return nil, nil, ErrCharacterNotFound
 	}
 
 	maxHP := char.Stats.MaxHP
@@ -290,7 +295,7 @@ func (s *Service) ExecuteRound(ctx context.Context, sessionID string) (*RoundRes
 	}
 	battleRes, err := s.battleEngine.Resolve(battleReq)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	won := battleRes.Outcome == corebattle.OutcomeWin && battleRes.WinnerID == char.ID
@@ -327,7 +332,7 @@ func (s *Service) ExecuteRound(ctx context.Context, sessionID string) (*RoundRes
 		session.UpdatedAt = time.Now().UTC()
 
 		if err := s.repo.UpdateSession(ctx, *session); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		return &RoundResult{
@@ -342,7 +347,7 @@ func (s *Service) ExecuteRound(ctx context.Context, sessionID string) (*RoundRes
 			AwardedItem:        awardedItem,
 			SessionEnded:       false,
 			SessionStatus:      StatusActive,
-		}, nil
+		}, session, nil
 	}
 
 	// Defeat: session terminates
@@ -356,7 +361,7 @@ func (s *Service) ExecuteRound(ctx context.Context, sessionID string) (*RoundRes
 	clearedRounds := round - 1
 
 	if err := s.repo.FinalizeSession(ctx, *session, awardedExp, awardedGold, nil, clearedRounds); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	return &RoundResult{
@@ -370,13 +375,25 @@ func (s *Service) ExecuteRound(ctx context.Context, sessionID string) (*RoundRes
 		RoundGold:          0,
 		SessionEnded:       true,
 		SessionStatus:      StatusDefeated,
-	}, nil
+	}, session, nil
 }
 
-func (s *Service) Cashout(ctx context.Context, sessionID string) (*CashoutResult, error) {
+func (s *Service) ExecuteRound(ctx context.Context, sessionID string) (*RoundResult, error) {
 	session, err := s.repo.FindSessionByID(ctx, sessionID)
 	if err != nil {
 		return nil, err
+	}
+	res, _, err := s.AdvanceRound(ctx, session.CharacterID, sessionID)
+	return res, err
+}
+
+func (s *Service) RetireSession(ctx context.Context, characterID string, sessionID string) (*ChallengeSession, error) {
+	session, err := s.repo.FindSessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session.CharacterID != characterID {
+		return nil, ErrForbidden
 	}
 	if session.Status != StatusActive {
 		return nil, ErrSessionNotActive
@@ -394,13 +411,44 @@ func (s *Service) Cashout(ctx context.Context, sessionID string) (*CashoutResult
 		return nil, err
 	}
 
+	return session, nil
+}
+
+func (s *Service) Cashout(ctx context.Context, sessionID string) (*CashoutResult, error) {
+	session, err := s.repo.FindSessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	retired, err := s.RetireSession(ctx, session.CharacterID, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	clearedRounds := retired.CurrentRound - 1
 	return &CashoutResult{
 		RoundsCleared:  clearedRounds,
-		AwardedExp:     exp,
-		AwardedGold:    gold,
-		AwardedItems:   items,
+		AwardedExp:     retired.AccumulatedExp,
+		AwardedGold:    retired.AccumulatedGold,
+		AwardedItems:   retired.AccumulatedItems,
 		NewRecordRound: clearedRounds,
 	}, nil
+}
+
+func (s *Service) GetSession(ctx context.Context, characterID string, sessionID string) (*ChallengeSession, error) {
+	session, err := s.repo.FindSessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session.CharacterID != characterID {
+		return nil, ErrForbidden
+	}
+	return session, nil
+}
+
+func (s *Service) GetCharacterRecords(ctx context.Context, characterID string) ([]CharacterChallengeRecord, error) {
+	if strings.TrimSpace(characterID) == "" {
+		return nil, errors.New("character id is required")
+	}
+	return s.repo.FindRecordsByCharacter(ctx, characterID)
 }
 
 func (s *Service) GetActiveSession(ctx context.Context, characterID string) (*ChallengeSession, error) {

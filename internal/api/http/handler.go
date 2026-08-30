@@ -65,6 +65,7 @@ type CharacterService interface {
 type AdventureService interface {
 	StartStage(ctx context.Context, characterID string, stageID string) (adventure.Adventure, error)
 	Claim(ctx context.Context, id string) (adventure.Adventure, error)
+	Get(ctx context.Context, id string) (adventure.Adventure, error)
 	ListHistory(ctx context.Context, characterID string, limit, offset int) (adventure.PaginatedAdventures, error)
 	GetChronicle(ctx context.Context, characterID string) (adventure.AdventureChronicle, error)
 }
@@ -719,11 +720,26 @@ func (h *Handler) handleStartAdventure(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleClaimAdventure(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.authenticatePlayer(w, r); !ok {
+	player, ok := h.authenticatePlayer(w, r)
+	if !ok {
 		return
 	}
 
 	id := r.PathValue("id")
+	advInfo, err := h.adventures.Get(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, adventure.ErrNotFound) {
+			writeError(w, http.StatusNotFound, err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	if _, ok := h.authorizeCharacter(w, r, player.ID, advInfo.CharacterID); !ok {
+		return
+	}
+
 	adv, err := h.adventures.Claim(r.Context(), id)
 	if err != nil {
 		switch {

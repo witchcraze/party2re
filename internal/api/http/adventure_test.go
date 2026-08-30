@@ -170,3 +170,25 @@ func TestHandleGetAdventureChronicle_Unauthenticated(t *testing.T) {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusUnauthorized)
 	}
 }
+
+func TestHandleGetAdventureChronicle_Forbidden_DifferentPlayer(t *testing.T) {
+	player := coreplayer.Player{ID: "p1", Username: "user1"}
+	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
+	cs := &stubCharacterService{
+		getFn: func(_ context.Context, id string) (corecharacter.Character, error) {
+			return corecharacter.Character{ID: "c1", PlayerID: "p2", Name: "Hero"}, nil
+		},
+	}
+	as := &stubAdventureService{}
+
+	h := newTestHandler(t, ps, cs, as, &stubShopService{})
+	req := httptest.NewRequest(http.MethodGet, "/characters/c1/adventure-chronicle", nil)
+	req.Header.Set("Authorization", bearerToken("sess1"))
+	w := httptest.NewRecorder()
+
+	h.Router().ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+}

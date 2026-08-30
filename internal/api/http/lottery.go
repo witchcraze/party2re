@@ -227,6 +227,10 @@ func (h *Handler) handleClaimLotteryTicket(w http.ResponseWriter, r *http.Reques
 				writeError(w, http.StatusNotFound, err)
 				return
 			}
+			if errors.Is(err, lottery.ErrForbidden) {
+				writeError(w, http.StatusForbidden, err)
+				return
+			}
 			if errors.Is(err, lottery.ErrTicketAlreadyClaimed) || errors.Is(err, lottery.ErrDrawingNotSettled) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return

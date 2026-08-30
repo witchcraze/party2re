@@ -137,6 +137,9 @@ State-mutating feature modules (such as `shop`, `blacksmith`, `alchemy`, `bank`,
 4. **High-Concurrency Stress Testing & Deadlock Verification**:
    - Automated concurrency benchmarks (`internal/database/concurrency_stress_test.go`, `make test-stress`, `scripts/stress_test.sh`) simulate 50–100 concurrent workers hammering MariaDB with high contention.
    - Verifies zero deadlocks (MariaDB Error 1213 / 1205), conservation of money/inventory invariants, deterministic auction buyout/bid resolution, and exact atomicity across mixed multi-domain chaos workflows.
+5. **Sub-Resource Ownership & Repository SQL Scoping**:
+   - When modifying, claiming, or deleting sub-resources belonging to a player/character (`challenge_sessions`, `lottery_tickets`, `auction_listings`, `dungeon_expeditions`, `letters`, `companion_phrases`), SQL queries MUST include character/player ID ownership scoping (`WHERE id = ? AND character_id = ?`).
+   - Domain services and HTTP handlers must enforce ownership verification and return `ErrForbidden` (`403 Forbidden`) on unauthorized access attempts.
 
 ## Related documents
 

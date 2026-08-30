@@ -17,7 +17,7 @@ type mockLotteryRepo struct {
 	listTicketsFn      func(ctx context.Context, charID string, roundID int) ([]lottery.LotteryTicket, error)
 	saveDrawingFn      func(ctx context.Context, drawing lottery.LotteryDrawing) error
 	getDrawingFn       func(ctx context.Context, roundID int) (lottery.LotteryDrawing, error)
-	claimTicketFn      func(ctx context.Context, ticketID string, tier string, prizeGold int) (lottery.LotteryTicket, corecharacter.Character, error)
+	claimTicketFn      func(ctx context.Context, charID string, ticketID string, tier string, prizeGold int) (lottery.LotteryTicket, corecharacter.Character, error)
 }
 
 func (m *mockLotteryRepo) GetRaffleTickets(ctx context.Context, charID string) (int, error) {
@@ -68,9 +68,9 @@ func (m *mockLotteryRepo) GetDrawing(ctx context.Context, roundID int) (lottery.
 	}
 	return lottery.LotteryDrawing{}, nil
 }
-func (m *mockLotteryRepo) ClaimLotteryTicket(ctx context.Context, ticketID string, tier string, prizeGold int) (lottery.LotteryTicket, corecharacter.Character, error) {
+func (m *mockLotteryRepo) ClaimLotteryTicket(ctx context.Context, charID string, ticketID string, tier string, prizeGold int) (lottery.LotteryTicket, corecharacter.Character, error) {
 	if m.claimTicketFn != nil {
-		return m.claimTicketFn(ctx, ticketID, tier, prizeGold)
+		return m.claimTicketFn(ctx, charID, ticketID, tier, prizeGold)
 	}
 	return lottery.LotteryTicket{}, corecharacter.Character{}, nil
 }
@@ -193,5 +193,58 @@ func TestLotteryService_RaffleFlow(t *testing.T) {
 	}
 	if char.Money != 1000+res.Prize.RewardGold {
 		t.Errorf("char money=%d, expected %d", char.Money, 1000+res.Prize.RewardGold)
+	}
+}
+
+func TestLotteryService_ClaimLotteryTicketOwnership(t *testing.T) {
+	ctx := context.Background()
+	ticket := lottery.LotteryTicket{
+		ID:           "ticket-1",
+		CharacterID:  "char-owner",
+		RoundID:      1,
+		TicketNumber: "7429",
+		Claimed:      false,
+	}
+	drawing := lottery.LotteryDrawing{
+		RoundID:       1,
+		WinningNumber: "7429",
+		IsSettled:     true,
+	}
+
+	repo := &mockLotteryRepo{
+		getTicketFn: func(_ context.Context, ticketID string) (lottery.LotteryTicket, error) {
+			if ticketID == "ticket-1" {
+				return ticket, nil
+			}
+			return lottery.LotteryTicket{}, lottery.ErrTicketNotFound
+		},
+		getDrawingFn: func(_ context.Context, roundID int) (lottery.LotteryDrawing, error) {
+			if roundID == 1 {
+				return drawing, nil
+			}
+			return lottery.LotteryDrawing{}, lottery.ErrDrawingNotSettled
+		},
+		claimTicketFn: func(_ context.Context, charID string, ticketID string, tier string, prizeGold int) (lottery.LotteryTicket, corecharacter.Character, error) {
+			ticket.Claimed = true
+			ticket.PrizeTier = tier
+			ticket.PrizeGold = prizeGold
+			return ticket, corecharacter.Character{ID: charID, Money: prizeGold}, nil
+		},
+	}
+	svc, _ := lottery.NewService(repo)
+
+	// 1. Claim by attacker returns ErrForbidden
+	_, _, err := svc.ClaimLotteryTicket(ctx, "char-attacker", "ticket-1")
+	if err != lottery.ErrForbidden {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+
+	// 2. Claim by owner succeeds
+	claimed, char, err := svc.ClaimLotteryTicket(ctx, "char-owner", "ticket-1")
+	if err != nil {
+		t.Fatalf("ClaimLotteryTicket failed: %v", err)
+	}
+	if !claimed.Claimed || claimed.PrizeTier != lottery.PrizeTier1st || char.Money != 100000 {
+		t.Errorf("unexpected claim result: %+v, char: %+v", claimed, char)
 	}
 }

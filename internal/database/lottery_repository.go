@@ -279,20 +279,20 @@ func (r *LotteryRepository) GetDrawing(ctx context.Context, roundID int) (lotter
 	return d, nil
 }
 
-func (r *LotteryRepository) ClaimLotteryTicket(ctx context.Context, ticketID string, tier string, prizeGold int) (lottery.LotteryTicket, corecharacter.Character, error) {
+func (r *LotteryRepository) ClaimLotteryTicket(ctx context.Context, characterID string, ticketID string, tier string, prizeGold int) (lottery.LotteryTicket, corecharacter.Character, error) {
 	var t lottery.LotteryTicket
 	var char corecharacter.Character
 
 	err := RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
 
-		// 1. Mark claimed
+		// 1. Mark claimed scoped by character_id
 		now := time.Now().UTC()
 		res, err := executor.ExecContext(txCtx, `
 			UPDATE lottery_tickets
 			SET claimed = TRUE, prize_tier = ?, prize_gold = ?, claimed_at = ?
-			WHERE id = ? AND claimed = FALSE
-		`, tier, prizeGold, now, ticketID)
+			WHERE id = ? AND character_id = ? AND claimed = FALSE
+		`, tier, prizeGold, now, ticketID, characterID)
 		if err != nil {
 			return err
 		}
@@ -301,16 +301,31 @@ func (r *LotteryRepository) ClaimLotteryTicket(ctx context.Context, ticketID str
 			return err
 		}
 		if affected == 0 {
-			return lottery.ErrTicketAlreadyClaimed
+			var actualCharID string
+			var isClaimed bool
+			err := executor.QueryRowContext(txCtx, `SELECT character_id, claimed FROM lottery_tickets WHERE id = ?`, ticketID).Scan(&actualCharID, &isClaimed)
+			if errors.Is(err, sql.ErrNoRows) {
+				return lottery.ErrTicketNotFound
+			}
+			if err != nil {
+				return err
+			}
+			if actualCharID != characterID {
+				return lottery.ErrForbidden
+			}
+			if isClaimed {
+				return lottery.ErrTicketAlreadyClaimed
+			}
+			return lottery.ErrTicketNotFound
 		}
 
-		// 2. Fetch ticket to get characterID
+		// 2. Fetch ticket to populate response
 		var claimedAt sql.NullTime
 		if err := executor.QueryRowContext(txCtx, `
 			SELECT id, character_id, round_id, ticket_number, purchased_at, claimed, prize_tier, prize_gold, claimed_at
 			FROM lottery_tickets
-			WHERE id = ?
-		`, ticketID).Scan(&t.ID, &t.CharacterID, &t.RoundID, &t.TicketNumber, &t.PurchasedAt, &t.Claimed, &t.PrizeTier, &t.PrizeGold, &claimedAt); err != nil {
+			WHERE id = ? AND character_id = ?
+		`, ticketID, characterID).Scan(&t.ID, &t.CharacterID, &t.RoundID, &t.TicketNumber, &t.PurchasedAt, &t.Claimed, &t.PrizeTier, &t.PrizeGold, &claimedAt); err != nil {
 			return err
 		}
 		if claimedAt.Valid {
@@ -323,7 +338,7 @@ func (r *LotteryRepository) ClaimLotteryTicket(ctx context.Context, ticketID str
 				UPDATE characters
 				SET money = money + ?
 				WHERE id = ?
-			`, prizeGold, t.CharacterID); err != nil {
+			`, prizeGold, characterID); err != nil {
 				return err
 			}
 		}
@@ -332,7 +347,7 @@ func (r *LotteryRepository) ClaimLotteryTicket(ctx context.Context, ticketID str
 			SELECT `+characterColumns+`
 			FROM characters
 			WHERE id = ?
-		`, t.CharacterID))
+		`, characterID))
 		if err != nil {
 			return err
 		}
