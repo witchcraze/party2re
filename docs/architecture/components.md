@@ -349,6 +349,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Secret underground shop discovery and access validation (Level >= 15 or Reborn), rare item catalog with 3x pricing multiplier, helper quest exclusion filter, concurrency-safe purchasing transactions, and humorous NPC interactions (sheep dialogues, inspect lore, and restorative `@ぱふぱふ` puff-puff service).
   - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository, Helper Quest filter.
   - **Persistence:** Direct inventory and character balance persistence via character/inventory repositories.
+- **Adventurer's Tavern & Barkeep @エレナ** (`internal/tavern`):
+  - **Responsibility:** Adventurer's Tavern culinary menu (14 food, drink, dessert, and full-course items), restorative HP/MP recovery meals with fullness tracking, lottery raffle ticket rewards, post-adventure meal delivery reservation and claim workflow, and barkeep dialogue interactions.
+  - **Dependencies:** Core Character, Character repository, Lottery repository.
+  - **Persistence:** `tavern_deliveries` and `tavern_character_status` tables in `internal/database/tavern_repository.go`.
 
 ### Cross-Module Transaction Orchestration & Ambient Context Propagation
 

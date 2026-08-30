@@ -56,6 +56,7 @@ import (
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/secretshop"
 	"github.com/witchcraze/party2re/internal/shop"
+	"github.com/witchcraze/party2re/internal/tavern"
 	"github.com/witchcraze/party2re/internal/valkey"
 )
 
@@ -373,6 +374,19 @@ func run(ctx context.Context, logger logging.Logger) error {
 		return err
 	}
 
+	tavernCatalog, err := tavern.LoadDefaultCatalog()
+	if err != nil {
+		return err
+	}
+	tavernRepo, err := database.NewTavernRepository(db)
+	if err != nil {
+		return err
+	}
+	tavernService, err := tavern.NewService(tavernCatalog, tavernRepo, charRepo, txProvider, tavern.WithLotteryRepository(lotteryRepo))
+	if err != nil {
+		return err
+	}
+
 	casinoRepo, err := database.NewCasinoRepository(db)
 	if err != nil {
 		return err
@@ -486,6 +500,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 		http.WithCustomSkill(customSkillService),
 		http.WithEventPlaza(eventplazaService),
 		http.WithSecretShop(secretshopService),
+		http.WithTavern(tavernService),
 	}
 
 	apiHandler, err := http.NewHandler(playerService, charService, advService, shopService, opts...)

@@ -38,6 +38,24 @@ func (r *LotteryRepository) GetRaffleTickets(ctx context.Context, characterID st
 	return count, nil
 }
 
+func (r *LotteryRepository) AddRaffleTickets(ctx context.Context, characterID string, count int) (int, error) {
+	if count <= 0 {
+		return r.GetRaffleTickets(ctx, characterID)
+	}
+
+	executor := ExecutorFromContext(ctx, r.db)
+	_, err := executor.ExecContext(ctx, `
+		INSERT INTO character_lottery (character_id, raffle_tickets)
+		VALUES (?, ?)
+		ON DUPLICATE KEY UPDATE raffle_tickets = raffle_tickets + VALUES(raffle_tickets)
+	`, characterID, count)
+	if err != nil {
+		return 0, err
+	}
+
+	return r.GetRaffleTickets(ctx, characterID)
+}
+
 func (r *LotteryRepository) BuyRaffleTickets(ctx context.Context, characterID string, count int, goldCost int) (int, corecharacter.Character, error) {
 	var currentTickets int
 	var char corecharacter.Character

@@ -116,6 +116,7 @@ type Handler struct {
 	auctions       AuctionService
 	eventplaza     EventPlazaService
 	secretshop     SecretShopService
+	tavern         TavernService
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
 	allowedOrigins map[string]struct{}
@@ -362,6 +363,16 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/secretshop/inspect", h.handleSecretShopInspect)
 	mux.HandleFunc("POST /characters/{id}/secretshop/puffpuff", h.handleSecretShopPuffPuff)
 	mux.HandleFunc("POST /characters/{id}/secretshop/purchase", h.handleSecretShopPurchase)
+
+	// Tavern
+	mux.HandleFunc("GET /tavern/menu", h.handleGetTavernMenu)
+	mux.HandleFunc("GET /characters/{id}/tavern", h.handleGetCharacterTavernStatus)
+	mux.HandleFunc("POST /characters/{id}/tavern/order", h.handleTavernOrder)
+	mux.HandleFunc("POST /characters/{id}/tavern/delivery", h.handleTavernReserveDelivery)
+	mux.HandleFunc("GET /characters/{id}/tavern/delivery", h.handleGetTavernDelivery)
+	mux.HandleFunc("DELETE /characters/{id}/tavern/delivery", h.handleTavernCancelDelivery)
+	mux.HandleFunc("POST /characters/{id}/tavern/delivery/claim", h.handleTavernClaimDelivery)
+	mux.HandleFunc("POST /characters/{id}/tavern/talk", h.handleTavernTalk)
 
 	// Farm
 	mux.HandleFunc("GET /characters/{id}/farm", h.handleGetFarm)
