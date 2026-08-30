@@ -36,18 +36,14 @@ A module qualifies for a dedicated `.arch/modules/<module>.json` file only if it
 To ensure definitions remain immutable against everyday code refactorings and line shifts:
 - **Module Level `source_ref` uses Symbol Anchors**:
   Format: `path/to/file.go#SymbolName` or `path/to/file.go#Struct.Method` (e.g., `internal/tavern/tavern.go#Service.OrderMeal` or `internal/tavern/tavern.go#CharacterRepository`).
-- **System Level `sources` uses File-Wide Boundaries**:
-  Format: `path: "internal/tavern/tavern.go"` covering the file for Archify repository validator compliance.
 
 ## 4. Automated Mechanical Verification (Zero Token Overhead)
-All architecture definitions and symbol coordinates are mechanically verified during `scripts/verify.sh` and Git `pre-push` hooks:
-1. **Archify CLI Layout & Repository Check**:
-   - `node ~/.agents/skills/archify/bin/archify.mjs validate architecture .arch/system.architecture.json --quality showcase --repo-root .`
-   - Verifies 9 artifact invariants, layout compactness, and Git line validity.
-2. **Go AST Symbol Linter (`internal/architecture/arch_test.go`)**:
+All architecture definitions and symbol coordinates are mechanically verified during `scripts/verify.sh` and standard `go test ./...`:
+1. **Go AST Symbol Linter (`internal/architecture/arch_test.go`)**:
    - Executed via `go test ./...` in ~0.02s.
-   - Automatically parses existing `.arch/modules/*.json` files and verifies using `go/parser` that every referenced interface, struct, and method symbol actually exists in the codebase.
+   - Automatically parses all `.arch/modules/*.json` files and verifies using `go/parser` that every referenced interface, struct, and method symbol actually exists in the codebase.
    - Fails the test immediately if a symbol is misspelled or renamed, preventing broken links with zero token consumption.
+
 
 ## 5. Go Idiom & Implementation Compatibility Guidelines
 To maintain idiomatic Go design while maximizing Guidance Layer navigability:

@@ -42,21 +42,13 @@ Core
 
 詳しい設計方針については [`docs/architecture/`](docs/architecture/) を参照してください。
 
-### アーキテクチャ図・モジュール構成（ビジュアルマップ）
+### アーキテクチャ図・モジュール構成（ガイダンスレイヤー）
 
-ブラウザで直接閲覧可能なインタラクティブ設計図を提供しています（GitHub Pages）：
+システムの全体トポロジー図（Mermaid）および高並行性モジュール（Tier 1: 酒場、でりばりー、銀行、オークション、ギルド、ショップ、鍛冶屋、冒険）のトランザクション境界・行ロック順序仕様は、以下で確認できます：
 
-- 🌐 [**システム全体概要・トポロジー図 (System Overview)**](https://witchcraze.github.io/party2re/architecture/system-overview.html)
-- 📦 **主要モジュール詳細（トランザクション境界・行ロック順序）**:
-  - [酒場 (Tavern)](https://witchcraze.github.io/party2re/architecture/modules/tavern.html)
-  - [でりばりー (Delivery)](https://witchcraze.github.io/party2re/architecture/modules/delivery.html)
-  - [銀行 (Bank)](https://witchcraze.github.io/party2re/architecture/modules/bank.html)
-  - [オークション (Auction)](https://witchcraze.github.io/party2re/architecture/modules/auction.html)
-  - [ギルド (Guild)](https://witchcraze.github.io/party2re/architecture/modules/guild.html)
-  - [ショップ (Shop)](https://witchcraze.github.io/party2re/architecture/modules/shop.html)
-  - [鍛冶屋 (Blacksmith)](https://witchcraze.github.io/party2re/architecture/modules/blacksmith.html)
-  - [冒険 (Adventure)](https://witchcraze.github.io/party2re/architecture/modules/adventure.html)
-- 📖 [アーキテクチャ・ガイダンスレイヤー仕様書](docs/architecture/guidance-layer.md)
+- 📖 [**アーキテクチャ・ガイダンスレイヤー仕様書 (`docs/architecture/guidance-layer.md`)**](docs/architecture/guidance-layer.md)
+- 🧭 **モジュール別ガイダンス定義 (AI Agent ナビゲーション)**: [`.arch/modules/`](.arch/modules/)
+
 
 
 
