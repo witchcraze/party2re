@@ -1,0 +1,142 @@
+[
+  {
+    "id": "tavern_water",
+    "name": "癒しの湧き水",
+    "category": "Drink",
+    "price": 20,
+    "hp_heal": 40,
+    "mp_heal": 0,
+    "tickets": 1,
+    "description": "清らかな名水。喉を潤しわずかにHPを回復する。"
+  },
+  {
+    "id": "tavern_fruit_juice",
+    "name": "もぎたて果実ジュース",
+    "category": "Drink",
+    "price": 50,
+    "hp_heal": 0,
+    "mp_heal": 30,
+    "tickets": 1,
+    "description": "新鮮な果実を搾ったジュース。すっきりとした甘さでMPを回復する。"
+  },
+  {
+    "id": "tavern_tomato_juice",
+    "name": "完熟トマトジュース",
+    "category": "Drink",
+    "price": 100,
+    "hp_heal": 10,
+    "mp_heal": 80,
+    "tickets": 2,
+    "description": "栄養満点の濃厚トマトジュース。HPとMPを回復する。"
+  },
+  {
+    "id": "tavern_coffee",
+    "name": "深煎り焙煎コーヒー",
+    "category": "Drink",
+    "price": 200,
+    "hp_heal": 0,
+    "mp_heal": 250,
+    "tickets": 3,
+    "description": "香ばしい挽きたてコーヒー。冴えわたる苦味でMPを大きく回復する。"
+  },
+  {
+    "id": "tavern_herb_tea",
+    "name": "薬草ハーブティー",
+    "category": "Drink",
+    "price": 500,
+    "hp_heal": 0,
+    "mp_heal": 500,
+    "tickets": 5,
+    "description": "厳選された薬草で淹れたお茶。精神を安らげMPを大幅に回復する。"
+  },
+  {
+    "id": "tavern_ice_cream",
+    "name": "濃厚バニラアイス",
+    "category": "Dessert",
+    "price": 100,
+    "hp_heal": 30,
+    "mp_heal": 30,
+    "tickets": 2,
+    "description": "ひんやり甘いバニラアイス。HPとMPを適度に回復する。"
+  },
+  {
+    "id": "tavern_pudding",
+    "name": "カスタードプリン",
+    "category": "Dessert",
+    "price": 200,
+    "hp_heal": 60,
+    "mp_heal": 60,
+    "tickets": 3,
+    "description": "昔ながらのしっかり固めプリン。カラメルの風味が元気をくれる。"
+  },
+  {
+    "id": "tavern_parfait",
+    "name": "特製フルーツパフェ",
+    "category": "Dessert",
+    "price": 300,
+    "hp_heal": 100,
+    "mp_heal": 100,
+    "tickets": 4,
+    "description": "季節の果物を贅沢に盛り付けたパフェ。冒険者の疲れを癒やす。"
+  },
+  {
+    "id": "tavern_curry",
+    "name": "スパイス香る特製カレー",
+    "category": "Food",
+    "price": 400,
+    "hp_heal": 250,
+    "mp_heal": 0,
+    "tickets": 5,
+    "description": "秘伝のスパイスを煮込んだカレー。スタミナが湧いてHPを回復する。"
+  },
+  {
+    "id": "tavern_pasta",
+    "name": "挽肉とトマトのパスタ",
+    "category": "Food",
+    "price": 600,
+    "hp_heal": 300,
+    "mp_heal": 50,
+    "tickets": 6,
+    "description": "モチモチ麺と濃厚トマトソースのパスタ。HPとMPを回復する。"
+  },
+  {
+    "id": "tavern_omelet_rice",
+    "name": "ふわとろオムライス",
+    "category": "Food",
+    "price": 750,
+    "hp_heal": 500,
+    "mp_heal": 100,
+    "tickets": 7,
+    "description": "黄金色の卵で包んだオムライス。HPを大きく回復する。"
+  },
+  {
+    "id": "tavern_salisbury_steak",
+    "name": "極上ジューシーハンバーグ",
+    "category": "Food",
+    "price": 900,
+    "hp_heal": 800,
+    "mp_heal": 0,
+    "tickets": 8,
+    "description": "溢れる肉汁の絶品ハンバーグ。HPを大量に回復する。"
+  },
+  {
+    "id": "tavern_rib_steak",
+    "name": "厳選リブアイステーキ",
+    "category": "Food",
+    "price": 1000,
+    "hp_heal": 999,
+    "mp_heal": 0,
+    "tickets": 10,
+    "description": "厚切りリブアイを炭火で焼き上げた最高峰ステーキ。HPを完全回復する。"
+  },
+  {
+    "id": "tavern_full_course",
+    "name": "酒場名物グランフルコース",
+    "category": "Course",
+    "price": 3000,
+    "hp_heal": 999,
+    "mp_heal": 999,
+    "tickets": 15,
+    "description": "酒場の粋を集めた豪華フルコース料理。HPとMPを完全回復し大量の福引券を進呈。"
+  }
+]

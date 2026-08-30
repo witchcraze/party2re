@@ -408,6 +408,232 @@
         ],
         "type": "object"
       },
+      "TavernDeliveryReservation": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "hp_heal": {
+            "type": "integer"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "item_name": {
+            "type": "string"
+          },
+          "mp_heal": {
+            "type": "integer"
+          },
+          "price": {
+            "type": "integer"
+          },
+          "tickets": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "item_id",
+          "item_name",
+          "price",
+          "hp_heal",
+          "mp_heal",
+          "tickets",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "TavernItemRequest": {
+        "properties": {
+          "item_id": {
+            "example": "tavern_curry",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id"
+        ],
+        "type": "object"
+      },
+      "TavernMenuItem": {
+        "properties": {
+          "category": {
+            "enum": [
+              "Drink",
+              "Dessert",
+              "Food",
+              "Course"
+            ],
+            "type": "string"
+          },
+          "description": {
+            "example": "秘伝のスパイスを煮込んだカレー。スタミナが湧いてHPを回復する。",
+            "type": "string"
+          },
+          "hp_heal": {
+            "example": 250,
+            "type": "integer"
+          },
+          "id": {
+            "example": "tavern_curry",
+            "type": "string"
+          },
+          "mp_heal": {
+            "example": 0,
+            "type": "integer"
+          },
+          "name": {
+            "example": "スパイス香る特製カレー",
+            "type": "string"
+          },
+          "price": {
+            "example": 400,
+            "type": "integer"
+          },
+          "tickets": {
+            "example": 5,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "category",
+          "price",
+          "hp_heal",
+          "mp_heal",
+          "tickets",
+          "description"
+        ],
+        "type": "object"
+      },
+      "TavernOrderResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "current_hp": {
+            "type": "integer"
+          },
+          "current_mp": {
+            "type": "integer"
+          },
+          "hp_healed": {
+            "type": "integer"
+          },
+          "item": {
+            "$ref": "#/components/schemas/TavernMenuItem"
+          },
+          "message": {
+            "type": "string"
+          },
+          "mp_healed": {
+            "type": "integer"
+          },
+          "remaining_gold": {
+            "type": "integer"
+          },
+          "tickets_awarded": {
+            "type": "integer"
+          },
+          "total_tickets": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "item",
+          "hp_healed",
+          "mp_healed",
+          "current_hp",
+          "current_mp",
+          "remaining_gold",
+          "tickets_awarded",
+          "total_tickets",
+          "message"
+        ],
+        "type": "object"
+      },
+      "TavernStatus": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "character_name": {
+            "type": "string"
+          },
+          "delivery_reservation": {
+            "$ref": "#/components/schemas/TavernDeliveryReservation"
+          },
+          "gold": {
+            "type": "integer"
+          },
+          "hp": {
+            "type": "integer"
+          },
+          "is_full": {
+            "type": "boolean"
+          },
+          "location_name": {
+            "example": "冒険者の酒場",
+            "type": "string"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "max_mp": {
+            "type": "integer"
+          },
+          "mp": {
+            "type": "integer"
+          },
+          "npc_name": {
+            "example": "@エレナ",
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "character_name",
+          "location_name",
+          "npc_name",
+          "gold",
+          "hp",
+          "max_hp",
+          "mp",
+          "max_mp",
+          "is_full"
+        ],
+        "type": "object"
+      },
+      "TavernTalkResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "location_name": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "npc_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "location_name",
+          "npc_name",
+          "message"
+        ],
+        "type": "object"
+      },
       "ToastBanquetRequest": {
         "properties": {
           "character_id": {
@@ -5682,6 +5908,356 @@
         ]
       }
     },
+    "/characters/{id}/tavern": {
+      "get": {
+        "description": "Returns current character stats, fullness status, and active delivery reservation at the tavern.",
+        "operationId": "getCharacterTavernStatus",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TavernStatus"
+                }
+              }
+            },
+            "description": "Tavern status retrieved successfully"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Character not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get character tavern status",
+        "tags": [
+          "Tavern"
+        ]
+      }
+    },
+    "/characters/{id}/tavern/delivery": {
+      "delete": {
+        "description": "Cancels the character's active delivery reservation.",
+        "operationId": "cancelTavernDelivery",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Delivery reservation cancelled successfully"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "No active delivery reservation"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Cancel tavern delivery reservation",
+        "tags": [
+          "Tavern"
+        ]
+      },
+      "get": {
+        "description": "Retrieves the character's active delivery reservation.",
+        "operationId": "getTavernDelivery",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TavernDeliveryReservation"
+                }
+              }
+            },
+            "description": "Delivery reservation retrieved successfully"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "No active delivery reservation"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get current tavern delivery reservation",
+        "tags": [
+          "Tavern"
+        ]
+      },
+      "post": {
+        "description": "Reserves a meal to be delivered and consumed after an adventure.",
+        "operationId": "reserveTavernDelivery",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TavernItemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TavernDeliveryReservation"
+                }
+              }
+            },
+            "description": "Delivery order reserved successfully"
+          },
+          "400": {
+            "description": "Insufficient gold or invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Character or menu item not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Reserve tavern delivery order",
+        "tags": [
+          "Tavern"
+        ]
+      }
+    },
+    "/characters/{id}/tavern/delivery/claim": {
+      "post": {
+        "description": "Claims and eats the reserved delivery meal, deducting gold, restoring HP/MP, and awarding raffle tickets.",
+        "operationId": "claimTavernDelivery",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TavernOrderResult"
+                }
+              }
+            },
+            "description": "Delivery claimed and meal consumed successfully"
+          },
+          "400": {
+            "description": "Insufficient gold"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "No active delivery reservation or character not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Claim and consume tavern delivery meal",
+        "tags": [
+          "Tavern"
+        ]
+      }
+    },
+    "/characters/{id}/tavern/order": {
+      "post": {
+        "description": "Purchases and immediately consumes a meal or drink, restoring HP/MP and awarding raffle tickets.",
+        "operationId": "orderTavernMeal",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TavernItemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TavernOrderResult"
+                }
+              }
+            },
+            "description": "Meal ordered and consumed successfully"
+          },
+          "400": {
+            "description": "Insufficient gold or invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Character or menu item not found"
+          },
+          "409": {
+            "description": "Character is already full"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Order and eat a tavern meal",
+        "tags": [
+          "Tavern"
+        ]
+      }
+    },
+    "/characters/{id}/tavern/talk": {
+      "post": {
+        "description": "Converses with Elena the tavern barkeep to receive randomized dialogue and tavern advice.",
+        "operationId": "talkTavernBarkeep",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TavernTalkResult"
+                }
+              }
+            },
+            "description": "Barkeep conversation dialogue returned"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Character not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Talk to tavern barkeep NPC",
+        "tags": [
+          "Tavern"
+        ]
+      }
+    },
     "/eventplaza": {
       "get": {
         "description": "Retrieves the event plaza status including active town population, traveling merchant tier, and ongoing boss victory celebration banquets.",
@@ -9311,6 +9887,39 @@
         "summary": "Sell item from inventory to shop",
         "tags": [
           "Shop"
+        ]
+      }
+    },
+    "/tavern/menu": {
+      "get": {
+        "description": "Returns the complete catalog of foods, drinks, and courses available at the tavern.",
+        "operationId": "listTavernMenu",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "items": {
+                      "items": {
+                        "$ref": "#/components/schemas/TavernMenuItem"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Menu retrieved successfully"
+          }
+        },
+        "summary": "List tavern menu",
+        "tags": [
+          "Tavern"
         ]
       }
     }
