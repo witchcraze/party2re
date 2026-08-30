@@ -49,19 +49,17 @@ func (h *Handler) handleGetAdventureChronicle(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if _, ok := h.authenticatePlayer(w, r); !ok {
-		return
-	}
-
 	charID := r.PathValue("id")
-	chronicle, err := h.adventures.GetChronicle(r.Context(), charID)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			writeError(w, http.StatusNotFound, err)
+	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+		chronicle, err := h.adventures.GetChronicle(r.Context(), char.ID)
+		if err != nil {
+			if errors.Is(err, corecharacter.ErrNotFound) {
+				writeError(w, http.StatusNotFound, err)
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, chronicle)
+		writeJSON(w, http.StatusOK, chronicle)
+	})
 }

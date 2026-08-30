@@ -19,8 +19,8 @@ type ChallengeService interface {
 	ListTiers() []challenge.ChallengeTier
 	GetTier(tierID string) (*challenge.ChallengeTier, error)
 	StartSession(ctx context.Context, characterID string, tierID string) (*challenge.ChallengeSession, error)
-	AdvanceRound(ctx context.Context, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error)
-	RetireSession(ctx context.Context, sessionID string) (*challenge.ChallengeSession, error)
+	AdvanceRound(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error)
+	RetireSession(ctx context.Context, characterID string, sessionID string) (*challenge.ChallengeSession, error)
 	GetCharacterRecords(ctx context.Context, characterID string) ([]challenge.CharacterChallengeRecord, error)
 }
 
@@ -178,7 +178,7 @@ func (h *Handler) handleAdvanceChallenge(w http.ResponseWriter, r *http.Request)
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, _ corecharacter.Character) {
+	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req advanceChallengeRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -189,10 +189,14 @@ func (h *Handler) handleAdvanceChallenge(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		roundRes, session, err := h.challenges.AdvanceRound(r.Context(), req.SessionID)
+		roundRes, session, err := h.challenges.AdvanceRound(r.Context(), char.ID, req.SessionID)
 		if err != nil {
 			if errors.Is(err, challenge.ErrSessionNotFound) {
 				writeError(w, http.StatusNotFound, err)
+				return
+			}
+			if errors.Is(err, challenge.ErrForbidden) {
+				writeError(w, http.StatusForbidden, err)
 				return
 			}
 			if errors.Is(err, challenge.ErrSessionNotActive) {
@@ -217,7 +221,7 @@ func (h *Handler) handleRetireChallenge(w http.ResponseWriter, r *http.Request) 
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, _ corecharacter.Character) {
+	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req retireChallengeRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -228,10 +232,14 @@ func (h *Handler) handleRetireChallenge(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		session, err := h.challenges.RetireSession(r.Context(), req.SessionID)
+		session, err := h.challenges.RetireSession(r.Context(), char.ID, req.SessionID)
 		if err != nil {
 			if errors.Is(err, challenge.ErrSessionNotFound) {
 				writeError(w, http.StatusNotFound, err)
+				return
+			}
+			if errors.Is(err, challenge.ErrForbidden) {
+				writeError(w, http.StatusForbidden, err)
 				return
 			}
 			if errors.Is(err, challenge.ErrSessionNotActive) {

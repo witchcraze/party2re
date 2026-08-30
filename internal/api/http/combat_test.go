@@ -20,8 +20,8 @@ type stubChallengeService struct {
 	listTiersFn           func() []challenge.ChallengeTier
 	getTierFn             func(tierID string) (*challenge.ChallengeTier, error)
 	startSessionFn        func(ctx context.Context, characterID string, tierID string) (*challenge.ChallengeSession, error)
-	advanceRoundFn        func(ctx context.Context, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error)
-	retireSessionFn       func(ctx context.Context, sessionID string) (*challenge.ChallengeSession, error)
+	advanceRoundFn        func(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error)
+	retireSessionFn       func(ctx context.Context, characterID string, sessionID string) (*challenge.ChallengeSession, error)
 	getCharacterRecordsFn func(ctx context.Context, characterID string) ([]challenge.CharacterChallengeRecord, error)
 }
 
@@ -43,17 +43,17 @@ func (s *stubChallengeService) StartSession(ctx context.Context, characterID str
 	}
 	return &challenge.ChallengeSession{ID: "sess-1", CharacterID: characterID, TierID: tierID, Status: challenge.StatusActive}, nil
 }
-func (s *stubChallengeService) AdvanceRound(ctx context.Context, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error) {
+func (s *stubChallengeService) AdvanceRound(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error) {
 	if s.advanceRoundFn != nil {
-		return s.advanceRoundFn(ctx, sessionID)
+		return s.advanceRoundFn(ctx, characterID, sessionID)
 	}
-	return &challenge.RoundResult{Round: 1, Won: true}, &challenge.ChallengeSession{ID: sessionID, CurrentRound: 2, Status: challenge.StatusActive}, nil
+	return &challenge.RoundResult{Round: 1, Won: true}, &challenge.ChallengeSession{ID: sessionID, CharacterID: characterID, CurrentRound: 2, Status: challenge.StatusActive}, nil
 }
-func (s *stubChallengeService) RetireSession(ctx context.Context, sessionID string) (*challenge.ChallengeSession, error) {
+func (s *stubChallengeService) RetireSession(ctx context.Context, characterID string, sessionID string) (*challenge.ChallengeSession, error) {
 	if s.retireSessionFn != nil {
-		return s.retireSessionFn(ctx, sessionID)
+		return s.retireSessionFn(ctx, characterID, sessionID)
 	}
-	return &challenge.ChallengeSession{ID: sessionID, Status: challenge.StatusClaimed}, nil
+	return &challenge.ChallengeSession{ID: sessionID, CharacterID: characterID, Status: challenge.StatusClaimed}, nil
 }
 func (s *stubChallengeService) GetCharacterRecords(ctx context.Context, characterID string) ([]challenge.CharacterChallengeRecord, error) {
 	if s.getCharacterRecordsFn != nil {
@@ -230,6 +230,29 @@ func TestCombatEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("POST /characters/{id}/challenges/advance - forbidden for non-owned session", func(t *testing.T) {
+		hForbidden := newTestHandler(
+			t,
+			pService,
+			cService,
+			&stubAdventureService{},
+			&stubShopService{},
+			apihttp.WithChallenge(&stubChallengeService{
+				advanceRoundFn: func(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error) {
+					return nil, nil, challenge.ErrForbidden
+				},
+			}),
+		)
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/advance", `{"session_id":"other-sess"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		hForbidden.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden, got %d", rec.Code)
+		}
+	})
+
 	t.Run("POST /characters/{id}/challenges/retire", func(t *testing.T) {
 		req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/retire", `{"session_id":"sess-1"}`)
 		req.Header.Set("Authorization", "Bearer valid-token")
@@ -238,6 +261,29 @@ func TestCombatEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+	})
+
+	t.Run("POST /characters/{id}/challenges/retire - forbidden for non-owned session", func(t *testing.T) {
+		hForbidden := newTestHandler(
+			t,
+			pService,
+			cService,
+			&stubAdventureService{},
+			&stubShopService{},
+			apihttp.WithChallenge(&stubChallengeService{
+				retireSessionFn: func(ctx context.Context, characterID string, sessionID string) (*challenge.ChallengeSession, error) {
+					return nil, challenge.ErrForbidden
+				},
+			}),
+		)
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/retire", `{"session_id":"other-sess"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		hForbidden.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden, got %d", rec.Code)
 		}
 	})
 

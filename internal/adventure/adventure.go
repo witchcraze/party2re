@@ -231,6 +231,10 @@ func (s *Service) StartStage(ctx context.Context, characterID string, stageID st
 	return value, nil
 }
 
+func (s *Service) Get(ctx context.Context, id string) (Adventure, error) {
+	return s.adventures.FindByID(ctx, id)
+}
+
 func (s *Service) Claim(ctx context.Context, id string) (Adventure, error) {
 	value, err := s.adventures.FindByID(ctx, id)
 	if err != nil {

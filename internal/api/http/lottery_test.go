@@ -149,4 +149,27 @@ func TestLotteryEndpoints(t *testing.T) {
 			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
+
+	t.Run("POST /characters/{id}/lottery/claim - forbidden for non-owned ticket", func(t *testing.T) {
+		hForbidden := newTestHandler(
+			t,
+			pService,
+			cService,
+			&stubAdventureService{},
+			&stubShopService{},
+			apihttp.WithLottery(&stubLotteryService{
+				claimLotteryTicketFn: func(ctx context.Context, characterID, ticketID string) (lottery.LotteryTicket, corecharacter.Character, error) {
+					return lottery.LotteryTicket{}, corecharacter.Character{}, lottery.ErrForbidden
+				},
+			}),
+		)
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/lottery/claim", `{"ticket_id":"other-ticket"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		hForbidden.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
 }

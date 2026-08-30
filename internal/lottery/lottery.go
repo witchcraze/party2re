@@ -33,6 +33,7 @@ var (
 	ErrTicketAlreadyClaimed = errors.New("ticket already claimed")
 	ErrDrawingNotSettled    = errors.New("lottery drawing not yet settled")
 	ErrTicketNotFound       = errors.New("lottery ticket not found")
+	ErrForbidden            = errors.New("forbidden: character does not own this lottery ticket")
 )
 
 type RaffleType string
@@ -160,7 +161,7 @@ type Repository interface {
 	ListLotteryTickets(ctx context.Context, characterID string, roundID int) ([]LotteryTicket, error)
 	SaveDrawing(ctx context.Context, drawing LotteryDrawing) error
 	GetDrawing(ctx context.Context, roundID int) (LotteryDrawing, error)
-	ClaimLotteryTicket(ctx context.Context, ticketID string, tier string, prizeGold int) (LotteryTicket, corecharacter.Character, error)
+	ClaimLotteryTicket(ctx context.Context, characterID string, ticketID string, tier string, prizeGold int) (LotteryTicket, corecharacter.Character, error)
 }
 
 // Service provides high-level lottery and raffle operations.
@@ -275,7 +276,7 @@ func (s *Service) ClaimLotteryTicket(ctx context.Context, characterID, ticketID 
 		return LotteryTicket{}, corecharacter.Character{}, err
 	}
 	if ticket.CharacterID != characterID {
-		return LotteryTicket{}, corecharacter.Character{}, ErrTicketNotFound
+		return LotteryTicket{}, corecharacter.Character{}, ErrForbidden
 	}
 	if ticket.Claimed {
 		return ticket, corecharacter.Character{}, ErrTicketAlreadyClaimed
@@ -290,5 +291,5 @@ func (s *Service) ClaimLotteryTicket(ctx context.Context, characterID, ticketID 
 	}
 
 	tier, prizeGold := EvaluateLotteryTicket(ticket.TicketNumber, drawing.WinningNumber)
-	return s.repo.ClaimLotteryTicket(ctx, ticketID, tier, prizeGold)
+	return s.repo.ClaimLotteryTicket(ctx, characterID, ticketID, tier, prizeGold)
 }

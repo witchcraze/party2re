@@ -81,7 +81,7 @@ func TestLotteryRepository_Integration(t *testing.T) {
 	}
 
 	// 6. Claim ticket for 1st Prize (100,000 gold)
-	claimed, updatedChar, err := repo.ClaimLotteryTicket(ctx, purchased.ID, lottery.PrizeTier1st, 100000)
+	claimed, updatedChar, err := repo.ClaimLotteryTicket(ctx, char.ID, purchased.ID, lottery.PrizeTier1st, 100000)
 	if err != nil {
 		t.Fatalf("ClaimLotteryTicket failed: %v", err)
 	}
@@ -90,7 +90,12 @@ func TestLotteryRepository_Integration(t *testing.T) {
 	}
 
 	// 7. Double claim returns error
-	if _, _, err := repo.ClaimLotteryTicket(ctx, purchased.ID, lottery.PrizeTier1st, 100000); err != lottery.ErrTicketAlreadyClaimed {
+	if _, _, err := repo.ClaimLotteryTicket(ctx, char.ID, purchased.ID, lottery.PrizeTier1st, 100000); err != lottery.ErrTicketAlreadyClaimed {
 		t.Errorf("double claim err = %v, want ErrTicketAlreadyClaimed", err)
+	}
+
+	// 8. Claim with different character ID returns ErrForbidden
+	if _, _, err := repo.ClaimLotteryTicket(ctx, "different-char-id", purchased.ID, lottery.PrizeTier1st, 100000); err != lottery.ErrForbidden {
+		t.Errorf("claim with wrong char err = %v, want ErrForbidden", err)
 	}
 }
