@@ -1,0 +1,92 @@
+[
+  {
+    "id": "bm_poison_needle",
+    "item_definition_id": "weapon-12",
+    "name": "どくばり",
+    "category": "Weapon",
+    "base_price": 1500,
+    "daily_limit": 5,
+    "description": "急所を刺せば一撃で息の根を止めることがある危険な暗殺用の針。"
+  },
+  {
+    "id": "bm_assassin_dagger",
+    "item_definition_id": "weapon-17",
+    "name": "アサシンダガー",
+    "category": "Weapon",
+    "base_price": 5500,
+    "daily_limit": 3,
+    "description": "闇に生きる暗殺者が愛用する刃物。鋭利な切先が致命傷を与える。"
+  },
+  {
+    "id": "bm_demon_spear",
+    "item_definition_id": "weapon-25",
+    "name": "悪魔の槍",
+    "category": "Weapon",
+    "base_price": 16000,
+    "daily_limit": 2,
+    "description": "魔界の怨念が宿った不吉な槍。相手の急所を的確に穿つ。"
+  },
+  {
+    "id": "bm_dark_rosary",
+    "item_definition_id": "item-036",
+    "name": "闇のロザリオ",
+    "category": "Accessory",
+    "base_price": 8000,
+    "daily_limit": 2,
+    "description": "漆黒の魔力を帯びたロザリオ。致命的な呪いから身を守る。"
+  },
+  {
+    "id": "bm_skull_ring",
+    "item_definition_id": "item-116",
+    "name": "ドクロの指輪",
+    "category": "Accessory",
+    "base_price": 666,
+    "daily_limit": 5,
+    "description": "不気味なドクロが彫られた怪しい指輪。身につけると不思議な魔力が湧く。"
+  },
+  {
+    "id": "bm_suicide_bracelet",
+    "item_definition_id": "item-110",
+    "name": "自爆の腕輪",
+    "category": "Accessory",
+    "base_price": 500,
+    "daily_limit": 5,
+    "description": "危機的状況で爆発し周囲を巻き込む禁断の腕輪。"
+  },
+  {
+    "id": "bm_elven_elixir",
+    "item_definition_id": "item-013",
+    "name": "エルフの飲み薬",
+    "category": "Consumable",
+    "base_price": 8000,
+    "daily_limit": 5,
+    "description": "森のエルフが秘伝の製法で作る霊薬。使用者のMPを全回復する。"
+  },
+  {
+    "id": "bm_magic_holy_water",
+    "item_definition_id": "item-011",
+    "name": "魔法の聖水",
+    "category": "Consumable",
+    "base_price": 500,
+    "daily_limit": 10,
+    "description": "魔力を活性化させ、MPを中回復する聖なる水。"
+  },
+  {
+    "id": "bm_sage_stone",
+    "item_definition_id": "item-004",
+    "name": "賢者の石",
+    "category": "Consumable",
+    "base_price": 1500,
+    "daily_limit": 3,
+    "description": "錬金術の極致とされる神秘の石。使うと何度でも味方全員の傷を癒やす。"
+  },
+  {
+    "id": "bm_tree_dewdrop",
+    "item_definition_id": "item-005",
+    "name": "霊樹のしずく",
+    "category": "Consumable",
+    "base_price": 5000,
+    "daily_limit": 3,
+    "description": "霊樹から抽出された神秘のしずく。味方全員のHPを完全回復する。"
+  }
+]

@@ -77,7 +77,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Bank accounts, gold deposits, withdrawals, and player-to-player transfers ([#71](https://github.com/witchcraze/party2re/issues/71))
 - [x] Blacksmith equipment enhancement (+1 to +10) with material/gold costs ([#59](https://github.com/witchcraze/party2re/issues/59))
 - [ ] Gem store currency and transactions ([#72](https://github.com/witchcraze/party2re/issues/72))
-- [ ] Black Market underground trade ([#142](https://github.com/witchcraze/party2re/issues/142))
+- [x] Black Market underground trade ([#142](https://github.com/witchcraze/party2re/issues/142))
 - [x] Small Medal collection and rare reward exchange ([#160](https://github.com/witchcraze/party2re/issues/160))
 
 ### D. Adventure, maps, stages, and battle
@@ -192,7 +192,8 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#266](https://github.com/witchcraze/party2re/issues/266) | Integrate HTTP API server startup, routing orchestration, and graceful shutdown in cmd/party2 | Merged |
 | [#161](https://github.com/witchcraze/party2re/issues/161) | Event Plaza, traveling merchant bazaar, and victory celebrations | Merged |
 | [#192](https://github.com/witchcraze/party2re/issues/192) | Secret Underground Shop and NPC @ヒミツジ | Merged |
-| [#185](https://github.com/witchcraze/party2re/issues/185) | Adventurer's Tavern, menu orders, delivery reservations, and NPC @エレナ | In Progress |
+| [#185](https://github.com/witchcraze/party2re/issues/185) | Adventurer's Tavern, menu orders, delivery reservations, and NPC @エレナ | Merged |
+| [#142](https://github.com/witchcraze/party2re/issues/142) | Town Black Market, contraband trading, dynamic pricing, and NPC @ヤミジ | In Progress |
 
 ---
 
