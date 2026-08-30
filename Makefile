@@ -1,4 +1,4 @@
-.PHONY: all check verify check-clean fmt vet test test-integration test-docker test-stress smoke db-migrate db-reset up down setup-hooks
+.PHONY: all check verify check-clean fmt vet openapi-check test test-integration test-docker test-stress smoke db-migrate db-reset up down setup-hooks
 
 all: check
 
@@ -9,6 +9,10 @@ fmt:
 vet:
 	@echo "Running static analysis..."
 	@go vet ./...
+
+openapi-check:
+	@echo "Validating OpenAPI specification and route coverage..."
+	@go test -count=1 ./internal/api/http -run "OpenAPI"
 
 up:
 	@echo "Starting database and cache services..."
