@@ -353,6 +353,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Adventurer's Tavern culinary menu (14 food, drink, dessert, and full-course items), restorative HP/MP recovery meals with fullness tracking, lottery raffle ticket rewards, post-adventure meal delivery reservation and claim workflow, and barkeep dialogue interactions.
   - **Dependencies:** Core Character, Character repository, Lottery repository.
   - **Persistence:** `tavern_deliveries` and `tavern_character_status` tables in `internal/database/tavern_repository.go`.
+- **Town Black Market & Shady Broker @ヤミジ** (`internal/blackmarket`):
+  - **Responsibility:** Town Black Market contraband item trade (Level >= 10), dynamic market conditions (`Quiet`, `HotDemand`, `Crackdown`, `Bargain`) with buy price multipliers and sell buyback rates, daily purchase quotas, pessimistic inventory and gold transaction handling, and shady broker dialogue and rumor intelligence.
+  - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository.
+  - **Persistence:** `blackmarket_character_purchases` and `blackmarket_market_state` tables in `internal/database/blackmarket_repository.go`.
 
 ### Cross-Module Transaction Orchestration & Ambient Context Propagation
 

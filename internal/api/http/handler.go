@@ -117,6 +117,7 @@ type Handler struct {
 	eventplaza     EventPlazaService
 	secretshop     SecretShopService
 	tavern         TavernService
+	blackmarket    BlackMarketService
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
 	allowedOrigins map[string]struct{}
@@ -373,6 +374,13 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("DELETE /characters/{id}/tavern/delivery", h.handleTavernCancelDelivery)
 	mux.HandleFunc("POST /characters/{id}/tavern/delivery/claim", h.handleTavernClaimDelivery)
 	mux.HandleFunc("POST /characters/{id}/tavern/talk", h.handleTavernTalk)
+
+	// Black Market
+	mux.HandleFunc("GET /characters/{id}/blackmarket", h.handleGetBlackMarketStatus)
+	mux.HandleFunc("POST /characters/{id}/blackmarket/purchase", h.handleBlackMarketPurchase)
+	mux.HandleFunc("POST /characters/{id}/blackmarket/sell", h.handleBlackMarketSell)
+	mux.HandleFunc("POST /characters/{id}/blackmarket/talk", h.handleBlackMarketTalk)
+	mux.HandleFunc("POST /characters/{id}/blackmarket/rumors", h.handleBlackMarketRumors)
 
 	// Farm
 	mux.HandleFunc("GET /characters/{id}/farm", h.handleGetFarm)

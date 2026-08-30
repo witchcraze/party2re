@@ -120,6 +120,331 @@
         ],
         "type": "object"
       },
+      "BlackMarketItem": {
+        "properties": {
+          "attack": {
+            "example": 5,
+            "type": "integer"
+          },
+          "base_price": {
+            "example": 1200,
+            "type": "integer"
+          },
+          "daily_limit": {
+            "example": 5,
+            "type": "integer"
+          },
+          "defense": {
+            "example": 0,
+            "type": "integer"
+          },
+          "description": {
+            "example": "急所を突けば一撃で仕留められる暗殺用の針。",
+            "type": "string"
+          },
+          "hp": {
+            "example": 0,
+            "type": "integer"
+          },
+          "id": {
+            "example": "bm_poison_needle",
+            "type": "string"
+          },
+          "mp": {
+            "example": 0,
+            "type": "integer"
+          },
+          "name": {
+            "example": "どくばり",
+            "type": "string"
+          },
+          "slot": {
+            "enum": [
+              "weapon",
+              "accessory",
+              "item"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slot",
+          "base_price",
+          "attack",
+          "defense",
+          "hp",
+          "mp",
+          "daily_limit",
+          "description"
+        ],
+        "type": "object"
+      },
+      "BlackMarketItemView": {
+        "properties": {
+          "effective_price": {
+            "example": 1200,
+            "type": "integer"
+          },
+          "item": {
+            "$ref": "#/components/schemas/BlackMarketItem"
+          },
+          "purchased_today": {
+            "example": 1,
+            "type": "integer"
+          },
+          "remaining_quota": {
+            "example": 4,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "item",
+          "effective_price",
+          "purchased_today",
+          "remaining_quota"
+        ],
+        "type": "object"
+      },
+      "BlackMarketPurchaseRequest": {
+        "properties": {
+          "item_id": {
+            "example": "bm_poison_needle",
+            "type": "string"
+          },
+          "quantity": {
+            "default": 1,
+            "example": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "item_id"
+        ],
+        "type": "object"
+      },
+      "BlackMarketPurchaseResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "inventory_instance_id": {
+            "type": "string"
+          },
+          "item": {
+            "$ref": "#/components/schemas/BlackMarketItem"
+          },
+          "quantity": {
+            "example": 1,
+            "type": "integer"
+          },
+          "remaining_gold": {
+            "example": 8800,
+            "type": "integer"
+          },
+          "remaining_quota": {
+            "example": 4,
+            "type": "integer"
+          },
+          "total_price": {
+            "example": 1200,
+            "type": "integer"
+          },
+          "unit_price": {
+            "example": 1200,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "item",
+          "quantity",
+          "unit_price",
+          "total_price",
+          "remaining_gold",
+          "inventory_instance_id",
+          "remaining_quota"
+        ],
+        "type": "object"
+      },
+      "BlackMarketRumorsResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "market_condition": {
+            "example": "Quiet",
+            "type": "string"
+          },
+          "npc_name": {
+            "example": "@ヤミジ",
+            "type": "string"
+          },
+          "rumor": {
+            "example": "今は衛兵の目も緩んでて相場は落ち着いてるぜ。",
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "npc_name",
+          "market_condition",
+          "rumor"
+        ],
+        "type": "object"
+      },
+      "BlackMarketSaleResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "item_instance_id": {
+            "type": "string"
+          },
+          "item_name": {
+            "example": "どくばり",
+            "type": "string"
+          },
+          "quantity": {
+            "example": 1,
+            "type": "integer"
+          },
+          "remaining_gold": {
+            "example": 10720,
+            "type": "integer"
+          },
+          "total_payout": {
+            "example": 720,
+            "type": "integer"
+          },
+          "unit_price": {
+            "example": 720,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "item_instance_id",
+          "item_name",
+          "quantity",
+          "unit_price",
+          "total_payout",
+          "remaining_gold"
+        ],
+        "type": "object"
+      },
+      "BlackMarketSellRequest": {
+        "properties": {
+          "item_instance_id": {
+            "example": "inst-1234",
+            "type": "string"
+          },
+          "quantity": {
+            "default": 1,
+            "example": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "item_instance_id"
+        ],
+        "type": "object"
+      },
+      "BlackMarketState": {
+        "properties": {
+          "condition": {
+            "enum": [
+              "Quiet",
+              "HotDemand",
+              "Crackdown",
+              "Bargain"
+            ],
+            "type": "string"
+          },
+          "description": {
+            "example": "平穏無事。相場は落ち着いている。",
+            "type": "string"
+          },
+          "price_multiplier": {
+            "example": 1,
+            "type": "number"
+          },
+          "risk_level": {
+            "example": "Low",
+            "type": "string"
+          },
+          "sell_multiplier": {
+            "example": 1,
+            "type": "number"
+          }
+        },
+        "required": [
+          "condition",
+          "price_multiplier",
+          "sell_multiplier",
+          "risk_level",
+          "description"
+        ],
+        "type": "object"
+      },
+      "BlackMarketStatus": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "is_eligible": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BlackMarketItemView"
+            },
+            "type": "array"
+          },
+          "location_name": {
+            "example": "裏路地の闇市",
+            "type": "string"
+          },
+          "market_state": {
+            "$ref": "#/components/schemas/BlackMarketState"
+          },
+          "npc_name": {
+            "example": "@ヤミジ",
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "location_name",
+          "npc_name",
+          "is_eligible",
+          "market_state",
+          "items"
+        ],
+        "type": "object"
+      },
+      "BlackMarketTalkResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "dialogue": {
+            "example": "……チッ、誰に聞いてここに来た？",
+            "type": "string"
+          },
+          "npc_name": {
+            "example": "@ヤミジ",
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "npc_name",
+          "dialogue"
+        ],
+        "type": "object"
+      },
       "CelebrationBanquet": {
         "properties": {
           "boss_id": {
@@ -1706,6 +2031,282 @@
         "summary": "List character adventure history",
         "tags": [
           "Adventure"
+        ]
+      }
+    },
+    "/characters/{id}/blackmarket": {
+      "get": {
+        "description": "Returns current market dynamic state, quotas, and contraband items for an authenticated character (Level \u003e= 10).",
+        "operationId": "getBlackMarketStatus",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlackMarketStatus"
+                }
+              }
+            },
+            "description": "Black market status and contraband item catalog"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get black market shop status and contraband item catalog",
+        "tags": [
+          "Black Market"
+        ]
+      }
+    },
+    "/characters/{id}/blackmarket/purchase": {
+      "post": {
+        "description": "Purchases contraband items with dynamic price multipliers and daily quota limits.",
+        "operationId": "purchaseBlackMarketItem",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlackMarketPurchaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlackMarketPurchaseResult"
+                }
+              }
+            },
+            "description": "Successful contraband purchase"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Purchase contraband items from the black market",
+        "tags": [
+          "Black Market"
+        ]
+      }
+    },
+    "/characters/{id}/blackmarket/rumors": {
+      "post": {
+        "description": "Returns current market condition and rumor commentary from @ヤミジ.",
+        "operationId": "getBlackMarketRumors",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlackMarketRumorsResult"
+                }
+              }
+            },
+            "description": "Market condition rumor"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Gather black market intelligence and dynamic condition rumors",
+        "tags": [
+          "Black Market"
+        ]
+      }
+    },
+    "/characters/{id}/blackmarket/sell": {
+      "post": {
+        "description": "Sells inventory items with dynamic buyback rates.",
+        "operationId": "sellBlackMarketItem",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlackMarketSellRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlackMarketSaleResult"
+                }
+              }
+            },
+            "description": "Successful sale"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Sell contraband or inventory items to the shady broker",
+        "tags": [
+          "Black Market"
+        ]
+      }
+    },
+    "/characters/{id}/blackmarket/talk": {
+      "post": {
+        "description": "Receives dialogue lines from broker @ヤミジ.",
+        "operationId": "talkBlackMarket",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlackMarketTalkResult"
+                }
+              }
+            },
+            "description": "Broker dialogue"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Converse with shady black market broker @ヤミジ",
+        "tags": [
+          "Black Market"
         ]
       }
     },

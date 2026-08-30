@@ -20,6 +20,7 @@ import (
 	"github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/auction"
 	"github.com/witchcraze/party2re/internal/bank"
+	"github.com/witchcraze/party2re/internal/blackmarket"
 	"github.com/witchcraze/party2re/internal/blacksmith"
 	"github.com/witchcraze/party2re/internal/boss"
 	"github.com/witchcraze/party2re/internal/casino"
@@ -387,6 +388,26 @@ func run(ctx context.Context, logger logging.Logger) error {
 		return err
 	}
 
+	blackmarketCatalog, err := blackmarket.LoadDefaultCatalog()
+	if err != nil {
+		return err
+	}
+	blackmarketRepo, err := database.NewBlackMarketRepository(db)
+	if err != nil {
+		return err
+	}
+	blackmarketService, err := blackmarket.NewService(
+		charRepo,
+		invRepo,
+		blackmarketRepo,
+		blackmarketCatalog,
+		blackmarket.WithItemDefinitionProvider(itemCatalog),
+		blackmarket.WithTransactionProvider(txProvider),
+	)
+	if err != nil {
+		return err
+	}
+
 	casinoRepo, err := database.NewCasinoRepository(db)
 	if err != nil {
 		return err
@@ -501,6 +522,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 		http.WithEventPlaza(eventplazaService),
 		http.WithSecretShop(secretshopService),
 		http.WithTavern(tavernService),
+		http.WithBlackMarket(blackmarketService),
 	}
 
 	apiHandler, err := http.NewHandler(playerService, charService, advService, shopService, opts...)
