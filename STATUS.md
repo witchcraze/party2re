@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #161 — Event: Event Plaza, traveling merchant bazaar, and victory celebrations
+Last updated: Issue #192 — Shop: Secret Underground Shop and NPC @ヒミツジ
 
 ## Current phase
 
@@ -57,6 +57,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Player Private Home & Mailbox** (`internal/home`): 自宅・私有地管理（`home.cgi`、壁紙・テーマ・一言設定、訪問者記録、プレイヤー間手紙送受信・受信箱/送信箱・未読件数、送信者・受信者の独立削除フラグ `is_deleted_by_sender`/`is_deleted_by_recipient` と双方削除時の完全パージ、仲間ペット言葉教え・挨拶会話、送金・譲渡通知台帳、MariaDB永続化）。
 - **Player Leaderboards & Character Rankings** (`internal/ranking`): ランキング・リーダーボード機能（`ranking.cgi`, `job_ranking.cgi`, `week_ranking.cgi`、レベル・プレイヤー総資産・キャラクター所持金・戦闘通算勝利数・PvP闘技場勝利数・ボス討伐数・冒険勝利数・職マスター数・職業人気分布・手助け達成数・転生回数・ちいさなメダル所持数の12カテゴリ、決定論的タイブレーク・ページネーション、インメモリTTLキャッシュ、Valkey分散スナップショットキャッシュ、Singleflightキャッシュスタンピード抑止、バックグラウンドWorker定期更新アクション `party2:ranking:refresh`、永続スナップショット `ranking_snapshots`、MariaDB永続化）。
 - **Event Plaza, Traveling Merchant Bazaar & Victory Banquets** (`internal/eventplaza`): イベント広場・行商人バザー＆ボス討伐祝宴（人口連動行商人Tier判定、希少アイテム・素材・装備バザーカタログ `bazaar.json`、並行性安全なアトミック購入トランザクション、キングボス討伐連動の祝勝祝宴自動開催・24時間有効期限・乾杯参加ゴールド報酬・重複乾杯防止 `banquet_toasts`、MariaDB永続化）。
+- **Secret Underground Shop & NPC @ヒミツジ** (`internal/secretshop`): 秘密の店・羊NPC @ヒミツジ（資格判定 Lv15以上または転生者、希少消費アイテム・アクセサリカタログ `secret_items.json`、3倍価格プレミアム設定、手助け依頼アイテム除外フィルタ連携、並行性安全なアトミック購入トランザクション、NPC羊会話・詳細情報・@ぱふぱふサービスと微小回復 HP+10/MP+5）。
 
 ### API & Transport
 - **Server Entrypoint & Lifecycle Orchestration** (`cmd/party2`): MariaDB・Valkey・全ドメインリポジトリおよびサービス・スケジューリングWorker・HTTP APIルーター（全24種Option）の統合初期化、`ADDR` / `PORT` 環境変数解決（デフォルト `:8080`）、GoroutineベースのHTTPサーバー＆Worker実行、OSシグナル（`SIGINT`, `SIGTERM`）受信時のタイムアウト付きGraceful Shutdown（`http.Server.Shutdown(ctx)`、Worker Contextキャンセル待機、DB/Valkeyリソース安全開放）、起動・停止のJSON構造化ログ。

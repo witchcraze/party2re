@@ -54,6 +54,7 @@ import (
 	"github.com/witchcraze/party2re/internal/replay"
 	"github.com/witchcraze/party2re/internal/rescue"
 	"github.com/witchcraze/party2re/internal/scheduling"
+	"github.com/witchcraze/party2re/internal/secretshop"
 	"github.com/witchcraze/party2re/internal/shop"
 	"github.com/witchcraze/party2re/internal/valkey"
 )
@@ -284,6 +285,15 @@ func run(ctx context.Context, logger logging.Logger) error {
 		return hookErr
 	})
 
+	secretshopCatalog, err := secretshop.LoadDefaultCatalog()
+	if err != nil {
+		return err
+	}
+	secretshopService, err := secretshop.NewService(charRepo, invRepo, secretshopCatalog, secretshop.WithTransactionProvider(txProvider))
+	if err != nil {
+		return err
+	}
+
 	rescueRepo, err := database.NewRescueRepository(db)
 	if err != nil {
 		return err
@@ -475,6 +485,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 		http.WithHome(homeService),
 		http.WithCustomSkill(customSkillService),
 		http.WithEventPlaza(eventplazaService),
+		http.WithSecretShop(secretshopService),
 	}
 
 	apiHandler, err := http.NewHandler(playerService, charService, advService, shopService, opts...)

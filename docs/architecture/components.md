@@ -345,6 +345,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Town event plaza gathering state, dynamic population tier calculations, traveling merchant rare item bazaar catalog with tier-based unlocks and concurrency-safe purchasing transactions, and world boss victory celebration banquets with celebratory toast rewards.
   - **Dependencies:** Core Character, Core Item, Character repository, Inventory repository.
   - **Persistence:** `celebration_banquets` and `banquet_toasts` tables in `internal/database/eventplaza_repository.go`.
+- **Secret Underground Shop & NPC @ヒミツジ** (`internal/secretshop`):
+  - **Responsibility:** Secret underground shop discovery and access validation (Level >= 15 or Reborn), rare item catalog with 3x pricing multiplier, helper quest exclusion filter, concurrency-safe purchasing transactions, and humorous NPC interactions (sheep dialogues, inspect lore, and restorative `@ぱふぱふ` puff-puff service).
+  - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository, Helper Quest filter.
+  - **Persistence:** Direct inventory and character balance persistence via character/inventory repositories.
 
 ### Cross-Module Transaction Orchestration & Ambient Context Propagation
 

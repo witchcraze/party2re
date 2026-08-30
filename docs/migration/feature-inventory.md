@@ -108,6 +108,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Collection and Monster Book encyclopedia ([#85](https://github.com/witchcraze/party2re/issues/85))
 - [x] Chapel prayers and blessings ([#86](https://github.com/witchcraze/party2re/issues/86))
 - [x] Event Plaza, traveling merchant bazaar, and victory celebrations ([#161](https://github.com/witchcraze/party2re/issues/161))
+- [x] Secret Underground Shop and NPC @ヒミツジ ([#192](https://github.com/witchcraze/party2re/issues/192))
 
 ### G. Presentation, assets, and operations
 - [x] UI-independent HTTP JSON Application API layer ([#87](https://github.com/witchcraze/party2re/issues/87))
@@ -189,6 +190,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#254](https://github.com/witchcraze/party2re/issues/254) | Complete HTTP API endpoints for remaining domain features | Merged |
 | [#266](https://github.com/witchcraze/party2re/issues/266) | Integrate HTTP API server startup, routing orchestration, and graceful shutdown in cmd/party2 | Merged |
 | [#161](https://github.com/witchcraze/party2re/issues/161) | Event Plaza, traveling merchant bazaar, and victory celebrations | Merged |
+| [#192](https://github.com/witchcraze/party2re/issues/192) | Secret Underground Shop and NPC @ヒミツジ | Merged |
 
 ---
 
