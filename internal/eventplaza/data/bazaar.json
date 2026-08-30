@@ -1,0 +1,83 @@
+[
+  {
+    "id": "bazaar_herb_extract",
+    "name": "名薬草のエキス",
+    "category": "consumable",
+    "price": 500,
+    "tier_required": 1,
+    "description": "旅の行商人が仕入れた高濃度薬草エキス。HPを大幅に回復する秘伝の薬。",
+    "item_definition_id": "item-003"
+  },
+  {
+    "id": "bazaar_mana_elixir",
+    "name": "活性魔力水",
+    "category": "consumable",
+    "price": 1200,
+    "tier_required": 1,
+    "description": "澄んだ魔力を蓄えた希少な霊水。MPを回復し集中力を研ぎ澄ます。",
+    "item_definition_id": "item-004"
+  },
+  {
+    "id": "bazaar_silver_amulet",
+    "name": "銀の魔除け護符",
+    "category": "accessory",
+    "price": 3500,
+    "tier_required": 1,
+    "description": "神聖な銀細工に加護を宿した護符。冒険者の身を守る。",
+    "item_definition_id": "item-020"
+  },
+  {
+    "id": "bazaar_phoenix_down",
+    "name": "不死鳥の羽",
+    "category": "consumable",
+    "price": 5000,
+    "tier_required": 2,
+    "description": "伝説の幻鳥から抜け落ちたとされる霊羽。神秘的な生命力に満ちている。",
+    "item_definition_id": "item-006"
+  },
+  {
+    "id": "bazaar_dragon_whetstone",
+    "name": "竜鱗の極上砥石",
+    "category": "material",
+    "price": 8000,
+    "tier_required": 2,
+    "description": "古竜の硬質な鱗を削り出した砥石。鍛冶職人が羨望する極上の研磨材。",
+    "item_definition_id": "item-050"
+  },
+  {
+    "id": "bazaar_wind_cloak",
+    "name": "風詠みの戦装束",
+    "category": "armor",
+    "price": 15000,
+    "tier_required": 2,
+    "description": "風の精霊の加護を受けた軽装鎧。素早い身のこなしを可能にする。",
+    "item_definition_id": "item-035"
+  },
+  {
+    "id": "bazaar_celestial_nectar",
+    "name": "天界の神酒",
+    "category": "consumable",
+    "price": 20000,
+    "tier_required": 3,
+    "description": "神々に捧げられる至高の霊酒。生命力と精神力を極限まで高める。",
+    "item_definition_id": "item-005"
+  },
+  {
+    "id": "bazaar_astral_gem",
+    "name": "星彩の創世結晶",
+    "category": "material",
+    "price": 50000,
+    "tier_required": 3,
+    "description": "星々の輝きを閉じ込めた奇跡の結晶。伝説の装備を生み出す至宝。",
+    "item_definition_id": "item-099"
+  },
+  {
+    "id": "bazaar_starlight_blade",
+    "name": "星砕きの宝剣",
+    "category": "weapon",
+    "price": 100000,
+    "tier_required": 3,
+    "description": "流星の鉄塊を鍛え上げた究極の一刀。圧倒的な斬撃力を誇る名剣。",
+    "item_definition_id": "item-088"
+  }
+]

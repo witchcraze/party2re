@@ -128,12 +128,19 @@ type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 }
 
+type VictoryBanquetHook func(ctx context.Context, bossID, bossName, slayerID, slayerName string, tier int) error
+
 type Service struct {
-	repo          Repository
-	characterRepo CharacterRepository
-	battleEngine  corebattle.Resolver
-	bosses        []Boss
-	bossMap       map[string]Boss
+	repo               Repository
+	characterRepo      CharacterRepository
+	battleEngine       corebattle.Resolver
+	bosses             []Boss
+	bossMap            map[string]Boss
+	victoryBanquetHook VictoryBanquetHook
+}
+
+func (s *Service) SetVictoryBanquetHook(hook VictoryBanquetHook) {
+	s.victoryBanquetHook = hook
 }
 
 func DefaultBossCatalog() []Boss {
@@ -594,6 +601,10 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 
 	if err := s.repo.RecordChallenge(ctx, history, rec, char, rewardItemInstance); err != nil {
 		return ChallengeResult{}, fmt.Errorf("record boss challenge: %w", err)
+	}
+
+	if outcome == corebattle.OutcomeWin && battleResult.WinnerID == char.ID && s.victoryBanquetHook != nil {
+		_ = s.victoryBanquetHook(ctx, boss.ID, boss.Name, char.ID, char.Name, boss.Tier)
 	}
 
 	return ChallengeResult{

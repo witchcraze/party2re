@@ -34,6 +34,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/dungeon"
+	"github.com/witchcraze/party2re/internal/eventplaza"
 	"github.com/witchcraze/party2re/internal/farm"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/gvg"
@@ -270,6 +271,19 @@ func run(ctx context.Context, logger logging.Logger) error {
 		return err
 	}
 
+	eventplazaRepo, err := database.NewEventPlazaRepository(db)
+	if err != nil {
+		return err
+	}
+	eventplazaService, err := eventplaza.NewService(eventplazaRepo, charRepo, invRepo, eventplaza.WithTransactionProvider(txProvider))
+	if err != nil {
+		return err
+	}
+	bossService.SetVictoryBanquetHook(func(ctx context.Context, bossID, bossName, slayerID, slayerName string, tier int) error {
+		_, hookErr := eventplazaService.RecordVictoryBanquet(ctx, bossID, bossName, slayerID, slayerName, tier)
+		return hookErr
+	})
+
 	rescueRepo, err := database.NewRescueRepository(db)
 	if err != nil {
 		return err
@@ -460,6 +474,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 		http.WithNotification(notificationService),
 		http.WithHome(homeService),
 		http.WithCustomSkill(customSkillService),
+		http.WithEventPlaza(eventplazaService),
 	}
 
 	apiHandler, err := http.NewHandler(playerService, charService, advService, shopService, opts...)
