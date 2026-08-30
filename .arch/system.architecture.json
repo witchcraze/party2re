@@ -2,7 +2,7 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "Party2Re Architecture & Topology Map (PoC)",
+    "title": "Party2Re System Architecture & Layer Topology",
     "locale": "en",
     "quality_profile": "showcase",
     "repository": {

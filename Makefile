@@ -66,5 +66,7 @@ arch-validate:
 	@node ~/.agents/skills/archify/bin/archify.mjs validate architecture .arch/system.architecture.json --quality showcase --repo-root .
 
 arch-build:
-	@echo "Building architecture system map HTML..."
-	@node ~/.agents/skills/archify/bin/archify.mjs deliver architecture .arch/system.architecture.json docs/architecture/system-map.html --quality showcase --repo-root .
+	@echo "Building architecture system overview HTML..."
+	@node ~/.agents/skills/archify/bin/archify.mjs deliver architecture .arch/system.architecture.json docs/architecture/system-overview.html --quality showcase --repo-root .
+	@echo "Building Tier 1 module architecture HTMLs..."
+	@go run ./cmd/arch-build
