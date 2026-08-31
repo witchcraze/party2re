@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "module": "tavern",
   "domain": "冒険者の酒場 (@エレナ)",
+  "description": "Adventurer's tavern culinary menu, restorative meal orders, raffle ticket bonuses, and post-adventure meal delivery reservations (owns tavern_deliveries, tavern_character_status). Distinct from delivery_parcels / character_deliveries (owned by delivery module).",
   "entrypoint": "internal/tavern/tavern.go",
   "dependencies": [
     {

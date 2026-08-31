@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "module": "delivery",
   "domain": "でりばりー・小包配送",
+  "description": "Town delivery quest lifecycle and player-to-player mail/courier service (owns delivery_quests, character_deliveries, delivery_parcels). Distinct from tavern_deliveries (post-adventure meal reservations owned by tavern module).",
   "entrypoint": "internal/delivery/delivery.go",
   "dependencies": [
     {
@@ -33,18 +34,34 @@
     {
       "flow": "AcceptQuest (クエスト受注)",
       "tx_mode": "RunInTx",
-      "source_ref": "internal/delivery/delivery.go#Service.AcceptQuest"
+      "source_ref": "internal/delivery/delivery.go#Service.AcceptQuest",
+      "lock_sequence": [
+        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByID", "mode": "SELECT" },
+        { "step": 2, "target": "delivery_quests", "lock_order": 8, "method": "DeliveryRepository.GetQuestByID", "mode": "SELECT" },
+        { "step": 3, "target": "character_deliveries", "lock_order": 8, "method": "DeliveryRepository.GetActiveCharacterDeliveries", "mode": "SELECT" },
+        { "step": 4, "target": "character_deliveries", "lock_order": 8, "method": "DeliveryRepository.SaveCharacterDelivery", "mode": "INSERT" }
+      ]
+    },
+    {
+      "flow": "CancelDelivery (クエスト受注取消)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/delivery/delivery.go#Service.CancelDelivery",
+      "lock_sequence": [
+        { "step": 1, "target": "character_deliveries", "lock_order": 8, "method": "DeliveryRepository.GetCharacterDeliveryByID", "mode": "SELECT (Ownership & Status Validation)" },
+        { "step": 2, "target": "character_deliveries", "lock_order": 8, "method": "DeliveryRepository.UpdateCharacterDelivery", "mode": "UPDATE (Mark Cancelled)" }
+      ]
     },
     {
       "flow": "CompleteDelivery (クエスト納品・報酬獲得)",
       "tx_mode": "RunInTx",
       "source_ref": "internal/delivery/delivery.go#Service.CompleteDelivery",
       "lock_sequence": [
-        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
-        { "step": 2, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate" },
-        { "step": 3, "target": "inventory_items", "method": "InventoryRepository.Save" },
-        { "step": 4, "target": "characters", "method": "CharacterRepository.Update" },
-        { "step": 5, "target": "character_deliveries", "lock_order": 8, "method": "DeliveryRepository.UpdateCharacterDelivery" }
+        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 2, "target": "character_deliveries", "lock_order": 8, "method": "DeliveryRepository.GetCharacterDeliveryByID", "mode": "SELECT (Ownership & Status Validation)" },
+        { "step": 3, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 4, "target": "inventory_items", "method": "InventoryRepository.Save", "mode": "UPDATE (Consume Required Items)" },
+        { "step": 5, "target": "characters", "method": "CharacterRepository.Update", "mode": "UPDATE (Credit Gold & EXP)" },
+        { "step": 6, "target": "character_deliveries", "lock_order": 8, "method": "DeliveryRepository.UpdateCharacterDelivery", "mode": "UPDATE (Mark Completed)" }
       ]
     },
     {
@@ -52,12 +69,12 @@
       "tx_mode": "RunInTx",
       "source_ref": "internal/delivery/delivery.go#Service.SendParcel",
       "lock_sequence": [
-        { "step": 1, "target": "characters (sender)", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
-        { "step": 2, "target": "characters (recipient check)", "method": "CharacterRepository.FindByID" },
-        { "step": 3, "target": "inventory_items (sender)", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate" },
-        { "step": 4, "target": "inventory_items", "method": "InventoryRepository.Save" },
-        { "step": 5, "target": "characters", "method": "CharacterRepository.Update" },
-        { "step": 6, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.SaveParcel" }
+        { "step": 1, "target": "characters (sender)", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 2, "target": "characters (recipient check)", "method": "CharacterRepository.FindByID", "mode": "SELECT" },
+        { "step": 3, "target": "inventory_items (sender)", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE (Conditional on Item Attached)", "optional": true },
+        { "step": 4, "target": "inventory_items", "method": "InventoryRepository.Save", "mode": "UPDATE (Deduct Item)", "optional": true },
+        { "step": 5, "target": "characters", "method": "CharacterRepository.Update", "mode": "UPDATE (Deduct 50G Fee + Gold Attached)" },
+        { "step": 6, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.SaveParcel", "mode": "INSERT" }
       ]
     },
     {
@@ -65,11 +82,12 @@
       "tx_mode": "RunInTx",
       "source_ref": "internal/delivery/delivery.go#Service.ClaimParcel",
       "lock_sequence": [
-        { "step": 1, "target": "characters (recipient)", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
-        { "step": 2, "target": "characters", "method": "CharacterRepository.Update" },
-        { "step": 3, "target": "inventory_items (recipient)", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate" },
-        { "step": 4, "target": "inventory_items", "method": "InventoryRepository.Save" },
-        { "step": 5, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.UpdateParcel" }
+        { "step": 1, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.GetParcelByID", "mode": "SELECT (Ownership & Status Validation)" },
+        { "step": 2, "target": "characters (recipient)", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE (Conditional on Gold Amount > 0)", "optional": true },
+        { "step": 3, "target": "characters", "method": "CharacterRepository.Update", "mode": "UPDATE (Credit Gold)", "optional": true },
+        { "step": 4, "target": "inventory_items (recipient)", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE (Conditional on Item Attached)", "optional": true },
+        { "step": 5, "target": "inventory_items", "method": "InventoryRepository.Save", "mode": "INSERT / UPDATE", "optional": true },
+        { "step": 6, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.UpdateParcel", "mode": "UPDATE (Mark Claimed)" }
       ]
     },
     {
@@ -77,11 +95,12 @@
       "tx_mode": "RunInTx",
       "source_ref": "internal/delivery/delivery.go#Service.CancelParcel",
       "lock_sequence": [
-        { "step": 1, "target": "characters (sender)", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
-        { "step": 2, "target": "characters", "method": "CharacterRepository.Update" },
-        { "step": 3, "target": "inventory_items (sender)", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate" },
-        { "step": 4, "target": "inventory_items", "method": "InventoryRepository.Save" },
-        { "step": 5, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.UpdateParcel" }
+        { "step": 1, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.GetParcelByID", "mode": "SELECT (Ownership & Status Check)" },
+        { "step": 2, "target": "characters (sender)", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE (Conditional on Gold Amount > 0)", "optional": true },
+        { "step": 3, "target": "characters", "method": "CharacterRepository.Update", "mode": "UPDATE (Conditional Refund)", "optional": true },
+        { "step": 4, "target": "inventory_items (sender)", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE (Conditional on Item Attached)", "optional": true },
+        { "step": 5, "target": "inventory_items", "method": "InventoryRepository.Save", "mode": "INSERT / UPDATE", "optional": true },
+        { "step": 6, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.UpdateParcel", "mode": "UPDATE (Mark Cancelled)" }
       ]
     }
   ]
