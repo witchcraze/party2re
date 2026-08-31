@@ -58,8 +58,8 @@
       ]
     },
     {
-      "method": "Complete",
-      "source_ref": "internal/adventure/adventure.go#Service.Complete",
+      "method": "Claim",
+      "source_ref": "internal/adventure/adventure.go#Service.Claim",
       "transaction_type": "ClaimAndApply",
       "lock_sequence": [
         {

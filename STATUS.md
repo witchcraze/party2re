@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #304 — Incorporate Legacy CGI @actions Reconciliation Checklist into Migration Rules
+Last updated: Issue #300 — Enhance Go AST Linter to Verify RunInTx Presence in Transaction Boundary Symbols
 
 ## Current phase
 
@@ -18,7 +18,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ### Architecture & Repository Intelligence (Guidance Layer - PoC)
 - **Guidance Layer (.arch/)**: シンボルアンカー（`path#Symbol`）ベースのモジュール詳細定義（`.arch/modules/*.json`）および GitHub ネイティブな Mermaid 全体トポロジー図（`docs/architecture/guidance-layer.md`）。外部 Node.js 依存や HTML 成果物を全廃し、純粋な Go + JSON + Markdown で完結。ソースコード（Ground Truth）のピンポイント探索を支援し、コンテキストトークン消費を 90% 削減。
 - **Module Selection Criteria & Target Tiers**: 4つの選定基準（C1: トランザクション深度, C2: 行ロック階層, C3: エスクロー/共有状態, C4: 非同期Worker）に基づくトリアージを実施（`docs/architecture/guidance-layer.md`）。Tier 1（高リスク8機能: `tavern`, `delivery`, `bank`, `auction`, `guild`, `shop`, `blacksmith`, `adventure`）、Tier 2（オンデマンド）、Tier 3（除外）の運用スコープを確立。
-- **Automated Mechanical Verification**: Go AST シンボルリント（`internal/architecture/arch_test.go`）による 0.02 秒の静的シンボル実在性チェック（`go test ./...` および `scripts/verify.sh` step `[4/7]` 統合）。外部ランタイム不要の純粋な Go 標準構文解析器による機械的テスト。
+- **Automated Mechanical Verification**: Go AST シンボルリント（`internal/architecture/arch_test.go`）による 0.05 秒の静的シンボル実在性チェックおよびトランザクション境界シンボルにおける `RunInTx` 呼び出しの実在検証（`go test ./...` および `scripts/verify.sh` step `[4/7]` 統合）。外部ランタイム不要の純粋な Go 標準構文解析器による機械的テスト。
 
 
 
