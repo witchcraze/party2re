@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-echo "==> [1/6] Checking and applying code formatting (gofmt)..."
+echo "==> [1/7] Checking and applying code formatting (gofmt & openapi-sync)..."
 GO_FILES=$(find . -name "*.go" -not -path "./vendor/*")
 if [ -n "$GO_FILES" ]; then
     UNFORMATTED=$(gofmt -l $GO_FILES)
@@ -16,8 +16,11 @@ if [ -n "$GO_FILES" ]; then
         echo "All Go files are properly formatted."
     fi
 fi
+if command -v go >/dev/null 2>&1; then
+    go run ./scripts/sync_openapi.go
+fi
 
-echo "==> [2/6] Running static analysis (go vet)..."
+echo "==> [2/7] Running static analysis (go vet)..."
 if command -v go >/dev/null 2>&1; then
     go vet ./...
 else
@@ -26,6 +29,7 @@ fi
 
 echo "==> [3/7] Validating OpenAPI 3.1 specification and route coverage..."
 if command -v go >/dev/null 2>&1; then
+    go run ./scripts/sync_openapi.go --check
     go test -count=1 ./internal/api/http -run "OpenAPI"
 else
     docker compose run --rm app go test -count=1 ./internal/api/http -run "OpenAPI"

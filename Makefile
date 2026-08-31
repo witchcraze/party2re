@@ -1,18 +1,24 @@
-.PHONY: all check verify check-clean fmt vet openapi-check test test-integration test-docker test-stress smoke db-migrate db-reset up down setup-hooks arch-lint
-
+.PHONY: all check verify check-clean fmt vet openapi-sync openapi-check test test-integration test-docker test-stress smoke db-migrate db-reset up down setup-hooks arch-lint
 
 all: check
 
 fmt:
 	@echo "Formatting Go files..."
 	@gofmt -w $$(find . -name "*.go" -not -path "./vendor/*")
+	@echo "Synchronizing and formatting OpenAPI specification..."
+	@go run ./scripts/sync_openapi.go
 
 vet:
 	@echo "Running static analysis..."
 	@go vet ./...
 
+openapi-sync:
+	@echo "Synchronizing and formatting OpenAPI specification..."
+	@go run ./scripts/sync_openapi.go
+
 openapi-check:
-	@echo "Validating OpenAPI specification and route coverage..."
+	@echo "Validating OpenAPI specification synchronization and route coverage..."
+	@go run ./scripts/sync_openapi.go --check
 	@go test -count=1 ./internal/api/http -run "OpenAPI"
 
 up:

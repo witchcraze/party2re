@@ -69,10 +69,16 @@ If testing a component requires knowledge of another component's private impleme
 The canonical commands run through the repository `Makefile` and Docker Compose, ensuring identical execution locally and in CI:
 
 ```bash
-# Auto-format Go code
+# Auto-format Go code and synchronize OpenAPI 3.1 specifications
 make fmt
 
-# Run all verification checks (formatting check, go vet, db-migrate, full docker test suite, smoke build)
+# Explicitly synchronize and format OpenAPI 3.1 specification across docs/ and internal/
+make openapi-sync
+
+# Validate OpenAPI specification synchronization and 100% route coverage
+make openapi-check
+
+# Run all verification checks (formatting check, go vet, openapi check, db-migrate, full docker test suite, smoke build)
 make check
 
 # Run clean verification with full database reset (DROP & recreate database)

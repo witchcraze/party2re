@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #301 — Enforce Session Authentication and Character Ownership on Event Plaza Endpoints with AST Auth Linter
+Last updated: Issue #277 — Automate OpenAPI 3.1 Specification Synchronization and Route Definition Check
 
 ## Current phase
 
@@ -77,7 +77,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `041_delivery.sql`、`make db-migrate` / `make db-reset`）。
 - **Valkey**: 遅延アクションキュー・排他ロック・分散レートリミット・ランキングスナップショットキャッシュ（AOF+RDB永続化）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
-- **Verification**: `Makefile` (`make check`, `make fmt`, `make vet`, `make openapi-check`, `make test-stress`, `make check-clean`)、CIガード（OpenAPI 3.1構文・全ルート網羅テスト）、Git pre-push hook による自動検証、`scripts/stress_test.sh` による高並行ストレステスト。
+- **Verification**: `Makefile` (`make check`, `make fmt`, `make vet`, `make openapi-sync`, `make openapi-check`, `make test-stress`, `make check-clean`)、OpenAPI 3.1 仕様書自動同期・フォーマット CLI（`scripts/sync_openapi.go`）、CIガード（OpenAPI 3.1構文・全ルート網羅テスト）、Git pre-push hook による自動検証、`scripts/stress_test.sh` による高並行ストレステスト。
 - **Deployment**: Distroless (`gcr.io/distroless/static-debian13:nonroot`) ベースの最小本番イメージ（GHCR自動公開）。
 
 ---
