@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/eventplaza"
 )
 
@@ -57,9 +60,33 @@ func (m *mockEventPlazaService) ToastBanquet(ctx context.Context, banquetID stri
 }
 
 func createTestHandler(opts ...apihttp.Option) (*apihttp.Handler, error) {
+	player := coreplayer.Player{ID: "player-1", Username: "user1"}
+	char := corecharacter.Character{ID: "char-1", PlayerID: "player-1", Name: "Hero"}
+	otherChar := corecharacter.Character{ID: "char-2", PlayerID: "other-player", Name: "OtherHero"}
+
+	players := &stubPlayerService{
+		authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
+			if sessionID == "valid-session" {
+				return player, nil
+			}
+			return coreplayer.Player{}, errors.New("unauthorized")
+		},
+	}
+	characters := &stubCharacterService{
+		getFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			if id == "char-1" {
+				return char, nil
+			}
+			if id == "char-2" {
+				return otherChar, nil
+			}
+			return corecharacter.Character{}, corecharacter.ErrNotFound
+		},
+	}
+
 	return apihttp.NewHandler(
-		&stubPlayerService{},
-		&stubCharacterService{},
+		players,
+		characters,
 		&stubAdventureService{},
 		&stubShopService{},
 		opts...,
@@ -163,13 +190,15 @@ func TestHandlePostEventPlazaMerchantPurchase(t *testing.T) {
 		t.Fatalf("failed to create handler: %v", err)
 	}
 
-	// 1. Success
+	// 1. Success with valid auth
 	body, _ := json.Marshal(map[string]any{
 		"character_id": "char-1",
 		"item_id":      "bazaar_herb_extract",
 		"quantity":     2,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/eventplaza/merchant/purchase", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer valid-session")
 	rec := httptest.NewRecorder()
 	handler.Router().ServeHTTP(rec, req)
 
@@ -184,11 +213,58 @@ func TestHandlePostEventPlazaMerchantPurchase(t *testing.T) {
 		"quantity":     1,
 	})
 	reqLocked := httptest.NewRequest(http.MethodPost, "/eventplaza/merchant/purchase", bytes.NewReader(lockedBody))
+	reqLocked.Header.Set("Content-Type", "application/json")
+	reqLocked.Header.Set("Authorization", "Bearer valid-session")
 	recLocked := httptest.NewRecorder()
 	handler.Router().ServeHTTP(recLocked, reqLocked)
 
 	if recLocked.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d", recLocked.Code)
+	}
+}
+
+func TestEventPlaza_MerchantPurchase_Unauthenticated_Returns401(t *testing.T) {
+	mockSvc := &mockEventPlazaService{}
+	handler, err := createTestHandler(apihttp.WithEventPlaza(mockSvc))
+	if err != nil {
+		t.Fatalf("failed to create handler: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"character_id": "char-1",
+		"item_id":      "bazaar_herb_extract",
+		"quantity":     1,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/eventplaza/merchant/purchase", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401 Unauthorized, got %d", rec.Code)
+	}
+}
+
+func TestEventPlaza_MerchantPurchase_ForbiddenCharacter_Returns403(t *testing.T) {
+	mockSvc := &mockEventPlazaService{}
+	handler, err := createTestHandler(apihttp.WithEventPlaza(mockSvc))
+	if err != nil {
+		t.Fatalf("failed to create handler: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"character_id": "char-2", // belongs to other-player
+		"item_id":      "bazaar_herb_extract",
+		"quantity":     1,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/eventplaza/merchant/purchase", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer valid-session")
+	rec := httptest.NewRecorder()
+	handler.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403 Forbidden, got %d", rec.Code)
 	}
 }
 
@@ -264,9 +340,11 @@ func TestHandlePostEventPlazaBanquetToast(t *testing.T) {
 		t.Fatalf("failed to create handler: %v", err)
 	}
 
-	// 1. Success
+	// 1. Success with valid auth
 	body, _ := json.Marshal(map[string]any{"character_id": "char-1"})
 	req := httptest.NewRequest(http.MethodPost, "/eventplaza/banquets/banquet-1/toast", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer valid-session")
 	rec := httptest.NewRecorder()
 	handler.Router().ServeHTTP(rec, req)
 
@@ -276,6 +354,8 @@ func TestHandlePostEventPlazaBanquetToast(t *testing.T) {
 
 	// 2. Already toasted -> 409 Conflict
 	reqConflict := httptest.NewRequest(http.MethodPost, "/eventplaza/banquets/already_toasted/toast", bytes.NewReader(body))
+	reqConflict.Header.Set("Content-Type", "application/json")
+	reqConflict.Header.Set("Authorization", "Bearer valid-session")
 	recConflict := httptest.NewRecorder()
 	handler.Router().ServeHTTP(recConflict, reqConflict)
 	if recConflict.Code != http.StatusConflict {
@@ -284,6 +364,8 @@ func TestHandlePostEventPlazaBanquetToast(t *testing.T) {
 
 	// 3. Expired -> 410 Gone
 	reqExpired := httptest.NewRequest(http.MethodPost, "/eventplaza/banquets/expired/toast", bytes.NewReader(body))
+	reqExpired.Header.Set("Content-Type", "application/json")
+	reqExpired.Header.Set("Authorization", "Bearer valid-session")
 	recExpired := httptest.NewRecorder()
 	handler.Router().ServeHTTP(recExpired, reqExpired)
 	if recExpired.Code != http.StatusGone {
@@ -292,9 +374,48 @@ func TestHandlePostEventPlazaBanquetToast(t *testing.T) {
 
 	// 4. Not Found -> 404
 	reqNotFound := httptest.NewRequest(http.MethodPost, "/eventplaza/banquets/not_found/toast", bytes.NewReader(body))
+	reqNotFound.Header.Set("Content-Type", "application/json")
+	reqNotFound.Header.Set("Authorization", "Bearer valid-session")
 	recNotFound := httptest.NewRecorder()
 	handler.Router().ServeHTTP(recNotFound, reqNotFound)
 	if recNotFound.Code != http.StatusNotFound {
 		t.Errorf("expected status 404, got %d", recNotFound.Code)
+	}
+}
+
+func TestEventPlaza_BanquetToast_Unauthenticated_Returns401(t *testing.T) {
+	mockSvc := &mockEventPlazaService{}
+	handler, err := createTestHandler(apihttp.WithEventPlaza(mockSvc))
+	if err != nil {
+		t.Fatalf("failed to create handler: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]any{"character_id": "char-1"})
+	req := httptest.NewRequest(http.MethodPost, "/eventplaza/banquets/banquet-1/toast", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401 Unauthorized, got %d", rec.Code)
+	}
+}
+
+func TestEventPlaza_BanquetToast_ForbiddenCharacter_Returns403(t *testing.T) {
+	mockSvc := &mockEventPlazaService{}
+	handler, err := createTestHandler(apihttp.WithEventPlaza(mockSvc))
+	if err != nil {
+		t.Fatalf("failed to create handler: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]any{"character_id": "char-2"}) // belongs to other-player
+	req := httptest.NewRequest(http.MethodPost, "/eventplaza/banquets/banquet-1/toast", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer valid-session")
+	rec := httptest.NewRecorder()
+	handler.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403 Forbidden, got %d", rec.Code)
 	}
 }

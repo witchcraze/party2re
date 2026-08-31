@@ -123,14 +123,8 @@ func (h *Handler) handleListNotifications(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
+	player, ok := h.authenticatePlayer(w, r)
+	if !ok {
 		return
 	}
 
@@ -163,14 +157,8 @@ func (h *Handler) handleGetUnreadNotificationCount(w http.ResponseWriter, r *htt
 		return
 	}
 
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
+	player, ok := h.authenticatePlayer(w, r)
+	if !ok {
 		return
 	}
 
@@ -189,19 +177,13 @@ func (h *Handler) handleMarkNotificationAsRead(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
+	player, ok := h.authenticatePlayer(w, r)
+	if !ok {
 		return
 	}
 
 	id := r.PathValue("id")
-	err = h.notifications.MarkAsRead(r.Context(), id, player.ID)
+	err := h.notifications.MarkAsRead(r.Context(), id, player.ID)
 	if err != nil {
 		if errors.Is(err, notification.ErrNotificationNotFound) {
 			writeError(w, http.StatusNotFound, err)
@@ -224,18 +206,12 @@ func (h *Handler) handleMarkAllNotificationsAsRead(w http.ResponseWriter, r *htt
 		return
 	}
 
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
+	player, ok := h.authenticatePlayer(w, r)
+	if !ok {
 		return
 	}
 
-	err = h.notifications.MarkAllAsRead(r.Context(), player.ID)
+	err := h.notifications.MarkAllAsRead(r.Context(), player.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -250,19 +226,13 @@ func (h *Handler) handleDeleteNotification(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	sessionID := sessionIDFromRequest(r)
-	if sessionID == "" {
-		writeError(w, http.StatusUnauthorized, errors.New("missing session"))
-		return
-	}
-	player, err := h.players.Authenticate(r.Context(), sessionID)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
+	player, ok := h.authenticatePlayer(w, r)
+	if !ok {
 		return
 	}
 
 	id := r.PathValue("id")
-	err = h.notifications.DeleteNotification(r.Context(), id, player.ID)
+	err := h.notifications.DeleteNotification(r.Context(), id, player.ID)
 	if err != nil {
 		if errors.Is(err, notification.ErrNotificationNotFound) {
 			writeError(w, http.StatusNotFound, err)
