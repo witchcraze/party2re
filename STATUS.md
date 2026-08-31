@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #277 — Automate OpenAPI 3.1 Specification Synchronization and Route Definition Check
+Last updated: Issue #304 — Incorporate Legacy CGI @actions Reconciliation Checklist into Migration Rules
 
 ## Current phase
 
