@@ -36,6 +36,7 @@ Never branch directly from another feature branch unless explicitly stacking PRs
   - If prerequisites are missing, explicitly document them in the Issue body along with concrete architectural options (e.g. Option A, Option B) and note that specification alignment is required before implementation.
 - **Study Existing Implementations:** Before generating new logic from scratch, actively search the codebase (using `fd`, `grep`, or IDE tools) for existing features that solve similar problems. Adopt the same architectural patterns, variable naming conventions, and file structures.
 - **Transparent Tool Usage:** When analyzing codebases, prefer native tools (`view_file`, `grep_search`). Do NOT execute complex or opaque bash scripts (like `sed`, `awk`, or `perl` one-liners) to parse code without explicitly explaining your intent to the user first. Ensure transparency in your actions.
+- **Mandatory Auth Wrappers**: All HTTP handlers exposing character actions or mutating gameplay entities must use standard auth wrappers (`withAuthenticatedCharacter`, `withAuthenticatedCharacterAndJSON`). Never decode `req.CharacterID` directly without verifying player ownership. The mechanical AST linter (`internal/api/http/auth_lint_test.go`) enforces this check.
 - **Bounded Tasks:** Select a bounded task. If the requested work is too large, split it into smaller Issues; preserve independently testable acceptance criteria; do not silently expand the current Issue.
 
 ## 3. TDD and Local Verification (Tiered Strategy)

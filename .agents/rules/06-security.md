@@ -20,5 +20,11 @@ Changes that impact the security perimeter of the application must not be merged
 ## 2. API Authorization Boundary
 The presentation/HTTP layer is responsible for extracting session tokens and performing initial authentication. However, **authorization (ensuring the user has permission to access or modify a resource)** must be guaranteed at the Service/API boundary as well. Always ensure that the authenticated user (`Session.PlayerID`) matches the owner of the requested resource before the Service executes critical domain logic.
 
-## 3. Dependency Vulnerabilities
+## 3. Mandatory Auth Helper and Common Wrapper Anti-Bypass Rule
+To completely prevent Insecure Direct Object Reference (IDOR) and unauthorized mutation vulnerabilities:
+- **Mandatory Standard Wrappers**: All HTTP handlers accepting `character_id` (in path or JSON body) or mutating character state MUST route through approved higher-order wrappers (`withAuthenticatedCharacter`, `withAuthenticatedCharacterAndJSON`) or explicit session auth (`authenticatePlayer`, `authenticateAdmin`).
+- **No Direct Parameter Extraction**: Handlers MUST NEVER bypass wrappers to decode `req.CharacterID` directly from JSON request bodies without verifying character ownership (`char.PlayerID == player.ID`).
+- **Continuous Mechanical Verification**: The Go AST static analysis suite (`internal/api/http/auth_lint_test.go`) automatically scans all HTTP endpoints during `make check` and CI to enforce that no character endpoint or request struct bypasses these authorization wrappers.
+
+## 4. Dependency Vulnerabilities
 Before introducing a new third-party dependency, verify its security posture and whether it introduces known vulnerabilities. Keep the dependency tree small to minimize attack surface.

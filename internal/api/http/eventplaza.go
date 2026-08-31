@@ -2,10 +2,11 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/eventplaza"
 )
 
@@ -95,38 +96,36 @@ func (h *Handler) handlePostEventPlazaMerchantPurchase(w http.ResponseWriter, r 
 		return
 	}
 
-	var req purchaseBazaarItemRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, errors.New("invalid request body"))
-		return
-	}
-
-	if req.Quantity <= 0 {
-		req.Quantity = 1
-	}
-
-	result, err := h.eventplaza.PurchaseBazaarItem(r.Context(), req.CharacterID, req.ItemID, req.Quantity)
-	if err != nil {
-		switch {
-		case errors.Is(err, eventplaza.ErrCharacterNotFound):
-			writeError(w, http.StatusNotFound, err)
-		case errors.Is(err, eventplaza.ErrItemNotFound):
-			writeError(w, http.StatusNotFound, err)
-		case errors.Is(err, eventplaza.ErrInsufficientGold):
-			writeError(w, http.StatusBadRequest, err)
-		case errors.Is(err, eventplaza.ErrItemTierLocked):
-			writeError(w, http.StatusBadRequest, err)
-		case errors.Is(err, eventplaza.ErrInvalidQuantity):
-			writeError(w, http.StatusBadRequest, err)
-		case errors.Is(err, eventplaza.ErrPriceOverflow):
-			writeError(w, http.StatusBadRequest, err)
-		default:
-			writeError(w, http.StatusInternalServerError, err)
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *purchaseBazaarItemRequest) string {
+		return req.CharacterID
+	}, func(_ coreplayer.Player, char corecharacter.Character, req purchaseBazaarItemRequest) {
+		if req.Quantity <= 0 {
+			req.Quantity = 1
 		}
-		return
-	}
 
-	writeJSON(w, http.StatusOK, result)
+		result, err := h.eventplaza.PurchaseBazaarItem(r.Context(), char.ID, req.ItemID, req.Quantity)
+		if err != nil {
+			switch {
+			case errors.Is(err, eventplaza.ErrCharacterNotFound):
+				writeError(w, http.StatusNotFound, err)
+			case errors.Is(err, eventplaza.ErrItemNotFound):
+				writeError(w, http.StatusNotFound, err)
+			case errors.Is(err, eventplaza.ErrInsufficientGold):
+				writeError(w, http.StatusBadRequest, err)
+			case errors.Is(err, eventplaza.ErrItemTierLocked):
+				writeError(w, http.StatusBadRequest, err)
+			case errors.Is(err, eventplaza.ErrInvalidQuantity):
+				writeError(w, http.StatusBadRequest, err)
+			case errors.Is(err, eventplaza.ErrPriceOverflow):
+				writeError(w, http.StatusBadRequest, err)
+			default:
+				writeError(w, http.StatusInternalServerError, err)
+			}
+			return
+		}
+
+		writeJSON(w, http.StatusOK, result)
+	})
 }
 
 func (h *Handler) handleGetEventPlazaBanquets(w http.ResponseWriter, r *http.Request) {
@@ -163,28 +162,26 @@ func (h *Handler) handlePostEventPlazaBanquetToast(w http.ResponseWriter, r *htt
 		return
 	}
 
-	var req toastBanquetRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, errors.New("invalid request body"))
-		return
-	}
-
-	result, err := h.eventplaza.ToastBanquet(r.Context(), banquetID, req.CharacterID)
-	if err != nil {
-		switch {
-		case errors.Is(err, eventplaza.ErrBanquetNotFound):
-			writeError(w, http.StatusNotFound, err)
-		case errors.Is(err, eventplaza.ErrCharacterNotFound):
-			writeError(w, http.StatusNotFound, err)
-		case errors.Is(err, eventplaza.ErrAlreadyToasted):
-			writeError(w, http.StatusConflict, err)
-		case errors.Is(err, eventplaza.ErrBanquetExpired):
-			writeError(w, http.StatusGone, err)
-		default:
-			writeError(w, http.StatusInternalServerError, err)
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *toastBanquetRequest) string {
+		return req.CharacterID
+	}, func(_ coreplayer.Player, char corecharacter.Character, req toastBanquetRequest) {
+		result, err := h.eventplaza.ToastBanquet(r.Context(), banquetID, char.ID)
+		if err != nil {
+			switch {
+			case errors.Is(err, eventplaza.ErrBanquetNotFound):
+				writeError(w, http.StatusNotFound, err)
+			case errors.Is(err, eventplaza.ErrCharacterNotFound):
+				writeError(w, http.StatusNotFound, err)
+			case errors.Is(err, eventplaza.ErrAlreadyToasted):
+				writeError(w, http.StatusConflict, err)
+			case errors.Is(err, eventplaza.ErrBanquetExpired):
+				writeError(w, http.StatusGone, err)
+			default:
+				writeError(w, http.StatusInternalServerError, err)
+			}
+			return
 		}
-		return
-	}
 
-	writeJSON(w, http.StatusOK, result)
+		writeJSON(w, http.StatusOK, result)
+	})
 }
