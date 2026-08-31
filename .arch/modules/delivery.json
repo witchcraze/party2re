@@ -82,12 +82,12 @@
       "tx_mode": "RunInTx",
       "source_ref": "internal/delivery/delivery.go#Service.ClaimParcel",
       "lock_sequence": [
-        { "step": 1, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.GetParcelByID", "mode": "SELECT (Ownership & Status Validation)" },
-        { "step": 2, "target": "characters (recipient)", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE (Conditional on Gold Amount > 0)", "optional": true },
-        { "step": 3, "target": "characters", "method": "CharacterRepository.Update", "mode": "UPDATE (Credit Gold)", "optional": true },
-        { "step": 4, "target": "inventory_items (recipient)", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE (Conditional on Item Attached)", "optional": true },
+        { "step": 1, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.GetParcelByIDForUpdate", "mode": "SELECT ... FOR UPDATE (Ownership & Status Validation)" },
+        { "step": 2, "target": "characters (recipient)", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 3, "target": "inventory_items (recipient)", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 4, "target": "characters", "method": "CharacterRepository.Update", "mode": "UPDATE (Credit Gold)", "optional": true },
         { "step": 5, "target": "inventory_items", "method": "InventoryRepository.Save", "mode": "INSERT / UPDATE", "optional": true },
-        { "step": 6, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.UpdateParcel", "mode": "UPDATE (Mark Claimed)" }
+        { "step": 6, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.UpdateParcel", "mode": "UPDATE (Mark Claimed, CAS: WHERE status = 'pending')" }
       ]
     },
     {
@@ -95,12 +95,12 @@
       "tx_mode": "RunInTx",
       "source_ref": "internal/delivery/delivery.go#Service.CancelParcel",
       "lock_sequence": [
-        { "step": 1, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.GetParcelByID", "mode": "SELECT (Ownership & Status Check)" },
-        { "step": 2, "target": "characters (sender)", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE (Conditional on Gold Amount > 0)", "optional": true },
-        { "step": 3, "target": "characters", "method": "CharacterRepository.Update", "mode": "UPDATE (Conditional Refund)", "optional": true },
-        { "step": 4, "target": "inventory_items (sender)", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE (Conditional on Item Attached)", "optional": true },
+        { "step": 1, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.GetParcelByIDForUpdate", "mode": "SELECT ... FOR UPDATE (Ownership & Status Check)" },
+        { "step": 2, "target": "characters (sender)", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 3, "target": "inventory_items (sender)", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 4, "target": "characters", "method": "CharacterRepository.Update", "mode": "UPDATE (Conditional Refund)", "optional": true },
         { "step": 5, "target": "inventory_items", "method": "InventoryRepository.Save", "mode": "INSERT / UPDATE", "optional": true },
-        { "step": 6, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.UpdateParcel", "mode": "UPDATE (Mark Cancelled)" }
+        { "step": 6, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.UpdateParcel", "mode": "UPDATE (Mark Cancelled, CAS: WHERE status = 'pending')" }
       ]
     }
   ]

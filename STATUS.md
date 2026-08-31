@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #294 — Design and Implement Reverse Fan-in Index for Shared DB Tables
+Last updated: Issue #302 — Eliminate Concurrent Delivery Parcel Claim and Cancellation Race Condition
 
 ## Current phase
 
@@ -67,7 +67,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Secret Underground Shop & NPC @ヒミツジ** (`internal/secretshop`): 秘密の店・羊NPC @ヒミツジ（資格判定 Lv15以上または転生者、希少消費アイテム・アクセサリカタログ `secret_items.json`、3倍価格プレミアム設定、手助け依頼アイテム除外フィルタ連携、並行性安全なアトミック購入トランザクション、NPC羊会話・詳細情報・@ぱふぱふサービスと微小回復 HP+10/MP+5）。
 - **Adventurer's Tavern, Menu Orders, Delivery Reservations & NPC @エレナ** (`internal/tavern`): 冒険者の酒場・看板娘NPC @エレナ（14種飲食メニューカタログ `menu.json`、HP/MP回復＆満腹度管理、購入時福引券ボーナス付与、冒険後自動回復用デリバリー予約・受取・キャンセル機能、NPC会話、MariaDB永続化）。
 - **Town Black Market, Contraband Trading, Dynamic Pricing & NPC @ヤミジ** (`internal/blackmarket`): 裏路地の闇市・闇ブローカーNPC @ヤミジ（資格判定 Lv10以上、10種禁制品アイテムカタログ `blackmarket_items.json`、4種ダイナミック市場相場状態 `Quiet`, `HotDemand`, `Crackdown`, `Bargain` と価格・買取倍率補正、1日購入制限クォータ、並行性安全なアトミック購入・売却トランザクション、NPC会話・相場噂話情報、MariaDB永続化）。
-- **Town Delivery Quests & Player Courier Service** (`internal/delivery`): 町のでりばりー依頼＆プレイヤー間宅配便（薬草・ポーション・装備等のNPC配送依頼、最大3件同時受領、インベントリ消費・ゴールド/EXP/アイテム報酬アトミック精算、およびプレイヤー間アイテム/ゴールド宅配便、50 G手数料、受取・発送キャンセル/返金、MariaDB永続化）。
+- **Town Delivery Quests & Player Courier Service** (`internal/delivery`): 町のでりばりー依頼＆プレイヤー間宅配便（薬草・ポーション・装備等のNPC配送依頼、最大3件同時受領、インベントリ消費・ゴールド/EXP/アイテム報酬アトミック精算、およびプレイヤー間アイテム/ゴールド宅配便、50 G手数料、受取・発送キャンセル/返金、`GetParcelByIDForUpdate` および CAS 条件付きステータス更新 `WHERE id = ? AND status = 'pending'` による受取/キャンセル並行実行時の二重支払い・複製レースコンディション完全防止、MariaDB永続化）。
 
 ### API & Transport
 - **Server Entrypoint & Lifecycle Orchestration** (`cmd/party2`): MariaDB・Valkey・全ドメインリポジトリおよびサービス・スケジューリングWorker・HTTP APIルーター（全27種Option）の統合初期化、`ADDR` / `PORT` 環境変数解決（デフォルト `:8080`）、GoroutineベースのHTTPサーバー＆Worker実行、OSシグナル（`SIGINT`, `SIGTERM`）受信時のタイムアウト付きGraceful Shutdown（`http.Server.Shutdown(ctx)`、Worker Contextキャンセル待機、DB/Valkeyリソース安全開放）、起動・停止のJSON構造化ログ。

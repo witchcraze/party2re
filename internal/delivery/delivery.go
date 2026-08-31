@@ -158,6 +158,7 @@ type DeliveryRepository interface {
 	UpdateCharacterDelivery(ctx context.Context, d *CharacterDelivery) error
 	SaveParcel(ctx context.Context, p *Parcel) error
 	GetParcelByID(ctx context.Context, id string) (*Parcel, error)
+	GetParcelByIDForUpdate(ctx context.Context, id string) (*Parcel, error)
 	GetIncomingParcels(ctx context.Context, recipientCharacterID string) ([]Parcel, error)
 	GetSentParcels(ctx context.Context, senderCharacterID string) ([]Parcel, error)
 	UpdateParcel(ctx context.Context, p *Parcel) error
@@ -798,16 +799,10 @@ func (s *Service) ClaimParcel(
 	var result *ParcelClaimResult
 
 	action := func(txCtx context.Context) error {
-		// 1. Fetch recipient with lock
-		recipient, err := s.charRepo.FindByIDForUpdate(txCtx, recipientID)
+		// 1. Fetch parcel with pessimistic lock (Tier 8) and check status & ownership FIRST
+		parcel, err := s.repo.GetParcelByIDForUpdate(txCtx, parcelID)
 		if err != nil {
-			return ErrCharacterNotFound
-		}
-
-		// 2. Fetch parcel and check status & ownership
-		parcel, err := s.repo.GetParcelByID(txCtx, parcelID)
-		if err != nil {
-			return ErrParcelNotFound
+			return err
 		}
 		if parcel.RecipientCharacterID != recipientID {
 			return ErrForbidden
@@ -816,7 +811,19 @@ func (s *Service) ClaimParcel(
 			return ErrParcelAlreadyClaimed
 		}
 
-		// 3. Credit Gold
+		// 2. Fetch recipient with lock (Tier 2)
+		recipient, err := s.charRepo.FindByIDForUpdate(txCtx, recipientID)
+		if err != nil {
+			return ErrCharacterNotFound
+		}
+
+		// 3. Fetch recipient inventory with lock (Tier 3)
+		inv, err := s.invRepo.FindByCharacterIDForUpdate(txCtx, recipientID)
+		if err != nil {
+			return err
+		}
+
+		// 4. Credit Gold
 		if parcel.GoldAmount > 0 {
 			if recipient.Money > 2000000000-parcel.GoldAmount {
 				recipient.Money = 2000000000
@@ -828,12 +835,8 @@ func (s *Service) ClaimParcel(
 			}
 		}
 
-		// 4. Add item if present
+		// 5. Add item if present
 		if parcel.ItemID != "" && parcel.ItemQuantity > 0 {
-			inv, err := s.invRepo.FindByCharacterIDForUpdate(txCtx, recipientID)
-			if err != nil {
-				return err
-			}
 			inst, err := coreitem.NewInstance(parcel.ItemID, parcel.ItemQuantity)
 			if err != nil {
 				return err
@@ -846,7 +849,7 @@ func (s *Service) ClaimParcel(
 			}
 		}
 
-		// 5. Update parcel status
+		// 6. Update parcel status with CAS guard
 		parcel.Status = ParcelStatusClaimed
 		parcel.ClaimedAt = &now
 		if err := s.repo.UpdateParcel(txCtx, parcel); err != nil {
@@ -886,10 +889,10 @@ func (s *Service) CancelParcel(ctx context.Context, senderID string, parcelID st
 	}
 
 	action := func(txCtx context.Context) error {
-		// 1. Fetch parcel and check status & sender
-		parcel, err := s.repo.GetParcelByID(txCtx, parcelID)
+		// 1. Lock parcel with pessimistic lock (Tier 8) and check status & sender ownership FIRST
+		parcel, err := s.repo.GetParcelByIDForUpdate(txCtx, parcelID)
 		if err != nil {
-			return ErrParcelNotFound
+			return err
 		}
 		if parcel.SenderCharacterID != senderID {
 			return ErrForbidden
@@ -898,24 +901,28 @@ func (s *Service) CancelParcel(ctx context.Context, senderID string, parcelID st
 			return ErrParcelAlreadyClaimed
 		}
 
-		// 2. Return gold payload (fee is non-refundable)
+		// 2. Lock sender character (Tier 2)
+		sender, err := s.charRepo.FindByIDForUpdate(txCtx, senderID)
+		if err != nil {
+			return ErrCharacterNotFound
+		}
+
+		// 3. Lock sender inventory (Tier 3)
+		inv, err := s.invRepo.FindByCharacterIDForUpdate(txCtx, senderID)
+		if err != nil {
+			return err
+		}
+
+		// 4. Return gold payload (fee is non-refundable)
 		if parcel.GoldAmount > 0 {
-			sender, err := s.charRepo.FindByIDForUpdate(txCtx, senderID)
-			if err != nil {
-				return ErrCharacterNotFound
-			}
 			sender.Money += parcel.GoldAmount
 			if err := s.charRepo.Update(txCtx, sender); err != nil {
 				return err
 			}
 		}
 
-		// 3. Return item if present
+		// 5. Return item if present
 		if parcel.ItemID != "" && parcel.ItemQuantity > 0 {
-			inv, err := s.invRepo.FindByCharacterIDForUpdate(txCtx, senderID)
-			if err != nil {
-				return err
-			}
 			inst, err := coreitem.NewInstance(parcel.ItemID, parcel.ItemQuantity)
 			if err != nil {
 				return err
@@ -928,6 +935,7 @@ func (s *Service) CancelParcel(ctx context.Context, senderID string, parcelID st
 			}
 		}
 
+		// 6. Update parcel status with CAS guard
 		parcel.Status = ParcelStatusCancelled
 		return s.repo.UpdateParcel(txCtx, parcel)
 	}
