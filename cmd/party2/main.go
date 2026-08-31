@@ -39,6 +39,7 @@ import (
 	"github.com/witchcraze/party2re/internal/eventplaza"
 	"github.com/witchcraze/party2re/internal/farm"
 	"github.com/witchcraze/party2re/internal/fleamarket"
+	"github.com/witchcraze/party2re/internal/gemstore"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/helper"
@@ -458,6 +459,21 @@ func run(ctx context.Context, logger logging.Logger) error {
 		return err
 	}
 
+	gemCatalog, err := gemstore.DefaultCatalog()
+	if err != nil {
+		return err
+	}
+	gemStoreService, err := gemstore.NewService(
+		gemCatalog,
+		charRepo,
+		invRepo,
+		gemstore.WithItemDefinitionProvider(itemCatalog),
+		gemstore.WithTransactionProvider(txProvider),
+	)
+	if err != nil {
+		return err
+	}
+
 	activityRepo, err := database.NewActivityRepository(db)
 	if err != nil {
 		return err
@@ -557,6 +573,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 		http.WithBlackMarket(blackmarketService),
 		http.WithDelivery(deliveryService),
 		http.WithFleaMarket(fleamarketService),
+		http.WithGemStore(gemStoreService),
 	}
 
 	apiHandler, err := http.NewHandler(playerService, charService, advService, shopService, opts...)

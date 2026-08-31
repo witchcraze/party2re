@@ -198,6 +198,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#142](https://github.com/witchcraze/party2re/issues/142) | Town Black Market, contraband trading, dynamic pricing, and NPC @ヤミジ | Merged |
 | [#195](https://github.com/witchcraze/party2re/issues/195) | Town item delivery quests and player-to-player parcel courier service | Merged |
 | [#194](https://github.com/witchcraze/party2re/issues/194) | Flea Market player-to-player item stalls and direct exchange | Merged |
+| [#72](https://github.com/witchcraze/party2re/issues/72) | Gem Store, jewel synthesis, gem transfer, and orb appraisal | Merged |
 
 ---
 

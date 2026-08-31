@@ -11,7 +11,8 @@
     "internal/delivery/delivery.go#CharacterRepository",
     "internal/adventure/adventure.go#CharacterRepository",
     "internal/blackmarket/blackmarket.go#CharacterRepository",
-    "internal/fleamarket/fleamarket.go#CharacterRepository"
+    "internal/fleamarket/fleamarket.go#CharacterRepository",
+    "internal/gemstore/gemstore.go#CharacterRepository"
   ],
   "callers": [
     {
@@ -181,6 +182,41 @@
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
       "lock_order": 2,
       "purpose": "Lock buyer and seller characters in ascending ID order to transfer gold"
+    },
+    {
+      "module": "gemstore",
+      "caller_method": "internal/gemstore/gemstore.go#Service.BuyGem",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock character wallet and verify funds"
+    },
+    {
+      "module": "gemstore",
+      "caller_method": "internal/gemstore/gemstore.go#Service.SellGem",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock character wallet"
+    },
+    {
+      "module": "gemstore",
+      "caller_method": "internal/gemstore/gemstore.go#Service.SendGem",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock sender and recipient characters in ascending ID order"
+    },
+    {
+      "module": "gemstore",
+      "caller_method": "internal/gemstore/gemstore.go#Service.SynthesizeGem",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock character"
+    },
+    {
+      "module": "gemstore",
+      "caller_method": "internal/gemstore/gemstore.go#Service.AppraiseItem",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock character"
     }
   ]
 }

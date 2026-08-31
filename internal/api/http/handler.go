@@ -120,6 +120,7 @@ type Handler struct {
 	blackmarket    BlackMarketService
 	delivery       DeliveryService
 	fleamarket     FleaMarketService
+	gemstore       GemStoreService
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
 	allowedOrigins map[string]struct{}
@@ -456,6 +457,16 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/fleamarket/listings", h.handleCreateFleaMarketListing)
 	mux.HandleFunc("POST /characters/{id}/fleamarket/listings/{listing_id}/purchase", h.handlePurchaseFleaMarketListing)
 	mux.HandleFunc("DELETE /characters/{id}/fleamarket/listings/{listing_id}", h.handleCancelFleaMarketListing)
+
+	// Gem Store
+	mux.HandleFunc("GET /gemstore/catalog", h.handleGetGemStoreCatalog)
+	mux.HandleFunc("GET /gemstore/recipes", h.handleGetGemStoreRecipes)
+	mux.HandleFunc("GET /gemstore/dialogue", h.handleGetGemStoreDialogue)
+	mux.HandleFunc("POST /characters/{id}/gemstore/buy", h.handleGemStoreBuy)
+	mux.HandleFunc("POST /characters/{id}/gemstore/sell", h.handleGemStoreSell)
+	mux.HandleFunc("POST /characters/{id}/gemstore/send", h.handleGemStoreSend)
+	mux.HandleFunc("POST /characters/{id}/gemstore/synthesize", h.handleGemStoreSynthesize)
+	mux.HandleFunc("POST /characters/{id}/gemstore/appraise", h.handleGemStoreAppraise)
 
 	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(mux)))
 }
