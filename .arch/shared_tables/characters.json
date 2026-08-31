@@ -1,0 +1,142 @@
+{
+  "$schema": "https://archify.dev/schema/shared_table.v1.json",
+  "table": "characters",
+  "tier": 2,
+  "description": "Primary player character state, attributes, wallet money, and progression.",
+  "repository_implementation": "internal/database/character_repository.go#CharacterRepository",
+  "consumer_interfaces": [
+    "internal/shop/shop.go#CharacterRepository",
+    "internal/blacksmith/blacksmith.go#CharacterRepository",
+    "internal/tavern/tavern.go#CharacterRepository",
+    "internal/delivery/delivery.go#CharacterRepository",
+    "internal/adventure/adventure.go#CharacterRepository"
+  ],
+  "callers": [
+    {
+      "module": "shop",
+      "caller_method": "internal/shop/shop.go#Service.Purchase",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock character wallet and verify sufficient funds"
+    },
+    {
+      "module": "shop",
+      "caller_method": "internal/shop/shop.go#Service.Sell",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock character wallet"
+    },
+    {
+      "module": "bank",
+      "caller_method": "internal/database/bank_repository.go#BankRepository.Deposit",
+      "lock_mode": "UPDATE",
+      "lock_order": 2,
+      "purpose": "Deduct gold from character wallet"
+    },
+    {
+      "module": "bank",
+      "caller_method": "internal/database/bank_repository.go#BankRepository.Withdraw",
+      "lock_mode": "UPDATE",
+      "lock_order": 2,
+      "purpose": "Credit character wallet"
+    },
+    {
+      "module": "blacksmith",
+      "caller_method": "internal/blacksmith/blacksmith.go#Service.Enhance",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock character wallet and verify enhancement fee"
+    },
+    {
+      "module": "auction",
+      "caller_method": "internal/database/auction_repository.go#AuctionRepository.PlaceBid",
+      "lock_mode": "UPDATE",
+      "lock_order": 2,
+      "purpose": "Deduct bid amount from bidder wallet & refund previous highest bidder"
+    },
+    {
+      "module": "auction",
+      "caller_method": "internal/database/auction_repository.go#AuctionRepository.Buyout",
+      "lock_mode": "UPDATE",
+      "lock_order": 2,
+      "purpose": "Deduct buyout price from buyer & credit seller"
+    },
+    {
+      "module": "guild",
+      "caller_method": "internal/database/guild_repository.go#GuildRepository.CreateGuild",
+      "lock_mode": "UPDATE",
+      "lock_order": 2,
+      "purpose": "Deduct guild founding fee from founder wallet"
+    },
+    {
+      "module": "guild",
+      "caller_method": "internal/database/guild_repository.go#GuildRepository.Donate",
+      "lock_mode": "UPDATE",
+      "lock_order": 2,
+      "purpose": "Deduct donated gold from character wallet"
+    },
+    {
+      "module": "tavern",
+      "caller_method": "internal/tavern/tavern.go#Service.OrderMeal",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock character wallet and verify gold balance"
+    },
+    {
+      "module": "tavern",
+      "caller_method": "internal/tavern/tavern.go#Service.ClaimDelivery",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock character to restore HP/MP and update fullness"
+    },
+    {
+      "module": "delivery",
+      "caller_method": "internal/delivery/delivery.go#Service.AcceptQuest",
+      "lock_mode": "SELECT",
+      "lock_order": 2,
+      "purpose": "Verify character exists"
+    },
+    {
+      "module": "delivery",
+      "caller_method": "internal/delivery/delivery.go#Service.CompleteDelivery",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Credit gold reward and experience points"
+    },
+    {
+      "module": "delivery",
+      "caller_method": "internal/delivery/delivery.go#Service.SendParcel",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Deduct 50G courier fee and optional attached gold"
+    },
+    {
+      "module": "delivery",
+      "caller_method": "internal/delivery/delivery.go#Service.ClaimParcel",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Credit attached gold to recipient wallet (conditional on GoldAmount > 0)"
+    },
+    {
+      "module": "delivery",
+      "caller_method": "internal/delivery/delivery.go#Service.CancelParcel",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Refund attached gold to sender wallet (conditional on GoldAmount > 0)"
+    },
+    {
+      "module": "adventure",
+      "caller_method": "internal/adventure/adventure.go#Service.StartStage",
+      "lock_mode": "SELECT",
+      "lock_order": 2,
+      "purpose": "Verify character level requirement against stage min level"
+    },
+    {
+      "module": "adventure",
+      "caller_method": "internal/adventure/adventure.go#Service.Claim",
+      "lock_mode": "UPDATE",
+      "lock_order": 2,
+      "purpose": "Apply experience level-up and credit gold reward"
+    }
+  ]
+}

@@ -36,6 +36,23 @@ type TransactionBoundary struct {
 	TransactionType string `json:"transaction_type"`
 }
 
+type SharedTableDoc struct {
+	Table                    string   `json:"table"`
+	Tier                     int      `json:"tier"`
+	Description              string   `json:"description"`
+	RepositoryImplementation string   `json:"repository_implementation"`
+	ConsumerInterfaces       []string `json:"consumer_interfaces"`
+	Callers                  []Caller `json:"callers"`
+}
+
+type Caller struct {
+	Module       string `json:"module"`
+	CallerMethod string `json:"caller_method"`
+	LockMode     string `json:"lock_mode"`
+	LockOrder    int    `json:"lock_order"`
+	Purpose      string `json:"purpose"`
+}
+
 func TestArchitectureGuidanceSymbols(t *testing.T) {
 	// Locate repository root
 	repoRoot := "../.."
@@ -108,6 +125,64 @@ func TestArchitectureGuidanceSymbols(t *testing.T) {
 				if flow.TxMode == "RunInTx" && flow.SourceRef != "" {
 					verifyRunInTxBoundary(t, repoRoot, flow.SourceRef)
 				}
+			}
+		})
+	}
+}
+
+func TestArchitectureSharedTablesSymbols(t *testing.T) {
+	// Locate repository root
+	repoRoot := "../.."
+	sharedTablesDir := filepath.Join(repoRoot, ".arch", "shared_tables")
+
+	entries, err := os.ReadDir(sharedTablesDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			t.Skip(".arch/shared_tables does not exist")
+		}
+		t.Fatalf("failed to read .arch/shared_tables: %v", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+
+		filePath := filepath.Join(sharedTablesDir, entry.Name())
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", filePath, err)
+		}
+
+		var doc SharedTableDoc
+		if err := json.Unmarshal(data, &doc); err != nil {
+			t.Fatalf("invalid json in %s: %v", filePath, err)
+		}
+
+		t.Run(entry.Name(), func(t *testing.T) {
+			var refs []string
+			if doc.RepositoryImplementation != "" {
+				refs = append(refs, doc.RepositoryImplementation)
+			}
+			refs = append(refs, doc.ConsumerInterfaces...)
+			for _, caller := range doc.Callers {
+				if caller.CallerMethod != "" {
+					refs = append(refs, caller.CallerMethod)
+				}
+			}
+
+			for _, ref := range refs {
+				parts := strings.Split(ref, "#")
+				if len(parts) != 2 {
+					t.Errorf("invalid source_ref format %q (expected file.go#Symbol)", ref)
+					continue
+				}
+
+				targetRelPath := parts[0]
+				targetSymbol := parts[1]
+				targetFullPath := filepath.Join(repoRoot, targetRelPath)
+
+				verifySymbolExists(t, targetFullPath, targetSymbol)
 			}
 		})
 	}

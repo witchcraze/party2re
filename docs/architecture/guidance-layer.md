@@ -104,19 +104,47 @@ Based on the selection criteria above, all packages in `internal/` are triaged i
 
 ---
 
-## 5. Automated Mechanical Verification (Zero-Token Overhead)
+## 5. Reverse Fan-in Shared Table Index (.arch/shared_tables/)
 
-All `.arch` definitions are continuously protected against syntax errors, symbol renaming, and doc rot via Go AST testing:
+To assess the blast radius of modifying core database tables and verify global deadlock hierarchies across multiple feature callers without full-codebase grep scans, the Guidance Layer provides a **Reverse Fan-in Index**:
 
-1. **Go AST Symbol Linter** (`internal/architecture/arch_test.go`):
-   - Parses all `.arch/modules/*.json` files in **~0.02s** during standard `go test ./...` and `scripts/verify.sh` step `[4/7]`.
-   - Verifies that every interface name, struct method, and exported type linked via `source_ref` (`path#Symbol`) strictly exists in the Go source code.
-   - Requires zero external runtimes (pure Go standard library `go/parser` and `go/ast`).
+```text
+DB Table (e.g. characters)
+   │
+   ├── Repository Implementation: internal/database/character_repository.go#CharacterRepository
+   ├── Consumer Interfaces: [Shop, Blacksmith, Tavern, Delivery, Adventure]
+   └── Callers:
+         ├─ [Shop] Purchase / Sell (Lock order: 2, SELECT ... FOR UPDATE)
+         ├─ [Bank] Deposit / Withdraw (Lock order: 2, UPDATE)
+         ├─ [Blacksmith] Enhance (Lock order: 2, SELECT ... FOR UPDATE)
+         ├─ [Auction] PlaceBid / Buyout (Lock order: 2, UPDATE)
+         ├─ [Guild] CreateGuild / Donate (Lock order: 2, UPDATE)
+         ├─ [Tavern] OrderMeal / ClaimDelivery (Lock order: 2, SELECT ... FOR UPDATE)
+         ├─ [Delivery] CompleteDelivery / SendParcel / ClaimParcel / CancelParcel (Lock order: 2)
+         └─ [Adventure] StartStage (SELECT) / Claim (UPDATE)
+```
 
+### Shared Table Index Inventory
+- [characters.json](file:///home/witchcraze/dev/party2re/.arch/shared_tables/characters.json) (Tier 2, High Fan-in Character wallet, stats, progression)
+- [inventory_items.json](file:///home/witchcraze/dev/party2re/.arch/shared_tables/inventory_items.json) (Tier 3, Character item instance repository)
+- [bank_accounts.json](file:///home/witchcraze/dev/party2re/.arch/shared_tables/bank_accounts.json) (Tier 6, Player savings accounts)
+- [guilds.json](file:///home/witchcraze/dev/party2re/.arch/shared_tables/guilds.json) (Tier 7, Guild organization records)
 
 ---
 
-## 5. Continuous Governance & Evolution Process (Issue-Driven Architecture)
+## 6. Automated Mechanical Verification (Zero-Token Overhead)
+
+All `.arch` definitions (both module definitions and shared table reverse indices) are continuously protected against syntax errors, symbol renaming, and doc rot via Go AST testing:
+
+1. **Go AST Symbol & Transaction Linter** (`internal/architecture/arch_test.go`):
+   - Parses all `.arch/modules/*.json` and `.arch/shared_tables/*.json` files in **~0.05s** during standard `go test ./...` and `scripts/verify.sh` step `[4/7]`.
+   - Verifies that every interface name, struct method, consumer interface, caller method, and exported type linked via `source_ref` (`path#Symbol`) strictly exists in the Go source code.
+   - Verifies that all symbols declared with `transaction_type: "RunInTx"` or `tx_mode: "RunInTx"` physically contain `RunInTx` invocations in their AST function bodies.
+   - Requires zero external runtimes (pure Go standard library `go/parser` and `go/ast`).
+
+---
+
+## 7. Continuous Governance & Evolution Process (Issue-Driven Architecture)
 
 The Guidance Layer is designed as a living, evolvable system rather than a static artifact. New tiers, module re-classifications, and artifact types can be proposed and adopted through the standard GitHub Issue workflow:
 
@@ -126,7 +154,7 @@ The Guidance Layer is designed as a living, evolvable system rather than a stati
 - **Procedure**: Submit an Architecture Issue (`.github/ISSUE_TEMPLATE/architecture.md`) describing the transaction changes and requesting module definition creation/archival.
 
 ### B. Introducing New Artifact Types & Schemas
-- Future Guidance extensions (e.g. `shared_tables/*.json` for reverse Fan-in indexing, `workers/*.json` for delayed job state machines) follow the same RFC process:
+- Future Guidance extensions (e.g. `workers/*.json` for delayed job state machines) follow the same RFC process:
   1. Define schema and invariants.
   2. Extend AST / validator checks in `internal/architecture/arch_test.go`.
   3. Submit via an Architecture PR.

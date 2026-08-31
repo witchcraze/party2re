@@ -1,0 +1,78 @@
+{
+  "$schema": "https://archify.dev/schema/shared_table.v1.json",
+  "table": "inventory_items",
+  "tier": 3,
+  "description": "Character item inventory instances, quantities, enhancements, and slot states.",
+  "repository_implementation": "internal/database/inventory_repository.go#InventoryRepository",
+  "consumer_interfaces": [
+    "internal/shop/shop.go#InventoryRepository",
+    "internal/blacksmith/blacksmith.go#InventoryRepository",
+    "internal/delivery/delivery.go#InventoryRepository",
+    "internal/adventure/adventure.go#InventoryRepository"
+  ],
+  "callers": [
+    {
+      "module": "shop",
+      "caller_method": "internal/shop/shop.go#Service.Purchase",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+      "lock_order": 3,
+      "purpose": "Lock inventory to verify slot capacity and grant purchased item"
+    },
+    {
+      "module": "shop",
+      "caller_method": "internal/shop/shop.go#Service.Sell",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+      "lock_order": 3,
+      "purpose": "Lock inventory to verify item ownership and deduct sold item"
+    },
+    {
+      "module": "blacksmith",
+      "caller_method": "internal/blacksmith/blacksmith.go#Service.Enhance",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+      "lock_order": 3,
+      "purpose": "Lock inventory to consume enhancement materials and update equipment level"
+    },
+    {
+      "module": "auction",
+      "caller_method": "internal/database/auction_repository.go#AuctionRepository.Buyout",
+      "lock_mode": "INSERT",
+      "lock_order": 3,
+      "purpose": "Grant purchased item instance to buyer inventory"
+    },
+    {
+      "module": "delivery",
+      "caller_method": "internal/delivery/delivery.go#Service.CompleteDelivery",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+      "lock_order": 3,
+      "purpose": "Lock inventory and consume quest-required delivery items"
+    },
+    {
+      "module": "delivery",
+      "caller_method": "internal/delivery/delivery.go#Service.SendParcel",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+      "lock_order": 3,
+      "purpose": "Lock sender inventory and consume attached item instance"
+    },
+    {
+      "module": "delivery",
+      "caller_method": "internal/delivery/delivery.go#Service.ClaimParcel",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+      "lock_order": 3,
+      "purpose": "Lock recipient inventory and grant received parcel item instance"
+    },
+    {
+      "module": "delivery",
+      "caller_method": "internal/delivery/delivery.go#Service.CancelParcel",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+      "lock_order": 3,
+      "purpose": "Lock sender inventory and return cancelled parcel item instance"
+    },
+    {
+      "module": "adventure",
+      "caller_method": "internal/adventure/adventure.go#Service.Claim",
+      "lock_mode": "INSERT",
+      "lock_order": 3,
+      "purpose": "Add monster drop item to adventurer inventory"
+    }
+  ]
+}
