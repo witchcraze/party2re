@@ -15,11 +15,62 @@ import (
 )
 
 type stubBlackMarketService struct {
-	getStatusFn    func(ctx context.Context, characterID string, now time.Time) (*blackmarket.ShopStatus, error)
-	purchaseItemFn func(ctx context.Context, characterID string, itemID string, quantity int, now time.Time) (*blackmarket.PurchaseResult, error)
-	sellItemFn     func(ctx context.Context, characterID string, itemInstanceID string, quantity int, now time.Time) (*blackmarket.SaleResult, error)
-	talkFn         func(ctx context.Context, characterID string) (*blackmarket.TalkResult, error)
-	rumorsFn       func(ctx context.Context, characterID string, now time.Time) (*blackmarket.RumorsResult, error)
+	getStatusFn       func(ctx context.Context, characterID string, now time.Time) (*blackmarket.ShopStatus, error)
+	purchaseItemFn    func(ctx context.Context, characterID string, itemID string, quantity int, now time.Time) (*blackmarket.PurchaseResult, error)
+	sellItemFn        func(ctx context.Context, characterID string, itemInstanceID string, quantity int, now time.Time) (*blackmarket.SaleResult, error)
+	talkFn            func(ctx context.Context, characterID string) (*blackmarket.TalkResult, error)
+	rumorsFn          func(ctx context.Context, characterID string, now time.Time) (*blackmarket.RumorsResult, error)
+	getPointsStatusFn func(ctx context.Context, characterID string) (*blackmarket.PointsStatus, error)
+	sacrificeItemFn   func(ctx context.Context, characterID string, itemInstanceID string) (*blackmarket.SacrificeResult, error)
+	tradePrizeFn      func(ctx context.Context, characterID string, prizeID string) (*blackmarket.TradeResult, error)
+}
+
+func (s *stubBlackMarketService) GetPointsStatus(ctx context.Context, characterID string) (*blackmarket.PointsStatus, error) {
+	if s.getPointsStatusFn != nil {
+		return s.getPointsStatusFn(ctx, characterID)
+	}
+	return &blackmarket.PointsStatus{
+		CharacterID: characterID,
+		RarePoints:  10,
+		URarePoints: 2,
+		Prizes:      []blackmarket.Prize{},
+		UPrizes:     []blackmarket.Prize{},
+	}, nil
+}
+
+func (s *stubBlackMarketService) SacrificeItem(ctx context.Context, characterID string, itemInstanceID string) (*blackmarket.SacrificeResult, error) {
+	if s.sacrificeItemFn != nil {
+		return s.sacrificeItemFn(ctx, characterID, itemInstanceID)
+	}
+	return &blackmarket.SacrificeResult{
+		CharacterID:       characterID,
+		ItemInstanceID:    itemInstanceID,
+		ItemDefinitionID:  "weapon-29",
+		ItemName:          "はやぶさの剣",
+		RarePointsGained:  1,
+		URarePointsGained: 0,
+		TotalRarePoints:   11,
+		TotalURarePoints:  2,
+		Message:           "…レアだな…。いいだろう…。お前のレアポイントを加算しておこう…",
+	}, nil
+}
+
+func (s *stubBlackMarketService) TradePrize(ctx context.Context, characterID string, prizeID string) (*blackmarket.TradeResult, error) {
+	if s.tradePrizeFn != nil {
+		return s.tradePrizeFn(ctx, characterID, prizeID)
+	}
+	return &blackmarket.TradeResult{
+		CharacterID:         characterID,
+		PrizeID:             prizeID,
+		ItemDefinitionID:    "item-087",
+		ItemName:            "まほうのそろばん",
+		InventoryInstanceID: "inst-prize-1",
+		Cost:                1,
+		IsURare:             false,
+		RemainingRare:       9,
+		RemainingURare:      2,
+		Message:             "取引成立だ…。まほうのそろばん を受け取った…",
+	}, nil
 }
 
 func (s *stubBlackMarketService) GetStatus(ctx context.Context, characterID string, now time.Time) (*blackmarket.ShopStatus, error) {
@@ -231,6 +282,109 @@ func TestBlackMarketEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusForbidden {
 			t.Fatalf("expected status 403, got %d", rec.Code)
+		}
+	})
+
+	t.Run("Points_Success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/characters/c1/blackmarket/points", nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "rare_points") {
+			t.Errorf("expected rare_points in points response, got: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("Sacrifice_Success", func(t *testing.T) {
+		body := `{"item_instance_id":"inst-rare-1"}`
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/blackmarket/sacrifice", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "rare_points_gained") {
+			t.Errorf("expected rare_points_gained in sacrifice response, got: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("Trade_Success", func(t *testing.T) {
+		body := `{"prize_id":"bm_prize_087"}`
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/blackmarket/trade", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "prize_id") {
+			t.Errorf("expected prize_id in trade response, got: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("Sacrifice_Ineligible_Error", func(t *testing.T) {
+		bmErrService := &stubBlackMarketService{
+			sacrificeItemFn: func(_ context.Context, _ string, _ string) (*blackmarket.SacrificeResult, error) {
+				return nil, blackmarket.ErrNotSacrificeEligible
+			},
+		}
+		hErr := newTestHandler(
+			t,
+			pService,
+			cService,
+			&stubAdventureService{},
+			&stubShopService{},
+			apihttp.WithBlackMarket(bmErrService),
+		)
+		errRouter := hErr.Router()
+
+		body := `{"item_instance_id":"inst-common"}`
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/blackmarket/sacrifice", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+
+		errRouter.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("Trade_InsufficientPoints_Error", func(t *testing.T) {
+		bmErrService := &stubBlackMarketService{
+			tradePrizeFn: func(_ context.Context, _ string, _ string) (*blackmarket.TradeResult, error) {
+				return nil, blackmarket.ErrInsufficientRarePoints
+			},
+		}
+		hErr := newTestHandler(
+			t,
+			pService,
+			cService,
+			&stubAdventureService{},
+			&stubShopService{},
+			apihttp.WithBlackMarket(bmErrService),
+		)
+		errRouter := hErr.Router()
+
+		body := `{"prize_id":"bm_prize_207"}`
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/blackmarket/trade", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+
+		errRouter.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 }

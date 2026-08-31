@@ -9,7 +9,8 @@
     "internal/blacksmith/blacksmith.go#CharacterRepository",
     "internal/tavern/tavern.go#CharacterRepository",
     "internal/delivery/delivery.go#CharacterRepository",
-    "internal/adventure/adventure.go#CharacterRepository"
+    "internal/adventure/adventure.go#CharacterRepository",
+    "internal/blackmarket/blackmarket.go#CharacterRepository"
   ],
   "callers": [
     {
@@ -137,6 +138,34 @@
       "lock_mode": "UPDATE",
       "lock_order": 2,
       "purpose": "Apply experience level-up and credit gold reward"
+    },
+    {
+      "module": "blackmarket",
+      "caller_method": "internal/blackmarket/blackmarket.go#Service.PurchaseItem",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock character wallet and verify eligibility & funds"
+    },
+    {
+      "module": "blackmarket",
+      "caller_method": "internal/blackmarket/blackmarket.go#Service.SellItem",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock character wallet and verify eligibility"
+    },
+    {
+      "module": "blackmarket",
+      "caller_method": "internal/blackmarket/blackmarket.go#Service.SacrificeItem",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock character and verify eligibility"
+    },
+    {
+      "module": "blackmarket",
+      "caller_method": "internal/blackmarket/blackmarket.go#Service.TradePrize",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock character and verify eligibility"
     }
   ]
 }

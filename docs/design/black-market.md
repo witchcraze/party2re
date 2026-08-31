@@ -90,29 +90,57 @@ The market operates under 4 dynamic market conditions reflecting town patrol ale
 
 ---
 
+### 7. Rare Point & U-Rare Point Sacrifice System (`SacrificeItem` / `@ささげる`)
+
+- **Sacrifice Eligibility**: Characters can sacrifice eligible rare weapons, armors, and consumables to earn prestige trade points:
+  - **Regular Rare Items** (e.g. `weapon-29`〜`weapon-40`, `armor-35`〜`armor-40`, `item-028`〜`item-109`): Yields **+1 Rare Point**.
+  - **Ultra-Rare Artifacts** (e.g. `item-263`〜`item-268`): Yields **+1 to +50 U-Rare Points**.
+  - **Ineligible Items**: Non-rare items are rejected (`ErrNotSacrificeEligible` / HTTP 400).
+- **Atomic Consumption**: Deducts 1 unit of the item instance from inventory (`inv.Consume`) and atomically increments points in `blackmarket_character_points` inside a pessimistic transaction boundary (`RunInTx`).
+
+---
+
+### 8. Exclusive Prize Trade Exchange (`TradePrize` / `@とりひき`)
+
+- **Prize Redemption**: Accumulated points can be exchanged for exclusive weapons, armor, accessories, and consumables in two catalogs:
+  - **Regular Rare Prizes** (e.g. `まほうのそろばん`, `ほのおのツメ`, `氷/炎/風神/ドラゴン/水鏡/オーガの盾`, `ちから/はやて/いのりの指輪`, `メタルキングの剣`): Costs **1 to 10 Rare Points**.
+  - **Ultra-Rare Prizes** (e.g. `きせきのつるぎ`, `ふしぎなボレロ`, `しあわせのくつ`, `はかいのつるぎ`, `あくまのよろい`, `しにがみのたて`, `ほしふる/ごうけつのうでわ`, `おうごんのティアラ`, `メタルキングの鎧/盾`, `やまびこのぼうし`): Costs **5 to 20 U-Rare Points**.
+- **Point Verification & Delivery**: Verifies sufficient point balance, deducts cost, and creates/deposits the prize item instance directly into the character's inventory inside the transaction boundary.
+
+---
+
 ## Persistence Architecture
 
-### MariaDB Schema (`migrations/040_blackmarket.sql`)
+### MariaDB Schemas
 
 ```sql
+-- Contraband Quotas and State (040_blackmarket.sql)
 CREATE TABLE IF NOT EXISTS blackmarket_character_purchases (
     character_id VARCHAR(64) NOT NULL,
     item_id VARCHAR(64) NOT NULL,
     purchase_date DATE NOT NULL,
     quantity INT NOT NULL DEFAULT 0,
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (character_id, item_id, purchase_date),
-    INDEX idx_bm_purchases_char_date (character_id, purchase_date)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    INDEX idx_char_date (character_id, purchase_date)
+);
 
 CREATE TABLE IF NOT EXISTS blackmarket_market_state (
-    id TINYINT UNSIGNED NOT NULL DEFAULT 1,
+    id INT PRIMARY KEY DEFAULT 1,
     condition_name VARCHAR(32) NOT NULL DEFAULT 'Quiet',
-    price_multiplier DECIMAL(4, 2) NOT NULL DEFAULT 1.00,
-    sell_multiplier DECIMAL(4, 2) NOT NULL DEFAULT 1.00,
+    price_multiplier DECIMAL(5,2) NOT NULL DEFAULT 1.00,
+    sell_multiplier DECIMAL(5,2) NOT NULL DEFAULT 1.00,
     risk_level VARCHAR(16) NOT NULL DEFAULT 'Low',
-    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-    PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Rare Point Sacrifice & Prize Trade Points (042_blackmarket_sacrifice_and_trade.sql)
+CREATE TABLE IF NOT EXISTS blackmarket_character_points (
+    character_id CHAR(32) NOT NULL PRIMARY KEY,
+    rare_points INT NOT NULL DEFAULT 0,
+    u_rare_points INT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_blackmarket_points_character FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
+);
 ```

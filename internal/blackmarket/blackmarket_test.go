@@ -65,11 +65,13 @@ func (m *mockInventoryRepo) Save(_ context.Context, value coreinventory.Inventor
 type mockBlackMarketRepo struct {
 	purchases map[string]map[string]int // charID+dateKey -> itemID -> quantity
 	state     *blackmarket.MarketState
+	points    map[string]blackmarket.CharacterPoints
 }
 
 func newMockBlackMarketRepo() *mockBlackMarketRepo {
 	return &mockBlackMarketRepo{
 		purchases: make(map[string]map[string]int),
+		points:    make(map[string]blackmarket.CharacterPoints),
 	}
 }
 
@@ -108,6 +110,22 @@ func (m *mockBlackMarketRepo) GetMarketState(_ context.Context) (blackmarket.Mar
 
 func (m *mockBlackMarketRepo) SaveMarketState(_ context.Context, state blackmarket.MarketState) error {
 	m.state = &state
+	return nil
+}
+
+func (m *mockBlackMarketRepo) GetCharacterPoints(_ context.Context, characterID string) (blackmarket.CharacterPoints, error) {
+	if pts, ok := m.points[characterID]; ok {
+		return pts, nil
+	}
+	return blackmarket.CharacterPoints{CharacterID: characterID, RarePoints: 0, URarePoints: 0}, nil
+}
+
+func (m *mockBlackMarketRepo) GetCharacterPointsForUpdate(ctx context.Context, characterID string) (blackmarket.CharacterPoints, error) {
+	return m.GetCharacterPoints(ctx, characterID)
+}
+
+func (m *mockBlackMarketRepo) SaveCharacterPoints(_ context.Context, points blackmarket.CharacterPoints) error {
+	m.points[points.CharacterID] = points
 	return nil
 }
 
@@ -427,5 +445,134 @@ func TestSellItem(t *testing.T) {
 	_, err = svc.SellItem(ctx, "char-seller", inst.ID, 10, now)
 	if err != blackmarket.ErrInvalidQuantity {
 		t.Errorf("expected ErrInvalidQuantity, got %v", err)
+	}
+}
+
+func TestBlackMarketPoints_StatusAndSacrificeAndTrade(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharacterRepo()
+	invRepo := newMockInventoryRepo()
+	bmRepo := newMockBlackMarketRepo()
+	catalog, err := blackmarket.LoadDefaultCatalog()
+	if err != nil {
+		t.Fatalf("failed to load default catalog: %v", err)
+	}
+	itemDefs := newMockItemDefProvider()
+	itemDefs.defs["weapon-29"] = coreitem.Definition{ID: "weapon-29", Name: "はやぶさの剣"}
+	itemDefs.defs["item-263"] = coreitem.Definition{ID: "item-263", Name: "オリハルコン"}
+	itemDefs.defs["item-001"] = coreitem.Definition{ID: "item-001", Name: "薬草"}
+
+	svc, err := blackmarket.NewService(
+		charRepo,
+		invRepo,
+		bmRepo,
+		catalog,
+		blackmarket.WithItemDefinitionProvider(itemDefs),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	char := corecharacter.Character{
+		ID:    "char-rare-hero",
+		Name:  "Rare Hero",
+		Level: 15,
+		Money: 1000,
+	}
+	_ = charRepo.Update(ctx, char)
+
+	// 1. Initial Points Status
+	status, err := svc.GetPointsStatus(ctx, "char-rare-hero")
+	if err != nil {
+		t.Fatalf("unexpected GetPointsStatus error: %v", err)
+	}
+	if status.RarePoints != 0 || status.URarePoints != 0 {
+		t.Errorf("expected 0 points initially, got Rare=%d URare=%d", status.RarePoints, status.URarePoints)
+	}
+	if len(status.Prizes) == 0 || len(status.UPrizes) == 0 {
+		t.Errorf("expected prize catalogs to be populated, got Prizes=%d UPrizes=%d", len(status.Prizes), len(status.UPrizes))
+	}
+
+	// 2. Sacrifice Regular Rare Item (weapon-29 -> 1 Rare Point)
+	inv, _ := invRepo.FindByCharacterID(ctx, "char-rare-hero")
+	instWeapon, _ := coreitem.NewInstance("weapon-29", 1)
+	_ = inv.Add(instWeapon)
+	_ = invRepo.Save(ctx, inv)
+
+	sacRes, err := svc.SacrificeItem(ctx, "char-rare-hero", instWeapon.ID)
+	if err != nil {
+		t.Fatalf("unexpected SacrificeItem error: %v", err)
+	}
+	if sacRes.RarePointsGained != 1 || sacRes.TotalRarePoints != 1 {
+		t.Errorf("expected 1 rare point, got gained=%d total=%d", sacRes.RarePointsGained, sacRes.TotalRarePoints)
+	}
+
+	// Verify item was consumed from inventory
+	updatedInv, _ := invRepo.FindByCharacterID(ctx, "char-rare-hero")
+	if _, found := updatedInv.Find(instWeapon.ID); found {
+		t.Errorf("expected weapon to be consumed from inventory")
+	}
+
+	// 3. Sacrifice Ultra-Rare Item (item-263 -> 1 U-Rare Point)
+	instURare, _ := coreitem.NewInstance("item-263", 1)
+	_ = updatedInv.Add(instURare)
+	_ = invRepo.Save(ctx, updatedInv)
+
+	sacURes, err := svc.SacrificeItem(ctx, "char-rare-hero", instURare.ID)
+	if err != nil {
+		t.Fatalf("unexpected SacrificeItem URare error: %v", err)
+	}
+	if sacURes.URarePointsGained != 1 || sacURes.TotalURarePoints != 1 {
+		t.Errorf("expected 1 u-rare point, got gained=%d total=%d", sacURes.URarePointsGained, sacURes.TotalURarePoints)
+	}
+
+	// 4. Sacrifice Ineligible Item (item-001)
+	instCommon, _ := coreitem.NewInstance("item-001", 1)
+	updatedInv, _ = invRepo.FindByCharacterID(ctx, "char-rare-hero")
+	_ = updatedInv.Add(instCommon)
+	_ = invRepo.Save(ctx, updatedInv)
+
+	_, err = svc.SacrificeItem(ctx, "char-rare-hero", instCommon.ID)
+	if err != blackmarket.ErrNotSacrificeEligible {
+		t.Errorf("expected ErrNotSacrificeEligible, got %v", err)
+	}
+
+	// 5. Sacrifice Unowned Item
+	_, err = svc.SacrificeItem(ctx, "char-rare-hero", "unowned-instance-id")
+	if err != blackmarket.ErrUnownedItem {
+		t.Errorf("expected ErrUnownedItem, got %v", err)
+	}
+
+	// 6. Trade Regular Prize (bm_prize_087 costs 1 Rare Point)
+	tradeRes, err := svc.TradePrize(ctx, "char-rare-hero", "bm_prize_087")
+	if err != nil {
+		t.Fatalf("unexpected TradePrize error: %v", err)
+	}
+	if tradeRes.RemainingRare != 0 {
+		t.Errorf("expected 0 remaining rare points, got %d", tradeRes.RemainingRare)
+	}
+
+	// Verify prize received in inventory
+	updatedInv, _ = invRepo.FindByCharacterID(ctx, "char-rare-hero")
+	if _, found := updatedInv.Find(tradeRes.InventoryInstanceID); !found {
+		t.Errorf("expected prize item to be present in inventory")
+	}
+
+	// 7. Trade with Insufficient Points
+	_, err = svc.TradePrize(ctx, "char-rare-hero", "bm_prize_087")
+	if err != blackmarket.ErrInsufficientRarePoints {
+		t.Errorf("expected ErrInsufficientRarePoints, got %v", err)
+	}
+
+	// 8. Trade with Insufficient U-Rare Points (bm_uprize_059 costs 5 U-Rare Points, hero only has 1)
+	_, err = svc.TradePrize(ctx, "char-rare-hero", "bm_uprize_059")
+	if err != blackmarket.ErrInsufficientURarePoints {
+		t.Errorf("expected ErrInsufficientURarePoints, got %v", err)
+	}
+
+	// 9. Trade Non-Existent Prize
+	_, err = svc.TradePrize(ctx, "char-rare-hero", "non-existent-prize")
+	if err != blackmarket.ErrPrizeNotFound {
+		t.Errorf("expected ErrPrizeNotFound, got %v", err)
 	}
 }

@@ -98,4 +98,27 @@ func TestBlackMarketRepository_Database(t *testing.T) {
 	if fetchedState.PriceMultiplier != 1.35 {
 		t.Errorf("expected 1.35, got %f", fetchedState.PriceMultiplier)
 	}
+
+	// 5. Points Lifecycle
+	pts, err := repo.GetCharacterPoints(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetCharacterPoints failed: %v", err)
+	}
+	if pts.RarePoints != 0 || pts.URarePoints != 0 {
+		t.Errorf("expected 0 initial points, got Rare=%d URare=%d", pts.RarePoints, pts.URarePoints)
+	}
+
+	pts.RarePoints = 12
+	pts.URarePoints = 3
+	if err := repo.SaveCharacterPoints(ctx, pts); err != nil {
+		t.Fatalf("SaveCharacterPoints failed: %v", err)
+	}
+
+	ptsForUpdate, err := repo.GetCharacterPointsForUpdate(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetCharacterPointsForUpdate failed: %v", err)
+	}
+	if ptsForUpdate.RarePoints != 12 || ptsForUpdate.URarePoints != 3 {
+		t.Errorf("expected Rare=12 URare=3, got Rare=%d URare=%d", ptsForUpdate.RarePoints, ptsForUpdate.URarePoints)
+	}
 }
