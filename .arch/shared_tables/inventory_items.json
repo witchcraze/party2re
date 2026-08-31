@@ -9,7 +9,8 @@
     "internal/blacksmith/blacksmith.go#InventoryRepository",
     "internal/delivery/delivery.go#InventoryRepository",
     "internal/adventure/adventure.go#InventoryRepository",
-    "internal/blackmarket/blackmarket.go#InventoryRepository"
+    "internal/blackmarket/blackmarket.go#InventoryRepository",
+    "internal/fleamarket/fleamarket.go#InventoryRepository"
   ],
   "callers": [
     {
@@ -102,6 +103,27 @@
       "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
       "lock_order": 3,
       "purpose": "Lock inventory to deposit traded prize item"
+    },
+    {
+      "module": "fleamarket",
+      "caller_method": "internal/fleamarket/fleamarket.go#Service.CreateListing",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+      "lock_order": 3,
+      "purpose": "Lock seller inventory and deduct listed item"
+    },
+    {
+      "module": "fleamarket",
+      "caller_method": "internal/fleamarket/fleamarket.go#Service.PurchaseListing",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+      "lock_order": 3,
+      "purpose": "Lock buyer inventory and deposit purchased item"
+    },
+    {
+      "module": "fleamarket",
+      "caller_method": "internal/fleamarket/fleamarket.go#Service.CancelListing",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+      "lock_order": 3,
+      "purpose": "Lock seller inventory and return cancelled listing item"
     }
   ]
 }

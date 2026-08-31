@@ -119,6 +119,7 @@ type Handler struct {
 	tavern         TavernService
 	blackmarket    BlackMarketService
 	delivery       DeliveryService
+	fleamarket     FleaMarketService
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
 	allowedOrigins map[string]struct{}
@@ -447,6 +448,14 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /auctions/{id}/bid", h.handleAuctionBid)
 	mux.HandleFunc("POST /auctions/{id}/buyout", h.handleAuctionBuyout)
 	mux.HandleFunc("POST /auctions/{id}/cancel", h.handleAuctionCancel)
+
+	// Flea Market
+	mux.HandleFunc("GET /fleamarket/listings", h.handleListFleaMarketListings)
+	mux.HandleFunc("GET /fleamarket/listings/{listing_id}", h.handleGetFleaMarketListing)
+	mux.HandleFunc("GET /characters/{id}/fleamarket/listings", h.handleGetCharacterFleaMarketListings)
+	mux.HandleFunc("POST /characters/{id}/fleamarket/listings", h.handleCreateFleaMarketListing)
+	mux.HandleFunc("POST /characters/{id}/fleamarket/listings/{listing_id}/purchase", h.handlePurchaseFleaMarketListing)
+	mux.HandleFunc("DELETE /characters/{id}/fleamarket/listings/{listing_id}", h.handleCancelFleaMarketListing)
 
 	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(mux)))
 }

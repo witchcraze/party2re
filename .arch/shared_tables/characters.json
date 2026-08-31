@@ -10,7 +10,8 @@
     "internal/tavern/tavern.go#CharacterRepository",
     "internal/delivery/delivery.go#CharacterRepository",
     "internal/adventure/adventure.go#CharacterRepository",
-    "internal/blackmarket/blackmarket.go#CharacterRepository"
+    "internal/blackmarket/blackmarket.go#CharacterRepository",
+    "internal/fleamarket/fleamarket.go#CharacterRepository"
   ],
   "callers": [
     {
@@ -166,6 +167,20 @@
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
       "lock_order": 2,
       "purpose": "Lock character and verify eligibility"
+    },
+    {
+      "module": "fleamarket",
+      "caller_method": "internal/fleamarket/fleamarket.go#Service.CreateListing",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock seller character"
+    },
+    {
+      "module": "fleamarket",
+      "caller_method": "internal/fleamarket/fleamarket.go#Service.PurchaseListing",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+      "lock_order": 2,
+      "purpose": "Lock buyer and seller characters in ascending ID order to transfer gold"
     }
   ]
 }

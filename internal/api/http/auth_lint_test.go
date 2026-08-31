@@ -70,6 +70,8 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^GET /challenges/tiers$`),
 		regexp.MustCompile(`^GET /auctions$`),
 		regexp.MustCompile(`^GET /auctions/\{id\}$`),
+		regexp.MustCompile(`^GET /fleamarket/listings$`),
+		regexp.MustCompile(`^GET /fleamarket/listings/\{listing_id\}$`),
 		regexp.MustCompile(`^GET /rankings/.*$`),
 		regexp.MustCompile(`^GET /homes/\{id\}$`),
 		regexp.MustCompile(`^GET /homes/\{id\}/companion/talk$`),
