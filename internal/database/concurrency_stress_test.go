@@ -16,6 +16,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/delivery"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/id"
@@ -896,4 +897,121 @@ func findSubstr(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestConcurrencyStressDeliveryClaimVsCancel(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	playerRepo, err := NewPlayerRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	charRepo, err := NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invRepo, err := NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deliveryRepo, err := NewDeliveryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := NewTransactionProvider(db)
+
+	deliverySvc, err := delivery.NewService(
+		deliveryRepo,
+		charRepo,
+		invRepo,
+		delivery.WithTransactionProvider(txProvider),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create Sender & Recipient
+	senderPlayer, err := coreplayer.New("del_send_"+id.New()[:6], "password123", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = playerRepo.Save(ctx, senderPlayer)
+	senderChar, _ := corecharacter.New("Sender-" + id.New()[:6])
+	senderChar.PlayerID = senderPlayer.ID
+	senderChar.Money = 100000
+	_ = charRepo.Save(ctx, senderChar)
+
+	recipientPlayer, err := coreplayer.New("del_recip_"+id.New()[:6], "password123", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = playerRepo.Save(ctx, recipientPlayer)
+	recipientChar, _ := corecharacter.New("Recipient-" + id.New()[:6])
+	recipientChar.PlayerID = recipientPlayer.ID
+	recipientChar.Money = 5000
+	_ = charRepo.Save(ctx, recipientChar)
+
+	const numRounds = 20
+	var claimWins int64
+	var cancelWins int64
+
+	for i := 0; i < numRounds; i++ {
+		parcel, err := deliverySvc.SendParcel(ctx, senderChar.ID, delivery.SendParcelRequest{
+			RecipientCharacterID: recipientChar.ID,
+			GoldAmount:           500,
+		}, now)
+		if err != nil {
+			t.Fatalf("round %d: SendParcel failed: %v", i, err)
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		var claimErr error
+		var cancelErr error
+
+		go func() {
+			defer wg.Done()
+			_, claimErr = deliverySvc.ClaimParcel(ctx, recipientChar.ID, parcel.ID, now)
+		}()
+
+		go func() {
+			defer wg.Done()
+			cancelErr = deliverySvc.CancelParcel(ctx, senderChar.ID, parcel.ID)
+		}()
+
+		wg.Wait()
+
+		if claimErr == nil && cancelErr == nil {
+			t.Fatalf("round %d: DOUBLE SPEND! Both ClaimParcel and CancelParcel succeeded on parcel %s", i, parcel.ID)
+		}
+
+		if claimErr == nil {
+			atomic.AddInt64(&claimWins, 1)
+			if !errors.Is(cancelErr, delivery.ErrParcelAlreadyClaimed) {
+				t.Fatalf("round %d: expected ErrParcelAlreadyClaimed for cancel, got %v", i, cancelErr)
+			}
+		} else if cancelErr == nil {
+			atomic.AddInt64(&cancelWins, 1)
+			if !errors.Is(claimErr, delivery.ErrParcelAlreadyClaimed) {
+				t.Fatalf("round %d: expected ErrParcelAlreadyClaimed for claim, got %v", i, claimErr)
+			}
+		} else {
+			t.Fatalf("round %d: both operations failed! claimErr: %v, cancelErr: %v", i, claimErr, cancelErr)
+		}
+	}
+
+	t.Logf("Delivery Claim vs Cancel race test passed across %d rounds: Claims=%d, Cancels=%d, 0 double-spends",
+		numRounds, claimWins, cancelWins)
 }

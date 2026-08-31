@@ -171,6 +171,10 @@ func (m *mockDeliveryRepo) GetParcelByID(ctx context.Context, id string) (*Parce
 	return &p, nil
 }
 
+func (m *mockDeliveryRepo) GetParcelByIDForUpdate(ctx context.Context, id string) (*Parcel, error) {
+	return m.GetParcelByID(ctx, id)
+}
+
 func (m *mockDeliveryRepo) GetIncomingParcels(ctx context.Context, recipientCharacterID string) ([]Parcel, error) {
 	var list []Parcel
 	for _, p := range m.parcels {
@@ -192,6 +196,10 @@ func (m *mockDeliveryRepo) GetSentParcels(ctx context.Context, senderCharacterID
 }
 
 func (m *mockDeliveryRepo) UpdateParcel(ctx context.Context, p *Parcel) error {
+	existing, ok := m.parcels[p.ID]
+	if !ok || existing.Status != ParcelStatusPending {
+		return ErrParcelAlreadyClaimed
+	}
 	m.parcels[p.ID] = *p
 	return nil
 }

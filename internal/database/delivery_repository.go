@@ -255,17 +255,32 @@ func (r *DeliveryRepository) SaveParcel(ctx context.Context, p *delivery.Parcel)
 }
 
 func (r *DeliveryRepository) GetParcelByID(ctx context.Context, id string) (*delivery.Parcel, error) {
-	var p delivery.Parcel
-	var statusStr string
-	var claimedAt sql.NullTime
-
-	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+	return r.getParcelByIDWithQuery(ctx, `
 		SELECT id, sender_character_id, sender_character_name, recipient_character_id,
 		       item_id, item_name, item_quantity, gold_amount, message, courier_fee,
 		       status, created_at, claimed_at
 		FROM delivery_parcels
 		WHERE id = ?
-	`, id).Scan(
+	`, id)
+}
+
+func (r *DeliveryRepository) GetParcelByIDForUpdate(ctx context.Context, id string) (*delivery.Parcel, error) {
+	return r.getParcelByIDWithQuery(ctx, `
+		SELECT id, sender_character_id, sender_character_name, recipient_character_id,
+		       item_id, item_name, item_quantity, gold_amount, message, courier_fee,
+		       status, created_at, claimed_at
+		FROM delivery_parcels
+		WHERE id = ?
+		FOR UPDATE
+	`, id)
+}
+
+func (r *DeliveryRepository) getParcelByIDWithQuery(ctx context.Context, query string, id string) (*delivery.Parcel, error) {
+	var p delivery.Parcel
+	var statusStr string
+	var claimedAt sql.NullTime
+
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query, id).Scan(
 		&p.ID, &p.SenderCharacterID, &p.SenderCharacterName, &p.RecipientCharacterID,
 		&p.ItemID, &p.ItemName, &p.ItemQuantity, &p.GoldAmount, &p.Message, &p.CourierFee,
 		&statusStr, &p.CreatedAt, &claimedAt,
@@ -359,10 +374,20 @@ func (r *DeliveryRepository) GetSentParcels(ctx context.Context, senderCharacter
 }
 
 func (r *DeliveryRepository) UpdateParcel(ctx context.Context, p *delivery.Parcel) error {
-	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+	res, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		UPDATE delivery_parcels
 		SET status = ?, claimed_at = ?
-		WHERE id = ?
+		WHERE id = ? AND status = 'pending'
 	`, string(p.Status), p.ClaimedAt, p.ID)
-	return err
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return delivery.ErrParcelAlreadyClaimed
+	}
+	return nil
 }
