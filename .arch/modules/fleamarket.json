@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "module": "fleamarket",
+  "domain": "フリーマーケット・プレイヤー露店取引",
+  "description": "Player-to-player direct fixed-price marketplace and item stall trading system (owns fleamarket_listings).",
+  "entrypoint": "internal/fleamarket/fleamarket.go",
+  "dependencies": [
+    {
+      "module": "core/character",
+      "relation_type": "public_service_call",
+      "methods": ["FindByID", "FindByIDForUpdate", "Update"],
+      "source_ref": "internal/fleamarket/fleamarket.go#CharacterRepository"
+    },
+    {
+      "module": "core/inventory",
+      "relation_type": "public_service_call",
+      "methods": ["FindByCharacterID", "FindByCharacterIDForUpdate", "Save"],
+      "source_ref": "internal/fleamarket/fleamarket.go#InventoryRepository"
+    },
+    {
+      "module": "core/item",
+      "relation_type": "catalog_data",
+      "methods": ["FindByID"],
+      "source_ref": "internal/fleamarket/fleamarket.go#ItemDefinitionProvider"
+    },
+    {
+      "module": "database",
+      "relation_type": "transaction_provider",
+      "methods": ["RunInTx"],
+      "source_ref": "internal/database/tx.go#TransactionProvider"
+    }
+  ],
+  "transaction_flows": [
+    {
+      "flow": "CreateListing (フリマ出品)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/fleamarket/fleamarket.go#Service.CreateListing",
+      "lock_sequence": [
+        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 2, "target": "fleamarket_listings", "lock_order": 8, "method": "FleaMarketRepository.CountActiveListingsBySeller", "mode": "SELECT" },
+        { "step": 3, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 4, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.Save", "mode": "UPDATE" },
+        { "step": 5, "target": "fleamarket_listings", "lock_order": 8, "method": "FleaMarketRepository.CreateListing", "mode": "INSERT" }
+      ]
+    },
+    {
+      "flow": "PurchaseListing (フリマ購入)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/fleamarket/fleamarket.go#Service.PurchaseListing",
+      "lock_sequence": [
+        { "step": 1, "target": "fleamarket_listings", "lock_order": 8, "method": "FleaMarketRepository.GetListingByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 2, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate (min(buyer,seller))", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 3, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate (max(buyer,seller))", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 4, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 5, "target": "characters", "lock_order": 2, "method": "CharacterRepository.Update (Buyer & Seller)", "mode": "UPDATE" },
+        { "step": 6, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.Save (Buyer)", "mode": "UPDATE" },
+        { "step": 7, "target": "fleamarket_listings", "lock_order": 8, "method": "FleaMarketRepository.UpdateListing", "mode": "UPDATE (Mark Sold)" }
+      ]
+    },
+    {
+      "flow": "CancelListing (フリマ出品取消・返却)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/fleamarket/fleamarket.go#Service.CancelListing",
+      "lock_sequence": [
+        { "step": 1, "target": "fleamarket_listings", "lock_order": 8, "method": "FleaMarketRepository.GetListingByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 2, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 3, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.Save", "mode": "UPDATE" },
+        { "step": 4, "target": "fleamarket_listings", "lock_order": 8, "method": "FleaMarketRepository.UpdateListing", "mode": "UPDATE (Mark Cancelled)" }
+      ]
+    }
+  ]
+}

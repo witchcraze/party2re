@@ -111,6 +111,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Secret Underground Shop and NPC @ヒミツジ ([#192](https://github.com/witchcraze/party2re/issues/192))
 - [x] Adventurer's Tavern, menu orders, delivery reservations, and NPC @エレナ ([#185](https://github.com/witchcraze/party2re/issues/185))
 - [x] Town item delivery quests and player-to-player parcel courier service ([#195](https://github.com/witchcraze/party2re/issues/195))
+- [x] Flea Market player-to-player item stalls and direct fixed-price exchange ([#194](https://github.com/witchcraze/party2re/issues/194))
 
 ### G. Presentation, assets, and operations
 - [x] UI-independent HTTP JSON Application API layer ([#87](https://github.com/witchcraze/party2re/issues/87))
@@ -195,7 +196,8 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#192](https://github.com/witchcraze/party2re/issues/192) | Secret Underground Shop and NPC @ヒミツジ | Merged |
 | [#185](https://github.com/witchcraze/party2re/issues/185) | Adventurer's Tavern, menu orders, delivery reservations, and NPC @エレナ | Merged |
 | [#142](https://github.com/witchcraze/party2re/issues/142) | Town Black Market, contraband trading, dynamic pricing, and NPC @ヤミジ | Merged |
-| [#195](https://github.com/witchcraze/party2re/issues/195) | Town item delivery quests and player-to-player parcel courier service | In Progress |
+| [#195](https://github.com/witchcraze/party2re/issues/195) | Town item delivery quests and player-to-player parcel courier service | Merged |
+| [#194](https://github.com/witchcraze/party2re/issues/194) | Flea Market player-to-player item stalls and direct exchange | Merged |
 
 ---
 

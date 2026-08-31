@@ -361,6 +361,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Town item delivery quest generation and lifecycle (max 3 concurrent in-progress quests, atomic item verification & reward settlement), and player-to-player mail/parcel courier service with gold and item attachments, 50 G flat courier fee, and sender cancellation/refund workflow.
   - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository.
   - **Persistence:** `delivery_quests`, `character_deliveries`, and `delivery_parcels` tables in `internal/database/delivery_repository.go`.
+- **Flea Market & Player Item Stalls** (`internal/fleamarket`):
+  - **Responsibility:** Player-to-player direct fixed-price item marketplace (`free.cgi`), inventory listing creation (max 5 active listings per character, 1–999,999 G price range), atomic purchasing transactions with cross-character deterministic locking, and seller cancellation and item return workflows.
+  - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository.
+  - **Persistence:** `fleamarket_listings` table in `internal/database/fleamarket_repository.go`.
 
 ### Cross-Module Transaction Orchestration & Ambient Context Propagation
 
