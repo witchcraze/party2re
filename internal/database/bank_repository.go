@@ -187,7 +187,7 @@ func (r *BankRepository) Transfer(ctx context.Context, record bank.TransferRecor
 	}
 
 	// Ensure accounts exist to avoid insert gap locks
-	_, _ = r.db.ExecContext(ctx, `
+	_, _ = ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT IGNORE INTO bank_accounts (player_id, balance)
 		VALUES (?, 0), (?, 0)
 	`, p1, p2)
