@@ -1,0 +1,33 @@
+{
+  "$schema": "https://archify.dev/schema/shared_table.v1.json",
+  "table": "bank_accounts",
+  "tier": 6,
+  "description": "Player savings bank account balances and last updated timestamps.",
+  "repository_implementation": "internal/database/bank_repository.go#BankRepository",
+  "consumer_interfaces": [
+    "internal/bank/bank.go#Repository"
+  ],
+  "callers": [
+    {
+      "module": "bank",
+      "caller_method": "internal/database/bank_repository.go#BankRepository.Deposit",
+      "lock_mode": "INSERT ON DUPLICATE KEY UPDATE",
+      "lock_order": 6,
+      "purpose": "Credit bank balance"
+    },
+    {
+      "module": "bank",
+      "caller_method": "internal/database/bank_repository.go#BankRepository.Withdraw",
+      "lock_mode": "UPDATE",
+      "lock_order": 6,
+      "purpose": "Deduct bank balance (balance >= amount)"
+    },
+    {
+      "module": "bank",
+      "caller_method": "internal/database/bank_repository.go#BankRepository.Transfer",
+      "lock_mode": "SELECT ... FOR UPDATE (ID Ascending Order: p1 < p2)",
+      "lock_order": 6,
+      "purpose": "Deterministic ascending player ID sorting to prevent two-way transfer deadlocks"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://archify.dev/schema/shared_table.v1.json",
+  "table": "guilds",
+  "tier": 7,
+  "description": "Guild entities, founding leadership, total experience, and treasury gold.",
+  "repository_implementation": "internal/database/guild_repository.go#GuildRepository",
+  "consumer_interfaces": [
+    "internal/guild/guild.go#Repository"
+  ],
+  "callers": [
+    {
+      "module": "guild",
+      "caller_method": "internal/database/guild_repository.go#GuildRepository.CreateGuild",
+      "lock_mode": "INSERT",
+      "lock_order": 7,
+      "purpose": "Insert new guild entity"
+    },
+    {
+      "module": "guild",
+      "caller_method": "internal/database/guild_repository.go#GuildRepository.Donate",
+      "lock_mode": "SELECT ... FOR UPDATE",
+      "lock_order": 7,
+      "purpose": "Lock guild row to recalculate total exp and credit treasury gold"
+    }
+  ]
+}
