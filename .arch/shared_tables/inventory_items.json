@@ -8,7 +8,8 @@
     "internal/shop/shop.go#InventoryRepository",
     "internal/blacksmith/blacksmith.go#InventoryRepository",
     "internal/delivery/delivery.go#InventoryRepository",
-    "internal/adventure/adventure.go#InventoryRepository"
+    "internal/adventure/adventure.go#InventoryRepository",
+    "internal/blackmarket/blackmarket.go#InventoryRepository"
   ],
   "callers": [
     {
@@ -73,6 +74,34 @@
       "lock_mode": "INSERT",
       "lock_order": 3,
       "purpose": "Add monster drop item to adventurer inventory"
+    },
+    {
+      "module": "blackmarket",
+      "caller_method": "internal/blackmarket/blackmarket.go#Service.PurchaseItem",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+      "lock_order": 3,
+      "purpose": "Lock inventory slots to add purchased contraband item"
+    },
+    {
+      "module": "blackmarket",
+      "caller_method": "internal/blackmarket/blackmarket.go#Service.SellItem",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+      "lock_order": 3,
+      "purpose": "Lock inventory to verify ownership and deduct sold item"
+    },
+    {
+      "module": "blackmarket",
+      "caller_method": "internal/blackmarket/blackmarket.go#Service.SacrificeItem",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+      "lock_order": 3,
+      "purpose": "Lock inventory to verify ownership and deduct sacrificed rare item"
+    },
+    {
+      "module": "blackmarket",
+      "caller_method": "internal/blackmarket/blackmarket.go#Service.TradePrize",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+      "lock_order": 3,
+      "purpose": "Lock inventory to deposit traded prize item"
     }
   ]
 }

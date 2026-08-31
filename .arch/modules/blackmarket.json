@@ -1,0 +1,124 @@
+{
+  "$schema": "https://archify.dev/schema/module.v1.json",
+  "module": "blackmarket",
+  "tier": 1,
+  "description": "Town black market contraband trading, rare point sacrifice, and prize trade exchanges.",
+  "package": "internal/blackmarket",
+  "implementation_package": "internal/blackmarket",
+  "dependencies": [
+    {
+      "name": "character_repository",
+      "target_module": "core/character",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/blackmarket/blackmarket.go#CharacterRepository"
+    },
+    {
+      "name": "inventory_repository",
+      "target_module": "core/inventory",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/blackmarket/blackmarket.go#InventoryRepository"
+    },
+    {
+      "name": "blackmarket_repository",
+      "target_module": "blackmarket",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/blackmarket/blackmarket.go#BlackMarketRepository"
+    },
+    {
+      "name": "transaction_provider",
+      "target_module": "database",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/blackmarket/blackmarket.go#TransactionProvider"
+    }
+  ],
+  "transaction_boundaries": [
+    {
+      "method": "PurchaseItem",
+      "source_ref": "internal/blackmarket/blackmarket.go#Service.PurchaseItem",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+          "note": "Lock character wallet and verify eligibility & sufficient funds"
+        },
+        {
+          "table": "inventory_items",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+          "note": "Lock inventory slots to add purchased contraband item"
+        }
+      ]
+    },
+    {
+      "method": "SellItem",
+      "source_ref": "internal/blackmarket/blackmarket.go#Service.SellItem",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+          "note": "Lock character wallet and verify eligibility"
+        },
+        {
+          "table": "inventory_items",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+          "note": "Lock inventory to verify ownership and deduct sold item"
+        }
+      ]
+    },
+    {
+      "method": "SacrificeItem",
+      "source_ref": "internal/blackmarket/blackmarket.go#Service.SacrificeItem",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+          "note": "Lock character and verify eligibility"
+        },
+        {
+          "table": "inventory_items",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+          "note": "Lock inventory to verify ownership and deduct sacrificed rare item"
+        },
+        {
+          "table": "blackmarket_character_points",
+          "tier": 8,
+          "mode": "SELECT ... FOR UPDATE (GetCharacterPointsForUpdate)",
+          "note": "Lock character points and credit rare points"
+        }
+      ]
+    },
+    {
+      "method": "TradePrize",
+      "source_ref": "internal/blackmarket/blackmarket.go#Service.TradePrize",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+          "note": "Lock character and verify eligibility"
+        },
+        {
+          "table": "inventory_items",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+          "note": "Lock inventory to deposit traded prize item"
+        },
+        {
+          "table": "blackmarket_character_points",
+          "tier": 8,
+          "mode": "SELECT ... FOR UPDATE (GetCharacterPointsForUpdate)",
+          "note": "Lock character points and deduct prize cost"
+        }
+      ]
+    }
+  ]
+}

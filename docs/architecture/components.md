@@ -354,9 +354,9 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Core Character, Character repository, Lottery repository.
   - **Persistence:** `tavern_deliveries` and `tavern_character_status` tables in `internal/database/tavern_repository.go`.
 - **Town Black Market & Shady Broker @ヤミジ** (`internal/blackmarket`):
-  - **Responsibility:** Town Black Market contraband item trade (Level >= 10), dynamic market conditions (`Quiet`, `HotDemand`, `Crackdown`, `Bargain`) with buy price multipliers and sell buyback rates, daily purchase quotas, pessimistic inventory and gold transaction handling, and shady broker dialogue and rumor intelligence.
+  - **Responsibility:** Town Black Market contraband item trade (Level >= 10), dynamic market conditions (`Quiet`, `HotDemand`, `Crackdown`, `Bargain`) with buy price multipliers and sell buyback rates, daily purchase quotas, Rare Point and U-Rare Point sacrifice recycling system (`SacrificeItem`), exclusive prize trade exchange (`TradePrize`), pessimistic inventory and gold transaction handling, and shady broker dialogue and rumor intelligence.
   - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository.
-  - **Persistence:** `blackmarket_character_purchases` and `blackmarket_market_state` tables in `internal/database/blackmarket_repository.go`.
+  - **Persistence:** `blackmarket_character_purchases`, `blackmarket_market_state`, and `blackmarket_character_points` tables in `internal/database/blackmarket_repository.go`.
 - **Town Delivery Quests & Player Courier Service** (`internal/delivery`):
   - **Responsibility:** Town item delivery quest generation and lifecycle (max 3 concurrent in-progress quests, atomic item verification & reward settlement), and player-to-player mail/parcel courier service with gold and item attachments, 50 G flat courier fee, and sender cancellation/refund workflow.
   - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository.

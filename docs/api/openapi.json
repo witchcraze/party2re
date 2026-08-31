@@ -207,6 +207,77 @@
         ],
         "type": "object"
       },
+      "BlackMarketPointsStatus": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "prizes": {
+            "items": {
+              "$ref": "#/components/schemas/BlackMarketPrize"
+            },
+            "type": "array"
+          },
+          "rare_points": {
+            "example": 10,
+            "type": "integer"
+          },
+          "u_prizes": {
+            "items": {
+              "$ref": "#/components/schemas/BlackMarketPrize"
+            },
+            "type": "array"
+          },
+          "u_rare_points": {
+            "example": 2,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "rare_points",
+          "u_rare_points",
+          "prizes",
+          "u_prizes"
+        ],
+        "type": "object"
+      },
+      "BlackMarketPrize": {
+        "properties": {
+          "cost": {
+            "example": 10,
+            "type": "integer"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "example": "bm_prize_207",
+            "type": "string"
+          },
+          "is_u_rare": {
+            "example": false,
+            "type": "boolean"
+          },
+          "item_definition_id": {
+            "example": "item-207",
+            "type": "string"
+          },
+          "name": {
+            "example": "メタルキングの剣",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "item_definition_id",
+          "name",
+          "cost",
+          "is_u_rare",
+          "description"
+        ],
+        "type": "object"
+      },
       "BlackMarketPurchaseRequest": {
         "properties": {
           "item_id": {
@@ -291,6 +362,69 @@
           "npc_name",
           "market_condition",
           "rumor"
+        ],
+        "type": "object"
+      },
+      "BlackMarketSacrificeRequest": {
+        "properties": {
+          "item_instance_id": {
+            "example": "inst-12345",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_instance_id"
+        ],
+        "type": "object"
+      },
+      "BlackMarketSacrificeResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "item_definition_id": {
+            "example": "weapon-29",
+            "type": "string"
+          },
+          "item_instance_id": {
+            "example": "inst-12345",
+            "type": "string"
+          },
+          "item_name": {
+            "example": "はやぶさの剣",
+            "type": "string"
+          },
+          "message": {
+            "example": "…レアだな…。いいだろう…。お前のレアポイントを加算しておこう…",
+            "type": "string"
+          },
+          "rare_points_gained": {
+            "example": 1,
+            "type": "integer"
+          },
+          "total_rare_points": {
+            "example": 11,
+            "type": "integer"
+          },
+          "total_u_rare_points": {
+            "example": 2,
+            "type": "integer"
+          },
+          "u_rare_points_gained": {
+            "example": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "item_instance_id",
+          "item_definition_id",
+          "item_name",
+          "rare_points_gained",
+          "u_rare_points_gained",
+          "total_rare_points",
+          "total_u_rare_points",
+          "message"
         ],
         "type": "object"
       },
@@ -442,6 +576,74 @@
           "character_id",
           "npc_name",
           "dialogue"
+        ],
+        "type": "object"
+      },
+      "BlackMarketTradeRequest": {
+        "properties": {
+          "prize_id": {
+            "example": "bm_prize_087",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prize_id"
+        ],
+        "type": "object"
+      },
+      "BlackMarketTradeResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "cost": {
+            "example": 1,
+            "type": "integer"
+          },
+          "inventory_instance_id": {
+            "example": "inst-prize-1",
+            "type": "string"
+          },
+          "is_u_rare": {
+            "example": false,
+            "type": "boolean"
+          },
+          "item_definition_id": {
+            "example": "item-087",
+            "type": "string"
+          },
+          "item_name": {
+            "example": "まほうのそろばん",
+            "type": "string"
+          },
+          "message": {
+            "example": "取引成立だ…。まほうのそろばん を受け取った…",
+            "type": "string"
+          },
+          "prize_id": {
+            "example": "bm_prize_087",
+            "type": "string"
+          },
+          "remaining_rare": {
+            "example": 9,
+            "type": "integer"
+          },
+          "remaining_u_rare": {
+            "example": 2,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "prize_id",
+          "item_definition_id",
+          "item_name",
+          "inventory_instance_id",
+          "cost",
+          "is_u_rare",
+          "remaining_rare",
+          "remaining_u_rare",
+          "message"
         ],
         "type": "object"
       },
@@ -2084,6 +2286,56 @@
         ]
       }
     },
+    "/characters/{id}/blackmarket/points": {
+      "get": {
+        "description": "Returns character's Rare Points and U-Rare Points balances along with regular and ultra-rare trade prize catalogs.",
+        "operationId": "getBlackMarketPoints",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlackMarketPointsStatus"
+                }
+              }
+            },
+            "description": "Black Market points and prize catalogs status"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get Black Market Rare Points status and prize catalogs",
+        "tags": [
+          "Black Market"
+        ]
+      }
+    },
     "/characters/{id}/blackmarket/purchase": {
       "post": {
         "description": "Purchases contraband items with dynamic price multipliers and daily quota limits.",
@@ -2197,6 +2449,69 @@
         ]
       }
     },
+    "/characters/{id}/blackmarket/sacrifice": {
+      "post": {
+        "description": "Sacrifices an eligible rare weapon, armor, or item to earn Rare Points or U-Rare Points.",
+        "operationId": "sacrificeBlackMarketItem",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlackMarketSacrificeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlackMarketSacrificeResult"
+                }
+              }
+            },
+            "description": "Item sacrifice successful"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Sacrifice rare item for Rare Points or U-Rare Points",
+        "tags": [
+          "Black Market"
+        ]
+      }
+    },
     "/characters/{id}/blackmarket/sell": {
       "post": {
         "description": "Sells inventory items with dynamic buyback rates.",
@@ -2305,6 +2620,69 @@
           }
         ],
         "summary": "Converse with shady black market broker @ヤミジ",
+        "tags": [
+          "Black Market"
+        ]
+      }
+    },
+    "/characters/{id}/blackmarket/trade": {
+      "post": {
+        "description": "Trades accumulated Rare Points or U-Rare Points for an exclusive black market prize item.",
+        "operationId": "tradeBlackMarketPrize",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlackMarketTradeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlackMarketTradeResult"
+                }
+              }
+            },
+            "description": "Prize trade exchange successful"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Exchange Rare Points for an exclusive black market prize",
         "tags": [
           "Black Market"
         ]

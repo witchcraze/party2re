@@ -3,6 +3,7 @@ package blackmarket
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"errors"
 	"fmt"
 	"math"
@@ -24,15 +25,19 @@ const (
 )
 
 var (
-	ErrNilDependency      = errors.New("black market dependency is nil")
-	ErrCharacterNotFound  = errors.New("character not found")
-	ErrAccessDenied       = errors.New("black market access denied: character does not meet discovery requirements")
-	ErrItemNotFound       = errors.New("item not found in black market catalog")
-	ErrInsufficientFunds  = errors.New("insufficient funds to purchase black market item")
-	ErrInvalidQuantity    = errors.New("invalid purchase or sale quantity")
-	ErrDailyLimitExceeded = errors.New("daily purchase limit exceeded for this item")
-	ErrUnownedItem        = errors.New("item instance is not owned in inventory")
-	ErrPriceOverflow      = errors.New("price calculation overflow")
+	ErrNilDependency           = errors.New("black market dependency is nil")
+	ErrCharacterNotFound       = errors.New("character not found")
+	ErrAccessDenied            = errors.New("black market access denied: character does not meet discovery requirements")
+	ErrItemNotFound            = errors.New("item not found in black market catalog")
+	ErrInsufficientFunds       = errors.New("insufficient funds to purchase black market item")
+	ErrInvalidQuantity         = errors.New("invalid purchase or sale quantity")
+	ErrDailyLimitExceeded      = errors.New("daily purchase limit exceeded for this item")
+	ErrUnownedItem             = errors.New("item instance is not owned in inventory")
+	ErrPriceOverflow           = errors.New("price calculation overflow")
+	ErrNotSacrificeEligible    = errors.New("item is not eligible for rare point sacrifice")
+	ErrInsufficientRarePoints  = errors.New("insufficient rare points for prize trade")
+	ErrInsufficientURarePoints = errors.New("insufficient u-rare points for prize trade")
+	ErrPrizeNotFound           = errors.New("prize item not found in trade catalog")
 )
 
 type MarketCondition string
@@ -111,11 +116,20 @@ type InventoryRepository interface {
 	Save(ctx context.Context, value coreinventory.Inventory) error
 }
 
+type CharacterPoints struct {
+	CharacterID string `json:"character_id"`
+	RarePoints  int    `json:"rare_points"`
+	URarePoints int    `json:"u_rare_points"`
+}
+
 type BlackMarketRepository interface {
 	GetDailyPurchases(ctx context.Context, characterID string, date time.Time) (map[string]int, error)
 	RecordPurchase(ctx context.Context, characterID string, itemID string, date time.Time, quantity int) error
 	GetMarketState(ctx context.Context) (MarketState, error)
 	SaveMarketState(ctx context.Context, state MarketState) error
+	GetCharacterPoints(ctx context.Context, characterID string) (CharacterPoints, error)
+	GetCharacterPointsForUpdate(ctx context.Context, characterID string) (CharacterPoints, error)
+	SaveCharacterPoints(ctx context.Context, points CharacterPoints) error
 }
 
 type ItemDefinitionProvider interface {
@@ -124,6 +138,42 @@ type ItemDefinitionProvider interface {
 
 type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+// PointsStatus describes accumulated points and available trade prize catalogs.
+type PointsStatus struct {
+	CharacterID string  `json:"character_id"`
+	RarePoints  int     `json:"rare_points"`
+	URarePoints int     `json:"u_rare_points"`
+	Prizes      []Prize `json:"prizes"`
+	UPrizes     []Prize `json:"u_prizes"`
+}
+
+// SacrificeResult contains outcome of sacrificing a rare item.
+type SacrificeResult struct {
+	CharacterID       string `json:"character_id"`
+	ItemInstanceID    string `json:"item_instance_id"`
+	ItemDefinitionID  string `json:"item_definition_id"`
+	ItemName          string `json:"item_name"`
+	RarePointsGained  int    `json:"rare_points_gained"`
+	URarePointsGained int    `json:"u_rare_points_gained"`
+	TotalRarePoints   int    `json:"total_rare_points"`
+	TotalURarePoints  int    `json:"total_u_rare_points"`
+	Message           string `json:"message"`
+}
+
+// TradeResult contains outcome of trading points for a prize item.
+type TradeResult struct {
+	CharacterID         string `json:"character_id"`
+	PrizeID             string `json:"prize_id"`
+	ItemDefinitionID    string `json:"item_definition_id"`
+	ItemName            string `json:"item_name"`
+	InventoryInstanceID string `json:"inventory_instance_id"`
+	Cost                int    `json:"cost"`
+	IsURare             bool   `json:"is_u_rare"`
+	RemainingRare       int    `json:"remaining_rare"`
+	RemainingURare      int    `json:"remaining_u_rare"`
+	Message             string `json:"message"`
 }
 
 // ShopItemView represents an item listing with dynamic market prices and remaining character quotas.
@@ -625,6 +675,250 @@ func (s *Service) SellItem(
 			UnitPrice:      unitPrice,
 			TotalPayout:    totalPayout,
 			RemainingGold:  char.Money,
+		}
+		return nil
+	}
+
+	if s.txProvider != nil {
+		if err := s.txProvider.RunInTx(ctx, operation); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := operation(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
+
+// GetPointsStatus returns accumulated Rare Points and U-Rare Points and available prizes.
+func (s *Service) GetPointsStatus(ctx context.Context, characterID string) (*PointsStatus, error) {
+	if strings.TrimSpace(characterID) == "" {
+		return nil, ErrCharacterNotFound
+	}
+
+	char, err := s.characterRepo.FindByID(ctx, characterID)
+	if err != nil {
+		return nil, ErrCharacterNotFound
+	}
+
+	if !CheckEligibility(char) {
+		return nil, ErrAccessDenied
+	}
+
+	points := CharacterPoints{CharacterID: characterID, RarePoints: 0, URarePoints: 0}
+	if s.blackMarketRepo != nil {
+		if pts, err := s.blackMarketRepo.GetCharacterPoints(ctx, characterID); err == nil {
+			points = pts
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	}
+
+	return &PointsStatus{
+		CharacterID: characterID,
+		RarePoints:  points.RarePoints,
+		URarePoints: points.URarePoints,
+		Prizes:      s.catalog.RegularPrizes(),
+		UPrizes:     s.catalog.UPrizes(),
+	}, nil
+}
+
+// SacrificeItem consumes an eligible rare item instance from character inventory and credits points.
+func (s *Service) SacrificeItem(ctx context.Context, characterID string, itemInstanceID string) (*SacrificeResult, error) {
+	if strings.TrimSpace(characterID) == "" {
+		return nil, ErrCharacterNotFound
+	}
+	if strings.TrimSpace(itemInstanceID) == "" {
+		return nil, ErrUnownedItem
+	}
+
+	var result *SacrificeResult
+
+	operation := func(txCtx context.Context) error {
+		// 1. Lock character (Tier 2)
+		char, err := s.characterRepo.FindByIDForUpdate(txCtx, characterID)
+		if err != nil {
+			return ErrCharacterNotFound
+		}
+
+		if !CheckEligibility(char) {
+			return ErrAccessDenied
+		}
+
+		// 2. Lock inventory (Tier 3)
+		inv, err := s.inventoryRepo.FindByCharacterIDForUpdate(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+
+		inst, found := inv.Find(itemInstanceID)
+		if !found {
+			return ErrUnownedItem
+		}
+
+		// 3. Check sacrifice eligibility
+		yield, eligible := s.catalog.GetSacrificeYield(inst.DefinitionID)
+		if !eligible {
+			return ErrNotSacrificeEligible
+		}
+
+		// 4. Consume 1 unit of the item instance
+		if err := inv.Consume(itemInstanceID, 1); err != nil {
+			return fmt.Errorf("failed to consume item for sacrifice: %w", err)
+		}
+
+		if err := s.inventoryRepo.Save(txCtx, inv); err != nil {
+			return err
+		}
+
+		// 5. Lock and update points (Tier 8)
+		points := CharacterPoints{CharacterID: characterID, RarePoints: 0, URarePoints: 0}
+		if s.blackMarketRepo != nil {
+			pts, err := s.blackMarketRepo.GetCharacterPointsForUpdate(txCtx, characterID)
+			if err == nil {
+				points = pts
+			} else if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+		}
+
+		points.RarePoints += yield.RarePoints
+		points.URarePoints += yield.URarePoints
+
+		if s.blackMarketRepo != nil {
+			if err := s.blackMarketRepo.SaveCharacterPoints(txCtx, points); err != nil {
+				return err
+			}
+		}
+
+		itemName := inst.DefinitionID
+		if s.itemDefs != nil {
+			if def, err := s.itemDefs.FindByID(inst.DefinitionID); err == nil && def.Name != "" {
+				itemName = def.Name
+			}
+		}
+
+		msg := "…レアだな…。いいだろう…。お前のレアポイントを加算しておこう…"
+		if yield.URarePoints > 0 {
+			msg = fmt.Sprintf("これは……! ……いいだろう…。お前の特別なレアポイントを%d加算しておこう…", yield.URarePoints)
+		}
+
+		result = &SacrificeResult{
+			CharacterID:       char.ID,
+			ItemInstanceID:    itemInstanceID,
+			ItemDefinitionID:  inst.DefinitionID,
+			ItemName:          itemName,
+			RarePointsGained:  yield.RarePoints,
+			URarePointsGained: yield.URarePoints,
+			TotalRarePoints:   points.RarePoints,
+			TotalURarePoints:  points.URarePoints,
+			Message:           msg,
+		}
+		return nil
+	}
+
+	if s.txProvider != nil {
+		if err := s.txProvider.RunInTx(ctx, operation); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := operation(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
+
+// TradePrize exchanges accumulated Rare Points or U-Rare Points for an exclusive prize item.
+func (s *Service) TradePrize(ctx context.Context, characterID string, prizeID string) (*TradeResult, error) {
+	if strings.TrimSpace(characterID) == "" {
+		return nil, ErrCharacterNotFound
+	}
+	if strings.TrimSpace(prizeID) == "" {
+		return nil, ErrPrizeNotFound
+	}
+
+	prize, found := s.catalog.FindPrizeByID(prizeID)
+	if !found {
+		return nil, ErrPrizeNotFound
+	}
+
+	var result *TradeResult
+
+	operation := func(txCtx context.Context) error {
+		// 1. Lock character (Tier 2)
+		char, err := s.characterRepo.FindByIDForUpdate(txCtx, characterID)
+		if err != nil {
+			return ErrCharacterNotFound
+		}
+
+		if !CheckEligibility(char) {
+			return ErrAccessDenied
+		}
+
+		// 2. Lock inventory (Tier 3)
+		inv, err := s.inventoryRepo.FindByCharacterIDForUpdate(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+
+		// 3. Lock and check points (Tier 8)
+		points := CharacterPoints{CharacterID: characterID, RarePoints: 0, URarePoints: 0}
+		if s.blackMarketRepo != nil {
+			pts, err := s.blackMarketRepo.GetCharacterPointsForUpdate(txCtx, characterID)
+			if err == nil {
+				points = pts
+			} else if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+		}
+
+		if prize.IsURare {
+			if points.URarePoints < prize.Cost {
+				return ErrInsufficientURarePoints
+			}
+			points.URarePoints -= prize.Cost
+		} else {
+			if points.RarePoints < prize.Cost {
+				return ErrInsufficientRarePoints
+			}
+			points.RarePoints -= prize.Cost
+		}
+
+		// 4. Create and add prize item instance to inventory
+		inst, err := coreitem.NewInstance(prize.ItemDefinitionID, 1)
+		if err != nil {
+			return err
+		}
+
+		if err := inv.Add(inst); err != nil {
+			return fmt.Errorf("failed to add prize to inventory: %w", err)
+		}
+
+		if err := s.inventoryRepo.Save(txCtx, inv); err != nil {
+			return err
+		}
+
+		if s.blackMarketRepo != nil {
+			if err := s.blackMarketRepo.SaveCharacterPoints(txCtx, points); err != nil {
+				return err
+			}
+		}
+
+		result = &TradeResult{
+			CharacterID:         char.ID,
+			PrizeID:             prize.ID,
+			ItemDefinitionID:    prize.ItemDefinitionID,
+			ItemName:            prize.Name,
+			InventoryInstanceID: inst.ID,
+			Cost:                prize.Cost,
+			IsURare:             prize.IsURare,
+			RemainingRare:       points.RarePoints,
+			RemainingURare:      points.URarePoints,
+			Message:             "取引成立だ…。" + prize.Name + " を受け取った…",
 		}
 		return nil
 	}
