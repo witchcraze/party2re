@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #300 — Enhance Go AST Linter to Verify RunInTx Presence in Transaction Boundary Symbols
+Last updated: Issue #299 — Refine Delivery and Tavern Guidance Layer Metadata and Lock Semantics
 
 ## Current phase
 
