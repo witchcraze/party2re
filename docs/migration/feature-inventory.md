@@ -99,6 +99,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Player private home, mailbox, and letter correspondence ([#159](https://github.com/witchcraze/party2re/issues/159))
 - [x] Helper and player rescue assistance ([#79](https://github.com/witchcraze/party2re/issues/79))
 - [x] Rankings (level, job, wealth, battle victories, helper, rebirth, medals) ([#63](https://github.com/witchcraze/party2re/issues/63))
+- [x] Photo Contest, screenshots, seasonal voting, and Hall of Fame ([#186](https://github.com/witchcraze/party2re/issues/186))
 
 ### F. Economy and side systems
 - [x] Alchemy synthesis with 112 recipes & material requirements ([#60](https://github.com/witchcraze/party2re/issues/60))
@@ -203,6 +204,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#72](https://github.com/witchcraze/party2re/issues/72) | Gem Store, jewel synthesis, gem transfer, and orb appraisal | Merged |
 | [#187](https://github.com/witchcraze/party2re/issues/187) | Endgame wishes and stat limit break system (god.cgi, u_god.cgi) | Merged |
 | [#193](https://github.com/witchcraze/party2re/issues/193) | Monster Grandpa and pet companion storage (farm.cgi / monster.cgi) | Merged |
+| [#186](https://github.com/witchcraze/party2re/issues/186) | Photo contest, screenshots, seasonal voting, and Hall of Fame (photo.cgi / contest.cgi) | Merged |
 
 ---
 

@@ -377,6 +377,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Monster storage box (base capacity 50 up to 300 via `OverMonster`), home pet companions (up to 8 pets per home estate), taming/capturing, renaming, gifting to other players, and releasing into the wild (`farm.cgi` / `monster.cgi`, NPC `@モンジィ`).
   - **Dependencies:** Core Character, Character repository.
   - **Persistence:** `character_monsters` table in `internal/database/monster_repository.go`.
+- **Photo Contest, Screenshots & Gallery** (`internal/contest`):
+  - **Responsibility:** Character screenshots and photo gallery storage (up to 20 photos per character), photo contest entry submissions, community voting with comments, automated round conclusion with prize distribution (15,000 / 7,000 / 3,000 Gold, 10 / 6 / 3 Small Medals, 700 / 300 / 100 Guild Points), voter bonus medal distribution, Hall of Fame (殿堂入り / Legends) archiving, and news announcements (`photo.cgi` / `contest.cgi`, NPC `@ワコール`).
+  - **Dependencies:** Core Character, Character repository, News publisher, Guild service.
+  - **Persistence:** `character_photos`, `contest_rounds`, `contest_entries`, `contest_votes`, and `contest_legends` tables in `internal/database/contest_repository.go`.
 
 ### Cross-Module Transaction Orchestration & Ambient Context Propagation
 
@@ -388,7 +392,7 @@ Cross-module workflows spanning multiple distinct feature and core repositories 
 ### Future Feature Modules
 
 - Web Presentation UI / Client
-- Photo Contest & Seasonal Events
+- Multiplayer Co-op Party System (quest.cgi)
 
 
 

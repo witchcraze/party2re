@@ -28,6 +28,7 @@ import (
 	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/character"
 	"github.com/witchcraze/party2re/internal/collection"
+	"github.com/witchcraze/party2re/internal/contest"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
@@ -496,6 +497,23 @@ func run(ctx context.Context, logger logging.Logger) error {
 		monster.WithTransactionProvider(txProvider),
 	)
 
+	contestRepo, err := database.NewContestRepository(db)
+	if err != nil {
+		return err
+	}
+	contestService, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithTransactionProvider(txProvider),
+		contest.WithNewsPublisher(contest.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
+			_, err := notificationService.PublishNews(ctx, cat, title, content, author, pubAt)
+			return err
+		})),
+	)
+	if err != nil {
+		return err
+	}
+
 	activityRepo, err := database.NewActivityRepository(db)
 	if err != nil {
 		return err
@@ -598,6 +616,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 		http.WithGemStore(gemStoreService),
 		http.WithGod(godService),
 		http.WithMonster(monsterService),
+		http.WithContest(contestService),
 	}
 
 	apiHandler, err := http.NewHandler(playerService, charService, advService, shopService, opts...)
