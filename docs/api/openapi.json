@@ -771,6 +771,43 @@
         ],
         "type": "object"
       },
+      "CreatePartyRequest": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "max_level": {
+            "type": "integer"
+          },
+          "max_members": {
+            "type": "integer"
+          },
+          "min_hp": {
+            "type": "integer"
+          },
+          "min_level": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "speed": {
+            "type": "integer"
+          },
+          "stage_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "name",
+          "stage_id"
+        ],
+        "type": "object"
+      },
       "ErrorResponse": {
         "properties": {
           "error": {
@@ -795,6 +832,35 @@
         ],
         "type": "object"
       },
+      "JoinPartyRequest": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id"
+        ],
+        "type": "object"
+      },
+      "KickPartyMemberRequest": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "target_character_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "target_character_id"
+        ],
+        "type": "object"
+      },
       "ListBanquetsResponse": {
         "properties": {
           "banquets": {
@@ -810,6 +876,269 @@
         "required": [
           "banquets",
           "total"
+        ],
+        "type": "object"
+      },
+      "Party": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "leader_character_id": {
+            "type": "string"
+          },
+          "max_level": {
+            "type": "integer"
+          },
+          "max_members": {
+            "type": "integer"
+          },
+          "min_hp": {
+            "type": "integer"
+          },
+          "min_level": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "speed": {
+            "type": "integer"
+          },
+          "stage_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "leader_character_id",
+          "name",
+          "stage_id",
+          "speed",
+          "max_members",
+          "min_level",
+          "max_level",
+          "min_hp",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "PartyAdventureResult": {
+        "properties": {
+          "outcome": {
+            "type": "string"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "rewards": {
+            "items": {
+              "$ref": "#/components/schemas/PartyMemberRewardSummary"
+            },
+            "type": "array"
+          },
+          "stage_id": {
+            "type": "string"
+          },
+          "synergy_bonus_percent": {
+            "type": "integer"
+          },
+          "total_exp": {
+            "type": "integer"
+          },
+          "total_gold": {
+            "type": "integer"
+          },
+          "turns": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "party_id",
+          "stage_id",
+          "outcome",
+          "turns",
+          "total_exp",
+          "total_gold",
+          "synergy_bonus_percent",
+          "rewards"
+        ],
+        "type": "object"
+      },
+      "PartyDetail": {
+        "properties": {
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/PartyMember"
+            },
+            "type": "array"
+          },
+          "party": {
+            "$ref": "#/components/schemas/Party"
+          }
+        },
+        "required": [
+          "party",
+          "members"
+        ],
+        "type": "object"
+      },
+      "PartyMember": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "character_name": {
+            "type": "string"
+          },
+          "hp": {
+            "type": "integer"
+          },
+          "is_leader": {
+            "type": "boolean"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "joined_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "ready_state": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "party_id",
+          "character_id",
+          "character_name",
+          "job_id",
+          "level",
+          "hp",
+          "max_hp",
+          "is_leader",
+          "ready_state",
+          "joined_at"
+        ],
+        "type": "object"
+      },
+      "PartyMemberRewardSummary": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "gained_exp": {
+            "type": "integer"
+          },
+          "gained_gold": {
+            "type": "integer"
+          },
+          "level_after": {
+            "type": "integer"
+          },
+          "level_before": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "name",
+          "gained_exp",
+          "gained_gold",
+          "level_before",
+          "level_after"
+        ],
+        "type": "object"
+      },
+      "PartySummary": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "current_members": {
+            "type": "integer"
+          },
+          "has_password": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "leader_character_id": {
+            "type": "string"
+          },
+          "leader_name": {
+            "type": "string"
+          },
+          "max_level": {
+            "type": "integer"
+          },
+          "max_members": {
+            "type": "integer"
+          },
+          "min_hp": {
+            "type": "integer"
+          },
+          "min_level": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "speed": {
+            "type": "integer"
+          },
+          "stage_id": {
+            "type": "string"
+          },
+          "stage_name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "leader_character_id",
+          "leader_name",
+          "stage_id",
+          "speed",
+          "current_members",
+          "max_members",
+          "has_password",
+          "min_level",
+          "max_level",
+          "min_hp",
+          "status",
+          "created_at"
         ],
         "type": "object"
       },
@@ -932,6 +1261,21 @@
           "session_id",
           "player_id",
           "expires_at"
+        ],
+        "type": "object"
+      },
+      "SetPartyReadyRequest": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "character_id",
+          "ready"
         ],
         "type": "object"
       },
@@ -13146,6 +13490,461 @@
         "summary": "Post message to town park board",
         "tags": [
           "Park"
+        ]
+      }
+    },
+    "/parties": {
+      "get": {
+        "description": "Lists recruiting or active multiplayer parties.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "default": "recruiting",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PartySummary"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "List of parties"
+          }
+        },
+        "summary": "List parties",
+        "tags": [
+          "Party"
+        ]
+      },
+      "post": {
+        "description": "Creates a new multiplayer party with the authenticated character as leader.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePartyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartyDetail"
+                }
+              }
+            },
+            "description": "Party created successfully"
+          },
+          "400": {
+            "description": "Invalid party parameters or character already in party"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Create party",
+        "tags": [
+          "Party"
+        ]
+      }
+    },
+    "/parties/{id}": {
+      "delete": {
+        "description": "Disbands the party (party leader only).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "character_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "character_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Party disbanded"
+          },
+          "400": {
+            "description": "Not party leader"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Party not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Disband party",
+        "tags": [
+          "Party"
+        ]
+      },
+      "get": {
+        "description": "Retrieves detailed information and member list for a party.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartyDetail"
+                }
+              }
+            },
+            "description": "Party details"
+          },
+          "404": {
+            "description": "Party not found"
+          }
+        },
+        "summary": "Get party detail",
+        "tags": [
+          "Party"
+        ]
+      }
+    },
+    "/parties/{id}/join": {
+      "post": {
+        "description": "Joins an existing recruiting party.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinPartyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartyDetail"
+                }
+              }
+            },
+            "description": "Joined party successfully"
+          },
+          "400": {
+            "description": "Party full, invalid password, requirement not met, or already in party"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Party not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Join party",
+        "tags": [
+          "Party"
+        ]
+      }
+    },
+    "/parties/{id}/kick": {
+      "post": {
+        "description": "Kicks a member from the party (leader only).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KickPartyMemberRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Member kicked successfully"
+          },
+          "400": {
+            "description": "Not party leader or cannot kick self"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Party or member not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Kick party member",
+        "tags": [
+          "Party"
+        ]
+      }
+    },
+    "/parties/{id}/leave": {
+      "post": {
+        "description": "Leaves the party. If the leader leaves, the party is disbanded.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "character_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "character_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Left party successfully"
+          },
+          "400": {
+            "description": "Character not in party"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Party not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Leave party",
+        "tags": [
+          "Party"
+        ]
+      }
+    },
+    "/parties/{id}/ready": {
+      "post": {
+        "description": "Toggles or sets member readiness before starting the co-op adventure.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPartyReadyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartyDetail"
+                }
+              }
+            },
+            "description": "Ready state updated"
+          },
+          "400": {
+            "description": "Character not in party"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Party not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Set party member ready state",
+        "tags": [
+          "Party"
+        ]
+      }
+    },
+    "/parties/{id}/start": {
+      "post": {
+        "description": "Starts and executes multiplayer co-op combat adventure for the party (leader only).",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "character_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "character_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartyAdventureResult"
+                }
+              }
+            },
+            "description": "Adventure completed"
+          },
+          "400": {
+            "description": "Not leader, not all members ready, or party not recruiting"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Party or stage not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Start party adventure",
+        "tags": [
+          "Party"
         ]
       }
     },

@@ -119,3 +119,76 @@ func TestEngineRejectsInvalidRewardFields(t *testing.T) {
 		}
 	}
 }
+
+func TestEngineResolvePartyBattle(t *testing.T) {
+	engine := Engine{}
+
+	// 1. Successful 2-ally victory with 10% bonus
+	res, err := engine.ResolvePartyBattle(PartyBattleRequest{
+		Allies: []Participant{
+			{ID: "hero1", HP: 50, Attack: 20, Defense: 5},
+			{ID: "hero2", HP: 40, Attack: 15, Defense: 5},
+		},
+		Enemies: []Participant{
+			{ID: "goblin", HP: 30, Attack: 10, Defense: 2},
+		},
+		VictoryReward: Reward{Experience: 100, Currency: 50},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePartyBattle failed: %v", err)
+	}
+	if res.Outcome != OutcomeWin || res.WinnerSide != "allies" {
+		t.Fatalf("expected allies win, got outcome=%s side=%s", res.Outcome, res.WinnerSide)
+	}
+	if res.BonusPercent != 10 {
+		t.Fatalf("expected 10%% bonus for 2 allies, got %d%%", res.BonusPercent)
+	}
+	if res.TotalReward.Experience != 110 || res.TotalReward.Currency != 55 {
+		t.Fatalf("expected scaled reward (110 EXP, 55 G), got %+v", res.TotalReward)
+	}
+	if len(res.AlliesSurvived) != 2 || len(res.Logs) == 0 {
+		t.Fatalf("expected 2 survivors and turn logs, got %+v", res)
+	}
+
+	// 2. 4-ally party with 30% bonus
+	res4, err := engine.ResolvePartyBattle(PartyBattleRequest{
+		Allies: []Participant{
+			{ID: "p1", HP: 50, Attack: 20, Defense: 5},
+			{ID: "p2", HP: 40, Attack: 15, Defense: 5},
+			{ID: "p3", HP: 45, Attack: 18, Defense: 5},
+			{ID: "p4", HP: 60, Attack: 22, Defense: 5},
+		},
+		Enemies: []Participant{
+			{ID: "dragon", HP: 100, Attack: 15, Defense: 5},
+		},
+		VictoryReward: Reward{Experience: 200, Currency: 100},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePartyBattle 4-player failed: %v", err)
+	}
+	if res4.BonusPercent != 30 || res4.TotalReward.Experience != 260 {
+		t.Fatalf("expected 30%% bonus (260 EXP), got %+v", res4)
+	}
+
+	// 3. Allies defeat
+	resDefeat, err := engine.ResolvePartyBattle(PartyBattleRequest{
+		Allies: []Participant{
+			{ID: "weak1", HP: 5, Attack: 1, Defense: 0},
+		},
+		Enemies: []Participant{
+			{ID: "mega_boss", HP: 1000, Attack: 100, Defense: 50},
+		},
+		DefeatReward: Reward{Experience: 10},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePartyBattle defeat failed: %v", err)
+	}
+	if resDefeat.Outcome != OutcomeDefeat || resDefeat.WinnerSide != "enemies" {
+		t.Fatalf("expected enemies win, got outcome=%s side=%s", resDefeat.Outcome, resDefeat.WinnerSide)
+	}
+
+	// 4. Invalid requests
+	if _, err := engine.ResolvePartyBattle(PartyBattleRequest{}); !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("expected ErrInvalidRequest, got %v", err)
+	}
+}
