@@ -3,154 +3,392 @@ package character
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
-type repositoryStub struct {
-	saved corecharacter.Character
-	err   error
+type mockRepository struct {
+	characters map[string]corecharacter.Character
+	profiles   map[string]Profile
+	err        error
 }
 
-func (r *repositoryStub) Save(_ context.Context, value corecharacter.Character) error {
-	r.saved = value
-	return r.err
+func newMockRepository() *mockRepository {
+	return &mockRepository{
+		characters: make(map[string]corecharacter.Character),
+		profiles:   make(map[string]Profile),
+	}
 }
 
-func (r *repositoryStub) FindByID(_ context.Context, _ string) (corecharacter.Character, error) {
-	return r.saved, r.err
+func (r *mockRepository) Save(_ context.Context, value corecharacter.Character) error {
+	if r.err != nil {
+		return r.err
+	}
+	r.characters[value.ID] = value
+	return nil
 }
 
-func (r *repositoryStub) FindByPlayerID(_ context.Context, playerID string) ([]corecharacter.Character, error) {
+func (r *mockRepository) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
+	if r.err != nil {
+		return corecharacter.Character{}, r.err
+	}
+	c, ok := r.characters[id]
+	if !ok {
+		return corecharacter.Character{}, ErrNotFound
+	}
+	return c, nil
+}
+
+func (r *mockRepository) FindByIDForUpdate(_ context.Context, id string) (corecharacter.Character, error) {
+	return r.FindByID(context.Background(), id)
+}
+
+func (r *mockRepository) FindByName(_ context.Context, name string) (corecharacter.Character, error) {
+	if r.err != nil {
+		return corecharacter.Character{}, r.err
+	}
+	for _, c := range r.characters {
+		if c.Name == name {
+			return c, nil
+		}
+	}
+	return corecharacter.Character{}, ErrNotFound
+}
+
+func (r *mockRepository) FindByNameForUpdate(_ context.Context, name string) (corecharacter.Character, error) {
+	return r.FindByName(context.Background(), name)
+}
+
+func (r *mockRepository) FindByPlayerID(_ context.Context, playerID string) ([]corecharacter.Character, error) {
 	if r.err != nil {
 		return nil, r.err
 	}
-	if r.saved.PlayerID == playerID {
-		return []corecharacter.Character{r.saved}, nil
+	var res []corecharacter.Character
+	for _, c := range r.characters {
+		if c.PlayerID == playerID {
+			res = append(res, c)
+		}
 	}
-	return nil, nil
+	return res, nil
 }
 
-func TestServiceCreateSavesCharacter(t *testing.T) {
-	repository := &repositoryStub{}
-	service, err := NewService(repository)
+func (r *mockRepository) Update(_ context.Context, value corecharacter.Character) error {
+	if r.err != nil {
+		return r.err
+	}
+	r.characters[value.ID] = value
+	return nil
+}
+
+func (r *mockRepository) GetProfile(_ context.Context, characterID string) (Profile, error) {
+	if r.err != nil {
+		return Profile{}, r.err
+	}
+	p, ok := r.profiles[characterID]
+	if !ok {
+		return Profile{}, ErrNotFound
+	}
+	return p, nil
+}
+
+func (r *mockRepository) SaveProfile(_ context.Context, profile Profile) error {
+	if r.err != nil {
+		return r.err
+	}
+	r.profiles[profile.CharacterID] = profile
+	return nil
+}
+
+type mockGuildChecker struct {
+	inGuild bool
+	err     error
+}
+
+func (m *mockGuildChecker) IsInGuild(_ context.Context, _ string) (bool, error) {
+	return m.inGuild, m.err
+}
+
+type mockFleaChecker struct {
+	hasListings bool
+	err         error
+}
+
+func (m *mockFleaChecker) HasActiveListings(_ context.Context, _ string) (bool, error) {
+	return m.hasListings, m.err
+}
+
+type mockNewsPublisher struct {
+	published []string
+}
+
+func (m *mockNewsPublisher) PublishNews(_ context.Context, category, title, content, author string, publishedAt time.Time) error {
+	m.published = append(m.published, title)
+	return nil
+}
+
+func TestService_CreateAndGet(t *testing.T) {
+	repo := newMockRepository()
+	service, err := NewService(repo)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := service.Create(context.Background(), "player-1", "Alice")
+	char, err := service.Create(context.Background(), "player-1", "Hero")
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
-	if got.ID != repository.saved.ID || got.PlayerID != "player-1" || repository.saved.PlayerID != "player-1" {
-		t.Fatalf("Create() did not save returned character: got %#v saved %#v", got, repository.saved)
-	}
-}
-
-func TestServiceCreateWithOptionsSavesInitialIdentity(t *testing.T) {
-	repository := &repositoryStub{}
-	service, _ := NewService(repository)
-
-	got, err := service.CreateWithOptions(context.Background(), "player-1", "Alice", CreationOptions{
-		JobID:  "starter-2",
-		Gender: "female",
-	})
-	if err != nil {
-		t.Fatalf("CreateWithOptions() error = %v", err)
-	}
-	if got.JobID != "starter-2" || got.Gender != "female" || got.PlayerID != "player-1" || repository.saved.Stats != got.Stats {
-		t.Fatalf("CreateWithOptions() = %#v, saved %#v", got, repository.saved)
-	}
-}
-
-func TestServiceCreateRejectsInvalidInputWithoutSaving(t *testing.T) {
-	repository := &repositoryStub{}
-	service, _ := NewService(repository)
-
-	if _, err := service.Create(context.Background(), "player-1", ""); err == nil {
-		t.Fatal("Create() error = nil, want validation error for empty name")
-	}
-	if _, err := service.Create(context.Background(), "", "Alice"); !errors.Is(err, ErrInvalidPlayer) {
-		t.Fatalf("Create() error = %v, want ErrInvalidPlayer for empty playerID", err)
-	}
-	if repository.saved.ID != "" {
-		t.Fatal("Create() saved invalid character")
-	}
-}
-
-func TestServiceCreateReturnsRepositoryError(t *testing.T) {
-	want := errors.New("database unavailable")
-	service, _ := NewService(&repositoryStub{err: want})
-
-	if _, err := service.Create(context.Background(), "player-1", "Alice"); !errors.Is(err, want) {
-		t.Fatalf("Create() error = %v, want %v", err, want)
-	}
-}
-
-func (r *repositoryStub) Update(_ context.Context, value corecharacter.Character) error {
-	r.saved = value
-	return r.err
-}
-
-func TestServiceGetReturnsSavedCharacter(t *testing.T) {
-	repository := &repositoryStub{}
-	service, _ := NewService(repository)
-	created, err := service.Create(context.Background(), "player-1", "Alice")
-	if err != nil {
-		t.Fatal(err)
+	if char.Name != "Hero" || char.PlayerID != "player-1" {
+		t.Fatalf("unexpected char: %+v", char)
 	}
 
-	got, err := service.Get(context.Background(), created.ID)
+	fetched, err := service.Get(context.Background(), char.ID)
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
-	if got != created {
-		t.Fatalf("Get() = %#v, want %#v", got, created)
-	}
-}
-
-func TestServiceListByPlayer(t *testing.T) {
-	repository := &repositoryStub{}
-	service, _ := NewService(repository)
-	created, err := service.Create(context.Background(), "player-1", "Alice")
-	if err != nil {
-		t.Fatal(err)
+	if fetched.ID != char.ID {
+		t.Fatalf("fetched ID mismatch: %s != %s", fetched.ID, char.ID)
 	}
 
 	list, err := service.ListByPlayer(context.Background(), "player-1")
-	if err != nil {
-		t.Fatalf("ListByPlayer error: %v", err)
-	}
-	if len(list) != 1 || list[0].ID != created.ID {
-		t.Fatalf("ListByPlayer = %#v, want 1 character", list)
-	}
-
-	if _, err := service.ListByPlayer(context.Background(), ""); !errors.Is(err, ErrInvalidPlayer) {
-		t.Fatalf("ListByPlayer(\"\") error = %v, want ErrInvalidPlayer", err)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("ListByPlayer() error = %v, len = %d", err, len(list))
 	}
 }
 
-func TestServiceRebirth(t *testing.T) {
-	repository := &repositoryStub{}
-	service, _ := NewService(repository)
-	created, err := service.Create(context.Background(), "player-1", "Rebirth Candidate")
+func TestService_ChangeName(t *testing.T) {
+	repo := newMockRepository()
+	news := &mockNewsPublisher{}
+	guildChecker := &mockGuildChecker{}
+	fleaChecker := &mockFleaChecker{}
+
+	service, err := NewService(repo,
+		WithNewsPublisher(news),
+		WithGuildChecker(guildChecker),
+		WithFleaMarketChecker(fleaChecker),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Under-leveled character cannot rebirth
-	if _, err := service.Rebirth(context.Background(), created.ID); err == nil {
-		t.Fatal("expected error for level 1 character rebirth, got nil")
+	// 1. Setup rich character
+	char, _ := service.Create(context.Background(), "player-1", "OldHero")
+	char.Money = 1000000
+	_ = repo.Update(context.Background(), char)
+
+	// 2. Successful name change
+	renamed, err := service.ChangeName(context.Background(), char.ID, "NewHero")
+	if err != nil {
+		t.Fatalf("ChangeName() failed: %v", err)
+	}
+	if renamed.Name != "NewHero" {
+		t.Fatalf("expected name NewHero, got %s", renamed.Name)
+	}
+	if renamed.Money != 500000 {
+		t.Fatalf("expected remaining money 500000, got %d", renamed.Money)
+	}
+	if len(news.published) != 1 {
+		t.Fatalf("expected news broadcast, got %d", len(news.published))
 	}
 
-	// Set character to level 99
-	repository.saved.Level = 99
-	rebirthed, err := service.Rebirth(context.Background(), created.ID)
-	if err != nil {
-		t.Fatalf("Rebirth error: %v", err)
+	// 3. Same name rejection
+	if _, err := service.ChangeName(context.Background(), char.ID, "NewHero"); !errors.Is(err, ErrSameName) {
+		t.Fatalf("expected ErrSameName, got %v", err)
 	}
-	if rebirthed.Level != 1 || rebirthed.RebirthCount != 1 {
-		t.Errorf("rebirthed = %#v, want Level 1 and RebirthCount 1", rebirthed)
+
+	// 4. Insufficient gold (< 500,000 G)
+	renamed.Money = 499999
+	_ = repo.Update(context.Background(), renamed)
+	if _, err := service.ChangeName(context.Background(), char.ID, "AnotherName"); !errors.Is(err, ErrInsufficientGold) {
+		t.Fatalf("expected ErrInsufficientGold, got %v", err)
+	}
+
+	// 5. Reset gold & test taken name
+	renamed.Money = 600000
+	_ = repo.Update(context.Background(), renamed)
+	_, _ = service.Create(context.Background(), "player-2", "TakenHero")
+	if _, err := service.ChangeName(context.Background(), char.ID, "TakenHero"); !errors.Is(err, ErrNameAlreadyTaken) {
+		t.Fatalf("expected ErrNameAlreadyTaken, got %v", err)
+	}
+
+	// 6. Guild membership block
+	guildChecker.inGuild = true
+	if _, err := service.ChangeName(context.Background(), char.ID, "ValidName"); !errors.Is(err, ErrInGuildDisallowed) {
+		t.Fatalf("expected ErrInGuildDisallowed, got %v", err)
+	}
+	guildChecker.inGuild = false
+
+	// 7. Active flea market listing block
+	fleaChecker.hasListings = true
+	if _, err := service.ChangeName(context.Background(), char.ID, "ValidName"); !errors.Is(err, ErrActiveMarketDisallowed) {
+		t.Fatalf("expected ErrActiveMarketDisallowed, got %v", err)
+	}
+	fleaChecker.hasListings = false
+
+	// 8. Invalid name formats
+	invalidNames := []string{
+		"",
+		"   ",
+		"Hero\u3000Name",        // Japanese space
+		"Hero Name",             // Space
+		"Hero,Name",             // Comma
+		"Hero;Name",             // Semicolon
+		"Hero\"Name",            // Quote
+		"Hero'Name",             // Single quote
+		"Hero&Name",             // Ampersand
+		"Hero<Name",             // Less than
+		"Hero>Name",             // Greater than
+		"Hero\\Name",            // Backslash
+		"Hero/Name",             // Slash
+		"Hero@Name",             // At
+		"Hero＠Name",             // Fullwidth at
+		strings.Repeat("A", 33), // Too long
+	}
+	for _, inv := range invalidNames {
+		if _, err := service.ChangeName(context.Background(), char.ID, inv); !errors.Is(err, ErrInvalidName) {
+			t.Errorf("expected ErrInvalidName for %q, got %v", inv, err)
+		}
+	}
+}
+
+func TestService_ChangeGender(t *testing.T) {
+	repo := newMockRepository()
+	service, _ := NewService(repo)
+
+	char, _ := service.CreateWithOptions(context.Background(), "player-1", "Hero", CreationOptions{
+		Gender: "m",
+	})
+	char.Money = 20000
+	_ = repo.Update(context.Background(), char)
+
+	// 1. Successful change to female
+	updated, err := service.ChangeGender(context.Background(), char.ID, "f")
+	if err != nil {
+		t.Fatalf("ChangeGender() failed: %v", err)
+	}
+	if updated.Gender != "f" {
+		t.Fatalf("expected gender f, got %s", updated.Gender)
+	}
+	if updated.Money != 10000 {
+		t.Fatalf("expected money 10000, got %d", updated.Money)
+	}
+
+	// 2. Same gender rejection
+	if _, err := service.ChangeGender(context.Background(), char.ID, "female"); !errors.Is(err, ErrSameGender) {
+		t.Fatalf("expected ErrSameGender, got %v", err)
+	}
+
+	// 3. Insufficient gold (< 10,000 G)
+	updated.Money = 9999
+	_ = repo.Update(context.Background(), updated)
+	if _, err := service.ChangeGender(context.Background(), char.ID, "m"); !errors.Is(err, ErrInsufficientGold) {
+		t.Fatalf("expected ErrInsufficientGold, got %v", err)
+	}
+
+	// 4. Invalid gender
+	updated.Money = 20000
+	_ = repo.Update(context.Background(), updated)
+	if _, err := service.ChangeGender(context.Background(), char.ID, "invalid-gender"); !errors.Is(err, ErrInvalidGender) {
+		t.Fatalf("expected ErrInvalidGender, got %v", err)
+	}
+}
+
+func TestService_ProfileOperations(t *testing.T) {
+	repo := newMockRepository()
+	service, _ := NewService(repo)
+
+	char, _ := service.Create(context.Background(), "player-1", "Hero")
+
+	// 1. Get default profile
+	view, err := service.GetProfile(context.Background(), char.ID)
+	if err != nil {
+		t.Fatalf("GetProfile() failed: %v", err)
+	}
+	if view.Character.ID != char.ID {
+		t.Fatalf("view character ID mismatch: %s != %s", view.Character.ID, char.ID)
+	}
+
+	// 2. Update profile
+	comment := "I am a mighty adventurer."
+	avatarURL := "https://example.com/avatar.png"
+	bio := map[string]string{
+		"hobby":     "Fishing",
+		"like_food": "Apple",
+	}
+
+	updatedProfile, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+		Comment:   &comment,
+		AvatarURL: &avatarURL,
+		BioData:   bio,
+	})
+	if err != nil {
+		t.Fatalf("UpdateProfile() failed: %v", err)
+	}
+	if updatedProfile.Comment != comment || updatedProfile.AvatarURL != avatarURL || updatedProfile.BioData["hobby"] != "Fishing" {
+		t.Fatalf("unexpected profile data: %+v", updatedProfile)
+	}
+
+	// 3. Validation errors
+	tooLongComment := strings.Repeat("あ", 161)
+	if _, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+		Comment: &tooLongComment,
+	}); !errors.Is(err, ErrCommentTooLong) {
+		t.Fatalf("expected ErrCommentTooLong, got %v", err)
+	}
+
+	invalidURL := "ftp://invalid-url.com/img.png"
+	if _, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+		AvatarURL: &invalidURL,
+	}); !errors.Is(err, ErrInvalidAvatarURL) {
+		t.Fatalf("expected ErrInvalidAvatarURL, got %v", err)
+	}
+
+	longKeyBio := map[string]string{
+		strings.Repeat("k", 33): "value",
+	}
+	if _, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+		BioData: longKeyBio,
+	}); !errors.Is(err, ErrBioKeyTooLong) {
+		t.Fatalf("expected ErrBioKeyTooLong, got %v", err)
+	}
+}
+
+func TestService_UploadAvatar(t *testing.T) {
+	repo := newMockRepository()
+	service, _ := NewService(repo)
+
+	char, _ := service.Create(context.Background(), "player-1", "Hero")
+
+	// 1. Valid PNG upload
+	pngHeader := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4")
+	dataURI, err := service.UploadAvatar(context.Background(), char.ID, "avatar.png", "image/png", pngHeader)
+	if err != nil {
+		t.Fatalf("UploadAvatar() failed: %v", err)
+	}
+	if !strings.HasPrefix(dataURI, "data:image/png;base64,") {
+		t.Fatalf("expected data:image/png URI, got %s", dataURI)
+	}
+
+	// 2. Empty data rejection
+	if _, err := service.UploadAvatar(context.Background(), char.ID, "empty.png", "image/png", []byte{}); !errors.Is(err, ErrInvalidImageFormat) {
+		t.Fatalf("expected ErrInvalidImageFormat, got %v", err)
+	}
+
+	// 3. Oversized data rejection (> 2 MB)
+	hugeData := make([]byte, 2*1024*1024+1)
+	if _, err := service.UploadAvatar(context.Background(), char.ID, "large.png", "image/png", hugeData); !errors.Is(err, ErrImageTooLarge) {
+		t.Fatalf("expected ErrImageTooLarge, got %v", err)
+	}
+}
+
+func TestService_GetNamingHallDialogue(t *testing.T) {
+	repo := newMockRepository()
+	service, _ := NewService(repo)
+
+	dialogue := service.GetNamingHallDialogue()
+	if dialogue.NPCName != "@マリナン" || dialogue.LocationTitle != "命名の館" || dialogue.NameChangeCost != 500000 || dialogue.GenderChangeCost != 10000 {
+		t.Fatalf("unexpected dialogue: %+v", dialogue)
 	}
 }

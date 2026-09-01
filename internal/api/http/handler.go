@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
+	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/helper"
@@ -59,6 +60,12 @@ type CharacterService interface {
 	Create(ctx context.Context, playerID string, name string) (corecharacter.Character, error)
 	Get(ctx context.Context, id string) (corecharacter.Character, error)
 	Rebirth(ctx context.Context, id string) (corecharacter.Character, error)
+	ChangeName(ctx context.Context, characterID, newName string) (corecharacter.Character, error)
+	ChangeGender(ctx context.Context, characterID, newGender string) (corecharacter.Character, error)
+	GetProfile(ctx context.Context, characterID string) (character.ProfileView, error)
+	UpdateProfile(ctx context.Context, characterID string, req character.UpdateProfileRequest) (character.Profile, error)
+	UploadAvatar(ctx context.Context, characterID string, filename string, contentType string, data []byte) (string, error)
+	GetNamingHallDialogue() character.NamingHallDialogue
 }
 
 // AdventureService defines the adventure operations exposed over HTTP.
@@ -281,6 +288,13 @@ func (h *Handler) Router() http.Handler {
 
 	mux.HandleFunc("POST /characters", h.handleCreateCharacter)
 	mux.HandleFunc("GET /characters/{id}", h.handleGetCharacter)
+	mux.HandleFunc("GET /characters/{id}/profile", h.handleGetCharacterProfile)
+	mux.HandleFunc("POST /characters/{id}/profile", h.handleUpdateCharacterProfile)
+	mux.HandleFunc("PUT /characters/{id}/profile", h.handleUpdateCharacterProfile)
+	mux.HandleFunc("POST /characters/{id}/name", h.handleChangeCharacterName)
+	mux.HandleFunc("POST /characters/{id}/gender", h.handleChangeCharacterGender)
+	mux.HandleFunc("POST /characters/{id}/avatar", h.handleUploadCharacterAvatar)
+	mux.HandleFunc("GET /naming-hall/dialogue", h.handleNamingHallDialogue)
 
 	mux.HandleFunc("POST /adventures", h.handleStartAdventure)
 	mux.HandleFunc("POST /adventures/{id}/claim", h.handleClaimAdventure)

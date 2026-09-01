@@ -36,7 +36,8 @@ func TestCharacterRepositoryPersistsAndLoadsCharacter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := corecharacter.New("Repository Test")
+	name := "RepoTest_" + player.ID[:8]
+	want, err := corecharacter.New(name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +79,41 @@ func TestCharacterRepositoryPersistsAndLoadsCharacter(t *testing.T) {
 	}
 	if updated != want {
 		t.Fatalf("FindByID() after update = %#v, want %#v", updated, want)
+	}
+
+	// FindByName & FindByNameForUpdate
+	byName, err := repository.FindByName(ctx, want.Name)
+	if err != nil || byName.ID != want.ID {
+		t.Fatalf("FindByName() error = %v, got %+v", err, byName)
+	}
+
+	byNameUpdate, err := repository.FindByNameForUpdate(ctx, want.Name)
+	if err != nil || byNameUpdate.ID != want.ID {
+		t.Fatalf("FindByNameForUpdate() error = %v, got %+v", err, byNameUpdate)
+	}
+
+	// Profile Operations
+	defaultProf, err := repository.GetProfile(ctx, want.ID)
+	if err != nil || defaultProf.CharacterID != want.ID {
+		t.Fatalf("GetProfile(default) error = %v, got %+v", err, defaultProf)
+	}
+
+	profToSave := defaultProf
+	profToSave.Comment = "Testing bio"
+	profToSave.AvatarURL = "https://example.com/avatar.png"
+	profToSave.BioData = map[string]string{
+		"hobby": "Coding",
+	}
+	if err := repository.SaveProfile(ctx, profToSave); err != nil {
+		t.Fatalf("SaveProfile() error = %v", err)
+	}
+
+	loadedProf, err := repository.GetProfile(ctx, want.ID)
+	if err != nil {
+		t.Fatalf("GetProfile() after save error = %v", err)
+	}
+	if loadedProf.Comment != "Testing bio" || loadedProf.AvatarURL != "https://example.com/avatar.png" || loadedProf.BioData["hobby"] != "Coding" {
+		t.Fatalf("unexpected loaded profile: %+v", loadedProf)
 	}
 
 	// Nonexistent character errors

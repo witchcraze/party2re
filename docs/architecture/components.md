@@ -42,6 +42,7 @@ justifies introducing it.
 Linked to a owning `Player` via `player_id` (enforced via foreign key constraint).
 Owns invariants about its own state but should not become a God object containing every game system.
 Access to character operations is authorized against the authenticated session's player identity.
+Owns character renaming at the Naming Hall (`name_change.cgi`, 500,000 G, guild & flea market restrictions, uniqueness validation), gender/appearance changes (10,000 G), and custom profile bio, comment, and avatar image management (`character_profiles`).
 
 ### Progression
 
