@@ -11,7 +11,7 @@ import (
 type mockAuctionRepo struct {
 	createFn func(ctx context.Context, listing auction.AuctionListing) (auction.AuctionListing, error)
 	getFn    func(ctx context.Context, id string) (auction.AuctionListing, error)
-	listFn   func(ctx context.Context, limit, offset int) ([]auction.AuctionListing, error)
+	listFn   func(ctx context.Context, limit, offset int) ([]auction.AuctionListing, int, error)
 	bidFn    func(ctx context.Context, id, bidder string, amount int) (auction.AuctionListing, error)
 	buyoutFn func(ctx context.Context, id, buyer string) (auction.AuctionListing, error)
 	settleFn func(ctx context.Context, id string) (auction.AuctionListing, error)
@@ -30,11 +30,11 @@ func (m *mockAuctionRepo) GetListing(ctx context.Context, id string) (auction.Au
 	}
 	return auction.AuctionListing{}, auction.ErrListingNotFound
 }
-func (m *mockAuctionRepo) ListActive(ctx context.Context, limit, offset int) ([]auction.AuctionListing, error) {
+func (m *mockAuctionRepo) ListActive(ctx context.Context, limit, offset int) ([]auction.AuctionListing, int, error) {
 	if m.listFn != nil {
 		return m.listFn(ctx, limit, offset)
 	}
-	return nil, nil
+	return nil, 0, nil
 }
 func (m *mockAuctionRepo) PlaceBid(ctx context.Context, id, bidder string, amount int) (auction.AuctionListing, error) {
 	if m.bidFn != nil {

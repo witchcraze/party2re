@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/party"
 )
 
@@ -16,7 +16,7 @@ import (
 type PartyService interface {
 	CreateParty(ctx context.Context, leaderCharID string, req party.CreatePartyRequest) (party.PartyDetail, error)
 	GetParty(ctx context.Context, partyID string) (party.PartyDetail, error)
-	ListParties(ctx context.Context, status string, limit, offset int) ([]party.PartySummary, error)
+	ListParties(ctx context.Context, status string, limit, offset int) (pagination.Page[party.PartySummary], error)
 	JoinParty(ctx context.Context, partyID, characterID, password string) (party.PartyDetail, error)
 	LeaveParty(ctx context.Context, partyID, characterID string) error
 	KickMember(ctx context.Context, partyID, leaderCharID, targetCharID string) error
@@ -40,16 +40,12 @@ func (h *Handler) handleListParties(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := r.URL.Query().Get("status")
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	params := pagination.ParseRequestWithDefaults(r, 50, 100)
 
-	list, err := h.parties.ListParties(r.Context(), status, limit, offset)
+	list, err := h.parties.ListParties(r.Context(), status, params.Limit, params.Offset)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list parties"})
 		return
-	}
-	if list == nil {
-		list = []party.PartySummary{}
 	}
 
 	writeJSON(w, http.StatusOK, list)

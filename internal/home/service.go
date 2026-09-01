@@ -11,6 +11,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/ratelimit"
 )
 
@@ -22,12 +23,8 @@ type Limiter interface {
 	Allow(ctx context.Context, key string, limit int64, window time.Duration) (ratelimit.Result, error)
 }
 
-type LetterListResult struct {
-	Letters []Letter `json:"letters"`
-	Total   int      `json:"total"`
-	Limit   int      `json:"limit"`
-	Offset  int      `json:"offset"`
-}
+// LetterListResult is a type alias for standardized generic paginated letters.
+type LetterListResult = pagination.Page[Letter]
 
 type Service struct {
 	repo            Repository
@@ -241,27 +238,14 @@ func (s *Service) ListInbox(ctx context.Context, recipientID string, limit, offs
 	if recipientID == "" {
 		return LetterListResult{}, ErrInvalidRecipient
 	}
-	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
-	if offset < 0 {
-		offset = 0
-	}
+	limit, offset = pagination.Normalize(limit, offset)
 
 	letters, total, err := s.repo.ListInboxLetters(ctx, recipientID, limit, offset)
 	if err != nil {
 		return LetterListResult{}, err
 	}
 
-	return LetterListResult{
-		Letters: letters,
-		Total:   total,
-		Limit:   limit,
-		Offset:  offset,
-	}, nil
+	return pagination.NewPage(letters, total, limit, offset), nil
 }
 
 // ListOutbox retrieves sent letters for a sender character.
@@ -270,27 +254,14 @@ func (s *Service) ListOutbox(ctx context.Context, senderID string, limit, offset
 	if senderID == "" {
 		return LetterListResult{}, ErrInvalidSender
 	}
-	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
-	if offset < 0 {
-		offset = 0
-	}
+	limit, offset = pagination.Normalize(limit, offset)
 
 	letters, total, err := s.repo.ListOutboxLetters(ctx, senderID, limit, offset)
 	if err != nil {
 		return LetterListResult{}, err
 	}
 
-	return LetterListResult{
-		Letters: letters,
-		Total:   total,
-		Limit:   limit,
-		Offset:  offset,
-	}, nil
+	return pagination.NewPage(letters, total, limit, offset), nil
 }
 
 // GetUnreadLetterCount returns the number of unread received letters.

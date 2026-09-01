@@ -305,17 +305,18 @@ func (m *mockContestRepo) SaveLegend(ctx context.Context, legend contest.Contest
 	return nil
 }
 
-func (m *mockContestRepo) ListLegends(ctx context.Context, limit, offset int) ([]contest.ContestLegend, error) {
+func (m *mockContestRepo) ListLegends(ctx context.Context, limit, offset int) ([]contest.ContestLegend, int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	total := len(m.legends)
 	if offset >= len(m.legends) {
-		return nil, nil
+		return nil, total, nil
 	}
 	end := offset + limit
 	if end > len(m.legends) {
 		end = len(m.legends)
 	}
-	return m.legends[offset:end], nil
+	return m.legends[offset:end], total, nil
 }
 
 type mockGuildService struct {
@@ -767,11 +768,11 @@ func TestSettlementAndPrizeDistribution(t *testing.T) {
 
 	// Verify Hall of Fame legend recorded
 	legends, err := svc.GetLegends(ctx, 10, 0)
-	if err != nil || len(legends) != 1 {
-		t.Fatalf("expected 1 legend, got %d (err: %v)", len(legends), err)
+	if err != nil || len(legends.Items) != 1 || legends.Total != 1 {
+		t.Fatalf("expected 1 legend, got %d (err: %v)", len(legends.Items), err)
 	}
-	if legends[0].Round != 1 || legends[0].Title != entries[0].Title {
-		t.Errorf("unexpected legend: %+v", legends[0])
+	if legends.Items[0].Round != 1 || legends.Items[0].Title != entries[0].Title {
+		t.Errorf("unexpected legend: %+v", legends.Items[0])
 	}
 
 	// Verify Round 1 is settled, Round 2 is now active, Round 3 is preparing

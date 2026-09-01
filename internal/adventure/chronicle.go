@@ -7,6 +7,7 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 // Milestone represents a gameplay achievement milestone unlocked through adventure clears.
@@ -81,25 +82,11 @@ type AdventureHistoryEntry struct {
 }
 
 // PaginatedAdventures represents a paginated list of adventure history entries.
-type PaginatedAdventures struct {
-	CharacterID string                  `json:"character_id"`
-	Adventures  []AdventureHistoryEntry `json:"adventures"`
-	Total       int                     `json:"total"`
-	Limit       int                     `json:"limit"`
-	Offset      int                     `json:"offset"`
-}
+type PaginatedAdventures = pagination.Page[AdventureHistoryEntry]
 
 // NormalizePagination ensures limit and offset stay within allowed system boundaries.
 func NormalizePagination(limit, offset int) (int, int) {
-	if limit <= 0 {
-		limit = 20
-	} else if limit > 100 {
-		limit = 100
-	}
-	if offset < 0 {
-		offset = 0
-	}
-	return limit, offset
+	return pagination.Normalize(limit, offset)
 }
 
 // DefaultMilestones evaluates milestone unlocking states based on total adventure victories.
@@ -226,13 +213,7 @@ func (s *Service) ListHistory(ctx context.Context, characterID string, limit, of
 		})
 	}
 
-	return PaginatedAdventures{
-		CharacterID: characterID,
-		Adventures:  entries,
-		Total:       total,
-		Limit:       limit,
-		Offset:      offset,
-	}, nil
+	return pagination.NewPage(entries, total, limit, offset), nil
 }
 
 // GetChronicle computes an aggregated statistical summary of past adventure runs and unlocked milestones.

@@ -1,6 +1,127 @@
 {
   "components": {
     "schemas": {
+      "AdventureHistoryEntry": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "drop_item_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "drop_item_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "experience": {
+            "type": "integer"
+          },
+          "gold": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "stage_id": {
+            "type": "string"
+          },
+          "stage_name": {
+            "type": "string"
+          },
+          "turns": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "character_id",
+          "stage_id",
+          "stage_name",
+          "outcome",
+          "turns",
+          "experience",
+          "gold",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "AuctionListing": {
+        "properties": {
+          "buyout_price": {
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "current_bid": {
+            "type": "integer"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "highest_bidder_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "highest_bidder_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "item_category": {
+            "type": "string"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "item_name": {
+            "type": "string"
+          },
+          "min_bid_increment": {
+            "type": "integer"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "seller_character_id": {
+            "type": "string"
+          },
+          "seller_character_name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "seller_character_id",
+          "seller_character_name",
+          "item_id",
+          "item_name",
+          "item_category",
+          "quantity",
+          "current_bid",
+          "buyout_price",
+          "min_bid_increment",
+          "expires_at",
+          "status",
+          "created_at"
+        ],
+        "type": "object"
+      },
       "BanquetToastResult": {
         "properties": {
           "banquet_id": {
@@ -771,6 +892,46 @@
         ],
         "type": "object"
       },
+      "ContestLegend": {
+        "properties": {
+          "caption": {
+            "type": "string"
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "character_name": {
+            "type": "string"
+          },
+          "image_url": {
+            "type": "string"
+          },
+          "round": {
+            "type": "integer"
+          },
+          "settled_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "votes": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "round",
+          "character_id",
+          "character_name",
+          "title",
+          "votes",
+          "image_url",
+          "caption",
+          "settled_at"
+        ],
+        "type": "object"
+      },
       "CreatePartyRequest": {
         "properties": {
           "character_id": {
@@ -828,6 +989,68 @@
         ],
         "type": "object"
       },
+      "FleaMarketListing": {
+        "properties": {
+          "cancelled_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "item_name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "seller_character_id": {
+            "type": "string"
+          },
+          "seller_character_name": {
+            "type": "string"
+          },
+          "sold_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "total_price": {
+            "type": "integer"
+          },
+          "unit_price": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "seller_character_id",
+          "seller_character_name",
+          "item_id",
+          "item_name",
+          "quantity",
+          "unit_price",
+          "total_price",
+          "comment",
+          "status",
+          "created_at"
+        ],
+        "type": "object"
+      },
       "HealthResponse": {
         "properties": {
           "status": {
@@ -866,6 +1089,70 @@
         "required": [
           "character_id",
           "target_character_id"
+        ],
+        "type": "object"
+      },
+      "Letter": {
+        "properties": {
+          "attached_gold": {
+            "type": "integer"
+          },
+          "attached_item_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "attached_item_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "attached_quantity": {
+            "type": "integer"
+          },
+          "body": {
+            "type": "string"
+          },
+          "claimed": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "recipient_character_id": {
+            "type": "string"
+          },
+          "recipient_character_name": {
+            "type": "string"
+          },
+          "sender_character_id": {
+            "type": "string"
+          },
+          "sender_character_name": {
+            "type": "string"
+          },
+          "sent_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sender_character_id",
+          "sender_character_name",
+          "recipient_character_id",
+          "recipient_character_name",
+          "subject",
+          "body",
+          "attached_gold",
+          "attached_quantity",
+          "read",
+          "claimed",
+          "sent_at"
         ],
         "type": "object"
       },
@@ -909,6 +1196,367 @@
           "enabled",
           "message",
           "updated_at"
+        ],
+        "type": "object"
+      },
+      "NewsItem": {
+        "properties": {
+          "author": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "title",
+          "content",
+          "author",
+          "published_at"
+        ],
+        "type": "object"
+      },
+      "Notification": {
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_read": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "character_id",
+          "category",
+          "title",
+          "content",
+          "is_read",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "PageAdventureHistoryEntry": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdventureHistoryEntry"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "PageAuctionListing": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuctionListing"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "PageContestLegend": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ContestLegend"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "PageFleaMarketListing": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FleaMarketListing"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "PageLetter": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Letter"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "PageNewsItem": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NewsItem"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "PageNotification": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Notification"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "PageParkPost": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ParkPost"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "PagePartySummary": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PartySummary"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "ParkPost": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "character_name": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "job_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "character_id",
+          "character_name",
+          "job_name",
+          "content",
+          "created_at"
         ],
         "type": "object"
       },
@@ -1927,7 +2575,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/PageAuctionListing"
                 }
               }
             },
@@ -2790,7 +3438,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/PageAdventureHistoryEntry"
                 }
               }
             },
@@ -10735,6 +11383,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageContestLegend"
+                }
+              }
+            },
             "description": "Contest legends retrieved successfully"
           },
           "500": {
@@ -11156,7 +11811,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/PageFleaMarketListing"
                 }
               }
             },
@@ -12256,7 +12911,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/PageLetter"
                 }
               }
             },
@@ -12351,7 +13006,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/PageLetter"
                 }
               }
             },
@@ -12901,7 +13556,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/PageNewsItem"
                 }
               }
             },
@@ -13080,7 +13735,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/PageNotification"
                 }
               }
             },
@@ -13666,6 +14321,15 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "description": "Offset from beginning of result set (default 0)",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -13673,7 +14337,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/PageParkPost"
                 }
               }
             },
@@ -13826,10 +14490,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/PartySummary"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/PagePartySummary"
                 }
               }
             },

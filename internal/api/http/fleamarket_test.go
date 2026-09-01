@@ -185,7 +185,7 @@ func TestFleaMarketHTTP_Endpoints(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
 		}
-		if !strings.Contains(rec.Body.String(), `"listings"`) || !strings.Contains(rec.Body.String(), `"total":1`) {
+		if !strings.Contains(rec.Body.String(), `"items"`) || !strings.Contains(rec.Body.String(), `"total":1`) {
 			t.Errorf("unexpected response body: %s", rec.Body.String())
 		}
 	})

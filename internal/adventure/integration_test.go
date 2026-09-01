@@ -293,11 +293,11 @@ func TestAdventureHistoryAndChronicleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListHistory error = %v", err)
 	}
-	if history.Total != 2 || len(history.Adventures) != 2 {
-		t.Fatalf("expected total 2 and 2 items, got total=%d, len=%d", history.Total, len(history.Adventures))
+	if history.Total != 2 || len(history.Items) != 2 {
+		t.Fatalf("expected total 2 and 2 items, got total=%d, len=%d", history.Total, len(history.Items))
 	}
-	if history.Adventures[0].ID != adv2.ID || history.Adventures[1].ID != adv1.ID {
-		t.Fatalf("unexpected ordering: first=%s, second=%s", history.Adventures[0].ID, history.Adventures[1].ID)
+	if history.Items[0].ID != adv2.ID || history.Items[1].ID != adv1.ID {
+		t.Fatalf("unexpected ordering: first=%s, second=%s", history.Items[0].ID, history.Items[1].ID)
 	}
 
 	// Query chronicle

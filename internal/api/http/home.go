@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 // HomeService defines the home and mailbox operations exposed over HTTP.
@@ -149,20 +149,9 @@ func (h *Handler) handleListInbox(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		limit := 20
-		offset := 0
-		if l := r.URL.Query().Get("limit"); l != "" {
-			if val, err := strconv.Atoi(l); err == nil && val > 0 {
-				limit = val
-			}
-		}
-		if o := r.URL.Query().Get("offset"); o != "" {
-			if val, err := strconv.Atoi(o); err == nil && val >= 0 {
-				offset = val
-			}
-		}
+		params := pagination.ParseRequest(r)
 
-		res, err := h.homes.ListInbox(r.Context(), char.ID, limit, offset)
+		res, err := h.homes.ListInbox(r.Context(), char.ID, params.Limit, params.Offset)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
@@ -185,20 +174,9 @@ func (h *Handler) handleListOutbox(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		limit := 20
-		offset := 0
-		if l := r.URL.Query().Get("limit"); l != "" {
-			if val, err := strconv.Atoi(l); err == nil && val > 0 {
-				limit = val
-			}
-		}
-		if o := r.URL.Query().Get("offset"); o != "" {
-			if val, err := strconv.Atoi(o); err == nil && val >= 0 {
-				offset = val
-			}
-		}
+		params := pagination.ParseRequest(r)
 
-		res, err := h.homes.ListOutbox(r.Context(), char.ID, limit, offset)
+		res, err := h.homes.ListOutbox(r.Context(), char.ID, params.Limit, params.Offset)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return

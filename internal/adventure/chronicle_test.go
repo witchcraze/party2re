@@ -168,11 +168,11 @@ func TestListHistory(t *testing.T) {
 		if res.Total != 2 {
 			t.Fatalf("expected total 2, got %d", res.Total)
 		}
-		if len(res.Adventures) != 2 {
-			t.Fatalf("expected 2 adventures, got %d", len(res.Adventures))
+		if len(res.Items) != 2 {
+			t.Fatalf("expected 2 adventures, got %d", len(res.Items))
 		}
 
-		first := res.Adventures[0]
+		first := res.Items[0]
 		if first.ID != "adv-1" || first.StageName != "平原" || first.MonsterName != "スライム" {
 			t.Fatalf("expected enriched first entry, got %+v", first)
 		}
@@ -180,7 +180,7 @@ func TestListHistory(t *testing.T) {
 			t.Fatalf("unexpected battle/reward fields in first entry: %+v", first)
 		}
 
-		second := res.Adventures[1]
+		second := res.Items[1]
 		if second.ID != "adv-2" || second.StageName != "森林" || second.MonsterName != "ゴブリン" {
 			t.Fatalf("expected enriched second entry, got %+v", second)
 		}

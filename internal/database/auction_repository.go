@@ -74,7 +74,17 @@ func (r *AuctionRepository) GetListing(ctx context.Context, listingID string) (a
 	return l, nil
 }
 
-func (r *AuctionRepository) ListActive(ctx context.Context, limit, offset int) ([]auction.AuctionListing, error) {
+func (r *AuctionRepository) ListActive(ctx context.Context, limit, offset int) ([]auction.AuctionListing, int, error) {
+	var total int
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM auction_listings
+		WHERE status = 'ACTIVE' AND expires_at > UTC_TIMESTAMP()
+	`).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, seller_character_id, item_id, item_name, item_category,
 		       enhancement_level, start_bid, current_bid, buyout_price,
@@ -85,7 +95,7 @@ func (r *AuctionRepository) ListActive(ctx context.Context, limit, offset int) (
 		LIMIT ? OFFSET ?
 	`, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -99,7 +109,7 @@ func (r *AuctionRepository) ListActive(ctx context.Context, limit, offset int) (
 			&l.EnhancementLevel, &l.StartBid, &l.CurrentBid, &l.BuyoutPrice,
 			&highestBidder, &l.Status, &l.CreatedAt, &l.ExpiresAt, &settledAt,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if highestBidder.Valid {
 			l.HighestBidderID = &highestBidder.String
@@ -109,7 +119,7 @@ func (r *AuctionRepository) ListActive(ctx context.Context, limit, offset int) (
 		}
 		listings = append(listings, l)
 	}
-	return listings, rows.Err()
+	return listings, total, rows.Err()
 }
 
 func (r *AuctionRepository) PlaceBid(ctx context.Context, listingID, bidderID string, bidAmount int) (auction.AuctionListing, error) {

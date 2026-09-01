@@ -7,21 +7,14 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
-type NewsListResult struct {
-	Articles []NewsArticle `json:"articles"`
-	Total    int           `json:"total"`
-	Limit    int           `json:"limit"`
-	Offset   int           `json:"offset"`
-}
+// NewsListResult is a type alias for standardized generic paginated news articles.
+type NewsListResult = pagination.Page[NewsArticle]
 
-type NotificationListResult struct {
-	Notifications []PlayerNotification `json:"notifications"`
-	Total         int                  `json:"total"`
-	Limit         int                  `json:"limit"`
-	Offset        int                  `json:"offset"`
-}
+// NotificationListResult is a type alias for standardized generic paginated player notifications.
+type NotificationListResult = pagination.Page[PlayerNotification]
 
 type Service struct {
 	newsRepo  NewsRepository
@@ -105,27 +98,14 @@ func (s *Service) GetNews(ctx context.Context, id string) (NewsArticle, error) {
 
 // ListNews retrieves a paginated list of news articles ordered by publication date descending.
 func (s *Service) ListNews(ctx context.Context, limit, offset int) (NewsListResult, error) {
-	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
-	if offset < 0 {
-		offset = 0
-	}
+	limit, offset = pagination.Normalize(limit, offset)
 
 	articles, total, err := s.newsRepo.ListNews(ctx, limit, offset)
 	if err != nil {
 		return NewsListResult{}, err
 	}
 
-	return NewsListResult{
-		Articles: articles,
-		Total:    total,
-		Limit:    limit,
-		Offset:   offset,
-	}, nil
+	return pagination.NewPage(articles, total, limit, offset), nil
 }
 
 // NotifyPlayer dispatches a notification to a specific player's inbox.
@@ -208,27 +188,14 @@ func (s *Service) GetPlayerNotifications(ctx context.Context, playerID string, u
 		return NotificationListResult{}, ErrInvalidPlayerID
 	}
 
-	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
-	if offset < 0 {
-		offset = 0
-	}
+	limit, offset = pagination.Normalize(limit, offset)
 
 	notifs, total, err := s.notifRepo.ListNotificationsByPlayer(ctx, playerID, unreadOnly, limit, offset)
 	if err != nil {
 		return NotificationListResult{}, err
 	}
 
-	return NotificationListResult{
-		Notifications: notifs,
-		Total:         total,
-		Limit:         limit,
-		Offset:        offset,
-	}, nil
+	return pagination.NewPage(notifs, total, limit, offset), nil
 }
 
 // GetUnreadCount retrieves the count of unread notifications for a player.

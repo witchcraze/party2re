@@ -44,7 +44,7 @@ func (r *mockPartyRepository) GetPartyForUpdate(_ context.Context, id string) (P
 	return r.GetParty(context.Background(), id)
 }
 
-func (r *mockPartyRepository) ListParties(_ context.Context, status string, limit, offset int) ([]PartySummary, error) {
+func (r *mockPartyRepository) ListParties(_ context.Context, status string, limit, offset int) ([]PartySummary, int, error) {
 	var list []PartySummary
 	for _, p := range r.parties {
 		if status != "" && p.Status != status {
@@ -67,7 +67,15 @@ func (r *mockPartyRepository) ListParties(_ context.Context, status string, limi
 			CreatedAt:         p.CreatedAt,
 		})
 	}
-	return list, nil
+	total := len(list)
+	if offset >= len(list) {
+		return []PartySummary{}, total, nil
+	}
+	end := offset + limit
+	if end > len(list) {
+		end = len(list)
+	}
+	return list[offset:end], total, nil
 }
 
 func (r *mockPartyRepository) UpdateParty(_ context.Context, p Party) error {
@@ -549,5 +557,38 @@ func TestPartyService_StartPartyAdventure(t *testing.T) {
 	updatedLeader := charRepo.chars[leader.ID]
 	if updatedLeader.Money <= leader.Money || updatedLeader.Experience <= leader.Experience {
 		t.Fatalf("expected leader to gain gold and exp, got money=%d exp=%d", updatedLeader.Money, updatedLeader.Experience)
+	}
+}
+
+func TestListParties(t *testing.T) {
+	svc, _, charRepo, _ := setupTestService(t)
+
+	leader := corecharacter.Character{
+		ID:    "char-leader",
+		Name:  "LeaderHero",
+		JobID: "warrior",
+		Level: 10,
+		Stats: corecharacter.Stats{HP: 50, MaxHP: 50, Attack: 20, Defense: 10},
+	}
+	charRepo.chars[leader.ID] = leader
+
+	_, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
+		Name:    "Party One",
+		StageID: "forest",
+		Speed:   3,
+	})
+	if err != nil {
+		t.Fatalf("CreateParty failed: %v", err)
+	}
+
+	page, err := svc.ListParties(context.Background(), StatusRecruiting, 10, 0)
+	if err != nil {
+		t.Fatalf("ListParties failed: %v", err)
+	}
+	if page.Total != 1 || len(page.Items) != 1 || page.Limit != 10 || page.Offset != 0 {
+		t.Fatalf("unexpected page result: %+v", page)
+	}
+	if page.Items[0].Name != "Party One" {
+		t.Errorf("expected party name 'Party One', got %s", page.Items[0].Name)
 	}
 }
