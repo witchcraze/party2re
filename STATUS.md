@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #72 — Gem Store and Jewel Special Synthesis System (gem_store.cgi)
+Last updated: Issue #317 — GemStore Weighted Randomized Appraisal Pools (gem_store.cgi, _data.cgi)
 
 ## Current phase
 
@@ -69,7 +69,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Town Black Market, Contraband Trading, Dynamic Pricing & NPC @ヤミジ** (`internal/blackmarket`): 裏路地の闇市・闇ブローカーNPC @ヤミジ（資格判定 Lv10以上、10種禁制品アイテムカタログ `blackmarket_items.json`、4種ダイナミック市場相場状態 `Quiet`, `HotDemand`, `Crackdown`, `Bargain` と価格・買取倍率補正、1日購入制限クォータ、レアアイテム・超レアアイテム捧げものリサイクルシステム `SacrificeItem` によるレアポイント/裏レアポイント獲得、限定武器・防具・装飾品・消費アイテム景品交換 `TradePrize`、並行性安全なアトミック購入・売却・捧げもの・交換トランザクション、NPC会話・相場噂話情報、MariaDB永続化 `blackmarket_character_purchases`, `blackmarket_market_state`, `blackmarket_character_points`）。
 - **Town Delivery Quests & Player Courier Service** (`internal/delivery`): 町のでりばりー依頼＆プレイヤー間宅配便（薬草・ポーション・装備等のNPC配送依頼、最大3件同時受領、インベントリ消費・ゴールド/EXP/アイテム報酬アトミック精算、およびプレイヤー間アイテム/ゴールド宅配便、50 G手数料、受取・発送キャンセル/返金、`GetParcelByIDForUpdate` および CAS 条件付きステータス更新 `WHERE id = ? AND status = 'pending'` による受取/キャンセル並行実行時の二重支払い・複製レースコンディション完全防止、MariaDB永続化）。
 - **Flea Market & Player Item Stalls** (`internal/fleamarket`): フリーマーケット＆プレイヤー露店取引（`free.cgi`、最大5件同時出品、1〜999,999 G固定価格出品、出品時インベントリ消費・キャンセル時安全返却、`GetListingByIDForUpdate` および買い手・売り手キャラクターID昇順ソート排他ロックによる並行購入時のデッドロック完全防止とゴールド・アイテムアトミック移転、MariaDB永続化 `fleamarket_listings`）。
-- **Gem Store, Jewel Synthesis & Appraisal** (`internal/gemstore`): 宝石店・宝珠/天珠販売・特殊合成加工・他プレイヤー譲渡・未鑑定宝珠鑑定（`gem_store.cgi`, NPC `@ジェマ`、レベル別カタログ `gems.json`、55種以上の上位宝石合成レシピ `recipes.json`、50%売却、自身送信防止＆昇順ロック譲渡、未鑑定宝珠の鑑定置換、`TransactionProvider` と `SELECT ... FOR UPDATE` 行ロックによる完全アトミックトランザクション整合性）。
+- **Gem Store, Jewel Synthesis & Appraisal** (`internal/gemstore`): 宝石店・宝珠/天珠販売・特殊合成加工・他プレイヤー譲渡・未鑑定宝珠鑑定（`gem_store.cgi`, `_data.cgi` No. 251–255, NPC `@ジェマ`、レベル別カタログ `gems.json`、55種以上の上位宝石合成レシピ `recipes.json`、5種未鑑定宝珠の重み付きレガシー準拠ランダム鑑定プール `orb_appraisals.json`、スレッドセーフRNG/決定論的シード注入、50%売却、自身送信防止＆昇順ロック譲渡、`TransactionProvider` と `SELECT ... FOR UPDATE` 行ロックによる完全アトミックトランザクション整合性）。
 
 ### API & Transport
 - **Server Entrypoint & Lifecycle Orchestration** (`cmd/party2`): MariaDB・Valkey・全ドメインリポジトリおよびサービス・スケジューリングWorker・HTTP APIルーター（全29種Option）の統合初期化、`ADDR` / `PORT` 環境変数解決（デフォルト `:8080`）、GoroutineベースのHTTPサーバー＆Worker実行、OSシグナル（`SIGINT`, `SIGTERM`）受信時のタイムアウト付きGraceful Shutdown（`http.Server.Shutdown(ctx)`、Worker Contextキャンセル待機、DB/Valkeyリソース安全開放）、起動・停止のJSON構造化ログ。

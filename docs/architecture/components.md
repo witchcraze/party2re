@@ -366,9 +366,9 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository.
   - **Persistence:** `fleamarket_listings` table in `internal/database/fleamarket_repository.go`.
 - **Gem Store & Jewel Synthesis** (`internal/gemstore`):
-  - **Responsibility:** Gem retail shop, 55+ advanced gem synthesis formulas (`kako`), player gem transfers (`okuru`), and unidentified orb appraisals (`kantei`) (`gem_store.cgi`, NPC `@ジェマ`).
+  - **Responsibility:** Gem retail shop, 55+ advanced gem synthesis formulas (`kako`), player gem transfers (`okuru`), and unidentified orb appraisals with weighted randomized loot pools (`kantei`) (`gem_store.cgi`, `_data.cgi` No. 251–255, NPC `@ジェマ`).
   - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository.
-  - **Catalogs:** `internal/gemstore/data/gems.json`, `internal/gemstore/data/recipes.json`.
+  - **Catalogs:** `internal/gemstore/data/gems.json`, `internal/gemstore/data/recipes.json`, `internal/gemstore/data/orb_appraisals.json`.
 
 ### Cross-Module Transaction Orchestration & Ambient Context Propagation
 

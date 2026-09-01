@@ -76,7 +76,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Item Shop purchase & 50% resale transactions ([#55](https://github.com/witchcraze/party2re/issues/55))
 - [x] Bank accounts, gold deposits, withdrawals, and player-to-player transfers ([#71](https://github.com/witchcraze/party2re/issues/71))
 - [x] Blacksmith equipment enhancement (+1 to +10) with material/gold costs ([#59](https://github.com/witchcraze/party2re/issues/59))
-- [ ] Gem store currency and transactions ([#72](https://github.com/witchcraze/party2re/issues/72))
+- [x] Gem store, synthesis recipes, and weighted orb appraisals ([#72](https://github.com/witchcraze/party2re/issues/72), [#317](https://github.com/witchcraze/party2re/issues/317))
 - [x] Black Market underground trade ([#142](https://github.com/witchcraze/party2re/issues/142))
 - [x] Small Medal collection and rare reward exchange ([#160](https://github.com/witchcraze/party2re/issues/160))
 
