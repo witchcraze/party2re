@@ -26,10 +26,11 @@ import (
 // -------------------------------------------------------------------
 
 type stubPlayerService struct {
-	registerFn     func(ctx context.Context, username, password string) (coreplayer.Player, error)
-	loginFn        func(ctx context.Context, username, password string) (coreplayer.Session, error)
-	logoutFn       func(ctx context.Context, sessionID string) error
-	authenticateFn func(ctx context.Context, sessionID string) (coreplayer.Player, error)
+	registerFn      func(ctx context.Context, username, password string) (coreplayer.Player, error)
+	loginFn         func(ctx context.Context, username, password string) (coreplayer.Session, error)
+	logoutFn        func(ctx context.Context, sessionID string) error
+	authenticateFn  func(ctx context.Context, sessionID string) (coreplayer.Player, error)
+	deleteAccountFn func(ctx context.Context, playerID, password string) error
 }
 
 func (s *stubPlayerService) Register(ctx context.Context, username, password string) (coreplayer.Player, error) {
@@ -44,6 +45,12 @@ func (s *stubPlayerService) Logout(ctx context.Context, sessionID string) error 
 func (s *stubPlayerService) Authenticate(ctx context.Context, sessionID string) (coreplayer.Player, error) {
 	return s.authenticateFn(ctx, sessionID)
 }
+func (s *stubPlayerService) DeleteAccount(ctx context.Context, playerID, password string) error {
+	if s.deleteAccountFn != nil {
+		return s.deleteAccountFn(ctx, playerID, password)
+	}
+	return nil
+}
 
 type stubCharacterService struct {
 	createFn                func(ctx context.Context, playerID, name string) (corecharacter.Character, error)
@@ -55,6 +62,7 @@ type stubCharacterService struct {
 	updateProfileFn         func(ctx context.Context, characterID string, req character.UpdateProfileRequest) (character.Profile, error)
 	uploadAvatarFn          func(ctx context.Context, characterID string, filename string, contentType string, data []byte) (string, error)
 	getNamingHallDialogueFn func() character.NamingHallDialogue
+	deleteFn                func(ctx context.Context, playerID, characterID string) error
 }
 
 func (s *stubCharacterService) Create(ctx context.Context, playerID, name string) (corecharacter.Character, error) {
@@ -110,6 +118,12 @@ func (s *stubCharacterService) GetNamingHallDialogue() character.NamingHallDialo
 		return s.getNamingHallDialogueFn()
 	}
 	return character.NamingHallDialogue{NPCName: "@マリナン", LocationTitle: "命名の館"}
+}
+func (s *stubCharacterService) Delete(ctx context.Context, playerID, characterID string) error {
+	if s.deleteFn != nil {
+		return s.deleteFn(ctx, playerID, characterID)
+	}
+	return nil
 }
 
 type stubAdventureService struct {
@@ -1149,4 +1163,152 @@ func TestCORS_WithAllowedOriginsFromEnv(t *testing.T) {
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://env.party2.game" {
 		t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, "https://env.party2.game")
 	}
+}
+
+func TestPlayerDeletionEndpoints(t *testing.T) {
+	var deletedPlayerID string
+	playerSvc := &stubPlayerService{
+		authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
+			if sessionID == "valid-session" {
+				return coreplayer.Player{ID: "player-123"}, nil
+			}
+			return coreplayer.Player{}, errors.New("invalid session")
+		},
+		deleteAccountFn: func(ctx context.Context, playerID, password string) error {
+			if password == "wrongpassword" {
+				return coreplayer.ErrAuthentication
+			}
+			deletedPlayerID = playerID
+			return nil
+		},
+	}
+
+	h := newTestHandler(t, playerSvc, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{})
+	router := h.Router()
+
+	t.Run("DELETE /players/me rejects unauthorized request", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/players/me", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized, got %d", rec.Code)
+		}
+	})
+
+	t.Run("DELETE /players/me rejects invalid password", func(t *testing.T) {
+		body := `{"password":"wrongpassword"}`
+		req := httptest.NewRequest(http.MethodDelete, "/players/me", bytes.NewReader([]byte(body)))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized, got %d", rec.Code)
+		}
+	})
+
+	t.Run("DELETE /players/me succeeds with valid password", func(t *testing.T) {
+		body := `{"password":"correctpassword"}`
+		req := httptest.NewRequest(http.MethodDelete, "/players/me", bytes.NewReader([]byte(body)))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if deletedPlayerID != "player-123" {
+			t.Errorf("expected deleted player player-123, got %s", deletedPlayerID)
+		}
+	})
+
+	t.Run("DELETE /players/{id} rejects non-owner player", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/players/player-other", nil)
+		req.Header.Set("Authorization", "Bearer valid-session")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden, got %d", rec.Code)
+		}
+	})
+}
+
+func TestCharacterDeletionEndpoints(t *testing.T) {
+	var deletedCharID string
+	playerSvc := &stubPlayerService{
+		authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
+			if sessionID == "valid-session" {
+				return coreplayer.Player{ID: "player-123"}, nil
+			}
+			return coreplayer.Player{}, errors.New("invalid session")
+		},
+	}
+	charSvc := &stubCharacterService{
+		getFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			if id == "char-mine" {
+				return corecharacter.Character{ID: id, PlayerID: "player-123"}, nil
+			}
+			if id == "char-other" {
+				return corecharacter.Character{ID: id, PlayerID: "player-999"}, nil
+			}
+			return corecharacter.Character{}, corecharacter.ErrNotFound
+		},
+		deleteFn: func(ctx context.Context, playerID, characterID string) error {
+			deletedCharID = characterID
+			return nil
+		},
+	}
+
+	h := newTestHandler(t, playerSvc, charSvc, &stubAdventureService{}, &stubShopService{})
+	router := h.Router()
+
+	t.Run("DELETE /characters/{id} rejects unauthorized", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/characters/char-mine", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized, got %d", rec.Code)
+		}
+	})
+
+	t.Run("DELETE /characters/{id} rejects non-owner character", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/characters/char-other", nil)
+		req.Header.Set("Authorization", "Bearer valid-session")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden, got %d", rec.Code)
+		}
+	})
+
+	t.Run("DELETE /characters/{id} returns 404 for nonexistent character", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/characters/char-unknown", nil)
+		req.Header.Set("Authorization", "Bearer valid-session")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 Not Found, got %d", rec.Code)
+		}
+	})
+
+	t.Run("DELETE /characters/{id} succeeds for owned character", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/characters/char-mine", nil)
+		req.Header.Set("Authorization", "Bearer valid-session")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if deletedCharID != "char-mine" {
+			t.Errorf("expected deleted character char-mine, got %s", deletedCharID)
+		}
+	})
 }

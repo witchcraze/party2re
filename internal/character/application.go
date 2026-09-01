@@ -27,6 +27,18 @@ type Repository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 	FindByPlayerID(ctx context.Context, playerID string) ([]corecharacter.Character, error)
 	Update(ctx context.Context, value corecharacter.Character) error
+	Delete(ctx context.Context, id string) error
+}
+
+// CleanupHook defines an interface for cleaning up external domain resources when a character is deleted.
+type CleanupHook interface {
+	CleanupCharacter(ctx context.Context, characterID string) error
+}
+
+type CleanupHookFunc func(ctx context.Context, characterID string) error
+
+func (f CleanupHookFunc) CleanupCharacter(ctx context.Context, characterID string) error {
+	return f(ctx, characterID)
 }
 
 type Option func(*Service)
@@ -66,6 +78,15 @@ func WithProfileRepository(repo ProfileRepository) Option {
 	}
 }
 
+// WithCleanupHook registers a cleanup hook to run prior to character deletion.
+func WithCleanupHook(hook CleanupHook) Option {
+	return func(s *Service) {
+		if hook != nil {
+			s.cleanupHooks = append(s.cleanupHooks, hook)
+		}
+	}
+}
+
 type Service struct {
 	repository   Repository
 	txProvider   TransactionProvider
@@ -73,6 +94,7 @@ type Service struct {
 	guildChecker GuildMembershipChecker
 	fleaChecker  FleaMarketChecker
 	profileRepo  ProfileRepository
+	cleanupHooks []CleanupHook
 }
 
 type CreationOptions struct {
@@ -141,6 +163,10 @@ func (s *Service) ListByPlayer(ctx context.Context, playerID string) ([]corechar
 		return nil, ErrInvalidPlayer
 	}
 	return s.repository.FindByPlayerID(ctx, playerID)
+}
+
+func (s *Service) FindByPlayerID(ctx context.Context, playerID string) ([]corecharacter.Character, error) {
+	return s.ListByPlayer(ctx, playerID)
 }
 
 func (s *Service) Rebirth(ctx context.Context, id string) (corecharacter.Character, error) {
@@ -429,4 +455,34 @@ func (s *Service) GetNamingHallDialogue() NamingHallDialogue {
 		NameChangeCost:   NameChangeCost,
 		GenderChangeCost: GenderChangeCost,
 	}
+}
+
+// Delete validates character ownership (if playerID is provided), executes all registered cleanup hooks,
+// and deletes the character and its associated database records.
+func (s *Service) Delete(ctx context.Context, playerID, characterID string) error {
+	characterID = strings.TrimSpace(characterID)
+	if characterID == "" {
+		return ErrNotFound
+	}
+	playerID = strings.TrimSpace(playerID)
+
+	char, err := s.repository.FindByID(ctx, characterID)
+	if err != nil {
+		return err
+	}
+
+	if playerID != "" && char.PlayerID != playerID {
+		return ErrForbidden
+	}
+
+	// Run domain cleanup hooks
+	for _, hook := range s.cleanupHooks {
+		if hook != nil {
+			_ = hook.CleanupCharacter(ctx, characterID)
+		}
+	}
+
+	return s.runInTx(ctx, func(txCtx context.Context) error {
+		return s.repository.Delete(txCtx, characterID)
+	})
 }

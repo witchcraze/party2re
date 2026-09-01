@@ -33,6 +33,11 @@ func (r *playerRepositoryStub) FindByID(context.Context, string) (coreplayer.Pla
 	return r.value, nil
 }
 
+func (r *playerRepositoryStub) Delete(context.Context, string) error {
+	r.value = coreplayer.Player{}
+	return nil
+}
+
 type sessionRepositoryStub struct {
 	value     coreplayer.Session
 	saveErr   error
@@ -60,7 +65,7 @@ func (r *sessionRepositoryStub) Revoke(context.Context, string, time.Time) error
 func TestRegisterLogsStructuredSafeOperation(t *testing.T) {
 	var output bytes.Buffer
 	logger := logging.NewJSON(&output)
-	service, err := NewService(&playerRepositoryStub{}, &sessionRepositoryStub{}, logger)
+	service, err := NewService(&playerRepositoryStub{}, &sessionRepositoryStub{}, WithLogger(logger))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +100,7 @@ func TestLoginFailureDoesNotLogAuthenticationValues(t *testing.T) {
 	}
 	var output bytes.Buffer
 	logger := logging.NewJSON(&output)
-	service, err := NewService(&playerRepositoryStub{value: value}, &sessionRepositoryStub{}, logger)
+	service, err := NewService(&playerRepositoryStub{value: value}, &sessionRepositoryStub{}, WithLogger(logger))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +125,7 @@ func TestLoginFailureDoesNotLogAuthenticationValues(t *testing.T) {
 func TestLogoutDoesNotLogSessionValue(t *testing.T) {
 	var output bytes.Buffer
 	logger := logging.NewJSON(&output)
-	service, err := NewService(&playerRepositoryStub{}, &sessionRepositoryStub{}, logger)
+	service, err := NewService(&playerRepositoryStub{}, &sessionRepositoryStub{}, WithLogger(logger))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +144,7 @@ func TestLoginSuccessCreatesActiveSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	sessions := &sessionRepositoryStub{}
-	service, err := NewService(&playerRepositoryStub{value: player}, sessions, logging.Nop())
+	service, err := NewService(&playerRepositoryStub{value: player}, sessions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +164,7 @@ func TestAuthenticateReturnsPlayerForActiveSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	sessions := &sessionRepositoryStub{}
-	service, err := NewService(&playerRepositoryStub{value: player}, sessions, logging.Nop())
+	service, err := NewService(&playerRepositoryStub{value: player}, sessions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +187,7 @@ func TestAuthenticateReturnsPlayerForActiveSession(t *testing.T) {
 func TestAuthenticateRejectsExpiredSession(t *testing.T) {
 	player, _ := coreplayer.New("dave", "pass", time.Now())
 	sessions := &sessionRepositoryStub{}
-	service, err := NewService(&playerRepositoryStub{value: player}, sessions, logging.Nop())
+	service, err := NewService(&playerRepositoryStub{value: player}, sessions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,4 +199,48 @@ func TestAuthenticateRejectsExpiredSession(t *testing.T) {
 	if _, err := service.Authenticate(context.Background(), expiredSession.ID); !errors.Is(err, coreplayer.ErrAuthentication) {
 		t.Fatalf("Authenticate(expired) error = %v, want %v", err, coreplayer.ErrAuthentication)
 	}
+}
+
+type charServiceStub struct {
+	deletedChars []string
+}
+
+func (c *charServiceStub) FindByPlayerID(ctx context.Context, playerID string) ([]coreplayer.Player, error) {
+	return nil, nil
+}
+
+type charStubService struct {
+	deletedChars []string
+}
+
+func (c *charStubService) FindByPlayerID(ctx context.Context, playerID string) ([]coreplayer.Player, error) {
+	return nil, nil
+}
+
+func TestDeleteAccount(t *testing.T) {
+	player, _ := coreplayer.New("eve", "correctpassword", time.Now())
+	players := &playerRepositoryStub{value: player}
+	sessions := &sessionRepositoryStub{}
+
+	service, err := NewService(players, sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("rejects deletion with invalid password", func(t *testing.T) {
+		err := service.DeleteAccount(context.Background(), player.ID, "wrongpassword")
+		if !errors.Is(err, coreplayer.ErrAuthentication) {
+			t.Fatalf("expected ErrAuthentication, got %v", err)
+		}
+	})
+
+	t.Run("successfully deletes account with correct password", func(t *testing.T) {
+		err := service.DeleteAccount(context.Background(), player.ID, "correctpassword")
+		if err != nil {
+			t.Fatalf("DeleteAccount failed: %v", err)
+		}
+		if players.value.ID != "" {
+			t.Errorf("expected player to be cleared from repository")
+		}
+	})
 }

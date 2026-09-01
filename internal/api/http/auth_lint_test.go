@@ -53,6 +53,7 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 	publicRoutePatterns := []*regexp.Regexp{
 		regexp.MustCompile(`^GET /health$`),
 		regexp.MustCompile(`^GET /openapi\.json$`),
+		regexp.MustCompile(`^GET /maintenance$`),
 		regexp.MustCompile(`^POST /players$`),
 		regexp.MustCompile(`^POST /sessions$`),
 		regexp.MustCompile(`^DELETE /sessions$`),
@@ -91,9 +92,11 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 	}
 
 	adminRoutes := map[string]bool{
-		"POST /news":             true,
-		"POST /rankings/refresh": true,
-		"POST /contest/settle":   true,
+		"POST /news":              true,
+		"POST /rankings/refresh":  true,
+		"POST /contest/settle":    true,
+		"POST /admin/maintenance": true,
+		"PUT /admin/maintenance":  true,
 	}
 
 	for _, route := range routes {

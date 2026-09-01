@@ -124,4 +124,14 @@ func TestCharacterRepositoryPersistsAndLoadsCharacter(t *testing.T) {
 	if _, err := repository.FindByID(ctx, "nonexistent_id"); err != corecharacter.ErrNotFound {
 		t.Fatalf("FindByID(nonexistent) error = %v, want %v", err, corecharacter.ErrNotFound)
 	}
+
+	// Delete character
+	if err := repository.Delete(ctx, want.ID); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+
+	// Ensure character is deleted
+	if _, err := repository.FindByID(ctx, want.ID); err != corecharacter.ErrNotFound {
+		t.Fatalf("FindByID() after Delete() = %v, want %v", err, corecharacter.ErrNotFound)
+	}
 }

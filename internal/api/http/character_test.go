@@ -26,6 +26,7 @@ type stubCharacterServiceExtended struct {
 	updateProfileFn         func(ctx context.Context, characterID string, req character.UpdateProfileRequest) (character.Profile, error)
 	uploadAvatarFn          func(ctx context.Context, characterID string, filename string, contentType string, data []byte) (string, error)
 	getNamingHallDialogueFn func() character.NamingHallDialogue
+	deleteFn                func(ctx context.Context, playerID, characterID string) error
 }
 
 func (s *stubCharacterServiceExtended) Create(ctx context.Context, playerID, name string) (corecharacter.Character, error) {
@@ -115,6 +116,13 @@ func (s *stubCharacterServiceExtended) GetNamingHallDialogue() character.NamingH
 		NameChangeCost:   500000,
 		GenderChangeCost: 10000,
 	}
+}
+
+func (s *stubCharacterServiceExtended) Delete(ctx context.Context, playerID, characterID string) error {
+	if s.deleteFn != nil {
+		return s.deleteFn(ctx, playerID, characterID)
+	}
+	return nil
 }
 
 func TestCharacterCustomizationHTTP(t *testing.T) {

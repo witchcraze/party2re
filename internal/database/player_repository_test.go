@@ -77,4 +77,14 @@ func TestPlayerRepositorySaveAndFind(t *testing.T) {
 	if _, err := repository.FindByUsername(context.Background(), "nonexistent_username"); !errors.Is(err, ErrPlayerNotFound) {
 		t.Fatalf("FindByUsername(nonexistent) error = %v, want %v", err, ErrPlayerNotFound)
 	}
+
+	// Delete player
+	if err := repository.Delete(context.Background(), player.ID); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+
+	// Ensure player is deleted
+	if _, err := repository.FindByID(context.Background(), player.ID); !errors.Is(err, ErrPlayerNotFound) {
+		t.Fatalf("FindByID() after Delete() = %v, want %v", err, ErrPlayerNotFound)
+	}
 }

@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"time"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/logging"
 )
@@ -16,6 +18,7 @@ type PlayerRepository interface {
 	Save(context.Context, coreplayer.Player) error
 	FindByUsername(context.Context, string) (coreplayer.Player, error)
 	FindByID(context.Context, string) (coreplayer.Player, error)
+	Delete(context.Context, string) error
 }
 
 type SessionRepository interface {
@@ -24,28 +27,72 @@ type SessionRepository interface {
 	Revoke(context.Context, string, time.Time) error
 }
 
-type Service struct {
-	players  PlayerRepository
-	sessions SessionRepository
-	logger   logging.Logger
-	now      func() time.Time
+type CharacterService interface {
+	FindByPlayerID(ctx context.Context, playerID string) ([]corecharacter.Character, error)
+	Delete(ctx context.Context, playerID, characterID string) error
 }
 
-func NewService(players PlayerRepository, sessions SessionRepository, loggers ...logging.Logger) (*Service, error) {
+type TransactionProvider interface {
+	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+type Option func(*Service)
+
+// WithLogger configures a logger for the player service.
+func WithLogger(logger logging.Logger) Option {
+	return func(s *Service) {
+		if logger != nil {
+			s.logger = logger
+		}
+	}
+}
+
+// WithTransactionProvider sets the transaction provider.
+func WithTransactionProvider(txProvider TransactionProvider) Option {
+	return func(s *Service) {
+		s.txProvider = txProvider
+	}
+}
+
+// WithCharacterService sets the character service for cascading deletions.
+func WithCharacterService(charService CharacterService) Option {
+	return func(s *Service) {
+		s.characters = charService
+	}
+}
+
+type Service struct {
+	players    PlayerRepository
+	sessions   SessionRepository
+	characters CharacterService
+	txProvider TransactionProvider
+	logger     logging.Logger
+	now        func() time.Time
+}
+
+func NewService(players PlayerRepository, sessions SessionRepository, opts ...Option) (*Service, error) {
 	if players == nil || sessions == nil {
 		return nil, errors.New("player dependencies are nil")
 	}
-	if len(loggers) > 1 {
-		return nil, errors.New("player logger is configured more than once")
+	s := &Service{
+		players:  players,
+		sessions: sessions,
+		logger:   logging.Nop(),
+		now:      time.Now,
 	}
-	logger := logging.Nop()
-	if len(loggers) == 1 {
-		if loggers[0] == nil {
-			return nil, errors.New("player logger is nil")
+	for _, opt := range opts {
+		if opt != nil {
+			opt(s)
 		}
-		logger = loggers[0]
 	}
-	return &Service{players: players, sessions: sessions, logger: logger, now: time.Now}, nil
+	return s, nil
+}
+
+func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	if s.txProvider != nil {
+		return s.txProvider.RunInTx(ctx, fn)
+	}
+	return fn(ctx)
 }
 
 func (s *Service) Register(ctx context.Context, username, password string) (coreplayer.Player, error) {
@@ -102,4 +149,47 @@ func (s *Service) Authenticate(ctx context.Context, sessionID string) (coreplaye
 		return coreplayer.Player{}, err
 	}
 	return value, nil
+}
+
+// DeleteAccount deletes a player account and cascades through all characters and resources.
+func (s *Service) DeleteAccount(ctx context.Context, playerID, password string) error {
+	playerID = strings.TrimSpace(playerID)
+	if playerID == "" {
+		return errors.New("player ID is required")
+	}
+
+	p, err := s.players.FindByID(ctx, playerID)
+	if err != nil {
+		return err
+	}
+
+	if password != "" && !p.Authenticate(password) {
+		s.logger.Warn(ctx, "player.delete", slog.String("player_id", playerID), slog.String("reason", "authentication_failed"))
+		return coreplayer.ErrAuthentication
+	}
+
+	// Delete all player characters first
+	if s.characters != nil {
+		chars, err := s.characters.FindByPlayerID(ctx, playerID)
+		if err == nil {
+			for _, char := range chars {
+				if err := s.characters.Delete(ctx, playerID, char.ID); err != nil {
+					s.logger.Error(ctx, "player.delete.character", err, slog.String("player_id", playerID), slog.String("character_id", char.ID))
+					return err
+				}
+			}
+		}
+	}
+
+	// Delete player and player-level resources
+	err = s.runInTx(ctx, func(txCtx context.Context) error {
+		return s.players.Delete(txCtx, playerID)
+	})
+	if err != nil {
+		s.logger.Error(ctx, "player.delete", err, slog.String("player_id", playerID))
+		return err
+	}
+
+	s.logger.Info(ctx, "player.delete", slog.String("player_id", playerID))
+	return nil
 }
