@@ -62,10 +62,20 @@ func TestAlchemyIntegrationSynthesis(t *testing.T) {
 	}
 
 	// Give character herbs (item-001) for recipe-001 (2 herbs -> 1 super herb)
-	inv, _ := invRepo.FindByCharacterID(ctx, createdChar.ID)
-	herbs, _ := item.NewInstance("item-001", 5)
-	_ = inv.Add(herbs)
-	_ = invRepo.Save(ctx, inv)
+	inv, err := coreinventory.New(createdChar.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	herbs, err := item.NewInstance("item-001", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := inv.Add(herbs); err != nil {
+		t.Fatal(err)
+	}
+	if err := invRepo.Save(ctx, inv); err != nil {
+		t.Fatal(err)
+	}
 
 	alcService, err := alchemy.NewServiceWithTransaction(charRepo, invRepo, alcRepo, recipeCatalog, itemCatalog)
 	if err != nil {

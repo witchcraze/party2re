@@ -50,6 +50,7 @@ import (
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/medal"
+	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/park"
 	"github.com/witchcraze/party2re/internal/player"
@@ -485,6 +486,16 @@ func run(ctx context.Context, logger logging.Logger) error {
 		return err
 	}
 
+	monsterRepo, err := database.NewMonsterRepository(db)
+	if err != nil {
+		return err
+	}
+	monsterService := monster.NewService(
+		charRepo,
+		monsterRepo,
+		monster.WithTransactionProvider(txProvider),
+	)
+
 	activityRepo, err := database.NewActivityRepository(db)
 	if err != nil {
 		return err
@@ -586,6 +597,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 		http.WithFleaMarket(fleamarketService),
 		http.WithGemStore(gemStoreService),
 		http.WithGod(godService),
+		http.WithMonster(monsterService),
 	}
 
 	apiHandler, err := http.NewHandler(playerService, charService, advService, shopService, opts...)
