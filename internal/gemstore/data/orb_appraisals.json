@@ -1,0 +1,99 @@
+[
+  {
+    "orb_name": "光る宝珠",
+    "candidates": [
+      { "gem_id": "gem_sky_atk_1", "weight": 1 },
+      { "gem_id": "gem_all_atk_sky", "weight": 1 },
+      { "gem_id": "gem_magic_atk_sky", "weight": 1 },
+      { "gem_id": "gem_all_magic_sky", "weight": 1 },
+      { "gem_id": "gem_atk_2", "weight": 2 },
+      { "gem_id": "gem_combo_1", "weight": 2 },
+      { "gem_id": "gem_all_atk_1", "weight": 2 },
+      { "gem_id": "gem_all_atk_2", "weight": 2 },
+      { "gem_id": "gem_guard_1", "weight": 2 },
+      { "gem_id": "gem_magic_atk_1", "weight": 2 },
+      { "gem_id": "gem_magic_atk_2", "weight": 2 },
+      { "gem_id": "gem_all_magic_1", "weight": 2 },
+      { "gem_id": "gem_all_breath_1", "weight": 2 },
+      { "gem_id": "gem_buff_atk_1", "weight": 2 },
+      { "gem_id": "gem_buff_atk_2", "weight": 2 },
+      { "gem_id": "gem_buff_def_1", "weight": 2 },
+      { "gem_id": "gem_buff_def_2", "weight": 2 },
+      { "gem_id": "gem_buff_spd_1", "weight": 2 },
+      { "gem_id": "gem_buff_spd_2", "weight": 2 }
+    ]
+  },
+  {
+    "orb_name": "ひび割れた宝珠",
+    "candidates": [
+      { "gem_id": "gem_heal_sky_1", "weight": 1 },
+      { "gem_id": "gem_all_heal_sky", "weight": 1 },
+      { "gem_id": "gem_awakening_1", "weight": 1 },
+      { "gem_id": "gem_heal_1", "weight": 2 },
+      { "gem_id": "gem_mitigate_phys", "weight": 2 },
+      { "gem_id": "gem_mitigate_magic", "weight": 2 },
+      { "gem_id": "gem_mitigate_breath", "weight": 2 },
+      { "gem_id": "gem_nullify_phys", "weight": 2 },
+      { "gem_id": "gem_nullify_magic_1", "weight": 2 },
+      { "gem_id": "gem_nullify_magic_2", "weight": 2 },
+      { "gem_id": "gem_counter_phys_1", "weight": 2 },
+      { "gem_id": "gem_counter_magic_1", "weight": 2 },
+      { "gem_id": "gem_counter_magic_2", "weight": 2 },
+      { "gem_id": "gem_counter_breath", "weight": 2 },
+      { "gem_id": "gem_regen_1", "weight": 2 },
+      { "gem_id": "gem_mind_eye", "weight": 2 },
+      { "gem_id": "gem_cure_poison", "weight": 2 },
+      { "gem_id": "gem_cure_paralysis", "weight": 2 },
+      { "gem_id": "gem_cure_sleep", "weight": 2 },
+      { "gem_id": "gem_cure_confusion", "weight": 2 },
+      { "gem_id": "gem_cure_paralyze_action", "weight": 2 },
+      { "gem_id": "gem_cure_atk_seal", "weight": 2 },
+      { "gem_id": "gem_cure_magic_seal", "weight": 2 },
+      { "gem_id": "gem_cure_all_abnormal", "weight": 2 }
+    ]
+  },
+  {
+    "orb_name": "多彩色の宝珠",
+    "candidates": [
+      { "gem_id": "gem_atk_2", "weight": 2 },
+      { "gem_id": "gem_sky_atk_1", "weight": 2 },
+      { "gem_id": "gem_sky_atk_2", "weight": 2 },
+      { "gem_id": "gem_combo_sky", "weight": 2 },
+      { "gem_id": "gem_all_atk_sky", "weight": 2 },
+      { "gem_id": "gem_magic_atk_sky", "weight": 2 },
+      { "gem_id": "gem_all_magic_sky", "weight": 2 },
+      { "gem_id": "gem_drain_hp_sky", "weight": 2 },
+      { "gem_id": "gem_calm_sky", "weight": 1 }
+    ]
+  },
+  {
+    "orb_name": "黒ずんだ宝珠",
+    "candidates": [
+      { "gem_id": "gem_drain_mp_sky", "weight": 2 },
+      { "gem_id": "gem_guard_sky", "weight": 2 },
+      { "gem_id": "gem_counter_phys_sky", "weight": 2 },
+      { "gem_id": "gem_revive_sky_1", "weight": 2 },
+      { "gem_id": "gem_kamikaze_sky", "weight": 2 },
+      { "gem_id": "gem_summon_sky", "weight": 2 },
+      { "gem_id": "gem_awakening_1", "weight": 2 },
+      { "gem_id": "gem_awakening_sky", "weight": 1 }
+    ]
+  },
+  {
+    "orb_name": "妖しい宝珠",
+    "candidates": [
+      { "gem_id": "gem_atk_2", "weight": 2 },
+      { "gem_id": "gem_sky_atk_1", "weight": 2 },
+      { "gem_id": "gem_sky_atk_2", "weight": 2 },
+      { "gem_id": "gem_burst_sky", "weight": 1 },
+      { "gem_id": "gem_combo_burst_sky", "weight": 1 },
+      { "gem_id": "gem_all_heal_sky", "weight": 1 },
+      { "gem_id": "gem_mp_heal_sky_2", "weight": 1 },
+      { "gem_id": "gem_revive_sky_2", "weight": 1 },
+      { "gem_id": "gem_revive_sky_3", "weight": 1 },
+      { "gem_id": "gem_divine_tension_sky", "weight": 1 },
+      { "gem_id": "gem_calm_sky", "weight": 1 },
+      { "gem_id": "gem_awakening_sky", "weight": 2 }
+    ]
+  }
+]

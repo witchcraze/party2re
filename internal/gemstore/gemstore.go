@@ -2,8 +2,10 @@ package gemstore
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -27,6 +29,29 @@ var (
 
 // ShopPriceMultiplier is the shop price multiplier applied to base gem price (legacy standard: 5x).
 const ShopPriceMultiplier = 5
+
+// RandomSource provides random integer generation for orb appraisals and RNG mechanics.
+type RandomSource interface {
+	Intn(n int) (int, error)
+}
+
+type cryptoRandomSource struct{}
+
+func (cryptoRandomSource) Intn(n int) (int, error) {
+	if n <= 0 {
+		return 0, nil
+	}
+	val, err := rand.Int(rand.Reader, big.NewInt(int64(n)))
+	if err != nil {
+		return 0, err
+	}
+	return int(val.Int64()), nil
+}
+
+// DefaultRandomSource returns the default crypto-secure random source.
+func DefaultRandomSource() RandomSource {
+	return cryptoRandomSource{}
+}
 
 // CharacterRepository defines character persistence methods required by gemstore.
 type CharacterRepository interface {
@@ -68,13 +93,21 @@ func WithTransactionProvider(provider TransactionProvider) Option {
 	}
 }
 
+// WithRandomSource configures an explicit random source (useful for deterministic tests).
+func WithRandomSource(r RandomSource) Option {
+	return func(s *Service) {
+		s.randomSource = r
+	}
+}
+
 // Service implements all gem store operations and domain invariants.
 type Service struct {
-	catalog     *Catalog
-	characters  CharacterRepository
-	inventories InventoryRepository
-	items       ItemDefinitionProvider
-	txProvider  TransactionProvider
+	catalog      *Catalog
+	characters   CharacterRepository
+	inventories  InventoryRepository
+	items        ItemDefinitionProvider
+	txProvider   TransactionProvider
+	randomSource RandomSource
 }
 
 // NewService creates a new GemStore service instance.
@@ -89,9 +122,10 @@ func NewService(
 	}
 
 	s := &Service{
-		catalog:     catalog,
-		characters:  characters,
-		inventories: inventories,
+		catalog:      catalog,
+		characters:   characters,
+		inventories:  inventories,
+		randomSource: DefaultRandomSource(),
 	}
 
 	for _, opt := range opts {
@@ -529,7 +563,9 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 		itemName := resolveItemName(targetItem.DefinitionID, s.catalog, s.items)
 
 		// Check if it's an unidentified orb that can be appraised into a gem
-		if gem, isUnidentified := s.catalog.AppraiseUnidentifiedItem(itemName); isUnidentified {
+		if gem, isUnidentified, err := s.catalog.AppraiseUnidentifiedItem(itemName, s.randomSource); err != nil {
+			return err
+		} else if isUnidentified {
 			if err := inv.Consume(targetItem.ID, 1); err != nil {
 				return err
 			}

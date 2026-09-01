@@ -3,6 +3,7 @@ package gemstore_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -88,6 +89,40 @@ func (m *mockItemProvider) FindByID(id string) (coreitem.Definition, error) {
 		return coreitem.Definition{}, errors.New("item not found")
 	}
 	return d, nil
+}
+
+type fixedRandomSource struct {
+	value int
+}
+
+func (f fixedRandomSource) Intn(n int) (int, error) {
+	if n <= 0 {
+		return 0, nil
+	}
+	return f.value % n, nil
+}
+
+type sequenceRandomSource struct {
+	values []int
+	index  int
+}
+
+func (s *sequenceRandomSource) Intn(n int) (int, error) {
+	if len(s.values) == 0 {
+		return 0, nil
+	}
+	v := s.values[s.index%len(s.values)]
+	s.index++
+	if n <= 0 {
+		return 0, nil
+	}
+	return v % n, nil
+}
+
+type errRandomSource struct{}
+
+func (errRandomSource) Intn(int) (int, error) {
+	return 0, errors.New("random source failure")
 }
 
 // -------------------------------------------------------------------
@@ -349,6 +384,7 @@ func TestGemStore_AppraiseItem(t *testing.T) {
 		charRepo,
 		invRepo,
 		gemstore.WithItemDefinitionProvider(itemProvider),
+		gemstore.WithRandomSource(fixedRandomSource{value: 0}), // index 0 in 光る宝珠 pool -> gem_sky_atk_1
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -364,8 +400,8 @@ func TestGemStore_AppraiseItem(t *testing.T) {
 	if !resOrb.IsGem {
 		t.Errorf("expected IsGem to be true")
 	}
-	if resOrb.IdentifiedGem == nil || resOrb.IdentifiedGem.ID != "gem_atk_2" {
-		t.Errorf("expected revealed gem_atk_2, got %+v", resOrb.IdentifiedGem)
+	if resOrb.IdentifiedGem == nil || resOrb.IdentifiedGem.ID != "gem_sky_atk_1" {
+		t.Errorf("expected revealed gem_sky_atk_1, got %+v", resOrb.IdentifiedGem)
 	}
 
 	// 2. Appraise regular item -> reveals name
@@ -378,6 +414,208 @@ func TestGemStore_AppraiseItem(t *testing.T) {
 	}
 	if resSword.IdentifiedName != "鉄の剣" {
 		t.Errorf("expected identified name 鉄の剣, got %s", resSword.IdentifiedName)
+	}
+}
+
+func TestGemStore_AppraiseItem_AllOrbs_AllCandidateOutcomes(t *testing.T) {
+	catalog, err := gemstore.DefaultCatalog()
+	if err != nil {
+		t.Fatalf("failed to load catalog: %v", err)
+	}
+
+	orbs := []string{
+		"光る宝珠",
+		"ひび割れた宝珠",
+		"多彩色の宝珠",
+		"黒ずんだ宝珠",
+		"妖しい宝珠",
+	}
+
+	for _, orbName := range orbs {
+		gemIDs, ok := catalog.GetOrbCandidateGemIDs(orbName)
+		if !ok || len(gemIDs) == 0 {
+			t.Fatalf("expected non-empty candidate pool for %s", orbName)
+		}
+
+		for idx, expectedGemID := range gemIDs {
+			charRepo := newMockCharacterRepo()
+			invRepo := newMockInventoryRepo()
+
+			char := corecharacter.Character{ID: "char_test", PlayerID: "p_test", Name: "Tester"}
+			charRepo.characters[char.ID] = char
+
+			itemProvider := &mockItemProvider{
+				items: map[string]coreitem.Definition{
+					"orb_item": {ID: "orb_item", Name: orbName},
+				},
+			}
+
+			inv, _ := coreinventory.New("char_test")
+			orbInst, _ := coreitem.NewInstance("orb_item", 1)
+			_ = inv.Add(orbInst)
+			invRepo.inventories["char_test"] = inv
+
+			svc, err := gemstore.NewService(
+				catalog,
+				charRepo,
+				invRepo,
+				gemstore.WithItemDefinitionProvider(itemProvider),
+				gemstore.WithRandomSource(fixedRandomSource{value: idx}),
+			)
+			if err != nil {
+				t.Fatalf("failed to create service: %v", err)
+			}
+
+			res, err := svc.AppraiseItem(context.Background(), "char_test", orbInst.ID)
+			if err != nil {
+				t.Fatalf("orb %s index %d: unexpected error: %v", orbName, idx, err)
+			}
+			if !res.IsGem {
+				t.Fatalf("orb %s index %d: expected IsGem to be true", orbName, idx)
+			}
+			if res.IdentifiedGem == nil || res.IdentifiedGem.ID != expectedGemID {
+				t.Errorf("orb %s index %d: expected gem %s, got %+v", orbName, idx, expectedGemID, res.IdentifiedGem)
+			}
+		}
+	}
+}
+
+func TestGemStore_AppraiseItem_RandomSourceError(t *testing.T) {
+	catalog, err := gemstore.DefaultCatalog()
+	if err != nil {
+		t.Fatalf("failed to load catalog: %v", err)
+	}
+
+	charRepo := newMockCharacterRepo()
+	invRepo := newMockInventoryRepo()
+
+	char := corecharacter.Character{ID: "char_1", PlayerID: "p1", Name: "Hero"}
+	charRepo.characters[char.ID] = char
+
+	itemProvider := &mockItemProvider{
+		items: map[string]coreitem.Definition{
+			"orb_item": {ID: "orb_item", Name: "光る宝珠"},
+		},
+	}
+
+	inv, _ := coreinventory.New("char_1")
+	orbInst, _ := coreitem.NewInstance("orb_item", 1)
+	_ = inv.Add(orbInst)
+	invRepo.inventories["char_1"] = inv
+
+	svc, err := gemstore.NewService(
+		catalog,
+		charRepo,
+		invRepo,
+		gemstore.WithItemDefinitionProvider(itemProvider),
+		gemstore.WithRandomSource(errRandomSource{}),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	_, err = svc.AppraiseItem(context.Background(), "char_1", orbInst.ID)
+	if err == nil {
+		t.Fatal("expected error from errRandomSource, got nil")
+	}
+}
+
+func TestGemStore_AppraiseItem_Concurrency(t *testing.T) {
+	catalog, err := gemstore.DefaultCatalog()
+	if err != nil {
+		t.Fatalf("failed to load catalog: %v", err)
+	}
+
+	const workerCount = 20
+	errChan := make(chan error, workerCount)
+
+	for i := 0; i < workerCount; i++ {
+		go func(workerID int) {
+			charRepo := newMockCharacterRepo()
+			invRepo := newMockInventoryRepo()
+
+			charID := fmt.Sprintf("char_%d", workerID)
+			char := corecharacter.Character{ID: charID, PlayerID: "p", Name: "Worker"}
+			charRepo.characters[charID] = char
+
+			itemProvider := &mockItemProvider{
+				items: map[string]coreitem.Definition{
+					"orb": {ID: "orb", Name: "多彩色の宝珠"},
+				},
+			}
+
+			inv, _ := coreinventory.New(charID)
+			orbInst, _ := coreitem.NewInstance("orb", 1)
+			_ = inv.Add(orbInst)
+			invRepo.inventories[charID] = inv
+
+			svc, err := gemstore.NewService(
+				catalog,
+				charRepo,
+				invRepo,
+				gemstore.WithItemDefinitionProvider(itemProvider),
+				gemstore.WithRandomSource(gemstore.DefaultRandomSource()),
+			)
+			if err != nil {
+				errChan <- err
+				return
+			}
+
+			res, err := svc.AppraiseItem(context.Background(), charID, orbInst.ID)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			if !res.IsGem || res.IdentifiedGem == nil {
+				errChan <- errors.New("expected valid gem result in concurrency test")
+				return
+			}
+			errChan <- nil
+		}(i)
+	}
+
+	for i := 0; i < workerCount; i++ {
+		if err := <-errChan; err != nil {
+			t.Errorf("worker failed: %v", err)
+		}
+	}
+}
+
+func TestCatalog_OrbAppraisalPools(t *testing.T) {
+	catalog, err := gemstore.DefaultCatalog()
+	if err != nil {
+		t.Fatalf("failed to load catalog: %v", err)
+	}
+
+	pools := catalog.GetOrbAppraisalPools()
+	if len(pools) != 5 {
+		t.Fatalf("expected 5 orb pools, got %d", len(pools))
+	}
+
+	expectedPoolCounts := map[string]int{
+		"光る宝珠":    34,
+		"ひび割れた宝珠": 45,
+		"多彩色の宝珠":  17,
+		"黒ずんだ宝珠":  15,
+		"妖しい宝珠":   16,
+	}
+
+	for orbName, expectedCount := range expectedPoolCounts {
+		if !catalog.IsUnidentifiedOrb(orbName) {
+			t.Errorf("expected %s to be recognized as unidentified orb", orbName)
+		}
+
+		gemIDs, ok := catalog.GetOrbCandidateGemIDs(orbName)
+		if !ok {
+			t.Errorf("expected candidate gem IDs for %s", orbName)
+		}
+		if len(gemIDs) != expectedCount {
+			t.Errorf("orb %s: expected %d total expanded entries, got %d", orbName, expectedCount, len(gemIDs))
+		}
+	}
+
+	if catalog.IsUnidentifiedOrb("普通の剣") {
+		t.Error("expected 普通の剣 not to be recognized as unidentified orb")
 	}
 }
 
