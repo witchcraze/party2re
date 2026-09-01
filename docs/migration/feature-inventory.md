@@ -85,6 +85,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Reusable deterministic Battle component & turn resolver ([#12](https://github.com/witchcraze/party2re/issues/12), [#20](https://github.com/witchcraze/party2re/issues/20), [#36](https://github.com/witchcraze/party2re/issues/36))
 - [x] Data-driven Stage Catalog (28 stages) and Monster Catalog (286 clean-room monsters) ([#56](https://github.com/witchcraze/party2re/issues/56))
 - [x] Multi-stage adventure and dungeon exploration with branching maps, traps, and boss encounters ([#57](https://github.com/witchcraze/party2re/issues/57), [#74](https://github.com/witchcraze/party2re/issues/74))
+- [x] Multiplayer party formation, co-op adventures, synergy bonuses, and group quests ([#188](https://github.com/witchcraze/party2re/issues/188))
 - [x] Adventure history logs, stage clear stats, and milestone progression unlocks ([#199](https://github.com/witchcraze/party2re/issues/199))
 - [x] Push-based background ScheduledAction completion via Valkey Worker ([#106](https://github.com/witchcraze/party2re/issues/106), [#109](https://github.com/witchcraze/party2re/issues/109), [#110](https://github.com/witchcraze/party2re/issues/110))
 - [x] Challenge content & special battle modes: Player versus Player arena combat ([#75](https://github.com/witchcraze/party2re/issues/75))
@@ -206,6 +207,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#193](https://github.com/witchcraze/party2re/issues/193) | Monster Grandpa and pet companion storage (farm.cgi / monster.cgi) | Merged |
 | [#186](https://github.com/witchcraze/party2re/issues/186) | Photo contest, screenshots, seasonal voting, and Hall of Fame (photo.cgi / contest.cgi) | Merged |
 | [#198](https://github.com/witchcraze/party2re/issues/198) | Character name changes, gender changes, profile, and avatar customization | Merged |
+| [#188](https://github.com/witchcraze/party2re/issues/188) | Multiplayer co-op party system and group quests (quest.cgi, party.cgi) | Merged |
 
 ---
 

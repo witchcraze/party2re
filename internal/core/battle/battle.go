@@ -28,8 +28,9 @@ type Request struct {
 type Outcome string
 
 const (
-	OutcomeWin  Outcome = "win"
-	OutcomeDraw Outcome = "draw"
+	OutcomeWin    Outcome = "win"
+	OutcomeDefeat Outcome = "defeat"
+	OutcomeDraw   Outcome = "draw"
 )
 
 type TurnLog struct {
@@ -71,6 +72,26 @@ type Effect struct {
 
 type Resolver interface {
 	Resolve(request Request) (Result, error)
+}
+
+type PartyBattleRequest struct {
+	Allies        []Participant
+	Enemies       []Participant
+	VictoryReward Reward
+	DefeatReward  Reward
+	DrawReward    Reward
+}
+
+type PartyBattleResult struct {
+	Outcome        Outcome   `json:"outcome"`
+	WinnerSide     string    `json:"winner_side"`
+	Turns          int       `json:"turns"`
+	BaseReward     Reward    `json:"base_reward"`
+	BonusPercent   int       `json:"bonus_percent"`
+	TotalReward    Reward    `json:"total_reward"`
+	AlliesSurvived []string  `json:"allies_survived"`
+	AlliesFallen   []string  `json:"allies_fallen"`
+	Logs           []TurnLog `json:"logs,omitempty"`
 }
 
 type Engine struct{}
@@ -147,6 +168,214 @@ func (Engine) Resolve(request Request) (Result, error) {
 		return Result{Outcome: OutcomeWin, WinnerID: second.ID, LoserID: first.ID, Turns: turns, Reward: request.DefeatReward, Logs: logs}, nil
 	}
 	return Result{Outcome: OutcomeWin, WinnerID: first.ID, LoserID: second.ID, Turns: turns, Reward: request.VictoryReward, Logs: logs}, nil
+}
+
+// ResolvePartyBattle resolves a multi-participant turn-based battle between a party of allies and enemies.
+func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, error) {
+	if len(req.Allies) == 0 || len(req.Enemies) == 0 {
+		return PartyBattleResult{}, ErrInvalidRequest
+	}
+	for _, a := range req.Allies {
+		if err := validateParticipant(a); err != nil {
+			return PartyBattleResult{}, err
+		}
+	}
+	for _, e := range req.Enemies {
+		if err := validateParticipant(e); err != nil {
+			return PartyBattleResult{}, err
+		}
+	}
+	for _, reward := range []Reward{req.VictoryReward, req.DefeatReward, req.DrawReward} {
+		if err := validateReward(reward); err != nil {
+			return PartyBattleResult{}, err
+		}
+	}
+
+	// Calculate multiplayer synergy bonus
+	// 1 ally: 0%, 2 allies: 10%, 3 allies: 20%, 4+ allies: 30%
+	bonusPercent := (len(req.Allies) - 1) * 10
+	if bonusPercent < 0 {
+		bonusPercent = 0
+	} else if bonusPercent > 30 {
+		bonusPercent = 30
+	}
+
+	hpMap := make(map[string]int)
+	for _, a := range req.Allies {
+		hpMap[a.ID] = a.HP
+	}
+	for _, e := range req.Enemies {
+		hpMap[e.ID] = e.HP
+	}
+
+	var logs []TurnLog
+	turns := 0
+	maxTurns := 100
+
+	for turns < maxTurns {
+		turns++
+
+		// 1. Allies turn
+		for _, ally := range req.Allies {
+			if hpMap[ally.ID] <= 0 {
+				continue
+			}
+			// Find living enemy with lowest HP
+			var target *Participant
+			for i := range req.Enemies {
+				if hpMap[req.Enemies[i].ID] > 0 {
+					if target == nil || hpMap[req.Enemies[i].ID] < hpMap[target.ID] {
+						target = &req.Enemies[i]
+					}
+				}
+			}
+			if target == nil {
+				break // All enemies down
+			}
+
+			dmg := damage(ally.Attack, target.Defense)
+			hpMap[target.ID] -= dmg
+			if hpMap[target.ID] < 0 {
+				hpMap[target.ID] = 0
+			}
+
+			snapshot := make(map[string]int, len(hpMap))
+			for k, v := range hpMap {
+				snapshot[k] = v
+			}
+
+			logs = append(logs, TurnLog{
+				Turn:        turns,
+				ActorID:     ally.ID,
+				ActionName:  "こうげき",
+				TargetID:    target.ID,
+				DamageDealt: dmg,
+				Message:     fmt.Sprintf("%s の攻撃！ %s に %d のダメージ！", ally.ID, target.ID, dmg),
+				RemainingHP: snapshot,
+			})
+		}
+
+		// Check if all enemies are defeated
+		allEnemiesDown := true
+		for _, e := range req.Enemies {
+			if hpMap[e.ID] > 0 {
+				allEnemiesDown = false
+				break
+			}
+		}
+		if allEnemiesDown {
+			var survived, fallen []string
+			for _, a := range req.Allies {
+				if hpMap[a.ID] > 0 {
+					survived = append(survived, a.ID)
+				} else {
+					fallen = append(fallen, a.ID)
+				}
+			}
+			totalReward := req.VictoryReward
+			totalReward.Experience = (totalReward.Experience * (100 + bonusPercent)) / 100
+			totalReward.Currency = (totalReward.Currency * (100 + bonusPercent)) / 100
+
+			return PartyBattleResult{
+				Outcome:        OutcomeWin,
+				WinnerSide:     "allies",
+				Turns:          turns,
+				BaseReward:     req.VictoryReward,
+				BonusPercent:   bonusPercent,
+				TotalReward:    totalReward,
+				AlliesSurvived: survived,
+				AlliesFallen:   fallen,
+				Logs:           logs,
+			}, nil
+		}
+
+		// 2. Enemies turn
+		for _, enemy := range req.Enemies {
+			if hpMap[enemy.ID] <= 0 {
+				continue
+			}
+			// Find living ally with lowest HP
+			var target *Participant
+			for i := range req.Allies {
+				if hpMap[req.Allies[i].ID] > 0 {
+					if target == nil || hpMap[req.Allies[i].ID] < hpMap[target.ID] {
+						target = &req.Allies[i]
+					}
+				}
+			}
+			if target == nil {
+				break // All allies down
+			}
+
+			dmg := damage(enemy.Attack, target.Defense)
+			hpMap[target.ID] -= dmg
+			if hpMap[target.ID] < 0 {
+				hpMap[target.ID] = 0
+			}
+
+			snapshot := make(map[string]int, len(hpMap))
+			for k, v := range hpMap {
+				snapshot[k] = v
+			}
+
+			logs = append(logs, TurnLog{
+				Turn:        turns,
+				ActorID:     enemy.ID,
+				ActionName:  "こうげき",
+				TargetID:    target.ID,
+				DamageDealt: dmg,
+				Message:     fmt.Sprintf("%s の攻撃！ %s に %d のダメージ！", enemy.ID, target.ID, dmg),
+				RemainingHP: snapshot,
+			})
+		}
+
+		// Check if all allies are defeated
+		allAlliesDown := true
+		for _, a := range req.Allies {
+			if hpMap[a.ID] > 0 {
+				allAlliesDown = false
+				break
+			}
+		}
+		if allAlliesDown {
+			var fallen []string
+			for _, a := range req.Allies {
+				fallen = append(fallen, a.ID)
+			}
+			return PartyBattleResult{
+				Outcome:        OutcomeDefeat,
+				WinnerSide:     "enemies",
+				Turns:          turns,
+				BaseReward:     req.DefeatReward,
+				BonusPercent:   0,
+				TotalReward:    req.DefeatReward,
+				AlliesSurvived: []string{},
+				AlliesFallen:   fallen,
+				Logs:           logs,
+			}, nil
+		}
+	}
+
+	// Timeout draw
+	var survived, fallen []string
+	for _, a := range req.Allies {
+		if hpMap[a.ID] > 0 {
+			survived = append(survived, a.ID)
+		} else {
+			fallen = append(fallen, a.ID)
+		}
+	}
+	return PartyBattleResult{
+		Outcome:        OutcomeDraw,
+		WinnerSide:     "none",
+		Turns:          turns,
+		BaseReward:     req.DrawReward,
+		BonusPercent:   0,
+		TotalReward:    req.DrawReward,
+		AlliesSurvived: survived,
+		AlliesFallen:   fallen,
+		Logs:           logs,
+	}, nil
 }
 
 func validateParticipant(value Participant) error {

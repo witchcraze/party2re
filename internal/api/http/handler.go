@@ -131,6 +131,7 @@ type Handler struct {
 	god            GodService
 	monster        MonsterService
 	contest        ContestService
+	parties        PartyService
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
 	allowedOrigins map[string]struct{}
@@ -511,6 +512,17 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("DELETE /characters/{id}/photos/{photoId}", h.handleDeleteCharacterPhoto)
 	mux.HandleFunc("POST /characters/{id}/contest/enter", h.handleEnterContest)
 	mux.HandleFunc("POST /characters/{id}/contest/vote", h.handleVoteContest)
+
+	// Multiplayer Party System (quest.cgi, party.cgi)
+	mux.HandleFunc("GET /parties", h.handleListParties)
+	mux.HandleFunc("POST /parties", h.handleCreateParty)
+	mux.HandleFunc("GET /parties/{id}", h.handleGetParty)
+	mux.HandleFunc("POST /parties/{id}/join", h.handleJoinParty)
+	mux.HandleFunc("POST /parties/{id}/leave", h.handleLeaveParty)
+	mux.HandleFunc("POST /parties/{id}/kick", h.handleKickPartyMember)
+	mux.HandleFunc("DELETE /parties/{id}", h.handleDisbandParty)
+	mux.HandleFunc("POST /parties/{id}/ready", h.handleSetPartyReady)
+	mux.HandleFunc("POST /parties/{id}/start", h.handleStartPartyAdventure)
 
 	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(mux)))
 }

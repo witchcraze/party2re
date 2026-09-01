@@ -382,6 +382,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Character screenshots and photo gallery storage (up to 20 photos per character), photo contest entry submissions, community voting with comments, automated round conclusion with prize distribution (15,000 / 7,000 / 3,000 Gold, 10 / 6 / 3 Small Medals, 700 / 300 / 100 Guild Points), voter bonus medal distribution, Hall of Fame (殿堂入り / Legends) archiving, and news announcements (`photo.cgi` / `contest.cgi`, NPC `@ワコール`).
   - **Dependencies:** Core Character, Character repository, News publisher, Guild service.
   - **Persistence:** `character_photos`, `contest_rounds`, `contest_entries`, `contest_votes`, and `contest_legends` tables in `internal/database/contest_repository.go`.
+- **Multiplayer Party & Co-op Quests** (`internal/party`):
+  - **Responsibility:** Multiplayer party formation (1–4 members), recruitment lobbies, password protection, readiness synchronization, leader management (kick, disband), and coordinated multi-participant combat against dungeon/stage encounters with cooperative synergy multipliers (+10% to +30% EXP/Gold bonus) and shared reward distribution (`quest.cgi`, `party.cgi`).
+  - **Dependencies:** Core Character, Core Battle, Core Inventory, Core Item, Core Progression, Character repository, Inventory repository, Stage/Monster Catalogs, News publisher.
+  - **Persistence:** `parties`, `party_members`, and `party_adventure_logs` tables in `internal/database/party_repository.go`.
 
 ### Cross-Module Transaction Orchestration & Ambient Context Propagation
 

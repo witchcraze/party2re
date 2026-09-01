@@ -54,6 +54,7 @@ import (
 	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/park"
+	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/player"
 	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/ranking"
@@ -553,6 +554,27 @@ func run(ctx context.Context, logger logging.Logger) error {
 		return err
 	}
 
+	partyRepo, err := database.NewPartyRepository(db)
+	if err != nil {
+		return err
+	}
+	partyService, err := party.NewService(
+		partyRepo,
+		charRepo,
+		invRepo,
+		adventureStages,
+		adventureMonsters,
+		corebattle.Engine{},
+		party.WithTransactionProvider(txProvider),
+		party.WithNewsPublisher(party.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
+			_, err := notificationService.PublishNews(ctx, cat, title, content, author, pubAt)
+			return err
+		})),
+	)
+	if err != nil {
+		return err
+	}
+
 	// 2. Cache, Limiter, Scheduler & Worker (with in-memory fallback)
 	var (
 		limiter        http.RateLimiter = ratelimit.NewMemoryLimiter()
@@ -639,6 +661,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 		http.WithGod(godService),
 		http.WithMonster(monsterService),
 		http.WithContest(contestService),
+		http.WithParty(partyService),
 	}
 
 	apiHandler, err := http.NewHandler(playerService, charService, advService, shopService, opts...)
