@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #186 — Photo Contest, Screenshots & Seasonal Voting System (photo.cgi / contest.cgi)
+Last updated: Issue #198 — Character Name Changes, Gender & Profile Customization (name_change.cgi, profile.cgi, custom_image.cgi)
 
 ## Current phase
 
@@ -24,7 +24,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### Core & Shared Components
 - **Player** (`internal/core/player`, `internal/player`): アカウント登録・パスワードハッシュ・セッション管理（MariaDB永続化）。
-- **Character** (`internal/core/character`, `internal/character`): `player_id` 外部キーによるアカウント紐付け、初期ステータス、能力値計算、転生（Rebirth +5永続ボーナス）、プレイヤー別キャラクター一覧取得。
+- **Character** (`internal/core/character`, `internal/character`): `player_id` 外部キーによるアカウント紐付け、初期ステータス、能力値計算、転生（Rebirth +5永続ボーナス）、プレイヤー別キャラクター一覧取得、命名の館（NPC `@マリナン`、名前変更 500,000 G・ギルド/フリマ制約・重複防止・ニュース配信、性別/外観変更 10,000 G）、プロフィール自己紹介コメント（最大160文字）・アバター画像アップロード/設定（最大2 MB）・カスタムメタデータ管理（`character_profiles`）。
 - **Progression** (`internal/core/progression`): レベルアップ（累積経験値テーブル `level * level * 10`）、成長率適用。
 - **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): クリーンルーム規約に完全準拠したJSONカタログ（`jobs.json`、特定フランチャイズ固有語を排除し汎用ファンタジー名へ標準化）、転職、Lv99マスタリー、スキル発動・コスト計算。
 - **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理。
@@ -76,10 +76,10 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### API & Transport
 - **Server Entrypoint & Lifecycle Orchestration** (`cmd/party2`): MariaDB・Valkey・全ドメインリポジトリおよびサービス・スケジューリングWorker・HTTP APIルーター（全32種Option）の統合初期化、`ADDR` / `PORT` 環境変数解決（デフォルト `:8080`）、GoroutineベースのHTTPサーバー＆Worker実行、OSシグナル（`SIGINT`, `SIGTERM`）受信時のタイムアウト付きGraceful Shutdown（`http.Server.Shutdown(ctx)`、Worker Contextキャンセル待機、DB/Valkeyリソース安全開放）、起動・停止のJSON構造化ログ。
-- **HTTP JSON API & OpenAPI 3.1 Specification** (`internal/api/http`, `docs/api/openapi.json`): Go標準 `net/http` によるREST風エンドポイント（全167ルート：`/health`, `/openapi.json`, `/players`, `/sessions`, `/characters`, `/jobs`, `/characters/{id}/change-job`, `/characters/{id}/rebirth`, `/characters/{id}/inn`, `/characters/{id}/custom-skills*`, `/characters/{id}/chapel*`, `/characters/{id}/farm*`, `/characters/{id}/collections/*`, `/characters/{id}/lottery/*`, `/characters/{id}/casino/*`, `/challenges/*`, `/characters/{id}/bosses*`, `/characters/{id}/dungeons*`, `/characters/{id}/pvp*`, `/auctions*`, `/fleamarket/listings*`, `/characters/{id}/fleamarket/listings*`, `/gemstore/*`, `/characters/{id}/gemstore/*`, `/god/*`, `/characters/{id}/god/*`, `/monster/*`, `/characters/{id}/monsters*`, `/contest/*`, `/characters/{id}/photos*`, `/characters/{id}/contest/*`, `/characters/{id}/adventures`, `/characters/{id}/adventure-chronicle`, `/adventures`, `/shop/*`, `/park/*`, `/medals/*`, `/helpers/*`, `/rescues/*`, `/news/*`, `/notifications/*`, `/homes/*`, `/letters/*`, `/rankings/*`, `/eventplaza*`, `/characters/{id}/secretshop*`, `/tavern/*`, `/characters/{id}/tavern*`, `/characters/{id}/blackmarket*`, `/characters/{id}/delivery*`）。全エンドポイントを網羅した機械可読 OpenAPI 3.1.0 スキーマ仕様（`docs/api/openapi.json`）の提供と `GET /openapi.json` による常時配信、CI自動テスト（`internal/api/http/openapi_test.go`）によるルート網羅率100%検証・スキーマバリデーション・ドキュメント同期ガード、および Go AST 静的解析テスト（`internal/api/http/auth_lint_test.go`）によるキャラクター操作全エンドポイントでの標準認証・所有権検証ラッパー適用の自動機械検証。セッション認証、管理者APIキー認可（`X-Admin-Key` / `Authorization: Bearer <key>`、タイミング攻撃耐性をもつ定数時間比較、`POST /news`, `POST /rankings/refresh`, `POST /contest/settle` を保護）、キャラクター・プレイヤー所有権認可検証（403 Forbidden、連戦セッション・宝くじ・冒険Claim・冒険クロニクル・オークション出品取消・宅配便・フリマ出品取消・宝石店操作・天界願い事操作・モンスター預かり所/ペット操作・フォトコン作品/写真操作・イベント広場購入/乾杯等のサブリソースIDOR完全防御）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、Valkey/In-Memory 分散レートリミットミドルウェア（公開認証エンドポイント・一般エンドポイント別制限、429 Too Many Requests、Retry-After / X-RateLimit-* ヘッダー、fail-open耐障害性）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
+- **HTTP JSON API & OpenAPI 3.1 Specification** (`internal/api/http`, `docs/api/openapi.json`): Go標準 `net/http` によるREST風エンドポイント（全171ルート：`/health`, `/openapi.json`, `/players`, `/sessions`, `/characters`, `/jobs`, `/characters/{id}/change-job`, `/characters/{id}/rebirth`, `/characters/{id}/inn`, `/characters/{id}/custom-skills*`, `/characters/{id}/chapel*`, `/characters/{id}/farm*`, `/characters/{id}/collections/*`, `/characters/{id}/lottery/*`, `/characters/{id}/casino/*`, `/challenges/*`, `/characters/{id}/bosses*`, `/characters/{id}/dungeons*`, `/characters/{id}/pvp*`, `/auctions*`, `/fleamarket/listings*`, `/characters/{id}/fleamarket/listings*`, `/gemstore/*`, `/characters/{id}/gemstore/*`, `/god/*`, `/characters/{id}/god/*`, `/monster/*`, `/characters/{id}/monsters*`, `/contest/*`, `/characters/{id}/photos*`, `/characters/{id}/contest/*`, `/naming-hall/*`, `/characters/{id}/name`, `/characters/{id}/gender`, `/characters/{id}/profile`, `/characters/{id}/avatar`, `/characters/{id}/adventures`, `/characters/{id}/adventure-chronicle`, `/adventures`, `/shop/*`, `/park/*`, `/medals/*`, `/helpers/*`, `/rescues/*`, `/news/*`, `/notifications/*`, `/homes/*`, `/letters/*`, `/rankings/*`, `/eventplaza*`, `/characters/{id}/secretshop*`, `/tavern/*`, `/characters/{id}/tavern*`, `/characters/{id}/blackmarket*`, `/characters/{id}/delivery*`）。全エンドポイントを網羅した機械可読 OpenAPI 3.1.0 スキーマ仕様（`docs/api/openapi.json`）の提供と `GET /openapi.json` による常時配信、CI自動テスト（`internal/api/http/openapi_test.go`）によるルート網羅率100%検証・スキーマバリデーション・ドキュメント同期ガード、および Go AST 静的解析テスト（`internal/api/http/auth_lint_test.go`）によるキャラクター操作全エンドポイントでの標準認証・所有権検証ラッパー適用の自動機械検証。セッション認証、管理者APIキー認可（`X-Admin-Key` / `Authorization: Bearer <key>`、タイミング攻撃耐性をもつ定数時間比較、`POST /news`, `POST /rankings/refresh`, `POST /contest/settle` を保護）、キャラクター・プレイヤー所有権認可検証（403 Forbidden、連戦セッション・宝くじ・冒険Claim・冒険クロニクル・オークション出品取消・宅配便・フリマ出品取消・宝石店操作・天界願い事操作・モンスター預かり所/ペット操作・フォトコン作品/写真操作・名前変更/性別変更/プロフィール更新/アバターアップロード・イベント広場購入/乾杯等のサブリソースIDOR完全防御）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、Valkey/In-Memory 分散レートリミットミドルウェア（公開認証エンドポイント・一般エンドポイント別制限、429 Too Many Requests、Retry-After / X-RateLimit-* ヘッダー、fail-open耐障害性）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
 
 ### Infrastructure & Operations
-- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `046_photo_contest_and_gallery.sql`、`make db-migrate` / `make db-reset`）。
+- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `047_character_profile_and_customization.sql`、`make db-migrate` / `make db-reset`）。
 - **Valkey**: 遅延アクションキュー・排他ロック・分散レートリミット・ランキングスナップショットキャッシュ（AOF+RDB永続化）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
 - **Verification**: `Makefile` (`make check`, `make fmt`, `make vet`, `make openapi-sync`, `make openapi-check`, `make test-stress`, `make check-clean`)、OpenAPI 3.1 仕様書自動同期・フォーマット CLI（`scripts/sync_openapi.go`）、CIガード（OpenAPI 3.1構文・全ルート網羅テスト）、Go AST 静的解析テスト（全リポジトリにおける `ExecutorFromContext` 必須・`BeginTx` 禁止検証 `internal/database/tx_lint_test.go`、サービス層 `RunInTx` 呼び出し検証 `internal/architecture/arch_test.go`、HTTP 所有権認可検証 `internal/api/http/auth_lint_test.go`）、Git pre-push hook による自動検証、`scripts/stress_test.sh` による高並行ストレステスト。
@@ -92,6 +92,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 1. **Remaining Version 1.0 Feature Modules**:
    - Personal Access Token (API Key) generation and authentication (Issue #163)
    - Multiplayer Co-op Party System (Issue #188)
+   - Player deletion and maintenance behavior (Issue #197)
    - Web Presentation UI / Client (Issue #140)
 
 ---

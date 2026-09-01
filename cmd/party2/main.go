@@ -131,10 +131,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 	if err != nil {
 		return err
 	}
-	charService, err := character.NewService(charRepo)
-	if err != nil {
-		return err
-	}
+	txProvider := database.NewTransactionProvider(db)
 
 	invRepo, err := database.NewInventoryRepository(db)
 	if err != nil {
@@ -274,7 +271,6 @@ func run(ctx context.Context, logger logging.Logger) error {
 		return err
 	}
 
-	txProvider := database.NewTransactionProvider(db)
 	medalService, err := medal.NewService(charRepo, invRepo, nil, "", medal.WithTransactionProvider(txProvider))
 	if err != nil {
 		return err
@@ -508,6 +504,32 @@ func run(ctx context.Context, logger logging.Logger) error {
 		contest.WithNewsPublisher(contest.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
 			_, err := notificationService.PublishNews(ctx, cat, title, content, author, pubAt)
 			return err
+		})),
+	)
+	if err != nil {
+		return err
+	}
+
+	charService, err := character.NewService(
+		charRepo,
+		character.WithTransactionProvider(txProvider),
+		character.WithNewsPublisher(character.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
+			_, err := notificationService.PublishNews(ctx, cat, title, content, author, pubAt)
+			return err
+		})),
+		character.WithGuildChecker(character.GuildMembershipCheckerFunc(func(ctx context.Context, characterID string) (bool, error) {
+			g, _, err := guildRepo.GetGuildByCharacter(ctx, characterID)
+			if err != nil {
+				return false, nil
+			}
+			return g.ID != "", nil
+		})),
+		character.WithFleaMarketChecker(character.FleaMarketCheckerFunc(func(ctx context.Context, characterID string) (bool, error) {
+			count, err := fleamarketRepo.CountActiveListingsBySeller(ctx, characterID)
+			if err != nil {
+				return false, err
+			}
+			return count > 0, nil
 		})),
 	)
 	if err != nil {

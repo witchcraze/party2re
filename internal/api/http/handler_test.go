@@ -17,6 +17,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
+	"github.com/witchcraze/party2re/internal/character"
 	"github.com/witchcraze/party2re/internal/shop"
 )
 
@@ -45,9 +46,15 @@ func (s *stubPlayerService) Authenticate(ctx context.Context, sessionID string) 
 }
 
 type stubCharacterService struct {
-	createFn  func(ctx context.Context, playerID, name string) (corecharacter.Character, error)
-	getFn     func(ctx context.Context, id string) (corecharacter.Character, error)
-	rebirthFn func(ctx context.Context, id string) (corecharacter.Character, error)
+	createFn                func(ctx context.Context, playerID, name string) (corecharacter.Character, error)
+	getFn                   func(ctx context.Context, id string) (corecharacter.Character, error)
+	rebirthFn               func(ctx context.Context, id string) (corecharacter.Character, error)
+	changeNameFn            func(ctx context.Context, characterID, newName string) (corecharacter.Character, error)
+	changeGenderFn          func(ctx context.Context, characterID, newGender string) (corecharacter.Character, error)
+	getProfileFn            func(ctx context.Context, characterID string) (character.ProfileView, error)
+	updateProfileFn         func(ctx context.Context, characterID string, req character.UpdateProfileRequest) (character.Profile, error)
+	uploadAvatarFn          func(ctx context.Context, characterID string, filename string, contentType string, data []byte) (string, error)
+	getNamingHallDialogueFn func() character.NamingHallDialogue
 }
 
 func (s *stubCharacterService) Create(ctx context.Context, playerID, name string) (corecharacter.Character, error) {
@@ -60,13 +67,49 @@ func (s *stubCharacterService) Get(ctx context.Context, id string) (corecharacte
 	if s.getFn != nil {
 		return s.getFn(ctx, id)
 	}
-	return corecharacter.Character{}, nil
+	return corecharacter.Character{ID: id, PlayerID: "player-1"}, nil
 }
 func (s *stubCharacterService) Rebirth(ctx context.Context, id string) (corecharacter.Character, error) {
 	if s.rebirthFn != nil {
 		return s.rebirthFn(ctx, id)
 	}
 	return corecharacter.Character{}, nil
+}
+func (s *stubCharacterService) ChangeName(ctx context.Context, characterID, newName string) (corecharacter.Character, error) {
+	if s.changeNameFn != nil {
+		return s.changeNameFn(ctx, characterID, newName)
+	}
+	return corecharacter.Character{ID: characterID, Name: newName}, nil
+}
+func (s *stubCharacterService) ChangeGender(ctx context.Context, characterID, newGender string) (corecharacter.Character, error) {
+	if s.changeGenderFn != nil {
+		return s.changeGenderFn(ctx, characterID, newGender)
+	}
+	return corecharacter.Character{ID: characterID, Gender: newGender}, nil
+}
+func (s *stubCharacterService) GetProfile(ctx context.Context, characterID string) (character.ProfileView, error) {
+	if s.getProfileFn != nil {
+		return s.getProfileFn(ctx, characterID)
+	}
+	return character.ProfileView{Character: corecharacter.Character{ID: characterID}}, nil
+}
+func (s *stubCharacterService) UpdateProfile(ctx context.Context, characterID string, req character.UpdateProfileRequest) (character.Profile, error) {
+	if s.updateProfileFn != nil {
+		return s.updateProfileFn(ctx, characterID, req)
+	}
+	return character.Profile{CharacterID: characterID}, nil
+}
+func (s *stubCharacterService) UploadAvatar(ctx context.Context, characterID string, filename string, contentType string, data []byte) (string, error) {
+	if s.uploadAvatarFn != nil {
+		return s.uploadAvatarFn(ctx, characterID, filename, contentType, data)
+	}
+	return "data:image/png;base64,placeholder", nil
+}
+func (s *stubCharacterService) GetNamingHallDialogue() character.NamingHallDialogue {
+	if s.getNamingHallDialogueFn != nil {
+		return s.getNamingHallDialogueFn()
+	}
+	return character.NamingHallDialogue{NPCName: "@マリナン", LocationTitle: "命名の館"}
 }
 
 type stubAdventureService struct {

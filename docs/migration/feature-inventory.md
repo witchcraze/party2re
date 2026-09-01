@@ -53,7 +53,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Player-character ownership verification linkage ([#131](https://github.com/witchcraze/party2re/issues/131))
 - [ ] Personal Access Token (API Key) generation and authentication ([#163](https://github.com/witchcraze/party2re/issues/163))
 - [ ] Player deletion and maintenance behavior
-- [ ] Name changes and profile customization
+- [x] Name changes and profile customization ([#198](https://github.com/witchcraze/party2re/issues/198))
 - [x] Notifications, news, and player notification inbox ([#67](https://github.com/witchcraze/party2re/issues/67))
 - [ ] Administrator operations
 
@@ -205,6 +205,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#187](https://github.com/witchcraze/party2re/issues/187) | Endgame wishes and stat limit break system (god.cgi, u_god.cgi) | Merged |
 | [#193](https://github.com/witchcraze/party2re/issues/193) | Monster Grandpa and pet companion storage (farm.cgi / monster.cgi) | Merged |
 | [#186](https://github.com/witchcraze/party2re/issues/186) | Photo contest, screenshots, seasonal voting, and Hall of Fame (photo.cgi / contest.cgi) | Merged |
+| [#198](https://github.com/witchcraze/party2re/issues/198) | Character name changes, gender changes, profile, and avatar customization | Merged |
 
 ---
 
