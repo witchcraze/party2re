@@ -77,6 +77,10 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^GET /gemstore/dialogue$`),
 		regexp.MustCompile(`^GET /god/dialogue$`),
 		regexp.MustCompile(`^GET /monster/dialogue$`),
+		regexp.MustCompile(`^GET /contest/venue$`),
+		regexp.MustCompile(`^GET /contest/current$`),
+		regexp.MustCompile(`^GET /contest/past$`),
+		regexp.MustCompile(`^GET /contest/legends$`),
 		regexp.MustCompile(`^GET /rankings/.*$`),
 		regexp.MustCompile(`^GET /homes/\{id\}$`),
 		regexp.MustCompile(`^GET /homes/\{id\}/companion/talk$`),
@@ -85,6 +89,7 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 	adminRoutes := map[string]bool{
 		"POST /news":             true,
 		"POST /rankings/refresh": true,
+		"POST /contest/settle":   true,
 	}
 
 	for _, route := range routes {

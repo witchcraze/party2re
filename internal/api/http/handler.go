@@ -123,6 +123,7 @@ type Handler struct {
 	gemstore       GemStoreService
 	god            GodService
 	monster        MonsterService
+	contest        ContestService
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
 	allowedOrigins map[string]struct{}
@@ -484,6 +485,18 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/monsters/{instance_id}/rename", h.handleRenameMonster)
 	mux.HandleFunc("POST /characters/{id}/monsters/{instance_id}/send", h.handleSendMonster)
 	mux.HandleFunc("POST /characters/{id}/monsters/{instance_id}/release", h.handleReleaseMonster)
+
+	// Photo Contest & Gallery
+	mux.HandleFunc("GET /contest/venue", h.handleGetContestVenue)
+	mux.HandleFunc("GET /contest/current", h.handleGetContestCurrent)
+	mux.HandleFunc("GET /contest/past", h.handleGetContestPast)
+	mux.HandleFunc("GET /contest/legends", h.handleGetContestLegends)
+	mux.HandleFunc("POST /contest/settle", h.handleSettleContest)
+	mux.HandleFunc("GET /characters/{id}/photos", h.handleGetCharacterPhotos)
+	mux.HandleFunc("POST /characters/{id}/photos", h.handleSaveCharacterPhoto)
+	mux.HandleFunc("DELETE /characters/{id}/photos/{photoId}", h.handleDeleteCharacterPhoto)
+	mux.HandleFunc("POST /characters/{id}/contest/enter", h.handleEnterContest)
+	mux.HandleFunc("POST /characters/{id}/contest/vote", h.handleVoteContest)
 
 	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(mux)))
 }
