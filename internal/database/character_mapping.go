@@ -9,7 +9,7 @@ import (
 )
 
 // characterColumns lists all standard columns of the characters table in canonical order.
-const characterColumns = "id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count, small_medals, help_count"
+const characterColumns = "id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count, small_medals, help_count, over_level, over_depot, over_monster, over_future, over_flea, over_store"
 
 // rowScanner abstracts *sql.Row, *sql.Rows, or any scanner implementation.
 type rowScanner interface {
@@ -38,6 +38,12 @@ func scanCharacterRow(scanner rowScanner) (corecharacter.Character, error) {
 		&value.RebirthCount,
 		&value.SmallMedals,
 		&value.HelpCount,
+		&value.OverLevel,
+		&value.OverDepot,
+		&value.OverMonster,
+		&value.OverFuture,
+		&value.OverFlea,
+		&value.OverStore,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return corecharacter.Character{}, corecharacter.ErrNotFound
@@ -69,11 +75,13 @@ func executeCharacterUpdate(ctx context.Context, executor sqlContextExecutor, va
 	result, err := executor.ExecContext(ctx, `
 		UPDATE characters
 		SET name = ?, job_id = ?, gender = ?, max_hp = ?, max_mp = ?, hp = ?, mp = ?,
-			attack = ?, defense = ?, agility = ?, money = ?, level = ?, experience = ?, rebirth_count = ?, small_medals = ?, help_count = ?
+			attack = ?, defense = ?, agility = ?, money = ?, level = ?, experience = ?, rebirth_count = ?, small_medals = ?, help_count = ?,
+			over_level = ?, over_depot = ?, over_monster = ?, over_future = ?, over_flea = ?, over_store = ?
 		WHERE id = ?
 	`, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP, value.Stats.HP,
 		value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility, value.Money,
-		value.Level, value.Experience, value.RebirthCount, value.SmallMedals, value.HelpCount, value.ID)
+		value.Level, value.Experience, value.RebirthCount, value.SmallMedals, value.HelpCount,
+		value.OverLevel, value.OverDepot, value.OverMonster, value.OverFuture, value.OverFlea, value.OverStore, value.ID)
 	if err != nil {
 		return 0, err
 	}

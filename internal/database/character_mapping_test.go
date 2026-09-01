@@ -48,8 +48,8 @@ func TestScanCharacterRow_CustomError(t *testing.T) {
 func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 	scanner := &mockScanner{
 		scanFn: func(dest ...any) error {
-			if len(dest) != 18 {
-				t.Fatalf("expected 18 scan destinations, got %d", len(dest))
+			if len(dest) != 24 {
+				t.Fatalf("expected 24 scan destinations, got %d", len(dest))
 			}
 			*dest[0].(*string) = "char-1"
 			*dest[1].(*string) = "player-1"
@@ -69,6 +69,12 @@ func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 			*dest[15].(*int) = 2
 			*dest[16].(*int) = 5
 			*dest[17].(*int) = 8
+			*dest[18].(*bool) = true
+			*dest[19].(*int) = 1
+			*dest[20].(*int) = 2
+			*dest[21].(*int) = 3
+			*dest[22].(*int) = 4
+			*dest[23].(*int) = 5
 			return nil
 		},
 	}
@@ -89,6 +95,10 @@ func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 	}
 	if char.RebirthCount != 2 || char.SmallMedals != 5 || char.HelpCount != 8 {
 		t.Errorf("unexpected medals/help/rebirth: Rebirth %d, Medals %d, Help %d", char.RebirthCount, char.SmallMedals, char.HelpCount)
+	}
+	if !char.OverLevel || char.OverDepot != 1 || char.OverMonster != 2 || char.OverFuture != 3 || char.OverFlea != 4 || char.OverStore != 5 {
+		t.Errorf("unexpected limit break fields: OverLevel %v, OverDepot %d, OverMonster %d, OverFuture %d, OverFlea %d, OverStore %d",
+			char.OverLevel, char.OverDepot, char.OverMonster, char.OverFuture, char.OverFlea, char.OverStore)
 	}
 }
 

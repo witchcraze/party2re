@@ -40,6 +40,7 @@ import (
 	"github.com/witchcraze/party2re/internal/farm"
 	"github.com/witchcraze/party2re/internal/fleamarket"
 	"github.com/witchcraze/party2re/internal/gemstore"
+	"github.com/witchcraze/party2re/internal/god"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/helper"
@@ -474,6 +475,16 @@ func run(ctx context.Context, logger logging.Logger) error {
 		return err
 	}
 
+	godService, err := god.NewService(
+		charRepo,
+		god.WithDepotRepository(depotRepo),
+		god.WithInventoryRepository(invRepo),
+		god.WithTransactionProvider(txProvider),
+	)
+	if err != nil {
+		return err
+	}
+
 	activityRepo, err := database.NewActivityRepository(db)
 	if err != nil {
 		return err
@@ -574,6 +585,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 		http.WithDelivery(deliveryService),
 		http.WithFleaMarket(fleamarketService),
 		http.WithGemStore(gemStoreService),
+		http.WithGod(godService),
 	}
 
 	apiHandler, err := http.NewHandler(playerService, charService, advService, shopService, opts...)

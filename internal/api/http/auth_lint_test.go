@@ -75,6 +75,7 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^GET /gemstore/catalog$`),
 		regexp.MustCompile(`^GET /gemstore/recipes$`),
 		regexp.MustCompile(`^GET /gemstore/dialogue$`),
+		regexp.MustCompile(`^GET /god/dialogue$`),
 		regexp.MustCompile(`^GET /rankings/.*$`),
 		regexp.MustCompile(`^GET /homes/\{id\}$`),
 		regexp.MustCompile(`^GET /homes/\{id\}/companion/talk$`),

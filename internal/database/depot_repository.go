@@ -63,6 +63,47 @@ func (r *DepotRepository) FindByCharacterID(ctx context.Context, characterID str
 	return dep, nil
 }
 
+func (r *DepotRepository) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (depot.Depot, error) {
+	var dep depot.Depot
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+		SELECT character_id, gold, capacity
+		FROM character_depots
+		WHERE character_id = ? FOR UPDATE
+	`, characterID).Scan(&dep.CharacterID, &dep.Gold, &dep.Capacity)
+	if errors.Is(err, sql.ErrNoRows) {
+		return depot.Depot{}, depot.ErrNotFound
+	}
+	if err != nil {
+		return depot.Depot{}, err
+	}
+
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
+		SELECT id, definition_id, quantity, enhancement_level
+		FROM depot_items
+		WHERE character_id = ? FOR UPDATE
+		ORDER BY id
+	`, characterID)
+	if err != nil {
+		return depot.Depot{}, err
+	}
+	defer rows.Close()
+
+	items := make([]item.Instance, 0)
+	for rows.Next() {
+		var instance item.Instance
+		if err := rows.Scan(&instance.ID, &instance.DefinitionID, &instance.Quantity, &instance.EnhancementLevel); err != nil {
+			return depot.Depot{}, err
+		}
+		items = append(items, instance)
+	}
+	if err := rows.Err(); err != nil {
+		return depot.Depot{}, err
+	}
+
+	dep.Items = items
+	return dep, nil
+}
+
 func (r *DepotRepository) Save(ctx context.Context, value depot.Depot) error {
 	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		return saveDepotTx(txCtx, ExecutorFromContext(txCtx, r.db), value)
