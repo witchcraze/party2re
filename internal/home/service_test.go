@@ -334,13 +334,13 @@ func TestHomeService(t *testing.T) {
 		}
 
 		inbox, err := service.ListInbox(ctx, "char-2", 10, 0)
-		if err != nil || inbox.Total != 0 || len(inbox.Letters) != 0 {
-			t.Errorf("expected empty inbox after recipient deletion, got total=%d, len=%d", inbox.Total, len(inbox.Letters))
+		if err != nil || inbox.Total != 0 || len(inbox.Items) != 0 {
+			t.Errorf("expected empty inbox after recipient deletion, got total=%d, len=%d", inbox.Total, len(inbox.Items))
 		}
 
 		outbox, err := service.ListOutbox(ctx, "char-1", 10, 0)
-		if err != nil || outbox.Total != 1 || len(outbox.Letters) != 1 {
-			t.Errorf("expected sender outbox still retained, got total=%d, len=%d", outbox.Total, len(outbox.Letters))
+		if err != nil || outbox.Total != 1 || len(outbox.Items) != 1 {
+			t.Errorf("expected sender outbox still retained, got total=%d, len=%d", outbox.Total, len(outbox.Items))
 		}
 
 		// Delete letter by sender -> sender outbox now empty as well
@@ -350,8 +350,8 @@ func TestHomeService(t *testing.T) {
 		}
 
 		outbox, err = service.ListOutbox(ctx, "char-1", 10, 0)
-		if err != nil || outbox.Total != 0 || len(outbox.Letters) != 0 {
-			t.Errorf("expected empty outbox after sender deletion, got total=%d, len=%d", outbox.Total, len(outbox.Letters))
+		if err != nil || outbox.Total != 0 || len(outbox.Items) != 0 {
+			t.Errorf("expected empty outbox after sender deletion, got total=%d, len=%d", outbox.Total, len(outbox.Items))
 		}
 	})
 
@@ -380,7 +380,7 @@ func TestHomeService(t *testing.T) {
 		}
 
 		inbox, err := service.ListInbox(ctx, "char-2", 10, 0)
-		if err != nil || inbox.Total != 1 || len(inbox.Letters) != 1 {
+		if err != nil || inbox.Total != 1 || len(inbox.Items) != 1 {
 			t.Fatalf("expected 1 letter in recipient inbox, got total=%d", inbox.Total)
 		}
 

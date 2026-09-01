@@ -3,10 +3,10 @@ package http
 import (
 	"errors"
 	"net/http"
-	"strconv"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 func (h *Handler) handleListCharacterAdventures(w http.ResponseWriter, r *http.Request) {
@@ -17,20 +17,9 @@ func (h *Handler) handleListCharacterAdventures(w http.ResponseWriter, r *http.R
 
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		limit := 20
-		offset := 0
-		if l := r.URL.Query().Get("limit"); l != "" {
-			if val, err := strconv.Atoi(l); err == nil {
-				limit = val
-			}
-		}
-		if o := r.URL.Query().Get("offset"); o != "" {
-			if val, err := strconv.Atoi(o); err == nil {
-				offset = val
-			}
-		}
+		params := pagination.ParseRequest(r)
 
-		res, err := h.adventures.ListHistory(r.Context(), char.ID, limit, offset)
+		res, err := h.adventures.ListHistory(r.Context(), char.ID, params.Limit, params.Offset)
 		if err != nil {
 			if errors.Is(err, corecharacter.ErrNotFound) {
 				writeError(w, http.StatusNotFound, err)

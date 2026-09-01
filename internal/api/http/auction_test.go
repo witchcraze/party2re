@@ -11,12 +11,13 @@ import (
 	"github.com/witchcraze/party2re/internal/auction"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 type stubAuctionService struct {
 	createListingFn func(ctx context.Context, sellerID, itemID, itemName, itemCategory string, enhancement int, startBid, buyoutPrice int, duration time.Duration) (auction.AuctionListing, error)
 	getListingFn    func(ctx context.Context, listingID string) (auction.AuctionListing, error)
-	listActiveFn    func(ctx context.Context, limit, offset int) ([]auction.AuctionListing, error)
+	listActiveFn    func(ctx context.Context, limit, offset int) (pagination.Page[auction.AuctionListing], error)
 	placeBidFn      func(ctx context.Context, listingID, bidderID string, bidAmount int) (auction.AuctionListing, error)
 	buyoutFn        func(ctx context.Context, listingID, buyerID string) (auction.AuctionListing, error)
 	cancelListingFn func(ctx context.Context, listingID, sellerID string) (auction.AuctionListing, error)
@@ -34,11 +35,11 @@ func (s *stubAuctionService) GetListing(ctx context.Context, listingID string) (
 	}
 	return auction.AuctionListing{ID: listingID, Status: auction.StatusActive}, nil
 }
-func (s *stubAuctionService) ListActive(ctx context.Context, limit, offset int) ([]auction.AuctionListing, error) {
+func (s *stubAuctionService) ListActive(ctx context.Context, limit, offset int) (pagination.Page[auction.AuctionListing], error) {
 	if s.listActiveFn != nil {
 		return s.listActiveFn(ctx, limit, offset)
 	}
-	return []auction.AuctionListing{{ID: "auc-1", Status: auction.StatusActive}}, nil
+	return pagination.NewPage([]auction.AuctionListing{{ID: "auc-1", Status: auction.StatusActive}}, 1, limit, offset), nil
 }
 func (s *stubAuctionService) PlaceBid(ctx context.Context, listingID, bidderID string, bidAmount int) (auction.AuctionListing, error) {
 	if s.placeBidFn != nil {
@@ -93,6 +94,11 @@ func TestAuctionEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+		var page pagination.Page[auction.AuctionListing]
+		decodeResponseBody(t, rec.Body.Bytes(), &page)
+		if page.Total != 1 || len(page.Items) != 1 || page.Limit != 10 || page.Offset != 0 {
+			t.Errorf("unexpected page result: %+v", page)
 		}
 	})
 

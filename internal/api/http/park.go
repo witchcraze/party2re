@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strconv"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/park"
 )
 
@@ -25,11 +25,6 @@ func WithPark(p ParkService) Option {
 	return func(h *Handler) {
 		h.park = p
 	}
-}
-
-type listParkPostsResponse struct {
-	Posts []park.Post `json:"posts"`
-	Total int         `json:"total"`
 }
 
 type postParkMessageRequest struct {
@@ -53,29 +48,15 @@ func (h *Handler) handleGetParkPosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	limit := 20
-	offset := 0
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if val, err := strconv.Atoi(l); err == nil && val > 0 {
-			limit = val
-		}
-	}
-	if o := r.URL.Query().Get("offset"); o != "" {
-		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
-			offset = val
-		}
-	}
+	params := pagination.ParseRequest(r)
 
-	posts, total, err := h.park.GetRecentPosts(r.Context(), limit, offset)
+	posts, total, err := h.park.GetRecentPosts(r.Context(), params.Limit, params.Offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, listParkPostsResponse{
-		Posts: posts,
-		Total: total,
-	})
+	writeJSON(w, http.StatusOK, pagination.NewPage(posts, total, params.Limit, params.Offset))
 }
 
 func (h *Handler) handlePostParkMessage(w http.ResponseWriter, r *http.Request) {

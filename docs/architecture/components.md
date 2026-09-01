@@ -209,7 +209,7 @@ Adventure may use Battle but should not own Battle's implementation.
 To avoid duplicate boilerplate while preventing monolithic "junk-drawer" packages, shared cross-cutting logic is organized into single-responsibility packages:
 
 - **ID Generation (`internal/id`)**: Centralized cryptographically secure ID generation (`id.New()`, `id.Generate()`, `id.NewLength(n)`) ensuring thread-safe, consistent 16-byte (32 hex characters) identifiers across all domain models without per-package duplicate helper functions.
-- **Pagination (`internal/pagination` or `internal/api/http/pagination`)**: Reusable generic list envelopes (`Page[T]`, `PaginationResult[T]`) and query parameter parsers with standard limit/offset normalization.
+- **Pagination (`internal/pagination`)**: Reusable generic list container `Page[T]` (`items`, `total`, `limit`, `offset`), parameter structures (`Params`), and request query parsers (`ParseRequest`, `Normalize`) ensuring standard limit/offset normalization and unified JSON envelopes across all HTTP list endpoints.
 - **Validation (`internal/validation`)**: Standardized format validators (e.g. HEX color codes `#RRGGBB`, text length bounds, HTML tag sanitization).
 - **HTTP Transport Middleware (`internal/api/http/middleware`)**: Reusable transport helpers, including session authentication, character ownership verification wrappers (`withAuthenticatedCharacter`), admin role guards, CORS policies, and rate limiters.
 - **Shared Entity Persistence Helpers (`internal/database`)**: Standardized transactional update functions for shared Core entities (e.g. updating character progression, stats, and gold) across repository boundaries.

@@ -64,7 +64,18 @@ func (r *PartyRepository) getPartyWithQuery(ctx context.Context, id string, quer
 	return p, nil
 }
 
-func (r *PartyRepository) ListParties(ctx context.Context, status string, limit, offset int) ([]party.PartySummary, error) {
+func (r *PartyRepository) ListParties(ctx context.Context, status string, limit, offset int) ([]party.PartySummary, int, error) {
+	var total int
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM parties p
+		JOIN characters c ON p.leader_character_id = c.id
+		WHERE (? = '' OR p.status = ?)
+	`, status, status).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT
 			p.id, p.name, p.leader_character_id, c.name, p.stage_id, '', p.speed,
@@ -78,7 +89,7 @@ func (r *PartyRepository) ListParties(ctx context.Context, status string, limit,
 		LIMIT ? OFFSET ?
 	`, status, status, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -90,14 +101,14 @@ func (r *PartyRepository) ListParties(ctx context.Context, status string, limit,
 			&s.Speed, &s.CurrentMembers, &s.MaxMembers, &s.HasPassword,
 			&s.MinLevel, &s.MaxLevel, &s.MinHP, &s.Status, &s.CreatedAt,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		list = append(list, s)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return list, nil
+	return list, total, nil
 }
 
 func (r *PartyRepository) UpdateParty(ctx context.Context, p party.Party) error {

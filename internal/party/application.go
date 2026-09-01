@@ -16,6 +16,7 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 type Option func(*Service)
@@ -230,17 +231,16 @@ func (s *Service) GetParty(ctx context.Context, partyID string) (PartyDetail, er
 }
 
 // ListParties lists recruiting or active parties.
-func (s *Service) ListParties(ctx context.Context, status string, limit, offset int) ([]PartySummary, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 50
-	}
-	if offset < 0 {
-		offset = 0
-	}
+func (s *Service) ListParties(ctx context.Context, status string, limit, offset int) (pagination.Page[PartySummary], error) {
+	limit, offset = pagination.NormalizeWithDefaults(limit, offset, 50, 100)
 	if status == "" {
 		status = StatusRecruiting
 	}
-	return s.repo.ListParties(ctx, status, limit, offset)
+	items, total, err := s.repo.ListParties(ctx, status, limit, offset)
+	if err != nil {
+		return pagination.Page[PartySummary]{}, err
+	}
+	return pagination.NewPage(items, total, limit, offset), nil
 }
 
 // JoinParty joins a character into an existing recruiting party.

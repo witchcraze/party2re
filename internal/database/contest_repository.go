@@ -456,7 +456,16 @@ func (r *ContestRepository) SaveLegend(ctx context.Context, l contest.ContestLeg
 	return err
 }
 
-func (r *ContestRepository) ListLegends(ctx context.Context, limit, offset int) ([]contest.ContestLegend, error) {
+func (r *ContestRepository) ListLegends(ctx context.Context, limit, offset int) ([]contest.ContestLegend, int, error) {
+	var total int
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM contest_legends
+	`).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT round, entry_id, title, character_id, character_name, guild_name, votes, image_url, caption, settled_at
 		FROM contest_legends
@@ -464,7 +473,7 @@ func (r *ContestRepository) ListLegends(ctx context.Context, limit, offset int) 
 		LIMIT ? OFFSET ?
 	`, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -472,9 +481,9 @@ func (r *ContestRepository) ListLegends(ctx context.Context, limit, offset int) 
 	for rows.Next() {
 		var l contest.ContestLegend
 		if err := rows.Scan(&l.Round, &l.EntryID, &l.Title, &l.CharacterID, &l.CharacterName, &l.GuildName, &l.Votes, &l.ImageURL, &l.Caption, &l.SettledAt); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		legends = append(legends, l)
 	}
-	return legends, rows.Err()
+	return legends, total, rows.Err()
 }

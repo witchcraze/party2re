@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 type AuctionStatus string
@@ -48,7 +50,7 @@ type AuctionListing struct {
 type Repository interface {
 	CreateListing(ctx context.Context, listing AuctionListing) (AuctionListing, error)
 	GetListing(ctx context.Context, listingID string) (AuctionListing, error)
-	ListActive(ctx context.Context, limit, offset int) ([]AuctionListing, error)
+	ListActive(ctx context.Context, limit, offset int) ([]AuctionListing, int, error)
 	PlaceBid(ctx context.Context, listingID, bidderID string, bidAmount int) (AuctionListing, error)
 	Buyout(ctx context.Context, listingID, buyerID string) (AuctionListing, error)
 	SettleListing(ctx context.Context, listingID string) (AuctionListing, error)
@@ -99,11 +101,13 @@ func (s *Service) GetListing(ctx context.Context, listingID string) (AuctionList
 	return s.repo.GetListing(ctx, listingID)
 }
 
-func (s *Service) ListActive(ctx context.Context, limit, offset int) ([]AuctionListing, error) {
-	if limit <= 0 {
-		limit = 50
+func (s *Service) ListActive(ctx context.Context, limit, offset int) (pagination.Page[AuctionListing], error) {
+	limit, offset = pagination.Normalize(limit, offset)
+	items, total, err := s.repo.ListActive(ctx, limit, offset)
+	if err != nil {
+		return pagination.Page[AuctionListing]{}, err
 	}
-	return s.repo.ListActive(ctx, limit, offset)
+	return pagination.NewPage(items, total, limit, offset), nil
 }
 
 func (s *Service) PlaceBid(ctx context.Context, bidderID, listingID string, bidAmount int) (AuctionListing, error) {

@@ -14,6 +14,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 type mockHomeService struct {
@@ -92,24 +93,14 @@ func (m *mockHomeService) ListInbox(ctx context.Context, recipientID string, lim
 	if m.listInboxFn != nil {
 		return m.listInboxFn(ctx, recipientID, limit, offset)
 	}
-	return home.LetterListResult{
-		Letters: []home.Letter{{ID: "letter-1", RecipientCharacterID: recipientID}},
-		Total:   1,
-		Limit:   limit,
-		Offset:  offset,
-	}, nil
+	return pagination.NewPage([]home.Letter{{ID: "letter-1", RecipientCharacterID: recipientID}}, 1, limit, offset), nil
 }
 
 func (m *mockHomeService) ListOutbox(ctx context.Context, senderID string, limit, offset int) (home.LetterListResult, error) {
 	if m.listOutboxFn != nil {
 		return m.listOutboxFn(ctx, senderID, limit, offset)
 	}
-	return home.LetterListResult{
-		Letters: []home.Letter{{ID: "letter-1", SenderCharacterID: senderID}},
-		Total:   1,
-		Limit:   limit,
-		Offset:  offset,
-	}, nil
+	return pagination.NewPage([]home.Letter{{ID: "letter-1", SenderCharacterID: senderID}}, 1, limit, offset), nil
 }
 
 func (m *mockHomeService) GetUnreadLetterCount(ctx context.Context, recipientID string) (int, error) {

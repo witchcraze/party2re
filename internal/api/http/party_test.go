@@ -12,6 +12,7 @@ import (
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/party"
 )
 
@@ -36,11 +37,11 @@ func (s *stubPartyService) GetParty(_ context.Context, partyID string) (party.Pa
 	return s.detail, nil
 }
 
-func (s *stubPartyService) ListParties(_ context.Context, status string, limit, offset int) ([]party.PartySummary, error) {
+func (s *stubPartyService) ListParties(_ context.Context, status string, limit, offset int) (pagination.Page[party.PartySummary], error) {
 	if s.err != nil {
-		return nil, s.err
+		return pagination.Page[party.PartySummary]{}, s.err
 	}
-	return s.parties, nil
+	return pagination.NewPage(s.parties, len(s.parties), limit, offset), nil
 }
 
 func (s *stubPartyService) JoinParty(_ context.Context, partyID, characterID, password string) (party.PartyDetail, error) {
@@ -137,6 +138,13 @@ func TestPartyHTTPHandlers(t *testing.T) {
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("GET /parties returned %d, want 200", w.Code)
+	}
+	var partyPage pagination.Page[party.PartySummary]
+	if err := json.NewDecoder(w.Body).Decode(&partyPage); err != nil {
+		t.Fatalf("failed to decode GET /parties response: %v", err)
+	}
+	if partyPage.Total != 1 || len(partyPage.Items) != 1 {
+		t.Errorf("unexpected GET /parties result: %+v", partyPage)
 	}
 
 	// 2. GET /parties/party-1

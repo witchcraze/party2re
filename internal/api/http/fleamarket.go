@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/fleamarket"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 // FleaMarketService defines the flea market operations exposed over HTTP.
@@ -35,44 +35,21 @@ type createFleaMarketListingRequest struct {
 	Price  int    `json:"price"`
 }
 
-type paginatedFleaMarketListingsResponse struct {
-	Listings []fleamarket.Listing `json:"listings"`
-	Total    int                  `json:"total"`
-	Limit    int                  `json:"limit"`
-	Offset   int                  `json:"offset"`
-}
-
 func (h *Handler) handleListFleaMarketListings(w http.ResponseWriter, r *http.Request) {
 	if h.fleamarket == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("fleamarket service not configured"))
 		return
 	}
 
-	limit := 20
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if val, err := strconv.Atoi(l); err == nil && val > 0 {
-			limit = val
-		}
-	}
-	offset := 0
-	if o := r.URL.Query().Get("offset"); o != "" {
-		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
-			offset = val
-		}
-	}
+	params := pagination.ParseRequest(r)
 
-	listings, total, err := h.fleamarket.ListActiveListings(r.Context(), limit, offset)
+	listings, total, err := h.fleamarket.ListActiveListings(r.Context(), params.Limit, params.Offset)
 	if err != nil {
 		h.writeFleaMarketError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, paginatedFleaMarketListingsResponse{
-		Listings: listings,
-		Total:    total,
-		Limit:    limit,
-		Offset:   offset,
-	})
+	writeJSON(w, http.StatusOK, pagination.NewPage(listings, total, params.Limit, params.Offset))
 }
 
 func (h *Handler) handleGetFleaMarketListing(w http.ResponseWriter, r *http.Request) {

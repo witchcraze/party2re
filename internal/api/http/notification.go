@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/notification"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 // NotificationService defines the news and notification operations exposed over HTTP.
@@ -46,20 +46,9 @@ func (h *Handler) handleListNews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	limit := 20
-	offset := 0
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if val, err := strconv.Atoi(l); err == nil && val > 0 {
-			limit = val
-		}
-	}
-	if o := r.URL.Query().Get("offset"); o != "" {
-		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
-			offset = val
-		}
-	}
+	params := pagination.ParseRequest(r)
 
-	result, err := h.notifications.ListNews(r.Context(), limit, offset)
+	result, err := h.notifications.ListNews(r.Context(), params.Limit, params.Offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -128,21 +117,10 @@ func (h *Handler) handleListNotifications(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	limit := 20
-	offset := 0
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if val, err := strconv.Atoi(l); err == nil && val > 0 {
-			limit = val
-		}
-	}
-	if o := r.URL.Query().Get("offset"); o != "" {
-		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
-			offset = val
-		}
-	}
+	params := pagination.ParseRequest(r)
 	unreadOnly := r.URL.Query().Get("unread_only") == "true"
 
-	result, err := h.notifications.GetPlayerNotifications(r.Context(), player.ID, unreadOnly, limit, offset)
+	result, err := h.notifications.GetPlayerNotifications(r.Context(), player.ID, unreadOnly, params.Limit, params.Offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return

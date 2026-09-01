@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/witchcraze/party2re/internal/contest"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 type ContestService interface {
@@ -22,7 +22,7 @@ type ContestService interface {
 	Vote(ctx context.Context, voterCharacterID, entryID, comment string) (contest.ContestVote, error)
 	GetCurrentEntries(ctx context.Context) ([]contest.ContestEntry, error)
 	GetPastResults(ctx context.Context) (*contest.ContestRound, []contest.ContestEntry, error)
-	GetLegends(ctx context.Context, limit, offset int) ([]contest.ContestLegend, error)
+	GetLegends(ctx context.Context, limit, offset int) (pagination.Page[contest.ContestLegend], error)
 	SettleContest(ctx context.Context, force bool) (contest.SettlementResult, error)
 }
 
@@ -110,10 +110,9 @@ func (h *Handler) handleGetContestLegends(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	params := pagination.ParseRequest(r)
 
-	legends, err := h.contest.GetLegends(r.Context(), limit, offset)
+	legends, err := h.contest.GetLegends(r.Context(), params.Limit, params.Offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return

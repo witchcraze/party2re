@@ -160,7 +160,7 @@ type Repository interface {
 	SaveParty(ctx context.Context, p Party) error
 	GetParty(ctx context.Context, id string) (Party, error)
 	GetPartyForUpdate(ctx context.Context, id string) (Party, error)
-	ListParties(ctx context.Context, status string, limit, offset int) ([]PartySummary, error)
+	ListParties(ctx context.Context, status string, limit, offset int) ([]PartySummary, int, error)
 	UpdateParty(ctx context.Context, p Party) error
 	DeleteParty(ctx context.Context, id string) error
 

@@ -28,11 +28,10 @@ func TestHandleListCharacterAdventures_Success(t *testing.T) {
 				t.Fatalf("unexpected listHistory args: char=%s, limit=%d, offset=%d", characterID, limit, offset)
 			}
 			return adventure.PaginatedAdventures{
-				CharacterID: "c1",
-				Total:       1,
-				Limit:       10,
-				Offset:      5,
-				Adventures: []adventure.AdventureHistoryEntry{
+				Total:  1,
+				Limit:  10,
+				Offset: 5,
+				Items: []adventure.AdventureHistoryEntry{
 					{
 						ID:          "adv-1",
 						CharacterID: "c1",
@@ -65,11 +64,11 @@ func TestHandleListCharacterAdventures_Success(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&res); err != nil {
 		t.Fatalf("decode body: %v", err)
 	}
-	if res.CharacterID != "c1" || res.Total != 1 || len(res.Adventures) != 1 {
+	if res.Total != 1 || len(res.Items) != 1 {
 		t.Fatalf("unexpected response body: %+v", res)
 	}
-	if res.Adventures[0].StageName != "平原" || res.Adventures[0].MonsterName != "スライム" {
-		t.Fatalf("unexpected enriched adventure: %+v", res.Adventures[0])
+	if res.Items[0].StageName != "平原" || res.Items[0].MonsterName != "スライム" {
+		t.Fatalf("unexpected enriched adventure: %+v", res.Items[0])
 	}
 }
 

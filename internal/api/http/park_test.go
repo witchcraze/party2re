@@ -133,6 +133,16 @@ func TestParkEndpoints(t *testing.T) {
 		if body["total"].(float64) != 1 {
 			t.Errorf("expected total 1, got %v", body["total"])
 		}
+		if body["limit"].(float64) != 10 {
+			t.Errorf("expected limit 10, got %v", body["limit"])
+		}
+		if body["offset"].(float64) != 0 {
+			t.Errorf("expected offset 0, got %v", body["offset"])
+		}
+		items, ok := body["items"].([]any)
+		if !ok || len(items) != 1 {
+			t.Errorf("expected 1 item, got %v", body["items"])
+		}
 	})
 
 	t.Run("POST /park/posts - unauthorized", func(t *testing.T) {

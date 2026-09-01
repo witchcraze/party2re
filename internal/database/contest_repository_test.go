@@ -196,9 +196,9 @@ func TestContestRepository_Database(t *testing.T) {
 		t.Fatalf("SaveLegend failed: %v", err)
 	}
 
-	legends, err := repo.ListLegends(ctx, 10, 0)
-	if err != nil || len(legends) == 0 {
-		t.Fatalf("ListLegends failed: %v", err)
+	legends, total, err := repo.ListLegends(ctx, 10, 0)
+	if err != nil || len(legends) == 0 || total < 1 {
+		t.Fatalf("ListLegends failed: err=%v, len=%d, total=%d", err, len(legends), total)
 	}
 
 	// 6. Delete Photo

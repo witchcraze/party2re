@@ -4,19 +4,19 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/auction"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 // AuctionService defines the auction house operations exposed over HTTP.
 type AuctionService interface {
 	CreateListing(ctx context.Context, sellerID, itemID, itemName, itemCategory string, enhancement int, startBid, buyoutPrice int, duration time.Duration) (auction.AuctionListing, error)
 	GetListing(ctx context.Context, listingID string) (auction.AuctionListing, error)
-	ListActive(ctx context.Context, limit, offset int) ([]auction.AuctionListing, error)
+	ListActive(ctx context.Context, limit, offset int) (pagination.Page[auction.AuctionListing], error)
 	PlaceBid(ctx context.Context, listingID, bidderID string, bidAmount int) (auction.AuctionListing, error)
 	Buyout(ctx context.Context, listingID, buyerID string) (auction.AuctionListing, error)
 	CancelListing(ctx context.Context, listingID, sellerID string) (auction.AuctionListing, error)
@@ -27,10 +27,6 @@ func WithAuction(a AuctionService) Option {
 	return func(h *Handler) {
 		h.auctions = a
 	}
-}
-
-type listAuctionsResponse struct {
-	Listings []auction.AuctionListing `json:"listings"`
 }
 
 type auctionListingResponse struct {
@@ -67,28 +63,15 @@ func (h *Handler) handleListAuctions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	limit := 20
-	offset := 0
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if val, err := strconv.Atoi(l); err == nil && val > 0 {
-			limit = val
-		}
-	}
-	if o := r.URL.Query().Get("offset"); o != "" {
-		if val, err := strconv.Atoi(o); err == nil && val >= 0 {
-			offset = val
-		}
-	}
+	params := pagination.ParseRequest(r)
 
-	listings, err := h.auctions.ListActive(r.Context(), limit, offset)
+	page, err := h.auctions.ListActive(r.Context(), params.Limit, params.Offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, listAuctionsResponse{
-		Listings: listings,
-	})
+	writeJSON(w, http.StatusOK, page)
 }
 
 func (h *Handler) handleGetAuction(w http.ResponseWriter, r *http.Request) {

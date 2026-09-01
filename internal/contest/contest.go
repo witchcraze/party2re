@@ -242,7 +242,7 @@ type ContestRepository interface {
 
 	// Legends
 	SaveLegend(ctx context.Context, legend ContestLegend) error
-	ListLegends(ctx context.Context, limit, offset int) ([]ContestLegend, error)
+	ListLegends(ctx context.Context, limit, offset int) ([]ContestLegend, int, error)
 }
 
 // TransactionProvider executes functions inside an atomic database transaction.

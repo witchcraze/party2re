@@ -12,6 +12,7 @@ import (
 	"github.com/witchcraze/party2re/internal/contest"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 type stubContestService struct {
@@ -24,7 +25,7 @@ type stubContestService struct {
 	voteFn              func(ctx context.Context, voterCharacterID, entryID, comment string) (contest.ContestVote, error)
 	getCurrentEntriesFn func(ctx context.Context) ([]contest.ContestEntry, error)
 	getPastResultsFn    func(ctx context.Context) (*contest.ContestRound, []contest.ContestEntry, error)
-	getLegendsFn        func(ctx context.Context, limit, offset int) ([]contest.ContestLegend, error)
+	getLegendsFn        func(ctx context.Context, limit, offset int) (pagination.Page[contest.ContestLegend], error)
 	settleContestFn     func(ctx context.Context, force bool) (contest.SettlementResult, error)
 }
 
@@ -91,11 +92,11 @@ func (s *stubContestService) GetPastResults(ctx context.Context) (*contest.Conte
 	return nil, []contest.ContestEntry{}, nil
 }
 
-func (s *stubContestService) GetLegends(ctx context.Context, limit, offset int) ([]contest.ContestLegend, error) {
+func (s *stubContestService) GetLegends(ctx context.Context, limit, offset int) (pagination.Page[contest.ContestLegend], error) {
 	if s.getLegendsFn != nil {
 		return s.getLegendsFn(ctx, limit, offset)
 	}
-	return []contest.ContestLegend{}, nil
+	return pagination.NewPage([]contest.ContestLegend{}, 0, limit, offset), nil
 }
 
 func (s *stubContestService) SettleContest(ctx context.Context, force bool) (contest.SettlementResult, error) {
@@ -120,8 +121,8 @@ func TestContestPublicEndpoints(t *testing.T) {
 			round := contest.ContestRound{Round: 1, Status: contest.StatusSettled}
 			return &round, []contest.ContestEntry{{ID: "e1", Title: "Past Winner", Ranking: 1}}, nil
 		},
-		getLegendsFn: func(ctx context.Context, limit, offset int) ([]contest.ContestLegend, error) {
-			return []contest.ContestLegend{{Round: 1, Title: "Legendary"}}, nil
+		getLegendsFn: func(ctx context.Context, limit, offset int) (pagination.Page[contest.ContestLegend], error) {
+			return pagination.NewPage([]contest.ContestLegend{{Round: 1, Title: "Legendary"}}, 1, limit, offset), nil
 		},
 	}
 
@@ -156,9 +157,16 @@ func TestContestPublicEndpoints(t *testing.T) {
 	}
 
 	// 4. GET /contest/legends
-	resp, err = http.Get(server.URL + "/contest/legends")
+	resp, err = http.Get(server.URL + "/contest/legends?limit=10&offset=0")
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /contest/legends failed: resp=%v, err=%v", resp, err)
+	}
+	var page pagination.Page[contest.ContestLegend]
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if page.Limit != 10 || page.Offset != 0 {
+		t.Errorf("unexpected pagination params: %+v", page)
 	}
 }
 

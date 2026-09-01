@@ -10,6 +10,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 type Service struct {
@@ -453,14 +454,13 @@ func (s *Service) GetPastResults(ctx context.Context) (*ContestRound, []ContestE
 }
 
 // GetLegends retrieves the Hall of Fame archive of past 1st-place winners.
-func (s *Service) GetLegends(ctx context.Context, limit, offset int) ([]ContestLegend, error) {
-	if limit <= 0 {
-		limit = 20
+func (s *Service) GetLegends(ctx context.Context, limit, offset int) (pagination.Page[ContestLegend], error) {
+	limit, offset = pagination.Normalize(limit, offset)
+	items, total, err := s.contests.ListLegends(ctx, limit, offset)
+	if err != nil {
+		return pagination.Page[ContestLegend]{}, err
 	}
-	if offset < 0 {
-		offset = 0
-	}
-	return s.contests.ListLegends(ctx, limit, offset)
+	return pagination.NewPage(items, total, limit, offset), nil
 }
 
 // SettleContest concludes the active contest round, awards prizes to winners and voters,

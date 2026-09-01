@@ -159,7 +159,7 @@ func (s *stubAdventureService) ListHistory(ctx context.Context, characterID stri
 	if s.listHistoryFn != nil {
 		return s.listHistoryFn(ctx, characterID, limit, offset)
 	}
-	return adventure.PaginatedAdventures{CharacterID: characterID}, nil
+	return adventure.PaginatedAdventures{}, nil
 }
 
 func (s *stubAdventureService) GetChronicle(ctx context.Context, characterID string) (adventure.AdventureChronicle, error) {

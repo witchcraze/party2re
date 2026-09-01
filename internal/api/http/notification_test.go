@@ -13,6 +13,7 @@ import (
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/notification"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 type mockNotificationService struct {
@@ -63,44 +64,34 @@ func (m *mockNotificationService) ListNews(ctx context.Context, limit, offset in
 	if m.listNewsFn != nil {
 		return m.listNewsFn(ctx, limit, offset)
 	}
-	return notification.NewsListResult{
-		Articles: []notification.NewsArticle{
-			{
-				ID:          "news-1",
-				Category:    "announcement",
-				Title:       "Server Update",
-				Content:     "Update notes",
-				Author:      "Admin",
-				PublishedAt: time.Now().UTC(),
-				CreatedAt:   time.Now().UTC(),
-			},
+	return pagination.NewPage([]notification.NewsArticle{
+		{
+			ID:          "news-1",
+			Category:    "announcement",
+			Title:       "Server Update",
+			Content:     "Update notes",
+			Author:      "Admin",
+			PublishedAt: time.Now().UTC(),
+			CreatedAt:   time.Now().UTC(),
 		},
-		Total:  1,
-		Limit:  limit,
-		Offset: offset,
-	}, nil
+	}, 1, limit, offset), nil
 }
 
 func (m *mockNotificationService) GetPlayerNotifications(ctx context.Context, playerID string, unreadOnly bool, limit, offset int) (notification.NotificationListResult, error) {
 	if m.getPlayerNotificationsFn != nil {
 		return m.getPlayerNotificationsFn(ctx, playerID, unreadOnly, limit, offset)
 	}
-	return notification.NotificationListResult{
-		Notifications: []notification.PlayerNotification{
-			{
-				ID:        "notif-1",
-				PlayerID:  playerID,
-				Category:  "system",
-				Title:     "Reward",
-				Body:      "You received 100 gold",
-				IsRead:    false,
-				CreatedAt: time.Now().UTC(),
-			},
+	return pagination.NewPage([]notification.PlayerNotification{
+		{
+			ID:        "notif-1",
+			PlayerID:  playerID,
+			Category:  "system",
+			Title:     "Reward",
+			Body:      "You received 100 gold",
+			IsRead:    false,
+			CreatedAt: time.Now().UTC(),
 		},
-		Total:  1,
-		Limit:  limit,
-		Offset: offset,
-	}, nil
+	}, 1, limit, offset), nil
 }
 
 func (m *mockNotificationService) GetUnreadCount(ctx context.Context, playerID string) (int, error) {
@@ -185,7 +176,7 @@ func TestNotificationEndpoints(t *testing.T) {
 		if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
 			t.Fatalf("failed to decode response: %v", err)
 		}
-		if res.Total != 1 || len(res.Articles) != 1 {
+		if res.Total != 1 || len(res.Items) != 1 {
 			t.Errorf("unexpected news list result: %+v", res)
 		}
 	})
@@ -304,7 +295,7 @@ func TestNotificationEndpoints(t *testing.T) {
 		if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
 			t.Fatalf("failed to decode response: %v", err)
 		}
-		if res.Total != 1 || len(res.Notifications) != 1 {
+		if res.Total != 1 || len(res.Items) != 1 {
 			t.Errorf("unexpected notification list result: %+v", res)
 		}
 	})
