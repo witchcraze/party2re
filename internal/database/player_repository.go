@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 )
@@ -43,4 +44,30 @@ func (r *PlayerRepository) FindByID(ctx context.Context, id string) (coreplayer.
 		return coreplayer.Player{}, ErrPlayerNotFound
 	}
 	return value, err
+}
+
+func (r *PlayerRepository) Delete(ctx context.Context, id string) error {
+	exec := ExecutorFromContext(ctx, r.db)
+
+	queries := []string{
+		`DELETE FROM player_sessions WHERE player_id = ?`,
+		`DELETE FROM player_notifications WHERE player_id = ?`,
+		`DELETE FROM bank_transfers WHERE from_player_id = ? OR to_player_id = ?`,
+		`DELETE FROM bank_accounts WHERE player_id = ?`,
+		`DELETE FROM players WHERE id = ?`,
+	}
+
+	for _, q := range queries {
+		if strings.Count(q, "?") == 2 {
+			if _, err := exec.ExecContext(ctx, q, id, id); err != nil {
+				return err
+			}
+		} else {
+			if _, err := exec.ExecContext(ctx, q, id); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

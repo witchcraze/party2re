@@ -50,6 +50,7 @@ import (
 	"github.com/witchcraze/party2re/internal/job"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/lottery"
+	"github.com/witchcraze/party2re/internal/maintenance"
 	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/notification"
@@ -123,7 +124,11 @@ func run(ctx context.Context, logger logging.Logger) error {
 	if err != nil {
 		return err
 	}
-	playerService, err := player.NewService(playerRepo, sessionRepo)
+	maintRepo, err := database.NewMaintenanceRepository(db)
+	if err != nil {
+		return err
+	}
+	maintService, err := maintenance.NewService(maintRepo)
 	if err != nil {
 		return err
 	}
@@ -537,6 +542,17 @@ func run(ctx context.Context, logger logging.Logger) error {
 		return err
 	}
 
+	playerService, err := player.NewService(
+		playerRepo,
+		sessionRepo,
+		player.WithCharacterService(charService),
+		player.WithTransactionProvider(txProvider),
+		player.WithLogger(logger),
+	)
+	if err != nil {
+		return err
+	}
+
 	activityRepo, err := database.NewActivityRepository(db)
 	if err != nil {
 		return err
@@ -662,6 +678,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 		http.WithMonster(monsterService),
 		http.WithContest(contestService),
 		http.WithParty(partyService),
+		http.WithMaintenance(maintService),
 	}
 
 	apiHandler, err := http.NewHandler(playerService, charService, advService, shopService, opts...)

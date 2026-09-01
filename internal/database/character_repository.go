@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/character"
@@ -147,4 +148,76 @@ func (r *CharacterRepository) SaveProfile(ctx context.Context, profile character
 			updated_at = VALUES(updated_at)
 	`, profile.CharacterID, profile.Comment, profile.AvatarURL, bioJSON, profile.UpdatedAt)
 	return err
+}
+
+func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
+	exec := ExecutorFromContext(ctx, r.db)
+
+	queries := []string{
+		`DELETE FROM casino_accounts WHERE character_id = ?`,
+		`DELETE FROM character_lottery WHERE character_id = ?`,
+		`DELETE FROM lottery_tickets WHERE character_id = ?`,
+		`DELETE FROM farm_plots WHERE character_id = ?`,
+		`DELETE FROM character_blessings WHERE character_id = ?`,
+		`DELETE FROM banquet_toasts WHERE character_id = ?`,
+		`DELETE FROM blackmarket_character_points WHERE character_id = ?`,
+		`DELETE FROM blackmarket_character_purchases WHERE character_id = ?`,
+		`DELETE FROM tavern_deliveries WHERE character_id = ?`,
+		`DELETE FROM tavern_character_status WHERE character_id = ?`,
+		`DELETE FROM park_posts WHERE character_id = ?`,
+		`DELETE FROM rescue_records WHERE character_id = ?`,
+		`DELETE FROM contest_votes WHERE voter_character_id = ?`,
+		`DELETE FROM contest_entries WHERE character_id = ?`,
+		`DELETE FROM character_photos WHERE character_id = ?`,
+		`DELETE FROM character_deliveries WHERE character_id = ?`,
+		`DELETE FROM delivery_parcels WHERE sender_character_id = ? OR recipient_character_id = ?`,
+		`DELETE FROM fleamarket_listings WHERE seller_character_id = ?`,
+		`DELETE FROM auction_listings WHERE seller_character_id = ?`,
+		`DELETE FROM character_letters WHERE sender_character_id = ? OR recipient_character_id = ?`,
+		`DELETE FROM character_companion_phrases WHERE character_id = ?`,
+		`DELETE FROM character_delivery_notices WHERE character_id = ?`,
+		`DELETE FROM character_homes WHERE character_id = ?`,
+		`DELETE FROM character_boss_records WHERE character_id = ?`,
+		`DELETE FROM boss_challenge_history WHERE character_id = ?`,
+		`DELETE FROM character_dungeon_records WHERE character_id = ?`,
+		`DELETE FROM dungeon_active_expeditions WHERE character_id = ?`,
+		`DELETE FROM dungeon_expedition_history WHERE character_id = ?`,
+		`DELETE FROM character_challenge_records WHERE character_id = ?`,
+		`DELETE FROM challenge_sessions WHERE character_id = ?`,
+		`DELETE FROM arena_ratings WHERE character_id = ?`,
+		`DELETE FROM arena_matches WHERE attacker_id = ? OR defender_id = ?`,
+		`DELETE FROM character_monsters WHERE character_id = ?`,
+		`DELETE FROM character_monster_book WHERE character_id = ?`,
+		`DELETE FROM character_item_collection WHERE character_id = ?`,
+		`DELETE FROM party_members WHERE character_id = ?`,
+		`DELETE FROM parties WHERE leader_character_id = ?`,
+		`DELETE FROM guild_members WHERE character_id = ?`,
+		`UPDATE guilds SET leader_character_id = NULL WHERE leader_character_id = ?`,
+		`DELETE FROM activities WHERE character_id = ?`,
+		`DELETE FROM adventures WHERE character_id = ?`,
+		`DELETE FROM character_custom_skills WHERE character_id = ?`,
+		`DELETE FROM equipment_slots WHERE character_id = ?`,
+		`DELETE FROM inventory_items WHERE character_id = ?`,
+		`DELETE FROM depot_items WHERE character_id = ?`,
+		`DELETE FROM character_depots WHERE character_id = ?`,
+		`DELETE FROM character_job_masteries WHERE character_id = ?`,
+		`DELETE FROM character_job_history WHERE character_id = ?`,
+		`DELETE FROM character_jobs WHERE character_id = ?`,
+		`DELETE FROM character_profiles WHERE character_id = ?`,
+		`DELETE FROM characters WHERE id = ?`,
+	}
+
+	for _, q := range queries {
+		if strings.Count(q, "?") == 2 {
+			if _, err := exec.ExecContext(ctx, q, id, id); err != nil {
+				return err
+			}
+		} else {
+			if _, err := exec.ExecContext(ctx, q, id); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

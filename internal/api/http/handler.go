@@ -53,6 +53,7 @@ type PlayerService interface {
 	Login(ctx context.Context, username, password string) (coreplayer.Session, error)
 	Logout(ctx context.Context, sessionID string) error
 	Authenticate(ctx context.Context, sessionID string) (coreplayer.Player, error)
+	DeleteAccount(ctx context.Context, playerID, password string) error
 }
 
 // CharacterService defines the character operations exposed over HTTP.
@@ -66,6 +67,7 @@ type CharacterService interface {
 	UpdateProfile(ctx context.Context, characterID string, req character.UpdateProfileRequest) (character.Profile, error)
 	UploadAvatar(ctx context.Context, characterID string, filename string, contentType string, data []byte) (string, error)
 	GetNamingHallDialogue() character.NamingHallDialogue
+	Delete(ctx context.Context, playerID, characterID string) error
 }
 
 // AdventureService defines the adventure operations exposed over HTTP.
@@ -132,6 +134,7 @@ type Handler struct {
 	monster        MonsterService
 	contest        ContestService
 	parties        PartyService
+	maintenance    MaintenanceService
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
 	allowedOrigins map[string]struct{}
@@ -140,6 +143,13 @@ type Handler struct {
 
 // Option configures optional parameters for the Handler.
 type Option func(*Handler)
+
+// WithMaintenance configures the maintenance service for the Handler.
+func WithMaintenance(maintenance MaintenanceService) Option {
+	return func(h *Handler) {
+		h.maintenance = maintenance
+	}
+}
 
 // WithAdminAPIKey configures the secret API key required for administrative endpoints (e.g. POST /news, POST /rankings/refresh).
 func WithAdminAPIKey(key string) Option {
@@ -282,13 +292,19 @@ func (h *Handler) Router() http.Handler {
 
 	mux.HandleFunc("GET /health", h.handleHealth)
 	mux.HandleFunc("GET /openapi.json", h.handleOpenAPI)
+	mux.HandleFunc("GET /maintenance", h.handleGetMaintenance)
+	mux.HandleFunc("POST /admin/maintenance", h.handleAdminSetMaintenance)
+	mux.HandleFunc("PUT /admin/maintenance", h.handleAdminSetMaintenance)
 
 	mux.HandleFunc("POST /players", h.handleRegisterPlayer)
+	mux.HandleFunc("DELETE /players/me", h.handleDeletePlayerMe)
+	mux.HandleFunc("DELETE /players/{id}", h.handleDeletePlayerByID)
 	mux.HandleFunc("POST /sessions", h.handleLogin)
 	mux.HandleFunc("DELETE /sessions", h.handleLogout)
 
 	mux.HandleFunc("POST /characters", h.handleCreateCharacter)
 	mux.HandleFunc("GET /characters/{id}", h.handleGetCharacter)
+	mux.HandleFunc("DELETE /characters/{id}", h.handleDeleteCharacter)
 	mux.HandleFunc("GET /characters/{id}/profile", h.handleGetCharacterProfile)
 	mux.HandleFunc("POST /characters/{id}/profile", h.handleUpdateCharacterProfile)
 	mux.HandleFunc("PUT /characters/{id}/profile", h.handleUpdateCharacterProfile)
@@ -524,7 +540,7 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /parties/{id}/ready", h.handleSetPartyReady)
 	mux.HandleFunc("POST /parties/{id}/start", h.handleStartPartyAdventure)
 
-	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(mux)))
+	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(h.maintenanceMiddleware(mux))))
 }
 
 func extractClientIP(r *http.Request) string {
@@ -730,6 +746,73 @@ func (h *Handler) handleLogout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type deletePlayerRequest struct {
+	Password string `json:"password"`
+}
+
+func (h *Handler) handleDeletePlayerMe(w http.ResponseWriter, r *http.Request) {
+	player, ok := h.authenticatePlayer(w, r)
+	if !ok {
+		return
+	}
+
+	var req deletePlayerRequest
+	if r.Body != nil && r.ContentLength > 0 {
+		_ = decodeJSON(w, r, &req)
+	}
+
+	if err := h.players.DeleteAccount(r.Context(), player.ID, req.Password); err != nil {
+		if errors.Is(err, coreplayer.ErrAuthentication) {
+			writeError(w, http.StatusUnauthorized, errors.New("invalid password"))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"deleted":   true,
+		"player_id": player.ID,
+	})
+}
+
+func (h *Handler) handleDeletePlayerByID(w http.ResponseWriter, r *http.Request) {
+	player, ok := h.authenticatePlayer(w, r)
+	if !ok {
+		return
+	}
+
+	targetID := r.PathValue("id")
+	if targetID == "" {
+		writeError(w, http.StatusBadRequest, errors.New("missing player id"))
+		return
+	}
+
+	if player.ID != targetID && !h.isAdminRequest(r) {
+		writeError(w, http.StatusForbidden, errors.New("forbidden: cannot delete another player"))
+		return
+	}
+
+	var req deletePlayerRequest
+	if r.Body != nil && r.ContentLength > 0 {
+		_ = decodeJSON(w, r, &req)
+	}
+
+	if err := h.players.DeleteAccount(r.Context(), targetID, req.Password); err != nil {
+		if errors.Is(err, coreplayer.ErrAuthentication) {
+			writeError(w, http.StatusUnauthorized, errors.New("invalid password"))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"deleted":   true,
+		"player_id": targetID,
+	})
+}
+
 // -------------------------------------------------------------------
 // Character
 // -------------------------------------------------------------------
@@ -782,6 +865,23 @@ func (h *Handler) handleCreateCharacter(w http.ResponseWriter, r *http.Request) 
 func (h *Handler) handleGetCharacter(w http.ResponseWriter, r *http.Request) {
 	h.withAuthenticatedCharacter(w, r, r.PathValue("id"), func(_ coreplayer.Player, char corecharacter.Character) {
 		writeJSON(w, http.StatusOK, toCharacterResponse(char))
+	})
+}
+
+func (h *Handler) handleDeleteCharacter(w http.ResponseWriter, r *http.Request) {
+	h.withAuthenticatedCharacter(w, r, r.PathValue("id"), func(player coreplayer.Player, char corecharacter.Character) {
+		if err := h.characters.Delete(r.Context(), player.ID, char.ID); err != nil {
+			if errors.Is(err, corecharacter.ErrNotFound) {
+				writeError(w, http.StatusNotFound, err)
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"deleted":      true,
+			"character_id": char.ID,
+		})
 	})
 }
 

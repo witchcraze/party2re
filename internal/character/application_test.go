@@ -102,6 +102,18 @@ func (r *mockRepository) SaveProfile(_ context.Context, profile Profile) error {
 	return nil
 }
 
+func (r *mockRepository) Delete(_ context.Context, id string) error {
+	if r.err != nil {
+		return r.err
+	}
+	if _, ok := r.characters[id]; !ok {
+		return ErrNotFound
+	}
+	delete(r.characters, id)
+	delete(r.profiles, id)
+	return nil
+}
+
 type mockGuildChecker struct {
 	inGuild bool
 	err     error
@@ -391,4 +403,65 @@ func TestService_GetNamingHallDialogue(t *testing.T) {
 	if dialogue.NPCName != "@マリナン" || dialogue.LocationTitle != "命名の館" || dialogue.NameChangeCost != 500000 || dialogue.GenderChangeCost != 10000 {
 		t.Fatalf("unexpected dialogue: %+v", dialogue)
 	}
+}
+
+func TestService_Delete(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("successfully deletes character and invokes cleanup hooks", func(t *testing.T) {
+		repo := newMockRepository()
+		var hookRan bool
+		hook := CleanupHookFunc(func(ctx context.Context, characterID string) error {
+			hookRan = true
+			return nil
+		})
+
+		service, _ := NewService(repo, WithCleanupHook(hook))
+		char, err := service.Create(ctx, "player-123", "Hero")
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+
+		if err := service.Delete(ctx, "player-123", char.ID); err != nil {
+			t.Fatalf("Delete() error = %v", err)
+		}
+
+		if !hookRan {
+			t.Errorf("expected cleanup hook to run")
+		}
+
+		if _, err := service.Get(ctx, char.ID); !errors.Is(err, ErrNotFound) {
+			t.Errorf("expected ErrNotFound after deletion, got %v", err)
+		}
+	})
+
+	t.Run("rejects deletion by non-owner player", func(t *testing.T) {
+		repo := newMockRepository()
+		service, _ := NewService(repo)
+		char, _ := service.Create(ctx, "player-owner", "OwnerHero")
+
+		err := service.Delete(ctx, "player-intruder", char.ID)
+		if !errors.Is(err, ErrForbidden) {
+			t.Fatalf("expected ErrForbidden, got %v", err)
+		}
+	})
+
+	t.Run("allows deletion when playerID is empty (system/admin delete)", func(t *testing.T) {
+		repo := newMockRepository()
+		service, _ := NewService(repo)
+		char, _ := service.Create(ctx, "player-owner", "OwnerHero")
+
+		if err := service.Delete(ctx, "", char.ID); err != nil {
+			t.Fatalf("expected nil error for admin delete, got %v", err)
+		}
+	})
+
+	t.Run("returns ErrNotFound for nonexistent character", func(t *testing.T) {
+		repo := newMockRepository()
+		service, _ := NewService(repo)
+
+		if err := service.Delete(ctx, "player-123", "nonexistent-id"); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("expected ErrNotFound, got %v", err)
+		}
+	})
 }

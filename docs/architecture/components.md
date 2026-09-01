@@ -386,6 +386,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Multiplayer party formation (1–4 members), recruitment lobbies, password protection, readiness synchronization, leader management (kick, disband), and coordinated multi-participant combat against dungeon/stage encounters with cooperative synergy multipliers (+10% to +30% EXP/Gold bonus) and shared reward distribution (`quest.cgi`, `party.cgi`).
   - **Dependencies:** Core Character, Core Battle, Core Inventory, Core Item, Core Progression, Character repository, Inventory repository, Stage/Monster Catalogs, News publisher.
   - **Persistence:** `parties`, `party_members`, and `party_adventure_logs` tables in `internal/database/party_repository.go`.
+- **System Maintenance Mode** (`internal/maintenance`):
+  - **Responsibility:** System-wide maintenance mode status management, public status queries, and administrative configuration (enable/disable, message, estimated end time) with HTTP middleware request interception.
+  - **Dependencies:** Maintenance repository.
+  - **Persistence:** `system_maintenance` table in `internal/database/maintenance_repository.go`.
 
 ### Cross-Module Transaction Orchestration & Ambient Context Propagation
 
