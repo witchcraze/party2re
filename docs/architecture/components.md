@@ -373,6 +373,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Celestial audiences in Heaven (天界, NPC `@神`, `god.cgi`) and Underworld (裏天界, NPC `@神?`, `u_god.cgi`), permanent character attribute enhancements (+40 all stats), currency/resource awards, Level 99+ limit breaks (raising character level cap to 150), and tier-up capacity limit breaks (depot capacity, monster storage, job memory, flea market listings, shop listings).
   - **Dependencies:** Core Character, Core Progression, Character repository, Depot repository, Inventory repository.
   - **Persistence:** `characters` table (`over_level`, `over_depot`, `over_monster`, `over_future`, `over_flea`, `over_store`) and `character_depots` capacity persistence.
+- **Monster Grandpa & Pet Companions** (`internal/monster`):
+  - **Responsibility:** Monster storage box (base capacity 50 up to 300 via `OverMonster`), home pet companions (up to 8 pets per home estate), taming/capturing, renaming, gifting to other players, and releasing into the wild (`farm.cgi` / `monster.cgi`, NPC `@モンジィ`).
+  - **Dependencies:** Core Character, Character repository.
+  - **Persistence:** `character_monsters` table in `internal/database/monster_repository.go`.
 
 ### Cross-Module Transaction Orchestration & Ambient Context Propagation
 

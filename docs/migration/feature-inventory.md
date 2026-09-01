@@ -113,6 +113,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Adventurer's Tavern, menu orders, delivery reservations, and NPC @エレナ ([#185](https://github.com/witchcraze/party2re/issues/185))
 - [x] Town item delivery quests and player-to-player parcel courier service ([#195](https://github.com/witchcraze/party2re/issues/195))
 - [x] Flea Market player-to-player item stalls and direct fixed-price exchange ([#194](https://github.com/witchcraze/party2re/issues/194))
+- [x] Monster Grandpa and home pet companion storage ([#193](https://github.com/witchcraze/party2re/issues/193))
 
 ### G. Presentation, assets, and operations
 - [x] UI-independent HTTP JSON Application API layer ([#87](https://github.com/witchcraze/party2re/issues/87))
@@ -201,6 +202,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#194](https://github.com/witchcraze/party2re/issues/194) | Flea Market player-to-player item stalls and direct exchange | Merged |
 | [#72](https://github.com/witchcraze/party2re/issues/72) | Gem Store, jewel synthesis, gem transfer, and orb appraisal | Merged |
 | [#187](https://github.com/witchcraze/party2re/issues/187) | Endgame wishes and stat limit break system (god.cgi, u_god.cgi) | Merged |
+| [#193](https://github.com/witchcraze/party2re/issues/193) | Monster Grandpa and pet companion storage (farm.cgi / monster.cgi) | Merged |
 
 ---
 

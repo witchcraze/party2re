@@ -122,6 +122,7 @@ type Handler struct {
 	fleamarket     FleaMarketService
 	gemstore       GemStoreService
 	god            GodService
+	monster        MonsterService
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
 	allowedOrigins map[string]struct{}
@@ -473,6 +474,16 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /god/dialogue", h.handleGetGodDialogue)
 	mux.HandleFunc("GET /characters/{id}/god/wishes", h.handleGetGodWishes)
 	mux.HandleFunc("POST /characters/{id}/god/wish", h.handleGrantGodWish)
+
+	// Monster Grandpa & Pet Companions
+	mux.HandleFunc("GET /monster/dialogue", h.handleGetMonsterDialogue)
+	mux.HandleFunc("GET /characters/{id}/monsters", h.handleGetCharacterMonsters)
+	mux.HandleFunc("POST /characters/{id}/monsters/tame", h.handleTameMonster)
+	mux.HandleFunc("POST /characters/{id}/monsters/{instance_id}/bring-home", h.handleBringMonsterToHome)
+	mux.HandleFunc("POST /characters/{id}/monsters/{instance_id}/deposit", h.handleDepositMonsterToBox)
+	mux.HandleFunc("POST /characters/{id}/monsters/{instance_id}/rename", h.handleRenameMonster)
+	mux.HandleFunc("POST /characters/{id}/monsters/{instance_id}/send", h.handleSendMonster)
+	mux.HandleFunc("POST /characters/{id}/monsters/{instance_id}/release", h.handleReleaseMonster)
 
 	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(mux)))
 }

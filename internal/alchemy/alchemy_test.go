@@ -57,6 +57,9 @@ func (r *memoryInvRepo) FindByCharacterID(_ context.Context, characterID string)
 	if !ok {
 		return coreinventory.New(characterID)
 	}
+	itemsCopy := make([]item.Instance, len(inv.Items))
+	copy(itemsCopy, inv.Items)
+	inv.Items = itemsCopy
 	return inv, nil
 }
 
@@ -67,6 +70,9 @@ func (r *memoryInvRepo) FindByCharacterIDForUpdate(ctx context.Context, characte
 func (r *memoryInvRepo) Save(_ context.Context, inventory coreinventory.Inventory) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	itemsCopy := make([]item.Instance, len(inventory.Items))
+	copy(itemsCopy, inventory.Items)
+	inventory.Items = itemsCopy
 	r.inventories[inventory.CharacterID] = inventory
 	return nil
 }
@@ -170,9 +176,13 @@ func TestSynthesizeValidationErrors(t *testing.T) {
 	}
 }
 
-type dummyTxProvider struct{}
+type dummyTxProvider struct {
+	mu sync.Mutex
+}
 
-func (d dummyTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+func (d *dummyTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	return fn(ctx)
 }
 
@@ -198,7 +208,7 @@ func TestConcurrentSynthesize_IngredientConsumptionAtomic(t *testing.T) {
 	invRepo.inventories[char.ID] = inv
 
 	service, _ := NewService(charRepo, invRepo, recipeCatalog, itemCatalog,
-		WithTransactionProvider(dummyTxProvider{}),
+		WithTransactionProvider(&dummyTxProvider{}),
 	)
 
 	var wg sync.WaitGroup
