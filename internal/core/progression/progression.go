@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	MaxLevel = 99
+	MaxLevel     = 99
+	OverMaxLevel = 150
 
 	experienceMultiplier = 10
 )
@@ -20,10 +21,27 @@ var (
 	ErrInvalidGrowth         = errors.New("job growth is invalid")
 )
 
+// MaxLevelForCharacter returns the maximum level for a character, taking OverLevel limit break into account.
+func MaxLevelForCharacter(char *character.Character) int {
+	if char != nil && char.OverLevel {
+		return OverMaxLevel
+	}
+	return MaxLevel
+}
+
 // ExperienceForNextLevel returns the cumulative experience required to advance
 // from the supplied level.
 func ExperienceForNextLevel(level int) (int, error) {
 	if level < character.InitialLevel || level >= MaxLevel {
+		return 0, ErrInvalidCharacterLevel
+	}
+	return level * level * experienceMultiplier, nil
+}
+
+// ExperienceForNextLevelWithMax returns the cumulative experience required to advance
+// from the supplied level considering a custom maximum level.
+func ExperienceForNextLevelWithMax(level int, maxLevel int) (int, error) {
+	if level < character.InitialLevel || level >= maxLevel {
 		return 0, ErrInvalidCharacterLevel
 	}
 	return level * level * experienceMultiplier, nil
@@ -57,7 +75,8 @@ func ApplyExperienceWithJob(value *character.Character, amount int, definition j
 	if amount < 0 {
 		return 0, ErrInvalidExperience
 	}
-	if value.Level < character.InitialLevel || value.Level > MaxLevel {
+	maxLvl := MaxLevelForCharacter(value)
+	if value.Level < character.InitialLevel || value.Level > maxLvl {
 		return 0, ErrInvalidCharacterLevel
 	}
 	if definition.ID != "" && random == nil {
@@ -66,8 +85,8 @@ func ApplyExperienceWithJob(value *character.Character, amount int, definition j
 
 	value.Experience += amount
 	levelsGained := 0
-	for value.Level < MaxLevel {
-		threshold, err := ExperienceForNextLevel(value.Level)
+	for value.Level < maxLvl {
+		threshold, err := ExperienceForNextLevelWithMax(value.Level, maxLvl)
 		if err != nil {
 			return levelsGained, err
 		}

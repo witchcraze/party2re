@@ -66,6 +66,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Job mastery (Lv99) and Character Rebirth progression (+5 stat bonuses) ([#61](https://github.com/witchcraze/party2re/issues/61))
 - [x] Inn resting and HP/MP recovery ([#62](https://github.com/witchcraze/party2re/issues/62))
 - [x] Custom skill assignment ([#69](https://github.com/witchcraze/party2re/issues/69))
+- [x] Endgame wishes, stat boosts, and Lv99+ / storage limit breaks ([#187](https://github.com/witchcraze/party2re/issues/187))
 
 ### C. Items, equipment, storage, and currency
 - [x] Item definitions, 5-category data catalog, and instance ownership ([#11](https://github.com/witchcraze/party2re/issues/11), [#51](https://github.com/witchcraze/party2re/issues/51))
@@ -199,6 +200,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#195](https://github.com/witchcraze/party2re/issues/195) | Town item delivery quests and player-to-player parcel courier service | Merged |
 | [#194](https://github.com/witchcraze/party2re/issues/194) | Flea Market player-to-player item stalls and direct exchange | Merged |
 | [#72](https://github.com/witchcraze/party2re/issues/72) | Gem Store, jewel synthesis, gem transfer, and orb appraisal | Merged |
+| [#187](https://github.com/witchcraze/party2re/issues/187) | Endgame wishes and stat limit break system (god.cgi, u_god.cgi) | Merged |
 
 ---
 

@@ -6818,6 +6818,209 @@
         ]
       }
     },
+    "/characters/{id}/god/wish": {
+      "post": {
+        "operationId": "grantGodWish",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "realm": {
+                    "enum": [
+                      "heaven",
+                      "underworld"
+                    ],
+                    "type": "string"
+                  },
+                  "wish_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "wish_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Wish granted result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid wish request or unmet requirement"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - character not owned by player"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character not found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Grant an endgame wish or limit break",
+        "tags": [
+          "God"
+        ]
+      }
+    },
+    "/characters/{id}/god/wishes": {
+      "get": {
+        "operationId": "getGodWishes",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Realm (heaven or underworld)",
+            "in": "query",
+            "name": "realm",
+            "required": false,
+            "schema": {
+              "default": "heaven",
+              "enum": [
+                "heaven",
+                "underworld"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Available wishes in realm"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - character not owned by player"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character not found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get available endgame wishes",
+        "tags": [
+          "God"
+        ]
+      }
+    },
     "/characters/{id}/inn": {
       "post": {
         "operationId": "restAtInn",
@@ -9081,6 +9284,53 @@
         "summary": "List all gem synthesis recipes",
         "tags": [
           "GemStore"
+        ]
+      }
+    },
+    "/god/dialogue": {
+      "get": {
+        "operationId": "getGodDialogue",
+        "parameters": [
+          {
+            "description": "Realm (heaven or underworld)",
+            "in": "query",
+            "name": "realm",
+            "required": false,
+            "schema": {
+              "default": "heaven",
+              "enum": [
+                "heaven",
+                "underworld"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "God NPC dialogue"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Get celestial NPC dialogue",
+        "tags": [
+          "God"
         ]
       }
     },

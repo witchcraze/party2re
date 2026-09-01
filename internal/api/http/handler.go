@@ -121,6 +121,7 @@ type Handler struct {
 	delivery       DeliveryService
 	fleamarket     FleaMarketService
 	gemstore       GemStoreService
+	god            GodService
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
 	allowedOrigins map[string]struct{}
@@ -467,6 +468,11 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/gemstore/send", h.handleGemStoreSend)
 	mux.HandleFunc("POST /characters/{id}/gemstore/synthesize", h.handleGemStoreSynthesize)
 	mux.HandleFunc("POST /characters/{id}/gemstore/appraise", h.handleGemStoreAppraise)
+
+	// God (Endgame Wishes & Limit Breaks)
+	mux.HandleFunc("GET /god/dialogue", h.handleGetGodDialogue)
+	mux.HandleFunc("GET /characters/{id}/god/wishes", h.handleGetGodWishes)
+	mux.HandleFunc("POST /characters/{id}/god/wish", h.handleGrantGodWish)
 
 	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(mux)))
 }

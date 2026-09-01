@@ -175,7 +175,8 @@ func (s *Service) CreateListing(
 		if err != nil {
 			return err
 		}
-		if activeCount >= MaxListingsPerCharacter {
+		maxListings := MaxListingsPerCharacter + seller.OverFlea
+		if activeCount >= maxListings {
 			return ErrMaxListingsReached
 		}
 

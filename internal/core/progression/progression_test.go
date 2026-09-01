@@ -278,6 +278,41 @@ func TestApplyExperienceWithJobNegativeGrowthFields(t *testing.T) {
 	}
 }
 
+func TestApplyExperience_OverLevel_GrowthTo150(t *testing.T) {
+	char, err := character.New("Legend")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 99
+	char.Experience = 99 * 99 * 10
+	char.OverLevel = true
+
+	def := job.Definition{
+		ID:            "hero",
+		Name:          "Hero",
+		HPGrowth:      5,
+		MPGrowth:      3,
+		AttackGrowth:  2,
+		DefenseGrowth: 2,
+		AgilityGrowth: 1,
+	}
+	random := &sequenceRandomSource{values: []int{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}
+
+	// Gain experience to reach Lv100
+	needed100, err := ExperienceForNextLevelWithMax(99, OverMaxLevel)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	levelsGained, err := ApplyExperienceWithJob(&char, needed100-char.Experience, def, random)
+	if err != nil {
+		t.Fatalf("ApplyExperienceWithJob failed: %v", err)
+	}
+	if levelsGained != 1 || char.Level != 100 {
+		t.Fatalf("expected level 100 with 1 level gained, got level %d with %d gained", char.Level, levelsGained)
+	}
+}
+
 type sequenceRandomSource struct {
 	values []int
 	index  int

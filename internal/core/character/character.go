@@ -39,6 +39,12 @@ type Character struct {
 	RebirthCount int
 	SmallMedals  int
 	HelpCount    int
+	OverLevel    bool
+	OverDepot    int
+	OverMonster  int
+	OverFuture   int
+	OverFlea     int
+	OverStore    int
 }
 
 type Stats struct {
