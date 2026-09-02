@@ -11,9 +11,13 @@ import (
 
 var ErrDefinitionNotFound = errors.New("item definition not found")
 
+// DefinitionProvider defines an interface for retrieving item definitions by ID.
 type DefinitionProvider interface {
 	FindByID(id string) (Definition, error)
 }
+
+// ItemDefinitionProvider is an alias for DefinitionProvider for packages preferring explicit naming.
+type ItemDefinitionProvider = DefinitionProvider
 
 type Catalog struct {
 	definitions map[string]Definition

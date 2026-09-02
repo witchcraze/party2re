@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #329 — Unify Party HTTP request handlers and cleanup components.md
+Last updated: Issue #316 — Centralize and standardize ItemDefinitionProvider interface in core/item
 
 ## Current phase
 
@@ -27,7 +27,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Character** (`internal/core/character`, `internal/character`): `player_id` 外部キーによるアカウント紐付け、初期ステータス、能力値計算、転生（Rebirth +5永続ボーナス）、プレイヤー別キャラクター一覧取得、キャラクター個別削除（`DELETE /characters/{id}`、所有権認可チェック、外部ドメイン `CleanupHook` 実行、MariaDB 35+サブリソーステーブルの完全カスケード削除）、命名の館（NPC `@マリナン`、名前変更 500,000 G・ギルド/フリマ制約・重複防止・ニュース配信、性別/外観変更 10,000 G）、プロフィール自己紹介コメント（最大160文字）・アバター画像アップロード/設定（最大2 MB）・カスタムメタデータ管理（`character_profiles`）。
 - **Progression** (`internal/core/progression`): レベルアップ（累積経験値テーブル `level * level * 10`）、OverLevel限界突破（Lv150）対応、成長率適用、Go AST 静的解析リンター（`internal/core/progression/progression_lint_test.go`）による全機能モジュールでの直接フィールド操作禁止・Core標準ヘルパー（`progression.ApplyExperience`）強制。
 - **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): クリーンルーム規約に完全準拠したJSONカタログ（`jobs.json`、特定フランチャイズ固有語を排除し汎用ファンタジー名へ標準化）、転職、Lv99マスタリー、スキル発動・コスト計算。
-- **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理。
+- **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理、統一アイテム定義プロバイダーインターフェース（`coreitem.DefinitionProvider` / `coreitem.ItemDefinitionProvider`）の一元化。
 - **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定（経験値・ゴールド・アイテム・ちいさなメダル）、構造化ターンログ出力、戦闘参加者（Participant）標準アダプタ/ビルダー（`NewParticipantFromCharacter`, `NewParticipantFromCharacterWithHP`, `ParticipantBuilder`）。
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): Valkeyバックエンドの遅延アクションキュー＆分散排他ロックWorker。
 - **Database & Transaction Orchestration** (`internal/database`): 全32リポジトリのトランザクション伝播モデル（`RunInTx` と `ExecutorFromContext`）への完全統一、トランザクション境界外からの直接 `r.db.BeginTx` 呼び出しの完全排除、コンテキスト内トランザクション再利用、マルチモジュール統合テスト（コミット原子性・ロールバック整合性・ネストトランザクション伝播検証）、決定論的行ロック獲得順序（`players` -> `characters` (昇順) -> `inventory_items` -> `character_jobs` -> `character_depots` -> `bank_accounts` -> `guilds` (昇順) -> 各種機能テーブル）によるデッドロック防止の標準化、および高並行性ストレステスト・デッドロック検出ベンチマークスイート（`internal/database/concurrency_stress_test.go`、`make test-stress`）による50並行ワーカー・1,000複合トランザクション負荷下での0デッドロック・データ保存不変条件の自動検証。さらに、全サブリソースリポジトリ（連戦セッション・宝くじ・オークション出品・ダンジョン探索・私有地手紙/挨拶台帳・祝勝祝宴乾杯台帳等）における所有権スコープ付きSQL（`WHERE id = ? AND character_id = ?`）の厳格適用によるIDOR完全防止。

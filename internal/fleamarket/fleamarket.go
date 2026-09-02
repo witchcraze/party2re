@@ -86,9 +86,7 @@ type InventoryRepository interface {
 	Save(ctx context.Context, value coreinventory.Inventory) error
 }
 
-type ItemDefinitionProvider interface {
-	FindByID(id string) (coreitem.Definition, error)
-}
+type ItemDefinitionProvider = coreitem.DefinitionProvider
 
 type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
