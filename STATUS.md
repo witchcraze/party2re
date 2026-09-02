@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #328 — Fix OverLevel limit break level-up cap and canonicalize stat growth in party adventures
+Last updated: Issue #330 — Implement AST Linter Check to Enforce Core Progression Helper Usage
 
 ## Current phase
 
@@ -25,7 +25,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ### Core & Shared Components
 - **Player** (`internal/core/player`, `internal/player`): アカウント登録・パスワードハッシュ・セッション管理・アカウント完全削除（`DELETE /players/me`, `DELETE /players/{id}`、パスワード再認証、所有キャラクター全件のクリーンアップフック実行および35+テーブル連鎖削除、MariaDBトランザクション整合性）。
 - **Character** (`internal/core/character`, `internal/character`): `player_id` 外部キーによるアカウント紐付け、初期ステータス、能力値計算、転生（Rebirth +5永続ボーナス）、プレイヤー別キャラクター一覧取得、キャラクター個別削除（`DELETE /characters/{id}`、所有権認可チェック、外部ドメイン `CleanupHook` 実行、MariaDB 35+サブリソーステーブルの完全カスケード削除）、命名の館（NPC `@マリナン`、名前変更 500,000 G・ギルド/フリマ制約・重複防止・ニュース配信、性別/外観変更 10,000 G）、プロフィール自己紹介コメント（最大160文字）・アバター画像アップロード/設定（最大2 MB）・カスタムメタデータ管理（`character_profiles`）。
-- **Progression** (`internal/core/progression`): レベルアップ（累積経験値テーブル `level * level * 10`）、成長率適用。
+- **Progression** (`internal/core/progression`): レベルアップ（累積経験値テーブル `level * level * 10`）、OverLevel限界突破（Lv150）対応、成長率適用、Go AST 静的解析リンター（`internal/core/progression/progression_lint_test.go`）による全機能モジュールでの直接フィールド操作禁止・Core標準ヘルパー（`progression.ApplyExperience`）強制。
 - **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): クリーンルーム規約に完全準拠したJSONカタログ（`jobs.json`、特定フランチャイズ固有語を排除し汎用ファンタジー名へ標準化）、転職、Lv99マスタリー、スキル発動・コスト計算。
 - **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理。
 - **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定（経験値・ゴールド・アイテム・ちいさなメダル）、構造化ターンログ出力、戦闘参加者（Participant）標準アダプタ/ビルダー（`NewParticipantFromCharacter`, `NewParticipantFromCharacterWithHP`, `ParticipantBuilder`）。
@@ -84,7 +84,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `049_player_deletion_and_maintenance.sql`、`make db-migrate` / `make db-reset`）。
 - **Valkey**: 遅延アクションキュー・排他ロック・分散レートリミット・ランキングスナップショットキャッシュ（AOF+RDB永続化）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
-- **Verification**: `Makefile` (`make check`, `make fmt`, `make vet`, `make openapi-sync`, `make openapi-check`, `make test-stress`, `make check-clean`)、OpenAPI 3.1 仕様書自動同期・フォーマット CLI（`scripts/sync_openapi.go`）、CIガード（OpenAPI 3.1構文・全ルート網羅テスト）、Go AST 静的解析テスト（全リポジトリにおける `ExecutorFromContext` 必須・`BeginTx` 禁止検証 `internal/database/tx_lint_test.go`、サービス層 `RunInTx` 呼び出し検証 `internal/architecture/arch_test.go`、HTTP 所有権認可検証 `internal/api/http/auth_lint_test.go`）、Git pre-push hook による自動検証、`scripts/stress_test.sh` による高並行ストレステスト。
+- **Verification**: `Makefile` (`make check`, `make fmt`, `make vet`, `make openapi-sync`, `make openapi-check`, `make test-stress`, `make check-clean`)、OpenAPI 3.1 仕様書自動同期・フォーマット CLI（`scripts/sync_openapi.go`）、CIガード（OpenAPI 3.1構文・全ルート網羅テスト）、Go AST 静的解析テスト（全リポジトリにおける `ExecutorFromContext` 必須・`BeginTx` 禁止検証 `internal/database/tx_lint_test.go`、サービス層 `RunInTx` 呼び出し検証 `internal/architecture/arch_test.go`、HTTP 所有権認可検証 `internal/api/http/auth_lint_test.go`、Core 成長ヘルパー適用強制 `internal/core/progression/progression_lint_test.go`）、Git pre-push hook による自動検証、`scripts/stress_test.sh` による高並行ストレステスト。
 - **Deployment**: Distroless (`gcr.io/distroless/static-debian13:nonroot`) ベースの最小本番イメージ（GHCR自動公開）。
 
 ---

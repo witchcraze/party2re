@@ -28,3 +28,7 @@ Party2 contains asynchronous/time-based actions (an action is started and a resu
 
 ## 6. Domain Events
 Use domain events (e.g., `BattleFinished`, `LevelUp`) when they provide meaningful decoupling. A publisher should not need to know which optional features (like achievements or rankings) consume an event. Do not turn every operation into an event; use direct calls when immediate results or strong transactional coupling are appropriate.
+
+## 7. Canonical Progression & Domain Helper Enforcement
+Character growth fields (`Experience`, `Level`) must never be mutated directly by feature modules (e.g. avoiding `c.Experience += exp` or `c.Level++`). Feature modules must route progression changes through canonical core domain helpers (`progression.ApplyExperience`). This ensures level boundaries (including OverLevel limit breaks up to Lv 150), cumulative experience formulas, and stat growth invariants are consistently applied. This rule is mechanically enforced by Go AST static analysis (`internal/core/progression/progression_lint_test.go`).
+
