@@ -78,3 +78,25 @@ func TestInventoryFindOnNilReturnsNotFound(t *testing.T) {
 		t.Fatal("nil Inventory.Find() should return false")
 	}
 }
+
+func TestInventoryUpdate(t *testing.T) {
+	inv, _ := New("character-1")
+	inst, _ := item.NewInstance("sword", 1)
+	_ = inv.Add(inst)
+
+	inst.EnhancementLevel = 3
+	if err := inv.Update(inst); err != nil {
+		t.Fatalf("Update() failed: %v", err)
+	}
+
+	found, ok := inv.Find(inst.ID)
+	if !ok || found.EnhancementLevel != 3 {
+		t.Fatalf("Find() after update = %#v, want enhancement level 3", found)
+	}
+
+	missing := inst
+	missing.ID = "missing-id"
+	if err := inv.Update(missing); !errors.Is(err, ErrItemNotFound) {
+		t.Fatalf("Update() missing item expected ErrItemNotFound, got %v", err)
+	}
+}

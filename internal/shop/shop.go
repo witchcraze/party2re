@@ -185,7 +185,9 @@ func (s *Service) Purchase(ctx context.Context, characterID string, itemDefiniti
 			return err
 		}
 
-		char.Money -= totalPrice
+		if err := char.DeductMoney(totalPrice); err != nil {
+			return ErrInsufficientFunds
+		}
 
 		if err := s.commit(txCtx, char, inv); err != nil {
 			return err
@@ -253,7 +255,7 @@ func (s *Service) Sell(ctx context.Context, characterID string, itemInstanceID s
 			return err
 		}
 
-		char.Money += totalPayout
+		_ = char.AddMoney(totalPayout)
 
 		if err := s.commit(txCtx, char, inv); err != nil {
 			return err

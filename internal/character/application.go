@@ -253,7 +253,9 @@ func (s *Service) ChangeName(ctx context.Context, characterID, newName string) (
 
 		// 6. Deduct fee and update name
 		oldName = char.Name
-		char.Money -= NameChangeCost
+		if err := char.DeductMoney(NameChangeCost); err != nil {
+			return ErrInsufficientGold
+		}
 		char.Name = newName
 
 		if err := s.repository.Update(txCtx, char); err != nil {
@@ -301,7 +303,9 @@ func (s *Service) ChangeGender(ctx context.Context, characterID, newGender strin
 			return ErrInsufficientGold
 		}
 
-		char.Money -= GenderChangeCost
+		if err := char.DeductMoney(GenderChangeCost); err != nil {
+			return ErrInsufficientGold
+		}
 		char.Gender = validatedGender
 
 		if err := s.repository.Update(txCtx, char); err != nil {

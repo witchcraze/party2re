@@ -178,7 +178,9 @@ func (s *Service) DepositGold(ctx context.Context, characterID string, amount in
 			}
 		}
 
-		char.Money -= amount
+		if err := char.DeductMoney(amount); err != nil {
+			return ErrInsufficientFunds
+		}
 		dep.Gold += amount
 
 		if err := tx.SaveCharacter(ctx, char); err != nil {
@@ -204,7 +206,7 @@ func (s *Service) DepositGold(ctx context.Context, characterID string, amount in
 	if err != nil {
 		return Depot{}, err
 	}
-	if char.Money < amount {
+	if !char.HasMoney(amount) {
 		return Depot{}, ErrInsufficientFunds
 	}
 	dep, err := s.depotRepo.FindByCharacterID(ctx, characterID)
@@ -218,7 +220,7 @@ func (s *Service) DepositGold(ctx context.Context, characterID string, amount in
 			return Depot{}, err
 		}
 	}
-	char.Money -= amount
+	_ = char.DeductMoney(amount)
 	dep.Gold += amount
 
 	if err := s.charRepo.Update(ctx, char); err != nil {
@@ -254,7 +256,7 @@ func (s *Service) WithdrawGold(ctx context.Context, characterID string, amount i
 		}
 
 		dep.Gold -= amount
-		char.Money += amount
+		_ = char.AddMoney(amount)
 
 		if err := tx.SaveDepot(ctx, dep); err != nil {
 			return fmt.Errorf("save depot: %w", err)
@@ -287,7 +289,7 @@ func (s *Service) WithdrawGold(ctx context.Context, characterID string, amount i
 		return Depot{}, err
 	}
 	dep.Gold -= amount
-	char.Money += amount
+	_ = char.AddMoney(amount)
 
 	if err := s.depotRepo.Save(ctx, dep); err != nil {
 		return Depot{}, err

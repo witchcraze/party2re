@@ -102,7 +102,9 @@ func (s *Service) Rest(ctx context.Context, characterID string) (corecharacter.C
 			return ErrInsufficientFunds
 		}
 
-		char.Money -= fee
+		if err := char.DeductMoney(fee); err != nil {
+			return ErrInsufficientFunds
+		}
 		char.Stats.HP = char.Stats.MaxHP
 		char.Stats.MP = char.Stats.MaxMP
 

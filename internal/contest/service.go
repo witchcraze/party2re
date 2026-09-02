@@ -521,8 +521,8 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 				prize := prizes[i]
 				char, err := s.characters.FindByIDForUpdate(txCtx, entries[i].CharacterID)
 				if err == nil {
-					char.Money += prize.Gold
-					char.SmallMedals += prize.SmallMedals
+					_ = char.AddMoney(prize.Gold)
+					_ = char.AddSmallMedals(prize.SmallMedals)
 					_ = s.characters.Update(txCtx, char)
 				}
 
@@ -564,7 +564,7 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 				for _, v := range votes {
 					voterChar, err := s.characters.FindByIDForUpdate(txCtx, v.VoterCharacterID)
 					if err == nil {
-						voterChar.SmallMedals += VoterBonusSmallMedals
+						_ = voterChar.AddSmallMedals(VoterBonusSmallMedals)
 						if err := s.characters.Update(txCtx, voterChar); err == nil {
 							voterCount++
 						}

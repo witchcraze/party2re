@@ -783,10 +783,10 @@ func (s *Service) handleDungeonClear(
 	if exp.AccumulatedExp > 0 {
 		_, _ = progression.ApplyExperience(char, exp.AccumulatedExp)
 	}
-	char.Money += exp.AccumulatedGold
+	_ = char.AddMoney(exp.AccumulatedGold)
 	medalsBonus := dungeon.Tier
 	exp.AccumulatedMedals += medalsBonus
-	char.SmallMedals += exp.AccumulatedMedals
+	_ = char.AddSmallMedals(exp.AccumulatedMedals)
 
 	rewardItems := make([]coreitem.Instance, 0, len(exp.AccumulatedItems))
 	for _, defID := range exp.AccumulatedItems {
@@ -853,8 +853,8 @@ func (s *Service) handleEscape(
 	if exp.AccumulatedExp > 0 {
 		_, _ = progression.ApplyExperience(char, exp.AccumulatedExp)
 	}
-	char.Money += exp.AccumulatedGold
-	char.SmallMedals += exp.AccumulatedMedals
+	_ = char.AddMoney(exp.AccumulatedGold)
+	_ = char.AddSmallMedals(exp.AccumulatedMedals)
 
 	rewardItems := make([]coreitem.Instance, 0, len(exp.AccumulatedItems))
 	for _, defID := range exp.AccumulatedItems {

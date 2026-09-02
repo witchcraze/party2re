@@ -267,7 +267,9 @@ func (s *Service) Enhance(ctx context.Context, characterID string, itemInstanceI
 		}
 
 		// Deduct gold
-		character.Money -= goldCost
+		if err := character.DeductMoney(goldCost); err != nil {
+			return ErrInsufficientFunds
+		}
 
 		// Consume material from inventory
 		materialToConsume := materialCost
@@ -296,12 +298,7 @@ func (s *Service) Enhance(ctx context.Context, characterID string, itemInstanceI
 			newLevel++
 			targetItem.EnhancementLevel = newLevel
 			// Update item instance in inventory
-			for i, inst := range inv.Items {
-				if inst.ID == targetItem.ID {
-					inv.Items[i].EnhancementLevel = newLevel
-					break
-				}
-			}
+			_ = inv.Update(targetItem)
 		}
 
 		// Commit atomically if transaction repository is configured (and no txProvider)

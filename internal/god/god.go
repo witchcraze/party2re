@@ -368,7 +368,7 @@ func (s *Service) executeHeavenWish(
 		return nil
 
 	case "wish_money":
-		char.Money += 100000
+		_ = char.AddMoney(100000)
 		if err := s.characters.Update(ctx, *char); err != nil {
 			return err
 		}
@@ -388,7 +388,7 @@ func (s *Service) executeHeavenWish(
 		return nil
 
 	case "wish_small_medals":
-		char.SmallMedals += 20
+		_ = char.AddSmallMedals(20)
 		if err := s.characters.Update(ctx, *char); err != nil {
 			return err
 		}

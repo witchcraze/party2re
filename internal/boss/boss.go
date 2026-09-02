@@ -578,8 +578,8 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 		if expGained > 0 {
 			_, _ = progression.ApplyExperience(&char, expGained)
 		}
-		char.Money += goldGained
-		char.SmallMedals += medalsGained
+		_ = char.AddMoney(goldGained)
+		_ = char.AddSmallMedals(medalsGained)
 	}
 
 	historyID := id.New()

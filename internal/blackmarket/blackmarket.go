@@ -532,12 +532,13 @@ func (s *Service) PurchaseItem(
 		if err != nil {
 			return fmt.Errorf("failed to create item instance: %w", err)
 		}
-
 		if err := inv.Add(inst); err != nil {
 			return fmt.Errorf("failed to add item to inventory: %w", err)
 		}
 
-		char.Money -= totalPrice
+		if err := char.DeductMoney(totalPrice); err != nil {
+			return ErrInsufficientFunds
+		}
 
 		if err := s.characterRepo.Update(txCtx, char); err != nil {
 			return err
@@ -655,7 +656,7 @@ func (s *Service) SellItem(
 			return fmt.Errorf("failed to remove item from inventory: %w", err)
 		}
 
-		char.Money += totalPayout
+		_ = char.AddMoney(totalPayout)
 
 		if err := s.characterRepo.Update(txCtx, char); err != nil {
 			return err

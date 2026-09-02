@@ -296,7 +296,9 @@ func (s *Service) OrderMeal(ctx context.Context, characterID string, itemID stri
 			}
 		}
 
-		char.Money -= item.Price
+		if err := char.DeductMoney(item.Price); err != nil {
+			return ErrInsufficientFunds
+		}
 
 		if err := s.charRepo.Update(txCtx, char); err != nil {
 			return fmt.Errorf("failed to update character after meal: %w", err)
@@ -493,7 +495,9 @@ func (s *Service) ClaimDelivery(ctx context.Context, characterID string) (OrderR
 			}
 		}
 
-		char.Money -= delivery.Price
+		if err := char.DeductMoney(delivery.Price); err != nil {
+			return ErrInsufficientFunds
+		}
 
 		if err := s.charRepo.Update(txCtx, char); err != nil {
 			return fmt.Errorf("failed to update character after delivery meal: %w", err)

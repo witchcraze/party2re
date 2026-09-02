@@ -565,11 +565,7 @@ func (s *Service) CompleteDelivery(
 		}
 
 		// 5. Grant Gold & EXP
-		if char.Money > 2000000000-quest.RewardGold {
-			char.Money = 2000000000
-		} else {
-			char.Money += quest.RewardGold
-		}
+		_ = char.AddMoney(quest.RewardGold)
 
 		if quest.RewardExp > 0 {
 			if _, err := progression.ApplyExperience(&char, quest.RewardExp); err != nil {
@@ -734,7 +730,9 @@ func (s *Service) SendParcel(
 		}
 
 		// 5. Deduct funds from sender
-		sender.Money -= totalGoldNeeded
+		if err := sender.DeductMoney(totalGoldNeeded); err != nil {
+			return ErrInsufficientFunds
+		}
 		if err := s.charRepo.Update(txCtx, sender); err != nil {
 			return err
 		}
@@ -824,11 +822,7 @@ func (s *Service) ClaimParcel(
 
 		// 4. Credit Gold
 		if parcel.GoldAmount > 0 {
-			if recipient.Money > 2000000000-parcel.GoldAmount {
-				recipient.Money = 2000000000
-			} else {
-				recipient.Money += parcel.GoldAmount
-			}
+			_ = recipient.AddMoney(parcel.GoldAmount)
 			if err := s.charRepo.Update(txCtx, recipient); err != nil {
 				return err
 			}
@@ -914,7 +908,7 @@ func (s *Service) CancelParcel(ctx context.Context, senderID string, parcelID st
 
 		// 4. Return gold payload (fee is non-refundable)
 		if parcel.GoldAmount > 0 {
-			sender.Money += parcel.GoldAmount
+			_ = sender.AddMoney(parcel.GoldAmount)
 			if err := s.charRepo.Update(txCtx, sender); err != nil {
 				return err
 			}

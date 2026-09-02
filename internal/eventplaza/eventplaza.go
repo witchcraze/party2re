@@ -308,7 +308,9 @@ func (s *Service) PurchaseBazaarItem(
 			return fmt.Errorf("failed to add item to inventory: %w", err)
 		}
 
-		char.Money -= totalCost
+		if err := char.DeductMoney(totalCost); err != nil {
+			return ErrInsufficientGold
+		}
 
 		if err := s.characterRepo.Update(txCtx, char); err != nil {
 			return fmt.Errorf("failed to update character money: %w", err)
@@ -418,7 +420,7 @@ func (s *Service) ToastBanquet(ctx context.Context, banquetID string, characterI
 		if rewardGold <= 0 {
 			rewardGold = DefaultToastGoldReward
 		}
-		char.Money += rewardGold
+		_ = char.AddMoney(rewardGold)
 
 		if err := s.characterRepo.Update(txCtx, char); err != nil {
 			return fmt.Errorf("failed to update character money on toast: %w", err)

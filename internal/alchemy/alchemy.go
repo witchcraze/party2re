@@ -182,7 +182,9 @@ func (s *Service) Synthesize(ctx context.Context, characterID string, recipeID s
 		}
 
 		// Deduct gold
-		character.Money -= recipe.GoldFee
+		if err := character.DeductMoney(recipe.GoldFee); err != nil {
+			return ErrInsufficientFunds
+		}
 
 		// Create and add result item instance
 		createdInstance, err := item.NewInstance(recipe.ResultItemDefinitionID, recipe.ResultQuantity)
