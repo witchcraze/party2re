@@ -5,13 +5,13 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 const (
@@ -416,11 +416,9 @@ func safeMultiply(price, qty int) (int, error) {
 	if price < 0 || qty < 0 {
 		return 0, ErrInvalidQuantity
 	}
-	if price == 0 || qty == 0 {
-		return 0, nil
-	}
-	if price > math.MaxInt/qty {
+	val, err := economy.SafeMultiply(price, qty)
+	if err != nil {
 		return 0, ErrPriceOverflow
 	}
-	return price * qty, nil
+	return val, nil
 }

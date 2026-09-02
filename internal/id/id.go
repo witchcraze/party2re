@@ -35,3 +35,27 @@ func NewLength(byteLength int) (string, error) {
 	}
 	return hex.EncodeToString(b), nil
 }
+
+// Sort2 returns two identifiers in deterministic ascending alphanumeric order.
+// This is used for two-party transactions to maintain a consistent row-locking order
+// and prevent database deadlocks.
+func Sort2(a, b string) (first, second string) {
+	if a <= b {
+		return a, b
+	}
+	return b, a
+}
+
+// Sort returns a slice of identifiers sorted in deterministic ascending alphanumeric order.
+func Sort(ids ...string) []string {
+	res := make([]string, len(ids))
+	copy(res, ids)
+	for i := 0; i < len(res)-1; i++ {
+		for j := i + 1; j < len(res); j++ {
+			if res[i] > res[j] {
+				res[i], res[j] = res[j], res[i]
+			}
+		}
+	}
+	return res
+}

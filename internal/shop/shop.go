@@ -8,6 +8,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 const (
@@ -112,13 +113,11 @@ func (s *Service) CalculateSellPrice(basePrice int) int {
 }
 
 func safeMultiply(a, b int) (int, error) {
-	if a <= 0 || b <= 0 {
-		return 0, nil
-	}
-	if a > math.MaxInt/b {
+	val, err := economy.SafeMultiply(a, b)
+	if err != nil {
 		return 0, ErrPriceOverflow
 	}
-	return a * b, nil
+	return val, nil
 }
 
 func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) error) error {

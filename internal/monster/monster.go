@@ -399,10 +399,7 @@ func (s *Service) SendMonster(ctx context.Context, senderCharID, recipientCharID
 
 	return s.runInTx(ctx, func(txCtx context.Context) error {
 		// Acquire character locks in deterministic order
-		firstID, secondID := senderCharID, recipientCharID
-		if firstID > secondID {
-			firstID, secondID = secondID, firstID
-		}
+		firstID, secondID := id.Sort2(senderCharID, recipientCharID)
 
 		firstChar, err := s.characters.FindByIDForUpdate(txCtx, firstID)
 		if err != nil {

@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #336 — Expand keyset cursor-based pagination across high-volume stream and log endpoints
+Last updated: Issue #276 — Introduce reusable transactional wallet and inventory exchange helpers
 
 ## Current phase
 
@@ -29,7 +29,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理、統一アイテム定義プロバイダーインターフェース（`coreitem.DefinitionProvider` / `coreitem.ItemDefinitionProvider`）の一元化、インベントリアイテム更新（`inv.Update`）、装備スロットカプセル化（`equip.Equip`, `equip.Unequip`）。
 - **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定（経験値・ゴールド・アイテム・ちいさなメダル）、構造化ターンログ出力、戦闘参加者（Participant）標準アダプタ/ビルダー（`NewParticipantFromCharacter`, `NewParticipantFromCharacterWithHP`, `ParticipantBuilder`）。
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): Valkeyバックエンドの遅延アクションキュー＆分散排他ロックWorker。
-- **Database & Transaction Orchestration** (`internal/database`): 全32リポジトリのトランザクション伝播モデル（`RunInTx` と `ExecutorFromContext`）への完全統一、トランザクション境界外からの直接 `r.db.BeginTx` 呼び出しの完全排除、コンテキスト内トランザクション再利用、マルチモジュール統合テスト（コミット原子性・ロールバック整合性・ネストトランザクション伝播検証）、決定論的行ロック獲得順序（`players` -> `characters` (昇順) -> `inventory_items` -> `character_jobs` -> `character_depots` -> `bank_accounts` -> `guilds` (昇順) -> 各種機能テーブル）によるデッドロック防止の標準化、および高並行性ストレステスト・デッドロック検出ベンチマークスイート（`internal/database/concurrency_stress_test.go`、`make test-stress`）による50並行ワーカー・1,000複合トランザクション負荷下での0デッドロック・データ保存不変条件の自動検証。さらに、全サブリソースリポジトリ（連戦セッション・宝くじ・オークション出品・ダンジョン探索・私有地手紙/挨拶台帳・祝勝祝宴乾杯台帳等）における所有権スコープ付きSQL（`WHERE id = ? AND character_id = ?`）の厳格適用によるIDOR完全防止。
+- **Database & Transaction Orchestration** (`internal/database`, `internal/economy`): 全32リポジトリのトランザクション伝播モデル（`RunInTx` と `ExecutorFromContext`）への完全統一、トランザクション境界外からの直接 `r.db.BeginTx` 呼び出しの完全排除、コンテキスト内トランザクション再利用、マルチモジュール統合テスト（コミット原子性・ロールバック整合性・ネストトランザクション伝播検証）、決定論的行ロック獲得順序（`players` -> `characters` (昇順) -> `inventory_items` -> `character_jobs` -> `character_depots` -> `bank_accounts` -> `guilds` (昇順) -> 各種機能テーブル）によるデッドロック防止の標準化、共通2者間IDソート排他ロックユーティリティ（`id.Sort2`）、および再利用可能なトランザクション内経済交換ヘルパー（`internal/economy`、ゴールド・メダル増減・送金、インベントリ消費・付与、複合 `Exchange`、オーバーフロー安全乗算 `SafeMultiply`）。
 - **Standardized Pagination & Common Utilities** (`internal/pagination`, `internal/id`, `internal/validation`, `internal/api/http/middleware`): 単一責務の共通パッケージ配置方針（Rule of Three、セキュリティ/認可の即時共通化指針）および暗号学的に安全なID生成ユーティリティ（`internal/id`）。汎用ジェネリックページネーションパッケージ（`internal/pagination`）によるリクエストパラメータ正規化（`Normalize`, `Parse`, `ParseRequest`, `ParseCursorRequest`）、標準オフセットレスポンスコンテナ（`Page[T]` `{items, total, limit, offset}`）、および高スループットストリーム/ログ向けキーセット・カーソルページネーションコンテナ（`CursorPage[T]` `{items, next_cursor, prev_cursor, limit, has_more}`、Base64 `(timestamp, id)` トークン暗号化・復号化）。広場掲示板（`internal/park`）、冒険履歴（`internal/adventure`）、戦闘リプレイ履歴（`internal/replay`）、私有地手紙受信箱/送信箱（`internal/home`）、宅配便受取待ち・発送履歴（`internal/delivery`）へのキーセットページネーション水平展開、全HTTP API一覧エンドポイントにおける統一エンベロープ適用および OpenAPI 3.1 仕様完全同期。
 
 ### Feature Modules

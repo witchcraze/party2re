@@ -402,6 +402,8 @@ Cross-module workflows spanning multiple distinct feature and core repositories 
 - **Ambient Context Boundary**: Transactions are established at the application service / orchestrator level via `database.RunInTx(ctx, db, fn)`.
 - **Automatic Participation**: Repositories resolve their SQL executor via `database.ExecutorFromContext(ctx, r.db)` and automatically participate in the active transaction without explicit transaction object passing across domain layers.
 - **Deadlock Prevention**: All repositories and orchestrators observe the deterministic lock acquisition hierarchy defined in [`feature-modules.md`](feature-modules.md) and [`.agents/rules/05-database-and-caching.md`](../../.agents/rules/05-database-and-caching.md).
+- **Deterministic Two-Party Locking (`internal/id.Sort2`)**: When acquiring pessimistic row locks across two player/character entities (e.g. P2P transfers, flea market purchases, monster trading, gem sending), IDs are sorted in ascending alphanumeric order via `id.Sort2(idA, idB)` to ensure identical lock acquisition order regardless of initiator.
+- **Standardized Transactional Exchange Helpers (`internal/economy`)**: Reusable domain service (`economy.Service`) providing atomic wallet currency deductions/credits (`DeductGold`, `AddGold`, `TransferGold`, `DeductSmallMedals`, `AddSmallMedals`), inventory operations (`GrantItem`, `ConsumeItemInstance`, `ConsumeItemDefinition`), and compound exchanges (`Exchange`) under deterministic lock hierarchy (`characters` -> `inventory_items`) with integer overflow protection (`SafeMultiply`).
 
 ### Future Feature Modules
 

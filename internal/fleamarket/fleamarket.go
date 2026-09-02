@@ -271,10 +271,7 @@ func (s *Service) PurchaseListing(
 		}
 
 		// 2. Deterministic lock acquisition order for characters (ascending ID order)
-		firstID, secondID := listing.SellerCharacterID, buyerCharacterID
-		if firstID > secondID {
-			firstID, secondID = buyerCharacterID, listing.SellerCharacterID
-		}
+		firstID, secondID := id.Sort2(listing.SellerCharacterID, buyerCharacterID)
 
 		firstChar, err := s.charRepo.FindByIDForUpdate(txCtx, firstID)
 		if err != nil {
