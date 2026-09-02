@@ -592,3 +592,69 @@ func TestListParties(t *testing.T) {
 		t.Errorf("expected party name 'Party One', got %s", page.Items[0].Name)
 	}
 }
+
+func TestPartyService_StartPartyAdventure_OverLevelAndCap(t *testing.T) {
+	svc, _, charRepo, _ := setupTestService(t)
+
+	// Leader with OverLevel at Lv 99
+	leader := corecharacter.Character{
+		ID:         "leader-overlevel",
+		Name:       "OverHero",
+		Level:      99,
+		Experience: 99 * 99 * 10,
+		Money:      1000,
+		OverLevel:  true,
+		Stats:      corecharacter.Stats{HP: 500, MaxHP: 500, Attack: 200, Defense: 150},
+	}
+	// Normal member without OverLevel at Lv 99
+	normalMem := corecharacter.Character{
+		ID:         "member-normal",
+		Name:       "NormalHero",
+		Level:      99,
+		Experience: 99 * 99 * 10,
+		Money:      1000,
+		OverLevel:  false,
+		Stats:      corecharacter.Stats{HP: 500, MaxHP: 500, Attack: 200, Defense: 150},
+	}
+	charRepo.chars[leader.ID] = leader
+	charRepo.chars[normalMem.ID] = normalMem
+
+	detail, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
+		Name:     "HighLevelParty",
+		StageID:  "forest",
+		MaxLevel: 150,
+	})
+	if err != nil {
+		t.Fatalf("CreateParty failed: %v", err)
+	}
+	partyID := detail.Party.ID
+
+	if _, err := svc.JoinParty(context.Background(), partyID, normalMem.ID, ""); err != nil {
+		t.Fatalf("JoinParty failed: %v", err)
+	}
+
+	if _, err := svc.SetReady(context.Background(), partyID, normalMem.ID, true); err != nil {
+		t.Fatalf("SetReady failed: %v", err)
+	}
+
+	res, err := svc.StartPartyAdventure(context.Background(), partyID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure failed: %v", err)
+	}
+	if res.Outcome != "win" {
+		t.Fatalf("expected victory, got %s", res.Outcome)
+	}
+
+	updatedLeader := charRepo.chars[leader.ID]
+	updatedNormal := charRepo.chars[normalMem.ID]
+
+	// OverLevel character should advance to Lv 100+
+	if updatedLeader.Level < 100 {
+		t.Errorf("expected OverLevel character to reach level >= 100, got %d", updatedLeader.Level)
+	}
+
+	// Normal character should cap strictly at Lv 99
+	if updatedNormal.Level != 99 {
+		t.Errorf("expected normal character to remain capped at level 99, got %d", updatedNormal.Level)
+	}
+}

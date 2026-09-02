@@ -548,17 +548,10 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			gainedGold := battleRes.TotalReward.Currency
 
 			c.Money += gainedGold
-			c.Experience += gainedEXP
-
-			// Process progression level-ups
-			reqExp, err := progression.ExperienceForNextLevel(c.Level)
-			for err == nil && c.Experience >= reqExp && c.Level < progression.MaxLevelForCharacter(&c) {
-				c.Level++
-				c.Stats.MaxHP += 3
-				c.Stats.Attack += 1
-				c.Stats.Defense += 1
-				c.Stats.Agility += 1
-				reqExp, err = progression.ExperienceForNextLevel(c.Level)
+			if gainedEXP > 0 {
+				if _, err := progression.ApplyExperience(&c, gainedEXP); err != nil {
+					return err
+				}
 			}
 
 			// Apply HP changes if any fallen

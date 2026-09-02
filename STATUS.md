@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #181 — Standardize Pagination for HTTP API Lists
+Last updated: Issue #328 — Fix OverLevel limit break level-up cap and canonicalize stat growth in party adventures
 
 ## Current phase
 
@@ -73,7 +73,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Endgame God Wishes & Limit Breaks** (`internal/god`): 天界・裏天界の願い事＆限界突破システム（`god.cgi`, `u_god.cgi`, NPC `@神`, `@神?`、ステータス+40・所持金・小さなメダル・全快等の天界願い事、Lv99到達時レベル上限150限界突破 `over_level`、倉庫預入枠拡張 `over_depot`、モンスター預入枠拡張 `over_monster`、職業記憶枠拡張 `over_future`、フリマ出品数上限拡張 `over_flea`、店舗出品数上限拡張 `over_store`、`TransactionProvider` と `SELECT ... FOR UPDATE` 行ロックによる完全アトミックトランザクション整合性）。
 - **Monster Grandpa & Pet Companions** (`internal/monster`): モンスター預かり所＆自宅ペット仲間システム（`farm.cgi` / `monster.cgi`, NPC `@モンジィ`、最大50体〜限界突破時最大300体預入 `character_monsters`、自宅ペット同居最大8体 `MaxHomePets = 8`、同居ペット同名重複チェック、命名文字制約、他プレイヤーへのモンスター譲渡、野生への解放、`TransactionProvider` と `SELECT ... FOR UPDATE` 行ロックによる完全アトミックトランザクション整合性）。
 - **Photo Contest, Screenshots & Gallery** (`internal/contest`): フォトコン会場・NPC `@ワコール`（`photo.cgi` / `contest.cgi`、キャラクター別スクリーンショット保存・ギャラリー最大20枚、コンテストエントリー・題名バリデーション・連続エントリー制限、開催中コンテスト作品への投票・応援コメント・自己投票禁止・1人1票制約、10日周期定期集計・5作品未満延期、上位3名賞金15,000/7,000/3,000 G・小さなメダル10/6/3枚・ギルドポイント700/300/100 GP付与、1位投票者全員への小さなメダル1枚配布、歴代1位作品の殿堂入り `contest_legends` 永久アーカイブ、結果発表お知らせ配信、`TransactionProvider` と行ロックによる完全アトミックトランザクション整合性・MariaDB永続化）。
-- **Multiplayer Party & Co-op Quests** (`internal/party`): パーティ結成・冒険中のパーティー（`quest.cgi`, `party.cgi`、最大4人編成、パーティ名バリデーション、合言葉パスワード設定、参加条件チェック（Lv上限・下限、HP下限）、単一アクティブパーティ制約、準備完了（Ready）同期、リーダー権限（キック・解散）、マルチプレイヤー協力戦闘解決（`internal/core/battle` 拡張）、協力シナジーボーナス（+10%〜+30% EXP/ゴールドボーナス）、報酬分配（レベルアップ・ドロップ品一括付与）、冒険ログ永続化、`TransactionProvider` と行ロックによる完全アトミックトランザクション整合性・MariaDB永続化 `parties`, `party_members`, `party_adventure_logs`）。
+- **Multiplayer Party & Co-op Quests** (`internal/party`): パーティ結成・冒険中のパーティー（`quest.cgi`, `party.cgi`、最大4人編成、パーティ名バリデーション、合言葉パスワード設定、参加条件チェック（Lv上限・下限、HP下限）、単一アクティブパーティ制約、準備完了（Ready）同期、リーダー権限（キック・解散）、マルチプレイヤー協力戦闘解決（`internal/core/battle` 拡張）、協力シナジーボーナス（+10%〜+30% EXP/ゴールドボーナス）、報酬分配（レベルアップ・OverLevel限界突破（Lv150）対応・ドロップ品一括付与）、冒険ログ永続化、`TransactionProvider` と行ロックによる完全アトミックトランザクション整合性・MariaDB永続化 `parties`, `party_members`, `party_adventure_logs`）。
 - **System Maintenance Mode** (`internal/maintenance`): メンテナンスモード管理（`GET /maintenance`, `POST /admin/maintenance`, `PUT /admin/maintenance`、管理者APIキーによる有効化/無効化・告知メッセージ・終了予定時刻設定、HTTPミドルウェアによる503 Service Unavailable遮断、`/health`, `/openapi.json`, `/maintenance` および管理者バイパス、MariaDB永続化 `system_maintenance`）。
 
 ### API & Transport
