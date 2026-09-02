@@ -110,3 +110,51 @@ func TestNew_UniquenessAndConcurrency(t *testing.T) {
 		t.Fatalf("expected %d unique IDs, got %d (collision detected)", expectedTotal, len(ids))
 	}
 }
+
+func TestSort2(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		a, b         string
+		want1, want2 string
+	}{
+		{"abc", "def", "abc", "def"},
+		{"def", "abc", "abc", "def"},
+		{"same", "same", "same", "same"},
+		{"", "xyz", "", "xyz"},
+		{"123", "012", "012", "123"},
+	}
+
+	for _, tt := range tests {
+		first, second := id.Sort2(tt.a, tt.b)
+		if first != tt.want1 || second != tt.want2 {
+			t.Errorf("Sort2(%q, %q) = (%q, %q), want (%q, %q)", tt.a, tt.b, first, second, tt.want1, tt.want2)
+		}
+	}
+}
+
+func TestSort(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input []string
+		want  []string
+	}{
+		{input: nil, want: []string{}},
+		{input: []string{"c", "a", "b"}, want: []string{"a", "b", "c"}},
+		{input: []string{"single"}, want: []string{"single"}},
+		{input: []string{"4", "1", "3", "2"}, want: []string{"1", "2", "3", "4"}},
+	}
+
+	for _, tt := range tests {
+		got := id.Sort(tt.input...)
+		if len(got) != len(tt.want) {
+			t.Fatalf("Sort(%v) len = %d, want %d", tt.input, len(got), len(tt.want))
+		}
+		for i := range got {
+			if got[i] != tt.want[i] {
+				t.Errorf("Sort(%v)[%d] = %q, want %q", tt.input, i, got[i], tt.want[i])
+			}
+		}
+	}
+}

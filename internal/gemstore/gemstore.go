@@ -11,6 +11,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 var (
@@ -355,10 +356,7 @@ func (s *Service) SendGem(ctx context.Context, senderID, recipientID, itemInstan
 		return SendResult{}, ErrInvalidGemID
 	}
 
-	firstID, secondID := senderID, recipientID
-	if firstID > secondID {
-		firstID, secondID = recipientID, senderID
-	}
+	firstID, secondID := id.Sort2(senderID, recipientID)
 
 	var res SendResult
 	run := func(txCtx context.Context) error {

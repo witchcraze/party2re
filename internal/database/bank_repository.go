@@ -8,6 +8,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/bank"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 type BankRepository struct {
@@ -181,10 +182,7 @@ func (r *BankRepository) Transfer(ctx context.Context, record bank.TransferRecor
 		return bank.Account{}, bank.Account{}, bank.ErrAccountNotFound
 	}
 
-	p1, p2 := record.FromPlayerID, record.ToPlayerID
-	if p1 > p2 {
-		p1, p2 = p2, p1
-	}
+	p1, p2 := id.Sort2(record.FromPlayerID, record.ToPlayerID)
 
 	// Ensure accounts exist to avoid insert gap locks
 	_, _ = ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
