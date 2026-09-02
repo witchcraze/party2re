@@ -336,6 +336,80 @@ func (r *DeliveryRepository) GetIncomingParcels(ctx context.Context, recipientCh
 	return list, nil
 }
 
+func (r *DeliveryRepository) GetIncomingParcelsByCursor(ctx context.Context, recipientCharacterID string, limit int, beforeTime time.Time, beforeID string) ([]delivery.Parcel, error) {
+	executor := ExecutorFromContext(ctx, r.db)
+	var rows *sql.Rows
+	var err error
+
+	if beforeTime.IsZero() && beforeID == "" {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, sender_character_id, sender_character_name, recipient_character_id,
+			       item_id, item_name, item_quantity, gold_amount, message, courier_fee,
+			       status, created_at, claimed_at
+			FROM delivery_parcels
+			WHERE recipient_character_id = ? AND status = 'pending'
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, recipientCharacterID, limit)
+	} else if !beforeTime.IsZero() && beforeID != "" {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, sender_character_id, sender_character_name, recipient_character_id,
+			       item_id, item_name, item_quantity, gold_amount, message, courier_fee,
+			       status, created_at, claimed_at
+			FROM delivery_parcels
+			WHERE recipient_character_id = ? AND status = 'pending' AND (created_at < ? OR (created_at = ? AND id < ?))
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, recipientCharacterID, beforeTime.UTC(), beforeTime.UTC(), beforeID, limit)
+	} else if !beforeTime.IsZero() {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, sender_character_id, sender_character_name, recipient_character_id,
+			       item_id, item_name, item_quantity, gold_amount, message, courier_fee,
+			       status, created_at, claimed_at
+			FROM delivery_parcels
+			WHERE recipient_character_id = ? AND status = 'pending' AND created_at < ?
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, recipientCharacterID, beforeTime.UTC(), limit)
+	} else {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, sender_character_id, sender_character_name, recipient_character_id,
+			       item_id, item_name, item_quantity, gold_amount, message, courier_fee,
+			       status, created_at, claimed_at
+			FROM delivery_parcels
+			WHERE recipient_character_id = ? AND status = 'pending' AND id < ?
+			ORDER BY id DESC
+			LIMIT ?
+		`, recipientCharacterID, beforeID, limit)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []delivery.Parcel
+	for rows.Next() {
+		var p delivery.Parcel
+		var statusStr string
+		var claimedAt sql.NullTime
+
+		if err := rows.Scan(
+			&p.ID, &p.SenderCharacterID, &p.SenderCharacterName, &p.RecipientCharacterID,
+			&p.ItemID, &p.ItemName, &p.ItemQuantity, &p.GoldAmount, &p.Message, &p.CourierFee,
+			&statusStr, &p.CreatedAt, &claimedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		p.Status = delivery.ParcelStatus(statusStr)
+		if claimedAt.Valid {
+			p.ClaimedAt = &claimedAt.Time
+		}
+		list = append(list, p)
+	}
+	return list, nil
+}
+
 func (r *DeliveryRepository) GetSentParcels(ctx context.Context, senderCharacterID string) ([]delivery.Parcel, error) {
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, sender_character_id, sender_character_name, recipient_character_id,
@@ -345,6 +419,80 @@ func (r *DeliveryRepository) GetSentParcels(ctx context.Context, senderCharacter
 		WHERE sender_character_id = ?
 		ORDER BY created_at DESC
 	`, senderCharacterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []delivery.Parcel
+	for rows.Next() {
+		var p delivery.Parcel
+		var statusStr string
+		var claimedAt sql.NullTime
+
+		if err := rows.Scan(
+			&p.ID, &p.SenderCharacterID, &p.SenderCharacterName, &p.RecipientCharacterID,
+			&p.ItemID, &p.ItemName, &p.ItemQuantity, &p.GoldAmount, &p.Message, &p.CourierFee,
+			&statusStr, &p.CreatedAt, &claimedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		p.Status = delivery.ParcelStatus(statusStr)
+		if claimedAt.Valid {
+			p.ClaimedAt = &claimedAt.Time
+		}
+		list = append(list, p)
+	}
+	return list, nil
+}
+
+func (r *DeliveryRepository) GetSentParcelsByCursor(ctx context.Context, senderCharacterID string, limit int, beforeTime time.Time, beforeID string) ([]delivery.Parcel, error) {
+	executor := ExecutorFromContext(ctx, r.db)
+	var rows *sql.Rows
+	var err error
+
+	if beforeTime.IsZero() && beforeID == "" {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, sender_character_id, sender_character_name, recipient_character_id,
+			       item_id, item_name, item_quantity, gold_amount, message, courier_fee,
+			       status, created_at, claimed_at
+			FROM delivery_parcels
+			WHERE sender_character_id = ?
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, senderCharacterID, limit)
+	} else if !beforeTime.IsZero() && beforeID != "" {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, sender_character_id, sender_character_name, recipient_character_id,
+			       item_id, item_name, item_quantity, gold_amount, message, courier_fee,
+			       status, created_at, claimed_at
+			FROM delivery_parcels
+			WHERE sender_character_id = ? AND (created_at < ? OR (created_at = ? AND id < ?))
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, senderCharacterID, beforeTime.UTC(), beforeTime.UTC(), beforeID, limit)
+	} else if !beforeTime.IsZero() {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, sender_character_id, sender_character_name, recipient_character_id,
+			       item_id, item_name, item_quantity, gold_amount, message, courier_fee,
+			       status, created_at, claimed_at
+			FROM delivery_parcels
+			WHERE sender_character_id = ? AND created_at < ?
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, senderCharacterID, beforeTime.UTC(), limit)
+	} else {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, sender_character_id, sender_character_name, recipient_character_id,
+			       item_id, item_name, item_quantity, gold_amount, message, courier_fee,
+			       status, created_at, claimed_at
+			FROM delivery_parcels
+			WHERE sender_character_id = ? AND id < ?
+			ORDER BY id DESC
+			LIMIT ?
+		`, senderCharacterID, beforeID, limit)
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -59,28 +59,88 @@ func (m *mockReplayRepo) FindByCharacter(ctx context.Context, characterID string
 	return list, nil
 }
 
-func (m *mockReplayRepo) FindRecent(ctx context.Context, combatType string, limit int) ([]replay.ReplayHeader, error) {
+func (m *mockReplayRepo) FindByCharacterByCursor(ctx context.Context, characterID string, combatType string, limit int, beforeTime time.Time, beforeID string) ([]replay.ReplayHeader, error) {
 	var list []replay.ReplayHeader
 	for _, r := range m.replays {
-		if combatType == "" || r.CombatType == combatType {
-			list = append(list, replay.ReplayHeader{
-				ID:            r.ID,
-				CombatType:    r.CombatType,
-				InitiatorID:   r.InitiatorID,
-				InitiatorName: r.InitiatorName,
-				OpponentID:    r.OpponentID,
-				OpponentName:  r.OpponentName,
-				Outcome:       r.Outcome,
-				WinnerID:      r.WinnerID,
-				TotalTurns:    r.TotalTurns,
-				CreatedAt:     r.CreatedAt,
-			})
+		if r.InitiatorID == characterID || r.OpponentID == characterID {
+			if combatType == "" || r.CombatType == combatType {
+				if beforeTime.IsZero() && beforeID == "" {
+					list = append(list, toReplayHeader(r))
+				} else if !beforeTime.IsZero() && beforeID != "" {
+					if r.CreatedAt.Before(beforeTime) || (r.CreatedAt.Equal(beforeTime) && r.ID < beforeID) {
+						list = append(list, toReplayHeader(r))
+					}
+				} else if !beforeTime.IsZero() {
+					if r.CreatedAt.Before(beforeTime) {
+						list = append(list, toReplayHeader(r))
+					}
+				} else {
+					if r.ID < beforeID {
+						list = append(list, toReplayHeader(r))
+					}
+				}
+			}
 		}
 	}
 	if len(list) > limit {
 		list = list[:limit]
 	}
 	return list, nil
+}
+
+func (m *mockReplayRepo) FindRecent(ctx context.Context, combatType string, limit int) ([]replay.ReplayHeader, error) {
+	var list []replay.ReplayHeader
+	for _, r := range m.replays {
+		if combatType == "" || r.CombatType == combatType {
+			list = append(list, toReplayHeader(r))
+		}
+	}
+	if len(list) > limit {
+		list = list[:limit]
+	}
+	return list, nil
+}
+
+func (m *mockReplayRepo) FindRecentByCursor(ctx context.Context, combatType string, limit int, beforeTime time.Time, beforeID string) ([]replay.ReplayHeader, error) {
+	var list []replay.ReplayHeader
+	for _, r := range m.replays {
+		if combatType == "" || r.CombatType == combatType {
+			if beforeTime.IsZero() && beforeID == "" {
+				list = append(list, toReplayHeader(r))
+			} else if !beforeTime.IsZero() && beforeID != "" {
+				if r.CreatedAt.Before(beforeTime) || (r.CreatedAt.Equal(beforeTime) && r.ID < beforeID) {
+					list = append(list, toReplayHeader(r))
+				}
+			} else if !beforeTime.IsZero() {
+				if r.CreatedAt.Before(beforeTime) {
+					list = append(list, toReplayHeader(r))
+				}
+			} else {
+				if r.ID < beforeID {
+					list = append(list, toReplayHeader(r))
+				}
+			}
+		}
+	}
+	if len(list) > limit {
+		list = list[:limit]
+	}
+	return list, nil
+}
+
+func toReplayHeader(r replay.BattleReplay) replay.ReplayHeader {
+	return replay.ReplayHeader{
+		ID:            r.ID,
+		CombatType:    r.CombatType,
+		InitiatorID:   r.InitiatorID,
+		InitiatorName: r.InitiatorName,
+		OpponentID:    r.OpponentID,
+		OpponentName:  r.OpponentName,
+		Outcome:       r.Outcome,
+		WinnerID:      r.WinnerID,
+		TotalTurns:    r.TotalTurns,
+		CreatedAt:     r.CreatedAt,
+	}
 }
 
 func (m *mockReplayRepo) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
@@ -239,5 +299,67 @@ func TestPruneOldReplays(t *testing.T) {
 	}
 	if _, ok := repo.replays["new-rep"]; !ok {
 		t.Errorf("expected new replay to remain")
+	}
+}
+
+func TestGetCharacterHistoryByCursor(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockReplayRepo()
+	service, err := replay.NewService(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+	for i := 1; i <= 5; i++ {
+		repID := "rep-" + string(rune('0'+i))
+		repo.replays[repID] = replay.BattleReplay{
+			ID:          repID,
+			CombatType:  replay.CombatTypePvP,
+			InitiatorID: "char-1",
+			OpponentID:  "char-2",
+			Outcome:     corebattle.OutcomeWin,
+			WinnerID:    "char-1",
+			CreatedAt:   now.Add(time.Duration(i) * time.Minute),
+		}
+	}
+
+	page1, err := service.GetCharacterHistoryByCursor(ctx, "char-1", replay.CombatTypePvP, 2, "")
+	if err != nil {
+		t.Fatalf("page 1 failed: %v", err)
+	}
+	if len(page1.Items) != 2 || !page1.HasMore || page1.NextCursor == "" {
+		t.Fatalf("unexpected page 1: %+v", page1)
+	}
+}
+
+func TestGetRecentReplaysByCursor(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockReplayRepo()
+	service, err := replay.NewService(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+	for i := 1; i <= 3; i++ {
+		repID := "rep-" + string(rune('0'+i))
+		repo.replays[repID] = replay.BattleReplay{
+			ID:          repID,
+			CombatType:  replay.CombatTypeBoss,
+			InitiatorID: "char-1",
+			OpponentID:  "boss-1",
+			Outcome:     corebattle.OutcomeWin,
+			WinnerID:    "char-1",
+			CreatedAt:   now.Add(time.Duration(i) * time.Minute),
+		}
+	}
+
+	page1, err := service.GetRecentReplaysByCursor(ctx, replay.CombatTypeBoss, 2, "")
+	if err != nil {
+		t.Fatalf("page 1 failed: %v", err)
+	}
+	if len(page1.Items) != 2 || !page1.HasMore || page1.NextCursor == "" {
+		t.Fatalf("unexpected page 1: %+v", page1)
 	}
 }

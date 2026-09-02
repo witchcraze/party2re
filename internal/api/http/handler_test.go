@@ -18,6 +18,7 @@ import (
 	"github.com/witchcraze/party2re/internal/adventure"
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/character"
+	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/shop"
 )
 
@@ -127,11 +128,12 @@ func (s *stubCharacterService) Delete(ctx context.Context, playerID, characterID
 }
 
 type stubAdventureService struct {
-	startStageFn   func(ctx context.Context, characterID, stageID string) (adventure.Adventure, error)
-	claimFn        func(ctx context.Context, id string) (adventure.Adventure, error)
-	getFn          func(ctx context.Context, id string) (adventure.Adventure, error)
-	listHistoryFn  func(ctx context.Context, characterID string, limit, offset int) (adventure.PaginatedAdventures, error)
-	getChronicleFn func(ctx context.Context, characterID string) (adventure.AdventureChronicle, error)
+	startStageFn          func(ctx context.Context, characterID, stageID string) (adventure.Adventure, error)
+	claimFn               func(ctx context.Context, id string) (adventure.Adventure, error)
+	getFn                 func(ctx context.Context, id string) (adventure.Adventure, error)
+	listHistoryFn         func(ctx context.Context, characterID string, limit, offset int) (adventure.PaginatedAdventures, error)
+	listHistoryByCursorFn func(ctx context.Context, characterID string, limit int, cursor string) (pagination.CursorPage[adventure.AdventureHistoryEntry], error)
+	getChronicleFn        func(ctx context.Context, characterID string) (adventure.AdventureChronicle, error)
 }
 
 func (s *stubAdventureService) StartStage(ctx context.Context, characterID, stageID string) (adventure.Adventure, error) {
@@ -160,6 +162,13 @@ func (s *stubAdventureService) ListHistory(ctx context.Context, characterID stri
 		return s.listHistoryFn(ctx, characterID, limit, offset)
 	}
 	return adventure.PaginatedAdventures{}, nil
+}
+
+func (s *stubAdventureService) ListHistoryByCursor(ctx context.Context, characterID string, limit int, cursor string) (pagination.CursorPage[adventure.AdventureHistoryEntry], error) {
+	if s.listHistoryByCursorFn != nil {
+		return s.listHistoryByCursorFn(ctx, characterID, limit, cursor)
+	}
+	return pagination.NewCursorPage([]adventure.AdventureHistoryEntry{}, "", "", limit, false), nil
 }
 
 func (s *stubAdventureService) GetChronicle(ctx context.Context, characterID string) (adventure.AdventureChronicle, error) {

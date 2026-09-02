@@ -3,6 +3,7 @@ package delivery
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -185,12 +186,66 @@ func (m *mockDeliveryRepo) GetIncomingParcels(ctx context.Context, recipientChar
 	return list, nil
 }
 
+func (m *mockDeliveryRepo) GetIncomingParcelsByCursor(ctx context.Context, recipientCharacterID string, limit int, beforeTime time.Time, beforeID string) ([]Parcel, error) {
+	var list []Parcel
+	for _, p := range m.parcels {
+		if p.RecipientCharacterID == recipientCharacterID && p.Status == ParcelStatusPending {
+			if beforeTime.IsZero() && beforeID == "" {
+				list = append(list, p)
+			} else if !beforeTime.IsZero() && beforeID != "" {
+				if p.CreatedAt.Before(beforeTime) || (p.CreatedAt.Equal(beforeTime) && p.ID < beforeID) {
+					list = append(list, p)
+				}
+			} else if !beforeTime.IsZero() {
+				if p.CreatedAt.Before(beforeTime) {
+					list = append(list, p)
+				}
+			} else {
+				if p.ID < beforeID {
+					list = append(list, p)
+				}
+			}
+		}
+	}
+	if len(list) > limit {
+		list = list[:limit]
+	}
+	return list, nil
+}
+
 func (m *mockDeliveryRepo) GetSentParcels(ctx context.Context, senderCharacterID string) ([]Parcel, error) {
 	var list []Parcel
 	for _, p := range m.parcels {
 		if p.SenderCharacterID == senderCharacterID {
 			list = append(list, p)
 		}
+	}
+	return list, nil
+}
+
+func (m *mockDeliveryRepo) GetSentParcelsByCursor(ctx context.Context, senderCharacterID string, limit int, beforeTime time.Time, beforeID string) ([]Parcel, error) {
+	var list []Parcel
+	for _, p := range m.parcels {
+		if p.SenderCharacterID == senderCharacterID {
+			if beforeTime.IsZero() && beforeID == "" {
+				list = append(list, p)
+			} else if !beforeTime.IsZero() && beforeID != "" {
+				if p.CreatedAt.Before(beforeTime) || (p.CreatedAt.Equal(beforeTime) && p.ID < beforeID) {
+					list = append(list, p)
+				}
+			} else if !beforeTime.IsZero() {
+				if p.CreatedAt.Before(beforeTime) {
+					list = append(list, p)
+				}
+			} else {
+				if p.ID < beforeID {
+					list = append(list, p)
+				}
+			}
+		}
+	}
+	if len(list) > limit {
+		list = list[:limit]
 	}
 	return list, nil
 }
@@ -549,5 +604,61 @@ func TestCancelParcel(t *testing.T) {
 	_, err = svc.ClaimParcel(ctx, recipientID, parcel.ID, now)
 	if !errors.Is(err, ErrParcelAlreadyClaimed) {
 		t.Fatalf("expected ErrParcelAlreadyClaimed, got %v", err)
+	}
+}
+
+func TestGetIncomingParcelsByCursor(t *testing.T) {
+	svc, dRepo, cRepo, _ := setupDeliveryTest(t)
+	ctx := context.Background()
+	now := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+
+	cRepo.chars["rec-1"] = corecharacter.Character{ID: "rec-1", Name: "Recipient"}
+	for i := 1; i <= 5; i++ {
+		pID := fmt.Sprintf("parcel-%d", i)
+		dRepo.parcels[pID] = Parcel{
+			ID:                   pID,
+			SenderCharacterID:    "sender-1",
+			SenderCharacterName:  "Sender",
+			RecipientCharacterID: "rec-1",
+			Status:               ParcelStatusPending,
+			GoldAmount:           100 * i,
+			CreatedAt:            now.Add(time.Duration(i) * time.Minute),
+		}
+	}
+
+	page1, err := svc.GetIncomingParcelsByCursor(ctx, "rec-1", 2, "")
+	if err != nil {
+		t.Fatalf("page 1 failed: %v", err)
+	}
+	if len(page1.Items) != 2 || !page1.HasMore || page1.NextCursor == "" {
+		t.Fatalf("unexpected page 1: %+v", page1)
+	}
+}
+
+func TestGetSentParcelsByCursor(t *testing.T) {
+	svc, dRepo, cRepo, _ := setupDeliveryTest(t)
+	ctx := context.Background()
+	now := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+
+	cRepo.chars["sender-1"] = corecharacter.Character{ID: "sender-1", Name: "Sender"}
+	for i := 1; i <= 4; i++ {
+		pID := fmt.Sprintf("sent-%d", i)
+		dRepo.parcels[pID] = Parcel{
+			ID:                   pID,
+			SenderCharacterID:    "sender-1",
+			SenderCharacterName:  "Sender",
+			RecipientCharacterID: "rec-1",
+			Status:               ParcelStatusClaimed,
+			GoldAmount:           100 * i,
+			CreatedAt:            now.Add(time.Duration(i) * time.Minute),
+		}
+	}
+
+	page1, err := svc.GetSentParcelsByCursor(ctx, "sender-1", 2, "")
+	if err != nil {
+		t.Fatalf("page 1 failed: %v", err)
+	}
+	if len(page1.Items) != 2 || !page1.HasMore || page1.NextCursor == "" {
+		t.Fatalf("unexpected page 1: %+v", page1)
 	}
 }

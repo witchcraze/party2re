@@ -166,54 +166,111 @@ func (s *Service) ListHistory(ctx context.Context, characterID string, limit, of
 
 	entries := make([]AdventureHistoryEntry, 0, len(adventures))
 	for _, adv := range adventures {
-		stageID := adv.StageID
-		if stageID == "" {
-			stageID = adv.Type
-		}
-		stageName := stageID
-		if s.stages != nil {
-			if st, err := s.stages.FindByID(stageID); err == nil {
-				stageName = st.Name
-			}
-		}
-
-		monsterID := adv.MonsterID
-		monsterName := monsterID
-		if monsterID == "" {
-			// If monster ID was not explicitly on the struct, infer from battle participant
-			if adv.BattleResult.WinnerID == adv.CharacterID {
-				monsterID = adv.BattleResult.LoserID
-			} else if adv.BattleResult.LoserID == adv.CharacterID {
-				monsterID = adv.BattleResult.WinnerID
-			}
-		}
-		if s.monsters != nil && monsterID != "" {
-			if m, err := s.monsters.FindByID(monsterID); err == nil {
-				monsterName = m.Name
-			}
-		}
-
-		entries = append(entries, AdventureHistoryEntry{
-			ID:                 adv.ID,
-			CharacterID:        adv.CharacterID,
-			StageID:            stageID,
-			StageName:          stageName,
-			MonsterID:          monsterID,
-			MonsterName:        monsterName,
-			StartedAt:          adv.StartedAt,
-			AvailableAt:        adv.AvailableAt,
-			Outcome:            adv.BattleResult.Outcome,
-			BattleTurns:        adv.BattleResult.Turns,
-			RewardExperience:   adv.BattleResult.Reward.Experience,
-			RewardCurrency:     adv.BattleResult.Reward.Currency,
-			RewardItemID:       adv.BattleResult.Reward.ItemDefinitionID,
-			RewardItemQuantity: adv.BattleResult.Reward.ItemQuantity,
-			Resolved:           adv.Resolved,
-			Claimed:            adv.Claimed,
-		})
+		entries = append(entries, s.buildHistoryEntry(adv))
 	}
 
 	return pagination.NewPage(entries, total, limit, offset), nil
+}
+
+// ListHistoryByCursor retrieves keyset / cursor-based paginated adventure history for a character.
+func (s *Service) ListHistoryByCursor(ctx context.Context, characterID string, limit int, cursor string) (pagination.CursorPage[AdventureHistoryEntry], error) {
+	if characterID == "" {
+		return pagination.CursorPage[AdventureHistoryEntry]{}, corecharacter.ErrNotFound
+	}
+	if _, err := s.characters.FindByID(ctx, characterID); err != nil {
+		return pagination.CursorPage[AdventureHistoryEntry]{}, err
+	}
+
+	if limit <= 0 {
+		limit = pagination.DefaultLimit
+	}
+	if limit > pagination.MaxLimit {
+		limit = pagination.MaxLimit
+	}
+
+	var beforeTime time.Time
+	var beforeID string
+	var err error
+
+	if cursor != "" {
+		beforeTime, beforeID, err = pagination.DecodeCursor(cursor)
+		if err != nil {
+			beforeID, _ = pagination.DecodeIDCursor(cursor)
+		}
+	}
+
+	fetchLimit := limit + 1
+	adventures, err := s.adventures.ListByCharacterIDByCursor(ctx, characterID, fetchLimit, beforeTime, beforeID)
+	if err != nil {
+		return pagination.CursorPage[AdventureHistoryEntry]{}, err
+	}
+
+	hasMore := false
+	if len(adventures) > limit {
+		hasMore = true
+		adventures = adventures[:limit]
+	}
+
+	entries := make([]AdventureHistoryEntry, 0, len(adventures))
+	for _, adv := range adventures {
+		entries = append(entries, s.buildHistoryEntry(adv))
+	}
+
+	var nextCursor string
+	if hasMore && len(adventures) > 0 {
+		last := adventures[len(adventures)-1]
+		nextCursor = pagination.EncodeCursor(last.StartedAt, last.ID)
+	}
+
+	return pagination.NewCursorPage(entries, nextCursor, cursor, limit, hasMore), nil
+}
+
+func (s *Service) buildHistoryEntry(adv Adventure) AdventureHistoryEntry {
+	stageID := adv.StageID
+	if stageID == "" {
+		stageID = adv.Type
+	}
+	stageName := stageID
+	if s.stages != nil {
+		if st, err := s.stages.FindByID(stageID); err == nil {
+			stageName = st.Name
+		}
+	}
+
+	monsterID := adv.MonsterID
+	monsterName := monsterID
+	if monsterID == "" {
+		// If monster ID was not explicitly on the struct, infer from battle participant
+		if adv.BattleResult.WinnerID == adv.CharacterID {
+			monsterID = adv.BattleResult.LoserID
+		} else if adv.BattleResult.LoserID == adv.CharacterID {
+			monsterID = adv.BattleResult.WinnerID
+		}
+	}
+	if s.monsters != nil && monsterID != "" {
+		if m, err := s.monsters.FindByID(monsterID); err == nil {
+			monsterName = m.Name
+		}
+	}
+
+	return AdventureHistoryEntry{
+		ID:                 adv.ID,
+		CharacterID:        adv.CharacterID,
+		StageID:            stageID,
+		StageName:          stageName,
+		MonsterID:          monsterID,
+		MonsterName:        monsterName,
+		StartedAt:          adv.StartedAt,
+		AvailableAt:        adv.AvailableAt,
+		Outcome:            adv.BattleResult.Outcome,
+		BattleTurns:        adv.BattleResult.Turns,
+		RewardExperience:   adv.BattleResult.Reward.Experience,
+		RewardCurrency:     adv.BattleResult.Reward.Currency,
+		RewardItemID:       adv.BattleResult.Reward.ItemDefinitionID,
+		RewardItemQuantity: adv.BattleResult.Reward.ItemQuantity,
+		Resolved:           adv.Resolved,
+		Claimed:            adv.Claimed,
+	}
 }
 
 // GetChronicle computes an aggregated statistical summary of past adventure runs and unlocked milestones.

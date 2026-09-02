@@ -12,6 +12,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 func TestHandleListCharacterAdventures_Success(t *testing.T) {
@@ -69,6 +70,56 @@ func TestHandleListCharacterAdventures_Success(t *testing.T) {
 	}
 	if res.Items[0].StageName != "平原" || res.Items[0].MonsterName != "スライム" {
 		t.Fatalf("unexpected enriched adventure: %+v", res.Items[0])
+	}
+}
+
+func TestHandleListCharacterAdventures_CursorSuccess(t *testing.T) {
+	player := coreplayer.Player{ID: "p1", Username: "user1"}
+	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
+	cs := &stubCharacterService{
+		getFn: func(_ context.Context, id string) (corecharacter.Character, error) {
+			return corecharacter.Character{ID: "c1", PlayerID: "p1", Name: "Hero"}, nil
+		},
+	}
+	as := &stubAdventureService{
+		listHistoryByCursorFn: func(_ context.Context, characterID string, limit int, cursor string) (pagination.CursorPage[adventure.AdventureHistoryEntry], error) {
+			if characterID != "c1" || limit != 15 || cursor != "cur-token" {
+				t.Fatalf("unexpected listHistoryByCursor args: char=%s, limit=%d, cursor=%s", characterID, limit, cursor)
+			}
+			return pagination.NewCursorPage([]adventure.AdventureHistoryEntry{
+				{
+					ID:          "adv-1",
+					CharacterID: "c1",
+					StageID:     "stage-01",
+					StageName:   "平原",
+					MonsterID:   "mon-01",
+					MonsterName: "スライム",
+					Outcome:     corebattle.OutcomeWin,
+					BattleTurns: 3,
+					Resolved:    true,
+					Claimed:     true,
+				},
+			}, "next-token", "prev-token", 15, true), nil
+		},
+	}
+
+	h := newTestHandler(t, ps, cs, as, &stubShopService{})
+	req := httptest.NewRequest(http.MethodGet, "/characters/c1/adventures?cursor=cur-token&limit=15", nil)
+	req.Header.Set("Authorization", bearerToken("sess1"))
+	w := httptest.NewRecorder()
+
+	h.Router().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	var res pagination.CursorPage[adventure.AdventureHistoryEntry]
+	if err := json.NewDecoder(w.Body).Decode(&res); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if len(res.Items) != 1 || res.NextCursor != "next-token" || !res.HasMore {
+		t.Fatalf("unexpected cursor page response: %+v", res)
 	}
 }
 

@@ -13,7 +13,9 @@ type Repository interface {
 	CreateLetter(ctx context.Context, letter Letter) error
 	GetLetterByID(ctx context.Context, id string) (Letter, error)
 	ListInboxLetters(ctx context.Context, recipientID string, limit, offset int) ([]Letter, int, error)
+	ListInboxLettersByCursor(ctx context.Context, recipientID string, limit int, beforeTime time.Time, beforeID string) ([]Letter, error)
 	ListOutboxLetters(ctx context.Context, senderID string, limit, offset int) ([]Letter, int, error)
+	ListOutboxLettersByCursor(ctx context.Context, senderID string, limit int, beforeTime time.Time, beforeID string) ([]Letter, error)
 	GetUnreadLetterCount(ctx context.Context, recipientID string) (int, error)
 	MarkLetterAsRead(ctx context.Context, id, recipientID string, readAt time.Time) error
 	DeleteLetter(ctx context.Context, id, characterID string) error

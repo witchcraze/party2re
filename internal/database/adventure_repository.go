@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -181,6 +182,89 @@ func (r *AdventureRepository) ListByCharacterID(ctx context.Context, characterID
 		return nil, 0, err
 	}
 	return result, total, nil
+}
+
+func (r *AdventureRepository) ListByCharacterIDByCursor(ctx context.Context, characterID string, limit int, beforeTime time.Time, beforeID string) ([]adventure.Adventure, error) {
+	executor := ExecutorFromContext(ctx, r.db)
+	var rows *sql.Rows
+	var err error
+
+	if beforeTime.IsZero() && beforeID == "" {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, character_id, adventure_type, started_at, available_at, experience_reward,
+				outcome, winner_id, loser_id, battle_turns, reward_experience, reward_currency,
+				reward_item_definition_id, reward_item_quantity, resolved, claimed
+			FROM adventures
+			WHERE character_id = ?
+			ORDER BY started_at DESC, id DESC
+			LIMIT ?
+		`, characterID, limit)
+	} else if !beforeTime.IsZero() && beforeID != "" {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, character_id, adventure_type, started_at, available_at, experience_reward,
+				outcome, winner_id, loser_id, battle_turns, reward_experience, reward_currency,
+				reward_item_definition_id, reward_item_quantity, resolved, claimed
+			FROM adventures
+			WHERE character_id = ? AND (started_at < ? OR (started_at = ? AND id < ?))
+			ORDER BY started_at DESC, id DESC
+			LIMIT ?
+		`, characterID, beforeTime.UTC(), beforeTime.UTC(), beforeID, limit)
+	} else if !beforeTime.IsZero() {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, character_id, adventure_type, started_at, available_at, experience_reward,
+				outcome, winner_id, loser_id, battle_turns, reward_experience, reward_currency,
+				reward_item_definition_id, reward_item_quantity, resolved, claimed
+			FROM adventures
+			WHERE character_id = ? AND started_at < ?
+			ORDER BY started_at DESC, id DESC
+			LIMIT ?
+		`, characterID, beforeTime.UTC(), limit)
+	} else {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, character_id, adventure_type, started_at, available_at, experience_reward,
+				outcome, winner_id, loser_id, battle_turns, reward_experience, reward_currency,
+				reward_item_definition_id, reward_item_quantity, resolved, claimed
+			FROM adventures
+			WHERE character_id = ? AND id < ?
+			ORDER BY id DESC
+			LIMIT ?
+		`, characterID, beforeID, limit)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []adventure.Adventure
+	for rows.Next() {
+		var value adventure.Adventure
+		var outcome, winnerID, loserID, rewardItemID sql.NullString
+		var turns sql.NullInt64
+		var rewardExperience, rewardCurrency, rewardItemQuantity int
+		if err := rows.Scan(&value.ID, &value.CharacterID, &value.Type, &value.StartedAt, &value.AvailableAt,
+			&value.ExperienceReward, &outcome, &winnerID, &loserID, &turns, &rewardExperience,
+			&rewardCurrency, &rewardItemID, &rewardItemQuantity, &value.Resolved, &value.Claimed); err != nil {
+			return nil, err
+		}
+		value.StageID = value.Type
+		value.BattleResult = corebattle.Result{
+			Outcome:  corebattle.Outcome(outcome.String),
+			WinnerID: winnerID.String,
+			LoserID:  loserID.String,
+			Turns:    int(turns.Int64),
+			Reward: corebattle.Reward{
+				Experience:       rewardExperience,
+				Currency:         rewardCurrency,
+				ItemDefinitionID: rewardItemID.String,
+				ItemQuantity:     rewardItemQuantity,
+			},
+		}
+		result = append(result, value)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (r *AdventureRepository) GetAggregatedStats(ctx context.Context, characterID string) (adventure.AggregatedStats, error) {

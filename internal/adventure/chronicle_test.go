@@ -44,6 +44,34 @@ func (r *chronicleRepositoryStub) ListByCharacterID(_ context.Context, character
 	return matched[offset:end], total, nil
 }
 
+func (r *chronicleRepositoryStub) ListByCharacterIDByCursor(_ context.Context, characterID string, limit int, beforeTime time.Time, beforeID string) ([]Adventure, error) {
+	var matched []Adventure
+	for _, a := range r.adventures {
+		if a.CharacterID != characterID {
+			continue
+		}
+		if beforeTime.IsZero() && beforeID == "" {
+			matched = append(matched, a)
+		} else if !beforeTime.IsZero() && beforeID != "" {
+			if a.StartedAt.Before(beforeTime) || (a.StartedAt.Equal(beforeTime) && a.ID < beforeID) {
+				matched = append(matched, a)
+			}
+		} else if !beforeTime.IsZero() {
+			if a.StartedAt.Before(beforeTime) {
+				matched = append(matched, a)
+			}
+		} else {
+			if a.ID < beforeID {
+				matched = append(matched, a)
+			}
+		}
+	}
+	if len(matched) > limit {
+		matched = matched[:limit]
+	}
+	return matched, nil
+}
+
 func (r *chronicleRepositoryStub) GetAggregatedStats(_ context.Context, characterID string) (AggregatedStats, error) {
 	return r.aggregatedStats, nil
 }
@@ -276,4 +304,94 @@ func TestGetChronicle(t *testing.T) {
 			t.Fatal("expected image_setting milestone to be locked at 80 victories")
 		}
 	})
+}
+
+func TestListHistoryByCursor(t *testing.T) {
+	now := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+	adventures := []Adventure{
+		{
+			ID:          "adv-3",
+			CharacterID: "char-1",
+			Type:        "stage-02",
+			StartedAt:   now.Add(2 * time.Minute),
+			BattleResult: corebattle.Result{
+				Outcome:  corebattle.OutcomeWin,
+				WinnerID: "char-1",
+				LoserID:  "starter-opponent",
+				Turns:    3,
+				Reward:   corebattle.Reward{Experience: 25, Currency: 15},
+			},
+			Resolved: true,
+			Claimed:  true,
+		},
+		{
+			ID:          "adv-2",
+			CharacterID: "char-1",
+			Type:        "stage-01",
+			StartedAt:   now.Add(1 * time.Minute),
+			BattleResult: corebattle.Result{
+				Outcome:  corebattle.OutcomeDefeat,
+				WinnerID: "starter-opponent",
+				LoserID:  "char-1",
+				Turns:    4,
+			},
+			Resolved: true,
+			Claimed:  true,
+		},
+		{
+			ID:          "adv-1",
+			CharacterID: "char-1",
+			Type:        "stage-01",
+			StartedAt:   now,
+			BattleResult: corebattle.Result{
+				Outcome:  corebattle.OutcomeWin,
+				WinnerID: "char-1",
+				LoserID:  "starter-opponent",
+				Turns:    2,
+				Reward:   corebattle.Reward{Experience: 20, Currency: 10},
+			},
+			Resolved: true,
+			Claimed:  true,
+		},
+	}
+
+	repo := &chronicleRepositoryStub{adventures: adventures}
+	charStub := &characterRepositoryStub{value: corecharacter.Character{ID: "char-1", Name: "Hero"}}
+	stages, _ := InitialStageCatalog()
+	service, err := NewServiceWithCatalogs(repo, charStub, nil, stages, nil, battleResolverStub{}, nil, nil, &testClock{now: now})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Page 1: limit 2
+	page1, err := service.ListHistoryByCursor(ctx, "char-1", 2, "")
+	if err != nil {
+		t.Fatalf("page 1 failed: %v", err)
+	}
+	if len(page1.Items) != 2 {
+		t.Fatalf("expected 2 items in page 1, got %d", len(page1.Items))
+	}
+	if page1.Items[0].ID != "adv-3" || page1.Items[1].ID != "adv-2" {
+		t.Fatalf("unexpected items in page 1: %+v", page1.Items)
+	}
+	if !page1.HasMore || page1.NextCursor == "" {
+		t.Fatalf("expected has_more true with next_cursor, got has_more=%v cursor=%s", page1.HasMore, page1.NextCursor)
+	}
+
+	// Page 2: use next_cursor
+	page2, err := service.ListHistoryByCursor(ctx, "char-1", 2, page1.NextCursor)
+	if err != nil {
+		t.Fatalf("page 2 failed: %v", err)
+	}
+	if len(page2.Items) != 1 {
+		t.Fatalf("expected 1 item in page 2, got %d", len(page2.Items))
+	}
+	if page2.Items[0].ID != "adv-1" {
+		t.Fatalf("unexpected item in page 2: %+v", page2.Items)
+	}
+	if page2.HasMore {
+		t.Fatal("expected has_more false on last page")
+	}
 }

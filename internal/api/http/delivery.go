@@ -10,6 +10,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/delivery"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 // DeliveryService defines the town delivery and parcel courier operations exposed over HTTP.
@@ -22,6 +23,7 @@ type DeliveryService interface {
 	CancelDelivery(ctx context.Context, characterID string, deliveryID string) error
 	SendParcel(ctx context.Context, senderID string, req delivery.SendParcelRequest, now time.Time) (*delivery.Parcel, error)
 	GetIncomingParcels(ctx context.Context, recipientID string) ([]delivery.Parcel, error)
+	GetIncomingParcelsByCursor(ctx context.Context, recipientID string, limit int, cursor string) (pagination.CursorPage[delivery.Parcel], error)
 	ClaimParcel(ctx context.Context, recipientID string, parcelID string, now time.Time) (*delivery.ParcelClaimResult, error)
 	CancelParcel(ctx context.Context, senderID string, parcelID string) error
 }
@@ -192,6 +194,17 @@ func (h *Handler) handleGetIncomingParcels(w http.ResponseWriter, r *http.Reques
 
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+		if r.URL != nil && r.URL.Query().Has("cursor") {
+			cursorParams := pagination.ParseCursorRequest(r)
+			res, err := h.delivery.GetIncomingParcelsByCursor(r.Context(), char.ID, cursorParams.Limit, cursorParams.Cursor)
+			if err != nil {
+				h.writeDeliveryError(w, err)
+				return
+			}
+			writeJSON(w, http.StatusOK, res)
+			return
+		}
+
 		parcels, err := h.delivery.GetIncomingParcels(r.Context(), char.ID)
 		if err != nil {
 			h.writeDeliveryError(w, err)

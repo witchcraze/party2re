@@ -23,7 +23,9 @@ type mockHomeService struct {
 	sendLetterFn            func(ctx context.Context, senderID, recipientID, content, color string) (home.Letter, error)
 	readLetterFn            func(ctx context.Context, letterID, recipientID string) error
 	listInboxFn             func(ctx context.Context, recipientID string, limit, offset int) (home.LetterListResult, error)
+	listInboxByCursorFn     func(ctx context.Context, recipientID string, limit int, cursor string) (pagination.CursorPage[home.Letter], error)
 	listOutboxFn            func(ctx context.Context, senderID string, limit, offset int) (home.LetterListResult, error)
+	listOutboxByCursorFn    func(ctx context.Context, senderID string, limit int, cursor string) (pagination.CursorPage[home.Letter], error)
 	getUnreadLetterCountFn  func(ctx context.Context, recipientID string) (int, error)
 	deleteLetterFn          func(ctx context.Context, letterID, characterID string) error
 	teachCompanionPhraseFn  func(ctx context.Context, characterID, phrase string) (home.CompanionPhrase, error)
@@ -96,11 +98,25 @@ func (m *mockHomeService) ListInbox(ctx context.Context, recipientID string, lim
 	return pagination.NewPage([]home.Letter{{ID: "letter-1", RecipientCharacterID: recipientID}}, 1, limit, offset), nil
 }
 
+func (m *mockHomeService) ListInboxByCursor(ctx context.Context, recipientID string, limit int, cursor string) (pagination.CursorPage[home.Letter], error) {
+	if m.listInboxByCursorFn != nil {
+		return m.listInboxByCursorFn(ctx, recipientID, limit, cursor)
+	}
+	return pagination.NewCursorPage([]home.Letter{{ID: "letter-1", RecipientCharacterID: recipientID}}, "", "", limit, false), nil
+}
+
 func (m *mockHomeService) ListOutbox(ctx context.Context, senderID string, limit, offset int) (home.LetterListResult, error) {
 	if m.listOutboxFn != nil {
 		return m.listOutboxFn(ctx, senderID, limit, offset)
 	}
 	return pagination.NewPage([]home.Letter{{ID: "letter-1", SenderCharacterID: senderID}}, 1, limit, offset), nil
+}
+
+func (m *mockHomeService) ListOutboxByCursor(ctx context.Context, senderID string, limit int, cursor string) (pagination.CursorPage[home.Letter], error) {
+	if m.listOutboxByCursorFn != nil {
+		return m.listOutboxByCursorFn(ctx, senderID, limit, cursor)
+	}
+	return pagination.NewCursorPage([]home.Letter{{ID: "letter-1", SenderCharacterID: senderID}}, "", "", limit, false), nil
 }
 
 func (m *mockHomeService) GetUnreadLetterCount(ctx context.Context, recipientID string) (int, error) {
@@ -273,6 +289,28 @@ func TestHomeEndpoints(t *testing.T) {
 
 	t.Run("GET /letters/inbox - success", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/letters/inbox?character_id=char-1", nil)
+		req.Header.Set("Authorization", "Bearer valid-session")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("GET /letters/inbox - cursor success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/letters/inbox?character_id=char-1&cursor=cur-1&limit=10", nil)
+		req.Header.Set("Authorization", "Bearer valid-session")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("GET /letters/outbox - cursor success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/letters/outbox?character_id=char-1&cursor=cur-1&limit=10", nil)
 		req.Header.Set("Authorization", "Bearer valid-session")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)

@@ -12,6 +12,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/delivery"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 type stubDeliveryService struct {
@@ -23,6 +24,7 @@ type stubDeliveryService struct {
 	cancelDeliveryFn               func(ctx context.Context, characterID string, deliveryID string) error
 	sendParcelFn                   func(ctx context.Context, senderID string, req delivery.SendParcelRequest, now time.Time) (*delivery.Parcel, error)
 	getIncomingParcelsFn           func(ctx context.Context, recipientID string) ([]delivery.Parcel, error)
+	getIncomingParcelsByCursorFn   func(ctx context.Context, recipientID string, limit int, cursor string) (pagination.CursorPage[delivery.Parcel], error)
 	claimParcelFn                  func(ctx context.Context, recipientID string, parcelID string, now time.Time) (*delivery.ParcelClaimResult, error)
 	cancelParcelFn                 func(ctx context.Context, senderID string, parcelID string) error
 }
@@ -141,6 +143,22 @@ func (s *stubDeliveryService) GetIncomingParcels(ctx context.Context, recipientI
 	}, nil
 }
 
+func (s *stubDeliveryService) GetIncomingParcelsByCursor(ctx context.Context, recipientID string, limit int, cursor string) (pagination.CursorPage[delivery.Parcel], error) {
+	if s.getIncomingParcelsByCursorFn != nil {
+		return s.getIncomingParcelsByCursorFn(ctx, recipientID, limit, cursor)
+	}
+	return pagination.NewCursorPage([]delivery.Parcel{
+		{
+			ID:                   "parcel-1",
+			SenderCharacterID:    "c2",
+			SenderCharacterName:  "SenderFriend",
+			RecipientCharacterID: recipientID,
+			GoldAmount:           500,
+			Status:               delivery.ParcelStatusPending,
+		},
+	}, "", "", limit, false), nil
+}
+
 func (s *stubDeliveryService) ClaimParcel(ctx context.Context, recipientID string, parcelID string, now time.Time) (*delivery.ParcelClaimResult, error) {
 	if s.claimParcelFn != nil {
 		return s.claimParcelFn(ctx, recipientID, parcelID, now)
@@ -257,6 +275,15 @@ func TestDeliveryEndpoints(t *testing.T) {
 	router.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 for incoming parcels, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	// 7b. GET /characters/c1/delivery/parcels/incoming with cursor
+	req = httptest.NewRequest(http.MethodGet, "/characters/c1/delivery/parcels/incoming?cursor=cur-1&limit=10", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for incoming parcels with cursor, got %d: %s", rr.Code, rr.Body.String())
 	}
 
 	// 8. POST /characters/c1/delivery/parcels/claim
