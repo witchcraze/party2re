@@ -87,3 +87,17 @@ func (i *Inventory) Consume(instanceID string, quantity int) error {
 	}
 	return ErrItemNotFound
 }
+
+// Update replaces an existing item instance in the inventory matching by ID.
+func (i *Inventory) Update(value item.Instance) error {
+	if i == nil || strings.TrimSpace(i.CharacterID) == "" || value.ID == "" {
+		return ErrInvalidInventory
+	}
+	for index, existing := range i.Items {
+		if existing.ID == value.ID {
+			i.Items[index] = value
+			return nil
+		}
+	}
+	return ErrItemNotFound
+}

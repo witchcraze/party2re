@@ -547,7 +547,7 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			gainedEXP := battleRes.TotalReward.Experience
 			gainedGold := battleRes.TotalReward.Currency
 
-			c.Money += gainedGold
+			_ = c.AddMoney(gainedGold)
 			if gainedEXP > 0 {
 				if _, err := progression.ApplyExperience(&c, gainedEXP); err != nil {
 					return err

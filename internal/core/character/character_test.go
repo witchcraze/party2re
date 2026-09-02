@@ -70,3 +70,71 @@ func TestNewRejectsInvalidNames(t *testing.T) {
 		})
 	}
 }
+
+func TestCharacterMoneyEncapsulation(t *testing.T) {
+	c := Character{Money: 100}
+
+	// HasMoney
+	if !c.HasMoney(50) || !c.HasMoney(100) || c.HasMoney(101) || c.HasMoney(-1) {
+		t.Errorf("unexpected HasMoney results")
+	}
+
+	// AddMoney
+	if err := c.AddMoney(50); err != nil || c.Money != 150 {
+		t.Errorf("AddMoney(50) failed: money=%d, err=%v", c.Money, err)
+	}
+	if err := c.AddMoney(-10); !errors.Is(err, ErrInvalidAmount) {
+		t.Errorf("AddMoney(-10) expected ErrInvalidAmount, got %v", err)
+	}
+	// Max cap
+	c.Money = MaxMoney - 50
+	if err := c.AddMoney(100); err != nil || c.Money != MaxMoney {
+		t.Errorf("AddMoney overflow cap failed: money=%d, err=%v", c.Money, err)
+	}
+
+	// DeductMoney
+	c.Money = 100
+	if err := c.DeductMoney(40); err != nil || c.Money != 60 {
+		t.Errorf("DeductMoney(40) failed: money=%d, err=%v", c.Money, err)
+	}
+	if err := c.DeductMoney(100); !errors.Is(err, ErrInsufficientFunds) || c.Money != 60 {
+		t.Errorf("DeductMoney(100) expected ErrInsufficientFunds, got %v", err)
+	}
+	if err := c.DeductMoney(-5); !errors.Is(err, ErrInvalidAmount) {
+		t.Errorf("DeductMoney(-5) expected ErrInvalidAmount, got %v", err)
+	}
+}
+
+func TestCharacterSmallMedalsEncapsulation(t *testing.T) {
+	c := Character{SmallMedals: 10}
+
+	// HasSmallMedals
+	if !c.HasSmallMedals(5) || !c.HasSmallMedals(10) || c.HasSmallMedals(11) || c.HasSmallMedals(-1) {
+		t.Errorf("unexpected HasSmallMedals results")
+	}
+
+	// AddSmallMedals
+	if err := c.AddSmallMedals(5); err != nil || c.SmallMedals != 15 {
+		t.Errorf("AddSmallMedals(5) failed: medals=%d, err=%v", c.SmallMedals, err)
+	}
+	if err := c.AddSmallMedals(-1); !errors.Is(err, ErrInvalidAmount) {
+		t.Errorf("AddSmallMedals(-1) expected ErrInvalidAmount, got %v", err)
+	}
+	// Max cap
+	c.SmallMedals = MaxSmallMedals - 5
+	if err := c.AddSmallMedals(10); err != nil || c.SmallMedals != MaxSmallMedals {
+		t.Errorf("AddSmallMedals overflow cap failed: medals=%d, err=%v", c.SmallMedals, err)
+	}
+
+	// DeductSmallMedals
+	c.SmallMedals = 10
+	if err := c.DeductSmallMedals(4); err != nil || c.SmallMedals != 6 {
+		t.Errorf("DeductSmallMedals(4) failed: medals=%d, err=%v", c.SmallMedals, err)
+	}
+	if err := c.DeductSmallMedals(20); !errors.Is(err, ErrInsufficientMedals) || c.SmallMedals != 6 {
+		t.Errorf("DeductSmallMedals(20) expected ErrInsufficientMedals, got %v", err)
+	}
+	if err := c.DeductSmallMedals(-1); !errors.Is(err, ErrInvalidAmount) {
+		t.Errorf("DeductSmallMedals(-1) expected ErrInvalidAmount, got %v", err)
+	}
+}

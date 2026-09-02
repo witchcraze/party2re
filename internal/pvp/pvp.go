@@ -270,7 +270,7 @@ func (s *Service) Challenge(ctx context.Context, attackerID, defenderID string) 
 		}
 		attackerLeveledUp = levelsGained > 0
 	}
-	attacker.Money += rewardGold
+	_ = attacker.AddMoney(rewardGold)
 
 	// 6. Update rating objects
 	now := time.Now().UTC()

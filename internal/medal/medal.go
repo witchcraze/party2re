@@ -195,7 +195,9 @@ func (s *Service) Claim(ctx context.Context, characterID string, itemID string) 
 			return err
 		}
 
-		char.SmallMedals -= targetReward.Cost
+		if err := char.DeductSmallMedals(targetReward.Cost); err != nil {
+			return ErrInsufficientMedals
+		}
 
 		if err := s.commit(txCtx, char, inv); err != nil {
 			return err

@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #327 — Design and introduce keyset / cursor-based pagination for high-volume endpoints
+Last updated: Issue #337 — Expand Go AST static analysis linter to enforce encapsulation across all Core domain invariants
 
 ## Current phase
 
@@ -19,15 +19,14 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Guidance Layer (.arch/)**: シンボルアンカー（`path#Symbol`）ベースのモジュール詳細定義（`.arch/modules/*.json`）および高 Fan-in 共有テーブルの逆引きインデックス（`.arch/shared_tables/*.json`、`characters`, `inventory_items`, `bank_accounts`, `guilds`）、GitHub ネイティブな Mermaid 全体トポロジー図（`docs/architecture/guidance-layer.md`）。外部 Node.js 依存や HTML 成果物を全廃し、純粋な Go + JSON + Markdown で完結。影響範囲・ロック順序をゼロトークンで特定しコンテキストトークン消費を 90% 削減。
 - **Module Selection Criteria & Target Tiers**: 4つの選定基準（C1: トランザクション深度, C2: 行ロック階層, C3: エスクロー/共有状態, C4: 非同期Worker）に基づくトリアージを実施（`docs/architecture/guidance-layer.md`）。Tier 1（高リスク8機能: `tavern`, `delivery`, `bank`, `auction`, `guild`, `shop`, `blacksmith`, `adventure`）、Tier 2（オンデマンド）、Tier 3（除外）の運用スコープを確立。
 - **Automated Mechanical Verification**: Go AST シンボルリント（`internal/architecture/arch_test.go`）による 0.05 秒の静的シンボル実在性チェック（モジュール定義および共有テーブル逆引き定義）およびトランザクション境界シンボルにおける `RunInTx` 呼び出しの実在検証（`go test ./...` および `scripts/verify.sh` step `[4/7]` 統合）。外部ランタイム不要の純粋な Go 標準構文解析器による機械的テスト。
-
-
+- **Core Domain Invariant Static Analysis Linter Suite**: Go AST 静的構文解析リンター（`internal/core/core_lint_test.go`, `internal/core/progression/progression_lint_test.go`）による 185 生産コードファイルの網羅的検査（所要時間 0.1 秒）。Progression（`Experience`, `Level`）、Currency & Economy（`Money`, `SmallMedals`）、Job State（`CurrentJobID`, `MasteredJobs`）、Inventory（`Inventory.Items`）、Equipment（`Equipment.Slots`）の全5重要ドメイン不変条件に対する直接構造体フィールド操作を機械的に禁止し、Core標準カプセル化ヘルパー経由の操作（`progression.ApplyExperience`, `c.AddMoney`, `c.DeductMoney`, `c.AddSmallMedals`, `c.DeductSmallMedals`, `inv.Add`, `inv.Consume`, `inv.Update`, `equip.Equip`, `equip.Unequip`）を100%強制。
 
 ### Core & Shared Components
 - **Player** (`internal/core/player`, `internal/player`): アカウント登録・パスワードハッシュ・セッション管理・アカウント完全削除（`DELETE /players/me`, `DELETE /players/{id}`、パスワード再認証、所有キャラクター全件のクリーンアップフック実行および35+テーブル連鎖削除、MariaDBトランザクション整合性）。
-- **Character** (`internal/core/character`, `internal/character`): `player_id` 外部キーによるアカウント紐付け、初期ステータス、能力値計算、転生（Rebirth +5永続ボーナス）、プレイヤー別キャラクター一覧取得、キャラクター個別削除（`DELETE /characters/{id}`、所有権認可チェック、外部ドメイン `CleanupHook` 実行、MariaDB 35+サブリソーステーブルの完全カスケード削除）、命名の館（NPC `@マリナン`、名前変更 500,000 G・ギルド/フリマ制約・重複防止・ニュース配信、性別/外観変更 10,000 G）、プロフィール自己紹介コメント（最大160文字）・アバター画像アップロード/設定（最大2 MB）・カスタムメタデータ管理（`character_profiles`）。
-- **Progression** (`internal/core/progression`): レベルアップ（累積経験値テーブル `level * level * 10`）、OverLevel限界突破（Lv150）対応、成長率適用、Go AST 静的解析リンター（`internal/core/progression/progression_lint_test.go`）による全機能モジュールでの直接フィールド操作禁止・Core標準ヘルパー（`progression.ApplyExperience`）強制。
+- **Character** (`internal/core/character`, `internal/character`): `player_id` 外部キーによるアカウント紐付け、初期ステータス、能力値計算、転生（Rebirth +5永続ボーナス）、プレイヤー別キャラクター一覧取得、キャラクター個別削除（`DELETE /characters/{id}`、所有権認可チェック、外部ドメイン `CleanupHook` 実行、MariaDB 35+サブリソーステーブルの完全カスケード削除）、命名の館（NPC `@マリナン`、名前変更 500,000 G・ギルド/フリマ制約・重複防止・ニュース配信、性別/外観変更 10,000 G）、プロフィール自己紹介コメント（最大160文字）・アバター画像アップロード/設定（最大2 MB）・カスタムメタデータ管理（`character_profiles`）。通貨・メダルの安全なカプセル化（`AddMoney`, `DeductMoney`, `HasMoney`, `AddSmallMedals`, `DeductSmallMedals`, `HasSmallMedals`、上限キャップ・負数ガード・残高オーバードラフト防止）。
+- **Progression** (`internal/core/progression`): レベルアップ（累積経験値テーブル `level * level * 10`）、OverLevel限界突破（Lv150）対応、成長率適用、Go AST 静的解析リンター（`internal/core/core_lint_test.go`）による全機能モジュールでの直接フィールド操作禁止・Core標準ヘルパー（`progression.ApplyExperience`）強制。
 - **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): クリーンルーム規約に完全準拠したJSONカタログ（`jobs.json`、特定フランチャイズ固有語を排除し汎用ファンタジー名へ標準化）、転職、Lv99マスタリー、スキル発動・コスト計算。
-- **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理、統一アイテム定義プロバイダーインターフェース（`coreitem.DefinitionProvider` / `coreitem.ItemDefinitionProvider`）の一元化。
+- **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理、統一アイテム定義プロバイダーインターフェース（`coreitem.DefinitionProvider` / `coreitem.ItemDefinitionProvider`）の一元化、インベントリアイテム更新（`inv.Update`）、装備スロットカプセル化（`equip.Equip`, `equip.Unequip`）。
 - **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定（経験値・ゴールド・アイテム・ちいさなメダル）、構造化ターンログ出力、戦闘参加者（Participant）標準アダプタ/ビルダー（`NewParticipantFromCharacter`, `NewParticipantFromCharacterWithHP`, `ParticipantBuilder`）。
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): Valkeyバックエンドの遅延アクションキュー＆分散排他ロックWorker。
 - **Database & Transaction Orchestration** (`internal/database`): 全32リポジトリのトランザクション伝播モデル（`RunInTx` と `ExecutorFromContext`）への完全統一、トランザクション境界外からの直接 `r.db.BeginTx` 呼び出しの完全排除、コンテキスト内トランザクション再利用、マルチモジュール統合テスト（コミット原子性・ロールバック整合性・ネストトランザクション伝播検証）、決定論的行ロック獲得順序（`players` -> `characters` (昇順) -> `inventory_items` -> `character_jobs` -> `character_depots` -> `bank_accounts` -> `guilds` (昇順) -> 各種機能テーブル）によるデッドロック防止の標準化、および高並行性ストレステスト・デッドロック検出ベンチマークスイート（`internal/database/concurrency_stress_test.go`、`make test-stress`）による50並行ワーカー・1,000複合トランザクション負荷下での0デッドロック・データ保存不変条件の自動検証。さらに、全サブリソースリポジトリ（連戦セッション・宝くじ・オークション出品・ダンジョン探索・私有地手紙/挨拶台帳・祝勝祝宴乾杯台帳等）における所有権スコープ付きSQL（`WHERE id = ? AND character_id = ?`）の厳格適用によるIDOR完全防止。

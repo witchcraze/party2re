@@ -306,12 +306,10 @@ func (s *Service) PurchaseListing(
 		}
 
 		// 5. Transfer Gold
-		buyerChar.Money -= listing.Price
-		if sellerChar.Money > MaxGoldCap-listing.Price {
-			sellerChar.Money = MaxGoldCap
-		} else {
-			sellerChar.Money += listing.Price
+		if err := buyerChar.DeductMoney(listing.Price); err != nil {
+			return ErrInsufficientGold
 		}
+		_ = sellerChar.AddMoney(listing.Price)
 
 		// 6. Deliver Item to Buyer
 		itemInst, err := coreitem.NewInstance(listing.ItemID, 1)

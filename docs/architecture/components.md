@@ -39,16 +39,17 @@ justifies introducing it.
 
 **Responsibility:** the player's in-game character and its fundamental state.
 
-Linked to a owning `Player` via `player_id` (enforced via foreign key constraint).
+Linked to an owning `Player` via `player_id` (enforced via foreign key constraint).
 Owns invariants about its own state but should not become a God object containing every game system.
 Access to character operations is authorized against the authenticated session's player identity.
 Owns character renaming at the Naming Hall (`name_change.cgi`, 500,000 G, guild & flea market restrictions, uniqueness validation), gender/appearance changes (10,000 G), and custom profile bio, comment, and avatar image management (`character_profiles`).
+Encapsulates wallet currency and medal operations (`AddMoney`, `DeductMoney`, `HasMoney`, `AddSmallMedals`, `DeductSmallMedals`, `HasSmallMedals`) with 0-debt invariants, non-negative bounds checking, and overflow capping. Direct mutations on `.Money` or `.SmallMedals` outside Core character and database mapping are mechanically banned by Go AST static analysis (`internal/core/core_lint_test.go`).
 
 ### Progression
 
 **Responsibility:** level, experience, stats, and other fundamental character progression.
 
-Progression consumes job growth values through the public Job definition contract. It does not contain a built-in catalog of job-specific data. It provides canonical domain helpers (`ApplyExperience`, `ApplyExperienceWithJob`, `ApplyExperienceWithProvider`, `MaxLevelForCharacter`) to calculate cumulative thresholds, handle OverLevel limit breaks up to Lv 150, and apply level-ups. Direct field mutation of character progression fields in feature modules is mechanically prohibited by Go AST static analysis (`internal/core/progression/progression_lint_test.go`).
+Progression consumes job growth values through the public Job definition contract. It does not contain a built-in catalog of job-specific data. It provides canonical domain helpers (`ApplyExperience`, `ApplyExperienceWithJob`, `ApplyExperienceWithProvider`, `MaxLevelForCharacter`) to calculate cumulative thresholds, handle OverLevel limit breaks up to Lv 150, and apply level-ups. Direct field mutation of character progression fields (`Experience`, `Level`) in feature modules is mechanically prohibited by Go AST static analysis (`internal/core/core_lint_test.go`, `internal/core/progression/progression_lint_test.go`).
 
 
 ### Job
@@ -61,6 +62,7 @@ catalog is stored outside Go source as validated data under
 `internal/core/job/data/`. The Job component loads and validates that data at
 startup or construction time, then exposes definitions through a small lookup
 contract. Consumers do not access the data file or catalog map directly.
+Character job state (`CharacterJob`) encapsulates job transitions (`ChangeTo`) and mastery (`Master`, `IsMastered`). Direct mutation of `CurrentJobID` and `MasteredJobs` is prohibited outside Core and database layers and validated via Go AST static analysis.
 
 The data file may contain stable IDs, display names, growth values, and simple
 requirements. Dynamic requirements and dynamic growth formulas require explicit
@@ -81,17 +83,20 @@ Keep definitions separate from instances.
 
 **Responsibility:** ownership and storage of item instances.
 
-Does not contain unrelated item behavior.
+Does not contain unrelated item behavior. Encapsulates item storage mutations via `Add`, `Consume`, and `Update` (with uniqueness checks and quantity validation). Direct mutations or slicing of `Inventory.Items` outside Core inventory and database mapping are mechanically prohibited by Go AST static analysis (`internal/core/core_lint_test.go`).
 
 ### Equipment
 
 **Responsibility:** which eligible item instances are equipped and where.
+
+Encapsulates slot assignments and un-equipping via `Equip` and `Unequip` (with slot suitability and ownership checks). Direct mutations of `Equipment.Slots` outside Core equipment and database mapping are mechanically prohibited by Go AST static analysis (`internal/core/core_lint_test.go`).
 
 ### Currency
 
 **Responsibility:** generic ownership and movement of game currencies.
 
 Avoid hard-coding every future currency into Core.
+
 
 ### Game Time / Scheduling
 

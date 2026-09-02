@@ -21,9 +21,17 @@ const (
 	InitialLevel  = 1
 )
 
+const (
+	MaxMoney       = 2_000_000_000
+	MaxSmallMedals = 999_999_999
+)
+
 var (
-	ErrInvalidName = errors.New("character name must be between 1 and 32 characters")
-	ErrNotFound    = errors.New("character not found")
+	ErrInvalidName        = errors.New("character name must be between 1 and 32 characters")
+	ErrNotFound           = errors.New("character not found")
+	ErrInvalidAmount      = errors.New("amount must be non-negative")
+	ErrInsufficientFunds  = errors.New("insufficient money")
+	ErrInsufficientMedals = errors.New("insufficient small medals")
 )
 
 type Character struct {
@@ -165,4 +173,64 @@ func validName(name string) bool {
 		return false
 	}
 	return !containsControl(name)
+}
+
+// AddMoney safely credits currency to the character, capping at MaxMoney and guarding against negative amounts.
+func (c *Character) AddMoney(amount int) error {
+	if amount < 0 {
+		return ErrInvalidAmount
+	}
+	if c.Money > MaxMoney-amount {
+		c.Money = MaxMoney
+		return nil
+	}
+	c.Money += amount
+	return nil
+}
+
+// DeductMoney safely subtracts currency from the character, ensuring non-negative balance.
+func (c *Character) DeductMoney(amount int) error {
+	if amount < 0 {
+		return ErrInvalidAmount
+	}
+	if c.Money < amount {
+		return ErrInsufficientFunds
+	}
+	c.Money -= amount
+	return nil
+}
+
+// HasMoney returns true if the character has at least the specified amount of money.
+func (c *Character) HasMoney(amount int) bool {
+	return amount >= 0 && c.Money >= amount
+}
+
+// AddSmallMedals safely credits small medals to the character, capping at MaxSmallMedals and guarding against negative amounts.
+func (c *Character) AddSmallMedals(amount int) error {
+	if amount < 0 {
+		return ErrInvalidAmount
+	}
+	if c.SmallMedals > MaxSmallMedals-amount {
+		c.SmallMedals = MaxSmallMedals
+		return nil
+	}
+	c.SmallMedals += amount
+	return nil
+}
+
+// DeductSmallMedals safely subtracts small medals from the character, ensuring non-negative balance.
+func (c *Character) DeductSmallMedals(amount int) error {
+	if amount < 0 {
+		return ErrInvalidAmount
+	}
+	if c.SmallMedals < amount {
+		return ErrInsufficientMedals
+	}
+	c.SmallMedals -= amount
+	return nil
+}
+
+// HasSmallMedals returns true if the character has at least the specified amount of small medals.
+func (c *Character) HasSmallMedals(amount int) bool {
+	return amount >= 0 && c.SmallMedals >= amount
 }

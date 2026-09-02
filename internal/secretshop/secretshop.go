@@ -349,7 +349,9 @@ func (s *Service) PurchaseItem(
 			return fmt.Errorf("failed to add item to inventory: %w", err)
 		}
 
-		char.Money -= totalPrice
+		if err := char.DeductMoney(totalPrice); err != nil {
+			return ErrInsufficientFunds
+		}
 
 		if err := s.characterRepo.Update(txCtx, char); err != nil {
 			return err

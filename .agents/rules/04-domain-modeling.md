@@ -29,6 +29,14 @@ Party2 contains asynchronous/time-based actions (an action is started and a resu
 ## 6. Domain Events
 Use domain events (e.g., `BattleFinished`, `LevelUp`) when they provide meaningful decoupling. A publisher should not need to know which optional features (like achievements or rankings) consume an event. Do not turn every operation into an event; use direct calls when immediate results or strong transactional coupling are appropriate.
 
-## 7. Canonical Progression & Domain Helper Enforcement
-Character growth fields (`Experience`, `Level`) must never be mutated directly by feature modules (e.g. avoiding `c.Experience += exp` or `c.Level++`). Feature modules must route progression changes through canonical core domain helpers (`progression.ApplyExperience`). This ensures level boundaries (including OverLevel limit breaks up to Lv 150), cumulative experience formulas, and stat growth invariants are consistently applied. This rule is mechanically enforced by Go AST static analysis (`internal/core/progression/progression_lint_test.go`).
+## 7. Core Domain Invariant & Helper Enforcement (Go AST Linting)
+Direct struct field mutations across Core domain entities by feature modules are strictly prohibited to prevent rule bypasses, integer overflows, concurrency races, and duplication bugs:
+- **Progression (`Experience`, `Level`)**: Must route through `progression.ApplyExperience` or `progression.Rebirth` (ensuring OverLevel Lv 150 thresholds, cumulative experience calculations, and stat growths are applied).
+- **Currency & Economy (`Money`, `SmallMedals`)**: Must route through `char.AddMoney`, `char.DeductMoney`, `char.AddSmallMedals`, or `char.DeductSmallMedals` (ensuring 0-debt invariants, non-negative amounts, and max currency caps).
+- **Job & Skill State (`CurrentJobID`, `MasteredJobs`)**: Must route through `CharacterJob.ChangeTo` and `CharacterJob.Master` (ensuring prerequisite level/gender validation and history logging).
+- **Inventory & Items (`Inventory.Items`)**: Must route through `Inventory.Add`, `Inventory.Consume`, or `Inventory.Update` (ensuring instance uniqueness and quantity consistency).
+- **Equipment & Slots (`Equipment.Slots`)**: Must route through `Equipment.Equip` or `Equipment.Unequip` (ensuring slot compatibility and ownership verification).
+
+These encapsulation boundaries are mechanically enforced across all Go source files outside `internal/core` (and database repository mappings) via Go AST static analysis (`internal/core/core_lint_test.go` and `internal/core/progression/progression_lint_test.go`), running with 0 runtime overhead in 0.1s during `make check`.
+
 

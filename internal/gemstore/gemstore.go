@@ -227,7 +227,9 @@ func (s *Service) BuyGem(ctx context.Context, characterID, gemID string) (BuyRes
 			return err
 		}
 
-		char.Money -= price
+		if err := char.DeductMoney(price); err != nil {
+			return ErrInsufficientFunds
+		}
 
 		if err := s.characters.Update(txCtx, char); err != nil {
 			return err
@@ -306,7 +308,7 @@ func (s *Service) SellGem(ctx context.Context, characterID, itemInstanceOrDefID 
 			return err
 		}
 
-		char.Money += sellPrice
+		_ = char.AddMoney(sellPrice)
 
 		if err := s.characters.Update(txCtx, char); err != nil {
 			return err
