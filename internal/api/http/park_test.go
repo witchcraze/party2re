@@ -13,15 +13,17 @@ import (
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/park"
 )
 
 type mockParkService struct {
-	postFn        func(ctx context.Context, charID, content, color, recipient string) (park.Post, error)
-	getPostsFn    func(ctx context.Context, limit, offset int) ([]park.Post, int, error)
-	talkFn        func(ctx context.Context, charID string) (string, error)
-	divinateFn    func(ctx context.Context, charID string) (park.DivinationResult, error)
-	inspectLineFn func() string
+	postFn             func(ctx context.Context, charID, content, color, recipient string) (park.Post, error)
+	getPostsFn         func(ctx context.Context, limit, offset int) ([]park.Post, int, error)
+	getPostsByCursorFn func(ctx context.Context, limit int, cursor string) (pagination.CursorPage[park.Post], error)
+	talkFn             func(ctx context.Context, charID string) (string, error)
+	divinateFn         func(ctx context.Context, charID string) (park.DivinationResult, error)
+	inspectLineFn      func() string
 }
 
 func (m *mockParkService) PostMessage(ctx context.Context, charID, content, color, recipient string) (park.Post, error) {
@@ -52,6 +54,22 @@ func (m *mockParkService) GetRecentPosts(ctx context.Context, limit, offset int)
 			CreatedAt:     time.Now().UTC(),
 		},
 	}, 1, nil
+}
+
+func (m *mockParkService) GetRecentPostsByCursor(ctx context.Context, limit int, cursor string) (pagination.CursorPage[park.Post], error) {
+	if m.getPostsByCursorFn != nil {
+		return m.getPostsByCursorFn(ctx, limit, cursor)
+	}
+	posts := []park.Post{
+		{
+			ID:            "post-1",
+			CharacterID:   "char-1",
+			CharacterName: "TestHero",
+			Content:       "Hello Cursor Park",
+			CreatedAt:     time.Now().UTC(),
+		},
+	}
+	return pagination.NewCursorPage(posts, "next-tok", cursor, limit, true), nil
 }
 
 func (m *mockParkService) TalkToNPC(ctx context.Context, charID string) (string, error) {
@@ -138,6 +156,31 @@ func TestParkEndpoints(t *testing.T) {
 		}
 		if body["offset"].(float64) != 0 {
 			t.Errorf("expected offset 0, got %v", body["offset"])
+		}
+		items, ok := body["items"].([]any)
+		if !ok || len(items) != 1 {
+			t.Errorf("expected 1 item, got %v", body["items"])
+		}
+	})
+
+	t.Run("GET /park/posts - with cursor pagination", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/park/posts?cursor=tok123&limit=5", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", rec.Code)
+		}
+		var body map[string]any
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		if body["next_cursor"] != "next-tok" {
+			t.Errorf("expected next_cursor 'next-tok', got %v", body["next_cursor"])
+		}
+		if body["has_more"] != true {
+			t.Errorf("expected has_more true, got %v", body["has_more"])
+		}
+		if body["limit"].(float64) != 5 {
+			t.Errorf("expected limit 5, got %v", body["limit"])
 		}
 		items, ok := body["items"].([]any)
 		if !ok || len(items) != 1 {

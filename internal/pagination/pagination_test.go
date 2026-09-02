@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/pagination"
 )
@@ -247,5 +248,194 @@ func TestSlicePage(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCursorEncodeDecode(t *testing.T) {
+	now := time.Date(2026, 9, 2, 20, 0, 0, 123456789, time.UTC)
+	id := "post-12345"
+
+	token := pagination.EncodeCursor(now, id)
+	if token == "" {
+		t.Fatal("expected non-empty token")
+	}
+
+	decodedTime, decodedID, err := pagination.DecodeCursor(token)
+	if err != nil {
+		t.Fatalf("DecodeCursor failed: %v", err)
+	}
+	if !decodedTime.Equal(now) {
+		t.Errorf("decoded time %v != %v", decodedTime, now)
+	}
+	if decodedID != id {
+		t.Errorf("decoded id %s != %s", decodedID, id)
+	}
+
+	// Zero time and empty id
+	emptyToken := pagination.EncodeCursor(time.Time{}, "")
+	if emptyToken != "" {
+		t.Errorf("expected empty token, got %q", emptyToken)
+	}
+
+	emptyTime, emptyID, err := pagination.DecodeCursor("")
+	if err != nil || !emptyTime.IsZero() || emptyID != "" {
+		t.Errorf("DecodeCursor(\"\") error = %v, got time %v, id %s", err, emptyTime, emptyID)
+	}
+
+	// Invalid encodings & formats
+	if _, _, err := pagination.DecodeCursor("%%%invalid-base64%%%"); err == nil {
+		t.Error("expected error for invalid base64")
+	}
+	if _, _, err := pagination.DecodeCursor("YWJj"); err == nil { // "abc" (no colon)
+		t.Error("expected error for missing delimiter")
+	}
+	if _, _, err := pagination.DecodeCursor("bm90LW51bWJlcjppZA"); err == nil { // "not-number:id"
+		t.Error("expected error for non-numeric timestamp")
+	}
+}
+
+func TestIDCursorEncodeDecode(t *testing.T) {
+	id := "item-abc-123"
+	token := pagination.EncodeIDCursor(id)
+	if token == "" {
+		t.Fatal("expected non-empty token")
+	}
+
+	decoded, err := pagination.DecodeIDCursor(token)
+	if err != nil {
+		t.Fatalf("DecodeIDCursor failed: %v", err)
+	}
+	if decoded != id {
+		t.Errorf("decoded ID %s != %s", decoded, id)
+	}
+
+	if empty := pagination.EncodeIDCursor(""); empty != "" {
+		t.Errorf("expected empty token, got %s", empty)
+	}
+	if dec, err := pagination.DecodeIDCursor(""); err != nil || dec != "" {
+		t.Errorf("DecodeIDCursor(\"\") error = %v, dec = %s", err, dec)
+	}
+	if _, err := pagination.DecodeIDCursor("%%%invalid%%%"); err == nil {
+		t.Error("expected error for invalid base64")
+	}
+}
+
+func TestParseCursor(t *testing.T) {
+	p := pagination.ParseCursor("some-cursor", "50")
+	if p.Cursor != "some-cursor" || p.Limit != 50 {
+		t.Errorf("ParseCursor() = %+v, want Cursor: 'some-cursor', Limit: 50", p)
+	}
+
+	pDefault := pagination.ParseCursor("", "")
+	if pDefault.Cursor != "" || pDefault.Limit != pagination.DefaultLimit {
+		t.Errorf("ParseCursor() = %+v, want defaults", pDefault)
+	}
+
+	pClamp := pagination.ParseCursor("c", "999")
+	if pClamp.Limit != pagination.MaxLimit {
+		t.Errorf("ParseCursor() limit = %d, want %d", pClamp.Limit, pagination.MaxLimit)
+	}
+}
+
+func TestParseCursorRequest(t *testing.T) {
+	t.Run("nil request", func(t *testing.T) {
+		p := pagination.ParseCursorRequest(nil)
+		if p.Cursor != "" || p.Limit != pagination.DefaultLimit {
+			t.Errorf("ParseCursorRequest(nil) = %+v, want defaults", p)
+		}
+	})
+
+	t.Run("valid query parameters", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/posts?cursor=tok123&limit=30", nil)
+		p := pagination.ParseCursorRequest(req)
+		if p.Cursor != "tok123" || p.Limit != 30 {
+			t.Errorf("ParseCursorRequest(req) = %+v, want Cursor: 'tok123', Limit: 30", p)
+		}
+	})
+
+	t.Run("custom bounds", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/posts?cursor=tok123&limit=150", nil)
+		p := pagination.ParseCursorRequestWithDefaults(req, 25, 200)
+		if p.Cursor != "tok123" || p.Limit != 150 {
+			t.Errorf("ParseCursorRequestWithDefaults() = %+v, want Limit: 150", p)
+		}
+	})
+}
+
+func TestNewCursorPage(t *testing.T) {
+	t.Run("normal construction", func(t *testing.T) {
+		items := []string{"p1", "p2"}
+		page := pagination.NewCursorPage(items, "next", "prev", 20, true)
+		if len(page.Items) != 2 || page.NextCursor != "next" || page.PrevCursor != "prev" || page.Limit != 20 || !page.HasMore {
+			t.Errorf("NewCursorPage() = %+v", page)
+		}
+	})
+
+	t.Run("nil items slice fallback", func(t *testing.T) {
+		var items []string
+		page := pagination.NewCursorPage(items, "", "", -5, false)
+		if page.Items == nil || len(page.Items) != 0 || page.Limit != pagination.DefaultLimit {
+			t.Errorf("NewCursorPage() with nil slice = %+v", page)
+		}
+	})
+}
+
+func TestSliceCursorPage(t *testing.T) {
+	type item struct {
+		ID   string
+		Name string
+	}
+	all := []item{
+		{"1", "One"},
+		{"2", "Two"},
+		{"3", "Three"},
+		{"4", "Four"},
+		{"5", "Five"},
+	}
+	getCursor := func(it item) string { return it.ID }
+
+	// First page (no cursor)
+	page1 := pagination.SliceCursorPage(all, 2, "", getCursor)
+	if len(page1.Items) != 2 || page1.Items[0].ID != "1" || page1.Items[1].ID != "2" {
+		t.Fatalf("page1 items mismatch: %+v", page1.Items)
+	}
+	if !page1.HasMore || page1.NextCursor != "2" || page1.PrevCursor != "" {
+		t.Errorf("page1 metadata mismatch: %+v", page1)
+	}
+
+	// Second page (cursor = "2")
+	page2 := pagination.SliceCursorPage(all, 2, "2", getCursor)
+	if len(page2.Items) != 2 || page2.Items[0].ID != "3" || page2.Items[1].ID != "4" {
+		t.Fatalf("page2 items mismatch: %+v", page2.Items)
+	}
+	if !page2.HasMore || page2.NextCursor != "4" || page2.PrevCursor != "2" {
+		t.Errorf("page2 metadata mismatch: %+v", page2)
+	}
+
+	// Third page (cursor = "4", last page)
+	page3 := pagination.SliceCursorPage(all, 2, "4", getCursor)
+	if len(page3.Items) != 1 || page3.Items[0].ID != "5" {
+		t.Fatalf("page3 items mismatch: %+v", page3.Items)
+	}
+	if page3.HasMore || page3.NextCursor != "" || page3.PrevCursor != "4" {
+		t.Errorf("page3 metadata mismatch: %+v", page3)
+	}
+
+	// Beyond last page (cursor = "5")
+	page4 := pagination.SliceCursorPage(all, 2, "5", getCursor)
+	if len(page4.Items) != 0 || page4.HasMore {
+		t.Errorf("page4 beyond end should be empty: %+v", page4)
+	}
+
+	// Non-existent cursor
+	pageBad := pagination.SliceCursorPage(all, 2, "non-existent", getCursor)
+	if len(pageBad.Items) != 0 || pageBad.HasMore {
+		t.Errorf("pageBad should be empty: %+v", pageBad)
+	}
+
+	// Empty list
+	pageEmpty := pagination.SliceCursorPage([]item{}, 2, "", getCursor)
+	if len(pageEmpty.Items) != 0 || pageEmpty.HasMore {
+		t.Errorf("pageEmpty should be empty: %+v", pageEmpty)
 	}
 }

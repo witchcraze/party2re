@@ -2,6 +2,7 @@ package park_test
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"sync"
 	"testing"
@@ -40,6 +41,31 @@ func (m *mockRepository) GetRecentPosts(ctx context.Context, limit int, offset i
 		end = total
 	}
 	return m.posts[offset:end], total, nil
+}
+
+func (m *mockRepository) GetRecentPostsByCursor(ctx context.Context, limit int, beforeTime time.Time, beforeID string) ([]park.Post, error) {
+	result := make([]park.Post, 0)
+	for _, p := range m.posts {
+		if !beforeTime.IsZero() && beforeID != "" {
+			if p.CreatedAt.Before(beforeTime) || (p.CreatedAt.Equal(beforeTime) && p.ID < beforeID) {
+				result = append(result, p)
+			}
+		} else if !beforeTime.IsZero() {
+			if p.CreatedAt.Before(beforeTime) {
+				result = append(result, p)
+			}
+		} else if beforeID != "" {
+			if p.ID < beforeID {
+				result = append(result, p)
+			}
+		} else {
+			result = append(result, p)
+		}
+		if len(result) >= limit {
+			break
+		}
+	}
+	return result, nil
 }
 
 func (m *mockRepository) GetLatestPostTimeByCharacter(ctx context.Context, characterID string) (time.Time, error) {
@@ -295,4 +321,75 @@ func TestConcurrentNPCInteractions(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+func TestService_GetRecentPostsByCursor(t *testing.T) {
+	repo := newMockRepository()
+	charReader := &mockCharacterReader{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "Alice"},
+		},
+	}
+	svc, err := park.NewService(repo, charReader)
+	if err != nil {
+		t.Fatalf("unexpected NewService error: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Create 5 posts with distinct timestamps
+	baseTime := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	for i := 1; i <= 5; i++ {
+		p := park.Post{
+			ID:            fmt.Sprintf("post-%d", i),
+			CharacterID:   "char-1",
+			CharacterName: "Alice",
+			Content:       fmt.Sprintf("Message %d", i),
+			Color:         "#000000",
+			CreatedAt:     baseTime.Add(time.Duration(i) * time.Minute),
+		}
+		_ = repo.CreatePost(ctx, p)
+	}
+
+	// First page (limit 2)
+	page1, err := svc.GetRecentPostsByCursor(ctx, 2, "")
+	if err != nil {
+		t.Fatalf("GetRecentPostsByCursor page 1 failed: %v", err)
+	}
+	if len(page1.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(page1.Items))
+	}
+	if page1.Items[0].ID != "post-5" || page1.Items[1].ID != "post-4" {
+		t.Errorf("unexpected page 1 items: %+v", page1.Items)
+	}
+	if !page1.HasMore || page1.NextCursor == "" {
+		t.Errorf("page 1 should have more items and next cursor: %+v", page1)
+	}
+
+	// Second page (using page1.NextCursor)
+	page2, err := svc.GetRecentPostsByCursor(ctx, 2, page1.NextCursor)
+	if err != nil {
+		t.Fatalf("GetRecentPostsByCursor page 2 failed: %v", err)
+	}
+	if len(page2.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(page2.Items))
+	}
+	if page2.Items[0].ID != "post-3" || page2.Items[1].ID != "post-2" {
+		t.Errorf("unexpected page 2 items: %+v", page2.Items)
+	}
+	if !page2.HasMore || page2.NextCursor == "" {
+		t.Errorf("page 2 should have more items: %+v", page2)
+	}
+
+	// Third page (last page, 1 item)
+	page3, err := svc.GetRecentPostsByCursor(ctx, 2, page2.NextCursor)
+	if err != nil {
+		t.Fatalf("GetRecentPostsByCursor page 3 failed: %v", err)
+	}
+	if len(page3.Items) != 1 || page3.Items[0].ID != "post-1" {
+		t.Fatalf("expected post-1 on last page, got %+v", page3.Items)
+	}
+	if page3.HasMore || page3.NextCursor != "" {
+		t.Errorf("page 3 should not have more items: %+v", page3)
+	}
 }

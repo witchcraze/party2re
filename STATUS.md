@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #316 — Centralize and standardize ItemDefinitionProvider interface in core/item
+Last updated: Issue #327 — Design and introduce keyset / cursor-based pagination for high-volume endpoints
 
 ## Current phase
 
@@ -31,7 +31,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定（経験値・ゴールド・アイテム・ちいさなメダル）、構造化ターンログ出力、戦闘参加者（Participant）標準アダプタ/ビルダー（`NewParticipantFromCharacter`, `NewParticipantFromCharacterWithHP`, `ParticipantBuilder`）。
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): Valkeyバックエンドの遅延アクションキュー＆分散排他ロックWorker。
 - **Database & Transaction Orchestration** (`internal/database`): 全32リポジトリのトランザクション伝播モデル（`RunInTx` と `ExecutorFromContext`）への完全統一、トランザクション境界外からの直接 `r.db.BeginTx` 呼び出しの完全排除、コンテキスト内トランザクション再利用、マルチモジュール統合テスト（コミット原子性・ロールバック整合性・ネストトランザクション伝播検証）、決定論的行ロック獲得順序（`players` -> `characters` (昇順) -> `inventory_items` -> `character_jobs` -> `character_depots` -> `bank_accounts` -> `guilds` (昇順) -> 各種機能テーブル）によるデッドロック防止の標準化、および高並行性ストレステスト・デッドロック検出ベンチマークスイート（`internal/database/concurrency_stress_test.go`、`make test-stress`）による50並行ワーカー・1,000複合トランザクション負荷下での0デッドロック・データ保存不変条件の自動検証。さらに、全サブリソースリポジトリ（連戦セッション・宝くじ・オークション出品・ダンジョン探索・私有地手紙/挨拶台帳・祝勝祝宴乾杯台帳等）における所有権スコープ付きSQL（`WHERE id = ? AND character_id = ?`）の厳格適用によるIDOR完全防止。
-- **Standardized Pagination & Common Utilities** (`internal/pagination`, `internal/id`, `internal/validation`, `internal/api/http/middleware`): 単一責務の共通パッケージ配置方針（Rule of Three、セキュリティ/認可の即時共通化指針）および暗号学的に安全なID生成ユーティリティ（`internal/id`）。汎用ジェネリックページネーションパッケージ（`internal/pagination`）によるリクエストパラメータ正規化（`Normalize`, `Parse`, `ParseRequest`）および標準レスポンスコンテナ（`Page[T]` `{items, total, limit, offset}`）、全HTTP API一覧エンドポイント（`/news`, `/notifications`, `/letters/inbox`, `/letters/outbox`, `/park/posts`, `/fleamarket/listings`, `/auctions`, `/characters/{id}/adventures`, `/contest/legends`, `/parties`）における統一エンベロープ適用および OpenAPI 3.1 仕様完全同期。
+- **Standardized Pagination & Common Utilities** (`internal/pagination`, `internal/id`, `internal/validation`, `internal/api/http/middleware`): 単一責務の共通パッケージ配置方針（Rule of Three、セキュリティ/認可の即時共通化指針）および暗号学的に安全なID生成ユーティリティ（`internal/id`）。汎用ジェネリックページネーションパッケージ（`internal/pagination`）によるリクエストパラメータ正規化（`Normalize`, `Parse`, `ParseRequest`, `ParseCursorRequest`）、標準オフセットレスポンスコンテナ（`Page[T]` `{items, total, limit, offset}`）、および高スループットストリーム向けキーセット/カーソルレスポンスコンテナ（`CursorPage[T]` `{items, next_cursor, prev_cursor, limit, has_more}`、不透明Base64カーソルトークン暗号化・復号化）、全HTTP API一覧エンドポイントにおける統一エンベロープ適用および OpenAPI 3.1 仕様完全同期。
 
 
 ### Feature Modules

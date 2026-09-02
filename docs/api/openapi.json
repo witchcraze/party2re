@@ -969,6 +969,38 @@
         ],
         "type": "object"
       },
+      "CursorPageParkPost": {
+        "properties": {
+          "has_more": {
+            "description": "Whether additional records exist beyond the current page",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ParkPost"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "next_cursor": {
+            "description": "Opaque cursor token for retrieving the next page of results",
+            "type": "string"
+          },
+          "prev_cursor": {
+            "description": "Opaque cursor token for retrieving the previous page of results",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "has_more"
+        ],
+        "type": "object"
+      },
       "DeletePlayerRequest": {
         "properties": {
           "password": {
@@ -14330,6 +14362,15 @@
               "default": 0,
               "type": "integer"
             }
+          },
+          {
+            "description": "Opaque cursor for keyset pagination (e.g. returned in next_cursor)",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -14337,7 +14378,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PageParkPost"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PageParkPost"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CursorPageParkPost"
+                    }
+                  ]
                 }
               }
             },

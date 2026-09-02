@@ -71,6 +71,71 @@ func (r *ParkRepository) GetRecentPosts(ctx context.Context, limit int, offset i
 	return posts, total, nil
 }
 
+func (r *ParkRepository) GetRecentPostsByCursor(ctx context.Context, limit int, beforeTime time.Time, beforeID string) ([]park.Post, error) {
+	executor := ExecutorFromContext(ctx, r.db)
+	var rows *sql.Rows
+	var err error
+
+	if beforeTime.IsZero() && beforeID == "" {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, character_id, character_name, content, color, recipient_name, created_at
+			FROM park_posts
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, limit)
+	} else if !beforeTime.IsZero() && beforeID != "" {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, character_id, character_name, content, color, recipient_name, created_at
+			FROM park_posts
+			WHERE created_at < ? OR (created_at = ? AND id < ?)
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, beforeTime.UTC(), beforeTime.UTC(), beforeID, limit)
+	} else if !beforeTime.IsZero() {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, character_id, character_name, content, color, recipient_name, created_at
+			FROM park_posts
+			WHERE created_at < ?
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, beforeTime.UTC(), limit)
+	} else {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, character_id, character_name, content, color, recipient_name, created_at
+			FROM park_posts
+			WHERE id < ?
+			ORDER BY id DESC
+			LIMIT ?
+		`, beforeID, limit)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	posts := make([]park.Post, 0)
+	for rows.Next() {
+		var p park.Post
+		if err := rows.Scan(
+			&p.ID,
+			&p.CharacterID,
+			&p.CharacterName,
+			&p.Content,
+			&p.Color,
+			&p.RecipientName,
+			&p.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		posts = append(posts, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return posts, nil
+}
+
 func (r *ParkRepository) GetLatestPostTimeByCharacter(ctx context.Context, characterID string) (time.Time, error) {
 	var createdAt time.Time
 	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
