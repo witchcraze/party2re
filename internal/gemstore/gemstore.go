@@ -68,9 +68,7 @@ type InventoryRepository interface {
 }
 
 // ItemDefinitionProvider resolves item definitions by ID.
-type ItemDefinitionProvider interface {
-	FindByID(id string) (coreitem.Definition, error)
-}
+type ItemDefinitionProvider = coreitem.DefinitionProvider
 
 // TransactionProvider executes work inside a transaction boundary.
 type TransactionProvider interface {

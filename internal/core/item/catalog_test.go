@@ -113,3 +113,34 @@ func TestCatalogRejectsDuplicatesInvalidDefinitionsAndUnknownIDs(t *testing.T) {
 		t.Fatalf("nilCatalog.Definitions() = %#v, want nil", defs)
 	}
 }
+
+func TestDefinitionProviderInterface(t *testing.T) {
+	valid, err := NewDefinition("herb", "Herb", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := NewCatalog([]Definition{valid})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify Catalog satisfies DefinitionProvider
+	var defProvider DefinitionProvider = catalog
+	def, err := defProvider.FindByID("herb")
+	if err != nil {
+		t.Fatalf("DefinitionProvider.FindByID failed: %v", err)
+	}
+	if def.ID != "herb" {
+		t.Errorf("expected def ID 'herb', got %s", def.ID)
+	}
+
+	// Verify Catalog satisfies ItemDefinitionProvider alias
+	var itemDefProvider ItemDefinitionProvider = catalog
+	itemDef, err := itemDefProvider.FindByID("herb")
+	if err != nil {
+		t.Fatalf("ItemDefinitionProvider.FindByID failed: %v", err)
+	}
+	if itemDef.ID != "herb" {
+		t.Errorf("expected itemDef ID 'herb', got %s", itemDef.ID)
+	}
+}
