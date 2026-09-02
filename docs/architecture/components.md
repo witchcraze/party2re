@@ -401,7 +401,6 @@ Cross-module workflows spanning multiple distinct feature and core repositories 
 ### Future Feature Modules
 
 - Web Presentation UI / Client
-- Multiplayer Co-op Party System (quest.cgi)
 
 
 

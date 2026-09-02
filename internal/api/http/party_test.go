@@ -164,6 +164,7 @@ func TestPartyHTTPHandlers(t *testing.T) {
 	})
 	req = httptest.NewRequest(http.MethodPost, "/parties", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer sess-1")
+	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusCreated {
@@ -177,6 +178,7 @@ func TestPartyHTTPHandlers(t *testing.T) {
 	})
 	req = httptest.NewRequest(http.MethodPost, "/parties/party-1/join", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer sess-1")
+	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -190,6 +192,7 @@ func TestPartyHTTPHandlers(t *testing.T) {
 	})
 	req = httptest.NewRequest(http.MethodPost, "/parties/party-1/ready", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer sess-1")
+	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -203,6 +206,7 @@ func TestPartyHTTPHandlers(t *testing.T) {
 	})
 	req = httptest.NewRequest(http.MethodPost, "/parties/party-1/kick", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer sess-1")
+	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -215,6 +219,7 @@ func TestPartyHTTPHandlers(t *testing.T) {
 	})
 	req = httptest.NewRequest(http.MethodPost, "/parties/party-1/start", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer sess-1")
+	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -227,6 +232,7 @@ func TestPartyHTTPHandlers(t *testing.T) {
 	})
 	req = httptest.NewRequest(http.MethodPost, "/parties/party-1/leave", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer sess-1")
+	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -239,6 +245,7 @@ func TestPartyHTTPHandlers(t *testing.T) {
 	})
 	req = httptest.NewRequest(http.MethodDelete, "/parties/party-1", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer sess-1")
+	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
