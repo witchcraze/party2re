@@ -84,4 +84,27 @@ func TestParkRepository_Database(t *testing.T) {
 	if !found {
 		t.Errorf("created post not found in recent posts")
 	}
+
+	// Test GetRecentPostsByCursor
+	cursorPosts, err := repo.GetRecentPostsByCursor(ctx, 10, time.Time{}, "")
+	if err != nil {
+		t.Fatalf("GetRecentPostsByCursor failed: %v", err)
+	}
+	if len(cursorPosts) < 1 {
+		t.Fatalf("expected cursorPosts len >= 1, got %d", len(cursorPosts))
+	}
+	if cursorPosts[0].ID != post1.ID {
+		t.Errorf("expected newest post %s, got %s", post1.ID, cursorPosts[0].ID)
+	}
+
+	// Paginate after post1
+	nextCursorPosts, err := repo.GetRecentPostsByCursor(ctx, 10, post1.CreatedAt, post1.ID)
+	if err != nil {
+		t.Fatalf("GetRecentPostsByCursor with cursor failed: %v", err)
+	}
+	for _, p := range nextCursorPosts {
+		if p.ID == post1.ID {
+			t.Errorf("post1 %s should not appear in subsequent page", post1.ID)
+		}
+	}
 }

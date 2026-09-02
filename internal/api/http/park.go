@@ -15,6 +15,7 @@ import (
 type ParkService interface {
 	PostMessage(ctx context.Context, characterID, content, color, recipient string) (park.Post, error)
 	GetRecentPosts(ctx context.Context, limit, offset int) ([]park.Post, int, error)
+	GetRecentPostsByCursor(ctx context.Context, limit int, cursor string) (pagination.CursorPage[park.Post], error)
 	TalkToNPC(ctx context.Context, characterID string) (string, error)
 	Divinate(ctx context.Context, characterID string) (park.DivinationResult, error)
 	InspectNPC() string
@@ -45,6 +46,17 @@ type parkDialogueResponse struct {
 func (h *Handler) handleGetParkPosts(w http.ResponseWriter, r *http.Request) {
 	if h.park == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("park service not configured"))
+		return
+	}
+
+	if r.URL != nil && r.URL.Query().Has("cursor") {
+		cursorParams := pagination.ParseCursorRequest(r)
+		page, err := h.park.GetRecentPostsByCursor(r.Context(), cursorParams.Limit, cursorParams.Cursor)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, page)
 		return
 	}
 
