@@ -48,8 +48,8 @@ Owns character renaming at the Naming Hall (`name_change.cgi`, 500,000 G, guild 
 
 **Responsibility:** level, experience, stats, and other fundamental character progression.
 
-Progression consumes job growth values through the public Job definition
-contract. It does not contain a built-in catalog of job-specific data.
+Progression consumes job growth values through the public Job definition contract. It does not contain a built-in catalog of job-specific data. It provides canonical domain helpers (`ApplyExperience`, `ApplyExperienceWithJob`, `ApplyExperienceWithProvider`, `MaxLevelForCharacter`) to calculate cumulative thresholds, handle OverLevel limit breaks up to Lv 150, and apply level-ups. Direct field mutation of character progression fields in feature modules is mechanically prohibited by Go AST static analysis (`internal/core/progression/progression_lint_test.go`).
+
 
 ### Job
 

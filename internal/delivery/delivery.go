@@ -11,6 +11,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -572,10 +573,10 @@ func (s *Service) CompleteDelivery(
 			char.Money += quest.RewardGold
 		}
 
-		if char.Experience > 2000000000-quest.RewardExp {
-			char.Experience = 2000000000
-		} else {
-			char.Experience += quest.RewardExp
+		if quest.RewardExp > 0 {
+			if _, err := progression.ApplyExperience(&char, quest.RewardExp); err != nil {
+				return err
+			}
 		}
 
 		// 6. Optional Reward Item
