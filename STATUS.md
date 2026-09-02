@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #330 — Implement AST Linter Check to Enforce Core Progression Helper Usage
+Last updated: Issue #329 — Unify Party HTTP request handlers and cleanup components.md
 
 ## Current phase
 

@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -32,6 +31,38 @@ func WithParty(p PartyService) Option {
 	}
 }
 
+type createPartyRequest struct {
+	CharacterID string `json:"character_id"`
+	party.CreatePartyRequest
+}
+
+type joinPartyRequest struct {
+	CharacterID string `json:"character_id"`
+	Password    string `json:"password,omitempty"`
+}
+
+type leavePartyRequest struct {
+	CharacterID string `json:"character_id"`
+}
+
+type kickPartyMemberRequest struct {
+	CharacterID       string `json:"character_id"`
+	TargetCharacterID string `json:"target_character_id"`
+}
+
+type disbandPartyRequest struct {
+	CharacterID string `json:"character_id"`
+}
+
+type setPartyReadyRequest struct {
+	CharacterID string `json:"character_id"`
+	Ready       bool   `json:"ready"`
+}
+
+type startPartyAdventureRequest struct {
+	CharacterID string `json:"character_id"`
+}
+
 // handleListParties returns a list of recruiting parties.
 func (h *Handler) handleListParties(w http.ResponseWriter, r *http.Request) {
 	if h.parties == nil {
@@ -58,16 +89,9 @@ func (h *Handler) handleCreateParty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		CharacterID string `json:"character_id"`
-		party.CreatePartyRequest
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-
-	h.withAuthenticatedCharacter(w, r, req.CharacterID, func(player coreplayer.Player, char corecharacter.Character) {
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *createPartyRequest) string {
+		return req.CharacterID
+	}, func(player coreplayer.Player, char corecharacter.Character, req createPartyRequest) {
 		detail, err := h.parties.CreateParty(r.Context(), char.ID, req.CreatePartyRequest)
 		if err != nil {
 			switch {
@@ -127,16 +151,9 @@ func (h *Handler) handleJoinParty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		CharacterID string `json:"character_id"`
-		Password    string `json:"password,omitempty"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-
-	h.withAuthenticatedCharacter(w, r, req.CharacterID, func(player coreplayer.Player, char corecharacter.Character) {
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *joinPartyRequest) string {
+		return req.CharacterID
+	}, func(player coreplayer.Player, char corecharacter.Character, req joinPartyRequest) {
 		detail, err := h.parties.JoinParty(r.Context(), partyID, char.ID, req.Password)
 		if err != nil {
 			switch {
@@ -173,15 +190,9 @@ func (h *Handler) handleLeaveParty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		CharacterID string `json:"character_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-
-	h.withAuthenticatedCharacter(w, r, req.CharacterID, func(player coreplayer.Player, char corecharacter.Character) {
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *leavePartyRequest) string {
+		return req.CharacterID
+	}, func(player coreplayer.Player, char corecharacter.Character, req leavePartyRequest) {
 		if err := h.parties.LeaveParty(r.Context(), partyID, char.ID); err != nil {
 			switch {
 			case errors.Is(err, party.ErrCharacterNotInParty):
@@ -211,16 +222,9 @@ func (h *Handler) handleKickPartyMember(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var req struct {
-		CharacterID       string `json:"character_id"`
-		TargetCharacterID string `json:"target_character_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-
-	h.withAuthenticatedCharacter(w, r, req.CharacterID, func(player coreplayer.Player, char corecharacter.Character) {
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *kickPartyMemberRequest) string {
+		return req.CharacterID
+	}, func(player coreplayer.Player, char corecharacter.Character, req kickPartyMemberRequest) {
 		if err := h.parties.KickMember(r.Context(), partyID, char.ID, req.TargetCharacterID); err != nil {
 			switch {
 			case errors.Is(err, party.ErrNotPartyLeader),
@@ -252,15 +256,9 @@ func (h *Handler) handleDisbandParty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		CharacterID string `json:"character_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-
-	h.withAuthenticatedCharacter(w, r, req.CharacterID, func(player coreplayer.Player, char corecharacter.Character) {
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *disbandPartyRequest) string {
+		return req.CharacterID
+	}, func(player coreplayer.Player, char corecharacter.Character, req disbandPartyRequest) {
 		if err := h.parties.DisbandParty(r.Context(), partyID, char.ID); err != nil {
 			switch {
 			case errors.Is(err, party.ErrNotPartyLeader):
@@ -290,16 +288,9 @@ func (h *Handler) handleSetPartyReady(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		CharacterID string `json:"character_id"`
-		Ready       bool   `json:"ready"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-
-	h.withAuthenticatedCharacter(w, r, req.CharacterID, func(player coreplayer.Player, char corecharacter.Character) {
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *setPartyReadyRequest) string {
+		return req.CharacterID
+	}, func(player coreplayer.Player, char corecharacter.Character, req setPartyReadyRequest) {
 		detail, err := h.parties.SetReady(r.Context(), partyID, char.ID, req.Ready)
 		if err != nil {
 			switch {
@@ -330,15 +321,9 @@ func (h *Handler) handleStartPartyAdventure(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var req struct {
-		CharacterID string `json:"character_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-
-	h.withAuthenticatedCharacter(w, r, req.CharacterID, func(player coreplayer.Player, char corecharacter.Character) {
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *startPartyAdventureRequest) string {
+		return req.CharacterID
+	}, func(player coreplayer.Player, char corecharacter.Character, req startPartyAdventureRequest) {
 		result, err := h.parties.StartPartyAdventure(r.Context(), partyID, char.ID)
 		if err != nil {
 			switch {
