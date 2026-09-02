@@ -62,6 +62,15 @@ func (r *repositoryStub) ListByCharacterID(_ context.Context, characterID string
 	return nil, 0, nil
 }
 
+func (r *repositoryStub) ListByCharacterIDByCursor(_ context.Context, characterID string, limit int, beforeTime time.Time, beforeID string) ([]Adventure, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.value.CharacterID == characterID {
+		return []Adventure{r.value}, nil
+	}
+	return nil, nil
+}
+
 func (r *repositoryStub) GetAggregatedStats(_ context.Context, characterID string) (AggregatedStats, error) {
 	return AggregatedStats{}, nil
 }

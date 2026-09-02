@@ -181,6 +181,75 @@ func (r *HomeRepository) ListInboxLetters(ctx context.Context, recipientID strin
 	return letters, total, nil
 }
 
+// ListInboxLettersByCursor retrieves letters received by a character using keyset / cursor pagination.
+func (r *HomeRepository) ListInboxLettersByCursor(ctx context.Context, recipientID string, limit int, beforeTime time.Time, beforeID string) ([]home.Letter, error) {
+	executor := ExecutorFromContext(ctx, r.db)
+	var rows *sql.Rows
+	var err error
+
+	if beforeTime.IsZero() && beforeID == "" {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, sender_character_id, sender_name, recipient_character_id, recipient_name,
+			       content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
+			FROM character_letters
+			WHERE recipient_character_id = ? AND is_deleted_by_recipient = FALSE
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, recipientID, limit)
+	} else if !beforeTime.IsZero() && beforeID != "" {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, sender_character_id, sender_name, recipient_character_id, recipient_name,
+			       content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
+			FROM character_letters
+			WHERE recipient_character_id = ? AND is_deleted_by_recipient = FALSE AND (created_at < ? OR (created_at = ? AND id < ?))
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, recipientID, beforeTime.UTC(), beforeTime.UTC(), beforeID, limit)
+	} else if !beforeTime.IsZero() {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, sender_character_id, sender_name, recipient_character_id, recipient_name,
+			       content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
+			FROM character_letters
+			WHERE recipient_character_id = ? AND is_deleted_by_recipient = FALSE AND created_at < ?
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, recipientID, beforeTime.UTC(), limit)
+	} else {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, sender_character_id, sender_name, recipient_character_id, recipient_name,
+			       content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
+			FROM character_letters
+			WHERE recipient_character_id = ? AND is_deleted_by_recipient = FALSE AND id < ?
+			ORDER BY id DESC
+			LIMIT ?
+		`, recipientID, beforeID, limit)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var letters []home.Letter
+	for rows.Next() {
+		var l home.Letter
+		var readAt sql.NullTime
+		if err := rows.Scan(&l.ID, &l.SenderCharacterID, &l.SenderName, &l.RecipientCharacterID, &l.RecipientName,
+			&l.Content, &l.Color, &l.IsRead, &readAt, &l.IsDeletedBySender, &l.IsDeletedByRecipient, &l.CreatedAt); err != nil {
+			return nil, err
+		}
+		if readAt.Valid {
+			t := readAt.Time
+			l.ReadAt = &t
+		}
+		letters = append(letters, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return letters, nil
+}
+
 // ListOutboxLetters retrieves letters sent by a character that have not been deleted by the sender.
 func (r *HomeRepository) ListOutboxLetters(ctx context.Context, senderID string, limit, offset int) ([]home.Letter, int, error) {
 	var total int
@@ -226,6 +295,75 @@ func (r *HomeRepository) ListOutboxLetters(ctx context.Context, senderID string,
 	}
 
 	return letters, total, nil
+}
+
+// ListOutboxLettersByCursor retrieves letters sent by a character using keyset / cursor pagination.
+func (r *HomeRepository) ListOutboxLettersByCursor(ctx context.Context, senderID string, limit int, beforeTime time.Time, beforeID string) ([]home.Letter, error) {
+	executor := ExecutorFromContext(ctx, r.db)
+	var rows *sql.Rows
+	var err error
+
+	if beforeTime.IsZero() && beforeID == "" {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, sender_character_id, sender_name, recipient_character_id, recipient_name,
+			       content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
+			FROM character_letters
+			WHERE sender_character_id = ? AND is_deleted_by_sender = FALSE
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, senderID, limit)
+	} else if !beforeTime.IsZero() && beforeID != "" {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, sender_character_id, sender_name, recipient_character_id, recipient_name,
+			       content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
+			FROM character_letters
+			WHERE sender_character_id = ? AND is_deleted_by_sender = FALSE AND (created_at < ? OR (created_at = ? AND id < ?))
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, senderID, beforeTime.UTC(), beforeTime.UTC(), beforeID, limit)
+	} else if !beforeTime.IsZero() {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, sender_character_id, sender_name, recipient_character_id, recipient_name,
+			       content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
+			FROM character_letters
+			WHERE sender_character_id = ? AND is_deleted_by_sender = FALSE AND created_at < ?
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`, senderID, beforeTime.UTC(), limit)
+	} else {
+		rows, err = executor.QueryContext(ctx, `
+			SELECT id, sender_character_id, sender_name, recipient_character_id, recipient_name,
+			       content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at
+			FROM character_letters
+			WHERE sender_character_id = ? AND is_deleted_by_sender = FALSE AND id < ?
+			ORDER BY id DESC
+			LIMIT ?
+		`, senderID, beforeID, limit)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var letters []home.Letter
+	for rows.Next() {
+		var l home.Letter
+		var readAt sql.NullTime
+		if err := rows.Scan(&l.ID, &l.SenderCharacterID, &l.SenderName, &l.RecipientCharacterID, &l.RecipientName,
+			&l.Content, &l.Color, &l.IsRead, &readAt, &l.IsDeletedBySender, &l.IsDeletedByRecipient, &l.CreatedAt); err != nil {
+			return nil, err
+		}
+		if readAt.Valid {
+			t := readAt.Time
+			l.ReadAt = &t
+		}
+		letters = append(letters, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return letters, nil
 }
 
 // GetUnreadLetterCount returns count of active unread letters for a recipient.

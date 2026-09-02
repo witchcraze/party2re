@@ -19,6 +19,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/helper"
+	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/ratelimit"
 	"github.com/witchcraze/party2re/internal/rescue"
 	"github.com/witchcraze/party2re/internal/shop"
@@ -76,6 +77,7 @@ type AdventureService interface {
 	Claim(ctx context.Context, id string) (adventure.Adventure, error)
 	Get(ctx context.Context, id string) (adventure.Adventure, error)
 	ListHistory(ctx context.Context, characterID string, limit, offset int) (adventure.PaginatedAdventures, error)
+	ListHistoryByCursor(ctx context.Context, characterID string, limit int, cursor string) (pagination.CursorPage[adventure.AdventureHistoryEntry], error)
 	GetChronicle(ctx context.Context, characterID string) (adventure.AdventureChronicle, error)
 }
 

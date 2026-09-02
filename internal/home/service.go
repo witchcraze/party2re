@@ -248,6 +248,51 @@ func (s *Service) ListInbox(ctx context.Context, recipientID string, limit, offs
 	return pagination.NewPage(letters, total, limit, offset), nil
 }
 
+// ListInboxByCursor retrieves received letters for a recipient character using keyset / cursor pagination.
+func (s *Service) ListInboxByCursor(ctx context.Context, recipientID string, limit int, cursor string) (pagination.CursorPage[Letter], error) {
+	recipientID = strings.TrimSpace(recipientID)
+	if recipientID == "" {
+		return pagination.CursorPage[Letter]{}, ErrInvalidRecipient
+	}
+	if limit <= 0 {
+		limit = pagination.DefaultLimit
+	}
+	if limit > pagination.MaxLimit {
+		limit = pagination.MaxLimit
+	}
+
+	var beforeTime time.Time
+	var beforeID string
+	var err error
+
+	if cursor != "" {
+		beforeTime, beforeID, err = pagination.DecodeCursor(cursor)
+		if err != nil {
+			beforeID, _ = pagination.DecodeIDCursor(cursor)
+		}
+	}
+
+	fetchLimit := limit + 1
+	letters, err := s.repo.ListInboxLettersByCursor(ctx, recipientID, fetchLimit, beforeTime, beforeID)
+	if err != nil {
+		return pagination.CursorPage[Letter]{}, err
+	}
+
+	hasMore := false
+	if len(letters) > limit {
+		hasMore = true
+		letters = letters[:limit]
+	}
+
+	var nextCursor string
+	if hasMore && len(letters) > 0 {
+		last := letters[len(letters)-1]
+		nextCursor = pagination.EncodeCursor(last.CreatedAt, last.ID)
+	}
+
+	return pagination.NewCursorPage(letters, nextCursor, cursor, limit, hasMore), nil
+}
+
 // ListOutbox retrieves sent letters for a sender character.
 func (s *Service) ListOutbox(ctx context.Context, senderID string, limit, offset int) (LetterListResult, error) {
 	senderID = strings.TrimSpace(senderID)
@@ -262,6 +307,51 @@ func (s *Service) ListOutbox(ctx context.Context, senderID string, limit, offset
 	}
 
 	return pagination.NewPage(letters, total, limit, offset), nil
+}
+
+// ListOutboxByCursor retrieves sent letters for a sender character using keyset / cursor pagination.
+func (s *Service) ListOutboxByCursor(ctx context.Context, senderID string, limit int, cursor string) (pagination.CursorPage[Letter], error) {
+	senderID = strings.TrimSpace(senderID)
+	if senderID == "" {
+		return pagination.CursorPage[Letter]{}, ErrInvalidSender
+	}
+	if limit <= 0 {
+		limit = pagination.DefaultLimit
+	}
+	if limit > pagination.MaxLimit {
+		limit = pagination.MaxLimit
+	}
+
+	var beforeTime time.Time
+	var beforeID string
+	var err error
+
+	if cursor != "" {
+		beforeTime, beforeID, err = pagination.DecodeCursor(cursor)
+		if err != nil {
+			beforeID, _ = pagination.DecodeIDCursor(cursor)
+		}
+	}
+
+	fetchLimit := limit + 1
+	letters, err := s.repo.ListOutboxLettersByCursor(ctx, senderID, fetchLimit, beforeTime, beforeID)
+	if err != nil {
+		return pagination.CursorPage[Letter]{}, err
+	}
+
+	hasMore := false
+	if len(letters) > limit {
+		hasMore = true
+		letters = letters[:limit]
+	}
+
+	var nextCursor string
+	if hasMore && len(letters) > 0 {
+		last := letters[len(letters)-1]
+		nextCursor = pagination.EncodeCursor(last.CreatedAt, last.ID)
+	}
+
+	return pagination.NewCursorPage(letters, nextCursor, cursor, limit, hasMore), nil
 }
 
 // GetUnreadLetterCount returns the number of unread received letters.

@@ -13,6 +13,7 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 const (
@@ -161,7 +162,9 @@ type DeliveryRepository interface {
 	GetParcelByID(ctx context.Context, id string) (*Parcel, error)
 	GetParcelByIDForUpdate(ctx context.Context, id string) (*Parcel, error)
 	GetIncomingParcels(ctx context.Context, recipientCharacterID string) ([]Parcel, error)
+	GetIncomingParcelsByCursor(ctx context.Context, recipientCharacterID string, limit int, beforeTime time.Time, beforeID string) ([]Parcel, error)
 	GetSentParcels(ctx context.Context, senderCharacterID string) ([]Parcel, error)
+	GetSentParcelsByCursor(ctx context.Context, senderCharacterID string, limit int, beforeTime time.Time, beforeID string) ([]Parcel, error)
 	UpdateParcel(ctx context.Context, p *Parcel) error
 }
 
@@ -780,6 +783,102 @@ func (s *Service) GetIncomingParcels(ctx context.Context, recipientID string) ([
 		return nil, ErrInvalidInput
 	}
 	return s.repo.GetIncomingParcels(ctx, recipientID)
+}
+
+// GetIncomingParcelsByCursor returns keyset / cursor-based paginated pending courier parcels for recipient.
+func (s *Service) GetIncomingParcelsByCursor(ctx context.Context, recipientID string, limit int, cursor string) (pagination.CursorPage[Parcel], error) {
+	if strings.TrimSpace(recipientID) == "" {
+		return pagination.CursorPage[Parcel]{}, ErrInvalidInput
+	}
+	if limit <= 0 {
+		limit = pagination.DefaultLimit
+	}
+	if limit > pagination.MaxLimit {
+		limit = pagination.MaxLimit
+	}
+
+	var beforeTime time.Time
+	var beforeID string
+	var err error
+
+	if cursor != "" {
+		beforeTime, beforeID, err = pagination.DecodeCursor(cursor)
+		if err != nil {
+			beforeID, _ = pagination.DecodeIDCursor(cursor)
+		}
+	}
+
+	fetchLimit := limit + 1
+	parcels, err := s.repo.GetIncomingParcelsByCursor(ctx, recipientID, fetchLimit, beforeTime, beforeID)
+	if err != nil {
+		return pagination.CursorPage[Parcel]{}, err
+	}
+
+	hasMore := false
+	if len(parcels) > limit {
+		hasMore = true
+		parcels = parcels[:limit]
+	}
+
+	var nextCursor string
+	if hasMore && len(parcels) > 0 {
+		last := parcels[len(parcels)-1]
+		nextCursor = pagination.EncodeCursor(last.CreatedAt, last.ID)
+	}
+
+	return pagination.NewCursorPage(parcels, nextCursor, cursor, limit, hasMore), nil
+}
+
+// GetSentParcels returns parcels sent by character.
+func (s *Service) GetSentParcels(ctx context.Context, senderID string) ([]Parcel, error) {
+	if strings.TrimSpace(senderID) == "" {
+		return nil, ErrInvalidInput
+	}
+	return s.repo.GetSentParcels(ctx, senderID)
+}
+
+// GetSentParcelsByCursor returns keyset / cursor-based paginated parcels sent by character.
+func (s *Service) GetSentParcelsByCursor(ctx context.Context, senderID string, limit int, cursor string) (pagination.CursorPage[Parcel], error) {
+	if strings.TrimSpace(senderID) == "" {
+		return pagination.CursorPage[Parcel]{}, ErrInvalidInput
+	}
+	if limit <= 0 {
+		limit = pagination.DefaultLimit
+	}
+	if limit > pagination.MaxLimit {
+		limit = pagination.MaxLimit
+	}
+
+	var beforeTime time.Time
+	var beforeID string
+	var err error
+
+	if cursor != "" {
+		beforeTime, beforeID, err = pagination.DecodeCursor(cursor)
+		if err != nil {
+			beforeID, _ = pagination.DecodeIDCursor(cursor)
+		}
+	}
+
+	fetchLimit := limit + 1
+	parcels, err := s.repo.GetSentParcelsByCursor(ctx, senderID, fetchLimit, beforeTime, beforeID)
+	if err != nil {
+		return pagination.CursorPage[Parcel]{}, err
+	}
+
+	hasMore := false
+	if len(parcels) > limit {
+		hasMore = true
+		parcels = parcels[:limit]
+	}
+
+	var nextCursor string
+	if hasMore && len(parcels) > 0 {
+		last := parcels[len(parcels)-1]
+		nextCursor = pagination.EncodeCursor(last.CreatedAt, last.ID)
+	}
+
+	return pagination.NewCursorPage(parcels, nextCursor, cursor, limit, hasMore), nil
 }
 
 // ClaimParcel deposits the parcel's gold and items into the recipient character's possession.

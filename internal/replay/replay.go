@@ -9,6 +9,7 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 var (
@@ -78,7 +79,9 @@ type Repository interface {
 	Save(ctx context.Context, replay BattleReplay) error
 	FindByID(ctx context.Context, id string) (*BattleReplay, error)
 	FindByCharacter(ctx context.Context, characterID string, combatType string, limit int) ([]ReplayHeader, error)
+	FindByCharacterByCursor(ctx context.Context, characterID string, combatType string, limit int, beforeTime time.Time, beforeID string) ([]ReplayHeader, error)
 	FindRecent(ctx context.Context, combatType string, limit int) ([]ReplayHeader, error)
+	FindRecentByCursor(ctx context.Context, combatType string, limit int, beforeTime time.Time, beforeID string) ([]ReplayHeader, error)
 	DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
@@ -156,11 +159,96 @@ func (s *Service) GetCharacterHistory(ctx context.Context, characterID string, c
 	return s.repo.FindByCharacter(ctx, characterID, combatType, limit)
 }
 
+// GetCharacterHistoryByCursor retrieves keyset / cursor-based paginated replay history for a character.
+func (s *Service) GetCharacterHistoryByCursor(ctx context.Context, characterID string, combatType string, limit int, cursor string) (pagination.CursorPage[ReplayHeader], error) {
+	if strings.TrimSpace(characterID) == "" {
+		return pagination.CursorPage[ReplayHeader]{}, errors.New("character id is required")
+	}
+	if limit <= 0 {
+		limit = pagination.DefaultLimit
+	}
+	if limit > pagination.MaxLimit {
+		limit = pagination.MaxLimit
+	}
+
+	var beforeTime time.Time
+	var beforeID string
+	var err error
+
+	if cursor != "" {
+		beforeTime, beforeID, err = pagination.DecodeCursor(cursor)
+		if err != nil {
+			beforeID, _ = pagination.DecodeIDCursor(cursor)
+		}
+	}
+
+	fetchLimit := limit + 1
+	items, err := s.repo.FindByCharacterByCursor(ctx, characterID, combatType, fetchLimit, beforeTime, beforeID)
+	if err != nil {
+		return pagination.CursorPage[ReplayHeader]{}, err
+	}
+
+	hasMore := false
+	if len(items) > limit {
+		hasMore = true
+		items = items[:limit]
+	}
+
+	var nextCursor string
+	if hasMore && len(items) > 0 {
+		last := items[len(items)-1]
+		nextCursor = pagination.EncodeCursor(last.CreatedAt, last.ID)
+	}
+
+	return pagination.NewCursorPage(items, nextCursor, cursor, limit, hasMore), nil
+}
+
 func (s *Service) GetRecentReplays(ctx context.Context, combatType string, limit int) ([]ReplayHeader, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	return s.repo.FindRecent(ctx, combatType, limit)
+}
+
+// GetRecentReplaysByCursor retrieves keyset / cursor-based paginated recent battle replays.
+func (s *Service) GetRecentReplaysByCursor(ctx context.Context, combatType string, limit int, cursor string) (pagination.CursorPage[ReplayHeader], error) {
+	if limit <= 0 {
+		limit = pagination.DefaultLimit
+	}
+	if limit > pagination.MaxLimit {
+		limit = pagination.MaxLimit
+	}
+
+	var beforeTime time.Time
+	var beforeID string
+	var err error
+
+	if cursor != "" {
+		beforeTime, beforeID, err = pagination.DecodeCursor(cursor)
+		if err != nil {
+			beforeID, _ = pagination.DecodeIDCursor(cursor)
+		}
+	}
+
+	fetchLimit := limit + 1
+	items, err := s.repo.FindRecentByCursor(ctx, combatType, fetchLimit, beforeTime, beforeID)
+	if err != nil {
+		return pagination.CursorPage[ReplayHeader]{}, err
+	}
+
+	hasMore := false
+	if len(items) > limit {
+		hasMore = true
+		items = items[:limit]
+	}
+
+	var nextCursor string
+	if hasMore && len(items) > 0 {
+		last := items[len(items)-1]
+		nextCursor = pagination.EncodeCursor(last.CreatedAt, last.ID)
+	}
+
+	return pagination.NewCursorPage(items, nextCursor, cursor, limit, hasMore), nil
 }
 
 func (s *Service) PruneOldReplays(ctx context.Context, retentionDays int) (int64, error) {

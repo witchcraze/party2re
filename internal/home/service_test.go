@@ -93,6 +93,33 @@ func (m *mockHomeRepo) ListInboxLetters(ctx context.Context, recipientID string,
 	return list, len(list), nil
 }
 
+func (m *mockHomeRepo) ListInboxLettersByCursor(ctx context.Context, recipientID string, limit int, beforeTime time.Time, beforeID string) ([]Letter, error) {
+	var list []Letter
+	for _, l := range m.letters {
+		if l.RecipientCharacterID == recipientID && !l.IsDeletedByRecipient {
+			if beforeTime.IsZero() && beforeID == "" {
+				list = append(list, l)
+			} else if !beforeTime.IsZero() && beforeID != "" {
+				if l.CreatedAt.Before(beforeTime) || (l.CreatedAt.Equal(beforeTime) && l.ID < beforeID) {
+					list = append(list, l)
+				}
+			} else if !beforeTime.IsZero() {
+				if l.CreatedAt.Before(beforeTime) {
+					list = append(list, l)
+				}
+			} else {
+				if l.ID < beforeID {
+					list = append(list, l)
+				}
+			}
+		}
+	}
+	if len(list) > limit {
+		list = list[:limit]
+	}
+	return list, nil
+}
+
 func (m *mockHomeRepo) ListOutboxLetters(ctx context.Context, senderID string, limit, offset int) ([]Letter, int, error) {
 	var list []Letter
 	for _, l := range m.letters {
@@ -101,6 +128,33 @@ func (m *mockHomeRepo) ListOutboxLetters(ctx context.Context, senderID string, l
 		}
 	}
 	return list, len(list), nil
+}
+
+func (m *mockHomeRepo) ListOutboxLettersByCursor(ctx context.Context, senderID string, limit int, beforeTime time.Time, beforeID string) ([]Letter, error) {
+	var list []Letter
+	for _, l := range m.letters {
+		if l.SenderCharacterID == senderID && !l.IsDeletedBySender {
+			if beforeTime.IsZero() && beforeID == "" {
+				list = append(list, l)
+			} else if !beforeTime.IsZero() && beforeID != "" {
+				if l.CreatedAt.Before(beforeTime) || (l.CreatedAt.Equal(beforeTime) && l.ID < beforeID) {
+					list = append(list, l)
+				}
+			} else if !beforeTime.IsZero() {
+				if l.CreatedAt.Before(beforeTime) {
+					list = append(list, l)
+				}
+			} else {
+				if l.ID < beforeID {
+					list = append(list, l)
+				}
+			}
+		}
+	}
+	if len(list) > limit {
+		list = list[:limit]
+	}
+	return list, nil
 }
 
 func (m *mockHomeRepo) GetUnreadLetterCount(ctx context.Context, recipientID string) (int, error) {
@@ -499,4 +553,78 @@ func TestConcurrentTalkToCompanion(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+func TestListInboxByCursor(t *testing.T) {
+	ctx := context.Background()
+	chars := &mockCharReader{
+		chars: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "Hero"},
+			"char-2": {ID: "char-2", Name: "Friend"},
+		},
+	}
+	repo := newMockHomeRepo()
+	service, err := NewService(repo, chars)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	now := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+	for i := 1; i <= 5; i++ {
+		letID := fmt.Sprintf("let-%d", i)
+		repo.letters[letID] = Letter{
+			ID:                   letID,
+			SenderCharacterID:    "char-2",
+			SenderName:           "Friend",
+			RecipientCharacterID: "char-1",
+			RecipientName:        "Hero",
+			Content:              fmt.Sprintf("Hello %d", i),
+			CreatedAt:            now.Add(time.Duration(i) * time.Minute),
+		}
+	}
+
+	page1, err := service.ListInboxByCursor(ctx, "char-1", 2, "")
+	if err != nil {
+		t.Fatalf("page 1 failed: %v", err)
+	}
+	if len(page1.Items) != 2 || !page1.HasMore || page1.NextCursor == "" {
+		t.Fatalf("unexpected page 1: %+v", page1)
+	}
+}
+
+func TestListOutboxByCursor(t *testing.T) {
+	ctx := context.Background()
+	chars := &mockCharReader{
+		chars: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "Hero"},
+			"char-2": {ID: "char-2", Name: "Friend"},
+		},
+	}
+	repo := newMockHomeRepo()
+	service, err := NewService(repo, chars)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	now := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+	for i := 1; i <= 3; i++ {
+		letID := fmt.Sprintf("out-%d", i)
+		repo.letters[letID] = Letter{
+			ID:                   letID,
+			SenderCharacterID:    "char-1",
+			SenderName:           "Hero",
+			RecipientCharacterID: "char-2",
+			RecipientName:        "Friend",
+			Content:              fmt.Sprintf("Sent %d", i),
+			CreatedAt:            now.Add(time.Duration(i) * time.Minute),
+		}
+	}
+
+	page1, err := service.ListOutboxByCursor(ctx, "char-1", 2, "")
+	if err != nil {
+		t.Fatalf("page 1 failed: %v", err)
+	}
+	if len(page1.Items) != 2 || !page1.HasMore || page1.NextCursor == "" {
+		t.Fatalf("unexpected page 1: %+v", page1)
+	}
 }

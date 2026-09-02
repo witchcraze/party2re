@@ -153,6 +153,73 @@ func (r *ReplayRepository) FindByCharacter(ctx context.Context, characterID stri
 	return scanReplayHeaders(rows)
 }
 
+func (r *ReplayRepository) FindByCharacterByCursor(ctx context.Context, characterID string, combatType string, limit int, beforeTime time.Time, beforeID string) ([]replay.ReplayHeader, error) {
+	var rows *sql.Rows
+	var err error
+
+	executor := ExecutorFromContext(ctx, r.db)
+
+	baseWhere := "(initiator_id = ? OR opponent_id = ?)"
+	var args []any
+	args = append(args, characterID, characterID)
+
+	if combatType != "" {
+		baseWhere += " AND combat_type = ?"
+		args = append(args, combatType)
+	}
+
+	var query string
+	if beforeTime.IsZero() && beforeID == "" {
+		query = `
+			SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
+			       outcome, winner_id, total_turns, created_at
+			FROM battle_replays
+			WHERE ` + baseWhere + `
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`
+		args = append(args, limit)
+	} else if !beforeTime.IsZero() && beforeID != "" {
+		query = `
+			SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
+			       outcome, winner_id, total_turns, created_at
+			FROM battle_replays
+			WHERE ` + baseWhere + ` AND (created_at < ? OR (created_at = ? AND id < ?))
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`
+		args = append(args, beforeTime.UTC(), beforeTime.UTC(), beforeID, limit)
+	} else if !beforeTime.IsZero() {
+		query = `
+			SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
+			       outcome, winner_id, total_turns, created_at
+			FROM battle_replays
+			WHERE ` + baseWhere + ` AND created_at < ?
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`
+		args = append(args, beforeTime.UTC(), limit)
+	} else {
+		query = `
+			SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
+			       outcome, winner_id, total_turns, created_at
+			FROM battle_replays
+			WHERE ` + baseWhere + ` AND id < ?
+			ORDER BY id DESC
+			LIMIT ?
+		`
+		args = append(args, beforeID, limit)
+	}
+
+	rows, err = executor.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanReplayHeaders(rows)
+}
+
 func (r *ReplayRepository) FindRecent(ctx context.Context, combatType string, limit int) ([]replay.ReplayHeader, error) {
 	var rows *sql.Rows
 	var err error
@@ -179,6 +246,72 @@ func (r *ReplayRepository) FindRecent(ctx context.Context, combatType string, li
 		rows, err = executor.QueryContext(ctx, query, limit)
 	}
 
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanReplayHeaders(rows)
+}
+
+func (r *ReplayRepository) FindRecentByCursor(ctx context.Context, combatType string, limit int, beforeTime time.Time, beforeID string) ([]replay.ReplayHeader, error) {
+	var rows *sql.Rows
+	var err error
+
+	executor := ExecutorFromContext(ctx, r.db)
+
+	baseWhere := "1=1"
+	var args []any
+
+	if combatType != "" {
+		baseWhere = "combat_type = ?"
+		args = append(args, combatType)
+	}
+
+	var query string
+	if beforeTime.IsZero() && beforeID == "" {
+		query = `
+			SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
+			       outcome, winner_id, total_turns, created_at
+			FROM battle_replays
+			WHERE ` + baseWhere + `
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`
+		args = append(args, limit)
+	} else if !beforeTime.IsZero() && beforeID != "" {
+		query = `
+			SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
+			       outcome, winner_id, total_turns, created_at
+			FROM battle_replays
+			WHERE ` + baseWhere + ` AND (created_at < ? OR (created_at = ? AND id < ?))
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`
+		args = append(args, beforeTime.UTC(), beforeTime.UTC(), beforeID, limit)
+	} else if !beforeTime.IsZero() {
+		query = `
+			SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
+			       outcome, winner_id, total_turns, created_at
+			FROM battle_replays
+			WHERE ` + baseWhere + ` AND created_at < ?
+			ORDER BY created_at DESC, id DESC
+			LIMIT ?
+		`
+		args = append(args, beforeTime.UTC(), limit)
+	} else {
+		query = `
+			SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
+			       outcome, winner_id, total_turns, created_at
+			FROM battle_replays
+			WHERE ` + baseWhere + ` AND id < ?
+			ORDER BY id DESC
+			LIMIT ?
+		`
+		args = append(args, beforeID, limit)
+	}
+
+	rows, err = executor.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

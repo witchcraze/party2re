@@ -19,7 +19,9 @@ type HomeService interface {
 	SendLetter(ctx context.Context, senderID, recipientID, content, color string) (home.Letter, error)
 	ReadLetter(ctx context.Context, letterID, recipientID string) error
 	ListInbox(ctx context.Context, recipientID string, limit, offset int) (home.LetterListResult, error)
+	ListInboxByCursor(ctx context.Context, recipientID string, limit int, cursor string) (pagination.CursorPage[home.Letter], error)
 	ListOutbox(ctx context.Context, senderID string, limit, offset int) (home.LetterListResult, error)
+	ListOutboxByCursor(ctx context.Context, senderID string, limit int, cursor string) (pagination.CursorPage[home.Letter], error)
 	GetUnreadLetterCount(ctx context.Context, recipientID string) (int, error)
 	DeleteLetter(ctx context.Context, letterID, characterID string) error
 	TeachCompanionPhrase(ctx context.Context, characterID, phrase string) (home.CompanionPhrase, error)
@@ -149,6 +151,17 @@ func (h *Handler) handleListInbox(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+		if r.URL != nil && r.URL.Query().Has("cursor") {
+			cursorParams := pagination.ParseCursorRequest(r)
+			res, err := h.homes.ListInboxByCursor(r.Context(), char.ID, cursorParams.Limit, cursorParams.Cursor)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err)
+				return
+			}
+			writeJSON(w, http.StatusOK, res)
+			return
+		}
+
 		params := pagination.ParseRequest(r)
 
 		res, err := h.homes.ListInbox(r.Context(), char.ID, params.Limit, params.Offset)
@@ -174,6 +187,17 @@ func (h *Handler) handleListOutbox(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+		if r.URL != nil && r.URL.Query().Has("cursor") {
+			cursorParams := pagination.ParseCursorRequest(r)
+			res, err := h.homes.ListOutboxByCursor(r.Context(), char.ID, cursorParams.Limit, cursorParams.Cursor)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err)
+				return
+			}
+			writeJSON(w, http.StatusOK, res)
+			return
+		}
+
 		params := pagination.ParseRequest(r)
 
 		res, err := h.homes.ListOutbox(r.Context(), char.ID, params.Limit, params.Offset)

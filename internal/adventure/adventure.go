@@ -57,6 +57,7 @@ type Repository interface {
 	FindByID(ctx context.Context, id string) (Adventure, error)
 	ClaimAndApply(ctx context.Context, value Adventure, character corecharacter.Character) error
 	ListByCharacterID(ctx context.Context, characterID string, limit, offset int) ([]Adventure, int, error)
+	ListByCharacterIDByCursor(ctx context.Context, characterID string, limit int, beforeTime time.Time, beforeID string) ([]Adventure, error)
 	GetAggregatedStats(ctx context.Context, characterID string) (AggregatedStats, error)
 }
 
