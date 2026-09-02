@@ -42,7 +42,7 @@ The Party system (`冒険中のパーティー`, `quest.cgi`, `party.cgi`) is on
   - 3 Players: +20% bonus EXP and Gold
   - 4 Players: +30% bonus EXP and Gold
 - **Reward Distribution**:
-  - On Victory: Each participating member receives full boosted EXP and Gold, character level-ups are evaluated, and stage item drops are awarded to player inventories.
+  - On Victory: Each participating member receives full boosted EXP and Gold, character level-ups are evaluated using canonical progression rules (`progression.ApplyExperience`, properly supporting OverLevel limit breaks up to Lv 150), and stage item drops are awarded to player inventories.
   - On Defeat: Half base EXP, 0 Gold, and characters survive with 1 HP.
 
 ---
