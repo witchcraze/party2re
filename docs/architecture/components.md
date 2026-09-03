@@ -281,6 +281,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Illustrated monster defeat tracking (`character_monster_book`), item discovery recording (`character_item_collection`), and career completion percentage queries.
   - **Dependencies:** Character repository.
   - **Persistence:** `character_monster_book` and `character_item_collection` tables in `internal/database/collection_repository.go`.
+- **Medal & Lifetime Achievements** (`internal/medal`):
+  - **Responsibility:** Small Medal (ちいさなメダル) exchange shop (`medal.cgi`, consuming medals for rare equipment/items) and Lifetime Milestone Achievement & Commemorative Medal collection system tracking gameplay metrics (adventure victories, monsters slain, gold accumulated, bosses conquered, arena wins, casino games, alchemy crafts), event-driven progress recording, milestone completion verification, double-claim prevention, and awarding commemorative medals (`character_medals`) and bonus small medals.
+  - **Dependencies:** Core Character, Character repository, Core Inventory, Inventory repository, TransactionProvider (`economy.Service`).
+  - **Persistence:** `character_achievements` and `character_medals` tables in `internal/database/achievement_repository.go` with pessimistic `FOR UPDATE` locking and ambient transaction propagation.
 - **Chapel & Blessings** (`internal/chapel`):
   - **Responsibility:** Active town church prayer registration (`character_blessings`), donation management, and reward modifier calculation (+50% EXP/Gold chance, drop bonuses).
   - **Dependencies:** Character repository (wallet gold).

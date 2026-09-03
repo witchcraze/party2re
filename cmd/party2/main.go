@@ -277,7 +277,19 @@ func run(ctx context.Context, logger logging.Logger) error {
 		return err
 	}
 
-	medalService, err := medal.NewService(charRepo, invRepo, nil, "", medal.WithTransactionProvider(txProvider))
+	achievementRepo, err := database.NewAchievementRepository(db)
+	if err != nil {
+		return err
+	}
+
+	medalService, err := medal.NewService(
+		charRepo,
+		invRepo,
+		nil,
+		"",
+		medal.WithTransactionProvider(txProvider),
+		medal.WithAchievementRepository(achievementRepo),
+	)
 	if err != nil {
 		return err
 	}
