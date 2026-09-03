@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #346 — Streamline redundant documentation and sync feature inventory
+Last updated: Issue #342 — Adopt reusable economy.Service across commerce modules
 
 ## Current phase
 

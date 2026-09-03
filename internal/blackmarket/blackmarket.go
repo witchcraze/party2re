@@ -14,6 +14,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 const (
@@ -256,6 +257,7 @@ type Service struct {
 	catalog         *Catalog
 	itemDefs        ItemDefinitionProvider
 	txProvider      TransactionProvider
+	economy         *economy.Service
 }
 
 func NewService(
@@ -284,6 +286,17 @@ func NewService(
 	for _, opt := range opts {
 		opt(s)
 	}
+
+	var ecoOpts []economy.Option
+	if s.txProvider != nil {
+		ecoOpts = append(ecoOpts, economy.WithTransactionProvider(s.txProvider))
+	}
+	eco, err := economy.NewService(characterRepo, inventoryRepo, ecoOpts...)
+	if err != nil {
+		return nil, err
+	}
+	s.economy = eco
+
 	return s, nil
 }
 
@@ -523,28 +536,19 @@ func (s *Service) PurchaseItem(
 			return ErrDailyLimitExceeded
 		}
 
-		inv, err := s.inventoryRepo.FindByCharacterIDForUpdate(txCtx, characterID)
+		ecoRes, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{
+			CharacterID:       characterID,
+			DeductGold:        totalPrice,
+			GrantDefinitionID: shopItem.ItemDefinitionID,
+			GrantQuantity:     quantity,
+		})
 		if err != nil {
-			inv, _ = coreinventory.New(characterID)
-		}
-
-		inst, err := coreitem.NewInstance(shopItem.ItemDefinitionID, quantity)
-		if err != nil {
-			return fmt.Errorf("failed to create item instance: %w", err)
-		}
-		if err := inv.Add(inst); err != nil {
-			return fmt.Errorf("failed to add item to inventory: %w", err)
-		}
-
-		if err := char.DeductMoney(totalPrice); err != nil {
-			return ErrInsufficientFunds
-		}
-
-		if err := s.characterRepo.Update(txCtx, char); err != nil {
-			return err
-		}
-
-		if err := s.inventoryRepo.Save(txCtx, inv); err != nil {
+			if errors.Is(err, economy.ErrInsufficientGold) {
+				return ErrInsufficientFunds
+			}
+			if errors.Is(err, economy.ErrCharacterNotFound) {
+				return ErrCharacterNotFound
+			}
 			return err
 		}
 
@@ -566,8 +570,8 @@ func (s *Service) PurchaseItem(
 			Quantity:            quantity,
 			UnitPrice:           unitPrice,
 			TotalPrice:          totalPrice,
-			RemainingGold:       char.Money,
-			InventoryInstanceID: inst.ID,
+			RemainingGold:       ecoRes.Character.Money,
+			InventoryInstanceID: ecoRes.GrantedItem.ID,
 			RemainingQuota:      remainingQuota,
 		}
 		return nil
@@ -652,17 +656,22 @@ func (s *Service) SellItem(
 			return err
 		}
 
-		if err := inv.Consume(itemInstanceID, quantity); err != nil {
-			return fmt.Errorf("failed to remove item from inventory: %w", err)
-		}
-
-		_ = char.AddMoney(totalPayout)
-
-		if err := s.characterRepo.Update(txCtx, char); err != nil {
-			return err
-		}
-
-		if err := s.inventoryRepo.Save(txCtx, inv); err != nil {
+		ecoRes, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{
+			CharacterID:        characterID,
+			AddGold:            totalPayout,
+			ConsumeInstanceID:  itemInstanceID,
+			ConsumeInstanceQty: quantity,
+		})
+		if err != nil {
+			if errors.Is(err, economy.ErrCharacterNotFound) {
+				return ErrCharacterNotFound
+			}
+			if errors.Is(err, economy.ErrItemNotFound) {
+				return ErrUnownedItem
+			}
+			if errors.Is(err, economy.ErrInsufficientItemQuantity) {
+				return ErrInvalidQuantity
+			}
 			return err
 		}
 
@@ -673,7 +682,7 @@ func (s *Service) SellItem(
 			Quantity:       quantity,
 			UnitPrice:      unitPrice,
 			TotalPayout:    totalPayout,
-			RemainingGold:  char.Money,
+			RemainingGold:  ecoRes.Character.Money,
 		}
 		return nil
 	}
@@ -764,11 +773,7 @@ func (s *Service) SacrificeItem(ctx context.Context, characterID string, itemIns
 		}
 
 		// 4. Consume 1 unit of the item instance
-		if err := inv.Consume(itemInstanceID, 1); err != nil {
-			return fmt.Errorf("failed to consume item for sacrifice: %w", err)
-		}
-
-		if err := s.inventoryRepo.Save(txCtx, inv); err != nil {
+		if _, err := s.economy.ConsumeItemInstance(txCtx, characterID, itemInstanceID, 1); err != nil {
 			return err
 		}
 
@@ -858,13 +863,7 @@ func (s *Service) TradePrize(ctx context.Context, characterID string, prizeID st
 			return ErrAccessDenied
 		}
 
-		// 2. Lock inventory (Tier 3)
-		inv, err := s.inventoryRepo.FindByCharacterIDForUpdate(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-
-		// 3. Lock and check points (Tier 8)
+		// 2. Lock and check points (Tier 8)
 		points := CharacterPoints{CharacterID: characterID, RarePoints: 0, URarePoints: 0}
 		if s.blackMarketRepo != nil {
 			pts, err := s.blackMarketRepo.GetCharacterPointsForUpdate(txCtx, characterID)
@@ -887,17 +886,9 @@ func (s *Service) TradePrize(ctx context.Context, characterID string, prizeID st
 			points.RarePoints -= prize.Cost
 		}
 
-		// 4. Create and add prize item instance to inventory
-		inst, err := coreitem.NewInstance(prize.ItemDefinitionID, 1)
+		// 3. Create and add prize item instance to inventory
+		_, inst, err := s.economy.GrantItem(txCtx, characterID, prize.ItemDefinitionID, 1)
 		if err != nil {
-			return err
-		}
-
-		if err := inv.Add(inst); err != nil {
-			return fmt.Errorf("failed to add prize to inventory: %w", err)
-		}
-
-		if err := s.inventoryRepo.Save(txCtx, inv); err != nil {
 			return err
 		}
 

@@ -77,9 +77,13 @@ type mockTxProvider struct {
 }
 
 func (m *mockTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	type inTxKey struct{}
+	if ctx.Value(inTxKey{}) != nil {
+		return fn(ctx)
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return fn(ctx)
+	return fn(context.WithValue(ctx, inTxKey{}, struct{}{}))
 }
 
 func newTestSetup(t *testing.T) (*shop.Service, *characterRepoStub, *inventoryRepoStub, *item.Catalog) {

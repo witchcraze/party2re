@@ -10,7 +10,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -133,6 +133,7 @@ type Service struct {
 	txProvider    TransactionProvider
 	clock         Clock
 	bazaarCatalog []BazaarItem
+	economy       *economy.Service
 }
 
 type Option func(*Service)
@@ -181,6 +182,16 @@ func NewService(
 	for _, opt := range opts {
 		opt(svc)
 	}
+
+	var ecoOpts []economy.Option
+	if svc.txProvider != nil {
+		ecoOpts = append(ecoOpts, economy.WithTransactionProvider(svc.txProvider))
+	}
+	eco, err := economy.NewService(characterRepo, inventoryRepo, ecoOpts...)
+	if err != nil {
+		return nil, err
+	}
+	svc.economy = eco
 
 	return svc, nil
 }
@@ -283,65 +294,30 @@ func (s *Service) PurchaseBazaarItem(
 	}
 	totalCost := targetItem.Price * quantity
 
-	var result BazaarPurchaseResult
-	runInTx := func(txCtx context.Context) error {
-		char, err := s.characterRepo.FindByIDForUpdate(txCtx, characterID)
-		if err != nil {
-			return ErrCharacterNotFound
+	res, err := s.economy.Exchange(ctx, economy.ExchangeRequest{
+		CharacterID:       characterID,
+		DeductGold:        totalCost,
+		GrantDefinitionID: targetItem.ItemDefinitionID,
+		GrantQuantity:     quantity,
+	})
+	if err != nil {
+		if errors.Is(err, economy.ErrInsufficientGold) {
+			return BazaarPurchaseResult{}, ErrInsufficientGold
 		}
-
-		if char.Money < totalCost {
-			return ErrInsufficientGold
+		if errors.Is(err, economy.ErrCharacterNotFound) {
+			return BazaarPurchaseResult{}, ErrCharacterNotFound
 		}
-
-		inv, err := s.inventoryRepo.FindByCharacterIDForUpdate(txCtx, characterID)
-		if err != nil {
-			inv, _ = coreinventory.New(characterID)
-		}
-
-		inst, err := coreitem.NewInstance(targetItem.ItemDefinitionID, quantity)
-		if err != nil {
-			return fmt.Errorf("failed to create item instance: %w", err)
-		}
-
-		if err := inv.Add(inst); err != nil {
-			return fmt.Errorf("failed to add item to inventory: %w", err)
-		}
-
-		if err := char.DeductMoney(totalCost); err != nil {
-			return ErrInsufficientGold
-		}
-
-		if err := s.characterRepo.Update(txCtx, char); err != nil {
-			return fmt.Errorf("failed to update character money: %w", err)
-		}
-
-		if err := s.inventoryRepo.Save(txCtx, inv); err != nil {
-			return fmt.Errorf("failed to save inventory: %w", err)
-		}
-
-		result = BazaarPurchaseResult{
-			CharacterID:         characterID,
-			Item:                *targetItem,
-			Quantity:            quantity,
-			TotalPrice:          totalCost,
-			RemainingGold:       char.Money,
-			InventoryInstanceID: inst.ID,
-		}
-		return nil
+		return BazaarPurchaseResult{}, err
 	}
 
-	if s.txProvider != nil {
-		if err := s.txProvider.RunInTx(ctx, runInTx); err != nil {
-			return BazaarPurchaseResult{}, err
-		}
-	} else {
-		if err := runInTx(ctx); err != nil {
-			return BazaarPurchaseResult{}, err
-		}
-	}
-
-	return result, nil
+	return BazaarPurchaseResult{
+		CharacterID:         characterID,
+		Item:                *targetItem,
+		Quantity:            quantity,
+		TotalPrice:          totalCost,
+		RemainingGold:       res.Character.Money,
+		InventoryInstanceID: res.GrantedItem.ID,
+	}, nil
 }
 
 func (s *Service) RecordVictoryBanquet(
