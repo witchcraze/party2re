@@ -11,6 +11,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -107,6 +108,7 @@ type Service struct {
 	items        ItemDefinitionProvider
 	txProvider   TransactionProvider
 	randomSource RandomSource
+	economy      *economy.Service
 }
 
 // NewService creates a new GemStore service instance.
@@ -130,6 +132,16 @@ func NewService(
 	for _, opt := range opts {
 		opt(s)
 	}
+
+	var ecoOpts []economy.Option
+	if s.txProvider != nil {
+		ecoOpts = append(ecoOpts, economy.WithTransactionProvider(s.txProvider))
+	}
+	eco, err := economy.NewService(characters, inventories, ecoOpts...)
+	if err != nil {
+		return nil, err
+	}
+	s.economy = eco
 
 	return s, nil
 }
@@ -210,41 +222,25 @@ func (s *Service) BuyGem(ctx context.Context, characterID, gemID string) (BuyRes
 			return ErrLevelTooLow
 		}
 
-		if char.Money < price {
-			return ErrInsufficientFunds
-		}
-
-		inv, err := s.inventories.FindByCharacterIDForUpdate(txCtx, characterID)
+		ecoRes, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{
+			CharacterID:       characterID,
+			DeductGold:        price,
+			GrantDefinitionID: gem.ID,
+			GrantQuantity:     1,
+		})
 		if err != nil {
-			return err
-		}
-
-		instance, err := coreitem.NewInstance(gem.ID, 1)
-		if err != nil {
-			return err
-		}
-
-		if err := inv.Add(instance); err != nil {
-			return err
-		}
-
-		if err := char.DeductMoney(price); err != nil {
-			return ErrInsufficientFunds
-		}
-
-		if err := s.characters.Update(txCtx, char); err != nil {
-			return err
-		}
-		if err := s.inventories.Save(txCtx, inv); err != nil {
+			if errors.Is(err, economy.ErrInsufficientGold) {
+				return ErrInsufficientFunds
+			}
 			return err
 		}
 
 		res = BuyResult{
-			Character:    char,
-			Inventory:    inv,
+			Character:    ecoRes.Character,
+			Inventory:    ecoRes.Inventory,
 			Gem:          gem,
 			Cost:         price,
-			ItemInstance: instance,
+			ItemInstance: *ecoRes.GrantedItem,
 		}
 		return nil
 	}
@@ -275,11 +271,6 @@ func (s *Service) SellGem(ctx context.Context, characterID, itemInstanceOrDefID 
 
 	var res SellResult
 	run := func(txCtx context.Context) error {
-		char, err := s.characters.FindByIDForUpdate(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-
 		inv, err := s.inventories.FindByCharacterIDForUpdate(txCtx, characterID)
 		if err != nil {
 			return err
@@ -305,22 +296,19 @@ func (s *Service) SellGem(ctx context.Context, characterID, itemInstanceOrDefID 
 			sellPrice = 1
 		}
 
-		if err := inv.Consume(targetItem.ID, 1); err != nil {
-			return err
-		}
-
-		_ = char.AddMoney(sellPrice)
-
-		if err := s.characters.Update(txCtx, char); err != nil {
-			return err
-		}
-		if err := s.inventories.Save(txCtx, inv); err != nil {
+		ecoRes, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{
+			CharacterID:        characterID,
+			AddGold:            sellPrice,
+			ConsumeInstanceID:  targetItem.ID,
+			ConsumeInstanceQty: 1,
+		})
+		if err != nil {
 			return err
 		}
 
 		res = SellResult{
-			Character: char,
-			Inventory: inv,
+			Character: ecoRes.Character,
+			Inventory: ecoRes.Inventory,
 			Gem:       gem,
 			Payout:    sellPrice,
 		}

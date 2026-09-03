@@ -9,7 +9,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
-	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 //go:embed medal_rewards.json
@@ -69,6 +69,7 @@ type Service struct {
 	transactions TransactionRepository
 	txProvider   TransactionProvider
 	rewards      []Reward
+	economy      *economy.Service
 }
 
 func NewService(
@@ -121,6 +122,15 @@ func NewServiceWithRewards(
 	for _, opt := range opts {
 		opt(s)
 	}
+	var ecoOpts []economy.Option
+	if s.txProvider != nil {
+		ecoOpts = append(ecoOpts, economy.WithTransactionProvider(s.txProvider))
+	}
+	eco, err := economy.NewService(characters, inventories, ecoOpts...)
+	if err != nil {
+		return nil, err
+	}
+	s.economy = eco
 	return s, nil
 }
 
@@ -168,58 +178,21 @@ func (s *Service) Claim(ctx context.Context, characterID string, itemID string) 
 		return corecharacter.Character{}, coreinventory.Inventory{}, ErrRewardNotFound
 	}
 
-	var updatedChar corecharacter.Character
-	var updatedInv coreinventory.Inventory
-
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		char, err := s.findCharacter(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-
-		if char.SmallMedals < targetReward.Cost {
-			return ErrInsufficientMedals
-		}
-
-		inv, err := s.findInventory(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-
-		instance, err := item.NewInstance(targetReward.ItemID, 1)
-		if err != nil {
-			return err
-		}
-
-		if err := inv.Add(instance); err != nil {
-			return err
-		}
-
-		if err := char.DeductSmallMedals(targetReward.Cost); err != nil {
-			return ErrInsufficientMedals
-		}
-
-		if err := s.commit(txCtx, char, inv); err != nil {
-			return err
-		}
-
-		updatedChar = char
-		updatedInv = inv
-		return nil
+	res, err := s.economy.Exchange(ctx, economy.ExchangeRequest{
+		CharacterID:       characterID,
+		DeductMedals:      targetReward.Cost,
+		GrantDefinitionID: targetReward.ItemID,
+		GrantQuantity:     1,
 	})
 	if err != nil {
+		if errors.Is(err, economy.ErrInsufficientMedals) {
+			return corecharacter.Character{}, coreinventory.Inventory{}, ErrInsufficientMedals
+		}
+		if errors.Is(err, economy.ErrCharacterNotFound) {
+			return corecharacter.Character{}, coreinventory.Inventory{}, corecharacter.ErrNotFound
+		}
 		return corecharacter.Character{}, coreinventory.Inventory{}, err
 	}
 
-	return updatedChar, updatedInv, nil
-}
-
-func (s *Service) commit(ctx context.Context, char corecharacter.Character, inv coreinventory.Inventory) error {
-	if s.transactions != nil && s.txProvider == nil {
-		return s.transactions.CommitTransaction(ctx, char, inv)
-	}
-	if err := s.characters.Update(ctx, char); err != nil {
-		return err
-	}
-	return s.inventories.Save(ctx, inv)
+	return res.Character, res.Inventory, nil
 }

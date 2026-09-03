@@ -3,7 +3,6 @@ package shop
 import (
 	"context"
 	"errors"
-	"math"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -72,6 +71,7 @@ type Service struct {
 	transactions TransactionRepository
 	txProvider   TransactionProvider
 	catalog      item.DefinitionProvider
+	economy      *economy.Service
 }
 
 func NewService(characters CharacterRepository, inventories InventoryRepository, catalog item.DefinitionProvider, opts ...Option) (*Service, error) {
@@ -86,6 +86,15 @@ func NewService(characters CharacterRepository, inventories InventoryRepository,
 	for _, opt := range opts {
 		opt(s)
 	}
+	var ecoOpts []economy.Option
+	if s.txProvider != nil {
+		ecoOpts = append(ecoOpts, economy.WithTransactionProvider(s.txProvider))
+	}
+	eco, err := economy.NewService(characters, inventories, ecoOpts...)
+	if err != nil {
+		return nil, err
+	}
+	s.economy = eco
 	return s, nil
 }
 
@@ -102,6 +111,15 @@ func NewServiceWithTransaction(characters CharacterRepository, inventories Inven
 	for _, opt := range opts {
 		opt(s)
 	}
+	var ecoOpts []economy.Option
+	if s.txProvider != nil {
+		ecoOpts = append(ecoOpts, economy.WithTransactionProvider(s.txProvider))
+	}
+	eco, err := economy.NewService(characters, inventories, ecoOpts...)
+	if err != nil {
+		return nil, err
+	}
+	s.economy = eco
 	return s, nil
 }
 
@@ -159,43 +177,28 @@ func (s *Service) Purchase(ctx context.Context, characterID string, itemDefiniti
 		return PurchaseResult{}, err
 	}
 
-	instance, err := item.NewInstance(itemDefinitionID, quantity)
-	if err != nil {
-		return PurchaseResult{}, err
-	}
-
 	var result PurchaseResult
 	err = s.runInTx(ctx, func(txCtx context.Context) error {
-		char, err := s.findCharacter(txCtx, characterID)
+		res, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{
+			CharacterID:       characterID,
+			DeductGold:        totalPrice,
+			GrantDefinitionID: itemDefinitionID,
+			GrantQuantity:     quantity,
+		})
 		if err != nil {
-			return err
-		}
-
-		if char.Money < totalPrice {
-			return ErrInsufficientFunds
-		}
-
-		inv, err := s.findInventory(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-
-		if err := inv.Add(instance); err != nil {
-			return err
-		}
-
-		if err := char.DeductMoney(totalPrice); err != nil {
-			return ErrInsufficientFunds
-		}
-
-		if err := s.commit(txCtx, char, inv); err != nil {
+			if errors.Is(err, economy.ErrInsufficientGold) {
+				return ErrInsufficientFunds
+			}
+			if errors.Is(err, economy.ErrCharacterNotFound) {
+				return corecharacter.ErrNotFound
+			}
 			return err
 		}
 
 		result = PurchaseResult{
-			Character:    char,
-			Inventory:    inv,
-			ItemInstance: instance,
+			Character:    res.Character,
+			Inventory:    res.Inventory,
+			ItemInstance: *res.GrantedItem,
 			TotalPrice:   totalPrice,
 		}
 		return nil
@@ -217,11 +220,6 @@ func (s *Service) Sell(ctx context.Context, characterID string, itemInstanceID s
 
 	var result SaleResult
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		char, err := s.findCharacter(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-
 		inv, err := s.findInventory(txCtx, characterID)
 		if err != nil {
 			return err
@@ -246,24 +244,35 @@ func (s *Service) Sell(ctx context.Context, characterID string, itemInstanceID s
 			return err
 		}
 
-		if math.MaxInt-char.Money < totalPayout {
-			return ErrPriceOverflow
-		}
-
-		if err := inv.Consume(itemInstanceID, quantity); err != nil {
+		res, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{
+			CharacterID:        characterID,
+			AddGold:            totalPayout,
+			ConsumeInstanceID:  itemInstanceID,
+			ConsumeInstanceQty: quantity,
+		})
+		if err != nil {
+			if errors.Is(err, economy.ErrGoldOverflow) {
+				return ErrPriceOverflow
+			}
+			if errors.Is(err, economy.ErrCharacterNotFound) {
+				return corecharacter.ErrNotFound
+			}
+			if errors.Is(err, economy.ErrItemNotFound) {
+				return ErrUnownedItem
+			}
+			if errors.Is(err, economy.ErrInsufficientItemQuantity) {
+				return ErrInvalidQuantity
+			}
 			return err
 		}
 
-		_ = char.AddMoney(totalPayout)
-
-		if err := s.commit(txCtx, char, inv); err != nil {
-			return err
-		}
+		soldInstance := instance
+		soldInstance.Quantity = quantity
 
 		result = SaleResult{
-			Character:    char,
-			Inventory:    inv,
-			SoldInstance: instance,
+			Character:    res.Character,
+			Inventory:    res.Inventory,
+			SoldInstance: soldInstance,
 			TotalPayout:  totalPayout,
 		}
 		return nil
@@ -273,14 +282,4 @@ func (s *Service) Sell(ctx context.Context, characterID string, itemInstanceID s
 	}
 
 	return result, nil
-}
-
-func (s *Service) commit(ctx context.Context, char corecharacter.Character, inv coreinventory.Inventory) error {
-	if s.transactions != nil && s.txProvider == nil {
-		return s.transactions.CommitTransaction(ctx, char, inv)
-	}
-	if err := s.characters.Update(ctx, char); err != nil {
-		return err
-	}
-	return s.inventories.Save(ctx, inv)
 }

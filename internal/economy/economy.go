@@ -93,11 +93,21 @@ func NewService(characters CharacterRepository, inventories InventoryRepository,
 	return s, nil
 }
 
+type txContextKey struct{}
+
 func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) error) error {
-	if s.txProvider != nil {
-		return s.txProvider.RunInTx(ctx, fn)
+	if ctx.Value(txContextKey{}) != nil {
+		return fn(ctx)
 	}
-	return fn(ctx)
+	if s.txProvider != nil {
+		return s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
+			if txCtx.Value(txContextKey{}) != nil {
+				return fn(txCtx)
+			}
+			return fn(context.WithValue(txCtx, txContextKey{}, struct{}{}))
+		})
+	}
+	return fn(context.WithValue(ctx, txContextKey{}, struct{}{}))
 }
 
 func (s *Service) findCharacter(ctx context.Context, characterID string) (corecharacter.Character, error) {

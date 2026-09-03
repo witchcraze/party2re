@@ -10,7 +10,6 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
@@ -85,6 +84,7 @@ type Service struct {
 	catalog       *Catalog
 	helperFilter  HelperQuestFilter
 	txProvider    TransactionProvider
+	economy       *economy.Service
 }
 
 func NewService(
@@ -111,6 +111,15 @@ func NewService(
 	for _, opt := range opts {
 		opt(s)
 	}
+	var ecoOpts []economy.Option
+	if s.txProvider != nil {
+		ecoOpts = append(ecoOpts, economy.WithTransactionProvider(s.txProvider))
+	}
+	eco, err := economy.NewService(characterRepo, inventoryRepo, ecoOpts...)
+	if err != nil {
+		return nil, err
+	}
+	s.economy = eco
 	return s, nil
 }
 
@@ -331,33 +340,19 @@ func (s *Service) PurchaseItem(
 			return err
 		}
 
-		if char.Money < totalPrice {
-			return ErrInsufficientFunds
-		}
-
-		inv, err := s.inventoryRepo.FindByCharacterIDForUpdate(txCtx, characterID)
+		res, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{
+			CharacterID:       characterID,
+			DeductGold:        totalPrice,
+			GrantDefinitionID: shopItem.ItemDefinitionID,
+			GrantQuantity:     quantity,
+		})
 		if err != nil {
-			inv, _ = coreinventory.New(characterID)
-		}
-
-		inst, err := coreitem.NewInstance(shopItem.ItemDefinitionID, quantity)
-		if err != nil {
-			return fmt.Errorf("failed to create item instance: %w", err)
-		}
-
-		if err := inv.Add(inst); err != nil {
-			return fmt.Errorf("failed to add item to inventory: %w", err)
-		}
-
-		if err := char.DeductMoney(totalPrice); err != nil {
-			return ErrInsufficientFunds
-		}
-
-		if err := s.characterRepo.Update(txCtx, char); err != nil {
-			return err
-		}
-
-		if err := s.inventoryRepo.Save(txCtx, inv); err != nil {
+			if errors.Is(err, economy.ErrInsufficientGold) {
+				return ErrInsufficientFunds
+			}
+			if errors.Is(err, economy.ErrCharacterNotFound) {
+				return ErrCharacterNotFound
+			}
 			return err
 		}
 
@@ -366,8 +361,8 @@ func (s *Service) PurchaseItem(
 			Item:                shopItem,
 			Quantity:            quantity,
 			TotalPrice:          totalPrice,
-			RemainingGold:       char.Money,
-			InventoryInstanceID: inst.ID,
+			RemainingGold:       res.Character.Money,
+			InventoryInstanceID: res.GrantedItem.ID,
 		}
 		return nil
 	}
