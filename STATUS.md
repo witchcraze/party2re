@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #343 — Unify keyset cursor pagination helper into internal/pagination
+Last updated: Issue #344 — Fix OverMonster limit break description wording
 
 ## Current phase
 

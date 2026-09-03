@@ -213,6 +213,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#341](https://github.com/witchcraze/party2re/issues/341) | Resolve Character ID vs Name collision and persist surviving HP in party battles | Merged |
 | [#342](https://github.com/witchcraze/party2re/issues/342) | Adopt reusable economy.Service across commerce modules | Merged |
 | [#343](https://github.com/witchcraze/party2re/issues/343) | Unify keyset cursor pagination helper into internal/pagination | Merged |
+| [#344](https://github.com/witchcraze/party2re/issues/344) | Fix OverMonster limit break description wording | Merged |
 
 ---
 

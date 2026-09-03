@@ -295,7 +295,7 @@ func (s *Service) buildUnderworldWishes(char corecharacter.Character) []Wish {
 			ID:          "wish_expand_monster",
 			Name:        "もっとモンスターを預けたい",
 			Realm:       RealmUnderworld,
-			Description: "モンスター預入上限アップ (+1枠)",
+			Description: "モンスター預入上限アップ (+50枠)",
 			Available:   char.OverMonster < MaxLimitBreakTier,
 			CurrentTier: char.OverMonster,
 			MaxTier:     MaxLimitBreakTier,
@@ -566,12 +566,12 @@ func (s *Service) executeUnderworldWish(
 				ID:          wishID,
 				Name:        "もっとモンスターを預けたい",
 				Realm:       RealmUnderworld,
-				Description: "モンスター預入上限アップ (+1枠)",
+				Description: "モンスター預入上限アップ (+50枠)",
 				Available:   char.OverMonster < MaxLimitBreakTier,
 				CurrentTier: char.OverMonster,
 				MaxTier:     MaxLimitBreakTier,
 			},
-			Message:   fmt.Sprintf("モンスター預入上限が +1 拡張されました！ (段階: %d/5)", char.OverMonster),
+			Message:   fmt.Sprintf("モンスター預入上限が +50 拡張されました！ (段階: %d/5)", char.OverMonster),
 			NPCSpeech: fmt.Sprintf("ふむ。%sの願いは「もっとモンスターを預けたい」だな。\n上限を広げてやったぞ…。さらばだ…", char.Name),
 		}
 		return nil
