@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #342 — Adopt reusable economy.Service across commerce modules
+Last updated: Issue #343 — Unify keyset cursor pagination helper into internal/pagination
 
 ## Current phase
 

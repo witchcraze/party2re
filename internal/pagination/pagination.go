@@ -347,3 +347,69 @@ func SliceCursorPage[T any](all []T, limit int, cursor string, getCursor func(it
 
 	return NewCursorPage(items, nextCursor, prevCursor, limit, hasMore)
 }
+
+// DecodeCursorParts decodes an opaque cursor string, attempting compound (time, id) decoding first,
+// with graceful fallback to single ID cursor decoding.
+func DecodeCursorParts(cursor string) (time.Time, string) {
+	trimmed := strings.TrimSpace(cursor)
+	if trimmed == "" {
+		return time.Time{}, ""
+	}
+	t, id, err := DecodeCursor(trimmed)
+	if err == nil && (!t.IsZero() || id != "") {
+		return t, id
+	}
+	id, _ = DecodeIDCursor(trimmed)
+	return time.Time{}, id
+}
+
+// BuildCursorPage constructs a CursorPage from a slice of fetched items (typically fetched with limit+1),
+// automatically handling truncation to limit, hasMore detection, nextCursor generation, and prevCursor retention.
+func BuildCursorPage[T any](rawItems []T, limit int, reqCursor string, getCursor func(item T) (time.Time, string)) CursorPage[T] {
+	limit, _ = Normalize(limit, 0)
+
+	hasMore := false
+	items := rawItems
+	if len(items) > limit {
+		hasMore = true
+		items = items[:limit]
+	}
+
+	var nextCursor string
+	if hasMore && len(items) > 0 && getCursor != nil {
+		last := items[len(items)-1]
+		t, id := getCursor(last)
+		nextCursor = EncodeCursor(t, id)
+	}
+
+	return NewCursorPage(items, nextCursor, reqCursor, limit, hasMore)
+}
+
+// BuildCursorPageWithMapper constructs a CursorPage when raw storage items need to be transformed
+// into a distinct domain or presentation model.
+func BuildCursorPageWithMapper[T any, R any](rawItems []T, limit int, reqCursor string, mapper func(T) R, getCursor func(item T) (time.Time, string)) CursorPage[R] {
+	limit, _ = Normalize(limit, 0)
+
+	hasMore := false
+	items := rawItems
+	if len(items) > limit {
+		hasMore = true
+		items = items[:limit]
+	}
+
+	mapped := make([]R, 0, len(items))
+	for _, item := range items {
+		if mapper != nil {
+			mapped = append(mapped, mapper(item))
+		}
+	}
+
+	var nextCursor string
+	if hasMore && len(items) > 0 && getCursor != nil {
+		last := items[len(items)-1]
+		t, id := getCursor(last)
+		nextCursor = EncodeCursor(t, id)
+	}
+
+	return NewCursorPage(mapped, nextCursor, reqCursor, limit, hasMore)
+}

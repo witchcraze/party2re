@@ -164,43 +164,17 @@ func (s *Service) GetCharacterHistoryByCursor(ctx context.Context, characterID s
 	if strings.TrimSpace(characterID) == "" {
 		return pagination.CursorPage[ReplayHeader]{}, errors.New("character id is required")
 	}
-	if limit <= 0 {
-		limit = pagination.DefaultLimit
-	}
-	if limit > pagination.MaxLimit {
-		limit = pagination.MaxLimit
-	}
+	limit, _ = pagination.Normalize(limit, 0)
+	beforeTime, beforeID := pagination.DecodeCursorParts(cursor)
 
-	var beforeTime time.Time
-	var beforeID string
-	var err error
-
-	if cursor != "" {
-		beforeTime, beforeID, err = pagination.DecodeCursor(cursor)
-		if err != nil {
-			beforeID, _ = pagination.DecodeIDCursor(cursor)
-		}
-	}
-
-	fetchLimit := limit + 1
-	items, err := s.repo.FindByCharacterByCursor(ctx, characterID, combatType, fetchLimit, beforeTime, beforeID)
+	items, err := s.repo.FindByCharacterByCursor(ctx, characterID, combatType, limit+1, beforeTime, beforeID)
 	if err != nil {
 		return pagination.CursorPage[ReplayHeader]{}, err
 	}
 
-	hasMore := false
-	if len(items) > limit {
-		hasMore = true
-		items = items[:limit]
-	}
-
-	var nextCursor string
-	if hasMore && len(items) > 0 {
-		last := items[len(items)-1]
-		nextCursor = pagination.EncodeCursor(last.CreatedAt, last.ID)
-	}
-
-	return pagination.NewCursorPage(items, nextCursor, cursor, limit, hasMore), nil
+	return pagination.BuildCursorPage(items, limit, cursor, func(r ReplayHeader) (time.Time, string) {
+		return r.CreatedAt, r.ID
+	}), nil
 }
 
 func (s *Service) GetRecentReplays(ctx context.Context, combatType string, limit int) ([]ReplayHeader, error) {
@@ -212,43 +186,17 @@ func (s *Service) GetRecentReplays(ctx context.Context, combatType string, limit
 
 // GetRecentReplaysByCursor retrieves keyset / cursor-based paginated recent battle replays.
 func (s *Service) GetRecentReplaysByCursor(ctx context.Context, combatType string, limit int, cursor string) (pagination.CursorPage[ReplayHeader], error) {
-	if limit <= 0 {
-		limit = pagination.DefaultLimit
-	}
-	if limit > pagination.MaxLimit {
-		limit = pagination.MaxLimit
-	}
+	limit, _ = pagination.Normalize(limit, 0)
+	beforeTime, beforeID := pagination.DecodeCursorParts(cursor)
 
-	var beforeTime time.Time
-	var beforeID string
-	var err error
-
-	if cursor != "" {
-		beforeTime, beforeID, err = pagination.DecodeCursor(cursor)
-		if err != nil {
-			beforeID, _ = pagination.DecodeIDCursor(cursor)
-		}
-	}
-
-	fetchLimit := limit + 1
-	items, err := s.repo.FindRecentByCursor(ctx, combatType, fetchLimit, beforeTime, beforeID)
+	items, err := s.repo.FindRecentByCursor(ctx, combatType, limit+1, beforeTime, beforeID)
 	if err != nil {
 		return pagination.CursorPage[ReplayHeader]{}, err
 	}
 
-	hasMore := false
-	if len(items) > limit {
-		hasMore = true
-		items = items[:limit]
-	}
-
-	var nextCursor string
-	if hasMore && len(items) > 0 {
-		last := items[len(items)-1]
-		nextCursor = pagination.EncodeCursor(last.CreatedAt, last.ID)
-	}
-
-	return pagination.NewCursorPage(items, nextCursor, cursor, limit, hasMore), nil
+	return pagination.BuildCursorPage(items, limit, cursor, func(r ReplayHeader) (time.Time, string) {
+		return r.CreatedAt, r.ID
+	}), nil
 }
 
 func (s *Service) PruneOldReplays(ctx context.Context, retentionDays int) (int64, error) {

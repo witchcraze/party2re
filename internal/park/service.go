@@ -154,43 +154,17 @@ func (s *Service) GetRecentPosts(ctx context.Context, limit, offset int) ([]Post
 
 // GetRecentPostsByCursor retrieves recent board posts using keyset / cursor-based pagination.
 func (s *Service) GetRecentPostsByCursor(ctx context.Context, limit int, cursor string) (pagination.CursorPage[Post], error) {
-	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
+	limit, _ = pagination.Normalize(limit, 0)
+	beforeTime, beforeID := pagination.DecodeCursorParts(cursor)
 
-	var beforeTime time.Time
-	var beforeID string
-	var err error
-
-	if cursor != "" {
-		beforeTime, beforeID, err = pagination.DecodeCursor(cursor)
-		if err != nil {
-			beforeID, _ = pagination.DecodeIDCursor(cursor)
-		}
-	}
-
-	fetchLimit := limit + 1
-	items, err := s.repo.GetRecentPostsByCursor(ctx, fetchLimit, beforeTime, beforeID)
+	items, err := s.repo.GetRecentPostsByCursor(ctx, limit+1, beforeTime, beforeID)
 	if err != nil {
 		return pagination.CursorPage[Post]{}, err
 	}
 
-	hasMore := false
-	if len(items) > limit {
-		hasMore = true
-		items = items[:limit]
-	}
-
-	var nextCursor string
-	if hasMore && len(items) > 0 {
-		last := items[len(items)-1]
-		nextCursor = pagination.EncodeCursor(last.CreatedAt, last.ID)
-	}
-
-	return pagination.NewCursorPage(items, nextCursor, cursor, limit, hasMore), nil
+	return pagination.BuildCursorPage(items, limit, cursor, func(p Post) (time.Time, string) {
+		return p.CreatedAt, p.ID
+	}), nil
 }
 
 // TalkToNPC generates a dialogue line for the character talking to the town girl NPC.

@@ -212,6 +212,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#276](https://github.com/witchcraze/party2re/issues/276) | Reusable transactional wallet and inventory exchange helpers (internal/economy) | Merged |
 | [#341](https://github.com/witchcraze/party2re/issues/341) | Resolve Character ID vs Name collision and persist surviving HP in party battles | Merged |
 | [#342](https://github.com/witchcraze/party2re/issues/342) | Adopt reusable economy.Service across commerce modules | Merged |
+| [#343](https://github.com/witchcraze/party2re/issues/343) | Unify keyset cursor pagination helper into internal/pagination | Merged |
 
 ---
 
