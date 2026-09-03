@@ -71,47 +71,28 @@ Once Version 1.0 is established, the project should transition from **reconstruc
 ### Phase 5 — Core Features & Economy Modules (In Progress)
 
 #### Completed Feature Modules & Subsystems:
-- [x] **Player Lifecycle & Session Auth** (Issue #21)
-- [x] **Character Initial State & Growth** (Issue #24, #10)
-- [x] **Item Catalog & 5-Slot Equipment System** (Issue #11, #19, #51)
-- [x] **Job System & Progression Rules** (Issue #17, #31, #38, #50)
-- [x] **Skill Definitions & Cost/Condition Evaluation** (Issue #18)
-- [x] **Battle Engine & Outcome Resolution** (Issue #12, #20, #36)
-- [x] **Valkey ScheduledAction Queue & Worker** (Issue #106, #109, #110)
-- [x] **Adventure System & Multi-stage Content** (Issue #13, #56, #57 — 28 stages, 286 monsters)
-- [x] **Small Medal Exchange** (Issue #160 — deductive logic)
-- [x] **Item Shop System** (Issue #55 — purchase & 50% resale)
-- [x] **Character Item Depot** (Issue #58 — storage for items & gold)
-- [x] **Blacksmith Enhancement** (Issue #59 — +1 to +10 equipment refinement)
-- [x] **Alchemy Synthesis** (Issue #60 — 112 recipe crafting)
-- [x] **Job Mastery & Character Rebirth** (Issue #61 — Lv99 mastery & +5 stat rebirth)
-- [x] **Inn & Resting** (Issue #62 — HP/MP recovery)
-- [x] **Banking & Player Remittance** (Issue #71 — gold deposits & player transfers)
-- [x] **Player Rescue & Helper Quests** (Issue #79 — helper deliveries & emergency rescue recovery)
-- [x] **HTTP JSON Application API Layer** (Issue #87)
-- [x] **Unified Local Verification & Pre-push Hook** (Issue #121, #124)
+- [x] **Player Lifecycle, Deletion & Session Auth** (Issue #21, #134, #190)
+- [x] **Character Initial State, Growth, Rebirth & Customization** (Issue #24, #10, #61, #198)
+- [x] **Item Catalog, 5-Slot Equipment System & Item Depot** (Issue #11, #19, #51, #58)
+- [x] **Job System, Skills, Mastery & Custom Loadout** (Issue #17, #18, #31, #38, #50, #69)
+- [x] **Battle Engine, Deterministic Turn Resolver & Replay Recorder** (Issue #12, #20, #36, #66)
+- [x] **Valkey ScheduledAction Queue & Distributed Lock Worker** (Issue #106, #109, #110)
+- [x] **Adventure System, Multi-stage Content & Chronicles** (Issue #13, #56, #57, #199 — 28 stages, 286 monsters)
+- [x] **Multiplayer Party & Co-op Quests** (Issue #188, #341)
+- [x] **Commercial Economy**: Shop, Blacksmith, Alchemy, Gem Store, Black Market, Flea Market, Auctions, Small Medals (Issue #55, #59, #60, #71, #72, #80, #142, #160, #194, #276)
+- [x] **Social & Meta Systems**: Guilds, GvG, PvP Arena, Bosses, Dungeons, Endurance Challenge, Park, News/Inbox, Home/Mailbox, Rankings, Photo Contest, Monster Grandpa, Secret Shop, Tavern, Delivery, Event Plaza (Issue #63, #67, #73, #74, #75, #76, #77, #78, #79, #81, #82, #83, #84, #85, #86, #141, #159, #161, #162, #185, #186, #187, #192, #193, #195)
+- [x] **HTTP JSON Application API Layer & Complete OpenAPI 3.1 Spec** (Issue #87, #180, #254, #266 — 182 routes)
+- [x] **Maintenance Mode & Admin Operations** (Issue #190)
+- [x] **Unified Verification Pipeline, Pre-push Hook & Distroless Smoke Build** (Issue #121, #124, #128)
 
-#### In-Progress & Upcoming Subsystems (Version 1.0 Milestones):
+#### Remaining Version 1.0 Milestones:
 
-1. **API Security & Ownership Hardening**
-   - Player-Character ownership linkage (Issue #131)
-   - HTTP security headers & CORS middleware (Issue #132, #133)
-2. **Language-Agnostic Core Specifications**
-   - Core design specifications in `docs/design/` (Battle, Progression, Jobs, Skills, Items) (Issue #136)
-3. **Social & Guild Systems**
-   - Guild creation, management, membership, and Guild Battles
-4. **Economy & Side Mini-Games**
-   - Player Auction House & Marketplace
-   - Casino games (High & Low, Indian Poker, Slot Machine, Doppel)
-   - Lottery & Raffle tickets
-   - Farm & Plantation cultivation
-   - Collection & Monster Book encyclopedia
-   - Chapel prayer & Blessings
-5. **Competitive & Meta Systems**
-   - Rankings (Level, Job, Weekly, Contest)
-6. **Client Presentation & UI**
-   - Web application client / UI-independent presentation layer
-   - Asset placeholder mapping and production asset pipeline
+1. **API Key / Personal Access Token Authentication**
+   - Personal Access Token (API Key) generation and authentication (Issue #163)
+2. **Client Presentation & Web UI**
+   - Web application client / UI-independent presentation layer (Issue #140)
+3. **Production Asset Pipeline & Final Licensing**
+   - Production asset mapping and license attribution catalog
 
 ---
 

@@ -17,27 +17,27 @@ In Party2, player accounts and individual characters can be permanently removed 
 Character deletion executes within a database transaction and cleans up resources in reverse-dependency order:
 1. External domain cleanup hooks (`CleanupHook`) for cross-service cleanup.
 2. Character-linked feature tables:
-   - `character_photos`
-   - `contest_entries`, `contest_votes`
-   - `home_companion_phrases`, `home_notices`, `home_profiles`
-   - `character_item_collection`, `character_monster_book`
-   - `tavern_deliveries`
-   - `letters` (both as sender and recipient)
-   - `character_custom_skills`
-   - `character_challenges`
-   - `activity_logs`
-   - `farm_plots`
-   - `parcels` (both sender and recipient)
-   - `delivery_quests`
-   - `character_job_masteries`
-   - `equipment_slots`
-   - `flea_market_listings`
-   - `auction_bids`, `auctions`
-   - `party_members`
-   - `guild_members`
-   - `depot_items`
-   - `inventories`
-   - `character_stats`
+   - `casino_accounts`, `character_lottery`, `lottery_tickets`
+   - `farm_plots`, `character_blessings`, `banquet_toasts`
+   - `blackmarket_character_points`, `blackmarket_character_purchases`
+   - `tavern_deliveries`, `tavern_character_status`
+   - `park_posts`, `rescue_records`
+   - `contest_votes`, `contest_entries`, `character_photos`
+   - `character_deliveries`, `delivery_parcels` (sender or recipient)
+   - `fleamarket_listings`, `auction_listings`
+   - `character_letters` (sender or recipient), `character_companion_phrases`, `character_delivery_notices`, `character_homes`
+   - `character_boss_records`, `boss_challenge_history`
+   - `character_dungeon_records`, `dungeon_active_expeditions`, `dungeon_expedition_history`
+   - `character_challenge_records`, `challenge_sessions`
+   - `arena_ratings`, `arena_matches` (attacker or defender)
+   - `character_monsters`, `character_monster_book`, `character_item_collection`
+   - `party_members`, `parties` (as leader)
+   - `guild_members`, `guilds` (clear `leader_character_id`)
+   - `activities`, `adventures`
+   - `character_custom_skills`, `equipment_slots`, `inventory_items`
+   - `depot_items`, `character_depots`
+   - `character_job_masteries`, `character_job_history`, `character_jobs`
+   - `character_profiles`
 3. Primary character record in `characters`.
 
 ---

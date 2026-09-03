@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #341 — Fix Party participant ID collision, persist surviving HP, and AST domain invariant check
+Last updated: Issue #346 — Streamline redundant documentation and sync feature inventory
 
 ## Current phase
 
