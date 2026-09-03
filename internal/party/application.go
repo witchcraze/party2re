@@ -240,6 +240,13 @@ func (s *Service) ListParties(ctx context.Context, status string, limit, offset 
 	if err != nil {
 		return pagination.Page[PartySummary]{}, err
 	}
+	if s.stages != nil {
+		for i := range items {
+			if st, err := s.stages.FindByID(items[i].StageID); err == nil {
+				items[i].StageName = st.Name
+			}
+		}
+	}
 	return pagination.NewPage(items, total, limit, offset), nil
 }
 
@@ -480,11 +487,12 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 		totalMonsterGold := 0
 		var dropPool []string
 
-		for _, mID := range stage.MonsterIDs {
+		for idx, mID := range stage.MonsterIDs {
 			m, err := s.monsters.FindByID(mID)
 			if err == nil {
 				enemies = append(enemies, battle.Participant{
-					ID:      m.Name,
+					ID:      fmt.Sprintf("%s-%d", m.ID, idx+1),
+					Name:    m.Name,
 					HP:      m.HP,
 					Attack:  m.Attack,
 					Defense: m.Defense,
@@ -497,7 +505,8 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 		if len(enemies) == 0 {
 			// Fallback placeholder enemy
 			enemies = append(enemies, battle.Participant{
-				ID:      "野良モンスター",
+				ID:      "stray-monster-1",
+				Name:    "野良モンスター",
 				HP:      30,
 				Attack:  10,
 				Defense: 5,
@@ -510,12 +519,7 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 		var allies []battle.Participant
 		for _, m := range members {
 			c := charMap[m.CharacterID]
-			allies = append(allies, battle.Participant{
-				ID:      c.Name,
-				HP:      c.Stats.HP,
-				Attack:  c.Stats.Attack,
-				Defense: c.Stats.Defense,
-			})
+			allies = append(allies, battle.NewParticipantFromCharacter(c))
 		}
 
 		// 6. Execute Battle
@@ -554,10 +558,26 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 				}
 			}
 
-			// Apply HP changes if any fallen
-			for _, fallen := range battleRes.AlliesFallen {
-				if fallen == c.Name {
-					c.Stats.HP = 1 // Survive with 1 HP
+			// Apply HP changes from battle result
+			if remHP, ok := battleRes.RemainingHP[c.ID]; ok {
+				if remHP <= 0 {
+					c.Stats.HP = 1 // Fallen members survive with 1 HP
+				} else {
+					c.Stats.HP = remHP
+					if c.Stats.MaxHP > 0 && c.Stats.HP > c.Stats.MaxHP {
+						c.Stats.HP = c.Stats.MaxHP
+					}
+				}
+			} else {
+				isFallen := false
+				for _, fallenID := range battleRes.AlliesFallen {
+					if fallenID == c.ID {
+						isFallen = true
+						break
+					}
+				}
+				if isFallen {
+					c.Stats.HP = 1
 				}
 			}
 

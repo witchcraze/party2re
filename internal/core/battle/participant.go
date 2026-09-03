@@ -8,8 +8,10 @@ import (
 
 // NewParticipant validates and creates a new Participant.
 func NewParticipant(id string, hp, attack, defense int) (Participant, error) {
+	trimmedID := strings.TrimSpace(id)
 	p := Participant{
-		ID:      strings.TrimSpace(id),
+		ID:      trimmedID,
+		Name:    trimmedID,
 		HP:      hp,
 		Attack:  attack,
 		Defense: defense,
@@ -38,6 +40,7 @@ func NewParticipantFromCharacter(char corecharacter.Character) Participant {
 	}
 	return Participant{
 		ID:      char.ID,
+		Name:    char.Name,
 		HP:      hp,
 		Attack:  char.Stats.Attack,
 		Defense: char.Stats.Defense,
@@ -55,6 +58,7 @@ func NewParticipantFromCharacterWithHP(char corecharacter.Character, currentHP i
 	}
 	return Participant{
 		ID:      char.ID,
+		Name:    char.Name,
 		HP:      hp,
 		Attack:  char.Stats.Attack,
 		Defense: char.Stats.Defense,
@@ -64,6 +68,7 @@ func NewParticipantFromCharacterWithHP(char corecharacter.Character, currentHP i
 // ParticipantBuilder provides a fluent builder pattern for constructing Participants.
 type ParticipantBuilder struct {
 	id      string
+	name    string
 	hp      int
 	attack  int
 	defense int
@@ -71,18 +76,26 @@ type ParticipantBuilder struct {
 
 // NewParticipantBuilder initializes a new builder with an ID.
 func NewParticipantBuilder(id string) *ParticipantBuilder {
-	return &ParticipantBuilder{id: strings.TrimSpace(id)}
+	trimmedID := strings.TrimSpace(id)
+	return &ParticipantBuilder{id: trimmedID, name: trimmedID}
 }
 
 // FromCharacter sets attributes based on a Character's stats.
 func (b *ParticipantBuilder) FromCharacter(char corecharacter.Character) *ParticipantBuilder {
 	b.id = char.ID
+	b.name = char.Name
 	b.hp = char.Stats.HP
 	if b.hp <= 0 && char.Stats.MaxHP > 0 {
 		b.hp = char.Stats.MaxHP
 	}
 	b.attack = char.Stats.Attack
 	b.defense = char.Stats.Defense
+	return b
+}
+
+// WithName sets the display name.
+func (b *ParticipantBuilder) WithName(name string) *ParticipantBuilder {
+	b.name = strings.TrimSpace(name)
 	return b
 }
 
@@ -102,7 +115,14 @@ func (b *ParticipantBuilder) WithCurrentHP(hp int) *ParticipantBuilder {
 
 // Build validates and returns the constructed Participant.
 func (b *ParticipantBuilder) Build() (Participant, error) {
-	return NewParticipant(b.id, b.hp, b.attack, b.defense)
+	p, err := NewParticipant(b.id, b.hp, b.attack, b.defense)
+	if err != nil {
+		return Participant{}, err
+	}
+	if b.name != "" {
+		p.Name = b.name
+	}
+	return p, nil
 }
 
 // MustBuild returns the constructed Participant or panics if invalid.

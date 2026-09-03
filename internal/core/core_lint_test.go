@@ -208,6 +208,62 @@ func checkFileCoreRules(fset *token.FileSet, node *ast.File, filename string) []
 					}
 				}
 			}
+
+		case *ast.CompositeLit:
+			// Check for Participant composite literals: Participant{ ID: c.Name, ... }
+			isParticipant := false
+			if sel, ok := stmt.Type.(*ast.SelectorExpr); ok {
+				if sel.Sel.Name == "Participant" {
+					isParticipant = true
+				}
+			} else if ident, ok := stmt.Type.(*ast.Ident); ok {
+				if ident.Name == "Participant" {
+					isParticipant = true
+				}
+			}
+			if isParticipant {
+				for _, elt := range stmt.Elts {
+					if kve, ok := elt.(*ast.KeyValueExpr); ok {
+						if keyIdent, ok := kve.Key.(*ast.Ident); ok && keyIdent.Name == "ID" {
+							if valSel, ok := kve.Value.(*ast.SelectorExpr); ok {
+								if valSel.Sel.Name == "Name" {
+									pos := fset.Position(kve.Pos())
+									violations = append(violations, coreViolation{
+										file:    filename,
+										line:    pos.Line,
+										field:   "Participant.ID",
+										message: "passing .Name as Participant.ID is prohibited; use entity unique ID (e.g. .ID) instead",
+									})
+								}
+							}
+						}
+					}
+				}
+			}
+
+		case *ast.CallExpr:
+			// Check calls to NewParticipant, MustNewParticipant, NewParticipantBuilder
+			fnName := ""
+			if sel, ok := stmt.Fun.(*ast.SelectorExpr); ok {
+				fnName = sel.Sel.Name
+			} else if ident, ok := stmt.Fun.(*ast.Ident); ok {
+				fnName = ident.Name
+			}
+			if fnName == "NewParticipant" || fnName == "MustNewParticipant" || fnName == "NewParticipantBuilder" {
+				if len(stmt.Args) > 0 {
+					if valSel, ok := stmt.Args[0].(*ast.SelectorExpr); ok {
+						if valSel.Sel.Name == "Name" {
+							pos := fset.Position(stmt.Pos())
+							violations = append(violations, coreViolation{
+								file:    filename,
+								line:    pos.Line,
+								field:   "Participant.ID",
+								message: "passing .Name as Participant ID argument is prohibited; use entity unique ID (e.g. .ID) instead",
+							})
+						}
+					}
+				}
+			}
 		}
 		return true
 	})
@@ -217,7 +273,7 @@ func checkFileCoreRules(fset *token.FileSet, node *ast.File, filename string) []
 
 // TestCoreDomainInvariantsAST scans all production Go source files under internal/
 // to mechanically verify that critical Core domain invariants (Progression, Currency,
-// Job state, Inventory, Equipment) are never mutated directly outside their canonical Core helpers.
+// Job state, Inventory, Equipment, Battle Participant Identity) are never violated.
 func TestCoreDomainInvariantsAST(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -447,6 +503,42 @@ func ForceEquip(eq *Equipment, slot Slot, instID string) {
 			expectError: true,
 			field:       "Slots",
 			errSnippet:  "use Equipment.Equip or Unequip",
+		},
+
+		// 6. Battle Participant Identity
+		{
+			name: "Valid Participant: NewParticipantFromCharacter",
+			path: "internal/feature/service.go",
+			code: `package feature
+func BuildAlly(char Character) Participant {
+	return NewParticipantFromCharacter(char)
+}`,
+			expectError: false,
+		},
+		{
+			name: "Violation: Participant composite lit assigning .Name to ID",
+			path: "internal/feature/service.go",
+			code: `package feature
+func BuildAlly(c Character) Participant {
+	return Participant{
+		ID: c.Name,
+		HP: 50,
+	}
+}`,
+			expectError: true,
+			field:       "Participant.ID",
+			errSnippet:  "passing .Name as Participant.ID is prohibited",
+		},
+		{
+			name: "Violation: NewParticipant call passing .Name as ID",
+			path: "internal/feature/service.go",
+			code: `package feature
+func BuildAlly(char Character) Participant {
+	return MustNewParticipant(char.Name, 50, 10, 5)
+}`,
+			expectError: true,
+			field:       "Participant.ID",
+			errSnippet:  "passing .Name as Participant ID argument is prohibited",
 		},
 	}
 

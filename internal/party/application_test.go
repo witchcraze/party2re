@@ -591,6 +591,121 @@ func TestListParties(t *testing.T) {
 	if page.Items[0].Name != "Party One" {
 		t.Errorf("expected party name 'Party One', got %s", page.Items[0].Name)
 	}
+	if page.Items[0].StageName != "はじまりの森" {
+		t.Errorf("expected stage name 'はじまりの森', got %q", page.Items[0].StageName)
+	}
+}
+
+func TestPartyService_StartPartyAdventure_DuplicateCharacterNames(t *testing.T) {
+	svc, _, charRepo, _ := setupTestService(t)
+
+	// Two characters with different IDs but exact same display name
+	leader := corecharacter.Character{
+		ID:         "char-same-1",
+		Name:       "SameHero",
+		Level:      5,
+		Experience: 250,
+		Money:      100,
+		Stats:      corecharacter.Stats{HP: 50, MaxHP: 50, Attack: 25, Defense: 10},
+	}
+	m1 := corecharacter.Character{
+		ID:         "char-same-2",
+		Name:       "SameHero",
+		Level:      5,
+		Experience: 250,
+		Money:      50,
+		Stats:      corecharacter.Stats{HP: 45, MaxHP: 45, Attack: 20, Defense: 8},
+	}
+	charRepo.chars[leader.ID] = leader
+	charRepo.chars[m1.ID] = m1
+
+	detail, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
+		Name:    "TwinParty",
+		StageID: "forest",
+	})
+	if err != nil {
+		t.Fatalf("CreateParty failed: %v", err)
+	}
+	partyID := detail.Party.ID
+
+	if _, err := svc.JoinParty(context.Background(), partyID, m1.ID, ""); err != nil {
+		t.Fatalf("JoinParty failed: %v", err)
+	}
+	if _, err := svc.SetReady(context.Background(), partyID, m1.ID, true); err != nil {
+		t.Fatalf("SetReady failed: %v", err)
+	}
+
+	res, err := svc.StartPartyAdventure(context.Background(), partyID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure with duplicate names failed: %v", err)
+	}
+	if res.Outcome != "win" {
+		t.Fatalf("expected victory, got %s", res.Outcome)
+	}
+	if len(res.Rewards) != 2 {
+		t.Fatalf("expected 2 distinct member rewards, got %d", len(res.Rewards))
+	}
+	if res.Rewards[0].CharacterID == res.Rewards[1].CharacterID {
+		t.Fatalf("expected unique character IDs in rewards, got %s and %s", res.Rewards[0].CharacterID, res.Rewards[1].CharacterID)
+	}
+}
+
+func TestPartyService_StartPartyAdventure_SurvivingDamagePersisted(t *testing.T) {
+	svc, _, charRepo, _ := setupTestService(t)
+
+	leader := corecharacter.Character{
+		ID:         "char-dmg-leader",
+		Name:       "ToughHero",
+		Level:      5,
+		Experience: 250,
+		Money:      100,
+		Stats:      corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 15, Defense: 5},
+	}
+	m1 := corecharacter.Character{
+		ID:         "char-dmg-member",
+		Name:       "FragileHero",
+		Level:      5,
+		Experience: 250,
+		Money:      50,
+		Stats:      corecharacter.Stats{HP: 15, MaxHP: 50, Attack: 15, Defense: 2},
+	}
+	charRepo.chars[leader.ID] = leader
+	charRepo.chars[m1.ID] = m1
+
+	detail, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
+		Name:    "BattleDamageParty",
+		StageID: "forest",
+	})
+	if err != nil {
+		t.Fatalf("CreateParty failed: %v", err)
+	}
+	partyID := detail.Party.ID
+
+	if _, err := svc.JoinParty(context.Background(), partyID, m1.ID, ""); err != nil {
+		t.Fatalf("JoinParty failed: %v", err)
+	}
+	if _, err := svc.SetReady(context.Background(), partyID, m1.ID, true); err != nil {
+		t.Fatalf("SetReady failed: %v", err)
+	}
+
+	res, err := svc.StartPartyAdventure(context.Background(), partyID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure failed: %v", err)
+	}
+
+	updatedLeader := charRepo.chars[leader.ID]
+	updatedMember := charRepo.chars[m1.ID]
+
+	// Leader took non-fatal damage and survived with HP < 100
+	if updatedLeader.Stats.HP <= 0 {
+		t.Errorf("expected leader to be alive, got HP=%d", updatedLeader.Stats.HP)
+	}
+
+	// Member with low HP either survived with damage or fell with HP = 1
+	if updatedMember.Stats.HP < 1 {
+		t.Errorf("expected member HP >= 1, got %d", updatedMember.Stats.HP)
+	}
+	t.Logf("Battle result outcome=%s, leader HP: %d/%d, member HP: %d/%d", res.Outcome, updatedLeader.Stats.HP, updatedLeader.Stats.MaxHP, updatedMember.Stats.HP, updatedMember.Stats.MaxHP)
 }
 
 func TestPartyService_StartPartyAdventure_OverLevelAndCap(t *testing.T) {

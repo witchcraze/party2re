@@ -3,6 +3,7 @@ package battle
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -187,7 +188,34 @@ func TestEngineResolvePartyBattle(t *testing.T) {
 		t.Fatalf("expected enemies win, got outcome=%s side=%s", resDefeat.Outcome, resDefeat.WinnerSide)
 	}
 
-	// 4. Invalid requests
+	// 4. Duplicate display names with distinct IDs
+	resSameName, err := engine.ResolvePartyBattle(PartyBattleRequest{
+		Allies: []Participant{
+			{ID: "char-1", Name: "TwinHero", HP: 50, Attack: 25, Defense: 5},
+			{ID: "char-2", Name: "TwinHero", HP: 40, Attack: 20, Defense: 5},
+		},
+		Enemies: []Participant{
+			{ID: "mon-1", Name: "Slime", HP: 20, Attack: 5, Defense: 2},
+		},
+		VictoryReward: Reward{Experience: 50, Currency: 25},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePartyBattle with duplicate names failed: %v", err)
+	}
+	if resSameName.Outcome != OutcomeWin {
+		t.Fatalf("expected win, got %s", resSameName.Outcome)
+	}
+	if len(resSameName.AlliesSurvived) != 2 {
+		t.Fatalf("expected 2 survivors, got %d", len(resSameName.AlliesSurvived))
+	}
+	if resSameName.RemainingHP["char-1"] <= 0 || resSameName.RemainingHP["char-2"] <= 0 {
+		t.Fatalf("expected positive remaining HP for both distinct IDs, got %+v", resSameName.RemainingHP)
+	}
+	if len(resSameName.Logs) == 0 || !strings.Contains(resSameName.Logs[0].Message, "TwinHero") {
+		t.Fatalf("expected log message to contain display name TwinHero, got %+v", resSameName.Logs)
+	}
+
+	// 5. Invalid requests
 	if _, err := engine.ResolvePartyBattle(PartyBattleRequest{}); !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("expected ErrInvalidRequest, got %v", err)
 	}
