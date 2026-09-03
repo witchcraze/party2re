@@ -350,6 +350,12 @@ func TestGod_GrantWish_Underworld(t *testing.T) {
 	if resMon.Character.OverMonster != 1 {
 		t.Errorf("expected OverMonster 1, got %d", resMon.Character.OverMonster)
 	}
+	if resMon.Wish.Description != "モンスター預入上限アップ (+50枠)" {
+		t.Errorf("expected description 'モンスター預入上限アップ (+50枠)', got %q", resMon.Wish.Description)
+	}
+	if resMon.Message != "モンスター預入上限が +50 拡張されました！ (段階: 1/5)" {
+		t.Errorf("expected message 'モンスター預入上限が +50 拡張されました！ (段階: 1/5)', got %q", resMon.Message)
+	}
 
 	// 4. Expand job memory
 	resJob, err := svc.GrantWish(ctx, "char_underworld", "wish_expand_job_memory", god.RealmUnderworld)
