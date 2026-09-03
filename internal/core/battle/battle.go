@@ -13,6 +13,7 @@ var (
 
 type Participant struct {
 	ID      string
+	Name    string
 	HP      int
 	Attack  int
 	Defense int
@@ -83,15 +84,16 @@ type PartyBattleRequest struct {
 }
 
 type PartyBattleResult struct {
-	Outcome        Outcome   `json:"outcome"`
-	WinnerSide     string    `json:"winner_side"`
-	Turns          int       `json:"turns"`
-	BaseReward     Reward    `json:"base_reward"`
-	BonusPercent   int       `json:"bonus_percent"`
-	TotalReward    Reward    `json:"total_reward"`
-	AlliesSurvived []string  `json:"allies_survived"`
-	AlliesFallen   []string  `json:"allies_fallen"`
-	Logs           []TurnLog `json:"logs,omitempty"`
+	Outcome        Outcome        `json:"outcome"`
+	WinnerSide     string         `json:"winner_side"`
+	Turns          int            `json:"turns"`
+	BaseReward     Reward         `json:"base_reward"`
+	BonusPercent   int            `json:"bonus_percent"`
+	TotalReward    Reward         `json:"total_reward"`
+	AlliesSurvived []string       `json:"allies_survived"`
+	AlliesFallen   []string       `json:"allies_fallen"`
+	RemainingHP    map[string]int `json:"remaining_hp"`
+	Logs           []TurnLog      `json:"logs,omitempty"`
 }
 
 type Engine struct{}
@@ -244,13 +246,22 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 				snapshot[k] = v
 			}
 
+			allyName := ally.Name
+			if allyName == "" {
+				allyName = ally.ID
+			}
+			targetName := target.Name
+			if targetName == "" {
+				targetName = target.ID
+			}
+
 			logs = append(logs, TurnLog{
 				Turn:        turns,
 				ActorID:     ally.ID,
 				ActionName:  "こうげき",
 				TargetID:    target.ID,
 				DamageDealt: dmg,
-				Message:     fmt.Sprintf("%s の攻撃！ %s に %d のダメージ！", ally.ID, target.ID, dmg),
+				Message:     fmt.Sprintf("%s の攻撃！ %s に %d のダメージ！", allyName, targetName, dmg),
 				RemainingHP: snapshot,
 			})
 		}
@@ -276,6 +287,11 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 			totalReward.Experience = (totalReward.Experience * (100 + bonusPercent)) / 100
 			totalReward.Currency = (totalReward.Currency * (100 + bonusPercent)) / 100
 
+			finalSnapshot := make(map[string]int, len(hpMap))
+			for k, v := range hpMap {
+				finalSnapshot[k] = v
+			}
+
 			return PartyBattleResult{
 				Outcome:        OutcomeWin,
 				WinnerSide:     "allies",
@@ -285,6 +301,7 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 				TotalReward:    totalReward,
 				AlliesSurvived: survived,
 				AlliesFallen:   fallen,
+				RemainingHP:    finalSnapshot,
 				Logs:           logs,
 			}, nil
 		}
@@ -318,13 +335,22 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 				snapshot[k] = v
 			}
 
+			enemyName := enemy.Name
+			if enemyName == "" {
+				enemyName = enemy.ID
+			}
+			targetName := target.Name
+			if targetName == "" {
+				targetName = target.ID
+			}
+
 			logs = append(logs, TurnLog{
 				Turn:        turns,
 				ActorID:     enemy.ID,
 				ActionName:  "こうげき",
 				TargetID:    target.ID,
 				DamageDealt: dmg,
-				Message:     fmt.Sprintf("%s の攻撃！ %s に %d のダメージ！", enemy.ID, target.ID, dmg),
+				Message:     fmt.Sprintf("%s の攻撃！ %s に %d のダメージ！", enemyName, targetName, dmg),
 				RemainingHP: snapshot,
 			})
 		}
@@ -342,6 +368,10 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 			for _, a := range req.Allies {
 				fallen = append(fallen, a.ID)
 			}
+			finalSnapshot := make(map[string]int, len(hpMap))
+			for k, v := range hpMap {
+				finalSnapshot[k] = v
+			}
 			return PartyBattleResult{
 				Outcome:        OutcomeDefeat,
 				WinnerSide:     "enemies",
@@ -351,6 +381,7 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 				TotalReward:    req.DefeatReward,
 				AlliesSurvived: []string{},
 				AlliesFallen:   fallen,
+				RemainingHP:    finalSnapshot,
 				Logs:           logs,
 			}, nil
 		}
@@ -365,6 +396,10 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 			fallen = append(fallen, a.ID)
 		}
 	}
+	finalSnapshot := make(map[string]int, len(hpMap))
+	for k, v := range hpMap {
+		finalSnapshot[k] = v
+	}
 	return PartyBattleResult{
 		Outcome:        OutcomeDraw,
 		WinnerSide:     "none",
@@ -374,6 +409,7 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 		TotalReward:    req.DrawReward,
 		AlliesSurvived: survived,
 		AlliesFallen:   fallen,
+		RemainingHP:    finalSnapshot,
 		Logs:           logs,
 	}, nil
 }
