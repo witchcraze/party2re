@@ -439,3 +439,144 @@ func TestSliceCursorPage(t *testing.T) {
 		t.Errorf("pageEmpty should be empty: %+v", pageEmpty)
 	}
 }
+
+func TestDecodeCursorParts(t *testing.T) {
+	now := time.Date(2026, 9, 2, 20, 0, 0, 123456789, time.UTC)
+	id := "item-123"
+
+	// Compound cursor
+	compoundToken := pagination.EncodeCursor(now, id)
+	tDec, idDec := pagination.DecodeCursorParts(compoundToken)
+	if !tDec.Equal(now) || idDec != id {
+		t.Errorf("DecodeCursorParts(compound) = (%v, %s), want (%v, %s)", tDec, idDec, now, id)
+	}
+
+	// Single ID cursor fallback
+	idToken := pagination.EncodeIDCursor(id)
+	tDecID, idDecID := pagination.DecodeCursorParts(idToken)
+	if !tDecID.IsZero() || idDecID != id {
+		t.Errorf("DecodeCursorParts(idToken) = (%v, %s), want (zero, %s)", tDecID, idDecID, id)
+	}
+
+	// Empty string
+	tEmpty, idEmpty := pagination.DecodeCursorParts("")
+	if !tEmpty.IsZero() || idEmpty != "" {
+		t.Errorf("DecodeCursorParts(\"\") = (%v, %s), want (zero, \"\")", tEmpty, idEmpty)
+	}
+
+	// Whitespace only
+	tWs, idWs := pagination.DecodeCursorParts("   ")
+	if !tWs.IsZero() || idWs != "" {
+		t.Errorf("DecodeCursorParts(whitespace) = (%v, %s), want (zero, \"\")", tWs, idWs)
+	}
+}
+
+func TestBuildCursorPage(t *testing.T) {
+	type testItem struct {
+		ID        string
+		CreatedAt time.Time
+	}
+
+	t0 := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+	t1 := time.Date(2026, 9, 1, 11, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+
+	getCursor := func(item testItem) (time.Time, string) {
+		return item.CreatedAt, item.ID
+	}
+
+	t.Run("has more items (len > limit)", func(t *testing.T) {
+		raw := []testItem{
+			{ID: "1", CreatedAt: t2},
+			{ID: "2", CreatedAt: t1},
+			{ID: "3", CreatedAt: t0}, // extra item for fetchLimit = limit + 1
+		}
+
+		page := pagination.BuildCursorPage(raw, 2, "initial-cursor", getCursor)
+		if len(page.Items) != 2 {
+			t.Fatalf("expected 2 items, got %d", len(page.Items))
+		}
+		if !page.HasMore {
+			t.Errorf("expected hasMore to be true")
+		}
+		if page.PrevCursor != "initial-cursor" {
+			t.Errorf("expected PrevCursor 'initial-cursor', got %q", page.PrevCursor)
+		}
+		expectedNext := pagination.EncodeCursor(t1, "2")
+		if page.NextCursor != expectedNext {
+			t.Errorf("expected NextCursor %q, got %q", expectedNext, page.NextCursor)
+		}
+	})
+
+	t.Run("exact or fewer items (hasMore = false)", func(t *testing.T) {
+		raw := []testItem{
+			{ID: "1", CreatedAt: t2},
+		}
+
+		page := pagination.BuildCursorPage(raw, 2, "some-cursor", getCursor)
+		if len(page.Items) != 1 {
+			t.Fatalf("expected 1 item, got %d", len(page.Items))
+		}
+		if page.HasMore {
+			t.Errorf("expected hasMore to be false")
+		}
+		if page.NextCursor != "" {
+			t.Errorf("expected NextCursor to be empty, got %q", page.NextCursor)
+		}
+		if page.PrevCursor != "some-cursor" {
+			t.Errorf("expected PrevCursor 'some-cursor', got %q", page.PrevCursor)
+		}
+	})
+
+	t.Run("empty raw items", func(t *testing.T) {
+		page := pagination.BuildCursorPage([]testItem{}, 2, "", getCursor)
+		if len(page.Items) != 0 || page.HasMore || page.NextCursor != "" {
+			t.Errorf("expected empty page, got %+v", page)
+		}
+	})
+}
+
+func TestBuildCursorPageWithMapper(t *testing.T) {
+	type rawEntity struct {
+		ID        string
+		Value     int
+		Timestamp time.Time
+	}
+	type dto struct {
+		ID    string
+		Value int
+	}
+
+	t0 := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+	t1 := time.Date(2026, 9, 1, 11, 0, 0, 0, time.UTC)
+
+	raw := []rawEntity{
+		{ID: "r1", Value: 100, Timestamp: t1},
+		{ID: "r2", Value: 200, Timestamp: t0},
+	}
+
+	mapper := func(r rawEntity) dto {
+		return dto{ID: r.ID, Value: r.Value * 2}
+	}
+	getCursor := func(r rawEntity) (time.Time, string) {
+		return r.Timestamp, r.ID
+	}
+
+	page := pagination.BuildCursorPageWithMapper(raw, 1, "req-token", mapper, getCursor)
+	if len(page.Items) != 1 {
+		t.Fatalf("expected 1 mapped item, got %d", len(page.Items))
+	}
+	if page.Items[0].Value != 200 {
+		t.Errorf("expected mapped value 200, got %d", page.Items[0].Value)
+	}
+	if !page.HasMore {
+		t.Errorf("expected hasMore to be true")
+	}
+	expectedNext := pagination.EncodeCursor(t1, "r1")
+	if page.NextCursor != expectedNext {
+		t.Errorf("expected NextCursor %q, got %q", expectedNext, page.NextCursor)
+	}
+	if page.PrevCursor != "req-token" {
+		t.Errorf("expected PrevCursor 'req-token', got %q", page.PrevCursor)
+	}
+}

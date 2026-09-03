@@ -790,43 +790,17 @@ func (s *Service) GetIncomingParcelsByCursor(ctx context.Context, recipientID st
 	if strings.TrimSpace(recipientID) == "" {
 		return pagination.CursorPage[Parcel]{}, ErrInvalidInput
 	}
-	if limit <= 0 {
-		limit = pagination.DefaultLimit
-	}
-	if limit > pagination.MaxLimit {
-		limit = pagination.MaxLimit
-	}
+	limit, _ = pagination.Normalize(limit, 0)
+	beforeTime, beforeID := pagination.DecodeCursorParts(cursor)
 
-	var beforeTime time.Time
-	var beforeID string
-	var err error
-
-	if cursor != "" {
-		beforeTime, beforeID, err = pagination.DecodeCursor(cursor)
-		if err != nil {
-			beforeID, _ = pagination.DecodeIDCursor(cursor)
-		}
-	}
-
-	fetchLimit := limit + 1
-	parcels, err := s.repo.GetIncomingParcelsByCursor(ctx, recipientID, fetchLimit, beforeTime, beforeID)
+	parcels, err := s.repo.GetIncomingParcelsByCursor(ctx, recipientID, limit+1, beforeTime, beforeID)
 	if err != nil {
 		return pagination.CursorPage[Parcel]{}, err
 	}
 
-	hasMore := false
-	if len(parcels) > limit {
-		hasMore = true
-		parcels = parcels[:limit]
-	}
-
-	var nextCursor string
-	if hasMore && len(parcels) > 0 {
-		last := parcels[len(parcels)-1]
-		nextCursor = pagination.EncodeCursor(last.CreatedAt, last.ID)
-	}
-
-	return pagination.NewCursorPage(parcels, nextCursor, cursor, limit, hasMore), nil
+	return pagination.BuildCursorPage(parcels, limit, cursor, func(p Parcel) (time.Time, string) {
+		return p.CreatedAt, p.ID
+	}), nil
 }
 
 // GetSentParcels returns parcels sent by character.
@@ -842,43 +816,17 @@ func (s *Service) GetSentParcelsByCursor(ctx context.Context, senderID string, l
 	if strings.TrimSpace(senderID) == "" {
 		return pagination.CursorPage[Parcel]{}, ErrInvalidInput
 	}
-	if limit <= 0 {
-		limit = pagination.DefaultLimit
-	}
-	if limit > pagination.MaxLimit {
-		limit = pagination.MaxLimit
-	}
+	limit, _ = pagination.Normalize(limit, 0)
+	beforeTime, beforeID := pagination.DecodeCursorParts(cursor)
 
-	var beforeTime time.Time
-	var beforeID string
-	var err error
-
-	if cursor != "" {
-		beforeTime, beforeID, err = pagination.DecodeCursor(cursor)
-		if err != nil {
-			beforeID, _ = pagination.DecodeIDCursor(cursor)
-		}
-	}
-
-	fetchLimit := limit + 1
-	parcels, err := s.repo.GetSentParcelsByCursor(ctx, senderID, fetchLimit, beforeTime, beforeID)
+	parcels, err := s.repo.GetSentParcelsByCursor(ctx, senderID, limit+1, beforeTime, beforeID)
 	if err != nil {
 		return pagination.CursorPage[Parcel]{}, err
 	}
 
-	hasMore := false
-	if len(parcels) > limit {
-		hasMore = true
-		parcels = parcels[:limit]
-	}
-
-	var nextCursor string
-	if hasMore && len(parcels) > 0 {
-		last := parcels[len(parcels)-1]
-		nextCursor = pagination.EncodeCursor(last.CreatedAt, last.ID)
-	}
-
-	return pagination.NewCursorPage(parcels, nextCursor, cursor, limit, hasMore), nil
+	return pagination.BuildCursorPage(parcels, limit, cursor, func(p Parcel) (time.Time, string) {
+		return p.CreatedAt, p.ID
+	}), nil
 }
 
 // ClaimParcel deposits the parcel's gold and items into the recipient character's possession.

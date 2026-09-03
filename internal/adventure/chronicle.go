@@ -181,48 +181,17 @@ func (s *Service) ListHistoryByCursor(ctx context.Context, characterID string, l
 		return pagination.CursorPage[AdventureHistoryEntry]{}, err
 	}
 
-	if limit <= 0 {
-		limit = pagination.DefaultLimit
-	}
-	if limit > pagination.MaxLimit {
-		limit = pagination.MaxLimit
-	}
+	limit, _ = pagination.Normalize(limit, 0)
+	beforeTime, beforeID := pagination.DecodeCursorParts(cursor)
 
-	var beforeTime time.Time
-	var beforeID string
-	var err error
-
-	if cursor != "" {
-		beforeTime, beforeID, err = pagination.DecodeCursor(cursor)
-		if err != nil {
-			beforeID, _ = pagination.DecodeIDCursor(cursor)
-		}
-	}
-
-	fetchLimit := limit + 1
-	adventures, err := s.adventures.ListByCharacterIDByCursor(ctx, characterID, fetchLimit, beforeTime, beforeID)
+	adventures, err := s.adventures.ListByCharacterIDByCursor(ctx, characterID, limit+1, beforeTime, beforeID)
 	if err != nil {
 		return pagination.CursorPage[AdventureHistoryEntry]{}, err
 	}
 
-	hasMore := false
-	if len(adventures) > limit {
-		hasMore = true
-		adventures = adventures[:limit]
-	}
-
-	entries := make([]AdventureHistoryEntry, 0, len(adventures))
-	for _, adv := range adventures {
-		entries = append(entries, s.buildHistoryEntry(adv))
-	}
-
-	var nextCursor string
-	if hasMore && len(adventures) > 0 {
-		last := adventures[len(adventures)-1]
-		nextCursor = pagination.EncodeCursor(last.StartedAt, last.ID)
-	}
-
-	return pagination.NewCursorPage(entries, nextCursor, cursor, limit, hasMore), nil
+	return pagination.BuildCursorPageWithMapper(adventures, limit, cursor, s.buildHistoryEntry, func(adv Adventure) (time.Time, string) {
+		return adv.StartedAt, adv.ID
+	}), nil
 }
 
 func (s *Service) buildHistoryEntry(adv Adventure) AdventureHistoryEntry {
