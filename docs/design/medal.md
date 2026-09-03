@@ -43,10 +43,16 @@ Small Medals are earned through various exploration and combat activities:
 2. **World Boss Battles (`internal/boss`)**:
    - **Boss Defeat**: Conquering a King Boss awards **1 to 5 Small Medals** (Tier 1〜10; Primal Creator Deity Tier 99 awards **10 Small Medals**).
    - **First Clear Bonus**: First-time defeat of a boss tier awards an extra **1 to 20 Small Medals**.
-3. **Endurance Challenge & Adventures (`internal/challenge`, `internal/adventure`)**:
-   - Milestone rewards and rare monster battle victory rewards.
+4. **Milestone Achievements (`internal/medal`, [`achievements.md`](achievements.md))**:
+   - Completing lifetime achievements (adventures completed, monsters slain, gold earned, bosses defeated, etc.) awards bonus Small Medals upon claim.
 
 ## HTTP API Endpoints
 
+### Small Medal Exchange
 - `GET /medals/rewards`: Returns the active small medal reward tiers and item definitions.
 - `POST /medals/claim`: Exchanges character small medals for a reward item (`{"character_id": "...", "item_id": "..."}`) with session authentication and character ownership verification.
+
+### Milestone Achievements & Commemorative Medals
+- `GET /characters/{id}/achievements`: Inspects character lifetime milestone achievements and progress.
+- `POST /characters/{id}/achievements/{achievement_id}/claim`: Claims completed milestone rewards (commemorative medal and bonus small medals).
+- `GET /characters/{id}/medals`: Inspects character collection of earned commemorative medals.

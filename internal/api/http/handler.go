@@ -447,6 +447,11 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /characters/{id}/collections/monsters", h.handleGetMonsterBook)
 	mux.HandleFunc("GET /characters/{id}/collections/items", h.handleGetItemCollection)
 
+	// Achievements & Commemorative Medals
+	mux.HandleFunc("GET /characters/{id}/achievements", h.handleGetCharacterAchievements)
+	mux.HandleFunc("POST /characters/{id}/achievements/{achievement_id}/claim", h.handleClaimAchievement)
+	mux.HandleFunc("GET /characters/{id}/medals", h.handleGetCharacterMedals)
+
 	// Lottery & Raffle
 	mux.HandleFunc("GET /characters/{id}/lottery/tickets", h.handleGetLotteryTickets)
 	mux.HandleFunc("POST /characters/{id}/lottery/buy-raffle", h.handleBuyRaffleTickets)
