@@ -201,7 +201,7 @@ Battle
   - Result (Structured TurnLogs for Replay)
 ```
 
-Battle must not know whether it was initiated by a quest, guild, arena, boss, dungeon, or challenge feature. All combat modes build `Participant` inputs using the shared `corebattle.NewParticipantFromCharacter`, `corebattle.NewParticipantFromCharacterWithHP`, or `corebattle.ParticipantBuilder` adapters.
+Battle must not know whether it was initiated by a quest, guild, arena, boss, dungeon, or challenge feature. All combat modes build `Participant` inputs using the shared `corebattle.NewParticipantFromCharacter`, `corebattle.NewParticipantFromCharacterWithHP`, or `corebattle.ParticipantBuilder` adapters, identifying participants strictly by unique entity ID while retaining display names for combat turn logs. Direct assignment of `.Name` to `Participant.ID` is mechanically prohibited by Go AST static analysis (`internal/core/core_lint_test.go`).
 
 ### Adventure / Quest
 

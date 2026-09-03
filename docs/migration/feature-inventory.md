@@ -52,10 +52,10 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Character profile and status display ([#87](https://github.com/witchcraze/party2re/issues/87))
 - [x] Player-character ownership verification linkage ([#131](https://github.com/witchcraze/party2re/issues/131))
 - [ ] Personal Access Token (API Key) generation and authentication ([#163](https://github.com/witchcraze/party2re/issues/163))
-- [ ] Player deletion and maintenance behavior
+- [x] Player deletion and maintenance behavior ([#134](https://github.com/witchcraze/party2re/issues/134), [#190](https://github.com/witchcraze/party2re/issues/190))
 - [x] Name changes and profile customization ([#198](https://github.com/witchcraze/party2re/issues/198))
 - [x] Notifications, news, and player notification inbox ([#67](https://github.com/witchcraze/party2re/issues/67))
-- [ ] Administrator operations
+- [x] Administrator operations ([#190](https://github.com/witchcraze/party2re/issues/190))
 
 ### B. Character, progression, jobs, and skills
 - [x] Level and cumulative experience progression ([#10](https://github.com/witchcraze/party2re/issues/10))
@@ -208,6 +208,9 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#186](https://github.com/witchcraze/party2re/issues/186) | Photo contest, screenshots, seasonal voting, and Hall of Fame (photo.cgi / contest.cgi) | Merged |
 | [#198](https://github.com/witchcraze/party2re/issues/198) | Character name changes, gender changes, profile, and avatar customization | Merged |
 | [#188](https://github.com/witchcraze/party2re/issues/188) | Multiplayer co-op party system and group quests (quest.cgi, party.cgi) | Merged |
+| [#190](https://github.com/witchcraze/party2re/issues/190) | Player deletion, maintenance mode, and admin operations (delete.cgi, maintenance.cgi) | Merged |
+| [#276](https://github.com/witchcraze/party2re/issues/276) | Reusable transactional wallet and inventory exchange helpers (internal/economy) | Merged |
+| [#341](https://github.com/witchcraze/party2re/issues/341) | Resolve Character ID vs Name collision and persist surviving HP in party battles | Merged |
 
 ---
 
