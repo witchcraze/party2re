@@ -366,11 +366,33 @@ func Reward(c *Character, exp int) {
 			errSnippet:  "use progression.ApplyExperience",
 		},
 		{
+			name: "Violation: Experience direct assignment",
+			path: "internal/feature/service.go",
+			code: `package feature
+func SetExp(c *Character) {
+	c.Experience = 1000
+}`,
+			expectError: true,
+			field:       "Experience",
+			errSnippet:  "use progression.ApplyExperience",
+		},
+		{
 			name: "Violation: Level direct increment",
 			path: "internal/feature/service.go",
 			code: `package feature
 func LevelUp(c *Character) {
 	c.Level++
+}`,
+			expectError: true,
+			field:       "Level",
+			errSnippet:  "use progression.ApplyExperience",
+		},
+		{
+			name: "Violation: Level direct assignment",
+			path: "internal/feature/service.go",
+			code: `package feature
+func SetLevel(c *Character) {
+	c.Level = 99
 }`,
 			expectError: true,
 			field:       "Level",

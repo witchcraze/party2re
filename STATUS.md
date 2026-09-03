@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #344 — Fix OverMonster limit break description wording
+Last updated: Issue #345 — Deprecate redundant progression_lint_test in favor of core_lint_test
 
 ## Current phase
 
