@@ -29,10 +29,10 @@ Does not own game-specific character state. Owns the relationship to characters 
 
 Player persistence stores a salted, iterated password hash and never stores the
 supplied password. Session state is an ephemeral record with explicit expiry and
-revocation. Per RFC #356, session persistence is designated as a **Valkey Master**
-entity (`session:<token> -> player_id` with 7-day TTL), eliminating relational
-database connection pressure on every authenticated HTTP request while relying on
-Valkey's native TTL for automated expiration.
+revocation. Per RFC #356 and Issue #366, session persistence is mastered directly in **Valkey Master**
+(`party2:session:<token>` with 7-day native TTL, `internal/player/valkey_session_repository.go`),
+eliminating relational database connection pressure on every authenticated HTTP request while relying on
+Valkey's native TTL for automated expiration and account deletion hooks for O(1) player set cleanup.
 
 ### Character
 
