@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #363 — Static analysis (Go AST) and CI guard for deterministic database row-lock acquisition hierarchy
+Last updated: Issue #356 — Establish data persistence boundary guidelines (MariaDB vs Valkey Master) and identify volatile state migration candidates
 
 ## Current phase
 
@@ -79,8 +79,8 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **HTTP JSON API & OpenAPI 3.1 Specification** (`internal/api/http`, `docs/api/base.json`, `docs/api/paths/*.json`, `docs/api/openapi.json`): Go標準 `net/http` によるREST風エンドポイント（全185ルート・200オペレーション：`/health`, `/openapi.json`, `/maintenance`, `/admin/maintenance`, `/players`, `/players/me`, `/players/{id}`, `/sessions`, `/characters`, `/characters/{id}`, `/jobs`, `/characters/{id}/change-job`, `/characters/{id}/rebirth`, `/characters/{id}/inn`, `/characters/{id}/custom-skills*`, `/characters/{id}/chapel*`, `/characters/{id}/farm*`, `/characters/{id}/collections/*`, `/characters/{id}/achievements*`, `/characters/{id}/medals`, `/characters/{id}/lottery/*`, `/characters/{id}/casino/*`, `/challenges/*`, `/characters/{id}/bosses*`, `/characters/{id}/dungeons*`, `/characters/{id}/pvp*`, `/auctions*`, `/fleamarket/listings*`, `/characters/{id}/fleamarket/listings*`, `/gemstore/*`, `/characters/{id}/gemstore/*`, `/god/*`, `/characters/{id}/god/*`, `/monster/*`, `/characters/{id}/monsters*`, `/contest/*`, `/characters/{id}/photos*`, `/characters/{id}/contest/*`, `/naming-hall/*`, `/characters/{id}/name`, `/characters/{id}/gender`, `/characters/{id}/profile`, `/characters/{id}/avatar`, `/characters/{id}/adventures`, `/characters/{id}/adventure-chronicle`, `/adventures`, `/parties*`, `/shop/*`, `/park/*`, `/medals/*`, `/helpers/*`, `/rescues/*`, `/news/*`, `/notifications/*`, `/homes/*`, `/letters/*`, `/rankings/*`, `/eventplaza*`, `/characters/{id}/secretshop*`, `/tavern/*`, `/characters/{id}/tavern*`, `/characters/{id}/blackmarket*`, `/characters/{id}/delivery*`）。ドメイン別モジュール分割仕様（`docs/api/paths/{module}.json`、全38ドメインファイル）および共通スキーマ（`docs/api/base.json`）をSSOTとし、Go ASTツール（`scripts/sync_openapi.go`）による自動スキャフォールディング・決定論的バンドル（`docs/api/openapi.json` およびバイナリ埋め込み `internal/api/http/openapi.json`）、CI自動テスト（`internal/api/http/openapi_test.go`）によるASTベースのルート網羅率100%検証・スキーマバリデーション・ドキュメント同期ガード、および Go AST 静的解析テスト（`internal/api/http/auth_lint_test.go`）によるキャラクター・プレイヤー操作全エンドポイントでの標準認証・所有権検証ラッパー適用の自動機械検証。セッション認証、管理者APIキー認可（`X-Admin-Key` / `Authorization: Bearer <key>`、タイミング攻撃耐性をもつ定数時間比較、`POST /news`, `POST /rankings/refresh`, `POST /contest/settle`, `POST /admin/maintenance` を保護）、キャラクター・プレイヤー所有権認可検証（403 Forbidden、アカウント削除・キャラクター削除・連戦セッション・宝くじ・冒険Claim・冒険クロニクル・オークション出品取消・宅配便・フリマ出品取消・宝石店操作・天界願い事操作・モンスター預かり所/ペット操作・フォトコン作品/写真操作・名前変更/性別変更/プロフィール更新/アバターアップロード・パーティ結成/加入/脱退/キック/解散/Ready/出発・イベント広場購入/乾杯等のサブリソースIDOR完全防御）、標準セキュリティレスポンスヘッダー（nosniff, DENY, strict-origin-when-cross-origin, CSP none）、CORS ポリシーミドルウェア（許可 Origin ホワイトリスト、`OPTIONS` プリフライトキャッシュ、`*` ワイルドカード抑止）、Valkey/In-Memory 分散レートリミットミドルウェア（公開認証エンドポイント・一般エンドポイント別制限、429 Too Many Requests、Retry-After / X-RateLimit-* ヘッダー、fail-open耐障害性）、メンテナンスモードミドルウェア（503 Service Unavailable、システム/管理者バイパス）、64 KiB リクエスト制限、未知フィールド拒否、構造化エラーレスポンス。
 
 ### Infrastructure & Operations
-- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `050_achievements_and_medals.sql`、`make db-migrate` / `make db-reset`）。
-- **Valkey**: 遅延アクションキュー・排他ロック・分散レートリミット・ランキングスナップショットキャッシュ（AOF+RDB永続化）。
+- **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `050_achievements_and_medals.sql`、`make db-migrate` / `make db-reset`、プレイヤー資産・キャラクター・所持品・経済の永続権威 MariaDB Master）。
+- **Valkey**: 遅延アクションキュー・排他ロック・分散レートリミット・ランキングスナップショットキャッシュ（AOF+RDB永続化）。RFC #356 に基づく揮発性ステートのプライマリストア（Valkey Master）境界策定およびセッション・メンテナンス・待機ロビー・一時ランバッファ・ボスHPの段階的移行ロードマップ確立（Issue #366, #367, #368, #369, #370）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
 - **Verification**: `Makefile` (`make check`, `make fmt`, `make vet`, `make lock-lint`, `make openapi-sync`, `make openapi-check`, `make openapi-scaffold`, `make test-stress`, `make check-clean`)、OpenAPI 3.1 仕様書自動スキャフォールド・同期・フォーマット CLI（`scripts/sync_openapi.go`）、CIガード（OpenAPI 3.1構文・全ルートAST網羅テスト）、Go AST 静的解析テスト（全リポジトリにおける `ExecutorFromContext` 必須・`BeginTx` 禁止検証 `internal/database/tx_lint_test.go`、行ロック獲得階層順序検証 `internal/database/lock_hierarchy_lint_test.go`、サービス層 `RunInTx` 呼び出し検証 `internal/architecture/arch_test.go`、HTTP 所有権認可検証 `internal/api/http/auth_lint_test.go`、Core 成長ヘルパー適用強制 `internal/core/progression/progression_lint_test.go`）、Git pre-push hook による自動検証、`scripts/stress_test.sh` による高並行ストレステスト。
 - **Deployment**: Distroless (`gcr.io/distroless/static-debian13:nonroot`) ベースの最小本番イメージ（GHCR自動公開）。
@@ -89,8 +89,10 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ## Immediate Priorities (Next Actions)
 
-1. **Remaining Version 1.0 Feature Modules**:
+1. **Remaining Version 1.0 Feature Modules & Infrastructure**:
    - Personal Access Token (API Key) generation and authentication (Issue #163)
+   - Player Session Migration to Valkey Master (Issue #366)
+   - Cache / Master System Maintenance State in Valkey (Issue #367)
    - Web Presentation UI / Client (Issue #140)
 
 ---

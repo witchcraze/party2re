@@ -28,12 +28,11 @@ The implementation language is intentionally not part of the component's identit
 Does not own game-specific character state. Owns the relationship to characters created under the account.
 
 Player persistence stores a salted, iterated password hash and never stores the
-supplied password. Session state is a separate record with explicit expiry and
-revocation. It is currently stored in MariaDB because that is the configured
-persistence system; this is an implementation choice, not a claim that
-sessions are durable game data. The repository contract leaves room to move
-session storage to Valkey when a concrete transient-state requirement
-justifies introducing it.
+supplied password. Session state is an ephemeral record with explicit expiry and
+revocation. Per RFC #356, session persistence is designated as a **Valkey Master**
+entity (`session:<token> -> player_id` with 7-day TTL), eliminating relational
+database connection pressure on every authenticated HTTP request while relying on
+Valkey's native TTL for automated expiration.
 
 ### Character
 
@@ -410,6 +409,50 @@ Cross-module workflows spanning multiple distinct feature and core repositories 
 - **Deterministic Two-Party Locking (`internal/id.Sort2`)**: When acquiring pessimistic row locks across two player/character entities (e.g. P2P transfers, flea market purchases, monster trading, gem sending), IDs are sorted in ascending alphanumeric order via `id.Sort2(idA, idB)` to ensure identical lock acquisition order regardless of initiator.
 - **Standardized Transactional Exchange Helpers (`internal/economy`)**: Reusable domain service (`economy.Service`) providing atomic wallet currency deductions/credits (`DeductGold`, `AddGold`, `TransferGold`, `DeductSmallMedals`, `AddSmallMedals`), inventory operations (`GrantItem`, `ConsumeItemInstance`, `ConsumeItemDefinition`), and compound exchanges (`Exchange`) under deterministic lock hierarchy (`characters` -> `inventory_items`) with integer overflow protection (`SafeMultiply`).
 - **Standardized Keyset Cursor Pagination (`internal/pagination`)**: Centralized generic pagination orchestration (`BuildCursorPage`, `BuildCursorPageWithMapper`, `DecodeCursorParts`) providing consistent keyset compound token encoding/decoding, limit truncation, and bidirectional cursor links across stream/log subsystems (`park`, `delivery`, `home`, `replay`, `adventure`).
+ 
+### Storage Authority & Data Persistence Tiers (MariaDB vs. Valkey Master)
+
+To maintain uncompromising durability for economic and progression assets while avoiding unnecessary relational database connection pressure for ephemeral state, storage authority is divided into three distinct tiers per [`.agents/rules/05-database-and-caching.md`](../../.agents/rules/05-database-and-caching.md):
+
+1. **MariaDB Master (Canonical Relational Persistence)**:
+   - **Scope:** Player Accounts, Characters, Inventories, Equipment, Currencies, Jobs, Depots, Bank Accounts, Guilds, Persistent Feature State (e.g. farms, auctions, contests, parties), and Audit/Chronicle Records.
+   - **Properties:** ACID transactions, foreign keys, deterministic row-lock hierarchy (Rank 0 -> 8), zero tolerance for uncommitted data loss.
+2. **Valkey Master (Primary Authoritative Ephemeral Store)**:
+   - **Scope:** Player Sessions (`session:<token>`), Distributed Locks (`party2:scheduled:lock:*`), Rate Limiting Counters (`party2:ratelimit:*`), Scheduled Action Queues (`party2:scheduled:queue`).
+   - **Properties:** Pure in-memory/AOF persistence with **no backing SQL tables**. Governed by native TTL expiration. State loss during crash or eviction is limited to non-critical ephemeral records (e.g. requiring a player to re-login, with zero impact on assets or progression).
+3. **Valkey Cache (Read Acceleration & Projections)**:
+   - **Scope:** Competitive Leaderboards & Standings (`party2:ranking:snapshot:*`), Player Profile Projections.
+   - **Properties:** MariaDB is the Single Source of Truth; Valkey holds read-optimized projections (e.g. Sorted Sets) for O(log N) operations. Reconstructible from MariaDB on cache miss.
+
+#### Persistence Decision Tree (Durability & Rebuildability First)
+
+```text
+                    ┌─ Yes ─→ MariaDB Master (Wallets, Inventories, Progression)
+Durability critical?
+                    │
+                    No
+                    ↓
+              Naturally expiring (TTL)?
+                    │
+             ┌──────┴──────┐
+            Yes            No
+             ↓              ↓
+        Valkey Master   Rebuildable from SQL / audit logs?
+        (Sessions)          │
+                       ┌────┴────┐
+                      Yes       No
+                       ↓         ↓
+                  Valkey Master MariaDB Master
+                  (Queues)      (Audit Records)
+```
+
+#### Migration Candidates & Roadmap
+- **Candidate A: Player Authentication Sessions (`sessions`)**: Formally approved for migration to Valkey Master (`session:<token> -> player_id, EX 604800`) to eliminate relational database connection bottleneck on every authenticated API request ([Issue #366](https://github.com/witchcraze/party2re/issues/366)).
+- **Candidate B: System Maintenance Mode State (`system_maintenance`)**: Formally approved for Valkey Master / In-Memory cache with invalidation to eliminate synchronous MariaDB queries from `maintenanceMiddleware` on every incoming HTTP request ([Issue #367](https://github.com/witchcraze/party2re/issues/367)).
+- **Candidate C: Party & Matchmaking Wait Lobbies (`party`, `matchmaking`)**: Candidate for Valkey Master (`party:lobby:{id}`) to decouple ephemeral wait states and 60-second ready checks from relational database tables ([Issue #368](https://github.com/witchcraze/party2re/issues/368)).
+- **Candidate D: In-Progress Run Buffers (`dungeon_active_expeditions`, `challenge_sessions`)**: Candidate for Valkey Master step-by-step turn buffers, eliminating write amplification on MariaDB until final settlement upon exit/completion ([Issue #369](https://github.com/witchcraze/party2re/issues/369)).
+- **Candidate E: World Boss Real-time Shared HP (`boss`)**: High-risk candidate requiring proof-of-concept for dual-write settlement (bridging Valkey atomic `DECRBY` with MariaDB transactional loot settlement) ([Issue #370](https://github.com/witchcraze/party2re/issues/370)).
+- **Candidate F: Real-time Leaderboards (`ranking`)**: Remains classified as Valkey Cache (projection), not Valkey Master.
 
 ### Future Feature Modules
 
