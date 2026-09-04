@@ -1,0 +1,159 @@
+{
+  "/players/me": {
+    "delete": {
+      "operationId": "deletePlayerMe",
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DeletePlayerRequest"
+            }
+          }
+        },
+        "required": false
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "deleted": {
+                    "type": "boolean"
+                  },
+                  "player_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "deleted",
+                  "player_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "Player account deleted successfully"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Delete current player account",
+      "tags": [
+        "Player"
+      ]
+    }
+  },
+  "/players/{id}": {
+    "delete": {
+      "operationId": "deletePlayerByID",
+      "parameters": [
+        {
+          "description": "Player ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DeletePlayerRequest"
+            }
+          }
+        },
+        "required": false
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "deleted": {
+                    "type": "boolean"
+                  },
+                  "player_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "deleted",
+                  "player_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "Player account deleted successfully"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Delete player account by ID",
+      "tags": [
+        "Player"
+      ]
+    }
+  }
+}

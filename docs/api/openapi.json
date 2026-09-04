@@ -14819,6 +14819,7 @@
     "/parties": {
       "get": {
         "description": "Lists recruiting or active multiplayer parties.",
+        "operationId": "listParties",
         "parameters": [
           {
             "in": "query",
@@ -14864,6 +14865,7 @@
       },
       "post": {
         "description": "Creates a new multiplayer party with the authenticated character as leader.",
+        "operationId": "createParty",
         "requestBody": {
           "content": {
             "application/json": {
@@ -14906,6 +14908,7 @@
     "/parties/{id}": {
       "delete": {
         "description": "Disbands the party (party leader only).",
+        "operationId": "disbandParty",
         "parameters": [
           {
             "in": "path",
@@ -14960,6 +14963,7 @@
       },
       "get": {
         "description": "Retrieves detailed information and member list for a party.",
+        "operationId": "getPartyDetail",
         "parameters": [
           {
             "in": "path",
@@ -14994,6 +14998,7 @@
     "/parties/{id}/join": {
       "post": {
         "description": "Joins an existing recruiting party.",
+        "operationId": "joinParty",
         "parameters": [
           {
             "in": "path",
@@ -15049,6 +15054,7 @@
     "/parties/{id}/kick": {
       "post": {
         "description": "Kicks a member from the party (leader only).",
+        "operationId": "kickPartyMember",
         "parameters": [
           {
             "in": "path",
@@ -15097,6 +15103,7 @@
     "/parties/{id}/leave": {
       "post": {
         "description": "Leaves the party. If the leader leaves, the party is disbanded.",
+        "operationId": "leaveParty",
         "parameters": [
           {
             "in": "path",
@@ -15153,6 +15160,7 @@
     "/parties/{id}/ready": {
       "post": {
         "description": "Toggles or sets member readiness before starting the co-op adventure.",
+        "operationId": "setPartyReadyState",
         "parameters": [
           {
             "in": "path",
@@ -15208,6 +15216,7 @@
     "/parties/{id}/start": {
       "post": {
         "description": "Starts and executes multiplayer co-op combat adventure for the party (leader only).",
+        "operationId": "startPartyAdventure",
         "parameters": [
           {
             "in": "path",

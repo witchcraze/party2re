@@ -1,0 +1,303 @@
+{
+  "/eventplaza": {
+    "get": {
+      "description": "Retrieves the event plaza status including active town population, traveling merchant tier, and ongoing boss victory celebration banquets.",
+      "operationId": "getEventPlaza",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlazaStatus"
+              }
+            }
+          },
+          "description": "Event Plaza status retrieved successfully"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Get Event Plaza status",
+      "tags": [
+        "EventPlaza"
+      ]
+    }
+  },
+  "/eventplaza/banquets": {
+    "get": {
+      "description": "Retrieves the list of active celebration banquets held in honour of defeating legendary king bosses.",
+      "operationId": "listEventPlazaBanquets",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListBanquetsResponse"
+              }
+            }
+          },
+          "description": "Active celebration banquets retrieved successfully"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "List ongoing victory celebration banquets",
+      "tags": [
+        "EventPlaza"
+      ]
+    }
+  },
+  "/eventplaza/banquets/{id}/toast": {
+    "post": {
+      "description": "Raises a celebratory toast for a victory banquet, awarding commemorative celebration gold to the participating character.",
+      "operationId": "toastEventPlazaBanquet",
+      "parameters": [
+        {
+          "description": "Unique identifier of the celebration banquet",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ToastBanquetRequest"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BanquetToastResult"
+              }
+            }
+          },
+          "description": "Toast completed successfully and reward received"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Invalid toast request"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized - missing or invalid session token"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden - character belongs to another player or lacks permission"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Banquet or character not found"
+        },
+        "409": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character has already toasted this banquet"
+        },
+        "410": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Banquet has already expired"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Participate in victory celebration toast",
+      "tags": [
+        "EventPlaza"
+      ]
+    }
+  },
+  "/eventplaza/merchant/items": {
+    "get": {
+      "description": "Lists rare goods, materials, and equipment sold by the traveling merchant based on the currently unlocked town population tier.",
+      "operationId": "getEventPlazaMerchantItems",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BazaarItemsResponse"
+              }
+            }
+          },
+          "description": "List of available traveling merchant goods"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "List traveling merchant items",
+      "tags": [
+        "EventPlaza"
+      ]
+    }
+  },
+  "/eventplaza/merchant/purchase": {
+    "post": {
+      "description": "Purchases items from the traveling merchant for a specific character with concurrency-safe transaction locking and validation.",
+      "operationId": "purchaseEventPlazaMerchantItem",
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/PurchaseBazaarItemRequest"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BazaarPurchaseResult"
+              }
+            }
+          },
+          "description": "Item purchased successfully"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Insufficient gold or invalid purchase request"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized - missing or invalid session token"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden - character belongs to another player or lacks permission"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character or item not found"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Purchase goods from traveling merchant",
+      "tags": [
+        "EventPlaza"
+      ]
+    }
+  }
+}

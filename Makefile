@@ -1,4 +1,4 @@
-.PHONY: all check verify check-clean fmt vet openapi-sync openapi-check test test-integration test-docker test-stress smoke db-migrate db-reset up down setup-hooks arch-lint
+.PHONY: all check verify check-clean fmt vet openapi-sync openapi-check openapi-scaffold test test-integration test-docker test-stress smoke db-migrate db-reset up down setup-hooks arch-lint
 
 all: check
 
@@ -20,6 +20,10 @@ openapi-check:
 	@echo "Validating OpenAPI specification synchronization and route coverage..."
 	@go run ./scripts/sync_openapi.go --check
 	@go test -count=1 ./internal/api/http -run "OpenAPI"
+
+openapi-scaffold:
+	@echo "Scaffolding missing routes and synchronizing OpenAPI specification..."
+	@go run ./scripts/sync_openapi.go --scaffold
 
 up:
 	@echo "Starting database and cache services..."

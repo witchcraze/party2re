@@ -1,0 +1,463 @@
+{
+  "/parties": {
+    "get": {
+      "description": "Lists recruiting or active multiplayer parties.",
+      "operationId": "listParties",
+      "parameters": [
+        {
+          "in": "query",
+          "name": "status",
+          "schema": {
+            "default": "recruiting",
+            "type": "string"
+          }
+        },
+        {
+          "in": "query",
+          "name": "limit",
+          "schema": {
+            "default": 50,
+            "type": "integer"
+          }
+        },
+        {
+          "in": "query",
+          "name": "offset",
+          "schema": {
+            "default": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagePartySummary"
+              }
+            }
+          },
+          "description": "List of parties"
+        }
+      },
+      "summary": "List parties",
+      "tags": [
+        "Party"
+      ]
+    },
+    "post": {
+      "description": "Creates a new multiplayer party with the authenticated character as leader.",
+      "operationId": "createParty",
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CreatePartyRequest"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "201": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartyDetail"
+              }
+            }
+          },
+          "description": "Party created successfully"
+        },
+        "400": {
+          "description": "Invalid party parameters or character already in party"
+        },
+        "401": {
+          "description": "Unauthorized"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Create party",
+      "tags": [
+        "Party"
+      ]
+    }
+  },
+  "/parties/{id}": {
+    "delete": {
+      "description": "Disbands the party (party leader only).",
+      "operationId": "disbandParty",
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "character_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "character_id"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "description": "Party disbanded"
+        },
+        "400": {
+          "description": "Not party leader"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "404": {
+          "description": "Party not found"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Disband party",
+      "tags": [
+        "Party"
+      ]
+    },
+    "get": {
+      "description": "Retrieves detailed information and member list for a party.",
+      "operationId": "getPartyDetail",
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartyDetail"
+              }
+            }
+          },
+          "description": "Party details"
+        },
+        "404": {
+          "description": "Party not found"
+        }
+      },
+      "summary": "Get party detail",
+      "tags": [
+        "Party"
+      ]
+    }
+  },
+  "/parties/{id}/join": {
+    "post": {
+      "description": "Joins an existing recruiting party.",
+      "operationId": "joinParty",
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/JoinPartyRequest"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartyDetail"
+              }
+            }
+          },
+          "description": "Joined party successfully"
+        },
+        "400": {
+          "description": "Party full, invalid password, requirement not met, or already in party"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "404": {
+          "description": "Party not found"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Join party",
+      "tags": [
+        "Party"
+      ]
+    }
+  },
+  "/parties/{id}/kick": {
+    "post": {
+      "description": "Kicks a member from the party (leader only).",
+      "operationId": "kickPartyMember",
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/KickPartyMemberRequest"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "description": "Member kicked successfully"
+        },
+        "400": {
+          "description": "Not party leader or cannot kick self"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "404": {
+          "description": "Party or member not found"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Kick party member",
+      "tags": [
+        "Party"
+      ]
+    }
+  },
+  "/parties/{id}/leave": {
+    "post": {
+      "description": "Leaves the party. If the leader leaves, the party is disbanded.",
+      "operationId": "leaveParty",
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "character_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "character_id"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "description": "Left party successfully"
+        },
+        "400": {
+          "description": "Character not in party"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "404": {
+          "description": "Party not found"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Leave party",
+      "tags": [
+        "Party"
+      ]
+    }
+  },
+  "/parties/{id}/ready": {
+    "post": {
+      "description": "Toggles or sets member readiness before starting the co-op adventure.",
+      "operationId": "setPartyReadyState",
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SetPartyReadyRequest"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartyDetail"
+              }
+            }
+          },
+          "description": "Ready state updated"
+        },
+        "400": {
+          "description": "Character not in party"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "404": {
+          "description": "Party not found"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Set party member ready state",
+      "tags": [
+        "Party"
+      ]
+    }
+  },
+  "/parties/{id}/start": {
+    "post": {
+      "description": "Starts and executes multiplayer co-op combat adventure for the party (leader only).",
+      "operationId": "startPartyAdventure",
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "character_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "character_id"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartyAdventureResult"
+              }
+            }
+          },
+          "description": "Adventure completed"
+        },
+        "400": {
+          "description": "Not leader, not all members ready, or party not recruiting"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "404": {
+          "description": "Party or stage not found"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Start party adventure",
+      "tags": [
+        "Party"
+      ]
+    }
+  }
+}

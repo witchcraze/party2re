@@ -1,0 +1,75 @@
+{
+  "/health": {
+    "get": {
+      "operationId": "getHealth",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HealthResponse"
+              }
+            }
+          },
+          "description": "Service is healthy"
+        }
+      },
+      "summary": "Health check endpoint",
+      "tags": [
+        "System"
+      ]
+    }
+  },
+  "/maintenance": {
+    "get": {
+      "operationId": "getMaintenanceStatus",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceStatus"
+              }
+            }
+          },
+          "description": "System maintenance status retrieved"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Get system maintenance status",
+      "tags": [
+        "System"
+      ]
+    }
+  },
+  "/openapi.json": {
+    "get": {
+      "operationId": "getOpenAPISpec",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "OpenAPI 3.1 JSON specification"
+        }
+      },
+      "summary": "Get OpenAPI 3.1 specification",
+      "tags": [
+        "System"
+      ]
+    }
+  }
+}
