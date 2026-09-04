@@ -3,6 +3,9 @@ package http_test
 import (
 	"bytes"
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -44,7 +47,7 @@ func TestOpenAPISpecificationValidity(t *testing.T) {
 	}
 
 	if !bytes.Equal(bytes.TrimSpace(docsData), bytes.TrimSpace(embeddedData)) {
-		t.Error("docs/api/openapi.json and internal/api/http/openapi.json must be identical; please sync them")
+		t.Error("docs/api/openapi.json and internal/api/http/openapi.json must be identical; please sync them with 'make openapi-sync'")
 	}
 
 	var spec openAPISpec
@@ -73,6 +76,87 @@ func TestOpenAPISpecificationValidity(t *testing.T) {
 	}
 }
 
+func TestOpenAPIModularSpecifications(t *testing.T) {
+	rootDir := getRepoRootDir(t)
+	basePath := filepath.Join(rootDir, "docs", "api", "base.json")
+	pathsDir := filepath.Join(rootDir, "docs", "api", "paths")
+
+	baseData, err := os.ReadFile(basePath)
+	if err != nil {
+		t.Fatalf("failed to read docs/api/base.json: %v", err)
+	}
+
+	var baseSpec map[string]interface{}
+	if err := json.Unmarshal(baseData, &baseSpec); err != nil {
+		t.Fatalf("docs/api/base.json is not valid JSON: %v", err)
+	}
+
+	if v, _ := baseSpec["openapi"].(string); !strings.HasPrefix(v, "3.1.") {
+		t.Errorf("expected base.json openapi version 3.1.x, got %q", v)
+	}
+
+	entries, err := os.ReadDir(pathsDir)
+	if err != nil {
+		t.Fatalf("failed to read docs/api/paths: %v", err)
+	}
+
+	pathCount := 0
+	seenPaths := make(map[string]string)
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+
+		filePath := filepath.Join(pathsDir, entry.Name())
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Errorf("failed to read path file %s: %v", entry.Name(), err)
+			continue
+		}
+
+		var filePaths map[string]map[string]interface{}
+		if err := json.Unmarshal(data, &filePaths); err != nil {
+			t.Errorf("invalid JSON in path file %s: %v", entry.Name(), err)
+			continue
+		}
+
+		if len(filePaths) == 0 {
+			t.Errorf("path file %s is empty", entry.Name())
+		}
+
+		for pathKey, methodMap := range filePaths {
+			if existingFile, exists := seenPaths[pathKey]; exists {
+				t.Errorf("duplicate path %q found in %s and %s", pathKey, existingFile, entry.Name())
+			}
+			seenPaths[pathKey] = entry.Name()
+			pathCount++
+
+			for method, opRaw := range methodMap {
+				op, ok := opRaw.(map[string]interface{})
+				if !ok {
+					t.Errorf("operation for %s %s in %s is invalid", method, pathKey, entry.Name())
+					continue
+				}
+
+				if summary, ok := op["summary"].(string); !ok || summary == "" {
+					t.Errorf("operation %s %s in %s missing summary", method, pathKey, entry.Name())
+				}
+				if opID, ok := op["operationId"].(string); !ok || opID == "" {
+					t.Errorf("operation %s %s in %s missing operationId", method, pathKey, entry.Name())
+				}
+				if responses, ok := op["responses"].(map[string]interface{}); !ok || len(responses) == 0 {
+					t.Errorf("operation %s %s in %s missing responses", method, pathKey, entry.Name())
+				}
+			}
+		}
+	}
+
+	if pathCount == 0 {
+		t.Fatal("no path operations found in docs/api/paths/*.json")
+	}
+}
+
 func TestOpenAPIRouteCoverage(t *testing.T) {
 	specData := gamehttp.OpenAPISpec()
 	var spec openAPISpec
@@ -80,170 +164,61 @@ func TestOpenAPIRouteCoverage(t *testing.T) {
 		t.Fatalf("failed to unmarshal OpenAPI spec: %v", err)
 	}
 
-	expectedRoutes := []struct {
-		Method string
-		Path   string
-	}{
-		{"GET", "/health"},
-		{"GET", "/openapi.json"},
-		{"GET", "/maintenance"},
-		{"POST", "/admin/maintenance"},
-		{"PUT", "/admin/maintenance"},
-		{"POST", "/players"},
-		{"DELETE", "/players/me"},
-		{"DELETE", "/players/{id}"},
-		{"POST", "/sessions"},
-		{"DELETE", "/sessions"},
-		{"POST", "/characters"},
-		{"GET", "/characters/{id}"},
-		{"DELETE", "/characters/{id}"},
-		{"POST", "/adventures"},
-		{"POST", "/adventures/{id}/claim"},
-		{"GET", "/characters/{id}/adventures"},
-		{"GET", "/characters/{id}/adventure-chronicle"},
-		{"POST", "/shop/purchase"},
-		{"POST", "/shop/sell"},
-		{"GET", "/park/posts"},
-		{"POST", "/park/posts"},
-		{"POST", "/park/npc/talk"},
-		{"POST", "/park/npc/divinate"},
-		{"GET", "/park/npc/inspect"},
-		{"GET", "/medals/rewards"},
-		{"POST", "/medals/claim"},
-		{"GET", "/characters/{id}/achievements"},
-		{"POST", "/characters/{id}/achievements/{achievement_id}/claim"},
-		{"GET", "/characters/{id}/medals"},
-		{"GET", "/helpers/quests"},
-		{"POST", "/helpers/complete"},
-		{"GET", "/rescues/penalty"},
-		{"POST", "/rescues/request"},
-		{"GET", "/news"},
-		{"GET", "/news/{id}"},
-		{"POST", "/news"},
-		{"GET", "/notifications"},
-		{"GET", "/notifications/unread-count"},
-		{"POST", "/notifications/{id}/read"},
-		{"POST", "/notifications/read-all"},
-		{"DELETE", "/notifications/{id}"},
-		{"GET", "/homes/{id}"},
-		{"POST", "/homes/{id}/settings"},
-		{"POST", "/homes/{id}/companion/phrases"},
-		{"DELETE", "/homes/{id}/companion/phrases/{phrase_id}"},
-		{"GET", "/homes/{id}/companion/talk"},
-		{"GET", "/homes/{id}/notices"},
-		{"POST", "/homes/{id}/notices/clear"},
-		{"POST", "/letters"},
-		{"GET", "/letters/inbox"},
-		{"GET", "/letters/outbox"},
-		{"GET", "/letters/unread-count"},
-		{"POST", "/letters/{id}/read"},
-		{"DELETE", "/letters/{id}"},
-		{"GET", "/rankings/levels"},
-		{"GET", "/rankings/wealth"},
-		{"GET", "/rankings/characters-wealth"},
-		{"GET", "/rankings/battles"},
-		{"GET", "/rankings/job-mastery"},
-		{"GET", "/rankings/job-popularity"},
-		{"GET", "/rankings/helpers"},
-		{"GET", "/rankings/rebirths"},
-		{"GET", "/rankings/medals"},
-		{"GET", "/rankings/{type}"},
-		{"POST", "/rankings/refresh"},
-		{"GET", "/jobs"},
-		{"POST", "/characters/{id}/change-job"},
-		{"POST", "/characters/{id}/rebirth"},
-		{"POST", "/characters/{id}/inn"},
-		{"GET", "/characters/{id}/custom-skills"},
-		{"POST", "/characters/{id}/custom-skills"},
-		{"DELETE", "/characters/{id}/custom-skills/{slot}"},
-		{"GET", "/characters/{id}/chapel"},
-		{"POST", "/characters/{id}/chapel/pray"},
-		{"POST", "/characters/{id}/chapel/donate"},
-		{"GET", "/characters/{id}/secretshop"},
-		{"POST", "/characters/{id}/secretshop/talk"},
-		{"POST", "/characters/{id}/secretshop/inspect"},
-		{"POST", "/characters/{id}/secretshop/puffpuff"},
-		{"POST", "/characters/{id}/secretshop/purchase"},
-		{"GET", "/characters/{id}/farm"},
-		{"POST", "/characters/{id}/farm/plant"},
-		{"POST", "/characters/{id}/farm/water"},
-		{"POST", "/characters/{id}/farm/fertilize"},
-		{"POST", "/characters/{id}/farm/harvest"},
-		{"POST", "/characters/{id}/farm/clear"},
-		{"GET", "/characters/{id}/collections/monsters"},
-		{"GET", "/characters/{id}/collections/items"},
-		{"GET", "/characters/{id}/lottery/tickets"},
-		{"POST", "/characters/{id}/lottery/buy-raffle"},
-		{"POST", "/characters/{id}/lottery/raffle"},
-		{"POST", "/characters/{id}/lottery/buy-ticket"},
-		{"POST", "/characters/{id}/lottery/claim"},
-		{"GET", "/characters/{id}/casino"},
-		{"POST", "/characters/{id}/casino/exchange"},
-		{"POST", "/characters/{id}/casino/slot"},
-		{"POST", "/characters/{id}/casino/highlow"},
-		{"POST", "/characters/{id}/casino/doppel"},
-		{"POST", "/characters/{id}/casino/poker"},
-		{"GET", "/challenges/tiers"},
-		{"GET", "/characters/{id}/challenges/records"},
-		{"POST", "/characters/{id}/challenges/start"},
-		{"POST", "/characters/{id}/challenges/advance"},
-		{"POST", "/characters/{id}/challenges/retire"},
-		{"GET", "/characters/{id}/bosses"},
-		{"POST", "/characters/{id}/bosses/fight"},
-		{"GET", "/characters/{id}/dungeons"},
-		{"POST", "/characters/{id}/dungeons/start"},
-		{"POST", "/characters/{id}/dungeons/move"},
-		{"POST", "/characters/{id}/dungeons/escape"},
-		{"GET", "/characters/{id}/pvp"},
-		{"GET", "/characters/{id}/pvp/opponents"},
-		{"POST", "/characters/{id}/pvp/fight"},
-		{"GET", "/auctions"},
-		{"GET", "/auctions/{id}"},
-		{"POST", "/auctions"},
-		{"POST", "/auctions/{id}/bid"},
-		{"POST", "/auctions/{id}/buyout"},
-		{"POST", "/auctions/{id}/cancel"},
-		{"GET", "/eventplaza"},
-		{"GET", "/eventplaza/merchant/items"},
-		{"POST", "/eventplaza/merchant/purchase"},
-		{"GET", "/eventplaza/banquets"},
-		{"POST", "/eventplaza/banquets/{id}/toast"},
-		{"GET", "/characters/{id}/secretshop"},
-		{"POST", "/characters/{id}/secretshop/talk"},
-		{"POST", "/characters/{id}/secretshop/inspect"},
-		{"POST", "/characters/{id}/secretshop/puffpuff"},
-		{"POST", "/characters/{id}/secretshop/purchase"},
-		{"GET", "/tavern/menu"},
-		{"GET", "/characters/{id}/tavern"},
-		{"POST", "/characters/{id}/tavern/order"},
-		{"POST", "/characters/{id}/tavern/delivery"},
-		{"GET", "/characters/{id}/tavern/delivery"},
-		{"DELETE", "/characters/{id}/tavern/delivery"},
-		{"POST", "/characters/{id}/tavern/delivery/claim"},
-		{"POST", "/characters/{id}/tavern/talk"},
-		{"GET", "/characters/{id}/blackmarket"},
-		{"POST", "/characters/{id}/blackmarket/purchase"},
-		{"POST", "/characters/{id}/blackmarket/sell"},
-		{"POST", "/characters/{id}/blackmarket/talk"},
-		{"POST", "/characters/{id}/blackmarket/rumors"},
-		{"GET", "/characters/{id}/delivery/quests"},
-		{"GET", "/characters/{id}/delivery/active"},
-		{"POST", "/characters/{id}/delivery/accept"},
-		{"POST", "/characters/{id}/delivery/complete"},
-		{"POST", "/characters/{id}/delivery/cancel"},
-		{"POST", "/characters/{id}/delivery/parcels/send"},
-		{"GET", "/characters/{id}/delivery/parcels/incoming"},
-		{"POST", "/characters/{id}/delivery/parcels/claim"},
-		{"POST", "/characters/{id}/delivery/parcels/cancel"},
-		{"GET", "/fleamarket/listings"},
-		{"GET", "/fleamarket/listings/{listing_id}"},
-		{"GET", "/characters/{id}/fleamarket/listings"},
-		{"POST", "/characters/{id}/fleamarket/listings"},
-		{"POST", "/characters/{id}/fleamarket/listings/{listing_id}/purchase"},
-		{"DELETE", "/characters/{id}/fleamarket/listings/{listing_id}"},
+	rootDir := getRepoRootDir(t)
+	handlerPath := filepath.Join(rootDir, "internal", "api", "http", "handler.go")
+
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, handlerPath, nil, 0)
+	if err != nil {
+		t.Fatalf("failed to parse handler.go: %v", err)
 	}
 
-	for _, route := range expectedRoutes {
+	type routeItem struct {
+		Method string
+		Path   string
+	}
+	var registeredRoutes []routeItem
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		fn, ok := n.(*ast.FuncDecl)
+		if !ok || fn.Name.Name != "Router" {
+			return true
+		}
+
+		ast.Inspect(fn.Body, func(bn ast.Node) bool {
+			call, ok := bn.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "HandleFunc" {
+				return true
+			}
+
+			if len(call.Args) >= 1 {
+				lit, ok := call.Args[0].(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					return true
+				}
+				pattern := strings.Trim(lit.Value, "\"")
+				parts := strings.SplitN(pattern, " ", 2)
+				if len(parts) == 2 {
+					registeredRoutes = append(registeredRoutes, routeItem{
+						Method: parts[0],
+						Path:   parts[1],
+					})
+				}
+			}
+			return true
+		})
+		return false
+	})
+
+	if len(registeredRoutes) == 0 {
+		t.Fatal("no routes extracted from handler.go Router()")
+	}
+
+	for _, route := range registeredRoutes {
 		pathItem, exists := spec.Paths[route.Path]
 		if !exists {
 			t.Errorf("missing path in OpenAPI spec: %s", route.Path)

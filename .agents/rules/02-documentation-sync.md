@@ -30,3 +30,15 @@ When opening a feature or domain change PR, **always synchronize in that same PR
 - **Do not treat STATUS.md as an append-only changelog.**
 - When a task in "Current Priorities" is completed, **remove it** or move it to `ROADMAP.md` / `feature-inventory.md`.
 - `STATUS.md` must remain a slim, accurate snapshot of the *current* state and *immediate next* priorities, not an unbounded historical record.
+
+## 5. OpenAPI Specification Synchronization (SSOT & Modular Paths)
+- **Source of Truth:**
+  - Base metadata, reusable schemas, and security schemes reside in `docs/api/base.json`.
+  - Endpoint path operations reside in modular files: `docs/api/paths/{module}.json` (e.g., `character.json`, `shop.json`).
+- **NEVER edit compiled artifacts directly:**
+  - Do NOT edit `docs/api/openapi.json` or `internal/api/http/openapi.json` directly. These are compiled build artifacts generated deterministically by `scripts/sync_openapi.go`.
+- **Synchronization Workflow:**
+  - Whenever an HTTP route is added or changed in `internal/api/http/handler.go`, run `make openapi-sync` (or `make openapi-scaffold`).
+  - Modify the modular path specification in `docs/api/paths/{module}.json`.
+  - Run `make openapi-sync` to recompile both artifacts.
+  - CI enforces 100% route coverage and synchronization via `make openapi-check`.

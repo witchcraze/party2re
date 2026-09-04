@@ -1,0 +1,407 @@
+{
+  "/characters/{id}/contest/enter": {
+    "post": {
+      "description": "Submits a character's saved photo into the next preparing contest round.",
+      "operationId": "enterContest",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "photo_id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "photo_id",
+                "title"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "201": {
+          "description": "Photo submitted to contest successfully"
+        },
+        "400": {
+          "description": "Invalid submission (duplicate title, already entered, or consecutive entry disallowed)"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "404": {
+          "description": "Photo or Character not found"
+        }
+      },
+      "summary": "Enter photo into upcoming contest",
+      "tags": [
+        "Contest"
+      ]
+    }
+  },
+  "/characters/{id}/contest/vote": {
+    "post": {
+      "description": "Casts a vote for a photo entry in the active contest round with an optional cheering comment.",
+      "operationId": "voteContest",
+      "parameters": [
+        {
+          "description": "Voter Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "comment": {
+                  "type": "string"
+                },
+                "entry_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "entry_id"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "description": "Vote cast successfully"
+        },
+        "400": {
+          "description": "Invalid vote (contest not active, already voted, self-voting disallowed, or comment too long)"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "404": {
+          "description": "Entry or Character not found"
+        }
+      },
+      "summary": "Vote for a contest entry",
+      "tags": [
+        "Contest"
+      ]
+    }
+  },
+  "/characters/{id}/photos": {
+    "get": {
+      "description": "Retrieves all captured screenshots owned by the character (max 20).",
+      "operationId": "getCharacterPhotos",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Photos retrieved successfully"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "404": {
+          "description": "Character not found"
+        }
+      },
+      "summary": "List character photos / screenshots",
+      "tags": [
+        "Contest"
+      ]
+    },
+    "post": {
+      "description": "Saves a new photo snapshot into the character's gallery (enforces max 20 capacity).",
+      "operationId": "saveCharacterPhoto",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "caption": {
+                  "type": "string"
+                },
+                "image_url": {
+                  "type": "string"
+                },
+                "location": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "201": {
+          "description": "Photo saved successfully"
+        },
+        "400": {
+          "description": "Invalid title or capacity reached"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "404": {
+          "description": "Character not found"
+        }
+      },
+      "summary": "Capture and save a new photo / screenshot",
+      "tags": [
+        "Contest"
+      ]
+    }
+  },
+  "/characters/{id}/photos/{photoId}": {
+    "delete": {
+      "description": "Removes a specific screenshot from the character's gallery.",
+      "operationId": "deleteCharacterPhoto",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Photo ID",
+          "in": "path",
+          "name": "photoId",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Photo deleted successfully"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "404": {
+          "description": "Photo or Character not found"
+        }
+      },
+      "summary": "Delete a character photo",
+      "tags": [
+        "Contest"
+      ]
+    }
+  },
+  "/contest/current": {
+    "get": {
+      "description": "Returns all photo submissions and current vote totals in the active contest round.",
+      "operationId": "getContestCurrent",
+      "responses": {
+        "200": {
+          "description": "Current contest entries retrieved successfully"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Get current active contest submissions",
+      "tags": [
+        "Contest"
+      ]
+    }
+  },
+  "/contest/legends": {
+    "get": {
+      "description": "Returns historical 1st-place winning contest entries permanently archived in the Hall of Fame.",
+      "operationId": "getContestLegends",
+      "parameters": [
+        {
+          "description": "Max entries to return (default 20)",
+          "in": "query",
+          "name": "limit",
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Offset from beginning (default 0)",
+          "in": "query",
+          "name": "offset",
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PageContestLegend"
+              }
+            }
+          },
+          "description": "Contest legends retrieved successfully"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "List Hall of Fame contest legends",
+      "tags": [
+        "Contest"
+      ]
+    }
+  },
+  "/contest/past": {
+    "get": {
+      "description": "Returns rankings, votes, and community comments from the latest settled contest round.",
+      "operationId": "getContestPast",
+      "responses": {
+        "200": {
+          "description": "Past contest results retrieved successfully"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Get previous contest results",
+      "tags": [
+        "Contest"
+      ]
+    }
+  },
+  "/contest/settle": {
+    "post": {
+      "description": "Concludes active round, calculates rankings, awards prizes to top 3 and voters, archives 1st place into legends, and advances rounds.",
+      "operationId": "settleContest",
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "force": {
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "required": false
+      },
+      "responses": {
+        "200": {
+          "description": "Contest round settled successfully"
+        },
+        "400": {
+          "description": "Contest round not ready to settle"
+        },
+        "403": {
+          "description": "Forbidden (invalid or missing admin API key)"
+        },
+        "404": {
+          "description": "Contest round not found"
+        }
+      },
+      "security": [
+        {
+          "AdminKeyAuth": []
+        }
+      ],
+      "summary": "Settle active contest round (Admin)",
+      "tags": [
+        "Contest"
+      ]
+    }
+  },
+  "/contest/venue": {
+    "get": {
+      "description": "Returns NPC @ワコール dialogue, overview of current and preparing contest rounds, and status.",
+      "operationId": "getContestVenue",
+      "responses": {
+        "200": {
+          "description": "Contest venue overview retrieved successfully"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Get Photo Contest venue overview and dialogue",
+      "tags": [
+        "Contest"
+      ]
+    }
+  }
+}

@@ -1,0 +1,374 @@
+{
+  "/park/npc/divinate": {
+    "post": {
+      "operationId": "divinateParkNPC",
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "character_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "character_id"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Fortune divination result"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized - missing or invalid session token"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden - player does not own requested character or lacks permission"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Get daily fortune divination from park NPC",
+      "tags": [
+        "Park"
+      ]
+    }
+  },
+  "/park/npc/inspect": {
+    "get": {
+      "operationId": "inspectParkNPC",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Park NPC inspection info"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Inspect town park NPC status",
+      "tags": [
+        "Park"
+      ]
+    }
+  },
+  "/park/npc/talk": {
+    "post": {
+      "operationId": "talkParkNPC",
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "character_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "character_id"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Park NPC dialogue response"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized - missing or invalid session token"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden - player does not own requested character or lacks permission"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Talk to town park NPC",
+      "tags": [
+        "Park"
+      ]
+    }
+  },
+  "/park/posts": {
+    "get": {
+      "operationId": "getParkPosts",
+      "parameters": [
+        {
+          "description": "Number of posts to fetch",
+          "in": "query",
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Offset from beginning of result set (default 0)",
+          "in": "query",
+          "name": "offset",
+          "schema": {
+            "default": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Opaque cursor for keyset pagination (e.g. returned in next_cursor)",
+          "in": "query",
+          "name": "cursor",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PageParkPost"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CursorPageParkPost"
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Park board posts"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Get town park bulletin board posts",
+      "tags": [
+        "Park"
+      ]
+    },
+    "post": {
+      "operationId": "postParkMessage",
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "character_id": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "character_id",
+                "message"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "201": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Message posted successfully"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized - missing or invalid session token"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden - player does not own requested character or lacks permission"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Post message to town park board",
+      "tags": [
+        "Park"
+      ]
+    }
+  }
+}

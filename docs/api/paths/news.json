@@ -1,0 +1,181 @@
+{
+  "/news": {
+    "get": {
+      "operationId": "listNews",
+      "parameters": [
+        {
+          "description": "Number of articles",
+          "in": "query",
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Pagination offset",
+          "in": "query",
+          "name": "offset",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PageNewsItem"
+              }
+            }
+          },
+          "description": "List of news articles"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "List published news announcements",
+      "tags": [
+        "News"
+      ]
+    },
+    "post": {
+      "operationId": "createNews",
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "content": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "content"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "201": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "News created successfully"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "AdminApiKey": []
+        }
+      ],
+      "summary": "Publish news article (Admin only)",
+      "tags": [
+        "News"
+      ]
+    }
+  },
+  "/news/{id}": {
+    "get": {
+      "operationId": "getNews",
+      "parameters": [
+        {
+          "description": "News Article ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "News article details"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Get news article by ID",
+      "tags": [
+        "News"
+      ]
+    }
+  }
+}

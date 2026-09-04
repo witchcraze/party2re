@@ -1,0 +1,2371 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "description": "Authoritative HTTP REST API for Party2 OSS reconstruction, providing complete game systems for Web UI clients and AI Agent orchestration.",
+    "title": "Party2 Reconstruction Game API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "description": "Local development server",
+      "url": "http://127.0.0.1:8080"
+    }
+  ],
+  "tags": [
+    {
+      "description": "System health and OpenAPI specification discovery",
+      "name": "System"
+    },
+    {
+      "description": "Player account registration and authentication sessions",
+      "name": "Auth"
+    },
+    {
+      "description": "Character creation, profiles, jobs, rebirth, and inn resting",
+      "name": "Character"
+    },
+    {
+      "description": "Stage explorations, delayed battles, and adventure chronicles",
+      "name": "Adventure"
+    },
+    {
+      "description": "Item purchasing and inventory resale transactions",
+      "name": "Shop"
+    },
+    {
+      "description": "Town park bulletin board and NPC interactions",
+      "name": "Park"
+    },
+    {
+      "description": "Small medal collection and rare reward exchange",
+      "name": "Medals"
+    },
+    {
+      "description": "Community delivery helper quests and rewards",
+      "name": "Helpers"
+    },
+    {
+      "description": "Emergency rescues and penalty cooldowns",
+      "name": "Rescues"
+    },
+    {
+      "description": "Game announcements and administrative news publishing",
+      "name": "News"
+    },
+    {
+      "description": "Player notification inbox and unread tracking",
+      "name": "Notifications"
+    },
+    {
+      "description": "Private home customizations, companion interactions, and delivery notices",
+      "name": "Homes"
+    },
+    {
+      "description": "Player-to-player mailbox correspondence",
+      "name": "Letters"
+    },
+    {
+      "description": "Category leaderboards and distributed ranking snapshots",
+      "name": "Rankings"
+    },
+    {
+      "description": "Custom skill loadouts and slot management",
+      "name": "CustomSkills"
+    },
+    {
+      "description": "Chapel worship, deity blessings, and gold donations",
+      "name": "Chapel"
+    },
+    {
+      "description": "Agricultural plantation and crop cultivation",
+      "name": "Farm"
+    },
+    {
+      "description": "Monster Book encyclopedia and item collection logs",
+      "name": "Collections"
+    },
+    {
+      "description": "Raffle drawings and periodic lottery tickets",
+      "name": "Lottery"
+    },
+    {
+      "description": "Casino mini-games (Slot, High & Low, Doppelganger, Indian Poker)",
+      "name": "Casino"
+    },
+    {
+      "description": "Endurance challenges, World Boss encounters, Dungeons, and PvP Arena",
+      "name": "Combat"
+    },
+    {
+      "description": "Free marketplace item listings, bidding, and buyouts",
+      "name": "Auctions"
+    },
+    {
+      "description": "Town event plaza, traveling merchant bazaar, and victory celebration banquets",
+      "name": "EventPlaza"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "AdventureHistoryEntry": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "drop_item_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "drop_item_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "experience": {
+            "type": "integer"
+          },
+          "gold": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "stage_id": {
+            "type": "string"
+          },
+          "stage_name": {
+            "type": "string"
+          },
+          "turns": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "character_id",
+          "stage_id",
+          "stage_name",
+          "outcome",
+          "turns",
+          "experience",
+          "gold",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "AuctionListing": {
+        "properties": {
+          "buyout_price": {
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "current_bid": {
+            "type": "integer"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "highest_bidder_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "highest_bidder_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "item_category": {
+            "type": "string"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "item_name": {
+            "type": "string"
+          },
+          "min_bid_increment": {
+            "type": "integer"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "seller_character_id": {
+            "type": "string"
+          },
+          "seller_character_name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "seller_character_id",
+          "seller_character_name",
+          "item_id",
+          "item_name",
+          "item_category",
+          "quantity",
+          "current_bid",
+          "buyout_price",
+          "min_bid_increment",
+          "expires_at",
+          "status",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "BanquetToastResult": {
+        "properties": {
+          "banquet_id": {
+            "type": "string"
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "current_character_gold": {
+            "type": "integer"
+          },
+          "gold_awarded": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "toast_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "banquet_id",
+          "character_id",
+          "gold_awarded",
+          "current_character_gold",
+          "toast_count",
+          "message"
+        ],
+        "type": "object"
+      },
+      "BazaarItem": {
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "item_definition_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "type": "integer"
+          },
+          "tier_required": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "category",
+          "price",
+          "tier_required",
+          "description",
+          "item_definition_id"
+        ],
+        "type": "object"
+      },
+      "BazaarItemsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BazaarItem"
+            },
+            "type": "array"
+          },
+          "merchant_tier": {
+            "type": "integer"
+          },
+          "merchant_tier_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "merchant_tier",
+          "merchant_tier_name",
+          "items"
+        ],
+        "type": "object"
+      },
+      "BazaarPurchaseResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "inventory_instance_id": {
+            "type": "string"
+          },
+          "item": {
+            "$ref": "#/components/schemas/BazaarItem"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "remaining_gold": {
+            "type": "integer"
+          },
+          "total_price": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "item",
+          "quantity",
+          "total_price",
+          "remaining_gold",
+          "inventory_instance_id"
+        ],
+        "type": "object"
+      },
+      "BlackMarketItem": {
+        "properties": {
+          "attack": {
+            "example": 5,
+            "type": "integer"
+          },
+          "base_price": {
+            "example": 1200,
+            "type": "integer"
+          },
+          "daily_limit": {
+            "example": 5,
+            "type": "integer"
+          },
+          "defense": {
+            "example": 0,
+            "type": "integer"
+          },
+          "description": {
+            "example": "\u6025\u6240\u3092\u7a81\u3051\u3070\u4e00\u6483\u3067\u4ed5\u7559\u3081\u3089\u308c\u308b\u6697\u6bba\u7528\u306e\u91dd\u3002",
+            "type": "string"
+          },
+          "hp": {
+            "example": 0,
+            "type": "integer"
+          },
+          "id": {
+            "example": "bm_poison_needle",
+            "type": "string"
+          },
+          "mp": {
+            "example": 0,
+            "type": "integer"
+          },
+          "name": {
+            "example": "\u3069\u304f\u3070\u308a",
+            "type": "string"
+          },
+          "slot": {
+            "enum": [
+              "weapon",
+              "accessory",
+              "item"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slot",
+          "base_price",
+          "attack",
+          "defense",
+          "hp",
+          "mp",
+          "daily_limit",
+          "description"
+        ],
+        "type": "object"
+      },
+      "BlackMarketItemView": {
+        "properties": {
+          "effective_price": {
+            "example": 1200,
+            "type": "integer"
+          },
+          "item": {
+            "$ref": "#/components/schemas/BlackMarketItem"
+          },
+          "purchased_today": {
+            "example": 1,
+            "type": "integer"
+          },
+          "remaining_quota": {
+            "example": 4,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "item",
+          "effective_price",
+          "purchased_today",
+          "remaining_quota"
+        ],
+        "type": "object"
+      },
+      "BlackMarketPointsStatus": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "prizes": {
+            "items": {
+              "$ref": "#/components/schemas/BlackMarketPrize"
+            },
+            "type": "array"
+          },
+          "rare_points": {
+            "example": 10,
+            "type": "integer"
+          },
+          "u_prizes": {
+            "items": {
+              "$ref": "#/components/schemas/BlackMarketPrize"
+            },
+            "type": "array"
+          },
+          "u_rare_points": {
+            "example": 2,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "rare_points",
+          "u_rare_points",
+          "prizes",
+          "u_prizes"
+        ],
+        "type": "object"
+      },
+      "BlackMarketPrize": {
+        "properties": {
+          "cost": {
+            "example": 10,
+            "type": "integer"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "example": "bm_prize_207",
+            "type": "string"
+          },
+          "is_u_rare": {
+            "example": false,
+            "type": "boolean"
+          },
+          "item_definition_id": {
+            "example": "item-207",
+            "type": "string"
+          },
+          "name": {
+            "example": "\u30e1\u30bf\u30eb\u30ad\u30f3\u30b0\u306e\u5263",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "item_definition_id",
+          "name",
+          "cost",
+          "is_u_rare",
+          "description"
+        ],
+        "type": "object"
+      },
+      "BlackMarketPurchaseRequest": {
+        "properties": {
+          "item_id": {
+            "example": "bm_poison_needle",
+            "type": "string"
+          },
+          "quantity": {
+            "default": 1,
+            "example": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "item_id"
+        ],
+        "type": "object"
+      },
+      "BlackMarketPurchaseResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "inventory_instance_id": {
+            "type": "string"
+          },
+          "item": {
+            "$ref": "#/components/schemas/BlackMarketItem"
+          },
+          "quantity": {
+            "example": 1,
+            "type": "integer"
+          },
+          "remaining_gold": {
+            "example": 8800,
+            "type": "integer"
+          },
+          "remaining_quota": {
+            "example": 4,
+            "type": "integer"
+          },
+          "total_price": {
+            "example": 1200,
+            "type": "integer"
+          },
+          "unit_price": {
+            "example": 1200,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "item",
+          "quantity",
+          "unit_price",
+          "total_price",
+          "remaining_gold",
+          "inventory_instance_id",
+          "remaining_quota"
+        ],
+        "type": "object"
+      },
+      "BlackMarketRumorsResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "market_condition": {
+            "example": "Quiet",
+            "type": "string"
+          },
+          "npc_name": {
+            "example": "@\u30e4\u30df\u30b8",
+            "type": "string"
+          },
+          "rumor": {
+            "example": "\u4eca\u306f\u885b\u5175\u306e\u76ee\u3082\u7de9\u3093\u3067\u3066\u76f8\u5834\u306f\u843d\u3061\u7740\u3044\u3066\u308b\u305c\u3002",
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "npc_name",
+          "market_condition",
+          "rumor"
+        ],
+        "type": "object"
+      },
+      "BlackMarketSacrificeRequest": {
+        "properties": {
+          "item_instance_id": {
+            "example": "inst-12345",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_instance_id"
+        ],
+        "type": "object"
+      },
+      "BlackMarketSacrificeResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "item_definition_id": {
+            "example": "weapon-29",
+            "type": "string"
+          },
+          "item_instance_id": {
+            "example": "inst-12345",
+            "type": "string"
+          },
+          "item_name": {
+            "example": "\u306f\u3084\u3076\u3055\u306e\u5263",
+            "type": "string"
+          },
+          "message": {
+            "example": "\u2026\u30ec\u30a2\u3060\u306a\u2026\u3002\u3044\u3044\u3060\u308d\u3046\u2026\u3002\u304a\u524d\u306e\u30ec\u30a2\u30dd\u30a4\u30f3\u30c8\u3092\u52a0\u7b97\u3057\u3066\u304a\u3053\u3046\u2026",
+            "type": "string"
+          },
+          "rare_points_gained": {
+            "example": 1,
+            "type": "integer"
+          },
+          "total_rare_points": {
+            "example": 11,
+            "type": "integer"
+          },
+          "total_u_rare_points": {
+            "example": 2,
+            "type": "integer"
+          },
+          "u_rare_points_gained": {
+            "example": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "item_instance_id",
+          "item_definition_id",
+          "item_name",
+          "rare_points_gained",
+          "u_rare_points_gained",
+          "total_rare_points",
+          "total_u_rare_points",
+          "message"
+        ],
+        "type": "object"
+      },
+      "BlackMarketSaleResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "item_instance_id": {
+            "type": "string"
+          },
+          "item_name": {
+            "example": "\u3069\u304f\u3070\u308a",
+            "type": "string"
+          },
+          "quantity": {
+            "example": 1,
+            "type": "integer"
+          },
+          "remaining_gold": {
+            "example": 10720,
+            "type": "integer"
+          },
+          "total_payout": {
+            "example": 720,
+            "type": "integer"
+          },
+          "unit_price": {
+            "example": 720,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "item_instance_id",
+          "item_name",
+          "quantity",
+          "unit_price",
+          "total_payout",
+          "remaining_gold"
+        ],
+        "type": "object"
+      },
+      "BlackMarketSellRequest": {
+        "properties": {
+          "item_instance_id": {
+            "example": "inst-1234",
+            "type": "string"
+          },
+          "quantity": {
+            "default": 1,
+            "example": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "item_instance_id"
+        ],
+        "type": "object"
+      },
+      "BlackMarketState": {
+        "properties": {
+          "condition": {
+            "enum": [
+              "Quiet",
+              "HotDemand",
+              "Crackdown",
+              "Bargain"
+            ],
+            "type": "string"
+          },
+          "description": {
+            "example": "\u5e73\u7a4f\u7121\u4e8b\u3002\u76f8\u5834\u306f\u843d\u3061\u7740\u3044\u3066\u3044\u308b\u3002",
+            "type": "string"
+          },
+          "price_multiplier": {
+            "example": 1,
+            "type": "number"
+          },
+          "risk_level": {
+            "example": "Low",
+            "type": "string"
+          },
+          "sell_multiplier": {
+            "example": 1,
+            "type": "number"
+          }
+        },
+        "required": [
+          "condition",
+          "price_multiplier",
+          "sell_multiplier",
+          "risk_level",
+          "description"
+        ],
+        "type": "object"
+      },
+      "BlackMarketStatus": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "is_eligible": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BlackMarketItemView"
+            },
+            "type": "array"
+          },
+          "location_name": {
+            "example": "\u88cf\u8def\u5730\u306e\u95c7\u5e02",
+            "type": "string"
+          },
+          "market_state": {
+            "$ref": "#/components/schemas/BlackMarketState"
+          },
+          "npc_name": {
+            "example": "@\u30e4\u30df\u30b8",
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "location_name",
+          "npc_name",
+          "is_eligible",
+          "market_state",
+          "items"
+        ],
+        "type": "object"
+      },
+      "BlackMarketTalkResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "dialogue": {
+            "example": "\u2026\u2026\u30c1\u30c3\u3001\u8ab0\u306b\u805e\u3044\u3066\u3053\u3053\u306b\u6765\u305f\uff1f",
+            "type": "string"
+          },
+          "npc_name": {
+            "example": "@\u30e4\u30df\u30b8",
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "npc_name",
+          "dialogue"
+        ],
+        "type": "object"
+      },
+      "BlackMarketTradeRequest": {
+        "properties": {
+          "prize_id": {
+            "example": "bm_prize_087",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prize_id"
+        ],
+        "type": "object"
+      },
+      "BlackMarketTradeResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "cost": {
+            "example": 1,
+            "type": "integer"
+          },
+          "inventory_instance_id": {
+            "example": "inst-prize-1",
+            "type": "string"
+          },
+          "is_u_rare": {
+            "example": false,
+            "type": "boolean"
+          },
+          "item_definition_id": {
+            "example": "item-087",
+            "type": "string"
+          },
+          "item_name": {
+            "example": "\u307e\u307b\u3046\u306e\u305d\u308d\u3070\u3093",
+            "type": "string"
+          },
+          "message": {
+            "example": "\u53d6\u5f15\u6210\u7acb\u3060\u2026\u3002\u307e\u307b\u3046\u306e\u305d\u308d\u3070\u3093 \u3092\u53d7\u3051\u53d6\u3063\u305f\u2026",
+            "type": "string"
+          },
+          "prize_id": {
+            "example": "bm_prize_087",
+            "type": "string"
+          },
+          "remaining_rare": {
+            "example": 9,
+            "type": "integer"
+          },
+          "remaining_u_rare": {
+            "example": 2,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "prize_id",
+          "item_definition_id",
+          "item_name",
+          "inventory_instance_id",
+          "cost",
+          "is_u_rare",
+          "remaining_rare",
+          "remaining_u_rare",
+          "message"
+        ],
+        "type": "object"
+      },
+      "CelebrationBanquet": {
+        "properties": {
+          "boss_id": {
+            "type": "string"
+          },
+          "boss_name": {
+            "type": "string"
+          },
+          "celebrated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "slayer_character_id": {
+            "type": "string"
+          },
+          "slayer_character_name": {
+            "type": "string"
+          },
+          "tier": {
+            "type": "integer"
+          },
+          "toast_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "boss_id",
+          "boss_name",
+          "slayer_character_id",
+          "slayer_character_name",
+          "tier",
+          "toast_count",
+          "celebrated_at",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "Character": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "exp": {
+            "type": "integer"
+          },
+          "gold": {
+            "type": "integer"
+          },
+          "hp": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "max_mp": {
+            "type": "integer"
+          },
+          "mp": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "player_id": {
+            "type": "string"
+          },
+          "rebirth_count": {
+            "type": "integer"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/CharacterStats"
+          }
+        },
+        "required": [
+          "id",
+          "player_id",
+          "name",
+          "level",
+          "hp",
+          "max_hp",
+          "mp",
+          "max_mp",
+          "gold"
+        ],
+        "type": "object"
+      },
+      "CharacterStats": {
+        "properties": {
+          "agility": {
+            "type": "integer"
+          },
+          "intelligence": {
+            "type": "integer"
+          },
+          "luck": {
+            "type": "integer"
+          },
+          "strength": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "strength",
+          "agility",
+          "intelligence",
+          "luck"
+        ],
+        "type": "object"
+      },
+      "ContestLegend": {
+        "properties": {
+          "caption": {
+            "type": "string"
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "character_name": {
+            "type": "string"
+          },
+          "image_url": {
+            "type": "string"
+          },
+          "round": {
+            "type": "integer"
+          },
+          "settled_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "votes": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "round",
+          "character_id",
+          "character_name",
+          "title",
+          "votes",
+          "image_url",
+          "caption",
+          "settled_at"
+        ],
+        "type": "object"
+      },
+      "CreatePartyRequest": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "max_level": {
+            "type": "integer"
+          },
+          "max_members": {
+            "type": "integer"
+          },
+          "min_hp": {
+            "type": "integer"
+          },
+          "min_level": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "speed": {
+            "type": "integer"
+          },
+          "stage_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "name",
+          "stage_id"
+        ],
+        "type": "object"
+      },
+      "CursorPageParkPost": {
+        "properties": {
+          "has_more": {
+            "description": "Whether additional records exist beyond the current page",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ParkPost"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "next_cursor": {
+            "description": "Opaque cursor token for retrieving the next page of results",
+            "type": "string"
+          },
+          "prev_cursor": {
+            "description": "Opaque cursor token for retrieving the previous page of results",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "has_more"
+        ],
+        "type": "object"
+      },
+      "DeletePlayerRequest": {
+        "properties": {
+          "password": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "example": "resource not found",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "FleaMarketListing": {
+        "properties": {
+          "cancelled_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "item_name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "seller_character_id": {
+            "type": "string"
+          },
+          "seller_character_name": {
+            "type": "string"
+          },
+          "sold_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "total_price": {
+            "type": "integer"
+          },
+          "unit_price": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "seller_character_id",
+          "seller_character_name",
+          "item_id",
+          "item_name",
+          "quantity",
+          "unit_price",
+          "total_price",
+          "comment",
+          "status",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "example": "ok",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "JoinPartyRequest": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id"
+        ],
+        "type": "object"
+      },
+      "KickPartyMemberRequest": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "target_character_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "target_character_id"
+        ],
+        "type": "object"
+      },
+      "Letter": {
+        "properties": {
+          "attached_gold": {
+            "type": "integer"
+          },
+          "attached_item_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "attached_item_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "attached_quantity": {
+            "type": "integer"
+          },
+          "body": {
+            "type": "string"
+          },
+          "claimed": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "recipient_character_id": {
+            "type": "string"
+          },
+          "recipient_character_name": {
+            "type": "string"
+          },
+          "sender_character_id": {
+            "type": "string"
+          },
+          "sender_character_name": {
+            "type": "string"
+          },
+          "sent_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sender_character_id",
+          "sender_character_name",
+          "recipient_character_id",
+          "recipient_character_name",
+          "subject",
+          "body",
+          "attached_gold",
+          "attached_quantity",
+          "read",
+          "claimed",
+          "sent_at"
+        ],
+        "type": "object"
+      },
+      "ListBanquetsResponse": {
+        "properties": {
+          "banquets": {
+            "items": {
+              "$ref": "#/components/schemas/CelebrationBanquet"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "banquets",
+          "total"
+        ],
+        "type": "object"
+      },
+      "MaintenanceStatus": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "estimated_end_time": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "message",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "NewsItem": {
+        "properties": {
+          "author": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "title",
+          "content",
+          "author",
+          "published_at"
+        ],
+        "type": "object"
+      },
+      "Notification": {
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_read": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "character_id",
+          "category",
+          "title",
+          "content",
+          "is_read",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "PageAdventureHistoryEntry": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdventureHistoryEntry"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "PageAuctionListing": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuctionListing"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "PageContestLegend": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ContestLegend"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "PageFleaMarketListing": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FleaMarketListing"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "PageLetter": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Letter"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "PageNewsItem": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NewsItem"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "PageNotification": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Notification"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "PageParkPost": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ParkPost"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "PagePartySummary": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PartySummary"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Offset from beginning of result set",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Total number of records matching the query",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "ParkPost": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "character_name": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "job_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "character_id",
+          "character_name",
+          "job_name",
+          "content",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "Party": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "leader_character_id": {
+            "type": "string"
+          },
+          "max_level": {
+            "type": "integer"
+          },
+          "max_members": {
+            "type": "integer"
+          },
+          "min_hp": {
+            "type": "integer"
+          },
+          "min_level": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "speed": {
+            "type": "integer"
+          },
+          "stage_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "leader_character_id",
+          "name",
+          "stage_id",
+          "speed",
+          "max_members",
+          "min_level",
+          "max_level",
+          "min_hp",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "PartyAdventureResult": {
+        "properties": {
+          "outcome": {
+            "type": "string"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "rewards": {
+            "items": {
+              "$ref": "#/components/schemas/PartyMemberRewardSummary"
+            },
+            "type": "array"
+          },
+          "stage_id": {
+            "type": "string"
+          },
+          "synergy_bonus_percent": {
+            "type": "integer"
+          },
+          "total_exp": {
+            "type": "integer"
+          },
+          "total_gold": {
+            "type": "integer"
+          },
+          "turns": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "party_id",
+          "stage_id",
+          "outcome",
+          "turns",
+          "total_exp",
+          "total_gold",
+          "synergy_bonus_percent",
+          "rewards"
+        ],
+        "type": "object"
+      },
+      "PartyDetail": {
+        "properties": {
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/PartyMember"
+            },
+            "type": "array"
+          },
+          "party": {
+            "$ref": "#/components/schemas/Party"
+          }
+        },
+        "required": [
+          "party",
+          "members"
+        ],
+        "type": "object"
+      },
+      "PartyMember": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "character_name": {
+            "type": "string"
+          },
+          "hp": {
+            "type": "integer"
+          },
+          "is_leader": {
+            "type": "boolean"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "joined_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "party_id": {
+            "type": "string"
+          },
+          "ready_state": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "party_id",
+          "character_id",
+          "character_name",
+          "job_id",
+          "level",
+          "hp",
+          "max_hp",
+          "is_leader",
+          "ready_state",
+          "joined_at"
+        ],
+        "type": "object"
+      },
+      "PartyMemberRewardSummary": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "gained_exp": {
+            "type": "integer"
+          },
+          "gained_gold": {
+            "type": "integer"
+          },
+          "level_after": {
+            "type": "integer"
+          },
+          "level_before": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "name",
+          "gained_exp",
+          "gained_gold",
+          "level_before",
+          "level_after"
+        ],
+        "type": "object"
+      },
+      "PartySummary": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "current_members": {
+            "type": "integer"
+          },
+          "has_password": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "leader_character_id": {
+            "type": "string"
+          },
+          "leader_name": {
+            "type": "string"
+          },
+          "max_level": {
+            "type": "integer"
+          },
+          "max_members": {
+            "type": "integer"
+          },
+          "min_hp": {
+            "type": "integer"
+          },
+          "min_level": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "speed": {
+            "type": "integer"
+          },
+          "stage_id": {
+            "type": "string"
+          },
+          "stage_name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "leader_character_id",
+          "leader_name",
+          "stage_id",
+          "speed",
+          "current_members",
+          "max_members",
+          "has_password",
+          "min_level",
+          "max_level",
+          "min_hp",
+          "status",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "PlayerResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username"
+        ],
+        "type": "object"
+      },
+      "PlazaStatus": {
+        "properties": {
+          "active_banquets": {
+            "items": {
+              "$ref": "#/components/schemas/CelebrationBanquet"
+            },
+            "type": "array"
+          },
+          "active_banquets_count": {
+            "type": "integer"
+          },
+          "active_participants": {
+            "type": "integer"
+          },
+          "merchant_tier": {
+            "type": "integer"
+          },
+          "merchant_tier_name": {
+            "type": "string"
+          },
+          "next_tier_threshold": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active_participants",
+          "merchant_tier",
+          "merchant_tier_name",
+          "next_tier_threshold",
+          "active_banquets_count"
+        ],
+        "type": "object"
+      },
+      "PurchaseBazaarItemRequest": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "default": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "item_id"
+        ],
+        "type": "object"
+      },
+      "SecretShopItem": {
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "item_definition_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "item_definition_id",
+          "name",
+          "category",
+          "price",
+          "description"
+        ],
+        "type": "object"
+      },
+      "SessionResponse": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "player_id": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "player_id",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "SetMaintenanceRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "estimated_end_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "SetPartyReadyRequest": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "character_id",
+          "ready"
+        ],
+        "type": "object"
+      },
+      "TavernDeliveryReservation": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "hp_heal": {
+            "type": "integer"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "item_name": {
+            "type": "string"
+          },
+          "mp_heal": {
+            "type": "integer"
+          },
+          "price": {
+            "type": "integer"
+          },
+          "tickets": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "item_id",
+          "item_name",
+          "price",
+          "hp_heal",
+          "mp_heal",
+          "tickets",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "TavernItemRequest": {
+        "properties": {
+          "item_id": {
+            "example": "tavern_curry",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id"
+        ],
+        "type": "object"
+      },
+      "TavernMenuItem": {
+        "properties": {
+          "category": {
+            "enum": [
+              "Drink",
+              "Dessert",
+              "Food",
+              "Course"
+            ],
+            "type": "string"
+          },
+          "description": {
+            "example": "\u79d8\u4f1d\u306e\u30b9\u30d1\u30a4\u30b9\u3092\u716e\u8fbc\u3093\u3060\u30ab\u30ec\u30fc\u3002\u30b9\u30bf\u30df\u30ca\u304c\u6e67\u3044\u3066HP\u3092\u56de\u5fa9\u3059\u308b\u3002",
+            "type": "string"
+          },
+          "hp_heal": {
+            "example": 250,
+            "type": "integer"
+          },
+          "id": {
+            "example": "tavern_curry",
+            "type": "string"
+          },
+          "mp_heal": {
+            "example": 0,
+            "type": "integer"
+          },
+          "name": {
+            "example": "\u30b9\u30d1\u30a4\u30b9\u9999\u308b\u7279\u88fd\u30ab\u30ec\u30fc",
+            "type": "string"
+          },
+          "price": {
+            "example": 400,
+            "type": "integer"
+          },
+          "tickets": {
+            "example": 5,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "category",
+          "price",
+          "hp_heal",
+          "mp_heal",
+          "tickets",
+          "description"
+        ],
+        "type": "object"
+      },
+      "TavernOrderResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "current_hp": {
+            "type": "integer"
+          },
+          "current_mp": {
+            "type": "integer"
+          },
+          "hp_healed": {
+            "type": "integer"
+          },
+          "item": {
+            "$ref": "#/components/schemas/TavernMenuItem"
+          },
+          "message": {
+            "type": "string"
+          },
+          "mp_healed": {
+            "type": "integer"
+          },
+          "remaining_gold": {
+            "type": "integer"
+          },
+          "tickets_awarded": {
+            "type": "integer"
+          },
+          "total_tickets": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "item",
+          "hp_healed",
+          "mp_healed",
+          "current_hp",
+          "current_mp",
+          "remaining_gold",
+          "tickets_awarded",
+          "total_tickets",
+          "message"
+        ],
+        "type": "object"
+      },
+      "TavernStatus": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "character_name": {
+            "type": "string"
+          },
+          "delivery_reservation": {
+            "$ref": "#/components/schemas/TavernDeliveryReservation"
+          },
+          "gold": {
+            "type": "integer"
+          },
+          "hp": {
+            "type": "integer"
+          },
+          "is_full": {
+            "type": "boolean"
+          },
+          "location_name": {
+            "example": "\u5192\u967a\u8005\u306e\u9152\u5834",
+            "type": "string"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "max_mp": {
+            "type": "integer"
+          },
+          "mp": {
+            "type": "integer"
+          },
+          "npc_name": {
+            "example": "@\u30a8\u30ec\u30ca",
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "character_name",
+          "location_name",
+          "npc_name",
+          "gold",
+          "hp",
+          "max_hp",
+          "mp",
+          "max_mp",
+          "is_full"
+        ],
+        "type": "object"
+      },
+      "TavernTalkResult": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "location_name": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "npc_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "location_name",
+          "npc_name",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ToastBanquetRequest": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "AdminApiKey": {
+        "description": "Master administrative API key for privileged operations.",
+        "in": "header",
+        "name": "X-Admin-Key",
+        "type": "apiKey"
+      },
+      "BearerAuth": {
+        "description": "Player session token returned by POST /sessions.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}
