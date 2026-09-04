@@ -53,12 +53,12 @@ Character deletion executes within a database transaction and cleans up resource
 Player account deletion executes within a database transaction:
 1. Retrieves all characters owned by the player via `FindByPlayerID`.
 2. Iterates through and invokes `characterService.Delete(ctx, playerID, char.ID)` for each character, triggering all character cleanup hooks and cascading SQL deletions.
-3. Player-linked account tables:
-   - `player_sessions` (active and expired sessions)
+3. Invalidate all active player sessions in Valkey Master via `SessionRepository.DeleteByPlayerID` (O(1) player session set and token deletion).
+4. Player-linked relational tables in MariaDB:
    - `player_notifications`
    - `bank_transfers` (both sender and recipient)
    - `bank_accounts`
-4. Primary player record in `players`.
+5. Primary player record in `players`.
 
 ---
 

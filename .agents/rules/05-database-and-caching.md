@@ -78,11 +78,11 @@ Durability critical?
 ```
 
 ### 3.3 Comprehensive State Migration Candidates & Architectural Constraints
-- **Candidate A: Player Authentication Sessions (`sessions`) [Priority 1: Approved for Migration, Issue #366]**:
+- **Candidate A: Player Authentication Sessions (`sessions`) [Priority 1: Migrated to Valkey Master, Issue #366]**:
   - *Authority*: Valkey Master (`session:<token> -> player_id, EX 604800`).
   - *Semantics*: Ephemeral, natural 7-day TTL. On crash/eviction, the player simply re-authenticates. Eliminates SQL connection pool overhead on every authenticated HTTP request; removes relational `sessions` table and periodic cleanup cron.
-  - *Constraint*: Account deletion hooks (`CleanupHook`) must explicitly remove active session keys.
-- **Candidate B: System Maintenance Mode State (`system_maintenance`) [Priority 1: Approved for Migration, Issue #367]**:
+  - *Constraint*: Account deletion hooks (`CleanupHook` / `DeleteAccount`) must explicitly remove active session keys via `DeleteByPlayerID`.
+- **Candidate B: System Maintenance Mode State (`system_maintenance`) [Priority 1: Migrated to Valkey Master, Issue #367]**:
   - *Authority*: Valkey Master / In-Memory Cache with Valkey PubSub or short TTL (`maintenance:status`).
   - *Semantics*: Low-cardinality global flag. Currently queried on *every single incoming HTTP request* by `maintenanceMiddleware`, causing significant MariaDB connection pool contention.
   - *Constraint*: Admin updates (`POST /admin/maintenance`) must immediately update/invalidate Valkey; must fail-open or fall back safely if Valkey is unreachable.

@@ -12,7 +12,7 @@ import (
 	"github.com/witchcraze/party2re/internal/logging"
 )
 
-const SessionDuration = 24 * time.Hour
+const SessionDuration = 7 * 24 * time.Hour
 
 type PlayerRepository interface {
 	Save(context.Context, coreplayer.Player) error
@@ -25,6 +25,7 @@ type SessionRepository interface {
 	Save(context.Context, coreplayer.Session) error
 	FindByID(context.Context, string) (coreplayer.Session, error)
 	Revoke(context.Context, string, time.Time) error
+	DeleteByPlayerID(context.Context, string) error
 }
 
 type CharacterService interface {
@@ -178,6 +179,13 @@ func (s *Service) DeleteAccount(ctx context.Context, playerID, password string) 
 					return err
 				}
 			}
+		}
+	}
+
+	// Delete active player sessions
+	if s.sessions != nil {
+		if err := s.sessions.DeleteByPlayerID(ctx, playerID); err != nil {
+			s.logger.Warn(ctx, "player.delete.sessions", slog.String("player_id", playerID), slog.String("reason", err.Error()))
 		}
 	}
 

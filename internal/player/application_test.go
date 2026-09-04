@@ -62,6 +62,11 @@ func (r *sessionRepositoryStub) Revoke(context.Context, string, time.Time) error
 	return r.revokeErr
 }
 
+func (r *sessionRepositoryStub) DeleteByPlayerID(context.Context, string) error {
+	r.value = coreplayer.Session{}
+	return nil
+}
+
 func TestRegisterLogsStructuredSafeOperation(t *testing.T) {
 	var output bytes.Buffer
 	logger := logging.NewJSON(&output)
@@ -193,7 +198,7 @@ func TestAuthenticateRejectsExpiredSession(t *testing.T) {
 	}
 
 	// Manually insert an already-expired session by manipulating stub.
-	expiredSession, _ := coreplayer.NewSession(player.ID, time.Now().Add(-48*time.Hour), SessionDuration)
+	expiredSession, _ := coreplayer.NewSession(player.ID, time.Now().Add(-8*24*time.Hour), SessionDuration)
 	sessions.value = expiredSession
 
 	if _, err := service.Authenticate(context.Background(), expiredSession.ID); !errors.Is(err, coreplayer.ErrAuthentication) {
@@ -220,7 +225,9 @@ func (c *charStubService) FindByPlayerID(ctx context.Context, playerID string) (
 func TestDeleteAccount(t *testing.T) {
 	player, _ := coreplayer.New("eve", "correctpassword", time.Now())
 	players := &playerRepositoryStub{value: player}
-	sessions := &sessionRepositoryStub{}
+	sessions := &sessionRepositoryStub{
+		value: coreplayer.Session{ID: "sess-eve", PlayerID: player.ID},
+	}
 
 	service, err := NewService(players, sessions)
 	if err != nil {
@@ -241,6 +248,9 @@ func TestDeleteAccount(t *testing.T) {
 		}
 		if players.value.ID != "" {
 			t.Errorf("expected player to be cleared from repository")
+		}
+		if sessions.value.ID != "" {
+			t.Errorf("expected player sessions to be cleared from repository")
 		}
 	})
 }

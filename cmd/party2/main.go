@@ -115,15 +115,20 @@ func run(ctx context.Context, logger logging.Logger) error {
 		return err
 	}
 
+	valkeyClient, err := valkey.NewClient()
+	if err != nil {
+		logger.Warn(ctx, "valkey.connect.failed", slog.String("detail", err.Error()), slog.String("fallback", "in_memory"))
+		valkeyClient = nil
+	} else {
+		defer valkeyClient.Close()
+	}
+
 	// 1. Core Player & Character Repositories and Services
 	playerRepo, err := database.NewPlayerRepository(db)
 	if err != nil {
 		return err
 	}
-	sessionRepo, err := database.NewSessionRepository(db)
-	if err != nil {
-		return err
-	}
+	sessionRepo := player.NewValkeySessionRepository(valkeyClient)
 	dbMaintRepo, err := database.NewMaintenanceRepository(db)
 	if err != nil {
 		return err
@@ -624,9 +629,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 		helperService  = helper.NewService(helperRepo, charRepo, invRepo, nil, txProvider)
 	)
 
-	valkeyClient, err := valkey.NewClient()
-	if err != nil {
-		logger.Warn(ctx, "valkey.connect.failed", slog.String("detail", err.Error()), slog.String("fallback", "in_memory"))
+	if valkeyClient == nil {
 		valkeyMaintRepo := maintenance.NewValkeyRepository(nil, maintenance.WithFallback(dbMaintRepo))
 		maintService, err = maintenance.NewService(valkeyMaintRepo)
 		if err != nil {
@@ -640,7 +643,6 @@ func run(ctx context.Context, logger logging.Logger) error {
 			return err
 		}
 	} else {
-		defer valkeyClient.Close()
 		valkeyMaintRepo := maintenance.NewValkeyRepository(valkeyClient, maintenance.WithFallback(dbMaintRepo))
 		maintService, err = maintenance.NewService(valkeyMaintRepo)
 		if err != nil {
