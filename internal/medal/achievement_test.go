@@ -252,7 +252,6 @@ func TestService_RecordProgress_And_Unlock(t *testing.T) {
 	svc, err := medal.NewService(
 		charRepo,
 		invRepo,
-		nil,
 		"",
 		medal.WithAchievementRepository(achRepo, customCatalog...),
 	)
@@ -335,7 +334,6 @@ func TestService_ClaimAchievement(t *testing.T) {
 	svc, err := medal.NewService(
 		charRepo,
 		invRepo,
-		nil,
 		"",
 		medal.WithAchievementRepository(achRepo, customCatalog...),
 	)
@@ -397,7 +395,6 @@ func TestService_ClaimAchievement_InvalidCases(t *testing.T) {
 	svc, _ := medal.NewService(
 		charRepo,
 		invRepo,
-		nil,
 		"",
 		medal.WithAchievementRepository(achRepo),
 	)

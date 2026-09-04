@@ -76,7 +76,7 @@ func TestMedalService(t *testing.T) {
 		charRepo := &mockCharacterRepo{char: char}
 		invRepo := &mockInventoryRepo{inv: inv}
 
-		svc, err := medal.NewService(charRepo, invRepo, nil, rewardsFile)
+		svc, err := medal.NewService(charRepo, invRepo, rewardsFile)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -102,7 +102,7 @@ func TestMedalService(t *testing.T) {
 		charRepo := &mockCharacterRepo{char: char}
 		invRepo := &mockInventoryRepo{inv: inv}
 
-		svc, err := medal.NewService(charRepo, invRepo, nil, rewardsFile)
+		svc, err := medal.NewService(charRepo, invRepo, rewardsFile)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -120,7 +120,7 @@ func TestMedalService(t *testing.T) {
 		charRepo := &mockCharacterRepo{char: char}
 		invRepo := &mockInventoryRepo{inv: inv}
 
-		svc, err := medal.NewService(charRepo, invRepo, nil, rewardsFile)
+		svc, err := medal.NewService(charRepo, invRepo, rewardsFile)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -152,7 +152,6 @@ func TestMedalService_ConcurrentClaim(t *testing.T) {
 	svc, err := medal.NewServiceWithRewards(
 		charRepo,
 		invRepo,
-		nil,
 		rewards,
 		medal.WithTransactionProvider(dummyTxProvider{}),
 	)

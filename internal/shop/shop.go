@@ -35,6 +35,7 @@ type InventoryRepository interface {
 	Save(ctx context.Context, value coreinventory.Inventory) error
 }
 
+// Deprecated: TransactionRepository is no longer used by shop.Service.
 type TransactionRepository interface {
 	CommitTransaction(ctx context.Context, character corecharacter.Character, inventory coreinventory.Inventory) error
 }
@@ -66,12 +67,11 @@ type SaleResult struct {
 }
 
 type Service struct {
-	characters   CharacterRepository
-	inventories  InventoryRepository
-	transactions TransactionRepository
-	txProvider   TransactionProvider
-	catalog      item.DefinitionProvider
-	economy      *economy.Service
+	characters  CharacterRepository
+	inventories InventoryRepository
+	txProvider  TransactionProvider
+	catalog     item.DefinitionProvider
+	economy     *economy.Service
 }
 
 func NewService(characters CharacterRepository, inventories InventoryRepository, catalog item.DefinitionProvider, opts ...Option) (*Service, error) {
@@ -98,29 +98,10 @@ func NewService(characters CharacterRepository, inventories InventoryRepository,
 	return s, nil
 }
 
-func NewServiceWithTransaction(characters CharacterRepository, inventories InventoryRepository, transactions TransactionRepository, catalog item.DefinitionProvider, opts ...Option) (*Service, error) {
-	if characters == nil || inventories == nil || catalog == nil {
-		return nil, ErrNilDependency
-	}
-	s := &Service{
-		characters:   characters,
-		inventories:  inventories,
-		transactions: transactions,
-		catalog:      catalog,
-	}
-	for _, opt := range opts {
-		opt(s)
-	}
-	var ecoOpts []economy.Option
-	if s.txProvider != nil {
-		ecoOpts = append(ecoOpts, economy.WithTransactionProvider(s.txProvider))
-	}
-	eco, err := economy.NewService(characters, inventories, ecoOpts...)
-	if err != nil {
-		return nil, err
-	}
-	s.economy = eco
-	return s, nil
+// Deprecated: TransactionRepository is no longer used by shop.Service since economy.Service handles transactions.
+// Use NewService with WithTransactionProvider option instead.
+func NewServiceWithTransaction(characters CharacterRepository, inventories InventoryRepository, _ TransactionRepository, catalog item.DefinitionProvider, opts ...Option) (*Service, error) {
+	return NewService(characters, inventories, catalog, opts...)
 }
 
 func (s *Service) CalculateSellPrice(basePrice int) int {
