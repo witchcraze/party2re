@@ -48,10 +48,6 @@ type InventoryRepository interface {
 	Save(ctx context.Context, value coreinventory.Inventory) error
 }
 
-type TransactionRepository interface {
-	CommitTransaction(ctx context.Context, character corecharacter.Character, inventory coreinventory.Inventory) error
-}
-
 type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
@@ -91,7 +87,6 @@ func WithAchievementCatalog(achievements []Achievement) Option {
 type Service struct {
 	characters      CharacterRepository
 	inventories     InventoryRepository
-	transactions    TransactionRepository
 	txProvider      TransactionProvider
 	rewards         []Reward
 	economy         *economy.Service
@@ -102,7 +97,6 @@ type Service struct {
 func NewService(
 	characters CharacterRepository,
 	inventories InventoryRepository,
-	transactions TransactionRepository,
 	rewardsFilePath string,
 	opts ...Option,
 ) (*Service, error) {
@@ -126,13 +120,12 @@ func NewService(
 		return nil, err
 	}
 
-	return NewServiceWithRewards(characters, inventories, transactions, rewards, opts...)
+	return NewServiceWithRewards(characters, inventories, rewards, opts...)
 }
 
 func NewServiceWithRewards(
 	characters CharacterRepository,
 	inventories InventoryRepository,
-	transactions TransactionRepository,
 	rewards []Reward,
 	opts ...Option,
 ) (*Service, error) {
@@ -141,10 +134,9 @@ func NewServiceWithRewards(
 	}
 
 	s := &Service{
-		characters:   characters,
-		inventories:  inventories,
-		transactions: transactions,
-		rewards:      rewards,
+		characters:  characters,
+		inventories: inventories,
+		rewards:     rewards,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -176,20 +168,6 @@ func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) erro
 		return s.txProvider.RunInTx(ctx, fn)
 	}
 	return fn(ctx)
-}
-
-func (s *Service) findCharacter(ctx context.Context, characterID string) (corecharacter.Character, error) {
-	if s.txProvider != nil {
-		return s.characters.FindByIDForUpdate(ctx, characterID)
-	}
-	return s.characters.FindByID(ctx, characterID)
-}
-
-func (s *Service) findInventory(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-	if s.txProvider != nil {
-		return s.inventories.FindByCharacterIDForUpdate(ctx, characterID)
-	}
-	return s.inventories.FindByCharacterID(ctx, characterID)
 }
 
 func (s *Service) Claim(ctx context.Context, characterID string, itemID string) (corecharacter.Character, coreinventory.Inventory, error) {

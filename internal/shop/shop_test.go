@@ -58,6 +58,9 @@ func (r *inventoryRepoStub) FindByCharacterID(_ context.Context, characterID str
 	if !ok {
 		return coreinventory.New(characterID)
 	}
+	itemsCopy := make([]item.Instance, len(inv.Items))
+	copy(itemsCopy, inv.Items)
+	inv.Items = itemsCopy
 	return inv, nil
 }
 
@@ -68,6 +71,9 @@ func (r *inventoryRepoStub) FindByCharacterIDForUpdate(ctx context.Context, char
 func (r *inventoryRepoStub) Save(_ context.Context, value coreinventory.Inventory) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	itemsCopy := make([]item.Instance, len(value.Items))
+	copy(itemsCopy, value.Items)
+	value.Items = itemsCopy
 	r.inventories[value.CharacterID] = value
 	return nil
 }
@@ -686,7 +692,14 @@ func TestService_Sell_LockHierarchy(t *testing.T) {
 }
 
 func TestService_Concurrent_Sell_And_Purchase(t *testing.T) {
-	service, charRepo, invRepo, _ := newTestSetup(t)
+	charRepo := newCharacterRepoStub()
+	invRepo := newInventoryRepoStub()
+	potion, _ := item.NewDefinition("herb", "Herb", 30)
+	catalog, _ := item.NewCatalog([]item.Definition{potion})
+	service, err := shop.NewService(charRepo, invRepo, catalog, shop.WithTransactionProvider(&mockTxProvider{}))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	char := createTestCharacter(t, charRepo, "TraderHero", 1000)
 	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
@@ -721,5 +734,20 @@ func TestService_Concurrent_Sell_And_Purchase(t *testing.T) {
 		if err != nil && !errors.Is(err, shop.ErrUnownedItem) && !errors.Is(err, shop.ErrInvalidQuantity) {
 			t.Errorf("unexpected concurrent transaction error: %v", err)
 		}
+	}
+}
+
+func TestNewServiceWithTransaction_DeprecatedCompatibility(t *testing.T) {
+	charRepo := newCharacterRepoStub()
+	invRepo := newInventoryRepoStub()
+	sword, _ := item.NewEquipmentDefinition("bronze_sword", "Bronze Sword", 100, item.SlotMainHand)
+	cat, _ := item.NewCatalog([]item.Definition{sword})
+
+	svc, err := shop.NewServiceWithTransaction(charRepo, invRepo, nil, cat)
+	if err != nil {
+		t.Fatalf("expected NewServiceWithTransaction to succeed, got %v", err)
+	}
+	if svc == nil {
+		t.Fatal("expected non-nil service")
 	}
 }

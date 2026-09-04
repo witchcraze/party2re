@@ -218,6 +218,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#345](https://github.com/witchcraze/party2re/issues/345) | Deprecate redundant progression_lint_test in favor of core_lint_test | Merged |
 | [#70](https://github.com/witchcraze/party2re/issues/70) | Character lifetime milestone achievements and commemorative medals | Merged |
 | [#357](https://github.com/witchcraze/party2re/issues/357) | Fix lock hierarchy inversion in shop.Sell and gemstore.SellGem to prevent database deadlocks | Merged |
+| [#359](https://github.com/witchcraze/party2re/issues/359) | Clean up unused transaction fields and dead code in shop and medal services | Merged |
 
 ---
 

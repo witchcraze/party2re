@@ -143,15 +143,11 @@ func run(ctx context.Context, logger logging.Logger) error {
 	if err != nil {
 		return err
 	}
-	shopRepo, err := database.NewShopRepository(db)
-	if err != nil {
-		return err
-	}
 	itemCatalog, err := coreitem.InitialCatalog()
 	if err != nil {
 		return err
 	}
-	shopService, err := shop.NewServiceWithTransaction(charRepo, invRepo, shopRepo, itemCatalog)
+	shopService, err := shop.NewService(charRepo, invRepo, itemCatalog, shop.WithTransactionProvider(txProvider))
 	if err != nil {
 		return err
 	}
@@ -285,7 +281,6 @@ func run(ctx context.Context, logger logging.Logger) error {
 	medalService, err := medal.NewService(
 		charRepo,
 		invRepo,
-		nil,
 		"",
 		medal.WithTransactionProvider(txProvider),
 		medal.WithAchievementRepository(achievementRepo),
