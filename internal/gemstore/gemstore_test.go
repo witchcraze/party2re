@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -17,6 +18,7 @@ import (
 // -------------------------------------------------------------------
 
 type mockCharacterRepo struct {
+	mu         sync.RWMutex
 	characters map[string]corecharacter.Character
 	updateFn   func(ctx context.Context, char corecharacter.Character) error
 }
@@ -28,6 +30,8 @@ func newMockCharacterRepo() *mockCharacterRepo {
 }
 
 func (m *mockCharacterRepo) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	c, ok := m.characters[id]
 	if !ok {
 		return corecharacter.Character{}, corecharacter.ErrNotFound
@@ -40,6 +44,8 @@ func (m *mockCharacterRepo) FindByIDForUpdate(ctx context.Context, id string) (c
 }
 
 func (m *mockCharacterRepo) Update(ctx context.Context, character corecharacter.Character) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.updateFn != nil {
 		return m.updateFn(ctx, character)
 	}
@@ -48,6 +54,7 @@ func (m *mockCharacterRepo) Update(ctx context.Context, character corecharacter.
 }
 
 type mockInventoryRepo struct {
+	mu          sync.RWMutex
 	inventories map[string]coreinventory.Inventory
 	saveFn      func(ctx context.Context, inv coreinventory.Inventory) error
 }
@@ -59,6 +66,8 @@ func newMockInventoryRepo() *mockInventoryRepo {
 }
 
 func (m *mockInventoryRepo) FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	inv, ok := m.inventories[characterID]
 	if !ok {
 		inv, _ = coreinventory.New(characterID)
@@ -72,6 +81,8 @@ func (m *mockInventoryRepo) FindByCharacterIDForUpdate(ctx context.Context, char
 }
 
 func (m *mockInventoryRepo) Save(ctx context.Context, inventory coreinventory.Inventory) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.saveFn != nil {
 		return m.saveFn(ctx, inventory)
 	}
@@ -653,5 +664,125 @@ func TestGemStore_GetCatalogAndRecipes(t *testing.T) {
 	dialogues := svc.GetDialogue()
 	if len(dialogues) == 0 {
 		t.Error("expected non-empty dialogue list")
+	}
+}
+
+type mockTxProvider struct {
+	mu sync.Mutex
+}
+
+func (m *mockTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	type inTxKey struct{}
+	if ctx.Value(inTxKey{}) != nil {
+		return fn(ctx)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return fn(context.WithValue(ctx, inTxKey{}, struct{}{}))
+}
+
+type orderTrackingCharRepo struct {
+	*mockCharacterRepo
+	lockOrder *[]string
+}
+
+func (r *orderTrackingCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	*r.lockOrder = append(*r.lockOrder, "characters")
+	return r.mockCharacterRepo.FindByIDForUpdate(ctx, id)
+}
+
+type orderTrackingInvRepo struct {
+	*mockInventoryRepo
+	lockOrder *[]string
+}
+
+func (r *orderTrackingInvRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	*r.lockOrder = append(*r.lockOrder, "inventory_items")
+	return r.mockInventoryRepo.FindByCharacterIDForUpdate(ctx, characterID)
+}
+
+func TestService_SellGem_LockHierarchy(t *testing.T) {
+	catalog, err := gemstore.DefaultCatalog()
+	if err != nil {
+		t.Fatalf("failed to load default catalog: %v", err)
+	}
+	charRepo := newMockCharacterRepo()
+	invRepo := newMockInventoryRepo()
+	var lockOrder []string
+
+	trackedCharRepo := &orderTrackingCharRepo{mockCharacterRepo: charRepo, lockOrder: &lockOrder}
+	trackedInvRepo := &orderTrackingInvRepo{mockInventoryRepo: invRepo, lockOrder: &lockOrder}
+
+	svc, err := gemstore.NewService(catalog, trackedCharRepo, trackedInvRepo, gemstore.WithTransactionProvider(&mockTxProvider{}))
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	char := corecharacter.Character{ID: "char-lock-test", Name: "LockTester", Level: 10, Money: 1000}
+	charRepo.characters[char.ID] = char
+
+	inv, _ := coreinventory.New(char.ID)
+	gemInst, _ := coreitem.NewInstance("gem_atk_1", 1)
+	_ = inv.Add(gemInst)
+	invRepo.inventories[char.ID] = inv
+
+	_, err = svc.SellGem(context.Background(), char.ID, gemInst.ID)
+	if err != nil {
+		t.Fatalf("SellGem failed: %v", err)
+	}
+
+	if len(lockOrder) < 2 {
+		t.Fatalf("expected at least 2 lock acquisitions, got %v", lockOrder)
+	}
+	if lockOrder[0] != "characters" {
+		t.Errorf("lock hierarchy violation in SellGem: expected 'characters' locked first, got %v", lockOrder)
+	}
+}
+
+func TestService_Concurrent_SellGem_And_BuyGem(t *testing.T) {
+	catalog, err := gemstore.DefaultCatalog()
+	if err != nil {
+		t.Fatalf("failed to load default catalog: %v", err)
+	}
+	charRepo := newMockCharacterRepo()
+	invRepo := newMockInventoryRepo()
+
+	svc, err := gemstore.NewService(catalog, charRepo, invRepo, gemstore.WithTransactionProvider(&mockTxProvider{}))
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	char := corecharacter.Character{ID: "char-concurrent-test", Name: "ConcurrentTrader", Level: 10, Money: 5000}
+	charRepo.characters[char.ID] = char
+
+	inv, _ := coreinventory.New(char.ID)
+	gemInst, _ := coreitem.NewInstance("gem_atk_1", 10)
+	_ = inv.Add(gemInst)
+	invRepo.inventories[char.ID] = inv
+
+	var wg sync.WaitGroup
+	numOps := 10
+	errs := make(chan error, numOps*2)
+
+	for i := 0; i < numOps; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			_, err := svc.BuyGem(context.Background(), char.ID, "gem_atk_1")
+			errs <- err
+		}()
+		go func() {
+			defer wg.Done()
+			_, err := svc.SellGem(context.Background(), char.ID, gemInst.ID)
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil && !errors.Is(err, gemstore.ErrItemNotOwned) {
+			t.Errorf("unexpected error in concurrent Buy/Sell: %v", err)
+		}
 	}
 }

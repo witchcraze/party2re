@@ -617,3 +617,109 @@ func TestConcurrentSell_StrictAtomicQuantity(t *testing.T) {
 		t.Errorf("finalInv items = %d, want 0", len(finalInv.Items))
 	}
 }
+
+type orderTrackingCharRepo struct {
+	*characterRepoStub
+	lockOrder *[]string
+	mu        sync.Mutex
+}
+
+func (r *orderTrackingCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	r.mu.Lock()
+	*r.lockOrder = append(*r.lockOrder, "characters")
+	r.mu.Unlock()
+	return r.characterRepoStub.FindByIDForUpdate(ctx, id)
+}
+
+type orderTrackingInvRepo struct {
+	*inventoryRepoStub
+	lockOrder *[]string
+	mu        sync.Mutex
+}
+
+func (r *orderTrackingInvRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	r.mu.Lock()
+	*r.lockOrder = append(*r.lockOrder, "inventory_items")
+	r.mu.Unlock()
+	return r.inventoryRepoStub.FindByCharacterIDForUpdate(ctx, characterID)
+}
+
+func TestService_Sell_LockHierarchy(t *testing.T) {
+	charRepo := newCharacterRepoStub()
+	invRepo := newInventoryRepoStub()
+	var lockOrder []string
+
+	trackedCharRepo := &orderTrackingCharRepo{characterRepoStub: charRepo, lockOrder: &lockOrder}
+	trackedInvRepo := &orderTrackingInvRepo{inventoryRepoStub: invRepo, lockOrder: &lockOrder}
+
+	sword, err := item.NewEquipmentDefinition("bronze_sword", "Bronze Sword", 100, item.SlotMainHand)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := item.NewCatalog([]item.Definition{sword})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	service, err := shop.NewService(trackedCharRepo, trackedInvRepo, cat, shop.WithTransactionProvider(&mockTxProvider{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char := createTestCharacter(t, charRepo, "SellerHero", 0)
+	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
+	swordInst, _ := item.NewInstance("bronze_sword", 1)
+	_ = inv.Add(swordInst)
+	_ = invRepo.Save(context.Background(), inv)
+
+	_, err = service.Sell(context.Background(), char.ID, swordInst.ID, 1)
+	if err != nil {
+		t.Fatalf("Sell() failed: %v", err)
+	}
+
+	if len(lockOrder) < 2 {
+		t.Fatalf("expected at least 2 lock acquisitions, got %v", lockOrder)
+	}
+	if lockOrder[0] != "characters" {
+		t.Errorf("lock hierarchy violation: expected 'characters' locked first, got %v", lockOrder)
+	}
+}
+
+func TestService_Concurrent_Sell_And_Purchase(t *testing.T) {
+	service, charRepo, invRepo, _ := newTestSetup(t)
+
+	char := createTestCharacter(t, charRepo, "TraderHero", 1000)
+	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
+
+	// Add 10 herbs for selling
+	herbInst, _ := item.NewInstance("herb", 10)
+	_ = inv.Add(herbInst)
+	_ = invRepo.Save(context.Background(), inv)
+
+	var wg sync.WaitGroup
+	numOps := 10
+	errs := make(chan error, numOps*2)
+
+	// Concurrently run Purchases and Sales for the same character
+	for i := 0; i < numOps; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			_, err := service.Purchase(context.Background(), char.ID, "herb", 1)
+			errs <- err
+		}()
+		go func() {
+			defer wg.Done()
+			_, err := service.Sell(context.Background(), char.ID, herbInst.ID, 1)
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil && !errors.Is(err, shop.ErrUnownedItem) && !errors.Is(err, shop.ErrInvalidQuantity) {
+			t.Errorf("unexpected concurrent transaction error: %v", err)
+		}
+	}
+}

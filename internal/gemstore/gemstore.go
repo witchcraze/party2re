@@ -271,6 +271,12 @@ func (s *Service) SellGem(ctx context.Context, characterID, itemInstanceOrDefID 
 
 	var res SellResult
 	run := func(txCtx context.Context) error {
+		// 1. Lock Character first (Deterministic lock order: characters -> inventory_items)
+		if _, err := s.characters.FindByIDForUpdate(txCtx, characterID); err != nil {
+			return err
+		}
+
+		// 2. Lock Inventory next
 		inv, err := s.inventories.FindByCharacterIDForUpdate(txCtx, characterID)
 		if err != nil {
 			return err

@@ -235,8 +235,8 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Persistence:** `adventures` table with atomic battle outcome persistence and compound query indexes (`idx_adventures_character_started`, `idx_adventures_character_claimed`).
 - **Shop** (`internal/shop`):
   - **Responsibility:** Item purchases (gold deduction + inventory addition) and resale (inventory removal + 50% gold refund).
-  - **Dependencies:** Item Catalog, Character (wallet), Inventory.
-  - **Persistence:** Atomic single-transaction `ShopRepository`.
+  - **Dependencies:** Item Catalog, Character (wallet), Inventory, Economy.
+  - **Persistence:** Single-transaction atomic updates via character/inventory repositories with deterministic lock hierarchy (`characters` -> `inventory_items`).
 - **Depot** (`internal/depot`):
   - **Responsibility:** Long-term storage management for item instances and gold.
   - **Dependencies:** Character (wallet), Inventory.
@@ -378,7 +378,7 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
 - **Gem Store & Jewel Synthesis** (`internal/gemstore`):
   - **Responsibility:** Gem retail shop, 55+ advanced gem synthesis formulas (`kako`), player gem transfers (`okuru`), and unidentified orb appraisals with weighted randomized loot pools (`kantei`) (`gem_store.cgi`, `_data.cgi` No. 251–255, NPC `@ジェマ`).
   - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository.
-  - **Persistence:** Direct inventory and character balance persistence via character/inventory repositories.
+  - **Persistence:** Direct inventory and character balance persistence via character/inventory repositories with deterministic lock hierarchy (`characters` -> `inventory_items`).
 - **Endgame God Wishes & Limit Breaks** (`internal/god`):
   - **Responsibility:** Celestial audiences in Heaven (天界, NPC `@神`, `god.cgi`) and Underworld (裏天界, NPC `@神?`, `u_god.cgi`), permanent character attribute enhancements (+40 all stats), currency/resource awards, Level 99+ limit breaks (raising character level cap to 150), and tier-up capacity limit breaks (depot capacity, monster storage, job memory, flea market listings, shop listings).
   - **Dependencies:** Core Character, Core Progression, Character repository, Depot repository, Inventory repository.
