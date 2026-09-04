@@ -216,6 +216,8 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#343](https://github.com/witchcraze/party2re/issues/343) | Unify keyset cursor pagination helper into internal/pagination | Merged |
 | [#344](https://github.com/witchcraze/party2re/issues/344) | Fix OverMonster limit break description wording | Merged |
 | [#345](https://github.com/witchcraze/party2re/issues/345) | Deprecate redundant progression_lint_test in favor of core_lint_test | Merged |
+| [#70](https://github.com/witchcraze/party2re/issues/70) | Character lifetime milestone achievements and commemorative medals | Merged |
+| [#357](https://github.com/witchcraze/party2re/issues/357) | Fix lock hierarchy inversion in shop.Sell and gemstore.SellGem to prevent database deadlocks | Merged |
 
 ---
 
