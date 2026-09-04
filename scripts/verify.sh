@@ -35,11 +35,13 @@ else
     docker compose run --rm app go test -count=1 ./internal/api/http -run "OpenAPI"
 fi
 
-echo "==> [4/7] Validating .arch Guidance Layer symbols via Go AST..."
+echo "==> [4/7] Validating .arch Guidance Layer symbols and database row-lock hierarchy via Go AST..."
 if command -v go >/dev/null 2>&1; then
     go test -count=1 ./internal/architecture
+    go test -count=1 ./internal/database -run "LockHierarchy"
 else
     docker compose run --rm app go test -count=1 ./internal/architecture
+    docker compose run --rm app go test -count=1 ./internal/database -run "LockHierarchy"
 fi
 
 

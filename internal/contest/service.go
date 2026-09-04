@@ -500,6 +500,9 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 			return nil
 		}
 
+		// Lock preparing round upfront (along with activeRound) to strictly adhere to global lock hierarchy
+		prepRound, prepErr := s.contests.GetPreparingRoundForUpdate(txCtx)
+
 		// Sort entries descending by Votes, then ascending by CreatedAt
 		sort.SliceStable(entries, func(i, j int) bool {
 			if entries[i].Votes != entries[j].Votes {
@@ -582,8 +585,7 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 		}
 
 		// Promote preparing round to active round and create next preparing round
-		prepRound, err := s.contests.GetPreparingRoundForUpdate(txCtx)
-		if err == nil {
+		if prepErr == nil {
 			prepRound.Status = StatusActive
 			prepRound.StartTime = now
 			prepRound.EndTime = now.Add(ContestCycleDays * 24 * time.Hour)
