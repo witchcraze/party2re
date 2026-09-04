@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -169,4 +170,76 @@ func TestMaintenanceEndpoints(t *testing.T) {
 			t.Errorf("expected maintenance disabled after update")
 		}
 	})
+}
+
+type countingMaintenanceDBRepo struct {
+	getCalls int64
+	status   maintenance.Status
+}
+
+func (c *countingMaintenanceDBRepo) GetStatus(ctx context.Context) (maintenance.Status, error) {
+	atomic.AddInt64(&c.getCalls, 1)
+	return c.status, nil
+}
+
+func (c *countingMaintenanceDBRepo) SetStatus(ctx context.Context, status maintenance.Status) error {
+	c.status = status
+	return nil
+}
+
+func TestMaintenanceMiddleware_WithValkeyRepository_EliminatesRepeatedDBQueries(t *testing.T) {
+	dbRepo := &countingMaintenanceDBRepo{
+		status: maintenance.Status{
+			Enabled:   false,
+			Message:   "System is operating normally.",
+			UpdatedAt: time.Now().UTC(),
+		},
+	}
+
+	valkeyRepo := maintenance.NewValkeyRepository(nil,
+		maintenance.WithFallback(dbRepo),
+		maintenance.WithMemoryCacheTTL(10*time.Second),
+	)
+
+	maintService, err := maintenance.NewService(valkeyRepo)
+	if err != nil {
+		t.Fatalf("failed to create maintenance service: %v", err)
+	}
+
+	h, err := apihttp.NewHandler(
+		&stubPlayerService{
+			authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
+				return coreplayer.Player{ID: "player-1"}, nil
+			},
+		},
+		&stubCharacterService{
+			getFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+				return corecharacter.Character{ID: id, PlayerID: "player-1"}, nil
+			},
+		},
+		&stubAdventureService{},
+		&stubShopService{},
+		apihttp.WithMaintenance(maintService),
+	)
+	if err != nil {
+		t.Fatalf("failed to create handler: %v", err)
+	}
+	router := h.Router()
+
+	// Dispatch 50 normal HTTP requests
+	for i := 0; i < 50; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/maintenance", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("request %d returned %d", i, rec.Code)
+		}
+	}
+
+	// Verify that the underlying database repository was queried at most 1 time, NOT 50 times
+	calls := atomic.LoadInt64(&dbRepo.getCalls)
+	if calls > 1 {
+		t.Errorf("expected at most 1 database query across 50 requests, got %d", calls)
+	}
 }

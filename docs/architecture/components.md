@@ -396,8 +396,8 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Persistence:** `parties`, `party_members`, and `party_adventure_logs` tables in `internal/database/party_repository.go`.
 - **System Maintenance Mode** (`internal/maintenance`):
   - **Responsibility:** System-wide maintenance mode status management, public status queries, and administrative configuration (enable/disable, message, estimated end time) with HTTP middleware request interception.
-  - **Dependencies:** Maintenance repository.
-  - **Persistence:** `system_maintenance` table in `internal/database/maintenance_repository.go`.
+  - **Dependencies:** Maintenance repository, Valkey client (`internal/valkey`).
+  - **Persistence:** Valkey Master / In-Memory caching via `internal/maintenance/valkey_repository.go` (`party2:maintenance:status`) backed by `system_maintenance` table in `internal/database/maintenance_repository.go`, eliminating MariaDB queries on normal HTTP request routing.
 
 ### Cross-Module Transaction Orchestration & Ambient Context Propagation
 
@@ -448,7 +448,7 @@ Durability critical?
 
 #### Migration Candidates & Roadmap
 - **Candidate A: Player Authentication Sessions (`sessions`)**: Formally approved for migration to Valkey Master (`session:<token> -> player_id, EX 604800`) to eliminate relational database connection bottleneck on every authenticated API request ([Issue #366](https://github.com/witchcraze/party2re/issues/366)).
-- **Candidate B: System Maintenance Mode State (`system_maintenance`)**: Formally approved for Valkey Master / In-Memory cache with invalidation to eliminate synchronous MariaDB queries from `maintenanceMiddleware` on every incoming HTTP request ([Issue #367](https://github.com/witchcraze/party2re/issues/367)).
+- **Candidate B: System Maintenance Mode State (`system_maintenance`)**: Implemented via Valkey Master / In-Memory cache (`internal/maintenance/valkey_repository.go`) to eliminate synchronous MariaDB queries from `maintenanceMiddleware` on every incoming HTTP request ([Issue #367](https://github.com/witchcraze/party2re/issues/367)).
 - **Candidate C: Party & Matchmaking Wait Lobbies (`party`, `matchmaking`)**: Candidate for Valkey Master (`party:lobby:{id}`) to decouple ephemeral wait states and 60-second ready checks from relational database tables ([Issue #368](https://github.com/witchcraze/party2re/issues/368)).
 - **Candidate D: In-Progress Run Buffers (`dungeon_active_expeditions`, `challenge_sessions`)**: Candidate for Valkey Master step-by-step turn buffers, eliminating write amplification on MariaDB until final settlement upon exit/completion ([Issue #369](https://github.com/witchcraze/party2re/issues/369)).
 - **Candidate E: World Boss Real-time Shared HP (`boss`)**: High-risk candidate requiring proof-of-concept for dual-write settlement (bridging Valkey atomic `DECRBY` with MariaDB transactional loot settlement) ([Issue #370](https://github.com/witchcraze/party2re/issues/370)).

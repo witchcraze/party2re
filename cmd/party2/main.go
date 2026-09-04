@@ -124,11 +124,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 	if err != nil {
 		return err
 	}
-	maintRepo, err := database.NewMaintenanceRepository(db)
-	if err != nil {
-		return err
-	}
-	maintService, err := maintenance.NewService(maintRepo)
+	dbMaintRepo, err := database.NewMaintenanceRepository(db)
 	if err != nil {
 		return err
 	}
@@ -623,6 +619,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 		parkService    *park.Service
 		homeService    *home.Service
 		advService     *adventure.Service
+		maintService   *maintenance.Service
 		rescueService  = rescue.NewService(rescueRepo, charRepo, nil)
 		helperService  = helper.NewService(helperRepo, charRepo, invRepo, nil, txProvider)
 	)
@@ -630,6 +627,11 @@ func run(ctx context.Context, logger logging.Logger) error {
 	valkeyClient, err := valkey.NewClient()
 	if err != nil {
 		logger.Warn(ctx, "valkey.connect.failed", slog.String("detail", err.Error()), slog.String("fallback", "in_memory"))
+		valkeyMaintRepo := maintenance.NewValkeyRepository(nil, maintenance.WithFallback(dbMaintRepo))
+		maintService, err = maintenance.NewService(valkeyMaintRepo)
+		if err != nil {
+			return err
+		}
 		rankingService, _ = ranking.NewService(rankingRepo)
 		parkService, _ = park.NewService(parkRepo, charRepo, park.WithRateLimiter(limiter))
 		homeService, _ = home.NewService(homeRepo, charRepo, home.WithVisitorLimiter(limiter, 24*time.Hour))
@@ -639,6 +641,11 @@ func run(ctx context.Context, logger logging.Logger) error {
 		}
 	} else {
 		defer valkeyClient.Close()
+		valkeyMaintRepo := maintenance.NewValkeyRepository(valkeyClient, maintenance.WithFallback(dbMaintRepo))
+		maintService, err = maintenance.NewService(valkeyMaintRepo)
+		if err != nil {
+			return err
+		}
 		limiter = ratelimit.NewValkeyLimiter(valkeyClient)
 		rankingCache := ranking.NewValkeySnapshotCache(valkeyClient)
 		schedRepo := scheduling.NewValkeyRepository(valkeyClient)

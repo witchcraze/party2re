@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #356 — Establish data persistence boundary guidelines (MariaDB vs Valkey Master) and identify volatile state migration candidates
+Last updated: Issue #367 — Cache or master system maintenance state in Valkey to eliminate SQL queries on every HTTP request
 
 ## Current phase
 
@@ -72,7 +72,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Monster Grandpa & Pet Companions** (`internal/monster`): モンスター預かり所＆自宅ペット仲間システム（`farm.cgi` / `monster.cgi`, NPC `@モンジィ`、最大50体〜限界突破時最大300体預入 `character_monsters`、自宅ペット同居最大8体 `MaxHomePets = 8`、同居ペット同名重複チェック、命名文字制約、他プレイヤーへのモンスター譲渡、野生への解放、`TransactionProvider` と `SELECT ... FOR UPDATE` 行ロックによる完全アトミックトランザクション整合性）。
 - **Photo Contest, Screenshots & Gallery** (`internal/contest`): フォトコン会場・NPC `@ワコール`（`photo.cgi` / `contest.cgi`、キャラクター別スクリーンショット保存・ギャラリー最大20枚、コンテストエントリー・題名バリデーション・連続エントリー制限、開催中コンテスト作品への投票・応援コメント・自己投票禁止・1人1票制約、10日周期定期集計・5作品未満延期、上位3名賞金15,000/7,000/3,000 G・小さなメダル10/6/3枚・ギルドポイント700/300/100 GP付与、1位投票者全員への小さなメダル1枚配布、歴代1位作品の殿堂入り `contest_legends` 永久アーカイブ、結果発表お知らせ配信、`TransactionProvider` と行ロックによる完全アトミックトランザクション整合性・MariaDB永続化）。
 - **Multiplayer Party & Co-op Quests** (`internal/party`): パーティ結成・冒険中のパーティー（`quest.cgi`, `party.cgi`、最大4人編成、パーティ名バリデーション、合言葉パスワード設定、参加条件チェック（Lv上限・下限、HP下限）、単一アクティブパーティ制約、準備完了（Ready）同期、リーダー権限（キック・解散）、マルチプレイヤー協力戦闘解決（`internal/core/battle` 拡張、同名キャラクター重複時も一意な `Participant.ID` による確実な識別、生存キャラクターの被ダメージ残りHP永続化、ステージ名自動補完 `StageName`）、協力シナジーボーナス（+10%〜+30% EXP/ゴールドボーナス）、報酬分配（レベルアップ・OverLevel限界突破（Lv150）対応・ドロップ品一括付与）、冒険ログ永続化、`TransactionProvider` と行ロックによる完全アトミックトランザクション整合性・MariaDB永続化 `parties`, `party_members`, `party_adventure_logs`）。
-- **System Maintenance Mode** (`internal/maintenance`): メンテナンスモード管理（`GET /maintenance`, `POST /admin/maintenance`, `PUT /admin/maintenance`、管理者APIキーによる有効化/無効化・告知メッセージ・終了予定時刻設定、HTTPミドルウェアによる503 Service Unavailable遮断、`/health`, `/openapi.json`, `/maintenance` および管理者バイパス、MariaDB永続化 `system_maintenance`）。
+- **System Maintenance Mode** (`internal/maintenance`): メンテナンスモード管理（`GET /maintenance`, `POST /admin/maintenance`, `PUT /admin/maintenance`、管理者APIキーによる有効化/無効化・告知メッセージ・終了予定時刻設定、HTTPミドルウェアによる503 Service Unavailable遮断、`/health`, `/openapi.json`, `/maintenance` および管理者バイパス、Valkey Master / In-Memory キャッシュ `internal/maintenance/valkey_repository.go` による毎リクエストのSQLクエリ完全排除、MariaDB永続バックアップ `system_maintenance`）。
 
 ### API & Transport
 - **Server Entrypoint & Lifecycle Orchestration** (`cmd/party2`): MariaDB・Valkey・全ドメインリポジトリおよびサービス・スケジューリングWorker・HTTP APIルーター（全34種Option）の統合初期化、`ADDR` / `PORT` 環境変数解決（デフォルト `:8080`）、GoroutineベースのHTTPサーバー＆Worker実行、OSシグナル（`SIGINT`, `SIGTERM`）受信時のタイムアウト付きGraceful Shutdown（`http.Server.Shutdown(ctx)`、Worker Contextキャンセル待機、DB/Valkeyリソース安全開放）、起動・停止のJSON構造化ログ。
@@ -92,7 +92,6 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 1. **Remaining Version 1.0 Feature Modules & Infrastructure**:
    - Personal Access Token (API Key) generation and authentication (Issue #163)
    - Player Session Migration to Valkey Master (Issue #366)
-   - Cache / Master System Maintenance State in Valkey (Issue #367)
    - Web Presentation UI / Client (Issue #140)
 
 ---
