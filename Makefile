@@ -1,4 +1,4 @@
-.PHONY: all check verify check-clean fmt vet openapi-sync openapi-check openapi-scaffold test test-integration test-docker test-stress smoke db-migrate db-reset up down setup-hooks arch-lint
+.PHONY: all check verify check-clean fmt vet openapi-sync openapi-check openapi-scaffold test test-integration test-docker test-stress smoke db-migrate db-reset up down setup-hooks arch-lint lock-lint
 
 all: check
 
@@ -75,4 +75,8 @@ setup-hooks:
 arch-lint:
 	@echo "Validating .arch module guidance symbols against Go AST..."
 	@go test -v ./internal/architecture
+
+lock-lint:
+	@echo "Validating deterministic database row-lock acquisition hierarchy via Go AST..."
+	@go test -v -count=1 ./internal/database -run "LockHierarchy"
 

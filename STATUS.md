@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #354 — Modularize OpenAPI specification into docs/api/paths/*.json and scaffold missing routes via AST
+Last updated: Issue #363 — Static analysis (Go AST) and CI guard for deterministic database row-lock acquisition hierarchy
 
 ## Current phase
 
@@ -29,7 +29,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理、統一アイテム定義プロバイダーインターフェース（`coreitem.DefinitionProvider` / `coreitem.ItemDefinitionProvider`）の一元化、インベントリアイテム更新（`inv.Update`）、装備スロットカプセル化（`equip.Equip`, `equip.Unequip`）。
 - **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定（経験値・ゴールド・アイテム・ちいさなメダル）、構造化ターンログ出力、戦闘参加者（Participant）標準アダプタ/ビルダー（`NewParticipantFromCharacter`, `NewParticipantFromCharacterWithHP`, `ParticipantBuilder`）。
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): Valkeyバックエンドの遅延アクションキュー＆分散排他ロックWorker。
-- **Database & Transaction Orchestration** (`internal/database`, `internal/economy`): 全32リポジトリのトランザクション伝播モデル（`RunInTx` と `ExecutorFromContext`）への完全統一、トランザクション境界外からの直接 `r.db.BeginTx` 呼び出しの完全排除、コンテキスト内トランザクション再利用、マルチモジュール統合テスト（コミット原子性・ロールバック整合性・ネストトランザクション伝播検証）、決定論的行ロック獲得順序（`players` -> `characters` (昇順) -> `inventory_items` -> `character_jobs` -> `character_depots` -> `bank_accounts` -> `guilds` (昇順) -> 各種機能テーブル）によるデッドロック防止の標準化、共通2者間IDソート排他ロックユーティリティ（`id.Sort2`）、および再利用可能なトランザクション内経済交換ヘルパー（`internal/economy`、ゴールド・メダル増減・送金、インベントリ消費・付与、複合 `Exchange`、オーバーフロー安全乗算 `SafeMultiply`）。
+- **Database & Transaction Orchestration** (`internal/database`, `internal/economy`): 全32リポジトリのトランザクション伝播モデル（`RunInTx` と `ExecutorFromContext`）への完全統一、トランザクション境界外からの直接 `r.db.BeginTx` 呼び出しの完全排除、コンテキスト内トランザクション再利用、マルチモジュール統合テスト（コミット原子性・ロールバック整合性・ネストトランザクション伝播検証）、決定論的行ロック獲得順序（Shared -> Players -> Characters (昇順) -> Inventory/Equipment -> Jobs -> Depots -> Bank -> Guilds (昇順) -> 各種機能テーブル）によるデッドロック防止の標準化および Go AST 静的解析リンター（`internal/database/lock_hierarchy_lint_test.go`）による機械的強制、共通2者間IDソート排他ロックユーティリティ（`id.Sort2`）、および再利用可能なトランザクション内経済交換ヘルパー（`internal/economy`、ゴールド・メダル増減・送金、インベントリ消費・付与、複合 `Exchange`、オーバーフロー安全乗算 `SafeMultiply`）。
 - **Standardized Pagination & Common Utilities** (`internal/pagination`, `internal/id`, `internal/validation`, `internal/api/http/middleware`): 単一責務の共通パッケージ配置方針（Rule of Three、セキュリティ/認可の即時共通化指針）および暗号学的に安全なID生成ユーティリティ（`internal/id`）。汎用ジェネリックページネーションパッケージ（`internal/pagination`）によるリクエストパラメータ正規化（`Normalize`, `Parse`, `ParseRequest`, `ParseCursorRequest`）、標準オフセットレスポンスコンテナ（`Page[T]` `{items, total, limit, offset}`）、および高スループットストリーム/ログ向けキーセット・カーソルページネーションコンテナ（`CursorPage[T]` `{items, next_cursor, prev_cursor, limit, has_more}`、Base64 `(timestamp, id)` トークン暗号化・復号化）。広場掲示板（`internal/park`）、冒険履歴（`internal/adventure`）、戦闘リプレイ履歴（`internal/replay`）、私有地手紙受信箱/送信箱（`internal/home`）、宅配便受取待ち・発送履歴（`internal/delivery`）へのキーセットページネーション水平展開、全HTTP API一覧エンドポイントにおける統一エンベロープ適用および OpenAPI 3.1 仕様完全同期。
 
 ### Feature Modules
@@ -82,7 +82,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `050_achievements_and_medals.sql`、`make db-migrate` / `make db-reset`）。
 - **Valkey**: 遅延アクションキュー・排他ロック・分散レートリミット・ランキングスナップショットキャッシュ（AOF+RDB永続化）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
-- **Verification**: `Makefile` (`make check`, `make fmt`, `make vet`, `make openapi-sync`, `make openapi-check`, `make openapi-scaffold`, `make test-stress`, `make check-clean`)、OpenAPI 3.1 仕様書自動スキャフォールド・同期・フォーマット CLI（`scripts/sync_openapi.go`）、CIガード（OpenAPI 3.1構文・全ルートAST網羅テスト）、Go AST 静的解析テスト（全リポジトリにおける `ExecutorFromContext` 必須・`BeginTx` 禁止検証 `internal/database/tx_lint_test.go`、サービス層 `RunInTx` 呼び出し検証 `internal/architecture/arch_test.go`、HTTP 所有権認可検証 `internal/api/http/auth_lint_test.go`、Core 成長ヘルパー適用強制 `internal/core/progression/progression_lint_test.go`）、Git pre-push hook による自動検証、`scripts/stress_test.sh` による高並行ストレステスト。
+- **Verification**: `Makefile` (`make check`, `make fmt`, `make vet`, `make lock-lint`, `make openapi-sync`, `make openapi-check`, `make openapi-scaffold`, `make test-stress`, `make check-clean`)、OpenAPI 3.1 仕様書自動スキャフォールド・同期・フォーマット CLI（`scripts/sync_openapi.go`）、CIガード（OpenAPI 3.1構文・全ルートAST網羅テスト）、Go AST 静的解析テスト（全リポジトリにおける `ExecutorFromContext` 必須・`BeginTx` 禁止検証 `internal/database/tx_lint_test.go`、行ロック獲得階層順序検証 `internal/database/lock_hierarchy_lint_test.go`、サービス層 `RunInTx` 呼び出し検証 `internal/architecture/arch_test.go`、HTTP 所有権認可検証 `internal/api/http/auth_lint_test.go`、Core 成長ヘルパー適用強制 `internal/core/progression/progression_lint_test.go`）、Git pre-push hook による自動検証、`scripts/stress_test.sh` による高並行ストレステスト。
 - **Deployment**: Distroless (`gcr.io/distroless/static-debian13:nonroot`) ベースの最小本番イメージ（GHCR自動公開）。
 
 ---
