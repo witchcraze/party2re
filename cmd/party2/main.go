@@ -594,10 +594,11 @@ func run(ctx context.Context, logger logging.Logger) error {
 		return err
 	}
 
-	partyRepo, err := database.NewPartyRepository(db)
+	dbPartyRepo, err := database.NewPartyRepository(db)
 	if err != nil {
 		return err
 	}
+	partyRepo := party.NewValkeyRepository(valkeyClient, party.WithDurableLogRepository(dbPartyRepo))
 	partyService, err := party.NewService(
 		partyRepo,
 		charRepo,
