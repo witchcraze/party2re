@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #359 — Clean up unused transaction fields and dead code in shop and medal services
+Last updated: Issue #358 — Connect gameplay action producers to achievement milestone progress tracking
 
 ## Current phase
 
@@ -34,8 +34,8 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### Feature Modules
 - **Activity** (`internal/activity`): 訓練機能（Valkey Worker push型＋手動Claimフォールバック）。
-- **Adventure** (`internal/adventure`): 28ステージ（`stages.json`）、286体モンスター（`monsters.json`）、戦闘解決、ドロップ報酬（メダル含む）、Valkey Worker連携、過去冒険履歴一覧（`GET /characters/{id}/adventures`、オフセット/カーソル両対応）、冒険戦績クロニクル・ステージ別クリア統計・マイルストーンアンロック状態（`GET /characters/{id}/adventure-chronicle`、トライモード/イメージ設定/カームモード/ハードモード/アバター設定/エクストリームモード）。
-- **Medal & Lifetime Achievements** (`internal/medal`): 小さなメダル交換所（減算消費方式、`economy.Service` 移行に伴う未使用 `TransactionRepository` 依存および不要ヘルパーの完全クリーンアップ、`TransactionProvider` と `SELECT ... FOR UPDATE` 行ロックによるメダル消費・アイテム付与の完全アトミックトランザクション整合性・並行性レース防止）、および生涯マイルストーン実績・記念勲章コレクションシステム（冒険・モンスター討伐・蓄財・ボス討伐・PvP・カジノ・錬金マイルストーン、DomainEvent/進捗更新、二重受取防止排他ロック、記念勲章付与および小さなメダル報酬付与、`GET /characters/{id}/achievements`, `POST /characters/{id}/achievements/{achievement_id}/claim`, `GET /characters/{id}/medals`）。
+- **Adventure** (`internal/adventure`): 28ステージ（`stages.json`）、286体モンスター（`monsters.json`）、戦闘解決、ドロップ報酬（メダル含む）、Valkey Worker連携、過去冒険履歴一覧（`GET /characters/{id}/adventures`、オフセット/カーソル両対応）、冒険戦績クロニクル・ステージ別クリア統計・マイルストーンアンロック状態（`GET /characters/{id}/adventure-chronicle`、トライモード/イメージ設定/カームモード/ハードモード/アバター設定/エクストリームモード）。勝利時フック（`VictoryHook`）による実績進捗（冒険勝利数、魔物討伐数、獲得ゴールド）連携。
+- **Medal & Lifetime Achievements** (`internal/medal`): 小さなメダル交換所（減算消費方式、`economy.Service` 移行に伴う未使用 `TransactionRepository` 依存および不要ヘルパーの完全クリーンアップ、`TransactionProvider` と `SELECT ... FOR UPDATE` 行ロックによるメダル消費・アイテム付与の完全アトミックトランザクション整合性・並行性レース防止）、および生涯マイルストーン実績・記念勲章コレクションシステム（冒険・モンスター討伐・蓄財・ボス討伐・PvP・カジノ・錬金マイルストーン、各ゲームプレイアクションプロデューサーとの明示的オブザーバーフック連携（`VictoryHook`, `GamePlayedHook`, `SynthesisHook`, `MonsterDefeatedHook`）による進捗自動記録・アンロック、二重受取防止排他ロック、記念勲章付与および小さなメダル報酬付与、`GET /characters/{id}/achievements`, `POST /characters/{id}/achievements/{achievement_id}/claim`, `GET /characters/{id}/medals`）。
 - **Shop** (`internal/shop`): アイテム売買（50%売却）、1回あたり最大取引数量制限（`MaxTransactionQuantity = 9999`）、整数オーバーフロー安全乗算（`safeMultiply` / `ErrPriceOverflow`）、`economy.Service` 移行に伴う未使用 `TransactionRepository` 依存の廃止および `main.go` からのデッドリポジトリ完全排除、`TransactionProvider` と決定論的行ロック階層（`characters` -> `inventory_items`）による購入・売却の完全アトミックトランザクション整合性・並行性レースおよびデッドロック防止。
 - **Depot** (`internal/depot`): 倉庫（アイテム・ゴールド預入・引出）、トランザクション整合性。
 - **Blacksmith** (`internal/blacksmith`): 鍛冶屋（+1〜+10装備強化、成功率曲線、`TransactionProvider` と `SELECT ... FOR UPDATE` 行ロックによる費用・強化素材消費・インベントリ更新の完全アトミックトランザクション整合性・二重消費防止）。

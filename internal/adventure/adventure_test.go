@@ -581,3 +581,40 @@ func TestAdventureClaimAwardsGoldAndItemDrops(t *testing.T) {
 		}
 	}
 }
+
+func TestAdventure_VictoryHook(t *testing.T) {
+	service, clock, _, characters := newTestService(t)
+
+	var hookedCharID string
+	var hookedMonsters int
+	var hookedGold int
+	service.SetVictoryHook(func(ctx context.Context, characterID string, monstersDefeated int, goldEarned int) error {
+		hookedCharID = characterID
+		hookedMonsters = monstersDefeated
+		hookedGold = goldEarned
+		return nil
+	})
+
+	adv, err := service.Start(context.Background(), characters.value.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.now = adv.AvailableAt
+
+	claimed, err := service.Claim(context.Background(), adv.ID)
+	if err != nil {
+		t.Fatalf("Claim() error = %v", err)
+	}
+
+	if claimed.BattleResult.Outcome == corebattle.OutcomeWin {
+		if hookedCharID != characters.value.ID {
+			t.Errorf("expected hookedCharID %s, got %s", characters.value.ID, hookedCharID)
+		}
+		if hookedMonsters != 1 {
+			t.Errorf("expected hookedMonsters 1, got %d", hookedMonsters)
+		}
+		if hookedGold != claimed.BattleResult.Reward.Currency {
+			t.Errorf("expected hookedGold %d, got %d", claimed.BattleResult.Reward.Currency, hookedGold)
+		}
+	}
+}

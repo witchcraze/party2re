@@ -215,3 +215,53 @@ func TestCasinoService_PlayDoppel(t *testing.T) {
 		t.Errorf("err = %v, want ErrInsufficientCoins", err)
 	}
 }
+
+func TestCasinoService_GamePlayedHook(t *testing.T) {
+	ctx := context.Background()
+	var currentCoins int64 = 500
+
+	repo := &mockCasinoRepo{
+		getAccountFn: func(_ context.Context, charID string) (casino.Account, error) {
+			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
+		},
+		deductAndCreditFn: func(_ context.Context, charID string, bet int64, payout int64) (casino.Account, error) {
+			currentCoins = currentCoins - bet + payout
+			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
+		},
+	}
+	svc, err := casino.NewService(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var playedGames []string
+	svc.SetGamePlayedHook(func(ctx context.Context, characterID string, gameName string) error {
+		playedGames = append(playedGames, gameName)
+		return nil
+	})
+
+	// 1. Slot
+	_, _, err = svc.SpinSlot(ctx, "char1", 10)
+	if err != nil {
+		t.Fatalf("SpinSlot failed: %v", err)
+	}
+
+	// 2. Doppel
+	_, _, err = svc.PlayDoppel(ctx, "char1", 50, 4, casino.MarkStar)
+	if err != nil {
+		t.Fatalf("PlayDoppel failed: %v", err)
+	}
+
+	// 3. HighLow
+	_, _, err = svc.PlayHighLow(ctx, "char1", 10, casino.GuessHigh)
+	if err != nil {
+		t.Fatalf("PlayHighLow failed: %v", err)
+	}
+
+	if len(playedGames) != 3 {
+		t.Fatalf("expected 3 games recorded, got %d: %v", len(playedGames), playedGames)
+	}
+	if playedGames[0] != "slot" || playedGames[1] != "doppel" || playedGames[2] != "highlow" {
+		t.Errorf("unexpected playedGames sequence: %v", playedGames)
+	}
+}

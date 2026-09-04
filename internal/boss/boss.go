@@ -130,6 +130,9 @@ type CharacterRepository interface {
 
 type VictoryBanquetHook func(ctx context.Context, bossID, bossName, slayerID, slayerName string, tier int) error
 
+// VictoryHook is called when a character successfully slays a boss.
+type VictoryHook func(ctx context.Context, characterID string, bossID string, tier int) error
+
 type Service struct {
 	repo               Repository
 	characterRepo      CharacterRepository
@@ -137,10 +140,15 @@ type Service struct {
 	bosses             []Boss
 	bossMap            map[string]Boss
 	victoryBanquetHook VictoryBanquetHook
+	victoryHook        VictoryHook
 }
 
 func (s *Service) SetVictoryBanquetHook(hook VictoryBanquetHook) {
 	s.victoryBanquetHook = hook
+}
+
+func (s *Service) SetVictoryHook(hook VictoryHook) {
+	s.victoryHook = hook
 }
 
 func DefaultBossCatalog() []Boss {
@@ -603,8 +611,13 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 		return ChallengeResult{}, fmt.Errorf("record boss challenge: %w", err)
 	}
 
-	if outcome == corebattle.OutcomeWin && battleResult.WinnerID == char.ID && s.victoryBanquetHook != nil {
-		_ = s.victoryBanquetHook(ctx, boss.ID, boss.Name, char.ID, char.Name, boss.Tier)
+	if outcome == corebattle.OutcomeWin && battleResult.WinnerID == char.ID {
+		if s.victoryBanquetHook != nil {
+			_ = s.victoryBanquetHook(ctx, boss.ID, boss.Name, char.ID, char.Name, boss.Tier)
+		}
+		if s.victoryHook != nil {
+			_ = s.victoryHook(ctx, char.ID, boss.ID, boss.Tier)
+		}
 	}
 
 	return ChallengeResult{

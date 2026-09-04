@@ -333,3 +333,54 @@ func TestServiceFindOpponentsAndLeaderboard(t *testing.T) {
 		t.Errorf("GetLeaderboard unexpected: %#v", leaders)
 	}
 }
+
+func TestService_VictoryHook(t *testing.T) {
+	ctx := context.Background()
+	attacker := corecharacter.Character{
+		ID:       "att-hero",
+		PlayerID: "player-1",
+		Level:    5,
+		Stats:    corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 50, Defense: 20, Agility: 30},
+	}
+	defender := corecharacter.Character{
+		ID:       "def-victim",
+		PlayerID: "player-2",
+		Level:    5,
+		Stats:    corecharacter.Stats{HP: 10, MaxHP: 10, Attack: 5, Defense: 5, Agility: 5},
+	}
+	charRepo := &mockCharacterRepo{
+		chars: map[string]corecharacter.Character{
+			attacker.ID: attacker,
+			defender.ID: defender,
+		},
+	}
+	pvpRepo := &mockPvPRepo{
+		ratings: make(map[string]pvp.ArenaRating),
+	}
+	service, err := pvp.NewService(pvpRepo, charRepo, corebattle.Engine{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var hookedWinnerID, hookedLoserID string
+	service.SetVictoryHook(func(ctx context.Context, winnerID, loserID string) error {
+		hookedWinnerID = winnerID
+		hookedLoserID = loserID
+		return nil
+	})
+
+	res, err := service.Challenge(ctx, attacker.ID, defender.ID)
+	if err != nil {
+		t.Fatalf("Challenge failed: %v", err)
+	}
+
+	if res.Match.Outcome != pvp.OutcomeWin {
+		t.Fatalf("expected win, got %v", res.Match.Outcome)
+	}
+	if hookedWinnerID != attacker.ID {
+		t.Errorf("expected hookedWinnerID %s, got %s", attacker.ID, hookedWinnerID)
+	}
+	if hookedLoserID != defender.ID {
+		t.Errorf("expected hookedLoserID %s, got %s", defender.ID, hookedLoserID)
+	}
+}

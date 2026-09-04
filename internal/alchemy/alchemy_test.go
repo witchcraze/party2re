@@ -239,3 +239,51 @@ func TestConcurrentSynthesize_IngredientConsumptionAtomic(t *testing.T) {
 		t.Fatalf("herbs became negative: %d", remainingHerbs)
 	}
 }
+
+func TestAlchemyService_SynthesisHook(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMemoryCharRepo()
+	invRepo := newMemoryInvRepo()
+
+	char, _ := corecharacter.New("Alchemist")
+	char.Money = 500
+	charRepo.characters[char.ID] = char
+
+	herb, _ := item.NewDefinition("item-001", "Herb", 30)
+	superHerb, _ := item.NewDefinition("item-002", "Super Herb", 100)
+	itemCatalog, _ := item.NewCatalog([]item.Definition{herb, superHerb})
+
+	recipe, _ := NewRecipe("rec-super-herb", "Synthesize Super Herb", "item-002", 1, []Ingredient{{"item-001", 2}}, 50)
+	recipeCatalog, _ := NewRecipeCatalog([]Recipe{recipe})
+
+	inv, _ := coreinventory.New(char.ID)
+	herbInst, _ := item.NewInstance("item-001", 3)
+	_ = inv.Add(herbInst)
+	invRepo.inventories[char.ID] = inv
+
+	service, err := NewService(charRepo, invRepo, recipeCatalog, itemCatalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var hookedCharID, hookedRecipeID string
+	service.SetSynthesisHook(func(ctx context.Context, characterID string, recipeID string) error {
+		hookedCharID = characterID
+		hookedRecipeID = recipeID
+		return nil
+	})
+
+	res, err := service.Synthesize(ctx, char.ID, "rec-super-herb")
+	if err != nil {
+		t.Fatalf("Synthesize failed: %v", err)
+	}
+	if res.CreatedItem.DefinitionID != "item-002" {
+		t.Errorf("created item = %s, want item-002", res.CreatedItem.DefinitionID)
+	}
+	if hookedCharID != char.ID {
+		t.Errorf("hookedCharID = %s, want %s", hookedCharID, char.ID)
+	}
+	if hookedRecipeID != "rec-super-herb" {
+		t.Errorf("hookedRecipeID = %s, want rec-super-herb", hookedRecipeID)
+	}
+}

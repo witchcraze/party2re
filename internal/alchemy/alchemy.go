@@ -43,6 +43,9 @@ type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
+// SynthesisHook is called when a recipe is successfully synthesized.
+type SynthesisHook func(ctx context.Context, characterID string, recipeID string) error
+
 type Option func(*Service)
 
 func WithTransactionProvider(txProvider TransactionProvider) Option {
@@ -51,13 +54,24 @@ func WithTransactionProvider(txProvider TransactionProvider) Option {
 	}
 }
 
+func WithSynthesisHook(hook SynthesisHook) Option {
+	return func(s *Service) {
+		s.synthesisHook = hook
+	}
+}
+
 type Service struct {
-	characters  CharacterRepository
-	inventories InventoryRepository
-	txRepo      TransactionRepository
-	txProvider  TransactionProvider
-	recipes     *RecipeCatalog
-	items       item.DefinitionProvider
+	characters    CharacterRepository
+	inventories   InventoryRepository
+	txRepo        TransactionRepository
+	txProvider    TransactionProvider
+	recipes       *RecipeCatalog
+	items         item.DefinitionProvider
+	synthesisHook SynthesisHook
+}
+
+func (s *Service) SetSynthesisHook(hook SynthesisHook) {
+	s.synthesisHook = hook
 }
 
 func NewService(
@@ -219,6 +233,10 @@ func (s *Service) Synthesize(ctx context.Context, characterID string, recipeID s
 	})
 	if err != nil {
 		return Result{}, err
+	}
+
+	if s.synthesisHook != nil {
+		_ = s.synthesisHook(ctx, characterID, recipeID)
 	}
 
 	return result, nil

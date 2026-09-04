@@ -188,5 +188,9 @@ func (s *Service) PlayHighLow(ctx context.Context, characterID string, betCoins 
 		return HighLowResult{}, Account{}, err
 	}
 
+	if s.gamePlayedHook != nil {
+		_ = s.gamePlayedHook(ctx, characterID, "highlow")
+	}
+
 	return res, acc, nil
 }

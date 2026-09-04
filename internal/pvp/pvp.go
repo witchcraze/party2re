@@ -132,10 +132,18 @@ type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 }
 
+// VictoryHook is called when an attacker wins an Arena match.
+type VictoryHook func(ctx context.Context, winnerID string, loserID string) error
+
 type Service struct {
-	repo       Repository
-	characters CharacterRepository
-	battle     corebattle.Resolver
+	repo        Repository
+	characters  CharacterRepository
+	battle      corebattle.Resolver
+	victoryHook VictoryHook
+}
+
+func (s *Service) SetVictoryHook(hook VictoryHook) {
+	s.victoryHook = hook
 }
 
 func NewService(repo Repository, characters CharacterRepository, battle corebattle.Resolver) (*Service, error) {
@@ -315,6 +323,10 @@ func (s *Service) Challenge(ctx context.Context, attackerID, defenderID string) 
 	// 7. Persist match record and rating updates atomically
 	if err := s.repo.RecordMatchAndUpdateRatings(ctx, match, updatedAttRating, updatedDefRating, attacker); err != nil {
 		return ChallengeResult{}, fmt.Errorf("record match: %w", err)
+	}
+
+	if outcome == OutcomeWin && winnerID == attacker.ID && s.victoryHook != nil {
+		_ = s.victoryHook(ctx, attacker.ID, defender.ID)
 	}
 
 	return ChallengeResult{

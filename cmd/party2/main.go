@@ -178,7 +178,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 	if err != nil {
 		return err
 	}
-	_, err = alchemy.NewServiceWithTransaction(charRepo, invRepo, alcRepo, recipeCatalog, itemCatalog)
+	alchemyService, err := alchemy.NewServiceWithTransaction(charRepo, invRepo, alcRepo, recipeCatalog, itemCatalog)
 	if err != nil {
 		return err
 	}
@@ -288,6 +288,19 @@ func run(ctx context.Context, logger logging.Logger) error {
 	if err != nil {
 		return err
 	}
+
+	bossService.SetVictoryHook(func(ctx context.Context, characterID string, bossID string, tier int) error {
+		return medalService.RecordProgress(ctx, characterID, medal.MetricBossesSlain, 1)
+	})
+	pvpService.SetVictoryHook(func(ctx context.Context, winnerID, loserID string) error {
+		return medalService.RecordProgress(ctx, winnerID, medal.MetricPvPVictories, 1)
+	})
+	dungeonService.SetMonsterDefeatedHook(func(ctx context.Context, characterID string, count int) error {
+		return medalService.RecordProgress(ctx, characterID, medal.MetricMonstersSlain, count)
+	})
+	alchemyService.SetSynthesisHook(func(ctx context.Context, characterID string, recipeID string) error {
+		return medalService.RecordProgress(ctx, characterID, medal.MetricAlchemyCrafts, 1)
+	})
 
 	eventplazaRepo, err := database.NewEventPlazaRepository(db)
 	if err != nil {
@@ -446,6 +459,9 @@ func run(ctx context.Context, logger logging.Logger) error {
 	if err != nil {
 		return err
 	}
+	casinoService.SetGamePlayedHook(func(ctx context.Context, characterID string, gameName string) error {
+		return medalService.RecordProgress(ctx, characterID, medal.MetricCasinoGames, 1)
+	})
 
 	auctionRepo, err := database.NewAuctionRepository(db)
 	if err != nil {
@@ -648,6 +664,17 @@ func run(ctx context.Context, logger logging.Logger) error {
 		worker.RegisterHandler(adventure.AdventureActionTypeComplete, adventure.NewAdventureCompletionHandler(advService))
 		worker.RegisterHandler(ranking.RankingActionTypeRefresh, ranking.NewRefreshHandler(rankingService))
 	}
+
+	advService.SetVictoryHook(func(ctx context.Context, characterID string, monstersDefeated int, goldEarned int) error {
+		_ = medalService.RecordProgress(ctx, characterID, medal.MetricAdventureVictories, 1)
+		if monstersDefeated > 0 {
+			_ = medalService.RecordProgress(ctx, characterID, medal.MetricMonstersSlain, monstersDefeated)
+		}
+		if goldEarned > 0 {
+			_ = medalService.RecordProgress(ctx, characterID, medal.MetricGoldEarned, goldEarned)
+		}
+		return nil
+	})
 
 	// 3. HTTP API Handler construction
 	opts := []http.Option{

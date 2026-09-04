@@ -80,7 +80,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Gem store, synthesis recipes, and weighted orb appraisals ([#72](https://github.com/witchcraze/party2re/issues/72), [#317](https://github.com/witchcraze/party2re/issues/317))
 - [x] Black Market underground trade ([#142](https://github.com/witchcraze/party2re/issues/142))
 - [x] Small Medal collection and rare reward exchange ([#160](https://github.com/witchcraze/party2re/issues/160))
-- [x] Character lifetime milestone achievements and commemorative medals ([#70](https://github.com/witchcraze/party2re/issues/70))
+- [x] Character lifetime milestone achievements and commemorative medals ([#70](https://github.com/witchcraze/party2re/issues/70), [#358](https://github.com/witchcraze/party2re/issues/358))
 
 ### D. Adventure, maps, stages, and battle
 - [x] Reusable deterministic Battle component & turn resolver ([#12](https://github.com/witchcraze/party2re/issues/12), [#20](https://github.com/witchcraze/party2re/issues/20), [#36](https://github.com/witchcraze/party2re/issues/36))
@@ -219,6 +219,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#70](https://github.com/witchcraze/party2re/issues/70) | Character lifetime milestone achievements and commemorative medals | Merged |
 | [#357](https://github.com/witchcraze/party2re/issues/357) | Fix lock hierarchy inversion in shop.Sell and gemstore.SellGem to prevent database deadlocks | Merged |
 | [#359](https://github.com/witchcraze/party2re/issues/359) | Clean up unused transaction fields and dead code in shop and medal services | Merged |
+| [#358](https://github.com/witchcraze/party2re/issues/358) | Connect gameplay action producers to achievement milestone progress tracking | Merged |
 
 ---
 

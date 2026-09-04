@@ -173,12 +173,20 @@ type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 }
 
+// MonsterDefeatedHook is called when a monster or boss is slain during dungeon exploration.
+type MonsterDefeatedHook func(ctx context.Context, characterID string, count int) error
+
 type Service struct {
-	repo          Repository
-	characterRepo CharacterRepository
-	battleEngine  corebattle.Resolver
-	dungeons      []Dungeon
-	dungeonMap    map[string]Dungeon
+	repo                Repository
+	characterRepo       CharacterRepository
+	battleEngine        corebattle.Resolver
+	dungeons            []Dungeon
+	dungeonMap          map[string]Dungeon
+	monsterDefeatedHook MonsterDefeatedHook
+}
+
+func (s *Service) SetMonsterDefeatedHook(hook MonsterDefeatedHook) {
+	s.monsterDefeatedHook = hook
 }
 
 func DefaultDungeonCatalog() []Dungeon {
@@ -718,6 +726,9 @@ func (s *Service) resolveMonsterCombat(
 		if err := s.repo.SaveActiveExpedition(ctx, *exp); err != nil {
 			return ExpeditionStepResult{}, err
 		}
+		if s.monsterDefeatedHook != nil {
+			_ = s.monsterDefeatedHook(ctx, char.ID, 1)
+		}
 		return ExpeditionStepResult{
 			Expedition:   *exp,
 			EventType:    eventType,
@@ -758,6 +769,9 @@ func (s *Service) resolveBossCombat(
 		exp.AccumulatedGold += bossMonster.GoldReward
 		if bossMonster.DropItemID != "" {
 			exp.AccumulatedItems = append(exp.AccumulatedItems, bossMonster.DropItemID)
+		}
+		if s.monsterDefeatedHook != nil {
+			_ = s.monsterDefeatedHook(ctx, char.ID, 1)
 		}
 		return s.handleDungeonClear(ctx, exp, char, dungeon)
 	}

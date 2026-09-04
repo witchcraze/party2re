@@ -376,3 +376,53 @@ func TestWipeout_ForfeitsLedgerRewards(t *testing.T) {
 		}
 	}
 }
+
+func TestService_MonsterDefeatedHook(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockDungeonRepo()
+	charRepo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"strong": createTestChar("strong", 20, 1000, 500, 500),
+		},
+	}
+	battleEngine := corebattle.Engine{}
+
+	service, err := dungeon.NewService(repo, charRepo, battleEngine)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var hookCalled bool
+	var hookCharID string
+	var hookCount int
+	service.SetMonsterDefeatedHook(func(ctx context.Context, characterID string, count int) error {
+		hookCalled = true
+		hookCharID = characterID
+		hookCount = count
+		return nil
+	})
+
+	_, err = service.StartExpedition(ctx, "strong", "dungeon-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Move east to (1, 0) which is tile '0' triggering monster combat
+	res, err := service.Move(ctx, "strong", dungeon.DirectionEast)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if res.EventType != dungeon.EventBattle {
+		t.Fatalf("expected EventBattle, got %v", res.EventType)
+	}
+	if !hookCalled {
+		t.Errorf("expected monsterDefeatedHook to be called")
+	}
+	if hookCharID != "strong" {
+		t.Errorf("expected character ID 'strong', got '%s'", hookCharID)
+	}
+	if hookCount != 1 {
+		t.Errorf("expected count 1, got %d", hookCount)
+	}
+}
