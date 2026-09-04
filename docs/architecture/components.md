@@ -412,14 +412,14 @@ Cross-module workflows spanning multiple distinct feature and core repositories 
  
 ### Storage Authority & Data Persistence Tiers (MariaDB vs. Valkey Master)
 
-To maintain uncompromising durability for economic and progression assets while avoiding unnecessary relational database connection pressure for ephemeral state, storage authority is divided into three distinct tiers per [`.agents/rules/05-database-and-caching.md`](../../.agents/rules/05-database-and-caching.md):
+To maintain uncompromising durability for economic and progression assets while avoiding unnecessary relational database connection pressure for ephemeral state, storage authority is divided into three distinct tiers per [`.agents/rules/05-database-and-caching.md`](../../.agents/rules/05-database-and-caching.md) and the centralized keyspace specification in [`valkey-keyspace.md`](valkey-keyspace.md):
 
 1. **MariaDB Master (Canonical Relational Persistence)**:
    - **Scope:** Player Accounts, Characters, Inventories, Equipment, Currencies, Jobs, Depots, Bank Accounts, Guilds, Persistent Feature State (e.g. farms, auctions, contests, parties), and Audit/Chronicle Records.
    - **Properties:** ACID transactions, foreign keys, deterministic row-lock hierarchy (Rank 0 -> 8), zero tolerance for uncommitted data loss.
 2. **Valkey Master (Primary Authoritative Ephemeral Store)**:
-   - **Scope:** Player Sessions (`session:<token>`), Distributed Locks (`party2:scheduled:lock:*`), Rate Limiting Counters (`party2:ratelimit:*`), Scheduled Action Queues (`party2:scheduled:queue`).
-   - **Properties:** Pure in-memory/AOF persistence with **no backing SQL tables**. Governed by native TTL expiration. State loss during crash or eviction is limited to non-critical ephemeral records (e.g. requiring a player to re-login, with zero impact on assets or progression).
+   - **Scope:** Player Sessions (`party2:session:<token>`), Session Index Sets (`party2:player:sessions:<player_id>`), System Maintenance State (`party2:maintenance:status`), Scheduled Action Queues (`party2:scheduled:pending`, `party2:scheduled:action:*`), Distributed Locks (`party2:scheduled:lock:*`), Rate Limiting Counters (`party2:ratelimit:*`).
+   - **Properties:** Pure in-memory/AOF persistence with **no backing SQL tables** (except administrative fallback backup). Governed strictly by native TTL expiration or explicit application lifecycle hooks per [`valkey-keyspace.md`](valkey-keyspace.md). State loss during crash or eviction is limited to non-critical ephemeral records (e.g. requiring a player to re-login, with zero impact on assets or progression).
 3. **Valkey Cache (Read Acceleration & Projections)**:
    - **Scope:** Competitive Leaderboards & Standings (`party2:ranking:snapshot:*`), Player Profile Projections.
    - **Properties:** MariaDB is the Single Source of Truth; Valkey holds read-optimized projections (e.g. Sorted Sets) for O(log N) operations. Reconstructible from MariaDB on cache miss.

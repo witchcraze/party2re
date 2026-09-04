@@ -102,7 +102,10 @@ Durability critical?
   - *Authority*: MariaDB Master + Valkey Cache.
   - *Semantics*: Sorted Sets (`ZADD` / `ZREVRANGE`) provide O(log N) ranking queries, but MariaDB remains the canonical source of truth. Data is refreshed periodically via background workers or reconstructed on cache miss.
 
-### 3.4 General Caching Constraints
+### 3.4 General Caching Constraints & Keyspace Taxonomy
+- **Centralized Keyspace Specification (SSOT):** All Valkey key patterns, data types, and expiration policies MUST conform to the taxonomy defined in [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md) (`party2:<namespace>:<entity>[:<id>]`). Mechanically enforced by Go AST lint test (`internal/architecture/valkey_lint_test.go`).
+- **Strict Prohibition of `KEYS *`:** Never execute `KEYS *` or unindexed wildcard `SCAN` in production code. Use Set indexing (e.g. `party2:player:sessions:<player_id>`) for O(1) multi-key lookups or cascade invalidation.
+- **Mandatory TTL Policy:** Every key written to Valkey Master MUST supply an explicit TTL at write time, with the sole exception of documented administrative singletons (`party2:maintenance:status`).
 - **SQL First for Assets:** The relational database (SQL) is the primary source of truth for critical persistent player state. Do not use Valkey as the primary persistence for critical player data.
 - **Concrete Requirements Only:** Do not introduce Valkey without a concrete feature requirement or measured performance benefit.
 - **Performance Caching:** Do not pre-emptively cache static/master data (Items, Jobs) in Valkey. Introduce read-caching only if empirical measurement proves SQL is a bottleneck.
