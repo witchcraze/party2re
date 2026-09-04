@@ -39,13 +39,72 @@ Until a standard migration tool is formally adopted, all SQL migrations MUST adh
 - **No Annotations:** Do NOT use `sql-migrate` annotations like `-- +migrate Up` or `-- +migrate Down`. The script pipes the entire file directly to MariaDB. Doing so will execute both blocks sequentially, potentially destroying tables immediately after creation.
 - **Manual Tracking:** You MUST manually append `INSERT IGNORE INTO schema_migrations (version) VALUES ('XXX_name');` at the very end of your `.sql` file to prevent infinite re-execution on startup.
 
-## 3. Caching and Volatile Data (Valkey)
-- **SQL First:** The relational database (SQL) is the primary source of truth for critical persistent player state. Do not use Valkey as the primary persistence for critical player data.
+## 3. Storage Authority & Persistence Boundaries (MariaDB vs. Valkey Master)
+
+### 3.1 Storage Authority Tiers
+To prevent conflating caching with primary persistence, the system strictly separates storage into two authoritative tiers and one acceleration tier:
+1. **MariaDB Master (Canonical Relational Persistence)**:
+   - The absolute Single Source of Truth for all durable player assets, progression, currencies, inventories, and audit records.
+   - ACID transactions, foreign keys, and deterministic row-lock hierarchy (Rank 0 -> 8) guarantee consistency.
+2. **Valkey Master (Primary Authoritative Ephemeral Store)**:
+   - Valkey is the Single Source of Truth with **no underlying SQL table**.
+   - Used **exclusively** for volatile, ephemeral, or deterministically rebuildable state where data loss on application restart (up to 1s with AOF `everysec`) causes zero corruption to player wealth, progression, or economic trust.
+   - Features utilizing Valkey Master rely on native TTL expiration or explicit application lifecycle hooks for garbage collection.
+3. **Valkey Cache (Projection / Read Acceleration Layer)**:
+   - MariaDB remains the canonical Single Source of Truth. Valkey holds read-optimized projections (e.g. Leaderboard Sorted Sets, profile caches).
+   - Loss on crash or eviction is completely harmless because projections can be deterministically reconstructed from MariaDB on demand.
+
+### 3.2 Hierarchical Persistence Decision Tree (Durability & Rebuildability First)
+High mutation frequency or throughput alone is **NOT** a justification for making Valkey the primary store (all currency movements must remain in MariaDB). Storage authority MUST follow this hierarchical evaluation:
+
+```text
+                    ┌─ Yes ─→ MariaDB Master (Wallets, Inventories, Progression)
+Durability critical?
+                    │
+                    No
+                    ↓
+              Naturally expiring (TTL)?
+                    │
+             ┌──────┴──────┐
+            Yes            No
+             ↓              ↓
+        Valkey Master   Rebuildable from SQL / audit logs?
+        (Sessions)          │
+                       ┌────┴────┐
+                      Yes       No
+                       ↓         ↓
+                  Valkey Master MariaDB Master
+                  (Queues)      (Audit Records)
+```
+
+### 3.3 Comprehensive State Migration Candidates & Architectural Constraints
+- **Candidate A: Player Authentication Sessions (`sessions`) [Priority 1: Approved for Migration, Issue #366]**:
+  - *Authority*: Valkey Master (`session:<token> -> player_id, EX 604800`).
+  - *Semantics*: Ephemeral, natural 7-day TTL. On crash/eviction, the player simply re-authenticates. Eliminates SQL connection pool overhead on every authenticated HTTP request; removes relational `sessions` table and periodic cleanup cron.
+  - *Constraint*: Account deletion hooks (`CleanupHook`) must explicitly remove active session keys.
+- **Candidate B: System Maintenance Mode State (`system_maintenance`) [Priority 1: Approved for Migration, Issue #367]**:
+  - *Authority*: Valkey Master / In-Memory Cache with Valkey PubSub or short TTL (`maintenance:status`).
+  - *Semantics*: Low-cardinality global flag. Currently queried on *every single incoming HTTP request* by `maintenanceMiddleware`, causing significant MariaDB connection pool contention.
+  - *Constraint*: Admin updates (`POST /admin/maintenance`) must immediately update/invalidate Valkey; must fail-open or fall back safely if Valkey is unreachable.
+- **Candidate C: Party & Matchmaking Wait Lobbies (`party`, `matchmaking`) [Priority 2: Valid / High Confidence, Issue #368]**:
+  - *Authority*: Valkey Master (`party:lobby:{id}`).
+  - *Semantics*: Ephemeral wait queues and 60-second ready checks. If the process restarts, players simply re-queue or re-enter the lobby.
+  - *Constraint*: Transient lobby states must remain strictly decoupled from persistent character party records and durable `party_adventure_logs`.
+- **Candidate D: In-Progress Run Buffers (`dungeon_active_expeditions`, `challenge_sessions`) [Priority 2: Valid / High Impact, Issue #369]**:
+  - *Authority*: Valkey Master for active step/turn buffers; MariaDB Master for final exit/cash-out settlement.
+  - *Semantics*: Step coordinates, floor progress, and tentative uncommitted reward buffers. Eliminates multi-turn write amplification on MariaDB during active exploration.
+  - *Constraint*: Two-phase settlement: tentative rewards exist only in Valkey until the run ends with victory, retreat, or defeat, at which point an atomic MariaDB transaction updates inventory and character progression.
+- **Candidate E: World Boss Real-time Shared HP (`boss`) [Priority 3: High Risk / Architectural Exploration, Issue #370]**:
+  - *Authority*: Valkey Master during combat (`DECRBY`) with MariaDB settlement.
+  - *Semantics*: High-frequency concurrent damage during multi-player raids; atomic Valkey primitives eliminate single-row SQL lock contention.
+  - *Constraint*: Dedicated proof-of-concept required before adoption to resolve dual-write settlement: preventing double-kill race conditions, phantom reward claims, or split-brain state during server crashes before SQL commit.
+- **Candidate F: Real-time Leaderboards (`ranking`) [Priority 4: Valkey Cache, not Master]**:
+  - *Authority*: MariaDB Master + Valkey Cache.
+  - *Semantics*: Sorted Sets (`ZADD` / `ZREVRANGE`) provide O(log N) ranking queries, but MariaDB remains the canonical source of truth. Data is refreshed periodically via background workers or reconstructed on cache miss.
+
+### 3.4 General Caching Constraints
+- **SQL First for Assets:** The relational database (SQL) is the primary source of truth for critical persistent player state. Do not use Valkey as the primary persistence for critical player data.
 - **Concrete Requirements Only:** Do not introduce Valkey without a concrete feature requirement or measured performance benefit.
-- **Feature Use Cases:** Introduce Valkey when building features that inherently demand it, such as:
-  - Scheduled Actions / Matchmaking queues
-  - Session tokens / Rate limiting
-  - Real-time transient state (Presence, World Boss HP)
 - **Performance Caching:** Do not pre-emptively cache static/master data (Items, Jobs) in Valkey. Introduce read-caching only if empirical measurement proves SQL is a bottleneck.
 
 ## 4. Sub-Resource Repository SQL Scoping and Ownership Authorization
