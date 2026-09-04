@@ -26,8 +26,14 @@ Battle is an independent domain component used by features. At a conceptual leve
 ## 5. Scheduled Actions
 Party2 contains asynchronous/time-based actions (an action is started and a result becomes available later). Model this as a reusable concept such as `ScheduledAction` (actor, action type, start time, execution time, state). The scheduling mechanism itself must not contain the rules of individual features.
 
-## 6. Domain Events
-Use domain events (e.g., `BattleFinished`, `LevelUp`) when they provide meaningful decoupling. A publisher should not need to know which optional features (like achievements or rankings) consume an event. Do not turn every operation into an event; use direct calls when immediate results or strong transactional coupling are appropriate.
+## 6. Domain Events & Side-Effect Hooks
+Use domain events or explicit observer hooks (e.g., `VictoryHook`, `SynthesisHook`, `BattleFinished`, `LevelUp`) when they provide meaningful decoupling:
+- **Modular Monolith Decoupling**: Action producers (e.g., adventure, boss, pvp, casino, alchemy, dungeon) must define explicit hook signatures (e.g., `type VictoryHook func(...) error`, `type GamePlayedHook func(...) error`) at their module boundaries rather than importing downstream consumer modules (like `medal`, `ranking`, or `notification`). This prevents circular dependencies and eliminates artificial coupling.
+- **Dependency Inversion Wiring at Composition Root**: Hook registrations are wired in `cmd/party2/main.go` where all domain services are instantiated and composed.
+- **Lock Hierarchy & Transaction Safety**: When observer hooks mutate secondary entities (such as `character_achievements`), locks must strictly adhere to the global lock acquisition order defined in `.agents/rules/05-database-and-caching.md` (`characters` -> `character_inventories` -> feature-specific secondary records). In particular, secondary records like achievements must always be locked *after* characters, never before.
+- **Resilient Execution**: Observer side effects (like achievement milestone tracking or non-critical activity feeds) must execute resiliently and must not abort primary gameplay transactions (e.g., winning an adventure or defeating a boss) if a secondary tracking call encounters a non-fatal error, unless strict atomicity is required by business invariants.
+- **Direct Calls vs Events**: Do not turn internal intra-module operations into events or hooks; use direct method calls when operations belong to the same bounded context and share immediate transactional invariants.
+
 
 ## 7. Core Domain Invariant & Helper Enforcement (Go AST Linting)
 Direct struct field mutations across Core domain entities by feature modules are strictly prohibited to prevent rule bypasses, integer overflows, concurrency races, and duplication bugs:

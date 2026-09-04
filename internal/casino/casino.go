@@ -33,8 +33,16 @@ type Repository interface {
 	DeductBetAndCreditPayout(ctx context.Context, characterID string, bet int64, payout int64) (Account, error)
 }
 
+// GamePlayedHook is called whenever a casino game round concludes.
+type GamePlayedHook func(ctx context.Context, characterID string, gameName string) error
+
 type Service struct {
-	repo Repository
+	repo           Repository
+	gamePlayedHook GamePlayedHook
+}
+
+func (s *Service) SetGamePlayedHook(hook GamePlayedHook) {
+	s.gamePlayedHook = hook
 }
 
 func NewService(repo Repository) (*Service, error) {
@@ -140,6 +148,10 @@ func (s *Service) PlayIndianPokerRound(ctx context.Context, characterID string, 
 		}
 	}
 
+	if game.Status != StatusInProgress && s.gamePlayedHook != nil {
+		_ = s.gamePlayedHook(ctx, characterID, "indian_poker")
+	}
+
 	return acc, nil
 }
 
@@ -163,6 +175,10 @@ func (s *Service) SpinSlot(ctx context.Context, characterID string, bet int64) (
 		return SpinResult{}, Account{}, err
 	}
 
+	if s.gamePlayedHook != nil {
+		_ = s.gamePlayedHook(ctx, characterID, "slot")
+	}
+
 	return res, acc, nil
 }
 
@@ -184,6 +200,10 @@ func (s *Service) PlayDoppel(ctx context.Context, characterID string, bet int64,
 	acc, err := s.repo.DeductBetAndCreditPayout(ctx, characterID, bet, res.PayoutCoins)
 	if err != nil {
 		return DoppelResult{}, Account{}, err
+	}
+
+	if s.gamePlayedHook != nil {
+		_ = s.gamePlayedHook(ctx, characterID, "doppel")
 	}
 
 	return res, acc, nil

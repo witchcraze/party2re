@@ -350,3 +350,47 @@ func TestChallengeBoss_Defeat(t *testing.T) {
 		t.Errorf("expected DailyAttemptsUsed=1, got %d", res.UpdatedRecord.DailyAttemptsUsed)
 	}
 }
+
+func TestChallengeBoss_VictoryHook(t *testing.T) {
+	ctx := context.Background()
+	bossRepo := newMockBossRepo()
+	charRepo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"strong-hero": createTestChar("strong-hero", 50, 1000, 200, 100),
+		},
+	}
+	battleEngine := corebattle.Engine{}
+
+	service, err := boss.NewService(bossRepo, charRepo, battleEngine)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var hookedCharID string
+	var hookedBossID string
+	var hookedTier int
+	service.SetVictoryHook(func(ctx context.Context, characterID string, bossID string, tier int) error {
+		hookedCharID = characterID
+		hookedBossID = bossID
+		hookedTier = tier
+		return nil
+	})
+
+	res, err := service.ChallengeBoss(ctx, "strong-hero", "king-01")
+	if err != nil {
+		t.Fatalf("ChallengeBoss failed: %v", err)
+	}
+
+	if res.Outcome != corebattle.OutcomeWin {
+		t.Fatalf("expected victory, got outcome %v", res.Outcome)
+	}
+	if hookedCharID != "strong-hero" {
+		t.Errorf("expected hookedCharID strong-hero, got %s", hookedCharID)
+	}
+	if hookedBossID != "king-01" {
+		t.Errorf("expected hookedBossID king-01, got %s", hookedBossID)
+	}
+	if hookedTier != 1 {
+		t.Errorf("expected hookedTier 1, got %d", hookedTier)
+	}
+}

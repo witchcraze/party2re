@@ -82,6 +82,9 @@ type nopLogger struct{}
 
 func (nopLogger) Warn(msg string, args ...any) {}
 
+// VictoryHook is called when an adventure stage concludes with a player victory.
+type VictoryHook func(ctx context.Context, characterID string, monstersDefeated int, goldEarned int) error
+
 type Service struct {
 	adventures  Repository
 	characters  CharacterRepository
@@ -92,6 +95,11 @@ type Service struct {
 	scheduler   Scheduler
 	logger      Logger
 	clock       Clock
+	victoryHook VictoryHook
+}
+
+func (s *Service) SetVictoryHook(hook VictoryHook) {
+	s.victoryHook = hook
 }
 
 func NewService(adventures Repository, characters CharacterRepository, battle corebattle.Resolver, scheduler Scheduler, logger Logger) (*Service, error) {
@@ -330,6 +338,12 @@ func (s *Service) Claim(ctx context.Context, id string) (Adventure, error) {
 	value.Claimed = true
 	if err := s.adventures.ClaimAndApply(ctx, value, character); err != nil {
 		return Adventure{}, err
+	}
+
+	if result.Outcome == corebattle.OutcomeWin && s.victoryHook != nil {
+		if err := s.victoryHook(ctx, character.ID, 1, result.Reward.Currency); err != nil {
+			s.logger.Warn("victory hook failed", "character_id", character.ID, "error", err)
+		}
 	}
 	return value, nil
 }
