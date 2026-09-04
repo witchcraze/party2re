@@ -391,9 +391,9 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Core Character, Character repository, News publisher, Guild service.
   - **Persistence:** `character_photos`, `contest_rounds`, `contest_entries`, `contest_votes`, and `contest_legends` tables in `internal/database/contest_repository.go`.
 - **Multiplayer Party & Co-op Quests** (`internal/party`):
-  - **Responsibility:** Multiplayer party formation (1–4 members), recruitment lobbies, password protection, readiness synchronization, leader management (kick, disband), and coordinated multi-participant combat against dungeon/stage encounters with cooperative synergy multipliers (+10% to +30% EXP/Gold bonus) and shared reward distribution (`quest.cgi`, `party.cgi`).
-  - **Dependencies:** Core Character, Core Battle, Core Inventory, Core Item, Core Progression, Character repository, Inventory repository, Stage/Monster Catalogs, News publisher.
-  - **Persistence:** `parties`, `party_members`, and `party_adventure_logs` tables in `internal/database/party_repository.go`.
+  - **Responsibility:** Multiplayer party formation (1–4 members), recruitment lobbies, password protection, readiness synchronization with 60-second countdown, leader management (kick, disband), and coordinated multi-participant combat against dungeon/stage encounters with cooperative synergy multipliers (+10% to +30% EXP/Gold bonus) and shared reward distribution (`quest.cgi`, `party.cgi`).
+  - **Dependencies:** Core Character, Core Battle, Core Inventory, Core Item, Core Progression, Character repository, Inventory repository, Stage/Monster Catalogs, News publisher, Valkey client (`internal/valkey`).
+  - **Persistence:** Ephemeral party wait lobbies, member ready states, and character index in Valkey Master (`party2:party:lobby:*`, `party2:party:ready:*`, `party2:party:character:*`, `party2:party:lobbies`) via `internal/party/valkey_repository.go` with 15-minute TTL auto-cleanup and 60-second ready countdown timeout, backed by MariaDB `party_adventure_logs` table in `internal/database/party_repository.go` exclusively for durable quest outcomes.
 - **System Maintenance Mode** (`internal/maintenance`):
   - **Responsibility:** System-wide maintenance mode status management, public status queries, and administrative configuration (enable/disable, message, estimated end time) with HTTP middleware request interception.
   - **Dependencies:** Maintenance repository, Valkey client (`internal/valkey`).
@@ -415,10 +415,10 @@ Cross-module workflows spanning multiple distinct feature and core repositories 
 To maintain uncompromising durability for economic and progression assets while avoiding unnecessary relational database connection pressure for ephemeral state, storage authority is divided into three distinct tiers per [`.agents/rules/05-database-and-caching.md`](../../.agents/rules/05-database-and-caching.md) and the centralized keyspace specification in [`valkey-keyspace.md`](valkey-keyspace.md):
 
 1. **MariaDB Master (Canonical Relational Persistence)**:
-   - **Scope:** Player Accounts, Characters, Inventories, Equipment, Currencies, Jobs, Depots, Bank Accounts, Guilds, Persistent Feature State (e.g. farms, auctions, contests, parties), and Audit/Chronicle Records.
+   - **Scope:** Player Accounts, Characters, Inventories, Equipment, Currencies, Jobs, Depots, Bank Accounts, Guilds, Persistent Feature State (e.g. farms, auctions, contests), and Audit/Chronicle Records (`party_adventure_logs`).
    - **Properties:** ACID transactions, foreign keys, deterministic row-lock hierarchy (Rank 0 -> 8), zero tolerance for uncommitted data loss.
 2. **Valkey Master (Primary Authoritative Ephemeral Store)**:
-   - **Scope:** Player Sessions (`party2:session:<token>`), Session Index Sets (`party2:player:sessions:<player_id>`), System Maintenance State (`party2:maintenance:status`), Scheduled Action Queues (`party2:scheduled:pending`, `party2:scheduled:action:*`), Distributed Locks (`party2:scheduled:lock:*`), Rate Limiting Counters (`party2:ratelimit:*`).
+   - **Scope:** Player Sessions (`party2:session:<token>`), Session Index Sets (`party2:player:sessions:<player_id>`), System Maintenance State (`party2:maintenance:status`), Party Wait Lobbies & Ready States (`party2:party:lobby:*`, `party2:party:ready:*`, `party2:party:character:*`, `party2:party:lobbies`), Scheduled Action Queues (`party2:scheduled:pending`, `party2:scheduled:action:*`), Distributed Locks (`party2:scheduled:lock:*`), Rate Limiting Counters (`party2:ratelimit:*`).
    - **Properties:** Pure in-memory/AOF persistence with **no backing SQL tables** (except administrative fallback backup). Governed strictly by native TTL expiration or explicit application lifecycle hooks per [`valkey-keyspace.md`](valkey-keyspace.md). State loss during crash or eviction is limited to non-critical ephemeral records (e.g. requiring a player to re-login, with zero impact on assets or progression).
 3. **Valkey Cache (Read Acceleration & Projections)**:
    - **Scope:** Competitive Leaderboards & Standings (`party2:ranking:snapshot:*`), Player Profile Projections.

@@ -155,8 +155,15 @@ func ValidatePartyName(name string) error {
 	return nil
 }
 
+// AdventureLogRepository defines durable persistence for party adventure logs in MariaDB.
+type AdventureLogRepository interface {
+	SaveAdventureLog(ctx context.Context, log PartyAdventureLog) error
+}
+
 // Repository defines persistence operations for parties and members.
 type Repository interface {
+	AdventureLogRepository
+
 	SaveParty(ctx context.Context, p Party) error
 	GetParty(ctx context.Context, id string) (Party, error)
 	GetPartyForUpdate(ctx context.Context, id string) (Party, error)
@@ -171,8 +178,6 @@ type Repository interface {
 	RemoveMember(ctx context.Context, partyID, characterID string) error
 	UpdateMemberReady(ctx context.Context, partyID, characterID string, ready bool) error
 	CountMembers(ctx context.Context, partyID string) (int, error)
-
-	SaveAdventureLog(ctx context.Context, log PartyAdventureLog) error
 }
 
 // CharacterRepository defines character persistence required by Party service.
