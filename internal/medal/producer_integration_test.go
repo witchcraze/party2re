@@ -17,6 +17,7 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/medal"
+	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/pvp"
 )
 
@@ -593,5 +594,233 @@ func TestProducerHooks_MilestoneProgressAndClaim(t *testing.T) {
 	}
 	if len(medals) != len(expectedMilestones) {
 		t.Errorf("expected %d medals, got %d", len(expectedMilestones), len(medals))
+	}
+}
+
+type dummyPartyLogRepo struct {
+	mu   sync.Mutex
+	logs []party.PartyAdventureLog
+}
+
+func (r *dummyPartyLogRepo) SaveAdventureLog(_ context.Context, log party.PartyAdventureLog) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.logs = append(r.logs, log)
+	return nil
+}
+
+func (r *dummyPartyLogRepo) ListAdventureLogsByPartyID(_ context.Context, _ string, _, _ int) ([]party.PartyAdventureLog, int, error) {
+	return nil, 0, nil
+}
+
+type integrationPartyStageProvider struct{}
+
+func (p integrationPartyStageProvider) FindByID(id string) (adventure.Stage, error) {
+	return adventure.Stage{
+		ID:         "stage-forest",
+		Name:       "はじまりの森",
+		MinLevel:   1,
+		MonsterIDs: []string{"slime-01", "goblin-01"},
+	}, nil
+}
+
+type integrationPartyMonsterProvider struct{}
+
+func (p integrationPartyMonsterProvider) FindByID(id string) (adventure.Monster, error) {
+	return adventure.Monster{
+		ID:               id,
+		Name:             "モンスター",
+		HP:               20,
+		Attack:           5,
+		Defense:          2,
+		ExperienceReward: 40,
+		GoldReward:       30,
+	}, nil
+}
+
+type integrationPartyBattleEngine struct{}
+
+func (e integrationPartyBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	return corebattle.PartyBattleResult{
+		Outcome: corebattle.OutcomeWin,
+		Turns:   2,
+		TotalReward: corebattle.Reward{
+			Experience: 80,
+			Currency:   60,
+		},
+	}, nil
+}
+
+func TestParty_MilestoneIntegration(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. Setup characters
+	charRepo := newMockCharRepo()
+	invRepo := newStatefulInvRepo()
+	achRepo := newMockAchievementRepo()
+
+	leader := corecharacter.Character{
+		ID:    "char-leader",
+		Name:  "LeaderHero",
+		Level: 10,
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 30, Defense: 15},
+	}
+	member := corecharacter.Character{
+		ID:    "char-member",
+		Name:  "MemberHero",
+		Level: 10,
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 25, Defense: 12},
+	}
+	charRepo.chars[leader.ID] = leader
+	charRepo.chars[member.ID] = member
+
+	// 2. Setup Achievement Catalog
+	catalog := []medal.Achievement{
+		{
+			ID:                "test_party_adv_victories",
+			Name:              "パーティ冒険王",
+			Metric:            medal.MetricAdventureVictories,
+			Threshold:         1,
+			MedalID:           "medal_party_adv",
+			MedalName:         "結束の勲章",
+			SmallMedalsReward: 5,
+		},
+		{
+			ID:                "test_party_monsters_slain",
+			Name:              "共闘モンスターバスター",
+			Metric:            medal.MetricMonstersSlain,
+			Threshold:         2,
+			MedalID:           "medal_party_slayer",
+			MedalName:         "討伐隊の勲章",
+			SmallMedalsReward: 3,
+		},
+		{
+			ID:                "test_party_gold_earned",
+			Name:              "パーティ富豪",
+			Metric:            medal.MetricGoldEarned,
+			Threshold:         50,
+			MedalID:           "medal_party_wealth",
+			MedalName:         "協調財産の勲章",
+			SmallMedalsReward: 2,
+		},
+	}
+
+	medalService, err := medal.NewService(
+		charRepo,
+		invRepo,
+		"",
+		medal.WithAchievementRepository(achRepo, catalog...),
+	)
+	if err != nil {
+		t.Fatalf("failed to create medal service: %v", err)
+	}
+
+	// 3. Setup Party Service and wire VictoryHook (mirroring cmd/party2/main.go)
+	partyRepo := party.NewValkeyRepository(nil, party.WithDurableLogRepository(&dummyPartyLogRepo{}))
+	partyService, err := party.NewService(
+		partyRepo,
+		charRepo,
+		invRepo,
+		integrationPartyStageProvider{},
+		integrationPartyMonsterProvider{},
+		integrationPartyBattleEngine{},
+	)
+	if err != nil {
+		t.Fatalf("failed to create party service: %v", err)
+	}
+
+	partyService.SetVictoryHook(func(ctx context.Context, characterIDs []string, monstersDefeated int, goldEarned int) error {
+		for _, cID := range characterIDs {
+			_ = medalService.RecordProgress(ctx, cID, medal.MetricAdventureVictories, 1)
+			if monstersDefeated > 0 {
+				_ = medalService.RecordProgress(ctx, cID, medal.MetricMonstersSlain, monstersDefeated)
+			}
+			if goldEarned > 0 {
+				_ = medalService.RecordProgress(ctx, cID, medal.MetricGoldEarned, goldEarned)
+			}
+		}
+		return nil
+	})
+
+	// 4. Create party, join member, mark ready, and start adventure
+	detail, err := partyService.CreateParty(ctx, leader.ID, party.CreatePartyRequest{
+		Name:    "VictoryCoop",
+		StageID: "stage-forest",
+	})
+	if err != nil {
+		t.Fatalf("CreateParty failed: %v", err)
+	}
+	partyID := detail.Party.ID
+
+	if _, err := partyService.JoinParty(ctx, partyID, member.ID, ""); err != nil {
+		t.Fatalf("JoinParty failed: %v", err)
+	}
+	if _, err := partyService.SetReady(ctx, partyID, member.ID, true); err != nil {
+		t.Fatalf("SetReady failed: %v", err)
+	}
+
+	res, err := partyService.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure failed: %v", err)
+	}
+	if res.Outcome != "win" {
+		t.Fatalf("expected victory outcome, got %s", res.Outcome)
+	}
+
+	// 5. Verify milestone achievements for both leader and member
+	expectedMilestones := []string{
+		"test_party_adv_victories",
+		"test_party_monsters_slain",
+		"test_party_gold_earned",
+	}
+
+	for _, charID := range []string{leader.ID, member.ID} {
+		achievements, err := medalService.GetAchievements(ctx, charID)
+		if err != nil {
+			t.Fatalf("failed to get achievements for %s: %v", charID, err)
+		}
+
+		achMap := make(map[string]medal.AchievementProgress)
+		for _, a := range achievements {
+			achMap[a.ID] = a
+		}
+
+		for _, achID := range expectedMilestones {
+			rec, found := achMap[achID]
+			if !found {
+				t.Errorf("[%s] expected achievement %s to be present", charID, achID)
+				continue
+			}
+			if !rec.IsCompleted {
+				t.Errorf("[%s] achievement %s should be completed, progress: %d/%d", charID, achID, rec.CurrentProgress, rec.Threshold)
+			}
+			if rec.IsClaimed {
+				t.Errorf("[%s] achievement %s should not yet be claimed", charID, achID)
+			}
+
+			// Claim achievement
+			claimResult, err := medalService.ClaimAchievement(ctx, charID, achID)
+			if err != nil {
+				t.Fatalf("[%s] ClaimAchievement(%s) failed: %v", charID, achID, err)
+			}
+			if claimResult.AchievementID != achID {
+				t.Errorf("[%s] expected achievement ID %s, got %s", charID, achID, claimResult.AchievementID)
+			}
+			if claimResult.Medal.MedalID == "" {
+				t.Errorf("[%s] expected commemorative medal to be awarded", charID)
+			}
+			if claimResult.SmallMedalsAwarded <= 0 {
+				t.Errorf("[%s] expected small medals reward > 0, got %d", charID, claimResult.SmallMedalsAwarded)
+			}
+		}
+
+		// Verify commemorative medals awarded
+		medals, err := medalService.GetCharacterMedals(ctx, charID)
+		if err != nil {
+			t.Fatalf("[%s] failed to get character medals: %v", charID, err)
+		}
+		if len(medals) != len(expectedMilestones) {
+			t.Errorf("[%s] expected %d medals, got %d", charID, len(expectedMilestones), len(medals))
+		}
 	}
 }

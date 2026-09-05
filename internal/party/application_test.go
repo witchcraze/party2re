@@ -806,3 +806,148 @@ func TestPartyService_StartPartyAdventure_SaveAdventureLogError(t *testing.T) {
 		t.Fatal("expected StartPartyAdventure to fail when SaveAdventureLog returns error, got nil")
 	}
 }
+
+func TestPartyService_StartPartyAdventure_VictoryHook(t *testing.T) {
+	svc, _, charRepo, _ := setupTestService(t)
+
+	leader := corecharacter.Character{
+		ID:         "leader",
+		Name:       "Hero1",
+		Level:      5,
+		Experience: 250,
+		Money:      100,
+		Stats:      corecharacter.Stats{HP: 50, MaxHP: 50, Attack: 25, Defense: 10},
+	}
+	m1 := corecharacter.Character{
+		ID:         "m1",
+		Name:       "Hero2",
+		Level:      5,
+		Experience: 250,
+		Money:      50,
+		Stats:      corecharacter.Stats{HP: 45, MaxHP: 45, Attack: 20, Defense: 8},
+	}
+	charRepo.chars[leader.ID] = leader
+	charRepo.chars[m1.ID] = m1
+
+	var (
+		hookCalled          bool
+		gotCharIDs          []string
+		gotMonstersDefeated int
+		gotGoldEarned       int
+	)
+
+	svc.SetVictoryHook(func(ctx context.Context, characterIDs []string, monstersDefeated int, goldEarned int) error {
+		hookCalled = true
+		gotCharIDs = characterIDs
+		gotMonstersDefeated = monstersDefeated
+		gotGoldEarned = goldEarned
+		return nil
+	})
+
+	detail, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
+		Name:    "CoopParty",
+		StageID: "forest",
+	})
+	if err != nil {
+		t.Fatalf("CreateParty failed: %v", err)
+	}
+	partyID := detail.Party.ID
+	_, _ = svc.JoinParty(context.Background(), partyID, m1.ID, "")
+	_, _ = svc.SetReady(context.Background(), partyID, m1.ID, true)
+
+	res, err := svc.StartPartyAdventure(context.Background(), partyID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure failed: %v", err)
+	}
+	if res.Outcome != "win" {
+		t.Fatalf("expected victory, got %s", res.Outcome)
+	}
+
+	if !hookCalled {
+		t.Fatal("expected VictoryHook to be called on victory, but was not")
+	}
+	if len(gotCharIDs) != 2 {
+		t.Fatalf("expected 2 character IDs in hook, got %d", len(gotCharIDs))
+	}
+	charIDMap := make(map[string]bool)
+	for _, id := range gotCharIDs {
+		charIDMap[id] = true
+	}
+	if !charIDMap["leader"] || !charIDMap["m1"] {
+		t.Errorf("expected leader and m1 in gotCharIDs, got %v", gotCharIDs)
+	}
+	if gotMonstersDefeated <= 0 {
+		t.Errorf("expected monstersDefeated > 0, got %d", gotMonstersDefeated)
+	}
+	if gotGoldEarned != res.TotalGold {
+		t.Errorf("expected goldEarned %d, got %d", res.TotalGold, gotGoldEarned)
+	}
+
+	// Resilient execution: hook error does not abort adventure
+	svc.SetVictoryHook(func(ctx context.Context, characterIDs []string, monstersDefeated int, goldEarned int) error {
+		return errors.New("achievement service unavailable")
+	})
+	_ = svc.DisbandParty(context.Background(), partyID, leader.ID)
+
+	detail2, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
+		Name:    "CoopParty2",
+		StageID: "forest",
+	})
+	if err != nil {
+		t.Fatalf("CreateParty 2 failed: %v", err)
+	}
+	res2, err := svc.StartPartyAdventure(context.Background(), detail2.Party.ID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure failed when hook returned error: %v", err)
+	}
+	if res2.Outcome != "win" {
+		t.Fatalf("expected victory, got %s", res2.Outcome)
+	}
+
+	// Outcome Defeat: hook must NOT be called
+	_ = svc.DisbandParty(context.Background(), detail2.Party.ID, leader.ID)
+	defeatHookCalled := false
+	defeatEngineSvc, err := NewService(
+		svc.repo,
+		svc.charRepo,
+		svc.invRepo,
+		svc.stages,
+		svc.monsters,
+		mockPartyBattleEngine{outcome: battle.OutcomeDefeat},
+		WithVictoryHook(func(ctx context.Context, characterIDs []string, monstersDefeated int, goldEarned int) error {
+			defeatHookCalled = true
+			return nil
+		}),
+	)
+	if err != nil {
+		t.Fatalf("failed to create defeat service: %v", err)
+	}
+	detail3, err := defeatEngineSvc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
+		Name:    "DefeatParty",
+		StageID: "forest",
+	})
+	if err != nil {
+		t.Fatalf("CreateParty 3 failed: %v", err)
+	}
+	res3, err := defeatEngineSvc.StartPartyAdventure(context.Background(), detail3.Party.ID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure failed: %v", err)
+	}
+	if res3.Outcome != "defeat" {
+		t.Fatalf("expected defeat, got %s", res3.Outcome)
+	}
+	if defeatHookCalled {
+		t.Fatal("expected VictoryHook to NOT be called on defeat, but it was")
+	}
+}
+
+type mockPartyBattleEngine struct {
+	outcome battle.Outcome
+}
+
+func (m mockPartyBattleEngine) ResolvePartyBattle(req battle.PartyBattleRequest) (battle.PartyBattleResult, error) {
+	return battle.PartyBattleResult{
+		Outcome: m.outcome,
+		Turns:   1,
+	}, nil
+}
