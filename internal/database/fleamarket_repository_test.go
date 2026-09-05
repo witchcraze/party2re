@@ -2,6 +2,7 @@ package database_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -120,5 +121,19 @@ func TestFleaMarketRepository_Database(t *testing.T) {
 	}
 	if countAfter != 0 {
 		t.Errorf("expected 0 active listings after sell, got %d", countAfter)
+	}
+
+	// 7. Stale UpdateListing on already-sold listing should return ErrListingNotActive (CAS failure)
+	err = repo.UpdateListing(ctx, fetched)
+	if !errors.Is(err, fleamarket.ErrListingNotActive) {
+		t.Errorf("expected ErrListingNotActive on stale update, got %v", err)
+	}
+
+	// 8. UpdateListing on non-existent ID should return ErrListingNotFound
+	missing := fetched
+	missing.ID = "non-existent-listing-id"
+	err = repo.UpdateListing(ctx, missing)
+	if !errors.Is(err, fleamarket.ErrListingNotFound) {
+		t.Errorf("expected ErrListingNotFound on missing listing, got %v", err)
 	}
 }

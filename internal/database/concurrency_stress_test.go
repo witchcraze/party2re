@@ -16,6 +16,7 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/delivery"
+	"github.com/witchcraze/party2re/internal/fleamarket"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/shop"
@@ -662,4 +663,272 @@ func TestConcurrencyStressDeliveryClaimVsCancel(t *testing.T) {
 
 	t.Logf("Delivery Claim vs Cancel race test passed across %d rounds: Claims=%d, Cancels=%d, 0 double-spends",
 		numRounds, claimWins, cancelWins)
+}
+
+func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	fleaMarketRepo, err := NewFleaMarketRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	charRepo, err := NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invRepo, err := NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := NewTransactionProvider(db)
+
+	herbDef, _ := coreitem.NewDefinition("herb", "Medicinal Herb", 50)
+	itemCatalog, _ := coreitem.NewCatalog([]coreitem.Definition{herbDef})
+
+	fleaMarketSvc, err := fleamarket.NewService(
+		fleaMarketRepo,
+		charRepo,
+		invRepo,
+		fleamarket.WithTransactionProvider(txProvider),
+		fleamarket.WithItemDefinitionProvider(itemCatalog),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Setup Seller with inventory items
+	sellerInitialGold := 100000
+	sellerChar, err := CreateTestCharacterWithFunds(ctx, db, "FleaStressSeller", sellerInitialGold)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	numIterations := 25
+	numConcurrentBuyers := 10
+	if os.Getenv("PARTY2_STRESS_ENABLED") == "1" {
+		numIterations = 100
+		numConcurrentBuyers = 50
+	}
+
+	totalItemsNeeded := numIterations*2 + 50
+	herbInst, err := coreitem.NewInstance("herb", totalItemsNeeded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = CreateTestInventoryWithItems(ctx, db, sellerChar.ID, []coreitem.Instance{herbInst})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Setup Buyers
+	buyerInitialGold := 500000
+	buyers := make([]corecharacter.Character, numConcurrentBuyers)
+	for i := 0; i < numConcurrentBuyers; i++ {
+		b, err := CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("FleaBuyer_%d", i), buyerInitialGold)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Create empty inventory for buyer
+		_, err = CreateTestInventoryWithItems(ctx, db, b.ID, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		buyers[i] = b
+	}
+
+	const itemPrice = 500
+
+	// ==========================================
+	// Phase 1: Simultaneous Buyers Contention
+	// ==========================================
+	t.Logf("Running Phase 1: Simultaneous Buyers Contention (%d iterations, %d concurrent buyers)...", numIterations, numConcurrentBuyers)
+	var totalSimultaneousPurchases int64
+
+	for iter := 0; iter < numIterations; iter++ {
+		// Seller creates 1 listing
+		listing, err := fleaMarketSvc.CreateListing(ctx, sellerChar.ID, "herb", itemPrice, now)
+		if err != nil {
+			t.Fatalf("Phase 1 iter %d: CreateListing failed: %v", iter, err)
+		}
+
+		// Calculate total gold before purchase attempt
+		sellerBefore, err := charRepo.FindByID(ctx, sellerChar.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		totalGoldBefore := int64(sellerBefore.Money)
+		for _, b := range buyers {
+			bc, err := charRepo.FindByID(ctx, b.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			totalGoldBefore += int64(bc.Money)
+		}
+
+		// All buyers race simultaneously to purchase the same listing
+		fns := make([]func() error, numConcurrentBuyers)
+		for bIdx := 0; bIdx < numConcurrentBuyers; bIdx++ {
+			bID := buyers[bIdx].ID
+			fns[bIdx] = func() error {
+				_, pErr := fleaMarketSvc.PurchaseListing(ctx, bID, listing.ID, now)
+				return pErr
+			}
+		}
+
+		errs := RunRace(fns...)
+
+		var successCount int
+		var rejectedCount int
+		for _, e := range errs {
+			if e == nil {
+				successCount++
+			} else if errors.Is(e, fleamarket.ErrListingNotActive) {
+				rejectedCount++
+			} else if IsDeadlockError(e) {
+				t.Fatalf("Phase 1 iter %d: DEADLOCK detected: %v", iter, e)
+			} else {
+				t.Fatalf("Phase 1 iter %d: unexpected purchase error: %v", iter, e)
+			}
+		}
+
+		if successCount != 1 {
+			t.Fatalf("Phase 1 iter %d: expected exactly 1 winner, got %d (rejected: %d)", iter, successCount, rejectedCount)
+		}
+		if rejectedCount != numConcurrentBuyers-1 {
+			t.Fatalf("Phase 1 iter %d: expected %d rejected buyers, got %d", iter, numConcurrentBuyers-1, rejectedCount)
+		}
+		atomic.AddInt64(&totalSimultaneousPurchases, 1)
+
+		// Verify total gold conservation
+		sellerAfter, err := charRepo.FindByID(ctx, sellerChar.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		totalGoldAfter := int64(sellerAfter.Money)
+		for _, b := range buyers {
+			bc, err := charRepo.FindByID(ctx, b.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			totalGoldAfter += int64(bc.Money)
+		}
+
+		if totalGoldBefore != totalGoldAfter {
+			t.Fatalf("Phase 1 iter %d: GOLD LEAK/CREATION! Before: %d, After: %d, Diff: %d",
+				iter, totalGoldBefore, totalGoldAfter, totalGoldAfter-totalGoldBefore)
+		}
+
+		// Verify listing status is sold
+		finalListing, err := fleaMarketRepo.GetListingByID(ctx, listing.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if finalListing.Status != fleamarket.StatusSold {
+			t.Fatalf("Phase 1 iter %d: expected status sold, got %v", iter, finalListing.Status)
+		}
+	}
+
+	// ==========================================
+	// Phase 2: Buyer vs Seller Race (Purchase vs Cancel)
+	// ==========================================
+	t.Logf("Running Phase 2: Buyer vs Seller Race (%d iterations)...", numIterations)
+	var buyWins int64
+	var cancelWins int64
+
+	testBuyer := buyers[0]
+
+	for iter := 0; iter < numIterations; iter++ {
+		// Seller creates 1 listing
+		listing, err := fleaMarketSvc.CreateListing(ctx, sellerChar.ID, "herb", itemPrice, now)
+		if err != nil {
+			t.Fatalf("Phase 2 iter %d: CreateListing failed: %v", iter, err)
+		}
+
+		// Calculate total gold before race
+		sellerBefore, err := charRepo.FindByID(ctx, sellerChar.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		buyerBefore, err := charRepo.FindByID(ctx, testBuyer.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		totalGoldBefore := int64(sellerBefore.Money + buyerBefore.Money)
+
+		// Race: Purchase vs Cancel
+		buyErr, cancelErr := RunRace2(
+			func() error {
+				_, pErr := fleaMarketSvc.PurchaseListing(ctx, testBuyer.ID, listing.ID, now)
+				return pErr
+			},
+			func() error {
+				_, cErr := fleaMarketSvc.CancelListing(ctx, sellerChar.ID, listing.ID)
+				return cErr
+			},
+		)
+
+		if IsDeadlockError(buyErr) || IsDeadlockError(cancelErr) {
+			t.Fatalf("Phase 2 iter %d: DEADLOCK detected! buyErr=%v, cancelErr=%v", iter, buyErr, cancelErr)
+		}
+
+		if buyErr == nil && cancelErr == nil {
+			t.Fatalf("Phase 2 iter %d: DOUBLE SPEND! Both Purchase and Cancel succeeded on listing %s", iter, listing.ID)
+		}
+		if buyErr != nil && cancelErr != nil {
+			t.Fatalf("Phase 2 iter %d: Both operations failed! buyErr: %v, cancelErr: %v", iter, buyErr, cancelErr)
+		}
+
+		finalListing, err := fleaMarketRepo.GetListingByID(ctx, listing.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if buyErr == nil {
+			atomic.AddInt64(&buyWins, 1)
+			if !errors.Is(cancelErr, fleamarket.ErrListingNotActive) {
+				t.Fatalf("Phase 2 iter %d: expected ErrListingNotActive for cancel, got %v", iter, cancelErr)
+			}
+			if finalListing.Status != fleamarket.StatusSold {
+				t.Fatalf("Phase 2 iter %d: expected StatusSold, got %v", iter, finalListing.Status)
+			}
+		} else {
+			atomic.AddInt64(&cancelWins, 1)
+			if !errors.Is(buyErr, fleamarket.ErrListingNotActive) {
+				t.Fatalf("Phase 2 iter %d: expected ErrListingNotActive for buy, got %v", iter, buyErr)
+			}
+			if finalListing.Status != fleamarket.StatusCancelled {
+				t.Fatalf("Phase 2 iter %d: expected StatusCancelled, got %v", iter, finalListing.Status)
+			}
+		}
+
+		// Verify total gold conservation
+		sellerAfter, err := charRepo.FindByID(ctx, sellerChar.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		buyerAfter, err := charRepo.FindByID(ctx, testBuyer.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		totalGoldAfter := int64(sellerAfter.Money + buyerAfter.Money)
+
+		if totalGoldBefore != totalGoldAfter {
+			t.Fatalf("Phase 2 iter %d: GOLD LEAK/CREATION! Before: %d, After: %d, Diff: %d",
+				iter, totalGoldBefore, totalGoldAfter, totalGoldAfter-totalGoldBefore)
+		}
+	}
+
+	t.Logf("Flea Market Concurrency Stress Test PASSED: Phase 1 Purchases=%d, Phase 2 BuyWins=%d, Phase 2 CancelWins=%d, 0 Deadlocks, 0 Gold Drift",
+		totalSimultaneousPurchases, buyWins, cancelWins)
 }
