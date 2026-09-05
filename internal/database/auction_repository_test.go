@@ -29,20 +29,16 @@ func TestAuctionRepository_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Create seller and bidder
-	seller, err := database.CreateTestCharacter(ctx, db, "AuctionSeller")
+	seller, err := database.CreateTestCharacterWithFunds(ctx, db, "AuctionSeller", 10000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	bidder1, err := database.CreateTestCharacter(ctx, db, "AuctionBidder1")
+	bidder1, err := database.CreateTestCharacterWithFunds(ctx, db, "AuctionBidder1", 10000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	bidder2, err := database.CreateTestCharacter(ctx, db, "AuctionBidder2")
+	bidder2, err := database.CreateTestCharacterWithFunds(ctx, db, "AuctionBidder2", 10000)
 	if err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = 10000 WHERE id IN (?, ?, ?)", seller.ID, bidder1.ID, bidder2.ID); err != nil {
 		t.Fatal(err)
 	}
 

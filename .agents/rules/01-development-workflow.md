@@ -52,6 +52,7 @@ For non-trivial behavior:
 A ticket is complete only when applicable:
 - Acceptance criteria are satisfied.
 - Behavior is covered by tests.
+- For features touching P2P or shared-resource state mutations (Bank, Auction, Flea Market, Delivery, Guild, Boss), a paired concurrency stress test using the standardized test harness (`testutil.RunConcurrentStressTest` or `testutil.RunRace`) is implemented and passes with zero deadlocks and conserved assets.
 - Unified local checks (`make check`) pass completely.
 - Architecture remains valid and no unrelated changes were introduced.
 - Documentation/status is updated when necessary.
