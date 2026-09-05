@@ -1,6 +1,7 @@
 package architecture_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"go/ast"
 	"go/parser"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -188,15 +190,37 @@ func TestArchitectureSharedTablesSymbols(t *testing.T) {
 	}
 }
 
-func verifySymbolExists(t *testing.T, fullPath, symbol string) {
-	t.Helper()
+var (
+	archASTCacheLock sync.RWMutex
+	archASTCache     = make(map[string]*ast.File)
+)
+
+func parseArchitectureFileCached(fullPath string, src []byte) (*ast.File, error) {
+	archASTCacheLock.RLock()
+	node, ok := archASTCache[fullPath]
+	archASTCacheLock.RUnlock()
+	if ok {
+		return node, nil
+	}
+
+	archASTCacheLock.Lock()
+	defer archASTCacheLock.Unlock()
+
+	if node, ok := archASTCache[fullPath]; ok {
+		return node, nil
+	}
 
 	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, fullPath, nil, 0)
+	parsed, err := parser.ParseFile(fset, fullPath, src, 0)
 	if err != nil {
-		t.Errorf("failed to parse Go file %s: %v", fullPath, err)
-		return
+		return nil, err
 	}
+	archASTCache[fullPath] = parsed
+	return parsed, nil
+}
+
+func verifySymbolExists(t *testing.T, fullPath, symbol string) {
+	t.Helper()
 
 	// Target can be a Type (e.g. CharacterRepository) or Struct.Method (e.g. Service.OrderMeal)
 	symbolParts := strings.Split(symbol, ".")
@@ -208,6 +232,24 @@ func verifySymbolExists(t *testing.T, fullPath, symbol string) {
 		targetName = symbolParts[1]
 	} else {
 		targetName = symbolParts[0]
+	}
+
+	src, err := os.ReadFile(fullPath)
+	if err != nil {
+		t.Errorf("failed to read Go file %s: %v", fullPath, err)
+		return
+	}
+
+	// Fast path: if source bytes do not contain the target name, fail fast without AST parsing
+	if !bytes.Contains(src, []byte(targetName)) {
+		t.Errorf("symbol %q not found in %s", symbol, fullPath)
+		return
+	}
+
+	node, err := parseArchitectureFileCached(fullPath, src)
+	if err != nil {
+		t.Errorf("failed to parse Go file %s: %v", fullPath, err)
+		return
 	}
 
 	found := false
@@ -264,13 +306,6 @@ func verifyRunInTxBoundary(t *testing.T, repoRoot, sourceRef string) {
 	targetSymbol := parts[1]
 	fullPath := filepath.Join(repoRoot, targetRelPath)
 
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, fullPath, nil, 0)
-	if err != nil {
-		t.Errorf("failed to parse Go file %s: %v", fullPath, err)
-		return
-	}
-
 	symbolParts := strings.Split(targetSymbol, ".")
 	var targetReceiver string
 	var targetName string
@@ -280,6 +315,28 @@ func verifyRunInTxBoundary(t *testing.T, repoRoot, sourceRef string) {
 		targetName = symbolParts[1]
 	} else {
 		targetName = symbolParts[0]
+	}
+
+	src, err := os.ReadFile(fullPath)
+	if err != nil {
+		t.Errorf("failed to read Go file %s: %v", fullPath, err)
+		return
+	}
+
+	// Fast path: if the file does not contain RunInTx or targetName, fail fast
+	if !bytes.Contains(src, []byte("RunInTx")) {
+		t.Errorf("file %s does not contain RunInTx", fullPath)
+		return
+	}
+	if !bytes.Contains(src, []byte(targetName)) {
+		t.Errorf("symbol %q not found in %s", targetSymbol, fullPath)
+		return
+	}
+
+	node, err := parseArchitectureFileCached(fullPath, src)
+	if err != nil {
+		t.Errorf("failed to parse Go file %s: %v", fullPath, err)
+		return
 	}
 
 	var targetFunc *ast.FuncDecl

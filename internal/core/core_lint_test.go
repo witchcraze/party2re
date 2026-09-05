@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"bytes"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 type coreViolation struct {
@@ -271,6 +273,27 @@ func checkFileCoreRules(fset *token.FileSet, node *ast.File, filename string) []
 	return violations
 }
 
+var coreTargetKeywords = [][]byte{
+	[]byte("Experience"),
+	[]byte("Level"),
+	[]byte("Money"),
+	[]byte("SmallMedals"),
+	[]byte("CurrentJobID"),
+	[]byte("MasteredJobs"),
+	[]byte("Items"),
+	[]byte("Slots"),
+	[]byte("Participant"),
+}
+
+func containsAnyCoreKeyword(src []byte) bool {
+	for _, kw := range coreTargetKeywords {
+		if bytes.Contains(src, kw) {
+			return true
+		}
+	}
+	return false
+}
+
 // TestCoreDomainInvariantsAST scans all production Go source files under internal/
 // to mechanically verify that critical Core domain invariants (Progression, Currency,
 // Job state, Inventory, Equipment, Battle Participant Identity) are never violated.
@@ -284,6 +307,8 @@ func TestCoreDomainInvariantsAST(t *testing.T) {
 
 	fset := token.NewFileSet()
 	checkedFiles := 0
+	parsedFiles := 0
+	start := time.Now()
 
 	err = filepath.WalkDir(internalDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -304,12 +329,24 @@ func TestCoreDomainInvariantsAST(t *testing.T) {
 		}
 		relPath = filepath.ToSlash(relPath)
 
-		node, err := parser.ParseFile(fset, path, nil, parser.AllErrors)
+		checkedFiles++
+
+		src, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", path, err)
+		}
+
+		// Fast path: skip files that do not contain any candidate domain invariant keywords
+		if !containsAnyCoreKeyword(src) {
+			return nil
+		}
+
+		parsedFiles++
+		node, err := parser.ParseFile(fset, path, src, parser.AllErrors)
 		if err != nil {
 			t.Fatalf("failed to parse %s: %v", path, err)
 		}
 
-		checkedFiles++
 		violations := checkFileCoreRules(fset, node, relPath)
 		for _, v := range violations {
 			t.Errorf("[%s:%d] %s", v.file, v.line, v.message)
@@ -326,7 +363,7 @@ func TestCoreDomainInvariantsAST(t *testing.T) {
 		t.Fatalf("no production Go files were checked under %s", internalDir)
 	}
 
-	t.Logf("Successfully verified Core domain invariant encapsulation across %d production files", checkedFiles)
+	t.Logf("Successfully verified Core domain invariant encapsulation across %d production files (%d parsed) in %s", checkedFiles, parsedFiles, time.Since(start))
 }
 
 // TestCoreDomainInvariantsAST_Detection verifies that the linter correctly

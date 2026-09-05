@@ -1,6 +1,7 @@
 package database_test
 
 import (
+	"bytes"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Allowed infrastructure files in internal/database that can define transaction infrastructure.
@@ -84,6 +86,12 @@ func checkFileTxRules(fset *token.FileSet, node *ast.File, filename string) []tx
 	return violations
 }
 
+func hasTxKeywords(src []byte) bool {
+	return bytes.Contains(src, []byte("Begin")) ||
+		bytes.Contains(src, []byte("Exec")) ||
+		bytes.Contains(src, []byte("Query"))
+}
+
 func TestAmbientTransactionPropagationAST(t *testing.T) {
 	dir := "."
 	entries, err := os.ReadDir(dir)
@@ -93,6 +101,8 @@ func TestAmbientTransactionPropagationAST(t *testing.T) {
 
 	fset := token.NewFileSet()
 	checkedFiles := 0
+	parsedFiles := 0
+	start := time.Now()
 
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
@@ -103,13 +113,25 @@ func TestAmbientTransactionPropagationAST(t *testing.T) {
 			continue
 		}
 
+		checkedFiles++
+
 		filePath := filepath.Join(dir, entry.Name())
-		node, err := parser.ParseFile(fset, filePath, nil, parser.AllErrors)
+		src, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", filePath, err)
+		}
+
+		// Fast path: files without SQL execution or transaction method candidates cannot contain violations
+		if !hasTxKeywords(src) {
+			continue
+		}
+
+		parsedFiles++
+		node, err := parser.ParseFile(fset, filePath, src, parser.AllErrors)
 		if err != nil {
 			t.Fatalf("failed to parse %s: %v", filePath, err)
 		}
 
-		checkedFiles++
 		violations := checkFileTxRules(fset, node, entry.Name())
 		for _, v := range violations {
 			t.Errorf("[%s:%d] %s", v.file, v.line, v.message)
@@ -119,7 +141,7 @@ func TestAmbientTransactionPropagationAST(t *testing.T) {
 	if checkedFiles == 0 {
 		t.Fatalf("no repository files were checked in %s", dir)
 	}
-	t.Logf("Successfully verified ambient transaction propagation rules across %d repository files", checkedFiles)
+	t.Logf("Successfully verified ambient transaction propagation rules across %d repository files (%d parsed) in %s", checkedFiles, parsedFiles, time.Since(start))
 }
 
 func TestAmbientTransactionPropagationAST_ViolationDetection(t *testing.T) {
