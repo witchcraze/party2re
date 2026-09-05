@@ -215,7 +215,71 @@ The following table catalogs all production and planned Lua scripts active in Pa
 | *Planned: `dungeon_step`* | Candidate D (Issue #369) | `KEYS[1]`: `dungeon:{run:<id>}:step`<br>`KEYS[2]`: `dungeon:{run:<id>}:rewards` | `ARGV[1]`: Move Delta<br>`ARGV[2]`: Step Payload | Atomically advances exploration coordinates and buffers tentative room rewards without touching MariaDB during active run. |
 | *Planned: `boss_damage`* | Candidate E (Issue #370) | `KEYS[1]`: `boss:{boss:<id>}:hp`<br>`KEYS[2]`: `boss:{boss:<id>}:lock` | `ARGV[1]`: Damage Amount | Atomically decrements world boss HP (`DECRBY`) and returns defeat trigger indicator if HP drops to `<= 0`. |
 
+### 5.7 Approved Pattern: Ephemeral Element Tracking via TTL-Scored Sorted Sets with Lazy Purging
+
+#### 5.7.1 The Architectural Problem
+Standard Valkey Sets (`SADD`, `SMEMBERS`, `SREM`) only allow setting an expiration TTL on the key itself, not on individual members inside the Set.
+
+When tracking ephemeral 1:N relationships where child items expire independently (such as player session tokens, matchmaking wait queues, candidate challenge tokens, or multi-turn exploration buffers), standard Sets lead to two systemic problems:
+1. **Accumulation of Stale Elements:** Expired items linger in the Set indefinitely unless explicitly removed.
+2. **Broken Parent TTL Guarantees:** Any operation refreshing the parent key's TTL keeps expired members trapped inside for days or weeks. Conversely, using a short parent key TTL evicts active unexpired members prematurely.
+3. **Flawed Alternative (Background Scanners):** Running periodic background worker goroutines to iterate and purge expired keys wastes CPU cycles, floods the Valkey connection pool, and introduces eventual consistency gaps.
+
+#### 5.7.2 The Core Approved SSOT Pattern
+To solve this, Party2 Re mandates the **TTL-Scored Sorted Set with Lazy Purging Pattern**:
+- **Data Structure:** A Valkey Sorted Set (`ZSET`) where:
+  - **Member:** Unique identifier of the child element (e.g. `session_id`, `challenge_token`, `queued_character_id`).
+  - **Score:** Unix timestamp in seconds indicating the element's exact expiration time (`float64(ExpiresAt.Unix())`).
+- **Pipelined / Atomic Command Sequence:**
+  1. **Add / Refresh Element:**
+     ```text
+     ZADD <parent_key> <expires_at_unix> <member_id>
+     ```
+  2. **Lazy Purge (O(log N + M)):**
+     ```text
+     ZREMRANGEBYSCORE <parent_key> -inf <now_unix>
+     ```
+     Removes all elements whose expiration timestamp is in the past.
+  3. **Touch Parent TTL:**
+     ```text
+     EXPIRE <parent_key> <max_parent_ttl_seconds>
+     ```
+     Sets or extends the parent key's TTL to encompass the furthest expiration horizon of any active member.
+  4. **Query Active Elements:**
+     Always lazily purge first (step 2), then query:
+     ```text
+     ZRANGE <parent_key> 0 -1
+     ```
+     Guarantees that query results never contain stale or expired entries.
+  5. **Revoke Single Element:**
+     ```text
+     ZREM <parent_key> <member_id>
+     ZREMRANGEBYSCORE <parent_key> -inf <now_unix>
+     DEL <child_key>
+     ```
+  6. **Cascade Delete All Elements:**
+     ```text
+     ZRANGE <parent_key> 0 -1 -> DEL child_key_1 child_key_2 ... parent_key
+     ```
+
+#### 5.7.3 Resilience & Zero-Downtime Migration (`WRONGTYPE`)
+When existing deployments transition an existing key from a standard Set to a Sorted Set, Valkey will return a `WRONGTYPE Operation against a key holding the wrong kind of value` error.
+All repository implementations adopting this pattern MUST handle `WRONGTYPE` gracefully:
+- **On Write (`ZADD`):**
+  If `WRONGTYPE` is returned, delete the legacy key (`DEL`) and retry `ZADD`.
+- **On Read / Deletion (`ZRANGE`):**
+  If `WRONGTYPE` is returned, fall back to `SMEMBERS` to retrieve legacy members, delete them, and delete the parent key.
+
+#### 5.7.4 Application Blueprints for Upcoming RFC #356 State Candidates
+
+| Candidate / Feature | Parent Key Pattern | Child Score Semantics | Lazy Purge & Invariant Behavior |
+| :--- | :--- | :--- | :--- |
+| **Candidate A: Player Sessions**<br>(Issue #378 / PR #383) | `party2:player:sessions:<player_id>` | `ExpiresAt.Unix()` (7 days from creation) | Purges expired session tokens lazily on `Save`, `FindByID`, and `Revoke`. Supports multi-device logins while preventing unbounded token accumulation. |
+| **Candidate D: In-Progress Run Buffers**<br>(Issue #369: Dungeon/Challenge) | `party2:dungeon:run:{character:<id>}:active_nodes`<br>`party2:challenge:run:{character:<id>}:turn_history` | Node expiration or turn timeout timestamp | Buffers tentative reward nodes, active tile coordinates, and temp battle buffs during multi-turn exploration. On step resolution or timeout, expired nodes are lazily purged before room state transition. |
+| **Matchmaking Queues & Invitations**<br>(Candidate C / Matchmaking) | `party2:matchmaking:{queue:<mode>}:waiters`<br>`party2:party:{lobby:<id>}:invitations` | Wait timeout timestamp (e.g. `now + 120s`) | Purges timed-out players lazily during matchmaking pairing rounds or lobby queries, preventing phantom invitations without background worker polling. |
+
 ---
+
 
 ## 6. Mechanical Verification & CI Enforcement
 
