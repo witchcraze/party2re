@@ -91,16 +91,19 @@ The table below catalogs all production key patterns currently active in the cod
 
 The following specifications define the key patterns, data types, and lifecycle semantics for upcoming state migration milestones:
 
-### 4.1 Candidate C: Party & Matchmaking Wait Lobbies (Issue #368)
+### 4.1 Candidate C: Party & Matchmaking Wait Lobbies (Issue #368, Issue #380 - Completed)
 
+- **Status**: Completed in PR #376 (Issue #368) and finalized in Issue #380 with MariaDB schema cleanup (Migration 052 dropped `parties` and `party_members`).
 - **Goal**: Move transient multiplayer recruitment, wait lobbies, and ready check states from MariaDB to Valkey Master to eliminate lock contention.
-- **Key Patterns**:
-  - `party2:party:lobby:<party_id>`: `Hash` or `String (JSON)` containing lobby metadata (leader ID, target stage, password, members list). TTL: 15 minutes, refreshed by leader heartbeat.
-  - `party2:party:ready:<party_id>`: `Hash` mapping `member_id -> ready_bool`. TTL: 60 seconds (countdown expiration).
+- **Implemented Key Patterns**:
+  - `party2:party:lobby:<party_id>`: `String (JSON)` containing lobby metadata and member roster. TTL: 15 minutes (`900s`), refreshed by member activity.
+  - `party2:party:lobbies`: `Sorted Set (ZSet)` indexing active recruiting parties scored by `CreatedAt.Unix()`.
+  - `party2:party:character:<character_id>`: `String` mapping character ID to current party ID. TTL: 15 minutes (`900s`). Ensures atomic single-party membership check.
+  - `party2:party:ready:<party_id>:<character_id>`: `String` flag (`"1"`). TTL: 60 seconds (`60s` countdown expiration).
 - **Lifecycle & Boundaries**:
-  - When the countdown expires without full ready status, the lobby resets to `recruiting` in Valkey.
-  - When the leader starts the adventure, the party transitions into durable quest resolution: final outcomes are saved exclusively to MariaDB (`parties`, `party_members`, `party_adventure_logs`).
-  - Abandoned lobbies expire automatically via Valkey TTL with zero orphaned SQL rows.
+  - Waiting lobbies have a natural TTL of 15 minutes and expire automatically if abandoned with zero orphaned SQL rows.
+  - When the countdown expires without full ready status, the unready member's readiness flag expires automatically without blocking the lobby.
+  - When the leader starts the adventure, the party transitions into durable quest resolution: final outcomes are saved exclusively to MariaDB (`party_adventure_logs`), while characters are locked and updated via `RunInTx` in ascending ID order. Legacy `parties` and `party_members` MariaDB tables were officially dropped via Migration 052.
 
 ### 4.2 Candidate D: In-Progress Run Buffers (Issue #369)
 

@@ -2,18 +2,15 @@ package database
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"os"
 	"testing"
 	"time"
 
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/party"
 )
 
-func TestPartyRepository(t *testing.T) {
+func TestPartyRepository_AdventureLog(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -25,164 +22,112 @@ func TestPartyRepository(t *testing.T) {
 	defer db.Close()
 
 	ctx := context.Background()
-	player, err := CreateTestPlayer(ctx, db)
-	if err != nil {
-		t.Fatal(err)
+
+	// 1. Verify NewPartyRepository validation
+	if _, err := NewPartyRepository(nil); err == nil {
+		t.Fatal("expected error when db is nil, got nil")
 	}
 
-	charRepo, err := NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
 	partyRepo, err := NewPartyRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Create 2 test characters
-	c1, err := corecharacter.New(fmt.Sprintf("PartyLeader_%s", player.ID[:8]))
-	if err != nil {
-		t.Fatal(err)
-	}
-	c1.PlayerID = player.ID
-	if err := charRepo.Save(ctx, c1); err != nil {
-		t.Fatal(err)
-	}
-
-	c2, err := corecharacter.New(fmt.Sprintf("PartyMember_%s", player.ID[:8]))
-	if err != nil {
-		t.Fatal(err)
-	}
-	c2.PlayerID = player.ID
-	if err := charRepo.Save(ctx, c2); err != nil {
-		t.Fatal(err)
-	}
-
-	now := time.Now().UTC().Truncate(time.Second)
 	pID := id.New()
-	testParty := party.Party{
-		ID:                pID,
-		LeaderCharacterID: c1.ID,
-		Name:              "DB Test Party",
-		PasswordHash:      "passhash123",
-		StageID:           "forest",
-		Speed:             3,
-		MaxMembers:        4,
-		MinLevel:          1,
-		MaxLevel:          99,
-		MinHP:             0,
-		Status:            party.StatusRecruiting,
-		CreatedAt:         now,
-		UpdatedAt:         now,
-	}
+	otherPID := id.New()
+	baseTime := time.Now().UTC().Truncate(time.Second)
 
-	// 1. Save and Get Party
-	if err := partyRepo.SaveParty(ctx, testParty); err != nil {
-		t.Fatalf("SaveParty failed: %v", err)
-	}
-
-	loadedParty, err := partyRepo.GetParty(ctx, pID)
-	if err != nil {
-		t.Fatalf("GetParty failed: %v", err)
-	}
-	if loadedParty.Name != "DB Test Party" || loadedParty.LeaderCharacterID != c1.ID {
-		t.Fatalf("unexpected loaded party: %+v", loadedParty)
-	}
-
-	// 2. Add Leader Member
-	leaderMem := party.Member{
-		PartyID:       pID,
-		CharacterID:   c1.ID,
-		CharacterName: c1.Name,
-		JobID:         c1.JobID,
-		Level:         c1.Level,
-		HP:            c1.Stats.HP,
-		MaxHP:         c1.Stats.MaxHP,
-		IsLeader:      true,
-		ReadyState:    true,
-		JoinedAt:      now,
-	}
-	if err := partyRepo.AddMember(ctx, leaderMem); err != nil {
-		t.Fatalf("AddMember(leader) failed: %v", err)
-	}
-
-	// 3. Add Second Member
-	secondMem := party.Member{
-		PartyID:       pID,
-		CharacterID:   c2.ID,
-		CharacterName: c2.Name,
-		JobID:         c2.JobID,
-		Level:         c2.Level,
-		HP:            c2.Stats.HP,
-		MaxHP:         c2.Stats.MaxHP,
-		IsLeader:      false,
-		ReadyState:    false,
-		JoinedAt:      now,
-	}
-	if err := partyRepo.AddMember(ctx, secondMem); err != nil {
-		t.Fatalf("AddMember(second) failed: %v", err)
-	}
-
-	// 4. Count and Get Members
-	count, err := partyRepo.CountMembers(ctx, pID)
-	if err != nil || count != 2 {
-		t.Fatalf("expected count 2, got %d (err: %v)", count, err)
-	}
-
-	members, err := partyRepo.GetMembers(ctx, pID)
-	if err != nil || len(members) != 2 {
-		t.Fatalf("expected 2 members, got %d (err: %v)", len(members), err)
-	}
-
-	// 5. GetActivePartyByCharacter
-	activeParty, m, err := partyRepo.GetActivePartyByCharacter(ctx, c2.ID)
-	if err != nil {
-		t.Fatalf("GetActivePartyByCharacter failed: %v", err)
-	}
-	if activeParty.ID != pID || m.CharacterID != c2.ID {
-		t.Fatalf("unexpected active party result: party=%+v member=%+v", activeParty, m)
-	}
-
-	// 6. Update Member Ready
-	if err := partyRepo.UpdateMemberReady(ctx, pID, c2.ID, true); err != nil {
-		t.Fatalf("UpdateMemberReady failed: %v", err)
-	}
-	updatedM2, err := partyRepo.GetMember(ctx, pID, c2.ID)
-	if err != nil || !updatedM2.ReadyState {
-		t.Fatalf("expected ready_state=true, got %+v", updatedM2)
-	}
-
-	// 7. Save Adventure Log
-	advLog := party.PartyAdventureLog{
+	// 2. Save multiple adventure logs for pID and another party
+	log1 := party.PartyAdventureLog{
 		ID:                  id.New(),
 		PartyID:             pID,
 		StageID:             "forest",
 		Outcome:             "win",
 		Turns:               3,
-		TotalEXP:            100,
-		TotalGold:           50,
+		TotalEXP:            150,
+		TotalGold:           75,
 		SynergyBonusPercent: 10,
-		DetailsJSON:         `{"outcome":"win"}`,
-		CreatedAt:           now,
+		DetailsJSON:         `{"outcome":"win","turns":3}`,
+		CreatedAt:           baseTime.Add(-10 * time.Minute),
 	}
-	if err := partyRepo.SaveAdventureLog(ctx, advLog); err != nil {
-		t.Fatalf("SaveAdventureLog failed: %v", err)
-	}
-
-	// 8. Remove Member
-	if err := partyRepo.RemoveMember(ctx, pID, c2.ID); err != nil {
-		t.Fatalf("RemoveMember failed: %v", err)
-	}
-	countAfterRemove, _ := partyRepo.CountMembers(ctx, pID)
-	if countAfterRemove != 1 {
-		t.Fatalf("expected 1 member after remove, got %d", countAfterRemove)
+	if err := partyRepo.SaveAdventureLog(ctx, log1); err != nil {
+		t.Fatalf("SaveAdventureLog(log1) failed: %v", err)
 	}
 
-	// 9. Delete Party
-	if err := partyRepo.DeleteParty(ctx, pID); err != nil {
-		t.Fatalf("DeleteParty failed: %v", err)
+	log2 := party.PartyAdventureLog{
+		ID:                  id.New(),
+		PartyID:             pID,
+		StageID:             "cavern",
+		Outcome:             "loss",
+		Turns:               5,
+		TotalEXP:            30,
+		TotalGold:           10,
+		SynergyBonusPercent: 5,
+		DetailsJSON:         `{"outcome":"loss","turns":5}`,
+		CreatedAt:           baseTime,
 	}
-	if _, err := partyRepo.GetParty(ctx, pID); !errors.Is(err, party.ErrNotFound) {
-		t.Fatalf("expected party.ErrNotFound after delete, got %v", err)
+	if err := partyRepo.SaveAdventureLog(ctx, log2); err != nil {
+		t.Fatalf("SaveAdventureLog(log2) failed: %v", err)
+	}
+
+	otherLog := party.PartyAdventureLog{
+		ID:                  id.New(),
+		PartyID:             otherPID,
+		StageID:             "graveyard",
+		Outcome:             "win",
+		Turns:               2,
+		TotalEXP:            200,
+		TotalGold:           100,
+		SynergyBonusPercent: 15,
+		DetailsJSON:         "",
+		CreatedAt:           baseTime,
+	}
+	if err := partyRepo.SaveAdventureLog(ctx, otherLog); err != nil {
+		t.Fatalf("SaveAdventureLog(otherLog) failed: %v", err)
+	}
+
+	// 3. Retrieve logs for pID and verify ordering and fields
+	logs, err := partyRepo.GetAdventureLogsByPartyID(ctx, pID)
+	if err != nil {
+		t.Fatalf("GetAdventureLogsByPartyID failed: %v", err)
+	}
+	if len(logs) != 2 {
+		t.Fatalf("expected 2 logs for party %s, got %d", pID, len(logs))
+	}
+
+	// Ordered by created_at DESC (log2 first, then log1)
+	if logs[0].ID != log2.ID {
+		t.Errorf("expected first log to be log2 (%s), got %s", log2.ID, logs[0].ID)
+	}
+	if logs[0].StageID != "cavern" || logs[0].Outcome != "loss" || logs[0].Turns != 5 || logs[0].TotalEXP != 30 || logs[0].TotalGold != 10 || logs[0].SynergyBonusPercent != 5 || logs[0].DetailsJSON != log2.DetailsJSON {
+		t.Errorf("unexpected log[0] content: %+v", logs[0])
+	}
+
+	if logs[1].ID != log1.ID {
+		t.Errorf("expected second log to be log1 (%s), got %s", log1.ID, logs[1].ID)
+	}
+	if logs[1].StageID != "forest" || logs[1].Outcome != "win" || logs[1].Turns != 3 || logs[1].TotalEXP != 150 || logs[1].TotalGold != 75 || logs[1].SynergyBonusPercent != 10 || logs[1].DetailsJSON != log1.DetailsJSON {
+		t.Errorf("unexpected log[1] content: %+v", logs[1])
+	}
+
+	// 4. Retrieve logs for otherPID
+	otherLogs, err := partyRepo.GetAdventureLogsByPartyID(ctx, otherPID)
+	if err != nil {
+		t.Fatalf("GetAdventureLogsByPartyID(otherPID) failed: %v", err)
+	}
+	if len(otherLogs) != 1 {
+		t.Fatalf("expected 1 log for otherPID, got %d", len(otherLogs))
+	}
+	if otherLogs[0].ID != otherLog.ID || otherLogs[0].DetailsJSON != "" {
+		t.Errorf("unexpected otherLog content: %+v", otherLogs[0])
+	}
+
+	// 5. Query non-existent party ID
+	emptyLogs, err := partyRepo.GetAdventureLogsByPartyID(ctx, id.New())
+	if err != nil {
+		t.Fatalf("GetAdventureLogsByPartyID(non-existent) failed: %v", err)
+	}
+	if len(emptyLogs) != 0 {
+		t.Fatalf("expected 0 logs for non-existent party, got %d", len(emptyLogs))
 	}
 }

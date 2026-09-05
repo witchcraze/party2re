@@ -31,7 +31,6 @@ Character deletion executes within a database transaction and cleans up resource
    - `character_challenge_records`, `challenge_sessions`
    - `arena_ratings`, `arena_matches` (attacker or defender)
    - `character_monsters`, `character_monster_book`, `character_item_collection`
-   - `party_members`, `parties` (as leader)
    - `guild_members`, `guilds` (clear `leader_character_id`)
    - `activities`, `adventures`
    - `character_custom_skills`, `equipment_slots`, `inventory_items`
