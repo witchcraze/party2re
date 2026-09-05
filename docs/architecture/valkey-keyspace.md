@@ -102,6 +102,11 @@ The table below catalogs all production key patterns currently active in the cod
 | `party2:party:lobbies` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `party_id`, Score: `CreatedAt.Unix()` | `internal/party` | `SaveParty` (ZADD), `DeleteParty` (ZREM), `ListParties` (ZREVRANGE / ZRANGE). |
 | `party2:party:character:<character_id>` | Valkey Master | `String` | 15 minutes (`900s`), refreshed on activity | Party ID (`string`) | `internal/party` | `AddMember` (SET EX), `RemoveMember` / `DeleteParty` (DEL), `GetActivePartyByCharacter` (GET). O(1) single-party membership check. |
 | `party2:party:ready:<party_id>:<character_id>` | Valkey Master | `String` | 60 seconds (`60s` countdown) | Flag (`"1"`) | `internal/party` | `UpdateMemberReady` (SET EX 60 or DEL), `GetMembers` (EXISTS). Automatic ready countdown timeout. |
+| `party2:boss:{boss:<boss_id>}:hp` | Valkey Master | `String` (Integer) | 2 hours (`7200s`), sliding | Remaining Boss HP (`int`) | `internal/boss` | `InitializeRaid` (SET EX), `ApplyDamage` (`boss_damage.lua`). |
+| `party2:boss:{boss:<boss_id>}:status` | Valkey Master | `String` | 2 hours (`7200s`), sliding | Status (`"active"`, `"defeated"`, `"settled"`) | `internal/boss` | `InitializeRaid`, `boss_damage.lua`, `MarkSettled`. |
+| `party2:boss:{boss:<boss_id>}:contributors` | Valkey Master | `Hash` | 2 hours (`7200s`), sliding | Field: `character_id`, Value: damage dealt (`int`) | `internal/boss` | `InitializeRaid` (DEL), `boss_damage.lua` (HINCRBY), `GetContributors` (HGETALL). |
+| `party2:boss:{boss:<boss_id>}:killer` | Valkey Master | `String` | 2 hours (`7200s`), sliding | Killer Character ID (`string`) | `internal/boss` | `InitializeRaid` (DEL), `boss_damage.lua` (SET on defeat). |
+| `party2:boss:{boss:<boss_id>}:run_id` | Valkey Master | `String` | 2 hours (`7200s`), sliding | Unique Run UUID (`string`) | `internal/boss` | `InitializeRaid` (SET EX), idempotency check on settlement. |
 
 ---
 
@@ -139,13 +144,16 @@ The following specifications define the key patterns, data types, and lifecycle 
 
 ### 4.3 Candidate E: World Boss Real-time Shared HP (Issue #370)
 
-- **Goal**: High-frequency concurrent boss raid damage resolution without MariaDB single-row lock serialization.
-- **Key Patterns**:
-  - `party2:boss:hp:<boss_id>`: `String` (Atomic integer counter). Mutated via `DECRBY`.
-  - `party2:boss:lock:<boss_id>`: `String` (Distributed lock) for synchronization during final defeat settlement.
-- **Lifecycle & Boundaries**:
-  - Atomic Valkey `DECRBY` resolves concurrent player attack rounds.
-  - Upon reaching `<= 0`, the winning worker acquires `party2:boss:lock:<boss_id>` and commits the defeat record, reward distribution, and banquet announcement atomically in MariaDB.
+- **Goal**: High-frequency concurrent boss raid damage resolution without MariaDB single-row lock serialization (SSOT: [`docs/architecture/transient-boss-hp.md`](transient-boss-hp.md)).
+- **Key Patterns (with Mandatory Cluster Hash Tagging `{boss:<boss_id>}`)**:
+  - `party2:boss:{boss:<boss_id>}:hp`: `String` (Atomic integer counter). Current remaining HP. TTL: 2 hours (`7200s`), sliding.
+  - `party2:boss:{boss:<boss_id>}:status`: `String`. Status (`"active"`, `"defeated"`, `"settled"`). TTL: 2 hours (`7200s`), sliding.
+  - `party2:boss:{boss:<boss_id>}:contributors`: `Hash`. Field: `character_id`, Value: damage tally. TTL: 2 hours (`7200s`), sliding.
+  - `party2:boss:{boss:<boss_id>}:killer`: `String`. Killer character ID elected by Lua script. TTL: 2 hours (`7200s`), sliding.
+  - `party2:boss:{boss:<boss_id>}:run_id`: `String`. Unique execution UUID for idempotent settlement. TTL: 2 hours (`7200s`), sliding.
+- **Lifecycle & Boundaries (Two-Phase Settlement)**:
+  - Phase 1 (Active Raid): Concurrent attacks execute entirely against Valkey Master via atomic Lua script (`boss_damage.lua`). Evaluates overkill prevention, tallies contributor damage (`HINCRBY`), elects exactly one killer when HP reaches 0, and refreshes 2h TTL. Zero MariaDB queries or locks during combat.
+  - Phase 2 (Settlement): The elected killer is designated the settlement coordinator and commits permanent loot (MVP bonus, Last-Hit bonus, participation rewards, completion logs) in MariaDB Master via `RunInTx`. The status in Valkey is then marked `"settled"`. Unfinalized defeats can be safely and idempotently reconciled.
 
 ---
 
@@ -217,7 +225,7 @@ The following table catalogs all production and planned Lua scripts active in Pa
 | *Planned: `zset_ttl_purge`* | Planned SSOT Pattern (Issue #386) | `KEYS[1]`: `ZSet` Key | `ARGV[1]`: Current Timestamp | Atomically purges expired members scored by TTL (`ZREMRANGEBYSCORE`) and returns remaining active count in a single round-trip. |
 | *Planned: `dungeon_step`* | Candidate D (Issue #369: `docs/architecture/transient-run-state.md`) | `KEYS[1]`: `party2:dungeon:{char:<id>}:state`<br>`KEYS[2]`: `party2:dungeon:{char:<id>}:rewards` | `ARGV[1]`: Expected Expedition ID<br>`ARGV[2]`: Floor<br>`ARGV[3]`: Pos X<br>`ARGV[4]`: Pos Y<br>`ARGV[5]`: HP Delta<br>`ARGV[6]`: Turns Delta<br>`ARGV[7]`: Exp Delta<br>`ARGV[8]`: Gold Delta<br>`ARGV[9]`: Medals Delta<br>`ARGV[10]`: Item ID<br>`ARGV[11]`: Timestamp<br>`ARGV[12]`: TTL (7200s) | Atomically advances exploration coordinates, updates HP/turns budget, and buffers provisional room loot without touching MariaDB during active run. |
 | *Planned: `challenge_advance_round`* | Candidate D (Issue #369: `docs/architecture/transient-run-state.md`) | `KEYS[1]`: `party2:challenge:{char:<id>}:session`<br>`KEYS[2]`: `party2:challenge:{char:<id>}:rewards` | `ARGV[1]`: Expected Session ID<br>`ARGV[2]`: Surviving HP<br>`ARGV[3]`: Exp Delta<br>`ARGV[4]`: Gold Delta<br>`ARGV[5]`: Item ID<br>`ARGV[6]`: Timestamp<br>`ARGV[7]`: TTL (7200s) | Atomically advances endurance challenge wave round, persists surviving HP, and accumulates wave rewards without touching MariaDB during active run. |
-| *Planned: `boss_damage`* | Candidate E (Issue #370) | `KEYS[1]`: `boss:{boss:<id>}:hp`<br>`KEYS[2]`: `boss:{boss:<id>}:lock` | `ARGV[1]`: Damage Amount | Atomically decrements world boss HP (`DECRBY`) and returns defeat trigger indicator if HP drops to `<= 0`. |
+| `boss_damage` | `internal/boss/lua.go` (`bossDamageLua`) | `KEYS[1]`: `party2:boss:{boss:<id>}:hp`<br>`KEYS[2]`: `party2:boss:{boss:<id>}:status`<br>`KEYS[3]`: `party2:boss:{boss:<id>}:contributors`<br>`KEYS[4]`: `party2:boss:{boss:<id>}:killer`<br>`KEYS[5]`: `party2:boss:{boss:<id>}:run_id` | `ARGV[1]`: Attacker ID<br>`ARGV[2]`: Incoming Damage<br>`ARGV[3]`: TTL (7200s) | Atomically decrements world boss HP, prevents overkill, tallies contributor damage (`HINCRBY`), elects exactly one killer when HP reaches 0, transitions status to `defeated`, and returns execution outcome without MariaDB row locks. |
 
 ### 5.7 Approved Pattern: Ephemeral Element Tracking via TTL-Scored Sorted Sets with Lazy Purging
 
