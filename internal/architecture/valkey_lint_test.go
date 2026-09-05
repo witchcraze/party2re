@@ -23,6 +23,7 @@ var validProdNamespaces = []string{
 	"party2:party:",
 	"party2:dungeon:",
 	"party2:challenge:",
+	"party2:boss:",
 }
 
 // Required keys documented in SSOT docs/architecture/valkey-keyspace.md
@@ -41,6 +42,7 @@ var requiredDocumentedKeys = []string{
 	"party2:party:lobbies",
 	"party2:party:character:",
 	"party2:party:ready:",
+	"party2:boss:",
 }
 
 func TestValkeyKeyspaceDocExistsAndCoversKeys(t *testing.T) {
@@ -364,6 +366,41 @@ func TestTransientRunStateDocCoversLuaAndPersistenceBoundaries(t *testing.T) {
 	for _, term := range requiredTerms {
 		if !strings.Contains(content, term) {
 			t.Errorf("docs/architecture/transient-run-state.md does not contain required architectural term %q", term)
+		}
+	}
+}
+
+func TestTransientBossHPDocCoversLuaAndPersistenceBoundaries(t *testing.T) {
+	repoRoot := "../.."
+	docPath := filepath.Join(repoRoot, "docs", "architecture", "transient-boss-hp.md")
+
+	data, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("docs/architecture/transient-boss-hp.md does not exist: %v", err)
+	}
+
+	content := string(data)
+	if len(strings.TrimSpace(content)) == 0 {
+		t.Fatalf("docs/architecture/transient-boss-hp.md is empty")
+	}
+
+	requiredTerms := []string{
+		"Candidate E",
+		"boss_damage",
+		"Cluster Hash Tag",
+		"Two-Phase Settlement",
+		"Crash Recovery",
+		"In-Memory Fallback Parity",
+		"party2:boss:{boss:<boss_id>}:hp",
+		"party2:boss:{boss:<boss_id>}:status",
+		"party2:boss:{boss:<boss_id>}:contributors",
+		"party2:boss:{boss:<boss_id>}:killer",
+		"party2:boss:{boss:<boss_id>}:run_id",
+	}
+
+	for _, term := range requiredTerms {
+		if !strings.Contains(content, term) {
+			t.Errorf("docs/architecture/transient-boss-hp.md does not contain required architectural term %q", term)
 		}
 	}
 }
