@@ -15,6 +15,7 @@ type mockCasinoRepo struct {
 	sellCoinsFn       func(ctx context.Context, charID string, coins int64, goldReward int) (casino.Account, corecharacter.Character, error)
 	adjustFn          func(ctx context.Context, charID string, delta int64) (casino.Account, error)
 	deductAndCreditFn func(ctx context.Context, charID string, bet int64, payout int64) (casino.Account, error)
+	pokerGames        map[string]*casino.IndianPokerGame
 }
 
 func (m *mockCasinoRepo) GetAccount(ctx context.Context, charID string) (casino.Account, error) {
@@ -22,6 +23,10 @@ func (m *mockCasinoRepo) GetAccount(ctx context.Context, charID string) (casino.
 		return m.getAccountFn(ctx, charID)
 	}
 	return casino.Account{CharacterID: charID, Coins: 1000, UpdatedAt: time.Now().UTC()}, nil
+}
+
+func (m *mockCasinoRepo) GetAccountForUpdate(ctx context.Context, charID string) (casino.Account, error) {
+	return m.GetAccount(ctx, charID)
 }
 
 func (m *mockCasinoRepo) ExchangeGoldToCoins(ctx context.Context, charID string, coins int64, goldCost int) (casino.Account, corecharacter.Character, error) {
@@ -50,6 +55,31 @@ func (m *mockCasinoRepo) DeductBetAndCreditPayout(ctx context.Context, charID st
 		return m.deductAndCreditFn(ctx, charID, bet, payout)
 	}
 	return casino.Account{CharacterID: charID, Coins: 1000 - bet + payout}, nil
+}
+
+func (m *mockCasinoRepo) SavePokerGame(ctx context.Context, game casino.IndianPokerGame) error {
+	if m.pokerGames == nil {
+		m.pokerGames = make(map[string]*casino.IndianPokerGame)
+	}
+	cpy := game
+	m.pokerGames[game.CharacterID] = &cpy
+	return nil
+}
+
+func (m *mockCasinoRepo) GetActivePokerGame(ctx context.Context, charID string) (*casino.IndianPokerGame, error) {
+	if m.pokerGames == nil {
+		return nil, nil
+	}
+	g, ok := m.pokerGames[charID]
+	if !ok || g.Status != casino.StatusInProgress {
+		return nil, nil
+	}
+	cpy := *g
+	return &cpy, nil
+}
+
+func (m *mockCasinoRepo) GetActivePokerGameForUpdate(ctx context.Context, charID string) (*casino.IndianPokerGame, error) {
+	return m.GetActivePokerGame(ctx, charID)
 }
 
 func TestCasinoService_Exchanges(t *testing.T) {
@@ -110,7 +140,7 @@ func TestCasinoService_IndianPokerLifecycle(t *testing.T) {
 	}
 	svc, _ := casino.NewService(repo)
 
-	// 1. Start game with rate 10 -> Ante 10 deducted
+	// 1. Start game with rate 10 -> Ante 10 deducted (490 coins remaining)
 	game, acc, err := svc.StartIndianPokerGame(ctx, "char1", 10)
 	if err != nil {
 		t.Fatalf("StartIndianPokerGame error: %v", err)
@@ -118,14 +148,73 @@ func TestCasinoService_IndianPokerLifecycle(t *testing.T) {
 	if acc.Coins != 490 || game.Pot != 20 {
 		t.Errorf("after start: coins=%d, pot=%d", acc.Coins, game.Pot)
 	}
-
-	// 2. Play fold
-	acc, err = svc.PlayIndianPokerRound(ctx, "char1", game, casino.ActionFold)
-	if err != nil {
-		t.Fatalf("PlayIndianPokerRound fold error: %v", err)
+	// Player card must be masked in client view while in progress
+	if game.PlayerCard.Rank != 0 || game.PlayerCard.Suit != "?" {
+		t.Errorf("expected masked player card, got %+v", game.PlayerCard)
 	}
-	if acc.Coins != 490 || game.Status != casino.StatusPlayerFolded {
-		t.Errorf("after fold: coins=%d, status=%v", acc.Coins, game.Status)
+
+	// Set mid-rank cards in repo to guarantee dealer calls in Round 1
+	repo.pokerGames["char1"].PlayerCard = casino.Card{Suit: casino.SuitSpades, Rank: casino.RankSeven}
+	repo.pokerGames["char1"].DealerCard = casino.Card{Suit: casino.SuitHearts, Rank: casino.RankSeven}
+
+	// 2. Starting another game while in progress should fail with ErrActiveSessionExists
+	_, _, err = svc.StartIndianPokerGame(ctx, "char1", 10)
+	if err != casino.ErrActiveSessionExists {
+		t.Errorf("expected ErrActiveSessionExists, got %v", err)
+	}
+
+	// 3. Query active game
+	activeGame, activeAcc, err := svc.GetActiveIndianPokerGame(ctx, "char1")
+	if err != nil {
+		t.Fatalf("GetActiveIndianPokerGame error: %v", err)
+	}
+	if activeGame.ID != game.ID || activeAcc.Coins != 490 {
+		t.Errorf("unexpected active game: %+v, acc=%+v", activeGame, activeAcc)
+	}
+	if activeGame.PlayerCard.Rank != 0 {
+		t.Errorf("active game player card must remain masked")
+	}
+
+	// 4. Play action 'call' -> round advances to 2, bet of 10 deducted (480 coins remaining)
+	nextGame, acc, err := svc.PlayIndianPokerAction(ctx, "char1", casino.ActionCall)
+	if err != nil {
+		t.Fatalf("PlayIndianPokerAction call error: %v", err)
+	}
+	if nextGame.Status == casino.StatusInProgress {
+		if nextGame.Round != 2 {
+			t.Errorf("round = %d, want 2", nextGame.Round)
+		}
+		if acc.Coins != 480 {
+			t.Errorf("coins = %d, want 480", acc.Coins)
+		}
+	}
+
+	// 5. Play action 'fold' -> game terminates with StatusPlayerFolded
+	finalGame, acc, err := svc.PlayIndianPokerAction(ctx, "char1", casino.ActionFold)
+	if err != nil {
+		t.Fatalf("PlayIndianPokerAction fold error: %v", err)
+	}
+	if finalGame.Status != casino.StatusPlayerFolded {
+		t.Errorf("status = %v, want %v", finalGame.Status, casino.StatusPlayerFolded)
+	}
+	// After game completes, player card is revealed
+	if finalGame.PlayerCard.Rank == 0 {
+		t.Errorf("expected revealed player card after game completion")
+	}
+
+	// 6. Querying active game now returns ErrNoActivePokerGame
+	_, _, err = svc.GetActiveIndianPokerGame(ctx, "char1")
+	if err != casino.ErrNoActivePokerGame {
+		t.Errorf("expected ErrNoActivePokerGame, got %v", err)
+	}
+
+	// 7. Starting a new game after completion succeeds
+	newGame, newAcc, err := svc.StartIndianPokerGame(ctx, "char1", 20)
+	if err != nil {
+		t.Fatalf("StartIndianPokerGame after completion error: %v", err)
+	}
+	if newGame.BaseRate != 20 || newAcc.Coins != acc.Coins-20 {
+		t.Errorf("new game unexpected state: base_rate=%d, coins=%d", newGame.BaseRate, newAcc.Coins)
 	}
 }
 

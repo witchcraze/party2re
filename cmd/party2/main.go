@@ -460,7 +460,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 	if err != nil {
 		return err
 	}
-	casinoService, err := casino.NewService(casinoRepo)
+	casinoService, err := casino.NewService(casinoRepo, casino.WithTransactionProvider(txProvider))
 	if err != nil {
 		return err
 	}

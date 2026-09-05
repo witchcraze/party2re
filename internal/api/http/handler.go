@@ -472,6 +472,8 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/casino/highlow", h.handleCasinoHighLow)
 	mux.HandleFunc("POST /characters/{id}/casino/doppel", h.handleCasinoDoppel)
 	mux.HandleFunc("POST /characters/{id}/casino/poker", h.handleCasinoPokerStart)
+	mux.HandleFunc("GET /characters/{id}/casino/poker", h.handleGetCasinoPoker)
+	mux.HandleFunc("POST /characters/{id}/casino/poker/action", h.handleCasinoPokerAction)
 
 	// Combat & Challenges
 	mux.HandleFunc("GET /challenges/tiers", h.handleListChallengeTiers)
