@@ -90,10 +90,13 @@ Durability critical?
   - *Authority*: Valkey Master (`party:lobby:{id}`).
   - *Semantics*: Ephemeral wait queues and 60-second ready checks. If the process restarts, players simply re-queue or re-enter the lobby.
   - *Constraint*: Transient lobby states must remain strictly decoupled from persistent character party records and durable `party_adventure_logs`.
-- **Candidate D: In-Progress Run Buffers (`dungeon_active_expeditions`, `challenge_sessions`) [Priority 2: Valid / High Impact, Issue #369]**:
-  - *Authority*: Valkey Master for active step/turn buffers; MariaDB Master for final exit/cash-out settlement.
-  - *Semantics*: Step coordinates, floor progress, and tentative uncommitted reward buffers. Eliminates multi-turn write amplification on MariaDB during active exploration.
-  - *Constraint*: Two-phase settlement: tentative rewards exist only in Valkey until the run ends with victory, retreat, or defeat, at which point an atomic MariaDB transaction updates inventory and character progression.
+- **Candidate D: In-Progress Run Buffers (`dungeon_active_expeditions`, `challenge_sessions`) [Priority 2: Evaluated & Codified, Issue #369]**:
+  - *Authority*: Valkey Master for active step/turn buffers; MariaDB Master for final exit/cash-out settlement (SSOT: [`docs/architecture/transient-run-state.md`](../../docs/architecture/transient-run-state.md)).
+  - *Semantics*: Step coordinates, floor progress, and tentative uncommitted reward buffers (`party2:dungeon:{char:<id>}:state`, `party2:dungeon:{char:<id>}:rewards`, `party2:challenge:{char:<id>}:session`, `party2:challenge:{char:<id>}:rewards`). Eliminates multi-turn write amplification on MariaDB during active exploration.
+  - *Constraints & Contracts*:
+    - Atomic Lua scripts (`dungeon_step`, `challenge_advance_round`) execute all active mutations in `< 1ms` with mandatory cluster hash tagging (`{char:<character_id>}`).
+    - 2-hour sliding TTL (`7200s`) automatically evicts abandoned sessions with zero database sweepers.
+    - Two-phase settlement: tentative rewards exist only in Valkey until the run ends with victory, retreat, or defeat, at which point an atomic MariaDB transaction (`RunInTx`) updates inventory and character progression, followed by Valkey buffer deletion (`DEL`).
 - **Candidate E: World Boss Real-time Shared HP (`boss`) [Priority 3: High Risk / Architectural Exploration, Issue #370]**:
   - *Authority*: Valkey Master during combat (`DECRBY`) with MariaDB settlement.
   - *Semantics*: High-frequency concurrent damage during multi-player raids; atomic Valkey primitives eliminate single-row SQL lock contention.
