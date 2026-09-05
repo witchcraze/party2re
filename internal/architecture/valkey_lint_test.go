@@ -1,6 +1,7 @@
 package architecture_test
 
 import (
+	"bytes"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Registered production Valkey namespaces
@@ -65,6 +67,9 @@ func TestValkeyNoBannedKeysCommandInProd(t *testing.T) {
 	internalDir := filepath.Join(repoRoot, "internal")
 
 	fset := token.NewFileSet()
+	checkedFiles := 0
+	parsedFiles := 0
+	start := time.Now()
 
 	err := filepath.Walk(internalDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -74,7 +79,20 @@ func TestValkeyNoBannedKeysCommandInProd(t *testing.T) {
 			return nil
 		}
 
-		node, parseErr := parser.ParseFile(fset, path, nil, 0)
+		checkedFiles++
+
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		// Fast path: files without "Keys" cannot invoke banned .Keys() calls
+		if !bytes.Contains(src, []byte("Keys")) {
+			return nil
+		}
+
+		parsedFiles++
+		node, parseErr := parser.ParseFile(fset, path, src, 0)
 		if parseErr != nil {
 			t.Fatalf("failed to parse %s: %v", path, parseErr)
 		}
@@ -101,6 +119,8 @@ func TestValkeyNoBannedKeysCommandInProd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to walk internal directory: %v", err)
 	}
+
+	t.Logf("Valkey banned KEYS linter verified %d production files (%d parsed) in %s", checkedFiles, parsedFiles, time.Since(start))
 }
 
 func TestValkeyKeyPrefixTaxonomy(t *testing.T) {
@@ -108,6 +128,9 @@ func TestValkeyKeyPrefixTaxonomy(t *testing.T) {
 	internalDir := filepath.Join(repoRoot, "internal")
 
 	fset := token.NewFileSet()
+	checkedFiles := 0
+	parsedFiles := 0
+	start := time.Now()
 
 	err := filepath.Walk(internalDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -117,9 +140,21 @@ func TestValkeyKeyPrefixTaxonomy(t *testing.T) {
 			return nil
 		}
 
+		checkedFiles++
 		isTestFile := strings.HasSuffix(path, "_test.go")
 
-		node, parseErr := parser.ParseFile(fset, path, nil, 0)
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		// Fast path: files without "party2:" cannot contain Valkey keyspace string literals
+		if !bytes.Contains(src, []byte("party2:")) {
+			return nil
+		}
+
+		parsedFiles++
+		node, parseErr := parser.ParseFile(fset, path, src, 0)
 		if parseErr != nil {
 			t.Fatalf("failed to parse %s: %v", path, parseErr)
 		}
@@ -168,4 +203,6 @@ func TestValkeyKeyPrefixTaxonomy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to walk internal directory: %v", err)
 	}
+
+	t.Logf("Valkey key taxonomy linter verified %d Go files (%d parsed) in %s", checkedFiles, parsedFiles, time.Since(start))
 }
