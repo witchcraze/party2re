@@ -28,7 +28,8 @@ func TestCasinoIndianPokerDatabaseIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	svc, err := casino.NewService(casinoRepo)
+	txProvider := database.NewTransactionProvider(db)
+	svc, err := casino.NewService(casinoRepo, casino.WithTransactionProvider(txProvider))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,22 +62,53 @@ func TestCasinoIndianPokerDatabaseIntegration(t *testing.T) {
 	if acc.Coins != 490 || game.Pot != 20 {
 		t.Fatalf("unexpected start state: coins=%d, pot=%d", acc.Coins, game.Pot)
 	}
+	if game.PlayerCard.Rank != 0 || game.PlayerCard.Suit != "?" {
+		t.Errorf("expected masked player card in client view, got %+v", game.PlayerCard)
+	}
 
-	// 4. Play game through to completion
-	for game.Status == casino.StatusInProgress {
+	// Starting another session while active must fail with ErrActiveSessionExists
+	_, _, err = svc.StartIndianPokerGame(ctx, char.ID, 10)
+	if !errors.Is(err, casino.ErrActiveSessionExists) {
+		t.Fatalf("expected ErrActiveSessionExists, got %v", err)
+	}
+
+	// Query active game state
+	activeGame, activeAcc, err := svc.GetActiveIndianPokerGame(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetActiveIndianPokerGame failed: %v", err)
+	}
+	if activeGame.ID != game.ID || activeAcc.Coins != 490 {
+		t.Fatalf("unexpected active game: %+v, coins=%d", activeGame, activeAcc.Coins)
+	}
+	if activeGame.PlayerCard.Rank != 0 {
+		t.Errorf("active game player card must remain masked")
+	}
+
+	// 4. Play game through to completion using PlayIndianPokerAction
+	for activeGame.Status == casino.StatusInProgress {
 		action := casino.ActionCall
-		if game.Round >= 2 {
+		if activeGame.Round >= 2 {
 			action = casino.ActionShowdown
 		}
-		acc, err = svc.PlayIndianPokerRound(ctx, char.ID, game, action)
+		activeGame, acc, err = svc.PlayIndianPokerAction(ctx, char.ID, action)
 		if err != nil {
-			t.Fatalf("PlayIndianPokerRound failed: %v", err)
+			t.Fatalf("PlayIndianPokerAction failed: %v", err)
 		}
 	}
 
 	// 5. Verify game finished and account coins are consistent
-	if game.Status == casino.StatusInProgress {
+	if activeGame.Status == casino.StatusInProgress {
 		t.Error("game should be finished")
+	}
+	// Finished game reveals player card
+	if activeGame.PlayerCard.Rank == 0 {
+		t.Errorf("completed game player card must be revealed")
+	}
+
+	// Querying active game now returns ErrNoActivePokerGame
+	_, _, err = svc.GetActiveIndianPokerGame(ctx, char.ID)
+	if !errors.Is(err, casino.ErrNoActivePokerGame) {
+		t.Fatalf("expected ErrNoActivePokerGame, got %v", err)
 	}
 
 	dbAcc, err := svc.GetAccount(ctx, char.ID)
@@ -569,4 +601,115 @@ func TestCasinoHighLow_ConcurrencyExploitPrevented(t *testing.T) {
 	if dbAcc.Coins < 0 {
 		t.Fatalf("balance became negative: %d", dbAcc.Coins)
 	}
+}
+
+func TestCasinoIndianPoker_ConcurrencyExploitPrevented(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	casinoRepo, err := database.NewCasinoRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	txProvider := database.NewTransactionProvider(db)
+	svc, err := casino.NewService(casinoRepo, casino.WithTransactionProvider(txProvider))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Create player with 500 coins
+	char, err := database.CreateTestCharacter(ctx, db, "PokerConcurrencyUser")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = ? WHERE id = ?", 10000, char.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	acc, _, err := svc.ExchangeGoldToCoins(ctx, char.ID, 500)
+	if err != nil {
+		t.Fatalf("ExchangeGoldToCoins failed: %v", err)
+	}
+	if acc.Coins != 500 {
+		t.Fatalf("initial coins = %d, want 500", acc.Coins)
+	}
+
+	// 2. Start game with rate 10 (ante 10 deducted, 490 coins remaining)
+	_, acc, err = svc.StartIndianPokerGame(ctx, char.ID, 10)
+	if err != nil {
+		t.Fatalf("StartIndianPokerGame failed: %v", err)
+	}
+	if acc.Coins != 490 {
+		t.Fatalf("coins after ante = %d, want 490", acc.Coins)
+	}
+
+	// 3. Concurrently launch 50 goroutines attempting actions on the same poker session
+	const concurrentRequests = 50
+	var wg sync.WaitGroup
+	var callSuccessCount int64
+	var showdownSuccessCount int64
+	var rejectedCount int64
+
+	startSignal := make(chan struct{})
+
+	for i := 0; i < concurrentRequests; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			<-startSignal
+
+			action := casino.ActionCall
+			if idx%2 == 0 {
+				action = casino.ActionShowdown
+			}
+
+			_, _, err := svc.PlayIndianPokerAction(ctx, char.ID, action)
+			if err == nil {
+				if action == casino.ActionCall {
+					atomic.AddInt64(&callSuccessCount, 1)
+				} else {
+					atomic.AddInt64(&showdownSuccessCount, 1)
+				}
+			} else if errors.Is(err, casino.ErrNoActivePokerGame) || errors.Is(err, casino.ErrGameAlreadyOver) {
+				atomic.AddInt64(&rejectedCount, 1)
+			} else {
+				t.Errorf("unexpected error during concurrent poker action: %v", err)
+			}
+		}(i)
+	}
+
+	close(startSignal)
+	wg.Wait()
+
+	// 4. Assert total attempts
+	totalProcessed := callSuccessCount + showdownSuccessCount + rejectedCount
+	if totalProcessed != concurrentRequests {
+		t.Errorf("total requests processed = %d, want %d", totalProcessed, concurrentRequests)
+	}
+
+	// 5. Verify database coins balance is non-negative and consistent
+	dbAcc, err := svc.GetAccount(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetAccount failed: %v", err)
+	}
+	if dbAcc.Coins < 0 {
+		t.Fatalf("balance became negative: %d", dbAcc.Coins)
+	}
+
+	// Active game should either be in progress or completed without error
+	activeGame, _, err := svc.GetActiveIndianPokerGame(ctx, char.ID)
+	if err != nil && !errors.Is(err, casino.ErrNoActivePokerGame) {
+		t.Fatalf("unexpected error checking active game: %v", err)
+	}
+	_ = activeGame
 }

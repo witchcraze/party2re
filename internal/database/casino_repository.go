@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -34,6 +35,38 @@ func (r *CasinoRepository) GetAccount(ctx context.Context, characterID string) (
 			Coins:       0,
 			UpdatedAt:   time.Now().UTC(),
 		}, nil
+	}
+	if err != nil {
+		return casino.Account{}, err
+	}
+	return acc, nil
+}
+
+func (r *CasinoRepository) GetAccountForUpdate(ctx context.Context, characterID string) (casino.Account, error) {
+	var acc casino.Account
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+		SELECT character_id, coins, updated_at
+		FROM casino_accounts
+		WHERE character_id = ?
+		FOR UPDATE
+	`, characterID).Scan(&acc.CharacterID, &acc.Coins, &acc.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		_, err = ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+			INSERT IGNORE INTO casino_accounts (character_id, coins)
+			VALUES (?, 0)
+		`, characterID)
+		if err != nil {
+			return casino.Account{}, err
+		}
+		err = ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+			SELECT character_id, coins, updated_at
+			FROM casino_accounts
+			WHERE character_id = ?
+			FOR UPDATE
+		`, characterID).Scan(&acc.CharacterID, &acc.Coins, &acc.UpdatedAt)
+		if err != nil {
+			return casino.Account{}, err
+		}
 	}
 	if err != nil {
 		return casino.Account{}, err
@@ -226,4 +259,178 @@ func (r *CasinoRepository) AdjustCoins(ctx context.Context, characterID string, 
 		return r.DeductBetAndCreditPayout(ctx, characterID, -delta, 0)
 	}
 	return r.DeductBetAndCreditPayout(ctx, characterID, 0, delta)
+}
+
+const pokerSessionColumns = `
+	id, character_id, base_rate, max_rounds, current_round, current_bet,
+	player_card_suit, player_card_rank, dealer_card_suit, dealer_card_rank,
+	player_committed_coins, dealer_committed_coins, pot, status, winner, payout_coins,
+	logs_json, created_at, updated_at
+`
+
+func (r *CasinoRepository) SavePokerGame(ctx context.Context, game casino.IndianPokerGame) error {
+	logsRaw, err := json.Marshal(game.Logs)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	if game.CreatedAt.IsZero() {
+		game.CreatedAt = now
+	}
+	if game.UpdatedAt.IsZero() {
+		game.UpdatedAt = now
+	}
+
+	exec := ExecutorFromContext(ctx, r.db)
+
+	res, err := exec.ExecContext(ctx, `
+		UPDATE casino_poker_sessions
+		SET current_round = ?,
+		    current_bet = ?,
+		    player_card_suit = ?,
+		    player_card_rank = ?,
+		    dealer_card_suit = ?,
+		    dealer_card_rank = ?,
+		    player_committed_coins = ?,
+		    dealer_committed_coins = ?,
+		    pot = ?,
+		    status = ?,
+		    winner = ?,
+		    payout_coins = ?,
+		    logs_json = ?,
+		    updated_at = ?
+		WHERE id = ?
+	`,
+		game.Round,
+		game.CurrentBet,
+		string(game.PlayerCard.Suit),
+		int(game.PlayerCard.Rank),
+		string(game.DealerCard.Suit),
+		int(game.DealerCard.Rank),
+		game.PlayerCommittedCoins,
+		game.DealerCommittedCoins,
+		game.Pot,
+		string(game.Status),
+		game.Winner,
+		game.PayoutCoins,
+		logsRaw,
+		game.UpdatedAt,
+		game.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows > 0 {
+		return nil
+	}
+
+	_, err = exec.ExecContext(ctx, `
+		INSERT INTO casino_poker_sessions (
+			id, character_id, base_rate, max_rounds, current_round, current_bet,
+			player_card_suit, player_card_rank, dealer_card_suit, dealer_card_rank,
+			player_committed_coins, dealer_committed_coins, pot, status, winner, payout_coins,
+			logs_json, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`,
+		game.ID,
+		game.CharacterID,
+		game.BaseRate,
+		game.MaxRounds,
+		game.Round,
+		game.CurrentBet,
+		string(game.PlayerCard.Suit),
+		int(game.PlayerCard.Rank),
+		string(game.DealerCard.Suit),
+		int(game.DealerCard.Rank),
+		game.PlayerCommittedCoins,
+		game.DealerCommittedCoins,
+		game.Pot,
+		string(game.Status),
+		game.Winner,
+		game.PayoutCoins,
+		logsRaw,
+		game.CreatedAt,
+		game.UpdatedAt,
+	)
+	return err
+}
+
+func (r *CasinoRepository) GetActivePokerGame(ctx context.Context, characterID string) (*casino.IndianPokerGame, error) {
+	row := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+		SELECT `+pokerSessionColumns+`
+		FROM casino_poker_sessions
+		WHERE character_id = ? AND status = 'in_progress'
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, characterID)
+	return scanPokerGame(row)
+}
+
+func (r *CasinoRepository) GetActivePokerGameForUpdate(ctx context.Context, characterID string) (*casino.IndianPokerGame, error) {
+	row := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+		SELECT `+pokerSessionColumns+`
+		FROM casino_poker_sessions
+		WHERE character_id = ? AND status = 'in_progress'
+		ORDER BY created_at DESC
+		LIMIT 1
+		FOR UPDATE
+	`, characterID)
+	return scanPokerGame(row)
+}
+
+func scanPokerGame(row interface {
+	Scan(dest ...any) error
+}) (*casino.IndianPokerGame, error) {
+	var g casino.IndianPokerGame
+	var playerSuit, dealerSuit string
+	var playerRank, dealerRank int
+	var logsRaw []byte
+	var status string
+
+	err := row.Scan(
+		&g.ID,
+		&g.CharacterID,
+		&g.BaseRate,
+		&g.MaxRounds,
+		&g.Round,
+		&g.CurrentBet,
+		&playerSuit,
+		&playerRank,
+		&dealerSuit,
+		&dealerRank,
+		&g.PlayerCommittedCoins,
+		&g.DealerCommittedCoins,
+		&g.Pot,
+		&status,
+		&g.Winner,
+		&g.PayoutCoins,
+		&logsRaw,
+		&g.CreatedAt,
+		&g.UpdatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	g.PlayerCard = casino.Card{
+		Suit: casino.Suit(playerSuit),
+		Rank: casino.Rank(playerRank),
+	}
+	g.DealerCard = casino.Card{
+		Suit: casino.Suit(dealerSuit),
+		Rank: casino.Rank(dealerRank),
+	}
+	g.Status = casino.GameStatus(status)
+	if len(logsRaw) > 0 {
+		_ = json.Unmarshal(logsRaw, &g.Logs)
+	}
+	return &g, nil
 }

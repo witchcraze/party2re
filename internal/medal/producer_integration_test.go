@@ -232,6 +232,22 @@ func (c *integrationCasinoRepo) DeductBetAndCreditPayout(_ context.Context, _ st
 	return c.account, nil
 }
 
+func (c *integrationCasinoRepo) GetAccountForUpdate(ctx context.Context, charID string) (casino.Account, error) {
+	return c.GetAccount(ctx, charID)
+}
+
+func (c *integrationCasinoRepo) SavePokerGame(_ context.Context, _ casino.IndianPokerGame) error {
+	return nil
+}
+
+func (c *integrationCasinoRepo) GetActivePokerGame(_ context.Context, _ string) (*casino.IndianPokerGame, error) {
+	return nil, nil
+}
+
+func (c *integrationCasinoRepo) GetActivePokerGameForUpdate(_ context.Context, _ string) (*casino.IndianPokerGame, error) {
+	return nil, nil
+}
+
 // Dungeon test stub
 type integrationDungeonRepo struct {
 	expedition *dungeon.ActiveExpedition

@@ -114,3 +114,100 @@ func TestCasinoRepositoryLifecycle(t *testing.T) {
 		t.Errorf("balance after failed bet = %d, want 250", checkAcc.Coins)
 	}
 }
+
+func TestCasinoRepository_PokerSessionLifecycle(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	casinoRepo, err := NewCasinoRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	char, err := CreateTestCharacter(ctx, db, "PokerRepoUser")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Initially no active session
+	active, err := casinoRepo.GetActivePokerGame(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetActivePokerGame failed: %v", err)
+	}
+	if active != nil {
+		t.Errorf("expected nil active game, got %+v", active)
+	}
+
+	// 2. GetAccountForUpdate creates and locks account
+	acc, err := casinoRepo.GetAccountForUpdate(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetAccountForUpdate failed: %v", err)
+	}
+	if acc.CharacterID != char.ID {
+		t.Errorf("unexpected account: %+v", acc)
+	}
+
+	// 3. Save new poker game
+	game, err := casino.NewIndianPokerGame(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessID := "poker_sess_" + char.ID
+	game.ID = sessID
+	game.CharacterID = char.ID
+
+	if err := casinoRepo.SavePokerGame(ctx, *game); err != nil {
+		t.Fatalf("SavePokerGame failed: %v", err)
+	}
+
+	// 4. Retrieve active game
+	active, err = casinoRepo.GetActivePokerGame(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetActivePokerGame failed: %v", err)
+	}
+	if active == nil || active.ID != sessID || active.Status != casino.StatusInProgress {
+		t.Fatalf("unexpected retrieved active game: %+v", active)
+	}
+
+	// 5. Update game to next round
+	active.Round = 2
+	active.CurrentBet = 20
+	active.Pot = 60
+	if err := casinoRepo.SavePokerGame(ctx, *active); err != nil {
+		t.Fatalf("SavePokerGame update failed: %v", err)
+	}
+
+	updated, err := casinoRepo.GetActivePokerGameForUpdate(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetActivePokerGameForUpdate failed: %v", err)
+	}
+	if updated == nil || updated.Round != 2 || updated.CurrentBet != 20 {
+		t.Fatalf("unexpected updated game: %+v", updated)
+	}
+
+	// 6. Complete game
+	updated.Status = casino.StatusPlayerWon
+	updated.Winner = "player"
+	updated.PayoutCoins = 60
+	if err := casinoRepo.SavePokerGame(ctx, *updated); err != nil {
+		t.Fatalf("SavePokerGame complete failed: %v", err)
+	}
+
+	// 7. No active game anymore
+	finished, err := casinoRepo.GetActivePokerGame(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetActivePokerGame failed: %v", err)
+	}
+	if finished != nil {
+		t.Errorf("expected no active game after completion, got %+v", finished)
+	}
+}

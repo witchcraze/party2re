@@ -61,6 +61,61 @@ The Casino (カジノ) system introduces mini-games and wagering mechanisms to P
 - **Tie** (`Player Rank == Dealer Rank`):
   - Pot is returned / split (`PayoutCoins = PlayerCommittedCoins`).
 
-## Persistence & Transactions
+## Persistence & State Management
 
-- All coin exchanges and game wagers are processed via atomic transactions (`*sql.Tx`) with row-level locking to prevent race conditions during concurrent mini-game plays.
+### Poker Session Model (`casino_poker_sessions`)
+
+Multi-round Indian Poker games are persisted in MariaDB via `casino_poker_sessions` to enable turn-by-turn interactive play:
+
+- **Schema Attributes**:
+  - `id`: Unique session identifier (`VARCHAR(64)` / UUID).
+  - `character_id`: Foreign key referencing characters table with cascading deletion.
+  - `status`: Game state (`in_progress`, `player_won`, `dealer_won`, `tie`, `player_folded`, `dealer_folded`).
+  - `round`: Current betting round ($1 \le R \le 5$).
+  - `max_rounds`: Maximum betting rounds (default 5).
+  - `base_rate`: Initial ante / base unit bet.
+  - `pot_coins`: Total accumulated pot.
+  - `player_committed`: Total coins committed by player.
+  - `dealer_committed`: Total coins committed by dealer.
+  - `player_card_suit`, `player_card_rank`: Player's drawn card (Ace=1 .. King=13).
+  - `dealer_card_suit`, `dealer_card_rank`: Dealer's drawn card.
+  - `history_json`: Turn-by-turn action and log event history.
+  - `created_at`, `updated_at`: Timestamps.
+
+### Client View & Information Security (Anti-Cheating)
+
+- **Card Masking (`ClientView`)**:
+  - While a session is in `in_progress` status, the player's own card is strictly masked to `{suit: "?", rank: 0}` in all HTTP responses (`GET`, `POST start`, `POST action`).
+  - The dealer's card is visible as intended by game design.
+  - Only upon showdown, fold, or game completion is the player's true card unmasked in the client response.
+
+## HTTP Endpoints & Session Lifecycle
+
+1. **Start Game (`POST /characters/{id}/casino/poker`)**:
+   - Accepts `{ "base_rate": <coins> }`.
+   - Validates that no active session (`status = 'in_progress'`) currently exists for the character; returns `422 Unprocessable Entity` if one is already active.
+   - Deducts initial ante atomically from `casino_accounts`.
+   - Deals cards, creates a new session in MariaDB, and returns the session state with masked player card.
+
+2. **Query Active Session (`GET /characters/{id}/casino/poker`)**:
+   - Queries the active (`status = 'in_progress'`) session for the character.
+   - Returns `404 Not Found` if no active session exists.
+   - Returns session state with masked player card.
+
+3. **Play Round Action (`POST /characters/{id}/casino/poker/action`)**:
+   - Accepts `{ "action": "call" | "showdown" | "fold" }`.
+   - Validates active session existence; returns `404 Not Found` if no session is active.
+   - For `call` and `showdown`: Deducts the required round bet from player's `casino_accounts` balance.
+   - Dealer AI makes its move based on the player's card rank.
+   - Resolves round progression, dealer fold, or showdown settlement atomically.
+   - Updates `casino_poker_sessions` and credits payout to `casino_accounts` on player win/tie.
+   - Returns final or updated session state with unmasked cards if the game finished.
+
+## Concurrency & Deadlock Prevention
+
+- **Clustered Lock Ordering**:
+  - To prevent MariaDB gap-lock deadlocks (`Error 1213`) under concurrent requests, transactions always acquire an exclusive row-level lock (`SELECT ... FOR UPDATE`) on the parent `casino_accounts` record via primary key `character_id` before querying or mutating `casino_poker_sessions`.
+  - Session saves employ `UPDATE ... WHERE id = ?` first and fallback to `INSERT` only when no row was updated, completely preventing insert intention gap conflicts.
+- **Account Balance Conservation**:
+  - Bet deductions and pot payouts are executed strictly within the same database transaction as session state transitions.
+

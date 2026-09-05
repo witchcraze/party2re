@@ -265,7 +265,7 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
 - **Casino** (`internal/casino`):
   - **Responsibility:** Casino currency exchange (1 Coin = 20 G), account management, and mini-games including Indian Poker (52-card deck, blind wagering, dealer AI, showdown resolution), Slot Machine (3-reel, 5-symbol paytable, 100x 777 jackpot), Doppelganger (8-mark secret match, 4x/6x/8x pool multiplier), and High & Low (card rank prediction, 2x payout, multi-round streak doubling).
   - **Dependencies:** Character repository (wallet gold).
-  - **Persistence:** `casino_accounts` table in `internal/database/casino_repository.go` with atomic transactional balance adjustments.
+  - **Persistence:** `casino_accounts` and `casino_poker_sessions` tables in `internal/database/casino_repository.go` with atomic transactional balance adjustments and clustered row locking.
 - **Lottery & Raffle** (`internal/lottery`):
   - **Responsibility:** Instant raffle drawings (standard/special orb tiers) and periodic 4-digit numbered lottery purchases, drawing settlement, and prize claims.
   - **Dependencies:** Character repository (wallet gold).

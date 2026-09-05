@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 )
 
 type Action string
@@ -49,11 +50,13 @@ var (
 )
 
 type IndianPokerGame struct {
+	ID                   string     `json:"id,omitempty"`
+	CharacterID          string     `json:"character_id,omitempty"`
 	BaseRate             int64      `json:"base_rate"`
 	MaxRounds            int        `json:"max_rounds"`
 	Round                int        `json:"round"`
 	CurrentBet           int64      `json:"current_bet"`
-	PlayerCard           Card       `json:"player_card"` // Hidden from player in UI
+	PlayerCard           Card       `json:"player_card"` // Hidden from player in UI while in progress
 	DealerCard           Card       `json:"dealer_card"` // Visible to player
 	PlayerCommittedCoins int64      `json:"player_committed_coins"`
 	DealerCommittedCoins int64      `json:"dealer_committed_coins"`
@@ -62,6 +65,21 @@ type IndianPokerGame struct {
 	Winner               string     `json:"winner,omitempty"`
 	PayoutCoins          int64      `json:"payout_coins"`
 	Logs                 []string   `json:"logs"`
+	CreatedAt            time.Time  `json:"created_at,omitempty"`
+	UpdatedAt            time.Time  `json:"updated_at,omitempty"`
+}
+
+// ClientView returns a copy of the game state suitable for player presentation.
+// While in progress, the player's own card is masked to prevent client-side inspection.
+func (g *IndianPokerGame) ClientView() *IndianPokerGame {
+	if g == nil {
+		return nil
+	}
+	cpy := *g
+	if cpy.Status == StatusInProgress {
+		cpy.PlayerCard = Card{Suit: "?", Rank: 0}
+	}
+	return &cpy
 }
 
 // NewIndianPokerGame starts a new game dealing 1 card to Player and 1 card to Dealer.

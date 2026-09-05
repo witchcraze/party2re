@@ -14,13 +14,15 @@ import (
 )
 
 type stubCasinoService struct {
-	getAccountFn           func(ctx context.Context, characterID string) (casino.Account, error)
-	exchangeGoldToCoinsFn  func(ctx context.Context, characterID string, coins int64) (casino.Account, corecharacter.Character, error)
-	exchangeCoinsToGoldFn  func(ctx context.Context, characterID string, coins int64) (casino.Account, corecharacter.Character, error)
-	spinSlotFn             func(ctx context.Context, characterID string, bet int64) (casino.SpinResult, casino.Account, error)
-	playHighLowFn          func(ctx context.Context, characterID string, betCoins int64, guess casino.GuessType) (casino.HighLowResult, casino.Account, error)
-	playDoppelFn           func(ctx context.Context, characterID string, bet int64, poolSize int, playerMark casino.DoppelMark) (casino.DoppelResult, casino.Account, error)
-	startIndianPokerGameFn func(ctx context.Context, characterID string, baseRate int64) (*casino.IndianPokerGame, casino.Account, error)
+	getAccountFn               func(ctx context.Context, characterID string) (casino.Account, error)
+	exchangeGoldToCoinsFn      func(ctx context.Context, characterID string, coins int64) (casino.Account, corecharacter.Character, error)
+	exchangeCoinsToGoldFn      func(ctx context.Context, characterID string, coins int64) (casino.Account, corecharacter.Character, error)
+	spinSlotFn                 func(ctx context.Context, characterID string, bet int64) (casino.SpinResult, casino.Account, error)
+	playHighLowFn              func(ctx context.Context, characterID string, betCoins int64, guess casino.GuessType) (casino.HighLowResult, casino.Account, error)
+	playDoppelFn               func(ctx context.Context, characterID string, bet int64, poolSize int, playerMark casino.DoppelMark) (casino.DoppelResult, casino.Account, error)
+	startIndianPokerGameFn     func(ctx context.Context, characterID string, baseRate int64) (*casino.IndianPokerGame, casino.Account, error)
+	getActiveIndianPokerGameFn func(ctx context.Context, characterID string) (*casino.IndianPokerGame, casino.Account, error)
+	playIndianPokerActionFn    func(ctx context.Context, characterID string, action casino.Action) (*casino.IndianPokerGame, casino.Account, error)
 }
 
 func (s *stubCasinoService) GetAccount(ctx context.Context, characterID string) (casino.Account, error) {
@@ -71,6 +73,23 @@ func (s *stubCasinoService) StartIndianPokerGame(ctx context.Context, characterI
 	}
 	game, _ := casino.NewIndianPokerGame(baseRate)
 	return game, casino.Account{CharacterID: characterID, Coins: 100}, nil
+}
+
+func (s *stubCasinoService) GetActiveIndianPokerGame(ctx context.Context, characterID string) (*casino.IndianPokerGame, casino.Account, error) {
+	if s.getActiveIndianPokerGameFn != nil {
+		return s.getActiveIndianPokerGameFn(ctx, characterID)
+	}
+	game, _ := casino.NewIndianPokerGame(10)
+	return game, casino.Account{CharacterID: characterID, Coins: 90}, nil
+}
+
+func (s *stubCasinoService) PlayIndianPokerAction(ctx context.Context, characterID string, action casino.Action) (*casino.IndianPokerGame, casino.Account, error) {
+	if s.playIndianPokerActionFn != nil {
+		return s.playIndianPokerActionFn(ctx, characterID, action)
+	}
+	game, _ := casino.NewIndianPokerGame(10)
+	_ = game.PlayRound(action, 100)
+	return game, casino.Account{CharacterID: characterID, Coins: 80}, nil
 }
 
 func TestCasinoEndpoints(t *testing.T) {
@@ -163,6 +182,66 @@ func TestCasinoEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("GET /characters/{id}/casino/poker - success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/characters/c1/casino/poker", nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("GET /characters/{id}/casino/poker - 404 not found", func(t *testing.T) {
+		casService.getActiveIndianPokerGameFn = func(_ context.Context, _ string) (*casino.IndianPokerGame, casino.Account, error) {
+			return nil, casino.Account{}, casino.ErrNoActivePokerGame
+		}
+		defer func() { casService.getActiveIndianPokerGameFn = nil }()
+
+		req := httptest.NewRequest(http.MethodGet, "/characters/c1/casino/poker", nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 Not Found, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("POST /characters/{id}/casino/poker/action - success call", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/casino/poker/action", `{"action":"call"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("POST /characters/{id}/casino/poker/action - success fold", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/casino/poker/action", `{"action":"fold"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("POST /characters/{id}/casino/poker/action - invalid action", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/casino/poker/action", `{"action":"invalid"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 }

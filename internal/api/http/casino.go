@@ -19,6 +19,8 @@ type CasinoService interface {
 	PlayHighLow(ctx context.Context, characterID string, betCoins int64, guess casino.GuessType) (casino.HighLowResult, casino.Account, error)
 	PlayDoppel(ctx context.Context, characterID string, bet int64, poolSize int, playerMark casino.DoppelMark) (casino.DoppelResult, casino.Account, error)
 	StartIndianPokerGame(ctx context.Context, characterID string, baseRate int64) (*casino.IndianPokerGame, casino.Account, error)
+	GetActiveIndianPokerGame(ctx context.Context, characterID string) (*casino.IndianPokerGame, casino.Account, error)
+	PlayIndianPokerAction(ctx context.Context, characterID string, action casino.Action) (*casino.IndianPokerGame, casino.Account, error)
 }
 
 // WithCasino configures the casino service for the Handler.
@@ -79,6 +81,10 @@ type casinoPokerRequest struct {
 type casinoPokerResponse struct {
 	Game    *casino.IndianPokerGame `json:"game"`
 	Account casino.Account          `json:"account"`
+}
+
+type casinoPokerActionRequest struct {
+	Action string `json:"action"` // "call", "showdown", or "fold"
 }
 
 func (h *Handler) handleGetCasinoAccount(w http.ResponseWriter, r *http.Request) {
@@ -292,12 +298,85 @@ func (h *Handler) handleCasinoPokerStart(w http.ResponseWriter, r *http.Request)
 
 		game, account, err := h.casino.StartIndianPokerGame(r.Context(), char.ID, req.BaseRate)
 		if err != nil {
-			if errors.Is(err, casino.ErrInsufficientCoins) {
+			if errors.Is(err, casino.ErrInsufficientCoins) || errors.Is(err, casino.ErrActiveSessionExists) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
 			if errors.Is(err, casino.ErrInvalidBaseRate) {
 				writeError(w, http.StatusBadRequest, err)
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, casinoPokerResponse{
+			Game:    game,
+			Account: account,
+		})
+	})
+}
+
+func (h *Handler) handleGetCasinoPoker(w http.ResponseWriter, r *http.Request) {
+	if h.casino == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("casino service not configured"))
+		return
+	}
+
+	charID := r.PathValue("id")
+	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+		game, account, err := h.casino.GetActiveIndianPokerGame(r.Context(), char.ID)
+		if err != nil {
+			if errors.Is(err, casino.ErrNoActivePokerGame) {
+				writeError(w, http.StatusNotFound, err)
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, casinoPokerResponse{
+			Game:    game,
+			Account: account,
+		})
+	})
+}
+
+func (h *Handler) handleCasinoPokerAction(w http.ResponseWriter, r *http.Request) {
+	if h.casino == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("casino service not configured"))
+		return
+	}
+
+	charID := r.PathValue("id")
+	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+		var req casinoPokerActionRequest
+		if !decodeJSON(w, r, &req) {
+			return
+		}
+
+		action := casino.Action(req.Action)
+		if !action.Valid() {
+			writeError(w, http.StatusBadRequest, casino.ErrInvalidAction)
+			return
+		}
+
+		game, account, err := h.casino.PlayIndianPokerAction(r.Context(), char.ID, action)
+		if err != nil {
+			if errors.Is(err, casino.ErrNoActivePokerGame) {
+				writeError(w, http.StatusNotFound, err)
+				return
+			}
+			if errors.Is(err, casino.ErrGameAlreadyOver) {
+				writeError(w, http.StatusConflict, err)
+				return
+			}
+			if errors.Is(err, casino.ErrInvalidAction) {
+				writeError(w, http.StatusBadRequest, err)
+				return
+			}
+			if errors.Is(err, casino.ErrInsufficientCoin) || errors.Is(err, casino.ErrInsufficientCoins) {
+				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
 			writeError(w, http.StatusInternalServerError, err)
