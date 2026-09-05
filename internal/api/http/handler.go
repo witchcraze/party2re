@@ -55,6 +55,9 @@ type PlayerService interface {
 	Logout(ctx context.Context, sessionID string) error
 	Authenticate(ctx context.Context, sessionID string) (coreplayer.Player, error)
 	DeleteAccount(ctx context.Context, playerID, password string) error
+	CreateAPIToken(ctx context.Context, playerID, name string, expiresAt *time.Time) (coreplayer.APIToken, string, error)
+	ListAPITokens(ctx context.Context, playerID string) ([]coreplayer.APIToken, error)
+	RevokeAPIToken(ctx context.Context, playerID, tokenID string) error
 }
 
 // CharacterService defines the character operations exposed over HTTP.
@@ -303,6 +306,9 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("DELETE /players/{id}", h.handleDeletePlayerByID)
 	mux.HandleFunc("POST /sessions", h.handleLogin)
 	mux.HandleFunc("DELETE /sessions", h.handleLogout)
+	mux.HandleFunc("POST /player/tokens", h.handleCreateAPIToken)
+	mux.HandleFunc("GET /player/tokens", h.handleListAPITokens)
+	mux.HandleFunc("DELETE /player/tokens/{id}", h.handleRevokeAPIToken)
 
 	mux.HandleFunc("POST /characters", h.handleCreateCharacter)
 	mux.HandleFunc("GET /characters/{id}", h.handleGetCharacter)

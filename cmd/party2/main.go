@@ -128,6 +128,10 @@ func run(ctx context.Context, logger logging.Logger) error {
 	if err != nil {
 		return err
 	}
+	playerAPITokenRepo, err := database.NewPlayerAPITokenRepository(db)
+	if err != nil {
+		return err
+	}
 	sessionRepo := player.NewValkeySessionRepository(valkeyClient)
 	dbMaintRepo, err := database.NewMaintenanceRepository(db)
 	if err != nil {
@@ -570,6 +574,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 		playerRepo,
 		sessionRepo,
 		player.WithCharacterService(charService),
+		player.WithAPITokenRepository(playerAPITokenRepo),
 		player.WithTransactionProvider(txProvider),
 		player.WithLogger(logger),
 	)

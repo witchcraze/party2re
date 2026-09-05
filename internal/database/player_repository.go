@@ -51,6 +51,7 @@ func (r *PlayerRepository) Delete(ctx context.Context, id string) error {
 
 	queries := []string{
 		`DELETE FROM player_notifications WHERE player_id = ?`,
+		`DELETE FROM player_api_tokens WHERE player_id = ?`,
 		`DELETE FROM bank_transfers WHERE from_player_id = ? OR to_player_id = ?`,
 		`DELETE FROM bank_accounts WHERE player_id = ?`,
 		`DELETE FROM players WHERE id = ?`,

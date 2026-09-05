@@ -34,6 +34,8 @@ revocation. Per RFC #356 and Issue #366, session persistence is mastered directl
 eliminating relational database connection pressure on every authenticated HTTP request while relying on
 Valkey's native TTL for automated expiration and account deletion hooks for O(1) player set cleanup.
 
+In addition to interactive sessions, Player provides cryptographically secure Personal Access Tokens (API keys with prefix `p2_sk_`) for AI agents, external CLI tooling, and MCP servers (`internal/core/player/token.go`, `internal/player/application.go`). Tokens are generated with 32 bytes of secure random entropy, hashed using SHA-256 before persistence in MariaDB (`player_api_tokens`), and never stored or returned in plaintext after initial creation. Authentication transparently supports dual authentication (`Bearer <token>` routing to either Valkey session cache or MariaDB PAT verification based on the `p2_sk_` prefix). All active tokens are cascade-deleted upon player account deletion.
+
 ### Character
 
 **Responsibility:** the player's in-game character and its fundamental state.
