@@ -19,6 +19,9 @@ import (
 	"github.com/witchcraze/party2re/internal/pagination"
 )
 
+// VictoryHook is called when a party multiplayer co-op adventure concludes with a victory.
+type VictoryHook func(ctx context.Context, characterIDs []string, monstersDefeated int, goldEarned int) error
+
 type Option func(*Service)
 
 func WithTransactionProvider(txProvider TransactionProvider) Option {
@@ -33,6 +36,12 @@ func WithNewsPublisher(news NewsPublisher) Option {
 	}
 }
 
+func WithVictoryHook(hook VictoryHook) Option {
+	return func(s *Service) {
+		s.victoryHook = hook
+	}
+}
+
 type Service struct {
 	repo         Repository
 	charRepo     CharacterRepository
@@ -42,6 +51,11 @@ type Service struct {
 	battleEngine BattleEngine
 	news         NewsPublisher
 	txProvider   TransactionProvider
+	victoryHook  VictoryHook
+}
+
+func (s *Service) SetVictoryHook(hook VictoryHook) {
+	s.victoryHook = hook
 }
 
 func NewService(
@@ -454,6 +468,7 @@ func (s *Service) SetReady(ctx context.Context, partyID, characterID string, rea
 //  5. Disband and clean up the ephemeral Valkey lobby state.
 func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID string) (PartyAdventureResult, error) {
 	var result PartyAdventureResult
+	var defeatedMonsterCount int
 
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		// 1. Lock party
@@ -568,6 +583,9 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 		// 7. Distribute Rewards and update each character
 		var rewardSummaries []MemberRewardSummary
 		outcome := string(battleRes.Outcome)
+		if battleRes.Outcome == battle.OutcomeWin {
+			defeatedMonsterCount = len(enemies)
+		}
 
 		for _, m := range members {
 			c := charMap[m.CharacterID]
@@ -674,6 +692,14 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 	})
 	if err != nil {
 		return PartyAdventureResult{}, err
+	}
+
+	if result.Outcome == string(battle.OutcomeWin) && s.victoryHook != nil {
+		charIDs := make([]string, len(result.Rewards))
+		for i, r := range result.Rewards {
+			charIDs[i] = r.CharacterID
+		}
+		_ = s.victoryHook(ctx, charIDs, defeatedMonsterCount, result.TotalGold)
 	}
 
 	return result, nil

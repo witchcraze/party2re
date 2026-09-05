@@ -686,6 +686,19 @@ func run(ctx context.Context, logger logging.Logger) error {
 		return nil
 	})
 
+	partyService.SetVictoryHook(func(ctx context.Context, characterIDs []string, monstersDefeated int, goldEarned int) error {
+		for _, cID := range characterIDs {
+			_ = medalService.RecordProgress(ctx, cID, medal.MetricAdventureVictories, 1)
+			if monstersDefeated > 0 {
+				_ = medalService.RecordProgress(ctx, cID, medal.MetricMonstersSlain, monstersDefeated)
+			}
+			if goldEarned > 0 {
+				_ = medalService.RecordProgress(ctx, cID, medal.MetricGoldEarned, goldEarned)
+			}
+		}
+		return nil
+	})
+
 	// 3. HTTP API Handler construction
 	opts := []http.Option{
 		http.WithRateLimiter(limiter),

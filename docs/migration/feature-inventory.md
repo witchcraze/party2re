@@ -220,6 +220,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#357](https://github.com/witchcraze/party2re/issues/357) | Fix lock hierarchy inversion in shop.Sell and gemstore.SellGem to prevent database deadlocks | Merged |
 | [#359](https://github.com/witchcraze/party2re/issues/359) | Clean up unused transaction fields and dead code in shop and medal services | Merged |
 | [#358](https://github.com/witchcraze/party2re/issues/358) | Connect gameplay action producers to achievement milestone progress tracking | Merged |
+| [#379](https://github.com/witchcraze/party2re/issues/379) | Connect party adventure victories and rewards to achievement progress tracking | Merged |
 
 ---
 
