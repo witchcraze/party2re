@@ -206,3 +206,102 @@ func TestValkeyKeyPrefixTaxonomy(t *testing.T) {
 
 	t.Logf("Valkey key taxonomy linter verified %d Go files (%d parsed) in %s", checkedFiles, parsedFiles, time.Since(start))
 }
+
+func TestValkeyNoBannedCommandsInLua(t *testing.T) {
+	repoRoot := "../.."
+	internalDir := filepath.Join(repoRoot, "internal")
+
+	fset := token.NewFileSet()
+	checkedFiles := 0
+	parsedFiles := 0
+	start := time.Now()
+
+	bannedLuaCommands := []string{"KEYS", "SCAN", "FLUSHDB", "FLUSHALL"}
+
+	err := filepath.Walk(internalDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+
+		checkedFiles++
+
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		// Fast path: files without "redis.call" cannot contain Valkey Lua command executions
+		if !bytes.Contains(src, []byte("redis.call")) {
+			return nil
+		}
+
+		parsedFiles++
+		node, parseErr := parser.ParseFile(fset, path, src, 0)
+		if parseErr != nil {
+			t.Fatalf("failed to parse %s: %v", path, parseErr)
+		}
+
+		ast.Inspect(node, func(n ast.Node) bool {
+			lit, ok := n.(*ast.BasicLit)
+			if !ok || lit.Kind != token.STRING {
+				return true
+			}
+
+			strVal := lit.Value
+			if !strings.Contains(strVal, "redis.call") {
+				return true
+			}
+
+			upper := strings.ToUpper(strVal)
+			for _, cmd := range bannedLuaCommands {
+				// Detect patterns like redis.call('KEYS' or redis.call("KEYS" or redis.call('SCAN'
+				if strings.Contains(upper, "REDIS.CALL('"+cmd+"'") ||
+					strings.Contains(upper, "REDIS.CALL(\""+cmd+"\"") ||
+					strings.Contains(upper, "REDIS.CALL('"+cmd+" ") ||
+					strings.Contains(upper, "REDIS.CALL(\""+cmd+" ") {
+					pos := fset.Position(lit.Pos())
+					t.Errorf("banned Valkey command %s in Lua script detected at %s:%d (prohibited by .agents/rules/05-database-and-caching.md Section 3.5)", cmd, path, pos.Line)
+				}
+			}
+			return true
+		})
+
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("failed to walk internal directory: %v", err)
+	}
+
+	t.Logf("Valkey Lua banned command linter verified %d files (%d parsed) in %s", checkedFiles, parsedFiles, time.Since(start))
+}
+
+func TestValkeyKeyspaceDocCoversLuaAndHashTags(t *testing.T) {
+	repoRoot := "../.."
+	docPath := filepath.Join(repoRoot, "docs", "architecture", "valkey-keyspace.md")
+
+	data, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("docs/architecture/valkey-keyspace.md does not exist: %v", err)
+	}
+
+	content := string(data)
+
+	requiredSectionsAndTerms := []string{
+		"Hash Tag",
+		"Lua Script Registry",
+		"party_add_member",
+		"party_remove_member",
+		"party_update_member_ready",
+		"party_update_party",
+	}
+
+	for _, term := range requiredSectionsAndTerms {
+		if !strings.Contains(content, term) {
+			t.Errorf("docs/architecture/valkey-keyspace.md does not contain required Lua/HashTag specification term %q", term)
+		}
+	}
+}
