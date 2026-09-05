@@ -1,6 +1,6 @@
 # Status
  
-Last updated: Issue #387 — [Architecture/Rules] Valkey: Codify Lua scripting standards, execution limits, and cluster hash tagging in .agents/rules and keyspace specification
+Last updated: Issue #386 — [Architecture/Docs] Valkey: Codify TTL-scored Sorted Set with lazy purging pattern as an approved SSOT design pattern
 
 ## Current phase
 
@@ -19,7 +19,8 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Guidance Layer (.arch/)**: シンボルアンカー（`path#Symbol`）ベースのモジュール詳細定義（`.arch/modules/*.json`）および高 Fan-in 共有テーブルの逆引きインデックス（`.arch/shared_tables/*.json`、`characters`, `inventory_items`, `bank_accounts`, `guilds`）、GitHub ネイティブな Mermaid 全体トポロジー図（`docs/architecture/guidance-layer.md`）。外部 Node.js 依存や HTML 成果物を全廃し、純粋な Go + JSON + Markdown で完結。影響範囲・ロック順序をゼロトークンで特定しコンテキストトークン消費を 90% 削減。
 - **Module Selection Criteria & Target Tiers**: 4つの選定基準（C1: トランザクション深度, C2: 行ロック階層, C3: エスクロー/共有状態, C4: 非同期Worker）に基づくトリアージを実施（`docs/architecture/guidance-layer.md`）。Tier 1（高リスク8機能: `tavern`, `delivery`, `bank`, `auction`, `guild`, `shop`, `blacksmith`, `adventure`）、Tier 2（オンデマンド）、Tier 3（除外）の運用スコープを確立。
 - **Automated Mechanical Verification**: Go AST シンボルリント（`internal/architecture/arch_test.go`）による 0.04 秒の静的シンボル実在性チェック（モジュール定義および共有テーブル逆引き定義、ASTキャッシュおよびバイト事前検査）およびトランザクション境界シンボルにおける `RunInTx` 呼び出しの実在検証（`go test ./...` および `scripts/verify.sh` step `[4/7]` 統合）。外部ランタイム不要の純粋な Go 標準構文解析器による機械的テスト。
-- **Valkey Keyspace Taxonomy & Operational SSOT (`docs/architecture/valkey-keyspace.md`)**: システム全体の Valkey キー空間（`party2:<namespace>:<entity>[:<id>]`）、データ型、TTLポリシー、所有モジュール、逆引き Set インデックスパターン、および Lua スクリプト運用基準（1ms 未満バジェット、計算量上限 O(log N)、Lua 内 `KEYS *` 禁止、Cluster Hash Tagging `{...}` 規約、インメモリフォールバック等価性、スクリプトレジストリ）を SSOT ドキュメントとして定義（`.agents/rules/05-database-and-caching.md` Section 3.5, `docs/architecture/valkey-keyspace.md` Section 2.3/5.5/5.6）。Go AST リンター（`internal/architecture/valkey_lint_test.go`）により本番コードでの `KEYS *` 呼び出し禁止、登録外プレフィックスの排除、Lua スクリプト内禁止コマンドの排除、ドキュメント同期を機械的に検証（高速バイト事前フィルタにより検査 0.01 秒、`make check` step `[4/7]` 統合）。
+- **Valkey Keyspace Taxonomy & Operational SSOT (`docs/architecture/valkey-keyspace.md`)**: システム全体の Valkey キー空間（`party2:<namespace>:<entity>[:<id>]`）、データ型、TTLポリシー、所有モジュール、逆引き Set インデックスパターン、Lua スクリプト運用基準（1ms 未満バジェット、計算量上限 O(log N)、Lua 内 `KEYS *` 禁止、Cluster Hash Tagging `{...}` 規約、インメモリフォールバック等価性、スクリプトレジストリ）、および TTL スコア付き Sorted Set（ZSET）による遅延パージ運用標準（`ZREMRANGEBYSCORE` によるクエリ時パージ、`WRONGTYPE` ゼロダウンタイムマイグレーション、Candidate D 探索バッファ等への設計ブループリント）を SSOT ドキュメントとして定義（`.agents/rules/05-database-and-caching.md` Section 3.5/3.6, `docs/architecture/valkey-keyspace.md` Section 2.3/5.5/5.6/5.7）。Go AST リンター（`internal/architecture/valkey_lint_test.go`）により本番コードでの `KEYS *` 呼び出し禁止、登録外プレフィックスの排除、Lua スクリプト内禁止コマンドの排除、ZSET遅延パージ標準とドキュメント同期を機械的に検証（高速バイト事前フィルタにより検査 0.01 秒、`make check` step `[4/7]` 統合）。
+
 - **Core Domain Invariant Static Analysis Linter Suite**: Go AST 静的構文解析リンター（`internal/core/core_lint_test.go`）による 186+ 生産コードファイルの網羅的検査（バイト事前フィルタ適用により 0.05 秒）。Progression（`Experience`, `Level`）、Currency & Economy（`Money`, `SmallMedals`）、Job State（`CurrentJobID`, `MasteredJobs`）、Inventory（`Inventory.Items`）、Equipment（`Equipment.Slots`）、Battle Participant Identity（`Participant.ID` への `.Name` 指定禁止）の全6重要ドメイン不変条件に対する直接構造体フィールド操作を機械的に禁止し、Core標準カプセル化ヘルパー経由の操作（`progression.ApplyExperience`, `c.AddMoney`, `c.DeductMoney`, `c.AddSmallMedals`, `c.DeductSmallMedals`, `inv.Add`, `inv.Consume`, `inv.Update`, `equip.Equip`, `equip.Unequip`, `battle.NewParticipantFromCharacter`）を100%強制。
 
 ### Core & Shared Components

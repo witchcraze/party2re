@@ -132,6 +132,20 @@ Valkey evaluates Lua scripts atomically in a single thread, guaranteeing seriali
 - **Script Execution Lifecycle:**
   - Scripts MUST be preloaded using `valkey.NewLuaScript` (leveraging `EVALSHA` with automatic `SCRIPT LOAD` on `NOSCRIPT`), rather than transmitting the full Lua source code on every invocation via raw `EVAL`.
 
+### 3.6 Collection Data Type Selection & Ephemeral Element Expiration (Set vs ZSet vs Hash)
+When designing multi-element collection keys in Valkey Master, agents and developers MUST evaluate the lifecycle of child elements according to the following rules:
+- **String or Hash (`HSET`, `HGETALL`)**:
+  - Use for single-record entities with known fields, CAS semantics, or direct key-value state (e.g. `party2:party:{lobby:<id>}:state`).
+- **Standard Set (`SADD`, `SMEMBERS`, `SREM`)**:
+  - Use ONLY for collections where all elements share the exact same lifetime as the parent key (all-or-nothing parent TTL), or where elements are bounded, static, and never independently expire (e.g. static tag indexes or fixed party member IDs bounded by lobby lifecycle).
+  - Standard Sets MUST NOT be used when child elements have distinct or rolling expiration times.
+- **TTL-Scored Sorted Set (`ZADD`, `ZREMRANGEBYSCORE`, `ZRANGE`) [Approved SSOT Pattern]**:
+  - MUST be used whenever child elements represent independently expiring ephemeral resources (e.g. player session tokens `party2:player:sessions:<player_id>`, matchmaking wait queues, candidate challenge tokens, or in-progress run reward buffers).
+  - **Score**: The element's expiration timestamp in Unix seconds (`float64(ExpiresAt.Unix())`).
+  - **Lazy Purging**: Read/write paths (`Save`, `Find`, `Revoke`) MUST purge expired elements via `ZREMRANGEBYSCORE key -inf <now.Unix()>`.
+  - **No Background Daemons**: Do NOT implement background ticker goroutines to poll and purge expired elements from Valkey; lazy purging at query/write time is O(log(N) + M) and eliminates thread lifecycle overhead.
+  - **Zero-Downtime Upgrade (`WRONGTYPE`)**: When migrating from legacy Set keys, repository logic MUST catch `WRONGTYPE` errors on `ZADD` or `ZRANGE` and gracefully upgrade or fallback to avoid downtime or manual key purges.
+
 ## 4. Sub-Resource Repository SQL Scoping and Ownership Authorization
 - **Strict SQL Scoping:** When modifying, finalizing, or deleting sub-resources belonging to a player or character (e.g., `challenge_sessions`, `lottery_tickets`, `auction_listings`, `character_challenge_records`, `character_boss_records`, `dungeon_expeditions`, `letters`, `companion_phrases`), SQL queries MUST include ownership predicates in the `WHERE` clause:
   - `WHERE id = ? AND character_id = ?` (or `WHERE id = ? AND player_id = ?`)

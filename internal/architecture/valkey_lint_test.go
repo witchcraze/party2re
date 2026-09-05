@@ -305,3 +305,28 @@ func TestValkeyKeyspaceDocCoversLuaAndHashTags(t *testing.T) {
 		}
 	}
 }
+
+func TestValkeyKeyspaceDocCoversTTLScoredZSetPattern(t *testing.T) {
+	repoRoot := "../.."
+	docPath := filepath.Join(repoRoot, "docs", "architecture", "valkey-keyspace.md")
+
+	data, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("docs/architecture/valkey-keyspace.md does not exist: %v", err)
+	}
+
+	content := string(data)
+
+	requiredTerms := []string{
+		"TTL-Scored Sorted Set with Lazy Purging",
+		"ZREMRANGEBYSCORE",
+		"WRONGTYPE",
+		"Candidate D: In-Progress Run Buffers",
+	}
+
+	for _, term := range requiredTerms {
+		if !strings.Contains(content, term) {
+			t.Errorf("docs/architecture/valkey-keyspace.md does not contain required TTL-scored ZSet pattern term %q", term)
+		}
+	}
+}
