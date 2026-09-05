@@ -189,7 +189,7 @@ func (r *FleaMarketRepository) UpdateListing(ctx context.Context, listing fleama
 	result, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		UPDATE fleamarket_listings
 		SET status = ?, buyer_character_id = ?, buyer_name = ?, sold_at = ?
-		WHERE id = ?
+		WHERE id = ? AND status = 'active'
 	`, string(listing.Status), listing.BuyerCharacterID, listing.BuyerName, listing.SoldAt, listing.ID)
 	if err != nil {
 		return err
@@ -200,7 +200,14 @@ func (r *FleaMarketRepository) UpdateListing(ctx context.Context, listing fleama
 		return err
 	}
 	if affected == 0 {
-		return fleamarket.ErrListingNotFound
+		var count int
+		err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+			SELECT COUNT(*) FROM fleamarket_listings WHERE id = ?
+		`, listing.ID).Scan(&count)
+		if err == nil && count == 0 {
+			return fleamarket.ErrListingNotFound
+		}
+		return fleamarket.ErrListingNotActive
 	}
 	return nil
 }

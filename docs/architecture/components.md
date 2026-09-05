@@ -375,7 +375,7 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
 - **Flea Market & Player Item Stalls** (`internal/fleamarket`):
   - **Responsibility:** Player-to-player direct fixed-price item marketplace (`free.cgi`), inventory listing creation (max 5 active listings per character, 1–999,999 G price range), atomic purchasing transactions with cross-character deterministic locking, and seller cancellation and item return workflows.
   - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository.
-  - **Persistence:** `fleamarket_listings` table in `internal/database/fleamarket_repository.go`.
+  - **Persistence:** `fleamarket_listings` table in `internal/database/fleamarket_repository.go` with SQL Compare-And-Swap (CAS) status predicate (`WHERE id = ? AND status = 'active'`) and deterministic cross-character row lock hierarchy (`characters` ID ascending -> `inventory_items` -> `fleamarket_listings`).
 - **Gem Store & Jewel Synthesis** (`internal/gemstore`):
   - **Responsibility:** Gem retail shop, 55+ advanced gem synthesis formulas (`kako`), player gem transfers (`okuru`), and unidentified orb appraisals with weighted randomized loot pools (`kantei`) (`gem_store.cgi`, `_data.cgi` No. 251–255, NPC `@ジェマ`).
   - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository.
