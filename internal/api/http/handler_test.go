@@ -27,11 +27,14 @@ import (
 // -------------------------------------------------------------------
 
 type stubPlayerService struct {
-	registerFn      func(ctx context.Context, username, password string) (coreplayer.Player, error)
-	loginFn         func(ctx context.Context, username, password string) (coreplayer.Session, error)
-	logoutFn        func(ctx context.Context, sessionID string) error
-	authenticateFn  func(ctx context.Context, sessionID string) (coreplayer.Player, error)
-	deleteAccountFn func(ctx context.Context, playerID, password string) error
+	registerFn       func(ctx context.Context, username, password string) (coreplayer.Player, error)
+	loginFn          func(ctx context.Context, username, password string) (coreplayer.Session, error)
+	logoutFn         func(ctx context.Context, sessionID string) error
+	authenticateFn   func(ctx context.Context, sessionID string) (coreplayer.Player, error)
+	deleteAccountFn  func(ctx context.Context, playerID, password string) error
+	createAPITokenFn func(ctx context.Context, playerID, name string, expiresAt *time.Time) (coreplayer.APIToken, string, error)
+	listAPITokensFn  func(ctx context.Context, playerID string) ([]coreplayer.APIToken, error)
+	revokeAPITokenFn func(ctx context.Context, playerID, tokenID string) error
 }
 
 func (s *stubPlayerService) Register(ctx context.Context, username, password string) (coreplayer.Player, error) {
@@ -49,6 +52,24 @@ func (s *stubPlayerService) Authenticate(ctx context.Context, sessionID string) 
 func (s *stubPlayerService) DeleteAccount(ctx context.Context, playerID, password string) error {
 	if s.deleteAccountFn != nil {
 		return s.deleteAccountFn(ctx, playerID, password)
+	}
+	return nil
+}
+func (s *stubPlayerService) CreateAPIToken(ctx context.Context, playerID, name string, expiresAt *time.Time) (coreplayer.APIToken, string, error) {
+	if s.createAPITokenFn != nil {
+		return s.createAPITokenFn(ctx, playerID, name, expiresAt)
+	}
+	return coreplayer.APIToken{}, "", nil
+}
+func (s *stubPlayerService) ListAPITokens(ctx context.Context, playerID string) ([]coreplayer.APIToken, error) {
+	if s.listAPITokensFn != nil {
+		return s.listAPITokensFn(ctx, playerID)
+	}
+	return nil, nil
+}
+func (s *stubPlayerService) RevokeAPIToken(ctx context.Context, playerID, tokenID string) error {
+	if s.revokeAPITokenFn != nil {
+		return s.revokeAPITokenFn(ctx, playerID, tokenID)
 	}
 	return nil
 }

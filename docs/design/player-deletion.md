@@ -55,6 +55,7 @@ Player account deletion executes within a database transaction:
 3. Invalidate all active player sessions in Valkey Master via `SessionRepository.DeleteByPlayerID` (O(1) player session set and token deletion).
 4. Player-linked relational tables in MariaDB:
    - `player_notifications`
+   - `player_api_tokens`
    - `bank_transfers` (both sender and recipient)
    - `bank_accounts`
 5. Primary player record in `players`.

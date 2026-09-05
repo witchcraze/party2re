@@ -254,3 +254,163 @@ func TestDeleteAccount(t *testing.T) {
 		}
 	})
 }
+
+type apiTokenRepositoryStub struct {
+	tokens         map[string]coreplayer.APIToken
+	tokensByHash   map[string]coreplayer.APIToken
+	lastUsedCalls  map[string]time.Time
+	deletedPlayers []string
+}
+
+func newAPITokenRepositoryStub() *apiTokenRepositoryStub {
+	return &apiTokenRepositoryStub{
+		tokens:        make(map[string]coreplayer.APIToken),
+		tokensByHash:  make(map[string]coreplayer.APIToken),
+		lastUsedCalls: make(map[string]time.Time),
+	}
+}
+
+func (r *apiTokenRepositoryStub) Save(_ context.Context, t coreplayer.APIToken) error {
+	r.tokens[t.ID] = t
+	r.tokensByHash[t.TokenHash] = t
+	return nil
+}
+
+func (r *apiTokenRepositoryStub) FindByTokenHash(_ context.Context, hash string) (coreplayer.APIToken, error) {
+	t, ok := r.tokensByHash[hash]
+	if !ok {
+		return coreplayer.APIToken{}, errors.New("token not found")
+	}
+	return t, nil
+}
+
+func (r *apiTokenRepositoryStub) FindByPlayerID(_ context.Context, playerID string) ([]coreplayer.APIToken, error) {
+	var list []coreplayer.APIToken
+	for _, t := range r.tokens {
+		if t.PlayerID == playerID {
+			list = append(list, t)
+		}
+	}
+	return list, nil
+}
+
+func (r *apiTokenRepositoryStub) TouchLastUsed(_ context.Context, id string, lastUsed time.Time) error {
+	r.lastUsedCalls[id] = lastUsed
+	return nil
+}
+
+func (r *apiTokenRepositoryStub) Revoke(_ context.Context, playerID, tokenID string) error {
+	t, ok := r.tokens[tokenID]
+	if !ok {
+		return errors.New("token not found")
+	}
+	if t.PlayerID != playerID {
+		return errors.New("forbidden")
+	}
+	delete(r.tokens, tokenID)
+	delete(r.tokensByHash, t.TokenHash)
+	return nil
+}
+
+func (r *apiTokenRepositoryStub) DeleteByPlayerID(_ context.Context, playerID string) error {
+	r.deletedPlayers = append(r.deletedPlayers, playerID)
+	for id, t := range r.tokens {
+		if t.PlayerID == playerID {
+			delete(r.tokens, id)
+			delete(r.tokensByHash, t.TokenHash)
+		}
+	}
+	return nil
+}
+
+func TestAPITokenServiceLifecycleAndDualAuthentication(t *testing.T) {
+	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
+	player, _ := coreplayer.New("bob", "password123", now)
+	players := &playerRepositoryStub{value: player}
+	sessions := &sessionRepositoryStub{
+		value: coreplayer.Session{ID: "sess-bob", PlayerID: player.ID, ExpiresAt: now.Add(24 * time.Hour)},
+	}
+	tokenRepo := newAPITokenRepositoryStub()
+
+	service, err := NewService(players, sessions, WithAPITokenRepository(tokenRepo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.now = func() time.Time { return now }
+
+	ctx := context.Background()
+
+	// 1. Create Token
+	token, plaintext, err := service.CreateAPIToken(ctx, player.ID, "Agent Token", nil)
+	if err != nil {
+		t.Fatalf("CreateAPIToken error: %v", err)
+	}
+	if !strings.HasPrefix(plaintext, "p2_sk_") {
+		t.Errorf("expected plaintext to start with p2_sk_, got %q", plaintext)
+	}
+	if token.Name != "Agent Token" {
+		t.Errorf("expected name 'Agent Token', got %q", token.Name)
+	}
+
+	// 2. Dual Authenticate with API Token
+	authPlayer, err := service.Authenticate(ctx, plaintext)
+	if err != nil {
+		t.Fatalf("Authenticate with API token failed: %v", err)
+	}
+	if authPlayer.ID != player.ID {
+		t.Errorf("Authenticate player ID mismatch: got %q, want %q", authPlayer.ID, player.ID)
+	}
+	if _, ok := tokenRepo.lastUsedCalls[token.ID]; !ok {
+		t.Error("expected TouchLastUsed to be called for active API token")
+	}
+
+	// 3. Dual Authenticate with Interactive Session Token
+	authSessionPlayer, err := service.Authenticate(ctx, "sess-bob")
+	if err != nil {
+		t.Fatalf("Authenticate with session token failed: %v", err)
+	}
+	if authSessionPlayer.ID != player.ID {
+		t.Errorf("Authenticate session player ID mismatch: got %q, want %q", authSessionPlayer.ID, player.ID)
+	}
+
+	// 4. Authenticate with invalid API token
+	if _, err := service.Authenticate(ctx, "p2_sk_invalidtokenstring"); !errors.Is(err, coreplayer.ErrAuthentication) {
+		t.Errorf("expected ErrAuthentication for invalid token, got %v", err)
+	}
+
+	// 5. Authenticate with expired API token
+	past := now.Add(-10 * time.Minute)
+	expiredTok, expiredPlaintext, err := coreplayer.NewAPIToken(player.ID, "Expired", &past, now.Add(-1*time.Hour))
+	if err == nil {
+		_ = tokenRepo.Save(ctx, expiredTok)
+		if _, err := service.Authenticate(ctx, expiredPlaintext); !errors.Is(err, coreplayer.ErrAuthentication) {
+			t.Errorf("expected ErrAuthentication for expired token, got %v", err)
+		}
+	}
+
+	// 6. List Tokens
+	list, err := service.ListAPITokens(ctx, player.ID)
+	if err != nil {
+		t.Fatalf("ListAPITokens failed: %v", err)
+	}
+	if len(list) < 1 {
+		t.Errorf("expected at least 1 token in list, got %d", len(list))
+	}
+
+	// 7. Revoke Token
+	if err := service.RevokeAPIToken(ctx, player.ID, token.ID); err != nil {
+		t.Fatalf("RevokeAPIToken failed: %v", err)
+	}
+	if _, err := service.Authenticate(ctx, plaintext); !errors.Is(err, coreplayer.ErrAuthentication) {
+		t.Errorf("expected ErrAuthentication after revocation, got %v", err)
+	}
+
+	// 8. DeleteAccount cascades to API tokens
+	_, _, _ = service.CreateAPIToken(ctx, player.ID, "Cascade Test", nil)
+	if err := service.DeleteAccount(ctx, player.ID, "password123"); err != nil {
+		t.Fatalf("DeleteAccount failed: %v", err)
+	}
+	if len(tokenRepo.deletedPlayers) != 1 || tokenRepo.deletedPlayers[0] != player.ID {
+		t.Errorf("expected API tokens deleted for %q, got %v", player.ID, tokenRepo.deletedPlayers)
+	}
+}
