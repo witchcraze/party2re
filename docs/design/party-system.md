@@ -20,13 +20,17 @@ The Party system (`冒険中のパーティー`, `quest.cgi`, `party.cgi`) is on
   - Level bounds (`min_level`, `max_level`)
   - HP threshold (`min_hp`)
   - Optional secret passphrase (`合言葉` / `password_hash`)
-- **Single Active Party Constraint**: A character may participate in only one active/recruiting party at a time (`uk_party_members_character`).
+- **Single Active Party Constraint**: A character may participate in only one active/recruiting party at a time. This invariant is enforced atomically in Valkey Master via reverse lookup key `party2:party:character:<character_id>`.
+- **Lobby Expiration & Readiness TTL**:
+  - Waiting lobbies have a natural TTL of 15 minutes (`900s`), refreshed on member activity, preventing zombie lobbies if a leader disconnects.
+  - Member readiness state has a 60-second countdown TTL (`60s`), after which unconfirmed readiness automatically expires to prevent stall locks.
 
 ### 2. Party Lifecycle & States
-- `recruiting`: Open for members to join, leave, toggle readiness, or be kicked by leader.
-- `in_progress`: Co-op battle execution in progress.
-- `completed`: Adventure finished and rewards distributed; members can ready up for subsequent runs or leave.
-- `disbanded`: Party closed by the leader or automatically upon leader departure.
+- `recruiting`: Open for members to join, leave, toggle readiness, or be kicked by leader (stored authoritatively in Valkey Master).
+- `in_progress` / `in_adventure`: Co-op battle execution in progress.
+- `completed`: Adventure finished and rewards distributed in MariaDB; members can ready up for subsequent runs or leave.
+- `disbanded`: Party closed by the leader or automatically upon leader departure / adventure completion.
+- *Note*: Ephemeral wait lobby state is completely decoupled from relational storage. Legacy MariaDB `parties` and `party_members` tables were dropped in Migration 052.
 
 ### 3. Readiness & Start Requirements
 - All party members must toggle their ready state (`ready_state = true`) before the leader can trigger `POST /parties/{id}/start`.
@@ -46,6 +50,7 @@ The Party system (`冒険中のパーティー`, `quest.cgi`, `party.cgi`) is on
   - Display names (`Participant.Name`) are maintained for combat turn log output and user presentation.
 - **Reward Distribution & Damage Persistence**:
   - On Victory: Each participating member receives full boosted EXP and Gold, character level-ups are evaluated using canonical progression rules (`progression.ApplyExperience`, properly supporting OverLevel limit breaks up to Lv 150), surviving members have their remaining battle HP persisted to `Stats.HP` (fallen members survive with 1 HP), and stage item drops are awarded to player inventories.
+  - **Cooperative QoL Policy vs Legacy CGI**: In legacy Party2 Perl CGI (`_battle.cgi:209`), fallen party members received 0 rewards (`next if $ms{$name}{hp} <= 0;`). In `party2re`, this behavior was intentionally revised: all participants who took part in a victorious expedition receive full synergy-boosted EXP/Gold and revive with 1 HP. This deliberate modern cooperative QoL design fosters teamplay and prevents penalizing tanks/support characters who sacrifice themselves for the party's victory.
   - On Defeat: Half base EXP, 0 Gold, and characters survive with 1 HP.
 
 ---
@@ -67,5 +72,18 @@ The Party system (`冒険中のパーティー`, `quest.cgi`, `party.cgi`) is on
 ---
 
 ## Transaction & Concurrency Boundaries
-- All party modifications use MariaDB `RunInTx` with `SELECT ... FOR UPDATE`.
-- During adventure execution, all member character records are locked in ascending ID order to prevent deadlock.
+
+The Party architecture implements a two-tier storage boundary (RFC #356, Issue #368, Issue #380):
+
+1. **Ephemeral Wait Lobbies (Valkey Master Authoritative Tier)**:
+   - Lobby metadata (`party2:party:lobby:<party_id>`), member rosters, index sets (`party2:party:lobbies`), and reverse membership lookups (`party2:party:character:<character_id>`) reside exclusively in Valkey Master.
+   - Join, leave, ready, and capacity operations use atomic Valkey Lua scripts and multi/exec pipelines to prevent race conditions and membership double-booking without relational database locking contention.
+   - During lobby mutations, MariaDB `runInTx` is utilized strictly for individual character row verification (`SELECT ... FOR UPDATE`, Rank 2).
+
+2. **Durable Quest Resolution & Settlement (MariaDB Master Canonical Tier)**:
+   - When the leader starts the expedition (`POST /parties/{id}/start`), the party status is locked in Valkey Master.
+   - A MariaDB transaction (`runInTx`) acquires deterministic pessimistic locks (`SELECT ... FOR UPDATE`, Rank 2) on all participating character records sorted in ascending canonical ID order to eliminate deadlock risks.
+   - Co-op battle simulation is executed in memory.
+   - Character progression updates (EXP, level-ups, OverLevel), remaining HP, Gold, and inventory item rewards are atomically committed in MariaDB.
+   - Durable audit records are persisted in `party_adventure_logs` (retained permanently for expedition history and audit trails).
+   - Upon successful database commit, the ephemeral Valkey lobby is disbanded and cleaned up.
