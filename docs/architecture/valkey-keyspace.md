@@ -71,7 +71,7 @@ The table below catalogs all production key patterns currently active in the cod
 | Key Pattern / Template | Storage Tier | Data Type | Expiration Policy (TTL) | Value / Serialization Format | Owner Module | Mutating Operations & Invalidation Hooks |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | `party2:session:<token>` | Valkey Master | `String` | 7 days (`604800s`), sliding or fixed | JSON (`PlayerSession`: `token`, `player_id`, `created_at`, `expires_at`) | `internal/player` | `CreateSession` (SET EX), `GetSession` (GET), `DeleteSession` (DEL), `DeleteSessionsByPlayerID` (bulk DEL). |
-| `party2:player:sessions:<player_id>` | Valkey Master | `Set` | 7 days (`604800s`), refreshed on login | Set of String session tokens | `internal/player` | `CreateSession` (SADD + EXPIRE), `DeleteSession` (SREM), `DeleteSessionsByPlayerID` (SMEMBERS -> DEL tokens + DEL set). Used for O(1) account session invalidation and account deletion. |
+| `party2:player:sessions:<player_id>` | Valkey Master | `Sorted Set (ZSet)` | 7 days (`604800s`), refreshed on login | Member: session token, Score: `ExpiresAt.Unix()` (`float64`) | `internal/player` | `Save` (ZADD + EXPIRE + lazy ZREMRANGEBYSCORE), `FindByID` (lazy ZREMRANGEBYSCORE), `Revoke` (ZREM + lazy ZREMRANGEBYSCORE), `DeleteByPlayerID` (ZRANGE -> DEL tokens + DEL key). Automatic expiration score tracking eliminates stale token accumulation. |
 | `party2:maintenance:status` | Valkey Master / In-Memory | `String` | None (Persistent / Admin managed) | JSON (`SystemMaintenance`: `enabled`, `message`, `starts_at`, `ends_at`, `updated_at`) | `internal/maintenance` | `SetStatus` (SET without TTL), `GetStatus` (GET with in-memory sync), admin endpoints (`POST/PUT /admin/maintenance`). Backed by `system_maintenance` MariaDB table. |
 | `party2:scheduled:pending` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic queue) | Member: Action ID (`string`), Score: `ExecuteAt.Unix()` (`float64`) | `internal/scheduling` | `ScheduleAction` (ZADD), `ClaimPendingActions` (ZRANGEBYSCORE + ZREM), `CancelAction` (ZREM). |
 | `party2:scheduled:action:<id>` | Valkey Master | `String` | 1 hour after execution or cancel | JSON (`ScheduledAction`: `id`, `action_type`, `payload`, `execute_at`, `state`) | `internal/scheduling` | `ScheduleAction` (SET), `GetAction` (GET), `CompleteAction` / `FailAction` / `CancelAction` (EXPIRE 1h). |
@@ -141,11 +141,11 @@ The following specifications define the key patterns, data types, and lifecycle 
   // BANNED: Never search for keys using wildcard patterns
   keys, _ := client.Do(ctx, client.B().Keys().Pattern("party2:session:*").Build()).AsStrSlice()
   ```
-- **Approved Pattern (Set Indexing)**:
-  Maintain a dedicated tracking `Set` for reverse lookup or cascading deletion:
+- **Approved Pattern (Index Tracking with Purging)**:
+  Maintain a dedicated tracking `Sorted Set` for reverse lookup, ordered retrieval, and lazy expiration purging:
   ```go
-  // APPROVED: Query the index set to retrieve specific keys in O(1)
-  tokens, _ := client.Do(ctx, client.B().Smembers().Key("party2:player:sessions:" + playerID).Build()).AsStrSlice()
+  // APPROVED: Query the index sorted set to retrieve specific keys in O(1)
+  tokens, _ := client.Do(ctx, client.B().Zrange().Key("party2:player:sessions:" + playerID).Min("0").Max("-1").Build()).AsStrSlice()
   for _, token := range tokens {
       client.Do(ctx, client.B().Del().Key("party2:session:" + token).Build())
   }

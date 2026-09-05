@@ -157,13 +157,13 @@ func TestValkeySessionRepository_RealValkeyIntegration(t *testing.T) {
 		t.Errorf("expected positive TTL up to 7 days, got %d", ttl)
 	}
 
-	// Verify Player session set has both tokens
-	members, err := client.Do(ctx, client.B().Smembers().Key(testPlayerPrefix+"vk-player-1").Build()).AsStrSlice()
+	// Verify Player session sorted set has both tokens
+	members, err := client.Do(ctx, client.B().Zrange().Key(testPlayerPrefix+"vk-player-1").Min("0").Max("-1").Build()).AsStrSlice()
 	if err != nil {
-		t.Fatalf("smembers failed: %v", err)
+		t.Fatalf("zrange failed: %v", err)
 	}
 	if len(members) != 2 {
-		t.Errorf("expected 2 sessions in player set, got %v", members)
+		t.Errorf("expected 2 sessions in player sorted set, got %v", members)
 	}
 
 	// 3. Test string-only token mapping fallback in Valkey
@@ -189,10 +189,10 @@ func TestValkeySessionRepository_RealValkeyIntegration(t *testing.T) {
 		t.Errorf("expected ErrInvalidSession after revoke, got %v", err)
 	}
 
-	// Ensure sess1 removed from player set
-	membersAfterRevoke, _ := client.Do(ctx, client.B().Smembers().Key(testPlayerPrefix+"vk-player-1").Build()).AsStrSlice()
+	// Ensure sess1 removed from player sorted set
+	membersAfterRevoke, _ := client.Do(ctx, client.B().Zrange().Key(testPlayerPrefix+"vk-player-1").Min("0").Max("-1").Build()).AsStrSlice()
 	if len(membersAfterRevoke) != 1 || membersAfterRevoke[0] != sess2.ID {
-		t.Errorf("expected only sess2 in player set, got %v", membersAfterRevoke)
+		t.Errorf("expected only sess2 in player sorted set, got %v", membersAfterRevoke)
 	}
 
 	// 5. DeleteByPlayerID cleans up remaining sess2 and the set
@@ -205,5 +205,225 @@ func TestValkeySessionRepository_RealValkeyIntegration(t *testing.T) {
 	exists, _ := client.Do(ctx, client.B().Exists().Key(testPlayerPrefix+"vk-player-1").Build()).AsInt64()
 	if exists != 0 {
 		t.Errorf("expected player sessions set deleted, exists = %d", exists)
+	}
+}
+
+func TestValkeySessionRepository_InMemory_Eviction(t *testing.T) {
+	ctx := context.Background()
+	repo := player.NewValkeySessionRepository(nil)
+
+	now := time.Now().UTC()
+	activeSess := coreplayer.Session{
+		ID:        "active-token",
+		PlayerID:  "p1",
+		CreatedAt: now,
+		ExpiresAt: now.Add(1 * time.Hour),
+	}
+	expiredSess := coreplayer.Session{
+		ID:        "expired-token",
+		PlayerID:  "p1",
+		CreatedAt: now.Add(-2 * time.Hour),
+		ExpiresAt: now.Add(-1 * time.Hour),
+	}
+
+	if err := repo.Save(ctx, activeSess); err != nil {
+		t.Fatalf("Save(activeSess) failed: %v", err)
+	}
+	if err := repo.Save(ctx, expiredSess); err != nil {
+		t.Fatalf("Save(expiredSess) failed: %v", err)
+	}
+
+	// Expired session should not be found and should be lazily evicted
+	_, err := repo.FindByID(ctx, expiredSess.ID)
+	if !errors.Is(err, coreplayer.ErrInvalidSession) {
+		t.Fatalf("expected ErrInvalidSession for expired session, got %v", err)
+	}
+
+	// Calling Save on a new session should also trigger eviction
+	newSess := coreplayer.Session{
+		ID:        "new-token",
+		PlayerID:  "p2",
+		CreatedAt: now,
+		ExpiresAt: now.Add(1 * time.Hour),
+	}
+	if err := repo.Save(ctx, newSess); err != nil {
+		t.Fatalf("Save(newSess) failed: %v", err)
+	}
+
+	// MemorySessionCount should only have active sessions (activeSess and newSess = 2)
+	if count := repo.MemorySessionCount(); count != 2 {
+		t.Errorf("expected 2 active sessions in memory store, got %d", count)
+	}
+}
+
+func TestValkeySessionRepository_NoInMemoryCachingWhenClientAvailable(t *testing.T) {
+	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("PARTY2_VALKEY_ADDR is not configured")
+	}
+
+	client, err := vk.NewClient()
+	if err != nil {
+		t.Fatalf("connect to valkey: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+	testSessionPrefix := "party2:test:session:"
+	testPlayerPrefix := "party2:test:player:sessions:"
+
+	repo := player.NewValkeySessionRepository(client,
+		player.WithSessionKeyPrefix(testSessionPrefix),
+		player.WithPlayerSessionsKeyPrefix(testPlayerPrefix),
+	)
+
+	now := time.Now().UTC()
+	sess := coreplayer.Session{
+		ID:        "vk-no-mem-leak-token",
+		PlayerID:  "p-leak-test",
+		CreatedAt: now,
+		ExpiresAt: now.Add(1 * time.Hour),
+	}
+	defer func() {
+		_ = repo.DeleteByPlayerID(ctx, "p-leak-test")
+	}()
+
+	if err := repo.Save(ctx, sess); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	// MemorySessionCount MUST remain 0 when Valkey client is available!
+	if count := repo.MemorySessionCount(); count != 0 {
+		t.Errorf("expected 0 memory sessions when client is connected, got %d (memory leak detected!)", count)
+	}
+}
+
+func TestValkeySessionRepository_ZSet_TrackingAndLazyPurge(t *testing.T) {
+	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("PARTY2_VALKEY_ADDR is not configured")
+	}
+
+	client, err := vk.NewClient()
+	if err != nil {
+		t.Fatalf("connect to valkey: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+	testSessionPrefix := "party2:test:session:"
+	testPlayerPrefix := "party2:test:player:sessions:"
+	playerID := "p-zset-test"
+	playerKey := testPlayerPrefix + playerID
+
+	repo := player.NewValkeySessionRepository(client,
+		player.WithSessionKeyPrefix(testSessionPrefix),
+		player.WithPlayerSessionsKeyPrefix(testPlayerPrefix),
+	)
+
+	defer func() {
+		_ = repo.DeleteByPlayerID(ctx, playerID)
+	}()
+
+	now := time.Now().UTC()
+	activeSess := coreplayer.Session{
+		ID:        "vk-zset-active",
+		PlayerID:  playerID,
+		CreatedAt: now,
+		ExpiresAt: now.Add(1 * time.Hour),
+	}
+
+	if err := repo.Save(ctx, activeSess); err != nil {
+		t.Fatalf("Save(activeSess) failed: %v", err)
+	}
+
+	// 1. Verify playerKey is a Sorted Set (zset)
+	keyType, err := client.Do(ctx, client.B().Type().Key(playerKey).Build()).ToString()
+	if err != nil {
+		t.Fatalf("Type command failed: %v", err)
+	}
+	if keyType != "zset" {
+		t.Fatalf("expected key type 'zset', got %q", keyType)
+	}
+
+	// 2. Inject an expired session token into the Sorted Set
+	expiredToken := "vk-zset-expired"
+	expiredScore := float64(now.Add(-10 * time.Minute).Unix())
+	if err := client.Do(ctx, client.B().Zadd().Key(playerKey).ScoreMember().ScoreMember(expiredScore, expiredToken).Build()).Error(); err != nil {
+		t.Fatalf("inject expired token failed: %v", err)
+	}
+
+	// Verify ZSet has 2 members before lazy purge
+	members, err := client.Do(ctx, client.B().Zrange().Key(playerKey).Min("0").Max("-1").Build()).AsStrSlice()
+	if err != nil || len(members) != 2 {
+		t.Fatalf("expected 2 members before purge, got %v (err: %v)", members, err)
+	}
+
+	// 3. FindByID on active session triggers lazy purge of expired tokens
+	found, err := repo.FindByID(ctx, activeSess.ID)
+	if err != nil || found.ID != activeSess.ID {
+		t.Fatalf("FindByID failed: %v", err)
+	}
+
+	// 4. Verify expiredToken was purged by ZREMRANGEBYSCORE
+	membersAfterPurge, err := client.Do(ctx, client.B().Zrange().Key(playerKey).Min("0").Max("-1").Build()).AsStrSlice()
+	if err != nil {
+		t.Fatalf("Zrange failed: %v", err)
+	}
+	if len(membersAfterPurge) != 1 || membersAfterPurge[0] != activeSess.ID {
+		t.Errorf("expected only active token %q in ZSet after lazy purge, got %v", activeSess.ID, membersAfterPurge)
+	}
+}
+
+func TestValkeySessionRepository_WrongTypeRecovery(t *testing.T) {
+	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("PARTY2_VALKEY_ADDR is not configured")
+	}
+
+	client, err := vk.NewClient()
+	if err != nil {
+		t.Fatalf("connect to valkey: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+	testSessionPrefix := "party2:test:session:"
+	testPlayerPrefix := "party2:test:player:sessions:"
+	playerID := "p-wrongtype-test"
+	playerKey := testPlayerPrefix + playerID
+
+	repo := player.NewValkeySessionRepository(client,
+		player.WithSessionKeyPrefix(testSessionPrefix),
+		player.WithPlayerSessionsKeyPrefix(testPlayerPrefix),
+	)
+
+	defer func() {
+		_ = repo.DeleteByPlayerID(ctx, playerID)
+	}()
+
+	// 1. Manually create an old Set key holding a legacy token
+	if err := client.Do(ctx, client.B().Sadd().Key(playerKey).Member("old-legacy-token").Build()).Error(); err != nil {
+		t.Fatalf("SADD legacy set failed: %v", err)
+	}
+
+	now := time.Now().UTC()
+	sess := coreplayer.Session{
+		ID:        "vk-upgraded-token",
+		PlayerID:  playerID,
+		CreatedAt: now,
+		ExpiresAt: now.Add(1 * time.Hour),
+	}
+
+	// 2. Save should transparently recover from WRONGTYPE and upgrade to ZSet
+	if err := repo.Save(ctx, sess); err != nil {
+		t.Fatalf("Save should recover from WRONGTYPE, got: %v", err)
+	}
+
+	keyType, _ := client.Do(ctx, client.B().Type().Key(playerKey).Build()).ToString()
+	if keyType != "zset" {
+		t.Errorf("expected key type 'zset' after upgrade, got %q", keyType)
+	}
+
+	// 3. DeleteByPlayerID cleanly removes keys
+	if err := repo.DeleteByPlayerID(ctx, playerID); err != nil {
+		t.Fatalf("DeleteByPlayerID failed: %v", err)
 	}
 }
