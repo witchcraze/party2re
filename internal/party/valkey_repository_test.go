@@ -2,7 +2,11 @@ package party_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -418,5 +422,350 @@ func TestValkeyRepository_LiveValkey(t *testing.T) {
 	charExists, _ := client.Do(ctx, client.B().Exists().Key(testCharPrefix+leaderID).Build()).AsInt64()
 	if charExists != 0 {
 		t.Errorf("expected character index deleted, got exists=%d", charExists)
+	}
+}
+
+func TestValkeyRepository_CapacityEnforcement_InMemory(t *testing.T) {
+	ctx := context.Background()
+	repo := party.NewValkeyRepository(nil)
+
+	// Non-existent party
+	err := repo.AddMember(ctx, party.Member{PartyID: "non-existent", CharacterID: "c1"})
+	if !errors.Is(err, party.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for non-existent party, got %v", err)
+	}
+
+	p := party.Party{
+		ID:                "cap-party-mem",
+		LeaderCharacterID: "leader-1",
+		Name:              "定員テストパーティ",
+		MaxMembers:        2,
+		Status:            party.StatusRecruiting,
+		CreatedAt:         time.Now().UTC(),
+	}
+	if err := repo.SaveParty(ctx, p); err != nil {
+		t.Fatalf("SaveParty failed: %v", err)
+	}
+
+	// Add leader (1/2)
+	if err := repo.AddMember(ctx, party.Member{PartyID: p.ID, CharacterID: "leader-1", IsLeader: true}); err != nil {
+		t.Fatalf("AddMember leader failed: %v", err)
+	}
+
+	// Add second member (2/2)
+	if err := repo.AddMember(ctx, party.Member{PartyID: p.ID, CharacterID: "member-2"}); err != nil {
+		t.Fatalf("AddMember 2 failed: %v", err)
+	}
+
+	// Add third member (3/2) -> Must fail with ErrPartyFull
+	err = repo.AddMember(ctx, party.Member{PartyID: p.ID, CharacterID: "member-3"})
+	if !errors.Is(err, party.ErrPartyFull) {
+		t.Errorf("expected ErrPartyFull when exceeding MaxMembers, got %v", err)
+	}
+
+	// Updating existing member must still succeed
+	if err := repo.AddMember(ctx, party.Member{PartyID: p.ID, CharacterID: "member-2", ReadyState: true}); err != nil {
+		t.Errorf("expected update of existing member to succeed, got %v", err)
+	}
+
+	// Ready check for non-member
+	err = repo.UpdateMemberReady(ctx, p.ID, "non-member", true)
+	if !errors.Is(err, party.ErrCharacterNotInParty) {
+		t.Errorf("expected ErrCharacterNotInParty, got %v", err)
+	}
+}
+
+func TestValkeyRepository_CapacityEnforcement_LiveValkey(t *testing.T) {
+	valkeyAddr := os.Getenv("PARTY2_VALKEY_ADDR")
+	if valkeyAddr == "" {
+		valkeyAddr = "127.0.0.1:6379"
+	}
+
+	client, err := valkey.NewClient(valkey.ClientOption{
+		InitAddress: []string{valkeyAddr},
+	})
+	if err != nil {
+		t.Skipf("skipping live Valkey test: %v", err)
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := client.Do(ctx, client.B().Ping().Build()).Error(); err != nil {
+		t.Skipf("skipping live Valkey test (cannot ping Valkey at %s): %v", valkeyAddr, err)
+	}
+
+	testLobbyPrefix := "party2:test:party:lobby:"
+	testReadyPrefix := "party2:test:party:ready:"
+	testCharPrefix := "party2:test:party:character:"
+	testIndexKey := "party2:test:party:lobbies"
+
+	repo := party.NewValkeyRepository(client,
+		party.WithLobbyKeyPrefix(testLobbyPrefix),
+		party.WithReadyKeyPrefix(testReadyPrefix),
+		party.WithCharacterKeyPrefix(testCharPrefix),
+		party.WithLobbiesIndexKey(testIndexKey),
+	)
+
+	partyID := "test-party-cap-live"
+	cleanup := func() {
+		_ = client.Do(ctx, client.B().Del().Key(testLobbyPrefix+partyID).Build()).Error()
+		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+"lead").Build()).Error()
+		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+"mem1").Build()).Error()
+		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+"mem2").Build()).Error()
+		_ = client.Do(ctx, client.B().Zrem().Key(testIndexKey).Member(partyID).Build()).Error()
+	}
+	cleanup()
+	defer cleanup()
+
+	// Non-existent party
+	err = repo.AddMember(ctx, party.Member{PartyID: "non-existent", CharacterID: "c1"})
+	if !errors.Is(err, party.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for non-existent party in live Valkey, got %v", err)
+	}
+
+	p := party.Party{
+		ID:                partyID,
+		LeaderCharacterID: "lead",
+		Name:              "定員テストライブ",
+		MaxMembers:        2,
+		Status:            party.StatusRecruiting,
+		CreatedAt:         time.Now().UTC(),
+	}
+	if err := repo.SaveParty(ctx, p); err != nil {
+		t.Fatalf("SaveParty failed: %v", err)
+	}
+
+	// Add leader (1/2)
+	if err := repo.AddMember(ctx, party.Member{PartyID: partyID, CharacterID: "lead", IsLeader: true}); err != nil {
+		t.Fatalf("AddMember leader failed: %v", err)
+	}
+
+	// Add member 1 (2/2)
+	if err := repo.AddMember(ctx, party.Member{PartyID: partyID, CharacterID: "mem1"}); err != nil {
+		t.Fatalf("AddMember mem1 failed: %v", err)
+	}
+
+	// Add member 2 (3/2) -> Must fail with ErrPartyFull
+	err = repo.AddMember(ctx, party.Member{PartyID: partyID, CharacterID: "mem2"})
+	if !errors.Is(err, party.ErrPartyFull) {
+		t.Errorf("expected ErrPartyFull in live Valkey, got %v", err)
+	}
+
+	// Update existing member must succeed
+	if err := repo.AddMember(ctx, party.Member{PartyID: partyID, CharacterID: "mem1", ReadyState: true}); err != nil {
+		t.Errorf("expected update of existing member in live Valkey to succeed, got %v", err)
+	}
+
+	// Ready check for non-member
+	err = repo.UpdateMemberReady(ctx, partyID, "non-member", true)
+	if !errors.Is(err, party.ErrCharacterNotInParty) {
+		t.Errorf("expected ErrCharacterNotInParty in live Valkey, got %v", err)
+	}
+}
+
+func TestValkeyRepository_ConcurrentJoinStress_InMemory(t *testing.T) {
+	ctx := context.Background()
+	repo := party.NewValkeyRepository(nil)
+
+	partyID := "stress-party-mem"
+	maxMembers := 4
+	p := party.Party{
+		ID:                partyID,
+		LeaderCharacterID: "stress-lead",
+		Name:              "並行ストレステスト(メモリ)",
+		MaxMembers:        maxMembers,
+		Status:            party.StatusRecruiting,
+		CreatedAt:         time.Now().UTC(),
+	}
+	if err := repo.SaveParty(ctx, p); err != nil {
+		t.Fatalf("SaveParty failed: %v", err)
+	}
+
+	// Add leader (1 member, 3 open slots)
+	if err := repo.AddMember(ctx, party.Member{PartyID: partyID, CharacterID: "stress-lead", IsLeader: true}); err != nil {
+		t.Fatalf("AddMember leader failed: %v", err)
+	}
+
+	numContenders := 50
+	var successCount int64
+	var fullCount int64
+	var otherErrCount int64
+
+	var wg sync.WaitGroup
+	startSignal := make(chan struct{})
+
+	for i := 1; i <= numContenders; i++ {
+		wg.Add(1)
+		charID := fmt.Sprintf("contender-mem-%d", i)
+		go func(cid string) {
+			defer wg.Done()
+			<-startSignal
+
+			err := repo.AddMember(ctx, party.Member{
+				PartyID:       partyID,
+				CharacterID:   cid,
+				CharacterName: cid,
+			})
+			if err == nil {
+				atomic.AddInt64(&successCount, 1)
+			} else if errors.Is(err, party.ErrPartyFull) {
+				atomic.AddInt64(&fullCount, 1)
+			} else {
+				atomic.AddInt64(&otherErrCount, 1)
+			}
+		}(charID)
+	}
+
+	close(startSignal)
+	wg.Wait()
+
+	expectedWins := int64(maxMembers - 1) // 3 available slots
+	expectedFulls := int64(numContenders) - expectedWins
+
+	if successCount != expectedWins {
+		t.Errorf("expected exactly %d successful joins, got %d", expectedWins, successCount)
+	}
+	if fullCount != expectedFulls {
+		t.Errorf("expected exactly %d ErrPartyFull errors, got %d", expectedFulls, fullCount)
+	}
+	if otherErrCount != 0 {
+		t.Errorf("unexpected other errors count: %d", otherErrCount)
+	}
+
+	members, err := repo.GetMembers(ctx, partyID)
+	if err != nil {
+		t.Fatalf("GetMembers failed: %v", err)
+	}
+	if len(members) != maxMembers {
+		t.Errorf("expected party to have exactly %d members, got %d", maxMembers, len(members))
+	}
+}
+
+func TestValkeyRepository_ConcurrentJoinStress_LiveValkey(t *testing.T) {
+	valkeyAddr := os.Getenv("PARTY2_VALKEY_ADDR")
+	if valkeyAddr == "" {
+		valkeyAddr = "127.0.0.1:6379"
+	}
+
+	client, err := valkey.NewClient(valkey.ClientOption{
+		InitAddress: []string{valkeyAddr},
+	})
+	if err != nil {
+		t.Skipf("skipping live Valkey test: %v", err)
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := client.Do(ctx, client.B().Ping().Build()).Error(); err != nil {
+		t.Skipf("skipping live Valkey test: %v", err)
+	}
+
+	testLobbyPrefix := "party2:test:party:lobby:"
+	testReadyPrefix := "party2:test:party:ready:"
+	testCharPrefix := "party2:test:party:character:"
+	testIndexKey := "party2:test:party:lobbies"
+
+	repo := party.NewValkeyRepository(client,
+		party.WithLobbyKeyPrefix(testLobbyPrefix),
+		party.WithReadyKeyPrefix(testReadyPrefix),
+		party.WithCharacterKeyPrefix(testCharPrefix),
+		party.WithLobbiesIndexKey(testIndexKey),
+	)
+
+	partyID := "stress-party-live"
+	maxMembers := 4
+
+	cleanup := func() {
+		_ = client.Do(ctx, client.B().Del().Key(testLobbyPrefix+partyID).Build()).Error()
+		_ = client.Do(ctx, client.B().Del().Key(testCharPrefix+"stress-live-lead").Build()).Error()
+		for i := 1; i <= 60; i++ {
+			_ = client.Do(ctx, client.B().Del().Key(fmt.Sprintf("%scontender-live-%d", testCharPrefix, i)).Build()).Error()
+		}
+		_ = client.Do(ctx, client.B().Zrem().Key(testIndexKey).Member(partyID).Build()).Error()
+	}
+	cleanup()
+	defer cleanup()
+
+	p := party.Party{
+		ID:                partyID,
+		LeaderCharacterID: "stress-live-lead",
+		Name:              "並行ストレステスト(実Valkey)",
+		MaxMembers:        maxMembers,
+		Status:            party.StatusRecruiting,
+		CreatedAt:         time.Now().UTC(),
+	}
+	if err := repo.SaveParty(ctx, p); err != nil {
+		t.Fatalf("SaveParty failed: %v", err)
+	}
+
+	if err := repo.AddMember(ctx, party.Member{PartyID: partyID, CharacterID: "stress-live-lead", IsLeader: true}); err != nil {
+		t.Fatalf("AddMember leader failed: %v", err)
+	}
+
+	numContenders := 50
+	var successCount int64
+	var fullCount int64
+	var otherErrCount int64
+
+	var wg sync.WaitGroup
+	startSignal := make(chan struct{})
+
+	for i := 1; i <= numContenders; i++ {
+		wg.Add(1)
+		charID := fmt.Sprintf("contender-live-%d", i)
+		go func(cid string) {
+			defer wg.Done()
+			<-startSignal
+
+			err := repo.AddMember(ctx, party.Member{
+				PartyID:       partyID,
+				CharacterID:   cid,
+				CharacterName: cid,
+			})
+			if err == nil {
+				atomic.AddInt64(&successCount, 1)
+			} else if errors.Is(err, party.ErrPartyFull) {
+				atomic.AddInt64(&fullCount, 1)
+			} else {
+				atomic.AddInt64(&otherErrCount, 1)
+			}
+		}(charID)
+	}
+
+	close(startSignal)
+	wg.Wait()
+
+	expectedWins := int64(maxMembers - 1) // 3 available slots
+	expectedFulls := int64(numContenders) - expectedWins
+
+	if successCount != expectedWins {
+		t.Errorf("expected exactly %d successful joins in live Valkey, got %d", expectedWins, successCount)
+	}
+	if fullCount != expectedFulls {
+		t.Errorf("expected exactly %d ErrPartyFull in live Valkey, got %d", expectedFulls, fullCount)
+	}
+	if otherErrCount != 0 {
+		t.Errorf("unexpected other errors in live Valkey: %d", otherErrCount)
+	}
+
+	members, err := repo.GetMembers(ctx, partyID)
+	if err != nil {
+		t.Fatalf("GetMembers failed: %v", err)
+	}
+	if len(members) != maxMembers {
+		t.Errorf("expected party to have exactly %d members, got %d", maxMembers, len(members))
+	}
+
+	// Verify all members are unique
+	seen := make(map[string]bool)
+	for _, m := range members {
+		if seen[m.CharacterID] {
+			t.Errorf("duplicate member %s found in party", m.CharacterID)
+		}
+		seen[m.CharacterID] = true
 	}
 }

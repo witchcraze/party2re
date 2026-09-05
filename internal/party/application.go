@@ -625,7 +625,9 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			DetailsJSON:         string(detailsJSON),
 			CreatedAt:           time.Now().UTC(),
 		}
-		_ = s.repo.SaveAdventureLog(txCtx, advLog)
+		if err := s.repo.SaveAdventureLog(txCtx, advLog); err != nil {
+			return fmt.Errorf("save party adventure log: %w", err)
+		}
 
 		// 9. Reset party status & ready states for members
 		for _, m := range members {
