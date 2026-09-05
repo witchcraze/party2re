@@ -69,12 +69,40 @@ func NewValkeySessionRepository(client valkey.Client, opts ...ValkeySessionOptio
 	return r
 }
 
-// Save persists a player session with native TTL in Valkey and tracks the session ID in the player's session set.
+// MemorySessionCount returns the number of active/stored sessions in the in-memory fallback store.
+// Intended for diagnostics and automated leak tests.
+func (r *ValkeySessionRepository) MemorySessionCount() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.memorySessions)
+}
+
+// purgeExpiredMemory removes expired sessions from the in-memory fallback store.
+// Caller MUST hold r.mu.Lock().
+func (r *ValkeySessionRepository) purgeExpiredMemory(now time.Time) {
+	for id, sess := range r.memorySessions {
+		if !sess.Active(now) {
+			delete(r.memorySessions, id)
+		}
+	}
+}
+
+// purgeExpiredZSet lazily purges expired session tokens from the player's Sorted Set index.
+func (r *ValkeySessionRepository) purgeExpiredZSet(ctx context.Context, playerKey string, now time.Time) {
+	if r.client == nil || strings.TrimSpace(playerKey) == "" {
+		return
+	}
+	cmd := r.client.B().Zremrangebyscore().Key(playerKey).Min("-inf").Max(fmt.Sprintf("%d", now.Unix())).Build()
+	_ = r.client.Do(ctx, cmd).Error()
+}
+
+// Save persists a player session with native TTL in Valkey and tracks the session ID in the player's session sorted set.
 func (r *ValkeySessionRepository) Save(ctx context.Context, session coreplayer.Session) error {
 	if strings.TrimSpace(session.ID) == "" || strings.TrimSpace(session.PlayerID) == "" {
 		return coreplayer.ErrInvalidSession
 	}
 
+	now := time.Now().UTC()
 	ttl := time.Until(session.ExpiresAt)
 	if ttl <= 0 {
 		ttl = SessionDuration
@@ -84,12 +112,7 @@ func (r *ValkeySessionRepository) Save(ctx context.Context, session coreplayer.S
 		ttlSeconds = 1
 	}
 
-	// 1. In-memory store for fallback/local execution
-	r.mu.Lock()
-	r.memorySessions[session.ID] = session
-	r.mu.Unlock()
-
-	// 2. Persist to Valkey if client is available
+	// 1. If live Valkey client is available, master exclusively in Valkey Master.
 	if r.client != nil {
 		data, err := json.Marshal(session)
 		if err != nil {
@@ -104,11 +127,28 @@ func (r *ValkeySessionRepository) Save(ctx context.Context, session coreplayer.S
 			return fmt.Errorf("save session to valkey: %w", err)
 		}
 
-		saddCmd := r.client.B().Sadd().Key(playerKey).Member(session.ID).Build()
-		_ = r.client.Do(ctx, saddCmd).Error()
+		score := float64(session.ExpiresAt.Unix())
+		zaddCmd := r.client.B().Zadd().Key(playerKey).ScoreMember().ScoreMember(score, session.ID).Build()
+		if err := r.client.Do(ctx, zaddCmd).Error(); err != nil && strings.Contains(err.Error(), "WRONGTYPE") {
+			// Upgrade legacy Set key to Sorted Set
+			_ = r.client.Do(ctx, r.client.B().Del().Key(playerKey).Build()).Error()
+			_ = r.client.Do(ctx, r.client.B().Zadd().Key(playerKey).ScoreMember().ScoreMember(score, session.ID).Build()).Error()
+		}
+
+		// Lazily purge expired sessions from player's ZSET
+		r.purgeExpiredZSet(ctx, playerKey, now)
+
 		expireCmd := r.client.B().Expire().Key(playerKey).Seconds(ttlSeconds).Build()
 		_ = r.client.Do(ctx, expireCmd).Error()
+
+		return nil
 	}
+
+	// 2. In-memory store fallback only when client is nil
+	r.mu.Lock()
+	r.purgeExpiredMemory(now)
+	r.memorySessions[session.ID] = session
+	r.mu.Unlock()
 
 	return nil
 }
@@ -119,6 +159,8 @@ func (r *ValkeySessionRepository) FindByID(ctx context.Context, id string) (core
 	if id == "" {
 		return coreplayer.Session{}, coreplayer.ErrInvalidSession
 	}
+
+	now := time.Now().UTC()
 
 	if r.client != nil {
 		sessionKey := r.sessionKey(id)
@@ -132,7 +174,7 @@ func (r *ValkeySessionRepository) FindByID(ctx context.Context, id string) (core
 			r.mu.RLock()
 			sess, ok := r.memorySessions[id]
 			r.mu.RUnlock()
-			if ok && sess.Active(time.Now().UTC()) {
+			if ok && sess.Active(now) {
 				return sess, nil
 			}
 			return coreplayer.Session{}, coreplayer.ErrInvalidSession
@@ -146,7 +188,6 @@ func (r *ValkeySessionRepository) FindByID(ctx context.Context, id string) (core
 			}
 		} else {
 			// Direct string token -> player_id mapping
-			now := time.Now().UTC()
 			sess = coreplayer.Session{
 				ID:        id,
 				PlayerID:  trimmed,
@@ -155,17 +196,25 @@ func (r *ValkeySessionRepository) FindByID(ctx context.Context, id string) (core
 			}
 		}
 
-		if !sess.Active(time.Now().UTC()) {
+		if !sess.Active(now) {
 			return coreplayer.Session{}, coreplayer.ErrInvalidSession
 		}
+
+		// Lazily purge expired sessions from player's ZSET
+		if sess.PlayerID != "" {
+			r.purgeExpiredZSet(ctx, r.playerSessionsKey(sess.PlayerID), now)
+		}
+
 		return sess, nil
 	}
 
 	// In-memory fallback
-	r.mu.RLock()
+	r.mu.Lock()
+	r.purgeExpiredMemory(now)
 	sess, ok := r.memorySessions[id]
-	r.mu.RUnlock()
-	if !ok || !sess.Active(time.Now().UTC()) {
+	r.mu.Unlock()
+
+	if !ok || !sess.Active(now) {
 		return coreplayer.Session{}, coreplayer.ErrInvalidSession
 	}
 	return sess, nil
@@ -187,14 +236,19 @@ func (r *ValkeySessionRepository) Revoke(ctx context.Context, id string, now tim
 			foundInValkey = true
 			trimmed := strings.TrimSpace(val)
 			var sess coreplayer.Session
+			var playerID string
 			if strings.HasPrefix(trimmed, "{") {
 				if json.Unmarshal([]byte(trimmed), &sess) == nil && sess.PlayerID != "" {
-					playerKey := r.playerSessionsKey(sess.PlayerID)
-					_ = r.client.Do(ctx, r.client.B().Srem().Key(playerKey).Member(id).Build()).Error()
+					playerID = sess.PlayerID
 				}
 			} else if trimmed != "" {
-				playerKey := r.playerSessionsKey(trimmed)
-				_ = r.client.Do(ctx, r.client.B().Srem().Key(playerKey).Member(id).Build()).Error()
+				playerID = trimmed
+			}
+
+			if playerID != "" {
+				playerKey := r.playerSessionsKey(playerID)
+				_ = r.client.Do(ctx, r.client.B().Zrem().Key(playerKey).Member(id).Build()).Error()
+				r.purgeExpiredZSet(ctx, playerKey, now)
 			}
 		}
 	}
@@ -204,6 +258,7 @@ func (r *ValkeySessionRepository) Revoke(ctx context.Context, id string, now tim
 	if foundInMemory {
 		delete(r.memorySessions, id)
 	}
+	r.purgeExpiredMemory(now)
 	r.mu.Unlock()
 
 	if !foundInValkey && (!foundInMemory || !sess.Active(now)) {
@@ -222,7 +277,11 @@ func (r *ValkeySessionRepository) DeleteByPlayerID(ctx context.Context, playerID
 
 	if r.client != nil {
 		playerKey := r.playerSessionsKey(playerID)
-		members, err := r.client.Do(ctx, r.client.B().Smembers().Key(playerKey).Build()).AsStrSlice()
+		members, err := r.client.Do(ctx, r.client.B().Zrange().Key(playerKey).Min("0").Max("-1").Build()).AsStrSlice()
+		if err != nil && strings.Contains(err.Error(), "WRONGTYPE") {
+			// Fallback in case old Set key exists
+			members, err = r.client.Do(ctx, r.client.B().Smembers().Key(playerKey).Build()).AsStrSlice()
+		}
 		if err == nil && len(members) > 0 {
 			keys := make([]string, 0, len(members)+1)
 			for _, m := range members {
@@ -236,8 +295,9 @@ func (r *ValkeySessionRepository) DeleteByPlayerID(ctx context.Context, playerID
 	}
 
 	r.mu.Lock()
+	now := time.Now().UTC()
 	for id, sess := range r.memorySessions {
-		if sess.PlayerID == playerID {
+		if sess.PlayerID == playerID || !sess.Active(now) {
 			delete(r.memorySessions, id)
 		}
 	}
