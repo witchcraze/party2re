@@ -17,6 +17,7 @@ type mockPartyRepository struct {
 	members     map[string]map[string]Member // partyID -> characterID -> Member
 	memberParty map[string]string            // characterID -> partyID
 	logs        []PartyAdventureLog
+	saveLogErr  error
 }
 
 func newMockPartyRepository() *mockPartyRepository {
@@ -165,6 +166,9 @@ func (r *mockPartyRepository) CountMembers(_ context.Context, partyID string) (i
 }
 
 func (r *mockPartyRepository) SaveAdventureLog(_ context.Context, log PartyAdventureLog) error {
+	if r.saveLogErr != nil {
+		return r.saveLogErr
+	}
 	r.logs = append(r.logs, log)
 	return nil
 }
@@ -771,5 +775,34 @@ func TestPartyService_StartPartyAdventure_OverLevelAndCap(t *testing.T) {
 	// Normal character should cap strictly at Lv 99
 	if updatedNormal.Level != 99 {
 		t.Errorf("expected normal character to remain capped at level 99, got %d", updatedNormal.Level)
+	}
+}
+
+func TestPartyService_StartPartyAdventure_SaveAdventureLogError(t *testing.T) {
+	ctx := context.Background()
+	svc, partyRepo, charRepo, _ := setupTestService(t)
+
+	leader := corecharacter.Character{
+		ID:    "char-leader-err",
+		Name:  "LeaderHero",
+		JobID: "warrior",
+		Level: 10,
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 20, Defense: 10},
+	}
+	charRepo.chars[leader.ID] = leader
+
+	detail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Name:    "ログ失敗テスト",
+		StageID: "forest",
+	})
+	if err != nil {
+		t.Fatalf("CreateParty failed: %v", err)
+	}
+
+	partyRepo.saveLogErr = errors.New("database connection broken")
+
+	_, err = svc.StartPartyAdventure(ctx, detail.Party.ID, leader.ID)
+	if err == nil {
+		t.Fatal("expected StartPartyAdventure to fail when SaveAdventureLog returns error, got nil")
 	}
 }
