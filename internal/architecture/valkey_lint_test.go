@@ -21,6 +21,8 @@ var validProdNamespaces = []string{
 	"party2:ratelimit:",
 	"party2:ranking:",
 	"party2:party:",
+	"party2:dungeon:",
+	"party2:challenge:",
 }
 
 // Required keys documented in SSOT docs/architecture/valkey-keyspace.md
@@ -297,6 +299,8 @@ func TestValkeyKeyspaceDocCoversLuaAndHashTags(t *testing.T) {
 		"party_remove_member",
 		"party_update_member_ready",
 		"party_update_party",
+		"dungeon_step",
+		"challenge_advance_round",
 	}
 
 	for _, term := range requiredSectionsAndTerms {
@@ -327,6 +331,39 @@ func TestValkeyKeyspaceDocCoversTTLScoredZSetPattern(t *testing.T) {
 	for _, term := range requiredTerms {
 		if !strings.Contains(content, term) {
 			t.Errorf("docs/architecture/valkey-keyspace.md does not contain required TTL-scored ZSet pattern term %q", term)
+		}
+	}
+}
+
+func TestTransientRunStateDocCoversLuaAndPersistenceBoundaries(t *testing.T) {
+	repoRoot := "../.."
+	docPath := filepath.Join(repoRoot, "docs", "architecture", "transient-run-state.md")
+
+	data, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("docs/architecture/transient-run-state.md does not exist: %v", err)
+	}
+
+	content := string(data)
+	if len(strings.TrimSpace(content)) == 0 {
+		t.Fatalf("docs/architecture/transient-run-state.md is empty")
+	}
+
+	requiredTerms := []string{
+		"Candidate D",
+		"dungeon_step",
+		"challenge_advance_round",
+		"Cluster Hash Tag",
+		"Two-Phase Settlement",
+		"Crash Recovery",
+		"In-Memory Fallback Parity",
+		"party2:dungeon:{char:<character_id>}:state",
+		"party2:challenge:{char:<character_id>}:session",
+	}
+
+	for _, term := range requiredTerms {
+		if !strings.Contains(content, term) {
+			t.Errorf("docs/architecture/transient-run-state.md does not contain required architectural term %q", term)
 		}
 	}
 }

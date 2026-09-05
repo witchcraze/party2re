@@ -44,7 +44,7 @@ party2:<namespace>:<entity>[:<identifier>...]
 ```
 
 - **Root Prefix**: Always `party2:`. Enforces namespace isolation on shared or multi-tenant Valkey clusters.
-- **Namespace**: The domain or architectural subsystem (`session`, `player`, `maintenance`, `scheduled`, `ratelimit`, `ranking`, `test`).
+- **Namespace**: The domain or architectural subsystem (`session`, `player`, `maintenance`, `scheduled`, `ratelimit`, `ranking`, `party`, `dungeon`, `challenge`, `test`).
 - **Entity**: The specific resource or data collection (`action`, `lock`, `snapshot`, `status`, `sessions`).
 - **Identifier**: Dynamic identifier (`token`, `player_id`, `action_id`, `category`, etc.).
 - **Case**: Strictly lowercase ASCII alphanumeric with colons `:` as delimiters. Compound entity terms use snake_case (`status`, `pending`, `snapshot`).
@@ -125,14 +125,17 @@ The following specifications define the key patterns, data types, and lifecycle 
 
 ### 4.2 Candidate D: In-Progress Run Buffers (Issue #369)
 
+- **Status**: Evaluated and Architecturally Codified (SSOT: [`docs/architecture/transient-run-state.md`](transient-run-state.md)).
 - **Goal**: Buffer active multi-turn dungeon expeditions and challenge gauntlets in Valkey Master, eliminating relational write amplification per turn.
-- **Key Patterns**:
-  - `party2:dungeon:run:<expedition_id>`: `String (JSON)` or `Hash` holding current floor, player HP/MP, turn counter, and floor seed. TTL: 2 hours.
-  - `party2:dungeon:rewards:<expedition_id>`: `String (JSON)` holding uncommitted tentative item drops, gold, and experience gathered during the run. TTL: 2 hours.
-  - `party2:challenge:run:<session_id>`: `String (JSON)` holding current endurance round and tentative rewards. TTL: 2 hours.
+- **Key Patterns (with Mandatory Cluster Hash Tagging `{char:<character_id>}`)**:
+  - `party2:dungeon:{char:<character_id>}:state`: `Hash` holding `expedition_id`, `dungeon_id`, `current_floor`, `pos_x`, `pos_y`, `current_hp`, `turns_remaining`, `status`. TTL: 2 hours (`7200s`), sliding.
+  - `party2:dungeon:{char:<character_id>}:rewards`: `Hash` holding uncommitted provisional item drops, gold, exp, medals. TTL: 2 hours (`7200s`), sliding.
+  - `party2:dungeon:{char:<character_id>}:revealed`: `Set` of visited `floor:x:y` coordinates for fog-of-war tracking. TTL: 2 hours (`7200s`), sliding.
+  - `party2:challenge:{char:<character_id>}:session`: `Hash` holding `session_id`, `tier_id`, `current_round`, `current_hp`, `status`. TTL: 2 hours (`7200s`), sliding.
+  - `party2:challenge:{char:<character_id>}:rewards`: `Hash` holding uncommitted provisional rewards (exp, gold, items). TTL: 2 hours (`7200s`), sliding.
 - **Lifecycle & Boundaries (Two-Phase Settlement)**:
-  - Phase 1 (Active Run): All turn updates occur in Valkey Master. MariaDB is not touched.
-  - Phase 2 (Settlement): Upon victory, retreat, or defeat, an atomic MariaDB transaction executes: durable inventory items are awarded, progression updated, and the Valkey run buffer is immediately deleted (`DEL`).
+  - Phase 1 (Active Run): All turn updates and reward buffering occur 100% in Valkey Master via atomic Lua scripts (`dungeon_step`, `challenge_advance_round`). MariaDB is not touched.
+  - Phase 2 (Settlement): Upon victory, retreat, or defeat, an atomic MariaDB transaction executes via `RunInTx`: durable inventory items are awarded, progression updated, and the Valkey run buffer is immediately deleted (`DEL`).
 
 ### 4.3 Candidate E: World Boss Real-time Shared HP (Issue #370)
 
@@ -212,7 +215,8 @@ The following table catalogs all production and planned Lua scripts active in Pa
 | `party_update_member_ready` | `internal/party/valkey_repository.go` (`updateMemberReadyLua`) | `KEYS[1]`: `lobbyKey`<br>`KEYS[2]`: `readyKey` | `ARGV[1]`: Character ID<br>`ARGV[2]`: Ready Flag (`"1"` or `"0"`)<br>`ARGV[3]`: Lobby TTL<br>`ARGV[4]`: Ready TTL | Atomically toggles a member's ready flag in the lobby state and synchronizes the 60-second ready countdown key (`SET EX 60` or `DEL`). Rejects if character is not a member (`ERR_CHAR_NOT_IN_PARTY`). |
 | `party_update_party` | `internal/party/valkey_repository.go` (`updatePartyLua`) | `KEYS[1]`: `lobbyKey`<br>`KEYS[2]`: `lobbiesIndexKey` | `ARGV[1]`: Party JSON<br>`ARGV[2]`: Lobby TTL<br>`ARGV[3]`: Status (`"recruiting"`, `"disbanded"`, `"completed"`)<br>`ARGV[4]`: Party ID | Atomically updates party configuration (e.g. stage, speed, max members) and removes the party from the recruiting index set (`ZREM`) if transitioned to `disbanded` or `completed`. |
 | *Planned: `zset_ttl_purge`* | Planned SSOT Pattern (Issue #386) | `KEYS[1]`: `ZSet` Key | `ARGV[1]`: Current Timestamp | Atomically purges expired members scored by TTL (`ZREMRANGEBYSCORE`) and returns remaining active count in a single round-trip. |
-| *Planned: `dungeon_step`* | Candidate D (Issue #369) | `KEYS[1]`: `dungeon:{run:<id>}:step`<br>`KEYS[2]`: `dungeon:{run:<id>}:rewards` | `ARGV[1]`: Move Delta<br>`ARGV[2]`: Step Payload | Atomically advances exploration coordinates and buffers tentative room rewards without touching MariaDB during active run. |
+| *Planned: `dungeon_step`* | Candidate D (Issue #369: `docs/architecture/transient-run-state.md`) | `KEYS[1]`: `party2:dungeon:{char:<id>}:state`<br>`KEYS[2]`: `party2:dungeon:{char:<id>}:rewards` | `ARGV[1]`: Expected Expedition ID<br>`ARGV[2]`: Floor<br>`ARGV[3]`: Pos X<br>`ARGV[4]`: Pos Y<br>`ARGV[5]`: HP Delta<br>`ARGV[6]`: Turns Delta<br>`ARGV[7]`: Exp Delta<br>`ARGV[8]`: Gold Delta<br>`ARGV[9]`: Medals Delta<br>`ARGV[10]`: Item ID<br>`ARGV[11]`: Timestamp<br>`ARGV[12]`: TTL (7200s) | Atomically advances exploration coordinates, updates HP/turns budget, and buffers provisional room loot without touching MariaDB during active run. |
+| *Planned: `challenge_advance_round`* | Candidate D (Issue #369: `docs/architecture/transient-run-state.md`) | `KEYS[1]`: `party2:challenge:{char:<id>}:session`<br>`KEYS[2]`: `party2:challenge:{char:<id>}:rewards` | `ARGV[1]`: Expected Session ID<br>`ARGV[2]`: Surviving HP<br>`ARGV[3]`: Exp Delta<br>`ARGV[4]`: Gold Delta<br>`ARGV[5]`: Item ID<br>`ARGV[6]`: Timestamp<br>`ARGV[7]`: TTL (7200s) | Atomically advances endurance challenge wave round, persists surviving HP, and accumulates wave rewards without touching MariaDB during active run. |
 | *Planned: `boss_damage`* | Candidate E (Issue #370) | `KEYS[1]`: `boss:{boss:<id>}:hp`<br>`KEYS[2]`: `boss:{boss:<id>}:lock` | `ARGV[1]`: Damage Amount | Atomically decrements world boss HP (`DECRBY`) and returns defeat trigger indicator if HP drops to `<= 0`. |
 
 ### 5.7 Approved Pattern: Ephemeral Element Tracking via TTL-Scored Sorted Sets with Lazy Purging
