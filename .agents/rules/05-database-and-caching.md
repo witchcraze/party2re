@@ -110,6 +110,28 @@ Durability critical?
 - **Concrete Requirements Only:** Do not introduce Valkey without a concrete feature requirement or measured performance benefit.
 - **Performance Caching:** Do not pre-emptively cache static/master data (Items, Jobs) in Valkey. Introduce read-caching only if empirical measurement proves SQL is a bottleneck.
 
+### 3.5 Valkey Lua Scripting Standards & Operational Constraints
+Valkey evaluates Lua scripts atomically in a single thread, guaranteeing serializability, no partial updates, and zero lock overhead in the application layer. However, because Valkey is single-threaded, a poorly designed Lua script will block all incoming client commands. All Lua scripts in Party2 Re MUST strictly adhere to the following architectural rules:
+- **Mandatory Criteria for Lua Scripting:**
+  - Use Lua scripts (`valkey.NewLuaScript` / `EVALSHA`) ONLY when an operation requires atomic conditional state transitions, multi-key validation, or CAS checks that cannot be achieved with single native commands (`INCR`, `HSET`, `SET NX`).
+  - Do NOT use Lua scripts for single-key updates that native commands support directly.
+  - Do NOT use client-side optimistic concurrency (`WATCH` / `MULTI` / `EXEC`) on high-throughput shared resources where transaction abort rates spike and waste network/CPU retries.
+- **Strict Execution Time Budget & Complexity Budget:**
+  - **Time Budget:** Scripts MUST complete within sub-millisecond budgets (< 1ms). Scripts exceeding 5ms trigger Valkey slowlog alerts and degrade cluster throughput.
+  - **Complexity Limit:** Complexity must not exceed O(1) or O(log N).
+- **Banned in Lua:**
+  - Unbounded loops, large collection iterations, or wildcard key scans (`KEYS *` / `SCAN`). Mechanically enforced across all Go files by AST linter (`internal/architecture/valkey_lint_test.go`).
+  - Heavy JSON serialization/deserialization inside Lua when simple strings, hashes, or flags suffice.
+  - Time-consuming or non-deterministic operations (cryptographic hashing, blocking calls).
+- **Mandatory Cluster Hash Tagging:**
+  - All multi-key operations touched by a Lua script MUST enclose their dynamic co-locating entity identifier in curly braces `{...}` (e.g. `party2:party:{lobby:<id>}:state` and `party2:party:{lobby:<id>}:ready:<char_id>`).
+  - Cross-slot multi-key scripts are strictly prohibited to ensure forward-compatibility with Valkey Cluster sharding.
+- **In-Memory Fallback Parity:**
+  - Any repository or service utilizing Lua scripts MUST implement 100% equivalent atomic validation and state mutation in its Go in-memory fallback store (`internal/valkey/memory.go` or module-specific memory stores).
+  - In-memory test mocks MUST replicate identical error codes (e.g. `ERR_PARTY_NOT_FOUND`, `ERR_PARTY_FULL`) and conditional invariants to guarantee zero mock divergence.
+- **Script Execution Lifecycle:**
+  - Scripts MUST be preloaded using `valkey.NewLuaScript` (leveraging `EVALSHA` with automatic `SCRIPT LOAD` on `NOSCRIPT`), rather than transmitting the full Lua source code on every invocation via raw `EVAL`.
+
 ## 4. Sub-Resource Repository SQL Scoping and Ownership Authorization
 - **Strict SQL Scoping:** When modifying, finalizing, or deleting sub-resources belonging to a player or character (e.g., `challenge_sessions`, `lottery_tickets`, `auction_listings`, `character_challenge_records`, `character_boss_records`, `dungeon_expeditions`, `letters`, `companion_phrases`), SQL queries MUST include ownership predicates in the `WHERE` clause:
   - `WHERE id = ? AND character_id = ?` (or `WHERE id = ? AND player_id = ?`)

@@ -62,6 +62,24 @@ Examples:
 - `party2:test:player:sessions:<player_id>`
 - `party2:test:maintenance:status`
 
+### 2.3 Cluster Hash Tagging Convention (`{...}`)
+
+In a clustered Valkey topology (Valkey Cluster), keys are distributed across 16,384 discrete hash slots. Multi-key operations, atomic transactions, and Lua scripts require all referenced keys to reside in the exact same hash slot.
+
+To guarantee that related multi-key resources hash to the identical slot without triggering `CROSSSLOT Keys in request don't hash to the same slot` errors, the dynamic co-locating entity identifier MUST be enclosed in curly braces `{...}`:
+
+```text
+party2:<namespace>:{<entity>:<id>}[:<sub_resource>]
+```
+
+Examples:
+- `party2:party:{lobby:123}:state`
+- `party2:party:{lobby:123}:ready:char456`
+- `party2:dungeon:{run:789}:step`
+- `party2:dungeon:{run:789}:rewards`
+
+**Operational Rule:** Any multi-key atomic Lua script MUST ensure that all dynamic keys passed in `KEYS[...]` share the identical hash tag `{...}`. Single-node standalone deployments also remain fully compatible with curly brace notation.
+
 ---
 
 ## 3. Master Key Inventory (Comprehensive SSOT Catalog)
@@ -172,6 +190,30 @@ The following specifications define the key patterns, data types, and lifecycle 
 - Valkey client configuration and connection setup MUST use `internal/valkey.NewClient()` and `internal/valkey.GetConfig()`.
 - The application process (`cmd/party2/main.go`) initializes a single multiplexed Valkey client instance and injects it into domain repositories.
 - The client connection is gracefully closed during application shutdown after background workers and HTTP listeners have stopped.
+
+### 5.5 Valkey Lua Scripting Standards & Operational Constraints
+
+Per [`.agents/rules/05-database-and-caching.md`](../../.agents/rules/05-database-and-caching.md) Section 3.5:
+- **Mandatory Criteria:** Use Lua scripts (`valkey.NewLuaScript`) ONLY for atomic conditional state transitions, multi-key validation, or CAS checks that cannot be achieved with single native commands (`INCR`, `HSET`, `SET NX`).
+- **Execution Budget:** Scripts MUST complete within sub-millisecond limits (< 1ms) with complexity <= O(log N).
+- **Prohibited in Lua:** Wildcard scans (`KEYS *`, `SCAN`), unbounded loops, and heavy JSON serialization in Lua.
+- **Cluster Hash Tagging:** Multi-key scripts MUST enclose the co-locating entity ID in `{...}`.
+- **In-Memory Fallback Parity:** Repositories using Lua scripts MUST provide 100% equivalent atomic validation and state mutation in Go in-memory fallback stores.
+- **Preloading:** Scripts MUST be preloaded via `valkey.NewLuaScript` (`EVALSHA` with automatic fallback on `NOSCRIPT`).
+
+### 5.6 Lua Script Registry & Operational Catalog
+
+The following table catalogs all production and planned Lua scripts active in Party2 Re:
+
+| Script Identifier | Source Location | Target Keys (`KEYS[...]`) | Parameters (`ARGV[...]`) | Operation Description & Invariant Guarantees |
+| :--- | :--- | :--- | :--- | :--- |
+| `party_add_member` | `internal/party/valkey_repository.go` (`addMemberLua`) | `KEYS[1]`: `lobbyKey`<br>`KEYS[2]`: `characterKey`<br>`KEYS[3]`: `readyKey` | `ARGV[1]`: Member JSON<br>`ARGV[2]`: Character ID<br>`ARGV[3]`: Party ID<br>`ARGV[4]`: Lobby TTL<br>`ARGV[5]`: Ready TTL<br>`ARGV[6]`: Ready Flag | Atomically adds a member to the party lobby roster if `status != 'disbanded'` and `current_members < max_members`, sets character-to-party mapping and ready countdown key with TTL. Prevents lobby overfilling races under concurrent join attempts. |
+| `party_remove_member` | `internal/party/valkey_repository.go` (`removeMemberLua`) | `KEYS[1]`: `lobbyKey`<br>`KEYS[2]`: `characterKey`<br>`KEYS[3]`: `readyKey` | `ARGV[1]`: Character ID<br>`ARGV[2]`: Lobby TTL | Atomically removes a member from the party lobby roster, deletes their character-to-party reverse index and ready check countdown key, and refreshes lobby TTL. |
+| `party_update_member_ready` | `internal/party/valkey_repository.go` (`updateMemberReadyLua`) | `KEYS[1]`: `lobbyKey`<br>`KEYS[2]`: `readyKey` | `ARGV[1]`: Character ID<br>`ARGV[2]`: Ready Flag (`"1"` or `"0"`)<br>`ARGV[3]`: Lobby TTL<br>`ARGV[4]`: Ready TTL | Atomically toggles a member's ready flag in the lobby state and synchronizes the 60-second ready countdown key (`SET EX 60` or `DEL`). Rejects if character is not a member (`ERR_CHAR_NOT_IN_PARTY`). |
+| `party_update_party` | `internal/party/valkey_repository.go` (`updatePartyLua`) | `KEYS[1]`: `lobbyKey`<br>`KEYS[2]`: `lobbiesIndexKey` | `ARGV[1]`: Party JSON<br>`ARGV[2]`: Lobby TTL<br>`ARGV[3]`: Status (`"recruiting"`, `"disbanded"`, `"completed"`)<br>`ARGV[4]`: Party ID | Atomically updates party configuration (e.g. stage, speed, max members) and removes the party from the recruiting index set (`ZREM`) if transitioned to `disbanded` or `completed`. |
+| *Planned: `zset_ttl_purge`* | Planned SSOT Pattern (Issue #386) | `KEYS[1]`: `ZSet` Key | `ARGV[1]`: Current Timestamp | Atomically purges expired members scored by TTL (`ZREMRANGEBYSCORE`) and returns remaining active count in a single round-trip. |
+| *Planned: `dungeon_step`* | Candidate D (Issue #369) | `KEYS[1]`: `dungeon:{run:<id>}:step`<br>`KEYS[2]`: `dungeon:{run:<id>}:rewards` | `ARGV[1]`: Move Delta<br>`ARGV[2]`: Step Payload | Atomically advances exploration coordinates and buffers tentative room rewards without touching MariaDB during active run. |
+| *Planned: `boss_damage`* | Candidate E (Issue #370) | `KEYS[1]`: `boss:{boss:<id>}:hp`<br>`KEYS[2]`: `boss:{boss:<id>}:lock` | `ARGV[1]`: Damage Amount | Atomically decrements world boss HP (`DECRBY`) and returns defeat trigger indicator if HP drops to `<= 0`. |
 
 ---
 
