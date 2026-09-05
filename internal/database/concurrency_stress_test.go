@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,21 +16,12 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/delivery"
-	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/shop"
 )
 
 var errOutOfStock = errors.New("out of stock")
-
-func getStressConfig() (workers int, operationsPerWorker int) {
-	if os.Getenv("PARTY2_STRESS_ENABLED") == "1" {
-		return 50, 20
-	}
-	// Fast verification for default make check / CI
-	return 15, 10
-}
 
 func TestConcurrencyStressBankTransfersAndDeposits(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
@@ -45,16 +35,7 @@ func TestConcurrencyStressBankTransfersAndDeposits(t *testing.T) {
 	defer db.Close()
 
 	ctx := context.Background()
-	now := time.Now().UTC()
 
-	playerRepo, err := NewPlayerRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	charRepo, err := NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
 	bankRepo, err := NewBankRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -66,92 +47,53 @@ func TestConcurrencyStressBankTransfersAndDeposits(t *testing.T) {
 
 	suffix := id.New()[:8]
 	for i := 0; i < numPlayers; i++ {
-		p, err := coreplayer.New(fmt.Sprintf("sp_%s_%d", suffix, i), "password123", now)
+		c, err := CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("SC_%s_%d", suffix, i), initialBalancePerPlayer)
 		if err != nil {
-			t.Fatal(err)
-		}
-		if err := playerRepo.Save(ctx, p); err != nil {
-			t.Fatal(err)
-		}
-		players[i] = p
-
-		c, err := corecharacter.New(fmt.Sprintf("SC_%s_%d", suffix, i))
-		if err != nil {
-			t.Fatal(err)
-		}
-		c.PlayerID = p.ID
-		c.Money = initialBalancePerPlayer
-		if err := charRepo.Save(ctx, c); err != nil {
 			t.Fatal(err)
 		}
 
 		// Initial deposit
-		_, _, err = bankRepo.Deposit(ctx, p.ID, c.ID, initialBalancePerPlayer)
+		_, _, err = bankRepo.Deposit(ctx, c.PlayerID, c.ID, initialBalancePerPlayer)
 		if err != nil {
 			t.Fatal(err)
 		}
+		players[i] = coreplayer.Player{ID: c.PlayerID}
 	}
 
-	workers, opsPerWorker := getStressConfig()
-	totalOps := workers * opsPerWorker
-
-	var wg sync.WaitGroup
-	var successfulTransfers int64
+	cfg := GetStressConfig()
 	var failedTransfers int64
-	var deadlockErrors int64
 
-	start := time.Now()
+	res := RunConcurrentStressTest(t, cfg, func(workerID int, op int) error {
+		r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerID*1000+op)))
+		fromIdx := r.Intn(numPlayers)
+		toIdx := r.Intn(numPlayers)
+		for toIdx == fromIdx {
+			toIdx = r.Intn(numPlayers)
+		}
 
-	for w := 0; w < workers; w++ {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-			r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerID)))
+		fromPlayer := players[fromIdx]
+		toPlayer := players[toIdx]
+		transferAmount := int64(r.Intn(200) + 1)
 
-			for op := 0; op < opsPerWorker; op++ {
-				// Pick 2 distinct players
-				fromIdx := r.Intn(numPlayers)
-				toIdx := r.Intn(numPlayers)
-				for toIdx == fromIdx {
-					toIdx = r.Intn(numPlayers)
-				}
+		record := bank.TransferRecord{
+			ID:           id.New(),
+			FromPlayerID: fromPlayer.ID,
+			ToPlayerID:   toPlayer.ID,
+			Amount:       transferAmount,
+			CreatedAt:    time.Now().UTC(),
+		}
 
-				fromPlayer := players[fromIdx]
-				toPlayer := players[toIdx]
-				transferAmount := int64(r.Intn(200) + 1)
-
-				record := bank.TransferRecord{
-					ID:           id.New(),
-					FromPlayerID: fromPlayer.ID,
-					ToPlayerID:   toPlayer.ID,
-					Amount:       transferAmount,
-					CreatedAt:    time.Now().UTC(),
-				}
-
-				_, _, err := bankRepo.Transfer(ctx, record)
-				if err != nil {
-					if errors.Is(err, bank.ErrInsufficientBalance) {
-						atomic.AddInt64(&failedTransfers, 1)
-					} else {
-						// Check if deadlock error
-						if isDeadlockError(err) {
-							atomic.AddInt64(&deadlockErrors, 1)
-						}
-						t.Errorf("worker %d unexpected transfer error: %v", workerID, err)
-					}
-				} else {
-					atomic.AddInt64(&successfulTransfers, 1)
-				}
+		_, _, err := bankRepo.Transfer(ctx, record)
+		if err != nil {
+			if errors.Is(err, bank.ErrInsufficientBalance) {
+				atomic.AddInt64(&failedTransfers, 1)
+				return err
 			}
-		}(w)
-	}
-
-	wg.Wait()
-	duration := time.Since(start)
-
-	if deadlockErrors > 0 {
-		t.Fatalf("Deadlock detected during concurrent transfers: count = %d", deadlockErrors)
-	}
+			t.Errorf("worker %d unexpected transfer error: %v", workerID, err)
+			return err
+		}
+		return nil
+	})
 
 	// Verify Conservation of Money across all accounts
 	var totalEndingBalance int64
@@ -172,7 +114,7 @@ func TestConcurrencyStressBankTransfersAndDeposits(t *testing.T) {
 	}
 
 	t.Logf("Bank Concurrency Stress Test Completed: %d total ops (%d success, %d insufficient balance) in %v. Total conserved: %d gold",
-		totalOps, successfulTransfers, failedTransfers, duration, totalEndingBalance)
+		res.TotalOps, res.Successes, failedTransfers, res.Duration, totalEndingBalance)
 }
 
 func TestConcurrencyStressGuildConcurrentDonations(t *testing.T) {
@@ -189,86 +131,28 @@ func TestConcurrencyStressGuildConcurrentDonations(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	playerRepo, err := NewPlayerRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	charRepo, err := NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
 	guildRepo, err := NewGuildRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	suffix := id.New()[:8]
-	leaderPlayer, err := coreplayer.New("glead_p_"+suffix, "password123", now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := playerRepo.Save(ctx, leaderPlayer); err != nil {
-		t.Fatal(err)
-	}
-
-	leaderChar, err := corecharacter.New("GLeadChar_" + suffix)
-	if err != nil {
-		t.Fatal(err)
-	}
-	leaderChar.PlayerID = leaderPlayer.ID
-	leaderChar.Money = 50000
-	if err := charRepo.Save(ctx, leaderChar); err != nil {
-		t.Fatal(err)
-	}
-
-	testGuild := guild.Guild{
-		ID:                id.New(),
-		Name:              "StressG_" + suffix,
-		LeaderCharacterID: leaderChar.ID,
-		Level:             1,
-		Exp:               0,
-		Gold:              0,
-		Notice:            "Stress Testing Guild",
-		CreatedAt:         now,
-		UpdatedAt:         now,
-	}
-	creatorMember := guild.Member{
-		GuildID:          testGuild.ID,
-		CharacterID:      leaderChar.ID,
-		Role:             guild.RoleLeader,
-		JoinedAt:         now,
-		TotalDonatedGold: 0,
-	}
-
-	createdGuild, _, _, err := guildRepo.CreateGuild(ctx, testGuild, creatorMember, 0)
+	createdGuild, _, err := CreateTestGuildWithLeader(ctx, db, "StressG_"+suffix, 50000)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	workers, opsPerWorker := getStressConfig()
+	cfg := GetStressConfig()
 	donationAmountPerOp := 50
 
 	type memberInfo struct {
 		character corecharacter.Character
 	}
-	members := make([]memberInfo, workers)
+	members := make([]memberInfo, cfg.Workers)
 
-	for w := 0; w < workers; w++ {
-		p, err := coreplayer.New(fmt.Sprintf("gmp_%s_%d", suffix, w), "password123", now)
+	for w := 0; w < cfg.Workers; w++ {
+		c, err := CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("GM_%s_%d", suffix, w), cfg.OpsPerWorker*donationAmountPerOp*2)
 		if err != nil {
-			t.Fatal(err)
-		}
-		if err := playerRepo.Save(ctx, p); err != nil {
-			t.Fatal(err)
-		}
-
-		c, err := corecharacter.New(fmt.Sprintf("GM_%s_%d", suffix, w))
-		if err != nil {
-			t.Fatal(err)
-		}
-		c.PlayerID = p.ID
-		c.Money = opsPerWorker * donationAmountPerOp * 2 // sufficient money
-		if err := charRepo.Save(ctx, c); err != nil {
 			t.Fatal(err)
 		}
 
@@ -285,38 +169,15 @@ func TestConcurrencyStressGuildConcurrentDonations(t *testing.T) {
 		members[w] = memberInfo{character: c}
 	}
 
-	var wg sync.WaitGroup
-	var successfulDonations int64
-	var deadlockErrors int64
-
-	start := time.Now()
-
-	for w := 0; w < workers; w++ {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-			m := members[workerID]
-
-			for op := 0; op < opsPerWorker; op++ {
-				_, _, _, err := guildRepo.Donate(ctx, createdGuild.ID, m.character.ID, donationAmountPerOp)
-				if err != nil {
-					if isDeadlockError(err) {
-						atomic.AddInt64(&deadlockErrors, 1)
-					}
-					t.Errorf("worker %d unexpected donation error: %v", workerID, err)
-				} else {
-					atomic.AddInt64(&successfulDonations, 1)
-				}
-			}
-		}(w)
-	}
-
-	wg.Wait()
-	duration := time.Since(start)
-
-	if deadlockErrors > 0 {
-		t.Fatalf("Deadlock detected during concurrent guild donations: count = %d", deadlockErrors)
-	}
+	res := RunConcurrentStressTest(t, cfg, func(workerID int, op int) error {
+		m := members[workerID]
+		_, _, _, err := guildRepo.Donate(ctx, createdGuild.ID, m.character.ID, donationAmountPerOp)
+		if err != nil {
+			t.Errorf("worker %d unexpected donation error: %v", workerID, err)
+			return err
+		}
+		return nil
+	})
 
 	// Verify Guild Total Gold and Member Contributions
 	finalGuild, guildMembers, err := guildRepo.GetGuild(ctx, createdGuild.ID)
@@ -324,7 +185,7 @@ func TestConcurrencyStressGuildConcurrentDonations(t *testing.T) {
 		t.Fatalf("failed to get guild: %v", err)
 	}
 
-	expectedGuildGold := int64(successfulDonations * int64(donationAmountPerOp))
+	expectedGuildGold := int64(res.Successes * int64(donationAmountPerOp))
 	if finalGuild.Gold != expectedGuildGold {
 		t.Fatalf("Guild gold mismatch! Expected %d, got %d", expectedGuildGold, finalGuild.Gold)
 	}
@@ -340,7 +201,7 @@ func TestConcurrencyStressGuildConcurrentDonations(t *testing.T) {
 	}
 
 	t.Logf("Guild Concurrency Stress Test Completed: %d successful donations totaling %d gold in %v",
-		successfulDonations, expectedGuildGold, duration)
+		res.Successes, expectedGuildGold, res.Duration)
 }
 
 func TestConcurrencyStressShopStockDepletion(t *testing.T) {
@@ -355,16 +216,7 @@ func TestConcurrencyStressShopStockDepletion(t *testing.T) {
 	defer db.Close()
 
 	ctx := context.Background()
-	now := time.Now().UTC()
 
-	playerRepo, err := NewPlayerRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	charRepo, err := NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
 	invRepo, err := NewInventoryRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -391,105 +243,73 @@ func TestConcurrencyStressShopStockDepletion(t *testing.T) {
 	workers := 25
 	buyers := make([]corecharacter.Character, workers)
 	for w := 0; w < workers; w++ {
-		p, err := coreplayer.New(fmt.Sprintf("bp_%s_%d", suffix, w), "password123", now)
+		c, err := CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("B_%s_%d", suffix, w), itemPrice*2)
 		if err != nil {
-			t.Fatal(err)
-		}
-		if err := playerRepo.Save(ctx, p); err != nil {
-			t.Fatal(err)
-		}
-
-		c, err := corecharacter.New(fmt.Sprintf("B_%s_%d", suffix, w))
-		if err != nil {
-			t.Fatal(err)
-		}
-		c.PlayerID = p.ID
-		c.Money = itemPrice * 2 // enough money
-		if err := charRepo.Save(ctx, c); err != nil {
 			t.Fatal(err)
 		}
 		buyers[w] = c
 	}
 
-	var wg sync.WaitGroup
-	var successfulPurchases int64
 	var outOfStockCount int64
-	var deadlockErrors int64
 
-	start := time.Now()
+	res := RunConcurrentStressTest(t, ConcurrencyStressConfig{Workers: workers, OpsPerWorker: 1}, func(workerID int, op int) error {
+		buyer := buyers[workerID]
 
-	for w := 0; w < workers; w++ {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-			buyer := buyers[workerID]
+		// Atomic purchase transaction simulation with RunInTx and row locking
+		err := RunInTx(ctx, db, func(txCtx context.Context) error {
+			exec := ExecutorFromContext(txCtx, db)
 
-			// Atomic purchase transaction simulation with RunInTx and row locking
-			err := RunInTx(ctx, db, func(txCtx context.Context) error {
-				exec := ExecutorFromContext(txCtx, db)
-
-				// 1. Lock character
-				char, err := scanCharacterRow(exec.QueryRowContext(txCtx, `SELECT `+characterColumns+` FROM characters WHERE id = ? FOR UPDATE`, buyer.ID))
-				if err != nil {
-					return err
-				}
-				if char.Money < itemPrice {
-					return shop.ErrInsufficientFunds
-				}
-
-				// 2. Check and decrement stock atomically using CAS
-				for {
-					stock := atomic.LoadInt64(&currentStock)
-					if stock <= 0 {
-						return errOutOfStock
-					}
-					if atomic.CompareAndSwapInt64(&currentStock, stock, stock-1) {
-						break
-					}
-				}
-
-				// 3. Deduct money
-				char.Money -= itemPrice
-				if err := updateCharacterAtomically(txCtx, exec, char); err != nil {
-					return err
-				}
-
-				// 4. Add item to inventory
-				itemInstance, err := coreitem.NewInstance(itemDefID, 1)
-				if err != nil {
-					return err
-				}
-				_, err = exec.ExecContext(txCtx, `
-					INSERT INTO inventory_items (id, character_id, definition_id, quantity, enhancement_level)
-					VALUES (?, ?, ?, ?, ?)
-				`, itemInstance.ID, char.ID, itemInstance.DefinitionID, itemInstance.Quantity, itemInstance.EnhancementLevel)
-				return err
-			})
-
+			// 1. Lock character
+			char, err := scanCharacterRow(exec.QueryRowContext(txCtx, `SELECT `+characterColumns+` FROM characters WHERE id = ? FOR UPDATE`, buyer.ID))
 			if err != nil {
-				if errors.Is(err, errOutOfStock) {
-					atomic.AddInt64(&outOfStockCount, 1)
-				} else {
-					if isDeadlockError(err) {
-						atomic.AddInt64(&deadlockErrors, 1)
-					}
-					t.Errorf("buyer %d unexpected error: %v", workerID, err)
-				}
-			} else {
-				atomic.AddInt64(&successfulPurchases, 1)
+				return err
 			}
-		}(w)
-	}
+			if char.Money < itemPrice {
+				return shop.ErrInsufficientFunds
+			}
 
-	wg.Wait()
-	duration := time.Since(start)
+			// 2. Check and decrement stock atomically using CAS
+			for {
+				stock := atomic.LoadInt64(&currentStock)
+				if stock <= 0 {
+					return errOutOfStock
+				}
+				if atomic.CompareAndSwapInt64(&currentStock, stock, stock-1) {
+					break
+				}
+			}
 
-	if deadlockErrors > 0 {
-		t.Fatalf("Deadlock detected during concurrent shop stock depletion: count = %d", deadlockErrors)
-	}
+			// 3. Deduct money
+			char.Money -= itemPrice
+			if err := updateCharacterAtomically(txCtx, exec, char); err != nil {
+				return err
+			}
 
-	if int(successfulPurchases) != initialStock {
-		t.Fatalf("Expected exactly %d successful purchases, got %d", initialStock, successfulPurchases)
+			// 4. Add item to inventory
+			itemInstance, err := coreitem.NewInstance(itemDefID, 1)
+			if err != nil {
+				return err
+			}
+			_, err = exec.ExecContext(txCtx, `
+				INSERT INTO inventory_items (id, character_id, definition_id, quantity, enhancement_level)
+				VALUES (?, ?, ?, ?, ?)
+			`, itemInstance.ID, char.ID, itemInstance.DefinitionID, itemInstance.Quantity, itemInstance.EnhancementLevel)
+			return err
+		})
+
+		if err != nil {
+			if errors.Is(err, errOutOfStock) {
+				atomic.AddInt64(&outOfStockCount, 1)
+				return err
+			}
+			t.Errorf("buyer %d unexpected error: %v", workerID, err)
+			return err
+		}
+		return nil
+	})
+
+	if int(res.Successes) != initialStock {
+		t.Fatalf("Expected exactly %d successful purchases, got %d", initialStock, res.Successes)
 	}
 
 	expectedOutOfStock := workers - initialStock
@@ -512,7 +332,7 @@ func TestConcurrencyStressShopStockDepletion(t *testing.T) {
 	}
 
 	t.Logf("Shop Stock Depletion Stress Test Completed: %d purchased, %d out-of-stock in %v",
-		successfulPurchases, outOfStockCount, duration)
+		res.Successes, outOfStockCount, res.Duration)
 }
 
 func TestConcurrencyStressAuctionBiddingAndBuyout(t *testing.T) {
@@ -529,10 +349,6 @@ func TestConcurrencyStressAuctionBiddingAndBuyout(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	playerRepo, err := NewPlayerRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
 	charRepo, err := NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -543,20 +359,8 @@ func TestConcurrencyStressAuctionBiddingAndBuyout(t *testing.T) {
 	}
 
 	suffix := id.New()[:8]
-	sellerPlayer, err := coreplayer.New("sel_p_"+suffix, "password123", now)
+	sellerChar, err := CreateTestCharacter(ctx, db, "SC_"+suffix)
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := playerRepo.Save(ctx, sellerPlayer); err != nil {
-		t.Fatal(err)
-	}
-
-	sellerChar, err := corecharacter.New("SC_" + suffix)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sellerChar.PlayerID = sellerPlayer.ID
-	if err := charRepo.Save(ctx, sellerChar); err != nil {
 		t.Fatal(err)
 	}
 
@@ -580,62 +384,30 @@ func TestConcurrencyStressAuctionBiddingAndBuyout(t *testing.T) {
 	numBidders := 20
 	bidders := make([]corecharacter.Character, numBidders)
 	for i := 0; i < numBidders; i++ {
-		p, err := coreplayer.New(fmt.Sprintf("bidp_%s_%d", suffix, i), "password123", now)
+		c, err := CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("BC_%s_%d", suffix, i), 10000)
 		if err != nil {
-			t.Fatal(err)
-		}
-		if err := playerRepo.Save(ctx, p); err != nil {
-			t.Fatal(err)
-		}
-
-		c, err := corecharacter.New(fmt.Sprintf("BC_%s_%d", suffix, i))
-		if err != nil {
-			t.Fatal(err)
-		}
-		c.PlayerID = p.ID
-		c.Money = 10000 // rich bidders
-		if err := charRepo.Save(ctx, c); err != nil {
 			t.Fatal(err)
 		}
 		bidders[i] = c
 	}
 
-	var wg sync.WaitGroup
-	var successfulBids int64
 	var outbidErrors int64
-	var deadlockErrors int64
 
-	start := time.Now()
+	res := RunConcurrentStressTest(t, ConcurrencyStressConfig{Workers: numBidders, OpsPerWorker: 1}, func(workerID int, op int) error {
+		bidder := bidders[workerID]
+		bidAmount := startBid + (workerID+1)*50
 
-	for i := 0; i < numBidders; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			bidder := bidders[idx]
-			bidAmount := startBid + (idx+1)*50
-
-			_, err := auctionRepo.PlaceBid(ctx, listing.ID, bidder.ID, bidAmount)
-			if err != nil {
-				if errors.Is(err, auction.ErrInvalidBidAmount) || errors.Is(err, auction.ErrListingNotActive) {
-					atomic.AddInt64(&outbidErrors, 1)
-				} else {
-					if isDeadlockError(err) {
-						atomic.AddInt64(&deadlockErrors, 1)
-					}
-					t.Errorf("bidder %d unexpected bid error: %v", idx, err)
-				}
-			} else {
-				atomic.AddInt64(&successfulBids, 1)
+		_, err := auctionRepo.PlaceBid(ctx, listing.ID, bidder.ID, bidAmount)
+		if err != nil {
+			if errors.Is(err, auction.ErrInvalidBidAmount) || errors.Is(err, auction.ErrListingNotActive) {
+				atomic.AddInt64(&outbidErrors, 1)
+				return err
 			}
-		}(i)
-	}
-
-	wg.Wait()
-	duration := time.Since(start)
-
-	if deadlockErrors > 0 {
-		t.Fatalf("Deadlock detected during concurrent auction bidding: count = %d", deadlockErrors)
-	}
+			t.Errorf("bidder %d unexpected bid error: %v", workerID, err)
+			return err
+		}
+		return nil
+	})
 
 	// Verify Auction State
 	finalListing, err := auctionRepo.GetListing(ctx, listing.ID)
@@ -663,7 +435,7 @@ func TestConcurrencyStressAuctionBiddingAndBuyout(t *testing.T) {
 	}
 
 	t.Logf("Auction Bidding Concurrency Stress Test Completed: %d successful bids, %d outbids in %v. Highest bid: %d by %v",
-		successfulBids, outbidErrors, duration, finalListing.CurrentBid, *finalListing.HighestBidderID)
+		res.Successes, outbidErrors, res.Duration, finalListing.CurrentBid, *finalListing.HighestBidderID)
 }
 
 func TestConcurrencyStressMultiDomainChaos(t *testing.T) {
@@ -680,10 +452,6 @@ func TestConcurrencyStressMultiDomainChaos(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	playerRepo, err := NewPlayerRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
 	charRepo, err := NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -703,43 +471,13 @@ func TestConcurrencyStressMultiDomainChaos(t *testing.T) {
 
 	suffix := id.New()[:8]
 
-	// Shared Guild
-	leadP, err := coreplayer.New("cgp_"+suffix, "password123", now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := playerRepo.Save(ctx, leadP); err != nil {
-		t.Fatal(err)
-	}
-
-	leadC, err := corecharacter.New("CL_" + suffix)
-	if err != nil {
-		t.Fatal(err)
-	}
-	leadC.PlayerID = leadP.ID
-	leadC.Money = 50000
-	if err := charRepo.Save(ctx, leadC); err != nil {
-		t.Fatal(err)
-	}
-
-	sharedGuild, _, _, err := guildRepo.CreateGuild(ctx, guild.Guild{
-		ID:                id.New(),
-		Name:              "ChaosG_" + suffix,
-		LeaderCharacterID: leadC.ID,
-		Level:             1,
-		Notice:            "Chaos guild",
-		CreatedAt:         now,
-		UpdatedAt:         now,
-	}, guild.Member{
-		CharacterID: leadC.ID,
-		Role:        guild.RoleLeader,
-		JoinedAt:    now,
-	}, 0)
+	// Shared Guild via centralized factory
+	sharedGuild, _, err := CreateTestGuildWithLeader(ctx, db, "ChaosG_"+suffix, 50000)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Setup 10 chaos subjects
+	// Setup 10 chaos subjects via centralized factories
 	numSubjects := 10
 	type subject struct {
 		player    coreplayer.Player
@@ -748,25 +486,12 @@ func TestConcurrencyStressMultiDomainChaos(t *testing.T) {
 	subjects := make([]subject, numSubjects)
 
 	for i := 0; i < numSubjects; i++ {
-		p, err := coreplayer.New(fmt.Sprintf("cp_%s_%d", suffix, i), "password123", now)
+		c, err := CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("CC_%s_%d", suffix, i), 10000)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := playerRepo.Save(ctx, p); err != nil {
-			t.Fatal(err)
-		}
 
-		c, err := corecharacter.New(fmt.Sprintf("CC_%s_%d", suffix, i))
-		if err != nil {
-			t.Fatal(err)
-		}
-		c.PlayerID = p.ID
-		c.Money = 10000
-		if err := charRepo.Save(ctx, c); err != nil {
-			t.Fatal(err)
-		}
-
-		_, _, err = bankRepo.Deposit(ctx, p.ID, c.ID, 5000)
+		_, _, err = bankRepo.Deposit(ctx, c.PlayerID, c.ID, 5000)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -781,122 +506,68 @@ func TestConcurrencyStressMultiDomainChaos(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = depotRepo.Save(ctx, depot.Depot{
-			CharacterID: c.ID,
-			Capacity:    20,
-			Gold:        1000,
-			Items:       nil,
-		})
+		_, err = CreateTestDepot(ctx, db, c.ID, 1000, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		subjects[i] = subject{player: p, character: c}
-	}
-
-	workers, opsPerWorker := getStressConfig()
-	var wg sync.WaitGroup
-	var completedChaosOps int64
-	var deadlockErrors int64
-
-	start := time.Now()
-
-	for w := 0; w < workers; w++ {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-			r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerID)))
-
-			for op := 0; op < opsPerWorker; op++ {
-				action := r.Intn(4)
-				s1 := subjects[r.Intn(numSubjects)]
-				s2 := subjects[r.Intn(numSubjects)]
-
-				switch action {
-				case 0:
-					// Bank Transfer
-					if s1.player.ID != s2.player.ID {
-						_, _, err := bankRepo.Transfer(ctx, bank.TransferRecord{
-							ID:           id.New(),
-							FromPlayerID: s1.player.ID,
-							ToPlayerID:   s2.player.ID,
-							Amount:       int64(r.Intn(50) + 1),
-							CreatedAt:    time.Now().UTC(),
-						})
-						if err != nil && !errors.Is(err, bank.ErrInsufficientBalance) {
-							if isDeadlockError(err) {
-								atomic.AddInt64(&deadlockErrors, 1)
-							}
-						}
-					}
-				case 1:
-					// Guild Donation
-					_, _, _, err := guildRepo.Donate(ctx, sharedGuild.ID, s1.character.ID, 10)
-					if err != nil && !errors.Is(err, guild.ErrInsufficientFunds) {
-						if isDeadlockError(err) {
-							atomic.AddInt64(&deadlockErrors, 1)
-						}
-					}
-				case 2:
-					// Depot Gold Storage
-					dep, err := depotRepo.FindByCharacterID(ctx, s1.character.ID)
-					if err == nil {
-						dep.Gold += 10
-						_ = depotRepo.Save(ctx, dep)
-					}
-				case 3:
-					// Character Profile / Money Update within RunInTx
-					_ = RunInTx(ctx, db, func(txCtx context.Context) error {
-						c, err := charRepo.FindByID(txCtx, s1.character.ID)
-						if err != nil {
-							return err
-						}
-						c.Money += 5
-						return charRepo.Update(txCtx, c)
-					})
-				}
-				atomic.AddInt64(&completedChaosOps, 1)
-			}
-		}(w)
-	}
-
-	wg.Wait()
-	duration := time.Since(start)
-
-	if deadlockErrors > 0 {
-		t.Fatalf("Deadlock detected in Multi-Domain Chaos Stress Test: count = %d", deadlockErrors)
-	}
-
-	t.Logf("Multi-Domain Chaos Stress Test Completed: %d mixed domain operations across %d workers in %v with 0 deadlocks",
-		completedChaosOps, workers, duration)
-}
-
-func isDeadlockError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errStr := err.Error()
-	// MariaDB Error 1213: Deadlock found when trying to get lock
-	// MariaDB Error 1205: Lock wait timeout exceeded
-	return errors.Is(err, context.DeadlineExceeded) ||
-		(len(errStr) > 0 && (contains(errStr, "1213") ||
-			contains(errStr, "Deadlock") ||
-			contains(errStr, "deadlock") ||
-			contains(errStr, "1205") ||
-			contains(errStr, "Lock wait timeout")))
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || (len(s) > 0 && len(substr) > 0 && findSubstr(s, substr)))
-}
-
-func findSubstr(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
+		subjects[i] = subject{
+			player:    coreplayer.Player{ID: c.PlayerID},
+			character: c,
 		}
 	}
-	return false
+
+	cfg := GetStressConfig()
+	res := RunConcurrentStressTest(t, cfg, func(workerID int, op int) error {
+		r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerID*1000+op)))
+		action := r.Intn(4)
+		s1 := subjects[r.Intn(numSubjects)]
+		s2 := subjects[r.Intn(numSubjects)]
+
+		switch action {
+		case 0:
+			// Bank Transfer
+			if s1.player.ID != s2.player.ID {
+				_, _, err := bankRepo.Transfer(ctx, bank.TransferRecord{
+					ID:           id.New(),
+					FromPlayerID: s1.player.ID,
+					ToPlayerID:   s2.player.ID,
+					Amount:       int64(r.Intn(50) + 1),
+					CreatedAt:    time.Now().UTC(),
+				})
+				if err != nil && !errors.Is(err, bank.ErrInsufficientBalance) {
+					return err
+				}
+			}
+		case 1:
+			// Guild Donation
+			_, _, _, err := guildRepo.Donate(ctx, sharedGuild.ID, s1.character.ID, 10)
+			if err != nil && !errors.Is(err, guild.ErrInsufficientFunds) {
+				return err
+			}
+		case 2:
+			// Depot Gold Storage
+			dep, err := depotRepo.FindByCharacterID(ctx, s1.character.ID)
+			if err == nil {
+				dep.Gold += 10
+				_ = depotRepo.Save(ctx, dep)
+			}
+		case 3:
+			// Character Profile / Money Update within RunInTx
+			_ = RunInTx(ctx, db, func(txCtx context.Context) error {
+				c, err := charRepo.FindByID(txCtx, s1.character.ID)
+				if err != nil {
+					return err
+				}
+				c.Money += 5
+				return charRepo.Update(txCtx, c)
+			})
+		}
+		return nil
+	})
+
+	t.Logf("Multi-Domain Chaos Stress Test Completed: %d mixed domain operations across %d workers in %v with 0 deadlocks",
+		res.TotalOps, cfg.Workers, res.Duration)
 }
 
 func TestConcurrencyStressDeliveryClaimVsCancel(t *testing.T) {
@@ -913,10 +584,6 @@ func TestConcurrencyStressDeliveryClaimVsCancel(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	playerRepo, err := NewPlayerRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
 	charRepo, err := NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -941,26 +608,15 @@ func TestConcurrencyStressDeliveryClaimVsCancel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create Sender & Recipient
-	senderPlayer, err := coreplayer.New("del_send_"+id.New()[:6], "password123", now)
+	// Create Sender & Recipient via centralized factory
+	senderChar, err := CreateTestCharacterWithFunds(ctx, db, "DelivSender", 100000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = playerRepo.Save(ctx, senderPlayer)
-	senderChar, _ := corecharacter.New("Sender-" + id.New()[:6])
-	senderChar.PlayerID = senderPlayer.ID
-	senderChar.Money = 100000
-	_ = charRepo.Save(ctx, senderChar)
-
-	recipientPlayer, err := coreplayer.New("del_recip_"+id.New()[:6], "password123", now)
+	recipientChar, err := CreateTestCharacterWithFunds(ctx, db, "DelivRecipient", 5000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = playerRepo.Save(ctx, recipientPlayer)
-	recipientChar, _ := corecharacter.New("Recipient-" + id.New()[:6])
-	recipientChar.PlayerID = recipientPlayer.ID
-	recipientChar.Money = 5000
-	_ = charRepo.Save(ctx, recipientChar)
 
 	const numRounds = 20
 	var claimWins int64
@@ -975,23 +631,15 @@ func TestConcurrencyStressDeliveryClaimVsCancel(t *testing.T) {
 			t.Fatalf("round %d: SendParcel failed: %v", i, err)
 		}
 
-		var wg sync.WaitGroup
-		wg.Add(2)
-
-		var claimErr error
-		var cancelErr error
-
-		go func() {
-			defer wg.Done()
-			_, claimErr = deliverySvc.ClaimParcel(ctx, recipientChar.ID, parcel.ID, now)
-		}()
-
-		go func() {
-			defer wg.Done()
-			cancelErr = deliverySvc.CancelParcel(ctx, senderChar.ID, parcel.ID)
-		}()
-
-		wg.Wait()
+		claimErr, cancelErr := RunRace2(
+			func() error {
+				_, err := deliverySvc.ClaimParcel(ctx, recipientChar.ID, parcel.ID, now)
+				return err
+			},
+			func() error {
+				return deliverySvc.CancelParcel(ctx, senderChar.ID, parcel.ID)
+			},
+		)
 
 		if claimErr == nil && cancelErr == nil {
 			t.Fatalf("round %d: DOUBLE SPEND! Both ClaimParcel and CancelParcel succeeded on parcel %s", i, parcel.ID)

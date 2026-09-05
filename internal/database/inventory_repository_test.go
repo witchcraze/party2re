@@ -5,7 +5,6 @@ import (
 	"os"
 	"testing"
 
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 )
 
@@ -25,25 +24,18 @@ func TestInventoryRepositoryPersistsAndLoadsInventory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inventory, err := coreinventory.New(character.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
 	instance, err := item.NewInstance("potion", 2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := inventory.Add(instance); err != nil {
+	inventory, err := CreateTestInventoryWithItems(context.Background(), db, character.ID, []item.Instance{instance})
+	if err != nil {
 		t.Fatal(err)
 	}
 
 	repository, err := NewInventoryRepository(db)
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	if err := repository.Save(context.Background(), inventory); err != nil {
-		t.Fatalf("Save() error = %v", err)
 	}
 	got, err := repository.FindByCharacterID(context.Background(), character.ID)
 	if err != nil {

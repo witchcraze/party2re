@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/bank"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 )
 
 func TestBankRepositoryDepositWithdrawAndTransfer(t *testing.T) {
@@ -26,46 +24,22 @@ func TestBankRepositoryDepositWithdrawAndTransfer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	charRepo, err := NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	playerRepo, err := NewPlayerRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	ctx := context.Background()
-	now := time.Now().UTC()
 
-	// 1. Create two players
-	player1, err := coreplayer.New("bank_p1_"+time.Now().Format("20060102150405.000000"), "securepass", now)
+	// 1. Create two players and character
+	player2, err := CreateTestPlayer(ctx, db)
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := playerRepo.Save(ctx, player1); err != nil {
-		t.Fatal(err)
-	}
-	player2, err := coreplayer.New("bank_p2_"+time.Now().Format("20060102150405.000000"), "securepass", now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := playerRepo.Save(ctx, player2); err != nil {
 		t.Fatal(err)
 	}
 
-	char1, err := corecharacter.New("Banker 1")
+	char1, err := CreateTestCharacterWithFunds(ctx, db, "Banker 1", 1000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	char1.PlayerID = player1.ID
-	char1.Money = 1000
-	if err := charRepo.Save(ctx, char1); err != nil {
-		t.Fatal(err)
-	}
+	player1ID := char1.PlayerID
 
 	// 2. Deposit
-	acc1, updatedChar1, err := bankRepo.Deposit(ctx, player1.ID, char1.ID, 400)
+	acc1, updatedChar1, err := bankRepo.Deposit(ctx, player1ID, char1.ID, 400)
 	if err != nil {
 		t.Fatalf("Deposit error: %v", err)
 	}
@@ -77,7 +51,7 @@ func TestBankRepositoryDepositWithdrawAndTransfer(t *testing.T) {
 	transferID := "t_" + char1.ID[:8]
 	record := bank.TransferRecord{
 		ID:           transferID,
-		FromPlayerID: player1.ID,
+		FromPlayerID: player1ID,
 		ToPlayerID:   player2.ID,
 		Amount:       250,
 		CreatedAt:    time.Now().UTC(),
@@ -94,7 +68,7 @@ func TestBankRepositoryDepositWithdrawAndTransfer(t *testing.T) {
 	}
 
 	// 4. Withdraw from player1
-	acc1AfterWithdraw, char1AfterWithdraw, err := bankRepo.Withdraw(ctx, player1.ID, char1.ID, 100)
+	acc1AfterWithdraw, char1AfterWithdraw, err := bankRepo.Withdraw(ctx, player1ID, char1.ID, 100)
 	if err != nil {
 		t.Fatalf("Withdraw error: %v", err)
 	}
@@ -103,7 +77,7 @@ func TestBankRepositoryDepositWithdrawAndTransfer(t *testing.T) {
 	}
 
 	// 5. Check transfer history
-	transfers, err := bankRepo.ListTransfers(ctx, player1.ID, 10)
+	transfers, err := bankRepo.ListTransfers(ctx, player1ID, 10)
 	if err != nil {
 		t.Fatalf("ListTransfers error: %v", err)
 	}

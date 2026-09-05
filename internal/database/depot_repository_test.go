@@ -38,19 +38,13 @@ func TestDepotRepositorySaveAndFind(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dep, err := depot.NewDepot(char.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dep.Gold = 1000
 	inst, err := item.NewInstance("item-001", 5)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = dep.AddItem(inst)
-
-	if err := depotRepo.Save(ctx, dep); err != nil {
-		t.Fatalf("Save() error = %v", err)
+	_, err = CreateTestDepot(ctx, db, char.ID, 1000, []item.Instance{inst})
+	if err != nil {
+		t.Fatalf("CreateTestDepot error = %v", err)
 	}
 
 	restored, err := depotRepo.FindByCharacterID(ctx, char.ID)
