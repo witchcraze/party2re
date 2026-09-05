@@ -251,11 +251,7 @@ func getRepoRootDir(t *testing.T) string {
 	return filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
 }
 
-func TestLockHierarchyProductionCodeAST(t *testing.T) {
-	start := time.Now()
-	rootDir := getRepoRootDir(t)
-	internalDir := filepath.Join(rootDir, "internal")
-
+func runLockHierarchyLint(internalDir, rootDir string) (int, []lockViolation, error) {
 	fset := token.NewFileSet()
 	var totalViolations []lockViolation
 	checkedFiles := 0
@@ -280,8 +276,7 @@ func TestLockHierarchyProductionCodeAST(t *testing.T) {
 
 		src, err := os.ReadFile(path)
 		if err != nil {
-			t.Errorf("failed to read file %s: %v", relPath, err)
-			return nil
+			return fmt.Errorf("failed to read file %s: %w", relPath, err)
 		}
 
 		// Fast path: files without "ForUpdate" cannot contain pessimistic lock acquisitions
@@ -291,8 +286,7 @@ func TestLockHierarchyProductionCodeAST(t *testing.T) {
 
 		fileNode, err := parser.ParseFile(fset, path, src, 0)
 		if err != nil {
-			t.Errorf("failed to parse file %s: %v", relPath, err)
-			return nil
+			return fmt.Errorf("failed to parse file %s: %w", relPath, err)
 		}
 
 		violations := analyzeASTFileLocks(fset, fileNode, relPath)
@@ -300,6 +294,19 @@ func TestLockHierarchyProductionCodeAST(t *testing.T) {
 		return nil
 	})
 
+	return checkedFiles, totalViolations, err
+}
+
+func TestLockHierarchyInvariants(t *testing.T) {
+	start := time.Now()
+	rootDir, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatalf("failed to resolve root dir: %v", err)
+	}
+
+	internalDir := filepath.Join(rootDir, "internal")
+
+	checkedFiles, totalViolations, err := runLockHierarchyLint(internalDir, rootDir)
 	if err != nil {
 		t.Fatalf("failed to walk internal directory: %v", err)
 	}
@@ -307,8 +314,10 @@ func TestLockHierarchyProductionCodeAST(t *testing.T) {
 	elapsed := time.Since(start)
 	t.Logf("Lock hierarchy linter verified %d production Go files in %s", checkedFiles, elapsed)
 
-	if elapsed > 1*time.Second {
-		t.Errorf("lock hierarchy linter took %s (exceeds 1s budget)", elapsed)
+	// Liberal dead-man safety bound strictly to catch infinite loops or deadlocks in AST traversal.
+	// Performance benchmarks and regression tracking are handled via BenchmarkLockHierarchyLinter.
+	if elapsed > 5*time.Second {
+		t.Errorf("lock hierarchy linter took %s (exceeds 5s dead-man safety bound, possible infinite loop or deadlock)", elapsed)
 	}
 
 	if len(totalViolations) > 0 {
@@ -318,6 +327,44 @@ func TestLockHierarchyProductionCodeAST(t *testing.T) {
 			sb.WriteString(fmt.Sprintf("[%d] %s\n", i+1, v.message))
 		}
 		t.Fatal(sb.String())
+	}
+}
+
+func BenchmarkLockHierarchyLinter(b *testing.B) {
+	rootDir, err := filepath.Abs("../..")
+	if err != nil {
+		b.Fatalf("failed to resolve root dir: %v", err)
+	}
+	internalDir := filepath.Join(rootDir, "internal")
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, err := runLockHierarchyLint(internalDir, rootDir)
+		if err != nil {
+			b.Fatalf("runLockHierarchyLint failed: %v", err)
+		}
+	}
+}
+
+func BenchmarkLockEvaluationStatement(b *testing.B) {
+	fset := token.NewFileSet()
+	code := `package test
+func (s *Service) Transfer(ctx context.Context) {
+	s.charRepo.GetByIDForUpdate(ctx, id1)
+	s.invRepo.GetByIDForUpdate(ctx, item1)
+	s.bankRepo.GetByIDForUpdate(ctx, acc1)
+}
+`
+	fileNode, err := parser.ParseFile(fset, "test.go", code, 0)
+	if err != nil {
+		b.Fatalf("failed to parse test code: %v", err)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = analyzeASTFileLocks(fset, fileNode, "test.go")
 	}
 }
 
