@@ -114,6 +114,7 @@ func run(ctx context.Context, logger logging.Logger) error {
 	if err := database.Ping(db); err != nil {
 		return err
 	}
+	logger.Info(ctx, "database.connected", slog.Int("max_open_conns", db.Stats().MaxOpenConnections))
 
 	valkeyClient, err := valkey.NewClient()
 	if err != nil {

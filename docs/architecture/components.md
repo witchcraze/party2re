@@ -218,7 +218,7 @@ To avoid duplicate boilerplate while preventing monolithic "junk-drawer" package
 - **Pagination (`internal/pagination`)**: Reusable generic list container `Page[T]` (`items`, `total`, `limit`, `offset`), parameter structures (`Params`), keyset / cursor pagination container `CursorPage[T]` (`items`, `next_cursor`, `prev_cursor`, `limit`, `has_more`), parameter structures (`CursorParams`), cursor token encoder/decoder utilities (`EncodeCursor`, `DecodeCursor`, `EncodeIDCursor`, `DecodeIDCursor`), and request query parsers (`ParseRequest`, `ParseCursorRequest`, `Normalize`) ensuring standard limit/offset and keyset normalization and unified JSON envelopes across all HTTP list endpoints.
 - **Validation (`internal/validation`)**: Standardized format validators (e.g. HEX color codes `#RRGGBB`, text length bounds, HTML tag sanitization).
 - **HTTP Transport Middleware (`internal/api/http/middleware`)**: Reusable transport helpers, including session authentication, character ownership verification wrappers (`withAuthenticatedCharacter`), admin role guards, CORS policies, and rate limiters.
-- **Shared Entity Persistence Helpers (`internal/database`)**: Standardized transactional update functions for shared Core entities (e.g. updating character progression, stats, and gold) across repository boundaries.
+- **Database Infrastructure & Connection Pool (`internal/database`)**: Standardized transactional update functions for shared Core entities (e.g. updating character progression, stats, and gold) across repository boundaries, ambient transaction propagation (`RunInTx`, `ExecutorFromContext`), and configurable connection pool initialization (`Open`, `OpenWithConfig`, `OpenFromEnvironment`) tuned via environment variables (`PARTY2_DB_MAX_OPEN_CONNS`, `PARTY2_DB_MAX_IDLE_CONNS`, `PARTY2_DB_CONN_MAX_LIFETIME`, `PARTY2_DB_CONN_MAX_IDLE_TIME`) with safe defaults (25 / 25 / 5m / 1m) and graceful fallback.
 
 ## Feature modules
 
@@ -345,7 +345,7 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Valkey (`github.com/valkey-io/valkey-go`) with in-memory thread-safe fallback.
   - **Persistence:** Transient atomic counter keys in Valkey with TTL (`party2:ratelimit:*`).
 - **Server Entrypoint & Lifecycle Orchestration** (`cmd/party2`):
-  - **Responsibility:** Process initialization, configuration loading (`PARTY2_DB_DSN`, `PARTY2_VALKEY_ADDR`, `PORT`/`ADDR`), full domain repository and service wiring, background scheduler worker execution, HTTP JSON API route registration, and graceful shutdown signal handling (`SIGINT`/`SIGTERM`) with connection draining.
+  - **Responsibility:** Process initialization, configuration loading (`PARTY2_DB_DSN`, `PARTY2_DB_MAX_OPEN_CONNS`, `PARTY2_DB_MAX_IDLE_CONNS`, `PARTY2_DB_CONN_MAX_LIFETIME`, `PARTY2_DB_CONN_MAX_IDLE_TIME`, `PARTY2_VALKEY_ADDR`, `PORT`/`ADDR`), full domain repository and service wiring, background scheduler worker execution, HTTP JSON API route registration, and graceful shutdown signal handling (`SIGINT`/`SIGTERM`) with connection draining.
   - **Dependencies:** All domain services and repositories, `internal/api/http`, `internal/scheduling`, `internal/database`, `internal/valkey`, `internal/ratelimit`, `internal/logging`.
   - **Persistence:** Coordinates connection lifecycles for MariaDB and Valkey.
 - **OpenAPI 3.1 Modular Specification, Bundler, AST Scaffolder & CI Guard** (`docs/api/base.json`, `docs/api/paths/*.json`, `scripts/sync_openapi.go`, `internal/api/http`):
