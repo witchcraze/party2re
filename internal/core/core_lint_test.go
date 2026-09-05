@@ -631,3 +631,38 @@ func BuildAlly(char Character) Participant {
 		})
 	}
 }
+
+func BenchmarkCoreDomainInvariantLinter(b *testing.B) {
+	wd, err := os.Getwd()
+	if err != nil {
+		b.Fatalf("failed to get working directory: %v", err)
+	}
+	repoRoot := filepath.Clean(filepath.Join(wd, "..", ".."))
+	internalDir := filepath.Join(repoRoot, "internal")
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		fset := token.NewFileSet()
+		_ = filepath.WalkDir(internalDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+
+			src, err := os.ReadFile(path)
+			if err != nil || !containsAnyCoreKeyword(src) {
+				return nil
+			}
+
+			node, parseErr := parser.ParseFile(fset, path, src, 0)
+			if parseErr != nil {
+				return nil
+			}
+
+			relPath, _ := filepath.Rel(repoRoot, path)
+			_ = checkFileCoreRules(fset, node, relPath)
+			return nil
+		})
+	}
+}

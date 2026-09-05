@@ -1,4 +1,4 @@
-.PHONY: all check verify check-clean fmt vet openapi-sync openapi-check openapi-scaffold test test-integration test-docker test-stress smoke db-migrate db-reset up down setup-hooks arch-lint lock-lint
+.PHONY: all check verify check-clean fmt vet openapi-sync openapi-check openapi-scaffold test test-integration test-docker test-stress bench smoke db-migrate db-reset up down setup-hooks arch-lint lock-lint
 
 all: check
 
@@ -54,6 +54,9 @@ test-docker:
 test-stress:
 	@echo "Running high-concurrency stress test..."
 	@./scripts/stress_test.sh
+
+bench:
+	@./scripts/benchmark.sh
 
 smoke:
 	@echo "Building smoke production image..."

@@ -48,6 +48,15 @@ For non-trivial behavior:
 4. **Inner Loop:** Run fast host tests continuously using `make test` (or `make test-integration`).
 5. **Outer Loop:** Auto-format code with `make fmt`, then run unified local verification with `make check` (runs format check, `go vet`, host test suite, and fast smoke build).
 
+### Unit & Integration Test Time Budget Policy vs. Benchmarking
+- **No Sub-Second Assertions in Unit/Integration Tests:**
+  - Functional tests (`go test`) MUST NOT enforce strict sub-second wall-clock thresholds (e.g., `elapsed < 200ms` or `elapsed < 1s`). Strict timing assertions in functional tests are inherently fragile in shared, virtualized, containerized, or CPU-throttled CI environments.
+  - Wall-clock timeout bounds in functional tests must be liberal dead-man safety bounds (e.g., 2.0s–5.0s) strictly designed to catch deadlocks, infinite loops, or hanging goroutines.
+  - Informational timing measurements should be emitted using `t.Logf` rather than failing tests via `t.Errorf`.
+- **Continuous Performance Verification via Dedicated Benchmarks:**
+  - Latency, throughput, and performance regression tracking MUST be verified via Go standard benchmarks (`testing.B`, `Benchmark*`) using `scripts/benchmark.sh` / `make bench`.
+  - Baselines are recorded (`./scripts/benchmark.sh --record`) and regressions are tracked deterministically without flaking functional test runs.
+
 ## 4. Definition of Done
 A ticket is complete only when applicable:
 - Acceptance criteria are satisfied.
