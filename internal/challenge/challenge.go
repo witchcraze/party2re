@@ -6,21 +6,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	"github.com/witchcraze/party2re/internal/id"
 )
 
 //go:embed data/challenge_tiers.json
 var challengeTiersData []byte
 
 var (
-	ErrSessionNotFound     = errors.New("challenge session not found")
-	ErrSessionNotActive    = errors.New("challenge session is not active")
+	ErrSessionNotFound     = errors.New("ERR_SESSION_NOT_FOUND: challenge session not found")
+	ErrSessionNotActive    = errors.New("ERR_SESSION_NOT_ACTIVE: challenge session is not active")
+	ErrSessionIDMismatch   = errors.New("ERR_SESSION_ID_MISMATCH: challenge session id mismatch")
 	ErrActiveSessionExists = errors.New("active challenge session already exists")
 	ErrTierNotFound        = errors.New("challenge tier not found")
 	ErrLevelTooLow         = errors.New("character level is too low for this tier")
@@ -110,6 +109,30 @@ type CashoutResult struct {
 	NewRecordRound int      `json:"new_record_round"`
 }
 
+// AdvanceRoundParams encapsulates the parameters for advancing an active challenge session round atomically.
+type AdvanceRoundParams struct {
+	ExpectedSessionID string
+	SurvivingHP       int
+	ExpDelta          int
+	GoldDelta         int
+	RewardItemID      string
+	Now               time.Time
+}
+
+// AdvanceRoundOutcome represents the result of executing an atomic round advancement against the active session store.
+type AdvanceRoundOutcome struct {
+	Session ChallengeSession
+	Status  SessionStatus
+}
+
+// ActiveSessionStore defines the storage contract for transient in-flight challenge sessions (Candidate D).
+type ActiveSessionStore interface {
+	GetActiveSession(ctx context.Context, characterID string) (*ChallengeSession, error)
+	SaveActiveSession(ctx context.Context, session ChallengeSession) error
+	DeleteActiveSession(ctx context.Context, characterID string) error
+	AdvanceRound(ctx context.Context, characterID string, params AdvanceRoundParams) (AdvanceRoundOutcome, error)
+}
+
 type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 }
@@ -130,10 +153,33 @@ type Service struct {
 	repo         Repository
 	charRepo     CharacterRepository
 	battleEngine corebattle.Resolver
+	activeStore  ActiveSessionStore
 	tiers        map[string]ChallengeTier
 }
 
-func NewService(repo Repository, charRepo CharacterRepository, battleEngine corebattle.Resolver) (*Service, error) {
+// Option configures optional parameters on Service.
+type Option func(*Service)
+
+// WithActiveSessionStore configures the transient active challenge session store (e.g. ValkeySessionRepository).
+func WithActiveSessionStore(store ActiveSessionStore) Option {
+	return func(s *Service) {
+		s.activeStore = store
+	}
+}
+
+// WithCustomTiers overrides the default challenge tiers catalog.
+func WithCustomTiers(tiers map[string]ChallengeTier) Option {
+	return func(s *Service) {
+		s.tiers = tiers
+	}
+}
+
+func NewService(
+	repo Repository,
+	charRepo CharacterRepository,
+	battleEngine corebattle.Resolver,
+	opts ...Option,
+) (*Service, error) {
 	if repo == nil {
 		return nil, errors.New("challenge repository is required")
 	}
@@ -148,12 +194,23 @@ func NewService(repo Repository, charRepo CharacterRepository, battleEngine core
 	if err != nil {
 		return nil, fmt.Errorf("load challenge tiers catalog: %w", err)
 	}
-	return &Service{
+
+	s := &Service{
 		repo:         repo,
 		charRepo:     charRepo,
 		battleEngine: battleEngine,
 		tiers:        tiers,
-	}, nil
+	}
+
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	if s.activeStore == nil {
+		s.activeStore = NewMemorySessionRepository()
+	}
+
+	return s, nil
 }
 
 func loadTiers() (map[string]ChallengeTier, error) {
@@ -190,272 +247,11 @@ func (s *Service) GetTier(tierID string) (*ChallengeTier, error) {
 	return &t, nil
 }
 
-func (s *Service) StartSession(ctx context.Context, characterID string, tierID string) (*ChallengeSession, error) {
-	tier, err := s.GetTier(tierID)
-	if err != nil {
-		return nil, err
-	}
-
-	char, err := s.charRepo.FindByID(ctx, characterID)
-	if err != nil {
-		return nil, ErrCharacterNotFound
-	}
-
-	level := char.Level
-	if level <= 0 {
-		level = 1
-	}
-	if level < tier.MinLevel {
-		return nil, ErrLevelTooLow
-	}
-
-	existing, err := s.repo.FindActiveSessionByCharacter(ctx, characterID)
-	if err == nil && existing != nil && existing.Status == StatusActive {
-		return nil, ErrActiveSessionExists
-	}
-
-	sessionID := id.New()
-
-	maxHP := char.Stats.MaxHP
-	if maxHP <= 0 {
-		maxHP = char.Stats.HP
-	}
-	if maxHP <= 0 {
-		maxHP = 100
-	}
-
-	now := time.Now().UTC()
-	session := ChallengeSession{
-		ID:                 sessionID,
-		CharacterID:        characterID,
-		TierID:             tierID,
-		CurrentRound:       1,
-		CharacterCurrentHP: maxHP,
-		AccumulatedExp:     0,
-		AccumulatedGold:    0,
-		AccumulatedItems:   []string{},
-		Status:             StatusActive,
-		CreatedAt:          now,
-		UpdatedAt:          now,
-	}
-
-	if err := s.repo.SaveSession(ctx, session); err != nil {
-		return nil, err
-	}
-
-	return &session, nil
-}
-
-func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionID string) (*RoundResult, *ChallengeSession, error) {
-	session, err := s.repo.FindSessionByID(ctx, sessionID)
-	if err != nil {
-		return nil, nil, err
-	}
-	if session.CharacterID != characterID {
-		return nil, nil, ErrForbidden
-	}
-	if session.Status != StatusActive {
-		return nil, nil, ErrSessionNotActive
-	}
-
-	tier, err := s.GetTier(session.TierID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	char, err := s.charRepo.FindByID(ctx, session.CharacterID)
-	if err != nil {
-		return nil, nil, ErrCharacterNotFound
-	}
-
-	maxHP := char.Stats.MaxHP
-	if maxHP <= 0 {
-		maxHP = char.Stats.HP
-	}
-	if maxHP <= 0 {
-		maxHP = 100
-	}
-
-	// Scale monster for round
-	round := session.CurrentRound
-	scale := 1.0 + float64(round-1)*tier.ScaleFactor
-	mHP := int(math.Round(float64(tier.BaseMonster.BaseHP) * scale))
-	mAtk := int(math.Round(float64(tier.BaseMonster.BaseAttack) * scale))
-	mDef := int(math.Round(float64(tier.BaseMonster.BaseDefense) * scale))
-	mExp := int(math.Round(float64(tier.BaseMonster.BaseExp) * scale))
-	mGold := int(math.Round(float64(tier.BaseMonster.BaseGold) * scale))
-	mName := fmt.Sprintf("%s (Wave %d)", tier.BaseMonster.Name, round)
-
-	// Resolve Battle
-	charParticipant := corebattle.NewParticipantFromCharacterWithHP(char, session.CharacterCurrentHP)
-	monsterParticipant := corebattle.MustNewParticipant(mName, mHP, mAtk, mDef)
-
-	battleReq := corebattle.Request{
-		Participants: []corebattle.Participant{charParticipant, monsterParticipant},
-	}
-	battleRes, err := s.battleEngine.Resolve(battleReq)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	won := battleRes.Outcome == corebattle.OutcomeWin && battleRes.WinnerID == char.ID
-
-	if won {
-		// Calculate surviving HP
-		survivingHP := 1
-		if len(battleRes.Logs) > 0 {
-			lastLog := battleRes.Logs[len(battleRes.Logs)-1]
-			if hp, ok := lastLog.RemainingHP[char.ID]; ok && hp > 0 {
-				survivingHP = hp
-			}
-		}
-
-		// 20% MaxHP Recovery between rounds
-		recovery := int(float64(maxHP) * 0.20)
-		survivingHP += recovery
-		if survivingHP > maxHP {
-			survivingHP = maxHP
-		}
-
-		session.CharacterCurrentHP = survivingHP
-		session.AccumulatedExp += mExp
-		session.AccumulatedGold += mGold
-
-		// Milestone item check
-		var awardedItem string
-		if tier.MilestoneInterval > 0 && round%tier.MilestoneInterval == 0 && len(tier.MilestoneItemPool) > 0 {
-			awardedItem = tier.MilestoneItemPool[(round/tier.MilestoneInterval-1)%len(tier.MilestoneItemPool)]
-			session.AccumulatedItems = append(session.AccumulatedItems, awardedItem)
-		}
-
-		session.CurrentRound++
-		session.UpdatedAt = time.Now().UTC()
-
-		if err := s.repo.UpdateSession(ctx, *session); err != nil {
-			return nil, nil, err
-		}
-
-		return &RoundResult{
-			Round:              round,
-			MonsterName:        mName,
-			BattleResult:       battleRes,
-			Won:                true,
-			RecoveredHP:        recovery,
-			CharacterCurrentHP: survivingHP,
-			RoundExp:           mExp,
-			RoundGold:          mGold,
-			AwardedItem:        awardedItem,
-			SessionEnded:       false,
-			SessionStatus:      StatusActive,
-		}, session, nil
-	}
-
-	// Defeat: session terminates
-	session.Status = StatusDefeated
-	session.CharacterCurrentHP = 0
-	session.UpdatedAt = time.Now().UTC()
-
-	// On defeat, half exp/gold awarded, items forfeited
-	awardedExp := session.AccumulatedExp / 2
-	awardedGold := session.AccumulatedGold / 2
-	clearedRounds := round - 1
-
-	if err := s.repo.FinalizeSession(ctx, *session, awardedExp, awardedGold, nil, clearedRounds); err != nil {
-		return nil, nil, err
-	}
-
-	return &RoundResult{
-		Round:              round,
-		MonsterName:        mName,
-		BattleResult:       battleRes,
-		Won:                false,
-		RecoveredHP:        0,
-		CharacterCurrentHP: 0,
-		RoundExp:           0,
-		RoundGold:          0,
-		SessionEnded:       true,
-		SessionStatus:      StatusDefeated,
-	}, session, nil
-}
-
-func (s *Service) ExecuteRound(ctx context.Context, sessionID string) (*RoundResult, error) {
-	session, err := s.repo.FindSessionByID(ctx, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	res, _, err := s.AdvanceRound(ctx, session.CharacterID, sessionID)
-	return res, err
-}
-
-func (s *Service) RetireSession(ctx context.Context, characterID string, sessionID string) (*ChallengeSession, error) {
-	session, err := s.repo.FindSessionByID(ctx, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	if session.CharacterID != characterID {
-		return nil, ErrForbidden
-	}
-	if session.Status != StatusActive {
-		return nil, ErrSessionNotActive
-	}
-
-	clearedRounds := session.CurrentRound - 1
-	session.Status = StatusClaimed
-	session.UpdatedAt = time.Now().UTC()
-
-	exp := session.AccumulatedExp
-	gold := session.AccumulatedGold
-	items := session.AccumulatedItems
-
-	if err := s.repo.FinalizeSession(ctx, *session, exp, gold, items, clearedRounds); err != nil {
-		return nil, err
-	}
-
-	return session, nil
-}
-
-func (s *Service) Cashout(ctx context.Context, sessionID string) (*CashoutResult, error) {
-	session, err := s.repo.FindSessionByID(ctx, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	retired, err := s.RetireSession(ctx, session.CharacterID, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	clearedRounds := retired.CurrentRound - 1
-	return &CashoutResult{
-		RoundsCleared:  clearedRounds,
-		AwardedExp:     retired.AccumulatedExp,
-		AwardedGold:    retired.AccumulatedGold,
-		AwardedItems:   retired.AccumulatedItems,
-		NewRecordRound: clearedRounds,
-	}, nil
-}
-
-func (s *Service) GetSession(ctx context.Context, characterID string, sessionID string) (*ChallengeSession, error) {
-	session, err := s.repo.FindSessionByID(ctx, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	if session.CharacterID != characterID {
-		return nil, ErrForbidden
-	}
-	return session, nil
-}
-
 func (s *Service) GetCharacterRecords(ctx context.Context, characterID string) ([]CharacterChallengeRecord, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return nil, errors.New("character id is required")
 	}
 	return s.repo.FindRecordsByCharacter(ctx, characterID)
-}
-
-func (s *Service) GetActiveSession(ctx context.Context, characterID string) (*ChallengeSession, error) {
-	if strings.TrimSpace(characterID) == "" {
-		return nil, errors.New("character id is required")
-	}
-	return s.repo.FindActiveSessionByCharacter(ctx, characterID)
 }
 
 func (s *Service) GetRecord(ctx context.Context, characterID string, tierID string) (*CharacterChallengeRecord, error) {

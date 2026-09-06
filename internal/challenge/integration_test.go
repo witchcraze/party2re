@@ -8,6 +8,7 @@ import (
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/database"
+	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
 func TestChallengeIntegrationFlow(t *testing.T) {
@@ -42,7 +43,21 @@ func TestChallengeIntegrationFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	service, err := challenge.NewService(challengeRepo, charRepo, corebattle.Engine{})
+	var opts []challenge.Option
+	if os.Getenv("PARTY2_VALKEY_ADDR") != "" {
+		vkClient, err := vk.NewClient()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer vkClient.Close()
+		vStore, err := challenge.NewValkeySessionRepository(vkClient)
+		if err != nil {
+			t.Fatal(err)
+		}
+		opts = append(opts, challenge.WithActiveSessionStore(vStore))
+	}
+
+	service, err := challenge.NewService(challengeRepo, charRepo, corebattle.Engine{}, opts...)
 	if err != nil {
 		t.Fatal(err)
 	}
