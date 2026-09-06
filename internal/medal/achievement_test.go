@@ -413,3 +413,29 @@ func TestService_ClaimAchievement_InvalidCases(t *testing.T) {
 		t.Fatalf("expected ErrAchievementNotFound, got %v", err)
 	}
 }
+
+func TestService_GetAchievementCatalog(t *testing.T) {
+	charRepo := newMockCharRepo()
+	invRepo := &mockInvRepo{}
+	achRepo := newMockAchievementRepo()
+
+	svc, err := medal.NewService(
+		charRepo,
+		invRepo,
+		"",
+		medal.WithAchievementRepository(achRepo),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	catalog := svc.GetAchievementCatalog()
+	if len(catalog) == 0 {
+		t.Fatalf("expected non-empty achievement catalog")
+	}
+	catalog[0].ID = "modified"
+	catalog2 := svc.GetAchievementCatalog()
+	if catalog2[0].ID == "modified" {
+		t.Errorf("expected GetAchievementCatalog to return a defensive copy")
+	}
+}

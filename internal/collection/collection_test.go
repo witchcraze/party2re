@@ -105,6 +105,11 @@ func TestCollectionService_MonsterBook(t *testing.T) {
 	if progress.DiscoveredCount != 1 || progress.CompletionPercentage != 10.0 {
 		t.Errorf("progress: count=%d, percentage=%f", progress.DiscoveredCount, progress.CompletionPercentage)
 	}
+
+	bookCount, err := repo.GetMonsterBookCount(ctx, "char1")
+	if err != nil || bookCount != 1 {
+		t.Errorf("expected bookCount 1, got %d (err: %v)", bookCount, err)
+	}
 }
 
 func TestCollectionService_ItemCollection(t *testing.T) {

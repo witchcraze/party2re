@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #288 — [Chore] Test/Dungeon+Delivery: Add unit tests for Move() and delivery cancellation error paths
+Last updated: Issue #428 — [Chore] Architecture: Audit and eliminate remaining legacy orphaned methods from knownLegacyOrphanedMethods
 
 ## Current phase
 
@@ -18,7 +18,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ### Architecture & Repository Intelligence (Guidance Layer - PoC)
 - **Guidance Layer (.arch/)**: シンボルアンカー（`path#Symbol`）ベースのモジュール詳細定義（`.arch/modules/*.json`）、共有テーブル逆引きインデックス（`.arch/shared_tables/*.json`、`characters`, `inventory_items`, `bank_accounts`, `guilds`）、Mermaid全体トポロジー図（`docs/architecture/guidance-layer.md`）。外部依存不要のGo + JSON + Markdown構成。
 - **Module Selection Criteria & Target Tiers**: 4つの選定基準（C1: トランザクション深度, C2: 行ロック階層, C3: エスクロー/共有状態, C4: 非同期Worker）に基づくトリアージ。Tier 1（高リスク8機能: `tavern`, `delivery`, `bank`, `auction`, `guild`, `shop`, `blacksmith`, `adventure`）、Tier 2（オンデマンド）、Tier 3（除外）の運用スコープを確立。
-- **Automated Mechanical Verification**: Go AST シンボルリント（`internal/architecture/arch_test.go`）による高速静的シンボル実在性チェック、`RunInTx` 呼び出し実在検証、本番ファイル行数リミット（生産コード ≤ 500行、`cmd/*/main.go` ≤ 150行）のラチェット方式自動ガード（`internal/architecture/file_size_lint_test.go`）、および孤立メソッド・未使用定数・未使用DTO構造体フィールドの機械的デッドコード検知（`internal/architecture/deadcode_lint_test.go`, `internal/architecture/unused_definitions_lint_test.go`）（`make check` / `make arch-lint` 統合）。`internal/tavern/tavern.go`（620行→210行）および `internal/boss/boss.go`（633行→228行）の分割リファクタリングにより500行制限をクリアし `whitelistedLegacyFileLimits` は13から11ファイルへラチェットダウン。また孤立メソッド（`casino.Service.PlayIndianPokerRound`, `casino.Service.SetTransactionProvider`）の削除により `knownLegacyOrphanedMethods` は14から12メソッドへラチェットダウン。
+- **Automated Mechanical Verification**: Go AST シンボルリント（`internal/architecture/arch_test.go`）による高速静的シンボル実在性チェック、`RunInTx` 呼び出し実在検証、本番ファイル行数リミット（生産コード ≤ 500行、`cmd/*/main.go` ≤ 150行）のラチェット方式自動ガード（`internal/architecture/file_size_lint_test.go`）、および孤立メソッド・未使用定数・未使用DTO構造体フィールドの機械的デッドコード検知（`internal/architecture/deadcode_lint_test.go`, `internal/architecture/unused_definitions_lint_test.go`）（`make check` / `make arch-lint` 統合）。`internal/tavern/tavern.go`（620行→210行）および `internal/boss/boss.go`（633行→228行）の分割リファクタリングにより500行制限をクリアし `whitelistedLegacyFileLimits` は13から11ファイルへラチェットダウン。また孤立メソッド監査（Issue #428）により残余12メソッドすべてにテスト呼び出しを追加し、`knownLegacyOrphanedMethods` は12から0メソッドへ完全ラチェットダウン（ホワイトリストが完全に空化）。
 - **Continuous Performance Verification & Benchmark Framework (`docs/development/benchmarking.md`)**: クリティカルパス（AST静的解析リント、戦闘シミュレーション、Valkeyセッション操作）を網羅する `Benchmark*` スイート、標準実行スクリプト（`scripts/benchmark.sh`）、`Makefile` ターゲット（`make bench`）、およびベースライン比較・リグレッション自動検知CLI（`scripts/compare_benchmarks.go`）。
 - **Valkey Keyspace Taxonomy & Operational SSOT (`docs/architecture/valkey-keyspace.md`)**: システム全体のValkeyキー空間（`party2:<namespace>:<entity>[:<id>]`）、TTLポリシー、所有モジュール、Luaスクリプト運用基準（1ms未満バジェット、O(log N)上限、`KEYS *` 禁止、Cluster Hash Tagging `{...}` 規約、インメモリ等価性、`lua/*.lua` 外部ファイル化・`//go:embed` コンパイル時埋め込み）、TTLスコア付きSorted Set（ZSET）遅延パージ標準。Go ASTリンター（`internal/architecture/valkey_lint_test.go`）により機械的検証。
 - **Core Domain Invariant Static Analysis Linter Suite**: Go AST 静的構文解析リンター（`internal/core/core_lint_test.go`）による全生産コードファイルの検査。Progression、Currency & Economy、Job State、Inventory、Equipment、Battle Participant Identityの全6重要ドメイン不変条件に対する直接構造体フィールド操作を機械的に禁止し、Core標準カプセル化ヘルパー経由の操作を100%強制。

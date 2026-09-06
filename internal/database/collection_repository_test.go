@@ -49,6 +49,14 @@ func TestCollectionRepository_Integration(t *testing.T) {
 		t.Errorf("monsters: %+v", monsters)
 	}
 
+	bookCount, err := repo.GetMonsterBookCount(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetMonsterBookCount failed: %v", err)
+	}
+	if bookCount != 1 {
+		t.Errorf("expected bookCount 1, got %d", bookCount)
+	}
+
 	// 4. Record item discovery
 	if err := repo.RecordItemDiscovered(ctx, char.ID, "wea_dagger", "Bronze Dagger", "WEAPON"); err != nil {
 		t.Fatalf("RecordItemDiscovered failed: %v", err)

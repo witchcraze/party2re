@@ -502,3 +502,88 @@ func TestService_Donate(t *testing.T) {
 		}
 	})
 }
+
+func TestService_GetByCharacter(t *testing.T) {
+	ctx := context.Background()
+
+	repo := &mockGuildRepo{
+		getGuildByCharFn: func(_ context.Context, charID string) (guild.Guild, guild.Member, error) {
+			if charID == "char1" {
+				return guild.Guild{ID: "g1", Name: "MyGuild"}, guild.Member{GuildID: "g1", CharacterID: charID, Role: guild.RoleLeader}, nil
+			}
+			return guild.Guild{}, guild.Member{}, guild.ErrCharacterNotInGuild
+		},
+	}
+	svc, _ := guild.NewService(repo)
+
+	t.Run("empty character ID", func(t *testing.T) {
+		_, _, err := svc.GetByCharacter(ctx, "")
+		if !errors.Is(err, guild.ErrCharacterNotFound) {
+			t.Errorf("got %v, want %v", err, guild.ErrCharacterNotFound)
+		}
+	})
+
+	t.Run("found character", func(t *testing.T) {
+		g, m, err := svc.GetByCharacter(ctx, "char1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if g.ID != "g1" || m.CharacterID != "char1" {
+			t.Errorf("unexpected guild/member: %+v, %+v", g, m)
+		}
+	})
+}
+
+func TestService_Disband(t *testing.T) {
+	ctx := context.Background()
+
+	var disbandedID string
+	repo := &mockGuildRepo{
+		getGuildByCharFn: func(_ context.Context, charID string) (guild.Guild, guild.Member, error) {
+			switch charID {
+			case "leader":
+				return guild.Guild{ID: "g1"}, guild.Member{GuildID: "g1", CharacterID: "leader", Role: guild.RoleLeader}, nil
+			case "member":
+				return guild.Guild{ID: "g1"}, guild.Member{GuildID: "g1", CharacterID: "member", Role: guild.RoleMember}, nil
+			default:
+				return guild.Guild{}, guild.Member{}, guild.ErrCharacterNotInGuild
+			}
+		},
+		disbandGuildFn: func(_ context.Context, guildID string) error {
+			disbandedID = guildID
+			return nil
+		},
+	}
+	svc, _ := guild.NewService(repo)
+
+	t.Run("empty guild ID", func(t *testing.T) {
+		err := svc.Disband(ctx, "", "leader")
+		if !errors.Is(err, guild.ErrInvalidGuildID) {
+			t.Errorf("got %v, want %v", err, guild.ErrInvalidGuildID)
+		}
+	})
+
+	t.Run("empty leader char ID", func(t *testing.T) {
+		err := svc.Disband(ctx, "g1", "")
+		if !errors.Is(err, guild.ErrCharacterNotFound) {
+			t.Errorf("got %v, want %v", err, guild.ErrCharacterNotFound)
+		}
+	})
+
+	t.Run("non-leader unauthorized", func(t *testing.T) {
+		err := svc.Disband(ctx, "g1", "member")
+		if !errors.Is(err, guild.ErrUnauthorized) {
+			t.Errorf("got %v, want %v", err, guild.ErrUnauthorized)
+		}
+	})
+
+	t.Run("successful disband", func(t *testing.T) {
+		err := svc.Disband(ctx, "g1", "leader")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if disbandedID != "g1" {
+			t.Errorf("disbandedID = %s, want g1", disbandedID)
+		}
+	})
+}
