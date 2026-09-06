@@ -40,9 +40,12 @@ To preserve testability, decouple packages from global runtime state, and preven
 - **Isolated Environment Loaders**: Environment variable parsing MUST be isolated to dedicated loader functions (e.g., `pkg.ConfigFromEnvironment()` or `pkg.DefaultConfig()`), or handled entirely at the composition root (`cmd/party2/config.go`).
 - **Test-Friendly Defaults**: Provide sane default values for local development and testing without requiring mandatory environment variables unless strictly necessary for secrets or external connection addresses.
 
-## 9. File Sizing and Package Cohesion
+## 9. File Sizing, Package Cohesion, and Mechanical Linting
 To keep files readable, maintainable, and within effective token limits for AI pair programming:
-- **Target File Size**: Production Go source files should target ≤ 500 lines of code, with a soft limit of 800 lines.
-- **Decomposition by Responsibility**: When a domain file approaches 800–1,000 lines (e.g., monolithic services handling exploration, encounters, combat resolution, and state updates all in one file), it MUST be decomposed into focused peer files within the same package (e.g., `service.go`, `combat.go`, `exploration.go`, `repository.go`).
-- **Maintain Package Cohesion**: Keep related sub-responsibilities within the same Go package unless clear layer or domain boundaries justify a new package. Splitting across peer files retains package-private visibility while improving navigability.
+- **Mechanical Line Limits**: Enforced automatically via `internal/architecture/file_size_lint_test.go` on `make check` and `make arch-lint`:
+  - Production Go files (`internal/**/*.go`): **≤ 500 lines** (excluding tests).
+  - Application entry points (`cmd/*/main.go`): **≤ 150 lines**.
+- **Ratcheting Whitelist**: Pre-existing oversized files are locked at their historical line count. Any growth beyond the baseline fails CI. When a file is decomposed below 500 lines, it must be removed from the whitelist to lock in the improvement.
+- **Decomposition by Responsibility**: When a domain file approaches 500 lines, decompose it into focused peer files within the same package (e.g., `service.go`, `session.go`, `step.go`, `repository.go`).
+- **Maintain Package Cohesion**: Keep related sub-responsibilities within the same Go package unless clear layer boundaries justify a new package. Splitting across peer files retains package-private visibility while improving navigability.
 
