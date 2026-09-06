@@ -2,6 +2,10 @@
 
 This document establishes the architectural evaluation, schema design, Lua script contracts, crash-recovery semantics, and persistence boundaries for **Candidate E: World Boss Real-Time Shared HP**, per **RFC #356** and [`.agents/rules/05-database-and-caching.md`](../../.agents/rules/05-database-and-caching.md).
 
+> [!NOTE]
+> **Implementation Status**: PoC completed in `internal/boss/valkey_raid_repository.go` & `lua.go`.
+> Production wiring to HTTP composition root is pending.
+
 ---
 
 ## 1. Executive Summary & Problem Context

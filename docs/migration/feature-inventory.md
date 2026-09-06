@@ -51,7 +51,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Login and session authentication lifecycle ([#21](https://github.com/witchcraze/party2re/issues/21))
 - [x] Character profile and status display ([#87](https://github.com/witchcraze/party2re/issues/87))
 - [x] Player-character ownership verification linkage ([#131](https://github.com/witchcraze/party2re/issues/131))
-- [ ] Personal Access Token (API Key) generation and authentication ([#163](https://github.com/witchcraze/party2re/issues/163))
+- [x] Personal Access Token (API Key) generation and authentication ([#163](https://github.com/witchcraze/party2re/issues/163))
 - [x] Player deletion and maintenance behavior ([#134](https://github.com/witchcraze/party2re/issues/134), [#190](https://github.com/witchcraze/party2re/issues/190))
 - [x] Name changes and profile customization ([#198](https://github.com/witchcraze/party2re/issues/198))
 - [x] Notifications, news, and player notification inbox ([#67](https://github.com/witchcraze/party2re/issues/67))
@@ -221,6 +221,27 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#359](https://github.com/witchcraze/party2re/issues/359) | Clean up unused transaction fields and dead code in shop and medal services | Merged |
 | [#358](https://github.com/witchcraze/party2re/issues/358) | Connect gameplay action producers to achievement milestone progress tracking | Merged |
 | [#379](https://github.com/witchcraze/party2re/issues/379) | Connect party adventure victories and rewards to achievement progress tracking | Merged |
+| [#363](https://github.com/witchcraze/party2re/issues/363) | Enforce deterministic row-lock hierarchy via Go AST linter | Merged |
+| [#356](https://github.com/witchcraze/party2re/issues/356) | Establish data persistence boundary guidelines (MariaDB vs Valkey Master) | Merged |
+| [#367](https://github.com/witchcraze/party2re/issues/367) | Cache and master system maintenance state in Valkey | Merged |
+| [#366](https://github.com/witchcraze/party2re/issues/366) | Migrate player sessions from MariaDB to Valkey with native TTL | Merged |
+| [#374](https://github.com/witchcraze/party2re/issues/374) | Establish centralized Valkey keyspace specification and AST linting | Merged |
+| [#368](https://github.com/witchcraze/party2re/issues/368) | Ephemeral wait lobbies and ready-check state in Valkey Master | Merged |
+| [#377](https://github.com/witchcraze/party2re/issues/377) | Enforce atomic lobby mutations in Valkey and add concurrency stress tests | Merged |
+| [#380](https://github.com/witchcraze/party2re/issues/380) | Resolve persistence boundary discrepancy and clean up dead schema/docs | Merged |
+| [#378](https://github.com/witchcraze/party2re/issues/378) | Prevent in-memory session leak and track sessions via sorted set with TTL purging | Merged |
+| [#388](https://github.com/witchcraze/party2re/issues/388) | Apply fast-path byte pre-filtering across AST static analysis linters | Merged |
+| [#387](https://github.com/witchcraze/party2re/issues/387) | Codify Lua scripting standards, execution limits, and cluster hash tagging | Merged |
+| [#386](https://github.com/witchcraze/party2re/issues/386) | Codify TTL-scored sorted set with lazy purging pattern | Merged |
+| [#369](https://github.com/witchcraze/party2re/issues/369) | Evaluate and codify transient run state persistence boundary | Merged |
+| [#163](https://github.com/witchcraze/party2re/issues/163) | Player personal access token (API Key) generation and dual authentication | Merged |
+| [#370](https://github.com/witchcraze/party2re/issues/370) | Proof-of-concept for valkey-backed real-time shared world boss hp | Merged |
+| [#384](https://github.com/witchcraze/party2re/issues/384) | Centralize database test fixtures, generic concurrency stress harness, and codify P2P stress test DoD | Merged |
+| [#385](https://github.com/witchcraze/party2re/issues/385) | Standardize wall-clock test budget policies and establish benchmark framework | Merged |
+| [#397](https://github.com/witchcraze/party2re/issues/397) | Implement Indian Poker multi-round session persistence and action API | Merged |
+| [#398](https://github.com/witchcraze/party2re/issues/398) | Enforce Flea Market SQL CAS guard and add high-concurrency stress test | Merged |
+| [#399](https://github.com/witchcraze/party2re/issues/399) | Make connection pool parameters configurable per environment | Merged |
+| [#408](https://github.com/witchcraze/party2re/issues/408) | Prevent false rejection on exact coins in Indian Poker action | Merged |
 
 ---
 

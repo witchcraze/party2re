@@ -149,6 +149,13 @@ When designing multi-element collection keys in Valkey Master, agents and develo
   - **No Background Daemons**: Do NOT implement background ticker goroutines to poll and purge expired elements from Valkey; lazy purging at query/write time is O(log(N) + M) and eliminates thread lifecycle overhead.
   - **Zero-Downtime Upgrade (`WRONGTYPE`)**: When migrating from legacy Set keys, repository logic MUST catch `WRONGTYPE` errors on `ZADD` or `ZRANGE` and gracefully upgrade or fallback to avoid downtime or manual key purges.
 
+### 3.7 Lua Script Physical Organization (`//go:embed`)
+Valkey Lua scripts MUST NOT be defined as raw multiline string constants inside Go source files. They MUST reside in dedicated external files and be embedded at compile time:
+- **Dedicated Subdirectory**: Store scripts under a `lua/` subdirectory within the owning package (e.g., `internal/party/lua/add_member.lua`, `internal/boss/lua/boss_damage.lua`).
+- **Compile-Time Embedding**: Embed script sources into string variables using Go standard `//go:embed` directives (e.g., `//go:embed lua/add_member.lua\nvar addMemberLuaScript string`).
+- **Zero Runtime File I/O**: `//go:embed` compiles the Lua source directly into the static binary, requiring no filesystem access or dynamic asset packaging at runtime.
+- **Tooling and Readability**: Dedicated `.lua` files enable editor syntax highlighting, external linting/formatting, and clean PR diffs without Go string escaping overhead.
+
 ## 4. Sub-Resource Repository SQL Scoping and Ownership Authorization
 - **Strict SQL Scoping:** When modifying, finalizing, or deleting sub-resources belonging to a player or character (e.g., `challenge_sessions`, `lottery_tickets`, `auction_listings`, `character_challenge_records`, `character_boss_records`, `dungeon_expeditions`, `letters`, `companion_phrases`), SQL queries MUST include ownership predicates in the `WHERE` clause:
   - `WHERE id = ? AND character_id = ?` (or `WHERE id = ? AND player_id = ?`)

@@ -33,3 +33,16 @@ Do not silently make substantial architectural decisions. Create an Issue if the
 - **Immediate Centralization for Security & Concurrency**: Security enforcement (session authentication, character ownership validation wrappers like `withAuthenticatedCharacter`) and concurrency-critical utilities (thread-safe RNG) MUST be centralized and reused immediately across all endpoints. Never duplicate auth or random state logic locally.
 - **Shared Entity Persistence**: Repositories mutating shared Core entities (e.g. character stats, money, level, medals) must use centralized persistence helpers in `internal/database` rather than maintaining scattered raw SQL update queries across multiple repository files.
 
+## 8. Configuration & Environment Variable Boundaries
+To preserve testability, decouple packages from global runtime state, and prevent hidden configuration dependencies:
+- **Config Struct First**: Packages requiring configuration parameters MUST define a pure configuration struct (e.g., `pkg.Config`) containing typed fields with zero dependencies on `os.Getenv` or environment variables.
+- **Constructors Accept Config**: Service/repository constructors MUST accept config structs or explicit arguments (e.g., `NewService(cfg Config, ...)`), and MUST NOT call `os.Getenv` or load secrets/paths directly within constructors.
+- **Isolated Environment Loaders**: Environment variable parsing MUST be isolated to dedicated loader functions (e.g., `pkg.ConfigFromEnvironment()` or `pkg.DefaultConfig()`), or handled entirely at the composition root (`cmd/party2/main.go`).
+- **Test-Friendly Defaults**: Provide sane default values for local development and testing without requiring mandatory environment variables unless strictly necessary for secrets or external connection addresses.
+
+## 9. File Sizing and Package Cohesion
+To keep files readable, maintainable, and within effective token limits for AI pair programming:
+- **Target File Size**: Production Go source files should target ≤ 500 lines of code, with a soft limit of 800 lines.
+- **Decomposition by Responsibility**: When a domain file approaches 800–1,000 lines (e.g., monolithic services handling exploration, encounters, combat resolution, and state updates all in one file), it MUST be decomposed into focused peer files within the same package (e.g., `service.go`, `combat.go`, `exploration.go`, `repository.go`).
+- **Maintain Package Cohesion**: Keep related sub-responsibilities within the same Go package unless clear layer or domain boundaries justify a new package. Splitting across peer files retains package-private visibility while improving navigability.
+

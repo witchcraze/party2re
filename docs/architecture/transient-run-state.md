@@ -2,6 +2,11 @@
 
 This document establishes the architectural evaluation, schema design, Lua script contracts, crash-recovery semantics, and persistence boundaries for **Candidate D: In-Progress Run Buffers** (Dungeon exploration and Endurance Challenge sessions), per **RFC #356** and [`.agents/rules/05-database-and-caching.md`](../../.agents/rules/05-database-and-caching.md).
 
+> [!NOTE]
+> **Implementation Status**: Architectural Specification Approved (Candidate D).
+> Implementation is in progress: Dungeon exploration is tracked in [#404](https://github.com/witchcraze/party2re/issues/404);
+> Endurance Challenge is tracked in [#405](https://github.com/witchcraze/party2re/issues/405).
+
 ---
 
 ## 1. Executive Summary & Problem Context
