@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #410 — [Chore] Tooling: Implement dead code and orphaned method detection for internal packages
+Last updated: Issue #406 — [Chore] Refactor: Decompose monolithic domain files (dungeon, delivery, ranking)
 
 ## Current phase
 
@@ -95,7 +95,6 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
    - Issue #400: Standardize Config Struct Injection and environment variable loading
    - Issue #404: Migrate active dungeon expedition state buffer to Valkey Master (Candidate D)
    - Issue #405: Migrate active challenge session buffer to Valkey Master (Candidate D)
-   - Issue #406: Decompose monolithic domain files (dungeon, fleamarket, casino)
    - Issue #411: Establish cross-domain application runtime primitives to abstract currency, item, locking, and event rules
 2. **Client Presentation & Web UI**:
    - Issue #140: Web Presentation UI and browser client implementation

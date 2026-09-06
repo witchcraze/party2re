@@ -44,28 +44,28 @@
     },
     {
       "module": "delivery",
-      "caller_method": "internal/delivery/delivery.go#Service.CompleteDelivery",
+      "caller_method": "internal/delivery/npc_quest.go#Service.CompleteDelivery",
       "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
       "lock_order": 3,
       "purpose": "Lock inventory and consume quest-required delivery items"
     },
     {
       "module": "delivery",
-      "caller_method": "internal/delivery/delivery.go#Service.SendParcel",
+      "caller_method": "internal/delivery/player_courier.go#Service.SendParcel",
       "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
       "lock_order": 3,
       "purpose": "Lock sender inventory and consume attached item instance"
     },
     {
       "module": "delivery",
-      "caller_method": "internal/delivery/delivery.go#Service.ClaimParcel",
+      "caller_method": "internal/delivery/player_courier.go#Service.ClaimParcel",
       "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
       "lock_order": 3,
       "purpose": "Lock recipient inventory and grant received parcel item instance"
     },
     {
       "module": "delivery",
-      "caller_method": "internal/delivery/delivery.go#Service.CancelParcel",
+      "caller_method": "internal/delivery/player_courier.go#Service.CancelParcel",
       "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
       "lock_order": 3,
       "purpose": "Lock sender inventory and return cancelled parcel item instance"

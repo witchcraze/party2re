@@ -34,7 +34,7 @@
     {
       "flow": "AcceptQuest (クエスト受注)",
       "tx_mode": "RunInTx",
-      "source_ref": "internal/delivery/delivery.go#Service.AcceptQuest",
+      "source_ref": "internal/delivery/npc_quest.go#Service.AcceptQuest",
       "lock_sequence": [
         { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByID", "mode": "SELECT" },
         { "step": 2, "target": "delivery_quests", "lock_order": 8, "method": "DeliveryRepository.GetQuestByID", "mode": "SELECT" },
@@ -45,7 +45,7 @@
     {
       "flow": "CancelDelivery (クエスト受注取消)",
       "tx_mode": "RunInTx",
-      "source_ref": "internal/delivery/delivery.go#Service.CancelDelivery",
+      "source_ref": "internal/delivery/npc_quest.go#Service.CancelDelivery",
       "lock_sequence": [
         { "step": 1, "target": "character_deliveries", "lock_order": 8, "method": "DeliveryRepository.GetCharacterDeliveryByID", "mode": "SELECT (Ownership & Status Validation)" },
         { "step": 2, "target": "character_deliveries", "lock_order": 8, "method": "DeliveryRepository.UpdateCharacterDelivery", "mode": "UPDATE (Mark Cancelled)" }
@@ -54,7 +54,7 @@
     {
       "flow": "CompleteDelivery (クエスト納品・報酬獲得)",
       "tx_mode": "RunInTx",
-      "source_ref": "internal/delivery/delivery.go#Service.CompleteDelivery",
+      "source_ref": "internal/delivery/npc_quest.go#Service.CompleteDelivery",
       "lock_sequence": [
         { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
         { "step": 2, "target": "character_deliveries", "lock_order": 8, "method": "DeliveryRepository.GetCharacterDeliveryByID", "mode": "SELECT (Ownership & Status Validation)" },
@@ -67,7 +67,7 @@
     {
       "flow": "SendParcel (小包発送・アイテム預入)",
       "tx_mode": "RunInTx",
-      "source_ref": "internal/delivery/delivery.go#Service.SendParcel",
+      "source_ref": "internal/delivery/player_courier.go#Service.SendParcel",
       "lock_sequence": [
         { "step": 1, "target": "characters (sender)", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
         { "step": 2, "target": "characters (recipient check)", "method": "CharacterRepository.FindByID", "mode": "SELECT" },
@@ -80,7 +80,7 @@
     {
       "flow": "ClaimParcel (小包受取・アイテム獲得)",
       "tx_mode": "RunInTx",
-      "source_ref": "internal/delivery/delivery.go#Service.ClaimParcel",
+      "source_ref": "internal/delivery/player_courier.go#Service.ClaimParcel",
       "lock_sequence": [
         { "step": 1, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.GetParcelByIDForUpdate", "mode": "SELECT ... FOR UPDATE (Ownership & Status Validation)" },
         { "step": 2, "target": "characters (recipient)", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
@@ -93,7 +93,7 @@
     {
       "flow": "CancelParcel (小包発送取消・アイテム返却)",
       "tx_mode": "RunInTx",
-      "source_ref": "internal/delivery/delivery.go#Service.CancelParcel",
+      "source_ref": "internal/delivery/player_courier.go#Service.CancelParcel",
       "lock_sequence": [
         { "step": 1, "target": "delivery_parcels", "lock_order": 8, "method": "DeliveryRepository.GetParcelByIDForUpdate", "mode": "SELECT ... FOR UPDATE (Ownership & Status Check)" },
         { "step": 2, "target": "characters (sender)", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
