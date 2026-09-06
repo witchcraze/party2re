@@ -226,9 +226,10 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, characterID string,
 			return ErrNoActivePokerGame
 		}
 
+		availableCoins := acc.Coins
 		if action == ActionCall || action == ActionShowdown {
 			neededBet := game.CurrentBet
-			if acc.Coins < neededBet {
+			if availableCoins < neededBet {
 				return ErrInsufficientCoin
 			}
 			acc, err = s.repo.DeductBetAndCreditPayout(txCtx, characterID, neededBet, 0)
@@ -237,7 +238,7 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, characterID string,
 			}
 		}
 
-		if err := game.PlayRound(action, acc.Coins); err != nil {
+		if err := game.PlayRound(action, availableCoins); err != nil {
 			return err
 		}
 
@@ -282,9 +283,13 @@ func (s *Service) PlayIndianPokerRound(ctx context.Context, characterID string, 
 		return Account{}, err
 	}
 
+	availableCoins := acc.Coins
 	// 1. If action requires bet, deduct atomically from account
 	if action == ActionCall || action == ActionShowdown {
 		neededBet := game.CurrentBet
+		if availableCoins < neededBet {
+			return acc, ErrInsufficientCoin
+		}
 		acc, err = s.repo.DeductBetAndCreditPayout(ctx, characterID, neededBet, 0)
 		if err != nil {
 			return acc, err
@@ -292,7 +297,7 @@ func (s *Service) PlayIndianPokerRound(ctx context.Context, characterID string, 
 	}
 
 	// 2. Play the round
-	if err := game.PlayRound(action, acc.Coins); err != nil {
+	if err := game.PlayRound(action, availableCoins); err != nil {
 		// Refund if round failed unexpectedly
 		if action == ActionCall || action == ActionShowdown {
 			_, _ = s.repo.DeductBetAndCreditPayout(ctx, characterID, 0, game.CurrentBet)
