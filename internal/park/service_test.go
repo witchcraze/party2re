@@ -2,6 +2,7 @@ package park_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -78,9 +79,13 @@ func (m *mockRepository) GetLatestPostTimeByCharacter(ctx context.Context, chara
 
 type mockCharacterReader struct {
 	characters map[string]corecharacter.Character
+	err        error
 }
 
 func (m *mockCharacterReader) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
+	if m.err != nil {
+		return corecharacter.Character{}, m.err
+	}
 	c, ok := m.characters[id]
 	if !ok {
 		return corecharacter.Character{}, corecharacter.ErrNotFound
@@ -254,6 +259,20 @@ func TestService_NPCInteractions(t *testing.T) {
 		if dialogue == "" {
 			t.Errorf("expected non-empty dialogue")
 		}
+
+		// Character not found
+		_, err = svc.TalkToNPC(ctx, "nonexistent-char")
+		if !errors.Is(err, park.ErrCharacterNotFound) {
+			t.Errorf("expected ErrCharacterNotFound, got %v", err)
+		}
+
+		// Generic reader error
+		charReader.err = errors.New("db reader error")
+		_, err = svc.TalkToNPC(ctx, "char-1")
+		if err == nil || err.Error() != "db reader error" {
+			t.Errorf("expected 'db reader error', got %v", err)
+		}
+		charReader.err = nil
 	})
 
 	t.Run("Divinate with NPC", func(t *testing.T) {
@@ -264,6 +283,20 @@ func TestService_NPCInteractions(t *testing.T) {
 		if res.Fortune == "" || res.LuckyColor == "" || res.Message == "" {
 			t.Errorf("incomplete divination result: %+v", res)
 		}
+
+		// Character not found
+		_, err = svc.Divinate(ctx, "nonexistent-char")
+		if !errors.Is(err, park.ErrCharacterNotFound) {
+			t.Errorf("expected ErrCharacterNotFound, got %v", err)
+		}
+
+		// Generic reader error
+		charReader.err = errors.New("db reader error")
+		_, err = svc.Divinate(ctx, "char-1")
+		if err == nil || err.Error() != "db reader error" {
+			t.Errorf("expected 'db reader error', got %v", err)
+		}
+		charReader.err = nil
 	})
 
 	t.Run("Inspect NPC", func(t *testing.T) {
@@ -272,6 +305,7 @@ func TestService_NPCInteractions(t *testing.T) {
 			t.Errorf("expected non-empty inspect dialogue")
 		}
 	})
+
 }
 
 func TestConcurrentNPCInteractions(t *testing.T) {

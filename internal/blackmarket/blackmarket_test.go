@@ -2,6 +2,7 @@ package blackmarket_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -66,6 +67,7 @@ type mockBlackMarketRepo struct {
 	purchases map[string]map[string]int // charID+dateKey -> itemID -> quantity
 	state     *blackmarket.MarketState
 	points    map[string]blackmarket.CharacterPoints
+	stateErr  error
 }
 
 func newMockBlackMarketRepo() *mockBlackMarketRepo {
@@ -102,6 +104,9 @@ func (m *mockBlackMarketRepo) RecordPurchase(_ context.Context, characterID stri
 }
 
 func (m *mockBlackMarketRepo) GetMarketState(_ context.Context) (blackmarket.MarketState, error) {
+	if m.stateErr != nil {
+		return blackmarket.MarketState{}, m.stateErr
+	}
 	if m.state != nil {
 		return *m.state, nil
 	}
@@ -575,4 +580,112 @@ func TestBlackMarketPoints_StatusAndSacrificeAndTrade(t *testing.T) {
 	if err != blackmarket.ErrPrizeNotFound {
 		t.Errorf("expected ErrPrizeNotFound, got %v", err)
 	}
+}
+
+func TestService_GetMarketState(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharacterRepo()
+	invRepo := newMockInventoryRepo()
+	catalog, err := blackmarket.LoadDefaultCatalog()
+	if err != nil {
+		t.Fatalf("failed to load catalog: %v", err)
+	}
+
+	t.Run("nil repository falls back to hour-based condition", func(t *testing.T) {
+		svc, err := blackmarket.NewService(charRepo, invRepo, nil, catalog)
+		if err != nil {
+			t.Fatalf("unexpected NewService error: %v", err)
+		}
+
+		nowHour1 := time.Date(2026, 8, 27, 1, 0, 0, 0, time.UTC)
+		st := svc.GetMarketState(ctx, nowHour1)
+		if st.Condition != blackmarket.ConditionHotDemand {
+			t.Errorf("expected ConditionHotDemand, got %v", st.Condition)
+		}
+	})
+
+	t.Run("repo error falls back to hour-based condition", func(t *testing.T) {
+		repo := newMockBlackMarketRepo()
+		repo.stateErr = errors.New("database connection failed")
+		svc, _ := blackmarket.NewService(charRepo, invRepo, repo, catalog)
+
+		nowHour2 := time.Date(2026, 8, 27, 2, 0, 0, 0, time.UTC)
+		st := svc.GetMarketState(ctx, nowHour2)
+		if st.Condition != blackmarket.ConditionCrackdown {
+			t.Errorf("expected ConditionCrackdown, got %v", st.Condition)
+		}
+	})
+
+	t.Run("empty condition in repo falls back to hour rotation (bargain and quiet)", func(t *testing.T) {
+		repo := newMockBlackMarketRepo()
+		repo.state = &blackmarket.MarketState{Condition: ""}
+		svc, _ := blackmarket.NewService(charRepo, invRepo, repo, catalog)
+
+		nowHour3 := time.Date(2026, 8, 27, 3, 0, 0, 0, time.UTC)
+		stBargain := svc.GetMarketState(ctx, nowHour3)
+		if stBargain.Condition != blackmarket.ConditionBargain {
+			t.Errorf("expected ConditionBargain, got %v", stBargain.Condition)
+		}
+
+		nowHour4 := time.Date(2026, 8, 27, 4, 0, 0, 0, time.UTC)
+		stQuiet := svc.GetMarketState(ctx, nowHour4)
+		if stQuiet.Condition != blackmarket.ConditionQuiet {
+			t.Errorf("expected ConditionQuiet, got %v", stQuiet.Condition)
+		}
+	})
+
+	t.Run("valid condition in repo with zero values fills defaults", func(t *testing.T) {
+		repo := newMockBlackMarketRepo()
+		repo.state = &blackmarket.MarketState{Condition: blackmarket.ConditionHotDemand}
+		svc, _ := blackmarket.NewService(charRepo, invRepo, repo, catalog)
+
+		def := blackmarket.DefaultMarketStates[blackmarket.ConditionHotDemand]
+		st := svc.GetMarketState(ctx, time.Now())
+		if st.Condition != blackmarket.ConditionHotDemand {
+			t.Errorf("expected ConditionHotDemand, got %v", st.Condition)
+		}
+		if st.PriceMultiplier != def.PriceMultiplier {
+			t.Errorf("expected PriceMultiplier %v, got %v", def.PriceMultiplier, st.PriceMultiplier)
+		}
+		if st.SellMultiplier != def.SellMultiplier {
+			t.Errorf("expected SellMultiplier %v, got %v", def.SellMultiplier, st.SellMultiplier)
+		}
+		if st.RiskLevel != def.RiskLevel {
+			t.Errorf("expected RiskLevel %v, got %v", def.RiskLevel, st.RiskLevel)
+		}
+		if st.Description != def.Description {
+			t.Errorf("expected Description %v, got %v", def.Description, st.Description)
+		}
+	})
+
+	t.Run("valid condition with custom values preserves custom values", func(t *testing.T) {
+		repo := newMockBlackMarketRepo()
+		repo.state = &blackmarket.MarketState{
+			Condition:       blackmarket.ConditionHotDemand,
+			PriceMultiplier: 3.5,
+			SellMultiplier:  0.85,
+			RiskLevel:       "EXTREME",
+			Description:     "Special custom condition description",
+		}
+		svc, _ := blackmarket.NewService(charRepo, invRepo, repo, catalog)
+
+		st := svc.GetMarketState(ctx, time.Now())
+		if st.PriceMultiplier != 3.5 || st.SellMultiplier != 0.85 || st.RiskLevel != "EXTREME" || st.Description != "Special custom condition description" {
+			t.Errorf("custom values not preserved: %+v", st)
+		}
+	})
+
+	t.Run("unknown condition not in DefaultMarketStates returns directly", func(t *testing.T) {
+		repo := newMockBlackMarketRepo()
+		repo.state = &blackmarket.MarketState{
+			Condition:       "CUSTOM_UNKNOWN_CONDITION",
+			PriceMultiplier: 2.0,
+		}
+		svc, _ := blackmarket.NewService(charRepo, invRepo, repo, catalog)
+
+		st := svc.GetMarketState(ctx, time.Now())
+		if st.Condition != "CUSTOM_UNKNOWN_CONDITION" || st.PriceMultiplier != 2.0 {
+			t.Errorf("unexpected state: %+v", st)
+		}
+	})
 }

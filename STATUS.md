@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #428 — [Chore] Architecture: Audit and eliminate remaining legacy orphaned methods from knownLegacyOrphanedMethods
+Last updated: Issue #289 — [Chore] Test/Blackmarket+Park: Add unit tests for GetMarketState, TalkToNPC, and Divinate
 
 ## Current phase
 
@@ -59,14 +59,14 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Continuous Endurance Challenge** (`internal/challenge`): 連戦チャレンジ・サバイバル戦闘（全4段階Tier `challenge_tiers.json`、ラウンド進行に伴う累進スケーリング、インターラウンドHP回復、マイルストーンアイテムドロップ、途中撤退全額確定 vs 敗北50%救済、リーダーボード、所有権認可）。Valkey Master による進行中セッションバッファリング（Candidate D、`party2:challenge:{char:<id>}:session|rewards`、スライディング2時間TTL、アトミックLuaスクリプト `challenge_round.lua`、ラウンド進行中SQL書き込み完全ゼロ化、Two-Phase Settlement によるMariaDB確定後パージ）。
 - **Custom Skill Loadout & Slot Management** (`internal/custom_skill`): カスタムスキル・スロット管理（JSONスキルカタログ `skills.json`、現在職・マスター職・宝石汎用スキルの装備制限バリデーション、スロット枠数管理、発動優先度 1〜10、重複装備防止）。
 - **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): 手助けクエスト（納品依頼、通常・レア・ギルド専用、錬金素材・幸福袋・GP報酬、有効依頼アイテムのショップ除外連携）および緊急救出処理（状態リセット、Valkey タスク自動キャンセル、クールダウン/睡眠ペナルティ）。
-- **Town Park & Public Bulletin Board** (`internal/park`): 交流広場・公開掲示板（発言投稿・文字色指定・宛先指定・HTMLサニタイズ・レートリミット、最新投稿ページネーション（キーセット・カーソル対応）、NPC占い）。
+- **Town Park & Public Bulletin Board** (`internal/park`): 交流広場・公開掲示板（発言投稿・文字色指定・宛先指定・HTMLサニタイズ・レートリミット、最新投稿ページネーション（キーセット・カーソル対応）、NPC占い）。`TalkToNPC()`（50.0%→100.0%）および `Divinate()`（50.0%→100.0%）のキャラクター不在・リポジトリ障害エラーパスの単体テスト網羅率向上完了。
 - **News & Player Notifications** (`internal/notification`): ニュース・お知らせ＆プレイヤー通知インボックス（全体告知、カテゴリ別お知らせ、プレイヤー別メッセージ受信箱、既読・未読管理、一括既読化、未読件数照会）。
 - **Player Private Home & Mailbox** (`internal/home`): 自宅・私有地管理（壁紙・テーマ・一言設定、訪問者記録、手紙送受信・受信箱/送信箱（オフセット/カーソル対応）・未読件数、独立削除フラグ、仲間ペット言葉教え・挨拶会話、送金・譲渡通知台帳）。
 - **Player Leaderboards & Character Rankings** (`internal/ranking`): ランキング・リーダーボード（12カテゴリ、決定論的タイブレーク・ページネーション、インメモリTTLキャッシュ、Valkey分散スナップショットキャッシュ、Singleflightキャッシュスタンピード抑止、定期更新Workerアクション、永続スナップショット `ranking_snapshots`）。
 - **Event Plaza, Traveling Merchant Bazaar & Victory Banquets** (`internal/eventplaza`): イベント広場・行商人バザー＆ボス討伐祝宴（人口連動行商人Tier判定、希少アイテムバザーカタログ `bazaar.json`、アトミック購入トランザクション、ボス討伐連動祝宴・乾杯参加ゴールド報酬・重複乾杯防止 `banquet_toasts`、キャラクター所有権検証）。
 - **Secret Underground Shop & NPC @ヒミツジ** (`internal/secretshop`): 秘密の店（資格判定 Lv15以上または転生者、希少消費アイテムカタログ `secret_items.json`、3倍価格プレミアム設定、アトミック購入トランザクション、NPC会話・詳細情報・ぱふぱふサービス回復）。
 - **Adventurer's Tavern, Menu Orders, Delivery Reservations & NPC @エレナ** (`internal/tavern`): 冒険者の酒場（14種飲食メニューカタログ `menu.json`、HP/MP回復＆満腹度管理、購入時福引券ボーナス付与、冒険後自動回復デリバリー予約・受取・キャンセル機能、NPC会話。ファイルサイズ上限遵守のため `dialogue.go`, `delivery.go`, `order.go`, `tavern.go` に責務分割完了）。
-- **Town Black Market, Contraband Trading, Dynamic Pricing & NPC @ヤミジ** (`internal/blackmarket`): 裏路地の闇市（資格判定 Lv10以上、10種禁制品カタログ `blackmarket_items.json`、4種市場相場状態、1日購入制限クォータ、レアアイテム捧げものリサイクル `SacrificeItem`、限定景品交換 `TradePrize`、アトミックトランザクション）。
+- **Town Black Market, Contraband Trading, Dynamic Pricing & NPC @ヤミジ** (`internal/blackmarket`): 裏路地の闇市（資格判定 Lv10以上、10種禁制品カタログ `blackmarket_items.json`、4種市場相場状態、1日購入制限クォータ、レアアイテム捧げものリサイクル `SacrificeItem`、限定景品交換 `TradePrize`、アトミックトランザクション）。`GetMarketState()`（27.8%→100.0%）の時間帯ローテーション・リポジトリ障害フォールバック・相場既定値補完・カスタム値保持の単体テスト網羅率向上完了。
 - **Town Delivery Quests & Player Courier Service** (`internal/delivery`): 町のでりばりー依頼＆プレイヤー間宅配便（NPC配送依頼、最大3件同時受領、報酬アトミック精算、およびプレイヤー間宅配便、手数料50 G、受取待ち・発送履歴（キーセット・カーソル対応）、受取・発送キャンセル/返金、CAS条件付きステータス更新 `WHERE id = ? AND status = 'pending'` による二重処理防止）。`CancelParcel()`（54.5%→87.9%）、`CompleteDelivery()`（71.0%→87.1%）、`ClaimParcel()`（73.2%→85.4%）のエラーパス・アイテム返還・ボーナス報酬受取フローの単体テスト網羅率向上完了。
 - **Flea Market & Player Item Stalls** (`internal/fleamarket`): フリーマーケット＆露店取引（最大5件同時出品、1〜999,999 G固定価格出品、出品時インベントリ消費・キャンセル時安全返却、ID昇順排他ロックによるデッドロック防止、SQL CAS述語 `WHERE id = ? AND status = 'active'` と `RowsAffected() == 1` 検証によるアトミック移転）。
 - **Gem Store, Jewel Synthesis & Appraisal** (`internal/gemstore`): 宝石店・宝珠/天珠販売・特殊合成加工・他プレイヤー譲渡・未鑑定宝珠鑑定（レベル別カタログ `gems.json`、55種以上の上位合成レシピ `recipes.json`、5種未鑑定宝珠の重み付きランダム鑑定プール `orb_appraisals.json`、決定論的行ロック階層によるアトミック整合性）。
