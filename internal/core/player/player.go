@@ -2,16 +2,16 @@ package player
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
-const passwordIterations = 100000
+const bcryptCost = 12
 
 var (
 	ErrInvalidPlayer   = errors.New("player is invalid")
@@ -79,43 +79,22 @@ func (s Session) Active(now time.Time) bool {
 }
 
 func hashPassword(password string) (string, error) {
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		return "", fmt.Errorf("generate password salt: %w", err)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
+	if err != nil {
+		return "", fmt.Errorf("hash password: %w", err)
 	}
-	digest := derive(password, salt)
-	return fmt.Sprintf("sha256$%d$%s$%s", passwordIterations, hex.EncodeToString(salt), hex.EncodeToString(digest)), nil
+	return string(hash), nil
 }
 
 func verifyPassword(password, encoded string) (bool, error) {
-	parts := strings.Split(encoded, "$")
-	if len(parts) != 4 || parts[0] != "sha256" {
-		return false, ErrAuthentication
+	err := bcrypt.CompareHashAndPassword([]byte(encoded), []byte(password))
+	if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+		return false, nil
 	}
-	var iterations int
-	if _, err := fmt.Sscanf(parts[1], "%d", &iterations); err != nil || iterations != passwordIterations {
-		return false, ErrAuthentication
-	}
-	saltText, digestText := parts[2], parts[3]
-	salt, err := hex.DecodeString(saltText)
 	if err != nil {
 		return false, ErrAuthentication
 	}
-	expected, err := hex.DecodeString(digestText)
-	if err != nil {
-		return false, ErrAuthentication
-	}
-	actual := derive(password, salt)
-	return len(expected) == len(actual) && subtle.ConstantTimeCompare(expected, actual) == 1, nil
-}
-
-func derive(password string, salt []byte) []byte {
-	value := append(append([]byte(nil), salt...), []byte(password)...)
-	for i := 0; i < passwordIterations; i++ {
-		sum := sha256.Sum256(value)
-		value = sum[:]
-	}
-	return value
+	return true, nil
 }
 
 func randomID() (string, error) {

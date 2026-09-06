@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #407 — [Chore] Docs: Update rules, clarify transient state implementation status, and prune STATUS.md
+Last updated: Issue #401 — [Chore] Security: Replace custom SHA-256 password hash with bcrypt
 
 ## Current phase
 
@@ -24,7 +24,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Core Domain Invariant Static Analysis Linter Suite**: Go AST 静的構文解析リンター（`internal/core/core_lint_test.go`）による全生産コードファイルの検査。Progression、Currency & Economy、Job State、Inventory、Equipment、Battle Participant Identityの全6重要ドメイン不変条件に対する直接構造体フィールド操作を機械的に禁止し、Core標準カプセル化ヘルパー経由の操作を100%強制。
 
 ### Core & Shared Components
-- **Player** (`internal/core/player`, `internal/player`): アカウント登録・パスワードハッシュ・セッション管理（Valkey Master `party2:session:<token>` 7日間TTL自動失効、Sorted Set `party2:player:sessions:<player_id>` による遅延パージ `ZREMRANGEBYSCORE`）・Personal Access Token（APIキー `p2_sk_...`、SHA-256ダイジェスト永続化、デュアル認証、所有権検証付き失効 `DELETE /player/tokens/{id}`）・アカウント完全削除（所有キャラクター全件クリーンアップ、Valkeyセッション破棄、PATカスケード削除、MariaDB 35+テーブル連鎖削除）。
+- **Player** (`internal/core/player`, `internal/player`): アカウント登録・パスワードハッシュ（bcrypt コスト12、GPU耐性・メモリ困難性担保）・セッション管理（Valkey Master `party2:session:<token>` 7日間TTL自動失効、Sorted Set `party2:player:sessions:<player_id>` による遅延パージ `ZREMRANGEBYSCORE`）・Personal Access Token（APIキー `p2_sk_...`、SHA-256ダイジェスト永続化、デュアル認証、所有権検証付き失効 `DELETE /player/tokens/{id}`）・アカウント完全削除（所有キャラクター全件クリーンアップ、Valkeyセッション破棄、PATカスケード削除、MariaDB 35+テーブル連鎖削除）。
 - **Character** (`internal/core/character`, `internal/character`): `player_id` 外部キーによるアカウント紐付け、初期ステータス、能力値計算、転生（Rebirth +5永続ボーナス）、キャラクター一覧取得、キャラクター個別削除（所有権認可、外部ドメイン `CleanupHook` 実行、MariaDB 35+サブリソーステーブルの完全カスケード削除）、命名の館（名前変更・性別/外観変更）、プロフィール自己紹介コメント・アバター画像管理。通貨・メダルの安全なカプセル化（`AddMoney`, `DeductMoney`, `AddSmallMedals`, `DeductSmallMedals`、上限キャップ・負数ガード・残高オーバードラフト防止）。
 - **Progression** (`internal/core/progression`): レベルアップ（累積経験値テーブル `level * level * 10`）、OverLevel限界突破（Lv150）対応、成長率適用、ASTリンターによるCore標準ヘルパー（`progression.ApplyExperience`）強制。
 - **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): クリーンルーム規約に完全準拠したJSONカタログ（`jobs.json`）、転職、Lv99マスタリー、スキル発動・コスト計算。
@@ -93,7 +93,6 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 1. **Tooling, Refactoring & Security Hardening**:
    - Issue #400: Standardize Config Struct Injection and environment variable loading
-   - Issue #401: Replace custom SHA-256 password hash with bcrypt (`golang.org/x/crypto/bcrypt`)
    - Issue #403: Extract inline Lua scripts to external files using `//go:embed`
    - Issue #404: Migrate active dungeon expedition state buffer to Valkey Master (Candidate D)
    - Issue #405: Migrate active challenge session buffer to Valkey Master (Candidate D)
