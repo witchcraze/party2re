@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #403 — [Chore] Lua: Extract inline Lua scripts to external files using //go:embed
+Last updated: Issue #410 — [Chore] Tooling: Implement dead code and orphaned method detection for internal packages
 
 ## Current phase
 
@@ -84,7 +84,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `054_casino_poker_sessions.sql`、`make db-migrate` / `make db-reset`、永続権威 MariaDB Master、コネクションプール設定 `MaxOpenConns`・`MaxIdleConns`・`ConnMaxLifetime`・`ConnMaxIdleTime` の環境変数設定対応）。
 - **Valkey**: 遅延アクションキュー・排他ロック・分散レートリミット・ランキングスナップショットキャッシュ（AOF+RDB永続化）。RFC #356 に基づく揮発性ステートのプライマリストア（Valkey Master: セッション、メンテナンス状態、待機ロビー）境界策定。統一キー空間仕様（SSOT: `docs/architecture/valkey-keyspace.md`）策定および AST 機械検証（`internal/architecture/valkey_lint_test.go`）。Lua スクリプト運用基準・Hash Tagging 規約・インメモリ等価性 SSOT 策定。一時ランバッファ（ダンジョン探索・連戦サバイバル）のValkey Master移行評価・Luaスクリプト契約（SSOT: `docs/architecture/transient-run-state.md`）。ワールドボスHPのリアルタイム共有HP低減PoC完了（SSOT: `docs/architecture/transient-boss-hp.md`）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
-- **Verification**: `Makefile` (`make check`, `make fmt`, `make vet`, `make lock-lint`, `make openapi-sync`, `make openapi-check`, `make openapi-scaffold`, `make test-stress`, `make bench`, `make check-clean`)、OpenAPI 3.1 仕様書自動同期 CLI（`scripts/sync_openapi.go`）、CIガード、Go AST 静的解析テストスイート（トランザクション伝播、行ロック階層順序、サービス層 `RunInTx`、Valkey キー空間仕様＆`KEYS *` 禁止、HTTP 所有権認可、Core ドメイン不変条件、全リンターへの高速バイト事前フィルタ適用）。
+- **Verification**: `Makefile` (`make check`, `make fmt`, `make vet`, `make lock-lint`, `make openapi-sync`, `make openapi-check`, `make openapi-scaffold`, `make test-stress`, `make bench`, `make check-clean`)、OpenAPI 3.1 仕様書自動同期 CLI（`scripts/sync_openapi.go`）、CIガード、Go AST 静的解析テストスイート（トランザクション伝播、行ロック階層順序、サービス層 `RunInTx`、Valkey キー空間仕様＆`KEYS *` 禁止、Luaスクリプト外部ファイル化＆埋め込み保証、HTTP 所有権認可、Core ドメイン不変条件、未参照・孤立メソッド／デッドコード機械的検知、全リンターへの高速バイト事前フィルタ適用）。
 - **Deployment**: Distroless (`gcr.io/distroless/static-debian13:nonroot`) ベースの最小本番イメージ（GHCR自動公開）。
 
 ---
@@ -96,7 +96,6 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
    - Issue #404: Migrate active dungeon expedition state buffer to Valkey Master (Candidate D)
    - Issue #405: Migrate active challenge session buffer to Valkey Master (Candidate D)
    - Issue #406: Decompose monolithic domain files (dungeon, fleamarket, casino)
-   - Issue #410: Implement dead code and orphaned method detection for internal packages
    - Issue #411: Establish cross-domain application runtime primitives to abstract currency, item, locking, and event rules
 2. **Client Presentation & Web UI**:
    - Issue #140: Web Presentation UI and browser client implementation
