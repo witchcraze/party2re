@@ -354,3 +354,53 @@ func TestCasinoService_GamePlayedHook(t *testing.T) {
 		t.Errorf("unexpected playedGames sequence: %v", playedGames)
 	}
 }
+
+func TestCasinoService_PlayIndianPokerAction_ExactCoinsBoundary(t *testing.T) {
+	ctx := context.Background()
+	// Start with exactly 20 coins: 10 for ante, 10 for round 1 bet
+	var currentCoins int64 = 20
+
+	repo := &mockCasinoRepo{
+		getAccountFn: func(_ context.Context, charID string) (casino.Account, error) {
+			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
+		},
+		adjustFn: func(_ context.Context, charID string, delta int64) (casino.Account, error) {
+			currentCoins += delta
+			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
+		},
+		deductAndCreditFn: func(_ context.Context, charID string, bet int64, payout int64) (casino.Account, error) {
+			if currentCoins < bet {
+				return casino.Account{CharacterID: charID, Coins: currentCoins}, casino.ErrInsufficientCoins
+			}
+			currentCoins = currentCoins - bet + payout
+			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
+		},
+	}
+	svc, err := casino.NewService(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Start game with rate 10 -> Ante 10 deducted (exact 10 coins remaining)
+	_, acc, err := svc.StartIndianPokerGame(ctx, "char1", 10)
+	if err != nil {
+		t.Fatalf("StartIndianPokerGame failed: %v", err)
+	}
+	if acc.Coins != 10 {
+		t.Fatalf("expected 10 coins remaining, got %d", acc.Coins)
+	}
+
+	// Set cards so dealer calls
+	repo.pokerGames["char1"].PlayerCard = casino.Card{Suit: casino.SuitSpades, Rank: casino.RankSeven}
+	repo.pokerGames["char1"].DealerCard = casino.Card{Suit: casino.SuitHearts, Rank: casino.RankSeven}
+
+	// 2. Play action 'call': current bet is 10, player has exactly 10 coins.
+	// This must succeed and leave player with 0 coins during the round.
+	_, updatedAcc, err := svc.PlayIndianPokerAction(ctx, "char1", casino.ActionCall)
+	if err != nil {
+		t.Fatalf("PlayIndianPokerAction failed on exact balance: %v", err)
+	}
+	if updatedAcc.Coins != 0 {
+		t.Errorf("expected 0 coins remaining after bet, got %d", updatedAcc.Coins)
+	}
+}

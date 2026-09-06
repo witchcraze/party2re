@@ -105,7 +105,7 @@ Multi-round Indian Poker games are persisted in MariaDB via `casino_poker_sessio
 3. **Play Round Action (`POST /characters/{id}/casino/poker/action`)**:
    - Accepts `{ "action": "call" | "showdown" | "fold" }`.
    - Validates active session existence; returns `404 Not Found` if no session is active.
-   - For `call` and `showdown`: Deducts the required round bet from player's `casino_accounts` balance.
+   - For `call` and `showdown`: Evaluates available coin balance prior to bet deduction (`coins >= current_bet`), allowing players with exact matching balances to execute round actions without false insufficient coin rejections, then deducts the required round bet atomically from `casino_accounts`.
    - Dealer AI makes its move based on the player's card rank.
    - Resolves round progression, dealer fold, or showdown settlement atomically.
    - Updates `casino_poker_sessions` and credits payout to `casino_accounts` on player win/tie.

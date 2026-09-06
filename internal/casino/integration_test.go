@@ -131,6 +131,76 @@ func TestCasinoIndianPokerDatabaseIntegration(t *testing.T) {
 	}
 }
 
+func TestCasinoIndianPokerDatabaseIntegration_ExactCoinsBoundary(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	casinoRepo, err := database.NewCasinoRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	txProvider := database.NewTransactionProvider(db)
+	svc, err := casino.NewService(casinoRepo, casino.WithTransactionProvider(txProvider))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Create test character and buy exactly 20 casino coins (400 gold)
+	char, err := database.CreateTestCharacter(ctx, db, "PokerBoundary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = ? WHERE id = ?", 400, char.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	acc, _, err := svc.ExchangeGoldToCoins(ctx, char.ID, 20)
+	if err != nil {
+		t.Fatalf("ExchangeGoldToCoins failed: %v", err)
+	}
+	if acc.Coins != 20 {
+		t.Fatalf("expected 20 coins, got %d", acc.Coins)
+	}
+
+	// 2. Start Indian Poker Game with base rate 10 -> Ante 10 deducted (exact 10 coins remaining)
+	game, acc, err := svc.StartIndianPokerGame(ctx, char.ID, 10)
+	if err != nil {
+		t.Fatalf("StartIndianPokerGame failed: %v", err)
+	}
+	if acc.Coins != 10 || game.Pot != 20 {
+		t.Fatalf("unexpected start state: coins=%d, pot=%d", acc.Coins, game.Pot)
+	}
+
+	// 3. Play action 'showdown' with exact 10 coins remaining (round 1 bet = 10 coins)
+	// Must succeed without ErrInsufficientCoin
+	finishedGame, updatedAcc, err := svc.PlayIndianPokerAction(ctx, char.ID, casino.ActionShowdown)
+	if err != nil {
+		t.Fatalf("PlayIndianPokerAction failed with exact balance: %v", err)
+	}
+	if finishedGame.Status == casino.StatusInProgress {
+		t.Errorf("expected showdown to conclude game, got status %s", finishedGame.Status)
+	}
+
+	// Verify DB account state matches returned account
+	dbAcc, err := svc.GetAccount(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetAccount failed: %v", err)
+	}
+	if dbAcc.Coins != updatedAcc.Coins {
+		t.Errorf("db coins = %d, updatedAcc coins = %d", dbAcc.Coins, updatedAcc.Coins)
+	}
+}
+
 func TestCasinoSlotMachineDatabaseIntegration(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
