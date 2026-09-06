@@ -37,7 +37,12 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 	if err != nil {
 		return nil, err
 	}
-	depotService, err := depot.NewServiceWithTransaction(depotRepo, core.charRepo, core.invRepo, depotRepo)
+	depotService, err := depot.NewService(
+		depotRepo,
+		core.charRepo,
+		core.invRepo,
+		depot.WithEconomy(core.economy),
+	)
 	if err != nil {
 		return nil, err
 	}

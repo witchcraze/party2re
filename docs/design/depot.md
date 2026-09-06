@@ -30,4 +30,4 @@ The Item Depot (預かり所 / 倉庫) provides characters with persistent stora
 
 ## Atomicity and Concurrency
 
-All depot operations (`DepositGold`, `WithdrawGold`, `DepositItem`, `WithdrawItem`) execute atomically inside a single database transaction (`*sql.Tx`) across character stats, inventory items, character depot metadata, and depot item records.
+All depot operations (`DepositGold`, `WithdrawGold`, `DepositItem`, `WithdrawItem`) execute atomically inside a single database transaction (`*sql.Tx`) across character stats, inventory items, character depot metadata, and depot item records orchestrated via `economy.TransactionRunner` / `economy.ExecuteTransaction`. Operations strictly adhere to the system-wide lock hierarchy (`characters` Rank 2 -> `inventory_items` Rank 3 -> `character_depots` Rank 5) with exclusive `FOR UPDATE` locks to eliminate deadlocks and concurrency anomalies.

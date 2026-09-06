@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 )
@@ -80,8 +78,8 @@ func (r *DepotRepository) FindByCharacterIDForUpdate(ctx context.Context, charac
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, definition_id, quantity, enhancement_level
 		FROM depot_items
-		WHERE character_id = ? FOR UPDATE
-		ORDER BY id
+		WHERE character_id = ?
+		ORDER BY id FOR UPDATE
 	`, characterID)
 	if err != nil {
 		return depot.Depot{}, err
@@ -137,124 +135,6 @@ func saveDepotTx(ctx context.Context, executor sqlContextExecutor, value depot.D
 	return nil
 }
 
-type sqlDepotTx struct {
-	executor sqlContextExecutor
-}
-
-func (t *sqlDepotTx) GetCharacter(ctx context.Context, characterID string) (corecharacter.Character, error) {
-	return scanCharacterRow(t.executor.QueryRowContext(ctx, `
-		SELECT `+characterColumns+`
-		FROM characters
-		WHERE id = ?
-	`, characterID))
-}
-
-func (t *sqlDepotTx) SaveCharacter(ctx context.Context, character corecharacter.Character) error {
-	return updateCharacterAtomically(ctx, t.executor, character)
-}
-
-func (t *sqlDepotTx) GetInventory(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-	var count int
-	err := t.executor.QueryRowContext(ctx, "SELECT COUNT(1) FROM characters WHERE id = ?", characterID).Scan(&count)
-	if err != nil {
-		return coreinventory.Inventory{}, err
-	}
-	if count == 0 {
-		return coreinventory.Inventory{}, corecharacter.ErrNotFound
-	}
-
-	rows, err := t.executor.QueryContext(ctx, `
-		SELECT id, definition_id, quantity, enhancement_level
-		FROM inventory_items
-		WHERE character_id = ?
-		ORDER BY id
-	`, characterID)
-	if err != nil {
-		return coreinventory.Inventory{}, err
-	}
-	defer rows.Close()
-
-	items := make([]item.Instance, 0)
-	for rows.Next() {
-		var instance item.Instance
-		if err := rows.Scan(&instance.ID, &instance.DefinitionID, &instance.Quantity, &instance.EnhancementLevel); err != nil {
-			return coreinventory.Inventory{}, err
-		}
-		items = append(items, instance)
-	}
-	if err := rows.Err(); err != nil {
-		return coreinventory.Inventory{}, err
-	}
-
-	return coreinventory.Inventory{
-		CharacterID: characterID,
-		Items:       items,
-	}, nil
-}
-
-func (t *sqlDepotTx) SaveInventory(ctx context.Context, inventory coreinventory.Inventory) error {
-	if _, err := t.executor.ExecContext(ctx, "DELETE FROM inventory_items WHERE character_id = ?", inventory.CharacterID); err != nil {
-		return err
-	}
-	for _, instance := range inventory.Items {
-		if _, err := t.executor.ExecContext(ctx, `
-			INSERT INTO inventory_items (id, character_id, definition_id, quantity, enhancement_level)
-			VALUES (?, ?, ?, ?, ?)
-		`, instance.ID, inventory.CharacterID, instance.DefinitionID, instance.Quantity, instance.EnhancementLevel); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (t *sqlDepotTx) GetDepot(ctx context.Context, characterID string) (depot.Depot, error) {
-	var dep depot.Depot
-	err := t.executor.QueryRowContext(ctx, `
-		SELECT character_id, gold, capacity
-		FROM character_depots
-		WHERE character_id = ?
-	`, characterID).Scan(&dep.CharacterID, &dep.Gold, &dep.Capacity)
-	if errors.Is(err, sql.ErrNoRows) {
-		return depot.Depot{}, depot.ErrNotFound
-	}
-	if err != nil {
-		return depot.Depot{}, err
-	}
-
-	rows, err := t.executor.QueryContext(ctx, `
-		SELECT id, definition_id, quantity, enhancement_level
-		FROM depot_items
-		WHERE character_id = ?
-		ORDER BY id
-	`, characterID)
-	if err != nil {
-		return depot.Depot{}, err
-	}
-	defer rows.Close()
-
-	items := make([]item.Instance, 0)
-	for rows.Next() {
-		var instance item.Instance
-		if err := rows.Scan(&instance.ID, &instance.DefinitionID, &instance.Quantity, &instance.EnhancementLevel); err != nil {
-			return depot.Depot{}, err
-		}
-		items = append(items, instance)
-	}
-	if err := rows.Err(); err != nil {
-		return depot.Depot{}, err
-	}
-
-	dep.Items = items
-	return dep, nil
-}
-
-func (t *sqlDepotTx) SaveDepot(ctx context.Context, dep depot.Depot) error {
-	return saveDepotTx(ctx, t.executor, dep)
-}
-
-func (r *DepotRepository) Execute(ctx context.Context, fn func(ctx context.Context, tx depot.Tx) error) error {
-	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
-		wrapped := &sqlDepotTx{executor: ExecutorFromContext(txCtx, r.db)}
-		return fn(txCtx, wrapped)
-	})
+func (r *DepotRepository) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	return RunInTx(ctx, r.db, fn)
 }

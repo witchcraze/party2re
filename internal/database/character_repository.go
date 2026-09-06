@@ -87,7 +87,7 @@ func (r *CharacterRepository) FindByPlayerID(ctx context.Context, playerID strin
 }
 
 func (r *CharacterRepository) Update(ctx context.Context, value corecharacter.Character) error {
-	return updateCharacter(ctx, ExecutorFromContext(ctx, r.db), value)
+	return updateCharacterAtomically(ctx, ExecutorFromContext(ctx, r.db), value)
 }
 
 func (r *CharacterRepository) GetProfile(ctx context.Context, characterID string) (character.Profile, error) {
