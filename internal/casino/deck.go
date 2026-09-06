@@ -18,6 +18,7 @@ const (
 
 type Rank int
 
+//lint:ignore unused standard playing card rank enum set completeness
 const (
 	RankAce   Rank = 1
 	RankTwo   Rank = 2

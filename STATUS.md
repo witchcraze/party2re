@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #418 — [Chore] Tooling: Implement file line limit and architecture structure guard AST linter
+Last updated: Issue #419 — [Chore] Tooling: Extend AST dead code linter to detect unused constants, enums, and DTO struct fields
 
 ## Current phase
 
@@ -18,7 +18,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ### Architecture & Repository Intelligence (Guidance Layer - PoC)
 - **Guidance Layer (.arch/)**: シンボルアンカー（`path#Symbol`）ベースのモジュール詳細定義（`.arch/modules/*.json`）、共有テーブル逆引きインデックス（`.arch/shared_tables/*.json`、`characters`, `inventory_items`, `bank_accounts`, `guilds`）、Mermaid全体トポロジー図（`docs/architecture/guidance-layer.md`）。外部依存不要のGo + JSON + Markdown構成。
 - **Module Selection Criteria & Target Tiers**: 4つの選定基準（C1: トランザクション深度, C2: 行ロック階層, C3: エスクロー/共有状態, C4: 非同期Worker）に基づくトリアージ。Tier 1（高リスク8機能: `tavern`, `delivery`, `bank`, `auction`, `guild`, `shop`, `blacksmith`, `adventure`）、Tier 2（オンデマンド）、Tier 3（除外）の運用スコープを確立。
-- **Automated Mechanical Verification**: Go AST シンボルリント（`internal/architecture/arch_test.go`）による高速静的シンボル実在性チェック、`RunInTx` 呼び出し実在検証、および本番ファイル行数リミット（生産コード ≤ 500行、`cmd/*/main.go` ≤ 150行）のラチェット方式自動ガード（`internal/architecture/file_size_lint_test.go`）（`make check` / `make arch-lint` 統合）。
+- **Automated Mechanical Verification**: Go AST シンボルリント（`internal/architecture/arch_test.go`）による高速静的シンボル実在性チェック、`RunInTx` 呼び出し実在検証、本番ファイル行数リミット（生産コード ≤ 500行、`cmd/*/main.go` ≤ 150行）のラチェット方式自動ガード（`internal/architecture/file_size_lint_test.go`）、および孤立メソッド・未使用定数・未使用DTO構造体フィールドの機械的デッドコード検知（`internal/architecture/deadcode_lint_test.go`, `internal/architecture/unused_definitions_lint_test.go`）（`make check` / `make arch-lint` 統合）。
 - **Continuous Performance Verification & Benchmark Framework (`docs/development/benchmarking.md`)**: クリティカルパス（AST静的解析リント、戦闘シミュレーション、Valkeyセッション操作）を網羅する `Benchmark*` スイート、標準実行スクリプト（`scripts/benchmark.sh`）、`Makefile` ターゲット（`make bench`）、およびベースライン比較・リグレッション自動検知CLI（`scripts/compare_benchmarks.go`）。
 - **Valkey Keyspace Taxonomy & Operational SSOT (`docs/architecture/valkey-keyspace.md`)**: システム全体のValkeyキー空間（`party2:<namespace>:<entity>[:<id>]`）、TTLポリシー、所有モジュール、Luaスクリプト運用基準（1ms未満バジェット、O(log N)上限、`KEYS *` 禁止、Cluster Hash Tagging `{...}` 規約、インメモリ等価性、`lua/*.lua` 外部ファイル化・`//go:embed` コンパイル時埋め込み）、TTLスコア付きSorted Set（ZSET）遅延パージ標準。Go ASTリンター（`internal/architecture/valkey_lint_test.go`）により機械的検証。
 - **Core Domain Invariant Static Analysis Linter Suite**: Go AST 静的構文解析リンター（`internal/core/core_lint_test.go`）による全生産コードファイルの検査。Progression、Currency & Economy、Job State、Inventory、Equipment、Battle Participant Identityの全6重要ドメイン不変条件に対する直接構造体フィールド操作を機械的に禁止し、Core標準カプセル化ヘルパー経由の操作を100%強制。
@@ -84,7 +84,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `054_casino_poker_sessions.sql`、`make db-migrate` / `make db-reset`、永続権威 MariaDB Master、コネクションプール設定 `MaxOpenConns`・`MaxIdleConns`・`ConnMaxLifetime`・`ConnMaxIdleTime` の環境変数設定対応）。
 - **Valkey**: 遅延アクションキュー・排他ロック・分散レートリミット・ランキングスナップショットキャッシュ（AOF+RDB永続化）。RFC #356 に基づく揮発性ステートのプライマリストア（Valkey Master: セッション、メンテナンス状態、待機ロビー）境界策定。統一キー空間仕様（SSOT: `docs/architecture/valkey-keyspace.md`）策定および AST 機械検証（`internal/architecture/valkey_lint_test.go`）。Lua スクリプト運用基準・Hash Tagging 規約・インメモリ等価性 SSOT 策定。一時ランバッファ（ダンジョン探索・連戦サバイバル）のValkey Master移行評価・Luaスクリプト契約（SSOT: `docs/architecture/transient-run-state.md`）。ワールドボスHPのリアルタイム共有HP低減PoC完了（SSOT: `docs/architecture/transient-boss-hp.md`）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
-- **Verification**: `Makefile` (`make check`, `make fmt`, `make vet`, `make lock-lint`, `make openapi-sync`, `make openapi-check`, `make openapi-scaffold`, `make test-stress`, `make bench`, `make check-clean`)、OpenAPI 3.1 仕様書自動同期 CLI（`scripts/sync_openapi.go`）、CIガード、Go AST 静的解析テストスイート（トランザクション伝播、行ロック階層順序、サービス層 `RunInTx`、Valkey キー空間仕様＆`KEYS *` 禁止、Luaスクリプト外部ファイル化＆埋め込み保証、HTTP 所有権認可、Core ドメイン不変条件、未参照・孤立メソッド／デッドコード機械的検知、本番ファイル行数・エントリポイントサイズ制約（生産 ≤ 500行、main.go ≤ 150行）のラチェット自動検査、全リンターへの高速バイト事前フィルタ適用）。
+- **Verification**: `Makefile` (`make check`, `make fmt`, `make vet`, `make lock-lint`, `make openapi-sync`, `make openapi-check`, `make openapi-scaffold`, `make test-stress`, `make bench`, `make check-clean`)、OpenAPI 3.1 仕様書自動同期 CLI（`scripts/sync_openapi.go`）、CIガード、Go AST 静的解析テストスイート（トランザクション伝播、行ロック階層順序、サービス層 `RunInTx`、Valkey キー空間仕様＆`KEYS *` 禁止、Luaスクリプト外部ファイル化＆埋め込み保証、HTTP 所有権認可、Core ドメイン不変条件、未参照・孤立メソッド／未使用定数／未使用DTO構造体フィールドのデッドコード機械検知、本番ファイル行数・エントリポイントサイズ制約（生産 ≤ 500行、main.go ≤ 150行）のラチェット自動検査、全リンターへの高速バイト事前フィルタ適用）。
 - **Deployment**: Distroless (`gcr.io/distroless/static-debian13:nonroot`) ベースの最小本番イメージ（GHCR自動公開）。
 
 ---
@@ -95,7 +95,6 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
    - Issue #404: Migrate active dungeon expedition state buffer to Valkey Master (Candidate D)
    - Issue #405: Migrate active challenge session buffer to Valkey Master (Candidate D)
    - Issue #411: Establish cross-domain application runtime primitives to abstract currency, item, locking, and event rules
-   - Issue #419: Extend AST dead code linter to detect unused constants, enums, and DTO struct fields
 2. **Client Presentation & Web UI**:
    - Issue #140: Web Presentation UI and browser client implementation
 3. **Production Asset Pipeline & Final Licensing**:
