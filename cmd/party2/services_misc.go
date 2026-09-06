@@ -222,7 +222,11 @@ func newMiscServices(
 	if err != nil {
 		return nil, err
 	}
-	casinoService, err := casino.NewService(casinoRepo, casino.WithTransactionProvider(core.txProvider))
+	casinoService, err := casino.NewService(
+		casinoRepo,
+		casino.WithTransactionProvider(core.txProvider),
+		casino.WithEconomy(core.economy),
+	)
 	if err != nil {
 		return nil, err
 	}

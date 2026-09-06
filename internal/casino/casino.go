@@ -6,6 +6,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -45,12 +46,18 @@ type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
+// TransactionRunner defines the contract for executing cross-domain transactions.
+type TransactionRunner interface {
+	ExecuteTransaction(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error)
+}
+
 // GamePlayedHook is called whenever a casino game round concludes.
 type GamePlayedHook func(ctx context.Context, characterID string, gameName string) error
 
 type Service struct {
 	repo           Repository
 	txProvider     TransactionProvider
+	runner         TransactionRunner
 	gamePlayedHook GamePlayedHook
 }
 
@@ -59,6 +66,18 @@ type Option func(*Service)
 func WithTransactionProvider(tx TransactionProvider) Option {
 	return func(s *Service) {
 		s.txProvider = tx
+	}
+}
+
+func WithTransactionRunner(runner TransactionRunner) Option {
+	return func(s *Service) {
+		s.runner = runner
+	}
+}
+
+func WithEconomy(eco *economy.Service) Option {
+	return func(s *Service) {
+		s.runner = eco
 	}
 }
 
@@ -104,6 +123,32 @@ func (s *Service) ExchangeGoldToCoins(ctx context.Context, characterID string, c
 		return Account{}, corecharacter.Character{}, ErrInvalidAmount
 	}
 	goldCost := int(coins * GoldPerCoin)
+
+	if s.runner != nil {
+		req := economy.TransactionRequest{
+			CharacterID: characterID,
+			Cost: economy.ResourceCost{
+				Gold: goldCost,
+			},
+		}
+		var acc Account
+		res, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+			var err error
+			acc, err = s.repo.AdjustCoins(tc.Context, characterID, coins)
+			return err
+		})
+		if err != nil {
+			if errors.Is(err, economy.ErrInsufficientGold) {
+				return Account{}, corecharacter.Character{}, ErrInsufficientGold
+			}
+			if errors.Is(err, economy.ErrCharacterNotFound) {
+				return Account{}, corecharacter.Character{}, corecharacter.ErrNotFound
+			}
+			return Account{}, corecharacter.Character{}, err
+		}
+		return acc, res.Character, nil
+	}
+
 	return s.repo.ExchangeGoldToCoins(ctx, characterID, coins, goldCost)
 }
 
@@ -116,6 +161,32 @@ func (s *Service) ExchangeCoinsToGold(ctx context.Context, characterID string, c
 		return Account{}, corecharacter.Character{}, ErrInvalidAmount
 	}
 	goldReward := int(coins * GoldPerCoin)
+
+	if s.runner != nil {
+		req := economy.TransactionRequest{
+			CharacterID: characterID,
+			Grant: economy.ResourceGrant{
+				Gold: goldReward,
+			},
+		}
+		var acc Account
+		res, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+			var err error
+			acc, err = s.repo.DeductBetAndCreditPayout(tc.Context, characterID, coins, 0)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			if errors.Is(err, economy.ErrCharacterNotFound) {
+				return Account{}, corecharacter.Character{}, corecharacter.ErrNotFound
+			}
+			return Account{}, corecharacter.Character{}, err
+		}
+		return acc, res.Character, nil
+	}
+
 	return s.repo.ExchangeCoinsToGold(ctx, characterID, coins, goldReward)
 }
 
