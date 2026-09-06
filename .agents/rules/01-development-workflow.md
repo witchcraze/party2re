@@ -64,7 +64,7 @@ A ticket is complete only when applicable:
 - For features touching P2P or shared-resource state mutations (Bank, Auction, Flea Market, Delivery, Guild, Boss), a paired concurrency stress test using the standardized test harness (`testutil.RunConcurrentStressTest` or `testutil.RunRace`) is implemented and passes with zero deadlocks and conserved assets.
 - Unified local checks (`make check`) pass completely.
 - Architecture remains valid and no unrelated changes were introduced.
-- Dead Code and Orphaned Method Elimination: When replacing, refactoring, or superseding domain methods or repository interfaces, all unused precursors MUST be eliminated. Leaving obsolete or zero-caller methods behind is prohibited. Mechanically enforced by Go AST linter (`internal/architecture/deadcode_lint_test.go`).
+- Dead Code and Orphaned Definitions Elimination: When replacing, refactoring, or superseding domain methods, repository interfaces, constants, or DTOs, all unused precursors MUST be eliminated. Leaving obsolete or zero-caller methods, unused top-level constants, or dead DTO fields behind is prohibited. Mechanically enforced by Go AST linters (`internal/architecture/deadcode_lint_test.go`, `internal/architecture/unused_definitions_lint_test.go`). Intentional schema/OpenAPI compatibility fields and enum sets must be annotated with `//lint:ignore <reason>`.
 - Documentation/status is updated when necessary.
 - PR template requirements are satisfied.
 
