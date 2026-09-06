@@ -2,6 +2,7 @@ package ratelimit
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"strconv"
@@ -108,26 +109,10 @@ func (m *MemoryLimiter) Allow(_ context.Context, key string, limit int64, window
 	}, nil
 }
 
-const (
-	defaultKeyPrefix = "party2:ratelimit:"
-	rateLimitLua     = `
-local key = KEYS[1]
-local limit = tonumber(ARGV[1])
-local window_ms = tonumber(ARGV[2])
+const defaultKeyPrefix = "party2:ratelimit:"
 
-local current = redis.call('INCR', key)
-if current == 1 then
-    redis.call('PEXPIRE', key, window_ms)
-end
-local ttl = redis.call('PTTL', key)
-if ttl < 0 then
-    redis.call('PEXPIRE', key, window_ms)
-    ttl = window_ms
-end
-
-return {current, ttl}
-`
-)
+//go:embed lua/rate_limit.lua
+var rateLimitLua string
 
 // ValkeyLimiter provides a distributed atomic rate limiter powered by Valkey.
 type ValkeyLimiter struct {
