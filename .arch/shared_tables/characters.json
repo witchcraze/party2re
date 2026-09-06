@@ -80,14 +80,14 @@
     },
     {
       "module": "tavern",
-      "caller_method": "internal/tavern/tavern.go#Service.OrderMeal",
+      "caller_method": "internal/tavern/order.go#Service.OrderMeal",
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
       "lock_order": 2,
       "purpose": "Lock character wallet and verify gold balance"
     },
     {
       "module": "tavern",
-      "caller_method": "internal/tavern/tavern.go#Service.ClaimDelivery",
+      "caller_method": "internal/tavern/delivery.go#Service.ClaimDelivery",
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
       "lock_order": 2,
       "purpose": "Lock character to restore HP/MP and update fullness"

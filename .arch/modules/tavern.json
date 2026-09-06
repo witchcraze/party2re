@@ -29,7 +29,7 @@
     {
       "flow": "OrderMeal (食事注文・消費)",
       "tx_mode": "RunInTx",
-      "source_ref": "internal/tavern/tavern.go#Service.OrderMeal",
+      "source_ref": "internal/tavern/order.go#Service.OrderMeal",
       "lock_sequence": [
         { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
         { "step": 2, "target": "characters", "method": "CharacterRepository.Update" },
@@ -40,7 +40,7 @@
     {
       "flow": "ClaimDelivery (配達受取・消費)",
       "tx_mode": "RunInTx",
-      "source_ref": "internal/tavern/tavern.go#Service.ClaimDelivery",
+      "source_ref": "internal/tavern/delivery.go#Service.ClaimDelivery",
       "lock_sequence": [
         { "step": 1, "target": "tavern_deliveries", "method": "Repository.GetDelivery" },
         { "step": 2, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
