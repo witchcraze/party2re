@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #445 — [Architecture] Depot: Migrate to cross-domain TransactionRunner and eliminate dual execution path
+Last updated: Issue #444 — [Chore] Testutil: Standardize offline mock client and RESP builder for Valkey-dependent domains
 
 ## Current phase
 
@@ -82,7 +82,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### Infrastructure & Operations
 - **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `054_casino_poker_sessions.sql`、`make db-migrate` / `make db-reset`、永続権威 MariaDB Master、コネクションプール設定 `MaxOpenConns`・`MaxIdleConns`・`ConnMaxLifetime`・`ConnMaxIdleTime` の環境変数設定対応）。
-- **Valkey**: 遅延アクションキュー・排他ロック・分散レートリミット・ランキングスナップショットキャッシュ（AOF+RDB永続化）。RFC #356 に基づく揮発性ステートのプライマリストア（Valkey Master: セッション、メンテナンス状態、待機ロビー、ダンジョン・連戦進行中バッファ）境界策定。統一キー空間仕様（SSOT: `docs/architecture/valkey-keyspace.md`）策定および AST 機械検証（`internal/architecture/valkey_lint_test.go`）。Lua スクリプト運用基準・Hash Tagging 規約・インメモリ等価性 SSOT 策定。一時ランバッファ（Candidate D: ダンジョン探索 #404・連戦サバイバル #405 完了）のValkey Master移行およびLuaスクリプト契約（SSOT: `docs/architecture/transient-run-state.md`）。ワールドボスHPのリアルタイム共有HP低減PoC完了（SSOT: `docs/architecture/transient-boss-hp.md`）。
+- **Valkey**: 遅延アクションキュー・排他ロック・分散レートリミット・ランキングスナップショットキャッシュ（AOF+RDB永続化）。RFC #356 に基づく揮発性ステートのプライマリストア（Valkey Master: セッション、メンテナンス状態、待機ロビー、ダンジョン・連戦進行中バッファ）境界策定。統一キー空間仕様（SSOT: `docs/architecture/valkey-keyspace.md`）策定および AST 機械検証（`internal/architecture/valkey_lint_test.go`）。Lua スクリプト運用基準・Hash Tagging 規約・インメモリ等価性 SSOT 策定。一時ランバッファ（Candidate D: ダンジョン探索 #404・連戦サバイバル #405 完了）のValkey Master移行およびLuaスクリプト契約（SSOT: `docs/architecture/transient-run-state.md`）。ワールドボスHPのリアルタイム共有HP低減PoC完了（SSOT: `docs/architecture/transient-boss-hp.md`）。外部Valkeyコンテナ不要のオフラインモックハーネス（`valkeytest.MockClient`, `valkeytest.NewBuilder`, RESPビルダー群 `MakeIntSliceResult`, `MakeStringResult`, `MakeErrorResult` 等）を `internal/testutil/valkeytest` として標準化完了（Issue #444）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
 - **Verification**: `Makefile` (`make check`, `make fmt`, `make vet`, `make lock-lint`, `make openapi-sync`, `make openapi-check`, `make openapi-scaffold`, `make test-stress`, `make bench`, `make check-clean`)、OpenAPI 3.1 仕様書自動同期 CLI（`scripts/sync_openapi.go`）、CIガード、Go AST 静的解析テストスイート（トランザクション伝播、行ロック階層順序、サービス層 `RunInTx`、Valkey キー空間仕様＆`KEYS *` 禁止、Luaスクリプト外部ファイル化＆埋め込み保証、HTTP 所有権認可、Core ドメイン不変条件、未参照・孤立メソッド／未使用定数／未使用DTO構造体フィールドのデッドコード機械検知、本番ファイル行数・エントリポイントサイズ制約（生産 ≤ 500行、main.go ≤ 150行）のラチェット自動検査、全リンターへの高速バイト事前フィルタ適用）。
 - **Deployment**: Distroless (`gcr.io/distroless/static-debian13:nonroot`) ベースの最小本番イメージ（GHCR自動公開）。
