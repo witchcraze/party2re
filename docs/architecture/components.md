@@ -463,6 +463,23 @@ Durability critical?
 
 
 
+## Component Configuration Lifecycle and Composition Root
+
+To preserve parallel testability and eliminate global state mutations (`os.Setenv` concurrency hazards):
+
+1. **Config Struct First**: Every configurable package (`internal/database`, `internal/valkey`, etc.) defines a pure `Config` struct holding typed configuration parameters, with a pure `DefaultConfig()` factory returning baseline defaults.
+2. **Explicit Constructor Injection**: Constructors accept typed `Config` structs or functional options. They do NOT read `os.Getenv` or environment variables directly.
+3. **Isolated Environment Loaders**: Environment parsing functions (`ConfigFromEnvironment()`) read, validate, and clamp environment variables into `Config` structs independently.
+4. **Composition Root Organization (`cmd/party2/`)**:
+   - `config.go`: Top-level `Config` struct and `ConfigFromEnv()` centralizing all environment variable keys and defaults.
+   - `main.go`: High-level application entrypoint (`main`, `run`, `runWithConfig`), server lifecycle, signal trapping, and graceful shutdown (≤ 150 lines).
+   - `services_core.go`: Player, Character, Inventory, Item/Job catalogs, and transaction orchestration.
+   - `services_econ.go`: Shop, Bank, Depot, Blacksmith, Alchemy, Auction, Flea Market, and Gem Store.
+   - `services_cmbt.go`: Battle engine, Boss, PvP, GvG, Dungeon, Challenge, Party, Replay, and Custom Skill.
+   - `services_soc.go`: Guild, Ranking, Park, Home, Notification, Scheduling, and background Worker.
+   - `services_misc.go`: Town facilities and features (Farm, Casino, Contest, Medal, Collection, Inn, Chapel, Activity, etc.).
+   - `wire.go`: Cross-domain event hooks (`SetVictoryHook`, `SetSynthesisHook`, `SetGamePlayedHook`) and HTTP handler composition.
+
 ## Component review criteria
 
 For every new component ask:

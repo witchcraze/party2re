@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #406 — [Chore] Refactor: Decompose monolithic domain files (dungeon, delivery, ranking)
+Last updated: Issue #400 — [Architecture] Config: Standardize Config Struct Injection and Decouple Environment Loading for Parallel Testability
 
 ## Current phase
 
@@ -77,7 +77,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **System Maintenance Mode** (`internal/maintenance`): メンテナンスモード管理（`GET /maintenance`, `POST /admin/maintenance`, `PUT /admin/maintenance`、管理者APIキーによる有効化/無効化・告知メッセージ・終了予定時刻設定、HTTPミドルウェアによる503 Service Unavailable遮断、Valkey Master / In-Memory キャッシュによる毎リクエストのSQLクエリ排除、MariaDBバックアップ `system_maintenance`）。
 
 ### API & Transport
-- **Server Entrypoint & Lifecycle Orchestration** (`cmd/party2`): MariaDB・Valkey・全ドメインリポジトリおよびサービス・スケジューリングWorker・HTTP APIルーター（全34種Option）の統合初期化、`ADDR` / `PORT` 環境変数解決（デフォルト `:8080`）、Graceful Shutdown（`http.Server.Shutdown(ctx)`、Worker Contextキャンセル待機、リソース安全開放）、起動・停止のJSON構造化ログ。
+- **Server Entrypoint, Configuration & Lifecycle Orchestration** (`cmd/party2`): 構成分離（`config.go`, `main.go`, `services_core.go`, `services_econ.go`, `services_cmbt.go`, `services_soc.go`, `services_misc.go`, `wire.go`）、型付けされた設定構造体インジェクション（`database.Config`, `valkey.Config`, `Config`）による並行テスト分離（`t.Parallel()` 完全対応）、MariaDB・Valkey・全ドメインリポジトリおよびサービス・スケジューリングWorker・HTTP APIルーター（全34種Option）の統合初期化、ドメインイベントフック一元集約（`wire.go`）、Graceful Shutdown（`http.Server.Shutdown(ctx)`、Worker Contextキャンセル待機、リソース安全開放）、起動・停止のJSON構造化ログ。
 - **HTTP JSON API & OpenAPI 3.1 Specification** (`internal/api/http`, `docs/api/base.json`, `docs/api/paths/*.json`): Go標準 `net/http` によるREST風エンドポイント（全188ルート・205オペレーション）。モジュール分割仕様（38ファイル）と自動バンドル（`docs/api/openapi.json` およびバイナリ埋め込み）、CI自動テストによるASTベースのルート網羅率100%検証、セッション認証およびPAT（APIキー）デュアル認証、管理者APIキー認可（`X-Admin-Key`、定数時間比較）、キャラクター所有権認可検証（403 Forbidden、全サブリソースIDOR防御）、標準セキュリティヘッダー、CORSミドルウェア、Valkey/In-Memory 分散レートリミット（429 Too Many Requests）、メンテナンスモードミドルウェア（503 Service Unavailable）。
 
 ### Infrastructure & Operations
@@ -92,7 +92,6 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ## Immediate Priorities (Next Actions)
 
 1. **Tooling, Refactoring & Security Hardening**:
-   - Issue #400: Standardize Config Struct Injection and environment variable loading
    - Issue #404: Migrate active dungeon expedition state buffer to Valkey Master (Candidate D)
    - Issue #405: Migrate active challenge session buffer to Valkey Master (Candidate D)
    - Issue #411: Establish cross-domain application runtime primitives to abstract currency, item, locking, and event rules
