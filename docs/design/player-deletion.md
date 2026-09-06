@@ -17,7 +17,7 @@ In Party2, player accounts and individual characters can be permanently removed 
 Character deletion executes within a database transaction and cleans up resources in reverse-dependency order:
 1. External domain cleanup hooks (`CleanupHook`) for cross-service cleanup.
 2. Character-linked feature tables:
-   - `casino_accounts`, `character_lottery`, `lottery_tickets`
+   - `casino_accounts`, `casino_poker_sessions`, `character_lottery`, `lottery_tickets`
    - `farm_plots`, `character_blessings`, `banquet_toasts`
    - `blackmarket_character_points`, `blackmarket_character_purchases`
    - `tavern_deliveries`, `tavern_character_status`

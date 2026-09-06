@@ -28,3 +28,9 @@ To completely prevent Insecure Direct Object Reference (IDOR) and unauthorized m
 
 ## 4. Dependency Vulnerabilities
 Before introducing a new third-party dependency, verify its security posture and whether it introduces known vulnerabilities. Keep the dependency tree small to minimize attack surface.
+
+## 5. Password Hashing and Cryptographic Storage
+To ensure credentials resist brute-force attacks by high-throughput hardware (GPUs/ASICs) and provide essential memory-hardness:
+- **Approved Hashing Algorithms**: All account authentication credentials MUST use `golang.org/x/crypto/bcrypt` with a work factor / cost parameter ≥ 12 (or `argon2id`).
+- **Strictly Banned Patterns**: Custom iterative SHA-256 loops, PBKDF1, MD5, SHA-1, unsalted hashes, or fast non-memory-hard cryptographic digests are strictly prohibited for user passwords.
+- **Constant-Time Verification**: Verification of security tokens, API keys, and credentials MUST use constant-time comparison (e.g., `subtle.ConstantTimeCompare`) or standard library cryptographic compare functions (e.g., `bcrypt.CompareHashAndPassword`) to prevent timing attacks.

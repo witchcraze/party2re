@@ -6,7 +6,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/witchcraze/party2re/internal/character"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -37,15 +36,7 @@ func TestDepotIntegrationGoldAndItemOperations(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	charService, err := character.NewService(charRepo)
-	if err != nil {
-		t.Fatal(err)
-	}
-	player, err := database.CreateTestPlayer(ctx, db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	createdChar, err := charService.Create(ctx, player.ID, "Depot Integrator")
+	createdChar, err := database.CreateTestCharacterWithFunds(ctx, db, "Depot Integrator", 200)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,10 +65,14 @@ func TestDepotIntegrationGoldAndItemOperations(t *testing.T) {
 	}
 
 	// 3. Deposit an item
-	inv, _ := invRepo.FindByCharacterID(ctx, createdChar.ID)
-	potion, _ := item.NewInstance("item-001", 3)
-	_ = inv.Add(potion)
-	_ = invRepo.Save(ctx, inv)
+	potion, err := item.NewInstance("item-001", 3)
+	if err != nil {
+		t.Fatalf("NewInstance error = %v", err)
+	}
+	_, err = database.CreateTestInventoryWithItems(ctx, db, createdChar.ID, []item.Instance{potion})
+	if err != nil {
+		t.Fatalf("CreateTestInventoryWithItems error = %v", err)
+	}
 
 	dep, err = depotService.DepositItem(ctx, createdChar.ID, potion.ID)
 	if err != nil {
@@ -106,7 +101,10 @@ func TestDepotIntegrationGoldAndItemOperations(t *testing.T) {
 	}
 
 	// Verify database persistence
-	restoredChar, _ := charRepo.FindByID(ctx, createdChar.ID)
+	restoredChar, err := charRepo.FindByID(ctx, createdChar.ID)
+	if err != nil {
+		t.Fatalf("FindByID error = %v", err)
+	}
 	expectedMoney := 200 - 120 + 50
 	if restoredChar.Money != expectedMoney {
 		t.Errorf("character money = %d, want %d", restoredChar.Money, expectedMoney)
@@ -125,15 +123,28 @@ func TestConcurrentDepotGoldWithdrawal(t *testing.T) {
 	defer db.Close()
 
 	ctx := context.Background()
-	charRepo, _ := database.NewCharacterRepository(db)
-	invRepo, _ := database.NewInventoryRepository(db)
-	depotRepo, _ := database.NewDepotRepository(db)
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invRepo, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depotRepo, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	char, _ := database.CreateTestCharacter(ctx, db, "Concurrent Depot")
-	char.Money = 500
-	_ = charRepo.Update(ctx, char)
+	char, err := database.CreateTestCharacterWithFunds(ctx, db, "Concurrent Depot", 500)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	depotService, _ := depot.NewServiceWithTransaction(depotRepo, charRepo, invRepo, depotRepo)
+	depotService, err := depot.NewServiceWithTransaction(depotRepo, charRepo, invRepo, depotRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Deposit 100 gold
 	_, err = depotService.DepositGold(ctx, char.ID, 100)
@@ -155,7 +166,10 @@ func TestConcurrentDepotGoldWithdrawal(t *testing.T) {
 	wg.Wait()
 	close(errs)
 
-	restoredDep, _ := depotRepo.FindByCharacterID(ctx, char.ID)
+	restoredDep, err := depotRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID error = %v", err)
+	}
 	if restoredDep.Gold < 0 {
 		t.Fatalf("depot gold went negative: %d", restoredDep.Gold)
 	}
