@@ -68,6 +68,14 @@ func TestContestRepository_Database(t *testing.T) {
 		t.Errorf("unexpected foundPhoto: %+v", foundPhoto)
 	}
 
+	foundPhotoForUpdate, err := repo.FindPhotoByIDForUpdate(ctx, photoID)
+	if err != nil {
+		t.Fatalf("FindPhotoByIDForUpdate failed: %v", err)
+	}
+	if foundPhotoForUpdate.Title != photo.Title {
+		t.Errorf("unexpected foundPhotoForUpdate: %+v", foundPhotoForUpdate)
+	}
+
 	photos, err := repo.ListPhotosByCharacterID(ctx, char.ID)
 	if err != nil || len(photos) == 0 {
 		t.Fatalf("ListPhotosByCharacterID failed: %v", err)
@@ -99,6 +107,14 @@ func TestContestRepository_Database(t *testing.T) {
 	}
 	if foundRound.Status != contest.StatusPreparing {
 		t.Errorf("expected status preparing, got %s", foundRound.Status)
+	}
+
+	foundRoundForUpdate, err := repo.GetRoundByNumberForUpdate(ctx, roundNum)
+	if err != nil {
+		t.Fatalf("GetRoundByNumberForUpdate failed: %v", err)
+	}
+	if foundRoundForUpdate.Round != roundNum {
+		t.Errorf("expected round %d, got %d", roundNum, foundRoundForUpdate.Round)
 	}
 
 	// 3. Contest Entry
@@ -144,6 +160,11 @@ func TestContestRepository_Database(t *testing.T) {
 		t.Fatalf("ListEntriesByRound failed: %v", err)
 	}
 
+	entryCount, err := repo.CountEntriesByRound(ctx, roundNum)
+	if err != nil || entryCount != 1 {
+		t.Fatalf("CountEntriesByRound failed: %v, count=%d", err, entryCount)
+	}
+
 	// 4. Contest Vote & Increment
 	voteID := id.New()
 	vote := contest.ContestVote{
@@ -177,6 +198,11 @@ func TestContestRepository_Database(t *testing.T) {
 	votesByEntry, err := repo.ListVotesByEntryID(ctx, entryID)
 	if err != nil || len(votesByEntry) != 1 {
 		t.Fatalf("ListVotesByEntryID failed: %v", err)
+	}
+
+	votesByRound, err := repo.ListVotesByRound(ctx, roundNum)
+	if err != nil || len(votesByRound) != 1 {
+		t.Fatalf("ListVotesByRound failed: %v, len=%d", err, len(votesByRound))
 	}
 
 	// 5. Contest Legend

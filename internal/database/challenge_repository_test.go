@@ -112,4 +112,24 @@ func TestChallengeRepository(t *testing.T) {
 	if !found {
 		t.Errorf("character not found in challenge leaderboard")
 	}
+
+	// 8. SaveRecord
+	customRec := challenge.CharacterChallengeRecord{
+		CharacterID:    char.ID,
+		TierID:         "expert",
+		HighestRound:   5,
+		TotalAttempts:  2,
+		TotalVictories: 5,
+		BestClearedAt:  now,
+	}
+	if err := repo.SaveRecord(ctx, customRec); err != nil {
+		t.Fatalf("SaveRecord failed: %v", err)
+	}
+	foundCustomRec, err := repo.FindRecord(ctx, char.ID, "expert")
+	if err != nil || foundCustomRec == nil {
+		t.Fatalf("FindRecord for customRec failed: %v", err)
+	}
+	if foundCustomRec.HighestRound != 5 {
+		t.Errorf("expected HighestRound 5, got %d", foundCustomRec.HighestRound)
+	}
 }

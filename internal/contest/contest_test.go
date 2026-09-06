@@ -796,3 +796,40 @@ func TestSettlementAndPrizeDistribution(t *testing.T) {
 		t.Error("expected news announcement to be published")
 	}
 }
+
+func TestMockContestRepository_AdditionalMethods(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockContestRepo()
+
+	// Photo ForUpdate
+	p := contest.Photo{ID: "p1", Title: "Photo 1"}
+	_ = repo.SavePhoto(ctx, p)
+	foundP, err := repo.FindPhotoByIDForUpdate(ctx, "p1")
+	if err != nil || foundP.Title != "Photo 1" {
+		t.Fatalf("FindPhotoByIDForUpdate failed: %v", err)
+	}
+
+	// Round ForUpdate
+	r := contest.ContestRound{Round: 10, Status: contest.StatusActive}
+	_ = repo.SaveRound(ctx, r)
+	foundR, err := repo.GetRoundByNumberForUpdate(ctx, 10)
+	if err != nil || foundR.Round != 10 {
+		t.Fatalf("GetRoundByNumberForUpdate failed: %v", err)
+	}
+
+	// CountEntriesByRound
+	e := contest.ContestEntry{ID: "e1", Round: 10, Title: "Entry 1"}
+	_ = repo.SaveEntry(ctx, e)
+	count, err := repo.CountEntriesByRound(ctx, 10)
+	if err != nil || count != 1 {
+		t.Fatalf("CountEntriesByRound failed: %v, count=%d", err, count)
+	}
+
+	// ListVotesByRound
+	v := contest.ContestVote{ID: "v1", Round: 10, EntryID: "e1"}
+	_ = repo.SaveVote(ctx, v)
+	votes, err := repo.ListVotesByRound(ctx, 10)
+	if err != nil || len(votes) != 1 {
+		t.Fatalf("ListVotesByRound failed: %v, len=%d", err, len(votes))
+	}
+}

@@ -318,3 +318,40 @@ func TestNotificationService(t *testing.T) {
 		}
 	})
 }
+
+func TestService_PruneExpired(t *testing.T) {
+	ctx := context.Background()
+	newsRepo := newMockNewsRepo()
+	notifRepo := newMockNotificationRepo()
+	fixedTime := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	service, err := NewService(newsRepo, notifRepo, WithNowFunc(func() time.Time { return fixedTime }))
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	notifRepo.notifs["old-notif"] = PlayerNotification{
+		ID:        "old-notif",
+		PlayerID:  "player-1",
+		CreatedAt: fixedTime.AddDate(0, 0, -35),
+	}
+	notifRepo.notifs["recent-notif"] = PlayerNotification{
+		ID:        "recent-notif",
+		PlayerID:  "player-1",
+		CreatedAt: fixedTime.AddDate(0, 0, -5),
+	}
+
+	pruned, err := service.PruneExpired(ctx, 0)
+	if err != nil {
+		t.Fatalf("PruneExpired failed: %v", err)
+	}
+	if pruned != 1 {
+		t.Errorf("expected 1 pruned notification, got %d", pruned)
+	}
+	if _, ok := notifRepo.notifs["old-notif"]; ok {
+		t.Errorf("expected old-notif to be deleted")
+	}
+	if _, ok := notifRepo.notifs["recent-notif"]; !ok {
+		t.Errorf("expected recent-notif to be preserved")
+	}
+}

@@ -14,22 +14,9 @@ import (
 )
 
 // knownLegacyOrphanedMethods documents existing methods without active callers
-// that are preserved for backward compatibility or scheduled for cleanup in dedicated domain issues (e.g. #287).
-// No new orphaned methods may be added to this list.
-var knownLegacyOrphanedMethods = map[string]string{
-	"helper.Service.SetRandomSource":                      "unused test setter; cleanup tracked in #287",
-	"boss.Service.GetCharacterRecord":                     "unused record query; cleanup tracked in #287",
-	"guild.Service.GetByCharacter":                        "unused query; cleanup tracked in #287",
-	"guild.Service.Disband":                               "superseded; cleanup tracked in #287",
-	"medal.Service.GetAchievementCatalog":                 "unused catalog query; cleanup tracked in #287",
-	"notification.Service.PruneExpired":                   "unused background pruning method; cleanup tracked in #287",
-	"contest.ContestRepository.GetRoundByNumberForUpdate": "unused repo method; cleanup tracked in #287",
-	"contest.ContestRepository.FindPhotoByIDForUpdate":    "unused repo method; cleanup tracked in #287",
-	"contest.ContestRepository.ListVotesByRound":          "unused repo method; cleanup tracked in #287",
-	"contest.ContestRepository.CountEntriesByRound":       "unused repo method; cleanup tracked in #287",
-	"challenge.Repository.SaveRecord":                     "unused repo method; cleanup tracked in #287",
-	"collection.Repository.GetMonsterBookCount":           "unused repo method; cleanup tracked in #287",
-}
+// that are preserved for backward compatibility or scheduled for cleanup in dedicated domain issues.
+// All legacy orphaned methods have been eliminated (#428). No new orphaned methods may be added.
+var knownLegacyOrphanedMethods = map[string]string{}
 
 type methodTarget struct {
 	Key      string // e.g. "casino.Service.PlayIndianPokerRound"

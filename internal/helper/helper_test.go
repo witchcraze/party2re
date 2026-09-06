@@ -370,3 +370,13 @@ func TestCompleteQuestTransactionFailure(t *testing.T) {
 		t.Fatal("expected error from failed transaction, got nil")
 	}
 }
+
+func TestService_SetRandomSource(t *testing.T) {
+	questRepo := newStubQuestRepo()
+	svc := NewService(questRepo, &stubCharRepo{}, &stubInvRepo{}, &stubGuildRepo{}, &stubTransactionProvider{})
+	mockRand := &mockRandomSource{values: []int{0, 1, 0, 0}}
+	svc.SetRandomSource(mockRand)
+	if svc.randomSource != mockRand {
+		t.Fatalf("expected randomSource to be updated")
+	}
+}

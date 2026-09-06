@@ -394,3 +394,32 @@ func TestChallengeBoss_VictoryHook(t *testing.T) {
 		t.Errorf("expected hookedTier 1, got %d", hookedTier)
 	}
 }
+
+func TestService_GetCharacterRecord(t *testing.T) {
+	ctx := context.Background()
+	bossRepo := newMockBossRepo()
+	charRepo := &mockCharRepo{}
+	battleEngine := corebattle.Engine{}
+
+	service, err := boss.NewService(bossRepo, charRepo, battleEngine)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("empty character ID returns error", func(t *testing.T) {
+		_, err := service.GetCharacterRecord(ctx, "")
+		if !errors.Is(err, boss.ErrCharacterNotFound) {
+			t.Errorf("expected ErrCharacterNotFound, got %v", err)
+		}
+	})
+
+	t.Run("valid character retrieves or creates record", func(t *testing.T) {
+		rec, err := service.GetCharacterRecord(ctx, "char-rec-1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if rec.CharacterID != "char-rec-1" {
+			t.Errorf("expected character ID char-rec-1, got %s", rec.CharacterID)
+		}
+	})
+}

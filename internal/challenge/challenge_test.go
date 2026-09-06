@@ -334,3 +334,27 @@ func TestChallenge_OwnershipVerification(t *testing.T) {
 		t.Errorf("expected status claimed, got %v", retired.Status)
 	}
 }
+
+func TestMockChallengeRepository_SaveRecord(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockChallengeRepo()
+
+	r := challenge.CharacterChallengeRecord{
+		CharacterID:    "char-1",
+		TierID:         "tier-1",
+		HighestRound:   4,
+		TotalAttempts:  1,
+		TotalVictories: 4,
+	}
+	if err := repo.SaveRecord(ctx, r); err != nil {
+		t.Fatalf("SaveRecord failed: %v", err)
+	}
+
+	found, err := repo.FindRecord(ctx, "char-1", "tier-1")
+	if err != nil || found == nil {
+		t.Fatalf("FindRecord failed: %v", err)
+	}
+	if found.HighestRound != 4 {
+		t.Errorf("expected HighestRound 4, got %d", found.HighestRound)
+	}
+}
