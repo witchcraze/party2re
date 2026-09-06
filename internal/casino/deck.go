@@ -74,6 +74,11 @@ func NewStandardDeck() *Deck {
 	return &Deck{cards: cards}
 }
 
+// NewCustomDeck creates a deck with the specified card slice.
+func NewCustomDeck(cards []Card) *Deck {
+	return &Deck{cards: cards}
+}
+
 func (d *Deck) Shuffle() error {
 	n := len(d.cards)
 	for i := n - 1; i > 0; i-- {

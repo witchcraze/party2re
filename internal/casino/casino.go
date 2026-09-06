@@ -81,10 +81,6 @@ func WithEconomy(eco *economy.Service) Option {
 	}
 }
 
-func (s *Service) SetTransactionProvider(tx TransactionProvider) {
-	s.txProvider = tx
-}
-
 func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	if s.txProvider != nil {
 		return s.txProvider.RunInTx(ctx, fn)
@@ -301,7 +297,7 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, characterID string,
 		if action == ActionCall || action == ActionShowdown {
 			neededBet := game.CurrentBet
 			if availableCoins < neededBet {
-				return ErrInsufficientCoin
+				return ErrInsufficientCoins
 			}
 			acc, err = s.repo.DeductBetAndCreditPayout(txCtx, characterID, neededBet, 0)
 			if err != nil {
@@ -338,57 +334,6 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, characterID string,
 	}
 
 	return updatedGame.ClientView(), updatedAcc, nil
-}
-
-// PlayIndianPokerRound plays one betting round for the game and settles coin changes when the game concludes.
-func (s *Service) PlayIndianPokerRound(ctx context.Context, characterID string, game *IndianPokerGame, action Action) (Account, error) {
-	if characterID == "" {
-		return Account{}, ErrInvalidCharacterID
-	}
-	if game == nil {
-		return Account{}, errors.New("game is nil")
-	}
-
-	acc, err := s.repo.GetAccount(ctx, characterID)
-	if err != nil {
-		return Account{}, err
-	}
-
-	availableCoins := acc.Coins
-	// 1. If action requires bet, deduct atomically from account
-	if action == ActionCall || action == ActionShowdown {
-		neededBet := game.CurrentBet
-		if availableCoins < neededBet {
-			return acc, ErrInsufficientCoin
-		}
-		acc, err = s.repo.DeductBetAndCreditPayout(ctx, characterID, neededBet, 0)
-		if err != nil {
-			return acc, err
-		}
-	}
-
-	// 2. Play the round
-	if err := game.PlayRound(action, availableCoins); err != nil {
-		// Refund if round failed unexpectedly
-		if action == ActionCall || action == ActionShowdown {
-			_, _ = s.repo.DeductBetAndCreditPayout(ctx, characterID, 0, game.CurrentBet)
-		}
-		return acc, err
-	}
-
-	// 3. If game finished and has payout, credit account
-	if game.Status != StatusInProgress && game.PayoutCoins > 0 {
-		acc, err = s.repo.DeductBetAndCreditPayout(ctx, characterID, 0, game.PayoutCoins)
-		if err != nil {
-			return acc, err
-		}
-	}
-
-	if game.Status != StatusInProgress && s.gamePlayedHook != nil {
-		_ = s.gamePlayedHook(ctx, characterID, "indian_poker")
-	}
-
-	return acc, nil
 }
 
 // SpinSlot executes a slot machine spin, adjusts coins atomically according to the outcome, and returns the result and updated account.

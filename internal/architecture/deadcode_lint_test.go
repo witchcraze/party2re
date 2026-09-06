@@ -17,8 +17,6 @@ import (
 // that are preserved for backward compatibility or scheduled for cleanup in dedicated domain issues (e.g. #287).
 // No new orphaned methods may be added to this list.
 var knownLegacyOrphanedMethods = map[string]string{
-	"casino.Service.PlayIndianPokerRound":                 "superseded by PlayIndianPokerAction in PR #397; cleanup tracked in #287",
-	"casino.Service.SetTransactionProvider":               "unused transaction setter; cleanup tracked in #287",
 	"helper.Service.SetRandomSource":                      "unused test setter; cleanup tracked in #287",
 	"boss.Service.GetCharacterRecord":                     "unused record query; cleanup tracked in #287",
 	"guild.Service.GetByCharacter":                        "unused query; cleanup tracked in #287",
