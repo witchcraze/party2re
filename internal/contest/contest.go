@@ -204,17 +204,18 @@ func (f NewsPublisherFunc) PublishNews(ctx context.Context, category, title, con
 	return f(ctx, category, title, content, author, publishedAt)
 }
 
-// ContestRepository defines database storage operations for photo contest.
-type ContestRepository interface {
-	// Photos
+// PhotoRepository defines photo storage operations for the photo contest venue.
+type PhotoRepository interface {
 	SavePhoto(ctx context.Context, photo Photo) error
 	FindPhotoByID(ctx context.Context, id string) (Photo, error)
 	FindPhotoByIDForUpdate(ctx context.Context, id string) (Photo, error)
 	ListPhotosByCharacterID(ctx context.Context, characterID string) ([]Photo, error)
 	CountPhotosByCharacterID(ctx context.Context, characterID string) (int, error)
 	DeletePhoto(ctx context.Context, id string) error
+}
 
-	// Rounds
+// ContestRoundRepository defines round and season lifecycle persistence for photo contest.
+type ContestRoundRepository interface {
 	GetRoundByNumber(ctx context.Context, round int) (ContestRound, error)
 	GetRoundByNumberForUpdate(ctx context.Context, round int) (ContestRound, error)
 	GetActiveRound(ctx context.Context) (ContestRound, error)
@@ -223,8 +224,10 @@ type ContestRepository interface {
 	GetPreparingRoundForUpdate(ctx context.Context) (ContestRound, error)
 	GetLatestSettledRound(ctx context.Context) (ContestRound, error)
 	SaveRound(ctx context.Context, round ContestRound) error
+}
 
-	// Entries
+// ContestEntryRepository defines photo contest entry submission and query operations.
+type ContestEntryRepository interface {
 	SaveEntry(ctx context.Context, entry ContestEntry) error
 	FindEntryByID(ctx context.Context, id string) (ContestEntry, error)
 	FindEntryByIDForUpdate(ctx context.Context, id string) (ContestEntry, error)
@@ -232,17 +235,31 @@ type ContestRepository interface {
 	FindEntryByRoundAndTitle(ctx context.Context, round int, title string) (ContestEntry, error)
 	ListEntriesByRound(ctx context.Context, round int) ([]ContestEntry, error)
 	CountEntriesByRound(ctx context.Context, round int) (int, error)
+}
 
-	// Votes
+// ContestVoteRepository defines voting and ballot persistence for active contest entries.
+type ContestVoteRepository interface {
 	SaveVote(ctx context.Context, vote ContestVote) error
 	HasVotedInRound(ctx context.Context, round int, voterCharacterID string) (bool, error)
 	ListVotesByRound(ctx context.Context, round int) ([]ContestVote, error)
 	ListVotesByEntryID(ctx context.Context, entryID string) ([]ContestVote, error)
 	IncrementEntryVotes(ctx context.Context, entryID string) error
+}
 
-	// Legends
+// ContestLegendRepository defines Hall of Fame archives for historic contest champions.
+type ContestLegendRepository interface {
 	SaveLegend(ctx context.Context, legend ContestLegend) error
 	ListLegends(ctx context.Context, limit, offset int) ([]ContestLegend, int, error)
+}
+
+// ContestRepository is a composite interface providing full database storage operations
+// for photo contest by embedding focused sub-interfaces (Photo, Round, Entry, Vote, Legend).
+type ContestRepository interface {
+	PhotoRepository
+	ContestRoundRepository
+	ContestEntryRepository
+	ContestVoteRepository
+	ContestLegendRepository
 }
 
 // TransactionProvider executes functions inside an atomic database transaction.

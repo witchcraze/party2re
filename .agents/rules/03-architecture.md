@@ -45,6 +45,11 @@ To keep files readable, maintainable, and within effective token limits for AI p
 - **Mechanical Line Limits**: Enforced automatically via `internal/architecture/file_size_lint_test.go` on `make check` and `make arch-lint`:
   - Production Go files (`internal/**/*.go`): **≤ 500 lines** (excluding tests).
   - Application entry points (`cmd/*/main.go`): **≤ 150 lines**.
+- **Interface Sizing & Segregation (ISP)**: Enforced automatically via `internal/architecture/interface_size_lint_test.go` on `make check` and `make arch-lint`:
+  - Domain interfaces must declare **≤ 10 direct methods** (`maxDirectInterfaceMethods`).
+  - Monolithic interfaces violating ISP must be decomposed into cohesive sub-interfaces (focused on specific sub-aggregates / operations) and assembled via interface embedding (composition).
+  - Embedded interfaces are excluded from direct method counts, actively incentivizing composition.
+  - Pre-existing oversized interfaces are ratcheted down in `whitelistedLegacyInterfaceLimits` as they are refactored.
 - **Ratcheting Whitelist**: Pre-existing oversized files are locked at their historical line count. Any growth beyond the baseline fails CI. When a file is decomposed below 500 lines, it must be removed from the whitelist to lock in the improvement.
 - **Decomposition by Responsibility**: When a domain file approaches 500 lines, decompose it into focused peer files within the same package (e.g., `service.go`, `session.go`, `step.go`, `repository.go`).
 - **Maintain Package Cohesion**: Keep related sub-responsibilities within the same Go package unless clear layer boundaries justify a new package. Splitting across peer files retains package-private visibility while improving navigability.
