@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #287 — [Chore] Test/Casino: Add unit tests for HighLow.Step() and PlayIndianPokerAction() & cleanup dead methods
+Last updated: Issue #288 — [Chore] Test/Dungeon+Delivery: Add unit tests for Move() and delivery cancellation error paths
 
 ## Current phase
 
@@ -54,7 +54,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Player versus Player Arena** (`internal/pvp`): 闘技場・対人対戦（PvP、標準Eloレーティング K=32/初期1000、近傍マッチメイキング・同一アカウント談合防止、勝敗・対戦履歴・防衛ログ永続化、経験値・ゴールド報酬）。
 - **Guild versus Guild Combat** (`internal/gvg`): ギルド対抗戦（GvG、標準Eloレーティング K=32/初期1000、5段階勝利メダル・王者杯昇格システム、ギルドポイントGP、ギルドEXP獲得・レベルアップ連動、対戦履歴永続化）。
 - **King & World Boss Battles** (`internal/boss`): 封印戦・ワールドボス（全10段階キングボス＋太古の創世神Tier、レベル制限・前提段階クリア・1日3回挑戦制限、初回討伐ボーナス・ドロップ報酬、討伐数リーダーボード、挑戦履歴永続化、討伐時のイベント広場祝宴連動。ファイルサイズ上限遵守のため `catalog.go`, `records.go`, `battle.go`, `boss.go` に責務分割完了）。
-- **Dungeon Exploration** (`internal/dungeon`): ダンジョン探索（多層グリッドマップ探索、モンスター遭遇戦闘、トラップ・宝箱イベント、階段降下、フロアボス決戦、一時報酬台帳バッファリングと脱出・踏破時の一括アトミック確定、全滅時戦利品没収、探索履歴永続化）。Valkey Master による進行中探索状態バッファリング（Candidate D、`party2:dungeon:{char:<id>}:state|rewards`、スライディング2時間TTL、アトミックLuaスクリプト `dungeon_step.lua`、探索中SQL書き込み完全ゼロ化、Two-Phase Settlement によるMariaDB確定後パージ）。
+- **Dungeon Exploration** (`internal/dungeon`): ダンジョン探索（多層グリッドマップ探索、モンスター遭遇戦闘、トラップ・宝箱イベント、階段降下、フロアボス決戦、一時報酬台帳バッファリングと脱出・踏破時の一括アトミック確定、全滅時戦利品没収、探索履歴永続化）。Valkey Master による進行中探索状態バッファリング（Candidate D、`party2:dungeon:{char:<id>}:state|rewards`、スライディング2時間TTL、アトミックLuaスクリプト `dungeon_step.lua`、探索中SQL書き込み完全ゼロ化、Two-Phase Settlement によるMariaDB確定後パージ）。`Move()`（44.9%→92.3%）のタイルイベント（階段・罠・宝箱・ボス戦闘・安全脱出・ターン切れ全滅）およびエラーパスの単体テスト網羅率向上完了。
 - **Battle Replays & Match History** (`internal/replay`): 戦闘リプレイ・対戦履歴（全戦闘モードのターン別アクションログ・ダメージ値・残りHPスナップショットの記録・忠実再生、標準化レコーダー、プレイヤー別履歴・全体最新一覧（キーセット・カーソル対応）、自動プルーニング）。
 - **Continuous Endurance Challenge** (`internal/challenge`): 連戦チャレンジ・サバイバル戦闘（全4段階Tier `challenge_tiers.json`、ラウンド進行に伴う累進スケーリング、インターラウンドHP回復、マイルストーンアイテムドロップ、途中撤退全額確定 vs 敗北50%救済、リーダーボード、所有権認可）。Valkey Master による進行中セッションバッファリング（Candidate D、`party2:challenge:{char:<id>}:session|rewards`、スライディング2時間TTL、アトミックLuaスクリプト `challenge_round.lua`、ラウンド進行中SQL書き込み完全ゼロ化、Two-Phase Settlement によるMariaDB確定後パージ）。
 - **Custom Skill Loadout & Slot Management** (`internal/custom_skill`): カスタムスキル・スロット管理（JSONスキルカタログ `skills.json`、現在職・マスター職・宝石汎用スキルの装備制限バリデーション、スロット枠数管理、発動優先度 1〜10、重複装備防止）。
@@ -67,7 +67,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Secret Underground Shop & NPC @ヒミツジ** (`internal/secretshop`): 秘密の店（資格判定 Lv15以上または転生者、希少消費アイテムカタログ `secret_items.json`、3倍価格プレミアム設定、アトミック購入トランザクション、NPC会話・詳細情報・ぱふぱふサービス回復）。
 - **Adventurer's Tavern, Menu Orders, Delivery Reservations & NPC @エレナ** (`internal/tavern`): 冒険者の酒場（14種飲食メニューカタログ `menu.json`、HP/MP回復＆満腹度管理、購入時福引券ボーナス付与、冒険後自動回復デリバリー予約・受取・キャンセル機能、NPC会話。ファイルサイズ上限遵守のため `dialogue.go`, `delivery.go`, `order.go`, `tavern.go` に責務分割完了）。
 - **Town Black Market, Contraband Trading, Dynamic Pricing & NPC @ヤミジ** (`internal/blackmarket`): 裏路地の闇市（資格判定 Lv10以上、10種禁制品カタログ `blackmarket_items.json`、4種市場相場状態、1日購入制限クォータ、レアアイテム捧げものリサイクル `SacrificeItem`、限定景品交換 `TradePrize`、アトミックトランザクション）。
-- **Town Delivery Quests & Player Courier Service** (`internal/delivery`): 町のでりばりー依頼＆プレイヤー間宅配便（NPC配送依頼、最大3件同時受領、報酬アトミック精算、およびプレイヤー間宅配便、手数料50 G、受取待ち・発送履歴（キーセット・カーソル対応）、受取・発送キャンセル/返金、CAS条件付きステータス更新 `WHERE id = ? AND status = 'pending'` による二重処理防止）。
+- **Town Delivery Quests & Player Courier Service** (`internal/delivery`): 町のでりばりー依頼＆プレイヤー間宅配便（NPC配送依頼、最大3件同時受領、報酬アトミック精算、およびプレイヤー間宅配便、手数料50 G、受取待ち・発送履歴（キーセット・カーソル対応）、受取・発送キャンセル/返金、CAS条件付きステータス更新 `WHERE id = ? AND status = 'pending'` による二重処理防止）。`CancelParcel()`（54.5%→87.9%）、`CompleteDelivery()`（71.0%→87.1%）、`ClaimParcel()`（73.2%→85.4%）のエラーパス・アイテム返還・ボーナス報酬受取フローの単体テスト網羅率向上完了。
 - **Flea Market & Player Item Stalls** (`internal/fleamarket`): フリーマーケット＆露店取引（最大5件同時出品、1〜999,999 G固定価格出品、出品時インベントリ消費・キャンセル時安全返却、ID昇順排他ロックによるデッドロック防止、SQL CAS述語 `WHERE id = ? AND status = 'active'` と `RowsAffected() == 1` 検証によるアトミック移転）。
 - **Gem Store, Jewel Synthesis & Appraisal** (`internal/gemstore`): 宝石店・宝珠/天珠販売・特殊合成加工・他プレイヤー譲渡・未鑑定宝珠鑑定（レベル別カタログ `gems.json`、55種以上の上位合成レシピ `recipes.json`、5種未鑑定宝珠の重み付きランダム鑑定プール `orb_appraisals.json`、決定論的行ロック階層によるアトミック整合性）。
 - **Endgame God Wishes & Limit Breaks** (`internal/god`): 天界・裏天界の願い事＆限界突破（ステータス+40・所持金・メダル等の願い事、Lv99到達時レベル上限150限界突破 `over_level`、倉庫枠拡張 `over_depot`、モンスター預入枠拡張 `over_monster`、職業記憶枠拡張 `over_future`、フリマ出品上限拡張 `over_flea`、店舗出品上限拡張 `over_store`）。
