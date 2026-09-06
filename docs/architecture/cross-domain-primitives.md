@@ -199,14 +199,52 @@ The Inn domain was selected as the pilot migration target:
 
 ---
 
-## 7. Migration Roadmap for Feature Domains
+## 7. Migrated Domain: Blacksmith (`internal/blacksmith`)
 
-Following the Inn pilot, remaining feature domains will migrate to the universal runner in subsequent issues:
+The Blacksmith domain migrated in Issue #426, demonstrating cross-resource transactions combining currency (Gold) and inventory items (upgrade materials):
 
-| Domain | Scope | Primary Benefit |
-|---|---|---|
-| **Blacksmith** (`internal/blacksmith`) | Equipment enhancement, upgrade materials | Eliminates manual inventory + character dual locking and rollbacks |
-| **Casino** (`internal/casino`) | Poker, Slot, Doppelganger, HighLow bet & payout | Unifies coin exchange and wager settlement with strict balance checking |
-| **Alchemy** (`internal/alchemy`) | Multi-ingredient consumption and item synthesis | Streamlines recipe validation and batch inventory deductions |
-| **Guild** (`internal/guild`) | Guild founding fee, Gold donations | Standardizes donation limits and deterministic locking |
-| **FleaMarket** (`internal/fleamarket`) | P2P item listing, purchase escrow | Two-party deterministic locking with `id.Sort2` and item transfer |
+### Before Migration
+- Manual `runInTx` orchestration with fallback transaction repositories.
+- Explicit `FindByIDForUpdate` and `FindByCharacterIDForUpdate` calls.
+- Manual balance verification (`char.Money < goldCost`) and manual inventory item deduction loops.
+- Manual dual-table saving (`characters.Update` + `inventories.Save` or `CommitEnhancement`).
+
+### After Migration
+- Injects `economy.TransactionRunner` (or `*economy.Service`) via `WithEconomy` / `WithTransactionRunner`.
+- Pre-calculates static fee and material requirements from equipment level and price.
+- Dispatches atomic transaction via `runner.ExecuteTransaction`:
+  ```go
+  req := economy.TransactionRequest{
+      CharacterID: characterID,
+      Cost: economy.ResourceCost{
+          Gold:              goldCost,
+          ItemDefinitionID:  s.materialID,
+          ItemDefinitionQty: materialCost,
+      },
+      LockInventory: true,
+  }
+  res, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+      // Re-verify target equipment under lock, roll RNG, and increment EnhancementLevel
+      if success {
+          lockedItem.EnhancementLevel++
+          return tc.Inventory.Update(lockedItem)
+      }
+      return nil
+  })
+  ```
+- 0 manual row locks, guaranteed Rank 2 (`characters`) -> Rank 3 (`inventory_items`) lock order, atomic fee and catalyst consumption.
+
+---
+
+## 8. Migration Roadmap for Feature Domains
+
+Following Inn and Blacksmith, remaining feature domains will migrate to the universal runner in subsequent issues:
+
+| Domain | Scope | Status | Primary Benefit |
+|---|---|---|---|
+| **Inn** (`internal/inn`) | Resting HP/MP recovery, level-scaled fee | Migrated (#411) | Eliminates manual character row-locking and dynamic fee check |
+| **Blacksmith** (`internal/blacksmith`) | Equipment enhancement, upgrade materials | Migrated (#426) | Eliminates manual inventory + character dual locking and rollbacks |
+| **Casino** (`internal/casino`) | Poker, Slot, Doppelganger, HighLow bet & payout | Planned (#427) | Unifies coin exchange and wager settlement with strict balance checking |
+| **Alchemy** (`internal/alchemy`) | Multi-ingredient consumption and item synthesis | Planned | Streamlines recipe validation and batch inventory deductions |
+| **Guild** (`internal/guild`) | Guild founding fee, Gold donations | Planned | Standardizes donation limits and deterministic locking |
+| **FleaMarket** (`internal/fleamarket`) | P2P item listing, purchase escrow | Planned | Two-party deterministic locking with `id.Sort2` and item transfer |

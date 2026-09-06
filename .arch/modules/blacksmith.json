@@ -23,24 +23,30 @@
       "target_module": "database",
       "relation_type": "consumer_interface",
       "source_ref": "internal/blacksmith/blacksmith.go#TransactionProvider"
+    },
+    {
+      "name": "transaction_runner",
+      "target_module": "economy",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/blacksmith/blacksmith.go#TransactionRunner"
     }
   ],
   "transaction_boundaries": [
     {
-      "method": "Enhance",
-      "source_ref": "internal/blacksmith/blacksmith.go#Service.Enhance",
-      "transaction_type": "RunInTx",
+      "method": "EnhanceEquipment",
+      "source_ref": "internal/blacksmith/blacksmith.go#Service.EnhanceEquipment",
+      "transaction_type": "ExecuteTransaction",
       "lock_sequence": [
         {
           "table": "characters",
           "tier": 2,
-          "mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+          "mode": "SELECT ... FOR UPDATE (economy.Runner Rank 2)",
           "note": "Lock character wallet and verify enhancement fee"
         },
         {
           "table": "inventory_items",
           "tier": 3,
-          "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+          "mode": "SELECT ... FOR UPDATE (economy.Runner Rank 3)",
           "note": "Lock inventory to consume enhancement materials and update equipment level"
         }
       ]

@@ -42,11 +42,12 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		return nil, err
 	}
 
-	bsRepo, err := database.NewBlacksmithRepository(db)
-	if err != nil {
-		return nil, err
-	}
-	blacksmithService, err := blacksmith.NewServiceWithTransaction(core.charRepo, core.invRepo, bsRepo, core.itemCatalog, nil)
+	blacksmithService, err := blacksmith.NewService(
+		core.charRepo,
+		core.invRepo,
+		core.itemCatalog,
+		blacksmith.WithEconomy(core.economy),
+	)
 	if err != nil {
 		return nil, err
 	}

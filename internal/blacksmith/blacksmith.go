@@ -10,6 +10,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 const (
@@ -115,11 +116,27 @@ type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
+type TransactionRunner interface {
+	ExecuteTransaction(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error)
+}
+
 type Option func(*Service)
 
 func WithTransactionProvider(txProvider TransactionProvider) Option {
 	return func(s *Service) {
 		s.txProvider = txProvider
+	}
+}
+
+func WithTransactionRunner(runner TransactionRunner) Option {
+	return func(s *Service) {
+		s.runner = runner
+	}
+}
+
+func WithEconomy(eco *economy.Service) Option {
+	return func(s *Service) {
+		s.runner = eco
 	}
 }
 
@@ -136,6 +153,7 @@ type Service struct {
 	inventories InventoryRepository
 	txRepo      TransactionRepository
 	txProvider  TransactionProvider
+	runner      TransactionRunner
 	catalog     item.DefinitionProvider
 	materialID  string
 	randSource  RandomSource
@@ -159,6 +177,17 @@ func NewService(
 	}
 	for _, opt := range opts {
 		opt(s)
+	}
+	if s.runner == nil {
+		var ecoOpts []economy.Option
+		if s.txProvider != nil {
+			ecoOpts = append(ecoOpts, economy.WithTransactionProvider(s.txProvider))
+		}
+		eco, err := economy.NewService(characters, inventories, ecoOpts...)
+		if err != nil {
+			return nil, err
+		}
+		s.runner = eco
 	}
 	return s, nil
 }
@@ -188,6 +217,17 @@ func NewServiceWithTransaction(
 	for _, opt := range opts {
 		opt(s)
 	}
+	if s.runner == nil {
+		var ecoOpts []economy.Option
+		if s.txProvider != nil {
+			ecoOpts = append(ecoOpts, economy.WithTransactionProvider(s.txProvider))
+		}
+		eco, err := economy.NewService(characters, inventories, ecoOpts...)
+		if err != nil {
+			return nil, err
+		}
+		s.runner = eco
+	}
 	return s, nil
 }
 
@@ -197,28 +237,11 @@ func (s *Service) SetMaterialDefinitionID(materialID string) {
 	}
 }
 
-func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) error) error {
-	if s.txProvider != nil {
-		return s.txProvider.RunInTx(ctx, fn)
-	}
-	return fn(ctx)
-}
-
-func (s *Service) findCharacter(ctx context.Context, characterID string) (corecharacter.Character, error) {
-	if s.txProvider != nil {
-		return s.characters.FindByIDForUpdate(ctx, characterID)
-	}
-	return s.characters.FindByID(ctx, characterID)
-}
-
-func (s *Service) findInventory(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-	if s.txProvider != nil {
-		return s.inventories.FindByCharacterIDForUpdate(ctx, characterID)
-	}
-	return s.inventories.FindByCharacterID(ctx, characterID)
-}
-
 func (s *Service) Enhance(ctx context.Context, characterID string, itemInstanceID string) (Result, error) {
+	return s.EnhanceEquipment(ctx, characterID, itemInstanceID)
+}
+
+func (s *Service) EnhanceEquipment(ctx context.Context, characterID string, itemInstanceID string) (Result, error) {
 	if characterID == "" {
 		return Result{}, ErrInvalidCharacterID
 	}
@@ -226,92 +249,62 @@ func (s *Service) Enhance(ctx context.Context, characterID string, itemInstanceI
 		return Result{}, ErrInvalidItemInstanceID
 	}
 
+	inv, err := s.inventories.FindByCharacterID(ctx, characterID)
+	if err != nil {
+		return Result{}, err
+	}
+
+	targetItem, found := inv.Find(itemInstanceID)
+	if !found {
+		return Result{}, ErrItemNotFound
+	}
+
+	def, err := s.catalog.FindByID(targetItem.DefinitionID)
+	if err != nil {
+		return Result{}, fmt.Errorf("lookup item definition: %w", err)
+	}
+
+	if def.Slot == item.SlotNone {
+		return Result{}, ErrItemNotEquipment
+	}
+
+	if targetItem.EnhancementLevel >= MaxEnhancementLevel {
+		return Result{}, ErrMaxEnhancementReached
+	}
+
+	goldCost, materialCost := CalculateCost(targetItem.EnhancementLevel, def.Price)
+
+	req := economy.TransactionRequest{
+		CharacterID: characterID,
+		Cost: economy.ResourceCost{
+			Gold:              goldCost,
+			ItemDefinitionID:  s.materialID,
+			ItemDefinitionQty: materialCost,
+		},
+		LockInventory: true,
+	}
+
 	var result Result
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		character, err := s.findCharacter(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-
-		inv, err := s.findInventory(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-
-		targetItem, found := inv.Find(itemInstanceID)
+	_, err = s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+		lockedItem, found := tc.Inventory.Find(itemInstanceID)
 		if !found {
 			return ErrItemNotFound
 		}
-
-		def, err := s.catalog.FindByID(targetItem.DefinitionID)
-		if err != nil {
-			return fmt.Errorf("lookup item definition: %w", err)
-		}
-
-		if def.Slot == item.SlotNone {
-			return ErrItemNotEquipment
-		}
-
-		if targetItem.EnhancementLevel >= MaxEnhancementLevel {
+		if lockedItem.EnhancementLevel >= MaxEnhancementLevel {
 			return ErrMaxEnhancementReached
 		}
 
-		goldCost, materialCost := CalculateCost(targetItem.EnhancementLevel, def.Price)
-		if character.Money < goldCost {
-			return ErrInsufficientFunds
-		}
-
-		availableMaterials := inv.Quantity(s.materialID)
-		if availableMaterials < materialCost {
-			return ErrInsufficientMaterials
-		}
-
-		// Deduct gold
-		if err := character.DeductMoney(goldCost); err != nil {
-			return ErrInsufficientFunds
-		}
-
-		// Consume material from inventory
-		materialToConsume := materialCost
-		for _, inst := range inv.Items {
-			if inst.DefinitionID == s.materialID && inst.Quantity > 0 {
-				toTake := inst.Quantity
-				if toTake > materialToConsume {
-					toTake = materialToConsume
-				}
-				_ = inv.Consume(inst.ID, toTake)
-				materialToConsume -= toTake
-				if materialToConsume <= 0 {
-					break
-				}
-			}
-		}
-
-		// Roll success
-		successRate := CalculateSuccessRate(targetItem.EnhancementLevel)
+		successRate := CalculateSuccessRate(lockedItem.EnhancementLevel)
 		roll := s.randSource.Float64()
 		success := roll < successRate
 
-		prevLevel := targetItem.EnhancementLevel
+		prevLevel := lockedItem.EnhancementLevel
 		newLevel := prevLevel
 		if success {
 			newLevel++
-			targetItem.EnhancementLevel = newLevel
-			// Update item instance in inventory
-			_ = inv.Update(targetItem)
-		}
-
-		// Commit atomically if transaction repository is configured (and no txProvider)
-		if s.txRepo != nil && s.txProvider == nil {
-			if err := s.txRepo.CommitEnhancement(txCtx, character, inv); err != nil {
-				return fmt.Errorf("commit enhancement transaction: %w", err)
-			}
-		} else {
-			if err := s.characters.Update(txCtx, character); err != nil {
-				return fmt.Errorf("update character: %w", err)
-			}
-			if err := s.inventories.Save(txCtx, inv); err != nil {
-				return fmt.Errorf("save inventory: %w", err)
+			lockedItem.EnhancementLevel = newLevel
+			if err := tc.Inventory.Update(lockedItem); err != nil {
+				return err
 			}
 		}
 
@@ -321,11 +314,20 @@ func (s *Service) Enhance(ctx context.Context, characterID string, itemInstanceI
 			NewLevel:      newLevel,
 			GoldCost:      goldCost,
 			MaterialCost:  materialCost,
-			ItemInstance:  targetItem,
+			ItemInstance:  lockedItem,
 		}
 		return nil
 	})
 	if err != nil {
+		if errors.Is(err, economy.ErrInsufficientGold) {
+			return Result{}, ErrInsufficientFunds
+		}
+		if errors.Is(err, economy.ErrInsufficientItemQuantity) {
+			return Result{}, ErrInsufficientMaterials
+		}
+		if errors.Is(err, economy.ErrCharacterNotFound) {
+			return Result{}, corecharacter.ErrNotFound
+		}
 		return Result{}, err
 	}
 

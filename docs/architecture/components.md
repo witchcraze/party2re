@@ -244,8 +244,8 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Persistence:** `character_depots` and `depot_items` tables with single-transaction commits.
 - **Blacksmith** (`internal/blacksmith`):
   - **Responsibility:** Equipment enhancement (+1 to +10) with level-scaling gold and material costs and probability curves.
-  - **Dependencies:** Character (wallet), Inventory.
-  - **Persistence:** Atomic single-transaction `BlacksmithRepository`.
+  - **Dependencies:** Character (wallet), Inventory, Economy (`economy.TransactionRunner`).
+  - **Persistence:** Atomic single-transaction via `economy.TransactionRunner` (`characters` Rank 2 -> `inventory_items` Rank 3).
 - **Alchemy** (`internal/alchemy`):
   - **Responsibility:** Crafting item synthesis from recipes (`recipes.json`) using inventory ingredients and gold fees.
   - **Dependencies:** Recipe Catalog, Item Catalog, Character (wallet), Inventory.
