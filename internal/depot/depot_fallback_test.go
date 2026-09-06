@@ -8,13 +8,15 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 var errTestBoom = errors.New("database connection failed")
 
 type stubDepotRepo struct {
-	findFn func(ctx context.Context, characterID string) (Depot, error)
-	saveFn func(ctx context.Context, value Depot) error
+	findFn          func(ctx context.Context, characterID string) (Depot, error)
+	findForUpdateFn func(ctx context.Context, characterID string) (Depot, error)
+	saveFn          func(ctx context.Context, value Depot) error
 }
 
 func (s *stubDepotRepo) FindByCharacterID(ctx context.Context, characterID string) (Depot, error) {
@@ -22,6 +24,13 @@ func (s *stubDepotRepo) FindByCharacterID(ctx context.Context, characterID strin
 		return s.findFn(ctx, characterID)
 	}
 	return Depot{}, ErrNotFound
+}
+
+func (s *stubDepotRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (Depot, error) {
+	if s.findForUpdateFn != nil {
+		return s.findForUpdateFn(ctx, characterID)
+	}
+	return s.FindByCharacterID(ctx, characterID)
 }
 
 func (s *stubDepotRepo) Save(ctx context.Context, value Depot) error {
@@ -32,15 +41,23 @@ func (s *stubDepotRepo) Save(ctx context.Context, value Depot) error {
 }
 
 type stubCharRepo struct {
-	findFn   func(ctx context.Context, id string) (corecharacter.Character, error)
-	updateFn func(ctx context.Context, character corecharacter.Character) error
+	findFn          func(ctx context.Context, id string) (corecharacter.Character, error)
+	findForUpdateFn func(ctx context.Context, id string) (corecharacter.Character, error)
+	updateFn        func(ctx context.Context, character corecharacter.Character) error
 }
 
 func (s *stubCharRepo) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
 	if s.findFn != nil {
 		return s.findFn(ctx, id)
 	}
-	return corecharacter.Character{}, corecharacter.ErrNotFound
+	return corecharacter.Character{ID: id, Money: 1000}, nil
+}
+
+func (s *stubCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	if s.findForUpdateFn != nil {
+		return s.findForUpdateFn(ctx, id)
+	}
+	return s.FindByID(ctx, id)
 }
 
 func (s *stubCharRepo) Update(ctx context.Context, character corecharacter.Character) error {
@@ -51,8 +68,9 @@ func (s *stubCharRepo) Update(ctx context.Context, character corecharacter.Chara
 }
 
 type stubInvRepo struct {
-	findFn func(ctx context.Context, characterID string) (coreinventory.Inventory, error)
-	saveFn func(ctx context.Context, inventory coreinventory.Inventory) error
+	findFn          func(ctx context.Context, characterID string) (coreinventory.Inventory, error)
+	findForUpdateFn func(ctx context.Context, characterID string) (coreinventory.Inventory, error)
+	saveFn          func(ctx context.Context, inventory coreinventory.Inventory) error
 }
 
 func (s *stubInvRepo) FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
@@ -62,6 +80,13 @@ func (s *stubInvRepo) FindByCharacterID(ctx context.Context, characterID string)
 	return coreinventory.New(characterID)
 }
 
+func (s *stubInvRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	if s.findForUpdateFn != nil {
+		return s.findForUpdateFn(ctx, characterID)
+	}
+	return s.FindByCharacterID(ctx, characterID)
+}
+
 func (s *stubInvRepo) Save(ctx context.Context, inventory coreinventory.Inventory) error {
 	if s.saveFn != nil {
 		return s.saveFn(ctx, inventory)
@@ -69,73 +94,33 @@ func (s *stubInvRepo) Save(ctx context.Context, inventory coreinventory.Inventor
 	return nil
 }
 
-type stubTxRepo struct {
-	executeFn func(ctx context.Context, fn func(ctx context.Context, tx Tx) error) error
+type stubTxProvider struct {
+	runInTxFn func(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
-func (s *stubTxRepo) Execute(ctx context.Context, fn func(ctx context.Context, tx Tx) error) error {
+func (s *stubTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	if s.runInTxFn != nil {
+		return s.runInTxFn(ctx, fn)
+	}
+	return fn(ctx)
+}
+
+type stubTransactionRunner struct {
+	executeFn func(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error)
+}
+
+func (s *stubTransactionRunner) ExecuteTransaction(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error) {
 	if s.executeFn != nil {
-		return s.executeFn(ctx, fn)
+		return s.executeFn(ctx, req, fn)
 	}
-	return nil
-}
-
-type stubTx struct {
-	getCharFn   func(ctx context.Context, characterID string) (corecharacter.Character, error)
-	saveCharFn  func(ctx context.Context, character corecharacter.Character) error
-	getInvFn    func(ctx context.Context, characterID string) (coreinventory.Inventory, error)
-	saveInvFn   func(ctx context.Context, inventory coreinventory.Inventory) error
-	getDepotFn  func(ctx context.Context, characterID string) (Depot, error)
-	saveDepotFn func(ctx context.Context, depot Depot) error
-}
-
-func (t *stubTx) GetCharacter(ctx context.Context, characterID string) (corecharacter.Character, error) {
-	if t.getCharFn != nil {
-		return t.getCharFn(ctx, characterID)
-	}
-	return corecharacter.Character{}, nil
-}
-
-func (t *stubTx) SaveCharacter(ctx context.Context, character corecharacter.Character) error {
-	if t.saveCharFn != nil {
-		return t.saveCharFn(ctx, character)
-	}
-	return nil
-}
-
-func (t *stubTx) GetInventory(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-	if t.getInvFn != nil {
-		return t.getInvFn(ctx, characterID)
-	}
-	return coreinventory.New(characterID)
-}
-
-func (t *stubTx) SaveInventory(ctx context.Context, inventory coreinventory.Inventory) error {
-	if t.saveInvFn != nil {
-		return t.saveInvFn(ctx, inventory)
-	}
-	return nil
-}
-
-func (t *stubTx) GetDepot(ctx context.Context, characterID string) (Depot, error) {
-	if t.getDepotFn != nil {
-		return t.getDepotFn(ctx, characterID)
-	}
-	return Depot{}, nil
-}
-
-func (t *stubTx) SaveDepot(ctx context.Context, depot Depot) error {
-	if t.saveDepotFn != nil {
-		return t.saveDepotFn(ctx, depot)
-	}
-	return nil
+	return nil, nil
 }
 
 func TestService_Constructors(t *testing.T) {
 	depotRepo := &stubDepotRepo{}
 	charRepo := &stubCharRepo{}
 	invRepo := &stubInvRepo{}
-	txRepo := &stubTxRepo{}
+	txProvider := &stubTxProvider{}
 
 	// NewService validation
 	if _, err := NewService(nil, charRepo, invRepo); err == nil {
@@ -153,45 +138,85 @@ func TestService_Constructors(t *testing.T) {
 	}
 
 	// NewServiceWithTransaction validation
-	if _, err := NewServiceWithTransaction(nil, charRepo, invRepo, txRepo); err == nil {
+	if _, err := NewServiceWithTransaction(nil, charRepo, invRepo, txProvider); err == nil {
 		t.Fatal("expected error when depotRepo is nil")
 	}
-	if _, err := NewServiceWithTransaction(depotRepo, nil, invRepo, txRepo); err == nil {
+	if _, err := NewServiceWithTransaction(depotRepo, nil, invRepo, txProvider); err == nil {
 		t.Fatal("expected error when charRepo is nil")
 	}
-	if _, err := NewServiceWithTransaction(depotRepo, charRepo, nil, txRepo); err == nil {
+	if _, err := NewServiceWithTransaction(depotRepo, charRepo, nil, txProvider); err == nil {
 		t.Fatal("expected error when invRepo is nil")
 	}
 	if _, err := NewServiceWithTransaction(depotRepo, charRepo, invRepo, nil); err == nil {
-		t.Fatal("expected error when txRepo is nil")
+		t.Fatal("expected error when txProvider is nil")
 	}
-	svcWithTx, err := NewServiceWithTransaction(depotRepo, charRepo, invRepo, txRepo)
+	svcWithTx, err := NewServiceWithTransaction(depotRepo, charRepo, invRepo, txProvider)
 	if err != nil || svcWithTx == nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Options validation
+	runner := &stubTransactionRunner{}
+	svcWithRunner, err := NewService(depotRepo, charRepo, invRepo, WithTransactionRunner(runner))
+	if err != nil || svcWithRunner == nil {
+		t.Fatalf("unexpected error with runner option: %v", err)
+	}
+	svcWithProv, err := NewService(depotRepo, charRepo, invRepo, WithTransactionProvider(txProvider))
+	if err != nil || svcWithProv == nil {
+		t.Fatalf("unexpected error with provider option: %v", err)
+	}
+	eco, err := economy.NewService(charRepo, invRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svcWithEco, err := NewService(depotRepo, charRepo, invRepo, WithEconomy(eco))
+	if err != nil || svcWithEco == nil {
+		t.Fatalf("unexpected error with economy option: %v", err)
 	}
 }
 
 func TestGetDepot_Extended(t *testing.T) {
 	ctx := context.Background()
 
-	// Existing depot
-	expectedDepot, _ := NewDepot("char-1")
-	expectedDepot.Gold = 12345
-	repo := &stubDepotRepo{
-		findFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return expectedDepot, nil
-		},
-	}
-	svc, _ := NewService(repo, &stubCharRepo{}, &stubInvRepo{})
-	got, err := svc.GetDepot(ctx, "char-1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got.Gold != 12345 {
-		t.Fatalf("expected gold 12345, got %d", got.Gold)
+	// 1. Invalid CharacterID
+	svc, _ := NewService(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{})
+	if _, err := svc.GetDepot(ctx, ""); !errors.Is(err, ErrInvalidCharacterID) {
+		t.Fatalf("expected ErrInvalidCharacterID, got %v", err)
 	}
 
-	// Repository error
+	// 2. Depot not found -> returns empty depot
+	depotRepoNotFound := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
+			return Depot{}, ErrNotFound
+		},
+	}
+	svcNotFound, _ := NewService(depotRepoNotFound, &stubCharRepo{}, &stubInvRepo{})
+	dep, err := svcNotFound.GetDepot(ctx, "char-1")
+	if err != nil {
+		t.Fatalf("unexpected error on not found: %v", err)
+	}
+	if dep.CharacterID != "char-1" || dep.Capacity != DefaultDepotCapacity || dep.Gold != 0 {
+		t.Fatalf("unexpected depot: %#v", dep)
+	}
+
+	// 3. Depot found -> returns existing depot
+	existingDepot, _ := NewDepot("char-1")
+	existingDepot.Gold = 500
+	depotRepoFound := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
+			return existingDepot, nil
+		},
+	}
+	svcFound, _ := NewService(depotRepoFound, &stubCharRepo{}, &stubInvRepo{})
+	dep, err = svcFound.GetDepot(ctx, "char-1")
+	if err != nil {
+		t.Fatalf("unexpected error on found: %v", err)
+	}
+	if dep.Gold != 500 {
+		t.Fatalf("expected gold 500, got %d", dep.Gold)
+	}
+
+	// 4. Depot repository error
 	repoErr := &stubDepotRepo{
 		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			return Depot{}, errTestBoom
@@ -204,7 +229,7 @@ func TestGetDepot_Extended(t *testing.T) {
 	}
 }
 
-func TestDepositGold_ValidationAndFallbackErrors(t *testing.T) {
+func TestDepositGold_ValidationAndExecutionErrors(t *testing.T) {
 	ctx := context.Background()
 
 	char, _ := corecharacter.New("Hero")
@@ -329,7 +354,7 @@ func TestDepositGold_ValidationAndFallbackErrors(t *testing.T) {
 	}
 }
 
-func TestWithdrawGold_ValidationAndFallbackErrors(t *testing.T) {
+func TestWithdrawGold_ValidationAndExecutionErrors(t *testing.T) {
 	ctx := context.Background()
 
 	char, _ := corecharacter.New("Hero")
@@ -424,7 +449,7 @@ func TestWithdrawGold_ValidationAndFallbackErrors(t *testing.T) {
 	}
 }
 
-func TestDepositItem_ValidationAndFallbackErrors(t *testing.T) {
+func TestDepositItem_ValidationAndExecutionErrors(t *testing.T) {
 	ctx := context.Background()
 
 	potion, _ := item.NewInstance("potion", 2)
@@ -447,14 +472,14 @@ func TestDepositItem_ValidationAndFallbackErrors(t *testing.T) {
 		t.Fatalf("expected ErrInvalidItemInstanceID, got %v", err)
 	}
 
-	// InvRepo.FindByCharacterID error
-	invRepoErr := &stubInvRepo{
-		findFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-			return coreinventory.Inventory{}, errTestBoom
+	// Transaction runner error
+	runnerErr := &stubTransactionRunner{
+		executeFn: func(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error) {
+			return nil, errTestBoom
 		},
 	}
-	svc = baseService(&stubDepotRepo{}, invRepoErr)
-	if _, err := svc.DepositItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
+	svcWithRunner, _ := NewService(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{}, WithTransactionRunner(runnerErr))
+	if _, err := svcWithRunner.DepositItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom, got %v", err)
 	}
 
@@ -540,7 +565,7 @@ func TestDepositItem_ValidationAndFallbackErrors(t *testing.T) {
 	}
 }
 
-func TestWithdrawItem_ValidationAndFallbackErrors(t *testing.T) {
+func TestWithdrawItem_ValidationAndExecutionErrors(t *testing.T) {
 	ctx := context.Background()
 
 	potion, _ := item.NewInstance("potion", 2)
@@ -574,20 +599,20 @@ func TestWithdrawItem_ValidationAndFallbackErrors(t *testing.T) {
 		t.Fatalf("expected errTestBoom, got %v", err)
 	}
 
-	// InvRepo.FindByCharacterID error
+	// Transaction runner error
 	depotRepoOK := &stubDepotRepo{
 		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			return depotWithItem, nil
 		},
 	}
-	invRepoErr := &stubInvRepo{
-		findFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-			return coreinventory.Inventory{}, errTestBoom
+	runnerErr := &stubTransactionRunner{
+		executeFn: func(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error) {
+			return nil, errTestBoom
 		},
 	}
-	svc = baseService(depotRepoOK, invRepoErr)
-	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom on inv find, got %v", err)
+	svcWithRunner, _ := NewService(depotRepoOK, &stubCharRepo{}, &stubInvRepo{}, WithTransactionRunner(runnerErr))
+	if _, err := svcWithRunner.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
+		t.Fatalf("expected errTestBoom on runner error, got %v", err)
 	}
 
 	// Item not found in depot
@@ -651,115 +676,119 @@ func TestTransactionPaths_DepositGold(t *testing.T) {
 	depotVal, _ := NewDepot("char-1")
 	depotVal.Gold = 100
 
-	// 1. txRepo.Execute error
-	txRepoExecErr := &stubTxRepo{
-		executeFn: func(ctx context.Context, fn func(ctx context.Context, tx Tx) error) error {
-			return errTestBoom
+	// 1. Transaction runner error
+	runnerErr := &stubTransactionRunner{
+		executeFn: func(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error) {
+			return nil, errTestBoom
 		},
 	}
-	svc, _ := NewServiceWithTransaction(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{}, txRepoExecErr)
+	svc, _ := NewService(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{}, WithTransactionRunner(runnerErr))
 	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom, got %v", err)
 	}
 
-	// Helper for tx tests
-	runTx := func(tx *stubTx) error {
-		repo := &stubTxRepo{
-			executeFn: func(ctx context.Context, fn func(ctx context.Context, txArg Tx) error) error {
-				return fn(ctx, tx)
-			},
-		}
-		service, _ := NewServiceWithTransaction(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{}, repo)
-		_, err := service.DepositGold(ctx, "char-1", 100)
-		return err
+	// 2. Character not found error
+	charRepoNotFound := &stubCharRepo{
+		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			return corecharacter.Character{}, corecharacter.ErrNotFound
+		},
+	}
+	svc, _ = NewService(&stubDepotRepo{}, charRepoNotFound, &stubInvRepo{})
+	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, corecharacter.ErrNotFound) {
+		t.Fatalf("expected corecharacter.ErrNotFound, got %v", err)
 	}
 
-	// 2. tx.GetCharacter error
-	err := runTx(&stubTx{
-		getCharFn: func(ctx context.Context, characterID string) (corecharacter.Character, error) {
-			return corecharacter.Character{}, errTestBoom
+	// 3. Insufficient funds error
+	charPoor := char
+	charPoor.Money = 50
+	charRepoPoor := &stubCharRepo{
+		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			return charPoor, nil
 		},
-	})
-	if !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom, got %v", err)
 	}
-
-	// 3. char.Money < amount -> ErrInsufficientFunds
-	err = runTx(&stubTx{
-		getCharFn: func(ctx context.Context, characterID string) (corecharacter.Character, error) {
-			c := char
-			c.Money = 50
-			return c, nil
-		},
-	})
-	if !errors.Is(err, ErrInsufficientFunds) {
+	svc, _ = NewService(&stubDepotRepo{}, charRepoPoor, &stubInvRepo{})
+	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, ErrInsufficientFunds) {
 		t.Fatalf("expected ErrInsufficientFunds, got %v", err)
 	}
 
-	// 4. tx.GetDepot generic error
-	err = runTx(&stubTx{
-		getCharFn: func(ctx context.Context, characterID string) (corecharacter.Character, error) {
-			return char, nil
-		},
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
+	// 4. DepotRepo FindByCharacterIDForUpdate generic error
+	depotRepoErr := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			return Depot{}, errTestBoom
 		},
-	})
-	if !errors.Is(err, errTestBoom) {
+	}
+	charRepoOK := &stubCharRepo{
+		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			return char, nil
+		},
+	}
+	svc, _ = NewService(depotRepoErr, charRepoOK, &stubInvRepo{})
+	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom, got %v", err)
 	}
 
-	// 5. tx.GetDepot ErrNotFound -> creates new depot and continues
+	// 5. DepotRepo FindByCharacterIDForUpdate ErrNotFound -> creates new depot and continues
 	var savedDepotGold int
-	err = runTx(&stubTx{
-		getCharFn: func(ctx context.Context, characterID string) (corecharacter.Character, error) {
-			return char, nil
-		},
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
+	depotRepoNotFound := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			return Depot{}, ErrNotFound
 		},
-		saveDepotFn: func(ctx context.Context, depot Depot) error {
+		saveFn: func(ctx context.Context, depot Depot) error {
 			savedDepotGold = depot.Gold
 			return nil
 		},
-	})
+	}
+	svc, _ = NewService(depotRepoNotFound, charRepoOK, &stubInvRepo{})
+	res, err := svc.DepositGold(ctx, "char-1", 100)
 	if err != nil {
 		t.Fatalf("unexpected error when depot ErrNotFound: %v", err)
 	}
-	if savedDepotGold != 100 {
-		t.Fatalf("expected saved depot gold 100, got %d", savedDepotGold)
+	if res.Gold != 100 || savedDepotGold != 100 {
+		t.Fatalf("expected saved depot gold 100, got res=%d, saved=%d", res.Gold, savedDepotGold)
 	}
 
-	// 6. tx.SaveCharacter error
-	err = runTx(&stubTx{
-		getCharFn: func(ctx context.Context, characterID string) (corecharacter.Character, error) {
-			return char, nil
-		},
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
+	// 6. DepotRepo Save error
+	depotRepoSaveErr := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			return depotVal, nil
 		},
-		saveCharFn: func(ctx context.Context, character corecharacter.Character) error {
+		saveFn: func(ctx context.Context, depot Depot) error {
 			return errTestBoom
 		},
-	})
-	if err == nil || !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected wrapped errTestBoom, got %v", err)
+	}
+	svc, _ = NewService(depotRepoSaveErr, charRepoOK, &stubInvRepo{})
+	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
+		t.Fatalf("expected errTestBoom, got %v", err)
 	}
 
-	// 7. tx.SaveDepot error
-	err = runTx(&stubTx{
-		getCharFn: func(ctx context.Context, characterID string) (corecharacter.Character, error) {
+	// 7. CharacterRepo Update error
+	charRepoUpdateErr := &stubCharRepo{
+		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
 			return char, nil
 		},
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return depotVal, nil
-		},
-		saveDepotFn: func(ctx context.Context, depot Depot) error {
+		updateFn: func(ctx context.Context, character corecharacter.Character) error {
 			return errTestBoom
 		},
-	})
-	if err == nil || !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected wrapped errTestBoom, got %v", err)
+	}
+	depotRepoOK := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
+			return depotVal, nil
+		},
+	}
+	svc, _ = NewService(depotRepoOK, charRepoUpdateErr, &stubInvRepo{})
+	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
+		t.Fatalf("expected errTestBoom, got %v", err)
+	}
+
+	// 8. WithTransactionProvider error
+	txProviderErr := &stubTxProvider{
+		runInTxFn: func(ctx context.Context, fn func(ctx context.Context) error) error {
+			return errTestBoom
+		},
+	}
+	svc, _ = NewServiceWithTransaction(depotRepoOK, charRepoOK, &stubInvRepo{}, txProviderErr)
+	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
+		t.Fatalf("expected errTestBoom with txProvider, got %v", err)
 	}
 }
 
@@ -772,103 +801,97 @@ func TestTransactionPaths_WithdrawGold(t *testing.T) {
 	depotVal, _ := NewDepot("char-1")
 	depotVal.Gold = 300
 
-	// 1. txRepo.Execute error
-	txRepoExecErr := &stubTxRepo{
-		executeFn: func(ctx context.Context, fn func(ctx context.Context, tx Tx) error) error {
-			return errTestBoom
+	// 1. Transaction runner error
+	runnerErr := &stubTransactionRunner{
+		executeFn: func(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error) {
+			return nil, errTestBoom
 		},
 	}
-	svc, _ := NewServiceWithTransaction(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{}, txRepoExecErr)
+	svc, _ := NewService(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{}, WithTransactionRunner(runnerErr))
 	if _, err := svc.WithdrawGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom, got %v", err)
 	}
 
-	runTx := func(tx *stubTx) (Depot, error) {
-		repo := &stubTxRepo{
-			executeFn: func(ctx context.Context, fn func(ctx context.Context, txArg Tx) error) error {
-				return fn(ctx, tx)
-			},
-		}
-		service, _ := NewServiceWithTransaction(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{}, repo)
-		return service.WithdrawGold(ctx, "char-1", 100)
+	// 2. Character not found error
+	charRepoNotFound := &stubCharRepo{
+		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			return corecharacter.Character{}, corecharacter.ErrNotFound
+		},
+	}
+	svc, _ = NewService(&stubDepotRepo{}, charRepoNotFound, &stubInvRepo{})
+	if _, err := svc.WithdrawGold(ctx, "char-1", 100); !errors.Is(err, corecharacter.ErrNotFound) {
+		t.Fatalf("expected corecharacter.ErrNotFound, got %v", err)
 	}
 
-	// 2. tx.GetDepot error
-	_, err := runTx(&stubTx{
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
+	// 3. DepotRepo FindByCharacterIDForUpdate error
+	depotRepoFindErr := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			return Depot{}, errTestBoom
 		},
-	})
-	if !errors.Is(err, errTestBoom) {
+	}
+	charRepoOK := &stubCharRepo{
+		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			return char, nil
+		},
+	}
+	svc, _ = NewService(depotRepoFindErr, charRepoOK, &stubInvRepo{})
+	if _, err := svc.WithdrawGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom, got %v", err)
 	}
 
-	// 3. dep.Gold < amount -> ErrInsufficientDepotGold
-	_, err = runTx(&stubTx{
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
-			d := depotVal
-			d.Gold = 50
-			return d, nil
+	// 4. Insufficient depot gold
+	depotRepoOK := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
+			return depotVal, nil
 		},
-	})
-	if !errors.Is(err, ErrInsufficientDepotGold) {
+	}
+	svc, _ = NewService(depotRepoOK, charRepoOK, &stubInvRepo{})
+	if _, err := svc.WithdrawGold(ctx, "char-1", 500); !errors.Is(err, ErrInsufficientDepotGold) {
 		t.Fatalf("expected ErrInsufficientDepotGold, got %v", err)
 	}
 
-	// 4. tx.GetCharacter error
-	_, err = runTx(&stubTx{
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
+	// 5. DepotRepo Save error
+	depotRepoSaveErr := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			return depotVal, nil
 		},
-		getCharFn: func(ctx context.Context, characterID string) (corecharacter.Character, error) {
-			return corecharacter.Character{}, errTestBoom
+		saveFn: func(ctx context.Context, value Depot) error {
+			return errTestBoom
 		},
-	})
-	if !errors.Is(err, errTestBoom) {
+	}
+	svc, _ = NewService(depotRepoSaveErr, charRepoOK, &stubInvRepo{})
+	if _, err := svc.WithdrawGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom, got %v", err)
 	}
 
-	// 5. tx.SaveDepot error
-	_, err = runTx(&stubTx{
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return depotVal, nil
-		},
-		getCharFn: func(ctx context.Context, characterID string) (corecharacter.Character, error) {
+	// 6. CharacterRepo Update error
+	charRepoUpdateErr := &stubCharRepo{
+		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
 			return char, nil
 		},
-		saveDepotFn: func(ctx context.Context, depot Depot) error {
+		updateFn: func(ctx context.Context, character corecharacter.Character) error {
 			return errTestBoom
 		},
-	})
-	if err == nil || !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected wrapped errTestBoom, got %v", err)
+	}
+	svc, _ = NewService(depotRepoOK, charRepoUpdateErr, &stubInvRepo{})
+	if _, err := svc.WithdrawGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
+		t.Fatalf("expected errTestBoom on char update, got %v", err)
 	}
 
-	// 6. tx.SaveCharacter error
-	_, err = runTx(&stubTx{
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return depotVal, nil
-		},
-		getCharFn: func(ctx context.Context, characterID string) (corecharacter.Character, error) {
-			return char, nil
-		},
-		saveCharFn: func(ctx context.Context, character corecharacter.Character) error {
+	// 7. WithTransactionProvider error
+	txProviderErr := &stubTxProvider{
+		runInTxFn: func(ctx context.Context, fn func(ctx context.Context) error) error {
 			return errTestBoom
 		},
-	})
-	if err == nil || !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected wrapped errTestBoom, got %v", err)
+	}
+	svc, _ = NewServiceWithTransaction(depotRepoOK, charRepoOK, &stubInvRepo{}, txProviderErr)
+	if _, err := svc.WithdrawGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
+		t.Fatalf("expected errTestBoom with txProvider, got %v", err)
 	}
 
-	// 7. Happy path
-	res, err := runTx(&stubTx{
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return depotVal, nil
-		},
-		getCharFn: func(ctx context.Context, characterID string) (corecharacter.Character, error) {
-			return char, nil
-		},
-	})
+	// 8. Happy path
+	svc, _ = NewService(depotRepoOK, charRepoOK, &stubInvRepo{})
+	res, err := svc.WithdrawGold(ctx, "char-1", 100)
 	if err != nil {
 		t.Fatalf("unexpected error on happy path: %v", err)
 	}
@@ -884,50 +907,59 @@ func TestTransactionPaths_DepositItem(t *testing.T) {
 	inv, _ := coreinventory.New("char-1")
 	_ = inv.Add(potion)
 
+	char, _ := corecharacter.New("Hero")
 	depotVal, _ := NewDepot("char-1")
 
-	// 1. txRepo.Execute error
-	txRepoExecErr := &stubTxRepo{
-		executeFn: func(ctx context.Context, fn func(ctx context.Context, tx Tx) error) error {
-			return errTestBoom
+	charRepoOK := &stubCharRepo{
+		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			return char, nil
 		},
 	}
-	svc, _ := NewServiceWithTransaction(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{}, txRepoExecErr)
+	invRepoOK := &stubInvRepo{
+		findFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+			return inv, nil
+		},
+	}
+	depotRepoOK := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
+			return depotVal, nil
+		},
+	}
+
+	// 1. Transaction runner error
+	runnerErr := &stubTransactionRunner{
+		executeFn: func(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error) {
+			return nil, errTestBoom
+		},
+	}
+	svc, _ := NewService(depotRepoOK, charRepoOK, invRepoOK, WithTransactionRunner(runnerErr))
 	if _, err := svc.DepositItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom, got %v", err)
 	}
 
-	runTx := func(tx *stubTx) (Depot, error) {
-		repo := &stubTxRepo{
-			executeFn: func(ctx context.Context, fn func(ctx context.Context, txArg Tx) error) error {
-				return fn(ctx, tx)
-			},
-		}
-		service, _ := NewServiceWithTransaction(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{}, repo)
-		return service.DepositItem(ctx, "char-1", potion.ID)
+	// 2. Character not found error
+	charRepoNotFound := &stubCharRepo{
+		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			return corecharacter.Character{}, corecharacter.ErrNotFound
+		},
+	}
+	svc, _ = NewService(depotRepoOK, charRepoNotFound, invRepoOK)
+	if _, err := svc.DepositItem(ctx, "char-1", potion.ID); !errors.Is(err, corecharacter.ErrNotFound) {
+		t.Fatalf("expected corecharacter.ErrNotFound, got %v", err)
 	}
 
-	// 2. tx.GetInventory error
-	_, err := runTx(&stubTx{
-		getInvFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-			return coreinventory.Inventory{}, errTestBoom
+	// 3. CharacterRepo Update error
+	charRepoUpdateErr := &stubCharRepo{
+		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			return char, nil
 		},
-	})
-	if !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom, got %v", err)
+		updateFn: func(ctx context.Context, character corecharacter.Character) error {
+			return errTestBoom
+		},
 	}
-
-	// 3. tx.GetDepot generic error
-	_, err = runTx(&stubTx{
-		getInvFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-			return inv, nil
-		},
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return Depot{}, errTestBoom
-		},
-	})
-	if !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom, got %v", err)
+	svc, _ = NewService(depotRepoOK, charRepoUpdateErr, invRepoOK)
+	if _, err := svc.DepositItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
+		t.Fatalf("expected errTestBoom on char update, got %v", err)
 	}
 
 	// 4. Depot full
@@ -935,90 +967,94 @@ func TestTransactionPaths_DepositItem(t *testing.T) {
 	fullDepot.Capacity = 1
 	dummy, _ := item.NewInstance("dummy", 1)
 	_ = fullDepot.AddItem(dummy)
-	_, err = runTx(&stubTx{
-		getInvFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-			return inv, nil
-		},
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
+	depotRepoFull := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			return fullDepot, nil
 		},
-	})
-	if !errors.Is(err, ErrDepotFull) {
+	}
+	svc, _ = NewService(depotRepoFull, charRepoOK, invRepoOK)
+	if _, err := svc.DepositItem(ctx, "char-1", potion.ID); !errors.Is(err, ErrDepotFull) {
 		t.Fatalf("expected ErrDepotFull, got %v", err)
 	}
 
 	// 5. Item not in inventory
-	emptyInv, _ := coreinventory.New("char-1")
-	_, err = runTx(&stubTx{
-		getInvFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-			return emptyInv, nil
-		},
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return depotVal, nil
-		},
-	})
-	if !errors.Is(err, ErrItemNotFound) {
+	svc, _ = NewService(depotRepoOK, charRepoOK, invRepoOK)
+	if _, err := svc.DepositItem(ctx, "char-1", "nonexistent-id"); !errors.Is(err, ErrItemNotFound) {
 		t.Fatalf("expected ErrItemNotFound, got %v", err)
 	}
 
-	// 6. tx.SaveInventory error
-	_, err = runTx(&stubTx{
-		getInvFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-			testInv, _ := coreinventory.New("char-1")
-			p, _ := item.NewInstance("potion", 2)
-			p.ID = potion.ID
-			_ = testInv.Add(p)
-			return testInv, nil
+	// 6. DepotRepo Find generic error
+	depotRepoErr := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
+			return Depot{}, errTestBoom
 		},
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return depotVal, nil
-		},
-		saveInvFn: func(ctx context.Context, inventory coreinventory.Inventory) error {
-			return errTestBoom
-		},
-	})
-	if err == nil || !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected wrapped errTestBoom, got %v", err)
+	}
+	svc, _ = NewService(depotRepoErr, charRepoOK, invRepoOK)
+	if _, err := svc.DepositItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
+		t.Fatalf("expected errTestBoom, got %v", err)
 	}
 
-	// 7. tx.SaveDepot error
-	_, err = runTx(&stubTx{
-		getInvFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-			testInv, _ := coreinventory.New("char-1")
-			p, _ := item.NewInstance("potion", 2)
-			p.ID = potion.ID
-			_ = testInv.Add(p)
-			return testInv, nil
-		},
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return depotVal, nil
-		},
-		saveDepotFn: func(ctx context.Context, depot Depot) error {
-			return errTestBoom
-		},
-	})
-	if err == nil || !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected wrapped errTestBoom, got %v", err)
-	}
-
-	// 8. tx.GetDepot returns ErrNotFound -> creates depot and succeeds
-	res, err := runTx(&stubTx{
-		getInvFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-			testInv, _ := coreinventory.New("char-1")
-			p, _ := item.NewInstance("potion", 2)
-			p.ID = potion.ID
-			_ = testInv.Add(p)
-			return testInv, nil
-		},
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
+	// 7. DepotRepo Find ErrNotFound -> creates depot and succeeds
+	var savedDepotCount int
+	depotRepoNotFound := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			return Depot{}, ErrNotFound
 		},
-	})
+		saveFn: func(ctx context.Context, value Depot) error {
+			savedDepotCount = len(value.Items)
+			return nil
+		},
+	}
+	svc, _ = NewService(depotRepoNotFound, charRepoOK, invRepoOK)
+	res, err := svc.DepositItem(ctx, "char-1", potion.ID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(res.Items) != 1 {
-		t.Fatalf("expected 1 item in depot, got %d", len(res.Items))
+	if len(res.Items) != 1 || savedDepotCount != 1 {
+		t.Fatalf("expected 1 item in depot, got res=%d, saved=%d", len(res.Items), savedDepotCount)
+	}
+
+	// 8. DepotRepo Save error
+	depotRepoSaveErr := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
+			return depotVal, nil
+		},
+		saveFn: func(ctx context.Context, value Depot) error {
+			return errTestBoom
+		},
+	}
+	svc, _ = NewService(depotRepoSaveErr, charRepoOK, invRepoOK)
+	if _, err := svc.DepositItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
+		t.Fatalf("expected errTestBoom on depot save, got %v", err)
+	}
+
+	// 9. InvRepo Save error
+	invRepoSaveErr := &stubInvRepo{
+		findFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+			testInv, _ := coreinventory.New("char-1")
+			p, _ := item.NewInstance("potion", 2)
+			p.ID = potion.ID
+			_ = testInv.Add(p)
+			return testInv, nil
+		},
+		saveFn: func(ctx context.Context, inventory coreinventory.Inventory) error {
+			return errTestBoom
+		},
+	}
+	svc, _ = NewService(depotRepoOK, charRepoOK, invRepoSaveErr)
+	if _, err := svc.DepositItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
+		t.Fatalf("expected errTestBoom on inv save, got %v", err)
+	}
+
+	// 10. WithTransactionProvider error
+	txProviderErr := &stubTxProvider{
+		runInTxFn: func(ctx context.Context, fn func(ctx context.Context) error) error {
+			return errTestBoom
+		},
+	}
+	svc, _ = NewServiceWithTransaction(depotRepoOK, charRepoOK, invRepoOK, txProviderErr)
+	if _, err := svc.DepositItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
+		t.Fatalf("expected errTestBoom with txProvider, got %v", err)
 	}
 }
 
@@ -1029,136 +1065,158 @@ func TestTransactionPaths_WithdrawItem(t *testing.T) {
 	depotWithItem, _ := NewDepot("char-1")
 	_ = depotWithItem.AddItem(potion)
 
-	// 1. txRepo.Execute error
-	txRepoExecErr := &stubTxRepo{
-		executeFn: func(ctx context.Context, fn func(ctx context.Context, tx Tx) error) error {
-			return errTestBoom
+	char, _ := corecharacter.New("Hero")
+	emptyInv, _ := coreinventory.New("char-1")
+
+	charRepoOK := &stubCharRepo{
+		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			return char, nil
 		},
 	}
-	svc, _ := NewServiceWithTransaction(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{}, txRepoExecErr)
+	invRepoOK := &stubInvRepo{
+		findFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+			return emptyInv, nil
+		},
+	}
+	depotRepoOK := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
+			return depotWithItem, nil
+		},
+	}
+
+	// 1. Transaction runner error
+	runnerErr := &stubTransactionRunner{
+		executeFn: func(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error) {
+			return nil, errTestBoom
+		},
+	}
+	svc, _ := NewService(depotRepoOK, charRepoOK, invRepoOK, WithTransactionRunner(runnerErr))
 	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom, got %v", err)
 	}
 
-	runTx := func(tx *stubTx) (Depot, error) {
-		repo := &stubTxRepo{
-			executeFn: func(ctx context.Context, fn func(ctx context.Context, txArg Tx) error) error {
-				return fn(ctx, tx)
-			},
-		}
-		service, _ := NewServiceWithTransaction(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{}, repo)
-		return service.WithdrawItem(ctx, "char-1", potion.ID)
+	// 2. Character not found error
+	charRepoNotFound := &stubCharRepo{
+		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			return corecharacter.Character{}, corecharacter.ErrNotFound
+		},
+	}
+	svc, _ = NewService(depotRepoOK, charRepoNotFound, invRepoOK)
+	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, corecharacter.ErrNotFound) {
+		t.Fatalf("expected corecharacter.ErrNotFound, got %v", err)
 	}
 
-	// 2. tx.GetDepot error
-	_, err := runTx(&stubTx{
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
+	// 3. CharacterRepo Update error
+	charRepoUpdateErr := &stubCharRepo{
+		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			return char, nil
+		},
+		updateFn: func(ctx context.Context, character corecharacter.Character) error {
+			return errTestBoom
+		},
+	}
+	svc, _ = NewService(depotRepoOK, charRepoUpdateErr, invRepoOK)
+	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
+		t.Fatalf("expected errTestBoom on char update, got %v", err)
+	}
+
+	// 4. DepotRepo Find generic error
+	depotRepoErr := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			return Depot{}, errTestBoom
 		},
-	})
-	if !errors.Is(err, errTestBoom) {
+	}
+	svc, _ = NewService(depotRepoErr, charRepoOK, invRepoOK)
+	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom, got %v", err)
 	}
 
-	// 3. tx.GetInventory error
-	_, err = runTx(&stubTx{
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return depotWithItem, nil
+	// 5. DepotRepo Find ErrNotFound -> returns ErrNotFound
+	depotRepoNotFound := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
+			return Depot{}, ErrNotFound
 		},
-		getInvFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-			return coreinventory.Inventory{}, errTestBoom
-		},
-	})
-	if !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom, got %v", err)
+	}
+	svc, _ = NewService(depotRepoNotFound, charRepoOK, invRepoOK)
+	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 
-	// 4. Item not found in depot
-	emptyDepot, _ := NewDepot("char-1")
-	_, err = runTx(&stubTx{
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return emptyDepot, nil
-		},
-		getInvFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-			return coreinventory.New("char-1")
-		},
-	})
-	if !errors.Is(err, ErrItemNotFound) {
+	// 6. Item not found in depot
+	svc, _ = NewService(depotRepoOK, charRepoOK, invRepoOK)
+	if _, err := svc.WithdrawItem(ctx, "char-1", "nonexistent-item"); !errors.Is(err, ErrItemNotFound) {
 		t.Fatalf("expected ErrItemNotFound, got %v", err)
 	}
 
-	// 5. Inventory full (inv.Add error)
+	// 7. Inventory full (item ID already present in inventory)
 	invWithSameItem, _ := coreinventory.New("char-1")
 	_ = invWithSameItem.Add(potion)
-	_, err = runTx(&stubTx{
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
-			d, _ := NewDepot("char-1")
-			p, _ := item.NewInstance("potion", 2)
-			p.ID = potion.ID
-			_ = d.AddItem(p)
-			return d, nil
-		},
-		getInvFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	invRepoWithSameItem := &stubInvRepo{
+		findFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
 			return invWithSameItem, nil
 		},
-	})
-	if !errors.Is(err, ErrInventoryFull) {
+	}
+	svc, _ = NewService(depotRepoOK, charRepoOK, invRepoWithSameItem)
+	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, ErrInventoryFull) {
 		t.Fatalf("expected ErrInventoryFull, got %v", err)
 	}
 
-	// 6. tx.SaveDepot error
-	_, err = runTx(&stubTx{
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
+	// 8. DepotRepo Save error
+	depotRepoSaveErr := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			d, _ := NewDepot("char-1")
 			p, _ := item.NewInstance("potion", 2)
 			p.ID = potion.ID
 			_ = d.AddItem(p)
 			return d, nil
 		},
-		getInvFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-			return coreinventory.New("char-1")
-		},
-		saveDepotFn: func(ctx context.Context, depot Depot) error {
+		saveFn: func(ctx context.Context, value Depot) error {
 			return errTestBoom
 		},
-	})
-	if err == nil || !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected wrapped errTestBoom, got %v", err)
+	}
+	svc, _ = NewService(depotRepoSaveErr, charRepoOK, invRepoOK)
+	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
+		t.Fatalf("expected errTestBoom on depot save, got %v", err)
 	}
 
-	// 7. tx.SaveInventory error
-	_, err = runTx(&stubTx{
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
-			d, _ := NewDepot("char-1")
-			p, _ := item.NewInstance("potion", 2)
-			p.ID = potion.ID
-			_ = d.AddItem(p)
-			return d, nil
-		},
-		getInvFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	// 9. InvRepo Save error
+	invRepoSaveErr := &stubInvRepo{
+		findFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
 			return coreinventory.New("char-1")
 		},
-		saveInvFn: func(ctx context.Context, inventory coreinventory.Inventory) error {
+		saveFn: func(ctx context.Context, inventory coreinventory.Inventory) error {
 			return errTestBoom
 		},
-	})
-	if err == nil || !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected wrapped errTestBoom, got %v", err)
+	}
+	svc, _ = NewService(depotRepoOK, charRepoOK, invRepoSaveErr)
+	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
+		t.Fatalf("expected errTestBoom on inv save, got %v", err)
 	}
 
-	// 8. Happy path
-	res, err := runTx(&stubTx{
-		getDepotFn: func(ctx context.Context, characterID string) (Depot, error) {
-			d, _ := NewDepot("char-1")
-			p, _ := item.NewInstance("potion", 2)
-			p.ID = potion.ID
-			_ = d.AddItem(p)
-			return d, nil
+	// 10. WithTransactionProvider error
+	txProviderErr := &stubTxProvider{
+		runInTxFn: func(ctx context.Context, fn func(ctx context.Context) error) error {
+			return errTestBoom
 		},
-		getInvFn: func(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-			return coreinventory.New("char-1")
+	}
+	svc, _ = NewServiceWithTransaction(depotRepoOK, charRepoOK, invRepoOK, txProviderErr)
+	if _, err := svc.WithdrawItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
+		t.Fatalf("expected errTestBoom with txProvider, got %v", err)
+	}
+
+	// 11. Happy path
+	freshDepot, _ := NewDepot("char-1")
+	freshPotion, _ := item.NewInstance("potion", 2)
+	freshPotion.ID = potion.ID
+	_ = freshDepot.AddItem(freshPotion)
+
+	depotRepoFresh := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
+			return freshDepot, nil
 		},
-	})
+	}
+	svc, _ = NewService(depotRepoFresh, charRepoOK, invRepoOK)
+	res, err := svc.WithdrawItem(ctx, "char-1", potion.ID)
 	if err != nil {
 		t.Fatalf("unexpected error on happy path: %v", err)
 	}

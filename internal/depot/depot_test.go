@@ -30,6 +30,10 @@ func (r *memoryDepotRepo) FindByCharacterID(_ context.Context, characterID strin
 	return d, nil
 }
 
+func (r *memoryDepotRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (Depot, error) {
+	return r.FindByCharacterID(ctx, characterID)
+}
+
 func (r *memoryDepotRepo) Save(_ context.Context, value Depot) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -56,6 +60,10 @@ func (r *memoryCharRepo) FindByID(_ context.Context, id string) (corecharacter.C
 	return c, nil
 }
 
+func (r *memoryCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return r.FindByID(ctx, id)
+}
+
 func (r *memoryCharRepo) Update(_ context.Context, character corecharacter.Character) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -80,6 +88,10 @@ func (r *memoryInvRepo) FindByCharacterID(_ context.Context, characterID string)
 		return coreinventory.New(characterID)
 	}
 	return inv, nil
+}
+
+func (r *memoryInvRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	return r.FindByCharacterID(ctx, characterID)
 }
 
 func (r *memoryInvRepo) Save(_ context.Context, inventory coreinventory.Inventory) error {
