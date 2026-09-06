@@ -119,7 +119,11 @@ func newMiscServices(
 		return nil, err
 	}
 
-	innService, err := inn.NewService(core.charRepo)
+	innService, err := inn.NewService(
+		core.charRepo,
+		inn.WithEconomy(core.economy),
+		inn.WithTransactionProvider(core.txProvider),
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #405 — [Feature] Challenge: Migrate active challenge session buffers to Valkey Master (Candidate D)
+Last updated: Issue #411 — [Architecture] Platform: Establish cross-domain application runtime primitives to abstract currency, item, locking, and event rules from feature domains
 
 ## Current phase
 
@@ -31,7 +31,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理、統一アイテム定義プロバイダー（`coreitem.DefinitionProvider`）、インベントリアイテム更新（`inv.Update`）、装備スロットカプセル化（`equip.Equip`, `equip.Unequip`）。
 - **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定（経験値・ゴールド・アイテム・ちいさなメダル）、構造化ターンログ出力、戦闘参加者（Participant）標準アダプタ/ビルダー（`NewParticipantFromCharacter`, `ParticipantBuilder`）。
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): Valkeyバックエンドの遅延アクションキュー＆分散排他ロックWorker。
-- **Database & Transaction Orchestration** (`internal/database`, `internal/economy`, `internal/testutil`, `internal/database/testutil`): 全リポジトリのトランザクション伝播モデル（`RunInTx` と `ExecutorFromContext`）、コンテキスト内トランザクション再利用、決定論的行ロック獲得順序（Shared -> Players -> Characters (昇順) -> Inventory/Equipment -> Jobs -> Depots -> Bank -> Guilds (昇順) -> 各種機能テーブル）のAST強制（`internal/database/lock_hierarchy_lint_test.go`）、共通2者間IDソート排他ロックユーティリティ（`id.Sort2`）、再利用可能なトランザクション内経済交換ヘルパー（`internal/economy`）、標準エンティティファクトリおよび汎用並行ストレステストハーネス（`RunConcurrentStressTest`, `RunRace`, `RunRace2`）。
+- **Database & Transaction Orchestration** (`internal/database`, `internal/economy`, `internal/core/event`, `internal/testutil`, `internal/database/testutil`): 全リポジトリのトランザクション伝播モデル（`RunInTx` と `ExecutorFromContext`）、コンテキスト内トランザクション再利用、決定論的行ロック獲得順序（Shared -> Players -> Characters (昇順) -> Inventory/Equipment -> Jobs -> Depots -> Bank -> Guilds (昇順) -> 各種機能テーブル）のAST強制（`internal/database/lock_hierarchy_lint_test.go`）、共通2者間IDソート排他ロックユーティリティ（`id.Sort2`）、**横断的アプリケーション実行時プリミティブ層**（`docs/architecture/cross-domain-primitives.md`、`economy.TransactionRunner`、`economy.ExecuteTransaction`、`economy.Run[T]`）、インプロセス2フェーズドメインイベントディスパッチャ（`internal/core/event.Dispatcher`、In-Tx同期＋Post-Commit非同期）、標準エンティティファクトリおよび汎用並行ストレステストハーネス（`RunConcurrentStressTest`, `RunRace`, `RunRace2`）。`internal/economy/economy.go` は責務別に4ファイルへ分割リファクタリングされ500行制限をクリア（`whitelistedLegacyFileLimits` から完全除外）。
 - **Standardized Pagination & Common Utilities** (`internal/pagination`, `internal/id`, `internal/validation`, `internal/api/http/middleware`): 単一責務の共通パッケージ配置、暗号学的一意ID生成（`internal/id`）、汎用ジェネリックページネーション（`internal/pagination`、オフセット `Page[T]` およびキーセット・カーソル `CursorPage[T]`）。広場掲示板、冒険履歴、戦闘リプレイ、手紙、宅配便への水平展開。
 
 ### Feature Modules
@@ -43,7 +43,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Blacksmith** (`internal/blacksmith`): 鍛冶屋（+1〜+10装備強化、成功率曲線、`TransactionProvider` と行ロックによる費用・素材消費・インベントリ更新のアトミック整合性）。
 - **Alchemy** (`internal/alchemy`): 錬金術（112レシピ `recipes.json`）、素材合成（`TransactionProvider` と行ロックによる素材消費・合成物付与のアトミック整合性）。
 - **Bank** (`internal/bank`): 銀行（預金・引出・プレイヤー間送金、`FOR UPDATE` 排他ロック）。
-- **Inn** (`internal/inn`): 宿屋・休息（HP/MP全回復、`TransactionProvider` と行ロックによる宿泊費減算と全回復のアトミック整合性）。
+- **Inn** (`internal/inn`): 宿屋・休息（HP/MP全回復。横断的ランタイムプリミティブ `economy.TransactionRunner` / `ExecuteTransaction` へのパイロット移行完了。手動行ロック・SQLボイラープレートを完全排除し、決定論的ロック階層とHP/MP全回復のアトミック整合性を保証）。
 - **Guild** (`internal/guild`): ギルド設立（5,000 G）、階層役職管理（Leader, Officer, Member）、加入・脱退・追放・役職変更・リーダー権限譲渡、ゴールド寄付によるEXP獲得とレベルアップ（最大Lv10 / 定員拡大、行ロックによるロストアップデート防止）、お知らせ掲示板、単一ギルド所属制約。
 - **Casino** (`internal/casino`): カジノコイン両替（1 Coin = 20 G）、インディアンポーカー（セッション永続化 `casino_poker_sessions`、進行中カードマスキング、コール/勝負/降り）、スロットマシン（3リール・5絵柄、777 100倍ジャックポット、レート設定）、ドッペルゲンガー（8種マーク一致・倍率設定）、ハイロー（大小予測、倍々モード）。`DeductBetAndCreditPayout` による条件付きアトミックベット減算・配当付与トランザクション処理と行ロックによる並行性保護。
 - **Lottery & Raffle** (`internal/lottery`): 福引（通常3枚・特賞〜6等・ハズレ、裏福引300枚・各色オーブ）、定期4桁数字宝くじ（1等100,000 Gジャックポット、下3桁/2桁/1桁返還、所有権認可・トランザクション安全な当籤受取処理）。

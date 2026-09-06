@@ -10,6 +10,7 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/player"
@@ -28,6 +29,7 @@ type coreServices struct {
 	jobCatalog         *corejob.Catalog
 	charService        *character.Service
 	playerService      *player.Service
+	economy            *economy.Service
 }
 
 func newCoreServices(db *sql.DB, valkeyClient valkeygo.Client) (*coreServices, error) {
@@ -69,6 +71,11 @@ func newCoreServices(db *sql.DB, valkeyClient valkeygo.Client) (*coreServices, e
 		return nil, err
 	}
 
+	economyService, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProvider))
+	if err != nil {
+		return nil, err
+	}
+
 	return &coreServices{
 		txProvider:         txProvider,
 		charRepo:           charRepo,
@@ -80,6 +87,7 @@ func newCoreServices(db *sql.DB, valkeyClient valkeygo.Client) (*coreServices, e
 		dbMaintRepo:        dbMaintRepo,
 		itemCatalog:        itemCatalog,
 		jobCatalog:         jobCatalog,
+		economy:            economyService,
 	}, nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 // --- stub repository ---
@@ -235,5 +236,41 @@ func TestRest_ConcurrentRestPreventsOverdraft(t *testing.T) {
 	}
 	if finalChar.Money != 3 { // 8 - 5 = 3
 		t.Errorf("character money = %d, want 3", finalChar.Money)
+	}
+}
+
+func TestNewService_WithOptions(t *testing.T) {
+	char := newTestCharacter(5, 1, 30, 10, 100, 2)
+	repo := &stubRepo{character: char}
+
+	eco, err := economy.NewService(repo, &noopInventoryRepo{})
+	if err != nil {
+		t.Fatalf("unexpected error creating economy: %v", err)
+	}
+
+	// Test WithEconomy
+	svcEco, err := NewService(repo, WithEconomy(eco))
+	if err != nil {
+		t.Fatalf("unexpected error creating inn with economy: %v", err)
+	}
+	resEco, err := svcEco.Rest(context.Background(), char.ID)
+	if err != nil {
+		t.Fatalf("Rest() with economy error = %v", err)
+	}
+	if resEco.Stats.HP != resEco.Stats.MaxHP {
+		t.Errorf("HP = %d, want MaxHP %d", resEco.Stats.HP, resEco.Stats.MaxHP)
+	}
+
+	// Test WithTransactionRunner
+	svcRunner, err := NewService(repo, WithTransactionRunner(eco))
+	if err != nil {
+		t.Fatalf("unexpected error creating inn with runner: %v", err)
+	}
+	resRunner, err := svcRunner.Rest(context.Background(), char.ID)
+	if err != nil {
+		t.Fatalf("Rest() with runner error = %v", err)
+	}
+	if resRunner.Stats.HP != resRunner.Stats.MaxHP {
+		t.Errorf("HP = %d, want MaxHP %d", resRunner.Stats.HP, resRunner.Stats.MaxHP)
 	}
 }

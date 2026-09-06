@@ -5,6 +5,8 @@ import (
 	"errors"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 const (
@@ -24,6 +26,10 @@ type CharacterRepository interface {
 	Update(ctx context.Context, value corecharacter.Character) error
 }
 
+type TransactionRunner interface {
+	ExecuteTransaction(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error)
+}
+
 type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
@@ -36,9 +42,22 @@ func WithTransactionProvider(txProvider TransactionProvider) Option {
 	}
 }
 
+func WithTransactionRunner(runner TransactionRunner) Option {
+	return func(s *Service) {
+		s.runner = runner
+	}
+}
+
+func WithEconomy(eco *economy.Service) Option {
+	return func(s *Service) {
+		s.runner = eco
+	}
+}
+
 type Service struct {
 	characters  CharacterRepository
 	txProvider  TransactionProvider
+	runner      TransactionRunner
 	feePerLevel int
 }
 
@@ -57,6 +76,19 @@ func NewServiceWithFee(characters CharacterRepository, feePerLevel int, opts ...
 	for _, opt := range opts {
 		opt(s)
 	}
+
+	if s.runner == nil {
+		var ecoOpts []economy.Option
+		if s.txProvider != nil {
+			ecoOpts = append(ecoOpts, economy.WithTransactionProvider(s.txProvider))
+		}
+		eco, err := economy.NewService(characters, &noopInventoryRepo{}, ecoOpts...)
+		if err != nil {
+			return nil, err
+		}
+		s.runner = eco
+	}
+
 	return s, nil
 }
 
@@ -71,53 +103,44 @@ func (s *Service) CalculateFee(level int) int {
 	return fee
 }
 
-func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) error) error {
-	if s.txProvider != nil {
-		return s.txProvider.RunInTx(ctx, fn)
-	}
-	return fn(ctx)
-}
-
-func (s *Service) findCharacter(ctx context.Context, characterID string) (corecharacter.Character, error) {
-	if s.txProvider != nil {
-		return s.characters.FindByIDForUpdate(ctx, characterID)
-	}
-	return s.characters.FindByID(ctx, characterID)
-}
-
 func (s *Service) Rest(ctx context.Context, characterID string) (corecharacter.Character, error) {
 	if characterID == "" {
 		return corecharacter.Character{}, corecharacter.ErrNotFound
 	}
 
-	var updatedChar corecharacter.Character
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		char, err := s.findCharacter(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-
-		fee := s.CalculateFee(char.Level)
-		if char.Money < fee {
-			return ErrInsufficientFunds
-		}
-
-		if err := char.DeductMoney(fee); err != nil {
-			return ErrInsufficientFunds
-		}
-		char.Stats.HP = char.Stats.MaxHP
-		char.Stats.MP = char.Stats.MaxMP
-
-		if err := s.characters.Update(txCtx, char); err != nil {
-			return err
-		}
-
-		updatedChar = char
+	res, err := s.runner.ExecuteTransaction(ctx, economy.TransactionRequest{
+		CharacterID: characterID,
+		CostFunc: func(char corecharacter.Character) (economy.ResourceCost, error) {
+			return economy.ResourceCost{Gold: s.CalculateFee(char.Level)}, nil
+		},
+	}, func(tc *economy.TxContext) error {
+		tc.Character.Stats.HP = tc.Character.Stats.MaxHP
+		tc.Character.Stats.MP = tc.Character.Stats.MaxMP
 		return nil
 	})
 	if err != nil {
+		if errors.Is(err, economy.ErrInsufficientGold) {
+			return corecharacter.Character{}, ErrInsufficientFunds
+		}
+		if errors.Is(err, economy.ErrCharacterNotFound) {
+			return corecharacter.Character{}, corecharacter.ErrNotFound
+		}
 		return corecharacter.Character{}, err
 	}
 
-	return updatedChar, nil
+	return res.Character, nil
+}
+
+type noopInventoryRepo struct{}
+
+func (n *noopInventoryRepo) FindByCharacterID(_ context.Context, charID string) (coreinventory.Inventory, error) {
+	return coreinventory.New(charID)
+}
+
+func (n *noopInventoryRepo) FindByCharacterIDForUpdate(_ context.Context, charID string) (coreinventory.Inventory, error) {
+	return coreinventory.New(charID)
+}
+
+func (n *noopInventoryRepo) Save(_ context.Context, _ coreinventory.Inventory) error {
+	return nil
 }
