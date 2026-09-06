@@ -46,7 +46,7 @@ var (
 	ErrInvalidBaseRate  = errors.New("base rate must be between 1 and 5000")
 	ErrGameAlreadyOver  = errors.New("game is already finished")
 	ErrInvalidAction    = errors.New("invalid poker action")
-	ErrInsufficientCoin = errors.New("insufficient coins for bet")
+	ErrInsufficientCoin = ErrInsufficientCoins
 )
 
 type IndianPokerGame struct {

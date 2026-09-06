@@ -13,12 +13,14 @@ import (
 )
 
 type mockCasinoRepo struct {
-	getAccountFn      func(ctx context.Context, charID string) (casino.Account, error)
-	buyCoinsFn        func(ctx context.Context, charID string, coins int64, goldCost int) (casino.Account, corecharacter.Character, error)
-	sellCoinsFn       func(ctx context.Context, charID string, coins int64, goldReward int) (casino.Account, corecharacter.Character, error)
-	adjustFn          func(ctx context.Context, charID string, delta int64) (casino.Account, error)
-	deductAndCreditFn func(ctx context.Context, charID string, bet int64, payout int64) (casino.Account, error)
-	pokerGames        map[string]*casino.IndianPokerGame
+	getAccountFn         func(ctx context.Context, charID string) (casino.Account, error)
+	buyCoinsFn           func(ctx context.Context, charID string, coins int64, goldCost int) (casino.Account, corecharacter.Character, error)
+	sellCoinsFn          func(ctx context.Context, charID string, coins int64, goldReward int) (casino.Account, corecharacter.Character, error)
+	adjustFn             func(ctx context.Context, charID string, delta int64) (casino.Account, error)
+	deductAndCreditFn    func(ctx context.Context, charID string, bet int64, payout int64) (casino.Account, error)
+	savePokerGameFn      func(ctx context.Context, game casino.IndianPokerGame) error
+	getActivePokerGameFn func(ctx context.Context, charID string) (*casino.IndianPokerGame, error)
+	pokerGames           map[string]*casino.IndianPokerGame
 }
 
 func (m *mockCasinoRepo) GetAccount(ctx context.Context, charID string) (casino.Account, error) {
@@ -61,6 +63,9 @@ func (m *mockCasinoRepo) DeductBetAndCreditPayout(ctx context.Context, charID st
 }
 
 func (m *mockCasinoRepo) SavePokerGame(ctx context.Context, game casino.IndianPokerGame) error {
+	if m.savePokerGameFn != nil {
+		return m.savePokerGameFn(ctx, game)
+	}
 	if m.pokerGames == nil {
 		m.pokerGames = make(map[string]*casino.IndianPokerGame)
 	}
@@ -70,6 +75,9 @@ func (m *mockCasinoRepo) SavePokerGame(ctx context.Context, game casino.IndianPo
 }
 
 func (m *mockCasinoRepo) GetActivePokerGame(ctx context.Context, charID string) (*casino.IndianPokerGame, error) {
+	if m.getActivePokerGameFn != nil {
+		return m.getActivePokerGameFn(ctx, charID)
+	}
 	if m.pokerGames == nil {
 		return nil, nil
 	}
@@ -219,6 +227,201 @@ func TestCasinoService_IndianPokerLifecycle(t *testing.T) {
 	if newGame.BaseRate != 20 || newAcc.Coins != acc.Coins-20 {
 		t.Errorf("new game unexpected state: base_rate=%d, coins=%d", newGame.BaseRate, newAcc.Coins)
 	}
+}
+
+func TestCasinoService_PlayIndianPokerAction_EdgeCases(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("Invalid Character ID", func(t *testing.T) {
+		repo := &mockCasinoRepo{}
+		svc, _ := casino.NewService(repo)
+		_, _, err := svc.PlayIndianPokerAction(ctx, "", casino.ActionCall)
+		if !errors.Is(err, casino.ErrInvalidCharacterID) {
+			t.Errorf("expected ErrInvalidCharacterID, got %v", err)
+		}
+	})
+
+	t.Run("Invalid Action String", func(t *testing.T) {
+		repo := &mockCasinoRepo{}
+		svc, _ := casino.NewService(repo)
+		_, _, err := svc.PlayIndianPokerAction(ctx, "char1", "invalid_action")
+		if !errors.Is(err, casino.ErrInvalidAction) {
+			t.Errorf("expected ErrInvalidAction, got %v", err)
+		}
+	})
+
+	t.Run("No Active Poker Game", func(t *testing.T) {
+		repo := &mockCasinoRepo{}
+		svc, _ := casino.NewService(repo)
+		_, _, err := svc.PlayIndianPokerAction(ctx, "char1", casino.ActionCall)
+		if !errors.Is(err, casino.ErrNoActivePokerGame) {
+			t.Errorf("expected ErrNoActivePokerGame, got %v", err)
+		}
+	})
+
+	t.Run("GetAccountForUpdate Error", func(t *testing.T) {
+		repo := &mockCasinoRepo{
+			getAccountFn: func(_ context.Context, _ string) (casino.Account, error) {
+				return casino.Account{}, errors.New("db error")
+			},
+		}
+		svc, _ := casino.NewService(repo)
+		_, _, err := svc.PlayIndianPokerAction(ctx, "char1", casino.ActionCall)
+		if err == nil || err.Error() != "db error" {
+			t.Errorf("expected db error, got %v", err)
+		}
+	})
+
+	t.Run("GetActivePokerGame Error", func(t *testing.T) {
+		repo := &mockCasinoRepo{
+			getActivePokerGameFn: func(_ context.Context, _ string) (*casino.IndianPokerGame, error) {
+				return nil, errors.New("game db error")
+			},
+		}
+		svc, _ := casino.NewService(repo)
+		_, _, err := svc.PlayIndianPokerAction(ctx, "char1", casino.ActionCall)
+		if err == nil || err.Error() != "game db error" {
+			t.Errorf("expected game db error, got %v", err)
+		}
+	})
+
+	t.Run("Insufficient Coins for Call or Showdown", func(t *testing.T) {
+		repo := &mockCasinoRepo{
+			getAccountFn: func(_ context.Context, charID string) (casino.Account, error) {
+				return casino.Account{CharacterID: charID, Coins: 5}, nil
+			},
+		}
+		svc, _ := casino.NewService(repo)
+		// Active game with CurrentBet = 10
+		game, _ := casino.NewIndianPokerGame(10)
+		game.CharacterID = "char1"
+		repo.SavePokerGame(ctx, *game)
+
+		_, _, err := svc.PlayIndianPokerAction(ctx, "char1", casino.ActionCall)
+		if !errors.Is(err, casino.ErrInsufficientCoins) {
+			t.Errorf("expected ErrInsufficientCoins, got %v", err)
+		}
+	})
+
+	t.Run("Deduct Bet Error on Call", func(t *testing.T) {
+		repo := &mockCasinoRepo{
+			getAccountFn: func(_ context.Context, charID string) (casino.Account, error) {
+				return casino.Account{CharacterID: charID, Coins: 500}, nil
+			},
+			deductAndCreditFn: func(_ context.Context, _ string, bet, payout int64) (casino.Account, error) {
+				if bet > 0 {
+					return casino.Account{}, errors.New("deduct error")
+				}
+				return casino.Account{}, nil
+			},
+		}
+		svc, _ := casino.NewService(repo)
+		game, _ := casino.NewIndianPokerGame(10)
+		game.CharacterID = "char1"
+		repo.SavePokerGame(ctx, *game)
+
+		_, _, err := svc.PlayIndianPokerAction(ctx, "char1", casino.ActionCall)
+		if err == nil || err.Error() != "deduct error" {
+			t.Errorf("expected deduct error, got %v", err)
+		}
+	})
+
+	t.Run("Showdown: Player Wins", func(t *testing.T) {
+		var hookCalled bool
+		repo := &mockCasinoRepo{}
+		svc, _ := casino.NewService(repo)
+		svc.SetGamePlayedHook(func(_ context.Context, _ string, gameType string) error {
+			if gameType == "indian_poker" {
+				hookCalled = true
+			}
+			return nil
+		})
+
+		game, _ := casino.NewIndianPokerGame(10)
+		game.CharacterID = "char1"
+		game.PlayerCard = casino.Card{Suit: casino.SuitSpades, Rank: casino.RankTen}
+		game.DealerCard = casino.Card{Suit: casino.SuitHearts, Rank: casino.RankFive}
+		repo.SavePokerGame(ctx, *game)
+
+		finalGame, acc, err := svc.PlayIndianPokerAction(ctx, "char1", casino.ActionShowdown)
+		if err != nil {
+			t.Fatalf("Showdown error: %v", err)
+		}
+		if finalGame.Status != casino.StatusPlayerWon || finalGame.Winner != "player" {
+			t.Errorf("unexpected game status: status=%v, winner=%s", finalGame.Status, finalGame.Winner)
+		}
+		if finalGame.PayoutCoins <= 0 {
+			t.Errorf("expected payout > 0, got %d", finalGame.PayoutCoins)
+		}
+		if acc.Coins <= 0 {
+			t.Errorf("expected credited coins, got %d", acc.Coins)
+		}
+		if !hookCalled {
+			t.Errorf("expected gamePlayedHook to be called")
+		}
+	})
+
+	t.Run("Showdown: Dealer Wins", func(t *testing.T) {
+		repo := &mockCasinoRepo{}
+		svc, _ := casino.NewService(repo)
+
+		game, _ := casino.NewIndianPokerGame(10)
+		game.CharacterID = "char1"
+		game.PlayerCard = casino.Card{Suit: casino.SuitSpades, Rank: casino.RankThree}
+		game.DealerCard = casino.Card{Suit: casino.SuitHearts, Rank: casino.RankTen}
+		repo.SavePokerGame(ctx, *game)
+
+		finalGame, _, err := svc.PlayIndianPokerAction(ctx, "char1", casino.ActionShowdown)
+		if err != nil {
+			t.Fatalf("Showdown error: %v", err)
+		}
+		if finalGame.Status != casino.StatusDealerWon || finalGame.Winner != "dealer" {
+			t.Errorf("unexpected game status: status=%v, winner=%s", finalGame.Status, finalGame.Winner)
+		}
+		if finalGame.PayoutCoins != 0 {
+			t.Errorf("expected 0 payout, got %d", finalGame.PayoutCoins)
+		}
+	})
+
+	t.Run("Showdown: Tie / Draw", func(t *testing.T) {
+		repo := &mockCasinoRepo{}
+		svc, _ := casino.NewService(repo)
+
+		game, _ := casino.NewIndianPokerGame(10)
+		game.CharacterID = "char1"
+		game.PlayerCard = casino.Card{Suit: casino.SuitSpades, Rank: casino.RankSeven}
+		game.DealerCard = casino.Card{Suit: casino.SuitHearts, Rank: casino.RankSeven}
+		repo.SavePokerGame(ctx, *game)
+
+		finalGame, _, err := svc.PlayIndianPokerAction(ctx, "char1", casino.ActionShowdown)
+		if err != nil {
+			t.Fatalf("Showdown tie error: %v", err)
+		}
+		if finalGame.Status != casino.StatusTie || finalGame.Winner != "tie" {
+			t.Errorf("unexpected tie status: status=%v, winner=%s", finalGame.Status, finalGame.Winner)
+		}
+		if finalGame.PayoutCoins <= 0 {
+			t.Errorf("expected positive tie payout, got %d", finalGame.PayoutCoins)
+		}
+	})
+
+	t.Run("SavePokerGame Error", func(t *testing.T) {
+		repo := &mockCasinoRepo{
+			savePokerGameFn: func(_ context.Context, _ casino.IndianPokerGame) error {
+				return errors.New("save error")
+			},
+		}
+		svc, _ := casino.NewService(repo)
+
+		game, _ := casino.NewIndianPokerGame(10)
+		game.CharacterID = "char1"
+		repo.pokerGames = map[string]*casino.IndianPokerGame{"char1": game}
+
+		_, _, err := svc.PlayIndianPokerAction(ctx, "char1", casino.ActionFold)
+		if err == nil || err.Error() != "save error" {
+			t.Errorf("expected save error, got %v", err)
+		}
+	})
 }
 
 func TestCasinoService_SpinSlot(t *testing.T) {
