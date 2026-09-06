@@ -142,7 +142,19 @@ func (r *CasinoRepository) ExchangeCoinsToGold(ctx context.Context, characterID 
 	err := RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
 
-		// 1. Deduct coins from casino account
+		// 1. Lock character first to guarantee deterministic lock hierarchy (Rank 2 -> Rank 8)
+		var exists string
+		err := executor.QueryRowContext(txCtx, `
+			SELECT id
+			FROM characters
+			WHERE id = ?
+			FOR UPDATE
+		`, characterID).Scan(&exists)
+		if err != nil {
+			return err
+		}
+
+		// 2. Deduct coins from casino account (Rank 8)
 		res, err := executor.ExecContext(txCtx, `
 			UPDATE casino_accounts
 			SET coins = coins - ?
@@ -226,13 +238,54 @@ func (r *CasinoRepository) DeductBetAndCreditPayout(ctx context.Context, charact
 
 		// 2. If payout > 0, credit payout to account
 		if payout > 0 {
-			_, err := executor.ExecContext(txCtx, `
-				INSERT INTO casino_accounts (character_id, coins)
-				VALUES (?, ?)
-				ON DUPLICATE KEY UPDATE coins = coins + VALUES(coins)
-			`, characterID, payout)
-			if err != nil {
-				return err
+			if bet > 0 {
+				// Account already exists and is locked by step 1. Update coins directly
+				// without INSERT to avoid unnecessary FK shared lock inversion on characters.
+				_, err := executor.ExecContext(txCtx, `
+					UPDATE casino_accounts
+					SET coins = coins + ?
+					WHERE character_id = ?
+				`, payout, characterID)
+				if err != nil {
+					return err
+				}
+			} else {
+				// bet == 0: attempt UPDATE first
+				res, err := executor.ExecContext(txCtx, `
+					UPDATE casino_accounts
+					SET coins = coins + ?
+					WHERE character_id = ?
+				`, payout, characterID)
+				if err != nil {
+					return err
+				}
+				rows, err := res.RowsAffected()
+				if err != nil {
+					return err
+				}
+				if rows == 0 {
+					// Account does not exist yet. Lock character first (Rank 2) before INSERT
+					// to strictly satisfy lock hierarchy before InnoDB checks foreign key constraint.
+					var exists string
+					err := executor.QueryRowContext(txCtx, `
+						SELECT id
+						FROM characters
+						WHERE id = ?
+						FOR UPDATE
+					`, characterID).Scan(&exists)
+					if err != nil {
+						return err
+					}
+
+					_, err = executor.ExecContext(txCtx, `
+						INSERT INTO casino_accounts (character_id, coins)
+						VALUES (?, ?)
+						ON DUPLICATE KEY UPDATE coins = coins + VALUES(coins)
+					`, characterID, payout)
+					if err != nil {
+						return err
+					}
+				}
 			}
 		}
 

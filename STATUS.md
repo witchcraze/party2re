@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #426 — [Architecture] Blacksmith: Migrate equipment enhancement transactions to economy.TransactionRunner primitives
+Last updated: Issue #427 — [Architecture] Casino: Migrate wager settlement and coin exchange to economy.TransactionRunner primitives
 
 ## Current phase
 
@@ -45,7 +45,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Bank** (`internal/bank`): 銀行（預金・引出・プレイヤー間送金、`FOR UPDATE` 排他ロック）。
 - **Inn** (`internal/inn`): 宿屋・休息（HP/MP全回復。横断的ランタイムプリミティブ `economy.TransactionRunner` / `ExecuteTransaction` へのパイロット移行完了。手動行ロック・SQLボイラープレートを完全排除し、決定論的ロック階層とHP/MP全回復のアトミック整合性を保証）。
 - **Guild** (`internal/guild`): ギルド設立（5,000 G）、階層役職管理（Leader, Officer, Member）、加入・脱退・追放・役職変更・リーダー権限譲渡、ゴールド寄付によるEXP獲得とレベルアップ（最大Lv10 / 定員拡大、行ロックによるロストアップデート防止）、お知らせ掲示板、単一ギルド所属制約。
-- **Casino** (`internal/casino`): カジノコイン両替（1 Coin = 20 G）、インディアンポーカー（セッション永続化 `casino_poker_sessions`、進行中カードマスキング、コール/勝負/降り）、スロットマシン（3リール・5絵柄、777 100倍ジャックポット、レート設定）、ドッペルゲンガー（8種マーク一致・倍率設定）、ハイロー（大小予測、倍々モード）。`DeductBetAndCreditPayout` による条件付きアトミックベット減算・配当付与トランザクション処理と行ロックによる並行性保護。
+- **Casino** (`internal/casino`): カジノコイン両替（1 Coin = 20 G、横断的ランタイムプリミティブ `economy.TransactionRunner` / `ExecuteTransaction` への移行完了。手動行ロック・SQLボイラープレートを排除し、Rank 2 (`characters`) -> Rank 8 (`casino_accounts`) 決定論的ロック階層と通貨変換のアトミック整合性を保証）、インディアンポーカー（セッション永続化 `casino_poker_sessions`、進行中カードマスキング、コール/勝負/降り）、スロットマシン（3リール・5絵柄、777 100倍ジャックポット、レート設定）、ドッペルゲンガー（8種マーク一致・倍率設定）、ハイロー（大小予測、倍々モード）。`DeductBetAndCreditPayout` による条件付きアトミックベット減算・配当付与トランザクション処理（既存口座へのUPDATE最適化による外部キー共有ロック逆転防止）と50並行ワーカー・1,000操作の並行性ストレステストによる0デッドロック検証済み。
 - **Lottery & Raffle** (`internal/lottery`): 福引（通常3枚・特賞〜6等・ハズレ、裏福引300枚・各色オーブ）、定期4桁数字宝くじ（1等100,000 Gジャックポット、下3桁/2桁/1桁返還、所有権認可・トランザクション安全な当籤受取処理）。
 - **Farm & Plantation** (`internal/farm`): 4区画農園（種蒔き、水やり、肥料、実時間経過成熟判定・枯れ判定、収穫報酬精算）。Unit of Work トランザクション（`FOR UPDATE` 行ロック）によるアトミック化。
 - **Auction & Marketplace** (`internal/auction`): プレイヤー間アイテム出品、入札時のゴールドエスクロー、高値更新時の自動返金、即決購入、出品期間満了時の自動精算、出品キャンセル（所有権認可 403 Forbidden）、`FOR UPDATE` 排他ロック。

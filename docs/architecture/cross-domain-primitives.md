@@ -234,17 +234,48 @@ The Blacksmith domain migrated in Issue #426, demonstrating cross-resource trans
   ```
 - 0 manual row locks, guaranteed Rank 2 (`characters`) -> Rank 3 (`inventory_items`) lock order, atomic fee and catalyst consumption.
 
+## 8. Migrated Domain: Casino (`internal/casino`)
+
+The Casino domain migrated in Issue #427, demonstrating cross-domain currency conversions and wager settlements:
+
+### Before Migration
+- Manual `runInTx` orchestration for coin exchanges (`ExchangeGoldToCoins`, `ExchangeCoinsToGold`).
+- Potential lock inversion hazard: `ExchangeCoinsToGold` previously updated `casino_accounts` (Rank 8) before `characters` (Rank 2), while `ExchangeGoldToCoins` updated `characters` before `casino_accounts`.
+- Foreign key verification deadlock hazard on `casino_accounts (character_id) REFERENCES characters (id)` during payouts using `INSERT ... ON DUPLICATE KEY UPDATE` while holding `casino_accounts` locks.
+
+### After Migration
+- Injects `economy.TransactionRunner` (or `*economy.Service`) via `WithEconomy` / `WithTransactionRunner`.
+- `ExchangeGoldToCoins` executes transaction with `Cost.Gold: goldCost` and callback incrementing casino coins:
+  ```go
+  req := economy.TransactionRequest{
+      CharacterID: characterID,
+      Cost: economy.ResourceCost{Gold: goldCost},
+  }
+  res, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+      acc, err := s.repo.AdjustCoins(ctx, characterID, coins)
+      if err != nil {
+          return err
+      }
+      latestAcc = acc
+      return nil
+  })
+  ```
+- `ExchangeCoinsToGold` executes transaction with `Grant.Gold: goldReward` and callback decrementing casino coins.
+- Strict `balance >= cost` semantics across Slot, Indian Poker, Doppelganger, and HighLow games.
+- Deterministic lock order: `characters` (Rank 2) is ALWAYS locked before `casino_accounts` (Rank 8). In repository layer, `DeductBetAndCreditPayout` avoids `INSERT` during normal play when updating existing accounts, preventing implicit foreign key S-lock deadlocks.
+- Verified under 50 concurrent workers executing 1,000 mixed exchange and bet operations with 0 deadlocks.
+
 ---
 
-## 8. Migration Roadmap for Feature Domains
+## 9. Migration Roadmap for Feature Domains
 
-Following Inn and Blacksmith, remaining feature domains will migrate to the universal runner in subsequent issues:
+Following Inn, Blacksmith, and Casino, remaining feature domains will migrate to the universal runner in subsequent issues:
 
 | Domain | Scope | Status | Primary Benefit |
 |---|---|---|---|
 | **Inn** (`internal/inn`) | Resting HP/MP recovery, level-scaled fee | Migrated (#411) | Eliminates manual character row-locking and dynamic fee check |
 | **Blacksmith** (`internal/blacksmith`) | Equipment enhancement, upgrade materials | Migrated (#426) | Eliminates manual inventory + character dual locking and rollbacks |
-| **Casino** (`internal/casino`) | Poker, Slot, Doppelganger, HighLow bet & payout | Planned (#427) | Unifies coin exchange and wager settlement with strict balance checking |
+| **Casino** (`internal/casino`) | Poker, Slot, Doppelganger, HighLow bet & payout | Migrated (#427) | Unifies coin exchange and wager settlement with strict balance checking and deterministic lock order |
 | **Alchemy** (`internal/alchemy`) | Multi-ingredient consumption and item synthesis | Planned | Streamlines recipe validation and batch inventory deductions |
 | **Guild** (`internal/guild`) | Guild founding fee, Gold donations | Planned | Standardizes donation limits and deterministic locking |
 | **FleaMarket** (`internal/fleamarket`) | P2P item listing, purchase escrow | Planned | Two-party deterministic locking with `id.Sort2` and item transfer |
