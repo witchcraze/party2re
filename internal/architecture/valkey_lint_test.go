@@ -226,7 +226,10 @@ func TestValkeyNoBannedCommandsInLua(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() || !strings.HasSuffix(path, ".go") {
+		if info.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, ".lua") {
 			return nil
 		}
 
@@ -243,6 +246,20 @@ func TestValkeyNoBannedCommandsInLua(t *testing.T) {
 		}
 
 		parsedFiles++
+
+		if strings.HasSuffix(path, ".lua") {
+			upper := strings.ToUpper(string(src))
+			for _, cmd := range bannedLuaCommands {
+				if strings.Contains(upper, "REDIS.CALL('"+cmd+"'") ||
+					strings.Contains(upper, "REDIS.CALL(\""+cmd+"\"") ||
+					strings.Contains(upper, "REDIS.CALL('"+cmd+" ") ||
+					strings.Contains(upper, "REDIS.CALL(\""+cmd+" ") {
+					t.Errorf("banned Valkey command %s in Lua script detected at %s (prohibited by .agents/rules/05-database-and-caching.md Section 3.5)", cmd, path)
+				}
+			}
+			return nil
+		}
+
 		node, parseErr := parser.ParseFile(fset, path, src, 0)
 		if parseErr != nil {
 			t.Fatalf("failed to parse %s: %v", path, parseErr)
@@ -281,6 +298,74 @@ func TestValkeyNoBannedCommandsInLua(t *testing.T) {
 	}
 
 	t.Logf("Valkey Lua banned command linter verified %d files (%d parsed) in %s", checkedFiles, parsedFiles, time.Since(start))
+}
+
+func TestValkeyLuaScriptsAreEmbedded(t *testing.T) {
+	repoRoot := "../.."
+	internalDir := filepath.Join(repoRoot, "internal")
+
+	fset := token.NewFileSet()
+	checkedFiles := 0
+	start := time.Now()
+
+	err := filepath.Walk(internalDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+
+		// Verify that any .lua file resides in a "lua" subdirectory
+		if strings.HasSuffix(path, ".lua") {
+			parentDir := filepath.Base(filepath.Dir(path))
+			if parentDir != "lua" {
+				t.Errorf(".lua file %s must reside in a dedicated 'lua/' subdirectory (per .agents/rules/05-database-and-caching.md Section 3.7)", path)
+			}
+			return nil
+		}
+
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+
+		checkedFiles++
+
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		// Fast path
+		if !bytes.Contains(src, []byte("redis.call")) {
+			return nil
+		}
+
+		node, parseErr := parser.ParseFile(fset, path, src, 0)
+		if parseErr != nil {
+			t.Fatalf("failed to parse %s: %v", path, parseErr)
+		}
+
+		ast.Inspect(node, func(n ast.Node) bool {
+			lit, ok := n.(*ast.BasicLit)
+			if !ok || lit.Kind != token.STRING {
+				return true
+			}
+			if strings.Contains(lit.Value, "redis.call") {
+				pos := fset.Position(lit.Pos())
+				t.Errorf("inline Lua script detected at %s:%d; Lua scripts must reside in dedicated lua/*.lua files and be embedded via //go:embed (prohibited by .agents/rules/05-database-and-caching.md Section 3.7)", path, pos.Line)
+			}
+			return true
+		})
+
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("failed to walk internal directory: %v", err)
+	}
+
+	t.Logf("Valkey Lua embedding linter verified %d production Go files in %s", checkedFiles, time.Since(start))
 }
 
 func TestValkeyKeyspaceDocCoversLuaAndHashTags(t *testing.T) {
