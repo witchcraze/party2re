@@ -13,10 +13,18 @@ import (
 	"time"
 )
 
-// knownLegacyOrphanedMethods documents existing methods without active callers
-// that are preserved for backward compatibility or scheduled for cleanup in dedicated domain issues.
-// All legacy orphaned methods have been eliminated (#428). No new orphaned methods may be added.
+// knownLegacyOrphanedMethods was previously used to document legacy orphaned methods.
+// All legacy orphaned methods have been eliminated (#428). This map must remain empty (Issue #438).
+// Adding any entry to this map is permanently prohibited and guarded by TestDeadCodeZeroWhitelistRatchet.
 var knownLegacyOrphanedMethods = map[string]string{}
+
+// verifyZeroWhitelist returns an error if the whitelist contains any entries.
+func verifyZeroWhitelist(whitelist map[string]string) error {
+	if len(whitelist) > 0 {
+		return fmt.Errorf("knownLegacyOrphanedMethods must remain empty (found %d entries); whitelisting is permanently prohibited (Issue #438)", len(whitelist))
+	}
+	return nil
+}
 
 type methodTarget struct {
 	Key      string // e.g. "casino.Service.PlayIndianPokerRound"
@@ -176,6 +184,11 @@ func TestDeadCodeOrphanedMethods(t *testing.T) {
 	repoRoot := "../.."
 	start := time.Now()
 
+	// Issue #438: Strict zero-tolerance ratchet. Whitelist must remain empty.
+	if err := verifyZeroWhitelist(knownLegacyOrphanedMethods); err != nil {
+		t.Errorf("zero-whitelist ratchet violation: %v", err)
+	}
+
 	targets, err := collectTargetMethods(repoRoot)
 	if err != nil {
 		t.Fatalf("failed to collect target methods: %v", err)
@@ -211,11 +224,6 @@ func TestDeadCodeOrphanedMethods(t *testing.T) {
 			continue
 		}
 
-		// Check if known legacy orphan
-		if _, known := knownLegacyOrphanedMethods[target.Key]; known {
-			continue
-		}
-
 		relPath, _ := filepath.Rel(repoRoot, target.FilePath)
 		unhandledOrphans = append(unhandledOrphans, fmt.Sprintf("%s (%s:%d)", target.Key, relPath, target.Line))
 	}
@@ -229,9 +237,24 @@ func TestDeadCodeOrphanedMethods(t *testing.T) {
 		len(targets), len(repoFiles), time.Since(start), len(unhandledOrphans), len(knownLegacyOrphanedMethods))
 }
 
+func TestDeadCodeZeroWhitelistRatchet(t *testing.T) {
+	if err := verifyZeroWhitelist(knownLegacyOrphanedMethods); err != nil {
+		t.Fatalf("ratchet violation: %v", err)
+	}
+}
+
+func TestDeadCodeZeroWhitelistRatchetRejectsAdditions(t *testing.T) {
+	mockWhitelist := map[string]string{
+		"sample.Service.LegacyMethod": "prohibited bypass entry",
+	}
+	if err := verifyZeroWhitelist(mockWhitelist); err == nil {
+		t.Fatal("expected verifyZeroWhitelist to return error for non-empty whitelist, got nil")
+	}
+}
+
 func TestDeadCodeDetectorDetectsOrphan(t *testing.T) {
 	// Synthetic unit test validating that hasCaller correctly distinguishes between
-	// orphaned methods and called methods.
+	// orphaned methods and called methods for Service structs.
 	target := methodTarget{
 		Key:      "sample.Service.DoAction",
 		Pkg:      "sample",
@@ -256,5 +279,30 @@ func TestDeadCodeDetectorDetectsOrphan(t *testing.T) {
 	}
 	if !hasCaller(target, withCallerFiles) {
 		t.Error("expected hasCaller to return true when caller exists")
+	}
+
+	// Case 3: Repository interface method with no callers
+	repoTarget := methodTarget{
+		Key:      "sample.ItemRepository.FindByID",
+		Pkg:      "sample",
+		Type:     "ItemRepository",
+		Method:   "FindByID",
+		FilePath: "sample_repo.go",
+		Line:     5,
+	}
+	repoDeclOnlyFiles := map[string][]byte{
+		"sample_repo.go": []byte("package sample\n\ntype ItemRepository interface {\n\tFindByID(id string) error\n}\n"),
+	}
+	if hasCaller(repoTarget, repoDeclOnlyFiles) {
+		t.Error("expected hasCaller to return false when only interface method declaration exists")
+	}
+
+	// Case 4: Repository interface method with caller
+	repoWithCallerFiles := map[string][]byte{
+		"sample_repo.go": []byte("package sample\n\ntype ItemRepository interface {\n\tFindByID(id string) error\n}\n"),
+		"service.go":     []byte("package sample\n\nfunc (s *Service) Get(r ItemRepository, id string) { r.FindByID(id) }\n"),
+	}
+	if !hasCaller(repoTarget, repoWithCallerFiles) {
+		t.Error("expected hasCaller to return true when interface caller exists")
 	}
 }
