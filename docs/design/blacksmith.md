@@ -35,5 +35,5 @@ The Blacksmith (鍛冶屋) enables characters to upgrade equipment (weapons, arm
 - **Eligibility**: Only items with equipment slots (`Slot != SlotNone`) can be enhanced.
 - **Max Level**: Items at `+10` cannot be enhanced (`ErrMaxEnhancementReached`).
 - **Success**: Increases item enhancement level by 1, consumes required gold and materials.
-- **Failure**: Consumes required gold and materials without increasing enhancement level (equipment is preserved and not destroyed).
-- **Atomicity**: Character money deduction, material consumption, and item enhancement update occur atomically in a single database transaction (`*sql.Tx`).
+- **Atomicity**: Character money deduction, material consumption, and item enhancement update occur atomically via the universal runtime primitive `economy.TransactionRunner`, enforcing the global deterministic row-lock hierarchy (Rank 2 `characters` -> Rank 3 `inventory_items`).
+

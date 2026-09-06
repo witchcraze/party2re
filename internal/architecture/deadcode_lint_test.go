@@ -19,7 +19,6 @@ import (
 var knownLegacyOrphanedMethods = map[string]string{
 	"casino.Service.PlayIndianPokerRound":                 "superseded by PlayIndianPokerAction in PR #397; cleanup tracked in #287",
 	"casino.Service.SetTransactionProvider":               "unused transaction setter; cleanup tracked in #287",
-	"blacksmith.Service.SetMaterialDefinitionID":          "unused test setter; cleanup tracked in #287",
 	"helper.Service.SetRandomSource":                      "unused test setter; cleanup tracked in #287",
 	"boss.Service.GetCharacterRecord":                     "unused record query; cleanup tracked in #287",
 	"guild.Service.GetByCharacter":                        "unused query; cleanup tracked in #287",

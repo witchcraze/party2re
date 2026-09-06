@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #402 — [Chore] Battle: Increase core/battle package coverage to ≥ 90%
+Last updated: Issue #426 — [Architecture] Blacksmith: Migrate equipment enhancement transactions to economy.TransactionRunner primitives
 
 ## Current phase
 
@@ -40,7 +40,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Medal & Lifetime Achievements** (`internal/medal`): 小さなメダル交換所（減算消費方式、`economy.Service` 連携、`TransactionProvider` と行ロックによる完全アトミック整合性）、生涯マイルストーン実績・記念勲章コレクションシステム（オブザーバーフック連携による進捗自動記録、二重受取防止排他ロック、記念勲章・メダル報酬付与）。
 - **Shop** (`internal/shop`): アイテム売買（50%売却）、1回最大取引数量制限（`MaxTransactionQuantity = 9999`）、整数オーバーフロー安全乗算（`safeMultiply`）、`economy.Service` 連携、`TransactionProvider` と決定論的行ロック階層（`characters` -> `inventory_items`）による完全アトミック整合性。
 - **Depot** (`internal/depot`): 倉庫（アイテム・ゴールド預入・引出）、トランザクション整合性。
-- **Blacksmith** (`internal/blacksmith`): 鍛冶屋（+1〜+10装備強化、成功率曲線、`TransactionProvider` と行ロックによる費用・素材消費・インベントリ更新のアトミック整合性）。
+- **Blacksmith** (`internal/blacksmith`): 鍛冶屋（+1〜+10装備強化、成功率曲線、横断的ランタイムプリミティブ `economy.TransactionRunner` / `ExecuteTransaction` への移行完了。手動行ロック・SQLボイラープレートを完全排除し、Rank 2 (`characters`) -> Rank 3 (`inventory_items`) 決定論的ロック階層と費用・素材消費・インベントリ更新のアトミック整合性を保証）。
 - **Alchemy** (`internal/alchemy`): 錬金術（112レシピ `recipes.json`）、素材合成（`TransactionProvider` と行ロックによる素材消費・合成物付与のアトミック整合性）。
 - **Bank** (`internal/bank`): 銀行（預金・引出・プレイヤー間送金、`FOR UPDATE` 排他ロック）。
 - **Inn** (`internal/inn`): 宿屋・休息（HP/MP全回復。横断的ランタイムプリミティブ `economy.TransactionRunner` / `ExecuteTransaction` へのパイロット移行完了。手動行ロック・SQLボイラープレートを完全排除し、決定論的ロック階層とHP/MP全回復のアトミック整合性を保証）。

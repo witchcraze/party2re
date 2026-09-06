@@ -9,6 +9,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 type memoryCharRepo struct {
@@ -334,5 +335,183 @@ func TestConcurrentEnhance_MaterialConsumptionAtomic(t *testing.T) {
 	remainingMaterials := finalInv.Quantity(DefaultMaterialDefinitionID)
 	if remainingMaterials < 0 {
 		t.Fatalf("materials became negative: %d", remainingMaterials)
+	}
+}
+
+type mockTransactionRunner struct {
+	invRepo *memoryInvRepo
+	called  bool
+	req     economy.TransactionRequest
+}
+
+func (m *mockTransactionRunner) ExecuteTransaction(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error) {
+	m.called = true
+	m.req = req
+	inv, _ := m.invRepo.FindByCharacterID(ctx, req.CharacterID)
+	tc := &economy.TxContext{
+		Context:   ctx,
+		Character: corecharacter.Character{ID: req.CharacterID},
+		Inventory: inv,
+	}
+	if fn != nil {
+		if err := fn(tc); err != nil {
+			return nil, err
+		}
+	}
+	return &economy.TransactionResult{
+		Character: tc.Character,
+		Inventory: tc.Inventory,
+	}, nil
+}
+
+func TestWithTransactionRunner(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMemoryCharRepo()
+	invRepo := newMemoryInvRepo()
+
+	char, _ := corecharacter.New("Mock Runner Hero")
+	charRepo.characters[char.ID] = char
+
+	swordDef, _ := item.NewEquipmentDefinition("test_sword", "Test Sword", 100, item.SlotMainHand)
+	matDef, _ := item.NewDefinition(DefaultMaterialDefinitionID, "Upgrade Stone", 50)
+	catalog, _ := item.NewCatalog([]item.Definition{swordDef, matDef})
+
+	inv, _ := coreinventory.New(char.ID)
+	swordInst, _ := item.NewInstance("test_sword", 1)
+	matInst, _ := item.NewInstance(DefaultMaterialDefinitionID, 5)
+	_ = inv.Add(swordInst)
+	_ = inv.Add(matInst)
+	invRepo.inventories[char.ID] = inv
+
+	runner := &mockTransactionRunner{invRepo: invRepo}
+	service, err := NewService(charRepo, invRepo, catalog,
+		WithTransactionRunner(runner),
+		WithRandomSource(fixedRandSource{value: 0.0}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := service.EnhanceEquipment(ctx, char.ID, swordInst.ID)
+	if err != nil {
+		t.Fatalf("EnhanceEquipment() error = %v", err)
+	}
+	if !runner.called {
+		t.Error("expected mockTransactionRunner to be called")
+	}
+	if !runner.req.LockInventory {
+		t.Error("expected LockInventory to be true")
+	}
+	if runner.req.Cost.Gold != 50 || runner.req.Cost.ItemDefinitionQty != 1 {
+		t.Errorf("cost = %+v, want Gold: 50, MatQty: 1", runner.req.Cost)
+	}
+	if !res.Success || res.NewLevel != 1 {
+		t.Errorf("result = %+v, want Success: true, NewLevel: 1", res)
+	}
+}
+
+func TestWithEconomyOption(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMemoryCharRepo()
+	invRepo := newMemoryInvRepo()
+
+	char, _ := corecharacter.New("Economy Hero")
+	char.Money = 1000
+	charRepo.characters[char.ID] = char
+
+	swordDef, _ := item.NewEquipmentDefinition("test_sword", "Test Sword", 100, item.SlotMainHand)
+	matDef, _ := item.NewDefinition(DefaultMaterialDefinitionID, "Upgrade Stone", 50)
+	catalog, _ := item.NewCatalog([]item.Definition{swordDef, matDef})
+
+	inv, _ := coreinventory.New(char.ID)
+	swordInst, _ := item.NewInstance("test_sword", 1)
+	matInst, _ := item.NewInstance(DefaultMaterialDefinitionID, 5)
+	_ = inv.Add(swordInst)
+	_ = inv.Add(matInst)
+	invRepo.inventories[char.ID] = inv
+
+	eco, err := economy.NewService(charRepo, invRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	service, err := NewService(charRepo, invRepo, catalog,
+		WithEconomy(eco),
+		WithRandomSource(fixedRandSource{value: 0.0}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := service.EnhanceEquipment(ctx, char.ID, swordInst.ID)
+	if err != nil {
+		t.Fatalf("EnhanceEquipment() error = %v", err)
+	}
+	if !res.Success || res.NewLevel != 1 {
+		t.Fatalf("unexpected result: %#v", res)
+	}
+}
+
+func TestSetMaterialDefinitionID_CustomMaterial(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMemoryCharRepo()
+	invRepo := newMemoryInvRepo()
+
+	char, _ := corecharacter.New("Alchemist Hero")
+	char.Money = 1000
+	charRepo.characters[char.ID] = char
+
+	customMatID := "item-custom-gem"
+	swordDef, _ := item.NewEquipmentDefinition("test_sword", "Test Sword", 100, item.SlotMainHand)
+	matDef, _ := item.NewDefinition(customMatID, "Rare Gem", 50)
+	catalog, _ := item.NewCatalog([]item.Definition{swordDef, matDef})
+
+	inv, _ := coreinventory.New(char.ID)
+	swordInst, _ := item.NewInstance("test_sword", 1)
+	matInst, _ := item.NewInstance(customMatID, 3)
+	_ = inv.Add(swordInst)
+	_ = inv.Add(matInst)
+	invRepo.inventories[char.ID] = inv
+
+	service, _ := NewService(charRepo, invRepo, catalog,
+		WithRandomSource(fixedRandSource{value: 0.0}),
+	)
+	service.SetMaterialDefinitionID(customMatID)
+
+	res, err := service.Enhance(ctx, char.ID, swordInst.ID)
+	if err != nil {
+		t.Fatalf("Enhance() error = %v", err)
+	}
+	if !res.Success || res.NewLevel != 1 {
+		t.Fatalf("unexpected result: %#v", res)
+	}
+
+	updatedInv, _ := invRepo.FindByCharacterID(ctx, char.ID)
+	if updatedInv.Quantity(customMatID) != 2 {
+		t.Errorf("custom material quantity = %d, want 2", updatedInv.Quantity(customMatID))
+	}
+}
+
+func TestEnhance_CharacterNotFound(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMemoryCharRepo()
+	invRepo := newMemoryInvRepo()
+
+	swordDef, _ := item.NewEquipmentDefinition("test_sword", "Test Sword", 100, item.SlotMainHand)
+	matDef, _ := item.NewDefinition(DefaultMaterialDefinitionID, "Upgrade Stone", 50)
+	catalog, _ := item.NewCatalog([]item.Definition{swordDef, matDef})
+
+	inv, _ := coreinventory.New("missing-char")
+	swordInst, _ := item.NewInstance("test_sword", 1)
+	matInst, _ := item.NewInstance(DefaultMaterialDefinitionID, 5)
+	_ = inv.Add(swordInst)
+	_ = inv.Add(matInst)
+	invRepo.inventories["missing-char"] = inv
+
+	service, _ := NewService(charRepo, invRepo, catalog)
+
+	_, err := service.EnhanceEquipment(ctx, "missing-char", swordInst.ID)
+	if !errors.Is(err, corecharacter.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 }

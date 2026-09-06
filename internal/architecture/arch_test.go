@@ -117,14 +117,14 @@ func TestArchitectureGuidanceSymbols(t *testing.T) {
 				verifySymbolExists(t, targetFullPath, targetSymbol)
 			}
 
-			// Verify transaction boundary RunInTx presence
+			// Verify transaction boundary RunInTx or ExecuteTransaction presence
 			for _, boundary := range doc.TransactionBoundaries {
-				if boundary.TransactionType == "RunInTx" && boundary.SourceRef != "" {
+				if (boundary.TransactionType == "RunInTx" || boundary.TransactionType == "ExecuteTransaction") && boundary.SourceRef != "" {
 					verifyRunInTxBoundary(t, repoRoot, boundary.SourceRef)
 				}
 			}
 			for _, flow := range doc.TransactionFlows {
-				if flow.TxMode == "RunInTx" && flow.SourceRef != "" {
+				if (flow.TxMode == "RunInTx" || flow.TxMode == "ExecuteTransaction") && flow.SourceRef != "" {
 					verifyRunInTxBoundary(t, repoRoot, flow.SourceRef)
 				}
 			}
@@ -323,9 +323,9 @@ func verifyRunInTxBoundary(t *testing.T, repoRoot, sourceRef string) {
 		return
 	}
 
-	// Fast path: if the file does not contain RunInTx or targetName, fail fast
-	if !bytes.Contains(src, []byte("RunInTx")) {
-		t.Errorf("file %s does not contain RunInTx", fullPath)
+	// Fast path: if the file does not contain a transaction boundary primitive, fail fast
+	if !bytes.Contains(src, []byte("RunInTx")) && !bytes.Contains(src, []byte("runInTx")) && !bytes.Contains(src, []byte("ExecuteTransaction")) {
+		t.Errorf("file %s does not contain RunInTx or ExecuteTransaction", fullPath)
 		return
 	}
 	if !bytes.Contains(src, []byte(targetName)) {
@@ -378,7 +378,7 @@ func verifyRunInTxBoundary(t *testing.T, repoRoot, sourceRef string) {
 	}
 
 	if !hasRunInTxCall(targetFunc.Body) {
-		t.Errorf("transaction boundary method %q in %s is declared with RunInTx, but contains no RunInTx call in AST body", targetSymbol, fullPath)
+		t.Errorf("transaction boundary method %q in %s is declared as transactional, but contains no RunInTx or ExecuteTransaction call in AST body", targetSymbol, fullPath)
 	}
 }
 
@@ -395,12 +395,12 @@ func hasRunInTxCall(body *ast.BlockStmt) bool {
 
 		switch fun := call.Fun.(type) {
 		case *ast.Ident:
-			if fun.Name == "RunInTx" || fun.Name == "runInTx" {
+			if fun.Name == "RunInTx" || fun.Name == "runInTx" || fun.Name == "ExecuteTransaction" {
 				found = true
 				return false
 			}
 		case *ast.SelectorExpr:
-			if fun.Sel.Name == "RunInTx" || fun.Sel.Name == "runInTx" {
+			if fun.Sel.Name == "RunInTx" || fun.Sel.Name == "runInTx" || fun.Sel.Name == "ExecuteTransaction" {
 				found = true
 				return false
 			}
