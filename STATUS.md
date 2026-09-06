@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #427 — [Architecture] Casino: Migrate wager settlement and coin exchange to economy.TransactionRunner primitives
+Last updated: Issue #429 — [Chore] Architecture: Decompose oversized domain files internal/tavern and internal/boss below 500-line limits
 
 ## Current phase
 
@@ -18,7 +18,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ### Architecture & Repository Intelligence (Guidance Layer - PoC)
 - **Guidance Layer (.arch/)**: シンボルアンカー（`path#Symbol`）ベースのモジュール詳細定義（`.arch/modules/*.json`）、共有テーブル逆引きインデックス（`.arch/shared_tables/*.json`、`characters`, `inventory_items`, `bank_accounts`, `guilds`）、Mermaid全体トポロジー図（`docs/architecture/guidance-layer.md`）。外部依存不要のGo + JSON + Markdown構成。
 - **Module Selection Criteria & Target Tiers**: 4つの選定基準（C1: トランザクション深度, C2: 行ロック階層, C3: エスクロー/共有状態, C4: 非同期Worker）に基づくトリアージ。Tier 1（高リスク8機能: `tavern`, `delivery`, `bank`, `auction`, `guild`, `shop`, `blacksmith`, `adventure`）、Tier 2（オンデマンド）、Tier 3（除外）の運用スコープを確立。
-- **Automated Mechanical Verification**: Go AST シンボルリント（`internal/architecture/arch_test.go`）による高速静的シンボル実在性チェック、`RunInTx` 呼び出し実在検証、本番ファイル行数リミット（生産コード ≤ 500行、`cmd/*/main.go` ≤ 150行）のラチェット方式自動ガード（`internal/architecture/file_size_lint_test.go`）、および孤立メソッド・未使用定数・未使用DTO構造体フィールドの機械的デッドコード検知（`internal/architecture/deadcode_lint_test.go`, `internal/architecture/unused_definitions_lint_test.go`）（`make check` / `make arch-lint` 統合）。
+- **Automated Mechanical Verification**: Go AST シンボルリント（`internal/architecture/arch_test.go`）による高速静的シンボル実在性チェック、`RunInTx` 呼び出し実在検証、本番ファイル行数リミット（生産コード ≤ 500行、`cmd/*/main.go` ≤ 150行）のラチェット方式自動ガード（`internal/architecture/file_size_lint_test.go`）、および孤立メソッド・未使用定数・未使用DTO構造体フィールドの機械的デッドコード検知（`internal/architecture/deadcode_lint_test.go`, `internal/architecture/unused_definitions_lint_test.go`）（`make check` / `make arch-lint` 統合）。`internal/tavern/tavern.go`（620行→210行）および `internal/boss/boss.go`（633行→228行）の分割リファクタリングにより500行制限をクリアし、`whitelistedLegacyFileLimits` は13から11ファイルへラチェットダウン。
 - **Continuous Performance Verification & Benchmark Framework (`docs/development/benchmarking.md`)**: クリティカルパス（AST静的解析リント、戦闘シミュレーション、Valkeyセッション操作）を網羅する `Benchmark*` スイート、標準実行スクリプト（`scripts/benchmark.sh`）、`Makefile` ターゲット（`make bench`）、およびベースライン比較・リグレッション自動検知CLI（`scripts/compare_benchmarks.go`）。
 - **Valkey Keyspace Taxonomy & Operational SSOT (`docs/architecture/valkey-keyspace.md`)**: システム全体のValkeyキー空間（`party2:<namespace>:<entity>[:<id>]`）、TTLポリシー、所有モジュール、Luaスクリプト運用基準（1ms未満バジェット、O(log N)上限、`KEYS *` 禁止、Cluster Hash Tagging `{...}` 規約、インメモリ等価性、`lua/*.lua` 外部ファイル化・`//go:embed` コンパイル時埋め込み）、TTLスコア付きSorted Set（ZSET）遅延パージ標準。Go ASTリンター（`internal/architecture/valkey_lint_test.go`）により機械的検証。
 - **Core Domain Invariant Static Analysis Linter Suite**: Go AST 静的構文解析リンター（`internal/core/core_lint_test.go`）による全生産コードファイルの検査。Progression、Currency & Economy、Job State、Inventory、Equipment、Battle Participant Identityの全6重要ドメイン不変条件に対する直接構造体フィールド操作を機械的に禁止し、Core標準カプセル化ヘルパー経由の操作を100%強制。
@@ -53,7 +53,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Chapel & Blessings** (`internal/chapel`): 教会（祈り・祝福登録、ゴールド寄付、戦闘・冒険報酬バフ補正計算）。
 - **Player versus Player Arena** (`internal/pvp`): 闘技場・対人対戦（PvP、標準Eloレーティング K=32/初期1000、近傍マッチメイキング・同一アカウント談合防止、勝敗・対戦履歴・防衛ログ永続化、経験値・ゴールド報酬）。
 - **Guild versus Guild Combat** (`internal/gvg`): ギルド対抗戦（GvG、標準Eloレーティング K=32/初期1000、5段階勝利メダル・王者杯昇格システム、ギルドポイントGP、ギルドEXP獲得・レベルアップ連動、対戦履歴永続化）。
-- **King & World Boss Battles** (`internal/boss`): 封印戦・ワールドボス（全10段階キングボス＋太古の創世神Tier、レベル制限・前提段階クリア・1日3回挑戦制限、初回討伐ボーナス・ドロップ報酬、討伐数リーダーボード、挑戦履歴永続化、討伐時のイベント広場祝宴連動）。
+- **King & World Boss Battles** (`internal/boss`): 封印戦・ワールドボス（全10段階キングボス＋太古の創世神Tier、レベル制限・前提段階クリア・1日3回挑戦制限、初回討伐ボーナス・ドロップ報酬、討伐数リーダーボード、挑戦履歴永続化、討伐時のイベント広場祝宴連動。ファイルサイズ上限遵守のため `catalog.go`, `records.go`, `battle.go`, `boss.go` に責務分割完了）。
 - **Dungeon Exploration** (`internal/dungeon`): ダンジョン探索（多層グリッドマップ探索、モンスター遭遇戦闘、トラップ・宝箱イベント、階段降下、フロアボス決戦、一時報酬台帳バッファリングと脱出・踏破時の一括アトミック確定、全滅時戦利品没収、探索履歴永続化）。Valkey Master による進行中探索状態バッファリング（Candidate D、`party2:dungeon:{char:<id>}:state|rewards`、スライディング2時間TTL、アトミックLuaスクリプト `dungeon_step.lua`、探索中SQL書き込み完全ゼロ化、Two-Phase Settlement によるMariaDB確定後パージ）。
 - **Battle Replays & Match History** (`internal/replay`): 戦闘リプレイ・対戦履歴（全戦闘モードのターン別アクションログ・ダメージ値・残りHPスナップショットの記録・忠実再生、標準化レコーダー、プレイヤー別履歴・全体最新一覧（キーセット・カーソル対応）、自動プルーニング）。
 - **Continuous Endurance Challenge** (`internal/challenge`): 連戦チャレンジ・サバイバル戦闘（全4段階Tier `challenge_tiers.json`、ラウンド進行に伴う累進スケーリング、インターラウンドHP回復、マイルストーンアイテムドロップ、途中撤退全額確定 vs 敗北50%救済、リーダーボード、所有権認可）。Valkey Master による進行中セッションバッファリング（Candidate D、`party2:challenge:{char:<id>}:session|rewards`、スライディング2時間TTL、アトミックLuaスクリプト `challenge_round.lua`、ラウンド進行中SQL書き込み完全ゼロ化、Two-Phase Settlement によるMariaDB確定後パージ）。
@@ -65,7 +65,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Player Leaderboards & Character Rankings** (`internal/ranking`): ランキング・リーダーボード（12カテゴリ、決定論的タイブレーク・ページネーション、インメモリTTLキャッシュ、Valkey分散スナップショットキャッシュ、Singleflightキャッシュスタンピード抑止、定期更新Workerアクション、永続スナップショット `ranking_snapshots`）。
 - **Event Plaza, Traveling Merchant Bazaar & Victory Banquets** (`internal/eventplaza`): イベント広場・行商人バザー＆ボス討伐祝宴（人口連動行商人Tier判定、希少アイテムバザーカタログ `bazaar.json`、アトミック購入トランザクション、ボス討伐連動祝宴・乾杯参加ゴールド報酬・重複乾杯防止 `banquet_toasts`、キャラクター所有権検証）。
 - **Secret Underground Shop & NPC @ヒミツジ** (`internal/secretshop`): 秘密の店（資格判定 Lv15以上または転生者、希少消費アイテムカタログ `secret_items.json`、3倍価格プレミアム設定、アトミック購入トランザクション、NPC会話・詳細情報・ぱふぱふサービス回復）。
-- **Adventurer's Tavern, Menu Orders, Delivery Reservations & NPC @エレナ** (`internal/tavern`): 冒険者の酒場（14種飲食メニューカタログ `menu.json`、HP/MP回復＆満腹度管理、購入時福引券ボーナス付与、冒険後自動回復デリバリー予約・受取・キャンセル機能、NPC会話）。
+- **Adventurer's Tavern, Menu Orders, Delivery Reservations & NPC @エレナ** (`internal/tavern`): 冒険者の酒場（14種飲食メニューカタログ `menu.json`、HP/MP回復＆満腹度管理、購入時福引券ボーナス付与、冒険後自動回復デリバリー予約・受取・キャンセル機能、NPC会話。ファイルサイズ上限遵守のため `dialogue.go`, `delivery.go`, `order.go`, `tavern.go` に責務分割完了）。
 - **Town Black Market, Contraband Trading, Dynamic Pricing & NPC @ヤミジ** (`internal/blackmarket`): 裏路地の闇市（資格判定 Lv10以上、10種禁制品カタログ `blackmarket_items.json`、4種市場相場状態、1日購入制限クォータ、レアアイテム捧げものリサイクル `SacrificeItem`、限定景品交換 `TradePrize`、アトミックトランザクション）。
 - **Town Delivery Quests & Player Courier Service** (`internal/delivery`): 町のでりばりー依頼＆プレイヤー間宅配便（NPC配送依頼、最大3件同時受領、報酬アトミック精算、およびプレイヤー間宅配便、手数料50 G、受取待ち・発送履歴（キーセット・カーソル対応）、受取・発送キャンセル/返金、CAS条件付きステータス更新 `WHERE id = ? AND status = 'pending'` による二重処理防止）。
 - **Flea Market & Player Item Stalls** (`internal/fleamarket`): フリーマーケット＆露店取引（最大5件同時出品、1〜999,999 G固定価格出品、出品時インベントリ消費・キャンセル時安全返却、ID昇順排他ロックによるデッドロック防止、SQL CAS述語 `WHERE id = ? AND status = 'active'` と `RowsAffected() == 1` 検証によるアトミック移転）。
