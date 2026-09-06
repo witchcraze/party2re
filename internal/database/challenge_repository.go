@@ -278,25 +278,35 @@ func (r *ChallengeRepository) FinalizeSession(ctx context.Context, s challenge.C
 
 		// 1. Update session status
 		itemsJSON := challenge.EncodeJSON(s.AccumulatedItems)
-		updateSessionQuery := `
-			UPDATE challenge_sessions
-			SET current_round = ?, character_current_hp = ?, accumulated_exp = ?,
-			    accumulated_gold = ?, accumulated_items_json = ?, status = ?,
-			    updated_at = ?
-			WHERE id = ? AND character_id = ?
+		upsertSessionQuery := `
+			INSERT INTO challenge_sessions (
+				id, character_id, tier_id, current_round, character_current_hp,
+				accumulated_exp, accumulated_gold, accumulated_items_json, status,
+				created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON DUPLICATE KEY UPDATE
+				current_round = VALUES(current_round),
+				character_current_hp = VALUES(character_current_hp),
+				accumulated_exp = VALUES(accumulated_exp),
+				accumulated_gold = VALUES(accumulated_gold),
+				accumulated_items_json = VALUES(accumulated_items_json),
+				status = VALUES(status),
+				updated_at = VALUES(updated_at)
 		`
 		if _, err := executor.ExecContext(
 			txCtx,
-			updateSessionQuery,
+			upsertSessionQuery,
+			s.ID,
+			s.CharacterID,
+			s.TierID,
 			s.CurrentRound,
 			s.CharacterCurrentHP,
 			s.AccumulatedExp,
 			s.AccumulatedGold,
 			itemsJSON,
 			string(s.Status),
+			s.CreatedAt,
 			s.UpdatedAt,
-			s.ID,
-			s.CharacterID,
 		); err != nil {
 			return err
 		}

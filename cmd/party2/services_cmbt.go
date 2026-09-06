@@ -97,7 +97,16 @@ func newCmbtServices(
 	if err != nil {
 		return nil, err
 	}
-	challengeService, err := challenge.NewService(challengeRepo, core.charRepo, battleEngine)
+	valkeyChallengeStore, err := challenge.NewValkeySessionRepository(valkeyClient)
+	if err != nil {
+		return nil, err
+	}
+	challengeService, err := challenge.NewService(
+		challengeRepo,
+		core.charRepo,
+		battleEngine,
+		challenge.WithActiveSessionStore(valkeyChallengeStore),
+	)
 	if err != nil {
 		return nil, err
 	}
