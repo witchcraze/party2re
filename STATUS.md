@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #419 — [Chore] Tooling: Extend AST dead code linter to detect unused constants, enums, and DTO struct fields
+Last updated: Issue #404 — [Feature] Dungeon: Migrate active dungeon exploration state buffers to Valkey Master
 
 ## Current phase
 
@@ -54,7 +54,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Player versus Player Arena** (`internal/pvp`): 闘技場・対人対戦（PvP、標準Eloレーティング K=32/初期1000、近傍マッチメイキング・同一アカウント談合防止、勝敗・対戦履歴・防衛ログ永続化、経験値・ゴールド報酬）。
 - **Guild versus Guild Combat** (`internal/gvg`): ギルド対抗戦（GvG、標準Eloレーティング K=32/初期1000、5段階勝利メダル・王者杯昇格システム、ギルドポイントGP、ギルドEXP獲得・レベルアップ連動、対戦履歴永続化）。
 - **King & World Boss Battles** (`internal/boss`): 封印戦・ワールドボス（全10段階キングボス＋太古の創世神Tier、レベル制限・前提段階クリア・1日3回挑戦制限、初回討伐ボーナス・ドロップ報酬、討伐数リーダーボード、挑戦履歴永続化、討伐時のイベント広場祝宴連動）。
-- **Dungeon Exploration** (`internal/dungeon`): ダンジョン探索（多層グリッドマップ探索、モンスター遭遇戦闘、トラップ・宝箱イベント、階段降下、フロアボス決戦、一時報酬台帳バッファリングと脱出・踏破時の一括アトミック確定、全滅時戦利品没収、探索履歴永続化）。
+- **Dungeon Exploration** (`internal/dungeon`): ダンジョン探索（多層グリッドマップ探索、モンスター遭遇戦闘、トラップ・宝箱イベント、階段降下、フロアボス決戦、一時報酬台帳バッファリングと脱出・踏破時の一括アトミック確定、全滅時戦利品没収、探索履歴永続化）。Valkey Master による進行中探索状態バッファリング（Candidate D、`party2:dungeon:{char:<id>}:state|rewards`、スライディング2時間TTL、アトミックLuaスクリプト `dungeon_step.lua`、探索中SQL書き込み完全ゼロ化、Two-Phase Settlement によるMariaDB確定後パージ）。
 - **Battle Replays & Match History** (`internal/replay`): 戦闘リプレイ・対戦履歴（全戦闘モードのターン別アクションログ・ダメージ値・残りHPスナップショットの記録・忠実再生、標準化レコーダー、プレイヤー別履歴・全体最新一覧（キーセット・カーソル対応）、自動プルーニング）。
 - **Continuous Endurance Challenge** (`internal/challenge`): 連戦チャレンジ・サバイバル戦闘（全4段階Tier `challenge_tiers.json`、ラウンド進行に伴う累進スケーリング、インターラウンドHP回復、マイルストーンアイテムドロップ、途中撤退全額確定 vs 敗北50%救済、リーダーボード、所有権認可）。
 - **Custom Skill Loadout & Slot Management** (`internal/custom_skill`): カスタムスキル・スロット管理（JSONスキルカタログ `skills.json`、現在職・マスター職・宝石汎用スキルの装備制限バリデーション、スロット枠数管理、発動優先度 1〜10、重複装備防止）。
@@ -82,7 +82,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### Infrastructure & Operations
 - **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `054_casino_poker_sessions.sql`、`make db-migrate` / `make db-reset`、永続権威 MariaDB Master、コネクションプール設定 `MaxOpenConns`・`MaxIdleConns`・`ConnMaxLifetime`・`ConnMaxIdleTime` の環境変数設定対応）。
-- **Valkey**: 遅延アクションキュー・排他ロック・分散レートリミット・ランキングスナップショットキャッシュ（AOF+RDB永続化）。RFC #356 に基づく揮発性ステートのプライマリストア（Valkey Master: セッション、メンテナンス状態、待機ロビー）境界策定。統一キー空間仕様（SSOT: `docs/architecture/valkey-keyspace.md`）策定および AST 機械検証（`internal/architecture/valkey_lint_test.go`）。Lua スクリプト運用基準・Hash Tagging 規約・インメモリ等価性 SSOT 策定。一時ランバッファ（ダンジョン探索・連戦サバイバル）のValkey Master移行評価・Luaスクリプト契約（SSOT: `docs/architecture/transient-run-state.md`）。ワールドボスHPのリアルタイム共有HP低減PoC完了（SSOT: `docs/architecture/transient-boss-hp.md`）。
+- **Valkey**: 遅延アクションキュー・排他ロック・分散レートリミット・ランキングスナップショットキャッシュ（AOF+RDB永続化）。RFC #356 に基づく揮発性ステートのプライマリストア（Valkey Master: セッション、メンテナンス状態、待機ロビー、ダンジョン進行中バッファ）境界策定。統一キー空間仕様（SSOT: `docs/architecture/valkey-keyspace.md`）策定および AST 機械検証（`internal/architecture/valkey_lint_test.go`）。Lua スクリプト運用基準・Hash Tagging 規約・インメモリ等価性 SSOT 策定。一時ランバッファ（Candidate D: ダンジョン探索完了 #404・連戦サバイバル #405）のValkey Master移行およびLuaスクリプト契約（SSOT: `docs/architecture/transient-run-state.md`）。ワールドボスHPのリアルタイム共有HP低減PoC完了（SSOT: `docs/architecture/transient-boss-hp.md`）。
 - **Logging**: Go標準 `log/slog` によるJSON構造化ログ、秘密情報自動マスキング。
 - **Verification**: `Makefile` (`make check`, `make fmt`, `make vet`, `make lock-lint`, `make openapi-sync`, `make openapi-check`, `make openapi-scaffold`, `make test-stress`, `make bench`, `make check-clean`)、OpenAPI 3.1 仕様書自動同期 CLI（`scripts/sync_openapi.go`）、CIガード、Go AST 静的解析テストスイート（トランザクション伝播、行ロック階層順序、サービス層 `RunInTx`、Valkey キー空間仕様＆`KEYS *` 禁止、Luaスクリプト外部ファイル化＆埋め込み保証、HTTP 所有権認可、Core ドメイン不変条件、未参照・孤立メソッド／未使用定数／未使用DTO構造体フィールドのデッドコード機械検知、本番ファイル行数・エントリポイントサイズ制約（生産 ≤ 500行、main.go ≤ 150行）のラチェット自動検査、全リンターへの高速バイト事前フィルタ適用）。
 - **Deployment**: Distroless (`gcr.io/distroless/static-debian13:nonroot`) ベースの最小本番イメージ（GHCR自動公開）。
@@ -92,7 +92,6 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ## Immediate Priorities (Next Actions)
 
 1. **Transient State Migration & Refactoring**:
-   - Issue #404: Migrate active dungeon expedition state buffer to Valkey Master (Candidate D)
    - Issue #405: Migrate active challenge session buffer to Valkey Master (Candidate D)
    - Issue #411: Establish cross-domain application runtime primitives to abstract currency, item, locking, and event rules
 2. **Client Presentation & Web UI**:

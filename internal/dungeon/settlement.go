@@ -15,7 +15,7 @@ func (s *Service) Escape(ctx context.Context, characterID string) (ExpeditionSte
 	if characterID == "" {
 		return ExpeditionStepResult{}, ErrCharacterNotFound
 	}
-	exp, err := s.repo.GetActiveExpedition(ctx, characterID)
+	exp, err := s.activeStore.GetActiveExpedition(ctx, characterID)
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
@@ -84,10 +84,13 @@ func (s *Service) handleDungeonClear(
 		CreatedAt:        now,
 	}
 
+	// Two-Phase Settlement: commit durable state to MariaDB first
 	if err := s.repo.FinalizeExpedition(ctx, history, rec, char, rewardItems); err != nil {
 		return ExpeditionStepResult{}, err
 	}
 
+	// Upon successful MariaDB commit, purge transient buffer from Valkey Master
+	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
 	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
 
 	return ExpeditionStepResult{
@@ -147,10 +150,13 @@ func (s *Service) handleEscape(
 		CreatedAt:        now,
 	}
 
+	// Two-Phase Settlement: commit durable state to MariaDB first
 	if err := s.repo.FinalizeExpedition(ctx, history, rec, char, rewardItems); err != nil {
 		return ExpeditionStepResult{}, err
 	}
 
+	// Upon successful MariaDB commit, purge transient buffer from Valkey Master
+	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
 	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
 
 	return ExpeditionStepResult{
@@ -191,10 +197,13 @@ func (s *Service) handleWipeout(
 	}
 
 	// Wiping out forfeits unbanked ledger rewards (0 EXP, 0 Gold, 0 items awarded)
+	// Two-Phase Settlement: commit durable state to MariaDB first
 	if err := s.repo.FinalizeExpedition(ctx, history, rec, char, nil); err != nil {
 		return ExpeditionStepResult{}, err
 	}
 
+	// Upon successful MariaDB commit, purge transient buffer from Valkey Master
+	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
 	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
 
 	return ExpeditionStepResult{

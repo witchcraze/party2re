@@ -70,7 +70,16 @@ func newCmbtServices(
 	if err != nil {
 		return nil, err
 	}
-	dungeonService, err := dungeon.NewService(dungeonRepo, core.charRepo, battleEngine)
+	valkeyExpeditionStore, err := dungeon.NewValkeyExpeditionRepository(valkeyClient)
+	if err != nil {
+		return nil, err
+	}
+	dungeonService, err := dungeon.NewService(
+		dungeonRepo,
+		core.charRepo,
+		battleEngine,
+		dungeon.WithActiveExpeditionStore(valkeyExpeditionStore),
+	)
 	if err != nil {
 		return nil, err
 	}

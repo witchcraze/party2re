@@ -151,6 +151,35 @@ type ExpeditionStepResult struct {
 	IsFinished   bool               `json:"is_finished"`
 }
 
+// StepParams encapsulates the parameters for advancing an active dungeon expedition step atomically.
+type StepParams struct {
+	ExpectedExpeditionID string
+	NewFloor             int
+	NewX                 int
+	NewY                 int
+	HPDelta              int
+	TurnsDelta           int
+	ExpDelta             int
+	GoldDelta            int
+	MedalsDelta          int
+	RewardItemID         string
+	Now                  time.Time
+}
+
+// StepOutcome represents the result of executing an atomic step against the active expedition store.
+type StepOutcome struct {
+	Expedition ActiveExpedition
+	Status     ExpeditionStatus
+}
+
+// ActiveExpeditionStore defines the storage contract for transient in-flight dungeon expeditions (Candidate D).
+type ActiveExpeditionStore interface {
+	GetActiveExpedition(ctx context.Context, characterID string) (*ActiveExpedition, error)
+	SaveActiveExpedition(ctx context.Context, exp ActiveExpedition) error
+	DeleteActiveExpedition(ctx context.Context, characterID string) error
+	Step(ctx context.Context, characterID string, params StepParams) (StepOutcome, error)
+}
+
 type Repository interface {
 	GetRecord(ctx context.Context, characterID string) (CharacterDungeonRecord, error)
 	GetActiveExpedition(ctx context.Context, characterID string) (*ActiveExpedition, error)
@@ -177,6 +206,7 @@ type Service struct {
 	repo                Repository
 	characterRepo       CharacterRepository
 	battleEngine        corebattle.Resolver
+	activeStore         ActiveExpeditionStore
 	dungeons            []Dungeon
 	dungeonMap          map[string]Dungeon
 	monsterDefeatedHook MonsterDefeatedHook
@@ -186,11 +216,32 @@ func (s *Service) SetMonsterDefeatedHook(hook MonsterDefeatedHook) {
 	s.monsterDefeatedHook = hook
 }
 
+// Option configures optional parameters on Service.
+type Option func(*Service)
+
+// WithActiveExpeditionStore configures the transient active expedition store (e.g. ValkeyExpeditionRepository).
+func WithActiveExpeditionStore(store ActiveExpeditionStore) Option {
+	return func(s *Service) {
+		s.activeStore = store
+	}
+}
+
+// WithCustomDungeons overrides the default dungeon catalog.
+func WithCustomDungeons(catalog []Dungeon) Option {
+	return func(s *Service) {
+		s.dungeons = catalog
+		s.dungeonMap = make(map[string]Dungeon, len(catalog))
+		for _, d := range catalog {
+			s.dungeonMap[d.ID] = d
+		}
+	}
+}
+
 func NewService(
 	repo Repository,
 	characterRepo CharacterRepository,
 	battleEngine corebattle.Resolver,
-	customDungeons ...Dungeon,
+	opts ...Option,
 ) (*Service, error) {
 	if repo == nil {
 		return nil, errors.New("dungeon repository is required")
@@ -203,22 +254,28 @@ func NewService(
 	}
 
 	catalog := DefaultDungeonCatalog()
-	if len(customDungeons) > 0 {
-		catalog = customDungeons
-	}
-
 	dMap := make(map[string]Dungeon, len(catalog))
 	for _, d := range catalog {
 		dMap[d.ID] = d
 	}
 
-	return &Service{
+	s := &Service{
 		repo:          repo,
 		characterRepo: characterRepo,
 		battleEngine:  battleEngine,
 		dungeons:      catalog,
 		dungeonMap:    dMap,
-	}, nil
+	}
+
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	if s.activeStore == nil {
+		s.activeStore = NewMemoryExpeditionRepository()
+	}
+
+	return s, nil
 }
 
 func (s *Service) ListDungeons(ctx context.Context, characterID string) ([]DungeonOverview, error) {
