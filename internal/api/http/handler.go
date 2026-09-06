@@ -271,17 +271,12 @@ func NewHandler(
 	if shops == nil {
 		return nil, errors.New("shop service is nil")
 	}
-	adminKey := os.Getenv("PARTY2_ADMIN_API_KEY")
-	if adminKey == "" {
-		adminKey = os.Getenv("ADMIN_API_KEY")
-	}
 	h := &Handler{
 		players:        players,
 		characters:     characters,
 		adventures:     adventures,
 		shops:          shops,
 		allowedOrigins: make(map[string]struct{}),
-		adminAPIKey:    strings.TrimSpace(adminKey),
 	}
 	for _, opt := range opts {
 		if opt != nil {
