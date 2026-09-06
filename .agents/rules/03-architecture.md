@@ -49,3 +49,12 @@ To keep files readable, maintainable, and within effective token limits for AI p
 - **Decomposition by Responsibility**: When a domain file approaches 500 lines, decompose it into focused peer files within the same package (e.g., `service.go`, `session.go`, `step.go`, `repository.go`).
 - **Maintain Package Cohesion**: Keep related sub-responsibilities within the same Go package unless clear layer boundaries justify a new package. Splitting across peer files retains package-private visibility while improving navigability.
 
+## 10. Cross-Domain Application Runtime Primitives
+To prevent lock inversions, deadlocks, and boundary condition bugs across feature domains:
+- **Universal Transaction Runner (`internal/economy.TransactionRunner`)**: Feature operations requiring currency deductions (Gold, Small Medals), inventory item consumption, or multi-resource atomic state mutations must route through `ExecuteTransaction` or `economy.Run[T]`.
+- **Mechanical Lock Hierarchy Guarantee**: The runner automatically enforces the global deterministic lock order (`characters` Rank 2 -> `inventory_items` Rank 3 -> secondary domain tables Rank 8). Handlers and feature services must not manually acquire disparate row locks outside this sequence.
+- **Strict Pre-Condition Boundary Enforcement**: Currency balances (`char.Money >= cost.Gold`, `char.SmallMedals >= cost.SmallMedals`) and item inventory quantities are verified and deducted atomically before invoking domain business logic.
+- **Two-Phase Domain Event Dispatching (`internal/core/event.Dispatcher`)**: Domain events emitted within transaction context (`tc.EmitEvent`) execute in two distinct phases:
+  - **Phase 1 (In-Tx Synchronous)**: Dispatched prior to SQL commit; any handler error aborts and rolls back the transaction (ACID consistency).
+  - **Phase 2 (Post-Commit Asynchronous)**: Dispatched in separate goroutines after successful commit with at-most-once delivery (resilient side effects like activity logs or announcements).
+
