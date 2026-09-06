@@ -2,48 +2,13 @@ package ratelimit
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/valkey-io/valkey-go"
+	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 )
-
-type stubValkeyClient struct {
-	valkey.Client
-	doFn func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult
-}
-
-func (s *stubValkeyClient) B() valkey.Builder {
-	dummy := struct{ ks uint16 }{ks: 1 << 15}
-	return *(*valkey.Builder)(unsafe.Pointer(&dummy))
-}
-
-func (s *stubValkeyClient) Do(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-	if s.doFn != nil {
-		return s.doFn(ctx, cmd)
-	}
-	return valkey.ValkeyResult{}
-}
-
-func makeIntSliceResult(values []int64) valkey.ValkeyResult {
-	buf := make([]byte, 7)
-	buf = append(buf, 42) // typeArray ('*')
-	lenBuf := make([]byte, 8)
-	binary.BigEndian.PutUint64(lenBuf, uint64(len(values)))
-	buf = append(buf, lenBuf...)
-	for _, v := range values {
-		buf = append(buf, 58) // typeInteger (':')
-		intBuf := make([]byte, 8)
-		binary.BigEndian.PutUint64(intBuf, uint64(v))
-		buf = append(buf, intBuf...)
-	}
-	var msg valkey.ValkeyMessage
-	_ = msg.CacheUnmarshalView(buf)
-	return valkey.NewResult(msg, nil)
-}
 
 func TestValkeyLimiter_InvalidParams(t *testing.T) {
 	lim := NewValkeyLimiter(nil)
@@ -100,11 +65,9 @@ func TestValkeyLimiter_ValkeyExecError(t *testing.T) {
 	ctx := context.Background()
 	errValkeyDown := errors.New("valkey connection refused")
 
-	client := &stubValkeyClient{
-		doFn: func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-			return valkey.NewErrorResult(errValkeyDown)
-		},
-	}
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		return valkeytest.MakeErrorResult(errValkeyDown)
+	}))
 
 	// 1. With fallback: should invoke fallback MemoryLimiter and succeed
 	limWithFallback := NewValkeyLimiter(client)
@@ -140,11 +103,9 @@ func TestValkeyLimiter_MalformedLuaResult(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Too few elements (len < 2)
-	clientShort := &stubValkeyClient{
-		doFn: func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-			return makeIntSliceResult([]int64{1})
-		},
-	}
+	clientShort := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		return valkeytest.MakeIntSliceResult([]int64{1})
+	}))
 
 	// Fail-open: allows
 	limFailOpen := NewValkeyLimiter(clientShort, WithFailOpen(true))
@@ -161,11 +122,9 @@ func TestValkeyLimiter_MalformedLuaResult(t *testing.T) {
 	}
 
 	// 2. Empty result (len == 0)
-	clientEmpty := &stubValkeyClient{
-		doFn: func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-			return makeIntSliceResult([]int64{})
-		},
-	}
+	clientEmpty := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		return valkeytest.MakeIntSliceResult([]int64{})
+	}))
 	limEmptyClosed := NewValkeyLimiter(clientEmpty, WithFailOpen(false))
 	if _, err := limEmptyClosed.Allow(ctx, "k", 5, time.Second); err == nil {
 		t.Fatal("expected error on empty result when failOpen=false")
@@ -175,13 +134,9 @@ func TestValkeyLimiter_MalformedLuaResult(t *testing.T) {
 func TestValkeyLimiter_SuccessAllowedAndBlocked(t *testing.T) {
 	ctx := context.Background()
 
-	var recordedCmd []string
-	client := &stubValkeyClient{
-		doFn: func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-			recordedCmd = cmd.Commands()
-			return makeIntSliceResult([]int64{2, 1500})
-		},
-	}
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		return valkeytest.MakeIntSliceResult([]int64{2, 1500})
+	}))
 
 	lim := NewValkeyLimiter(client, WithKeyPrefix("custom:rl:"))
 
@@ -201,16 +156,15 @@ func TestValkeyLimiter_SuccessAllowedAndBlocked(t *testing.T) {
 	}
 
 	// Verify key passed to Lua has custom prefix
+	recordedCmd := client.LastCommandStrings()
 	if len(recordedCmd) < 4 || recordedCmd[3] != "custom:rl:client-123" {
 		t.Fatalf("expected custom key prefix in command, got %v", recordedCmd)
 	}
 
 	// Blocked check (current > limit)
-	clientBlocked := &stubValkeyClient{
-		doFn: func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-			return makeIntSliceResult([]int64{6, 800})
-		},
-	}
+	clientBlocked := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		return valkeytest.MakeIntSliceResult([]int64{6, 800})
+	}))
 	limBlocked := NewValkeyLimiter(clientBlocked)
 	res, err = limBlocked.Allow(ctx, "client-blocked", 5, 2*time.Second)
 	if err != nil {
@@ -224,11 +178,9 @@ func TestValkeyLimiter_SuccessAllowedAndBlocked(t *testing.T) {
 	}
 
 	// Negative TTL check (clamped to 0)
-	clientNegTTL := &stubValkeyClient{
-		doFn: func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-			return makeIntSliceResult([]int64{1, -50})
-		},
-	}
+	clientNegTTL := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		return valkeytest.MakeIntSliceResult([]int64{1, -50})
+	}))
 	limNegTTL := NewValkeyLimiter(clientNegTTL)
 	res, err = limNegTTL.Allow(ctx, "client-neg-ttl", 5, time.Second)
 	if err != nil {
@@ -242,13 +194,9 @@ func TestValkeyLimiter_SuccessAllowedAndBlocked(t *testing.T) {
 func TestValkeyLimiter_SubMillisecondWindow(t *testing.T) {
 	ctx := context.Background()
 
-	var recordedCmd []string
-	client := &stubValkeyClient{
-		doFn: func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-			recordedCmd = cmd.Commands()
-			return makeIntSliceResult([]int64{1, 1})
-		},
-	}
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		return valkeytest.MakeIntSliceResult([]int64{1, 1})
+	}))
 
 	lim := NewValkeyLimiter(client)
 	// 500 microseconds has Milliseconds() == 0, triggering windowMs = 1 clamp
@@ -257,6 +205,7 @@ func TestValkeyLimiter_SubMillisecondWindow(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// Last argument is windowMs, should be "1"
+	recordedCmd := client.LastCommandStrings()
 	if len(recordedCmd) < 5 || recordedCmd[len(recordedCmd)-1] != "1" {
 		t.Fatalf("expected windowMs clamped to 1, got %v", recordedCmd)
 	}
