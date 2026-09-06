@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #411 — [Architecture] Platform: Establish cross-domain application runtime primitives to abstract currency, item, locking, and event rules from feature domains
+Last updated: Issue #402 — [Chore] Battle: Increase core/battle package coverage to ≥ 90%
 
 ## Current phase
 
@@ -29,7 +29,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Progression** (`internal/core/progression`): レベルアップ（累積経験値テーブル `level * level * 10`）、OverLevel限界突破（Lv150）対応、成長率適用、ASTリンターによるCore標準ヘルパー（`progression.ApplyExperience`）強制。
 - **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): クリーンルーム規約に完全準拠したJSONカタログ（`jobs.json`）、転職、Lv99マスタリー、スキル発動・コスト計算。
 - **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理、統一アイテム定義プロバイダー（`coreitem.DefinitionProvider`）、インベントリアイテム更新（`inv.Update`）、装備スロットカプセル化（`equip.Equip`, `equip.Unequip`）。
-- **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定（経験値・ゴールド・アイテム・ちいさなメダル）、構造化ターンログ出力、戦闘参加者（Participant）標準アダプタ/ビルダー（`NewParticipantFromCharacter`, `ParticipantBuilder`）。
+- **Battle** (`internal/core/battle`): 決定論的ターン制戦闘解決、勝敗・報酬決定（経験値・ゴールド・アイテム・ちいさなメダル）、構造化ターンログ出力、戦闘参加者（Participant）標準アダプタ/ビルダー（`NewParticipantFromCharacter`, `ParticipantBuilder`）。ステートメントカバレッジ97.6%を達成しエッジケース・全0%関数を完全検証済み。
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): Valkeyバックエンドの遅延アクションキュー＆分散排他ロックWorker。
 - **Database & Transaction Orchestration** (`internal/database`, `internal/economy`, `internal/core/event`, `internal/testutil`, `internal/database/testutil`): 全リポジトリのトランザクション伝播モデル（`RunInTx` と `ExecutorFromContext`）、コンテキスト内トランザクション再利用、決定論的行ロック獲得順序（Shared -> Players -> Characters (昇順) -> Inventory/Equipment -> Jobs -> Depots -> Bank -> Guilds (昇順) -> 各種機能テーブル）のAST強制（`internal/database/lock_hierarchy_lint_test.go`）、共通2者間IDソート排他ロックユーティリティ（`id.Sort2`）、**横断的アプリケーション実行時プリミティブ層**（`docs/architecture/cross-domain-primitives.md`、`economy.TransactionRunner`、`economy.ExecuteTransaction`、`economy.Run[T]`）、インプロセス2フェーズドメインイベントディスパッチャ（`internal/core/event.Dispatcher`、In-Tx同期＋Post-Commit非同期）、標準エンティティファクトリおよび汎用並行ストレステストハーネス（`RunConcurrentStressTest`, `RunRace`, `RunRace2`）。`internal/economy/economy.go` は責務別に4ファイルへ分割リファクタリングされ500行制限をクリア（`whitelistedLegacyFileLimits` から完全除外）。
 - **Standardized Pagination & Common Utilities** (`internal/pagination`, `internal/id`, `internal/validation`, `internal/api/http/middleware`): 単一責務の共通パッケージ配置、暗号学的一意ID生成（`internal/id`）、汎用ジェネリックページネーション（`internal/pagination`、オフセット `Page[T]` およびキーセット・カーソル `CursorPage[T]`）。広場掲示板、冒険履歴、戦闘リプレイ、手紙、宅配便への水平展開。
