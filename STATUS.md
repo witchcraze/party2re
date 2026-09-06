@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #439 — [Architecture] Architecture: Enforce Interface Segregation Principle (ISP) with interface size lint and composite refactoring
+Last updated: Issue #284 — [Chore] Test/Depot: Add unit tests for gold and item deposit/withdraw fallback paths
 
 ## Current phase
 
@@ -39,7 +39,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Adventure** (`internal/adventure`): 28ステージ（`stages.json`）、286体モンスター（`monsters.json`）、戦闘解決、ドロップ報酬（メダル含む）、Valkey Worker連携、過去冒険履歴一覧（オフセット/カーソル両対応）、冒険戦績クロニクル（トライモード/イメージ/カーム/ハード/アバター/エクストリーム）。勝利時フック（`VictoryHook`）による実績進捗連携。
 - **Medal & Lifetime Achievements** (`internal/medal`): 小さなメダル交換所（減算消費方式、`economy.Service` 連携、`TransactionProvider` と行ロックによる完全アトミック整合性）、生涯マイルストーン実績・記念勲章コレクションシステム（オブザーバーフック連携による進捗自動記録、二重受取防止排他ロック、記念勲章・メダル報酬付与）。
 - **Shop** (`internal/shop`): アイテム売買（50%売却）、1回最大取引数量制限（`MaxTransactionQuantity = 9999`）、整数オーバーフロー安全乗算（`safeMultiply`）、`economy.Service` 連携、`TransactionProvider` と決定論的行ロック階層（`characters` -> `inventory_items`）による完全アトミック整合性。
-- **Depot** (`internal/depot`): 倉庫（アイテム・ゴールド預入・引出）、トランザクション整合性。
+- **Depot** (`internal/depot`): 倉庫（アイテム・ゴールド預入・引出）、トランザクション整合性。単体テストカバレッジ96.0%達成（Issue #284: トランザクション・非トランザクション双方の預入・引出・残高不足・容量超過・リポジトリ障害フォールバックパスを網羅）。
 - **Blacksmith** (`internal/blacksmith`): 鍛冶屋（+1〜+10装備強化、成功率曲線、横断的ランタイムプリミティブ `economy.TransactionRunner` / `ExecuteTransaction` への移行完了。手動行ロック・SQLボイラープレートを完全排除し、Rank 2 (`characters`) -> Rank 3 (`inventory_items`) 決定論的ロック階層と費用・素材消費・インベントリ更新のアトミック整合性を保証）。
 - **Alchemy** (`internal/alchemy`): 錬金術（112レシピ `recipes.json`）、素材合成（`TransactionProvider` と行ロックによる素材消費・合成物付与のアトミック整合性）。
 - **Bank** (`internal/bank`): 銀行（預金・引出・プレイヤー間送金、`FOR UPDATE` 排他ロック）。
