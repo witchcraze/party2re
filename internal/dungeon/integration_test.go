@@ -8,6 +8,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/dungeon"
+	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
 func TestDungeonIntegrationFlow(t *testing.T) {
@@ -32,7 +33,20 @@ func TestDungeonIntegrationFlow(t *testing.T) {
 	}
 
 	battleEngine := corebattle.Engine{}
-	service, err := dungeon.NewService(dungeonRepo, charRepo, battleEngine)
+	var opts []dungeon.Option
+	if os.Getenv("PARTY2_VALKEY_ADDR") != "" {
+		vkClient, err := vk.NewClient()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer vkClient.Close()
+		vStore, err := dungeon.NewValkeyExpeditionRepository(vkClient)
+		if err != nil {
+			t.Fatal(err)
+		}
+		opts = append(opts, dungeon.WithActiveExpeditionStore(vStore))
+	}
+	service, err := dungeon.NewService(dungeonRepo, charRepo, battleEngine, opts...)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -14,7 +14,7 @@ func (s *Service) GetActiveExpedition(ctx context.Context, characterID string) (
 	if characterID == "" {
 		return nil, ErrCharacterNotFound
 	}
-	return s.repo.GetActiveExpedition(ctx, characterID)
+	return s.activeStore.GetActiveExpedition(ctx, characterID)
 }
 
 func (s *Service) StartExpedition(ctx context.Context, characterID, dungeonID string) (*ActiveExpedition, error) {
@@ -35,7 +35,7 @@ func (s *Service) StartExpedition(ctx context.Context, characterID, dungeonID st
 		return nil, ErrLevelRequirementNotMet
 	}
 
-	existing, err := s.repo.GetActiveExpedition(ctx, characterID)
+	existing, err := s.activeStore.GetActiveExpedition(ctx, characterID)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func (s *Service) StartExpedition(ctx context.Context, characterID, dungeonID st
 		UpdatedAt:        now,
 	}
 
-	if err := s.repo.SaveActiveExpedition(ctx, exp); err != nil {
+	if err := s.activeStore.SaveActiveExpedition(ctx, exp); err != nil {
 		return nil, err
 	}
 
@@ -80,7 +80,7 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 		return ExpeditionStepResult{}, ErrCharacterNotFound
 	}
 
-	exp, err := s.repo.GetActiveExpedition(ctx, characterID)
+	exp, err := s.activeStore.GetActiveExpedition(ctx, characterID)
 	if err != nil {
 		return ExpeditionStepResult{}, err
 	}
@@ -127,29 +127,39 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 		return ExpeditionStepResult{}, ErrImpassableWall
 	}
 
-	exp.PosX = newX
-	exp.PosY = newY
-	exp.TurnsRemaining--
-	exp.UpdatedAt = time.Now().UTC()
-
-	// Check turn exhaustion -> wipeout/timeout
-	if exp.TurnsRemaining <= 0 {
-		return s.handleWipeout(ctx, exp, &char, "行動限界（ターン切れ）により意識を失い、探索に失敗した…")
-	}
+	now := time.Now().UTC()
 
 	// Dispatch Tile Event
 	switch tileChar {
 	case 'S', '0': // Start or Normal Path
-		// 50% monster encounter chance on normal path
 		if tileChar == '0' && len(floor.Monsters) > 0 {
 			monster := floor.Monsters[newX%len(floor.Monsters)]
-			return s.resolveMonsterCombat(ctx, exp, &char, monster, EventBattle)
+			return s.resolveMonsterCombat(ctx, exp, &char, monster, EventBattle, newX, newY)
 		}
-		if err := s.repo.SaveActiveExpedition(ctx, *exp); err != nil {
+
+		stepRes, err := s.activeStore.Step(ctx, characterID, StepParams{
+			ExpectedExpeditionID: exp.ID,
+			NewFloor:             exp.CurrentFloor,
+			NewX:                 newX,
+			NewY:                 newY,
+			HPDelta:              0,
+			TurnsDelta:           -1,
+			ExpDelta:             0,
+			GoldDelta:            0,
+			MedalsDelta:          0,
+			RewardItemID:         "",
+			Now:                  now,
+		})
+		if err != nil {
 			return ExpeditionStepResult{}, err
 		}
+
+		if stepRes.Status == StatusWipedOut {
+			return s.handleWipeout(ctx, &stepRes.Expedition, &char, "行動限界（ターン切れ）により意識を失い、探索に失敗した…")
+		}
+
 		return ExpeditionStepResult{
-			Expedition: *exp,
+			Expedition: stepRes.Expedition,
 			EventType:  EventMove,
 			Message:    "静かな通路を進んだ。",
 		}, nil
@@ -161,18 +171,30 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 			itemFound = floor.Monsters[0].DropItemID
 		}
 		medalsFound := 1
-		exp.AccumulatedGold += goldFound
-		exp.AccumulatedMedals += medalsFound
-		exp.AccumulatedItems = append(exp.AccumulatedItems, itemFound)
 
-		rec, _ := s.repo.GetRecord(ctx, char.ID)
-		rec.TotalChestsOpened++
-
-		if err := s.repo.SaveActiveExpedition(ctx, *exp); err != nil {
+		stepRes, err := s.activeStore.Step(ctx, characterID, StepParams{
+			ExpectedExpeditionID: exp.ID,
+			NewFloor:             exp.CurrentFloor,
+			NewX:                 newX,
+			NewY:                 newY,
+			HPDelta:              0,
+			TurnsDelta:           -1,
+			ExpDelta:             0,
+			GoldDelta:            goldFound,
+			MedalsDelta:          medalsFound,
+			RewardItemID:         itemFound,
+			Now:                  now,
+		})
+		if err != nil {
 			return ExpeditionStepResult{}, err
 		}
+
+		if stepRes.Status == StatusWipedOut {
+			return s.handleWipeout(ctx, &stepRes.Expedition, &char, "行動限界（ターン切れ）により意識を失い、探索に失敗した…")
+		}
+
 		return ExpeditionStepResult{
-			Expedition:  *exp,
+			Expedition:  stepRes.Expedition,
 			EventType:   EventTreasure,
 			GoldFound:   goldFound,
 			MedalsFound: medalsFound,
@@ -182,16 +204,29 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 
 	case 'X': // Hazard Trap
 		trapDamage := int(math.Max(10, float64(char.Stats.MaxHP)*0.15))
-		exp.CurrentHP -= trapDamage
-		if exp.CurrentHP <= 0 {
-			exp.CurrentHP = 0
-			return s.handleWipeout(ctx, exp, &char, fmt.Sprintf("罠が作動し %d の猛烈なダメージを受けた！力尽きて倒れた…", trapDamage))
-		}
-		if err := s.repo.SaveActiveExpedition(ctx, *exp); err != nil {
+		stepRes, err := s.activeStore.Step(ctx, characterID, StepParams{
+			ExpectedExpeditionID: exp.ID,
+			NewFloor:             exp.CurrentFloor,
+			NewX:                 newX,
+			NewY:                 newY,
+			HPDelta:              -trapDamage,
+			TurnsDelta:           -1,
+			ExpDelta:             0,
+			GoldDelta:            0,
+			MedalsDelta:          0,
+			RewardItemID:         "",
+			Now:                  now,
+		})
+		if err != nil {
 			return ExpeditionStepResult{}, err
 		}
+
+		if stepRes.Status == StatusWipedOut {
+			return s.handleWipeout(ctx, &stepRes.Expedition, &char, fmt.Sprintf("罠が作動し %d の猛烈なダメージを受けた！力尽きて倒れた…", trapDamage))
+		}
+
 		return ExpeditionStepResult{
-			Expedition:  *exp,
+			Expedition:  stepRes.Expedition,
 			EventType:   EventTrap,
 			DamageTaken: trapDamage,
 			Message:     fmt.Sprintf("罠を踏んでしまった！ %d のダメージを受けた！", trapDamage),
@@ -199,22 +234,28 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 
 	case 'D': // Down Stairs
 		if exp.CurrentFloor < len(dungeon.Floors) {
-			exp.CurrentFloor++
-			nextFloor := dungeon.Floors[exp.CurrentFloor-1]
-			exp.PosX = nextFloor.StartX
-			exp.PosY = nextFloor.StartY
-			exp.TurnsRemaining = dungeon.MaxTurnsPerFloor
-
-			rec, _ := s.repo.GetRecord(ctx, char.ID)
-			rec.TotalFloorsCleared++
-
-			if err := s.repo.SaveActiveExpedition(ctx, *exp); err != nil {
+			nextFloor := dungeon.Floors[exp.CurrentFloor]
+			stepRes, err := s.activeStore.Step(ctx, characterID, StepParams{
+				ExpectedExpeditionID: exp.ID,
+				NewFloor:             exp.CurrentFloor + 1,
+				NewX:                 nextFloor.StartX,
+				NewY:                 nextFloor.StartY,
+				HPDelta:              0,
+				TurnsDelta:           dungeon.MaxTurnsPerFloor - exp.TurnsRemaining,
+				ExpDelta:             0,
+				GoldDelta:            0,
+				MedalsDelta:          0,
+				RewardItemID:         "",
+				Now:                  now,
+			})
+			if err != nil {
 				return ExpeditionStepResult{}, err
 			}
+
 			return ExpeditionStepResult{
-				Expedition: *exp,
+				Expedition: stepRes.Expedition,
 				EventType:  EventStairs,
-				Message:    fmt.Sprintf("階段を発見し、地下 %d 階へ降りた！", exp.CurrentFloor),
+				Message:    fmt.Sprintf("階段を発見し、地下 %d 階へ降りた！", stepRes.Expedition.CurrentFloor),
 			}, nil
 		}
 		// If last floor has no boss, stair completes dungeon
@@ -228,17 +269,35 @@ func (s *Service) Move(ctx context.Context, characterID string, dir Direction) (
 		if bossMonster == nil {
 			return s.handleDungeonClear(ctx, exp, &char, dungeon)
 		}
-		return s.resolveBossCombat(ctx, exp, &char, dungeon, *bossMonster)
+		return s.resolveBossCombat(ctx, exp, &char, dungeon, *bossMonster, newX, newY)
 
 	case 'E': // Safe Escape Exit
 		return s.handleEscape(ctx, exp, &char, "脱出の魔法陣を発見し、無事に帰還した！")
 
 	default:
-		if err := s.repo.SaveActiveExpedition(ctx, *exp); err != nil {
+		stepRes, err := s.activeStore.Step(ctx, characterID, StepParams{
+			ExpectedExpeditionID: exp.ID,
+			NewFloor:             exp.CurrentFloor,
+			NewX:                 newX,
+			NewY:                 newY,
+			HPDelta:              0,
+			TurnsDelta:           -1,
+			ExpDelta:             0,
+			GoldDelta:            0,
+			MedalsDelta:          0,
+			RewardItemID:         "",
+			Now:                  now,
+		})
+		if err != nil {
 			return ExpeditionStepResult{}, err
 		}
+
+		if stepRes.Status == StatusWipedOut {
+			return s.handleWipeout(ctx, &stepRes.Expedition, &char, "行動限界（ターン切れ）により意識を失い、探索に失敗した…")
+		}
+
 		return ExpeditionStepResult{
-			Expedition: *exp,
+			Expedition: stepRes.Expedition,
 			EventType:  EventMove,
 			Message:    "通路を進んだ。",
 		}, nil
