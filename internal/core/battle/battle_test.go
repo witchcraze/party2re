@@ -220,3 +220,225 @@ func TestEngineResolvePartyBattle(t *testing.T) {
 		t.Fatalf("expected ErrInvalidRequest, got %v", err)
 	}
 }
+
+func TestPartyBattleDraw(t *testing.T) {
+	engine := Engine{}
+	// Two high-HP participants dealing minimal damage to hit 100 turns limit
+	res, err := engine.ResolvePartyBattle(PartyBattleRequest{
+		Allies: []Participant{
+			{ID: "tank-ally", HP: 5000, Attack: 1, Defense: 100},
+		},
+		Enemies: []Participant{
+			{ID: "tank-enemy", HP: 5000, Attack: 1, Defense: 100},
+		},
+		DrawReward: Reward{Experience: 10, Currency: 5},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePartyBattle draw failed: %v", err)
+	}
+	if res.Outcome != OutcomeDraw {
+		t.Fatalf("expected OutcomeDraw, got %s", res.Outcome)
+	}
+	if res.WinnerSide != "none" {
+		t.Fatalf("expected winner side 'none', got %s", res.WinnerSide)
+	}
+	if res.Turns != 100 {
+		t.Fatalf("expected 100 turns, got %d", res.Turns)
+	}
+	if res.TotalReward.Experience != 10 || res.TotalReward.Currency != 5 {
+		t.Fatalf("expected DrawReward (10 EXP, 5 G), got %+v", res.TotalReward)
+	}
+	if len(res.AlliesSurvived) != 1 || res.AlliesSurvived[0] != "tank-ally" {
+		t.Fatalf("expected tank-ally survived, got %+v", res.AlliesSurvived)
+	}
+	if len(res.AlliesFallen) != 0 {
+		t.Fatalf("expected 0 fallen allies, got %+v", res.AlliesFallen)
+	}
+}
+
+func TestPartyBattleBonusPercent(t *testing.T) {
+	engine := Engine{}
+	enemy := Participant{ID: "boss", HP: 50, Attack: 5, Defense: 0}
+
+	tests := []struct {
+		allyCount   int
+		wantPercent int
+	}{
+		{allyCount: 1, wantPercent: 0},
+		{allyCount: 2, wantPercent: 10},
+		{allyCount: 3, wantPercent: 20},
+		{allyCount: 4, wantPercent: 30},
+		{allyCount: 5, wantPercent: 30}, // clamped at 30%
+	}
+
+	for _, tt := range tests {
+		allies := make([]Participant, tt.allyCount)
+		for i := 0; i < tt.allyCount; i++ {
+			allies[i] = Participant{
+				ID:      string(rune('a' + i)),
+				HP:      100,
+				Attack:  50,
+				Defense: 10,
+			}
+		}
+
+		res, err := engine.ResolvePartyBattle(PartyBattleRequest{
+			Allies:        allies,
+			Enemies:       []Participant{enemy},
+			VictoryReward: Reward{Experience: 100, Currency: 100},
+		})
+		if err != nil {
+			t.Fatalf("allyCount %d failed: %v", tt.allyCount, err)
+		}
+		if res.BonusPercent != tt.wantPercent {
+			t.Errorf("allyCount %d bonusPercent = %d, want %d", tt.allyCount, res.BonusPercent, tt.wantPercent)
+		}
+	}
+}
+
+func TestPartyBattlePartialFallen(t *testing.T) {
+	engine := Engine{}
+
+	// Ally 1 will be targeted first and fall; Ally 2 will survive and finish off enemy
+	res, err := engine.ResolvePartyBattle(PartyBattleRequest{
+		Allies: []Participant{
+			{ID: "fragile-ally", HP: 10, Attack: 10, Defense: 0},
+			{ID: "mighty-ally", HP: 300, Attack: 40, Defense: 10},
+		},
+		Enemies: []Participant{
+			{ID: "ogre", HP: 100, Attack: 25, Defense: 0},
+		},
+		VictoryReward: Reward{Experience: 100, Currency: 50},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Outcome != OutcomeWin || res.WinnerSide != "allies" {
+		t.Fatalf("expected allies victory, got outcome=%s side=%s", res.Outcome, res.WinnerSide)
+	}
+	if len(res.AlliesFallen) != 1 || res.AlliesFallen[0] != "fragile-ally" {
+		t.Errorf("expected AlliesFallen [fragile-ally], got %+v", res.AlliesFallen)
+	}
+	if len(res.AlliesSurvived) != 1 || res.AlliesSurvived[0] != "mighty-ally" {
+		t.Errorf("expected AlliesSurvived [mighty-ally], got %+v", res.AlliesSurvived)
+	}
+}
+
+func TestPartyBattleMultipleEnemiesFocusLowestHP(t *testing.T) {
+	engine := Engine{}
+
+	// Enemy 2 has lower HP (20) than Enemy 1 (60), so Allies must focus Enemy 2 first
+	res, err := engine.ResolvePartyBattle(PartyBattleRequest{
+		Allies: []Participant{
+			{ID: "hero", HP: 200, Attack: 25, Defense: 5},
+		},
+		Enemies: []Participant{
+			{ID: "tough-enemy", HP: 60, Attack: 5, Defense: 0},
+			{ID: "weak-enemy", HP: 20, Attack: 5, Defense: 0},
+		},
+		VictoryReward: Reward{Experience: 80, Currency: 40},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Outcome != OutcomeWin {
+		t.Fatalf("expected win, got %s", res.Outcome)
+	}
+	// Verify in turn 1 that weak-enemy was targeted
+	if len(res.Logs) < 1 || res.Logs[0].TargetID != "weak-enemy" {
+		t.Errorf("expected first attack target to be weak-enemy, got log: %+v", res.Logs[0])
+	}
+}
+
+func TestDamageBoundary(t *testing.T) {
+	tests := []struct {
+		attack  int
+		defense int
+		want    int
+	}{
+		{attack: 25, defense: 10, want: 15}, // normal attack > defense
+		{attack: 10, defense: 10, want: 1},  // attack == defense -> min 1
+		{attack: 5, defense: 15, want: 1},   // attack < defense -> min 1
+		{attack: 0, defense: 10, want: 1},   // 0 attack -> min 1
+		{attack: 10, defense: 0, want: 10},  // 0 defense -> normal
+	}
+
+	for _, tt := range tests {
+		got := damage(tt.attack, tt.defense)
+		if got != tt.want {
+			t.Errorf("damage(%d, %d) = %d, want %d", tt.attack, tt.defense, got, tt.want)
+		}
+	}
+}
+
+func TestPartyBattleValidationErrors(t *testing.T) {
+	engine := Engine{}
+	validParticipant := Participant{ID: "hero", HP: 50, Attack: 10, Defense: 5}
+	validEnemy := Participant{ID: "goblin", HP: 30, Attack: 8, Defense: 2}
+
+	// 1. Empty Allies
+	_, err := engine.ResolvePartyBattle(PartyBattleRequest{
+		Allies:  []Participant{},
+		Enemies: []Participant{validEnemy},
+	})
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Errorf("expected ErrInvalidRequest for empty Allies, got %v", err)
+	}
+
+	// 2. Empty Enemies
+	_, err = engine.ResolvePartyBattle(PartyBattleRequest{
+		Allies:  []Participant{validParticipant},
+		Enemies: []Participant{},
+	})
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Errorf("expected ErrInvalidRequest for empty Enemies, got %v", err)
+	}
+
+	// 3. Invalid Ally participant
+	_, err = engine.ResolvePartyBattle(PartyBattleRequest{
+		Allies:  []Participant{{ID: "bad", HP: 0, Attack: 10, Defense: 5}},
+		Enemies: []Participant{validEnemy},
+	})
+	if !errors.Is(err, ErrInvalidParticipant) {
+		t.Errorf("expected ErrInvalidParticipant for Ally HP=0, got %v", err)
+	}
+
+	// 4. Invalid Enemy participant
+	_, err = engine.ResolvePartyBattle(PartyBattleRequest{
+		Allies:  []Participant{validParticipant},
+		Enemies: []Participant{{ID: "", HP: 10, Attack: 5, Defense: 2}},
+	})
+	if !errors.Is(err, ErrInvalidParticipant) {
+		t.Errorf("expected ErrInvalidParticipant for empty Enemy ID, got %v", err)
+	}
+
+	// 5. Invalid VictoryReward
+	_, err = engine.ResolvePartyBattle(PartyBattleRequest{
+		Allies:        []Participant{validParticipant},
+		Enemies:       []Participant{validEnemy},
+		VictoryReward: Reward{Experience: -5},
+	})
+	if !errors.Is(err, ErrInvalidReward) {
+		t.Errorf("expected ErrInvalidReward for negative exp, got %v", err)
+	}
+
+	// 6. Invalid DefeatReward
+	_, err = engine.ResolvePartyBattle(PartyBattleRequest{
+		Allies:       []Participant{validParticipant},
+		Enemies:      []Participant{validEnemy},
+		DefeatReward: Reward{Currency: -10},
+	})
+	if !errors.Is(err, ErrInvalidReward) {
+		t.Errorf("expected ErrInvalidReward for negative currency, got %v", err)
+	}
+
+	// 7. Invalid DrawReward
+	_, err = engine.ResolvePartyBattle(PartyBattleRequest{
+		Allies:     []Participant{validParticipant},
+		Enemies:    []Participant{validEnemy},
+		DrawReward: Reward{ItemQuantity: 1}, // missing ItemDefinitionID
+	})
+	if !errors.Is(err, ErrInvalidReward) {
+		t.Errorf("expected ErrInvalidReward for invalid item reward, got %v", err)
+	}
+}
