@@ -50,7 +50,7 @@ Encapsulates wallet currency and medal operations (`AddMoney`, `DeductMoney`, `H
 
 **Responsibility:** level, experience, stats, and other fundamental character progression.
 
-Progression consumes job growth values through the public Job definition contract. It does not contain a built-in catalog of job-specific data. It provides canonical domain helpers (`ApplyExperience`, `ApplyExperienceWithJob`, `ApplyExperienceWithProvider`, `MaxLevelForCharacter`) to calculate cumulative thresholds, handle OverLevel limit breaks up to Lv 150, and apply level-ups. Direct field mutation of character progression fields (`Experience`, `Level`) in feature modules is mechanically prohibited by Go AST static analysis (`internal/core/core_lint_test.go`, `internal/core/progression/progression_lint_test.go`).
+Progression consumes job growth values through the public Job definition contract. It does not contain a built-in catalog of job-specific data. It provides canonical domain helpers (`ApplyExperience`, `ApplyExperienceWithJob`, `ApplyExperienceWithJobFull`, `ApplyExperienceWithProvider`, `MaxLevelForCharacter`) to calculate cumulative thresholds, award Skill Points (SP) per level with Skill Orb bonus support, trigger automatic SP-threshold skill learning, handle celestial OverLevel limit breaks up to Lv 150, and apply level-ups with legacy cap re-rolls. Fictional Rebirth mechanics are completely eliminated. Direct field mutation of character progression fields (`Experience`, `Level`, `SP`) in feature modules is mechanically prohibited by Go AST static analysis (`internal/core/core_lint_test.go`, `internal/core/progression/progression_lint_test.go`).
 
 
 ### Job
@@ -345,7 +345,7 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Core Character, Character repository.
   - **Persistence:** `character_homes`, `character_letters`, `character_companion_phrases`, and `character_delivery_notices` tables in `internal/database/home_repository.go`.
 - **Player Leaderboards & Character Rankings** (`internal/ranking`):
-  - **Responsibility:** Multi-category competitive leaderboards and character rankings (`ranking.cgi`, `job_ranking.cgi`, `week_ranking.cgi`), including Level, Player Wealth, Character Wealth, Battle Victories, PvP Victories, World Boss Defeats, Adventure Victories, Job Mastery, Job Popularity, Helper Quests, Rebirth Count, and Small Medals, with deterministic tie-breaking, pagination, in-memory TTL caching, Valkey distributed caching, singleflight cache stampede protection, and background worker refresh action (`party2:ranking:refresh`).
+  - **Responsibility:** Multi-category competitive leaderboards and character rankings (`ranking.cgi`, `job_ranking.cgi`, `week_ranking.cgi`), including Level, Player Wealth, Character Wealth, Battle Victories, PvP Victories, World Boss Defeats, Adventure Victories, Job Mastery, Job Popularity, Helper Quests, and Small Medals, with deterministic tie-breaking, pagination, in-memory TTL caching, Valkey distributed caching, singleflight cache stampede protection, and background worker refresh action (`party2:ranking:refresh`).
   - **Dependencies:** Core Character, Core Player, Valkey (`github.com/valkey-io/valkey-go`), Scheduling (`internal/scheduling`).
   - **Persistence:** `ranking_snapshots` table and dedicated high-performance query indexes in `internal/database/ranking_repository.go`, and Valkey distributed cache keys (`party2:ranking:snapshot:*`).
 - **Distributed Rate Limiting & Cooldown Tracking** (`internal/ratelimit`):

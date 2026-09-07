@@ -35,24 +35,24 @@ var (
 )
 
 type Character struct {
-	ID           string
-	PlayerID     string
-	Name         string
-	JobID        string
-	Gender       string
-	Stats        Stats
-	Money        int
-	Level        int
-	Experience   int
-	RebirthCount int
-	SmallMedals  int
-	HelpCount    int
-	OverLevel    bool
-	OverDepot    int
-	OverMonster  int
-	OverFuture   int
-	OverFlea     int
-	OverStore    int
+	ID          string
+	PlayerID    string
+	Name        string
+	JobID       string
+	Gender      string
+	Stats       Stats
+	Money       int
+	Level       int
+	Experience  int
+	SP          int // Skill Points: incremented on each level-up; used for SP-based skill learning.
+	SmallMedals int
+	HelpCount   int
+	OverLevel   bool
+	OverDepot   int
+	OverMonster int
+	OverFuture  int
+	OverFlea    int
+	OverStore   int
 }
 
 type Stats struct {

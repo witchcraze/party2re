@@ -23,7 +23,6 @@ type mockHTTPRankingService struct {
 	jobMasteryPage    ranking.RankingPage[ranking.CharacterRankingEntry]
 	jobPopularityPage ranking.RankingPage[ranking.JobPopularityEntry]
 	helperPage        ranking.RankingPage[ranking.CharacterRankingEntry]
-	rebirthPage       ranking.RankingPage[ranking.CharacterRankingEntry]
 	medalPage         ranking.RankingPage[ranking.CharacterRankingEntry]
 	refreshedTypes    []ranking.RankingType
 	refreshedAll      bool
@@ -58,9 +57,6 @@ func (m *mockHTTPRankingService) GetJobPopularityRanking(ctx context.Context, us
 }
 func (m *mockHTTPRankingService) GetHelperRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.helperPage, nil
-}
-func (m *mockHTTPRankingService) GetRebirthRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
-	return m.rebirthPage, nil
 }
 func (m *mockHTTPRankingService) GetSmallMedalRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.medalPage, nil
@@ -167,14 +163,6 @@ func TestRankingEndpoints(t *testing.T) {
 			Offset:       0,
 			CalculatedAt: now,
 		},
-		rebirthPage: ranking.RankingPage[ranking.CharacterRankingEntry]{
-			RankingType:  ranking.RankingTypeRebirth,
-			Entries:      []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", Score: 2}},
-			Total:        1,
-			Limit:        20,
-			Offset:       0,
-			CalculatedAt: now,
-		},
 		medalPage: ranking.RankingPage[ranking.CharacterRankingEntry]{
 			RankingType:  ranking.RankingTypeSmallMedals,
 			Entries:      []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", Score: 100}},
@@ -257,12 +245,7 @@ func TestRankingEndpoints(t *testing.T) {
 			url:        "/rankings/helpers",
 			wantStatus: http.StatusOK,
 		},
-		{
-			name:       "GET /rankings/rebirths",
-			method:     http.MethodGet,
-			url:        "/rankings/rebirths",
-			wantStatus: http.StatusOK,
-		},
+
 		{
 			name:       "GET /rankings/medals",
 			method:     http.MethodGet,

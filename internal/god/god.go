@@ -525,7 +525,7 @@ func (s *Service) executeUnderworldWish(
 		if s.depots != nil {
 			dep, err := s.depots.FindByCharacterIDForUpdate(ctx, char.ID)
 			if err == nil {
-				dep.Capacity = depot.CalculateCapacity(char.RebirthCount, dep.ExDepot, char.OverDepot)
+				dep.Capacity = depot.CalculateCapacity(0, dep.ExDepot, char.OverDepot)
 				_ = s.depots.Save(ctx, dep)
 			}
 		}

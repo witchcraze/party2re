@@ -39,41 +39,6 @@ func (s *Service) GetLevelRanking(ctx context.Context, limit, offset int, useSna
 	}, nil
 }
 
-// GetRebirthRanking returns character rankings sorted by rebirth count.
-func (s *Service) GetRebirthRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
-	limit, offset = NormalizePagination(limit, offset)
-	if useSnapshot {
-		entries, total, calcTime, found := s.getCachedCharacterRanking(ctx, RankingTypeRebirth, limit, offset)
-		if found {
-			return RankingPage[CharacterRankingEntry]{
-				RankingType:  RankingTypeRebirth,
-				Entries:      entries,
-				Total:        total,
-				Limit:        limit,
-				Offset:       offset,
-				CalculatedAt: calcTime,
-				IsSnapshot:   true,
-			}, nil
-		}
-	}
-
-	entries, total, err := s.repo.GetRebirthRanking(ctx, limit, offset)
-	if err != nil {
-		return RankingPage[CharacterRankingEntry]{}, err
-	}
-
-	now := s.nowFunc().UTC()
-	return RankingPage[CharacterRankingEntry]{
-		RankingType:  RankingTypeRebirth,
-		Entries:      entries,
-		Total:        total,
-		Limit:        limit,
-		Offset:       offset,
-		CalculatedAt: now,
-		IsSnapshot:   false,
-	}, nil
-}
-
 // GetJobMasteryRanking returns character rankings sorted by count of mastered jobs.
 func (s *Service) GetJobMasteryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (RankingPage[CharacterRankingEntry], error) {
 	limit, offset = NormalizePagination(limit, offset)

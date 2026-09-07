@@ -13,6 +13,7 @@ func TestSkillUseChecksConditionsConsumesMPAndReturnsBattleEffect(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	value.SP = 1 // SP must meet RequiredSP threshold
 	value.Stats.MP = 5
 	definition, err := NewDefinition("power-strike", "Power Strike", []string{"vanguard"}, 1, 3,
 		corebattle.Effect{Kind: "damage", Power: 10})
@@ -31,13 +32,14 @@ func TestSkillUseChecksConditionsConsumesMPAndReturnsBattleEffect(t *testing.T) 
 
 func TestSkillRejectsUnavailableConditionsAndInsufficientMP(t *testing.T) {
 	value, _ := corecharacter.New("Alice")
+	// RequiredSP = 5; character SP = 0 → ErrUnavailable (wrong job first)
 	definition, _ := NewDefinition("locked", "Locked Skill", []string{"vanguard"}, 5, 2,
 		corebattle.Effect{Kind: "damage", Power: 1})
 	if err := definition.CanUse(UseRequest{Character: &value}); !errors.Is(err, ErrUnavailable) {
-		t.Fatalf("wrong job/level error = %v", err)
+		t.Fatalf("wrong job/SP error = %v", err)
 	}
 	value.JobID = "vanguard"
-	value.Level = 5
+	value.SP = 5 // meet RequiredSP
 	value.Stats.MP = 1
 	if err := definition.CanUse(UseRequest{Character: &value}); !errors.Is(err, ErrInsufficientMP) {
 		t.Fatalf("insufficient MP error = %v", err)
@@ -46,6 +48,7 @@ func TestSkillRejectsUnavailableConditionsAndInsufficientMP(t *testing.T) {
 
 func TestSkillRequiresOwnedItemWhenConfigured(t *testing.T) {
 	value, _ := corecharacter.New("Alice")
+	value.SP = 1 // meet RequiredSP = 1
 	definition, _ := NewDefinition("item-skill", "Item Skill", nil, 1, 0,
 		corebattle.Effect{Kind: "heal", Power: 5})
 	if err := definition.CanUse(UseRequest{
@@ -59,21 +62,21 @@ func TestSkillRequiresOwnedItemWhenConfigured(t *testing.T) {
 
 func TestNewDefinitionValidation(t *testing.T) {
 	tests := []struct {
-		id     string
-		name   string
-		level  int
-		mpCost int
-		effect corebattle.Effect
+		id         string
+		name       string
+		requiredSP int
+		mpCost     int
+		effect     corebattle.Effect
 	}{
-		{id: "", name: "Name", level: 1, mpCost: 1, effect: corebattle.Effect{Kind: "heal", Power: 1}},
-		{id: "id", name: "", level: 1, mpCost: 1, effect: corebattle.Effect{Kind: "heal", Power: 1}},
-		{id: "id", name: "Name", level: 0, mpCost: 1, effect: corebattle.Effect{Kind: "heal", Power: 1}},
-		{id: "id", name: "Name", level: 1, mpCost: -1, effect: corebattle.Effect{Kind: "heal", Power: 1}},
-		{id: "id", name: "Name", level: 1, mpCost: 1, effect: corebattle.Effect{Kind: "", Power: 1}},
-		{id: "id", name: "Name", level: 1, mpCost: 1, effect: corebattle.Effect{Kind: "heal", Power: -1}},
+		{id: "", name: "Name", requiredSP: 1, mpCost: 1, effect: corebattle.Effect{Kind: "heal", Power: 1}},
+		{id: "id", name: "", requiredSP: 1, mpCost: 1, effect: corebattle.Effect{Kind: "heal", Power: 1}},
+		{id: "id", name: "Name", requiredSP: 0, mpCost: 1, effect: corebattle.Effect{Kind: "heal", Power: 1}},
+		{id: "id", name: "Name", requiredSP: 1, mpCost: -1, effect: corebattle.Effect{Kind: "heal", Power: 1}},
+		{id: "id", name: "Name", requiredSP: 1, mpCost: 1, effect: corebattle.Effect{Kind: "", Power: 1}},
+		{id: "id", name: "Name", requiredSP: 1, mpCost: 1, effect: corebattle.Effect{Kind: "heal", Power: -1}},
 	}
 	for _, test := range tests {
-		if _, err := NewDefinition(test.id, test.name, nil, test.level, test.mpCost, test.effect); !errors.Is(err, ErrInvalidDefinition) {
+		if _, err := NewDefinition(test.id, test.name, nil, test.requiredSP, test.mpCost, test.effect); !errors.Is(err, ErrInvalidDefinition) {
 			t.Errorf("NewDefinition(%#v) error = %v, want %v", test, err, ErrInvalidDefinition)
 		}
 	}
@@ -97,6 +100,7 @@ func TestSkillUseInsufficientMPLeavesMPUnchanged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	value.SP = 1 // meet RequiredSP = 1
 	value.Stats.MP = 2
 	definition, err := NewDefinition("heavy-strike", "Heavy Strike", nil, 1, 5, corebattle.Effect{Kind: "damage", Power: 20})
 	if err != nil {

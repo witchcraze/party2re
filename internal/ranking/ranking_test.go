@@ -22,7 +22,7 @@ func TestIsValidRankingType(t *testing.T) {
 		{"job_mastery", ranking.RankingTypeJobMastery, true},
 		{"job_popularity", ranking.RankingTypeJobPopularity, true},
 		{"helper", ranking.RankingTypeHelper, true},
-		{"rebirth", ranking.RankingTypeRebirth, true},
+		{"rebirth", ranking.RankingType("rebirth"), false},
 		{"small_medals", ranking.RankingTypeSmallMedals, true},
 		{"invalid", ranking.RankingType("invalid_type"), false},
 		{"empty", ranking.RankingType(""), false},

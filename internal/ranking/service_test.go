@@ -28,8 +28,6 @@ type mockRankingRepository struct {
 	jobPopularityRankings   []ranking.JobPopularityEntry
 	helperRankings          []ranking.CharacterRankingEntry
 	helperTotal             int
-	rebirthRankings         []ranking.CharacterRankingEntry
-	rebirthTotal            int
 	smallMedalRankings      []ranking.CharacterRankingEntry
 	smallMedalTotal         int
 	snapshots               map[ranking.RankingType]ranking.RankingSnapshot
@@ -79,10 +77,6 @@ func (m *mockRankingRepository) GetJobPopularityRanking(ctx context.Context) ([]
 
 func (m *mockRankingRepository) GetHelperRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
 	return paginateSlice(m.helperRankings, limit, offset), m.helperTotal, nil
-}
-
-func (m *mockRankingRepository) GetRebirthRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
-	return paginateSlice(m.rebirthRankings, limit, offset), m.rebirthTotal, nil
 }
 
 func (m *mockRankingRepository) GetSmallMedalRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
@@ -278,8 +272,8 @@ func TestService_RefreshAllSnapshots(t *testing.T) {
 		t.Fatalf("unexpected error refreshing all snapshots: %v", err)
 	}
 
-	if len(repo.snapshots) != 12 {
-		t.Fatalf("expected 12 snapshots saved in repository, got %d", len(repo.snapshots))
+	if len(repo.snapshots) != 11 {
+		t.Fatalf("expected 11 snapshots saved in repository, got %d", len(repo.snapshots))
 	}
 }
 

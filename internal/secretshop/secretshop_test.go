@@ -102,7 +102,7 @@ func setupTest(t *testing.T) (*secretshop.Service, *mockCharacterRepo, *mockInve
 	return svc, charRepo, invRepo, catalog
 }
 
-func createTestCharacter(id, name string, level, money int, rebirth int) corecharacter.Character {
+func createTestCharacter(id, name string, level, money int) corecharacter.Character {
 	return corecharacter.Character{
 		ID:       id,
 		PlayerID: "player-1",
@@ -116,9 +116,8 @@ func createTestCharacter(id, name string, level, money int, rebirth int) corecha
 			Defense: 10,
 			Agility: 10,
 		},
-		Level:        level,
-		Money:        money,
-		RebirthCount: rebirth,
+		Level: level,
+		Money: money,
 	}
 }
 
@@ -154,19 +153,17 @@ func TestCheckEligibility(t *testing.T) {
 	tests := []struct {
 		name     string
 		level    int
-		rebirth  int
 		expected bool
 	}{
-		{"low level no rebirth", 5, 0, false},
-		{"level 14 no rebirth", 14, 0, false},
-		{"level 15 qualified", 15, 0, true},
-		{"level 50 qualified", 50, 0, true},
-		{"level 1 with rebirth qualified", 1, 1, true},
+		{"low level", 5, false},
+		{"level 14", 14, false},
+		{"level 15 qualified", 15, true},
+		{"level 50 qualified", 50, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := createTestCharacter("c1", "Hero", tt.level, 1000, tt.rebirth)
+			c := createTestCharacter("c1", "Hero", tt.level, 1000)
 			eligible := secretshop.CheckEligibility(c)
 			if eligible != tt.expected {
 				t.Errorf("expected eligibility %v, got %v", tt.expected, eligible)
@@ -180,7 +177,7 @@ func TestGetShopStatus(t *testing.T) {
 	ctx := context.Background()
 
 	// Ineligible character
-	ineligible := createTestCharacter("char-low", "Novice", 10, 5000, 0)
+	ineligible := createTestCharacter("char-low", "Novice", 10, 5000)
 	_ = charRepo.Update(ctx, ineligible)
 
 	_, err := svc.GetShopStatus(ctx, "char-low")
@@ -189,7 +186,7 @@ func TestGetShopStatus(t *testing.T) {
 	}
 
 	// Eligible character
-	eligible := createTestCharacter("char-high", "Veteran", 20, 50000, 0)
+	eligible := createTestCharacter("char-high", "Veteran", 20, 50000)
 	_ = charRepo.Update(ctx, eligible)
 
 	status, err := svc.GetShopStatus(ctx, "char-high")
@@ -223,7 +220,7 @@ func TestHelperQuestFilter(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	eligible := createTestCharacter("char-high", "Veteran", 20, 50000, 0)
+	eligible := createTestCharacter("char-high", "Veteran", 20, 50000)
 	_ = charRepo.Update(ctx, eligible)
 
 	status, err := svc.GetShopStatus(ctx, "char-high")
@@ -248,7 +245,7 @@ func TestNPCInteractions(t *testing.T) {
 	svc, charRepo, _, _ := setupTest(t)
 	ctx := context.Background()
 
-	eligible := createTestCharacter("char-high", "Veteran", 20, 50000, 0)
+	eligible := createTestCharacter("char-high", "Veteran", 20, 50000)
 	_ = charRepo.Update(ctx, eligible)
 
 	// Talk
@@ -286,7 +283,7 @@ func TestPurchaseItemSuccess(t *testing.T) {
 	svc, charRepo, invRepo, _ := setupTest(t)
 	ctx := context.Background()
 
-	eligible := createTestCharacter("char-high", "Veteran", 20, 100000, 0)
+	eligible := createTestCharacter("char-high", "Veteran", 20, 100000)
 	_ = charRepo.Update(ctx, eligible)
 
 	result, err := svc.PurchaseItem(ctx, "char-high", "secret_item_philosopher_stone", 2)
@@ -320,7 +317,7 @@ func TestPurchaseItemValidationErrors(t *testing.T) {
 	ctx := context.Background()
 
 	// Ineligible
-	ineligible := createTestCharacter("char-low", "Novice", 5, 100000, 0)
+	ineligible := createTestCharacter("char-low", "Novice", 5, 100000)
 	_ = charRepo.Update(ctx, ineligible)
 	_, err := svc.PurchaseItem(ctx, "char-low", "secret_item_philosopher_stone", 1)
 	if !errors.Is(err, secretshop.ErrAccessDenied) {
@@ -328,7 +325,7 @@ func TestPurchaseItemValidationErrors(t *testing.T) {
 	}
 
 	// Eligible but insufficient funds
-	broke := createTestCharacter("char-broke", "Veteran", 20, 100, 0)
+	broke := createTestCharacter("char-broke", "Veteran", 20, 100)
 	_ = charRepo.Update(ctx, broke)
 	_, err = svc.PurchaseItem(ctx, "char-broke", "secret_item_philosopher_stone", 1)
 	if !errors.Is(err, secretshop.ErrInsufficientFunds) {
@@ -336,7 +333,7 @@ func TestPurchaseItemValidationErrors(t *testing.T) {
 	}
 
 	// Invalid quantity
-	eligible := createTestCharacter("char-high", "Veteran", 20, 100000, 0)
+	eligible := createTestCharacter("char-high", "Veteran", 20, 100000)
 	_ = charRepo.Update(ctx, eligible)
 	_, err = svc.PurchaseItem(ctx, "char-high", "secret_item_philosopher_stone", 0)
 	if !errors.Is(err, secretshop.ErrInvalidQuantity) {

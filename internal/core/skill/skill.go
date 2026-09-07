@@ -18,19 +18,19 @@ type Definition struct {
 	ID             string
 	Name           string
 	RequiredJobIDs []string
-	RequiredLevel  int
+	RequiredSP     int // Skill Point threshold at which this skill is automatically learned.
 	MPCost         int
 	Effect         corebattle.Effect
 }
 
-func NewDefinition(id, name string, jobs []string, level, mpCost int, effect corebattle.Effect) (Definition, error) {
-	if strings.TrimSpace(id) == "" || strings.TrimSpace(name) == "" || level < 1 ||
+func NewDefinition(id, name string, jobs []string, requiredSP, mpCost int, effect corebattle.Effect) (Definition, error) {
+	if strings.TrimSpace(id) == "" || strings.TrimSpace(name) == "" || requiredSP < 1 ||
 		mpCost < 0 || strings.TrimSpace(effect.Kind) == "" || effect.Power < 0 {
 		return Definition{}, ErrInvalidDefinition
 	}
 	return Definition{
 		ID: id, Name: name, RequiredJobIDs: append([]string(nil), jobs...),
-		RequiredLevel: level, MPCost: mpCost, Effect: effect,
+		RequiredSP: requiredSP, MPCost: mpCost, Effect: effect,
 	}, nil
 }
 
@@ -44,7 +44,7 @@ func (d Definition) CanUse(request UseRequest) error {
 	if request.Character == nil {
 		return ErrUnavailable
 	}
-	if request.Character.Level < d.RequiredLevel || request.Character.Stats.MP < d.MPCost {
+	if request.Character.SP < d.RequiredSP || request.Character.Stats.MP < d.MPCost {
 		if request.Character.Stats.MP < d.MPCost {
 			return ErrInsufficientMP
 		}

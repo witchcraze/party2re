@@ -39,7 +39,7 @@ func (r *RankingRepository) GetLevelRanking(ctx context.Context, limit, offset i
 
 	query := `
 		SELECT c.id, c.player_id, COALESCE(p.username, ''), c.name, c.job_id, c.gender,
-		       c.level, c.experience, c.rebirth_count, c.level AS score, c.experience AS secondary_score
+		       c.level, c.experience, c.sp, c.level AS score, c.experience AS secondary_score
 		FROM characters c
 		LEFT JOIN players p ON c.player_id = p.id
 		ORDER BY c.level DESC, c.experience DESC, c.id ASC
@@ -115,7 +115,7 @@ func (r *RankingRepository) GetCharacterWealthRanking(ctx context.Context, limit
 
 	query := `
 		SELECT c.id, c.player_id, COALESCE(p.username, ''), c.name, c.job_id, c.gender,
-		       c.level, c.experience, c.rebirth_count, c.money AS score, c.level AS secondary_score
+		       c.level, c.experience, c.sp, c.money AS score, c.level AS secondary_score
 		FROM characters c
 		LEFT JOIN players p ON c.player_id = p.id
 		ORDER BY c.money DESC, c.level DESC, c.id ASC
@@ -142,7 +142,7 @@ func (r *RankingRepository) GetBattleVictoryRanking(ctx context.Context, limit, 
 
 	query := `
 		SELECT c.id, c.player_id, COALESCE(p.username, ''), c.name, c.job_id, c.gender,
-		       c.level, c.experience, c.rebirth_count,
+		       c.level, c.experience, c.sp,
 		       (COALESCE(ar.wins, 0) + COALESCE(br.total_boss_defeats, 0) + COALESCE(adv.adventure_wins, 0)) AS total_victories,
 		       COALESCE(ar.wins, 0) AS pvp_wins
 		FROM characters c
@@ -179,7 +179,7 @@ func (r *RankingRepository) GetPvPVictoryRanking(ctx context.Context, limit, off
 
 	query := `
 		SELECT c.id, c.player_id, COALESCE(p.username, ''), c.name, c.job_id, c.gender,
-		       c.level, c.experience, c.rebirth_count,
+		       c.level, c.experience, c.sp,
 		       COALESCE(ar.wins, 0) AS pvp_wins,
 		       COALESCE(ar.rating, 1000) AS rating
 		FROM characters c
@@ -209,7 +209,7 @@ func (r *RankingRepository) GetBossDefeatRanking(ctx context.Context, limit, off
 
 	query := `
 		SELECT c.id, c.player_id, COALESCE(p.username, ''), c.name, c.job_id, c.gender,
-		       c.level, c.experience, c.rebirth_count,
+		       c.level, c.experience, c.sp,
 		       COALESCE(br.total_boss_defeats, 0) AS boss_defeats,
 		       COALESCE(br.highest_tier_cleared, 0) AS highest_tier
 		FROM characters c
@@ -239,7 +239,7 @@ func (r *RankingRepository) GetAdventureVictoryRanking(ctx context.Context, limi
 
 	query := `
 		SELECT c.id, c.player_id, COALESCE(p.username, ''), c.name, c.job_id, c.gender,
-		       c.level, c.experience, c.rebirth_count,
+		       c.level, c.experience, c.sp,
 		       COALESCE(adv.adventure_wins, 0) AS adventure_wins,
 		       c.level AS secondary_score
 		FROM characters c
@@ -274,13 +274,13 @@ func (r *RankingRepository) GetJobMasteryRanking(ctx context.Context, limit, off
 
 	query := `
 		SELECT c.id, c.player_id, COALESCE(p.username, ''), c.name, c.job_id, c.gender,
-		       c.level, c.experience, c.rebirth_count,
+		       c.level, c.experience, c.sp,
 		       COUNT(jm.job_id) AS mastered_count,
 		       c.level AS secondary_score
 		FROM characters c
 		LEFT JOIN players p ON c.player_id = p.id
 		LEFT JOIN character_job_masteries jm ON c.id = jm.character_id
-		GROUP BY c.id, c.player_id, p.username, c.name, c.job_id, c.gender, c.level, c.experience, c.rebirth_count
+		GROUP BY c.id, c.player_id, p.username, c.name, c.job_id, c.gender, c.level, c.experience, c.sp
 		ORDER BY mastered_count DESC, c.level DESC, c.id ASC
 		LIMIT ? OFFSET ?
 	`
@@ -346,37 +346,10 @@ func (r *RankingRepository) GetHelperRanking(ctx context.Context, limit, offset 
 
 	query := `
 		SELECT c.id, c.player_id, COALESCE(p.username, ''), c.name, c.job_id, c.gender,
-		       c.level, c.experience, c.rebirth_count, c.help_count AS score, c.level AS secondary_score
+		       c.level, c.experience, c.sp, c.help_count AS score, c.level AS secondary_score
 		FROM characters c
 		LEFT JOIN players p ON c.player_id = p.id
 		ORDER BY c.help_count DESC, c.level DESC, c.id ASC
-		LIMIT ? OFFSET ?
-	`
-	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-
-	entries, err := scanCharacterRankingEntries(rows, offset)
-	if err != nil {
-		return nil, 0, err
-	}
-	return entries, total, nil
-}
-
-func (r *RankingRepository) GetRebirthRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
-	total, err := r.countCharacters(ctx)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	query := `
-		SELECT c.id, c.player_id, COALESCE(p.username, ''), c.name, c.job_id, c.gender,
-		       c.level, c.experience, c.rebirth_count, c.rebirth_count AS score, c.level AS secondary_score
-		FROM characters c
-		LEFT JOIN players p ON c.player_id = p.id
-		ORDER BY c.rebirth_count DESC, c.level DESC, c.experience DESC, c.id ASC
 		LIMIT ? OFFSET ?
 	`
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
@@ -400,7 +373,7 @@ func (r *RankingRepository) GetSmallMedalRanking(ctx context.Context, limit, off
 
 	query := `
 		SELECT c.id, c.player_id, COALESCE(p.username, ''), c.name, c.job_id, c.gender,
-		       c.level, c.experience, c.rebirth_count, c.small_medals AS score, c.level AS secondary_score
+		       c.level, c.experience, c.sp, c.small_medals AS score, c.level AS secondary_score
 		FROM characters c
 		LEFT JOIN players p ON c.player_id = p.id
 		ORDER BY c.small_medals DESC, c.level DESC, c.id ASC
@@ -494,7 +467,7 @@ func scanCharacterRankingEntries(rows *sql.Rows, offset int) ([]ranking.Characte
 			&e.Gender,
 			&e.Level,
 			&e.Experience,
-			&e.RebirthCount,
+			&e.SP,
 			&e.Score,
 			&secondary,
 		); err != nil {

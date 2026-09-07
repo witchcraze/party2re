@@ -24,7 +24,6 @@ The ranking engine calculates standings across 12 distinct game metrics:
 | **Job Mastery Ranking** | `job_mastery` | `count(mastered_jobs) DESC, level DESC, id ASC` | Characters |
 | **Job Popularity Ranking** | `job_popularity` | `total_count DESC, job_id ASC` (with male/female distribution) | Job Classes |
 | **Helper Quests Ranking** | `helper` | `help_count DESC, level DESC, id ASC` | Characters |
-| **Character Rebirth Ranking** | `rebirth` | `rebirth_count DESC, level DESC, experience DESC, id ASC` | Characters |
 | **Small Medals Ranking** | `small_medals` | `small_medals DESC, level DESC, id ASC` | Characters |
 
 ### 2. Deterministic Tie-Breaking & Pagination
@@ -54,7 +53,6 @@ The ranking engine calculates standings across 12 distinct game metrics:
 | `GET` | `/rankings/job-mastery` | Public | Mastered Jobs leaderboard (`?limit=20&offset=0&snapshot=true`) |
 | `GET` | `/rankings/job-popularity` | Public | Job distribution & popularity statistics (`?snapshot=true`) |
 | `GET` | `/rankings/helpers` | Public | Helper Quests completed leaderboard (`?limit=20&offset=0&snapshot=true`) |
-| `GET` | `/rankings/rebirths` | Public | Character Rebirth count leaderboard (`?limit=20&offset=0&snapshot=true`) |
 | `GET` | `/rankings/medals` | Public | Small Medals collected leaderboard (`?limit=20&offset=0&snapshot=true`) |
 | `GET` | `/rankings/{type}` | Public | Dynamic leaderboard by ranking type string |
 | `POST` | `/rankings/refresh` | Admin (`X-Admin-Key` / `Bearer <key>`) | Trigger snapshot recalculation (all or specific `ranking_type`) |
@@ -63,11 +61,10 @@ The ranking engine calculates standings across 12 distinct game metrics:
 
 ## Persistence
 
-Data is managed and indexed in MariaDB via `migrations/035_rankings_and_leaderboards.sql`:
+Data is managed and indexed in MariaDB via `migrations/035_rankings_and_leaderboards.sql` and `migrations/056_eliminate_rebirth_add_sp.sql`:
 - `ranking_snapshots`: (ranking_type PRIMARY KEY, snapshot_data, total_count, calculated_at, updated_at)
 - Indexes added for high-performance ranking queries:
   - `idx_characters_level_exp` on `characters(level DESC, experience DESC, id ASC)`
   - `idx_characters_money` on `characters(money DESC, id ASC)`
-  - `idx_characters_rebirth` on `characters(rebirth_count DESC, level DESC, id ASC)`
   - `idx_characters_help` on `characters(help_count DESC, level DESC, id ASC)`
   - `idx_adventures_char_outcome` on `adventures(character_id, outcome)`

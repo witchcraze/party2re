@@ -93,7 +93,7 @@ Following a comprehensive clean-room specification audit of all 40 legacy CGI mo
 Eliminate divergent mechanics in storage, core progression, and battle engines before downstream dependencies.
 - [x] **Depot Capacity & Direct Delivery Routing** (#460)
 - [x] **Multi-turn Core Battle Engine Parity** (#480)
-- [ ] **Abolish Fictional Rebirth System & Restore OverLevel Cap** (#470)
+- [x] **Abolish Fictional Rebirth System & Restore OverLevel Cap** (#470)
 - [ ] **Altar of Rebirth: Restore Lv99→150 Limit Break & Celestial Realm** (#471)
 - [ ] **Custom Skills: Incantations, Resource Scaling & Failure Multipliers** (#469)
 - [ ] **Job System Mastery & Job Change Requirements** (#467)

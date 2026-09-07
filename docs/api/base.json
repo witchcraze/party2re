@@ -955,7 +955,7 @@
           "player_id": {
             "type": "string"
           },
-          "rebirth_count": {
+          "sp": {
             "type": "integer"
           },
           "stats": {

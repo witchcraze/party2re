@@ -16,7 +16,6 @@ type Repository interface {
 	GetJobMasteryRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	GetJobPopularityRanking(ctx context.Context) ([]JobPopularityEntry, error)
 	GetHelperRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
-	GetRebirthRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	GetSmallMedalRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 
 	SaveSnapshot(ctx context.Context, snapshot RankingSnapshot) error
