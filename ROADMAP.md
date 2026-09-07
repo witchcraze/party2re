@@ -94,7 +94,7 @@ Eliminate divergent mechanics in storage, core progression, and battle engines b
 - [x] **Depot Capacity & Direct Delivery Routing** (#460)
 - [x] **Multi-turn Core Battle Engine Parity** (#480)
 - [x] **Abolish Fictional Rebirth System & Restore OverLevel Cap** (#470)
-- [ ] **Altar of Rebirth: Restore Lv99→150 Limit Break & Celestial Realm** (#471)
+- [x] **Altar of Rebirth: Restore 6-Orb Offering, Ramia Awakening & Otherworld Wishes** (#471)
 - [ ] **Custom Skills: Incantations, Resource Scaling & Failure Multipliers** (#469)
 - [ ] **Job System Mastery & Job Change Requirements** (#467)
 - [ ] **Wishing Well & God Stat Seed Grants** (#468, #473)

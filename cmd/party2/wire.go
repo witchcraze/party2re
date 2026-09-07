@@ -167,6 +167,7 @@ func newHTTPHandler(
 		http.WithMonster(misc.monster),
 		http.WithContest(misc.contest),
 		http.WithParty(cmbt.party),
+		http.WithAltar(misc.altar),
 		http.WithMaintenance(misc.maint),
 	}
 

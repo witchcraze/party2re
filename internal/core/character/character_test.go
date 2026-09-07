@@ -138,3 +138,68 @@ func TestCharacterSmallMedalsEncapsulation(t *testing.T) {
 		t.Errorf("DeductSmallMedals(-1) expected ErrInvalidAmount, got %v", err)
 	}
 }
+
+func TestCharacterOrbEncapsulation(t *testing.T) {
+	c := Character{Orb: ""}
+
+	if c.OrbCount() != 0 {
+		t.Fatalf("expected 0 orbs, got %d", c.OrbCount())
+	}
+	if c.HasAllOrbs() {
+		t.Fatal("expected HasAllOrbs to be false for empty orb string")
+	}
+	if c.IsRamiaAwakened() {
+		t.Fatal("expected IsRamiaAwakened to be false")
+	}
+
+	// Add valid orb
+	added, err := c.AddOrb(OrbSilver)
+	if err != nil || !added || !c.HasOrb(OrbSilver) {
+		t.Fatalf("failed to add OrbSilver: added=%v, err=%v", added, err)
+	}
+	if c.OrbCount() != 1 {
+		t.Fatalf("expected 1 orb, got %d", c.OrbCount())
+	}
+
+	// Duplicate add returns added=false, err=nil
+	added, err = c.AddOrb(OrbSilver)
+	if err != nil || added {
+		t.Fatalf("expected duplicate AddOrb to return false, nil; got added=%v, err=%v", added, err)
+	}
+
+	// Invalid orb rune
+	_, err = c.AddOrb('x')
+	if !errors.Is(err, ErrInvalidOrbRune) {
+		t.Fatalf("expected ErrInvalidOrbRune, got %v", err)
+	}
+
+	// Add remaining 5 orbs
+	for _, orb := range []rune{OrbRed, OrbBlue, OrbGreen, OrbYellow, OrbPurple} {
+		added, err := c.AddOrb(orb)
+		if err != nil || !added {
+			t.Fatalf("failed to add orb %c: %v", orb, err)
+		}
+	}
+
+	if c.OrbCount() != 6 {
+		t.Fatalf("expected 6 orbs, got %d", c.OrbCount())
+	}
+	if !c.HasAllOrbs() {
+		t.Fatal("expected HasAllOrbs to be true")
+	}
+
+	// Awaken Ramia
+	c.SetRamiaAwakened()
+	if !c.IsRamiaAwakened() {
+		t.Fatal("expected IsRamiaAwakened to be true")
+	}
+	if c.Orb != "G" {
+		t.Fatalf("expected Orb to be 'G', got %q", c.Orb)
+	}
+
+	// Clear orbs
+	c.ClearOrbs()
+	if c.Orb != "" || c.OrbCount() != 0 || c.IsRamiaAwakened() {
+		t.Fatalf("expected cleared orbs, got %q", c.Orb)
+	}
+}

@@ -69,6 +69,7 @@ func TestCharacterRepositoryPersistsAndLoadsCharacter(t *testing.T) {
 	want.Money = 350
 	want.Stats.HP = 25
 	want.SP = 1
+	want.Orb = "srbgyp"
 	if err := repository.Update(ctx, want); err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
