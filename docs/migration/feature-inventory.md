@@ -63,7 +63,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Job definitions, data catalog, and job change history ([#17](https://github.com/witchcraze/party2re/issues/17), [#38](https://github.com/witchcraze/party2re/issues/38), [#50](https://github.com/witchcraze/party2re/issues/50))
 - [x] Job-based stat growth formulas ([#31](https://github.com/witchcraze/party2re/issues/31))
 - [x] Skill definitions, costs, and availability conditions ([#18](https://github.com/witchcraze/party2re/issues/18))
-- [x] Job mastery (Lv99) and Character Rebirth progression (+5 stat bonuses) ([#61](https://github.com/witchcraze/party2re/issues/61))
+- [x] Job mastery (Lv99) ([#61](https://github.com/witchcraze/party2re/issues/61)); Fictional Rebirth abolished in favor of SP accumulation and OverLevel ([#470](https://github.com/witchcraze/party2re/issues/470))
 - [x] Inn resting and HP/MP recovery ([#62](https://github.com/witchcraze/party2re/issues/62))
 - [x] Custom skill assignment ([#69](https://github.com/witchcraze/party2re/issues/69))
 - [x] Endgame wishes, stat boosts, and Lv99+ / storage limit breaks ([#187](https://github.com/witchcraze/party2re/issues/187))
@@ -100,7 +100,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Player communication, park, and public interactions ([#78](https://github.com/witchcraze/party2re/issues/78))
 - [x] Player private home, mailbox, and letter correspondence ([#159](https://github.com/witchcraze/party2re/issues/159))
 - [x] Helper and player rescue assistance ([#79](https://github.com/witchcraze/party2re/issues/79))
-- [x] Rankings (level, job, wealth, battle victories, helper, rebirth, medals) ([#63](https://github.com/witchcraze/party2re/issues/63))
+- [x] Rankings (level, job, wealth, battle victories, helper, medals; rebirth eliminated) ([#63](https://github.com/witchcraze/party2re/issues/63), [#470](https://github.com/witchcraze/party2re/issues/470))
 - [x] Photo Contest, screenshots, seasonal voting, and Hall of Fame ([#186](https://github.com/witchcraze/party2re/issues/186))
 
 ### F. Economy and side systems
@@ -161,7 +161,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#58](https://github.com/witchcraze/party2re/issues/58) | Character Item Depot storage management | Merged |
 | [#59](https://github.com/witchcraze/party2re/issues/59) | Blacksmith equipment enhancement (+1 to +10) | Merged |
 | [#60](https://github.com/witchcraze/party2re/issues/60) | Alchemy synthesis and 112 crafting recipes | Merged |
-| [#61](https://github.com/witchcraze/party2re/issues/61) | Job mastery tracking and Character Rebirth | Merged |
+| [#61](https://github.com/witchcraze/party2re/issues/61) | Job mastery tracking and Character Rebirth (Rebirth superseded by #470) | Merged |
 | [#62](https://github.com/witchcraze/party2re/issues/62) | Character resting and Inn recovery | Merged |
 | [#71](https://github.com/witchcraze/party2re/issues/71) | Bank account management and player transfers | Merged |
 | [#87](https://github.com/witchcraze/party2re/issues/87) | HTTP JSON Application API transport layer | Merged |

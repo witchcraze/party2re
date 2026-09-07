@@ -23,7 +23,7 @@ Where:
   - If $jobLv \ge 29$: $150$ slots
   - If $jobLv > 0$: $jobLv \times 5 + 5$ slots
   - Default / minimum base: $5$ slots
-  *(In Party2Re, $jobLv$ corresponds to the character's rebirth count / effective job level)*
+  *(In Party2Re, $jobLv$ corresponds to the character's effective job level)*
 - **`ex_depot`**: Number of paid depot expansions (0 to 20, granting +5 slots each, up to +100 slots).
 - **`over_depot`**: Number of god limit breaks applied to depot capacity (0 to 5, granting +50 slots each, up to +250 slots).
 - Absolute minimum capacity: 5 slots.

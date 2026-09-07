@@ -15,8 +15,7 @@ The secret shop provides rare consumable goods and accessories at premium pricin
 Access to the secret underground shop is restricted to characters who satisfy discovery qualifications:
 
 - **Level Requirement**: Level `>= 15`
-- **Rebirth Exception**: Any character with `RebirthCount > 0` qualifies regardless of level.
-- **Access Control**: Characters failing these criteria receive `ErrAccessDenied` (HTTP 403 Forbidden).
+- **Access Control**: Characters failing this criterion receive `ErrAccessDenied` (HTTP 403 Forbidden).
 
 ---
 

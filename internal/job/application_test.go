@@ -90,10 +90,11 @@ func TestServiceListAndChangeJob(t *testing.T) {
 	state, _ := corejob.NewCharacterJob("character-1", "starter")
 	repo := &repositoryStub{value: state}
 	char := corecharacter.Character{
-		ID:     "character-1",
-		JobID:  "starter",
-		Level:  10,
-		Gender: "male",
+		ID:        "character-1",
+		JobID:     "starter",
+		Level:     10,
+		Gender:    "male",
+		OverLevel: true,
 	}
 	charRepo := &charRepoStub{char: char}
 	svc, err := NewService(repo, WithCharacterRepository(charRepo))
@@ -112,5 +113,8 @@ func TestServiceListAndChangeJob(t *testing.T) {
 	}
 	if updatedChar.JobID != "job-01" || updatedJob.CurrentJobID != "job-01" {
 		t.Fatalf("expected job job-01, got char=%s, job=%s", updatedChar.JobID, updatedJob.CurrentJobID)
+	}
+	if updatedChar.OverLevel {
+		t.Fatalf("expected OverLevel to be reset to false on job change, got %v", updatedChar.OverLevel)
 	}
 }

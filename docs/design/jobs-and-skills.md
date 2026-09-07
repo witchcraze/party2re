@@ -40,7 +40,7 @@ Skills represent special combat actions or abilities:
 - `ID`: Unique identifier (e.g. `skill-01`)
 - `Name`: Display name (e.g. `会心の一撃`, `ヒール`)
 - `RequiredJobIDs`: List of job IDs allowed to use the skill (empty means any job).
-- `RequiredLevel`: Minimum character level required.
+- `RequiredSP`: Skill Point threshold at which this skill is learned and can be used.
 - `MPCost`: Mana cost consumed upon skill execution.
 - `Effect`: Combat effect produced:
   - `Kind`: Type of effect (e.g. `damage`, `heal`, `buff`).
@@ -48,7 +48,7 @@ Skills represent special combat actions or abilities:
 
 ### Skill Availability Evaluation
 Before a skill can be invoked, `CanUse` checks:
-1. `Character.Level >= Skill.RequiredLevel`
+1. `Character.SP >= Skill.RequiredSP`
 2. `Character.Stats.MP >= Skill.MPCost`
 3. If `RequiredJobIDs` is non-empty, `Character.JobID` must match one of the allowed jobs.
 4. If a required item is specified, the character's inventory must contain the item.

@@ -143,7 +143,7 @@ The target is the game's meaningful behavior and design, not its historical impl
 
 ### Domain Design Specifications
 - [`battle.md`](battle.md) — combat formulas and deterministic resolution
-- [`progression.md`](progression.md) — experience thresholds, level growth, and rebirth
+- [`progression.md`](progression.md) — experience thresholds, level growth, and celestial OverLevel
 - [`jobs-and-skills.md`](jobs-and-skills.md) — jobs, mastery, and skill execution
 - [`items-and-equipment.md`](items-and-equipment.md) — 5-category item catalog and equipment rules
 - [`activities.md`](activities.md) — delayed training activities
@@ -154,7 +154,6 @@ The target is the game's meaningful behavior and design, not its historical impl
 - [`alchemy.md`](alchemy.md) — recipe crafting synthesis
 - [`bank.md`](bank.md) — bank accounts and remittances
 - [`resting.md`](resting.md) — inn and rest recovery
-- [`rebirth.md`](rebirth.md) — job mastery and character reincarnation
 
 ### Architecture & Rules
 - [`../architecture/overview.md`](../architecture/overview.md) — how the game is structured in software.

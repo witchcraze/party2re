@@ -11282,83 +11282,6 @@
         ]
       }
     },
-    "/characters/{id}/rebirth": {
-      "post": {
-        "operationId": "rebirthCharacter",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Rebirth completed"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Rebirth Lv99 character with stat bonuses",
-        "tags": [
-          "Character"
-        ]
-      }
-    },
     "/characters/{id}/secretshop": {
       "get": {
         "description": "Checks character eligibility and returns secret shop status and available rare items.",
@@ -16672,58 +16595,6 @@
         ]
       }
     },
-    "/rankings/rebirths": {
-      "get": {
-        "operationId": "getRebirthRanking",
-        "parameters": [
-          {
-            "description": "Limit",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Rebirth ranking"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          }
-        },
-        "summary": "Get character rebirth count ranking",
-        "tags": [
-          "Rankings"
-        ]
-      }
-    },
     "/rankings/refresh": {
       "post": {
         "operationId": "refreshRankings",
@@ -17354,7 +17225,7 @@
       "name": "Auth"
     },
     {
-      "description": "Character creation, profiles, jobs, rebirth, and inn resting",
+      "description": "Character creation, profiles, jobs, and inn resting",
       "name": "Character"
     },
     {

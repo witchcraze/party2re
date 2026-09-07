@@ -83,6 +83,7 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}
 	char.JobID = targetJobID
+	char.OverLevel = false
 	if err := s.characters.Update(ctx, char); err != nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}

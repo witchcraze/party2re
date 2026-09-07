@@ -32,7 +32,7 @@ func (s *stubJobService) ChangeJob(ctx context.Context, characterID, targetJobID
 	return corecharacter.Character{}, corejob.CharacterJob{}, nil
 }
 
-func TestJobAndRebirthEndpoints(t *testing.T) {
+func TestJobEndpoints(t *testing.T) {
 	player := coreplayer.Player{ID: "p1", Username: "hero"}
 	char := corecharacter.Character{ID: "c1", PlayerID: "p1", Name: "Hero", Level: 50}
 
