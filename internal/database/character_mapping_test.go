@@ -93,8 +93,8 @@ func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 	if char.Money != 5000 || char.Level != 15 || char.Experience != 3200 {
 		t.Errorf("unexpected progression: Level %d, Exp %d, Money %d", char.Level, char.Experience, char.Money)
 	}
-	if char.RebirthCount != 2 || char.SmallMedals != 5 || char.HelpCount != 8 {
-		t.Errorf("unexpected medals/help/rebirth: Rebirth %d, Medals %d, Help %d", char.RebirthCount, char.SmallMedals, char.HelpCount)
+	if char.SP != 2 || char.SmallMedals != 5 || char.HelpCount != 8 {
+		t.Errorf("unexpected medals/help/sp: SP %d, Medals %d, Help %d", char.SP, char.SmallMedals, char.HelpCount)
 	}
 	if !char.OverLevel || char.OverDepot != 1 || char.OverMonster != 2 || char.OverFuture != 3 || char.OverFlea != 4 || char.OverStore != 5 {
 		t.Errorf("unexpected limit break fields: OverLevel %v, OverDepot %d, OverMonster %d, OverFuture %d, OverFlea %d, OverStore %d",

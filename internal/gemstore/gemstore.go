@@ -218,7 +218,7 @@ func (s *Service) BuyGem(ctx context.Context, characterID, gemID string) (BuyRes
 			return err
 		}
 
-		if char.Level < gem.RequiredLevel && char.RebirthCount == 0 {
+		if char.Level < gem.RequiredLevel {
 			return ErrLevelTooLow
 		}
 

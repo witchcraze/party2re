@@ -32,10 +32,6 @@ type changeJobResponse struct {
 	Job       corejob.CharacterJob `json:"job"`
 }
 
-type rebirthResponse struct {
-	Character characterResponse `json:"character"`
-}
-
 func (h *Handler) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	if h.jobs == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("job service not configured"))
@@ -75,21 +71,6 @@ func (h *Handler) handleChangeJob(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, changeJobResponse{
 			Character: toCharacterResponse(updatedChar),
 			Job:       updatedJob,
-		})
-	})
-}
-
-func (h *Handler) handleRebirth(w http.ResponseWriter, r *http.Request) {
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		updatedChar, err := h.characters.Rebirth(r.Context(), char.ID)
-		if err != nil {
-			writeError(w, http.StatusUnprocessableEntity, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, rebirthResponse{
-			Character: toCharacterResponse(updatedChar),
 		})
 	})
 }

@@ -21,7 +21,6 @@ type RankingService interface {
 	GetJobMasteryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	GetJobPopularityRanking(ctx context.Context, useSnapshot bool) (ranking.RankingPage[ranking.JobPopularityEntry], error)
 	GetHelperRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
-	GetRebirthRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	GetSmallMedalRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	GetRankingByType(ctx context.Context, rankingType ranking.RankingType, limit, offset int, useSnapshot bool) (any, error)
 	RefreshSnapshot(ctx context.Context, rankingType ranking.RankingType) error
@@ -149,20 +148,6 @@ func (h *Handler) handleGetHelperRanking(w http.ResponseWriter, r *http.Request)
 	}
 	limit, offset, useSnapshot := parsePaginationAndSnapshotParams(r)
 	page, err := h.rankings.GetHelperRanking(r.Context(), limit, offset, useSnapshot)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, page)
-}
-
-func (h *Handler) handleGetRebirthRanking(w http.ResponseWriter, r *http.Request) {
-	if h.rankings == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("ranking service not configured"))
-		return
-	}
-	limit, offset, useSnapshot := parsePaginationAndSnapshotParams(r)
-	page, err := h.rankings.GetRebirthRanking(r.Context(), limit, offset, useSnapshot)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return

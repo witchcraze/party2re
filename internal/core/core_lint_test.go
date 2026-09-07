@@ -79,13 +79,13 @@ func checkFileCoreRules(fset *token.FileSet, node *ast.File, filename string) []
 				fieldName := sel.Sel.Name
 				pos := fset.Position(stmt.Pos())
 
-				// Progression (Experience, Level)
-				if (fieldName == "Experience" || fieldName == "Level") && !isAllowedProgression {
+				// Progression (Experience, Level, SP)
+				if (fieldName == "Experience" || fieldName == "Level" || fieldName == "SP") && !isAllowedProgression {
 					violations = append(violations, coreViolation{
 						file:    filename,
 						line:    pos.Line,
 						field:   fieldName,
-						message: "direct mutation of character progression field '" + fieldName + "' is prohibited; use progression.ApplyExperience or progression.Rebirth instead",
+						message: "direct mutation of character progression field '" + fieldName + "' is prohibited; use progression.ApplyExperience instead",
 					})
 				}
 
@@ -126,12 +126,12 @@ func checkFileCoreRules(fset *token.FileSet, node *ast.File, filename string) []
 					pos := fset.Position(stmt.Pos())
 
 					// Progression
-					if (fieldName == "Experience" || fieldName == "Level") && !isAllowedProgression {
+					if (fieldName == "Experience" || fieldName == "Level" || fieldName == "SP") && !isAllowedProgression {
 						violations = append(violations, coreViolation{
 							file:    filename,
 							line:    pos.Line,
 							field:   fieldName,
-							message: "direct mutation of character progression field '" + fieldName + "' is prohibited; use progression.ApplyExperience or progression.Rebirth instead",
+							message: "direct mutation of character progression field '" + fieldName + "' is prohibited; use progression.ApplyExperience instead",
 						})
 					}
 

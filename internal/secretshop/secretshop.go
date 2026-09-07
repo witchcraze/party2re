@@ -154,8 +154,9 @@ type PuffPuffResult struct {
 }
 
 // CheckEligibility returns true if the character meets secret shop discovery qualifications.
+// The original CGI (secret.cgi) is accessible only when level >= MinAccessLevel.
 func CheckEligibility(c corecharacter.Character) bool {
-	return c.Level >= MinAccessLevel || c.RebirthCount > 0
+	return c.Level >= MinAccessLevel
 }
 
 // GetShopStatus checks access and returns available secret shop items.

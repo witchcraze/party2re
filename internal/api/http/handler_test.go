@@ -77,7 +77,6 @@ func (s *stubPlayerService) RevokeAPIToken(ctx context.Context, playerID, tokenI
 type stubCharacterService struct {
 	createFn                func(ctx context.Context, playerID, name string) (corecharacter.Character, error)
 	getFn                   func(ctx context.Context, id string) (corecharacter.Character, error)
-	rebirthFn               func(ctx context.Context, id string) (corecharacter.Character, error)
 	changeNameFn            func(ctx context.Context, characterID, newName string) (corecharacter.Character, error)
 	changeGenderFn          func(ctx context.Context, characterID, newGender string) (corecharacter.Character, error)
 	getProfileFn            func(ctx context.Context, characterID string) (character.ProfileView, error)
@@ -98,12 +97,6 @@ func (s *stubCharacterService) Get(ctx context.Context, id string) (corecharacte
 		return s.getFn(ctx, id)
 	}
 	return corecharacter.Character{ID: id, PlayerID: "player-1"}, nil
-}
-func (s *stubCharacterService) Rebirth(ctx context.Context, id string) (corecharacter.Character, error) {
-	if s.rebirthFn != nil {
-		return s.rebirthFn(ctx, id)
-	}
-	return corecharacter.Character{}, nil
 }
 func (s *stubCharacterService) ChangeName(ctx context.Context, characterID, newName string) (corecharacter.Character, error) {
 	if s.changeNameFn != nil {

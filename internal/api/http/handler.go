@@ -62,7 +62,6 @@ type PlayerService interface {
 type CharacterService interface {
 	Create(ctx context.Context, playerID string, name string) (corecharacter.Character, error)
 	Get(ctx context.Context, id string) (corecharacter.Character, error)
-	Rebirth(ctx context.Context, id string) (corecharacter.Character, error)
 	ChangeName(ctx context.Context, characterID, newName string) (corecharacter.Character, error)
 	ChangeGender(ctx context.Context, characterID, newGender string) (corecharacter.Character, error)
 	GetProfile(ctx context.Context, characterID string) (character.ProfileView, error)
@@ -386,15 +385,13 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /rankings/job-mastery", h.handleGetJobMasteryRanking)
 	mux.HandleFunc("GET /rankings/job-popularity", h.handleGetJobPopularityRanking)
 	mux.HandleFunc("GET /rankings/helpers", h.handleGetHelperRanking)
-	mux.HandleFunc("GET /rankings/rebirths", h.handleGetRebirthRanking)
 	mux.HandleFunc("GET /rankings/medals", h.handleGetSmallMedalRanking)
 	mux.HandleFunc("GET /rankings/{type}", h.handleGetRankingByType)
 	mux.HandleFunc("POST /rankings/refresh", h.handleRefreshRankings)
 
-	// Jobs, Rebirth & Inn
+	// Jobs & Inn
 	mux.HandleFunc("GET /jobs", h.handleListJobs)
 	mux.HandleFunc("POST /characters/{id}/change-job", h.handleChangeJob)
-	mux.HandleFunc("POST /characters/{id}/rebirth", h.handleRebirth)
 	mux.HandleFunc("POST /characters/{id}/inn", h.handleInnRest)
 
 	// Custom Skills
@@ -723,16 +720,16 @@ type createCharacterRequest struct {
 }
 
 type characterResponse struct {
-	ID           string        `json:"id"`
-	PlayerID     string        `json:"player_id"`
-	Name         string        `json:"name"`
-	JobID        string        `json:"job_id"`
-	Gender       string        `json:"gender"`
-	Level        int           `json:"level"`
-	Experience   int           `json:"experience"`
-	Money        int           `json:"money"`
-	RebirthCount int           `json:"rebirth_count"`
-	Stats        statsResponse `json:"stats"`
+	ID         string        `json:"id"`
+	PlayerID   string        `json:"player_id"`
+	Name       string        `json:"name"`
+	JobID      string        `json:"job_id"`
+	Gender     string        `json:"gender"`
+	Level      int           `json:"level"`
+	Experience int           `json:"experience"`
+	Money      int           `json:"money"`
+	SP         int           `json:"sp"`
+	Stats      statsResponse `json:"stats"`
 }
 
 type statsResponse struct {
@@ -788,15 +785,15 @@ func (h *Handler) handleDeleteCharacter(w http.ResponseWriter, r *http.Request) 
 
 func toCharacterResponse(char corecharacter.Character) characterResponse {
 	return characterResponse{
-		ID:           char.ID,
-		PlayerID:     char.PlayerID,
-		Name:         char.Name,
-		JobID:        char.JobID,
-		Gender:       char.Gender,
-		Level:        char.Level,
-		Experience:   char.Experience,
-		Money:        char.Money,
-		RebirthCount: char.RebirthCount,
+		ID:         char.ID,
+		PlayerID:   char.PlayerID,
+		Name:       char.Name,
+		JobID:      char.JobID,
+		Gender:     char.Gender,
+		Level:      char.Level,
+		Experience: char.Experience,
+		Money:      char.Money,
+		SP:         char.SP,
 		Stats: statsResponse{
 			MaxHP:   char.Stats.MaxHP,
 			MaxMP:   char.Stats.MaxMP,

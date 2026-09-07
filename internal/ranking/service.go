@@ -94,8 +94,6 @@ func (s *Service) GetRankingByType(ctx context.Context, rankingType RankingType,
 		return s.GetJobPopularityRanking(ctx, useSnapshot)
 	case RankingTypeHelper:
 		return s.GetHelperRanking(ctx, limit, offset, useSnapshot)
-	case RankingTypeRebirth:
-		return s.GetRebirthRanking(ctx, limit, offset, useSnapshot)
 	case RankingTypeSmallMedals:
 		return s.GetSmallMedalRanking(ctx, limit, offset, useSnapshot)
 	default:

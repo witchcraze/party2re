@@ -14,7 +14,6 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	"github.com/witchcraze/party2re/internal/core/progression"
 )
 
 var (
@@ -167,25 +166,6 @@ func (s *Service) ListByPlayer(ctx context.Context, playerID string) ([]corechar
 
 func (s *Service) FindByPlayerID(ctx context.Context, playerID string) ([]corecharacter.Character, error) {
 	return s.ListByPlayer(ctx, playerID)
-}
-
-func (s *Service) Rebirth(ctx context.Context, id string) (corecharacter.Character, error) {
-	var result corecharacter.Character
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		char, err := s.findForUpdate(txCtx, id)
-		if err != nil {
-			return err
-		}
-		if err := progression.Rebirth(&char); err != nil {
-			return err
-		}
-		if err := s.repository.Update(txCtx, char); err != nil {
-			return err
-		}
-		result = char
-		return nil
-	})
-	return result, err
 }
 
 func (s *Service) findForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {

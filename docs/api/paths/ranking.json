@@ -352,58 +352,6 @@
       ]
     }
   },
-  "/rankings/rebirths": {
-    "get": {
-      "operationId": "getRebirthRanking",
-      "parameters": [
-        {
-          "description": "Limit",
-          "in": "query",
-          "name": "limit",
-          "required": false,
-          "schema": {
-            "type": "integer"
-          }
-        }
-      ],
-      "responses": {
-        "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          },
-          "description": "Rebirth ranking"
-        },
-        "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Bad request - invalid input or JSON syntax"
-        },
-        "500": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Internal server error"
-        }
-      },
-      "summary": "Get character rebirth count ranking",
-      "tags": [
-        "Rankings"
-      ]
-    }
-  },
   "/rankings/refresh": {
     "post": {
       "operationId": "refreshRankings",

@@ -57,10 +57,6 @@ func (s *Service) RefreshSnapshot(ctx context.Context, rankingType RankingType) 
 		var entries []CharacterRankingEntry
 		entries, totalCount, err = s.repo.GetHelperRanking(ctx, 100, 0)
 		data = entries
-	case RankingTypeRebirth:
-		var entries []CharacterRankingEntry
-		entries, totalCount, err = s.repo.GetRebirthRanking(ctx, 100, 0)
-		data = entries
 	case RankingTypeSmallMedals:
 		var entries []CharacterRankingEntry
 		entries, totalCount, err = s.repo.GetSmallMedalRanking(ctx, 100, 0)
@@ -119,7 +115,6 @@ func (s *Service) RefreshAllSnapshots(ctx context.Context) error {
 		RankingTypeJobMastery,
 		RankingTypeJobPopularity,
 		RankingTypeHelper,
-		RankingTypeRebirth,
 		RankingTypeSmallMedals,
 	}
 

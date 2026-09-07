@@ -6,6 +6,9 @@ import (
 
 	"github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/job"
+	"github.com/witchcraze/party2re/internal/core/skill"
+
+	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 )
 
 func TestExperienceForNextLevelUsesCumulativeSquareThreshold(t *testing.T) {
@@ -111,12 +114,12 @@ func TestApplyExperienceWithJobAppliesRandomGrowthAndDoesNotRestoreCurrentResour
 	}
 	random := &sequenceRandomSource{values: []int{6, 1, 3, 0, 2}}
 
-	levels, err := ApplyExperienceWithJob(&value, 10, definition, random)
+	result, err := ApplyExperienceWithJob(&value, 10, definition, random, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if levels != 1 || value.Level != 2 {
-		t.Fatalf("level result = %d, character = %#v", levels, value)
+	if result.LevelsGained != 1 || value.Level != 2 {
+		t.Fatalf("level result = %d, character = %#v", result.LevelsGained, value)
 	}
 	want := character.Stats{MaxHP: 37, HP: 12, MaxMP: 9, MP: 3, Attack: 9, Defense: 6, Agility: 8}
 	if value.Stats != want {
@@ -135,12 +138,12 @@ func TestApplyExperienceWithJobGivesHPMinimumGrowth(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	levels, err := ApplyExperienceWithJob(&value, 10, definition, &sequenceRandomSource{values: []int{0, 0, 0, 0, 0}})
+	result, err := ApplyExperienceWithJob(&value, 10, definition, &sequenceRandomSource{values: []int{0, 0, 0, 0, 0}}, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if levels != 1 || value.Stats.MaxHP != 31 {
-		t.Fatalf("level result = %d, stats = %#v", levels, value.Stats)
+	if result.LevelsGained != 1 || value.Stats.MaxHP != 31 {
+		t.Fatalf("level result = %d, stats = %#v", result.LevelsGained, value.Stats)
 	}
 }
 
@@ -160,12 +163,12 @@ func TestApplyExperienceWithJobAppliesGrowthForMultipleLevels(t *testing.T) {
 		1, 1, 1, 1, 1,
 	}}
 
-	levels, err := ApplyExperienceWithJob(&value, 100, definition, random)
+	result, err := ApplyExperienceWithJob(&value, 100, definition, random, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if levels != 3 || value.Level != 4 {
-		t.Fatalf("level result = %d, character = %#v", levels, value)
+	if result.LevelsGained != 3 || value.Level != 4 {
+		t.Fatalf("level result = %d, character = %#v", result.LevelsGained, value)
 	}
 	if value.Stats.MaxHP != 35 || value.Stats.MaxMP != 8 ||
 		value.Stats.Attack != 8 || value.Stats.Defense != 8 || value.Stats.Agility != 8 {
@@ -178,11 +181,11 @@ func TestApplyExperienceWithJobRejectsInvalidGrowthAndRandomSource(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ApplyExperienceWithJob(&value, 10, job.Definition{ID: "broken", HPGrowth: -1}, &sequenceRandomSource{}); !errors.Is(err, ErrInvalidGrowth) {
+	if _, err := ApplyExperienceWithJob(&value, 10, job.Definition{ID: "broken", HPGrowth: -1}, &sequenceRandomSource{}, false, nil); !errors.Is(err, ErrInvalidGrowth) {
 		t.Fatalf("invalid growth error = %v, want %v", err, ErrInvalidGrowth)
 	}
 	definition, _ := job.NewDefinition("novice", "Novice", 1, 1, 1, 1, 1, 1, "")
-	if _, err := ApplyExperienceWithJob(&value, 10, definition, nil); !errors.Is(err, ErrInvalidGrowth) {
+	if _, err := ApplyExperienceWithJob(&value, 10, definition, nil, false, nil); !errors.Is(err, ErrInvalidGrowth) {
 		t.Fatalf("nil random error = %v, want %v", err, ErrInvalidGrowth)
 	}
 }
@@ -252,7 +255,7 @@ func TestApplyExperienceWithJobRandomError(t *testing.T) {
 		t.Fatal(err)
 	}
 	errRandom := errRandomSource{}
-	if _, err := ApplyExperienceWithJob(&value, 10, definition, errRandom); err == nil {
+	if _, err := ApplyExperienceWithJob(&value, 10, definition, errRandom, false, nil); err == nil {
 		t.Fatal("ApplyExperienceWithJob(errRandom) expected error, got nil")
 	}
 }
@@ -272,7 +275,7 @@ func TestApplyExperienceWithJobNegativeGrowthFields(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := ApplyExperienceWithJob(&char, 10, def, random); !errors.Is(err, ErrInvalidGrowth) {
+		if _, err := ApplyExperienceWithJob(&char, 10, def, random, false, nil); !errors.Is(err, ErrInvalidGrowth) {
 			t.Fatalf("ApplyExperienceWithJob(%#v) error = %v, want %v", def, err, ErrInvalidGrowth)
 		}
 	}
@@ -304,14 +307,139 @@ func TestApplyExperience_OverLevel_GrowthTo150(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	levelsGained, err := ApplyExperienceWithJob(&char, needed100-char.Experience, def, random)
+	result, err := ApplyExperienceWithJob(&char, needed100-char.Experience, def, random, false, nil)
 	if err != nil {
 		t.Fatalf("ApplyExperienceWithJob failed: %v", err)
 	}
-	if levelsGained != 1 || char.Level != 100 {
-		t.Fatalf("expected level 100 with 1 level gained, got level %d with %d gained", char.Level, levelsGained)
+	if result.LevelsGained != 1 || char.Level != 100 {
+		t.Fatalf("expected level 100 with 1 level gained, got level %d with %d gained", char.Level, result.LevelsGained)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// SP gain tests (旧CGI仕様)
+// ---------------------------------------------------------------------------
+
+func TestApplyExperienceIncrementsSPOnEachLevelUp(t *testing.T) {
+	char, err := character.New("Bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Gain enough XP for 3 level-ups (Lv1→4 needs XP ≥ 100)
+	result, err := ApplyExperienceWithJob(&char, 100, job.Definition{}, zeroRandomSource{}, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.LevelsGained != 3 {
+		t.Fatalf("expected 3 levels gained, got %d", result.LevelsGained)
+	}
+	if char.SP != 3 {
+		t.Fatalf("SP after 3 level-ups = %d, want 3", char.SP)
+	}
+}
+
+func TestApplyExperienceSPBasedSkillLearning(t *testing.T) {
+	char, err := character.New("Bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Define a skill that is learned when SP == 2
+	fireball, err := skill.NewDefinition("fireball", "Fireball", nil, 2, 5,
+		corebattle.Effect{Kind: "damage", Power: 30})
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobSkills := []skill.Definition{fireball}
+
+	// Gain enough XP to level up to Lv3 (SP will become 2 at Lv3)
+	result, err := ApplyExperienceWithJob(&char, 100, job.Definition{}, zeroRandomSource{}, false, jobSkills)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.LevelsGained != 3 {
+		t.Fatalf("expected 3 levels gained, got %d", result.LevelsGained)
+	}
+	if char.SP != 3 {
+		t.Fatalf("SP = %d, want 3", char.SP)
+	}
+	// Fireball should have been learned exactly once (when SP == 2)
+	if len(result.NewlyLearnedSkillIDs) != 1 || result.NewlyLearnedSkillIDs[0] != "fireball" {
+		t.Fatalf("newly learned skills = %v, want [fireball]", result.NewlyLearnedSkillIDs)
+	}
+}
+
+func TestApplyExperienceSkillOrbGivesExtraSPWithProbability(t *testing.T) {
+	char, err := character.New("Bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a single level-up; item 157 orb roll = 0 (< 1) → grants extra SP.
+	// Sequence: roll for HasSkillOrb (0 = triggers), then stat growth rolls (5 zeros).
+	random := &sequenceRandomSource{values: []int{0}}
+
+	result, err := ApplyExperienceWithJob(&char, 10, job.Definition{}, random, true, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.LevelsGained != 1 {
+		t.Fatalf("expected 1 level, got %d", result.LevelsGained)
+	}
+	// SP = 1 (base) + 1 (skill orb bonus) = 2
+	if char.SP != 2 {
+		t.Fatalf("SP after skill orb level-up = %d, want 2", char.SP)
+	}
+}
+
+func TestApplyExperienceSkillOrbNoExtraSPWhenRollFails(t *testing.T) {
+	char, err := character.New("Bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Roll = 1 (≥ 1) → no extra SP.
+	random := &sequenceRandomSource{values: []int{1}}
+
+	result, err := ApplyExperienceWithJob(&char, 10, job.Definition{}, random, true, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.LevelsGained != 1 {
+		t.Fatalf("expected 1 level, got %d", result.LevelsGained)
+	}
+	if char.SP != 1 {
+		t.Fatalf("SP after failed skill orb = %d, want 1", char.SP)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// growthValue cap tests (旧CGI: $v > 9 → rand(9)+1)
+// ---------------------------------------------------------------------------
+
+func TestGrowthValueCapsBeyondNineWithReroll(t *testing.T) {
+	// First Intn(max+1) returns 10 (> growthCap=9), then re-roll Intn(9) returns 4 → value = 5.
+	random := &sequenceRandomSource{values: []int{10, 4}}
+	value, err := growthValue(15, random)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value != 5 {
+		t.Fatalf("growthValue cap re-roll = %d, want 5", value)
+	}
+}
+
+func TestGrowthValueNoCapWhenBelowOrEqualNine(t *testing.T) {
+	random := &sequenceRandomSource{values: []int{9}}
+	value, err := growthValue(9, random)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value != 9 {
+		t.Fatalf("growthValue(9) = %d, want 9", value)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------------
 
 type sequenceRandomSource struct {
 	values []int

@@ -34,8 +34,8 @@ func TestRefreshHandler_HandleAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAllSnapshots: %v", err)
 	}
-	if len(snapshots) < 12 {
-		t.Errorf("expected 12 snapshots, got %d", len(snapshots))
+	if len(snapshots) < 11 {
+		t.Errorf("expected 11 snapshots, got %d", len(snapshots))
 	}
 }
 

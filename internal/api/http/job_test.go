@@ -32,7 +32,7 @@ func (s *stubJobService) ChangeJob(ctx context.Context, characterID, targetJobID
 	return corecharacter.Character{}, corejob.CharacterJob{}, nil
 }
 
-func TestJobAndRebirthEndpoints(t *testing.T) {
+func TestJobEndpoints(t *testing.T) {
 	player := coreplayer.Player{ID: "p1", Username: "hero"}
 	char := corecharacter.Character{ID: "c1", PlayerID: "p1", Name: "Hero", Level: 50}
 
@@ -43,15 +43,6 @@ func TestJobAndRebirthEndpoints(t *testing.T) {
 		getFn: func(_ context.Context, id string) (corecharacter.Character, error) {
 			if id == "c1" {
 				return char, nil
-			}
-			return corecharacter.Character{}, corecharacter.ErrNotFound
-		},
-		rebirthFn: func(_ context.Context, id string) (corecharacter.Character, error) {
-			if id == "c1" {
-				c := char
-				c.Level = 1
-				c.RebirthCount = 1
-				return c, nil
 			}
 			return corecharacter.Character{}, corecharacter.ErrNotFound
 		},
@@ -120,14 +111,14 @@ func TestJobAndRebirthEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /characters/{id}/rebirth - success", func(t *testing.T) {
+	t.Run("POST /characters/{id}/rebirth - eliminated (404 Not Found)", func(t *testing.T) {
 		req := jsonRequest(t, http.MethodPost, "/characters/c1/rebirth", "")
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 Not Found for eliminated rebirth endpoint, got %d", rec.Code)
 		}
 	})
 }

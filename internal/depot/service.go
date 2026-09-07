@@ -12,10 +12,10 @@ import (
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
-func effectiveJobLevel(char corecharacter.Character) int {
-	if char.RebirthCount > 0 {
-		return char.RebirthCount
-	}
+// effectiveJobLevel returns the effective job level for depot capacity calculation.
+// The original CGI uses job_lv (転職回数), which is implemented in Issue #467.
+// Until that migration is complete this returns 0 (minimum capacity).
+func effectiveJobLevel(_ corecharacter.Character) int {
 	return 0
 }
 

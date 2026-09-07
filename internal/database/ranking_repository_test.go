@@ -86,7 +86,7 @@ func TestRankingRepository_Integration(t *testing.T) {
 	c1.Level = 80
 	c1.Experience = 64000
 	c1.Money = 50000
-	c1.RebirthCount = 3
+	c1.SP = 3
 	c1.SmallMedals = 15
 	c1.HelpCount = 10
 	if err := charRepo.Save(ctx, c1); err != nil {
@@ -101,7 +101,7 @@ func TestRankingRepository_Integration(t *testing.T) {
 	c2.Level = 90
 	c2.Experience = 81000
 	c2.Money = 300000
-	c2.RebirthCount = 1
+	c2.SP = 1
 	c2.SmallMedals = 50
 	c2.HelpCount = 2
 	if err := charRepo.Save(ctx, c2); err != nil {
@@ -256,17 +256,6 @@ func TestRankingRepository_Integration(t *testing.T) {
 	for _, entry := range helpRankings {
 		if entry.CharacterID == c1.ID && entry.Score != 10 {
 			t.Fatalf("expected c1 help count 10, got %d", entry.Score)
-		}
-	}
-
-	// === Test Rebirth Ranking ===
-	rebirthRankings, _, err := rankingRepo.GetRebirthRanking(ctx, 100, 0)
-	if err != nil {
-		t.Fatalf("GetRebirthRanking failed: %v", err)
-	}
-	for _, entry := range rebirthRankings {
-		if entry.CharacterID == c1.ID && entry.Score != 3 {
-			t.Fatalf("expected c1 rebirth count 3, got %d", entry.Score)
 		}
 	}
 

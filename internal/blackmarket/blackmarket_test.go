@@ -181,19 +181,14 @@ func TestCatalogLoading(t *testing.T) {
 }
 
 func TestCheckEligibility(t *testing.T) {
-	cLow := corecharacter.Character{Level: 5, RebirthCount: 0}
+	cLow := corecharacter.Character{Level: 5}
 	if blackmarket.CheckEligibility(cLow) {
 		t.Errorf("expected level 5 character to not be eligible")
 	}
 
-	cReq := corecharacter.Character{Level: 10, RebirthCount: 0}
+	cReq := corecharacter.Character{Level: 10}
 	if !blackmarket.CheckEligibility(cReq) {
 		t.Errorf("expected level 10 character to be eligible")
-	}
-
-	cRebirth := corecharacter.Character{Level: 1, RebirthCount: 1}
-	if !blackmarket.CheckEligibility(cRebirth) {
-		t.Errorf("expected rebirth character to be eligible")
 	}
 }
 

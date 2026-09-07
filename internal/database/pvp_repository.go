@@ -153,7 +153,7 @@ func (r *PvPRepository) FindOpponents(ctx context.Context, characterID string, l
 	// Query characters and their ratings, excluding self and same player
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT c.id, c.name, c.job_id, c.level, COALESCE(ar.rating, 1000) as rating,
-		       COALESCE(ar.wins, 0) as wins, COALESCE(ar.losses, 0) as losses, c.rebirth_count
+		       COALESCE(ar.wins, 0) as wins, COALESCE(ar.losses, 0) as losses, c.sp
 		FROM characters c
 		LEFT JOIN arena_ratings ar ON c.id = ar.character_id
 		WHERE c.id != ?
@@ -170,7 +170,7 @@ func (r *PvPRepository) FindOpponents(ctx context.Context, characterID string, l
 	candidates := make([]pvp.OpponentCandidate, 0)
 	for rows.Next() {
 		var c pvp.OpponentCandidate
-		if err := rows.Scan(&c.CharacterID, &c.Name, &c.JobID, &c.Level, &c.Rating, &c.Wins, &c.Losses, &c.RebirthCount); err != nil {
+		if err := rows.Scan(&c.CharacterID, &c.Name, &c.JobID, &c.Level, &c.Rating, &c.Wins, &c.Losses, &c.SP); err != nil {
 			return nil, err
 		}
 		candidates = append(candidates, c)
@@ -221,7 +221,7 @@ func (r *PvPRepository) GetDefenseLogs(ctx context.Context, characterID string, 
 
 func (r *PvPRepository) GetLeaderboard(ctx context.Context, limit int) ([]pvp.OpponentCandidate, error) {
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
-		SELECT c.id, c.name, c.job_id, c.level, ar.rating, ar.wins, ar.losses, c.rebirth_count
+		SELECT c.id, c.name, c.job_id, c.level, ar.rating, ar.wins, ar.losses, c.sp
 		FROM arena_ratings ar
 		JOIN characters c ON ar.character_id = c.id
 		ORDER BY ar.rating DESC, ar.wins DESC, c.level DESC
@@ -235,7 +235,7 @@ func (r *PvPRepository) GetLeaderboard(ctx context.Context, limit int) ([]pvp.Op
 	candidates := make([]pvp.OpponentCandidate, 0)
 	for rows.Next() {
 		var c pvp.OpponentCandidate
-		if err := rows.Scan(&c.CharacterID, &c.Name, &c.JobID, &c.Level, &c.Rating, &c.Wins, &c.Losses, &c.RebirthCount); err != nil {
+		if err := rows.Scan(&c.CharacterID, &c.Name, &c.JobID, &c.Level, &c.Rating, &c.Wins, &c.Losses, &c.SP); err != nil {
 			return nil, err
 		}
 		candidates = append(candidates, c)

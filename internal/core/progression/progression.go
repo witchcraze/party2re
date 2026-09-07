@@ -5,6 +5,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/job"
+	"github.com/witchcraze/party2re/internal/core/skill"
 )
 
 const (
@@ -12,6 +13,10 @@ const (
 	OverMaxLevel = 150
 
 	experienceMultiplier = 10
+
+	// growthCap is the maximum stat gain per level-up before the legacy
+	// re-roll kicks in (original CGI: $v > 9 → int(rand(9)+1)).
+	growthCap = 9
 )
 
 var (
@@ -49,7 +54,27 @@ func ExperienceForNextLevelWithMax(level int, maxLevel int) (int, error) {
 
 // ApplyExperience awards cumulative experience and applies every earned level.
 func ApplyExperience(value *character.Character, amount int) (int, error) {
-	return ApplyExperienceWithJob(value, amount, job.Definition{}, zeroRandomSource{})
+	result, err := ApplyExperienceWithJob(value, amount, job.Definition{}, zeroRandomSource{}, false, nil)
+	return result.LevelsGained, err
+}
+
+// LevelUpResult holds the outcome of a level-up event.
+type LevelUpResult struct {
+	// LevelsGained is the number of levels gained.
+	LevelsGained int
+	// NewlyLearnedSkillIDs contains the IDs of skills learned by SP threshold
+	// during this experience application (SP == skill.RequiredSP).
+	NewlyLearnedSkillIDs []string
+}
+
+// ApplyExperienceOptions configures optional level-up behaviour.
+type ApplyExperienceOptions struct {
+	// HasSkillOrb indicates the character carries item 157 (スキルの宝珠),
+	// which grants a 25% chance of an additional SP on each level-up.
+	HasSkillOrb bool
+	// JobSkills is the ordered list of skill definitions for the character's
+	// current job, used to detect SP-threshold skill learning.
+	JobSkills []skill.Definition
 }
 
 func ApplyExperienceWithProvider(value *character.Character, amount int, provider job.DefinitionProvider, random character.RandomSource) (int, error) {
@@ -63,45 +88,83 @@ func ApplyExperienceWithProvider(value *character.Character, amount int, provide
 	if err != nil {
 		return 0, err
 	}
-	return ApplyExperienceWithJob(value, amount, definition, random)
+	result, err := ApplyExperienceWithJob(value, amount, definition, random, false, nil)
+	if err != nil {
+		return 0, err
+	}
+	return result.LevelsGained, nil
 }
 
 // ApplyExperienceWithJob awards experience and applies job growth for each
 // earned level. Current HP and MP are intentionally not restored.
-func ApplyExperienceWithJob(value *character.Character, amount int, definition job.Definition, random character.RandomSource) (int, error) {
+//
+// Deprecated: prefer ApplyExperienceWithJobFull for SP / skill-learning support.
+func ApplyExperienceWithJob(value *character.Character, amount int, definition job.Definition, random character.RandomSource, hasSkillOrb bool, jobSkills []skill.Definition) (LevelUpResult, error) {
+	return ApplyExperienceWithJobFull(value, amount, definition, random, ApplyExperienceOptions{
+		HasSkillOrb: hasSkillOrb,
+		JobSkills:   jobSkills,
+	})
+}
+
+// ApplyExperienceWithJobFull is the canonical implementation: awards experience,
+// increments SP on each level-up (with 25% bonus for item 157), detects
+// SP-threshold skill learning, and applies job stat growth.
+func ApplyExperienceWithJobFull(value *character.Character, amount int, definition job.Definition, random character.RandomSource, opts ApplyExperienceOptions) (LevelUpResult, error) {
 	if value == nil {
-		return 0, ErrNilCharacter
+		return LevelUpResult{}, ErrNilCharacter
 	}
 	if amount < 0 {
-		return 0, ErrInvalidExperience
+		return LevelUpResult{}, ErrInvalidExperience
 	}
 	maxLvl := MaxLevelForCharacter(value)
 	if value.Level < character.InitialLevel || value.Level > maxLvl {
-		return 0, ErrInvalidCharacterLevel
+		return LevelUpResult{}, ErrInvalidCharacterLevel
 	}
 	if definition.ID != "" && random == nil {
-		return 0, ErrInvalidGrowth
+		return LevelUpResult{}, ErrInvalidGrowth
 	}
 
 	value.Experience += amount
-	levelsGained := 0
+	var result LevelUpResult
 	for value.Level < maxLvl {
 		threshold, err := ExperienceForNextLevelWithMax(value.Level, maxLvl)
 		if err != nil {
-			return levelsGained, err
+			return result, err
 		}
 		if value.Experience < threshold {
 			break
 		}
 		value.Level++
-		if definition.ID != "" {
-			if err := applyGrowth(&value.Stats, definition, random); err != nil {
-				return levelsGained, err
+
+		// SP gain: +1 per level (旧CGI: ++$m{sp})
+		value.SP++
+
+		// スキルの宝珠 (item 157): 25% chance of +1 additional SP.
+		if opts.HasSkillOrb {
+			roll, err := random.Intn(4)
+			if err != nil {
+				return result, err
+			}
+			if roll < 1 {
+				value.SP++
 			}
 		}
-		levelsGained++
+
+		// SP-based skill learning: trigger when SP == skill.RequiredSP (旧CGI: $skills[$i][0] eq $m{sp})
+		for _, sk := range opts.JobSkills {
+			if value.SP == sk.RequiredSP {
+				result.NewlyLearnedSkillIDs = append(result.NewlyLearnedSkillIDs, sk.ID)
+			}
+		}
+
+		if definition.ID != "" {
+			if err := applyGrowth(&value.Stats, definition, random); err != nil {
+				return result, err
+			}
+		}
+		result.LevelsGained++
 	}
-	return levelsGained, nil
+	return result, nil
 }
 
 func applyGrowth(stats *character.Stats, definition job.Definition, random character.RandomSource) error {
@@ -122,7 +185,7 @@ func applyGrowth(stats *character.Stats, definition job.Definition, random chara
 	if err != nil {
 		return err
 	}
-	hp++
+	hp++ // HP minimum +1 guaranteed (旧CGI: ++$v for hp)
 	mp, err := growthValue(definition.MPGrowth, random)
 	if err != nil {
 		return err
@@ -147,10 +210,21 @@ func applyGrowth(stats *character.Stats, definition job.Definition, random chara
 	return nil
 }
 
+// growthValue returns a random growth amount in [0, max].
+// If the result exceeds growthCap (9), it is re-rolled as rand(1, 9)
+// to match the original CGI formula: $v > 9 → int(rand(9)+1).
 func growthValue(max int, random character.RandomSource) (int, error) {
 	value, err := random.Intn(max + 1)
 	if err != nil {
 		return 0, err
+	}
+	if value > growthCap {
+		// Re-roll: rand(9)+1 → [1, 9]
+		value, err = random.Intn(growthCap)
+		if err != nil {
+			return 0, err
+		}
+		value++ // ensure minimum 1
 	}
 	return value, nil
 }

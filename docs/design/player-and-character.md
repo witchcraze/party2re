@@ -24,7 +24,7 @@ Every `Character` belongs to exactly one `Player`. A `Player` may own multiple c
 
 ### 2.3 Character Listing & Querying
 - A `Player` can query all characters associated with their account (`FindByPlayerID`).
-- Each `Character` response contains `id`, `player_id`, `name`, `job_id`, `gender`, `level`, `experience`, `money`, `rebirth_count`, and `stats`.
+- Each `Character` response contains `id`, `player_id`, `name`, `job_id`, `gender`, `level`, `experience`, `money`, `sp`, and `stats`.
 
 ---
 
@@ -39,7 +39,7 @@ Every `Character` belongs to exactly one `Player`. A `Player` may own multiple c
 - `level INT NOT NULL`
 - `experience INT NOT NULL`
 - `money INT NOT NULL`
-- `rebirth_count INT NOT NULL`
+- `sp INT NOT NULL`
 - `max_hp INT NOT NULL`, `max_mp INT NOT NULL`, `hp INT NOT NULL`, `mp INT NOT NULL`
 - `attack INT NOT NULL`, `defense INT NOT NULL`, `agility INT NOT NULL`
 

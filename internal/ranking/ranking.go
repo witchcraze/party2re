@@ -19,7 +19,6 @@ const (
 	RankingTypeJobMastery       RankingType = "job_mastery"
 	RankingTypeJobPopularity    RankingType = "job_popularity"
 	RankingTypeHelper           RankingType = "helper"
-	RankingTypeRebirth          RankingType = "rebirth"
 	RankingTypeSmallMedals      RankingType = "small_medals"
 )
 
@@ -44,7 +43,7 @@ type CharacterRankingEntry struct {
 	Gender         string `json:"gender"`
 	Level          int    `json:"level"`
 	Experience     int    `json:"experience"`
-	RebirthCount   int    `json:"rebirth_count"`
+	SP             int    `json:"sp"`
 	Score          int64  `json:"score"`
 	SecondaryScore int64  `json:"secondary_score,omitempty"`
 }
@@ -103,7 +102,6 @@ func IsValidRankingType(t RankingType) bool {
 		RankingTypeJobMastery,
 		RankingTypeJobPopularity,
 		RankingTypeHelper,
-		RankingTypeRebirth,
 		RankingTypeSmallMedals:
 		return true
 	default:

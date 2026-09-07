@@ -46,14 +46,14 @@ type ArenaRating struct {
 }
 
 type OpponentCandidate struct {
-	CharacterID  string `json:"character_id"`
-	Name         string `json:"name"`
-	JobID        string `json:"job_id"`
-	Level        int    `json:"level"`
-	Rating       int    `json:"rating"`
-	Wins         int    `json:"wins"`
-	Losses       int    `json:"losses"`
-	RebirthCount int    `json:"rebirth_count"`
+	CharacterID string `json:"character_id"`
+	Name        string `json:"name"`
+	JobID       string `json:"job_id"`
+	Level       int    `json:"level"`
+	Rating      int    `json:"rating"`
+	Wins        int    `json:"wins"`
+	Losses      int    `json:"losses"`
+	SP          int    `json:"sp"`
 }
 
 type MatchRecord struct {

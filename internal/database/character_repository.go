@@ -26,11 +26,11 @@ func NewCharacterRepository(db *sql.DB) (*CharacterRepository, error) {
 func (r *CharacterRepository) Save(ctx context.Context, value corecharacter.Character) error {
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO characters
-			(id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, rebirth_count, small_medals, help_count, over_level, over_depot, over_monster, over_future, over_flea, over_store)
+			(id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, small_medals, help_count, over_level, over_depot, over_monster, over_future, over_flea, over_store)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, value.ID, value.PlayerID, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP,
 		value.Stats.HP, value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility,
-		value.Money, value.Level, value.Experience, value.RebirthCount, value.SmallMedals, value.HelpCount,
+		value.Money, value.Level, value.Experience, value.SP, value.SmallMedals, value.HelpCount,
 		value.OverLevel, value.OverDepot, value.OverMonster, value.OverFuture, value.OverFlea, value.OverStore)
 	return err
 }

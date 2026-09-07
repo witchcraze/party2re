@@ -231,9 +231,9 @@ type RumorsResult struct {
 	Rumor           string `json:"rumor"`
 }
 
-// CheckEligibility returns true if the character meets black market discovery requirements.
+// CheckEligibility returns true if character meets requirements (level >= MinAccessLevel).
 func CheckEligibility(c corecharacter.Character) bool {
-	return c.Level >= MinAccessLevel || c.RebirthCount > 0
+	return c.Level >= MinAccessLevel
 }
 
 type Option func(*Service)

@@ -91,8 +91,8 @@ func TestRankingServiceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAllSnapshots failed: %v", err)
 	}
-	if len(allSnaps) != 12 {
-		t.Errorf("expected 12 snapshots, got %d", len(allSnaps))
+	if len(allSnaps) != 11 {
+		t.Errorf("expected 11 snapshots, got %d", len(allSnaps))
 	}
 
 	// 4. Cold-start Service instance (clean in-memory cache) falls back to database snapshot
