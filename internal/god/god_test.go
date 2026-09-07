@@ -321,7 +321,7 @@ func TestGod_GrantWish_Underworld(t *testing.T) {
 		}
 
 		dep, _ := depotRepo.FindByCharacterIDForUpdate(ctx, "char_underworld")
-		expectedCap := depot.DefaultDepotCapacity + (tier * 10)
+		expectedCap := depot.CalculateCapacity(char.RebirthCount, dep.ExDepot, tier)
 		if dep.Capacity != expectedCap {
 			t.Errorf("expected depot capacity %d, got %d", expectedCap, dep.Capacity)
 		}

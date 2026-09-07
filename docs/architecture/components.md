@@ -239,9 +239,9 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Item Catalog, Character (wallet), Inventory, Economy.
   - **Persistence:** Single-transaction atomic updates via character/inventory repositories with deterministic lock hierarchy (`characters` -> `inventory_items`).
 - **Depot** (`internal/depot`):
-  - **Responsibility:** Long-term storage management for item instances and gold.
-  - **Dependencies:** Character (wallet), Inventory, Economy (`economy.TransactionRunner`).
-  - **Persistence:** `character_depots` and `depot_items` tables with atomic single-transaction execution via `economy.TransactionRunner` obeying the global lock hierarchy (`characters` Rank 2 -> `inventory_items` Rank 3 -> `character_depots` Rank 5).
+  - **Responsibility:** Persistent item storage with legacy dynamic capacity formula (`get_depot_c`), storage expansions (`かくちょう`), item sales (`うる` / `まとめてうる`), item sorting (`せいとん`), mailing items and money (`おくる`), and collection book sync. Fictional gold storage eliminated.
+  - **Dependencies:** Character, Inventory, Economy (`economy.TransactionRunner`), Collection (hook).
+  - **Persistence:** `character_depots` (`capacity`, `ex_depot`) and `depot_items` tables with atomic single-transaction execution via `economy.TransactionRunner` and `RunInTx` obeying the global lock hierarchy (Rank 2 `characters` sorted asc -> Rank 3 `inventory_items` -> Rank 5 `character_depots`).
 - **Blacksmith** (`internal/blacksmith`):
   - **Responsibility:** Equipment enhancement (+1 to +10) with level-scaling gold and material costs and probability curves.
   - **Dependencies:** Character (wallet), Inventory, Economy (`economy.TransactionRunner`).

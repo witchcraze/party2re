@@ -286,7 +286,7 @@ func (s *Service) buildUnderworldWishes(char corecharacter.Character) []Wish {
 			ID:          "wish_expand_depot",
 			Name:        "もっとアイテムを預けたい",
 			Realm:       RealmUnderworld,
-			Description: "預かり所の上限アップ (+10枠)",
+			Description: "預かり所の上限アップ (+50枠)",
 			Available:   char.OverDepot < MaxLimitBreakTier,
 			CurrentTier: char.OverDepot,
 			MaxTier:     MaxLimitBreakTier,
@@ -525,7 +525,7 @@ func (s *Service) executeUnderworldWish(
 		if s.depots != nil {
 			dep, err := s.depots.FindByCharacterIDForUpdate(ctx, char.ID)
 			if err == nil {
-				dep.Capacity = depot.DefaultDepotCapacity + (char.OverDepot * 10)
+				dep.Capacity = depot.CalculateCapacity(char.RebirthCount, dep.ExDepot, char.OverDepot)
 				_ = s.depots.Save(ctx, dep)
 			}
 		}
@@ -540,12 +540,12 @@ func (s *Service) executeUnderworldWish(
 				ID:          wishID,
 				Name:        "もっとアイテムを預けたい",
 				Realm:       RealmUnderworld,
-				Description: "預かり所の上限アップ (+10枠)",
+				Description: "預かり所の上限アップ (+50枠)",
 				Available:   char.OverDepot < MaxLimitBreakTier,
 				CurrentTier: char.OverDepot,
 				MaxTier:     MaxLimitBreakTier,
 			},
-			Message:   fmt.Sprintf("預かり所の預入上限が +10 拡張されました！ (段階: %d/5)", char.OverDepot),
+			Message:   fmt.Sprintf("預かり所の預入上限が +50 拡張されました！ (段階: %d/5)", char.OverDepot),
 			NPCSpeech: fmt.Sprintf("ふむ。%sの願いは「もっとアイテムを預けたい」だな。\n上限を広げてやったぞ…。さらばだ…", char.Name),
 		}
 		return nil

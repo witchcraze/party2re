@@ -64,12 +64,12 @@ func TestTestutilReExports(t *testing.T) {
 	}
 
 	// 5. CreateTestDepot
-	dep, err := CreateTestDepot(ctx, db, c.ID, 3000, []coreitem.Instance{it})
+	dep, err := CreateTestDepot(ctx, db, c.ID, 3, []coreitem.Instance{it})
 	if err != nil {
 		t.Fatalf("CreateTestDepot failed: %v", err)
 	}
-	if dep.Gold != 3000 {
-		t.Fatalf("expected gold 3000, got %d", dep.Gold)
+	if dep.ExDepot != 3 {
+		t.Fatalf("expected ExDepot 3, got %d", dep.ExDepot)
 	}
 
 	// 6. RunRace2

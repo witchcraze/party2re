@@ -23,10 +23,10 @@ func NewDepotRepository(db *sql.DB) (*DepotRepository, error) {
 func (r *DepotRepository) FindByCharacterID(ctx context.Context, characterID string) (depot.Depot, error) {
 	var dep depot.Depot
 	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT character_id, gold, capacity
+		SELECT character_id, ex_depot, capacity
 		FROM character_depots
 		WHERE character_id = ?
-	`, characterID).Scan(&dep.CharacterID, &dep.Gold, &dep.Capacity)
+	`, characterID).Scan(&dep.CharacterID, &dep.ExDepot, &dep.Capacity)
 	if errors.Is(err, sql.ErrNoRows) {
 		return depot.Depot{}, depot.ErrNotFound
 	}
@@ -64,10 +64,10 @@ func (r *DepotRepository) FindByCharacterID(ctx context.Context, characterID str
 func (r *DepotRepository) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (depot.Depot, error) {
 	var dep depot.Depot
 	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT character_id, gold, capacity
+		SELECT character_id, ex_depot, capacity
 		FROM character_depots
 		WHERE character_id = ? FOR UPDATE
-	`, characterID).Scan(&dep.CharacterID, &dep.Gold, &dep.Capacity)
+	`, characterID).Scan(&dep.CharacterID, &dep.ExDepot, &dep.Capacity)
 	if errors.Is(err, sql.ErrNoRows) {
 		return depot.Depot{}, depot.ErrNotFound
 	}
@@ -110,12 +110,12 @@ func (r *DepotRepository) Save(ctx context.Context, value depot.Depot) error {
 
 func saveDepotTx(ctx context.Context, executor sqlContextExecutor, value depot.Depot) error {
 	_, err := executor.ExecContext(ctx, `
-		INSERT INTO character_depots (character_id, gold, capacity)
+		INSERT INTO character_depots (character_id, ex_depot, capacity)
 		VALUES (?, ?, ?)
 		ON DUPLICATE KEY UPDATE
-			gold = VALUES(gold),
+			ex_depot = VALUES(ex_depot),
 			capacity = VALUES(capacity)
-	`, value.CharacterID, value.Gold, value.Capacity)
+	`, value.CharacterID, value.ExDepot, value.Capacity)
 	if err != nil {
 		return err
 	}

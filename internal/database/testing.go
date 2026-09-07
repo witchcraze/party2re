@@ -172,13 +172,14 @@ func CreateTestInventoryWithItems(ctx context.Context, db *sql.DB, charID string
 	return inv, nil
 }
 
-// CreateTestDepot creates and persists a depot with initial gold and items for a character.
-func CreateTestDepot(ctx context.Context, db *sql.DB, charID string, gold int, items []coreitem.Instance) (depot.Depot, error) {
+// CreateTestDepot creates and persists a depot with initial exDepot and items for a character.
+func CreateTestDepot(ctx context.Context, db *sql.DB, charID string, exDepot int, items []coreitem.Instance) (depot.Depot, error) {
 	dep, err := depot.NewDepot(charID)
 	if err != nil {
 		return depot.Depot{}, err
 	}
-	dep.Gold = gold
+	dep.ExDepot = exDepot
+	dep.Capacity = depot.CalculateCapacity(0, exDepot, 0)
 	for _, it := range items {
 		if err := dep.AddItem(it); err != nil {
 			return depot.Depot{}, err

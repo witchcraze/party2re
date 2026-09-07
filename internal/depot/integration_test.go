@@ -11,7 +11,7 @@ import (
 	"github.com/witchcraze/party2re/internal/depot"
 )
 
-func TestDepotIntegrationGoldAndItemOperations(t *testing.T) {
+func TestDepotLifecycle_Integration(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -36,7 +36,7 @@ func TestDepotIntegrationGoldAndItemOperations(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	createdChar, err := database.CreateTestCharacterWithFunds(ctx, db, "Depot Integrator", 200)
+	createdChar, err := database.CreateTestCharacterWithFunds(ctx, db, "Depot Tester", 500000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,20 +51,11 @@ func TestDepotIntegrationGoldAndItemOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDepot error = %v", err)
 	}
-	if initialDep.Gold != 0 || len(initialDep.Items) != 0 {
+	if initialDep.ExDepot != 0 || len(initialDep.Items) != 0 {
 		t.Fatalf("initial depot not empty: %#v", initialDep)
 	}
 
-	// 2. Deposit Gold
-	dep, err := depotService.DepositGold(ctx, createdChar.ID, 120)
-	if err != nil {
-		t.Fatalf("DepositGold error = %v", err)
-	}
-	if dep.Gold != 120 {
-		t.Errorf("depot gold = %d, want 120", dep.Gold)
-	}
-
-	// 3. Deposit an item
+	// 2. Deposit an item
 	potion, err := item.NewInstance("item-001", 3)
 	if err != nil {
 		t.Fatalf("NewInstance error = %v", err)
@@ -74,12 +65,21 @@ func TestDepotIntegrationGoldAndItemOperations(t *testing.T) {
 		t.Fatalf("CreateTestInventoryWithItems error = %v", err)
 	}
 
-	dep, err = depotService.DepositItem(ctx, createdChar.ID, potion.ID)
+	dep, err := depotService.DepositItem(ctx, createdChar.ID, potion.ID)
 	if err != nil {
 		t.Fatalf("DepositItem error = %v", err)
 	}
 	if len(dep.Items) != 1 || dep.Items[0].DefinitionID != "item-001" {
 		t.Fatalf("unexpected depot items: %#v", dep.Items)
+	}
+
+	// 3. Expand depot capacity
+	dep, err = depotService.Expand(ctx, createdChar.ID)
+	if err != nil {
+		t.Fatalf("Expand error = %v", err)
+	}
+	if dep.ExDepot != 1 || dep.Capacity != 10 {
+		t.Errorf("depot ExDepot = %d, Capacity = %d, want 1, 10", dep.ExDepot, dep.Capacity)
 	}
 
 	// 4. Withdraw Item
@@ -91,27 +91,26 @@ func TestDepotIntegrationGoldAndItemOperations(t *testing.T) {
 		t.Fatalf("depot items count = %d, want 0", len(dep.Items))
 	}
 
-	// 5. Withdraw Gold
-	dep, err = depotService.WithdrawGold(ctx, createdChar.ID, 50)
-	if err != nil {
-		t.Fatalf("WithdrawGold error = %v", err)
-	}
-	if dep.Gold != 70 {
-		t.Errorf("depot gold = %d, want 70", dep.Gold)
-	}
-
 	// Verify database persistence
 	restoredChar, err := charRepo.FindByID(ctx, createdChar.ID)
 	if err != nil {
 		t.Fatalf("FindByID error = %v", err)
 	}
-	expectedMoney := 200 - 120 + 50
+	expectedMoney := 500000 - 200000 // 1 expansion cost
 	if restoredChar.Money != expectedMoney {
 		t.Errorf("character money = %d, want %d", restoredChar.Money, expectedMoney)
 	}
+
+	restoredDep, err := depotRepo.FindByCharacterID(ctx, createdChar.ID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID error = %v", err)
+	}
+	if restoredDep.ExDepot != 1 || restoredDep.Capacity != 10 {
+		t.Errorf("restored depot mismatch: %#v", restoredDep)
+	}
 }
 
-func TestConcurrentDepotGoldWithdrawal(t *testing.T) {
+func TestConcurrentDepotExpansion(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -136,7 +135,8 @@ func TestConcurrentDepotGoldWithdrawal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char, err := database.CreateTestCharacterWithFunds(ctx, db, "Concurrent Depot", 500)
+	// Character only has funds for exactly 1 expansion (200,000 G)
+	char, err := database.CreateTestCharacterWithFunds(ctx, db, "Concurrent Expand", 250000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,31 +146,35 @@ func TestConcurrentDepotGoldWithdrawal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Deposit 100 gold
-	_, err = depotService.DepositGold(ctx, char.ID, 100)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Attempt two concurrent withdrawals of 80 gold each (total 160 > 100)
+	// Attempt two concurrent expansions (each 200k, total 400k > 250k)
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
 	for range 2 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := depotService.WithdrawGold(ctx, char.ID, 80)
+			_, err := depotService.Expand(ctx, char.ID)
 			errs <- err
 		}()
 	}
 	wg.Wait()
 	close(errs)
 
+	successCount := 0
+	for err := range errs {
+		if err == nil {
+			successCount++
+		}
+	}
+	if successCount != 1 {
+		t.Errorf("expected exactly 1 successful expansion, got %d", successCount)
+	}
+
 	restoredDep, err := depotRepo.FindByCharacterID(ctx, char.ID)
 	if err != nil {
 		t.Fatalf("FindByCharacterID error = %v", err)
 	}
-	if restoredDep.Gold < 0 {
-		t.Fatalf("depot gold went negative: %d", restoredDep.Gold)
+	if restoredDep.ExDepot != 1 {
+		t.Fatalf("expected ex_depot = 1, got %d", restoredDep.ExDepot)
 	}
 }

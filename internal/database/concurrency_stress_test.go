@@ -507,7 +507,7 @@ func TestConcurrencyStressMultiDomainChaos(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, err = CreateTestDepot(ctx, db, c.ID, 1000, nil)
+		_, err = CreateTestDepot(ctx, db, c.ID, 0, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -547,10 +547,10 @@ func TestConcurrencyStressMultiDomainChaos(t *testing.T) {
 				return err
 			}
 		case 2:
-			// Depot Gold Storage
+			// Depot Storage
 			dep, err := depotRepo.FindByCharacterID(ctx, s1.character.ID)
 			if err == nil {
-				dep.Gold += 10
+				dep.Capacity += 1
 				_ = depotRepo.Save(ctx, dep)
 			}
 		case 3:

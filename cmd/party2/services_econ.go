@@ -42,6 +42,8 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		core.charRepo,
 		core.invRepo,
 		depot.WithEconomy(core.economy),
+		depot.WithTransactionProvider(core.txProvider),
+		depot.WithItemDefinitionProvider(core.itemCatalog),
 	)
 	if err != nil {
 		return nil, err

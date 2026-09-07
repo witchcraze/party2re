@@ -3,6 +3,7 @@ package depot
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -195,13 +196,13 @@ func TestGetDepot_Extended(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error on not found: %v", err)
 	}
-	if dep.CharacterID != "char-1" || dep.Capacity != DefaultDepotCapacity || dep.Gold != 0 {
+	if dep.CharacterID != "char-1" || dep.Capacity != DefaultDepotCapacity || dep.ExDepot != 0 {
 		t.Fatalf("unexpected depot: %#v", dep)
 	}
 
 	// 3. Depot found -> returns existing depot
 	existingDepot, _ := NewDepot("char-1")
-	existingDepot.Gold = 500
+	existingDepot.ExDepot = 3
 	depotRepoFound := &stubDepotRepo{
 		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			return existingDepot, nil
@@ -212,8 +213,8 @@ func TestGetDepot_Extended(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error on found: %v", err)
 	}
-	if dep.Gold != 500 {
-		t.Fatalf("expected gold 500, got %d", dep.Gold)
+	if dep.ExDepot != 3 {
+		t.Fatalf("expected ex_depot 3, got %d", dep.ExDepot)
 	}
 
 	// 4. Depot repository error
@@ -229,11 +230,8 @@ func TestGetDepot_Extended(t *testing.T) {
 	}
 }
 
-func TestDepositGold_ValidationAndExecutionErrors(t *testing.T) {
+func TestSellItem_ValidationAndExecutionErrors(t *testing.T) {
 	ctx := context.Background()
-
-	char, _ := corecharacter.New("Hero")
-	char.Money = 1000
 
 	baseService := func(depotRepo Repository, charRepo CharacterRepository) *Service {
 		svc, _ := NewService(depotRepo, charRepo, &stubInvRepo{})
@@ -242,210 +240,129 @@ func TestDepositGold_ValidationAndExecutionErrors(t *testing.T) {
 
 	// Invalid character ID
 	svc := baseService(&stubDepotRepo{}, &stubCharRepo{})
-	if _, err := svc.DepositGold(ctx, "", 100); !errors.Is(err, ErrInvalidCharacterID) {
+	if _, _, err := svc.SellItem(ctx, "", "item-1"); !errors.Is(err, ErrInvalidCharacterID) {
 		t.Fatalf("expected ErrInvalidCharacterID, got %v", err)
 	}
 
-	// Invalid amount
-	if _, err := svc.DepositGold(ctx, "char-1", 0); !errors.Is(err, ErrInvalidAmount) {
-		t.Fatalf("expected ErrInvalidAmount, got %v", err)
-	}
-	if _, err := svc.DepositGold(ctx, "char-1", -50); !errors.Is(err, ErrInvalidAmount) {
-		t.Fatalf("expected ErrInvalidAmount, got %v", err)
+	// Invalid item instance ID
+	if _, _, err := svc.SellItem(ctx, "char-1", ""); !errors.Is(err, ErrInvalidItemInstanceID) {
+		t.Fatalf("expected ErrInvalidItemInstanceID, got %v", err)
 	}
 
-	// CharacterRepo.FindByID error
-	charRepoErr := &stubCharRepo{
-		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
-			return corecharacter.Character{}, errTestBoom
+	// Item not found in depot
+	depotEmpty, _ := NewDepot("char-1")
+	depotRepoEmpty := &stubDepotRepo{
+		findForUpdateFn: func(ctx context.Context, characterID string) (Depot, error) {
+			return depotEmpty, nil
 		},
 	}
-	svc = baseService(&stubDepotRepo{}, charRepoErr)
-	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom, got %v", err)
-	}
-
-	// Insufficient funds
-	poorChar, _ := corecharacter.New("Hero")
-	poorChar.Money = 50
-	charRepoPoor := &stubCharRepo{
-		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
-			return poorChar, nil
-		},
-	}
-	svc = baseService(&stubDepotRepo{}, charRepoPoor)
-	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, ErrInsufficientFunds) {
-		t.Fatalf("expected ErrInsufficientFunds, got %v", err)
-	}
-
-	// DepotRepo.FindByCharacterID returns generic error
-	depotRepoErr := &stubDepotRepo{
-		findFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return Depot{}, errTestBoom
-		},
-	}
-	charRepoOK := &stubCharRepo{
-		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
-			return char, nil
-		},
-	}
-	svc = baseService(depotRepoErr, charRepoOK)
-	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom, got %v", err)
-	}
-
-	// DepotRepo.FindByCharacterID returns ErrNotFound -> creates new depot successfully
-	depotRepoNotFound := &stubDepotRepo{
-		findFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return Depot{}, ErrNotFound
-		},
-		saveFn: func(ctx context.Context, value Depot) error {
-			if value.Gold != 100 {
-				t.Fatalf("expected depot gold 100, got %d", value.Gold)
-			}
-			return nil
-		},
-	}
-	var updatedMoney int
-	charRepoUpdateCheck := &stubCharRepo{
-		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
-			return char, nil
-		},
-		updateFn: func(ctx context.Context, character corecharacter.Character) error {
-			updatedMoney = character.Money
-			return nil
-		},
-	}
-	svc = baseService(depotRepoNotFound, charRepoUpdateCheck)
-	dep, err := svc.DepositGold(ctx, "char-1", 100)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if dep.Gold != 100 {
-		t.Fatalf("expected depot gold 100, got %d", dep.Gold)
-	}
-	if updatedMoney != 900 {
-		t.Fatalf("expected character money 900, got %d", updatedMoney)
-	}
-
-	// CharacterRepo.Update error
-	charRepoUpdateErr := &stubCharRepo{
-		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
-			return char, nil
-		},
-		updateFn: func(ctx context.Context, character corecharacter.Character) error {
-			return errTestBoom
-		},
-	}
-	svc = baseService(&stubDepotRepo{}, charRepoUpdateErr)
-	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom on update, got %v", err)
-	}
-
-	// DepotRepo.Save error
-	depotRepoSaveErr := &stubDepotRepo{
-		saveFn: func(ctx context.Context, value Depot) error {
-			return errTestBoom
-		},
-	}
-	svc = baseService(depotRepoSaveErr, charRepoOK)
-	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom on save, got %v", err)
+	svc = baseService(depotRepoEmpty, &stubCharRepo{})
+	if _, _, err := svc.SellItem(ctx, "char-1", "nonexistent"); !errors.Is(err, ErrItemNotFound) {
+		t.Fatalf("expected ErrItemNotFound, got %v", err)
 	}
 }
 
-func TestWithdrawGold_ValidationAndExecutionErrors(t *testing.T) {
+func TestExpand_ValidationAndExecutionErrors(t *testing.T) {
 	ctx := context.Background()
 
-	char, _ := corecharacter.New("Hero")
-	char.Money = 500
-
-	depotVal, _ := NewDepot("char-1")
-	depotVal.Gold = 300
-
-	baseService := func(depotRepo Repository, charRepo CharacterRepository) *Service {
-		svc, _ := NewService(depotRepo, charRepo, &stubInvRepo{})
-		return svc
-	}
-
 	// Invalid character ID
-	svc := baseService(&stubDepotRepo{}, &stubCharRepo{})
-	if _, err := svc.WithdrawGold(ctx, "", 100); !errors.Is(err, ErrInvalidCharacterID) {
+	svc, _ := NewService(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{})
+	if _, err := svc.Expand(ctx, ""); !errors.Is(err, ErrInvalidCharacterID) {
 		t.Fatalf("expected ErrInvalidCharacterID, got %v", err)
 	}
 
+	// Max expansions reached
+	depMax, _ := NewDepot("char-1")
+	depMax.ExDepot = MaxExDepot
+	depotRepoMax := &stubDepotRepo{
+		findForUpdateFn: func(ctx context.Context, characterID string) (Depot, error) {
+			return depMax, nil
+		},
+	}
+	svc, _ = NewService(depotRepoMax, &stubCharRepo{}, &stubInvRepo{})
+	if _, err := svc.Expand(ctx, "char-1"); !errors.Is(err, ErrDepotMaxExpanded) {
+		t.Fatalf("expected ErrDepotMaxExpanded, got %v", err)
+	}
+
+	// Insufficient funds
+	charPoor, _ := corecharacter.New("Poor Hero")
+	charPoor.Money = 100 // Need 200,000
+	charRepoPoor := &stubCharRepo{
+		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			return charPoor, nil
+		},
+	}
+	depNormal, _ := NewDepot("char-1")
+	depotRepoNormal := &stubDepotRepo{
+		findForUpdateFn: func(ctx context.Context, characterID string) (Depot, error) {
+			return depNormal, nil
+		},
+	}
+	svc, _ = NewService(depotRepoNormal, charRepoPoor, &stubInvRepo{})
+	if _, err := svc.Expand(ctx, "char-1"); !errors.Is(err, ErrInsufficientFunds) {
+		t.Fatalf("expected ErrInsufficientFunds, got %v", err)
+	}
+}
+
+func TestSortItems_ValidationAndExecutionErrors(t *testing.T) {
+	ctx := context.Background()
+
+	svc, _ := NewService(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{})
+	if _, err := svc.SortItems(ctx, ""); !errors.Is(err, ErrInvalidCharacterID) {
+		t.Fatalf("expected ErrInvalidCharacterID, got %v", err)
+	}
+}
+
+func TestSendMoney_ValidationAndExecutionErrors(t *testing.T) {
+	ctx := context.Background()
+	txProv := &stubTxProvider{}
+
+	svc, _ := NewService(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{}, WithTransactionProvider(txProv))
+
+	// Invalid character IDs
+	if _, err := svc.SendMoney(ctx, "", "char-2", 100); !errors.Is(err, ErrInvalidCharacterID) {
+		t.Fatalf("expected ErrInvalidCharacterID, got %v", err)
+	}
+	if _, err := svc.SendMoney(ctx, "char-1", "", 100); !errors.Is(err, ErrInvalidCharacterID) {
+		t.Fatalf("expected ErrInvalidCharacterID, got %v", err)
+	}
+
+	// Self-transfer
+	if _, err := svc.SendMoney(ctx, "char-1", "char-1", 100); !errors.Is(err, ErrSelfTransferNotAllowed) {
+		t.Fatalf("expected ErrSelfTransferNotAllowed, got %v", err)
+	}
+
 	// Invalid amount
-	if _, err := svc.WithdrawGold(ctx, "char-1", 0); !errors.Is(err, ErrInvalidAmount) {
+	if _, err := svc.SendMoney(ctx, "char-1", "char-2", 0); !errors.Is(err, ErrInvalidAmount) {
 		t.Fatalf("expected ErrInvalidAmount, got %v", err)
 	}
-	if _, err := svc.WithdrawGold(ctx, "char-1", -10); !errors.Is(err, ErrInvalidAmount) {
+	if _, err := svc.SendMoney(ctx, "char-1", "char-2", -50); !errors.Is(err, ErrInvalidAmount) {
 		t.Fatalf("expected ErrInvalidAmount, got %v", err)
 	}
+}
 
-	// DepotRepo.FindByCharacterID error
-	depotRepoFindErr := &stubDepotRepo{
-		findFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return Depot{}, errTestBoom
-		},
-	}
-	svc = baseService(depotRepoFindErr, &stubCharRepo{})
-	if _, err := svc.WithdrawGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom, got %v", err)
-	}
+func TestSendItem_ValidationAndExecutionErrors(t *testing.T) {
+	ctx := context.Background()
+	txProv := &stubTxProvider{}
 
-	// Insufficient depot gold
-	depotRepoOK := &stubDepotRepo{
-		findFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return depotVal, nil
-		},
+	svc, _ := NewService(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{}, WithTransactionProvider(txProv))
+
+	// Invalid character IDs
+	if _, err := svc.SendItem(ctx, "", "char-2", "item-1"); !errors.Is(err, ErrInvalidCharacterID) {
+		t.Fatalf("expected ErrInvalidCharacterID, got %v", err)
 	}
-	svc = baseService(depotRepoOK, &stubCharRepo{})
-	if _, err := svc.WithdrawGold(ctx, "char-1", 500); !errors.Is(err, ErrInsufficientDepotGold) {
-		t.Fatalf("expected ErrInsufficientDepotGold, got %v", err)
+	if _, err := svc.SendItem(ctx, "char-1", "", "item-1"); !errors.Is(err, ErrInvalidCharacterID) {
+		t.Fatalf("expected ErrInvalidCharacterID, got %v", err)
 	}
 
-	// CharacterRepo.FindByID error
-	charRepoFindErr := &stubCharRepo{
-		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
-			return corecharacter.Character{}, errTestBoom
-		},
-	}
-	svc = baseService(depotRepoOK, charRepoFindErr)
-	if _, err := svc.WithdrawGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom on char find, got %v", err)
+	// Self-transfer
+	if _, err := svc.SendItem(ctx, "char-1", "char-1", "item-1"); !errors.Is(err, ErrSelfTransferNotAllowed) {
+		t.Fatalf("expected ErrSelfTransferNotAllowed, got %v", err)
 	}
 
-	// DepotRepo.Save error
-	charRepoOK := &stubCharRepo{
-		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
-			return char, nil
-		},
-	}
-	depotRepoSaveErr := &stubDepotRepo{
-		findFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return depotVal, nil
-		},
-		saveFn: func(ctx context.Context, value Depot) error {
-			return errTestBoom
-		},
-	}
-	svc = baseService(depotRepoSaveErr, charRepoOK)
-	if _, err := svc.WithdrawGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom on depot save, got %v", err)
-	}
-
-	// CharacterRepo.Update error
-	charRepoUpdateErr := &stubCharRepo{
-		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
-			return char, nil
-		},
-		updateFn: func(ctx context.Context, character corecharacter.Character) error {
-			return errTestBoom
-		},
-	}
-	svc = baseService(depotRepoOK, charRepoUpdateErr)
-	if _, err := svc.WithdrawGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom on char update, got %v", err)
+	// Invalid item instance ID
+	if _, err := svc.SendItem(ctx, "char-1", "char-2", ""); !errors.Is(err, ErrInvalidItemInstanceID) {
+		t.Fatalf("expected ErrInvalidItemInstanceID, got %v", err)
 	}
 }
 
@@ -501,9 +418,10 @@ func TestDepositItem_ValidationAndExecutionErrors(t *testing.T) {
 
 	// Depot is full
 	fullDepot, _ := NewDepot("char-1")
-	fullDepot.Capacity = 1
-	dummyItem, _ := item.NewInstance("dummy", 1)
-	_ = fullDepot.AddItem(dummyItem)
+	for i := 0; i < 5; i++ {
+		dummyItem, _ := item.NewInstance(fmt.Sprintf("dummy-%d", i), 1)
+		_ = fullDepot.AddItem(dummyItem)
+	}
 	depotRepoFull := &stubDepotRepo{
 		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			return fullDepot, nil
@@ -667,14 +585,12 @@ func TestWithdrawItem_ValidationAndExecutionErrors(t *testing.T) {
 	}
 }
 
-func TestTransactionPaths_DepositGold(t *testing.T) {
+func TestTransactionPaths_SellItem(t *testing.T) {
 	ctx := context.Background()
 
-	char, _ := corecharacter.New("Hero")
-	char.Money = 500
-
+	potion, _ := item.NewInstance("potion", 2)
 	depotVal, _ := NewDepot("char-1")
-	depotVal.Gold = 100
+	_ = depotVal.AddItem(potion)
 
 	// 1. Transaction runner error
 	runnerErr := &stubTransactionRunner{
@@ -683,7 +599,7 @@ func TestTransactionPaths_DepositGold(t *testing.T) {
 		},
 	}
 	svc, _ := NewService(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{}, WithTransactionRunner(runnerErr))
-	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
+	if _, _, err := svc.SellItem(ctx, "char-1", potion.ID); !errors.Is(err, errTestBoom) {
 		t.Fatalf("expected errTestBoom, got %v", err)
 	}
 
@@ -694,209 +610,66 @@ func TestTransactionPaths_DepositGold(t *testing.T) {
 		},
 	}
 	svc, _ = NewService(&stubDepotRepo{}, charRepoNotFound, &stubInvRepo{})
-	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, corecharacter.ErrNotFound) {
+	if _, _, err := svc.SellItem(ctx, "char-1", potion.ID); !errors.Is(err, corecharacter.ErrNotFound) {
 		t.Fatalf("expected corecharacter.ErrNotFound, got %v", err)
 	}
 
-	// 3. Insufficient funds error
-	charPoor := char
+	// 3. Item not found in depot
+	depotRepoOK := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
+			return depotVal, nil
+		},
+	}
+	svc, _ = NewService(depotRepoOK, &stubCharRepo{}, &stubInvRepo{})
+	if _, _, err := svc.SellItem(ctx, "char-1", "nonexistent"); !errors.Is(err, ErrItemNotFound) {
+		t.Fatalf("expected ErrItemNotFound, got %v", err)
+	}
+}
+
+func TestTransactionPaths_Expand(t *testing.T) {
+	ctx := context.Background()
+
+	depotVal, _ := NewDepot("char-1")
+
+	// 1. Transaction runner error
+	runnerErr := &stubTransactionRunner{
+		executeFn: func(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error) {
+			return nil, errTestBoom
+		},
+	}
+	svc, _ := NewService(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{}, WithTransactionRunner(runnerErr))
+	if _, err := svc.Expand(ctx, "char-1"); !errors.Is(err, errTestBoom) {
+		t.Fatalf("expected errTestBoom, got %v", err)
+	}
+
+	// 2. Max expansion reached
+	depMax, _ := NewDepot("char-1")
+	depMax.ExDepot = MaxExDepot
+	depotRepoMax := &stubDepotRepo{
+		findFn: func(ctx context.Context, characterID string) (Depot, error) {
+			return depMax, nil
+		},
+	}
+	svc, _ = NewService(depotRepoMax, &stubCharRepo{}, &stubInvRepo{})
+	if _, err := svc.Expand(ctx, "char-1"); !errors.Is(err, ErrDepotMaxExpanded) {
+		t.Fatalf("expected ErrDepotMaxExpanded, got %v", err)
+	}
+
+	// 3. Insufficient funds
+	charPoor, _ := corecharacter.New("Hero")
 	charPoor.Money = 50
 	charRepoPoor := &stubCharRepo{
 		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
 			return charPoor, nil
 		},
 	}
-	svc, _ = NewService(&stubDepotRepo{}, charRepoPoor, &stubInvRepo{})
-	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, ErrInsufficientFunds) {
-		t.Fatalf("expected ErrInsufficientFunds, got %v", err)
-	}
-
-	// 4. DepotRepo FindByCharacterIDForUpdate generic error
-	depotRepoErr := &stubDepotRepo{
-		findFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return Depot{}, errTestBoom
-		},
-	}
-	charRepoOK := &stubCharRepo{
-		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
-			return char, nil
-		},
-	}
-	svc, _ = NewService(depotRepoErr, charRepoOK, &stubInvRepo{})
-	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom, got %v", err)
-	}
-
-	// 5. DepotRepo FindByCharacterIDForUpdate ErrNotFound -> creates new depot and continues
-	var savedDepotGold int
-	depotRepoNotFound := &stubDepotRepo{
-		findFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return Depot{}, ErrNotFound
-		},
-		saveFn: func(ctx context.Context, depot Depot) error {
-			savedDepotGold = depot.Gold
-			return nil
-		},
-	}
-	svc, _ = NewService(depotRepoNotFound, charRepoOK, &stubInvRepo{})
-	res, err := svc.DepositGold(ctx, "char-1", 100)
-	if err != nil {
-		t.Fatalf("unexpected error when depot ErrNotFound: %v", err)
-	}
-	if res.Gold != 100 || savedDepotGold != 100 {
-		t.Fatalf("expected saved depot gold 100, got res=%d, saved=%d", res.Gold, savedDepotGold)
-	}
-
-	// 6. DepotRepo Save error
-	depotRepoSaveErr := &stubDepotRepo{
-		findFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return depotVal, nil
-		},
-		saveFn: func(ctx context.Context, depot Depot) error {
-			return errTestBoom
-		},
-	}
-	svc, _ = NewService(depotRepoSaveErr, charRepoOK, &stubInvRepo{})
-	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom, got %v", err)
-	}
-
-	// 7. CharacterRepo Update error
-	charRepoUpdateErr := &stubCharRepo{
-		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
-			return char, nil
-		},
-		updateFn: func(ctx context.Context, character corecharacter.Character) error {
-			return errTestBoom
-		},
-	}
 	depotRepoOK := &stubDepotRepo{
 		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			return depotVal, nil
 		},
 	}
-	svc, _ = NewService(depotRepoOK, charRepoUpdateErr, &stubInvRepo{})
-	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom, got %v", err)
-	}
-
-	// 8. WithTransactionProvider error
-	txProviderErr := &stubTxProvider{
-		runInTxFn: func(ctx context.Context, fn func(ctx context.Context) error) error {
-			return errTestBoom
-		},
-	}
-	svc, _ = NewServiceWithTransaction(depotRepoOK, charRepoOK, &stubInvRepo{}, txProviderErr)
-	if _, err := svc.DepositGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom with txProvider, got %v", err)
-	}
-}
-
-func TestTransactionPaths_WithdrawGold(t *testing.T) {
-	ctx := context.Background()
-
-	char, _ := corecharacter.New("Hero")
-	char.Money = 500
-
-	depotVal, _ := NewDepot("char-1")
-	depotVal.Gold = 300
-
-	// 1. Transaction runner error
-	runnerErr := &stubTransactionRunner{
-		executeFn: func(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error) {
-			return nil, errTestBoom
-		},
-	}
-	svc, _ := NewService(&stubDepotRepo{}, &stubCharRepo{}, &stubInvRepo{}, WithTransactionRunner(runnerErr))
-	if _, err := svc.WithdrawGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom, got %v", err)
-	}
-
-	// 2. Character not found error
-	charRepoNotFound := &stubCharRepo{
-		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
-			return corecharacter.Character{}, corecharacter.ErrNotFound
-		},
-	}
-	svc, _ = NewService(&stubDepotRepo{}, charRepoNotFound, &stubInvRepo{})
-	if _, err := svc.WithdrawGold(ctx, "char-1", 100); !errors.Is(err, corecharacter.ErrNotFound) {
-		t.Fatalf("expected corecharacter.ErrNotFound, got %v", err)
-	}
-
-	// 3. DepotRepo FindByCharacterIDForUpdate error
-	depotRepoFindErr := &stubDepotRepo{
-		findFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return Depot{}, errTestBoom
-		},
-	}
-	charRepoOK := &stubCharRepo{
-		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
-			return char, nil
-		},
-	}
-	svc, _ = NewService(depotRepoFindErr, charRepoOK, &stubInvRepo{})
-	if _, err := svc.WithdrawGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom, got %v", err)
-	}
-
-	// 4. Insufficient depot gold
-	depotRepoOK := &stubDepotRepo{
-		findFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return depotVal, nil
-		},
-	}
-	svc, _ = NewService(depotRepoOK, charRepoOK, &stubInvRepo{})
-	if _, err := svc.WithdrawGold(ctx, "char-1", 500); !errors.Is(err, ErrInsufficientDepotGold) {
-		t.Fatalf("expected ErrInsufficientDepotGold, got %v", err)
-	}
-
-	// 5. DepotRepo Save error
-	depotRepoSaveErr := &stubDepotRepo{
-		findFn: func(ctx context.Context, characterID string) (Depot, error) {
-			return depotVal, nil
-		},
-		saveFn: func(ctx context.Context, value Depot) error {
-			return errTestBoom
-		},
-	}
-	svc, _ = NewService(depotRepoSaveErr, charRepoOK, &stubInvRepo{})
-	if _, err := svc.WithdrawGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom, got %v", err)
-	}
-
-	// 6. CharacterRepo Update error
-	charRepoUpdateErr := &stubCharRepo{
-		findFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
-			return char, nil
-		},
-		updateFn: func(ctx context.Context, character corecharacter.Character) error {
-			return errTestBoom
-		},
-	}
-	svc, _ = NewService(depotRepoOK, charRepoUpdateErr, &stubInvRepo{})
-	if _, err := svc.WithdrawGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom on char update, got %v", err)
-	}
-
-	// 7. WithTransactionProvider error
-	txProviderErr := &stubTxProvider{
-		runInTxFn: func(ctx context.Context, fn func(ctx context.Context) error) error {
-			return errTestBoom
-		},
-	}
-	svc, _ = NewServiceWithTransaction(depotRepoOK, charRepoOK, &stubInvRepo{}, txProviderErr)
-	if _, err := svc.WithdrawGold(ctx, "char-1", 100); !errors.Is(err, errTestBoom) {
-		t.Fatalf("expected errTestBoom with txProvider, got %v", err)
-	}
-
-	// 8. Happy path
-	svc, _ = NewService(depotRepoOK, charRepoOK, &stubInvRepo{})
-	res, err := svc.WithdrawGold(ctx, "char-1", 100)
-	if err != nil {
-		t.Fatalf("unexpected error on happy path: %v", err)
-	}
-	if res.Gold != 200 {
-		t.Fatalf("expected depot gold 200, got %d", res.Gold)
+	svc, _ = NewService(depotRepoOK, charRepoPoor, &stubInvRepo{})
+	if _, err := svc.Expand(ctx, "char-1"); !errors.Is(err, ErrInsufficientFunds) {
 	}
 }
 
@@ -964,9 +737,10 @@ func TestTransactionPaths_DepositItem(t *testing.T) {
 
 	// 4. Depot full
 	fullDepot, _ := NewDepot("char-1")
-	fullDepot.Capacity = 1
-	dummy, _ := item.NewInstance("dummy", 1)
-	_ = fullDepot.AddItem(dummy)
+	for i := 0; i < 5; i++ {
+		dummy, _ := item.NewInstance(fmt.Sprintf("dummy-%d", i), 1)
+		_ = fullDepot.AddItem(dummy)
+	}
 	depotRepoFull := &stubDepotRepo{
 		findFn: func(ctx context.Context, characterID string) (Depot, error) {
 			return fullDepot, nil

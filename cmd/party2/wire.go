@@ -116,6 +116,10 @@ func wireHooks(
 		return nil
 	})
 
+	if misc.collection != nil {
+		econ.depot.SetCollectionRecorder(misc.collection)
+	}
+
 	soc.registerWorkerHandlers(misc.activity, cmbt.adv)
 }
 
@@ -141,6 +145,7 @@ func newHTTPHandler(
 		http.WithChapel(misc.chapel),
 		http.WithFarm(misc.farm),
 		http.WithCollection(misc.collection),
+		http.WithDepot(econ.depot),
 		http.WithLottery(misc.lottery),
 		http.WithCasino(misc.casino),
 		http.WithChallenge(cmbt.challenge),

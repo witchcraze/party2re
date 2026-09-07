@@ -1,0 +1,335 @@
+{
+  "/characters/{id}/depot": {
+    "get": {
+      "operationId": "getCharactersIdDepot",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "GET /characters/{id}/depot endpoint",
+      "tags": [
+        "Depot"
+      ]
+    }
+  },
+  "/characters/{id}/depot/deposit": {
+    "post": {
+      "operationId": "postCharactersIdDepotDeposit",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/depot/deposit endpoint",
+      "tags": [
+        "Depot"
+      ]
+    }
+  },
+  "/characters/{id}/depot/expand": {
+    "post": {
+      "operationId": "postCharactersIdDepotExpand",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/depot/expand endpoint",
+      "tags": [
+        "Depot"
+      ]
+    }
+  },
+  "/characters/{id}/depot/sell": {
+    "post": {
+      "operationId": "postCharactersIdDepotSell",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/depot/sell endpoint",
+      "tags": [
+        "Depot"
+      ]
+    }
+  },
+  "/characters/{id}/depot/sell-batch": {
+    "post": {
+      "operationId": "postCharactersIdDepotSellBatch",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/depot/sell-batch endpoint",
+      "tags": [
+        "Depot"
+      ]
+    }
+  },
+  "/characters/{id}/depot/send-item": {
+    "post": {
+      "operationId": "postCharactersIdDepotSendItem",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/depot/send-item endpoint",
+      "tags": [
+        "Depot"
+      ]
+    }
+  },
+  "/characters/{id}/depot/send-money": {
+    "post": {
+      "operationId": "postCharactersIdDepotSendMoney",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/depot/send-money endpoint",
+      "tags": [
+        "Depot"
+      ]
+    }
+  },
+  "/characters/{id}/depot/sort": {
+    "post": {
+      "operationId": "postCharactersIdDepotSort",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/depot/sort endpoint",
+      "tags": [
+        "Depot"
+      ]
+    }
+  },
+  "/characters/{id}/depot/withdraw": {
+    "post": {
+      "operationId": "postCharactersIdDepotWithdraw",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/depot/withdraw endpoint",
+      "tags": [
+        "Depot"
+      ]
+    }
+  }
+}

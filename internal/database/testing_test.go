@@ -107,11 +107,11 @@ func TestDatabaseTestEntityFactories(t *testing.T) {
 	// 5. CreateTestDepot
 	t.Run("CreateTestDepot", func(t *testing.T) {
 		depItem, _ := coreitem.NewInstance("elixir-01", 1)
-		dep, err := CreateTestDepot(ctx, db, charID, 5000, []coreitem.Instance{depItem})
+		dep, err := CreateTestDepot(ctx, db, charID, 3, []coreitem.Instance{depItem})
 		if err != nil {
 			t.Fatalf("CreateTestDepot error: %v", err)
 		}
-		if dep.CharacterID != charID || dep.Gold != 5000 || len(dep.Items) != 1 {
+		if dep.CharacterID != charID || dep.ExDepot != 3 || len(dep.Items) != 1 {
 			t.Errorf("unexpected depot: %+v", dep)
 		}
 	})
