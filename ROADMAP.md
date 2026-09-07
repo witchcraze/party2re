@@ -118,6 +118,7 @@ Reconcile facilities and production mechanics that depend on Depot storage and o
 
 ##### Milestone 3: Adventure, Dungeons & Live Combat
 Restore crawl structures, boss challenges, and multiplayer PvP/GvG arenas.
+- [ ] **Battle Adapter: Standardize Character/Party Mapping & Post-Battle State Application** (#496)
 - [ ] **Adventure: 10-Floor Dungeon Crawl, Flee Penalties & Boss Battles** (#478)
 - [ ] **Sealing Boss Arena: Proof of Kingship, Revive Counters & Leaves** (#479)
 - [ ] **Colosseum PvP: Real-time Wagering & Spectator Broadcasts** (#481)
