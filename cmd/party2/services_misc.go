@@ -7,6 +7,7 @@ import (
 
 	valkeygo "github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/activity"
+	"github.com/witchcraze/party2re/internal/altar"
 	"github.com/witchcraze/party2re/internal/blackmarket"
 	"github.com/witchcraze/party2re/internal/casino"
 	"github.com/witchcraze/party2re/internal/chapel"
@@ -48,6 +49,7 @@ type miscServices struct {
 	god         *god.Service
 	monster     *monster.Service
 	contest     *contest.Service
+	altar       *altar.Service
 	maint       *maintenance.Service
 	activity    *activity.Service
 }
@@ -274,6 +276,23 @@ func newMiscServices(
 		return nil, err
 	}
 
+	altarRepo, err := database.NewAltarRepository(db)
+	if err != nil {
+		return nil, err
+	}
+	altarService, err := altar.NewService(
+		core.charRepo,
+		core.invRepo,
+		econ.depotRepo,
+		altarRepo,
+		core.itemCatalog,
+		core.txProvider,
+		altar.WithCollectionRecorder(collectionService),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	var activityService *activity.Service
 	if valkeyClient != nil {
 		activityRepo, err := database.NewActivityRepository(db)
@@ -307,5 +326,6 @@ func newMiscServices(
 		contest:     contestService,
 		maint:       maintService,
 		activity:    activityService,
+		altar:       altarService,
 	}, nil
 }

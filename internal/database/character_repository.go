@@ -26,12 +26,12 @@ func NewCharacterRepository(db *sql.DB) (*CharacterRepository, error) {
 func (r *CharacterRepository) Save(ctx context.Context, value corecharacter.Character) error {
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO characters
-			(id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, small_medals, help_count, over_level, over_depot, over_monster, over_future, over_flea, over_store)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			(id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, small_medals, help_count, orb, over_level, over_depot, over_monster, over_future, over_flea, over_store)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, value.ID, value.PlayerID, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP,
 		value.Stats.HP, value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility,
 		value.Money, value.Level, value.Experience, value.SP, value.SmallMedals, value.HelpCount,
-		value.OverLevel, value.OverDepot, value.OverMonster, value.OverFuture, value.OverFlea, value.OverStore)
+		value.Orb, value.OverLevel, value.OverDepot, value.OverMonster, value.OverFuture, value.OverFlea, value.OverStore)
 	return err
 }
 
@@ -166,6 +166,7 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		`DELETE FROM tavern_deliveries WHERE character_id = ?`,
 		`DELETE FROM tavern_character_status WHERE character_id = ?`,
 		`DELETE FROM park_posts WHERE character_id = ?`,
+		`DELETE FROM altar_ramia_awakenings WHERE character_id = ?`,
 		`DELETE FROM rescue_records WHERE character_id = ?`,
 		`DELETE FROM contest_votes WHERE voter_character_id = ?`,
 		`DELETE FROM contest_entries WHERE character_id = ?`,

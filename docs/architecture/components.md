@@ -486,7 +486,7 @@ To preserve parallel testability and eliminate global state mutations (`os.Seten
    - `services_econ.go`: Shop, Bank, Depot, Blacksmith, Alchemy, Auction, Flea Market, and Gem Store.
    - `services_cmbt.go`: Battle engine, Boss, PvP, GvG, Dungeon, Challenge, Party, Replay, and Custom Skill.
    - `services_soc.go`: Guild, Ranking, Park, Home, Notification, Scheduling, and background Worker.
-   - `services_misc.go`: Town facilities and features (Farm, Casino, Contest, Medal, Collection, Inn, Chapel, Activity, etc.).
+   - `services_misc.go`: Town facilities and features (Farm, Casino, Contest, Medal, Collection, Inn, Chapel, Altar of Rebirth, Activity, etc.).
    - `wire.go`: Cross-domain event hooks (`SetVictoryHook`, `SetSynthesisHook`, `SetGamePlayedHook`) and HTTP handler composition.
 
 ## Component review criteria

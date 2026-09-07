@@ -117,6 +117,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Town item delivery quests and player-to-player parcel courier service ([#195](https://github.com/witchcraze/party2re/issues/195))
 - [x] Flea Market player-to-player item stalls and direct fixed-price exchange ([#194](https://github.com/witchcraze/party2re/issues/194))
 - [x] Monster Grandpa and home pet companion storage ([#193](https://github.com/witchcraze/party2re/issues/193))
+- [x] Altar of Rebirth: 6-Orb Offering, Ramia Awakening, and Otherworld Travel Item Wishes ([#471](https://github.com/witchcraze/party2re/issues/471))
 
 ### G. Presentation, assets, and operations
 - [x] UI-independent HTTP JSON Application API layer ([#87](https://github.com/witchcraze/party2re/issues/87))
@@ -242,6 +243,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#398](https://github.com/witchcraze/party2re/issues/398) | Enforce Flea Market SQL CAS guard and add high-concurrency stress test | Merged |
 | [#399](https://github.com/witchcraze/party2re/issues/399) | Make connection pool parameters configurable per environment | Merged |
 | [#408](https://github.com/witchcraze/party2re/issues/408) | Prevent false rejection on exact coins in Indian Poker action | Merged |
+| [#471](https://github.com/witchcraze/party2re/issues/471) | Altar of Rebirth: 6-Orb Offering, Ramia Awakening, and Otherworld Travel Item Wishes | Merged |
 
 ---
 
