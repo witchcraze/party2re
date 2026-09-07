@@ -204,6 +204,14 @@ Battle
 
 Battle must not know whether it was initiated by a quest, guild, arena, boss, dungeon, or challenge feature. All combat modes build `Participant` inputs using the shared `corebattle.NewParticipantFromCharacter`, `corebattle.NewParticipantFromCharacterWithHP`, or `corebattle.ParticipantBuilder` adapters, identifying participants strictly by unique entity ID while retaining display names for combat turn logs. Direct assignment of `.Name` to `Participant.ID` is mechanically prohibited by Go AST static analysis (`internal/core/core_lint_test.go`).
 
+The battle engine provides both legacy 1v1 resolution (`Resolve`) and full multi-turn party resolution (`ResolvePartyBattle`, `_battle.cgi`, `_skill.cgi` parity):
+- **Party Combat**: Up to 4 allies vs 1–N enemies with dynamic round loops (up to 30 rounds).
+- **Agility Turn Order**: Combatants act in descending order of Agility within each round.
+- **Skills & Resource Costs**: Job skills consuming MP (single/all targets, elemental affinity, healing) and custom blended skills consuming CMP with incantation broadcast logs and chained gem effects.
+- **Elemental Fields & Anti-Field (`_create_field`, `_check_anti_field`)**: Active field states granting +30% matching damage bonus and -20% opposing damage penalty, with turn countdowns and anti-field neutralization.
+- **Defeat & Revival (`defeat.go`)**: Pre-death triggers (`pharaoh`, `undying`, `touki_shield`, `dokuro_amulet`, `cursed_revive`) restoring combatant HP upon fatal damage.
+- **File Size Modularization**: Core battle responsibilities are decomposed into single-purpose units (`party_battle.go`, `field.go`, `defeat.go`, `action.go`, `participant.go`, `battle.go`), strictly adhering to the 500-line ceiling.
+
 ### Adventure / Quest
 
 **Responsibility:** define and execute adventure-oriented game flows, including destinations, encounters, durations, requirements, and rewards.
