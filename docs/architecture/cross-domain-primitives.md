@@ -267,15 +267,36 @@ The Casino domain migrated in Issue #427, demonstrating cross-domain currency co
 
 ---
 
-## 9. Migration Roadmap for Feature Domains
+## 9. Migrated Domain: Depot (`internal/depot`)
 
-Following Inn, Blacksmith, and Casino, remaining feature domains will migrate to the universal runner in subsequent issues:
+The Depot domain migrated in Issue #445, eliminating dual-execution fallback logic and standardizing all gold and item storage operations onto `economy.TransactionRunner`:
+
+### Before Migration
+- Dual execution paths (`if s.runner != nil` vs fallback manual repository transaction).
+- Redundant `sqlDepotTx` abstraction duplicating transaction orchestration.
+- Complex nested fallback tests attempting to simulate transactionless environments.
+
+### After Migration
+- Injects `economy.TransactionRunner` (or `*economy.Service`) via `WithEconomy` / `WithTransactionRunner`.
+- Auto-wires `economy.Service` in `NewService` when runner is not supplied.
+- `DepositGold` executes with `Cost.Gold: amount` and callback incrementing depot gold balance.
+- `WithdrawGold` executes transaction callback decrementing depot gold balance and dispatches `Grant.Gold: amount`.
+- `DepositItem` and `WithdrawItem` execute with `LockInventory: true` ensuring deterministic lock order: `characters` (Rank 2) -> `inventory_items` (Rank 3) -> `character_depots` (Rank 5).
+- Code size reduced from 473 lines down to 316 lines with 96.6% unit test coverage.
+
+---
+
+## 10. Migration Roadmap for Feature Domains
+
+Following Inn, Blacksmith, Casino, and Depot, remaining feature domains will migrate to the universal runner in subsequent issues:
 
 | Domain | Scope | Status | Primary Benefit |
 |---|---|---|---|
 | **Inn** (`internal/inn`) | Resting HP/MP recovery, level-scaled fee | Migrated (#411) | Eliminates manual character row-locking and dynamic fee check |
 | **Blacksmith** (`internal/blacksmith`) | Equipment enhancement, upgrade materials | Migrated (#426) | Eliminates manual inventory + character dual locking and rollbacks |
 | **Casino** (`internal/casino`) | Poker, Slot, Doppelganger, HighLow bet & payout | Migrated (#427) | Unifies coin exchange and wager settlement with strict balance checking and deterministic lock order |
+| **Depot** (`internal/depot`) | Gold & item storage, inventory transfer | Migrated (#445) | Eliminates dual execution path, enforces Rank 2 -> 3 -> 5 locking order |
 | **Alchemy** (`internal/alchemy`) | Multi-ingredient consumption and item synthesis | Planned | Streamlines recipe validation and batch inventory deductions |
 | **Guild** (`internal/guild`) | Guild founding fee, Gold donations | Planned | Standardizes donation limits and deterministic locking |
 | **FleaMarket** (`internal/fleamarket`) | P2P item listing, purchase escrow | Planned | Two-party deterministic locking with `id.Sort2` and item transfer |
+
