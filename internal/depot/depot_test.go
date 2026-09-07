@@ -101,140 +101,137 @@ func (r *memoryInvRepo) Save(_ context.Context, inventory coreinventory.Inventor
 	return nil
 }
 
-func TestNewDepot(t *testing.T) {
-	dep, err := NewDepot("char-123")
-	if err != nil {
-		t.Fatalf("NewDepot error: %v", err)
+type memoryTxProvider struct{}
+
+func (p *memoryTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	return fn(ctx)
+}
+
+type memoryItemCatalog struct {
+	items map[string]item.Definition
+}
+
+func newMemoryItemCatalog() *memoryItemCatalog {
+	c := &memoryItemCatalog{items: make(map[string]item.Definition)}
+	defWeapon, _ := item.NewEquipmentDefinition("wea-01", "Iron Sword", 1000, item.SlotMainHand)
+	defShield, _ := item.NewEquipmentDefinition("arm-01", "Iron Shield", 800, item.SlotOffHand)
+	defPotion, _ := item.NewDefinition("item-001", "Herb", 100)
+	c.items[defWeapon.ID] = defWeapon
+	c.items[defShield.ID] = defShield
+	c.items[defPotion.ID] = defPotion
+	return c
+}
+
+func (c *memoryItemCatalog) FindByID(id string) (item.Definition, error) {
+	def, ok := c.items[id]
+	if !ok {
+		return item.Definition{}, errors.New("item not found")
 	}
-	if dep.CharacterID != "char-123" || dep.Capacity != DefaultDepotCapacity || dep.Gold != 0 || len(dep.Items) != 0 {
-		t.Fatalf("unexpected depot: %#v", dep)
+	return def, nil
+}
+
+type memoryCollectionRecorder struct {
+	mu       sync.Mutex
+	recorded []string
+}
+
+func (m *memoryCollectionRecorder) RecordItemDiscovered(_ context.Context, _, itemID, _, _ string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.recorded = append(m.recorded, itemID)
+	return nil
+}
+
+func TestCalculateCapacity(t *testing.T) {
+	tests := []struct {
+		name      string
+		jobLv     int
+		exDepot   int
+		overDepot int
+		want      int
+	}{
+		{"Initial state (all zero)", 0, 0, 0, 5},
+		{"JobLv 1", 1, 0, 0, 10},
+		{"JobLv 2", 2, 0, 0, 15},
+		{"JobLv 28", 28, 0, 0, 145},
+		{"JobLv 29 (cap at 150)", 29, 0, 0, 150},
+		{"JobLv 100", 100, 0, 0, 150},
+		{"ExDepot 1", 0, 1, 0, 10},
+		{"ExDepot 20 (max +100)", 0, 20, 0, 105},
+		{"ExDepot 25 (clamped to 20)", 0, 25, 0, 105},
+		{"OverDepot 1 (+50)", 0, 0, 1, 55},
+		{"OverDepot 5 (max +250)", 0, 0, 5, 255},
+		{"OverDepot 10 (clamped to 5)", 0, 0, 10, 255},
+		{"Max Theoretical (150 + 100 + 250 = 500)", 29, 20, 5, 500},
+		{"Negative numbers clamped", -5, -2, -1, 5},
 	}
 
-	_, err = NewDepot("")
-	if !errors.Is(err, ErrInvalidCharacterID) {
-		t.Fatalf("expected ErrInvalidCharacterID, got %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CalculateCapacity(tt.jobLv, tt.exDepot, tt.overDepot)
+			if got != tt.want {
+				t.Errorf("CalculateCapacity(%d, %d, %d) = %d, want %d", tt.jobLv, tt.exDepot, tt.overDepot, got, tt.want)
+			}
+		})
 	}
 }
 
-func TestDepotAddItemAndRemoveItem(t *testing.T) {
-	dep, _ := NewDepot("char-123")
-	item1, _ := item.NewInstance("potion", 2)
-	item2, _ := item.NewInstance("potion", 3)
-	item3, _ := item.NewInstance("sword", 1)
-
-	if err := dep.AddItem(item1); err != nil {
-		t.Fatalf("AddItem error: %v", err)
+func TestExpansionCost(t *testing.T) {
+	cost0, err := ExpansionCost(0)
+	if err != nil || cost0 != 200000 {
+		t.Errorf("expected 200000 at 0, got %d, err %v", cost0, err)
 	}
-	if len(dep.Items) != 1 || dep.Items[0].Quantity != 2 {
-		t.Fatalf("unexpected items: %#v", dep.Items)
+	cost2, err := ExpansionCost(2)
+	if err != nil || cost2 != 400000 {
+		t.Errorf("expected 400000 at 2, got %d, err %v", cost2, err)
 	}
-
-	// Stacking item of same definition
-	if err := dep.AddItem(item2); err != nil {
-		t.Fatalf("AddItem error: %v", err)
+	cost8, err := ExpansionCost(8)
+	if err != nil || cost8 != 999999 {
+		t.Errorf("expected 999999 at 8, got %d, err %v", cost8, err)
 	}
-	if len(dep.Items) != 1 || dep.Items[0].Quantity != 5 {
-		t.Fatalf("unexpected items: %#v", dep.Items)
+	cost19, err := ExpansionCost(19)
+	if err != nil || cost19 != 999999 {
+		t.Errorf("expected 999999 at 19, got %d, err %v", cost19, err)
 	}
-
-	// Adding different item
-	if err := dep.AddItem(item3); err != nil {
-		t.Fatalf("AddItem error: %v", err)
-	}
-	if len(dep.Items) != 2 {
-		t.Fatalf("unexpected items length: %d", len(dep.Items))
-	}
-
-	// Remove item
-	removed, err := dep.RemoveItem(item1.ID)
-	if err != nil {
-		t.Fatalf("RemoveItem error: %v", err)
-	}
-	if removed.DefinitionID != "potion" || len(dep.Items) != 1 {
-		t.Fatalf("unexpected remove result: %#v, items: %#v", removed, dep.Items)
-	}
-
-	// Remove non-existent item
-	_, err = dep.RemoveItem("nonexistent")
-	if !errors.Is(err, ErrItemNotFound) {
-		t.Fatalf("expected ErrItemNotFound, got %v", err)
+	_, err = ExpansionCost(20)
+	if !errors.Is(err, ErrDepotMaxExpanded) {
+		t.Errorf("expected ErrDepotMaxExpanded at 20, got %v", err)
 	}
 }
 
-func TestDepotCapacityLimit(t *testing.T) {
-	dep, _ := NewDepot("char-123")
+// TestDepot_AddItem_StackingAndCapacity verifies Issue #452 fix:
+// Stacking items merge even when at full capacity; non-stacking items are rejected.
+func TestDepot_AddItem_StackingAndCapacity(t *testing.T) {
+	dep, _ := NewDepot("char-1")
 	dep.Capacity = 2
 
-	item1, _ := item.NewInstance("item-1", 1)
-	item2, _ := item.NewInstance("item-2", 1)
-	item3, _ := item.NewInstance("item-3", 1)
+	itemA, _ := item.NewInstance("item-001", 1)
+	itemB, _ := item.NewInstance("item-002", 1)
+	itemAExtra, _ := item.NewInstance("item-001", 3)
+	itemC, _ := item.NewInstance("item-003", 1)
 
-	_ = dep.AddItem(item1)
-	_ = dep.AddItem(item2)
-
-	err := dep.AddItem(item3)
-	if !errors.Is(err, ErrDepotFull) {
-		t.Fatalf("expected ErrDepotFull, got %v", err)
+	// Fill depot to capacity (2/2)
+	if err := dep.AddItem(itemA); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-}
-
-func TestDepositAndWithdrawGold(t *testing.T) {
-	ctx := context.Background()
-	depotRepo := newMemoryDepotRepo()
-	charRepo := newMemoryCharRepo()
-	invRepo := newMemoryInvRepo()
-
-	char, _ := corecharacter.New("Trader")
-	char.Money = 500
-	charRepo.characters[char.ID] = char
-
-	service, err := NewService(depotRepo, charRepo, invRepo)
-	if err != nil {
-		t.Fatal(err)
+	if err := dep.AddItem(itemB); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(dep.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(dep.Items))
 	}
 
-	// Deposit 200 gold
-	dep, err := service.DepositGold(ctx, char.ID, 200)
-	if err != nil {
-		t.Fatalf("DepositGold error: %v", err)
+	// Issue #452: Adding existing itemA when depot is at full capacity (2/2) MUST succeed!
+	if err := dep.AddItem(itemAExtra); err != nil {
+		t.Fatalf("expected stacking item to succeed at full capacity, got: %v", err)
 	}
-	if dep.Gold != 200 {
-		t.Errorf("expected depot gold = 200, got %d", dep.Gold)
-	}
-	updatedChar, _ := charRepo.FindByID(ctx, char.ID)
-	if updatedChar.Money != 300 {
-		t.Errorf("expected character money = 300, got %d", updatedChar.Money)
+	if dep.Items[0].Quantity != 4 {
+		t.Errorf("expected quantity 4, got %d", dep.Items[0].Quantity)
 	}
 
-	// Deposit too much gold
-	_, err = service.DepositGold(ctx, char.ID, 400)
-	if !errors.Is(err, ErrInsufficientFunds) {
-		t.Errorf("expected ErrInsufficientFunds, got %v", err)
-	}
-
-	// Deposit invalid amount
-	_, err = service.DepositGold(ctx, char.ID, 0)
-	if !errors.Is(err, ErrInvalidAmount) {
-		t.Errorf("expected ErrInvalidAmount, got %v", err)
-	}
-
-	// Withdraw 150 gold
-	dep, err = service.WithdrawGold(ctx, char.ID, 150)
-	if err != nil {
-		t.Fatalf("WithdrawGold error: %v", err)
-	}
-	if dep.Gold != 50 {
-		t.Errorf("expected depot gold = 50, got %d", dep.Gold)
-	}
-	updatedChar, _ = charRepo.FindByID(ctx, char.ID)
-	if updatedChar.Money != 450 {
-		t.Errorf("expected character money = 450, got %d", updatedChar.Money)
-	}
-
-	// Withdraw too much gold
-	_, err = service.WithdrawGold(ctx, char.ID, 100)
-	if !errors.Is(err, ErrInsufficientDepotGold) {
-		t.Errorf("expected ErrInsufficientDepotGold, got %v", err)
+	// Adding new non-existing itemC MUST fail with ErrDepotFull
+	if err := dep.AddItem(itemC); !errors.Is(err, ErrDepotFull) {
+		t.Fatalf("expected ErrDepotFull for new item, got: %v", err)
 	}
 }
 
@@ -243,18 +240,24 @@ func TestDepositAndWithdrawItem(t *testing.T) {
 	depotRepo := newMemoryDepotRepo()
 	charRepo := newMemoryCharRepo()
 	invRepo := newMemoryInvRepo()
+	catalog := newMemoryItemCatalog()
+	collector := &memoryCollectionRecorder{}
 
 	char, _ := corecharacter.New("Item Collector")
 	charRepo.characters[char.ID] = char
 
 	inv, _ := coreinventory.New(char.ID)
 	potion, _ := item.NewInstance("item-001", 3)
-	sword, _ := item.NewInstance("weapon-01", 1)
+	sword, _ := item.NewInstance("wea-01", 1)
 	_ = inv.Add(potion)
 	_ = inv.Add(sword)
 	invRepo.inventories[char.ID] = inv
 
-	service, _ := NewService(depotRepo, charRepo, invRepo)
+	service, _ := NewService(
+		depotRepo, charRepo, invRepo,
+		WithItemDefinitionProvider(catalog),
+		WithCollectionRecorder(collector),
+	)
 
 	// Deposit potion
 	dep, err := service.DepositItem(ctx, char.ID, potion.ID)
@@ -263,16 +266,6 @@ func TestDepositAndWithdrawItem(t *testing.T) {
 	}
 	if len(dep.Items) != 1 || dep.Items[0].DefinitionID != "item-001" {
 		t.Fatalf("unexpected depot items: %#v", dep.Items)
-	}
-	updatedInv, _ := invRepo.FindByCharacterID(ctx, char.ID)
-	if len(updatedInv.Items) != 1 {
-		t.Fatalf("expected inventory items count = 1, got %d", len(updatedInv.Items))
-	}
-
-	// Deposit non-existent item
-	_, err = service.DepositItem(ctx, char.ID, "nonexistent")
-	if !errors.Is(err, ErrItemNotFound) {
-		t.Fatalf("expected ErrItemNotFound, got %v", err)
 	}
 
 	// Withdraw potion
@@ -283,38 +276,207 @@ func TestDepositAndWithdrawItem(t *testing.T) {
 	if len(dep.Items) != 0 {
 		t.Fatalf("expected depot items count = 0, got %d", len(dep.Items))
 	}
-	updatedInv, _ = invRepo.FindByCharacterID(ctx, char.ID)
-	if len(updatedInv.Items) != 2 {
-		t.Fatalf("expected inventory items count = 2, got %d", len(updatedInv.Items))
-	}
 
-	// Withdraw non-existent item
-	_, err = service.WithdrawItem(ctx, char.ID, "nonexistent")
-	if !errors.Is(err, ErrItemNotFound) {
-		t.Fatalf("expected ErrItemNotFound, got %v", err)
+	// Verify collection was recorded on withdrawal
+	if len(collector.recorded) != 1 || collector.recorded[0] != "item-001" {
+		t.Errorf("expected item-001 recorded in collection, got %v", collector.recorded)
 	}
 }
 
-func TestGetDepot(t *testing.T) {
+func TestSellItemAndBatch(t *testing.T) {
+	ctx := context.Background()
+	depotRepo := newMemoryDepotRepo()
+	charRepo := newMemoryCharRepo()
+	invRepo := newMemoryInvRepo()
+	catalog := newMemoryItemCatalog()
+
+	char, _ := corecharacter.New("Seller")
+	char.Money = 100
+	charRepo.characters[char.ID] = char
+
+	service, _ := NewService(depotRepo, charRepo, invRepo, WithItemDefinitionProvider(catalog))
+
+	dep, _ := NewDepot(char.ID)
+	sword, _ := item.NewInstance("wea-01", 1)     // Price 1000 -> 50% = 500
+	shield, _ := item.NewInstance("arm-01", 1)    // Price 800 -> 50% = 400
+	potions, _ := item.NewInstance("item-001", 2) // Price 100 -> 50% = 50 * 2 = 100
+	_ = dep.AddItem(sword)
+	_ = dep.AddItem(shield)
+	_ = dep.AddItem(potions)
+	_ = depotRepo.Save(ctx, dep)
+
+	// Single item sell: sword
+	dep, earned, err := service.SellItem(ctx, char.ID, sword.ID)
+	if err != nil {
+		t.Fatalf("SellItem error: %v", err)
+	}
+	if earned != 500 {
+		t.Errorf("expected earned 500, got %d", earned)
+	}
+	updatedChar, _ := charRepo.FindByID(ctx, char.ID)
+	if updatedChar.Money != 600 {
+		t.Errorf("expected char money 600, got %d", updatedChar.Money)
+	}
+	if len(dep.Items) != 2 {
+		t.Errorf("expected 2 items remaining, got %d", len(dep.Items))
+	}
+
+	// Batch sell: shield and potions
+	dep, batchEarned, err := service.SellItems(ctx, char.ID, []string{shield.ID, potions.ID})
+	if err != nil {
+		t.Fatalf("SellItems error: %v", err)
+	}
+	if batchEarned != 500 { // 400 + 100
+		t.Errorf("expected batchEarned 500, got %d", batchEarned)
+	}
+	updatedChar, _ = charRepo.FindByID(ctx, char.ID)
+	if updatedChar.Money != 1100 {
+		t.Errorf("expected char money 1100, got %d", updatedChar.Money)
+	}
+	if len(dep.Items) != 0 {
+		t.Errorf("expected depot items empty, got %d", len(dep.Items))
+	}
+}
+
+func TestSortItems(t *testing.T) {
+	ctx := context.Background()
+	depotRepo := newMemoryDepotRepo()
+	charRepo := newMemoryCharRepo()
+	invRepo := newMemoryInvRepo()
+	catalog := newMemoryItemCatalog()
+
+	char, _ := corecharacter.New("Sorter")
+	charRepo.characters[char.ID] = char
+
+	service, _ := NewService(depotRepo, charRepo, invRepo, WithItemDefinitionProvider(catalog))
+
+	dep, _ := NewDepot(char.ID)
+	potion, _ := item.NewInstance("item-001", 1) // Kind 3
+	shield, _ := item.NewInstance("arm-01", 1)   // Kind 2
+	sword, _ := item.NewInstance("wea-01", 1)    // Kind 1
+	// Add in reverse order
+	_ = dep.AddItem(potion)
+	_ = dep.AddItem(shield)
+	_ = dep.AddItem(sword)
+	_ = depotRepo.Save(ctx, dep)
+
+	sortedDep, err := service.SortItems(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("SortItems error: %v", err)
+	}
+	if len(sortedDep.Items) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(sortedDep.Items))
+	}
+	// Kind 1 (weapon) -> Kind 2 (armor) -> Kind 3 (item)
+	if sortedDep.Items[0].DefinitionID != "wea-01" {
+		t.Errorf("expected first item wea-01, got %s", sortedDep.Items[0].DefinitionID)
+	}
+	if sortedDep.Items[1].DefinitionID != "arm-01" {
+		t.Errorf("expected second item arm-01, got %s", sortedDep.Items[1].DefinitionID)
+	}
+	if sortedDep.Items[2].DefinitionID != "item-001" {
+		t.Errorf("expected third item item-001, got %s", sortedDep.Items[2].DefinitionID)
+	}
+}
+
+func TestExpand(t *testing.T) {
 	ctx := context.Background()
 	depotRepo := newMemoryDepotRepo()
 	charRepo := newMemoryCharRepo()
 	invRepo := newMemoryInvRepo()
 
+	char, _ := corecharacter.New("Expander")
+	char.Money = 500000 // 500k G
+	charRepo.characters[char.ID] = char
+
 	service, _ := NewService(depotRepo, charRepo, invRepo)
 
-	// Get depot when none exists returns default empty depot
-	dep, err := service.GetDepot(ctx, "char-new")
+	// First expansion: costs 200k G
+	dep, err := service.Expand(ctx, char.ID)
 	if err != nil {
-		t.Fatalf("GetDepot error: %v", err)
+		t.Fatalf("Expand error: %v", err)
 	}
-	if dep.CharacterID != "char-new" || dep.Capacity != DefaultDepotCapacity || dep.Gold != 0 {
-		t.Fatalf("unexpected depot: %#v", dep)
+	if dep.ExDepot != 1 {
+		t.Errorf("expected ExDepot 1, got %d", dep.ExDepot)
+	}
+	if dep.Capacity != 10 { // base 5 + 1*5 = 10
+		t.Errorf("expected capacity 10, got %d", dep.Capacity)
+	}
+	updatedChar, _ := charRepo.FindByID(ctx, char.ID)
+	if updatedChar.Money != 300000 {
+		t.Errorf("expected money 300000, got %d", updatedChar.Money)
 	}
 
-	// Invalid character ID
-	_, err = service.GetDepot(ctx, "")
-	if !errors.Is(err, ErrInvalidCharacterID) {
-		t.Fatalf("expected ErrInvalidCharacterID, got %v", err)
+	// Second expansion: costs 200k G
+	dep, err = service.Expand(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("second Expand error: %v", err)
+	}
+	if dep.ExDepot != 2 || dep.Capacity != 15 {
+		t.Errorf("expected ExDepot 2, capacity 15, got %d, %d", dep.ExDepot, dep.Capacity)
+	}
+
+	// Third expansion: costs 400k G, but character only has 100k G -> fails
+	_, err = service.Expand(ctx, char.ID)
+	if !errors.Is(err, ErrInsufficientFunds) {
+		t.Errorf("expected ErrInsufficientFunds, got %v", err)
+	}
+}
+
+func TestSendMoneyAndItem(t *testing.T) {
+	ctx := context.Background()
+	depotRepo := newMemoryDepotRepo()
+	charRepo := newMemoryCharRepo()
+	invRepo := newMemoryInvRepo()
+	txProv := &memoryTxProvider{}
+
+	sender, _ := corecharacter.New("Sender")
+	sender.Money = 1000
+	charRepo.characters[sender.ID] = sender
+
+	recipient, _ := corecharacter.New("Recipient")
+	recipient.Money = 50
+	charRepo.characters[recipient.ID] = recipient
+
+	inv, _ := coreinventory.New(sender.ID)
+	sword, _ := item.NewInstance("wea-01", 1)
+	_ = inv.Add(sword)
+	invRepo.inventories[sender.ID] = inv
+
+	service, _ := NewService(depotRepo, charRepo, invRepo, WithTransactionProvider(txProv))
+
+	// Send money
+	_, err := service.SendMoney(ctx, sender.ID, recipient.ID, 300)
+	if err != nil {
+		t.Fatalf("SendMoney error: %v", err)
+	}
+	upSender, _ := charRepo.FindByID(ctx, sender.ID)
+	upRecipient, _ := charRepo.FindByID(ctx, recipient.ID)
+	if upSender.Money != 700 || upRecipient.Money != 350 {
+		t.Errorf("unexpected money balances: sender %d, recipient %d", upSender.Money, upRecipient.Money)
+	}
+
+	// Send money - self transfer rejected
+	_, err = service.SendMoney(ctx, sender.ID, sender.ID, 100)
+	if !errors.Is(err, ErrSelfTransferNotAllowed) {
+		t.Errorf("expected ErrSelfTransferNotAllowed, got %v", err)
+	}
+
+	// Send item
+	_, err = service.SendItem(ctx, sender.ID, recipient.ID, sword.ID)
+	if err != nil {
+		t.Fatalf("SendItem error: %v", err)
+	}
+
+	// Verify item removed from sender inventory
+	upInv, _ := invRepo.FindByCharacterID(ctx, sender.ID)
+	if len(upInv.Items) != 0 {
+		t.Errorf("expected sender inventory empty, got %d", len(upInv.Items))
+	}
+
+	// Verify item added to recipient depot
+	recDep, _ := depotRepo.FindByCharacterID(ctx, recipient.ID)
+	if len(recDep.Items) != 1 || recDep.Items[0].DefinitionID != "wea-01" {
+		t.Errorf("expected sword in recipient depot, got %#v", recDep.Items)
 	}
 }

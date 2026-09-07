@@ -42,7 +42,7 @@ func TestDepotRepositorySaveAndFind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = CreateTestDepot(ctx, db, char.ID, 1000, []item.Instance{inst})
+	_, err = CreateTestDepot(ctx, db, char.ID, 2, []item.Instance{inst})
 	if err != nil {
 		t.Fatalf("CreateTestDepot error = %v", err)
 	}
@@ -52,7 +52,7 @@ func TestDepotRepositorySaveAndFind(t *testing.T) {
 		t.Fatalf("FindByCharacterID() error = %v", err)
 	}
 
-	if restored.CharacterID != char.ID || restored.Gold != 1000 || len(restored.Items) != 1 || restored.Items[0].Quantity != 5 {
+	if restored.CharacterID != char.ID || restored.ExDepot != 2 || len(restored.Items) != 1 || restored.Items[0].Quantity != 5 {
 		t.Fatalf("restored depot mismatch: %#v", restored)
 	}
 }
@@ -86,7 +86,7 @@ func TestDepotRepositoryExecuteTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	char.Money = 300
+	char.Money = 500000
 	if err := charRepo.Update(ctx, char); err != nil {
 		t.Fatal(err)
 	}
@@ -106,17 +106,8 @@ func TestDepotRepositoryExecuteTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Deposit gold
-	dep, err := service.DepositGold(ctx, char.ID, 100)
-	if err != nil {
-		t.Fatalf("DepositGold error: %v", err)
-	}
-	if dep.Gold != 100 {
-		t.Errorf("depot gold = %d, want 100", dep.Gold)
-	}
-
-	// Deposit item
-	dep, err = service.DepositItem(ctx, char.ID, potion.ID)
+	// 1. Deposit item
+	dep, err := service.DepositItem(ctx, char.ID, potion.ID)
 	if err != nil {
 		t.Fatalf("DepositItem error: %v", err)
 	}
@@ -131,5 +122,23 @@ func TestDepotRepositoryExecuteTransaction(t *testing.T) {
 	}
 	if len(restoredInv.Items) != 0 {
 		t.Errorf("restored inventory count = %d, want 0", len(restoredInv.Items))
+	}
+
+	// 2. Expand depot
+	dep, err = service.Expand(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("Expand error: %v", err)
+	}
+	if dep.ExDepot != 1 {
+		t.Errorf("depot ex_depot = %d, want 1", dep.ExDepot)
+	}
+
+	// 3. Withdraw item
+	dep, err = service.WithdrawItem(ctx, char.ID, potion.ID)
+	if err != nil {
+		t.Fatalf("WithdrawItem error: %v", err)
+	}
+	if len(dep.Items) != 0 {
+		t.Errorf("depot items count = %d, want 0", len(dep.Items))
 	}
 }
