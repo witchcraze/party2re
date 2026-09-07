@@ -103,7 +103,7 @@ This catalog is the Single Source of Truth (SSOT) mapping every single Perl CGI 
 | :--- | :--- | :--- | :--- | :---: |
 | `lib/vs_monster.cgi`, `lib/adventure.cgi` | 冒険 (Adventure) | 10-floor dungeon crawl, flee penalty, floor boss | `internal/adventure` | Reconciling (#478) |
 | `lib/vs_king.cgi`, `_win_vs_king.cgi` | 封印の魔王 (Boss) | Proof of Kingship, single-run revives, Leaf of World Tree | `internal/boss` | Reconciling (#479) |
-| `lib/_battle.cgi` | コア戦闘エンジン | Turn calculations, damage, hit rate, critical, status | `internal/core/battle` | Reconciling (#480) |
+| `lib/_battle.cgi` | コア戦闘エンジン | Turn calculations, damage, hit rate, critical, status | `internal/core/battle` | Reconciled (#480) |
 | `lib/_skill.cgi` | スキル発動エンジン | Skill triggers, MP/HP costs, elemental damage | `internal/core/skill` | Reconciling (#469) |
 | `lib/vs_player.cgi` | 闘技場 (PvP Arena) | Real-time live betting, spectator logs, Elo rating | `internal/pvp` | Reconciling (#481) |
 | `lib/vs_guild.cgi` | ギルド戦 (GvG Arena) | Multi-round tournament brackets, color defense | `internal/gvg` | Reconciling (#482) |

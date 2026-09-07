@@ -42,8 +42,12 @@ func NewParticipantFromCharacter(char corecharacter.Character) Participant {
 		ID:      char.ID,
 		Name:    char.Name,
 		HP:      hp,
+		MaxHP:   char.Stats.MaxHP,
+		MP:      char.Stats.MP,
+		MaxMP:   char.Stats.MaxMP,
 		Attack:  char.Stats.Attack,
 		Defense: char.Stats.Defense,
+		Agility: char.Stats.Agility,
 	}
 }
 
@@ -60,18 +64,33 @@ func NewParticipantFromCharacterWithHP(char corecharacter.Character, currentHP i
 		ID:      char.ID,
 		Name:    char.Name,
 		HP:      hp,
+		MaxHP:   char.Stats.MaxHP,
+		MP:      char.Stats.MP,
+		MaxMP:   char.Stats.MaxMP,
 		Attack:  char.Stats.Attack,
 		Defense: char.Stats.Defense,
+		Agility: char.Stats.Agility,
 	}
 }
 
 // ParticipantBuilder provides a fluent builder pattern for constructing Participants.
 type ParticipantBuilder struct {
-	id      string
-	name    string
-	hp      int
-	attack  int
-	defense int
+	id           string
+	name         string
+	hp           int
+	maxHP        int
+	mp           int
+	maxMP        int
+	cmp          int
+	maxCMP       int
+	attack       int
+	defense      int
+	agility      int
+	abilities    []string
+	skills       []ActionSkill
+	customSkills []ActionCustomSkill
+	defending    bool
+	status       string
 }
 
 // NewParticipantBuilder initializes a new builder with an ID.
@@ -88,8 +107,12 @@ func (b *ParticipantBuilder) FromCharacter(char corecharacter.Character) *Partic
 	if b.hp <= 0 && char.Stats.MaxHP > 0 {
 		b.hp = char.Stats.MaxHP
 	}
+	b.maxHP = char.Stats.MaxHP
+	b.mp = char.Stats.MP
+	b.maxMP = char.Stats.MaxMP
 	b.attack = char.Stats.Attack
 	b.defense = char.Stats.Defense
+	b.agility = char.Stats.Agility
 	return b
 }
 
@@ -102,6 +125,9 @@ func (b *ParticipantBuilder) WithName(name string) *ParticipantBuilder {
 // WithStats sets HP, Attack, and Defense values.
 func (b *ParticipantBuilder) WithStats(hp, attack, defense int) *ParticipantBuilder {
 	b.hp = hp
+	if b.maxHP <= 0 {
+		b.maxHP = hp
+	}
 	b.attack = attack
 	b.defense = defense
 	return b
@@ -110,6 +136,56 @@ func (b *ParticipantBuilder) WithStats(hp, attack, defense int) *ParticipantBuil
 // WithCurrentHP overrides the HP attribute.
 func (b *ParticipantBuilder) WithCurrentHP(hp int) *ParticipantBuilder {
 	b.hp = hp
+	return b
+}
+
+// WithAgility sets the Agility value.
+func (b *ParticipantBuilder) WithAgility(ag int) *ParticipantBuilder {
+	b.agility = ag
+	return b
+}
+
+// WithMP sets MP and MaxMP values.
+func (b *ParticipantBuilder) WithMP(mp, maxMP int) *ParticipantBuilder {
+	b.mp = mp
+	b.maxMP = maxMP
+	return b
+}
+
+// WithCMP sets CMP and MaxCMP values.
+func (b *ParticipantBuilder) WithCMP(cmp, maxCMP int) *ParticipantBuilder {
+	b.cmp = cmp
+	b.maxCMP = maxCMP
+	return b
+}
+
+// WithAbilities sets passive combat abilities.
+func (b *ParticipantBuilder) WithAbilities(abilities ...string) *ParticipantBuilder {
+	b.abilities = append(b.abilities, abilities...)
+	return b
+}
+
+// WithSkills sets actionable job skills.
+func (b *ParticipantBuilder) WithSkills(skills ...ActionSkill) *ParticipantBuilder {
+	b.skills = append(b.skills, skills...)
+	return b
+}
+
+// WithCustomSkills sets actionable custom skills.
+func (b *ParticipantBuilder) WithCustomSkills(skills ...ActionCustomSkill) *ParticipantBuilder {
+	b.customSkills = append(b.customSkills, skills...)
+	return b
+}
+
+// WithDefending sets the initial defending stance.
+func (b *ParticipantBuilder) WithDefending(defending bool) *ParticipantBuilder {
+	b.defending = defending
+	return b
+}
+
+// WithStatus sets the initial status affliction.
+func (b *ParticipantBuilder) WithStatus(status string) *ParticipantBuilder {
+	b.status = status
 	return b
 }
 
@@ -122,6 +198,17 @@ func (b *ParticipantBuilder) Build() (Participant, error) {
 	if b.name != "" {
 		p.Name = b.name
 	}
+	p.MaxHP = b.maxHP
+	p.MP = b.mp
+	p.MaxMP = b.maxMP
+	p.CMP = b.cmp
+	p.MaxCMP = b.maxCMP
+	p.Agility = b.agility
+	p.Abilities = b.abilities
+	p.Skills = b.skills
+	p.CustomSkills = b.customSkills
+	p.Defending = b.defending
+	p.Status = b.status
 	return p, nil
 }
 
