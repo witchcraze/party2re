@@ -28,6 +28,13 @@ Closes #
 - [ ] Focused tests pass
 - [ ] Full test suite passes
 
+## Legacy Specification Parity (Clean-room Audit)
+
+<!-- Required for feature/refactor PRs reconciling or implementing legacy game mechanics -->
+- [ ] **Legacy Reference**: Cited original Perl CGI path and line numbers (e.g. `party2/lib/guild.cgi:70-130`)
+- [ ] **Action & Parameter Parity**: Verified `@actions`, formulas, state flags (`$m{...}`), and probabilities match the legacy reference
+- [ ] **Zero Fictional Features**: Confirmed no divergent modern mobile-game/RPG conventions (unauthorized level-ups, fees, or instant shortcuts) were introduced
+
 ## Architecture
 
 - [ ] No architectural impact

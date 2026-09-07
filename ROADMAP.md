@@ -85,6 +85,53 @@ Once Version 1.0 is established, the project should transition from **reconstruc
 - [x] **Maintenance Mode & Admin Operations** (Issue #190)
 - [x] **Unified Verification Pipeline, Pre-push Hook & Distroless Smoke Build** (Issue #121, #124, #128)
 
+#### Legacy Clean-room Specification Parity Milestones (4-Phase Roadmap):
+
+Following a comprehensive clean-room specification audit of all 40 legacy CGI modules against the current implementation, 33 reconciliation issues (#459–#491) were identified and scheduled into 4 dependency-ordered milestones within Phase 5:
+
+##### Milestone 1: Core Foundation & Shared Storage
+Eliminate divergent mechanics in storage, core progression, and battle engines before downstream dependencies.
+- [ ] **Depot Capacity & Direct Delivery Routing** (#460)
+- [ ] **Multi-turn Core Battle Engine Parity** (#480)
+- [ ] **Abolish Fictional Rebirth System & Restore OverLevel Cap** (#470)
+- [ ] **Altar of Rebirth: Restore Lv99→150 Limit Break & Celestial Realm** (#471)
+- [ ] **Custom Skills: Incantations, Resource Scaling & Failure Multipliers** (#469)
+- [ ] **Job System Mastery & Job Change Requirements** (#467)
+- [ ] **Wishing Well & God Stat Seed Grants** (#468, #473)
+- [ ] **Chapel: Status Afflictions, Curses, and Tithe Buffs** (#472)
+
+##### Milestone 2: Economic, Life & Production Loop
+Reconcile facilities and production mechanics that depend on Depot storage and overnight cycles.
+- [ ] **Home & Estate: Overnight Carpenter Construction & Resting Buffs** (#459, #461)
+- [ ] **Standard Commercial Shops: Level Gates, Sellback & MasterCard Discount** (#465)
+- [ ] **Secret Shop: Passphrase Unlock & Deterministic Rotations** (#462)
+- [ ] **Black Market: Entrance Fees, Rare Catalogs & Bust Mechanics** (#463)
+- [ ] **Gem Store: Exact Catalogs & Exchange Formulas** (#464)
+- [ ] **Player Stores: Custom Pricing, Log Books & Commission Fees** (#466)
+- [ ] **Bank: Character Deposits, Daily Interest & Peer-to-Peer Transfers** (#476)
+- [ ] **Auction House: Bid Retention, Expiry Settlement & Depot Routing** (#474)
+- [ ] **Flea Market: Direct Depot Withdrawals & Trading Logs** (#477)
+- [ ] **Tavern Food Delivery: Scheduled Post-Adventure Buffs** (#475)
+- [ ] **Alchemy: Free Overnight Depot-linked Synthesis & Compendium** (#487)
+- [ ] **Monster Ranch: Monster Stabling, Home Pet Link, Naming & P2P Gifting** (#488)
+- [ ] **Plantation: 6 Seeds, 14 Fertilizer Reagents & Overnight Depot Harvest** (#489)
+
+##### Milestone 3: Adventure, Dungeons & Live Combat
+Restore crawl structures, boss challenges, and multiplayer PvP/GvG arenas.
+- [ ] **Adventure: 10-Floor Dungeon Crawl, Flee Penalties & Boss Battles** (#478)
+- [ ] **Sealing Boss Arena: Proof of Kingship, Revive Counters & Leaves** (#479)
+- [ ] **Colosseum PvP: Real-time Wagering & Spectator Broadcasts** (#481)
+- [ ] **GvG Arena: Multi-round Tournament Engine & Defensive Battles** (#482)
+- [ ] **Dungeon & Challenge: Co-op Multi-party Lobbies & Turn Engines** (#483)
+
+##### Milestone 4: Community, Events & Entertainment
+Restore authentic social structures and mini-games.
+- [ ] **Guild: Dynamic Guild Points, Hex Colors, Custom Roles & Approval Workflow** (#490)
+- [ ] **Event Plaza: Real-time Concurrency Headcount & 3x Markup Catalog** (#491)
+- [ ] **Takarakuji Lottery: 20-Cap Tickets & Server-wide Rollover Jackpot** (#484)
+- [ ] **Fukubiki Raffle: Stat Seeds, Divine Orbs & Guaranteed Tiers** (#485)
+- [ ] **Casino: 8-Player Shared-room Roulette & Progressive Slots** (#486)
+
 #### Remaining Version 1.0 Milestones:
 
 1. **API Key / Personal Access Token Authentication**
