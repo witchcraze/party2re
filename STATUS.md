@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #468 — [Feature] Wishing Well: Reproduce original SP Change for permanent stat growth
+Last updated: Issue #472 — [Refactor] Chapel: Eliminate fictional Donations, restore Monster befriending prayer, and enforce single-active-wish constraint
 
 ## Current phase
 
@@ -50,7 +50,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Farm & Plantation** (`internal/farm`): 4区画農園（種蒔き、水やり、肥料、実時間経過成熟判定・枯れ判定、収穫報酬精算）。Unit of Work トランザクション（`FOR UPDATE` 行ロック）によるアトミック化。
 - **Auction & Marketplace** (`internal/auction`): プレイヤー間アイテム出品、入札時のゴールドエスクロー、高値更新時の自動返金、即決購入、出品期間満了時の自動精算、出品キャンセル（所有権認可 403 Forbidden）、`FOR UPDATE` 排他ロック。
 - **Collection & Monster Book** (`internal/collection`): モンスター図鑑（討伐記録・コンプリート率計算）、アイテム図鑑（獲得アイテム・カテゴリ別記録・コンプリート率計算）。
-- **Chapel & Blessings** (`internal/chapel`): 教会（祈り・祝福登録、ゴールド寄付、戦闘・冒険報酬バフ補正計算）。
+- **Chapel & Blessings** (`internal/chapel`): 礼拝堂（シスターNPC、5種の原典準拠祈り（お金、強さ、モンスター仲間化率+50%、宝箱ドロップ、カジノコイン）、単一の祈り排他制約（「祈りに大事なのは、数でなく気持ちなのです」/ 409 Conflict）、架空の寄付機能 `POST /characters/{id}/chapel/donate` および `donation_gold_total` の完全撤廃）。
 - **Player versus Player Arena** (`internal/pvp`): 闘技場・対人対戦（PvP、標準Eloレーティング K=32/初期1000、近傍マッチメイキング・同一アカウント談合防止、勝敗・対戦履歴・防衛ログ永続化、経験値・ゴールド報酬）。
 - **Guild versus Guild Combat** (`internal/gvg`): ギルド対抗戦（GvG、標準Eloレーティング K=32/初期1000、5段階勝利メダル・王者杯昇格システム、ギルドポイントGP、ギルドEXP獲得・レベルアップ連動、対戦履歴永続化）。
 - **King & World Boss Battles** (`internal/boss`): 封印戦・ワールドボス（全10段階キングボス＋太古の創世神Tier、レベル制限・前提段階クリア・1日3回挑戦制限、初回討伐ボーナス・ドロップ報酬、討伐数リーダーボード、挑戦履歴永続化、討伐時のイベント広場祝宴連動。ファイルサイズ上限遵守のため `catalog.go`, `records.go`, `battle.go`, `boss.go` に責務分割完了）。
