@@ -13,6 +13,7 @@ import (
 	"github.com/witchcraze/party2re/internal/custom_skill"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/dungeon"
+	"github.com/witchcraze/party2re/internal/gemstore"
 	"github.com/witchcraze/party2re/internal/gvg"
 	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/pvp"
@@ -29,6 +30,18 @@ type cmbtServices struct {
 	customSkill *custom_skill.Service
 	party       *party.Service
 	adv         *adventure.Service
+}
+
+type customSkillGemCatalog struct{ catalog *gemstore.Catalog }
+
+func (c customSkillGemCatalog) FindGemByID(id string) (custom_skill.GemDefinition, bool) {
+	gem, ok := c.catalog.FindGemByID(id)
+	if !ok {
+		return custom_skill.GemDefinition{}, false
+	}
+	return custom_skill.GemDefinition{
+		ID: gem.ID, Name: gem.Name, SlotCost: gem.SlotCost, MPCost: gem.MPCost,
+	}, true
 }
 
 func newCmbtServices(
@@ -115,10 +128,15 @@ func newCmbtServices(
 	if err != nil {
 		return nil, err
 	}
-	customSkillService, err := custom_skill.NewService(customSkillRepo, core.charRepo, core.charJobRepo)
+	customSkillService, err := custom_skill.NewService(customSkillRepo, core.charRepo)
 	if err != nil {
 		return nil, err
 	}
+	gemCatalog, err := gemstore.DefaultCatalog()
+	if err != nil {
+		return nil, err
+	}
+	customSkillService.ConfigureGemSynthesis(customSkillGemCatalog{catalog: gemCatalog}, core.invRepo, core.txProvider)
 
 	adventureRepo, err := database.NewAdventureRepository(db)
 	if err != nil {

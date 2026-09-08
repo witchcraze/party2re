@@ -323,11 +323,11 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Data Catalog:** Embedded JSON tier definitions (`internal/challenge/data/challenge_tiers.json`).
   - **Dependencies:** Core Battle Engine, Character repository, Inventory repository, Valkey Master (`party2:challenge:{char:<char_id>}:*`).
   - **Persistence:** `character_challenge_records` and `challenge_sessions` tables in `internal/database/challenge_repository.go` for durable records; volatile active challenge buffers in Valkey Master (`ValkeySessionRepository`) with thread-safe in-memory fallback.
-- **Custom Skill Loadout & Slot Management** (`internal/custom_skill`):
-  - **Responsibility:** Cross-job ability customization, job mastery verification, slot capacity enforcement, tactical priority configuration, and supplying active equipped loadouts to combat participants across all battle modes.
-  - **Data Catalog:** Embedded JSON skill catalog definitions (`internal/custom_skill/data/skills.json`).
-  - **Dependencies:** Core Skill, Core Job, Core Character, Character repository, Character Job repository.
-  - **Persistence:** `character_custom_skills` table in `internal/database/custom_skill_repository.go`.
+- **Custom Skill Gem Synthesis** (`internal/custom_skill`):
+  - **Responsibility:** Original custom skill naming, activation phrase validation, gem-box selection, CMP/slot checks, and atomic exchange of selected gems with the character inventory.
+  - **Data Catalog:** Gem definitions from `internal/gemstore`.
+  - **Dependencies:** Core Character, Inventory repository, Gem catalog, transaction provider.
+  - **Persistence:** `character_custom_skills` (name, phrase, CMP, and three gem IDs) in `internal/database/custom_skill_repository.go`.
 - **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`):
   - **Responsibility:** Helper quest generation, item/monster delivery validation, alchemy material rewards, guild points contribution, emergency state rescue recovery with cooldown penalties, and HTTP JSON API endpoints (`/helpers/quests`, `/helpers/complete`, `/rescues/penalty`, `/rescues/request`).
   - **Dependencies:** Core Character, Core Inventory, Core Item, Guild repository.
