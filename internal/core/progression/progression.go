@@ -17,6 +17,12 @@ const (
 	// growthCap is the maximum stat gain per level-up before the legacy
 	// re-roll kicks in (original CGI: $v > 9 → int(rand(9)+1)).
 	growthCap = 9
+
+	ItemLifeStatOrb    = "item-152"
+	ItemMagicStatOrb   = "item-153"
+	ItemPowerStatOrb   = "item-154"
+	ItemDefenseStatOrb = "item-155"
+	ItemAgilityStatOrb = "item-156"
 )
 
 var (
@@ -75,6 +81,8 @@ type ApplyExperienceOptions struct {
 	// JobSkills is the ordered list of skill definitions for the character's
 	// current job, used to detect SP-threshold skill learning.
 	JobSkills []skill.Definition
+	// StatOrbItems contains the stat orb item IDs currently carried by the character.
+	StatOrbItems map[string]bool
 }
 
 func ApplyExperienceWithProvider(value *character.Character, amount int, provider job.DefinitionProvider, random character.RandomSource) (int, error) {
@@ -158,7 +166,7 @@ func ApplyExperienceWithJobFull(value *character.Character, amount int, definiti
 		}
 
 		if definition.ID != "" {
-			if err := applyGrowth(&value.Stats, definition, random); err != nil {
+			if err := applyGrowth(&value.Stats, definition, random, opts.StatOrbItems, value.OverLevel, value.Level); err != nil {
 				return result, err
 			}
 		}
@@ -167,7 +175,7 @@ func ApplyExperienceWithJobFull(value *character.Character, amount int, definiti
 	return result, nil
 }
 
-func applyGrowth(stats *character.Stats, definition job.Definition, random character.RandomSource) error {
+func applyGrowth(stats *character.Stats, definition job.Definition, random character.RandomSource, statOrbItems map[string]bool, overLevel bool, level int) error {
 	growths := []int{
 		definition.HPGrowth,
 		definition.MPGrowth,
@@ -181,24 +189,24 @@ func applyGrowth(stats *character.Stats, definition job.Definition, random chara
 		}
 	}
 
-	hp, err := growthValue(definition.HPGrowth, random)
+	hp, err := growthValue(definition.HPGrowth, random, statOrbItems[ItemLifeStatOrb])
 	if err != nil {
 		return err
 	}
 	hp++ // HP minimum +1 guaranteed (旧CGI: ++$v for hp)
-	mp, err := growthValue(definition.MPGrowth, random)
+	mp, err := growthValue(definition.MPGrowth, random, statOrbItems[ItemMagicStatOrb])
 	if err != nil {
 		return err
 	}
-	attack, err := growthValue(definition.AttackGrowth, random)
+	attack, err := growthValue(definition.AttackGrowth, random, statOrbItems[ItemPowerStatOrb])
 	if err != nil {
 		return err
 	}
-	defense, err := growthValue(definition.DefenseGrowth, random)
+	defense, err := growthValue(definition.DefenseGrowth, random, statOrbItems[ItemDefenseStatOrb])
 	if err != nil {
 		return err
 	}
-	agility, err := growthValue(definition.AgilityGrowth, random)
+	agility, err := growthValue(definition.AgilityGrowth, random, statOrbItems[ItemAgilityStatOrb])
 	if err != nil {
 		return err
 	}
@@ -207,14 +215,19 @@ func applyGrowth(stats *character.Stats, definition job.Definition, random chara
 	stats.Attack += attack
 	stats.Defense += defense
 	stats.Agility += agility
+	stats.Clamp(overLevel, level)
 	return nil
 }
 
 // growthValue returns a random growth amount in [0, max].
 // If the result exceeds growthCap (9), it is re-rolled as rand(1, 9)
 // to match the original CGI formula: $v > 9 → int(rand(9)+1).
-func growthValue(max int, random character.RandomSource) (int, error) {
-	value, err := random.Intn(max + 1)
+func growthValue(max int, random character.RandomSource, statOrb ...bool) (int, error) {
+	bonus := 0
+	if len(statOrb) > 0 && statOrb[0] {
+		bonus = 1
+	}
+	value, err := random.Intn(max + 1 + bonus)
 	if err != nil {
 		return 0, err
 	}

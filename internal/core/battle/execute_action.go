@@ -108,9 +108,19 @@ func (ctx *battleContext) applyDamage(actor Participant, target Participant, bas
 		ctx.mpMap[target.ID] = curMP
 		if rev.Revived {
 			ctx.hpMap[target.ID] = rev.HP
+			ctx.attackBuff[target.ID] += rev.AttackBuff
+			ctx.defenseBuff[target.ID] += rev.DefenseBuff
+			ctx.agilityBuff[target.ID] += rev.AgilityBuff
 			msg += " " + rev.Message
-			ctx.abilitiesMap[target.ID] = nil
+			if rev.Cursed {
+				ctx.abilitiesMap[target.ID] = append(ctx.abilitiesMap[target.ID], "cursed")
+			} else {
+				ctx.abilitiesMap[target.ID] = nil
+			}
+		} else {
+			ctx.applyMazinSynergy(target)
 		}
+
 	}
 
 	ctx.logs = append(ctx.logs, TurnLog{
@@ -122,6 +132,35 @@ func (ctx *battleContext) applyDamage(actor Participant, target Participant, bas
 		Message:     msg,
 		RemainingHP: copyHPMap(ctx.hpMap),
 	})
+}
+
+func (ctx *battleContext) applyMazinSynergy(fallen Participant) {
+	party := ctx.req.Enemies
+	for _, ally := range ctx.req.Allies {
+		if ally.ID == fallen.ID {
+			party = ctx.req.Allies
+			break
+		}
+	}
+	for _, ally := range party {
+		if ally.ID == fallen.ID || ctx.hpMap[ally.ID] <= 0 || !hasItem(ally.ItemDefinitionIDs, "item-037") || !hasItem(ally.ItemDefinitionIDs, "item-038") {
+			continue
+		}
+		bonus := fallen.Attack / 2
+		ctx.attackBuff[ally.ID] += bonus
+		if ally.Attack+ctx.attackBuff[ally.ID] > 999 {
+			ctx.attackBuff[ally.ID] = 999 - ally.Attack
+		}
+	}
+}
+
+func hasItem(items []string, wanted string) bool {
+	for _, item := range items {
+		if item == wanted {
+			return true
+		}
+	}
+	return false
 }
 
 func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill, allyParty []Participant, opponents []Participant) {
@@ -377,8 +416,17 @@ func (ctx *battleContext) applyPoisonDOT(combatants []Participant) {
 				ctx.mpMap[p.ID] = curMP
 				if rev.Revived {
 					ctx.hpMap[p.ID] = rev.HP
+					ctx.attackBuff[p.ID] += rev.AttackBuff
+					ctx.defenseBuff[p.ID] += rev.DefenseBuff
+					ctx.agilityBuff[p.ID] += rev.AgilityBuff
 					msg += " " + rev.Message
-					ctx.abilitiesMap[p.ID] = nil
+					if rev.Cursed {
+						ctx.abilitiesMap[p.ID] = append(ctx.abilitiesMap[p.ID], "cursed")
+					} else {
+						ctx.abilitiesMap[p.ID] = nil
+					}
+				} else {
+					ctx.applyMazinSynergy(p)
 				}
 			}
 			ctx.logs = append(ctx.logs, TurnLog{

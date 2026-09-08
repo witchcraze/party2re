@@ -12,22 +12,23 @@ var (
 )
 
 type Participant struct {
-	ID           string
-	Name         string
-	HP           int
-	MaxHP        int
-	MP           int
-	MaxMP        int
-	CMP          int
-	MaxCMP       int
-	Attack       int
-	Defense      int
-	Agility      int
-	Abilities    []string
-	Skills       []ActionSkill
-	CustomSkills []ActionCustomSkill
-	Defending    bool
-	Status       string
+	ID                string
+	Name              string
+	HP                int
+	MaxHP             int
+	MP                int
+	MaxMP             int
+	CMP               int
+	MaxCMP            int
+	Attack            int
+	Defense           int
+	Agility           int
+	Abilities         []string
+	Skills            []ActionSkill
+	CustomSkills      []ActionCustomSkill
+	Defending         bool
+	Status            string
+	ItemDefinitionIDs []string
 }
 
 type Request struct {
