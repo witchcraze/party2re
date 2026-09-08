@@ -95,10 +95,10 @@ Eliminate divergent mechanics in storage, core progression, and battle engines b
 - [x] **Multi-turn Core Battle Engine Parity** (#480)
 - [x] **Abolish Fictional Rebirth System & Restore OverLevel Cap** (#470)
 - [x] **Altar of Rebirth: Restore 6-Orb Offering, Ramia Awakening & Otherworld Wishes** (#471)
-- [ ] **Custom Skills: Incantations, Resource Scaling & Failure Multipliers** (#469)
-- [ ] **Job System Mastery & Job Change Requirements** (#467)
+- [x] **Custom Skills: Incantations, Resource Scaling & Failure Multipliers** (#469)
+- [x] **Job System Mastery & Job Change Requirements** (#467)
 - [x] **Wishing Well: Permanent Stat Growth via SP Exchange** (#468)
-- [ ] **God Stat Seed Grants & Celestial Prayers** (#473)
+- [x] **God Stat Seed Grants & Celestial Prayers** (#473)
 - [x] **Chapel: Eliminate Fictional Donations, Restore Monster Prayer & Single-Active-Wish Constraint** (#472)
 
 ##### Milestone 2: Economic, Life & Production Loop

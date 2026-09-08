@@ -15,11 +15,22 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/party"
 	"github.com/witchcraze/party2re/internal/pvp"
 )
+
+type mockIntegrationDepotRepo struct{}
+
+func (m *mockIntegrationDepotRepo) FindByCharacterIDForUpdate(_ context.Context, charID string) (depot.Depot, error) {
+	return depot.Depot{CharacterID: charID, Capacity: 50}, nil
+}
+
+func (m *mockIntegrationDepotRepo) Save(_ context.Context, _ depot.Depot) error {
+	return nil
+}
 
 // In-memory repositories for producers
 
@@ -401,7 +412,7 @@ func TestProducerHooks_MilestoneProgressAndClaim(t *testing.T) {
 
 	medalService, err := medal.NewService(
 		charRepo,
-		invRepo,
+		&mockIntegrationDepotRepo{},
 		"",
 		medal.WithAchievementRepository(achRepo, catalog...),
 	)
@@ -723,7 +734,7 @@ func TestParty_MilestoneIntegration(t *testing.T) {
 
 	medalService, err := medal.NewService(
 		charRepo,
-		invRepo,
+		&mockIntegrationDepotRepo{},
 		"",
 		medal.WithAchievementRepository(achRepo, catalog...),
 	)

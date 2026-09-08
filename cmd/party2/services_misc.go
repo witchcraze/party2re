@@ -69,7 +69,7 @@ func newMiscServices(
 	}
 	medalService, err := medal.NewService(
 		core.charRepo,
-		core.invRepo,
+		econ.depotRepo,
 		"",
 		medal.WithTransactionProvider(core.txProvider),
 		medal.WithAchievementRepository(achievementRepo),
@@ -253,11 +253,22 @@ func newMiscServices(
 		return nil, err
 	}
 
+	homeMemberRepo, err := database.NewHomeMemberRepository(db)
+	if err != nil {
+		return nil, err
+	}
+
 	godService, err := god.NewService(
 		core.charRepo,
 		god.WithDepotRepository(econ.depotRepo),
 		god.WithInventoryRepository(core.invRepo),
 		god.WithTransactionProvider(core.txProvider),
+		god.WithCasinoRepository(casinoRepo),
+		god.WithLotteryRepository(lotteryRepo),
+		god.WithGuildRepository(soc.guildRepo),
+		god.WithHomeMemberRepository(homeMemberRepo),
+		god.WithProfileRepository(homeMemberRepo),
+		god.WithHomeRepository(homeMemberRepo),
 	)
 	if err != nil {
 		return nil, err

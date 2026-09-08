@@ -11,14 +11,14 @@ import (
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/medal"
 )
 
 type mockMedalService struct {
 	getRewardsFn         func() []medal.Reward
-	claimFn              func(ctx context.Context, charID string, itemID string) (corecharacter.Character, coreinventory.Inventory, error)
+	claimFn              func(ctx context.Context, charID string, itemID string) (corecharacter.Character, depot.Depot, error)
 	getAchievementsFn    func(ctx context.Context, charID string) ([]medal.AchievementProgress, error)
 	claimAchievementFn   func(ctx context.Context, charID string, achievementID string) (medal.ClaimResult, error)
 	getCharacterMedalsFn func(ctx context.Context, charID string) ([]medal.CharacterMedal, error)
@@ -34,12 +34,12 @@ func (m *mockMedalService) GetRewards() []medal.Reward {
 	}
 }
 
-func (m *mockMedalService) Claim(ctx context.Context, charID string, itemID string) (corecharacter.Character, coreinventory.Inventory, error) {
+func (m *mockMedalService) Claim(ctx context.Context, charID string, itemID string) (corecharacter.Character, depot.Depot, error) {
 	if m.claimFn != nil {
 		return m.claimFn(ctx, charID, itemID)
 	}
-	inv, _ := coreinventory.New(charID)
-	return corecharacter.Character{ID: charID, SmallMedals: 2}, inv, nil
+	d, _ := depot.NewDepotWithCapacity(charID, 0, 0, 0)
+	return corecharacter.Character{ID: charID, SmallMedals: 2}, d, nil
 }
 
 func (m *mockMedalService) GetAchievements(ctx context.Context, charID string) ([]medal.AchievementProgress, error) {
@@ -177,8 +177,8 @@ func TestMedalEndpoints(t *testing.T) {
 
 	t.Run("POST /medals/claim - insufficient medals", func(t *testing.T) {
 		mockSvc := &mockMedalService{
-			claimFn: func(ctx context.Context, charID, itemID string) (corecharacter.Character, coreinventory.Inventory, error) {
-				return corecharacter.Character{}, coreinventory.Inventory{}, medal.ErrInsufficientMedals
+			claimFn: func(ctx context.Context, charID, itemID string) (corecharacter.Character, depot.Depot, error) {
+				return corecharacter.Character{}, depot.Depot{}, medal.ErrInsufficientMedals
 			},
 		}
 		h, _ := apihttp.NewHandler(players, chars, adv, shopSvc, apihttp.WithMedal(mockSvc))
@@ -198,8 +198,8 @@ func TestMedalEndpoints(t *testing.T) {
 
 	t.Run("POST /medals/claim - reward not found", func(t *testing.T) {
 		mockSvc := &mockMedalService{
-			claimFn: func(ctx context.Context, charID, itemID string) (corecharacter.Character, coreinventory.Inventory, error) {
-				return corecharacter.Character{}, coreinventory.Inventory{}, medal.ErrRewardNotFound
+			claimFn: func(ctx context.Context, charID, itemID string) (corecharacter.Character, depot.Depot, error) {
+				return corecharacter.Character{}, depot.Depot{}, medal.ErrRewardNotFound
 			},
 		}
 		h, _ := apihttp.NewHandler(players, chars, adv, shopSvc, apihttp.WithMedal(mockSvc))

@@ -6,14 +6,14 @@ import (
 	"net/http"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/medal"
 )
 
 type MedalService interface {
 	GetRewards() []medal.Reward
-	Claim(ctx context.Context, characterID string, itemID string) (corecharacter.Character, coreinventory.Inventory, error)
+	Claim(ctx context.Context, characterID string, itemID string) (corecharacter.Character, depot.Depot, error)
 	GetAchievements(ctx context.Context, characterID string) ([]medal.AchievementProgress, error)
 	ClaimAchievement(ctx context.Context, characterID string, achievementID string) (medal.ClaimResult, error)
 	GetCharacterMedals(ctx context.Context, characterID string) ([]medal.CharacterMedal, error)
@@ -32,8 +32,9 @@ type claimMedalRewardRequest struct {
 }
 
 type claimMedalRewardResponse struct {
-	Character characterResponse       `json:"character"`
-	Inventory coreinventory.Inventory `json:"inventory"`
+	Character   characterResponse `json:"character"`
+	Depot       depot.Depot       `json:"depot"`
+	DeliveredTo string            `json:"delivered_to"`
 }
 
 func (h *Handler) handleGetMedalRewards(w http.ResponseWriter, r *http.Request) {
@@ -55,9 +56,9 @@ func (h *Handler) handleClaimMedalReward(w http.ResponseWriter, r *http.Request)
 	withAuthenticatedCharacterAndJSON(h, w, r, func(req *claimMedalRewardRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req claimMedalRewardRequest) {
-		updatedChar, updatedInv, err := h.medals.Claim(r.Context(), char.ID, req.ItemID)
+		updatedChar, updatedDepot, err := h.medals.Claim(r.Context(), char.ID, req.ItemID)
 		if err != nil {
-			if errors.Is(err, medal.ErrInsufficientMedals) {
+			if errors.Is(err, medal.ErrInsufficientMedals) || errors.Is(err, depot.ErrDepotFull) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
@@ -70,8 +71,9 @@ func (h *Handler) handleClaimMedalReward(w http.ResponseWriter, r *http.Request)
 		}
 
 		writeJSON(w, http.StatusOK, claimMedalRewardResponse{
-			Character: toCharacterResponse(updatedChar),
-			Inventory: updatedInv,
+			Character:   toCharacterResponse(updatedChar),
+			Depot:       updatedDepot,
+			DeliveredTo: "depot",
 		})
 	})
 }

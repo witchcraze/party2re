@@ -9,8 +9,8 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
-	"github.com/witchcraze/party2re/internal/economy"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
 )
 
 //go:embed medal_rewards.json
@@ -42,10 +42,9 @@ type CharacterRepository interface {
 	Update(ctx context.Context, value corecharacter.Character) error
 }
 
-type InventoryRepository interface {
-	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
-	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error)
-	Save(ctx context.Context, value coreinventory.Inventory) error
+type DepotRepository interface {
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (depot.Depot, error)
+	Save(ctx context.Context, dep depot.Depot) error
 }
 
 type TransactionProvider interface {
@@ -86,21 +85,20 @@ func WithAchievementCatalog(achievements []Achievement) Option {
 
 type Service struct {
 	characters      CharacterRepository
-	inventories     InventoryRepository
+	depots          DepotRepository
 	txProvider      TransactionProvider
 	rewards         []Reward
-	economy         *economy.Service
 	achievements    []Achievement
 	achievementRepo AchievementRepository
 }
 
 func NewService(
 	characters CharacterRepository,
-	inventories InventoryRepository,
+	depots DepotRepository,
 	rewardsFilePath string,
 	opts ...Option,
 ) (*Service, error) {
-	if characters == nil || inventories == nil {
+	if characters == nil || depots == nil {
 		return nil, ErrNilDependency
 	}
 
@@ -120,23 +118,23 @@ func NewService(
 		return nil, err
 	}
 
-	return NewServiceWithRewards(characters, inventories, rewards, opts...)
+	return NewServiceWithRewards(characters, depots, rewards, opts...)
 }
 
 func NewServiceWithRewards(
 	characters CharacterRepository,
-	inventories InventoryRepository,
+	depots DepotRepository,
 	rewards []Reward,
 	opts ...Option,
 ) (*Service, error) {
-	if characters == nil || inventories == nil {
+	if characters == nil || depots == nil {
 		return nil, ErrNilDependency
 	}
 
 	s := &Service{
-		characters:  characters,
-		inventories: inventories,
-		rewards:     rewards,
+		characters: characters,
+		depots:     depots,
+		rewards:    rewards,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -147,15 +145,6 @@ func NewServiceWithRewards(
 			s.achievements = defaultAchs
 		}
 	}
-	var ecoOpts []economy.Option
-	if s.txProvider != nil {
-		ecoOpts = append(ecoOpts, economy.WithTransactionProvider(s.txProvider))
-	}
-	eco, err := economy.NewService(characters, inventories, ecoOpts...)
-	if err != nil {
-		return nil, err
-	}
-	s.economy = eco
 	return s, nil
 }
 
@@ -170,12 +159,12 @@ func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) erro
 	return fn(ctx)
 }
 
-func (s *Service) Claim(ctx context.Context, characterID string, itemID string) (corecharacter.Character, coreinventory.Inventory, error) {
+func (s *Service) Claim(ctx context.Context, characterID string, itemID string) (corecharacter.Character, depot.Depot, error) {
 	if characterID == "" {
-		return corecharacter.Character{}, coreinventory.Inventory{}, corecharacter.ErrNotFound
+		return corecharacter.Character{}, depot.Depot{}, corecharacter.ErrNotFound
 	}
 	if itemID == "" {
-		return corecharacter.Character{}, coreinventory.Inventory{}, ErrRewardNotFound
+		return corecharacter.Character{}, depot.Depot{}, ErrRewardNotFound
 	}
 
 	var targetReward *Reward
@@ -186,24 +175,58 @@ func (s *Service) Claim(ctx context.Context, characterID string, itemID string) 
 		}
 	}
 	if targetReward == nil {
-		return corecharacter.Character{}, coreinventory.Inventory{}, ErrRewardNotFound
+		return corecharacter.Character{}, depot.Depot{}, ErrRewardNotFound
 	}
 
-	res, err := s.economy.Exchange(ctx, economy.ExchangeRequest{
-		CharacterID:       characterID,
-		DeductMedals:      targetReward.Cost,
-		GrantDefinitionID: targetReward.ItemID,
-		GrantQuantity:     1,
+	var updatedChar corecharacter.Character
+	var updatedDepot depot.Depot
+
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		char, err := s.characters.FindByIDForUpdate(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+
+		if char.SmallMedals < targetReward.Cost {
+			return ErrInsufficientMedals
+		}
+
+		dep, err := s.depots.FindByCharacterIDForUpdate(txCtx, characterID)
+		if errors.Is(err, depot.ErrNotFound) {
+			dep, err = depot.NewDepotWithCapacity(char.ID, 0, 0, char.OverDepot)
+			if err != nil {
+				return err
+			}
+		} else if err != nil {
+			return err
+		}
+
+		inst, err := coreitem.NewInstance(targetReward.ItemID, 1)
+		if err != nil {
+			return err
+		}
+		if err := dep.AddItem(inst); err != nil {
+			return err
+		}
+
+		if err := char.DeductSmallMedals(targetReward.Cost); err != nil {
+			return err
+		}
+
+		if err := s.characters.Update(txCtx, char); err != nil {
+			return err
+		}
+		if err := s.depots.Save(txCtx, dep); err != nil {
+			return err
+		}
+
+		updatedChar = char
+		updatedDepot = dep
+		return nil
 	})
 	if err != nil {
-		if errors.Is(err, economy.ErrInsufficientMedals) {
-			return corecharacter.Character{}, coreinventory.Inventory{}, ErrInsufficientMedals
-		}
-		if errors.Is(err, economy.ErrCharacterNotFound) {
-			return corecharacter.Character{}, coreinventory.Inventory{}, corecharacter.ErrNotFound
-		}
-		return corecharacter.Character{}, coreinventory.Inventory{}, err
+		return corecharacter.Character{}, depot.Depot{}, err
 	}
 
-	return res.Character, res.Inventory, nil
+	return updatedChar, updatedDepot, nil
 }

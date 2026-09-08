@@ -294,6 +294,15 @@ func (c *Character) HasSmallMedals(amount int) bool {
 	return amount >= 0 && c.SmallMedals >= amount
 }
 
+// AddSP safely credits skill points to the character, guarding against negative amounts.
+func (c *Character) AddSP(amount int) error {
+	if amount < 0 {
+		return ErrInvalidAmount
+	}
+	c.SP += amount
+	return nil
+}
+
 // ApplyJobChange applies the legacy job-change reset and resource transfer.
 func (c *Character) ApplyJobChange(targetJobID string, targetSP int) error {
 	if c == nil || strings.TrimSpace(c.JobID) == "" || strings.TrimSpace(targetJobID) == "" {
