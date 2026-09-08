@@ -1,7 +1,7 @@
 {
   "/characters/{id}/custom-skills": {
     "get": {
-      "operationId": "getCustomSkills",
+      "operationId": "getCustomSkill",
       "parameters": [
         {
           "description": "Character ID",
@@ -22,46 +22,15 @@
               }
             }
           },
-          "description": "Custom skill loadout"
-        },
-        "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Bad request - invalid input or JSON syntax"
+          "description": "Get custom skill synthesis"
         },
         "401": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Unauthorized - missing or invalid session token"
+          "description": "Unauthorized"
         },
         "403": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Forbidden - player does not own requested character or lacks permission"
+          "description": "Forbidden"
         },
         "500": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
           "description": "Internal server error"
         }
       },
@@ -70,13 +39,13 @@
           "BearerAuth": []
         }
       ],
-      "summary": "Get equipped custom skill loadout and available skills",
+      "summary": "Get custom skill synthesis",
       "tags": [
         "CustomSkills"
       ]
     },
     "post": {
-      "operationId": "equipCustomSkill",
+      "operationId": "setCustomSkill",
       "parameters": [
         {
           "description": "Character ID",
@@ -93,21 +62,32 @@
           "application/json": {
             "schema": {
               "properties": {
-                "action": {
+                "comment": {
                   "type": "string"
                 },
-                "priority": {
-                  "type": "integer"
-                },
-                "skill_id": {
+                "gem1": {
                   "type": "string"
                 },
-                "slot_index": {
-                  "type": "integer"
+                "gem2": {
+                  "type": "string"
+                },
+                "gem3": {
+                  "type": "string"
+                },
+                "gems": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "name": {
+                  "type": "string"
                 }
               },
               "required": [
-                "slot_index"
+                "name"
               ],
               "type": "object"
             }
@@ -124,46 +104,18 @@
               }
             }
           },
-          "description": "Equipped custom skill loadout"
+          "description": "Set custom skill synthesis"
         },
         "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Bad request - invalid input or JSON syntax"
+          "description": "Bad request"
         },
         "401": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Unauthorized - missing or invalid session token"
+          "description": "Unauthorized"
         },
         "403": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Forbidden - player does not own requested character or lacks permission"
+          "description": "Forbidden"
         },
         "500": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
           "description": "Internal server error"
         }
       },
@@ -172,93 +124,7 @@
           "BearerAuth": []
         }
       ],
-      "summary": "Equip or update custom skill slot",
-      "tags": [
-        "CustomSkills"
-      ]
-    }
-  },
-  "/characters/{id}/custom-skills/{slot}": {
-    "delete": {
-      "operationId": "unequipCustomSkillSlot",
-      "parameters": [
-        {
-          "description": "Character ID",
-          "in": "path",
-          "name": "id",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "description": "Slot index (0-based)",
-          "in": "path",
-          "name": "slot",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "responses": {
-        "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          },
-          "description": "Updated custom skill loadout"
-        },
-        "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Bad request - invalid input or JSON syntax"
-        },
-        "401": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Unauthorized - missing or invalid session token"
-        },
-        "403": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Forbidden - player does not own requested character or lacks permission"
-        },
-        "500": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Internal server error"
-        }
-      },
-      "security": [
-        {
-          "BearerAuth": []
-        }
-      ],
-      "summary": "Unequip skill from custom skill slot",
+      "summary": "Set custom skill synthesis",
       "tags": [
         "CustomSkills"
       ]

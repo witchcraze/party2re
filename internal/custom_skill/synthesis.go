@@ -11,18 +11,8 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 )
 
-func (s *Service) ConfigureGemSynthesis(gems GemProvider, inventory InventoryProvider, txProvider TransactionProvider) {
-	s.gems = gems
-	s.inventory = inventory
-	s.txProvider = txProvider
-}
-
 func (s *Service) GetCustomSkill(ctx context.Context, characterID string) (*CustomSkill, error) {
-	repo, ok := s.repo.(SynthesisRepository)
-	if !ok {
-		return nil, ErrGemDependencies
-	}
-	return repo.FindCustomSkill(ctx, characterID)
+	return s.repo.FindCustomSkill(ctx, characterID)
 }
 
 func (s *Service) SetCustomSkill(ctx context.Context, characterID, name, comment string, gems [3]string) (*CustomSkill, error) {
@@ -36,10 +26,6 @@ func (s *Service) SetCustomSkill(ctx context.Context, characterID, name, comment
 		return nil, err
 	}
 	if s.gems == nil || s.inventory == nil {
-		return nil, ErrGemDependencies
-	}
-	repo, ok := s.repo.(SynthesisRepository)
-	if !ok {
 		return nil, ErrGemDependencies
 	}
 	var result *CustomSkill
@@ -75,7 +61,7 @@ func (s *Service) SetCustomSkill(ctx context.Context, characterID, name, comment
 		if cmpTotal > char.Stats.MaxMP {
 			return ErrCMPTooHigh
 		}
-		previous, err := repo.FindCustomSkill(txCtx, characterID)
+		previous, err := s.repo.FindCustomSkill(txCtx, characterID)
 		if err != nil {
 			return err
 		}
@@ -118,7 +104,7 @@ func (s *Service) SetCustomSkill(ctx context.Context, characterID, name, comment
 		if err := s.inventory.Save(txCtx, inventory); err != nil {
 			return err
 		}
-		return repo.SaveCustomSkill(txCtx, *result)
+		return s.repo.SaveCustomSkill(txCtx, *result)
 	}
 	if s.txProvider != nil {
 		if err := s.txProvider.RunInTx(ctx, run); err != nil {

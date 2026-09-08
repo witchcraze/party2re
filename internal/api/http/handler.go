@@ -397,8 +397,7 @@ func (h *Handler) Router() http.Handler {
 
 	// Custom Skills
 	mux.HandleFunc("GET /characters/{id}/custom-skills", h.handleGetCustomSkills)
-	mux.HandleFunc("POST /characters/{id}/custom-skills", h.handleEquipCustomSkill)
-	mux.HandleFunc("DELETE /characters/{id}/custom-skills/{slot}", h.handleUnequipCustomSkill)
+	mux.HandleFunc("POST /characters/{id}/custom-skills", h.handleSetCustomSkill)
 
 	// Chapel
 	mux.HandleFunc("GET /characters/{id}/chapel", h.handleGetChapel)

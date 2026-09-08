@@ -74,7 +74,7 @@ Once Version 1.0 is established, the project should transition from **reconstruc
 - [x] **Player Lifecycle, Deletion & Session Auth** (Issue #21, #134, #190)
 - [x] **Character Initial State, Growth, Rebirth & Customization** (Issue #24, #10, #61, #198)
 - [x] **Item Catalog, 5-Slot Equipment System & Item Depot** (Issue #11, #19, #51, #58)
-- [x] **Job System, Skills, Mastery & Custom Loadout** (Issue #17, #18, #31, #38, #50, #69)
+- [x] **Job System, Skills & Mastery** (Issue #17, #18, #31, #38, #50, #69)
 - [x] **Battle Engine, Deterministic Turn Resolver & Replay Recorder** (Issue #12, #20, #36, #66)
 - [x] **Valkey ScheduledAction Queue & Distributed Lock Worker** (Issue #106, #109, #110)
 - [x] **Adventure System, Multi-stage Content & Chronicles** (Issue #13, #56, #57, #199 — 28 stages, 286 monsters)

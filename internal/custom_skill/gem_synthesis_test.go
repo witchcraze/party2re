@@ -14,18 +14,24 @@ type synthesisRepo struct {
 	skill *custom_skill.CustomSkill
 }
 
-func (r *synthesisRepo) SaveLoadout(context.Context, custom_skill.CharacterSkillLoadout) error {
-	return nil
-}
-func (r *synthesisRepo) FindLoadout(context.Context, string) (*custom_skill.CharacterSkillLoadout, error) {
-	return nil, nil
-}
 func (r *synthesisRepo) SaveCustomSkill(_ context.Context, skill custom_skill.CustomSkill) error {
 	r.skill = &skill
 	return nil
 }
 func (r *synthesisRepo) FindCustomSkill(context.Context, string) (*custom_skill.CustomSkill, error) {
 	return r.skill, nil
+}
+
+type synthesisCharacters struct {
+	characters map[string]corecharacter.Character
+}
+
+func (r *synthesisCharacters) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
+	character, ok := r.characters[id]
+	if !ok {
+		return corecharacter.Character{}, custom_skill.ErrCharacterNotFound
+	}
+	return character, nil
 }
 
 type synthesisGems map[string]custom_skill.GemDefinition
@@ -61,10 +67,10 @@ func TestSetCustomSkillSynthesizesGemsAndReturnsPreviousSelection(t *testing.T) 
 		}
 	}
 	invRepo := &synthesisInventory{value: inventory}
-	chars := &mockCharRepo{chars: map[string]corecharacter.Character{
+	chars := &synthesisCharacters{characters: map[string]corecharacter.Character{
 		"char-1": {ID: "char-1", Stats: corecharacter.Stats{MaxMP: 20}},
 	}}
-	service, err := custom_skill.NewService(repo, chars, nil)
+	service, err := custom_skill.NewService(repo, chars)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,10 +104,10 @@ func TestSetCustomSkillRejectsInvalidNameAndLimits(t *testing.T) {
 		_ = inventory.Add(instance)
 	}
 	invRepo := &synthesisInventory{value: inventory}
-	chars := &mockCharRepo{chars: map[string]corecharacter.Character{
+	chars := &synthesisCharacters{characters: map[string]corecharacter.Character{
 		"char-1": {ID: "char-1", Stats: corecharacter.Stats{MaxMP: 5}},
 	}}
-	service, _ := custom_skill.NewService(repo, chars, nil)
+	service, _ := custom_skill.NewService(repo, chars)
 	service.ConfigureGemSynthesis(synthesisGems{
 		"a": {ID: "a", SlotCost: 2, MPCost: 3},
 		"b": {ID: "b", SlotCost: 2, MPCost: 3},
