@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #502 — [Feature] Stat Orb progression and revival battle parity
+Last updated: Issue #468 — [Feature] Wishing Well: Reproduce original SP Change for permanent stat growth
 
 ## Current phase
 
@@ -75,11 +75,12 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Photo Contest, Screenshots & Gallery** (`internal/contest`): フォトコン会場（キャラクター別スクリーンショット保存・ギャラリー最大20枚、コンテストエントリー・題名バリデーション・連続制限、投票・応援コメント・自己投票禁止・1人1票、10日周期定期集計、上位3名賞金・メダル・GP付与、1位投票者メダル配布、歴代1位殿堂入り `contest_legends` 永久アーカイブ）。巨大リポジトリインターフェース（28メソッド）をISPに基づき5つの責務別サブインターフェース（Photo/Round/Entry/Vote/Legend）へ分割し、埋め込み合成インターフェース `ContestRepository` として再構築完了。
 - **Multiplayer Party & Co-op Quests** (`internal/party`): パーティ結成・冒険（最大4人編成、合言葉パスワード、参加条件バリデーション、Ready同期、リーダー権限（キック・解散）、協力戦闘解決、シナジーボーナス、報酬分配、HP1生存保証）。Valkey Master による待機ロビー管理（`party2:party:lobby:<party_id>` 15分TTL自動失効、60秒Readyカウントダウン、ZSETロビー一覧）、アトミックLuaスクリプト、MariaDB `party_adventure_logs` への恒久冒険ログ永続化。
 - **Altar of Rebirth & Ramia Awakening** (`internal/altar`): 復活の祭壇（6色のオーブ（s, r, b, g, y, p）奉納、伝説の不死鳥ラーミァ復活祈り `@いのる`・30分間滞在記録 `altar_ramia_awakenings`、4種の異世界旅行アイテム願い `@ねがう`（真実の鏡、マダムの招待状、宝の地図、闇のランプ）、インベントリ上限時の預かり所（Depot）自動転送、オーブ状態クリア、決定論的行ロック階層（`characters` -> `inventory_items` -> `character_depots` -> `altar_ramia_awakenings`）による完全アトミック整合性）。
+- **Wishing Well & SP Stat Growth** (`internal/wishingwell`): 願いの泉（@女神、`sp_change.cgi`）。スキルポイント（SP）を捧げて基礎能力値（MHP・MMPは1 SPにつき+2、攻撃・守備・素早さは1 SPにつき+1）を恒久的に成長させる原典仕様の完全再現。思い出し中（JobMemory active）および天界限界突破（OverLevel）時の利用制限ガード、ステータス上限クランプ、決定論的行ロック階層（Rank 2 `characters`）によるアトミック整合性担保。
 - **System Maintenance Mode** (`internal/maintenance`): メンテナンスモード管理（`GET /maintenance`, `POST /admin/maintenance`, `PUT /admin/maintenance`、管理者APIキーによる有効化/無効化・告知メッセージ・終了予定時刻設定、HTTPミドルウェアによる503 Service Unavailable遮断、Valkey Master / In-Memory キャッシュによる毎リクエストのSQLクエリ排除、MariaDBバックアップ `system_maintenance`）。
 
 ### API & Transport
 - **Server Entrypoint, Configuration & Lifecycle Orchestration** (`cmd/party2`): 構成分離（`config.go`, `main.go`, `services_core.go`, `services_econ.go`, `services_cmbt.go`, `services_soc.go`, `services_misc.go`, `wire.go`）、型付けされた設定構造体インジェクション（`database.Config`, `valkey.Config`, `Config`）による並行テスト分離（`t.Parallel()` 完全対応）、MariaDB・Valkey・全ドメインリポジトリおよびサービス・スケジューリングWorker・HTTP APIルーター（全35種Option）の統合初期化、ドメインイベントフック一元集約（`wire.go`）、Graceful Shutdown（`http.Server.Shutdown(ctx)`、Worker Contextキャンセル待機、リソース安全開放）、起動・停止のJSON構造化ログ。
-- **HTTP JSON API & OpenAPI 3.1 Specification** (`internal/api/http`, `docs/api/base.json`, `docs/api/paths/*.json`): Go標準 `net/http` によるREST風エンドポイント（全199ルート・216オペレーション）。モジュール分割仕様（39ファイル）と自動バンドル（`docs/api/openapi.json` およびバイナリ埋め込み）、CI自動テストによるASTベースのルート網羅率100%検証、セッション認証およびPAT（APIキー）デュアル認証、管理者APIキー認可（`X-Admin-Key`、定数時間比較）、キャラクター所有権認可検証（403 Forbidden、全サブリソースIDOR防御）、標準セキュリティヘッダー、CORSミドルウェア、Valkey/In-Memory 分散レートリミット（429 Too Many Requests、ValkeyLimiter 96.9%・extractClientIP 100% カバレッジ担保）、メンテナンスモードミドルウェア（503 Service Unavailable）。
+- **HTTP JSON API & OpenAPI 3.1 Specification** (`internal/api/http`, `docs/api/base.json`, `docs/api/paths/*.json`): Go標準 `net/http` によるREST風エンドポイント（全203ルート・221オペレーション）。モジュール分割仕様（40ファイル）と自動バンドル（`docs/api/openapi.json` およびバイナリ埋め込み）、CI自動テストによるASTベースのルート網羅率100%検証、セッション認証およびPAT（APIキー）デュアル認証、管理者APIキー認可（`X-Admin-Key`、定数時間比較）、キャラクター所有権認可検証（403 Forbidden、全サブリソースIDOR防御）、標準セキュリティヘッダー、CORSミドルウェア、Valkey/In-Memory 分散レートリミット（429 Too Many Requests、ValkeyLimiter 96.9%・extractClientIP 100% カバレッジ担保）、メンテナンスモードミドルウェア（503 Service Unavailable）。
 
 ### Infrastructure & Operations
 - **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `057_altar_of_rebirth.sql`、`make db-migrate` / `make db-reset`、永続権威 MariaDB Master、コネクションプール設定 `MaxOpenConns`・`MaxIdleConns`・`ConnMaxLifetime`・`ConnMaxIdleTime` の環境変数設定対応）。

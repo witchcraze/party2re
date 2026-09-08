@@ -138,6 +138,7 @@ type Handler struct {
 	contest        ContestService
 	parties        PartyService
 	altar          AltarService
+	wishingWell    WishingWellService
 	maintenance    MaintenanceService
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
@@ -413,6 +414,10 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/altar/pray", h.handleAltarPray)
 	mux.HandleFunc("POST /characters/{id}/altar/wish", h.handleAltarWish)
 	mux.HandleFunc("POST /characters/{id}/altar/offer", h.handleAltarOffer)
+
+	// Wishing Well
+	mux.HandleFunc("GET /characters/{id}/wishing-well", h.handleGetWishingWell)
+	mux.HandleFunc("POST /characters/{id}/wishing-well/exchange", h.handleWishingWellExchange)
 
 	// Secret Shop
 	mux.HandleFunc("GET /characters/{id}/secretshop", h.handleGetSecretShop)

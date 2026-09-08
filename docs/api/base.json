@@ -103,6 +103,10 @@
     {
       "description": "Town event plaza, traveling merchant bazaar, and victory celebration banquets",
       "name": "EventPlaza"
+    },
+    {
+      "description": "Goddess wishing well and skill point stat sacrifice exchange",
+      "name": "WishingWell"
     }
   ],
   "components": {

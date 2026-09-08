@@ -168,6 +168,7 @@ func newHTTPHandler(
 		http.WithContest(misc.contest),
 		http.WithParty(cmbt.party),
 		http.WithAltar(misc.altar),
+		http.WithWishingWell(misc.wishingwell),
 		http.WithMaintenance(misc.maint),
 	}
 

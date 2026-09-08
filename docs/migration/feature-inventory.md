@@ -66,6 +66,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Job mastery, level-20 job changes, transition penalties, item costs, mastered-job memory exchange, future memory snapshots ("よびおこす"), and 72-job completion title/news notification with "すっぴん" job unlock ([#467](https://github.com/witchcraze/party2re/issues/467)); fictional Lv99 mastery and Rebirth are removed in favor of final-skill SP thresholds and SP accumulation ([#470](https://github.com/witchcraze/party2re/issues/470))
 - [x] Inn resting and HP/MP recovery ([#62](https://github.com/witchcraze/party2re/issues/62))
 - [x] Custom skill assignment ([#69](https://github.com/witchcraze/party2re/issues/69))
+- [x] Wishing Well (願いの泉, @女神) SP sacrifice exchange for permanent stat growth ([#468](https://github.com/witchcraze/party2re/issues/468))
 - [x] Endgame wishes, stat boosts, and Lv99+ / storage limit breaks ([#187](https://github.com/witchcraze/party2re/issues/187))
 
 ### C. Items, equipment, storage, and currency
