@@ -20,6 +20,11 @@ type CustomSkillService interface {
 	ListCatalog() []custom_skill.SkillEntry
 }
 
+type gemSynthesisService interface {
+	GetCustomSkill(ctx context.Context, characterID string) (*custom_skill.CustomSkill, error)
+	SetCustomSkill(ctx context.Context, characterID, name, comment string, gems [3]string) (*custom_skill.CustomSkill, error)
+}
+
 // WithCustomSkill configures the custom skill service for the Handler.
 func WithCustomSkill(skills CustomSkillService) Option {
 	return func(h *Handler) {
@@ -30,13 +35,20 @@ func WithCustomSkill(skills CustomSkillService) Option {
 type getCustomSkillsResponse struct {
 	Loadout         *custom_skill.CharacterSkillLoadout `json:"loadout"`
 	AvailableSkills []custom_skill.SkillEntry           `json:"available_skills"`
+	CustomSkill     *custom_skill.CustomSkill           `json:"custom_skill,omitempty"`
 }
 
 type equipCustomSkillRequest struct {
-	SlotIndex int    `json:"slot_index"`
-	SkillID   string `json:"skill_id,omitempty"`
-	Priority  int    `json:"priority,omitempty"`
-	Action    string `json:"action,omitempty"` // "equip" (default) or "unequip"
+	SlotIndex int       `json:"slot_index"`
+	SkillID   string    `json:"skill_id,omitempty"`
+	Priority  int       `json:"priority,omitempty"`
+	Action    string    `json:"action,omitempty"` // "equip" (default) or "unequip"
+	Name      string    `json:"name,omitempty"`
+	Comment   string    `json:"comment,omitempty"`
+	Gems      [3]string `json:"gems,omitempty"`
+	Gem1      string    `json:"gem1,omitempty"`
+	Gem2      string    `json:"gem2,omitempty"`
+	Gem3      string    `json:"gem3,omitempty"`
 }
 
 type equipCustomSkillResponse struct {
@@ -63,10 +75,18 @@ func (h *Handler) handleGetCustomSkills(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		writeJSON(w, http.StatusOK, getCustomSkillsResponse{
+		response := getCustomSkillsResponse{
 			Loadout:         loadout,
 			AvailableSkills: available,
-		})
+		}
+		if synthesis, ok := h.customSkills.(gemSynthesisService); ok {
+			response.CustomSkill, err = synthesis.GetCustomSkill(r.Context(), char.ID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err)
+				return
+			}
+		}
+		writeJSON(w, http.StatusOK, response)
 	})
 }
 
@@ -80,6 +100,40 @@ func (h *Handler) handleEquipCustomSkill(w http.ResponseWriter, r *http.Request)
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req equipCustomSkillRequest
 		if !decodeJSON(w, r, &req) {
+			return
+		}
+		if req.Name != "" || req.Comment != "" || req.Gem1 != "" || req.Gem2 != "" || req.Gem3 != "" {
+			synthesis, ok := h.customSkills.(gemSynthesisService)
+			if !ok {
+				writeError(w, http.StatusNotImplemented, custom_skill.ErrGemDependencies)
+				return
+			}
+			gems := req.Gems
+			if req.Gem1 != "" {
+				gems[0] = req.Gem1
+			}
+			if req.Gem2 != "" {
+				gems[1] = req.Gem2
+			}
+			if req.Gem3 != "" {
+				gems[2] = req.Gem3
+			}
+			result, err := synthesis.SetCustomSkill(r.Context(), char.ID, req.Name, req.Comment, gems)
+			if err != nil {
+				switch {
+				case errors.Is(err, custom_skill.ErrInvalidSkillName),
+					errors.Is(err, custom_skill.ErrInvalidSkillComment),
+					errors.Is(err, custom_skill.ErrTooManyGemSlots),
+					errors.Is(err, custom_skill.ErrCMPTooHigh),
+					errors.Is(err, custom_skill.ErrGemNotOwned),
+					errors.Is(err, custom_skill.ErrGemNotFound):
+					writeError(w, http.StatusBadRequest, err)
+				default:
+					writeError(w, http.StatusInternalServerError, err)
+				}
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"custom_skill": result})
 			return
 		}
 

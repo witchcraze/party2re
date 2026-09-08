@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #471 — [Feature] Altar of Rebirth: Reproduce original 6-Orb Offering, Ramia Awakening, and Otherworld Travel Item Wishes
+Last updated: Issue #469 — [Refactor] Custom Skill: Reproduce Gem Box synthesis and naming
 
 ## Current phase
 
@@ -57,7 +57,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Dungeon Exploration** (`internal/dungeon`): ダンジョン探索（多層グリッドマップ探索、モンスター遭遇戦闘、トラップ・宝箱イベント、階段降下、フロアボス決戦、一時報酬台帳バッファリングと脱出・踏破時の一括アトミック確定、全滅時戦利品没収、探索履歴永続化）。Valkey Master による進行中探索状態バッファリング（Candidate D、`party2:dungeon:{char:<id>}:state|rewards`、スライディング2時間TTL、アトミックLuaスクリプト `dungeon_step.lua`、探索中SQL書き込み完全ゼロ化、Two-Phase Settlement によるMariaDB確定後パージ）。`Move()`（44.9%→92.3%）のタイルイベント（階段・罠・宝箱・ボス戦闘・安全脱出・ターン切れ全滅）およびエラーパスの単体テスト網羅率向上完了。
 - **Battle Replays & Match History** (`internal/replay`): 戦闘リプレイ・対戦履歴（全戦闘モードのターン別アクションログ・ダメージ値・残りHPスナップショットの記録・忠実再生、標準化レコーダー、プレイヤー別履歴・全体最新一覧（キーセット・カーソル対応）、自動プルーニング）。
 - **Continuous Endurance Challenge** (`internal/challenge`): 連戦チャレンジ・サバイバル戦闘（全4段階Tier `challenge_tiers.json`、ラウンド進行に伴う累進スケーリング、インターラウンドHP回復、マイルストーンアイテムドロップ、途中撤退全額確定 vs 敗北50%救済、リーダーボード、所有権認可）。Valkey Master による進行中セッションバッファリング（Candidate D、`party2:challenge:{char:<id>}:session|rewards`、スライディング2時間TTL、アトミックLuaスクリプト `challenge_round.lua`、ラウンド進行中SQL書き込み完全ゼロ化、Two-Phase Settlement によるMariaDB確定後パージ）。
-- **Custom Skill Loadout & Slot Management** (`internal/custom_skill`): カスタムスキル・スロット管理（JSONスキルカタログ `skills.json`、現在職・マスター職・宝石汎用スキルの装備制限バリデーション、スロット枠数管理、発動優先度 1〜10、重複装備防止）。
+- **Custom Skill Gem Synthesis** (`internal/custom_skill`): 宝石箱から最大3個を選んで調合するオリジナルスキル（CMP/スロット制限、名前・セリフ検証、旧宝石返却を含むアトミック交換）。戦闘発動処理は別スコープ。
 - **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): 手助けクエスト（納品依頼、通常・レア・ギルド専用、錬金素材・幸福袋・GP報酬、有効依頼アイテムのショップ除外連携）および緊急救出処理（状態リセット、Valkey タスク自動キャンセル、クールダウン/睡眠ペナルティ）。
 - **Town Park & Public Bulletin Board** (`internal/park`): 交流広場・公開掲示板（発言投稿・文字色指定・宛先指定・HTMLサニタイズ・レートリミット、最新投稿ページネーション（キーセット・カーソル対応）、NPC占い）。`TalkToNPC()`（50.0%→100.0%）および `Divinate()`（50.0%→100.0%）のキャラクター不在・リポジトリ障害エラーパスの単体テスト網羅率向上完了。
 - **News & Player Notifications** (`internal/notification`): ニュース・お知らせ＆プレイヤー通知インボックス（全体告知、カテゴリ別お知らせ、プレイヤー別メッセージ受信箱、既読・未読管理、一括既読化、未読件数照会）。
