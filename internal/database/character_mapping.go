@@ -9,7 +9,7 @@ import (
 )
 
 // characterColumns lists all standard columns of the characters table in canonical order.
-const characterColumns = "id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, small_medals, help_count, orb, over_level, over_depot, over_monster, over_future, over_flea, over_store"
+const characterColumns = "id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, job_level, old_job_id, old_sp, job_memory_job_id, job_memory_sp, job_memory_old_job_id, job_memory_old_sp, small_medals, help_count, orb, over_level, over_depot, over_monster, over_future, over_flea, over_store"
 
 // rowScanner abstracts *sql.Row, *sql.Rows, or any scanner implementation.
 type rowScanner interface {
@@ -19,6 +19,8 @@ type rowScanner interface {
 // scanCharacterRow scans a single database row into a corecharacter.Character struct.
 func scanCharacterRow(scanner rowScanner) (corecharacter.Character, error) {
 	var value corecharacter.Character
+	var memoryJobID, memoryOldJobID string
+	var memorySP, memoryOldSP int
 	err := scanner.Scan(
 		&value.ID,
 		&value.PlayerID,
@@ -36,6 +38,13 @@ func scanCharacterRow(scanner rowScanner) (corecharacter.Character, error) {
 		&value.Level,
 		&value.Experience,
 		&value.SP,
+		&value.JobLevel,
+		&value.OldJobID,
+		&value.OldSP,
+		&memoryJobID,
+		&memorySP,
+		&memoryOldJobID,
+		&memoryOldSP,
 		&value.SmallMedals,
 		&value.HelpCount,
 		&value.Orb,
@@ -51,6 +60,11 @@ func scanCharacterRow(scanner rowScanner) (corecharacter.Character, error) {
 	}
 	if err != nil {
 		return corecharacter.Character{}, err
+	}
+	if memoryJobID != "" {
+		value.JobMemory = &corecharacter.JobMemory{
+			JobID: memoryJobID, SP: memorySP, OldJobID: memoryOldJobID, OldSP: memoryOldSP,
+		}
 	}
 	return value, nil
 }
@@ -73,15 +87,23 @@ func scanCharacterRows(rows *sql.Rows) ([]corecharacter.Character, error) {
 
 // executeCharacterUpdate runs the standard UPDATE characters query with full state persistence.
 func executeCharacterUpdate(ctx context.Context, executor sqlContextExecutor, value corecharacter.Character) (int64, error) {
+	memoryJobID, memoryOldJobID := "", ""
+	memorySP, memoryOldSP := 0, 0
+	if value.JobMemory != nil {
+		memoryJobID, memorySP = value.JobMemory.JobID, value.JobMemory.SP
+		memoryOldJobID, memoryOldSP = value.JobMemory.OldJobID, value.JobMemory.OldSP
+	}
 	result, err := executor.ExecContext(ctx, `
 		UPDATE characters
 		SET name = ?, job_id = ?, gender = ?, max_hp = ?, max_mp = ?, hp = ?, mp = ?,
-			attack = ?, defense = ?, agility = ?, money = ?, level = ?, experience = ?, sp = ?, small_medals = ?, help_count = ?,
+			attack = ?, defense = ?, agility = ?, money = ?, level = ?, experience = ?, sp = ?, job_level = ?, old_job_id = ?, old_sp = ?,
+			job_memory_job_id = ?, job_memory_sp = ?, job_memory_old_job_id = ?, job_memory_old_sp = ?, small_medals = ?, help_count = ?,
 			orb = ?, over_level = ?, over_depot = ?, over_monster = ?, over_future = ?, over_flea = ?, over_store = ?
 		WHERE id = ?
 	`, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP, value.Stats.HP,
 		value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility, value.Money,
-		value.Level, value.Experience, value.SP, value.SmallMedals, value.HelpCount,
+		value.Level, value.Experience, value.SP, value.JobLevel, value.OldJobID, value.OldSP,
+		memoryJobID, memorySP, memoryOldJobID, memoryOldSP, value.SmallMedals, value.HelpCount,
 		value.Orb, value.OverLevel, value.OverDepot, value.OverMonster, value.OverFuture, value.OverFlea, value.OverStore, value.ID)
 	if err != nil {
 		return 0, err

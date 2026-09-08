@@ -48,8 +48,8 @@ func TestScanCharacterRow_CustomError(t *testing.T) {
 func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 	scanner := &mockScanner{
 		scanFn: func(dest ...any) error {
-			if len(dest) != 25 {
-				t.Fatalf("expected 25 scan destinations, got %d", len(dest))
+			if len(dest) != 32 {
+				t.Fatalf("expected 32 scan destinations, got %d", len(dest))
 			}
 			*dest[0].(*string) = "char-1"
 			*dest[1].(*string) = "player-1"
@@ -67,15 +67,22 @@ func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 			*dest[13].(*int) = 15
 			*dest[14].(*int) = 3200
 			*dest[15].(*int) = 2
-			*dest[16].(*int) = 5
-			*dest[17].(*int) = 8
-			*dest[18].(*string) = "srbgyp"
-			*dest[19].(*bool) = true
-			*dest[20].(*int) = 1
-			*dest[21].(*int) = 2
-			*dest[22].(*int) = 3
-			*dest[23].(*int) = 4
-			*dest[24].(*int) = 5
+			*dest[16].(*int) = 4
+			*dest[17].(*string) = "old-job"
+			*dest[18].(*int) = 3
+			*dest[19].(*string) = "memory-job"
+			*dest[20].(*int) = 12
+			*dest[21].(*string) = "memory-old"
+			*dest[22].(*int) = 8
+			*dest[23].(*int) = 5
+			*dest[24].(*int) = 8
+			*dest[25].(*string) = "srbgyp"
+			*dest[26].(*bool) = true
+			*dest[27].(*int) = 1
+			*dest[28].(*int) = 2
+			*dest[29].(*int) = 3
+			*dest[30].(*int) = 4
+			*dest[31].(*int) = 5
 			return nil
 		},
 	}

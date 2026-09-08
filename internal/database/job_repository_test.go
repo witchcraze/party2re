@@ -24,7 +24,7 @@ func TestCharacterJobRepositoryPersistsAndLoadsHistory(t *testing.T) {
 	}
 	want, _ := corejob.NewCharacterJob(character.ID, "starter")
 	target, _ := corejob.NewDefinition("vanguard", "Vanguard", 6, 1, 3, 5, 2, 1, "")
-	if err := want.ChangeTo(target, 1, "unspecified"); err != nil {
+	if err := want.ChangeTo(target, 20, "unspecified"); err != nil {
 		t.Fatal(err)
 	}
 	want.Master("vanguard")

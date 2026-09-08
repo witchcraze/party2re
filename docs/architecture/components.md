@@ -63,7 +63,14 @@ catalog is stored outside Go source as validated data under
 `internal/core/job/data/`. The Job component loads and validates that data at
 startup or construction time, then exposes definitions through a small lookup
 contract. Consumers do not access the data file or catalog map directly.
-Character job state (`CharacterJob`) encapsulates job transitions (`ChangeTo`) and mastery (`Master`, `IsMastered`). Direct mutation of `CurrentJobID` and `MasteredJobs` is prohibited outside Core and database layers and validated via Go AST static analysis.
+Character job state (`CharacterJob`) encapsulates job transitions (`ChangeTo`),
+mastery (`RecordMastery`, `Master`, `IsMastered`), prerequisite checks, and
+retained mastery SP. The job application service coordinates the level-20
+change transaction, character reset, optional inventory consumption, and
+temporary mastered-job exchange. `Character` owns the persisted previous-job,
+job-change count, and memory snapshot fields. Direct mutation of
+`CurrentJobID` and `MasteredJobs` is prohibited outside Core and database
+layers and validated via Go AST static analysis.
 
 The data file may contain stable IDs, display names, growth values, and simple
 requirements. Dynamic requirements and dynamic growth formulas require explicit

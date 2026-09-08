@@ -116,7 +116,25 @@ func newMiscServices(
 	}
 	helperService := helper.NewService(helperRepo, core.charRepo, core.invRepo, nil, core.txProvider)
 
-	jobService, err := job.NewService(core.charJobRepo, job.WithCatalog(core.jobCatalog), job.WithCharacterRepository(core.charRepo))
+	futureMemoryRepo, err := database.NewFutureMemoryRepository(db)
+	if err != nil {
+		return nil, err
+	}
+	jobService, err := job.NewService(
+		core.charJobRepo,
+		job.WithCatalog(core.jobCatalog),
+		job.WithCharacterRepository(core.charRepo),
+		job.WithInventoryRepository(core.invRepo),
+		job.WithEconomy(core.economy),
+		job.WithFutureMemoryRepository(futureMemoryRepo),
+		job.WithNewsPublisher(job.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
+			if soc.notification != nil {
+				_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)
+				return err
+			}
+			return nil
+		})),
+	)
 	if err != nil {
 		return nil, err
 	}
