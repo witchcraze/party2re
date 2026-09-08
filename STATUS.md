@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #469 — [Refactor] Custom Skill: Reproduce Gem Box synthesis and naming
+Last updated: Issue #503 — [Refactor] Altar OfferOrb inventory consumption and error cleanup
 
 ## Current phase
 

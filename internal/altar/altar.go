@@ -23,6 +23,13 @@ const (
 	ItemMadamsInvite   = "item-067" // マダムの招待状
 	ItemTreasureMap    = "item-068" // 宝の地図
 	ItemLampOfDarkness = "item-069" // 闇のランプ
+
+	ItemSilverOrb = "item-060"
+	ItemRedOrb    = "item-061"
+	ItemBlueOrb   = "item-062"
+	ItemGreenOrb  = "item-063"
+	ItemYellowOrb = "item-064"
+	ItemPurpleOrb = "item-065"
 )
 
 // Legacy dialogue & messages from reborn.cgi
@@ -44,6 +51,7 @@ var (
 	ErrRamiaNotAwakened  = errors.New("Ramia is not awakened; cannot make a wish")
 	ErrInvalidWishItem   = errors.New("invalid travel item chosen for wish")
 	ErrOrbAlreadyOffered = errors.New("orb has already been offered")
+	ErrOrbItemNotFound   = errors.New("required orb item not found in inventory")
 	ErrInvalidOrbRune    = errors.New("invalid orb symbol")
 	ErrNilDependency     = errors.New("required dependency is nil")
 )
@@ -81,6 +89,25 @@ func OrbName(r rune) string {
 		return "パープルオーブ"
 	default:
 		return "オーブ"
+	}
+}
+
+func OrbItemID(r rune) string {
+	switch r {
+	case corecharacter.OrbSilver:
+		return ItemSilverOrb
+	case corecharacter.OrbRed:
+		return ItemRedOrb
+	case corecharacter.OrbBlue:
+		return ItemBlueOrb
+	case corecharacter.OrbGreen:
+		return ItemGreenOrb
+	case corecharacter.OrbYellow:
+		return ItemYellowOrb
+	case corecharacter.OrbPurple:
+		return ItemPurpleOrb
+	default:
+		return ""
 	}
 }
 

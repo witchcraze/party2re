@@ -120,6 +120,12 @@ func setupTestService(t *testing.T) (*Service, *mockCharRepo, *mockInvRepo, *moc
 	collector := &mockCollector{}
 	itemDefs := &mockItemDefProvider{
 		defs: map[string]coreitem.Definition{
+			ItemSilverOrb:      {ID: ItemSilverOrb, Name: "シルバーオーブ"},
+			ItemRedOrb:         {ID: ItemRedOrb, Name: "レッドオーブ"},
+			ItemBlueOrb:        {ID: ItemBlueOrb, Name: "ブルーオーブ"},
+			ItemGreenOrb:       {ID: ItemGreenOrb, Name: "グリーンオーブ"},
+			ItemYellowOrb:      {ID: ItemYellowOrb, Name: "イエローオーブ"},
+			ItemPurpleOrb:      {ID: ItemPurpleOrb, Name: "パープルオーブ"},
 			ItemMirrorOfTruth:  {ID: ItemMirrorOfTruth, Name: "真実の鏡"},
 			ItemMadamsInvite:   {ID: ItemMadamsInvite, Name: "マダムの招待状"},
 			ItemTreasureMap:    {ID: ItemTreasureMap, Name: "宝の地図"},
@@ -370,7 +376,7 @@ func TestWishDeliveredToDepotWhenInventoryFull(t *testing.T) {
 }
 
 func TestOfferOrb(t *testing.T) {
-	svc, charRepo, _, _, _, _ := setupTestService(t)
+	svc, charRepo, invRepo, _, _, _ := setupTestService(t)
 	ctx := context.Background()
 
 	c, _ := corecharacter.New("Hero")
@@ -383,6 +389,12 @@ func TestOfferOrb(t *testing.T) {
 		t.Fatalf("expected ErrInvalidOrbRune, got %v", err)
 	}
 
+	// An orb can only be offered when its tangible inventory item is present.
+	inv, _ := coreinventory.New(c.ID)
+	silver, _ := coreitem.NewInstance(ItemSilverOrb, 2)
+	_ = inv.Add(silver)
+	invRepo.invs[c.ID] = inv
+
 	// Offer silver orb
 	res, err := svc.OfferOrb(ctx, "char-1", corecharacter.OrbSilver)
 	if err != nil {
@@ -391,10 +403,33 @@ func TestOfferOrb(t *testing.T) {
 	if res.TotalOrbs != 1 || res.OrbName != "シルバーオーブ" {
 		t.Fatalf("unexpected offer result: %+v", res)
 	}
+	remaining := invRepo.invs[c.ID]
+	if got := remaining.Quantity(ItemSilverOrb); got != 1 {
+		t.Fatalf("expected one silver orb remaining, got %d", got)
+	}
 
 	// Duplicate offer
 	_, err = svc.OfferOrb(ctx, "char-1", corecharacter.OrbSilver)
 	if !errors.Is(err, ErrOrbAlreadyOffered) {
 		t.Fatalf("expected ErrOrbAlreadyOffered, got %v", err)
+	}
+	remaining = invRepo.invs[c.ID]
+	if got := remaining.Quantity(ItemSilverOrb); got != 1 {
+		t.Fatalf("duplicate offer must not consume an item, got %d remaining", got)
+	}
+}
+
+func TestOfferOrbRequiresMatchingInventoryItem(t *testing.T) {
+	svc, charRepo, _, _, _, _ := setupTestService(t)
+	c, _ := corecharacter.New("Hero")
+	c.ID = "char-1"
+	charRepo.chars[c.ID] = c
+
+	_, err := svc.OfferOrb(context.Background(), c.ID, corecharacter.OrbPurple)
+	if !errors.Is(err, ErrOrbItemNotFound) {
+		t.Fatalf("expected ErrOrbItemNotFound, got %v", err)
+	}
+	if charRepo.chars[c.ID].Orb != "" {
+		t.Fatalf("missing orb item must not mutate character state")
 	}
 }

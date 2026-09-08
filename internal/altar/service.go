@@ -21,7 +21,7 @@ func (s *Service) GetStatus(ctx context.Context, characterID string) (AltarStatu
 
 	now := s.nowFunc()
 	latestAwakening, err := s.altars.GetLatestAwakening(ctx)
-	if err != nil && !errors.Is(err, sqlErrNoRows()) {
+	if err != nil {
 		return AltarStatus{}, err
 	}
 
@@ -225,11 +225,7 @@ func (s *Service) OfferOrb(ctx context.Context, characterID string, orb rune) (O
 			return err
 		}
 
-		added, err := char.AddOrb(orb)
-		if err != nil {
-			return err
-		}
-		if !added {
+		if char.HasOrb(orb) {
 			result = OfferResult{
 				CharacterID: char.ID,
 				Orb:         orb,
@@ -239,6 +235,38 @@ func (s *Service) OfferOrb(ctx context.Context, characterID string, orb rune) (O
 				HasAllOrbs:  char.HasAllOrbs(),
 			}
 			return ErrOrbAlreadyOffered
+		}
+
+		inv, err := s.invs.FindByCharacterIDForUpdate(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+
+		orbItemID := OrbItemID(orb)
+		var orbInstanceID string
+		for _, item := range inv.Items {
+			if item.DefinitionID == orbItemID {
+				orbInstanceID = item.ID
+				break
+			}
+		}
+		if orbInstanceID == "" {
+			return ErrOrbItemNotFound
+		}
+		if err := inv.Consume(orbInstanceID, 1); err != nil {
+			return fmt.Errorf("%w: %v", ErrOrbItemNotFound, err)
+		}
+
+		added, err := char.AddOrb(orb)
+		if err != nil {
+			return err
+		}
+		if !added {
+			return ErrOrbAlreadyOffered
+		}
+
+		if err := s.invs.Save(txCtx, inv); err != nil {
+			return err
 		}
 
 		if err := s.chars.Update(txCtx, char); err != nil {
@@ -262,7 +290,3 @@ func (s *Service) OfferOrb(ctx context.Context, characterID string, orb rune) (O
 }
 
 type timeTimePtr = time.Time
-
-func sqlErrNoRows() error {
-	return errors.New("sql: no rows in result set")
-}

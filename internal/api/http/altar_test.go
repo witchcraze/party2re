@@ -98,6 +98,9 @@ func TestAltarEndpoints(t *testing.T) {
 			if orb == 's' {
 				return altar.OfferResult{CharacterID: characterID, Orb: orb, Message: "シルバーオーブを復活の祭壇にささげた！"}, nil
 			}
+			if orb == 'y' {
+				return altar.OfferResult{}, altar.ErrOrbItemNotFound
+			}
 			return altar.OfferResult{CharacterID: characterID, Orb: orb, Message: altar.MsgAlreadyOffered}, altar.ErrOrbAlreadyOffered
 		},
 	}
@@ -128,6 +131,7 @@ func TestAltarEndpoints(t *testing.T) {
 	t.Run("POST Altar Offer success", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/characters/c1/altar/offer", strings.NewReader(`{"orb":"silver"}`))
 		req.Header.Set("Authorization", "Bearer valid_token")
+		req.Header.Set("Authorization", "Bearer test-session")
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -150,7 +154,29 @@ func TestAltarEndpoints(t *testing.T) {
 		}
 	})
 
-	// 4. POST /characters/c1/altar/pray (success)
+	// 4. POST /characters/c1/altar/offer (missing inventory item)
+	t.Run("POST Altar Offer missing item", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/altar/offer", strings.NewReader(`{"orb":"yellow"}`))
+		req.Header.Set("Authorization", "Bearer test-session")
+		req.Header.Set("Authorization", "Bearer test-session")
+		req.Header.Set("Content-Type", "application/json")
+		/*
+				req.Header.Set("Authorization", "Bearer test-session")
+			req := httptest.NewRequest(http.MethodPost, "/characters/c1/altar/offer", strings.NewReader(`{"orb":"yellow"}`))
+			req.Header.Set("Authorization", "Bearer ******")
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+		*/
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	// 5. POST /characters/c1/altar/pray (success)
 	t.Run("POST Altar Pray success", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/characters/c1/altar/pray", nil)
 		req.Header.Set("Authorization", "Bearer valid_token")
@@ -162,7 +188,7 @@ func TestAltarEndpoints(t *testing.T) {
 		}
 	})
 
-	// 5. POST /characters/c1/altar/wish (success)
+	// 6. POST /characters/c1/altar/wish (success)
 	t.Run("POST Altar Wish success", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/characters/c1/altar/wish", strings.NewReader(`{"item_id":"item-066"}`))
 		req.Header.Set("Authorization", "Bearer valid_token")
@@ -175,7 +201,7 @@ func TestAltarEndpoints(t *testing.T) {
 		}
 	})
 
-	// 6. POST /characters/c1/altar/wish (invalid item)
+	// 7. POST /characters/c1/altar/wish (invalid item)
 	t.Run("POST Altar Wish invalid", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/characters/c1/altar/wish", strings.NewReader(`{"item_id":"invalid"}`))
 		req.Header.Set("Authorization", "Bearer valid_token")
