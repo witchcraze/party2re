@@ -76,101 +76,6 @@
       ]
     }
   },
-  "/characters/{id}/chapel/donate": {
-    "post": {
-      "operationId": "donateToChapel",
-      "parameters": [
-        {
-          "description": "Character ID",
-          "in": "path",
-          "name": "id",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "requestBody": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "properties": {
-                "amount": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "amount"
-              ],
-              "type": "object"
-            }
-          }
-        },
-        "required": true
-      },
-      "responses": {
-        "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          },
-          "description": "Chapel donation processed"
-        },
-        "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Bad request - invalid input or JSON syntax"
-        },
-        "401": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Unauthorized - missing or invalid session token"
-        },
-        "403": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Forbidden - player does not own requested character or lacks permission"
-        },
-        "500": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Internal server error"
-        }
-      },
-      "security": [
-        {
-          "BearerAuth": []
-        }
-      ],
-      "summary": "Donate gold to chapel",
-      "tags": [
-        "Chapel"
-      ]
-    }
-  },
   "/characters/{id}/chapel/pray": {
     "post": {
       "operationId": "prayAtChapel",
@@ -244,6 +149,16 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "409": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Conflict - character already has an active blessing and cannot pray again until consumed"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -260,7 +175,7 @@
           "BearerAuth": []
         }
       ],
-      "summary": "Pray at chapel to receive or renew divine blessing",
+      "summary": "Pray at chapel to receive divine blessing (single active wish constraint)",
       "tags": [
         "Chapel"
       ]

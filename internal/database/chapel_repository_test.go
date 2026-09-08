@@ -2,6 +2,7 @@ package database_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 
@@ -27,46 +28,54 @@ func TestChapelRepository_Integration(t *testing.T) {
 
 	ctx := context.Background()
 
-	// 1. Create character & fund
+	// 1. Create character
 	char, err := database.CreateTestCharacter(ctx, db, "PrayingPriest")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _ = db.ExecContext(ctx, "UPDATE characters SET money = 10000 WHERE id = ?", char.ID)
 
 	// 2. Initial state
 	b, err := repo.GetBlessing(ctx, char.ID)
 	if err != nil {
 		t.Fatalf("GetBlessing failed: %v", err)
 	}
-	if b.ActiveBlessing != chapel.BlessingNone || b.DonationGoldTotal != 0 {
-		t.Errorf("initial state = %+v", b)
+	if b.ActiveBlessing != chapel.BlessingNone {
+		t.Errorf("initial state = %+v, want NONE", b)
 	}
 
-	// 3. Select Blessing
-	b, err = repo.SelectBlessing(ctx, char.ID, chapel.BlessingGold)
+	// 3. Select Monster Blessing
+	b, err = repo.SelectBlessing(ctx, char.ID, chapel.BlessingMonster)
 	if err != nil {
 		t.Fatalf("SelectBlessing failed: %v", err)
 	}
-	if b.ActiveBlessing != chapel.BlessingGold {
-		t.Errorf("active blessing = %v, want GOLD", b.ActiveBlessing)
+	if b.ActiveBlessing != chapel.BlessingMonster {
+		t.Errorf("active blessing = %v, want MONSTER", b.ActiveBlessing)
 	}
 
-	// 4. Donate gold
-	b, err = repo.Donate(ctx, char.ID, 500)
-	if err != nil {
-		t.Fatalf("Donate failed: %v", err)
-	}
-	if b.DonationGoldTotal != 500 {
-		t.Errorf("donation total = %d, want 500", b.DonationGoldTotal)
+	// 4. Enforce single active wish constraint: second prayer fails with ErrAlreadyPrayed
+	_, err = repo.SelectBlessing(ctx, char.ID, chapel.BlessingExp)
+	if !errors.Is(err, chapel.ErrAlreadyPrayed) {
+		t.Fatalf("expected ErrAlreadyPrayed, got %v", err)
 	}
 
-	// 5. Donate more gold
-	b, err = repo.Donate(ctx, char.ID, 300)
-	if err != nil {
-		t.Fatalf("Donate 2 failed: %v", err)
+	// 5. Clear blessing
+	if err := repo.ClearBlessing(ctx, char.ID); err != nil {
+		t.Fatalf("ClearBlessing failed: %v", err)
 	}
-	if b.DonationGoldTotal != 800 {
-		t.Errorf("donation total = %d, want 800", b.DonationGoldTotal)
+	b, err = repo.GetBlessing(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetBlessing failed: %v", err)
+	}
+	if b.ActiveBlessing != chapel.BlessingNone {
+		t.Errorf("expected NONE after ClearBlessing, got %v", b.ActiveBlessing)
+	}
+
+	// 6. Select Casino Blessing after clear
+	b, err = repo.SelectBlessing(ctx, char.ID, chapel.BlessingCasino)
+	if err != nil {
+		t.Fatalf("SelectBlessing after clear failed: %v", err)
+	}
+	if b.ActiveBlessing != chapel.BlessingCasino {
+		t.Errorf("active blessing = %v, want CASINO", b.ActiveBlessing)
 	}
 }

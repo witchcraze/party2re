@@ -85,7 +85,7 @@ This catalog is the Single Source of Truth (SSOT) mapping every single Perl CGI 
 | `lib/name_change.cgi` | 命名の館 / @アストロン | `なまえをかえる` (Gold fee, unique name validation) | `internal/character` | Compliant |
 | `lib/custom_image.cgi`, `upload_image.cgi` | 画像設定所 | `がぞうをかえる` (Custom avatar URL/icon) | `internal/character` | Compliant |
 | `lib/altar.cgi`, `reborn.cgi` | 転生の祭壇 / @精霊ルビス | `げんかいとっぱ` (OverLevel 99→150 limit break) | `internal/core/progression` | Reconciling (#470, #471) |
-| `lib/chapel.cgi` | 教会 / @神父 | `いのる`, `きふ`, `どくのちりょう`, `のろいをとく` | `internal/chapel` | Reconciling (#472) |
+| `lib/chapel.cgi` | 礼拝堂 / @シスター | `いのる` (5 wishes: お金, 強さ, モンスター, 宝箱, コイン; single-active-wish constraint) | `internal/chapel` | Compliant (#472) |
 | `lib/god.cgi` | 天界 / @神 | `おいのり` (Stat seeds grant, celestial blessings) | `internal/god` | Reconciling (#473) |
 | `lib/u_god.cgi` | 裏天界 / @裏神 | `うらおいのり` (Celestial ranch expansion +2) | `internal/god` | Reconciling (#473) |
 | `lib/medal.cgi` | メダル王 / @メダル王 | `こうかん` (Small medal prize exchanges to Depot) | `internal/medal` | Reconciling (#473) |

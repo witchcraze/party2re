@@ -2,6 +2,7 @@ package chapel_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 
@@ -32,14 +33,22 @@ func TestChapelServiceDatabaseIntegration(t *testing.T) {
 
 	ctx := context.Background()
 
-	// 1. Create character & fund
+	// 1. Create character
 	char, err := database.CreateTestCharacter(ctx, db, "ChapelDevotee")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _ = db.ExecContext(ctx, "UPDATE characters SET money = 10000 WHERE id = ?", char.ID)
 
-	// 2. Select Blessing
+	// 2. Initial state
+	status, err := svc.GetStatus(ctx, char.ID, char.Name)
+	if err != nil {
+		t.Fatalf("GetStatus failed: %v", err)
+	}
+	if status.HasActiveBlessing {
+		t.Errorf("expected no active blessing initially")
+	}
+
+	// 3. Select Blessing (Drop)
 	b, err := svc.SelectBlessing(ctx, char.ID, chapel.BlessingDrop)
 	if err != nil {
 		t.Fatalf("SelectBlessing failed: %v", err)
@@ -48,21 +57,30 @@ func TestChapelServiceDatabaseIntegration(t *testing.T) {
 		t.Errorf("expected BlessingDrop, got %v", b.ActiveBlessing)
 	}
 
-	// 3. Donate
-	b, err = svc.Donate(ctx, char.ID, 1000)
-	if err != nil {
-		t.Fatalf("Donate failed: %v", err)
-	}
-	if b.DonationGoldTotal != 1000 {
-		t.Errorf("donation = %d, want 1000", b.DonationGoldTotal)
+	// 4. Single-active-wish constraint: second prayer fails with ErrAlreadyPrayed
+	_, err = svc.SelectBlessing(ctx, char.ID, chapel.BlessingExp)
+	if !errors.Is(err, chapel.ErrAlreadyPrayed) {
+		t.Fatalf("expected ErrAlreadyPrayed, got %v", err)
 	}
 
-	// 4. Retrieve
+	// 5. Clear blessing and select Monster blessing
+	if err := svc.ClearBlessing(ctx, char.ID); err != nil {
+		t.Fatalf("ClearBlessing failed: %v", err)
+	}
+	b, err = svc.Pray(ctx, char.ID, chapel.BlessingMonster)
+	if err != nil {
+		t.Fatalf("Pray failed: %v", err)
+	}
+	if b.ActiveBlessing != chapel.BlessingMonster {
+		t.Errorf("expected BlessingMonster, got %v", b.ActiveBlessing)
+	}
+
+	// 6. Retrieve
 	b, err = svc.GetBlessing(ctx, char.ID)
 	if err != nil {
 		t.Fatalf("GetBlessing failed: %v", err)
 	}
-	if b.ActiveBlessing != chapel.BlessingDrop || b.DonationGoldTotal != 1000 {
-		t.Errorf("got state %+v", b)
+	if b.ActiveBlessing != chapel.BlessingMonster {
+		t.Errorf("got blessing %+v, want MONSTER", b.ActiveBlessing)
 	}
 }

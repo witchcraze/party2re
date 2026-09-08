@@ -99,7 +99,7 @@ Eliminate divergent mechanics in storage, core progression, and battle engines b
 - [ ] **Job System Mastery & Job Change Requirements** (#467)
 - [x] **Wishing Well: Permanent Stat Growth via SP Exchange** (#468)
 - [ ] **God Stat Seed Grants & Celestial Prayers** (#473)
-- [ ] **Chapel: Status Afflictions, Curses, and Tithe Buffs** (#472)
+- [x] **Chapel: Eliminate Fictional Donations, Restore Monster Prayer & Single-Active-Wish Constraint** (#472)
 
 ##### Milestone 2: Economic, Life & Production Loop
 Reconcile facilities and production mechanics that depend on Depot storage and overnight cycles.

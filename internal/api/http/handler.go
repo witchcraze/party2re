@@ -407,7 +407,6 @@ func (h *Handler) Router() http.Handler {
 	// Chapel
 	mux.HandleFunc("GET /characters/{id}/chapel", h.handleGetChapel)
 	mux.HandleFunc("POST /characters/{id}/chapel/pray", h.handleChapelPray)
-	mux.HandleFunc("POST /characters/{id}/chapel/donate", h.handleChapelDonate)
 
 	// Altar of Rebirth
 	mux.HandleFunc("GET /characters/{id}/altar", h.handleGetAltar)

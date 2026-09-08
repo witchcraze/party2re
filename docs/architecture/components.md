@@ -302,9 +302,9 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Core Character, Character repository, Core Inventory, Inventory repository, TransactionProvider (`economy.Service`), wired to action producers in `cmd/party2/main.go`.
   - **Persistence:** `character_achievements` and `character_medals` tables in `internal/database/achievement_repository.go` with pessimistic `FOR UPDATE` locking and ambient transaction propagation.
 - **Chapel & Blessings** (`internal/chapel`):
-  - **Responsibility:** Active town church prayer registration (`character_blessings`), donation management, and reward modifier calculation (+50% EXP/Gold chance, drop bonuses).
-  - **Dependencies:** Character repository (wallet gold).
-  - **Persistence:** `character_blessings` table in `internal/database/chapel_repository.go`.
+  - **Responsibility:** Town church prayer registration (`character_blessings`), authentic 5 blessing choices (Gold, EXP, Monster recruit boost, Chest drop boost, Casino coins), single active wish enforcement (`ErrAlreadyPrayed`, HTTP 409 Conflict), Sister dialogues/facility metadata, and reward modifier calculations. Fictional donations purged in Issue #472.
+  - **Dependencies:** Character repository.
+  - **Persistence:** `character_blessings` table in `internal/database/chapel_repository.go` with pessimistic `FOR UPDATE` single-active-wish protection.
 - **Player versus Player (PvP) Arena** (`internal/pvp`):
   - **Responsibility:** Asynchronous player-versus-player arena combat against defending character snapshots, standard Elo rating calculation (K=32, base 1000), matchmaking query with account win-trading prevention, match history, and defense logs.
   - **Dependencies:** Core Battle Engine, Character repository, Core Progression.
