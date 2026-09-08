@@ -165,7 +165,7 @@ func (h *Handler) handleAltarOffer(w http.ResponseWriter, r *http.Request) {
 				writeJSON(w, http.StatusConflict, result)
 				return
 			}
-			if errors.Is(err, altar.ErrInvalidOrbRune) {
+			if errors.Is(err, altar.ErrInvalidOrbRune) || errors.Is(err, altar.ErrOrbItemNotFound) {
 				writeError(w, http.StatusBadRequest, err)
 				return
 			}

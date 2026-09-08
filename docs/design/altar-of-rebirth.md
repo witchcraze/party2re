@@ -20,6 +20,7 @@ World adventures yield 6 elemental orbs across different days of the week. Chara
 | `p` | パープルオーブ (Purple Orb) | 土 (Earth) | `item-065` |
 
 - **State Representation**: Stored in `characters.orb` as a string of runes (e.g., `"srb"`). Duplicate offerings are rejected with `409 Conflict`.
+- **Offering**: Each offering consumes one matching inventory item (`item-060` through `item-065`) atomically with the character update. An orb cannot be offered when its tangible item is absent.
 - **All Orbs Collected**: When all 6 unique orbs (`s`, `r`, `b`, `g`, `y`, `p`) are collected, the shrine maiden prompts the character to pray.
 
 ---

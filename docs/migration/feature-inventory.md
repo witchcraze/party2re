@@ -118,6 +118,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Flea Market player-to-player item stalls and direct fixed-price exchange ([#194](https://github.com/witchcraze/party2re/issues/194))
 - [x] Monster Grandpa and home pet companion storage ([#193](https://github.com/witchcraze/party2re/issues/193))
 - [x] Altar of Rebirth: 6-Orb Offering, Ramia Awakening, and Otherworld Travel Item Wishes ([#471](https://github.com/witchcraze/party2re/issues/471))
+- [x] Altar orb offerings consume matching inventory items and reject absent orb items ([#503](https://github.com/witchcraze/party2re/issues/503))
 
 ### G. Presentation, assets, and operations
 - [x] UI-independent HTTP JSON Application API layer ([#87](https://github.com/witchcraze/party2re/issues/87))
