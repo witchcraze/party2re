@@ -65,6 +65,7 @@ type Guild struct {
 	Exp               int64     `json:"exp"`
 	Gold              int64     `json:"gold"`
 	Notice            string    `json:"notice"`
+	Bgimg             string    `json:"bgimg"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 }

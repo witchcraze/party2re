@@ -424,3 +424,22 @@ func (r *GuildRepository) DisbandGuild(ctx context.Context, guildID string) erro
 		return nil
 	})
 }
+
+func (r *GuildRepository) AddExp(ctx context.Context, guildID string, expDelta int64) error {
+	executor := ExecutorFromContext(ctx, r.db)
+	var currentExp int64
+	err := executor.QueryRowContext(ctx, "SELECT exp FROM guilds WHERE id = ? FOR UPDATE", guildID).Scan(&currentExp)
+	if err != nil {
+		return err
+	}
+	newExp := currentExp + expDelta
+	newLevel := guild.CalculateLevel(newExp)
+	_, err = executor.ExecContext(ctx, "UPDATE guilds SET exp = ?, level = ? WHERE id = ?", newExp, newLevel, guildID)
+	return err
+}
+
+func (r *GuildRepository) UpdateBgimg(ctx context.Context, guildID string, bgimg string) error {
+	executor := ExecutorFromContext(ctx, r.db)
+	_, err := executor.ExecContext(ctx, "UPDATE guilds SET bgimg = ? WHERE id = ?", bgimg, guildID)
+	return err
+}

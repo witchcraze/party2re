@@ -21,7 +21,6 @@ var whitelistedLegacyFileLimits = map[string]int{
 	"internal/party/valkey_repository.go":      824,
 	"internal/party/application.go":            706,
 	"internal/gemstore/gemstore.go":            681,
-	"internal/god/god.go":                      660,
 	"internal/contest/service.go":              645,
 	"internal/database/home_repository.go":     579,
 	"internal/api/http/combat.go":              576,

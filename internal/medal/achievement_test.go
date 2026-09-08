@@ -8,7 +8,6 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/medal"
 )
 
@@ -160,20 +159,6 @@ func (m *mockCharRepo) Update(ctx context.Context, value corecharacter.Character
 	return nil
 }
 
-type mockInvRepo struct{}
-
-func (m *mockInvRepo) FindByCharacterID(ctx context.Context, charID string) (coreinventory.Inventory, error) {
-	inv, _ := coreinventory.New(charID)
-	return inv, nil
-}
-func (m *mockInvRepo) FindByCharacterIDForUpdate(ctx context.Context, charID string) (coreinventory.Inventory, error) {
-	inv, _ := coreinventory.New(charID)
-	return inv, nil
-}
-func (m *mockInvRepo) Save(ctx context.Context, value coreinventory.Inventory) error {
-	return nil
-}
-
 func TestInitialAchievements_CatalogIntegrity(t *testing.T) {
 	achievements, err := medal.InitialAchievements()
 	if err != nil {
@@ -225,7 +210,7 @@ func TestService_RecordProgress_And_Unlock(t *testing.T) {
 	char, _ := corecharacter.New("Hero")
 	charRepo.chars[char.ID] = char
 
-	invRepo := &mockInvRepo{}
+	depotRepo := &mockDepotRepo{}
 	achRepo := newMockAchievementRepo()
 
 	customCatalog := []medal.Achievement{
@@ -251,7 +236,7 @@ func TestService_RecordProgress_And_Unlock(t *testing.T) {
 
 	svc, err := medal.NewService(
 		charRepo,
-		invRepo,
+		depotRepo,
 		"",
 		medal.WithAchievementRepository(achRepo, customCatalog...),
 	)
@@ -314,7 +299,7 @@ func TestService_ClaimAchievement(t *testing.T) {
 	char, _ := corecharacter.New("Hero")
 	charRepo.chars[char.ID] = char
 
-	invRepo := &mockInvRepo{}
+	depotRepo := &mockDepotRepo{}
 	achRepo := newMockAchievementRepo()
 
 	customCatalog := []medal.Achievement{
@@ -333,7 +318,7 @@ func TestService_ClaimAchievement(t *testing.T) {
 
 	svc, err := medal.NewService(
 		charRepo,
-		invRepo,
+		depotRepo,
 		"",
 		medal.WithAchievementRepository(achRepo, customCatalog...),
 	)
@@ -389,12 +374,12 @@ func TestService_ClaimAchievement(t *testing.T) {
 
 func TestService_ClaimAchievement_InvalidCases(t *testing.T) {
 	charRepo := newMockCharRepo()
-	invRepo := &mockInvRepo{}
+	depotRepo := &mockDepotRepo{}
 	achRepo := newMockAchievementRepo()
 
 	svc, _ := medal.NewService(
 		charRepo,
-		invRepo,
+		depotRepo,
 		"",
 		medal.WithAchievementRepository(achRepo),
 	)
@@ -416,12 +401,12 @@ func TestService_ClaimAchievement_InvalidCases(t *testing.T) {
 
 func TestService_GetAchievementCatalog(t *testing.T) {
 	charRepo := newMockCharRepo()
-	invRepo := &mockInvRepo{}
+	depotRepo := &mockDepotRepo{}
 	achRepo := newMockAchievementRepo()
 
 	svc, err := medal.NewService(
 		charRepo,
-		invRepo,
+		depotRepo,
 		"",
 		medal.WithAchievementRepository(achRepo),
 	)

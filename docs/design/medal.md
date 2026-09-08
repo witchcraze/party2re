@@ -7,8 +7,9 @@ The Small Medal (ちいさなメダル) system allows players to exchange collec
 As directed by project requirements, this system faithfully recreates the deductive (消費型) behavior of the original Party2 `medal.cgi`.
 - Small Medals act as a special currency.
 - When a player exchanges medals for an item, the required medal cost is **deducted** from their balance.
-- Players can repeatedly purchase the same reward as long as they have sufficient medals.
-- The system uses a pessimistic database lock to ensure transaction integrity during the exchange.
+- Claimed prize items are directly delivered to the player's **depot** (`character_depots`), matching legacy specification (`medal.cgi:44-48`), rather than personal bag inventory.
+- Players can repeatedly purchase the same reward as long as they have sufficient medals and depot space.
+- The system enforces a strict pessimistic lock hierarchy (Rank 2: `characters` $\to$ Rank 5: `character_depots`) to ensure transaction integrity during the exchange.
 
 ## Data Structures
 - **Medal Balance**: Stored in `characters.small_medals` (integer).
@@ -50,7 +51,7 @@ Small Medals are earned through various exploration and combat activities:
 
 ### Small Medal Exchange
 - `GET /medals/rewards`: Returns the active small medal reward tiers and item definitions.
-- `POST /medals/claim`: Exchanges character small medals for a reward item (`{"character_id": "...", "item_id": "..."}`) with session authentication and character ownership verification.
+- `POST /medals/claim`: Exchanges character small medals for a reward item (`{"character_id": "...", "item_id": "..."}`) with session authentication and character ownership verification. The item is delivered directly to the character's depot.
 
 ### Milestone Achievements & Commemorative Medals
 - `GET /characters/{id}/achievements`: Inspects character lifetime milestone achievements and progress.
