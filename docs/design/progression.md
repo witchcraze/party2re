@@ -69,6 +69,23 @@ if v > 9:
 ### Current HP/MP Preservation
 Level advancement increases maximum HP and maximum MP (`MaxHP`, `MaxMP`). It deliberately does **not** restore current HP and MP (`HP`, `MP`). Recovery must be achieved through healing items or resting at an Inn.
 
+### Stat Orb Growth Modifiers
+
+The legacy stat orbs add one to the random growth upper bound for exactly one
+stat on each level-up:
+
+| Item | Stat |
+| --- | --- |
+| `item-152` | MaxHP |
+| `item-153` | MaxMP |
+| `item-154` | Attack |
+| `item-155` | Defense |
+| `item-156` | Agility |
+
+The normal cap re-roll still applies after the bonus is added. Stat ceilings are
+999 for HP/MP and 255 for Attack/Defense/Agility. When `OverLevel` is enabled
+and the character is above level 99, those ceilings are doubled.
+
 ## Celestial OverLevel (天界限界突破)
 
 OverLevel allows characters that have reached the celestial realm to progress beyond the standard Lv99 cap:

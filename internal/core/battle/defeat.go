@@ -4,10 +4,13 @@ import "fmt"
 
 // RevivalResult describes the outcome of a defeat revival check.
 type RevivalResult struct {
-	Revived bool
-	HP      int
-	Message string
-	Cursed  bool
+	Revived     bool
+	HP          int
+	Message     string
+	Cursed      bool
+	AttackBuff  int
+	DefenseBuff int
+	AgilityBuff int
 }
 
 // CheckRevival inspects participant abilities and resources when HP reaches 0 to determine if revival triggers.
@@ -33,13 +36,18 @@ func CheckRevival(p *Participant, currentMP *int) RevivalResult {
 		name = p.ID
 	}
 
-	for _, ab := range p.Abilities {
+	abilities := append([]string(nil), p.Abilities...)
+	if hasItem(p.ItemDefinitionIDs, "item-260") && !hasAbility(abilities, "cursed") {
+		abilities = append(abilities, "cursed_revive")
+	}
+	for _, ab := range abilities {
 		switch ab {
 		case "undying", "revive":
 			hp := maxHP / 5
 			if hp < 1 {
 				hp = 1
 			}
+
 			return RevivalResult{
 				Revived: true,
 				HP:      hp,
@@ -71,12 +79,24 @@ func CheckRevival(p *Participant, currentMP *int) RevivalResult {
 				hp = 1
 			}
 			return RevivalResult{
-				Revived: true,
-				HP:      hp,
-				Cursed:  true,
-				Message: fmt.Sprintf("%sは瀕死でよみがえった！ %sは呪われた！", name, name),
+				Revived:     true,
+				HP:          hp,
+				Cursed:      true,
+				AttackBuff:  300,
+				DefenseBuff: 300,
+				AgilityBuff: 300,
+				Message:     fmt.Sprintf("%sは瀕死でよみがえった！ %sは呪われた！", name, name),
 			}
 		}
 	}
 	return RevivalResult{}
+}
+
+func hasAbility(abilities []string, wanted string) bool {
+	for _, ability := range abilities {
+		if ability == wanted {
+			return true
+		}
+	}
+	return false
 }

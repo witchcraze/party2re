@@ -432,8 +432,40 @@ func TestGrowthValueNoCapWhenBelowOrEqualNine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if value != 9 {
 		t.Fatalf("growthValue(9) = %d, want 9", value)
+	}
+}
+
+func TestApplyExperienceStatOrbsAddOneToMatchingGrowthRoll(t *testing.T) {
+	char, _ := character.New("OrbBearer")
+	char.Stats = character.Stats{}
+	def := job.Definition{ID: "orb-job"}
+	random := &sequenceRandomSource{values: []int{1, 0, 0, 0, 0}}
+
+	_, err := ApplyExperienceWithJobFull(&char, 10, def, random, ApplyExperienceOptions{
+		StatOrbItems: map[string]bool{ItemLifeStatOrb: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if char.Stats.MaxHP != 2 || char.Stats.MaxMP != 0 || char.Stats.Attack != 0 {
+		t.Fatalf("stat orb growth = %#v, want HP 2 and other stats 0", char.Stats)
+	}
+}
+
+func TestStatsClampUsesOverLevelDoubleCaps(t *testing.T) {
+	stats := character.Stats{MaxHP: 3000, HP: 3000, MaxMP: 3000, MP: 3000, Attack: 700, Defense: 700, Agility: 700}
+	stats.Clamp(false, 99)
+	if stats.MaxHP != 999 || stats.Attack != 255 {
+		t.Fatalf("standard clamp = %#v", stats)
+	}
+
+	stats = character.Stats{MaxHP: 3000, HP: 3000, MaxMP: 3000, MP: 3000, Attack: 700, Defense: 700, Agility: 700}
+	stats.Clamp(true, 100)
+	if stats.MaxHP != 1998 || stats.Attack != 510 {
+		t.Fatalf("over-level clamp = %#v", stats)
 	}
 }
 

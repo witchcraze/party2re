@@ -66,6 +66,30 @@ type Stats struct {
 	Agility int
 }
 
+// Clamp applies the legacy status ceilings. OverLevel characters above level 99
+// receive the doubled ceilings used by the celestial level-break system.
+func (s *Stats) Clamp(overLevel bool, level int) {
+	if s == nil {
+		return
+	}
+	multiplier := 1
+	if overLevel && level > 99 {
+		multiplier = 2
+	}
+	limitHPMP := 999 * multiplier
+	limitCombat := 255 * multiplier
+	for _, value := range []*int{&s.MaxHP, &s.HP, &s.MaxMP, &s.MP} {
+		if *value > limitHPMP {
+			*value = limitHPMP
+		}
+	}
+	for _, value := range []*int{&s.Attack, &s.Defense, &s.Agility} {
+		if *value > limitCombat {
+			*value = limitCombat
+		}
+	}
+}
+
 type RandomSource interface {
 	Intn(max int) (int, error)
 }

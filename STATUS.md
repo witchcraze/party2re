@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #503 — [Refactor] Altar OfferOrb inventory consumption and error cleanup
+Last updated: Issue #502 — [Feature] Stat Orb progression and revival battle parity
 
 ## Current phase
 

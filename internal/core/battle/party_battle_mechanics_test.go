@@ -253,3 +253,37 @@ func TestPartyBattle_MultiGemCustomSkill(t *testing.T) {
 		t.Errorf("expected final field to be fire, got %+v", res.FinalField)
 	}
 }
+
+func TestCheckRevivalCursedItemAddsStatBuffs(t *testing.T) {
+	mp := 10
+	result := corebattle.CheckRevival(&corebattle.Participant{
+		ID: "cursed", HP: 0, MaxHP: 100,
+		ItemDefinitionIDs: []string{"item-260"},
+	}, &mp)
+	if !result.Revived || !result.Cursed || result.HP != 30 {
+		t.Fatalf("unexpected cursed revival: %+v", result)
+	}
+	if result.AttackBuff != 300 || result.DefenseBuff != 300 || result.AgilityBuff != 300 {
+		t.Fatalf("unexpected cursed buffs: %+v", result)
+	}
+}
+
+func TestPartyBattleMazinSetAbsorbsFallenAllyAttack(t *testing.T) {
+	res, err := (corebattle.Engine{}).ResolvePartyBattle(corebattle.PartyBattleRequest{
+		Allies: []corebattle.Participant{
+			{ID: "fallen", HP: 1, MaxHP: 1, Attack: 80, Defense: 1, Agility: 1},
+			{ID: "mazin", HP: 100, MaxHP: 100, Attack: 10, Defense: 1, Agility: 50, ItemDefinitionIDs: []string{"item-037", "item-038"}},
+		},
+		Enemies:       []corebattle.Participant{{ID: "enemy", HP: 100, MaxHP: 100, Attack: 100, Defense: 1, Agility: 100}},
+		VictoryReward: corebattle.Reward{Experience: 1},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, log := range res.Logs {
+		if log.ActorID == "mazin" && log.DamageDealt == 49 {
+			return
+		}
+	}
+	t.Fatalf("expected Mazin attack 10 + 40 against defense 1, logs: %+v", res.Logs)
+}

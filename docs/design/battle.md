@@ -90,6 +90,14 @@ Maintained with 100% backward compatibility:
 - Damage: $\max(1, \text{Attack} - \text{Defense})$.
 - Terminates upon knockout or simultaneous knockout (`OutcomeDraw`).
 
+### Legacy Defeat Synergies
+
+- A cursed revival from `item-260` revives the participant at 30% MaxHP and
+  grants +300 Attack, +300 Defense, and +300 Agility for the battle.
+- When an ally is defeated without revival, each living ally equipped with
+  `item-037` and `item-038` gains half of the fallen ally's Attack. The
+  resulting Attack is capped at 999.
+
 ## Boundaries & Invariants
 
 - **Context Isolation**: The Battle engine never queries database persistence or mutates external character state directly. It returns an immutable `Result` containing turn logs and rewards.
