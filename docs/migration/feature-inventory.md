@@ -63,7 +63,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Job definitions, data catalog, and job change history ([#17](https://github.com/witchcraze/party2re/issues/17), [#38](https://github.com/witchcraze/party2re/issues/38), [#50](https://github.com/witchcraze/party2re/issues/50))
 - [x] Job-based stat growth formulas ([#31](https://github.com/witchcraze/party2re/issues/31))
 - [x] Skill definitions, costs, and availability conditions ([#18](https://github.com/witchcraze/party2re/issues/18))
-- [x] Job mastery (Lv99) ([#61](https://github.com/witchcraze/party2re/issues/61)); Fictional Rebirth abolished in favor of SP accumulation and OverLevel ([#470](https://github.com/witchcraze/party2re/issues/470))
+- [x] Job mastery, level-20 job changes, transition penalties, item costs, mastered-job memory exchange, future memory snapshots ("よびおこす"), and 72-job completion title/news notification with "すっぴん" job unlock ([#467](https://github.com/witchcraze/party2re/issues/467)); fictional Lv99 mastery and Rebirth are removed in favor of final-skill SP thresholds and SP accumulation ([#470](https://github.com/witchcraze/party2re/issues/470))
 - [x] Inn resting and HP/MP recovery ([#62](https://github.com/witchcraze/party2re/issues/62))
 - [x] Custom skill assignment ([#69](https://github.com/witchcraze/party2re/issues/69))
 - [x] Endgame wishes, stat boosts, and Lv99+ / storage limit breaks ([#187](https://github.com/witchcraze/party2re/issues/187))
@@ -165,6 +165,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#59](https://github.com/witchcraze/party2re/issues/59) | Blacksmith equipment enhancement (+1 to +10) | Merged |
 | [#60](https://github.com/witchcraze/party2re/issues/60) | Alchemy synthesis and 112 crafting recipes | Merged |
 | [#61](https://github.com/witchcraze/party2re/issues/61) | Job mastery tracking and Character Rebirth (Rebirth superseded by #470) | Merged |
+| [#467](https://github.com/witchcraze/party2re/issues/467) | Job change parity, SP-based mastery, item costs, and job memory exchange | Implemented |
 | [#62](https://github.com/witchcraze/party2re/issues/62) | Character resting and Inn recovery | Merged |
 | [#71](https://github.com/witchcraze/party2re/issues/71) | Bank account management and player transfers | Merged |
 | [#87](https://github.com/witchcraze/party2re/issues/87) | HTTP JSON Application API transport layer | Merged |

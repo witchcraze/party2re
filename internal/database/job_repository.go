@@ -26,10 +26,10 @@ func (r *CharacterJobRepository) Save(ctx context.Context, value corejob.Charact
 		executor := ExecutorFromContext(txCtx, r.db)
 
 		if _, err := executor.ExecContext(txCtx, `
-			INSERT INTO character_jobs (character_id, current_job_id)
-			VALUES (?, ?)
-			ON DUPLICATE KEY UPDATE current_job_id = VALUES(current_job_id)
-		`, value.CharacterID, value.CurrentJobID); err != nil {
+			INSERT INTO character_jobs (character_id, current_job_id, all_jobs_mastered)
+			VALUES (?, ?, ?)
+			ON DUPLICATE KEY UPDATE current_job_id = VALUES(current_job_id), all_jobs_mastered = VALUES(all_jobs_mastered)
+		`, value.CharacterID, value.CurrentJobID, value.AllJobsMastered); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(txCtx, "DELETE FROM character_job_history WHERE character_id = ?", value.CharacterID); err != nil {
@@ -47,10 +47,14 @@ func (r *CharacterJobRepository) Save(ctx context.Context, value corejob.Charact
 			return err
 		}
 		for _, jobID := range value.MasteredJobs {
+			masteredSP := 0
+			if value.MasteredJobSP != nil {
+				masteredSP = value.MasteredJobSP[jobID]
+			}
 			if _, err := executor.ExecContext(txCtx, `
-				INSERT INTO character_job_masteries (character_id, job_id)
-				VALUES (?, ?)
-			`, value.CharacterID, jobID); err != nil {
+				INSERT INTO character_job_masteries (character_id, job_id, mastered_sp)
+				VALUES (?, ?, ?)
+			`, value.CharacterID, jobID, masteredSP); err != nil {
 				return err
 			}
 		}
@@ -62,10 +66,10 @@ func (r *CharacterJobRepository) FindByCharacterID(ctx context.Context, characte
 	var value corejob.CharacterJob
 	executor := ExecutorFromContext(ctx, r.db)
 	err := executor.QueryRowContext(ctx, `
-		SELECT character_id, current_job_id
+		SELECT character_id, current_job_id, all_jobs_mastered
 		FROM character_jobs
 		WHERE character_id = ?
-	`, characterID).Scan(&value.CharacterID, &value.CurrentJobID)
+	`, characterID).Scan(&value.CharacterID, &value.CurrentJobID, &value.AllJobsMastered)
 	if errors.Is(err, sql.ErrNoRows) {
 		return corejob.CharacterJob{}, ErrCharacterJobNotFound
 	}
@@ -94,7 +98,7 @@ func (r *CharacterJobRepository) FindByCharacterID(ctx context.Context, characte
 	}
 
 	masteryRows, err := executor.QueryContext(ctx, `
-		SELECT job_id
+		SELECT job_id, mastered_sp
 		FROM character_job_masteries
 		WHERE character_id = ?
 		ORDER BY job_id
@@ -105,10 +109,15 @@ func (r *CharacterJobRepository) FindByCharacterID(ctx context.Context, characte
 	defer masteryRows.Close()
 	for masteryRows.Next() {
 		var jobID string
-		if err := masteryRows.Scan(&jobID); err != nil {
+		var masteredSP int
+		if err := masteryRows.Scan(&jobID, &masteredSP); err != nil {
 			return corejob.CharacterJob{}, err
 		}
 		value.MasteredJobs = append(value.MasteredJobs, jobID)
+		if value.MasteredJobSP == nil {
+			value.MasteredJobSP = make(map[string]int)
+		}
+		value.MasteredJobSP[jobID] = masteredSP
 	}
 	if err := masteryRows.Err(); err != nil {
 		return corejob.CharacterJob{}, err

@@ -3,6 +3,7 @@ package job
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -114,7 +115,7 @@ func TestInitialCatalogValidatesAndExercisesEveryDefinition(t *testing.T) {
 			if err != nil {
 				t.Fatalf("FindByID(%q): %v", definition.ID, err)
 			}
-			if loaded != definition {
+			if !reflect.DeepEqual(loaded, definition) {
 				t.Fatalf("FindByID(%q) = %#v, want %#v", definition.ID, loaded, definition)
 			}
 
@@ -122,13 +123,20 @@ func TestInitialCatalogValidatesAndExercisesEveryDefinition(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if definition.ID == SuppinJobID {
+				state.AllJobsMastered = true
+			}
 			if definition.ID == "starter" {
 				if err := state.ChangeTo(definition, definition.MinLevel, "unspecified"); !errors.Is(err, ErrJobUnavailable) {
 					t.Fatalf("starter ChangeTo() error = %v, want %v", err, ErrJobUnavailable)
 				}
 				return
 			}
-			if err := state.ChangeTo(definition, definition.MinLevel, definition.RequiredGender); err != nil {
+			level := definition.MinLevel
+			if level < MinimumChangeLevel {
+				level = MinimumChangeLevel
+			}
+			if err := state.ChangeTo(definition, level, definition.RequiredGender); err != nil {
 				t.Fatalf("ChangeTo() at minimum level: %v", err)
 			}
 		})
@@ -150,7 +158,11 @@ func TestInitialCatalogExercisesMinimumLevelBoundaryForEveryJob(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := state.ChangeTo(definition, definition.MinLevel-1, definition.RequiredGender); !errors.Is(err, ErrJobUnavailable) {
+			level := definition.MinLevel - 1
+			if level >= MinimumChangeLevel {
+				level = MinimumChangeLevel - 1
+			}
+			if err := state.ChangeTo(definition, level, definition.RequiredGender); !errors.Is(err, ErrJobUnavailable) {
 				t.Fatalf("ChangeTo() below minimum level error = %v, want %v", err, ErrJobUnavailable)
 			}
 		})

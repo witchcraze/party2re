@@ -3,6 +3,7 @@ package character
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestNewCreatesLevelOneCharacter(t *testing.T) {
@@ -145,6 +146,7 @@ func TestCharacterOrbEncapsulation(t *testing.T) {
 	if c.OrbCount() != 0 {
 		t.Fatalf("expected 0 orbs, got %d", c.OrbCount())
 	}
+
 	if c.HasAllOrbs() {
 		t.Fatal("expected HasAllOrbs to be false for empty orb string")
 	}
@@ -201,5 +203,101 @@ func TestCharacterOrbEncapsulation(t *testing.T) {
 	c.ClearOrbs()
 	if c.Orb != "" || c.OrbCount() != 0 || c.IsRamiaAwakened() {
 		t.Fatalf("expected cleared orbs, got %q", c.Orb)
+	}
+}
+
+func TestApplyJobChangeHalvesStatsAndResetsProgression(t *testing.T) {
+	value := Character{
+		JobID: "job-old", Level: 42, Experience: 1234, SP: 7, JobLevel: 2, OverLevel: true,
+		Stats: Stats{MaxHP: 101, MaxMP: 19, HP: 1, MP: 1, Attack: 25, Defense: 9, Agility: 20},
+	}
+	if err := value.ApplyJobChange("job-new", 3); err != nil {
+		t.Fatal(err)
+	}
+	if value.JobID != "job-new" || value.OldJobID != "job-old" || value.OldSP != 7 || value.SP != 3 {
+		t.Fatalf("job state = %#v", value)
+	}
+	if value.Stats.MaxHP != 50 || value.Stats.MaxMP != 10 || value.Stats.Attack != 12 ||
+		value.Stats.Defense != 10 || value.Stats.Agility != 10 ||
+		value.Stats.HP != value.Stats.MaxHP || value.Stats.MP != value.Stats.MaxMP {
+		t.Fatalf("stats = %#v", value.Stats)
+	}
+	if value.Level != 1 || value.Experience != 0 || value.JobLevel != 3 || value.OverLevel {
+		t.Fatalf("progression = %#v", value)
+	}
+}
+
+func TestFutureMemorySnapshotAndRestoration(t *testing.T) {
+	c := Character{
+		ID:         "char-1",
+		JobID:      "job-05",
+		OldJobID:   "job-01",
+		Level:      45,
+		Experience: 8900,
+		SP:         80,
+		OldSP:      50,
+		Gender:     "male",
+		OverLevel:  true,
+		OverFuture: 1, // capacity for 1 + 1 = 2 snapshots (index 0, 1)
+		Stats: Stats{
+			MaxHP:   500,
+			MaxMP:   200,
+			HP:      150,
+			MP:      80,
+			Attack:  120,
+			Defense: 90,
+			Agility: 75,
+		},
+	}
+
+	// CanSave checks
+	if !c.CanSaveFutureMemory(0) {
+		t.Fatal("expected CanSaveFutureMemory(0) with OverFuture=1 to be true")
+	}
+	if !c.CanSaveFutureMemory(1) {
+		t.Fatal("expected CanSaveFutureMemory(1) with OverFuture=1 to be true")
+	}
+	if c.CanSaveFutureMemory(2) {
+		t.Fatal("expected CanSaveFutureMemory(2) with OverFuture=1 to be false")
+	}
+
+	// If JobMemory is set (during recall), cannot save
+	c.JobMemory = &JobMemory{JobID: "job-08"}
+	if c.CanSaveFutureMemory(0) {
+		t.Fatal("expected CanSaveFutureMemory to be false when JobMemory is active")
+	}
+	c.JobMemory = nil
+
+	now := time.Now()
+	snapshot := c.CreateFutureMemory("mem-1", now)
+	if snapshot.ID != "mem-1" || snapshot.CharacterID != "char-1" || snapshot.JobID != "job-05" ||
+		snapshot.OldJobID != "job-01" || snapshot.Level != 45 || snapshot.MaxHP != 500 || snapshot.Attack != 120 {
+		t.Fatalf("unexpected snapshot: %#v", snapshot)
+	}
+
+	// Change character state to simulate different job / level
+	c.JobID = "job-02"
+	c.OldJobID = "job-05"
+	c.Level = 10
+	c.Experience = 200
+	c.Stats = Stats{MaxHP: 100, MaxMP: 50, HP: 50, MP: 20, Attack: 30, Defense: 30, Agility: 30}
+	c.SP = 10
+	c.OldSP = 80
+	c.OverLevel = false
+
+	// Apply FutureMemory
+	if err := c.ApplyFutureMemory(snapshot, 95, 60); err != nil {
+		t.Fatalf("ApplyFutureMemory failed: %v", err)
+	}
+
+	if c.JobID != "job-05" || c.OldJobID != "job-01" || c.Level != 45 || c.Experience != 8900 {
+		t.Fatalf("unexpected job/level state after recall: %#v", c)
+	}
+	if c.Stats.MaxHP != 500 || c.Stats.HP != 500 || c.Stats.MaxMP != 200 || c.Stats.MP != 200 ||
+		c.Stats.Attack != 120 || c.Stats.Defense != 90 || c.Stats.Agility != 75 {
+		t.Fatalf("unexpected stats after recall: %#v", c.Stats)
+	}
+	if c.SP != 95 || c.OldSP != 60 || !c.OverLevel {
+		t.Fatalf("unexpected SP or OverLevel after recall: SP=%d, OldSP=%d, OverLevel=%v", c.SP, c.OldSP, c.OverLevel)
 	}
 }

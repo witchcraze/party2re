@@ -14,8 +14,12 @@ import (
 )
 
 type stubJobService struct {
-	listDefinitionsFn func() []corejob.Definition
-	changeJobFn       func(ctx context.Context, characterID, targetJobID string) (corecharacter.Character, corejob.CharacterJob, error)
+	listDefinitionsFn    func() []corejob.Definition
+	changeJobFn          func(ctx context.Context, characterID, targetJobID string) (corecharacter.Character, corejob.CharacterJob, error)
+	exchangeJobFn        func(ctx context.Context, characterID, targetJobID, targetOldJobID string) (corecharacter.Character, corejob.CharacterJob, error)
+	saveFutureMemoryFn   func(ctx context.Context, characterID string) (corecharacter.FutureMemory, error)
+	recallFutureMemoryFn func(ctx context.Context, characterID, memoryID string) (corecharacter.Character, corejob.CharacterJob, error)
+	listFutureMemoriesFn func(ctx context.Context, characterID string) ([]corecharacter.FutureMemory, error)
 }
 
 func (s *stubJobService) ListDefinitions() []corejob.Definition {
@@ -30,6 +34,34 @@ func (s *stubJobService) ChangeJob(ctx context.Context, characterID, targetJobID
 		return s.changeJobFn(ctx, characterID, targetJobID)
 	}
 	return corecharacter.Character{}, corejob.CharacterJob{}, nil
+}
+
+func (s *stubJobService) ExchangeJob(ctx context.Context, characterID, targetJobID, targetOldJobID string) (corecharacter.Character, corejob.CharacterJob, error) {
+	if s.exchangeJobFn != nil {
+		return s.exchangeJobFn(ctx, characterID, targetJobID, targetOldJobID)
+	}
+	return corecharacter.Character{}, corejob.CharacterJob{}, nil
+}
+
+func (s *stubJobService) SaveFutureMemory(ctx context.Context, characterID string) (corecharacter.FutureMemory, error) {
+	if s.saveFutureMemoryFn != nil {
+		return s.saveFutureMemoryFn(ctx, characterID)
+	}
+	return corecharacter.FutureMemory{}, nil
+}
+
+func (s *stubJobService) RecallFutureMemory(ctx context.Context, characterID, memoryID string) (corecharacter.Character, corejob.CharacterJob, error) {
+	if s.recallFutureMemoryFn != nil {
+		return s.recallFutureMemoryFn(ctx, characterID, memoryID)
+	}
+	return corecharacter.Character{}, corejob.CharacterJob{}, nil
+}
+
+func (s *stubJobService) ListFutureMemories(ctx context.Context, characterID string) ([]corecharacter.FutureMemory, error) {
+	if s.listFutureMemoriesFn != nil {
+		return s.listFutureMemoriesFn(ctx, characterID)
+	}
+	return nil, nil
 }
 
 func TestJobEndpoints(t *testing.T) {
@@ -60,6 +92,20 @@ func TestJobEndpoints(t *testing.T) {
 			}
 			cj, _ := corejob.NewCharacterJob(characterID, targetJobID)
 			return char, cj, nil
+		},
+		exchangeJobFn: func(_ context.Context, characterID, targetJobID, targetOldJobID string) (corecharacter.Character, corejob.CharacterJob, error) {
+			cj, _ := corejob.NewCharacterJob(characterID, targetJobID)
+			return char, cj, nil
+		},
+		saveFutureMemoryFn: func(_ context.Context, characterID string) (corecharacter.FutureMemory, error) {
+			return corecharacter.FutureMemory{ID: "fmem-1", CharacterID: characterID, JobID: "job-01", Level: 50}, nil
+		},
+		recallFutureMemoryFn: func(_ context.Context, characterID, memoryID string) (corecharacter.Character, corejob.CharacterJob, error) {
+			cj, _ := corejob.NewCharacterJob(characterID, "job-01")
+			return char, cj, nil
+		},
+		listFutureMemoriesFn: func(_ context.Context, characterID string) ([]corecharacter.FutureMemory, error) {
+			return []corecharacter.FutureMemory{{ID: "fmem-1", CharacterID: characterID, JobID: "job-01", Level: 50}}, nil
 		},
 	}
 
@@ -119,6 +165,57 @@ func TestJobEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("expected 404 Not Found for eliminated rebirth endpoint, got %d", rec.Code)
+		}
+	})
+
+	t.Run("POST /characters/{id}/exchange-job - success", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/exchange-job", `{"job_id":"job-02","old_job_id":"job-01"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+	})
+
+	t.Run("GET /characters/{id}/future-memories - success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/characters/c1/future-memories", nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+		var memories []corecharacter.FutureMemory
+		if err := json.NewDecoder(rec.Body).Decode(&memories); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if len(memories) != 1 {
+			t.Fatalf("expected 1 memory, got %d", len(memories))
+		}
+	})
+
+	t.Run("POST /characters/{id}/future-memories - success", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/future-memories", `{}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("expected 201 Created, got %d", rec.Code)
+		}
+	})
+
+	t.Run("POST /characters/{id}/recall-future - success", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/recall-future", `{"memory_id":"fmem-1"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rec.Code)
 		}
 	})
 }

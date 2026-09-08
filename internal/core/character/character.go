@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -45,6 +46,10 @@ type Character struct {
 	Level       int
 	Experience  int
 	SP          int // Skill Points: incremented on each level-up; used for SP-based skill learning.
+	JobLevel    int // Number of completed job changes.
+	OldJobID    string
+	OldSP       int
+	JobMemory   *JobMemory
 	SmallMedals int
 	HelpCount   int
 	Orb         string // Orb collection status: string containing characters 's','r','b','g','y','p', or 'G' (Ramia awakened)
@@ -54,6 +59,35 @@ type Character struct {
 	OverFuture  int
 	OverFlea    int
 	OverStore   int
+}
+
+// JobMemory is the temporary pair of job states used by the job exchange
+// operation. It is intentionally part of character state so the exchange can
+// be resumed safely after a process restart.
+type JobMemory struct {
+	JobID    string
+	SP       int
+	OldJobID string
+	OldSP    int
+}
+
+// FutureMemory represents a saved snapshot of a character's state created via
+// item-207 (未来のカケラ) and restored through the legacy "よびおこす" action.
+type FutureMemory struct {
+	ID          string    `json:"id"`
+	CharacterID string    `json:"character_id"`
+	JobID       string    `json:"job_id"`
+	OldJobID    string    `json:"old_job_id"`
+	Level       int       `json:"level"`
+	Experience  int       `json:"experience"`
+	MaxHP       int       `json:"max_hp"`
+	MaxMP       int       `json:"max_mp"`
+	Attack      int       `json:"attack"`
+	Defense     int       `json:"defense"`
+	Agility     int       `json:"agility"`
+	Gender      string    `json:"gender"`
+	OverLevel   bool      `json:"over_level"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Stats struct {
@@ -258,6 +292,104 @@ func (c *Character) DeductSmallMedals(amount int) error {
 // HasSmallMedals returns true if the character has at least the specified amount of small medals.
 func (c *Character) HasSmallMedals(amount int) bool {
 	return amount >= 0 && c.SmallMedals >= amount
+}
+
+// ApplyJobChange applies the legacy job-change reset and resource transfer.
+func (c *Character) ApplyJobChange(targetJobID string, targetSP int) error {
+	if c == nil || strings.TrimSpace(c.JobID) == "" || strings.TrimSpace(targetJobID) == "" {
+		return errors.New("job change requires current and target jobs")
+	}
+	if targetSP < 0 {
+		return ErrInvalidAmount
+	}
+	if targetJobID != c.JobID {
+		c.OldJobID = c.JobID
+		c.OldSP = c.SP
+		c.JobID = strings.TrimSpace(targetJobID)
+		c.SP = targetSP
+	}
+	for _, value := range []*int{&c.Stats.MaxHP, &c.Stats.MaxMP, &c.Stats.Attack, &c.Stats.Defense, &c.Stats.Agility} {
+		*value /= 2
+		if *value < 10 {
+			*value = 10
+		}
+	}
+	c.Stats.HP = c.Stats.MaxHP
+	c.Stats.MP = c.Stats.MaxMP
+	c.Level = InitialLevel
+	c.Experience = 0
+	c.JobLevel++
+	c.OverLevel = false
+	return nil
+}
+
+// ApplyJobMemory switches to a remembered job pair without applying the
+// level/stat penalty used by a normal job change.
+func (c *Character) ApplyJobMemory(jobID string, sp int, oldJobID string, oldSP int) error {
+	if c == nil || strings.TrimSpace(jobID) == "" || strings.TrimSpace(oldJobID) == "" ||
+		sp < 0 || oldSP < 0 {
+		return errors.New("job memory is invalid")
+	}
+	c.JobID, c.SP = strings.TrimSpace(jobID), sp
+	c.OldJobID, c.OldSP = strings.TrimSpace(oldJobID), oldSP
+	return nil
+}
+
+// CanSaveFutureMemory checks whether a future memory snapshot can be saved.
+// It requires that no temporary job exchange is active, and that existing snapshots
+// do not exceed the OverFuture capacity limit (0 allows 1 snapshot).
+func (c *Character) CanSaveFutureMemory(currentSnapshotCount int) bool {
+	if c == nil || c.JobMemory != nil {
+		return false
+	}
+	return currentSnapshotCount <= c.OverFuture
+}
+
+// CreateFutureMemory builds a future memory snapshot from current character state.
+func (c *Character) CreateFutureMemory(id string, createdAt time.Time) FutureMemory {
+	return FutureMemory{
+		ID:          id,
+		CharacterID: c.ID,
+		JobID:       c.JobID,
+		OldJobID:    c.OldJobID,
+		Level:       c.Level,
+		Experience:  c.Experience,
+		MaxHP:       c.Stats.MaxHP,
+		MaxMP:       c.Stats.MaxMP,
+		Attack:      c.Stats.Attack,
+		Defense:     c.Stats.Defense,
+		Agility:     c.Stats.Agility,
+		Gender:      c.Gender,
+		OverLevel:   c.OverLevel,
+		CreatedAt:   createdAt,
+	}
+}
+
+// ApplyFutureMemory restores the character's state from a future memory snapshot
+// and resets current HP/MP to their restored maxima, setting SP and OldSP from mastery data.
+func (c *Character) ApplyFutureMemory(memory FutureMemory, currentSP, oldSP int) error {
+	if c == nil || strings.TrimSpace(memory.JobID) == "" {
+		return errors.New("future memory is invalid")
+	}
+	if currentSP < 0 || oldSP < 0 {
+		return ErrInvalidAmount
+	}
+	c.JobID = memory.JobID
+	c.OldJobID = memory.OldJobID
+	c.Level = memory.Level
+	c.Experience = memory.Experience
+	c.Stats.MaxHP = memory.MaxHP
+	c.Stats.HP = memory.MaxHP
+	c.Stats.MaxMP = memory.MaxMP
+	c.Stats.MP = memory.MaxMP
+	c.Stats.Attack = memory.Attack
+	c.Stats.Defense = memory.Defense
+	c.Stats.Agility = memory.Agility
+	c.Gender = memory.Gender
+	c.OverLevel = memory.OverLevel
+	c.SP = currentSP
+	c.OldSP = oldSP
+	return nil
 }
 
 // Orb symbols conforming to legacy Party2 (reborn.cgi / _data.cgi).

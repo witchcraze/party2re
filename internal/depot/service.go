@@ -12,11 +12,9 @@ import (
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
-// effectiveJobLevel returns the effective job level for depot capacity calculation.
-// The original CGI uses job_lv (転職回数), which is implemented in Issue #467.
-// Until that migration is complete this returns 0 (minimum capacity).
-func effectiveJobLevel(_ corecharacter.Character) int {
-	return 0
+// effectiveJobLevel returns the job-change count used for depot capacity.
+func effectiveJobLevel(char corecharacter.Character) int {
+	return char.JobLevel
 }
 
 func (s *Service) findOrCreateDepot(ctx context.Context, characterID string, char corecharacter.Character) (Depot, error) {

@@ -7931,6 +7931,43 @@
         ]
       }
     },
+    "/characters/{id}/exchange-job": {
+      "post": {
+        "operationId": "postCharactersIdExchangeJob",
+        "parameters": [
+          {
+            "description": "id parameter",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "summary": "POST /characters/{id}/exchange-job endpoint",
+        "tags": [
+          "Character"
+        ]
+      }
+    },
     "/characters/{id}/farm": {
       "get": {
         "operationId": "getFarmPlots",
@@ -8840,6 +8877,78 @@
         "summary": "Purchase flea market listing",
         "tags": [
           "FleaMarket"
+        ]
+      }
+    },
+    "/characters/{id}/future-memories": {
+      "get": {
+        "operationId": "getCharactersIdFutureMemories",
+        "parameters": [
+          {
+            "description": "id parameter",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "summary": "GET /characters/{id}/future-memories endpoint",
+        "tags": [
+          "Character"
+        ]
+      },
+      "post": {
+        "operationId": "postCharactersIdFutureMemories",
+        "parameters": [
+          {
+            "description": "id parameter",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "summary": "POST /characters/{id}/future-memories endpoint",
+        "tags": [
+          "Character"
         ]
       }
     },
@@ -11607,6 +11716,43 @@
         "summary": "Find candidate opponents for PvP arena combat",
         "tags": [
           "Combat"
+        ]
+      }
+    },
+    "/characters/{id}/recall-future": {
+      "post": {
+        "operationId": "postCharactersIdRecallFuture",
+        "parameters": [
+          {
+            "description": "id parameter",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "summary": "POST /characters/{id}/recall-future endpoint",
+        "tags": [
+          "Character"
         ]
       }
     },

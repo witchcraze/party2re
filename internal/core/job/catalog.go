@@ -21,10 +21,16 @@ type Catalog struct {
 func NewCatalog(definitions []Definition) (*Catalog, error) {
 	catalog := &Catalog{definitions: make(map[string]Definition, len(definitions))}
 	for _, definition := range definitions {
+		if definition.MasterySP == 0 {
+			definition.MasterySP = legacyMasteryThresholds[definition.ID]
+		}
+		if definition.RequiredItemID == "" {
+			definition.RequiredItemID = legacyItemRequirements[definition.ID]
+		}
 		if definition.ID == "" || definition.Name == "" || definition.HPGrowth < 0 ||
 			definition.MPGrowth < 0 || definition.AttackGrowth < 0 ||
 			definition.DefenseGrowth < 0 || definition.AgilityGrowth < 0 ||
-			definition.MinLevel < 1 {
+			definition.MinLevel < 1 || definition.MasterySP < 0 {
 			return nil, ErrInvalidDefinition
 		}
 		if _, exists := catalog.definitions[definition.ID]; exists {
