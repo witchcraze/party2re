@@ -1,0 +1,181 @@
+{
+  "/characters/{id}/wishing-well": {
+    "get": {
+      "operationId": "getWishingWellStatus",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Wishing Well status and dialogues"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Get Wishing Well status, current SP, and goddess dialogues",
+      "tags": [
+        "WishingWell"
+      ]
+    }
+  },
+  "/characters/{id}/wishing-well/exchange": {
+    "post": {
+      "operationId": "exchangeWishingWellSP",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "sp": {
+                  "description": "Number of skill points to sacrifice (at least 1)",
+                  "type": "integer"
+                },
+                "stat": {
+                  "description": "Target stat to permanently increase (mhp, mmp, at, df, ag)",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "stat",
+                "sp"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "SP sacrifice request",
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Successful SP sacrifice and permanent stat increase"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid amount, insufficient SP, active JobMemory, or OverLevel restriction"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Sacrifice skill points to permanently increase a base stat",
+      "tags": [
+        "WishingWell"
+      ]
+    }
+  }
+}

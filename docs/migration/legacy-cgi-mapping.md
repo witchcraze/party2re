@@ -80,7 +80,7 @@ This catalog is the Single Source of Truth (SSOT) mapping every single Perl CGI 
 | :--- | :--- | :--- | :--- | :---: |
 | `lib/job_change.cgi` | 転職所 / @ダーマ神官 | `てんしょく` (Level 30+ requirement, stat scaling) | `internal/job` | Reconciling (#467) |
 | `lib/job_master.cgi` | 職業極め所 | `きわめる` (Mastery bonuses, stat passives) | `internal/job` | Reconciling (#467) |
-| `lib/sp_change.cgi` | 特殊職・特技所 | `とくしゅてんしょく` (Special/advanced jobs) | `internal/job` | Reconciling (#467) |
+| `lib/sp_change.cgi` | 願いの泉 / @女神 | `たいりょく`, `まりょく`, `こうげき`, `ぼうぎょ`, `すばやさ` (SP stat growth) | `internal/wishingwell` | Compliant (#468) |
 | `lib/custom_skill.cgi` | 特技設定 / @マニャ | `つくる` (Incantations, custom cost/rates) | `internal/custom_skill` | Reconciling (#469) |
 | `lib/name_change.cgi` | 命名の館 / @アストロン | `なまえをかえる` (Gold fee, unique name validation) | `internal/character` | Compliant |
 | `lib/custom_image.cgi`, `upload_image.cgi` | 画像設定所 | `がぞうをかえる` (Custom avatar URL/icon) | `internal/character` | Compliant |

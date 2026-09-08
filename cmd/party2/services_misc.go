@@ -28,6 +28,7 @@ import (
 	"github.com/witchcraze/party2re/internal/rescue"
 	"github.com/witchcraze/party2re/internal/secretshop"
 	"github.com/witchcraze/party2re/internal/tavern"
+	"github.com/witchcraze/party2re/internal/wishingwell"
 )
 
 type miscServices struct {
@@ -50,6 +51,7 @@ type miscServices struct {
 	monster     *monster.Service
 	contest     *contest.Service
 	altar       *altar.Service
+	wishingwell *wishingwell.Service
 	maint       *maintenance.Service
 	activity    *activity.Service
 }
@@ -311,6 +313,14 @@ func newMiscServices(
 		return nil, err
 	}
 
+	wishingwellService, err := wishingwell.NewService(
+		core.charRepo,
+		wishingwell.WithTransactionProvider(core.txProvider),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	var activityService *activity.Service
 	if valkeyClient != nil {
 		activityRepo, err := database.NewActivityRepository(db)
@@ -345,5 +355,6 @@ func newMiscServices(
 		maint:       maintService,
 		activity:    activityService,
 		altar:       altarService,
+		wishingwell: wishingwellService,
 	}, nil
 }

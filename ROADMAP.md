@@ -97,7 +97,8 @@ Eliminate divergent mechanics in storage, core progression, and battle engines b
 - [x] **Altar of Rebirth: Restore 6-Orb Offering, Ramia Awakening & Otherworld Wishes** (#471)
 - [ ] **Custom Skills: Incantations, Resource Scaling & Failure Multipliers** (#469)
 - [ ] **Job System Mastery & Job Change Requirements** (#467)
-- [ ] **Wishing Well & God Stat Seed Grants** (#468, #473)
+- [x] **Wishing Well: Permanent Stat Growth via SP Exchange** (#468)
+- [ ] **God Stat Seed Grants & Celestial Prayers** (#473)
 - [ ] **Chapel: Status Afflictions, Curses, and Tithe Buffs** (#472)
 
 ##### Milestone 2: Economic, Life & Production Loop
