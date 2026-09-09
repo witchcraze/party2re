@@ -64,17 +64,17 @@ func NewDefinition(id, name string, hp, mp, attack, defense, agility, minLevel i
 }
 
 type Change struct {
-	FromJobID string
-	ToJobID   string
+	FromJobID string `json:"from_job_id"`
+	ToJobID   string `json:"to_job_id"`
 }
 
 type CharacterJob struct {
-	CharacterID     string
-	CurrentJobID    string
-	History         []Change
-	MasteredJobs    []string
-	MasteredJobSP   map[string]int
-	AllJobsMastered bool
+	CharacterID     string         `json:"character_id"`
+	CurrentJobID    string         `json:"current_job_id"`
+	History         []Change       `json:"history"`
+	MasteredJobs    []string       `json:"mastered_jobs"`
+	MasteredJobSP   map[string]int `json:"mastered_job_sp"`
+	AllJobsMastered bool           `json:"all_jobs_mastered"`
 }
 
 func NewCharacterJob(characterID, currentJobID string) (CharacterJob, error) {

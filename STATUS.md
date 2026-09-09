@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #513 — [Spec] God: Confirm wish_refresh vs legacy tired-field mapping
+Last updated: Issue #512 — [Chore] OpenAPI: Enrich exchange-job / future-memories / recall-future endpoint schemas
 
 ## Current phase
 
@@ -81,7 +81,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### API & Transport
 - **Server Entrypoint, Configuration & Lifecycle Orchestration** (`cmd/party2`): 構成分離（`config.go`, `main.go`, `services_core.go`, `services_econ.go`, `services_cmbt.go`, `services_soc.go`, `services_misc.go`, `wire.go`）、型付けされた設定構造体インジェクション（`database.Config`, `valkey.Config`, `Config`）による並行テスト分離（`t.Parallel()` 完全対応）、MariaDB・Valkey・全ドメインリポジトリおよびサービス・スケジューリングWorker・HTTP APIルーター（全35種Option）の統合初期化、ドメインイベントフック一元集約（`wire.go`）、Graceful Shutdown（`http.Server.Shutdown(ctx)`、Worker Contextキャンセル待機、リソース安全開放）、起動・停止のJSON構造化ログ。
-- **HTTP JSON API & OpenAPI 3.1 Specification** (`internal/api/http`, `docs/api/base.json`, `docs/api/paths/*.json`): Go標準 `net/http` によるREST風エンドポイント（全203ルート・221オペレーション）。モジュール分割仕様（40ファイル）と自動バンドル（`docs/api/openapi.json` およびバイナリ埋め込み）、CI自動テストによるASTベースのルート網羅率100%検証、セッション認証およびPAT（APIキー）デュアル認証、管理者APIキー認可（`X-Admin-Key`、定数時間比較）、キャラクター所有権認可検証（403 Forbidden、全サブリソースIDOR防御）、標準セキュリティヘッダー、CORSミドルウェア、Valkey/In-Memory 分散レートリミット（429 Too Many Requests、ValkeyLimiter 96.9%・extractClientIP 100% カバレッジ担保）、メンテナンスモードミドルウェア（503 Service Unavailable）。
+- **HTTP JSON API & OpenAPI 3.1 Specification** (`internal/api/http`, `docs/api/base.json`, `docs/api/paths/*.json`): Go標準 `net/http` によるREST風エンドポイント（全203ルート・222オペレーション）。モジュール分割仕様（40ファイル）と自動バンドル（`docs/api/openapi.json` およびバイナリ埋め込み）、CI自動テストによるASTベースのルート網羅率100%検証、セッション認証およびPAT（APIキー）デュアル認証、管理者APIキー認可（`X-Admin-Key`、定数時間比較）、キャラクター所有権認可検証（403 Forbidden、全サブリソースIDOR防御）、標準セキュリティヘッダー、CORSミドルウェア、Valkey/In-Memory 分散レートリミット（429 Too Many Requests、ValkeyLimiter 96.9%・extractClientIP 100% カバレッジ担保）、メンテナンスモードミドルウェア（503 Service Unavailable）。
 
 ### Infrastructure & Operations
 - **Database**: MariaDB（マイグレーション `migrations/001_initial.sql` 〜 `057_altar_of_rebirth.sql`、`make db-migrate` / `make db-reset`、永続権威 MariaDB Master、コネクションプール設定 `MaxOpenConns`・`MaxIdleConns`・`ConnMaxLifetime`・`ConnMaxIdleTime` の環境変数設定対応）。

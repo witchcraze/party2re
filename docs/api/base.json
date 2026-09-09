@@ -923,6 +923,33 @@
         ],
         "type": "object"
       },
+      "ChangeJobRequest": {
+        "properties": {
+          "job_id": {
+            "description": "ID of the target job class to switch to",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "ChangeJobResponse": {
+        "properties": {
+          "character": {
+            "$ref": "#/components/schemas/CharacterResponse"
+          },
+          "job": {
+            "$ref": "#/components/schemas/CharacterJob"
+          }
+        },
+        "required": [
+          "character",
+          "job"
+        ],
+        "type": "object"
+      },
       "Character": {
         "properties": {
           "created_at": {
@@ -979,6 +1006,108 @@
         ],
         "type": "object"
       },
+      "CharacterJob": {
+        "properties": {
+          "all_jobs_mastered": {
+            "type": "boolean"
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "current_job_id": {
+            "type": "string"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterJobChange"
+            },
+            "type": "array"
+          },
+          "mastered_job_sp": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "mastered_jobs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "character_id",
+          "current_job_id",
+          "history",
+          "mastered_jobs",
+          "mastered_job_sp",
+          "all_jobs_mastered"
+        ],
+        "type": "object"
+      },
+      "CharacterJobChange": {
+        "properties": {
+          "from_job_id": {
+            "type": "string"
+          },
+          "to_job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_job_id",
+          "to_job_id"
+        ],
+        "type": "object"
+      },
+      "CharacterResponse": {
+        "properties": {
+          "experience": {
+            "type": "integer"
+          },
+          "gender": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "money": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "player_id": {
+            "type": "string"
+          },
+          "sp": {
+            "type": "integer"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/CharacterStatsResponse"
+          }
+        },
+        "required": [
+          "id",
+          "player_id",
+          "name",
+          "job_id",
+          "gender",
+          "level",
+          "experience",
+          "money",
+          "sp",
+          "stats"
+        ],
+        "type": "object"
+      },
       "CharacterStats": {
         "properties": {
           "agility": {
@@ -999,6 +1128,41 @@
           "agility",
           "intelligence",
           "luck"
+        ],
+        "type": "object"
+      },
+      "CharacterStatsResponse": {
+        "properties": {
+          "agility": {
+            "type": "integer"
+          },
+          "attack": {
+            "type": "integer"
+          },
+          "defense": {
+            "type": "integer"
+          },
+          "hp": {
+            "type": "integer"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "max_mp": {
+            "type": "integer"
+          },
+          "mp": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_hp",
+          "max_mp",
+          "hp",
+          "mp",
+          "attack",
+          "defense",
+          "agility"
         ],
         "type": "object"
       },
@@ -1119,6 +1283,23 @@
         },
         "type": "object"
       },
+      "ExchangeJobRequest": {
+        "properties": {
+          "job_id": {
+            "description": "ID of the target job class to switch to",
+            "type": "string"
+          },
+          "old_job_id": {
+            "description": "ID of the previous job class to record or swap",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "old_job_id"
+        ],
+        "type": "object"
+      },
       "ErrorResponse": {
         "properties": {
           "error": {
@@ -1189,6 +1370,70 @@
           "total_price",
           "comment",
           "status",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "FutureMemory": {
+        "properties": {
+          "agility": {
+            "type": "integer"
+          },
+          "attack": {
+            "type": "integer"
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "defense": {
+            "type": "integer"
+          },
+          "experience": {
+            "type": "integer"
+          },
+          "gender": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "max_mp": {
+            "type": "integer"
+          },
+          "old_job_id": {
+            "type": "string"
+          },
+          "over_level": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "character_id",
+          "job_id",
+          "old_job_id",
+          "level",
+          "experience",
+          "max_hp",
+          "max_mp",
+          "attack",
+          "defense",
+          "agility",
+          "gender",
+          "over_level",
           "created_at"
         ],
         "type": "object"
@@ -2033,6 +2278,18 @@
         "required": [
           "character_id",
           "item_id"
+        ],
+        "type": "object"
+      },
+      "RecallFutureMemoryRequest": {
+        "properties": {
+          "memory_id": {
+            "description": "ID of the saved future memory snapshot to restore",
+            "type": "string"
+          }
+        },
+        "required": [
+          "memory_id"
         ],
         "type": "object"
       },
