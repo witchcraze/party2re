@@ -127,3 +127,16 @@ func withAuthenticatedCharacterAndJSON[Req any](
 
 	fn(player, char, req)
 }
+
+// ensureNotSleeping checks if the character is currently sleeping. If sleeping, writes 409 Conflict.
+func (h *Handler) ensureNotSleeping(w http.ResponseWriter, r *http.Request, charID string) bool {
+	if h.homes == nil {
+		return true
+	}
+	status, err := h.homes.GetSleepStatus(r.Context(), charID)
+	if err == nil && status.Sleeping {
+		writeError(w, http.StatusConflict, errors.New(status.Message))
+		return false
+	}
+	return true
+}

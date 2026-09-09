@@ -107,6 +107,7 @@ func (s *Service) executeHeavenWish(
 	case WishRefresh, WishFullRecovery:
 		wishName = "元気いっぱいになりたい"
 		desc = "疲労度 -150 % (HP・MP完全回復)"
+		char.Tired -= 150
 		char.Stats.HP = char.Stats.MaxHP
 		char.Stats.MP = char.Stats.MaxMP
 		msg = "HPとMPが完全に回復しました！"

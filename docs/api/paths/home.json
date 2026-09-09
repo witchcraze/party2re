@@ -1,4 +1,249 @@
 {
+  "/characters/{id}/home/sleep": {
+    "get": {
+      "operationId": "getHomeSleepStatus",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Current sleep status"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized - missing or invalid session token"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden - player does not own requested character"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Get sleeping status for a character",
+      "tags": [
+        "Homes"
+      ]
+    },
+    "post": {
+      "operationId": "homeSleep",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "target_home_id": {
+                  "description": "Optional home owner character ID to sleep at",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "description": "Sleep parameters"
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Character started sleeping"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden"
+        },
+        "409": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Conflict - character is already sleeping"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Put character to sleep in own or visited house",
+      "tags": [
+        "Homes"
+      ]
+    }
+  },
+  "/characters/{id}/home/wake": {
+    "post": {
+      "operationId": "homeWake",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Character woke up with full recovery"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden"
+        },
+        "409": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Conflict - character is still sleeping"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Wake character up from sleep",
+      "tags": [
+        "Homes"
+      ]
+    }
+  },
   "/homes/{id}": {
     "get": {
       "operationId": "getHomeView",

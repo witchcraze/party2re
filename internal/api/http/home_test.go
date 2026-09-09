@@ -34,6 +34,9 @@ type mockHomeService struct {
 	talkToCompanionFn       func(ctx context.Context, characterID string) (string, error)
 	listDeliveryNoticesFn   func(ctx context.Context, characterID string, unclearedOnly bool) ([]home.DeliveryNotice, error)
 	clearDeliveryNoticesFn  func(ctx context.Context, characterID string) error
+	sleepFn                 func(ctx context.Context, characterID, targetHomeID string) (home.SleepResult, error)
+	getSleepStatusFn        func(ctx context.Context, characterID string) (home.SleepStatus, error)
+	wakeFn                  func(ctx context.Context, characterID string) (home.WakeResult, error)
 }
 
 func (m *mockHomeService) GetHomeView(ctx context.Context, homeCharacterID, visitorCharacterID string) (home.HomeView, error) {
@@ -178,6 +181,27 @@ func (m *mockHomeService) ClearDeliveryNotices(ctx context.Context, characterID 
 		return m.clearDeliveryNoticesFn(ctx, characterID)
 	}
 	return nil
+}
+
+func (m *mockHomeService) Sleep(ctx context.Context, characterID, targetHomeID string) (home.SleepResult, error) {
+	if m.sleepFn != nil {
+		return m.sleepFn(ctx, characterID, targetHomeID)
+	}
+	return home.SleepResult{Sleeping: true, DurationSeconds: 60, RemainingSeconds: 60, HomeCharacterID: targetHomeID, Message: "おやすみ"}, nil
+}
+
+func (m *mockHomeService) GetSleepStatus(ctx context.Context, characterID string) (home.SleepStatus, error) {
+	if m.getSleepStatusFn != nil {
+		return m.getSleepStatusFn(ctx, characterID)
+	}
+	return home.SleepStatus{Sleeping: false, RemainingSeconds: 0, CanWake: false, Message: "起きています"}, nil
+}
+
+func (m *mockHomeService) Wake(ctx context.Context, characterID string) (home.WakeResult, error) {
+	if m.wakeFn != nil {
+		return m.wakeFn(ctx, characterID)
+	}
+	return home.WakeResult{Success: true, Message: "目覚めました", Character: corecharacter.Character{ID: characterID, Name: "Hero"}}, nil
 }
 
 func TestHomeEndpoints(t *testing.T) {

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Player Private Home Feature Module (`internal/home`) manages character private estates (`home.cgi`), personal customization, player-to-player letter correspondence (mailbox/inbox/outbox), companion greeting customization (`ことばをおしえる`), and delivery notice ledgers.
+The Player Private Home Feature Module (`internal/home`) manages character private estates (`home.cgi`), personal customization, player-to-player letter correspondence (mailbox/inbox/outbox), companion greeting customization (`ことばをおしえる`), delivery notice ledgers, and character resting/sleeping (`sleep.cgi`, `home.cgi`).
 
 ---
 
@@ -35,7 +35,7 @@ Asynchronous direct messaging between characters:
   - `unread_count`: Real-time query for unread received letters.
 - **Authorization & Retention**:
   - Only the recipient may mark a letter as read.
-  - **Independent Deletion Semantics**: The sender and recipient maintain independent deletion flags (`is_deleted_by_sender` and `is_deleted_by_recipient`). Deletion of a letter by one party (e.g., sender deleting sent history or recipient clearing inbox) does not remove the letter from the other party's view or alter the recipient's unread counter.
+  - **Independent Deletion Semantics**: The sender and recipient maintain independent deletion flags (`is_deleted_by_sender` and `is_deleted_by_recipient`). Deletion of a letter by one party does not remove the letter from the other party's view or alter the recipient's unread counter.
   - **Physical Purge Lifecycle**: When both the sender and recipient have deleted the letter, the database record is physically removed.
 
 ### 3. Companion Greeting Phrases (`character_companion_phrases`)
@@ -56,6 +56,22 @@ Persistent ledger for incoming transfer events:
 - Logs item deliveries, bank remittances, and gift notifications.
 - Supports retrieval of uncleared notices and bulk clearing upon viewing.
 
+### 5. Resting & Sleeping (`sleep.cgi`, `home.cgi`)
+
+True Party2 character recovery is conducted at Home (either one's own or a visited player's house):
+- **Free Recovery**: No monetary fee (deprecates fictional paid Inn).
+- **Concurrency Scaling**: Sleep duration scales by online concurrent player count:
+  - `< 20` players: 1x base duration (60 seconds)
+  - `>= 20` players: 2x base duration (120 seconds)
+  - `>= 30` players: 3x base duration (180 seconds)
+- **Action Locking**: While sleeping, `party2:timer:sleep:<character_id>` locks character actions with HTTP `409 Conflict` (`"お休み中「Zzz...」 目覚めるまで X分YY秒"`).
+- **Awakening**:
+  - HP and MP fully restored.
+  - Tiredness (疲労度) reset to 0.
+  - Temporary Job Memory reverted.
+  - Tavern fullness state reset (`tavern.ResetFullness`).
+  - Chapel prayers and active blessings cleared (`chapel.ClearBlessing`).
+
 ---
 
 ## HTTP REST Endpoints
@@ -69,6 +85,9 @@ Persistent ledger for incoming transfer events:
 | `GET` | `/homes/{id}/companion/talk` | Public | Talk to the home companion to hear a random greeting |
 | `GET` | `/homes/{id}/notices` | Owner Session | List delivery notices for character |
 | `POST` | `/homes/{id}/notices/clear` | Owner Session | Clear/acknowledge all delivery notices |
+| `POST` | `/characters/{id}/home/sleep` | Owner Session | Start sleeping at home (or target player's home) |
+| `GET` | `/characters/{id}/home/sleep` | Owner Session | Check current sleep timer and status |
+| `POST` | `/characters/{id}/home/wake` | Owner Session | Wake up with full HP/MP/tired recovery and reset hooks |
 | `POST` | `/letters` | Sender Session | Send a new letter to a recipient character |
 | `GET` | `/letters/inbox` | Recipient Session | List received letters (`?character_id=...&limit=...&offset=...`) |
 | `GET` | `/letters/outbox` | Sender Session | List sent letters (`?character_id=...&limit=...&offset=...`) |
@@ -80,8 +99,10 @@ Persistent ledger for incoming transfer events:
 
 ## Persistence
 
-Data is persisted in MariaDB via `migrations/034_player_home_and_mailbox.sql` and `migrations/036_player_mailbox_independent_deletion.sql`:
+Data is persisted in MariaDB via `migrations/034_player_home_and_mailbox.sql`, `migrations/036_player_mailbox_independent_deletion.sql`, and `migrations/062_character_tired.sql`:
 - `character_homes`: (character_id PRIMARY KEY, theme, motto, companion_name, visitor_count, last_visited_at, updated_at)
 - `character_letters`: (id PRIMARY KEY, sender_character_id, sender_name, recipient_character_id, recipient_name, content, color, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at)
 - `character_companion_phrases`: (id PRIMARY KEY, character_id, phrase, created_at)
 - `character_delivery_notices`: (id PRIMARY KEY, character_id, notice_type, message, is_cleared, created_at)
+- `characters.tired`: (INT NOT NULL DEFAULT 0)
+- Valkey keys: `party2:timer:sleep:<character_id>` and `party2:timer:asleep:<character_id>`

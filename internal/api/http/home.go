@@ -30,6 +30,9 @@ type HomeService interface {
 	TalkToCompanion(ctx context.Context, characterID string) (string, error)
 	ListDeliveryNotices(ctx context.Context, characterID string, unclearedOnly bool) ([]home.DeliveryNotice, error)
 	ClearDeliveryNotices(ctx context.Context, characterID string) error
+	Sleep(ctx context.Context, characterID, targetHomeID string) (home.SleepResult, error)
+	GetSleepStatus(ctx context.Context, characterID string) (home.SleepStatus, error)
+	Wake(ctx context.Context, characterID string) (home.WakeResult, error)
 }
 
 // WithHome configures the HomeService for the Handler.

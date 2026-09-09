@@ -8,6 +8,7 @@ import (
 	"github.com/witchcraze/party2re/internal/activity"
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/api/http"
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/home"
@@ -88,8 +89,15 @@ func newSocServices(
 		worker = scheduling.NewWorker(schedRepo, 5*time.Second, logger)
 	}
 
+	timerService := timer.NewService(valkeyClient)
 	parkService, _ := park.NewService(parkRepo, core.charRepo, park.WithRateLimiter(limiter))
-	homeService, _ := home.NewService(homeRepo, core.charRepo, home.WithVisitorLimiter(limiter, 24*time.Hour))
+	homeService, _ := home.NewService(
+		homeRepo,
+		core.charRepo,
+		home.WithVisitorLimiter(limiter, 24*time.Hour),
+		home.WithTimer(timerService),
+		home.WithCharacterUpdater(core.charRepo),
+	)
 
 	return &socServices{
 		guildRepo:    guildRepo,

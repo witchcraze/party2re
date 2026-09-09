@@ -27,13 +27,19 @@ type Limiter interface {
 type LetterListResult = pagination.Page[Letter]
 
 type Service struct {
-	repo            Repository
-	charReader      CharacterReader
-	rngMu           sync.Mutex
-	rng             *mrand.Rand
-	visitorLimiter  Limiter
-	visitorCooldown time.Duration
-	nowFunc         func() time.Time
+	repo              Repository
+	charReader        CharacterReader
+	rngMu             sync.Mutex
+	rng               *mrand.Rand
+	visitorLimiter    Limiter
+	visitorCooldown   time.Duration
+	nowFunc           func() time.Time
+	timer             TimerService
+	charUpdater       CharacterUpdater
+	fullness          FullnessResetter
+	chapel            BlessingCleaner
+	onlineCounter     OnlineCounter
+	baseSleepDuration time.Duration
 }
 
 type ServiceOption func(*Service)
@@ -57,6 +63,42 @@ func WithRNG(rng *mrand.Rand) ServiceOption {
 	}
 }
 
+func WithTimer(t TimerService) ServiceOption {
+	return func(s *Service) {
+		s.timer = t
+	}
+}
+
+func WithCharacterUpdater(u CharacterUpdater) ServiceOption {
+	return func(s *Service) {
+		s.charUpdater = u
+	}
+}
+
+func WithFullnessResetter(f FullnessResetter) ServiceOption {
+	return func(s *Service) {
+		s.fullness = f
+	}
+}
+
+func WithBlessingCleaner(b BlessingCleaner) ServiceOption {
+	return func(s *Service) {
+		s.chapel = b
+	}
+}
+
+func WithOnlineCounter(c OnlineCounter) ServiceOption {
+	return func(s *Service) {
+		s.onlineCounter = c
+	}
+}
+
+func WithBaseSleepDuration(d time.Duration) ServiceOption {
+	return func(s *Service) {
+		s.baseSleepDuration = d
+	}
+}
+
 func NewService(repo Repository, charReader CharacterReader, opts ...ServiceOption) (*Service, error) {
 	if repo == nil {
 		return nil, errors.New("repository is required")
@@ -65,11 +107,12 @@ func NewService(repo Repository, charReader CharacterReader, opts ...ServiceOpti
 		return nil, errors.New("character reader is required")
 	}
 	s := &Service{
-		repo:            repo,
-		charReader:      charReader,
-		rng:             mrand.New(mrand.NewSource(time.Now().UnixNano())),
-		visitorCooldown: 24 * time.Hour,
-		nowFunc:         func() time.Time { return time.Now().UTC() },
+		repo:              repo,
+		charReader:        charReader,
+		rng:               mrand.New(mrand.NewSource(time.Now().UnixNano())),
+		visitorCooldown:   24 * time.Hour,
+		baseSleepDuration: DefaultBaseSleepDuration,
+		nowFunc:           func() time.Time { return time.Now().UTC() },
 	}
 	for _, opt := range opts {
 		opt(s)

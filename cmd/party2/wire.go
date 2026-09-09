@@ -119,6 +119,12 @@ func wireHooks(
 	if misc.collection != nil {
 		econ.depot.SetCollectionRecorder(misc.collection)
 	}
+	if misc.tavern != nil {
+		soc.home.SetFullnessResetter(misc.tavern)
+	}
+	if misc.chapel != nil {
+		soc.home.SetBlessingCleaner(misc.chapel)
+	}
 
 	soc.registerWorkerHandlers(misc.activity, cmbt.adv)
 }
@@ -141,7 +147,6 @@ func newHTTPHandler(
 		http.WithPark(soc.park),
 		http.WithRanking(soc.ranking),
 		http.WithJob(misc.job),
-		http.WithInn(misc.inn),
 		http.WithChapel(misc.chapel),
 		http.WithFarm(misc.farm),
 		http.WithCollection(misc.collection),

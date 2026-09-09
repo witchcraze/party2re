@@ -269,10 +269,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Bank account management, gold deposits, withdrawals, and player-to-player remittances.
   - **Dependencies:** Character (wallet).
   - **Persistence:** `bank_accounts` and `bank_transfers` tables with `FOR UPDATE` concurrency locking.
-- **Inn** (`internal/inn`):
-  - **Responsibility:** Character resting and full HP/MP recovery.
-  - **Dependencies:** Character repository.
-  - **Persistence:** Single-transaction character update.
+- **Home & Resting** (`internal/home`):
+  - **Responsibility:** Private home profiles, visitor counters, guest letters/mailbox, pet companion phrase training and conversation, delivery notifications, and character sleeping/resting (`sleep.cgi`/`home.cgi` - full HP/MP/tired recovery, online-scaled countdown lock, fullness and chapel resets). Fictional paid Inn decommissioned per Issue #459.
+  - **Dependencies:** Character repository, Home repository, Timer service (`internal/core/timer`), Tavern (fullness reset), Chapel (blessing cleaner).
+  - **Persistence:** `character_homes`, `home_letters`, `companion_phrases`, `home_delivery_notices` tables, Valkey `party2:timer:sleep:<id>` and `party2:timer:asleep:<id>`.
 - **Guild** (`internal/guild`):
   - **Responsibility:** Guild creation, membership lifecycle, role management (Leader, Officer, Member), notice board, gold donations, and level/capacity progression.
   - **Dependencies:** Character repository.
