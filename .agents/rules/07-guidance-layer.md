@@ -1,9 +1,9 @@
 ---
-name: Repository Intelligence (PoC) Rules
+name: Guidance Layer Rules
 description: Guidelines for managing the Guidance Layer (.arch/*.json), module selection criteria, agent navigation, and automated verification.
 ---
 
-# Repository Intelligence & Guidance Layer Principles (PoC)
+# Guidance Layer Principles
 
 ## 1. Ground Truth vs. Guidance Layer
 - **Source Code & Comments are the Ground Truth**: 
@@ -14,7 +14,7 @@ description: Guidelines for managing the Guidance Layer (.arch/*.json), module s
   Agents must never treat `.arch` metadata as unquestionable fact without verifying the actual code linked by `source_ref` (file path and symbol anchor) before making decisions or changes.
 
 ## 2. Module Selection Criteria & Scope Tiers
-To prevent documentation rot and maintain zero unnecessary overhead, module-level definitions (`.arch/modules/<module>.json`) are governed by strict selection criteria (see `docs/architecture/guidance-layer.md`):
+To prevent documentation rot and maintain zero unnecessary overhead, module-level definitions (`.arch/modules/<module>.json`) are governed by strict selection criteria (see [`docs/architecture/guidance-layer.md`](../../docs/architecture/guidance-layer.md)):
 
 ### A. Selection Criteria (C1 - C4)
 A module qualifies for a dedicated `.arch/modules/<module>.json` file only if it meets at least **two** of the following conditions:
@@ -38,18 +38,10 @@ To ensure definitions remain immutable against everyday code refactorings and li
   Format: `path/to/file.go#SymbolName` or `path/to/file.go#Struct.Method` (e.g., `internal/tavern/tavern.go#Service.OrderMeal` or `internal/tavern/tavern.go#CharacterRepository`).
 
 ## 4. Reverse Fan-in Shared Table Index (.arch/shared_tables/)
-To assess the blast radius of modifying core database tables and verify global deadlock hierarchies across multiple feature callers without full-codebase grep scans:
-- **Scope**: High Fan-in shared database tables (`characters`, `inventory_items`, `bank_accounts`, `guilds`).
-- **Structure**: Maps `Table -> Repository Implementation -> Consumer Interfaces -> Caller Feature Methods & Lock Orders`.
-- **Zero-Token Blast Radius**: Agents inspect `.arch/shared_tables/<table_name>.json` to locate all mutation points before refactoring shared domain entities.
+Agents MUST inspect `.arch/shared_tables/<table_name>.json` (`characters`, `inventory_items`, `bank_accounts`, `guilds`) before refactoring shared domain entities to verify lock hierarchies and blast radius. See [`docs/architecture/guidance-layer.md`](../../docs/architecture/guidance-layer.md) §5.
 
-## 5. Automated Mechanical Verification (Zero Token Overhead)
-All architecture definitions and symbol coordinates are mechanically verified during `scripts/verify.sh` and standard `go test ./...`:
-1. **Go AST Symbol & Transaction Linter (`internal/architecture/arch_test.go`)**:
-   - Executed via `go test ./...` in ~0.05s.
-   - Automatically parses all `.arch/modules/*.json` and `.arch/shared_tables/*.json` files and verifies using `go/parser` that every referenced interface, struct, consumer interface, and caller method symbol actually exists in the codebase.
-   - Verifies that all symbols declared with `transaction_type: "RunInTx"` or `tx_mode: "RunInTx"` physically contain `RunInTx` calls in their AST bodies.
-   - Fails the test immediately if a symbol is misspelled or renamed, preventing broken links with zero token consumption.
+## 5. Automated Mechanical Verification
+All `.arch` definitions and symbol coordinates are mechanically verified via Go AST in `internal/architecture/arch_test.go` on `make check` / `go test ./...`. All referenced symbols and `RunInTx` declarations MUST physically exist in Go source code. See [`docs/architecture/guidance-layer.md`](../../docs/architecture/guidance-layer.md) §6.
 
 ## 6. Go Idiom & Implementation Compatibility Guidelines
 To maintain idiomatic Go design while maximizing Guidance Layer navigability:

@@ -113,11 +113,32 @@ The table below catalogs all production key patterns currently active in the cod
 
 ---
 
-## 4. Codified Guidelines for Future State Candidates (RFC #356 Roadmap)
+## 4. Codified Guidelines for State Candidates (RFC #356 Roadmap)
 
-The following specifications define the key patterns, data types, and lifecycle semantics for upcoming state migration milestones:
+The following specifications define the key patterns, data types, and lifecycle semantics for state candidates evaluated under RFC #356:
 
-### 4.1 Candidate C: Party & Matchmaking Wait Lobbies (Issue #368, Issue #380 - Completed)
+### 4.1 Candidate A: Player Authentication Sessions (Issue #366, Issue #378 - Completed)
+
+- **Status**: Completed in PR #366 (Issue #366) and optimized with TTL-scored Sorted Sets in Issue #378; legacy `player_sessions` MariaDB table dropped in Migration 051.
+- **Goal**: Move ephemeral authentication sessions from MariaDB to Valkey Master (`session:<token> -> player_id, EX 604800`) to eliminate relational database connection pool bottlenecks on every authenticated HTTP request.
+- **Key Patterns**:
+  - `party2:session:<token>`: `String (JSON)`. 7-day TTL (`604800s`).
+  - `party2:player:sessions:<player_id>`: `Sorted Set (ZSet)` tracking active tokens by expiration score.
+- **Lifecycle & Boundaries**:
+  - Ephemeral, natural 7-day TTL. On crash/eviction, the player simply re-authenticates.
+  - Account deletion hooks (`CleanupHook` / `DeleteAccount`) explicitly remove active session keys via `DeleteByPlayerID`.
+
+### 4.2 Candidate B: System Maintenance Mode State (Issue #367 - Completed)
+
+- **Status**: Completed in Issue #367.
+- **Goal**: Eliminate synchronous MariaDB queries from `maintenanceMiddleware` on every incoming HTTP request by maintaining low-cardinality global maintenance flags in Valkey Master / In-Memory.
+- **Key Patterns**:
+  - `party2:maintenance:status`: `String (JSON)` without TTL. Backed by MariaDB `system_maintenance` table.
+- **Lifecycle & Boundaries**:
+  - Admin updates (`POST /admin/maintenance`) immediately update/invalidate Valkey.
+  - Middleware fails-open or falls back safely to in-memory state if Valkey is temporarily unreachable.
+
+### 4.3 Candidate C: Party & Matchmaking Wait Lobbies (Issue #368, Issue #380 - Completed)
 
 - **Status**: Completed in PR #376 (Issue #368) and finalized in Issue #380 with MariaDB schema cleanup (Migration 052 dropped `parties` and `party_members`).
 - **Goal**: Move transient multiplayer recruitment, wait lobbies, and ready check states from MariaDB to Valkey Master to eliminate lock contention.
@@ -131,7 +152,7 @@ The following specifications define the key patterns, data types, and lifecycle 
   - When the countdown expires without full ready status, the unready member's readiness flag expires automatically without blocking the lobby.
   - When the leader starts the adventure, the party transitions into durable quest resolution: final outcomes are saved exclusively to MariaDB (`party_adventure_logs`), while characters are locked and updated via `RunInTx` in ascending ID order. Legacy `parties` and `party_members` MariaDB tables were officially dropped via Migration 052.
 
-### 4.2 Candidate D: In-Progress Run Buffers (Issue #369)
+### 4.4 Candidate D: In-Progress Run Buffers (Issue #369)
 
 - **Status**: Evaluated and Architecturally Codified (SSOT: [`docs/architecture/transient-run-state.md`](transient-run-state.md)).
 - **Goal**: Buffer active multi-turn dungeon expeditions and challenge gauntlets in Valkey Master, eliminating relational write amplification per turn.
@@ -145,7 +166,7 @@ The following specifications define the key patterns, data types, and lifecycle 
   - Phase 1 (Active Run): All turn updates and reward buffering occur 100% in Valkey Master via atomic Lua scripts (`dungeon_step`, `challenge_advance_round`). MariaDB is not touched.
   - Phase 2 (Settlement): Upon victory, retreat, or defeat, an atomic MariaDB transaction executes via `RunInTx`: durable inventory items are awarded, progression updated, and the Valkey run buffer is immediately deleted (`DEL`).
 
-### 4.3 Candidate E: World Boss Real-time Shared HP (Issue #370)
+### 4.5 Candidate E: World Boss Real-time Shared HP (Issue #370)
 
 - **Goal**: High-frequency concurrent boss raid damage resolution without MariaDB single-row lock serialization (SSOT: [`docs/architecture/transient-boss-hp.md`](transient-boss-hp.md)).
 - **Key Patterns (with Mandatory Cluster Hash Tagging `{boss:<boss_id>}`)**:
@@ -157,6 +178,15 @@ The following specifications define the key patterns, data types, and lifecycle 
 - **Lifecycle & Boundaries (Two-Phase Settlement)**:
   - Phase 1 (Active Raid): Concurrent attacks execute entirely against Valkey Master via atomic Lua script (`boss_damage.lua`). Evaluates overkill prevention, tallies contributor damage (`HINCRBY`), elects exactly one killer when HP reaches 0, and refreshes 2h TTL. Zero MariaDB queries or locks during combat.
   - Phase 2 (Settlement): The elected killer is designated the settlement coordinator and commits permanent loot (MVP bonus, Last-Hit bonus, participation rewards, completion logs) in MariaDB Master via `RunInTx`. The status in Valkey is then marked `"settled"`. Unfinalized defeats can be safely and idempotently reconciled.
+
+### 4.6 Candidate F: Real-time Leaderboards (`ranking`) (Valkey Cache, Not Master)
+
+- **Authority**: MariaDB Master + Valkey Cache.
+- **Goal**: Read acceleration for high-traffic leaderboard views without overloading MariaDB queries.
+- **Semantics & Lifecycle**:
+  - Sorted Sets (`ZADD` / `ZREVRANGE`) provide O(log N) ranking queries.
+  - MariaDB remains the canonical source of truth (`ranking_snapshots` table).
+  - Data is refreshed periodically via background worker (`party2:ranking:refresh`) or reconstructed on cache miss.
 
 ---
 
@@ -207,13 +237,21 @@ The following specifications define the key patterns, data types, and lifecycle 
 
 ### 5.5 Valkey Lua Scripting Standards & Operational Constraints
 
-Per [`.agents/rules/05-database-and-caching.md`](../../.agents/rules/05-database-and-caching.md) Section 3.5:
+Valkey evaluates Lua scripts atomically in a single thread, guaranteeing serializability, no partial updates, and zero lock overhead in the application layer. However, because Valkey is single-threaded, a poorly designed Lua script will block all incoming client commands. All Lua scripts in Party2 Re must strictly adhere to the following operational constraints:
 - **Mandatory Criteria:** Use Lua scripts (`valkey.NewLuaScript`) ONLY for atomic conditional state transitions, multi-key validation, or CAS checks that cannot be achieved with single native commands (`INCR`, `HSET`, `SET NX`).
 - **Execution Budget:** Scripts MUST complete within sub-millisecond limits (< 1ms) with complexity <= O(log N).
 - **Prohibited in Lua:** Wildcard scans (`KEYS *`, `SCAN`), unbounded loops, and heavy JSON serialization in Lua.
 - **Cluster Hash Tagging:** Multi-key scripts MUST enclose the co-locating entity ID in `{...}`.
 - **In-Memory Fallback Parity:** Repositories using Lua scripts MUST provide 100% equivalent atomic validation and state mutation in Go in-memory fallback stores.
 - **Preloading:** Scripts MUST be preloaded via `valkey.NewLuaScript` (`EVALSHA` with automatic fallback on `NOSCRIPT`).
+
+#### 5.5.1 Lua Script Physical Organization (`//go:embed`)
+
+Valkey Lua scripts MUST NOT be defined as raw multiline string constants inside Go source files. They MUST reside in dedicated external files and be embedded at compile time:
+- **Dedicated Subdirectory**: Store scripts under a `lua/` subdirectory within the owning package (e.g., `internal/dungeon/lua/dungeon_step.lua`, `internal/challenge/lua/challenge_round.lua`).
+- **Compile-Time Embedding**: Embed script sources into string variables using Go standard `//go:embed` directives (e.g., `//go:embed lua/dungeon_step.lua\nvar dungeonStepLua string`).
+- **Zero Runtime File I/O**: `//go:embed` compiles the Lua source directly into the static binary, requiring no filesystem access or dynamic asset packaging at runtime.
+- **Tooling and Readability**: Dedicated `.lua` files enable editor syntax highlighting, external linting/formatting, and clean PR diffs without Go string escaping overhead.
 
 ### 5.6 Lua Script Registry & Operational Catalog
 

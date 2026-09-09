@@ -27,7 +27,7 @@ description: Guidelines for database transaction boundaries, concurrency control
   - **Unprotected Read-Modify-Write:** Do NOT read structs (e.g., Character) outside a transaction, mutate them in Go memory, and then blindly save them back. This will erase concurrent changes (like Adventure rewards).
   - **Direct `BeginTx` in Repositories:** Do NOT call `r.db.BeginTx` directly in repositories. Always use `RunInTx(ctx, r.db, ...)` and `ExecutorFromContext(ctx, r.db)`. (Note: This is automatically validated by the Go AST linter in `internal/database/tx_lint_test.go` on every `make check`).
   - **Non-deterministic Row Locking:** Never lock rows in random, hash-map, or caller-dependent order; always sort IDs ascending when locking multiple rows of the same table.
-  - **Sub-Resource Pre-Locking (Inverted Lock Hierarchy):** When inspecting or mutating dependent sub-resources (such as `inventory_items` during item sales, trade, or material synthesis), always acquire the exclusive row lock on the parent entity (`characters`) first before locking the sub-resource. Never acquire a lock on `inventory_items` first and then delegate to a service or helper (such as `economy.Service`) that subsequently locks `characters`. This causes A-B / B-A lock ordering inversions and MariaDB deadlocks (Error 1213). (Note: This is mechanically prevented by `internal/database/lock_hierarchy_lint_test.go` on every `make check`).
+  - **Sub-Resource Pre-Locking (Inverted Lock Hierarchy):** NEVER lock sub-resources (e.g. `inventory_items`) before locking parent `characters`. Enforced mechanically by `internal/database/lock_hierarchy_lint_test.go`; see [`docs/architecture/cross-domain-primitives.md`](../../docs/architecture/cross-domain-primitives.md) §4.3.
   - **Collection Wipe-and-Insert:** Do NOT implement inventory/collection updates by executing `DELETE FROM ...` followed by re-inserting all items from an unprotected in-memory slice. Use targeted `UPSERT` / `ON DUPLICATE KEY UPDATE` or atomic `DELETE` of specific rows.
 - **Concurrency Protection:** You MUST use pessimistic locking (`SELECT ... FOR UPDATE`) during the read phase of the transaction when modifying complex state that cannot be done with simple SQL statements.
 - **Alternative Safe Mechanisms:** Depending on the context, other concurrency control methods may be preferable to `FOR UPDATE`, such as:
@@ -77,33 +77,17 @@ Durability critical?
                   (Queues)      (Audit Records)
 ```
 
-### 3.3 Comprehensive State Migration Candidates & Architectural Constraints
-- **Candidate A: Player Authentication Sessions (`sessions`) [Priority 1: Migrated to Valkey Master, Issue #366]**:
-  - *Authority*: Valkey Master (`session:<token> -> player_id, EX 604800`).
-  - *Semantics*: Ephemeral, natural 7-day TTL. On crash/eviction, the player simply re-authenticates. Eliminates SQL connection pool overhead on every authenticated HTTP request; removes relational `sessions` table and periodic cleanup cron.
-  - *Constraint*: Account deletion hooks (`CleanupHook` / `DeleteAccount`) must explicitly remove active session keys via `DeleteByPlayerID`.
-- **Candidate B: System Maintenance Mode State (`system_maintenance`) [Priority 1: Migrated to Valkey Master, Issue #367]**:
-  - *Authority*: Valkey Master / In-Memory Cache with Valkey PubSub or short TTL (`maintenance:status`).
-  - *Semantics*: Low-cardinality global flag. Currently queried on *every single incoming HTTP request* by `maintenanceMiddleware`, causing significant MariaDB connection pool contention.
-  - *Constraint*: Admin updates (`POST /admin/maintenance`) must immediately update/invalidate Valkey; must fail-open or fall back safely if Valkey is unreachable.
-- **Candidate C: Party & Matchmaking Wait Lobbies (`party`, `matchmaking`) [Priority 2: Valid / High Confidence, Issue #368]**:
-  - *Authority*: Valkey Master (`party:lobby:{id}`).
-  - *Semantics*: Ephemeral wait queues and 60-second ready checks. If the process restarts, players simply re-queue or re-enter the lobby.
-  - *Constraint*: Transient lobby states must remain strictly decoupled from persistent character party records and durable `party_adventure_logs`.
-- **Candidate D: In-Progress Run Buffers (`dungeon_active_expeditions`, `challenge_sessions`) [Priority 2: Evaluated & Codified, Issue #369]**:
-  - *Authority*: Valkey Master for active step/turn buffers; MariaDB Master for final exit/cash-out settlement (SSOT: [`docs/architecture/transient-run-state.md`](../../docs/architecture/transient-run-state.md)).
-  - *Semantics*: Step coordinates, floor progress, and tentative uncommitted reward buffers (`party2:dungeon:{char:<id>}:state`, `party2:dungeon:{char:<id>}:rewards`, `party2:challenge:{char:<id>}:session`, `party2:challenge:{char:<id>}:rewards`). Eliminates multi-turn write amplification on MariaDB during active exploration.
-  - *Constraints & Contracts*:
-    - Atomic Lua scripts (`dungeon_step`, `challenge_advance_round`) execute all active mutations in `< 1ms` with mandatory cluster hash tagging (`{char:<character_id>}`).
-    - 2-hour sliding TTL (`7200s`) automatically evicts abandoned sessions with zero database sweepers.
-    - Two-phase settlement: tentative rewards exist only in Valkey until the run ends with victory, retreat, or defeat, at which point an atomic MariaDB transaction (`RunInTx`) updates inventory and character progression, followed by Valkey buffer deletion (`DEL`).
-- **Candidate E: World Boss Real-time Shared HP (`boss`) [Priority 3: High Risk / Architectural Exploration, Issue #370]**:
-  - *Authority*: Valkey Master during combat (`DECRBY`) with MariaDB settlement.
-  - *Semantics*: High-frequency concurrent damage during multi-player raids; atomic Valkey primitives eliminate single-row SQL lock contention.
-  - *Constraint*: Dedicated proof-of-concept required before adoption to resolve dual-write settlement: preventing double-kill race conditions, phantom reward claims, or split-brain state during server crashes before SQL commit.
-- **Candidate F: Real-time Leaderboards (`ranking`) [Priority 4: Valkey Cache, not Master]**:
-  - *Authority*: MariaDB Master + Valkey Cache.
-  - *Semantics*: Sorted Sets (`ZADD` / `ZREVRANGE`) provide O(log N) ranking queries, but MariaDB remains the canonical source of truth. Data is refreshed periodically via background workers or reconstructed on cache miss.
+### 3.3 State Migration Decision Table (Candidates A–F)
+State authority decisions for candidates evaluated under RFC #356. Details in [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md) §4.
+
+| Candidate | Domain | Authority | Key Constraint |
+| :--- | :--- | :--- | :--- |
+| **A: Sessions** | `player` | Valkey Master | Delete on account cleanup; 7d TTL |
+| **B: Maintenance** | `maintenance` | Valkey Master / In-Memory | Admin updates invalidate; fail-open |
+| **C: Lobbies** | `party` | Valkey Master | Decoupled from durable adventure logs |
+| **D: Run Buffers** | `dungeon`, `challenge` | Valkey Master (settle MariaDB) | 2h sliding TTL; Lua atomic mutations ([SSOT](../../docs/architecture/transient-run-state.md)) |
+| **E: Boss Shared HP** | `boss` | Valkey Master (settle MariaDB) | Requires dedicated PoC before production adoption |
+| **F: Leaderboards** | `ranking` | MariaDB Master + Valkey Cache | Read cache only; ZSET reconstructed on miss |
 
 ### 3.4 General Caching Constraints & Keyspace Taxonomy
 - **Centralized Keyspace Specification (SSOT):** All Valkey key patterns, data types, and expiration policies MUST conform to the taxonomy defined in [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md) (`party2:<namespace>:<entity>[:<id>]`). Mechanically enforced by Go AST lint test (`internal/architecture/valkey_lint_test.go`).
@@ -113,27 +97,14 @@ Durability critical?
 - **Concrete Requirements Only:** Do not introduce Valkey without a concrete feature requirement or measured performance benefit.
 - **Performance Caching:** Do not pre-emptively cache static/master data (Items, Jobs) in Valkey. Introduce read-caching only if empirical measurement proves SQL is a bottleneck.
 
-### 3.5 Valkey Lua Scripting Standards & Operational Constraints
-Valkey evaluates Lua scripts atomically in a single thread, guaranteeing serializability, no partial updates, and zero lock overhead in the application layer. However, because Valkey is single-threaded, a poorly designed Lua script will block all incoming client commands. All Lua scripts in Party2 Re MUST strictly adhere to the following architectural rules:
-- **Mandatory Criteria for Lua Scripting:**
-  - Use Lua scripts (`valkey.NewLuaScript` / `EVALSHA`) ONLY when an operation requires atomic conditional state transitions, multi-key validation, or CAS checks that cannot be achieved with single native commands (`INCR`, `HSET`, `SET NX`).
-  - Do NOT use Lua scripts for single-key updates that native commands support directly.
-  - Do NOT use client-side optimistic concurrency (`WATCH` / `MULTI` / `EXEC`) on high-throughput shared resources where transaction abort rates spike and waste network/CPU retries.
-- **Strict Execution Time Budget & Complexity Budget:**
-  - **Time Budget:** Scripts MUST complete within sub-millisecond budgets (< 1ms). Scripts exceeding 5ms trigger Valkey slowlog alerts and degrade cluster throughput.
-  - **Complexity Limit:** Complexity must not exceed O(1) or O(log N).
-- **Banned in Lua:**
-  - Unbounded loops, large collection iterations, or wildcard key scans (`KEYS *` / `SCAN`). Mechanically enforced across all Go files by AST linter (`internal/architecture/valkey_lint_test.go`).
-  - Heavy JSON serialization/deserialization inside Lua when simple strings, hashes, or flags suffice.
-  - Time-consuming or non-deterministic operations (cryptographic hashing, blocking calls).
-- **Mandatory Cluster Hash Tagging:**
-  - All multi-key operations touched by a Lua script MUST enclose their dynamic co-locating entity identifier in curly braces `{...}` (e.g. `party2:party:{lobby:<id>}:state` and `party2:party:{lobby:<id>}:ready:<char_id>`).
-  - Cross-slot multi-key scripts are strictly prohibited to ensure forward-compatibility with Valkey Cluster sharding.
-- **In-Memory Fallback Parity:**
-  - Any repository or service utilizing Lua scripts MUST implement 100% equivalent atomic validation and state mutation in its Go in-memory fallback store (`internal/valkey/memory.go` or module-specific memory stores).
-  - In-memory test mocks MUST replicate identical error codes (e.g. `ERR_PARTY_NOT_FOUND`, `ERR_PARTY_FULL`) and conditional invariants to guarantee zero mock divergence.
-- **Script Execution Lifecycle:**
-  - Scripts MUST be preloaded using `valkey.NewLuaScript` (leveraging `EVALSHA` with automatic `SCRIPT LOAD` on `NOSCRIPT`), rather than transmitting the full Lua source code on every invocation via raw `EVAL`.
+### 3.5 Valkey Lua Scripting Standards & Physical Organization
+See [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md) §5.5–5.6 for details and performance benchmarks.
+- **When to Use**: ONLY for atomic conditional state transitions or CAS operations unachievable via native commands (`INCR`, `SET NX`). NEVER use for single-key updates or when native commands suffice.
+- **Budgets & Complexity**: Execution time MUST be < 1ms; complexity MUST NOT exceed O(1) or O(log N).
+- **BANNED in Lua**: Unbounded loops, large iterations, wildcard key scans (`KEYS *`), JSON parsing inside Lua, blocking calls. Enforced by `internal/architecture/valkey_lint_test.go`.
+- **Mandatory Hash Tagging**: Multi-key operations MUST use `{...}` hash tags (e.g. `{char:<id>}`). Cross-slot multi-key scripts are BANNED.
+- **In-Memory Parity**: Services MUST implement 100% equivalent atomic logic and error codes in their Go in-memory fallback (`internal/valkey/memory.go`).
+- **Physical Organization (`//go:embed`)**: Scripts MUST reside in `<pkg>/lua/*.lua` files and be embedded via `//go:embed`. Raw multiline string script constants in Go source files are BANNED. Preload with `valkey.NewLuaScript` (`EVALSHA`).
 
 ### 3.6 Collection Data Type Selection & Ephemeral Element Expiration (Set vs ZSet vs Hash)
 When designing multi-element collection keys in Valkey Master, agents and developers MUST evaluate the lifecycle of child elements according to the following rules:
@@ -148,13 +119,6 @@ When designing multi-element collection keys in Valkey Master, agents and develo
   - **Lazy Purging**: Read/write paths (`Save`, `Find`, `Revoke`) MUST purge expired elements via `ZREMRANGEBYSCORE key -inf <now.Unix()>`.
   - **No Background Daemons**: Do NOT implement background ticker goroutines to poll and purge expired elements from Valkey; lazy purging at query/write time is O(log(N) + M) and eliminates thread lifecycle overhead.
   - **Zero-Downtime Upgrade (`WRONGTYPE`)**: When migrating from legacy Set keys, repository logic MUST catch `WRONGTYPE` errors on `ZADD` or `ZRANGE` and gracefully upgrade or fallback to avoid downtime or manual key purges.
-
-### 3.7 Lua Script Physical Organization (`//go:embed`)
-Valkey Lua scripts MUST NOT be defined as raw multiline string constants inside Go source files. They MUST reside in dedicated external files and be embedded at compile time:
-- **Dedicated Subdirectory**: Store scripts under a `lua/` subdirectory within the owning package (e.g., `internal/party/lua/add_member.lua`, `internal/boss/lua/boss_damage.lua`).
-- **Compile-Time Embedding**: Embed script sources into string variables using Go standard `//go:embed` directives (e.g., `//go:embed lua/add_member.lua\nvar addMemberLuaScript string`).
-- **Zero Runtime File I/O**: `//go:embed` compiles the Lua source directly into the static binary, requiring no filesystem access or dynamic asset packaging at runtime.
-- **Tooling and Readability**: Dedicated `.lua` files enable editor syntax highlighting, external linting/formatting, and clean PR diffs without Go string escaping overhead.
 
 ## 4. Sub-Resource Repository SQL Scoping and Ownership Authorization
 - **Strict SQL Scoping:** When modifying, finalizing, or deleting sub-resources belonging to a player or character (e.g., `challenge_sessions`, `lottery_tickets`, `auction_listings`, `character_challenge_records`, `character_boss_records`, `dungeon_expeditions`, `letters`, `companion_phrases`), SQL queries MUST include ownership predicates in the `WHERE` clause:

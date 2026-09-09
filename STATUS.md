@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #512 — [Chore] OpenAPI: Enrich exchange-job / future-memories / recall-future endpoint schemas
+Last updated: Issue #515 — [Chore] Agents: Clarify rule-vs-docs boundary in AGENTS.md and trim all rule files
 
 ## Current phase
 
@@ -15,8 +15,9 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ## Current Component State (What is True Now)
 
-### Architecture & Repository Intelligence (Guidance Layer - PoC)
-- **Guidance Layer (.arch/)**: シンボルアンカー（`path#Symbol`）ベースのモジュール詳細定義（`.arch/modules/*.json`）、共有テーブル逆引きインデックス（`.arch/shared_tables/*.json`、`characters`, `inventory_items`, `bank_accounts`, `guilds`）、Mermaid全体トポロジー図（`docs/architecture/guidance-layer.md`）。外部依存不要のGo + JSON + Markdown構成。
+### Architecture & Repository Intelligence (Guidance Layer)
+- **Agent Operating Rules & Boundary Criteria (`AGENTS.md`, `.agents/rules/`)**: `AGENTS.md` にルール（処方的制約 MUST/NEVER/BANNED）とアーキテクチャドキュメント（設計根拠・歴史的経緯）の記載境界基準を明文化。各 rule ファイル（`03-architecture.md`, `04-domain-modeling.md`, `05-database-and-caching.md`, `07-guidance-layer.md`）の解説・重複記述を `docs/architecture/` へのポインタへ圧縮しトークン消費を抑制（計554行）。
+- **Guidance Layer (.arch/, `.agents/rules/07-guidance-layer.md`)**: シンボルアンカー（`path#Symbol`）ベースのモジュール詳細定義（`.arch/modules/*.json`）、共有テーブル逆引きインデックス（`.arch/shared_tables/*.json`、`characters`, `inventory_items`, `bank_accounts`, `guilds`）、Mermaid全体トポロジー図（`docs/architecture/guidance-layer.md`）。外部依存不要のGo + JSON + Markdown構成。
 - **Module Selection Criteria & Target Tiers**: 4つの選定基準（C1: トランザクション深度, C2: 行ロック階層, C3: エスクロー/共有状態, C4: 非同期Worker）に基づくトリアージ。Tier 1（高リスク8機能: `tavern`, `delivery`, `bank`, `auction`, `guild`, `shop`, `blacksmith`, `adventure`）、Tier 2（オンデマンド）、Tier 3（除外）の運用スコープを確立。
 - **Automated Mechanical Verification**: Go AST シンボルリント（`internal/architecture/arch_test.go`）による高速静的シンボル実在性チェック、`RunInTx` 呼び出し実在検証、本番ファイル行数リミット（生産コード ≤ 500行、`cmd/*/main.go` ≤ 150行）のラチェット方式自動ガード（`internal/architecture/file_size_lint_test.go`）、インターフェース直接メソッド数リミット（ドメインインターフェース ≤ 10直接メソッド）のラチェット方式自動ガード（`internal/architecture/interface_size_lint_test.go`）、および孤立メソッド・未使用定数・未使用DTO構造体フィールドの機械的デッドコード検知（`internal/architecture/deadcode_lint_test.go`, `internal/architecture/unused_definitions_lint_test.go`）（`make check` / `make arch-lint` 統合）。`internal/tavern/tavern.go`（620行→210行）および `internal/boss/boss.go`（633行→228行）の分割リファクタリングにより500行制限をクリアし `whitelistedLegacyFileLimits` は13から11ファイルへラチェットダウン。また孤立メソッド監査（Issue #428）およびゼロホワイトリストラチェット化（Issue #438）によりデッドコード孤立メソッドは完全ゼロを恒久保証。さらに Issue #439 により ISP インターフェースサイズ制限を導入し、パイロットとして `contest.ContestRepository`（28メソッド）を5つの責務別サブインターフェース（Photo/Round/Entry/Vote/Legend）へ分割・埋め込み合成（Composite Interface）へリファクタリング完了（`whitelistedLegacyInterfaceLimits` 残余5件）。
 - **Continuous Performance Verification & Benchmark Framework (`docs/development/benchmarking.md`)**: クリティカルパス（AST静的解析リント、戦闘シミュレーション、Valkeyセッション操作）を網羅する `Benchmark*` スイート、標準実行スクリプト（`scripts/benchmark.sh`）、`Makefile` ターゲット（`make bench`）、およびベースライン比較・リグレッション自動検知CLI（`scripts/compare_benchmarks.go`）。
