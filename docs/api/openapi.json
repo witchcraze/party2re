@@ -813,6 +813,33 @@
         ],
         "type": "object"
       },
+      "ChangeJobRequest": {
+        "properties": {
+          "job_id": {
+            "description": "ID of the target job class to switch to",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "ChangeJobResponse": {
+        "properties": {
+          "character": {
+            "$ref": "#/components/schemas/CharacterResponse"
+          },
+          "job": {
+            "$ref": "#/components/schemas/CharacterJob"
+          }
+        },
+        "required": [
+          "character",
+          "job"
+        ],
+        "type": "object"
+      },
       "Character": {
         "properties": {
           "created_at": {
@@ -869,6 +896,108 @@
         ],
         "type": "object"
       },
+      "CharacterJob": {
+        "properties": {
+          "all_jobs_mastered": {
+            "type": "boolean"
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "current_job_id": {
+            "type": "string"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterJobChange"
+            },
+            "type": "array"
+          },
+          "mastered_job_sp": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "mastered_jobs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "character_id",
+          "current_job_id",
+          "history",
+          "mastered_jobs",
+          "mastered_job_sp",
+          "all_jobs_mastered"
+        ],
+        "type": "object"
+      },
+      "CharacterJobChange": {
+        "properties": {
+          "from_job_id": {
+            "type": "string"
+          },
+          "to_job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_job_id",
+          "to_job_id"
+        ],
+        "type": "object"
+      },
+      "CharacterResponse": {
+        "properties": {
+          "experience": {
+            "type": "integer"
+          },
+          "gender": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "money": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "player_id": {
+            "type": "string"
+          },
+          "sp": {
+            "type": "integer"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/CharacterStatsResponse"
+          }
+        },
+        "required": [
+          "id",
+          "player_id",
+          "name",
+          "job_id",
+          "gender",
+          "level",
+          "experience",
+          "money",
+          "sp",
+          "stats"
+        ],
+        "type": "object"
+      },
       "CharacterStats": {
         "properties": {
           "agility": {
@@ -889,6 +1018,41 @@
           "agility",
           "intelligence",
           "luck"
+        ],
+        "type": "object"
+      },
+      "CharacterStatsResponse": {
+        "properties": {
+          "agility": {
+            "type": "integer"
+          },
+          "attack": {
+            "type": "integer"
+          },
+          "defense": {
+            "type": "integer"
+          },
+          "hp": {
+            "type": "integer"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "max_mp": {
+            "type": "integer"
+          },
+          "mp": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_hp",
+          "max_mp",
+          "hp",
+          "mp",
+          "attack",
+          "defense",
+          "agility"
         ],
         "type": "object"
       },
@@ -1021,6 +1185,23 @@
         ],
         "type": "object"
       },
+      "ExchangeJobRequest": {
+        "properties": {
+          "job_id": {
+            "description": "ID of the target job class to switch to",
+            "type": "string"
+          },
+          "old_job_id": {
+            "description": "ID of the previous job class to record or swap",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "old_job_id"
+        ],
+        "type": "object"
+      },
       "FleaMarketListing": {
         "properties": {
           "cancelled_at": {
@@ -1079,6 +1260,70 @@
           "total_price",
           "comment",
           "status",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "FutureMemory": {
+        "properties": {
+          "agility": {
+            "type": "integer"
+          },
+          "attack": {
+            "type": "integer"
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "defense": {
+            "type": "integer"
+          },
+          "experience": {
+            "type": "integer"
+          },
+          "gender": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "max_mp": {
+            "type": "integer"
+          },
+          "old_job_id": {
+            "type": "string"
+          },
+          "over_level": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "character_id",
+          "job_id",
+          "old_job_id",
+          "level",
+          "experience",
+          "max_hp",
+          "max_mp",
+          "attack",
+          "defense",
+          "agility",
+          "gender",
+          "over_level",
           "created_at"
         ],
         "type": "object"
@@ -1923,6 +2168,18 @@
         "required": [
           "character_id",
           "item_id"
+        ],
+        "type": "object"
+      },
+      "RecallFutureMemoryRequest": {
+        "properties": {
+          "memory_id": {
+            "description": "ID of the saved future memory snapshot to restore",
+            "type": "string"
+          }
+        },
+        "required": [
+          "memory_id"
         ],
         "type": "object"
       },
@@ -6050,15 +6307,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "properties": {
-                  "job_id": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "job_id"
-                ],
-                "type": "object"
+                "$ref": "#/components/schemas/ChangeJobRequest"
               }
             }
           },
@@ -6069,7 +6318,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ChangeJobResponse"
                 }
               }
             },
@@ -6104,6 +6353,16 @@
               }
             },
             "description": "Forbidden - player does not own requested character or lacks permission"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable entity - job requirements not met"
           },
           "500": {
             "content": {
@@ -7848,10 +8107,10 @@
     },
     "/characters/{id}/exchange-job": {
       "post": {
-        "operationId": "postCharactersIdExchangeJob",
+        "operationId": "exchangeCharacterJob",
         "parameters": [
           {
-            "description": "id parameter",
+            "description": "Character ID",
             "in": "path",
             "name": "id",
             "required": true,
@@ -7860,24 +8119,84 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExchangeJobRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
-            "description": "Successful operation"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeJobResponse"
+                }
+              }
+            },
+            "description": "Job exchange result"
           },
           "400": {
-            "description": "Bad request"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request - invalid input or JSON syntax"
           },
           "401": {
-            "description": "Unauthorized"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized - missing or invalid session token"
           },
           "403": {
-            "description": "Forbidden"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - player does not own requested character or lacks permission"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable entity - job requirements not met or item missing"
           },
           "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
             "description": "Internal server error"
           }
         },
-        "summary": "POST /characters/{id}/exchange-job endpoint",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Exchange character job using Job Exchange Ticket (item-168)",
         "tags": [
           "Character"
         ]
@@ -8797,10 +9116,10 @@
     },
     "/characters/{id}/future-memories": {
       "get": {
-        "operationId": "getCharactersIdFutureMemories",
+        "operationId": "listCharacterFutureMemories",
         "parameters": [
           {
-            "description": "id parameter",
+            "description": "Character ID",
             "in": "path",
             "name": "id",
             "required": true,
@@ -8811,31 +9130,74 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful operation"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FutureMemory"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "List of saved future memory snapshots"
           },
           "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
             "description": "Bad request"
           },
           "401": {
-            "description": "Unauthorized"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized - missing or invalid session token"
           },
           "403": {
-            "description": "Forbidden"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - player does not own requested character or lacks permission"
           },
           "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
             "description": "Internal server error"
           }
         },
-        "summary": "GET /characters/{id}/future-memories endpoint",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "List saved future memory snapshots",
         "tags": [
           "Character"
         ]
       },
       "post": {
-        "operationId": "postCharactersIdFutureMemories",
+        "operationId": "saveCharacterFutureMemory",
         "parameters": [
           {
-            "description": "id parameter",
+            "description": "Character ID",
             "in": "path",
             "name": "id",
             "required": true,
@@ -8845,23 +9207,73 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful operation"
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FutureMemory"
+                }
+              }
+            },
+            "description": "Saved future memory snapshot"
           },
           "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
             "description": "Bad request"
           },
           "401": {
-            "description": "Unauthorized"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized - missing or invalid session token"
           },
           "403": {
-            "description": "Forbidden"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - player does not own requested character or lacks permission"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable entity - slot limit reached, item missing, or job unavailable"
           },
           "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
             "description": "Internal server error"
           }
         },
-        "summary": "POST /characters/{id}/future-memories endpoint",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Save character state snapshot using Future Fragment (item-207)",
         "tags": [
           "Character"
         ]
@@ -11804,10 +12216,10 @@
     },
     "/characters/{id}/recall-future": {
       "post": {
-        "operationId": "postCharactersIdRecallFuture",
+        "operationId": "recallCharacterFutureMemory",
         "parameters": [
           {
-            "description": "id parameter",
+            "description": "Character ID",
             "in": "path",
             "name": "id",
             "required": true,
@@ -11816,24 +12228,84 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecallFutureMemoryRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
-            "description": "Successful operation"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeJobResponse"
+                }
+              }
+            },
+            "description": "Restored character state from future memory snapshot"
           },
           "400": {
-            "description": "Bad request"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request - invalid input or missing memory_id"
           },
           "401": {
-            "description": "Unauthorized"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized - missing or invalid session token"
           },
           "403": {
-            "description": "Forbidden"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - player does not own requested character or lacks permission"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable entity - future memory not found or job unavailable"
           },
           "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
             "description": "Internal server error"
           }
         },
-        "summary": "POST /characters/{id}/recall-future endpoint",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Restore character state from a saved future memory snapshot",
         "tags": [
           "Character"
         ]
