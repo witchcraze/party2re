@@ -338,3 +338,27 @@ func TestCharacterTired(t *testing.T) {
 		t.Errorf("expected nilChar.IsExhausted to be false")
 	}
 }
+
+func TestCharacterColor(t *testing.T) {
+	char, err := New("Hero")
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+	if char.Color != DefaultColor {
+		t.Errorf("expected initial color %q, got %q", DefaultColor, char.Color)
+	}
+
+	validColors := []string{"#000000", "#FFFFFF", "#ff007f", "#123abc"}
+	for _, color := range validColors {
+		if err := char.SetColor(color); err != nil {
+			t.Errorf("SetColor(%q) unexpected error: %v", color, err)
+		}
+	}
+
+	invalidColors := []string{"", "red", "#12345", "#1234567", "#gggggg", "123456"}
+	for _, color := range invalidColors {
+		if err := char.SetColor(color); !errors.Is(err, ErrInvalidColor) {
+			t.Errorf("SetColor(%q) expected ErrInvalidColor, got %v", color, err)
+		}
+	}
+}

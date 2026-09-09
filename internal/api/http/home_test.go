@@ -19,7 +19,13 @@ import (
 
 type mockHomeService struct {
 	getHomeViewFn           func(ctx context.Context, homeCharacterID, visitorCharacterID string) (home.HomeView, error)
-	updateHomeFn            func(ctx context.Context, characterID, theme, motto, companionName string) (home.CharacterHome, error)
+	updateHomeFn            func(ctx context.Context, characterID, companionName string) (home.CharacterHome, error)
+	buildHouseFn            func(ctx context.Context, characterID, townID, houseStyle string) (*home.HomeCheckResult, error)
+	checkHouseFn            func(ctx context.Context, targetNameOrID string) (*home.HomeCheckResult, error)
+	listTownHousesFn        func(ctx context.Context, townID string) ([]home.HomeCheckResult, error)
+	setCharacterColorFn     func(ctx context.Context, characterID, color string) error
+	listHomeItemsFn         func(ctx context.Context, characterID string) ([]home.HomeUsableItem, error)
+	useHomeItemFn           func(ctx context.Context, characterID, instanceID, source string) (*home.UseHomeItemResult, error)
 	sendLetterFn            func(ctx context.Context, senderID, recipientID, content, color string) (home.Letter, error)
 	readLetterFn            func(ctx context.Context, letterID, recipientID string) error
 	listInboxFn             func(ctx context.Context, recipientID string, limit, offset int) (home.LetterListResult, error)
@@ -50,24 +56,63 @@ func (m *mockHomeService) GetHomeView(ctx context.Context, homeCharacterID, visi
 		Owner: corecharacter.Character{ID: homeCharacterID, Name: "Hero"},
 		Home: home.CharacterHome{
 			CharacterID:   homeCharacterID,
-			Theme:         "#ffffff",
 			CompanionName: "ペット",
 		},
 		IsOwner: (homeCharacterID == visitorCharacterID),
 	}, nil
 }
 
-func (m *mockHomeService) UpdateHome(ctx context.Context, characterID, theme, motto, companionName string) (home.CharacterHome, error) {
+func (m *mockHomeService) UpdateHome(ctx context.Context, characterID, companionName string) (home.CharacterHome, error) {
 	if m.updateHomeFn != nil {
-		return m.updateHomeFn(ctx, characterID, theme, motto, companionName)
+		return m.updateHomeFn(ctx, characterID, companionName)
 	}
 	return home.CharacterHome{
 		CharacterID:   characterID,
-		Theme:         theme,
-		Motto:         motto,
 		CompanionName: companionName,
 		UpdatedAt:     time.Now().UTC(),
 	}, nil
+}
+
+func (m *mockHomeService) BuildHouse(ctx context.Context, characterID, townID, houseStyle string) (*home.HomeCheckResult, error) {
+	if m.buildHouseFn != nil {
+		return m.buildHouseFn(ctx, characterID, townID, houseStyle)
+	}
+	return &home.HomeCheckResult{CharacterID: characterID, TownID: townID, HouseStyle: houseStyle}, nil
+}
+
+func (m *mockHomeService) CheckHouse(ctx context.Context, targetNameOrID string) (*home.HomeCheckResult, error) {
+	if m.checkHouseFn != nil {
+		return m.checkHouseFn(ctx, targetNameOrID)
+	}
+	return &home.HomeCheckResult{CharacterID: "char-1", OwnerName: targetNameOrID, TownID: "town1"}, nil
+}
+
+func (m *mockHomeService) ListTownHouses(ctx context.Context, townID string) ([]home.HomeCheckResult, error) {
+	if m.listTownHousesFn != nil {
+		return m.listTownHousesFn(ctx, townID)
+	}
+	return []home.HomeCheckResult{{CharacterID: "char-1", TownID: townID}}, nil
+}
+
+func (m *mockHomeService) SetCharacterColor(ctx context.Context, characterID, color string) error {
+	if m.setCharacterColorFn != nil {
+		return m.setCharacterColorFn(ctx, characterID, color)
+	}
+	return nil
+}
+
+func (m *mockHomeService) ListHomeItems(ctx context.Context, characterID string) ([]home.HomeUsableItem, error) {
+	if m.listHomeItemsFn != nil {
+		return m.listHomeItemsFn(ctx, characterID)
+	}
+	return []home.HomeUsableItem{{InstanceID: "inst-1", Name: "薬草"}}, nil
+}
+
+func (m *mockHomeService) UseHomeItem(ctx context.Context, characterID, instanceID, source string) (*home.UseHomeItemResult, error) {
+	if m.useHomeItemFn != nil {
+		return m.useHomeItemFn(ctx, characterID, instanceID, source)
+	}
+	return &home.UseHomeItemResult{Action: "consumed", Message: "薬草を使いました", Consumed: true}, nil
 }
 
 func (m *mockHomeService) SendLetter(ctx context.Context, senderID, recipientID, content, color string) (home.Letter, error) {
@@ -263,9 +308,8 @@ func TestHomeEndpoints(t *testing.T) {
 
 	t.Run("POST /homes/{id}/settings - success", func(t *testing.T) {
 		body, _ := json.Marshal(map[string]string{
-			"theme":          "#123456",
-			"motto":          "Welcome to my palace",
 			"companion_name": "スライム",
+			"color":          "#123456",
 		})
 		req := httptest.NewRequest(http.MethodPost, "/homes/char-1/settings", bytes.NewReader(body))
 		req.Header.Set("Authorization", "Bearer valid-session")
@@ -280,7 +324,7 @@ func TestHomeEndpoints(t *testing.T) {
 
 	t.Run("POST /homes/{id}/settings - forbidden other player", func(t *testing.T) {
 		body, _ := json.Marshal(map[string]string{
-			"theme": "#123456",
+			"companion_name": "スライム",
 		})
 		req := httptest.NewRequest(http.MethodPost, "/homes/char-2/settings", bytes.NewReader(body))
 		req.Header.Set("Authorization", "Bearer valid-session")

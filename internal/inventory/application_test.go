@@ -41,3 +41,22 @@ func TestServiceAddAndConsumePersistsInventory(t *testing.T) {
 		t.Fatalf("inventory = %#v, saved = %#v", got, repository.value)
 	}
 }
+
+func TestServiceFindByCharacterID(t *testing.T) {
+	value, _ := coreinventory.New("character-1")
+	instance, _ := item.NewInstance("potion", 2)
+	_ = value.Add(instance)
+	repository := &repositoryStub{value: value}
+	service, err := NewService(repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := service.FindByCharacterID(context.Background(), "character-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Quantity("potion") != 2 {
+		t.Fatalf("expected 2 potions, got %d", got.Quantity("potion"))
+	}
+}

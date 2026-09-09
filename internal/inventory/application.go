@@ -51,3 +51,7 @@ func (s *Service) Consume(ctx context.Context, characterID, instanceID string, q
 	}
 	return inventory, nil
 }
+
+func (s *Service) FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	return s.repository.FindByCharacterID(ctx, characterID)
+}

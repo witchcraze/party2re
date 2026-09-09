@@ -107,7 +107,7 @@ The table below catalogs all production key patterns currently active in the cod
 | `party2:boss:{boss:<boss_id>}:contributors` | Valkey Master | `Hash` | 2 hours (`7200s`), sliding | Field: `character_id`, Value: damage dealt (`int`) | `internal/boss` | `InitializeRaid` (DEL), `boss_damage.lua` (HINCRBY), `GetContributors` (HGETALL). |
 | `party2:boss:{boss:<boss_id>}:killer` | Valkey Master | `String` | 2 hours (`7200s`), sliding | Killer Character ID (`string`) | `internal/boss` | `InitializeRaid` (DEL), `boss_damage.lua` (SET on defeat). |
 | `party2:boss:{boss:<boss_id>}:run_id` | Valkey Master | `String` | 2 hours (`7200s`), sliding | Unique Run UUID (`string`) | `internal/boss` | `InitializeRaid` (SET EX), idempotency check on settlement. |
-| `party2:timer:<category>:<id>` | Valkey Master | `String` | Dynamic (e.g. 60s–180s for sleep) | Flag (`"1"`) | `internal/core/timer` | `SetLock` (SET EX), `IsLocked` (EXISTS), `GetRemainingLock` (TTL), `ReleaseLock` (DEL). Ephemeral action cooldown and sleep locks. |
+| `party2:timer:<category>:<id>` | Valkey Master | `String` | Dynamic (e.g. 60s–180s for sleep, 5d–20d for house estate lease) | Flag (`"1"`) | `internal/core/timer` | `SetLock` (SET EX), `IsLocked` (EXISTS), `GetRemainingLock` (TTL), `ReleaseLock` (DEL). Ephemeral action cooldown, sleep locks, and house estate lease cache. |
 | `party2:daily:<action>:<id>` | Valkey Master | `String` | Until next midnight JST (`EXAT` / seconds) | Date string or flag (`"1"`) | `internal/core/timer` | `ConsumeDailyQuota` (SET NX EX), `HasUsedDailyQuota` (EXISTS), `ResetDailyQuota` (DEL). Daily action and prayer quotas. |
 
 

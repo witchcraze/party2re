@@ -22,7 +22,6 @@ var whitelistedLegacyFileLimits = map[string]int{
 	"internal/party/application.go":            706,
 	"internal/gemstore/gemstore.go":            681,
 	"internal/contest/service.go":              645,
-	"internal/database/home_repository.go":     579,
 	"internal/api/http/combat.go":              576,
 	"internal/database/delivery_repository.go": 541,
 	"internal/monster/monster.go":              504,

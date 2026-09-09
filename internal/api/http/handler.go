@@ -374,6 +374,12 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/home/sleep", h.handleHomeSleep)
 	mux.HandleFunc("GET /characters/{id}/home/sleep", h.handleGetHomeSleep)
 	mux.HandleFunc("POST /characters/{id}/home/wake", h.handleHomeWake)
+	mux.HandleFunc("POST /towns/{town_id}/houses", h.handleBuildHouse)
+	mux.HandleFunc("GET /towns/{town_id}/houses", h.handleListTownHouses)
+	mux.HandleFunc("GET /houses/check", h.handleCheckHouse)
+	mux.HandleFunc("POST /characters/{id}/color", h.handleSetCharacterColor)
+	mux.HandleFunc("GET /characters/{id}/home/items", h.handleListHomeItems)
+	mux.HandleFunc("POST /characters/{id}/home/items/use", h.handleUseHomeItem)
 
 	mux.HandleFunc("POST /letters", h.handleSendLetter)
 	mux.HandleFunc("GET /letters/inbox", h.handleListInbox)

@@ -33,7 +33,7 @@ func wireApp(
 	if err != nil {
 		return nil, err
 	}
-	soc, err := newSocServices(db, core, valkeyClient, logger)
+	soc, err := newSocServices(db, core, econ, valkeyClient, logger)
 	if err != nil {
 		return nil, err
 	}

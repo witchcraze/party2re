@@ -9,7 +9,7 @@ import (
 )
 
 // characterColumns lists all standard columns of the characters table in canonical order.
-const characterColumns = "id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, job_level, old_job_id, old_sp, job_memory_job_id, job_memory_sp, job_memory_old_job_id, job_memory_old_sp, small_medals, help_count, orb, tired, over_level, over_depot, over_monster, over_future, over_flea, over_store"
+const characterColumns = "id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, job_level, old_job_id, old_sp, job_memory_job_id, job_memory_sp, job_memory_old_job_id, job_memory_old_sp, small_medals, help_count, orb, tired, over_level, over_depot, over_monster, over_future, over_flea, over_store, color"
 
 // rowScanner abstracts *sql.Row, *sql.Rows, or any scanner implementation.
 type rowScanner interface {
@@ -55,12 +55,16 @@ func scanCharacterRow(scanner rowScanner) (corecharacter.Character, error) {
 		&value.OverFuture,
 		&value.OverFlea,
 		&value.OverStore,
+		&value.Color,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return corecharacter.Character{}, corecharacter.ErrNotFound
 	}
 	if err != nil {
 		return corecharacter.Character{}, err
+	}
+	if value.Color == "" {
+		value.Color = corecharacter.DefaultColor
 	}
 	if memoryJobID != "" {
 		value.JobMemory = &corecharacter.JobMemory{
@@ -94,18 +98,22 @@ func executeCharacterUpdate(ctx context.Context, executor sqlContextExecutor, va
 		memoryJobID, memorySP = value.JobMemory.JobID, value.JobMemory.SP
 		memoryOldJobID, memoryOldSP = value.JobMemory.OldJobID, value.JobMemory.OldSP
 	}
+	color := value.Color
+	if color == "" {
+		color = corecharacter.DefaultColor
+	}
 	result, err := executor.ExecContext(ctx, `
 		UPDATE characters
 		SET name = ?, job_id = ?, gender = ?, max_hp = ?, max_mp = ?, hp = ?, mp = ?,
 			attack = ?, defense = ?, agility = ?, money = ?, level = ?, experience = ?, sp = ?, job_level = ?, old_job_id = ?, old_sp = ?,
 			job_memory_job_id = ?, job_memory_sp = ?, job_memory_old_job_id = ?, job_memory_old_sp = ?, small_medals = ?, help_count = ?,
-			orb = ?, tired = ?, over_level = ?, over_depot = ?, over_monster = ?, over_future = ?, over_flea = ?, over_store = ?
+			orb = ?, tired = ?, over_level = ?, over_depot = ?, over_monster = ?, over_future = ?, over_flea = ?, over_store = ?, color = ?
 		WHERE id = ?
 	`, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP, value.Stats.HP,
 		value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility, value.Money,
 		value.Level, value.Experience, value.SP, value.JobLevel, value.OldJobID, value.OldSP,
 		memoryJobID, memorySP, memoryOldJobID, memoryOldSP, value.SmallMedals, value.HelpCount,
-		value.Orb, value.Tired, value.OverLevel, value.OverDepot, value.OverMonster, value.OverFuture, value.OverFlea, value.OverStore, value.ID)
+		value.Orb, value.Tired, value.OverLevel, value.OverDepot, value.OverMonster, value.OverFuture, value.OverFlea, value.OverStore, color, value.ID)
 	if err != nil {
 		return 0, err
 	}
