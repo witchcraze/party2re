@@ -78,4 +78,16 @@ func TestChapelRepository_Integration(t *testing.T) {
 	if b.ActiveBlessing != chapel.BlessingCasino {
 		t.Errorf("active blessing = %v, want CASINO", b.ActiveBlessing)
 	}
+
+	// 7. Clear all blessings
+	if err := repo.ClearAllBlessings(ctx); err != nil {
+		t.Fatalf("ClearAllBlessings failed: %v", err)
+	}
+	b, err = repo.GetBlessing(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetBlessing after ClearAllBlessings failed: %v", err)
+	}
+	if b.ActiveBlessing != chapel.BlessingNone {
+		t.Errorf("expected NONE after ClearAllBlessings, got %v", b.ActiveBlessing)
+	}
 }

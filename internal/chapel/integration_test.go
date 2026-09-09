@@ -83,4 +83,16 @@ func TestChapelServiceDatabaseIntegration(t *testing.T) {
 	if b.ActiveBlessing != chapel.BlessingMonster {
 		t.Errorf("got blessing %+v, want MONSTER", b.ActiveBlessing)
 	}
+
+	// 7. Clear all blessings
+	if err := svc.ClearAllBlessings(ctx); err != nil {
+		t.Fatalf("ClearAllBlessings failed: %v", err)
+	}
+	b, err = svc.GetBlessing(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetBlessing after ClearAllBlessings failed: %v", err)
+	}
+	if b.ActiveBlessing != chapel.BlessingNone {
+		t.Errorf("expected BlessingNone after ClearAllBlessings, got %v", b.ActiveBlessing)
+	}
 }

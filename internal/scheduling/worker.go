@@ -60,6 +60,11 @@ func (w *Worker) processActions(ctx context.Context) {
 	}
 }
 
+// ProcessAction executes the processing lifecycle for a single scheduled action.
+func (w *Worker) ProcessAction(ctx context.Context, action core_scheduling.ScheduledAction) {
+	w.processAction(ctx, action)
+}
+
 func (w *Worker) processAction(ctx context.Context, action core_scheduling.ScheduledAction) {
 	// Defense-in-depth: validate before acquiring any lock or dispatching.
 	// FetchDue already validates, but actions may arrive from other paths.

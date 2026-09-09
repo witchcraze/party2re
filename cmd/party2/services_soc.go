@@ -8,6 +8,7 @@ import (
 	"github.com/witchcraze/party2re/internal/activity"
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/api/http"
+	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/guild"
@@ -112,7 +113,7 @@ func newSocServices(
 	}, nil
 }
 
-func (s *socServices) registerWorkerHandlers(activityService *activity.Service, advService *adventure.Service) {
+func (s *socServices) registerWorkerHandlers(activityService *activity.Service, advService *adventure.Service, chapelService *chapel.Service) {
 	if s.worker != nil {
 		if activityService != nil {
 			s.worker.RegisterHandler(activity.ActivityActionTypeTrainingComplete, activity.NewTrainingHandler(activityService))
@@ -121,5 +122,8 @@ func (s *socServices) registerWorkerHandlers(activityService *activity.Service, 
 			s.worker.RegisterHandler(adventure.AdventureActionTypeComplete, adventure.NewAdventureCompletionHandler(advService))
 		}
 		s.worker.RegisterHandler(ranking.RankingActionTypeRefresh, ranking.NewRefreshHandler(s.ranking))
+		if chapelService != nil {
+			s.worker.RegisterHandler(chapel.ActionTypeChapelReset, chapel.NewResetHandler(chapelService, chapel.WithScheduler(s.sched)))
+		}
 	}
 }

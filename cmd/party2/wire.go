@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	valkeygo "github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/api/http"
+	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/scheduling"
@@ -126,7 +128,18 @@ func wireHooks(
 		soc.home.SetBlessingCleaner(misc.chapel)
 	}
 
-	soc.registerWorkerHandlers(misc.activity, cmbt.adv)
+	soc.registerWorkerHandlers(misc.activity, cmbt.adv, misc.chapel)
+
+	if soc.sched != nil && misc.chapel != nil {
+		wireChapelDailyReset(soc.sched)
+	}
+}
+
+// wireChapelDailyReset enqueues the daily JST midnight reset action if not already scheduled.
+func wireChapelDailyReset(sched *scheduling.Service) {
+	ctx := context.Background()
+	next := chapel.NextMidnightJST(time.Now())
+	_ = sched.ScheduleWithID(ctx, chapel.DailyResetActionID(next), chapel.ActionTypeChapelReset, "system", nil, next)
 }
 
 func newHTTPHandler(

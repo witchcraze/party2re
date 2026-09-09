@@ -22,6 +22,14 @@ func NewService(repo core_scheduling.ScheduledActionRepository) *Service {
 // Schedule adds a new action to be executed at a specific time.
 func (s *Service) Schedule(ctx context.Context, actionType, actorID string, params map[string]string, executeAt time.Time) (string, error) {
 	id := uuid.New().String()
+	if err := s.ScheduleWithID(ctx, id, actionType, actorID, params, executeAt); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+// ScheduleWithID adds an action with an explicit ID to be executed at a specific time.
+func (s *Service) ScheduleWithID(ctx context.Context, id, actionType, actorID string, params map[string]string, executeAt time.Time) error {
 	action := core_scheduling.ScheduledAction{
 		ID:          id,
 		ActionType:  actionType,
@@ -32,12 +40,7 @@ func (s *Service) Schedule(ctx context.Context, actionType, actorID string, para
 		State:       core_scheduling.StatePending,
 	}
 
-	err := s.repo.Schedule(ctx, action)
-	if err != nil {
-		return "", err
-	}
-
-	return id, nil
+	return s.repo.Schedule(ctx, action)
 }
 
 // CancelByActorID cancels and removes all scheduled actions for the specified actor.

@@ -41,6 +41,35 @@ func TestService_Schedule(t *testing.T) {
 	}
 }
 
+func TestService_ScheduleWithID(t *testing.T) {
+	repo := newMockRepository()
+	service := NewService(repo)
+
+	executeAt := time.Now().Add(2 * time.Hour)
+	params := map[string]string{"foo": "bar"}
+	customID := "custom-scheduled-id-123"
+
+	err := service.ScheduleWithID(context.Background(), customID, "custom_action", "actor_system", params, executeAt)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if len(repo.actions) != 1 {
+		t.Fatalf("expected 1 action, got %d", len(repo.actions))
+	}
+
+	saved := repo.actions[0]
+	if saved.ID != customID {
+		t.Errorf("expected ID %s, got %s", customID, saved.ID)
+	}
+	if saved.ActionType != "custom_action" {
+		t.Errorf("expected ActionType custom_action, got %s", saved.ActionType)
+	}
+	if saved.ActorID != "actor_system" {
+		t.Errorf("expected ActorID actor_system, got %s", saved.ActorID)
+	}
+}
+
 func TestService_CancelByActorID(t *testing.T) {
 	repo := newMockRepository()
 	service := NewService(repo)
