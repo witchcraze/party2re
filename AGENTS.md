@@ -13,7 +13,7 @@ To prevent context window flooding, the monolithic rules previously stored here 
 - **`.agents/rules/04-domain-modeling.md`**: Guidelines for modeling game logic, combat, progression, and scheduled actions.
 - **`.agents/rules/05-database-and-caching.md`**: Guidelines for database transaction boundaries (Unit of Work), pessimistic locking, and appropriate usage of Valkey (Redis).
 - **`.agents/rules/06-security.md`**: Guidelines for security reviews, authorization, input validation, and preventing common vulnerabilities.
-- **`.agents/rules/99-poc-repository-intelligence.md`**: *(PoC / Experimental)* Guidelines for managing the Guidance Layer (.arch/*.json), agent navigation, and autonomous improvement.
+- **`.agents/rules/07-guidance-layer.md`**: Guidelines for managing the Guidance Layer (.arch/*.json), agent navigation, and automated verification.
 
 ## Document hierarchy
 
@@ -43,6 +43,17 @@ AGENTS.md (and .agents/rules/)
 ```
 
 Do not use `STATUS.md` or `ROADMAP.md` as substitutes for permanent architecture/design documentation.
+
+### Rules vs. Architecture Docs — Placement Criteria
+
+`.agents/rules/` MUST contain **prescriptive constraints only**:
+- Prescriptive rules directly governing agent behavior via MUST / NEVER / BANNED
+- Decision criteria and checklists required for judgment (e.g. decision trees)
+
+Place the following in `docs/architecture/`, NOT in `.agents/rules/`:
+- Design rationale and explanations of "why" constraints exist
+- Historical migration context and decision records
+- Detailed implementation patterns already enforced mechanically by linters
 
 ## Historical Context
 

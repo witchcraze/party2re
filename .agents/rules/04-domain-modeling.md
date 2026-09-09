@@ -28,11 +28,9 @@ Party2 contains asynchronous/time-based actions (an action is started and a resu
 
 ## 6. Domain Events & Side-Effect Hooks
 Use domain events or explicit observer hooks (e.g., `VictoryHook`, `SynthesisHook`, `BattleFinished`, `LevelUp`) when they provide meaningful decoupling:
-- **Two-Phase In-Memory Dispatcher (`internal/core/event.Dispatcher`)**: Producers emit domain events (`Event` interface) via `tc.EmitEvent` within transaction boundaries. The dispatcher separates in-tx synchronous execution (`SubscribeSync`, ACID consistency) from post-commit asynchronous execution (`SubscribeAsync`, resilient side effects).
-- **Modular Monolith Decoupling**: Action producers (e.g., adventure, boss, pvp, casino, alchemy, dungeon) define explicit hook signatures or domain event types at their module boundaries rather than importing downstream consumer modules (like `medal`, `ranking`, or `notification`). This prevents circular dependencies and eliminates artificial coupling.
-- **Dependency Inversion Wiring at Composition Root**: Hook and event registrations are wired in `cmd/party2/wire.go` where all domain services are instantiated and composed.
-- **Lock Hierarchy & Transaction Safety**: When observer hooks or sync event handlers mutate secondary entities (such as `character_achievements`), locks must strictly adhere to the global lock acquisition order defined in `.agents/rules/05-database-and-caching.md` (`characters` -> `character_inventories` -> feature-specific secondary records). Secondary records must always be locked *after* characters, never before.
-- **Resilient Execution**: Observer side effects (like achievement milestone tracking or non-critical activity feeds) must execute resiliently and must not abort primary gameplay transactions (e.g., winning an adventure or defeating a boss) if a secondary tracking call encounters a non-fatal error, unless strict atomicity is required by business invariants.
+- **Two-Phase Dispatcher (`internal/core/event.Dispatcher`)**: Producers emit domain events via `tc.EmitEvent`. The dispatcher separates in-tx synchronous execution from post-commit asynchronous execution. See [`docs/architecture/cross-domain-primitives.md`](../../docs/architecture/cross-domain-primitives.md) §5 for dispatcher architecture and lifecycle semantics.
+- **Modular Monolith Decoupling**: Action producers define explicit hook signatures or domain event types at their module boundaries rather than importing downstream consumer modules. Wire registrations in `cmd/party2/wire.go` at the composition root.
+- **Lock Hierarchy & Transaction Safety**: Sync event handlers mutating secondary entities must adhere to the lock order in `.agents/rules/05-database-and-caching.md` (`characters` -> `inventory_items` -> secondary records). Secondary records must always be locked *after* characters, never before.
 - **Direct Calls vs Events**: Do not turn internal intra-module operations into events or hooks; use direct method calls when operations belong to the same bounded context and share immediate transactional invariants.
 
 ## 7. Core Domain Invariant & Helper Enforcement (Go AST Linting)
@@ -44,5 +42,3 @@ Direct struct field mutations across Core domain entities by feature modules are
 - **Equipment & Slots (`Equipment.Slots`)**: Must route through `Equipment.Equip` or `Equipment.Unequip` (ensuring slot compatibility and ownership verification).
 
 These encapsulation boundaries are mechanically enforced across all Go source files outside `internal/core` (and database repository mappings) via Go AST static analysis (`internal/core/core_lint_test.go` and `internal/core/progression/progression_lint_test.go`), running with 0 runtime overhead in 0.1s during `make check`.
-
-
