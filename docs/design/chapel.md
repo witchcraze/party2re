@@ -66,3 +66,16 @@ The fictional donation feature (`POST /characters/{id}/chapel/donate`, `donation
 - Original Party2 has **no donation mechanism** in `chapel.cgi`.
 - `donation_gold_total` and its check constraint were purged via migration `060_chapel_parity.sql`.
 
+---
+
+## Daily Blessing Reset (chapel_clean)
+
+In original Party2 (`party2/lib/home.cgi: &chapel_clean`), active prayers (`$m{wish}` and `$userdir/$id/wish.cgi`) are wiped clean upon daily date change (00:00 JST).
+
+In Party2Re:
+- **Scheduled Worker Integration**: The scheduled worker (`internal/scheduling.Worker`) registers the handler for `ActionType: "chapel_reset"` (`chapel.ActionTypeChapelReset`).
+- **Distributed Daily Execution**: A deterministic scheduled task (`chapel_reset:YYYY-MM-DD`) is enqueued into Valkey pending sorted set (`party2:scheduled:pending`) targeted at 00:00:00 JST (`chapel.NextMidnightJST`).
+- **Reset Mechanism**: When triggered, `chapel.Service.ClearAllBlessings(ctx)` executes `UPDATE character_blessings SET active_blessing = 'NONE', updated_at = ? WHERE active_blessing != 'NONE'`, resetting all characters with active blessings to unblessed state so they can pray again on the new day.
+- **Auto-Rescheduling**: Upon executing the daily reset, the handler automatically schedules the next day's 00:00:00 JST action, ensuring continuous unattended daily cycles.
+- **Home Wakeup Reset**: Sleeping at home (`home.cgi: &neru`, `internal/home`) also invokes `ClearBlessing(ctx, characterID)` upon waking up, in accordance with authentic resting recovery.
+

@@ -39,6 +39,11 @@ func (m *mockChapelRepo) ClearBlessing(_ context.Context, _ string) error {
 	return nil
 }
 
+func (m *mockChapelRepo) ClearAllBlessings(_ context.Context) error {
+	m.blessing.ActiveBlessing = chapel.BlessingNone
+	return nil
+}
+
 func TestComputeRewardModifiers(t *testing.T) {
 	// 1. EXP Blessing with roll < 0.25 -> 1.5x EXP
 	mods := chapel.ComputeRewardModifiers(chapel.BlessingExp, 0.10)
@@ -183,5 +188,32 @@ func TestChapelService(t *testing.T) {
 	}
 	if _, err := svc.SelectBlessing(ctx, "char2", chapel.BlessingNone); !errors.Is(err, chapel.ErrInvalidBlessing) {
 		t.Errorf("expected ErrInvalidBlessing for BlessingNone, got %v", err)
+	}
+}
+
+func TestService_ClearAllBlessings(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockChapelRepo{
+		blessing: chapel.CharacterBlessing{
+			CharacterID:    "char1",
+			ActiveBlessing: chapel.BlessingExp,
+			PrayedAt:       time.Now().UTC(),
+		},
+	}
+	svc, err := chapel.NewService(repo)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	if err := svc.ClearAllBlessings(ctx); err != nil {
+		t.Fatalf("ClearAllBlessings failed: %v", err)
+	}
+
+	b, err := svc.GetBlessing(ctx, "char1")
+	if err != nil {
+		t.Fatalf("GetBlessing failed: %v", err)
+	}
+	if b.ActiveBlessing != chapel.BlessingNone {
+		t.Errorf("expected BlessingNone, got %v", b.ActiveBlessing)
 	}
 }

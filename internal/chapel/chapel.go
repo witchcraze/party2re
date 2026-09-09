@@ -142,6 +142,7 @@ type Repository interface {
 	GetBlessing(ctx context.Context, characterID string) (CharacterBlessing, error)
 	SelectBlessing(ctx context.Context, characterID string, blessing BlessingType) (CharacterBlessing, error)
 	ClearBlessing(ctx context.Context, characterID string) error
+	ClearAllBlessings(ctx context.Context) error
 }
 
 type Service struct {
@@ -236,4 +237,8 @@ func (s *Service) ClearBlessing(ctx context.Context, characterID string) error {
 		return ErrInvalidCharacterID
 	}
 	return s.repo.ClearBlessing(ctx, characterID)
+}
+
+func (s *Service) ClearAllBlessings(ctx context.Context) error {
+	return s.repo.ClearAllBlessings(ctx)
 }

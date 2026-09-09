@@ -86,3 +86,13 @@ func (r *ChapelRepository) ClearBlessing(ctx context.Context, characterID string
 	`, now, characterID)
 	return err
 }
+
+func (r *ChapelRepository) ClearAllBlessings(ctx context.Context) error {
+	now := time.Now().UTC()
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+		UPDATE character_blessings
+		SET active_blessing = 'NONE', updated_at = ?
+		WHERE active_blessing != 'NONE'
+	`, now)
+	return err
+}
