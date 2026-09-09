@@ -37,7 +37,7 @@ The Heaven catalog comprises 18 standard wishes plus 1 conditional level-cap wis
 | `wish_lottery_tickets` | 福引券がほしい | 1000 枚 | None | Lottery Tickets $+ 1,000$ (via `lottery.AddRaffleTickets`) |
 | `wish_guild_rank` | ギルドランクをあげたい | 1000 ポイント | Must belong to a guild | Guild EXP $+ 1,000$ (recalculates guild level) |
 | `wish_guild_gorgeous` | ギルドをゴージャスにしたい | ギルドが… | Must belong to a guild | Guild `bgimg` set to `"god.gif"` |
-| `wish_refresh` / `wish_full_recovery` | 元気いっぱいになりたい | 疲労度 -150 % (HP・MP完全回復) | None | $\text{HP} = \text{MaxHP}, \text{MP} = \text{MaxMP}$ |
+| `wish_refresh` / `wish_full_recovery` | 元気いっぱいになりたい | 疲労度 -150 % (HP・MP完全回復) | None | $\text{Tired} = \text{Tired} - 150, \text{HP} = \text{MaxHP}, \text{MP} = \text{MaxMP}$ |
 | `wish_all_orbs` | 新しい冒険場所に行きたい | 全オーブ | None | Adds all 6 standard orbs (`byrpgs` / `ValidOrbRunes`) |
 | `wish_celestial_dragon` | 天竜人になりたい | 転職 (空竜の民) | `JobID != "job-70" && OldJobID != "job-70"` | Job changed to `"job-70"` (Job reset & base stats applied) |
 | `wish_god_of_new_world` | 新世界の神になりたい | 自分の家が… | None | Avatar set to `"chr/052.gif"`, home `bgimg` set to `"god.gif"` |
@@ -61,6 +61,15 @@ Each Underworld limit break can be upgraded up to 5 tiers (`0/5` to `5/5`):
 | `wish_expand_job_memory` | もっと職業を覚えたい | $\text{OverFuture} < 5$ | $\text{OverFuture} + 1$, Future job memory slot $+1$ |
 | `wish_expand_flea_market` | もっとフリーマーケットで出品したい | $\text{OverFlea} < 5$ | $\text{OverFlea} + 1$, Max active listings $+1$ (Base 5 $\to$ Max 10) |
 | `wish_expand_shop_store` | もっとお店で出品したい | $\text{OverStore} < 5$ | $\text{OverStore} + 1$, Player shop listings $+1$ |
+
+### 3.3 Fatigue Recovery (疲労度回復) Parity
+
+In legacy Party2 (`party2/lib/god.cgi:57`):
+```perl
+['元気いっぱいになりたい', '疲労度 -150 %', sub { $m{tired} -= 150; }]
+```
+- In Party2Re, `wish_refresh` (`wish_full_recovery`) deducts 150 from `Character.Tired` (`char.ReduceTired(150)`), fully matching the legacy behavior where fatigue can drop below 0 to provide a buffer against subsequent combat fatigue.
+- In addition to fatigue reduction, HP and MP are fully restored to their respective maximum values (`MaxHP` and `MaxMP`).
 
 ---
 

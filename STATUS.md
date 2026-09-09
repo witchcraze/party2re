@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #511 — [Chore] Chapel: Wire daily blessing reset (chapel_clean) into Scheduled Worker
+Last updated: Issue #513 — [Spec] God: Confirm wish_refresh vs legacy tired-field mapping
 
 ## Current phase
 
@@ -71,7 +71,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Town Delivery Quests & Player Courier Service** (`internal/delivery`): 町のでりばりー依頼＆プレイヤー間宅配便（NPC配送依頼、最大3件同時受領、報酬アトミック精算、およびプレイヤー間宅配便、手数料50 G、受取待ち・発送履歴（キーセット・カーソル対応）、受取・発送キャンセル/返金、CAS条件付きステータス更新 `WHERE id = ? AND status = 'pending'` による二重処理防止）。`CancelParcel()`（54.5%→87.9%）、`CompleteDelivery()`（71.0%→87.1%）、`ClaimParcel()`（73.2%→85.4%）のエラーパス・アイテム返還・ボーナス報酬受取フローの単体テスト網羅率向上完了。
 - **Flea Market & Player Item Stalls** (`internal/fleamarket`): フリーマーケット＆露店取引（最大5件同時出品、1〜999,999 G固定価格出品、出品時インベントリ消費・キャンセル時安全返却、ID昇順排他ロックによるデッドロック防止、SQL CAS述語 `WHERE id = ? AND status = 'active'` と `RowsAffected() == 1` 検証によるアトミック移転）。
 - **Gem Store, Jewel Synthesis & Appraisal** (`internal/gemstore`): 宝石店・宝珠/天珠販売・特殊合成加工・他プレイヤー譲渡・未鑑定宝珠鑑定（レベル別カタログ `gems.json`、55種以上の上位合成レシピ `recipes.json`、5種未鑑定宝珠の重み付きランダム鑑定プール `orb_appraisals.json`、決定論的行ロック階層によるアトミック整合性）。
-- **Endgame God Wishes & Limit Breaks** (`internal/god`): 天界・裏天界の願い事＆限界突破（原典 `god.cgi` 準拠の全19種天界願い事（ステータス40上昇・SP50・10万G・カジノコイン5万枚・メダル20枚・福引券1000枚・ギルドランクEXP1000・ギルド外観ゴージャス・HP/MP全快・全6オーブ・天竜人転職・新世界の神アバター＆自宅壁紙変更・オルテガ生存NPC・猫ペット・メイド雇用・エッチな本預かり所送致・錬金レシピ預かり所送致・恋人ジョーク拒絶・Lv上限150限界突破/復元）、願い成就後の自宅帰還（`NextLocation: "home"` / `$m{lib} = 'home'`）、裏天界限界突破（倉庫+50・モンスター預入+50・職業記憶+1・フリマ出品+1・店舗出品+1、各最大5段階）。単一ファイル661行から単一責務ファイル群（`models.go`, `catalog.go`, `execution_heaven.go`, `execution_underworld.go`, `god.go`）へ分割リファクタリングを完遂し、ファイル行数500行制限をクリア（`whitelistedLegacyFileLimits` を11から10ファイルへラチェットダウン））。
+- **Endgame God Wishes & Limit Breaks** (`internal/god`): 天界・裏天界の願い事＆限界突破（原典 `god.cgi` 準拠の全19種天界願い事（ステータス40上昇・SP50・10万G・カジノコイン5万枚・メダル20枚・福引券1000枚・ギルドランクEXP1000・ギルド外観ゴージャス・元気いっぱい疲労度-150%（`ReduceTired(150)`）＆HP/MP全快・全6オーブ・天竜人転職・新世界の神アバター＆自宅壁紙変更・オルテガ生存NPC・猫ペット・メイド雇用・エッチな本預かり所送致・錬金レシピ預かり所送致・恋人ジョーク拒絶・Lv上限150限界突破/復元）、願い成就後の自宅帰還（`NextLocation: "home"` / `$m{lib} = 'home'`）、裏天界限界突破（倉庫+50・モンスター預入+50・職業記憶+1・フリマ出品+1・店舗出品+1、各最大5段階）。単一ファイル661行から単一責務ファイル群（`models.go`, `catalog.go`, `execution_heaven.go`, `execution_underworld.go`, `god.go`）へ分割リファクタリングを完遂し、ファイル行数500行制限をクリア（`whitelistedLegacyFileLimits` を11から10ファイルへラチェットダウン））。
 - **Monster Grandpa & Pet Companions** (`internal/monster`): モンスター預かり所＆自宅ペット仲間（最大50〜300体預入 `character_monsters`、自宅ペット同居最大8体、命名制約、他プレイヤーへの譲渡、野生への解放、行ロックによるトランザクション整合性）。
 - **Photo Contest, Screenshots & Gallery** (`internal/contest`): フォトコン会場（キャラクター別スクリーンショット保存・ギャラリー最大20枚、コンテストエントリー・題名バリデーション・連続制限、投票・応援コメント・自己投票禁止・1人1票、10日周期定期集計、上位3名賞金・メダル・GP付与、1位投票者メダル配布、歴代1位殿堂入り `contest_legends` 永久アーカイブ）。巨大リポジトリインターフェース（28メソッド）をISPに基づき5つの責務別サブインターフェース（Photo/Round/Entry/Vote/Legend）へ分割し、埋め込み合成インターフェース `ContestRepository` として再構築完了。
 - **Multiplayer Party & Co-op Quests** (`internal/party`): パーティ結成・冒険（最大4人編成、合言葉パスワード、参加条件バリデーション、Ready同期、リーダー権限（キック・解散）、協力戦闘解決、シナジーボーナス、報酬分配、HP1生存保証）。Valkey Master による待機ロビー管理（`party2:party:lobby:<party_id>` 15分TTL自動失効、60秒Readyカウントダウン、ZSETロビー一覧）、アトミックLuaスクリプト、MariaDB `party_adventure_logs` への恒久冒険ログ永続化。

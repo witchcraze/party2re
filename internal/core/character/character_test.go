@@ -301,3 +301,40 @@ func TestFutureMemorySnapshotAndRestoration(t *testing.T) {
 		t.Fatalf("unexpected SP or OverLevel after recall: SP=%d, OldSP=%d, OverLevel=%v", c.SP, c.OldSP, c.OverLevel)
 	}
 }
+
+func TestCharacterTired(t *testing.T) {
+	c := &Character{Tired: 0}
+
+	if c.IsExhausted() {
+		t.Errorf("expected IsExhausted to be false at 0%% tired")
+	}
+
+	c.AddTired(40)
+	if c.Tired != 40 || c.IsExhausted() {
+		t.Errorf("expected 40%% tired, got %d (exhausted=%v)", c.Tired, c.IsExhausted())
+	}
+
+	c.AddTired(60)
+	if c.Tired != 100 || !c.IsExhausted() {
+		t.Errorf("expected 100%% tired and exhausted, got %d (exhausted=%v)", c.Tired, c.IsExhausted())
+	}
+
+	c.ReduceTired(150)
+	if c.Tired != -50 || c.IsExhausted() {
+		t.Errorf("expected -50%% tired after ReduceTired(150), got %d (exhausted=%v)", c.Tired, c.IsExhausted())
+	}
+
+	c.ResetTired()
+	if c.Tired != 0 || c.IsExhausted() {
+		t.Errorf("expected 0%% tired after ResetTired, got %d (exhausted=%v)", c.Tired, c.IsExhausted())
+	}
+
+	// Nil receiver safety
+	var nilChar *Character
+	nilChar.AddTired(10)
+	nilChar.ReduceTired(10)
+	nilChar.ResetTired()
+	if nilChar.IsExhausted() {
+		t.Errorf("expected nilChar.IsExhausted to be false")
+	}
+}
