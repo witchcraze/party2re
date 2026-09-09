@@ -113,7 +113,6 @@ type Handler struct {
 	homes          HomeService
 	rankings       RankingService
 	jobs           JobService
-	inn            InnService
 	customSkills   CustomSkillService
 	chapel         ChapelService
 	farm           FarmService
@@ -372,6 +371,9 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /homes/{id}/companion/talk", h.handleTalkToCompanion)
 	mux.HandleFunc("GET /homes/{id}/notices", h.handleListDeliveryNotices)
 	mux.HandleFunc("POST /homes/{id}/notices/clear", h.handleClearDeliveryNotices)
+	mux.HandleFunc("POST /characters/{id}/home/sleep", h.handleHomeSleep)
+	mux.HandleFunc("GET /characters/{id}/home/sleep", h.handleGetHomeSleep)
+	mux.HandleFunc("POST /characters/{id}/home/wake", h.handleHomeWake)
 
 	mux.HandleFunc("POST /letters", h.handleSendLetter)
 	mux.HandleFunc("GET /letters/inbox", h.handleListInbox)
@@ -391,14 +393,13 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /rankings/{type}", h.handleGetRankingByType)
 	mux.HandleFunc("POST /rankings/refresh", h.handleRefreshRankings)
 
-	// Jobs & Inn
+	// Jobs
 	mux.HandleFunc("GET /jobs", h.handleListJobs)
 	mux.HandleFunc("POST /characters/{id}/change-job", h.handleChangeJob)
 	mux.HandleFunc("POST /characters/{id}/exchange-job", h.handleExchangeJob)
 	mux.HandleFunc("GET /characters/{id}/future-memories", h.handleListFutureMemories)
 	mux.HandleFunc("POST /characters/{id}/future-memories", h.handleSaveFutureMemory)
 	mux.HandleFunc("POST /characters/{id}/recall-future", h.handleRecallFutureMemory)
-	mux.HandleFunc("POST /characters/{id}/inn", h.handleInnRest)
 
 	// Custom Skills
 	mux.HandleFunc("GET /characters/{id}/custom-skills", h.handleGetCustomSkills)
@@ -844,6 +845,9 @@ func (h *Handler) handleStartAdventure(w http.ResponseWriter, r *http.Request) {
 	withAuthenticatedCharacterAndJSON(h, w, r, func(req *startAdventureRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req startAdventureRequest) {
+		if !h.ensureNotSleeping(w, r, char.ID) {
+			return
+		}
 		adv, err := h.adventures.StartStage(r.Context(), char.ID, req.StageID)
 		if err != nil {
 			if errors.Is(err, adventure.ErrLevelRequirementNotMet) {

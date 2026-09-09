@@ -19,7 +19,6 @@ import (
 	"github.com/witchcraze/party2re/internal/farm"
 	"github.com/witchcraze/party2re/internal/god"
 	"github.com/witchcraze/party2re/internal/helper"
-	"github.com/witchcraze/party2re/internal/inn"
 	"github.com/witchcraze/party2re/internal/job"
 	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/maintenance"
@@ -38,7 +37,6 @@ type miscServices struct {
 	rescue      *rescue.Service
 	helper      *helper.Service
 	job         *job.Service
-	inn         *inn.Service
 	chapel      *chapel.Service
 	farm        *farm.Service
 	collection  *collection.Service
@@ -136,15 +134,6 @@ func newMiscServices(
 			}
 			return nil
 		})),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	innService, err := inn.NewService(
-		core.charRepo,
-		inn.WithEconomy(core.economy),
-		inn.WithTransactionProvider(core.txProvider),
 	)
 	if err != nil {
 		return nil, err
@@ -351,7 +340,6 @@ func newMiscServices(
 		rescue:      rescueService,
 		helper:      helperService,
 		job:         jobService,
-		inn:         innService,
 		chapel:      chapelService,
 		farm:        farmService,
 		collection:  collectionService,

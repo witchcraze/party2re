@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #473 — [Feature] Heaven Wishes & Small Medal Delivery: Expand Celestial Wishes catalog and route Medal rewards to Depot (Milestone 1 Complete)
+Last updated: Issue #459 — [Feature] Resting: Reproduce original Sleep (睡眠・回復) in Home and deprecate fictional Inn
 
 ## Current phase
 
@@ -25,7 +25,8 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### Core & Shared Components
 - **Player** (`internal/core/player`, `internal/player`): アカウント登録・パスワードハッシュ（bcrypt コスト12、GPU耐性・メモリ困難性担保）・セッション管理（Valkey Master `party2:session:<token>` 7日間TTL自動失効、Sorted Set `party2:player:sessions:<player_id>` による遅延パージ `ZREMRANGEBYSCORE`）・Personal Access Token（APIキー `p2_sk_...`、SHA-256ダイジェスト永続化、デュアル認証、所有権検証付き失効 `DELETE /player/tokens/{id}`）・アカウント完全削除（所有キャラクター全件クリーンアップ、Valkeyセッション破棄、PATカスケード削除、MariaDB 35+テーブル連鎖削除）。
-- **Character** (`internal/core/character`, `internal/character`): `player_id` 外部キーによるアカウント紐付け、初期ステータス、能力値計算、スキルポイント（SP）、キャラクター一覧取得、キャラクター個別削除（所有権認可、外部ドメイン `CleanupHook` 実行、MariaDB 35+サブリソーステーブルの完全カスケード削除）、命名の館（名前変更・性別/外観変更）、プロフィール自己紹介コメント・アバター画像管理。通貨・メダルの安全なカプセル化（`AddMoney`, `DeductMoney`, `AddSmallMedals`, `DeductSmallMedals`、上限キャップ・負数ガード・残高オーバードラフト防止）。架空の転生（Rebirth）は完全撤廃。
+- **Character** (`internal/core/character`, `internal/character`): `player_id` 外部キーによるアカウント紐付け、初期ステータス、能力値計算、疲労度（`Tired`、戦闘累積・睡眠全快・天界願い事回復）、スキルポイント（SP）、キャラクター一覧取得、キャラクター個別削除（所有権認可、外部ドメイン `CleanupHook` 実行、MariaDB 35+サブリソーステーブルの完全カスケード削除）、命名の館（名前変更・性別/外観変更）、プロフィール自己紹介コメント・アバター画像管理。通貨・メダルの安全なカプセル化（`AddMoney`, `DeductMoney`, `AddSmallMedals`, `DeductSmallMedals`、上限キャップ・負数ガード・残高オーバードラフト防止）。架空の転生（Rebirth）は完全撤廃。
+- **Timer & Daily Quotas** (`internal/core/timer`): Valkey Master / In-Memory 共通タイマー（`party2:timer:<category>:<id>`、Native TTL）および日次クォータ（`party2:daily:<feature>:<id>:<date>`、JST深夜0時自動失効）。クラスターセーフなタクソノミーとValkeyリンター完全適合。
 - **Progression** (`internal/core/progression`): レベルアップ（累積経験値テーブル `level * level * 10`）、レベルアップ時のSP加算（`$m{sp}++`、スキルの宝珠による25%追加ボーナス）、SP到達時の職業スキル自動習得判定（`skill.RequiredSP == character.SP`）、原典準拠のステータス成長率再ロール（$v > 9$ 時 `rand(1, 9)`・HP最低+1保証）、天界OverLevel限界突破（Lv150）対応、ASTリンターによるCore標準ヘルパー（`progression.ApplyExperienceWithJobFull`）強制。
 - **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): クリーンルーム規約に完全準拠したJSONカタログ（`jobs.json`）、Lv20転職（能力値半減・Lv1/Exp0・転職回数・前職SP復元）、最終スキルSP到達マスタリー、特殊職のアイテム消費、思い出しによるマスター職交換、将来用メモリ枠（「よびおこす」未来のカケラによるステータススナップショット保存・復元）、全72職コンプリート時の称号・全体イベントニュース通知および特殊職「すっぴん」解禁、SP到達スキル習得、スキル発動・MPコスト計算。
 - **Item, Inventory, Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): 5カテゴリJSONカタログ（武器・防具・盾・アクセ・消費/素材）、スロット装備、所持枠管理、統一アイテム定義プロバイダー（`coreitem.DefinitionProvider`）、インベントリアイテム更新（`inv.Update`）、装備スロットカプセル化（`equip.Equip`, `equip.Unequip`）。
@@ -43,7 +44,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Blacksmith** (`internal/blacksmith`): 鍛冶屋（+1〜+10装備強化、成功率曲線、横断的ランタイムプリミティブ `economy.TransactionRunner` / `ExecuteTransaction` への移行完了。手動行ロック・SQLボイラープレートを完全排除し、Rank 2 (`characters`) -> Rank 3 (`inventory_items`) 決定論的ロック階層と費用・素材消費・インベントリ更新のアトミック整合性を保証）。
 - **Alchemy** (`internal/alchemy`): 錬金術（112レシピ `recipes.json`）、素材合成（`TransactionProvider` と行ロックによる素材消費・合成物付与のアトミック整合性）。
 - **Bank** (`internal/bank`): 銀行（預金・引出・プレイヤー間送金、`FOR UPDATE` 排他ロック）。
-- **Inn** (`internal/inn`): 宿屋・休息（HP/MP全回復。横断的ランタイムプリミティブ `economy.TransactionRunner` / `ExecuteTransaction` へのパイロット移行完了。手動行ロック・SQLボイラープレートを完全排除し、決定論的ロック階層とHP/MP全回復のアトミック整合性を保証）。
+- **Inn** (`internal/inn`): 架空の宿屋機能およびエンドポイントを完全撤廃（Issue #459）。原典仕様に準拠した自宅・私有地での睡眠・休息（`internal/home`）へ一本化。
 - **Guild** (`internal/guild`): ギルド設立（5,000 G）、階層役職管理（Leader, Officer, Member）、加入・脱退・追放・役職変更・リーダー権限譲渡、ゴールド寄付によるEXP獲得とレベルアップ（最大Lv10 / 定員拡大、行ロックによるロストアップデート防止）、お知らせ掲示板、単一ギルド所属制約。
 - **Casino** (`internal/casino`): カジノコイン両替（1 Coin = 20 G、横断的ランタイムプリミティブ `economy.TransactionRunner` / `ExecuteTransaction` への移行完了。手動行ロック・SQLボイラープレートを排除し、Rank 2 (`characters`) -> Rank 8 (`casino_accounts`) 決定論的ロック階層と通貨変換のアトミック整合性を保証）、インディアンポーカー（セッション永続化 `casino_poker_sessions`、進行中カードマスキング、コール/勝負/降り）、スロットマシン（3リール・5絵柄、777 100倍ジャックポット、レート設定）、ドッペルゲンガー（8種マーク一致・倍率設定）、ハイロー（大小予測、倍々モード）。`HighLowSession.Step()`（95.0%）および `PlayIndianPokerAction()`（95.0%）の単体テスト網羅率向上、重複エラー `ErrInsufficientCoin` の一本化、および孤立メソッド削除完了。
 - **Lottery & Raffle** (`internal/lottery`): 福引（通常3枚・特賞〜6等・ハズレ、裏福引300枚・各色オーブ）、定期4桁数字宝くじ（1等100,000 Gジャックポット、下3桁/2桁/1桁返還、所有権認可・トランザクション安全な当籤受取処理）。
@@ -61,7 +62,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): 手助けクエスト（納品依頼、通常・レア・ギルド専用、錬金素材・幸福袋・GP報酬、有効依頼アイテムのショップ除外連携）および緊急救出処理（状態リセット、Valkey タスク自動キャンセル、クールダウン/睡眠ペナルティ）。
 - **Town Park & Public Bulletin Board** (`internal/park`): 交流広場・公開掲示板（発言投稿・文字色指定・宛先指定・HTMLサニタイズ・レートリミット、最新投稿ページネーション（キーセット・カーソル対応）、NPC占い）。`TalkToNPC()`（50.0%→100.0%）および `Divinate()`（50.0%→100.0%）のキャラクター不在・リポジトリ障害エラーパスの単体テスト網羅率向上完了。
 - **News & Player Notifications** (`internal/notification`): ニュース・お知らせ＆プレイヤー通知インボックス（全体告知、カテゴリ別お知らせ、プレイヤー別メッセージ受信箱、既読・未読管理、一括既読化、未読件数照会）。
-- **Player Private Home & Mailbox** (`internal/home`): 自宅・私有地管理（壁紙・テーマ・一言設定、訪問者記録、手紙送受信・受信箱/送信箱（オフセット/カーソル対応）・未読件数、独立削除フラグ、仲間ペット言葉教え・挨拶会話、送金・譲渡通知台帳）。
+- **Player Private Home, Mailbox & Resting** (`internal/home`, `internal/core/timer`): 自宅・私有地管理（壁紙・テーマ・一言設定、訪問者記録、手紙送受信・受信箱/送信箱（オフセット/カーソル対応）・未読件数、独立削除フラグ、仲間ペット言葉教え・挨拶会話、送金・譲渡通知台帳、および原典準拠の無料睡眠・休息回復機能（`POST /characters/{id}/home/sleep` & `POST /characters/{id}/home/wake`、同時接続数スケーリングカウントダウン（60s/120s/180s）、Valkey Native TTL `party2:timer:sleep:<id>` による行動抑止 409 Conflict、起床時のHP/MP/疲労度全快、一時職記憶復元、酒場満腹度リセット、礼拝堂祈り・加護リセット連携））。
 - **Player Leaderboards & Character Rankings** (`internal/ranking`): ランキング・リーダーボード（12カテゴリ、決定論的タイブレーク・ページネーション、インメモリTTLキャッシュ、Valkey分散スナップショットキャッシュ、Singleflightキャッシュスタンピード抑止、定期更新Workerアクション、永続スナップショット `ranking_snapshots`）。
 - **Event Plaza, Traveling Merchant Bazaar & Victory Banquets** (`internal/eventplaza`): イベント広場・行商人バザー＆ボス討伐祝宴（人口連動行商人Tier判定、希少アイテムバザーカタログ `bazaar.json`、アトミック購入トランザクション、ボス討伐連動祝宴・乾杯参加ゴールド報酬・重複乾杯防止 `banquet_toasts`、キャラクター所有権検証）。
 - **Secret Underground Shop & NPC @ヒミツジ** (`internal/secretshop`): 秘密の店（資格判定 Lv15以上または転生者、希少消費アイテムカタログ `secret_items.json`、3倍価格プレミアム設定、アトミック購入トランザクション、NPC会話・詳細情報・ぱふぱふサービス回復）。

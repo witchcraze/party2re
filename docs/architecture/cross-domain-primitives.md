@@ -171,7 +171,10 @@ type Dispatcher struct { /* ... */ }
 
 ---
 
-## 6. Pilot Domain Migration: Inn (`internal/inn`)
+## 6. Pilot Domain Migration: Inn (`internal/inn` - Historical)
+
+> [!NOTE]
+> The Inn domain was used as the historical pilot for `economy.TransactionRunner` in #411. In Issue #459, the fictional paid Inn was decommissioned in accordance with legacy Party2 clean-room specifications (resting is free at Home via `internal/home`). The implementation pattern below is preserved for architectural reference.
 
 The Inn domain was selected as the pilot migration target:
 
@@ -292,7 +295,7 @@ Following Inn, Blacksmith, Casino, and Depot, remaining feature domains will mig
 
 | Domain | Scope | Status | Primary Benefit |
 |---|---|---|---|
-| **Inn** (`internal/inn`) | Resting HP/MP recovery, level-scaled fee | Migrated (#411) | Eliminates manual character row-locking and dynamic fee check |
+| **Inn** (`internal/inn`) | Resting HP/MP recovery, level-scaled fee | Decommissioned (#459) | Fictional domain removed; replaced by free Home sleep (`internal/home`) |
 | **Blacksmith** (`internal/blacksmith`) | Equipment enhancement, upgrade materials | Migrated (#426) | Eliminates manual inventory + character dual locking and rollbacks |
 | **Casino** (`internal/casino`) | Poker, Slot, Doppelganger, HighLow bet & payout | Migrated (#427) | Unifies coin exchange and wager settlement with strict balance checking and deterministic lock order |
 | **Depot** (`internal/depot`) | Gold & item storage, inventory transfer | Migrated (#445) | Eliminates dual execution path, enforces Rank 2 -> 3 -> 5 locking order |
