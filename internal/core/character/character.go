@@ -416,6 +416,13 @@ func (c *Character) AddTired(delta int) {
 	}
 }
 
+// ReduceTired decreases character fatigue by delta percentage (e.g. celestial wishes).
+func (c *Character) ReduceTired(delta int) {
+	if c != nil {
+		c.Tired -= delta
+	}
+}
+
 // IsExhausted returns true if character fatigue is 100% or higher.
 func (c *Character) IsExhausted() bool {
 	if c == nil {

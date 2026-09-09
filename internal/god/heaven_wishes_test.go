@@ -297,10 +297,11 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 	})
 
-	t.Run("wish_refresh recovers full HP and MP", func(t *testing.T) {
+	t.Run("wish_refresh recovers full HP and MP and reduces fatigue by 150%", func(t *testing.T) {
 		svc, charRepo, _, _, _, _, _, _, _ := setupHeavenService()
 		char := corecharacter.Character{
 			ID: "char-refresh", Name: "Tired",
+			Tired: 80,
 			Stats: corecharacter.Stats{MaxHP: 300, HP: 10, MaxMP: 150, MP: 0},
 		}
 		charRepo.characters[char.ID] = char
@@ -311,6 +312,13 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 		if res.Character.Stats.HP != 300 || res.Character.Stats.MP != 150 {
 			t.Errorf("expected full HP/MP (300/150), got %d/%d", res.Character.Stats.HP, res.Character.Stats.MP)
+		}
+		if res.Character.Tired != -70 {
+			t.Errorf("expected Tired -70 (80 - 150), got %d", res.Character.Tired)
+		}
+		expectedMsg := "疲労度が 150% 回復し、HPとMPが完全に回復しました！"
+		if res.Message != expectedMsg {
+			t.Errorf("expected Message %q, got %q", expectedMsg, res.Message)
 		}
 		if res.NextLocation != "home" {
 			t.Errorf("expected NextLocation home, got %s", res.NextLocation)
