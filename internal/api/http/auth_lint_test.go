@@ -122,6 +122,8 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		regexp.MustCompile(`^GET /rankings/.*$`),
 		regexp.MustCompile(`^GET /homes/\{id\}$`),
 		regexp.MustCompile(`^GET /homes/\{id\}/companion/talk$`),
+		regexp.MustCompile(`^GET /towns/\{town_id\}/houses$`),
+		regexp.MustCompile(`^GET /houses/check$`),
 	}
 
 	adminRoutes := map[string]bool{

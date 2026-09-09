@@ -156,7 +156,7 @@ func TestRankingRepository_Integration(t *testing.T) {
 	}
 
 	// === Test Level Ranking ===
-	levelRankings, total, err := rankingRepo.GetLevelRanking(ctx, 100, 0)
+	levelRankings, total, err := rankingRepo.GetLevelRanking(ctx, 10000, 0)
 	if err != nil {
 		t.Fatalf("GetLevelRanking failed: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestRankingRepository_Integration(t *testing.T) {
 	}
 
 	// === Test Player Wealth Ranking ===
-	wealthRankings, pTotal, err := rankingRepo.GetPlayerWealthRanking(ctx, 100, 0)
+	wealthRankings, pTotal, err := rankingRepo.GetPlayerWealthRanking(ctx, 10000, 0)
 	if err != nil {
 		t.Fatalf("GetPlayerWealthRanking failed: %v", err)
 	}
@@ -201,7 +201,7 @@ func TestRankingRepository_Integration(t *testing.T) {
 	}
 
 	// === Test Character Wealth Ranking ===
-	charWealthRankings, _, err := rankingRepo.GetCharacterWealthRanking(ctx, 100, 0)
+	charWealthRankings, _, err := rankingRepo.GetCharacterWealthRanking(ctx, 10000, 0)
 	if err != nil {
 		t.Fatalf("GetCharacterWealthRanking failed: %v", err)
 	}
@@ -212,7 +212,7 @@ func TestRankingRepository_Integration(t *testing.T) {
 	}
 
 	// === Test Battle Victory Ranking ===
-	battleRankings, _, err := rankingRepo.GetBattleVictoryRanking(ctx, 100, 0)
+	battleRankings, _, err := rankingRepo.GetBattleVictoryRanking(ctx, 10000, 0)
 	if err != nil {
 		t.Fatalf("GetBattleVictoryRanking failed: %v", err)
 	}
@@ -226,7 +226,7 @@ func TestRankingRepository_Integration(t *testing.T) {
 	}
 
 	// === Test Job Mastery Ranking ===
-	masteryRankings, _, err := rankingRepo.GetJobMasteryRanking(ctx, 100, 0)
+	masteryRankings, _, err := rankingRepo.GetJobMasteryRanking(ctx, 10000, 0)
 	if err != nil {
 		t.Fatalf("GetJobMasteryRanking failed: %v", err)
 	}
@@ -249,7 +249,7 @@ func TestRankingRepository_Integration(t *testing.T) {
 	}
 
 	// === Test Helper Ranking ===
-	helpRankings, _, err := rankingRepo.GetHelperRanking(ctx, 100, 0)
+	helpRankings, _, err := rankingRepo.GetHelperRanking(ctx, 10000, 0)
 	if err != nil {
 		t.Fatalf("GetHelperRanking failed: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestRankingRepository_Integration(t *testing.T) {
 	}
 
 	// === Test Small Medal Ranking ===
-	medalRankings, _, err := rankingRepo.GetSmallMedalRanking(ctx, 100, 0)
+	medalRankings, _, err := rankingRepo.GetSmallMedalRanking(ctx, 10000, 0)
 	if err != nil {
 		t.Fatalf("GetSmallMedalRanking failed: %v", err)
 	}

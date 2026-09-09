@@ -392,6 +392,43 @@
       ]
     }
   },
+  "/characters/{id}/color": {
+    "post": {
+      "operationId": "postCharactersIdColor",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/color endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
   "/characters/{id}/exchange-job": {
     "post": {
       "operationId": "exchangeCharacterJob",
@@ -705,6 +742,80 @@
         }
       },
       "summary": "Change character gender / appearance",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
+  "/characters/{id}/home/items": {
+    "get": {
+      "operationId": "getCharactersIdHomeItems",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "GET /characters/{id}/home/items endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
+  "/characters/{id}/home/items/use": {
+    "post": {
+      "operationId": "postCharactersIdHomeItemsUse",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/home/items/use endpoint",
       "tags": [
         "Character"
       ]

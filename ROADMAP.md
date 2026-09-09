@@ -103,7 +103,7 @@ Eliminate divergent mechanics in storage, core progression, and battle engines b
 
 ##### Milestone 2: Economic, Life & Production Loop
 Reconcile facilities and production mechanics that depend on Depot storage and overnight cycles.
-- [ ] **Home & Estate: Overnight Carpenter Construction & Resting Buffs** (#459, #461)
+- [x] **Home & Estate: Overnight Carpenter Construction, Town Estate Cycles & Resting Buffs** (#459, #461)
 - [ ] **Standard Commercial Shops: Level Gates, Sellback & MasterCard Discount** (#465)
 - [ ] **Secret Shop: Passphrase Unlock & Deterministic Rotations** (#462)
 - [ ] **Black Market: Entrance Fees, Rare Catalogs & Bust Mechanics** (#463)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
@@ -11,8 +12,10 @@ import (
 	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/inventory"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/park"
@@ -20,6 +23,25 @@ import (
 	"github.com/witchcraze/party2re/internal/ratelimit"
 	"github.com/witchcraze/party2re/internal/scheduling"
 )
+
+type depotManagerAdapter struct {
+	repo *database.DepotRepository
+}
+
+func (a *depotManagerAdapter) FindByCharacterID(ctx context.Context, characterID string) (depot.Depot, error) {
+	return a.repo.FindByCharacterID(ctx, characterID)
+}
+
+func (a *depotManagerAdapter) RemoveItem(ctx context.Context, characterID, itemInstanceID string) error {
+	dp, err := a.repo.FindByCharacterIDForUpdate(ctx, characterID)
+	if err != nil {
+		return err
+	}
+	if _, err := dp.RemoveItem(itemInstanceID); err != nil {
+		return err
+	}
+	return a.repo.Save(ctx, dp)
+}
 
 type socServices struct {
 	guildRepo    *database.GuildRepository
@@ -36,6 +58,7 @@ type socServices struct {
 func newSocServices(
 	db *sql.DB,
 	core *coreServices,
+	econ *econServices,
 	valkeyClient valkeygo.Client,
 	logger logging.Logger,
 ) (*socServices, error) {
@@ -92,12 +115,20 @@ func newSocServices(
 
 	timerService := timer.NewService(valkeyClient)
 	parkService, _ := park.NewService(parkRepo, core.charRepo, park.WithRateLimiter(limiter))
+
+	invService, _ := inventory.NewService(core.invRepo)
+	var depotMgr home.DepotManager
+	if econ != nil && econ.depotRepo != nil {
+		depotMgr = &depotManagerAdapter{repo: econ.depotRepo}
+	}
 	homeService, _ := home.NewService(
 		homeRepo,
 		core.charRepo,
-		home.WithVisitorLimiter(limiter, 24*time.Hour),
 		home.WithTimer(timerService),
 		home.WithCharacterUpdater(core.charRepo),
+		home.WithInventoryManager(invService),
+		home.WithDepotManager(depotMgr),
+		home.WithItemCatalog(core.itemCatalog),
 	)
 
 	return &socServices{

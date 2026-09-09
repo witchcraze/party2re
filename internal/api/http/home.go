@@ -12,10 +12,20 @@ import (
 	"github.com/witchcraze/party2re/internal/pagination"
 )
 
-// HomeService defines the home and mailbox operations exposed over HTTP.
-type HomeService interface {
+// HomeEstateService defines estate, item, and color operations.
+type HomeEstateService interface {
 	GetHomeView(ctx context.Context, homeCharacterID, visitorCharacterID string) (home.HomeView, error)
-	UpdateHome(ctx context.Context, characterID, theme, motto, companionName string) (home.CharacterHome, error)
+	UpdateHome(ctx context.Context, characterID, companionName string) (home.CharacterHome, error)
+	BuildHouse(ctx context.Context, characterID, townID, houseStyle string) (*home.HomeCheckResult, error)
+	CheckHouse(ctx context.Context, targetNameOrID string) (*home.HomeCheckResult, error)
+	ListTownHouses(ctx context.Context, townID string) ([]home.HomeCheckResult, error)
+	SetCharacterColor(ctx context.Context, characterID, color string) error
+	ListHomeItems(ctx context.Context, characterID string) ([]home.HomeUsableItem, error)
+	UseHomeItem(ctx context.Context, characterID, instanceID, source string) (*home.UseHomeItemResult, error)
+}
+
+// HomeMailboxService defines player-to-player letter and mailbox operations.
+type HomeMailboxService interface {
 	SendLetter(ctx context.Context, senderID, recipientID, content, color string) (home.Letter, error)
 	ReadLetter(ctx context.Context, letterID, recipientID string) error
 	ListInbox(ctx context.Context, recipientID string, limit, offset int) (home.LetterListResult, error)
@@ -24,15 +34,31 @@ type HomeService interface {
 	ListOutboxByCursor(ctx context.Context, senderID string, limit int, cursor string) (pagination.CursorPage[home.Letter], error)
 	GetUnreadLetterCount(ctx context.Context, recipientID string) (int, error)
 	DeleteLetter(ctx context.Context, letterID, characterID string) error
+}
+
+// HomeCompanionService defines companion pet dialogue and phrase operations.
+type HomeCompanionService interface {
 	TeachCompanionPhrase(ctx context.Context, characterID, phrase string) (home.CompanionPhrase, error)
 	ForgetCompanionPhrase(ctx context.Context, phraseID, characterID string) error
 	ListCompanionPhrases(ctx context.Context, characterID string) ([]home.CompanionPhrase, error)
 	TalkToCompanion(ctx context.Context, characterID string) (string, error)
+}
+
+// HomeLivingService defines resting, waking, and delivery notice operations.
+type HomeLivingService interface {
 	ListDeliveryNotices(ctx context.Context, characterID string, unclearedOnly bool) ([]home.DeliveryNotice, error)
 	ClearDeliveryNotices(ctx context.Context, characterID string) error
 	Sleep(ctx context.Context, characterID, targetHomeID string) (home.SleepResult, error)
 	GetSleepStatus(ctx context.Context, characterID string) (home.SleepStatus, error)
 	Wake(ctx context.Context, characterID string) (home.WakeResult, error)
+}
+
+// HomeService defines the home, mailbox, companion, and estate operations exposed over HTTP.
+type HomeService interface {
+	HomeEstateService
+	HomeMailboxService
+	HomeCompanionService
+	HomeLivingService
 }
 
 // WithHome configures the HomeService for the Handler.
@@ -43,9 +69,8 @@ func WithHome(h HomeService) Option {
 }
 
 type updateHomeRequest struct {
-	Theme         string `json:"theme"`
-	Motto         string `json:"motto"`
 	CompanionName string `json:"companion_name"`
+	Color         string `json:"color,omitempty"`
 }
 
 type sendLetterRequest struct {
@@ -102,10 +127,14 @@ func (h *Handler) handleUpdateHomeSettings(w http.ResponseWriter, r *http.Reques
 			return
 		}
 
-		updated, err := h.homes.UpdateHome(r.Context(), char.ID, req.Theme, req.Motto, req.CompanionName)
+		updated, err := h.homes.UpdateHome(r.Context(), char.ID, req.CompanionName)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
+		}
+
+		if req.Color != "" {
+			_ = h.homes.SetCharacterColor(r.Context(), char.ID, req.Color)
 		}
 
 		writeJSON(w, http.StatusOK, updated)

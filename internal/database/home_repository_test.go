@@ -25,11 +25,13 @@ func TestHomeRepository_Database(t *testing.T) {
 
 	ctx := context.Background()
 
-	char1, err := database.CreateTestCharacter(ctx, db, "HomeHero1")
+	char1Name := fmt.Sprintf("Hero1_%d", time.Now().UnixNano()%1000000)
+	char2Name := fmt.Sprintf("Hero2_%d", time.Now().UnixNano()%1000000)
+	char1, err := database.CreateTestCharacter(ctx, db, char1Name)
 	if err != nil {
 		t.Fatal(err)
 	}
-	char2, err := database.CreateTestCharacter(ctx, db, "HomeHero2")
+	char2, err := database.CreateTestCharacter(ctx, db, char2Name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,38 +41,52 @@ func TestHomeRepository_Database(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 1. Home Settings & Visitor Count
-	t.Run("home settings and visitor count", func(t *testing.T) {
+	// 1. Home Estate Lifecycle
+	t.Run("home estate lifecycle", func(t *testing.T) {
 		h, err := repo.GetHome(ctx, char1.ID)
 		if err != nil {
 			t.Fatalf("GetHome failed: %v", err)
 		}
-		if h.VisitorCount != 0 {
-			t.Errorf("expected 0 visitor count, got %d", h.VisitorCount)
+		if h.CompanionName != home.DefaultCompanionName {
+			t.Errorf("expected default companion name, got %s", h.CompanionName)
 		}
 
 		now := time.Now().UTC().Truncate(time.Microsecond)
-		err = repo.IncrementVisitorCount(ctx, char1.ID, now)
-		if err != nil {
-			t.Fatalf("IncrementVisitorCount failed: %v", err)
-		}
+		expires := now.Add(5 * 24 * time.Hour)
+		testTown := fmt.Sprintf("town_repo_%d", time.Now().UnixNano())
 
-		h, err = repo.GetHome(ctx, char1.ID)
-		if err != nil || h.VisitorCount != 1 {
-			t.Errorf("expected 1 visitor count, got %d, err=%v", h.VisitorCount, err)
-		}
-
-		h.Theme = "#112233"
-		h.Motto = "Greetings travelers!"
+		h.TownID = testTown
+		h.HouseStyle = "001"
+		h.ExpiresAt = &expires
 		h.CompanionName = "モモンガ"
 		err = repo.SaveHome(ctx, h)
 		if err != nil {
 			t.Fatalf("SaveHome failed: %v", err)
 		}
 
-		h, _ = repo.GetHome(ctx, char1.ID)
-		if h.Theme != "#112233" || h.CompanionName != "モモンガ" {
-			t.Errorf("unexpected home settings: %+v", h)
+		h, err = repo.GetHome(ctx, char1.ID)
+		if err != nil || h.TownID != testTown || h.HouseStyle != "001" || h.CompanionName != "モモンガ" {
+			t.Fatalf("unexpected home settings: %+v, err=%v", h, err)
+		}
+
+		count, err := repo.CountActiveTownHouses(ctx, testTown, now)
+		if err != nil || count != 1 {
+			t.Errorf("expected 1 active house in %s, got %d, err=%v", testTown, count, err)
+		}
+
+		activeHome, err := repo.FindActiveHomeByCharacterID(ctx, char1.ID, now)
+		if err != nil || activeHome.CharacterID != char1.ID {
+			t.Errorf("FindActiveHomeByCharacterID failed: %+v, err=%v", activeHome, err)
+		}
+
+		activeHomeName, charFound, err := repo.FindActiveHomeByCharacterName(ctx, char1.Name, now)
+		if err != nil || activeHomeName.CharacterID != char1.ID || charFound.ID != char1.ID {
+			t.Errorf("FindActiveHomeByCharacterName failed: %+v, char=%+v, err=%v", activeHomeName, charFound, err)
+		}
+
+		list, err := repo.ListActiveTownHouses(ctx, testTown, now)
+		if err != nil || len(list) != 1 {
+			t.Errorf("ListActiveTownHouses failed: len=%d, err=%v", len(list), err)
 		}
 	})
 

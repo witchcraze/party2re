@@ -87,7 +87,7 @@ func TestMemoryTimer_DailyQuota(t *testing.T) {
 
 	charID := "char-456"
 	action := "chapel_pray"
-	now := time.Date(2026, 9, 9, 12, 0, 0, 0, JST)
+	now := time.Now().In(JST)
 
 	// Initially not used
 	used, err := svc.HasUsedDailyQuota(ctx, action, charID)

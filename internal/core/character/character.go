@@ -18,6 +18,7 @@ const maxNameLength = 32
 const (
 	DefaultJobID  = "starter"
 	DefaultGender = "unspecified"
+	DefaultColor  = "#ffffff"
 	InitialMoney  = 200
 	InitialLevel  = 1
 )
@@ -33,6 +34,7 @@ var (
 	ErrInvalidAmount      = errors.New("amount must be non-negative")
 	ErrInsufficientFunds  = errors.New("insufficient money")
 	ErrInsufficientMedals = errors.New("insufficient small medals")
+	ErrInvalidColor       = errors.New("invalid color format, must be #RRGGBB")
 )
 
 type Character struct {
@@ -60,6 +62,7 @@ type Character struct {
 	OverFuture  int
 	OverFlea    int
 	OverStore   int
+	Color       string // Player chat/display color (HEX format: #RRGGBB, default: #ffffff)
 }
 
 // JobMemory is the temporary pair of job states used by the job exchange
@@ -171,6 +174,7 @@ func NewWithOptions(name, jobID, gender string, random RandomSource) (Character,
 		Stats:  stats,
 		Money:  InitialMoney,
 		Level:  InitialLevel,
+		Color:  DefaultColor,
 	}, nil
 }
 
@@ -440,4 +444,28 @@ func (c *Character) RevertJobMemory() bool {
 	_ = c.ApplyJobMemory(memory.JobID, memory.SP, memory.OldJobID, memory.OldSP)
 	c.JobMemory = nil
 	return true
+}
+
+// IsValidColor checks if a string is a valid #RRGGBB hex color code.
+func IsValidColor(color string) bool {
+	if len(color) != 7 || color[0] != '#' {
+		return false
+	}
+	for i := 1; i < 7; i++ {
+		b := color[i]
+		if !((b >= '0' && b <= '9') || (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
+// SetColor updates the character's chat and display color (#RRGGBB).
+func (c *Character) SetColor(color string) error {
+	clean := strings.TrimSpace(color)
+	if !IsValidColor(clean) {
+		return ErrInvalidColor
+	}
+	c.Color = strings.ToLower(clean)
+	return nil
 }

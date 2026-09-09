@@ -1,0 +1,28 @@
+{
+  "/houses/check": {
+    "get": {
+      "operationId": "getHousesCheck",
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "GET /houses/check endpoint",
+      "tags": [
+        "Houses"
+      ]
+    }
+  }
+}

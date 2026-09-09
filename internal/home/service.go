@@ -31,11 +31,13 @@ type Service struct {
 	charReader        CharacterReader
 	rngMu             sync.Mutex
 	rng               *mrand.Rand
-	visitorLimiter    Limiter
-	visitorCooldown   time.Duration
 	nowFunc           func() time.Time
 	timer             TimerService
 	charUpdater       CharacterUpdater
+	guildPoints       GuildPointsRegistrar
+	invMgr            InventoryManager
+	depotMgr          DepotManager
+	catalog           ItemCatalog
 	fullness          FullnessResetter
 	chapel            BlessingCleaner
 	onlineCounter     OnlineCounter
@@ -44,11 +46,8 @@ type Service struct {
 
 type ServiceOption func(*Service)
 
-func WithVisitorLimiter(limiter Limiter, cooldown time.Duration) ServiceOption {
-	return func(s *Service) {
-		s.visitorLimiter = limiter
-		s.visitorCooldown = cooldown
-	}
+func WithVisitorLimiter(_ Limiter, _ time.Duration) ServiceOption {
+	return func(s *Service) {}
 }
 
 func WithNowFunc(fn func() time.Time) ServiceOption {
@@ -72,6 +71,30 @@ func WithTimer(t TimerService) ServiceOption {
 func WithCharacterUpdater(u CharacterUpdater) ServiceOption {
 	return func(s *Service) {
 		s.charUpdater = u
+	}
+}
+
+func WithGuildPoints(g GuildPointsRegistrar) ServiceOption {
+	return func(s *Service) {
+		s.guildPoints = g
+	}
+}
+
+func WithInventoryManager(i InventoryManager) ServiceOption {
+	return func(s *Service) {
+		s.invMgr = i
+	}
+}
+
+func WithDepotManager(d DepotManager) ServiceOption {
+	return func(s *Service) {
+		s.depotMgr = d
+	}
+}
+
+func WithItemCatalog(c ItemCatalog) ServiceOption {
+	return func(s *Service) {
+		s.catalog = c
 	}
 }
 
@@ -110,7 +133,6 @@ func NewService(repo Repository, charReader CharacterReader, opts ...ServiceOpti
 		repo:              repo,
 		charReader:        charReader,
 		rng:               mrand.New(mrand.NewSource(time.Now().UnixNano())),
-		visitorCooldown:   24 * time.Hour,
 		baseSleepDuration: DefaultBaseSleepDuration,
 		nowFunc:           func() time.Time { return time.Now().UTC() },
 	}
@@ -120,7 +142,7 @@ func NewService(repo Repository, charReader CharacterReader, opts ...ServiceOpti
 	return s, nil
 }
 
-// GetHomeView retrieves the aggregated home view for a character, incrementing visitor count if visited by another character.
+// GetHomeView retrieves the aggregated home view for a character.
 func (s *Service) GetHomeView(ctx context.Context, homeCharacterID, visitorCharacterID string) (HomeView, error) {
 	homeChar, err := s.charReader.FindByID(ctx, homeCharacterID)
 	if err != nil {
@@ -131,20 +153,6 @@ func (s *Service) GetHomeView(ctx context.Context, homeCharacterID, visitorChara
 	}
 
 	isOwner := (homeCharacterID == visitorCharacterID)
-	now := s.nowFunc().UTC()
-
-	if !isOwner && visitorCharacterID != "" {
-		allowed := true
-		if s.visitorLimiter != nil && s.visitorCooldown > 0 {
-			res, err := s.visitorLimiter.Allow(ctx, "home:visit:"+homeCharacterID+":"+visitorCharacterID, 1, s.visitorCooldown)
-			if err == nil && !res.Allowed {
-				allowed = false
-			}
-		}
-		if allowed {
-			_ = s.repo.IncrementVisitorCount(ctx, homeCharacterID, now)
-		}
-	}
 
 	h, err := s.repo.GetHome(ctx, homeCharacterID)
 	if err != nil {
@@ -165,27 +173,14 @@ func (s *Service) GetHomeView(ctx context.Context, homeCharacterID, visitorChara
 	}, nil
 }
 
-// UpdateHome updates private home custom settings (theme, motto, companion_name).
-func (s *Service) UpdateHome(ctx context.Context, characterID, theme, motto, companionName string) (CharacterHome, error) {
+// UpdateHome updates private home custom settings (companion_name).
+func (s *Service) UpdateHome(ctx context.Context, characterID, companionName string) (CharacterHome, error) {
 	_, err := s.charReader.FindByID(ctx, characterID)
 	if err != nil {
 		if errors.Is(err, corecharacter.ErrNotFound) {
 			return CharacterHome{}, ErrCharacterNotFound
 		}
 		return CharacterHome{}, err
-	}
-
-	cleanTheme := strings.TrimSpace(theme)
-	if cleanTheme == "" {
-		cleanTheme = DefaultTheme
-	}
-	if len(cleanTheme) > MaxColorLength {
-		cleanTheme = cleanTheme[:MaxColorLength]
-	}
-
-	cleanMotto := strings.TrimSpace(motto)
-	if utf8.RuneCountInString(cleanMotto) > MaxMottoLength {
-		cleanMotto = string([]rune(cleanMotto)[:MaxMottoLength])
 	}
 
 	cleanCompanion := strings.TrimSpace(companionName)
@@ -201,8 +196,6 @@ func (s *Service) UpdateHome(ctx context.Context, characterID, theme, motto, com
 		return CharacterHome{}, err
 	}
 
-	h.Theme = cleanTheme
-	h.Motto = cleanMotto
 	h.CompanionName = cleanCompanion
 	h.UpdatedAt = s.nowFunc().UTC()
 
