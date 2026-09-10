@@ -12,7 +12,8 @@
     "internal/adventure/adventure.go#CharacterRepository",
     "internal/blackmarket/blackmarket.go#CharacterRepository",
     "internal/fleamarket/fleamarket.go#CharacterRepository",
-    "internal/gemstore/gemstore.go#CharacterRepository"
+    "internal/gemstore/gemstore.go#CharacterRepository",
+    "internal/bank/bank.go#Repository"
   ],
   "callers": [
     {
@@ -32,16 +33,16 @@
     {
       "module": "bank",
       "caller_method": "internal/database/bank_repository.go#BankRepository.Deposit",
-      "lock_mode": "UPDATE",
+      "lock_mode": "SELECT ... FOR UPDATE",
       "lock_order": 2,
-      "purpose": "Deduct gold from character wallet"
+      "purpose": "Deduct gold from character wallet and add to character deposit"
     },
     {
       "module": "bank",
       "caller_method": "internal/database/bank_repository.go#BankRepository.Withdraw",
-      "lock_mode": "UPDATE",
+      "lock_mode": "SELECT ... FOR UPDATE",
       "lock_order": 2,
-      "purpose": "Credit character wallet"
+      "purpose": "Deduct from character deposit, clamp character money to 999,999G and refund excess"
     },
     {
       "module": "blacksmith",

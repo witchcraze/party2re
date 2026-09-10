@@ -143,6 +143,7 @@ type Handler struct {
 	parties        PartyService
 	altar          AltarService
 	wishingWell    WishingWellService
+	bank           BankService
 	maintenance    MaintenanceService
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
@@ -342,6 +343,14 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/depot/expand", h.handleExpandDepot)
 	mux.HandleFunc("POST /characters/{id}/depot/send-money", h.handleDepotSendMoney)
 	mux.HandleFunc("POST /characters/{id}/depot/send-item", h.handleDepotSendItem)
+
+	if h.bank != nil {
+		mux.HandleFunc("GET /characters/{id}/bank", h.handleGetBankState)
+		mux.HandleFunc("POST /characters/{id}/bank/deposit", h.handleBankDeposit)
+		mux.HandleFunc("POST /characters/{id}/bank/withdraw", h.handleBankWithdraw)
+		mux.HandleFunc("POST /characters/{id}/bank/inspect", h.handleBankInspectNPC)
+		mux.HandleFunc("POST /characters/{id}/bank/talk", h.handleBankTalkNPC)
+	}
 
 	mux.HandleFunc("GET /park/posts", h.handleGetParkPosts)
 	mux.HandleFunc("POST /park/posts", h.handlePostParkMessage)

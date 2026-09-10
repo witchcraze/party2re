@@ -63,6 +63,7 @@ type Character struct {
 	OverFlea    int
 	OverStore   int
 	Color       string // Player chat/display color (HEX format: #RRGGBB, default: #ffffff)
+	Deposit     int64  // Bank gold deposit (預金): max 99,999,999,999,999 G
 }
 
 // JobMemory is the temporary pair of job states used by the job exchange

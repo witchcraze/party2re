@@ -105,7 +105,7 @@ func TestMultiModuleTransactionOrchestrationCommitAndRollback(t *testing.T) {
 				return fmt.Errorf("charRepo.Save: %w", err)
 			}
 			// 3. Deposit money into Bank (Deposit internally calls RunInTx, re-using ambient tx)
-			if _, _, err := bankRepo.Deposit(txCtx, player.ID, char.ID, 2000); err != nil {
+			if _, err := bankRepo.Deposit(txCtx, char.ID, 2000); err != nil {
 				return fmt.Errorf("bankRepo.Deposit: %w", err)
 			}
 			// 4. Deposit item into Depot
@@ -157,10 +157,8 @@ func TestMultiModuleTransactionOrchestrationCommitAndRollback(t *testing.T) {
 		if savedChar.Money != 3000 {
 			t.Fatalf("expected character money 3000 after 2000 deposit, got %d", savedChar.Money)
 		}
-
-		account, err := bankRepo.GetAccount(ctx, player.ID)
-		if err != nil || account.Balance != 2000 {
-			t.Fatalf("expected bank balance 2000, got %v, err=%v", account, err)
+		if savedChar.Deposit != 2000 {
+			t.Fatalf("expected character deposit 2000, got %d", savedChar.Deposit)
 		}
 
 		dep, err := depotRepo.FindByCharacterID(ctx, char.ID)
@@ -198,7 +196,7 @@ func TestMultiModuleTransactionOrchestrationCommitAndRollback(t *testing.T) {
 			if err := charRepo.Save(txCtx, char); err != nil {
 				return err
 			}
-			if _, _, err := bankRepo.Deposit(txCtx, player.ID, char.ID, 2000); err != nil {
+			if _, err := bankRepo.Deposit(txCtx, char.ID, 2000); err != nil {
 				return err
 			}
 			depotItem, err := coreitem.NewInstance(itemDefID, 5)
@@ -232,11 +230,6 @@ func TestMultiModuleTransactionOrchestrationCommitAndRollback(t *testing.T) {
 		foundChar, err := charRepo.FindByID(ctx, char.ID)
 		if err == nil && foundChar.ID != "" {
 			t.Fatalf("expected character to be rolled back, but found: %+v", foundChar)
-		}
-
-		account, err := bankRepo.GetAccount(ctx, player.ID)
-		if err == nil && account.Balance != 0 {
-			t.Fatalf("expected no bank account or 0 balance, got %+v", account)
 		}
 
 		dep, err := depotRepo.FindByCharacterID(ctx, char.ID)

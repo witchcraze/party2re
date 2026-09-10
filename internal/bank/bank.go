@@ -3,49 +3,86 @@ package bank
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math/rand"
 	"strings"
-	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	"github.com/witchcraze/party2re/internal/id"
 )
+
+const (
+	// MaxDeposit is the maximum deposit allowed in the bank (99兆9999億9999万9999 G).
+	MaxDeposit int64 = 99_999_999_999_999
+	// MaxWallet is the maximum gold held in the character wallet upon bank withdrawal (999,999 G).
+	MaxWallet int = 999_999
+	// NPCName is the Taxeed bank receptionist.
+	NPCName = "@タクシード"
+)
+
+// NPCDialogues lists standard bank greeting and service dialogues.
+var NPCDialogues = []string{
+	"ゴールドをお預かりいたします",
+	"24時間いつでも、手数料もございません",
+	"99999999999999 Gまでお預かりいたします",
+}
 
 var (
-	ErrInvalidPlayerID     = errors.New("invalid player ID")
-	ErrInvalidCharacterID  = errors.New("invalid character ID")
-	ErrInvalidAmount       = errors.New("amount must be positive")
-	ErrInsufficientFunds   = errors.New("insufficient character funds")
-	ErrInsufficientBalance = errors.New("insufficient bank balance")
-	ErrSelfTransfer        = errors.New("cannot transfer gold to self")
-	ErrAccountNotFound     = errors.New("bank account not found")
+	ErrInvalidCharacterID   = errors.New("invalid character ID")
+	ErrInvalidAmount        = errors.New("amount must be positive")
+	ErrInsufficientFunds    = errors.New("insufficient character funds")
+	ErrInsufficientBalance  = errors.New("insufficient bank balance")
+	ErrDepositLimitExceeded = errors.New("これ以上お預かりできません")
 )
 
-type Account struct {
-	PlayerID  string    `json:"player_id"`
-	Balance   int64     `json:"balance"`
-	UpdatedAt time.Time `json:"updated_at"`
+// State represents the current bank and wallet status of a character.
+type State struct {
+	CharacterID string   `json:"character_id"`
+	Money       int      `json:"money"`
+	Deposit     int64    `json:"deposit"`
+	MaxDeposit  int64    `json:"max_deposit"`
+	NPCName     string   `json:"npc_name"`
+	Dialogues   []string `json:"dialogues"`
 }
 
-type TransferRecord struct {
-	ID           string    `json:"id"`
-	FromPlayerID string    `json:"from_player_id"`
-	ToPlayerID   string    `json:"to_player_id"`
-	Amount       int64     `json:"amount"`
-	CreatedAt    time.Time `json:"created_at"`
+// DepositResult represents the result of depositing gold into the bank.
+type DepositResult struct {
+	CharacterID string `json:"character_id"`
+	Money       int    `json:"money"`
+	Deposit     int64  `json:"deposit"`
+	Amount      int64  `json:"amount"`
+	Message     string `json:"message"`
 }
 
+// WithdrawResult represents the result of withdrawing gold from the bank.
+type WithdrawResult struct {
+	CharacterID     string `json:"character_id"`
+	Money           int    `json:"money"`
+	Deposit         int64  `json:"deposit"`
+	Amount          int64  `json:"amount"`
+	ActualWithdrawn int    `json:"actual_withdrawn"`
+	Refunded        int64  `json:"refunded"`
+	Message         string `json:"message"`
+}
+
+// NPCInfo represents NPC receptionist metadata.
+type NPCInfo struct {
+	Name      string   `json:"name"`
+	Dialogues []string `json:"dialogues"`
+}
+
+// Repository defines the storage contract for character bank accounts.
 type Repository interface {
-	Deposit(ctx context.Context, playerID string, characterID string, amount int) (Account, corecharacter.Character, error)
-	Withdraw(ctx context.Context, playerID string, characterID string, amount int) (Account, corecharacter.Character, error)
-	Transfer(ctx context.Context, record TransferRecord) (from Account, to Account, err error)
-	GetAccount(ctx context.Context, playerID string) (Account, error)
-	ListTransfers(ctx context.Context, playerID string, limit int) ([]TransferRecord, error)
+	GetCharacter(ctx context.Context, characterID string) (corecharacter.Character, error)
+	Deposit(ctx context.Context, characterID string, amount int64) (corecharacter.Character, error)
+	Withdraw(ctx context.Context, characterID string, amount int64) (char corecharacter.Character, actualWithdrawn int, refunded int64, err error)
 }
 
+// Service provides bank operations aligned with Party2 specifications.
 type Service struct {
 	repository Repository
 }
 
+// NewService creates a new bank Service instance.
 func NewService(repository Repository) (*Service, error) {
 	if repository == nil {
 		return nil, errors.New("bank repository is nil")
@@ -53,96 +90,133 @@ func NewService(repository Repository) (*Service, error) {
 	return &Service{repository: repository}, nil
 }
 
-func (s *Service) GetAccount(ctx context.Context, playerID string) (Account, error) {
-	if strings.TrimSpace(playerID) == "" {
-		return Account{}, ErrInvalidPlayerID
+// CalculateDeposit performs pure calculation and validation for depositing gold.
+func CalculateDeposit(currentMoney int, currentDeposit int64, amount int64) (newMoney int, newDeposit int64, err error) {
+	if amount <= 0 {
+		return 0, 0, ErrInvalidAmount
 	}
-	return s.repository.GetAccount(ctx, strings.TrimSpace(playerID))
+	if int64(currentMoney) < amount {
+		return 0, 0, ErrInsufficientFunds
+	}
+	if currentDeposit > MaxDeposit-amount {
+		return 0, 0, ErrDepositLimitExceeded
+	}
+	return currentMoney - int(amount), currentDeposit + amount, nil
 }
 
-func (s *Service) Deposit(ctx context.Context, playerID string, characterID string, amount int) (Account, corecharacter.Character, error) {
-	if strings.TrimSpace(playerID) == "" {
-		return Account{}, corecharacter.Character{}, ErrInvalidPlayerID
-	}
-	if strings.TrimSpace(characterID) == "" {
-		return Account{}, corecharacter.Character{}, ErrInvalidCharacterID
-	}
+// CalculateWithdrawal performs pure calculation and validation for withdrawing gold,
+// enforcing the 999,999 G wallet clamp and refunding excess gold back to deposit.
+func CalculateWithdrawal(currentMoney int, currentDeposit int64, amount int64) (newMoney int, newDeposit int64, actualWithdrawn int, refunded int64, err error) {
 	if amount <= 0 {
-		return Account{}, corecharacter.Character{}, ErrInvalidAmount
+		return 0, 0, 0, 0, ErrInvalidAmount
 	}
-	return s.repository.Deposit(ctx, strings.TrimSpace(playerID), strings.TrimSpace(characterID), amount)
-}
-
-func (s *Service) Withdraw(ctx context.Context, playerID string, characterID string, amount int) (Account, corecharacter.Character, error) {
-	if strings.TrimSpace(playerID) == "" {
-		return Account{}, corecharacter.Character{}, ErrInvalidPlayerID
-	}
-	if strings.TrimSpace(characterID) == "" {
-		return Account{}, corecharacter.Character{}, ErrInvalidCharacterID
-	}
-	if amount <= 0 {
-		return Account{}, corecharacter.Character{}, ErrInvalidAmount
-	}
-	return s.repository.Withdraw(ctx, strings.TrimSpace(playerID), strings.TrimSpace(characterID), amount)
-}
-
-func (s *Service) Transfer(ctx context.Context, fromPlayerID string, toPlayerID string, amount int64) (Account, Account, TransferRecord, error) {
-	fromPlayerID = strings.TrimSpace(fromPlayerID)
-	toPlayerID = strings.TrimSpace(toPlayerID)
-	if fromPlayerID == "" || toPlayerID == "" {
-		return Account{}, Account{}, TransferRecord{}, ErrInvalidPlayerID
-	}
-	if fromPlayerID == toPlayerID {
-		return Account{}, Account{}, TransferRecord{}, ErrSelfTransfer
-	}
-	if amount <= 0 {
-		return Account{}, Account{}, TransferRecord{}, ErrInvalidAmount
+	if currentDeposit < amount {
+		return 0, 0, 0, 0, ErrInsufficientBalance
 	}
 
-	recordID := id.New()
-
-	record := TransferRecord{
-		ID:           recordID,
-		FromPlayerID: fromPlayerID,
-		ToPlayerID:   toPlayerID,
-		Amount:       amount,
-		CreatedAt:    time.Now().UTC(),
-	}
-
-	var (
-		fromAcc, toAcc Account
-		err            error
-	)
-	const maxRetries = 5
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		fromAcc, toAcc, err = s.repository.Transfer(ctx, record)
-		if err == nil {
-			break
+	needed := MaxWallet - currentMoney
+	if needed <= 0 {
+		clampedMoney := currentMoney
+		if clampedMoney > MaxWallet {
+			clampedMoney = MaxWallet
 		}
-		if isDeadlock(err) && attempt < maxRetries-1 {
-			time.Sleep(time.Duration(10*(attempt+1)) * time.Millisecond)
-			continue
-		}
-		return Account{}, Account{}, TransferRecord{}, err
+		return clampedMoney, currentDeposit, 0, amount, nil
 	}
 
-	return fromAcc, toAcc, record, nil
+	if amount > int64(needed) {
+		actualWithdrawn = needed
+		refunded = amount - int64(needed)
+		newMoney = MaxWallet
+		newDeposit = currentDeposit - int64(needed)
+		return newMoney, newDeposit, actualWithdrawn, refunded, nil
+	}
+
+	actualWithdrawn = int(amount)
+	refunded = 0
+	newMoney = currentMoney + actualWithdrawn
+	newDeposit = currentDeposit - amount
+	return newMoney, newDeposit, actualWithdrawn, refunded, nil
 }
 
-func isDeadlock(err error) bool {
-	if err == nil {
-		return false
+// GetState returns the current bank and wallet status for the character.
+func (s *Service) GetState(ctx context.Context, characterID string) (State, error) {
+	characterID = strings.TrimSpace(characterID)
+	if characterID == "" {
+		return State{}, ErrInvalidCharacterID
 	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "deadlock") || strings.Contains(msg, "1213")
+	char, err := s.repository.GetCharacter(ctx, characterID)
+	if err != nil {
+		return State{}, err
+	}
+	return State{
+		CharacterID: char.ID,
+		Money:       char.Money,
+		Deposit:     char.Deposit,
+		MaxDeposit:  MaxDeposit,
+		NPCName:     NPCName,
+		Dialogues:   NPCDialogues,
+	}, nil
 }
 
-func (s *Service) ListTransfers(ctx context.Context, playerID string, limit int) ([]TransferRecord, error) {
-	if strings.TrimSpace(playerID) == "" {
-		return nil, ErrInvalidPlayerID
+// Deposit deposits the specified amount of gold from the character's wallet into their bank savings.
+func (s *Service) Deposit(ctx context.Context, characterID string, amount int64) (DepositResult, error) {
+	characterID = strings.TrimSpace(characterID)
+	if characterID == "" {
+		return DepositResult{}, ErrInvalidCharacterID
 	}
-	if limit <= 0 {
-		limit = 20
+	if amount <= 0 {
+		return DepositResult{}, ErrInvalidAmount
 	}
-	return s.repository.ListTransfers(ctx, strings.TrimSpace(playerID), limit)
+	char, err := s.repository.Deposit(ctx, characterID, amount)
+	if err != nil {
+		return DepositResult{}, err
+	}
+	return DepositResult{
+		CharacterID: char.ID,
+		Money:       char.Money,
+		Deposit:     char.Deposit,
+		Amount:      amount,
+		Message:     fmt.Sprintf("%d Gお預かりいたしました", amount),
+	}, nil
+}
+
+// Withdraw withdraws gold from the character's bank savings into their wallet,
+// clamping wallet gold at 999,999 G and refunding any excess back to deposit.
+func (s *Service) Withdraw(ctx context.Context, characterID string, amount int64) (WithdrawResult, error) {
+	characterID = strings.TrimSpace(characterID)
+	if characterID == "" {
+		return WithdrawResult{}, ErrInvalidCharacterID
+	}
+	if amount <= 0 {
+		return WithdrawResult{}, ErrInvalidAmount
+	}
+	char, actualWithdrawn, refunded, err := s.repository.Withdraw(ctx, characterID, amount)
+	if err != nil {
+		return WithdrawResult{}, err
+	}
+	return WithdrawResult{
+		CharacterID:     char.ID,
+		Money:           char.Money,
+		Deposit:         char.Deposit,
+		Amount:          amount,
+		ActualWithdrawn: actualWithdrawn,
+		Refunded:        refunded,
+		Message:         fmt.Sprintf("%d Gお返しいたします", amount),
+	}, nil
+}
+
+// InspectNPC returns metadata regarding the Taxeed bank receptionist.
+func (s *Service) InspectNPC() NPCInfo {
+	return NPCInfo{
+		Name:      NPCName,
+		Dialogues: NPCDialogues,
+	}
+}
+
+// TalkNPC returns a random greeting dialogue from the bank receptionist.
+func (s *Service) TalkNPC() string {
+	if len(NPCDialogues) == 0 {
+		return ""
+	}
+	return NPCDialogues[rand.Intn(len(NPCDialogues))]
 }
