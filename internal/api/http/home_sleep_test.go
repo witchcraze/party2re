@@ -111,6 +111,26 @@ func TestHomeSleepEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("POST /characters/{id}/home/sleep - house not found for homeless or expired target", func(t *testing.T) {
+		mockHome := &mockHomeService{
+			sleepFn: func(ctx context.Context, characterID, targetHomeID string) (home.SleepResult, error) {
+				return home.SleepResult{}, home.ErrHouseNotFound
+			},
+		}
+		h := newTestHandler(t, players, characters, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome))
+		router := h.Router()
+
+		req := httptest.NewRequest(http.MethodPost, "/characters/char-1/home/sleep", bytes.NewReader([]byte(`{"target_home_id":"c2"}`)))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 Not Found, got %d", rec.Code)
+		}
+	})
+
 	t.Run("GET /characters/{id}/home/sleep - status", func(t *testing.T) {
 		mockHome := &mockHomeService{
 			getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {

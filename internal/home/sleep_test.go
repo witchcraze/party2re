@@ -122,6 +122,15 @@ func TestSleepAndWake_Lifecycle(t *testing.T) {
 		t.Fatalf("failed to create service: %v", err)
 	}
 
+	// Set up active house for friend (c2)
+	future := time.Now().UTC().Add(24 * time.Hour)
+	_ = mockHomeRepo.SaveHome(ctx, CharacterHome{
+		CharacterID: "c2",
+		TownID:      "town-1",
+		HouseStyle:  "style-1",
+		ExpiresAt:   &future,
+	})
+
 	// 1. Sleep in friend's house (c2)
 	res, err := svc.Sleep(ctx, "c1", "c2")
 	if err != nil {
@@ -234,4 +243,88 @@ func TestSleep_JobMemoryReversal(t *testing.T) {
 	if updated.JobID != "mage" || updated.SP != 20 {
 		t.Fatalf("expected Job to be restored to mage (SP 20), got JobID=%s, SP=%d", updated.JobID, updated.SP)
 	}
+}
+
+func TestSleep_VisitingHomelessOrExpiredHouse(t *testing.T) {
+	ctx := context.Background()
+	charRepo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1":          {ID: "c1", Name: "Hero"},
+			"c2_homeless": {ID: "c2_homeless", Name: "Homeless"},
+			"c3_expired":  {ID: "c3_expired", Name: "Expired"},
+			"c4_active":   {ID: "c4_active", Name: "ActiveHost"},
+		},
+	}
+	mockHomeRepo := newMockHomeRepo()
+	past := time.Now().UTC().Add(-24 * time.Hour)
+	_ = mockHomeRepo.SaveHome(ctx, CharacterHome{
+		CharacterID: "c3_expired",
+		TownID:      "town-1",
+		HouseStyle:  "style-1",
+		ExpiresAt:   &past,
+	})
+	future := time.Now().UTC().Add(24 * time.Hour)
+	_ = mockHomeRepo.SaveHome(ctx, CharacterHome{
+		CharacterID: "c4_active",
+		TownID:      "town-1",
+		HouseStyle:  "style-1",
+		ExpiresAt:   &future,
+	})
+
+	timerSvc := timer.NewService(nil)
+	svc, err := NewService(
+		mockHomeRepo,
+		charRepo,
+		WithTimer(timerSvc),
+		WithCharacterUpdater(charRepo),
+		WithBaseSleepDuration(10*time.Millisecond),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	t.Run("visiting homeless player returns ErrHouseNotFound", func(t *testing.T) {
+		_, err := svc.Sleep(ctx, "c1", "c2_homeless")
+		if !errors.Is(err, ErrHouseNotFound) {
+			t.Fatalf("expected ErrHouseNotFound, got %v", err)
+		}
+	})
+
+	t.Run("visiting expired house returns ErrHouseNotFound", func(t *testing.T) {
+		_, err := svc.Sleep(ctx, "c1", "c3_expired")
+		if !errors.Is(err, ErrHouseNotFound) {
+			t.Fatalf("expected ErrHouseNotFound, got %v", err)
+		}
+	})
+
+	t.Run("visiting non-existent character returns ErrCharacterNotFound", func(t *testing.T) {
+		_, err := svc.Sleep(ctx, "c1", "nonexistent")
+		if !errors.Is(err, ErrCharacterNotFound) {
+			t.Fatalf("expected ErrCharacterNotFound, got %v", err)
+		}
+	})
+
+	t.Run("sleeping in own home without town house succeeds", func(t *testing.T) {
+		res, err := svc.Sleep(ctx, "c1", "c1")
+		if err != nil {
+			t.Fatalf("expected success, got %v", err)
+		}
+		if !res.Sleeping {
+			t.Fatalf("expected sleeping to be true")
+		}
+		// wake up to clear sleep lock
+		_, _ = svc.Wake(ctx, "c1")
+	})
+
+	t.Run("visiting active house succeeds", func(t *testing.T) {
+		// Wait for timer to clear
+		time.Sleep(20 * time.Millisecond)
+		res, err := svc.Sleep(ctx, "c1", "c4_active")
+		if err != nil {
+			t.Fatalf("expected success, got %v", err)
+		}
+		if !res.Sleeping || res.HomeCharacterID != "c4_active" {
+			t.Fatalf("unexpected result: %+v", res)
+		}
+	})
 }

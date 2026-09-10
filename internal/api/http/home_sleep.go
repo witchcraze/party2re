@@ -57,7 +57,7 @@ func (h *Handler) handleHomeSleep(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusConflict, err)
 				return
 			}
-			if errors.Is(err, home.ErrCharacterNotFound) {
+			if errors.Is(err, home.ErrCharacterNotFound) || errors.Is(err, home.ErrHouseNotFound) || errors.Is(err, home.ErrHouseExpired) {
 				writeError(w, http.StatusNotFound, err)
 				return
 			}
