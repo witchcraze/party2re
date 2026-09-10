@@ -11,6 +11,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
+	"github.com/witchcraze/party2re/internal/core/item"
 )
 
 type testClock struct{ now time.Time }
@@ -616,5 +617,76 @@ func TestAdventure_VictoryHook(t *testing.T) {
 		if hookedGold != claimed.BattleResult.Reward.Currency {
 			t.Errorf("expected hookedGold %d, got %d", claimed.BattleResult.Reward.Currency, hookedGold)
 		}
+	}
+}
+
+func TestValidateCombatItem(t *testing.T) {
+	tests := []struct {
+		name    string
+		def     item.Definition
+		wantErr bool
+	}{
+		{
+			name: "combat only item allowed",
+			def: item.Definition{
+				ID:            "item-001",
+				Name:          "薬草",
+				UsageCategory: item.UsageCategoryCombatOnly,
+			},
+			wantErr: false,
+		},
+		{
+			name: "anytime seed item rejected",
+			def: item.Definition{
+				ID:            "item-060",
+				Name:          "力の種",
+				UsageCategory: item.UsageCategoryAnytime,
+			},
+			wantErr: true,
+		},
+		{
+			name: "small medal rejected",
+			def: item.Definition{
+				ID:            "item-100",
+				Name:          "小さなメダル",
+				UsageCategory: item.UsageCategoryAnytime,
+			},
+			wantErr: true,
+		},
+		{
+			name: "passive item rejected",
+			def: item.Definition{
+				ID:            "item-037",
+				Name:          "闘気の盾",
+				UsageCategory: item.UsageCategoryCombatPassive,
+			},
+			wantErr: true,
+		},
+		{
+			name: "material item rejected",
+			def: item.Definition{
+				ID:            "item-200",
+				Name:          "鉄のインゴット",
+				UsageCategory: item.UsageCategoryNone,
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateCombatItem(tt.def)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error for item %s, got nil", tt.def.Name)
+				} else if !errors.Is(err, ErrCannotUseInCombat) {
+					t.Errorf("expected ErrCannotUseInCombat, got %v", err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("expected no error for item %s, got %v", tt.def.Name, err)
+				}
+			}
+		})
 	}
 }

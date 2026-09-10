@@ -20,12 +20,14 @@ A participant in combat possesses combat attributes:
 - `Agility`: Speed attribute determining turn resolution order (≥ 0).
 - `JobSkill`: Optional class skill (`ActionSkill`).
 - `CustomSkill`: Optional custom blended skill (`ActionCustomSkill`).
+- `ActionItems`: Slice of active combat items (`ActionItem`) for `@どうぐ` commands.
 - `RevivalTriggers`: Slice of active revival conditions/items (`pharaoh`, `undying`, `touki_shield`, `dokuro_amulet`, `cursed_revive`).
 - `Defeated`: Boolean flag indicating if participant is knocked out.
 
 ### Action Models
 - **Job Skill (`ActionSkill`)**: Class skill requiring MP. Includes `Name`, `CostMP`, `Power`, `Element`, `TargetScope` (`TargetScopeSingleEnemy`, `TargetScopeAllEnemies`, `TargetScopeAllAllies`, `TargetScopeSelf`), and optional `Heal` boolean.
 - **Custom Skill (`ActionCustomSkill`)**: Blended gem skill requiring CMP. Includes `Name`, `Incantation` (quote announced in logs), `CostCMP`, and a slice of `GemEffect` entries (damage, heal, create field, create anti-field).
+- **Combat Item (`ActionItem`)**: Active item command requiring `UsageCategory == UsageCategoryCombatOnly` (`1`). Non-combat items (categories `0`, `2`, `3`, `4`) are strictly prohibited and return `ErrCannotUseInCombat`. Includes `ID`, `Name`, `UsageCategory`, `Kind` (`heal`, `buff`, `status`, `attack`), `Power`, `TargetScope`, and optional `Element`, `BuffStat`, or `Status`.
 - **Gem Effect (`GemEffect`)**: Type (`attack`, `heal`, `field`, `anti_field`), `Power`, `Element`, and `TargetScope`.
 
 ### Field State (`FieldState`)
@@ -51,7 +53,7 @@ Replicating the original Party2 CGI combat engine (`_battle.cgi`, `_skill.cgi`):
 
 2. **Turn Execution (per participant)**:
    - Skip if participant has been defeated earlier in the round.
-   - **Action Selection**:
+   - **Action Selection Priority**:
      1. If `CustomSkill` is configured and participant has sufficient CMP:
         - Deduct CMP.
         - Log incantation quote: `"<Name> calls: '<Incantation>'!"`.
@@ -59,7 +61,13 @@ Replicating the original Party2 CGI combat engine (`_battle.cgi`, `_skill.cgi`):
      2. Else if `JobSkill` is configured and participant has sufficient MP:
         - Deduct MP.
         - Apply job skill effects according to `TargetScope` and `Element`.
-     3. Else execute **Normal Attack**:
+     3. Else if participant has available `ActionItems`:
+        - Use the first available `ActionItem` (validated with `UsageCategoryCombatOnly`).
+        - Execute item effect (Heal, Buff, Status, or Attack) and consume item from combatant's active items.
+        - Log item action: `"<Actor> は <Item> をつかった！ ..."`.
+     4. Else if `Defending`:
+        - Execute defend stance.
+     5. Else execute **Normal Attack**:
         - Target: First living opponent.
         - Base Damage: $\max(1, \text{Attack}_{\text{attacker}} - \text{Defense}_{\text{defender}})$.
         - Apply Field elemental multiplier if attacker has an elemental affinity.

@@ -105,7 +105,7 @@ func TestMemoryTimer_DailyQuota(t *testing.T) {
 	}
 
 	// Second consumption on same day fails
-	ok, err = svc.ConsumeDailyQuota(ctx, action, charID, now.Add(2*time.Hour))
+	ok, err = svc.ConsumeDailyQuota(ctx, action, charID, now.Add(1*time.Minute))
 	if err != nil || ok {
 		t.Fatalf("expected consumption denied, got ok=%v, err=%v", ok, err)
 	}

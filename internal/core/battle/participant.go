@@ -92,6 +92,7 @@ type ParticipantBuilder struct {
 	defending    bool
 	status       string
 	items        []string
+	actionItems  []ActionItem
 }
 
 // NewParticipantBuilder initializes a new builder with an ID.
@@ -196,6 +197,12 @@ func (b *ParticipantBuilder) WithItems(itemIDs ...string) *ParticipantBuilder {
 	return b
 }
 
+// WithActionItems sets actionable combat items (@どうぐ).
+func (b *ParticipantBuilder) WithActionItems(items ...ActionItem) *ParticipantBuilder {
+	b.actionItems = append(b.actionItems, items...)
+	return b
+}
+
 // Build validates and returns the constructed Participant.
 func (b *ParticipantBuilder) Build() (Participant, error) {
 	p, err := NewParticipant(b.id, b.hp, b.attack, b.defense)
@@ -217,6 +224,10 @@ func (b *ParticipantBuilder) Build() (Participant, error) {
 	p.Defending = b.defending
 	p.Status = b.status
 	p.ItemDefinitionIDs = b.items
+	p.ActionItems = b.actionItems
+	if err := validateParticipant(p); err != nil {
+		return Participant{}, err
+	}
 	return p, nil
 }
 

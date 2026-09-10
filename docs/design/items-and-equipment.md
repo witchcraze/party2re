@@ -26,6 +26,10 @@ Derived from the authentic Party2 Perl CGI `@ites` table (`$ites[no][3]`), every
 - **`UsageCategoryCombatPassive` (`3`)**: Automatically triggers or provides passive protection in combat (charms, talismans, elemental orbs). Total: 117 items.
 - **`UsageCategoryDepotAfterAction` (`4`)**: Special processing during quest participation or depot after-action (e.g. `item-113`, `item-114`, `item-259`). Total: 3 items.
 
+### Usage Location Validation Rules
+- **Combat Action Command (`＠どうぐ`)**: Active item execution in combat (`ActionItem`) is strictly restricted to `UsageCategoryCombatOnly` (`1`). Non-combat items (seeds, medals, materials, passives; categories `0`, `2`, `3`, `4`) are rejected with `ErrCannotUseInCombat` (`item cannot be used in combat`) and are never consumed in battle.
+- **Home Command (`＠ほーむ`)**: Active item consumption at Home is restricted to `UsageCategoryAnytime` (`2`) and `UsageCategoryDepotAfterAction` (`4`). Combat items (`1`) return `ErrCannotUseHere` (`%sは戦闘中でしか使えません`), and non-usable items (`0`, `3`) return `%sはここでは使えません`.
+
 ### Pricing Rules
 - **Purchase Price**: Defined in the item catalog (`Price`).
 - **Resale Price**: Exactly 50% of the base purchase price ($\lfloor\text{Price} / 2\rfloor$).
