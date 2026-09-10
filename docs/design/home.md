@@ -46,6 +46,7 @@ Asynchronous direct messaging between characters:
   - Only the recipient may mark a letter as read.
   - **Independent Deletion Semantics**: The sender and recipient maintain independent deletion flags (`is_deleted_by_sender` and `is_deleted_by_recipient`). Deletion of a letter by one party does not remove the letter from the other party's view or alter the recipient's unread counter.
   - **Physical Purge Lifecycle**: When both the sender and recipient have deleted the letter, the database record is physically removed.
+  - **Transactional Concurrency Guarantee**: Concurrent deletion by sender and recipient is serialized within `RunInTx` using pessimistic row-locking (`SELECT ... FOR UPDATE`), eliminating lost updates and ensuring reliable physical purging when both parties delete.
 
 ### 3. Companion Greeting Phrases (`character_companion_phrases`)
 
