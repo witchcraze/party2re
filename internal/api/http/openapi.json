@@ -10314,6 +10314,16 @@
             },
             "description": "Forbidden"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character or visited house not found or expired"
+          },
           "409": {
             "content": {
               "application/json": {

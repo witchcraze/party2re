@@ -109,6 +109,17 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 		if _, err := s.charReader.FindByID(ctx, targetHomeID); err != nil {
 			return SleepResult{}, ErrCharacterNotFound
 		}
+		targetHome, err := s.repo.GetHome(ctx, targetHomeID)
+		if err != nil {
+			return SleepResult{}, err
+		}
+		now := s.nowFunc()
+		if now.IsZero() {
+			now = time.Now()
+		}
+		if !targetHome.IsActive(now.UTC()) {
+			return SleepResult{}, ErrHouseNotFound
+		}
 	}
 
 	isSleeping, err := s.timer.IsLocked(ctx, timer.CategorySleep, characterID)

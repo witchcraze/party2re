@@ -86,6 +86,7 @@ Persistent ledger for incoming transfer events:
 
 True Party2 character recovery is conducted at Home (either one's own or a visited player's house):
 - **Free Recovery**: No monetary fee (deprecates fictional paid Inn).
+- **Visiting House Restriction**: When sleeping at another player's house (`target_home_id != character_id`), the host must own an active, unexpired town house (`targetHome.IsActive(now)`). If the host character has never built a house or their lease has expired, the request is rejected with `ErrHouseNotFound` (HTTP `404 Not Found`), matching legacy `home.cgi:1-7` (`"$yhomeという家は見つかりません"`). A character can always sleep in their own private home even without a town estate.
 - **Concurrency Scaling**: Sleep duration scales by online concurrent player count:
   - `< 20` players: 1x base duration (60 seconds)
   - `>= 20` players: 2x base duration (120 seconds)
@@ -108,6 +109,8 @@ True Party2 character recovery is conducted at Home (either one's own or a visit
 | `GET` | `/towns/{town_id}/houses` | Public | List active houses in a specified town |
 | `GET` | `/houses/check` | Public | Check a character's house status by query `?target=...` |
 | `POST` | `/characters/{id}/color` | Owner Session | Update character font color (`#RRGGBB`) |
+| `POST` | `/characters/{id}/home/sleep` | Owner Session | Start sleeping at home (or visited player's active town house) |
+| `GET` | `/characters/{id}/home/sleep` | Owner Session | Check current sleep timer and status |
 | `GET` | `/characters/{id}/home/items` | Owner Session | List inspectable and usable items in inventory & depot |
 | `POST` | `/characters/{id}/home/items/use` | Owner Session | Inspect equipment or consume seeds/medals/fatigue items from home |
 | `GET` | `/homes/{id}` | Optional | Get aggregated home view for character `id` (with optional `?visitor_id=...`) |
