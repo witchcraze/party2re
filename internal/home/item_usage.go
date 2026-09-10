@@ -212,6 +212,13 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	}
 
 	// Consumable item logic
+	if def.UsageCategory == item.UsageCategoryCombatOnly {
+		return nil, fmt.Errorf("%w: %sは戦闘中でしか使えません", ErrCannotUseHere, def.Name)
+	}
+	if def.UsageCategory != item.UsageCategoryNone && !def.UsageCategory.IsUsableAtHome() {
+		return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
+	}
+
 	var msg string
 
 	switch def.Name {

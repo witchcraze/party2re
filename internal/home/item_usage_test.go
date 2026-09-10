@@ -3,6 +3,7 @@ package home
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -125,21 +126,21 @@ func TestItemUsage(t *testing.T) {
 		defs: map[string]coreitem.Definition{
 			"item-wea":    {ID: "item-wea", Name: "銅の剣", Price: 100, Slot: coreitem.SlotMainHand},
 			"item-arm":    {ID: "item-arm", Name: "革の鎧", Price: 150, Slot: coreitem.SlotBody},
-			"item-seed1":  {ID: "item-seed1", Name: "命の木の実", Price: 50, Slot: coreitem.SlotNone},
-			"item-seed2":  {ID: "item-seed2", Name: "不思議な木の実", Price: 50, Slot: coreitem.SlotNone},
-			"item-seed3":  {ID: "item-seed3", Name: "力の種", Price: 50, Slot: coreitem.SlotNone},
-			"item-seed4":  {ID: "item-seed4", Name: "守りの種", Price: 50, Slot: coreitem.SlotNone},
-			"item-seed5":  {ID: "item-seed5", Name: "素早さの種", Price: 50, Slot: coreitem.SlotNone},
-			"item-seed6":  {ID: "item-seed6", Name: "スキルの種", Price: 50, Slot: coreitem.SlotNone},
-			"item-happy":  {ID: "item-happy", Name: "幸せの種", Price: 3000, Slot: coreitem.SlotNone},
-			"item-fight":  {ID: "item-fight", Name: "ファイト一発", Price: 3000, Slot: coreitem.SlotNone},
-			"item-fight2": {ID: "item-fight2", Name: "気合の霊薬", Price: 3000, Slot: coreitem.SlotNone},
-			"item-medal":  {ID: "item-medal", Name: "小さなメダル", Price: 0, Slot: coreitem.SlotNone},
-			"item-herb":   {ID: "item-herb", Name: "薬草", Price: 8, Slot: coreitem.SlotNone},
-			"item-potion": {ID: "item-potion", Name: "特薬草", Price: 250, Slot: coreitem.SlotNone},
-			"item-drop":   {ID: "item-drop", Name: "世界樹のしずく", Price: 5000, Slot: coreitem.SlotNone},
-			"item-water":  {ID: "item-water", Name: "魔法の聖水", Price: 500, Slot: coreitem.SlotNone},
-			"item-other":  {ID: "item-other", Name: "爆弾岩の破片", Price: 200, Slot: coreitem.SlotNone},
+			"item-seed1":  {ID: "item-seed1", Name: "命の木の実", Price: 50, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryAnytime},
+			"item-seed2":  {ID: "item-seed2", Name: "不思議な木の実", Price: 50, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryAnytime},
+			"item-seed3":  {ID: "item-seed3", Name: "力の種", Price: 50, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryAnytime},
+			"item-seed4":  {ID: "item-seed4", Name: "守りの種", Price: 50, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryAnytime},
+			"item-seed5":  {ID: "item-seed5", Name: "素早さの種", Price: 50, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryAnytime},
+			"item-seed6":  {ID: "item-seed6", Name: "スキルの種", Price: 50, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryAnytime},
+			"item-happy":  {ID: "item-happy", Name: "幸せの種", Price: 3000, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryAnytime},
+			"item-fight":  {ID: "item-fight", Name: "ファイト一発", Price: 3000, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryAnytime},
+			"item-fight2": {ID: "item-fight2", Name: "気合の霊薬", Price: 3000, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryAnytime},
+			"item-medal":  {ID: "item-medal", Name: "小さなメダル", Price: 0, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryAnytime},
+			"item-herb":   {ID: "item-herb", Name: "薬草", Price: 8, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryCombatOnly},
+			"item-potion": {ID: "item-potion", Name: "特薬草", Price: 250, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryCombatOnly},
+			"item-drop":   {ID: "item-drop", Name: "世界樹のしずく", Price: 5000, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryCombatOnly},
+			"item-water":  {ID: "item-water", Name: "魔法の聖水", Price: 500, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryCombatOnly},
+			"item-other":  {ID: "item-other", Name: "爆弾岩の破片", Price: 200, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryNone},
 		},
 	}
 
@@ -401,10 +402,142 @@ func TestItemUsage(t *testing.T) {
 		}
 	})
 
-	t.Run("cannot use battle-only item", func(t *testing.T) {
+	t.Run("cannot use combat-only items in home", func(t *testing.T) {
+		combatInstances := []struct {
+			instID string
+			name   string
+		}{
+			{"inst-herb", "薬草"},
+			{"inst-potion", "特薬草"},
+			{"inst-drop", "世界樹のしずく"},
+			{"inst-water", "魔法の聖水"},
+		}
+
+		for _, itemCase := range combatInstances {
+			t.Run(itemCase.name, func(t *testing.T) {
+				res, err := svc.UseHomeItem(ctx, "char-1", itemCase.instID, "inventory")
+				if !errors.Is(err, ErrCannotUseHere) {
+					t.Fatalf("expected ErrCannotUseHere, got res=%+v, err=%v", res, err)
+				}
+				expectedSubstr := fmt.Sprintf("%sは戦闘中でしか使えません", itemCase.name)
+				if !strings.Contains(err.Error(), expectedSubstr) {
+					t.Errorf("expected error message to contain %q, got %q", expectedSubstr, err.Error())
+				}
+			})
+		}
+	})
+
+	t.Run("cannot use non-usable item in home", func(t *testing.T) {
 		res, err := svc.UseHomeItem(ctx, "char-1", "inst-other", "inventory")
 		if !errors.Is(err, ErrCannotUseHere) {
 			t.Fatalf("expected ErrCannotUseHere, got res=%+v, err=%v", res, err)
 		}
+		expectedSubstr := "爆弾岩の破片はここでは使えません"
+		if !strings.Contains(err.Error(), expectedSubstr) {
+			t.Errorf("expected error message to contain %q, got %q", expectedSubstr, err.Error())
+		}
 	})
+}
+
+func TestUseHomeItem_AuthenticCatalogMatrix(t *testing.T) {
+	ctx := context.Background()
+	cat, err := coreitem.InitialCatalog()
+	if err != nil {
+		t.Fatalf("InitialCatalog failed: %v", err)
+	}
+
+	char := corecharacter.Character{
+		ID:    "char-matrix",
+		Name:  "Tester",
+		Level: 10,
+	}
+	chars := map[string]corecharacter.Character{char.ID: char}
+	charReader := &mockCharReader{chars: chars}
+	charUpdater := &mockCharUpdater{chars: chars}
+	repo := newMockHomeRepo(chars)
+
+	// Verify all combat-only definitions are rejected with authentic message
+	consumableCombatCount := 0
+	equipmentCombatCount := 0
+	for _, def := range cat.Definitions() {
+		def := def
+		if def.UsageCategory == coreitem.UsageCategoryCombatOnly {
+			if def.Slot == coreitem.SlotNone {
+				consumableCombatCount++
+				t.Run("consumable_combat_only_"+def.ID, func(t *testing.T) {
+					inv, err := coreinventory.New(char.ID)
+					if err != nil {
+						t.Fatalf("New inventory failed: %v", err)
+					}
+					_ = inv.Add(coreitem.Instance{ID: "inst-" + def.ID, DefinitionID: def.ID, Quantity: 1})
+					invMgr := &mockInventoryManager{invs: map[string]coreinventory.Inventory{char.ID: inv}}
+					depotMgr := &mockDepotManager{depots: make(map[string]depot.Depot)}
+
+					svc, err := NewService(
+						repo,
+						charReader,
+						WithCharacterUpdater(charUpdater),
+						WithInventoryManager(invMgr),
+						WithDepotManager(depotMgr),
+						WithItemCatalog(cat),
+					)
+					if err != nil {
+						t.Fatalf("NewService failed: %v", err)
+					}
+
+					res, err := svc.UseHomeItem(ctx, char.ID, "inst-"+def.ID, "inventory")
+					if !errors.Is(err, ErrCannotUseHere) {
+						t.Fatalf("[%s] expected ErrCannotUseHere, got res=%+v, err=%v", def.ID, res, err)
+					}
+					expectedSubstr := fmt.Sprintf("%sは戦闘中でしか使えません", def.Name)
+					if !strings.Contains(err.Error(), expectedSubstr) {
+						t.Errorf("[%s] expected error message to contain %q, got %q", def.ID, expectedSubstr, err.Error())
+					}
+					// Verify item was not consumed
+					currentInv, _ := invMgr.FindByCharacterID(ctx, char.ID)
+					if inst, found := currentInv.Find("inst-" + def.ID); !found || inst.Quantity != 1 {
+						t.Errorf("[%s] item should not have been consumed from inventory: found=%v, quantity=%d", def.ID, found, inst.Quantity)
+					}
+				})
+			} else {
+				equipmentCombatCount++
+				t.Run("equipment_combat_only_"+def.ID, func(t *testing.T) {
+					inv, err := coreinventory.New(char.ID)
+					if err != nil {
+						t.Fatalf("New inventory failed: %v", err)
+					}
+					_ = inv.Add(coreitem.Instance{ID: "inst-" + def.ID, DefinitionID: def.ID, Quantity: 1})
+					invMgr := &mockInventoryManager{invs: map[string]coreinventory.Inventory{char.ID: inv}}
+					depotMgr := &mockDepotManager{depots: make(map[string]depot.Depot)}
+
+					svc, err := NewService(
+						repo,
+						charReader,
+						WithCharacterUpdater(charUpdater),
+						WithInventoryManager(invMgr),
+						WithDepotManager(depotMgr),
+						WithItemCatalog(cat),
+					)
+					if err != nil {
+						t.Fatalf("NewService failed: %v", err)
+					}
+
+					res, err := svc.UseHomeItem(ctx, char.ID, "inst-"+def.ID, "inventory")
+					if err != nil {
+						t.Fatalf("[%s] unexpected error inspecting equipment: %v", def.ID, err)
+					}
+					if res.Action != "inspect" || res.Consumed {
+						t.Errorf("[%s] expected inspect action without consumption, got %+v", def.ID, res)
+					}
+				})
+			}
+		}
+	}
+
+	if consumableCombatCount != 50 {
+		t.Fatalf("expected exactly 50 combat-only consumable items in authentic catalog, got %d", consumableCombatCount)
+	}
+	if equipmentCombatCount != 3 {
+		t.Fatalf("expected exactly 3 combat-only equipment items in authentic catalog, got %d", equipmentCombatCount)
+	}
 }

@@ -18,6 +18,14 @@ Definitions are organized into five JSON data catalogs:
 4. `accessories.json`: Rings, amulets, and trinkets.
 5. `consumables.json`: Potions, herbs, craft materials, and quest items.
 
+### Usage Location Categories (`UsageCategory`)
+Derived from the authentic Party2 Perl CGI `@ites` table (`$ites[no][3]`), every item definition specifies its authorized usage context:
+- **`UsageCategoryNone` (`0`)**: Not actively usable via menus (materials, coins, job emblems, auto-consumed quest items). Total: 43 items (including 0: なし).
+- **`UsageCategoryCombatOnly` (`1`)**: Usable strictly during active battle commands (`＠どうぐ`). Total: 53 items (50 consumables like herbs/drops/waters and 3 combat gear).
+- **`UsageCategoryAnytime` (`2`)**: Usable anytime / at Home (`＠ほーむ`) (seeds, medals, fight elixir, recipes). Total: 53 items.
+- **`UsageCategoryCombatPassive` (`3`)**: Automatically triggers or provides passive protection in combat (charms, talismans, elemental orbs). Total: 117 items.
+- **`UsageCategoryDepotAfterAction` (`4`)**: Special processing during quest participation or depot after-action (e.g. `item-113`, `item-114`, `item-259`). Total: 3 items.
+
 ### Pricing Rules
 - **Purchase Price**: Defined in the item catalog (`Price`).
 - **Resale Price**: Exactly 50% of the base purchase price ($\lfloor\text{Price} / 2\rfloor$).
