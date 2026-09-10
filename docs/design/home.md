@@ -73,8 +73,7 @@ Adventurers can inspect equipment and consume location-2 items directly from the
     - `スキルの種`: Increases SP by 1 (not clamped by OverLevel).
     - `小さなメダル`: Consumed and increases `SmallMedals` counter by 1.
     - `幸せの種`: Sets experience to `Level * Level * 10` (triggers level up on next adventure: `"次のクエスト時にレベルアップ！"`).
-    - `ファイト一発` (or IP alias `気合の霊薬`): Resets tiredness (`Tired`) to 0 (`"元気全快！%sの疲労が回復した！"`).
-  - Combat recovery items (`薬草`, `上薬草`, `特薬草`, `世界樹のしずく`, `魔法の聖水`, `祈りの指輪`, `エルフの飲み薬`) cannot be consumed at Home and return `ErrCannotUseHere` (`"○○はここでは使えません"`, HTTP `400 Bad Request`). Recovery at home is performed exclusively via Resting & Sleeping (`＠やすむ`).
+  - Combat recovery items and combat-only items (`UsageCategory == 1`, e.g. `薬草`, `上薬草`, `特薬草`, `霊樹のしずく`, `魔法の聖水`) cannot be consumed at Home and return `ErrCannotUseHere` with authentic message `"%sは戦闘中でしか使えません"` (HTTP `400 Bad Request`). Non-usable/passive items (`UsageCategory == 0` or `3`) return `ErrCannotUseHere` with `"%sはここでは使えません"`. Recovery at home is performed exclusively via Resting & Sleeping (`＠やすむ`).
   - Deducts 1 item instance from inventory or remote depot storage upon successful usage.
 
 ### 5. Delivery Notices (`character_delivery_notices`)

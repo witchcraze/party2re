@@ -28,7 +28,7 @@ func NewCatalog(definitions []Definition) (*Catalog, error) {
 	for _, definition := range definitions {
 		id := strings.TrimSpace(definition.ID)
 		name := strings.TrimSpace(definition.Name)
-		if id == "" || name == "" || definition.Price < 0 || !IsValidSlot(definition.Slot) {
+		if id == "" || name == "" || definition.Price < 0 || !IsValidSlot(definition.Slot) || !IsValidUsageCategory(definition.UsageCategory) {
 			return nil, ErrInvalidDefinition
 		}
 		if _, exists := catalog.definitions[id]; exists {
