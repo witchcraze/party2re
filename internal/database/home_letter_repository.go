@@ -309,49 +309,52 @@ func (r *HomeRepository) MarkLetterAsRead(ctx context.Context, id, recipientID s
 
 // DeleteLetter marks a letter as deleted for the given character (sender or recipient), and physically purges when deleted by both.
 func (r *HomeRepository) DeleteLetter(ctx context.Context, id, characterID string) error {
-	var senderID, recipientID string
-	var isDeletedSender, isDeletedRecipient bool
-	executor := ExecutorFromContext(ctx, r.db)
+	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		var senderID, recipientID string
+		var isDeletedSender, isDeletedRecipient bool
+		executor := ExecutorFromContext(txCtx, r.db)
 
-	err := executor.QueryRowContext(ctx, `
-		SELECT sender_character_id, recipient_character_id, is_deleted_by_sender, is_deleted_by_recipient
-		FROM character_letters
-		WHERE id = ?
-	`, id).Scan(&senderID, &recipientID, &isDeletedSender, &isDeletedRecipient)
+		err := executor.QueryRowContext(txCtx, `
+			SELECT sender_character_id, recipient_character_id, is_deleted_by_sender, is_deleted_by_recipient
+			FROM character_letters
+			WHERE id = ?
+			FOR UPDATE
+		`, id).Scan(&senderID, &recipientID, &isDeletedSender, &isDeletedRecipient)
 
-	if errors.Is(err, sql.ErrNoRows) {
-		return home.ErrLetterNotFound
-	}
-	if err != nil {
-		return err
-	}
-
-	if characterID != senderID && characterID != recipientID {
-		return home.ErrForbidden
-	}
-
-	if characterID == senderID {
-		if isDeletedSender && !isDeletedRecipient {
+		if errors.Is(err, sql.ErrNoRows) {
 			return home.ErrLetterNotFound
 		}
-		isDeletedSender = true
-	}
-	if characterID == recipientID {
-		if isDeletedRecipient && !isDeletedSender {
-			return home.ErrLetterNotFound
+		if err != nil {
+			return err
 		}
-		isDeletedRecipient = true
-	}
 
-	if isDeletedSender && isDeletedRecipient {
-		_, err = executor.ExecContext(ctx, `DELETE FROM character_letters WHERE id = ?`, id)
+		if characterID != senderID && characterID != recipientID {
+			return home.ErrForbidden
+		}
+
+		if characterID == senderID {
+			if isDeletedSender {
+				return home.ErrLetterNotFound
+			}
+			isDeletedSender = true
+		}
+		if characterID == recipientID {
+			if isDeletedRecipient {
+				return home.ErrLetterNotFound
+			}
+			isDeletedRecipient = true
+		}
+
+		if isDeletedSender && isDeletedRecipient {
+			_, err = executor.ExecContext(txCtx, `DELETE FROM character_letters WHERE id = ?`, id)
+			return err
+		}
+
+		_, err = executor.ExecContext(txCtx, `
+			UPDATE character_letters
+			SET is_deleted_by_sender = ?, is_deleted_by_recipient = ?
+			WHERE id = ?
+		`, isDeletedSender, isDeletedRecipient, id)
 		return err
-	}
-
-	_, err = executor.ExecContext(ctx, `
-		UPDATE character_letters
-		SET is_deleted_by_sender = ?, is_deleted_by_recipient = ?
-		WHERE id = ?
-	`, isDeletedSender, isDeletedRecipient, id)
-	return err
+	})
 }
