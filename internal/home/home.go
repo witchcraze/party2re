@@ -31,6 +31,7 @@ var (
 	ErrHouseExpired         = errors.New("house has expired")
 	ErrInsufficientFunds    = errors.New("insufficient funds to build house")
 	ErrItemNotFound         = errors.New("item not found")
+	ErrCannotUseHere        = errors.New("cannot use item here")
 )
 
 const (

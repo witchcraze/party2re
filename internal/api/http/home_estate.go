@@ -164,6 +164,10 @@ func (h *Handler) handleUseHomeItem(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusNotFound, err)
 				return
 			}
+			if errors.Is(err, home.ErrCannotUseHere) {
+				writeError(w, http.StatusBadRequest, err)
+				return
+			}
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
