@@ -162,3 +162,179 @@ func TestNewCatalogRejectsInvalidUsageCategory(t *testing.T) {
 		t.Errorf("expected ErrInvalidDefinition for catalog with invalid UsageCategory, got %v", err)
 	}
 }
+
+func TestValidateUsageLocation(t *testing.T) {
+	tests := []struct {
+		name     string
+		category UsageCategory
+		location UsageLocation
+		wantErr  error
+		combatOK bool
+		homeOK   bool
+	}{
+		{
+			name:     "Category 1 CombatOnly allowed in combat",
+			category: UsageCategoryCombatOnly,
+			location: UsageLocationCombat,
+			wantErr:  nil,
+			combatOK: true,
+			homeOK:   false,
+		},
+		{
+			name:     "Category 1 CombatOnly rejected at home",
+			category: UsageCategoryCombatOnly,
+			location: UsageLocationHome,
+			wantErr:  ErrCannotUseAtHome,
+			combatOK: true,
+			homeOK:   false,
+		},
+		{
+			name:     "Category 2 Anytime allowed at home",
+			category: UsageCategoryAnytime,
+			location: UsageLocationHome,
+			wantErr:  nil,
+			combatOK: false,
+			homeOK:   true,
+		},
+		{
+			name:     "Category 2 Anytime rejected in combat",
+			category: UsageCategoryAnytime,
+			location: UsageLocationCombat,
+			wantErr:  ErrCannotUseInCombat,
+			combatOK: false,
+			homeOK:   true,
+		},
+		{
+			name:     "Category 0 None rejected in combat",
+			category: UsageCategoryNone,
+			location: UsageLocationCombat,
+			wantErr:  ErrCannotUseInCombat,
+			combatOK: false,
+			homeOK:   false,
+		},
+		{
+			name:     "Category 0 None rejected at home",
+			category: UsageCategoryNone,
+			location: UsageLocationHome,
+			wantErr:  ErrCannotUseAtHome,
+			combatOK: false,
+			homeOK:   false,
+		},
+		{
+			name:     "Category 3 CombatPassive rejected in combat command",
+			category: UsageCategoryCombatPassive,
+			location: UsageLocationCombat,
+			wantErr:  ErrCannotUseInCombat,
+			combatOK: false,
+			homeOK:   false,
+		},
+		{
+			name:     "Category 3 CombatPassive rejected at home",
+			category: UsageCategoryCombatPassive,
+			location: UsageLocationHome,
+			wantErr:  ErrCannotUseAtHome,
+			combatOK: false,
+			homeOK:   false,
+		},
+		{
+			name:     "Category 4 DepotAfterAction allowed at home",
+			category: UsageCategoryDepotAfterAction,
+			location: UsageLocationHome,
+			wantErr:  nil,
+			combatOK: false,
+			homeOK:   true,
+		},
+		{
+			name:     "Category 4 DepotAfterAction rejected in combat",
+			category: UsageCategoryDepotAfterAction,
+			location: UsageLocationCombat,
+			wantErr:  ErrCannotUseInCombat,
+			combatOK: false,
+			homeOK:   true,
+		},
+		{
+			name:     "Unknown location returns ErrInvalidUsageLocation",
+			category: UsageCategoryCombatOnly,
+			location: UsageLocation("nowhere"),
+			wantErr:  ErrInvalidUsageLocation,
+			combatOK: true,
+			homeOK:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.category.IsUsableInCombatCommand(); got != tt.combatOK {
+				t.Errorf("IsUsableInCombatCommand() = %v, want %v", got, tt.combatOK)
+			}
+			err := ValidateUsageLocation(tt.category, tt.location)
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("ValidateUsageLocation() error = %v, want %v", err, tt.wantErr)
+			}
+
+			def := Definition{ID: "test-item", Name: "Test", UsageCategory: tt.category}
+			if got := def.CanUseInCombat(); got != tt.combatOK {
+				t.Errorf("def.CanUseInCombat() = %v, want %v", got, tt.combatOK)
+			}
+			defErr := def.ValidateUsageLocation(tt.location)
+			if !errors.Is(defErr, tt.wantErr) {
+				t.Errorf("def.ValidateUsageLocation() error = %v, want %v", defErr, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestAll269ItemsCombatUsageMatrix(t *testing.T) {
+	catalog, err := InitialCatalog()
+	if err != nil {
+		t.Fatalf("InitialCatalog failed: %v", err)
+	}
+
+	combatAllowedCount := 0
+	combatRejectedCount := 0
+
+	for _, ref := range LegacyItemCatalog {
+		if ref.No == 0 {
+			continue
+		}
+		itemID := fmt.Sprintf("item-%03d", ref.No)
+		def, err := catalog.FindByID(itemID)
+		if err != nil {
+			t.Fatalf("[%s] item not found: %v", itemID, err)
+		}
+
+		if ref.UsageCategory == UsageCategoryCombatOnly {
+			// Must be allowed in combat
+			if !def.CanUseInCombat() {
+				t.Errorf("[%s: %s] expected CanUseInCombat() == true for Category 1", itemID, def.Name)
+			}
+			if !def.UsageCategory.IsUsableInCombatCommand() {
+				t.Errorf("[%s: %s] expected IsUsableInCombatCommand() == true for Category 1", itemID, def.Name)
+			}
+			if err := def.ValidateUsageLocation(UsageLocationCombat); err != nil {
+				t.Errorf("[%s: %s] expected ValidateUsageLocation(Combat) == nil, got %v", itemID, def.Name, err)
+			}
+			combatAllowedCount++
+		} else {
+			// Must be rejected in combat command
+			if def.CanUseInCombat() {
+				t.Errorf("[%s: %s] expected CanUseInCombat() == false for Category %v", itemID, def.Name, ref.UsageCategory)
+			}
+			if def.UsageCategory.IsUsableInCombatCommand() {
+				t.Errorf("[%s: %s] expected IsUsableInCombatCommand() == false for Category %v", itemID, def.Name, ref.UsageCategory)
+			}
+			if err := def.ValidateUsageLocation(UsageLocationCombat); !errors.Is(err, ErrCannotUseInCombat) {
+				t.Errorf("[%s: %s] expected ErrCannotUseInCombat for Category %v, got %v", itemID, def.Name, ref.UsageCategory, err)
+			}
+			combatRejectedCount++
+		}
+	}
+
+	if combatAllowedCount != 53 {
+		t.Errorf("combatAllowedCount = %d, want 53", combatAllowedCount)
+	}
+	// 269 items total - 1 (item 0) = 268 items: 53 combat-only, 215 non-combat (43 None, 53 Anytime, 116 CombatPassive, 3 DepotAfterAction)
+	if combatRejectedCount != 215 {
+		t.Errorf("combatRejectedCount = %d, want 215", combatRejectedCount)
+	}
+}

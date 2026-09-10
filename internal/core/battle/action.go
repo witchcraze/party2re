@@ -1,5 +1,9 @@
 package battle
 
+import (
+	"github.com/witchcraze/party2re/internal/core/item"
+)
+
 // Target scopes for battle actions and skills.
 const (
 	TargetScopeSingleEnemy = "single_enemy"
@@ -17,6 +21,27 @@ const (
 	ActionKindBuff   = "buff"
 	ActionKindStatus = "status"
 )
+
+// ActionItem represents an active item command executed during combat (@どうぐ).
+type ActionItem struct {
+	ID            string             `json:"id"`
+	Name          string             `json:"name"`
+	UsageCategory item.UsageCategory `json:"usage_category"`
+	Kind          string             `json:"kind"` // "heal", "buff", "status", "attack"
+	Power         int                `json:"power"`
+	TargetScope   string             `json:"target_scope"`
+	Element       string             `json:"element,omitempty"`
+	BuffStat      string             `json:"buff_stat,omitempty"`
+	Status        string             `json:"status,omitempty"`
+}
+
+// ValidateItemAction verifies if an item action is permissible in combat according to legacy rules.
+func ValidateItemAction(it ActionItem) error {
+	if !it.UsageCategory.IsUsableInCombatCommand() {
+		return ErrCannotUseInCombat
+	}
+	return nil
+}
 
 // Status ailments supported during combat resolution.
 const (

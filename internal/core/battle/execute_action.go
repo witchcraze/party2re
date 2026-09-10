@@ -18,6 +18,7 @@ type battleContext struct {
 	defenseBuff  map[string]int
 	agilityBuff  map[string]int
 	abilitiesMap map[string][]string
+	itemsMap     map[string][]ActionItem
 	logs         []TurnLog
 }
 

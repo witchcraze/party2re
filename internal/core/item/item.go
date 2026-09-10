@@ -66,6 +66,44 @@ func (c UsageCategory) IsCombatOnly() bool {
 	return c == UsageCategoryCombatOnly
 }
 
+// IsUsableInCombatCommand returns whether the item category can be actively used via combat command (@どうぐ).
+// In legacy Party2 CGI (_skill.cgi), only UsageCategoryCombatOnly (1) items can be registered and used in battle commands.
+func (c UsageCategory) IsUsableInCombatCommand() bool {
+	return c == UsageCategoryCombatOnly
+}
+
+// UsageLocation represents the execution context where an item usage attempt occurs.
+type UsageLocation string
+
+const (
+	UsageLocationHome   UsageLocation = "home"
+	UsageLocationCombat UsageLocation = "combat"
+)
+
+var (
+	ErrCannotUseInCombat    = errors.New("item cannot be used in combat")
+	ErrCannotUseAtHome      = errors.New("item cannot be used at home")
+	ErrInvalidUsageLocation = errors.New("invalid usage location")
+)
+
+// ValidateUsageLocation checks whether an item with the given category is permitted for use at the specified location.
+func ValidateUsageLocation(category UsageCategory, location UsageLocation) error {
+	switch location {
+	case UsageLocationCombat:
+		if !category.IsUsableInCombatCommand() {
+			return ErrCannotUseInCombat
+		}
+		return nil
+	case UsageLocationHome:
+		if !category.IsUsableAtHome() {
+			return ErrCannotUseAtHome
+		}
+		return nil
+	default:
+		return ErrInvalidUsageLocation
+	}
+}
+
 type Definition struct {
 	ID            string        `json:"id"`
 	Name          string        `json:"name"`
@@ -82,6 +120,16 @@ func (d Definition) IsUsableAtHome() bool {
 // IsCombatOnly returns whether the item definition can only be consumed in combat.
 func (d Definition) IsCombatOnly() bool {
 	return d.UsageCategory.IsCombatOnly()
+}
+
+// CanUseInCombat returns whether the item definition can be actively used in combat command (@どうぐ).
+func (d Definition) CanUseInCombat() bool {
+	return d.UsageCategory.IsUsableInCombatCommand()
+}
+
+// ValidateUsageLocation checks whether this item definition is permitted for use at the specified location.
+func (d Definition) ValidateUsageLocation(location UsageLocation) error {
+	return ValidateUsageLocation(d.UsageCategory, location)
 }
 
 type Slot string

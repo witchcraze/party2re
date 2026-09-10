@@ -3,12 +3,15 @@ package battle
 import (
 	"errors"
 	"fmt"
+
+	"github.com/witchcraze/party2re/internal/core/item"
 )
 
 var (
 	ErrInvalidRequest     = errors.New("battle request is invalid")
 	ErrInvalidParticipant = errors.New("battle participant is invalid")
 	ErrInvalidReward      = errors.New("battle reward is invalid")
+	ErrCannotUseInCombat  = item.ErrCannotUseInCombat
 )
 
 type Participant struct {
@@ -26,6 +29,7 @@ type Participant struct {
 	Abilities         []string
 	Skills            []ActionSkill
 	CustomSkills      []ActionCustomSkill
+	ActionItems       []ActionItem
 	Defending         bool
 	Status            string
 	ItemDefinitionIDs []string
@@ -189,6 +193,11 @@ func (Engine) Resolve(request Request) (Result, error) {
 func validateParticipant(value Participant) error {
 	if value.ID == "" || value.HP <= 0 || value.Attack < 0 || value.Defense < 0 {
 		return ErrInvalidParticipant
+	}
+	for _, it := range value.ActionItems {
+		if err := ValidateItemAction(it); err != nil {
+			return err
+		}
 	}
 	return nil
 }

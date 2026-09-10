@@ -28,7 +28,16 @@ var (
 	ErrAlreadyClaimed         = errors.New("adventure result already claimed")
 	ErrUnsupportedReward      = errors.New("adventure reward type is unsupported")
 	ErrLevelRequirementNotMet = errors.New("character level requirement not met for stage")
+	ErrCannotUseInCombat      = item.ErrCannotUseInCombat
 )
+
+// ValidateCombatItem validates that an item is allowed for use in combat actions.
+func ValidateCombatItem(def item.Definition) error {
+	if !def.CanUseInCombat() {
+		return fmt.Errorf("%w: %sは戦闘中では使えません", ErrCannotUseInCombat, def.Name)
+	}
+	return nil
+}
 
 type Adventure struct {
 	ID               string

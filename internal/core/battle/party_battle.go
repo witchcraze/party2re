@@ -57,6 +57,7 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 		defenseBuff:  make(map[string]int),
 		agilityBuff:  make(map[string]int),
 		abilitiesMap: make(map[string][]string),
+		itemsMap:     make(map[string][]ActionItem),
 	}
 
 	for _, a := range req.Allies {
@@ -66,6 +67,7 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 		ctx.abilitiesMap[a.ID] = append([]string(nil), a.Abilities...)
 		ctx.defendingMap[a.ID] = a.Defending
 		ctx.statusMap[a.ID] = a.Status
+		ctx.itemsMap[a.ID] = append([]ActionItem(nil), a.ActionItems...)
 	}
 	for _, e := range req.Enemies {
 		ctx.hpMap[e.ID] = e.HP
@@ -74,6 +76,7 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 		ctx.abilitiesMap[e.ID] = append([]string(nil), e.Abilities...)
 		ctx.defendingMap[e.ID] = e.Defending
 		ctx.statusMap[e.ID] = e.Status
+		ctx.itemsMap[e.ID] = append([]ActionItem(nil), e.ActionItems...)
 	}
 
 	if req.InitialField != nil {
@@ -163,7 +166,7 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 				break
 			}
 
-			// Decide Action: Custom Skill -> Job Skill -> Defend -> Normal Attack
+			// Decide Action: Custom Skill -> Job Skill -> Item -> Defend -> Normal Attack
 			var usedCustom *ActionCustomSkill
 			for i := range actor.CustomSkills {
 				cs := &actor.CustomSkills[i]
@@ -184,10 +187,17 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 				}
 			}
 
+			var usedItem *ActionItem
+			if usedCustom == nil && usedSkill == nil && len(ctx.itemsMap[actorID]) > 0 {
+				usedItem = &ctx.itemsMap[actorID][0]
+			}
+
 			if usedCustom != nil {
 				ctx.executeCustomSkill(actor, usedCustom, allyParty, opponents)
 			} else if usedSkill != nil {
 				ctx.executeJobSkill(actor, usedSkill, allyParty, opponents)
+			} else if usedItem != nil {
+				_ = ctx.executeItem(actor, usedItem, allyParty, opponents)
 			} else if actor.Defending {
 				ctx.executeDefend(actor)
 			} else {
