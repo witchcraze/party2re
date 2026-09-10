@@ -61,14 +61,20 @@ The resident home companion/pet can be trained with customized greetings:
 
 ### 4. Remote Depot & Inventory Item Usage (`＠つかう`)
 
-Adventurers can inspect and consume items directly from their home interface:
+Adventurers can inspect equipment and consume location-2 items directly from their home interface:
 - **Weapon & Armor Inspection**:
-  - Weapons: Displays power and gold price (`武器名：%s / 強さ：%d / 価格：%dG`).
-  - Armors/Shields/Accessories: Displays defense and gold price (`防具名：%s / 強さ：%d / 価格：%dG`).
+  - Weapons: Displays power, weight, and gold price (`武器名：%s / 強さ：%d / 重さ：%d / 価格：%dG`).
+  - Armors/Shields/Accessories: Displays defense, weight, and gold price (`防具名：%s / 強さ：%d / 重さ：%d / 価格：%dG`).
+  - Weight calculation: `price / 20 + 1`.
 - **Consumable Usage**:
-  - Stat-boosting seeds (MaxHP, MaxMP, Attack, Defense, Agility, SP, Small Medals).
-  - Recovery items (薬草, 上薬草, 特薬草, 世界樹のしずく, 魔法の聖水, 祈りの指輪, エルフの飲み薬).
-  - Deducts 1 item instance from inventory or remote depot storage.
+  - Stat-boosting seeds:
+    - `命の木の実`, `不思議な木の実`, `力の種`, `守りの種`, `素早さの種`: Increase respective stats by 1–3 (or HP 3–5). If character has `OverLevel == true`, the stat gain is clamped to 0.
+    - `スキルの種`: Increases SP by 1 (not clamped by OverLevel).
+    - `小さなメダル`: Consumed and increases `SmallMedals` counter by 1.
+    - `幸せの種`: Sets experience to `Level * Level * 10` (triggers level up on next adventure: `"次のクエスト時にレベルアップ！"`).
+    - `ファイト一発` (or IP alias `気合の霊薬`): Resets tiredness (`Tired`) to 0 (`"元気全快！%sの疲労が回復した！"`).
+  - Combat recovery items (`薬草`, `上薬草`, `特薬草`, `世界樹のしずく`, `魔法の聖水`, `祈りの指輪`, `エルフの飲み薬`) cannot be consumed at Home and return `ErrCannotUseHere` (`"○○はここでは使えません"`, HTTP `400 Bad Request`). Recovery at home is performed exclusively via Resting & Sleeping (`＠やすむ`).
+  - Deducts 1 item instance from inventory or remote depot storage upon successful usage.
 
 ### 5. Delivery Notices (`character_delivery_notices`)
 
@@ -103,7 +109,7 @@ True Party2 character recovery is conducted at Home (either one's own or a visit
 | `GET` | `/houses/check` | Public | Check a character's house status by query `?target=...` |
 | `POST` | `/characters/{id}/color` | Owner Session | Update character font color (`#RRGGBB`) |
 | `GET` | `/characters/{id}/home/items` | Owner Session | List inspectable and usable items in inventory & depot |
-| `POST` | `/characters/{id}/home/items/use` | Owner Session | Inspect equipment or consume seeds/herbs from home |
+| `POST` | `/characters/{id}/home/items/use` | Owner Session | Inspect equipment or consume seeds/medals/fatigue items from home |
 | `GET` | `/homes/{id}` | Optional | Get aggregated home view for character `id` (with optional `?visitor_id=...`) |
 | `POST` | `/homes/{id}/settings` | Owner Session | Update home settings (companion name) |
 | `POST` | `/homes/{id}/companion/phrases` | Owner Session | Teach a new greeting phrase to the home companion (max 120 chars) |

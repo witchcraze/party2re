@@ -58,6 +58,16 @@ func ExperienceForNextLevelWithMax(level int, maxLevel int) (int, error) {
 	return level * level * experienceMultiplier, nil
 }
 
+// ApplyHappySeed sets the character's experience to the threshold required for the next level,
+// matching the legacy Party2 CGI formula: $m{exp} = $m{lv} * $m{lv} * 10.
+func ApplyHappySeed(value *character.Character) error {
+	if value == nil {
+		return ErrNilCharacter
+	}
+	value.Experience = value.Level * value.Level * experienceMultiplier
+	return nil
+}
+
 // ApplyExperience awards cumulative experience and applies every earned level.
 func ApplyExperience(value *character.Character, amount int) (int, error) {
 	result, err := ApplyExperienceWithJob(value, amount, job.Definition{}, zeroRandomSource{}, false, nil)

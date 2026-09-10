@@ -469,6 +469,24 @@ func TestStatsClampUsesOverLevelDoubleCaps(t *testing.T) {
 	}
 }
 
+func TestApplyHappySeed(t *testing.T) {
+	if err := ApplyHappySeed(nil); !errors.Is(err, ErrNilCharacter) {
+		t.Fatalf("expected ErrNilCharacter, got %v", err)
+	}
+
+	char := &character.Character{
+		Level:      5,
+		Experience: 10,
+	}
+	if err := ApplyHappySeed(char); err != nil {
+		t.Fatalf("ApplyHappySeed failed: %v", err)
+	}
+	// level 5 * 5 * 10 = 250
+	if char.Experience != 250 {
+		t.Errorf("expected 250 experience, got %d", char.Experience)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------

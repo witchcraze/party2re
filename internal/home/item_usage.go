@@ -7,6 +7,7 @@ import (
 
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/depot"
 )
 
@@ -54,12 +55,25 @@ func (s *Service) ListHomeItems(ctx context.Context, characterID string) ([]Home
 					price = def.Price
 					kind = itemKindFromSlot(def.Slot)
 				}
+				attack := 0
+				defense := 0
+				weight := 0
+				if kind == 1 {
+					attack = price/10 + 1
+					weight = price/20 + 1
+				} else if kind == 2 {
+					defense = price/10 + 1
+					weight = price/20 + 1
+				}
 				results = append(results, HomeUsableItem{
 					InstanceID:   inst.ID,
 					DefinitionID: inst.DefinitionID,
 					Name:         name,
 					Kind:         kind,
 					Slot:         slot,
+					Attack:       attack,
+					Defense:      defense,
+					Weight:       weight,
 					Price:        price,
 					Quantity:     inst.Quantity,
 					Source:       "inventory",
@@ -83,12 +97,25 @@ func (s *Service) ListHomeItems(ctx context.Context, characterID string) ([]Home
 					price = def.Price
 					kind = itemKindFromSlot(def.Slot)
 				}
+				attack := 0
+				defense := 0
+				weight := 0
+				if kind == 1 {
+					attack = price/10 + 1
+					weight = price/20 + 1
+				} else if kind == 2 {
+					defense = price/10 + 1
+					weight = price/20 + 1
+				}
 				results = append(results, HomeUsableItem{
 					InstanceID:   inst.ID,
 					DefinitionID: inst.DefinitionID,
 					Name:         name,
 					Kind:         kind,
 					Slot:         slot,
+					Attack:       attack,
+					Defense:      defense,
+					Weight:       weight,
 					Price:        price,
 					Quantity:     inst.Quantity,
 					Source:       "depot",
@@ -157,7 +184,8 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	// Inspection of weapons
 	if kind == 1 {
 		power := def.Price/10 + 1
-		msg := fmt.Sprintf("武器名：%s / 強さ：%d / 価格：%dG", def.Name, power, def.Price)
+		weight := def.Price/20 + 1
+		msg := fmt.Sprintf("武器名：%s / 強さ：%d / 重さ：%d / 価格：%dG", def.Name, power, weight, def.Price)
 		return &UseHomeItemResult{
 			Action:    "inspect",
 			Message:   msg,
@@ -171,7 +199,8 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	// Inspection of armors/accessories
 	if kind == 2 {
 		defense := def.Price/10 + 1
-		msg := fmt.Sprintf("防具名：%s / 強さ：%d / 価格：%dG", def.Name, defense, def.Price)
+		weight := def.Price/20 + 1
+		msg := fmt.Sprintf("防具名：%s / 強さ：%d / 重さ：%d / 価格：%dG", def.Name, defense, weight, def.Price)
 		return &UseHomeItemResult{
 			Action:    "inspect",
 			Message:   msg,
@@ -184,30 +213,49 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 
 	// Consumable item logic
 	var msg string
-	isUsable := true
 
 	switch def.Name {
 	case "命の木の実":
 		v := s.randomInt(4) + 3
+		if char.OverLevel {
+			v = 0
+		}
 		char.Stats.MaxHP += v
 		char.Stats.HP += v
+		char.Stats.Clamp(char.OverLevel, char.Level)
 		msg = fmt.Sprintf("%sのHPが %d あがった！", char.Name, v)
 	case "不思議な木の実":
 		v := s.randomInt(4) + 3
+		if char.OverLevel {
+			v = 0
+		}
 		char.Stats.MaxMP += v
 		char.Stats.MP += v
+		char.Stats.Clamp(char.OverLevel, char.Level)
 		msg = fmt.Sprintf("%sのMPが %d あがった！", char.Name, v)
 	case "力の種":
 		v := s.randomInt(6) + 1
+		if char.OverLevel {
+			v = 0
+		}
 		char.Stats.Attack += v
+		char.Stats.Clamp(char.OverLevel, char.Level)
 		msg = fmt.Sprintf("%sの攻撃力が %d あがった！", char.Name, v)
 	case "守りの種":
 		v := s.randomInt(6) + 1
+		if char.OverLevel {
+			v = 0
+		}
 		char.Stats.Defense += v
+		char.Stats.Clamp(char.OverLevel, char.Level)
 		msg = fmt.Sprintf("%sの守備力が %d あがった！", char.Name, v)
 	case "素早さの種":
 		v := s.randomInt(6) + 1
+		if char.OverLevel {
+			v = 0
+		}
 		char.Stats.Agility += v
+		char.Stats.Clamp(char.OverLevel, char.Level)
 		msg = fmt.Sprintf("%sの素早さが %d あがった！", char.Name, v)
 	case "スキルの種":
 		v := s.randomInt(3) + 1
@@ -215,65 +263,21 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 			return nil, err
 		}
 		msg = fmt.Sprintf("%sのSPが %d あがった！", char.Name, v)
+	case "幸せの種":
+		if err := progression.ApplyHappySeed(&char); err != nil {
+			return nil, err
+		}
+		msg = "次のクエスト時にレベルアップ！"
+	case "ファイト一発", "気合の霊薬":
+		char.ResetTired()
+		msg = fmt.Sprintf("元気全快！%sの疲労が回復した！", char.Name)
 	case "小さなメダル":
 		if err := char.AddSmallMedals(1); err != nil {
 			return nil, err
 		}
 		msg = "メダル王にメダルを１枚献上しました"
-	case "薬草":
-		heal := 40
-		char.Stats.HP += heal
-		if char.Stats.HP > char.Stats.MaxHP {
-			char.Stats.HP = char.Stats.MaxHP
-		}
-		msg = fmt.Sprintf("%sをつかった！HPが回復した！", def.Name)
-	case "上薬草":
-		heal := 100
-		char.Stats.HP += heal
-		if char.Stats.HP > char.Stats.MaxHP {
-			char.Stats.HP = char.Stats.MaxHP
-		}
-		msg = fmt.Sprintf("%sをつかった！HPが大幅に回復した！", def.Name)
-	case "特薬草":
-		heal := 250
-		char.Stats.HP += heal
-		if char.Stats.HP > char.Stats.MaxHP {
-			char.Stats.HP = char.Stats.MaxHP
-		}
-		msg = fmt.Sprintf("%sをつかった！HPが超回復した！", def.Name)
-	case "世界樹のしずく":
-		char.Stats.HP = char.Stats.MaxHP
-		msg = fmt.Sprintf("%sをつかった！HPが全回復した！", def.Name)
-	case "魔法の聖水":
-		heal := 40
-		char.Stats.MP += heal
-		if char.Stats.MP > char.Stats.MaxMP {
-			char.Stats.MP = char.Stats.MaxMP
-		}
-		msg = fmt.Sprintf("%sをつかった！MPが回復した！", def.Name)
-	case "祈りの指輪":
-		heal := 100
-		char.Stats.MP += heal
-		if char.Stats.MP > char.Stats.MaxMP {
-			char.Stats.MP = char.Stats.MaxMP
-		}
-		msg = fmt.Sprintf("%sをつかった！MPが大幅に回復した！", def.Name)
-	case "エルフの飲み薬":
-		char.Stats.MP = char.Stats.MaxMP
-		msg = fmt.Sprintf("%sをつかった！MPが全回復した！", def.Name)
 	default:
-		isUsable = false
-	}
-
-	if !isUsable {
-		return &UseHomeItemResult{
-			Action:    "cannot_use",
-			Message:   fmt.Sprintf("%sはここでは使えません", def.Name),
-			ItemName:  def.Name,
-			Kind:      3,
-			Consumed:  false,
-			Character: &char,
-		}, nil
+		return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
 	}
 
 	// Consume 1 item

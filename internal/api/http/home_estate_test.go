@@ -12,6 +12,7 @@ import (
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/home"
 )
 
 func TestHomeEstateEndpoints(t *testing.T) {
@@ -125,6 +126,48 @@ func TestHomeEstateEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("POST /characters/{id}/home/items/use - cannot use here returns 400 Bad Request", func(t *testing.T) {
+		homeSvc.useHomeItemFn = func(ctx context.Context, characterID, instanceID, source string) (*home.UseHomeItemResult, error) {
+			return nil, home.ErrCannotUseHere
+		}
+		defer func() { homeSvc.useHomeItemFn = nil }()
+
+		body, _ := json.Marshal(map[string]string{
+			"instance_id": "inst-combat-item",
+			"source":      "inventory",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/characters/char-1/home/items/use", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("POST /characters/{id}/home/items/use - item not found returns 404 Not Found", func(t *testing.T) {
+		homeSvc.useHomeItemFn = func(ctx context.Context, characterID, instanceID, source string) (*home.UseHomeItemResult, error) {
+			return nil, home.ErrItemNotFound
+		}
+		defer func() { homeSvc.useHomeItemFn = nil }()
+
+		body, _ := json.Marshal(map[string]string{
+			"instance_id": "inst-nonexistent",
+			"source":      "inventory",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/characters/char-1/home/items/use", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 Not Found, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 }
