@@ -193,15 +193,56 @@ func (s *stubAdventureService) GetChronicle(ctx context.Context, characterID str
 }
 
 type stubShopService struct {
-	purchaseFn func(ctx context.Context, characterID, itemDefinitionID string, quantity int) (shop.PurchaseResult, error)
-	sellFn     func(ctx context.Context, characterID, itemInstanceID string, quantity int) (shop.SaleResult, error)
+	purchaseFn           func(ctx context.Context, characterID, itemDefinitionID string, quantity int) (shop.PurchaseResult, error)
+	sellFn               func(ctx context.Context, characterID, itemInstanceID string, quantity int) (shop.SaleResult, error)
+	getCatalogFn         func(ctx context.Context, shopType shop.ShopType, characterID string) (shop.ShopCatalog, error)
+	batchPurchaseFn      func(ctx context.Context, characterID string, shopType shop.ShopType, items []shop.BatchPurchaseItemRequest) (shop.BatchPurchaseResult, error)
+	inspectNPCFn         func(ctx context.Context, shopType shop.ShopType, characterID string) (shop.NPCInspectResult, error)
+	talkNPCFn            func(ctx context.Context, shopType shop.ShopType) (string, error)
+	discoverSecretShopFn func(ctx context.Context, characterID string) (bool, string, error)
 }
 
 func (s *stubShopService) Purchase(ctx context.Context, characterID, itemDefinitionID string, quantity int) (shop.PurchaseResult, error) {
-	return s.purchaseFn(ctx, characterID, itemDefinitionID, quantity)
+	if s.purchaseFn != nil {
+		return s.purchaseFn(ctx, characterID, itemDefinitionID, quantity)
+	}
+	return shop.PurchaseResult{}, nil
 }
 func (s *stubShopService) Sell(ctx context.Context, characterID, itemInstanceID string, quantity int) (shop.SaleResult, error) {
-	return s.sellFn(ctx, characterID, itemInstanceID, quantity)
+	if s.sellFn != nil {
+		return s.sellFn(ctx, characterID, itemInstanceID, quantity)
+	}
+	return shop.SaleResult{}, nil
+}
+func (s *stubShopService) GetCatalog(ctx context.Context, shopType shop.ShopType, characterID string) (shop.ShopCatalog, error) {
+	if s.getCatalogFn != nil {
+		return s.getCatalogFn(ctx, shopType, characterID)
+	}
+	return shop.ShopCatalog{ShopType: shopType}, nil
+}
+func (s *stubShopService) BatchPurchase(ctx context.Context, characterID string, shopType shop.ShopType, items []shop.BatchPurchaseItemRequest) (shop.BatchPurchaseResult, error) {
+	if s.batchPurchaseFn != nil {
+		return s.batchPurchaseFn(ctx, characterID, shopType, items)
+	}
+	return shop.BatchPurchaseResult{Character: corecharacter.Character{ID: characterID}}, nil
+}
+func (s *stubShopService) InspectNPC(ctx context.Context, shopType shop.ShopType, characterID string) (shop.NPCInspectResult, error) {
+	if s.inspectNPCFn != nil {
+		return s.inspectNPCFn(ctx, shopType, characterID)
+	}
+	return shop.NPCInspectResult{}, nil
+}
+func (s *stubShopService) TalkNPC(ctx context.Context, shopType shop.ShopType) (string, error) {
+	if s.talkNPCFn != nil {
+		return s.talkNPCFn(ctx, shopType)
+	}
+	return "", nil
+}
+func (s *stubShopService) DiscoverSecretShop(ctx context.Context, characterID string) (bool, string, error) {
+	if s.discoverSecretShopFn != nil {
+		return s.discoverSecretShopFn(ctx, characterID)
+	}
+	return true, "unlocked", nil
 }
 
 // -------------------------------------------------------------------

@@ -85,6 +85,11 @@ type AdventureService interface {
 type ShopService interface {
 	Purchase(ctx context.Context, characterID string, itemDefinitionID string, quantity int) (shop.PurchaseResult, error)
 	Sell(ctx context.Context, characterID string, itemInstanceID string, quantity int) (shop.SaleResult, error)
+	GetCatalog(ctx context.Context, shopType shop.ShopType, characterID string) (shop.ShopCatalog, error)
+	BatchPurchase(ctx context.Context, characterID string, shopType shop.ShopType, items []shop.BatchPurchaseItemRequest) (shop.BatchPurchaseResult, error)
+	InspectNPC(ctx context.Context, shopType shop.ShopType, characterID string) (shop.NPCInspectResult, error)
+	TalkNPC(ctx context.Context, shopType shop.ShopType) (string, error)
+	DiscoverSecretShop(ctx context.Context, characterID string) (bool, string, error)
 }
 
 // HelperService defines the helper quest operations exposed over HTTP.
@@ -322,6 +327,11 @@ func (h *Handler) Router() http.Handler {
 
 	mux.HandleFunc("POST /shop/purchase", h.handlePurchase)
 	mux.HandleFunc("POST /shop/sell", h.handleSell)
+	mux.HandleFunc("GET /characters/{id}/shop/{type}", h.handleGetShopCatalog)
+	mux.HandleFunc("POST /characters/{id}/shop/batch-purchase", h.handleShopBatchPurchase)
+	mux.HandleFunc("POST /characters/{id}/shop/{type}/inspect", h.handleShopInspectNPC)
+	mux.HandleFunc("POST /characters/{id}/shop/{type}/talk", h.handleShopTalkNPC)
+	mux.HandleFunc("POST /characters/{id}/shop/discover-secret", h.handleShopDiscoverSecret)
 
 	mux.HandleFunc("GET /characters/{id}/depot", h.handleGetDepot)
 	mux.HandleFunc("POST /characters/{id}/depot/deposit", h.handleDepositDepotItem)
@@ -929,10 +939,12 @@ type purchaseRequest struct {
 }
 
 type purchaseResponse struct {
-	CharacterID      string `json:"character_id"`
-	ItemDefinitionID string `json:"item_definition_id"`
-	Quantity         int    `json:"quantity"`
-	TotalCost        int    `json:"total_cost"`
+	CharacterID        string `json:"character_id"`
+	ItemDefinitionID   string `json:"item_definition_id"`
+	Quantity           int    `json:"quantity"`
+	TotalCost          int    `json:"total_cost"`
+	TransferredToDepot bool   `json:"transferred_to_depot"`
+	NPCMessage         string `json:"npc_message,omitempty"`
 }
 
 type sellRequest struct {
@@ -958,10 +970,12 @@ func (h *Handler) handlePurchase(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, purchaseResponse{
-			CharacterID:      result.Character.ID,
-			ItemDefinitionID: result.ItemInstance.DefinitionID,
-			Quantity:         result.ItemInstance.Quantity,
-			TotalCost:        result.TotalPrice,
+			CharacterID:        result.Character.ID,
+			ItemDefinitionID:   result.ItemInstance.DefinitionID,
+			Quantity:           result.ItemInstance.Quantity,
+			TotalCost:          result.TotalPrice,
+			TransferredToDepot: result.TransferredToDepot,
+			NPCMessage:         result.NPCMessage,
 		})
 	})
 }

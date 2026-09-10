@@ -9,6 +9,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/shop"
 )
 
@@ -92,6 +93,36 @@ func (m *mockTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Contex
 	return fn(context.WithValue(ctx, inTxKey{}, struct{}{}))
 }
 
+type depotRepoStub struct {
+	mu     sync.Mutex
+	depots map[string]depot.Depot
+}
+
+func newDepotRepoStub() *depotRepoStub {
+	return &depotRepoStub{depots: make(map[string]depot.Depot)}
+}
+
+func (r *depotRepoStub) FindByCharacterID(_ context.Context, characterID string) (depot.Depot, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	d, ok := r.depots[characterID]
+	if !ok {
+		return depot.Depot{}, depot.ErrNotFound
+	}
+	return d, nil
+}
+
+func (r *depotRepoStub) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (depot.Depot, error) {
+	return r.FindByCharacterID(ctx, characterID)
+}
+
+func (r *depotRepoStub) Save(_ context.Context, value depot.Depot) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.depots[value.CharacterID] = value
+	return nil
+}
+
 func newTestSetup(t *testing.T) (*shop.Service, *characterRepoStub, *inventoryRepoStub, *item.Catalog) {
 	t.Helper()
 	sword, err := item.NewEquipmentDefinition("bronze_sword", "Bronze Sword", 100, item.SlotMainHand)
@@ -113,8 +144,9 @@ func newTestSetup(t *testing.T) (*shop.Service, *characterRepoStub, *inventoryRe
 
 	charRepo := newCharacterRepoStub()
 	invRepo := newInventoryRepoStub()
+	depotRepo := newDepotRepoStub()
 
-	service, err := shop.NewService(charRepo, invRepo, catalog)
+	service, err := shop.NewService(charRepo, invRepo, catalog, shop.WithDepotRepository(depotRepo))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,11 +176,12 @@ func TestPurchaseSuccess(t *testing.T) {
 		t.Fatalf("Purchase() error = %v", err)
 	}
 
-	if result.TotalPrice != 100 {
-		t.Errorf("TotalPrice = %d, want 100", result.TotalPrice)
+	// 2x retail pricing: 100 base * 2 = 200
+	if result.TotalPrice != 200 {
+		t.Errorf("TotalPrice = %d, want 200", result.TotalPrice)
 	}
-	if result.Character.Money != 100 {
-		t.Errorf("Character.Money = %d, want 100", result.Character.Money)
+	if result.Character.Money != 0 {
+		t.Errorf("Character.Money = %d, want 0", result.Character.Money)
 	}
 	if len(result.Inventory.Items) != 1 {
 		t.Fatalf("Inventory items count = %d, want 1", len(result.Inventory.Items))
@@ -156,14 +189,17 @@ func TestPurchaseSuccess(t *testing.T) {
 	if result.ItemInstance.DefinitionID != "bronze_sword" {
 		t.Errorf("ItemInstance.DefinitionID = %s, want bronze_sword", result.ItemInstance.DefinitionID)
 	}
+	if result.TransferredToDepot {
+		t.Errorf("expected TransferredToDepot = false for first purchase in empty slot")
+	}
 
 	// Verify persistence in repos
 	savedChar, err := charRepo.FindByID(context.Background(), char.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if savedChar.Money != 100 {
-		t.Errorf("persisted Character.Money = %d, want 100", savedChar.Money)
+	if savedChar.Money != 0 {
+		t.Errorf("persisted Character.Money = %d, want 0", savedChar.Money)
 	}
 
 	savedInv, err := invRepo.FindByCharacterID(context.Background(), char.ID)
@@ -179,19 +215,23 @@ func TestPurchaseMultipleQuantity(t *testing.T) {
 	service, charRepo, _, _ := newTestSetup(t)
 	char := createTestCharacter(t, charRepo, "Hero", 200)
 
+	// Herb base price 30 * 2 = 60 retail. 3 herbs = 180.
 	result, err := service.Purchase(context.Background(), char.ID, "herb", 3)
 	if err != nil {
 		t.Fatalf("Purchase() error = %v", err)
 	}
 
-	if result.TotalPrice != 90 {
-		t.Errorf("TotalPrice = %d, want 90", result.TotalPrice)
+	if result.TotalPrice != 180 {
+		t.Errorf("TotalPrice = %d, want 180", result.TotalPrice)
 	}
-	if result.Character.Money != 110 {
-		t.Errorf("Character.Money = %d, want 110", result.Character.Money)
+	if result.Character.Money != 20 {
+		t.Errorf("Character.Money = %d, want 20", result.Character.Money)
 	}
 	if result.ItemInstance.Quantity != 3 {
 		t.Errorf("ItemInstance.Quantity = %d, want 3", result.ItemInstance.Quantity)
+	}
+	if !result.TransferredToDepot {
+		t.Errorf("expected TransferredToDepot = true for quantity > 1")
 	}
 }
 
@@ -402,8 +442,8 @@ func TestPurchase_QuantityBounds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Purchase(MaxTransactionQuantity) failed: %v", err)
 	}
-	if res.TotalPrice != 30*shop.MaxTransactionQuantity {
-		t.Errorf("TotalPrice = %d, want %d", res.TotalPrice, 30*shop.MaxTransactionQuantity)
+	if res.TotalPrice != 60*shop.MaxTransactionQuantity {
+		t.Errorf("TotalPrice = %d, want %d", res.TotalPrice, 60*shop.MaxTransactionQuantity)
 	}
 
 	// 2. MaxTransactionQuantity + 1 -> fails with ErrInvalidQuantity
@@ -512,7 +552,7 @@ func TestConcurrentPurchase_StrictAtomicBalance(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char := createTestCharacter(t, charRepo, "ConcurrentHero", 150)
+	char := createTestCharacter(t, charRepo, "ConcurrentHero", 350)
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 5)
@@ -546,8 +586,8 @@ func TestConcurrentPurchase_StrictAtomicBalance(t *testing.T) {
 	}
 
 	finalChar, _ := charRepo.FindByID(context.Background(), char.ID)
-	if finalChar.Money != 50 {
-		t.Errorf("finalChar.Money = %d, want 50", finalChar.Money)
+	if finalChar.Money != 150 {
+		t.Errorf("finalChar.Money = %d, want 150", finalChar.Money)
 	}
 
 	finalInv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
@@ -696,7 +736,7 @@ func TestService_Concurrent_Sell_And_Purchase(t *testing.T) {
 	invRepo := newInventoryRepoStub()
 	potion, _ := item.NewDefinition("herb", "Herb", 30)
 	catalog, _ := item.NewCatalog([]item.Definition{potion})
-	service, err := shop.NewService(charRepo, invRepo, catalog, shop.WithTransactionProvider(&mockTxProvider{}))
+	service, err := shop.NewService(charRepo, invRepo, catalog, shop.WithTransactionProvider(&mockTxProvider{}), shop.WithDepotRepository(newDepotRepoStub()))
 	if err != nil {
 		t.Fatal(err)
 	}

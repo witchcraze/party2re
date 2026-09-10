@@ -250,9 +250,9 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Stage/Monster catalogs, Battle Resolver, Character & Inventory repositories, Scheduling Service.
   - **Persistence:** `adventures` table with atomic battle outcome persistence and compound query indexes (`idx_adventures_character_started`, `idx_adventures_character_claimed`).
 - **Shop** (`internal/shop`):
-  - **Responsibility:** Item purchases (gold deduction + inventory addition) and resale (inventory removal + 50% gold refund).
-  - **Dependencies:** Item Catalog, Character (wallet), Inventory, Economy.
-  - **Persistence:** Single-transaction atomic updates via character/inventory repositories with deterministic lock hierarchy (`characters` -> `inventory_items`).
+  - **Responsibility:** Standard town shops (Weapon Shop ブッキー, Armor Shop アマノ, Item Shop アイテムコ) with 2x retail purchase pricing, 50% resale markdown, `job_lv`-based catalog progression, helper quest objective exclusion, direct inventory vs. depot auto-transfer routing, batch purchasing directly to depot, NPC advice/inspect interactions, and secret shop discovery unlock (`job_lv >= 7`).
+  - **Dependencies:** Item Catalog, Character (wallet), Inventory, Depot, Helper (`HelperProvider`), Collection (`CollectionRecorder`), Economy.
+  - **Persistence:** Single-transaction atomic updates via character, inventory, and depot repositories obeying global lock hierarchy (`characters` Tier 2 -> `inventory_items` Tier 3 -> `character_depots` Tier 5).
 - **Depot** (`internal/depot`):
   - **Responsibility:** Persistent item storage with legacy dynamic capacity formula (`get_depot_c`), storage expansions (`かくちょう`), item sales (`うる` / `まとめてうる`), item sorting (`せいとん`), mailing items and money (`おくる`), and collection book sync. Fictional gold storage eliminated.
   - **Dependencies:** Character, Inventory, Economy (`economy.TransactionRunner`), Collection (hook).

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #542 — Battle/Item: Enforce UsageCategory validation prohibiting non-combat items in combat action command
+Last updated: Issue #465 — Standard Shops Parity: Enforce 2x retail pricing, job_lv catalog progression, helper exclusion, and depot auto-transfer
 
 ## Current phase
 
@@ -40,7 +40,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Activity** (`internal/activity`): 訓練機能（Valkey Worker push型＋手動Claimフォールバック）。
 - **Adventure** (`internal/adventure`): 28ステージ（`stages.json`）、286体モンスター（`monsters.json`）、戦闘解決、ドロップ報酬（メダル含む）、Valkey Worker連携、過去冒険履歴一覧（オフセット/カーソル両対応）、冒険戦績クロニクル（トライモード/イメージ/カーム/ハード/アバター/エクストリーム）。勝利時フック（`VictoryHook`）による実績進捗連携。
 - **Medal & Lifetime Achievements** (`internal/medal`): 小さなメダル交換所（減算消費方式、交換品預かり所（Depot）直接送致による持ち物枠圧迫防止、`economy.Service` 連携、`TransactionProvider` と決定論的行ロック階層 Rank 2 (`characters`) -> Rank 5 (`character_depots`) による完全アトミック整合性）、生涯マイルストーン実績・記念勲章コレクションシステム（オブザーバーフック連携による進捗自動記録、二重受取防止排他ロック、記念勲章・メダル報酬付与）。
-- **Shop** (`internal/shop`): アイテム売買（50%売却）、1回最大取引数量制限（`MaxTransactionQuantity = 9999`）、整数オーバーフロー安全乗算（`safeMultiply`）、`economy.Service` 連携、`TransactionProvider` と決定論的行ロック階層（`characters` -> `inventory_items`）による完全アトミック整合性。
+- **Shop** (`internal/shop`): 通常商店（武器屋ブッキー、防具屋アマノ、道具屋アイテムコ）。2倍定価販売（`CalculateRetailPrice`）、50%売却（`Sell`）、職業レベル（`job_lv`）に応じた段階的カタログ拡張（武器2段階、防具3段階、道具3段階）、お助けクエスト（`helper_quests`）対象アイテムの店頭陳列・購入除外フィルター、装備枠・所持枠埋まり時または2個以上購入時の預かり所（`character_depots`）自動転送および容量上限チェック（`ErrDepotFull`）、預かり所直接配送の一括購入（`BatchPurchase`）、NPC会話・観察リアクション（道具屋NPC観察時の秘密の店ヒント `"＠ひみつのみせ に行きたい"`）、秘密の店発見フラグ解禁（Lv7+）、および図鑑（`collection`）自動記録連携。決定論的行ロック階層 Rank 2 (`characters`) -> Rank 3 (`inventory_items`) -> Rank 5 (`character_depots`) を遵守。
 - **Depot** (`internal/depot`): 倉庫（アイテム預入・引出・動的容量計算・拡張・売却・整頓・郵送）。架空のゴールド預託を完全撤廃し、オリジナルPerl CGI仕様（`system.cgi:get_depot_c`）に準拠した動的容量計算（Base(JobLv: 5〜150) + ExDepot(0〜20: +5〜+100) + OverDepot(0〜5: +50〜+250) = 最大500枠）、段階的拡張コストテーブル（200k〜999k）、アイテム売却（50%価格・単体および一括アトミック売却）、アイテム整頓（武器Kind 1 -> 防具Kind 2 -> アイテムKind 3 -> DefinitionID昇順）、アイテム・ゴールド郵送（2者間昇順行ロック `id.Sort2` によるデッドロックフリーな直接転送）、アイテム引出時の図鑑（Collection）自動登録、およびスタックアイテム預入時の枠数判定順序不具合（Issue #452）の解消を達成（Issue #460, #452）。横断的ランタイムプリミティブ `economy.TransactionRunner` / `ExecuteTransaction` による整合性担保とRank 2 (`characters`) -> Rank 3 (`inventory_items`) -> Rank 5 (`character_depots`) の行ロック階層遵守。
 - **Blacksmith** (`internal/blacksmith`): 鍛冶屋（+1〜+10装備強化、成功率曲線、横断的ランタイムプリミティブ `economy.TransactionRunner` / `ExecuteTransaction` への移行完了。手動行ロック・SQLボイラープレートを完全排除し、Rank 2 (`characters`) -> Rank 3 (`inventory_items`) 決定論的ロック階層と費用・素材消費・インベントリ更新のアトミック整合性を保証）。
 - **Alchemy** (`internal/alchemy`): 錬金術（112レシピ `recipes.json`）、素材合成（`TransactionProvider` と行ロックによる素材消費・合成物付与のアトミック整合性）。

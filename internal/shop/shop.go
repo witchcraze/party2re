@@ -3,10 +3,12 @@ package shop
 import (
 	"context"
 	"errors"
+	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
@@ -35,6 +37,20 @@ type InventoryRepository interface {
 	Save(ctx context.Context, value coreinventory.Inventory) error
 }
 
+type DepotRepository interface {
+	FindByCharacterID(ctx context.Context, characterID string) (depot.Depot, error)
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (depot.Depot, error)
+	Save(ctx context.Context, value depot.Depot) error
+}
+
+type HelperProvider interface {
+	GetActiveHelperItemIDs(ctx context.Context, now time.Time) ([]string, error)
+}
+
+type CollectionRecorder interface {
+	RecordItemDiscovered(ctx context.Context, characterID, itemID, itemName, category string) error
+}
+
 // Deprecated: TransactionRepository is no longer used by shop.Service.
 type TransactionRepository interface {
 	CommitTransaction(ctx context.Context, character corecharacter.Character, inventory coreinventory.Inventory) error
@@ -52,11 +68,28 @@ func WithTransactionProvider(txProvider TransactionProvider) Option {
 	}
 }
 
-type PurchaseResult struct {
-	Character    corecharacter.Character
-	Inventory    coreinventory.Inventory
-	ItemInstance item.Instance
-	TotalPrice   int
+func WithDepotRepository(depotRepo DepotRepository) Option {
+	return func(s *Service) {
+		s.depots = depotRepo
+	}
+}
+
+func WithHelperProvider(helper HelperProvider) Option {
+	return func(s *Service) {
+		s.helper = helper
+	}
+}
+
+func WithCollectionRecorder(recorder CollectionRecorder) Option {
+	return func(s *Service) {
+		s.recorder = recorder
+	}
+}
+
+func WithTimeSource(timeSource func() time.Time) Option {
+	return func(s *Service) {
+		s.now = timeSource
+	}
 }
 
 type SaleResult struct {
@@ -69,9 +102,13 @@ type SaleResult struct {
 type Service struct {
 	characters  CharacterRepository
 	inventories InventoryRepository
+	depots      DepotRepository
+	helper      HelperProvider
+	recorder    CollectionRecorder
 	txProvider  TransactionProvider
 	catalog     item.DefinitionProvider
 	economy     *economy.Service
+	now         func() time.Time
 }
 
 func NewService(characters CharacterRepository, inventories InventoryRepository, catalog item.DefinitionProvider, opts ...Option) (*Service, error) {
@@ -82,6 +119,7 @@ func NewService(characters CharacterRepository, inventories InventoryRepository,
 		characters:  characters,
 		inventories: inventories,
 		catalog:     catalog,
+		now:         time.Now,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -102,6 +140,21 @@ func NewService(characters CharacterRepository, inventories InventoryRepository,
 // Use NewService with WithTransactionProvider option instead.
 func NewServiceWithTransaction(characters CharacterRepository, inventories InventoryRepository, _ TransactionRepository, catalog item.DefinitionProvider, opts ...Option) (*Service, error) {
 	return NewService(characters, inventories, catalog, opts...)
+}
+
+func (s *Service) SetHelperProvider(helper HelperProvider) {
+	s.helper = helper
+}
+
+func (s *Service) SetCollectionRecorder(recorder CollectionRecorder) {
+	s.recorder = recorder
+}
+
+func (s *Service) CalculateRetailPrice(basePrice int) (int, error) {
+	if basePrice <= 0 {
+		return 0, nil
+	}
+	return safeMultiply(basePrice, 2)
 }
 
 func (s *Service) CalculateSellPrice(basePrice int) int {
@@ -140,55 +193,68 @@ func (s *Service) findInventory(ctx context.Context, characterID string) (corein
 	return s.inventories.FindByCharacterID(ctx, characterID)
 }
 
-func (s *Service) Purchase(ctx context.Context, characterID string, itemDefinitionID string, quantity int) (PurchaseResult, error) {
-	if quantity <= 0 || quantity > MaxTransactionQuantity {
-		return PurchaseResult{}, ErrInvalidQuantity
-	}
-	if characterID == "" {
-		return PurchaseResult{}, corecharacter.ErrNotFound
-	}
-
-	definition, err := s.catalog.FindByID(itemDefinitionID)
-	if err != nil {
-		return PurchaseResult{}, ErrItemNotFound
+// GetCatalog returns the shop title, NPC name, and the available items with 2x retail pricing,
+// filtering out items requested in active helper quests.
+func (s *Service) GetCatalog(ctx context.Context, shopType ShopType, characterID string) (ShopCatalog, error) {
+	if !ValidateShopType(shopType) {
+		return ShopCatalog{}, ErrInvalidShopType
 	}
 
-	totalPrice, err := safeMultiply(definition.Price, quantity)
-	if err != nil {
-		return PurchaseResult{}, err
-	}
-
-	var result PurchaseResult
-	err = s.runInTx(ctx, func(txCtx context.Context) error {
-		res, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{
-			CharacterID:       characterID,
-			DeductGold:        totalPrice,
-			GrantDefinitionID: itemDefinitionID,
-			GrantQuantity:     quantity,
-		})
+	jobLv := 0
+	if characterID != "" {
+		char, err := s.characters.FindByID(ctx, characterID)
 		if err != nil {
-			if errors.Is(err, economy.ErrInsufficientGold) {
-				return ErrInsufficientFunds
-			}
-			if errors.Is(err, economy.ErrCharacterNotFound) {
-				return corecharacter.ErrNotFound
-			}
-			return err
+			return ShopCatalog{}, err
 		}
-
-		result = PurchaseResult{
-			Character:    res.Character,
-			Inventory:    res.Inventory,
-			ItemInstance: *res.GrantedItem,
-			TotalPrice:   totalPrice,
-		}
-		return nil
-	})
-	if err != nil {
-		return PurchaseResult{}, err
+		jobLv = char.JobLevel
 	}
 
-	return result, nil
+	salesIDs, err := GetSalesItemIDs(shopType, jobLv)
+	if err != nil {
+		return ShopCatalog{}, err
+	}
+
+	// Filter out items in active helper quests
+	var excludedIDs map[string]bool
+	if s.helper != nil {
+		active, err := s.helper.GetActiveHelperItemIDs(ctx, s.now())
+		if err == nil && len(active) > 0 {
+			excludedIDs = make(map[string]bool, len(active))
+			for _, id := range active {
+				excludedIDs[id] = true
+			}
+		}
+	}
+
+	items := make([]CatalogItem, 0, len(salesIDs))
+	for _, id := range salesIDs {
+		if excludedIDs != nil && excludedIDs[id] {
+			continue
+		}
+		def, err := s.catalog.FindByID(id)
+		if err != nil {
+			continue
+		}
+		retailPrice, err := s.CalculateRetailPrice(def.Price)
+		if err != nil {
+			continue
+		}
+		items = append(items, CatalogItem{
+			ID:          def.ID,
+			Name:        def.Name,
+			BasePrice:   def.Price,
+			RetailPrice: retailPrice,
+			Slot:        def.Slot,
+		})
+	}
+
+	title, npc := GetShopMeta(shopType)
+	return ShopCatalog{
+		ShopType: shopType,
+		Title:    title,
+		NPCName:  npc,
+		Items:    items,
+	}, nil
 }
 
 func (s *Service) Sell(ctx context.Context, characterID string, itemInstanceID string, quantity int) (SaleResult, error) {
