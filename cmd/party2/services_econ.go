@@ -28,12 +28,18 @@ type econServices struct {
 }
 
 func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
-	shopService, err := shop.NewService(core.charRepo, core.invRepo, core.itemCatalog, shop.WithTransactionProvider(core.txProvider))
+	depotRepo, err := database.NewDepotRepository(db)
 	if err != nil {
 		return nil, err
 	}
 
-	depotRepo, err := database.NewDepotRepository(db)
+	shopService, err := shop.NewService(
+		core.charRepo,
+		core.invRepo,
+		core.itemCatalog,
+		shop.WithTransactionProvider(core.txProvider),
+		shop.WithDepotRepository(depotRepo),
+	)
 	if err != nil {
 		return nil, err
 	}

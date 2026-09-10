@@ -28,7 +28,7 @@
   "transaction_boundaries": [
     {
       "method": "Purchase",
-      "source_ref": "internal/shop/shop.go#Service.Purchase",
+      "source_ref": "internal/shop/purchase.go#Service.Purchase",
       "transaction_type": "RunInTx",
       "lock_sequence": [
         {

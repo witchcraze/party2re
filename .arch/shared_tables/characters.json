@@ -17,7 +17,7 @@
   "callers": [
     {
       "module": "shop",
-      "caller_method": "internal/shop/shop.go#Service.Purchase",
+      "caller_method": "internal/shop/purchase.go#Service.Purchase",
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
       "lock_order": 2,
       "purpose": "Lock character wallet and verify sufficient funds"

@@ -16,7 +16,7 @@
   "callers": [
     {
       "module": "shop",
-      "caller_method": "internal/shop/shop.go#Service.Purchase",
+      "caller_method": "internal/shop/purchase.go#Service.Purchase",
       "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
       "lock_order": 3,
       "purpose": "Lock inventory to verify slot capacity and grant purchased item"
