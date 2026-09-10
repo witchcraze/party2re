@@ -86,7 +86,7 @@ Based on the selection criteria above, all packages in `internal/` are triaged i
 | :--- | :--- | :--- | :--- | :--- |
 | **Tavern** | `internal/tavern` | `OrderMeal`, `ClaimDelivery` | `characters(2) -> tavern_character_status(8)` | [tavern.json](file:///home/witchcraze/dev/party2re/.arch/modules/tavern.json) |
 | **Delivery** | `internal/delivery` | `AcceptQuest`, `CompleteDelivery`, `SendParcel`, `ClaimParcel` | `characters(2) -> inventory_items(3) -> delivery_parcels(8)` | [delivery.json](file:///home/witchcraze/dev/party2re/.arch/modules/delivery.json) |
-| **Bank** | `internal/bank` | `Deposit`, `Withdraw`, `Transfer` | `characters(2) -> bank_accounts(6, p1<p2) -> bank_transfers(8)` | [bank.json](file:///home/witchcraze/dev/party2re/.arch/modules/bank.json) |
+| **Bank** | `internal/bank` | `Deposit`, `Withdraw` | `characters(2)` | [bank.json](file:///home/witchcraze/dev/party2re/.arch/modules/bank.json) |
 | **Auction** | `internal/auction` | `CreateListing`, `PlaceBid`, `Buyout`, `CancelListing` | `auction_listings(8) -> characters(2, bidder) -> characters(2, refund)` | [auction.json](file:///home/witchcraze/dev/party2re/.arch/modules/auction.json) |
 | **Guild** | `internal/guild` | `CreateGuild`, `Donate` | `characters(2) -> guilds(7) -> guild_members(7)` | [guild.json](file:///home/witchcraze/dev/party2re/.arch/modules/guild.json) |
 | **Shop** | `internal/shop` | `Purchase`, `Sell` | `characters(2) -> inventory_items(3)` | [shop.json](file:///home/witchcraze/dev/party2re/.arch/modules/shop.json) |
@@ -115,7 +115,7 @@ DB Table (e.g. characters)
    ├── Consumer Interfaces: [Shop, Blacksmith, Tavern, Delivery, Adventure]
    └── Callers:
          ├─ [Shop] Purchase / Sell (Lock order: 2, SELECT ... FOR UPDATE)
-         ├─ [Bank] Deposit / Withdraw (Lock order: 2, UPDATE)
+         ├─ [Bank] Deposit / Withdraw (Lock order: 2, SELECT ... FOR UPDATE)
          ├─ [Blacksmith] Enhance (Lock order: 2, SELECT ... FOR UPDATE)
          ├─ [Auction] PlaceBid / Buyout (Lock order: 2, UPDATE)
          ├─ [Guild] CreateGuild / Donate (Lock order: 2, UPDATE)
@@ -127,7 +127,6 @@ DB Table (e.g. characters)
 ### Shared Table Index Inventory
 - [characters.json](file:///home/witchcraze/dev/party2re/.arch/shared_tables/characters.json) (Tier 2, High Fan-in Character wallet, stats, progression)
 - [inventory_items.json](file:///home/witchcraze/dev/party2re/.arch/shared_tables/inventory_items.json) (Tier 3, Character item instance repository)
-- [bank_accounts.json](file:///home/witchcraze/dev/party2re/.arch/shared_tables/bank_accounts.json) (Tier 6, Player savings accounts)
 - [guilds.json](file:///home/witchcraze/dev/party2re/.arch/shared_tables/guilds.json) (Tier 7, Guild organization records)
 
 ---

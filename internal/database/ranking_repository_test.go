@@ -67,17 +67,7 @@ func TestRankingRepository_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 2. Set bank balances
-	_, err = db.ExecContext(ctx, `
-		INSERT INTO bank_accounts (player_id, balance)
-		VALUES (?, 500000), (?, 200000)
-		ON DUPLICATE KEY UPDATE balance = VALUES(balance)
-	`, p1.ID, p2.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// 3. Create characters
+	// 2. Create characters with funds and deposits
 	c1, err := corecharacter.NewWithOptions(prefix+"Hero", "warrior", "m", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -86,6 +76,7 @@ func TestRankingRepository_Integration(t *testing.T) {
 	c1.Level = 80
 	c1.Experience = 64000
 	c1.Money = 50000
+	c1.Deposit = 500000
 	c1.SP = 3
 	c1.SmallMedals = 15
 	c1.HelpCount = 10
@@ -101,6 +92,7 @@ func TestRankingRepository_Integration(t *testing.T) {
 	c2.Level = 90
 	c2.Experience = 81000
 	c2.Money = 300000
+	c2.Deposit = 200000
 	c2.SP = 1
 	c2.SmallMedals = 50
 	c2.HelpCount = 2

@@ -128,11 +128,10 @@ State-mutating feature modules (such as `shop`, `blacksmith`, `alchemy`, `bank`,
      3. `inventory_items` / `equipment_slots`
      4. `character_jobs` / `character_job_masteries`
      5. `character_depots` / `depot_items`
-     6. `bank_accounts` / `bank_transfers`
-     7. `guilds` (if multiple guilds, sorted ascending: `id1 < id2`) / `guild_members`
-     8. Feature tables (`auction_listings`, `farm_plots`, `casino_accounts`, `gvg_standings`, `character_boss_records`, `challenge_records`, etc.)
+     6. `guilds` (if multiple guilds, sorted ascending: `id1 < id2`) / `guild_members`
+     7. Feature tables (`auction_listings`, `farm_plots`, `casino_accounts`, `gvg_standings`, `character_boss_records`, `challenge_records`, etc.)
 3. **Application Orchestrator Pattern**:
-   - Cross-module operations (such as purchasing an auction listing involving Buyer character wallet, Seller bank account, and Inventory transfer) should be orchestrated at the application layer inside a single `RunInTx` boundary.
+   - Cross-module operations (such as purchasing an auction listing involving Buyer character wallet, Seller character wallet, and Inventory transfer) should be orchestrated at the application layer inside a single `RunInTx` boundary.
    - No feature repository calls `BeginTx` directly; all repositories delegate to `RunInTx` and `ExecutorFromContext`.
 4. **High-Concurrency Stress Testing & Deadlock Verification**:
    - Automated concurrency benchmarks (`internal/database/concurrency_stress_test.go`, `make test-stress`, `scripts/stress_test.sh`) simulate 50–100 concurrent workers hammering MariaDB with high contention.

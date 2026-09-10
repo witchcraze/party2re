@@ -1,0 +1,187 @@
+{
+  "/characters/{id}/bank": {
+    "get": {
+      "operationId": "getCharactersIdBank",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "GET /characters/{id}/bank endpoint",
+      "tags": [
+        "Bank"
+      ]
+    }
+  },
+  "/characters/{id}/bank/deposit": {
+    "post": {
+      "operationId": "postCharactersIdBankDeposit",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/bank/deposit endpoint",
+      "tags": [
+        "Bank"
+      ]
+    }
+  },
+  "/characters/{id}/bank/inspect": {
+    "post": {
+      "operationId": "postCharactersIdBankInspect",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/bank/inspect endpoint",
+      "tags": [
+        "Bank"
+      ]
+    }
+  },
+  "/characters/{id}/bank/talk": {
+    "post": {
+      "operationId": "postCharactersIdBankTalk",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/bank/talk endpoint",
+      "tags": [
+        "Bank"
+      ]
+    }
+  },
+  "/characters/{id}/bank/withdraw": {
+    "post": {
+      "operationId": "postCharactersIdBankWithdraw",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/bank/withdraw endpoint",
+      "tags": [
+        "Bank"
+      ]
+    }
+  }
+}

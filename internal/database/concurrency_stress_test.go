@@ -24,7 +24,7 @@ import (
 
 var errOutOfStock = errors.New("out of stock")
 
-func TestConcurrencyStressBankTransfersAndDeposits(t *testing.T) {
+func TestConcurrencyStressBankDepositsAndWithdrawals(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -42,80 +42,79 @@ func TestConcurrencyStressBankTransfersAndDeposits(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	numPlayers := 6
-	players := make([]coreplayer.Player, numPlayers)
-	initialBalancePerPlayer := int(10000)
+	numCharacters := 6
+	characterIDs := make([]string, numCharacters)
+	initialMoneyPerChar := 50000
+	initialDepositPerChar := int64(50000)
 
 	suffix := id.New()[:8]
-	for i := 0; i < numPlayers; i++ {
-		c, err := CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("SC_%s_%d", suffix, i), initialBalancePerPlayer)
+	for i := 0; i < numCharacters; i++ {
+		c, err := CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("SC_%s_%d", suffix, i), initialMoneyPerChar)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		// Initial deposit
-		_, _, err = bankRepo.Deposit(ctx, c.PlayerID, c.ID, initialBalancePerPlayer)
+		// Initial deposit in DB
+		_, err = db.ExecContext(ctx, "UPDATE characters SET deposit = ? WHERE id = ?", initialDepositPerChar, c.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		players[i] = coreplayer.Player{ID: c.PlayerID}
+		characterIDs[i] = c.ID
 	}
 
 	cfg := GetStressConfig()
-	var failedTransfers int64
+	var failedOps int64
 
 	res := RunConcurrentStressTest(t, cfg, func(workerID int, op int) error {
 		r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerID*1000+op)))
-		fromIdx := r.Intn(numPlayers)
-		toIdx := r.Intn(numPlayers)
-		for toIdx == fromIdx {
-			toIdx = r.Intn(numPlayers)
-		}
+		charIdx := r.Intn(numCharacters)
+		charID := characterIDs[charIdx]
+		amount := int64(r.Intn(200) + 1)
 
-		fromPlayer := players[fromIdx]
-		toPlayer := players[toIdx]
-		transferAmount := int64(r.Intn(200) + 1)
-
-		record := bank.TransferRecord{
-			ID:           id.New(),
-			FromPlayerID: fromPlayer.ID,
-			ToPlayerID:   toPlayer.ID,
-			Amount:       transferAmount,
-			CreatedAt:    time.Now().UTC(),
-		}
-
-		_, _, err := bankRepo.Transfer(ctx, record)
-		if err != nil {
-			if errors.Is(err, bank.ErrInsufficientBalance) {
-				atomic.AddInt64(&failedTransfers, 1)
+		if r.Intn(2) == 0 {
+			// Deposit
+			_, err := bankRepo.Deposit(ctx, charID, amount)
+			if err != nil {
+				if errors.Is(err, bank.ErrInsufficientFunds) {
+					atomic.AddInt64(&failedOps, 1)
+					return err
+				}
+				t.Errorf("worker %d unexpected deposit error: %v", workerID, err)
 				return err
 			}
-			t.Errorf("worker %d unexpected transfer error: %v", workerID, err)
-			return err
+		} else {
+			// Withdraw
+			_, _, _, err := bankRepo.Withdraw(ctx, charID, amount)
+			if err != nil {
+				if errors.Is(err, bank.ErrInsufficientBalance) {
+					atomic.AddInt64(&failedOps, 1)
+					return err
+				}
+				t.Errorf("worker %d unexpected withdraw error: %v", workerID, err)
+				return err
+			}
 		}
 		return nil
 	})
 
-	// Verify Conservation of Money across all accounts
-	var totalEndingBalance int64
-	for _, p := range players {
-		acc, err := bankRepo.GetAccount(ctx, p.ID)
+	// Verify Conservation of Money across each character
+	for _, cid := range characterIDs {
+		c, err := bankRepo.GetCharacter(ctx, cid)
 		if err != nil {
-			t.Fatalf("failed to read account balance for %s: %v", p.ID, err)
+			t.Fatalf("failed to read character %s: %v", cid, err)
 		}
-		if acc.Balance < 0 {
-			t.Fatalf("account %s went negative: %d", p.ID, acc.Balance)
+		if c.Money < 0 || c.Deposit < 0 {
+			t.Fatalf("character %s balance went negative: money=%d, deposit=%d", cid, c.Money, c.Deposit)
 		}
-		totalEndingBalance += acc.Balance
+		expectedCharTotal := int64(initialMoneyPerChar) + initialDepositPerChar
+		actualCharTotal := int64(c.Money) + c.Deposit
+		if actualCharTotal != expectedCharTotal {
+			t.Fatalf("Money conservation violated for %s! Expected %d total balance, got %d", cid, expectedCharTotal, actualCharTotal)
+		}
 	}
 
-	expectedTotal := int64(initialBalancePerPlayer * numPlayers)
-	if totalEndingBalance != expectedTotal {
-		t.Fatalf("Money conservation violated! Expected %d total balance, got %d", expectedTotal, totalEndingBalance)
-	}
-
-	t.Logf("Bank Concurrency Stress Test Completed: %d total ops (%d success, %d insufficient balance) in %v. Total conserved: %d gold",
-		res.TotalOps, res.Successes, failedTransfers, res.Duration, totalEndingBalance)
+	t.Logf("Bank Concurrency Stress Test Completed: %d total ops (%d success, %d expected rejections) in %v.",
+		res.TotalOps, res.Successes, failedOps, res.Duration)
 }
 
 func TestConcurrencyStressGuildConcurrentDonations(t *testing.T) {
@@ -492,7 +491,7 @@ func TestConcurrencyStressMultiDomainChaos(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, _, err = bankRepo.Deposit(ctx, c.PlayerID, c.ID, 5000)
+		_, err = bankRepo.Deposit(ctx, c.ID, 5000)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -523,19 +522,17 @@ func TestConcurrencyStressMultiDomainChaos(t *testing.T) {
 		r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerID*1000+op)))
 		action := r.Intn(4)
 		s1 := subjects[r.Intn(numSubjects)]
-		s2 := subjects[r.Intn(numSubjects)]
 
 		switch action {
 		case 0:
-			// Bank Transfer
-			if s1.player.ID != s2.player.ID {
-				_, _, err := bankRepo.Transfer(ctx, bank.TransferRecord{
-					ID:           id.New(),
-					FromPlayerID: s1.player.ID,
-					ToPlayerID:   s2.player.ID,
-					Amount:       int64(r.Intn(50) + 1),
-					CreatedAt:    time.Now().UTC(),
-				})
+			// Bank Deposit or Withdraw
+			if r.Intn(2) == 0 {
+				_, err := bankRepo.Deposit(ctx, s1.character.ID, int64(r.Intn(50)+1))
+				if err != nil && !errors.Is(err, bank.ErrInsufficientFunds) {
+					return err
+				}
+			} else {
+				_, _, _, err := bankRepo.Withdraw(ctx, s1.character.ID, int64(r.Intn(50)+1))
 				if err != nil && !errors.Is(err, bank.ErrInsufficientBalance) {
 					return err
 				}

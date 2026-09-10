@@ -13,7 +13,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 )
 
-func TestBankIntegrationConcurrentDepositsAndTransfers(t *testing.T) {
+func TestBankIntegrationConcurrentDepositsAndWithdrawals(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -45,19 +45,11 @@ func TestBankIntegrationConcurrentDepositsAndTransfers(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	// Create player and characters
 	player1, err := coreplayer.New("bank_c1_"+time.Now().Format("20060102150405.000000"), "securepass", now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := playerRepo.Save(ctx, player1); err != nil {
-		t.Fatal(err)
-	}
-	player2, err := coreplayer.New("bank_c2_"+time.Now().Format("20060102150405.000000"), "securepass", now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := playerRepo.Save(ctx, player2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -67,48 +59,46 @@ func TestBankIntegrationConcurrentDepositsAndTransfers(t *testing.T) {
 	}
 	char1.PlayerID = player1.ID
 	char1.Money = 10000
+	char1.Deposit = 10000
 	if err := charRepo.Save(ctx, char1); err != nil {
 		t.Fatal(err)
 	}
 
-	// Deposit initial 5000
-	_, _, err = service.Deposit(ctx, player1.ID, char1.ID, 5000)
-	if err != nil {
-		t.Fatalf("initial deposit error: %v", err)
-	}
-
-	// Run 10 concurrent transfers of 100G each from player1 to player2
-	const concurrentTransfers = 10
+	const concurrentOps = 10
 	var wg sync.WaitGroup
-	wg.Add(concurrentTransfers)
+	wg.Add(concurrentOps * 2)
 
-	for i := 0; i < concurrentTransfers; i++ {
+	// 10 concurrent deposits of 100G
+	for i := 0; i < concurrentOps; i++ {
 		go func() {
 			defer wg.Done()
-			_, _, _, transferErr := service.Transfer(ctx, player1.ID, player2.ID, 100)
-			if transferErr != nil {
-				t.Errorf("concurrent transfer failed: %v", transferErr)
+			_, depErr := service.Deposit(ctx, char1.ID, 100)
+			if depErr != nil {
+				t.Errorf("concurrent deposit failed: %v", depErr)
+			}
+		}()
+	}
+
+	// 10 concurrent withdrawals of 100G
+	for i := 0; i < concurrentOps; i++ {
+		go func() {
+			defer wg.Done()
+			_, withErr := service.Withdraw(ctx, char1.ID, 100)
+			if withErr != nil {
+				t.Errorf("concurrent withdraw failed: %v", withErr)
 			}
 		}()
 	}
 	wg.Wait()
 
-	acc1, err := service.GetAccount(ctx, player1.ID)
+	state, err := service.GetState(ctx, char1.ID)
 	if err != nil {
-		t.Fatalf("GetAccount(player1) error: %v", err)
-	}
-	acc2, err := service.GetAccount(ctx, player2.ID)
-	if err != nil {
-		t.Fatalf("GetAccount(player2) error: %v", err)
+		t.Fatalf("GetState error: %v", err)
 	}
 
-	expectedAcc1 := int64(5000 - concurrentTransfers*100)
-	expectedAcc2 := int64(concurrentTransfers * 100)
-
-	if acc1.Balance != expectedAcc1 {
-		t.Errorf("player1 balance = %d, want %d", acc1.Balance, expectedAcc1)
-	}
-	if acc2.Balance != expectedAcc2 {
-		t.Errorf("player2 balance = %d, want %d", acc2.Balance, expectedAcc2)
+	// Total gold must be conserved (initial 10000 + 10000 = 20000)
+	totalGold := int64(state.Money) + state.Deposit
+	if totalGold != 20000 {
+		t.Errorf("total gold violated: got %d, want 20000 (money=%d, deposit=%d)", totalGold, state.Money, state.Deposit)
 	}
 }

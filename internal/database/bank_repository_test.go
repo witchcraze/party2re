@@ -4,12 +4,11 @@ import (
 	"context"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/witchcraze/party2re/internal/bank"
 )
 
-func TestBankRepositoryDepositWithdrawAndTransfer(t *testing.T) {
+func TestBankRepositoryDepositAndWithdraw(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -26,62 +25,51 @@ func TestBankRepositoryDepositWithdrawAndTransfer(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	// 1. Create two players and character
-	player2, err := CreateTestPlayer(ctx, db)
+	// 1. Create character with 10,000 gold
+	char1, err := CreateTestCharacterWithFunds(ctx, db, "Banker 1", 10000)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	char1, err := CreateTestCharacterWithFunds(ctx, db, "Banker 1", 1000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	player1ID := char1.PlayerID
-
-	// 2. Deposit
-	acc1, updatedChar1, err := bankRepo.Deposit(ctx, player1ID, char1.ID, 400)
+	// 2. Deposit 4,000 gold
+	updatedChar, err := bankRepo.Deposit(ctx, char1.ID, 4000)
 	if err != nil {
 		t.Fatalf("Deposit error: %v", err)
 	}
-	if acc1.Balance != 400 || updatedChar1.Money != 600 {
-		t.Errorf("deposit state: acc1=%d, char1=%d", acc1.Balance, updatedChar1.Money)
+	if updatedChar.Money != 6000 || updatedChar.Deposit != 4000 {
+		t.Errorf("deposit state: money=%d, deposit=%d", updatedChar.Money, updatedChar.Deposit)
 	}
 
-	// 3. Transfer from player1 to player2
-	transferID := "t_" + char1.ID[:8]
-	record := bank.TransferRecord{
-		ID:           transferID,
-		FromPlayerID: player1ID,
-		ToPlayerID:   player2.ID,
-		Amount:       250,
-		CreatedAt:    time.Now().UTC(),
-	}
-	fromAcc, toAcc, err := bankRepo.Transfer(ctx, record)
-	if err != nil {
-		t.Fatalf("Transfer error: %v", err)
-	}
-	if fromAcc.Balance != 150 {
-		t.Errorf("from balance = %d, want 150", fromAcc.Balance)
-	}
-	if toAcc.Balance != 250 {
-		t.Errorf("to balance = %d, want 250", toAcc.Balance)
-	}
-
-	// 4. Withdraw from player1
-	acc1AfterWithdraw, char1AfterWithdraw, err := bankRepo.Withdraw(ctx, player1ID, char1.ID, 100)
+	// 3. Withdraw 1,500 gold
+	withdrawnChar, actual, refunded, err := bankRepo.Withdraw(ctx, char1.ID, 1500)
 	if err != nil {
 		t.Fatalf("Withdraw error: %v", err)
 	}
-	if acc1AfterWithdraw.Balance != 50 || char1AfterWithdraw.Money != 700 {
-		t.Errorf("withdraw state: acc1=%d, char1=%d", acc1AfterWithdraw.Balance, char1AfterWithdraw.Money)
+	if withdrawnChar.Money != 7500 || withdrawnChar.Deposit != 2500 || actual != 1500 || refunded != 0 {
+		t.Errorf("withdraw state: money=%d, deposit=%d, actual=%d, refunded=%d", withdrawnChar.Money, withdrawnChar.Deposit, actual, refunded)
 	}
 
-	// 5. Check transfer history
-	transfers, err := bankRepo.ListTransfers(ctx, player1ID, 10)
+	// 4. Test wallet clamp at 999,999 G:
+	// Set money to 800,000 and deposit to 500,000
+	_, err = db.ExecContext(ctx, "UPDATE characters SET money = 800000, deposit = 500000 WHERE id = ?", char1.ID)
 	if err != nil {
-		t.Fatalf("ListTransfers error: %v", err)
+		t.Fatal(err)
 	}
-	if len(transfers) == 0 || transfers[0].ID != transferID {
-		t.Fatalf("unexpected transfer history: %#v", transfers)
+
+	clampedChar, actual, refunded, err := bankRepo.Withdraw(ctx, char1.ID, 300000)
+	if err != nil {
+		t.Fatalf("Withdraw clamp error: %v", err)
+	}
+	if clampedChar.Money != bank.MaxWallet {
+		t.Errorf("clamped money = %d, want %d", clampedChar.Money, bank.MaxWallet)
+	}
+	if clampedChar.Deposit != 300001 {
+		t.Errorf("clamped deposit = %d, want 300001", clampedChar.Deposit)
+	}
+	if actual != 199999 || refunded != 100001 {
+		t.Errorf("actual = %d, refunded = %d", actual, refunded)
+	}
+	if int64(clampedChar.Money)+clampedChar.Deposit != 800000+500000 {
+		t.Errorf("gold conservation violated: %d", int64(clampedChar.Money)+clampedChar.Deposit)
 	}
 }

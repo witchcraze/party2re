@@ -48,8 +48,8 @@ func TestScanCharacterRow_CustomError(t *testing.T) {
 func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 	scanner := &mockScanner{
 		scanFn: func(dest ...any) error {
-			if len(dest) != 34 {
-				t.Fatalf("expected 34 scan destinations, got %d", len(dest))
+			if len(dest) != 35 {
+				t.Fatalf("expected 35 scan destinations, got %d", len(dest))
 			}
 			*dest[0].(*string) = "char-1"
 			*dest[1].(*string) = "player-1"
@@ -85,6 +85,7 @@ func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 			*dest[31].(*int) = 4
 			*dest[32].(*int) = 5
 			*dest[33].(*string) = "#123456"
+			*dest[34].(*int64) = 123456789
 			return nil
 		},
 	}
@@ -102,6 +103,9 @@ func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 	}
 	if char.Money != 5000 || char.Level != 15 || char.Experience != 3200 {
 		t.Errorf("unexpected progression: Level %d, Exp %d, Money %d", char.Level, char.Experience, char.Money)
+	}
+	if char.Deposit != 123456789 {
+		t.Errorf("unexpected deposit: got %d, want 123456789", char.Deposit)
 	}
 	if char.SP != 2 || char.SmallMedals != 5 || char.HelpCount != 8 {
 		t.Errorf("unexpected medals/help/sp: SP %d, Medals %d, Help %d", char.SP, char.SmallMedals, char.HelpCount)

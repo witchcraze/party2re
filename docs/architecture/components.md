@@ -266,9 +266,9 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Recipe Catalog, Item Catalog, Character (wallet), Inventory.
   - **Persistence:** Atomic single-transaction `AlchemyRepository`.
 - **Bank** (`internal/bank`):
-  - **Responsibility:** Bank account management, gold deposits, withdrawals, and player-to-player remittances.
-  - **Dependencies:** Character (wallet).
-  - **Persistence:** `bank_accounts` and `bank_transfers` tables with `FOR UPDATE` concurrency locking.
+  - **Responsibility:** Bank receptionist NPC Taxeed (`@タクシード`), character gold savings deposits, withdrawals with 999,999G wallet clamp and excess refund.
+  - **Dependencies:** Character (wallet & deposit).
+  - **Persistence:** `characters` table (`deposit` column) with Tier 2 `SELECT ... FOR UPDATE` row locking.
 - **Home & Resting** (`internal/home`):
   - **Responsibility:** Private home profiles, visitor counters, guest letters/mailbox, pet companion phrase training and conversation, delivery notifications, and character sleeping/resting (`sleep.cgi`/`home.cgi` - full HP/MP/tired recovery, online-scaled countdown lock, fullness and chapel resets). Fictional paid Inn decommissioned per Issue #459.
   - **Dependencies:** Character repository, Home repository, Timer service (`internal/core/timer`), Tavern (fullness reset), Chapel (blessing cleaner).
@@ -418,7 +418,7 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
 
 ### Cross-Module Transaction Orchestration & Ambient Context Propagation
 
-Cross-module workflows spanning multiple distinct feature and core repositories (such as auction settlement transferring character gold, seller bank deposits, and inventory items) use the **Application Orchestrator Pattern**:
+Cross-module workflows spanning multiple distinct feature and core repositories (such as auction settlement transferring character gold and inventory items) use the **Application Orchestrator Pattern**:
 - **Ambient Context Boundary**: Transactions are established at the application service / orchestrator level via `database.RunInTx(ctx, db, fn)`.
 - **Automatic Participation**: Repositories resolve their SQL executor via `database.ExecutorFromContext(ctx, r.db)` and automatically participate in the active transaction without explicit transaction object passing across domain layers.
 - **Deadlock Prevention**: All repositories and orchestrators observe the deterministic lock acquisition hierarchy defined in [`feature-modules.md`](feature-modules.md) and [`.agents/rules/05-database-and-caching.md`](../../.agents/rules/05-database-and-caching.md).

@@ -66,14 +66,13 @@ func (r *RankingRepository) GetPlayerWealthRanking(ctx context.Context, limit, o
 
 	query := `
 		SELECT p.id, p.username,
-		       (COALESCE(b.balance, 0) + COALESCE(SUM(c.money), 0)) AS total_wealth,
-		       COALESCE(b.balance, 0) AS bank_balance,
+		       COALESCE(SUM(c.money + c.deposit), 0) AS total_wealth,
+		       COALESCE(SUM(c.deposit), 0) AS bank_balance,
 		       COALESCE(SUM(c.money), 0) AS characters_money,
 		       COUNT(c.id) AS character_count
 		FROM players p
-		LEFT JOIN bank_accounts b ON p.id = b.player_id
 		LEFT JOIN characters c ON p.id = c.player_id
-		GROUP BY p.id, p.username, b.balance
+		GROUP BY p.id, p.username
 		ORDER BY total_wealth DESC, p.id ASC
 		LIMIT ? OFFSET ?
 	`

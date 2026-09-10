@@ -168,6 +168,7 @@ func newHTTPHandler(
 		http.WithFarm(misc.farm),
 		http.WithCollection(misc.collection),
 		http.WithDepot(econ.depot),
+		http.WithBank(econ.bank),
 		http.WithLottery(misc.lottery),
 		http.WithCasino(misc.casino),
 		http.WithChallenge(cmbt.challenge),

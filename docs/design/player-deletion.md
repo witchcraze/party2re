@@ -56,8 +56,6 @@ Player account deletion executes within a database transaction:
 4. Player-linked relational tables in MariaDB:
    - `player_notifications`
    - `player_api_tokens`
-   - `bank_transfers` (both sender and recipient)
-   - `bank_accounts`
 5. Primary player record in `players`.
 
 ---
