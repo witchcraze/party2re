@@ -270,8 +270,8 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Character (wallet & deposit).
   - **Persistence:** `characters` table (`deposit` column) with Tier 2 `SELECT ... FOR UPDATE` row locking.
 - **Home & Resting** (`internal/home`):
-  - **Responsibility:** Private home profiles, visitor counters, guest letters/mailbox, pet companion phrase training and conversation, delivery notifications, and character sleeping/resting (`sleep.cgi`/`home.cgi` - full HP/MP/tired recovery, online-scaled countdown lock, fullness and chapel resets). Fictional paid Inn decommissioned per Issue #459.
-  - **Dependencies:** Character repository, Home repository, Timer service (`internal/core/timer`), Tavern (fullness reset), Chapel (blessing cleaner).
+  - **Responsibility:** Private home profiles, visitor counters, guest letters/mailbox, pet companion phrase training and conversation, delivery notifications, character sleeping/resting (`sleep.cgi`/`home.cgi` - full HP/MP/tired recovery, online-scaled countdown lock, fullness and chapel resets), and atomic home item usage (`UseHomeItem` via `economy.TransactionRunner` with Rank 2 Character -> Rank 3 Inventory / Rank 5 Depot row locking). Fictional paid Inn decommissioned per Issue #459.
+  - **Dependencies:** Character repository, Home repository, Timer service (`internal/core/timer`), Economy Transaction Runner (`internal/economy`), Inventory service, Depot repository, Item catalog, Tavern (fullness reset), Chapel (blessing cleaner).
   - **Persistence:** `character_homes`, `home_letters`, `companion_phrases`, `home_delivery_notices` tables, Valkey `party2:timer:sleep:<id>` and `party2:timer:asleep:<id>`.
 - **Guild** (`internal/guild`):
   - **Responsibility:** Guild creation, membership lifecycle, role management (Leader, Officer, Member), notice board, gold donations, and level/capacity progression.

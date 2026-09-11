@@ -2,13 +2,16 @@ package home
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 type DepotManager interface {
@@ -219,6 +222,127 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 		return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
 	}
 
+	// Validate supported consumable items before transaction
+	switch def.Name {
+	case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル":
+	default:
+		return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
+	}
+
+	if s.runner != nil {
+		var resMsg string
+		if source == "inventory" {
+			req := economy.TransactionRequest{
+				CharacterID:   characterID,
+				LockInventory: true,
+				Cost: economy.ResourceCost{
+					ItemInstanceID:  instanceID,
+					ItemInstanceQty: 1,
+				},
+			}
+			txRes, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+				msg, err := s.applyConsumableEffect(&tc.Character, def)
+				if err != nil {
+					return err
+				}
+				resMsg = msg
+				return nil
+			})
+			if err != nil {
+				if errors.Is(err, economy.ErrItemNotFound) || errors.Is(err, economy.ErrInsufficientItemQuantity) {
+					return nil, ErrItemNotFound
+				}
+				if errors.Is(err, economy.ErrCharacterNotFound) {
+					return nil, ErrCharacterNotFound
+				}
+				return nil, err
+			}
+			return &UseHomeItemResult{
+				Action:    "consumed",
+				Message:   resMsg,
+				ItemName:  def.Name,
+				Kind:      3,
+				Consumed:  true,
+				Character: &txRes.Character,
+			}, nil
+		}
+
+		// source == "depot"
+		req := economy.TransactionRequest{
+			CharacterID:   characterID,
+			LockInventory: false,
+		}
+		txRes, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+			if s.depotMgr == nil {
+				return ErrItemNotFound
+			}
+			if err := s.depotMgr.RemoveItem(tc.Context, characterID, instanceID); err != nil {
+				if errors.Is(err, depot.ErrItemNotFound) || errors.Is(err, depot.ErrNotFound) {
+					return ErrItemNotFound
+				}
+				return err
+			}
+			msg, err := s.applyConsumableEffect(&tc.Character, def)
+			if err != nil {
+				return err
+			}
+			resMsg = msg
+			return nil
+		})
+		if err != nil {
+			if errors.Is(err, economy.ErrItemNotFound) || errors.Is(err, ErrItemNotFound) {
+				return nil, ErrItemNotFound
+			}
+			if errors.Is(err, economy.ErrCharacterNotFound) {
+				return nil, ErrCharacterNotFound
+			}
+			return nil, err
+		}
+		return &UseHomeItemResult{
+			Action:    "consumed",
+			Message:   resMsg,
+			ItemName:  def.Name,
+			Kind:      3,
+			Consumed:  true,
+			Character: &txRes.Character,
+		}, nil
+	}
+
+	// Fallback path for unit test mocks without runner configured
+	msg, err := s.applyConsumableEffect(&char, def)
+	if err != nil {
+		return nil, err
+	}
+
+	// Consume 1 item
+	if source == "inventory" && s.invMgr != nil {
+		if _, err := s.invMgr.Consume(ctx, characterID, instanceID, 1); err != nil {
+			return nil, err
+		}
+	} else if source == "depot" && s.depotMgr != nil {
+		if err := s.depotMgr.RemoveItem(ctx, characterID, instanceID); err != nil {
+			return nil, err
+		}
+	}
+
+	// Update character state
+	if s.charUpdater != nil {
+		if err := s.charUpdater.Update(ctx, char); err != nil {
+			return nil, err
+		}
+	}
+
+	return &UseHomeItemResult{
+		Action:    "consumed",
+		Message:   msg,
+		ItemName:  def.Name,
+		Kind:      3,
+		Consumed:  true,
+		Character: &char,
+	}, nil
+}
+
+func (s *Service) applyConsumableEffect(char *corecharacter.Character, def item.Definition) (string, error) {
 	var msg string
 
 	switch def.Name {
@@ -267,12 +391,12 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	case "スキルの種":
 		v := s.randomInt(3) + 1
 		if err := char.AddSP(v); err != nil {
-			return nil, err
+			return "", err
 		}
 		msg = fmt.Sprintf("%sのSPが %d あがった！", char.Name, v)
 	case "幸せの種":
-		if err := progression.ApplyHappySeed(&char); err != nil {
-			return nil, err
+		if err := progression.ApplyHappySeed(char); err != nil {
+			return "", err
 		}
 		msg = "次のクエスト時にレベルアップ！"
 	case "ファイト一発", "気合の霊薬":
@@ -280,35 +404,12 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 		msg = fmt.Sprintf("元気全快！%sの疲労が回復した！", char.Name)
 	case "小さなメダル":
 		if err := char.AddSmallMedals(1); err != nil {
-			return nil, err
+			return "", err
 		}
 		msg = "メダル王にメダルを１枚献上しました"
 	default:
-		return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
+		return "", fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
 	}
 
-	// Consume 1 item
-	if source == "inventory" && s.invMgr != nil {
-		if _, err := s.invMgr.Consume(ctx, characterID, instanceID, 1); err != nil {
-			return nil, err
-		}
-	} else if source == "depot" && s.depotMgr != nil {
-		if err := s.depotMgr.RemoveItem(ctx, characterID, instanceID); err != nil {
-			return nil, err
-		}
-	}
-
-	// Update character state
-	if err := s.charUpdater.Update(ctx, char); err != nil {
-		return nil, err
-	}
-
-	return &UseHomeItemResult{
-		Action:    "consumed",
-		Message:   msg,
-		ItemName:  def.Name,
-		Kind:      3,
-		Consumed:  true,
-		Character: &char,
-	}, nil
+	return msg, nil
 }

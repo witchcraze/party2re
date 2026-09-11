@@ -129,6 +129,7 @@ func newSocServices(
 		home.WithInventoryManager(invService),
 		home.WithDepotManager(depotMgr),
 		home.WithItemCatalog(core.itemCatalog),
+		home.WithEconomy(core.economy),
 	)
 
 	return &socServices{

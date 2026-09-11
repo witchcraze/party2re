@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	mrand "math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 type mockInventoryManager struct {
@@ -540,4 +542,294 @@ func TestUseHomeItem_AuthenticCatalogMatrix(t *testing.T) {
 	if equipmentCombatCount != 3 {
 		t.Fatalf("expected exactly 3 combat-only equipment items in authentic catalog, got %d", equipmentCombatCount)
 	}
+}
+
+type mockTransactionRunner struct {
+	chars          map[string]corecharacter.Character
+	invs           map[string]coreinventory.Inventory
+	failOnCallback bool
+	failOnCommit   bool
+	calls          int
+	lastReq        economy.TransactionRequest
+}
+
+func (m *mockTransactionRunner) ExecuteTransaction(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error) {
+	m.calls++
+	m.lastReq = req
+	char, ok := m.chars[req.CharacterID]
+	if !ok {
+		return nil, economy.ErrCharacterNotFound
+	}
+	charCopy := char
+
+	var inv coreinventory.Inventory
+	var invCopy coreinventory.Inventory
+	if req.LockInventory {
+		var found bool
+		inv, found = m.invs[req.CharacterID]
+		if !found {
+			var err error
+			inv, err = coreinventory.New(req.CharacterID)
+			if err != nil {
+				return nil, err
+			}
+		}
+		invCopy = inv
+		if req.Cost.ItemInstanceID != "" && req.Cost.ItemInstanceQty > 0 {
+			inst, found := invCopy.Find(req.Cost.ItemInstanceID)
+			if !found {
+				return nil, economy.ErrItemNotFound
+			}
+			if inst.Quantity < req.Cost.ItemInstanceQty {
+				return nil, economy.ErrInsufficientItemQuantity
+			}
+			if err := invCopy.Consume(req.Cost.ItemInstanceID, req.Cost.ItemInstanceQty); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	tc := &economy.TxContext{
+		Context:   ctx,
+		Character: charCopy,
+		Inventory: invCopy,
+	}
+
+	if m.failOnCallback {
+		return nil, errors.New("simulated callback failure")
+	}
+
+	if err := fn(tc); err != nil {
+		return nil, err
+	}
+
+	if m.failOnCommit {
+		return nil, errors.New("simulated commit failure")
+	}
+
+	m.chars[req.CharacterID] = tc.Character
+	if req.LockInventory {
+		m.invs[req.CharacterID] = tc.Inventory
+	}
+	return &economy.TransactionResult{
+		Character: tc.Character,
+		Inventory: tc.Inventory,
+	}, nil
+}
+
+type transactionalMockDepotManager struct {
+	depots map[string]depot.Depot
+}
+
+func (m *transactionalMockDepotManager) FindByCharacterID(ctx context.Context, characterID string) (depot.Depot, error) {
+	dp, ok := m.depots[characterID]
+	if !ok {
+		return depot.NewDepot(characterID)
+	}
+	return dp, nil
+}
+
+func (m *transactionalMockDepotManager) RemoveItem(ctx context.Context, characterID, itemInstanceID string) error {
+	dp, ok := m.depots[characterID]
+	if !ok {
+		return depot.ErrNotFound
+	}
+	for i, it := range dp.Items {
+		if it.ID == itemInstanceID {
+			dp.Items = append(dp.Items[:i], dp.Items[i+1:]...)
+			m.depots[characterID] = dp
+			return nil
+		}
+	}
+	return depot.ErrItemNotFound
+}
+
+func TestUseHomeItem_TransactionalSuccess(t *testing.T) {
+	ctx := context.Background()
+	cat, err := coreitem.InitialCatalog()
+	if err != nil {
+		t.Fatalf("InitialCatalog failed: %v", err)
+	}
+
+	charID := "char-tx-success"
+	char := corecharacter.Character{
+		ID:    charID,
+		Name:  "TxHero",
+		Level: 10,
+		Stats: corecharacter.Stats{
+			Attack:  20,
+			Defense: 15,
+		},
+	}
+	chars := map[string]corecharacter.Character{charID: char}
+
+	inv, _ := coreinventory.New(charID)
+	_ = inv.Add(coreitem.Instance{ID: "inst-atk-seed", DefinitionID: "item-018", Quantity: 1})
+	invs := map[string]coreinventory.Inventory{charID: inv}
+
+	dp, _ := depot.NewDepot(charID)
+	dp.Items = append(dp.Items, coreitem.Instance{ID: "inst-def-seed", DefinitionID: "item-019", Quantity: 1})
+	depots := map[string]depot.Depot{charID: dp}
+
+	runner := &mockTransactionRunner{chars: chars, invs: invs}
+	invMgr := &mockInventoryManager{invs: invs}
+	depotMgr := &transactionalMockDepotManager{depots: depots}
+	charReader := &mockCharReader{chars: chars}
+	repo := newMockHomeRepo(chars)
+
+	svc, err := NewService(
+		repo,
+		charReader,
+		WithInventoryManager(invMgr),
+		WithDepotManager(depotMgr),
+		WithItemCatalog(cat),
+		WithTransactionRunner(runner),
+		WithRNG(mrand.New(mrand.NewSource(1))),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	// 1. Consume from inventory
+	resInv, err := svc.UseHomeItem(ctx, charID, "inst-atk-seed", "inventory")
+	if err != nil {
+		t.Fatalf("UseHomeItem inventory failed: %v", err)
+	}
+	if !resInv.Consumed || resInv.Action != "consumed" {
+		t.Fatalf("expected consumed action, got %+v", resInv)
+	}
+	if runner.chars[charID].Stats.Attack <= 20 {
+		t.Errorf("expected attack to increase from 20, got %d", runner.chars[charID].Stats.Attack)
+	}
+	invAfter := runner.invs[charID]
+	if _, found := invAfter.Find("inst-atk-seed"); found {
+		t.Errorf("expected inst-atk-seed to be consumed from inventory")
+	}
+	if !runner.lastReq.LockInventory {
+		t.Errorf("expected LockInventory=true for inventory item usage")
+	}
+
+	// 2. Consume from depot
+	resDepot, err := svc.UseHomeItem(ctx, charID, "inst-def-seed", "depot")
+	if err != nil {
+		t.Fatalf("UseHomeItem depot failed: %v", err)
+	}
+	if !resDepot.Consumed || resDepot.Action != "consumed" {
+		t.Fatalf("expected consumed action, got %+v", resDepot)
+	}
+	if runner.chars[charID].Stats.Defense <= 15 {
+		t.Errorf("expected defense to increase from 15, got %d", runner.chars[charID].Stats.Defense)
+	}
+	if len(depotMgr.depots[charID].Items) != 0 {
+		t.Errorf("expected depot item to be consumed, got %d items", len(depotMgr.depots[charID].Items))
+	}
+	if runner.lastReq.LockInventory {
+		t.Errorf("expected LockInventory=false for depot item usage")
+	}
+}
+
+func TestUseHomeItem_TransactionalRollback(t *testing.T) {
+	ctx := context.Background()
+	cat, err := coreitem.InitialCatalog()
+	if err != nil {
+		t.Fatalf("InitialCatalog failed: %v", err)
+	}
+
+	t.Run("inventory commit failure rolls back item and stats", func(t *testing.T) {
+		charID := "char-rollback-inv"
+		char := corecharacter.Character{
+			ID:    charID,
+			Name:  "RollbackHero",
+			Level: 10,
+			Stats: corecharacter.Stats{
+				Attack: 20,
+			},
+		}
+		chars := map[string]corecharacter.Character{charID: char}
+
+		inv, _ := coreinventory.New(charID)
+		_ = inv.Add(coreitem.Instance{ID: "inst-seed3", DefinitionID: "item-018", Quantity: 1})
+		invs := map[string]coreinventory.Inventory{charID: inv}
+
+		runner := &mockTransactionRunner{
+			chars:        chars,
+			invs:         invs,
+			failOnCommit: true,
+		}
+		invMgr := &mockInventoryManager{invs: invs}
+		charReader := &mockCharReader{chars: chars}
+		repo := newMockHomeRepo(chars)
+
+		svc, err := NewService(
+			repo,
+			charReader,
+			WithInventoryManager(invMgr),
+			WithItemCatalog(cat),
+			WithTransactionRunner(runner),
+		)
+		if err != nil {
+			t.Fatalf("NewService failed: %v", err)
+		}
+
+		res, err := svc.UseHomeItem(ctx, charID, "inst-seed3", "inventory")
+		if err == nil {
+			t.Fatalf("expected error on commit failure, got nil result: %+v", res)
+		}
+
+		// Verify state was rolled back
+		if runner.chars[charID].Stats.Attack != 20 {
+			t.Errorf("expected attack to remain 20 after rollback, got %d", runner.chars[charID].Stats.Attack)
+		}
+		invAfter := runner.invs[charID]
+		itemInst, found := invAfter.Find("inst-seed3")
+		if !found || itemInst.Quantity != 1 {
+			t.Errorf("expected inst-seed3 to remain in inventory with qty 1, found=%v, qty=%d", found, itemInst.Quantity)
+		}
+	})
+
+	t.Run("depot callback failure rolls back depot item and stats", func(t *testing.T) {
+		charID := "char-rollback-depot"
+		char := corecharacter.Character{
+			ID:    charID,
+			Name:  "RollbackDepotHero",
+			Level: 10,
+			Stats: corecharacter.Stats{
+				Defense: 15,
+			},
+		}
+		chars := map[string]corecharacter.Character{charID: char}
+
+		dp, _ := depot.NewDepot(charID)
+		dp.Items = append(dp.Items, coreitem.Instance{ID: "inst-seed4", DefinitionID: "item-019", Quantity: 1})
+		depots := map[string]depot.Depot{charID: dp}
+
+		runner := &mockTransactionRunner{
+			chars:          chars,
+			failOnCallback: true,
+		}
+		depotMgr := &transactionalMockDepotManager{depots: depots}
+		charReader := &mockCharReader{chars: chars}
+		repo := newMockHomeRepo(chars)
+
+		svc, err := NewService(
+			repo,
+			charReader,
+			WithDepotManager(depotMgr),
+			WithItemCatalog(cat),
+			WithTransactionRunner(runner),
+		)
+		if err != nil {
+			t.Fatalf("NewService failed: %v", err)
+		}
+
+		res, err := svc.UseHomeItem(ctx, charID, "inst-seed4", "depot")
+		if err == nil {
+			t.Fatalf("expected error on callback failure, got nil result: %+v", res)
+		}
+
+		// Verify stats were not saved
+		if runner.chars[charID].Stats.Defense != 15 {
+			t.Errorf("expected defense to remain 15 after rollback, got %d", runner.chars[charID].Stats.Defense)
+		}
+	})
 }
