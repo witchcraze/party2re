@@ -111,7 +111,7 @@ Reconcile facilities and production mechanics that depend on Depot storage and o
 - [x] **Player Stores: Custom Pricing, Log Books & Commission Fees** (#466)
 - [x] **Bank: Character Deposits, Daily Interest & Peer-to-Peer Transfers** (#476)
 - [ ] **Auction House: Bid Retention, Expiry Settlement & Depot Routing** (#474)
-- [ ] **Flea Market: Direct Depot Withdrawals & Trading Logs** (#477)
+- [x] **Flea Market: Direct Depot Withdrawals & Trading Logs** (#477)
 - [ ] **Tavern Food Delivery: Scheduled Post-Adventure Buffs** (#475)
 - [ ] **Alchemy: Free Overnight Depot-linked Synthesis & Compendium** (#487)
 - [ ] **Monster Ranch: Monster Stabling, Home Pet Link, Naming & P2P Gifting** (#488)

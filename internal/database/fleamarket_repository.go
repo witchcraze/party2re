@@ -185,6 +185,19 @@ func (r *FleaMarketRepository) CountActiveListingsBySeller(ctx context.Context, 
 	return count, nil
 }
 
+func (r *FleaMarketRepository) CountTotalActiveListings(ctx context.Context) (int, error) {
+	var count int
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM fleamarket_listings
+		WHERE status = 'active'
+	`).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *FleaMarketRepository) UpdateListing(ctx context.Context, listing fleamarket.Listing) error {
 	result, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		UPDATE fleamarket_listings

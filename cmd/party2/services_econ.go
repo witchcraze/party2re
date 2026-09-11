@@ -112,7 +112,7 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 	fleamarketService, err := fleamarket.NewService(
 		fleamarketRepo,
 		core.charRepo,
-		core.invRepo,
+		depotRepo,
 		fleamarket.WithItemDefinitionProvider(core.itemCatalog),
 		fleamarket.WithTransactionProvider(core.txProvider),
 	)
