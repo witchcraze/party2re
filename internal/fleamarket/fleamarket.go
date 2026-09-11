@@ -16,7 +16,6 @@ const (
 	MaxListingsPerCharacter = 5
 	MinListingPrice         = 1
 	MaxListingPrice         = 999999
-	MaxGoldCap              = 2000000000
 )
 
 type ListingStatus string

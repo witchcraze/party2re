@@ -20,7 +20,6 @@ import (
 var knownLegacyUnusedConstants = map[string]string{
 	"replay.CombatTypeGvG":                       "reserved for future GvG combat replay recording",
 	"replay.CombatTypeDungeon":                   "reserved for future dungeon exploration replay recording",
-	"fleamarket.MaxGoldCap":                      "flea market balance constant; candidate for cleanup",
 	"notification.MaxCategoryLen":                "schema constraint constant for news categories",
 	"notification.MaxAuthorLen":                  "schema constraint constant for news author",
 	"notification.MaxLinkLen":                    "schema constraint constant for news link",

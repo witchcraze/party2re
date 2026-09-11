@@ -14,7 +14,7 @@ const (
 	// MaxDeposit is the maximum deposit allowed in the bank (99兆9999億9999万9999 G).
 	MaxDeposit int64 = 99_999_999_999_999
 	// MaxWallet is the maximum gold held in the character wallet upon bank withdrawal (999,999 G).
-	MaxWallet int = 999_999
+	MaxWallet int = corecharacter.MaxMoney
 	// NPCName is the Taxeed bank receptionist.
 	NPCName = "@タクシード"
 )

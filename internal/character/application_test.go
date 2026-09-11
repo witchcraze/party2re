@@ -187,7 +187,7 @@ func TestService_ChangeName(t *testing.T) {
 
 	// 1. Setup rich character
 	char, _ := service.Create(context.Background(), "player-1", "OldHero")
-	char.Money = 1000000
+	char.Money = 600000
 	_ = repo.Update(context.Background(), char)
 
 	// 2. Successful name change
@@ -198,8 +198,8 @@ func TestService_ChangeName(t *testing.T) {
 	if renamed.Name != "NewHero" {
 		t.Fatalf("expected name NewHero, got %s", renamed.Name)
 	}
-	if renamed.Money != 500000 {
-		t.Fatalf("expected remaining money 500000, got %d", renamed.Money)
+	if renamed.Money != 100000 {
+		t.Fatalf("expected remaining money 100000, got %d", renamed.Money)
 	}
 	if len(news.published) != 1 {
 		t.Fatalf("expected news broadcast, got %d", len(news.published))

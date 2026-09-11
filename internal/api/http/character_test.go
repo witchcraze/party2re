@@ -39,7 +39,7 @@ func (s *stubCharacterServiceExtended) Get(ctx context.Context, id string) (core
 	if s.getFn != nil {
 		return s.getFn(ctx, id)
 	}
-	return corecharacter.Character{ID: id, PlayerID: "player-1", Name: "Hero", Gender: "m", Money: 1000000}, nil
+	return corecharacter.Character{ID: id, PlayerID: "player-1", Name: "Hero", Gender: "m", Money: 999999}, nil
 }
 
 func (s *stubCharacterServiceExtended) ChangeName(ctx context.Context, characterID, newName string) (corecharacter.Character, error) {

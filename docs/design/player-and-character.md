@@ -26,6 +26,12 @@ Every `Character` belongs to exactly one `Player`. A `Player` may own multiple c
 - A `Player` can query all characters associated with their account (`FindByPlayerID`).
 - Each `Character` response contains `id`, `player_id`, `name`, `job_id`, `gender`, `level`, `experience`, `money`, `sp`, and `stats`.
 
+### 2.4 Currency & Wallet Ceiling
+- `Character.Money` holds the character's active wallet gold, strictly capped at an authentic maximum ceiling of `999,999 G` (`corecharacter.MaxMoney`, reproducing legacy Party2 `system.cgi:71`).
+- All currency-crediting pathways (`Character.AddMoney`, `economy.Service.AddGold`, shops, adventures, depot, battles, courier) respect this ceiling, clamping any overflowed gold to `999,999 G`.
+- Wealth beyond 999,999 G must be deposited into the Bank (`Character.Deposit`), which supports large-scale gold savings up to 99兆9999億9999万9999 G (`bank.MaxDeposit`).
+- `Character.SmallMedals` is capped at `999,999,999` (`corecharacter.MaxSmallMedals`).
+
 ---
 
 ## 3. Data Schema & Persistence

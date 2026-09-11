@@ -3,6 +3,7 @@ package shop
 import (
 	"context"
 	"errors"
+	"math"
 	"math/rand"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -281,7 +282,7 @@ func (s *Service) BatchPurchase(ctx context.Context, characterID string, shopTyp
 		}
 
 		// Check overflow in cumulative sum
-		if totalPrice > 2_000_000_000-lineTotal {
+		if totalPrice > math.MaxInt-lineTotal {
 			return BatchPurchaseResult{}, ErrPriceOverflow
 		}
 		totalPrice += lineTotal

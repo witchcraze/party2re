@@ -325,6 +325,39 @@ func TestSellSuccess(t *testing.T) {
 	}
 }
 
+func TestSellWalletMaxMoneyClamp(t *testing.T) {
+	service, charRepo, invRepo, _ := newTestSetup(t)
+	// Character with near-cap money: 999,980 G
+	char := createTestCharacter(t, charRepo, "RichHero", 999_980)
+
+	inv, _ := invRepo.FindByCharacterID(context.Background(), char.ID)
+	swordInst, err := item.NewInstance("bronze_sword", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = inv.Add(swordInst)
+	_ = invRepo.Save(context.Background(), inv)
+
+	// Bronze Sword (100 G) sells for 50 G payout. 999,980 + 50 = 1,000,030 -> clamps to MaxMoney (999,999)
+	result, err := service.Sell(context.Background(), char.ID, swordInst.ID, 1)
+	if err != nil {
+		t.Fatalf("Sell() error = %v", err)
+	}
+
+	if result.TotalPayout != 50 {
+		t.Errorf("TotalPayout = %d, want 50", result.TotalPayout)
+	}
+	if result.Character.Money != corecharacter.MaxMoney {
+		t.Errorf("Character.Money = %d, want %d", result.Character.Money, corecharacter.MaxMoney)
+	}
+
+	// Verify persistence
+	savedChar, _ := charRepo.FindByID(context.Background(), char.ID)
+	if savedChar.Money != corecharacter.MaxMoney {
+		t.Errorf("persisted Character.Money = %d, want %d", savedChar.Money, corecharacter.MaxMoney)
+	}
+}
+
 func TestSellPartialQuantity(t *testing.T) {
 	service, charRepo, invRepo, _ := newTestSetup(t)
 	char := createTestCharacter(t, charRepo, "Hero", 100)
