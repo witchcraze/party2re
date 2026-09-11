@@ -379,10 +379,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Adventurer's Tavern culinary menu (14 food, drink, dessert, and full-course items), restorative HP/MP recovery meals with fullness tracking, lottery raffle ticket rewards, post-adventure meal delivery reservation and claim workflow, and barkeep dialogue interactions.
   - **Dependencies:** Core Character, Character repository, Lottery repository.
   - **Persistence:** `tavern_deliveries` and `tavern_character_status` tables in `internal/database/tavern_repository.go`.
-- **Town Black Market & Shady Broker @ヤミジ** (`internal/blackmarket`):
-  - **Responsibility:** Town Black Market contraband item trade (Level >= 10), dynamic market conditions (`Quiet`, `HotDemand`, `Crackdown`, `Bargain`) with buy price multipliers and sell buyback rates, daily purchase quotas, Rare Point and U-Rare Point sacrifice recycling system (`SacrificeItem`), exclusive prize trade exchange (`TradePrize`), pessimistic inventory and gold transaction handling, and shady broker dialogue and rumor intelligence.
-  - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository.
-  - **Persistence:** `blackmarket_character_purchases`, `blackmarket_market_state`, and `blackmarket_character_points` tables in `internal/database/blackmarket_repository.go`.
+- **Town Black Market & Underworld Barter @闇商人** (`internal/blackmarket`):
+  - **Responsibility:** Town Black Market barter exchange (`party2/lib/black_market.cgi`, `闇市場`, NPC `@闇商人`). Rare item sacrifice recycling system (`SacrificeItem`) accepting eligible rare weapons, armors, and items from character inventory or depot to award Rare Points (+1) or U-Rare Points (+1 to +50), exclusive prize trade exchange (`TradePrize`) for 24 authentic equipment/item rewards delivered directly to character Depot (`預かり所`) with depot capacity check, and authentic underworld NPC dialogue and inspection interactions.
+  - **Dependencies:** Core Character, Core Item, Core Inventory, Depot, Character repository, Inventory repository, Depot repository.
+  - **Persistence:** `blackmarket_character_points` table in `internal/database/blackmarket_repository.go`. Fictional tables `blackmarket_character_purchases` and `blackmarket_market_state` dropped in migration 065.
 - **Town Delivery Quests & Player Courier Service** (`internal/delivery`):
   - **Responsibility:** Town item delivery quest generation and lifecycle (max 3 concurrent in-progress quests, atomic item verification & reward settlement), and player-to-player mail/parcel courier service with gold and item attachments, 50 G flat courier fee, and sender cancellation/refund workflow.
   - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository.

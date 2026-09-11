@@ -144,20 +144,6 @@
     },
     {
       "module": "blackmarket",
-      "caller_method": "internal/blackmarket/blackmarket.go#Service.PurchaseItem",
-      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
-      "lock_order": 2,
-      "purpose": "Lock character wallet and verify eligibility & funds"
-    },
-    {
-      "module": "blackmarket",
-      "caller_method": "internal/blackmarket/blackmarket.go#Service.SellItem",
-      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
-      "lock_order": 2,
-      "purpose": "Lock character wallet and verify eligibility"
-    },
-    {
-      "module": "blackmarket",
       "caller_method": "internal/blackmarket/blackmarket.go#Service.SacrificeItem",
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
       "lock_order": 2,

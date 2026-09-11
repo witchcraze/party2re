@@ -17,7 +17,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** with complete file 
 | **`sleep.cgi` / `home.cgi` (No Paid Inn)** | **自宅での睡眠**: 有料の宿屋は存在しない。**自宅（または他人の家）で寝る**ことで無料全快・日次フラグリセット。 | Decommission `internal/inn`; integrate into `internal/home` (Issue #459). |
 | **`free.cgi` (Flea Market)** | **フリーマーケット**: 旧ファイル名は `fleamarket.cgi` ではなく `lib/free.cgi`。預かり所から直接出品・引出。 | Implemented in `internal/fleamarket` (Issue #477). |
 | **`secret.cgi` (Secret Shop)** | **秘密の店**: 旧ファイル名は `lib/secret.cgi`。転職7回以上（`job_lv >= 7`）、原典8アイテム3倍価格、満杯時Depot転送、ぱふぱふ（会話のみ）。 | Completed in `internal/secretshop` (Issue #462). |
-| **`black_market.cgi` (Black Market)** | **闇市**: 入場料1000G、非売品アイテム・不正取引、摘発リスク。 | Implemented in `internal/blackmarket` (Issue #463). |
+| **`black_market.cgi` (Black Market)** | **闇市場**: ゴールド売買・相場変動・日次枠を全撤廃し、純粋なレアポイント生贄（手持ち/Depot）と24種景品Depot直送に回帰。 | Completed in `internal/blackmarket` (Issue #463). |
 
 ---
 
@@ -74,7 +74,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** with complete file 
 | `lib/accessory.cgi` | 装飾品屋 | `internal/shop/` | `internal/api/http/shop.go` | `docs/design/shops.md`<br/>`docs/api/paths/shop.json` | Reconciling (#465) | 特殊効果アクセサリーのステータス計算 |
 | `lib/blacksmith.cgi` | 鍛冶屋 (@コスタ) | `internal/blacksmith/` | `internal/api/http/handler.go`<br/>`migrations/012_item_enhancement.sql` | `docs/design/blacksmith.md` | Reconciling (#458) | 強化+1..+10、刻印、名付け（全角8文字） |
 | `lib/secret.cgi` | 秘密の店 (@ヒミツジ) | `internal/secretshop/` | `internal/api/http/secretshop.go` | `docs/design/secretshop.md`<br/>`docs/api/paths/secretshop.json` | Completed (#462) | 転職7回以上(`job_lv >= 7`)、原典8種3倍価格、満杯時Depot転送、ぱふぱふ会話のみ |
-| `lib/black_market.cgi` | 闇市 (@ヤンガス) | `internal/blackmarket/` | `internal/api/http/blackmarket.go`<br/>`migrations/040_blackmarket.sql`<br/>`migrations/042_blackmarket_sacrifice_and_trade.sql` | `docs/design/black-market.md`<br/>`docs/api/paths/blackmarket.json` | Reconciling (#463) | 入場料1000G、摘発リスク、生贄・特殊トレード |
+| `lib/black_market.cgi` | 闇市場 (@闇商人) | `internal/blackmarket/` | `internal/api/http/blackmarket.go`<br/>`migrations/042_blackmarket_sacrifice_and_trade.sql`<br/>`migrations/065_drop_blackmarket_fictional_tables.sql` | `docs/design/black-market.md`<br/>`docs/api/paths/blackmarket.json` | Completed (#463) | 純粋レアポイント物々交換、手持ち/Depot生贄、24種景品Depot直送、原典台詞 |
 | `lib/gem_store.cgi` | 宝石店 (@ルル) | `internal/gemstore/` | `internal/api/http/gemstore.go` | `docs/design/gemstore.md`<br/>`docs/api/paths/gemstore.json` | Reconciling (#464) | 宝石購入およびスキル枠への宝玉合成 |
 | `lib/store.cgi`, `party2/store.cgi` | プレイヤー個人店舗 | `internal/shop/` (bazaar) | `internal/api/http/shop.go` | `docs/design/shops.md` | Reconciling (#466) | 看板設定、記帳、出品枠上限 |
 | `lib/bar.cgi` | ルイーダの酒場 (@ルイーダ) | `internal/tavern/` | `internal/api/http/tavern.go`<br/>`migrations/039_tavern.sql` | `docs/design/tavern.md`<br/>`docs/api/paths/tavern.json` | Reconciling (#475) | 食事バフ付与（+2GP）、デリバリー配達 |

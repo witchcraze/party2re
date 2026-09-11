@@ -2,14 +2,13 @@ package blackmarket_test
 
 import (
 	"context"
-	"errors"
 	"testing"
-	"time"
 
 	"github.com/witchcraze/party2re/internal/blackmarket"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
 )
 
 type mockCharacterRepo struct {
@@ -63,59 +62,40 @@ func (m *mockInventoryRepo) Save(_ context.Context, value coreinventory.Inventor
 	return nil
 }
 
+type mockDepotRepo struct {
+	depots map[string]depot.Depot
+}
+
+func newMockDepotRepo() *mockDepotRepo {
+	return &mockDepotRepo{depots: make(map[string]depot.Depot)}
+}
+
+func (m *mockDepotRepo) FindByCharacterID(_ context.Context, characterID string) (depot.Depot, error) {
+	d, ok := m.depots[characterID]
+	if !ok {
+		d, _ = depot.NewDepot(characterID)
+		m.depots[characterID] = d
+	}
+	return d, nil
+}
+
+func (m *mockDepotRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (depot.Depot, error) {
+	return m.FindByCharacterID(ctx, characterID)
+}
+
+func (m *mockDepotRepo) Save(_ context.Context, value depot.Depot) error {
+	m.depots[value.CharacterID] = value
+	return nil
+}
+
 type mockBlackMarketRepo struct {
-	purchases map[string]map[string]int // charID+dateKey -> itemID -> quantity
-	state     *blackmarket.MarketState
-	points    map[string]blackmarket.CharacterPoints
-	stateErr  error
+	points map[string]blackmarket.CharacterPoints
 }
 
 func newMockBlackMarketRepo() *mockBlackMarketRepo {
 	return &mockBlackMarketRepo{
-		purchases: make(map[string]map[string]int),
-		points:    make(map[string]blackmarket.CharacterPoints),
+		points: make(map[string]blackmarket.CharacterPoints),
 	}
-}
-
-func (m *mockBlackMarketRepo) dateKey(characterID string, date time.Time) string {
-	return characterID + ":" + date.Format("2006-01-02")
-}
-
-func (m *mockBlackMarketRepo) GetDailyPurchases(_ context.Context, characterID string, date time.Time) (map[string]int, error) {
-	key := m.dateKey(characterID, date)
-	res, ok := m.purchases[key]
-	if !ok {
-		return make(map[string]int), nil
-	}
-	copied := make(map[string]int, len(res))
-	for k, v := range res {
-		copied[k] = v
-	}
-	return copied, nil
-}
-
-func (m *mockBlackMarketRepo) RecordPurchase(_ context.Context, characterID string, itemID string, date time.Time, quantity int) error {
-	key := m.dateKey(characterID, date)
-	if m.purchases[key] == nil {
-		m.purchases[key] = make(map[string]int)
-	}
-	m.purchases[key][itemID] += quantity
-	return nil
-}
-
-func (m *mockBlackMarketRepo) GetMarketState(_ context.Context) (blackmarket.MarketState, error) {
-	if m.stateErr != nil {
-		return blackmarket.MarketState{}, m.stateErr
-	}
-	if m.state != nil {
-		return *m.state, nil
-	}
-	return blackmarket.MarketState{}, nil
-}
-
-func (m *mockBlackMarketRepo) SaveMarketState(_ context.Context, state blackmarket.MarketState) error {
-	m.state = &state
-	return nil
 }
 
 func (m *mockBlackMarketRepo) GetCharacterPoints(_ context.Context, characterID string) (blackmarket.CharacterPoints, error) {
@@ -161,34 +141,55 @@ func TestCatalogLoading(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to load default catalog: %v", err)
 	}
-	items := catalog.Items()
-	if len(items) != 10 {
-		t.Errorf("expected 10 items, got %d", len(items))
+
+	prizes := catalog.Prizes()
+	if len(prizes) != 24 {
+		t.Errorf("expected 24 total prizes (12 regular + 12 ura), got %d", len(prizes))
 	}
 
-	needle, ok := catalog.FindByID("bm_poison_needle")
-	if !ok {
-		t.Fatalf("item bm_poison_needle not found")
-	}
-	if needle.ItemDefinitionID != "weapon-12" {
-		t.Errorf("expected weapon-12, got %s", needle.ItemDefinitionID)
+	regularPrizes := catalog.RegularPrizes()
+	if len(regularPrizes) != 12 {
+		t.Errorf("expected 12 regular prizes, got %d", len(regularPrizes))
 	}
 
-	_, ok = catalog.FindByDefinitionID("item-036")
+	uPrizes := catalog.UPrizes()
+	if len(uPrizes) != 12 {
+		t.Errorf("expected 12 u-prizes, got %d", len(uPrizes))
+	}
+
+	// Verify legacy prize IDs
+	p087, ok := catalog.FindPrizeByID("bm_prize_087")
 	if !ok {
-		t.Fatalf("item definition item-036 not found")
+		t.Fatalf("bm_prize_087 not found")
+	}
+	if p087.ItemDefinitionID != "item-087" || p087.Cost != 1 || p087.IsURare {
+		t.Errorf("unexpected bm_prize_087: %+v", p087)
+	}
+
+	up262, ok := catalog.FindPrizeByID("bm_uprize_262")
+	if !ok {
+		t.Fatalf("bm_uprize_262 not found")
+	}
+	if up262.ItemDefinitionID != "item-262" || up262.Cost != 20 || !up262.IsURare {
+		t.Errorf("unexpected bm_uprize_262: %+v", up262)
+	}
+
+	// Verify sacrifice yields
+	yWeapon29, ok := catalog.GetSacrificeYield("weapon-29")
+	if !ok || yWeapon29.RarePoints != 1 || yWeapon29.URarePoints != 0 {
+		t.Errorf("unexpected sacrifice yield for weapon-29: %+v", yWeapon29)
+	}
+
+	yURare268, ok := catalog.GetSacrificeYield("item-268")
+	if !ok || yURare268.URarePoints != 50 || yURare268.RarePoints != 0 {
+		t.Errorf("unexpected sacrifice yield for item-268: %+v", yURare268)
 	}
 }
 
 func TestCheckEligibility(t *testing.T) {
-	cLow := corecharacter.Character{Level: 5}
-	if blackmarket.CheckEligibility(cLow) {
-		t.Errorf("expected level 5 character to not be eligible")
-	}
-
-	cReq := corecharacter.Character{Level: 10}
-	if !blackmarket.CheckEligibility(cReq) {
-		t.Errorf("expected level 10 character to be eligible")
+	c := corecharacter.Character{Level: 1}
+	if !blackmarket.CheckEligibility(c) {
+		t.Errorf("expected level 1 character to be eligible under authentic Party2 spec")
 	}
 }
 
@@ -197,10 +198,7 @@ func TestGetStatus(t *testing.T) {
 	charRepo := newMockCharacterRepo()
 	invRepo := newMockInventoryRepo()
 	bmRepo := newMockBlackMarketRepo()
-	catalog, err := blackmarket.LoadDefaultCatalog()
-	if err != nil {
-		t.Fatal(err)
-	}
+	catalog, _ := blackmarket.LoadDefaultCatalog()
 
 	svc, err := blackmarket.NewService(
 		charRepo,
@@ -213,16 +211,20 @@ func TestGetStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	now := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
 	char := corecharacter.Character{
 		ID:    "char-1",
-		Name:  "Shadow Rogue",
-		Level: 15,
-		Money: 50000,
+		Name:  "Hero",
+		Level: 1,
 	}
 	_ = charRepo.Update(ctx, char)
 
-	status, err := svc.GetStatus(ctx, "char-1", now)
+	bmRepo.points["char-1"] = blackmarket.CharacterPoints{
+		CharacterID: "char-1",
+		RarePoints:  7,
+		URarePoints: 3,
+	}
+
+	status, err := svc.GetStatus(ctx, "char-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -230,18 +232,21 @@ func TestGetStatus(t *testing.T) {
 	if status.CharacterID != "char-1" {
 		t.Errorf("expected char-1, got %s", status.CharacterID)
 	}
-	if !status.IsEligible {
-		t.Errorf("expected eligible status")
+	if status.NPCName != "@闇商人" {
+		t.Errorf("expected @闇商人, got %s", status.NPCName)
 	}
-	if len(status.Items) != 10 {
-		t.Errorf("expected 10 items, got %d", len(status.Items))
+	if status.LocationName != "闇市場" {
+		t.Errorf("expected 闇市場, got %s", status.LocationName)
 	}
-	if status.NPCName != "@ヤミジ" {
-		t.Errorf("expected @ヤミジ, got %s", status.NPCName)
+	if status.RarePoints != 7 || status.URarePoints != 3 {
+		t.Errorf("expected Rare=7 URare=3, got Rare=%d URare=%d", status.RarePoints, status.URarePoints)
+	}
+	if len(status.Prizes) != 12 || len(status.UPrizes) != 12 {
+		t.Errorf("expected 12 regular and 12 u-prizes")
 	}
 }
 
-func TestTalkAndRumors(t *testing.T) {
+func TestTalkAndInspect(t *testing.T) {
 	ctx := context.Background()
 	charRepo := newMockCharacterRepo()
 	invRepo := newMockInventoryRepo()
@@ -249,438 +254,339 @@ func TestTalkAndRumors(t *testing.T) {
 	catalog, _ := blackmarket.LoadDefaultCatalog()
 
 	svc, _ := blackmarket.NewService(charRepo, invRepo, bmRepo, catalog)
-	now := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
 
-	// Low level character
-	charLow := corecharacter.Character{ID: "char-low", Level: 5}
-	_ = charRepo.Update(ctx, charLow)
+	char := corecharacter.Character{ID: "char-talker", Name: "Talker"}
+	_ = charRepo.Update(ctx, char)
 
-	_, err := svc.Talk(ctx, "char-low")
-	if err != blackmarket.ErrAccessDenied {
-		t.Errorf("expected ErrAccessDenied, got %v", err)
-	}
-
-	_, err = svc.Rumors(ctx, "char-low", now)
-	if err != blackmarket.ErrAccessDenied {
-		t.Errorf("expected ErrAccessDenied, got %v", err)
-	}
-
-	// Eligible character
-	charEligible := corecharacter.Character{ID: "char-ok", Level: 12}
-	_ = charRepo.Update(ctx, charEligible)
-
-	talkRes, err := svc.Talk(ctx, "char-ok")
+	talk, err := svc.Talk(ctx, "char-talker")
 	if err != nil {
-		t.Fatalf("talk error: %v", err)
+		t.Fatalf("unexpected Talk error: %v", err)
 	}
-	if talkRes.Dialogue == "" || talkRes.NPCName != "@ヤミジ" {
-		t.Errorf("invalid talk result: %+v", talkRes)
+	if talk.NPCName != "@闇商人" {
+		t.Errorf("expected @闇商人, got %s", talk.NPCName)
+	}
+	if talk.Dialogue == "" {
+		t.Errorf("expected non-empty dialogue")
 	}
 
-	rumorsRes, err := svc.Rumors(ctx, "char-ok", now)
+	inspect, err := svc.Inspect(ctx, "char-talker")
 	if err != nil {
-		t.Fatalf("rumors error: %v", err)
+		t.Fatalf("unexpected Inspect error: %v", err)
 	}
-	if rumorsRes.Rumor == "" || rumorsRes.MarketCondition == "" {
-		t.Errorf("invalid rumors result: %+v", rumorsRes)
+	if inspect.NPCName != "@闇商人" {
+		t.Errorf("expected @闇商人, got %s", inspect.NPCName)
+	}
+	if inspect.Dialogue != "…お前の魂で取引したいのか？" {
+		t.Errorf("expected authentic inspect dialogue, got %s", inspect.Dialogue)
 	}
 }
 
-func TestPurchaseItem(t *testing.T) {
+func TestSacrificeItem_Inventory(t *testing.T) {
 	ctx := context.Background()
 	charRepo := newMockCharacterRepo()
 	invRepo := newMockInventoryRepo()
 	bmRepo := newMockBlackMarketRepo()
 	catalog, _ := blackmarket.LoadDefaultCatalog()
-
-	svc, err := blackmarket.NewService(
-		charRepo,
-		invRepo,
-		bmRepo,
-		catalog,
-		blackmarket.WithTransactionProvider(&mockTxProvider{}),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	now := time.Date(2026, 8, 30, 0, 0, 0, 0, time.UTC) // Hour 0 -> Quiet (1.0x price)
-	char := corecharacter.Character{
-		ID:    "char-buyer",
-		Name:  "Test Buyer",
-		Level: 15,
-		Money: 10000,
-	}
-	_ = charRepo.Update(ctx, char)
-
-	// 1. Purchase success
-	res, err := svc.PurchaseItem(ctx, "char-buyer", "bm_poison_needle", 2, now)
-	if err != nil {
-		t.Fatalf("unexpected purchase error: %v", err)
-	}
-	if res.UnitPrice != 1500 {
-		t.Errorf("expected unit price 1500, got %d", res.UnitPrice)
-	}
-	if res.TotalPrice != 3000 {
-		t.Errorf("expected total price 3000, got %d", res.TotalPrice)
-	}
-	if res.RemainingGold != 7000 {
-		t.Errorf("expected remaining gold 7000, got %d", res.RemainingGold)
-	}
-	if res.RemainingQuota != 3 { // Daily limit is 5
-		t.Errorf("expected remaining quota 3, got %d", res.RemainingQuota)
-	}
-
-	// Verify inventory
-	inv, _ := invRepo.FindByCharacterID(ctx, "char-buyer")
-	inst, ok := inv.Find(res.InventoryInstanceID)
-	if !ok || inst.Quantity != 2 {
-		t.Errorf("expected 2 items in inventory, got %+v", inst)
-	}
-
-	// 2. Exceed daily limit (Limit is 5, purchased 2, trying to buy 4)
-	_, err = svc.PurchaseItem(ctx, "char-buyer", "bm_poison_needle", 4, now)
-	if err != blackmarket.ErrDailyLimitExceeded {
-		t.Errorf("expected ErrDailyLimitExceeded, got %v", err)
-	}
-
-	// 3. Insufficient funds
-	poorChar := corecharacter.Character{ID: "char-poor", Level: 20, Money: 100}
-	_ = charRepo.Update(ctx, poorChar)
-	_, err = svc.PurchaseItem(ctx, "char-poor", "bm_demon_spear", 1, now)
-	if err != blackmarket.ErrInsufficientFunds {
-		t.Errorf("expected ErrInsufficientFunds, got %v", err)
-	}
-
-	// 4. Ineligible character
-	lowChar := corecharacter.Character{ID: "char-ineligible", Level: 5, Money: 999999}
-	_ = charRepo.Update(ctx, lowChar)
-	_, err = svc.PurchaseItem(ctx, "char-ineligible", "bm_poison_needle", 1, now)
-	if err != blackmarket.ErrAccessDenied {
-		t.Errorf("expected ErrAccessDenied, got %v", err)
-	}
-
-	// 5. Invalid item ID
-	_, err = svc.PurchaseItem(ctx, "char-buyer", "non_existent_item", 1, now)
-	if err != blackmarket.ErrItemNotFound {
-		t.Errorf("expected ErrItemNotFound, got %v", err)
-	}
-
-	// 6. Invalid quantity
-	_, err = svc.PurchaseItem(ctx, "char-buyer", "bm_poison_needle", 0, now)
-	if err != blackmarket.ErrInvalidQuantity {
-		t.Errorf("expected ErrInvalidQuantity, got %v", err)
-	}
-}
-
-func TestSellItem(t *testing.T) {
-	ctx := context.Background()
-	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
-	bmRepo := newMockBlackMarketRepo()
-	itemDefs := newMockItemDefProvider()
-	catalog, _ := blackmarket.LoadDefaultCatalog()
-
-	itemDefs.defs["weapon-12"] = coreitem.Definition{
-		ID:    "weapon-12",
-		Name:  "どくばり",
-		Price: 1500,
-	}
-
-	svc, err := blackmarket.NewService(
-		charRepo,
-		invRepo,
-		bmRepo,
-		catalog,
-		blackmarket.WithItemDefinitionProvider(itemDefs),
-		blackmarket.WithTransactionProvider(&mockTxProvider{}),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	now := time.Date(2026, 8, 30, 0, 0, 0, 0, time.UTC) // Quiet -> 1.0x sell multiplier
-	char := corecharacter.Character{
-		ID:    "char-seller",
-		Name:  "Test Seller",
-		Level: 15,
-		Money: 1000,
-	}
-	_ = charRepo.Update(ctx, char)
-
-	inv, _ := invRepo.FindByCharacterID(ctx, "char-seller")
-	inst, _ := coreitem.NewInstance("weapon-12", 5)
-	_ = inv.Add(inst)
-	_ = invRepo.Save(ctx, inv)
-
-	// Sell 2 units (base price 1500, 60% = 900 G each)
-	res, err := svc.SellItem(ctx, "char-seller", inst.ID, 2, now)
-	if err != nil {
-		t.Fatalf("unexpected sell error: %v", err)
-	}
-	if res.UnitPrice != 900 {
-		t.Errorf("expected unit price 900, got %d", res.UnitPrice)
-	}
-	if res.TotalPayout != 1800 {
-		t.Errorf("expected total payout 1800, got %d", res.TotalPayout)
-	}
-	if res.RemainingGold != 2800 {
-		t.Errorf("expected remaining gold 2800, got %d", res.RemainingGold)
-	}
-
-	// Verify inventory reduced to 3
-	updatedInv, _ := invRepo.FindByCharacterID(ctx, "char-seller")
-	updatedInst, _ := updatedInv.Find(inst.ID)
-	if updatedInst.Quantity != 3 {
-		t.Errorf("expected 3 remaining, got %d", updatedInst.Quantity)
-	}
-
-	// Sell unowned item instance
-	_, err = svc.SellItem(ctx, "char-seller", "non-existent-inst", 1, now)
-	if err != blackmarket.ErrUnownedItem {
-		t.Errorf("expected ErrUnownedItem, got %v", err)
-	}
-
-	// Sell excessive quantity
-	_, err = svc.SellItem(ctx, "char-seller", inst.ID, 10, now)
-	if err != blackmarket.ErrInvalidQuantity {
-		t.Errorf("expected ErrInvalidQuantity, got %v", err)
-	}
-}
-
-func TestBlackMarketPoints_StatusAndSacrificeAndTrade(t *testing.T) {
-	ctx := context.Background()
-	charRepo := newMockCharacterRepo()
-	invRepo := newMockInventoryRepo()
-	bmRepo := newMockBlackMarketRepo()
-	catalog, err := blackmarket.LoadDefaultCatalog()
-	if err != nil {
-		t.Fatalf("failed to load default catalog: %v", err)
-	}
 	itemDefs := newMockItemDefProvider()
 	itemDefs.defs["weapon-29"] = coreitem.Definition{ID: "weapon-29", Name: "はやぶさの剣"}
 	itemDefs.defs["item-263"] = coreitem.Definition{ID: "item-263", Name: "オリハルコン"}
 	itemDefs.defs["item-001"] = coreitem.Definition{ID: "item-001", Name: "薬草"}
 
-	svc, err := blackmarket.NewService(
+	svc, _ := blackmarket.NewService(
 		charRepo,
 		invRepo,
 		bmRepo,
 		catalog,
 		blackmarket.WithItemDefinitionProvider(itemDefs),
+		blackmarket.WithTransactionProvider(&mockTxProvider{}),
 	)
-	if err != nil {
-		t.Fatalf("failed to create service: %v", err)
-	}
 
-	char := corecharacter.Character{
-		ID:    "char-rare-hero",
-		Name:  "Rare Hero",
-		Level: 15,
-		Money: 1000,
-	}
+	char := corecharacter.Character{ID: "char-hero", Name: "Hero"}
 	_ = charRepo.Update(ctx, char)
 
-	// 1. Initial Points Status
-	status, err := svc.GetPointsStatus(ctx, "char-rare-hero")
-	if err != nil {
-		t.Fatalf("unexpected GetPointsStatus error: %v", err)
-	}
-	if status.RarePoints != 0 || status.URarePoints != 0 {
-		t.Errorf("expected 0 points initially, got Rare=%d URare=%d", status.RarePoints, status.URarePoints)
-	}
-	if len(status.Prizes) == 0 || len(status.UPrizes) == 0 {
-		t.Errorf("expected prize catalogs to be populated, got Prizes=%d UPrizes=%d", len(status.Prizes), len(status.UPrizes))
-	}
-
-	// 2. Sacrifice Regular Rare Item (weapon-29 -> 1 Rare Point)
-	inv, _ := invRepo.FindByCharacterID(ctx, "char-rare-hero")
+	inv, _ := invRepo.FindByCharacterID(ctx, "char-hero")
 	instWeapon, _ := coreitem.NewInstance("weapon-29", 1)
 	_ = inv.Add(instWeapon)
 	_ = invRepo.Save(ctx, inv)
 
-	sacRes, err := svc.SacrificeItem(ctx, "char-rare-hero", instWeapon.ID)
+	// Sacrifice regular rare item
+	res, err := svc.SacrificeItem(ctx, "char-hero", instWeapon.ID)
 	if err != nil {
-		t.Fatalf("unexpected SacrificeItem error: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if sacRes.RarePointsGained != 1 || sacRes.TotalRarePoints != 1 {
-		t.Errorf("expected 1 rare point, got gained=%d total=%d", sacRes.RarePointsGained, sacRes.TotalRarePoints)
+	if res.RarePointsGained != 1 || res.TotalRarePoints != 1 {
+		t.Errorf("expected 1 rare point, got gained=%d total=%d", res.RarePointsGained, res.TotalRarePoints)
 	}
-
-	// Verify item was consumed from inventory
-	updatedInv, _ := invRepo.FindByCharacterID(ctx, "char-rare-hero")
-	if _, found := updatedInv.Find(instWeapon.ID); found {
-		t.Errorf("expected weapon to be consumed from inventory")
+	if res.Message != "…はやぶさの剣…か…。レアだな…。いいだろう…。お前のレアポイントを加算しておこう…" {
+		t.Errorf("unexpected dialogue: %s", res.Message)
 	}
 
-	// 3. Sacrifice Ultra-Rare Item (item-263 -> 1 U-Rare Point)
+	// Verify item was consumed
+	inv, _ = invRepo.FindByCharacterID(ctx, "char-hero")
+	if _, found := inv.Find(instWeapon.ID); found {
+		t.Errorf("expected weapon-29 to be consumed from inventory")
+	}
+
+	// Sacrifice ultra-rare item
 	instURare, _ := coreitem.NewInstance("item-263", 1)
-	_ = updatedInv.Add(instURare)
-	_ = invRepo.Save(ctx, updatedInv)
+	_ = inv.Add(instURare)
+	_ = invRepo.Save(ctx, inv)
 
-	sacURes, err := svc.SacrificeItem(ctx, "char-rare-hero", instURare.ID)
+	resURare, err := svc.SacrificeItem(ctx, "char-hero", instURare.ID)
 	if err != nil {
-		t.Fatalf("unexpected SacrificeItem URare error: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if sacURes.URarePointsGained != 1 || sacURes.TotalURarePoints != 1 {
-		t.Errorf("expected 1 u-rare point, got gained=%d total=%d", sacURes.URarePointsGained, sacURes.TotalURarePoints)
+	if resURare.URarePointsGained != 1 || resURare.TotalURarePoints != 1 {
+		t.Errorf("expected 1 u-rare point, got gained=%d total=%d", resURare.URarePointsGained, resURare.TotalURarePoints)
+	}
+	if resURare.Message != "これは……! ……いいだろう…。お前の特別なレアポイントを1加算しておこう…" {
+		t.Errorf("unexpected dialogue: %s", resURare.Message)
 	}
 
-	// 4. Sacrifice Ineligible Item (item-001)
+	// Sacrifice non-rare item -> ErrNotSacrificeEligible
 	instCommon, _ := coreitem.NewInstance("item-001", 1)
-	updatedInv, _ = invRepo.FindByCharacterID(ctx, "char-rare-hero")
-	_ = updatedInv.Add(instCommon)
-	_ = invRepo.Save(ctx, updatedInv)
+	_ = inv.Add(instCommon)
+	_ = invRepo.Save(ctx, inv)
 
-	_, err = svc.SacrificeItem(ctx, "char-rare-hero", instCommon.ID)
+	_, err = svc.SacrificeItem(ctx, "char-hero", instCommon.ID)
 	if err != blackmarket.ErrNotSacrificeEligible {
 		t.Errorf("expected ErrNotSacrificeEligible, got %v", err)
 	}
+}
 
-	// 5. Sacrifice Unowned Item
-	_, err = svc.SacrificeItem(ctx, "char-rare-hero", "unowned-instance-id")
-	if err != blackmarket.ErrUnownedItem {
-		t.Errorf("expected ErrUnownedItem, got %v", err)
+func TestSacrificeItem_Depot(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharacterRepo()
+	invRepo := newMockInventoryRepo()
+	depotRepo := newMockDepotRepo()
+	bmRepo := newMockBlackMarketRepo()
+	catalog, _ := blackmarket.LoadDefaultCatalog()
+	itemDefs := newMockItemDefProvider()
+	itemDefs.defs["armor-35"] = coreitem.Definition{ID: "armor-35", Name: "神秘の鎧"}
+
+	svc, _ := blackmarket.NewService(
+		charRepo,
+		invRepo,
+		bmRepo,
+		catalog,
+		blackmarket.WithDepotRepository(depotRepo),
+		blackmarket.WithItemDefinitionProvider(itemDefs),
+		blackmarket.WithTransactionProvider(&mockTxProvider{}),
+	)
+
+	char := corecharacter.Character{ID: "char-depot", Name: "DepotUser"}
+	_ = charRepo.Update(ctx, char)
+
+	dep, _ := depotRepo.FindByCharacterID(ctx, "char-depot")
+	armorInst, _ := coreitem.NewInstance("armor-35", 1)
+	_ = dep.AddItem(armorInst)
+	_ = depotRepo.Save(ctx, dep)
+
+	res, err := svc.SacrificeItem(ctx, "char-depot", armorInst.ID)
+	if err != nil {
+		t.Fatalf("unexpected sacrifice from depot error: %v", err)
+	}
+	if res.RarePointsGained != 1 || res.TotalRarePoints != 1 {
+		t.Errorf("expected 1 rare point, got gained=%d total=%d", res.RarePointsGained, res.TotalRarePoints)
 	}
 
-	// 6. Trade Regular Prize (bm_prize_087 costs 1 Rare Point)
-	tradeRes, err := svc.TradePrize(ctx, "char-rare-hero", "bm_prize_087")
+	// Verify depot item removed
+	dep, _ = depotRepo.FindByCharacterID(ctx, "char-depot")
+	if len(dep.Items) != 0 {
+		t.Errorf("expected depot to be empty after sacrifice, got %d items", len(dep.Items))
+	}
+}
+
+func TestTradePrize_ToDepot(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharacterRepo()
+	invRepo := newMockInventoryRepo()
+	depotRepo := newMockDepotRepo()
+	bmRepo := newMockBlackMarketRepo()
+	catalog, _ := blackmarket.LoadDefaultCatalog()
+
+	svc, _ := blackmarket.NewService(
+		charRepo,
+		invRepo,
+		bmRepo,
+		catalog,
+		blackmarket.WithDepotRepository(depotRepo),
+		blackmarket.WithTransactionProvider(&mockTxProvider{}),
+	)
+
+	char := corecharacter.Character{
+		ID:       "char-trader",
+		Name:     "Trader",
+		JobLevel: 10,
+	}
+	_ = charRepo.Update(ctx, char)
+
+	bmRepo.points["char-trader"] = blackmarket.CharacterPoints{
+		CharacterID: "char-trader",
+		RarePoints:  10,
+		URarePoints: 20,
+	}
+
+	// Trade regular prize: bm_prize_087 costs 1 Rare Point
+	res, err := svc.TradePrize(ctx, "char-trader", "bm_prize_087")
 	if err != nil {
 		t.Fatalf("unexpected TradePrize error: %v", err)
 	}
-	if tradeRes.RemainingRare != 0 {
-		t.Errorf("expected 0 remaining rare points, got %d", tradeRes.RemainingRare)
+	if res.RemainingRare != 9 {
+		t.Errorf("expected 9 remaining rare points, got %d", res.RemainingRare)
+	}
+	if res.Message != "取引成立だ…。まほうのそろばん はお前の預かり所に送っておいた…" {
+		t.Errorf("unexpected message: %s", res.Message)
 	}
 
-	// Verify prize received in inventory
-	updatedInv, _ = invRepo.FindByCharacterID(ctx, "char-rare-hero")
-	if _, found := updatedInv.Find(tradeRes.InventoryInstanceID); !found {
-		t.Errorf("expected prize item to be present in inventory")
+	// Verify item in depot
+	dep, _ := depotRepo.FindByCharacterID(ctx, "char-trader")
+	if len(dep.Items) != 1 || dep.Items[0].DefinitionID != "item-087" {
+		t.Errorf("expected item-087 in depot, got %+v", dep.Items)
 	}
 
-	// 7. Trade with Insufficient Points
-	_, err = svc.TradePrize(ctx, "char-rare-hero", "bm_prize_087")
+	// Trade u-prize: bm_uprize_262 costs 20 U-Rare Points
+	resU, err := svc.TradePrize(ctx, "char-trader", "bm_uprize_262")
+	if err != nil {
+		t.Fatalf("unexpected TradePrize u-prize error: %v", err)
+	}
+	if resU.RemainingURare != 0 {
+		t.Errorf("expected 0 remaining u-rare points, got %d", resU.RemainingURare)
+	}
+
+	dep, _ = depotRepo.FindByCharacterID(ctx, "char-trader")
+	if len(dep.Items) != 2 {
+		t.Errorf("expected 2 items in depot, got %d", len(dep.Items))
+	}
+
+	// Insufficient rare points
+	bmRepo.points["char-trader"] = blackmarket.CharacterPoints{
+		CharacterID: "char-trader",
+		RarePoints:  0,
+		URarePoints: 0,
+	}
+	_, err = svc.TradePrize(ctx, "char-trader", "bm_prize_087")
 	if err != blackmarket.ErrInsufficientRarePoints {
 		t.Errorf("expected ErrInsufficientRarePoints, got %v", err)
 	}
 
-	// 8. Trade with Insufficient U-Rare Points (bm_uprize_059 costs 5 U-Rare Points, hero only has 1)
-	_, err = svc.TradePrize(ctx, "char-rare-hero", "bm_uprize_059")
+	// Insufficient u-rare points
+	_, err = svc.TradePrize(ctx, "char-trader", "bm_uprize_262")
 	if err != blackmarket.ErrInsufficientURarePoints {
 		t.Errorf("expected ErrInsufficientURarePoints, got %v", err)
 	}
 
-	// 9. Trade Non-Existent Prize
-	_, err = svc.TradePrize(ctx, "char-rare-hero", "non-existent-prize")
+	// Non-existent prize
+	_, err = svc.TradePrize(ctx, "char-trader", "invalid_prize_id")
 	if err != blackmarket.ErrPrizeNotFound {
 		t.Errorf("expected ErrPrizeNotFound, got %v", err)
 	}
 }
 
-func TestService_GetMarketState(t *testing.T) {
+func TestTradePrize_DepotFull(t *testing.T) {
 	ctx := context.Background()
 	charRepo := newMockCharacterRepo()
 	invRepo := newMockInventoryRepo()
-	catalog, err := blackmarket.LoadDefaultCatalog()
-	if err != nil {
-		t.Fatalf("failed to load catalog: %v", err)
+	depotRepo := newMockDepotRepo()
+	bmRepo := newMockBlackMarketRepo()
+	catalog, _ := blackmarket.LoadDefaultCatalog()
+
+	svc, _ := blackmarket.NewService(
+		charRepo,
+		invRepo,
+		bmRepo,
+		catalog,
+		blackmarket.WithDepotRepository(depotRepo),
+		blackmarket.WithTransactionProvider(&mockTxProvider{}),
+	)
+
+	// Level 0 character has base depot capacity 5
+	char := corecharacter.Character{
+		ID:       "char-full-depot",
+		Name:     "FullDepotUser",
+		JobLevel: 0,
+	}
+	_ = charRepo.Update(ctx, char)
+
+	bmRepo.points["char-full-depot"] = blackmarket.CharacterPoints{
+		CharacterID: "char-full-depot",
+		RarePoints:  10,
 	}
 
-	t.Run("nil repository falls back to hour-based condition", func(t *testing.T) {
-		svc, err := blackmarket.NewService(charRepo, invRepo, nil, catalog)
-		if err != nil {
-			t.Fatalf("unexpected NewService error: %v", err)
-		}
+	dep, _ := depotRepo.FindByCharacterID(ctx, "char-full-depot")
+	dep.Capacity = 5
+	for i := 1; i <= 5; i++ {
+		dummyInst, _ := coreitem.NewInstance("unique-item-"+string(rune('A'+i)), 1)
+		_ = dep.AddItem(dummyInst)
+	}
+	_ = depotRepo.Save(ctx, dep)
 
-		nowHour1 := time.Date(2026, 8, 27, 1, 0, 0, 0, time.UTC)
-		st := svc.GetMarketState(ctx, nowHour1)
-		if st.Condition != blackmarket.ConditionHotDemand {
-			t.Errorf("expected ConditionHotDemand, got %v", st.Condition)
-		}
-	})
+	// Trade should fail with ErrDepotFull
+	_, err := svc.TradePrize(ctx, "char-full-depot", "bm_prize_087")
+	if err != blackmarket.ErrDepotFull {
+		t.Errorf("expected ErrDepotFull, got %v", err)
+	}
+}
 
-	t.Run("repo error falls back to hour-based condition", func(t *testing.T) {
-		repo := newMockBlackMarketRepo()
-		repo.stateErr = errors.New("database connection failed")
-		svc, _ := blackmarket.NewService(charRepo, invRepo, repo, catalog)
+func TestNewService_NilDependencies(t *testing.T) {
+	charRepo := newMockCharacterRepo()
+	invRepo := newMockInventoryRepo()
+	bmRepo := newMockBlackMarketRepo()
+	catalog, _ := blackmarket.LoadDefaultCatalog()
 
-		nowHour2 := time.Date(2026, 8, 27, 2, 0, 0, 0, time.UTC)
-		st := svc.GetMarketState(ctx, nowHour2)
-		if st.Condition != blackmarket.ConditionCrackdown {
-			t.Errorf("expected ConditionCrackdown, got %v", st.Condition)
-		}
-	})
+	if _, err := blackmarket.NewService(nil, invRepo, bmRepo, catalog); err != blackmarket.ErrNilDependency {
+		t.Errorf("expected ErrNilDependency, got %v", err)
+	}
+	if _, err := blackmarket.NewService(charRepo, nil, bmRepo, catalog); err != blackmarket.ErrNilDependency {
+		t.Errorf("expected ErrNilDependency, got %v", err)
+	}
+	if _, err := blackmarket.NewService(charRepo, invRepo, nil, catalog); err != blackmarket.ErrNilDependency {
+		t.Errorf("expected ErrNilDependency, got %v", err)
+	}
+	if _, err := blackmarket.NewService(charRepo, invRepo, bmRepo, nil); err != blackmarket.ErrNilDependency {
+		t.Errorf("expected ErrNilDependency, got %v", err)
+	}
+}
 
-	t.Run("empty condition in repo falls back to hour rotation (bargain and quiet)", func(t *testing.T) {
-		repo := newMockBlackMarketRepo()
-		repo.state = &blackmarket.MarketState{Condition: ""}
-		svc, _ := blackmarket.NewService(charRepo, invRepo, repo, catalog)
+func TestValidationErrors(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharacterRepo()
+	invRepo := newMockInventoryRepo()
+	bmRepo := newMockBlackMarketRepo()
+	catalog, _ := blackmarket.LoadDefaultCatalog()
 
-		nowHour3 := time.Date(2026, 8, 27, 3, 0, 0, 0, time.UTC)
-		stBargain := svc.GetMarketState(ctx, nowHour3)
-		if stBargain.Condition != blackmarket.ConditionBargain {
-			t.Errorf("expected ConditionBargain, got %v", stBargain.Condition)
-		}
+	svc, _ := blackmarket.NewService(charRepo, invRepo, bmRepo, catalog)
 
-		nowHour4 := time.Date(2026, 8, 27, 4, 0, 0, 0, time.UTC)
-		stQuiet := svc.GetMarketState(ctx, nowHour4)
-		if stQuiet.Condition != blackmarket.ConditionQuiet {
-			t.Errorf("expected ConditionQuiet, got %v", stQuiet.Condition)
-		}
-	})
+	// Blank character ID checks
+	if _, err := svc.GetStatus(ctx, ""); err != blackmarket.ErrCharacterNotFound {
+		t.Errorf("expected ErrCharacterNotFound, got %v", err)
+	}
+	if _, err := svc.GetPointsStatus(ctx, ""); err != blackmarket.ErrCharacterNotFound {
+		t.Errorf("expected ErrCharacterNotFound, got %v", err)
+	}
+	if _, err := svc.Talk(ctx, ""); err != blackmarket.ErrCharacterNotFound {
+		t.Errorf("expected ErrCharacterNotFound, got %v", err)
+	}
+	if _, err := svc.Inspect(ctx, ""); err != blackmarket.ErrCharacterNotFound {
+		t.Errorf("expected ErrCharacterNotFound, got %v", err)
+	}
+	if _, err := svc.SacrificeItem(ctx, "", "inst"); err != blackmarket.ErrCharacterNotFound {
+		t.Errorf("expected ErrCharacterNotFound, got %v", err)
+	}
+	if _, err := svc.SacrificeItem(ctx, "char-1", ""); err != blackmarket.ErrUnownedItem {
+		t.Errorf("expected ErrUnownedItem, got %v", err)
+	}
+	if _, err := svc.TradePrize(ctx, "", "prize"); err != blackmarket.ErrCharacterNotFound {
+		t.Errorf("expected ErrCharacterNotFound, got %v", err)
+	}
+	if _, err := svc.TradePrize(ctx, "char-1", ""); err != blackmarket.ErrPrizeNotFound {
+		t.Errorf("expected ErrPrizeNotFound, got %v", err)
+	}
 
-	t.Run("valid condition in repo with zero values fills defaults", func(t *testing.T) {
-		repo := newMockBlackMarketRepo()
-		repo.state = &blackmarket.MarketState{Condition: blackmarket.ConditionHotDemand}
-		svc, _ := blackmarket.NewService(charRepo, invRepo, repo, catalog)
-
-		def := blackmarket.DefaultMarketStates[blackmarket.ConditionHotDemand]
-		st := svc.GetMarketState(ctx, time.Now())
-		if st.Condition != blackmarket.ConditionHotDemand {
-			t.Errorf("expected ConditionHotDemand, got %v", st.Condition)
-		}
-		if st.PriceMultiplier != def.PriceMultiplier {
-			t.Errorf("expected PriceMultiplier %v, got %v", def.PriceMultiplier, st.PriceMultiplier)
-		}
-		if st.SellMultiplier != def.SellMultiplier {
-			t.Errorf("expected SellMultiplier %v, got %v", def.SellMultiplier, st.SellMultiplier)
-		}
-		if st.RiskLevel != def.RiskLevel {
-			t.Errorf("expected RiskLevel %v, got %v", def.RiskLevel, st.RiskLevel)
-		}
-		if st.Description != def.Description {
-			t.Errorf("expected Description %v, got %v", def.Description, st.Description)
-		}
-	})
-
-	t.Run("valid condition with custom values preserves custom values", func(t *testing.T) {
-		repo := newMockBlackMarketRepo()
-		repo.state = &blackmarket.MarketState{
-			Condition:       blackmarket.ConditionHotDemand,
-			PriceMultiplier: 3.5,
-			SellMultiplier:  0.85,
-			RiskLevel:       "EXTREME",
-			Description:     "Special custom condition description",
-		}
-		svc, _ := blackmarket.NewService(charRepo, invRepo, repo, catalog)
-
-		st := svc.GetMarketState(ctx, time.Now())
-		if st.PriceMultiplier != 3.5 || st.SellMultiplier != 0.85 || st.RiskLevel != "EXTREME" || st.Description != "Special custom condition description" {
-			t.Errorf("custom values not preserved: %+v", st)
-		}
-	})
-
-	t.Run("unknown condition not in DefaultMarketStates returns directly", func(t *testing.T) {
-		repo := newMockBlackMarketRepo()
-		repo.state = &blackmarket.MarketState{
-			Condition:       "CUSTOM_UNKNOWN_CONDITION",
-			PriceMultiplier: 2.0,
-		}
-		svc, _ := blackmarket.NewService(charRepo, invRepo, repo, catalog)
-
-		st := svc.GetMarketState(ctx, time.Now())
-		if st.Condition != "CUSTOM_UNKNOWN_CONDITION" || st.PriceMultiplier != 2.0 {
-			t.Errorf("unexpected state: %+v", st)
-		}
-	})
+	// Depot not configured
+	char := corecharacter.Character{ID: "char-nodepot"}
+	_ = charRepo.Update(ctx, char)
+	if _, err := svc.TradePrize(ctx, "char-nodepot", "bm_prize_087"); err != blackmarket.ErrDepotNotConfigured {
+		t.Errorf("expected ErrDepotNotConfigured, got %v", err)
+	}
 }
