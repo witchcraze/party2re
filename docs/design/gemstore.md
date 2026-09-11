@@ -11,12 +11,14 @@
 
 | Legacy Action | Legacy サブルーチン | Modern Go ドメインメソッド | Modern HTTP エンドポイント | 動作と不変条件 |
 |---|---|---|---|---|
-| `かう` | `&kau` | `GemStoreService.BuyGem` | `POST /characters/{id}/gemstore/buy` | レベル要件検証 $\rightarrow$ 価格計算（定価 $\times$ 5） $\rightarrow$ 所持金減算 $\rightarrow$ インベントリ追加 |
-| `うる` | `&uru` | `GemStoreService.SellGem` | `POST /characters/{id}/gemstore/sell` | インベントリ所有確認 $\rightarrow$ 売却額計算（50%価格、最低1G） $\rightarrow$ 消費 $\rightarrow$ 所持金加算 |
-| `おくる` | `&okuru` | `GemStoreService.SendGem` | `POST /characters/{id}/gemstore/send` | 自身送信防止 $\rightarrow$ 送信者・受信者ID昇順ロック $\rightarrow$ 送信者消費 $\rightarrow$ 受信者付与 |
-| `かこう` | `&kako` | `GemStoreService.SynthesizeGem` | `POST /characters/{id}/gemstore/synthesize` | レシピ素材2種（宝石/アイテム）所有確認 $\rightarrow$ 消費 $\rightarrow$ 上位宝石生成・付与 |
-| `かんてい` | `&kantei` | `GemStoreService.AppraiseItem` | `POST /characters/{id}/gemstore/appraise` | 未鑑定宝珠（光る宝珠等）を鑑定・上位宝石へ置換 / 既知アイテムの名称確認 |
-| `みる` / `はなす` | `words` / メニュー | `GemStoreService.GetCatalog`<br>`GemStoreService.GetRecipes`<br>`GemStoreService.GetDialogue` | `GET /gemstore/catalog`<br>`GET /gemstore/recipes`<br>`GET /gemstore/dialogue` | レベル別購入可能宝石、全合成レシピ、店主 `@ジェマ` 会話メッセージの取得 |
+| `みる (宝珠箱)` | `gem_box.cgi` | `GemStoreService.GetGemBox` | `GET /characters/{id}/gembox` | 宝珠箱内容取得（動的容量、所持宝珠リスト） |
+| `せいとん` | `gem_box.cgi` | `GemStoreService.SortGemBox` | `POST /characters/{id}/gembox/sort` | カタログ昇順（ID・マスター順）で宝珠箱を整頓・永続化 |
+| `かう` | `&kau` | `GemStoreService.BuyGem` | `POST /characters/{id}/gemstore/buy` | レベル要件検証 $\rightarrow$ 価格計算（定価 $\times$ 5） $\rightarrow$ 所持金減算 $\rightarrow$ 宝珠箱 (`GemBox`) 追加（満杯時拒否） |
+| `うる` | `&uru` | `GemStoreService.SellGem` | `POST /characters/{id}/gemstore/sell` | 宝珠箱所有確認 $\rightarrow$ 売却額計算（50%価格、最低1G） $\rightarrow$ 宝珠箱から消費 $\rightarrow$ 所持金加算 |
+| `おくる` | `&okuru` | `GemStoreService.SendGem` | `POST /characters/{id}/gemstore/send` | 自身送信防止 $\rightarrow$ 送受信者ID昇順ロック $\rightarrow$ 送信者宝珠箱から消費 $\rightarrow$ 受信者宝珠箱付与（満杯時拒否） |
+| `かこう` | `&kako` | `GemStoreService.SynthesizeGem` | `POST /characters/{id}/gemstore/synthesize` | レシピ素材2種（宝珠箱/インベントリ/倉庫）所有確認 $\rightarrow$ 消費 $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否） |
+| `かんてい` | `&kantei` | `GemStoreService.AppraiseItem` | `POST /characters/{id}/gemstore/appraise` | 未鑑定宝珠（インベントリ）を消費 $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否） |
+| `みる` / `はなす` | `words` / メニュー | `GemStoreService.GetCatalog`<br>`GemStoreService.GetRecipes`<br>`GemStoreService.GetDialogue` | `GET /gemstore/catalog`<br>`GET /gemstore/recipes`<br>`GET /gemstore/dialogue` | 転職・レベル別購入可能宝石、全合成レシピ、店主 `@ジェマ` 会話メッセージの取得 |
 
 ---
 
@@ -26,18 +28,25 @@
 - `ID`: 宝石識別子 (e.g. `gem_atk_1`, `gem_sky_atk_1`, `gem_awakening_sky`)
 - `Name`: 表示名 (e.g. `攻撃の宝珠Ⅰ`, `攻撃の天珠Ⅰ`, `覚醒の天珠`)
 - `Price`: 定価 (G)
-- `RequiredLevel`: 購入に必要なキャラクターレベル (1, 10, 30, 50, 100)
+- `RequiredLevel`: 購入に必要なキャラクターレベル / 転職回数 (1, 10, 30, 50, 100)
 - `SlotCost`: スキルスロット消費数 (宝珠: 1, 天珠: 2)
 - `MPCost`: 戦闘時消費CMP (CMP = 集中魔力)
 - `Description`: 効果説明文
 
-### 3.2 合成レシピ (`Recipe`)
+### 3.2 専用宝珠箱 (`GemBox`) と動的容量計算
+旧 Party2 の `gem_box.cgi` に完全準拠した専用ストレージ。通常インベントリとは独立して管理され、キャラクターの転職回数 (`job_lv`) に応じて容量が動的にスケールする。
+
+- **初期容量 (未転職 / `job_lv <= 0`)**: 5 スロット
+- **転職進行時 (`1 <= job_lv < 20`)**: `job_lv * 5 + 5` スロット
+- **最大容量 (`job_lv >= 20`)**: 100 スロット
+
+### 3.3 合成レシピ (`Recipe`)
 - `ID`: レシピ識別子 (e.g. `recipe_atk_2`, `recipe_combo_sky`, `recipe_awakening_sky`)
 - `ResultName`: 完成品宝石名
 - `Material1`: 必要素材1 (宝石または特殊アイテム)
 - `Material2`: 必要素材2 (宝石または特殊アイテム)
 
-### 3.3 未鑑定宝珠の鑑定プール (Unidentified Orb Appraisal Pools)
+### 3.4 未鑑定宝珠の鑑定プール (Unidentified Orb Appraisal Pools)
 未鑑定宝珠（`_data.cgi` No. 251〜255）を鑑定した際、レガシーの `@nums` 定義に完全準拠した重み付き確率で宝石が選定される。
 
 1. **光る宝珠 (`光る宝珠`, No. 251)**: 全34エントリ
@@ -66,6 +75,10 @@
 [Tier 2] characters (昇順: min(id1, id2) -> max(id1, id2))
     |
 [Tier 3] inventory_items (昇順: min(character_id) -> max(character_id))
+    |
+[Tier 5] character_depots (昇順: min(character_id) -> max(character_id))
+    |
+[Tier 8] character_gem_boxes (昇順: min(character_id) -> max(character_id))
 ```
 
 すべての状態更新は `txProvider.RunInTx(ctx, ...)` によるアンビエントトランザクション伝播下でアトミックに実行される。

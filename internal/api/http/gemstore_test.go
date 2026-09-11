@@ -22,9 +22,33 @@ type stubGemStoreService struct {
 	sendGemFn       func(ctx context.Context, senderID, recipientID, itemID string) (gemstore.SendResult, error)
 	synthesizeGemFn func(ctx context.Context, characterID, recipeID string) (gemstore.SynthesizeResult, error)
 	appraiseItemFn  func(ctx context.Context, characterID, itemID string) (gemstore.AppraiseResult, error)
+	getGemBoxFn     func(ctx context.Context, characterID string) (gemstore.GemBox, error)
+	sortGemBoxFn    func(ctx context.Context, characterID string) (gemstore.GemBox, error)
 	getCatalogFn    func(level int) []gemstore.Gem
 	getRecipesFn    func() []gemstore.Recipe
 	getDialogueFn   func() []string
+}
+
+func (s *stubGemStoreService) GetGemBox(ctx context.Context, characterID string) (gemstore.GemBox, error) {
+	if s.getGemBoxFn != nil {
+		return s.getGemBoxFn(ctx, characterID)
+	}
+	return gemstore.GemBox{
+		CharacterID: characterID,
+		Capacity:    10,
+		Items:       []coreitem.Instance{},
+	}, nil
+}
+
+func (s *stubGemStoreService) SortGemBox(ctx context.Context, characterID string) (gemstore.GemBox, error) {
+	if s.sortGemBoxFn != nil {
+		return s.sortGemBoxFn(ctx, characterID)
+	}
+	return gemstore.GemBox{
+		CharacterID: characterID,
+		Capacity:    10,
+		Items:       []coreitem.Instance{},
+	}, nil
 }
 
 func (s *stubGemStoreService) BuyGem(ctx context.Context, characterID, gemID string) (gemstore.BuyResult, error) {
@@ -274,6 +298,55 @@ func TestGemStoreHTTP_Endpoints(t *testing.T) {
 
 		if rec.Code != http.StatusUnauthorized {
 			t.Fatalf("expected status 401, got %d", rec.Code)
+		}
+	}
+
+	// 10. GET /characters/{id}/gembox
+	{
+		req := httptest.NewRequest(http.MethodGet, "/characters/char_1/gembox", nil)
+		req.Header.Set("Authorization", bearerToken("session_1"))
+		rec := httptest.NewRecorder()
+		server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var box gemstore.GemBox
+		if err := json.Unmarshal(rec.Body.Bytes(), &box); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if box.CharacterID != "char_1" {
+			t.Errorf("expected character_id char_1, got %s", box.CharacterID)
+		}
+	}
+
+	// 11. POST /characters/{id}/gembox/sort
+	{
+		req := httptest.NewRequest(http.MethodPost, "/characters/char_1/gembox/sort", nil)
+		req.Header.Set("Authorization", bearerToken("session_1"))
+		rec := httptest.NewRecorder()
+		server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+	}
+
+	// 12. GET /gemstore/catalog?job_level=10
+	{
+		req := httptest.NewRequest(http.MethodGet, "/gemstore/catalog?job_level=10", nil)
+		rec := httptest.NewRecorder()
+		server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var res map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if jl, ok := res["job_level"].(float64); !ok || int(jl) != 10 {
+			t.Errorf("expected job_level 10, got %v", res["job_level"])
 		}
 	}
 }

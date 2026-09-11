@@ -550,6 +550,8 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /gemstore/catalog", h.handleGetGemStoreCatalog)
 	mux.HandleFunc("GET /gemstore/recipes", h.handleGetGemStoreRecipes)
 	mux.HandleFunc("GET /gemstore/dialogue", h.handleGetGemStoreDialogue)
+	mux.HandleFunc("GET /characters/{id}/gembox", h.handleGetGemBox)
+	mux.HandleFunc("POST /characters/{id}/gembox/sort", h.handleSortGemBox)
 	mux.HandleFunc("POST /characters/{id}/gemstore/buy", h.handleGemStoreBuy)
 	mux.HandleFunc("POST /characters/{id}/gemstore/sell", h.handleGemStoreSell)
 	mux.HandleFunc("POST /characters/{id}/gemstore/send", h.handleGemStoreSend)

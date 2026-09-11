@@ -217,6 +217,8 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		`DELETE FROM character_custom_skills WHERE character_id = ?`,
 		`DELETE FROM equipment_slots WHERE character_id = ?`,
 		`DELETE FROM inventory_items WHERE character_id = ?`,
+		`DELETE FROM gem_box_items WHERE character_id = ?`,
+		`DELETE FROM character_gem_boxes WHERE character_id = ?`,
 		`DELETE FROM depot_items WHERE character_id = ?`,
 		`DELETE FROM character_depots WHERE character_id = ?`,
 		`DELETE FROM character_job_masteries WHERE character_id = ?`,

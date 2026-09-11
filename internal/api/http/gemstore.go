@@ -19,7 +19,9 @@ type GemStoreService interface {
 	SendGem(ctx context.Context, senderID, recipientID, itemInstanceOrDefID string) (gemstore.SendResult, error)
 	SynthesizeGem(ctx context.Context, characterID, recipeID string) (gemstore.SynthesizeResult, error)
 	AppraiseItem(ctx context.Context, characterID, itemInstanceOrDefID string) (gemstore.AppraiseResult, error)
-	GetCatalog(level int) []gemstore.Gem
+	GetGemBox(ctx context.Context, characterID string) (gemstore.GemBox, error)
+	SortGemBox(ctx context.Context, characterID string) (gemstore.GemBox, error)
+	GetCatalog(jobLevel int) []gemstore.Gem
 	GetRecipes() []gemstore.Recipe
 	GetDialogue() []string
 }
@@ -60,17 +62,22 @@ func (h *Handler) handleGetGemStoreCatalog(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	level := 1
-	if levelStr := r.URL.Query().Get("level"); levelStr != "" {
-		if l, err := strconv.Atoi(levelStr); err == nil && l > 0 {
-			level = l
+	jobLevel := 0
+	if jlStr := r.URL.Query().Get("job_level"); jlStr != "" {
+		if jl, err := strconv.Atoi(jlStr); err == nil && jl >= 0 {
+			jobLevel = jl
+		}
+	} else if levelStr := r.URL.Query().Get("level"); levelStr != "" {
+		if l, err := strconv.Atoi(levelStr); err == nil && l >= 0 {
+			jobLevel = l
 		}
 	}
 
-	gems := h.gemstore.GetCatalog(level)
+	gems := h.gemstore.GetCatalog(jobLevel)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"gems":  gems,
-		"level": level,
+		"gems":      gems,
+		"job_level": jobLevel,
+		"level":     jobLevel,
 	})
 }
 
@@ -244,15 +251,56 @@ func (h *Handler) handleGemStoreAppraise(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+func (h *Handler) handleGetGemBox(w http.ResponseWriter, r *http.Request) {
+	if h.gemstore == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("gemstore service not configured"))
+		return
+	}
+
+	charID := r.PathValue("id")
+	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+		box, err := h.gemstore.GetGemBox(r.Context(), char.ID)
+		if err != nil {
+			h.writeGemStoreError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, box)
+	})
+}
+
+func (h *Handler) handleSortGemBox(w http.ResponseWriter, r *http.Request) {
+	if h.gemstore == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("gemstore service not configured"))
+		return
+	}
+
+	charID := r.PathValue("id")
+	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+		box, err := h.gemstore.SortGemBox(r.Context(), char.ID)
+		if err != nil {
+			h.writeGemStoreError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]any{
+			"gem_box": box,
+			"message": "お預かりしている宝石をせいとんしました",
+		})
+	})
+}
+
 func (h *Handler) writeGemStoreError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, gemstore.ErrGemNotFound), errors.Is(err, gemstore.ErrRecipeNotFound):
+	case errors.Is(err, gemstore.ErrGemNotFound), errors.Is(err, gemstore.ErrRecipeNotFound), errors.Is(err, gemstore.ErrGemBoxNotFound):
 		writeError(w, http.StatusNotFound, err)
 	case errors.Is(err, gemstore.ErrLevelTooLow),
 		errors.Is(err, gemstore.ErrInsufficientFunds),
 		errors.Is(err, gemstore.ErrItemNotOwned),
 		errors.Is(err, gemstore.ErrCannotSendToSelf),
 		errors.Is(err, gemstore.ErrInsufficientMaterials),
+		errors.Is(err, gemstore.ErrGemBoxFull),
+		errors.Is(err, gemstore.ErrRecipientGemBoxFull),
 		errors.Is(err, gemstore.ErrInvalidCharacterID),
 		errors.Is(err, gemstore.ErrInvalidGemID),
 		errors.Is(err, gemstore.ErrInvalidRecipeID):
