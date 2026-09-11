@@ -16,7 +16,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** with complete file 
 | **`guild.cgi` (No Donation Leveling)** | **ギルド拠点**: ゴールド寄付によるギルドLv1〜10上げは存在しない。**活動による動的GP**、自由役職命名（6文字）、申請承認制、HEXカラー。 | Purge fictional donation levels; restore activity GP & custom roles (Issue #490). |
 | **`sleep.cgi` / `home.cgi` (No Paid Inn)** | **自宅での睡眠**: 有料の宿屋は存在しない。**自宅（または他人の家）で寝る**ことで無料全快・日次フラグリセット。 | Decommission `internal/inn`; integrate into `internal/home` (Issue #459). |
 | **`free.cgi` (Flea Market)** | **フリーマーケット**: 旧ファイル名は `fleamarket.cgi` ではなく `lib/free.cgi`。預かり所から直接出品・引出。 | Implemented in `internal/fleamarket` (Issue #477). |
-| **`secret.cgi` (Secret Shop)** | **秘密の店**: 旧ファイル名は `secretshop.cgi` ではなく `lib/secret.cgi`。合言葉入力と時間帯別出現。 | Implemented in `internal/secretshop` (Issue #462). |
+| **`secret.cgi` (Secret Shop)** | **秘密の店**: 旧ファイル名は `lib/secret.cgi`。転職7回以上（`job_lv >= 7`）、原典8アイテム3倍価格、満杯時Depot転送、ぱふぱふ（会話のみ）。 | Completed in `internal/secretshop` (Issue #462). |
 | **`black_market.cgi` (Black Market)** | **闇市**: 入場料1000G、非売品アイテム・不正取引、摘発リスク。 | Implemented in `internal/blackmarket` (Issue #463). |
 
 ---
@@ -73,7 +73,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** with complete file 
 | `lib/item.cgi`, `lib/goods.cgi` | 道具屋 | `internal/shop/` | `internal/api/http/shop.go` | `docs/design/shops.md`<br/>`docs/api/paths/shop.json` | Reconciling (#465) | MasterCard所持時の10%割引 |
 | `lib/accessory.cgi` | 装飾品屋 | `internal/shop/` | `internal/api/http/shop.go` | `docs/design/shops.md`<br/>`docs/api/paths/shop.json` | Reconciling (#465) | 特殊効果アクセサリーのステータス計算 |
 | `lib/blacksmith.cgi` | 鍛冶屋 (@コスタ) | `internal/blacksmith/` | `internal/api/http/handler.go`<br/>`migrations/012_item_enhancement.sql` | `docs/design/blacksmith.md` | Reconciling (#458) | 強化+1..+10、刻印、名付け（全角8文字） |
-| `lib/secret.cgi` | 秘密の店 (@ゲルダ) | `internal/secretshop/` | `internal/api/http/secretshop.go` | `docs/design/secretshop.md`<br/>`docs/api/paths/secretshop.json` | Reconciling (#462) | 合言葉入力必須、時間帯別の品揃え変化 |
+| `lib/secret.cgi` | 秘密の店 (@ヒミツジ) | `internal/secretshop/` | `internal/api/http/secretshop.go` | `docs/design/secretshop.md`<br/>`docs/api/paths/secretshop.json` | Completed (#462) | 転職7回以上(`job_lv >= 7`)、原典8種3倍価格、満杯時Depot転送、ぱふぱふ会話のみ |
 | `lib/black_market.cgi` | 闇市 (@ヤンガス) | `internal/blackmarket/` | `internal/api/http/blackmarket.go`<br/>`migrations/040_blackmarket.sql`<br/>`migrations/042_blackmarket_sacrifice_and_trade.sql` | `docs/design/black-market.md`<br/>`docs/api/paths/blackmarket.json` | Reconciling (#463) | 入場料1000G、摘発リスク、生贄・特殊トレード |
 | `lib/gem_store.cgi` | 宝石店 (@ルル) | `internal/gemstore/` | `internal/api/http/gemstore.go` | `docs/design/gemstore.md`<br/>`docs/api/paths/gemstore.json` | Reconciling (#464) | 宝石購入およびスキル枠への宝玉合成 |
 | `lib/store.cgi`, `party2/store.cgi` | プレイヤー個人店舗 | `internal/shop/` (bazaar) | `internal/api/http/shop.go` | `docs/design/shops.md` | Reconciling (#466) | 看板設定、記帳、出品枠上限 |

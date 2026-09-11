@@ -10,11 +10,13 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
 const (
-	MinAccessLevel      = 15
+	MinAccessJobLevel   = 7
 	MaxPurchaseQuantity = 99
 	NPCName             = "@ヒミツジ"
 	LocationName        = "秘密の店"
@@ -29,6 +31,8 @@ var (
 	ErrInsufficientFunds            = errors.New("insufficient funds to purchase secret shop item")
 	ErrInvalidQuantity              = errors.New("invalid purchase quantity")
 	ErrPriceOverflow                = errors.New("price calculation overflow")
+	ErrDepotFull                    = depot.ErrDepotFull
+	ErrDepotNotConfigured           = errors.New("depot repository not configured")
 )
 
 var DefaultTalkDialogues = []string{
@@ -40,9 +44,18 @@ var DefaultTalkDialogues = []string{
 }
 
 const (
-	InspectDialogue  = "@ヒミツジ「オイラは羊の@ヒミツジだメェ〜。羊の国から来たよ…ゴホッゴホッ…羊の国から来たメェ〜」"
-	PuffPuffDialogue = "パフパフ♥ パフパフ♥ パフパフ♥ ……… どうだ わしのパフパフは気持ちいいだろう"
+	InspectDialogue        = "@ヒミツジ「オイラは羊の@ヒミツジだメェ〜。羊の国から来たよ…ゴホッゴホッ…羊の国から来たメェ〜」"
+	PuffPuffDialogue       = "パフパフ♥ パフパフ♥ パフパフ♥ ……… どうだ わしのパフパフは気持ちいいだろう"
+	PuffPuffDialogueFormat = "パフパフ♥ パフパフ♥ パフパフ♥ ……… どうだ %s わしのパフパフは気持ちいいだろう"
 )
+
+// FormatPuffPuffMessage formats the puff-puff dialogue with the character name, matching legacy CGI (secret.cgi).
+func FormatPuffPuffMessage(charName string) string {
+	if strings.TrimSpace(charName) == "" {
+		return PuffPuffDialogue
+	}
+	return fmt.Sprintf(PuffPuffDialogueFormat, charName)
+}
 
 type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
@@ -54,6 +67,15 @@ type InventoryRepository interface {
 	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
 	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error)
 	Save(ctx context.Context, value coreinventory.Inventory) error
+}
+
+type DepotRepository interface {
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (depot.Depot, error)
+	Save(ctx context.Context, value depot.Depot) error
+}
+
+type ItemDefinitionProvider interface {
+	FindByID(id string) (coreitem.Definition, error)
 }
 
 type HelperQuestFilter interface {
@@ -78,13 +100,27 @@ func WithHelperFilter(filter HelperQuestFilter) Option {
 	}
 }
 
+func WithDepotRepository(repo DepotRepository) Option {
+	return func(s *Service) {
+		s.depotRepo = repo
+	}
+}
+
+func WithItemDefinitionProvider(provider ItemDefinitionProvider) Option {
+	return func(s *Service) {
+		s.itemDefProvider = provider
+	}
+}
+
 type Service struct {
-	characterRepo CharacterRepository
-	inventoryRepo InventoryRepository
-	catalog       *Catalog
-	helperFilter  HelperQuestFilter
-	txProvider    TransactionProvider
-	economy       *economy.Service
+	characterRepo   CharacterRepository
+	inventoryRepo   InventoryRepository
+	catalog         *Catalog
+	helperFilter    HelperQuestFilter
+	txProvider      TransactionProvider
+	economy         *economy.Service
+	depotRepo       DepotRepository
+	itemDefProvider ItemDefinitionProvider
 }
 
 func NewService(
@@ -140,23 +176,22 @@ type PurchaseResult struct {
 	TotalPrice          int    `json:"total_price"`
 	RemainingGold       int    `json:"remaining_gold"`
 	InventoryInstanceID string `json:"inventory_instance_id"`
+	TransferredToDepot  bool   `json:"transferred_to_depot"`
+	NPCMessage          string `json:"npc_message"`
 }
 
 // PuffPuffResult contains the result of the NPC puff-puff interaction.
+// Under legacy parity (secret.cgi), puff-puff provides flavor dialogue only with no healing.
 type PuffPuffResult struct {
 	CharacterID string `json:"character_id"`
 	NPCName     string `json:"npc_name"`
 	Message     string `json:"message"`
-	HPHealed    int    `json:"hp_healed"`
-	MPHealed    int    `json:"mp_healed"`
-	CurrentHP   int    `json:"current_hp"`
-	CurrentMP   int    `json:"current_mp"`
 }
 
 // CheckEligibility returns true if the character meets secret shop discovery qualifications.
-// The original CGI (secret.cgi) is accessible only when level >= MinAccessLevel.
+// The original CGI (item.cgi:himitsunomise) is accessible only when job_lv >= 7.
 func CheckEligibility(c corecharacter.Character) bool {
-	return c.Level >= MinAccessLevel
+	return c.JobLevel >= MinAccessJobLevel
 }
 
 // GetShopStatus checks access and returns available secret shop items.
@@ -225,74 +260,30 @@ func (s *Service) Inspect(ctx context.Context, characterID string) (string, erro
 	return InspectDialogue, nil
 }
 
-// PuffPuff provides the playful secret puff-puff service and minor healing.
+// PuffPuff provides the playful secret puff-puff service with flavor text only (no stat modifications).
 func (s *Service) PuffPuff(ctx context.Context, characterID string) (*PuffPuffResult, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return nil, ErrCharacterNotFound
 	}
-	var result *PuffPuffResult
-
-	operation := func(txCtx context.Context) error {
-		char, err := s.characterRepo.FindByIDForUpdate(txCtx, characterID)
-		if err != nil {
-			return ErrCharacterNotFound
-		}
-
-		if !CheckEligibility(char) {
-			return ErrAccessDenied
-		}
-
-		hpHealed := 0
-		mpHealed := 0
-
-		if char.Stats.HP < char.Stats.MaxHP {
-			hpHealed = 10
-			if char.Stats.HP+hpHealed > char.Stats.MaxHP {
-				hpHealed = char.Stats.MaxHP - char.Stats.HP
-			}
-			char.Stats.HP += hpHealed
-		}
-
-		if char.Stats.MP < char.Stats.MaxMP {
-			mpHealed = 5
-			if char.Stats.MP+mpHealed > char.Stats.MaxMP {
-				mpHealed = char.Stats.MaxMP - char.Stats.MP
-			}
-			char.Stats.MP += mpHealed
-		}
-
-		if hpHealed > 0 || mpHealed > 0 {
-			if err := s.characterRepo.Update(txCtx, char); err != nil {
-				return err
-			}
-		}
-
-		result = &PuffPuffResult{
-			CharacterID: char.ID,
-			NPCName:     NPCName,
-			Message:     PuffPuffDialogue,
-			HPHealed:    hpHealed,
-			MPHealed:    mpHealed,
-			CurrentHP:   char.Stats.HP,
-			CurrentMP:   char.Stats.MP,
-		}
-		return nil
+	char, err := s.characterRepo.FindByID(ctx, characterID)
+	if err != nil {
+		return nil, ErrCharacterNotFound
 	}
 
-	if s.txProvider != nil {
-		if err := s.txProvider.RunInTx(ctx, operation); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := operation(ctx); err != nil {
-			return nil, err
-		}
+	if !CheckEligibility(char) {
+		return nil, ErrAccessDenied
 	}
 
-	return result, nil
+	return &PuffPuffResult{
+		CharacterID: char.ID,
+		NPCName:     NPCName,
+		Message:     FormatPuffPuffMessage(char.Name),
+	}, nil
 }
 
 // PurchaseItem purchases rare items from the secret shop with transactional protection.
+// If inventory consumable slot is empty and quantity == 1, it is placed in character inventory.
+// If inventory is occupied or quantity > 1, it is automatically transferred to depot.
 func (s *Service) PurchaseItem(
 	ctx context.Context,
 	characterID string,
@@ -341,11 +332,92 @@ func (s *Service) PurchaseItem(
 			return err
 		}
 
+		if char.Money < totalPrice {
+			return ErrInsufficientFunds
+		}
+
+		inv, err := s.inventoryRepo.FindByCharacterIDForUpdate(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+
+		occupied := false
+		for _, inst := range inv.Items {
+			if s.itemDefProvider != nil {
+				def, err := s.itemDefProvider.FindByID(inst.DefinitionID)
+				if err == nil && (def.Slot == coreitem.SlotNone || def.Slot == "") {
+					occupied = true
+					break
+				}
+			} else {
+				if _, ok := s.catalog.FindByDefinitionID(inst.DefinitionID); ok || strings.HasPrefix(inst.DefinitionID, "item-") {
+					occupied = true
+					break
+				}
+			}
+		}
+
+		if !occupied && quantity == 1 {
+			res, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{
+				CharacterID:       characterID,
+				DeductGold:        totalPrice,
+				GrantDefinitionID: shopItem.ItemDefinitionID,
+				GrantQuantity:     1,
+			})
+			if err != nil {
+				if errors.Is(err, economy.ErrInsufficientGold) {
+					return ErrInsufficientFunds
+				}
+				if errors.Is(err, economy.ErrCharacterNotFound) {
+					return ErrCharacterNotFound
+				}
+				return err
+			}
+
+			result = &PurchaseResult{
+				CharacterID:         char.ID,
+				Item:                shopItem,
+				Quantity:            1,
+				TotalPrice:          totalPrice,
+				RemainingGold:       res.Character.Money,
+				InventoryInstanceID: res.GrantedItem.ID,
+				TransferredToDepot:  false,
+				NPCMessage:          fmt.Sprintf("%sメェ〜。持ってけメェ〜", shopItem.Name),
+			}
+			return nil
+		}
+
+		// Consumable slot is occupied or quantity > 1: route to depot
+		if s.depotRepo == nil {
+			return ErrDepotNotConfigured
+		}
+
+		dep, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, characterID)
+		if err != nil {
+			if !errors.Is(err, depot.ErrNotFound) {
+				return err
+			}
+			dep, err = depot.NewDepotWithCapacity(characterID, char.JobLevel, 0, char.OverDepot)
+			if err != nil {
+				return err
+			}
+		}
+		dep.Capacity = depot.CalculateCapacity(char.JobLevel, dep.ExDepot, char.OverDepot)
+
+		inst, err := coreitem.NewInstance(shopItem.ItemDefinitionID, quantity)
+		if err != nil {
+			return err
+		}
+		if err := dep.AddItem(inst); err != nil {
+			if errors.Is(err, depot.ErrDepotFull) {
+				return ErrDepotFull
+			}
+			return err
+		}
+
 		res, err := s.economy.Exchange(txCtx, economy.ExchangeRequest{
-			CharacterID:       characterID,
-			DeductGold:        totalPrice,
-			GrantDefinitionID: shopItem.ItemDefinitionID,
-			GrantQuantity:     quantity,
+			CharacterID: characterID,
+			DeductGold:  totalPrice,
 		})
 		if err != nil {
 			if errors.Is(err, economy.ErrInsufficientGold) {
@@ -357,13 +429,19 @@ func (s *Service) PurchaseItem(
 			return err
 		}
 
+		if err := s.depotRepo.Save(txCtx, dep); err != nil {
+			return err
+		}
+
 		result = &PurchaseResult{
 			CharacterID:         char.ID,
 			Item:                shopItem,
 			Quantity:            quantity,
 			TotalPrice:          totalPrice,
 			RemainingGold:       res.Character.Money,
-			InventoryInstanceID: res.GrantedItem.ID,
+			InventoryInstanceID: inst.ID,
+			TransferredToDepot:  true,
+			NPCMessage:          fmt.Sprintf("%sは%sメェ〜の預かり所の方に投げましたメェ〜", shopItem.Name, char.Name),
 		}
 		return nil
 	}
