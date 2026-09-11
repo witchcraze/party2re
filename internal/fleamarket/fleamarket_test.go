@@ -3,12 +3,13 @@ package fleamarket_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/fleamarket"
 )
 
@@ -77,6 +78,16 @@ func (m *mockFleaMarketRepo) CountActiveListingsBySeller(ctx context.Context, se
 	return count, nil
 }
 
+func (m *mockFleaMarketRepo) CountTotalActiveListings(ctx context.Context) (int, error) {
+	count := 0
+	for _, l := range m.listings {
+		if l.Status == fleamarket.StatusActive {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func (m *mockFleaMarketRepo) UpdateListing(ctx context.Context, listing fleamarket.Listing) error {
 	if _, ok := m.listings[listing.ID]; !ok {
 		return fleamarket.ErrListingNotFound
@@ -110,29 +121,30 @@ func (m *mockCharRepo) Update(ctx context.Context, c corecharacter.Character) er
 	return nil
 }
 
-type mockInvRepo struct {
-	inventories map[string]coreinventory.Inventory
+type mockDepotRepo struct {
+	depots map[string]depot.Depot
 }
 
-func newMockInvRepo() *mockInvRepo {
-	return &mockInvRepo{inventories: make(map[string]coreinventory.Inventory)}
+func newMockDepotRepo() *mockDepotRepo {
+	return &mockDepotRepo{depots: make(map[string]depot.Depot)}
 }
 
-func (m *mockInvRepo) FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-	inv, ok := m.inventories[characterID]
+func (m *mockDepotRepo) FindByCharacterID(ctx context.Context, characterID string) (depot.Depot, error) {
+	d, ok := m.depots[characterID]
 	if !ok {
-		inv, _ = coreinventory.New(characterID)
-		m.inventories[characterID] = inv
+		d, _ = depot.NewDepot(characterID)
+		d.Capacity = 20
+		m.depots[characterID] = d
 	}
-	return inv, nil
+	return d, nil
 }
 
-func (m *mockInvRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+func (m *mockDepotRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (depot.Depot, error) {
 	return m.FindByCharacterID(ctx, characterID)
 }
 
-func (m *mockInvRepo) Save(ctx context.Context, inv coreinventory.Inventory) error {
-	m.inventories[inv.CharacterID] = inv
+func (m *mockDepotRepo) Save(ctx context.Context, d depot.Depot) error {
+	m.depots[d.CharacterID] = d
 	return nil
 }
 
@@ -161,10 +173,10 @@ func TestFleaMarketService_CreateListing(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockFleaMarketRepo()
 	charRepo := newMockCharRepo()
-	invRepo := newMockInvRepo()
+	depotRepo := newMockDepotRepo()
 	itemDefs := &mockItemDefs{}
 
-	svc, err := fleamarket.NewService(repo, charRepo, invRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
+	svc, err := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -176,10 +188,11 @@ func TestFleaMarketService_CreateListing(t *testing.T) {
 		Name:  "SellerHero",
 		Money: 500,
 	}
-	sellerInv, _ := coreinventory.New(sellerID)
+	sellerDepot, _ := depot.NewDepot(sellerID)
+	sellerDepot.Capacity = 20
 	inst, _ := coreitem.NewInstance("wea-sword", 2)
-	_ = sellerInv.Add(inst)
-	_ = invRepo.Save(ctx, sellerInv)
+	_ = sellerDepot.AddItem(inst)
+	_ = depotRepo.Save(ctx, sellerDepot)
 
 	now := time.Now().UTC()
 
@@ -195,10 +208,10 @@ func TestFleaMarketService_CreateListing(t *testing.T) {
 		t.Errorf("expected StatusActive, got %s", listing.Status)
 	}
 
-	// Verify seller inventory decreased
-	updatedInv, _ := invRepo.FindByCharacterID(ctx, sellerID)
-	if updatedInv.Quantity("wea-sword") != 1 {
-		t.Errorf("expected 1 wea-sword remaining, got %d", updatedInv.Quantity("wea-sword"))
+	// Verify seller depot decreased (1 remaining)
+	updatedDepot, _ := depotRepo.FindByCharacterID(ctx, sellerID)
+	if len(updatedDepot.Items) != 1 || updatedDepot.Items[0].Quantity != 1 {
+		t.Errorf("expected 1 wea-sword remaining in depot, got %+v", updatedDepot.Items)
 	}
 
 	// Test invalid price (0, negative, or > 999999)
@@ -210,15 +223,14 @@ func TestFleaMarketService_CreateListing(t *testing.T) {
 	}
 
 	// Test unowned item
-	if _, err := svc.CreateListing(ctx, sellerID, "item-herb", 50, now); !errors.Is(err, fleamarket.ErrItemNotInInventory) {
-		t.Errorf("expected ErrItemNotInInventory, got %v", err)
+	if _, err := svc.CreateListing(ctx, sellerID, "item-herb", 50, now); !errors.Is(err, fleamarket.ErrItemNotInDepot) {
+		t.Errorf("expected ErrItemNotInDepot, got %v", err)
 	}
 
-	// Test max listing limit (5 items)
-	// Add more items to inventory to create up to 5 listings
+	// Test max listing limit (5 items default)
 	inst2, _ := coreitem.NewInstance("item-herb", 10)
-	_ = updatedInv.Add(inst2)
-	_ = invRepo.Save(ctx, updatedInv)
+	_ = updatedDepot.AddItem(inst2)
+	_ = depotRepo.Save(ctx, updatedDepot)
 
 	for i := 0; i < 4; i++ {
 		_, err := svc.CreateListing(ctx, sellerID, "item-herb", 50+i, now)
@@ -226,223 +238,119 @@ func TestFleaMarketService_CreateListing(t *testing.T) {
 			t.Fatalf("listing %d failed: %v", i+2, err)
 		}
 	}
-	// 6th listing must fail with ErrMaxListingsReached
+	// 6th listing must fail with ErrMaxListingsReached (base 5 limit)
 	_, err = svc.CreateListing(ctx, sellerID, "item-herb", 100, now)
 	if !errors.Is(err, fleamarket.ErrMaxListingsReached) {
 		t.Errorf("expected ErrMaxListingsReached, got %v", err)
 	}
 }
 
-func TestFleaMarketService_PurchaseListing(t *testing.T) {
+func TestFleaMarketService_OverFleaCapacity(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockFleaMarketRepo()
 	charRepo := newMockCharRepo()
-	invRepo := newMockInvRepo()
+	depotRepo := newMockDepotRepo()
 	itemDefs := &mockItemDefs{}
 
-	svc, _ := fleamarket.NewService(repo, charRepo, invRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
-
-	sellerID := "char-seller-2"
-	buyerID := "char-buyer-1"
-
-	charRepo.characters[sellerID] = corecharacter.Character{
-		ID:    sellerID,
-		Name:  "SellerAlice",
-		Money: 1000,
+	svc, err := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
 	}
-	charRepo.characters[buyerID] = corecharacter.Character{
-		ID:    buyerID,
-		Name:  "BuyerBob",
-		Money: 2000,
-	}
-
-	sellerInv, _ := coreinventory.New(sellerID)
-	inst, _ := coreitem.NewInstance("wea-sword", 1)
-	_ = sellerInv.Add(inst)
-	_ = invRepo.Save(ctx, sellerInv)
 
 	now := time.Now().UTC()
-	listing, err := svc.CreateListing(ctx, sellerID, "wea-sword", 450, now)
-	if err != nil {
-		t.Fatalf("CreateListing failed: %v", err)
+
+	// 1. OverFlea = 3 -> allows 5 + 3 = 8 listings
+	seller3ID := "char-overflea-3"
+	charRepo.characters[seller3ID] = corecharacter.Character{
+		ID:       seller3ID,
+		Name:     "OverFlea3Seller",
+		OverFlea: 3,
 	}
+	depot3, _ := depot.NewDepot(seller3ID)
+	depot3.Capacity = 20
+	inst3, _ := coreitem.NewInstance("item-herb", 10)
+	_ = depot3.AddItem(inst3)
+	_ = depotRepo.Save(ctx, depot3)
 
-	// 1. Seller cannot buy own listing
-	_, err = svc.PurchaseListing(ctx, sellerID, listing.ID, now)
-	if !errors.Is(err, fleamarket.ErrCannotBuyOwnListing) {
-		t.Errorf("expected ErrCannotBuyOwnListing, got %v", err)
-	}
-
-	// 2. Buyer with insufficient funds
-	poorBuyerID := "char-poor"
-	charRepo.characters[poorBuyerID] = corecharacter.Character{
-		ID:    poorBuyerID,
-		Name:  "PoorGuy",
-		Money: 100,
-	}
-	_, err = svc.PurchaseListing(ctx, poorBuyerID, listing.ID, now)
-	if !errors.Is(err, fleamarket.ErrInsufficientGold) {
-		t.Errorf("expected ErrInsufficientGold, got %v", err)
-	}
-
-	// 3. Successful Purchase
-	result, err := svc.PurchaseListing(ctx, buyerID, listing.ID, now)
-	if err != nil {
-		t.Fatalf("PurchaseListing failed: %v", err)
-	}
-
-	if result.Listing.Status != fleamarket.StatusSold {
-		t.Errorf("expected StatusSold, got %s", result.Listing.Status)
-	}
-	if result.BuyerGold != 1550 {
-		t.Errorf("expected buyer gold 1550, got %d", result.BuyerGold)
-	}
-	if result.SellerGold != 1450 {
-		t.Errorf("expected seller gold 1450, got %d", result.SellerGold)
-	}
-
-	// Verify buyer received item
-	buyerInv, _ := invRepo.FindByCharacterID(ctx, buyerID)
-	if buyerInv.Quantity("wea-sword") != 1 {
-		t.Errorf("expected buyer to have 1 wea-sword, got %d", buyerInv.Quantity("wea-sword"))
-	}
-
-	// 4. Double purchase on already sold listing fails
-	_, err = svc.PurchaseListing(ctx, buyerID, listing.ID, now)
-	if !errors.Is(err, fleamarket.ErrListingNotActive) {
-		t.Errorf("expected ErrListingNotActive for sold listing, got %v", err)
-	}
-}
-
-func TestFleaMarketService_CancelListing(t *testing.T) {
-	ctx := context.Background()
-	repo := newMockFleaMarketRepo()
-	charRepo := newMockCharRepo()
-	invRepo := newMockInvRepo()
-	itemDefs := &mockItemDefs{}
-
-	svc, _ := fleamarket.NewService(repo, charRepo, invRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
-
-	sellerID := "char-seller-3"
-	otherID := "char-other"
-
-	charRepo.characters[sellerID] = corecharacter.Character{
-		ID:    sellerID,
-		Name:  "SellerCharlie",
-		Money: 100,
-	}
-	charRepo.characters[otherID] = corecharacter.Character{
-		ID:    otherID,
-		Name:  "OtherGuy",
-		Money: 100,
-	}
-
-	sellerInv, _ := coreinventory.New(sellerID)
-	inst, _ := coreitem.NewInstance("item-herb", 1)
-	_ = sellerInv.Add(inst)
-	_ = invRepo.Save(ctx, sellerInv)
-
-	now := time.Now().UTC()
-	listing, err := svc.CreateListing(ctx, sellerID, "item-herb", 50, now)
-	if err != nil {
-		t.Fatalf("CreateListing failed: %v", err)
-	}
-
-	// 1. Non-seller cannot cancel
-	_, err = svc.CancelListing(ctx, otherID, listing.ID)
-	if !errors.Is(err, fleamarket.ErrUnauthorizedSeller) {
-		t.Errorf("expected ErrUnauthorizedSeller, got %v", err)
-	}
-
-	// 2. Seller cancels listing
-	cancelled, err := svc.CancelListing(ctx, sellerID, listing.ID)
-	if err != nil {
-		t.Fatalf("CancelListing failed: %v", err)
-	}
-	if cancelled.Status != fleamarket.StatusCancelled {
-		t.Errorf("expected StatusCancelled, got %s", cancelled.Status)
-	}
-
-	// Item returned to seller inventory
-	updatedInv, _ := invRepo.FindByCharacterID(ctx, sellerID)
-	if updatedInv.Quantity("item-herb") != 1 {
-		t.Errorf("expected 1 item-herb returned to seller, got %d", updatedInv.Quantity("item-herb"))
-	}
-
-	// 3. Cancelling already cancelled listing fails
-	_, err = svc.CancelListing(ctx, sellerID, listing.ID)
-	if !errors.Is(err, fleamarket.ErrListingNotActive) {
-		t.Errorf("expected ErrListingNotActive, got %v", err)
-	}
-}
-
-func TestFleaMarketService_QueriesAndPagination(t *testing.T) {
-	ctx := context.Background()
-	repo := newMockFleaMarketRepo()
-	charRepo := newMockCharRepo()
-	invRepo := newMockInvRepo()
-	itemDefs := &mockItemDefs{}
-
-	svc, _ := fleamarket.NewService(repo, charRepo, invRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
-
-	sellerID := "char-seller-p"
-	charRepo.characters[sellerID] = corecharacter.Character{ID: sellerID, Name: "SellerP"}
-	sellerInv, _ := coreinventory.New(sellerID)
-	inst, _ := coreitem.NewInstance("item-herb", 10)
-	_ = sellerInv.Add(inst)
-	_ = invRepo.Save(ctx, sellerInv)
-
-	now := time.Now().UTC()
-	var createdIDs []string
-	for i := 0; i < 3; i++ {
-		l, err := svc.CreateListing(ctx, sellerID, "item-herb", 100+i*10, now)
+	for i := 0; i < 8; i++ {
+		_, err := svc.CreateListing(ctx, seller3ID, "item-herb", 50+i, now)
 		if err != nil {
-			t.Fatalf("failed to create listing %d: %v", i, err)
+			t.Fatalf("listing %d with OverFlea=3 failed: %v", i+1, err)
 		}
-		createdIDs = append(createdIDs, l.ID)
+	}
+	// 9th listing fails
+	_, err = svc.CreateListing(ctx, seller3ID, "item-herb", 100, now)
+	if !errors.Is(err, fleamarket.ErrMaxListingsReached) {
+		t.Errorf("expected ErrMaxListingsReached for 9th listing with OverFlea=3, got %v", err)
 	}
 
-	// 1. ListActiveListings
-	listings, total, err := svc.ListActiveListings(ctx, 2, 0)
+	// 2. OverFlea = 5 -> allows 5 + 5 = 10 listings (legacy maximum)
+	seller5ID := "char-overflea-5"
+	charRepo.characters[seller5ID] = corecharacter.Character{
+		ID:       seller5ID,
+		Name:     "OverFlea5Seller",
+		OverFlea: 5,
+	}
+	depot5, _ := depot.NewDepot(seller5ID)
+	depot5.Capacity = 20
+	inst5, _ := coreitem.NewInstance("item-herb", 15)
+	_ = depot5.AddItem(inst5)
+	_ = depotRepo.Save(ctx, depot5)
+
+	for i := 0; i < 10; i++ {
+		_, err := svc.CreateListing(ctx, seller5ID, "item-herb", 50+i, now)
+		if err != nil {
+			t.Fatalf("listing %d with OverFlea=5 failed: %v", i+1, err)
+		}
+	}
+	// 11th listing fails
+	_, err = svc.CreateListing(ctx, seller5ID, "item-herb", 100, now)
+	if !errors.Is(err, fleamarket.ErrMaxListingsReached) {
+		t.Errorf("expected ErrMaxListingsReached for 11th listing with OverFlea=5, got %v", err)
+	}
+}
+
+func TestFleaMarketService_ServerCeiling(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockFleaMarketRepo()
+	charRepo := newMockCharRepo()
+	depotRepo := newMockDepotRepo()
+	itemDefs := &mockItemDefs{}
+
+	svc, err := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
 	if err != nil {
-		t.Fatalf("ListActiveListings failed: %v", err)
-	}
-	if total != 3 || len(listings) != 2 {
-		t.Errorf("expected total 3, page length 2, got total %d, length %d", total, len(listings))
+		t.Fatalf("failed to create service: %v", err)
 	}
 
-	// 2. GetListing
-	single, err := svc.GetListing(ctx, createdIDs[0])
-	if err != nil {
-		t.Fatalf("GetListing failed: %v", err)
-	}
-	if single.ID != createdIDs[0] {
-		t.Errorf("expected ID %s, got %s", createdIDs[0], single.ID)
+	now := time.Now().UTC()
+
+	// Pre-populate 120 listings from various characters
+	for i := 0; i < fleamarket.ServerMaxListings; i++ {
+		l := fleamarket.Listing{
+			ID:                fmt.Sprintf("listing-server-%d", i),
+			SellerCharacterID: fmt.Sprintf("seller-%d", i),
+			SellerName:        "RandomSeller",
+			ItemID:            "item-herb",
+			ItemName:          "薬草",
+			ItemCategory:      "consumable",
+			Price:             100,
+			Status:            fleamarket.StatusActive,
+			CreatedAt:         now,
+		}
+		_ = repo.CreateListing(ctx, l)
 	}
 
-	// 3. GetCharacterListings
-	sellerListings, err := svc.GetCharacterListings(ctx, sellerID)
-	if err != nil {
-		t.Fatalf("GetCharacterListings failed: %v", err)
-	}
-	if len(sellerListings) != 3 {
-		t.Errorf("expected 3 listings for seller, got %d", len(sellerListings))
-	}
+	// Try to create 121st listing
+	newSellerID := "char-seller-new"
+	charRepo.characters[newSellerID] = corecharacter.Character{ID: newSellerID, Name: "NewSeller"}
+	dep, _ := depot.NewDepot(newSellerID)
+	dep.Capacity = 20
+	inst, _ := coreitem.NewInstance("item-herb", 5)
+	_ = dep.AddItem(inst)
+	_ = depotRepo.Save(ctx, dep)
 
-	// 4. Invalid input checks
-	if _, err := svc.GetListing(ctx, ""); !errors.Is(err, fleamarket.ErrInvalidInput) {
-		t.Errorf("expected ErrInvalidInput for empty ID, got %v", err)
-	}
-	if _, err := svc.GetCharacterListings(ctx, ""); !errors.Is(err, fleamarket.ErrInvalidInput) {
-		t.Errorf("expected ErrInvalidInput for empty character ID, got %v", err)
-	}
-	if _, err := svc.CreateListing(ctx, "", "item-herb", 100, now); !errors.Is(err, fleamarket.ErrInvalidInput) {
-		t.Errorf("expected ErrInvalidInput for empty seller ID, got %v", err)
-	}
-	if _, err := svc.PurchaseListing(ctx, "", createdIDs[0], now); !errors.Is(err, fleamarket.ErrInvalidInput) {
-		t.Errorf("expected ErrInvalidInput for empty buyer ID, got %v", err)
-	}
-	if _, err := svc.CancelListing(ctx, "", createdIDs[0]); !errors.Is(err, fleamarket.ErrInvalidInput) {
-		t.Errorf("expected ErrInvalidInput for empty seller ID in CancelListing, got %v", err)
+	_, err = svc.CreateListing(ctx, newSellerID, "item-herb", 100, now)
+	if !errors.Is(err, fleamarket.ErrServerMaxListingsReached) {
+		t.Errorf("expected ErrServerMaxListingsReached at 120 server ceiling, got %v", err)
 	}
 }

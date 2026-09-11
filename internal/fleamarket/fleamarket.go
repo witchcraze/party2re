@@ -7,12 +7,13 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
 const (
+	ServerMaxListings       = 120
 	MaxListingsPerCharacter = 5
 	MinListingPrice         = 1
 	MaxListingPrice         = 999999
@@ -27,18 +28,20 @@ const (
 )
 
 var (
-	ErrNilDependency       = errors.New("fleamarket dependency is nil")
-	ErrCharacterNotFound   = errors.New("character not found")
-	ErrListingNotFound     = errors.New("fleamarket listing not found")
-	ErrListingNotActive    = errors.New("fleamarket listing is not active")
-	ErrCannotBuyOwnListing = errors.New("cannot purchase your own flea market listing")
-	ErrUnauthorizedSeller  = errors.New("only the seller can cancel this listing")
-	ErrInsufficientGold    = errors.New("insufficient gold to purchase listing")
-	ErrMaxListingsReached  = errors.New("maximum active listings limit reached")
-	ErrInvalidPrice        = errors.New("listing price must be between 1 and 999999 gold")
-	ErrItemNotInInventory  = errors.New("item not found in inventory or insufficient quantity")
-	ErrForbidden           = errors.New("access forbidden: character does not own this resource")
-	ErrInvalidInput        = errors.New("invalid flea market input parameters")
+	ErrNilDependency            = errors.New("fleamarket dependency is nil")
+	ErrCharacterNotFound        = errors.New("character not found")
+	ErrListingNotFound          = errors.New("fleamarket listing not found")
+	ErrListingNotActive         = errors.New("fleamarket listing is not active")
+	ErrCannotBuyOwnListing      = errors.New("cannot purchase your own flea market listing")
+	ErrUnauthorizedSeller       = errors.New("only the seller can cancel this listing")
+	ErrInsufficientGold         = errors.New("insufficient gold to purchase listing")
+	ErrMaxListingsReached       = errors.New("maximum active listings limit reached")
+	ErrServerMaxListingsReached = errors.New("server-wide maximum active listings limit (120) reached")
+	ErrInvalidPrice             = errors.New("listing price must be between 1 and 999999 gold")
+	ErrItemNotInDepot           = errors.New("item not found in depot storage")
+	ErrDepotFull                = errors.New("depot storage is full")
+	ErrForbidden                = errors.New("access forbidden: character does not own this resource")
+	ErrInvalidInput             = errors.New("invalid flea market input parameters")
 )
 
 type Listing struct {
@@ -70,6 +73,7 @@ type FleaMarketRepository interface {
 	ListActiveListings(ctx context.Context, limit, offset int) ([]Listing, int, error)
 	GetListingsBySeller(ctx context.Context, sellerCharacterID string) ([]Listing, error)
 	CountActiveListingsBySeller(ctx context.Context, sellerCharacterID string) (int, error)
+	CountTotalActiveListings(ctx context.Context) (int, error)
 	UpdateListing(ctx context.Context, listing Listing) error
 }
 
@@ -79,10 +83,10 @@ type CharacterRepository interface {
 	Update(ctx context.Context, value corecharacter.Character) error
 }
 
-type InventoryRepository interface {
-	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
-	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error)
-	Save(ctx context.Context, value coreinventory.Inventory) error
+type DepotRepository interface {
+	FindByCharacterID(ctx context.Context, characterID string) (depot.Depot, error)
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (depot.Depot, error)
+	Save(ctx context.Context, value depot.Depot) error
 }
 
 type ItemDefinitionProvider = coreitem.DefinitionProvider
@@ -94,7 +98,7 @@ type TransactionProvider interface {
 type Service struct {
 	repo       FleaMarketRepository
 	charRepo   CharacterRepository
-	invRepo    InventoryRepository
+	depotRepo  DepotRepository
 	itemDefs   ItemDefinitionProvider
 	txProvider TransactionProvider
 }
@@ -116,17 +120,17 @@ func WithItemDefinitionProvider(itemDefs ItemDefinitionProvider) Option {
 func NewService(
 	repo FleaMarketRepository,
 	charRepo CharacterRepository,
-	invRepo InventoryRepository,
+	depotRepo DepotRepository,
 	opts ...Option,
 ) (*Service, error) {
-	if repo == nil || charRepo == nil || invRepo == nil {
+	if repo == nil || charRepo == nil || depotRepo == nil {
 		return nil, ErrNilDependency
 	}
 
 	svc := &Service{
-		repo:     repo,
-		charRepo: charRepo,
-		invRepo:  invRepo,
+		repo:      repo,
+		charRepo:  charRepo,
+		depotRepo: depotRepo,
 	}
 
 	for _, opt := range opts {
@@ -143,7 +147,7 @@ func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) erro
 	return fn(ctx)
 }
 
-// CreateListing lists an item from the character's inventory onto the flea market.
+// CreateListing lists an item from the character's depot onto the flea market.
 func (s *Service) CreateListing(
 	ctx context.Context,
 	sellerCharacterID string,
@@ -161,13 +165,22 @@ func (s *Service) CreateListing(
 	var created Listing
 
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		// 1. Lock seller character
+		// 1. Check server-wide active listing count ceiling (120)
+		totalActive, err := s.repo.CountTotalActiveListings(txCtx)
+		if err != nil {
+			return err
+		}
+		if totalActive >= ServerMaxListings {
+			return ErrServerMaxListingsReached
+		}
+
+		// 2. Lock seller character (Rank 2)
 		seller, err := s.charRepo.FindByIDForUpdate(txCtx, sellerCharacterID)
 		if err != nil {
 			return ErrCharacterNotFound
 		}
 
-		// 2. Check active listing count limit
+		// 3. Check active listing count limit (5 + OverFlea)
 		activeCount, err := s.repo.CountActiveListingsBySeller(txCtx, sellerCharacterID)
 		if err != nil {
 			return err
@@ -177,41 +190,38 @@ func (s *Service) CreateListing(
 			return ErrMaxListingsReached
 		}
 
-		// 3. Lock seller inventory
-		inv, err := s.invRepo.FindByCharacterIDForUpdate(txCtx, sellerCharacterID)
+		// 4. Lock seller depot (Rank 5)
+		dep, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, sellerCharacterID)
 		if err != nil {
 			return err
 		}
 
-		// 4. Locate item in inventory
-		inst, found := inv.Find(itemInstanceOrDefID)
-		if !found {
-			// Try locating by DefinitionID
-			for _, item := range inv.Items {
-				if item.DefinitionID == itemInstanceOrDefID && item.Quantity > 0 {
-					inst = item
-					found = true
-					break
-				}
+		// 5. Locate item in depot
+		var targetInstanceID string
+		for _, item := range dep.Items {
+			if item.ID == itemInstanceOrDefID || item.DefinitionID == itemInstanceOrDefID {
+				targetInstanceID = item.ID
+				break
 			}
 		}
-		if !found || inst.Quantity < 1 {
-			return ErrItemNotInInventory
+		if targetInstanceID == "" {
+			return ErrItemNotInDepot
 		}
 
-		// 5. Consume 1 unit from inventory
-		if err := inv.Consume(inst.ID, 1); err != nil {
-			return err
+		// 6. Consume 1 unit from depot
+		consumedItem, err := dep.ConsumeOne(targetInstanceID)
+		if err != nil {
+			return ErrItemNotInDepot
 		}
-		if err := s.invRepo.Save(txCtx, inv); err != nil {
+		if err := s.depotRepo.Save(txCtx, dep); err != nil {
 			return err
 		}
 
-		// 6. Fetch definition for item metadata
-		itemName := inst.DefinitionID
+		// 7. Fetch definition for item metadata
+		itemName := consumedItem.DefinitionID
 		itemCategory := "misc"
 		if s.itemDefs != nil {
-			if def, defErr := s.itemDefs.FindByID(inst.DefinitionID); defErr == nil {
+			if def, defErr := s.itemDefs.FindByID(consumedItem.DefinitionID); defErr == nil {
 				itemName = def.Name
 				if def.Slot != "" {
 					itemCategory = string(def.Slot)
@@ -221,12 +231,12 @@ func (s *Service) CreateListing(
 			}
 		}
 
-		// 7. Create Listing record
+		// 8. Create Listing record
 		created = Listing{
 			ID:                id.New(),
 			SellerCharacterID: seller.ID,
 			SellerName:        seller.Name,
-			ItemID:            inst.DefinitionID,
+			ItemID:            consumedItem.DefinitionID,
 			ItemName:          itemName,
 			ItemCategory:      itemCategory,
 			Price:             price,
@@ -257,7 +267,7 @@ func (s *Service) PurchaseListing(
 	var result PurchaseResult
 
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		// 1. Lock listing first (CAS / P2P shared entity lock)
+		// 1. Lock listing first (CAS / P2P shared entity lock, Rank 0)
 		listing, err := s.repo.GetListingByIDForUpdate(txCtx, listingID)
 		if err != nil {
 			return ErrListingNotFound
@@ -269,7 +279,7 @@ func (s *Service) PurchaseListing(
 			return ErrCannotBuyOwnListing
 		}
 
-		// 2. Deterministic lock acquisition order for characters (ascending ID order)
+		// 2. Deterministic lock acquisition order for characters (ascending ID order, Rank 2)
 		firstID, secondID := id.Sort2(listing.SellerCharacterID, buyerCharacterID)
 
 		firstChar, err := s.charRepo.FindByIDForUpdate(txCtx, firstID)
@@ -295,8 +305,8 @@ func (s *Service) PurchaseListing(
 			return ErrInsufficientGold
 		}
 
-		// 4. Lock buyer inventory
-		buyerInv, err := s.invRepo.FindByCharacterIDForUpdate(txCtx, buyerCharacterID)
+		// 4. Lock buyer depot (Rank 5)
+		buyerDepot, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, buyerCharacterID)
 		if err != nil {
 			return err
 		}
@@ -307,12 +317,15 @@ func (s *Service) PurchaseListing(
 		}
 		_ = sellerChar.AddMoney(listing.Price)
 
-		// 6. Deliver Item to Buyer
+		// 6. Deliver Item to Buyer Depot (legacy &send_item)
 		itemInst, err := coreitem.NewInstance(listing.ItemID, 1)
 		if err != nil {
 			return err
 		}
-		if err := buyerInv.Add(itemInst); err != nil {
+		if err := buyerDepot.AddItem(itemInst); err != nil {
+			if errors.Is(err, depot.ErrDepotFull) {
+				return ErrDepotFull
+			}
 			return err
 		}
 
@@ -330,7 +343,7 @@ func (s *Service) PurchaseListing(
 		if err := s.charRepo.Update(txCtx, sellerChar); err != nil {
 			return err
 		}
-		if err := s.invRepo.Save(txCtx, buyerInv); err != nil {
+		if err := s.depotRepo.Save(txCtx, buyerDepot); err != nil {
 			return err
 		}
 		if err := s.repo.UpdateListing(txCtx, listing); err != nil {
@@ -366,7 +379,7 @@ func (s *Service) CancelListing(
 	var cancelled Listing
 
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		// 1. Lock listing
+		// 1. Lock listing (Rank 0)
 		listing, err := s.repo.GetListingByIDForUpdate(txCtx, listingID)
 		if err != nil {
 			return ErrListingNotFound
@@ -378,21 +391,24 @@ func (s *Service) CancelListing(
 			return ErrListingNotActive
 		}
 
-		// 2. Lock seller inventory
-		inv, err := s.invRepo.FindByCharacterIDForUpdate(txCtx, sellerCharacterID)
+		// 2. Lock seller depot (Rank 5)
+		sellerDepot, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, sellerCharacterID)
 		if err != nil {
 			return err
 		}
 
-		// 3. Return item instance to seller inventory
+		// 3. Return item instance to seller depot (legacy &send_item)
 		itemInst, err := coreitem.NewInstance(listing.ItemID, 1)
 		if err != nil {
 			return err
 		}
-		if err := inv.Add(itemInst); err != nil {
+		if err := sellerDepot.AddItem(itemInst); err != nil {
+			if errors.Is(err, depot.ErrDepotFull) {
+				return ErrDepotFull
+			}
 			return err
 		}
-		if err := s.invRepo.Save(txCtx, inv); err != nil {
+		if err := s.depotRepo.Save(txCtx, sellerDepot); err != nil {
 			return err
 		}
 

@@ -16,6 +16,7 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/delivery"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/fleamarket"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/id"
@@ -684,7 +685,7 @@ func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	invRepo, err := NewInventoryRepository(db)
+	depotRepo, err := NewDepotRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -696,7 +697,7 @@ func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {
 	fleaMarketSvc, err := fleamarket.NewService(
 		fleaMarketRepo,
 		charRepo,
-		invRepo,
+		depotRepo,
 		fleamarket.WithTransactionProvider(txProvider),
 		fleamarket.WithItemDefinitionProvider(itemCatalog),
 	)
@@ -704,7 +705,7 @@ func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 1. Setup Seller with inventory items
+	// 1. Setup Seller with depot items
 	sellerInitialGold := 100000
 	sellerChar, err := CreateTestCharacterWithFunds(ctx, db, "FleaStressSeller", sellerInitialGold)
 	if err != nil {
@@ -723,8 +724,15 @@ func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = CreateTestInventoryWithItems(ctx, db, sellerChar.ID, []coreitem.Instance{herbInst})
+	sellerDepot, err := depot.NewDepot(sellerChar.ID)
 	if err != nil {
+		t.Fatal(err)
+	}
+	sellerDepot.Capacity = 200
+	if err := sellerDepot.AddItem(herbInst); err != nil {
+		t.Fatal(err)
+	}
+	if err := depotRepo.Save(ctx, sellerDepot); err != nil {
 		t.Fatal(err)
 	}
 
@@ -736,9 +744,13 @@ func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		// Create empty inventory for buyer
-		_, err = CreateTestInventoryWithItems(ctx, db, b.ID, nil)
+		// Create empty depot for buyer
+		bDepot, err := depot.NewDepot(b.ID)
 		if err != nil {
+			t.Fatal(err)
+		}
+		bDepot.Capacity = 200
+		if err := depotRepo.Save(ctx, bDepot); err != nil {
 			t.Fatal(err)
 		}
 		buyers[i] = b

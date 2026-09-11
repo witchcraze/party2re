@@ -160,8 +160,10 @@ func (h *Handler) writeFleaMarketError(w http.ResponseWriter, err error) {
 		errors.Is(err, fleamarket.ErrCannotBuyOwnListing),
 		errors.Is(err, fleamarket.ErrInsufficientGold),
 		errors.Is(err, fleamarket.ErrMaxListingsReached),
+		errors.Is(err, fleamarket.ErrServerMaxListingsReached),
 		errors.Is(err, fleamarket.ErrInvalidPrice),
-		errors.Is(err, fleamarket.ErrItemNotInInventory),
+		errors.Is(err, fleamarket.ErrItemNotInDepot),
+		errors.Is(err, fleamarket.ErrDepotFull),
 		errors.Is(err, fleamarket.ErrInvalidInput):
 		writeError(w, http.StatusBadRequest, err)
 	default:

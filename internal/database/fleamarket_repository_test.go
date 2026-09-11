@@ -68,13 +68,21 @@ func TestFleaMarketRepository_Database(t *testing.T) {
 		t.Errorf("unexpected fetched listing: %+v", fetched)
 	}
 
-	// 3. CountActiveListingsBySeller
+	// 3. CountActiveListingsBySeller and CountTotalActiveListings
 	count, err := repo.CountActiveListingsBySeller(ctx, seller.ID)
 	if err != nil {
 		t.Fatalf("CountActiveListingsBySeller failed: %v", err)
 	}
 	if count != 1 {
 		t.Errorf("expected 1 active listing, got %d", count)
+	}
+
+	totalActiveBefore, err := repo.CountTotalActiveListings(ctx)
+	if err != nil {
+		t.Fatalf("CountTotalActiveListings failed: %v", err)
+	}
+	if totalActiveBefore < 1 {
+		t.Errorf("expected at least 1 total active listing, got %d", totalActiveBefore)
 	}
 
 	// 4. ListActiveListings
@@ -121,6 +129,14 @@ func TestFleaMarketRepository_Database(t *testing.T) {
 	}
 	if countAfter != 0 {
 		t.Errorf("expected 0 active listings after sell, got %d", countAfter)
+	}
+
+	totalActiveAfter, err := repo.CountTotalActiveListings(ctx)
+	if err != nil {
+		t.Fatalf("CountTotalActiveListings after sell failed: %v", err)
+	}
+	if totalActiveAfter != totalActiveBefore-1 {
+		t.Errorf("expected total active to decrease by 1, got %d (was %d)", totalActiveAfter, totalActiveBefore)
 	}
 
 	// 7. Stale UpdateListing on already-sold listing should return ErrListingNotActive (CAS failure)

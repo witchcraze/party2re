@@ -270,4 +270,47 @@ func TestFleaMarketHTTP_Endpoints(t *testing.T) {
 			t.Fatalf("expected status 401, got %d", rec.Code)
 		}
 	})
+
+	t.Run("POST /characters/{id}/fleamarket/listings - Error mappings", func(t *testing.T) {
+		fleaService.createListingFn = func(ctx context.Context, sellerCharacterID, itemInstanceOrDefID string, price int, now time.Time) (fleamarket.Listing, error) {
+			return fleamarket.Listing{}, fleamarket.ErrServerMaxListingsReached
+		}
+		body := `{"item_id":"wea-sword","price":350}`
+		req := httptest.NewRequest(http.MethodPost, "/characters/char-1/fleamarket/listings", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400 for ErrServerMaxListingsReached, got %d", rec.Code)
+		}
+
+		fleaService.createListingFn = func(ctx context.Context, sellerCharacterID, itemInstanceOrDefID string, price int, now time.Time) (fleamarket.Listing, error) {
+			return fleamarket.Listing{}, fleamarket.ErrItemNotInDepot
+		}
+		rec = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodPost, "/characters/char-1/fleamarket/listings", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400 for ErrItemNotInDepot, got %d", rec.Code)
+		}
+	})
+
+	t.Run("POST /characters/{id}/fleamarket/listings/{listing_id}/purchase - Depot Full mapping", func(t *testing.T) {
+		fleaService.purchaseListingFn = func(ctx context.Context, buyerCharacterID, listingID string, now time.Time) (fleamarket.PurchaseResult, error) {
+			return fleamarket.PurchaseResult{}, fleamarket.ErrDepotFull
+		}
+		req := httptest.NewRequest(http.MethodPost, "/characters/char-1/fleamarket/listings/listing-1/purchase", nil)
+		req.Header.Set("Authorization", "Bearer valid-session")
+		rec := httptest.NewRecorder()
+		server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400 for ErrDepotFull, got %d", rec.Code)
+		}
+	})
 }
