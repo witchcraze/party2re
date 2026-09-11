@@ -104,12 +104,12 @@ Eliminate divergent mechanics in storage, core progression, and battle engines b
 ##### Milestone 2: Economic, Life & Production Loop
 Reconcile facilities and production mechanics that depend on Depot storage and overnight cycles.
 - [x] **Home & Estate: Overnight Carpenter Construction, Town Estate Cycles & Resting Buffs** (#459, #461)
-- [ ] **Standard Commercial Shops: Level Gates, Sellback & MasterCard Discount** (#465)
-- [ ] **Secret Shop: Passphrase Unlock & Deterministic Rotations** (#462)
+- [x] **Standard Commercial Shops: Level Gates, Sellback & MasterCard Discount** (#465)
+- [x] **Secret Shop: Access Requirement (job_lv >= 7), 8 Items at 3x Price & Purge Puff-Puff Healing** (#462)
 - [ ] **Black Market: Entrance Fees, Rare Catalogs & Bust Mechanics** (#463)
 - [ ] **Gem Store: Exact Catalogs & Exchange Formulas** (#464)
 - [ ] **Player Stores: Custom Pricing, Log Books & Commission Fees** (#466)
-- [ ] **Bank: Character Deposits, Daily Interest & Peer-to-Peer Transfers** (#476)
+- [x] **Bank: Character Deposits, Daily Interest & Peer-to-Peer Transfers** (#476)
 - [ ] **Auction House: Bid Retention, Expiry Settlement & Depot Routing** (#474)
 - [ ] **Flea Market: Direct Depot Withdrawals & Trading Logs** (#477)
 - [ ] **Tavern Food Delivery: Scheduled Post-Adventure Buffs** (#475)

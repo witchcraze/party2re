@@ -154,8 +154,11 @@ func (h *Handler) writeSecretShopError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, err)
 	case errors.Is(err, secretshop.ErrInsufficientFunds),
 		errors.Is(err, secretshop.ErrInvalidQuantity),
-		errors.Is(err, secretshop.ErrPriceOverflow):
+		errors.Is(err, secretshop.ErrPriceOverflow),
+		errors.Is(err, secretshop.ErrDepotFull):
 		writeError(w, http.StatusBadRequest, err)
+	case errors.Is(err, secretshop.ErrDepotNotConfigured):
+		writeError(w, http.StatusInternalServerError, err)
 	case errors.Is(err, secretshop.ErrItemUnavailableInHelperQuest):
 		writeError(w, http.StatusConflict, err)
 	default:

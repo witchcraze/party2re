@@ -99,6 +99,8 @@ func newMiscServices(
 		core.invRepo,
 		secretshopCatalog,
 		secretshop.WithTransactionProvider(core.txProvider),
+		secretshop.WithDepotRepository(econ.depotRepo),
+		secretshop.WithItemDefinitionProvider(core.itemCatalog),
 	)
 	if err != nil {
 		return nil, err

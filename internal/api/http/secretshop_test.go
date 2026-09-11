@@ -55,10 +55,6 @@ func (s *stubSecretShopService) PuffPuff(ctx context.Context, characterID string
 		CharacterID: characterID,
 		NPCName:     secretshop.NPCName,
 		Message:     secretshop.PuffPuffDialogue,
-		HPHealed:    10,
-		MPHealed:    5,
-		CurrentHP:   60,
-		CurrentMP:   25,
 	}, nil
 }
 
@@ -179,7 +175,7 @@ func TestSecretShopEndpoints(t *testing.T) {
 	})
 
 	t.Run("POST /characters/{id}/secretshop/purchase success", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/secretshop/purchase", `{"item_id":"secret_item_philosopher_stone","quantity":1}`)
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/secretshop/purchase", `{"item_id":"secret_item_herbal_root","quantity":1}`)
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rr := httptest.NewRecorder()
 
@@ -206,7 +202,7 @@ func TestSecretShopEndpoints(t *testing.T) {
 		)
 		errRouter := hErr.Router()
 
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/secretshop/purchase", `{"item_id":"secret_item_philosopher_stone","quantity":1}`)
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/secretshop/purchase", `{"item_id":"secret_item_herbal_root","quantity":1}`)
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rr := httptest.NewRecorder()
 
