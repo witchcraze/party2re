@@ -56,4 +56,6 @@ To keep files readable, maintainable, and within effective token limits for AI p
 
 ## 10. Cross-Domain Application Runtime Primitives
 - **Universal Transaction Runner**: Feature operations requiring currency, inventory mutations, or multi-resource atomic state changes MUST route through `economy.TransactionRunner` (`ExecuteTransaction` or `economy.Run[T]`). Direct ad-hoc `RunInTx` in feature services is prohibited.
+  - **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/tx_runner_lint_test.go`) during `make check` and CI.
 - **Event Dispatcher**: Domain events MUST use `internal/core/event.Dispatcher` two-phase dispatch. See [`docs/architecture/cross-domain-primitives.md`](../../docs/architecture/cross-domain-primitives.md) for architecture, lock order enforcement, and migration examples.
+
