@@ -5,59 +5,66 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/auction"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
-	"github.com/witchcraze/party2re/internal/pagination"
 )
 
 type stubAuctionService struct {
-	createListingFn func(ctx context.Context, sellerID, itemID, itemName, itemCategory string, enhancement int, startBid, buyoutPrice int, duration time.Duration) (auction.AuctionListing, error)
-	getListingFn    func(ctx context.Context, listingID string) (auction.AuctionListing, error)
-	listActiveFn    func(ctx context.Context, limit, offset int) (pagination.Page[auction.AuctionListing], error)
-	placeBidFn      func(ctx context.Context, listingID, bidderID string, bidAmount int) (auction.AuctionListing, error)
-	buyoutFn        func(ctx context.Context, listingID, buyerID string) (auction.AuctionListing, error)
-	cancelListingFn func(ctx context.Context, listingID, sellerID string) (auction.AuctionListing, error)
+	sendFn        func(ctx context.Context, req auction.SendRequest) (auction.SendResult, error)
+	inspectFn     func(ctx context.Context, inspectorCharacterID, targetCharacterID string) (auction.InspectResult, error)
+	inspectByName func(ctx context.Context, inspectorCharacterID, targetName string) (auction.InspectResult, error)
+	getVenueFn    func() auction.VenueInfo
 }
 
-func (s *stubAuctionService) CreateListing(ctx context.Context, sellerID, itemID, itemName, itemCategory string, enhancement int, startBid, buyoutPrice int, duration time.Duration) (auction.AuctionListing, error) {
-	if s.createListingFn != nil {
-		return s.createListingFn(ctx, sellerID, itemID, itemName, itemCategory, enhancement, startBid, buyoutPrice, duration)
+func (s *stubAuctionService) Send(ctx context.Context, req auction.SendRequest) (auction.SendResult, error) {
+	if s.sendFn != nil {
+		return s.sendFn(ctx, req)
 	}
-	return auction.AuctionListing{ID: "auc-1", SellerCharacterID: sellerID, ItemID: itemID, ItemName: itemName, StartBid: startBid, BuyoutPrice: buyoutPrice, Status: auction.StatusActive}, nil
+	return auction.SendResult{
+		SenderCharacterID:   req.SenderCharacterID,
+		TargetCharacterID:   req.TargetCharacterID,
+		TargetCharacterName: req.TargetCharacterName,
+		TransferredGold:     req.Gold,
+		Message:             "送金完了",
+	}, nil
 }
-func (s *stubAuctionService) GetListing(ctx context.Context, listingID string) (auction.AuctionListing, error) {
-	if s.getListingFn != nil {
-		return s.getListingFn(ctx, listingID)
+
+func (s *stubAuctionService) Inspect(ctx context.Context, inspectorCharacterID, targetCharacterID string) (auction.InspectResult, error) {
+	if s.inspectFn != nil {
+		return s.inspectFn(ctx, inspectorCharacterID, targetCharacterID)
 	}
-	return auction.AuctionListing{ID: listingID, Status: auction.StatusActive}, nil
+	return auction.InspectResult{
+		CharacterID: targetCharacterID,
+		Name:        "Bob",
+		Level:       10,
+		Money:       5000,
+	}, nil
 }
-func (s *stubAuctionService) ListActive(ctx context.Context, limit, offset int) (pagination.Page[auction.AuctionListing], error) {
-	if s.listActiveFn != nil {
-		return s.listActiveFn(ctx, limit, offset)
+
+func (s *stubAuctionService) InspectByName(ctx context.Context, inspectorCharacterID, targetName string) (auction.InspectResult, error) {
+	if s.inspectByName != nil {
+		return s.inspectByName(ctx, inspectorCharacterID, targetName)
 	}
-	return pagination.NewPage([]auction.AuctionListing{{ID: "auc-1", Status: auction.StatusActive}}, 1, limit, offset), nil
+	return auction.InspectResult{
+		CharacterID: "c2",
+		Name:        targetName,
+		Level:       10,
+		Money:       5000,
+	}, nil
 }
-func (s *stubAuctionService) PlaceBid(ctx context.Context, listingID, bidderID string, bidAmount int) (auction.AuctionListing, error) {
-	if s.placeBidFn != nil {
-		return s.placeBidFn(ctx, listingID, bidderID, bidAmount)
+
+func (s *stubAuctionService) GetVenueInfo() auction.VenueInfo {
+	if s.getVenueFn != nil {
+		return s.getVenueFn()
 	}
-	return auction.AuctionListing{ID: listingID, CurrentBid: bidAmount, HighestBidderID: &bidderID, Status: auction.StatusActive}, nil
-}
-func (s *stubAuctionService) Buyout(ctx context.Context, listingID, buyerID string) (auction.AuctionListing, error) {
-	if s.buyoutFn != nil {
-		return s.buyoutFn(ctx, listingID, buyerID)
+	return auction.VenueInfo{
+		Title:    auction.VenueName,
+		NPCName:  auction.NPCName,
+		Dialogue: auction.DialogueWords,
 	}
-	return auction.AuctionListing{ID: listingID, HighestBidderID: &buyerID, Status: auction.StatusSold}, nil
-}
-func (s *stubAuctionService) CancelListing(ctx context.Context, listingID, sellerID string) (auction.AuctionListing, error) {
-	if s.cancelListingFn != nil {
-		return s.cancelListingFn(ctx, listingID, sellerID)
-	}
-	return auction.AuctionListing{ID: listingID, SellerCharacterID: sellerID, Status: auction.StatusCancelled}, nil
 }
 
 func TestAuctionEndpoints(t *testing.T) {
@@ -87,44 +94,39 @@ func TestAuctionEndpoints(t *testing.T) {
 	)
 	router := h.Router()
 
-	t.Run("GET /auctions - success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/auctions?limit=10&offset=0", nil)
+	t.Run("GET /auction/hall - public venue info", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/auction/hall", nil)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d", rec.Code)
 		}
-		var page pagination.Page[auction.AuctionListing]
-		decodeResponseBody(t, rec.Body.Bytes(), &page)
-		if page.Total != 1 || len(page.Items) != 1 || page.Limit != 10 || page.Offset != 0 {
-			t.Errorf("unexpected page result: %+v", page)
+		var info auction.VenueInfo
+		decodeResponseBody(t, rec.Body.Bytes(), &info)
+		if info.Title != "オークション会場" || info.NPCName != "@ワイルド" {
+			t.Errorf("unexpected venue info: %+v", info)
 		}
 	})
 
-	t.Run("GET /auctions/{id} - success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/auctions/auc-1", nil)
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d", rec.Code)
-		}
-	})
-
-	t.Run("POST /auctions - create success", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/auctions", `{"seller_character_id":"c1","item_id":"i1","item_name":"Sword","item_category":"weapon","enhancement_level":0,"start_bid":100,"buyout_price":500,"duration_hours":24}`)
+	t.Run("POST /characters/{id}/auction/send - send gold success", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/auction/send", `{"target_character_id":"c2","gold":500}`)
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusCreated {
-			t.Fatalf("expected 201 Created, got %d: %s", rec.Code, rec.Body.String())
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var res auction.SendResult
+		decodeResponseBody(t, rec.Body.Bytes(), &res)
+		if res.TransferredGold != 500 {
+			t.Errorf("expected 500 transferred gold, got %d", res.TransferredGold)
 		}
 	})
 
-	t.Run("POST /auctions/{id}/bid - success", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/auctions/auc-1/bid", `{"bidder_character_id":"c1","bid_amount":150}`)
+	t.Run("POST /characters/{id}/auction/send - send item success", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/auction/send", `{"target_character_id":"c2","slot":"weapon"}`)
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -134,8 +136,45 @@ func TestAuctionEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /auctions/{id}/buyout - success", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/auctions/auc-1/buyout", `{"buyer_character_id":"c1"}`)
+	t.Run("POST /characters/{id}/auction/send - errors mapped to bad request", func(t *testing.T) {
+		testCases := []struct {
+			name string
+			err  error
+		}{
+			{"cannot send to self", auction.ErrCannotSendToSelf},
+			{"insufficient money", auction.ErrInsufficientMoney},
+			{"depot full", auction.ErrDepotFull},
+			{"taboo item", auction.ErrTabooItem},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				handler := newTestHandler(
+					t,
+					pService,
+					cService,
+					&stubAdventureService{},
+					&stubShopService{},
+					apihttp.WithAuction(&stubAuctionService{
+						sendFn: func(_ context.Context, _ auction.SendRequest) (auction.SendResult, error) {
+							return auction.SendResult{}, tc.err
+						},
+					}),
+				)
+				req := jsonRequest(t, http.MethodPost, "/characters/c1/auction/send", `{"target_character_id":"c2","gold":100}`)
+				req.Header.Set("Authorization", "Bearer valid-token")
+				rec := httptest.NewRecorder()
+				handler.Router().ServeHTTP(rec, req)
+
+				if rec.Code != http.StatusBadRequest {
+					t.Errorf("expected 400 Bad Request, got %d", rec.Code)
+				}
+			})
+		}
+	})
+
+	t.Run("POST /auction/send - legacy endpoint success", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/auction/send", `{"sender_character_id":"c1","target_character_id":"c2","gold":200}`)
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -145,8 +184,8 @@ func TestAuctionEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /auctions/{id}/cancel - success", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/auctions/auc-1/cancel", `{"seller_character_id":"c1"}`)
+	t.Run("GET /characters/{id}/auction/inspect - inspect success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/characters/c1/auction/inspect?target_character_id=c2", nil)
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -154,28 +193,35 @@ func TestAuctionEndpoints(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
 		}
+		var res auction.InspectResult
+		decodeResponseBody(t, rec.Body.Bytes(), &res)
+		if res.CharacterID != "c2" || res.Name != "Bob" {
+			t.Errorf("unexpected inspect result: %+v", res)
+		}
 	})
 
-	t.Run("POST /auctions/{id}/cancel - forbidden for non-seller", func(t *testing.T) {
-		hForbidden := newTestHandler(
-			t,
-			pService,
-			cService,
-			&stubAdventureService{},
-			&stubShopService{},
-			apihttp.WithAuction(&stubAuctionService{
-				cancelListingFn: func(ctx context.Context, listingID, sellerID string) (auction.AuctionListing, error) {
-					return auction.AuctionListing{}, auction.ErrUnauthorizedSeller
-				},
-			}),
-		)
-		req := jsonRequest(t, http.MethodPost, "/auctions/auc-1/cancel", `{"seller_character_id":"c1"}`)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		hForbidden.Router().ServeHTTP(rec, req)
+	t.Run("Obsolete fictional auction endpoints return 404", func(t *testing.T) {
+		obsoleteRoutes := []struct {
+			method string
+			path   string
+		}{
+			{http.MethodGet, "/auctions"},
+			{http.MethodGet, "/auctions/123"},
+			{http.MethodPost, "/auctions"},
+			{http.MethodPost, "/auctions/123/bid"},
+			{http.MethodPost, "/auctions/123/buyout"},
+			{http.MethodPost, "/auctions/123/cancel"},
+		}
 
-		if rec.Code != http.StatusForbidden {
-			t.Fatalf("expected 403 Forbidden, got %d", rec.Code)
+		for _, tc := range obsoleteRoutes {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req.Header.Set("Authorization", "Bearer valid-token")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusNotFound {
+				t.Errorf("expected 404 Not Found for obsolete route %s %s, got %d", tc.method, tc.path, rec.Code)
+			}
 		}
 	})
 }

@@ -531,13 +531,11 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /characters/{id}/pvp/opponents", h.handleFindPvPOpponents)
 	mux.HandleFunc("POST /characters/{id}/pvp/fight", h.handlePvPFight)
 
-	// Auction House
-	mux.HandleFunc("GET /auctions", h.handleListAuctions)
-	mux.HandleFunc("GET /auctions/{id}", h.handleGetAuction)
-	mux.HandleFunc("POST /auctions", h.handleCreateAuction)
-	mux.HandleFunc("POST /auctions/{id}/bid", h.handleAuctionBid)
-	mux.HandleFunc("POST /auctions/{id}/buyout", h.handleAuctionBuyout)
-	mux.HandleFunc("POST /auctions/{id}/cancel", h.handleAuctionCancel)
+	// Auction Hall (Live P2P Trading, Direct Send & Inspect)
+	mux.HandleFunc("GET /auction/hall", h.handleAuctionVenueInfo)
+	mux.HandleFunc("POST /characters/{id}/auction/send", h.handleAuctionSend)
+	mux.HandleFunc("POST /auction/send", h.handleAuctionSendLegacy)
+	mux.HandleFunc("GET /characters/{id}/auction/inspect", h.handleAuctionInspect)
 
 	// Flea Market
 	mux.HandleFunc("GET /fleamarket/listings", h.handleListFleaMarketListings)

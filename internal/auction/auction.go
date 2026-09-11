@@ -3,174 +3,389 @@ package auction
 import (
 	"context"
 	"errors"
-	"time"
+	"fmt"
+	"strings"
 
-	"github.com/witchcraze/party2re/internal/pagination"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/id"
 )
-
-type AuctionStatus string
-
-const (
-	StatusActive    AuctionStatus = "ACTIVE"
-	StatusSold      AuctionStatus = "SOLD"
-	StatusExpired   AuctionStatus = "EXPIRED"
-	StatusCancelled AuctionStatus = "CANCELLED"
-)
-
-var (
-	ErrInvalidBidAmount     = errors.New("bid amount must be higher than current bid and start bid")
-	ErrListingNotFound      = errors.New("auction listing not found")
-	ErrListingNotActive     = errors.New("auction listing is not active")
-	ErrListingExpired       = errors.New("auction listing has expired")
-	ErrSellerCannotBid      = errors.New("seller cannot bid on own listing")
-	ErrNoBuyoutPrice        = errors.New("listing does not have a buyout price")
-	ErrCannotCancelWithBids = errors.New("cannot cancel auction with active bids")
-	ErrUnauthorizedSeller   = errors.New("only the seller can cancel this auction")
-	ErrInsufficientGold     = errors.New("insufficient gold for bid or buyout")
-	ErrInvalidPricing       = errors.New("invalid starting bid or buyout price")
-)
-
-type AuctionListing struct {
-	ID                string        `json:"id"`
-	SellerCharacterID string        `json:"seller_character_id"`
-	ItemID            string        `json:"item_id"`
-	ItemName          string        `json:"item_name"`
-	ItemCategory      string        `json:"item_category"`
-	EnhancementLevel  int           `json:"enhancement_level"`
-	StartBid          int           `json:"start_bid"`
-	CurrentBid        int           `json:"current_bid"`
-	BuyoutPrice       int           `json:"buyout_price"`
-	HighestBidderID   *string       `json:"highest_bidder_id,omitempty"`
-	Status            AuctionStatus `json:"status"`
-	CreatedAt         time.Time     `json:"created_at"`
-	ExpiresAt         time.Time     `json:"expires_at"`
-	SettledAt         *time.Time    `json:"settled_at,omitempty"`
-}
-
-type Repository interface {
-	CreateListing(ctx context.Context, listing AuctionListing) (AuctionListing, error)
-	GetListing(ctx context.Context, listingID string) (AuctionListing, error)
-	ListActive(ctx context.Context, limit, offset int) ([]AuctionListing, int, error)
-	PlaceBid(ctx context.Context, listingID, bidderID string, bidAmount int) (AuctionListing, error)
-	Buyout(ctx context.Context, listingID, buyerID string) (AuctionListing, error)
-	SettleListing(ctx context.Context, listingID string) (AuctionListing, error)
-	CancelListing(ctx context.Context, listingID, sellerID string) (AuctionListing, error)
-}
 
 type Service struct {
-	repo Repository
+	txProvider TransactionProvider
+	charRepo   CharacterRepository
+	equipRepo  EquipmentRepository
+	invRepo    InventoryRepository
+	depotRepo  DepotRepository
+	catalog    ItemDefinitionProvider
+	tabooItems map[string]bool
 }
 
-func NewService(repo Repository) (*Service, error) {
-	if repo == nil {
-		return nil, errors.New("repository is required")
+type Option func(*Service)
+
+func WithTabooItems(ids ...string) Option {
+	return func(s *Service) {
+		for _, id := range ids {
+			s.tabooItems[id] = true
+		}
 	}
-	return &Service{repo: repo}, nil
 }
 
-func (s *Service) CreateListing(ctx context.Context, sellerID, itemID, itemName, itemCategory string, enhancement int, startBid, buyoutPrice int, duration time.Duration) (AuctionListing, error) {
-	if startBid <= 0 {
-		return AuctionListing{}, ErrInvalidPricing
+func NewService(
+	txProvider TransactionProvider,
+	charRepo CharacterRepository,
+	equipRepo EquipmentRepository,
+	invRepo InventoryRepository,
+	depotRepo DepotRepository,
+	catalog ItemDefinitionProvider,
+	opts ...Option,
+) (*Service, error) {
+	if txProvider == nil {
+		return nil, errors.New("transaction provider is required")
 	}
-	if buyoutPrice > 0 && buyoutPrice < startBid {
-		return AuctionListing{}, ErrInvalidPricing
+	if charRepo == nil {
+		return nil, errors.New("character repository is required")
 	}
-	if duration <= 0 {
-		duration = 24 * time.Hour
+	if equipRepo == nil {
+		return nil, errors.New("equipment repository is required")
+	}
+	if invRepo == nil {
+		return nil, errors.New("inventory repository is required")
+	}
+	if depotRepo == nil {
+		return nil, errors.New("depot repository is required")
 	}
 
-	now := time.Now().UTC()
-	listing := AuctionListing{
-		SellerCharacterID: sellerID,
-		ItemID:            itemID,
-		ItemName:          itemName,
-		ItemCategory:      itemCategory,
-		EnhancementLevel:  enhancement,
-		StartBid:          startBid,
-		CurrentBid:        0,
-		BuyoutPrice:       buyoutPrice,
-		Status:            StatusActive,
-		CreatedAt:         now,
-		ExpiresAt:         now.Add(duration),
+	s := &Service{
+		txProvider: txProvider,
+		charRepo:   charRepo,
+		equipRepo:  equipRepo,
+		invRepo:    invRepo,
+		depotRepo:  depotRepo,
+		catalog:    catalog,
+		tabooItems: make(map[string]bool),
 	}
-
-	return s.repo.CreateListing(ctx, listing)
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s, nil
 }
 
-func (s *Service) GetListing(ctx context.Context, listingID string) (AuctionListing, error) {
-	return s.repo.GetListing(ctx, listingID)
+func (s *Service) isTaboo(definitionID string) bool {
+	return s.tabooItems[definitionID]
 }
 
-func (s *Service) ListActive(ctx context.Context, limit, offset int) (pagination.Page[AuctionListing], error) {
-	limit, offset = pagination.Normalize(limit, offset)
-	items, total, err := s.repo.ListActive(ctx, limit, offset)
+func normalizeSlot(raw string) (coreitem.Slot, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "weapon", "wea", string(coreitem.SlotMainHand):
+		return coreitem.SlotMainHand, nil
+	case "armor", "arm", string(coreitem.SlotBody):
+		return coreitem.SlotBody, nil
+	case "item", "ite", string(coreitem.SlotAccessory):
+		return coreitem.SlotAccessory, nil
+	case "shield", string(coreitem.SlotOffHand):
+		return coreitem.SlotOffHand, nil
+	default:
+		return "", ErrInvalidSlot
+	}
+}
+
+func (s *Service) Send(ctx context.Context, req SendRequest) (SendResult, error) {
+	senderID := strings.TrimSpace(req.SenderCharacterID)
+	if senderID == "" {
+		return SendResult{}, errors.New("sender character ID is required")
+	}
+
+	targetID := strings.TrimSpace(req.TargetCharacterID)
+	targetName := strings.TrimSpace(req.TargetCharacterName)
+	if targetID == "" && targetName == "" {
+		return SendResult{}, ErrInvalidSendTarget
+	}
+
+	if targetID == "" {
+		targetChar, err := s.charRepo.FindByName(ctx, targetName)
+		if err != nil {
+			return SendResult{}, ErrTargetNotFound
+		}
+		targetID = targetChar.ID
+	}
+
+	if senderID == targetID {
+		return SendResult{}, ErrCannotSendToSelf
+	}
+
+	if req.Gold < 0 {
+		return SendResult{}, ErrInvalidSendAmount
+	}
+
+	hasGold := req.Gold > 0
+	hasItem := strings.TrimSpace(req.Slot) != "" || strings.TrimSpace(req.InstanceID) != ""
+
+	if !hasGold && !hasItem {
+		return SendResult{}, ErrNothingToSend
+	}
+
+	var result SendResult
+
+	err := s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
+		// Rank 2: Characters locked ascending by ID to prevent deadlocks
+		firstID, secondID := id.Sort2(senderID, targetID)
+		firstChar, err := s.charRepo.FindByIDForUpdate(txCtx, firstID)
+		if err != nil {
+			return ErrTargetNotFound
+		}
+		secondChar, err := s.charRepo.FindByIDForUpdate(txCtx, secondID)
+		if err != nil {
+			return ErrTargetNotFound
+		}
+
+		var senderChar, receiverChar *corecharacter.Character
+		if firstChar.ID == senderID {
+			senderChar = &firstChar
+			receiverChar = &secondChar
+		} else {
+			senderChar = &secondChar
+			receiverChar = &firstChar
+		}
+
+		if hasGold {
+			if req.Gold <= 0 {
+				return ErrInvalidSendAmount
+			}
+			if err := senderChar.DeductMoney(req.Gold); err != nil {
+				return ErrInsufficientMoney
+			}
+			if err := receiverChar.AddMoney(req.Gold); err != nil {
+				return err
+			}
+
+			if err := s.charRepo.Update(txCtx, firstChar); err != nil {
+				return err
+			}
+			if err := s.charRepo.Update(txCtx, secondChar); err != nil {
+				return err
+			}
+
+			result = SendResult{
+				SenderCharacterID:   senderID,
+				TargetCharacterID:   targetID,
+				TargetCharacterName: receiverChar.Name,
+				TransferredGold:     req.Gold,
+				Message:             fmt.Sprintf("%d Gを %s に送りました", req.Gold, receiverChar.Name),
+			}
+			return nil
+		}
+
+		// Transfer Item:
+		// Rank 3: Sender Inventory lock
+		senderInv, err := s.invRepo.FindByCharacterIDForUpdate(txCtx, senderID)
+		if err != nil {
+			return err
+		}
+
+		// Rank 5: Receiver Depot lock
+		receiverDepot, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, targetID)
+		if err != nil {
+			return err
+		}
+
+		senderEquip, err := s.equipRepo.FindByCharacterID(txCtx, senderID)
+		if err != nil {
+			return err
+		}
+
+		var targetInstanceID string
+		var unequipSlot coreitem.Slot
+
+		if req.Slot != "" {
+			slot, err := normalizeSlot(req.Slot)
+			if err != nil {
+				return err
+			}
+			instID, ok := senderEquip.Equipped(slot)
+			if !ok || instID == "" {
+				return ErrItemNotEquipped
+			}
+			targetInstanceID = instID
+			unequipSlot = slot
+		} else {
+			targetInstanceID = strings.TrimSpace(req.InstanceID)
+			for sl, instID := range senderEquip.Slots {
+				if instID == targetInstanceID {
+					unequipSlot = sl
+					break
+				}
+			}
+		}
+
+		inst, ok := senderInv.Find(targetInstanceID)
+		if !ok {
+			return ErrItemNotFound
+		}
+
+		if s.isTaboo(inst.DefinitionID) {
+			return ErrTabooItem
+		}
+
+		hasSlot := false
+		for _, existing := range receiverDepot.Items {
+			if existing.DefinitionID == inst.DefinitionID {
+				hasSlot = true
+				break
+			}
+		}
+		if !hasSlot && len(receiverDepot.Items) >= receiverDepot.Capacity {
+			return ErrDepotFull
+		}
+
+		itemName := inst.DefinitionID
+		if s.catalog != nil {
+			if def, err := s.catalog.FindByID(inst.DefinitionID); err == nil && def.Name != "" {
+				itemName = def.Name
+			}
+		}
+
+		if unequipSlot != "" {
+			_, _ = senderEquip.Unequip(unequipSlot)
+			if err := s.equipRepo.Save(txCtx, senderEquip); err != nil {
+				return err
+			}
+		}
+
+		if err := senderInv.Consume(targetInstanceID, 1); err != nil {
+			return err
+		}
+		if err := s.invRepo.Save(txCtx, senderInv); err != nil {
+			return err
+		}
+
+		transferredInst := coreitem.Instance{
+			ID:               id.New(),
+			DefinitionID:     inst.DefinitionID,
+			Quantity:         1,
+			EnhancementLevel: inst.EnhancementLevel,
+		}
+		if err := receiverDepot.AddItem(transferredInst); err != nil {
+			if errors.Is(err, depot.ErrDepotFull) {
+				return ErrDepotFull
+			}
+			return err
+		}
+		if err := s.depotRepo.Save(txCtx, receiverDepot); err != nil {
+			return err
+		}
+
+		result = SendResult{
+			SenderCharacterID:   senderID,
+			TargetCharacterID:   targetID,
+			TargetCharacterName: receiverChar.Name,
+			TransferredItem: &TransferredItemInfo{
+				InstanceID:       transferredInst.ID,
+				DefinitionID:     inst.DefinitionID,
+				ItemName:         itemName,
+				EnhancementLevel: inst.EnhancementLevel,
+			},
+			Message: fmt.Sprintf("%sを%sに送りました", itemName, receiverChar.Name),
+		}
+		return nil
+	})
+
 	if err != nil {
-		return pagination.Page[AuctionListing]{}, err
+		return SendResult{}, err
 	}
-	return pagination.NewPage(items, total, limit, offset), nil
+	return result, nil
 }
 
-func (s *Service) PlaceBid(ctx context.Context, bidderID, listingID string, bidAmount int) (AuctionListing, error) {
-	listing, err := s.repo.GetListing(ctx, listingID)
+func (s *Service) Inspect(ctx context.Context, inspectorID, targetID string) (InspectResult, error) {
+	targetChar, err := s.charRepo.FindByID(ctx, targetID)
 	if err != nil {
-		return AuctionListing{}, err
+		return InspectResult{}, ErrTargetNotFound
 	}
-	if listing.Status != StatusActive {
-		return AuctionListing{}, ErrListingNotActive
-	}
-	if time.Now().UTC().After(listing.ExpiresAt) {
-		return AuctionListing{}, ErrListingExpired
-	}
-	if listing.SellerCharacterID == bidderID {
-		return AuctionListing{}, ErrSellerCannotBid
-	}
-	if bidAmount < listing.StartBid || (listing.CurrentBid > 0 && bidAmount <= listing.CurrentBid) {
-		return AuctionListing{}, ErrInvalidBidAmount
-	}
-
-	// If buyout price is set and bid meets or exceeds buyout, execute buyout
-	if listing.BuyoutPrice > 0 && bidAmount >= listing.BuyoutPrice {
-		return s.repo.Buyout(ctx, listingID, bidderID)
-	}
-
-	return s.repo.PlaceBid(ctx, listingID, bidderID, bidAmount)
+	return s.buildInspectResult(ctx, targetChar)
 }
 
-func (s *Service) Buyout(ctx context.Context, buyerID, listingID string) (AuctionListing, error) {
-	listing, err := s.repo.GetListing(ctx, listingID)
+func (s *Service) InspectByName(ctx context.Context, inspectorID, targetName string) (InspectResult, error) {
+	targetChar, err := s.charRepo.FindByName(ctx, targetName)
 	if err != nil {
-		return AuctionListing{}, err
+		return InspectResult{}, ErrTargetNotFound
 	}
-	if listing.Status != StatusActive {
-		return AuctionListing{}, ErrListingNotActive
-	}
-	if time.Now().UTC().After(listing.ExpiresAt) {
-		return AuctionListing{}, ErrListingExpired
-	}
-	if listing.SellerCharacterID == buyerID {
-		return AuctionListing{}, ErrSellerCannotBid
-	}
-	if listing.BuyoutPrice <= 0 {
-		return AuctionListing{}, ErrNoBuyoutPrice
-	}
-
-	return s.repo.Buyout(ctx, listingID, buyerID)
+	return s.buildInspectResult(ctx, targetChar)
 }
 
-func (s *Service) SettleListing(ctx context.Context, listingID string) (AuctionListing, error) {
-	return s.repo.SettleListing(ctx, listingID)
+func (s *Service) buildInspectResult(ctx context.Context, char corecharacter.Character) (InspectResult, error) {
+	res := InspectResult{
+		CharacterID: char.ID,
+		Name:        char.Name,
+		Level:       char.Level,
+		JobID:       char.JobID,
+		JobLevel:    char.JobLevel,
+		Money:       char.Money,
+		Message:     char.Color,
+	}
+
+	equip, err := s.equipRepo.FindByCharacterID(ctx, char.ID)
+	if err == nil {
+		inv, err := s.invRepo.FindByCharacterID(ctx, char.ID)
+		if err == nil {
+			if weaponID, ok := equip.Equipped(coreitem.SlotMainHand); ok {
+				if itemInst, ok := inv.Find(weaponID); ok {
+					name := itemInst.DefinitionID
+					if s.catalog != nil {
+						if def, err := s.catalog.FindByID(itemInst.DefinitionID); err == nil && def.Name != "" {
+							name = def.Name
+						}
+					}
+					res.Weapon = &EquippedItemInfo{
+						InstanceID:       itemInst.ID,
+						DefinitionID:     itemInst.DefinitionID,
+						Name:             name,
+						EnhancementLevel: itemInst.EnhancementLevel,
+					}
+				}
+			}
+			if armorID, ok := equip.Equipped(coreitem.SlotBody); ok {
+				if itemInst, ok := inv.Find(armorID); ok {
+					name := itemInst.DefinitionID
+					if s.catalog != nil {
+						if def, err := s.catalog.FindByID(itemInst.DefinitionID); err == nil && def.Name != "" {
+							name = def.Name
+						}
+					}
+					res.Armor = &EquippedItemInfo{
+						InstanceID:       itemInst.ID,
+						DefinitionID:     itemInst.DefinitionID,
+						Name:             name,
+						EnhancementLevel: itemInst.EnhancementLevel,
+					}
+				}
+			}
+			if accID, ok := equip.Equipped(coreitem.SlotAccessory); ok {
+				if itemInst, ok := inv.Find(accID); ok {
+					name := itemInst.DefinitionID
+					if s.catalog != nil {
+						if def, err := s.catalog.FindByID(itemInst.DefinitionID); err == nil && def.Name != "" {
+							name = def.Name
+						}
+					}
+					res.Accessory = &EquippedItemInfo{
+						InstanceID:       itemInst.ID,
+						DefinitionID:     itemInst.DefinitionID,
+						Name:             name,
+						EnhancementLevel: itemInst.EnhancementLevel,
+					}
+				}
+			}
+		}
+	}
+
+	return res, nil
 }
 
-func (s *Service) CancelListing(ctx context.Context, sellerID, listingID string) (AuctionListing, error) {
-	listing, err := s.repo.GetListing(ctx, listingID)
-	if err != nil {
-		return AuctionListing{}, err
+func (s *Service) GetVenueInfo() VenueInfo {
+	return VenueInfo{
+		Title:    VenueName,
+		NPCName:  NPCName,
+		Dialogue: DialogueWords,
 	}
-	if listing.SellerCharacterID != sellerID {
-		return AuctionListing{}, ErrUnauthorizedSeller
-	}
-	if listing.HighestBidderID != nil {
-		return AuctionListing{}, ErrCannotCancelWithBids
-	}
-	return s.repo.CancelListing(ctx, listingID, sellerID)
 }

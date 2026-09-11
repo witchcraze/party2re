@@ -96,11 +96,18 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		return nil, err
 	}
 
-	auctionRepo, err := database.NewAuctionRepository(db)
+	equipRepo, err := database.NewEquipmentRepository(db)
 	if err != nil {
 		return nil, err
 	}
-	auctionService, err := auction.NewService(auctionRepo)
+	auctionService, err := auction.NewService(
+		core.txProvider,
+		core.charRepo,
+		equipRepo,
+		core.invRepo,
+		depotRepo,
+		core.itemCatalog,
+	)
 	if err != nil {
 		return nil, err
 	}

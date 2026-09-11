@@ -87,7 +87,7 @@ Based on the selection criteria above, all packages in `internal/` are triaged i
 | **Tavern** | `internal/tavern` | `OrderMeal`, `ClaimDelivery` | `characters(2) -> tavern_character_status(8)` | [tavern.json](file:///home/witchcraze/dev/party2re/.arch/modules/tavern.json) |
 | **Delivery** | `internal/delivery` | `AcceptQuest`, `CompleteDelivery`, `SendParcel`, `ClaimParcel` | `characters(2) -> inventory_items(3) -> delivery_parcels(8)` | [delivery.json](file:///home/witchcraze/dev/party2re/.arch/modules/delivery.json) |
 | **Bank** | `internal/bank` | `Deposit`, `Withdraw` | `characters(2)` | [bank.json](file:///home/witchcraze/dev/party2re/.arch/modules/bank.json) |
-| **Auction** | `internal/auction` | `CreateListing`, `PlaceBid`, `Buyout`, `CancelListing` | `auction_listings(8) -> characters(2, bidder) -> characters(2, refund)` | [auction.json](file:///home/witchcraze/dev/party2re/.arch/modules/auction.json) |
+| **Auction** | `internal/auction` | `Send`, `Inspect` | `characters(2, sorted) -> inventory_items(3) -> character_depot_items(5)` | [auction.json](file:///home/witchcraze/dev/party2re/.arch/modules/auction.json) |
 | **Guild** | `internal/guild` | `CreateGuild`, `Donate` | `characters(2) -> guilds(7) -> guild_members(7)` | [guild.json](file:///home/witchcraze/dev/party2re/.arch/modules/guild.json) |
 | **Shop** | `internal/shop` | `Purchase`, `Sell` | `characters(2) -> inventory_items(3)` | [shop.json](file:///home/witchcraze/dev/party2re/.arch/modules/shop.json) |
 | **Blacksmith** | `internal/blacksmith` | `Enhance` | `characters(2) -> inventory_items(3)` | [blacksmith.json](file:///home/witchcraze/dev/party2re/.arch/modules/blacksmith.json) |

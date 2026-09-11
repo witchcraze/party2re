@@ -2,238 +2,194 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
-	"time"
+	"strings"
 
 	"github.com/witchcraze/party2re/internal/auction"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
-	"github.com/witchcraze/party2re/internal/pagination"
 )
 
-// AuctionService defines the auction house operations exposed over HTTP.
+// AuctionService defines the live P2P auction operations exposed over HTTP.
 type AuctionService interface {
-	CreateListing(ctx context.Context, sellerID, itemID, itemName, itemCategory string, enhancement int, startBid, buyoutPrice int, duration time.Duration) (auction.AuctionListing, error)
-	GetListing(ctx context.Context, listingID string) (auction.AuctionListing, error)
-	ListActive(ctx context.Context, limit, offset int) (pagination.Page[auction.AuctionListing], error)
-	PlaceBid(ctx context.Context, listingID, bidderID string, bidAmount int) (auction.AuctionListing, error)
-	Buyout(ctx context.Context, listingID, buyerID string) (auction.AuctionListing, error)
-	CancelListing(ctx context.Context, listingID, sellerID string) (auction.AuctionListing, error)
+	Send(ctx context.Context, req auction.SendRequest) (auction.SendResult, error)
+	Inspect(ctx context.Context, inspectorCharacterID, targetCharacterID string) (auction.InspectResult, error)
+	InspectByName(ctx context.Context, inspectorCharacterID, targetName string) (auction.InspectResult, error)
+	GetVenueInfo() auction.VenueInfo
 }
 
-// WithAuction configures the auction house service for the Handler.
+// WithAuction configures the auction service for the Handler.
 func WithAuction(a AuctionService) Option {
 	return func(h *Handler) {
 		h.auctions = a
 	}
 }
 
-type auctionListingResponse struct {
-	Listing auction.AuctionListing `json:"listing"`
+type sendAuctionRequest struct {
+	TargetCharacterID   string `json:"target_character_id,omitempty"`
+	TargetCharacterName string `json:"target_character_name,omitempty"`
+	Gold                int    `json:"gold,omitempty"`
+	Slot                string `json:"slot,omitempty"`
+	InstanceID          string `json:"instance_id,omitempty"`
 }
 
-type createAuctionRequest struct {
-	SellerCharacterID string `json:"seller_character_id"`
-	ItemID            string `json:"item_id"`
-	ItemName          string `json:"item_name"`
-	ItemCategory      string `json:"item_category"`
-	EnhancementLevel  int    `json:"enhancement_level"`
-	StartBid          int    `json:"start_bid"`
-	BuyoutPrice       int    `json:"buyout_price"`
-	DurationHours     int    `json:"duration_hours,omitempty"`
+type sendAuctionLegacyRequest struct {
+	SenderCharacterID   string `json:"sender_character_id"`
+	TargetCharacterID   string `json:"target_character_id,omitempty"`
+	TargetCharacterName string `json:"target_character_name,omitempty"`
+	Gold                int    `json:"gold,omitempty"`
+	Slot                string `json:"slot,omitempty"`
+	InstanceID          string `json:"instance_id,omitempty"`
 }
 
-type placeBidRequest struct {
-	BidderCharacterID string `json:"bidder_character_id"`
-	BidAmount         int    `json:"bid_amount"`
-}
-
-type buyoutAuctionRequest struct {
-	BuyerCharacterID string `json:"buyer_character_id"`
-}
-
-type cancelAuctionRequest struct {
-	SellerCharacterID string `json:"seller_character_id"`
-}
-
-func (h *Handler) handleListAuctions(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleAuctionSend(w http.ResponseWriter, r *http.Request) {
 	if h.auctions == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("auction service not configured"))
 		return
 	}
 
-	params := pagination.ParseRequest(r)
+	charID := r.PathValue("id")
+	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+		var req sendAuctionRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
 
-	page, err := h.auctions.ListActive(r.Context(), params.Limit, params.Offset)
+		res, err := h.auctions.Send(r.Context(), auction.SendRequest{
+			SenderCharacterID:   char.ID,
+			TargetCharacterID:   req.TargetCharacterID,
+			TargetCharacterName: req.TargetCharacterName,
+			Gold:                req.Gold,
+			Slot:                req.Slot,
+			InstanceID:          req.InstanceID,
+		})
+		if err != nil {
+			h.writeAuctionError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, res)
+	})
+}
+
+func (h *Handler) handleAuctionSendLegacy(w http.ResponseWriter, r *http.Request) {
+	if h.auctions == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("auction service not configured"))
+		return
+	}
+
+	p, ok := h.authenticatePlayer(w, r)
+	if !ok {
+		return
+	}
+
+	var req sendAuctionLegacyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	senderID := strings.TrimSpace(req.SenderCharacterID)
+	if senderID == "" {
+		writeError(w, http.StatusBadRequest, errors.New("sender_character_id is required"))
+		return
+	}
+
+	senderChar, err := h.characters.Get(r.Context(), senderID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeError(w, http.StatusNotFound, errors.New("sender character not found"))
+		return
+	}
+	if senderChar.PlayerID != p.ID {
+		writeError(w, http.StatusForbidden, errors.New("you do not own this character"))
 		return
 	}
 
-	writeJSON(w, http.StatusOK, page)
-}
-
-func (h *Handler) handleGetAuction(w http.ResponseWriter, r *http.Request) {
-	if h.auctions == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("auction service not configured"))
-		return
-	}
-
-	auctionID := r.PathValue("id")
-	listing, err := h.auctions.GetListing(r.Context(), auctionID)
+	res, err := h.auctions.Send(r.Context(), auction.SendRequest{
+		SenderCharacterID:   senderID,
+		TargetCharacterID:   req.TargetCharacterID,
+		TargetCharacterName: req.TargetCharacterName,
+		Gold:                req.Gold,
+		Slot:                req.Slot,
+		InstanceID:          req.InstanceID,
+	})
 	if err != nil {
-		if errors.Is(err, auction.ErrListingNotFound) {
-			writeError(w, http.StatusNotFound, err)
+		h.writeAuctionError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) handleAuctionInspect(w http.ResponseWriter, r *http.Request) {
+	if h.auctions == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("auction service not configured"))
+		return
+	}
+
+	charID := r.PathValue("id")
+	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+		targetID := r.URL.Query().Get("target_character_id")
+		if targetID == "" {
+			targetID = r.URL.Query().Get("target_id")
+		}
+		targetName := r.URL.Query().Get("target_name")
+
+		if targetID == "" && targetName == "" {
+			writeError(w, http.StatusBadRequest, errors.New("target_id or target_name is required"))
 			return
 		}
+
+		var res auction.InspectResult
+		var err error
+		if targetID != "" {
+			res, err = h.auctions.Inspect(r.Context(), char.ID, targetID)
+		} else {
+			res, err = h.auctions.InspectByName(r.Context(), char.ID, targetName)
+		}
+
+		if err != nil {
+			if errors.Is(err, auction.ErrTargetNotFound) {
+				writeError(w, http.StatusNotFound, err)
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, res)
+	})
+}
+
+func (h *Handler) handleAuctionVenueInfo(w http.ResponseWriter, r *http.Request) {
+	if h.auctions == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("auction service not configured"))
+		return
+	}
+
+	info := h.auctions.GetVenueInfo()
+	writeJSON(w, http.StatusOK, info)
+}
+
+func (h *Handler) writeAuctionError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, auction.ErrCannotSendToSelf),
+		errors.Is(err, auction.ErrInvalidSendTarget),
+		errors.Is(err, auction.ErrNothingToSend),
+		errors.Is(err, auction.ErrInvalidSendAmount),
+		errors.Is(err, auction.ErrInsufficientMoney),
+		errors.Is(err, auction.ErrDepotFull),
+		errors.Is(err, auction.ErrTabooItem),
+		errors.Is(err, auction.ErrItemNotEquipped),
+		errors.Is(err, auction.ErrInvalidSlot):
+		writeError(w, http.StatusBadRequest, err)
+	case errors.Is(err, auction.ErrTargetNotFound),
+		errors.Is(err, auction.ErrItemNotFound):
+		writeError(w, http.StatusNotFound, err)
+	default:
 		writeError(w, http.StatusInternalServerError, err)
-		return
 	}
-
-	writeJSON(w, http.StatusOK, auctionListingResponse{
-		Listing: listing,
-	})
-}
-
-func (h *Handler) handleCreateAuction(w http.ResponseWriter, r *http.Request) {
-	if h.auctions == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("auction service not configured"))
-		return
-	}
-
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *createAuctionRequest) string {
-		return req.SellerCharacterID
-	}, func(_ coreplayer.Player, char corecharacter.Character, req createAuctionRequest) {
-		duration := 24 * time.Hour
-		if req.DurationHours > 0 {
-			duration = time.Duration(req.DurationHours) * time.Hour
-		}
-
-		listing, err := h.auctions.CreateListing(
-			r.Context(),
-			char.ID,
-			req.ItemID,
-			req.ItemName,
-			req.ItemCategory,
-			req.EnhancementLevel,
-			req.StartBid,
-			req.BuyoutPrice,
-			duration,
-		)
-		if err != nil {
-			if errors.Is(err, auction.ErrInvalidPricing) {
-				writeError(w, http.StatusBadRequest, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusCreated, auctionListingResponse{
-			Listing: listing,
-		})
-	})
-}
-
-func (h *Handler) handleAuctionBid(w http.ResponseWriter, r *http.Request) {
-	if h.auctions == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("auction service not configured"))
-		return
-	}
-
-	auctionID := r.PathValue("id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *placeBidRequest) string {
-		return req.BidderCharacterID
-	}, func(_ coreplayer.Player, char corecharacter.Character, req placeBidRequest) {
-		listing, err := h.auctions.PlaceBid(r.Context(), auctionID, char.ID, req.BidAmount)
-		if err != nil {
-			if errors.Is(err, auction.ErrListingNotFound) {
-				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			if errors.Is(err, auction.ErrInvalidBidAmount) || errors.Is(err, auction.ErrSellerCannotBid) {
-				writeError(w, http.StatusBadRequest, err)
-				return
-			}
-			if errors.Is(err, auction.ErrListingNotActive) || errors.Is(err, auction.ErrListingExpired) || errors.Is(err, auction.ErrInsufficientGold) {
-				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, auctionListingResponse{
-			Listing: listing,
-		})
-	})
-}
-
-func (h *Handler) handleAuctionBuyout(w http.ResponseWriter, r *http.Request) {
-	if h.auctions == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("auction service not configured"))
-		return
-	}
-
-	auctionID := r.PathValue("id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *buyoutAuctionRequest) string {
-		return req.BuyerCharacterID
-	}, func(_ coreplayer.Player, char corecharacter.Character, req buyoutAuctionRequest) {
-		listing, err := h.auctions.Buyout(r.Context(), auctionID, char.ID)
-		if err != nil {
-			if errors.Is(err, auction.ErrListingNotFound) {
-				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			if errors.Is(err, auction.ErrNoBuyoutPrice) || errors.Is(err, auction.ErrSellerCannotBid) {
-				writeError(w, http.StatusBadRequest, err)
-				return
-			}
-			if errors.Is(err, auction.ErrListingNotActive) || errors.Is(err, auction.ErrListingExpired) || errors.Is(err, auction.ErrInsufficientGold) {
-				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, auctionListingResponse{
-			Listing: listing,
-		})
-	})
-}
-
-func (h *Handler) handleAuctionCancel(w http.ResponseWriter, r *http.Request) {
-	if h.auctions == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("auction service not configured"))
-		return
-	}
-
-	auctionID := r.PathValue("id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *cancelAuctionRequest) string {
-		return req.SellerCharacterID
-	}, func(_ coreplayer.Player, char corecharacter.Character, req cancelAuctionRequest) {
-		listing, err := h.auctions.CancelListing(r.Context(), auctionID, char.ID)
-		if err != nil {
-			if errors.Is(err, auction.ErrListingNotFound) {
-				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			if errors.Is(err, auction.ErrUnauthorizedSeller) {
-				writeError(w, http.StatusForbidden, err)
-				return
-			}
-			if errors.Is(err, auction.ErrCannotCancelWithBids) || errors.Is(err, auction.ErrListingNotActive) {
-				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, auctionListingResponse{
-			Listing: listing,
-		})
-	})
 }
