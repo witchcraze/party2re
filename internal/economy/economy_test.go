@@ -202,8 +202,20 @@ func TestAddGold(t *testing.T) {
 		t.Errorf("expected 350 gold, got %d", res.Money)
 	}
 
-	// Cap at MaxMoney
+	// Cap at MaxMoney (999,999)
 	res, err = svc.AddGold(context.Background(), "char-1", corecharacter.MaxMoney)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Money != corecharacter.MaxMoney {
+		t.Errorf("expected MaxMoney (%d), got %d", corecharacter.MaxMoney, res.Money)
+	}
+	if corecharacter.MaxMoney != 999_999 {
+		t.Errorf("expected corecharacter.MaxMoney to be 999999, got %d", corecharacter.MaxMoney)
+	}
+
+	// Add more gold when already at MaxMoney
+	res, err = svc.AddGold(context.Background(), "char-1", 50000)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

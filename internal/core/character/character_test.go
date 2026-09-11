@@ -87,10 +87,27 @@ func TestCharacterMoneyEncapsulation(t *testing.T) {
 	if err := c.AddMoney(-10); !errors.Is(err, ErrInvalidAmount) {
 		t.Errorf("AddMoney(-10) expected ErrInvalidAmount, got %v", err)
 	}
+	if MaxMoney != 999_999 {
+		t.Fatalf("MaxMoney must equal authentic 999,999 G ceiling, got %d", MaxMoney)
+	}
+
 	// Max cap
 	c.Money = MaxMoney - 50
 	if err := c.AddMoney(100); err != nil || c.Money != MaxMoney {
 		t.Errorf("AddMoney overflow cap failed: money=%d, err=%v", c.Money, err)
+	}
+	// AddMoney when already at MaxMoney
+	if err := c.AddMoney(5000); err != nil || c.Money != MaxMoney {
+		t.Errorf("AddMoney at MaxMoney failed: money=%d, err=%v", c.Money, err)
+	}
+	// AddMoney when over MaxMoney (stale state clamp)
+	c.Money = 1_200_000
+	if err := c.AddMoney(50); err != nil || c.Money != MaxMoney {
+		t.Errorf("AddMoney over MaxMoney failed: money=%d, err=%v", c.Money, err)
+	}
+	c.Money = 1_200_000
+	if err := c.AddMoney(0); err != nil || c.Money != MaxMoney {
+		t.Errorf("AddMoney(0) over MaxMoney failed: money=%d, err=%v", c.Money, err)
 	}
 
 	// DeductMoney

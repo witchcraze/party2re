@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #465 — Standard Shops Parity: Enforce 2x retail pricing, job_lv catalog progression, helper exclusion, and depot auto-transfer
+Last updated: Issue #547 — Core/Character: Enforce Authentic 999,999 G Wallet Money Ceiling and Overflow Alignment
 
 ## Current phase
 
@@ -26,7 +26,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### Core & Shared Components
 - **Player** (`internal/core/player`, `internal/player`): アカウント登録・パスワードハッシュ（bcrypt コスト12、GPU耐性・メモリ困難性担保）・セッション管理（Valkey Master `party2:session:<token>` 7日間TTL自動失効、Sorted Set `party2:player:sessions:<player_id>` による遅延パージ `ZREMRANGEBYSCORE`）・Personal Access Token（APIキー `p2_sk_...`、SHA-256ダイジェスト永続化、デュアル認証、所有権検証付き失効 `DELETE /player/tokens/{id}`）・アカウント完全削除（所有キャラクター全件クリーンアップ、Valkeyセッション破棄、PATカスケード削除、MariaDB 35+テーブル連鎖削除）。
-- **Character** (`internal/core/character`, `internal/character`): `player_id` 外部キーによるアカウント紐付け、初期ステータス、能力値計算、疲労度（`Tired`、戦闘累積・睡眠全快・天界願い事回復）、スキルポイント（SP）、キャラクター一覧取得、キャラクター個別削除（所有権認可、外部ドメイン `CleanupHook` 実行、MariaDB 35+サブリソーステーブルの完全カスケード削除）、命名の館（名前変更・性別/外観変更）、プロフィール自己紹介コメント・アバター画像管理。通貨・メダルの安全なカプセル化（`AddMoney`, `DeductMoney`, `AddSmallMedals`, `DeductSmallMedals`、上限キャップ・負数ガード・残高オーバードラフト防止）。架空の転生（Rebirth）は完全撤廃。
+- **Character** (`internal/core/character`, `internal/character`): `player_id` 外部キーによるアカウント紐付け、初期ステータス、能力値計算、疲労度（`Tired`、戦闘累積・睡眠全快・天界願い事回復）、スキルポイント（SP）、キャラクター一覧取得、キャラクター個別削除（所有権認可、外部ドメイン `CleanupHook` 実行、MariaDB 35+サブリソーステーブルの完全カスケード削除）、命名の館（名前変更・性別/外観変更）、プロフィール自己紹介コメント・アバター画像管理。通貨・メダルの安全なカプセル化（`AddMoney`, `DeductMoney`, `AddSmallMedals`, `DeductSmallMedals`、原典 `system.cgi:71` に100%パリティ適合する **財布所持金上限 999,999 G**（`corecharacter.MaxMoney`）の厳格クランプ・負数ガード・残高オーバードラフト防止・999,999G超の銀行預託サイクル連携）。架空の転生（Rebirth）は完全撤廃。
 - **Timer & Daily Quotas** (`internal/core/timer`): Valkey Master / In-Memory 共通タイマー（`party2:timer:<category>:<id>`、Native TTL）および日次クォータ（`party2:daily:<feature>:<id>:<date>`、JST深夜0時自動失効）。クラスターセーフなタクソノミーとValkeyリンター完全適合。
 - **Progression** (`internal/core/progression`): レベルアップ（累積経験値テーブル `level * level * 10`）、レベルアップ時のSP加算（`$m{sp}++`、スキルの宝珠による25%追加ボーナス）、SP到達時の職業スキル自動習得判定（`skill.RequiredSP == character.SP`）、原典準拠のステータス成長率再ロール（$v > 9$ 時 `rand(1, 9)`・HP最低+1保証）、天界OverLevel限界突破（Lv150）対応、幸せの種（次レベル経験値付与 `level * level * 10`）、ASTリンターによるCore標準ヘルパー（`progression.ApplyExperienceWithJobFull`, `progression.ApplyHappySeed`）強制。
 - **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): クリーンルーム規約に完全準拠したJSONカタログ（`jobs.json`）、Lv20転職（能力値半減・Lv1/Exp0・転職回数・前職SP復元）、最終スキルSP到達マスタリー、特殊職のアイテム消費、思い出しによるマスター職交換、将来用メモリ枠（「よびおこす」未来のカケラによるステータススナップショット保存・復元）、全72職コンプリート時の称号・全体イベントニュース通知および特殊職「すっぴん」解禁、SP到達スキル習得、スキル発動・MPコスト計算。

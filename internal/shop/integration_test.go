@@ -292,7 +292,7 @@ func TestShopIntegration_BulkPurchaseBounds(t *testing.T) {
 	txProvider := database.NewTransactionProvider(db)
 
 	char, _ := database.CreateTestCharacter(ctx, db, "Bulk Buyer")
-	char.Money = 1_000_000
+	char.Money = 999_999
 	_ = charRepo.Update(ctx, char)
 
 	potion, _ := item.NewDefinition("bulk_potion", "Bulk Potion", 10)

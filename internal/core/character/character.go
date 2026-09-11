@@ -24,7 +24,7 @@ const (
 )
 
 const (
-	MaxMoney       = 2_000_000_000
+	MaxMoney       = 999_999
 	MaxSmallMedals = 999_999_999
 )
 
@@ -245,7 +245,7 @@ func (c *Character) AddMoney(amount int) error {
 	if amount < 0 {
 		return ErrInvalidAmount
 	}
-	if c.Money > MaxMoney-amount {
+	if c.Money > MaxMoney-amount || c.Money > MaxMoney {
 		c.Money = MaxMoney
 		return nil
 	}
