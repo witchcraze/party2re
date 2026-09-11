@@ -137,6 +137,7 @@ type Handler struct {
 	delivery       DeliveryService
 	fleamarket     FleaMarketService
 	gemstore       GemStoreService
+	stores         StoreService
 	god            GodService
 	monster        MonsterService
 	contest        ContestService
@@ -557,6 +558,22 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/gemstore/send", h.handleGemStoreSend)
 	mux.HandleFunc("POST /characters/{id}/gemstore/synthesize", h.handleGemStoreSynthesize)
 	mux.HandleFunc("POST /characters/{id}/gemstore/appraise", h.handleGemStoreAppraise)
+
+	// Player Store (Bazaar & Boutique)
+	mux.HandleFunc("POST /towns/{town_id}/stores", h.handleBuildStore)
+	mux.HandleFunc("GET /towns/{town_id}/stores", h.handleListTownStores)
+	mux.HandleFunc("GET /stores/{store_id}", h.handleGetStore)
+	mux.HandleFunc("GET /characters/{id}/store", h.handleCheckStore)
+	mux.HandleFunc("POST /characters/{id}/store/listings/gold", h.handleListGoldItem)
+	mux.HandleFunc("POST /characters/{id}/store/listings/barter", h.handleListBarterItem)
+	mux.HandleFunc("DELETE /characters/{id}/store/listings/{sale_id}", h.handleWithdrawListing)
+	mux.HandleFunc("POST /characters/{id}/store/sales/{sale_id}/buy", h.handleBuyStoreItem)
+	mux.HandleFunc("POST /characters/{id}/store/sales/{sale_id}/trade", h.handleTradeStoreItem)
+	mux.HandleFunc("POST /characters/{id}/store/name", h.handleChangeStoreName)
+	mux.HandleFunc("POST /characters/{id}/store/wallpaper", h.handleChangeWallpaper)
+	mux.HandleFunc("POST /characters/{id}/store/interiors", h.handleAddInterior)
+	mux.HandleFunc("PUT /characters/{id}/store/interiors/{interior_id}/name", h.handleRenameInterior)
+	mux.HandleFunc("DELETE /characters/{id}/store/interiors", h.handleCleanInteriors)
 
 	// God (Endgame Wishes & Limit Breaks)
 	mux.HandleFunc("GET /god/dialogue", h.handleGetGodDialogue)

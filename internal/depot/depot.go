@@ -151,6 +151,25 @@ func (d *Depot) RemoveItem(instanceID string) (item.Instance, error) {
 	return item.Instance{}, ErrItemNotFound
 }
 
+// ConsumeOne removes one quantity of the item with the given instanceID.
+// If the quantity is greater than 1, it decrements the quantity and returns an instance with Quantity=1.
+// If the quantity is 1, it removes the item completely and returns it.
+func (d *Depot) ConsumeOne(instanceID string) (item.Instance, error) {
+	for i, existing := range d.Items {
+		if existing.ID == instanceID {
+			if existing.Quantity > 1 {
+				d.Items[i].Quantity--
+				ret := existing
+				ret.Quantity = 1
+				return ret, nil
+			}
+			d.Items = append(d.Items[:i], d.Items[i+1:]...)
+			return existing, nil
+		}
+	}
+	return item.Instance{}, ErrItemNotFound
+}
+
 type Repository interface {
 	FindByCharacterID(ctx context.Context, characterID string) (Depot, error)
 	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (Depot, error)

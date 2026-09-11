@@ -415,6 +415,11 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** System-wide maintenance mode status management, public status queries, and administrative configuration (enable/disable, message, estimated end time) with HTTP middleware request interception.
   - **Dependencies:** Maintenance repository, Valkey client (`internal/valkey`).
   - **Persistence:** Valkey Master / In-Memory caching via `internal/maintenance/valkey_repository.go` (`party2:maintenance:status`) backed by `system_maintenance` table in `internal/database/maintenance_repository.go`, eliminating MariaDB queries on normal HTTP request routing.
+- **Player Store & Town Boutiques** (`internal/store`):
+  - **Responsibility:** Player store construction in towns 1–4 (50,000 G, max 10 stores per town, 90-day timer duration, 900 GP guild award), gold and barter item listings from depot (base 10 up to 20 listings via `OverStore`), atomic purchasing and item bartering transactions, and store customization (5,000 G signboard name changes, 26 wallpaper styles from `%kabes`, and up to 5 interior furniture pieces from 15 styles with custom labels) (`store.cgi`).
+  - **Dependencies:** Core Character, Depot, Core Item, Character repository, Depot repository, Item Catalog, Guild Points registrar, Timer service (`internal/core/timer`), TxProvider (`internal/database`).
+  - **Persistence:** `character_stores`, `store_sales`, and `store_interiors` tables in `internal/database/store_repository.go` adhering to deterministic lock hierarchy (Rank 0 `store_sales` -> Rank 2 `characters` sorted asc -> Rank 5 `character_depots` sorted asc).
+
 
 ### Cross-Module Transaction Orchestration & Ambient Context Propagation
 

@@ -1123,6 +1123,447 @@
       ]
     }
   },
+  "/characters/{id}/store": {
+    "get": {
+      "operationId": "getCharactersIdStore",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "GET /characters/{id}/store endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
+  "/characters/{id}/store/interiors": {
+    "delete": {
+      "operationId": "deleteCharactersIdStoreInteriors",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "DELETE /characters/{id}/store/interiors endpoint",
+      "tags": [
+        "Character"
+      ]
+    },
+    "post": {
+      "operationId": "postCharactersIdStoreInteriors",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/store/interiors endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
+  "/characters/{id}/store/interiors/{interior_id}/name": {
+    "put": {
+      "operationId": "putCharactersIdStoreInteriorsInteriorIdName",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "interior_id parameter",
+          "in": "path",
+          "name": "interior_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "PUT /characters/{id}/store/interiors/{interior_id}/name endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
+  "/characters/{id}/store/listings/barter": {
+    "post": {
+      "operationId": "postCharactersIdStoreListingsBarter",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/store/listings/barter endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
+  "/characters/{id}/store/listings/gold": {
+    "post": {
+      "operationId": "postCharactersIdStoreListingsGold",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/store/listings/gold endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
+  "/characters/{id}/store/listings/{sale_id}": {
+    "delete": {
+      "operationId": "deleteCharactersIdStoreListingsSaleId",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "sale_id parameter",
+          "in": "path",
+          "name": "sale_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "DELETE /characters/{id}/store/listings/{sale_id} endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
+  "/characters/{id}/store/name": {
+    "post": {
+      "operationId": "postCharactersIdStoreName",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/store/name endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
+  "/characters/{id}/store/sales/{sale_id}/buy": {
+    "post": {
+      "operationId": "postCharactersIdStoreSalesSaleIdBuy",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "sale_id parameter",
+          "in": "path",
+          "name": "sale_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/store/sales/{sale_id}/buy endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
+  "/characters/{id}/store/sales/{sale_id}/trade": {
+    "post": {
+      "operationId": "postCharactersIdStoreSalesSaleIdTrade",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "sale_id parameter",
+          "in": "path",
+          "name": "sale_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/store/sales/{sale_id}/trade endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
+  "/characters/{id}/store/wallpaper": {
+    "post": {
+      "operationId": "postCharactersIdStoreWallpaper",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/store/wallpaper endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
   "/jobs": {
     "get": {
       "operationId": "listJobs",

@@ -10,8 +10,9 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/fleamarket"
-	"github.com/witchcraze/party2re/internal/gemstore"
+	gemstore "github.com/witchcraze/party2re/internal/gemstore"
 	"github.com/witchcraze/party2re/internal/shop"
+	"github.com/witchcraze/party2re/internal/store"
 )
 
 type econServices struct {
@@ -23,9 +24,11 @@ type econServices struct {
 	auction        *auction.Service
 	fleamarket     *fleamarket.Service
 	gemStore       *gemstore.Service
+	store          *store.Service
 	depotRepo      *database.DepotRepository
 	gemBoxRepo     *database.GemBoxRepository
 	fleamarketRepo *database.FleaMarketRepository
+	storeRepo      *database.StoreRepository
 }
 
 func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
@@ -134,6 +137,18 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		return nil, err
 	}
 
+	storeRepo, err := database.NewStoreRepository(db)
+	if err != nil {
+		return nil, err
+	}
+	storeService := store.NewService(
+		storeRepo,
+		core.charRepo,
+		depotRepo,
+		core.itemCatalog,
+		core.txProvider,
+	)
+
 	return &econServices{
 		shop:           shopService,
 		depot:          depotService,
@@ -143,8 +158,22 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		auction:        auctionService,
 		fleamarket:     fleamarketService,
 		gemStore:       gemStoreService,
+		store:          storeService,
 		depotRepo:      depotRepo,
 		gemBoxRepo:     gemBoxRepo,
 		fleamarketRepo: fleamarketRepo,
+		storeRepo:      storeRepo,
 	}, nil
+}
+
+func (e *econServices) initStore(core *coreServices, gp store.GuildPointsRegistrar, t store.TimerService) {
+	e.store = store.NewService(
+		e.storeRepo,
+		core.charRepo,
+		e.depotRepo,
+		core.itemCatalog,
+		core.txProvider,
+		store.WithGuildPoints(gp),
+		store.WithTimer(t),
+	)
 }
