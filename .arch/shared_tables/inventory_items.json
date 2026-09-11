@@ -11,7 +11,7 @@
     "internal/adventure/adventure.go#InventoryRepository",
     "internal/blackmarket/blackmarket.go#InventoryRepository",
     "internal/fleamarket/fleamarket.go#InventoryRepository",
-    "internal/gemstore/gemstore.go#InventoryRepository"
+    "internal/gemstore/types.go#InventoryRepository"
   ],
   "callers": [
     {
@@ -107,38 +107,17 @@
     },
     {
       "module": "gemstore",
-      "caller_method": "internal/gemstore/gemstore.go#Service.BuyGem",
+      "caller_method": "internal/gemstore/synthesis.go#Service.SynthesizeGem",
       "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
       "lock_order": 3,
-      "purpose": "Lock inventory to deposit purchased gem"
+      "purpose": "Lock inventory to consume ingredients"
     },
     {
       "module": "gemstore",
-      "caller_method": "internal/gemstore/gemstore.go#Service.SellGem",
+      "caller_method": "internal/gemstore/synthesis.go#Service.AppraiseItem",
       "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
       "lock_order": 3,
-      "purpose": "Lock inventory to consume sold gem"
-    },
-    {
-      "module": "gemstore",
-      "caller_method": "internal/gemstore/gemstore.go#Service.SendGem",
-      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
-      "lock_order": 3,
-      "purpose": "Lock sender and recipient inventories to transfer gem"
-    },
-    {
-      "module": "gemstore",
-      "caller_method": "internal/gemstore/gemstore.go#Service.SynthesizeGem",
-      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
-      "lock_order": 3,
-      "purpose": "Lock inventory to consume 2 ingredients and deposit synthesized gem"
-    },
-    {
-      "module": "gemstore",
-      "caller_method": "internal/gemstore/gemstore.go#Service.AppraiseItem",
-      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
-      "lock_order": 3,
-      "purpose": "Lock inventory to transform unidentified orb into identified gem"
+      "purpose": "Lock inventory to consume unidentified orb"
     }
   ]
 }

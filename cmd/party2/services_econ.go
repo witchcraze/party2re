@@ -24,11 +24,17 @@ type econServices struct {
 	fleamarket     *fleamarket.Service
 	gemStore       *gemstore.Service
 	depotRepo      *database.DepotRepository
+	gemBoxRepo     *database.GemBoxRepository
 	fleamarketRepo *database.FleaMarketRepository
 }
 
 func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 	depotRepo, err := database.NewDepotRepository(db)
+	if err != nil {
+		return nil, err
+	}
+
+	gemBoxRepo, err := database.NewGemBoxRepository(db)
 	if err != nil {
 		return nil, err
 	}
@@ -121,6 +127,8 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		core.invRepo,
 		gemstore.WithItemDefinitionProvider(core.itemCatalog),
 		gemstore.WithTransactionProvider(core.txProvider),
+		gemstore.WithGemBoxRepository(gemBoxRepo),
+		gemstore.WithDepotRepository(depotRepo),
 	)
 	if err != nil {
 		return nil, err
@@ -136,6 +144,7 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		fleamarket:     fleamarketService,
 		gemStore:       gemStoreService,
 		depotRepo:      depotRepo,
+		gemBoxRepo:     gemBoxRepo,
 		fleamarketRepo: fleamarketRepo,
 	}, nil
 }

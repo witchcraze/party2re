@@ -107,7 +107,7 @@ Reconcile facilities and production mechanics that depend on Depot storage and o
 - [x] **Standard Commercial Shops: Level Gates, Sellback & MasterCard Discount** (#465)
 - [x] **Secret Shop: Access Requirement (job_lv >= 7), 8 Items at 3x Price & Purge Puff-Puff Healing** (#462)
 - [x] **Black Market: Eliminate Fictional Gold Trading, Market Conditions & Daily Limits, Restore Pure Rare Point Barter** (#463)
-- [ ] **Gem Store: Exact Catalogs & Exchange Formulas** (#464)
+- [x] **Gem Store: Dedicated Gem Box, Dynamic Capacity & Job Level Unlocks** (#464)
 - [ ] **Player Stores: Custom Pricing, Log Books & Commission Fees** (#466)
 - [x] **Bank: Character Deposits, Daily Interest & Peer-to-Peer Transfers** (#476)
 - [ ] **Auction House: Bid Retention, Expiry Settlement & Depot Routing** (#474)

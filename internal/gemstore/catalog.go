@@ -18,13 +18,14 @@ var rawOrbAppraisalsJSON []byte
 
 // Gem represents a gem or jewel orb available in the gem store.
 type Gem struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	Price         int    `json:"price"`
-	RequiredLevel int    `json:"required_level"`
-	SlotCost      int    `json:"slot_cost"`
-	MPCost        int    `json:"mp_cost"`
-	Description   string `json:"description"`
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Price            int    `json:"price"`
+	RequiredJobLevel int    `json:"required_job_level,omitempty"`
+	RequiredLevel    int    `json:"required_level"`
+	SlotCost         int    `json:"slot_cost"`
+	MPCost           int    `json:"mp_cost"`
+	Description      string `json:"description"`
 }
 
 // Recipe represents a synthesis formula for creating advanced gems.
@@ -52,6 +53,7 @@ type Catalog struct {
 	gemsByID     map[string]Gem
 	gemsByName   map[string]Gem
 	allGems      []Gem
+	gemRanks     map[string]int
 	recipesByID  map[string]Recipe
 	allRecipes   []Recipe
 	recipesByMat map[string]Recipe
@@ -80,6 +82,7 @@ func DefaultCatalog() (*Catalog, error) {
 		gemsByID:     make(map[string]Gem, len(gems)),
 		gemsByName:   make(map[string]Gem, len(gems)),
 		allGems:      gems,
+		gemRanks:     make(map[string]int, len(gems)),
 		recipesByID:  make(map[string]Recipe, len(recipes)),
 		allRecipes:   recipes,
 		recipesByMat: make(map[string]Recipe, len(recipes)),
@@ -87,9 +90,15 @@ func DefaultCatalog() (*Catalog, error) {
 		orbPoolDefs:  orbPools,
 	}
 
-	for _, g := range gems {
+	for i, g := range gems {
+		if g.RequiredJobLevel == 0 && g.RequiredLevel > 0 {
+			g.RequiredJobLevel = g.RequiredLevel
+		}
+		c.allGems[i] = g
 		c.gemsByID[g.ID] = g
 		c.gemsByName[g.Name] = g
+		c.gemRanks[g.ID] = i
+		c.gemRanks[g.Name] = i
 	}
 
 	for _, r := range recipes {
@@ -139,15 +148,31 @@ func (c *Catalog) AllGems() []Gem {
 	return result
 }
 
-// GetGemsForLevel returns gems that a character of given level is eligible to purchase.
-func (c *Catalog) GetGemsForLevel(level int) []Gem {
+// GemRank returns the catalog index of the gem for sorting (lower is earlier).
+func (c *Catalog) GemRank(idOrName string) int {
+	if rank, ok := c.gemRanks[strings.TrimSpace(idOrName)]; ok {
+		return rank
+	}
+	return 9999
+}
+
+// GetGemsForJobLevel returns gems that a character of given job_lv (transfer count) is eligible to purchase.
+func (c *Catalog) GetGemsForJobLevel(jobLevel int) []Gem {
 	var eligible []Gem
 	for _, g := range c.allGems {
-		if level >= g.RequiredLevel {
+		req := g.RequiredJobLevel
+		if req <= 1 {
+			eligible = append(eligible, g)
+		} else if jobLevel >= req {
 			eligible = append(eligible, g)
 		}
 	}
 	return eligible
+}
+
+// GetGemsForLevel returns gems that a character of given level is eligible to purchase (delegates to GetGemsForJobLevel).
+func (c *Catalog) GetGemsForLevel(level int) []Gem {
+	return c.GetGemsForJobLevel(level)
 }
 
 // FindRecipeByID finds a recipe by its ID.

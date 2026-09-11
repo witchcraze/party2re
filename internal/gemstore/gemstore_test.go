@@ -176,8 +176,8 @@ func TestGemStore_BuyGem(t *testing.T) {
 	if res.Character.Money != 4700 {
 		t.Errorf("expected money 4700, got %d", res.Character.Money)
 	}
-	if len(res.Inventory.Items) != 1 {
-		t.Errorf("expected 1 inventory item, got %d", len(res.Inventory.Items))
+	if len(res.GemBox.Items) != 1 {
+		t.Errorf("expected 1 gem box item, got %d", len(res.GemBox.Items))
 	}
 
 	// 2. Failure: Level too low for Lv50 gem (gem_atk_2)
@@ -220,15 +220,11 @@ func TestGemStore_SellGem(t *testing.T) {
 		ID:       "char_1",
 		PlayerID: "player_1",
 		Name:     "Hero",
+		JobLevel: 10,
 		Level:    10,
 		Money:    100,
 	}
 	charRepo.characters[char.ID] = char
-
-	inv, _ := coreinventory.New("char_1")
-	inst, _ := coreitem.NewInstance("gem_atk_1", 1) // price 60 -> 50% = 30
-	_ = inv.Add(inst)
-	invRepo.inventories["char_1"] = inv
 
 	svc, err := gemstore.NewService(catalog, charRepo, invRepo)
 	if err != nil {
@@ -237,23 +233,33 @@ func TestGemStore_SellGem(t *testing.T) {
 
 	ctx := context.Background()
 
-	// 1. Success sell
-	res, err := svc.SellGem(ctx, "char_1", inst.ID)
+	// Buy a gem first to put it in Gem Box (price 60 * 5 = 300)
+	char.Money = 1000
+	charRepo.characters[char.ID] = char
+	buyRes, err := svc.BuyGem(ctx, "char_1", "gem_atk_1")
+	if err != nil {
+		t.Fatalf("expected BuyGem success, got: %v", err)
+	}
+
+	initialMoney := buyRes.Character.Money
+
+	// 1. Success sell (payout = 60 * 50% = 30)
+	res, err := svc.SellGem(ctx, "char_1", buyRes.ItemInstance.ID)
 	if err != nil {
 		t.Fatalf("expected SellGem success, got: %v", err)
 	}
 	if res.Payout != 30 {
 		t.Errorf("expected payout 30, got %d", res.Payout)
 	}
-	if res.Character.Money != 130 {
-		t.Errorf("expected money 130, got %d", res.Character.Money)
+	if res.Character.Money != initialMoney+30 {
+		t.Errorf("expected money %d, got %d", initialMoney+30, res.Character.Money)
 	}
-	if len(res.Inventory.Items) != 0 {
-		t.Errorf("expected 0 inventory items, got %d", len(res.Inventory.Items))
+	if len(res.GemBox.Items) != 0 {
+		t.Errorf("expected 0 gem box items, got %d", len(res.GemBox.Items))
 	}
 
-	// 2. Failure: Item not in inventory
-	_, err = svc.SellGem(ctx, "char_1", inst.ID)
+	// 2. Failure: Item not in gem box
+	_, err = svc.SellGem(ctx, "char_1", buyRes.ItemInstance.ID)
 	if err != gemstore.ErrItemNotOwned {
 		t.Errorf("expected ErrItemNotOwned, got: %v", err)
 	}
@@ -268,15 +274,10 @@ func TestGemStore_SendGem(t *testing.T) {
 	charRepo := newMockCharacterRepo()
 	invRepo := newMockInventoryRepo()
 
-	char1 := corecharacter.Character{ID: "char_1", PlayerID: "p1", Name: "Sender"}
-	char2 := corecharacter.Character{ID: "char_2", PlayerID: "p2", Name: "Recipient"}
+	char1 := corecharacter.Character{ID: "char_1", PlayerID: "p1", Name: "Sender", JobLevel: 10, Money: 1000}
+	char2 := corecharacter.Character{ID: "char_2", PlayerID: "p2", Name: "Recipient", JobLevel: 10, Money: 1000}
 	charRepo.characters[char1.ID] = char1
 	charRepo.characters[char2.ID] = char2
-
-	inv1, _ := coreinventory.New("char_1")
-	inst, _ := coreitem.NewInstance("gem_heal_1", 1)
-	_ = inv1.Add(inst)
-	invRepo.inventories["char_1"] = inv1
 
 	svc, err := gemstore.NewService(catalog, charRepo, invRepo)
 	if err != nil {
@@ -285,14 +286,19 @@ func TestGemStore_SendGem(t *testing.T) {
 
 	ctx := context.Background()
 
+	buyRes, err := svc.BuyGem(ctx, "char_1", "gem_heal_1")
+	if err != nil {
+		t.Fatalf("expected BuyGem success: %v", err)
+	}
+
 	// 1. Cannot send to self
-	_, err = svc.SendGem(ctx, "char_1", "char_1", inst.ID)
+	_, err = svc.SendGem(ctx, "char_1", "char_1", buyRes.ItemInstance.ID)
 	if err != gemstore.ErrCannotSendToSelf {
 		t.Errorf("expected ErrCannotSendToSelf, got: %v", err)
 	}
 
 	// 2. Success send
-	res, err := svc.SendGem(ctx, "char_1", "char_2", inst.ID)
+	res, err := svc.SendGem(ctx, "char_1", "char_2", buyRes.ItemInstance.ID)
 	if err != nil {
 		t.Fatalf("expected SendGem success, got: %v", err)
 	}
@@ -300,14 +306,14 @@ func TestGemStore_SendGem(t *testing.T) {
 		t.Errorf("expected sent gem_heal_1, got %s", res.Gem.ID)
 	}
 
-	// Verify inventory states
-	senderInv, _ := invRepo.FindByCharacterID(ctx, "char_1")
-	recipInv, _ := invRepo.FindByCharacterID(ctx, "char_2")
-	if len(senderInv.Items) != 0 {
-		t.Errorf("expected sender 0 items, got %d", len(senderInv.Items))
+	// Verify gem box states
+	senderBox, _ := svc.GetGemBox(ctx, "char_1")
+	recipBox, _ := svc.GetGemBox(ctx, "char_2")
+	if len(senderBox.Items) != 0 {
+		t.Errorf("expected sender 0 items, got %d", len(senderBox.Items))
 	}
-	if len(recipInv.Items) != 1 {
-		t.Errorf("expected recipient 1 item, got %d", len(recipInv.Items))
+	if len(recipBox.Items) != 1 {
+		t.Errorf("expected recipient 1 item, got %d", len(recipBox.Items))
 	}
 }
 
@@ -320,16 +326,8 @@ func TestGemStore_SynthesizeGem(t *testing.T) {
 	charRepo := newMockCharacterRepo()
 	invRepo := newMockInventoryRepo()
 
-	char := corecharacter.Character{ID: "char_1", PlayerID: "p1", Name: "Hero"}
+	char := corecharacter.Character{ID: "char_1", PlayerID: "p1", Name: "Hero", JobLevel: 10, Money: 10000}
 	charRepo.characters[char.ID] = char
-
-	// Inventory with 2 x gem_atk_1 ("攻撃の宝珠Ⅰ")
-	inv, _ := coreinventory.New("char_1")
-	inst1, _ := coreitem.NewInstance("gem_atk_1", 1)
-	inst2, _ := coreitem.NewInstance("gem_atk_1", 1)
-	_ = inv.Add(inst1)
-	_ = inv.Add(inst2)
-	invRepo.inventories["char_1"] = inv
 
 	svc, err := gemstore.NewService(catalog, charRepo, invRepo)
 	if err != nil {
@@ -337,6 +335,16 @@ func TestGemStore_SynthesizeGem(t *testing.T) {
 	}
 
 	ctx := context.Background()
+
+	// Buy 2 x gem_atk_1 ("攻撃の宝珠Ⅰ") into Gem Box
+	_, err = svc.BuyGem(ctx, "char_1", "gem_atk_1")
+	if err != nil {
+		t.Fatalf("BuyGem 1 failed: %v", err)
+	}
+	_, err = svc.BuyGem(ctx, "char_1", "gem_atk_1")
+	if err != nil {
+		t.Fatalf("BuyGem 2 failed: %v", err)
+	}
 
 	// 1. Success synthesis: 攻撃の宝珠Ⅱ = 攻撃の宝珠Ⅰ × 攻撃の宝珠Ⅰ (recipe_atk_2)
 	res, err := svc.SynthesizeGem(ctx, "char_1", "recipe_atk_2")
@@ -346,8 +354,8 @@ func TestGemStore_SynthesizeGem(t *testing.T) {
 	if res.CreatedGem.ID != "gem_atk_2" {
 		t.Errorf("expected created gem_atk_2, got %s", res.CreatedGem.ID)
 	}
-	if len(res.Inventory.Items) != 1 {
-		t.Errorf("expected 1 item in inventory (the synthesized gem), got %d", len(res.Inventory.Items))
+	if len(res.GemBox.Items) != 1 {
+		t.Errorf("expected 1 item in gem box (the synthesized gem), got %d", len(res.GemBox.Items))
 	}
 
 	// 2. Failure: Insufficient materials (now only has gem_atk_2)
@@ -691,14 +699,44 @@ func (r *orderTrackingCharRepo) FindByIDForUpdate(ctx context.Context, id string
 	return r.mockCharacterRepo.FindByIDForUpdate(ctx, id)
 }
 
-type orderTrackingInvRepo struct {
-	*mockInventoryRepo
+type mockGemBoxRepo struct {
+	mu    sync.RWMutex
+	boxes map[string]gemstore.GemBox
+}
+
+func newMockGemBoxRepo() *mockGemBoxRepo {
+	return &mockGemBoxRepo{boxes: make(map[string]gemstore.GemBox)}
+}
+
+func (m *mockGemBoxRepo) FindByCharacterID(ctx context.Context, id string) (gemstore.GemBox, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	b, ok := m.boxes[id]
+	if !ok {
+		return gemstore.GemBox{}, gemstore.ErrGemBoxNotFound
+	}
+	return b, nil
+}
+
+func (m *mockGemBoxRepo) FindByCharacterIDForUpdate(ctx context.Context, id string) (gemstore.GemBox, error) {
+	return m.FindByCharacterID(ctx, id)
+}
+
+func (m *mockGemBoxRepo) Save(ctx context.Context, box gemstore.GemBox) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.boxes[box.CharacterID] = box
+	return nil
+}
+
+type orderTrackingGemBoxRepo struct {
+	*mockGemBoxRepo
 	lockOrder *[]string
 }
 
-func (r *orderTrackingInvRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-	*r.lockOrder = append(*r.lockOrder, "inventory_items")
-	return r.mockInventoryRepo.FindByCharacterIDForUpdate(ctx, characterID)
+func (r *orderTrackingGemBoxRepo) FindByCharacterIDForUpdate(ctx context.Context, id string) (gemstore.GemBox, error) {
+	*r.lockOrder = append(*r.lockOrder, "character_gem_boxes")
+	return r.mockGemBoxRepo.FindByCharacterIDForUpdate(ctx, id)
 }
 
 func TestService_SellGem_LockHierarchy(t *testing.T) {
@@ -708,23 +746,29 @@ func TestService_SellGem_LockHierarchy(t *testing.T) {
 	}
 	charRepo := newMockCharacterRepo()
 	invRepo := newMockInventoryRepo()
+	boxRepo := newMockGemBoxRepo()
 	var lockOrder []string
 
 	trackedCharRepo := &orderTrackingCharRepo{mockCharacterRepo: charRepo, lockOrder: &lockOrder}
-	trackedInvRepo := &orderTrackingInvRepo{mockInventoryRepo: invRepo, lockOrder: &lockOrder}
+	trackedBoxRepo := &orderTrackingGemBoxRepo{mockGemBoxRepo: boxRepo, lockOrder: &lockOrder}
 
-	svc, err := gemstore.NewService(catalog, trackedCharRepo, trackedInvRepo, gemstore.WithTransactionProvider(&mockTxProvider{}))
+	svc, err := gemstore.NewService(catalog, trackedCharRepo, invRepo,
+		gemstore.WithGemBoxRepository(trackedBoxRepo),
+		gemstore.WithTransactionProvider(&mockTxProvider{}),
+	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
 
-	char := corecharacter.Character{ID: "char-lock-test", Name: "LockTester", Level: 10, Money: 1000}
+	char := corecharacter.Character{ID: "char-lock-test", Name: "LockTester", JobLevel: 10, Level: 10, Money: 1000}
 	charRepo.characters[char.ID] = char
 
-	inv, _ := coreinventory.New(char.ID)
 	gemInst, _ := coreitem.NewInstance("gem_atk_1", 1)
-	_ = inv.Add(gemInst)
-	invRepo.inventories[char.ID] = inv
+	_ = boxRepo.Save(context.Background(), gemstore.GemBox{
+		CharacterID: char.ID,
+		Capacity:    10,
+		Items:       []coreitem.Instance{gemInst},
+	})
 
 	_, err = svc.SellGem(context.Background(), char.ID, gemInst.ID)
 	if err != nil {
@@ -737,6 +781,9 @@ func TestService_SellGem_LockHierarchy(t *testing.T) {
 	if lockOrder[0] != "characters" {
 		t.Errorf("lock hierarchy violation in SellGem: expected 'characters' locked first, got %v", lockOrder)
 	}
+	if lockOrder[1] != "character_gem_boxes" {
+		t.Errorf("lock hierarchy violation in SellGem: expected 'character_gem_boxes' locked second, got %v", lockOrder)
+	}
 }
 
 func TestService_Concurrent_SellGem_And_BuyGem(t *testing.T) {
@@ -746,19 +793,25 @@ func TestService_Concurrent_SellGem_And_BuyGem(t *testing.T) {
 	}
 	charRepo := newMockCharacterRepo()
 	invRepo := newMockInventoryRepo()
+	boxRepo := newMockGemBoxRepo()
 
-	svc, err := gemstore.NewService(catalog, charRepo, invRepo, gemstore.WithTransactionProvider(&mockTxProvider{}))
+	svc, err := gemstore.NewService(catalog, charRepo, invRepo,
+		gemstore.WithGemBoxRepository(boxRepo),
+		gemstore.WithTransactionProvider(&mockTxProvider{}),
+	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
 
-	char := corecharacter.Character{ID: "char-concurrent-test", Name: "ConcurrentTrader", Level: 10, Money: 5000}
+	char := corecharacter.Character{ID: "char-concurrent-test", Name: "ConcurrentTrader", JobLevel: 20, Level: 10, Money: 50000}
 	charRepo.characters[char.ID] = char
 
-	inv, _ := coreinventory.New(char.ID)
-	gemInst, _ := coreitem.NewInstance("gem_atk_1", 10)
-	_ = inv.Add(gemInst)
-	invRepo.inventories[char.ID] = inv
+	gemInst, _ := coreitem.NewInstance("gem_atk_1", 1)
+	_ = boxRepo.Save(context.Background(), gemstore.GemBox{
+		CharacterID: char.ID,
+		Capacity:    100,
+		Items:       []coreitem.Instance{gemInst},
+	})
 
 	var wg sync.WaitGroup
 	numOps := 10
