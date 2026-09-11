@@ -562,6 +562,15 @@ func (m *mockTransactionRunner) ExecuteTransaction(ctx context.Context, req econ
 	}
 	charCopy := char
 
+	if req.Cost.Gold > 0 {
+		if charCopy.Money < req.Cost.Gold {
+			return nil, economy.ErrInsufficientGold
+		}
+		if err := charCopy.DeductMoney(req.Cost.Gold); err != nil {
+			return nil, err
+		}
+	}
+
 	var inv coreinventory.Inventory
 	var invCopy coreinventory.Inventory
 	if req.LockInventory {

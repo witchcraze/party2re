@@ -121,7 +121,9 @@ func (s *Service) SaveFutureMemory(ctx context.Context, characterID string) (cor
 		if char.OldJobID != "" {
 			state.MasteredJobSP[char.OldJobID] = char.OldSP
 		}
-		_ = s.repository.Save(ctx, state)
+		if err := s.repository.Save(ctx, state); err != nil {
+			return corecharacter.FutureMemory{}, err
+		}
 	}
 	return snapshot, nil
 }
@@ -135,6 +137,65 @@ func (s *Service) RecallFutureMemory(ctx context.Context, characterID, memoryID 
 	if s.futureMemories == nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, errors.New("future memory repository is nil")
 	}
+
+	if s.economy != nil {
+		var recalledChar corecharacter.Character
+		var recalledState corejob.CharacterJob
+
+		req := economy.TransactionRequest{
+			CharacterID: characterID,
+		}
+
+		_, err := s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+			if tc.Character.JobMemory != nil {
+				return corejob.ErrJobUnavailable
+			}
+			memories, err := s.futureMemories.FindByCharacterID(tc.Context, characterID)
+			if err != nil {
+				return err
+			}
+			var targetMemory *corecharacter.FutureMemory
+			for _, m := range memories {
+				if m.ID == memoryID {
+					targetMemory = &m
+					break
+				}
+			}
+			if targetMemory == nil {
+				return errors.New("future memory not found")
+			}
+
+			state, err := s.loadState(tc.Context, tc.Character)
+			if err != nil {
+				return err
+			}
+			jobSP, _ := state.MasteredSP(targetMemory.JobID)
+			oldJobSP, _ := state.MasteredSP(targetMemory.OldJobID)
+
+			c := tc.Character
+			if err := c.ApplyFutureMemory(*targetMemory, jobSP, oldJobSP); err != nil {
+				return err
+			}
+			tc.Character = c
+
+			if err := s.futureMemories.Delete(tc.Context, characterID, memoryID); err != nil {
+				return err
+			}
+			state.RestoreCurrentJob(tc.Character.JobID)
+			if err := s.repository.Save(tc.Context, state); err != nil {
+				return err
+			}
+
+			recalledChar = tc.Character
+			recalledState = state
+			return nil
+		})
+		if err != nil {
+			return corecharacter.Character{}, corejob.CharacterJob{}, err
+		}
+		return recalledChar, recalledState, nil
+	}
+
 	char, err := s.characters.FindByID(ctx, characterID)
 	if err != nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
