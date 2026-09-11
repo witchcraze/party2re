@@ -443,3 +443,15 @@ func (r *GuildRepository) UpdateBgimg(ctx context.Context, guildID string, bgimg
 	_, err := executor.ExecContext(ctx, "UPDATE guilds SET bgimg = ? WHERE id = ?", bgimg, guildID)
 	return err
 }
+
+// AddGuildPoints awards guild EXP points for character activity if the character belongs to a guild.
+func (r *GuildRepository) AddGuildPoints(ctx context.Context, characterID string, points int) error {
+	g, _, err := r.GetGuildByCharacter(ctx, characterID)
+	if err != nil {
+		if errors.Is(err, guild.ErrCharacterNotInGuild) {
+			return nil
+		}
+		return err
+	}
+	return r.AddExp(ctx, g.ID, int64(points))
+}

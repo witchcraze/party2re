@@ -92,6 +92,7 @@ Based on the selection criteria above, all packages in `internal/` are triaged i
 | **Shop** | `internal/shop` | `Purchase`, `Sell` | `characters(2) -> inventory_items(3)` | [shop.json](file:///home/witchcraze/dev/party2re/.arch/modules/shop.json) |
 | **Blacksmith** | `internal/blacksmith` | `Enhance` | `characters(2) -> inventory_items(3)` | [blacksmith.json](file:///home/witchcraze/dev/party2re/.arch/modules/blacksmith.json) |
 | **Adventure** | `internal/adventure` | `StartStage`, `Complete` (Worker) | `characters(2) -> adventures(8) -> inventory_items(3)` | [adventure.json](file:///home/witchcraze/dev/party2re/.arch/modules/adventure.json) |
+| **Store** | `internal/store` | `BuildStore`, `BuyItem`, `TradeItem` | `store_sales(0) -> characters(2) -> character_depots(5)` | [store.json](file:///home/witchcraze/dev/party2re/.arch/modules/store.json) |
 
 ### Tier 2: On-Demand Targets (Secondary Scope)
 *Modules with moderate complexity or single-resource mutations. Guidance files are authored on-demand only when substantial refactoring or cross-feature coupling occurs.*

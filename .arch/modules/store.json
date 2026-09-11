@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "module": "store",
+  "domain": "プレイヤーストア・町建築バザール・インテリア",
+  "description": "Player-built retail boutique and bazaar stall in towns 1-4 with gold/barter listings, wallpaper styling, and custom furniture interiors.",
+  "entrypoint": "internal/store/service.go",
+  "dependencies": [
+    {
+      "module": "core/character",
+      "relation_type": "public_service_call",
+      "methods": ["FindByID", "FindByIDForUpdate", "Update"],
+      "source_ref": "internal/store/repository.go#CharacterRepository"
+    },
+    {
+      "module": "depot",
+      "relation_type": "public_service_call",
+      "methods": ["FindByCharacterID", "FindByCharacterIDForUpdate", "Save"],
+      "source_ref": "internal/store/repository.go#DepotRepository"
+    },
+    {
+      "module": "core/item",
+      "relation_type": "catalog_data",
+      "methods": ["FindByID", "FindByName"],
+      "source_ref": "internal/store/repository.go#ItemCatalog"
+    },
+    {
+      "module": "database",
+      "relation_type": "transaction_provider",
+      "methods": ["RunInTx"],
+      "source_ref": "internal/store/repository.go#TxProvider"
+    }
+  ],
+  "transaction_flows": [
+    {
+      "flow": "BuildStore (店舗建築)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/store/service.go#Service.BuildStore",
+      "lock_sequence": [
+        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 2, "target": "character_stores", "lock_order": 8, "method": "StoreRepository.GetStoreByCharacterID", "mode": "SELECT" },
+        { "step": 3, "target": "character_stores", "lock_order": 8, "method": "StoreRepository.GetTownStoreCount", "mode": "SELECT" },
+        { "step": 4, "target": "character_stores", "lock_order": 8, "method": "StoreRepository.CreateStore", "mode": "INSERT" },
+        { "step": 5, "target": "characters", "lock_order": 2, "method": "CharacterRepository.Update", "mode": "UPDATE" }
+      ]
+    },
+    {
+      "flow": "BuyItem (ゴールド購入)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/store/sales.go#Service.BuyItem",
+      "lock_sequence": [
+        { "step": 1, "target": "store_sales", "lock_order": 0, "method": "StoreRepository.GetSaleByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 2, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate (min(buyer,seller))", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 3, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate (max(buyer,seller))", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 4, "target": "depots", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate (buyer)", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 5, "target": "characters", "lock_order": 2, "method": "CharacterRepository.Update (both)", "mode": "UPDATE" },
+        { "step": 6, "target": "depots", "lock_order": 5, "method": "DepotRepository.Save (buyer)", "mode": "UPDATE" },
+        { "step": 7, "target": "store_sales", "lock_order": 0, "method": "StoreRepository.DeleteSale", "mode": "DELETE" }
+      ]
+    },
+    {
+      "flow": "TradeItem (物々交換)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/store/sales.go#Service.TradeItem",
+      "lock_sequence": [
+        { "step": 1, "target": "store_sales", "lock_order": 0, "method": "StoreRepository.GetSaleByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 2, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate (min(buyer,seller))", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 3, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate (max(buyer,seller))", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 4, "target": "depots", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate (min(buyer,seller))", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 5, "target": "depots", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate (max(buyer,seller))", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 6, "target": "depots", "lock_order": 5, "method": "DepotRepository.Save (both)", "mode": "UPDATE" },
+        { "step": 7, "target": "store_sales", "lock_order": 0, "method": "StoreRepository.DeleteSale", "mode": "DELETE" }
+      ]
+    }
+  ]
+}

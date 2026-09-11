@@ -52,6 +52,19 @@ func (c *Catalog) FindByID(id string) (Definition, error) {
 	return value, nil
 }
 
+func (c *Catalog) FindByName(name string) (Definition, error) {
+	if c == nil {
+		return Definition{}, ErrDefinitionNotFound
+	}
+	cleanName := strings.TrimSpace(name)
+	for _, definition := range c.definitions {
+		if definition.Name == cleanName {
+			return definition, nil
+		}
+	}
+	return Definition{}, ErrDefinitionNotFound
+}
+
 // Definitions returns all catalog entries in stable ID order.
 func (c *Catalog) Definitions() []Definition {
 	if c == nil {

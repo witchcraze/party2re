@@ -53,6 +53,7 @@ type socServices struct {
 	sched        *scheduling.Service
 	limiter      http.RateLimiter
 	worker       *scheduling.Worker
+	timer        timer.Service
 }
 
 func newSocServices(
@@ -142,6 +143,7 @@ func newSocServices(
 		sched:        schedService,
 		limiter:      limiter,
 		worker:       worker,
+		timer:        timerService,
 	}, nil
 }
 

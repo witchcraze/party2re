@@ -17,6 +17,7 @@ const (
 	CategorySleep  = "sleep"
 	CategoryAsleep = "asleep"
 	CategoryHouse  = "house"
+	CategoryStore  = "store"
 )
 
 var (

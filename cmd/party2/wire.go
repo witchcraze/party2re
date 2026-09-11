@@ -49,6 +49,7 @@ func wireApp(
 		return nil, err
 	}
 
+	econ.initStore(core, soc.guildRepo, soc.timer)
 	wireHooks(cmbt, econ, misc, soc)
 
 	apiHandler, err := newHTTPHandler(cfg, core, econ, cmbt, soc, misc)
@@ -186,6 +187,7 @@ func newHTTPHandler(
 		http.WithDelivery(misc.delivery),
 		http.WithFleaMarket(econ.fleamarket),
 		http.WithGemStore(econ.gemStore),
+		http.WithStore(econ.store),
 		http.WithGod(misc.god),
 		http.WithMonster(misc.monster),
 		http.WithContest(misc.contest),

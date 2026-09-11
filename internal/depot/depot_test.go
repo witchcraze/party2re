@@ -480,3 +480,45 @@ func TestSendMoneyAndItem(t *testing.T) {
 		t.Errorf("expected sword in recipient depot, got %#v", recDep.Items)
 	}
 }
+
+func TestDepot_ConsumeOne(t *testing.T) {
+	d, err := NewDepot("char-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	d.Items = []item.Instance{
+		{ID: "inst-1", DefinitionID: "itm-herb", Quantity: 3},
+		{ID: "inst-2", DefinitionID: "wea-sword", Quantity: 1},
+	}
+
+	// Consume 1 from stacking item (3 -> 2)
+	consumed, err := d.ConsumeOne("inst-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if consumed.Quantity != 1 || consumed.DefinitionID != "itm-herb" {
+		t.Errorf("expected consumed quantity 1, got %d", consumed.Quantity)
+	}
+	if d.Items[0].Quantity != 2 {
+		t.Errorf("expected remaining quantity 2, got %d", d.Items[0].Quantity)
+	}
+
+	// Consume remaining 1 from non-stacking item (removes item)
+	consumed, err = d.ConsumeOne("inst-2")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if consumed.ID != "inst-2" {
+		t.Errorf("expected inst-2, got %s", consumed.ID)
+	}
+	if len(d.Items) != 1 {
+		t.Errorf("expected 1 item left in depot, got %d", len(d.Items))
+	}
+
+	// Consume non-existent item
+	_, err = d.ConsumeOne("missing")
+	if !errors.Is(err, ErrItemNotFound) {
+		t.Errorf("expected ErrItemNotFound, got %v", err)
+	}
+}
