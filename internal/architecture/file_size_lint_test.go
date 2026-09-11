@@ -17,7 +17,6 @@ import (
 // When a file is refactored below 500 lines, it MUST be removed from this list.
 var whitelistedLegacyFileLimits = map[string]int{
 	"internal/api/http/handler.go":             1122,
-	"internal/blackmarket/blackmarket.go":      927,
 	"internal/party/valkey_repository.go":      824,
 	"internal/party/application.go":            706,
 	"internal/gemstore/gemstore.go":            681,

@@ -463,10 +463,8 @@ func (h *Handler) Router() http.Handler {
 
 	// Black Market
 	mux.HandleFunc("GET /characters/{id}/blackmarket", h.handleGetBlackMarketStatus)
-	mux.HandleFunc("POST /characters/{id}/blackmarket/purchase", h.handleBlackMarketPurchase)
-	mux.HandleFunc("POST /characters/{id}/blackmarket/sell", h.handleBlackMarketSell)
 	mux.HandleFunc("POST /characters/{id}/blackmarket/talk", h.handleBlackMarketTalk)
-	mux.HandleFunc("POST /characters/{id}/blackmarket/rumors", h.handleBlackMarketRumors)
+	mux.HandleFunc("POST /characters/{id}/blackmarket/inspect", h.handleBlackMarketInspect)
 	mux.HandleFunc("GET /characters/{id}/blackmarket/points", h.handleGetBlackMarketPoints)
 	mux.HandleFunc("POST /characters/{id}/blackmarket/sacrifice", h.handleBlackMarketSacrifice)
 	mux.HandleFunc("POST /characters/{id}/blackmarket/trade", h.handleBlackMarketTrade)

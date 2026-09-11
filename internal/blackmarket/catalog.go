@@ -6,25 +6,11 @@ import (
 	"fmt"
 )
 
-//go:embed data/blackmarket_items.json
-var defaultBlackMarketItemsJSON []byte
-
 //go:embed data/blackmarket_prizes.json
 var defaultBlackMarketPrizesJSON []byte
 
 //go:embed data/blackmarket_sacrifices.json
 var defaultBlackMarketSacrificesJSON []byte
-
-// Item represents a contraband or special goods item available in the black market.
-type Item struct {
-	ID               string `json:"id"`
-	ItemDefinitionID string `json:"item_definition_id"`
-	Name             string `json:"name"`
-	Category         string `json:"category"`
-	BasePrice        int    `json:"base_price"`
-	DailyLimit       int    `json:"daily_limit"`
-	Description      string `json:"description"`
-}
 
 // Prize represents an item obtainable by trading Rare Points or U-Rare Points.
 type Prize struct {
@@ -43,11 +29,8 @@ type SacrificeYield struct {
 	URarePoints      int    `json:"u_rare_points"`
 }
 
-// Catalog holds all black market item offerings, prizes, and sacrifice definitions.
+// Catalog holds all black market prize offerings and sacrifice definitions.
 type Catalog struct {
-	items             []Item
-	byID              map[string]Item
-	byDefID           map[string]Item
 	prizes            []Prize
 	prizesByID        map[string]Prize
 	regularPrizes     []Prize
@@ -55,33 +38,13 @@ type Catalog struct {
 	sacrificesByDefID map[string]SacrificeYield
 }
 
-// LoadDefaultCatalog loads the embedded black market catalog, prizes, and sacrifices.
+// LoadDefaultCatalog loads the embedded black market prizes and sacrifices.
 func LoadDefaultCatalog() (*Catalog, error) {
-	return LoadAllCatalogs(defaultBlackMarketItemsJSON, defaultBlackMarketPrizesJSON, defaultBlackMarketSacrificesJSON)
+	return LoadAllCatalogs(defaultBlackMarketPrizesJSON, defaultBlackMarketSacrificesJSON)
 }
 
-// LoadCatalog parses JSON data into a black market contraband items catalog.
-func LoadCatalog(itemsData []byte) (*Catalog, error) {
-	return LoadAllCatalogs(itemsData, defaultBlackMarketPrizesJSON, defaultBlackMarketSacrificesJSON)
-}
-
-// LoadAllCatalogs parses items, prizes, and sacrifice data into a complete Catalog.
-func LoadAllCatalogs(itemsData, prizesData, sacrificesData []byte) (*Catalog, error) {
-	var items []Item
-	if err := json.Unmarshal(itemsData, &items); err != nil {
-		return nil, fmt.Errorf("failed to parse black market catalog: %w", err)
-	}
-
-	byID := make(map[string]Item, len(items))
-	byDefID := make(map[string]Item, len(items))
-	for _, item := range items {
-		if item.ID == "" || item.ItemDefinitionID == "" || item.BasePrice <= 0 || item.DailyLimit <= 0 {
-			return nil, fmt.Errorf("invalid black market item: %+v", item)
-		}
-		byID[item.ID] = item
-		byDefID[item.ItemDefinitionID] = item
-	}
-
+// LoadAllCatalogs parses prizes and sacrifice data into a complete Catalog.
+func LoadAllCatalogs(prizesData, sacrificesData []byte) (*Catalog, error) {
 	var prizes []Prize
 	if err := json.Unmarshal(prizesData, &prizes); err != nil {
 		return nil, fmt.Errorf("failed to parse black market prizes: %w", err)
@@ -116,34 +79,12 @@ func LoadAllCatalogs(itemsData, prizesData, sacrificesData []byte) (*Catalog, er
 	}
 
 	return &Catalog{
-		items:             items,
-		byID:              byID,
-		byDefID:           byDefID,
 		prizes:            prizes,
 		prizesByID:        prizesByID,
 		regularPrizes:     regularPrizes,
 		uPrizes:           uPrizes,
 		sacrificesByDefID: sacrificesByDefID,
 	}, nil
-}
-
-// Items returns a copy of all contraband items in the catalog.
-func (c *Catalog) Items() []Item {
-	copied := make([]Item, len(c.items))
-	copy(copied, c.items)
-	return copied
-}
-
-// FindByID finds an item by black market item ID.
-func (c *Catalog) FindByID(id string) (Item, bool) {
-	item, ok := c.byID[id]
-	return item, ok
-}
-
-// FindByDefinitionID finds an item by core item definition ID.
-func (c *Catalog) FindByDefinitionID(defID string) (Item, bool) {
-	item, ok := c.byDefID[defID]
-	return item, ok
 }
 
 // Prizes returns all prize offerings.

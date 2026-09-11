@@ -351,96 +351,17 @@
         ],
         "type": "object"
       },
-      "BlackMarketItem": {
-        "properties": {
-          "attack": {
-            "example": 5,
-            "type": "integer"
-          },
-          "base_price": {
-            "example": 1200,
-            "type": "integer"
-          },
-          "daily_limit": {
-            "example": 5,
-            "type": "integer"
-          },
-          "defense": {
-            "example": 0,
-            "type": "integer"
-          },
-          "description": {
-            "example": "\u6025\u6240\u3092\u7a81\u3051\u3070\u4e00\u6483\u3067\u4ed5\u7559\u3081\u3089\u308c\u308b\u6697\u6bba\u7528\u306e\u91dd\u3002",
-            "type": "string"
-          },
-          "hp": {
-            "example": 0,
-            "type": "integer"
-          },
-          "id": {
-            "example": "bm_poison_needle",
-            "type": "string"
-          },
-          "mp": {
-            "example": 0,
-            "type": "integer"
-          },
-          "name": {
-            "example": "\u3069\u304f\u3070\u308a",
-            "type": "string"
-          },
-          "slot": {
-            "enum": [
-              "weapon",
-              "accessory",
-              "item"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "slot",
-          "base_price",
-          "attack",
-          "defense",
-          "hp",
-          "mp",
-          "daily_limit",
-          "description"
-        ],
-        "type": "object"
-      },
-      "BlackMarketItemView": {
-        "properties": {
-          "effective_price": {
-            "example": 1200,
-            "type": "integer"
-          },
-          "item": {
-            "$ref": "#/components/schemas/BlackMarketItem"
-          },
-          "purchased_today": {
-            "example": 1,
-            "type": "integer"
-          },
-          "remaining_quota": {
-            "example": 4,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "item",
-          "effective_price",
-          "purchased_today",
-          "remaining_quota"
-        ],
-        "type": "object"
-      },
       "BlackMarketPointsStatus": {
         "properties": {
           "character_id": {
+            "type": "string"
+          },
+          "location_name": {
+            "example": "闇市場",
+            "type": "string"
+          },
+          "npc_name": {
+            "example": "@闇商人",
             "type": "string"
           },
           "prizes": {
@@ -466,6 +387,8 @@
         },
         "required": [
           "character_id",
+          "location_name",
+          "npc_name",
           "rare_points",
           "u_rare_points",
           "prizes",
@@ -495,7 +418,7 @@
             "type": "string"
           },
           "name": {
-            "example": "\u30e1\u30bf\u30eb\u30ad\u30f3\u30b0\u306e\u5263",
+            "example": "メタルキングの剣",
             "type": "string"
           }
         },
@@ -506,93 +429,6 @@
           "cost",
           "is_u_rare",
           "description"
-        ],
-        "type": "object"
-      },
-      "BlackMarketPurchaseRequest": {
-        "properties": {
-          "item_id": {
-            "example": "bm_poison_needle",
-            "type": "string"
-          },
-          "quantity": {
-            "default": 1,
-            "example": 1,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "item_id"
-        ],
-        "type": "object"
-      },
-      "BlackMarketPurchaseResult": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "inventory_instance_id": {
-            "type": "string"
-          },
-          "item": {
-            "$ref": "#/components/schemas/BlackMarketItem"
-          },
-          "quantity": {
-            "example": 1,
-            "type": "integer"
-          },
-          "remaining_gold": {
-            "example": 8800,
-            "type": "integer"
-          },
-          "remaining_quota": {
-            "example": 4,
-            "type": "integer"
-          },
-          "total_price": {
-            "example": 1200,
-            "type": "integer"
-          },
-          "unit_price": {
-            "example": 1200,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "character_id",
-          "item",
-          "quantity",
-          "unit_price",
-          "total_price",
-          "remaining_gold",
-          "inventory_instance_id",
-          "remaining_quota"
-        ],
-        "type": "object"
-      },
-      "BlackMarketRumorsResult": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "market_condition": {
-            "example": "Quiet",
-            "type": "string"
-          },
-          "npc_name": {
-            "example": "@\u30e4\u30df\u30b8",
-            "type": "string"
-          },
-          "rumor": {
-            "example": "\u4eca\u306f\u885b\u5175\u306e\u76ee\u3082\u7de9\u3093\u3067\u3066\u76f8\u5834\u306f\u843d\u3061\u7740\u3044\u3066\u308b\u305c\u3002",
-            "type": "string"
-          }
-        },
-        "required": [
-          "character_id",
-          "npc_name",
-          "market_condition",
-          "rumor"
         ],
         "type": "object"
       },
@@ -622,11 +458,11 @@
             "type": "string"
           },
           "item_name": {
-            "example": "\u306f\u3084\u3076\u3055\u306e\u5263",
+            "example": "はやぶさの剣",
             "type": "string"
           },
           "message": {
-            "example": "\u2026\u30ec\u30a2\u3060\u306a\u2026\u3002\u3044\u3044\u3060\u308d\u3046\u2026\u3002\u304a\u524d\u306e\u30ec\u30a2\u30dd\u30a4\u30f3\u30c8\u3092\u52a0\u7b97\u3057\u3066\u304a\u3053\u3046\u2026",
+            "example": "…はやぶさの剣…か…。レアだな…。いいだろう…。お前のレアポイントを加算しておこう…",
             "type": "string"
           },
           "rare_points_gained": {
@@ -659,133 +495,48 @@
         ],
         "type": "object"
       },
-      "BlackMarketSaleResult": {
-        "properties": {
-          "character_id": {
-            "type": "string"
-          },
-          "item_instance_id": {
-            "type": "string"
-          },
-          "item_name": {
-            "example": "\u3069\u304f\u3070\u308a",
-            "type": "string"
-          },
-          "quantity": {
-            "example": 1,
-            "type": "integer"
-          },
-          "remaining_gold": {
-            "example": 10720,
-            "type": "integer"
-          },
-          "total_payout": {
-            "example": 720,
-            "type": "integer"
-          },
-          "unit_price": {
-            "example": 720,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "character_id",
-          "item_instance_id",
-          "item_name",
-          "quantity",
-          "unit_price",
-          "total_payout",
-          "remaining_gold"
-        ],
-        "type": "object"
-      },
-      "BlackMarketSellRequest": {
-        "properties": {
-          "item_instance_id": {
-            "example": "inst-1234",
-            "type": "string"
-          },
-          "quantity": {
-            "default": 1,
-            "example": 1,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "item_instance_id"
-        ],
-        "type": "object"
-      },
-      "BlackMarketState": {
-        "properties": {
-          "condition": {
-            "enum": [
-              "Quiet",
-              "HotDemand",
-              "Crackdown",
-              "Bargain"
-            ],
-            "type": "string"
-          },
-          "description": {
-            "example": "\u5e73\u7a4f\u7121\u4e8b\u3002\u76f8\u5834\u306f\u843d\u3061\u7740\u3044\u3066\u3044\u308b\u3002",
-            "type": "string"
-          },
-          "price_multiplier": {
-            "example": 1,
-            "type": "number"
-          },
-          "risk_level": {
-            "example": "Low",
-            "type": "string"
-          },
-          "sell_multiplier": {
-            "example": 1,
-            "type": "number"
-          }
-        },
-        "required": [
-          "condition",
-          "price_multiplier",
-          "sell_multiplier",
-          "risk_level",
-          "description"
-        ],
-        "type": "object"
-      },
       "BlackMarketStatus": {
         "properties": {
           "character_id": {
             "type": "string"
           },
-          "is_eligible": {
-            "type": "boolean"
+          "location_name": {
+            "example": "闇市場",
+            "type": "string"
           },
-          "items": {
+          "npc_name": {
+            "example": "@闇商人",
+            "type": "string"
+          },
+          "prizes": {
             "items": {
-              "$ref": "#/components/schemas/BlackMarketItemView"
+              "$ref": "#/components/schemas/BlackMarketPrize"
             },
             "type": "array"
           },
-          "location_name": {
-            "example": "\u88cf\u8def\u5730\u306e\u95c7\u5e02",
-            "type": "string"
+          "rare_points": {
+            "example": 10,
+            "type": "integer"
           },
-          "market_state": {
-            "$ref": "#/components/schemas/BlackMarketState"
+          "u_prizes": {
+            "items": {
+              "$ref": "#/components/schemas/BlackMarketPrize"
+            },
+            "type": "array"
           },
-          "npc_name": {
-            "example": "@\u30e4\u30df\u30b8",
-            "type": "string"
+          "u_rare_points": {
+            "example": 2,
+            "type": "integer"
           }
         },
         "required": [
           "character_id",
           "location_name",
           "npc_name",
-          "is_eligible",
-          "market_state",
-          "items"
+          "rare_points",
+          "u_rare_points",
+          "prizes",
+          "u_prizes"
         ],
         "type": "object"
       },
@@ -795,11 +546,11 @@
             "type": "string"
           },
           "dialogue": {
-            "example": "\u2026\u2026\u30c1\u30c3\u3001\u8ab0\u306b\u805e\u3044\u3066\u3053\u3053\u306b\u6765\u305f\uff1f",
+            "example": "よく来たな…。ここは闇市場だ…",
             "type": "string"
           },
           "npc_name": {
-            "example": "@\u30e4\u30df\u30b8",
+            "example": "@闇商人",
             "type": "string"
           }
         },
@@ -831,7 +582,7 @@
             "example": 1,
             "type": "integer"
           },
-          "inventory_instance_id": {
+          "depot_instance_id": {
             "example": "inst-prize-1",
             "type": "string"
           },
@@ -844,11 +595,11 @@
             "type": "string"
           },
           "item_name": {
-            "example": "\u307e\u307b\u3046\u306e\u305d\u308d\u3070\u3093",
+            "example": "まほうのそろばん",
             "type": "string"
           },
           "message": {
-            "example": "\u53d6\u5f15\u6210\u7acb\u3060\u2026\u3002\u307e\u307b\u3046\u306e\u305d\u308d\u3070\u3093 \u3092\u53d7\u3051\u53d6\u3063\u305f\u2026",
+            "example": "取引成立だ…。まほうのそろばん はお前の預かり所に送っておいた…",
             "type": "string"
           },
           "prize_id": {
@@ -869,7 +620,6 @@
           "prize_id",
           "item_definition_id",
           "item_name",
-          "inventory_instance_id",
           "cost",
           "is_u_rare",
           "remaining_rare",

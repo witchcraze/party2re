@@ -1,7 +1,7 @@
 {
   "/characters/{id}/blackmarket": {
     "get": {
-      "description": "Returns current market dynamic state, quotas, and contraband items for an authenticated character (Level \u003e= 10).",
+      "description": "Returns current Black Market status, points balances, and prize catalogs for an authenticated character.",
       "operationId": "getBlackMarketStatus",
       "parameters": [
         {
@@ -23,7 +23,7 @@
               }
             }
           },
-          "description": "Black market status and contraband item catalog"
+          "description": "Black market status and trade prize catalogs"
         },
         "401": {
           "$ref": "#/components/responses/Unauthorized"
@@ -43,7 +43,57 @@
           "BearerAuth": []
         }
       ],
-      "summary": "Get black market shop status and contraband item catalog",
+      "summary": "Get black market status and prize catalogs",
+      "tags": [
+        "Black Market"
+      ]
+    }
+  },
+  "/characters/{id}/blackmarket/inspect": {
+    "post": {
+      "description": "Inspects NPC @闇商人 in the Black Market.",
+      "operationId": "inspectBlackMarket",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlackMarketTalkResult"
+              }
+            }
+          },
+          "description": "Merchant inspection dialogue"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthorized"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        },
+        "404": {
+          "$ref": "#/components/responses/NotFound"
+        },
+        "500": {
+          "$ref": "#/components/responses/InternalServerError"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Inspect NPC @闇商人 in the Black Market",
       "tags": [
         "Black Market"
       ]
@@ -99,122 +149,9 @@
       ]
     }
   },
-  "/characters/{id}/blackmarket/purchase": {
-    "post": {
-      "description": "Purchases contraband items with dynamic price multipliers and daily quota limits.",
-      "operationId": "purchaseBlackMarketItem",
-      "parameters": [
-        {
-          "description": "Character ID",
-          "in": "path",
-          "name": "id",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "requestBody": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/BlackMarketPurchaseRequest"
-            }
-          }
-        },
-        "required": true
-      },
-      "responses": {
-        "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BlackMarketPurchaseResult"
-              }
-            }
-          },
-          "description": "Successful contraband purchase"
-        },
-        "400": {
-          "$ref": "#/components/responses/BadRequest"
-        },
-        "401": {
-          "$ref": "#/components/responses/Unauthorized"
-        },
-        "403": {
-          "$ref": "#/components/responses/Forbidden"
-        },
-        "404": {
-          "$ref": "#/components/responses/NotFound"
-        },
-        "500": {
-          "$ref": "#/components/responses/InternalServerError"
-        }
-      },
-      "security": [
-        {
-          "BearerAuth": []
-        }
-      ],
-      "summary": "Purchase contraband items from the black market",
-      "tags": [
-        "Black Market"
-      ]
-    }
-  },
-  "/characters/{id}/blackmarket/rumors": {
-    "post": {
-      "description": "Returns current market condition and rumor commentary from @ヤミジ.",
-      "operationId": "getBlackMarketRumors",
-      "parameters": [
-        {
-          "description": "Character ID",
-          "in": "path",
-          "name": "id",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "responses": {
-        "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BlackMarketRumorsResult"
-              }
-            }
-          },
-          "description": "Market condition rumor"
-        },
-        "401": {
-          "$ref": "#/components/responses/Unauthorized"
-        },
-        "403": {
-          "$ref": "#/components/responses/Forbidden"
-        },
-        "404": {
-          "$ref": "#/components/responses/NotFound"
-        },
-        "500": {
-          "$ref": "#/components/responses/InternalServerError"
-        }
-      },
-      "security": [
-        {
-          "BearerAuth": []
-        }
-      ],
-      "summary": "Gather black market intelligence and dynamic condition rumors",
-      "tags": [
-        "Black Market"
-      ]
-    }
-  },
   "/characters/{id}/blackmarket/sacrifice": {
     "post": {
-      "description": "Sacrifices an eligible rare weapon, armor, or item to earn Rare Points or U-Rare Points.",
+      "description": "Sacrifices an eligible rare weapon, armor, or item from inventory or depot to earn Rare Points or U-Rare Points.",
       "operationId": "sacrificeBlackMarketItem",
       "parameters": [
         {
@@ -275,72 +212,9 @@
       ]
     }
   },
-  "/characters/{id}/blackmarket/sell": {
-    "post": {
-      "description": "Sells inventory items with dynamic buyback rates.",
-      "operationId": "sellBlackMarketItem",
-      "parameters": [
-        {
-          "description": "Character ID",
-          "in": "path",
-          "name": "id",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "requestBody": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/BlackMarketSellRequest"
-            }
-          }
-        },
-        "required": true
-      },
-      "responses": {
-        "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BlackMarketSaleResult"
-              }
-            }
-          },
-          "description": "Successful sale"
-        },
-        "400": {
-          "$ref": "#/components/responses/BadRequest"
-        },
-        "401": {
-          "$ref": "#/components/responses/Unauthorized"
-        },
-        "403": {
-          "$ref": "#/components/responses/Forbidden"
-        },
-        "404": {
-          "$ref": "#/components/responses/NotFound"
-        },
-        "500": {
-          "$ref": "#/components/responses/InternalServerError"
-        }
-      },
-      "security": [
-        {
-          "BearerAuth": []
-        }
-      ],
-      "summary": "Sell contraband or inventory items to the shady broker",
-      "tags": [
-        "Black Market"
-      ]
-    }
-  },
   "/characters/{id}/blackmarket/talk": {
     "post": {
-      "description": "Receives dialogue lines from broker @ヤミジ.",
+      "description": "Receives dialogue lines from broker @闇商人.",
       "operationId": "talkBlackMarket",
       "parameters": [
         {
@@ -362,7 +236,7 @@
               }
             }
           },
-          "description": "Broker dialogue"
+          "description": "Merchant dialogue"
         },
         "401": {
           "$ref": "#/components/responses/Unauthorized"
@@ -382,7 +256,7 @@
           "BearerAuth": []
         }
       ],
-      "summary": "Converse with shady black market broker @ヤミジ",
+      "summary": "Converse with black market merchant @闇商人",
       "tags": [
         "Black Market"
       ]
@@ -390,7 +264,7 @@
   },
   "/characters/{id}/blackmarket/trade": {
     "post": {
-      "description": "Trades accumulated Rare Points or U-Rare Points for an exclusive black market prize item.",
+      "description": "Trades accumulated Rare Points or U-Rare Points for an exclusive black market prize item delivered to depot.",
       "operationId": "tradeBlackMarketPrize",
       "parameters": [
         {

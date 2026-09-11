@@ -209,6 +209,7 @@ func newMiscServices(
 		core.invRepo,
 		blackmarketRepo,
 		blackmarketCatalog,
+		blackmarket.WithDepotRepository(econ.depotRepo),
 		blackmarket.WithItemDefinitionProvider(core.itemCatalog),
 		blackmarket.WithTransactionProvider(core.txProvider),
 	)

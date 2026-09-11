@@ -2,7 +2,7 @@
   "$schema": "https://archify.dev/schema/module.v1.json",
   "module": "blackmarket",
   "tier": 1,
-  "description": "Town black market contraband trading, rare point sacrifice, and prize trade exchanges.",
+  "description": "Town black market rare item point sacrifice, and prize trade exchanges.",
   "package": "internal/blackmarket",
   "implementation_package": "internal/blackmarket",
   "dependencies": [
@@ -19,6 +19,12 @@
       "source_ref": "internal/blackmarket/blackmarket.go#InventoryRepository"
     },
     {
+      "name": "depot_repository",
+      "target_module": "depot",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/blackmarket/blackmarket.go#DepotRepository"
+    },
+    {
       "name": "blackmarket_repository",
       "target_module": "blackmarket",
       "relation_type": "consumer_interface",
@@ -32,44 +38,6 @@
     }
   ],
   "transaction_boundaries": [
-    {
-      "method": "PurchaseItem",
-      "source_ref": "internal/blackmarket/blackmarket.go#Service.PurchaseItem",
-      "transaction_type": "RunInTx",
-      "lock_sequence": [
-        {
-          "table": "characters",
-          "tier": 2,
-          "mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
-          "note": "Lock character wallet and verify eligibility & sufficient funds"
-        },
-        {
-          "table": "inventory_items",
-          "tier": 3,
-          "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
-          "note": "Lock inventory slots to add purchased contraband item"
-        }
-      ]
-    },
-    {
-      "method": "SellItem",
-      "source_ref": "internal/blackmarket/blackmarket.go#Service.SellItem",
-      "transaction_type": "RunInTx",
-      "lock_sequence": [
-        {
-          "table": "characters",
-          "tier": 2,
-          "mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
-          "note": "Lock character wallet and verify eligibility"
-        },
-        {
-          "table": "inventory_items",
-          "tier": 3,
-          "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
-          "note": "Lock inventory to verify ownership and deduct sold item"
-        }
-      ]
-    },
     {
       "method": "SacrificeItem",
       "source_ref": "internal/blackmarket/blackmarket.go#Service.SacrificeItem",
@@ -86,6 +54,12 @@
           "tier": 3,
           "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
           "note": "Lock inventory to verify ownership and deduct sacrificed rare item"
+        },
+        {
+          "table": "character_depots",
+          "tier": 5,
+          "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+          "note": "Lock depot to deduct sacrificed rare item if not in inventory"
         },
         {
           "table": "blackmarket_character_points",
@@ -107,10 +81,10 @@
           "note": "Lock character and verify eligibility"
         },
         {
-          "table": "inventory_items",
-          "tier": 3,
+          "table": "character_depots",
+          "tier": 5,
           "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
-          "note": "Lock inventory to deposit traded prize item"
+          "note": "Lock depot to verify capacity and deposit traded prize item"
         },
         {
           "table": "blackmarket_character_points",
