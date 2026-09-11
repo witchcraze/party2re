@@ -336,7 +336,7 @@ func TestConcurrencyStressShopStockDepletion(t *testing.T) {
 		res.Successes, outOfStockCount, res.Duration)
 }
 
-func TestConcurrencyStressAuctionBiddingAndBuyout(t *testing.T) {
+func TestConcurrencyStressAuctionP2PTrading(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -348,95 +348,98 @@ func TestConcurrencyStressAuctionBiddingAndBuyout(t *testing.T) {
 	defer db.Close()
 
 	ctx := context.Background()
-	now := time.Now().UTC()
 
+	txProvider := NewTransactionProvider(db)
 	charRepo, err := NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	auctionRepo, err := NewAuctionRepository(db)
+	equipRepo, err := NewEquipmentRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invRepo, err := NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depotRepo, err := NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := coreitem.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	auctionSvc, err := auction.NewService(txProvider, charRepo, equipRepo, invRepo, depotRepo, catalog)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	suffix := id.New()[:8]
-	sellerChar, err := CreateTestCharacter(ctx, db, "SC_"+suffix)
-	if err != nil {
-		t.Fatal(err)
+	numPairs := 5
+	initialMoney := 10000
+
+	type pair struct {
+		charA corecharacter.Character
+		charB corecharacter.Character
 	}
 
-	startBid := 100
-	buyoutPrice := 5000
-	listing, err := auctionRepo.CreateListing(ctx, auction.AuctionListing{
-		ID:                id.New(),
-		SellerCharacterID: sellerChar.ID,
-		ItemID:            "item_" + suffix,
-		ItemName:          "Mythic Blade",
-		ItemCategory:      "WEAPON",
-		EnhancementLevel:  10,
-		StartBid:          startBid,
-		BuyoutPrice:       buyoutPrice,
-		ExpiresAt:         now.Add(24 * time.Hour),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	numBidders := 20
-	bidders := make([]corecharacter.Character, numBidders)
-	for i := 0; i < numBidders; i++ {
-		c, err := CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("BC_%s_%d", suffix, i), 10000)
+	pairs := make([]pair, numPairs)
+	for i := 0; i < numPairs; i++ {
+		cA, err := CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("P2P_A_%s_%d", suffix, i), initialMoney)
 		if err != nil {
 			t.Fatal(err)
 		}
-		bidders[i] = c
-	}
-
-	var outbidErrors int64
-
-	res := RunConcurrentStressTest(t, ConcurrencyStressConfig{Workers: numBidders, OpsPerWorker: 1}, func(workerID int, op int) error {
-		bidder := bidders[workerID]
-		bidAmount := startBid + (workerID+1)*50
-
-		_, err := auctionRepo.PlaceBid(ctx, listing.ID, bidder.ID, bidAmount)
-		if err != nil {
-			if errors.Is(err, auction.ErrInvalidBidAmount) || errors.Is(err, auction.ErrListingNotActive) {
-				atomic.AddInt64(&outbidErrors, 1)
-				return err
-			}
-			t.Errorf("bidder %d unexpected bid error: %v", workerID, err)
-			return err
-		}
-		return nil
-	})
-
-	// Verify Auction State
-	finalListing, err := auctionRepo.GetListing(ctx, listing.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if finalListing.CurrentBid < startBid {
-		t.Fatalf("Expected current bid >= start bid %d, got %d", startBid, finalListing.CurrentBid)
-	}
-
-	// Verify Total Money across seller and all bidders is conserved
-	var totalMoneyEnd int
-	for _, bidder := range bidders {
-		c, err := charRepo.FindByID(ctx, bidder.ID)
+		cB, err := CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("P2P_B_%s_%d", suffix, i), initialMoney)
 		if err != nil {
 			t.Fatal(err)
 		}
-		totalMoneyEnd += c.Money
+		pairs[i] = pair{charA: cA, charB: cB}
 	}
 
-	expectedTotalMoneyEnd := (numBidders * 10000) - finalListing.CurrentBid
-	if totalMoneyEnd != expectedTotalMoneyEnd {
-		t.Fatalf("Money conservation in auction bidding failed! Expected total bidder money %d, got %d", expectedTotalMoneyEnd, totalMoneyEnd)
+	// 10 concurrent workers (2 per pair) executing concurrent cross-transfers (A -> B and B -> A simultaneously)
+	// Testing deadlock prevention via id.Sort2 locking ordering
+	numWorkers := numPairs * 2
+	res := RunConcurrentStressTest(t, ConcurrencyStressConfig{Workers: numWorkers, OpsPerWorker: 5}, func(workerID int, op int) error {
+		p := pairs[workerID/2]
+		var senderID, receiverID string
+		if workerID%2 == 0 {
+			senderID = p.charA.ID
+			receiverID = p.charB.ID
+		} else {
+			senderID = p.charB.ID
+			receiverID = p.charA.ID
+		}
+
+		_, err := auctionSvc.Send(ctx, auction.SendRequest{
+			SenderCharacterID: senderID,
+			TargetCharacterID: receiverID,
+			Gold:              10,
+		})
+		return err
+	})
+
+	// Verify Total Money across each pair is conserved (neither created nor lost)
+	for i, p := range pairs {
+		cA, err := charRepo.FindByID(ctx, p.charA.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cB, err := charRepo.FindByID(ctx, p.charB.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		pairTotal := cA.Money + cB.Money
+		expectedTotal := initialMoney * 2
+		if pairTotal != expectedTotal {
+			t.Fatalf("Pair %d money conservation failed! Expected %d, got %d", i, expectedTotal, pairTotal)
+		}
 	}
 
-	t.Logf("Auction Bidding Concurrency Stress Test Completed: %d successful bids, %d outbids in %v. Highest bid: %d by %v",
-		res.Successes, outbidErrors, res.Duration, finalListing.CurrentBid, *finalListing.HighestBidderID)
+	t.Logf("Auction P2P Trading Concurrency Stress Test Completed: %d successful transfers in %v",
+		res.Successes, res.Duration)
 }
 
 func TestConcurrencyStressMultiDomainChaos(t *testing.T) {

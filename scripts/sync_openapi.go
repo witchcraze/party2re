@@ -468,7 +468,7 @@ func moduleForRoute(route Route) string {
 		return "admin"
 	case strings.HasPrefix(p, "/adventures") || p == "/characters/{id}/adventures" || p == "/characters/{id}/adventure-chronicle":
 		return "adventure"
-	case strings.HasPrefix(p, "/auctions"):
+	case strings.HasPrefix(p, "/auction") || strings.Contains(p, "/auction/"):
 		return "auction"
 	case p == "/players" || p == "/sessions":
 		return "auth"

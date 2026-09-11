@@ -110,7 +110,7 @@ Reconcile facilities and production mechanics that depend on Depot storage and o
 - [x] **Gem Store: Dedicated Gem Box, Dynamic Capacity & Job Level Unlocks** (#464)
 - [x] **Player Stores: Custom Pricing, Log Books & Commission Fees** (#466)
 - [x] **Bank: Character Deposits, Daily Interest & Peer-to-Peer Transfers** (#476)
-- [ ] **Auction House: Bid Retention, Expiry Settlement & Depot Routing** (#474)
+- [x] **Auction Hall: Eliminate Fictional Bidding Auction House and Reproduce Original Live P2P Trading and Direct Send** (#474)
 - [x] **Flea Market: Direct Depot Withdrawals & Trading Logs** (#477)
 - [ ] **Tavern Food Delivery: Scheduled Post-Adventure Buffs** (#475)
 - [ ] **Alchemy: Free Overnight Depot-linked Synthesis & Compendium** (#487)

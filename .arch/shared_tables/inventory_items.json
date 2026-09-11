@@ -10,7 +10,8 @@
     "internal/delivery/delivery.go#InventoryRepository",
     "internal/adventure/adventure.go#InventoryRepository",
     "internal/blackmarket/blackmarket.go#InventoryRepository",
-    "internal/gemstore/types.go#InventoryRepository"
+    "internal/gemstore/types.go#InventoryRepository",
+    "internal/auction/types.go#InventoryRepository"
   ],
   "callers": [
     {
@@ -36,10 +37,10 @@
     },
     {
       "module": "auction",
-      "caller_method": "internal/database/auction_repository.go#AuctionRepository.Buyout",
-      "lock_mode": "INSERT",
+      "caller_method": "internal/auction/auction.go#Service.Send",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
       "lock_order": 3,
-      "purpose": "Grant purchased item instance to buyer inventory"
+      "purpose": "Lock sender inventory and consume transferred item instance"
     },
     {
       "module": "delivery",

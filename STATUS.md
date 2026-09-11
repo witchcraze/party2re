@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #529 — [Architecture] Economy: Automated Enforcement of Universal Transaction Runner in Feature Services
+Last updated: Issue #474 — [Refactor] Auction Hall: Eliminate fictional bidding auction house and reproduce original Live P2P Trading and Direct Send
 
 ## Current phase
 
@@ -50,7 +50,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Casino** (`internal/casino`): カジノコイン両替（1 Coin = 20 G、横断的ランタイムプリミティブ `economy.TransactionRunner` / `ExecuteTransaction` への移行完了。手動行ロック・SQLボイラープレートを排除し、Rank 2 (`characters`) -> Rank 8 (`casino_accounts`) 決定論的ロック階層と通貨変換のアトミック整合性を保証）、インディアンポーカー（セッション永続化 `casino_poker_sessions`、進行中カードマスキング、コール/勝負/降り）、スロットマシン（3リール・5絵柄、777 100倍ジャックポット、レート設定）、ドッペルゲンガー（8種マーク一致・倍率設定）、ハイロー（大小予測、倍々モード）。`HighLowSession.Step()`（95.0%）および `PlayIndianPokerAction()`（95.0%）の単体テスト網羅率向上、重複エラー `ErrInsufficientCoin` の一本化、および孤立メソッド削除完了。
 - **Lottery & Raffle** (`internal/lottery`): 福引（通常3枚・特賞〜6等・ハズレ、裏福引300枚・各色オーブ）、定期4桁数字宝くじ（1等100,000 Gジャックポット、下3桁/2桁/1桁返還、所有権認可・トランザクション安全な当籤受取処理）。
 - **Farm & Plantation** (`internal/farm`): 4区画農園（種蒔き、水やり、肥料、実時間経過成熟判定・枯れ判定、収穫報酬精算）。Unit of Work トランザクション（`FOR UPDATE` 行ロック）によるアトミック化。
-- **Auction & Marketplace** (`internal/auction`): プレイヤー間アイテム出品、入札時のゴールドエスクロー、高値更新時の自動返金、即決購入、出品期間満了時の自動精算、出品キャンセル（所有権認可 403 Forbidden）、`FOR UPDATE` 排他ロック。
+- **Auction Hall** (`internal/auction`): オークション会場（原典 `party2/lib/auction.cgi` 完全準拠。NPC「ワイルド」`@ワイルド` の立ち合いのもと、架空の非同期入札・出品オークションハウスおよび架空テーブル `auction_listings` を完全撤廃。対面リアルタイムP2Pトレード `@おくる` によるゴールド直接送金および装備アイテム預かり所（Depot）直接転送、取引詐欺防止の相手ステータス・装備調査 `@しらべる`、タブーアイテム送付防止、およびID昇順決定論的行ロック Rank 2 (`characters`) -> Rank 3 (`inventory_items`) -> Rank 5 (`character_depots`) によるデッドロックフリーなアトミック整合性担保、Issue #474）。
 - **Collection & Monster Book** (`internal/collection`): モンスター図鑑（討伐記録・コンプリート率計算）、アイテム図鑑（獲得アイテム・カテゴリ別記録・コンプリート率計算）。
 - **Chapel & Blessings** (`internal/chapel`): 礼拝堂（シスターNPC、5種の原典準拠祈り（お金、強さ、モンスター仲間化率+50%、宝箱ドロップ、カジノコイン）、単一の祈り排他制約（「祈りに大事なのは、数でなく気持ちなのです」/ 409 Conflict）、架空の寄付機能 `POST /characters/{id}/chapel/donate` および `donation_gold_total` の完全撤廃、Scheduled Worker（`ActionType: "chapel_reset"`）による毎日JST深夜0時の日次祈りリセット（`chapel_clean`）完全再現、および自宅睡眠（`internal/home`）起床時の祈り初期化連携）。
 - **Player versus Player Arena** (`internal/pvp`): 闘技場・対人対戦（PvP、標準Eloレーティング K=32/初期1000、近傍マッチメイキング・同一アカウント談合防止、勝敗・対戦履歴・防衛ログ永続化、経験値・ゴールド報酬）。

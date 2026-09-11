@@ -129,15 +129,15 @@ State-mutating feature modules (such as `shop`, `blacksmith`, `alchemy`, `bank`,
      4. `character_jobs` / `character_job_masteries`
      5. `character_depots` / `depot_items`
      6. `guilds` (if multiple guilds, sorted ascending: `id1 < id2`) / `guild_members`
-     7. Feature tables (`auction_listings`, `farm_plots`, `casino_accounts`, `gvg_standings`, `character_boss_records`, `challenge_records`, etc.)
+     7. Feature tables (`farm_plots`, `casino_accounts`, `gvg_standings`, `character_boss_records`, `challenge_records`, etc.)
 3. **Application Orchestrator Pattern**:
-   - Cross-module operations (such as purchasing an auction listing involving Buyer character wallet, Seller character wallet, and Inventory transfer) should be orchestrated at the application layer inside a single `RunInTx` boundary.
+   - Cross-module operations (such as P2P auction transfers involving sender character wallet, recipient character wallet, and sender inventory to recipient depot) should be orchestrated at the application layer inside a single `RunInTx` boundary.
    - No feature repository calls `BeginTx` directly; all repositories delegate to `RunInTx` and `ExecutorFromContext`.
 4. **High-Concurrency Stress Testing & Deadlock Verification**:
    - Automated concurrency benchmarks (`internal/database/concurrency_stress_test.go`, `make test-stress`, `scripts/stress_test.sh`) simulate 50–100 concurrent workers hammering MariaDB with high contention.
    - Verifies zero deadlocks (MariaDB Error 1213 / 1205), conservation of money/inventory invariants, deterministic auction buyout/bid resolution, and exact atomicity across mixed multi-domain chaos workflows.
 5. **Sub-Resource Ownership & Repository SQL Scoping**:
-   - When modifying, claiming, or deleting sub-resources belonging to a player/character (`challenge_sessions`, `lottery_tickets`, `auction_listings`, `dungeon_expeditions`, `letters`, `companion_phrases`), SQL queries MUST include character/player ID ownership scoping (`WHERE id = ? AND character_id = ?`).
+   - When modifying, claiming, or deleting sub-resources belonging to a player/character (`challenge_sessions`, `lottery_tickets`, `dungeon_expeditions`, `letters`, `companion_phrases`), SQL queries MUST include character/player ID ownership scoping (`WHERE id = ? AND character_id = ?`).
    - Domain services and HTTP handlers must enforce ownership verification and return `ErrForbidden` (`403 Forbidden`) on unauthorized access attempts.
 
 ## Related documents

@@ -13,7 +13,8 @@
     "internal/blackmarket/blackmarket.go#CharacterRepository",
     "internal/fleamarket/fleamarket.go#CharacterRepository",
     "internal/gemstore/types.go#CharacterRepository",
-    "internal/bank/bank.go#Repository"
+    "internal/bank/bank.go#Repository",
+    "internal/auction/types.go#CharacterRepository"
   ],
   "callers": [
     {
@@ -53,17 +54,10 @@
     },
     {
       "module": "auction",
-      "caller_method": "internal/database/auction_repository.go#AuctionRepository.PlaceBid",
-      "lock_mode": "UPDATE",
+      "caller_method": "internal/auction/auction.go#Service.Send",
+      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate, ascending ID order)",
       "lock_order": 2,
-      "purpose": "Deduct bid amount from bidder wallet & refund previous highest bidder"
-    },
-    {
-      "module": "auction",
-      "caller_method": "internal/database/auction_repository.go#AuctionRepository.Buyout",
-      "lock_mode": "UPDATE",
-      "lock_order": 2,
-      "purpose": "Deduct buyout price from buyer & credit seller"
+      "purpose": "Lock sender and target characters ascending by ID for P2P trading and gold transfer"
     },
     {
       "module": "guild",

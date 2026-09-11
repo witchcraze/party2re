@@ -290,9 +290,9 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Character repository (wallet gold/items).
   - **Persistence:** `farm_plots` table in `internal/database/farm_repository.go` with unique per-character plot indexes.
 - **Auction & Marketplace** (`internal/auction`):
-  - **Responsibility:** Player item listing, starting bids, buyout instant purchases, outbid automatic refunds, duration-based expiration settlement, and cancellation.
-  - **Dependencies:** Character repository (wallet gold/items).
-  - **Persistence:** `auction_listings` table in `internal/database/auction_repository.go` with row-level transactional concurrency.
+  - **Responsibility:** Authentic live P2P trading hall (`party2/lib/auction.cgi`) overseen by NPC @ワイルド. Direct transfer of gold and equipped items to player depots (`@おくる`), real-time target player inspection (`@しらべる`), and taboo item protection.
+  - **Dependencies:** Character repository, Equipment repository, Inventory repository, Depot repository, Item catalog.
+  - **Persistence:** Direct transactional state updates to `characters`, `inventory_items`, and `character_depot_items` with Rank 2 -> 3 -> 5 pessimistic deadlock-free locking.
 - **Collection & Monster Book** (`internal/collection`):
   - **Responsibility:** Illustrated monster defeat tracking (`character_monster_book`), item discovery recording (`character_item_collection`), and career completion percentage queries.
   - **Dependencies:** Character repository.
