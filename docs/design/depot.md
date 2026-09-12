@@ -34,7 +34,7 @@ Where:
 ### 1. Item Deposit & Withdrawal
 - **Deposit Item**: Moves an item instance from character inventory to depot storage.
   - Invariant: Item exists in character inventory.
-  - Invariant (Issue #452): If the item definition ID already exists in the depot, it stacks into the existing slot without consuming an extra slot. Only new unique definitions require $\text{len}(Items) < Capacity$.
+  - Invariant (Issues #452, #558): Stacking is restricted to unenhanced items (`EnhancementLevel == 0`). If an unenhanced item already exists in the depot with identical definition ID, it stacks into the existing slot without consuming an extra slot. Enhanced equipment instances (`EnhancementLevel > 0`) or items with differing enhancement levels represent distinct upgraded gear and must never merge into a single slot, always occupying discrete slots ($\text{len}(Items) < Capacity$).
 - **Withdraw Item**: Moves an item instance from depot storage to character inventory.
   - Invariant: Item exists in depot storage.
   - Invariant: Character inventory has available space ($\text{len}(Inventory.Items) < Inventory.Capacity$).

@@ -235,6 +235,73 @@ func TestDepot_AddItem_StackingAndCapacity(t *testing.T) {
 	}
 }
 
+func TestDepot_AddItem_EnhancementLevels(t *testing.T) {
+	dep, _ := NewDepot("char-enh-test")
+	dep.Capacity = 4
+
+	sword0, _ := item.NewInstanceWithEnhancement("sword-1", 1, 0)
+	sword5, _ := item.NewInstanceWithEnhancement("sword-1", 1, 5)
+	sword5Second, _ := item.NewInstanceWithEnhancement("sword-1", 1, 5)
+
+	// 1. Add +0 sword
+	if err := dep.AddItem(sword0); err != nil {
+		t.Fatalf("failed to add +0 sword: %v", err)
+	}
+	if len(dep.Items) != 1 || dep.Items[0].EnhancementLevel != 0 {
+		t.Fatalf("expected 1 item with +0, got %+v", dep.Items)
+	}
+
+	// 2. Add +5 sword: MUST NOT collapse into +0 slot
+	if err := dep.AddItem(sword5); err != nil {
+		t.Fatalf("failed to add +5 sword: %v", err)
+	}
+	if len(dep.Items) != 2 {
+		t.Fatalf("expected 2 distinct slots for +0 and +5 swords, got %d", len(dep.Items))
+	}
+	if dep.Items[0].EnhancementLevel != 0 || dep.Items[0].Quantity != 1 {
+		t.Errorf("slot 0 corrupted: %+v", dep.Items[0])
+	}
+	if dep.Items[1].EnhancementLevel != 5 || dep.Items[1].Quantity != 1 {
+		t.Errorf("slot 1 corrupted: %+v", dep.Items[1])
+	}
+
+	// 3. Add second +5 sword: upgraded equipment must NOT merge into existing +5 slot
+	if err := dep.AddItem(sword5Second); err != nil {
+		t.Fatalf("failed to add second +5 sword: %v", err)
+	}
+	if len(dep.Items) != 3 {
+		t.Fatalf("expected 3 distinct slots, got %d", len(dep.Items))
+	}
+	if dep.Items[2].EnhancementLevel != 5 || dep.Items[2].Quantity != 1 {
+		t.Errorf("slot 2 corrupted: %+v", dep.Items[2])
+	}
+
+	// 4. Add unenhanced consumable: should merge with identical unenhanced consumable
+	herbA, _ := item.NewInstanceWithEnhancement("herb-1", 2, 0)
+	herbB, _ := item.NewInstanceWithEnhancement("herb-1", 3, 0)
+	if err := dep.AddItem(herbA); err != nil {
+		t.Fatalf("failed to add herbA: %v", err)
+	}
+	if len(dep.Items) != 4 {
+		t.Fatalf("expected 4 slots (3 swords + 1 herb), got %d", len(dep.Items))
+	}
+
+	// Depot is now at full capacity (4/4).
+	// Adding more unenhanced herbs MUST succeed because they stack into slot 3.
+	if err := dep.AddItem(herbB); err != nil {
+		t.Fatalf("expected stacking herbB to succeed at full capacity, got %v", err)
+	}
+	if dep.Items[3].Quantity != 5 {
+		t.Errorf("expected herb quantity 5, got %d", dep.Items[3].Quantity)
+	}
+
+	// Adding another +5 sword at full capacity MUST fail with ErrDepotFull
+	swordExtra, _ := item.NewInstanceWithEnhancement("sword-1", 1, 5)
+	if err := dep.AddItem(swordExtra); !errors.Is(err, ErrDepotFull) {
+		t.Errorf("expected ErrDepotFull for enhanced equipment at full capacity, got %v", err)
+	}
+}
+
 func TestDepositAndWithdrawItem(t *testing.T) {
 	ctx := context.Background()
 	depotRepo := newMemoryDepotRepo()
@@ -280,6 +347,73 @@ func TestDepositAndWithdrawItem(t *testing.T) {
 	// Verify collection was recorded on withdrawal
 	if len(collector.recorded) != 1 || collector.recorded[0] != "item-001" {
 		t.Errorf("expected item-001 recorded in collection, got %v", collector.recorded)
+	}
+}
+
+func TestDepositAndWithdrawItem_EnhancedEquipment(t *testing.T) {
+	ctx := context.Background()
+	depotRepo := newMemoryDepotRepo()
+	charRepo := newMemoryCharRepo()
+	invRepo := newMemoryInvRepo()
+	catalog := newMemoryItemCatalog()
+
+	char, _ := corecharacter.New("Blacksmith Customer")
+	charRepo.characters[char.ID] = char
+
+	inv, _ := coreinventory.New(char.ID)
+	sword0, _ := item.NewInstanceWithEnhancement("wea-01", 1, 0)
+	sword7, _ := item.NewInstanceWithEnhancement("wea-01", 1, 7)
+	_ = inv.Add(sword0)
+	_ = inv.Add(sword7)
+	invRepo.inventories[char.ID] = inv
+
+	service, _ := NewService(
+		depotRepo, charRepo, invRepo,
+		WithItemDefinitionProvider(catalog),
+	)
+
+	// Deposit +0 sword
+	dep, err := service.DepositItem(ctx, char.ID, sword0.ID)
+	if err != nil {
+		t.Fatalf("DepositItem sword0 error: %v", err)
+	}
+	if len(dep.Items) != 1 || dep.Items[0].EnhancementLevel != 0 {
+		t.Fatalf("unexpected depot state after sword0: %+v", dep.Items)
+	}
+
+	// Deposit +7 sword
+	dep, err = service.DepositItem(ctx, char.ID, sword7.ID)
+	if err != nil {
+		t.Fatalf("DepositItem sword7 error: %v", err)
+	}
+	// Verify depot now has 2 distinct slots preserving enhancement levels
+	if len(dep.Items) != 2 {
+		t.Fatalf("expected 2 distinct slots in depot, got %d", len(dep.Items))
+	}
+	if dep.Items[0].EnhancementLevel != 0 || dep.Items[0].Quantity != 1 {
+		t.Errorf("slot 0 corrupted: %+v", dep.Items[0])
+	}
+	if dep.Items[1].EnhancementLevel != 7 || dep.Items[1].Quantity != 1 {
+		t.Errorf("slot 1 corrupted: %+v", dep.Items[1])
+	}
+
+	// Withdraw the +7 sword
+	dep, err = service.WithdrawItem(ctx, char.ID, sword7.ID)
+	if err != nil {
+		t.Fatalf("WithdrawItem sword7 error: %v", err)
+	}
+	if len(dep.Items) != 1 || dep.Items[0].EnhancementLevel != 0 {
+		t.Fatalf("expected 1 item with +0 remaining in depot, got %+v", dep.Items)
+	}
+
+	// Verify inventory now has the +7 sword restored
+	currentInv, _ := invRepo.FindByCharacterID(ctx, char.ID)
+	withdrawnInst, found := currentInv.Find(sword7.ID)
+	if !found {
+		t.Fatalf("expected sword7 in inventory, not found")
+	}
+	if withdrawnInst.EnhancementLevel != 7 {
+		t.Errorf("expected withdrawn sword to have enhancement level 7, got %d", withdrawnInst.EnhancementLevel)
 	}
 }
 

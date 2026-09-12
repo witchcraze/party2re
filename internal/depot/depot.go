@@ -124,14 +124,17 @@ func NewDepotWithCapacity(characterID string, jobLv, exDepot, overDepot int) (De
 }
 
 // AddItem adds an item to depot.
-// Resolves Issue #452: Stacking items with existing identical definition ID
-// are merged into existing slot first without consuming a new slot.
-// Only non-stacking new items require len(Items) < Capacity.
+// Resolves Issue #452 & #558: Stacking items with existing identical definition ID
+// and identical EnhancementLevel == 0 are merged into an existing slot first without consuming a new slot.
+// Enhanced equipment items (EnhancementLevel > 0) or items with differing enhancement levels
+// represent distinct gear instances and must never be collapsed, preserving their unique enhancement levels.
 func (d *Depot) AddItem(instance item.Instance) error {
-	for i, existing := range d.Items {
-		if existing.DefinitionID == instance.DefinitionID {
-			d.Items[i].Quantity += instance.Quantity
-			return nil
+	if instance.EnhancementLevel == 0 {
+		for i, existing := range d.Items {
+			if existing.DefinitionID == instance.DefinitionID && existing.EnhancementLevel == 0 {
+				d.Items[i].Quantity += instance.Quantity
+				return nil
+			}
 		}
 	}
 	if len(d.Items) >= d.Capacity {
