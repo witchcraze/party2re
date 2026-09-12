@@ -129,19 +129,8 @@ func executeCharacterUpdate(ctx context.Context, executor sqlContextExecutor, va
 }
 
 // updateCharacter updates character fields in the database, returning corecharacter.ErrNotFound if no row matched.
+// It succeeds even if MySQL reports 0 affected rows because values were unchanged.
 func updateCharacter(ctx context.Context, executor sqlContextExecutor, value corecharacter.Character) error {
-	affected, err := executeCharacterUpdate(ctx, executor, value)
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return corecharacter.ErrNotFound
-	}
-	return nil
-}
-
-// updateCharacterAtomically updates character fields, succeeding even if MySQL reports 0 affected rows because values were unchanged.
-func updateCharacterAtomically(ctx context.Context, executor sqlContextExecutor, value corecharacter.Character) error {
 	affected, err := executeCharacterUpdate(ctx, executor, value)
 	if err != nil {
 		return err
@@ -157,4 +146,10 @@ func updateCharacterAtomically(ctx context.Context, executor sqlContextExecutor,
 		return err
 	}
 	return nil
+}
+
+// updateCharacterAtomically updates character fields, succeeding even if MySQL reports 0 affected rows because values were unchanged.
+// Deprecated: Use updateCharacter directly.
+func updateCharacterAtomically(ctx context.Context, executor sqlContextExecutor, value corecharacter.Character) error {
+	return updateCharacter(ctx, executor, value)
 }

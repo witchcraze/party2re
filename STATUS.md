@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #478 — [Refactor] Adventure System: Eliminate 1-hour expedition timer and reproduce 10-Floor Party Dungeon Crawl with Treasure Rooms
+Last updated: Issue #585 — [Bug] Database: Consolidate updateCharacter and updateCharacterAtomically to eliminate false ErrNotFound on unchanged updates
 
 ## Current phase
 
@@ -33,7 +33,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Item / Inventory / Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): ✅ 5-category catalog (269 items), UsageCategory validation, domain stackability invariants (`IsStackable`), slot management, standardized item consumption interface (`Consume`, `ConsumeItem`, `ConsumeOne`, `ConsumeOneItem`).
 - **Battle & Adapter** (`internal/core/battle`, `internal/battle`): ✅ Deterministic turn resolver; party battle engine (4vN), skill/item/gem-effect/field-state/revival — full `_battle.cgi` parity (#480); standardized Battle Adapter (`internal/battle`) bridging Character/Party to Participant, automatic Stat Orb / passive trigger binding, and atomic post-battle state application with deterministic row-lock hierarchy (Rank 2 -> Rank 3 -> Rank 5) (#496).
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): ✅ Valkey-backed delayed queue + distributed lock worker; package coverage 92.7%.
-- **Database & Transaction Orchestration** (`internal/database`, `internal/economy`, `internal/core/event`): ✅ `RunInTx`/`ExecutorFromContext` propagation, deterministic lock hierarchy (Rank 0→8) AST-enforced, single-character `economy.TransactionRunner`, multi-aggregate/P2P `TransactionProvider` formalization (#561), 2-phase event dispatcher.
+- **Database & Transaction Orchestration** (`internal/database`, `internal/economy`, `internal/core/event`): ✅ `RunInTx`/`ExecutorFromContext` propagation, deterministic lock hierarchy (Rank 0→8) AST-enforced, single-character `economy.TransactionRunner`, multi-aggregate/P2P `TransactionProvider` formalization (#561), consolidated safe `updateCharacter` persistence eliminating false `ErrNotFound` on unchanged updates (#585), 2-phase event dispatcher.
 - **Common Utilities** (`internal/pagination`, `internal/id`, `internal/validation`): ✅ Keyset cursor pagination (`CursorPage[T]`), cryptographic ID, validation helpers.
 
 ### Feature Modules

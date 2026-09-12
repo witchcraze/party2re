@@ -281,7 +281,7 @@ func TestConcurrencyStressShopStockDepletion(t *testing.T) {
 
 			// 3. Deduct money
 			char.Money -= itemPrice
-			if err := updateCharacterAtomically(txCtx, exec, char); err != nil {
+			if err := updateCharacter(txCtx, exec, char); err != nil {
 				return err
 			}
 

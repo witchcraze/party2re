@@ -24,7 +24,7 @@ func (r *BlacksmithRepository) CommitEnhancement(ctx context.Context, character 
 	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
 
-		if err := updateCharacterAtomically(txCtx, executor, character); err != nil {
+		if err := updateCharacter(txCtx, executor, character); err != nil {
 			return err
 		}
 

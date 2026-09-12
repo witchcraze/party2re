@@ -172,3 +172,50 @@ func TestUpdateCharacterAtomically_Integration(t *testing.T) {
 		t.Fatalf("expected ErrNotFound for nonexistent character, got %v", err)
 	}
 }
+
+func TestUpdateCharacter_Integration(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	player, err := CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	repo, err := NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := corecharacter.New("Update Character Test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.PlayerID = player.ID
+	char.SmallMedals = 3
+	char.HelpCount = 4
+
+	if err := repo.Save(ctx, char); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// 1. Update same values (0 rows affected in MySQL) -> should succeed
+	if err := updateCharacter(ctx, db, char); err != nil {
+		t.Fatalf("expected updateCharacter with unchanged values to succeed, got %v", err)
+	}
+
+	// 2. Update nonexistent character -> should return ErrNotFound
+	charNonExistent := char
+	charNonExistent.ID = "nonexistent_char_id"
+	if err := updateCharacter(ctx, db, charNonExistent); !errors.Is(err, corecharacter.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for nonexistent character, got %v", err)
+	}
+}
