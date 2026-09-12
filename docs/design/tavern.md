@@ -54,6 +54,8 @@ To allow characters heading out to adventure to secure an immediate meal upon re
 - **Claim & Consume (`POST /characters/{id}/tavern/delivery/claim`)**:
   - Re-validates gold funds at claim time inside a pessimistic transaction.
   - Deducts gold, restores HP/MP, awards raffle tickets, sets character fullness state to true, and removes the pending delivery entry.
+- **Automated Post-Adventure Arrival**:
+  - When an adventure concludes (`adventure.Claim`), the registered `PostAdventureHook` automatically executes `ClaimDelivery` to restore the adventurer upon return. Insufficient funds gracefully skip delivery without impeding adventure completion.
 
 ---
 

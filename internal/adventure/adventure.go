@@ -94,21 +94,29 @@ func (nopLogger) Warn(msg string, args ...any) {}
 // VictoryHook is called when an adventure stage concludes with a player victory.
 type VictoryHook func(ctx context.Context, characterID string, monstersDefeated int, goldEarned int) error
 
+// PostAdventureHook is called after an adventure concludes and state is applied.
+type PostAdventureHook func(ctx context.Context, characterID string) error
+
 type Service struct {
-	adventures  Repository
-	characters  CharacterRepository
-	inventories InventoryRepository
-	stages      *StageCatalog
-	monsters    *MonsterCatalog
-	battle      corebattle.Resolver
-	scheduler   Scheduler
-	logger      Logger
-	clock       Clock
-	victoryHook VictoryHook
+	adventures        Repository
+	characters        CharacterRepository
+	inventories       InventoryRepository
+	stages            *StageCatalog
+	monsters          *MonsterCatalog
+	battle            corebattle.Resolver
+	scheduler         Scheduler
+	logger            Logger
+	clock             Clock
+	victoryHook       VictoryHook
+	postAdventureHook PostAdventureHook
 }
 
 func (s *Service) SetVictoryHook(hook VictoryHook) {
 	s.victoryHook = hook
+}
+
+func (s *Service) SetPostAdventureHook(hook PostAdventureHook) {
+	s.postAdventureHook = hook
 }
 
 func NewService(adventures Repository, characters CharacterRepository, battle corebattle.Resolver, scheduler Scheduler, logger Logger) (*Service, error) {
@@ -352,6 +360,11 @@ func (s *Service) Claim(ctx context.Context, id string) (Adventure, error) {
 	if result.Outcome == corebattle.OutcomeWin && s.victoryHook != nil {
 		if err := s.victoryHook(ctx, character.ID, 1, result.Reward.Currency); err != nil {
 			s.logger.Warn("victory hook failed", "character_id", character.ID, "error", err)
+		}
+	}
+	if s.postAdventureHook != nil {
+		if err := s.postAdventureHook(ctx, character.ID); err != nil {
+			s.logger.Warn("post adventure hook failed", "character_id", character.ID, "error", err)
 		}
 	}
 	return value, nil

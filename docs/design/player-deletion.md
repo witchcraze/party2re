@@ -23,7 +23,6 @@ Character deletion executes within a database transaction and cleans up resource
    - `tavern_deliveries`, `tavern_character_status`
    - `park_posts`, `rescue_records`
    - `contest_votes`, `contest_entries`, `character_photos`
-   - `character_deliveries`, `delivery_parcels` (sender or recipient)
    - `fleamarket_listings`
    - `character_letters` (sender or recipient), `character_companion_phrases`, `character_delivery_notices`, `character_homes`
    - `character_boss_records`, `boss_challenge_history`

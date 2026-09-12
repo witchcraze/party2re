@@ -15,7 +15,6 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
-	"github.com/witchcraze/party2re/internal/delivery"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/fleamarket"
 	"github.com/witchcraze/party2re/internal/guild"
@@ -570,100 +569,6 @@ func TestConcurrencyStressMultiDomainChaos(t *testing.T) {
 
 	t.Logf("Multi-Domain Chaos Stress Test Completed: %d mixed domain operations across %d workers in %v with 0 deadlocks",
 		res.TotalOps, cfg.Workers, res.Duration)
-}
-
-func TestConcurrencyStressDeliveryClaimVsCancel(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	ctx := context.Background()
-	now := time.Now().UTC()
-
-	charRepo, err := NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	invRepo, err := NewInventoryRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	deliveryRepo, err := NewDeliveryRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	txProvider := NewTransactionProvider(db)
-
-	deliverySvc, err := delivery.NewService(
-		deliveryRepo,
-		charRepo,
-		invRepo,
-		delivery.WithTransactionProvider(txProvider),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create Sender & Recipient via centralized factory
-	senderChar, err := CreateTestCharacterWithFunds(ctx, db, "DelivSender", 100000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	recipientChar, err := CreateTestCharacterWithFunds(ctx, db, "DelivRecipient", 5000)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	const numRounds = 20
-	var claimWins int64
-	var cancelWins int64
-
-	for i := 0; i < numRounds; i++ {
-		parcel, err := deliverySvc.SendParcel(ctx, senderChar.ID, delivery.SendParcelRequest{
-			RecipientCharacterID: recipientChar.ID,
-			GoldAmount:           500,
-		}, now)
-		if err != nil {
-			t.Fatalf("round %d: SendParcel failed: %v", i, err)
-		}
-
-		claimErr, cancelErr := RunRace2(
-			func() error {
-				_, err := deliverySvc.ClaimParcel(ctx, recipientChar.ID, parcel.ID, now)
-				return err
-			},
-			func() error {
-				return deliverySvc.CancelParcel(ctx, senderChar.ID, parcel.ID)
-			},
-		)
-
-		if claimErr == nil && cancelErr == nil {
-			t.Fatalf("round %d: DOUBLE SPEND! Both ClaimParcel and CancelParcel succeeded on parcel %s", i, parcel.ID)
-		}
-
-		if claimErr == nil {
-			atomic.AddInt64(&claimWins, 1)
-			if !errors.Is(cancelErr, delivery.ErrParcelAlreadyClaimed) {
-				t.Fatalf("round %d: expected ErrParcelAlreadyClaimed for cancel, got %v", i, cancelErr)
-			}
-		} else if cancelErr == nil {
-			atomic.AddInt64(&cancelWins, 1)
-			if !errors.Is(claimErr, delivery.ErrParcelAlreadyClaimed) {
-				t.Fatalf("round %d: expected ErrParcelAlreadyClaimed for claim, got %v", i, claimErr)
-			}
-		} else {
-			t.Fatalf("round %d: both operations failed! claimErr: %v, cancelErr: %v", i, claimErr, cancelErr)
-		}
-	}
-
-	t.Logf("Delivery Claim vs Cancel race test passed across %d rounds: Claims=%d, Cancels=%d, 0 double-spends",
-		numRounds, claimWins, cancelWins)
 }
 
 func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {

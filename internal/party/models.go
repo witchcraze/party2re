@@ -22,7 +22,7 @@ const (
 
 	StatusRecruiting = "recruiting"
 	StatusInProgress = "in_progress"
-	StatusCompleted  = "completed"
+	StatusCompleted  = "completed" //lint:ignore unused party lifecycle status enum completeness
 	StatusDisbanded  = "disbanded"
 
 	DefaultSpeed = 3

@@ -14,7 +14,6 @@ import (
 	"github.com/witchcraze/party2re/internal/collection"
 	"github.com/witchcraze/party2re/internal/contest"
 	"github.com/witchcraze/party2re/internal/database"
-	"github.com/witchcraze/party2re/internal/delivery"
 	"github.com/witchcraze/party2re/internal/eventplaza"
 	"github.com/witchcraze/party2re/internal/farm"
 	"github.com/witchcraze/party2re/internal/god"
@@ -43,7 +42,6 @@ type miscServices struct {
 	lottery     *lottery.Service
 	tavern      *tavern.Service
 	blackmarket *blackmarket.Service
-	delivery    *delivery.Service
 	casino      *casino.Service
 	god         *god.Service
 	monster     *monster.Service
@@ -217,21 +215,6 @@ func newMiscServices(
 		return nil, err
 	}
 
-	deliveryRepo, err := database.NewDeliveryRepository(db)
-	if err != nil {
-		return nil, err
-	}
-	deliveryService, err := delivery.NewService(
-		deliveryRepo,
-		core.charRepo,
-		core.invRepo,
-		delivery.WithItemDefinitionProvider(core.itemCatalog),
-		delivery.WithTransactionProvider(core.txProvider),
-	)
-	if err != nil {
-		return nil, err
-	}
-
 	casinoRepo, err := database.NewCasinoRepository(db)
 	if err != nil {
 		return nil, err
@@ -349,7 +332,6 @@ func newMiscServices(
 		lottery:     lotteryService,
 		tavern:      tavernService,
 		blackmarket: blackmarketService,
-		delivery:    deliveryService,
 		casino:      casinoService,
 		god:         godService,
 		monster:     monsterService,

@@ -1,89 +1,79 @@
-# Town Delivery Quests and Player-to-Player Courier Service Design Specification
+# Tavern Post-Adventure Food Delivery Design Specification
 
 ## Overview
 
-The Delivery subsystem modernizes and cleanly reconstructs the original Party2 `delivery.cgi` ("でりばりー") mechanics. It provides two core game loops:
-1. **Town Delivery Quests**: NPC residents request deliveries of common items, medicines, or equipment to specific recipients across the game world. Fulfilling these quests grants Gold, Experience points, and rare bonus items.
-2. **Player-to-Player Courier Service**: Players can dispatch items and gold to other registered player characters with personalized messages via town couriers, paying a modest flat service fee (50 G).
+The Food Delivery ("でりばりー") subsystem is part of the Adventurer's Tavern module (`internal/tavern`, `docs/design/tavern.md`).
+In original Party2 (`party2/lib/bar.cgi`, `party2/lib/_battle.cgi`), delivery is NOT an NPC courier quest or parcel delivery system. It is a standing meal reservation made at the Tavern: an adventurer pre-orders food or drinks before heading out to adventure. When an adventure concludes, the tavern automatically delivers the meal, restoring HP and MP, deducting the meal cost, and awarding bonus raffle tickets for the town lottery.
+
+> [!NOTE]
+> Fictional NPC delivery quests and player-to-player parcel mail previously implemented in `internal/delivery` have been completely purged (#475) in accordance with the clean-room migration policy.
 
 ---
 
 ## 1. Domain Architecture & Invariants
 
 ```mermaid
-classDiagram
-    class Quest {
-        +string ID
-        +string ClientName
-        +string ClientMessage
-        +string TargetItemID
-        +string TargetItemName
-        +int RequiredQuantity
-        +string RecipientName
-        +string Destination
-        +int RewardGold
-        +int RewardExp
-        +string RewardItemID
-        +time.Time ExpiresAt
-        +time.Time CreatedAt
-    }
+sequenceDiagram
+    autonumber
+    actor Player
+    participant Tavern as Tavern Service
+    participant Adv as Adventure Service
+    participant DB as MariaDB / Tx
 
-    class CharacterDelivery {
-        +string ID
-        +string CharacterID
-        +string QuestID
-        +DeliveryStatus Status
-        +time.Time AcceptedAt
-        +time.Time CompletedAt
-    }
-
-    class Parcel {
-        +string ID
-        +string SenderCharacterID
-        +string SenderCharacterName
-        +string RecipientCharacterID
-        +string ItemID
-        +string ItemName
-        +int ItemQuantity
-        +int GoldAmount
-        +string Message
-        +int CourierFee
-        +ParcelStatus Status
-        +time.Time CreatedAt
-        +time.Time ClaimedAt
-    }
-
-    Quest "1" <-- "0..*" CharacterDelivery : references
+    Player->>Tavern: ReserveDelivery(character_id, item_id)
+    Tavern->>DB: Save DeliveryReservation (0G upfront)
+    Note over Player,Adv: Player departs on Adventure
+    Player->>Adv: Start & Claim Adventure
+    Adv->>DB: Resolve battle & commit rewards
+    Adv->>Tavern: PostAdventureHook -> ClaimDelivery(character_id)
+    alt Character has sufficient Gold
+        Tavern->>DB: Deduct meal Price, Restore HP/MP, Award Tickets, Delete Reservation
+        Tavern-->>Adv: Meal delivered & consumed
+    else Insufficient Gold
+        Tavern-->>Adv: Skip delivery (no charge, no heal)
+    end
 ```
 
 ### Invariants:
-1. **Concurrent Active Delivery Limit**: A character can hold a maximum of 3 concurrent in-progress delivery quests (`MaxActiveDeliveries = 3`).
-2. **Atomic Item Consumption & Reward Settlement**: Delivery completion verifies item possession under pessimistic row locks (`FOR UPDATE`), consumes items, adds gold/exp/bonus items, and updates delivery status within a single transaction boundary (`RunInTx`).
-3. **Pessimistic Locking Hierarchy**: All transactions strictly follow the lock acquisition hierarchy to prevent deadlocks:
-   - `characters` -> `inventory_items` -> `delivery_quests` / `character_deliveries` / `delivery_parcels`.
-4. **Non-Self Parcel Delivery**: Characters cannot send courier parcels to themselves.
-5. **Courier Fee**: A non-refundable 50 G flat courier fee is deducted from the sender upon parcel dispatch. If cancelled by the sender before claiming, the item and gold payload are refunded to the sender.
+1. **Zero Upfront Reservation Cost**: Reserving a delivery meal costs 0 G upfront (`party2/lib/bar.cgi:140`). Payment occurs upon successful delivery at adventure completion.
+2. **Single Active Reservation**: A character may hold at most one active delivery reservation at a time (`tavern_deliveries` keyed by `character_id`). Reserving another meal overwrites the active reservation.
+3. **Cancellation Without Fee**: Players can cancel a pending delivery reservation at any time with zero penalty or fee (`party2/lib/bar.cgi:149`).
+4. **Automated Post-Adventure Trigger**: When an adventure completes (`adventure.Claim`), the registered `PostAdventureHook` automatically invokes `ClaimDelivery`:
+   - If the player has sufficient funds (`Money >= Price`), the meal cost is deducted, HP and MP are restored (clamped to `MaxHP` / `MaxMP`), raffle tickets are awarded, and the delivery reservation is consumed.
+   - If funds are insufficient, delivery is skipped without deducting gold or applying restorative effects, and the error is treated as non-fatal so adventure rewards are not impeded.
+5. **Direct Manual Claim**: Characters may also manually claim a pending delivery meal via `POST /characters/{id}/tavern/delivery/claim`.
 
 ---
 
 ## 2. API Endpoints
 
+All food delivery endpoints are consolidated under the Tavern domain (`/characters/{id}/tavern/delivery`):
+
 | Method | Path | Summary | Authentication |
 |---|---|---|---|
-| `GET` | `/characters/{id}/delivery/quests` | List available town delivery quests | Bearer Token (Character Owner) |
-| `GET` | `/characters/{id}/delivery/active` | List character's active delivery quests | Bearer Token (Character Owner) |
-| `POST` | `/characters/{id}/delivery/accept` | Accept an available delivery quest | Bearer Token (Character Owner) |
-| `POST` | `/characters/{id}/delivery/complete` | Complete quest, consume items, claim rewards | Bearer Token (Character Owner) |
-| `POST` | `/characters/{id}/delivery/cancel` | Cancel an in-progress delivery quest | Bearer Token (Character Owner) |
-| `POST` | `/characters/{id}/delivery/parcels/send` | Send item/gold courier parcel to player | Bearer Token (Character Owner) |
-| `GET` | `/characters/{id}/delivery/parcels/incoming` | List incoming pending parcels | Bearer Token (Character Owner) |
-| `POST` | `/characters/{id}/delivery/parcels/claim` | Claim incoming courier parcel payload | Bearer Token (Character Owner) |
-| `POST` | `/characters/{id}/delivery/parcels/cancel` | Cancel outgoing pending parcel & refund payload | Bearer Token (Character Owner) |
+| `POST` | `/characters/{id}/tavern/delivery` | Reserve a tavern meal for post-adventure delivery | Bearer Token / Session |
+| `GET` | `/characters/{id}/tavern/delivery` | Inspect currently active delivery reservation | Bearer Token / Session |
+| `DELETE` | `/characters/{id}/tavern/delivery` | Cancel active delivery reservation | Bearer Token / Session |
+| `POST` | `/characters/{id}/tavern/delivery/claim` | Manually claim and consume reserved delivery meal | Bearer Token / Session |
 
 ---
 
 ## 3. Database Schema
 
-- `delivery_quests`: Stores world delivery quest definitions with expiration timestamps.
-- `character_deliveries`: Stores accepted quest progress (`in_progress`, `completed`, `cancelled`) linked to characters.
-- `delivery_parcels`: Stores player-to-player mail parcels (`pending`, `claimed`, `cancelled`).
+The subsystem uses `tavern_deliveries` (`migrations/039_tavern.sql`):
+
+```sql
+CREATE TABLE IF NOT EXISTS tavern_deliveries (
+    character_id CHAR(32) NOT NULL PRIMARY KEY,
+    item_id VARCHAR(64) NOT NULL,
+    item_name VARCHAR(128) NOT NULL,
+    price INT NOT NULL,
+    hp_heal INT NOT NULL,
+    mp_heal INT NOT NULL,
+    tickets INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_tavern_deliveries_char FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
+);
+```
+
+Legacy fictional tables `delivery_quests`, `character_deliveries`, and `delivery_parcels` have been purged via `migrations/069_drop_fictional_delivery_tables.sql`.

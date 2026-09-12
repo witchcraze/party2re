@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	valkeygo "github.com/valkey-io/valkey-go"
@@ -11,6 +12,7 @@ import (
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/scheduling"
+	"github.com/witchcraze/party2re/internal/tavern"
 )
 
 type appWiring struct {
@@ -128,6 +130,13 @@ func wireHooks(
 	}
 	if misc.tavern != nil {
 		soc.home.SetFullnessResetter(misc.tavern)
+		cmbt.adv.SetPostAdventureHook(func(ctx context.Context, characterID string) error {
+			_, err := misc.tavern.ClaimDelivery(ctx, characterID)
+			if errors.Is(err, tavern.ErrNoActiveDelivery) || errors.Is(err, tavern.ErrInsufficientFunds) {
+				return nil
+			}
+			return err
+		})
 	}
 	if misc.chapel != nil {
 		soc.home.SetBlessingCleaner(misc.chapel)
@@ -184,7 +193,6 @@ func newHTTPHandler(
 		http.WithSecretShop(misc.secretshop),
 		http.WithTavern(misc.tavern),
 		http.WithBlackMarket(misc.blackmarket),
-		http.WithDelivery(misc.delivery),
 		http.WithFleaMarket(econ.fleamarket),
 		http.WithGemStore(econ.gemStore),
 		http.WithStore(econ.store),
