@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "module": "plantation",
+  "domain": "種菜園 (@ロータス)",
+  "description": "Authentic Party2 seed cultivation facility. Sows 6 legacy seeds, applies 14 fertilizer reagents (Gold or Depot/Inventory items), matures overnight at next midnight JST, evaluates wither and yield bonuses, and deposits harvested items directly into Depot.",
+  "entrypoint": "internal/plantation/service.go",
+  "dependencies": [
+    {
+      "module": "core/character",
+      "relation_type": "public_service_call",
+      "methods": ["FindByID", "FindByIDForUpdate", "Update"],
+      "source_ref": "internal/plantation/service.go#CharacterRepository"
+    },
+    {
+      "module": "core/inventory",
+      "relation_type": "public_service_call",
+      "methods": ["FindByCharacterID", "FindByCharacterIDForUpdate", "Save"],
+      "source_ref": "internal/plantation/service.go#InventoryRepository"
+    },
+    {
+      "module": "depot",
+      "relation_type": "public_service_call",
+      "methods": ["FindByCharacterID", "FindByCharacterIDForUpdate", "Save"],
+      "source_ref": "internal/plantation/service.go#DepotRepository"
+    },
+    {
+      "module": "database",
+      "relation_type": "transaction_provider",
+      "methods": ["RunInTx"],
+      "source_ref": "internal/database/tx.go#TransactionProvider"
+    }
+  ],
+  "transaction_flows": [
+    {
+      "flow": "Sow (種まき・ゴールド支払い)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/plantation/service.go#Service.Sow",
+      "lock_sequence": [
+        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
+        { "step": 2, "target": "plantation_plots", "lock_order": 8, "method": "Repository.GetPlotForUpdate" },
+        { "step": 3, "target": "characters", "method": "CharacterRepository.Update" },
+        { "step": 4, "target": "plantation_plots", "method": "Repository.SavePlot" }
+      ]
+    },
+    {
+      "flow": "Fertilize (肥料散布・ゴールドまたは素材消費)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/plantation/service.go#Service.Fertilize",
+      "lock_sequence": [
+        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
+        { "step": 2, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate" },
+        { "step": 3, "target": "character_depots", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate" },
+        { "step": 4, "target": "plantation_plots", "lock_order": 8, "method": "Repository.GetPlotForUpdate" },
+        { "step": 5, "target": "plantation_plots", "method": "Repository.SavePlot" }
+      ]
+    },
+    {
+      "flow": "Harvest (収穫・預かり所納品)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/plantation/harvest.go#Service.Harvest",
+      "lock_sequence": [
+        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
+        { "step": 2, "target": "character_depots", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate" },
+        { "step": 3, "target": "plantation_plots", "lock_order": 8, "method": "Repository.GetPlotForUpdate" },
+        { "step": 4, "target": "depot_items", "method": "DepotRepository.Save" },
+        { "step": 5, "target": "plantation_plots", "method": "Repository.DeletePlot" }
+      ]
+    }
+  ]
+}

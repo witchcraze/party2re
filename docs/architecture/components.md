@@ -265,6 +265,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Overnight crafting item synthesis from 112 recipes (`recipes.json`) consuming Depot materials directly without gold fees, Depot-direct output delivery, home rest acceleration, and Recipe Compendium tracking with `comp_alc` title award.
   - **Dependencies:** Recipe Catalog, Item Catalog, Character repository, Depot repository, Economy (`RunInTx`).
   - **Persistence:** `character_alchemy` and `character_alchemy_recipes` tables via `internal/database/alchemy_repository.go` obeying global lock hierarchy (Rank 2 `characters` -> Rank 5 `character_depots` -> Rank 8 `character_alchemy`).
+- **Plantation** (`internal/plantation`):
+  - **Responsibility:** Seed cultivation facility hosted by NPC Lotus (`@ロータス`) reproducing legacy `plantation.cgi`. Supports 6 seed varieties, 14 fertilizer reagents (Gold or Depot/Inventory items), overnight maturation (`timer.NextMidnightJST`), wither and extra yield bonuses, and direct Depot delivery of harvested crops.
+  - **Dependencies:** Item Catalog, Character repository, Inventory repository, Depot repository, Timer service (`internal/core/timer`), Database (`RunInTx`).
+  - **Persistence:** `plantation_plots` table via `internal/database/plantation_repository.go` obeying global lock hierarchy (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 5 `character_depots` -> Rank 8 `plantation_plots`).
 - **Bank** (`internal/bank`):
   - **Responsibility:** Bank receptionist NPC Taxeed (`@タクシード`), character gold savings deposits, withdrawals with 999,999G wallet clamp and excess refund.
   - **Dependencies:** Character (wallet & deposit).
@@ -489,7 +493,7 @@ To preserve parallel testability and eliminate global state mutations (`os.Seten
    - `config.go`: Top-level `Config` struct and `ConfigFromEnv()` centralizing all environment variable keys and defaults.
    - `main.go`: High-level application entrypoint (`main`, `run`, `runWithConfig`), server lifecycle, signal trapping, and graceful shutdown (≤ 150 lines).
    - `services_core.go`: Player, Character, Inventory, Item/Job catalogs, and transaction orchestration.
-   - `services_econ.go`: Shop, Bank, Depot, Blacksmith, Alchemy, Auction, Flea Market, and Gem Store.
+   - `services_econ.go`: Shop, Bank, Depot, Blacksmith, Alchemy, Plantation, Auction, Flea Market, and Gem Store.
    - `services_cmbt.go`: Battle engine, Boss, PvP, GvG, Dungeon, Challenge, Party, Replay, and Custom Skill.
    - `services_soc.go`: Guild, Ranking, Park, Home, Notification, Scheduling, and background Worker.
    - `services_misc.go`: Town facilities and features (Farm, Casino, Contest, Medal, Collection, Inn, Chapel, Altar of Rebirth, Wishing Well, Activity, etc.).

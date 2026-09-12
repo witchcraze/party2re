@@ -145,7 +145,8 @@ func classifyLockCall(recvName, methodName, relPath string) (LockRank, string, b
 	// Rank 8: Secondary domain feature records
 	if strings.Contains(r, "monster") || strings.Contains(r, "achievement") ||
 		strings.Contains(r, "blackmarket") || strings.Contains(r, "point") ||
-		strings.Contains(r, "farm") || strings.Contains(m, "achievement") ||
+		strings.Contains(r, "farm") || strings.Contains(r, "plantation") ||
+		strings.Contains(r, "plot") || strings.Contains(m, "achievement") ||
 		strings.Contains(m, "point") {
 		return RankSecondaryFeature, fmt.Sprintf("%s.%s", recvName, methodName), true
 	}

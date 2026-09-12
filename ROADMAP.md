@@ -80,12 +80,12 @@ Completed features are tracked in [`docs/migration/feature-inventory.md`](docs/m
 
 Following a comprehensive clean-room specification audit of all 40 legacy CGI modules, 33 reconciliation issues (#459–#491) were identified and scheduled into 4 dependency-ordered milestones. Milestone 1 is complete (see `docs/migration/legacy-cgi-mapping.md`).
 
-##### Milestone 2: Economic, Life & Production Loop *(In Progress)*
+##### Milestone 2: Economic, Life & Production Loop *(Completed)*
 Reconcile facilities and production mechanics that depend on Depot storage and overnight cycles.
 - [x] **Tavern Food Delivery: Scheduled Post-Adventure Buffs** (#475)
 - [x] **Alchemy: Free Overnight Depot-linked Synthesis & Compendium** (#487)
 - [x] **Monster Ranch: Monster Stabling, Home Pet Link, Naming & P2P Gifting** (#488)
-- [ ] **Plantation: 6 Seeds, 14 Fertilizer Reagents & Overnight Depot Harvest** (#489)
+- [x] **Plantation: 6 Seeds, 14 Fertilizer Reagents & Overnight Depot Harvest** (#489)
 
 ##### Milestone 3: Adventure, Dungeons & Live Combat *(Planned)*
 Restore crawl structures, boss challenges, and multiplayer PvP/GvG arenas.

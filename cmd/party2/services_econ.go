@@ -11,6 +11,7 @@ import (
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/fleamarket"
 	gemstore "github.com/witchcraze/party2re/internal/gemstore"
+	"github.com/witchcraze/party2re/internal/plantation"
 	"github.com/witchcraze/party2re/internal/shop"
 	"github.com/witchcraze/party2re/internal/store"
 )
@@ -20,12 +21,14 @@ type econServices struct {
 	depot          *depot.Service
 	blacksmith     *blacksmith.Service
 	alchemy        *alchemy.Service
+	plantation     *plantation.Service
 	bank           *bank.Service
 	auction        *auction.Service
 	fleamarket     *fleamarket.Service
 	gemStore       *gemstore.Service
 	store          *store.Service
 	depotRepo      *database.DepotRepository
+	plantationRepo *database.PlantationRepository
 	gemBoxRepo     *database.GemBoxRepository
 	fleamarketRepo *database.FleaMarketRepository
 	storeRepo      *database.StoreRepository
@@ -89,6 +92,22 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		recipeCatalog,
 		core.itemCatalog,
 		alchemy.WithTransactionProvider(core.txProvider),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	plantationRepo, err := database.NewPlantationRepository(db)
+	if err != nil {
+		return nil, err
+	}
+	plantationService, err := plantation.NewService(
+		core.charRepo,
+		core.invRepo,
+		depotRepo,
+		plantationRepo,
+		core.itemCatalog,
+		plantation.WithTransactionProvider(core.txProvider),
 	)
 	if err != nil {
 		return nil, err
@@ -168,12 +187,14 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		depot:          depotService,
 		blacksmith:     blacksmithService,
 		alchemy:        alchemyService,
+		plantation:     plantationService,
 		bank:           bankService,
 		auction:        auctionService,
 		fleamarket:     fleamarketService,
 		gemStore:       gemStoreService,
 		store:          storeService,
 		depotRepo:      depotRepo,
+		plantationRepo: plantationRepo,
 		gemBoxRepo:     gemBoxRepo,
 		fleamarketRepo: fleamarketRepo,
 		storeRepo:      storeRepo,

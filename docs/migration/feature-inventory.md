@@ -109,7 +109,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Player Auction house and free-market operations ([#80](https://github.com/witchcraze/party2re/issues/80))
 - [x] Casino mini-games: Slot Machine ([#81](https://github.com/witchcraze/party2re/issues/81)), Indian Poker ([#82](https://github.com/witchcraze/party2re/issues/82)), Doppel ([#141](https://github.com/witchcraze/party2re/issues/141)), High & Low ([#64](https://github.com/witchcraze/party2re/issues/64))
 - [x] Lottery and raffle ticket systems ([#83](https://github.com/witchcraze/party2re/issues/83))
-- [ ] Plantation seed cultivation with 6 seeds & 14 fertilizers ([#84](https://github.com/witchcraze/party2re/issues/84), [#489](https://github.com/witchcraze/party2re/issues/489))
+- [x] Plantation seed cultivation with 6 seeds & 14 fertilizers ([#84](https://github.com/witchcraze/party2re/issues/84), [#489](https://github.com/witchcraze/party2re/issues/489))
 - [x] Collection and Monster Book encyclopedia ([#85](https://github.com/witchcraze/party2re/issues/85))
 - [x] Chapel prayers and blessings ([#86](https://github.com/witchcraze/party2re/issues/86))
 - [x] Event Plaza, traveling merchant bazaar, and victory celebrations ([#161](https://github.com/witchcraze/party2re/issues/161))
