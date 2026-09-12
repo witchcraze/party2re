@@ -20,12 +20,18 @@ func effectiveJobLevel(char corecharacter.Character) int {
 func (s *Service) findOrCreateDepot(ctx context.Context, characterID string, char corecharacter.Character) (Depot, error) {
 	dep, err := s.depotRepo.FindByCharacterIDForUpdate(ctx, characterID)
 	if err != nil && errors.Is(err, ErrNotFound) {
-		return NewDepotWithCapacity(characterID, effectiveJobLevel(char), 0, char.OverDepot)
+		newDep, err := NewDepotWithCapacity(characterID, effectiveJobLevel(char), 0, char.OverDepot)
+		if err != nil {
+			return Depot{}, err
+		}
+		newDep.ItemDefs = s.itemDefs
+		return newDep, nil
 	}
 	if err != nil {
 		return Depot{}, err
 	}
 	dep.RefreshCapacity(char.JobLevel, char.OverDepot)
+	dep.ItemDefs = s.itemDefs
 	return dep, nil
 }
 
@@ -85,12 +91,18 @@ func (s *Service) GetDepot(ctx context.Context, characterID string) (Depot, erro
 	}
 	depot, err := s.depotRepo.FindByCharacterID(ctx, characterID)
 	if err != nil && errors.Is(err, ErrNotFound) {
-		return NewDepotWithCapacity(characterID, effectiveJobLevel(char), 0, char.OverDepot)
+		newDep, err := NewDepotWithCapacity(characterID, effectiveJobLevel(char), 0, char.OverDepot)
+		if err != nil {
+			return Depot{}, err
+		}
+		newDep.ItemDefs = s.itemDefs
+		return newDep, nil
 	}
 	if err != nil {
 		return Depot{}, err
 	}
 	depot.RefreshCapacity(char.JobLevel, char.OverDepot)
+	depot.ItemDefs = s.itemDefs
 	return depot, nil
 }
 

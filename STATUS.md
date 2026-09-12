@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #560 — [Parity] Gem Store: Support dual-source appraisal from Depot storage in AppraiseItem (sub kantei parity)
+Last updated: Issue #563 — [Architecture] Core/Item: Enforce stackability invariant (IsStackable) across inventory and depot
 
 ## Current phase
 
@@ -30,7 +30,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Timer & Daily Quotas** (`internal/core/timer`): ✅ Valkey/in-memory native TTL timers and JST-midnight daily quotas.
 - **Progression** (`internal/core/progression`): ✅ Cumulative EXP (`level²×10`), OverLevel (Lv150), Happy Seed; enforced via AST linter.
 - **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): ✅ 72-job catalog, Lv20 job change, mastery, future memory snapshots, gem synthesis triggers.
-- **Item / Inventory / Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): ✅ 5-category catalog (269 items), UsageCategory validation, slot management.
+- **Item / Inventory / Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): ✅ 5-category catalog (269 items), UsageCategory validation, domain stackability invariants (`IsStackable`), slot management.
 - **Battle** (`internal/core/battle`): ✅ Deterministic turn resolver; party battle engine (4v N), skill/item/gem-effect/field-state/revival — full `_battle.cgi` parity (#480).
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): ✅ Valkey-backed delayed queue + distributed lock worker; package coverage 92.7%.
 - **Database & Transaction Orchestration** (`internal/database`, `internal/economy`, `internal/core/event`): ✅ `RunInTx`/`ExecutorFromContext` propagation, deterministic lock hierarchy (Rank 0→8) AST-enforced, `economy.TransactionRunner`, 2-phase event dispatcher.
@@ -41,7 +41,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Adventure** (`internal/adventure`): ✅ 28 stages, 286 monsters, Valkey Worker, chronicles, VictoryHook.
 - **Medal & Achievements** (`internal/medal`): ✅ Small Medal exchange → Depot; milestone achievement observer.
 - **Shop** (`internal/shop`): ✅ 3 shops with job-level gates, 50% sellback, MasterCard discount, Depot auto-delivery.
-- **Depot** (`internal/depot`): ✅ Dynamic capacity (up to 500 slots), tiered expansion, sort, item sell, gold/item direct-send, safe stack consumption (`ConsumeOne`), enhancement-level preservation (#558), standardized `RefreshCapacity` helper across commerce modules (#559).
+- **Depot** (`internal/depot`): ✅ Dynamic capacity (up to 500 slots), tiered expansion, sort, item sell, gold/item direct-send, safe stack consumption (`ConsumeOne`), enhancement-level & equipment stackability preservation (#558, #563), standardized `RefreshCapacity` helper across commerce modules (#559).
 - **Blacksmith** (`internal/blacksmith`): ✅ +1→+10 enhancement via `economy.TransactionRunner`.
 - **Alchemy** (`internal/alchemy`): ✅ 112 recipes; material consume + output — overnight/Depot parity pending (#487).
 - **Bank** (`internal/bank`): ✅ Character gold deposit/withdrawal; 999,999G wallet clamp; fictional `bank_accounts` table purged (#476).

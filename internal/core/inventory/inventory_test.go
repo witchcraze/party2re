@@ -100,3 +100,26 @@ func TestInventoryUpdate(t *testing.T) {
 		t.Fatalf("Update() missing item expected ErrItemNotFound, got %v", err)
 	}
 }
+
+func TestInventory_AddsMultipleEquipmentInstancesSeparately(t *testing.T) {
+	inv, _ := New("char-equip-inv")
+	sword1, _ := item.NewInstance("weapon-01", 1)
+	sword2, _ := item.NewInstance("weapon-01", 1)
+
+	if err := inv.Add(sword1); err != nil {
+		t.Fatalf("Add(sword1) failed: %v", err)
+	}
+	if err := inv.Add(sword2); err != nil {
+		t.Fatalf("Add(sword2) failed: %v", err)
+	}
+
+	if len(inv.Items) != 2 {
+		t.Fatalf("expected 2 distinct equipment slots in inventory, got %d", len(inv.Items))
+	}
+	if inv.Items[0].ID == inv.Items[1].ID {
+		t.Errorf("expected distinct instance IDs")
+	}
+	if inv.Quantity("weapon-01") != 2 {
+		t.Errorf("Quantity(weapon-01) = %d, want 2", inv.Quantity("weapon-01"))
+	}
+}
