@@ -254,6 +254,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#560](https://github.com/witchcraze/party2re/issues/560) | Gem Store: Support dual-source appraisal from Depot storage in AppraiseItem (sub kantei parity) | Completed |
 | [#563](https://github.com/witchcraze/party2re/issues/563) | Core/Item: Enforce stackability invariant (IsStackable) across inventory and depot | Completed |
 | [#562](https://github.com/witchcraze/party2re/issues/562) | Storage: Standardize item consumption interface (Consume, ConsumeItem, ConsumeOne, PurgeSlot) between Depot and Inventory | Completed |
+| [#561](https://github.com/witchcraze/party2re/issues/561) | Transaction: Formalize multi-aggregate and P2P transaction runner primitives and align tx_runner linter | Completed |
 
 ---
 

@@ -142,6 +142,34 @@ To prevent deadlocks mechanically, `ExecuteTransaction` enforces the global lock
 
 At no point may a secondary domain table or inventory table be locked prior to `characters`.
 
+### 4.4 Architectural Boundaries: Single-Character Runner vs. Multi-Aggregate and P2P Transactions
+
+Party2 transaction execution distinguishes two distinct operational scopes to avoid God-object bloat while guaranteeing deterministic concurrency control:
+
+#### 1. Single-Character Currency & Inventory Transactions (`economy.TransactionRunner`)
+- **Scope**: Operations modifying a single character's wallet, medals, and/or active inventory items (e.g. equipment enhancement in `blacksmith`, casino chip purchase/payout in `casino`, simple shop purchases in `shop`).
+- **Execution**: MUST use `economy.TransactionRunner` (`ExecuteTransaction` or `economy.Run[T]`).
+- **Guarantee**: Automatically encapsulates Rank 2 (`characters`) -> Rank 3 (`inventory_items`) locking order, balance validation, item capacity checks, and two-phase domain event dispatching.
+
+#### 2. Multi-Aggregate Transactions
+- **Scope**: Operations mutating state across multiple storage systems or secondary domain tables (e.g. shop purchases auto-delivering overflow to `character_depots` [Rank 5] in `secretshop`, black market rare item sacrifices affecting Depot items in `blackmarket`, gem store synthesis mutating `gem_boxes` [Rank 8] and Depot items in `gemstore`).
+- **Execution**: Feature services inject a `TransactionProvider` (`RunInTx(ctx, fn) error`, matching `economy.TransactionProvider`).
+- **Rationale**: `economy` cannot directly reference `depot`, `gemstore`, `store`, or `fleamarket` without introducing cyclic dependencies or bloating `economy` into a monolithic God object.
+- **Guarantee**: Domain callbacks must manually enforce ascending lock ranks:
+  $$\text{Rank 2 (characters)} \longrightarrow \text{Rank 3 (inventory\_items)} \longrightarrow \text{Rank 5 (character\_depots)} \longrightarrow \text{Rank 8 (domain records)}$$
+
+#### 3. Peer-to-Peer (P2P) Transactions
+- **Scope**: Transfers or direct trades between two distinct characters (e.g. `TransferGold` in `economy`, item/money mailing in `depot.SendMoney` and `depot.SendItem`, customer purchasing in `store.Sales`, P2P trade in `fleamarket.PurchaseListing`, auction bidding in `auction`).
+- **Execution**: Uses `id.Sort2(charID1, charID2)` to establish deterministic lexicographical ordering.
+- **Guarantee**: Always acquires Rank 2 character locks in ascending order before acquiring Rank 3 inventory or Rank 5 depot locks:
+  ```go
+  firstID, secondID := id.Sort2(buyerID, sellerID)
+  char1, err := s.characterRepo.FindByIDForUpdate(txCtx, firstID)
+  char2, err := s.characterRepo.FindByIDForUpdate(txCtx, secondID)
+  // Subsequent Rank 3 inventory or Rank 5 depot locks...
+  ```
+- **Prohibition**: Feature services MUST NEVER import `internal/database` directly to invoke raw `database.RunInTx(ctx, db, ...)` or hold raw `*sql.DB` references. All transaction boundaries must be injected via interfaces.
+
 ---
 
 ## 5. Domain Event Dispatcher Integration (`internal/core/event`)
@@ -289,17 +317,24 @@ The Depot domain migrated in Issue #445, eliminating dual-execution fallback log
 
 ---
 
-## 10. Migration Roadmap for Feature Domains
+## 10. Feature Domain Transaction Status and Roadmap
 
-Following Inn, Blacksmith, Casino, and Depot, remaining feature domains will migrate to the universal runner in subsequent issues:
+Following the establishment of the single-character `TransactionRunner` and multi-aggregate / P2P `TransactionProvider` patterns, domain status is tracked as follows:
 
-| Domain | Scope | Status | Primary Benefit |
+| Domain | Scope | Status | Execution Pattern & Primary Benefit |
 |---|---|---|---|
 | **Inn** (`internal/inn`) | Resting HP/MP recovery, level-scaled fee | Decommissioned (#459) | Fictional domain removed; replaced by free Home sleep (`internal/home`) |
-| **Blacksmith** (`internal/blacksmith`) | Equipment enhancement, upgrade materials | Migrated (#426) | Eliminates manual inventory + character dual locking and rollbacks |
-| **Casino** (`internal/casino`) | Poker, Slot, Doppelganger, HighLow bet & payout | Migrated (#427) | Unifies coin exchange and wager settlement with strict balance checking and deterministic lock order |
-| **Depot** (`internal/depot`) | Gold & item storage, inventory transfer | Migrated (#445) | Eliminates dual execution path, enforces Rank 2 -> 3 -> 5 locking order |
+| **Blacksmith** (`internal/blacksmith`) | Equipment enhancement, upgrade materials | Migrated (#426) | `economy.TransactionRunner`: eliminates manual inventory + character dual locking |
+| **Casino** (`internal/casino`) | Poker, Slot, Doppelganger, HighLow bet & payout | Migrated (#427) | `economy.TransactionRunner`: unifies coin exchange and wager settlement with strict balance checking |
+| **Shop** (`internal/shop`) | Standard purchases and resale | Migrated (#446) | `economy.TransactionRunner`: deterministic Rank 2 -> 3 -> 5 locking for auto-depot delivery |
+| **Depot** (`internal/depot`) | Storage, expansions, P2P send | Migrated (#445, #554, #562) | `economy.TransactionRunner` for internal moves; `TransactionProvider` + `id.Sort2` for P2P transfers |
+| **SecretShop** (`internal/secretshop`) | Secret item purchases and auto-depot transfer | Migrated (#554) | `economy.TransactionRunner` + `TransactionProvider` fallback for Depot delivery under Rank 2 -> 3 -> 5 |
+| **BlackMarket** (`internal/blackmarket`) | Rare item sacrifice, prize trade | Migrated (#554) | `TransactionProvider`: multi-aggregate storage consumption and prize delivery under Rank 2 -> 3 -> 5 |
+| **GemStore** (`internal/gemstore`) | Gem Box storage, synthesis, appraisal, P2P send | Migrated (#554) | `TransactionProvider`: P2P transfers (`id.Sort2`) and multi-aggregate synthesis under Rank 2 -> 3 -> 5 -> 8 |
+| **Store** (`internal/store`) | Player store sales and customer delivery | Migrated (#555) | `TransactionProvider`: P2P customer purchases (`id.Sort2`) under Rank 2 -> 3 -> 5 -> 8 |
+| **FleaMarket** (`internal/fleamarket`) | P2P item listings and purchase escrow | Migrated (#555) | `TransactionProvider`: two-party deterministic locking with `id.Sort2` under Rank 0 -> 2 -> 3 -> 5 |
+| **Auction** (`internal/auction`) | P2P live bidding and direct trade | Migrated (#556) | `TransactionProvider`: two-party deterministic locking with `id.Sort2` under Rank 0 -> 2 -> 3 |
 | **Alchemy** (`internal/alchemy`) | Multi-ingredient consumption and item synthesis | Planned | Streamlines recipe validation and batch inventory deductions |
 | **Guild** (`internal/guild`) | Guild founding fee, Gold donations | Planned | Standardizes donation limits and deterministic locking |
-| **FleaMarket** (`internal/fleamarket`) | P2P item listing, purchase escrow | Planned | Two-party deterministic locking with `id.Sort2` and item transfer |
+
 
