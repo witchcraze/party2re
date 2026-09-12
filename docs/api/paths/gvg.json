@@ -1,0 +1,128 @@
+{
+  "/gvg/leaderboard": {
+    "get": {
+      "operationId": "getGvgLeaderboard",
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "GET /gvg/leaderboard endpoint",
+      "tags": [
+        "Gvg"
+      ]
+    }
+  },
+  "/gvg/rooms": {
+    "get": {
+      "operationId": "getGvgRooms",
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "GET /gvg/rooms endpoint",
+      "tags": [
+        "Gvg"
+      ]
+    }
+  },
+  "/gvg/rooms/{room_id}": {
+    "get": {
+      "operationId": "getGvgRoomsRoomId",
+      "parameters": [
+        {
+          "description": "room_id parameter",
+          "in": "path",
+          "name": "room_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "GET /gvg/rooms/{room_id} endpoint",
+      "tags": [
+        "Gvg"
+      ]
+    }
+  },
+  "/gvg/standings/{guild_id}": {
+    "get": {
+      "operationId": "getGvgStandingsGuildId",
+      "parameters": [
+        {
+          "description": "guild_id parameter",
+          "in": "path",
+          "name": "guild_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "GET /gvg/standings/{guild_id} endpoint",
+      "tags": [
+        "Gvg"
+      ]
+    }
+  }
+}

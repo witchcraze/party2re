@@ -12,355 +12,488 @@ import (
 	"github.com/witchcraze/party2re/internal/gvg"
 )
 
-func TestMedalPromotion(t *testing.T) {
-	standing := gvg.GvGStanding{
-		BronzeMedals: 26, // 26 Bronze -> 5 Silver + 1 Bronze -> 1 Gold + 0 Silver + 1 Bronze
-	}
-	standing.PromoteMedals()
-
-	if standing.BronzeMedals != 1 {
-		t.Errorf("expected 1 bronze medal, got %d", standing.BronzeMedals)
-	}
-	if standing.SilverMedals != 0 {
-		t.Errorf("expected 0 silver medals, got %d", standing.SilverMedals)
-	}
-	if standing.GoldMedals != 1 {
-		t.Errorf("expected 1 gold medal, got %d", standing.GoldMedals)
-	}
-
-	// Test up to Champion Cup
-	standing2 := gvg.GvGStanding{
-		BronzeMedals: 5 * 5 * 5 * 5 * 5 * 2, // 2 Champion Cups
-	}
-	standing2.PromoteMedals()
-	if standing2.ChampionCups != 2 {
-		t.Errorf("expected 2 champion cups, got %d", standing2.ChampionCups)
-	}
+// mockStandingRepo implements gvg.StandingRepository for tests.
+type mockStandingRepo struct {
+	standings   map[string]gvg.GvGStanding
+	settlements []gvg.MatchSettlement
+	roundWins   map[string]int
 }
 
-func TestCalculateEloDelta(t *testing.T) {
-	tests := []struct {
-		name           string
-		cRating        int
-		dRating        int
-		cScore         int
-		dScore         int
-		wantCDeltaSign int // 1 for positive, -1 for negative, 0 for zero
-		wantDDeltaSign int
-	}{
-		{
-			name:           "Equal ratings challenger wins",
-			cRating:        1000,
-			dRating:        1000,
-			cScore:         3,
-			dScore:         1,
-			wantCDeltaSign: 1,
-			wantDDeltaSign: -1,
-		},
-		{
-			name:           "Equal ratings defender wins",
-			cRating:        1000,
-			dRating:        1000,
-			cScore:         1,
-			dScore:         3,
-			wantCDeltaSign: -1,
-			wantDDeltaSign: 1,
-		},
-		{
-			name:           "Equal ratings draw",
-			cRating:        1000,
-			dRating:        1000,
-			cScore:         2,
-			dScore:         2,
-			wantCDeltaSign: 0,
-			wantDDeltaSign: 0,
-		},
-		{
-			name:           "Much higher rated challenger wins (minimum +1)",
-			cRating:        3000,
-			dRating:        500,
-			cScore:         3,
-			dScore:         0,
-			wantCDeltaSign: 1,
-			wantDDeltaSign: -1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cDelta, dDelta := gvg.CalculateEloDelta(tt.cRating, tt.dRating, tt.cScore, tt.dScore)
-			if tt.wantCDeltaSign > 0 && cDelta <= 0 {
-				t.Errorf("expected positive cDelta, got %d", cDelta)
-			}
-			if tt.wantCDeltaSign < 0 && cDelta >= 0 {
-				t.Errorf("expected negative cDelta, got %d", cDelta)
-			}
-			if tt.wantCDeltaSign == 0 && cDelta != 0 {
-				t.Errorf("expected zero cDelta, got %d", cDelta)
-			}
-			if cDelta+dDelta != 0 {
-				t.Errorf("expected cDelta + dDelta = 0, got %d + %d = %d", cDelta, dDelta, cDelta+dDelta)
-			}
-		})
-	}
-}
-
-func TestCalculateGuildRewards(t *testing.T) {
-	cExp, dExp, cVP, dVP, cMedal, dMedal := gvg.CalculateGuildRewards(3, 1)
-	if cExp != 100 || dExp != 20 || cVP != 10 || dVP != 1 || !cMedal || dMedal {
-		t.Errorf("unexpected challenger win rewards: cExp=%d, dExp=%d, cVP=%d, dVP=%d, cMedal=%v, dMedal=%v",
-			cExp, dExp, cVP, dVP, cMedal, dMedal)
-	}
-
-	cExp, dExp, cVP, dVP, cMedal, dMedal = gvg.CalculateGuildRewards(1, 3)
-	if cExp != 20 || dExp != 100 || cVP != 1 || dVP != 10 || cMedal || !dMedal {
-		t.Errorf("unexpected defender win rewards: cExp=%d, dExp=%d, cVP=%d, dVP=%d, cMedal=%v, dMedal=%v",
-			cExp, dExp, cVP, dVP, cMedal, dMedal)
-	}
-
-	cExp, dExp, cVP, dVP, cMedal, dMedal = gvg.CalculateGuildRewards(2, 2)
-	if cExp != 50 || dExp != 50 || cVP != 3 || dVP != 3 || cMedal || dMedal {
-		t.Errorf("unexpected draw rewards: cExp=%d, dExp=%d, cVP=%d, dVP=%d, cMedal=%v, dMedal=%v",
-			cExp, dExp, cVP, dVP, cMedal, dMedal)
-	}
-}
-
-// Mock repositories for service testing
-type mockGvGRepo struct {
-	standings map[string]gvg.GvGStanding
-	matches   map[string]gvg.MatchRecord
-}
-
-func newMockGvGRepo() *mockGvGRepo {
-	return &mockGvGRepo{
+func newMockStandingRepo() *mockStandingRepo {
+	return &mockStandingRepo{
 		standings: make(map[string]gvg.GvGStanding),
-		matches:   make(map[string]gvg.MatchRecord),
+		roundWins: make(map[string]int),
 	}
 }
 
-func (m *mockGvGRepo) GetOrCreateStanding(ctx context.Context, guildID string) (gvg.GvGStanding, error) {
-	st, ok := m.standings[guildID]
-	if !ok {
-		st = gvg.GvGStanding{
-			GuildID:   guildID,
-			Rating:    gvg.DefaultRating,
-			UpdatedAt: time.Now(),
-		}
-		m.standings[guildID] = st
+func (m *mockStandingRepo) GetOrCreateStanding(_ context.Context, guildID string) (gvg.GvGStanding, error) {
+	if st, ok := m.standings[guildID]; ok {
+		return st, nil
 	}
+	st := gvg.GvGStanding{
+		GuildID:   guildID,
+		UpdatedAt: time.Now(),
+	}
+	m.standings[guildID] = st
 	return st, nil
 }
 
-func (m *mockGvGRepo) FindOpponentGuilds(ctx context.Context, challengerGuildID string, limit int) ([]gvg.GuildCandidate, error) {
-	return []gvg.GuildCandidate{
-		{GuildID: "g_defender", GuildName: "Defender Guild", Rating: 1000},
-	}, nil
-}
-
-func (m *mockGvGRepo) GetLeaderboard(ctx context.Context, limit int) ([]gvg.GvGStanding, error) {
+func (m *mockStandingRepo) GetLeaderboard(_ context.Context, limit int) ([]gvg.GvGStanding, error) {
 	var list []gvg.GvGStanding
 	for _, st := range m.standings {
 		list = append(list, st)
 	}
-	return list, nil
-}
-
-func (m *mockGvGRepo) GetMatchHistory(ctx context.Context, guildID string, limit int) ([]gvg.MatchRecord, error) {
-	var list []gvg.MatchRecord
-	for _, match := range m.matches {
-		if match.ChallengerGuildID == guildID || match.DefenderGuildID == guildID {
-			list = append(list, match)
-		}
+	if len(list) > limit {
+		list = list[:limit]
 	}
 	return list, nil
 }
 
-func (m *mockGvGRepo) GetMatchDetail(ctx context.Context, matchID string) (gvg.MatchRecord, error) {
-	match, ok := m.matches[matchID]
-	if !ok {
-		return gvg.MatchRecord{}, gvg.ErrMatchNotFound
-	}
-	return match, nil
-}
-
-func (m *mockGvGRepo) RecordMatchAndUpdateStandings(
-	ctx context.Context,
-	match gvg.MatchRecord,
-	challengerDelta, defenderDelta int,
-	challengerExp, defenderExp int64,
-	challengerVP, defenderVP int64,
-	challengerMedal, defenderMedal bool,
-	memberRewards map[string]gvg.MemberReward,
-) error {
-	m.matches[match.ID] = match
-
-	cSt, _ := m.GetOrCreateStanding(ctx, match.ChallengerGuildID)
-	cSt.Rating += challengerDelta
-	cSt.VictoryPoints += challengerVP
-	if challengerMedal {
-		cSt.BronzeMedals++
-		cSt.Wins++
-	} else if defenderMedal {
-		cSt.Losses++
-	} else {
-		cSt.Draws++
-	}
-	cSt.PromoteMedals()
-	m.standings[match.ChallengerGuildID] = cSt
-
-	dSt, _ := m.GetOrCreateStanding(ctx, match.DefenderGuildID)
-	dSt.Rating += defenderDelta
-	dSt.VictoryPoints += defenderVP
-	if defenderMedal {
-		dSt.BronzeMedals++
-		dSt.Wins++
-	} else if challengerMedal {
-		dSt.Losses++
-	} else {
-		dSt.Draws++
-	}
-	dSt.PromoteMedals()
-	m.standings[match.DefenderGuildID] = dSt
-
+func (m *mockStandingRepo) AddRoundWinGP(_ context.Context, guildID string, gp int) error {
+	st, _ := m.GetOrCreateStanding(context.Background(), guildID)
+	st.VictoryPoints += int64(gp)
+	m.standings[guildID] = st
+	m.roundWins[guildID] += gp
 	return nil
 }
 
-type mockGuildRepo struct {
-	guilds map[string]guild.Detail
+func (m *mockStandingRepo) RecordMatchSettlement(_ context.Context, settlement gvg.MatchSettlement) error {
+	m.settlements = append(m.settlements, settlement)
+	for _, gID := range settlement.GuildIDs {
+		st, _ := m.GetOrCreateStanding(context.Background(), gID)
+		extraGP := settlement.ParticipantGP[gID]
+		if settlement.IsDraw {
+			st.Draws++
+			st.VictoryPoints += int64(extraGP)
+		} else if gID == settlement.WinnerGuildID {
+			st.Wins++
+			st.VictoryPoints += int64(settlement.WinnerPrizeGP + extraGP)
+			st.BronzeMedals++
+			st.PromoteMedals()
+		} else {
+			st.Losses++
+			st.VictoryPoints += int64(extraGP)
+		}
+		m.standings[gID] = st
+	}
+	return nil
 }
 
-func (m *mockGuildRepo) GetGuild(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
-	d, ok := m.guilds[guildID]
+// mockGuildRepo implements gvg.GuildRepository for tests.
+type mockGuildRepo struct {
+	guilds     map[string]guild.Guild
+	charGuilds map[string]string
+	members    map[string][]guild.Member
+}
+
+func newMockGuildRepo() *mockGuildRepo {
+	return &mockGuildRepo{
+		guilds:     make(map[string]guild.Guild),
+		charGuilds: make(map[string]string),
+		members:    make(map[string][]guild.Member),
+	}
+}
+
+func (m *mockGuildRepo) GetGuild(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
+	g, ok := m.guilds[guildID]
 	if !ok {
 		return guild.Guild{}, nil, guild.ErrGuildNotFound
 	}
-	return d.Guild, d.Members, nil
+	return g, m.members[guildID], nil
 }
 
-func (m *mockGuildRepo) GetGuildByCharacter(ctx context.Context, characterID string) (guild.Guild, guild.Member, error) {
-	for _, d := range m.guilds {
-		for _, mem := range d.Members {
-			if mem.CharacterID == characterID {
-				return d.Guild, mem, nil
-			}
-		}
+func (m *mockGuildRepo) GetGuildByCharacter(_ context.Context, characterID string) (guild.Guild, guild.Member, error) {
+	gID, ok := m.charGuilds[characterID]
+	if !ok {
+		return guild.Guild{}, guild.Member{}, guild.ErrCharacterNotInGuild
 	}
-	return guild.Guild{}, guild.Member{}, guild.ErrCharacterNotInGuild
+	g, ok := m.guilds[gID]
+	if !ok {
+		return guild.Guild{}, guild.Member{}, guild.ErrGuildNotFound
+	}
+	return g, guild.Member{GuildID: gID, CharacterID: characterID, Role: guild.RoleMember}, nil
 }
 
+// mockCharRepo implements gvg.CharacterRepository for tests.
 type mockCharRepo struct {
-	chars map[string]corecharacter.Character
+	characters map[string]corecharacter.Character
 }
 
-func (m *mockCharRepo) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
-	c, ok := m.chars[id]
+func newMockCharRepo() *mockCharRepo {
+	return &mockCharRepo{characters: make(map[string]corecharacter.Character)}
+}
+
+func (m *mockCharRepo) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
+	c, ok := m.characters[id]
 	if !ok {
 		return corecharacter.Character{}, gvg.ErrCharacterNotFound
 	}
 	return c, nil
 }
 
-type mockBattleEngine struct{}
+func (m *mockCharRepo) Update(_ context.Context, character corecharacter.Character) error {
+	m.characters[character.ID] = character
+	return nil
+}
 
-func (m *mockBattleEngine) Resolve(req corebattle.Request) (corebattle.Result, error) {
-	winnerID := req.Participants[0].ID
-	loserID := req.Participants[1].ID
-	if req.Participants[1].Attack > req.Participants[0].Attack {
-		winnerID = req.Participants[1].ID
-		loserID = req.Participants[0].ID
-	}
-	return corebattle.Result{
-		Outcome:  corebattle.OutcomeWin,
-		WinnerID: winnerID,
-		LoserID:  loserID,
-		Turns:    5,
+// mockBattleEngine implements gvg.BattleEngine for tests.
+type mockBattleEngine struct {
+	outcome corebattle.Outcome
+}
+
+func (m *mockBattleEngine) ResolvePartyBattle(_ corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	return corebattle.PartyBattleResult{
+		Outcome: m.outcome,
+		Turns:   3,
 	}, nil
 }
 
-func TestServiceDeclareMatch(t *testing.T) {
+func createTestCharacter(id, name string, hp int, tired int) corecharacter.Character {
+	return corecharacter.Character{
+		ID:    id,
+		Name:  name,
+		JobID: "warrior",
+		Level: 10,
+		Stats: corecharacter.Stats{
+			HP:    hp,
+			MaxHP: 100,
+		},
+		Tired: tired,
+	}
+}
+
+func TestTrophyMedalPromotion(t *testing.T) {
+	// Test 7-tier cascading promotion:
+	// Bronze (5) -> Silver (5) -> Gold (5) -> Order (5) -> Trophy (5) -> Championship Cup (5) -> Champion Cup
+	st := gvg.GvGStanding{
+		BronzeMedals: 26, // 26 -> 1 Bronze + 5 Silver -> 1 Bronze + 0 Silver + 1 Gold
+	}
+	st.PromoteMedals()
+	if st.BronzeMedals != 1 || st.SilverMedals != 0 || st.GoldMedals != 1 {
+		t.Fatalf("expected 1 bronze, 0 silver, 1 gold, got B=%d S=%d G=%d", st.BronzeMedals, st.SilverMedals, st.GoldMedals)
+	}
+
+	// 5^6 = 15625 Bronze Medals = 1 Champion Cup
+	st2 := gvg.GvGStanding{
+		BronzeMedals: 15625 * 2,
+	}
+	st2.PromoteMedals()
+	if st2.ChampionCups != 2 || st2.BronzeMedals != 0 {
+		t.Fatalf("expected 2 champion cups, got %d (bronze=%d)", st2.ChampionCups, st2.BronzeMedals)
+	}
+
+	// Test Orders tier promotion
+	st3 := gvg.GvGStanding{
+		Orders: 5,
+	}
+	st3.PromoteMedals()
+	if st3.Orders != 0 || st3.Trophies != 1 {
+		t.Fatalf("expected 0 orders, 1 trophy, got O=%d T=%d", st3.Orders, st3.Trophies)
+	}
+}
+
+func TestCreateRoom(t *testing.T) {
 	ctx := context.Background()
+	roomRepo := gvg.NewMemoryRoomRepository()
+	standingRepo := newMockStandingRepo()
+	guildRepo := newMockGuildRepo()
+	charRepo := newMockCharRepo()
+	battleEngine := &mockBattleEngine{outcome: corebattle.OutcomeWin}
 
-	gvgRepo := newMockGvGRepo()
-	guildRepo := &mockGuildRepo{
-		guilds: map[string]guild.Detail{
-			"guild_a": {
-				Guild: guild.Guild{ID: "guild_a", Name: "Alpha Guild", Level: 1},
-				Members: []guild.Member{
-					{GuildID: "guild_a", CharacterID: "char_leader_a", Role: guild.RoleLeader},
-					{GuildID: "guild_a", CharacterID: "char_mem_a2", Role: guild.RoleMember},
-				},
-			},
-			"guild_b": {
-				Guild: guild.Guild{ID: "guild_b", Name: "Beta Guild", Level: 1},
-				Members: []guild.Member{
-					{GuildID: "guild_b", CharacterID: "char_leader_b", Role: guild.RoleLeader},
-					{GuildID: "guild_b", CharacterID: "char_mem_b2", Role: guild.RoleMember},
-				},
-			},
-		},
-	}
-
-	charRepo := &mockCharRepo{
-		chars: map[string]corecharacter.Character{
-			"char_leader_a": {ID: "char_leader_a", Name: "Leader A", Level: 10, Stats: corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 50, Defense: 30}},
-			"char_mem_a2":   {ID: "char_mem_a2", Name: "Member A2", Level: 8, Stats: corecharacter.Stats{HP: 80, MaxHP: 80, Attack: 40, Defense: 20}},
-			"char_leader_b": {ID: "char_leader_b", Name: "Leader B", Level: 5, Stats: corecharacter.Stats{HP: 50, MaxHP: 50, Attack: 20, Defense: 10}},
-			"char_mem_b2":   {ID: "char_mem_b2", Name: "Member B2", Level: 5, Stats: corecharacter.Stats{HP: 50, MaxHP: 50, Attack: 20, Defense: 10}},
-		},
-	}
-
-	battleEngine := &mockBattleEngine{}
-
-	svc, err := gvg.NewService(gvgRepo, guildRepo, charRepo, battleEngine)
+	svc, err := gvg.NewService(roomRepo, standingRepo, guildRepo, charRepo, battleEngine)
 	if err != nil {
-		t.Fatalf("failed to create gvg service: %v", err)
+		t.Fatal(err)
 	}
 
-	// 1. Validation: Member cannot declare match
-	_, err = svc.DeclareMatch(ctx, "char_mem_a2", "guild_b")
-	if !errors.Is(err, gvg.ErrUnauthorized) {
-		t.Errorf("expected ErrUnauthorized for regular member, got %v", err)
-	}
+	// Register characters
+	charRepo.characters["c1"] = createTestCharacter("c1", "Leader", 100, 0)
+	charRepo.characters["c_dead"] = createTestCharacter("c_dead", "Dead", 0, 0)
+	charRepo.characters["c_tired"] = createTestCharacter("c_tired", "Tired", 100, 100)
+	charRepo.characters["c_friendly"] = createTestCharacter("c_friendly", "Friendly", 100, 0)
 
-	// 2. Validation: Cannot challenge own guild
-	_, err = svc.DeclareMatch(ctx, "char_leader_a", "guild_a")
-	if !errors.Is(err, gvg.ErrCannotChallengeOwnGuild) {
-		t.Errorf("expected ErrCannotChallengeOwnGuild, got %v", err)
-	}
+	// Register guilds
+	guildRepo.guilds["g1"] = guild.Guild{ID: "g1", Name: "Crimson", Color: "#FF3333"}
+	guildRepo.charGuilds["c1"] = "g1"
 
-	// 3. Success declaration by leader
-	res, err := svc.DeclareMatch(ctx, "char_leader_a", "guild_b")
+	guildRepo.guilds["g_white"] = guild.Guild{ID: "g_white", Name: "WhiteGuild", Color: "#FFFFFF"}
+	guildRepo.charGuilds["c_friendly"] = "g_white"
+
+	t.Run("fails if character not in guild", func(t *testing.T) {
+		charRepo.characters["c_no_guild"] = createTestCharacter("c_no_guild", "NoGuild", 100, 0)
+		_, err := svc.CreateRoom(ctx, "c_no_guild", gvg.CreateRoomRequest{Name: "GvG Arena"})
+		if !errors.Is(err, gvg.ErrActorNotInGuild) {
+			t.Fatalf("expected ErrActorNotInGuild, got %v", err)
+		}
+	})
+
+	t.Run("fails if guild has friendly color #FFFFFF", func(t *testing.T) {
+		_, err := svc.CreateRoom(ctx, "c_friendly", gvg.CreateRoomRequest{Name: "GvG Arena"})
+		if !errors.Is(err, gvg.ErrFriendlyGuildCannotBattle) {
+			t.Fatalf("expected ErrFriendlyGuildCannotBattle, got %v", err)
+		}
+	})
+
+	t.Run("fails if unconscious or exhausted", func(t *testing.T) {
+		guildRepo.charGuilds["c_dead"] = "g1"
+		guildRepo.charGuilds["c_tired"] = "g1"
+
+		_, err := svc.CreateRoom(ctx, "c_dead", gvg.CreateRoomRequest{Name: "GvG Arena"})
+		if !errors.Is(err, gvg.ErrCharacterUnconscious) {
+			t.Fatalf("expected ErrCharacterUnconscious, got %v", err)
+		}
+
+		_, err = svc.CreateRoom(ctx, "c_tired", gvg.CreateRoomRequest{Name: "GvG Arena"})
+		if !errors.Is(err, gvg.ErrCharacterExhausted) {
+			t.Fatalf("expected ErrCharacterExhausted, got %v", err)
+		}
+	})
+
+	t.Run("successfully creates room with initial 2 GP prize pool", func(t *testing.T) {
+		detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{
+			Name:       "Crimson Clan War",
+			MaxMembers: 8,
+			TargetWins: 2,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if detail.Room.PrizePool != 2 {
+			t.Errorf("expected initial prize pool 2 GP, got %d", detail.Room.PrizePool)
+		}
+		if detail.Room.Status != gvg.StatusRecruiting {
+			t.Errorf("expected status recruiting, got %s", detail.Room.Status)
+		}
+		if len(detail.Members) != 1 {
+			t.Fatalf("expected 1 member, got %d", len(detail.Members))
+		}
+		if detail.Members[0].GuildColor != "#FF3333" {
+			t.Errorf("expected leader guild color #FF3333, got %s", detail.Members[0].GuildColor)
+		}
+
+		// Character is mapped to active room
+		inRoom, err := svc.GetCharacterRoom(ctx, "c1")
+		if err != nil || inRoom.Room.ID != detail.Room.ID {
+			t.Fatalf("expected character mapped to room %s, got %v", detail.Room.ID, err)
+		}
+	})
+
+	t.Run("fails if character already in active room", func(t *testing.T) {
+		_, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{Name: "Duplicate"})
+		if !errors.Is(err, gvg.ErrAlreadyInRoom) {
+			t.Fatalf("expected ErrAlreadyInRoom, got %v", err)
+		}
+	})
+}
+
+func TestJoinAndLeaveRoom(t *testing.T) {
+	ctx := context.Background()
+	roomRepo := gvg.NewMemoryRoomRepository()
+	standingRepo := newMockStandingRepo()
+	guildRepo := newMockGuildRepo()
+	charRepo := newMockCharRepo()
+	battleEngine := &mockBattleEngine{outcome: corebattle.OutcomeWin}
+
+	svc, _ := gvg.NewService(roomRepo, standingRepo, guildRepo, charRepo, battleEngine)
+
+	charRepo.characters["c1"] = createTestCharacter("c1", "Leader", 100, 0)
+	charRepo.characters["c2"] = createTestCharacter("c2", "Joiner", 100, 0)
+	charRepo.characters["c3"] = createTestCharacter("c3", "Third", 100, 0)
+
+	guildRepo.guilds["g1"] = guild.Guild{ID: "g1", Name: "Crimson", Color: "#FF3333"}
+	guildRepo.charGuilds["c1"] = "g1"
+
+	guildRepo.guilds["g2"] = guild.Guild{ID: "g2", Name: "Azure", Color: "#33CCFF"}
+	guildRepo.charGuilds["c2"] = "g2"
+	guildRepo.charGuilds["c3"] = "g2"
+
+	detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{
+		Name:       "Test GvG",
+		Password:   "secret",
+		MaxMembers: 2,
+		TargetWins: 1,
+	})
 	if err != nil {
-		t.Fatalf("DeclareMatch failed: %v", err)
+		t.Fatal(err)
 	}
 
-	if res.Match.WinnerGuildID != "guild_a" {
-		t.Errorf("expected winner guild_a, got %s", res.Match.WinnerGuildID)
-	}
-	if res.Match.ChallengerScore != 2 || res.Match.DefenderScore != 0 {
-		t.Errorf("expected score 2-0, got %d-%d", res.Match.ChallengerScore, res.Match.DefenderScore)
-	}
-	if res.ChallengerRatingDelta <= 0 || res.DefenderRatingDelta >= 0 {
-		t.Errorf("unexpected rating deltas: cDelta=%d, dDelta=%d", res.ChallengerRatingDelta, res.DefenderRatingDelta)
-	}
-	if res.ChallengerGuildExp != 100 || res.ChallengerVictoryPoints != 10 || !res.ChallengerMedalAwarded {
-		t.Errorf("unexpected challenger guild rewards: exp=%d, vp=%d, medal=%v",
-			res.ChallengerGuildExp, res.ChallengerVictoryPoints, res.ChallengerMedalAwarded)
+	t.Run("fails join with wrong password", func(t *testing.T) {
+		_, err := svc.JoinRoom(ctx, "c2", detail.Room.ID, "wrong")
+		if !errors.Is(err, gvg.ErrInvalidPassword) {
+			t.Fatalf("expected ErrInvalidPassword, got %v", err)
+		}
+	})
+
+	t.Run("successful join adds 1 GP to prize pool and adopts guild color", func(t *testing.T) {
+		joined, err := svc.JoinRoom(ctx, "c2", detail.Room.ID, "secret")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if joined.Room.PrizePool != 3 { // 2 initial + 1 joiner = 3 GP
+			t.Errorf("expected prize pool 3 GP, got %d", joined.Room.PrizePool)
+		}
+		if len(joined.Members) != 2 {
+			t.Fatalf("expected 2 members, got %d", len(joined.Members))
+		}
+		if joined.Members[1].GuildColor != "#33CCFF" {
+			t.Errorf("expected joiner guild color #33CCFF, got %s", joined.Members[1].GuildColor)
+		}
+	})
+
+	t.Run("fails join when room is full", func(t *testing.T) {
+		_, err := svc.JoinRoom(ctx, "c3", detail.Room.ID, "secret")
+		if !errors.Is(err, gvg.ErrRoomFull) {
+			t.Fatalf("expected ErrRoomFull, got %v", err)
+		}
+	})
+
+	t.Run("regular member leaves room and reduces 1 GP", func(t *testing.T) {
+		err := svc.LeaveRoom(ctx, "c2", detail.Room.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		afterLeave, err := svc.GetRoom(ctx, detail.Room.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(afterLeave.Members) != 1 {
+			t.Fatalf("expected 1 member left, got %d", len(afterLeave.Members))
+		}
+		if afterLeave.Room.PrizePool != 2 {
+			t.Errorf("expected prize pool reduced to 2 GP, got %d", afterLeave.Room.PrizePool)
+		}
+	})
+
+	t.Run("leader leaves and disbands room", func(t *testing.T) {
+		err := svc.LeaveRoom(ctx, "c1", detail.Room.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = svc.GetRoom(ctx, detail.Room.ID)
+		if !errors.Is(err, gvg.ErrRoomNotFound) {
+			t.Fatalf("expected ErrRoomNotFound after disband, got %v", err)
+		}
+	})
+}
+
+func TestGvGMatchFlow(t *testing.T) {
+	ctx := context.Background()
+	roomRepo := gvg.NewMemoryRoomRepository()
+	standingRepo := newMockStandingRepo()
+	guildRepo := newMockGuildRepo()
+	charRepo := newMockCharRepo()
+	battleEngine := &mockBattleEngine{outcome: corebattle.OutcomeWin}
+
+	svc, _ := gvg.NewService(roomRepo, standingRepo, guildRepo, charRepo, battleEngine)
+
+	charRepo.characters["c1"] = createTestCharacter("c1", "Leader Crimson", 50, 0)
+	charRepo.characters["c2"] = createTestCharacter("c2", "Ally Crimson", 60, 0)
+	charRepo.characters["c3"] = createTestCharacter("c3", "Enemy Azure", 70, 0)
+
+	guildRepo.guilds["g_crimson"] = guild.Guild{ID: "g_crimson", Name: "Crimson", Color: "#FF3333"}
+	guildRepo.charGuilds["c1"] = "g_crimson"
+	guildRepo.charGuilds["c2"] = "g_crimson"
+
+	guildRepo.guilds["g_azure"] = guild.Guild{ID: "g_azure", Name: "Azure", Color: "#33CCFF"}
+	guildRepo.charGuilds["c3"] = "g_azure"
+
+	detail, err := svc.CreateRoom(ctx, "c1", gvg.CreateRoomRequest{
+		Name:       "War of the Guilds",
+		MaxMembers: 4,
+		TargetWins: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	// 4. Query standing & match history
-	stA, err := svc.GetStanding(ctx, "guild_a")
-	if err != nil || stA.Wins != 1 || stA.BronzeMedals != 1 {
-		t.Errorf("unexpected guild A standing: %#v, err=%v", stA, err)
+	t.Run("cannot start with only 1 participant", func(t *testing.T) {
+		_, err := svc.StartMatch(ctx, "c1", detail.Room.ID)
+		if !errors.Is(err, gvg.ErrNotEnoughParticipants) {
+			t.Fatalf("expected ErrNotEnoughParticipants, got %v", err)
+		}
+	})
+
+	// Add ally with same color
+	_, err = svc.JoinRoom(ctx, "c2", detail.Room.ID, "")
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	history, err := svc.GetMatchHistory(ctx, "guild_a", 10)
-	if err != nil || len(history) != 1 {
-		t.Errorf("expected 1 match in history, got %d, err=%v", len(history), err)
+	t.Run("cannot start with only 1 guild color", func(t *testing.T) {
+		_, err := svc.StartMatch(ctx, "c1", detail.Room.ID)
+		if !errors.Is(err, gvg.ErrNeedAtLeastTwoGuilds) {
+			t.Fatalf("expected ErrNeedAtLeastTwoGuilds, got %v", err)
+		}
+	})
+
+	// Add opponent with different color
+	_, err = svc.JoinRoom(ctx, "c3", detail.Room.ID, "")
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	detail, err := svc.GetMatchDetail(ctx, res.Match.ID)
-	if err != nil || detail.ID != res.Match.ID {
-		t.Errorf("unexpected match detail: %#v, err=%v", detail, err)
-	}
+	t.Run("start match recovers HP and sets round 1 in progress", func(t *testing.T) {
+		started, err := svc.StartMatch(ctx, "c1", detail.Room.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if started.Room.Status != gvg.StatusInProgress || started.Room.Round != 1 {
+			t.Fatalf("expected in_progress round 1, got status=%s round=%d", started.Room.Status, started.Room.Round)
+		}
+		// Participant HP should be restored to MaxHP (100)
+		for _, m := range started.Members {
+			if m.HP != 100 {
+				t.Errorf("expected HP restored to 100, got %d for %s", m.HP, m.CharacterName)
+			}
+		}
+	})
+
+	t.Run("advance round resolves combat and completes match on target wins", func(t *testing.T) {
+		// Prize pool: 2 initial + 2 joiners (c2, c3) = 4 GP
+		res, err := svc.AdvanceRound(ctx, "c1", detail.Room.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !res.MatchCompleted {
+			t.Fatal("expected match to be completed on reaching 1 target win")
+		}
+		if res.Outcome != "match_won" {
+			t.Errorf("expected outcome match_won, got %s", res.Outcome)
+		}
+		if res.OverallWinnerGuildID != "g_crimson" {
+			t.Errorf("expected winner g_crimson, got %s", res.OverallWinnerGuildID)
+		}
+
+		// Verify Standings:
+		// 1. Round win: g_crimson got +3 GP
+		// 2. Match settlement:
+		//    - g_crimson (winner): +4 GP prize pool + (4 * 2 participants) = 12 GP, +1 Win, +1 Bronze Medal
+		//    - Total GP for g_crimson: 3 (round) + 12 (match) = 15 GP
+		//    - g_azure (loser): +1 Loss, + (4 * 1 participant) = 4 GP
+		stCrimson, err := standingRepo.GetOrCreateStanding(ctx, "g_crimson")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stCrimson.Wins != 1 {
+			t.Errorf("expected 1 win for Crimson, got %d", stCrimson.Wins)
+		}
+		if stCrimson.BronzeMedals != 1 {
+			t.Errorf("expected 1 bronze medal for Crimson, got %d", stCrimson.BronzeMedals)
+		}
+		if stCrimson.VictoryPoints != 15 {
+			t.Errorf("expected 15 GP for Crimson, got %d", stCrimson.VictoryPoints)
+		}
+
+		stAzure, err := standingRepo.GetOrCreateStanding(ctx, "g_azure")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stAzure.Losses != 1 {
+			t.Errorf("expected 1 loss for Azure, got %d", stAzure.Losses)
+		}
+		if stAzure.VictoryPoints != 4 {
+			t.Errorf("expected 4 GP for Azure, got %d", stAzure.VictoryPoints)
+		}
+	})
 }

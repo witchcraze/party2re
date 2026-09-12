@@ -44,7 +44,7 @@ party2:<namespace>:<entity>[:<identifier>...]
 ```
 
 - **Root Prefix**: Always `party2:`. Enforces namespace isolation on shared or multi-tenant Valkey clusters.
-- **Namespace**: The domain or architectural subsystem (`session`, `player`, `maintenance`, `scheduled`, `ratelimit`, `ranking`, `party`, `dungeon`, `challenge`, `boss`, `timer`, `daily`, `pvp`).
+- **Namespace**: The domain or architectural subsystem (`session`, `player`, `maintenance`, `scheduled`, `ratelimit`, `ranking`, `party`, `dungeon`, `challenge`, `boss`, `timer`, `daily`, `pvp`, `gvg`).
 - **Entity**: The specific resource or data collection (`action`, `lock`, `snapshot`, `status`, `sessions`).
 - **Identifier**: Dynamic identifier (`token`, `player_id`, `action_id`, `category`, etc.).
 - **Case**: Strictly lowercase ASCII alphanumeric with colons `:` as delimiters. Compound entity terms use snake_case (`status`, `pending`, `snapshot`).
@@ -112,6 +112,9 @@ The table below catalogs all production key patterns currently active in the cod
 | `party2:pvp:room:<room_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | JSON (`RoomDetail`: `Room`, `Members`) | `internal/pvp` | `SaveRoom` (SET EX), `GetRoom` (GET), `DeleteRoom` (DEL). Ephemeral Colosseum room state. |
 | `party2:pvp:character:<character_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | Room ID (`string`) | `internal/pvp` | `SetCharacterRoom` (SET EX), `GetCharacterRoom` (GET), `DeleteCharacterRoom` (DEL). Single active room check. |
 | `party2:pvp:rooms` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `room_id`, Score: `CreatedAt.Unix()` | `internal/pvp` | `SaveRoom` (ZADD), `DeleteRoom` (ZREM), `ListRooms` (ZRANGE). Active Colosseum rooms list. |
+| `party2:gvg:room:<room_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | JSON (`RoomDetail`: `Room`, `Members`) | `internal/gvg` | `SaveRoom` (SET EX), `GetRoom` (GET), `DeleteRoom` (DEL). Ephemeral GvG room state. |
+| `party2:gvg:character:<character_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | Room ID (`string`) | `internal/gvg` | `SetCharacterRoom` (SET EX), `GetCharacterRoom` (GET), `DeleteCharacterRoom` (DEL). Single active GvG room check. |
+| `party2:gvg:rooms` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `room_id`, Score: `CreatedAt.Unix()` | `internal/gvg` | `SaveRoom` (ZADD), `DeleteRoom` (ZREM), `ListRooms` (ZRANGE). Active GvG rooms list. |
 
 
 ---

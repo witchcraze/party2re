@@ -48,6 +48,7 @@ func TestGvGRepository(t *testing.T) {
 		Name:              guildA_Name,
 		LeaderCharacterID: charA.ID,
 		Level:             1,
+		Color:             "#FF3333",
 		Notice:            "Guild A",
 	}
 	memA := guild.Member{
@@ -74,6 +75,7 @@ func TestGvGRepository(t *testing.T) {
 		Name:              guildB_Name,
 		LeaderCharacterID: charB.ID,
 		Level:             1,
+		Color:             "#6666FF",
 		Notice:            "Guild B",
 	}
 	memB := guild.Member{
@@ -90,106 +92,78 @@ func TestGvGRepository(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetOrCreateStanding guild A: %v", err)
 	}
-	if stA.Rating != 1000 || stA.Wins != 0 || stA.BronzeMedals != 0 {
+	if stA.Wins != 0 || stA.BronzeMedals != 0 || stA.VictoryPoints != 0 {
 		t.Errorf("unexpected initial standing A: %#v", stA)
 	}
 
-	// 4. Test FindOpponentGuilds
-	opponents, err := gvgRepo.FindOpponentGuilds(ctx, guildA_ID, 10)
+	// 4. Test AddRoundWinGP
+	if err := gvgRepo.AddRoundWinGP(ctx, guildA_ID, 3); err != nil {
+		t.Fatalf("AddRoundWinGP: %v", err)
+	}
+	stA_afterRound, err := gvgRepo.GetOrCreateStanding(ctx, guildA_ID)
 	if err != nil {
-		t.Fatalf("FindOpponentGuilds: %v", err)
+		t.Fatalf("GetOrCreateStanding after round win: %v", err)
 	}
-	if len(opponents) == 0 {
-		t.Fatalf("expected at least 1 opponent guild")
-	}
-	for _, opp := range opponents {
-		if opp.GuildID == guildA_ID {
-			t.Errorf("FindOpponentGuilds returned self: %s", opp.GuildID)
-		}
-		if opp.GuildName == "" || opp.Level <= 0 {
-			t.Errorf("invalid opponent candidate: %#v", opp)
-		}
+	if stA_afterRound.VictoryPoints != 3 {
+		t.Errorf("expected 3 GP after round win, got %d", stA_afterRound.VictoryPoints)
 	}
 
-	// 5. Test RecordMatchAndUpdateStandings
-	matchID := fmt.Sprintf("gvg_test_%d", time.Now().UnixNano())
-	roundID := fmt.Sprintf("%s_r1", matchID)
-	matchRecord := gvg.MatchRecord{
-		ID:                     matchID,
-		ChallengerGuildID:      guildA_ID,
-		DefenderGuildID:        guildB_ID,
-		WinnerGuildID:          guildA_ID,
-		ChallengerScore:        1,
-		DefenderScore:          0,
-		TotalRounds:            1,
-		ChallengerRatingBefore: 1000,
-		ChallengerRatingAfter:  1016,
-		DefenderRatingBefore:   1000,
-		DefenderRatingAfter:    984,
-		Rounds: []gvg.MatchRound{
-			{
-				ID:                      roundID,
-				MatchID:                 matchID,
-				RoundIndex:              1,
-				ChallengerCharacterID:   charA.ID,
-				ChallengerCharacterName: charA.Name,
-				DefenderCharacterID:     charB.ID,
-				DefenderCharacterName:   charB.Name,
-				WinnerCharacterID:       charA.ID,
-				Turns:                   4,
-				CreatedAt:               time.Now(),
-			},
+	// 5. Test RecordMatchSettlement (Win / Loss)
+	settlement := gvg.MatchSettlement{
+		WinnerGuildID: guildA_ID,
+		WinnerPrizeGP: 3, // 3 GP room prize pool
+		GuildIDs:      []string{guildA_ID, guildB_ID},
+		IsDraw:        false,
+		ParticipantGP: map[string]int{
+			guildA_ID: 4, // 1 participant * 4 GP
+			guildB_ID: 4, // 1 participant * 4 GP
 		},
-		CreatedAt: time.Now(),
+	}
+	if err := gvgRepo.RecordMatchSettlement(ctx, settlement); err != nil {
+		t.Fatalf("RecordMatchSettlement: %v", err)
 	}
 
-	memberRewards := map[string]gvg.MemberReward{
-		charA.ID: {Experience: 50, Gold: 100},
-		charB.ID: {Experience: 15, Gold: 20},
-	}
-
-	err = gvgRepo.RecordMatchAndUpdateStandings(
-		ctx,
-		matchRecord,
-		16, -16,
-		100, 20,
-		10, 1,
-		true, false,
-		memberRewards,
-	)
-	if err != nil {
-		t.Fatalf("RecordMatchAndUpdateStandings failed: %v", err)
-	}
-
-	// 6. Verify Updated Standings
 	updatedA, err := gvgRepo.GetOrCreateStanding(ctx, guildA_ID)
-	if err != nil || updatedA.Rating != 1016 || updatedA.Wins != 1 || updatedA.BronzeMedals != 1 || updatedA.VictoryPoints != 10 {
-		t.Errorf("unexpected updated standing A: %#v, err=%v", updatedA, err)
+	if err != nil {
+		t.Fatalf("GetOrCreateStanding A after settlement: %v", err)
+	}
+	// 3 GP (from round) + 3 GP (prize pool) + 4 GP (participant) = 10 GP
+	if updatedA.Wins != 1 || updatedA.BronzeMedals != 1 || updatedA.VictoryPoints != 10 {
+		t.Errorf("unexpected updated standing A: %#v", updatedA)
 	}
 
 	updatedB, err := gvgRepo.GetOrCreateStanding(ctx, guildB_ID)
-	if err != nil || updatedB.Rating != 984 || updatedB.Losses != 1 || updatedB.VictoryPoints != 1 {
-		t.Errorf("unexpected updated standing B: %#v, err=%v", updatedB, err)
-	}
-
-	// 7. Verify Match Detail
-	detail, err := gvgRepo.GetMatchDetail(ctx, matchID)
 	if err != nil {
-		t.Fatalf("GetMatchDetail failed: %v", err)
+		t.Fatalf("GetOrCreateStanding B after settlement: %v", err)
 	}
-	if detail.WinnerGuildID != guildA_ID || len(detail.Rounds) != 1 {
-		t.Errorf("unexpected match detail: %#v", detail)
-	}
-
-	// 8. Verify Match History
-	history, err := gvgRepo.GetMatchHistory(ctx, guildA_ID, 10)
-	if err != nil || len(history) == 0 {
-		t.Fatalf("GetMatchHistory failed: %v", err)
+	// 4 GP (participant), 1 loss
+	if updatedB.Losses != 1 || updatedB.VictoryPoints != 4 {
+		t.Errorf("unexpected updated standing B: %#v", updatedB)
 	}
 
-	// 9. Verify Leaderboard
+	// 6. Test Draw Settlement
+	drawSettlement := gvg.MatchSettlement{
+		WinnerGuildID: "",
+		WinnerPrizeGP: 0,
+		GuildIDs:      []string{guildA_ID, guildB_ID},
+		IsDraw:        true,
+		ParticipantGP: map[string]int{
+			guildA_ID: 4,
+			guildB_ID: 4,
+		},
+	}
+	if err := gvgRepo.RecordMatchSettlement(ctx, drawSettlement); err != nil {
+		t.Fatalf("RecordMatchSettlement (draw): %v", err)
+	}
+
+	afterDrawA, err := gvgRepo.GetOrCreateStanding(ctx, guildA_ID)
+	if err != nil || afterDrawA.Draws != 1 || afterDrawA.VictoryPoints != 14 {
+		t.Errorf("unexpected standing A after draw: %#v, err=%v", afterDrawA, err)
+	}
+
+	// 7. Verify Leaderboard
 	leaderboard, err := gvgRepo.GetLeaderboard(ctx, 10)
-	if err != nil || len(leaderboard) == 0 {
-		t.Fatalf("GetLeaderboard failed: %v", err)
+	if err != nil || len(leaderboard) < 2 {
+		t.Fatalf("GetLeaderboard failed: len=%d, err=%v", len(leaderboard), err)
 	}
 }
