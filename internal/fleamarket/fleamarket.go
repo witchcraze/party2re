@@ -310,6 +310,7 @@ func (s *Service) PurchaseListing(
 		if err != nil {
 			return err
 		}
+		buyerDepot.RefreshCapacity(buyerChar.JobLevel, buyerChar.OverDepot)
 
 		// 5. Transfer Gold
 		if err := buyerChar.DeductMoney(listing.Price); err != nil {
@@ -391,13 +392,23 @@ func (s *Service) CancelListing(
 			return ErrListingNotActive
 		}
 
-		// 2. Lock seller depot (Rank 5)
+		// 2. Lock seller character (Rank 2)
+		sellerChar, err := s.charRepo.FindByIDForUpdate(txCtx, sellerCharacterID)
+		if err != nil {
+			if errors.Is(err, corecharacter.ErrNotFound) {
+				return ErrCharacterNotFound
+			}
+			return err
+		}
+
+		// 3. Lock seller depot (Rank 5)
 		sellerDepot, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, sellerCharacterID)
 		if err != nil {
 			return err
 		}
+		sellerDepot.RefreshCapacity(sellerChar.JobLevel, sellerChar.OverDepot)
 
-		// 3. Return item instance to seller depot (legacy &send_item)
+		// 4. Return item instance to seller depot (legacy &send_item)
 		itemInst, err := coreitem.NewInstance(listing.ItemID, 1)
 		if err != nil {
 			return err

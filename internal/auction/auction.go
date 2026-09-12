@@ -189,6 +189,7 @@ func (s *Service) Send(ctx context.Context, req SendRequest) (SendResult, error)
 		if err != nil {
 			return err
 		}
+		receiverDepot.RefreshCapacity(receiverChar.JobLevel, receiverChar.OverDepot)
 
 		senderEquip, err := s.equipRepo.FindByCharacterID(txCtx, senderID)
 		if err != nil {

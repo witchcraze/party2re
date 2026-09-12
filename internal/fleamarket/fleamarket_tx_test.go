@@ -309,3 +309,112 @@ func TestFleaMarketService_QueriesAndPagination(t *testing.T) {
 		t.Errorf("expected ErrInvalidInput for empty seller ID in CancelListing, got %v", err)
 	}
 }
+
+func TestFleaMarketService_PurchaseListing_HighJobLevel_ExceedsInitialCapacity(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockFleaMarketRepo()
+	charRepo := newMockCharRepo()
+	depotRepo := newMockDepotRepo()
+	itemDefs := &mockItemDefs{}
+
+	svc, _ := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
+
+	sellerID := "seller-hj"
+	buyerID := "buyer-hj"
+
+	charRepo.characters[sellerID] = corecharacter.Character{
+		ID:    sellerID,
+		Name:  "SellerHJ",
+		Money: 0,
+	}
+	charRepo.characters[buyerID] = corecharacter.Character{
+		ID:       buyerID,
+		Name:     "BuyerHJ",
+		JobLevel: 20, // dynamic depot capacity = 20*5+5 = 105
+		Money:    1000,
+	}
+
+	// Seller depot with listing item
+	sellerDepot, _ := depot.NewDepot(sellerID)
+	sellerDepot.Capacity = 20
+	herbInst, _ := coreitem.NewInstance("item-herb", 1)
+	_ = sellerDepot.AddItem(herbInst)
+	_ = depotRepo.Save(ctx, sellerDepot)
+
+	// Buyer depot populated with 6 distinct items (exceeds initial capacity of 5)
+	buyerDepot, _ := depot.NewDepot(buyerID)
+	for i := 0; i < 6; i++ {
+		fillInst, _ := coreitem.NewInstance(fmt.Sprintf("item-fill-%d", i), 1)
+		buyerDepot.Items = append(buyerDepot.Items, fillInst)
+	}
+	_ = depotRepo.Save(ctx, buyerDepot)
+
+	now := time.Now().UTC()
+	listing, err := svc.CreateListing(ctx, sellerID, "item-herb", 100, now)
+	if err != nil {
+		t.Fatalf("CreateListing failed: %v", err)
+	}
+
+	result, err := svc.PurchaseListing(ctx, buyerID, listing.ID, now)
+	if err != nil {
+		t.Fatalf("PurchaseListing failed for high JobLevel character with >5 depot items: %v", err)
+	}
+	if result.BuyerGold != 900 {
+		t.Errorf("expected buyer gold 900, got %d", result.BuyerGold)
+	}
+
+	updatedBuyerDepot, _ := depotRepo.FindByCharacterID(ctx, buyerID)
+	if len(updatedBuyerDepot.Items) != 7 {
+		t.Errorf("expected 7 items in buyer depot, got %d", len(updatedBuyerDepot.Items))
+	}
+}
+
+func TestFleaMarketService_CancelListing_HighJobLevel_ExceedsInitialCapacity(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockFleaMarketRepo()
+	charRepo := newMockCharRepo()
+	depotRepo := newMockDepotRepo()
+	itemDefs := &mockItemDefs{}
+
+	svc, _ := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
+
+	sellerID := "seller-cancel-hj"
+	charRepo.characters[sellerID] = corecharacter.Character{
+		ID:       sellerID,
+		Name:     "SellerCancelHJ",
+		JobLevel: 20, // dynamic capacity = 105
+	}
+
+	sellerDepot, _ := depot.NewDepot(sellerID)
+	sellerDepot.Capacity = 20
+	herbInst, _ := coreitem.NewInstance("item-herb", 1)
+	_ = sellerDepot.AddItem(herbInst)
+	_ = depotRepo.Save(ctx, sellerDepot)
+
+	now := time.Now().UTC()
+	listing, err := svc.CreateListing(ctx, sellerID, "item-herb", 100, now)
+	if err != nil {
+		t.Fatalf("CreateListing failed: %v", err)
+	}
+
+	// Populate seller depot with 6 items (exceeding initial capacity of 5)
+	currentDepot, _ := depotRepo.FindByCharacterID(ctx, sellerID)
+	for i := 0; i < 6; i++ {
+		fillInst, _ := coreitem.NewInstance(fmt.Sprintf("item-fill-%d", i), 1)
+		currentDepot.Items = append(currentDepot.Items, fillInst)
+	}
+	_ = depotRepo.Save(ctx, currentDepot)
+
+	cancelled, err := svc.CancelListing(ctx, sellerID, listing.ID)
+	if err != nil {
+		t.Fatalf("CancelListing failed for high JobLevel character with >5 depot items: %v", err)
+	}
+	if cancelled.Status != fleamarket.StatusCancelled {
+		t.Errorf("expected StatusCancelled, got %s", cancelled.Status)
+	}
+
+	updatedSellerDepot, _ := depotRepo.FindByCharacterID(ctx, sellerID)
+	if len(updatedSellerDepot.Items) != 7 {
+		t.Errorf("expected 7 items in seller depot, got %d", len(updatedSellerDepot.Items))
+	}
+}

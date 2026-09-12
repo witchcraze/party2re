@@ -3,6 +3,7 @@ package auction_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/auction"
@@ -344,10 +345,11 @@ func TestSendItem_DepotFull(t *testing.T) {
 	aliceEquip.Slots[coreitem.SlotMainHand] = "inst-1"
 	_ = equipRepo.Save(ctx, aliceEquip)
 
-	// Fill Bob's depot to max capacity (capacity = 1)
+	// Fill Bob's depot to max capacity (minimum dynamic capacity = 5)
 	bobDepot, _ := depot.NewDepot("char-2")
-	bobDepot.Capacity = 1
-	_ = bobDepot.AddItem(coreitem.Instance{ID: "existing-1", DefinitionID: "item-x", Quantity: 1})
+	for i := 0; i < 5; i++ {
+		_ = bobDepot.AddItem(coreitem.Instance{ID: fmt.Sprintf("existing-%d", i), DefinitionID: fmt.Sprintf("item-%d", i), Quantity: 1})
+	}
 	_ = depotRepo.Save(ctx, bobDepot)
 
 	_, err := svc.Send(ctx, auction.SendRequest{
@@ -357,6 +359,55 @@ func TestSendItem_DepotFull(t *testing.T) {
 	})
 	if !errors.Is(err, auction.ErrDepotFull) {
 		t.Errorf("expected ErrDepotFull, got %v", err)
+	}
+}
+
+func TestSendItem_HighJobLevel_ExceedsInitialCapacity(t *testing.T) {
+	ctx := context.Background()
+	svc, charRepo, equipRepo, invRepo, depotRepo := setupAuctionService(t)
+
+	charRepo.chars["char-1"] = corecharacter.Character{ID: "char-1", Name: "Alice"}
+	charRepo.chars["char-2"] = corecharacter.Character{
+		ID:       "char-2",
+		Name:     "Bob",
+		JobLevel: 20, // dynamic capacity = 20*5+5 = 105
+	}
+
+	aliceInv, _ := coreinventory.New("char-1")
+	swordInst := coreitem.Instance{ID: "inst-1", DefinitionID: "sword-1", Quantity: 1}
+	_ = aliceInv.Add(swordInst)
+	_ = invRepo.Save(ctx, aliceInv)
+
+	aliceEquip, _ := coreequipment.New("char-1")
+	aliceEquip.Slots[coreitem.SlotMainHand] = "inst-1"
+	_ = equipRepo.Save(ctx, aliceEquip)
+
+	// Fill Bob's depot with 6 distinct items (exceeds initial capacity of 5)
+	bobDepot, _ := depot.NewDepot("char-2")
+	for i := 0; i < 6; i++ {
+		bobDepot.Items = append(bobDepot.Items, coreitem.Instance{
+			ID:           fmt.Sprintf("existing-%d", i),
+			DefinitionID: fmt.Sprintf("item-%d", i),
+			Quantity:     1,
+		})
+	}
+	_ = depotRepo.Save(ctx, bobDepot)
+
+	res, err := svc.Send(ctx, auction.SendRequest{
+		SenderCharacterID: "char-1",
+		TargetCharacterID: "char-2",
+		Slot:              "weapon",
+	})
+	if err != nil {
+		t.Fatalf("Send item failed for high JobLevel recipient with >5 depot items: %v", err)
+	}
+	if res.TransferredItem == nil || res.TransferredItem.DefinitionID != "sword-1" {
+		t.Fatalf("expected sword-1 transferred, got %+v", res.TransferredItem)
+	}
+
+	updatedBobDepot, _ := depotRepo.FindByCharacterID(ctx, "char-2")
+	if len(updatedBobDepot.Items) != 7 {
+		t.Errorf("expected 7 items in Bob depot, got %d", len(updatedBobDepot.Items))
 	}
 }
 

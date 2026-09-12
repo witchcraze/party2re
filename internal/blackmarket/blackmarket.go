@@ -352,7 +352,7 @@ func (s *Service) TradePrize(ctx context.Context, characterID string, prizeID st
 		if err != nil {
 			return err
 		}
-		dep.Capacity = depot.CalculateCapacity(char.JobLevel, dep.ExDepot, char.OverDepot)
+		dep.RefreshCapacity(char.JobLevel, char.OverDepot)
 
 		// 3. Lock and check points (Tier 8)
 		points := CharacterPoints{CharacterID: characterID, RarePoints: 0, URarePoints: 0}

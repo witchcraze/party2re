@@ -213,7 +213,7 @@ func (s *Service) WithdrawListing(ctx context.Context, characterID, saleID strin
 		}
 
 		// Rank 2: character lock
-		_, err = s.charRepo.FindByIDForUpdate(txCtx, characterID)
+		char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
 			return err
 		}
@@ -223,6 +223,7 @@ func (s *Service) WithdrawListing(ctx context.Context, characterID, saleID strin
 		if err != nil {
 			return err
 		}
+		dep.RefreshCapacity(char.JobLevel, char.OverDepot)
 
 		if err := dep.AddItem(coreitem.Instance{
 			ID:               s.idGen(),
@@ -305,10 +306,7 @@ func (s *Service) BuyItem(ctx context.Context, buyerCharacterID, saleID string) 
 		} else {
 			buyerDepot = &dep2
 		}
-
-		if len(buyerDepot.Items) >= buyerDepot.Capacity {
-			return ErrDepotFull
-		}
+		buyerDepot.RefreshCapacity(buyerChar.JobLevel, buyerChar.OverDepot)
 
 		if err := buyerChar.DeductMoney(sale.Price); err != nil {
 			return ErrInsufficientFunds
@@ -363,11 +361,20 @@ func (s *Service) TradeItem(ctx context.Context, buyerCharacterID, saleID, custo
 		if c1 > c2 {
 			c1, c2 = c2, c1
 		}
-		if _, err := s.charRepo.FindByIDForUpdate(txCtx, c1); err != nil {
+		char1, err := s.charRepo.FindByIDForUpdate(txCtx, c1)
+		if err != nil {
 			return err
 		}
-		if _, err := s.charRepo.FindByIDForUpdate(txCtx, c2); err != nil {
+		char2, err := s.charRepo.FindByIDForUpdate(txCtx, c2)
+		if err != nil {
 			return err
+		}
+
+		var buyerChar, sellerChar corecharacter.Character
+		if char1.ID == buyerCharacterID {
+			buyerChar, sellerChar = char1, char2
+		} else {
+			buyerChar, sellerChar = char2, char1
 		}
 
 		// Rank 5: depots locked ascending
@@ -390,6 +397,8 @@ func (s *Service) TradeItem(ctx context.Context, buyerCharacterID, saleID, custo
 		} else {
 			buyerDepot, sellerDepot = &dep2, &dep1
 		}
+		buyerDepot.RefreshCapacity(buyerChar.JobLevel, buyerChar.OverDepot)
+		sellerDepot.RefreshCapacity(sellerChar.JobLevel, sellerChar.OverDepot)
 
 		// Find desired item in buyer depot
 		bIdx := -1
@@ -412,11 +421,6 @@ func (s *Service) TradeItem(ctx context.Context, buyerCharacterID, saleID, custo
 		}
 		if matchedName != sale.WishItemName {
 			return ErrTradeItemMissing
-		}
-
-		// Check seller depot capacity
-		if len(sellerDepot.Items) >= sellerDepot.Capacity {
-			return ErrDepotFull
 		}
 
 		// Remove 1 from buyer depot
