@@ -92,7 +92,7 @@ Restore crawl structures, boss challenges, and multiplayer PvP/GvG arenas.
 - [x] **Battle Adapter: Standardize Character/Party Mapping & Post-Battle State Application** (#496)
 - [ ] **Adventure: 10-Floor Dungeon Crawl, Flee Penalties & Boss Battles** (#478)
 - [ ] **Sealing Boss Arena: Proof of Kingship, Revive Counters & Leaves** (#479)
-- [ ] **Colosseum PvP: Real-time Wagering & Spectator Broadcasts** (#481)
+- [x] **Colosseum PvP: Eliminate Elo Arena & Reproduce Real-time 8-Player Bet & Split Battles** (#481)
 - [ ] **GvG Arena: Multi-round Tournament Engine & Defensive Battles** (#482)
 - [ ] **Dungeon & Challenge: Co-op Multi-party Lobbies & Turn Engines** (#483)
 

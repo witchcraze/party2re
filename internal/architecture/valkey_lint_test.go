@@ -26,6 +26,7 @@ var validProdNamespaces = []string{
 	"party2:boss:",
 	"party2:timer:",
 	"party2:daily:",
+	"party2:pvp:",
 }
 
 // Required keys documented in SSOT docs/architecture/valkey-keyspace.md
@@ -47,6 +48,9 @@ var requiredDocumentedKeys = []string{
 	"party2:boss:",
 	"party2:timer:",
 	"party2:daily:",
+	"party2:pvp:room:",
+	"party2:pvp:character:",
+	"party2:pvp:rooms",
 }
 
 func TestValkeyKeyspaceDocExistsAndCoversKeys(t *testing.T) {

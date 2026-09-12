@@ -1,87 +1,10 @@
 {
-  "/characters/{id}/pvp": {
-    "get": {
-      "operationId": "getPvPRating",
-      "parameters": [
-        {
-          "description": "Character ID",
-          "in": "path",
-          "name": "id",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "responses": {
-        "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          },
-          "description": "PvP arena rating"
-        },
-        "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Bad request - invalid input or JSON syntax"
-        },
-        "401": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Unauthorized - missing or invalid session token"
-        },
-        "403": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Forbidden - player does not own requested character or lacks permission"
-        },
-        "500": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Internal server error"
-        }
-      },
-      "security": [
-        {
-          "BearerAuth": []
-        }
-      ],
-      "summary": "Get character PvP rating and arena record",
-      "tags": [
-        "Combat"
-      ]
-    }
-  },
-  "/characters/{id}/pvp/fight": {
+  "/characters/{id}/pvp/rooms": {
     "post": {
-      "operationId": "fightPvP",
+      "operationId": "postCharactersIdPvpRooms",
       "parameters": [
         {
-          "description": "Character ID",
+          "description": "id parameter",
           "in": "path",
           "name": "id",
           "required": true,
@@ -90,93 +13,35 @@
           }
         }
       ],
-      "requestBody": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "properties": {
-                "defender_id": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "defender_id"
-              ],
-              "type": "object"
-            }
-          }
-        },
-        "required": true
-      },
       "responses": {
         "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          },
-          "description": "PvP battle outcome and rating delta"
+          "description": "Successful operation"
         },
         "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Bad request - invalid input or JSON syntax"
+          "description": "Bad request"
         },
         "401": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Unauthorized - missing or invalid session token"
+          "description": "Unauthorized"
         },
         "403": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Forbidden - player does not own requested character or lacks permission"
+          "description": "Forbidden"
         },
         "500": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
           "description": "Internal server error"
         }
       },
-      "security": [
-        {
-          "BearerAuth": []
-        }
-      ],
-      "summary": "Initiate PvP arena battle against opponent",
+      "summary": "POST /characters/{id}/pvp/rooms endpoint",
       "tags": [
         "Combat"
       ]
     }
   },
-  "/characters/{id}/pvp/opponents": {
-    "get": {
-      "operationId": "findPvPOpponents",
+  "/characters/{id}/pvp/rooms/{room_id}/advance": {
+    "post": {
+      "operationId": "postCharactersIdPvpRoomsRoomIdAdvance",
       "parameters": [
         {
-          "description": "Character ID",
+          "description": "id parameter",
           "in": "path",
           "name": "id",
           "required": true,
@@ -185,76 +50,280 @@
           }
         },
         {
-          "description": "Opponent candidates limit",
-          "in": "query",
-          "name": "limit",
-          "required": false,
+          "description": "room_id parameter",
+          "in": "path",
+          "name": "room_id",
+          "required": true,
           "schema": {
-            "type": "integer"
+            "type": "string"
           }
         }
       ],
       "responses": {
         "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "items": {
-                  "type": "object"
-                },
-                "type": "array"
-              }
-            }
-          },
-          "description": "PvP opponent candidate list"
+          "description": "Successful operation"
         },
         "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Bad request - invalid input or JSON syntax"
+          "description": "Bad request"
         },
         "401": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Unauthorized - missing or invalid session token"
+          "description": "Unauthorized"
         },
         "403": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Forbidden - player does not own requested character or lacks permission"
+          "description": "Forbidden"
         },
         "500": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
           "description": "Internal server error"
         }
       },
-      "security": [
+      "summary": "POST /characters/{id}/pvp/rooms/{room_id}/advance endpoint",
+      "tags": [
+        "Combat"
+      ]
+    }
+  },
+  "/characters/{id}/pvp/rooms/{room_id}/join": {
+    "post": {
+      "operationId": "postCharactersIdPvpRoomsRoomIdJoin",
+      "parameters": [
         {
-          "BearerAuth": []
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "room_id parameter",
+          "in": "path",
+          "name": "room_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
         }
       ],
-      "summary": "Find candidate opponents for PvP arena combat",
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/pvp/rooms/{room_id}/join endpoint",
+      "tags": [
+        "Combat"
+      ]
+    }
+  },
+  "/characters/{id}/pvp/rooms/{room_id}/leave": {
+    "post": {
+      "operationId": "postCharactersIdPvpRoomsRoomIdLeave",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "room_id parameter",
+          "in": "path",
+          "name": "room_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/pvp/rooms/{room_id}/leave endpoint",
+      "tags": [
+        "Combat"
+      ]
+    }
+  },
+  "/characters/{id}/pvp/rooms/{room_id}/start": {
+    "post": {
+      "operationId": "postCharactersIdPvpRoomsRoomIdStart",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "room_id parameter",
+          "in": "path",
+          "name": "room_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/pvp/rooms/{room_id}/start endpoint",
+      "tags": [
+        "Combat"
+      ]
+    }
+  },
+  "/characters/{id}/pvp/rooms/{room_id}/team": {
+    "post": {
+      "operationId": "postCharactersIdPvpRoomsRoomIdTeam",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "room_id parameter",
+          "in": "path",
+          "name": "room_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/pvp/rooms/{room_id}/team endpoint",
+      "tags": [
+        "Combat"
+      ]
+    }
+  },
+  "/pvp/rooms": {
+    "get": {
+      "operationId": "getPvpRooms",
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "GET /pvp/rooms endpoint",
+      "tags": [
+        "Combat"
+      ]
+    }
+  },
+  "/pvp/rooms/{room_id}": {
+    "get": {
+      "operationId": "getPvpRoomsRoomId",
+      "parameters": [
+        {
+          "description": "room_id parameter",
+          "in": "path",
+          "name": "room_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "GET /pvp/rooms/{room_id} endpoint",
       "tags": [
         "Combat"
       ]

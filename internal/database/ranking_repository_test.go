@@ -11,7 +11,6 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
-	"github.com/witchcraze/party2re/internal/pvp"
 	"github.com/witchcraze/party2re/internal/ranking"
 )
 
@@ -119,10 +118,14 @@ func TestRankingRepository_Integration(t *testing.T) {
 
 	// 5. PvP Wins
 	_, err = db.ExecContext(ctx, `
-		INSERT INTO arena_ratings (character_id, rating, wins, losses, draws)
-		VALUES (?, 1400, 25, 2, 0), (?, 1100, 5, 10, 0)
-		ON DUPLICATE KEY UPDATE wins = VALUES(wins), rating = VALUES(rating)
-	`, c1.ID, c2.ID)
+		UPDATE characters SET pvp_wins = 25 WHERE id = ?
+	`, c1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.ExecContext(ctx, `
+		UPDATE characters SET pvp_wins = 5 WHERE id = ?
+	`, c2.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,6 +301,5 @@ func TestRankingRepository_Integration(t *testing.T) {
 
 // Unused imports check suppression
 var (
-	_ = pvp.DefaultRating
 	_ = boss.ErrBossNotFound
 )

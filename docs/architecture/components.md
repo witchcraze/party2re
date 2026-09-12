@@ -306,10 +306,10 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Town church prayer registration (`character_blessings`), authentic 5 blessing choices (Gold, EXP, Monster recruit boost, Chest drop boost, Casino coins), single active wish enforcement (`ErrAlreadyPrayed`, HTTP 409 Conflict), Sister dialogues/facility metadata, and reward modifier calculations. Fictional donations purged in Issue #472.
   - **Dependencies:** Character repository.
   - **Persistence:** `character_blessings` table in `internal/database/chapel_repository.go` with pessimistic `FOR UPDATE` single-active-wish protection.
-- **Player versus Player (PvP) Arena** (`internal/pvp`):
-  - **Responsibility:** Asynchronous player-versus-player arena combat against defending character snapshots, standard Elo rating calculation (K=32, base 1000), matchmaking query with account win-trading prevention, match history, and defense logs.
-  - **Dependencies:** Core Battle Engine, Character repository, Core Progression.
-  - **Persistence:** `arena_ratings` and `arena_matches` tables in `internal/database/pvp_repository.go` with transactional rating adjustments and match recording.
+- **Colosseum PvP (闘技場)** (`internal/pvp`):
+  - **Responsibility:** Authentic real-time 2-to-8 player multiplayer lobby rooms (`quest.cgi:type=4`, `vs_player.cgi`), Bet & Split wager economics (min 10G), 9 color team division (`@ぱーてぃー`), `@かいし` multi-team validation and participant HP restoration, multi-round party battle resolution (`_battle.cgi:486`), target wins championship detection (1-3 wins), equal prize pool split among winning team members, durable lifetime `pvp_wins` tracking (`$m{kill_p}`), and 10-round draw refund safety. Fictional asynchronous Elo rating calculations, snapshot duels, and `arena_ratings`/`arena_matches` tables have been completely purged per Issue #481.
+  - **Dependencies:** Core Battle Engine, Character repository.
+  - **Persistence:** Ephemeral room state, rosters, and scores in Valkey Master (`party2:pvp:room:<id>`, `party2:pvp:character:<id>`, `party2:pvp:rooms`) with 30m TTL; durable wealth and `pvp_wins` in MariaDB Master `characters`.
 - **Guild versus Guild (GvG) Combat** (`internal/gvg`):
   - **Responsibility:** Asynchronous guild-versus-guild multi-round roster skirmishes, Elo rating adjustments (K=32, base 1000), victory medals and championship cup tiered promotions (5:1 ratios), Guild Points (Victory Points), guild EXP leveling, and match/round history logging.
   - **Dependencies:** Core Battle Engine, Guild repository, Character repository, Core Progression.

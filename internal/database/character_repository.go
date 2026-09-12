@@ -36,18 +36,18 @@ func (r *CharacterRepository) Save(ctx context.Context, value corecharacter.Char
 	}
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO characters
-			(id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, job_level, old_job_id, old_sp, job_memory_job_id, job_memory_sp, job_memory_old_job_id, job_memory_old_sp, small_medals, help_count, hero_count, orb, tired, over_level, over_depot, over_monster, over_future, over_flea, over_store, color, deposit)
+			(id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, job_level, old_job_id, old_sp, job_memory_job_id, job_memory_sp, job_memory_old_job_id, job_memory_old_sp, small_medals, help_count, hero_count, pvp_wins, orb, tired, over_level, over_depot, over_monster, over_future, over_flea, over_store, color, deposit)
 		VALUES (
 			?, ?, ?, ?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, ?,
-			?, ?, ?, ?
+			?, ?, ?, ?, ?
 		)
 	`, value.ID, value.PlayerID, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP,
 		value.Stats.HP, value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility,
 		value.Money, value.Level, value.Experience, value.SP, value.JobLevel, value.OldJobID, value.OldSP,
-		memoryJobID, memorySP, memoryOldJobID, memoryOldSP, value.SmallMedals, value.HelpCount, value.HeroCount,
+		memoryJobID, memorySP, memoryOldJobID, memoryOldSP, value.SmallMedals, value.HelpCount, value.HeroCount, value.PvPWins,
 		value.Orb, value.Tired, value.OverLevel, value.OverDepot, value.OverMonster, value.OverFuture, value.OverFlea, value.OverStore, color,
 		value.Deposit)
 	return err
@@ -199,8 +199,6 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		`DELETE FROM dungeon_expedition_history WHERE character_id = ?`,
 		`DELETE FROM character_challenge_records WHERE character_id = ?`,
 		`DELETE FROM challenge_sessions WHERE character_id = ?`,
-		`DELETE FROM arena_ratings WHERE character_id = ?`,
-		`DELETE FROM arena_matches WHERE attacker_id = ? OR defender_id = ?`,
 		`DELETE FROM character_monsters WHERE character_id = ?`,
 		`DELETE FROM character_monster_book WHERE character_id = ?`,
 		`DELETE FROM character_item_collection WHERE character_id = ?`,

@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/witchcraze/party2re/internal/challenge"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/dungeon"
-	"github.com/witchcraze/party2re/internal/pvp"
 )
 
 // ChallengeService defines endurance challenge operations exposed over HTTP.
@@ -32,13 +30,6 @@ type DungeonService interface {
 	GetActiveExpedition(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error)
 }
 
-// PvPService defines PvP arena operations exposed over HTTP.
-type PvPService interface {
-	GetRating(ctx context.Context, characterID string) (pvp.ArenaRating, error)
-	FindOpponents(ctx context.Context, characterID string, limit int) ([]pvp.OpponentCandidate, error)
-	Challenge(ctx context.Context, attackerID, defenderID string) (pvp.ChallengeResult, error)
-}
-
 // WithChallenge configures the challenge service for the Handler.
 func WithChallenge(c ChallengeService) Option {
 	return func(h *Handler) {
@@ -50,13 +41,6 @@ func WithChallenge(c ChallengeService) Option {
 func WithDungeon(d DungeonService) Option {
 	return func(h *Handler) {
 		h.dungeons = d
-	}
-}
-
-// WithPvP configures the pvp arena service for the Handler.
-func WithPvP(p PvPService) Option {
-	return func(h *Handler) {
-		h.pvp = p
 	}
 }
 
@@ -376,111 +360,6 @@ func (h *Handler) handleEscapeDungeon(w http.ResponseWriter, r *http.Request) {
 		}
 
 		writeJSON(w, http.StatusOK, dungeonStepResponse{
-			Result: res,
-		})
-	})
-}
-
-// -------------------------------------------------------------------
-// PvP Arena Handlers
-// -------------------------------------------------------------------
-
-type pvpRatingResponse struct {
-	Rating pvp.ArenaRating `json:"rating"`
-}
-
-type pvpOpponentsResponse struct {
-	Opponents []pvp.OpponentCandidate `json:"opponents"`
-}
-
-type pvpFightRequest struct {
-	DefenderID string `json:"defender_id"`
-}
-
-type pvpFightResponse struct {
-	Result pvp.ChallengeResult `json:"result"`
-}
-
-func (h *Handler) handleGetPvPRating(w http.ResponseWriter, r *http.Request) {
-	if h.pvp == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("pvp service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		rating, err := h.pvp.GetRating(r.Context(), char.ID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, pvpRatingResponse{
-			Rating: rating,
-		})
-	})
-}
-
-func (h *Handler) handleFindPvPOpponents(w http.ResponseWriter, r *http.Request) {
-	if h.pvp == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("pvp service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		limit := 5
-		if l := r.URL.Query().Get("limit"); l != "" {
-			if val, err := strconv.Atoi(l); err == nil && val > 0 {
-				limit = val
-			}
-		}
-
-		opponents, err := h.pvp.FindOpponents(r.Context(), char.ID, limit)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, pvpOpponentsResponse{
-			Opponents: opponents,
-		})
-	})
-}
-
-func (h *Handler) handlePvPFight(w http.ResponseWriter, r *http.Request) {
-	if h.pvp == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("pvp service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req pvpFightRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		if req.DefenderID == "" {
-			writeError(w, http.StatusBadRequest, errors.New("defender_id is required"))
-			return
-		}
-
-		res, err := h.pvp.Challenge(r.Context(), char.ID, req.DefenderID)
-		if err != nil {
-			if errors.Is(err, pvp.ErrCannotChallengeSelf) || errors.Is(err, pvp.ErrInvalidCharacterID) {
-				writeError(w, http.StatusBadRequest, err)
-				return
-			}
-			if errors.Is(err, pvp.ErrCharacterDefeated) {
-				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, pvpFightResponse{
 			Result: res,
 		})
 	})

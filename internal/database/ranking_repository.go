@@ -142,11 +142,10 @@ func (r *RankingRepository) GetBattleVictoryRanking(ctx context.Context, limit, 
 	query := `
 		SELECT c.id, c.player_id, COALESCE(p.username, ''), c.name, c.job_id, c.gender,
 		       c.level, c.experience, c.sp,
-		       (COALESCE(ar.wins, 0) + COALESCE(br.total_boss_defeats, 0) + COALESCE(adv.adventure_wins, 0)) AS total_victories,
-		       COALESCE(ar.wins, 0) AS pvp_wins
+		       (COALESCE(c.pvp_wins, 0) + COALESCE(br.total_boss_defeats, 0) + COALESCE(adv.adventure_wins, 0)) AS total_victories,
+		       COALESCE(c.pvp_wins, 0) AS pvp_wins
 		FROM characters c
 		LEFT JOIN players p ON c.player_id = p.id
-		LEFT JOIN arena_ratings ar ON c.id = ar.character_id
 		LEFT JOIN character_boss_records br ON c.id = br.character_id
 		LEFT JOIN (
 			SELECT character_id, COUNT(*) AS adventure_wins
@@ -179,12 +178,11 @@ func (r *RankingRepository) GetPvPVictoryRanking(ctx context.Context, limit, off
 	query := `
 		SELECT c.id, c.player_id, COALESCE(p.username, ''), c.name, c.job_id, c.gender,
 		       c.level, c.experience, c.sp,
-		       COALESCE(ar.wins, 0) AS pvp_wins,
-		       COALESCE(ar.rating, 1000) AS rating
+		       COALESCE(c.pvp_wins, 0) AS pvp_wins,
+		       0 AS rating
 		FROM characters c
 		LEFT JOIN players p ON c.player_id = p.id
-		LEFT JOIN arena_ratings ar ON c.id = ar.character_id
-		ORDER BY pvp_wins DESC, rating DESC, c.level DESC, c.id ASC
+		ORDER BY pvp_wins DESC, c.level DESC, c.id ASC
 		LIMIT ? OFFSET ?
 	`
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
