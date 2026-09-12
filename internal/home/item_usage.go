@@ -16,6 +16,7 @@ import (
 
 type DepotManager interface {
 	FindByCharacterID(ctx context.Context, characterID string) (depot.Depot, error)
+	Consume(ctx context.Context, characterID, itemInstanceID string, quantity int) error
 	ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error
 }
 

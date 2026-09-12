@@ -32,6 +32,7 @@ var (
 	ErrRecipientNotFound      = errors.New("recipient character not found")
 	ErrRecipientDepotFull     = errors.New("recipient depot is at full capacity")
 	ErrEmptyItemList          = errors.New("item list cannot be empty")
+	ErrInvalidQuantity        = errors.New("item quantity is invalid")
 )
 
 var ExpansionCosts = [...]int{
@@ -172,7 +173,42 @@ func (d *Depot) AddItem(instance item.Instance, stackable ...bool) error {
 	return nil
 }
 
-func (d *Depot) RemoveItem(instanceID string) (item.Instance, error) {
+// Consume removes quantity of the item with the given instanceID.
+// Returns ErrInvalidQuantity if quantity <= 0 or if the existing item quantity < quantity.
+// If the remaining quantity reaches 0, the item slot is removed from depot storage.
+// Returns a copy of the consumed item instance with Quantity = quantity.
+func (d *Depot) Consume(instanceID string, quantity int) (item.Instance, error) {
+	if quantity <= 0 {
+		return item.Instance{}, ErrInvalidQuantity
+	}
+	for i, existing := range d.Items {
+		if existing.ID == instanceID {
+			if existing.Quantity < quantity {
+				return item.Instance{}, ErrInvalidQuantity
+			}
+			consumed := existing
+			consumed.Quantity = quantity
+
+			if existing.Quantity == quantity {
+				d.Items = append(d.Items[:i], d.Items[i+1:]...)
+			} else {
+				d.Items[i].Quantity -= quantity
+			}
+			return consumed, nil
+		}
+	}
+	return item.Instance{}, ErrItemNotFound
+}
+
+// ConsumeOne removes one unit of the item with the given instanceID.
+// Delegates to Consume(instanceID, 1).
+func (d *Depot) ConsumeOne(instanceID string) (item.Instance, error) {
+	return d.Consume(instanceID, 1)
+}
+
+// PurgeSlot unconditionally removes an entire item slot regardless of Quantity.
+// Use Consume or ConsumeOne for safe item consumption and quantity decrements.
+func (d *Depot) PurgeSlot(instanceID string) (item.Instance, error) {
 	for i, existing := range d.Items {
 		if existing.ID == instanceID {
 			d.Items = append(d.Items[:i], d.Items[i+1:]...)
@@ -182,23 +218,10 @@ func (d *Depot) RemoveItem(instanceID string) (item.Instance, error) {
 	return item.Instance{}, ErrItemNotFound
 }
 
-// ConsumeOne removes one quantity of the item with the given instanceID.
-// If the quantity is greater than 1, it decrements the quantity and returns an instance with Quantity=1.
-// If the quantity is 1, it removes the item completely and returns it.
-func (d *Depot) ConsumeOne(instanceID string) (item.Instance, error) {
-	for i, existing := range d.Items {
-		if existing.ID == instanceID {
-			if existing.Quantity > 1 {
-				d.Items[i].Quantity--
-				ret := existing
-				ret.Quantity = 1
-				return ret, nil
-			}
-			d.Items = append(d.Items[:i], d.Items[i+1:]...)
-			return existing, nil
-		}
-	}
-	return item.Instance{}, ErrItemNotFound
+// RemoveItem unconditionally removes the entire item slot regardless of Quantity.
+// Deprecated: Use Consume or ConsumeOne for safe quantity decrements, or PurgeSlot if intentional whole-slot deletion is required.
+func (d *Depot) RemoveItem(instanceID string) (item.Instance, error) {
+	return d.PurgeSlot(instanceID)
 }
 
 type Repository interface {

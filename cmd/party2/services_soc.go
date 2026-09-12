@@ -32,26 +32,19 @@ func (a *depotManagerAdapter) FindByCharacterID(ctx context.Context, characterID
 	return a.repo.FindByCharacterID(ctx, characterID)
 }
 
-func (a *depotManagerAdapter) ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error {
+func (a *depotManagerAdapter) Consume(ctx context.Context, characterID, itemInstanceID string, quantity int) error {
 	dp, err := a.repo.FindByCharacterIDForUpdate(ctx, characterID)
 	if err != nil {
 		return err
 	}
-	if _, err := dp.ConsumeOne(itemInstanceID); err != nil {
+	if _, err := dp.Consume(itemInstanceID, quantity); err != nil {
 		return err
 	}
 	return a.repo.Save(ctx, dp)
 }
 
-func (a *depotManagerAdapter) RemoveItem(ctx context.Context, characterID, itemInstanceID string) error {
-	dp, err := a.repo.FindByCharacterIDForUpdate(ctx, characterID)
-	if err != nil {
-		return err
-	}
-	if _, err := dp.RemoveItem(itemInstanceID); err != nil {
-		return err
-	}
-	return a.repo.Save(ctx, dp)
+func (a *depotManagerAdapter) ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error {
+	return a.Consume(ctx, characterID, itemInstanceID, 1)
 }
 
 type socServices struct {

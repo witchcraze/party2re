@@ -66,26 +66,51 @@ func (i *Inventory) Find(instanceID string) (item.Instance, bool) {
 	return item.Instance{}, false
 }
 
+// Consume removes quantity of the item instance.
+// Returns ErrInvalidQuantity if quantity <= 0 or if available quantity < quantity.
 func (i *Inventory) Consume(instanceID string, quantity int) error {
+	_, err := i.ConsumeItem(instanceID, quantity)
+	return err
+}
+
+// ConsumeOne removes one unit of the item instance.
+// Delegates to Consume(instanceID, 1).
+func (i *Inventory) ConsumeOne(instanceID string) error {
+	return i.Consume(instanceID, 1)
+}
+
+// ConsumeItem removes quantity of the item instance and returns a copy of the consumed item instance.
+// Returns ErrInvalidQuantity if quantity <= 0 or if available quantity < quantity.
+// If remaining quantity reaches 0, the item slot is removed from inventory.
+func (i *Inventory) ConsumeItem(instanceID string, quantity int) (item.Instance, error) {
 	if i == nil || quantity <= 0 {
-		return ErrInvalidQuantity
+		return item.Instance{}, ErrInvalidQuantity
 	}
 	for index, value := range i.Items {
 		if value.ID != instanceID {
 			continue
 		}
 		if value.Quantity < quantity {
-			return ErrInvalidQuantity
+			return item.Instance{}, ErrInvalidQuantity
 		}
+		consumed := value
+		consumed.Quantity = quantity
+
 		value.Quantity -= quantity
 		if value.Quantity == 0 {
 			i.Items = append(i.Items[:index], i.Items[index+1:]...)
 		} else {
 			i.Items[index] = value
 		}
-		return nil
+		return consumed, nil
 	}
-	return ErrItemNotFound
+	return item.Instance{}, ErrItemNotFound
+}
+
+// ConsumeOneItem removes one unit of the item instance and returns it.
+// Delegates to ConsumeItem(instanceID, 1).
+func (i *Inventory) ConsumeOneItem(instanceID string) (item.Instance, error) {
+	return i.ConsumeItem(instanceID, 1)
 }
 
 // Update replaces an existing item instance in the inventory matching by ID.

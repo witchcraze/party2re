@@ -47,16 +47,20 @@ func (m *mockDepotManager) FindByCharacterID(ctx context.Context, characterID st
 	return dp, nil
 }
 
-func (m *mockDepotManager) ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error {
+func (m *mockDepotManager) Consume(ctx context.Context, characterID, itemInstanceID string, quantity int) error {
 	dp, ok := m.depots[characterID]
 	if !ok {
 		return depot.ErrNotFound
 	}
-	if _, err := dp.ConsumeOne(itemInstanceID); err != nil {
+	if _, err := dp.Consume(itemInstanceID, quantity); err != nil {
 		return err
 	}
 	m.depots[characterID] = dp
 	return nil
+}
+
+func (m *mockDepotManager) ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error {
+	return m.Consume(ctx, characterID, itemInstanceID, 1)
 }
 
 type mockCatalog struct {
@@ -635,16 +639,20 @@ func (m *transactionalMockDepotManager) FindByCharacterID(ctx context.Context, c
 	return dp, nil
 }
 
-func (m *transactionalMockDepotManager) ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error {
+func (m *transactionalMockDepotManager) Consume(ctx context.Context, characterID, itemInstanceID string, quantity int) error {
 	dp, ok := m.depots[characterID]
 	if !ok {
 		return depot.ErrNotFound
 	}
-	if _, err := dp.ConsumeOne(itemInstanceID); err != nil {
+	if _, err := dp.Consume(itemInstanceID, quantity); err != nil {
 		return err
 	}
 	m.depots[characterID] = dp
 	return nil
+}
+
+func (m *transactionalMockDepotManager) ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error {
+	return m.Consume(ctx, characterID, itemInstanceID, 1)
 }
 
 func TestUseHomeItem_TransactionalSuccess(t *testing.T) {
