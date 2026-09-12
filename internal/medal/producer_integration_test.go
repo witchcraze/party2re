@@ -289,46 +289,6 @@ func (b *integrationBossRepo) ListBosses() []boss.Boss {
 	return boss.DefaultBossCatalog()
 }
 
-// PvP test stub
-type integrationPvPRepo struct {
-	ratings map[string]pvp.ArenaRating
-}
-
-func newIntegrationPvPRepo() *integrationPvPRepo {
-	return &integrationPvPRepo{ratings: make(map[string]pvp.ArenaRating)}
-}
-
-func (p *integrationPvPRepo) GetOrCreateRating(_ context.Context, charID string) (pvp.ArenaRating, error) {
-	r, ok := p.ratings[charID]
-	if !ok {
-		r = pvp.ArenaRating{CharacterID: charID, Rating: pvp.DefaultRating}
-		p.ratings[charID] = r
-	}
-	return r, nil
-}
-
-func (p *integrationPvPRepo) RecordMatchAndUpdateRatings(_ context.Context, _ pvp.MatchRecord, att, def pvp.ArenaRating, _ corecharacter.Character) error {
-	p.ratings[att.CharacterID] = att
-	p.ratings[def.CharacterID] = def
-	return nil
-}
-
-func (p *integrationPvPRepo) FindOpponents(_ context.Context, _ string, _ int) ([]pvp.OpponentCandidate, error) {
-	return nil, nil
-}
-
-func (p *integrationPvPRepo) GetMatchHistory(_ context.Context, _ string, _ int) ([]pvp.MatchRecord, error) {
-	return nil, nil
-}
-
-func (p *integrationPvPRepo) GetDefenseLogs(_ context.Context, _ string, _ int) ([]pvp.MatchRecord, error) {
-	return nil, nil
-}
-
-func (p *integrationPvPRepo) GetLeaderboard(_ context.Context, _ int) ([]pvp.OpponentCandidate, error) {
-	return nil, nil
-}
-
 // Casino test stub
 type integrationCasinoRepo struct {
 	account casino.Account
@@ -596,7 +556,7 @@ func TestProducerHooks_MilestoneProgressAndClaim(t *testing.T) {
 	})
 
 	// --- PvP ---
-	pvpRepo := newIntegrationPvPRepo()
+	pvpRepo := pvp.NewMemoryRoomRepository()
 	pvpService, err := pvp.NewService(
 		pvpRepo,
 		charRepo,
@@ -667,8 +627,29 @@ func TestProducerHooks_MilestoneProgressAndClaim(t *testing.T) {
 	}
 
 	// (c) PvP Victory
-	if _, err := pvpService.Challenge(ctx, hero.ID, opponent.ID); err != nil {
-		t.Fatalf("failed pvp challenge: %v", err)
+	pvpRoom, err := pvpService.CreateRoom(ctx, hero.ID, pvp.CreateRoomRequest{
+		Name:       "Medal Arena",
+		Bet:        10,
+		MaxMembers: 2,
+		TargetWins: 1,
+	})
+	if err != nil {
+		t.Fatalf("failed to create pvp room: %v", err)
+	}
+	if _, err := pvpService.JoinRoom(ctx, opponent.ID, pvpRoom.Room.ID, ""); err != nil {
+		t.Fatalf("failed to join pvp room: %v", err)
+	}
+	if _, err := pvpService.SelectTeam(ctx, hero.ID, pvpRoom.Room.ID, pvp.ColorRed); err != nil {
+		t.Fatalf("failed to select team for hero: %v", err)
+	}
+	if _, err := pvpService.SelectTeam(ctx, opponent.ID, pvpRoom.Room.ID, pvp.ColorBlue); err != nil {
+		t.Fatalf("failed to select team for opponent: %v", err)
+	}
+	if _, err := pvpService.StartMatch(ctx, hero.ID, pvpRoom.Room.ID); err != nil {
+		t.Fatalf("failed to start pvp match: %v", err)
+	}
+	if _, err := pvpService.AdvanceRound(ctx, hero.ID, pvpRoom.Room.ID); err != nil {
+		t.Fatalf("failed to advance pvp round: %v", err)
 	}
 
 	// (d) Casino Game

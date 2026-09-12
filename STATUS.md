@@ -54,7 +54,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Auction Hall** (`internal/auction`): ✅ Live P2P trade (`@おくる`/`@しらべる`); fictional async auction house purged (#474).
 - **Collection & Monster Book** (`internal/collection`): ✅ Monster + item encyclopedia; auto-record on obtain.
 - **Chapel & Blessings** (`internal/chapel`): ✅ 5 prayers, single-active constraint, daily reset Worker; fictional donations purged (#472).
-- **PvP Arena** (`internal/pvp`): ✅ Elo rating (K=32); real-time wagering/spectator parity pending (#481).
+- **Colosseum PvP (闘技場)** (`internal/pvp`): ✅ Real-time 2..8 player room recruitment (`quest.cgi:type=4`), Bet & Split prize pool mechanics, 9 team colors (`@ぱーてぃー`), multi-round party battle resolution (`_battle.cgi:486`), durable `pvp_wins` (`$m{kill_p}`) tracking, draw refund on 10 rounds; fictional Elo rating arena purged (#481).
 - **GvG Combat** (`internal/gvg`): ✅ Elo guild combat; multi-round tournament parity pending (#482).
 - **Boss Battles (封印戦)** (`internal/boss`): ✅ 4-player Party Sealing Battles (`vs_king.cgi`, `stage/king1..10.cgi`, `king99.cgi`), Dejon banishment (+30% Tired), `@ふういん` resealing, HeroCount increment, celebration banquets, news broadcast; fictional 1-day-3-attempts solo raid completely purged (#479).
 - **Dungeon Exploration** (`internal/dungeon`): ✅ Grid-map exploration; Valkey Master run buffer (Lua CAS, 2h TTL, two-phase settle).

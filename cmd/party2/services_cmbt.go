@@ -52,11 +52,17 @@ func newCmbtServices(
 ) (*cmbtServices, error) {
 	battleEngine := corebattle.Engine{}
 
-	pvpRepo, err := database.NewPvPRepository(db)
-	if err != nil {
-		return nil, err
+	var pvpRoomRepo pvp.RoomRepository
+	if valkeyClient != nil {
+		vr, err := pvp.NewValkeyRoomRepository(valkeyClient)
+		if err != nil {
+			return nil, err
+		}
+		pvpRoomRepo = vr
+	} else {
+		pvpRoomRepo = pvp.NewMemoryRoomRepository()
 	}
-	pvpService, err := pvp.NewService(pvpRepo, core.charRepo, battleEngine)
+	pvpService, err := pvp.NewService(pvpRoomRepo, core.charRepo, battleEngine)
 	if err != nil {
 		return nil, err
 	}

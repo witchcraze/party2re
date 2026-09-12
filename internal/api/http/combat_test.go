@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/boss"
@@ -13,7 +12,6 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/dungeon"
-	"github.com/witchcraze/party2re/internal/pvp"
 )
 
 type stubChallengeService struct {
@@ -133,37 +131,6 @@ func (s *stubDungeonService) GetActiveExpedition(ctx context.Context, characterI
 	return nil, dungeon.ErrNoActiveExpedition
 }
 
-type stubPvPService struct {
-	getRatingFn     func(ctx context.Context, characterID string) (pvp.ArenaRating, error)
-	findOpponentsFn func(ctx context.Context, characterID string, limit int) ([]pvp.OpponentCandidate, error)
-	challengeFn     func(ctx context.Context, attackerID, defenderID string) (pvp.ChallengeResult, error)
-}
-
-func (s *stubPvPService) GetRating(ctx context.Context, characterID string) (pvp.ArenaRating, error) {
-	if s.getRatingFn != nil {
-		return s.getRatingFn(ctx, characterID)
-	}
-	return pvp.ArenaRating{CharacterID: characterID, Rating: 1500, UpdatedAt: time.Now()}, nil
-}
-func (s *stubPvPService) FindOpponents(ctx context.Context, characterID string, limit int) ([]pvp.OpponentCandidate, error) {
-	if s.findOpponentsFn != nil {
-		return s.findOpponentsFn(ctx, characterID, limit)
-	}
-	return []pvp.OpponentCandidate{{CharacterID: "c2", Name: "Rival", Rating: 1510}}, nil
-}
-func (s *stubPvPService) Challenge(ctx context.Context, attackerID, defenderID string) (pvp.ChallengeResult, error) {
-	if s.challengeFn != nil {
-		return s.challengeFn(ctx, attackerID, defenderID)
-	}
-	return pvp.ChallengeResult{
-		Match: pvp.MatchRecord{
-			Outcome:             pvp.OutcomeWin,
-			AttackerRatingAfter: 1516,
-			DefenderRatingAfter: 1494,
-		},
-	}, nil
-}
-
 func TestCombatEndpoints(t *testing.T) {
 	player := coreplayer.Player{ID: "p1", Username: "hero"}
 	char := corecharacter.Character{ID: "c1", PlayerID: "p1", Name: "Hero"}
@@ -189,7 +156,6 @@ func TestCombatEndpoints(t *testing.T) {
 		apihttp.WithChallenge(&stubChallengeService{}),
 		apihttp.WithBoss(&stubBossService{}),
 		apihttp.WithDungeon(&stubDungeonService{}),
-		apihttp.WithPvP(&stubPvPService{}),
 	)
 	router := h.Router()
 
@@ -364,40 +330,6 @@ func TestCombatEndpoints(t *testing.T) {
 
 	t.Run("POST /characters/{id}/dungeons/escape", func(t *testing.T) {
 		req := jsonRequest(t, http.MethodPost, "/characters/c1/dungeons/escape", "")
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d", rec.Code)
-		}
-	})
-
-	// PvP
-	t.Run("GET /characters/{id}/pvp", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/characters/c1/pvp", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d", rec.Code)
-		}
-	})
-
-	t.Run("GET /characters/{id}/pvp/opponents", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/characters/c1/pvp/opponents?limit=5", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d", rec.Code)
-		}
-	})
-
-	t.Run("POST /characters/{id}/pvp/fight", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/pvp/fight", `{"defender_id":"c2"}`)
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
