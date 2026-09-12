@@ -20,6 +20,7 @@ type battleContext struct {
 	abilitiesMap  map[string][]string
 	itemsMap      map[string][]ActionItem
 	consumedItems map[string][]ConsumedItem
+	banishedMap   map[string]bool
 	logs          []TurnLog
 }
 
@@ -103,26 +104,27 @@ func (ctx *battleContext) applyDamage(actor Participant, target Participant, bas
 	}
 
 	if ctx.hpMap[target.ID] <= 0 {
-		curMP := ctx.mpMap[target.ID]
-		targetCopy := target
-		targetCopy.Abilities = ctx.abilitiesMap[target.ID]
-		rev := CheckRevival(&targetCopy, &curMP)
-		ctx.mpMap[target.ID] = curMP
-		if rev.Revived {
-			ctx.hpMap[target.ID] = rev.HP
-			ctx.attackBuff[target.ID] += rev.AttackBuff
-			ctx.defenseBuff[target.ID] += rev.DefenseBuff
-			ctx.agilityBuff[target.ID] += rev.AgilityBuff
-			msg += " " + rev.Message
-			if rev.Cursed {
-				ctx.abilitiesMap[target.ID] = append(ctx.abilitiesMap[target.ID], "cursed")
+		if !ctx.banishedMap[target.ID] {
+			curMP := ctx.mpMap[target.ID]
+			targetCopy := target
+			targetCopy.Abilities = ctx.abilitiesMap[target.ID]
+			rev := CheckRevival(&targetCopy, &curMP)
+			ctx.mpMap[target.ID] = curMP
+			if rev.Revived {
+				ctx.hpMap[target.ID] = rev.HP
+				ctx.attackBuff[target.ID] += rev.AttackBuff
+				ctx.defenseBuff[target.ID] += rev.DefenseBuff
+				ctx.agilityBuff[target.ID] += rev.AgilityBuff
+				msg += " " + rev.Message
+				if rev.Cursed {
+					ctx.abilitiesMap[target.ID] = append(ctx.abilitiesMap[target.ID], "cursed")
+				} else {
+					ctx.abilitiesMap[target.ID] = nil
+				}
 			} else {
-				ctx.abilitiesMap[target.ID] = nil
+				ctx.applyMazinSynergy(target)
 			}
-		} else {
-			ctx.applyMazinSynergy(target)
 		}
-
 	}
 
 	ctx.logs = append(ctx.logs, TurnLog{
@@ -165,10 +167,25 @@ func hasItem(items []string, wanted string) bool {
 	return false
 }
 
-func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill, allyParty []Participant, opponents []Participant) {
+func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill, allyParty []Participant, opponents []Participant, fullOpponents []Participant) {
 	ctx.mpMap[actor.ID] -= skill.MPCost
 
 	switch skill.Kind {
+	case ActionKindDejon:
+		for _, opp := range fullOpponents {
+			if ctx.hpMap[opp.ID] <= 0 && !ctx.banishedMap[opp.ID] {
+				ctx.banishedMap[opp.ID] = true
+				ctx.logs = append(ctx.logs, TurnLog{
+					Turn:        ctx.turns,
+					ActorID:     actor.ID,
+					ActionName:  skill.Name,
+					TargetID:    opp.ID,
+					Message:     fmt.Sprintf("%s が異空間へと吸い込まれた！", opp.NameOrID()),
+					RemainingHP: copyHPMap(ctx.hpMap),
+				})
+			}
+		}
+
 	case ActionKindDefend:
 		ctx.executeDefend(actor)
 

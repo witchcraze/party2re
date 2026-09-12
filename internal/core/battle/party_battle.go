@@ -58,6 +58,7 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 		agilityBuff:  make(map[string]int),
 		abilitiesMap: make(map[string][]string),
 		itemsMap:     make(map[string][]ActionItem),
+		banishedMap:  make(map[string]bool),
 	}
 
 	for _, a := range req.Allies {
@@ -138,20 +139,23 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 
 			var opponents []Participant
 			var allyParty []Participant
+			var fullOpponents []Participant
 			if cw.isAlly {
+				fullOpponents = req.Enemies
 				for _, e := range req.Enemies {
 					if ctx.hpMap[e.ID] > 0 {
 						opponents = append(opponents, e)
 					}
 				}
 				for _, a := range req.Allies {
-					if ctx.hpMap[a.ID] > 0 {
+					if ctx.hpMap[a.ID] > 0 && !ctx.banishedMap[a.ID] {
 						allyParty = append(allyParty, a)
 					}
 				}
 			} else {
+				fullOpponents = req.Allies
 				for _, a := range req.Allies {
-					if ctx.hpMap[a.ID] > 0 {
+					if ctx.hpMap[a.ID] > 0 && !ctx.banishedMap[a.ID] {
 						opponents = append(opponents, a)
 					}
 				}
@@ -181,6 +185,18 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 				for i := range actor.Skills {
 					sk := &actor.Skills[i]
 					if ctx.mpMap[actorID] >= sk.MPCost {
+						if sk.Kind == ActionKindDejon {
+							hasFallenTarget := false
+							for _, opp := range fullOpponents {
+								if ctx.hpMap[opp.ID] <= 0 && !ctx.banishedMap[opp.ID] {
+									hasFallenTarget = true
+									break
+								}
+							}
+							if !hasFallenTarget {
+								continue
+							}
+						}
 						usedSkill = sk
 						break
 					}
@@ -195,7 +211,7 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 			if usedCustom != nil {
 				ctx.executeCustomSkill(actor, usedCustom, allyParty, opponents)
 			} else if usedSkill != nil {
-				ctx.executeJobSkill(actor, usedSkill, allyParty, opponents)
+				ctx.executeJobSkill(actor, usedSkill, allyParty, opponents, fullOpponents)
 			} else if usedItem != nil {
 				_ = ctx.executeItem(actor, usedItem, allyParty, opponents)
 			} else if actor.Defending {
@@ -309,9 +325,21 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 		RemainingCMP:    copyHPMap(ctx.cmpMap),
 		RemainingStatus: copyStatusMap(ctx.statusMap),
 		ConsumedItems:   copyConsumedItemsMap(ctx.consumedItems),
+		BanishedIDs:     copyBoolMap(ctx.banishedMap),
 		Logs:            ctx.logs,
 		FinalField:      ctx.field,
 	}, nil
+}
+
+func copyBoolMap(m map[string]bool) map[string]bool {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]bool, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }
 
 func findLowestHPTarget(targets []Participant, hpMap map[string]int) *Participant {

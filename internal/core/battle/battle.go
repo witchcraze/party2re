@@ -125,6 +125,7 @@ type PartyBattleResult struct {
 	RemainingCMP    map[string]int            `json:"remaining_cmp,omitempty"`
 	RemainingStatus map[string]string         `json:"remaining_status,omitempty"`
 	ConsumedItems   map[string][]ConsumedItem `json:"consumed_items,omitempty"`
+	BanishedIDs     map[string]bool           `json:"banished_ids,omitempty"`
 	Logs            []TurnLog                 `json:"logs,omitempty"`
 	FinalField      *FieldState               `json:"final_field,omitempty"`
 }

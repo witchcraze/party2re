@@ -56,7 +56,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Chapel & Blessings** (`internal/chapel`): ✅ 5 prayers, single-active constraint, daily reset Worker; fictional donations purged (#472).
 - **PvP Arena** (`internal/pvp`): ✅ Elo rating (K=32); real-time wagering/spectator parity pending (#481).
 - **GvG Combat** (`internal/gvg`): ✅ Elo guild combat; multi-round tournament parity pending (#482).
-- **Boss Battles** (`internal/boss`): ✅ 10 King tiers + creator boss; 1-day-3-attempts limit — proof-of-kingship parity pending (#479).
+- **Boss Battles (封印戦)** (`internal/boss`): ✅ 4-player Party Sealing Battles (`vs_king.cgi`, `stage/king1..10.cgi`, `king99.cgi`), Dejon banishment (+30% Tired), `@ふういん` resealing, HeroCount increment, celebration banquets, news broadcast; fictional 1-day-3-attempts solo raid completely purged (#479).
 - **Dungeon Exploration** (`internal/dungeon`): ✅ Grid-map exploration; Valkey Master run buffer (Lua CAS, 2h TTL, two-phase settle).
 - **Battle Replays** (`internal/replay`): ✅ Turn-log recorder + history viewer (keyset cursor).
 - **Endurance Challenge** (`internal/challenge`): ✅ 4-tier survival; Valkey Master session buffer; co-op lobbies pending (#483).

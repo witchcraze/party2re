@@ -283,6 +283,13 @@ func (s *Service) applyResourceUpdates(char *corecharacter.Character, charID str
 			char.Stats.MP = char.Stats.MaxMP
 		}
 	}
+
+	if res.BanishedIDs != nil && res.BanishedIDs[charID] {
+		char.Tired += 30
+		if char.Tired > 100 {
+			char.Tired = 100
+		}
+	}
 }
 
 func (s *Service) applyConsumedItems(

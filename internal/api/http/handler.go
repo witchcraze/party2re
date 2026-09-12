@@ -601,6 +601,7 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("DELETE /parties/{id}", h.handleDisbandParty)
 	mux.HandleFunc("POST /parties/{id}/ready", h.handleSetPartyReady)
 	mux.HandleFunc("POST /parties/{id}/start", h.handleStartPartyAdventure)
+	mux.HandleFunc("POST /parties/{id}/sealing-battle", h.handleStartSealingBattle)
 
 	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(h.maintenanceMiddleware(mux))))
 }

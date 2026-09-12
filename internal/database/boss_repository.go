@@ -25,15 +25,13 @@ func NewBossRepository(db *sql.DB) (*BossRepository, error) {
 
 func (r *BossRepository) GetOrCreateRecord(ctx context.Context, characterID string) (boss.CharacterBossRecord, error) {
 	now := time.Now().UTC()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 
 	var rec boss.CharacterBossRecord
 	var firstClearedAt, lastChallengedAt sql.NullTime
 
 	query := `
 		SELECT character_id, highest_tier_cleared, total_boss_defeats,
-		       first_cleared_at, last_challenged_at, daily_attempts_used, daily_attempts_reset_at,
-		       created_at, updated_at
+		       first_cleared_at, last_challenged_at, created_at, updated_at
 		FROM character_boss_records
 		WHERE character_id = ?
 	`
@@ -43,8 +41,6 @@ func (r *BossRepository) GetOrCreateRecord(ctx context.Context, characterID stri
 		&rec.TotalBossDefeats,
 		&firstClearedAt,
 		&lastChallengedAt,
-		&rec.DailyAttemptsUsed,
-		&rec.DailyAttemptsResetAt,
 		&rec.CreatedAt,
 		&rec.UpdatedAt,
 	)
@@ -52,21 +48,19 @@ func (r *BossRepository) GetOrCreateRecord(ctx context.Context, characterID stri
 		insertQuery := `
 			INSERT INTO character_boss_records (
 				character_id, highest_tier_cleared, total_boss_defeats,
-				daily_attempts_used, daily_attempts_reset_at, created_at, updated_at
-			) VALUES (?, 0, 0, 0, ?, ?, ?)
+				created_at, updated_at
+			) VALUES (?, 0, 0, ?, ?)
 		`
-		_, insertErr := ExecutorFromContext(ctx, r.db).ExecContext(ctx, insertQuery, characterID, today, now, now)
+		_, insertErr := ExecutorFromContext(ctx, r.db).ExecContext(ctx, insertQuery, characterID, now, now)
 		if insertErr != nil {
 			return boss.CharacterBossRecord{}, insertErr
 		}
 		return boss.CharacterBossRecord{
-			CharacterID:          characterID,
-			HighestTierCleared:   0,
-			TotalBossDefeats:     0,
-			DailyAttemptsUsed:    0,
-			DailyAttemptsResetAt: today,
-			CreatedAt:            now,
-			UpdatedAt:            now,
+			CharacterID:        characterID,
+			HighestTierCleared: 0,
+			TotalBossDefeats:   0,
+			CreatedAt:          now,
+			UpdatedAt:          now,
 		}, nil
 	}
 	if err != nil {
@@ -106,16 +100,13 @@ func (r *BossRepository) RecordChallenge(
 		upsertRecordQuery := `
 			INSERT INTO character_boss_records (
 				character_id, highest_tier_cleared, total_boss_defeats,
-				first_cleared_at, last_challenged_at, daily_attempts_used, daily_attempts_reset_at,
-				created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+				first_cleared_at, last_challenged_at, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?)
 			ON DUPLICATE KEY UPDATE
 				highest_tier_cleared = VALUES(highest_tier_cleared),
 				total_boss_defeats = VALUES(total_boss_defeats),
 				first_cleared_at = VALUES(first_cleared_at),
 				last_challenged_at = VALUES(last_challenged_at),
-				daily_attempts_used = VALUES(daily_attempts_used),
-				daily_attempts_reset_at = VALUES(daily_attempts_reset_at),
 				updated_at = VALUES(updated_at)
 		`
 		_, err := executor.ExecContext(
@@ -126,8 +117,6 @@ func (r *BossRepository) RecordChallenge(
 			record.TotalBossDefeats,
 			firstClearedAt,
 			lastChallengedAt,
-			record.DailyAttemptsUsed,
-			record.DailyAttemptsResetAt,
 			now,
 			now,
 		)
@@ -167,7 +156,7 @@ func (r *BossRepository) RecordChallenge(
 		}
 
 		// 3. Update character progression/stats/money/medals
-		if err := updateCharacter(txCtx, executor, character); err != nil {
+		if err := updateCharacterAtomically(txCtx, executor, character); err != nil {
 			return err
 		}
 

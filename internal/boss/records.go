@@ -2,30 +2,14 @@ package boss
 
 import (
 	"context"
-	"time"
 )
-
-// ResetDailyAttemptsIfExpired resets used attempts when day has rolled over.
-func (r *CharacterBossRecord) ResetDailyAttemptsIfExpired(today time.Time) {
-	todayDate := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.UTC)
-	resetDate := time.Date(r.DailyAttemptsResetAt.Year(), r.DailyAttemptsResetAt.Month(), r.DailyAttemptsResetAt.Day(), 0, 0, 0, 0, time.UTC)
-	if todayDate.After(resetDate) {
-		r.DailyAttemptsUsed = 0
-		r.DailyAttemptsResetAt = todayDate
-	}
-}
 
 // GetCharacterRecord retrieves the boss challenge progress record for a character.
 func (s *Service) GetCharacterRecord(ctx context.Context, characterID string) (CharacterBossRecord, error) {
 	if characterID == "" {
 		return CharacterBossRecord{}, ErrCharacterNotFound
 	}
-	rec, err := s.repo.GetOrCreateRecord(ctx, characterID)
-	if err != nil {
-		return CharacterBossRecord{}, err
-	}
-	rec.ResetDailyAttemptsIfExpired(time.Now().UTC())
-	return rec, nil
+	return s.repo.GetOrCreateRecord(ctx, characterID)
 }
 
 // GetHistory retrieves recent boss challenge history for a character.

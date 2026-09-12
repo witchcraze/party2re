@@ -65,6 +65,7 @@ func (s *stubChallengeService) GetCharacterRecords(ctx context.Context, characte
 type stubBossService struct {
 	listBossesFn         func(ctx context.Context, characterID string) ([]boss.BossEncounterStatus, error)
 	challengeBossFn      func(ctx context.Context, characterID, bossID string) (boss.ChallengeResult, error)
+	startSealingBattleFn func(ctx context.Context, partyID, leaderCharID string) (boss.SealingBattleResult, error)
 	getCharacterRecordFn func(ctx context.Context, characterID string) (boss.CharacterBossRecord, error)
 }
 
@@ -78,7 +79,13 @@ func (s *stubBossService) ChallengeBoss(ctx context.Context, characterID, bossID
 	if s.challengeBossFn != nil {
 		return s.challengeBossFn(ctx, characterID, bossID)
 	}
-	return boss.ChallengeResult{Outcome: "WIN"}, nil
+	return boss.ChallengeResult{Outcome: "win"}, nil
+}
+func (s *stubBossService) StartSealingBattle(ctx context.Context, partyID, leaderCharID string) (boss.SealingBattleResult, error) {
+	if s.startSealingBattleFn != nil {
+		return s.startSealingBattleFn(ctx, partyID, leaderCharID)
+	}
+	return boss.SealingBattleResult{StageID: "king1", Outcome: "win"}, nil
 }
 func (s *stubBossService) GetCharacterRecord(ctx context.Context, characterID string) (boss.CharacterBossRecord, error) {
 	if s.getCharacterRecordFn != nil {
@@ -307,6 +314,17 @@ func TestCombatEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+	})
+
+	t.Run("POST /parties/{id}/sealing-battle", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/parties/party-1/sealing-battle", `{"character_id":"c1"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d (body: %s)", rec.Code, rec.Body.String())
 		}
 	})
 
