@@ -47,19 +47,16 @@ func (m *mockDepotManager) FindByCharacterID(ctx context.Context, characterID st
 	return dp, nil
 }
 
-func (m *mockDepotManager) RemoveItem(ctx context.Context, characterID, itemInstanceID string) error {
+func (m *mockDepotManager) ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error {
 	dp, ok := m.depots[characterID]
 	if !ok {
 		return depot.ErrNotFound
 	}
-	for i, it := range dp.Items {
-		if it.ID == itemInstanceID {
-			dp.Items = append(dp.Items[:i], dp.Items[i+1:]...)
-			m.depots[characterID] = dp
-			return nil
-		}
+	if _, err := dp.ConsumeOne(itemInstanceID); err != nil {
+		return err
 	}
-	return depot.ErrItemNotFound
+	m.depots[characterID] = dp
+	return nil
 }
 
 type mockCatalog struct {
@@ -638,19 +635,16 @@ func (m *transactionalMockDepotManager) FindByCharacterID(ctx context.Context, c
 	return dp, nil
 }
 
-func (m *transactionalMockDepotManager) RemoveItem(ctx context.Context, characterID, itemInstanceID string) error {
+func (m *transactionalMockDepotManager) ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error {
 	dp, ok := m.depots[characterID]
 	if !ok {
 		return depot.ErrNotFound
 	}
-	for i, it := range dp.Items {
-		if it.ID == itemInstanceID {
-			dp.Items = append(dp.Items[:i], dp.Items[i+1:]...)
-			m.depots[characterID] = dp
-			return nil
-		}
+	if _, err := dp.ConsumeOne(itemInstanceID); err != nil {
+		return err
 	}
-	return depot.ErrItemNotFound
+	m.depots[characterID] = dp
+	return nil
 }
 
 func TestUseHomeItem_TransactionalSuccess(t *testing.T) {
@@ -841,4 +835,102 @@ func TestUseHomeItem_TransactionalRollback(t *testing.T) {
 			t.Errorf("expected defense to remain 15 after rollback, got %d", runner.chars[charID].Stats.Defense)
 		}
 	})
+}
+
+func TestUseHomeItem_Depot_StackedItem(t *testing.T) {
+	ctx := context.Background()
+	cat, err := coreitem.InitialCatalog()
+	if err != nil {
+		t.Fatalf("InitialCatalog failed: %v", err)
+	}
+
+	charID := "char-stacked-depot"
+	char := corecharacter.Character{
+		ID:    charID,
+		Name:  "StackedDepotHero",
+		Level: 10,
+		Stats: corecharacter.Stats{
+			Defense: 10,
+		},
+	}
+	chars := map[string]corecharacter.Character{charID: char}
+
+	dp, err := depot.NewDepot(charID)
+	if err != nil {
+		t.Fatalf("NewDepot failed: %v", err)
+	}
+	// item-019 is 守りの種 (Defense Seed)
+	dp.Items = append(dp.Items, coreitem.Instance{
+		ID:           "inst-seed-stack",
+		DefinitionID: "item-019",
+		Quantity:     3,
+	})
+	depots := map[string]depot.Depot{charID: dp}
+
+	runner := &mockTransactionRunner{chars: chars}
+	depotMgr := &transactionalMockDepotManager{depots: depots}
+	charReader := &mockCharReader{chars: chars}
+	repo := newMockHomeRepo(chars)
+
+	svc, err := NewService(
+		repo,
+		charReader,
+		WithDepotManager(depotMgr),
+		WithItemCatalog(cat),
+		WithTransactionRunner(runner),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	// First use: Quantity 3 -> 2
+	res1, err := svc.UseHomeItem(ctx, charID, "inst-seed-stack", "depot")
+	if err != nil {
+		t.Fatalf("UseHomeItem 1 failed: %v", err)
+	}
+	if !res1.Consumed {
+		t.Errorf("expected item to be consumed, got %+v", res1)
+	}
+	currentDepot, err := depotMgr.FindByCharacterID(ctx, charID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID failed: %v", err)
+	}
+	if len(currentDepot.Items) != 1 {
+		t.Fatalf("expected 1 item slot remaining in depot, got %d", len(currentDepot.Items))
+	}
+	if currentDepot.Items[0].Quantity != 2 {
+		t.Errorf("expected quantity 2 remaining in depot, got %d", currentDepot.Items[0].Quantity)
+	}
+
+	// Second use: Quantity 2 -> 1
+	res2, err := svc.UseHomeItem(ctx, charID, "inst-seed-stack", "depot")
+	if err != nil {
+		t.Fatalf("UseHomeItem 2 failed: %v", err)
+	}
+	if !res2.Consumed {
+		t.Errorf("expected item to be consumed, got %+v", res2)
+	}
+	currentDepot, _ = depotMgr.FindByCharacterID(ctx, charID)
+	if len(currentDepot.Items) != 1 || currentDepot.Items[0].Quantity != 1 {
+		t.Fatalf("expected 1 item with quantity 1, got %+v", currentDepot.Items)
+	}
+
+	// Third use: Quantity 1 -> 0 (slot removed)
+	res3, err := svc.UseHomeItem(ctx, charID, "inst-seed-stack", "depot")
+	if err != nil {
+		t.Fatalf("UseHomeItem 3 failed: %v", err)
+	}
+	if !res3.Consumed {
+		t.Errorf("expected item to be consumed, got %+v", res3)
+	}
+	currentDepot, _ = depotMgr.FindByCharacterID(ctx, charID)
+	if len(currentDepot.Items) != 0 {
+		t.Errorf("expected depot to be empty after consuming final unit, got %+v", currentDepot.Items)
+	}
+
+	// Fourth use: should fail with ErrItemNotFound
+	_, err = svc.UseHomeItem(ctx, charID, "inst-seed-stack", "depot")
+	if !errors.Is(err, ErrItemNotFound) {
+		t.Errorf("expected ErrItemNotFound, got %v", err)
+	}
 }

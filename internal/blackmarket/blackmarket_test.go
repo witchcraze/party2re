@@ -2,6 +2,7 @@ package blackmarket_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/blackmarket"
@@ -394,6 +395,87 @@ func TestSacrificeItem_Depot(t *testing.T) {
 	dep, _ = depotRepo.FindByCharacterID(ctx, "char-depot")
 	if len(dep.Items) != 0 {
 		t.Errorf("expected depot to be empty after sacrifice, got %d items", len(dep.Items))
+	}
+}
+
+func TestSacrificeItem_Depot_StackedItem(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharacterRepo()
+	invRepo := newMockInventoryRepo()
+	depotRepo := newMockDepotRepo()
+	bmRepo := newMockBlackMarketRepo()
+	catalog, _ := blackmarket.LoadDefaultCatalog()
+	itemDefs := newMockItemDefProvider()
+	itemDefs.defs["armor-35"] = coreitem.Definition{ID: "armor-35", Name: "神秘の鎧"}
+
+	svc, _ := blackmarket.NewService(
+		charRepo,
+		invRepo,
+		bmRepo,
+		catalog,
+		blackmarket.WithDepotRepository(depotRepo),
+		blackmarket.WithItemDefinitionProvider(itemDefs),
+		blackmarket.WithTransactionProvider(&mockTxProvider{}),
+	)
+
+	char := corecharacter.Character{ID: "char-depot-stack", Name: "StackDepotUser"}
+	_ = charRepo.Update(ctx, char)
+
+	dep, _ := depotRepo.FindByCharacterID(ctx, "char-depot-stack")
+	armorInst := coreitem.Instance{
+		ID:           "inst-rare-stack",
+		DefinitionID: "armor-35",
+		Quantity:     3,
+	}
+	_ = dep.AddItem(armorInst)
+	_ = depotRepo.Save(ctx, dep)
+
+	// First sacrifice: Quantity 3 -> 2
+	res1, err := svc.SacrificeItem(ctx, "char-depot-stack", "inst-rare-stack")
+	if err != nil {
+		t.Fatalf("first sacrifice failed: %v", err)
+	}
+	if res1.RarePointsGained != 1 || res1.TotalRarePoints != 1 {
+		t.Errorf("expected 1 rare point, got gained=%d total=%d", res1.RarePointsGained, res1.TotalRarePoints)
+	}
+	dep, _ = depotRepo.FindByCharacterID(ctx, "char-depot-stack")
+	if len(dep.Items) != 1 {
+		t.Fatalf("expected 1 item in depot, got %d", len(dep.Items))
+	}
+	if dep.Items[0].Quantity != 2 {
+		t.Errorf("expected quantity 2 in depot, got %d", dep.Items[0].Quantity)
+	}
+
+	// Second sacrifice: Quantity 2 -> 1
+	res2, err := svc.SacrificeItem(ctx, "char-depot-stack", "inst-rare-stack")
+	if err != nil {
+		t.Fatalf("second sacrifice failed: %v", err)
+	}
+	if res2.RarePointsGained != 1 || res2.TotalRarePoints != 2 {
+		t.Errorf("expected total 2 rare points, got gained=%d total=%d", res2.RarePointsGained, res2.TotalRarePoints)
+	}
+	dep, _ = depotRepo.FindByCharacterID(ctx, "char-depot-stack")
+	if len(dep.Items) != 1 || dep.Items[0].Quantity != 1 {
+		t.Fatalf("expected 1 item with quantity 1 in depot, got %+v", dep.Items)
+	}
+
+	// Third sacrifice: Quantity 1 -> 0 (slot removed)
+	res3, err := svc.SacrificeItem(ctx, "char-depot-stack", "inst-rare-stack")
+	if err != nil {
+		t.Fatalf("third sacrifice failed: %v", err)
+	}
+	if res3.RarePointsGained != 1 || res3.TotalRarePoints != 3 {
+		t.Errorf("expected total 3 rare points, got gained=%d total=%d", res3.RarePointsGained, res3.TotalRarePoints)
+	}
+	dep, _ = depotRepo.FindByCharacterID(ctx, "char-depot-stack")
+	if len(dep.Items) != 0 {
+		t.Errorf("expected depot to be empty, got %d items", len(dep.Items))
+	}
+
+	// Fourth sacrifice: fails because item is no longer in depot
+	_, err = svc.SacrificeItem(ctx, "char-depot-stack", "inst-rare-stack")
+	if !errors.Is(err, blackmarket.ErrUnownedItem) {
+		t.Errorf("expected ErrUnownedItem, got %v", err)
 	}
 }
 

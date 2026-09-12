@@ -141,12 +141,12 @@ func (a *testDepotManagerAdapter) FindByCharacterID(ctx context.Context, charact
 	return a.repo.FindByCharacterID(ctx, characterID)
 }
 
-func (a *testDepotManagerAdapter) RemoveItem(ctx context.Context, characterID, itemInstanceID string) error {
+func (a *testDepotManagerAdapter) ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error {
 	dp, err := a.repo.FindByCharacterIDForUpdate(ctx, characterID)
 	if err != nil {
 		return err
 	}
-	if _, err := dp.RemoveItem(itemInstanceID); err != nil {
+	if _, err := dp.ConsumeOne(itemInstanceID); err != nil {
 		return err
 	}
 	return a.repo.Save(ctx, dp)

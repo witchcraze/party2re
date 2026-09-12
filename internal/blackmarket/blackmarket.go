@@ -253,7 +253,7 @@ func (s *Service) SacrificeItem(ctx context.Context, characterID string, itemIns
 				return err
 			}
 		} else if foundInDep {
-			if _, err := dep.RemoveItem(itemInstanceID); err != nil {
+			if _, err := dep.ConsumeOne(itemInstanceID); err != nil {
 				return err
 			}
 			if err := s.depotRepo.Save(txCtx, dep); err != nil {
