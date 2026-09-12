@@ -31,6 +31,16 @@ Never branch directly from another feature branch unless explicitly stacking PRs
 - **Pre-Registration De-duplication Check:**
   - Before creating any new Issue, agents MUST search existing open issues using targeted domain/entity keywords (`gh issue list --state open --search "<domain-or-keyword>" --json number,title,labels`).
   - If an open issue already tracks the problem, update or refine the existing issue rather than registering a duplicate.
+- **Related Tickets Synchronization (Body-First Update Rule):**
+  - When a PR modifies shared domain models, changes storage contracts, fixes bugs, or alters premises affecting other open issues, agents MUST synchronize the affected open issues.
+  - **Body-First Requirement:** Agents MUST update the issue body directly (`gh issue edit <number> --body ...` or `--body-file`). Agents MUST NEVER rely solely on issue comments for codebase updates, because `gh issue view` does not display comments by default and subsequent agents/collaborators will operate from stale premises.
+  - **Standardized Alert Callout Format:** Prepend a standardized GitHub alert callout directly at the top of `## Problem` (or `## Context` if `## Problem` is missing):
+    ```markdown
+    > [!NOTE]
+    > **Codebase Context Update (Issue #<resolved-issue> resolved via PR #<pr-number>)**:
+    > <Concise description of changes made to the codebase and what was fixed/superseded>.
+    > <Clear statement of what remains active or in-scope for this issue>.
+    ```
 - **Prerequisite & Feasibility Verification:**
   - When creating issues for security, auth, or cross-cutting features, verify whether required underlying infrastructure/models (e.g., Admin role, RBAC, config keys) already exist in the codebase.
   - If prerequisites are missing, explicitly document them in the Issue body along with concrete architectural options (e.g. Option A, Option B) and note that specification alignment is required before implementation.
