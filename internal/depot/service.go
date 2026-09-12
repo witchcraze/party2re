@@ -154,7 +154,7 @@ func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInst
 			return err
 		}
 		dep.RefreshCapacity(tc.Character.JobLevel, tc.Character.OverDepot)
-		itemInstance, err := dep.RemoveItem(itemInstanceID)
+		itemInstance, err := dep.PurgeSlot(itemInstanceID)
 		if err != nil {
 			return err
 		}
@@ -197,7 +197,7 @@ func (s *Service) SellItem(ctx context.Context, characterID string, itemInstance
 		if err != nil {
 			return err
 		}
-		itemInstance, err := dep.RemoveItem(itemInstanceID)
+		itemInstance, err := dep.PurgeSlot(itemInstanceID)
 		if err != nil {
 			return err
 		}
@@ -253,7 +253,7 @@ func (s *Service) SellItems(ctx context.Context, characterID string, itemInstanc
 		}
 
 		for _, targetID := range itemInstanceIDs {
-			itemInstance, _ := dep.RemoveItem(targetID)
+			itemInstance, _ := dep.PurgeSlot(targetID)
 			unitPrice := 0
 			if s.itemDefs != nil {
 				if def, defErr := s.itemDefs.FindByID(itemInstance.DefinitionID); defErr == nil {

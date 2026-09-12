@@ -73,11 +73,13 @@ Because `character_depots.capacity` is initialized at character creation and cha
   - Invariant: Item exists in sender inventory.
   - Invariant: Recipient depot has available capacity (respecting stack merging).
 
-### 6. Storage Item Consumption (`ConsumeOne`)
+### 6. Storage Item Consumption (`Consume`, `ConsumeOne`, `PurgeSlot`)
 - Town facilities and trade actions (e.g., Home consumable item usage, Black Market rare item sacrifices, Gem Store synthesis crafting, Flea Market and Player Store listings) consume items directly from Depot storage.
-- Consuming 1 item decrements `Quantity` by 1 (`ConsumeOne`) when `Quantity > 1`, retaining the depot slot.
-- The item slot is removed from depot storage only when the remaining quantity reaches 0.
-- Services consuming individual item units must invoke `ConsumeOne` instead of whole-slot deletion (`RemoveItem`) to prevent silent deletion of stacked items.
+- Standardized consumption method `dep.Consume(instanceID, quantity)` safely decrements `Quantity` by `quantity` when `existing.Quantity >= quantity`, returning a copy of the consumed instance with `Quantity = quantity`.
+- If the remaining quantity reaches 0, the item slot is removed from depot storage.
+- If `quantity <= 0` or `existing.Quantity < quantity`, returns `ErrInvalidQuantity` without mutating depot state.
+- `dep.ConsumeOne(instanceID)` delegates directly to `dep.Consume(instanceID, 1)`.
+- Intentional whole-slot removal (e.g., withdrawing an entire stack to inventory) must use `PurgeSlot(instanceID)` (or legacy `RemoveItem`, which delegates to `PurgeSlot`). `RemoveItem` is marked deprecated for consumption purposes to prevent accidental stack deletion.
 
 ## Atomicity, Concurrency & Lock Hierarchy
 

@@ -56,3 +56,15 @@ A character has 5 distinct equipment slots:
    - **Non-Stackable Definitions (`Definition.IsStackable() == false`)**: Equipment items (`Slot != SlotNone`: weapons, armor, shields, accessories) represent discrete gear. Each equipment piece must have `Quantity == 1` and occupy its own distinct storage slot.
    - **Enhancement Level Invariant**: Any item with `EnhancementLevel > 0` must strictly have `Quantity == 1` and cannot stack with any other item instance (`CanStackWith == false`).
    - **Instance Creation & Validation Guards**: `NewInstanceWithEnhancement`, `Definition.NewInstance`, and `Definition.NewInstanceWithEnhancement` reject `Quantity > 1` for equipment or enhanced items with `ErrInvalidInstance`.
+
+---
+
+## Storage & Item Consumption
+
+Inventory storage (`internal/core/inventory`) encapsulates item mutations and validates quantities:
+- **`Consume(instanceID, quantity) error`**: Decrements item quantity by `quantity` or removes the slot when quantity reaches 0. Rejects `quantity <= 0` or insufficient stack with `ErrInvalidQuantity`.
+- **`ConsumeItem(instanceID, quantity) (item.Instance, error)`**: Decrements item quantity and returns a copy of the consumed item instance with `Quantity = quantity`.
+- **`ConsumeOne(instanceID) error`**: Convenience helper delegating directly to `Consume(instanceID, 1)`.
+- **`ConsumeOneItem(instanceID) (item.Instance, error)`**: Convenience helper delegating directly to `ConsumeItem(instanceID, 1)`.
+- **Interface Symmetry**: Symmetrically mirrors Depot storage consumption (`depot.Consume`, `depot.ConsumeOne`, `depot.PurgeSlot`) across storage aggregates.
+

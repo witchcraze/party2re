@@ -123,3 +123,54 @@ func TestInventory_AddsMultipleEquipmentInstancesSeparately(t *testing.T) {
 		t.Errorf("Quantity(weapon-01) = %d, want 2", inv.Quantity("weapon-01"))
 	}
 }
+
+func TestInventory_ConsumeItem_And_ConsumeOne(t *testing.T) {
+	inv, _ := New("char-consume-inv")
+	inst, _ := item.NewInstance("potion", 5)
+	_ = inv.Add(inst)
+
+	// 1. ConsumeOne
+	if err := inv.ConsumeOne(inst.ID); err != nil {
+		t.Fatalf("ConsumeOne failed: %v", err)
+	}
+	if inv.Quantity("potion") != 4 {
+		t.Errorf("expected quantity 4, got %d", inv.Quantity("potion"))
+	}
+
+	// 2. ConsumeOneItem
+	one, err := inv.ConsumeOneItem(inst.ID)
+	if err != nil || one.Quantity != 1 || one.DefinitionID != "potion" {
+		t.Fatalf("ConsumeOneItem failed: err=%v, one=%+v", err, one)
+	}
+	if inv.Quantity("potion") != 3 {
+		t.Errorf("expected quantity 3, got %d", inv.Quantity("potion"))
+	}
+
+	// 3. ConsumeItem multi-quantity (consume 2 of 3)
+	consumed, err := inv.ConsumeItem(inst.ID, 2)
+	if err != nil || consumed.Quantity != 2 {
+		t.Fatalf("ConsumeItem(2) failed: err=%v, consumed=%+v", err, consumed)
+	}
+	if inv.Quantity("potion") != 1 {
+		t.Errorf("expected quantity 1, got %d", inv.Quantity("potion"))
+	}
+
+	// 4. ConsumeItem excess quantity (trying to consume 2 when 1 left)
+	if _, err := inv.ConsumeItem(inst.ID, 2); !errors.Is(err, ErrInvalidQuantity) {
+		t.Errorf("expected ErrInvalidQuantity for excess quantity, got %v", err)
+	}
+
+	// 5. ConsumeItem invalid quantity <= 0
+	if _, err := inv.ConsumeItem(inst.ID, 0); !errors.Is(err, ErrInvalidQuantity) {
+		t.Errorf("expected ErrInvalidQuantity for 0, got %v", err)
+	}
+
+	// 6. Final exhaust (consume 1 of 1 -> slot removed)
+	last, err := inv.ConsumeItem(inst.ID, 1)
+	if err != nil || last.Quantity != 1 {
+		t.Fatalf("ConsumeItem(1) final failed: err=%v, last=%+v", err, last)
+	}
+	if len(inv.Items) != 0 || inv.Quantity("potion") != 0 {
+		t.Errorf("expected inventory to be empty, got %+v", inv.Items)
+	}
+}

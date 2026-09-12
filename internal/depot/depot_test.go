@@ -769,3 +769,72 @@ func TestDepot_ConsumeOne(t *testing.T) {
 		t.Errorf("expected ErrItemNotFound, got %v", err)
 	}
 }
+
+func TestDepot_Consume_MultiQuantityAndPurge(t *testing.T) {
+	d, _ := NewDepot("char-consume-test")
+	d.Items = []item.Instance{
+		{ID: "herb-stack", DefinitionID: "item-001", Quantity: 10, EnhancementLevel: 0},
+		{ID: "sword-slot", DefinitionID: "wea-01", Quantity: 1, EnhancementLevel: 3},
+	}
+
+	// 1. Partial consume (10 -> 6, consumed 4)
+	consumed, err := d.Consume("herb-stack", 4)
+	if err != nil {
+		t.Fatalf("Consume(4) failed: %v", err)
+	}
+	if consumed.Quantity != 4 || consumed.DefinitionID != "item-001" {
+		t.Errorf("expected consumed quantity 4, got %+v", consumed)
+	}
+	if d.Items[0].Quantity != 6 {
+		t.Errorf("expected remaining quantity 6, got %d", d.Items[0].Quantity)
+	}
+
+	// 2. Reject invalid quantity <= 0
+	if _, err := d.Consume("herb-stack", 0); !errors.Is(err, ErrInvalidQuantity) {
+		t.Errorf("expected ErrInvalidQuantity for 0, got %v", err)
+	}
+	if _, err := d.Consume("herb-stack", -2); !errors.Is(err, ErrInvalidQuantity) {
+		t.Errorf("expected ErrInvalidQuantity for negative qty, got %v", err)
+	}
+
+	// 3. Reject excess quantity (> 6)
+	if _, err := d.Consume("herb-stack", 7); !errors.Is(err, ErrInvalidQuantity) {
+		t.Errorf("expected ErrInvalidQuantity for excess quantity, got %v", err)
+	}
+	if d.Items[0].Quantity != 6 {
+		t.Errorf("slot quantity must remain intact after failed consume, got %d", d.Items[0].Quantity)
+	}
+
+	// 4. Exact exhaustion (consume remaining 6 -> slot removed)
+	consumed, err = d.Consume("herb-stack", 6)
+	if err != nil {
+		t.Fatalf("Consume(6) failed: %v", err)
+	}
+	if consumed.Quantity != 6 {
+		t.Errorf("expected consumed quantity 6, got %d", consumed.Quantity)
+	}
+	if len(d.Items) != 1 || d.Items[0].ID != "sword-slot" {
+		t.Fatalf("expected only sword-slot left in depot, got %+v", d.Items)
+	}
+
+	// 5. Consume missing item
+	if _, err := d.Consume("herb-stack", 1); !errors.Is(err, ErrItemNotFound) {
+		t.Errorf("expected ErrItemNotFound, got %v", err)
+	}
+
+	// 6. PurgeSlot unconditionally removes sword-slot
+	purged, err := d.PurgeSlot("sword-slot")
+	if err != nil || purged.ID != "sword-slot" {
+		t.Fatalf("PurgeSlot failed: err=%v, purged=%+v", err, purged)
+	}
+	if len(d.Items) != 0 {
+		t.Errorf("expected depot to be empty after PurgeSlot, got %d", len(d.Items))
+	}
+
+	// 7. RemoveItem delegates to PurgeSlot
+	d.Items = []item.Instance{{ID: "bulk-herb", DefinitionID: "item-001", Quantity: 99}}
+	removed, err := d.RemoveItem("bulk-herb")
+	if err != nil || removed.Quantity != 99 || len(d.Items) != 0 {
+		t.Errorf("RemoveItem failed: err=%v, removed=%+v, remaining=%d", err, removed, len(d.Items))
+	}
+}
