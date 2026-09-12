@@ -71,6 +71,6 @@ func (r *ActivityRepository) ClaimAndApply(ctx context.Context, id string, chara
 		if affected == 0 {
 			return claimFailure(txCtx, executor, "activities", id, activity.ErrNotFound, activity.ErrAlreadyClaimed)
 		}
-		return updateCharacterAtomically(txCtx, executor, character)
+		return updateCharacter(txCtx, executor, character)
 	})
 }

@@ -156,7 +156,7 @@ func (r *BossRepository) RecordChallenge(
 		}
 
 		// 3. Update character progression/stats/money/medals
-		if err := updateCharacterAtomically(txCtx, executor, character); err != nil {
+		if err := updateCharacter(txCtx, executor, character); err != nil {
 			return err
 		}
 

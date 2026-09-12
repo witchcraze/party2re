@@ -117,7 +117,7 @@ func (r *PvPRepository) RecordMatchAndUpdateRatings(
 		}
 
 		// 3. Update attacker stats, money, level, exp
-		if err := updateCharacterAtomically(txCtx, executor, attacker); err != nil {
+		if err := updateCharacter(txCtx, executor, attacker); err != nil {
 			return err
 		}
 
