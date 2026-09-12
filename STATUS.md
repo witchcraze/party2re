@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #562 — [Architecture] Storage: Standardize item consumption interface between Depot and Inventory
+Last updated: Issue #561 — [Architecture] Transaction: Formalize multi-aggregate and P2P transaction runner primitives and align tx_runner linter
 
 ## Current phase
 
@@ -21,7 +21,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ### Architecture & Repository Intelligence
 - **Agent Operating Rules** (`AGENTS.md`, `.agents/rules/`): ✅ Prescriptive constraint rules modularized into 9 rule files; rationale in `docs/architecture/`.
 - **Guidance Layer** (`.arch/`): ✅ Symbol-anchor module JSON + shared table reverse-index; verified by `arch_test.go`.
-- **AST Linter Suite** (`make check`, `make arch-lint`): ✅ TransactionRunner enforcement, lock hierarchy, file size (≤500 lines), ISP interface size (≤10 methods), dead code, Valkey keyspace.
+- **AST Linter Suite** (`make check`, `make arch-lint`): ✅ TransactionRunner & dual mutation boundary enforcement (#561), lock hierarchy, file size (≤500 lines), ISP interface size (≤10 methods), dead code, Valkey keyspace.
 - **Benchmark Framework** (`make bench`): ✅ Critical-path benchmarks + baseline regression detection.
 
 ### Core & Shared Components
@@ -33,7 +33,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Item / Inventory / Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): ✅ 5-category catalog (269 items), UsageCategory validation, domain stackability invariants (`IsStackable`), slot management, standardized item consumption interface (`Consume`, `ConsumeItem`, `ConsumeOne`, `ConsumeOneItem`).
 - **Battle** (`internal/core/battle`): ✅ Deterministic turn resolver; party battle engine (4v N), skill/item/gem-effect/field-state/revival — full `_battle.cgi` parity (#480).
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): ✅ Valkey-backed delayed queue + distributed lock worker; package coverage 92.7%.
-- **Database & Transaction Orchestration** (`internal/database`, `internal/economy`, `internal/core/event`): ✅ `RunInTx`/`ExecutorFromContext` propagation, deterministic lock hierarchy (Rank 0→8) AST-enforced, `economy.TransactionRunner`, 2-phase event dispatcher.
+- **Database & Transaction Orchestration** (`internal/database`, `internal/economy`, `internal/core/event`): ✅ `RunInTx`/`ExecutorFromContext` propagation, deterministic lock hierarchy (Rank 0→8) AST-enforced, single-character `economy.TransactionRunner`, multi-aggregate/P2P `TransactionProvider` formalization (#561), 2-phase event dispatcher.
 - **Common Utilities** (`internal/pagination`, `internal/id`, `internal/validation`): ✅ Keyset cursor pagination (`CursorPage[T]`), cryptographic ID, validation helpers.
 
 ### Feature Modules

@@ -55,7 +55,16 @@ To keep files readable, maintainable, and within effective token limits for AI p
 - **Maintain Package Cohesion**: Keep related sub-responsibilities within the same Go package unless clear layer boundaries justify a new package. Splitting across peer files retains package-private visibility while improving navigability.
 
 ## 10. Cross-Domain Application Runtime Primitives
-- **Universal Transaction Runner**: Feature operations requiring currency, inventory mutations, or multi-resource atomic state changes MUST route through `economy.TransactionRunner` (`ExecuteTransaction` or `economy.Run[T]`). Direct ad-hoc `RunInTx` in feature services is prohibited.
-  - **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/tx_runner_lint_test.go`) during `make check` and CI.
+- **Transactional Mutation Boundaries**:
+  - **Single-Character Currency & Inventory Operations**: Operations modifying a single character's wallet, medals, or inventory items MUST route through `economy.TransactionRunner` (`ExecuteTransaction` or `economy.Run[T]`). Feature services MUST NOT roll their own ad-hoc transaction orchestration or row locking for single-character currency/inventory mutations.
+  - **Peer-to-Peer (P2P) and Multi-Aggregate Operations**: Operations orchestrating transfers between multiple characters (e.g. sender & receiver, buyer & seller) or mutating multiple domain aggregates across storage/table boundaries (e.g. `character_depots`, `gem_boxes`, `flea_market_items`, `player_stores`, `auction_listings`) MUST inject a transaction boundary provider interface (`TransactionProvider` / `RunInTx(ctx, fn) error`, matching `economy.TransactionProvider`).
+  - **Deterministic Lock Hierarchy Enforcement**: Any P2P or multi-aggregate transaction MUST strictly adhere to the global pessimistic lock hierarchy (Rank 0 → Rank 8) defined in `.agents/rules/05-database-and-caching.md`:
+    - Rank 0: Shared peer entity (e.g. `flea_market_items`, `parcels`, `auction_listings`)
+    - Rank 2: Character entities — multiple characters MUST be locked in ascending lexicographical order via `id.Sort2(charID1, charID2)`.
+    - Rank 3: Inventory items (`inventory_items`).
+    - Rank 5: Depot storage (`character_depots`).
+    - Rank 8: Secondary domain feature records (`gem_boxes`, `player_stores`, etc.).
+  - **Prohibition of Direct Infrastructure Coupling**: Feature packages MUST NOT import `internal/database` directly to invoke raw `database.RunInTx(ctx, db, ...)` or hold raw `*sql.DB` / `db` identifiers. All database transaction boundaries must be injected via interfaces.
+  - **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/tx_runner_lint_test.go` and `internal/database/lock_hierarchy_lint_test.go`) during `make check` and CI.
 - **Event Dispatcher**: Domain events MUST use `internal/core/event.Dispatcher` two-phase dispatch. See [`docs/architecture/cross-domain-primitives.md`](../../docs/architecture/cross-domain-primitives.md) for architecture, lock order enforcement, and migration examples.
 

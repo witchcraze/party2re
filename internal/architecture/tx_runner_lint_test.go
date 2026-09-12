@@ -61,7 +61,7 @@ func checkFileTxRunnerRules(fset *token.FileSet, node *ast.File, filename string
 				violations = append(violations, txRunnerViolation{
 					file:    filename,
 					line:    pos.Line,
-					message: "direct call to database.RunInTx is prohibited in feature packages; route through economy.TransactionRunner or repository methods (.agents/rules/03-architecture.md §10)",
+					message: fmt.Sprintf("direct call to %s.RunInTx is prohibited in feature packages; route single-character operations through economy.TransactionRunner, or inject a TransactionProvider conforming to the lock hierarchy for P2P/multi-aggregate operations (.agents/rules/03-architecture.md §10)", ident.Name),
 				})
 				return true
 			}
@@ -70,7 +70,7 @@ func checkFileTxRunnerRules(fset *token.FileSet, node *ast.File, filename string
 				violations = append(violations, txRunnerViolation{
 					file:    filename,
 					line:    pos.Line,
-					message: "direct call to RunInTx on database handle is prohibited in feature packages; route through economy.TransactionRunner (.agents/rules/03-architecture.md §10)",
+					message: "direct call to RunInTx on raw database handle is prohibited in feature packages; route single-character operations through economy.TransactionRunner, or inject a TransactionProvider conforming to the lock hierarchy for P2P/multi-aggregate operations (.agents/rules/03-architecture.md §10)",
 				})
 				return true
 			}
@@ -142,8 +142,10 @@ func TestTxRunnerLint_NoDirectDatabaseRunInTx(t *testing.T) {
 		for _, v := range allViolations {
 			buf.WriteString(fmt.Sprintf("%s:%d: %s\n", filepath.ToSlash(v.file), v.line, v.message))
 		}
-		buf.WriteString("\nAccording to .agents/rules/03-architecture.md §10, feature operations mutating currencies,\n" +
-			"inventories, or multi-resource domain states MUST route through economy.TransactionRunner (ExecuteTransaction / economy.Run[T]).\n")
+		buf.WriteString("\nAccording to .agents/rules/03-architecture.md §10:\n" +
+			"- Single-character currency/inventory operations MUST route through economy.TransactionRunner (ExecuteTransaction / economy.Run[T]).\n" +
+			"- Peer-to-peer (P2P) and multi-aggregate operations MUST inject a TransactionProvider interface conforming to the deterministic lock hierarchy (Rank 0->8).\n" +
+			"- Direct coupling via raw database.RunInTx or raw db handles in feature packages is strictly prohibited.\n")
 		t.Errorf("%s", buf.String())
 	}
 }
@@ -207,6 +209,41 @@ import "context"
 type Service struct{}
 func (s *Service) DoSomething(ctx context.Context) error {
 	return nil
+}`,
+			expectCount: 0,
+		},
+		{
+			name: "compliant injected TransactionProvider in multi-aggregate/P2P service",
+			code: `package testpkg
+import "context"
+type TransactionProvider interface {
+	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+type Service struct {
+	txProvider TransactionProvider
+}
+func (s *Service) ExecuteP2PTrade(ctx context.Context) error {
+	return s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
+		return nil
+	})
+}`,
+			expectCount: 0,
+		},
+		{
+			name: "compliant economy.TransactionRunner in single-character service",
+			code: `package testpkg
+import (
+	"context"
+	"github.com/witchcraze/party2re/internal/economy"
+)
+type Service struct {
+	runner economy.TransactionRunner
+}
+func (s *Service) BuyItem(ctx context.Context, charID string) error {
+	_, err := s.runner.ExecuteTransaction(ctx, economy.TransactionRequest{CharacterID: charID}, func(tc *economy.TxContext) error {
+		return nil
+	})
+	return err
 }`,
 			expectCount: 0,
 		},
