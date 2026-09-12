@@ -105,7 +105,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Photo Contest, screenshots, seasonal voting, and Hall of Fame ([#186](https://github.com/witchcraze/party2re/issues/186))
 
 ### F. Economy and side systems
-- [x] Alchemy synthesis with 112 recipes & material requirements ([#60](https://github.com/witchcraze/party2re/issues/60))
+- [x] Alchemy: Free Overnight Depot-linked Synthesis & Compendium ([#60](https://github.com/witchcraze/party2re/issues/60), [#487](https://github.com/witchcraze/party2re/issues/487))
 - [x] Player Auction house and free-market operations ([#80](https://github.com/witchcraze/party2re/issues/80))
 - [x] Casino mini-games: Slot Machine ([#81](https://github.com/witchcraze/party2re/issues/81)), Indian Poker ([#82](https://github.com/witchcraze/party2re/issues/82)), Doppel ([#141](https://github.com/witchcraze/party2re/issues/141)), High & Low ([#64](https://github.com/witchcraze/party2re/issues/64))
 - [x] Lottery and raffle ticket systems ([#83](https://github.com/witchcraze/party2re/issues/83))
@@ -256,6 +256,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#562](https://github.com/witchcraze/party2re/issues/562) | Storage: Standardize item consumption interface (Consume, ConsumeItem, ConsumeOne, PurgeSlot) between Depot and Inventory | Completed |
 | [#561](https://github.com/witchcraze/party2re/issues/561) | Transaction: Formalize multi-aggregate and P2P transaction runner primitives and align tx_runner linter | Completed |
 | [#475](https://github.com/witchcraze/party2re/issues/475) | Food Delivery: Eliminate fictional courier quests and reproduce Tavern Post-Adventure Food Delivery | Completed |
+| [#487](https://github.com/witchcraze/party2re/issues/487) | Alchemy: Free Overnight Depot-linked Synthesis & Compendium | Completed |
 
 ---
 

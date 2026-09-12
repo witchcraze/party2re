@@ -5,15 +5,17 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/alchemy"
 	"github.com/witchcraze/party2re/internal/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/depot"
 )
 
-func TestAlchemyIntegrationSynthesis(t *testing.T) {
+func TestAlchemyIntegrationOvernightDepotSynthesis(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -29,7 +31,7 @@ func TestAlchemyIntegrationSynthesis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	invRepo, err := database.NewInventoryRepository(db)
+	depotRepo, err := database.NewDepotRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,6 +39,7 @@ func TestAlchemyIntegrationSynthesis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	txProvider := database.NewTransactionProvider(db)
 
 	charService, err := character.NewService(charRepo)
 	if err != nil {
@@ -61,60 +64,106 @@ func TestAlchemyIntegrationSynthesis(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Give character herbs (item-001) for recipe-001 (2 herbs -> 1 super herb)
-	inv, err := coreinventory.New(createdChar.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	herbs, err := item.NewInstance("item-001", 5)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := inv.Add(herbs); err != nil {
-		t.Fatal(err)
-	}
-	if err := invRepo.Save(ctx, inv); err != nil {
-		t.Fatal(err)
-	}
-
-	alcService, err := alchemy.NewServiceWithTransaction(charRepo, invRepo, alcRepo, recipeCatalog, itemCatalog)
+	simTime := time.Date(2026, 9, 12, 15, 0, 0, 0, timer.JST)
+	alcService, err := alchemy.NewService(
+		charRepo,
+		depotRepo,
+		alcRepo,
+		recipeCatalog,
+		itemCatalog,
+		alchemy.WithTransactionProvider(txProvider),
+		alchemy.WithNowFunc(func() time.Time { return simTime }),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Synthesize recipe-001 (上薬草)
-	res, err := alcService.Synthesize(ctx, createdChar.ID, "recipe-001")
-	if err != nil {
-		t.Fatalf("Synthesize() error = %v", err)
+	// 1. Unlock recipe-001 (2 herbs item-001 -> 1 super herb item-002)
+	if err := alcService.UnlockRecipe(ctx, createdChar.ID, "recipe-001"); err != nil {
+		t.Fatalf("UnlockRecipe failed: %v", err)
 	}
 
-	if res.CreatedItem.DefinitionID != "item-002" || res.CreatedItem.Quantity != 1 {
-		t.Fatalf("unexpected synthesized item: %#v", res.CreatedItem)
-	}
-
-	// Verify database persistence
-	restoredChar, err := charRepo.FindByID(ctx, createdChar.ID)
+	// 2. Put 5 herbs into Depot
+	dep, err := depot.NewDepot(createdChar.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectedMoney := 200 - res.GoldCost
-	if restoredChar.Money != expectedMoney {
-		t.Errorf("restored character money = %d, want %d", restoredChar.Money, expectedMoney)
-	}
-
-	restoredInv, err := invRepo.FindByCharacterID(ctx, createdChar.ID)
+	dep.Capacity = 10
+	herbInst, err := item.NewInstance("item-001", 5)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if restoredInv.Quantity("item-001") != 3 {
-		t.Errorf("remaining herbs = %d, want 3", restoredInv.Quantity("item-001"))
+	if err := dep.AddItem(herbInst); err != nil {
+		t.Fatal(err)
 	}
-	if restoredInv.Quantity("item-002") != 1 {
-		t.Errorf("super herb quantity = %d, want 1", restoredInv.Quantity("item-002"))
+	if err := depotRepo.Save(ctx, dep); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Synthesize recipe-001: consumes 2 herbs from Depot
+	synthRes, err := alcService.Synthesize(ctx, createdChar.ID, "recipe-001")
+	if err != nil {
+		t.Fatalf("Synthesize failed: %v", err)
+	}
+	if synthRes.State != alchemy.StateOngoing {
+		t.Errorf("expected StateOngoing, got %v", synthRes.State)
+	}
+
+	// Verify depot materials decreased from 5 to 3
+	savedDepot, err := depotRepo.FindByCharacterID(ctx, createdChar.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if savedDepot.Quantity("item-001") != 3 {
+		t.Errorf("depot item-001 quantity = %d, want 3", savedDepot.Quantity("item-001"))
+	}
+
+	// 4. Before morning / before home rest, claiming must fail
+	if _, err := alcService.Claim(ctx, createdChar.ID); err == nil {
+		t.Fatal("expected Claim to fail before maturity/rest, got nil")
+	}
+
+	// 5. Complete via Home Sleep Hook
+	if err := alcService.CompleteOngoingSynthesis(ctx, createdChar.ID); err != nil {
+		t.Fatalf("CompleteOngoingSynthesis failed: %v", err)
+	}
+
+	status, err := alcService.GetStatus(ctx, createdChar.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.State != alchemy.StateCompleted {
+		t.Errorf("expected status StateCompleted, got %v", status.State)
+	}
+
+	// 6. Claim delivers item-002 directly to Depot
+	claimRes, err := alcService.Claim(ctx, createdChar.ID)
+	if err != nil {
+		t.Fatalf("Claim failed: %v", err)
+	}
+	if claimRes.CreatedItem.DefinitionID != "item-002" {
+		t.Errorf("expected created item item-002, got %s", claimRes.CreatedItem.DefinitionID)
+	}
+
+	finalDepot, err := depotRepo.FindByCharacterID(ctx, createdChar.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if finalDepot.Quantity("item-002") != 1 {
+		t.Errorf("depot item-002 quantity = %d, want 1", finalDepot.Quantity("item-002"))
+	}
+
+	// 7. Compendium reflects crafted state
+	comp, err := alcService.GetCompendium(ctx, createdChar.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if comp.CraftedCount != 1 {
+		t.Errorf("expected crafted count 1, got %d", comp.CraftedCount)
 	}
 }
 
-func TestConcurrentAlchemySynthesis(t *testing.T) {
+func TestAlchemyIntegrationConcurrentSynthesize(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -127,51 +176,54 @@ func TestConcurrentAlchemySynthesis(t *testing.T) {
 
 	ctx := context.Background()
 	charRepo, _ := database.NewCharacterRepository(db)
-	invRepo, _ := database.NewInventoryRepository(db)
+	depotRepo, _ := database.NewDepotRepository(db)
+	alcRepo, _ := database.NewAlchemyRepository(db)
+	txProvider := database.NewTransactionProvider(db)
 
-	char, _ := database.CreateTestCharacter(ctx, db, "Concurrent Alchemist")
-	char.Money = 500
-	_ = charRepo.Update(ctx, char)
+	charService, _ := character.NewService(charRepo)
+	player, _ := database.CreateTestPlayer(ctx, db)
+	char, _ := charService.Create(ctx, player.ID, "Concurrent Alchemist")
 
 	itemCatalog, _ := item.InitialCatalog()
 	recipeCatalog, _ := alchemy.InitialRecipeCatalog()
 
-	// Give only 3 herbs (recipe-001 needs 2 herbs per synthesis, so only 1 can succeed)
-	inv, _ := coreinventory.New(char.ID)
-	herbs, _ := item.NewInstance("item-001", 3)
-	_ = inv.Add(herbs)
-	_ = invRepo.Save(ctx, inv)
-
-	txProvider := database.NewTransactionProvider(db)
 	alcService, _ := alchemy.NewService(
 		charRepo,
-		invRepo,
+		depotRepo,
+		alcRepo,
 		recipeCatalog,
 		itemCatalog,
 		alchemy.WithTransactionProvider(txProvider),
 	)
 
+	_ = alcService.UnlockRecipe(ctx, char.ID, "recipe-001")
+
+	dep, _ := depot.NewDepot(char.ID)
+	dep.Capacity = 10
+	herbInst, _ := item.NewInstance("item-001", 10)
+	_ = dep.AddItem(herbInst)
+	_ = depotRepo.Save(ctx, dep)
+
+	const goroutines = 5
 	var wg sync.WaitGroup
-	errs := make(chan error, 2)
-	for range 2 {
+	successCount := 0
+	var mu sync.Mutex
+
+	for i := 0; i < goroutines; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			_, err := alcService.Synthesize(ctx, char.ID, "recipe-001")
-			errs <- err
+			if err == nil {
+				mu.Lock()
+				successCount++
+				mu.Unlock()
+			}
 		}()
 	}
 	wg.Wait()
-	close(errs)
 
-	restoredInv, _ := invRepo.FindByCharacterID(ctx, char.ID)
-	if restoredInv.Quantity("item-001") < 0 {
-		t.Fatalf("herb quantity became negative: %d", restoredInv.Quantity("item-001"))
-	}
-	if restoredInv.Quantity("item-002") != 1 {
-		t.Fatalf("expected exactly 1 super herb created with only 3 herbs, got: %d", restoredInv.Quantity("item-002"))
-	}
-	if restoredInv.Quantity("item-001") != 1 {
-		t.Fatalf("expected remaining herbs = 1, got: %d", restoredInv.Quantity("item-001"))
+	if successCount != 1 {
+		t.Errorf("expected exactly 1 concurrent synthesize to succeed, got %d", successCount)
 	}
 }

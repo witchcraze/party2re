@@ -262,9 +262,9 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Character (wallet), Inventory, Economy (`economy.TransactionRunner`).
   - **Persistence:** Atomic single-transaction via `economy.TransactionRunner` (`characters` Rank 2 -> `inventory_items` Rank 3).
 - **Alchemy** (`internal/alchemy`):
-  - **Responsibility:** Crafting item synthesis from recipes (`recipes.json`) using inventory ingredients and gold fees.
-  - **Dependencies:** Recipe Catalog, Item Catalog, Character (wallet), Inventory.
-  - **Persistence:** Atomic single-transaction `AlchemyRepository`.
+  - **Responsibility:** Overnight crafting item synthesis from 112 recipes (`recipes.json`) consuming Depot materials directly without gold fees, Depot-direct output delivery, home rest acceleration, and Recipe Compendium tracking with `comp_alc` title award.
+  - **Dependencies:** Recipe Catalog, Item Catalog, Character repository, Depot repository, Economy (`RunInTx`).
+  - **Persistence:** `character_alchemy` and `character_alchemy_recipes` tables via `internal/database/alchemy_repository.go` obeying global lock hierarchy (Rank 2 `characters` -> Rank 5 `character_depots` -> Rank 8 `character_alchemy`).
 - **Bank** (`internal/bank`):
   - **Responsibility:** Bank receptionist NPC Taxeed (`@タクシード`), character gold savings deposits, withdrawals with 999,999G wallet clamp and excess refund.
   - **Dependencies:** Character (wallet & deposit).

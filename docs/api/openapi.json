@@ -3349,6 +3349,154 @@
         ]
       }
     },
+    "/characters/{id}/alchemy": {
+      "get": {
+        "operationId": "getCharactersIdAlchemy",
+        "parameters": [
+          {
+            "description": "id parameter",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "summary": "GET /characters/{id}/alchemy endpoint",
+        "tags": [
+          "Character"
+        ]
+      }
+    },
+    "/characters/{id}/alchemy/claim": {
+      "post": {
+        "operationId": "postCharactersIdAlchemyClaim",
+        "parameters": [
+          {
+            "description": "id parameter",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "summary": "POST /characters/{id}/alchemy/claim endpoint",
+        "tags": [
+          "Character"
+        ]
+      }
+    },
+    "/characters/{id}/alchemy/learn": {
+      "post": {
+        "operationId": "postCharactersIdAlchemyLearn",
+        "parameters": [
+          {
+            "description": "id parameter",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "summary": "POST /characters/{id}/alchemy/learn endpoint",
+        "tags": [
+          "Character"
+        ]
+      }
+    },
+    "/characters/{id}/alchemy/synthesize": {
+      "post": {
+        "operationId": "postCharactersIdAlchemySynthesize",
+        "parameters": [
+          {
+            "description": "id parameter",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "summary": "POST /characters/{id}/alchemy/synthesize endpoint",
+        "tags": [
+          "Character"
+        ]
+      }
+    },
     "/characters/{id}/altar": {
       "get": {
         "operationId": "getAltarStatus",

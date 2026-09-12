@@ -82,7 +82,14 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 	if err != nil {
 		return nil, err
 	}
-	alchemyService, err := alchemy.NewServiceWithTransaction(core.charRepo, core.invRepo, alcRepo, recipeCatalog, core.itemCatalog)
+	alchemyService, err := alchemy.NewService(
+		core.charRepo,
+		depotRepo,
+		alcRepo,
+		recipeCatalog,
+		core.itemCatalog,
+		alchemy.WithTransactionProvider(core.txProvider),
+	)
 	if err != nil {
 		return nil, err
 	}

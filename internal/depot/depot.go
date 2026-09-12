@@ -200,6 +200,17 @@ func (d *Depot) Consume(instanceID string, quantity int) (item.Instance, error) 
 	return item.Instance{}, ErrItemNotFound
 }
 
+// Quantity returns the total quantity of items matching definitionID in the depot.
+func (d *Depot) Quantity(definitionID string) int {
+	total := 0
+	for _, inst := range d.Items {
+		if inst.DefinitionID == definitionID {
+			total += inst.Quantity
+		}
+	}
+	return total
+}
+
 // ConsumeOne removes one unit of the item with the given instanceID.
 // Delegates to Consume(instanceID, 1).
 func (d *Depot) ConsumeOne(instanceID string) (item.Instance, error) {

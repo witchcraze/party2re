@@ -40,6 +40,7 @@ type Service struct {
 	catalog           ItemCatalog
 	fullness          FullnessResetter
 	chapel            BlessingCleaner
+	alchemy           AlchemyCompleter
 	onlineCounter     OnlineCounter
 	baseSleepDuration time.Duration
 	runner            TransactionRunner

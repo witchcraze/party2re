@@ -45,6 +45,11 @@ type BlessingCleaner interface {
 	ClearBlessing(ctx context.Context, characterID string) error
 }
 
+// AlchemyCompleter completes ongoing alchemy synthesis upon rest.
+type AlchemyCompleter interface {
+	CompleteOngoingSynthesis(ctx context.Context, characterID string) error
+}
+
 // OnlineCounter counts currently logged in players for sleep duration scaling.
 type OnlineCounter interface {
 	GetOnlineCount(ctx context.Context) (int, error)
@@ -261,6 +266,9 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 	if s.chapel != nil {
 		_ = s.chapel.ClearBlessing(ctx, characterID)
 	}
+	if s.alchemy != nil {
+		_ = s.alchemy.CompleteOngoingSynthesis(ctx, characterID)
+	}
 
 	_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
 
@@ -279,4 +287,9 @@ func (s *Service) SetFullnessResetter(f FullnessResetter) {
 // SetBlessingCleaner registers a cross-domain chapel blessing cleaner hook.
 func (s *Service) SetBlessingCleaner(b BlessingCleaner) {
 	s.chapel = b
+}
+
+// SetAlchemyCompleter registers a cross-domain alchemy synthesis completer hook.
+func (s *Service) SetAlchemyCompleter(a AlchemyCompleter) {
+	s.alchemy = a
 }

@@ -22,13 +22,128 @@ import (
 	"github.com/witchcraze/party2re/internal/pvp"
 )
 
-type mockIntegrationDepotRepo struct{}
+type mockIntegrationDepotRepo struct {
+	mu     sync.Mutex
+	depots map[string]depot.Depot
+}
 
-func (m *mockIntegrationDepotRepo) FindByCharacterIDForUpdate(_ context.Context, charID string) (depot.Depot, error) {
+func (m *mockIntegrationDepotRepo) FindByCharacterID(_ context.Context, charID string) (depot.Depot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.depots != nil {
+		if d, ok := m.depots[charID]; ok {
+			return d, nil
+		}
+	}
 	return depot.Depot{CharacterID: charID, Capacity: 50}, nil
 }
 
-func (m *mockIntegrationDepotRepo) Save(_ context.Context, _ depot.Depot) error {
+func (m *mockIntegrationDepotRepo) FindByCharacterIDForUpdate(ctx context.Context, charID string) (depot.Depot, error) {
+	return m.FindByCharacterID(ctx, charID)
+}
+
+func (m *mockIntegrationDepotRepo) Save(_ context.Context, d depot.Depot) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.depots == nil {
+		m.depots = make(map[string]depot.Depot)
+	}
+	m.depots[d.CharacterID] = d
+	return nil
+}
+
+type mockIntegrationAlchemyRepo struct {
+	mu      sync.Mutex
+	state   map[string]alchemy.Synthesis
+	recipes map[string][]alchemy.DiscoveredRecipe
+}
+
+func (m *mockIntegrationAlchemyRepo) GetSynthesisState(_ context.Context, characterID string) (alchemy.Synthesis, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.state != nil {
+		if s, ok := m.state[characterID]; ok {
+			return s, nil
+		}
+	}
+	return alchemy.Synthesis{CharacterID: characterID, State: alchemy.StateNone}, nil
+}
+
+func (m *mockIntegrationAlchemyRepo) GetSynthesisStateForUpdate(ctx context.Context, characterID string) (alchemy.Synthesis, error) {
+	return m.GetSynthesisState(ctx, characterID)
+}
+
+func (m *mockIntegrationAlchemyRepo) SaveSynthesisState(_ context.Context, s alchemy.Synthesis) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.state == nil {
+		m.state = make(map[string]alchemy.Synthesis)
+	}
+	m.state[s.CharacterID] = s
+	return nil
+}
+
+func (m *mockIntegrationAlchemyRepo) CompleteOngoingSynthesis(_ context.Context, characterID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.state != nil {
+		s := m.state[characterID]
+		s.State = alchemy.StateCompleted
+		m.state[characterID] = s
+	}
+	return nil
+}
+
+func (m *mockIntegrationAlchemyRepo) GetDiscoveredRecipes(_ context.Context, characterID string) ([]alchemy.DiscoveredRecipe, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.recipes != nil {
+		return m.recipes[characterID], nil
+	}
+	return nil, nil
+}
+
+func (m *mockIntegrationAlchemyRepo) SaveDiscoveredRecipe(_ context.Context, characterID, recipeID string, isCrafted bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.recipes == nil {
+		m.recipes = make(map[string][]alchemy.DiscoveredRecipe)
+	}
+	m.recipes[characterID] = append(m.recipes[characterID], alchemy.DiscoveredRecipe{RecipeID: recipeID, IsCrafted: isCrafted})
+	return nil
+}
+
+func (m *mockIntegrationAlchemyRepo) MarkRecipeCrafted(_ context.Context, characterID, recipeID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.recipes == nil {
+		m.recipes = make(map[string][]alchemy.DiscoveredRecipe)
+	}
+	for i, r := range m.recipes[characterID] {
+		if r.RecipeID == recipeID {
+			m.recipes[characterID][i].IsCrafted = true
+			return nil
+		}
+	}
+	m.recipes[characterID] = append(m.recipes[characterID], alchemy.DiscoveredRecipe{RecipeID: recipeID, IsCrafted: true})
+	return nil
+}
+
+func (m *mockIntegrationAlchemyRepo) CountCraftedRecipes(_ context.Context, characterID string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	count := 0
+	if m.recipes != nil {
+		for _, r := range m.recipes[characterID] {
+			if r.IsCrafted {
+				count++
+			}
+		}
+	}
+	return count, nil
+}
+
+func (m *mockIntegrationAlchemyRepo) SetCompAlcTitle(_ context.Context, characterID string) error {
 	return nil
 }
 
@@ -488,12 +603,19 @@ func TestProducerHooks_MilestoneProgressAndClaim(t *testing.T) {
 	herbDef, _ := coreitem.NewDefinition("herb", "Herb", 10)
 	potionDef, _ := coreitem.NewDefinition("potion", "Potion", 50)
 	itemCatalog, _ := coreitem.NewCatalog([]coreitem.Definition{herbDef, potionDef})
-	recipe, _ := alchemy.NewRecipe("rec-potion", "Craft Potion", "potion", 1, []alchemy.Ingredient{{DefinitionID: "herb", Quantity: 2}}, 10)
+	recipe, _ := alchemy.NewRecipe("rec-potion", "Craft Potion", "potion", 1, []alchemy.Ingredient{{DefinitionID: "herb", Quantity: 2}})
 	recipeCatalog, _ := alchemy.NewRecipeCatalog([]alchemy.Recipe{recipe})
-	alchemyService, err := alchemy.NewService(charRepo, invRepo, recipeCatalog, itemCatalog)
+	medalAlcRepo := &mockIntegrationAlchemyRepo{}
+	medalDepotRepo := &mockIntegrationDepotRepo{}
+	alchemyService, err := alchemy.NewService(charRepo, medalDepotRepo, medalAlcRepo, recipeCatalog, itemCatalog)
 	if err != nil {
 		t.Fatalf("failed to create alchemy service: %v", err)
 	}
+	hDepot, _ := medalDepotRepo.FindByCharacterID(ctx, hero.ID)
+	hDepot.Capacity = 50
+	herbDepotInst, _ := coreitem.NewInstance("herb", 5)
+	_ = hDepot.AddItem(herbDepotInst)
+	_ = medalDepotRepo.Save(ctx, hDepot)
 	alchemyService.SetSynthesisHook(func(ctx context.Context, characterID string, recipeID string) error {
 		return medalService.RecordProgress(ctx, characterID, medal.MetricAlchemyCrafts, 1)
 	})
@@ -539,9 +661,14 @@ func TestProducerHooks_MilestoneProgressAndClaim(t *testing.T) {
 		t.Fatalf("failed casino spin: %v", err)
 	}
 
-	// (e) Alchemy Synthesis
+	// (e) Alchemy Synthesis & Claim
+	_ = alchemyService.UnlockRecipe(ctx, hero.ID, "rec-potion")
 	if _, err := alchemyService.Synthesize(ctx, hero.ID, "rec-potion"); err != nil {
 		t.Fatalf("failed alchemy synthesize: %v", err)
+	}
+	_ = alchemyService.CompleteOngoingSynthesis(ctx, hero.ID)
+	if _, err := alchemyService.Claim(ctx, hero.ID); err != nil {
+		t.Fatalf("failed alchemy claim: %v", err)
 	}
 
 	// (f) Dungeon Monster Slain

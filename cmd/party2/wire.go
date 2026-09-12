@@ -141,6 +141,9 @@ func wireHooks(
 	if misc.chapel != nil {
 		soc.home.SetBlessingCleaner(misc.chapel)
 	}
+	if econ.alchemy != nil {
+		soc.home.SetAlchemyCompleter(econ.alchemy)
+	}
 
 	soc.registerWorkerHandlers(misc.activity, cmbt.adv, misc.chapel)
 
@@ -192,6 +195,7 @@ func newHTTPHandler(
 		http.WithEventPlaza(misc.eventplaza),
 		http.WithSecretShop(misc.secretshop),
 		http.WithTavern(misc.tavern),
+		http.WithAlchemy(econ.alchemy),
 		http.WithBlackMarket(misc.blackmarket),
 		http.WithFleaMarket(econ.fleamarket),
 		http.WithGemStore(econ.gemStore),
