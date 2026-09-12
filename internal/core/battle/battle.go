@@ -100,18 +100,29 @@ type PartyBattleRequest struct {
 	DrawReward    Reward
 }
 
+// ConsumedItem records an item consumed during combat.
+type ConsumedItem struct {
+	ID         string `json:"id"`
+	InstanceID string `json:"instance_id,omitempty"`
+	Quantity   int    `json:"quantity"`
+}
+
 type PartyBattleResult struct {
-	Outcome        Outcome        `json:"outcome"`
-	WinnerSide     string         `json:"winner_side"`
-	Turns          int            `json:"turns"`
-	BaseReward     Reward         `json:"base_reward"`
-	BonusPercent   int            `json:"bonus_percent"`
-	TotalReward    Reward         `json:"total_reward"`
-	AlliesSurvived []string       `json:"allies_survived"`
-	AlliesFallen   []string       `json:"allies_fallen"`
-	RemainingHP    map[string]int `json:"remaining_hp"`
-	Logs           []TurnLog      `json:"logs,omitempty"`
-	FinalField     *FieldState    `json:"final_field,omitempty"`
+	Outcome         Outcome                   `json:"outcome"`
+	WinnerSide      string                    `json:"winner_side"`
+	Turns           int                       `json:"turns"`
+	BaseReward      Reward                    `json:"base_reward"`
+	BonusPercent    int                       `json:"bonus_percent"`
+	TotalReward     Reward                    `json:"total_reward"`
+	AlliesSurvived  []string                  `json:"allies_survived"`
+	AlliesFallen    []string                  `json:"allies_fallen"`
+	RemainingHP     map[string]int            `json:"remaining_hp"`
+	RemainingMP     map[string]int            `json:"remaining_mp,omitempty"`
+	RemainingCMP    map[string]int            `json:"remaining_cmp,omitempty"`
+	RemainingStatus map[string]string         `json:"remaining_status,omitempty"`
+	ConsumedItems   map[string][]ConsumedItem `json:"consumed_items,omitempty"`
+	Logs            []TurnLog                 `json:"logs,omitempty"`
+	FinalField      *FieldState               `json:"final_field,omitempty"`
 }
 
 type Engine struct{}

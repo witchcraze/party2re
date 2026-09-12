@@ -94,6 +94,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Challenge content & special battle modes: King & World Boss challenge battles ([#73](https://github.com/witchcraze/party2re/issues/73))
 - [x] Challenge content & special battle modes: Continuous Challenge ([#162](https://github.com/witchcraze/party2re/issues/162))
 - [x] Battle replay records and match history viewer ([#66](https://github.com/witchcraze/party2re/issues/66))
+- [x] Standardized Battle Adapter: Character/Party to Battle Participant Mapping & Post-Battle State Application ([#496](https://github.com/witchcraze/party2re/issues/496))
 
 ### E. Social and competitive systems
 - [x] Guild creation, membership, and administration ([#76](https://github.com/witchcraze/party2re/issues/76))
@@ -256,8 +257,9 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#562](https://github.com/witchcraze/party2re/issues/562) | Storage: Standardize item consumption interface (Consume, ConsumeItem, ConsumeOne, PurgeSlot) between Depot and Inventory | Completed |
 | [#561](https://github.com/witchcraze/party2re/issues/561) | Transaction: Formalize multi-aggregate and P2P transaction runner primitives and align tx_runner linter | Completed |
 | [#475](https://github.com/witchcraze/party2re/issues/475) | Food Delivery: Eliminate fictional courier quests and reproduce Tavern Post-Adventure Food Delivery | Completed |
-| [#487](https://github.com/witchcraze/party2re/issues/487) | Alchemy: Free Overnight Depot-linked Synthesis & Compendium | Completed |
 | [#488](https://github.com/witchcraze/party2re/issues/488) | Monster Ranch: Purge fictional farm crop system, reproducing Monster Stabling, Home Pet Link, Naming, and P2P Gift Delivery | Completed |
+| [#489](https://github.com/witchcraze/party2re/issues/489) | Plantation: Reproduce Legacy Seed Cultivation, 14 Fertilizer Reagents, Overnight Harvest, and Depot Delivery | Completed |
+| [#496](https://github.com/witchcraze/party2re/issues/496) | Battle Adapter: Standardize Character/Party to Battle Participant Mapping & Post-Battle State Application | Completed |
 
 ---
 

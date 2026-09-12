@@ -296,17 +296,21 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 	totalReward := applyBonus(selectedReward, bonusPercent)
 
 	return PartyBattleResult{
-		Outcome:        outcome,
-		WinnerSide:     winnerSide,
-		Turns:          ctx.turns,
-		BaseReward:     selectedReward,
-		BonusPercent:   bonusPercent,
-		TotalReward:    totalReward,
-		AlliesSurvived: alliesSurvived,
-		AlliesFallen:   alliesFallen,
-		RemainingHP:    ctx.hpMap,
-		Logs:           ctx.logs,
-		FinalField:     ctx.field,
+		Outcome:         outcome,
+		WinnerSide:      winnerSide,
+		Turns:           ctx.turns,
+		BaseReward:      selectedReward,
+		BonusPercent:    bonusPercent,
+		TotalReward:     totalReward,
+		AlliesSurvived:  alliesSurvived,
+		AlliesFallen:    alliesFallen,
+		RemainingHP:     copyHPMap(ctx.hpMap),
+		RemainingMP:     copyHPMap(ctx.mpMap),
+		RemainingCMP:    copyHPMap(ctx.cmpMap),
+		RemainingStatus: copyStatusMap(ctx.statusMap),
+		ConsumedItems:   copyConsumedItemsMap(ctx.consumedItems),
+		Logs:            ctx.logs,
+		FinalField:      ctx.field,
 	}, nil
 }
 
@@ -329,6 +333,25 @@ func copyHPMap(m map[string]int) map[string]int {
 	out := make(map[string]int, len(m))
 	for k, v := range m {
 		out[k] = v
+	}
+	return out
+}
+
+func copyStatusMap(m map[string]string) map[string]string {
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+func copyConsumedItemsMap(m map[string][]ConsumedItem) map[string][]ConsumedItem {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string][]ConsumedItem, len(m))
+	for k, v := range m {
+		out[k] = append([]ConsumedItem(nil), v...)
 	}
 	return out
 }

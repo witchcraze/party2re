@@ -12,10 +12,29 @@ func (ctx *battleContext) executeItem(actor Participant, it *ActionItem, allyPar
 	// Consume item from actor's inventory in this battle
 	items := ctx.itemsMap[actor.ID]
 	for i, item := range items {
-		if item.ID == it.ID {
+		if item.ID == it.ID && item.InstanceID == it.InstanceID {
 			ctx.itemsMap[actor.ID] = append(items[:i], items[i+1:]...)
 			break
 		}
+	}
+
+	if ctx.consumedItems == nil {
+		ctx.consumedItems = make(map[string][]ConsumedItem)
+	}
+	found := false
+	for i := range ctx.consumedItems[actor.ID] {
+		if ctx.consumedItems[actor.ID][i].ID == it.ID && ctx.consumedItems[actor.ID][i].InstanceID == it.InstanceID {
+			ctx.consumedItems[actor.ID][i].Quantity++
+			found = true
+			break
+		}
+	}
+	if !found {
+		ctx.consumedItems[actor.ID] = append(ctx.consumedItems[actor.ID], ConsumedItem{
+			ID:         it.ID,
+			InstanceID: it.InstanceID,
+			Quantity:   1,
+		})
 	}
 
 	switch it.Kind {

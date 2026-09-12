@@ -25,6 +25,7 @@ const (
 // ActionItem represents an active item command executed during combat (@どうぐ).
 type ActionItem struct {
 	ID            string             `json:"id"`
+	InstanceID    string             `json:"instance_id,omitempty"`
 	Name          string             `json:"name"`
 	UsageCategory item.UsageCategory `json:"usage_category"`
 	Kind          string             `json:"kind"` // "heal", "buff", "status", "attack"

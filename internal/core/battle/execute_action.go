@@ -6,20 +6,21 @@ import (
 )
 
 type battleContext struct {
-	turns        int
-	req          PartyBattleRequest
-	field        *FieldState
-	hpMap        map[string]int
-	mpMap        map[string]int
-	cmpMap       map[string]int
-	defendingMap map[string]bool
-	statusMap    map[string]string
-	attackBuff   map[string]int
-	defenseBuff  map[string]int
-	agilityBuff  map[string]int
-	abilitiesMap map[string][]string
-	itemsMap     map[string][]ActionItem
-	logs         []TurnLog
+	turns         int
+	req           PartyBattleRequest
+	field         *FieldState
+	hpMap         map[string]int
+	mpMap         map[string]int
+	cmpMap        map[string]int
+	defendingMap  map[string]bool
+	statusMap     map[string]string
+	attackBuff    map[string]int
+	defenseBuff   map[string]int
+	agilityBuff   map[string]int
+	abilitiesMap  map[string][]string
+	itemsMap      map[string][]ActionItem
+	consumedItems map[string][]ConsumedItem
+	logs          []TurnLog
 }
 
 func (ctx *battleContext) checkStatusSkip(actor Participant) bool {

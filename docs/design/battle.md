@@ -106,10 +106,35 @@ Maintained with 100% backward compatibility:
   `item-037` and `item-038` gains half of the fallen ally's Attack. The
   resulting Attack is capped at 999.
 
+## Battle Adapter & State Application (`internal/battle`)
+
+The application-layer bridge (`internal/battle`) standardizes combat participant binding and post-battle state application across all feature modules (`adventure`, `boss`, `pvp`, `gvg`, `dungeon`, `challenge`, `party`), eliminating duplicate ad-hoc logic and ensuring deadlock-free transactional persistence.
+
+### 1. Participant & Request Construction
+- **Domain Mapping (`BuildParticipantFromData`)**: Constructs `corebattle.Participant` directly from `Character`, `Inventory`, `Equipment`, `Job`, and `CustomSkill`.
+- **Passive Abilities Extraction**: Automatically detects and binds pre-death revival abilities:
+  - `touki_shield`: 闘気の盾 (`item-161`, UsageCategory 3)
+  - `dokuro_amulet`: ドクロのお守り (`item-193`, UsageCategory 3)
+  - `cursed_revive`: 転生の呪魂符 (`item-260`, UsageCategory 3)
+  - `pharaoh`: Pharaoh job class or ability
+- **Active Combat Items (`@どうぐ`)**: Extracts consumable items with `UsageCategoryCombatOnly` (`1`) from inventory and equipped tools (e.g. 祈りの指輪 `item-012` in `SlotAccessory`). Each item includes an `InstanceID` so concrete item instances can be tracked and consumed during battle.
+- **Stat Orb Binding (`ExtractStatOrbOptions`)**: Automatically scans inventory for `item-152` through `item-156` (Life, Magic, Power, Defense, Agility Orbs) and `item-157` (Skill Orb), binding them into `progression.ApplyExperienceOptions`.
+
+### 2. Atomic Post-Battle State Application (`ApplyPostBattleResult`)
+- **Row-Lock Ordering**: Adheres strictly to the global pessimistic lock hierarchy:
+  1. **Rank 2 (Character)**: Multiple participating characters are locked in ascending lexicographical order (`sort.Strings`).
+  2. **Rank 3 (Inventory & Equipment)**: Inventories are locked in ascending character order; equipment slots are loaded.
+  3. **Rank 5 (Depot)**: When item drops exceed inventory capacity, depots are locked in ascending character order.
+- **Resource Mutation**: Updates current HP, MP, and CMP based on `RemainingHP`, `RemainingMP`, and `RemainingCMP`. Fallen members survive with HP = 1.
+- **Consumed Item Persistence**: Items used during combat (`ConsumedItems`) are decremented from character inventory. If an equipped item was consumed or broken (e.g. 祈りの指輪), its equipment slot is automatically unequipped (`equip.Unequip`) simultaneously.
+- **Reward Distribution**: Adds gold, calculates experience growth via `progression.ApplyExperienceWithJobFull` (accounting for Stat Orbs and Job definitions), and adds item drops to inventory or routes them to Depot upon inventory overflow.
+- **Single vs Multi-Character Transactions**: Single-character battles route through `economy.TransactionRunner` (`ExecuteTransaction`). Multi-character party battles route through `TransactionProvider` (`RunInTx`).
+
 ## Boundaries & Invariants
 
 - **Context Isolation**: The Battle engine never queries database persistence or mutates external character state directly. It returns an immutable `Result` containing turn logs and rewards.
-- **Consumer Ownership**: Feature modules (`adventure`, `dungeon`, `boss`, `pvp`, `gvg`, `challenge`, `party`) map character/monster models to `Participant` and handle post-battle reward persistence atomically via `economy.TransactionRunner`.
+- **Consumer Ownership**: Feature modules (`adventure`, `dungeon`, `boss`, `pvp`, `gvg`, `challenge`, `party`) utilize `internal/battle` to map character/monster models to `Participant` and handle post-battle reward persistence atomically via `economy.TransactionRunner` or `TransactionProvider`.
 - **Minimum Damage Guarantee**: Every offensive attack or damaging skill inflicts at least 1 damage.
 - **Round Ceiling**: Party battles terminate at a maximum of 30 rounds to prevent infinite loops.
 - **File Size Constraint**: All battle module source files are kept $\le 500$ lines.
+
