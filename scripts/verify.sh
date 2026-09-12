@@ -4,6 +4,31 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+STAMP_FILE="${ROOT_DIR}/.cache/verify_tree_stamp"
+FORCE_VERIFY="${FORCE_VERIFY:-0}"
+
+get_tree_hash() {
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        local tmp_idx
+        tmp_idx=$(mktemp -u)
+        GIT_INDEX_FILE="$tmp_idx" git add -A
+        GIT_INDEX_FILE="$tmp_idx" git write-tree
+        rm -f "$tmp_idx"
+    else
+        echo "none"
+    fi
+}
+
+CURRENT_TREE=$(get_tree_hash)
+if [ "$FORCE_VERIFY" = "0" ] && [ -f "$STAMP_FILE" ] && [ "$CURRENT_TREE" != "none" ]; then
+    CACHED_TREE=$(cat "$STAMP_FILE" 2>/dev/null || echo "")
+    if [ "$CURRENT_TREE" = "$CACHED_TREE" ]; then
+        echo "==> [verify.sh] Tree ${CURRENT_TREE:0:8} already verified cleanly. Skipping duplicate verification (set FORCE_VERIFY=1 to force)."
+        echo "==> ALL VERIFICATION CHECKS PASSED!"
+        exit 0
+    fi
+fi
+
 echo "==> [1/7] Checking and applying code formatting (gofmt & openapi-sync)..."
 GO_FILES=$(find . -name "*.go" -not -path "./vendor/*")
 if [ -n "$GO_FILES" ]; then
@@ -61,5 +86,10 @@ fi
 echo "==> [7/7] Running smoke image build..."
 docker build -f Dockerfile -t party2re:smoke .
 
+FINAL_TREE=$(get_tree_hash)
+if [ "$FINAL_TREE" != "none" ]; then
+    mkdir -p "${ROOT_DIR}/.cache"
+    echo "$FINAL_TREE" > "$STAMP_FILE"
+fi
 
 echo "==> ALL VERIFICATION CHECKS PASSED!"
