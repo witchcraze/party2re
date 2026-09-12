@@ -127,6 +127,7 @@ type Handler struct {
 	bosses         BossService
 	dungeons       DungeonService
 	pvp            PvPService
+	gvg            GvGService
 	auctions       AuctionService
 	eventplaza     EventPlazaService
 	secretshop     SecretShopService
@@ -527,6 +528,17 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/pvp/rooms/{room_id}/team", h.handleSelectPvPTeam)
 	mux.HandleFunc("POST /characters/{id}/pvp/rooms/{room_id}/start", h.handleStartPvPMatch)
 	mux.HandleFunc("POST /characters/{id}/pvp/rooms/{room_id}/advance", h.handleAdvancePvPRound)
+
+	// Guild Battles (Live Multi-Round GvG Rooms)
+	mux.HandleFunc("POST /characters/{id}/gvg/rooms", h.handleCreateGvGRoom)
+	mux.HandleFunc("GET /gvg/rooms", h.handleListGvGRooms)
+	mux.HandleFunc("GET /gvg/rooms/{room_id}", h.handleGetGvGRoom)
+	mux.HandleFunc("POST /characters/{id}/gvg/rooms/{room_id}/join", h.handleJoinGvGRoom)
+	mux.HandleFunc("POST /characters/{id}/gvg/rooms/{room_id}/leave", h.handleLeaveGvGRoom)
+	mux.HandleFunc("POST /characters/{id}/gvg/rooms/{room_id}/start", h.handleStartGvGMatch)
+	mux.HandleFunc("POST /characters/{id}/gvg/rooms/{room_id}/advance", h.handleAdvanceGvGRound)
+	mux.HandleFunc("GET /gvg/standings/{guild_id}", h.handleGetGvGStanding)
+	mux.HandleFunc("GET /gvg/leaderboard", h.handleGetGvGLeaderboard)
 
 	// Auction Hall (Live P2P Trading, Direct Send & Inspect)
 	mux.HandleFunc("GET /auction/hall", h.handleAuctionVenueInfo)

@@ -65,6 +65,7 @@ type Guild struct {
 	Exp               int64     `json:"exp"`
 	Gold              int64     `json:"gold"`
 	Notice            string    `json:"notice"`
+	Color             string    `json:"color"`
 	Bgimg             string    `json:"bgimg"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
@@ -166,6 +167,7 @@ func (s *Service) Create(ctx context.Context, creatorCharID string, name string)
 		Exp:               0,
 		Gold:              0,
 		Notice:            "",
+		Color:             "#FFFFFF",
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}

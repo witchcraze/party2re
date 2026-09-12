@@ -59,10 +59,14 @@ func (r *GuildRepository) CreateGuild(ctx context.Context, g guild.Guild, creato
 		}
 
 		// 2. Insert guild record
+		guildColor := g.Color
+		if guildColor == "" {
+			guildColor = "#FFFFFF"
+		}
 		_, err := executor.ExecContext(txCtx, `
-			INSERT INTO guilds (id, name, leader_character_id, level, exp, gold, notice, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, g.ID, g.Name, g.LeaderCharacterID, g.Level, g.Exp, g.Gold, g.Notice, g.CreatedAt, g.UpdatedAt)
+			INSERT INTO guilds (id, name, leader_character_id, level, exp, gold, notice, color, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, g.ID, g.Name, g.LeaderCharacterID, g.Level, g.Exp, g.Gold, g.Notice, guildColor, g.CreatedAt, g.UpdatedAt)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "duplicate") || strings.Contains(strings.ToLower(err.Error()), "unique") {
 				return guild.ErrGuildNameTaken
@@ -106,12 +110,12 @@ func (r *GuildRepository) GetGuild(ctx context.Context, guildID string) (guild.G
 	var g guild.Guild
 	executor := ExecutorFromContext(ctx, r.db)
 	err := executor.QueryRowContext(ctx, `
-		SELECT id, name, leader_character_id, level, exp, gold, notice, created_at, updated_at
+		SELECT id, name, leader_character_id, level, exp, gold, notice, color, created_at, updated_at
 		FROM guilds
 		WHERE id = ?
 	`, guildID).Scan(
 		&g.ID, &g.Name, &g.LeaderCharacterID, &g.Level,
-		&g.Exp, &g.Gold, &g.Notice, &g.CreatedAt, &g.UpdatedAt,
+		&g.Exp, &g.Gold, &g.Notice, &g.Color, &g.CreatedAt, &g.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return guild.Guild{}, nil, guild.ErrGuildNotFound
@@ -155,13 +159,13 @@ func (r *GuildRepository) GetGuildByCharacter(ctx context.Context, characterID s
 
 	executor := ExecutorFromContext(ctx, r.db)
 	err := executor.QueryRowContext(ctx, `
-		SELECT g.id, g.name, g.leader_character_id, g.level, g.exp, g.gold, g.notice, g.created_at, g.updated_at,
+		SELECT g.id, g.name, g.leader_character_id, g.level, g.exp, g.gold, g.notice, g.color, g.created_at, g.updated_at,
 		       gm.guild_id, gm.character_id, gm.role, gm.joined_at, gm.total_donated_gold
 		FROM guild_members gm
 		JOIN guilds g ON gm.guild_id = g.id
 		WHERE gm.character_id = ?
 	`, characterID).Scan(
-		&g.ID, &g.Name, &g.LeaderCharacterID, &g.Level, &g.Exp, &g.Gold, &g.Notice, &g.CreatedAt, &g.UpdatedAt,
+		&g.ID, &g.Name, &g.LeaderCharacterID, &g.Level, &g.Exp, &g.Gold, &g.Notice, &g.Color, &g.CreatedAt, &g.UpdatedAt,
 		&m.GuildID, &m.CharacterID, &roleStr, &m.JoinedAt, &m.TotalDonatedGold,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -177,7 +181,7 @@ func (r *GuildRepository) GetGuildByCharacter(ctx context.Context, characterID s
 
 func (r *GuildRepository) ListGuilds(ctx context.Context, offset, limit int) ([]guild.Guild, error) {
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
-		SELECT id, name, leader_character_id, level, exp, gold, notice, created_at, updated_at
+		SELECT id, name, leader_character_id, level, exp, gold, notice, color, created_at, updated_at
 		FROM guilds
 		ORDER BY level DESC, exp DESC, created_at ASC
 		LIMIT ? OFFSET ?
@@ -192,7 +196,7 @@ func (r *GuildRepository) ListGuilds(ctx context.Context, offset, limit int) ([]
 		var g guild.Guild
 		if err := rows.Scan(
 			&g.ID, &g.Name, &g.LeaderCharacterID, &g.Level,
-			&g.Exp, &g.Gold, &g.Notice, &g.CreatedAt, &g.UpdatedAt,
+			&g.Exp, &g.Gold, &g.Notice, &g.Color, &g.CreatedAt, &g.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -372,12 +376,12 @@ func (r *GuildRepository) Donate(ctx context.Context, guildID string, characterI
 
 		// 5. Scan updated values
 		if err := executor.QueryRowContext(txCtx, `
-			SELECT id, name, leader_character_id, level, exp, gold, notice, created_at, updated_at
+			SELECT id, name, leader_character_id, level, exp, gold, notice, color, created_at, updated_at
 			FROM guilds
 			WHERE id = ?
 		`, guildID).Scan(
 			&g.ID, &g.Name, &g.LeaderCharacterID, &g.Level,
-			&g.Exp, &g.Gold, &g.Notice, &g.CreatedAt, &g.UpdatedAt,
+			&g.Exp, &g.Gold, &g.Notice, &g.Color, &g.CreatedAt, &g.UpdatedAt,
 		); err != nil {
 			return err
 		}

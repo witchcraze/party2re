@@ -40,13 +40,14 @@ func TestGvGIntegrationMatchFlow(t *testing.T) {
 	}
 
 	battleEngine := corebattle.Engine{}
+	roomRepo := gvg.NewMemoryRoomRepository()
 
-	service, err := gvg.NewService(gvgRepo, guildRepo, charRepo, battleEngine)
+	service, err := gvg.NewService(roomRepo, gvgRepo, guildRepo, charRepo, battleEngine)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// 1. Create Guild Alpha (3 members)
+	// 1. Create Guild Alpha (Crimson)
 	leaderA, err := database.CreateTestCharacter(ctx, db, "GvG Leader Alpha")
 	if err != nil {
 		t.Fatal(err)
@@ -58,10 +59,6 @@ func TestGvGIntegrationMatchFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	memA2, err := database.CreateTestCharacter(ctx, db, "GvG Mem Alpha 2")
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	guildAID := fmt.Sprintf("g_alpha_%012x", time.Now().UnixNano())
 	guildAName := fmt.Sprintf("Alpha_%d", time.Now().UnixNano()%1000000)
@@ -70,6 +67,7 @@ func TestGvGIntegrationMatchFlow(t *testing.T) {
 		Name:              guildAName,
 		LeaderCharacterID: leaderA.ID,
 		Level:             1,
+		Color:             "#FF3333", // Red
 		Notice:            "Alpha Guild Notice",
 	}
 	memA := guild.Member{
@@ -83,20 +81,13 @@ func TestGvGIntegrationMatchFlow(t *testing.T) {
 	if _, err := guildRepo.AddMember(ctx, guild.Member{GuildID: guildAID, CharacterID: memA1.ID, Role: guild.RoleOfficer}); err != nil {
 		t.Fatalf("add memA1: %v", err)
 	}
-	if _, err := guildRepo.AddMember(ctx, guild.Member{GuildID: guildAID, CharacterID: memA2.ID, Role: guild.RoleMember}); err != nil {
-		t.Fatalf("add memA2: %v", err)
-	}
 
-	// 2. Create Guild Beta (2 members)
+	// 2. Create Guild Beta (Blue)
 	leaderB, err := database.CreateTestCharacter(ctx, db, "GvG Leader Beta")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = ? WHERE id = ?", 10000, leaderB.ID); err != nil {
-		t.Fatal(err)
-	}
-	memB1, err := database.CreateTestCharacter(ctx, db, "GvG Mem Beta 1")
-	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -107,6 +98,7 @@ func TestGvGIntegrationMatchFlow(t *testing.T) {
 		Name:              guildBName,
 		LeaderCharacterID: leaderB.ID,
 		Level:             1,
+		Color:             "#6666FF", // Blue
 		Notice:            "Beta Guild Notice",
 	}
 	memB := guild.Member{
@@ -117,57 +109,83 @@ func TestGvGIntegrationMatchFlow(t *testing.T) {
 	if _, _, _, err := guildRepo.CreateGuild(ctx, gB, memB, 5000); err != nil {
 		t.Fatalf("create guild B: %v", err)
 	}
-	if _, err := guildRepo.AddMember(ctx, guild.Member{GuildID: guildBID, CharacterID: memB1.ID, Role: guild.RoleMember}); err != nil {
-		t.Fatalf("add memB1: %v", err)
-	}
 
-	// 3. Find Opponents
-	opponents, err := service.FindOpponentGuilds(ctx, guildAID, 10)
+	// 3. Leader A creates GvG Room (seeds 2 GP)
+	createdRoom, err := service.CreateRoom(ctx, leaderA.ID, gvg.CreateRoomRequest{
+		Name:       "Live GvG Tournament",
+		MaxMembers: 4,
+		TargetWins: 1,
+	})
 	if err != nil {
-		t.Fatalf("FindOpponentGuilds: %v", err)
+		t.Fatalf("CreateRoom: %v", err)
 	}
-	if len(opponents) == 0 {
-		t.Fatalf("expected opponents list")
+	if createdRoom.Room.PrizePool != 2 {
+		t.Fatalf("expected 2 GP prize pool on create, got %d", createdRoom.Room.PrizePool)
 	}
 
-	// 4. Officer declares match against Guild Beta
-	res, err := service.DeclareMatch(ctx, memA1.ID, guildBID)
+	// 4. Leader B joins GvG Room (adds 1 GP -> 3 GP)
+	joinedRoom, err := service.JoinRoom(ctx, leaderB.ID, createdRoom.Room.ID, "")
 	if err != nil {
-		t.Fatalf("DeclareMatch: %v", err)
+		t.Fatalf("JoinRoom: %v", err)
+	}
+	if joinedRoom.Room.PrizePool != 3 {
+		t.Fatalf("expected 3 GP prize pool on join, got %d", joinedRoom.Room.PrizePool)
 	}
 
-	if res.Match.TotalRounds != 2 {
-		t.Errorf("expected 2 rounds, got %d", res.Match.TotalRounds)
+	// 5. Start Match (@かいし)
+	startedRoom, err := service.StartMatch(ctx, leaderA.ID, createdRoom.Room.ID)
+	if err != nil {
+		t.Fatalf("StartMatch: %v", err)
 	}
-	if res.Match.WinnerGuildID == "" && res.Match.ChallengerScore != res.Match.DefenderScore {
-		t.Errorf("unexpected match result: %#v", res.Match)
+	if startedRoom.Room.Status != gvg.StatusInProgress || startedRoom.Room.Round != 1 {
+		t.Fatalf("expected round 1 in_progress, got status=%s round=%d", startedRoom.Room.Status, startedRoom.Room.Round)
 	}
 
-	// 5. Verify Standings
-	standingA, err := service.GetStanding(ctx, guildAID)
+	// 6. Advance Round
+	roundRes, err := service.AdvanceRound(ctx, leaderA.ID, createdRoom.Room.ID)
+	if err != nil {
+		t.Fatalf("AdvanceRound: %v", err)
+	}
+
+	if !roundRes.MatchCompleted {
+		t.Fatalf("expected match completed on 1 target win, got %#v", roundRes)
+	}
+
+	// 7. Verify Durable Standings in MariaDB
+	stA, err := service.GetStanding(ctx, guildAID)
 	if err != nil {
 		t.Fatalf("GetStanding A: %v", err)
 	}
-	standingB, err := service.GetStanding(ctx, guildBID)
+	stB, err := service.GetStanding(ctx, guildBID)
 	if err != nil {
 		t.Fatalf("GetStanding B: %v", err)
 	}
 
-	if standingA.Rating == 1000 && standingB.Rating == 1000 && res.Match.ChallengerScore != res.Match.DefenderScore {
-		t.Errorf("expected rating update from decisive match")
+	if stA.Wins == 1 {
+		if stA.BronzeMedals != 1 {
+			t.Errorf("expected 1 bronze medal for winner guild A, got %d", stA.BronzeMedals)
+		}
+		if stA.VictoryPoints < 3 {
+			t.Errorf("expected GP >= 3 for winner guild A, got %d", stA.VictoryPoints)
+		}
+		if stB.Losses != 1 {
+			t.Errorf("expected 1 loss for loser guild B, got %d", stB.Losses)
+		}
+	} else if stB.Wins == 1 {
+		if stB.BronzeMedals != 1 {
+			t.Errorf("expected 1 bronze medal for winner guild B, got %d", stB.BronzeMedals)
+		}
+		if stA.Losses != 1 {
+			t.Errorf("expected 1 loss for loser guild A, got %d", stA.Losses)
+		}
 	}
 
-	// 6. Verify Match History & Detail
-	history, err := service.GetMatchHistory(ctx, guildAID, 5)
-	if err != nil || len(history) == 0 {
-		t.Fatalf("GetMatchHistory: %v", err)
-	}
-
-	detail, err := service.GetMatchDetail(ctx, res.Match.ID)
+	// 8. Verify Leaderboard
+	leaderboard, err := service.GetLeaderboard(ctx, 10)
 	if err != nil {
-		t.Fatalf("GetMatchDetail: %v", err)
+		t.Fatalf("GetLeaderboard: %v", err)
 	}
-	if len(detail.Rounds) != 2 {
-		t.Errorf("expected 2 rounds in detail, got %d", len(detail.Rounds))
+	if len(leaderboard) < 2 {
+		t.Errorf("expected at least 2 guilds in leaderboard, got %d", len(leaderboard))
 	}
 }

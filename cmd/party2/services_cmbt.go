@@ -67,11 +67,22 @@ func newCmbtServices(
 		return nil, err
 	}
 
+	var gvgRoomRepo gvg.RoomRepository
+	if valkeyClient != nil {
+		vr, err := gvg.NewValkeyRoomRepository(valkeyClient)
+		if err != nil {
+			return nil, err
+		}
+		gvgRoomRepo = vr
+	} else {
+		gvgRoomRepo = gvg.NewMemoryRoomRepository()
+	}
+
 	gvgRepo, err := database.NewGvGRepository(db)
 	if err != nil {
 		return nil, err
 	}
-	gvgService, err := gvg.NewService(gvgRepo, soc.guildRepo, core.charRepo, battleEngine)
+	gvgService, err := gvg.NewService(gvgRoomRepo, gvgRepo, soc.guildRepo, core.charRepo, battleEngine)
 	if err != nil {
 		return nil, err
 	}
