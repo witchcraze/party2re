@@ -42,10 +42,13 @@ Issue (acceptance criteria)
   -> implement minimum solution
   -> write / update docs/design/<feature>.md (language-agnostic spec)
   -> update docs/architecture/components.md & STATUS.md (current state)
+  -> re-check active issue (verify acceptance criteria & zero omissions)
   -> make fmt
   -> make check
-  -> open PR
+  -> commit changes & open PR
 ```
+
+Before committing changes upon task completion, agents MUST re-inspect the active Issue (`gh issue view <issue-number>`) and cross-check each acceptance criterion to guarantee zero omissions before committing and opening the PR.
 
 Keep unrelated changes out of the ticket.
 

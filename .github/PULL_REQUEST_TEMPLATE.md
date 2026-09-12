@@ -27,6 +27,7 @@ Closes #
 
 - [ ] Focused tests pass
 - [ ] Full test suite passes
+- [ ] Active issue re-checked prior to commit and all acceptance criteria verified with zero omissions
 
 ## Legacy Specification Parity (Clean-room Audit)
 
