@@ -250,6 +250,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#471](https://github.com/witchcraze/party2re/issues/471) | Altar of Rebirth: 6-Orb Offering, Ramia Awakening, and Otherworld Travel Item Wishes | Merged |
 | [#557](https://github.com/witchcraze/party2re/issues/557) | Depot: Replace RemoveItem with ConsumeOne in Home, Black Market, and Gem Store to prevent silent stack deletion | Completed |
 | [#558](https://github.com/witchcraze/party2re/issues/558) | Depot: Prevent AddItem from collapsing equipment instances with different enhancement levels | Completed |
+| [#559](https://github.com/witchcraze/party2re/issues/559) | Commerce: Standardize dynamic depot capacity calculation across Flea Market, Auction, and Player Store | Completed |
 
 ---
 

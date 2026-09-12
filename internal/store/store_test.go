@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -473,5 +474,209 @@ func TestStoreCustomization(t *testing.T) {
 	err = svc.CleanInteriors(ctx, "c1")
 	if err != nil {
 		t.Fatalf("CleanInteriors failed: %v", err)
+	}
+}
+
+func TestStoreService_BuyItem_HighJobLevel_ExceedsInitialCapacity(t *testing.T) {
+	svc, _, charRepo, depotRepo, _ := setupTestService(t)
+	ctx := context.Background()
+
+	// Seller c1 has store and listed item
+	_, _ = svc.BuildStore(ctx, "c1", "town1", "001", "マイショップ")
+	dep1, _ := depotRepo.FindByCharacterID(ctx, "c1")
+	dep1.Items = append(dep1.Items, coreitem.Instance{ID: "inst_wpn1", DefinitionID: "wpn_001", Quantity: 1})
+	_ = depotRepo.Save(ctx, dep1)
+
+	sale, err := svc.ListGoldItem(ctx, "c1", "inst_wpn1", 3000)
+	if err != nil {
+		t.Fatalf("ListGoldItem failed: %v", err)
+	}
+
+	// Buyer c2 has JobLevel: 20 (dynamic capacity 105), and depot already has 6 items (exceeding initial capacity 5)
+	c2 := charRepo.chars["c2"]
+	c2.JobLevel = 20
+	charRepo.chars["c2"] = c2
+
+	dep2, _ := depotRepo.FindByCharacterID(ctx, "c2")
+	dep2.Capacity = 5
+	for i := 0; i < 6; i++ {
+		dep2.Items = append(dep2.Items, coreitem.Instance{
+			ID:           fmt.Sprintf("existing-%d", i),
+			DefinitionID: fmt.Sprintf("item-%d", i),
+			Quantity:     1,
+		})
+	}
+	_ = depotRepo.Save(ctx, dep2)
+
+	err = svc.BuyItem(ctx, "c2", sale.ID)
+	if err != nil {
+		t.Fatalf("BuyItem failed for high JobLevel character with >5 depot items: %v", err)
+	}
+
+	updatedDep2, _ := depotRepo.FindByCharacterID(ctx, "c2")
+	if len(updatedDep2.Items) != 7 {
+		t.Errorf("expected 7 items in buyer depot, got %d", len(updatedDep2.Items))
+	}
+}
+
+func TestStoreService_BuyItem_Stackable_WhenDepotAtCapacity(t *testing.T) {
+	svc, _, charRepo, depotRepo, _ := setupTestService(t)
+	ctx := context.Background()
+
+	// Seller c1 has store and listed stackable item itm_001 (やくそう)
+	_, _ = svc.BuildStore(ctx, "c1", "town1", "001", "マイショップ")
+	dep1, _ := depotRepo.FindByCharacterID(ctx, "c1")
+	dep1.Items = append(dep1.Items, coreitem.Instance{ID: "inst_herb1", DefinitionID: "itm_001", Quantity: 2})
+	_ = depotRepo.Save(ctx, dep1)
+
+	sale, err := svc.ListGoldItem(ctx, "c1", "inst_herb1", 100)
+	if err != nil {
+		t.Fatalf("ListGoldItem failed: %v", err)
+	}
+
+	// Buyer c2 has JobLevel: 0 (capacity 5), and exactly 5 slots full (including itm_001)
+	c2 := charRepo.chars["c2"]
+	c2.JobLevel = 0
+	charRepo.chars["c2"] = c2
+
+	dep2, _ := depotRepo.FindByCharacterID(ctx, "c2")
+	dep2.Capacity = 5
+	dep2.Items = []coreitem.Instance{
+		{ID: "c2_herb", DefinitionID: "itm_001", Quantity: 1},
+		{ID: "slot2", DefinitionID: "wpn_001", Quantity: 1},
+		{ID: "slot3", DefinitionID: "wpn_002", Quantity: 1},
+		{ID: "slot4", DefinitionID: "item-fill-4", Quantity: 1},
+		{ID: "slot5", DefinitionID: "item-fill-5", Quantity: 1},
+	}
+	_ = depotRepo.Save(ctx, dep2)
+
+	// BuyItem should succeed because itm_001 merges into existing slot without requiring a new slot
+	err = svc.BuyItem(ctx, "c2", sale.ID)
+	if err != nil {
+		t.Fatalf("BuyItem failed for stackable item when depot slots equal capacity: %v", err)
+	}
+
+	updatedDep2, _ := depotRepo.FindByCharacterID(ctx, "c2")
+	if len(updatedDep2.Items) != 5 {
+		t.Errorf("expected 5 slots remaining in buyer depot, got %d", len(updatedDep2.Items))
+	}
+	foundHerb := false
+	for _, it := range updatedDep2.Items {
+		if it.DefinitionID == "itm_001" {
+			foundHerb = true
+			if it.Quantity != 2 { // 1 + 1 (ListGoldItem lists 1 via ConsumeOne)
+				t.Errorf("expected merged quantity 2, got %d", it.Quantity)
+			}
+		}
+	}
+	if !foundHerb {
+		t.Errorf("expected itm_001 in buyer depot")
+	}
+}
+
+func TestStoreService_WithdrawListing_HighJobLevel_ExceedsInitialCapacity(t *testing.T) {
+	svc, _, charRepo, depotRepo, _ := setupTestService(t)
+	ctx := context.Background()
+
+	// Owner c1 has JobLevel: 20 (capacity 105)
+	c1 := charRepo.chars["c1"]
+	c1.JobLevel = 20
+	charRepo.chars["c1"] = c1
+
+	_, _ = svc.BuildStore(ctx, "c1", "town1", "001", "マイショップ")
+	dep1, _ := depotRepo.FindByCharacterID(ctx, "c1")
+	dep1.Items = append(dep1.Items, coreitem.Instance{ID: "inst_wpn1", DefinitionID: "wpn_001", Quantity: 1})
+	_ = depotRepo.Save(ctx, dep1)
+
+	sale, err := svc.ListGoldItem(ctx, "c1", "inst_wpn1", 3000)
+	if err != nil {
+		t.Fatalf("ListGoldItem failed: %v", err)
+	}
+
+	// Populate c1 depot with 6 items (exceeding initial capacity 5)
+	currentDep1, _ := depotRepo.FindByCharacterID(ctx, "c1")
+	currentDep1.Capacity = 5
+	for i := 0; i < 6; i++ {
+		currentDep1.Items = append(currentDep1.Items, coreitem.Instance{
+			ID:           fmt.Sprintf("existing-%d", i),
+			DefinitionID: fmt.Sprintf("item-%d", i),
+			Quantity:     1,
+		})
+	}
+	_ = depotRepo.Save(ctx, currentDep1)
+
+	err = svc.WithdrawListing(ctx, "c1", sale.ID)
+	if err != nil {
+		t.Fatalf("WithdrawListing failed for high JobLevel character with >5 depot items: %v", err)
+	}
+
+	updatedDep1, _ := depotRepo.FindByCharacterID(ctx, "c1")
+	if len(updatedDep1.Items) != 7 {
+		t.Errorf("expected 7 items in owner depot, got %d", len(updatedDep1.Items))
+	}
+}
+
+func TestStoreService_TradeItem_HighJobLevel_ExceedsInitialCapacity(t *testing.T) {
+	svc, _, charRepo, depotRepo, _ := setupTestService(t)
+	ctx := context.Background()
+
+	// Seller c1 has JobLevel: 20, Buyer c2 has JobLevel: 20
+	c1 := charRepo.chars["c1"]
+	c1.JobLevel = 20
+	charRepo.chars["c1"] = c1
+
+	c2 := charRepo.chars["c2"]
+	c2.JobLevel = 20
+	charRepo.chars["c2"] = c2
+
+	_, _ = svc.BuildStore(ctx, "c1", "town1", "001", "マイショップ")
+	dep1, _ := depotRepo.FindByCharacterID(ctx, "c1")
+	dep1.Items = append(dep1.Items, coreitem.Instance{ID: "inst_wpn2", DefinitionID: "wpn_002", Quantity: 1})
+	_ = depotRepo.Save(ctx, dep1)
+
+	sale, err := svc.ListBarterItem(ctx, "c1", "inst_wpn2", "やくそう")
+	if err != nil {
+		t.Fatalf("ListBarterItem failed: %v", err)
+	}
+
+	// Populate c1 depot with 6 items (exceeding initial 5)
+	currentDep1, _ := depotRepo.FindByCharacterID(ctx, "c1")
+	currentDep1.Capacity = 5
+	for i := 0; i < 6; i++ {
+		currentDep1.Items = append(currentDep1.Items, coreitem.Instance{
+			ID:           fmt.Sprintf("c1-existing-%d", i),
+			DefinitionID: fmt.Sprintf("c1-item-%d", i),
+			Quantity:     1,
+		})
+	}
+	_ = depotRepo.Save(ctx, currentDep1)
+
+	// Populate c2 depot with 6 items, one of which is the barter item (itm_001 "やくそう")
+	dep2, _ := depotRepo.FindByCharacterID(ctx, "c2")
+	dep2.Capacity = 5
+	dep2.Items = []coreitem.Instance{
+		{ID: "c2_herb", DefinitionID: "itm_001", Quantity: 1},
+	}
+	for i := 1; i < 6; i++ {
+		dep2.Items = append(dep2.Items, coreitem.Instance{
+			ID:           fmt.Sprintf("c2-existing-%d", i),
+			DefinitionID: fmt.Sprintf("c2-item-%d", i),
+			Quantity:     1,
+		})
+	}
+	_ = depotRepo.Save(ctx, dep2)
+
+	err = svc.TradeItem(ctx, "c2", sale.ID, "c2_herb")
+	if err != nil {
+		t.Fatalf("TradeItem failed for high JobLevel characters with >5 depot items: %v", err)
+	}
+
+	updatedDep1, _ := depotRepo.FindByCharacterID(ctx, "c1")
+	if len(updatedDep1.Items) != 7 {
+		t.Errorf("expected 7 items in seller depot, got %d", len(updatedDep1.Items))
+	}
+	updatedDep2, _ := depotRepo.FindByCharacterID(ctx, "c2")
+	if len(updatedDep2.Items) != 6 {
+		t.Errorf("expected 6 items in buyer depot (consumed 1, received 1), got %d", len(updatedDep2.Items))
 	}
 }

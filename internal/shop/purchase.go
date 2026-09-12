@@ -190,7 +190,7 @@ func (s *Service) Purchase(ctx context.Context, characterID string, itemDefiniti
 				return err
 			}
 		}
-		dep.Capacity = depot.CalculateCapacity(char.JobLevel, dep.ExDepot, char.OverDepot)
+		dep.RefreshCapacity(char.JobLevel, char.OverDepot)
 
 		inst, err := item.NewInstance(itemDefinitionID, quantity)
 		if err != nil {
@@ -317,7 +317,7 @@ func (s *Service) BatchPurchase(ctx context.Context, characterID string, shopTyp
 				return err
 			}
 		}
-		dep.Capacity = depot.CalculateCapacity(char.JobLevel, dep.ExDepot, char.OverDepot)
+		dep.RefreshCapacity(char.JobLevel, char.OverDepot)
 
 		// Pre-validate & add all items to depot
 		for _, inst := range instances {

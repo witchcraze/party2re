@@ -123,6 +123,11 @@ func NewDepotWithCapacity(characterID string, jobLv, exDepot, overDepot int) (De
 	}, nil
 }
 
+// RefreshCapacity recalculates and updates the depot capacity based on the character's JobLevel and OverDepot.
+func (d *Depot) RefreshCapacity(jobLv, overDepot int) {
+	d.Capacity = CalculateCapacity(jobLv, d.ExDepot, overDepot)
+}
+
 // AddItem adds an item to depot.
 // Resolves Issue #452 & #558: Stacking items with existing identical definition ID
 // and identical EnhancementLevel == 0 are merged into an existing slot first without consuming a new slot.

@@ -254,7 +254,7 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Item Catalog, Character (wallet), Inventory, Depot, Helper (`HelperProvider`), Collection (`CollectionRecorder`), Economy.
   - **Persistence:** Single-transaction atomic updates via character, inventory, and depot repositories obeying global lock hierarchy (`characters` Tier 2 -> `inventory_items` Tier 3 -> `character_depots` Tier 5).
 - **Depot** (`internal/depot`):
-  - **Responsibility:** Persistent item storage with legacy dynamic capacity formula (`get_depot_c`), storage expansions (`かくちょう`), item sales (`うる` / `まとめてうる`), item sorting (`せいとん`), mailing items and money (`おくる`), and collection book sync. Fictional gold storage eliminated.
+  - **Responsibility:** Persistent item storage with legacy dynamic capacity formula (`get_depot_c`), storage expansions (`かくちょう`), item sales (`うる` / `まとめてうる`), item sorting (`せいとん`), mailing items and money (`おくる`), collection book sync, and standardized `RefreshCapacity` helper across commerce modules (`shop`, `secretshop`, `blackmarket`, `fleamarket`, `auction`, `store`). Fictional gold storage eliminated.
   - **Dependencies:** Character, Inventory, Economy (`economy.TransactionRunner`), Collection (hook).
   - **Persistence:** `character_depots` (`capacity`, `ex_depot`) and `depot_items` tables with atomic single-transaction execution via `economy.TransactionRunner` and `RunInTx` obeying the global lock hierarchy (Rank 2 `characters` sorted asc -> Rank 3 `inventory_items` -> Rank 5 `character_depots`).
 - **Blacksmith** (`internal/blacksmith`):

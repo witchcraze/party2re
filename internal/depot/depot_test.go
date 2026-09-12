@@ -176,6 +176,35 @@ func TestCalculateCapacity(t *testing.T) {
 	}
 }
 
+func TestDepot_RefreshCapacity(t *testing.T) {
+	d, err := NewDepot("char-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d.Capacity != MinDepotCapacity {
+		t.Errorf("expected initial capacity %d, got %d", MinDepotCapacity, d.Capacity)
+	}
+
+	// Refresh with JobLevel 20 -> 20 * 5 + 5 = 105
+	d.RefreshCapacity(20, 0)
+	if d.Capacity != 105 {
+		t.Errorf("expected capacity 105 for JobLevel 20, got %d", d.Capacity)
+	}
+
+	// Refresh with OverDepot 2 -> 105 + 100 = 205
+	d.RefreshCapacity(20, 2)
+	if d.Capacity != 205 {
+		t.Errorf("expected capacity 205 for JobLevel 20 + OverDepot 2, got %d", d.Capacity)
+	}
+
+	// Refresh with ExDepot 5, JobLevel 30 (clamped to base 150) -> 150 + 25 + 50 = 225
+	d.ExDepot = 5
+	d.RefreshCapacity(30, 1)
+	if d.Capacity != 225 {
+		t.Errorf("expected capacity 225, got %d", d.Capacity)
+	}
+}
+
 func TestExpansionCost(t *testing.T) {
 	cost0, err := ExpansionCost(0)
 	if err != nil || cost0 != 200000 {

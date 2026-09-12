@@ -25,7 +25,7 @@ func (s *Service) findOrCreateDepot(ctx context.Context, characterID string, cha
 	if err != nil {
 		return Depot{}, err
 	}
-	dep.Capacity = CalculateCapacity(effectiveJobLevel(char), dep.ExDepot, char.OverDepot)
+	dep.RefreshCapacity(char.JobLevel, char.OverDepot)
 	return dep, nil
 }
 
@@ -90,7 +90,7 @@ func (s *Service) GetDepot(ctx context.Context, characterID string) (Depot, erro
 	if err != nil {
 		return Depot{}, err
 	}
-	depot.Capacity = CalculateCapacity(effectiveJobLevel(char), depot.ExDepot, char.OverDepot)
+	depot.RefreshCapacity(char.JobLevel, char.OverDepot)
 	return depot, nil
 }
 
@@ -141,7 +141,7 @@ func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInst
 		if err != nil {
 			return err
 		}
-		dep.Capacity = CalculateCapacity(effectiveJobLevel(tc.Character), dep.ExDepot, tc.Character.OverDepot)
+		dep.RefreshCapacity(tc.Character.JobLevel, tc.Character.OverDepot)
 		itemInstance, err := dep.RemoveItem(itemInstanceID)
 		if err != nil {
 			return err
@@ -330,7 +330,7 @@ func (s *Service) Expand(ctx context.Context, characterID string) (Depot, error)
 			return err
 		}
 		dep.ExDepot++
-		dep.Capacity = CalculateCapacity(effectiveJobLevel(tc.Character), dep.ExDepot, tc.Character.OverDepot)
+		dep.RefreshCapacity(tc.Character.JobLevel, tc.Character.OverDepot)
 		if err := s.saveDepot(tc.Context, dep); err != nil {
 			return err
 		}

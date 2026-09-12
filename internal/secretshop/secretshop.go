@@ -402,7 +402,7 @@ func (s *Service) PurchaseItem(
 				return err
 			}
 		}
-		dep.Capacity = depot.CalculateCapacity(char.JobLevel, dep.ExDepot, char.OverDepot)
+		dep.RefreshCapacity(char.JobLevel, char.OverDepot)
 
 		inst, err := coreitem.NewInstance(shopItem.ItemDefinitionID, quantity)
 		if err != nil {
