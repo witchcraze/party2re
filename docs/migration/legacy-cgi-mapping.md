@@ -9,8 +9,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** with complete file 
 ## 1. Critical Misnomer & Pitfall Warnings (取り違え厳禁)
 
 | Misnomer Trap | Authentic Legacy Specification | Go Implementation Guideline |
-| :--- | :--- | :--- |
-| **`farm.cgi` (Monster Ranch)** | **モンスター牧場 (@モンジィ)**: 仲間モンスター保管（30/32匹）、自宅ペット連携（8枠）、改名（8文字）、P2P譲渡、野生への解放。**作物・畑の要素は一切存在しない**。 | Dedicated to `internal/monsterranch` (or clean `internal/farm`). Crop logic must be purged. (Issue #488) |
+| **`farm.cgi` (Monster Ranch)** | **モンスター牧場 (@モンジィ)**: 仲間モンスター保管（50〜300匹）、自宅ペット連携（8枠）、改名（8文字）、P2P譲渡、野生への解放。**作物・畑の要素は一切存在しない**。 | Dedicated to `internal/monster`. Fictional crop logic purged. (Issue #488) |
 | **`plantation.cgi` (Seed Cultivation)** | **種菜園 (@ロータス)**: 6種の種（赤/青/黄/緑/銀/金）、14種の特殊肥料、枯れ率計算、翌朝タイマー、預かり所（depot）への収穫物直送。 | Dedicated to `internal/plantation` (Issue #489). |
 | **`reborn.cgi` / `altar.cgi` (No Rebirth)** | **転生の祭壇**: レベル1リセット（転生）は存在しない。**Lv99→150の限界突破（OverLevel）**および裏天界解放のみ。 | Purge fictional Rebirth system; restore OverLevel cap (Issue #470, #471). |
 | **`guild.cgi` (No Donation Leveling)** | **ギルド拠点**: ゴールド寄付によるギルドLv1〜10上げは存在しない。**活動による動的GP**、自由役職命名（6文字）、申請承認制、HEXカラー。 | Purge fictional donation levels; restore activity GP & custom roles (Issue #490). |
@@ -110,13 +109,13 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** with complete file 
 ### CL-05: Production, Cultivation & Monsters (生産・菜園・モンスター牧場)
 - **Cluster Summary**: 錬金堂（レシピ合成）、モンスター牧場（仲間預託・ペット連携）、種菜園（栽培・肥料）
 - **Shared Dependencies**: `party2/lib/_data.cgi`, `party2/lib/_alchemy_recipe.cgi`, `party2/lib/depot.cgi`
-- **Primary Domain Packages**: `internal/alchemy/`, `internal/monsterranch/` (旧 `internal/farm/`), `internal/plantation/`, `internal/monster/`
+- **Primary Domain Packages**: `internal/alchemy/`, `internal/monster/`, `internal/plantation/`
 - **Key Testing / Linter Focus**: 牧場から畑要素を全削除、錬金の翌朝タイマー・Depot直結、菜園の14種肥料・枯れ率計算
 
 | Legacy Script | Authentic Role / Action | Go Domain Implementation | HTTP Handler & Migrations | Design Doc & OpenAPI | Status | Pitfalls / Parity Traps |
 | :--- | :--- | :--- | :--- | :--- | :---: | :--- |
 | `lib/alchemy.cgi`, `lib/_alchemy_recipe.cgi` | 錬金堂 (@トロデ) | `internal/alchemy/` | `internal/api/http/alchemy.go`<br/>`migrations/070_alchemy_overnight_depot.sql` | `docs/design/alchemy.md`<br/>`docs/api/openapi.json` | Complete (#487) | ✅ 復元完了: 完全無料、Depot素材消費、翌朝完成（自宅休息完了）、Depot直送、図鑑100%称号。 |
-| `lib/farm.cgi` | モンスター牧場 (@モンジィ) | `internal/monsterranch/` (旧 `internal/farm/`) | `internal/api/http/farm.go`<br/>`internal/api/http/monster.go`<br/>`migrations/019_farm.sql`<br/>`migrations/045_monster_grandpa_and_pets.sql` | `docs/design/farm.md`<br/>`docs/design/monster.md`<br/>`docs/api/paths/farm.json`<br/>`docs/api/paths/monster.json` | Reconciling (#488) | 🚨 創作: 4面畑・水やり・収穫。<br/>正: モンスター預託（30/32枠）、自宅ペット連携（8枠）、改名（8文字）、P2P譲渡。 |
+| `lib/farm.cgi` | モンスター牧場 (@モンジィ) | `internal/monster/` | `internal/api/http/monster.go`<br/>`migrations/045_monster_grandpa_and_pets.sql`<br/>`migrations/071_purge_farm_plots.sql` | `docs/design/monster.md`<br/>`docs/api/openapi.json` | Complete (#488) | ✅ 復元完了: 創作の畑・作物システムを完全パージ。仲間モンスター預託（50〜300枠）、自宅ペット連携（8枠）、改名（8文字）、P2P譲渡、野生解放。 |
 | `lib/plantation.cgi` | 種菜園 (@ロータス) | `internal/plantation/` | Pending HTTP Handler | `docs/design/plantation.md` (Issue #489) | Reconciling (#489) | 6種の種、14種の肥料、水やりと枯れ率計算、翌朝収穫Depot直結。 |
 
 ---

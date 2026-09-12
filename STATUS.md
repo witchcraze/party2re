@@ -49,7 +49,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Guild** (`internal/guild`): ✅ Foundation (5,000G), role hierarchy, bulletin board; fictional donation-leveling purge pending (#490).
 - **Casino** (`internal/casino`): ✅ Coin exchange, Indian Poker (sessions), Slot, Doppel, High-Low; 8-player shared room pending (#486).
 - **Lottery & Raffle** (`internal/lottery`): ✅ Raffle (normal/special); 4-digit lottery — 20-cap/rollover parity pending (#484, #485).
-- **Farm & Plantation** (`internal/farm`): ✅ Initial implementation; Ranch/Plantation parity pending (#488, #489).
+- **Monster Ranch** (`internal/monster`): ✅ Monster Grandpa stabling (50–300 cap), Home pet link (8 pets), renaming (8 chars), P2P gift, wild release (#488). Fictional crop farm purged; Plantation pending (#489).
 - **Auction Hall** (`internal/auction`): ✅ Live P2P trade (`@おくる`/`@しらべる`); fictional async auction house purged (#474).
 - **Collection & Monster Book** (`internal/collection`): ✅ Monster + item encyclopedia; auto-record on obtain.
 - **Chapel & Blessings** (`internal/chapel`): ✅ 5 prayers, single-active constraint, daily reset Worker; fictional donations purged (#472).
@@ -97,7 +97,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 See [`ROADMAP.md`](ROADMAP.md) for full milestone details.
 
-1. **Parity Milestone 2 (Remaining) — Production & Delivery**: #488, #489
+1. **Parity Milestone 2 (Remaining) — Production & Delivery**: #489
 2. **Parity Milestone 3 — Adventure, Combat & Dungeons**: #478, #479, #481, #482, #483, #496
 3. **Client Presentation & Web UI**: Issue #140
 4. **Production Asset Pipeline & Final Licensing**: Issue #143, #202

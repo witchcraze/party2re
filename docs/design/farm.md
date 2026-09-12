@@ -1,60 +1,30 @@
-# Farm & Plantation Cultivation Design
+# Monster Ranch Design (旧 farm.cgi / モンスター牧場)
 
-## Overview
-
-The Farm and Plantation Feature Module (`internal/farm`) allows player characters to cultivate seeds into herbs, flowers, and rare alchemy/cooking ingredients across dedicated farm plots.
-
----
-
-## Domain Rules & Mechanics
-
-### Farm Plots
-
-- Each player character possesses a dedicated farm with **4 individual plots** (indices `0` to `3`).
-- **Plot Statuses**:
-  - `EMPTY`: Plot is cleared and ready for planting.
-  - `GROWING`: Crop is currently growing ($T_{\text{planted}} \le T_{\text{current}} < T_{\text{matures}}$).
-  - `MATURE`: Crop is ready to harvest ($T_{\text{matures}} \le T_{\text{current}} < T_{\text{wither}}$).
-  - `WITHERED`: Crop has withered due to neglect beyond grace period ($T_{\text{current}} \ge T_{\text{wither}}$).
+> [!NOTE]
+> **Fictional Crop Farm Purged (Issue #488)**:
+> The fictional 4-plot crop cultivation system previously located in `internal/farm` has been completely purged from the codebase.
+> In original Party2, `farm.cgi` is the **Monster Ranch (モンスターじいさん @モンジィ)**.
+>
+> - **Monster Ranch & Home Pet Companion Design**: See [`monster.md`](monster.md) (`internal/monster`, legacy `farm.cgi`).
+> - **Plantation Seed Cultivation Design**: See `docs/design/plantation.md` (`internal/plantation`, legacy `plantation.cgi` @ロータス, Issue #489).
 
 ---
 
-## Seed & Crop Catalog
+## 1. Role in Legacy Party2 (`farm.cgi`)
 
-| Seed Type | Crop Name | Growth Duration | Grace Period | Base Yield | Reward Gold / Item |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-| `seed_herb` | Medicinal Herb (薬草) | 5 minutes | 24 hours | 2 | 50 G / `item_medicinal_herb` |
-| `seed_mandrake` | Mandrake Root (マンドラゴラ) | 15 minutes | 24 hours | 1 | 200 G / `item_mandrake_root` |
-| `seed_moonlight` | Moonlight Flower (月光草) | 30 minutes | 24 hours | 1 | 500 G / `item_moonlight_flower` |
-| `seed_golden` | Golden Apple (黄金の果実) | 60 minutes | 24 hours | 1 | 2,000 G / `item_golden_fruit` |
-
----
-
-## Crop Care Operations
-
-1. **Watering (`WaterPlot`)**:
-   - Increases harvest yield by $+1$.
-   - Allowed once per growth cycle.
-2. **Fertilizing (`FertilizePlot`)**:
-   - Consumes 1 `item_fertilizer` atomically from the character's inventory.
-   - Halves the total remaining growth duration ($T_{\text{matures}} = T_{\text{planted}} + \frac{\text{Duration}}{2}$).
-   - Allowed once per growth cycle.
-
----
-
-## Harvesting & Clearing
-
-- **Harvesting**:
-  - Only allowed when the crop is in `MATURE` state.
-  - Awards total yield ($\text{Yield} \times \text{RewardGold}$) to character gold and grants $\text{Yield}$ copies of `RewardItemID` into inventory.
-  - Resets the plot back to `EMPTY`.
-- **Clearing**:
-  - Resets a `WITHERED` or abandoned plot back to `EMPTY`.
-
----
-
-## Persistence & Transactions
-
-- Farm plot states, inventory item consumption (`seed_*`, `item_fertilizer`), harvest items, and gold rewards are managed atomically in MariaDB within explicit database transactions (Unit of Work with `FOR UPDATE` locking).
-- `UNIQUE (character_id, plot_index)` constraint ensures plot consistency per character.
-- Any precondition failure during planting, watering, fertilizing, or harvesting automatically rolls back the transaction, guaranteeing zero item loss.
+`farm.cgi` serves as the monster stabling and ranch facility overseen by NPC `@モンジィ` (モンスターじいさん).
+Its responsibilities are:
+1. **Monster Stabling**: Storing captured and befriended monsters in the character's ranch box (`character_monsters`).
+   - Base capacity: 50 monsters (100 monsters at character Level $\ge$ 100).
+   - Expandable up to 300 monsters via underworld celestial wishes (`OverMonster`, +50 per tier up to 5 tiers).
+2. **Home Pet Companions**:
+   - Transferring monsters to player private home estates as active pets (`つれてく`, `BringToHome`, up to 8 pets).
+   - Depositing active pets back to ranch storage (`あずける`, `DepositToBox`).
+   - Duplicate name restriction: No two pets in the same home may share identical custom names.
+3. **Monster Renaming (`なづける`, `Rename`)**:
+   - Custom nicknames up to 8 UTF-8 characters.
+   - Rejection of invalid whitespace or special characters (`,`, `;`, `"`, `'`, `&`, `<`, `>`, `@`).
+4. **P2P Monster Gifting (`おくる`, `SendMonster`)**:
+   - Direct transfer of a monster instance to another player's ranch box with deterministic two-party row locking.
+5. **Wild Release (`わかれる`, `ReleaseMonster`)**:
+   - Permanently releasing a monster back to the wild.

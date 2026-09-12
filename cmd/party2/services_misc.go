@@ -15,7 +15,6 @@ import (
 	"github.com/witchcraze/party2re/internal/contest"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/eventplaza"
-	"github.com/witchcraze/party2re/internal/farm"
 	"github.com/witchcraze/party2re/internal/god"
 	"github.com/witchcraze/party2re/internal/helper"
 	"github.com/witchcraze/party2re/internal/job"
@@ -37,7 +36,6 @@ type miscServices struct {
 	helper      *helper.Service
 	job         *job.Service
 	chapel      *chapel.Service
-	farm        *farm.Service
 	collection  *collection.Service
 	lottery     *lottery.Service
 	tavern      *tavern.Service
@@ -144,15 +142,6 @@ func newMiscServices(
 		return nil, err
 	}
 	chapelService, err := chapel.NewService(chapelRepo)
-	if err != nil {
-		return nil, err
-	}
-
-	farmRepo, err := database.NewFarmRepository(db)
-	if err != nil {
-		return nil, err
-	}
-	farmService, err := farm.NewService(farmRepo)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +316,6 @@ func newMiscServices(
 		helper:      helperService,
 		job:         jobService,
 		chapel:      chapelService,
-		farm:        farmService,
 		collection:  collectionService,
 		lottery:     lotteryService,
 		tavern:      tavernService,

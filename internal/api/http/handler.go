@@ -120,7 +120,6 @@ type Handler struct {
 	jobs           JobService
 	customSkills   CustomSkillService
 	chapel         ChapelService
-	farm           FarmService
 	collections    CollectionService
 	depot          DepotService
 	lottery        LotteryService
@@ -475,14 +474,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /characters/{id}/blackmarket/points", h.handleGetBlackMarketPoints)
 	mux.HandleFunc("POST /characters/{id}/blackmarket/sacrifice", h.handleBlackMarketSacrifice)
 	mux.HandleFunc("POST /characters/{id}/blackmarket/trade", h.handleBlackMarketTrade)
-
-	// Farm
-	mux.HandleFunc("GET /characters/{id}/farm", h.handleGetFarm)
-	mux.HandleFunc("POST /characters/{id}/farm/plant", h.handleFarmPlant)
-	mux.HandleFunc("POST /characters/{id}/farm/water", h.handleFarmWater)
-	mux.HandleFunc("POST /characters/{id}/farm/fertilize", h.handleFarmFertilize)
-	mux.HandleFunc("POST /characters/{id}/farm/harvest", h.handleFarmHarvest)
-	mux.HandleFunc("POST /characters/{id}/farm/clear", h.handleFarmClear)
 
 	// Collections
 	mux.HandleFunc("GET /characters/{id}/collections/monsters", h.handleGetMonsterBook)

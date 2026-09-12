@@ -3,7 +3,6 @@ package monster
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 	"unicode"
@@ -57,14 +56,6 @@ type MonsterBoxSummary struct {
 	Monsters     []MonsterInstance `json:"monsters"`
 }
 
-// Dialogue represents NPC @モンジィ dialogue.
-type Dialogue struct {
-	NPCName  string   `json:"npc_name"`
-	Title    string   `json:"title"`
-	Greeting string   `json:"greeting"`
-	Phrases  []string `json:"phrases"`
-}
-
 // CharacterRepository defines character data access for Monster service.
 type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
@@ -112,8 +103,12 @@ func NewService(characters CharacterRepository, monsters MonsterRepository, opts
 	return s
 }
 
-// BoxCapacityForCharacter computes maximum monster box capacity based on OverMonster limit break.
+// BoxCapacityForCharacter computes maximum monster box capacity based on OverMonster limit break and level.
 func BoxCapacityForCharacter(char corecharacter.Character) int {
+	base := BaseBoxCapacity
+	if char.Level >= 100 {
+		base = 100
+	}
 	tier := char.OverMonster
 	if tier < 0 {
 		tier = 0
@@ -121,7 +116,7 @@ func BoxCapacityForCharacter(char corecharacter.Character) int {
 	if tier > 5 {
 		tier = 5
 	}
-	return BaseBoxCapacity + (tier * OverBoxCapacityPerTier)
+	return base + (tier * OverBoxCapacityPerTier)
 }
 
 // ValidateMonsterName ensures the custom pet name conforms to legacy restrictions.
@@ -474,26 +469,6 @@ func (s *Service) ReleaseMonster(ctx context.Context, characterID, instanceID st
 
 		return s.monsters.Delete(txCtx, instanceID)
 	})
-}
-
-// GetDialogue returns NPC @モンジィ dialogue.
-func (s *Service) GetDialogue() Dialogue {
-	return Dialogue{
-		NPCName:  "@モンジィ",
-		Title:    "モンスターじいさん",
-		Greeting: "わしが有名な@モンジィじゃ。モンスターのことなら何でも聞いてくれい",
-		Phrases: []string{
-			"わしが有名な@モンジィじゃ。モンスターのことなら何でも聞いてくれい",
-			"何度かモンスターを倒していると、なついてくるモンスターがいるのじゃ",
-			"人間を好むモンスターもいるということじゃ",
-			"純粋な強さにモンスターはひきつけられるのじゃ",
-			fmt.Sprintf("自分の家には%d匹までペットを連れて行くことができるぞい", MaxHomePets),
-			"モンスターは最大50匹（限界突破で最大300匹）まで預かっておけるぞい。それ以上は、残念じゃが＠わかれるしかないのぉ…",
-			"モンスター預かり所がまんぱんの状態だと、モンスターは仲間にならんから注意じゃ",
-			"自分が相手より強い方が仲間になりやすいぞい",
-			"ふがふがふがふがふがふがふが",
-		},
-	}
 }
 
 func (s *Service) runInTx(ctx context.Context, fn func(txCtx context.Context) error) error {

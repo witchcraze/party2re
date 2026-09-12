@@ -285,10 +285,6 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Instant raffle drawings (standard/special orb tiers) and periodic 4-digit numbered lottery purchases, drawing settlement, and prize claims.
   - **Dependencies:** Character repository (wallet gold).
   - **Persistence:** `character_lottery`, `lottery_drawings`, and `lottery_tickets` tables in `internal/database/lottery_repository.go` with atomic transactional claiming.
-- **Farm & Plantation** (`internal/farm`):
-  - **Responsibility:** Multi-plot crop cultivation (planting seeds, watering for bonus yield, fertilizing for growth acceleration, time-based maturation, harvesting, and withering).
-  - **Dependencies:** Character repository (wallet gold/items).
-  - **Persistence:** `farm_plots` table in `internal/database/farm_repository.go` with unique per-character plot indexes.
 - **Auction & Marketplace** (`internal/auction`):
   - **Responsibility:** Authentic live P2P trading hall (`party2/lib/auction.cgi`) overseen by NPC @ワイルド. Direct transfer of gold and equipped items to player depots (`@おくる`), real-time target player inspection (`@しらべる`), and taboo item protection.
   - **Dependencies:** Character repository, Equipment repository, Inventory repository, Depot repository, Item catalog.
@@ -398,9 +394,9 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Responsibility:** Celestial audiences in Heaven (天界, NPC `@神`, `god.cgi`) and Underworld (裏天界, NPC `@神?`, `u_god.cgi`), permanent character attribute enhancements (+40 all stats), currency/resource awards, Level 99+ limit breaks (raising character level cap to 150), and tier-up capacity limit breaks (depot capacity, monster storage, job memory, flea market listings, shop listings).
   - **Dependencies:** Core Character, Core Progression, Character repository, Depot repository, Inventory repository.
   - **Persistence:** `characters` table (`over_level`, `over_depot`, `over_monster`, `over_future`, `over_flea`, `over_store`) and `character_depots` capacity persistence.
-- **Monster Grandpa & Pet Companions** (`internal/monster`):
-  - **Responsibility:** Monster storage box (base capacity 50 up to 300 via `OverMonster`), home pet companions (up to 8 pets per home estate), taming/capturing, renaming, gifting to other players, and releasing into the wild (`farm.cgi` / `monster.cgi`, NPC `@モンジィ`).
-  - **Dependencies:** Core Character, Character repository.
+- **Monster Ranch & Pet Companions** (`internal/monster`):
+  - **Responsibility:** Authentic monster ranch stabling and pet companionship facility (`farm.cgi` / `monster.cgi`, NPC `@モンジィ`). Storing befriended monsters in ranch storage (base capacity 50, 100 at Lv100, up to 300 via `OverMonster`), transferring to/from home pet estate (up to 8 pets with unique name constraint), nickname customization (up to 8 UTF-8 chars with symbol filtering), peer-to-peer monster gifting with two-party pessimistic locking, and releasing back to the wild.
+  - **Dependencies:** Core Character, Character repository, Transaction Provider.
   - **Persistence:** `character_monsters` table in `internal/database/monster_repository.go`.
 - **Photo Contest, Screenshots & Gallery** (`internal/contest`):
   - **Responsibility:** Character screenshots and photo gallery storage (up to 20 photos per character), photo contest entry submissions, community voting with comments, automated round conclusion with prize distribution (15,000 / 7,000 / 3,000 Gold, 10 / 6 / 3 Small Medals, 700 / 300 / 100 Guild Points), voter bonus medal distribution, Hall of Fame (殿堂入り / Legends) archiving, and news announcements (`photo.cgi` / `contest.cgi`, NPC `@ワコール`).

@@ -178,7 +178,6 @@ func newHTTPHandler(
 		http.WithRanking(soc.ranking),
 		http.WithJob(misc.job),
 		http.WithChapel(misc.chapel),
-		http.WithFarm(misc.farm),
 		http.WithCollection(misc.collection),
 		http.WithDepot(econ.depot),
 		http.WithBank(econ.bank),

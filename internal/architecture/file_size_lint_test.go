@@ -21,7 +21,6 @@ var whitelistedLegacyFileLimits = map[string]int{
 	"internal/party/application.go":       706,
 	"internal/contest/service.go":         645,
 	"internal/api/http/combat.go":         576,
-	"internal/monster/monster.go":         504,
 }
 
 const (
