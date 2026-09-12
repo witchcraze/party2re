@@ -70,54 +70,24 @@ Once Version 1.0 is established, the project should transition from **reconstruc
 
 ### Phase 5 — Core Features & Economy Modules (In Progress)
 
-#### Completed Feature Modules & Subsystems:
-- [x] **Player Lifecycle, Deletion & Session Auth** (Issue #21, #134, #190)
-- [x] **Character Initial State, Growth, Rebirth & Customization** (Issue #24, #10, #61, #198)
-- [x] **Item Catalog, 5-Slot Equipment System & Item Depot** (Issue #11, #19, #51, #58)
-- [x] **Job System, Skills & Mastery** (Issue #17, #18, #31, #38, #50, #69)
-- [x] **Battle Engine, Deterministic Turn Resolver & Replay Recorder** (Issue #12, #20, #36, #66)
-- [x] **Valkey ScheduledAction Queue & Distributed Lock Worker** (Issue #106, #109, #110)
-- [x] **Adventure System, Multi-stage Content & Chronicles** (Issue #13, #56, #57, #199 — 28 stages, 286 monsters)
-- [x] **Multiplayer Party & Co-op Quests** (Issue #188, #341)
-- [x] **Commercial Economy**: Shop, Blacksmith, Alchemy, Gem Store, Black Market, Flea Market, Auctions, Small Medals (Issue #55, #59, #60, #71, #72, #80, #142, #160, #194, #276)
-- [x] **Social & Meta Systems**: Guilds, GvG, PvP Arena, Bosses, Dungeons, Endurance Challenge, Park, News/Inbox, Home/Mailbox, Rankings, Photo Contest, Monster Grandpa, Secret Shop, Tavern, Delivery, Event Plaza (Issue #63, #67, #73, #74, #75, #76, #77, #78, #79, #81, #82, #83, #84, #85, #86, #141, #159, #161, #162, #185, #186, #187, #192, #193, #195)
-- [x] **HTTP JSON Application API Layer & Complete OpenAPI 3.1 Spec** (Issue #87, #180, #254, #266 — 182 routes)
-- [x] **Maintenance Mode & Admin Operations** (Issue #190)
-- [x] **Unified Verification Pipeline, Pre-push Hook & Distroless Smoke Build** (Issue #121, #124, #128)
+#### Completed Feature Modules & Subsystems
+
+Completed features are tracked in [`docs/migration/feature-inventory.md`](docs/migration/feature-inventory.md) (the authoritative SSOT for Version 1.0 completion records). The full list of merged issues and feature groups is maintained there.
+
+**Summary**: All core feature modules are implemented, including Player/Character lifecycle, Battle Engine, Adventure, Economy (Shop/Bank/Auction/Flea Market/Gem Store/Black Market), Social systems (Guild/GvG/PvP/Dungeons/Casino/Lottery/Home/Tavern/Delivery), and the complete HTTP JSON API layer (203 routes, OpenAPI 3.1).
 
 #### Legacy Clean-room Specification Parity Milestones (4-Phase Roadmap):
 
-Following a comprehensive clean-room specification audit of all 40 legacy CGI modules against the current implementation, 33 reconciliation issues (#459–#491) were identified and scheduled into 4 dependency-ordered milestones within Phase 5:
+Following a comprehensive clean-room specification audit of all 40 legacy CGI modules, 33 reconciliation issues (#459–#491) were identified and scheduled into 4 dependency-ordered milestones. Milestone 1 is complete (see `docs/migration/legacy-cgi-mapping.md`).
 
-##### Milestone 1: Core Foundation & Shared Storage
-Eliminate divergent mechanics in storage, core progression, and battle engines before downstream dependencies.
-- [x] **Depot Capacity & Direct Delivery Routing** (#460)
-- [x] **Multi-turn Core Battle Engine Parity** (#480)
-- [x] **Abolish Fictional Rebirth System & Restore OverLevel Cap** (#470)
-- [x] **Altar of Rebirth: Restore 6-Orb Offering, Ramia Awakening & Otherworld Wishes** (#471)
-- [x] **Custom Skills: Incantations, Resource Scaling & Failure Multipliers** (#469)
-- [x] **Job System Mastery & Job Change Requirements** (#467)
-- [x] **Wishing Well: Permanent Stat Growth via SP Exchange** (#468)
-- [x] **God Stat Seed Grants & Celestial Prayers** (#473)
-- [x] **Chapel: Eliminate Fictional Donations, Restore Monster Prayer & Single-Active-Wish Constraint** (#472)
-
-##### Milestone 2: Economic, Life & Production Loop
+##### Milestone 2: Economic, Life & Production Loop *(In Progress)*
 Reconcile facilities and production mechanics that depend on Depot storage and overnight cycles.
-- [x] **Home & Estate: Overnight Carpenter Construction, Town Estate Cycles & Resting Buffs** (#459, #461)
-- [x] **Standard Commercial Shops: Level Gates, Sellback & MasterCard Discount** (#465)
-- [x] **Secret Shop: Access Requirement (job_lv >= 7), 8 Items at 3x Price & Purge Puff-Puff Healing** (#462)
-- [x] **Black Market: Eliminate Fictional Gold Trading, Market Conditions & Daily Limits, Restore Pure Rare Point Barter** (#463)
-- [x] **Gem Store: Dedicated Gem Box, Dynamic Capacity & Job Level Unlocks** (#464)
-- [x] **Player Stores: Custom Pricing, Log Books & Commission Fees** (#466)
-- [x] **Bank: Character Deposits, Daily Interest & Peer-to-Peer Transfers** (#476)
-- [x] **Auction Hall: Eliminate Fictional Bidding Auction House and Reproduce Original Live P2P Trading and Direct Send** (#474)
-- [x] **Flea Market: Direct Depot Withdrawals & Trading Logs** (#477)
 - [ ] **Tavern Food Delivery: Scheduled Post-Adventure Buffs** (#475)
 - [ ] **Alchemy: Free Overnight Depot-linked Synthesis & Compendium** (#487)
 - [ ] **Monster Ranch: Monster Stabling, Home Pet Link, Naming & P2P Gifting** (#488)
 - [ ] **Plantation: 6 Seeds, 14 Fertilizer Reagents & Overnight Depot Harvest** (#489)
 
-##### Milestone 3: Adventure, Dungeons & Live Combat
+##### Milestone 3: Adventure, Dungeons & Live Combat *(Planned)*
 Restore crawl structures, boss challenges, and multiplayer PvP/GvG arenas.
 - [ ] **Battle Adapter: Standardize Character/Party Mapping & Post-Battle State Application** (#496)
 - [ ] **Adventure: 10-Floor Dungeon Crawl, Flee Penalties & Boss Battles** (#478)
@@ -126,7 +96,7 @@ Restore crawl structures, boss challenges, and multiplayer PvP/GvG arenas.
 - [ ] **GvG Arena: Multi-round Tournament Engine & Defensive Battles** (#482)
 - [ ] **Dungeon & Challenge: Co-op Multi-party Lobbies & Turn Engines** (#483)
 
-##### Milestone 4: Community, Events & Entertainment
+##### Milestone 4: Community, Events & Entertainment *(Planned)*
 Restore authentic social structures and mini-games.
 - [ ] **Guild: Dynamic Guild Points, Hex Colors, Custom Roles & Approval Workflow** (#490)
 - [ ] **Event Plaza: Real-time Concurrency Headcount & 3x Markup Catalog** (#491)
@@ -136,11 +106,9 @@ Restore authentic social structures and mini-games.
 
 #### Remaining Version 1.0 Milestones:
 
-1. **API Key / Personal Access Token Authentication**
-   - Personal Access Token (API Key) generation and authentication (Issue #163)
-2. **Client Presentation & Web UI**
+1. **Client Presentation & Web UI**
    - Web application client / UI-independent presentation layer (Issue #140)
-3. **Production Asset Pipeline & Final Licensing**
+2. **Production Asset Pipeline & Final Licensing**
    - Production asset mapping and license attribution catalog
 
 ---
