@@ -66,8 +66,9 @@ check verify:
 	@./scripts/verify.sh
 
 check-clean:
+	@rm -f .cache/verify_tree_stamp
 	@./scripts/reset_db.sh
-	@./scripts/verify.sh
+	@FORCE_VERIFY=1 ./scripts/verify.sh
 
 setup-hooks:
 	@echo "Configuring Git hooks path..."
