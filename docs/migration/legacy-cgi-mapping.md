@@ -115,7 +115,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** with complete file 
 
 | Legacy Script | Authentic Role / Action | Go Domain Implementation | HTTP Handler & Migrations | Design Doc & OpenAPI | Status | Pitfalls / Parity Traps |
 | :--- | :--- | :--- | :--- | :--- | :---: | :--- |
-| `lib/alchemy.cgi`, `lib/_alchemy_recipe.cgi` | 錬金堂 (@トロデ) | `internal/alchemy/` | `internal/api/http/farm.go` (分離予定)<br/>`migrations/019_farm.sql` | `docs/design/alchemy.md`<br/>`docs/api/paths/farm.json` | Reconciling (#487) | 🚨 創作: 即時錬金・ゴールド費用。<br/>正: 完全無料、Depot素材消費、翌朝完成、Depot直送。 |
+| `lib/alchemy.cgi`, `lib/_alchemy_recipe.cgi` | 錬金堂 (@トロデ) | `internal/alchemy/` | `internal/api/http/alchemy.go`<br/>`migrations/070_alchemy_overnight_depot.sql` | `docs/design/alchemy.md`<br/>`docs/api/openapi.json` | Complete (#487) | ✅ 復元完了: 完全無料、Depot素材消費、翌朝完成（自宅休息完了）、Depot直送、図鑑100%称号。 |
 | `lib/farm.cgi` | モンスター牧場 (@モンジィ) | `internal/monsterranch/` (旧 `internal/farm/`) | `internal/api/http/farm.go`<br/>`internal/api/http/monster.go`<br/>`migrations/019_farm.sql`<br/>`migrations/045_monster_grandpa_and_pets.sql` | `docs/design/farm.md`<br/>`docs/design/monster.md`<br/>`docs/api/paths/farm.json`<br/>`docs/api/paths/monster.json` | Reconciling (#488) | 🚨 創作: 4面畑・水やり・収穫。<br/>正: モンスター預託（30/32枠）、自宅ペット連携（8枠）、改名（8文字）、P2P譲渡。 |
 | `lib/plantation.cgi` | 種菜園 (@ロータス) | `internal/plantation/` | Pending HTTP Handler | `docs/design/plantation.md` (Issue #489) | Reconciling (#489) | 6種の種、14種の肥料、水やりと枯れ率計算、翌朝収穫Depot直結。 |
 

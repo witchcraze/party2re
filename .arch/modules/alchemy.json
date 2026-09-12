@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "module": "alchemy",
+  "domain": "錬金場 (@トロデ)",
+  "description": "Overnight recipe synthesis and compendium facility. Consumes materials directly from Depot with zero gold fees, matures overnight or upon home rest, delivers items into Depot, and awards comp_alc 100% compendium title.",
+  "entrypoint": "internal/alchemy/alchemy.go",
+  "dependencies": [
+    {
+      "module": "core/character",
+      "relation_type": "public_service_call",
+      "methods": ["FindByID", "FindByIDForUpdate"],
+      "source_ref": "internal/alchemy/alchemy.go#CharacterRepository"
+    },
+    {
+      "module": "depot",
+      "relation_type": "public_service_call",
+      "methods": ["FindByCharacterID", "FindByCharacterIDForUpdate", "Save"],
+      "source_ref": "internal/alchemy/alchemy.go#DepotRepository"
+    },
+    {
+      "module": "database",
+      "relation_type": "transaction_provider",
+      "methods": ["RunInTx"],
+      "source_ref": "internal/database/tx.go#TransactionProvider"
+    }
+  ],
+  "transaction_flows": [
+    {
+      "flow": "Synthesize (錬金開始・預かり所素材消費)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/alchemy/alchemy.go#Service.Synthesize",
+      "lock_sequence": [
+        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
+        { "step": 2, "target": "character_depots", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate" },
+        { "step": 3, "target": "character_alchemy", "lock_order": 8, "method": "Repository.GetSynthesisStateForUpdate" },
+        { "step": 4, "target": "depot_items", "method": "DepotRepository.Save" },
+        { "step": 5, "target": "character_alchemy", "method": "Repository.SaveSynthesisState" }
+      ]
+    },
+    {
+      "flow": "Claim (錬金完成品受取・預かり所納品)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/alchemy/alchemy.go#Service.Claim",
+      "lock_sequence": [
+        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
+        { "step": 2, "target": "character_depots", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate" },
+        { "step": 3, "target": "character_alchemy", "lock_order": 8, "method": "Repository.GetSynthesisStateForUpdate" },
+        { "step": 4, "target": "depot_items", "method": "DepotRepository.Save" },
+        { "step": 5, "target": "character_alchemy_recipes", "method": "Repository.MarkRecipeCrafted" },
+        { "step": 6, "target": "character_alchemy", "method": "Repository.SaveSynthesisState" }
+      ]
+    }
+  ]
+}

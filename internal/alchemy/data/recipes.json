@@ -9,8 +9,7 @@
         "definition_id": "item-001",
         "quantity": 2
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-002",
@@ -26,8 +25,7 @@
         "definition_id": "item-042",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-003",
@@ -39,8 +37,7 @@
         "definition_id": "item-002",
         "quantity": 2
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-004",
@@ -56,8 +53,7 @@
         "definition_id": "item-016",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-005",
@@ -73,8 +69,7 @@
         "definition_id": "item-008",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-006",
@@ -90,8 +85,7 @@
         "definition_id": "item-011",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-007",
@@ -107,8 +101,7 @@
         "definition_id": "item-005",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-008",
@@ -124,8 +117,7 @@
         "definition_id": "item-133",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-009",
@@ -141,8 +133,7 @@
         "definition_id": "item-022",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-010",
@@ -158,8 +149,7 @@
         "definition_id": "item-105",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-011",
@@ -175,8 +165,7 @@
         "definition_id": "item-022",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-012",
@@ -192,8 +181,7 @@
         "definition_id": "item-081",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-013",
@@ -209,8 +197,7 @@
         "definition_id": "item-105",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-014",
@@ -226,8 +213,7 @@
         "definition_id": "item-014",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-015",
@@ -243,8 +229,7 @@
         "definition_id": "item-080",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-016",
@@ -260,8 +245,7 @@
         "definition_id": "item-130",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-017",
@@ -277,8 +261,7 @@
         "definition_id": "item-087",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-018",
@@ -294,8 +277,7 @@
         "definition_id": "item-077",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-019",
@@ -311,8 +293,7 @@
         "definition_id": "armor-05",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-020",
@@ -328,8 +309,7 @@
         "definition_id": "item-011",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-021",
@@ -341,8 +321,7 @@
         "definition_id": "item-024",
         "quantity": 2
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-022",
@@ -354,8 +333,7 @@
         "definition_id": "item-025",
         "quantity": 2
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-023",
@@ -367,8 +345,7 @@
         "definition_id": "item-026",
         "quantity": 2
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-024",
@@ -384,8 +361,7 @@
         "definition_id": "item-016",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-025",
@@ -401,8 +377,7 @@
         "definition_id": "item-017",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-026",
@@ -418,8 +393,7 @@
         "definition_id": "item-018",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-027",
@@ -435,8 +409,7 @@
         "definition_id": "item-019",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-028",
@@ -452,8 +425,7 @@
         "definition_id": "item-020",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-029",
@@ -465,8 +437,7 @@
         "definition_id": "item-118",
         "quantity": 2
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-030",
@@ -482,8 +453,7 @@
         "definition_id": "item-097",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-031",
@@ -499,8 +469,7 @@
         "definition_id": "item-133",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-032",
@@ -516,8 +485,7 @@
         "definition_id": "item-112",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-033",
@@ -529,8 +497,7 @@
         "definition_id": "item-122",
         "quantity": 2
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-034",
@@ -542,8 +509,7 @@
         "definition_id": "item-120",
         "quantity": 2
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-035",
@@ -559,8 +525,7 @@
         "definition_id": "item-121",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-036",
@@ -576,8 +541,7 @@
         "definition_id": "item-042",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-037",
@@ -593,8 +557,7 @@
         "definition_id": "item-134",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-038",
@@ -610,8 +573,7 @@
         "definition_id": "item-085",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-039",
@@ -627,8 +589,7 @@
         "definition_id": "item-133",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-040",
@@ -644,8 +605,7 @@
         "definition_id": "weapon-43",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-041",
@@ -661,8 +621,7 @@
         "definition_id": "weapon-42",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-042",
@@ -678,8 +637,7 @@
         "definition_id": "weapon-16",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-043",
@@ -691,8 +649,7 @@
         "definition_id": "weapon-06",
         "quantity": 2
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-044",
@@ -708,8 +665,7 @@
         "definition_id": "item-133",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-045",
@@ -725,8 +681,7 @@
         "definition_id": "weapon-12",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-046",
@@ -742,8 +697,7 @@
         "definition_id": "item-132",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-047",
@@ -759,8 +713,7 @@
         "definition_id": "armor-44",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-048",
@@ -776,8 +729,7 @@
         "definition_id": "weapon-10",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-049",
@@ -793,8 +745,7 @@
         "definition_id": "item-085",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-050",
@@ -810,8 +761,7 @@
         "definition_id": "weapon-12",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-051",
@@ -827,8 +777,7 @@
         "definition_id": "item-085",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-052",
@@ -844,8 +793,7 @@
         "definition_id": "weapon-23",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-053",
@@ -861,8 +809,7 @@
         "definition_id": "item-134",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-054",
@@ -878,8 +825,7 @@
         "definition_id": "item-130",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-055",
@@ -895,8 +841,7 @@
         "definition_id": "item-120",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-056",
@@ -912,8 +857,7 @@
         "definition_id": "item-041",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-057",
@@ -929,8 +873,7 @@
         "definition_id": "item-133",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-058",
@@ -946,8 +889,7 @@
         "definition_id": "weapon-49",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-059",
@@ -963,8 +905,7 @@
         "definition_id": "item-075",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-060",
@@ -980,8 +921,7 @@
         "definition_id": "item-132",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-061",
@@ -997,8 +937,7 @@
         "definition_id": "item-130",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-062",
@@ -1014,8 +953,7 @@
         "definition_id": "item-085",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-063",
@@ -1031,8 +969,7 @@
         "definition_id": "item-120",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-064",
@@ -1044,8 +981,7 @@
         "definition_id": "weapon-09",
         "quantity": 2
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-065",
@@ -1057,8 +993,7 @@
         "definition_id": "weapon-11",
         "quantity": 2
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-066",
@@ -1074,8 +1009,7 @@
         "definition_id": "item-134",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-067",
@@ -1091,8 +1025,7 @@
         "definition_id": "item-008",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-068",
@@ -1108,8 +1041,7 @@
         "definition_id": "item-135",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-069",
@@ -1125,8 +1057,7 @@
         "definition_id": "armor-48",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-070",
@@ -1142,8 +1073,7 @@
         "definition_id": "armor-39",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-071",
@@ -1159,8 +1089,7 @@
         "definition_id": "weapon-11",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-072",
@@ -1176,8 +1105,7 @@
         "definition_id": "item-123",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-073",
@@ -1193,8 +1121,7 @@
         "definition_id": "weapon-63",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-074",
@@ -1210,8 +1137,7 @@
         "definition_id": "item-121",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-075",
@@ -1227,8 +1153,7 @@
         "definition_id": "item-133",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-076",
@@ -1244,8 +1169,7 @@
         "definition_id": "item-132",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-077",
@@ -1261,8 +1185,7 @@
         "definition_id": "item-113",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-078",
@@ -1278,8 +1201,7 @@
         "definition_id": "item-136",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-079",
@@ -1295,8 +1217,7 @@
         "definition_id": "item-135",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-080",
@@ -1312,8 +1233,7 @@
         "definition_id": "item-137",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-081",
@@ -1329,8 +1249,7 @@
         "definition_id": "item-123",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-082",
@@ -1346,8 +1265,7 @@
         "definition_id": "item-136",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-083",
@@ -1363,8 +1281,7 @@
         "definition_id": "weapon-40",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-084",
@@ -1376,8 +1293,7 @@
         "definition_id": "armor-01",
         "quantity": 2
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-085",
@@ -1393,8 +1309,7 @@
         "definition_id": "item-131",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-086",
@@ -1410,8 +1325,7 @@
         "definition_id": "item-052",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-087",
@@ -1427,8 +1341,7 @@
         "definition_id": "weapon-16",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-088",
@@ -1444,8 +1357,7 @@
         "definition_id": "item-079",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-089",
@@ -1461,8 +1373,7 @@
         "definition_id": "weapon-08",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-090",
@@ -1478,8 +1389,7 @@
         "definition_id": "item-078",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-091",
@@ -1495,8 +1405,7 @@
         "definition_id": "item-130",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-092",
@@ -1512,8 +1421,7 @@
         "definition_id": "weapon-28",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-093",
@@ -1529,8 +1437,7 @@
         "definition_id": "item-130",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-094",
@@ -1546,8 +1453,7 @@
         "definition_id": "item-131",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-095",
@@ -1563,8 +1469,7 @@
         "definition_id": "item-134",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-096",
@@ -1580,8 +1485,7 @@
         "definition_id": "item-132",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-097",
@@ -1597,8 +1501,7 @@
         "definition_id": "armor-03",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-098",
@@ -1614,8 +1517,7 @@
         "definition_id": "item-085",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-099",
@@ -1631,8 +1533,7 @@
         "definition_id": "weapon-15",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-100",
@@ -1648,8 +1549,7 @@
         "definition_id": "item-131",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-101",
@@ -1665,8 +1565,7 @@
         "definition_id": "item-133",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-102",
@@ -1682,8 +1581,7 @@
         "definition_id": "item-133",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-103",
@@ -1699,8 +1597,7 @@
         "definition_id": "armor-29",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-104",
@@ -1716,8 +1613,7 @@
         "definition_id": "armor-34",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-105",
@@ -1733,8 +1629,7 @@
         "definition_id": "item-120",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-106",
@@ -1750,8 +1645,7 @@
         "definition_id": "item-123",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-107",
@@ -1767,8 +1661,7 @@
         "definition_id": "item-136",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-108",
@@ -1784,8 +1677,7 @@
         "definition_id": "item-135",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-109",
@@ -1801,8 +1693,7 @@
         "definition_id": "item-137",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-110",
@@ -1818,8 +1709,7 @@
         "definition_id": "item-123",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-111",
@@ -1835,8 +1725,7 @@
         "definition_id": "item-136",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   },
   {
     "id": "recipe-112",
@@ -1852,7 +1741,6 @@
         "definition_id": "armor-40",
         "quantity": 1
       }
-    ],
-    "gold_fee": 100
+    ]
   }
 ]

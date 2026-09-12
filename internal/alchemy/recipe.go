@@ -28,7 +28,6 @@ type Recipe struct {
 	ResultItemDefinitionID string       `json:"result_item_definition_id"`
 	ResultQuantity         int          `json:"result_quantity"`
 	Ingredients            []Ingredient `json:"ingredients"`
-	GoldFee                int          `json:"gold_fee"`
 }
 
 func NewRecipe(
@@ -37,12 +36,11 @@ func NewRecipe(
 	resultItemID string,
 	resultQuantity int,
 	ingredients []Ingredient,
-	goldFee int,
 ) (Recipe, error) {
 	if strings.TrimSpace(id) == "" || strings.TrimSpace(name) == "" || strings.TrimSpace(resultItemID) == "" {
 		return Recipe{}, ErrInvalidRecipe
 	}
-	if resultQuantity <= 0 || goldFee < 0 || len(ingredients) == 0 {
+	if resultQuantity <= 0 || len(ingredients) == 0 {
 		return Recipe{}, ErrInvalidRecipe
 	}
 	for _, ing := range ingredients {
@@ -56,7 +54,6 @@ func NewRecipe(
 		ResultItemDefinitionID: strings.TrimSpace(resultItemID),
 		ResultQuantity:         resultQuantity,
 		Ingredients:            ingredients,
-		GoldFee:                goldFee,
 	}, nil
 }
 
@@ -67,7 +64,7 @@ type RecipeCatalog struct {
 func NewRecipeCatalog(recipes []Recipe) (*RecipeCatalog, error) {
 	catalog := &RecipeCatalog{recipes: make(map[string]Recipe, len(recipes))}
 	for _, r := range recipes {
-		validated, err := NewRecipe(r.ID, r.Name, r.ResultItemDefinitionID, r.ResultQuantity, r.Ingredients, r.GoldFee)
+		validated, err := NewRecipe(r.ID, r.Name, r.ResultItemDefinitionID, r.ResultQuantity, r.Ingredients)
 		if err != nil {
 			return nil, err
 		}

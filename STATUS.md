@@ -43,7 +43,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Shop** (`internal/shop`): ✅ 3 shops with job-level gates, 50% sellback, MasterCard discount, Depot auto-delivery.
 - **Depot** (`internal/depot`): ✅ Dynamic capacity (up to 500 slots), tiered expansion, sort, item sell, gold/item direct-send, standardized item consumption (`Consume`, `ConsumeOne`, `PurgeSlot`), enhancement-level & equipment stackability preservation (#558, #563), standardized `RefreshCapacity` helper across commerce modules (#559).
 - **Blacksmith** (`internal/blacksmith`): ✅ +1→+10 enhancement via `economy.TransactionRunner`.
-- **Alchemy** (`internal/alchemy`): ✅ 112 recipes; material consume + output — overnight/Depot parity pending (#487).
+- **Alchemy** (`internal/alchemy`): ✅ 112 recipes; zero fee, depot-linked overnight synthesis, home sleep completion, depot-direct delivery, recipe compendium & `comp_alc` title (#487).
 - **Bank** (`internal/bank`): ✅ Character gold deposit/withdrawal; 999,999G wallet clamp; fictional `bank_accounts` table purged (#476).
 - **Inn** (`internal/inn`): ✅ Fictional paid-inn purged; resting moved to `internal/home` (#459).
 - **Guild** (`internal/guild`): ✅ Foundation (5,000G), role hierarchy, bulletin board; fictional donation-leveling purge pending (#490).
@@ -97,7 +97,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 See [`ROADMAP.md`](ROADMAP.md) for full milestone details.
 
-1. **Parity Milestone 2 (Remaining) — Production & Delivery**: #487, #488, #489
+1. **Parity Milestone 2 (Remaining) — Production & Delivery**: #488, #489
 2. **Parity Milestone 3 — Adventure, Combat & Dungeons**: #478, #479, #481, #482, #483, #496
 3. **Client Presentation & Web UI**: Issue #140
 4. **Production Asset Pipeline & Final Licensing**: Issue #143, #202

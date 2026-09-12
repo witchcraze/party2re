@@ -35,9 +35,6 @@ func TestInitialRecipeCatalogValid(t *testing.T) {
 		if r.ResultQuantity <= 0 {
 			t.Errorf("recipe %s result quantity <= 0", r.ID)
 		}
-		if r.GoldFee < 0 {
-			t.Errorf("recipe %s gold fee < 0", r.ID)
-		}
 
 		// Verify result item exists in Item catalog
 		if _, err := items.FindByID(r.ResultItemDefinitionID); err != nil {
@@ -60,11 +57,11 @@ func TestInitialRecipeCatalogValid(t *testing.T) {
 }
 
 func TestRecipeCatalogOperations(t *testing.T) {
-	r1, err := NewRecipe("rec-1", "Test 1", "item-002", 1, []Ingredient{{"item-001", 2}}, 50)
+	r1, err := NewRecipe("rec-1", "Test 1", "item-002", 1, []Ingredient{{"item-001", 2}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	r2, err := NewRecipe("rec-2", "Test 2", "item-003", 1, []Ingredient{{"item-002", 2}}, 100)
+	r2, err := NewRecipe("rec-2", "Test 2", "item-003", 1, []Ingredient{{"item-002", 2}})
 	if err != nil {
 		t.Fatal(err)
 	}
