@@ -42,13 +42,6 @@
       "purpose": "Lock sender inventory and consume transferred item instance"
     },
     {
-      "module": "adventure",
-      "caller_method": "internal/adventure/adventure.go#Service.Claim",
-      "lock_mode": "INSERT",
-      "lock_order": 3,
-      "purpose": "Add monster drop item to adventurer inventory"
-    },
-    {
       "module": "blackmarket",
       "caller_method": "internal/blackmarket/blackmarket.go#Service.SacrificeItem",
       "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",

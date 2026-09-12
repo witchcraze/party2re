@@ -11,7 +11,7 @@ This document describes the stage hierarchy, monster encounters, and clean-room 
 - **Name (`name`)**: The Japanese name of the stage location.
 - **Minimum Level (`min_level`)**: The recommended character/job level requirement to safely enter the stage.
 - **Monster IDs (`monster_ids`)**: List of monster references encountered in the stage.
-- **Duration (`duration_seconds`)**: Standard scheduled duration for completing an adventure in the stage (default: 3600s / 1 hour).
+- **Dungeon Crawl Structure**: Authentic 10-floor dungeon crawl loop (`vs_monster.cgi`). Floors 1–9 spawn random stage enemies, Floor 10 features the stage boss battle, and upon victory, Floor 11 serves as the Treasure Room (`add_treasure`). Adventures resolve immediately upon initiation without artificial waiting timers.
 
 ### Standard Adventure Stages (01–28)
 1. **プニプニ平原** (`stage-01`): Level 1+ introductory meadow.

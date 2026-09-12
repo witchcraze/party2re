@@ -3,6 +3,8 @@ package party
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -25,7 +27,7 @@ const (
 	StatusCompleted  = "completed" //lint:ignore unused party lifecycle status enum completeness
 	StatusDisbanded  = "disbanded"
 
-	DefaultSpeed = 3
+	DefaultSpeed = 18
 )
 
 var (
@@ -43,6 +45,8 @@ var (
 	ErrInvalidPartyName       = errors.New("party name must be between 1 and 50 characters")
 	ErrInvalidMaxMembers      = errors.New("max members must be between 1 and 4")
 	ErrCharacterUnconscious   = errors.New("character is unconscious (HP <= 0) and cannot adventure")
+	ErrCharacterExhausted     = errors.New("character is exhausted (tired >= 100) and must rest")
+	ErrNeedJoinNotMet         = errors.New("character does not meet party join condition")
 	ErrStageNotFound          = errors.New("adventure stage not found")
 	ErrForbidden              = errors.New("forbidden: character does not belong to player")
 )
@@ -58,6 +62,7 @@ type Party struct {
 	MinLevel          int       `json:"min_level"`
 	MaxLevel          int       `json:"max_level"`
 	MinHP             int       `json:"min_hp"`
+	NeedJoin          string    `json:"need_join,omitempty"`
 	Status            string    `json:"status"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
@@ -95,6 +100,7 @@ type PartySummary struct {
 	MinLevel          int       `json:"min_level"`
 	MaxLevel          int       `json:"max_level"`
 	MinHP             int       `json:"min_hp"`
+	NeedJoin          string    `json:"need_join,omitempty"`
 	Status            string    `json:"status"`
 	CreatedAt         time.Time `json:"created_at"`
 }
@@ -108,6 +114,7 @@ type CreatePartyRequest struct {
 	MinLevel   int    `json:"min_level,omitempty"`
 	MaxLevel   int    `json:"max_level,omitempty"`
 	MinHP      int    `json:"min_hp,omitempty"`
+	NeedJoin   string `json:"need_join,omitempty"`
 }
 
 type MemberRewardSummary struct {
@@ -124,11 +131,13 @@ type PartyAdventureResult struct {
 	PartyID             string                   `json:"party_id"`
 	StageID             string                   `json:"stage_id"`
 	Outcome             string                   `json:"outcome"`
+	FloorsCleared       int                      `json:"floors_cleared"`
 	Turns               int                      `json:"turns"`
 	TotalEXP            int                      `json:"total_exp"`
 	TotalGold           int                      `json:"total_gold"`
 	SynergyBonusPercent int                      `json:"synergy_bonus_percent"`
 	Rewards             []MemberRewardSummary    `json:"rewards"`
+	TreasureBoxes       []adventure.TreasureBox  `json:"treasure_boxes,omitempty"`
 	BattleResult        battle.PartyBattleResult `json:"battle_result"`
 }
 
@@ -151,6 +160,43 @@ func ValidatePartyName(name string) error {
 	runes := utf8.RuneCountInString(trimmed)
 	if runes < MinPartyNameLen || runes > MaxPartyNameLen {
 		return ErrInvalidPartyName
+	}
+	return nil
+}
+
+// ValidateNeedJoin validates participation condition constraints (quest.cgi).
+// Formats: "joblv_{val}_{u|o}", "hp_{val}_{u|o}".
+func ValidateNeedJoin(needJoin string, char corecharacter.Character) error {
+	needJoin = strings.TrimSpace(needJoin)
+	if needJoin == "" || needJoin == "0" {
+		return nil
+	}
+	parts := strings.Split(needJoin, "_")
+	if len(parts) != 3 {
+		return nil
+	}
+	key := parts[0]
+	val, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return nil
+	}
+	uo := parts[2] // "u" (< val) or "o" (>= val)
+
+	switch key {
+	case "hp":
+		if uo == "u" && char.Stats.MaxHP >= val {
+			return fmt.Errorf("%w: HP must be under %d", ErrNeedJoinNotMet, val)
+		}
+		if uo == "o" && char.Stats.MaxHP < val {
+			return fmt.Errorf("%w: HP must be at least %d", ErrNeedJoinNotMet, val)
+		}
+	case "joblv":
+		if uo == "u" && char.JobLevel >= val {
+			return fmt.Errorf("%w: Job level must be under %d", ErrNeedJoinNotMet, val)
+		}
+		if uo == "o" && char.JobLevel < val {
+			return fmt.Errorf("%w: Job level must be at least %d", ErrNeedJoinNotMet, val)
+		}
 	}
 	return nil
 }
@@ -196,6 +242,7 @@ type InventoryRepository interface {
 // StageProvider resolves stage definitions.
 type StageProvider interface {
 	FindByID(id string) (adventure.Stage, error)
+	CanAccessStage(c corecharacter.Character, stageID string) error
 }
 
 // MonsterProvider resolves monster definitions.

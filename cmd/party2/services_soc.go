@@ -7,7 +7,6 @@ import (
 
 	valkeygo "github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/activity"
-	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/core/timer"
@@ -151,13 +150,10 @@ func newSocServices(
 	}, nil
 }
 
-func (s *socServices) registerWorkerHandlers(activityService *activity.Service, advService *adventure.Service, chapelService *chapel.Service) {
+func (s *socServices) registerWorkerHandlers(activityService *activity.Service, chapelService *chapel.Service) {
 	if s.worker != nil {
 		if activityService != nil {
 			s.worker.RegisterHandler(activity.ActivityActionTypeTrainingComplete, activity.NewTrainingHandler(activityService))
-		}
-		if advService != nil {
-			s.worker.RegisterHandler(adventure.AdventureActionTypeComplete, adventure.NewAdventureCompletionHandler(advService))
 		}
 		s.worker.RegisterHandler(ranking.RankingActionTypeRefresh, ranking.NewRefreshHandler(s.ranking))
 		if chapelService != nil {

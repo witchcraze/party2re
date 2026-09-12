@@ -74,7 +74,6 @@ type CharacterService interface {
 // AdventureService defines the adventure operations exposed over HTTP.
 type AdventureService interface {
 	StartStage(ctx context.Context, characterID string, stageID string) (adventure.Adventure, error)
-	Claim(ctx context.Context, id string) (adventure.Adventure, error)
 	Get(ctx context.Context, id string) (adventure.Adventure, error)
 	ListHistory(ctx context.Context, characterID string, limit, offset int) (adventure.PaginatedAdventures, error)
 	ListHistoryByCursor(ctx context.Context, characterID string, limit int, cursor string) (pagination.CursorPage[adventure.AdventureHistoryEntry], error)
@@ -323,7 +322,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /naming-hall/dialogue", h.handleNamingHallDialogue)
 
 	mux.HandleFunc("POST /adventures", h.handleStartAdventure)
-	mux.HandleFunc("POST /adventures/{id}/claim", h.handleClaimAdventure)
 	mux.HandleFunc("GET /characters/{id}/adventures", h.handleListCharacterAdventures)
 	mux.HandleFunc("GET /characters/{id}/adventure-chronicle", h.handleGetAdventureChronicle)
 
@@ -868,9 +866,10 @@ type adventureResponse struct {
 	CharacterID      string    `json:"character_id"`
 	StageID          string    `json:"stage_id"`
 	StartedAt        time.Time `json:"started_at"`
-	AvailableAt      time.Time `json:"available_at"`
+	FloorsCleared    int       `json:"floors_cleared"`
+	IsCleared        bool      `json:"is_cleared"`
+	PartySize        int       `json:"party_size"`
 	Resolved         bool      `json:"resolved"`
-	Claimed          bool      `json:"claimed"`
 	ExperienceReward int       `json:"experience_reward"`
 }
 
@@ -883,7 +882,7 @@ func (h *Handler) handleStartAdventure(w http.ResponseWriter, r *http.Request) {
 		}
 		adv, err := h.adventures.StartStage(r.Context(), char.ID, req.StageID)
 		if err != nil {
-			if errors.Is(err, adventure.ErrLevelRequirementNotMet) {
+			if errors.Is(err, adventure.ErrLevelRequirementNotMet) || errors.Is(err, adventure.ErrJobLevelRequirementNotMet) {
 				writeError(w, http.StatusForbidden, err)
 				return
 			}
@@ -894,53 +893,16 @@ func (h *Handler) handleStartAdventure(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) handleClaimAdventure(w http.ResponseWriter, r *http.Request) {
-	player, ok := h.authenticatePlayer(w, r)
-	if !ok {
-		return
-	}
-
-	id := r.PathValue("id")
-	advInfo, err := h.adventures.Get(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, adventure.ErrNotFound) {
-			writeError(w, http.StatusNotFound, err)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	if _, ok := h.authorizeCharacter(w, r, player.ID, advInfo.CharacterID); !ok {
-		return
-	}
-
-	adv, err := h.adventures.Claim(r.Context(), id)
-	if err != nil {
-		switch {
-		case errors.Is(err, adventure.ErrNotFound):
-			writeError(w, http.StatusNotFound, err)
-		case errors.Is(err, adventure.ErrNotReady):
-			writeError(w, http.StatusConflict, err)
-		case errors.Is(err, adventure.ErrAlreadyClaimed):
-			writeError(w, http.StatusConflict, err)
-		default:
-			writeError(w, http.StatusInternalServerError, err)
-		}
-		return
-	}
-	writeJSON(w, http.StatusOK, toAdventureResponse(adv))
-}
-
 func toAdventureResponse(adv adventure.Adventure) adventureResponse {
 	return adventureResponse{
 		ID:               adv.ID,
 		CharacterID:      adv.CharacterID,
 		StageID:          adv.StageID,
 		StartedAt:        adv.StartedAt,
-		AvailableAt:      adv.AvailableAt,
+		FloorsCleared:    adv.FloorsCleared,
+		IsCleared:        adv.IsCleared,
+		PartySize:        adv.PartySize,
 		Resolved:         adv.Resolved,
-		Claimed:          adv.Claimed,
 		ExperienceReward: adv.ExperienceReward,
 	}
 }

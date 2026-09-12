@@ -3,6 +3,7 @@ package party
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -228,6 +229,17 @@ func (p *mockStageProvider) FindByID(id string) (adventure.Stage, error) {
 		return adventure.Stage{}, adventure.ErrStageNotFound
 	}
 	return s, nil
+}
+
+func (p *mockStageProvider) CanAccessStage(c corecharacter.Character, stageID string) error {
+	s, ok := p.stages[stageID]
+	if !ok {
+		return adventure.ErrStageNotFound
+	}
+	if s.MinLevel > 0 && c.Level < s.MinLevel {
+		return adventure.ErrLevelRequirementNotMet
+	}
+	return nil
 }
 
 type mockMonsterProvider struct {
@@ -950,4 +962,168 @@ func (m mockPartyBattleEngine) ResolvePartyBattle(req battle.PartyBattleRequest)
 		Outcome: m.outcome,
 		Turns:   1,
 	}, nil
+}
+
+func TestPartyService_NeedJoinCondition(t *testing.T) {
+	svc, _, charRepo, _ := setupTestService(t)
+
+	leaderUnder := corecharacter.Character{
+		ID:       "leader-under",
+		Name:     "LeaderUnder",
+		Level:    5,
+		JobLevel: 1,
+		Stats:    corecharacter.Stats{HP: 50, MaxHP: 50},
+	}
+	leaderOver := corecharacter.Character{
+		ID:       "leader-over",
+		Name:     "LeaderOver",
+		Level:    5,
+		JobLevel: 5,
+		Stats:    corecharacter.Stats{HP: 50, MaxHP: 50},
+	}
+	memberUnder := corecharacter.Character{
+		ID:       "member-under",
+		Name:     "MemberUnder",
+		Level:    5,
+		JobLevel: 1,
+		Stats:    corecharacter.Stats{HP: 50, MaxHP: 50},
+	}
+	memberOver := corecharacter.Character{
+		ID:       "member-over",
+		Name:     "MemberOver",
+		Level:    5,
+		JobLevel: 5,
+		Stats:    corecharacter.Stats{HP: 50, MaxHP: 50},
+	}
+	charRepo.chars[leaderUnder.ID] = leaderUnder
+	charRepo.chars[leaderOver.ID] = leaderOver
+	charRepo.chars[memberUnder.ID] = memberUnder
+	charRepo.chars[memberOver.ID] = memberOver
+
+	ctx := context.Background()
+
+	// Leader with JobLevel 1 tries to create party requiring JobLevel >= 3 -> fails
+	_, err := svc.CreateParty(ctx, leaderUnder.ID, CreatePartyRequest{
+		Name:     "HighLevelOnly",
+		StageID:  "forest",
+		NeedJoin: "joblv_3_o",
+	})
+	if !errors.Is(err, ErrNeedJoinNotMet) {
+		t.Fatalf("expected ErrNeedJoinNotMet when leader doesn't meet requirement, got %v", err)
+	}
+
+	// Leader with JobLevel 5 creates party requiring JobLevel >= 3 -> succeeds
+	detail, err := svc.CreateParty(ctx, leaderOver.ID, CreatePartyRequest{
+		Name:     "HighLevelOnly",
+		StageID:  "forest",
+		NeedJoin: "joblv_3_o",
+	})
+	if err != nil {
+		t.Fatalf("CreateParty failed: %v", err)
+	}
+	if detail.Party.NeedJoin != "joblv_3_o" {
+		t.Errorf("NeedJoin = %s, want joblv_3_o", detail.Party.NeedJoin)
+	}
+
+	// Member with JobLevel 1 tries to join -> fails
+	_, err = svc.JoinParty(ctx, detail.Party.ID, memberUnder.ID, "")
+	if !errors.Is(err, ErrNeedJoinNotMet) {
+		t.Fatalf("expected ErrNeedJoinNotMet on join, got %v", err)
+	}
+
+	// Member with JobLevel 5 joins -> succeeds
+	_, err = svc.JoinParty(ctx, detail.Party.ID, memberOver.ID, "")
+	if err != nil {
+		t.Fatalf("JoinParty failed for qualified member: %v", err)
+	}
+}
+
+func TestPartyService_ExhaustedCharacter(t *testing.T) {
+	svc, _, charRepo, _ := setupTestService(t)
+
+	exhaustedChar := corecharacter.Character{
+		ID:    "tired-char",
+		Name:  "Sleepy",
+		Level: 5,
+		Tired: 100,
+		Stats: corecharacter.Stats{HP: 50, MaxHP: 50},
+	}
+	normalChar := corecharacter.Character{
+		ID:    "normal-char",
+		Name:  "Fresh",
+		Level: 5,
+		Tired: 0,
+		Stats: corecharacter.Stats{HP: 50, MaxHP: 50},
+	}
+	charRepo.chars[exhaustedChar.ID] = exhaustedChar
+	charRepo.chars[normalChar.ID] = normalChar
+
+	ctx := context.Background()
+
+	// Tired character cannot create party
+	_, err := svc.CreateParty(ctx, exhaustedChar.ID, CreatePartyRequest{
+		Name:    "TiredParty",
+		StageID: "forest",
+	})
+	if !errors.Is(err, ErrCharacterExhausted) {
+		t.Fatalf("expected ErrCharacterExhausted on CreateParty, got %v", err)
+	}
+
+	// Normal character creates party
+	detail, err := svc.CreateParty(ctx, normalChar.ID, CreatePartyRequest{
+		Name:    "FreshParty",
+		StageID: "forest",
+	})
+	if err != nil {
+		t.Fatalf("CreateParty failed: %v", err)
+	}
+
+	// Tired character cannot join party
+	_, err = svc.JoinParty(ctx, detail.Party.ID, exhaustedChar.ID, "")
+	if !errors.Is(err, ErrCharacterExhausted) {
+		t.Fatalf("expected ErrCharacterExhausted on JoinParty, got %v", err)
+	}
+}
+
+func TestPartyService_SpeedSettings(t *testing.T) {
+	svc, _, charRepo, _ := setupTestService(t)
+
+	c := corecharacter.Character{
+		ID:    "speed-tester",
+		Name:  "Speedy",
+		Level: 5,
+		Stats: corecharacter.Stats{HP: 50, MaxHP: 50},
+	}
+	charRepo.chars[c.ID] = c
+
+	ctx := context.Background()
+
+	// Speed 3, 18, 25 allowed
+	for _, speed := range []int{3, 18, 25} {
+		det, err := svc.CreateParty(ctx, c.ID, CreatePartyRequest{
+			Name:    fmt.Sprintf("Party-%d", speed),
+			StageID: "forest",
+			Speed:   speed,
+		})
+		if err != nil {
+			t.Fatalf("CreateParty speed %d failed: %v", speed, err)
+		}
+		if det.Party.Speed != speed {
+			t.Errorf("Speed = %d, want %d", det.Party.Speed, speed)
+		}
+		_ = svc.DisbandParty(ctx, det.Party.ID, c.ID)
+	}
+
+	// Default fallback to 18
+	det, err := svc.CreateParty(ctx, c.ID, CreatePartyRequest{
+		Name:    "Party-InvalidSpeed",
+		StageID: "forest",
+		Speed:   99,
+	})
+	if err != nil {
+		t.Fatalf("CreateParty invalid speed failed: %v", err)
+	}
+	if det.Party.Speed != 18 {
+		t.Errorf("Speed = %d, want 18 (default)", det.Party.Speed)
+	}
 }

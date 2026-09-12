@@ -143,7 +143,6 @@ func (s *stubCharacterService) Delete(ctx context.Context, playerID, characterID
 
 type stubAdventureService struct {
 	startStageFn          func(ctx context.Context, characterID, stageID string) (adventure.Adventure, error)
-	claimFn               func(ctx context.Context, id string) (adventure.Adventure, error)
 	getFn                 func(ctx context.Context, id string) (adventure.Adventure, error)
 	listHistoryFn         func(ctx context.Context, characterID string, limit, offset int) (adventure.PaginatedAdventures, error)
 	listHistoryByCursorFn func(ctx context.Context, characterID string, limit int, cursor string) (pagination.CursorPage[adventure.AdventureHistoryEntry], error)
@@ -153,13 +152,6 @@ type stubAdventureService struct {
 func (s *stubAdventureService) StartStage(ctx context.Context, characterID, stageID string) (adventure.Adventure, error) {
 	if s.startStageFn != nil {
 		return s.startStageFn(ctx, characterID, stageID)
-	}
-	return adventure.Adventure{}, nil
-}
-
-func (s *stubAdventureService) Claim(ctx context.Context, id string) (adventure.Adventure, error) {
-	if s.claimFn != nil {
-		return s.claimFn(ctx, id)
 	}
 	return adventure.Adventure{}, nil
 }
@@ -634,11 +626,14 @@ func TestHandleStartAdventure_Success(t *testing.T) {
 	char := corecharacter.Character{ID: "c1", PlayerID: "p1"}
 	now := time.Now().UTC()
 	adv := adventure.Adventure{
-		ID:          "adv1",
-		CharacterID: "c1",
-		StageID:     "stage-01",
-		StartedAt:   now,
-		AvailableAt: now.Add(time.Hour),
+		ID:            "adv1",
+		CharacterID:   "c1",
+		StageID:       "stage-01",
+		StartedAt:     now,
+		FloorsCleared: 10,
+		IsCleared:     true,
+		PartySize:     1,
+		Resolved:      true,
 	}
 	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
 	cs := &stubCharacterService{
@@ -663,6 +658,9 @@ func TestHandleStartAdventure_Success(t *testing.T) {
 	decodeResponseBody(t, rec.Body.Bytes(), &resp)
 	if resp["id"] != "adv1" {
 		t.Errorf("id = %v, want adv1", resp["id"])
+	}
+	if resp["floors_cleared"] != float64(10) {
+		t.Errorf("floors_cleared = %v, want 10", resp["floors_cleared"])
 	}
 }
 
@@ -709,116 +707,6 @@ func TestHandleStartAdventure_LevelRequirementNotMet(t *testing.T) {
 	h.Router().ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
-	}
-}
-
-func TestHandleClaimAdventure_Success(t *testing.T) {
-	player := coreplayer.Player{ID: "p1"}
-	char := corecharacter.Character{ID: "c1", PlayerID: "p1"}
-	adv := adventure.Adventure{ID: "adv1", CharacterID: "c1", Claimed: true, ExperienceReward: 20}
-	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
-	cs := &stubCharacterService{
-		getFn: func(_ context.Context, id string) (corecharacter.Character, error) {
-			if id == "c1" {
-				return char, nil
-			}
-			return corecharacter.Character{}, corecharacter.ErrNotFound
-		},
-	}
-	as := &stubAdventureService{
-		getFn:   func(_ context.Context, id string) (adventure.Adventure, error) { return adv, nil },
-		claimFn: func(_ context.Context, id string) (adventure.Adventure, error) { return adv, nil },
-	}
-	h := newTestHandler(t, ps, cs, as, &stubShopService{})
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/adventures/adv1/claim", nil)
-	req.Header.Set("Authorization", bearerToken("sess1"))
-	h.Router().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	var resp map[string]any
-	decodeResponseBody(t, rec.Body.Bytes(), &resp)
-	if resp["experience_reward"] != float64(20) {
-		t.Errorf("experience_reward = %v, want 20", resp["experience_reward"])
-	}
-}
-
-func TestHandleClaimAdventure_Forbidden_DifferentPlayer(t *testing.T) {
-	player := coreplayer.Player{ID: "p1"}
-	char := corecharacter.Character{ID: "c_other", PlayerID: "other_player"}
-	adv := adventure.Adventure{ID: "adv1", CharacterID: "c_other", Claimed: false}
-	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
-	cs := &stubCharacterService{
-		getFn: func(_ context.Context, id string) (corecharacter.Character, error) {
-			if id == "c_other" {
-				return char, nil
-			}
-			return corecharacter.Character{}, corecharacter.ErrNotFound
-		},
-	}
-	as := &stubAdventureService{
-		getFn:   func(_ context.Context, id string) (adventure.Adventure, error) { return adv, nil },
-		claimFn: func(_ context.Context, id string) (adventure.Adventure, error) { return adv, nil },
-	}
-	h := newTestHandler(t, ps, cs, as, &stubShopService{})
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/adventures/adv1/claim", nil)
-	req.Header.Set("Authorization", bearerToken("sess1"))
-	h.Router().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
-	}
-}
-
-func TestHandleClaimAdventure_NotReady(t *testing.T) {
-	player := coreplayer.Player{ID: "p1"}
-	char := corecharacter.Character{ID: "c1", PlayerID: "p1"}
-	adv := adventure.Adventure{ID: "adv1", CharacterID: "c1"}
-	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
-	cs := &stubCharacterService{
-		getFn: func(_ context.Context, id string) (corecharacter.Character, error) {
-			if id == "c1" {
-				return char, nil
-			}
-			return corecharacter.Character{}, corecharacter.ErrNotFound
-		},
-	}
-	as := &stubAdventureService{
-		getFn: func(_ context.Context, id string) (adventure.Adventure, error) { return adv, nil },
-		claimFn: func(_ context.Context, id string) (adventure.Adventure, error) {
-			return adventure.Adventure{}, adventure.ErrNotReady
-		},
-	}
-	h := newTestHandler(t, ps, cs, as, &stubShopService{})
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/adventures/adv1/claim", nil)
-	req.Header.Set("Authorization", bearerToken("sess1"))
-	h.Router().ServeHTTP(rec, req)
-	if rec.Code != http.StatusConflict {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusConflict)
-	}
-}
-
-func TestHandleClaimAdventure_NotFound(t *testing.T) {
-	player := coreplayer.Player{ID: "p1"}
-	ps := &stubPlayerService{authenticateFn: alwaysAuthPlayer(player)}
-	as := &stubAdventureService{
-		getFn: func(_ context.Context, id string) (adventure.Adventure, error) {
-			return adventure.Adventure{}, adventure.ErrNotFound
-		},
-	}
-	h := newTestHandler(t, ps, &stubCharacterService{}, as, &stubShopService{})
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/adventures/missing/claim", nil)
-	req.Header.Set("Authorization", bearerToken("sess1"))
-	h.Router().ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
 	}
 }
 

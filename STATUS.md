@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #496 — [Feature] Battle Adapter: Standardize Character/Party to Battle Participant Mapping & Post-Battle State Application
+Last updated: Issue #478 — [Refactor] Adventure System: Eliminate 1-hour expedition timer and reproduce 10-Floor Party Dungeon Crawl with Treasure Rooms
 
 ## Current phase
 
@@ -38,7 +38,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### Feature Modules
 - **Activity** (`internal/activity`): ✅ Training via Valkey Worker push + manual Claim fallback.
-- **Adventure** (`internal/adventure`): ✅ 28 stages, 286 monsters, Valkey Worker, chronicles, VictoryHook.
+- **Adventure** (`internal/adventure`): ✅ Authentic 10-floor dungeon crawl loop (`vs_monster.cgi`) across 28 stages (286 monsters), Floor 11 Treasure Room resolution (`_npc_action.cgi` `add_treasure`), immediate crawl execution (1-hour timer purged), chronicles, VictoryHook (#478).
 - **Medal & Achievements** (`internal/medal`): ✅ Small Medal exchange → Depot; milestone achievement observer.
 - **Shop** (`internal/shop`): ✅ 3 shops with job-level gates, 50% sellback, MasterCard discount, Depot auto-delivery.
 - **Depot** (`internal/depot`): ✅ Dynamic capacity (up to 500 slots), tiered expansion, sort, item sell, gold/item direct-send, standardized item consumption (`Consume`, `ConsumeOne`, `PurgeSlot`), enhancement-level & equipment stackability preservation (#558, #563), standardized `RefreshCapacity` helper across commerce modules (#559).
@@ -75,7 +75,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **God Wishes & Limit Breaks** (`internal/god`): ✅ 19 heaven wishes, OverLevel (Lv150), underworld limit-breaks (5 stages each).
 - **Monster Grandpa & Pets** (`internal/monster`): ✅ 50–300 stable capacity, 8 home pets, P2P transfer, naming; Ranch parity pending (#488).
 - **Photo Contest** (`internal/contest`): ✅ 10-day cycle, voting, prize distribution, Hall of Fame; ISP-split to 5 sub-interfaces.
-- **Party & Co-op Quests** (`internal/party`): ✅ Up to 4 players, Valkey lobby (15min TTL), synergy bonus, HP-1 survival guarantee.
+- **Party & Co-op Quests** (`internal/party`): ✅ Up to 4 players, Valkey lobby (30min idle TTL), speed configs (3/18/25), `need_join` condition checks (`hp`/`joblv`), stage job level access gates, 10-floor dungeon crawl + Floor 11 treasure room, synergy bonus, HP-1 survival guarantee (#478).
 - **Altar of Rebirth** (`internal/altar`): ✅ 6-orb offering, Ramia awakening (30min record), 4 otherworld-item wishes, Depot fallback.
 - **Wishing Well** (`internal/wishingwell`): ✅ SP → permanent stat growth (MHP/MMP +2/SP, ATK/DEF/AGI +1/SP).
 - **Player Store & Town Boutiques** (`internal/store`): ✅ Shop construction (50,000G/90d), gold/item listings, 26 wallpapers, 15 furniture types.

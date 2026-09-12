@@ -12,17 +12,19 @@ The Party system (`冒険中のパーティー`, `quest.cgi`, `party.cgi`) is on
 - **Party Leader**: The creator of the party is designated as leader.
 - **Name / Title**: 1 to 50 runes, descriptive of the expedition.
 - **Capacity**: 1 to 4 characters (`max_members`).
-- **Speed**: Configurable animation/log pacing:
+- **Speed**: Configurable animation/log pacing (`quest.cgi`):
   - `3`: さくさく (Fast)
-  - `18`: まったり (Relaxed)
+  - `18`: まったり (Relaxed) [Default]
   - `25`: じっくり (Deliberate)
-- **Join Requirements (Conditions)**:
+- **Join Requirements (Conditions)** (`need_join` / `quest.cgi`):
   - Level bounds (`min_level`, `max_level`)
   - HP threshold (`min_hp`)
-  - Optional secret passphrase (`合言葉` / `password_hash`)
+  - Condition string: `{key}_{val}_{u|o}` where `key` is `hp` (MaxHP) or `joblv` (JobLevel), `u` is under (`< val`), `o` is over (`>= val`). Validated on both creation (leader) and join (member).
+  - Stage Access Gate: Character job level must satisfy the stage's required job level (`$job_lv[$stage]`).
+  - Optional secret passphrase (`合言葉` / `password_hash`).
 - **Single Active Party Constraint**: A character may participate in only one active/recruiting party at a time. This invariant is enforced atomically in Valkey Master via reverse lookup key `party2:party:character:<character_id>`.
 - **Lobby Expiration & Readiness TTL**:
-  - Waiting lobbies have a natural TTL of 15 minutes (`900s`), refreshed on member activity, preventing zombie lobbies if a leader disconnects.
+  - Waiting lobbies have a natural TTL of 30 minutes (`1800s`), refreshed on member activity, preventing zombie lobbies if a leader disconnects (`quest.cgi` 30-minute idle auto-disband).
   - Member readiness state has a 60-second countdown TTL (`60s`), after which unconfirmed readiness automatically expires to prevent stall locks.
 
 ### 2. Party Lifecycle & States

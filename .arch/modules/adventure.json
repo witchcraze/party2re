@@ -2,7 +2,7 @@
   "$schema": "https://archify.dev/schema/module.v1.json",
   "module": "adventure",
   "tier": 1,
-  "description": "Stage exploration, battle resolution, asynchronous Valkey scheduling, and victory rewards.",
+  "description": "Stage exploration, 10-floor party dungeon crawl, battle resolution, and rewards.",
   "package": "internal/adventure",
   "implementation_package": "internal/adventure",
   "dependencies": [
@@ -23,19 +23,13 @@
       "target_module": "core/inventory",
       "relation_type": "consumer_interface",
       "source_ref": "internal/adventure/adventure.go#InventoryRepository"
-    },
-    {
-      "name": "scheduler",
-      "target_module": "core/scheduling",
-      "relation_type": "consumer_interface",
-      "source_ref": "internal/adventure/adventure.go#Scheduler"
     }
   ],
   "transaction_boundaries": [
     {
       "method": "StartStage",
       "source_ref": "internal/adventure/adventure.go#Service.StartStage",
-      "transaction_type": "Direct/Async",
+      "transaction_type": "Direct",
       "lock_sequence": [
         {
           "table": "characters",
@@ -50,35 +44,10 @@
           "note": "Persist new adventure session"
         },
         {
-          "table": "valkey_scheduled_jobs",
-          "tier": 9,
-          "mode": "ZADD (Schedule)",
-          "note": "Enqueue async delayed completion callback"
-        }
-      ]
-    },
-    {
-      "method": "Claim",
-      "source_ref": "internal/adventure/adventure.go#Service.Claim",
-      "transaction_type": "ClaimAndApply",
-      "lock_sequence": [
-        {
-          "table": "adventures",
-          "tier": 8,
-          "mode": "SELECT ... FOR UPDATE",
-          "note": "Lock and claim adventure session"
-        },
-        {
           "table": "characters",
           "tier": 2,
           "mode": "UPDATE",
           "note": "Apply experience level-up and credit gold reward"
-        },
-        {
-          "table": "inventory_items",
-          "tier": 3,
-          "mode": "INSERT",
-          "note": "Add monster drop item to inventory"
         }
       ]
     }

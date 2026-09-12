@@ -145,7 +145,7 @@ func wireHooks(
 		soc.home.SetAlchemyCompleter(econ.alchemy)
 	}
 
-	soc.registerWorkerHandlers(misc.activity, cmbt.adv, misc.chapel)
+	soc.registerWorkerHandlers(misc.activity, misc.chapel)
 
 	if soc.sched != nil && misc.chapel != nil {
 		wireChapelDailyReset(soc.sched)

@@ -18,19 +18,14 @@ import (
 const (
 	// DefaultLobbyKeyPrefix is the Valkey key prefix for transient party lobby state.
 	DefaultLobbyKeyPrefix = "party2:party:lobby:"
-
 	// DefaultReadyKeyPrefix is the Valkey key prefix for 60-second ready check countdowns.
 	DefaultReadyKeyPrefix = "party2:party:ready:"
-
 	// DefaultCharacterKeyPrefix is the Valkey key prefix for O(1) character-to-party mapping.
 	DefaultCharacterKeyPrefix = "party2:party:character:"
-
 	// DefaultLobbiesIndexKey is the Valkey Sorted Set key tracking active recruiting lobbies.
 	DefaultLobbiesIndexKey = "party2:party:lobbies"
-
-	// DefaultLobbyTTL is the automatic expiration time for abandoned or idle party lobbies.
-	DefaultLobbyTTL = 15 * time.Minute
-
+	// DefaultLobbyTTL is the automatic expiration time for abandoned or idle party lobbies (30-minute auto-disband per quest.cgi).
+	DefaultLobbyTTL = 30 * time.Minute
 	// DefaultReadyTTL is the 60-second ready check countdown expiration duration.
 	DefaultReadyTTL = 60 * time.Second
 )
@@ -362,6 +357,7 @@ func (r *ValkeyRepository) ListParties(ctx context.Context, status string, limit
 				MinLevel:          p.MinLevel,
 				MaxLevel:          p.MaxLevel,
 				MinHP:             p.MinHP,
+				NeedJoin:          p.NeedJoin,
 				Status:            p.Status,
 				CreatedAt:         p.CreatedAt,
 			})
@@ -430,6 +426,7 @@ func (r *ValkeyRepository) ListParties(ctx context.Context, status string, limit
 			MinLevel:          state.Party.MinLevel,
 			MaxLevel:          state.Party.MaxLevel,
 			MinHP:             state.Party.MinHP,
+			NeedJoin:          state.Party.NeedJoin,
 			Status:            state.Party.Status,
 			CreatedAt:         state.Party.CreatedAt,
 		})

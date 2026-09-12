@@ -104,8 +104,8 @@ func TestNormalizePagination(t *testing.T) {
 func TestListHistory(t *testing.T) {
 	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
 	stages, err := NewStageCatalog([]Stage{
-		{ID: "stage-01", Name: "平原", MinLevel: 1, MonsterIDs: []string{"mon-01"}, Duration: time.Minute},
-		{ID: "stage-02", Name: "森林", MinLevel: 2, MonsterIDs: []string{"mon-02"}, Duration: time.Minute},
+		{ID: "stage-01", Name: "平原", MinLevel: 1, MonsterIDs: []string{"mon-01"}},
+		{ID: "stage-02", Name: "森林", MinLevel: 2, MonsterIDs: []string{"mon-02"}},
 	})
 	if err != nil {
 		t.Fatalf("create stage catalog: %v", err)
@@ -131,7 +131,6 @@ func TestListHistory(t *testing.T) {
 			StageID:     "stage-01",
 			MonsterID:   "mon-01",
 			StartedAt:   now,
-			AvailableAt: now.Add(time.Minute),
 			BattleResult: corebattle.Result{
 				Outcome:  corebattle.OutcomeWin,
 				WinnerID: "char-1",
@@ -145,7 +144,6 @@ func TestListHistory(t *testing.T) {
 				},
 			},
 			Resolved: true,
-			Claimed:  true,
 		},
 		{
 			ID:          "adv-2",
@@ -154,7 +152,6 @@ func TestListHistory(t *testing.T) {
 			StageID:     "stage-02",
 			MonsterID:   "mon-02",
 			StartedAt:   now.Add(time.Hour),
-			AvailableAt: now.Add(time.Hour + time.Minute),
 			BattleResult: corebattle.Result{
 				Outcome:  corebattle.OutcomeWin,
 				WinnerID: "mon-02",
@@ -162,12 +159,11 @@ func TestListHistory(t *testing.T) {
 				Turns:    5,
 			},
 			Resolved: true,
-			Claimed:  true,
 		},
 	}
 
 	repo := &chronicleRepositoryStub{adventures: advs}
-	service, err := NewServiceWithCatalogs(repo, charStub, nil, stages, monsters, battleResolverStub{}, nil, nil, &testClock{now: now})
+	service, err := NewServiceWithCatalogs(repo, charStub, nil, stages, monsters, corebattle.Engine{}, nil, nil, &testClock{now: now})
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
@@ -221,8 +217,8 @@ func TestListHistory(t *testing.T) {
 func TestGetChronicle(t *testing.T) {
 	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
 	stages, err := NewStageCatalog([]Stage{
-		{ID: "stage-01", Name: "平原", MinLevel: 1, MonsterIDs: []string{"mon-01"}, Duration: time.Minute},
-		{ID: "stage-02", Name: "森林", MinLevel: 2, MonsterIDs: []string{"mon-02"}, Duration: time.Minute},
+		{ID: "stage-01", Name: "平原", MinLevel: 1, MonsterIDs: []string{"mon-01"}},
+		{ID: "stage-02", Name: "森林", MinLevel: 2, MonsterIDs: []string{"mon-02"}},
 	})
 	if err != nil {
 		t.Fatalf("create stage catalog: %v", err)
@@ -247,7 +243,7 @@ func TestGetChronicle(t *testing.T) {
 	}
 
 	repo := &chronicleRepositoryStub{aggregatedStats: stats}
-	service, err := NewServiceWithCatalogs(repo, charStub, nil, stages, nil, battleResolverStub{}, nil, nil, &testClock{now: now})
+	service, err := NewServiceWithCatalogs(repo, charStub, nil, stages, nil, corebattle.Engine{}, nil, nil, &testClock{now: now})
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}
@@ -322,7 +318,6 @@ func TestListHistoryByCursor(t *testing.T) {
 				Reward:   corebattle.Reward{Experience: 25, Currency: 15},
 			},
 			Resolved: true,
-			Claimed:  true,
 		},
 		{
 			ID:          "adv-2",
@@ -336,7 +331,6 @@ func TestListHistoryByCursor(t *testing.T) {
 				Turns:    4,
 			},
 			Resolved: true,
-			Claimed:  true,
 		},
 		{
 			ID:          "adv-1",
@@ -351,14 +345,13 @@ func TestListHistoryByCursor(t *testing.T) {
 				Reward:   corebattle.Reward{Experience: 20, Currency: 10},
 			},
 			Resolved: true,
-			Claimed:  true,
 		},
 	}
 
 	repo := &chronicleRepositoryStub{adventures: adventures}
 	charStub := &characterRepositoryStub{value: corecharacter.Character{ID: "char-1", Name: "Hero"}}
 	stages, _ := InitialStageCatalog()
-	service, err := NewServiceWithCatalogs(repo, charStub, nil, stages, nil, battleResolverStub{}, nil, nil, &testClock{now: now})
+	service, err := NewServiceWithCatalogs(repo, charStub, nil, stages, nil, corebattle.Engine{}, nil, nil, &testClock{now: now})
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}

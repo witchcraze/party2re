@@ -91,6 +91,10 @@ type Resolver interface {
 	Resolve(request Request) (Result, error)
 }
 
+type PartyBattleResolver interface {
+	ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, error)
+}
+
 type PartyBattleRequest struct {
 	Allies        []Participant
 	Enemies       []Participant

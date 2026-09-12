@@ -4,17 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/core/battle"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
-	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/pagination"
 )
@@ -185,6 +180,17 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 		if leaderChar.Stats.HP <= 0 {
 			return ErrCharacterUnconscious
 		}
+		if leaderChar.Tired >= 100 {
+			return ErrCharacterExhausted
+		}
+		if err := s.stages.CanAccessStage(leaderChar, stage.ID); err != nil {
+			return err
+		}
+		if req.NeedJoin != "" {
+			if err := ValidateNeedJoin(req.NeedJoin, leaderChar); err != nil {
+				return err
+			}
+		}
 
 		now := time.Now().UTC()
 		partyID := id.New()
@@ -201,6 +207,7 @@ func (s *Service) CreateParty(ctx context.Context, leaderCharID string, req Crea
 			MinLevel:          minLevel,
 			MaxLevel:          maxLevel,
 			MinHP:             minHP,
+			NeedJoin:          strings.TrimSpace(req.NeedJoin),
 			Status:            StatusRecruiting,
 			CreatedAt:         now,
 			UpdatedAt:         now,
@@ -319,6 +326,17 @@ func (s *Service) JoinParty(ctx context.Context, partyID, characterID, password 
 		}
 		if char.Stats.HP <= 0 {
 			return ErrCharacterUnconscious
+		}
+		if char.Tired >= 100 {
+			return ErrCharacterExhausted
+		}
+		if err := s.stages.CanAccessStage(char, p.StageID); err != nil {
+			return err
+		}
+		if p.NeedJoin != "" {
+			if err := ValidateNeedJoin(p.NeedJoin, char); err != nil {
+				return err
+			}
 		}
 		if char.Level < p.MinLevel || char.Level > p.MaxLevel {
 			return ErrLevelRequirementNotMet
@@ -455,252 +473,4 @@ func (s *Service) SetReady(ctx context.Context, partyID, characterID string, rea
 	}
 
 	return detail, nil
-}
-
-// StartPartyAdventure starts and resolves a multiplayer co-op adventure for the party.
-//
-// Concurrency & Persistence Boundary:
-//  1. Transition party status in Valkey Master (GetPartyForUpdate).
-//  2. Begin MariaDB transaction (runInTx) acquiring Rank 2 locks on all participating
-//     character rows in ascending ID order to prevent deadlock.
-//  3. Simulate co-op combat in memory and apply full-party synergy rewards.
-//  4. Atomically commit character updates and persist durable party_adventure_logs in MariaDB.
-//  5. Disband and clean up the ephemeral Valkey lobby state.
-func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID string) (PartyAdventureResult, error) {
-	var result PartyAdventureResult
-	var defeatedMonsterCount int
-
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		// 1. Lock party
-		p, err := s.repo.GetPartyForUpdate(txCtx, partyID)
-		if err != nil {
-			return err
-		}
-		if p.LeaderCharacterID != leaderCharID {
-			return ErrNotPartyLeader
-		}
-		if p.Status != StatusRecruiting {
-			return ErrPartyNotRecruiting
-		}
-
-		// 2. Fetch members
-		members, err := s.repo.GetMembers(txCtx, partyID)
-		if err != nil || len(members) == 0 {
-			return ErrPartyNotReady
-		}
-
-		// All members must be ready
-		for _, m := range members {
-			if !m.ReadyState {
-				return ErrPartyNotReady
-			}
-		}
-
-		// 3. Lock all character rows in ascending order to prevent deadlocks
-		charIDs := make([]string, len(members))
-		for i, m := range members {
-			charIDs[i] = m.CharacterID
-		}
-		sort.Strings(charIDs)
-
-		charMap := make(map[string]corecharacter.Character, len(charIDs))
-		for _, cID := range charIDs {
-			c, err := s.charRepo.FindByIDForUpdate(txCtx, cID)
-			if err != nil {
-				return err
-			}
-			if c.Stats.HP <= 0 {
-				return ErrCharacterUnconscious
-			}
-			charMap[c.ID] = c
-		}
-
-		// 4. Resolve stage and monsters
-		stage, err := s.stages.FindByID(p.StageID)
-		if err != nil {
-			return ErrStageNotFound
-		}
-
-		var enemies []battle.Participant
-		totalMonsterEXP := 0
-		totalMonsterGold := 0
-		var dropPool []string
-
-		for idx, mID := range stage.MonsterIDs {
-			m, err := s.monsters.FindByID(mID)
-			if err == nil {
-				enemies = append(enemies, battle.Participant{
-					ID:      fmt.Sprintf("%s-%d", m.ID, idx+1),
-					Name:    m.Name,
-					HP:      m.HP,
-					Attack:  m.Attack,
-					Defense: m.Defense,
-				})
-				totalMonsterEXP += m.ExperienceReward
-				totalMonsterGold += m.GoldReward
-				dropPool = append(dropPool, m.DropItemIDs...)
-			}
-		}
-		if len(enemies) == 0 {
-			// Fallback placeholder enemy
-			enemies = append(enemies, battle.Participant{
-				ID:      "stray-monster-1",
-				Name:    "野良モンスター",
-				HP:      30,
-				Attack:  10,
-				Defense: 5,
-			})
-			totalMonsterEXP = 50
-			totalMonsterGold = 30
-		}
-
-		// 5. Build allies
-		var allies []battle.Participant
-		for _, m := range members {
-			c := charMap[m.CharacterID]
-			allies = append(allies, battle.NewParticipantFromCharacter(c))
-		}
-
-		// 6. Execute Battle
-		battleReq := battle.PartyBattleRequest{
-			Allies:  allies,
-			Enemies: enemies,
-			VictoryReward: battle.Reward{
-				Experience: totalMonsterEXP,
-				Currency:   totalMonsterGold,
-			},
-			DefeatReward: battle.Reward{
-				Experience: totalMonsterEXP / 4,
-				Currency:   0,
-			},
-		}
-
-		battleRes, err := s.battleEngine.ResolvePartyBattle(battleReq)
-		if err != nil {
-			return err
-		}
-
-		// 7. Distribute Rewards and update each character
-		var rewardSummaries []MemberRewardSummary
-		outcome := string(battleRes.Outcome)
-		if battleRes.Outcome == battle.OutcomeWin {
-			defeatedMonsterCount = len(enemies)
-		}
-
-		for _, m := range members {
-			c := charMap[m.CharacterID]
-			levelBefore := c.Level
-			gainedEXP := battleRes.TotalReward.Experience
-			gainedGold := battleRes.TotalReward.Currency
-
-			_ = c.AddMoney(gainedGold)
-			if gainedEXP > 0 {
-				if _, err := progression.ApplyExperience(&c, gainedEXP); err != nil {
-					return err
-				}
-			}
-
-			// Apply HP changes from battle result
-			if remHP, ok := battleRes.RemainingHP[c.ID]; ok {
-				if remHP <= 0 {
-					c.Stats.HP = 1 // Fallen members survive with 1 HP
-				} else {
-					c.Stats.HP = remHP
-					if c.Stats.MaxHP > 0 && c.Stats.HP > c.Stats.MaxHP {
-						c.Stats.HP = c.Stats.MaxHP
-					}
-				}
-			} else {
-				isFallen := false
-				for _, fallenID := range battleRes.AlliesFallen {
-					if fallenID == c.ID {
-						isFallen = true
-						break
-					}
-				}
-				if isFallen {
-					c.Stats.HP = 1
-				}
-			}
-
-			if err := s.charRepo.Update(txCtx, c); err != nil {
-				return err
-			}
-
-			// Award item drops if victorious
-			var drops []coreitem.Instance
-			if battleRes.Outcome == battle.OutcomeWin && len(dropPool) > 0 && s.invRepo != nil {
-				itemDefID := dropPool[0]
-				inst, err := coreitem.NewInstance(itemDefID, 1)
-				if err == nil {
-					inv, err := s.invRepo.FindByCharacterIDForUpdate(txCtx, c.ID)
-					if err == nil {
-						_ = inv.Add(inst)
-						_ = s.invRepo.Save(txCtx, inv)
-						drops = append(drops, inst)
-					}
-				}
-			}
-
-			rewardSummaries = append(rewardSummaries, MemberRewardSummary{
-				CharacterID: c.ID,
-				Name:        c.Name,
-				GainedEXP:   gainedEXP,
-				GainedGold:  gainedGold,
-				LevelBefore: levelBefore,
-				LevelAfter:  c.Level,
-				Drops:       drops,
-			})
-		}
-
-		// 8. Save Adventure Log
-		detailsJSON, _ := json.Marshal(battleRes)
-		advLog := PartyAdventureLog{
-			ID:                  id.New(),
-			PartyID:             partyID,
-			StageID:             p.StageID,
-			Outcome:             outcome,
-			Turns:               battleRes.Turns,
-			TotalEXP:            battleRes.TotalReward.Experience,
-			TotalGold:           battleRes.TotalReward.Currency,
-			SynergyBonusPercent: battleRes.BonusPercent,
-			DetailsJSON:         string(detailsJSON),
-			CreatedAt:           time.Now().UTC(),
-		}
-		if err := s.repo.SaveAdventureLog(txCtx, advLog); err != nil {
-			return fmt.Errorf("save party adventure log: %w", err)
-		}
-
-		// 9. Reset party status & ready states for members
-		for _, m := range members {
-			_ = s.repo.UpdateMemberReady(txCtx, partyID, m.CharacterID, false)
-		}
-
-		result = PartyAdventureResult{
-			PartyID:             partyID,
-			StageID:             p.StageID,
-			Outcome:             outcome,
-			Turns:               battleRes.Turns,
-			TotalEXP:            battleRes.TotalReward.Experience,
-			TotalGold:           battleRes.TotalReward.Currency,
-			SynergyBonusPercent: battleRes.BonusPercent,
-			Rewards:             rewardSummaries,
-			BattleResult:        battleRes,
-		}
-
-		return nil
-	})
-	if err != nil {
-		return PartyAdventureResult{}, err
-	}
-
-	if result.Outcome == string(battle.OutcomeWin) && s.victoryHook != nil {
-		charIDs := make([]string, len(result.Rewards))
-		for i, r := range result.Rewards {
-			charIDs[i] = r.CharacterID
-		}
-		_ = s.victoryHook(ctx, charIDs, defeatedMonsterCount, result.TotalGold)
-	}
-
-	return result, nil
 }

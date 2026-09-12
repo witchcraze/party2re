@@ -139,10 +139,10 @@ func TestRankingRepository_Integration(t *testing.T) {
 
 	// 7. Adventure Wins
 	_, err = db.ExecContext(ctx, `
-		INSERT INTO adventures (id, character_id, adventure_type, started_at, available_at, experience_reward, outcome, resolved, claimed)
-		VALUES (?, ?, 'stage_1', ?, ?, 100, 'WIN', TRUE, TRUE),
-		       (?, ?, 'stage_2', ?, ?, 200, 'WIN', TRUE, TRUE)
-	`, prefix+"adv1", c1.ID, now, now, prefix+"adv2", c1.ID, now, now)
+		INSERT INTO adventures (id, character_id, adventure_type, started_at, floors_cleared, is_cleared, party_size, experience_reward, outcome, resolved)
+		VALUES (?, ?, 'stage_1', ?, 10, TRUE, 1, 100, 'WIN', TRUE),
+		       (?, ?, 'stage_2', ?, 10, TRUE, 1, 200, 'WIN', TRUE)
+	`, prefix+"adv1", c1.ID, now, prefix+"adv2", c1.ID, now)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -70,7 +70,9 @@ type AdventureHistoryEntry struct {
 	MonsterID          string             `json:"monster_id"`
 	MonsterName        string             `json:"monster_name"`
 	StartedAt          time.Time          `json:"started_at"`
-	AvailableAt        time.Time          `json:"available_at"`
+	FloorsCleared      int                `json:"floors_cleared"`
+	IsCleared          bool               `json:"is_cleared"`
+	PartySize          int                `json:"party_size"`
 	Outcome            corebattle.Outcome `json:"outcome"`
 	BattleTurns        int                `json:"battle_turns"`
 	RewardExperience   int                `json:"reward_experience"`
@@ -78,7 +80,6 @@ type AdventureHistoryEntry struct {
 	RewardItemID       string             `json:"reward_item_id,omitempty"`
 	RewardItemQuantity int                `json:"reward_item_quantity,omitempty"`
 	Resolved           bool               `json:"resolved"`
-	Claimed            bool               `json:"claimed"`
 }
 
 // PaginatedAdventures represents a paginated list of adventure history entries.
@@ -230,7 +231,9 @@ func (s *Service) buildHistoryEntry(adv Adventure) AdventureHistoryEntry {
 		MonsterID:          monsterID,
 		MonsterName:        monsterName,
 		StartedAt:          adv.StartedAt,
-		AvailableAt:        adv.AvailableAt,
+		FloorsCleared:      adv.FloorsCleared,
+		IsCleared:          adv.IsCleared,
+		PartySize:          adv.PartySize,
 		Outcome:            adv.BattleResult.Outcome,
 		BattleTurns:        adv.BattleResult.Turns,
 		RewardExperience:   adv.BattleResult.Reward.Experience,
@@ -238,7 +241,6 @@ func (s *Service) buildHistoryEntry(adv Adventure) AdventureHistoryEntry {
 		RewardItemID:       adv.BattleResult.Reward.ItemDefinitionID,
 		RewardItemQuantity: adv.BattleResult.Reward.ItemQuantity,
 		Resolved:           adv.Resolved,
-		Claimed:            adv.Claimed,
 	}
 }
 

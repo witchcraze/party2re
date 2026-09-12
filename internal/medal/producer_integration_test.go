@@ -637,13 +637,8 @@ func TestProducerHooks_MilestoneProgressAndClaim(t *testing.T) {
 	// 4. Trigger Gameplay Actions & Observe Achievement Progress Tracking
 
 	// (a) Adventure Victory
-	adv, err := advService.Start(ctx, hero.ID)
-	if err != nil {
+	if _, err := advService.Start(ctx, hero.ID); err != nil {
 		t.Fatalf("failed to start adventure: %v", err)
-	}
-	clock.now = clock.now.Add(2 * time.Hour)
-	if _, err := advService.Claim(ctx, adv.ID); err != nil {
-		t.Fatalf("failed to claim adventure: %v", err)
 	}
 
 	// (b) Boss Victory
@@ -776,6 +771,10 @@ func (p integrationPartyStageProvider) FindByID(id string) (adventure.Stage, err
 		MinLevel:   1,
 		MonsterIDs: []string{"slime-01", "goblin-01"},
 	}, nil
+}
+
+func (p integrationPartyStageProvider) CanAccessStage(_ corecharacter.Character, _ string) error {
+	return nil
 }
 
 type integrationPartyMonsterProvider struct{}

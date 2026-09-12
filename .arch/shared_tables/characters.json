@@ -89,16 +89,9 @@
     {
       "module": "adventure",
       "caller_method": "internal/adventure/adventure.go#Service.StartStage",
-      "lock_mode": "SELECT",
+      "lock_mode": "SELECT / UPDATE",
       "lock_order": 2,
-      "purpose": "Verify character level requirement against stage min level"
-    },
-    {
-      "module": "adventure",
-      "caller_method": "internal/adventure/adventure.go#Service.Claim",
-      "lock_mode": "UPDATE",
-      "lock_order": 2,
-      "purpose": "Apply experience level-up and credit gold reward"
+      "purpose": "Verify character level requirement against stage min level and apply rewards upon crawl completion"
     },
     {
       "module": "blackmarket",
