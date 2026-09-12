@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #561 — [Architecture] Transaction: Formalize multi-aggregate and P2P transaction runner primitives and align tx_runner linter
+Last updated: Issue #475 — [Refactor] Food Delivery: Eliminate fictional courier quests and reproduce Tavern Post-Adventure Food Delivery
 
 ## Current phase
 
@@ -67,9 +67,8 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Rankings** (`internal/ranking`): ✅ 12 categories; Valkey snapshot cache, singleflight stampede guard, periodic Worker.
 - **Event Plaza** (`internal/eventplaza`): ✅ Headcount-tiered merchant, 3× price catalog, boss-banquet toasts; real-time concurrency parity pending (#491).
 - **Secret Shop** (`internal/secretshop`): ✅ `job_lv >= 7` gate, 8 items at 3× price, Depot auto-delivery, puff-puff (dialogue only) (#462).
-- **Tavern** (`internal/tavern`): ✅ 14-item menu, HP/MP restore, fullness, raffle ticket bonus, delivery reservation; scheduled post-adventure buff parity pending (#475).
+- **Tavern & Food Delivery** (`internal/tavern`): ✅ 14-item menu, HP/MP restore, fullness, raffle ticket bonus, delivery reservation with automated post-adventure arrival hook (`adventure.PostAdventureHook`); fictional courier quests and parcel courier purged (#475).
 - **Black Market** (`internal/blackmarket`): ✅ Rare-point barter, Depot sacrifice/prize; fictional gold trading purged (#463).
-- **Delivery** (`internal/delivery`): ✅ NPC delivery quests (max 3), P2P parcels (50G fee), CAS status guard.
 - **Flea Market** (`internal/fleamarket`): ✅ Depot-linked listings (120-server max), SQL CAS + RowsAffected guard, Depot direct-receive.
 - **Gem Store** (`internal/gemstore`): ✅ Dedicated gem box (`job_lv`-scaled capacity), 55+ synthesis recipes, dual-source (inventory & depot) weighted orb appraisal (#560).
 - **God Wishes & Limit Breaks** (`internal/god`): ✅ 19 heaven wishes, OverLevel (Lv150), underworld limit-breaks (5 stages each).
@@ -98,7 +97,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 See [`ROADMAP.md`](ROADMAP.md) for full milestone details.
 
-1. **Parity Milestone 2 (Remaining) — Production & Delivery**: #475, #487, #488, #489
+1. **Parity Milestone 2 (Remaining) — Production & Delivery**: #487, #488, #489
 2. **Parity Milestone 3 — Adventure, Combat & Dungeons**: #478, #479, #481, #482, #483, #496
 3. **Client Presentation & Web UI**: Issue #140
 4. **Production Asset Pipeline & Final Licensing**: Issue #143, #202

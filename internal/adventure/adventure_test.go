@@ -620,6 +620,31 @@ func TestAdventure_VictoryHook(t *testing.T) {
 	}
 }
 
+func TestAdventure_PostAdventureHook(t *testing.T) {
+	service, clock, _, characters := newTestService(t)
+
+	var postAdvCharID string
+	service.SetPostAdventureHook(func(ctx context.Context, characterID string) error {
+		postAdvCharID = characterID
+		return nil
+	})
+
+	adv, err := service.Start(context.Background(), characters.value.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.now = adv.AvailableAt
+
+	_, err = service.Claim(context.Background(), adv.ID)
+	if err != nil {
+		t.Fatalf("Claim() error = %v", err)
+	}
+
+	if postAdvCharID != characters.value.ID {
+		t.Errorf("expected postAdvCharID %s, got %s", characters.value.ID, postAdvCharID)
+	}
+}
+
 func TestValidateCombatItem(t *testing.T) {
 	tests := []struct {
 		name    string

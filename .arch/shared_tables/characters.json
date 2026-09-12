@@ -8,7 +8,6 @@
     "internal/shop/shop.go#CharacterRepository",
     "internal/blacksmith/blacksmith.go#CharacterRepository",
     "internal/tavern/tavern.go#CharacterRepository",
-    "internal/delivery/delivery.go#CharacterRepository",
     "internal/adventure/adventure.go#CharacterRepository",
     "internal/blackmarket/blackmarket.go#CharacterRepository",
     "internal/fleamarket/fleamarket.go#CharacterRepository",
@@ -86,41 +85,6 @@
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
       "lock_order": 2,
       "purpose": "Lock character to restore HP/MP and update fullness"
-    },
-    {
-      "module": "delivery",
-      "caller_method": "internal/delivery/npc_quest.go#Service.AcceptQuest",
-      "lock_mode": "SELECT",
-      "lock_order": 2,
-      "purpose": "Verify character exists"
-    },
-    {
-      "module": "delivery",
-      "caller_method": "internal/delivery/npc_quest.go#Service.CompleteDelivery",
-      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
-      "lock_order": 2,
-      "purpose": "Credit gold reward and experience points"
-    },
-    {
-      "module": "delivery",
-      "caller_method": "internal/delivery/player_courier.go#Service.SendParcel",
-      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
-      "lock_order": 2,
-      "purpose": "Deduct 50G courier fee and optional attached gold"
-    },
-    {
-      "module": "delivery",
-      "caller_method": "internal/delivery/player_courier.go#Service.ClaimParcel",
-      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
-      "lock_order": 2,
-      "purpose": "Credit attached gold to recipient wallet (conditional on GoldAmount > 0)"
-    },
-    {
-      "module": "delivery",
-      "caller_method": "internal/delivery/player_courier.go#Service.CancelParcel",
-      "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
-      "lock_order": 2,
-      "purpose": "Refund attached gold to sender wallet (conditional on GoldAmount > 0)"
     },
     {
       "module": "adventure",

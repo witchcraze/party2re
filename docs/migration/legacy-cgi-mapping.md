@@ -63,7 +63,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** with complete file 
 ### CL-03: Economy, Shops & Trading (商業・流通・装備強化)
 - **Cluster Summary**: 武器・防具・道具・装飾品・宝石店・闇市・秘密の店、鍛冶屋、酒場、銀行、オークション、フリーマーケット、個人商店
 - **Shared Dependencies**: `party2/lib/_data.cgi` (アイテム・装備マスタ定数), `party2/config.cgi`, `party2/lib/depot.cgi`
-- **Primary Domain Packages**: `internal/shop/`, `internal/blacksmith/`, `internal/secretshop/`, `internal/blackmarket/`, `internal/gemstore/`, `internal/tavern/`, `internal/bank/`, `internal/auction/`, `internal/fleamarket/`, `internal/delivery/`, `internal/economy/`
+- **Primary Domain Packages**: `internal/shop/`, `internal/blacksmith/`, `internal/secretshop/`, `internal/blackmarket/`, `internal/gemstore/`, `internal/tavern/`, `internal/bank/`, `internal/auction/`, `internal/fleamarket/`, `internal/economy/`
 - **Key Testing / Linter Focus**: 売却価格50%、MasterCard10%割引、強化上限+10、Depot直結入出庫、並行購入デッドロック防止
 
 | Legacy Script | Authentic Role / Action | Go Domain Implementation | HTTP Handler & Migrations | Design Doc & OpenAPI | Status | Pitfalls / Parity Traps |
@@ -77,7 +77,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** with complete file 
 | `lib/black_market.cgi` | 闇市場 (@闇商人) | `internal/blackmarket/` | `internal/api/http/blackmarket.go`<br/>`migrations/042_blackmarket_sacrifice_and_trade.sql`<br/>`migrations/065_drop_blackmarket_fictional_tables.sql` | `docs/design/black-market.md`<br/>`docs/api/paths/blackmarket.json` | Completed (#463) | 純粋レアポイント物々交換、手持ち/Depot生贄、24種景品Depot直送、原典台詞 |
 | `lib/gem_store.cgi` | 宝石店 (@ルル) | `internal/gemstore/` | `internal/api/http/gemstore.go` | `docs/design/gemstore.md`<br/>`docs/api/paths/gemstore.json` | Reconciling (#464) | 宝石購入およびスキル枠への宝玉合成 |
 | `lib/store.cgi`, `party2/store.cgi` | プレイヤー個人店舗 | `internal/shop/` (bazaar) | `internal/api/http/shop.go` | `docs/design/shops.md` | Reconciling (#466) | 看板設定、記帳、出品枠上限 |
-| `lib/bar.cgi` | ルイーダの酒場 (@ルイーダ) | `internal/tavern/` | `internal/api/http/tavern.go`<br/>`migrations/039_tavern.sql` | `docs/design/tavern.md`<br/>`docs/api/paths/tavern.json` | Reconciling (#475) | 食事バフ付与（+2GP）、デリバリー配達 |
+| `lib/bar.cgi` | ルイーダの酒場 (@ルイーダ) | `internal/tavern/` | `internal/api/http/tavern.go`<br/>`migrations/039_tavern.sql`<br/>`migrations/069_drop_fictional_delivery_tables.sql` | `docs/design/tavern.md`<br/>`docs/design/delivery.md`<br/>`docs/api/paths/tavern.json` | Completed (#475) | 食事注文・福引券付与、出前予約・冒険完了時自動配達フック（架空NPCおつかい・小包便撤廃） |
 | `lib/bank.cgi` | ゴールド銀行 | `internal/bank/` | `internal/api/http/handler.go`<br/>`migrations/014_bank.sql` | `docs/design/bank.md` | Reconciling (#476) | 預金・引出・送金、999,999,999G上限、日次利息計算 |
 | `lib/auction.cgi` | オークション | `internal/auction/` | `internal/api/http/auction.go`<br/>`migrations/020_auctions.sql` | `docs/design/auction.md`<br/>`docs/api/paths/auction.json` | Reconciling (#474) | 出品・入札・落札、落札品はDepotへ直送 |
 | `lib/free.cgi` | フリーマーケット | `internal/fleamarket/` | `internal/api/http/fleamarket.go`<br/>`migrations/043_fleamarket.sql` | `docs/design/fleamarket.md`<br/>`docs/api/paths/fleamarket.json` | Reconciling (#477) | Depotから直接出品・購入品はDepotへ即時格納 |

@@ -18,10 +18,9 @@ import (
 // If any whitelisted interface grows larger than its baseline, the test fails.
 // When an interface is refactored to <= 10 direct methods, it MUST be removed from this list.
 var whitelistedLegacyInterfaceLimits = map[string]int{
-	"delivery.DeliveryRepository": 17,
-	"ranking.Repository":          15,
-	"party.Repository":            13, // 13 direct methods (14 including embedded AdventureLogRepository)
-	"guild.Repository":            11,
+	"ranking.Repository": 15,
+	"party.Repository":   13, // 13 direct methods (14 including embedded AdventureLogRepository)
+	"guild.Repository":   11,
 }
 
 const maxDirectInterfaceMethods = 10
