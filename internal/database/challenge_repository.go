@@ -23,18 +23,28 @@ func NewChallengeRepository(db *sql.DB) (*ChallengeRepository, error) {
 
 func (r *ChallengeRepository) SaveSession(ctx context.Context, s challenge.ChallengeSession) error {
 	itemsJSON := challenge.EncodeJSON(s.AccumulatedItems)
+	var partyID sql.NullString
+	if s.PartyID != "" {
+		partyID = sql.NullString{String: s.PartyID, Valid: true}
+	}
+	var membersJSON sql.NullString
+	if len(s.Members) > 0 {
+		membersJSON = sql.NullString{String: challenge.EncodeJSON(s.Members), Valid: true}
+	}
 	query := `
 		INSERT INTO challenge_sessions (
-			id, character_id, tier_id, current_round, character_current_hp,
+			id, character_id, party_id, members_json, tier_id, current_round, character_current_hp,
 			accumulated_exp, accumulated_gold, accumulated_items_json, status,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(
 		ctx,
 		query,
 		s.ID,
 		s.CharacterID,
+		partyID,
+		membersJSON,
 		s.TierID,
 		s.CurrentRound,
 		s.CharacterCurrentHP,
@@ -50,7 +60,7 @@ func (r *ChallengeRepository) SaveSession(ctx context.Context, s challenge.Chall
 
 func (r *ChallengeRepository) FindSessionByID(ctx context.Context, id string) (*challenge.ChallengeSession, error) {
 	query := `
-		SELECT id, character_id, tier_id, current_round, character_current_hp,
+		SELECT id, character_id, party_id, members_json, tier_id, current_round, character_current_hp,
 		       accumulated_exp, accumulated_gold, accumulated_items_json, status,
 		       created_at, updated_at
 		FROM challenge_sessions
@@ -58,10 +68,13 @@ func (r *ChallengeRepository) FindSessionByID(ctx context.Context, id string) (*
 	`
 	var s challenge.ChallengeSession
 	var statusStr, itemsJSON string
+	var partyID, membersJSON sql.NullString
 
 	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query, id).Scan(
 		&s.ID,
 		&s.CharacterID,
+		&partyID,
+		&membersJSON,
 		&s.TierID,
 		&s.CurrentRound,
 		&s.CharacterCurrentHP,
@@ -79,6 +92,15 @@ func (r *ChallengeRepository) FindSessionByID(ctx context.Context, id string) (*
 		return nil, err
 	}
 
+	if partyID.Valid {
+		s.PartyID = partyID.String
+	}
+	if membersJSON.Valid && membersJSON.String != "" {
+		members, err := challenge.DecodeJSON[[]challenge.ChallengeMember](membersJSON.String)
+		if err == nil {
+			s.Members = members
+		}
+	}
 	s.Status = challenge.SessionStatus(statusStr)
 	items, err := challenge.DecodeJSON[[]string](itemsJSON)
 	if err != nil {
@@ -91,7 +113,7 @@ func (r *ChallengeRepository) FindSessionByID(ctx context.Context, id string) (*
 
 func (r *ChallengeRepository) FindActiveSessionByCharacter(ctx context.Context, characterID string) (*challenge.ChallengeSession, error) {
 	query := `
-		SELECT id, character_id, tier_id, current_round, character_current_hp,
+		SELECT id, character_id, party_id, members_json, tier_id, current_round, character_current_hp,
 		       accumulated_exp, accumulated_gold, accumulated_items_json, status,
 		       created_at, updated_at
 		FROM challenge_sessions
@@ -101,10 +123,13 @@ func (r *ChallengeRepository) FindActiveSessionByCharacter(ctx context.Context, 
 	`
 	var s challenge.ChallengeSession
 	var statusStr, itemsJSON string
+	var partyID, membersJSON sql.NullString
 
 	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query, characterID).Scan(
 		&s.ID,
 		&s.CharacterID,
+		&partyID,
+		&membersJSON,
 		&s.TierID,
 		&s.CurrentRound,
 		&s.CharacterCurrentHP,
@@ -122,6 +147,15 @@ func (r *ChallengeRepository) FindActiveSessionByCharacter(ctx context.Context, 
 		return nil, err
 	}
 
+	if partyID.Valid {
+		s.PartyID = partyID.String
+	}
+	if membersJSON.Valid && membersJSON.String != "" {
+		members, err := challenge.DecodeJSON[[]challenge.ChallengeMember](membersJSON.String)
+		if err == nil {
+			s.Members = members
+		}
+	}
 	s.Status = challenge.SessionStatus(statusStr)
 	items, err := challenge.DecodeJSON[[]string](itemsJSON)
 	if err != nil {
@@ -134,10 +168,14 @@ func (r *ChallengeRepository) FindActiveSessionByCharacter(ctx context.Context, 
 
 func (r *ChallengeRepository) UpdateSession(ctx context.Context, s challenge.ChallengeSession) error {
 	itemsJSON := challenge.EncodeJSON(s.AccumulatedItems)
+	var membersJSON sql.NullString
+	if len(s.Members) > 0 {
+		membersJSON = sql.NullString{String: challenge.EncodeJSON(s.Members), Valid: true}
+	}
 	query := `
 		UPDATE challenge_sessions
 		SET current_round = ?, character_current_hp = ?, accumulated_exp = ?,
-		    accumulated_gold = ?, accumulated_items_json = ?, status = ?,
+		    accumulated_gold = ?, accumulated_items_json = ?, members_json = ?, status = ?,
 		    updated_at = ?
 		WHERE id = ? AND character_id = ?
 	`
@@ -149,6 +187,7 @@ func (r *ChallengeRepository) UpdateSession(ctx context.Context, s challenge.Cha
 		s.AccumulatedExp,
 		s.AccumulatedGold,
 		itemsJSON,
+		membersJSON,
 		string(s.Status),
 		s.UpdatedAt,
 		s.ID,
@@ -278,13 +317,23 @@ func (r *ChallengeRepository) FinalizeSession(ctx context.Context, s challenge.C
 
 		// 1. Update session status
 		itemsJSON := challenge.EncodeJSON(s.AccumulatedItems)
+		var partyID sql.NullString
+		if s.PartyID != "" {
+			partyID = sql.NullString{String: s.PartyID, Valid: true}
+		}
+		var membersJSON sql.NullString
+		if len(s.Members) > 0 {
+			membersJSON = sql.NullString{String: challenge.EncodeJSON(s.Members), Valid: true}
+		}
 		upsertSessionQuery := `
 			INSERT INTO challenge_sessions (
-				id, character_id, tier_id, current_round, character_current_hp,
+				id, character_id, party_id, members_json, tier_id, current_round, character_current_hp,
 				accumulated_exp, accumulated_gold, accumulated_items_json, status,
 				created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON DUPLICATE KEY UPDATE
+				party_id = VALUES(party_id),
+				members_json = VALUES(members_json),
 				current_round = VALUES(current_round),
 				character_current_hp = VALUES(character_current_hp),
 				accumulated_exp = VALUES(accumulated_exp),
@@ -298,6 +347,8 @@ func (r *ChallengeRepository) FinalizeSession(ctx context.Context, s challenge.C
 			upsertSessionQuery,
 			s.ID,
 			s.CharacterID,
+			partyID,
+			membersJSON,
 			s.TierID,
 			s.CurrentRound,
 			s.CharacterCurrentHP,

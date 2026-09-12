@@ -21,6 +21,9 @@ type stubChallengeService struct {
 	advanceRoundFn        func(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error)
 	retireSessionFn       func(ctx context.Context, characterID string, sessionID string) (*challenge.ChallengeSession, error)
 	getCharacterRecordsFn func(ctx context.Context, characterID string) ([]challenge.CharacterChallengeRecord, error)
+	startPartySessionFn   func(ctx context.Context, leaderID string, memberIDs []string, tierID string, partyName string, partyColor string) (*challenge.ChallengeSession, error)
+	getHallOfFameFn       func(ctx context.Context, tierID string) (*challenge.HallOfFameEntry, error)
+	listHallOfFameFn      func(ctx context.Context) ([]challenge.HallOfFameEntry, error)
 }
 
 func (s *stubChallengeService) ListTiers() []challenge.ChallengeTier {
@@ -41,6 +44,12 @@ func (s *stubChallengeService) StartSession(ctx context.Context, characterID str
 	}
 	return &challenge.ChallengeSession{ID: "sess-1", CharacterID: characterID, TierID: tierID, Status: challenge.StatusActive}, nil
 }
+func (s *stubChallengeService) StartPartySession(ctx context.Context, leaderID string, memberIDs []string, tierID string, partyName string, partyColor string) (*challenge.ChallengeSession, error) {
+	if s.startPartySessionFn != nil {
+		return s.startPartySessionFn(ctx, leaderID, memberIDs, tierID, partyName, partyColor)
+	}
+	return &challenge.ChallengeSession{ID: "sess-party-1", CharacterID: leaderID, TierID: tierID, PartyName: partyName, PartyColor: partyColor, Status: challenge.StatusActive}, nil
+}
 func (s *stubChallengeService) AdvanceRound(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error) {
 	if s.advanceRoundFn != nil {
 		return s.advanceRoundFn(ctx, characterID, sessionID)
@@ -58,6 +67,18 @@ func (s *stubChallengeService) GetCharacterRecords(ctx context.Context, characte
 		return s.getCharacterRecordsFn(ctx, characterID)
 	}
 	return []challenge.CharacterChallengeRecord{{CharacterID: characterID, TierID: "novice", HighestRound: 5}}, nil
+}
+func (s *stubChallengeService) GetHallOfFame(ctx context.Context, tierID string) (*challenge.HallOfFameEntry, error) {
+	if s.getHallOfFameFn != nil {
+		return s.getHallOfFameFn(ctx, tierID)
+	}
+	return &challenge.HallOfFameEntry{TierID: tierID, HighestRound: 10, PartyName: "TopParty"}, nil
+}
+func (s *stubChallengeService) ListHallOfFame(ctx context.Context) ([]challenge.HallOfFameEntry, error) {
+	if s.listHallOfFameFn != nil {
+		return s.listHallOfFameFn(ctx)
+	}
+	return []challenge.HallOfFameEntry{{TierID: "novice", HighestRound: 10, PartyName: "TopParty"}}, nil
 }
 
 type stubBossService struct {
@@ -93,11 +114,13 @@ func (s *stubBossService) GetCharacterRecord(ctx context.Context, characterID st
 }
 
 type stubDungeonService struct {
-	listDungeonsFn        func(ctx context.Context, characterID string) ([]dungeon.DungeonOverview, error)
-	startExpeditionFn     func(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error)
-	moveFn                func(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
-	escapeFn              func(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
-	getActiveExpeditionFn func(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error)
+	listDungeonsFn         func(ctx context.Context, characterID string) ([]dungeon.DungeonOverview, error)
+	startExpeditionFn      func(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error)
+	moveFn                 func(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
+	escapeFn               func(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
+	getActiveExpeditionFn  func(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error)
+	startPartyExpeditionFn func(ctx context.Context, leaderID string, memberIDs []string, dungeonID string, partyID string) (*dungeon.ActiveExpedition, error)
+	viewMapFn              func(ctx context.Context, characterID string) (dungeon.MapView, error)
 }
 
 func (s *stubDungeonService) ListDungeons(ctx context.Context, characterID string) ([]dungeon.DungeonOverview, error) {
@@ -111,6 +134,12 @@ func (s *stubDungeonService) StartExpedition(ctx context.Context, characterID st
 		return s.startExpeditionFn(ctx, characterID, dungeonID)
 	}
 	return &dungeon.ActiveExpedition{ID: "exp-1", CharacterID: characterID, DungeonID: dungeonID, Status: dungeon.StatusExploring}, nil
+}
+func (s *stubDungeonService) StartPartyExpedition(ctx context.Context, leaderID string, memberIDs []string, dungeonID string, partyID string) (*dungeon.ActiveExpedition, error) {
+	if s.startPartyExpeditionFn != nil {
+		return s.startPartyExpeditionFn(ctx, leaderID, memberIDs, dungeonID, partyID)
+	}
+	return &dungeon.ActiveExpedition{ID: "exp-party-1", CharacterID: leaderID, DungeonID: dungeonID, PartyID: partyID, Status: dungeon.StatusExploring}, nil
 }
 func (s *stubDungeonService) Move(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error) {
 	if s.moveFn != nil {
@@ -129,6 +158,12 @@ func (s *stubDungeonService) GetActiveExpedition(ctx context.Context, characterI
 		return s.getActiveExpeditionFn(ctx, characterID)
 	}
 	return nil, dungeon.ErrNoActiveExpedition
+}
+func (s *stubDungeonService) ViewMap(ctx context.Context, characterID string) (dungeon.MapView, error) {
+	if s.viewMapFn != nil {
+		return s.viewMapFn(ctx, characterID)
+	}
+	return dungeon.MapView{Radius: 1, CenterX: 5, CenterY: 5, Formatted: "[P]"}, nil
 }
 
 func TestCombatEndpoints(t *testing.T) {
@@ -331,6 +366,59 @@ func TestCombatEndpoints(t *testing.T) {
 	t.Run("POST /characters/{id}/dungeons/escape", func(t *testing.T) {
 		req := jsonRequest(t, http.MethodPost, "/characters/c1/dungeons/escape", "")
 		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+	})
+
+	t.Run("POST /characters/{id}/dungeons/party-start", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/dungeons/party-start", `{"dungeon_id":"d1","member_ids":["c1","c2"],"party_id":"p1"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+	})
+
+	t.Run("GET /characters/{id}/dungeons/map", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/characters/c1/dungeons/map", nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+	})
+
+	t.Run("POST /characters/{id}/challenges/party-start", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/party-start", `{"tier_id":"novice","member_ids":["c1","c2"],"party_name":"Party","party_color":"#FF0000"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+	})
+
+	t.Run("GET /challenges/hall-of-fame", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/challenges/hall-of-fame", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+	})
+
+	t.Run("GET /challenges/hall-of-fame/{tier_id}", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/challenges/hall-of-fame/novice", nil)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 

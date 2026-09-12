@@ -135,9 +135,17 @@ func (r *ValkeyExpeditionRepository) GetActiveExpedition(ctx context.Context, ch
 	startedAt, _ := time.Parse(time.RFC3339Nano, sMap["started_at"])
 	updatedAt, _ := time.Parse(time.RFC3339Nano, sMap["updated_at"])
 
+	var members []ExpeditionMember
+	if mJSON, ok := sMap["members"]; ok && mJSON != "" {
+		members = DecodeMembers(mJSON)
+	}
+
 	active := &ActiveExpedition{
 		ID:                sMap["expedition_id"],
 		CharacterID:       sMap["character_id"],
+		PartyID:           sMap["party_id"],
+		PartyName:         sMap["party_name"],
+		Members:           members,
 		DungeonID:         sMap["dungeon_id"],
 		CurrentFloor:      floor,
 		PosX:              posX,
@@ -165,12 +173,16 @@ func (r *ValkeyExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 	rKey := r.rewardsKey(exp.CharacterID)
 
 	itemsJSON := EncodeItems(exp.AccumulatedItems)
+	membersJSON := EncodeMembers(exp.Members)
 	ttlSec := int64(r.ttl.Seconds())
 
 	cmds := r.client.DoMulti(ctx,
 		r.client.B().Hset().Key(sKey).FieldValue().
 			FieldValue("expedition_id", exp.ID).
 			FieldValue("character_id", exp.CharacterID).
+			FieldValue("party_id", exp.PartyID).
+			FieldValue("party_name", exp.PartyName).
+			FieldValue("members", membersJSON).
 			FieldValue("dungeon_id", exp.DungeonID).
 			FieldValue("current_floor", strconv.Itoa(exp.CurrentFloor)).
 			FieldValue("pos_x", strconv.Itoa(exp.PosX)).

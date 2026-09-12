@@ -8,7 +8,6 @@ import (
 	"github.com/witchcraze/party2re/internal/challenge"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
-	"github.com/witchcraze/party2re/internal/dungeon"
 )
 
 // ChallengeService defines endurance challenge operations exposed over HTTP.
@@ -16,18 +15,12 @@ type ChallengeService interface {
 	ListTiers() []challenge.ChallengeTier
 	GetTier(tierID string) (*challenge.ChallengeTier, error)
 	StartSession(ctx context.Context, characterID string, tierID string) (*challenge.ChallengeSession, error)
+	StartPartySession(ctx context.Context, leaderID string, memberIDs []string, tierID string, partyName string, partyColor string) (*challenge.ChallengeSession, error)
 	AdvanceRound(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error)
 	RetireSession(ctx context.Context, characterID string, sessionID string) (*challenge.ChallengeSession, error)
 	GetCharacterRecords(ctx context.Context, characterID string) ([]challenge.CharacterChallengeRecord, error)
-}
-
-// DungeonService defines dungeon explorations operations exposed over HTTP.
-type DungeonService interface {
-	ListDungeons(ctx context.Context, characterID string) ([]dungeon.DungeonOverview, error)
-	StartExpedition(ctx context.Context, characterID string, dungeonID string) (*dungeon.ActiveExpedition, error)
-	Move(ctx context.Context, characterID string, dir dungeon.Direction) (dungeon.ExpeditionStepResult, error)
-	Escape(ctx context.Context, characterID string) (dungeon.ExpeditionStepResult, error)
-	GetActiveExpedition(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error)
+	GetHallOfFame(ctx context.Context, tierID string) (*challenge.HallOfFameEntry, error)
+	ListHallOfFame(ctx context.Context) ([]challenge.HallOfFameEntry, error)
 }
 
 // WithChallenge configures the challenge service for the Handler.
@@ -37,19 +30,19 @@ func WithChallenge(c ChallengeService) Option {
 	}
 }
 
-// WithDungeon configures the dungeon service for the Handler.
-func WithDungeon(d DungeonService) Option {
-	return func(h *Handler) {
-		h.dungeons = d
-	}
-}
-
 // -------------------------------------------------------------------
-// Challenge Handlers
+// Challenge Handlers & DTOs
 // -------------------------------------------------------------------
 
 type startChallengeRequest struct {
 	TierID string `json:"tier_id"`
+}
+
+type startPartyChallengeRequest struct {
+	TierID     string   `json:"tier_id"`
+	MemberIDs  []string `json:"member_ids"`
+	PartyName  string   `json:"party_name"`
+	PartyColor string   `json:"party_color"`
 }
 
 type advanceChallengeRequest struct {
@@ -127,6 +120,49 @@ func (h *Handler) handleStartChallenge(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if errors.Is(err, challenge.ErrLevelTooLow) || errors.Is(err, challenge.ErrActiveSessionExists) {
+				writeError(w, http.StatusUnprocessableEntity, err)
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, challengeSessionResponse{
+			Session: session,
+		})
+	})
+}
+
+func (h *Handler) handleStartPartyChallenge(w http.ResponseWriter, r *http.Request) {
+	if h.challenges == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("challenge service not configured"))
+		return
+	}
+
+	charID := r.PathValue("id")
+	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+		var req startPartyChallengeRequest
+		if !decodeJSON(w, r, &req) {
+			return
+		}
+
+		if req.TierID == "" {
+			writeError(w, http.StatusBadRequest, errors.New("tier_id is required"))
+			return
+		}
+
+		memberIDs := req.MemberIDs
+		if len(memberIDs) == 0 {
+			memberIDs = []string{char.ID}
+		}
+
+		session, err := h.challenges.StartPartySession(r.Context(), char.ID, memberIDs, req.TierID, req.PartyName, req.PartyColor)
+		if err != nil {
+			if errors.Is(err, challenge.ErrTierNotFound) || errors.Is(err, challenge.ErrCharacterNotFound) {
+				writeError(w, http.StatusBadRequest, err)
+				return
+			}
+			if errors.Is(err, challenge.ErrLevelTooLow) || errors.Is(err, challenge.ErrActiveSessionExists) || errors.Is(err, challenge.ErrTooManyPartyMembers) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
@@ -225,142 +261,42 @@ func (h *Handler) handleRetireChallenge(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// -------------------------------------------------------------------
-// Dungeon Handlers
-// -------------------------------------------------------------------
-
-type startDungeonRequest struct {
-	DungeonID string `json:"dungeon_id"`
-}
-
-type moveDungeonRequest struct {
-	Direction string `json:"direction"` // "north", "south", "east", "west"
-}
-
-type dungeonListResponse struct {
-	Dungeons []dungeon.DungeonOverview `json:"dungeons"`
-}
-
-type startDungeonResponse struct {
-	Expedition *dungeon.ActiveExpedition `json:"expedition"`
-}
-
-type dungeonStepResponse struct {
-	Result dungeon.ExpeditionStepResult `json:"result"`
-}
-
-func (h *Handler) handleListDungeons(w http.ResponseWriter, r *http.Request) {
-	if h.dungeons == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("dungeon service not configured"))
+func (h *Handler) handleGetChallengeHallOfFame(w http.ResponseWriter, r *http.Request) {
+	if h.challenges == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("challenge service not configured"))
 		return
 	}
 
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		dungeonsList, err := h.dungeons.ListDungeons(r.Context(), char.ID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, dungeonListResponse{
-			Dungeons: dungeonsList,
-		})
-	})
-}
-
-func (h *Handler) handleStartDungeon(w http.ResponseWriter, r *http.Request) {
-	if h.dungeons == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("dungeon service not configured"))
+	tierID := r.PathValue("tier_id")
+	if tierID == "" {
+		writeError(w, http.StatusBadRequest, errors.New("tier_id is required"))
 		return
 	}
 
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req startDungeonRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		if req.DungeonID == "" {
-			writeError(w, http.StatusBadRequest, errors.New("dungeon_id is required"))
-			return
-		}
-
-		exp, err := h.dungeons.StartExpedition(r.Context(), char.ID, req.DungeonID)
-		if err != nil {
-			if errors.Is(err, dungeon.ErrDungeonNotFound) || errors.Is(err, dungeon.ErrCharacterNotFound) {
-				writeError(w, http.StatusBadRequest, err)
-				return
-			}
-			if errors.Is(err, dungeon.ErrLevelRequirementNotMet) || errors.Is(err, dungeon.ErrActiveExpeditionExists) {
-				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, startDungeonResponse{
-			Expedition: exp,
-		})
-	})
-}
-
-func (h *Handler) handleMoveDungeon(w http.ResponseWriter, r *http.Request) {
-	if h.dungeons == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("dungeon service not configured"))
+	hof, err := h.challenges.GetHallOfFame(r.Context(), tierID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if hof == nil {
+		writeError(w, http.StatusNotFound, errors.New("hall of fame entry not found"))
 		return
 	}
 
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req moveDungeonRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		dir := dungeon.Direction(req.Direction)
-		res, err := h.dungeons.Move(r.Context(), char.ID, dir)
-		if err != nil {
-			if errors.Is(err, dungeon.ErrNoActiveExpedition) {
-				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			if errors.Is(err, dungeon.ErrInvalidDirection) || errors.Is(err, dungeon.ErrImpassableWall) {
-				writeError(w, http.StatusBadRequest, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, dungeonStepResponse{
-			Result: res,
-		})
-	})
+	writeJSON(w, http.StatusOK, hof)
 }
 
-func (h *Handler) handleEscapeDungeon(w http.ResponseWriter, r *http.Request) {
-	if h.dungeons == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("dungeon service not configured"))
+func (h *Handler) handleListChallengeHallOfFame(w http.ResponseWriter, r *http.Request) {
+	if h.challenges == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("challenge service not configured"))
 		return
 	}
 
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		res, err := h.dungeons.Escape(r.Context(), char.ID)
-		if err != nil {
-			if errors.Is(err, dungeon.ErrNoActiveExpedition) {
-				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
+	list, err := h.challenges.ListHallOfFame(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
 
-		writeJSON(w, http.StatusOK, dungeonStepResponse{
-			Result: res,
-		})
-	})
+	writeJSON(w, http.StatusOK, list)
 }

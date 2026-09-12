@@ -48,6 +48,7 @@ func (m *MemoryExpeditionRepository) GetActiveExpedition(ctx context.Context, ch
 
 	cp := exp
 	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
+	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
 	return &cp, nil
 }
 
@@ -57,6 +58,7 @@ func (m *MemoryExpeditionRepository) SaveActiveExpedition(ctx context.Context, e
 
 	cp := exp
 	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
+	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
 	m.expeditions[exp.CharacterID] = cp
 	m.expirations[exp.CharacterID] = time.Now().UTC().Add(m.ttl)
 	return nil
@@ -98,6 +100,24 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 	currentHP := exp.CurrentHP + params.HPDelta
 	turnsRemaining := exp.TurnsRemaining + params.TurnsDelta
 
+	if len(params.MemberHPDeltas) > 0 {
+		allDead := true
+		for i := range exp.Members {
+			if delta, ok := params.MemberHPDeltas[exp.Members[i].CharacterID]; ok {
+				exp.Members[i].CurrentHP += delta
+				if exp.Members[i].CurrentHP < 0 {
+					exp.Members[i].CurrentHP = 0
+				}
+			}
+			if exp.Members[i].CurrentHP > 0 {
+				allDead = false
+			}
+		}
+		if len(exp.Members) > 0 && allDead {
+			currentHP = 0
+		}
+	}
+
 	finalStatus := StatusExploring
 	if currentHP <= 0 {
 		currentHP = 0
@@ -126,6 +146,7 @@ func (m *MemoryExpeditionRepository) Step(ctx context.Context, characterID strin
 
 	cp := exp
 	cp.AccumulatedItems = append([]string(nil), exp.AccumulatedItems...)
+	cp.Members = append([]ExpeditionMember(nil), exp.Members...)
 	return StepOutcome{
 		Expedition: cp,
 		Status:     finalStatus,

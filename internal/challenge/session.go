@@ -9,70 +9,11 @@ import (
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
-	"github.com/witchcraze/party2re/internal/id"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
 func (s *Service) StartSession(ctx context.Context, characterID string, tierID string) (*ChallengeSession, error) {
-	if strings.TrimSpace(characterID) == "" {
-		return nil, ErrCharacterNotFound
-	}
-
-	tier, err := s.GetTier(tierID)
-	if err != nil {
-		return nil, err
-	}
-
-	char, err := s.charRepo.FindByID(ctx, characterID)
-	if err != nil {
-		return nil, ErrCharacterNotFound
-	}
-
-	level := char.Level
-	if level <= 0 {
-		level = 1
-	}
-	if level < tier.MinLevel {
-		return nil, ErrLevelTooLow
-	}
-
-	existing, err := s.activeStore.GetActiveSession(ctx, characterID)
-	if err == nil && existing != nil && existing.Status == StatusActive {
-		return nil, ErrActiveSessionExists
-	}
-
-	sessionID := id.New()
-
-	maxHP := char.Stats.MaxHP
-	if maxHP <= 0 {
-		maxHP = char.Stats.HP
-	}
-	if maxHP <= 0 {
-		maxHP = 100
-	}
-
-	now := time.Now().UTC()
-	session := ChallengeSession{
-		ID:                 sessionID,
-		CharacterID:        characterID,
-		TierID:             tierID,
-		CurrentRound:       1,
-		CharacterCurrentHP: maxHP,
-		AccumulatedExp:     0,
-		AccumulatedGold:    0,
-		AccumulatedItems:   []string{},
-		Status:             StatusActive,
-		CreatedAt:          now,
-		UpdatedAt:          now,
-	}
-
-	if err := s.activeStore.SaveActiveSession(ctx, session); err != nil {
-		return nil, err
-	}
-
-	// Persist initial durable session placeholder in SQL repository
-	_ = s.repo.SaveSession(ctx, session)
-
-	return &session, nil
+	return s.StartPartySession(ctx, characterID, []string{characterID}, tierID, "", "#FFFFFF")
 }
 
 func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionID string) (*RoundResult, *ChallengeSession, error) {
@@ -127,35 +68,104 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 	mGold := int(math.Round(float64(tier.BaseMonster.BaseGold) * scale))
 	mName := fmt.Sprintf("%s (Wave %d)", tier.BaseMonster.Name, round)
 
-	// Resolve Battle
-	charParticipant := corebattle.NewParticipantFromCharacterWithHP(char, session.CharacterCurrentHP)
 	monsterParticipant := corebattle.MustNewParticipant(mName, mHP, mAtk, mDef)
+	var battleRes corebattle.Result
+	var won bool
+	var remainingHPs map[string]int
 
-	battleReq := corebattle.Request{
-		Participants: []corebattle.Participant{charParticipant, monsterParticipant},
+	if pResolver, ok := s.battleEngine.(corebattle.PartyBattleResolver); ok && len(session.Members) > 1 {
+		allies := make([]corebattle.Participant, 0, len(session.Members))
+		for _, m := range session.Members {
+			if m.CharacterCurrentHP > 0 {
+				mChar := corecharacter.Character{
+					ID:    m.CharacterID,
+					Name:  m.CharacterName,
+					JobID: m.JobID,
+					Level: m.Level,
+					Stats: corecharacter.Stats{
+						HP:      m.CharacterCurrentHP,
+						MaxHP:   m.MaxHP,
+						MP:      m.MaxMP,
+						MaxMP:   m.MaxMP,
+						Attack:  m.Attack,
+						Defense: m.Defense,
+						Agility: m.Agility,
+					},
+				}
+				allies = append(allies, corebattle.NewParticipantFromCharacterWithHP(mChar, m.CharacterCurrentHP))
+			}
+		}
+		if len(allies) == 0 {
+			allies = append(allies, corebattle.NewParticipantFromCharacterWithHP(char, session.CharacterCurrentHP))
+		}
+		pRes, pErr := pResolver.ResolvePartyBattle(corebattle.PartyBattleRequest{
+			Allies:  allies,
+			Enemies: []corebattle.Participant{monsterParticipant},
+		})
+		if pErr != nil {
+			return nil, nil, pErr
+		}
+		won = pRes.Outcome == corebattle.OutcomeWin && pRes.WinnerSide == "allies"
+		remainingHPs = pRes.RemainingHP
+		battleRes = corebattle.Result{
+			Outcome:  pRes.Outcome,
+			WinnerID: char.ID,
+			LoserID:  monsterParticipant.ID,
+			Turns:    pRes.Turns,
+			Logs:     pRes.Logs,
+		}
+	} else {
+		charParticipant := corebattle.NewParticipantFromCharacterWithHP(char, session.CharacterCurrentHP)
+		battleReq := corebattle.Request{
+			Participants: []corebattle.Participant{charParticipant, monsterParticipant},
+		}
+		var bErr error
+		battleRes, bErr = s.battleEngine.Resolve(battleReq)
+		if bErr != nil {
+			return nil, nil, bErr
+		}
+		won = battleRes.Outcome == corebattle.OutcomeWin && battleRes.WinnerID != monsterParticipant.ID
+		if len(battleRes.Logs) > 0 {
+			remainingHPs = battleRes.Logs[len(battleRes.Logs)-1].RemainingHP
+		}
 	}
-	battleRes, err := s.battleEngine.Resolve(battleReq)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	won := battleRes.Outcome == corebattle.OutcomeWin && battleRes.WinnerID == char.ID
 
 	if won {
-		// Calculate surviving HP
-		survivingHP := 1
-		if len(battleRes.Logs) > 0 {
-			lastLog := battleRes.Logs[len(battleRes.Logs)-1]
-			if hp, ok := lastLog.RemainingHP[char.ID]; ok && hp > 0 {
-				survivingHP = hp
+		// Update member HPs and 20% recovery
+		leaderSurvivingHP := 1
+		for i := range session.Members {
+			m := &session.Members[i]
+			if m.CharacterCurrentHP > 0 {
+				remHP := 0
+				if hp, ok := remainingHPs[m.CharacterID]; ok {
+					remHP = hp
+				}
+				if remHP > 0 {
+					recovery := int(float64(m.MaxHP) * 0.20)
+					m.CharacterCurrentHP = remHP + recovery
+					if m.CharacterCurrentHP > m.MaxHP {
+						m.CharacterCurrentHP = m.MaxHP
+					}
+				} else {
+					m.CharacterCurrentHP = 0
+				}
+			}
+			if m.CharacterID == char.ID && m.CharacterCurrentHP > 0 {
+				leaderSurvivingHP = m.CharacterCurrentHP
 			}
 		}
 
-		// 20% MaxHP Recovery between rounds
-		recovery := int(float64(maxHP) * 0.20)
-		survivingHP += recovery
-		if survivingHP > maxHP {
-			survivingHP = maxHP
+		if len(session.Members) == 0 {
+			survivingHP := 1
+			if hp, ok := remainingHPs[char.ID]; ok && hp > 0 {
+				survivingHP = hp
+			}
+			recovery := int(float64(maxHP) * 0.20)
+			survivingHP += recovery
+			if survivingHP > maxHP {
+				survivingHP = maxHP
+			}
+			leaderSurvivingHP = survivingHP
 		}
 
 		// Milestone item check
@@ -164,10 +174,65 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 			awardedItem = tier.MilestoneItemPool[(round/tier.MilestoneInterval-1)%len(tier.MilestoneItemPool)]
 		}
 
-		// Atomically advance round and buffer rewards in Valkey Master (Zero MariaDB SQL writes)
+		// Update Hall of Fame if round > highestRound for tier
+		hof, _ := s.repo.GetHallOfFame(ctx, session.TierID)
+		if hof == nil || round > hof.HighestRound {
+			hofMembers := make([]HallOfFameMember, len(session.Members))
+			for i, m := range session.Members {
+				icon := m.Icon
+				if m.CharacterCurrentHP <= 0 {
+					icon = "chr/099.gif"
+				}
+				hofMembers[i] = HallOfFameMember{
+					CharacterID:   m.CharacterID,
+					CharacterName: m.CharacterName,
+					Icon:          icon,
+					JobID:         m.JobID,
+					OldJobID:      m.OldJobID,
+					HP:            m.MaxHP,
+					MP:            m.MaxMP,
+					Attack:        m.Attack,
+					Defense:       m.Defense,
+					Agility:       m.Agility,
+				}
+			}
+			if len(hofMembers) == 0 {
+				hofMembers = []HallOfFameMember{
+					{
+						CharacterID:   char.ID,
+						CharacterName: char.Name,
+						Icon:          "chr/001.gif",
+						JobID:         char.JobID,
+						HP:            char.Stats.MaxHP,
+						MP:            char.Stats.MaxMP,
+						Attack:        char.Stats.Attack,
+						Defense:       char.Stats.Defense,
+						Agility:       char.Stats.Agility,
+					},
+				}
+			}
+			pName := session.PartyName
+			if pName == "" {
+				pName = char.Name
+			}
+			pColor := session.PartyColor
+			if pColor == "" {
+				pColor = "#FFFFFF"
+			}
+			_ = s.repo.SaveHallOfFame(ctx, HallOfFameEntry{
+				TierID:       session.TierID,
+				HighestRound: round,
+				PartyName:    pName,
+				PartyColor:   pColor,
+				ClearedAt:    time.Now().UTC(),
+				Members:      hofMembers,
+			})
+		}
+
+		// Atomically advance round and buffer rewards in Valkey Master
 		outcome, err := s.activeStore.AdvanceRound(ctx, characterID, AdvanceRoundParams{
 			ExpectedSessionID: sessionID,
-			SurvivingHP:       survivingHP,
+			SurvivingHP:       leaderSurvivingHP,
 			ExpDelta:          mExp,
 			GoldDelta:         mGold,
 			RewardItemID:      awardedItem,
@@ -177,13 +242,19 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 			return nil, nil, err
 		}
 
+		outcome.Session.PartyID = session.PartyID
+		outcome.Session.Members = session.Members
+		outcome.Session.PartyName = session.PartyName
+		outcome.Session.PartyColor = session.PartyColor
+		_ = s.activeStore.SaveActiveSession(ctx, outcome.Session)
+
 		return &RoundResult{
 			Round:              round,
 			MonsterName:        mName,
 			BattleResult:       battleRes,
 			Won:                true,
-			RecoveredHP:        recovery,
-			CharacterCurrentHP: survivingHP,
+			RecoveredHP:        int(float64(maxHP) * 0.20),
+			CharacterCurrentHP: leaderSurvivingHP,
 			RoundExp:           mExp,
 			RoundGold:          mGold,
 			AwardedItem:        awardedItem,

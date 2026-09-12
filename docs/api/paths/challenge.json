@@ -1,4 +1,90 @@
 {
+  "/challenges/hall-of-fame": {
+    "get": {
+      "operationId": "listChallengeHallOfFame",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            }
+          },
+          "description": "Hall of fame entries list"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "List all challenge tier Hall of Fame records",
+      "tags": [
+        "Combat"
+      ]
+    }
+  },
+  "/challenges/hall-of-fame/{tier_id}": {
+    "get": {
+      "operationId": "getChallengeHallOfFame",
+      "parameters": [
+        {
+          "description": "Challenge Tier ID",
+          "in": "path",
+          "name": "tier_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Hall of fame entry"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Not found"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Get Hall of Fame record for a challenge tier",
+      "tags": [
+        "Combat"
+      ]
+    }
+  },
   "/challenges/tiers": {
     "get": {
       "operationId": "listChallengeTiers",
@@ -133,6 +219,113 @@
         }
       ],
       "summary": "Advance continuous challenge round battle",
+      "tags": [
+        "Combat"
+      ]
+    }
+  },
+  "/characters/{id}/challenges/party-start": {
+    "post": {
+      "operationId": "startPartyChallenge",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "member_ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "party_color": {
+                  "type": "string"
+                },
+                "party_name": {
+                  "type": "string"
+                },
+                "tier_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "tier_id"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Started challenge session"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Start a party continuous challenge run",
       "tags": [
         "Combat"
       ]

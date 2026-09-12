@@ -56,3 +56,20 @@ $$\text{Expedition Items} = \bigcup \text{Monster Drops} \cup \bigcup \text{Ches
   2. `char.Money += gold`
   3. All item instances generated are inserted into `inventory_items`.
   4. Statistics updated: `highest_dungeon_cleared`, `total_expeditions`, `total_floors_cleared`, `total_chests_opened`.
+
+---
+
+## Multi-Player Party Exploration & Scouting Mechanics
+
+### 1. Party Expeditions
+- Up to 4 characters can form an expedition party (`members` in `dungeon_active_expeditions`).
+- The party leader coordinates movement and exploration decisions.
+- Hazard trap (`X`) damage is distributed across all party members, applying per-member variance ($0.9 + 0.3 \times \text{rand}$).
+- **Treasure Hunter (Job 78)**: Grants $+1$ to $+2$ bonus treasure chests when opening chests, increasing found gold and item drops.
+
+### 2. Map Scouting (`@ちず`)
+- Characters can inspect the floor map around the party's current coordinate:
+  - **Base Vision (Radius 1)**: $3 \times 3$ grid displayed around party.
+  - **Expanded Vision (Radius 2)**: $5 \times 5$ grid displayed if any party member is a scouting class (**Thief 9**, **Ninja 26**, **Geomancer 27**, **Ranger 79**) or possesses item **197 (`scope_goggles`)**.
+- Rendered with emoji/ASCII indicators (`●` current party position, `■` walls, `·` passages, `T` chests, `X` traps, `D` stairs, `?` unrevealed fog).
+

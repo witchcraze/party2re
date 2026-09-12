@@ -26,12 +26,14 @@ func (m *mockCharRepo) FindByID(ctx context.Context, id string) (corecharacter.C
 type mockChallengeRepo struct {
 	sessions map[string]challenge.ChallengeSession
 	records  map[string]challenge.CharacterChallengeRecord
+	hof      map[string]challenge.HallOfFameEntry
 }
 
 func newMockChallengeRepo() *mockChallengeRepo {
 	return &mockChallengeRepo{
 		sessions: make(map[string]challenge.ChallengeSession),
 		records:  make(map[string]challenge.CharacterChallengeRecord),
+		hof:      make(map[string]challenge.HallOfFameEntry),
 	}
 }
 
@@ -118,6 +120,27 @@ func (m *mockChallengeRepo) FinalizeSession(ctx context.Context, s challenge.Cha
 	}
 	m.records[key] = rec
 	return nil
+}
+
+func (m *mockChallengeRepo) SaveHallOfFame(ctx context.Context, entry challenge.HallOfFameEntry) error {
+	m.hof[entry.TierID] = entry
+	return nil
+}
+
+func (m *mockChallengeRepo) GetHallOfFame(ctx context.Context, tierID string) (*challenge.HallOfFameEntry, error) {
+	entry, ok := m.hof[tierID]
+	if !ok {
+		return nil, nil
+	}
+	return &entry, nil
+}
+
+func (m *mockChallengeRepo) ListHallOfFame(ctx context.Context) ([]challenge.HallOfFameEntry, error) {
+	var list []challenge.HallOfFameEntry
+	for _, e := range m.hof {
+		list = append(list, e)
+	}
+	return list, nil
 }
 
 func TestStartSession_ValidationAndCreation(t *testing.T) {

@@ -126,10 +126,15 @@ func (r *ValkeySessionRepository) GetActiveSession(ctx context.Context, characte
 
 	createdAt, _ := time.Parse(time.RFC3339Nano, sMap["created_at"])
 	updatedAt, _ := time.Parse(time.RFC3339Nano, sMap["updated_at"])
+	members, _ := DecodeJSON[[]ChallengeMember](sMap["members"])
 
 	session := &ChallengeSession{
 		ID:                 sMap["session_id"],
 		CharacterID:        sMap["character_id"],
+		PartyID:            sMap["party_id"],
+		PartyName:          sMap["party_name"],
+		PartyColor:         sMap["party_color"],
+		Members:            members,
 		TierID:             sMap["tier_id"],
 		CurrentRound:       round,
 		CharacterCurrentHP: hp,
@@ -153,12 +158,17 @@ func (r *ValkeySessionRepository) SaveActiveSession(ctx context.Context, session
 	rKey := r.rewardsKey(session.CharacterID)
 
 	itemsJSON := EncodeJSON(session.AccumulatedItems)
+	membersJSON := EncodeJSON(session.Members)
 	ttlSec := int64(r.ttl.Seconds())
 
 	cmds := r.client.DoMulti(ctx,
 		r.client.B().Hset().Key(sKey).FieldValue().
 			FieldValue("session_id", session.ID).
 			FieldValue("character_id", session.CharacterID).
+			FieldValue("party_id", session.PartyID).
+			FieldValue("party_name", session.PartyName).
+			FieldValue("party_color", session.PartyColor).
+			FieldValue("members", membersJSON).
 			FieldValue("tier_id", session.TierID).
 			FieldValue("current_round", strconv.Itoa(session.CurrentRound)).
 			FieldValue("character_current_hp", strconv.Itoa(session.CharacterCurrentHP)).
