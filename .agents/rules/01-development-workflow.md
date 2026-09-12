@@ -48,6 +48,10 @@ Never branch directly from another feature branch unless explicitly stacking PRs
 - **Transparent Tool Usage:** When analyzing codebases, prefer native tools (`view_file`, `grep_search`). Do NOT execute complex or opaque bash scripts (like `sed`, `awk`, or `perl` one-liners) to parse code without explicitly explaining your intent to the user first. Ensure transparency in your actions.
 - **Mandatory Auth Wrappers**: All HTTP handlers exposing character actions or mutating gameplay entities must use standard auth wrappers (`withAuthenticatedCharacter`, `withAuthenticatedCharacterAndJSON`). Never decode `req.CharacterID` directly without verifying player ownership. The mechanical AST linter (`internal/api/http/auth_lint_test.go`) enforces this check.
 - **Legacy `@actions` Reconciliation**: When migrating or reviewing a feature originating from a legacy CGI script (`/home/witchcraze/dev/party2`), extract the full list of actions/subroutines and verify 1:1 mapping against new Go domain methods & HTTP endpoints. Any omitted or superseded action must have documented rationale.
+- **Pre-Commit Active Issue Re-Check (対応漏れ再確認)**:
+  - Before committing changes and opening a PR upon task completion, agents and developers MUST re-inspect the active issue (`gh issue view <issue-number>`).
+  - Cross-check every item in Acceptance Criteria, Scope, and specific requirements against the implemented code, tests, and documentation to verify zero omissions.
+  - Do not proceed to commit changes or open a PR until all acceptance criteria and issue requirements are verified as completely satisfied.
 - **Bounded Tasks:** Select a bounded task. If the requested work is too large, split it into smaller Issues; preserve independently testable acceptance criteria; do not silently expand the current Issue.
 
 ## 3. TDD and Local Verification (Tiered Strategy)
@@ -70,6 +74,7 @@ For non-trivial behavior:
 ## 4. Definition of Done
 A ticket is complete only when applicable:
 - Acceptance criteria are satisfied.
+- Active issue is re-checked prior to commit and all requirements/acceptance criteria are verified with zero omissions.
 - Behavior is covered by tests.
 - For features touching P2P or shared-resource state mutations (Bank, Auction, Flea Market, Delivery, Guild, Boss), a paired concurrency stress test using the standardized test harness (`testutil.RunConcurrentStressTest` or `testutil.RunRace`) is implemented and passes with zero deadlocks and conserved assets.
 - Unified local checks (`make check`) pass completely.

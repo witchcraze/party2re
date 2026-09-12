@@ -29,6 +29,16 @@ To avoid pre-emptive documentation rework while ensuring permanent design docume
    - Implement the code and unit/integration tests.
    - Once domain rules, formulas, and state transitions are settled, create or update the language-agnostic design specification (`docs/design/<feature>.md`) **within the same implementation PR**.
    - Synchronize `docs/architecture/components.md` and `STATUS.md` in the same PR.
+   - **Pre-commit issue re-check**: Re-inspect the active Issue and verify every acceptance criterion and requirement against code, tests, and documentation before committing and opening the PR.
+
+## Pre-commit verification (Active Issue Re-Check)
+
+Before committing changes and submitting a PR:
+
+1. Re-inspect the active Issue in full (`gh issue view <issue-number>`).
+2. Cross-check each item in Acceptance Criteria, Scope, and domain requirements against the implemented solution, tests, and synchronized documentation.
+3. Verify that there are zero omissions, unaddressed criteria, or dropped edge cases.
+4. Only proceed to commit changes once full coverage of the issue requirements is confirmed.
 
 ## PR is the unit of review
 
