@@ -133,6 +133,7 @@ type Handler struct {
 	secretshop     SecretShopService
 	tavern         TavernService
 	alchemy        AlchemyService
+	plantation     PlantationService
 	blackmarket    BlackMarketService
 	fleamarket     FleaMarketService
 	gemstore       GemStoreService
@@ -466,6 +467,12 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/alchemy/synthesize", h.handleAlchemySynthesize)
 	mux.HandleFunc("POST /characters/{id}/alchemy/claim", h.handleAlchemyClaim)
 	mux.HandleFunc("POST /characters/{id}/alchemy/learn", h.handleAlchemyLearn)
+
+	// Plantation
+	mux.HandleFunc("GET /characters/{id}/plantation", h.handleGetCharacterPlantation)
+	mux.HandleFunc("POST /characters/{id}/plantation/sow", h.handlePlantationSow)
+	mux.HandleFunc("POST /characters/{id}/plantation/fertilize", h.handlePlantationFertilize)
+	mux.HandleFunc("POST /characters/{id}/plantation/harvest", h.handlePlantationHarvest)
 
 	// Black Market
 	mux.HandleFunc("GET /characters/{id}/blackmarket", h.handleGetBlackMarketStatus)

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #475 — [Refactor] Food Delivery: Eliminate fictional courier quests and reproduce Tavern Post-Adventure Food Delivery
+Last updated: Issue #489 — [Feature] Plantation: Reproduce Legacy Seed Cultivation, 14 Fertilizer Reagents, Overnight Harvest, and Depot Delivery
 
 ## Current phase
 
@@ -49,7 +49,8 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Guild** (`internal/guild`): ✅ Foundation (5,000G), role hierarchy, bulletin board; fictional donation-leveling purge pending (#490).
 - **Casino** (`internal/casino`): ✅ Coin exchange, Indian Poker (sessions), Slot, Doppel, High-Low; 8-player shared room pending (#486).
 - **Lottery & Raffle** (`internal/lottery`): ✅ Raffle (normal/special); 4-digit lottery — 20-cap/rollover parity pending (#484, #485).
-- **Monster Ranch** (`internal/monster`): ✅ Monster Grandpa stabling (50–300 cap), Home pet link (8 pets), renaming (8 chars), P2P gift, wild release (#488). Fictional crop farm purged; Plantation pending (#489).
+- **Monster Ranch** (`internal/monster`): ✅ Monster Grandpa stabling (50–300 cap), Home pet link (8 pets), renaming (8 chars), P2P gift, wild release (#488). Fictional crop farm purged (#488).
+- **Plantation** (`internal/plantation`): ✅ 6 seeds, 14 fertilizer reagents (Gold or Depot/Inventory items), next-midnight JST maturation, wither/yield bonuses, Depot-direct delivery (#489).
 - **Auction Hall** (`internal/auction`): ✅ Live P2P trade (`@おくる`/`@しらべる`); fictional async auction house purged (#474).
 - **Collection & Monster Book** (`internal/collection`): ✅ Monster + item encyclopedia; auto-record on obtain.
 - **Chapel & Blessings** (`internal/chapel`): ✅ 5 prayers, single-active constraint, daily reset Worker; fictional donations purged (#472).
@@ -82,10 +83,10 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### API & Transport
 - **Server Entrypoint** (`cmd/party2`): ✅ Typed config injection, modular service wiring (`wire.go`), Graceful Shutdown.
-- **HTTP JSON API** (`internal/api/http`): ✅ 203 routes / 222 operations (OpenAPI 3.1); dual auth (session + PAT), IDOR defense, rate-limit, CORS, maintenance middleware.
+- **HTTP JSON API** (`internal/api/http`): ✅ 222 paths / 243 operations (OpenAPI 3.1); dual auth (session + PAT), IDOR defense, rate-limit, CORS, maintenance middleware.
 
 ### Infrastructure & Operations
-- **Database** (MariaDB): ✅ Migrations `001`–`057`; `make db-migrate` / `make db-reset`; connection pool env-configurable.
+- **Database** (MariaDB): ✅ Migrations `001`–`072`; `make db-migrate` / `make db-reset`; connection pool env-configurable.
 - **Valkey**: ✅ Delayed-action queue, distributed lock, rate-limit, ranking cache (AOF+RDB). Keyspace SSOT: `docs/architecture/valkey-keyspace.md`. Offline mock harness: `internal/testutil/valkeytest`.
 - **Logging**: ✅ `log/slog` JSON structured logging with credential masking.
 - **Verification**: ✅ `make check` (fmt, vet, AST linters, tests, smoke build); `make openapi-sync`; `make bench`.
@@ -97,8 +98,8 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 See [`ROADMAP.md`](ROADMAP.md) for full milestone details.
 
-1. **Parity Milestone 2 (Remaining) — Production & Delivery**: #489
-2. **Parity Milestone 3 — Adventure, Combat & Dungeons**: #478, #479, #481, #482, #483, #496
+1. **Parity Milestone 3 — Adventure, Combat & Dungeons**: #496, #478, #479, #481, #482, #483
+2. **Parity Milestone 4 — Community, Events & Entertainment**: #490, #491, #484, #485, #486
 3. **Client Presentation & Web UI**: Issue #140
 4. **Production Asset Pipeline & Final Licensing**: Issue #143, #202
 
