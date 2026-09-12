@@ -109,7 +109,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Player Auction house and free-market operations ([#80](https://github.com/witchcraze/party2re/issues/80))
 - [x] Casino mini-games: Slot Machine ([#81](https://github.com/witchcraze/party2re/issues/81)), Indian Poker ([#82](https://github.com/witchcraze/party2re/issues/82)), Doppel ([#141](https://github.com/witchcraze/party2re/issues/141)), High & Low ([#64](https://github.com/witchcraze/party2re/issues/64))
 - [x] Lottery and raffle ticket systems ([#83](https://github.com/witchcraze/party2re/issues/83))
-- [x] Farm and plantation cultivation ([#84](https://github.com/witchcraze/party2re/issues/84))
+- [ ] Plantation seed cultivation with 6 seeds & 14 fertilizers ([#84](https://github.com/witchcraze/party2re/issues/84), [#489](https://github.com/witchcraze/party2re/issues/489))
 - [x] Collection and Monster Book encyclopedia ([#85](https://github.com/witchcraze/party2re/issues/85))
 - [x] Chapel prayers and blessings ([#86](https://github.com/witchcraze/party2re/issues/86))
 - [x] Event Plaza, traveling merchant bazaar, and victory celebrations ([#161](https://github.com/witchcraze/party2re/issues/161))
@@ -117,7 +117,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Adventurer's Tavern, menu orders, delivery reservations, and NPC @エレナ ([#185](https://github.com/witchcraze/party2re/issues/185))
 - [x] Food Delivery: Replaced fictional courier quests with Tavern Post-Adventure Food Delivery ([#475](https://github.com/witchcraze/party2re/issues/475))
 - [x] Flea Market player-to-player item stalls and direct fixed-price exchange ([#194](https://github.com/witchcraze/party2re/issues/194))
-- [x] Monster Grandpa and home pet companion storage ([#193](https://github.com/witchcraze/party2re/issues/193))
+- [x] Monster Grandpa & Monster Ranch pet companion storage ([#193](https://github.com/witchcraze/party2re/issues/193), [#488](https://github.com/witchcraze/party2re/issues/488))
 - [x] Altar of Rebirth: 6-Orb Offering, Ramia Awakening, and Otherworld Travel Item Wishes ([#471](https://github.com/witchcraze/party2re/issues/471))
 - [x] Altar orb offerings consume matching inventory items and reject absent orb items ([#503](https://github.com/witchcraze/party2re/issues/503))
 - [x] Stat Orb progression bonuses and Cursed/Mazin revival battle synergies ([#502](https://github.com/witchcraze/party2re/issues/502))
@@ -257,6 +257,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#561](https://github.com/witchcraze/party2re/issues/561) | Transaction: Formalize multi-aggregate and P2P transaction runner primitives and align tx_runner linter | Completed |
 | [#475](https://github.com/witchcraze/party2re/issues/475) | Food Delivery: Eliminate fictional courier quests and reproduce Tavern Post-Adventure Food Delivery | Completed |
 | [#487](https://github.com/witchcraze/party2re/issues/487) | Alchemy: Free Overnight Depot-linked Synthesis & Compendium | Completed |
+| [#488](https://github.com/witchcraze/party2re/issues/488) | Monster Ranch: Purge fictional farm crop system, reproducing Monster Stabling, Home Pet Link, Naming, and P2P Gift Delivery | Completed |
 
 ---
 

@@ -129,7 +129,7 @@ State-mutating feature modules (such as `shop`, `blacksmith`, `alchemy`, `bank`,
      4. `character_jobs` / `character_job_masteries`
      5. `character_depots` / `depot_items`
      6. `guilds` (if multiple guilds, sorted ascending: `id1 < id2`) / `guild_members`
-     7. Feature tables (`farm_plots`, `casino_accounts`, `gvg_standings`, `character_boss_records`, `challenge_records`, etc.)
+     7. Feature tables (`character_monsters`, `casino_accounts`, `gvg_standings`, `character_boss_records`, `challenge_records`, etc.)
 3. **Application Orchestrator Pattern**:
    - Cross-module operations (such as P2P auction transfers involving sender character wallet, recipient character wallet, and sender inventory to recipient depot) should be orchestrated at the application layer inside a single `RunInTx` boundary.
    - No feature repository calls `BeginTx` directly; all repositories delegate to `RunInTx` and `ExecutorFromContext`.

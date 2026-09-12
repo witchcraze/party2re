@@ -18,7 +18,7 @@ Character deletion executes within a database transaction and cleans up resource
 1. External domain cleanup hooks (`CleanupHook`) for cross-service cleanup.
 2. Character-linked feature tables:
    - `casino_accounts`, `casino_poker_sessions`, `character_lottery`, `lottery_tickets`
-   - `farm_plots`, `character_blessings`, `banquet_toasts`
+   - `character_blessings`, `banquet_toasts`
    - `blackmarket_character_points`, `blackmarket_character_purchases`
    - `tavern_deliveries`, `tavern_character_status`
    - `park_posts`, `rescue_records`

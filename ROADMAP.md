@@ -84,7 +84,7 @@ Following a comprehensive clean-room specification audit of all 40 legacy CGI mo
 Reconcile facilities and production mechanics that depend on Depot storage and overnight cycles.
 - [x] **Tavern Food Delivery: Scheduled Post-Adventure Buffs** (#475)
 - [x] **Alchemy: Free Overnight Depot-linked Synthesis & Compendium** (#487)
-- [ ] **Monster Ranch: Monster Stabling, Home Pet Link, Naming & P2P Gifting** (#488)
+- [x] **Monster Ranch: Monster Stabling, Home Pet Link, Naming & P2P Gifting** (#488)
 - [ ] **Plantation: 6 Seeds, 14 Fertilizer Reagents & Overnight Depot Harvest** (#489)
 
 ##### Milestone 3: Adventure, Dungeons & Live Combat *(Planned)*
