@@ -54,4 +54,22 @@ The Continuous Endurance Challenge Feature Module (`internal/challenge`) impleme
 ## Persistence Schema
 
 - `character_challenge_records`: Primary key (`character_id`, `tier_id`), tracking `highest_round`, `total_attempts`, `total_victories`, and `best_cleared_at`.
-- `challenge_sessions`: Active session state tracking `character_id`, `tier_id`, `current_round`, `character_current_hp`, `accumulated_exp`, `accumulated_gold`, `accumulated_items_json`, and `status`.
+- `challenge_sessions`: Active session state tracking `character_id`, `party_id`, `members_json`, `tier_id`, `current_round`, `character_current_hp`, `accumulated_exp`, `accumulated_gold`, `accumulated_items_json`, and `status`.
+- `challenge_hall_of_fame`: Record-holding parties for each tier (`tier_id` PK, `highest_round`, `party_name`, `party_color`, `cleared_at`, `members_json`).
+
+---
+
+## Multi-Player Party Challenge & Hall of Fame Records
+
+### 1. Multi-Player Party Challenge
+- Up to 4 players can enter endurance challenge runs together.
+- Party battles resolve simultaneously using `internal/core/battle.Engine` with dynamic turn ordering, HP, MP, CMP, and skill execution.
+- Surviving party members recover $+20\%$ of their `Max HP` between consecutive waves.
+
+### 2. Hall of Fame (`challenge_hall_of_fame`)
+- Whenever a party sets a new tier high-water mark (`round > highest_round`), the run is immortalized in the Hall of Fame.
+- Records include:
+  - Tier ID, highest round cleared, party name, party color, and completion timestamp.
+  - Member details: Character ID, Name, Job, OldJob, Stats (HP, MP, Attack, Defense, Agility).
+  - Member icon: Surviving members show their active avatar; members who fell in battle are marked with a gravestone icon (`chr/099.gif`).
+

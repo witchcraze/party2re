@@ -2,6 +2,8 @@ package dungeon
 
 import (
 	"context"
+	cryptorand "crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +11,7 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 )
 
@@ -90,21 +93,24 @@ type Dungeon struct {
 }
 
 type ActiveExpedition struct {
-	ID                string           `json:"id"`
-	CharacterID       string           `json:"character_id"`
-	DungeonID         string           `json:"dungeon_id"`
-	CurrentFloor      int              `json:"current_floor"`
-	PosX              int              `json:"pos_x"`
-	PosY              int              `json:"pos_y"`
-	CurrentHP         int              `json:"current_hp"`
-	TurnsRemaining    int              `json:"turns_remaining"`
-	AccumulatedExp    int              `json:"accumulated_exp"`
-	AccumulatedGold   int              `json:"accumulated_gold"`
-	AccumulatedItems  []string         `json:"accumulated_items"`
-	AccumulatedMedals int              `json:"accumulated_medals"`
-	Status            ExpeditionStatus `json:"status"`
-	StartedAt         time.Time        `json:"started_at"`
-	UpdatedAt         time.Time        `json:"updated_at"`
+	ID                string             `json:"id"`
+	CharacterID       string             `json:"character_id"`
+	PartyID           string             `json:"party_id,omitempty"`
+	PartyName         string             `json:"party_name,omitempty"`
+	Members           []ExpeditionMember `json:"members,omitempty"`
+	DungeonID         string             `json:"dungeon_id"`
+	CurrentFloor      int                `json:"current_floor"`
+	PosX              int                `json:"pos_x"`
+	PosY              int                `json:"pos_y"`
+	CurrentHP         int                `json:"current_hp"`
+	TurnsRemaining    int                `json:"turns_remaining"`
+	AccumulatedExp    int                `json:"accumulated_exp"`
+	AccumulatedGold   int                `json:"accumulated_gold"`
+	AccumulatedItems  []string           `json:"accumulated_items"`
+	AccumulatedMedals int                `json:"accumulated_medals"`
+	Status            ExpeditionStatus   `json:"status"`
+	StartedAt         time.Time          `json:"started_at"`
+	UpdatedAt         time.Time          `json:"updated_at"`
 }
 
 type CharacterDungeonRecord struct {
@@ -139,16 +145,18 @@ type DungeonOverview struct {
 }
 
 type ExpeditionStepResult struct {
-	Expedition   ActiveExpedition   `json:"expedition"`
-	EventType    TileEventType      `json:"event_type"`
-	Message      string             `json:"message"`
-	BattleResult *corebattle.Result `json:"battle_result,omitempty"`
-	DamageTaken  int                `json:"damage_taken,omitempty"`
-	GoldFound    int                `json:"gold_found,omitempty"`
-	MedalsFound  int                `json:"medals_found,omitempty"`
-	ItemFound    string             `json:"item_found,omitempty"`
-	ExpEarned    int                `json:"exp_earned,omitempty"`
-	IsFinished   bool               `json:"is_finished"`
+	Expedition    ActiveExpedition   `json:"expedition"`
+	EventType     TileEventType      `json:"event_type"`
+	Message       string             `json:"message"`
+	BattleResult  *corebattle.Result `json:"battle_result,omitempty"`
+	DamageTaken   int                `json:"damage_taken,omitempty"`
+	MemberDamages map[string]int     `json:"member_damages,omitempty"`
+	GoldFound     int                `json:"gold_found,omitempty"`
+	MedalsFound   int                `json:"medals_found,omitempty"`
+	ItemFound     string             `json:"item_found,omitempty"`
+	ChestsOpened  int                `json:"chests_opened,omitempty"`
+	ExpEarned     int                `json:"exp_earned,omitempty"`
+	IsFinished    bool               `json:"is_finished"`
 }
 
 // StepParams encapsulates the parameters for advancing an active dungeon expedition step atomically.
@@ -158,6 +166,7 @@ type StepParams struct {
 	NewX                 int
 	NewY                 int
 	HPDelta              int
+	MemberHPDeltas       map[string]int
 	TurnsDelta           int
 	ExpDelta             int
 	GoldDelta            int
@@ -199,17 +208,47 @@ type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 }
 
+type InventoryProvider interface {
+	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
+}
+
 // MonsterDefeatedHook is called when a monster or boss is slain during dungeon exploration.
 type MonsterDefeatedHook func(ctx context.Context, characterID string, count int) error
+
+type RandomSource interface {
+	Intn(n int) int
+	Float64() float64
+}
+
+type defaultRandomSource struct{}
+
+func (defaultRandomSource) Intn(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	var b [4]byte
+	_, _ = cryptorand.Read(b[:])
+	val := binary.BigEndian.Uint32(b[:])
+	return int(val % uint32(n))
+}
+
+func (defaultRandomSource) Float64() float64 {
+	var b [8]byte
+	_, _ = cryptorand.Read(b[:])
+	val := binary.BigEndian.Uint64(b[:])
+	return float64(val&(1<<53-1)) / float64(1<<53)
+}
 
 type Service struct {
 	repo                Repository
 	characterRepo       CharacterRepository
+	invRepo             InventoryProvider
 	battleEngine        corebattle.Resolver
 	activeStore         ActiveExpeditionStore
 	dungeons            []Dungeon
 	dungeonMap          map[string]Dungeon
 	monsterDefeatedHook MonsterDefeatedHook
+	rng                 RandomSource
 }
 
 func (s *Service) SetMonsterDefeatedHook(hook MonsterDefeatedHook) {
@@ -234,6 +273,20 @@ func WithCustomDungeons(catalog []Dungeon) Option {
 		for _, d := range catalog {
 			s.dungeonMap[d.ID] = d
 		}
+	}
+}
+
+// WithInventoryProvider sets the inventory repository for checking items like Scope Goggles (197).
+func WithInventoryProvider(invRepo InventoryProvider) Option {
+	return func(s *Service) {
+		s.invRepo = invRepo
+	}
+}
+
+// WithRNG sets custom RandomSource for deterministic testing.
+func WithRNG(rng RandomSource) Option {
+	return func(s *Service) {
+		s.rng = rng
 	}
 }
 
@@ -273,6 +326,9 @@ func NewService(
 
 	if s.activeStore == nil {
 		s.activeStore = NewMemoryExpeditionRepository()
+	}
+	if s.rng == nil {
+		s.rng = defaultRandomSource{}
 	}
 
 	return s, nil
@@ -349,4 +405,18 @@ func DecodeItems(data string) []string {
 		items = []string{}
 	}
 	return items
+}
+
+func EncodeMembers(members []ExpeditionMember) string {
+	b, _ := json.Marshal(members)
+	return string(b)
+}
+
+func DecodeMembers(data string) []ExpeditionMember {
+	var members []ExpeditionMember
+	_ = json.Unmarshal([]byte(data), &members)
+	if members == nil {
+		members = []ExpeditionMember{}
+	}
+	return members
 }

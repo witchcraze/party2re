@@ -87,14 +87,14 @@ Reconcile facilities and production mechanics that depend on Depot storage and o
 - [x] **Monster Ranch: Monster Stabling, Home Pet Link, Naming & P2P Gifting** (#488)
 - [x] **Plantation: 6 Seeds, 14 Fertilizer Reagents & Overnight Depot Harvest** (#489)
 
-##### Milestone 3: Adventure, Dungeons & Live Combat *(Planned)*
+##### Milestone 3: Adventure, Dungeons & Live Combat *(Completed)*
 Restore crawl structures, boss challenges, and multiplayer PvP/GvG arenas.
 - [x] **Battle Adapter: Standardize Character/Party Mapping & Post-Battle State Application** (#496)
-- [ ] **Adventure: 10-Floor Dungeon Crawl, Flee Penalties & Boss Battles** (#478)
-- [ ] **Sealing Boss Arena: Proof of Kingship, Revive Counters & Leaves** (#479)
+- [x] **Adventure: 10-Floor Dungeon Crawl, Flee Penalties & Boss Battles** (#478)
+- [x] **Sealing Boss Arena: Proof of Kingship, Revive Counters & Leaves** (#479)
 - [x] **Colosseum PvP: Eliminate Elo Arena & Reproduce Real-time 8-Player Bet & Split Battles** (#481)
 - [x] **Guild Battles: Eliminate Elo Duels & Reproduce Live GvG Multi-Round Matches with Trophy Decorations** (#482)
-- [ ] **Dungeon & Challenge: Co-op Multi-party Lobbies & Turn Engines** (#483)
+- [x] **Dungeon & Challenge: Co-op Multi-party Lobbies & Turn Engines** (#483)
 
 ##### Milestone 4: Community, Events & Entertainment *(Planned)*
 Restore authentic social structures and mini-games.

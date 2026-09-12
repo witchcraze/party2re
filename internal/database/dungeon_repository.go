@@ -68,19 +68,22 @@ func (r *DungeonRepository) GetRecord(ctx context.Context, characterID string) (
 
 func (r *DungeonRepository) GetActiveExpedition(ctx context.Context, characterID string) (*dungeon.ActiveExpedition, error) {
 	query := `
-		SELECT id, character_id, dungeon_id, current_floor, pos_x, pos_y,
+		SELECT id, character_id, party_id, dungeon_id, current_floor, pos_x, pos_y,
 		       current_hp, turns_remaining, accumulated_exp, accumulated_gold,
-		       accumulated_items_json, status, started_at, updated_at
+		       accumulated_items_json, members_json, status, started_at, updated_at
 		FROM dungeon_active_expeditions
 		WHERE character_id = ?
 	`
 	var exp dungeon.ActiveExpedition
 	var itemsJSON string
 	var statusStr string
+	var partyID sql.NullString
+	var membersJSON sql.NullString
 
 	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query, characterID).Scan(
 		&exp.ID,
 		&exp.CharacterID,
+		&partyID,
 		&exp.DungeonID,
 		&exp.CurrentFloor,
 		&exp.PosX,
@@ -90,6 +93,7 @@ func (r *DungeonRepository) GetActiveExpedition(ctx context.Context, characterID
 		&exp.AccumulatedExp,
 		&exp.AccumulatedGold,
 		&itemsJSON,
+		&membersJSON,
 		&statusStr,
 		&exp.StartedAt,
 		&exp.UpdatedAt,
@@ -101,6 +105,13 @@ func (r *DungeonRepository) GetActiveExpedition(ctx context.Context, characterID
 		return nil, err
 	}
 
+	if partyID.Valid {
+		exp.PartyID = partyID.String
+	}
+	if membersJSON.Valid && membersJSON.String != "" {
+		exp.Members = dungeon.DecodeMembers(membersJSON.String)
+	}
+
 	exp.Status = dungeon.ExpeditionStatus(statusStr)
 	exp.AccumulatedItems = dungeon.DecodeItems(itemsJSON)
 
@@ -109,15 +120,22 @@ func (r *DungeonRepository) GetActiveExpedition(ctx context.Context, characterID
 
 func (r *DungeonRepository) SaveActiveExpedition(ctx context.Context, exp dungeon.ActiveExpedition) error {
 	itemsJSON := dungeon.EncodeItems(exp.AccumulatedItems)
+	membersJSON := dungeon.EncodeMembers(exp.Members)
 	now := time.Now().UTC()
+
+	var partyID sql.NullString
+	if exp.PartyID != "" {
+		partyID = sql.NullString{String: exp.PartyID, Valid: true}
+	}
 
 	query := `
 		INSERT INTO dungeon_active_expeditions (
-			id, character_id, dungeon_id, current_floor, pos_x, pos_y,
+			id, character_id, party_id, dungeon_id, current_floor, pos_x, pos_y,
 			current_hp, turns_remaining, accumulated_exp, accumulated_gold,
-			accumulated_items_json, status, started_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			accumulated_items_json, members_json, status, started_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
+			party_id = VALUES(party_id),
 			current_floor = VALUES(current_floor),
 			pos_x = VALUES(pos_x),
 			pos_y = VALUES(pos_y),
@@ -126,6 +144,7 @@ func (r *DungeonRepository) SaveActiveExpedition(ctx context.Context, exp dungeo
 			accumulated_exp = VALUES(accumulated_exp),
 			accumulated_gold = VALUES(accumulated_gold),
 			accumulated_items_json = VALUES(accumulated_items_json),
+			members_json = VALUES(members_json),
 			status = VALUES(status),
 			updated_at = VALUES(updated_at)
 	`
@@ -134,6 +153,7 @@ func (r *DungeonRepository) SaveActiveExpedition(ctx context.Context, exp dungeo
 		query,
 		exp.ID,
 		exp.CharacterID,
+		partyID,
 		exp.DungeonID,
 		exp.CurrentFloor,
 		exp.PosX,
@@ -143,6 +163,7 @@ func (r *DungeonRepository) SaveActiveExpedition(ctx context.Context, exp dungeo
 		exp.AccumulatedExp,
 		exp.AccumulatedGold,
 		itemsJSON,
+		membersJSON,
 		string(exp.Status),
 		exp.StartedAt,
 		now,

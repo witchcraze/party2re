@@ -48,6 +48,7 @@ func (m *MemorySessionRepository) GetActiveSession(ctx context.Context, characte
 
 	cp := s
 	cp.AccumulatedItems = append([]string(nil), s.AccumulatedItems...)
+	cp.Members = append([]ChallengeMember(nil), s.Members...)
 	return &cp, nil
 }
 
@@ -57,6 +58,7 @@ func (m *MemorySessionRepository) SaveActiveSession(ctx context.Context, session
 
 	cp := session
 	cp.AccumulatedItems = append([]string(nil), session.AccumulatedItems...)
+	cp.Members = append([]ChallengeMember(nil), session.Members...)
 	m.sessions[session.CharacterID] = cp
 	m.expirations[session.CharacterID] = time.Now().UTC().Add(m.ttl)
 	return nil
@@ -109,6 +111,7 @@ func (m *MemorySessionRepository) AdvanceRound(ctx context.Context, characterID 
 
 	cp := s
 	cp.AccumulatedItems = append([]string(nil), s.AccumulatedItems...)
+	cp.Members = append([]ChallengeMember(nil), s.Members...)
 	return AdvanceRoundOutcome{
 		Session: cp,
 		Status:  cp.Status,

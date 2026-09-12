@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #482 — [Refactor] Guild Battles: Revert asynchronous Elo duels to Live GvG Multi-Round Matches with Trophy Decorations
+Last updated: Issue #483 — [Feature] Dungeon & Challenge Multi-Player: Support Party Exploration, Map Scouting Skills, and Hall of Fame Records
 
 ## Current phase
 
@@ -57,9 +57,9 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Colosseum PvP (闘技場)** (`internal/pvp`): ✅ Real-time 2..8 player room recruitment (`quest.cgi:type=4`), Bet & Split prize pool mechanics, 9 team colors (`@ぱーてぃー`), multi-round party battle resolution (`_battle.cgi:486`), durable `pvp_wins` (`$m{kill_p}`) tracking, draw refund on 10 rounds; fictional Elo rating arena purged (#481).
 - **GvG Combat (ギルド戦)** (`internal/gvg`): ✅ Real-time 2..8 player guild battle rooms (`quest.cgi:type=5`, `vs_guild.cgi`), room GP prize pool seeding (2 GP initial + 1 GP per joiner), automatic guild color adoption, friendly guild battle prohibition (`color == '#FFFFFF'`), `@かいし` multi-guild validation and HP restoration, multi-round party battle resolution (`corebattle.ResolvePartyBattle`), round winner GP rewards (+3 GP), target wins (1-3 wins) match victory awards (prize pool GP + 1 Bronze Medal), all-participant +4 GP compensation, 10-round draw limit, and 7-tier victory medals & championship cups cascading promotion (5:1 ratios); fictional asynchronous Elo duels and match tables purged (#482).
 - **Boss Battles (封印戦)** (`internal/boss`): ✅ 4-player Party Sealing Battles (`vs_king.cgi`, `stage/king1..10.cgi`, `king99.cgi`), Dejon banishment (+30% Tired), `@ふういん` resealing, HeroCount increment, celebration banquets, news broadcast; fictional 1-day-3-attempts solo raid completely purged (#479).
-- **Dungeon Exploration** (`internal/dungeon`): ✅ Grid-map exploration; Valkey Master run buffer (Lua CAS, 2h TTL, two-phase settle).
+- **Dungeon Exploration** (`internal/dungeon`): ✅ Grid-map exploration; Valkey Master run buffer (Lua CAS, 2h TTL, two-phase settle); multi-player party exploration (up to 4 players), trap damage distribution, Treasure Hunter (+1..+2 bonus chests), and map scouting (@ちず) vision expansion (Thief/Ninja/Geomancer/Ranger/scope_goggles) (#483).
 - **Battle Replays** (`internal/replay`): ✅ Turn-log recorder + history viewer (keyset cursor).
-- **Endurance Challenge** (`internal/challenge`): ✅ 4-tier survival; Valkey Master session buffer; co-op lobbies pending (#483).
+- **Endurance Challenge** (`internal/challenge`): ✅ 4-tier survival; Valkey Master session buffer; multi-player party challenge runs (up to 4 players, 20% MaxHP recovery), and Hall of Fame records with gravestones (`chr/099.gif`) for fallen members (#483).
 - **Custom Skill Gem Synthesis** (`internal/custom_skill`): ✅ 3-gem recipe synthesis, CMP/slot constraints, atomic gem swap.
 - **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): ✅ Delivery quests (normal/rare/guild), emergency state reset.
 - **Town Park & Bulletin Board** (`internal/park`): ✅ Posts with color/recipient, rate-limit, NPC divination.

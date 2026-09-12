@@ -55,18 +55,61 @@ type ChallengeTier struct {
 	MilestoneItemPool []string         `json:"milestone_item_pool"`
 }
 
+type ChallengeMember struct {
+	CharacterID        string `json:"character_id"`
+	CharacterName      string `json:"character_name"`
+	Icon               string `json:"icon"`
+	JobID              string `json:"job_id"`
+	OldJobID           string `json:"old_job_id,omitempty"`
+	Level              int    `json:"level"`
+	CharacterCurrentHP int    `json:"character_current_hp"`
+	MaxHP              int    `json:"max_hp"`
+	MaxMP              int    `json:"max_mp"`
+	Attack             int    `json:"attack"`
+	Defense            int    `json:"defense"`
+	Agility            int    `json:"agility"`
+}
+
+type HallOfFameMember struct {
+	CharacterID   string `json:"character_id"`
+	CharacterName string `json:"character_name"`
+	Icon          string `json:"icon"`
+	JobID         string `json:"job_id"`
+	JobName       string `json:"job_name,omitempty"`
+	OldJobID      string `json:"old_job_id,omitempty"`
+	OldJobName    string `json:"old_job_name,omitempty"`
+	HP            int    `json:"hp"`
+	MP            int    `json:"mp"`
+	Attack        int    `json:"attack"`
+	Defense       int    `json:"defense"`
+	Agility       int    `json:"agility"`
+}
+
+type HallOfFameEntry struct {
+	TierID       string             `json:"tier_id"`
+	HighestRound int                `json:"highest_round"`
+	PartyName    string             `json:"party_name"`
+	PartyColor   string             `json:"party_color"`
+	ClearedAt    time.Time          `json:"cleared_at"`
+	Members      []HallOfFameMember `json:"members"`
+}
+
 type ChallengeSession struct {
-	ID                 string        `json:"id"`
-	CharacterID        string        `json:"character_id"`
-	TierID             string        `json:"tier_id"`
-	CurrentRound       int           `json:"current_round"`
-	CharacterCurrentHP int           `json:"character_current_hp"`
-	AccumulatedExp     int           `json:"accumulated_exp"`
-	AccumulatedGold    int           `json:"accumulated_gold"`
-	AccumulatedItems   []string      `json:"accumulated_items"`
-	Status             SessionStatus `json:"status"`
-	CreatedAt          time.Time     `json:"created_at"`
-	UpdatedAt          time.Time     `json:"updated_at"`
+	ID                 string            `json:"id"`
+	CharacterID        string            `json:"character_id"`
+	PartyID            string            `json:"party_id,omitempty"`
+	PartyName          string            `json:"party_name,omitempty"`
+	PartyColor         string            `json:"party_color,omitempty"`
+	Members            []ChallengeMember `json:"members,omitempty"`
+	TierID             string            `json:"tier_id"`
+	CurrentRound       int               `json:"current_round"`
+	CharacterCurrentHP int               `json:"character_current_hp"`
+	AccumulatedExp     int               `json:"accumulated_exp"`
+	AccumulatedGold    int               `json:"accumulated_gold"`
+	AccumulatedItems   []string          `json:"accumulated_items"`
+	Status             SessionStatus     `json:"status"`
+	CreatedAt          time.Time         `json:"created_at"`
+	UpdatedAt          time.Time         `json:"updated_at"`
 }
 
 type CharacterChallengeRecord struct {
@@ -137,16 +180,31 @@ type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 }
 
-type Repository interface {
+type SessionRepository interface {
 	SaveSession(ctx context.Context, session ChallengeSession) error
 	FindSessionByID(ctx context.Context, id string) (*ChallengeSession, error)
 	FindActiveSessionByCharacter(ctx context.Context, characterID string) (*ChallengeSession, error)
 	UpdateSession(ctx context.Context, session ChallengeSession) error
+	FinalizeSession(ctx context.Context, session ChallengeSession, expReward int, goldReward int, items []string, newStreak int) error
+}
+
+type RecordRepository interface {
 	SaveRecord(ctx context.Context, record CharacterChallengeRecord) error
 	FindRecord(ctx context.Context, characterID string, tierID string) (*CharacterChallengeRecord, error)
 	FindRecordsByCharacter(ctx context.Context, characterID string) ([]CharacterChallengeRecord, error)
 	GetLeaderboard(ctx context.Context, tierID string, limit int) ([]LeaderboardEntry, error)
-	FinalizeSession(ctx context.Context, session ChallengeSession, expReward int, goldReward int, items []string, newStreak int) error
+}
+
+type HallOfFameRepository interface {
+	SaveHallOfFame(ctx context.Context, entry HallOfFameEntry) error
+	GetHallOfFame(ctx context.Context, tierID string) (*HallOfFameEntry, error)
+	ListHallOfFame(ctx context.Context) ([]HallOfFameEntry, error)
+}
+
+type Repository interface {
+	SessionRepository
+	RecordRepository
+	HallOfFameRepository
 }
 
 type Service struct {

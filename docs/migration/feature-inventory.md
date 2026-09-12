@@ -261,6 +261,10 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#489](https://github.com/witchcraze/party2re/issues/489) | Plantation: Reproduce Legacy Seed Cultivation, 14 Fertilizer Reagents, Overnight Harvest, and Depot Delivery | Completed |
 | [#496](https://github.com/witchcraze/party2re/issues/496) | Battle Adapter: Standardize Character/Party to Battle Participant Mapping & Post-Battle State Application | Completed |
 | [#478](https://github.com/witchcraze/party2re/issues/478) | Adventure: Eliminate 1-hour expedition timer and reproduce 10-Floor Party Dungeon Crawl with Treasure Rooms | Completed |
+| [#479](https://github.com/witchcraze/party2re/issues/479) | Boss Battles: Purge fictional 1-day-3-attempts solo raid, reproducing 4-Player Party Sealing Battles | Completed |
+| [#481](https://github.com/witchcraze/party2re/issues/481) | Colosseum PvP: Eliminate Elo Arena & Reproduce Real-time 8-Player Bet & Split Battles | Completed |
+| [#482](https://github.com/witchcraze/party2re/issues/482) | Guild Battles: Eliminate Elo Duels & Reproduce Live GvG Multi-Round Matches with Trophy Decorations | Completed |
+| [#483](https://github.com/witchcraze/party2re/issues/483) | Dungeon & Challenge Multi-Player: Support Party Exploration, Map Scouting Skills, and Hall of Fame Records | Completed |
 
 ---
 
