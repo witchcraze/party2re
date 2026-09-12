@@ -20,6 +20,7 @@ const (
 	ActionKindHeal   = "heal"
 	ActionKindBuff   = "buff"
 	ActionKindStatus = "status"
+	ActionKindDejon  = "dejon"
 )
 
 // ActionItem represents an active item command executed during combat (@どうぐ).

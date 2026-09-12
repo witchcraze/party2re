@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/witchcraze/party2re/internal/boss"
 	"github.com/witchcraze/party2re/internal/challenge"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
@@ -22,13 +21,6 @@ type ChallengeService interface {
 	AdvanceRound(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error)
 	RetireSession(ctx context.Context, characterID string, sessionID string) (*challenge.ChallengeSession, error)
 	GetCharacterRecords(ctx context.Context, characterID string) ([]challenge.CharacterChallengeRecord, error)
-}
-
-// BossService defines boss encounters operations exposed over HTTP.
-type BossService interface {
-	ListBosses(ctx context.Context, characterID string) ([]boss.BossEncounterStatus, error)
-	ChallengeBoss(ctx context.Context, characterID, bossID string) (boss.ChallengeResult, error)
-	GetCharacterRecord(ctx context.Context, characterID string) (boss.CharacterBossRecord, error)
 }
 
 // DungeonService defines dungeon explorations operations exposed over HTTP.
@@ -51,13 +43,6 @@ type PvPService interface {
 func WithChallenge(c ChallengeService) Option {
 	return func(h *Handler) {
 		h.challenges = c
-	}
-}
-
-// WithBoss configures the boss service for the Handler.
-func WithBoss(b BossService) Option {
-	return func(h *Handler) {
-		h.bosses = b
 	}
 }
 
@@ -252,80 +237,6 @@ func (h *Handler) handleRetireChallenge(w http.ResponseWriter, r *http.Request) 
 
 		writeJSON(w, http.StatusOK, challengeSessionResponse{
 			Session: session,
-		})
-	})
-}
-
-// -------------------------------------------------------------------
-// Boss Handlers
-// -------------------------------------------------------------------
-
-type challengeBossRequest struct {
-	BossID string `json:"boss_id"`
-}
-
-type bossListResponse struct {
-	Bosses []boss.BossEncounterStatus `json:"bosses"`
-}
-
-type bossChallengeResponse struct {
-	Result boss.ChallengeResult `json:"result"`
-}
-
-func (h *Handler) handleListBosses(w http.ResponseWriter, r *http.Request) {
-	if h.bosses == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("boss service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		statuses, err := h.bosses.ListBosses(r.Context(), char.ID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, bossListResponse{
-			Bosses: statuses,
-		})
-	})
-}
-
-func (h *Handler) handleChallengeBoss(w http.ResponseWriter, r *http.Request) {
-	if h.bosses == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("boss service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req challengeBossRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		if req.BossID == "" {
-			writeError(w, http.StatusBadRequest, errors.New("boss_id is required"))
-			return
-		}
-
-		res, err := h.bosses.ChallengeBoss(r.Context(), char.ID, req.BossID)
-		if err != nil {
-			if errors.Is(err, boss.ErrBossNotFound) || errors.Is(err, boss.ErrInvalidBossID) || errors.Is(err, boss.ErrCharacterNotFound) {
-				writeError(w, http.StatusBadRequest, err)
-				return
-			}
-			if errors.Is(err, boss.ErrDailyAttemptsExhausted) || errors.Is(err, boss.ErrPrerequisiteNotMet) || errors.Is(err, boss.ErrLevelRequirementNotMet) {
-				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, bossChallengeResponse{
-			Result: res,
 		})
 	})
 }

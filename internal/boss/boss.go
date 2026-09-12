@@ -3,59 +3,76 @@ package boss
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
-)
-
-const (
-	DefaultDailyEntryLimit = 3
+	"github.com/witchcraze/party2re/internal/party"
 )
 
 var (
-	ErrBossNotFound           = errors.New("boss encounter not found")
-	ErrCharacterNotFound      = errors.New("character not found")
-	ErrLevelRequirementNotMet = errors.New("character level requirement not met for boss")
-	ErrPrerequisiteNotMet     = errors.New("prerequisite boss tier must be cleared first")
-	ErrDailyAttemptsExhausted = errors.New("daily challenge attempts exhausted for today")
-	ErrInvalidBossID          = errors.New("invalid boss id")
+	ErrBossNotFound         = errors.New("boss stage not found")
+	ErrCharacterNotFound    = errors.New("character not found")
+	ErrInvalidBossID        = errors.New("invalid boss id")
+	ErrPartyNotFound        = errors.New("party not found")
+	ErrNotPartyLeader       = errors.New("only party leader can start sealing battle")
+	ErrPartyNotReady        = errors.New("all party members must be ready before starting")
+	ErrPartyNotRecruiting   = errors.New("party is not currently recruiting")
+	ErrNeedJoinNotMet       = errors.New("character does not meet party join condition")
+	ErrCharacterUnconscious = errors.New("character is unconscious (HP <= 0)")
+	ErrCharacterExhausted   = errors.New("character is exhausted (tired >= 100)")
 )
 
-type Boss struct {
-	ID                   string   `json:"id"`
-	Tier                 int      `json:"tier"`
-	Name                 string   `json:"name"`
-	Title                string   `json:"title"`
-	MinLevel             int      `json:"min_level"`
-	HP                   int      `json:"hp"`
-	Attack               int      `json:"attack"`
-	Defense              int      `json:"defense"`
-	Agility              int      `json:"agility"`
-	ExperienceReward     int      `json:"experience_reward"`
-	GoldReward           int      `json:"gold_reward"`
-	DropItemIDs          []string `json:"drop_item_ids"`
-	FirstClearExpBonus   int      `json:"first_clear_exp_bonus"`
-	FirstClearGoldBonus  int      `json:"first_clear_gold_bonus"`
-	SmallMedalReward     int      `json:"small_medal_reward"`
-	FirstClearMedalBonus int      `json:"first_clear_medal_bonus"`
-	DailyEntryLimit      int      `json:"daily_entry_limit"`
+// BossStage defines an authentic King stage (stage/king1.cgi - king10.cgi, king99.cgi).
+type BossStage struct {
+	ID              string        `json:"id"`
+	Name            string        `json:"name"`
+	LeaderName      string        `json:"leader_name"`
+	Speed           int           `json:"speed"`
+	MaxMembers      int           `json:"max_members"`
+	NeedJoin        string        `json:"need_join"`
+	Bosses          []BossMonster `json:"bosses"`
+	TreasureItemIDs []string      `json:"treasure_item_ids"`
 }
 
+// Boss is an alias for BossStage for compatibility.
+type Boss = BossStage
+
+// BossMonster represents a combatant in a King sealing battle.
+type BossMonster struct {
+	Name       string `json:"name"`
+	HP         int    `json:"hp"`
+	MP         int    `json:"mp"`
+	MaxHP      int    `json:"max_hp"`
+	MaxMP      int    `json:"max_mp"`
+	Attack     int    `json:"attack"`
+	Defense    int    `json:"defense"`
+	Agility    int    `json:"agility"`
+	GetExp     int    `json:"get_exp"`
+	GetMoney   int    `json:"get_money"`
+	Icon       string `json:"icon"`
+	Job        int    `json:"job"`
+	SP         int    `json:"sp"`
+	OldJob     int    `json:"old_job"`
+	OldSP      int    `json:"old_sp"`
+	TMP        string `json:"tmp"`
+	State      string `json:"state"`
+	GetCrystal int    `json:"get_crystal"`
+}
+
+// CharacterBossRecord tracks boss defeat progress in MariaDB.
 type CharacterBossRecord struct {
-	CharacterID          string
-	HighestTierCleared   int
-	TotalBossDefeats     int
-	FirstClearedAt       *time.Time
-	LastChallengedAt     *time.Time
-	DailyAttemptsUsed    int
-	DailyAttemptsResetAt time.Time
-	CreatedAt            time.Time
-	UpdatedAt            time.Time
+	CharacterID        string
+	HighestTierCleared int
+	TotalBossDefeats   int
+	FirstClearedAt     *time.Time
+	LastChallengedAt   *time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
+// BossChallengeHistory records a completed sealing battle.
 type BossChallengeHistory struct {
 	ID                string
 	CharacterID       string
@@ -71,25 +88,39 @@ type BossChallengeHistory struct {
 	CreatedAt         time.Time
 }
 
-type BossEncounterStatus struct {
-	Boss              Boss   `json:"boss"`
-	IsUnlocked        bool   `json:"is_unlocked"`
-	IsCleared         bool   `json:"is_cleared"`
-	AttemptsRemaining int    `json:"attempts_remaining"`
-	LockReason        string `json:"lock_reason,omitempty"`
+// BossStageStatus represents the availability of a King stage for a character.
+type BossStageStatus struct {
+	Boss             BossStage `json:"boss"`
+	IsEligible       bool      `json:"is_eligible"`
+	IsUnlocked       bool      `json:"is_unlocked"`
+	IsCleared        bool      `json:"is_cleared"`
+	IneligibleReason string    `json:"ineligible_reason,omitempty"`
+	LockReason       string    `json:"lock_reason,omitempty"`
 }
 
-type ChallengeResult struct {
-	BattleResult      corebattle.Result   `json:"battle_result"`
-	Outcome           corebattle.Outcome  `json:"outcome"`
-	ExperienceReward  int                 `json:"experience_reward"`
-	GoldReward        int                 `json:"gold_reward"`
-	SmallMedalsReward int                 `json:"small_medals_reward"`
-	ItemRewardID      string              `json:"item_reward_id,omitempty"`
-	IsFirstClear      bool                `json:"is_first_clear"`
-	UpdatedRecord     CharacterBossRecord `json:"updated_record"`
+// BossEncounterStatus is an alias for BossStageStatus.
+type BossEncounterStatus = BossStageStatus
+
+// SealingBattleResult captures the outcome of an authentic Sealing Battle (vs_king.cgi).
+type SealingBattleResult struct {
+	StageID           string                       `json:"stage_id"`
+	StageName         string                       `json:"stage_name"`
+	Outcome           corebattle.Outcome           `json:"outcome"`
+	Turns             int                          `json:"turns"`
+	RewardExp         int                          `json:"reward_exp"`
+	RewardGold        int                          `json:"reward_gold"`
+	RewardItemID      string                       `json:"reward_item_id,omitempty"`
+	HeroCountGained   int                          `json:"hero_count_gained"`
+	BanishedMemberIDs []string                     `json:"banished_member_ids,omitempty"`
+	NewsMessage       string                       `json:"news_message,omitempty"`
+	BanquetHeld       bool                         `json:"banquet_held"`
+	BattleResult      corebattle.PartyBattleResult `json:"battle_result"`
 }
 
+// ChallengeResult is an alias for SealingBattleResult for backward compatibility.
+type ChallengeResult = SealingBattleResult
+
+// BossLeaderboardEntry tracks top boss slayers.
 type BossLeaderboardEntry struct {
 	CharacterID        string     `json:"character_id"`
 	CharacterName      string     `json:"character_name"`
@@ -115,21 +146,72 @@ type Repository interface {
 
 type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
+	FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
+	Update(ctx context.Context, char corecharacter.Character) error
+}
+
+type PartyRepository interface {
+	GetPartyForUpdate(ctx context.Context, id string) (party.Party, error)
+	GetMembers(ctx context.Context, partyID string) ([]party.Member, error)
+	DeleteParty(ctx context.Context, id string) error
+	UpdateParty(ctx context.Context, p party.Party) error
+}
+
+type NewsPublisher interface {
+	PublishNews(ctx context.Context, category, title, content, author string, publishedAt time.Time) error
+}
+
+type NewsPublisherFunc func(ctx context.Context, category, title, content, author string, publishedAt time.Time) error
+
+func (f NewsPublisherFunc) PublishNews(ctx context.Context, category, title, content, author string, publishedAt time.Time) error {
+	return f(ctx, category, title, content, author, publishedAt)
+}
+
+type TransactionProvider interface {
+	RunInTx(ctx context.Context, fn func(txCtx context.Context) error) error
 }
 
 type VictoryBanquetHook func(ctx context.Context, bossID, bossName, slayerID, slayerName string, tier int) error
-
-// VictoryHook is called when a character successfully slays a boss.
 type VictoryHook func(ctx context.Context, characterID string, bossID string, tier int) error
+
+type ServiceOption func(*Service)
+
+func WithPartyRepository(repo PartyRepository) ServiceOption {
+	return func(s *Service) {
+		s.partyRepo = repo
+	}
+}
+
+func WithNewsPublisher(pub NewsPublisher) ServiceOption {
+	return func(s *Service) {
+		s.newsPub = pub
+	}
+}
+
+func WithTransactionProvider(tx TransactionProvider) ServiceOption {
+	return func(s *Service) {
+		s.txProvider = tx
+	}
+}
+
+func WithRandomSource(rng corecharacter.RandomSource) ServiceOption {
+	return func(s *Service) {
+		s.rng = rng
+	}
+}
 
 type Service struct {
 	repo               Repository
 	characterRepo      CharacterRepository
+	partyRepo          PartyRepository
 	battleEngine       corebattle.Resolver
-	bosses             []Boss
-	bossMap            map[string]Boss
+	stages             []BossStage
+	stageMap           map[string]BossStage
 	victoryBanquetHook VictoryBanquetHook
 	victoryHook        VictoryHook
+	newsPub            NewsPublisher
+	txProvider         TransactionProvider
+	rng                corecharacter.RandomSource
 }
 
 func (s *Service) SetVictoryBanquetHook(hook VictoryBanquetHook) {
@@ -144,7 +226,7 @@ func NewService(
 	repo Repository,
 	characterRepo CharacterRepository,
 	battleEngine corebattle.Resolver,
-	customBosses ...Boss,
+	customBosses ...BossStage,
 ) (*Service, error) {
 	if repo == nil {
 		return nil, errors.New("boss repository is required")
@@ -161,21 +243,27 @@ func NewService(
 		catalog = customBosses
 	}
 
-	bossMap := make(map[string]Boss, len(catalog))
+	stageMap := make(map[string]BossStage, len(catalog))
 	for _, b := range catalog {
-		bossMap[b.ID] = b
+		stageMap[b.ID] = b
 	}
 
 	return &Service{
 		repo:          repo,
 		characterRepo: characterRepo,
 		battleEngine:  battleEngine,
-		bosses:        catalog,
-		bossMap:       bossMap,
+		stages:        catalog,
+		stageMap:      stageMap,
 	}, nil
 }
 
-func (s *Service) ListBosses(ctx context.Context, characterID string) ([]BossEncounterStatus, error) {
+func (s *Service) Configure(opts ...ServiceOption) {
+	for _, opt := range opts {
+		opt(s)
+	}
+}
+
+func (s *Service) ListStages(ctx context.Context, characterID string) ([]BossStageStatus, error) {
 	if characterID == "" {
 		return nil, ErrCharacterNotFound
 	}
@@ -187,42 +275,46 @@ func (s *Service) ListBosses(ctx context.Context, characterID string) ([]BossEnc
 	if err != nil {
 		return nil, err
 	}
-	rec.ResetDailyAttemptsIfExpired(time.Now().UTC())
 
-	statuses := make([]BossEncounterStatus, 0, len(s.bosses))
-	for _, b := range s.bosses {
-		isUnlocked := true
-		lockReason := ""
+	statuses := make([]BossStageStatus, 0, len(s.stages))
+	for _, stage := range s.stages {
+		isEligible := true
+		ineligibleReason := ""
 
-		// Check level requirement
-		if char.Level < b.MinLevel {
-			isUnlocked = false
-			lockReason = fmt.Sprintf("Requires Character Level %d", b.MinLevel)
+		if char.Stats.HP <= 0 {
+			isEligible = false
+			ineligibleReason = "Character is unconscious"
+		} else if char.Tired >= 100 {
+			isEligible = false
+			ineligibleReason = "Character is exhausted (Tired >= 100)"
+		} else if err := party.ValidateNeedJoin(stage.NeedJoin, char); err != nil {
+			isEligible = false
+			ineligibleReason = err.Error()
 		}
 
-		// Check prerequisite tier requirement
-		if isUnlocked && b.Tier > 1 {
-			prereqTier := b.Tier - 1
-			if b.Tier == 99 {
-				prereqTier = 10
-			}
-			if rec.HighestTierCleared < prereqTier {
-				isUnlocked = false
-				lockReason = fmt.Sprintf("Requires clearing Tier %d Boss first", prereqTier)
-			}
-		}
+		isCleared := rec.TotalBossDefeats > 0
 
-		isCleared := rec.HighestTierCleared >= b.Tier
-		attemptsRemaining := max(0, b.DailyEntryLimit-rec.DailyAttemptsUsed)
-
-		statuses = append(statuses, BossEncounterStatus{
-			Boss:              b,
-			IsUnlocked:        isUnlocked,
-			IsCleared:         isCleared,
-			AttemptsRemaining: attemptsRemaining,
-			LockReason:        lockReason,
+		statuses = append(statuses, BossStageStatus{
+			Boss:             stage,
+			IsEligible:       isEligible,
+			IsUnlocked:       isEligible,
+			IsCleared:        isCleared,
+			IneligibleReason: ineligibleReason,
+			LockReason:       ineligibleReason,
 		})
 	}
 
 	return statuses, nil
+}
+
+// ListBosses is an alias for ListStages.
+func (s *Service) ListBosses(ctx context.Context, characterID string) ([]BossStageStatus, error) {
+	return s.ListStages(ctx, characterID)
+}
+
+func (s *Service) runInTx(ctx context.Context, fn func(txCtx context.Context) error) error {
+	if s.txProvider != nil {
+		return s.txProvider.RunInTx(ctx, fn)
+	}
+	return fn(ctx)
 }

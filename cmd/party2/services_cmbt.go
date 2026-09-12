@@ -188,6 +188,16 @@ func newCmbtServices(
 		return nil, err
 	}
 
+	// Wire party repository and news publisher into boss service so that
+	// StartSealingBattle (パーティー封印戦) can resolve party membership and publish sealing news.
+	bossService.Configure(
+		boss.WithPartyRepository(partyRepo),
+		boss.WithNewsPublisher(boss.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
+			_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)
+			return err
+		})),
+	)
+
 	return &cmbtServices{
 		pvp:         pvpService,
 		gvg:         gvgService,

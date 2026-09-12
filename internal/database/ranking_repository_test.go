@@ -129,10 +129,10 @@ func TestRankingRepository_Integration(t *testing.T) {
 
 	// 6. Boss Defeats
 	_, err = db.ExecContext(ctx, `
-		INSERT INTO character_boss_records (character_id, highest_tier_cleared, total_boss_defeats, daily_attempts_reset_at)
-		VALUES (?, 5, 12, ?), (?, 2, 3, ?)
+		INSERT INTO character_boss_records (character_id, highest_tier_cleared, total_boss_defeats)
+		VALUES (?, 5, 12), (?, 2, 3)
 		ON DUPLICATE KEY UPDATE total_boss_defeats = VALUES(total_boss_defeats)
-	`, c1.ID, now, c2.ID, now)
+	`, c1.ID, c2.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

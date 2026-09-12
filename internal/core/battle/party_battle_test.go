@@ -452,3 +452,72 @@ func TestPartyBattle_OpposingElementFieldPenalty(t *testing.T) {
 		}
 	}
 }
+
+func TestPartyBattle_DejonBanishment(t *testing.T) {
+	engine := corebattle.Engine{}
+
+	req := corebattle.PartyBattleRequest{
+		Allies: []corebattle.Participant{
+			{
+				ID:      "ally-1",
+				Name:    "Ally1",
+				HP:      10,
+				Attack:  10,
+				Defense: 5,
+				Agility: 5,
+			},
+			{
+				ID:      "ally-2",
+				Name:    "Ally2",
+				HP:      500,
+				Attack:  50,
+				Defense: 50,
+				Agility: 5,
+			},
+		},
+		Enemies: []corebattle.Participant{
+			{
+				ID:      "boss-king",
+				Name:    "破壊神",
+				HP:      1000,
+				Attack:  50,
+				Defense: 20,
+				Agility: 50, // Acts first
+				Skills: []corebattle.ActionSkill{
+					{
+						ID:     "dejon",
+						Name:   "デジョン",
+						Kind:   corebattle.ActionKindDejon,
+						MPCost: 0,
+					},
+				},
+			},
+		},
+		VictoryReward: corebattle.Reward{Experience: 100},
+	}
+
+	res, err := engine.ResolvePartyBattle(req)
+	if err != nil {
+		t.Fatalf("ResolvePartyBattle failed: %v", err)
+	}
+
+	// Ally 1 was killed by boss attack, then on next boss action banished by dejon
+	if !res.BanishedIDs["ally-1"] {
+		t.Errorf("expected ally-1 to be banished by dejon, got BanishedIDs: %+v", res.BanishedIDs)
+	}
+
+	foundDejonLog := false
+	for _, log := range res.Logs {
+		if log.ActionName == "デジョン" && log.TargetID == "ally-1" {
+			foundDejonLog = true
+			expectedMsg := "Ally1 が異空間へと吸い込まれた！"
+			if log.Message != expectedMsg {
+				t.Errorf("expected log message %q, got %q", expectedMsg, log.Message)
+			}
+			break
+		}
+	}
+	if !foundDejonLog {
+		t.Errorf("expected dejon turn log for ally-1, logs: %+v", res.Logs)
+	}
+}

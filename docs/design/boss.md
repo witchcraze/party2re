@@ -1,68 +1,57 @@
-# King and World Boss Battles Design
+# King Sealing Battles Design (封印戦)
 
 ## Overview
 
-The King and World Boss Feature Module (`internal/boss`) provides high-tier endgame raid and sealing boss challenges (`vs_king.cgi`, `stage/king1..10.cgi`) using the shared Core Battle engine (`internal/core/battle`). Players challenge legendary boss encounters across 10 progressive tiers and an ultimate world boss tier to earn massive experience, gold, rare drop loots (crystals, orbs), and first-clear milestone bonuses.
+The King Sealing Battle Feature Module (`internal/boss`) provides high-tier endgame cooperative sealing battles (`vs_king.cgi`, `stage/king1..10.cgi`, `king99.cgi`) using the shared Multi-Participant Core Battle engine (`internal/core/battle`).
+
+Up to 4 players form a party in the Multiplayer Party System (`internal/party`) under quest mode "封印戦" (quest type 6) to challenge ancient sealed kings and calamitous deities. Characters face devastating enemy skills like **Dejon** (デジョン; dimensional banishment of unconscious members with severe fatigue penalties). Victorious adventurers achieve resealing via **`@ふういん`**, gaining Hero Count (勇者カウント / `$m{hero_c}`), rare treasures, worldwide server news broadcasts, and hosting a celebratory banquet in the town Event Plaza (`internal/eventplaza`).
 
 ---
 
 ## Architectural Policy & Boundaries
 
-- **Core Battle Engine Isolation**: All boss encounters are resolved through `internal/core/battle.Engine`. The battle engine operates language-agnostically without boss-specific conditionals.
-- **Data-Driven Encounters**: Boss attributes (stats, level requirement, experience/gold rewards, drop items, first-clear bonuses) are defined through a data catalog.
-- **Player Progression & History**: Challenge records, total boss defeats (hero count / 英雄度), highest cleared tier, first-clear timestamps, and daily attempt limits are persisted in MariaDB (`character_boss_records`, `boss_challenge_history`).
-- **Transactional Consistency**: Match history recording, character progression updates (level/EXP/money), item drop inventory awards, and record adjustments are committed within a single atomic database transaction.
+- **Multi-Participant Battle Engine**: Encounters are resolved through `corebattle.PartyBattleResolver` (`corebattle.Engine{}`), handling party vs. multi-enemy boss formations, agility turn-order, MP/CMP skills, and revive/banishment rules.
+- **Authentic Stage Catalog**: 11 stages faithfully reproduced from legacy Party2 CGI data (`stage/king1.cgi` through `stage/king10.cgi`, and dynamic clone stage `king99.cgi`).
+- **No Fictional Daily Limits**: Legacy Party2 has no daily attempt caps (the previously fabricated 3-entry solo raid limit has been completely removed). Entrance is governed solely by character fatigue (`tired < 100`) and stage-specific `need_join` conditions (e.g. `hp_400_o`).
+- **Transactional Consistency**: Post-battle state transitions (HeroCount increment, entry fatigue +20%, dejon fatigue +30%, loot awards, news broadcast, banquet hooks, party disbandment) are committed within a single database transaction.
 
 ---
 
-## Domain Rules & Boss Tiers
+## Authentic King Stages
 
-### 1. Boss Tiers & Level Requirements
-
-| Tier | Boss Name | Title | Min Level | HP | Attack | Defense | Agility | Base EXP | Base Gold | Drop Loots |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Tier 1** | レッドストーン・ガーディアン | 封印の尖兵 | Lv 15 | 250 | 45 | 30 | 20 | 300 | 500 | Potion |
-| **Tier 2** | ブルーストーン・ゴーレム | 氷結の守護神 | Lv 25 | 500 | 80 | 60 | 35 | 600 | 1,000 | High Potion |
-| **Tier 3** | エメラルド・ワイバーン | 碧空の暴君 | Lv 35 | 900 | 130 | 95 | 55 | 1,000 | 1,800 | Ether |
-| **Tier 4** | アメジスト・ロード | 紫電の魔将 | Lv 45 | 1,400 | 190 | 140 | 75 | 1,600 | 2,800 | High Ether |
-| **Tier 5** | トパーズ・キメラ | 砂塵の獣王 | Lv 55 | 2,000 | 260 | 190 | 100 | 2,400 | 4,000 | Elixir |
-| **Tier 6** | オブシディアン・ナイト | 黒曜の覇者 | Lv 65 | 2,800 | 340 | 250 | 130 | 3,400 | 5,500 | Crystal I |
-| **Tier 7** | クリスタル・ドラゴン | 光彩の巨竜 | Lv 75 | 3,800 | 430 | 320 | 165 | 4,600 | 7,500 | Crystal II |
-| **Tier 8** | ダークネス・ベヒモス | 深淵の殲滅者 | Lv 85 | 5,000 | 530 | 400 | 200 | 6,000 | 10,000 | Crystal III |
-| **Tier 9** | アビス・ルーラー | 黄泉の帝王 | Lv 95 | 6,500 | 640 | 490 | 245 | 8,000 | 14,000 | Dark Orb |
-| **Tier 10** | 全てを無に還す者 | 終焉の破壊神 | Lv 99 | 8,500 | 760 | 590 | 300 | 12,000 | 20,000 | Light Orb |
-| **Tier 99** | 太古の創世神 | 天界の守護龍神 | Lv 99 | 12,000 | 920 | 720 | 360 | 25,000 | 50,000 | Rainbow Orb |
+| Stage ID | Stage Name | Leader / Boss | Speed | Max Members | Participation Gate (`need_join`) | Loot Drops |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **king1** | @全てを無に還す者@ | 破壊神 (HP 150,000) + 6 Stones | 12 | 4 | `hp_400_o` (Max HP ≥ 400) | item-059, item-071, item-104 |
+| **king2** | @全てを憎む者@ | 暗黒竜 (HP 140,000) | 12 | 4 | `hp_400_o` (Max HP ≥ 400) | item-059, item-071, item-104 |
+| **king3** | @全てを破壊する者@ | 悪魔の書 (HP 100,000) | 12 | 4 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071 |
+| **king4** | @全てを喰らう者@ | デス・マスター (HP 100,000) | 12 | 4 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
+| **king5** | @全てを司る者@ | 邪神官 (HP 100,000) | 12 | 4 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
+| **king6** | @全てを統べる者@ | 破壊神 (HP 120,000) | 12 | 4 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
+| **king7** | @全てを導く者@ | 竜神 (HP 150,000) | 12 | 4 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
+| **king8** | @全てを裁く者@ | 審判者 (HP 160,000) | 12 | 4 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
+| **king9** | @全てを赦す者@ | 救世主 (HP 180,000) | 12 | 4 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
+| **king10** | @全てを越える者@ | 創世神 (HP 200,000) | 12 | 4 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
+| **king99** | @自分を倒す者@ | @Player Clone (Allies Stats × 50) | 10 | 4 | `hp_400_o` (Max HP ≥ 400) | item-059, item-071, item-104 |
 
 ---
 
-### 2. Challenge & Prerequisite Gates
+## Battle Mechanics
 
-1. **Level Gate**: A character cannot challenge a boss if `character.Level < boss.MinLevel`.
-2. **Sequential Tier Unlocking**:
-   - Tier 1 has no prerequisite.
-   - For Tier $N > 1$, the character must have cleared Tier $N - 1$ (`HighestTierCleared >= N - 1`).
-   - Tier 99 requires Tier 10 to be cleared (`HighestTierCleared >= 10`).
-3. **Daily Attempt Limits**:
-   - Each boss encounter permits up to `DailyEntryLimit = 3` attempts per day.
-   - Daily attempts reset at `00:00:00 UTC`.
+### 1. Entry & Fatigue Cost
+- Each participating character incurs **+20% Tired** upon entering the sealing battle (`$m{tired} += 20`).
+- Characters with `tired >= 100` or `hp <= 0` cannot enter.
 
----
+### 2. Dejon (デジョン) Banishment
+- Bosses execute the **Dejon** skill (`ActionKindDejon = "dejon"`).
+- Target: Any opposing character whose HP is reduced to `0` or below.
+- Effect: The unconscious character is cast into another dimension and permanently removed from combat. They cannot be revived for the remainder of the battle.
+- Penalty: An additional **+30% Tired** (`$m{tired} += 30`) is applied to banished characters upon battle conclusion.
 
-### 3. Rewards & Milestone Bonuses
-
-- **Victory Rewards**:
-  $$\text{EXP Awarded} = \text{Base EXP} + (\text{First Clear Bonus if Applicable})$$
-  $$\text{Gold Awarded} = \text{Base Gold} + (\text{First Clear Bonus if Applicable})$$
-  - Upon first clear of a tier, the character receives first-clear bonus EXP & Gold, and updates `HighestTierCleared`.
-  - Increments `TotalBossDefeats` (hero count / 英雄度).
-  - Rewards first drop item from `DropItemIDs` into character inventory.
-- **Defeat / Draw**:
-  - Consumes 1 daily challenge attempt.
-  - Grants 0 EXP, 0 Gold, 0 items without corrupting character health or inventory state.
-
----
-
-## Leaderboard & History
-
-- **Boss Leaderboard**: Characters are ranked by `HighestTierCleared` descending, `TotalBossDefeats` descending, and `FirstClearedAt` ascending.
-- **Challenge History**: Records turn count, outcome, rewards, drop items, and first-clear flags.
+### 3. Victory & `@ふういん` Resealing
+Upon defeating all enemy boss participants:
+1. **Hero Count**: All party members receive **+1 Hero Count** (`characters.hero_count` / `$m{hero_c}`).
+2. **Treasure Drop**: A random item from the stage's `treasure_item_ids` is awarded.
+3. **Exp & Gold**: Distributed to all party members.
+4. **Server News**: A worldwide announcement is broadcast: `"勇者○○が○○を封印する"`.
+5. **Celebration Banquet**: Triggers a 2-hour victory banquet in Event Plaza (`_win_vs_king.cgi`).
+6. **Lobby Disbandment**: The temporary staging party is deleted upon conclusion.

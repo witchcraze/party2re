@@ -54,6 +54,7 @@ type Character struct {
 	JobMemory   *JobMemory
 	SmallMedals int
 	HelpCount   int
+	HeroCount   int    // Hero count (勇者カウント hero_c): incremented when sealing a king boss.
 	Orb         string // Orb collection status: string containing characters 's','r','b','g','y','p', or 'G' (Ramia awakened)
 	Tired       int    // Fatigue percentage (疲労度 %): increases in combat, resets to 0 on sleep.
 	OverLevel   bool

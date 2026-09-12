@@ -65,7 +65,6 @@ func TestBossRepository(t *testing.T) {
 	rec.TotalBossDefeats = 1
 	rec.FirstClearedAt = &now
 	rec.LastChallengedAt = &now
-	rec.DailyAttemptsUsed = 1
 
 	char.Money += 1500
 
@@ -86,7 +85,7 @@ func TestBossRepository(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetOrCreateRecord updated failed: %v", err)
 	}
-	if updatedRec.HighestTierCleared != 1 || updatedRec.TotalBossDefeats != 1 || updatedRec.DailyAttemptsUsed != 1 {
+	if updatedRec.HighestTierCleared != 1 || updatedRec.TotalBossDefeats != 1 {
 		t.Errorf("unexpected updated record: %#v", updatedRec)
 	}
 

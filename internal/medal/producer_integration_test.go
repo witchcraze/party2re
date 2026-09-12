@@ -417,6 +417,26 @@ func (e integrationBattleEngine) Resolve(_ corebattle.Request) (corebattle.Resul
 	return e.result, nil
 }
 
+func (e integrationBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	outcome := e.result.Outcome
+	winnerSide := ""
+	if outcome == corebattle.OutcomeWin {
+		winnerSide = "allies"
+	} else if outcome == corebattle.OutcomeDefeat {
+		winnerSide = "enemies"
+	}
+	alliesSurvived := make([]string, 0, len(req.Allies))
+	for _, a := range req.Allies {
+		alliesSurvived = append(alliesSurvived, a.ID)
+	}
+	return corebattle.PartyBattleResult{
+		Outcome:        outcome,
+		WinnerSide:     winnerSide,
+		AlliesSurvived: alliesSurvived,
+		TotalReward:    req.VictoryReward,
+	}, nil
+}
+
 func TestProducerHooks_MilestoneProgressAndClaim(t *testing.T) {
 	ctx := context.Background()
 
@@ -642,7 +662,7 @@ func TestProducerHooks_MilestoneProgressAndClaim(t *testing.T) {
 	}
 
 	// (b) Boss Victory
-	if _, err := bossService.ChallengeBoss(ctx, hero.ID, "king-01"); err != nil {
+	if _, err := bossService.ChallengeBoss(ctx, hero.ID, "king1"); err != nil {
 		t.Fatalf("failed to challenge boss: %v", err)
 	}
 
