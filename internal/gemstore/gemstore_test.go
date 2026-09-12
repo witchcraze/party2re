@@ -549,6 +549,178 @@ func TestGemStore_AppraiseItem(t *testing.T) {
 	}
 }
 
+func TestGemStore_AppraiseItem_FromDepot(t *testing.T) {
+	catalog, err := gemstore.DefaultCatalog()
+	if err != nil {
+		t.Fatalf("failed to load catalog: %v", err)
+	}
+
+	charRepo := newMockCharacterRepo()
+	invRepo := newMockInventoryRepo()
+	depotRepo := newMockDepotRepo()
+	boxRepo := newMockGemBoxRepo()
+
+	char := corecharacter.Character{ID: "char_depot_appraise", PlayerID: "p1", Name: "Hero", JobLevel: 10}
+	charRepo.characters[char.ID] = char
+
+	itemProvider := &mockItemProvider{
+		items: map[string]coreitem.Definition{
+			"unidentified_glowing_orb": {ID: "unidentified_glowing_orb", Name: "光る宝珠"},
+			"iron_sword":               {ID: "iron_sword", Name: "鉄の剣"},
+		},
+	}
+
+	// Empty inventory
+	inv, _ := coreinventory.New(char.ID)
+	invRepo.inventories[char.ID] = inv
+
+	// Depot with stacked unidentified orb (qty 3) and normal sword
+	dep, _ := depot.NewDepot(char.ID)
+	dep.Items = append(dep.Items,
+		coreitem.Instance{ID: "depot_orb_stack", DefinitionID: "unidentified_glowing_orb", Quantity: 3},
+		coreitem.Instance{ID: "depot_sword", DefinitionID: "iron_sword", Quantity: 1},
+	)
+	_ = depotRepo.Save(context.Background(), dep)
+
+	svc, err := gemstore.NewService(
+		catalog,
+		charRepo,
+		invRepo,
+		gemstore.WithGemBoxRepository(boxRepo),
+		gemstore.WithDepotRepository(depotRepo),
+		gemstore.WithItemDefinitionProvider(itemProvider),
+		gemstore.WithRandomSource(fixedRandomSource{value: 0}), // index 0 in 光る宝珠 pool -> gem_sky_atk_1
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Appraise unidentified orb from Depot -> converts to Gem, decrements stack (3 -> 2)
+	resOrb, err := svc.AppraiseItem(ctx, char.ID, "depot_orb_stack")
+	if err != nil {
+		t.Fatalf("expected AppraiseItem success on depot orb, got: %v", err)
+	}
+	if !resOrb.IsGem {
+		t.Errorf("expected IsGem to be true")
+	}
+	if resOrb.IdentifiedGem == nil || resOrb.IdentifiedGem.ID != "gem_sky_atk_1" {
+		t.Errorf("expected revealed gem_sky_atk_1, got %+v", resOrb.IdentifiedGem)
+	}
+	expectedMsg := "これは… 攻撃の天珠Ⅰですね。Heroさんの宝石箱に入れておきました"
+	if resOrb.Message != expectedMsg {
+		t.Errorf("expected message %q, got %q", expectedMsg, resOrb.Message)
+	}
+
+	// Verify Gem Box has the gem
+	box, err := svc.GetGemBox(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetGemBox failed: %v", err)
+	}
+	if len(box.Items) != 1 || box.Items[0].DefinitionID != "gem_sky_atk_1" {
+		t.Errorf("expected gem_sky_atk_1 in gem box, got %+v", box.Items)
+	}
+
+	// Verify Depot stack was decremented from 3 to 2
+	updatedDepot, _ := depotRepo.FindByCharacterID(ctx, char.ID)
+	var foundOrb *coreitem.Instance
+	for _, it := range updatedDepot.Items {
+		if it.ID == "depot_orb_stack" {
+			inst := it
+			foundOrb = &inst
+			break
+		}
+	}
+	if foundOrb == nil || foundOrb.Quantity != 2 {
+		t.Fatalf("expected depot orb stack to have quantity 2, got %+v", foundOrb)
+	}
+
+	// 2. Appraise regular item from Depot -> reveals name without consuming
+	resSword, err := svc.AppraiseItem(ctx, char.ID, "depot_sword")
+	if err != nil {
+		t.Fatalf("expected AppraiseItem success on depot sword, got: %v", err)
+	}
+	if resSword.IsGem {
+		t.Errorf("expected IsGem to be false for sword")
+	}
+	if resSword.IdentifiedName != "鉄の剣" {
+		t.Errorf("expected identified name 鉄の剣, got %s", resSword.IdentifiedName)
+	}
+	if resSword.Message != "これは… 鉄の剣ですね" {
+		t.Errorf("expected message これは… 鉄の剣ですね, got %s", resSword.Message)
+	}
+
+	// Verify sword still exists in Depot
+	updatedDepot, _ = depotRepo.FindByCharacterID(ctx, char.ID)
+	foundSword := false
+	for _, it := range updatedDepot.Items {
+		if it.ID == "depot_sword" {
+			foundSword = true
+			break
+		}
+	}
+	if !foundSword {
+		t.Errorf("expected depot sword to remain unconsumed")
+	}
+
+	// 3. Test GemBoxFull: fill Gem Box to max capacity
+	curBox, _ := svc.GetGemBox(ctx, char.ID)
+	// Add dummy items until box is full
+	for len(curBox.Items) < curBox.Capacity {
+		dummy, _ := coreitem.NewInstance("gem_sky_atk_1", 1)
+		_ = curBox.AddItem(dummy)
+	}
+	_ = boxRepo.Save(ctx, curBox)
+
+	// Attempt appraisal when Gem Box is full -> returns ErrGemBoxFull
+	_, err = svc.AppraiseItem(ctx, char.ID, "depot_orb_stack")
+	if !errors.Is(err, gemstore.ErrGemBoxFull) {
+		t.Errorf("expected ErrGemBoxFull, got %v", err)
+	}
+
+	// Verify depot quantity remains 2 (not consumed)
+	depotAfterFull, _ := depotRepo.FindByCharacterID(ctx, char.ID)
+	for _, it := range depotAfterFull.Items {
+		if it.ID == "depot_orb_stack" {
+			if it.Quantity != 2 {
+				t.Errorf("expected quantity 2 to remain unchanged on ErrGemBoxFull, got %d", it.Quantity)
+			}
+		}
+	}
+
+	// 4. Test consuming last item in Depot slot (qty 1 -> slot removed)
+	// Reset gem box with free space
+	curBox.Items = curBox.Items[:1]
+	_ = boxRepo.Save(ctx, curBox)
+
+	// Set orb quantity to 1 in depot
+	singleDep, _ := depotRepo.FindByCharacterID(ctx, char.ID)
+	for i, it := range singleDep.Items {
+		if it.ID == "depot_orb_stack" {
+			singleDep.Items[i].Quantity = 1
+			break
+		}
+	}
+	_ = depotRepo.Save(ctx, singleDep)
+
+	resLastOrb, err := svc.AppraiseItem(ctx, char.ID, "depot_orb_stack")
+	if err != nil {
+		t.Fatalf("expected appraisal of last orb to succeed, got %v", err)
+	}
+	if !resLastOrb.IsGem {
+		t.Errorf("expected IsGem to be true")
+	}
+
+	// Verify slot is completely removed from depot
+	depotAfterLast, _ := depotRepo.FindByCharacterID(ctx, char.ID)
+	for _, it := range depotAfterLast.Items {
+		if it.ID == "depot_orb_stack" {
+			t.Errorf("expected depot_orb_stack slot to be removed, but still present: %+v", it)
+		}
+	}
+}
+
 func TestGemStore_AppraiseItem_AllOrbs_AllCandidateOutcomes(t *testing.T) {
 	catalog, err := gemstore.DefaultCatalog()
 	if err != nil {

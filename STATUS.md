@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #559 — [Parity] Commerce: Standardize dynamic depot capacity calculation across Flea Market, Auction, and Player Store
+Last updated: Issue #560 — [Parity] Gem Store: Support dual-source appraisal from Depot storage in AppraiseItem (sub kantei parity)
 
 ## Current phase
 
@@ -71,7 +71,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Black Market** (`internal/blackmarket`): ✅ Rare-point barter, Depot sacrifice/prize; fictional gold trading purged (#463).
 - **Delivery** (`internal/delivery`): ✅ NPC delivery quests (max 3), P2P parcels (50G fee), CAS status guard.
 - **Flea Market** (`internal/fleamarket`): ✅ Depot-linked listings (120-server max), SQL CAS + RowsAffected guard, Depot direct-receive.
-- **Gem Store** (`internal/gemstore`): ✅ Dedicated gem box (`job_lv`-scaled capacity), 55+ synthesis recipes, weighted orb appraisal.
+- **Gem Store** (`internal/gemstore`): ✅ Dedicated gem box (`job_lv`-scaled capacity), 55+ synthesis recipes, dual-source (inventory & depot) weighted orb appraisal (#560).
 - **God Wishes & Limit Breaks** (`internal/god`): ✅ 19 heaven wishes, OverLevel (Lv150), underworld limit-breaks (5 stages each).
 - **Monster Grandpa & Pets** (`internal/monster`): ✅ 50–300 stable capacity, 8 home pets, P2P transfer, naming; Ranch parity pending (#488).
 - **Photo Contest** (`internal/contest`): ✅ 10-day cycle, voting, prize distribution, Hall of Fame; ISP-split to 5 sub-interfaces.
