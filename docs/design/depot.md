@@ -69,6 +69,12 @@ Where:
   - Invariant: Item exists in sender inventory.
   - Invariant: Recipient depot has available capacity (respecting stack merging).
 
+### 6. Storage Item Consumption (`ConsumeOne`)
+- Town facilities and trade actions (e.g., Home consumable item usage, Black Market rare item sacrifices, Gem Store synthesis crafting, Flea Market and Player Store listings) consume items directly from Depot storage.
+- Consuming 1 item decrements `Quantity` by 1 (`ConsumeOne`) when `Quantity > 1`, retaining the depot slot.
+- The item slot is removed from depot storage only when the remaining quantity reaches 0.
+- Services consuming individual item units must invoke `ConsumeOne` instead of whole-slot deletion (`RemoveItem`) to prevent silent deletion of stacked items.
+
 ## Atomicity, Concurrency & Lock Hierarchy
 
 All depot transactions execute inside an explicit database transaction (`*sql.Tx`). Cross-character transfers (`SendMoney`, `SendItem`) enforce global lock hierarchy ordering:

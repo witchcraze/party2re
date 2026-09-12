@@ -32,6 +32,17 @@ func (a *depotManagerAdapter) FindByCharacterID(ctx context.Context, characterID
 	return a.repo.FindByCharacterID(ctx, characterID)
 }
 
+func (a *depotManagerAdapter) ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error {
+	dp, err := a.repo.FindByCharacterIDForUpdate(ctx, characterID)
+	if err != nil {
+		return err
+	}
+	if _, err := dp.ConsumeOne(itemInstanceID); err != nil {
+		return err
+	}
+	return a.repo.Save(ctx, dp)
+}
+
 func (a *depotManagerAdapter) RemoveItem(ctx context.Context, characterID, itemInstanceID string) error {
 	dp, err := a.repo.FindByCharacterIDForUpdate(ctx, characterID)
 	if err != nil {

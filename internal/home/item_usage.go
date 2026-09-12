@@ -16,7 +16,7 @@ import (
 
 type DepotManager interface {
 	FindByCharacterID(ctx context.Context, characterID string) (depot.Depot, error)
-	RemoveItem(ctx context.Context, characterID, itemInstanceID string) error
+	ConsumeOne(ctx context.Context, characterID, itemInstanceID string) error
 }
 
 type InventoryManager interface {
@@ -276,7 +276,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 			if s.depotMgr == nil {
 				return ErrItemNotFound
 			}
-			if err := s.depotMgr.RemoveItem(tc.Context, characterID, instanceID); err != nil {
+			if err := s.depotMgr.ConsumeOne(tc.Context, characterID, instanceID); err != nil {
 				if errors.Is(err, depot.ErrItemNotFound) || errors.Is(err, depot.ErrNotFound) {
 					return ErrItemNotFound
 				}
@@ -320,7 +320,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 			return nil, err
 		}
 	} else if source == "depot" && s.depotMgr != nil {
-		if err := s.depotMgr.RemoveItem(ctx, characterID, instanceID); err != nil {
+		if err := s.depotMgr.ConsumeOne(ctx, characterID, instanceID); err != nil {
 			return nil, err
 		}
 	}

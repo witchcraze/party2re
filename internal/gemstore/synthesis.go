@@ -67,7 +67,7 @@ func (s *Service) SynthesizeGem(ctx context.Context, characterID, recipeID strin
 				return err
 			}
 		} else if mat1Dep, ok := findMaterialInDepot(dep, recipe.Material1, s.catalog, s.items); ok {
-			if _, err := dep.RemoveItem(mat1Dep.ID); err != nil {
+			if _, err := dep.ConsumeOne(mat1Dep.ID); err != nil {
 				return err
 			}
 		} else {
@@ -82,7 +82,7 @@ func (s *Service) SynthesizeGem(ctx context.Context, characterID, recipeID strin
 				return err
 			}
 		} else if mat2Dep, ok := findMaterialInDepot(dep, recipe.Material2, s.catalog, s.items); ok {
-			if _, err := dep.RemoveItem(mat2Dep.ID); err != nil {
+			if _, err := dep.ConsumeOne(mat2Dep.ID); err != nil {
 				return err
 			}
 		} else {

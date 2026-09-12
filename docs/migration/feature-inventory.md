@@ -248,6 +248,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#399](https://github.com/witchcraze/party2re/issues/399) | Make connection pool parameters configurable per environment | Merged |
 | [#408](https://github.com/witchcraze/party2re/issues/408) | Prevent false rejection on exact coins in Indian Poker action | Merged |
 | [#471](https://github.com/witchcraze/party2re/issues/471) | Altar of Rebirth: 6-Orb Offering, Ramia Awakening, and Otherworld Travel Item Wishes | Merged |
+| [#557](https://github.com/witchcraze/party2re/issues/557) | Depot: Replace RemoveItem with ConsumeOne in Home, Black Market, and Gem Store to prevent silent stack deletion | Completed |
 
 ---
 

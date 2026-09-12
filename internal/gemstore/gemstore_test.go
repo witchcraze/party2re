@@ -10,6 +10,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/gemstore"
 )
 
@@ -134,6 +135,39 @@ type errRandomSource struct{}
 
 func (errRandomSource) Intn(int) (int, error) {
 	return 0, errors.New("random source failure")
+}
+
+type mockDepotRepo struct {
+	mu     sync.RWMutex
+	depots map[string]depot.Depot
+}
+
+func newMockDepotRepo() *mockDepotRepo {
+	return &mockDepotRepo{
+		depots: make(map[string]depot.Depot),
+	}
+}
+
+func (m *mockDepotRepo) FindByCharacterID(_ context.Context, characterID string) (depot.Depot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	d, ok := m.depots[characterID]
+	if !ok {
+		d, _ = depot.NewDepot(characterID)
+		m.depots[characterID] = d
+	}
+	return d, nil
+}
+
+func (m *mockDepotRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (depot.Depot, error) {
+	return m.FindByCharacterID(ctx, characterID)
+}
+
+func (m *mockDepotRepo) Save(_ context.Context, d depot.Depot) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.depots[d.CharacterID] = d
+	return nil
 }
 
 // -------------------------------------------------------------------
@@ -368,6 +402,85 @@ func TestGemStore_SynthesizeGem(t *testing.T) {
 	_, err = svc.SynthesizeGem(ctx, "char_1", "invalid_recipe")
 	if err != gemstore.ErrRecipeNotFound {
 		t.Errorf("expected ErrRecipeNotFound, got: %v", err)
+	}
+}
+
+func TestGemStore_SynthesizeGem_Depot_StackedMaterial(t *testing.T) {
+	catalog, err := gemstore.DefaultCatalog()
+	if err != nil {
+		t.Fatalf("failed to load catalog: %v", err)
+	}
+
+	charRepo := newMockCharacterRepo()
+	invRepo := newMockInventoryRepo()
+	depotRepo := newMockDepotRepo()
+
+	char := corecharacter.Character{ID: "char_depot_synth", PlayerID: "p1", Name: "Hero", JobLevel: 10, Money: 10000}
+	charRepo.characters[char.ID] = char
+
+	dep, err := depot.NewDepot(char.ID)
+	if err != nil {
+		t.Fatalf("NewDepot failed: %v", err)
+	}
+	// Add 5 x gem_atk_1 ("攻撃の宝珠Ⅰ") stacked in depot
+	dep.Items = append(dep.Items, coreitem.Instance{
+		ID:           "depot-gem-atk-1",
+		DefinitionID: "gem_atk_1",
+		Quantity:     5,
+	})
+	_ = depotRepo.Save(context.Background(), dep)
+
+	svc, err := gemstore.NewService(
+		catalog,
+		charRepo,
+		invRepo,
+		gemstore.WithDepotRepository(depotRepo),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Synthesize recipe_atk_2: requires 2 x "攻撃の宝珠Ⅰ".
+	// Both should be consumed from the single stacked slot in depot (5 -> 3).
+	res, err := svc.SynthesizeGem(ctx, char.ID, "recipe_atk_2")
+	if err != nil {
+		t.Fatalf("SynthesizeGem failed: %v", err)
+	}
+	if res.CreatedGem.ID != "gem_atk_2" {
+		t.Errorf("expected created gem_atk_2, got %s", res.CreatedGem.ID)
+	}
+
+	// Verify depot still contains remaining 3 items
+	dep, err = depotRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID failed: %v", err)
+	}
+	if len(dep.Items) != 1 {
+		t.Fatalf("expected 1 item slot in depot, got %d", len(dep.Items))
+	}
+	if dep.Items[0].Quantity != 3 {
+		t.Errorf("expected 3 remaining in depot stack, got %d", dep.Items[0].Quantity)
+	}
+
+	// 2. Synthesize recipe_atk_2 second time (3 -> 1).
+	res2, err := svc.SynthesizeGem(ctx, char.ID, "recipe_atk_2")
+	if err != nil {
+		t.Fatalf("second SynthesizeGem failed: %v", err)
+	}
+	if res2.CreatedGem.ID != "gem_atk_2" {
+		t.Errorf("expected created gem_atk_2, got %s", res2.CreatedGem.ID)
+	}
+	dep, _ = depotRepo.FindByCharacterID(ctx, char.ID)
+	if len(dep.Items) != 1 || dep.Items[0].Quantity != 1 {
+		t.Fatalf("expected 1 item with quantity 1 in depot, got %+v", dep.Items)
+	}
+
+	// 3. Attempt third synthesis: depot only has 1, requires 2 -> fails with ErrInsufficientMaterials
+	_, err = svc.SynthesizeGem(ctx, char.ID, "recipe_atk_2")
+	if !errors.Is(err, gemstore.ErrInsufficientMaterials) {
+		t.Errorf("expected ErrInsufficientMaterials, got %v", err)
 	}
 }
 

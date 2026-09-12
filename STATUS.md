@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #564 — [Chore] Docs: ROADMAP.md と STATUS.md の役割重複を解消し feature-inventory.md を完了記録SSOTとして確立
+Last updated: Issue #557 — [Bug] Depot: Replace RemoveItem with ConsumeOne in Home, Black Market, and Gem Store to prevent silent stack deletion
 
 ## Current phase
 
@@ -41,7 +41,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Adventure** (`internal/adventure`): ✅ 28 stages, 286 monsters, Valkey Worker, chronicles, VictoryHook.
 - **Medal & Achievements** (`internal/medal`): ✅ Small Medal exchange → Depot; milestone achievement observer.
 - **Shop** (`internal/shop`): ✅ 3 shops with job-level gates, 50% sellback, MasterCard discount, Depot auto-delivery.
-- **Depot** (`internal/depot`): ✅ Dynamic capacity (up to 500 slots), tiered expansion, sort, item sell, gold/item direct-send.
+- **Depot** (`internal/depot`): ✅ Dynamic capacity (up to 500 slots), tiered expansion, sort, item sell, gold/item direct-send, safe stack consumption (`ConsumeOne`).
 - **Blacksmith** (`internal/blacksmith`): ✅ +1→+10 enhancement via `economy.TransactionRunner`.
 - **Alchemy** (`internal/alchemy`): ✅ 112 recipes; material consume + output — overnight/Depot parity pending (#487).
 - **Bank** (`internal/bank`): ✅ Character gold deposit/withdrawal; 999,999G wallet clamp; fictional `bank_accounts` table purged (#476).
