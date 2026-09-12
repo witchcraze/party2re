@@ -15,20 +15,17 @@ import (
 )
 
 const (
-	StarterAdventure            = "stage-01"
-	AdventureDuration           = time.Hour
-	AdventureReward             = 20
-	AdventureEnemyID            = "starter-opponent"
-	AdventureActionTypeComplete = "adventure:complete"
+	StarterAdventure = "stage-01"
+	AdventureReward  = 20
+	AdventureEnemyID = "starter-opponent"
 )
 
 var (
-	ErrNotFound               = errors.New("adventure not found")
-	ErrNotReady               = errors.New("adventure is not ready")
-	ErrAlreadyClaimed         = errors.New("adventure result already claimed")
-	ErrUnsupportedReward      = errors.New("adventure reward type is unsupported")
-	ErrLevelRequirementNotMet = errors.New("character level requirement not met for stage")
-	ErrCannotUseInCombat      = item.ErrCannotUseInCombat
+	ErrNotFound             = errors.New("adventure not found")
+	ErrUnsupportedReward    = errors.New("adventure reward type is unsupported")
+	ErrCannotUseInCombat    = item.ErrCannotUseInCombat
+	ErrCharacterUnconscious = errors.New("character is unconscious (HP <= 0) and cannot adventure")
+	ErrCharacterExhausted   = errors.New("character is exhausted (tired >= 100) and must rest")
 )
 
 // ValidateCombatItem validates that an item is allowed for use in combat actions.
@@ -39,6 +36,8 @@ func ValidateCombatItem(def item.Definition) error {
 	return nil
 }
 
+// Adventure represents a completed or active dungeon crawl record.
+// Fictional 1-hour expedition timer fields (AvailableAt, Claimed) are purged per Issue #478.
 type Adventure struct {
 	ID               string
 	CharacterID      string
@@ -46,11 +45,12 @@ type Adventure struct {
 	StageID          string
 	MonsterID        string
 	StartedAt        time.Time
-	AvailableAt      time.Time
+	FloorsCleared    int
+	IsCleared        bool
+	PartySize        int
 	ExperienceReward int
 	BattleResult     corebattle.Result
 	Resolved         bool
-	Claimed          bool
 }
 
 type Clock interface {
@@ -64,7 +64,6 @@ func (RealClock) Now() time.Time { return time.Now().UTC() }
 type Repository interface {
 	Save(ctx context.Context, value Adventure) error
 	FindByID(ctx context.Context, id string) (Adventure, error)
-	ClaimAndApply(ctx context.Context, value Adventure, character corecharacter.Character) error
 	ListByCharacterID(ctx context.Context, characterID string, limit, offset int) ([]Adventure, int, error)
 	ListByCharacterIDByCursor(ctx context.Context, characterID string, limit int, beforeTime time.Time, beforeID string) ([]Adventure, error)
 	GetAggregatedStats(ctx context.Context, characterID string) (AggregatedStats, error)
@@ -79,8 +78,8 @@ type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 }
 
-type Scheduler interface {
-	Schedule(ctx context.Context, actionType, actorID string, params map[string]string, executeAt time.Time) (string, error)
+type CharacterUpdater interface {
+	Update(ctx context.Context, value corecharacter.Character) error
 }
 
 type Logger interface {
@@ -97,6 +96,10 @@ type VictoryHook func(ctx context.Context, characterID string, monstersDefeated 
 // PostAdventureHook is called after an adventure concludes and state is applied.
 type PostAdventureHook func(ctx context.Context, characterID string) error
 
+type partyBattleResolver interface {
+	ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error)
+}
+
 type Service struct {
 	adventures        Repository
 	characters        CharacterRepository
@@ -104,7 +107,6 @@ type Service struct {
 	stages            *StageCatalog
 	monsters          *MonsterCatalog
 	battle            corebattle.Resolver
-	scheduler         Scheduler
 	logger            Logger
 	clock             Clock
 	victoryHook       VictoryHook
@@ -119,7 +121,7 @@ func (s *Service) SetPostAdventureHook(hook PostAdventureHook) {
 	s.postAdventureHook = hook
 }
 
-func NewService(adventures Repository, characters CharacterRepository, battle corebattle.Resolver, scheduler Scheduler, logger Logger) (*Service, error) {
+func NewService(adventures Repository, characters CharacterRepository, battle corebattle.Resolver, scheduler any, logger Logger) (*Service, error) {
 	stages, err := InitialStageCatalog()
 	if err != nil {
 		return nil, err
@@ -131,7 +133,7 @@ func NewService(adventures Repository, characters CharacterRepository, battle co
 	return NewServiceWithCatalogs(adventures, characters, nil, stages, monsters, battle, scheduler, logger, RealClock{})
 }
 
-func NewServiceWithClock(adventures Repository, characters CharacterRepository, battle corebattle.Resolver, scheduler Scheduler, logger Logger, clock Clock) (*Service, error) {
+func NewServiceWithClock(adventures Repository, characters CharacterRepository, battle corebattle.Resolver, scheduler any, logger Logger, clock Clock) (*Service, error) {
 	if clock == nil {
 		return nil, errors.New("adventure clock is nil")
 	}
@@ -153,7 +155,7 @@ func NewServiceWithCatalogs(
 	stages *StageCatalog,
 	monsters *MonsterCatalog,
 	battle corebattle.Resolver,
-	scheduler Scheduler,
+	_ any, // scheduler unused per Issue #478 (timer purged)
 	logger Logger,
 	clock Clock,
 ) (*Service, error) {
@@ -173,199 +175,175 @@ func NewServiceWithCatalogs(
 		stages:      stages,
 		monsters:    monsters,
 		battle:      battle,
-		scheduler:   scheduler,
 		logger:      logger,
 		clock:       clock,
 	}, nil
 }
 
+// Start executes a default StarterAdventure crawl.
 func (s *Service) Start(ctx context.Context, characterID string) (Adventure, error) {
-	return s.StartStage(ctx, characterID, "stage-01")
+	return s.StartStage(ctx, characterID, StarterAdventure)
 }
 
+// StartStage executes the authentic 10-floor dungeon crawl for a character, immediately resolving it.
+// The fictional 1-hour expedition timer is completely abolished.
 func (s *Service) StartStage(ctx context.Context, characterID string, stageID string) (Adventure, error) {
 	if characterID == "" {
 		return Adventure{}, corecharacter.ErrNotFound
 	}
-	character, err := s.characters.FindByID(ctx, characterID)
+	char, err := s.characters.FindByID(ctx, characterID)
 	if err != nil {
 		return Adventure{}, err
 	}
 
 	if stageID == "" {
-		stageID = "stage-01"
+		stageID = StarterAdventure
 	}
-
-	var stage Stage
-	var monster Monster
-	duration := AdventureDuration
-	expReward := AdventureReward
 
 	if s.stages != nil {
-		st, err := s.stages.FindByID(stageID)
-		if err != nil {
-			return Adventure{}, ErrStageNotFound
-		}
-		if character.Level < st.MinLevel {
-			return Adventure{}, ErrLevelRequirementNotMet
-		}
-		stage = st
-		duration = st.Duration
-
-		if len(st.MonsterIDs) > 0 && s.monsters != nil {
-			chosenMonsterID := st.MonsterIDs[0]
-			m, err := s.monsters.FindByID(chosenMonsterID)
-			if err != nil {
-				return Adventure{}, ErrMonsterNotFound
-			}
-			monster = m
-			expReward = m.ExperienceReward
+		if err := s.stages.CanAccessStage(char, stageID); err != nil {
+			return Adventure{}, err
 		}
 	}
 
-	now := s.clock.Now()
-	value := Adventure{
-		ID:               id.New(),
-		CharacterID:      characterID,
-		Type:             stageID,
-		StageID:          stage.ID,
-		MonsterID:        monster.ID,
-		StartedAt:        now,
-		AvailableAt:      now.Add(duration),
-		ExperienceReward: expReward,
-	}
-	if err := s.adventures.Save(ctx, value); err != nil {
+	crawlRes, err := s.ExecuteCrawl(ctx, DungeonCrawlRequest{
+		CharacterIDs: []string{characterID},
+		StageID:      stageID,
+	})
+	if err != nil {
 		return Adventure{}, err
 	}
 
-	if s.scheduler != nil {
-		if _, err := s.scheduler.Schedule(
-			ctx,
-			AdventureActionTypeComplete,
-			characterID,
-			map[string]string{
-				"adventure_id": value.ID,
-				"stage_id":     stage.ID,
-				"monster_id":   monster.ID,
-			},
-			value.AvailableAt,
-		); err != nil {
-			s.logger.Warn("failed to schedule adventure completion", "adventure_id", value.ID, "error", err)
+	advID := crawlRes.AdventureIDs[characterID]
+	return s.adventures.FindByID(ctx, advID)
+}
+
+// ExecuteCrawl runs the authentic 10-floor dungeon crawl and Floor 11 treasure room (vs_monster.cgi).
+func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (DungeonCrawlResult, error) {
+	if len(req.CharacterIDs) == 0 {
+		return DungeonCrawlResult{}, ErrNoParticipants
+	}
+	if len(req.CharacterIDs) > 4 {
+		return DungeonCrawlResult{}, ErrTooManyParticipants
+	}
+
+	characters := make([]corecharacter.Character, 0, len(req.CharacterIDs))
+	for _, cID := range req.CharacterIDs {
+		c, err := s.characters.FindByID(ctx, cID)
+		if err != nil {
+			return DungeonCrawlResult{}, err
+		}
+		if c.Stats.HP <= 0 {
+			return DungeonCrawlResult{}, ErrCharacterUnconscious
+		}
+		if c.Tired >= 100 {
+			return DungeonCrawlResult{}, ErrCharacterExhausted
+		}
+		characters = append(characters, c)
+	}
+
+	stageID := req.StageID
+	if stageID == "" {
+		stageID = StarterAdventure
+	}
+	stage, err := s.stages.FindByID(stageID)
+	if err != nil {
+		return DungeonCrawlResult{}, ErrStageNotFound
+	}
+
+	if err := s.stages.CanAccessStage(characters[0], stage.ID); err != nil {
+		return DungeonCrawlResult{}, err
+	}
+
+	var pbr corebattle.PartyBattleResolver = corebattle.Engine{}
+	if r, ok := s.battle.(partyBattleResolver); ok {
+		pbr = r
+	}
+
+	session, err := NewCrawlSession(stage, characters, req.Rng)
+	if err != nil {
+		return DungeonCrawlResult{}, err
+	}
+
+	// Advance through all 10 floors
+	for floor := 1; floor <= BossFloor; floor++ {
+		floorRes, err := session.AdvanceFloor(s.stages, s.monsters, pbr)
+		if err != nil {
+			return DungeonCrawlResult{}, err
+		}
+		if !floorRes.Cleared {
+			break
 		}
 	}
 
-	return value, nil
+	// If boss was defeated, advance to Floor 11 (Treasure Room) and open boxes
+	if session.StageCleared {
+		_, _ = session.AdvanceFloor(s.stages, s.monsters, pbr)
+		for _, c := range characters {
+			_, _ = session.ExamineTreasure(c.ID)
+		}
+	}
+
+	result := session.Result()
+
+	// Persist adventure record for each participating character
+	now := s.clock.Now()
+	for _, c := range characters {
+		advID := id.New()
+		result.AdventureIDs[c.ID] = advID
+
+		adv := Adventure{
+			ID:               advID,
+			CharacterID:      c.ID,
+			Type:             stage.ID,
+			StageID:          stage.ID,
+			StartedAt:        now,
+			FloorsCleared:    result.FloorsCleared,
+			IsCleared:        result.StageCleared,
+			PartySize:        len(characters),
+			ExperienceReward: result.TotalEXP,
+			Resolved:         true,
+			BattleResult: corebattle.Result{
+				Outcome:  result.Outcome,
+				WinnerID: characters[0].ID,
+				Turns:    result.TotalTurns,
+				Reward: corebattle.Reward{
+					Experience: result.TotalEXP,
+					Currency:   result.TotalGold,
+				},
+			},
+		}
+
+		if s.adventures != nil {
+			_ = s.adventures.Save(ctx, adv)
+		}
+
+		// Apply experience and gold rewards
+		if result.Outcome == corebattle.OutcomeWin {
+			if result.TotalEXP > 0 {
+				_, _ = progression.ApplyExperience(&c, result.TotalEXP)
+			}
+			if result.TotalGold > 0 {
+				_ = c.AddMoney(result.TotalGold)
+			}
+			if updater, ok := s.characters.(CharacterUpdater); ok {
+				_ = updater.Update(ctx, c)
+			}
+
+			if s.victoryHook != nil {
+				_ = s.victoryHook(ctx, c.ID, result.FloorsCleared, result.TotalGold)
+			}
+		}
+
+		if s.postAdventureHook != nil {
+			_ = s.postAdventureHook(ctx, c.ID)
+		}
+	}
+
+	return result, nil
 }
 
+// Get retrieves an adventure record by its ID.
 func (s *Service) Get(ctx context.Context, id string) (Adventure, error) {
 	return s.adventures.FindByID(ctx, id)
-}
-
-func (s *Service) Claim(ctx context.Context, id string) (Adventure, error) {
-	value, err := s.adventures.FindByID(ctx, id)
-	if err != nil {
-		return Adventure{}, err
-	}
-	if value.Claimed {
-		return Adventure{}, ErrAlreadyClaimed
-	}
-	if s.clock.Now().Before(value.AvailableAt) {
-		return Adventure{}, ErrNotReady
-	}
-	character, err := s.characters.FindByID(ctx, value.CharacterID)
-	if err != nil {
-		return Adventure{}, err
-	}
-
-	// Prepare combat participants and reward
-	enemyID := AdventureEnemyID
-	enemyHP := 8
-	enemyAttack := 1
-	enemyDefense := 0
-	rewardExp := value.ExperienceReward
-	rewardGold := 0
-	rewardItemID := ""
-
-	if value.MonsterID != "" && s.monsters != nil {
-		if m, err := s.monsters.FindByID(value.MonsterID); err == nil {
-			enemyID = m.ID
-			enemyHP = m.HP
-			enemyAttack = m.Attack
-			enemyDefense = m.Defense
-			rewardExp = m.ExperienceReward
-			rewardGold = m.GoldReward
-			if len(m.DropItemIDs) > 0 {
-				rewardItemID = m.DropItemIDs[0]
-			}
-		}
-	}
-
-	itemQuantity := 0
-	if rewardItemID != "" {
-		itemQuantity = 1
-	}
-
-	req := corebattle.Request{
-		Participants: []corebattle.Participant{
-			corebattle.NewParticipantFromCharacter(character),
-			corebattle.MustNewParticipant(enemyID, enemyHP, enemyAttack, enemyDefense),
-		},
-		VictoryReward: corebattle.Reward{
-			Experience:       rewardExp,
-			Currency:         rewardGold,
-			ItemDefinitionID: rewardItemID,
-			ItemQuantity:     itemQuantity,
-		},
-	}
-
-	result, err := s.battle.Resolve(req)
-	if err != nil {
-		return Adventure{}, fmt.Errorf("resolve adventure battle: %w", err)
-	}
-	value.BattleResult = result
-	value.Resolved = true
-
-	if result.Outcome == corebattle.OutcomeWin {
-		if result.Reward.Experience > 0 {
-			if _, err := progression.ApplyExperience(&character, result.Reward.Experience); err != nil {
-				return Adventure{}, fmt.Errorf("apply adventure reward: %w", err)
-			}
-		}
-		if result.Reward.Currency > 0 {
-			_ = character.AddMoney(result.Reward.Currency)
-		}
-		if result.Reward.SmallMedals > 0 {
-			_ = character.AddSmallMedals(result.Reward.SmallMedals)
-		}
-		if result.Reward.ItemDefinitionID != "" {
-			if s.inventories == nil {
-				return Adventure{}, ErrUnsupportedReward
-			}
-			inv, err := s.inventories.FindByCharacterID(ctx, character.ID)
-			if err == nil {
-				inst, err := item.NewInstance(result.Reward.ItemDefinitionID, result.Reward.ItemQuantity)
-				if err == nil {
-					_ = inv.Add(inst)
-					_ = s.inventories.Save(ctx, inv)
-				}
-			}
-		}
-	}
-
-	value.Claimed = true
-	if err := s.adventures.ClaimAndApply(ctx, value, character); err != nil {
-		return Adventure{}, err
-	}
-
-	if result.Outcome == corebattle.OutcomeWin && s.victoryHook != nil {
-		if err := s.victoryHook(ctx, character.ID, 1, result.Reward.Currency); err != nil {
-			s.logger.Warn("victory hook failed", "character_id", character.ID, "error", err)
-		}
-	}
-	if s.postAdventureHook != nil {
-		if err := s.postAdventureHook(ctx, character.ID); err != nil {
-			s.logger.Warn("post adventure hook failed", "character_id", character.ID, "error", err)
-		}
-	}
-	return value, nil
 }
