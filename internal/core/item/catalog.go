@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 )
 
 var ErrDefinitionNotFound = errors.New("item definition not found")
@@ -111,4 +112,36 @@ func InitialCatalog() (*Catalog, error) {
 		all = append(all, data...)
 	}
 	return NewCatalog(all)
+}
+
+var (
+	defaultCatalogOnce sync.Once
+	defaultCatalog     *Catalog
+	defaultCatalogErr  error
+)
+
+// DefaultCatalog returns the shared default catalog containing all standard game item definitions.
+func DefaultCatalog() (*Catalog, error) {
+	defaultCatalogOnce.Do(func() {
+		defaultCatalog, defaultCatalogErr = InitialCatalog()
+	})
+	return defaultCatalog, defaultCatalogErr
+}
+
+// IsStackableID returns whether the given item definition ID is stackable according to the default catalog.
+// If the item definition is not found in the default catalog, it checks whether the ID indicates equipment.
+func IsStackableID(definitionID string) bool {
+	cat, err := DefaultCatalog()
+	if err == nil {
+		if def, err := cat.FindByID(definitionID); err == nil {
+			return def.IsStackable()
+		}
+	}
+	lower := strings.ToLower(definitionID)
+	for _, prefix := range []string{"weapon", "armor", "shield", "acc", "wea", "arm", "shi", "sword", "axe", "bow", "wand", "staff", "helm", "plate", "robe"} {
+		if strings.HasPrefix(lower, prefix) {
+			return false
+		}
+	}
+	return true
 }

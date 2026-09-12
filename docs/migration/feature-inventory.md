@@ -252,6 +252,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#558](https://github.com/witchcraze/party2re/issues/558) | Depot: Prevent AddItem from collapsing equipment instances with different enhancement levels | Completed |
 | [#559](https://github.com/witchcraze/party2re/issues/559) | Commerce: Standardize dynamic depot capacity calculation across Flea Market, Auction, and Player Store | Completed |
 | [#560](https://github.com/witchcraze/party2re/issues/560) | Gem Store: Support dual-source appraisal from Depot storage in AppraiseItem (sub kantei parity) | Completed |
+| [#563](https://github.com/witchcraze/party2re/issues/563) | Core/Item: Enforce stackability invariant (IsStackable) across inventory and depot | Completed |
 
 ---
 

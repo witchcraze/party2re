@@ -51,3 +51,8 @@ A character has 5 distinct equipment slots:
 2. **Slot Compatibility**: An item definition's `Slot` must match the target equipment slot (`SlotNone` items like potions/materials cannot be equipped).
 3. **Equip Operation**: Equipping an item into an occupied slot returns the previously equipped instance ID so it can be returned/swapped in inventory.
 4. **Unequip Operation**: Removing equipment unlinks the instance from the slot and requires the slot to currently hold an item.
+5. **Stackability Domain Invariants**:
+   - **Stackable Definitions (`Definition.IsStackable() == true`)**: Items with `Slot == SlotNone` (consumables, craft materials) are stackable (`Quantity >= 1`).
+   - **Non-Stackable Definitions (`Definition.IsStackable() == false`)**: Equipment items (`Slot != SlotNone`: weapons, armor, shields, accessories) represent discrete gear. Each equipment piece must have `Quantity == 1` and occupy its own distinct storage slot.
+   - **Enhancement Level Invariant**: Any item with `EnhancementLevel > 0` must strictly have `Quantity == 1` and cannot stack with any other item instance (`CanStackWith == false`).
+   - **Instance Creation & Validation Guards**: `NewInstanceWithEnhancement`, `Definition.NewInstance`, and `Definition.NewInstanceWithEnhancement` reject `Quantity > 1` for equipment or enhanced items with `ErrInvalidInstance`.

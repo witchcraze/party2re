@@ -127,6 +127,47 @@ func (d Definition) CanUseInCombat() bool {
 	return d.UsageCategory.IsUsableInCombatCommand()
 }
 
+// IsStackable returns whether items of this definition can be stacked in storage.
+// In Party2 game rules, equipment items (weapons, armor, shields, accessories with Slot != SlotNone)
+// are non-stackable discrete gear, while non-equipment items (Slot == SlotNone) are stackable consumables/materials.
+func (d Definition) IsStackable() bool {
+	return d.Slot == SlotNone
+}
+
+// NewInstance creates an item instance from this definition, enforcing stackability invariants.
+// For equipment items (!d.IsStackable()), quantity must be 1.
+func (d Definition) NewInstance(quantity int) (Instance, error) {
+	return d.NewInstanceWithEnhancement(quantity, 0)
+}
+
+// NewInstanceWithEnhancement creates an item instance with enhancement from this definition,
+// enforcing stackability invariants. For equipment items or enhanced items, quantity must be 1.
+func (d Definition) NewInstanceWithEnhancement(quantity int, enhancementLevel int) (Instance, error) {
+	if (!d.IsStackable() || enhancementLevel > 0) && quantity > 1 {
+		return Instance{}, ErrInvalidInstance
+	}
+	return NewInstanceWithEnhancement(d.ID, quantity, enhancementLevel)
+}
+
+// ValidateInstance verifies that an instance satisfies the domain invariants for this definition.
+func (d Definition) ValidateInstance(inst Instance) error {
+	if inst.DefinitionID != d.ID {
+		return ErrInvalidInstance
+	}
+	if inst.Quantity <= 0 || inst.EnhancementLevel < 0 {
+		return ErrInvalidInstance
+	}
+	if (!d.IsStackable() || inst.EnhancementLevel > 0) && inst.Quantity > 1 {
+		return ErrInvalidInstance
+	}
+	return nil
+}
+
+// CanStackInstances reports whether instances a and b of this definition can be stacked together.
+func (d Definition) CanStackInstances(a, b Instance) bool {
+	return a.CanStackWith(b, d.IsStackable())
+}
+
 // ValidateUsageLocation checks whether this item definition is permitted for use at the specified location.
 func (d Definition) ValidateUsageLocation(location UsageLocation) error {
 	return ValidateUsageLocation(d.UsageCategory, location)
@@ -186,12 +227,34 @@ type Instance struct {
 	EnhancementLevel int
 }
 
+// CanStackWith reports whether this instance can stack with another instance,
+// given whether the underlying item definition is stackable.
+// Invariants enforced:
+// 1. Definition must be stackable (equipment cannot stack).
+// 2. Both instances must share the same DefinitionID.
+// 3. Neither instance may have an EnhancementLevel > 0.
+func (i Instance) CanStackWith(other Instance, isStackable bool) bool {
+	if !isStackable {
+		return false
+	}
+	if i.DefinitionID != other.DefinitionID {
+		return false
+	}
+	if i.EnhancementLevel > 0 || other.EnhancementLevel > 0 {
+		return false
+	}
+	return i.EnhancementLevel == other.EnhancementLevel
+}
+
 func NewInstance(definitionID string, quantity int) (Instance, error) {
 	return NewInstanceWithEnhancement(definitionID, quantity, 0)
 }
 
 func NewInstanceWithEnhancement(definitionID string, quantity int, enhancementLevel int) (Instance, error) {
 	if strings.TrimSpace(definitionID) == "" || quantity <= 0 || enhancementLevel < 0 {
+		return Instance{}, ErrInvalidInstance
+	}
+	if enhancementLevel > 0 && quantity > 1 {
 		return Instance{}, ErrInvalidInstance
 	}
 	return Instance{

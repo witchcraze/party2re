@@ -86,10 +86,11 @@ func CalculateCapacity(jobLv, exDepot, overDepot int) int {
 }
 
 type Depot struct {
-	CharacterID string          `json:"character_id"`
-	ExDepot     int             `json:"ex_depot"`
-	Capacity    int             `json:"capacity"`
-	Items       []item.Instance `json:"items"`
+	CharacterID string                  `json:"character_id"`
+	ExDepot     int                     `json:"ex_depot"`
+	Capacity    int                     `json:"capacity"`
+	Items       []item.Instance         `json:"items"`
+	ItemDefs    item.DefinitionProvider `json:"-"`
 }
 
 func NewDepot(characterID string) (Depot, error) {
@@ -123,18 +124,40 @@ func NewDepotWithCapacity(characterID string, jobLv, exDepot, overDepot int) (De
 	}, nil
 }
 
+// SetItemDefinitionProvider configures the item definition provider for stackability resolution.
+func (d *Depot) SetItemDefinitionProvider(provider item.DefinitionProvider) {
+	d.ItemDefs = provider
+}
+
+// isStackable determines whether the given item definition ID represents a stackable item.
+func (d *Depot) isStackable(definitionID string) bool {
+	if d.ItemDefs != nil {
+		if def, err := d.ItemDefs.FindByID(definitionID); err == nil {
+			return def.IsStackable()
+		}
+	}
+	return item.IsStackableID(definitionID)
+}
+
 // RefreshCapacity recalculates and updates the depot capacity based on the character's JobLevel and OverDepot.
 func (d *Depot) RefreshCapacity(jobLv, overDepot int) {
 	d.Capacity = CalculateCapacity(jobLv, d.ExDepot, overDepot)
 }
 
 // AddItem adds an item to depot.
-// Resolves Issue #452 & #558: Stacking items with existing identical definition ID
-// and identical EnhancementLevel == 0 are merged into an existing slot first without consuming a new slot.
-// Enhanced equipment items (EnhancementLevel > 0) or items with differing enhancement levels
-// represent distinct gear instances and must never be collapsed, preserving their unique enhancement levels.
-func (d *Depot) AddItem(instance item.Instance) error {
-	if instance.EnhancementLevel == 0 {
+// Resolves Issue #452, #558, & #563: Stacking items (stackable consumables/materials with EnhancementLevel == 0)
+// are merged into an existing slot first without consuming a new slot.
+// Equipment items (non-stackable) or items with EnhancementLevel > 0 represent
+// distinct gear instances and must never be collapsed, always occupying separate slots.
+func (d *Depot) AddItem(instance item.Instance, stackable ...bool) error {
+	isStack := true
+	if len(stackable) > 0 {
+		isStack = stackable[0]
+	} else {
+		isStack = d.isStackable(instance.DefinitionID)
+	}
+
+	if isStack && instance.EnhancementLevel == 0 {
 		for i, existing := range d.Items {
 			if existing.DefinitionID == instance.DefinitionID && existing.EnhancementLevel == 0 {
 				d.Items[i].Quantity += instance.Quantity

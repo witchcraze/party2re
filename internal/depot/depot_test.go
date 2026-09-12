@@ -331,6 +331,90 @@ func TestDepot_AddItem_EnhancementLevels(t *testing.T) {
 	}
 }
 
+// TestDepot_AddItem_EquipmentNeverStacks verifies Issue #563:
+// Equipment items (weapons, armor, shields, accessories) must NEVER stack into a single slot
+// even if both instances are unenhanced (+0). Each equipment piece occupies an individual slot.
+func TestDepot_AddItem_EquipmentNeverStacks(t *testing.T) {
+	catalog := newMemoryItemCatalog() // wea-01 (main-hand), arm-01 (off-hand), item-001 (consumable)
+
+	dep, _ := NewDepot("char-equip-stack-test")
+	dep.Capacity = 3
+	dep.SetItemDefinitionProvider(catalog)
+
+	// 1. Add first unenhanced +0 sword (wea-01)
+	swordA, _ := item.NewInstanceWithEnhancement("wea-01", 1, 0)
+	if err := dep.AddItem(swordA); err != nil {
+		t.Fatalf("failed to add first +0 sword: %v", err)
+	}
+	if len(dep.Items) != 1 {
+		t.Fatalf("expected 1 item slot, got %d", len(dep.Items))
+	}
+
+	// 2. Add second identical unenhanced +0 sword (wea-01)
+	// MUST NOT merge into slot 0! Must create a distinct second slot.
+	swordB, _ := item.NewInstanceWithEnhancement("wea-01", 1, 0)
+	if err := dep.AddItem(swordB); err != nil {
+		t.Fatalf("failed to add second +0 sword: %v", err)
+	}
+	if len(dep.Items) != 2 {
+		t.Fatalf("expected 2 distinct slots for two +0 swords, got %d", len(dep.Items))
+	}
+	if dep.Items[0].Quantity != 1 || dep.Items[1].Quantity != 1 {
+		t.Errorf("expected both swords to have Quantity=1, got slot0=%d, slot1=%d",
+			dep.Items[0].Quantity, dep.Items[1].Quantity)
+	}
+
+	// 3. Add third identical +0 sword (wea-01) -> fills depot (3/3)
+	swordC, _ := item.NewInstanceWithEnhancement("wea-01", 1, 0)
+	if err := dep.AddItem(swordC); err != nil {
+		t.Fatalf("failed to add third +0 sword: %v", err)
+	}
+	if len(dep.Items) != 3 {
+		t.Fatalf("expected 3 distinct slots, got %d", len(dep.Items))
+	}
+
+	// 4. Add fourth identical +0 sword at capacity (3/3) -> MUST fail with ErrDepotFull
+	swordD, _ := item.NewInstanceWithEnhancement("wea-01", 1, 0)
+	if err := dep.AddItem(swordD); !errors.Is(err, ErrDepotFull) {
+		t.Fatalf("expected ErrDepotFull for non-stackable equipment at full capacity, got %v", err)
+	}
+
+	// 5. Test with default catalog fallback (without explicit ItemDefs provider set)
+	depDefault, _ := NewDepot("char-default-cat")
+	depDefault.Capacity = 3
+
+	// "weapon-01" is in embedded default catalog (weapons.json)
+	defSword1, _ := item.NewInstance("weapon-01", 1)
+	defSword2, _ := item.NewInstance("weapon-01", 1)
+
+	if err := depDefault.AddItem(defSword1); err != nil {
+		t.Fatalf("failed to add first default catalog sword: %v", err)
+	}
+	if err := depDefault.AddItem(defSword2); err != nil {
+		t.Fatalf("failed to add second default catalog sword: %v", err)
+	}
+	if len(depDefault.Items) != 2 {
+		t.Fatalf("expected 2 distinct slots for default catalog weapons, got %d", len(depDefault.Items))
+	}
+
+	// Consumables ("item-001") in default catalog MUST merge
+	herb1, _ := item.NewInstance("item-001", 2)
+	herb2, _ := item.NewInstance("item-001", 3)
+	if err := depDefault.AddItem(herb1); err != nil {
+		t.Fatalf("failed to add first herb: %v", err)
+	}
+	if len(depDefault.Items) != 3 {
+		t.Fatalf("expected 3 slots (2 swords + 1 herb), got %d", len(depDefault.Items))
+	}
+	// Depot is now at full capacity (3/3). Adding more herbs should merge into slot 2!
+	if err := depDefault.AddItem(herb2); err != nil {
+		t.Fatalf("expected stacking herb to succeed at full capacity, got %v", err)
+	}
+	if depDefault.Items[2].Quantity != 5 {
+		t.Errorf("expected herb quantity to be 5, got %d", depDefault.Items[2].Quantity)
+	}
+}
+
 func TestDepositAndWithdrawItem(t *testing.T) {
 	ctx := context.Background()
 	depotRepo := newMemoryDepotRepo()
