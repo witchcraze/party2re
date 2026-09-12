@@ -268,3 +268,61 @@ func TestAll269ItemsBattleActionMatrix(t *testing.T) {
 		t.Errorf("combatRejected = %d, want 215", combatRejected)
 	}
 }
+
+func TestPartyBattleItemConsumptionTracking(t *testing.T) {
+	herb := corebattle.ActionItem{
+		ID:            "item-001",
+		InstanceID:    "inst-herb-1",
+		Name:          "薬草",
+		UsageCategory: item.UsageCategoryCombatOnly,
+		Kind:          corebattle.ActionKindHeal,
+		Power:         30,
+		TargetScope:   corebattle.TargetScopeSingleAlly,
+	}
+
+	hero, err := corebattle.NewParticipantBuilder("hero").
+		WithStats(20, 10, 5).
+		WithMP(50, 50).
+		WithCMP(30, 30).
+		WithAgility(30).
+		WithActionItems(herb).
+		Build()
+	if err != nil {
+		t.Fatalf("Build hero failed: %v", err)
+	}
+	hero.MaxHP = 100
+
+	enemy, err := corebattle.NewParticipantBuilder("slime").
+		WithStats(5, 1, 0).
+		WithAgility(5).
+		Build()
+	if err != nil {
+		t.Fatalf("Build slime failed: %v", err)
+	}
+
+	engine := corebattle.Engine{}
+	res, err := engine.ResolvePartyBattle(corebattle.PartyBattleRequest{
+		Allies:  []corebattle.Participant{hero},
+		Enemies: []corebattle.Participant{enemy},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePartyBattle failed: %v", err)
+	}
+
+	// Verify consumed items tracking
+	consumedList, ok := res.ConsumedItems["hero"]
+	if !ok || len(consumedList) == 0 {
+		t.Fatalf("expected consumed items for 'hero', got: %+v", res.ConsumedItems)
+	}
+	if consumedList[0].ID != "item-001" || consumedList[0].InstanceID != "inst-herb-1" || consumedList[0].Quantity != 1 {
+		t.Errorf("consumed item mismatch: got %+v, want ID: item-001, InstanceID: inst-herb-1, Quantity: 1", consumedList[0])
+	}
+
+	// Verify remaining resources tracking
+	if res.RemainingMP["hero"] != 50 {
+		t.Errorf("RemainingMP = %d, want 50", res.RemainingMP["hero"])
+	}
+	if res.RemainingCMP["hero"] != 30 {
+		t.Errorf("RemainingCMP = %d, want 30", res.RemainingCMP["hero"])
+	}
+}

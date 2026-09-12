@@ -218,6 +218,7 @@ The battle engine provides both legacy 1v1 resolution (`Resolve`) and full multi
 - **Elemental Fields & Anti-Field (`_create_field`, `_check_anti_field`)**: Active field states granting +30% matching damage bonus and -20% opposing damage penalty, with turn countdowns and anti-field neutralization.
 - **Defeat & Revival (`defeat.go`)**: Pre-death triggers (`pharaoh`, `undying`, `touki_shield`, `dokuro_amulet`, `cursed_revive`) restoring combatant HP upon fatal damage.
 - **File Size Modularization**: Core battle responsibilities are decomposed into single-purpose units (`party_battle.go`, `field.go`, `defeat.go`, `action.go`, `participant.go`, `battle.go`), strictly adhering to the 500-line ceiling.
+- **Battle Adapter & Application Bridge (`internal/battle`)**: Standardized integration service bridging `internal/core/battle` with Characters, Inventories, Equipment, Job definitions, Custom Skills, and Depots. Provides `BuildParticipant`, `BuildPartyBattleRequest`, `ExtractStatOrbOptions`, and atomic `ApplyPostBattleResult` enforcing deterministic row-lock hierarchy (Rank 2: Characters ascending -> Rank 3: Inventories/Equipment ascending -> Rank 5: Depots ascending), item consumption persistence, equipment unequip on tool consumption, and Depot fallback routing for inventory overflow.
 
 ### Adventure / Quest
 
