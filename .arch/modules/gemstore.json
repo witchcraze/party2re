@@ -90,9 +90,11 @@
       "lock_sequence": [
         { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
         { "step": 2, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 3, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 4, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.Save", "mode": "UPDATE" },
-        { "step": 5, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.Save", "mode": "UPDATE" }
+        { "step": 3, "target": "character_depots", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 4, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 5, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.Save", "mode": "UPDATE" },
+        { "step": 6, "target": "character_depots", "lock_order": 5, "method": "DepotRepository.Save", "mode": "UPDATE" },
+        { "step": 7, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.Save", "mode": "UPDATE" }
       ]
     }
   ]

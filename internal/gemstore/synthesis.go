@@ -162,13 +162,24 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 			return err
 		}
 
+		var dep depot.Depot
+		if s.depots != nil {
+			if d, err := s.depots.FindByCharacterIDForUpdate(txCtx, characterID); err == nil {
+				dep = d
+			}
+		}
+
 		box, err := s.getOrCreateGemBoxForUpdate(txCtx, char)
 		if err != nil {
 			return err
 		}
 
-		targetItem, ok := findItemInInventory(inv, itemInstanceOrDefID, s.catalog, s.items)
-		if !ok {
+		targetItem, foundInInv := findItemInInventory(inv, itemInstanceOrDefID, s.catalog, s.items)
+		var foundInDepot bool
+		if !foundInInv && s.depots != nil {
+			targetItem, foundInDepot = findItemInDepot(dep, itemInstanceOrDefID, s.catalog, s.items)
+		}
+		if !foundInInv && !foundInDepot {
 			return ErrItemNotOwned
 		}
 
@@ -182,8 +193,14 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 				return ErrGemBoxFull
 			}
 
-			if err := inv.Consume(targetItem.ID, 1); err != nil {
-				return err
+			if foundInInv {
+				if err := inv.Consume(targetItem.ID, 1); err != nil {
+					return err
+				}
+			} else if foundInDepot {
+				if _, err := dep.ConsumeOne(targetItem.ID); err != nil {
+					return err
+				}
 			}
 
 			gemInstance, err := coreitem.NewInstance(gem.ID, 1)
@@ -195,8 +212,15 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 				return err
 			}
 
-			if err := s.inventories.Save(txCtx, inv); err != nil {
-				return err
+			if foundInInv {
+				if err := s.inventories.Save(txCtx, inv); err != nil {
+					return err
+				}
+			}
+			if foundInDepot && s.depots != nil {
+				if err := s.depots.Save(txCtx, dep); err != nil {
+					return err
+				}
 			}
 			if err := s.gemBoxes.Save(txCtx, box); err != nil {
 				return err
@@ -206,6 +230,7 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 				Character:      char,
 				GemBox:         box,
 				Inventory:      inv,
+				Depot:          dep,
 				IsGem:          true,
 				IdentifiedGem:  &gem,
 				IdentifiedName: gem.Name,
@@ -219,6 +244,7 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 			Character:      char,
 			GemBox:         box,
 			Inventory:      inv,
+			Depot:          dep,
 			IsGem:          false,
 			IdentifiedName: itemName,
 			Message:        fmt.Sprintf("これは… %sですね", itemName),
@@ -250,6 +276,24 @@ func findItemInInventory(
 	items ItemDefinitionProvider,
 ) (coreitem.Instance, bool) {
 	for _, inst := range inv.Items {
+		if inst.ID == target || inst.DefinitionID == target {
+			return inst, true
+		}
+		name := resolveItemName(inst.DefinitionID, catalog, items)
+		if name == target {
+			return inst, true
+		}
+	}
+	return coreitem.Instance{}, false
+}
+
+func findItemInDepot(
+	dep depot.Depot,
+	target string,
+	catalog *Catalog,
+	items ItemDefinitionProvider,
+) (coreitem.Instance, bool) {
+	for _, inst := range dep.Items {
 		if inst.ID == target || inst.DefinitionID == target {
 			return inst, true
 		}

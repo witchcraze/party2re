@@ -17,7 +17,7 @@
 | `うる` | `&uru` | `GemStoreService.SellGem` | `POST /characters/{id}/gemstore/sell` | 宝珠箱所有確認 $\rightarrow$ 売却額計算（50%価格、最低1G） $\rightarrow$ 宝珠箱から消費 $\rightarrow$ 所持金加算 |
 | `おくる` | `&okuru` | `GemStoreService.SendGem` | `POST /characters/{id}/gemstore/send` | 自身送信防止 $\rightarrow$ 送受信者ID昇順ロック $\rightarrow$ 送信者宝珠箱から消費 $\rightarrow$ 受信者宝珠箱付与（満杯時拒否） |
 | `かこう` | `&kako` | `GemStoreService.SynthesizeGem` | `POST /characters/{id}/gemstore/synthesize` | レシピ素材2種（宝珠箱/インベントリ/倉庫）所有確認 $\rightarrow$ 消費 $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否） |
-| `かんてい` | `&kantei` | `GemStoreService.AppraiseItem` | `POST /characters/{id}/gemstore/appraise` | 未鑑定宝珠（インベントリ）を消費 $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否） |
+| `かんてい` | `&kantei` | `GemStoreService.AppraiseItem` | `POST /characters/{id}/gemstore/appraise` | 未鑑定宝珠（インベントリまたは預かり所）を消費（スタック時 `ConsumeOne`） $\rightarrow$ 宝珠箱へ上位宝石付与（満杯時拒否） |
 | `みる` / `はなす` | `words` / メニュー | `GemStoreService.GetCatalog`<br>`GemStoreService.GetRecipes`<br>`GemStoreService.GetDialogue` | `GET /gemstore/catalog`<br>`GET /gemstore/recipes`<br>`GET /gemstore/dialogue` | 転職・レベル別購入可能宝石、全合成レシピ、店主 `@ジェマ` 会話メッセージの取得 |
 
 ---
