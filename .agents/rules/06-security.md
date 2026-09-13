@@ -34,3 +34,5 @@ To ensure credentials resist brute-force attacks by high-throughput hardware (GP
 - **Approved Hashing Algorithms**: All account authentication credentials MUST use `golang.org/x/crypto/bcrypt` with a work factor / cost parameter ≥ 12 (or `argon2id`).
 - **Strictly Banned Patterns**: Custom iterative SHA-256 loops, PBKDF1, MD5, SHA-1, unsalted hashes, or fast non-memory-hard cryptographic digests are strictly prohibited for user passwords.
 - **Constant-Time Verification**: Verification of security tokens, API keys, and credentials MUST use constant-time comparison (e.g., `subtle.ConstantTimeCompare`) or standard library cryptographic compare functions (e.g., `bcrypt.CompareHashAndPassword`) to prevent timing attacks.
+- **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/crypto_lint_test.go`) during `make check` and CI.
+
