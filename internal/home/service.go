@@ -3,13 +3,13 @@ package home
 import (
 	"context"
 	"errors"
-	mrand "math/rand"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/ratelimit"
@@ -30,7 +30,7 @@ type Service struct {
 	repo              Repository
 	charReader        CharacterReader
 	rngMu             sync.Mutex
-	rng               *mrand.Rand
+	rng               random.Generator
 	nowFunc           func() time.Time
 	timer             TimerService
 	charUpdater       CharacterUpdater
@@ -56,7 +56,7 @@ func NewService(repo Repository, charReader CharacterReader, opts ...ServiceOpti
 	s := &Service{
 		repo:              repo,
 		charReader:        charReader,
-		rng:               mrand.New(mrand.NewSource(time.Now().UnixNano())),
+		rng:               random.Default(),
 		baseSleepDuration: DefaultBaseSleepDuration,
 		nowFunc:           func() time.Time { return time.Now().UTC() },
 	}

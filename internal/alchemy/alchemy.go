@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"strings"
 	"sync"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/depot"
 )
@@ -118,7 +118,13 @@ type Service struct {
 	synthesisHook SynthesisHook
 	nowFunc       func() time.Time
 	rngMu         sync.Mutex
-	rng           *rand.Rand
+	rng           random.Generator
+}
+
+func WithRNG(rng random.Generator) Option {
+	return func(s *Service) {
+		s.rng = rng
+	}
 }
 
 func NewService(
@@ -138,7 +144,7 @@ func NewService(
 		repo:       repo,
 		recipes:    recipes,
 		items:      items,
-		rng:        rand.New(rand.NewSource(time.Now().UnixNano())),
+		rng:        random.Default(),
 	}
 	for _, opt := range opts {
 		opt(s)

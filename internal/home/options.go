@@ -2,9 +2,9 @@ package home
 
 import (
 	"context"
-	mrand "math/rand"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
@@ -25,7 +25,7 @@ func WithNowFunc(fn func() time.Time) ServiceOption {
 	}
 }
 
-func WithRNG(rng *mrand.Rand) ServiceOption {
+func WithRNG(rng random.Generator) ServiceOption {
 	return func(s *Service) {
 		s.rng = rng
 	}

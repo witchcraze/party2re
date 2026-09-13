@@ -2,12 +2,14 @@ package battle
 
 import (
 	"fmt"
-	"math/rand"
+
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 type battleContext struct {
 	turns           int
 	req             PartyBattleRequest
+	rng             random.Generator
 	field           *FieldState
 	hpMap           map[string]int
 	mpMap           map[string]int
@@ -30,7 +32,7 @@ func (ctx *battleContext) checkStatusSkip(actor Participant) bool {
 	st := ctx.statusMap[actor.ID]
 	switch st {
 	case StatusParalyze:
-		if rand.Float64() < 0.33 {
+		if ctx.rng.Float64() < 0.33 {
 			ctx.statusMap[actor.ID] = ""
 			ctx.logs = append(ctx.logs, TurnLog{
 				Turn:        ctx.turns,
@@ -50,7 +52,7 @@ func (ctx *battleContext) checkStatusSkip(actor Participant) bool {
 		})
 		return true
 	case StatusSleep:
-		if rand.Float64() < 0.33 {
+		if ctx.rng.Float64() < 0.33 {
 			ctx.statusMap[actor.ID] = ""
 			ctx.logs = append(ctx.logs, TurnLog{
 				Turn:        ctx.turns,

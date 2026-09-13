@@ -3,10 +3,10 @@ package adventure
 import (
 	"errors"
 	"fmt"
-	"math/rand"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -104,7 +104,7 @@ func NewCrawlSessionWithParticipants(
 		return nil, ErrTooManyParticipants
 	}
 	if rng == nil {
-		rng = rand.Intn
+		rng = random.Intn
 	}
 
 	charIDs := make([]string, len(characters))

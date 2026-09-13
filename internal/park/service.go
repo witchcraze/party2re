@@ -3,11 +3,11 @@ package park
 import (
 	"context"
 	"errors"
-	mrand "math/rand"
 	"strings"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/ratelimit"
@@ -50,7 +50,7 @@ func WithNowFunc(fn func() time.Time) ServiceOption {
 	}
 }
 
-func WithNPCRNG(rng *mrand.Rand) ServiceOption {
+func WithNPCRNG(rng random.Generator) ServiceOption {
 	return func(s *Service) {
 		s.npc = NewTownGirlNPC(rng)
 	}

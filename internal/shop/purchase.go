@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"math"
-	"math/rand"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
 )
@@ -382,7 +382,7 @@ func (s *Service) TalkNPC(ctx context.Context, shopType ShopType) (string, error
 	if len(words) == 0 {
 		return "", nil
 	}
-	idx := rand.Intn(len(words))
+	idx := random.Intn(len(words))
 	return words[idx], nil
 }
 

@@ -2,7 +2,8 @@ package adventure
 
 import (
 	"fmt"
-	"math/rand"
+
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 // Legacy item IDs with special adventure interactions.
@@ -40,7 +41,7 @@ func CalculateTreasureCount(input TreasureCalculationInput) int {
 	}
 	rng := input.Rng
 	if rng == nil {
-		rng = rand.Intn
+		rng = random.Intn
 	}
 
 	// Base count: 1 box per alive party member
@@ -83,7 +84,7 @@ func GenerateTreasureBoxes(count int, dropPool []string, rng func(n int) int) []
 		return nil
 	}
 	if rng == nil {
-		rng = rand.Intn
+		rng = random.Intn
 	}
 	if len(dropPool) == 0 {
 		dropPool = []string{"item-001"}

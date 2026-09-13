@@ -30,7 +30,8 @@ Do not silently make substantial architectural decisions. Create an Issue if the
 ## 7. Common Components and DRY Guidelines
 - **No Monolithic `util`/`common` Packages**: Do not create generic "junk-drawer" packages (`util` / `common`). Instead, place shared logic in single-responsibility, focused packages (e.g. `internal/id`, `internal/pagination`, `internal/validation`, `internal/api/http/middleware`).
 - **Rule of Three for General Utilities**: For general logic, formatting, and mathematical operations, prefer local implementation until duplication occurs across 3+ modules. Then extract to a dedicated shared package to avoid premature abstraction.
-- **Immediate Centralization for Security & Concurrency**: Security enforcement (session authentication, character ownership validation wrappers like `withAuthenticatedCharacter`) and concurrency-critical utilities (thread-safe RNG) MUST be centralized and reused immediately across all endpoints. Never duplicate auth or random state logic locally.
+- **Immediate Centralization for Security & Concurrency**: Security enforcement (session authentication, character ownership validation wrappers like `withAuthenticatedCharacter`) and concurrency-critical utilities (thread-safe RNG via `internal/core/random`) MUST be centralized and reused immediately across all endpoints. Never duplicate auth or random state logic locally. Direct imports of `math/rand` in production packages are prohibited.
+  - **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/rand_lint_test.go`) during `make check` and CI.
 - **Shared Entity Persistence**: Repositories mutating shared Core entities (e.g. character stats, money, level, medals) must use centralized persistence helpers in `internal/database` rather than maintaining scattered raw SQL update queries across multiple repository files.
 
 ## 8. Configuration & Environment Variable Boundaries

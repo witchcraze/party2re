@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	mrand "math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +11,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
 )
@@ -695,7 +695,7 @@ func TestUseHomeItem_TransactionalSuccess(t *testing.T) {
 		WithDepotManager(depotMgr),
 		WithItemCatalog(cat),
 		WithTransactionRunner(runner),
-		WithRNG(mrand.New(mrand.NewSource(1))),
+		WithRNG(random.NewDeterministic(1)),
 	)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)

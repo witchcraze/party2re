@@ -2,10 +2,10 @@ package boss
 
 import (
 	"fmt"
-	"math/rand"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 func (s *Service) buildBossParticipants(stage BossStage, allies []corecharacter.Character) []corebattle.Participant {
@@ -80,7 +80,7 @@ func (s *Service) pickTreasure(treasures []string) string {
 			idx = n
 		}
 	} else {
-		idx = rand.Intn(len(treasures))
+		idx = random.Intn(len(treasures))
 	}
 	return treasures[idx]
 }

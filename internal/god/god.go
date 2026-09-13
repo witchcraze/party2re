@@ -3,7 +3,8 @@ package god
 import (
 	"context"
 	"fmt"
-	"math/rand"
+
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 type Option func(*Service)
@@ -107,7 +108,7 @@ func (s *Service) randFloat() float64 {
 	if s.randFloatFn != nil {
 		return s.randFloatFn()
 	}
-	return rand.Float64()
+	return random.Float64()
 }
 
 func (s *Service) GetWishes(ctx context.Context, characterID string, realm Realm) ([]Wish, error) {

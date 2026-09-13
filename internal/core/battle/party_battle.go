@@ -2,6 +2,8 @@ package battle
 
 import (
 	"sort"
+
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 type combatantWrapper struct {
@@ -122,8 +124,14 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 		bonusPercent = 30
 	}
 
+	rng := req.RNG
+	if rng == nil {
+		rng = random.Default()
+	}
+
 	ctx := &battleContext{
 		req:             req,
+		rng:             rng,
 		hpMap:           make(map[string]int),
 		mpMap:           make(map[string]int),
 		cmpMap:          make(map[string]int),

@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 type mockCharReader struct {
@@ -325,7 +325,7 @@ func TestHomeService(t *testing.T) {
 	}
 	repo := newMockHomeRepo(chars.chars)
 	fixedTime := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
-	rng := rand.New(rand.NewSource(42))
+	rng := random.NewDeterministic(42)
 	charUpdater := &mockCharUpdater{chars: chars.chars}
 
 	service, err := NewService(

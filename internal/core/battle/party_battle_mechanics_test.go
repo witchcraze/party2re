@@ -287,3 +287,89 @@ func TestPartyBattleMazinSetAbsorbsFallenAllyAttack(t *testing.T) {
 	}
 	t.Fatalf("expected Mazin attack 10 + 40 against defense 1, logs: %+v", res.Logs)
 }
+
+type fixedFloatRNG struct {
+	val float64
+}
+
+func (f fixedFloatRNG) Intn(n int) int   { return 0 }
+func (f fixedFloatRNG) IntN(n int) int   { return 0 }
+func (f fixedFloatRNG) Float64() float64 { return f.val }
+
+func TestPartyBattle_DeterministicStatusRecovery(t *testing.T) {
+	engine := corebattle.Engine{}
+
+	// 1. Recovered scenario: RNG returns 0.1 (< 0.33) -> status clears to "" and character acts
+	reqRecovered := corebattle.PartyBattleRequest{
+		Allies: []corebattle.Participant{
+			corebattle.NewParticipantBuilder("hero").
+				WithName("Hero").
+				WithStats(100, 30, 10).
+				WithAgility(100).
+				WithStatus(corebattle.StatusParalyze).
+				MustBuild(),
+		},
+		Enemies: []corebattle.Participant{
+			corebattle.NewParticipantBuilder("goblin").
+				WithName("Goblin").
+				WithStats(10, 10, 5).
+				WithAgility(10).
+				MustBuild(),
+		},
+		VictoryReward: corebattle.Reward{Experience: 10},
+		RNG:           fixedFloatRNG{val: 0.1},
+	}
+
+	resRecovered, err := engine.ResolvePartyBattle(reqRecovered)
+	if err != nil {
+		t.Fatalf("ResolvePartyBattle failed: %v", err)
+	}
+
+	foundRecovered := false
+	for _, l := range resRecovered.Logs {
+		if l.ActionName == "回復" {
+			foundRecovered = true
+			break
+		}
+	}
+	if !foundRecovered {
+		t.Errorf("expected paralyze recovery log with RNG < 0.33, got: %+v", resRecovered.Logs)
+	}
+
+	// 2. Paralyzed skip scenario: RNG returns 0.5 (>= 0.33) -> remains paralyzed and cannot act
+	reqBlocked := corebattle.PartyBattleRequest{
+		Allies: []corebattle.Participant{
+			corebattle.NewParticipantBuilder("hero").
+				WithName("Hero").
+				WithStats(100, 30, 10).
+				WithAgility(100).
+				WithStatus(corebattle.StatusParalyze).
+				MustBuild(),
+		},
+		Enemies: []corebattle.Participant{
+			corebattle.NewParticipantBuilder("goblin").
+				WithName("Goblin").
+				WithStats(10, 10, 5).
+				WithAgility(10).
+				MustBuild(),
+		},
+		VictoryReward: corebattle.Reward{Experience: 10},
+		RNG:           fixedFloatRNG{val: 0.5},
+	}
+
+	resBlocked, err := engine.ResolvePartyBattle(reqBlocked)
+	if err != nil {
+		t.Fatalf("ResolvePartyBattle failed: %v", err)
+	}
+
+	foundBlocked := false
+	for _, l := range resBlocked.Logs {
+		if l.ActionName == "行動不能" {
+			foundBlocked = true
+			break
+		}
+	}
+	if !foundBlocked {
+		t.Errorf("expected paralyze skip log with RNG >= 0.33, got: %+v", resBlocked.Logs)
+	}
+}

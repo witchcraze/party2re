@@ -1,10 +1,10 @@
 package park_test
 
 import (
-	"math/rand"
 	"strings"
 	"testing"
 
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/park"
 )
 
@@ -85,7 +85,7 @@ func TestValidatePost(t *testing.T) {
 }
 
 func TestTownGirlNPC_Talk(t *testing.T) {
-	npc := park.NewTownGirlNPC(rand.New(rand.NewSource(42)))
+	npc := park.NewTownGirlNPC(random.NewDeterministic(42))
 	line := npc.Talk("勇者", "勇者1号")
 	if line == "" {
 		t.Fatalf("expected non-empty dialogue line")
@@ -96,7 +96,7 @@ func TestTownGirlNPC_Talk(t *testing.T) {
 }
 
 func TestTownGirlNPC_Divinate(t *testing.T) {
-	npc := park.NewTownGirlNPC(rand.New(rand.NewSource(42)))
+	npc := park.NewTownGirlNPC(random.NewDeterministic(42))
 	result := npc.Divinate("勇者1号")
 	if result.Fortune == "" {
 		t.Fatalf("expected non-empty fortune")
@@ -110,7 +110,7 @@ func TestTownGirlNPC_Divinate(t *testing.T) {
 }
 
 func TestTownGirlNPC_Inspect(t *testing.T) {
-	npc := park.NewTownGirlNPC(rand.New(rand.NewSource(42)))
+	npc := park.NewTownGirlNPC(random.NewDeterministic(42))
 	line := npc.Inspect()
 	if line == "" {
 		t.Fatalf("expected non-empty inspect line")

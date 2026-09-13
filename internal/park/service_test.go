@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/park"
 	"github.com/witchcraze/party2re/internal/ratelimit"
 )
@@ -249,7 +249,7 @@ func TestService_NPCInteractions(t *testing.T) {
 		},
 	}
 
-	svc, _ := park.NewService(repo, charReader, park.WithNPCRNG(rand.New(rand.NewSource(123))))
+	svc, _ := park.NewService(repo, charReader, park.WithNPCRNG(random.NewDeterministic(123)))
 
 	t.Run("Talk to NPC", func(t *testing.T) {
 		dialogue, err := svc.TalkToNPC(ctx, "char-1")

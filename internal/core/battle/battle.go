@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 var (
@@ -104,6 +105,7 @@ type PartyBattleRequest struct {
 	VictoryReward Reward
 	DefeatReward  Reward
 	DrawReward    Reward
+	RNG           random.Generator
 }
 
 // ConsumedItem records an item consumed during combat.

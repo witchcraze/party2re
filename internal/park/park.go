@@ -4,11 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"math/rand"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 var (
@@ -68,13 +68,12 @@ func ValidatePost(characterID, content, color, recipient string) error {
 
 // TownGirlNPC represents the @町娘 NPC in the park.
 type TownGirlNPC struct {
-	mu  sync.Mutex
-	rng *rand.Rand
+	rng random.Generator
 }
 
-func NewTownGirlNPC(rng *rand.Rand) *TownGirlNPC {
+func NewTownGirlNPC(rng random.Generator) *TownGirlNPC {
 	if rng == nil {
-		rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+		rng = random.Default()
 	}
 	return &TownGirlNPC{rng: rng}
 }
@@ -83,8 +82,6 @@ func (n *TownGirlNPC) randomInt(max int) int {
 	if max <= 0 {
 		return 0
 	}
-	n.mu.Lock()
-	defer n.mu.Unlock()
 	return n.rng.Intn(max)
 }
 

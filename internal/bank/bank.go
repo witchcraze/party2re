@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 const (
@@ -218,5 +218,5 @@ func (s *Service) TalkNPC() string {
 	if len(NPCDialogues) == 0 {
 		return ""
 	}
-	return NPCDialogues[rand.Intn(len(NPCDialogues))]
+	return NPCDialogues[random.Intn(len(NPCDialogues))]
 }
