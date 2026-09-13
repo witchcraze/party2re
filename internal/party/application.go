@@ -37,17 +37,29 @@ func WithVictoryHook(hook VictoryHook) Option {
 	}
 }
 
+// ParticipantBuilder constructs a Participant from a character ID.
+type ParticipantBuilder interface {
+	BuildParticipant(ctx context.Context, characterID string) (battle.Participant, error)
+}
+
+func WithParticipantBuilder(builder ParticipantBuilder) Option {
+	return func(s *Service) {
+		s.participantBuilder = builder
+	}
+}
+
 type Service struct {
-	repo              Repository
-	charRepo          CharacterRepository
-	invRepo           InventoryRepository
-	stages            StageProvider
-	monsters          MonsterProvider
-	battleEngine      BattleEngine
-	news              NewsPublisher
-	txProvider        TransactionProvider
-	victoryHook       VictoryHook
-	postAdventureHook PostAdventureHook
+	repo               Repository
+	charRepo           CharacterRepository
+	invRepo            InventoryRepository
+	stages             StageProvider
+	monsters           MonsterProvider
+	battleEngine       BattleEngine
+	news               NewsPublisher
+	txProvider         TransactionProvider
+	victoryHook        VictoryHook
+	postAdventureHook  PostAdventureHook
+	participantBuilder ParticipantBuilder
 }
 
 func (s *Service) SetVictoryHook(hook VictoryHook) {

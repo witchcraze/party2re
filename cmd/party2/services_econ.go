@@ -28,6 +28,7 @@ type econServices struct {
 	gemStore       *gemstore.Service
 	store          *store.Service
 	depotRepo      *database.DepotRepository
+	equipRepo      *database.EquipmentRepository
 	plantationRepo *database.PlantationRepository
 	gemBoxRepo     *database.GemBoxRepository
 	fleamarketRepo *database.FleaMarketRepository
@@ -194,6 +195,7 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		gemStore:       gemStoreService,
 		store:          storeService,
 		depotRepo:      depotRepo,
+		equipRepo:      equipRepo,
 		plantationRepo: plantationRepo,
 		gemBoxRepo:     gemBoxRepo,
 		fleamarketRepo: fleamarketRepo,

@@ -337,6 +337,92 @@ func TestBuildParticipant(t *testing.T) {
 	}
 }
 
+func TestBuildParticipant_EquipmentStats(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	invRepo := newMockInvRepo()
+	equipRepo := newMockEquipRepo()
+
+	char := corecharacter.Character{
+		ID:   "char-warrior",
+		Name: "戦士ライアン",
+		Stats: corecharacter.Stats{
+			HP:      100,
+			MaxHP:   100,
+			Attack:  30,
+			Defense: 20,
+			Agility: 25,
+		},
+	}
+	_ = charRepo.Update(ctx, char)
+
+	inv, _ := coreinventory.New("char-warrior")
+	// weapon-08: 銅の剣 (atk +14, wt 9)
+	sword, _ := coreitem.NewInstance("weapon-08", 1)
+	// armor-07: 鎖かたびら (def +24, wt 8)
+	armor, _ := coreitem.NewInstance("armor-07", 1)
+	// item-122: 力の指輪 (atk +20)
+	ring, _ := coreitem.NewInstance("item-122", 1)
+
+	_ = inv.Add(sword)
+	_ = inv.Add(armor)
+	_ = inv.Add(ring)
+	_ = invRepo.Save(ctx, inv)
+
+	equip, _ := coreequipment.New("char-warrior")
+	equip.Slots[coreitem.SlotMainHand] = sword.ID
+	equip.Slots[coreitem.SlotBody] = armor.ID
+	equip.Slots[coreitem.SlotAccessory] = ring.ID
+	_ = equipRepo.Save(ctx, equip)
+
+	svc := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithEquipmentRepository(equipRepo),
+	)
+
+	part, err := svc.BuildParticipant(ctx, "char-warrior")
+	if err != nil {
+		t.Fatalf("BuildParticipant failed: %v", err)
+	}
+
+	// Attack = 30 + 14 (sword) + 20 (ring) = 64
+	// Defense = 20 + 24 (armor) = 44
+	// Agility = 25 - 9 (sword) - 8 (armor) = 8
+	if part.Attack != 64 {
+		t.Errorf("part.Attack = %d, want 64", part.Attack)
+	}
+	if part.Defense != 44 {
+		t.Errorf("part.Defense = %d, want 44", part.Defense)
+	}
+	if part.Agility != 8 {
+		t.Errorf("part.Agility = %d, want 8", part.Agility)
+	}
+}
+
+func TestBuildParticipantWithCurrentHP(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	char := corecharacter.Character{
+		ID:   "char-hp-test",
+		Name: "テストキャラ",
+		Stats: corecharacter.Stats{
+			HP:    100,
+			MaxHP: 100,
+		},
+	}
+	_ = charRepo.Update(ctx, char)
+
+	svc := battle.NewService(battle.WithCharacterRepository(charRepo))
+	part, err := svc.BuildParticipantWithCurrentHP(ctx, "char-hp-test", 42)
+	if err != nil {
+		t.Fatalf("BuildParticipantWithCurrentHP failed: %v", err)
+	}
+	if part.HP != 42 {
+		t.Errorf("part.HP = %d, want 42", part.HP)
+	}
+}
+
 func TestExtractStatOrbOptions(t *testing.T) {
 	inv, _ := coreinventory.New("char-1")
 	lifeOrb, _ := coreitem.NewInstance(progression.ItemLifeStatOrb, 1)

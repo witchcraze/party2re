@@ -200,6 +200,18 @@ func WithRandomSource(rng corecharacter.RandomSource) ServiceOption {
 	}
 }
 
+// ParticipantBuilder constructs a Participant from a character ID.
+type ParticipantBuilder interface {
+	BuildParticipant(ctx context.Context, characterID string) (corebattle.Participant, error)
+}
+
+// WithParticipantBuilder configures the ParticipantBuilder.
+func WithParticipantBuilder(builder ParticipantBuilder) ServiceOption {
+	return func(s *Service) {
+		s.participantBuilder = builder
+	}
+}
+
 type Service struct {
 	repo               Repository
 	characterRepo      CharacterRepository
@@ -212,6 +224,7 @@ type Service struct {
 	newsPub            NewsPublisher
 	txProvider         TransactionProvider
 	rng                corecharacter.RandomSource
+	participantBuilder ParticipantBuilder
 }
 
 func (s *Service) SetVictoryBanquetHook(hook VictoryBanquetHook) {

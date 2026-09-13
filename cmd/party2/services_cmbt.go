@@ -7,6 +7,7 @@ import (
 
 	valkeygo "github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/adventure"
+	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/boss"
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -30,6 +31,7 @@ type cmbtServices struct {
 	customSkill *custom_skill.Service
 	party       *party.Service
 	adv         *adventure.Service
+	battle      *battle.Service
 }
 
 type customSkillGemCatalog struct{ catalog *gemstore.Catalog }
@@ -48,9 +50,27 @@ func newCmbtServices(
 	db *sql.DB,
 	core *coreServices,
 	soc *socServices,
+	econ *econServices,
 	valkeyClient valkeygo.Client,
 ) (*cmbtServices, error) {
 	battleEngine := corebattle.Engine{}
+
+	customSkillRepo, err := database.NewCustomSkillRepository(db)
+	if err != nil {
+		return nil, err
+	}
+
+	battleAdapter := battle.NewService(
+		battle.WithCharacterRepository(core.charRepo),
+		battle.WithInventoryRepository(core.invRepo),
+		battle.WithEquipmentRepository(econ.equipRepo),
+		battle.WithDepotRepository(econ.depotRepo),
+		battle.WithBattleEngine(battleEngine),
+		battle.WithCustomSkillRepository(customSkillRepo),
+		battle.WithJobDefinitionProvider(core.jobCatalog),
+		battle.WithTransactionProvider(core.txProvider),
+		battle.WithTransactionRunner(core.economy),
+	)
 
 	var pvpRoomRepo pvp.RoomRepository
 	if valkeyClient != nil {
@@ -62,7 +82,7 @@ func newCmbtServices(
 	} else {
 		pvpRoomRepo = pvp.NewMemoryRoomRepository()
 	}
-	pvpService, err := pvp.NewService(pvpRoomRepo, core.charRepo, battleEngine)
+	pvpService, err := pvp.NewService(pvpRoomRepo, core.charRepo, battleEngine, pvp.WithParticipantBuilder(battleAdapter))
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +102,14 @@ func newCmbtServices(
 	if err != nil {
 		return nil, err
 	}
-	gvgService, err := gvg.NewService(gvgRoomRepo, gvgRepo, soc.guildRepo, core.charRepo, battleEngine)
+	gvgService, err := gvg.NewService(
+		gvgRoomRepo,
+		gvgRepo,
+		soc.guildRepo,
+		core.charRepo,
+		battleEngine,
+		gvg.WithParticipantBuilder(battleAdapter),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +136,7 @@ func newCmbtServices(
 		core.charRepo,
 		battleEngine,
 		dungeon.WithActiveExpeditionStore(valkeyExpeditionStore),
+		dungeon.WithParticipantBuilder(battleAdapter),
 	)
 	if err != nil {
 		return nil, err
@@ -136,15 +164,12 @@ func newCmbtServices(
 		core.charRepo,
 		battleEngine,
 		challenge.WithActiveSessionStore(valkeyChallengeStore),
+		challenge.WithParticipantBuilder(battleAdapter),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	customSkillRepo, err := database.NewCustomSkillRepository(db)
-	if err != nil {
-		return nil, err
-	}
 	customSkillService, err := custom_skill.NewService(customSkillRepo, core.charRepo)
 	if err != nil {
 		return nil, err
@@ -185,6 +210,7 @@ func newCmbtServices(
 			_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)
 			return err
 		})),
+		party.WithParticipantBuilder(battleAdapter),
 	)
 	if err != nil {
 		return nil, err
@@ -200,15 +226,17 @@ func newCmbtServices(
 		soc.sched,
 		nil,
 		adventure.RealClock{},
+		adventure.WithParticipantBuilder(battleAdapter),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	// Wire party repository and news publisher into boss service so that
+	// Wire party repository, participant builder, and news publisher into boss service so that
 	// StartSealingBattle (パーティー封印戦) can resolve party membership and publish sealing news.
 	bossService.Configure(
 		boss.WithPartyRepository(partyRepo),
+		boss.WithParticipantBuilder(battleAdapter),
 		boss.WithNewsPublisher(boss.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
 			_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)
 			return err
@@ -225,5 +253,6 @@ func newCmbtServices(
 		customSkill: customSkillService,
 		party:       partyService,
 		adv:         advService,
+		battle:      battleAdapter,
 	}, nil
 }

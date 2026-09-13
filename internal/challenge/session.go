@@ -92,11 +92,31 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 						Agility: m.Agility,
 					},
 				}
-				allies = append(allies, corebattle.NewParticipantFromCharacterWithHP(mChar, m.CharacterCurrentHP))
+				var p corebattle.Participant
+				if s.participantBuilder != nil {
+					var err error
+					p, err = s.participantBuilder.BuildParticipantWithCurrentHP(ctx, m.CharacterID, m.CharacterCurrentHP)
+					if err != nil {
+						return nil, nil, err
+					}
+				} else {
+					p = buildFallbackParticipantWithHP(mChar, m.CharacterCurrentHP)
+				}
+				allies = append(allies, p)
 			}
 		}
 		if len(allies) == 0 {
-			allies = append(allies, corebattle.NewParticipantFromCharacterWithHP(char, session.CharacterCurrentHP))
+			var p corebattle.Participant
+			if s.participantBuilder != nil {
+				var err error
+				p, err = s.participantBuilder.BuildParticipantWithCurrentHP(ctx, char.ID, session.CharacterCurrentHP)
+				if err != nil {
+					return nil, nil, err
+				}
+			} else {
+				p = buildFallbackParticipantWithHP(char, session.CharacterCurrentHP)
+			}
+			allies = append(allies, p)
 		}
 		pRes, pErr := pResolver.ResolvePartyBattle(corebattle.PartyBattleRequest{
 			Allies:  allies,
@@ -115,7 +135,16 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 			Logs:     pRes.Logs,
 		}
 	} else {
-		charParticipant := corebattle.NewParticipantFromCharacterWithHP(char, session.CharacterCurrentHP)
+		var charParticipant corebattle.Participant
+		if s.participantBuilder != nil {
+			var err error
+			charParticipant, err = s.participantBuilder.BuildParticipantWithCurrentHP(ctx, char.ID, session.CharacterCurrentHP)
+			if err != nil {
+				return nil, nil, err
+			}
+		} else {
+			charParticipant = buildFallbackParticipantWithHP(char, session.CharacterCurrentHP)
+		}
 		battleReq := corebattle.Request{
 			Participants: []corebattle.Participant{charParticipant, monsterParticipant},
 		}
@@ -384,4 +413,21 @@ func (s *Service) GetActiveSession(ctx context.Context, characterID string) (*Ch
 		return nil, errors.New("character id is required")
 	}
 	return s.activeStore.GetActiveSession(ctx, characterID)
+}
+
+func buildFallbackParticipantWithHP(char corecharacter.Character, currentHP int) corebattle.Participant {
+	hp := currentHP
+	if hp <= 0 {
+		hp = char.Stats.HP
+		if hp <= 0 && char.Stats.MaxHP > 0 {
+			hp = char.Stats.MaxHP
+		}
+	}
+	p := corebattle.MustNewParticipant(char.ID, hp, char.Stats.Attack, char.Stats.Defense)
+	p.Name = char.Name
+	p.MaxHP = char.Stats.MaxHP
+	p.MP = char.Stats.MP
+	p.MaxMP = char.Stats.MaxMP
+	p.Agility = char.Stats.Agility
+	return p
 }

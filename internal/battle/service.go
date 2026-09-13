@@ -66,6 +66,12 @@ type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
+// ParticipantBuilder constructs combat participants from character state with equipment, items, and skills.
+type ParticipantBuilder interface {
+	BuildParticipant(ctx context.Context, characterID string) (corebattle.Participant, error)
+	BuildParticipantWithCurrentHP(ctx context.Context, characterID string, currentHP int) (corebattle.Participant, error)
+}
+
 // BattleEngine defines the core party battle resolver.
 type BattleEngine interface {
 	ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error)

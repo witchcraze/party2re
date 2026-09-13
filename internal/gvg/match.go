@@ -86,13 +86,28 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 	// Build battle participants: Leader's Guild (Allies) vs Opposing Guild(s) (Enemies)
 	var allies, enemies []corebattle.Participant
 	for _, m := range detail.Members {
-		char, err := s.characters.FindByID(ctx, m.CharacterID)
-		if err != nil {
-			return RoundResolution{}, err
+		var p corebattle.Participant
+		if s.participantBuilder != nil {
+			var err error
+			p, err = s.participantBuilder.BuildParticipantWithCurrentHP(ctx, m.CharacterID, m.HP)
+			if err != nil {
+				return RoundResolution{}, err
+			}
+		} else {
+			char, err := s.characters.FindByID(ctx, m.CharacterID)
+			if err != nil {
+				return RoundResolution{}, err
+			}
+			p = corebattle.MustNewParticipant(char.ID, char.Stats.HP, char.Stats.Attack, char.Stats.Defense)
+			p.Name = char.Name
+			p.MaxHP = char.Stats.MaxHP
+			p.MP = char.Stats.MP
+			p.MaxMP = char.Stats.MaxMP
+			p.Agility = char.Stats.Agility
 		}
-		p := corebattle.NewParticipantFromCharacter(char)
-		p.HP = m.HP
-		if p.HP <= 0 {
+		if m.HP > 0 {
+			p.HP = m.HP
+		} else if p.HP <= 0 {
 			p.HP = m.MaxHP
 		}
 		p.TeamID = m.GuildID

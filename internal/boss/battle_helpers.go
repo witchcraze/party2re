@@ -135,3 +135,17 @@ func stageTierFromID(id string) int {
 		return 1
 	}
 }
+
+func buildFallbackParticipant(char corecharacter.Character) corebattle.Participant {
+	hp := char.Stats.HP
+	if hp <= 0 && char.Stats.MaxHP > 0 {
+		hp = char.Stats.MaxHP
+	}
+	p := corebattle.MustNewParticipant(char.ID, hp, char.Stats.Attack, char.Stats.Defense)
+	p.Name = char.Name
+	p.MaxHP = char.Stats.MaxHP
+	p.MP = char.Stats.MP
+	p.MaxMP = char.Stats.MaxMP
+	p.Agility = char.Stats.Agility
+	return p
+}

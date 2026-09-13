@@ -64,7 +64,19 @@ func (s *Service) BuildParticipant(ctx context.Context, characterID string) (cor
 		}
 	}
 
-	return BuildParticipantFromData(char, inv, equip, skills, cs)
+	return BuildParticipantFromDataWithRNG(char, inv, equip, skills, cs, s.rng)
+}
+
+// BuildParticipantWithCurrentHP loads a character and constructs a Participant with current HP overridden.
+func (s *Service) BuildParticipantWithCurrentHP(ctx context.Context, characterID string, currentHP int) (corebattle.Participant, error) {
+	p, err := s.BuildParticipant(ctx, characterID)
+	if err != nil {
+		return corebattle.Participant{}, err
+	}
+	if currentHP > 0 {
+		p.HP = currentHP
+	}
+	return p, nil
 }
 
 // BuildParticipantFromData constructs a Participant directly from domain structs.
@@ -75,9 +87,39 @@ func BuildParticipantFromData(
 	skills []skill.Definition,
 	cs *custom_skill.CustomSkill,
 ) (corebattle.Participant, error) {
+	return BuildParticipantFromDataWithRNG(char, inv, equip, skills, cs, nil)
+}
+
+// BuildParticipantFromDataWithRNG constructs a Participant directly from domain structs with custom RNG.
+func BuildParticipantFromDataWithRNG(
+	char corecharacter.Character,
+	inv coreinventory.Inventory,
+	equip coreequipment.Equipment,
+	skills []skill.Definition,
+	cs *custom_skill.CustomSkill,
+	rng corecharacter.RandomSource,
+) (corebattle.Participant, error) {
 	builder := corebattle.NewParticipantBuilder(char.ID).
 		WithName(char.Name).
 		FromCharacter(char)
+
+	// Apply equipment stat modifications (weapons, armor, accessories)
+	eqStats := CalculateEquipmentStats(char, inv, equip, rng)
+	finalAtk := char.Stats.Attack + eqStats.AttackBonus
+	if finalAtk < 0 {
+		finalAtk = 0
+	}
+	finalDef := char.Stats.Defense + eqStats.DefenseBonus
+	if finalDef < 0 {
+		finalDef = 0
+	}
+	finalAgi := char.Stats.Agility + eqStats.AgilityBonus
+	if finalAgi < 0 {
+		finalAgi = 0
+	}
+	builder.WithAttack(finalAtk).
+		WithDefense(finalDef).
+		WithAgility(finalAgi)
 
 	// Collect item definition IDs and find passive abilities & active combat items
 	itemDefIDs := make([]string, 0, len(inv.Items)+len(equip.Slots))

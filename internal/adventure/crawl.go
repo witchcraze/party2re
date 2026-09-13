@@ -87,6 +87,16 @@ func NewCrawlSession(
 	characters []corecharacter.Character,
 	rng func(n int) int,
 ) (*CrawlSession, error) {
+	return NewCrawlSessionWithParticipants(stage, characters, nil, rng)
+}
+
+// NewCrawlSessionWithParticipants creates a crawl session with pre-built participants.
+func NewCrawlSessionWithParticipants(
+	stage Stage,
+	characters []corecharacter.Character,
+	participants []corebattle.Participant,
+	rng func(n int) int,
+) (*CrawlSession, error) {
 	if len(characters) == 0 {
 		return nil, ErrNoParticipants
 	}
@@ -98,10 +108,14 @@ func NewCrawlSession(
 	}
 
 	charIDs := make([]string, len(characters))
-	participants := make([]corebattle.Participant, len(characters))
+	parts := make([]corebattle.Participant, len(characters))
 	for i, c := range characters {
 		charIDs[i] = c.ID
-		participants[i] = corebattle.NewParticipantFromCharacter(c)
+		if i < len(participants) && participants[i].ID != "" {
+			parts[i] = participants[i]
+		} else {
+			parts[i] = buildFallbackParticipant(c)
+		}
 	}
 
 	return &CrawlSession{
@@ -112,9 +126,23 @@ func NewCrawlSession(
 		CharacterIDs: charIDs,
 		Characters:   characters,
 		CurrentFloor: 1,
-		Participants: participants,
+		Participants: parts,
 		Rng:          rng,
 	}, nil
+}
+
+func buildFallbackParticipant(c corecharacter.Character) corebattle.Participant {
+	hp := c.Stats.HP
+	if hp <= 0 && c.Stats.MaxHP > 0 {
+		hp = c.Stats.MaxHP
+	}
+	p := corebattle.MustNewParticipant(c.ID, hp, c.Stats.Attack, c.Stats.Defense)
+	p.Name = c.Name
+	p.MaxHP = c.Stats.MaxHP
+	p.MP = c.Stats.MP
+	p.MaxMP = c.Stats.MaxMP
+	p.Agility = c.Stats.Agility
+	return p
 }
 
 // StageFinder provides stage lookup for crawl advancement.

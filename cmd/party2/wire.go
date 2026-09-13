@@ -43,7 +43,7 @@ func wireApp(
 	if err := core.initPlayerAndChar(soc.guildRepo, econ.fleamarketRepo, soc.notification, logger); err != nil {
 		return nil, err
 	}
-	cmbt, err := newCmbtServices(db, core, soc, valkeyClient)
+	cmbt, err := newCmbtServices(db, core, soc, econ, valkeyClient)
 	if err != nil {
 		return nil, err
 	}

@@ -100,17 +100,33 @@ type partyBattleResolver interface {
 	ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error)
 }
 
+// ParticipantBuilder constructs a Participant from a character ID.
+type ParticipantBuilder interface {
+	BuildParticipant(ctx context.Context, characterID string) (corebattle.Participant, error)
+}
+
+// Option configures optional parameters on Service.
+type Option func(*Service)
+
+// WithParticipantBuilder configures the ParticipantBuilder.
+func WithParticipantBuilder(builder ParticipantBuilder) Option {
+	return func(s *Service) {
+		s.participantBuilder = builder
+	}
+}
+
 type Service struct {
-	adventures        Repository
-	characters        CharacterRepository
-	inventories       InventoryRepository
-	stages            *StageCatalog
-	monsters          *MonsterCatalog
-	battle            corebattle.Resolver
-	logger            Logger
-	clock             Clock
-	victoryHook       VictoryHook
-	postAdventureHook PostAdventureHook
+	adventures         Repository
+	characters         CharacterRepository
+	inventories        InventoryRepository
+	stages             *StageCatalog
+	monsters           *MonsterCatalog
+	battle             corebattle.Resolver
+	logger             Logger
+	clock              Clock
+	victoryHook        VictoryHook
+	postAdventureHook  PostAdventureHook
+	participantBuilder ParticipantBuilder
 }
 
 func (s *Service) SetVictoryHook(hook VictoryHook) {
@@ -158,6 +174,7 @@ func NewServiceWithCatalogs(
 	_ any, // scheduler unused per Issue #478 (timer purged)
 	logger Logger,
 	clock Clock,
+	opts ...Option,
 ) (*Service, error) {
 	if adventures == nil || characters == nil || battle == nil {
 		return nil, errors.New("adventure dependencies are nil")
@@ -168,7 +185,7 @@ func NewServiceWithCatalogs(
 	if logger == nil {
 		logger = nopLogger{}
 	}
-	return &Service{
+	s := &Service{
 		adventures:  adventures,
 		characters:  characters,
 		inventories: inventories,
@@ -177,7 +194,11 @@ func NewServiceWithCatalogs(
 		battle:      battle,
 		logger:      logger,
 		clock:       clock,
-	}, nil
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s, nil
 }
 
 // Start executes a default StarterAdventure crawl.
@@ -260,7 +281,19 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 		pbr = r
 	}
 
-	session, err := NewCrawlSession(stage, characters, req.Rng)
+	var participants []corebattle.Participant
+	if s.participantBuilder != nil {
+		participants = make([]corebattle.Participant, len(characters))
+		for i, c := range characters {
+			p, err := s.participantBuilder.BuildParticipant(ctx, c.ID)
+			if err != nil {
+				return DungeonCrawlResult{}, err
+			}
+			participants[i] = p
+		}
+	}
+
+	session, err := NewCrawlSessionWithParticipants(stage, characters, participants, req.Rng)
 	if err != nil {
 		return DungeonCrawlResult{}, err
 	}

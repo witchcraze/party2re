@@ -207,16 +207,29 @@ type Repository interface {
 	HallOfFameRepository
 }
 
+// ParticipantBuilder constructs a Participant from character ID with current HP.
+type ParticipantBuilder interface {
+	BuildParticipantWithCurrentHP(ctx context.Context, characterID string, currentHP int) (corebattle.Participant, error)
+}
+
 type Service struct {
-	repo         Repository
-	charRepo     CharacterRepository
-	battleEngine corebattle.Resolver
-	activeStore  ActiveSessionStore
-	tiers        map[string]ChallengeTier
+	repo               Repository
+	charRepo           CharacterRepository
+	battleEngine       corebattle.Resolver
+	activeStore        ActiveSessionStore
+	tiers              map[string]ChallengeTier
+	participantBuilder ParticipantBuilder
 }
 
 // Option configures optional parameters on Service.
 type Option func(*Service)
+
+// WithParticipantBuilder configures the ParticipantBuilder.
+func WithParticipantBuilder(builder ParticipantBuilder) Option {
+	return func(s *Service) {
+		s.participantBuilder = builder
+	}
+}
 
 // WithActiveSessionStore configures the transient active challenge session store (e.g. ValkeySessionRepository).
 func WithActiveSessionStore(store ActiveSessionStore) Option {

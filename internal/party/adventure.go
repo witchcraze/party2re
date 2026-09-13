@@ -89,7 +89,20 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 		}
 
 		// 6. Execute 10-Floor Dungeon Crawl & Floor 11 Treasure Room
-		session, err := adventure.NewCrawlSession(stage, participatingChars, nil)
+		var session *adventure.CrawlSession
+		if s.participantBuilder != nil {
+			participants := make([]battle.Participant, len(participatingChars))
+			for i, c := range participatingChars {
+				part, err := s.participantBuilder.BuildParticipant(ctx, c.ID)
+				if err != nil {
+					return err
+				}
+				participants[i] = part
+			}
+			session, err = adventure.NewCrawlSessionWithParticipants(stage, participatingChars, participants, nil)
+		} else {
+			session, err = adventure.NewCrawlSession(stage, participatingChars, nil)
+		}
 		if err != nil {
 			return err
 		}

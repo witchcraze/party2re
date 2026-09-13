@@ -239,6 +239,11 @@ func (defaultRandomSource) Float64() float64 {
 	return float64(val&(1<<53-1)) / float64(1<<53)
 }
 
+// ParticipantBuilder constructs a Participant from character ID with current HP.
+type ParticipantBuilder interface {
+	BuildParticipantWithCurrentHP(ctx context.Context, characterID string, currentHP int) (corebattle.Participant, error)
+}
+
 type Service struct {
 	repo                Repository
 	characterRepo       CharacterRepository
@@ -249,6 +254,7 @@ type Service struct {
 	dungeonMap          map[string]Dungeon
 	monsterDefeatedHook MonsterDefeatedHook
 	rng                 RandomSource
+	participantBuilder  ParticipantBuilder
 }
 
 func (s *Service) SetMonsterDefeatedHook(hook MonsterDefeatedHook) {
@@ -287,6 +293,13 @@ func WithInventoryProvider(invRepo InventoryProvider) Option {
 func WithRNG(rng RandomSource) Option {
 	return func(s *Service) {
 		s.rng = rng
+	}
+}
+
+// WithParticipantBuilder configures the ParticipantBuilder.
+func WithParticipantBuilder(builder ParticipantBuilder) Option {
+	return func(s *Service) {
+		s.participantBuilder = builder
 	}
 }
 

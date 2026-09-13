@@ -17,9 +17,20 @@ func (s *Service) resolveMonsterCombat(
 	eventType TileEventType,
 	newX, newY int,
 ) (ExpeditionStepResult, error) {
+	var playerPart corebattle.Participant
+	if s.participantBuilder != nil {
+		var err error
+		playerPart, err = s.participantBuilder.BuildParticipantWithCurrentHP(ctx, char.ID, exp.CurrentHP)
+		if err != nil {
+			return ExpeditionStepResult{}, err
+		}
+	} else {
+		playerPart = buildFallbackParticipantWithHP(*char, exp.CurrentHP)
+	}
+
 	req := corebattle.Request{
 		Participants: []corebattle.Participant{
-			corebattle.NewParticipantFromCharacterWithHP(*char, exp.CurrentHP),
+			playerPart,
 			corebattle.MustNewParticipant(monster.ID, monster.HP, monster.Attack, monster.Defense),
 		},
 	}
@@ -85,9 +96,20 @@ func (s *Service) resolveBossCombat(
 	bossMonster DungeonMonster,
 	newX, newY int,
 ) (ExpeditionStepResult, error) {
+	var playerPart corebattle.Participant
+	if s.participantBuilder != nil {
+		var err error
+		playerPart, err = s.participantBuilder.BuildParticipantWithCurrentHP(ctx, char.ID, exp.CurrentHP)
+		if err != nil {
+			return ExpeditionStepResult{}, err
+		}
+	} else {
+		playerPart = buildFallbackParticipantWithHP(*char, exp.CurrentHP)
+	}
+
 	req := corebattle.Request{
 		Participants: []corebattle.Participant{
-			corebattle.NewParticipantFromCharacterWithHP(*char, exp.CurrentHP),
+			playerPart,
 			corebattle.MustNewParticipant(bossMonster.ID, bossMonster.HP, bossMonster.Attack, bossMonster.Defense),
 		},
 	}
@@ -135,4 +157,21 @@ func (s *Service) resolveBossCombat(
 		return ExpeditionStepResult{}, err
 	}
 	return s.handleWipeout(ctx, &stepRes.Expedition, char, fmt.Sprintf("フロアボス %s の圧倒的な力の前に敗れ去った…", bossMonster.Name))
+}
+
+func buildFallbackParticipantWithHP(char corecharacter.Character, currentHP int) corebattle.Participant {
+	hp := currentHP
+	if hp <= 0 {
+		hp = char.Stats.HP
+		if hp <= 0 && char.Stats.MaxHP > 0 {
+			hp = char.Stats.MaxHP
+		}
+	}
+	p := corebattle.MustNewParticipant(char.ID, hp, char.Stats.Attack, char.Stats.Defense)
+	p.Name = char.Name
+	p.MaxHP = char.Stats.MaxHP
+	p.MP = char.Stats.MP
+	p.MaxMP = char.Stats.MaxMP
+	p.Agility = char.Stats.Agility
+	return p
 }

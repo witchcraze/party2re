@@ -29,6 +29,11 @@ type BattleEngine interface {
 // VictoryHook is called when a character or team wins a Colosseum match.
 type VictoryHook func(ctx context.Context, winnerID string, loserID string) error
 
+// ParticipantBuilder constructs a Participant from character ID with current HP.
+type ParticipantBuilder interface {
+	BuildParticipantWithCurrentHP(ctx context.Context, characterID string, currentHP int) (corebattle.Participant, error)
+}
+
 // Option configures Service dependencies.
 type Option func(*Service)
 
@@ -38,11 +43,19 @@ func WithVictoryHook(hook VictoryHook) Option {
 	}
 }
 
+// WithParticipantBuilder configures the ParticipantBuilder.
+func WithParticipantBuilder(builder ParticipantBuilder) Option {
+	return func(s *Service) {
+		s.participantBuilder = builder
+	}
+}
+
 type Service struct {
-	repo         RoomRepository
-	characters   CharacterRepository
-	battleEngine BattleEngine
-	victoryHook  VictoryHook
+	repo               RoomRepository
+	characters         CharacterRepository
+	battleEngine       BattleEngine
+	victoryHook        VictoryHook
+	participantBuilder ParticipantBuilder
 }
 
 func (s *Service) SetVictoryHook(hook VictoryHook) {

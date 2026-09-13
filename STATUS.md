@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #590 — [Feature] Casino (Part 2): Multi-Player High-Low and Doppelganger Games
+Last updated: Issue #593 — [Refactor] Combat/Adapter: Wire Battle Adapter to all combat features and eliminate naked combatants
 
 ## Current phase
 
@@ -31,7 +31,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Progression** (`internal/core/progression`): ✅ Cumulative EXP (`level²×10`), OverLevel (Lv150), Happy Seed; enforced via AST linter.
 - **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): ✅ 72-job catalog, Lv20 job change, mastery, future memory snapshots, gem synthesis triggers.
 - **Item / Inventory / Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`): ✅ 5-category catalog (269 items), UsageCategory validation, domain stackability invariants (`IsStackable`), slot management, standardized item consumption interface (`Consume`, `ConsumeItem`, `ConsumeOne`, `ConsumeOneItem`).
-- **Battle & Adapter** (`internal/core/battle`, `internal/battle`): ✅ Deterministic turn resolver; multi-participant party combat (4vN) and multi-faction/team combat (3+ teams/guilds up to 8 players) with independent faction targeting and elimination loops, skill/item/gem-effect/field-state/revival — full `_battle.cgi` parity (#480, #605); standardized Battle Adapter (`internal/battle`) bridging Character/Party to Participant, automatic Stat Orb / passive trigger binding, and atomic post-battle state application with deterministic row-lock hierarchy (Rank 2 -> Rank 3 -> Rank 5) (#496).
+- **Battle & Adapter** (`internal/core/battle`, `internal/battle`): ✅ Deterministic turn resolver; multi-participant party combat (4vN) and multi-faction/team combat (3+ teams/guilds up to 8 players) with independent faction targeting and elimination loops, skill/item/gem-effect/field-state/revival — full `_battle.cgi` parity (#480, #605); standardized Battle Adapter (`internal/battle`) bridging Character/Party to Participant, authentic equipment stat calculation (71 weapons, 55 armors, 9 accessories), automatic Stat Orb / passive trigger binding, and atomic post-battle state application with deterministic row-lock hierarchy (Rank 2 -> Rank 3 -> Rank 5) (#496); fully wired into all 6 combat features (`pvp`, `gvg`, `boss`, `dungeon`, `challenge`, `adventure` / `party`) via `ParticipantBuilder` and `cmd/party2/wire.go`, completely eliminating naked combatants (#593).
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): ✅ Valkey-backed delayed queue + distributed lock worker; package coverage 92.7%.
 - **Database & Transaction Orchestration** (`internal/database`, `internal/economy`, `internal/core/event`): ✅ `RunInTx`/`ExecutorFromContext` propagation, deterministic lock hierarchy (Rank 0→8) AST-enforced, single-character `economy.TransactionRunner`, multi-aggregate/P2P `TransactionProvider` formalization (#561), consolidated safe `updateCharacter` persistence eliminating false `ErrNotFound` on unchanged updates (#585), 2-phase event dispatcher.
 - **Common Utilities** (`internal/pagination`, `internal/id`, `internal/validation`): ✅ Keyset cursor pagination (`CursorPage[T]`), cryptographic ID, validation helpers.

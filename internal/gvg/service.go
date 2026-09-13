@@ -33,13 +33,29 @@ type BattleEngine interface {
 	ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error)
 }
 
+// ParticipantBuilder constructs a Participant from character ID with current HP.
+type ParticipantBuilder interface {
+	BuildParticipantWithCurrentHP(ctx context.Context, characterID string, currentHP int) (corebattle.Participant, error)
+}
+
+// Option configures Service dependencies.
+type Option func(*Service)
+
+// WithParticipantBuilder configures the ParticipantBuilder.
+func WithParticipantBuilder(builder ParticipantBuilder) Option {
+	return func(s *Service) {
+		s.participantBuilder = builder
+	}
+}
+
 // Service manages real-time GvG rooms and standings.
 type Service struct {
-	repo         RoomRepository
-	standings    StandingRepository
-	guilds       GuildRepository
-	characters   CharacterRepository
-	battleEngine BattleEngine
+	repo               RoomRepository
+	standings          StandingRepository
+	guilds             GuildRepository
+	characters         CharacterRepository
+	battleEngine       BattleEngine
+	participantBuilder ParticipantBuilder
 }
 
 // NewService constructs a new GvG service.
@@ -49,17 +65,22 @@ func NewService(
 	guilds GuildRepository,
 	characters CharacterRepository,
 	battleEngine BattleEngine,
+	opts ...Option,
 ) (*Service, error) {
 	if repo == nil || standings == nil || guilds == nil || characters == nil || battleEngine == nil {
 		return nil, ErrInvalidDependencies
 	}
-	return &Service{
+	s := &Service{
 		repo:         repo,
 		standings:    standings,
 		guilds:       guilds,
 		characters:   characters,
 		battleEngine: battleEngine,
-	}, nil
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s, nil
 }
 
 func hashPassword(pw string) string {

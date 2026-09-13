@@ -93,7 +93,17 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 		orderedChars := make([]corecharacter.Character, 0, len(members))
 		for _, m := range members {
 			c := chars[m.CharacterID]
-			allies = append(allies, corebattle.NewParticipantFromCharacter(c))
+			var p corebattle.Participant
+			if s.participantBuilder != nil {
+				var err error
+				p, err = s.participantBuilder.BuildParticipant(ctx, c.ID)
+				if err != nil {
+					return err
+				}
+			} else {
+				p = buildFallbackParticipant(c)
+			}
+			allies = append(allies, p)
 			orderedChars = append(orderedChars, c)
 		}
 
@@ -311,9 +321,17 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 			char.Tired = 100
 		}
 
-		allies := []corebattle.Participant{
-			corebattle.NewParticipantFromCharacter(char),
+		var p corebattle.Participant
+		if s.participantBuilder != nil {
+			var err error
+			p, err = s.participantBuilder.BuildParticipant(ctx, char.ID)
+			if err != nil {
+				return err
+			}
+		} else {
+			p = buildFallbackParticipant(char)
 		}
+		allies := []corebattle.Participant{p}
 		orderedChars := []corecharacter.Character{char}
 		bossParticipants := s.buildBossParticipants(stage, orderedChars)
 

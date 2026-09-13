@@ -142,6 +142,18 @@ func (b *ParticipantBuilder) WithStats(hp, attack, defense int) *ParticipantBuil
 	return b
 }
 
+// WithAttack sets the Attack value.
+func (b *ParticipantBuilder) WithAttack(atk int) *ParticipantBuilder {
+	b.attack = atk
+	return b
+}
+
+// WithDefense sets the Defense value.
+func (b *ParticipantBuilder) WithDefense(def int) *ParticipantBuilder {
+	b.defense = def
+	return b
+}
+
 // WithCurrentHP overrides the HP attribute.
 func (b *ParticipantBuilder) WithCurrentHP(hp int) *ParticipantBuilder {
 	b.hp = hp
