@@ -2,7 +2,7 @@
   "$schema": "https://archify.dev/schema/module.v1.json",
   "module": "guild",
   "tier": 1,
-  "description": "Guild founding, dynamic guild points, custom roles, hex color customization, and membership management.",
+  "description": "Guild founding, dynamic guild points, custom roles, hex color, marks, wallpapers, membership workflow, and broadcast callouts.",
   "package": "internal/guild",
   "implementation_package": "internal/database",
   "dependencies": [
@@ -55,6 +55,44 @@
           "tier": 7,
           "mode": "UPDATE",
           "note": "Update former leader to member role and promote new leader"
+        }
+      ]
+    },
+    {
+      "method": "UpdateMark",
+      "source_ref": "internal/database/guild_repository.go#GuildRepository.UpdateMark",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "UPDATE",
+          "note": "Deduct guild mark change fee from leader wallet"
+        },
+        {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "UPDATE",
+          "note": "Update guild mark and last_active_at"
+        }
+      ]
+    },
+    {
+      "method": "UpdateWallpaper",
+      "source_ref": "internal/database/guild_repository.go#GuildRepository.UpdateWallpaper",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "UPDATE",
+          "note": "Deduct guild wallpaper change fee from leader wallet"
+        },
+        {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "UPDATE",
+          "note": "Update guild wallpaper and last_active_at"
         }
       ]
     }
