@@ -98,10 +98,10 @@ func classifyLockCall(recvName, methodName, relPath string) (LockRank, string, b
 	if strings.Contains(m, "listing") || strings.Contains(m, "parcel") ||
 		strings.Contains(m, "party") || strings.Contains(m, "round") ||
 		strings.Contains(m, "auction") || strings.Contains(m, "entry") ||
-		strings.Contains(m, "sale") {
+		strings.Contains(m, "sale") || strings.Contains(m, "room") {
 		return RankSharedPeerEntity, fmt.Sprintf("%s.%s", recvName, methodName), true
 	}
-	if strings.Contains(r, "party") || strings.Contains(r, "contest") {
+	if strings.Contains(r, "party") || strings.Contains(r, "contest") || strings.Contains(r, "casinoroom") {
 		return RankSharedPeerEntity, fmt.Sprintf("%s.%s", recvName, methodName), true
 	}
 

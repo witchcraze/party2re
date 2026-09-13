@@ -8,19 +8,39 @@ import (
 	"github.com/witchcraze/party2re/internal/casino"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/depot"
 )
 
-// CasinoService defines the casino games operations exposed over HTTP.
-type CasinoService interface {
+type CasinoAccountService interface {
 	GetAccount(ctx context.Context, characterID string) (casino.Account, error)
 	ExchangeGoldToCoins(ctx context.Context, characterID string, coins int64) (casino.Account, corecharacter.Character, error)
 	ExchangeCoinsToGold(ctx context.Context, characterID string, coins int64) (casino.Account, corecharacter.Character, error)
+	ExchangePrize(ctx context.Context, characterID string, costCoins int64, count int) (casino.PrizeExchangeResult, error)
+}
+
+type CasinoSoloGameService interface {
 	SpinSlot(ctx context.Context, characterID string, bet int64) (casino.SpinResult, casino.Account, error)
 	PlayHighLow(ctx context.Context, characterID string, betCoins int64, guess casino.GuessType) (casino.HighLowResult, casino.Account, error)
 	PlayDoppel(ctx context.Context, characterID string, bet int64, poolSize int, playerMark casino.DoppelMark) (casino.DoppelResult, casino.Account, error)
-	StartIndianPokerGame(ctx context.Context, characterID string, baseRate int64) (*casino.IndianPokerGame, casino.Account, error)
-	GetActiveIndianPokerGame(ctx context.Context, characterID string) (*casino.IndianPokerGame, casino.Account, error)
-	PlayIndianPokerAction(ctx context.Context, characterID string, action casino.Action) (*casino.IndianPokerGame, casino.Account, error)
+}
+
+type CasinoRoomService interface {
+	ListRooms(ctx context.Context) ([]casino.RoomDetail, error)
+	CreateRoom(ctx context.Context, characterID string, req casino.CreateRoomRequest) (*casino.RoomDetail, error)
+	GetRoomDetail(ctx context.Context, roomID string, viewingCharID string) (*casino.RoomDetail, error)
+	JoinRoom(ctx context.Context, roomID string, characterID string, password string, fatigue int) (*casino.RoomDetail, error)
+	SpectateRoom(ctx context.Context, roomID string, characterID string, password string) (*casino.RoomDetail, error)
+	LeaveRoom(ctx context.Context, roomID string, characterID string) error
+	KickMember(ctx context.Context, roomID string, leaderID string, targetID string) error
+	StartIndianPoker(ctx context.Context, roomID string, leaderID string) (*casino.RoomDetail, error)
+	PlayIndianPokerAction(ctx context.Context, roomID string, characterID string, action casino.Action) (*casino.RoomDetail, error)
+}
+
+// CasinoService defines the casino operations exposed over HTTP.
+type CasinoService interface {
+	CasinoAccountService
+	CasinoSoloGameService
+	CasinoRoomService
 }
 
 // WithCasino configures the casino service for the Handler.
@@ -74,17 +94,13 @@ type casinoDoppelResponse struct {
 	Account casino.Account      `json:"account"`
 }
 
-type casinoPokerRequest struct {
-	BaseRate int64 `json:"base_rate"`
+type casinoPrizeExchangeRequest struct {
+	CostCoins int64 `json:"cost_coins"`
+	Count     int   `json:"count"`
 }
 
-type casinoPokerResponse struct {
-	Game    *casino.IndianPokerGame `json:"game"`
-	Account casino.Account          `json:"account"`
-}
-
-type casinoPokerActionRequest struct {
-	Action string `json:"action"` // "call", "showdown", or "fold"
+type casinoPrizeExchangeResponse struct {
+	Result casino.PrizeExchangeResult `json:"result"`
 }
 
 func (h *Handler) handleGetCasinoAccount(w http.ResponseWriter, r *http.Request) {
@@ -278,7 +294,12 @@ func (h *Handler) handleCasinoDoppel(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) handleCasinoPokerStart(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleGetCasinoPrizes(w http.ResponseWriter, r *http.Request) {
+	prizes := casino.GetPrizes()
+	writeJSON(w, http.StatusOK, map[string]any{"prizes": prizes})
+}
+
+func (h *Handler) handleCasinoExchangePrize(w http.ResponseWriter, r *http.Request) {
 	if h.casino == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("casino service not configured"))
 		return
@@ -286,23 +307,21 @@ func (h *Handler) handleCasinoPokerStart(w http.ResponseWriter, r *http.Request)
 
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req casinoPokerRequest
+		var req casinoPrizeExchangeRequest
 		if !decodeJSON(w, r, &req) {
 			return
 		}
-
-		if req.BaseRate <= 0 {
-			writeError(w, http.StatusBadRequest, casino.ErrInvalidBaseRate)
-			return
+		if req.Count <= 0 {
+			req.Count = 1
 		}
 
-		game, account, err := h.casino.StartIndianPokerGame(r.Context(), char.ID, req.BaseRate)
+		res, err := h.casino.ExchangePrize(r.Context(), char.ID, req.CostCoins, req.Count)
 		if err != nil {
-			if errors.Is(err, casino.ErrInsufficientCoins) || errors.Is(err, casino.ErrActiveSessionExists) {
+			if errors.Is(err, casino.ErrInsufficientCoins) || errors.Is(err, depot.ErrDepotFull) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
-			if errors.Is(err, casino.ErrInvalidBaseRate) {
+			if errors.Is(err, casino.ErrPrizeNotFound) || errors.Is(err, casino.ErrInvalidCount) {
 				writeError(w, http.StatusBadRequest, err)
 				return
 			}
@@ -310,82 +329,8 @@ func (h *Handler) handleCasinoPokerStart(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, casinoPokerResponse{
-			Game:    game,
-			Account: account,
-		})
-	})
-}
-
-func (h *Handler) handleGetCasinoPoker(w http.ResponseWriter, r *http.Request) {
-	if h.casino == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("casino service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		game, account, err := h.casino.GetActiveIndianPokerGame(r.Context(), char.ID)
-		if err != nil {
-			if errors.Is(err, casino.ErrNoActivePokerGame) {
-				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, casinoPokerResponse{
-			Game:    game,
-			Account: account,
-		})
-	})
-}
-
-func (h *Handler) handleCasinoPokerAction(w http.ResponseWriter, r *http.Request) {
-	if h.casino == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("casino service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req casinoPokerActionRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		action := casino.Action(req.Action)
-		if !action.Valid() {
-			writeError(w, http.StatusBadRequest, casino.ErrInvalidAction)
-			return
-		}
-
-		game, account, err := h.casino.PlayIndianPokerAction(r.Context(), char.ID, action)
-		if err != nil {
-			if errors.Is(err, casino.ErrNoActivePokerGame) {
-				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			if errors.Is(err, casino.ErrGameAlreadyOver) {
-				writeError(w, http.StatusConflict, err)
-				return
-			}
-			if errors.Is(err, casino.ErrInvalidAction) {
-				writeError(w, http.StatusBadRequest, err)
-				return
-			}
-			if errors.Is(err, casino.ErrInsufficientCoin) || errors.Is(err, casino.ErrInsufficientCoins) {
-				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, casinoPokerResponse{
-			Game:    game,
-			Account: account,
+		writeJSON(w, http.StatusOK, casinoPrizeExchangeResponse{
+			Result: res,
 		})
 	})
 }

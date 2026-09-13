@@ -1,121 +1,116 @@
-# Casino & Indian Poker Design
+# Casino: Multi-Player Room Lobby, Indian Poker, & Prize Depot Routing
 
 ## Overview
 
-The Casino (カジノ) system introduces mini-games and wagering mechanisms to Party2. Indian Poker (インディアンポーカー) is a blind-card bluffing and wagering game played with a standard 52-card deck against the NPC House Dealer.
+The Casino (カジノ) system in Party2 provides multiplayer gaming rooms and prize exchanges based faithfully on the legacy Perl CGI implementation (`party2/lib/casino.cgi`, `party2/lib/_casino.cgi`, `party2/lib/casino_indian.cgi`).
 
-## Currency & Account Model
+Players can create and join multiplayer rooms for Indian Poker (`indian`), High & Low (`highlow`), and Doppelganger (`doppel`). In Indian Poker, 2 to 8 players compete with a 13-card deck where cards are placed on foreheads—each player sees all opponents' cards while their own card is hidden until showdown or folding.
 
-### Casino Coins (`casino_accounts`)
+Casino coins earned can be exchanged for 18 authentic casino prizes delivered directly into long-term bank storage (Depot).
 
-- **Currency Exchange Rate**: `1 Casino Coin = 20 Gold` (standard value from reference implementation).
-- **Exchange Operations**:
-  - `ExchangeGoldToCoins`: Deducts gold from character wallet and credits casino coins.
-  - `ExchangeCoinsToGold`: Deducts casino coins and rewards gold to character wallet.
-- **Account Invariants**:
-  - Coin balances are stored as non-negative integers (`coins >= 0`) per character.
+---
 
-## Indian Poker Rules & Mechanics
+## 1. Multi-Player Room Lobby (`casino_rooms`, `casino_members`)
 
-### Card Deck & Ranking
+### Room Parameters & Creation (`@つくる`)
+- **Name**: 1–50 characters, unique among non-disbanded rooms, cannot contain whitespace or delimiter characters (`,;\&<>\\/@＠`).
+- **Game Type**: `indian` (Indian Poker), `highlow` (High & Low), `doppel` (Doppelganger).
+- **Speed**: Turn countdown timer:
+  - `12` seconds (さくさく / Fast)
+  - `18` seconds (まったり / Normal)
+  - `28` seconds (じっくり / Slow)
+- **Capacity**: 2 to 8 players.
+- **Rate (Base Bet)**:
+  - Standard games (`indian`, `highlow`): `1`, `5`, `10`, `20`, `50`, `100`, `500`, `1000`, `5000` coins.
+  - Doppelganger (`doppel`): Custom rate with minimum 10 coins.
+  - Room creator must hold at least `rate * 5` coins (or `rate` for doppel).
+- **Password (Aikotoba)**: Optional plaintext password hashed via SHA-256 (`password_hash`).
+- **Spectators**: Optional permission allowing non-playing spectators.
 
-- **Deck**: Standard 52-card deck with 4 suits (♠, ♥, ♦, ♣) and 13 ranks (Ace to King).
-- **Rank Hierarchy**: King (13, highest) > Queen (12) > Jack (11) > 10 > ... > 2 > Ace (1, lowest).
-- **Card Visibility**:
-  - Players cannot see their own card ("blind" card held up to forehead).
-  - Players can see all opponents' / dealer's cards.
-  - The Dealer sees the player's card, but cannot see the dealer's own card.
+### Member Operations
+- **Join (`@さんか`)**:
+  - Requires character fatigue `tired < 100` and `coins >= rate`.
+  - Room capacity must not be exceeded.
+- **Spectate (`@けんがく`)**:
+  - Permitted only if `allow_spectators` is true. Spectators cannot act or receive payouts.
+- **Leave (`@にげる`)**:
+  - Removes character from room.
+  - If the leader leaves, leadership automatically transfers to the next active player.
+  - If all active players leave, the room status becomes `disbanded`.
+- **Kick (`@きっく`)**:
+  - Leader can kick another member only before the game starts (`round == 0`).
 
-### Betting Structure
+---
 
-1. **Base Rate & Ante**:
-   - The game begins with a chosen base rate ($B \in [1, 5000]$ coins).
-   - Both the Player and the Dealer automatically pay an initial ante equal to $B$. Initial pot is $2B$.
-2. **Rounds**:
-   - Maximum 5 betting rounds (`DefaultMaxRounds`).
-   - In round $R$, the required bet to stay in the hand is $R \times B$.
+## 2. Multiplayer Indian Poker Mechanics (`party2/lib/casino_indian.cgi`)
 
-### Player & Dealer Actions
+### Card Deck & Forehead Rule
+- **Deck**: 13 unique ranks (0 to 12: `Ａ`, `２`, `３`, `４`, `５`, `６`, `７`, `８`, `９`, `10`, `Ｊ`, `Ｑ`, `Ｋ`).
+- **Card Distribution**: Each active player is dealt 1 unique card from the 13-card deck.
+- **Forehead Card Visibility**:
+  - A player **cannot** see their own card during an active round (masked as `？` / `-1` in API responses).
+  - A player **can** see all other players' cards.
+  - Cards are revealed upon folding or showdown.
 
-- **Call / Continue (`ActionCall` / つづける)**:
-  - Match the current round bet.
-  - If both parties call, the game advances to round $R + 1$ (or showdown if round 5 is reached).
-- **Showdown (`ActionShowdown` / しょうぶ)**:
-  - Match the current round bet and immediately trigger the showdown.
-- **Fold (`ActionFold` / おりる)**:
-  - Forfeit the hand. The opponent immediately wins the entire pot.
+### Betting & Round Flow
+1. **Start Game (`@かいし`)**: Leader starts Round 1 (`round = 1`, `current_bet = rate`). Cards dealt to all active members.
+2. **Actions**:
+   - **Call (`つづける`)**: Pay `current_bet` coins into the pot to continue.
+   - **Showdown (`しょうぶ`)**: Pay `current_bet` coins into the pot and request immediate showdown.
+   - **Fold (`おりる`)**: Forfeit current hand without paying into pot. Card is revealed.
+3. **Round Advancement**:
+   - When all active players have acted:
+     - If all but one player folded $\rightarrow$ remaining player wins.
+     - If $\ge 50\%$ of active players declared showdown (or maximum bet reached, or a player runs out of coins) $\rightarrow$ Showdown triggers.
+     - Otherwise $\rightarrow$ `round++`, `current_bet += rate`, and actions reset.
+4. **Showdown Resolution**:
+   - Highest card among non-folded players wins the entire accumulated pot.
+   - Ties split the pot equally.
+   - Surviving members reset to `待機中`. Members with 0 coins are automatically ejected.
 
-### Dealer AI Behavior
+---
 
-- The Dealer evaluates action probabilities using the player's visible card rank:
-  - **High Player Card (King, Queen, Jack)**: High probability that dealer is beaten. Dealer folds with high probability or calls conservatively.
-  - **Low Player Card (Ace, 2, 3)**: High probability that dealer holds a superior card. Dealer aggressively calls or triggers showdown.
-  - **Mid Cards (4..10)**: Balanced play based on game round.
+## 3. Authentic Prize Exchange & Depot Routing
 
-### Showdown & Payout Settlement
+### Prize Catalog (18 Authentic Items from `party2/lib/casino.cgi:41-65`)
 
-- **Player Win** (`Player Rank > Dealer Rank` or Dealer Folded):
-  - Player receives the entire pot (`PayoutCoins = Pot`).
-- **Dealer Win** (`Dealer Rank > Player Rank` or Player Folded):
-  - Player receives 0 (`PayoutCoins = 0`).
-- **Tie** (`Player Rank == Dealer Rank`):
-  - Pot is returned / split (`PayoutCoins = PlayerCommittedCoins`).
+| Cost (Coins) | Item ID | Item Name | Category |
+| :--- | :--- | :--- | :--- |
+| **100** | `item-004` | 賢者の石 | Consumable |
+| **300** | `item-012` | 祈りの指輪 | Accessory |
+| **700** | `item-006` | 霊樹の葉 | Consumable |
+| **2,000** | `item-032` | 物真似の心 | Consumable |
+| **4,000** | `item-038` | 幻獣の実 | Consumable |
+| **5,000** | `item-039` | ギャンブルハート | Consumable |
+| **8,000** | `armor-34` | 危ない水着 | Armor |
+| **30,000** | `weapon-31` | 必殺のピアス | Weapon |
+| **70,000** | `weapon-40` | 流銀の剣 | Weapon |
+| **80,000** | `weapon-38` | 茨の霊鞭 | Weapon |
+| **180,000** | `item-106` | 金の鶏 | Consumable |
+| **200,000** | `item-105` | 幸せのくつ | Consumable |
+| **1,000,000** | `item-231` | 宇宙の壁紙 | Consumable |
+| **1,000,001** | `item-232` | 蟻地獄の壁紙 | Consumable |
+| **1,000,002** | `item-233` | 炎の壁紙 | Consumable |
+| **1,000,003** | `item-234` | 墓場の壁紙 | Consumable |
+| **1,000,004** | `item-235` | 図書館の壁紙 | Consumable |
+| **1,000,005** | `item-236` | 要塞の壁紙 | Consumable |
 
-## Persistence & State Management
+### Depot Routing & Atomicity
+- Items purchased are delivered directly into the character's Depot (`character_depots`, `depot_items`).
+- If the depot is full, `depot.ErrDepotFull` is returned and **zero** casino coins are deducted (strict atomic rollback).
+- Stackable items merge into existing slots; equipment items occupy distinct slots.
 
-### Poker Session Model (`casino_poker_sessions`)
+---
 
-Multi-round Indian Poker games are persisted in MariaDB via `casino_poker_sessions` to enable turn-by-turn interactive play:
+## 4. Concurrency & Lock Acquisition Hierarchy
 
-- **Schema Attributes**:
-  - `id`: Unique session identifier (`VARCHAR(64)` / UUID).
-  - `character_id`: Foreign key referencing characters table with cascading deletion.
-  - `status`: Game state (`in_progress`, `player_won`, `dealer_won`, `tie`, `player_folded`, `dealer_folded`).
-  - `round`: Current betting round ($1 \le R \le 5$).
-  - `max_rounds`: Maximum betting rounds (default 5).
-  - `base_rate`: Initial ante / base unit bet.
-  - `pot_coins`: Total accumulated pot.
-  - `player_committed`: Total coins committed by player.
-  - `dealer_committed`: Total coins committed by dealer.
-  - `player_card_suit`, `player_card_rank`: Player's drawn card (Ace=1 .. King=13).
-  - `dealer_card_suit`, `dealer_card_rank`: Dealer's drawn card.
-  - `history_json`: Turn-by-turn action and log event history.
-  - `created_at`, `updated_at`: Timestamps.
+All database mutations strictly conform to deterministic lock acquisition order:
+1. **Rank 0 (Shared Peer Entity)**: `casino_rooms`, `casino_members`
+2. **Rank 2 (Character Primary Entity)**: `characters`
+3. **Rank 5 (Depot Storage)**: `character_depots`, `depot_items`
+4. **Rank 8 (Secondary Feature Records)**: `casino_accounts`
 
-### Client View & Information Security (Anti-Cheating)
-
-- **Card Masking (`ClientView`)**:
-  - While a session is in `in_progress` status, the player's own card is strictly masked to `{suit: "?", rank: 0}` in all HTTP responses (`GET`, `POST start`, `POST action`).
-  - The dealer's card is visible as intended by game design.
-  - Only upon showdown, fold, or game completion is the player's true card unmasked in the client response.
-
-## HTTP Endpoints & Session Lifecycle
-
-1. **Start Game (`POST /characters/{id}/casino/poker`)**:
-   - Accepts `{ "base_rate": <coins> }`.
-   - Validates that no active session (`status = 'in_progress'`) currently exists for the character; returns `422 Unprocessable Entity` if one is already active.
-   - Deducts initial ante atomically from `casino_accounts`.
-   - Deals cards, creates a new session in MariaDB, and returns the session state with masked player card.
-
-2. **Query Active Session (`GET /characters/{id}/casino/poker`)**:
-   - Queries the active (`status = 'in_progress'`) session for the character.
-   - Returns `404 Not Found` if no active session exists.
-   - Returns session state with masked player card.
-
-3. **Play Round Action (`POST /characters/{id}/casino/poker/action`)**:
-   - Accepts `{ "action": "call" | "showdown" | "fold" }`.
-   - Validates active session existence; returns `404 Not Found` if no session is active.
-   - For `call` and `showdown`: Evaluates available coin balance prior to bet deduction (`coins >= current_bet`), allowing players with exact matching balances to execute round actions without false insufficient coin rejections, then deducts the required round bet atomically from `casino_accounts`.
-   - Dealer AI makes its move based on the player's card rank.
-   - Resolves round progression, dealer fold, or showdown settlement atomically.
-   - Updates `casino_poker_sessions` and credits payout to `casino_accounts` on player win/tie.
-   - Returns final or updated session state with unmasked cards if the game finished.
-
-## Concurrency & Deadlock Prevention
-
-- **Clustered Lock Ordering**:
-  - To prevent MariaDB gap-lock deadlocks (`Error 1213`) under concurrent requests, transactions always acquire an exclusive row-level lock (`SELECT ... FOR UPDATE`) on the parent `casino_accounts` record via primary key `character_id` before querying or mutating `casino_poker_sessions`.
-  - Session saves employ `UPDATE ... WHERE id = ?` first and fallback to `INSERT` only when no row was updated, completely preventing insert intention gap conflicts.
-- **Account Balance Conservation**:
-  - Bet deductions and pot payouts are executed strictly within the same database transaction as session state transitions.
-
+In `ExchangePrize`:
+- Depot lock (`FindByCharacterIDForUpdate` - Rank 5) is acquired first.
+- Casino account lock (`GetAccountForUpdate` - Rank 8) is acquired second.
+- Prevents deadlocks with concurrent inventory/depot transactions.

@@ -1,9 +1,9 @@
 package casino
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
-	"fmt"
 	"math/big"
 	"time"
 )
@@ -25,224 +25,278 @@ func (a Action) Valid() bool {
 	}
 }
 
-type GameStatus string
-
-const (
-	StatusInProgress   GameStatus = "in_progress"
-	StatusPlayerWon    GameStatus = "player_won"
-	StatusDealerWon    GameStatus = "dealer_won"
-	StatusTie          GameStatus = "tie"
-	StatusPlayerFolded GameStatus = "player_folded"
-	StatusDealerFolded GameStatus = "dealer_folded"
-)
-
-const (
-	DefaultMaxRounds = 5
-	MinBaseRate      = 1
-	MaxBaseRate      = 5000
-)
-
 var (
-	ErrInvalidBaseRate  = errors.New("base rate must be between 1 and 5000")
-	ErrGameAlreadyOver  = errors.New("game is already finished")
-	ErrInvalidAction    = errors.New("invalid poker action")
-	ErrInsufficientCoin = ErrInsufficientCoins
+	ErrInvalidAction   = errors.New("invalid casino action: must be call, showdown, or fold")
+	ErrAlreadyActed    = errors.New("character has already acted in the current round")
+	ErrGameNotInRound  = errors.New("game is not currently in progress")
+	ErrSpectatorCannot = errors.New("spectators cannot play actions")
 )
 
-type IndianPokerGame struct {
-	ID                   string     `json:"id,omitempty"`
-	CharacterID          string     `json:"character_id,omitempty"`
-	BaseRate             int64      `json:"base_rate"`
-	MaxRounds            int        `json:"max_rounds"`
-	Round                int        `json:"round"`
-	CurrentBet           int64      `json:"current_bet"`
-	PlayerCard           Card       `json:"player_card"` // Hidden from player in UI while in progress
-	DealerCard           Card       `json:"dealer_card"` // Visible to player
-	PlayerCommittedCoins int64      `json:"player_committed_coins"`
-	DealerCommittedCoins int64      `json:"dealer_committed_coins"`
-	Pot                  int64      `json:"pot"`
-	Status               GameStatus `json:"status"`
-	Winner               string     `json:"winner,omitempty"`
-	PayoutCoins          int64      `json:"payout_coins"`
-	Logs                 []string   `json:"logs"`
-	CreatedAt            time.Time  `json:"created_at,omitempty"`
-	UpdatedAt            time.Time  `json:"updated_at,omitempty"`
-}
-
-// ClientView returns a copy of the game state suitable for player presentation.
-// While in progress, the player's own card is masked to prevent client-side inspection.
-func (g *IndianPokerGame) ClientView() *IndianPokerGame {
-	if g == nil {
-		return nil
+// StartIndianPoker deals 1 card to each participant and starts Round 1 (party2/lib/casino_indian.cgi:39-61).
+func (s *Service) StartIndianPoker(ctx context.Context, roomID string, leaderID string) (*RoomDetail, error) {
+	if leaderID == "" {
+		return nil, ErrInvalidCharacterID
 	}
-	cpy := *g
-	if cpy.Status == StatusInProgress {
-		cpy.PlayerCard = Card{Suit: "?", Rank: 0}
-	}
-	return &cpy
-}
-
-// NewIndianPokerGame starts a new game dealing 1 card to Player and 1 card to Dealer.
-func NewIndianPokerGame(baseRate int64) (*IndianPokerGame, error) {
-	if baseRate < MinBaseRate || baseRate > MaxBaseRate {
-		return nil, ErrInvalidBaseRate
+	if s.roomRepo == nil {
+		return nil, errors.New("room repository is required")
 	}
 
-	deck := NewStandardDeck()
-	if err := deck.Shuffle(); err != nil {
-		return nil, err
-	}
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		room, err := s.roomRepo.GetRoomForUpdate(txCtx, roomID)
+		if err != nil {
+			return err
+		}
+		if room.LeaderCharacterID != leaderID {
+			return ErrNotLeader
+		}
+		if room.Round > 0 {
+			return ErrGameInProgress
+		}
 
-	playerCard, err := deck.Draw()
+		members, err := s.roomRepo.ListMembersForUpdate(txCtx, roomID)
+		if err != nil {
+			return err
+		}
+
+		var participants []RoomMember
+		for _, m := range members {
+			if !m.IsSpectator {
+				participants = append(participants, m)
+			}
+		}
+
+		if len(participants) < MinPartyCount {
+			return ErrNotEnoughPlayers
+		}
+
+		// Prepare 13 card deck (0..12) and deal 1 unique card per participant
+		cardDeck := make([]int, 13)
+		for i := 0; i < 13; i++ {
+			cardDeck[i] = i
+		}
+
+		for _, m := range participants {
+			n, err := rand.Int(rand.Reader, big.NewInt(int64(len(cardDeck))))
+			if err != nil {
+				return err
+			}
+			idx := int(n.Int64())
+			drawnCard := cardDeck[idx]
+			cardDeck = append(cardDeck[:idx], cardDeck[idx+1:]...)
+
+			m.Card = drawnCard
+			m.Action = ""
+			m.UpdatedAt = time.Now().UTC()
+			if err := s.roomRepo.UpdateMember(txCtx, m); err != nil {
+				return err
+			}
+		}
+
+		now := time.Now().UTC()
+		room.Round = 1
+		room.Status = RoomStatusInProgress
+		room.CurrentBet = room.Rate
+		room.MaxBet = room.Rate * 5
+		room.Pot = 0
+		room.WinnerCharacterID = nil
+		room.UpdatedAt = now
+
+		return s.roomRepo.UpdateRoom(txCtx, *room)
+	})
 	if err != nil {
 		return nil, err
 	}
-	dealerCard, err := deck.Draw()
+
+	return s.GetRoomDetail(ctx, roomID, leaderID)
+}
+
+// PlayIndianPokerAction processes a player's round action (call, showdown, fold)
+// and handles pot accumulation, round progression, and showdown settlement (party2/lib/casino_indian.cgi:64-176).
+func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, characterID string, action Action) (*RoomDetail, error) {
+	if characterID == "" {
+		return nil, ErrInvalidCharacterID
+	}
+	if !action.Valid() {
+		return nil, ErrInvalidAction
+	}
+	if s.roomRepo == nil {
+		return nil, errors.New("room repository is required")
+	}
+
+	var showdownWinner string
+
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		room, err := s.roomRepo.GetRoomForUpdate(txCtx, roomID)
+		if err != nil {
+			return err
+		}
+		if room.Round <= 0 || room.Status != RoomStatusInProgress {
+			return ErrGameNotInRound
+		}
+
+		member, err := s.roomRepo.GetMemberForUpdate(txCtx, roomID, characterID)
+		if err != nil {
+			return ErrMemberNotFound
+		}
+		if member.IsSpectator {
+			return ErrSpectatorCannot
+		}
+		if member.Action != "" && member.Action != "待機中" {
+			return ErrAlreadyActed
+		}
+
+		acc, err := s.repo.GetAccount(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+
+		effectiveAction := action
+		if action == ActionCall && acc.Coins < room.CurrentBet {
+			// Forced showdown if insufficient coins to call
+			effectiveAction = ActionShowdown
+		}
+
+		betToDeduct := room.CurrentBet
+		if acc.Coins < betToDeduct {
+			betToDeduct = acc.Coins // all-in remaining coins
+		}
+
+		if betToDeduct > 0 {
+			_, err = s.repo.DeductBetAndCreditPayout(txCtx, characterID, betToDeduct, 0)
+			if err != nil {
+				return err
+			}
+			room.Pot += betToDeduct
+		}
+
+		member.Action = string(effectiveAction)
+		member.UpdatedAt = time.Now().UTC()
+		if err := s.roomRepo.UpdateMember(txCtx, *member); err != nil {
+			return err
+		}
+
+		// Re-fetch all members to evaluate round completion
+		members, err := s.roomRepo.ListMembersForUpdate(txCtx, roomID)
+		if err != nil {
+			return err
+		}
+
+		var participants []RoomMember
+		foldedCount := 0
+		showdownCount := 0
+		actedCount := 0
+
+		for _, m := range members {
+			if m.IsSpectator {
+				continue
+			}
+			participants = append(participants, m)
+			if m.Action == string(ActionFold) {
+				foldedCount++
+				actedCount++
+			} else if m.Action == string(ActionShowdown) {
+				showdownCount++
+				actedCount++
+			} else if m.Action == string(ActionCall) {
+				actedCount++
+			}
+		}
+
+		totalParticipants := len(participants)
+		activeNonFolded := totalParticipants - foldedCount
+
+		shouldShowdown := false
+		if activeNonFolded <= 1 {
+			// All players except 1 folded
+			shouldShowdown = true
+		} else if actedCount == totalParticipants {
+			// All players have acted in this round
+			hasCoinlessPlayer := false
+			for _, m := range participants {
+				if m.Action != string(ActionFold) {
+					pAcc, err := s.repo.GetAccount(txCtx, m.CharacterID)
+					if err == nil && pAcc.Coins <= 0 {
+						hasCoinlessPlayer = true
+						break
+					}
+				}
+			}
+
+			if hasCoinlessPlayer || room.CurrentBet >= room.MaxBet || float64(showdownCount) >= float64(activeNonFolded)*0.5 {
+				shouldShowdown = true
+			} else {
+				// Next Round!
+				room.Round++
+				room.CurrentBet += room.Rate
+				for _, m := range participants {
+					if m.Action != string(ActionFold) {
+						m.Action = ""
+						m.UpdatedAt = time.Now().UTC()
+						if err := s.roomRepo.UpdateMember(txCtx, m); err != nil {
+							return err
+						}
+					}
+				}
+			}
+		}
+
+		if shouldShowdown {
+			// Showdown resolution (party2/lib/casino_indian.cgi:147-176)
+			maxCard := -1
+			winnerID := ""
+
+			for _, m := range participants {
+				if m.Action == string(ActionFold) {
+					continue
+				}
+				if m.Card > maxCard {
+					maxCard = m.Card
+					winnerID = m.CharacterID
+				}
+			}
+
+			if winnerID != "" && room.Pot > 0 {
+				_, err = s.repo.DeductBetAndCreditPayout(txCtx, winnerID, 0, room.Pot)
+				if err != nil {
+					return err
+				}
+				showdownWinner = winnerID
+			}
+
+			room.Round = 0
+			room.Status = RoomStatusWaiting
+			room.CurrentBet = room.Rate
+			room.Pot = 0
+			if winnerID != "" {
+				room.WinnerCharacterID = &winnerID
+			}
+
+			// Eject members with 0 coins and set surviving to "待機中"
+			for _, m := range participants {
+				pAcc, err := s.repo.GetAccount(txCtx, m.CharacterID)
+				if err == nil && pAcc.Coins <= 0 {
+					_ = s.roomRepo.RemoveMember(txCtx, roomID, m.CharacterID)
+					if room.LeaderCharacterID == m.CharacterID && winnerID != "" {
+						room.LeaderCharacterID = winnerID
+					}
+				} else {
+					m.Action = "待機中"
+					m.UpdatedAt = time.Now().UTC()
+					_ = s.roomRepo.UpdateMember(txCtx, m)
+				}
+			}
+		}
+
+		room.UpdatedAt = time.Now().UTC()
+		return s.roomRepo.UpdateRoom(txCtx, *room)
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	// Initial Ante: Both player and dealer commit BaseRate
-	initialBet := baseRate
-	game := &IndianPokerGame{
-		BaseRate:             baseRate,
-		MaxRounds:            DefaultMaxRounds,
-		Round:                1,
-		CurrentBet:           initialBet,
-		PlayerCard:           playerCard,
-		DealerCard:           dealerCard,
-		PlayerCommittedCoins: initialBet,
-		DealerCommittedCoins: initialBet,
-		Pot:                  initialBet * 2,
-		Status:               StatusInProgress,
-		Logs: []string{
-			fmt.Sprintf("Game started with rate %d coins.", baseRate),
-			fmt.Sprintf("Round 1: Dealer card is %s (Player card is hidden).", dealerCard),
-		},
-	}
-	return game, nil
-}
-
-// PlayRound processes the player's action and the dealer's response.
-func (g *IndianPokerGame) PlayRound(playerAction Action, playerAvailableCoins int64) error {
-	if g.Status != StatusInProgress {
-		return ErrGameAlreadyOver
-	}
-	if !playerAction.Valid() {
-		return ErrInvalidAction
+	if showdownWinner != "" && s.gamePlayedHook != nil {
+		_ = s.gamePlayedHook(ctx, showdownWinner, "indian_poker")
 	}
 
-	// 1. Handle Player Fold
-	if playerAction == ActionFold {
-		g.Status = StatusPlayerFolded
-		g.Winner = "dealer"
-		g.PayoutCoins = 0
-		g.Logs = append(g.Logs, "Player folded. Dealer wins the pot.")
-		return nil
-	}
-
-	// 2. Check if player has enough coins for current round bet
-	neededCoins := g.CurrentBet
-	if playerAvailableCoins < neededCoins {
-		return ErrInsufficientCoin
-	}
-
-	// 3. Player commits coins for this round
-	g.PlayerCommittedCoins += neededCoins
-	g.Pot += neededCoins
-	g.Logs = append(g.Logs, fmt.Sprintf("Player chose %s and bet %d coins.", playerAction, neededCoins))
-
-	// 4. Dealer decides action based on visible Player card
-	dealerAction := g.decideDealerAction()
-	g.Logs = append(g.Logs, fmt.Sprintf("Dealer chose %s.", dealerAction))
-
-	if dealerAction == ActionFold {
-		g.Status = StatusDealerFolded
-		g.Winner = "player"
-		g.PayoutCoins = g.Pot
-		g.Logs = append(g.Logs, fmt.Sprintf("Dealer folded! Player wins total pot of %d coins.", g.Pot))
-		return nil
-	}
-
-	// Dealer commits matching coins
-	g.DealerCommittedCoins += neededCoins
-	g.Pot += neededCoins
-
-	// 5. Evaluate Showdown conditions
-	// Showdown occurs if:
-	// - Player chose ActionShowdown, OR
-	// - Dealer chose ActionShowdown, OR
-	// - Max rounds reached
-	if playerAction == ActionShowdown || dealerAction == ActionShowdown || g.Round >= g.MaxRounds {
-		g.resolveShowdown()
-		return nil
-	}
-
-	// 6. Otherwise advance to next round
-	g.Round++
-	g.CurrentBet = g.BaseRate * int64(g.Round)
-	g.Logs = append(g.Logs, fmt.Sprintf("Advancing to Round %d. Next bet: %d coins.", g.Round, g.CurrentBet))
-	return nil
-}
-
-// decideDealerAction implements the Dealer AI based on visible player card rank.
-func (g *IndianPokerGame) decideDealerAction() Action {
-	// Dealer sees player's card
-	playerRank := g.PlayerCard.Rank
-
-	// Random factor for slight unpredictability / bluffing (0..99)
-	randValBig, _ := rand.Int(rand.Reader, big.NewInt(100))
-	randVal := int(randValBig.Int64())
-
-	switch {
-	case playerRank == RankKing:
-		// Player has King (highest rank). Dealer can at best tie if Dealer has King, otherwise loses.
-		if randVal < 80 {
-			return ActionFold
-		}
-		return ActionCall
-	case playerRank >= RankJack:
-		// Player has Queen or Jack (high rank)
-		if randVal < 45 {
-			return ActionFold
-		} else if randVal < 85 {
-			return ActionCall
-		}
-		return ActionShowdown
-	case playerRank <= RankThree:
-		// Player has very low rank (Ace, 2, 3). High probability dealer has better card.
-		if randVal < 60 {
-			return ActionShowdown
-		}
-		return ActionCall
-	default:
-		// Mid ranks (4..10)
-		if g.Round >= 3 && randVal < 40 {
-			return ActionShowdown
-		}
-		return ActionCall
-	}
-}
-
-// resolveShowdown determines the winner by comparing card ranks.
-func (g *IndianPokerGame) resolveShowdown() {
-	g.Logs = append(g.Logs, fmt.Sprintf("--- SHOWDOWN --- Player card: %s vs Dealer card: %s", g.PlayerCard, g.DealerCard))
-
-	if g.PlayerCard.Rank > g.DealerCard.Rank {
-		g.Status = StatusPlayerWon
-		g.Winner = "player"
-		g.PayoutCoins = g.Pot
-		g.Logs = append(g.Logs, fmt.Sprintf("Player has higher rank (%s > %s). Player wins %d coins!", g.PlayerCard.Rank, g.DealerCard.Rank, g.Pot))
-	} else if g.DealerCard.Rank > g.PlayerCard.Rank {
-		g.Status = StatusDealerWon
-		g.Winner = "dealer"
-		g.PayoutCoins = 0
-		g.Logs = append(g.Logs, fmt.Sprintf("Dealer has higher rank (%s > %s). Dealer wins the pot.", g.DealerCard.Rank, g.PlayerCard.Rank))
-	} else {
-		// Tie rank: pot split / returned
-		g.Status = StatusTie
-		g.Winner = "tie"
-		g.PayoutCoins = g.PlayerCommittedCoins
-		g.Logs = append(g.Logs, fmt.Sprintf("Equal card ranks (%s == %s). It's a tie! %d coins returned to player.", g.PlayerCard.Rank, g.DealerCard.Rank, g.PayoutCoins))
-	}
+	return s.GetRoomDetail(ctx, roomID, characterID)
 }

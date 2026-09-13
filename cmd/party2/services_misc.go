@@ -240,10 +240,17 @@ func newMiscServices(
 	if err != nil {
 		return nil, err
 	}
+	casinoRoomRepo, err := database.NewCasinoRoomRepository(db)
+	if err != nil {
+		return nil, err
+	}
 	casinoService, err := casino.NewService(
 		casinoRepo,
 		casino.WithTransactionProvider(core.txProvider),
 		casino.WithEconomy(core.economy),
+		casino.WithDepotRepository(econ.depotRepo),
+		casino.WithCharacterRepository(core.charRepo),
+		casino.WithRoomRepository(casinoRoomRepo),
 	)
 	if err != nil {
 		return nil, err

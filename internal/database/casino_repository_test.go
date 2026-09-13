@@ -3,8 +3,10 @@ package database
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/casino"
 )
@@ -115,7 +117,7 @@ func TestCasinoRepositoryLifecycle(t *testing.T) {
 	}
 }
 
-func TestCasinoRepository_PokerSessionLifecycle(t *testing.T) {
+func TestCasinoRoomRepository_Lifecycle(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -126,88 +128,113 @@ func TestCasinoRepository_PokerSessionLifecycle(t *testing.T) {
 	}
 	defer db.Close()
 
-	casinoRepo, err := NewCasinoRepository(db)
+	roomRepo, err := NewCasinoRoomRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	ctx := context.Background()
 
-	char, err := CreateTestCharacter(ctx, db, "PokerRepoUser")
+	char, err := CreateTestCharacter(ctx, db, "RoomRepoUser")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// 1. Initially no active session
-	active, err := casinoRepo.GetActivePokerGame(ctx, char.ID)
+	roomID := fmt.Sprintf("test_room_%d", time.Now().UnixNano())
+	roomName := fmt.Sprintf("Room-%d", time.Now().UnixNano()%1000000000)
+	now := time.Now().UTC()
+
+	r := casino.Room{
+		ID:                roomID,
+		Name:              roomName,
+		GameType:          casino.GameTypeIndian,
+		LeaderCharacterID: char.ID,
+		Speed:             12,
+		MaxPlayers:        4,
+		Rate:              10,
+		Status:            casino.RoomStatusWaiting,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	m := casino.RoomMember{
+		RoomID:      roomID,
+		CharacterID: char.ID,
+		IsSpectator: false,
+		Action:      "待機中",
+		Card:        -1,
+		JoinedAt:    now,
+		UpdatedAt:   now,
+	}
+
+	// 1. Create room
+	if err := roomRepo.CreateRoom(ctx, r, m); err != nil {
+		t.Fatalf("CreateRoom failed: %v", err)
+	}
+
+	// 2. GetRoom & GetRoomByName
+	gotRoom, err := roomRepo.GetRoom(ctx, roomID)
 	if err != nil {
-		t.Fatalf("GetActivePokerGame failed: %v", err)
+		t.Fatalf("GetRoom failed: %v", err)
 	}
-	if active != nil {
-		t.Errorf("expected nil active game, got %+v", active)
+	if gotRoom.Name != roomName || gotRoom.LeaderCharacterID != char.ID {
+		t.Errorf("unexpected room: %+v", gotRoom)
 	}
 
-	// 2. GetAccountForUpdate creates and locks account
-	acc, err := casinoRepo.GetAccountForUpdate(ctx, char.ID)
+	gotByName, err := roomRepo.GetRoomByName(ctx, roomName)
+	if err != nil || gotByName.ID != roomID {
+		t.Errorf("GetRoomByName failed: %v, %+v", err, gotByName)
+	}
+
+	// 3. ListActiveRooms
+	activeList, err := roomRepo.ListActiveRooms(ctx)
 	if err != nil {
-		t.Fatalf("GetAccountForUpdate failed: %v", err)
+		t.Fatalf("ListActiveRooms failed: %v", err)
 	}
-	if acc.CharacterID != char.ID {
-		t.Errorf("unexpected account: %+v", acc)
+	found := false
+	for _, d := range activeList {
+		if d.Room.ID == roomID {
+			found = true
+			break
+		}
 	}
-
-	// 3. Save new poker game
-	game, err := casino.NewIndianPokerGame(10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sessID := "poker_sess_" + char.ID
-	game.ID = sessID
-	game.CharacterID = char.ID
-
-	if err := casinoRepo.SavePokerGame(ctx, *game); err != nil {
-		t.Fatalf("SavePokerGame failed: %v", err)
+	if !found {
+		t.Errorf("expected room %s in active list", roomID)
 	}
 
-	// 4. Retrieve active game
-	active, err = casinoRepo.GetActivePokerGame(ctx, char.ID)
-	if err != nil {
-		t.Fatalf("GetActivePokerGame failed: %v", err)
-	}
-	if active == nil || active.ID != sessID || active.Status != casino.StatusInProgress {
-		t.Fatalf("unexpected retrieved active game: %+v", active)
+	// 4. UpdateRoom
+	gotRoom.Round = 1
+	gotRoom.Pot = 20
+	if err := roomRepo.UpdateRoom(ctx, *gotRoom); err != nil {
+		t.Fatalf("UpdateRoom failed: %v", err)
 	}
 
-	// 5. Update game to next round
-	active.Round = 2
-	active.CurrentBet = 20
-	active.Pot = 60
-	if err := casinoRepo.SavePokerGame(ctx, *active); err != nil {
-		t.Fatalf("SavePokerGame update failed: %v", err)
+	// 5. Members: ListMembers & UpdateMember
+	members, err := roomRepo.ListMembers(ctx, roomID)
+	if err != nil || len(members) != 1 {
+		t.Fatalf("ListMembers failed: %v (count=%d)", err, len(members))
+	}
+	mem := members[0]
+	mem.Action = "しょうぶ"
+	mem.Card = 5
+	if err := roomRepo.UpdateMember(ctx, mem); err != nil {
+		t.Fatalf("UpdateMember failed: %v", err)
 	}
 
-	updated, err := casinoRepo.GetActivePokerGameForUpdate(ctx, char.ID)
-	if err != nil {
-		t.Fatalf("GetActivePokerGameForUpdate failed: %v", err)
-	}
-	if updated == nil || updated.Round != 2 || updated.CurrentBet != 20 {
-		t.Fatalf("unexpected updated game: %+v", updated)
+	gotMem, err := roomRepo.GetMember(ctx, roomID, char.ID)
+	if err != nil || gotMem.Card != 5 || gotMem.Action != "しょうぶ" {
+		t.Errorf("unexpected updated member: %v, %+v", err, gotMem)
 	}
 
-	// 6. Complete game
-	updated.Status = casino.StatusPlayerWon
-	updated.Winner = "player"
-	updated.PayoutCoins = 60
-	if err := casinoRepo.SavePokerGame(ctx, *updated); err != nil {
-		t.Fatalf("SavePokerGame complete failed: %v", err)
+	// 6. RemoveMember & DeleteRoom
+	if err := roomRepo.RemoveMember(ctx, roomID, char.ID); err != nil {
+		t.Fatalf("RemoveMember failed: %v", err)
+	}
+	if err := roomRepo.DeleteRoom(ctx, roomID); err != nil {
+		t.Fatalf("DeleteRoom failed: %v", err)
 	}
 
-	// 7. No active game anymore
-	finished, err := casinoRepo.GetActivePokerGame(ctx, char.ID)
-	if err != nil {
-		t.Fatalf("GetActivePokerGame failed: %v", err)
-	}
-	if finished != nil {
-		t.Errorf("expected no active game after completion, got %+v", finished)
+	_, err = roomRepo.GetRoom(ctx, roomID)
+	if !errors.Is(err, casino.ErrRoomNotFound) {
+		t.Errorf("expected ErrRoomNotFound after deletion, got %v", err)
 	}
 }
