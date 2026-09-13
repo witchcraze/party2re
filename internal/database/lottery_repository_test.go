@@ -38,22 +38,22 @@ func TestLotteryRepository_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 2. Buy 10 raffle tickets (10 * 100 = 1000 gold)
-	tickets, updatedChar, err := repo.BuyRaffleTickets(ctx, char.ID, 10, 1000)
+	// 2. Add 10 raffle tickets (e.g. from tavern meal or god wish)
+	tickets, err := repo.AddRaffleTickets(ctx, char.ID, 10)
 	if err != nil {
-		t.Fatalf("BuyRaffleTickets failed: %v", err)
+		t.Fatalf("AddRaffleTickets failed: %v", err)
 	}
-	if tickets != 10 || updatedChar.Money != 99000 {
-		t.Errorf("tickets=%d, money=%d", tickets, updatedChar.Money)
+	if tickets != 10 {
+		t.Errorf("tickets=%d, want 10", tickets)
 	}
 
-	// 3. Use 3 raffle tickets with 500 gold reward
-	remaining, updatedChar, err := repo.UseRaffleTickets(ctx, char.ID, 3, 500)
+	// 3. Use 3 raffle tickets
+	remaining, err := repo.UseRaffleTickets(ctx, char.ID, 3)
 	if err != nil {
 		t.Fatalf("UseRaffleTickets failed: %v", err)
 	}
-	if remaining != 7 || updatedChar.Money != 99500 {
-		t.Errorf("remaining=%d, money=%d", remaining, updatedChar.Money)
+	if remaining != 7 {
+		t.Errorf("remaining=%d, want 7", remaining)
 	}
 
 	// Clean tables for isolated round testing
@@ -107,8 +107,8 @@ func TestLotteryRepository_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PurchaseTakarakujiTicket failed: %v", err)
 	}
-	if tkt.ID == "" || updatedChar.Money != 99500-30000 {
-		t.Errorf("ticket ID = %s, money = %d", tkt.ID, updatedChar.Money)
+	if tkt.ID == "" || updatedChar.Money != 100000-lottery.TakarakujiCostGold {
+		t.Errorf("ticket ID = %s, money = %d, want money = %d", tkt.ID, updatedChar.Money, 100000-lottery.TakarakujiCostGold)
 	}
 
 	// 8. Check purchased after buying

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/lottery"
@@ -15,8 +16,7 @@ import (
 
 type mockLotteryRepo struct {
 	getRaffleTicketsFn                func(ctx context.Context, charID string) (int, error)
-	buyRaffleTicketsFn                func(ctx context.Context, charID string, count int, goldCost int) (int, corecharacter.Character, error)
-	useRaffleTicketsFn                func(ctx context.Context, charID string, count int, rewardGold int) (int, corecharacter.Character, error)
+	useRaffleTicketsFn                func(ctx context.Context, charID string, count int) (int, error)
 	getActiveTakarakujiRoundFn        func(ctx context.Context) (lottery.TakarakujiRound, error)
 	createTakarakujiRoundFn           func(ctx context.Context, round lottery.TakarakujiRound) (lottery.TakarakujiRound, error)
 	countTakarakujiTicketsFn          func(ctx context.Context, roundID int) (int, error)
@@ -34,17 +34,11 @@ func (m *mockLotteryRepo) GetRaffleTickets(ctx context.Context, charID string) (
 	}
 	return 0, nil
 }
-func (m *mockLotteryRepo) BuyRaffleTickets(ctx context.Context, charID string, count int, goldCost int) (int, corecharacter.Character, error) {
-	if m.buyRaffleTicketsFn != nil {
-		return m.buyRaffleTicketsFn(ctx, charID, count, goldCost)
-	}
-	return 0, corecharacter.Character{}, nil
-}
-func (m *mockLotteryRepo) UseRaffleTickets(ctx context.Context, charID string, count int, rewardGold int) (int, corecharacter.Character, error) {
+func (m *mockLotteryRepo) UseRaffleTickets(ctx context.Context, charID string, count int) (int, error) {
 	if m.useRaffleTicketsFn != nil {
-		return m.useRaffleTicketsFn(ctx, charID, count, rewardGold)
+		return m.useRaffleTicketsFn(ctx, charID, count)
 	}
-	return 0, corecharacter.Character{}, nil
+	return 0, nil
 }
 func (m *mockLotteryRepo) GetActiveTakarakujiRound(ctx context.Context) (lottery.TakarakujiRound, error) {
 	if m.getActiveTakarakujiRoundFn != nil {
@@ -143,6 +137,61 @@ type fixedClock struct {
 
 func (c fixedClock) Now() time.Time {
 	return c.now
+}
+
+type mockInventoryRepo struct {
+	inventories map[string]coreinventory.Inventory
+}
+
+func (m *mockInventoryRepo) FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	if m.inventories == nil {
+		m.inventories = make(map[string]coreinventory.Inventory)
+	}
+	inv, ok := m.inventories[characterID]
+	if !ok {
+		inv, _ = coreinventory.New(characterID)
+		m.inventories[characterID] = inv
+	}
+	return inv, nil
+}
+
+func (m *mockInventoryRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
+	return m.FindByCharacterID(ctx, characterID)
+}
+
+func (m *mockInventoryRepo) Save(ctx context.Context, value coreinventory.Inventory) error {
+	if m.inventories == nil {
+		m.inventories = make(map[string]coreinventory.Inventory)
+	}
+	m.inventories[value.CharacterID] = value
+	return nil
+}
+
+type mockCharacterRepo struct {
+	characters map[string]corecharacter.Character
+}
+
+func (m *mockCharacterRepo) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
+	if m.characters == nil {
+		return corecharacter.Character{}, corecharacter.ErrNotFound
+	}
+	c, ok := m.characters[id]
+	if !ok {
+		return corecharacter.Character{}, corecharacter.ErrNotFound
+	}
+	return c, nil
+}
+
+func (m *mockCharacterRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return m.FindByID(ctx, id)
+}
+
+func (m *mockCharacterRepo) Update(ctx context.Context, value corecharacter.Character) error {
+	if m.characters == nil {
+		m.characters = make(map[string]corecharacter.Character)
+	}
+	m.characters[value.ID] = value
+	return nil
 }
 
 func TestNextDrawDateJST(t *testing.T) {
@@ -471,37 +520,320 @@ func TestDrawTakarakuji(t *testing.T) {
 }
 
 func TestEvaluateRaffleRoll(t *testing.T) {
-	t.Run("Standard Raffle Tiers", func(t *testing.T) {
-		p0 := lottery.EvaluateRaffleRoll(lottery.RaffleStandard, 0)
-		if p0.Tier != lottery.PrizeTierGrand || p0.RewardGold != 5000 {
-			t.Errorf("expected Grand Prize, got %+v", p0)
+	t.Run("Standard Raffle - Day of Week Grand Prizes", func(t *testing.T) {
+		expectedGrandPrizes := []struct {
+			wday   int
+			itemID string
+			name   string
+		}{
+			{wday: 0, itemID: "item-027", name: "賢者の悟り"},
+			{wday: 1, itemID: "item-035", name: "ドラゴンの心"},
+			{wday: 2, itemID: "item-036", name: "闇のロザリオ"},
+			{wday: 3, itemID: "item-088", name: "魔銃"},
+			{wday: 4, itemID: "item-037", name: "ギザールの野菜"},
+			{wday: 5, itemID: "item-038", name: "クポの実"},
+			{wday: 6, itemID: "item-039", name: "ギャンブルハート"},
 		}
 
-		p1 := lottery.EvaluateRaffleRoll(lottery.RaffleStandard, 3)
-		if p1.Tier != lottery.PrizeTier1st || p1.RewardGold != 2500 {
-			t.Errorf("expected 1st Prize, got %+v", p1)
-		}
-
-		pMiss := lottery.EvaluateRaffleRoll(lottery.RaffleStandard, 500)
-		if pMiss.Tier != lottery.PrizeTierMiss || pMiss.RewardGold != 0 {
-			t.Errorf("expected Miss, got %+v", pMiss)
+		for _, tc := range expectedGrandPrizes {
+			p := lottery.EvaluateRaffleRoll(lottery.RaffleStandard, 0, tc.wday)
+			if p.Tier != lottery.PrizeTierGrand {
+				t.Errorf("wday %d: expected Grand Prize, got %s", tc.wday, p.Tier)
+			}
+			if p.ItemDefinitionID != tc.itemID {
+				t.Errorf("wday %d: expected item %s, got %s", tc.wday, tc.itemID, p.ItemDefinitionID)
+			}
+			if p.Name != tc.name {
+				t.Errorf("wday %d: expected name %s, got %s", tc.wday, tc.name, p.Name)
+			}
+			if p.ColorName != "金" {
+				t.Errorf("expected gold color, got %s", p.ColorName)
+			}
 		}
 	})
 
-	t.Run("Special Raffle Tiers", func(t *testing.T) {
-		p0 := lottery.EvaluateRaffleRoll(lottery.RaffleSpecial, 2)
-		if p0.Tier != lottery.PrizeTierGrand || p0.RewardGold != 100000 {
-			t.Errorf("expected Gold Orb, got %+v", p0)
+	t.Run("Standard Raffle - All Tiers", func(t *testing.T) {
+		// 1st Prize: item-030 (rolls 1, 2, 3)
+		for _, r := range []int{1, 2, 3} {
+			p := lottery.EvaluateRaffleRoll(lottery.RaffleStandard, r, 0)
+			if p.Tier != lottery.PrizeTier1st || p.ItemDefinitionID != "item-030" || p.ColorName != "赤" {
+				t.Errorf("roll %d: expected 1st prize item-030, got %+v", r, p)
+			}
 		}
 
-		p1 := lottery.EvaluateRaffleRoll(lottery.RaffleSpecial, 10)
-		if p1.Tier != lottery.PrizeTier1st || p1.RewardGold != 20000 {
-			t.Errorf("expected Silver Orb, got %+v", p1)
+		// 2nd Prize: item-033 (rolls 4..7)
+		for _, r := range []int{4, 7} {
+			p := lottery.EvaluateRaffleRoll(lottery.RaffleStandard, r, 0)
+			if p.Tier != lottery.PrizeTier2nd || p.ItemDefinitionID != "item-033" || p.ColorName != "紫" {
+				t.Errorf("roll %d: expected 2nd prize item-033, got %+v", r, p)
+			}
 		}
 
-		pMiss := lottery.EvaluateRaffleRoll(lottery.RaffleSpecial, 90)
-		if pMiss.Tier != lottery.PrizeTierMiss || pMiss.RewardGold != 0 {
-			t.Errorf("expected Miss, got %+v", pMiss)
+		// 3rd Prize: item-023 (rolls 8..13)
+		for _, r := range []int{8, 13} {
+			p := lottery.EvaluateRaffleRoll(lottery.RaffleStandard, r, 0)
+			if p.Tier != lottery.PrizeTier3rd || p.ItemDefinitionID != "item-023" || p.ColorName != "黄" {
+				t.Errorf("roll %d: expected 3rd prize item-023, got %+v", r, p)
+			}
+		}
+
+		// 4th Prize - Seeds (rolls 14..44)
+		seedTests := []struct {
+			rolls  []int
+			itemID string
+			name   string
+		}{
+			{rolls: []int{14, 19}, itemID: "item-016", name: "命の木の実"},
+			{rolls: []int{20, 24}, itemID: "item-017", name: "不思議な木の実"},
+			{rolls: []int{25, 29}, itemID: "item-018", name: "力の種"},
+			{rolls: []int{30, 34}, itemID: "item-019", name: "守りの種"},
+			{rolls: []int{35, 39}, itemID: "item-020", name: "素早さの種"},
+			{rolls: []int{40, 44}, itemID: "item-021", name: "スキルの種"},
+		}
+		for _, st := range seedTests {
+			for _, r := range st.rolls {
+				p := lottery.EvaluateRaffleRoll(lottery.RaffleStandard, r, 0)
+				if p.Tier != lottery.PrizeTier4th || p.ItemDefinitionID != st.itemID || p.Name != st.name || p.ColorName != "桃" {
+					t.Errorf("roll %d: expected 4th prize %s (%s), got %+v", r, st.name, st.itemID, p)
+				}
+			}
+		}
+
+		// 5th Prize: item-012 (rolls 45..54)
+		for _, r := range []int{45, 54} {
+			p := lottery.EvaluateRaffleRoll(lottery.RaffleStandard, r, 0)
+			if p.Tier != lottery.PrizeTier5th || p.ItemDefinitionID != "item-012" || p.ColorName != "青" {
+				t.Errorf("roll %d: expected 5th prize item-012, got %+v", r, p)
+			}
+		}
+
+		// 6th Prize: item-125 (rolls 55..74)
+		for _, r := range []int{55, 74} {
+			p := lottery.EvaluateRaffleRoll(lottery.RaffleStandard, r, 0)
+			if p.Tier != lottery.PrizeTier6th || p.ItemDefinitionID != "item-125" || p.ColorName != "緑" {
+				t.Errorf("roll %d: expected 6th prize item-125, got %+v", r, p)
+			}
+		}
+
+		// Miss: rolls 75..999
+		for _, r := range []int{75, 500, 999} {
+			p := lottery.EvaluateRaffleRoll(lottery.RaffleStandard, r, 0)
+			if p.Tier != lottery.PrizeTierMiss || p.ItemDefinitionID != "" || p.ColorName != "白" {
+				t.Errorf("roll %d: expected Miss, got %+v", r, p)
+			}
+		}
+	})
+
+	t.Run("Special Raffle - Orbs & Materials", func(t *testing.T) {
+		// Grand Prize: rolls 0..2 (materials)
+		p0 := lottery.EvaluateRaffleRoll(lottery.RaffleSpecial, 0, 0, 0)
+		if p0.Tier != lottery.PrizeTierGrand || p0.ItemDefinitionID != "item-090" || p0.ColorName != "ゴールド" {
+			t.Errorf("expected material item-090, got %+v", p0)
+		}
+
+		p142 := lottery.EvaluateRaffleRoll(lottery.RaffleSpecial, 2, 0, 11)
+		if p142.Tier != lottery.PrizeTierGrand || p142.ItemDefinitionID != "item-142" || p142.Name != "蝶の翅" {
+			t.Errorf("expected material item-142, got %+v", p142)
+		}
+
+		// Orbs
+		orbTests := []struct {
+			rolls     []int
+			tier      string
+			itemID    string
+			name      string
+			colorName string
+		}{
+			{rolls: []int{3, 14}, tier: lottery.PrizeTier1st, itemID: "item-060", name: "シルバーオーブ", colorName: "シルバー"},
+			{rolls: []int{15, 29}, tier: lottery.PrizeTier2nd, itemID: "item-061", name: "レッドオーブ", colorName: "レッド"},
+			{rolls: []int{30, 39}, tier: lottery.PrizeTier3rd, itemID: "item-062", name: "ブルーオーブ", colorName: "ブルー"},
+			{rolls: []int{40, 49}, tier: lottery.PrizeTier4th, itemID: "item-063", name: "グリーンオーブ", colorName: "グリーン"},
+			{rolls: []int{50, 59}, tier: lottery.PrizeTier5th, itemID: "item-064", name: "イエローオーブ", colorName: "イエロー"},
+			{rolls: []int{60, 69}, tier: lottery.PrizeTier6th, itemID: "item-065", name: "パープルオーブ", colorName: "パープル"},
+		}
+
+		for _, ot := range orbTests {
+			for _, r := range ot.rolls {
+				p := lottery.EvaluateRaffleRoll(lottery.RaffleSpecial, r, 0)
+				if p.Tier != ot.tier || p.ItemDefinitionID != ot.itemID || p.Name != ot.name || p.ColorName != ot.colorName {
+					t.Errorf("roll %d: expected %s (%s), got %+v", r, ot.name, ot.itemID, p)
+				}
+			}
+		}
+
+		// Miss: rolls 70..99
+		for _, r := range []int{70, 90, 99} {
+			p := lottery.EvaluateRaffleRoll(lottery.RaffleSpecial, r, 0)
+			if p.Tier != lottery.PrizeTierMiss || p.ItemDefinitionID != "" || p.ColorName != "ホワイト" {
+				t.Errorf("roll %d: expected Miss, got %+v", r, p)
+			}
+		}
+	})
+}
+
+func TestPlayRaffle(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("Standard Raffle - Empty Hand Delivers to Inventory", func(t *testing.T) {
+		repo := &mockLotteryRepo{
+			getRaffleTicketsFn: func(ctx context.Context, charID string) (int, error) {
+				return 10, nil
+			},
+			useRaffleTicketsFn: func(ctx context.Context, charID string, count int) (int, error) {
+				if count != 3 {
+					t.Errorf("expected count 3, got %d", count)
+				}
+				return 7, nil
+			},
+		}
+
+		charRepo := &mockCharacterRepo{
+			characters: map[string]corecharacter.Character{
+				"char-1": {ID: "char-1", JobLevel: 5},
+			},
+		}
+
+		invRepo := &mockInventoryRepo{}
+		depotRepo := &mockDepotRepo{depot: make(map[string]depot.Depot)}
+
+		svc, err := lottery.NewService(repo,
+			lottery.WithCharacterRepository(charRepo),
+			lottery.WithInventoryRepository(invRepo),
+			lottery.WithDepotRepository(depotRepo),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		res, remaining, _, err := svc.PlayRaffle(ctx, "char-1", lottery.RaffleStandard)
+		if err != nil {
+			t.Fatalf("PlayRaffle failed: %v", err)
+		}
+
+		if remaining != 7 {
+			t.Errorf("remaining tickets = %d; want 7", remaining)
+		}
+		if res.TicketsUsed != 3 {
+			t.Errorf("tickets used = %d; want 3", res.TicketsUsed)
+		}
+
+		// Check destination: if won an item, hand was empty so should be in inventory
+		if res.Prize.ItemDefinitionID != "" {
+			if res.TransferredToDepot {
+				t.Errorf("expected item delivered to inventory, but transferred_to_depot is true")
+			}
+			inv, err := invRepo.FindByCharacterID(ctx, "char-1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(inv.Items) != 1 || inv.Items[0].DefinitionID != res.Prize.ItemDefinitionID {
+				t.Errorf("expected %s in inventory, got %+v", res.Prize.ItemDefinitionID, inv.Items)
+			}
+		}
+	})
+
+	t.Run("Standard Raffle - Occupied Hand Delivers to Depot", func(t *testing.T) {
+		repo := &mockLotteryRepo{
+			getRaffleTicketsFn: func(ctx context.Context, charID string) (int, error) {
+				return 10, nil
+			},
+			useRaffleTicketsFn: func(ctx context.Context, charID string, count int) (int, error) {
+				return 7, nil
+			},
+		}
+
+		charRepo := &mockCharacterRepo{
+			characters: map[string]corecharacter.Character{
+				"char-1": {ID: "char-1", JobLevel: 5},
+			},
+		}
+
+		// Existing consumable in hand
+		existingItem, _ := coreitem.NewInstance("item-001", 1)
+		inv := coreinventory.Inventory{
+			CharacterID: "char-1",
+			Items:       []coreitem.Instance{existingItem},
+		}
+		invRepo := &mockInventoryRepo{
+			inventories: map[string]coreinventory.Inventory{"char-1": inv},
+		}
+		depotRepo := &mockDepotRepo{depot: make(map[string]depot.Depot)}
+
+		svc, err := lottery.NewService(repo,
+			lottery.WithCharacterRepository(charRepo),
+			lottery.WithInventoryRepository(invRepo),
+			lottery.WithDepotRepository(depotRepo),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Keep rolling until we hit an item win (<= 75/1000 chance) to verify depot delivery
+		hitItem := false
+		for i := 0; i < 200; i++ {
+			res, _, _, err := svc.PlayRaffle(ctx, "char-1", lottery.RaffleStandard)
+			if err != nil {
+				t.Fatalf("PlayRaffle failed: %v", err)
+			}
+			if res.Prize.ItemDefinitionID != "" {
+				hitItem = true
+				if !res.TransferredToDepot {
+					t.Errorf("expected item delivered to depot when hand occupied, got transferred_to_depot=false")
+				}
+				dp, err := depotRepo.FindByCharacterID(ctx, "char-1")
+				if err != nil {
+					t.Fatal(err)
+				}
+				found := false
+				for _, it := range dp.Items {
+					if it.DefinitionID == res.Prize.ItemDefinitionID {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected won item %s in depot, got %+v", res.Prize.ItemDefinitionID, dp.Items)
+				}
+				break
+			}
+		}
+		if !hitItem {
+			t.Log("Note: did not hit item win in 200 trials (random test)")
+		}
+	})
+
+	t.Run("Standard Raffle - Insufficient Tickets", func(t *testing.T) {
+		repo := &mockLotteryRepo{
+			getRaffleTicketsFn: func(ctx context.Context, charID string) (int, error) {
+				return 2, nil
+			},
+			useRaffleTicketsFn: func(ctx context.Context, charID string, count int) (int, error) {
+				return 0, lottery.ErrInsufficientTickets
+			},
+		}
+		svc, _ := lottery.NewService(repo)
+		_, _, _, err := svc.PlayRaffle(ctx, "char-1", lottery.RaffleStandard)
+		if !errors.Is(err, lottery.ErrInsufficientTickets) {
+			t.Errorf("expected ErrInsufficientTickets, got %v", err)
+		}
+	})
+
+	t.Run("Special Raffle - Insufficient Tickets for 300 requirement", func(t *testing.T) {
+		repo := &mockLotteryRepo{
+			getRaffleTicketsFn: func(ctx context.Context, charID string) (int, error) {
+				return 100, nil
+			},
+			useRaffleTicketsFn: func(ctx context.Context, charID string, count int) (int, error) {
+				if count != 300 {
+					t.Errorf("expected count 300, got %d", count)
+				}
+				return 0, lottery.ErrInsufficientTickets
+			},
+		}
+		svc, _ := lottery.NewService(repo)
+		_, _, _, err := svc.PlayRaffle(ctx, "char-1", lottery.RaffleSpecial)
+		if !errors.Is(err, lottery.ErrInsufficientTickets) {
+			t.Errorf("expected ErrInsufficientTickets, got %v", err)
 		}
 	})
 }

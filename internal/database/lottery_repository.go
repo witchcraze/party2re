@@ -56,65 +56,8 @@ func (r *LotteryRepository) AddRaffleTickets(ctx context.Context, characterID st
 	return r.GetRaffleTickets(ctx, characterID)
 }
 
-func (r *LotteryRepository) BuyRaffleTickets(ctx context.Context, characterID string, count int, goldCost int) (int, corecharacter.Character, error) {
+func (r *LotteryRepository) UseRaffleTickets(ctx context.Context, characterID string, count int) (int, error) {
 	var currentTickets int
-	var char corecharacter.Character
-
-	err := RunInTx(ctx, r.db, func(txCtx context.Context) error {
-		executor := ExecutorFromContext(txCtx, r.db)
-
-		// 1. Deduct gold
-		res, err := executor.ExecContext(txCtx, `
-			UPDATE characters
-			SET money = money - ?
-			WHERE id = ? AND money >= ?
-		`, goldCost, characterID, goldCost)
-		if err != nil {
-			return err
-		}
-		affected, err := res.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if affected == 0 {
-			return lottery.ErrInsufficientGold
-		}
-
-		// 2. Upsert raffle tickets
-		_, err = executor.ExecContext(txCtx, `
-			INSERT INTO character_lottery (character_id, raffle_tickets)
-			VALUES (?, ?)
-			ON DUPLICATE KEY UPDATE raffle_tickets = raffle_tickets + VALUES(raffle_tickets)
-		`, characterID, count)
-		if err != nil {
-			return err
-		}
-
-		// 3. Query updated values
-		if err := executor.QueryRowContext(txCtx, `SELECT raffle_tickets FROM character_lottery WHERE character_id = ?`, characterID).Scan(&currentTickets); err != nil {
-			return err
-		}
-
-		char, err = scanCharacterRow(executor.QueryRowContext(txCtx, `
-			SELECT `+characterColumns+`
-			FROM characters
-			WHERE id = ?
-		`, characterID))
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-	if err != nil {
-		return 0, corecharacter.Character{}, err
-	}
-	return currentTickets, char, nil
-}
-
-func (r *LotteryRepository) UseRaffleTickets(ctx context.Context, characterID string, count int, rewardGold int) (int, corecharacter.Character, error) {
-	var currentTickets int
-	var char corecharacter.Character
 
 	err := RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
@@ -136,37 +79,17 @@ func (r *LotteryRepository) UseRaffleTickets(ctx context.Context, characterID st
 			return lottery.ErrInsufficientTickets
 		}
 
-		// 2. Add reward gold if any
-		if rewardGold > 0 {
-			if _, err := executor.ExecContext(txCtx, `
-				UPDATE characters
-				SET money = money + ?
-				WHERE id = ?
-			`, rewardGold, characterID); err != nil {
-				return err
-			}
-		}
-
-		// 3. Query updated state
+		// 2. Query updated state
 		if err := executor.QueryRowContext(txCtx, `SELECT raffle_tickets FROM character_lottery WHERE character_id = ?`, characterID).Scan(&currentTickets); err != nil {
-			return err
-		}
-
-		char, err = scanCharacterRow(executor.QueryRowContext(txCtx, `
-			SELECT `+characterColumns+`
-			FROM characters
-			WHERE id = ?
-		`, characterID))
-		if err != nil {
 			return err
 		}
 
 		return nil
 	})
 	if err != nil {
-		return 0, corecharacter.Character{}, err
+		return 0, err
 	}
-	return currentTickets, char, nil
+	return currentTickets, nil
 }
 
 func (r *LotteryRepository) GetActiveTakarakujiRound(ctx context.Context) (lottery.TakarakujiRound, error) {

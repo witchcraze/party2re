@@ -15,7 +15,6 @@ import (
 
 type stubLotteryService struct {
 	getRaffleTicketsFn             func(ctx context.Context, characterID string) (int, error)
-	buyRaffleTicketsFn             func(ctx context.Context, characterID string, count int) (int, corecharacter.Character, error)
 	playRaffleFn                   func(ctx context.Context, characterID string, raffleType lottery.RaffleType) (lottery.RaffleResult, int, corecharacter.Character, error)
 	getTakarakujiStatusFn          func(ctx context.Context) (lottery.TakarakujiStatus, error)
 	buyTakarakujiTicketFn          func(ctx context.Context, characterID string) (lottery.TakarakujiPurchaseResult, error)
@@ -27,13 +26,6 @@ func (s *stubLotteryService) GetRaffleTickets(ctx context.Context, characterID s
 		return s.getRaffleTicketsFn(ctx, characterID)
 	}
 	return 0, nil
-}
-
-func (s *stubLotteryService) BuyRaffleTickets(ctx context.Context, characterID string, count int) (int, corecharacter.Character, error) {
-	if s.buyRaffleTicketsFn != nil {
-		return s.buyRaffleTicketsFn(ctx, characterID, count)
-	}
-	return count, corecharacter.Character{ID: characterID}, nil
 }
 
 func (s *stubLotteryService) PlayRaffle(ctx context.Context, characterID string, raffleType lottery.RaffleType) (lottery.RaffleResult, int, corecharacter.Character, error) {
@@ -216,14 +208,14 @@ func TestLotteryEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /characters/{id}/lottery/buy-raffle - success", func(t *testing.T) {
+	t.Run("POST /characters/{id}/lottery/buy-raffle - not found (purged)", func(t *testing.T) {
 		req := jsonRequest(t, http.MethodPost, "/characters/c1/lottery/buy-raffle", `{"count":5}`)
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 Not Found for purged buy-raffle, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 

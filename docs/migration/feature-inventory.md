@@ -270,6 +270,9 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#600](https://github.com/witchcraze/party2re/issues/600) | Challenge: Remove fictional 20% inter-round HP recovery and restore legacy HP carryover | Completed |
 | [#594](https://github.com/witchcraze/party2re/issues/594) | PvP+GvG: Fix multi-team survivor determination in Colosseum and Guild Battle rounds | Completed |
 | [#605](https://github.com/witchcraze/party2re/issues/605) | Combat/PvP/GvG: Core battle engine multi-team 3+ faction support, inter-team targeting, and elimination loops | Completed |
+| [#484](https://github.com/witchcraze/party2re/issues/484) | Takarakuji: Purge fictional 4-digit lottery, reproducing 20-cap 30,000G rare equipment lottery and 10-day drawing cycles | Completed |
+| [#595](https://github.com/witchcraze/party2re/issues/595) | Tavern: Restore food delivery standing order, remove erroneous deletion and fullness, and trigger on party adventure | Completed |
+| [#485](https://github.com/witchcraze/party2re/issues/485) | Fukubiki Raffle: Eliminate gold purchase and gold prizes, restoring Stat Seeds, Orbs, and Tavern coupon linkage | Completed |
 
 
 ---

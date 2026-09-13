@@ -182,6 +182,12 @@ func newMiscServices(
 	if core.itemCatalog != nil {
 		lotOpts = append(lotOpts, lottery.WithItemDefinitionProvider(core.itemCatalog))
 	}
+	if core.invRepo != nil {
+		lotOpts = append(lotOpts, lottery.WithInventoryRepository(core.invRepo))
+	}
+	if core.txProvider != nil {
+		lotOpts = append(lotOpts, lottery.WithTransactionProvider(core.txProvider))
+	}
 	if collectionService != nil {
 		lotOpts = append(lotOpts, lottery.WithCollectionRecorder(collectionService))
 	}

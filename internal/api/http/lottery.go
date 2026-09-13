@@ -7,13 +7,13 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/lottery"
 )
 
 // LotteryService defines the raffle and lottery operations exposed over HTTP.
 type LotteryService interface {
 	GetRaffleTickets(ctx context.Context, characterID string) (int, error)
-	BuyRaffleTickets(ctx context.Context, characterID string, count int) (int, corecharacter.Character, error)
 	PlayRaffle(ctx context.Context, characterID string, raffleType lottery.RaffleType) (lottery.RaffleResult, int, corecharacter.Character, error)
 
 	GetTakarakujiStatus(ctx context.Context) (lottery.TakarakujiStatus, error)
@@ -30,15 +30,6 @@ func WithLottery(l LotteryService) Option {
 
 type getLotteryTicketsResponse struct {
 	Tickets int `json:"tickets"`
-}
-
-type buyRaffleRequest struct {
-	Count int `json:"count"`
-}
-
-type buyRaffleResponse struct {
-	Tickets   int               `json:"tickets"`
-	Character characterResponse `json:"character"`
 }
 
 type playRaffleRequest struct {
@@ -76,45 +67,6 @@ func (h *Handler) handleGetLotteryTickets(w http.ResponseWriter, r *http.Request
 	})
 }
 
-func (h *Handler) handleBuyRaffleTickets(w http.ResponseWriter, r *http.Request) {
-	if h.lottery == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("lottery service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req buyRaffleRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		if req.Count <= 0 {
-			writeError(w, http.StatusBadRequest, lottery.ErrInvalidAmount)
-			return
-		}
-
-		tickets, updatedChar, err := h.lottery.BuyRaffleTickets(r.Context(), char.ID, req.Count)
-		if err != nil {
-			if errors.Is(err, lottery.ErrInsufficientGold) {
-				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
-			if errors.Is(err, lottery.ErrInvalidAmount) {
-				writeError(w, http.StatusBadRequest, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, buyRaffleResponse{
-			Tickets:   tickets,
-			Character: toCharacterResponse(updatedChar),
-		})
-	})
-}
-
 func (h *Handler) handlePlayRaffle(w http.ResponseWriter, r *http.Request) {
 	if h.lottery == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("lottery service not configured"))
@@ -137,6 +89,10 @@ func (h *Handler) handlePlayRaffle(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			if errors.Is(err, lottery.ErrInsufficientTickets) {
 				writeError(w, http.StatusUnprocessableEntity, err)
+				return
+			}
+			if errors.Is(err, depot.ErrDepotFull) {
+				writeError(w, http.StatusConflict, err)
 				return
 			}
 			writeError(w, http.StatusInternalServerError, err)

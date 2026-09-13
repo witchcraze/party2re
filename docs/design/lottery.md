@@ -4,7 +4,61 @@
 
 The Lottery and Raffle Feature Module (`internal/lottery`) implements the authentic Party2 town games:
 1. **Server-Wide 20-Cap Rare Item Lottery (宝くじ / Takarakuji)**: Periodic limited-entry lottery (`party2/lib/takarakuzi.cgi`, NPC `@クラゲ`) featuring 20 tickets per round, 1 ticket per player, 10-day drawing cycles, and direct delivery of rare equipment and alchemy recipes into the winner's Depot (`預かり所`).
-2. **Raffle (福引 / Fukubiki)**: Instant raffle mini-game (`party2/lib/lot.cgi`) using meal coupons from the Adventurer's Tavern to draw stat-boosting seeds and divine orbs.
+2. **Raffle (福引 / Fukubiki)**: Instant tavern coupon drawing facility (`party2/lib/lot.cgi`, NPC `@フクスケ`) using meal coupons from the Adventurer's Tavern to draw stat-boosting seeds, weekday secret treasures, and divine orbs.
+
+---
+
+## Fukubiki Raffle (福引所 / `party2/lib/lot.cgi`)
+
+### 1. Basic Specifications
+- **Location**: 福引所 (Raffle Shop)
+- **NPC**: `@フクスケ` (Fukusuke)
+- **Coupon Source**: Obtained exclusively via Tavern counter meals (`OrderMeal` in `party2/lib/bar.cgi`) and Heaven Wishes (`god`). Fictional direct gold purchase (100G) and gold prize tables are completely purged.
+- **Item Delivery Routing**:
+  - If the character's consumable item hand slot is empty: delivered directly to the character's Inventory (`transferred_to_depot = false`).
+  - If the character's consumable item hand slot is occupied: automatically forwarded to Depot storage (`character_depots` / `depot_items`) (`transferred_to_depot = true`).
+  - If Depot storage is full: returns `depot.ErrDepotFull` (HTTP 409 Conflict), rolling back ticket consumption to protect player assets.
+
+### 2. Standard Raffle (通常福引)
+- **Cost**: 3 coupons (`StandardRaffleCost = 3`)
+- **Roll Range**: 0 to 999 (`rand(1000)`)
+- **Prize Tiers & Probabilities**:
+  - **特賞 (Grand Prize / Gold / 0.1%)**: Day-of-week secret treasure (`$g_prizes[$wday]` in JST):
+    - Sunday (0): `item-027` (賢者の悟り)
+    - Monday (1): `item-035` (ドラゴンの心)
+    - Tuesday (2): `item-036` (闇のロザリオ)
+    - Wednesday (3): `item-088` (魔銃)
+    - Thursday (4): `item-037` (ギザールの野菜)
+    - Friday (5): `item-038` (クポの実)
+    - Saturday (6): `item-039` (ギャンブルハート)
+  - **1等 (1st Prize / Red / 0.3%)**: `item-030` (精霊の守り, rolls 1..3)
+  - **2等 (2nd Prize / Purple / 0.4%)**: `item-033` (スライムの心, rolls 4..7)
+  - **3等 (3rd Prize / Yellow / 0.6%)**: `item-023` (小さなメダル, rolls 8..13)
+  - **4等 (4th Prize / Pink / 3.1%)**: Stat Seeds (rolls 14..44):
+    - `item-016` (命の木の実, 0.6%, rolls 14..19)
+    - `item-017` (不思議な木の実, 0.5%, rolls 20..24)
+    - `item-018` (力の種, 0.5%, rolls 25..29)
+    - `item-019` (守りの種, 0.5%, rolls 30..34)
+    - `item-020` (素早さの種, 0.5%, rolls 35..39)
+    - `item-021` (スキルの種, 0.5%, rolls 40..44)
+  - **5等 (5th Prize / Blue / 1.0%)**: `item-012` (祈りの指輪, rolls 45..54)
+  - **6等 (6th Prize / Green / 2.0%)**: `item-125` (福袋, rolls 55..74)
+  - **ハズレ (Miss / White / 92.5%)**: None (rolls 75..999)
+
+### 3. Special Raffle (裏・特別福引)
+- **Cost**: 300 coupons (`SpecialRaffleCost = 300`)
+- **Requirement**: Character must hold at least 300 coupons.
+- **Roll Range**: 0 to 99 (`rand(100)`)
+- **Prize Tiers & Probabilities**:
+  - **特賞 (Grand Prize / Gold / 3.0%)**: Random rare alchemy material item (rolls 0..2):
+    - Candidates: `item-090` (スライムピアス), `item-091` (飛竜のヒゲ), `item-092` (禁断の書), `item-093` (コウモリの羽), `item-094` (マジックマッシュルーム), `item-095` (透明マント), `item-096` (獣の血), `item-097` (死者の骨), `item-098` (謎の液体), `item-099` (ヒーローソード), `item-100` (ヒーローソード2), `item-142` (蝶の翅)
+  - **1等 (1st Prize / Silver / 12.0%)**: `item-060` (シルバーオーブ, rolls 3..14)
+  - **2等 (2nd Prize / Red / 15.0%)**: `item-061` (レッドオーブ, rolls 15..29)
+  - **3等 (3rd Prize / Blue / 10.0%)**: `item-062` (ブルーオーブ, rolls 30..39)
+  - **4等 (4th Prize / Green / 10.0%)**: `item-063` (グリーンオーブ, rolls 40..49)
+  - **5等 (5th Prize / Yellow / 10.0%)**: `item-064` (イエローオーブ, rolls 50..59)
+  - **6等 (6th Prize / Purple / 10.0%)**: `item-065` (パープルオーブ, rolls 60..69)
+  - **ハズレ (Miss / White / 30.0%)**: None (rolls 70..99)
 
 ---
 
@@ -66,36 +120,11 @@ When a drawing occurs (via background scheduler `takarakuji_draw` or on-demand d
 
 ## Database Persistence
 
-### Schema Migrations (`migrations/081_takarakuji.sql`)
+### Schema Migrations (`migrations/018_lottery.sql`, `migrations/081_takarakuji.sql`)
 
-```sql
-CREATE TABLE IF NOT EXISTS takarakuji_rounds (
-    round_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    draw_date DATETIME(6) NOT NULL,
-    is_drawn BOOLEAN NOT NULL DEFAULT FALSE,
-    drawn_at DATETIME(6) NULL,
-    prize_1_item_id VARCHAR(64) NOT NULL,
-    prize_1_amount INT NOT NULL DEFAULT 1,
-    prize_2_item_id VARCHAR(64) NOT NULL,
-    prize_2_amount INT NOT NULL DEFAULT 1,
-    prize_3_item_id VARCHAR(64) NOT NULL,
-    prize_3_amount INT NOT NULL DEFAULT 2,
-    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    INDEX idx_takarakuji_rounds_draw_date (draw_date, is_drawn)
-);
-
-CREATE TABLE IF NOT EXISTS takarakuji_tickets (
-    id CHAR(32) NOT NULL PRIMARY KEY,
-    round_id INT NOT NULL,
-    character_id CHAR(32) NOT NULL,
-    purchased_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    won_rank INT NOT NULL DEFAULT 0,
-    won_item_id VARCHAR(64) NULL,
-    CONSTRAINT fk_takarakuji_tickets_round FOREIGN KEY (round_id) REFERENCES takarakuji_rounds (round_id) ON DELETE CASCADE,
-    CONSTRAINT fk_takarakuji_tickets_char FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE,
-    CONSTRAINT uq_takarakuji_round_char UNIQUE (round_id, character_id)
-);
-```
+- `character_lottery`: Tracks character tavern raffle coupons (`raffle_tickets >= 0`).
+- `takarakuji_rounds`: Tracks 10-day Takarakuji lottery rounds, prize candidate items, and drawn status.
+- `takarakuji_tickets`: Tracks character ticket purchases (1 per round, max 20 per round).
 
 ---
 
@@ -107,5 +136,4 @@ CREATE TABLE IF NOT EXISTS takarakuji_tickets (
 | `POST` | `/characters/{id}/lottery/takarakuji/buy` | Purchase Takarakuji ticket (30,000G, 1 per character per round, 20 max) | Character Auth |
 | `GET` | `/characters/{id}/lottery/takarakuji/ticket` | Get character's current round ticket and past participation history | Character Auth |
 | `GET` | `/characters/{id}/lottery/tickets` | Get character tavern raffle ticket count | Character Auth |
-| `POST` | `/characters/{id}/lottery/buy-raffle` | Buy raffle tickets (scheduled for removal in Issue #485) | Character Auth |
-| `POST` | `/characters/{id}/lottery/raffle` | Play raffle drawing mini-game | Character Auth |
+| `POST` | `/characters/{id}/lottery/raffle` | Play raffle drawing mini-game (Standard: 3 tickets, Special: 300 tickets) | Character Auth |
