@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #458 — [Feature] Blacksmith: Reproduce original Weapon Seal (刻印), Naming (名付け), and Blacksmith Storage (専用預かり所)
+Last updated: Issue #598 — [Chore] Test/Valkey: Implement offline unit tests for pvp, gvg, and dungeon repositories using valkeytest
 
 ## Current phase
 

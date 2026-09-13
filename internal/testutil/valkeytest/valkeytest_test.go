@@ -347,4 +347,17 @@ func TestRESPBuilders(t *testing.T) {
 	if !errors.Is(errRes.Error(), customErr) {
 		t.Fatalf("expected customErr, got %v", errRes.Error())
 	}
+
+	// 9. MakeStringMapResult
+	mapRes := valkeytest.MakeStringMapResult(map[string]string{
+		"field1": "val1",
+		"field2": "val2",
+	})
+	strMap, err := mapRes.AsStrMap()
+	if err != nil {
+		t.Fatalf("AsStrMap error: %v", err)
+	}
+	if strMap["field1"] != "val1" || strMap["field2"] != "val2" || len(strMap) != 2 {
+		t.Fatalf("unexpected string map: %v", strMap)
+	}
 }

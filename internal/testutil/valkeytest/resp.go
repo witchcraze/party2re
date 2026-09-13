@@ -92,6 +92,15 @@ func MakeNilResult() valkey.ValkeyResult {
 	return valkey.NewResult(msg, valkey.Nil)
 }
 
+// MakeStringMapResult builds a ValkeyResult containing key-value string pairs for HGETALL / AsStrMap.
+func MakeStringMapResult(values map[string]string) valkey.ValkeyResult {
+	pairs := make([]string, 0, len(values)*2)
+	for k, v := range values {
+		pairs = append(pairs, k, v)
+	}
+	return MakeStringSliceResult(pairs)
+}
+
 // MakeOKResult builds a ValkeyResult representing an "OK" string response.
 func MakeOKResult() valkey.ValkeyResult {
 	return MakeStringResult("OK")
