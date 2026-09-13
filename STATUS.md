@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #598 — [Chore] Test/Valkey: Implement offline unit tests for pvp, gvg, and dungeon repositories using valkeytest
+Last updated: Issue #456 — [Chore] Test/Valkey: Implement offline unit tests for challenge and party repositories using valkeytest
 
 ## Current phase
 
