@@ -290,25 +290,55 @@ func TestTavern_DeliveryFlow(t *testing.T) {
 		t.Errorf("expected RemainingGold 1250, got %d", res.RemainingGold)
 	}
 
-	// 5. Delivery should now be removed
+	if res.TicketsAwarded != 0 {
+		t.Errorf("expected TicketsAwarded 0 on delivery, got %d", res.TicketsAwarded)
+	}
+
+	// 5. Delivery should STILL be active (standing order / recurring contract)
+	delivAfter, err := svc.GetDelivery(ctx, charID)
+	if err != nil {
+		t.Fatalf("expected delivery to remain active after claim, got error: %v", err)
+	}
+	if delivAfter.ItemID != deliv.ItemID {
+		t.Errorf("expected delivery item %s, got %s", deliv.ItemID, delivAfter.ItemID)
+	}
+
+	// 6. Character should NOT be full after delivery
+	status, err := tavernRepo.GetCharacterStatus(ctx, charID)
+	if err != nil {
+		t.Fatalf("GetCharacterStatus failed: %v", err)
+	}
+	if status.IsFull {
+		t.Errorf("expected character to NOT be full after delivery claim")
+	}
+
+	// 7. Subsequent ClaimDelivery succeeds again (standing order)
+	char := charRepo.chars[charID]
+	char.Stats.HP = 50
+	charRepo.chars[charID] = char
+
+	res2, err := svc.ClaimDelivery(ctx, charID)
+	if err != nil {
+		t.Fatalf("subsequent ClaimDelivery failed: %v", err)
+	}
+	if res2.HPHealed != 50 || res2.CurrentHP != 100 {
+		t.Errorf("expected HP 100 (healed 50), got HP %d healed %d", res2.CurrentHP, res2.HPHealed)
+	}
+	if res2.RemainingGold != 500 { // 1250 - 750 = 500
+		t.Errorf("expected RemainingGold 500, got %d", res2.RemainingGold)
+	}
+
+	// 8. Cancel delivery explicitly removes the standing order
+	if err := svc.CancelDelivery(ctx, charID); err != nil {
+		t.Fatalf("CancelDelivery failed: %v", err)
+	}
 	_, err = svc.GetDelivery(ctx, charID)
 	if !errors.Is(err, tavern.ErrNoActiveDelivery) {
-		t.Errorf("expected ErrNoActiveDelivery, got %v", err)
+		t.Errorf("expected ErrNoActiveDelivery after cancel, got %v", err)
 	}
-
-	// 6. Character should now be full
-	status, err := tavernRepo.GetCharacterStatus(ctx, charID)
-	if err != nil || !status.IsFull {
-		t.Errorf("expected character to be full after delivery claim")
-	}
-
-	// 7. Reset fullness
-	if err := svc.ResetFullness(ctx, charID); err != nil {
-		t.Fatalf("ResetFullness failed: %v", err)
-	}
-	statusReset, _ := tavernRepo.GetCharacterStatus(ctx, charID)
-	if statusReset.IsFull {
-		t.Errorf("expected character to not be full after reset")
+	_, err = svc.ClaimDelivery(ctx, charID)
+	if !errors.Is(err, tavern.ErrNoActiveDelivery) {
+		t.Errorf("expected ErrNoActiveDelivery on claim after cancel, got %v", err)
 	}
 }
 

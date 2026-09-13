@@ -244,5 +244,26 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 		_ = s.victoryHook(ctx, charIDs, defeatedMonsterCount, result.TotalGold)
 	}
 
+	if s.postAdventureHook != nil {
+		for _, r := range result.Rewards {
+			_ = s.postAdventureHook(ctx, r.CharacterID)
+		}
+	}
+
 	return result, nil
+}
+
+// PostAdventureHook is invoked for each party member after a party adventure successfully completes and commits.
+type PostAdventureHook func(ctx context.Context, characterID string) error
+
+// WithPostAdventureHook configures the PostAdventureHook for the service.
+func WithPostAdventureHook(hook PostAdventureHook) Option {
+	return func(s *Service) {
+		s.postAdventureHook = hook
+	}
+}
+
+// SetPostAdventureHook sets the PostAdventureHook on an existing service.
+func (s *Service) SetPostAdventureHook(hook PostAdventureHook) {
+	s.postAdventureHook = hook
 }

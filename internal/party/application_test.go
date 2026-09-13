@@ -1127,3 +1127,63 @@ func TestPartyService_SpeedSettings(t *testing.T) {
 		t.Errorf("Speed = %d, want 18 (default)", det.Party.Speed)
 	}
 }
+
+func TestPartyService_StartPartyAdventure_PostAdventureHook(t *testing.T) {
+	svc, _, charRepo, _ := setupTestService(t)
+	ctx := context.Background()
+
+	leader := corecharacter.Character{
+		ID:         "leader",
+		Name:       "Hero1",
+		Level:      5,
+		Experience: 250,
+		Money:      100,
+		Stats:      corecharacter.Stats{HP: 50, MaxHP: 50, Attack: 25, Defense: 10},
+	}
+	m1 := corecharacter.Character{
+		ID:         "m1",
+		Name:       "Hero2",
+		Level:      5,
+		Experience: 250,
+		Money:      50,
+		Stats:      corecharacter.Stats{HP: 45, MaxHP: 45, Attack: 20, Defense: 8},
+	}
+	charRepo.chars[leader.ID] = leader
+	charRepo.chars[m1.ID] = m1
+
+	var hookedCharIDs []string
+	svc.SetPostAdventureHook(func(ctx context.Context, characterID string) error {
+		hookedCharIDs = append(hookedCharIDs, characterID)
+		return nil
+	})
+
+	detail, err := svc.CreateParty(ctx, leader.ID, CreatePartyRequest{
+		Name:    "DeliveryParty",
+		StageID: "forest",
+	})
+	if err != nil {
+		t.Fatalf("CreateParty failed: %v", err)
+	}
+	partyID := detail.Party.ID
+	_, _ = svc.JoinParty(ctx, partyID, m1.ID, "")
+	_, _ = svc.SetReady(ctx, partyID, m1.ID, true)
+
+	res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure failed: %v", err)
+	}
+	if len(res.Rewards) != 2 {
+		t.Fatalf("expected 2 member rewards, got %d", len(res.Rewards))
+	}
+
+	if len(hookedCharIDs) != 2 {
+		t.Fatalf("expected PostAdventureHook to be called 2 times, got %d", len(hookedCharIDs))
+	}
+
+	expectedIDs := map[string]bool{leader.ID: true, m1.ID: true}
+	for _, id := range hookedCharIDs {
+		if !expectedIDs[id] {
+			t.Errorf("unexpected character ID hooked: %s", id)
+		}
+	}
+}

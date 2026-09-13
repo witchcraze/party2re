@@ -137,13 +137,19 @@ func wireHooks(
 	}
 	if misc.tavern != nil {
 		soc.home.SetFullnessResetter(misc.tavern)
-		cmbt.adv.SetPostAdventureHook(func(ctx context.Context, characterID string) error {
+		deliveryHook := func(ctx context.Context, characterID string) error {
 			_, err := misc.tavern.ClaimDelivery(ctx, characterID)
 			if errors.Is(err, tavern.ErrNoActiveDelivery) || errors.Is(err, tavern.ErrInsufficientFunds) {
 				return nil
 			}
 			return err
-		})
+		}
+		if cmbt.adv != nil {
+			cmbt.adv.SetPostAdventureHook(deliveryHook)
+		}
+		if cmbt.party != nil {
+			cmbt.party.SetPostAdventureHook(deliveryHook)
+		}
 	}
 	if misc.chapel != nil {
 		soc.home.SetBlessingCleaner(misc.chapel)

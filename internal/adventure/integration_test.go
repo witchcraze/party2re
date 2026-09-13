@@ -314,18 +314,20 @@ func TestAdventure_TavernDelivery_PostAdventureIntegration(t *testing.T) {
 		t.Errorf("expected Gold %d, got %d", expectedGold, updatedChar.Money)
 	}
 
-	// Delivery reservation should be consumed
-	_, err = tavernService.GetDelivery(ctx, char.ID)
-	if !errors.Is(err, tavern.ErrNoActiveDelivery) {
-		t.Errorf("expected ErrNoActiveDelivery after post-adventure delivery, got %v", err)
+	// Delivery reservation should remain active (standing order / recurring contract)
+	delivAfter, err := tavernService.GetDelivery(ctx, char.ID)
+	if err != nil {
+		t.Errorf("expected delivery reservation to remain active, got %v", err)
+	} else if delivAfter.ItemID != "tavern_omelet_rice" {
+		t.Errorf("expected delivery item tavern_omelet_rice, got %s", delivAfter.ItemID)
 	}
 
-	// Raffle tickets should have been awarded
+	// Raffle tickets should NOT have been awarded from delivery meals
 	tickets, err := lotteryRepo.GetRaffleTickets(ctx, char.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tickets != 7 {
-		t.Errorf("expected 7 raffle tickets, got %d", tickets)
+	if tickets != 0 {
+		t.Errorf("expected 0 raffle tickets from delivery, got %d", tickets)
 	}
 }

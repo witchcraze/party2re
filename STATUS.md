@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #605 — [Bug] Combat/PvP/GvG: Core battle engine multi-team 3+ faction support
+Last updated: Issue #595 — [Refactor] Tavern: Restore food delivery standing order, remove erroneous deletion and fullness, and trigger on party adventure
 
 ## Current phase
 
@@ -68,7 +68,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Rankings** (`internal/ranking`): ✅ 12 categories; Valkey snapshot cache, singleflight stampede guard, periodic Worker.
 - **Event Plaza** (`internal/eventplaza`): ✅ Real-time plaza concurrency presence tracking (5-minute active window via Valkey Sorted Set + MariaDB), 26-item authentic merchant catalog at 3× markup across Tiers 1–3, active helper quest item exclusion, hand occupancy depot fallback delivery, and King Boss victory celebration banquets (#491).
 - **Secret Shop** (`internal/secretshop`): ✅ `job_lv >= 7` gate, 8 items at 3× price, Depot auto-delivery, puff-puff (dialogue only) (#462).
-- **Tavern & Food Delivery** (`internal/tavern`): ✅ 14-item menu, HP/MP restore, fullness, raffle ticket bonus, delivery reservation with automated post-adventure arrival hook (`adventure.PostAdventureHook`); fictional courier quests and parcel courier purged (#475).
+- **Tavern & Food Delivery** (`internal/tavern`): ✅ 14-item menu, HP/MP restore, fullness on counter meal, raffle tickets on counter meal, recurring standing order food delivery across repeated solo & party adventures without erroneous consumption, fullness mutation, or ticket mis-award (`bar.cgi`, `_battle.cgi`); fictional courier quests and parcel courier purged (#475, #595).
 - **Black Market** (`internal/blackmarket`): ✅ Rare-point barter, Depot sacrifice/prize; fictional gold trading purged (#463).
 - **Flea Market** (`internal/fleamarket`): ✅ Depot-linked listings (120-server max), SQL CAS + RowsAffected guard, Depot direct-receive.
 - **Gem Store** (`internal/gemstore`): ✅ Dedicated gem box (`job_lv`-scaled capacity), 55+ synthesis recipes, dual-source (inventory & depot) weighted orb appraisal (#560).

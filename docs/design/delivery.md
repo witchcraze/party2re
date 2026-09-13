@@ -3,7 +3,7 @@
 ## Overview
 
 The Food Delivery ("でりばりー") subsystem is part of the Adventurer's Tavern module (`internal/tavern`, `docs/design/tavern.md`).
-In original Party2 (`party2/lib/bar.cgi`, `party2/lib/_battle.cgi`), delivery is NOT an NPC courier quest or parcel delivery system. It is a standing meal reservation made at the Tavern: an adventurer pre-orders food or drinks before heading out to adventure. When an adventure concludes, the tavern automatically delivers the meal, restoring HP and MP, deducting the meal cost, and awarding bonus raffle tickets for the town lottery.
+In original Party2 (`party2/lib/bar.cgi`, `party2/lib/_battle.cgi`), delivery is NOT an NPC courier quest or parcel delivery system. It is a recurring standing meal reservation ("定期配達") made at the Tavern: an adventurer pre-orders food or drinks before heading out to adventure. When an adventure concludes (solo or party), the tavern automatically delivers the meal, restoring HP and MP, and deducting the meal cost. The reservation persists across subsequent adventures until explicitly canceled.
 
 > [!NOTE]
 > Fictional NPC delivery quests and player-to-player parcel mail previously implemented in `internal/delivery` have been completely purged (#475) in accordance with the clean-room migration policy.
@@ -17,31 +17,34 @@ sequenceDiagram
     autonumber
     actor Player
     participant Tavern as Tavern Service
-    participant Adv as Adventure Service
+    participant Adv as Adventure / Party Service
     participant DB as MariaDB / Tx
 
     Player->>Tavern: ReserveDelivery(character_id, item_id)
-    Tavern->>DB: Save DeliveryReservation (0G upfront)
-    Note over Player,Adv: Player departs on Adventure
-    Player->>Adv: Start & Claim Adventure
-    Adv->>DB: Resolve battle & commit rewards
+    Tavern->>DB: Save DeliveryReservation (0G upfront standing order)
+    Note over Player,Adv: Player departs on Adventure (Solo or Party)
+    Player->>Adv: Start & Complete Adventure
+    Adv->>DB: Resolve crawl/battle & commit rewards
     Adv->>Tavern: PostAdventureHook -> ClaimDelivery(character_id)
     alt Character has sufficient Gold
-        Tavern->>DB: Deduct meal Price, Restore HP/MP, Award Tickets, Delete Reservation
-        Tavern-->>Adv: Meal delivered & consumed
+        Tavern->>DB: Deduct meal Price, Restore HP/MP (Reservation kept)
+        Tavern-->>Adv: Meal delivered & consumed (standing order active)
     else Insufficient Gold
-        Tavern-->>Adv: Skip delivery (no charge, no heal)
+        Tavern-->>Adv: Skip delivery (no charge, no heal, reservation kept)
     end
 ```
 
 ### Invariants:
 1. **Zero Upfront Reservation Cost**: Reserving a delivery meal costs 0 G upfront (`party2/lib/bar.cgi:140`). Payment occurs upon successful delivery at adventure completion.
-2. **Single Active Reservation**: A character may hold at most one active delivery reservation at a time (`tavern_deliveries` keyed by `character_id`). Reserving another meal overwrites the active reservation.
-3. **Cancellation Without Fee**: Players can cancel a pending delivery reservation at any time with zero penalty or fee (`party2/lib/bar.cgi:149`).
-4. **Automated Post-Adventure Trigger**: When an adventure completes (`adventure.Claim`), the registered `PostAdventureHook` automatically invokes `ClaimDelivery`:
-   - If the player has sufficient funds (`Money >= Price`), the meal cost is deducted, HP and MP are restored (clamped to `MaxHP` / `MaxMP`), raffle tickets are awarded, and the delivery reservation is consumed.
-   - If funds are insufficient, delivery is skipped without deducting gold or applying restorative effects, and the error is treated as non-fatal so adventure rewards are not impeded.
-5. **Direct Manual Claim**: Characters may also manually claim a pending delivery meal via `POST /characters/{id}/tavern/delivery/claim`.
+2. **Standing Order (Recurring Delivery)**: Reserving a delivery establishes a recurring contract. Successful delivery does NOT delete the reservation (`party2/lib/_battle.cgi:1348-1376`). The standing order persists and will deliver again after subsequent adventures.
+3. **Single Active Reservation**: A character may hold at most one active delivery reservation at a time (`tavern_deliveries` keyed by `character_id`). Reserving another meal updates the active reservation.
+4. **Cancellation Without Fee**: Players can cancel a pending delivery reservation at any time with zero penalty or fee (`DELETE /characters/{id}/tavern/delivery`, `party2/lib/bar.cgi:149`).
+5. **No Fullness State Mutation**: Receiving a delivery meal does NOT set `IsFull = true`. Adventurers can still eat at the tavern counter or receive future deliveries.
+6. **No Raffle Tickets on Delivery**: Unlike counter dining (`OrderMeal`), delivery meals do NOT award lottery raffle tickets (`coupon` is exclusive to `bar.cgi:113-117`).
+7. **Automated Post-Adventure Trigger (Solo & Party)**: When a solo adventure or multiplayer party adventure completes, the registered `PostAdventureHook` automatically invokes `ClaimDelivery` for each participating character:
+   - If the player has sufficient funds (`Money >= Price`), the meal cost is deducted and HP and MP are restored (clamped to `MaxHP` / `MaxMP`).
+   - If funds are insufficient, delivery is skipped without deducting gold or applying restorative effects, the standing order remains active, and the error is treated as non-fatal so adventure rewards are not impeded.
+8. **Direct Manual Claim**: Characters may also manually claim a pending delivery meal via `POST /characters/{id}/tavern/delivery/claim`.
 
 ---
 

@@ -167,22 +167,12 @@ func (s *Service) ClaimDelivery(ctx context.Context, characterID string) (OrderR
 			return fmt.Errorf("failed to update character after delivery meal: %w", err)
 		}
 
-		// Award lottery tickets
-		totalTickets := 0
-		if s.lotteryRepo != nil && delivery.Tickets > 0 {
-			newTickets, err := s.lotteryRepo.AddRaffleTickets(txCtx, charID, delivery.Tickets)
-			if err == nil {
-				totalTickets = newTickets
-			}
-		}
-
 		// Update tavern status
 		status, err := s.repo.GetCharacterStatus(txCtx, charID)
 		if err != nil {
 			status = TavernCharacterStatus{CharacterID: charID}
 		}
 		now := time.Now().UTC()
-		status.IsFull = true
 		status.LastEatenAt = &now
 		status.TotalMealsEaten++
 		status.TotalGoldSpent += int64(delivery.Price)
@@ -192,20 +182,13 @@ func (s *Service) ClaimDelivery(ctx context.Context, characterID string) (OrderR
 			return fmt.Errorf("failed to update tavern character status: %w", err)
 		}
 
-		if err := s.repo.DeleteDelivery(txCtx, charID); err != nil {
-			return fmt.Errorf("failed to delete claimed delivery: %w", err)
-		}
-
-		msg := fmt.Sprintf("配達完了！冒険帰りの体に染み渡る%sが届いたわ♪", delivery.ItemName)
+		msg := fmt.Sprintf("酒場から%sが届きました！", delivery.ItemName)
 		if hpHealed > 0 && mpHealed > 0 {
 			msg += fmt.Sprintf(" HPが%d、MPが%d回復した！", hpHealed, mpHealed)
 		} else if hpHealed > 0 {
 			msg += fmt.Sprintf(" HPが%d回復した！", hpHealed)
 		} else if mpHealed > 0 {
 			msg += fmt.Sprintf(" MPが%d回復した！", mpHealed)
-		}
-		if delivery.Tickets > 0 {
-			msg += fmt.Sprintf(" 福引券を%d枚もらった！", delivery.Tickets)
 		}
 
 		result = OrderResult{
@@ -216,8 +199,8 @@ func (s *Service) ClaimDelivery(ctx context.Context, characterID string) (OrderR
 			CurrentHP:      char.Stats.HP,
 			CurrentMP:      char.Stats.MP,
 			RemainingGold:  char.Money,
-			TicketsAwarded: delivery.Tickets,
-			TotalTickets:   totalTickets,
+			TicketsAwarded: 0,
+			TotalTickets:   0,
 			Message:        msg,
 		}
 		return nil

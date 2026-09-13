@@ -38,15 +38,16 @@ func WithVictoryHook(hook VictoryHook) Option {
 }
 
 type Service struct {
-	repo         Repository
-	charRepo     CharacterRepository
-	invRepo      InventoryRepository
-	stages       StageProvider
-	monsters     MonsterProvider
-	battleEngine BattleEngine
-	news         NewsPublisher
-	txProvider   TransactionProvider
-	victoryHook  VictoryHook
+	repo              Repository
+	charRepo          CharacterRepository
+	invRepo           InventoryRepository
+	stages            StageProvider
+	monsters          MonsterProvider
+	battleEngine      BattleEngine
+	news              NewsPublisher
+	txProvider        TransactionProvider
+	victoryHook       VictoryHook
+	postAdventureHook PostAdventureHook
 }
 
 func (s *Service) SetVictoryHook(hook VictoryHook) {

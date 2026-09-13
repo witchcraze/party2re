@@ -46,16 +46,18 @@ When ordering food or drinks directly inside the tavern:
 
 ### 3. Delivery Reservation System (`ReserveDelivery` / `ClaimDelivery`)
 
-To allow characters heading out to adventure to secure an immediate meal upon return:
-- **Reservation (`POST /characters/{id}/tavern/delivery`)**:
-  - Validates character funds and menu item selection.
-  - Saves reservation details into `tavern_deliveries`.
-  - Can be inspected with `GET` or cancelled with `DELETE`.
+To allow characters heading out to adventure to secure an automatic meal upon return:
+- **Standing Order Reservation (`POST /characters/{id}/tavern/delivery`)**:
+  - Validates menu item selection and initial funds.
+  - Saves recurring standing order into `tavern_deliveries`.
+  - Can be inspected with `GET` or cancelled with `DELETE` (`party2/lib/bar.cgi:149`).
 - **Claim & Consume (`POST /characters/{id}/tavern/delivery/claim`)**:
   - Re-validates gold funds at claim time inside a pessimistic transaction.
-  - Deducts gold, restores HP/MP, awards raffle tickets, sets character fullness state to true, and removes the pending delivery entry.
-- **Automated Post-Adventure Arrival**:
-  - When an adventure concludes, the registered `PostAdventureHook` automatically executes `ClaimDelivery` to restore the adventurer upon return. Insufficient funds gracefully skip delivery without impeding adventure completion.
+  - Deducts gold and restores HP/MP.
+  - Does NOT set `is_full = true` and does NOT award raffle tickets (`party2/lib/_battle.cgi:1348-1376`).
+  - Does NOT delete the reservation; the standing order remains active for future adventures.
+- **Automated Post-Adventure Arrival (Solo & Party)**:
+  - When a solo or party adventure concludes, the registered `PostAdventureHook` automatically executes `ClaimDelivery` to restore each participating adventurer. Insufficient funds gracefully skip delivery without cancelling the order or impeding adventure completion.
 
 ---
 
