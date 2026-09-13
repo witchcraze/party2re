@@ -98,7 +98,7 @@ Restore crawl structures, boss challenges, and multiplayer PvP/GvG arenas.
 
 ##### Milestone 4: Community, Events & Entertainment *(Planned)*
 Restore authentic social structures and mini-games.
-- [ ] **Guild (Part 1): Dynamic Guild Points, Hex Colors & Custom Roles** (#490)
+- [x] **Guild (Part 1): Dynamic Guild Points, Hex Colors & Custom Roles** (#490)
 - [ ] **Guild (Part 2): Membership Application/Approval, Broadcast Callouts & Inactivity Disband** (#591)
 - [ ] **Event Plaza: Real-time Concurrency Headcount & 3x Markup Catalog** (#491)
 - [ ] **Takarakuji Lottery: 20-Cap Tickets & Server-wide Rollover Jackpot** (#484)

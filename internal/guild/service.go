@@ -10,126 +10,6 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 )
 
-type Role string
-
-const (
-	RoleLeader  Role = "leader"
-	RoleOfficer Role = "officer"
-	RoleMember  Role = "member"
-)
-
-func (r Role) Valid() bool {
-	switch r {
-	case RoleLeader, RoleOfficer, RoleMember:
-		return true
-	default:
-		return false
-	}
-}
-
-const (
-	CreationFee      = 5000 // Gold required to create a guild (standard reference value)
-	BaseCapacity     = 10   // Base member capacity at Level 1
-	CapacityPerLevel = 2    // Capacity increase per level
-	MaxLevel         = 10   // Maximum guild level
-	MaxNameLength    = 32   // Maximum characters for guild name
-	MaxNoticeLength  = 200  // Maximum characters for guild notice
-)
-
-var (
-	ErrInvalidGuildID               = errors.New("invalid guild ID")
-	ErrInvalidGuildName             = errors.New("guild name must be between 1 and 32 characters")
-	ErrNoticeTooLong                = errors.New("guild notice exceeds maximum allowed length")
-	ErrGuildNotFound                = errors.New("guild not found")
-	ErrGuildNameTaken               = errors.New("guild name is already taken")
-	ErrCharacterNotFound            = errors.New("character not found")
-	ErrCharacterAlreadyInGuild      = errors.New("character is already a member of a guild")
-	ErrCharacterNotInGuild          = errors.New("character is not a member of this guild")
-	ErrInsufficientFunds            = errors.New("character does not have enough gold")
-	ErrGuildFull                    = errors.New("guild has reached maximum member capacity")
-	ErrUnauthorized                 = errors.New("unauthorized to perform this action in the guild")
-	ErrCannotKickLeader             = errors.New("cannot kick the guild leader")
-	ErrCannotKickEqualOrHigherRole  = errors.New("officers cannot kick other officers or the leader")
-	ErrLeaderCannotLeaveWithMembers = errors.New("guild leader cannot leave while other members remain; transfer leadership or disband")
-	ErrInvalidDonationAmount        = errors.New("donation amount must be positive")
-	ErrTargetNotMember              = errors.New("target character is not a member of the guild")
-	ErrCannotDemoteLeader           = errors.New("cannot demote leader; transfer leadership instead")
-	ErrInvalidRole                  = errors.New("invalid role")
-)
-
-type Guild struct {
-	ID                string    `json:"id"`
-	Name              string    `json:"name"`
-	LeaderCharacterID string    `json:"leader_character_id"`
-	Level             int       `json:"level"`
-	Exp               int64     `json:"exp"`
-	Gold              int64     `json:"gold"`
-	Notice            string    `json:"notice"`
-	Color             string    `json:"color"`
-	Bgimg             string    `json:"bgimg"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
-}
-
-// Capacity returns the member capacity based on the guild's level.
-func (g Guild) Capacity() int {
-	lvl := g.Level
-	if lvl < 1 {
-		lvl = 1
-	}
-	return BaseCapacity + (lvl-1)*CapacityPerLevel
-}
-
-// ExpForLevel returns the cumulative exp required to reach level L.
-// Formula: Level 1 requires 0 exp. Level L (L >= 2) requires (L - 1) * (L - 1) * 10000 exp.
-func ExpForLevel(lvl int) int64 {
-	if lvl <= 1 {
-		return 0
-	}
-	diff := int64(lvl - 1)
-	return diff * diff * 10000
-}
-
-// CalculateLevel returns the guild level for a given cumulative EXP.
-func CalculateLevel(exp int64) int {
-	lvl := 1
-	for lvl < MaxLevel {
-		nextReq := ExpForLevel(lvl + 1)
-		if exp < nextReq {
-			break
-		}
-		lvl++
-	}
-	return lvl
-}
-
-type Member struct {
-	GuildID          string    `json:"guild_id"`
-	CharacterID      string    `json:"character_id"`
-	Role             Role      `json:"role"`
-	JoinedAt         time.Time `json:"joined_at"`
-	TotalDonatedGold int64     `json:"total_donated_gold"`
-}
-
-type Detail struct {
-	Guild   Guild    `json:"guild"`
-	Members []Member `json:"members"`
-}
-
-type Repository interface {
-	CreateGuild(ctx context.Context, g Guild, creator Member, fee int) (Guild, Member, corecharacter.Character, error)
-	GetGuild(ctx context.Context, guildID string) (Guild, []Member, error)
-	GetGuildByCharacter(ctx context.Context, characterID string) (Guild, Member, error)
-	ListGuilds(ctx context.Context, offset, limit int) ([]Guild, error)
-	AddMember(ctx context.Context, member Member) (Member, error)
-	RemoveMember(ctx context.Context, guildID string, characterID string) error
-	TransferLeadership(ctx context.Context, guildID string, oldLeaderCharID string, newLeaderCharID string) error
-	UpdateMemberRole(ctx context.Context, guildID string, targetCharID string, newRole Role) error
-	UpdateNotice(ctx context.Context, guildID string, notice string) error
-	Donate(ctx context.Context, guildID string, characterID string, amount int) (Guild, Member, corecharacter.Character, error)
-	DisbandGuild(ctx context.Context, guildID string) error
-}
-
 type Service struct {
 	repo Repository
 }
@@ -157,26 +37,23 @@ func (s *Service) Create(ctx context.Context, creatorCharID string, name string)
 	}
 
 	guildID := id.New()
-
 	now := time.Now().UTC()
 	g := Guild{
 		ID:                guildID,
 		Name:              name,
 		LeaderCharacterID: creatorCharID,
-		Level:             1,
-		Exp:               0,
-		Gold:              0,
+		Points:            0,
 		Notice:            "",
-		Color:             "#FFFFFF",
+		Color:             DefaultColor,
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
 	m := Member{
-		GuildID:          guildID,
-		CharacterID:      creatorCharID,
-		Role:             RoleLeader,
-		JoinedAt:         now,
-		TotalDonatedGold: 0,
+		GuildID:     guildID,
+		CharacterID: creatorCharID,
+		Role:        RoleLeader,
+		Title:       DefaultTitleLeader,
+		JoinedAt:    now,
 	}
 
 	return s.repo.CreateGuild(ctx, g, m, CreationFee)
@@ -227,21 +104,17 @@ func (s *Service) Join(ctx context.Context, guildID string, characterID string) 
 		return Member{}, ErrCharacterAlreadyInGuild
 	}
 
-	g, members, err := s.repo.GetGuild(ctx, guildID)
+	_, _, err := s.repo.GetGuild(ctx, guildID)
 	if err != nil {
 		return Member{}, err
 	}
 
-	if len(members) >= g.Capacity() {
-		return Member{}, ErrGuildFull
-	}
-
 	m := Member{
-		GuildID:          guildID,
-		CharacterID:      characterID,
-		Role:             RoleMember,
-		JoinedAt:         time.Now().UTC(),
-		TotalDonatedGold: 0,
+		GuildID:     guildID,
+		CharacterID: characterID,
+		Role:        RoleMember,
+		Title:       "",
+		JoinedAt:    time.Now().UTC(),
 	}
 
 	return s.repo.AddMember(ctx, m)
@@ -312,26 +185,14 @@ func (s *Service) Kick(ctx context.Context, guildID string, requesterCharID stri
 			target = &members[i]
 		}
 	}
-	if requester == nil {
+	if requester == nil || requester.Role != RoleLeader {
 		return ErrUnauthorized
 	}
 	if target == nil {
 		return ErrTargetNotMember
 	}
-
 	if target.Role == RoleLeader {
 		return ErrCannotKickLeader
-	}
-
-	switch requester.Role {
-	case RoleLeader:
-		// Leader can kick officer and member
-	case RoleOfficer:
-		if target.Role != RoleMember {
-			return ErrCannotKickEqualOrHigherRole
-		}
-	default:
-		return ErrUnauthorized
 	}
 
 	return s.repo.RemoveMember(ctx, guildID, targetCharID)
@@ -376,7 +237,9 @@ func (s *Service) TransferLeadership(ctx context.Context, guildID string, curren
 	return s.repo.TransferLeadership(ctx, guildID, currentLeaderCharID, newLeaderCharID)
 }
 
-func (s *Service) UpdateRole(ctx context.Context, guildID string, requesterCharID string, targetCharID string, newRole Role) error {
+// AssignCustomRole sets a custom role title on a guild member (guild.cgi:ataeru).
+// Only the guild leader can assign role titles.
+func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requesterCharID string, targetCharID string, title string) error {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return ErrInvalidGuildID
@@ -386,8 +249,9 @@ func (s *Service) UpdateRole(ctx context.Context, guildID string, requesterCharI
 	if requesterCharID == "" || targetCharID == "" {
 		return ErrCharacterNotFound
 	}
-	if !newRole.Valid() || newRole == RoleLeader {
-		return ErrInvalidRole
+
+	if err := ValidateRoleTitle(title); err != nil {
+		return err
 	}
 
 	_, members, err := s.repo.GetGuild(ctx, guildID)
@@ -412,10 +276,63 @@ func (s *Service) UpdateRole(ctx context.Context, guildID string, requesterCharI
 		return ErrTargetNotMember
 	}
 	if target.Role == RoleLeader {
-		return ErrCannotDemoteLeader
+		return ErrCannotAssignToLeader
 	}
 
-	return s.repo.UpdateMemberRole(ctx, guildID, targetCharID, newRole)
+	return s.repo.AssignCustomRole(ctx, guildID, targetCharID, title)
+}
+
+// UpdateColor changes the guild's hex color (guild.cgi:color).
+// Only the guild leader can change color.
+// Validates hex format, NPC color prohibition, and server-wide uniqueness.
+func (s *Service) UpdateColor(ctx context.Context, guildID string, requesterCharID string, color string) error {
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return ErrInvalidGuildID
+	}
+	requesterCharID = strings.TrimSpace(requesterCharID)
+	if requesterCharID == "" {
+		return ErrCharacterNotFound
+	}
+
+	normalizedColor, err := ValidateColorFormat(color)
+	if err != nil {
+		return err
+	}
+
+	g, members, err := s.repo.GetGuild(ctx, guildID)
+	if err != nil {
+		return err
+	}
+
+	var requester *Member
+	for i := range members {
+		if members[i].CharacterID == requesterCharID {
+			requester = &members[i]
+			break
+		}
+	}
+	if requester == nil || requester.Role != RoleLeader {
+		return ErrUnauthorized
+	}
+
+	// Legacy rule: White (#FFFFFF) is allowed and can be shared, but non-white colors must be unique.
+	// NPC color (#FF69B4) is reserved and cannot be selected.
+	if normalizedColor == NPCColor {
+		return ErrColorTaken
+	}
+
+	if normalizedColor != DefaultColor {
+		taken, err := s.repo.IsColorTaken(ctx, normalizedColor, g.ID)
+		if err != nil {
+			return err
+		}
+		if taken {
+			return ErrColorTaken
+		}
+	}
+
+	return s.repo.UpdateColor(ctx, guildID, normalizedColor)
 }
 
 func (s *Service) UpdateNotice(ctx context.Context, guildID string, requesterCharID string, notice string) error {
@@ -435,38 +352,27 @@ func (s *Service) UpdateNotice(ctx context.Context, guildID string, requesterCha
 	if err != nil {
 		return err
 	}
-	if member.GuildID != guildID {
-		return ErrUnauthorized
-	}
-	if member.Role != RoleLeader && member.Role != RoleOfficer {
+	if member.GuildID != guildID || member.Role != RoleLeader {
 		return ErrUnauthorized
 	}
 
 	return s.repo.UpdateNotice(ctx, guildID, notice)
 }
 
-func (s *Service) Donate(ctx context.Context, guildID string, characterID string, amount int) (Guild, Member, corecharacter.Character, error) {
-	guildID = strings.TrimSpace(guildID)
-	if guildID == "" {
-		return Guild{}, Member{}, corecharacter.Character{}, ErrInvalidGuildID
+// AddPoints increments guild points directly by guild ID.
+func (s *Service) AddPoints(ctx context.Context, guildID string, points int64) error {
+	if guildID == "" || points <= 0 {
+		return nil
 	}
-	characterID = strings.TrimSpace(characterID)
-	if characterID == "" {
-		return Guild{}, Member{}, corecharacter.Character{}, ErrCharacterNotFound
-	}
-	if amount <= 0 {
-		return Guild{}, Member{}, corecharacter.Character{}, ErrInvalidDonationAmount
-	}
+	return s.repo.AddPoints(ctx, guildID, points)
+}
 
-	_, member, err := s.repo.GetGuildByCharacter(ctx, characterID)
-	if err != nil {
-		return Guild{}, Member{}, corecharacter.Character{}, err
+// AddGuildPoints awards guild points if the character is in a guild.
+func (s *Service) AddGuildPoints(ctx context.Context, characterID string, points int) error {
+	if characterID == "" || points <= 0 {
+		return nil
 	}
-	if member.GuildID != guildID {
-		return Guild{}, Member{}, corecharacter.Character{}, ErrCharacterNotInGuild
-	}
-
-	return s.repo.Donate(ctx, guildID, characterID, amount)
+	return s.repo.AddGuildPoints(ctx, characterID, points)
 }
 
 func (s *Service) Disband(ctx context.Context, guildID string, leaderCharID string) error {

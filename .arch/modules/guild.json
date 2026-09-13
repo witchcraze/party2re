@@ -2,7 +2,7 @@
   "$schema": "https://archify.dev/schema/module.v1.json",
   "module": "guild",
   "tier": 1,
-  "description": "Guild founding, membership management, and gold donation with 3-table atomic synchronization.",
+  "description": "Guild founding, dynamic guild points, custom roles, hex color customization, and membership management.",
   "package": "internal/guild",
   "implementation_package": "internal/database",
   "dependencies": [
@@ -10,7 +10,7 @@
       "name": "guild_repository",
       "target_module": "database",
       "relation_type": "contract_interface",
-      "source_ref": "internal/guild/guild.go#Repository"
+      "source_ref": "internal/guild/repository.go#Repository"
     }
   ],
   "transaction_boundaries": [
@@ -40,27 +40,21 @@
       ]
     },
     {
-      "method": "Donate",
-      "source_ref": "internal/database/guild_repository.go#GuildRepository.Donate",
+      "method": "TransferLeadership",
+      "source_ref": "internal/database/guild_repository.go#GuildRepository.TransferLeadership",
       "transaction_type": "RunInTx",
       "lock_sequence": [
         {
-          "table": "characters",
-          "tier": 2,
-          "mode": "UPDATE",
-          "note": "Deduct donated gold from character wallet"
-        },
-        {
           "table": "guilds",
           "tier": 7,
-          "mode": "SELECT ... FOR UPDATE",
-          "note": "Lock guild row to recalculate total exp and treasury gold"
+          "mode": "UPDATE",
+          "note": "Update guild leader character ID"
         },
         {
           "table": "guild_members",
           "tier": 7,
           "mode": "UPDATE",
-          "note": "Increment member total_donated_gold"
+          "note": "Update former leader to member role and promote new leader"
         }
       ]
     }

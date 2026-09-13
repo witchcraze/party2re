@@ -125,19 +125,18 @@ func CreateTestGuildWithLeader(ctx context.Context, db *sql.DB, guildName string
 		ID:                id.New(),
 		Name:              safeGuildName,
 		LeaderCharacterID: leaderChar.ID,
-		Level:             1,
-		Exp:               0,
-		Gold:              0,
+		Points:            0,
 		Notice:            "Test Guild Notice",
+		Color:             guild.DefaultColor,
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
 	creatorMember := guild.Member{
-		GuildID:          testGuild.ID,
-		CharacterID:      leaderChar.ID,
-		Role:             guild.RoleLeader,
-		JoinedAt:         now,
-		TotalDonatedGold: 0,
+		GuildID:     testGuild.ID,
+		CharacterID: leaderChar.ID,
+		Role:        guild.RoleLeader,
+		Title:       guild.DefaultTitleLeader,
+		JoinedAt:    now,
 	}
 
 	guildRepo, err := NewGuildRepository(db)

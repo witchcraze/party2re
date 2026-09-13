@@ -66,7 +66,7 @@ func TestGvGIntegrationMatchFlow(t *testing.T) {
 		ID:                guildAID,
 		Name:              guildAName,
 		LeaderCharacterID: leaderA.ID,
-		Level:             1,
+		Points:            0,
 		Color:             "#FF3333", // Red
 		Notice:            "Alpha Guild Notice",
 	}
@@ -78,7 +78,7 @@ func TestGvGIntegrationMatchFlow(t *testing.T) {
 	if _, _, _, err := guildRepo.CreateGuild(ctx, gA, memA, 5000); err != nil {
 		t.Fatalf("create guild A: %v", err)
 	}
-	if _, err := guildRepo.AddMember(ctx, guild.Member{GuildID: guildAID, CharacterID: memA1.ID, Role: guild.RoleOfficer}); err != nil {
+	if _, err := guildRepo.AddMember(ctx, guild.Member{GuildID: guildAID, CharacterID: memA1.ID, Role: guild.RoleMember}); err != nil {
 		t.Fatalf("add memA1: %v", err)
 	}
 
@@ -97,7 +97,7 @@ func TestGvGIntegrationMatchFlow(t *testing.T) {
 		ID:                guildBID,
 		Name:              guildBName,
 		LeaderCharacterID: leaderB.ID,
-		Level:             1,
+		Points:            0,
 		Color:             "#6666FF", // Blue
 		Notice:            "Beta Guild Notice",
 	}

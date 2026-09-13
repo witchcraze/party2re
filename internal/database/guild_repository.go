@@ -61,12 +61,12 @@ func (r *GuildRepository) CreateGuild(ctx context.Context, g guild.Guild, creato
 		// 2. Insert guild record
 		guildColor := g.Color
 		if guildColor == "" {
-			guildColor = "#FFFFFF"
+			guildColor = guild.DefaultColor
 		}
 		_, err := executor.ExecContext(txCtx, `
-			INSERT INTO guilds (id, name, leader_character_id, level, exp, gold, notice, color, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, g.ID, g.Name, g.LeaderCharacterID, g.Level, g.Exp, g.Gold, g.Notice, guildColor, g.CreatedAt, g.UpdatedAt)
+			INSERT INTO guilds (id, name, leader_character_id, points, notice, color, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		`, g.ID, g.Name, g.LeaderCharacterID, g.Points, g.Notice, guildColor, g.CreatedAt, g.UpdatedAt)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "duplicate") || strings.Contains(strings.ToLower(err.Error()), "unique") {
 				return guild.ErrGuildNameTaken
@@ -76,10 +76,13 @@ func (r *GuildRepository) CreateGuild(ctx context.Context, g guild.Guild, creato
 
 		// 3. Insert creator as leader
 		creator.GuildID = g.ID
+		if creator.Title == "" {
+			creator.Title = guild.DefaultTitleLeader
+		}
 		_, err = executor.ExecContext(txCtx, `
-			INSERT INTO guild_members (guild_id, character_id, role, joined_at, total_donated_gold)
+			INSERT INTO guild_members (guild_id, character_id, role, title, joined_at)
 			VALUES (?, ?, ?, ?, ?)
-		`, creator.GuildID, creator.CharacterID, string(creator.Role), creator.JoinedAt, creator.TotalDonatedGold)
+		`, creator.GuildID, creator.CharacterID, string(creator.Role), creator.Title, creator.JoinedAt)
 		if err != nil {
 			return err
 		}
@@ -95,6 +98,7 @@ func (r *GuildRepository) CreateGuild(ctx context.Context, g guild.Guild, creato
 		}
 
 		createdGuild = g
+		createdGuild.Color = guildColor
 		createdMember = creator
 		updatedChar = char
 		return nil
@@ -110,12 +114,12 @@ func (r *GuildRepository) GetGuild(ctx context.Context, guildID string) (guild.G
 	var g guild.Guild
 	executor := ExecutorFromContext(ctx, r.db)
 	err := executor.QueryRowContext(ctx, `
-		SELECT id, name, leader_character_id, level, exp, gold, notice, color, created_at, updated_at
+		SELECT id, name, leader_character_id, points, notice, color, COALESCE(bgimg, ''), created_at, updated_at
 		FROM guilds
 		WHERE id = ?
 	`, guildID).Scan(
-		&g.ID, &g.Name, &g.LeaderCharacterID, &g.Level,
-		&g.Exp, &g.Gold, &g.Notice, &g.Color, &g.CreatedAt, &g.UpdatedAt,
+		&g.ID, &g.Name, &g.LeaderCharacterID, &g.Points,
+		&g.Notice, &g.Color, &g.Bgimg, &g.CreatedAt, &g.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return guild.Guild{}, nil, guild.ErrGuildNotFound
@@ -125,7 +129,7 @@ func (r *GuildRepository) GetGuild(ctx context.Context, guildID string) (guild.G
 	}
 
 	rows, err := executor.QueryContext(ctx, `
-		SELECT guild_id, character_id, role, joined_at, total_donated_gold
+		SELECT guild_id, character_id, role, title, joined_at
 		FROM guild_members
 		WHERE guild_id = ?
 		ORDER BY joined_at ASC
@@ -139,7 +143,7 @@ func (r *GuildRepository) GetGuild(ctx context.Context, guildID string) (guild.G
 	for rows.Next() {
 		var m guild.Member
 		var roleStr string
-		if err := rows.Scan(&m.GuildID, &m.CharacterID, &roleStr, &m.JoinedAt, &m.TotalDonatedGold); err != nil {
+		if err := rows.Scan(&m.GuildID, &m.CharacterID, &roleStr, &m.Title, &m.JoinedAt); err != nil {
 			return guild.Guild{}, nil, err
 		}
 		m.Role = guild.Role(roleStr)
@@ -159,14 +163,14 @@ func (r *GuildRepository) GetGuildByCharacter(ctx context.Context, characterID s
 
 	executor := ExecutorFromContext(ctx, r.db)
 	err := executor.QueryRowContext(ctx, `
-		SELECT g.id, g.name, g.leader_character_id, g.level, g.exp, g.gold, g.notice, g.color, g.created_at, g.updated_at,
-		       gm.guild_id, gm.character_id, gm.role, gm.joined_at, gm.total_donated_gold
+		SELECT g.id, g.name, g.leader_character_id, g.points, g.notice, g.color, COALESCE(g.bgimg, ''), g.created_at, g.updated_at,
+		       gm.guild_id, gm.character_id, gm.role, gm.title, gm.joined_at
 		FROM guild_members gm
 		JOIN guilds g ON gm.guild_id = g.id
 		WHERE gm.character_id = ?
 	`, characterID).Scan(
-		&g.ID, &g.Name, &g.LeaderCharacterID, &g.Level, &g.Exp, &g.Gold, &g.Notice, &g.Color, &g.CreatedAt, &g.UpdatedAt,
-		&m.GuildID, &m.CharacterID, &roleStr, &m.JoinedAt, &m.TotalDonatedGold,
+		&g.ID, &g.Name, &g.LeaderCharacterID, &g.Points, &g.Notice, &g.Color, &g.Bgimg, &g.CreatedAt, &g.UpdatedAt,
+		&m.GuildID, &m.CharacterID, &roleStr, &m.Title, &m.JoinedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return guild.Guild{}, guild.Member{}, guild.ErrCharacterNotInGuild
@@ -181,9 +185,9 @@ func (r *GuildRepository) GetGuildByCharacter(ctx context.Context, characterID s
 
 func (r *GuildRepository) ListGuilds(ctx context.Context, offset, limit int) ([]guild.Guild, error) {
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
-		SELECT id, name, leader_character_id, level, exp, gold, notice, color, created_at, updated_at
+		SELECT id, name, leader_character_id, points, notice, color, COALESCE(bgimg, ''), created_at, updated_at
 		FROM guilds
-		ORDER BY level DESC, exp DESC, created_at ASC
+		ORDER BY points DESC, created_at ASC
 		LIMIT ? OFFSET ?
 	`, limit, offset)
 	if err != nil {
@@ -195,8 +199,8 @@ func (r *GuildRepository) ListGuilds(ctx context.Context, offset, limit int) ([]
 	for rows.Next() {
 		var g guild.Guild
 		if err := rows.Scan(
-			&g.ID, &g.Name, &g.LeaderCharacterID, &g.Level,
-			&g.Exp, &g.Gold, &g.Notice, &g.Color, &g.CreatedAt, &g.UpdatedAt,
+			&g.ID, &g.Name, &g.LeaderCharacterID, &g.Points,
+			&g.Notice, &g.Color, &g.Bgimg, &g.CreatedAt, &g.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -211,9 +215,9 @@ func (r *GuildRepository) ListGuilds(ctx context.Context, offset, limit int) ([]
 
 func (r *GuildRepository) AddMember(ctx context.Context, m guild.Member) (guild.Member, error) {
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
-		INSERT INTO guild_members (guild_id, character_id, role, joined_at, total_donated_gold)
+		INSERT INTO guild_members (guild_id, character_id, role, title, joined_at)
 		VALUES (?, ?, ?, ?, ?)
-	`, m.GuildID, m.CharacterID, string(m.Role), m.JoinedAt, m.TotalDonatedGold)
+	`, m.GuildID, m.CharacterID, string(m.Role), m.Title, m.JoinedAt)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "duplicate") || strings.Contains(strings.ToLower(err.Error()), "primary") {
 			return guild.Member{}, guild.ErrCharacterAlreadyInGuild
@@ -255,17 +259,17 @@ func (r *GuildRepository) TransferLeadership(ctx context.Context, guildID string
 
 		if _, err := executor.ExecContext(txCtx, `
 			UPDATE guild_members
-			SET role = ?
+			SET role = ?, title = ''
 			WHERE guild_id = ? AND character_id = ?
-		`, string(guild.RoleOfficer), guildID, oldLeaderID); err != nil {
+		`, string(guild.RoleMember), guildID, oldLeaderID); err != nil {
 			return err
 		}
 
 		if _, err := executor.ExecContext(txCtx, `
 			UPDATE guild_members
-			SET role = ?
+			SET role = ?, title = ?
 			WHERE guild_id = ? AND character_id = ?
-		`, string(guild.RoleLeader), guildID, newLeaderID); err != nil {
+		`, string(guild.RoleLeader), guild.DefaultTitleLeader, guildID, newLeaderID); err != nil {
 			return err
 		}
 
@@ -273,12 +277,12 @@ func (r *GuildRepository) TransferLeadership(ctx context.Context, guildID string
 	})
 }
 
-func (r *GuildRepository) UpdateMemberRole(ctx context.Context, guildID string, targetCharID string, newRole guild.Role) error {
+func (r *GuildRepository) AssignCustomRole(ctx context.Context, guildID string, targetCharID string, title string) error {
 	res, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		UPDATE guild_members
-		SET role = ?
+		SET title = ?
 		WHERE guild_id = ? AND character_id = ?
-	`, string(newRole), guildID, targetCharID)
+	`, title, guildID, targetCharID)
 	if err != nil {
 		return err
 	}
@@ -312,108 +316,68 @@ func (r *GuildRepository) UpdateNotice(ctx context.Context, guildID string, noti
 	return nil
 }
 
-func (r *GuildRepository) Donate(ctx context.Context, guildID string, characterID string, amount int) (guild.Guild, guild.Member, corecharacter.Character, error) {
-	var g guild.Guild
-	var m guild.Member
-	var char corecharacter.Character
-
-	err := RunInTx(ctx, r.db, func(txCtx context.Context) error {
-		executor := ExecutorFromContext(txCtx, r.db)
-
-		// 1. Deduct gold from character
-		res, err := executor.ExecContext(txCtx, `
-			UPDATE characters
-			SET money = money - ?
-			WHERE id = ? AND money >= ?
-		`, amount, characterID, amount)
-		if err != nil {
-			return err
-		}
-		rows, err := res.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if rows == 0 {
-			return guild.ErrInsufficientFunds
-		}
-
-		// 2. Lock and retrieve current guild stats
-		var currentExp int64
-		var currentGold int64
-		err = executor.QueryRowContext(txCtx, `
-			SELECT exp, gold
-			FROM guilds
-			WHERE id = ? FOR UPDATE
-		`, guildID).Scan(&currentExp, &currentGold)
-		if errors.Is(err, sql.ErrNoRows) {
-			return guild.ErrGuildNotFound
-		}
-		if err != nil {
-			return err
-		}
-
-		newExp := currentExp + int64(amount)
-		newLevel := guild.CalculateLevel(newExp)
-
-		// 3. Update guild stats
-		now := time.Now().UTC()
-		if _, err := executor.ExecContext(txCtx, `
-			UPDATE guilds
-			SET gold = gold + ?, exp = ?, level = ?, updated_at = ?
-			WHERE id = ?
-		`, amount, newExp, newLevel, now, guildID); err != nil {
-			return err
-		}
-
-		// 4. Update member donated gold
-		if _, err := executor.ExecContext(txCtx, `
-			UPDATE guild_members
-			SET total_donated_gold = total_donated_gold + ?
-			WHERE guild_id = ? AND character_id = ?
-		`, amount, guildID, characterID); err != nil {
-			return err
-		}
-
-		// 5. Scan updated values
-		if err := executor.QueryRowContext(txCtx, `
-			SELECT id, name, leader_character_id, level, exp, gold, notice, color, created_at, updated_at
-			FROM guilds
-			WHERE id = ?
-		`, guildID).Scan(
-			&g.ID, &g.Name, &g.LeaderCharacterID, &g.Level,
-			&g.Exp, &g.Gold, &g.Notice, &g.Color, &g.CreatedAt, &g.UpdatedAt,
-		); err != nil {
-			return err
-		}
-
-		var roleStr string
-		if err := executor.QueryRowContext(txCtx, `
-			SELECT guild_id, character_id, role, joined_at, total_donated_gold
-			FROM guild_members
-			WHERE guild_id = ? AND character_id = ?
-		`, guildID, characterID).Scan(
-			&m.GuildID, &m.CharacterID, &roleStr, &m.JoinedAt, &m.TotalDonatedGold,
-		); err != nil {
-			return err
-		}
-		m.Role = guild.Role(roleStr)
-
-		char, err = scanCharacterRow(executor.QueryRowContext(txCtx, `
-			SELECT `+characterColumns+`
-			FROM characters
-			WHERE id = ?
-		`, characterID))
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
+func (r *GuildRepository) UpdateColor(ctx context.Context, guildID string, color string) error {
+	now := time.Now().UTC()
+	res, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+		UPDATE guilds
+		SET color = ?, updated_at = ?
+		WHERE id = ?
+	`, color, now, guildID)
 	if err != nil {
-		return guild.Guild{}, guild.Member{}, corecharacter.Character{}, err
+		return err
 	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return guild.ErrGuildNotFound
+	}
+	return nil
+}
 
-	return g, m, char, nil
+func (r *GuildRepository) IsColorTaken(ctx context.Context, color string, excludeGuildID string) (bool, error) {
+	var count int
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM guilds
+		WHERE color = ? AND id != ?
+	`, color, excludeGuildID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func (r *GuildRepository) AddPoints(ctx context.Context, guildID string, points int64) error {
+	now := time.Now().UTC()
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+		UPDATE guilds
+		SET points = points + ?, updated_at = ?
+		WHERE id = ?
+	`, points, now, guildID)
+	return err
+}
+
+func (r *GuildRepository) AddGuildPoints(ctx context.Context, characterID string, points int) error {
+	g, _, err := r.GetGuildByCharacter(ctx, characterID)
+	if err != nil {
+		if errors.Is(err, guild.ErrCharacterNotInGuild) {
+			return nil
+		}
+		return err
+	}
+	return r.AddPoints(ctx, g.ID, int64(points))
+}
+
+func (r *GuildRepository) UpdateBgimg(ctx context.Context, guildID string, bgimg string) error {
+	now := time.Now().UTC()
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+		UPDATE guilds
+		SET bgimg = ?, updated_at = ?
+		WHERE id = ?
+	`, bgimg, now, guildID)
+	return err
 }
 
 func (r *GuildRepository) DisbandGuild(ctx context.Context, guildID string) error {
@@ -427,35 +391,4 @@ func (r *GuildRepository) DisbandGuild(ctx context.Context, guildID string) erro
 		}
 		return nil
 	})
-}
-
-func (r *GuildRepository) AddExp(ctx context.Context, guildID string, expDelta int64) error {
-	executor := ExecutorFromContext(ctx, r.db)
-	var currentExp int64
-	err := executor.QueryRowContext(ctx, "SELECT exp FROM guilds WHERE id = ? FOR UPDATE", guildID).Scan(&currentExp)
-	if err != nil {
-		return err
-	}
-	newExp := currentExp + expDelta
-	newLevel := guild.CalculateLevel(newExp)
-	_, err = executor.ExecContext(ctx, "UPDATE guilds SET exp = ?, level = ? WHERE id = ?", newExp, newLevel, guildID)
-	return err
-}
-
-func (r *GuildRepository) UpdateBgimg(ctx context.Context, guildID string, bgimg string) error {
-	executor := ExecutorFromContext(ctx, r.db)
-	_, err := executor.ExecContext(ctx, "UPDATE guilds SET bgimg = ? WHERE id = ?", bgimg, guildID)
-	return err
-}
-
-// AddGuildPoints awards guild EXP points for character activity if the character belongs to a guild.
-func (r *GuildRepository) AddGuildPoints(ctx context.Context, characterID string, points int) error {
-	g, _, err := r.GetGuildByCharacter(ctx, characterID)
-	if err != nil {
-		if errors.Is(err, guild.ErrCharacterNotInGuild) {
-			return nil
-		}
-		return err
-	}
-	return r.AddExp(ctx, g.ID, int64(points))
 }

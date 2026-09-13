@@ -265,6 +265,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#481](https://github.com/witchcraze/party2re/issues/481) | Colosseum PvP: Eliminate Elo Arena & Reproduce Real-time 8-Player Bet & Split Battles | Completed |
 | [#482](https://github.com/witchcraze/party2re/issues/482) | Guild Battles: Eliminate Elo Duels & Reproduce Live GvG Multi-Round Matches with Trophy Decorations | Completed |
 | [#483](https://github.com/witchcraze/party2re/issues/483) | Dungeon & Challenge Multi-Player: Support Party Exploration, Map Scouting Skills, and Hall of Fame Records | Completed |
+| [#490](https://github.com/witchcraze/party2re/issues/490) | Guild (Part 1): Purge Donation Leveling, Reproduce Dynamic Guild Points, Hex Colors, and Custom Titles | Completed |
 
 ---
 

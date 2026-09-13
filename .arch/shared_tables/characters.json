@@ -66,13 +66,6 @@
       "purpose": "Deduct guild founding fee from founder wallet"
     },
     {
-      "module": "guild",
-      "caller_method": "internal/database/guild_repository.go#GuildRepository.Donate",
-      "lock_mode": "UPDATE",
-      "lock_order": 2,
-      "purpose": "Deduct donated gold from character wallet"
-    },
-    {
       "module": "tavern",
       "caller_method": "internal/tavern/order.go#Service.OrderMeal",
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",

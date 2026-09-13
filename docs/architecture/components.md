@@ -279,9 +279,9 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Character repository, Home repository, Timer service (`internal/core/timer`), Economy Transaction Runner (`internal/economy`), Inventory service, Depot repository, Item catalog, Tavern (fullness reset), Chapel (blessing cleaner).
   - **Persistence:** `character_homes`, `home_letters`, `companion_phrases`, `home_delivery_notices` tables, Valkey `party2:timer:sleep:<id>` and `party2:timer:asleep:<id>`.
 - **Guild** (`internal/guild`):
-  - **Responsibility:** Guild creation, membership lifecycle, role management (Leader, Officer, Member), notice board, gold donations, and level/capacity progression.
+  - **Responsibility:** Guild founding (5,000G), membership lifecycle, dynamic Guild Points (`gpoint`) accrual across social/combat activities and server-wide rankings, custom member role titles (up to 6 full-width characters via `あたえる`), hex color customization with server-wide uniqueness and GvG eligibility validation (`からー`), notice board, and administrative controls (kick, leadership transfer, disband). Fictional gold donation leveling and capacity scaling completely excised (#490).
   - **Dependencies:** Character repository.
-  - **Persistence:** `guilds` and `guild_members` tables in `internal/database/guild_repository.go` with single-guild foreign key uniqueness and transactional integrity.
+  - **Persistence:** `guilds` and `guild_members` tables in `internal/database/guild_repository.go` with single-guild foreign key uniqueness, atomic points arithmetic, and transactional integrity.
 - **Casino** (`internal/casino`):
   - **Responsibility:** Casino currency exchange (1 Coin = 20 G), account management, and mini-games including Indian Poker (52-card deck, blind wagering, dealer AI, showdown resolution), Slot Machine (3-reel, 5-symbol paytable, 100x 777 jackpot), Doppelganger (8-mark secret match, 4x/6x/8x pool multiplier), and High & Low (card rank prediction, 2x payout, multi-round streak doubling).
   - **Dependencies:** Character repository (wallet gold).

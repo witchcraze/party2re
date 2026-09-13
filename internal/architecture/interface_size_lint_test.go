@@ -20,7 +20,6 @@ import (
 var whitelistedLegacyInterfaceLimits = map[string]int{
 	"ranking.Repository": 15,
 	"party.Repository":   13, // 13 direct methods (14 including embedded AdventureLogRepository)
-	"guild.Repository":   11,
 }
 
 const maxDirectInterfaceMethods = 10
