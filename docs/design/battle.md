@@ -124,6 +124,18 @@ The application-layer bridge (`internal/battle`) standardizes combat participant
   - `pharaoh`: Pharaoh job class or ability
 - **Active Combat Items (`@どうぐ`)**: Extracts consumable items with `UsageCategoryCombatOnly` (`1`) from inventory and equipped tools (e.g. 祈りの指輪 `item-012` in `SlotAccessory`). Each item includes an `InstanceID` so concrete item instances can be tracked and consumed during battle.
 - **Stat Orb Binding (`ExtractStatOrbOptions`)**: Automatically scans inventory for `item-152` through `item-156` (Life, Magic, Power, Defense, Agility Orbs) and `item-157` (Skill Orb), binding them into `progression.ApplyExperienceOptions`.
+- **Equipment Stat Calculations (`CalculateEquipmentStats`)**: Computes attack, defense, and agility modifications across weapons (71 weapons), armor (55 armors), and accessories (12 accessories):
+  - **Excalibur & Ex Amulet / Awakening Scaling (`_battle.cgi:1736-1744`)**:
+    - When wielding Excalibur (`weapon-71`), base weapon attack is normally `int(mat * (0.75 + rand(0.5)))`.
+    - If Ex Amulet (`item-158`) or Awakening gems (`item-240` 覚醒の紅玉, `item-241` 覚醒の蒼玉, `item-242` 覚醒の翠玉) are equipped in the accessory slot, weapon attack is boosted to `int(mat * (1.5 + rand(0.5)))`.
+    - Level scaling factor (`ite_158`): Lv < 50 applies 0.5x, Lv < 75 applies 0.7x, and Lv >= 75 applies 1.0x.
+  - **Dragon God Sword Revisions (`_battle.cgi:1728-1734`)**:
+    - Dragon God Sword (`weapon-69`): Attack bonus gains `+ int(min(char.Level, 99) * 1.5)`.
+    - Dragon God King Sword (`weapon-70`): Attack bonus gains `+ int(min(char.Level, 99) * 2.0)`.
+  - **Awakening Gems Accessory Stats (`_data.cgi:1997-1999`)**:
+    - `item-240`: +30 Attack, -20 Defense, -20 Agility.
+    - `item-241`: -20 Attack, +30 Defense, -20 Agility.
+    - `item-242`: -20 Attack, -20 Defense, +30 Agility.
 
 ### 2. Atomic Post-Battle State Application (`ApplyPostBattleResult`)
 - **Row-Lock Ordering**: Adheres strictly to the global pessimistic lock hierarchy:
