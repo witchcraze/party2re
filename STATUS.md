@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #531 — [Architecture] Core/Random: Centralized Thread-Safe RNG Provider and Direct math/rand Prohibition
+Last updated: Issue #533 — [Architecture] Concurrency: Automated Linter Prohibiting Raw time.Sleep in Production Services
 
 ## Current phase
 
@@ -21,7 +21,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ### Architecture & Repository Intelligence
 - **Agent Operating Rules** (`AGENTS.md`, `.agents/rules/`): ✅ Prescriptive constraint rules modularized into 9 rule files; rationale in `docs/architecture/`.
 - **Guidance Layer** (`.arch/`): ✅ Symbol-anchor module JSON + shared table reverse-index; verified by `arch_test.go`.
-- **AST Linter Suite** (`make check`, `make arch-lint`): ✅ TransactionRunner & dual mutation boundary enforcement (#561), lock hierarchy, file size (≤500 lines), ISP interface size (≤10 methods), dead code, Valkey keyspace, Battle Adapter boundary enforcement (#599), Direct math/rand prohibition (#531).
+- **AST Linter Suite** (`make check`, `make arch-lint`): ✅ TransactionRunner & dual mutation boundary enforcement (#561), lock hierarchy, file size (≤500 lines), ISP interface size (≤10 methods), dead code, Valkey keyspace, Battle Adapter boundary enforcement (#599), Direct math/rand prohibition (#531), Raw time.Sleep prohibition and cooperative cancellation enforcement (#533).
 - **Benchmark Framework** (`make bench`): ✅ Critical-path benchmarks + baseline regression detection.
 
 ### Core & Shared Components

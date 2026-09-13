@@ -74,3 +74,9 @@ To keep files readable, maintainable, and within effective token limits for AI p
 - **Mandatory Battle Adapter Routing**: All combat features MUST inject `battle.ParticipantBuilder` (implemented by `internal/battle.Service`) or use `battle.BuildParticipantFromData` to ensure complete, authentic character combatant construction.
 - **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/battle_adapter_lint_test.go`) during `make check`, `make arch-lint`, and CI.
 
+## 12. Concurrency and Cooperative Cancellation
+- **Context-Aware Delays and Prohibiting Raw `time.Sleep`**: Backend services and workers must always support cooperative cancellation via `context.Context`. Raw `time.Sleep` calls block goroutines unconditionally, ignoring server graceful shutdown signals, container termination deadlines, and request timeout/cancellation events.
+- **Mandatory Pattern**: Any delay, retry backoff, or polling interval in production services MUST listen to `ctx.Done()` (e.g. via `select { case <-ctx.Done(): return ctx.Err(); case <-time.After(delay): }` or `time.NewTicker` / `time.NewTimer`). Direct calls to `time.Sleep` in production code are strictly prohibited.
+- **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/sleep_lint_test.go`) during `make check` and CI.
+
+
