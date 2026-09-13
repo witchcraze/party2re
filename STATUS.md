@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #456 — [Chore] Test/Valkey: Implement offline unit tests for challenge and party repositories using valkeytest
+Last updated: Issue #451 — [Chore] Test/Player: Implement offline unit tests for ValkeySessionRepository using valkeytest
 
 ## Current phase
 
