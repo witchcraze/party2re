@@ -287,9 +287,9 @@ Each feature owns its feature-specific rules and state. A feature may consume pu
   - **Dependencies:** Character repository (wallet gold).
   - **Persistence:** `casino_accounts` and `casino_poker_sessions` tables in `internal/database/casino_repository.go` with atomic transactional balance adjustments and clustered row locking.
 - **Lottery & Raffle** (`internal/lottery`):
-  - **Responsibility:** Instant raffle drawings (standard/special orb tiers) and periodic 4-digit numbered lottery purchases, drawing settlement, and prize claims.
-  - **Dependencies:** Character repository (wallet gold).
-  - **Persistence:** `character_lottery`, `lottery_drawings`, and `lottery_tickets` tables in `internal/database/lottery_repository.go` with atomic transactional claiming.
+  - **Responsibility:** Server-wide 20-cap Takarakuji lottery (`party2/lib/takarakuzi.cgi`, NPC `@クラゲ`) with 30,000G ticket price, 1 per character limit, 10-day drawing cycles (1st, 11th, 21st at 00:00 JST), and automatic Depot delivery of 1st, 2nd, and 3rd prize rare equipment and recipe items. Also provides instant Tavern raffle coupon drawings (standard/special orb tiers; `party2/lib/lot.cgi`).
+  - **Dependencies:** Character repository, Depot repository, Core Item catalog, Item Collection recorder, Scheduling Service.
+  - **Persistence:** `character_lottery`, `takarakuji_rounds`, and `takarakuji_tickets` tables in `internal/database/lottery_repository.go` with atomic transactional purchases and depot delivery.
 - **Auction & Marketplace** (`internal/auction`):
   - **Responsibility:** Authentic live P2P trading hall (`party2/lib/auction.cgi`) overseen by NPC @ワイルド. Direct transfer of gold and equipped items to player depots (`@おくる`), real-time target player inspection (`@しらべる`), and taboo item protection.
   - **Dependencies:** Character repository, Equipment repository, Inventory repository, Depot repository, Item catalog.

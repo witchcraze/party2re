@@ -13,11 +13,12 @@ import (
 // LotteryService defines the raffle and lottery operations exposed over HTTP.
 type LotteryService interface {
 	GetRaffleTickets(ctx context.Context, characterID string) (int, error)
-	ListLotteryTickets(ctx context.Context, characterID string, roundID int) ([]lottery.LotteryTicket, error)
 	BuyRaffleTickets(ctx context.Context, characterID string, count int) (int, corecharacter.Character, error)
 	PlayRaffle(ctx context.Context, characterID string, raffleType lottery.RaffleType) (lottery.RaffleResult, int, corecharacter.Character, error)
-	PurchaseLotteryTicket(ctx context.Context, characterID string, roundID int, number string) (lottery.LotteryTicket, corecharacter.Character, error)
-	ClaimLotteryTicket(ctx context.Context, characterID, ticketID string) (lottery.LotteryTicket, corecharacter.Character, error)
+
+	GetTakarakujiStatus(ctx context.Context) (lottery.TakarakujiStatus, error)
+	BuyTakarakujiTicket(ctx context.Context, characterID string) (lottery.TakarakujiPurchaseResult, error)
+	GetCharacterTakarakujiTicket(ctx context.Context, characterID string) (*lottery.TakarakujiTicket, []lottery.TakarakujiTicket, error)
 }
 
 // WithLottery configures the lottery service for the Handler.
@@ -50,23 +51,9 @@ type playRaffleResponse struct {
 	Character        characterResponse    `json:"character"`
 }
 
-type buyLotteryTicketRequest struct {
-	RoundID int    `json:"round_id"`
-	Number  string `json:"number"`
-}
-
-type buyLotteryTicketResponse struct {
-	Ticket    lottery.LotteryTicket `json:"ticket"`
-	Character characterResponse     `json:"character"`
-}
-
-type claimLotteryTicketRequest struct {
-	TicketID string `json:"ticket_id"`
-}
-
-type claimLotteryTicketResponse struct {
-	Ticket    lottery.LotteryTicket `json:"ticket"`
-	Character characterResponse     `json:"character"`
+type getCharacterTakarakujiTicketResponse struct {
+	CurrentTicket *lottery.TakarakujiTicket  `json:"current_ticket,omitempty"`
+	History       []lottery.TakarakujiTicket `json:"history"`
 }
 
 func (h *Handler) handleGetLotteryTickets(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +151,22 @@ func (h *Handler) handlePlayRaffle(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) handleBuyLotteryTicket(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleGetTakarakujiStatus(w http.ResponseWriter, r *http.Request) {
+	if h.lottery == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("lottery service not configured"))
+		return
+	}
+
+	status, err := h.lottery.GetTakarakujiStatus(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (h *Handler) handleBuyTakarakujiTicket(w http.ResponseWriter, r *http.Request) {
 	if h.lottery == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("lottery service not configured"))
 		return
@@ -172,38 +174,25 @@ func (h *Handler) handleBuyLotteryTicket(w http.ResponseWriter, r *http.Request)
 
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req buyLotteryTicketRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		if req.RoundID <= 0 || req.Number == "" {
-			writeError(w, http.StatusBadRequest, errors.New("round_id and 4-digit number are required"))
-			return
-		}
-
-		ticket, updatedChar, err := h.lottery.PurchaseLotteryTicket(r.Context(), char.ID, req.RoundID, req.Number)
+		res, err := h.lottery.BuyTakarakujiTicket(r.Context(), char.ID)
 		if err != nil {
-			if errors.Is(err, lottery.ErrInvalidTicketNumber) || errors.Is(err, lottery.ErrInvalidAmount) {
-				writeError(w, http.StatusBadRequest, err)
-				return
-			}
 			if errors.Is(err, lottery.ErrInsufficientGold) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
+			if errors.Is(err, lottery.ErrAlreadyPurchased) || errors.Is(err, lottery.ErrSoldOut) {
+				writeError(w, http.StatusConflict, err)
+				return
+			}
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, buyLotteryTicketResponse{
-			Ticket:    ticket,
-			Character: toCharacterResponse(updatedChar),
-		})
+		writeJSON(w, http.StatusOK, res)
 	})
 }
 
-func (h *Handler) handleClaimLotteryTicket(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleGetCharacterTakarakujiTicket(w http.ResponseWriter, r *http.Request) {
 	if h.lottery == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("lottery service not configured"))
 		return
@@ -211,37 +200,15 @@ func (h *Handler) handleClaimLotteryTicket(w http.ResponseWriter, r *http.Reques
 
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req claimLotteryTicketRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		if req.TicketID == "" {
-			writeError(w, http.StatusBadRequest, errors.New("ticket_id is required"))
-			return
-		}
-
-		ticket, updatedChar, err := h.lottery.ClaimLotteryTicket(r.Context(), char.ID, req.TicketID)
+		current, history, err := h.lottery.GetCharacterTakarakujiTicket(r.Context(), char.ID)
 		if err != nil {
-			if errors.Is(err, lottery.ErrTicketNotFound) {
-				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			if errors.Is(err, lottery.ErrForbidden) {
-				writeError(w, http.StatusForbidden, err)
-				return
-			}
-			if errors.Is(err, lottery.ErrTicketAlreadyClaimed) || errors.Is(err, lottery.ErrDrawingNotSettled) {
-				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, claimLotteryTicketResponse{
-			Ticket:    ticket,
-			Character: toCharacterResponse(updatedChar),
+		writeJSON(w, http.StatusOK, getCharacterTakarakujiTicketResponse{
+			CurrentTicket: current,
+			History:       history,
 		})
 	})
 }

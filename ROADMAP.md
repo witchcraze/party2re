@@ -101,7 +101,7 @@ Restore authentic social structures and mini-games.
 - [x] **Guild (Part 1): Dynamic Guild Points, Hex Colors & Custom Roles** (#490)
 - [x] **Guild (Part 2): Membership Application/Approval, Broadcast Callouts & Inactivity Disband** (#591)
 - [x] **Event Plaza: Real-time Concurrency Headcount & 3x Markup Catalog** (#491)
-- [ ] **Takarakuji Lottery: 20-Cap Tickets & Server-wide Rollover Jackpot** (#484)
+- [x] **Takarakuji Lottery: 20-Cap Tickets & Server-wide Rollover Jackpot** (#484)
 - [ ] **Fukubiki Raffle: Stat Seeds, Divine Orbs & Guaranteed Tiers** (#485)
 - [ ] **Casino (Part 1): Multi-Player Room Lobby, Indian Poker & Prize Depot Routing** (#486)
 - [ ] **Casino (Part 2): Multi-Player High-Low & Doppelganger Games** (#590)

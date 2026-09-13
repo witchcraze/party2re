@@ -2,14 +2,17 @@ package lottery_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/lottery"
 )
 
-func TestLotteryServiceDatabaseIntegration(t *testing.T) {
+func TestTakarakujiDatabaseIntegration(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -24,71 +27,128 @@ func TestLotteryServiceDatabaseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depotRepo, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	svc, err := lottery.NewService(lotteryRepo)
+	svc, err := lottery.NewService(lotteryRepo,
+		lottery.WithCharacterRepository(charRepo),
+		lottery.WithDepotRepository(depotRepo),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	ctx := context.Background()
 
-	// 1. Create test character with 10,000 gold
-	char, err := database.CreateTestCharacter(ctx, db, "FullLotteryPlayer")
+	// 1. Create main test character with 100,000 gold
+	char1, err := database.CreateTestCharacter(ctx, db, "TakarakujiPlayer1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = ? WHERE id = ?", 10000, char.ID); err != nil {
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = ? WHERE id = ?", 100000, char1.ID); err != nil {
 		t.Fatal(err)
 	}
 
-	// 2. Buy 6 raffle tickets (costs 600 gold)
-	tickets, updatedChar, err := svc.BuyRaffleTickets(ctx, char.ID, 6)
+	// 2. Get initial status (auto-initializes round if none)
+	status, err := svc.GetTakarakujiStatus(ctx)
 	if err != nil {
-		t.Fatalf("BuyRaffleTickets failed: %v", err)
+		t.Fatalf("GetTakarakujiStatus failed: %v", err)
 	}
-	if tickets != 6 || updatedChar.Money != 9400 {
-		t.Errorf("tickets=%d, money=%d", tickets, updatedChar.Money)
+	if status.TicketPrice != 30000 || status.MaxTickets != 20 {
+		t.Fatalf("unexpected status: %+v", status)
 	}
 
-	// 3. Play raffle
-	res, remaining, raffleChar, err := svc.PlayRaffle(ctx, char.ID, lottery.RaffleStandard)
+	// 3. Buy ticket for char1
+	res1, err := svc.BuyTakarakujiTicket(ctx, char1.ID)
 	if err != nil {
-		t.Fatalf("PlayRaffle failed: %v", err)
+		t.Fatalf("BuyTakarakujiTicket failed: %v", err)
 	}
-	if remaining != 3 || res.TicketsUsed != 3 {
-		t.Errorf("remaining=%d, used=%d", remaining, res.TicketsUsed)
+	if res1.RemainingGold != 70000 {
+		t.Errorf("char1 remaining gold = %d; want 70000", res1.RemainingGold)
 	}
-	if raffleChar.Money != 9400+res.Prize.RewardGold {
-		t.Errorf("money after raffle = %d, want %d", raffleChar.Money, 9400+res.Prize.RewardGold)
+	if res1.Ticket.RoundID != status.RoundID {
+		t.Errorf("ticket round = %d; want %d", res1.Ticket.RoundID, status.RoundID)
 	}
 
-	// 4. Purchase lottery ticket for round 10 (costs 300 gold)
-	ticket, ticketChar, err := svc.PurchaseLotteryTicket(ctx, char.ID, 10, "5555")
-	if err != nil {
-		t.Fatalf("PurchaseLotteryTicket failed: %v", err)
-	}
-	if ticket.TicketNumber != "5555" || ticketChar.Money != raffleChar.Money-300 {
-		t.Errorf("ticket=%+v, money=%d", ticket, ticketChar.Money)
+	// 4. Duplicate purchase attempt by char1 -> must fail with ErrAlreadyPurchased
+	_, err = svc.BuyTakarakujiTicket(ctx, char1.ID)
+	if !errors.Is(err, lottery.ErrAlreadyPurchased) {
+		t.Fatalf("expected ErrAlreadyPurchased, got: %v", err)
 	}
 
-	// 5. Settle drawing with winning number 5555
-	drawing, err := svc.SettleDrawing(ctx, 10, "5555")
-	if err != nil {
-		t.Fatalf("SettleDrawing failed: %v", err)
-	}
-	if !drawing.IsSettled {
-		t.Error("drawing should be settled")
+	// 5. Buy remaining 19 tickets with 19 unique characters
+	for i := 2; i <= 20; i++ {
+		charName := fmt.Sprintf("TakarakujiBuyer%d_%d", i, time.Now().UnixNano())
+		c, err := database.CreateTestCharacter(ctx, db, charName)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, "UPDATE characters SET money = ? WHERE id = ?", 50000, c.ID); err != nil {
+			t.Fatal(err)
+		}
+		_, err = svc.BuyTakarakujiTicket(ctx, c.ID)
+		if err != nil {
+			t.Fatalf("failed buying ticket for buyer %d: %v", i, err)
+		}
 	}
 
-	// 6. Claim winning ticket (100,000 gold jackpot)
-	claimed, claimedChar, err := svc.ClaimLotteryTicket(ctx, char.ID, ticket.ID)
+	// 6. 21st ticket attempt with a new character -> must fail with ErrSoldOut
+	char21, err := database.CreateTestCharacter(ctx, db, "TakarakujiLateBuyer")
 	if err != nil {
-		t.Fatalf("ClaimLotteryTicket failed: %v", err)
+		t.Fatal(err)
 	}
-	if claimed.PrizeTier != lottery.PrizeTier1st || claimed.PrizeGold != 100000 {
-		t.Errorf("claimed prize tier=%s, gold=%d", claimed.PrizeTier, claimed.PrizeGold)
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = ? WHERE id = ?", 50000, char21.ID); err != nil {
+		t.Fatal(err)
 	}
-	if claimedChar.Money != ticketChar.Money+100000 {
-		t.Errorf("final money=%d, expected %d", claimedChar.Money, ticketChar.Money+100000)
+	_, err = svc.BuyTakarakujiTicket(ctx, char21.ID)
+	if !errors.Is(err, lottery.ErrSoldOut) {
+		t.Fatalf("expected ErrSoldOut, got: %v", err)
+	}
+
+	// 7. Verify status reports sold out
+	statusSold, err := svc.GetTakarakujiStatus(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if statusSold.SoldCount != 20 || statusSold.RemainingTickets != 0 || !statusSold.IsSoldOut {
+		t.Errorf("expected sold out status, got: %+v", statusSold)
+	}
+
+	// 8. Execute draw
+	drawResult, err := svc.DrawTakarakuji(ctx, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("DrawTakarakuji failed: %v", err)
+	}
+	if drawResult.RoundID != status.RoundID {
+		t.Errorf("drawResult.RoundID = %d; want %d", drawResult.RoundID, status.RoundID)
+	}
+	if drawResult.NextRound.RoundID == 0 {
+		t.Errorf("expected new round created, got: %+v", drawResult.NextRound)
+	}
+
+	// 9. Check winners and verify prize delivery to Depot
+	for _, w := range drawResult.Winners {
+		if !w.IsDummy {
+			dp, err := depotRepo.FindByCharacterID(ctx, w.CharacterID)
+			if err != nil {
+				t.Errorf("failed getting depot for winner %s: %v", w.CharacterID, err)
+			}
+			found := false
+			for _, it := range dp.Items {
+				if it.DefinitionID == w.ItemID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("winner %s depot does not contain won prize %s", w.CharacterID, w.ItemID)
+			}
+		}
 	}
 }

@@ -2,6 +2,7 @@ package database_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -28,12 +29,12 @@ func TestLotteryRepository_Integration(t *testing.T) {
 
 	ctx := context.Background()
 
-	// 1. Create character with 10,000 gold
-	char, err := database.CreateTestCharacter(ctx, db, "LotteryTester")
+	// 1. Create character with 100,000 gold
+	char, err := database.CreateTestCharacter(ctx, db, "TakarakujiRepoTester")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = ? WHERE id = ?", 10000, char.ID); err != nil {
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = ? WHERE id = ?", 100000, char.ID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -42,7 +43,7 @@ func TestLotteryRepository_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuyRaffleTickets failed: %v", err)
 	}
-	if tickets != 10 || updatedChar.Money != 9000 {
+	if tickets != 10 || updatedChar.Money != 99000 {
 		t.Errorf("tickets=%d, money=%d", tickets, updatedChar.Money)
 	}
 
@@ -51,51 +52,100 @@ func TestLotteryRepository_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UseRaffleTickets failed: %v", err)
 	}
-	if remaining != 7 || updatedChar.Money != 9500 {
+	if remaining != 7 || updatedChar.Money != 99500 {
 		t.Errorf("remaining=%d, money=%d", remaining, updatedChar.Money)
 	}
 
-	// 4. Purchase numbered lottery ticket (300 gold)
-	tkt := lottery.LotteryTicket{
-		CharacterID:  char.ID,
-		RoundID:      1,
-		TicketNumber: "7429",
+	// Clean tables for isolated round testing
+	if _, err := db.ExecContext(ctx, "DELETE FROM takarakuji_tickets"); err != nil {
+		t.Fatal(err)
 	}
-	purchased, updatedChar, err := repo.PurchaseLotteryTicket(ctx, tkt, 300)
+	if _, err := db.ExecContext(ctx, "DELETE FROM takarakuji_rounds"); err != nil {
+		t.Fatal(err)
+	}
+
+	// 4. Create Takarakuji round
+	drawDate := time.Now().Add(10 * 24 * time.Hour).UTC()
+	round, err := repo.CreateTakarakujiRound(ctx, lottery.TakarakujiRound{
+		DrawDate:     drawDate,
+		IsDrawn:      false,
+		Prize1ItemID: "item-129",
+		Prize1Amount: 1,
+		Prize2ItemID: "weapon-40",
+		Prize2Amount: 2,
+		Prize3ItemID: "item-126",
+		Prize3Amount: 3,
+		CreatedAt:    time.Now().UTC(),
+	})
 	if err != nil {
-		t.Fatalf("PurchaseLotteryTicket failed: %v", err)
+		t.Fatalf("CreateTakarakujiRound failed: %v", err)
 	}
-	if purchased.ID == "" || updatedChar.Money != 9200 {
-		t.Errorf("purchased ticket ID=%s, money=%d", purchased.ID, updatedChar.Money)
-	}
-
-	// 5. Save drawing for round 1
-	drawing := lottery.LotteryDrawing{
-		RoundID:       1,
-		WinningNumber: "7429",
-		DrawnAt:       time.Now().UTC(),
-		IsSettled:     true,
-	}
-	if err := repo.SaveDrawing(ctx, drawing); err != nil {
-		t.Fatalf("SaveDrawing failed: %v", err)
+	if round.RoundID == 0 {
+		t.Fatal("expected non-zero RoundID")
 	}
 
-	// 6. Claim ticket for 1st Prize (100,000 gold)
-	claimed, updatedChar, err := repo.ClaimLotteryTicket(ctx, char.ID, purchased.ID, lottery.PrizeTier1st, 100000)
+	// 5. Get active round
+	active, err := repo.GetActiveTakarakujiRound(ctx)
 	if err != nil {
-		t.Fatalf("ClaimLotteryTicket failed: %v", err)
+		t.Fatalf("GetActiveTakarakujiRound failed: %v", err)
 	}
-	if !claimed.Claimed || updatedChar.Money != 109200 {
-		t.Errorf("claimed=%v, final money=%d", claimed.Claimed, updatedChar.Money)
-	}
-
-	// 7. Double claim returns error
-	if _, _, err := repo.ClaimLotteryTicket(ctx, char.ID, purchased.ID, lottery.PrizeTier1st, 100000); err != lottery.ErrTicketAlreadyClaimed {
-		t.Errorf("double claim err = %v, want ErrTicketAlreadyClaimed", err)
+	if active.RoundID != round.RoundID {
+		t.Errorf("active.RoundID = %d, want %d", active.RoundID, round.RoundID)
 	}
 
-	// 8. Claim with different character ID returns ErrForbidden
-	if _, _, err := repo.ClaimLotteryTicket(ctx, "different-char-id", purchased.ID, lottery.PrizeTier1st, 100000); err != lottery.ErrForbidden {
-		t.Errorf("claim with wrong char err = %v, want ErrForbidden", err)
+	// 6. Check purchased before buying
+	hasBought, err := repo.HasCharacterPurchasedTakarakuji(ctx, round.RoundID, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasBought {
+		t.Error("expected hasBought to be false")
+	}
+
+	// 7. Purchase Takarakuji ticket (30,000 gold)
+	tkt, updatedChar, err := repo.PurchaseTakarakujiTicket(ctx, round.RoundID, char.ID, lottery.TakarakujiCostGold)
+	if err != nil {
+		t.Fatalf("PurchaseTakarakujiTicket failed: %v", err)
+	}
+	if tkt.ID == "" || updatedChar.Money != 99500-30000 {
+		t.Errorf("ticket ID = %s, money = %d", tkt.ID, updatedChar.Money)
+	}
+
+	// 8. Check purchased after buying
+	hasBought, err = repo.HasCharacterPurchasedTakarakuji(ctx, round.RoundID, char.ID)
+	if err != nil || !hasBought {
+		t.Errorf("expected hasBought to be true, got %v, err: %v", hasBought, err)
+	}
+
+	// 9. Second purchase attempt -> ErrAlreadyPurchased
+	_, _, err = repo.PurchaseTakarakujiTicket(ctx, round.RoundID, char.ID, lottery.TakarakujiCostGold)
+	if !errors.Is(err, lottery.ErrAlreadyPurchased) {
+		t.Errorf("expected ErrAlreadyPurchased, got: %v", err)
+	}
+
+	// 10. List round tickets
+	roundTickets, err := repo.ListRoundTakarakujiTickets(ctx, round.RoundID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(roundTickets) != 1 {
+		t.Errorf("len(roundTickets) = %d, want 1", len(roundTickets))
+	}
+
+	// 11. Settle round
+	winningItem := "item-129"
+	tkt.WonRank = 1
+	tkt.WonItemID = &winningItem
+	if err := repo.SettleTakarakujiRound(ctx, round.RoundID, time.Now().UTC(), []lottery.TakarakujiTicket{tkt}); err != nil {
+		t.Fatalf("SettleTakarakujiRound failed: %v", err)
+	}
+
+	// 12. Check settled ticket
+	charTkt, err := repo.GetCharacterTakarakujiTicket(ctx, round.RoundID, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if charTkt.WonRank != 1 || charTkt.WonItemID == nil || *charTkt.WonItemID != "item-129" {
+		t.Errorf("charTkt = %+v", charTkt)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/tavern"
@@ -151,10 +152,13 @@ func wireHooks(
 		soc.home.SetAlchemyCompleter(econ.alchemy)
 	}
 
-	soc.registerWorkerHandlers(misc.activity, misc.chapel)
+	soc.registerWorkerHandlers(misc.activity, misc.chapel, misc.lottery)
 
 	if soc.sched != nil && misc.chapel != nil {
 		wireChapelDailyReset(soc.sched)
+	}
+	if soc.sched != nil && misc.lottery != nil {
+		wireTakarakujiDrawing(soc.sched)
 	}
 }
 
@@ -163,6 +167,13 @@ func wireChapelDailyReset(sched *scheduling.Service) {
 	ctx := context.Background()
 	next := chapel.NextMidnightJST(time.Now())
 	_ = sched.ScheduleWithID(ctx, chapel.DailyResetActionID(next), chapel.ActionTypeChapelReset, "system", nil, next)
+}
+
+// wireTakarakujiDrawing enqueues the recurring Takarakuji drawing action if not already scheduled.
+func wireTakarakujiDrawing(sched *scheduling.Service) {
+	ctx := context.Background()
+	next := lottery.NextDrawDateJST(time.Now())
+	_ = sched.ScheduleWithID(ctx, lottery.DrawActionID(next), lottery.ActionTypeTakarakujiDraw, "system", nil, next)
 }
 
 func newHTTPHandler(

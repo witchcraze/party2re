@@ -79,14 +79,15 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Altar of Rebirth** (`internal/altar`): ✅ 6-orb offering, Ramia awakening (30min record), 4 otherworld-item wishes, Depot fallback.
 - **Wishing Well** (`internal/wishingwell`): ✅ SP → permanent stat growth (MHP/MMP +2/SP, ATK/DEF/AGI +1/SP).
 - **Player Store & Town Boutiques** (`internal/store`): ✅ Shop construction (50,000G/90d), gold/item listings, 26 wallpapers, 15 furniture types.
+- **Takarakuji & Raffle** (`internal/lottery`): ✅ Authentic 20-cap Takarakuji lottery (30,000G, 1 per player, 10-day cycles on 1st/11th/21st JST, rare equipment/recipe Depot auto-delivery; `takarakuzi.cgi`, NPC `@クラゲ`), and instant tavern raffle coupons (#484).
 - **Maintenance Mode** (`internal/maintenance`): ✅ Valkey/in-memory cache, admin API key, 503 middleware.
 
 ### API & Transport
 - **Server Entrypoint** (`cmd/party2`): ✅ Typed config injection, modular service wiring (`wire.go`), Graceful Shutdown.
-- **HTTP JSON API** (`internal/api/http`): ✅ 242 paths / 263 operations (OpenAPI 3.1); dual auth (session + PAT), IDOR defense, rate-limit, CORS, maintenance middleware.
+- **HTTP JSON API** (`internal/api/http`): ✅ 243 paths / 264 operations (OpenAPI 3.1); dual auth (session + PAT), IDOR defense, rate-limit, CORS, maintenance middleware.
 
 ### Infrastructure & Operations
-- **Database** (MariaDB): ✅ Migrations `001`–`080`; `make db-migrate` / `make db-reset`; connection pool env-configurable.
+- **Database** (MariaDB): ✅ Migrations `001`–`081`; `make db-migrate` / `make db-reset`; connection pool env-configurable.
 - **Valkey**: ✅ Delayed-action queue, distributed lock, rate-limit, ranking cache (AOF+RDB). Keyspace SSOT: `docs/architecture/valkey-keyspace.md`. Offline mock harness: `internal/testutil/valkeytest`.
 - **Logging**: ✅ `log/slog` JSON structured logging with credential masking.
 - **Verification**: ✅ `make check` (fmt, vet, AST linters, tests, smoke build); `make openapi-sync`; `make bench`.
@@ -99,7 +100,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 See [`ROADMAP.md`](ROADMAP.md) for full milestone details.
 
 1. **Parity Milestone 3 — Adventure, Combat & Dungeons**: #478, #479, #481, #482, #483
-2. **Parity Milestone 4 — Community, Events & Entertainment**: #490, #591, #491 (complete); next: #484, #485, #486
+2. **Parity Milestone 4 — Community, Events & Entertainment**: #490, #591, #491, #484 (complete); next: #485, #486
 3. **Client Presentation & Web UI**: Issue #140
 4. **Production Asset Pipeline & Final Licensing**: Issue #143, #202
 

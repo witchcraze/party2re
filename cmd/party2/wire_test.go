@@ -75,7 +75,7 @@ func TestRegisterWorkerHandlers_ChapelReset(t *testing.T) {
 		t.Fatalf("NewService failed: %v", err)
 	}
 
-	soc.registerWorkerHandlers(nil, chapelService)
+	soc.registerWorkerHandlers(nil, chapelService, nil)
 
 	// Dispatch chapel_reset action via worker
 	ctx := context.Background()

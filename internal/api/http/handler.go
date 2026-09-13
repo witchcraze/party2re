@@ -492,11 +492,12 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /characters/{id}/medals", h.handleGetCharacterMedals)
 
 	// Lottery & Raffle
+	mux.HandleFunc("GET /lottery/takarakuji", h.handleGetTakarakujiStatus)
 	mux.HandleFunc("GET /characters/{id}/lottery/tickets", h.handleGetLotteryTickets)
 	mux.HandleFunc("POST /characters/{id}/lottery/buy-raffle", h.handleBuyRaffleTickets)
 	mux.HandleFunc("POST /characters/{id}/lottery/raffle", h.handlePlayRaffle)
-	mux.HandleFunc("POST /characters/{id}/lottery/buy-ticket", h.handleBuyLotteryTicket)
-	mux.HandleFunc("POST /characters/{id}/lottery/claim", h.handleClaimLotteryTicket)
+	mux.HandleFunc("POST /characters/{id}/lottery/takarakuji/buy", h.handleBuyTakarakujiTicket)
+	mux.HandleFunc("GET /characters/{id}/lottery/takarakuji/ticket", h.handleGetCharacterTakarakujiTicket)
 
 	// Casino
 	mux.HandleFunc("GET /characters/{id}/casino", h.handleGetCasinoAccount)

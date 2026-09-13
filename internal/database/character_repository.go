@@ -175,7 +175,7 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		`DELETE FROM casino_accounts WHERE character_id = ?`,
 		`DELETE FROM casino_poker_sessions WHERE character_id = ?`,
 		`DELETE FROM character_lottery WHERE character_id = ?`,
-		`DELETE FROM lottery_tickets WHERE character_id = ?`,
+		`DELETE FROM takarakuji_tickets WHERE character_id = ?`,
 		`DELETE FROM character_blessings WHERE character_id = ?`,
 		`DELETE FROM banquet_toasts WHERE character_id = ?`,
 		`DELETE FROM blackmarket_character_points WHERE character_id = ?`,

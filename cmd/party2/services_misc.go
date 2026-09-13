@@ -172,7 +172,20 @@ func newMiscServices(
 	if err != nil {
 		return nil, err
 	}
-	lotteryService, err := lottery.NewService(lotteryRepo)
+	var lotOpts []lottery.Option
+	if core.charRepo != nil {
+		lotOpts = append(lotOpts, lottery.WithCharacterRepository(core.charRepo))
+	}
+	if econ.depotRepo != nil {
+		lotOpts = append(lotOpts, lottery.WithDepotRepository(econ.depotRepo))
+	}
+	if core.itemCatalog != nil {
+		lotOpts = append(lotOpts, lottery.WithItemDefinitionProvider(core.itemCatalog))
+	}
+	if collectionService != nil {
+		lotOpts = append(lotOpts, lottery.WithCollectionRecorder(collectionService))
+	}
+	lotteryService, err := lottery.NewService(lotteryRepo, lotOpts...)
 	if err != nil {
 		return nil, err
 	}

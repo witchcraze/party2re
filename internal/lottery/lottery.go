@@ -9,13 +9,14 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
 )
 
 const (
-	RaffleTicketCostGold  = 100
-	StandardRaffleCost    = 3
-	SpecialRaffleCost     = 300
-	LotteryTicketCostGold = 300
+	RaffleTicketCostGold = 100
+	StandardRaffleCost   = 3
+	SpecialRaffleCost    = 300
 
 	PrizeTier1st   = "1ST_PRIZE"
 	PrizeTier2nd   = "2ND_PRIZE"
@@ -26,14 +27,9 @@ const (
 )
 
 var (
-	ErrInvalidAmount        = errors.New("invalid amount or quantity")
-	ErrInsufficientGold     = errors.New("insufficient gold")
-	ErrInsufficientTickets  = errors.New("insufficient raffle tickets")
-	ErrInvalidTicketNumber  = errors.New("invalid 4-digit ticket number (0000-9999)")
-	ErrTicketAlreadyClaimed = errors.New("ticket already claimed")
-	ErrDrawingNotSettled    = errors.New("lottery drawing not yet settled")
-	ErrTicketNotFound       = errors.New("lottery ticket not found")
-	ErrForbidden            = errors.New("forbidden: character does not own this lottery ticket")
+	ErrInvalidAmount       = errors.New("invalid amount or quantity")
+	ErrInsufficientGold    = errors.New("insufficient gold")
+	ErrInsufficientTickets = errors.New("insufficient raffle tickets")
 )
 
 type RaffleType string
@@ -56,25 +52,6 @@ type RaffleResult struct {
 	TicketsUsed int         `json:"tickets_used"`
 	Roll        int         `json:"roll"`
 	Prize       RafflePrize `json:"prize"`
-}
-
-type LotteryTicket struct {
-	ID           string     `json:"id"`
-	CharacterID  string     `json:"character_id"`
-	RoundID      int        `json:"round_id"`
-	TicketNumber string     `json:"ticket_number"`
-	PurchasedAt  time.Time  `json:"purchased_at"`
-	Claimed      bool       `json:"claimed"`
-	PrizeTier    string     `json:"prize_tier"`
-	PrizeGold    int        `json:"prize_gold"`
-	ClaimedAt    *time.Time `json:"claimed_at,omitempty"`
-}
-
-type LotteryDrawing struct {
-	RoundID       int       `json:"round_id"`
-	WinningNumber string    `json:"winning_number"`
-	DrawnAt       time.Time `json:"drawn_at"`
-	IsSettled     bool      `json:"is_settled"`
 }
 
 // EvaluateRaffleRoll deterministically returns the prize for a roll.
@@ -121,59 +98,113 @@ func EvaluateRaffleRoll(raffleType RaffleType, roll int) RafflePrize {
 	}
 }
 
-// EvaluateLotteryTicket matches player ticket number with winning number and calculates prize.
-func EvaluateLotteryTicket(ticketNumber, winningNumber string) (tier string, prizeGold int) {
-	if len(ticketNumber) != 4 || len(winningNumber) != 4 {
-		return PrizeTierMiss, 0
-	}
-
-	if ticketNumber == winningNumber {
-		return PrizeTier1st, 100000
-	}
-	if ticketNumber[1:] == winningNumber[1:] {
-		return PrizeTier2nd, 10000
-	}
-	if ticketNumber[2:] == winningNumber[2:] {
-		return PrizeTier3rd, 1000
-	}
-	if ticketNumber[3:] == winningNumber[3:] {
-		return PrizeTier4th, 300
-	}
-	return PrizeTierMiss, 0
-}
-
-// GenerateRandom4Digit returns a random 4-digit numeric string ("0000" to "9999").
-func GenerateRandom4Digit() (string, error) {
-	nBig, err := rand.Int(rand.Reader, big.NewInt(10000))
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%04d", nBig.Int64()), nil
-}
-
-// Repository defines data access for character raffle tickets, lottery tickets, and drawings.
-type Repository interface {
+// RaffleRepository defines data access for character raffle tickets (Fukubiki).
+type RaffleRepository interface {
 	GetRaffleTickets(ctx context.Context, characterID string) (int, error)
 	BuyRaffleTickets(ctx context.Context, characterID string, count int, goldCost int) (int, corecharacter.Character, error)
 	UseRaffleTickets(ctx context.Context, characterID string, count int, rewardGold int) (int, corecharacter.Character, error)
-	PurchaseLotteryTicket(ctx context.Context, ticket LotteryTicket, goldCost int) (LotteryTicket, corecharacter.Character, error)
-	GetLotteryTicket(ctx context.Context, ticketID string) (LotteryTicket, error)
-	ListLotteryTickets(ctx context.Context, characterID string, roundID int) ([]LotteryTicket, error)
-	SaveDrawing(ctx context.Context, drawing LotteryDrawing) error
-	GetDrawing(ctx context.Context, roundID int) (LotteryDrawing, error)
-	ClaimLotteryTicket(ctx context.Context, characterID string, ticketID string, tier string, prizeGold int) (LotteryTicket, corecharacter.Character, error)
+}
+
+// TakarakujiRepository defines data access for periodic Takarakuji lottery rounds and tickets.
+type TakarakujiRepository interface {
+	GetActiveTakarakujiRound(ctx context.Context) (TakarakujiRound, error)
+	CreateTakarakujiRound(ctx context.Context, round TakarakujiRound) (TakarakujiRound, error)
+	CountTakarakujiTickets(ctx context.Context, roundID int) (int, error)
+	HasCharacterPurchasedTakarakuji(ctx context.Context, roundID int, characterID string) (bool, error)
+	PurchaseTakarakujiTicket(ctx context.Context, roundID int, characterID string, goldCost int) (TakarakujiTicket, corecharacter.Character, error)
+	GetCharacterTakarakujiTicket(ctx context.Context, roundID int, characterID string) (TakarakujiTicket, error)
+	ListCharacterTakarakujiTickets(ctx context.Context, characterID string) ([]TakarakujiTicket, error)
+	ListRoundTakarakujiTickets(ctx context.Context, roundID int) ([]TakarakujiTicket, error)
+	SettleTakarakujiRound(ctx context.Context, roundID int, drawnAt time.Time, winningTickets []TakarakujiTicket) error
+}
+
+// Repository is the composite persistence interface for lottery and raffle systems.
+type Repository interface {
+	RaffleRepository
+	TakarakujiRepository
+}
+
+type ItemDefinitionProvider interface {
+	FindByID(id string) (coreitem.Definition, error)
+}
+
+type DepotRepository interface {
+	FindByCharacterID(ctx context.Context, characterID string) (depot.Depot, error)
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (depot.Depot, error)
+	Save(ctx context.Context, value depot.Depot) error
+}
+
+type CharacterRepository interface {
+	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
+	FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
+	Update(ctx context.Context, value corecharacter.Character) error
+}
+
+type CollectionRecorder interface {
+	RecordItemDiscovered(ctx context.Context, characterID, itemID, itemName, category string) error
+}
+
+type Clock interface {
+	Now() time.Time
+}
+
+type realClock struct{}
+
+func (realClock) Now() time.Time {
+	return time.Now().UTC()
 }
 
 // Service provides high-level lottery and raffle operations.
 type Service struct {
-	repo Repository
+	repo               Repository
+	depotRepo          DepotRepository
+	charRepo           CharacterRepository
+	itemDefProvider    ItemDefinitionProvider
+	collectionRecorder CollectionRecorder
+	clock              Clock
 }
 
-func NewService(repo Repository) (*Service, error) {
+type Option func(*Service)
+
+func WithDepotRepository(r DepotRepository) Option {
+	return func(s *Service) { s.depotRepo = r }
+}
+
+func WithCharacterRepository(r CharacterRepository) Option {
+	return func(s *Service) { s.charRepo = r }
+}
+
+func WithItemDefinitionProvider(p ItemDefinitionProvider) Option {
+	return func(s *Service) { s.itemDefProvider = p }
+}
+
+func WithCollectionRecorder(r CollectionRecorder) Option {
+	return func(s *Service) { s.collectionRecorder = r }
+}
+
+func WithClock(c Clock) Option {
+	return func(s *Service) { s.clock = c }
+}
+
+func NewService(repo Repository, opts ...Option) (*Service, error) {
 	if repo == nil {
 		return nil, errors.New("repository is required")
 	}
-	return &Service{repo: repo}, nil
+	s := &Service{
+		repo:  repo,
+		clock: realClock{},
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s, nil
+}
+
+func (s *Service) now() time.Time {
+	if s.clock != nil {
+		return s.clock.Now()
+	}
+	return time.Now().UTC()
 }
 
 func (s *Service) GetRaffleTickets(ctx context.Context, characterID string) (int, error) {
@@ -181,13 +212,6 @@ func (s *Service) GetRaffleTickets(ctx context.Context, characterID string) (int
 		return 0, corecharacter.ErrNotFound
 	}
 	return s.repo.GetRaffleTickets(ctx, characterID)
-}
-
-func (s *Service) ListLotteryTickets(ctx context.Context, characterID string, roundID int) ([]LotteryTicket, error) {
-	if characterID == "" {
-		return nil, corecharacter.ErrNotFound
-	}
-	return s.repo.ListLotteryTickets(ctx, characterID, roundID)
 }
 
 func (s *Service) BuyRaffleTickets(ctx context.Context, characterID string, count int) (int, corecharacter.Character, error) {
@@ -233,63 +257,4 @@ func (s *Service) PlayRaffle(ctx context.Context, characterID string, raffleType
 		Prize:       prize,
 	}
 	return res, remainingTickets, char, nil
-}
-
-func (s *Service) PurchaseLotteryTicket(ctx context.Context, characterID string, roundID int, number string) (LotteryTicket, corecharacter.Character, error) {
-	if len(number) != 4 {
-		return LotteryTicket{}, corecharacter.Character{}, ErrInvalidTicketNumber
-	}
-	for _, ch := range number {
-		if ch < '0' || ch > '9' {
-			return LotteryTicket{}, corecharacter.Character{}, ErrInvalidTicketNumber
-		}
-	}
-
-	ticket := LotteryTicket{
-		CharacterID:  characterID,
-		RoundID:      roundID,
-		TicketNumber: number,
-		PurchasedAt:  time.Now().UTC(),
-	}
-	return s.repo.PurchaseLotteryTicket(ctx, ticket, LotteryTicketCostGold)
-}
-
-func (s *Service) SettleDrawing(ctx context.Context, roundID int, winningNumber string) (LotteryDrawing, error) {
-	if len(winningNumber) != 4 {
-		return LotteryDrawing{}, ErrInvalidTicketNumber
-	}
-	drawing := LotteryDrawing{
-		RoundID:       roundID,
-		WinningNumber: winningNumber,
-		DrawnAt:       time.Now().UTC(),
-		IsSettled:     true,
-	}
-	if err := s.repo.SaveDrawing(ctx, drawing); err != nil {
-		return LotteryDrawing{}, err
-	}
-	return drawing, nil
-}
-
-func (s *Service) ClaimLotteryTicket(ctx context.Context, characterID, ticketID string) (LotteryTicket, corecharacter.Character, error) {
-	ticket, err := s.repo.GetLotteryTicket(ctx, ticketID)
-	if err != nil {
-		return LotteryTicket{}, corecharacter.Character{}, err
-	}
-	if ticket.CharacterID != characterID {
-		return LotteryTicket{}, corecharacter.Character{}, ErrForbidden
-	}
-	if ticket.Claimed {
-		return ticket, corecharacter.Character{}, ErrTicketAlreadyClaimed
-	}
-
-	drawing, err := s.repo.GetDrawing(ctx, ticket.RoundID)
-	if err != nil {
-		return ticket, corecharacter.Character{}, err
-	}
-	if !drawing.IsSettled {
-		return ticket, corecharacter.Character{}, ErrDrawingNotSettled
-	}
-
-	tier, prizeGold := EvaluateLotteryTicket(ticket.TicketNumber, drawing.WinningNumber)
-	return s.repo.ClaimLotteryTicket(ctx, characterID, ticketID, tier, prizeGold)
 }
