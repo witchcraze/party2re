@@ -17,11 +17,19 @@ import (
 )
 
 type mockEventPlazaService struct {
+	recordPresenceFn           func(ctx context.Context, characterID string) error
 	getPlazaStatusFn           func(ctx context.Context) (eventplaza.PlazaStatus, error)
 	listAvailableBazaarItemsFn func(ctx context.Context) ([]eventplaza.BazaarItem, int, error)
 	purchaseBazaarItemFn       func(ctx context.Context, characterID string, itemID string, quantity int) (eventplaza.BazaarPurchaseResult, error)
 	listActiveBanquetsFn       func(ctx context.Context) ([]eventplaza.CelebrationBanquet, error)
 	toastBanquetFn             func(ctx context.Context, banquetID string, characterID string) (eventplaza.BanquetToastResult, error)
+}
+
+func (m *mockEventPlazaService) RecordPresence(ctx context.Context, characterID string) error {
+	if m.recordPresenceFn != nil {
+		return m.recordPresenceFn(ctx, characterID)
+	}
+	return nil
 }
 
 func (m *mockEventPlazaService) GetPlazaStatus(ctx context.Context) (eventplaza.PlazaStatus, error) {
@@ -175,12 +183,20 @@ func TestHandlePostEventPlazaMerchantPurchase(t *testing.T) {
 			if itemID == "locked_item" {
 				return eventplaza.BazaarPurchaseResult{}, eventplaza.ErrItemTierLocked
 			}
+			if itemID == "helper_item" {
+				return eventplaza.BazaarPurchaseResult{}, eventplaza.ErrItemUnavailable
+			}
+			if itemID == "depot_full_item" {
+				return eventplaza.BazaarPurchaseResult{}, eventplaza.ErrDepotFull
+			}
 			return eventplaza.BazaarPurchaseResult{
 				CharacterID:         characterID,
 				Quantity:            quantity,
-				TotalPrice:          1000,
+				TotalPrice:          4800,
 				RemainingGold:       5000,
 				InventoryInstanceID: "inst-123",
+				TransferredToDepot:  false,
+				NPCMessage:          "はい、身代わり人形です",
 			}, nil
 		},
 	}
@@ -193,7 +209,7 @@ func TestHandlePostEventPlazaMerchantPurchase(t *testing.T) {
 	// 1. Success with valid auth
 	body, _ := json.Marshal(map[string]any{
 		"character_id": "char-1",
-		"item_id":      "bazaar_herb_extract",
+		"item_id":      "item-072",
 		"quantity":     2,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/eventplaza/merchant/purchase", bytes.NewReader(body))
@@ -221,6 +237,68 @@ func TestHandlePostEventPlazaMerchantPurchase(t *testing.T) {
 	if recLocked.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d", recLocked.Code)
 	}
+
+	// 3. Helper quest unavailable item -> 409
+	helperBody, _ := json.Marshal(map[string]any{
+		"character_id": "char-1",
+		"item_id":      "helper_item",
+		"quantity":     1,
+	})
+	reqHelper := httptest.NewRequest(http.MethodPost, "/eventplaza/merchant/purchase", bytes.NewReader(helperBody))
+	reqHelper.Header.Set("Content-Type", "application/json")
+	reqHelper.Header.Set("Authorization", "Bearer valid-session")
+	recHelper := httptest.NewRecorder()
+	handler.Router().ServeHTTP(recHelper, reqHelper)
+
+	if recHelper.Code != http.StatusConflict {
+		t.Errorf("expected status 409, got %d", recHelper.Code)
+	}
+
+	// 4. Depot full -> 409
+	depotBody, _ := json.Marshal(map[string]any{
+		"character_id": "char-1",
+		"item_id":      "depot_full_item",
+		"quantity":     1,
+	})
+	reqDepot := httptest.NewRequest(http.MethodPost, "/eventplaza/merchant/purchase", bytes.NewReader(depotBody))
+	reqDepot.Header.Set("Content-Type", "application/json")
+	reqDepot.Header.Set("Authorization", "Bearer valid-session")
+	recDepot := httptest.NewRecorder()
+	handler.Router().ServeHTTP(recDepot, reqDepot)
+
+	if recDepot.Code != http.StatusConflict {
+		t.Errorf("expected status 409, got %d", recDepot.Code)
+	}
+}
+
+func TestHandlePostEventPlazaPresence(t *testing.T) {
+	recordedID := ""
+	mockSvc := &mockEventPlazaService{
+		recordPresenceFn: func(ctx context.Context, characterID string) error {
+			recordedID = characterID
+			return nil
+		},
+	}
+	handler, err := createTestHandler(apihttp.WithEventPlaza(mockSvc))
+	if err != nil {
+		t.Fatalf("failed to create handler: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"character_id": "char-1",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/eventplaza/presence", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer valid-session")
+	rec := httptest.NewRecorder()
+	handler.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if recordedID != "char-1" {
+		t.Errorf("expected recorded presence for char-1, got %s", recordedID)
+	}
 }
 
 func TestEventPlaza_MerchantPurchase_Unauthenticated_Returns401(t *testing.T) {
@@ -232,7 +310,7 @@ func TestEventPlaza_MerchantPurchase_Unauthenticated_Returns401(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{
 		"character_id": "char-1",
-		"item_id":      "bazaar_herb_extract",
+		"item_id":      "item-072",
 		"quantity":     1,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/eventplaza/merchant/purchase", bytes.NewReader(body))
@@ -254,7 +332,7 @@ func TestEventPlaza_MerchantPurchase_ForbiddenCharacter_Returns403(t *testing.T)
 
 	body, _ := json.Marshal(map[string]any{
 		"character_id": "char-2", // belongs to other-player
-		"item_id":      "bazaar_herb_extract",
+		"item_id":      "item-072",
 		"quantity":     1,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/eventplaza/merchant/purchase", bytes.NewReader(body))

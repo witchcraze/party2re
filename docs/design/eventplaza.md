@@ -2,49 +2,70 @@
 
 ## Overview
 
-The Event Plaza Feature Module (`internal/eventplaza`) introduces a dynamic town gathering plaza (`イベント広場`) where town population metrics influence traveling merchant offerings and community-wide victory banquets celebrate boss conquests.
+The Event Plaza Feature Module (`internal/eventplaza`) introduces a dynamic town gathering plaza (`イベント広場`) where real-time active character presence (5-minute active window matching legacy `party2/lib/event.cgi` `$limit_member_time = 60 * 5`) determines traveling merchant tiers and catalog availability. It also coordinates community-wide victory banquets celebrating King Boss conquests.
 
 ---
 
 ## Domain Rules & Systems
 
-### 1. Town Population & Merchant Tiers
+### 1. Real-Time Concurrency Tracking & Merchant Tiers
 
-The traveling merchant's bazaar inventory dynamically adapts based on the active character population in the game world:
+The traveling merchant's bazaar inventory dynamically adapts based on real-time active participant presence within the plaza:
 
-| Tier | Active Population | Merchant Title | Catalog Unlocks |
+- **Presence Window (`PresenceWindow = 5 * time.Minute`)**: Adventurers who visited or refreshed the plaza within the last 5 minutes are counted as active participants.
+- **Dual Tracking Engine**:
+  - Primary in-memory Valkey Sorted Set (`party2:eventplaza:presence` with Unix timestamp score) for sub-millisecond concurrency evaluation.
+  - MariaDB backing table `eventplaza_presences (character_id, last_seen_at)` for durable fallback and cold-start synchronization.
+- **Heartbeat (`POST /eventplaza/presence`)**: Adventurers emit presence heartbeats upon entering or interacting with the plaza. Purchases and toasts also update presence automatically.
+
+| Tier | Active Participants | Merchant Title | Catalog Unlocks (Legacy `lib/event.cgi`) |
 | :--- | :--- | :--- | :--- |
-| **Tier 0** | `< 10` characters | Traveling Merchant on the Road (行商人の旅路) | None (Merchant on the road) |
-| **Tier 1** | `10 – 19` characters | Bronze Traveling Merchant (新米行商人バザー) | Tier 1 items (Herbs, Magic Water, Warding Talismans) |
-| **Tier 2** | `20 – 29` characters | Silver Traveling Merchant (熟練の行商人バザー) | Tier 1 + Tier 2 items (Phoenix Feathers, Dragon Whetstones, Wind Attire) |
-| **Tier 3** | `>= 30` characters | Gold Traveling Merchant (伝説の豪商バザー) | All items (Tiers 1, 2, and 3: Nectar of the Gods, Genesis Crystals, Star-Cleaver Sword) |
+| **Tier 0** | `< 10` | Traveling Merchant On Journey (行商人巡回中) | None (Merchant is on the road) |
+| **Tier 1** | `10 – 19` | Bronze Traveling Merchant (旅の行商人バザー) | 6 Tier 1 items (item-72, 81, 82, 83, 84, 86) |
+| **Tier 2** | `20 – 29` | Silver Traveling Merchant (熟練の行商人バザー) | 6 Tier 2 items (item-73, 74, 77, 5, 75, 85) |
+| **Tier 3** | `>= 30` | Gold Traveling Merchant (至高の行商人バザー) | 14 Tier 3 items (item-90..100, 108, 142, 217) |
 
-The plaza status endpoint (`GET /eventplaza`) calculates the active population count, the current merchant tier, and the distance to the next tier threshold.
+*Note: Per authentic legacy `lib/event.cgi`, higher tiers strictly replace earlier tier inventories (`@sales` array re-assigned).*
 
 ---
 
 ### 2. Traveling Merchant Bazaar (`internal/eventplaza/data/bazaar.json`)
 
-The traveling merchant offers high-grade consumable items, crafting materials, and legendary gear:
+The bazaar offers 26 canonical items spanning tiers 1 to 3:
 
-- **Tier 1 Items**:
-  - `bazaar_herb_extract` (名薬草のエキス): 500 Gold
-  - `bazaar_mana_water` (活性魔力水): 800 Gold
-  - `bazaar_warding_talisman` (銀の魔除け護符): 1,200 Gold
-- **Tier 2 Items**:
-  - `bazaar_phoenix_feather` (不死鳥の羽): 3,000 Gold
-  - `bazaar_dragon_whetstone` (竜鱗の極上砥石): 5,000 Gold
-  - `bazaar_wind_robe` (風詠みの戦装束): 7,500 Gold
-- **Tier 3 Items**:
-  - `bazaar_god_ambrosia` (天界の神酒): 15,000 Gold
-  - `bazaar_genesis_crystal` (星彩の創世結晶): 25,000 Gold
-  - `bazaar_star_sword` (星砕きの宝剣): 50,000 Gold
+#### 3x Pricing Markup
+All items are sold at exactly **3× base price** (`$ites[$i][2] *= 3`), reflecting the traveling merchant's premium markup:
+- **Tier 1 Items (6 items)**:
+  - `item-72`: 力の種 (Seed of Strength) - 6,000 Gold
+  - `item-81`: 賢者の石 (Philosopher's Stone) - 30,000 Gold
+  - `item-82`: 天使の聖水 (Angel's Holy Water) - 3,000 Gold
+  - `item-83`: 蘇生薬 (Revival Elixir) - 6,000 Gold
+  - `item-84`: 魔法の小瓶 (Magic Vial) - 1,500 Gold
+  - `item-86`: 聖なるしずく (Holy Droplet) - 30,000 Gold
+- **Tier 2 Items (6 items)**:
+  - `item-73`: 素早さの種 (Seed of Agility) - 6,000 Gold
+  - `item-74`: 守りの種 (Seed of Protection) - 6,000 Gold
+  - `item-77`: クモの糸 (Spider Web) - 3,000 Gold
+  - `item-5`: 魔法の聖水 (Magic Holy Water) - 600 Gold
+  - `item-75`: 幸せの種 (Seed of Fortune) - 15,000 Gold
+  - `item-85`: 不死鳥の涙 (Phoenix Tear) - 6,000 Gold
+- **Tier 3 Items (14 items)**:
+  - `item-90`–`item-100`: Scroll collection (炎の巻物, 氷の巻物, 聖なる巻物, etc.) - 60,000 Gold each
+  - `item-108`: 光のヴェール (Veil of Light) - 150,000 Gold
+  - `item-142`: ソロモンの指輪 (Solomon's Ring) - 300,000 Gold
+  - `item-217`: 仙人の薬草 (Hermit's Medicinal Herb) - 30,000 Gold
 
-#### Purchase Mechanics
-- Purchasing is fully transactional via `database.RunInTx`.
-- Character gold and inventory are locked pessimistically (`SELECT ... FOR UPDATE`).
-- Verifies tier unlocking, sufficient gold balance, and valid quantity.
-- Deducts gold and appends new item instances (`coreitem.Instance`) to the character's inventory atomically.
+#### Helper Quest Exclusion
+Items currently requested by ongoing Town Helper Quests (`get_helper_item(3)`) are strictly omitted from listing and cannot be purchased (returns HTTP 409 Conflict).
+
+#### Hand Occupancy & Depot Routing
+Authentic delivery mechanics based on hand item slot occupancy:
+- **Direct Hand Delivery**: If the player's consumable item slot is empty and `quantity == 1`, the item is added directly to character inventory with NPC message:
+  `"はい、$nameです"`
+- **Depot Storage Delivery**: If the player already holds a consumable item in hand, or if `quantity > 1`, items are routed directly to Depot storage (`預かり所`) with authentic NPC message:
+  `"$nameは$charさんの預かり所に送っておきましたよ"`
+- If the character's Depot is at capacity, the purchase is safely rejected with HTTP 409 Conflict (`ErrDepotFull`).
+- Discovered items are recorded into the player's Item Collection (`internal/collection`).
 
 ---
 
@@ -65,7 +86,9 @@ When a player conquers a King Boss in the Boss Challenge Arena (`internal/boss`)
 
 ## Database Persistence
 
-### Schema Migration: `migrations/038_eventplaza.sql`
+### Schema Migrations:
+- `migrations/038_eventplaza.sql`: Celebration banquets and toasts tables.
+- `migrations/080_eventplaza_presences.sql`: Plaza participant concurrency tracking table.
 
 ```sql
 CREATE TABLE celebration_banquets (
@@ -93,6 +116,12 @@ CREATE TABLE banquet_toasts (
     CONSTRAINT fk_toasts_character FOREIGN KEY (character_id)
         REFERENCES characters (id) ON DELETE CASCADE
 );
+
+CREATE TABLE eventplaza_presences (
+    character_id CHAR(32) NOT NULL PRIMARY KEY,
+    last_seen_at DATETIME(6) NOT NULL,
+    INDEX idx_eventplaza_presences_last_seen (last_seen_at)
+);
 ```
 
 ---
@@ -101,8 +130,9 @@ CREATE TABLE banquet_toasts (
 
 | Method | Endpoint | Description | Auth |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/eventplaza` | Get plaza status, population tier, and active banquets count | Public |
-| `GET` | `/eventplaza/merchant/items` | List traveling merchant items unlocked at current tier | Public |
-| `POST` | `/eventplaza/merchant/purchase` | Purchase goods from traveling merchant | Character Auth |
+| `GET` | `/eventplaza` | Get plaza status, real-time active participants, merchant tier, and active banquets | Public |
+| `POST` | `/eventplaza/presence` | Record character active presence in Event Plaza | Character Auth |
+| `GET` | `/eventplaza/merchant/items` | List traveling merchant items unlocked at current tier (filtered by helper quest) | Public |
+| `POST` | `/eventplaza/merchant/purchase` | Purchase goods from traveling merchant (depot fallback, 3x price markup) | Character Auth |
 | `GET` | `/eventplaza/banquets` | List active victory celebration banquets | Public |
 | `POST` | `/eventplaza/banquets/{id}/toast` | Raise a toast at a celebration banquet | Character Auth |

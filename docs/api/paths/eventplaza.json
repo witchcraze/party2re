@@ -278,6 +278,16 @@
           },
           "description": "Character or item not found"
         },
+        "409": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Item unavailable (requested by active helper quest) or depot storage full"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -295,6 +305,108 @@
         }
       ],
       "summary": "Purchase goods from traveling merchant",
+      "tags": [
+        "EventPlaza"
+      ]
+    }
+  },
+  "/eventplaza/presence": {
+    "post": {
+      "description": "Registers or refreshes character presence in the Event Plaza for real-time concurrency tracking.",
+      "operationId": "recordEventPlazaPresence",
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "character_id": {
+                  "description": "Unique identifier of the character registering presence",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "character_id"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "status": {
+                    "example": "ok",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "Presence recorded successfully"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized - missing or invalid session token"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden - character belongs to another player"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character not found"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Register character presence in Event Plaza",
       "tags": [
         "EventPlaza"
       ]

@@ -4,17 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
-	"github.com/witchcraze/party2re/internal/id"
 )
 
 const (
+	PresenceWindow = 5 * time.Minute
+
 	Tier1Threshold = 10
 	Tier2Threshold = 20
 	Tier3Threshold = 30
@@ -25,16 +27,20 @@ const (
 )
 
 var (
-	ErrNilDependency     = errors.New("eventplaza dependency is nil")
-	ErrCharacterNotFound = errors.New("character not found")
-	ErrInsufficientGold  = errors.New("insufficient gold to complete purchase")
-	ErrItemNotFound      = errors.New("bazaar item not found in catalog")
-	ErrItemTierLocked    = errors.New("bazaar item requires higher town population merchant tier")
-	ErrInvalidQuantity   = errors.New("invalid purchase quantity")
-	ErrPriceOverflow     = errors.New("price calculation overflow")
-	ErrBanquetNotFound   = errors.New("celebration banquet not found")
-	ErrBanquetExpired    = errors.New("celebration banquet has already ended")
-	ErrAlreadyToasted    = errors.New("character has already toasted this victory celebration banquet")
+	ErrNilDependency      = errors.New("eventplaza dependency is nil")
+	ErrCharacterNotFound  = errors.New("character not found")
+	ErrInsufficientGold   = errors.New("insufficient gold to complete purchase")
+	ErrItemNotFound       = errors.New("bazaar item not found in catalog")
+	ErrItemTierLocked     = errors.New("bazaar item requires higher town population merchant tier")
+	ErrItemUnavailable    = errors.New("item is currently unavailable (active helper quest)")
+	ErrDepotFull          = errors.New("depot storage is full")
+	ErrDepotNotConfigured = errors.New("depot repository not configured")
+	ErrInvalidQuantity    = errors.New("invalid purchase quantity")
+	ErrPriceOverflow      = errors.New("price calculation overflow")
+	ErrBanquetNotFound    = errors.New("celebration banquet not found")
+	ErrBanquetExpired     = errors.New("celebration banquet has already ended")
+	ErrAlreadyToasted     = errors.New("character has already toasted this victory celebration banquet")
+	ErrMerchantNotPresent = errors.New("traveling merchant is not present in event plaza")
 )
 
 // BazaarItem represents an item offered in the Traveling Merchant Bazaar.
@@ -58,46 +64,19 @@ type PlazaStatus struct {
 	ActiveBanquets      []CelebrationBanquet `json:"active_banquets,omitempty"`
 }
 
-// CelebrationBanquet represents a victory feast in honor of slaying a legendary boss.
-type CelebrationBanquet struct {
-	ID                  string    `json:"id"`
-	BossID              string    `json:"boss_id"`
-	BossName            string    `json:"boss_name"`
-	SlayerCharacterID   string    `json:"slayer_character_id"`
-	SlayerCharacterName string    `json:"slayer_character_name"`
-	Tier                int       `json:"tier"`
-	ToastCount          int       `json:"toast_count"`
-	CelebratedAt        time.Time `json:"celebrated_at"`
-	ExpiresAt           time.Time `json:"expires_at"`
-}
-
-// BanquetToastResult represents the outcome of raising a commemorative toast at a banquet.
-type BanquetToastResult struct {
-	BanquetID            string `json:"banquet_id"`
-	CharacterID          string `json:"character_id"`
-	GoldAwarded          int    `json:"gold_awarded"`
-	CurrentCharacterGold int    `json:"current_character_gold"`
-	ToastCount           int    `json:"toast_count"`
-	Message              string `json:"message"`
-}
-
-// BazaarPurchaseResult represents the result of buying goods from the traveling merchant.
-type BazaarPurchaseResult struct {
-	CharacterID         string     `json:"character_id"`
-	Item                BazaarItem `json:"item"`
-	Quantity            int        `json:"quantity"`
-	TotalPrice          int        `json:"total_price"`
-	RemainingGold       int        `json:"remaining_gold"`
-	InventoryInstanceID string     `json:"inventory_instance_id"`
-}
-
 type Repository interface {
-	CountActiveParticipants(ctx context.Context) (int, error)
+	RecordPresence(ctx context.Context, characterID string, at time.Time) error
+	CountActiveParticipants(ctx context.Context, cutoff time.Time) (int, error)
 	SaveBanquet(ctx context.Context, banquet CelebrationBanquet) error
 	FindBanquetByID(ctx context.Context, id string) (CelebrationBanquet, error)
 	ListActiveBanquets(ctx context.Context, now time.Time) ([]CelebrationBanquet, error)
 	RecordToast(ctx context.Context, banquetID string, characterID string, toastedAt time.Time) error
 	HasToasted(ctx context.Context, banquetID string, characterID string) (bool, error)
+}
+
+type PresenceTracker interface {
+	RecordPresence(ctx context.Context, characterID string, at time.Time) error
+	CountActiveParticipants(ctx context.Context, cutoff time.Time) (int, error)
 }
 
 type CharacterRepository interface {
@@ -110,6 +89,24 @@ type InventoryRepository interface {
 	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
 	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error)
 	Save(ctx context.Context, value coreinventory.Inventory) error
+}
+
+type DepotRepository interface {
+	FindByCharacterID(ctx context.Context, characterID string) (depot.Depot, error)
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (depot.Depot, error)
+	Save(ctx context.Context, value depot.Depot) error
+}
+
+type HelperProvider interface {
+	GetActiveHelperItemIDs(ctx context.Context, now time.Time) ([]string, error)
+}
+
+type CollectionRecorder interface {
+	RecordItemDiscovered(ctx context.Context, characterID, itemID, itemName, category string) error
+}
+
+type ItemDefinitionProvider interface {
+	FindByID(id string) (coreitem.Definition, error)
 }
 
 type TransactionProvider interface {
@@ -127,13 +124,18 @@ func (realClock) Now() time.Time {
 }
 
 type Service struct {
-	repo          Repository
-	characterRepo CharacterRepository
-	inventoryRepo InventoryRepository
-	txProvider    TransactionProvider
-	clock         Clock
-	bazaarCatalog []BazaarItem
-	economy       *economy.Service
+	repo            Repository
+	presenceTracker PresenceTracker
+	characterRepo   CharacterRepository
+	inventoryRepo   InventoryRepository
+	depotRepo       DepotRepository
+	helper          HelperProvider
+	recorder        CollectionRecorder
+	itemDefProvider ItemDefinitionProvider
+	txProvider      TransactionProvider
+	clock           Clock
+	bazaarCatalog   []BazaarItem
+	economy         *economy.Service
 }
 
 type Option func(*Service)
@@ -154,6 +156,44 @@ func WithBazaarCatalog(catalog []BazaarItem) Option {
 	return func(s *Service) {
 		s.bazaarCatalog = catalog
 	}
+}
+
+func WithPresenceTracker(tracker PresenceTracker) Option {
+	return func(s *Service) {
+		s.presenceTracker = tracker
+	}
+}
+
+func WithHelperProvider(helper HelperProvider) Option {
+	return func(s *Service) {
+		s.helper = helper
+	}
+}
+
+func WithDepotRepository(depotRepo DepotRepository) Option {
+	return func(s *Service) {
+		s.depotRepo = depotRepo
+	}
+}
+
+func WithCollectionRecorder(recorder CollectionRecorder) Option {
+	return func(s *Service) {
+		s.recorder = recorder
+	}
+}
+
+func WithItemDefinitionProvider(provider ItemDefinitionProvider) Option {
+	return func(s *Service) {
+		s.itemDefProvider = provider
+	}
+}
+
+func (s *Service) SetHelperProvider(helper HelperProvider) {
+	s.helper = helper
+}
+
+func (s *Service) SetCollectionRecorder(recorder CollectionRecorder) {
+	s.recorder = recorder
 }
 
 func NewService(
@@ -196,7 +236,21 @@ func NewService(
 	return svc, nil
 }
 
-// CalculateMerchantTier calculates the active traveling merchant tier based on population.
+func (s *Service) countParticipants(ctx context.Context, cutoff time.Time) (int, error) {
+	if s.presenceTracker != nil {
+		return s.presenceTracker.CountActiveParticipants(ctx, cutoff)
+	}
+	return s.repo.CountActiveParticipants(ctx, cutoff)
+}
+
+func (s *Service) recordPresence(ctx context.Context, characterID string, at time.Time) error {
+	if s.presenceTracker != nil {
+		return s.presenceTracker.RecordPresence(ctx, characterID, at)
+	}
+	return s.repo.RecordPresence(ctx, characterID, at)
+}
+
+// CalculateMerchantTier calculates the active traveling merchant tier based on real-time plaza concurrency.
 func CalculateMerchantTier(participants int) (tier int, tierName string, nextThreshold int) {
 	if participants >= Tier3Threshold {
 		return 3, "Gold Traveling Merchant (至高の行商人バザー)", 0
@@ -210,8 +264,16 @@ func CalculateMerchantTier(participants int) (tier int, tierName string, nextThr
 	return 0, "Traveling Merchant On Journey (行商人巡回中)", Tier1Threshold
 }
 
+func (s *Service) RecordPresence(ctx context.Context, characterID string) error {
+	if strings.TrimSpace(characterID) == "" {
+		return ErrCharacterNotFound
+	}
+	return s.recordPresence(ctx, strings.TrimSpace(characterID), s.clock.Now())
+}
+
 func (s *Service) GetPlazaStatus(ctx context.Context) (PlazaStatus, error) {
-	participants, err := s.repo.CountActiveParticipants(ctx)
+	cutoff := s.clock.Now().Add(-PresenceWindow)
+	participants, err := s.countParticipants(ctx, cutoff)
 	if err != nil {
 		return PlazaStatus{}, fmt.Errorf("failed to count active participants: %w", err)
 	}
@@ -235,7 +297,8 @@ func (s *Service) GetPlazaStatus(ctx context.Context) (PlazaStatus, error) {
 }
 
 func (s *Service) ListAvailableBazaarItems(ctx context.Context) ([]BazaarItem, int, error) {
-	participants, err := s.repo.CountActiveParticipants(ctx)
+	cutoff := s.clock.Now().Add(-PresenceWindow)
+	participants, err := s.countParticipants(ctx, cutoff)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count active participants: %w", err)
 	}
@@ -245,183 +308,29 @@ func (s *Service) ListAvailableBazaarItems(ctx context.Context) ([]BazaarItem, i
 		return []BazaarItem{}, 0, nil
 	}
 
+	var activeHelperIDs []string
+	if s.helper != nil {
+		ids, err := s.helper.GetActiveHelperItemIDs(ctx, s.clock.Now())
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to get active helper item ids: %w", err)
+		}
+		activeHelperIDs = ids
+	}
+
+	isHelperItem := make(map[string]bool, len(activeHelperIDs))
+	for _, id := range activeHelperIDs {
+		isHelperItem[id] = true
+	}
+
 	var available []BazaarItem
 	for _, item := range s.bazaarCatalog {
-		if item.TierRequired <= tier {
+		if item.TierRequired == tier {
+			if isHelperItem[item.ItemDefinitionID] {
+				continue
+			}
 			available = append(available, item)
 		}
 	}
 
 	return available, tier, nil
-}
-
-func (s *Service) PurchaseBazaarItem(
-	ctx context.Context,
-	characterID string,
-	itemID string,
-	quantity int,
-) (BazaarPurchaseResult, error) {
-	if strings.TrimSpace(characterID) == "" {
-		return BazaarPurchaseResult{}, ErrCharacterNotFound
-	}
-	if quantity <= 0 || quantity > MaxPurchaseQuantity {
-		return BazaarPurchaseResult{}, ErrInvalidQuantity
-	}
-
-	var targetItem *BazaarItem
-	for i := range s.bazaarCatalog {
-		if s.bazaarCatalog[i].ID == itemID {
-			targetItem = &s.bazaarCatalog[i]
-			break
-		}
-	}
-	if targetItem == nil {
-		return BazaarPurchaseResult{}, ErrItemNotFound
-	}
-
-	participants, err := s.repo.CountActiveParticipants(ctx)
-	if err != nil {
-		return BazaarPurchaseResult{}, fmt.Errorf("failed to count active participants: %w", err)
-	}
-
-	currentTier, _, _ := CalculateMerchantTier(participants)
-	if targetItem.TierRequired > currentTier {
-		return BazaarPurchaseResult{}, ErrItemTierLocked
-	}
-
-	if targetItem.Price > math.MaxInt/quantity {
-		return BazaarPurchaseResult{}, ErrPriceOverflow
-	}
-	totalCost := targetItem.Price * quantity
-
-	res, err := s.economy.Exchange(ctx, economy.ExchangeRequest{
-		CharacterID:       characterID,
-		DeductGold:        totalCost,
-		GrantDefinitionID: targetItem.ItemDefinitionID,
-		GrantQuantity:     quantity,
-	})
-	if err != nil {
-		if errors.Is(err, economy.ErrInsufficientGold) {
-			return BazaarPurchaseResult{}, ErrInsufficientGold
-		}
-		if errors.Is(err, economy.ErrCharacterNotFound) {
-			return BazaarPurchaseResult{}, ErrCharacterNotFound
-		}
-		return BazaarPurchaseResult{}, err
-	}
-
-	return BazaarPurchaseResult{
-		CharacterID:         characterID,
-		Item:                *targetItem,
-		Quantity:            quantity,
-		TotalPrice:          totalCost,
-		RemainingGold:       res.Character.Money,
-		InventoryInstanceID: res.GrantedItem.ID,
-	}, nil
-}
-
-func (s *Service) RecordVictoryBanquet(
-	ctx context.Context,
-	bossID, bossName, slayerID, slayerName string,
-	tier int,
-) (CelebrationBanquet, error) {
-	if strings.TrimSpace(bossID) == "" || strings.TrimSpace(bossName) == "" ||
-		strings.TrimSpace(slayerID) == "" || strings.TrimSpace(slayerName) == "" {
-		return CelebrationBanquet{}, errors.New("invalid victory banquet parameters")
-	}
-
-	now := s.clock.Now()
-	banquet := CelebrationBanquet{
-		ID:                  id.New(),
-		BossID:              strings.TrimSpace(bossID),
-		BossName:            strings.TrimSpace(bossName),
-		SlayerCharacterID:   strings.TrimSpace(slayerID),
-		SlayerCharacterName: strings.TrimSpace(slayerName),
-		Tier:                tier,
-		ToastCount:          0,
-		CelebratedAt:        now,
-		ExpiresAt:           now.Add(DefaultBanquetDuration),
-	}
-
-	if err := s.repo.SaveBanquet(ctx, banquet); err != nil {
-		return CelebrationBanquet{}, fmt.Errorf("failed to save celebration banquet: %w", err)
-	}
-
-	return banquet, nil
-}
-
-func (s *Service) ListActiveBanquets(ctx context.Context) ([]CelebrationBanquet, error) {
-	now := s.clock.Now()
-	return s.repo.ListActiveBanquets(ctx, now)
-}
-
-func (s *Service) ToastBanquet(ctx context.Context, banquetID string, characterID string) (BanquetToastResult, error) {
-	if strings.TrimSpace(banquetID) == "" {
-		return BanquetToastResult{}, ErrBanquetNotFound
-	}
-	if strings.TrimSpace(characterID) == "" {
-		return BanquetToastResult{}, ErrCharacterNotFound
-	}
-
-	banquet, err := s.repo.FindBanquetByID(ctx, banquetID)
-	if err != nil {
-		return BanquetToastResult{}, ErrBanquetNotFound
-	}
-
-	now := s.clock.Now()
-	if now.After(banquet.ExpiresAt) {
-		return BanquetToastResult{}, ErrBanquetExpired
-	}
-
-	hasToasted, err := s.repo.HasToasted(ctx, banquetID, characterID)
-	if err != nil {
-		return BanquetToastResult{}, fmt.Errorf("failed to check toast status: %w", err)
-	}
-	if hasToasted {
-		return BanquetToastResult{}, ErrAlreadyToasted
-	}
-
-	var result BanquetToastResult
-	runInTx := func(txCtx context.Context) error {
-		char, err := s.characterRepo.FindByIDForUpdate(txCtx, characterID)
-		if err != nil {
-			return ErrCharacterNotFound
-		}
-
-		if err := s.repo.RecordToast(txCtx, banquetID, characterID, now); err != nil {
-			return ErrAlreadyToasted
-		}
-
-		rewardGold := DefaultToastGoldReward * banquet.Tier
-		if rewardGold <= 0 {
-			rewardGold = DefaultToastGoldReward
-		}
-		_ = char.AddMoney(rewardGold)
-
-		if err := s.characterRepo.Update(txCtx, char); err != nil {
-			return fmt.Errorf("failed to update character money on toast: %w", err)
-		}
-
-		result = BanquetToastResult{
-			BanquetID:            banquetID,
-			CharacterID:          characterID,
-			GoldAwarded:          rewardGold,
-			CurrentCharacterGold: char.Money,
-			ToastCount:           banquet.ToastCount + 1,
-			Message:              fmt.Sprintf("英雄 %s の討伐偉業を称えて乾杯しました！祝宴の引き出物として %d G を受け取りました。", banquet.SlayerCharacterName, rewardGold),
-		}
-		return nil
-	}
-
-	if s.txProvider != nil {
-		if err := s.txProvider.RunInTx(ctx, runInTx); err != nil {
-			return BanquetToastResult{}, err
-		}
-	} else {
-		if err := runInTx(ctx); err != nil {
-			return BanquetToastResult{}, err
-		}
-	}
-
-	return result, nil
 }

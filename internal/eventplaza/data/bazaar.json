@@ -1,83 +1,236 @@
 [
   {
-    "id": "bazaar_herb_extract",
-    "name": "名薬草のエキス",
+    "id": "item-072",
+    "name": "身代わり人形",
     "category": "consumable",
-    "price": 500,
+    "price": 2400,
     "tier_required": 1,
-    "description": "旅の行商人が仕入れた高濃度薬草エキス。HPを大幅に回復する秘伝の薬。",
-    "item_definition_id": "item-003"
+    "description": "致命傷を受けた際に身代わりとなって砕け散る人形。",
+    "item_definition_id": "item-072"
   },
   {
-    "id": "bazaar_mana_elixir",
-    "name": "活性魔力水",
+    "id": "item-081",
+    "name": "魔法の粉",
     "category": "consumable",
-    "price": 1200,
+    "price": 3600,
     "tier_required": 1,
-    "description": "澄んだ魔力を蓄えた希少な霊水。MPを回復し集中力を研ぎ澄ます。",
-    "item_definition_id": "item-004"
+    "description": "魔力を活性化させ呪文の威力を高める神秘の粉末。",
+    "item_definition_id": "item-081"
   },
   {
-    "id": "bazaar_silver_amulet",
-    "name": "銀の魔除け護符",
-    "category": "accessory",
-    "price": 3500,
+    "id": "item-082",
+    "name": "悪魔の粉",
+    "category": "consumable",
+    "price": 4800,
     "tier_required": 1,
-    "description": "神聖な銀細工に加護を宿した護符。冒険者の身を守る。",
-    "item_definition_id": "item-020"
+    "description": "暗黒の力を秘めた危険な粉末。",
+    "item_definition_id": "item-082"
   },
   {
-    "id": "bazaar_phoenix_down",
-    "name": "不死鳥の羽",
+    "id": "item-083",
+    "name": "帰還の翼",
     "category": "consumable",
-    "price": 5000,
+    "price": 5100,
+    "tier_required": 1,
+    "description": "ダンジョンや戦場から瞬時に町へ退却できる不思議な翼。",
+    "item_definition_id": "item-083"
+  },
+  {
+    "id": "item-084",
+    "name": "魔石のカケラ",
+    "category": "consumable",
+    "price": 2100,
+    "tier_required": 1,
+    "description": "結晶化した魔力の破片。",
+    "item_definition_id": "item-084"
+  },
+  {
+    "id": "item-086",
+    "name": "不思議なタンバリン",
+    "category": "consumable",
+    "price": 3000,
+    "tier_required": 1,
+    "description": "打ち鳴らすことで味方全体の闘志を高める楽器。",
+    "item_definition_id": "item-086"
+  },
+  {
+    "id": "item-073",
+    "name": "身代わり石像",
+    "category": "consumable",
+    "price": 3000,
     "tier_required": 2,
-    "description": "伝説の幻鳥から抜け落ちたとされる霊羽。神秘的な生命力に満ちている。",
-    "item_definition_id": "item-006"
+    "description": "身代わり人形よりも堅固な防護をもたらす魔導の石像。",
+    "item_definition_id": "item-073"
   },
   {
-    "id": "bazaar_dragon_whetstone",
-    "name": "竜鱗の極上砥石",
-    "category": "material",
-    "price": 8000,
+    "id": "item-074",
+    "name": "身代わり騎士",
+    "category": "consumable",
+    "price": 3600,
     "tier_required": 2,
-    "description": "古竜の硬質な鱗を削り出した砥石。鍛冶職人が羨望する極上の研磨材。",
-    "item_definition_id": "item-050"
+    "description": "持ち主を守る幻影の騎士を召喚する護符。",
+    "item_definition_id": "item-074"
   },
   {
-    "id": "bazaar_wind_cloak",
-    "name": "風詠みの戦装束",
-    "category": "armor",
+    "id": "item-077",
+    "name": "魔物のエサ",
+    "category": "consumable",
     "price": 15000,
     "tier_required": 2,
-    "description": "風の精霊の加護を受けた軽装鎧。素早い身のこなしを可能にする。",
-    "item_definition_id": "item-035"
+    "description": "魔物を引き寄せ手懐けやすくする調合餌。",
+    "item_definition_id": "item-077"
   },
   {
-    "id": "bazaar_celestial_nectar",
-    "name": "天界の神酒",
+    "id": "item-005",
+    "name": "霊樹のしずく",
     "category": "consumable",
-    "price": 20000,
-    "tier_required": 3,
-    "description": "神々に捧げられる至高の霊酒。生命力と精神力を極限まで高める。",
+    "price": 15000,
+    "tier_required": 2,
+    "description": "パーティ全員の傷を完全に癒やす霊木の大雫。",
     "item_definition_id": "item-005"
   },
   {
-    "id": "bazaar_astral_gem",
-    "name": "星彩の創世結晶",
-    "category": "material",
-    "price": 50000,
+    "id": "item-075",
+    "name": "妖精の笛",
+    "category": "consumable",
+    "price": 4500,
+    "tier_required": 2,
+    "description": "妖精の旋律を奏でる美しい笛。",
+    "item_definition_id": "item-075"
+  },
+  {
+    "id": "item-085",
+    "name": "悪魔のしっぽ",
+    "category": "consumable",
+    "price": 10800,
+    "tier_required": 2,
+    "description": "不吉な魔力を放つ悪魔の尾。",
+    "item_definition_id": "item-085"
+  },
+  {
+    "id": "item-090",
+    "name": "水滴のピアス",
+    "category": "accessory",
+    "price": 600,
     "tier_required": 3,
-    "description": "星々の輝きを閉じ込めた奇跡の結晶。伝説の装備を生み出す至宝。",
+    "description": "清らかな水滴を模した装飾品。",
+    "item_definition_id": "item-090"
+  },
+  {
+    "id": "item-091",
+    "name": "飛竜のヒゲ",
+    "category": "consumable",
+    "price": 600,
+    "tier_required": 3,
+    "description": "天空を駆ける飛竜の硬質な髭。",
+    "item_definition_id": "item-091"
+  },
+  {
+    "id": "item-092",
+    "name": "禁断の書",
+    "category": "consumable",
+    "price": 540,
+    "tier_required": 3,
+    "description": "禁忌の知識が記された古文書。",
+    "item_definition_id": "item-092"
+  },
+  {
+    "id": "item-093",
+    "name": "コウモリの羽",
+    "category": "consumable",
+    "price": 450,
+    "tier_required": 3,
+    "description": "夜行性魔物のしなやかな皮膜。",
+    "item_definition_id": "item-093"
+  },
+  {
+    "id": "item-094",
+    "name": "マジックマッシュルーム",
+    "category": "consumable",
+    "price": 600,
+    "tier_required": 3,
+    "description": "微弱な魔力を帯びた発光キノコ。",
+    "item_definition_id": "item-094"
+  },
+  {
+    "id": "item-095",
+    "name": "透明マント",
+    "category": "consumable",
+    "price": 600,
+    "tier_required": 3,
+    "description": "光を屈折させ姿を隠す不思議な布地。",
+    "item_definition_id": "item-095"
+  },
+  {
+    "id": "item-096",
+    "name": "獣の血",
+    "category": "consumable",
+    "price": 540,
+    "tier_required": 3,
+    "description": "野生魔獣から採取された濃厚な血。",
+    "item_definition_id": "item-096"
+  },
+  {
+    "id": "item-097",
+    "name": "死者の骨",
+    "category": "consumable",
+    "price": 540,
+    "tier_required": 3,
+    "description": "怨念を帯びた白骨の欠片。",
+    "item_definition_id": "item-097"
+  },
+  {
+    "id": "item-098",
+    "name": "謎の液体",
+    "category": "consumable",
+    "price": 450,
+    "tier_required": 3,
+    "description": "正体不明の怪しい薬液。",
+    "item_definition_id": "item-098"
+  },
+  {
+    "id": "item-099",
+    "name": "ヒーローソード",
+    "category": "consumable",
+    "price": 600,
+    "tier_required": 3,
+    "description": "かつて勇者が振るったとされる刀剣。",
     "item_definition_id": "item-099"
   },
   {
-    "id": "bazaar_starlight_blade",
-    "name": "星砕きの宝剣",
-    "category": "weapon",
-    "price": 100000,
+    "id": "item-100",
+    "name": "ヒーローソード2",
+    "category": "consumable",
+    "price": 600,
     "tier_required": 3,
-    "description": "流星の鉄塊を鍛え上げた究極の一刀。圧倒的な斬撃力を誇る名剣。",
-    "item_definition_id": "item-088"
+    "description": "更なる研鑽が重ねられた二振り目の勇者の剣。",
+    "item_definition_id": "item-100"
+  },
+  {
+    "id": "item-108",
+    "name": "走鳥の羽",
+    "category": "consumable",
+    "price": 60000,
+    "tier_required": 3,
+    "description": "黄色い巨鳥の尾から抜け落ちた鮮やかな羽。",
+    "item_definition_id": "item-108"
+  },
+  {
+    "id": "item-142",
+    "name": "蝶の翅",
+    "category": "consumable",
+    "price": 450,
+    "tier_required": 3,
+    "description": "鱗粉が光り輝く幻想的な蝶の翅。",
+    "item_definition_id": "item-142"
+  },
+  {
+    "id": "item-217",
+    "name": "蛇の抜殻",
+    "category": "consumable",
+    "price": 1500,
+    "tier_required": 3,
+    "description": "大蛇が脱皮した跡に残された金運の縁起物。",
+    "item_definition_id": "item-217"
   }
 ]

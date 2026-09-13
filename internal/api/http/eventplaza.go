@@ -12,6 +12,7 @@ import (
 
 // EventPlazaService defines town event plaza and traveling merchant operations over HTTP.
 type EventPlazaService interface {
+	RecordPresence(ctx context.Context, characterID string) error
 	GetPlazaStatus(ctx context.Context) (eventplaza.PlazaStatus, error)
 	ListAvailableBazaarItems(ctx context.Context) ([]eventplaza.BazaarItem, int, error)
 	PurchaseBazaarItem(ctx context.Context, characterID string, itemID string, quantity int) (eventplaza.BazaarPurchaseResult, error)
@@ -24,6 +25,10 @@ func WithEventPlaza(service EventPlazaService) Option {
 	return func(h *Handler) {
 		h.eventplaza = service
 	}
+}
+
+type recordPresenceRequest struct {
+	CharacterID string `json:"character_id"`
 }
 
 type getBazaarItemsResponse struct {
@@ -60,6 +65,28 @@ func (h *Handler) handleGetEventPlaza(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, status)
+}
+
+func (h *Handler) handlePostEventPlazaPresence(w http.ResponseWriter, r *http.Request) {
+	if h.eventplaza == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("event plaza service not configured"))
+		return
+	}
+
+	withAuthenticatedCharacterAndJSON(h, w, r, func(req *recordPresenceRequest) string {
+		return req.CharacterID
+	}, func(_ coreplayer.Player, char corecharacter.Character, _ recordPresenceRequest) {
+		if err := h.eventplaza.RecordPresence(r.Context(), char.ID); err != nil {
+			if errors.Is(err, eventplaza.ErrCharacterNotFound) {
+				writeError(w, http.StatusNotFound, err)
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
 }
 
 func (h *Handler) handleGetEventPlazaMerchantItems(w http.ResponseWriter, r *http.Request) {
@@ -114,6 +141,14 @@ func (h *Handler) handlePostEventPlazaMerchantPurchase(w http.ResponseWriter, r 
 				writeError(w, http.StatusBadRequest, err)
 			case errors.Is(err, eventplaza.ErrItemTierLocked):
 				writeError(w, http.StatusBadRequest, err)
+			case errors.Is(err, eventplaza.ErrMerchantNotPresent):
+				writeError(w, http.StatusBadRequest, err)
+			case errors.Is(err, eventplaza.ErrItemUnavailable):
+				writeError(w, http.StatusConflict, err)
+			case errors.Is(err, eventplaza.ErrDepotFull):
+				writeError(w, http.StatusConflict, err)
+			case errors.Is(err, eventplaza.ErrDepotNotConfigured):
+				writeError(w, http.StatusInternalServerError, err)
 			case errors.Is(err, eventplaza.ErrInvalidQuantity):
 				writeError(w, http.StatusBadRequest, err)
 			case errors.Is(err, eventplaza.ErrPriceOverflow):

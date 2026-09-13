@@ -66,7 +66,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **News & Notifications** (`internal/notification`): ✅ Server-wide announcements + per-player inbox with read/unread management.
 - **Home, Towns & Resting** (`internal/home`, `internal/town`): ✅ House construction/expiry cycles, pet phrases (30 max), mailbox (independent delete), sleep recovery; overnight carpenter parity (#459, #461).
 - **Rankings** (`internal/ranking`): ✅ 12 categories; Valkey snapshot cache, singleflight stampede guard, periodic Worker.
-- **Event Plaza** (`internal/eventplaza`): ✅ Headcount-tiered merchant, 3× price catalog, boss-banquet toasts; real-time concurrency parity pending (#491).
+- **Event Plaza** (`internal/eventplaza`): ✅ Real-time plaza concurrency presence tracking (5-minute active window via Valkey Sorted Set + MariaDB), 26-item authentic merchant catalog at 3× markup across Tiers 1–3, active helper quest item exclusion, hand occupancy depot fallback delivery, and King Boss victory celebration banquets (#491).
 - **Secret Shop** (`internal/secretshop`): ✅ `job_lv >= 7` gate, 8 items at 3× price, Depot auto-delivery, puff-puff (dialogue only) (#462).
 - **Tavern & Food Delivery** (`internal/tavern`): ✅ 14-item menu, HP/MP restore, fullness, raffle ticket bonus, delivery reservation with automated post-adventure arrival hook (`adventure.PostAdventureHook`); fictional courier quests and parcel courier purged (#475).
 - **Black Market** (`internal/blackmarket`): ✅ Rare-point barter, Depot sacrifice/prize; fictional gold trading purged (#463).
@@ -83,10 +83,10 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### API & Transport
 - **Server Entrypoint** (`cmd/party2`): ✅ Typed config injection, modular service wiring (`wire.go`), Graceful Shutdown.
-- **HTTP JSON API** (`internal/api/http`): ✅ 222 paths / 243 operations (OpenAPI 3.1); dual auth (session + PAT), IDOR defense, rate-limit, CORS, maintenance middleware.
+- **HTTP JSON API** (`internal/api/http`): ✅ 242 paths / 263 operations (OpenAPI 3.1); dual auth (session + PAT), IDOR defense, rate-limit, CORS, maintenance middleware.
 
 ### Infrastructure & Operations
-- **Database** (MariaDB): ✅ Migrations `001`–`072`; `make db-migrate` / `make db-reset`; connection pool env-configurable.
+- **Database** (MariaDB): ✅ Migrations `001`–`080`; `make db-migrate` / `make db-reset`; connection pool env-configurable.
 - **Valkey**: ✅ Delayed-action queue, distributed lock, rate-limit, ranking cache (AOF+RDB). Keyspace SSOT: `docs/architecture/valkey-keyspace.md`. Offline mock harness: `internal/testutil/valkeytest`.
 - **Logging**: ✅ `log/slog` JSON structured logging with credential masking.
 - **Verification**: ✅ `make check` (fmt, vet, AST linters, tests, smoke build); `make openapi-sync`; `make bench`.
@@ -99,7 +99,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 See [`ROADMAP.md`](ROADMAP.md) for full milestone details.
 
 1. **Parity Milestone 3 — Adventure, Combat & Dungeons**: #478, #479, #481, #482, #483
-2. **Parity Milestone 4 — Community, Events & Entertainment**: #490, #491, #484, #485, #486
+2. **Parity Milestone 4 — Community, Events & Entertainment**: #490, #591, #491 (complete); next: #484, #485, #486
 3. **Client Presentation & Web UI**: Issue #140
 4. **Production Asset Pipeline & Final Licensing**: Issue #143, #202
 

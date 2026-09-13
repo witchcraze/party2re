@@ -76,11 +76,24 @@ func newMiscServices(
 	if err != nil {
 		return nil, err
 	}
+	var plazaOpts []eventplaza.Option
+	if core.txProvider != nil {
+		plazaOpts = append(plazaOpts, eventplaza.WithTransactionProvider(core.txProvider))
+	}
+	if econ.depotRepo != nil {
+		plazaOpts = append(plazaOpts, eventplaza.WithDepotRepository(econ.depotRepo))
+	}
+	if core.itemCatalog != nil {
+		plazaOpts = append(plazaOpts, eventplaza.WithItemDefinitionProvider(core.itemCatalog))
+	}
+	if valkeyClient != nil {
+		plazaOpts = append(plazaOpts, eventplaza.WithPresenceTracker(eventplaza.NewValkeyPresenceTracker(valkeyClient)))
+	}
 	eventplazaService, err := eventplaza.NewService(
 		eventplazaRepo,
 		core.charRepo,
 		core.invRepo,
-		eventplaza.WithTransactionProvider(core.txProvider),
+		plazaOpts...,
 	)
 	if err != nil {
 		return nil, err

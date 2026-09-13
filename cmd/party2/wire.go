@@ -124,9 +124,15 @@ func wireHooks(
 	if misc.collection != nil {
 		econ.depot.SetCollectionRecorder(misc.collection)
 		econ.shop.SetCollectionRecorder(misc.collection)
+		if misc.eventplaza != nil {
+			misc.eventplaza.SetCollectionRecorder(misc.collection)
+		}
 	}
 	if misc.helper != nil {
 		econ.shop.SetHelperProvider(misc.helper)
+		if misc.eventplaza != nil {
+			misc.eventplaza.SetHelperProvider(misc.helper)
+		}
 	}
 	if misc.tavern != nil {
 		soc.home.SetFullnessResetter(misc.tavern)

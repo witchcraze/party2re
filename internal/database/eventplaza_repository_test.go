@@ -39,8 +39,16 @@ func TestEventPlazaRepository_Database(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 1. CountActiveParticipants
-	count, err := repo.CountActiveParticipants(ctx)
+	// 1. RecordPresence and CountActiveParticipants
+	now := time.Now().UTC().Truncate(time.Second)
+	if err := repo.RecordPresence(ctx, slayer.ID, now); err != nil {
+		t.Fatalf("RecordPresence failed: %v", err)
+	}
+	if err := repo.RecordPresence(ctx, toaster.ID, now); err != nil {
+		t.Fatalf("RecordPresence failed: %v", err)
+	}
+
+	count, err := repo.CountActiveParticipants(ctx, now.Add(-5*time.Minute))
 	if err != nil {
 		t.Fatalf("CountActiveParticipants failed: %v", err)
 	}
@@ -48,8 +56,17 @@ func TestEventPlazaRepository_Database(t *testing.T) {
 		t.Errorf("expected at least 2 active characters, got %d", count)
 	}
 
+	// Cutoff in the future should return 0
+	countFuture, err := repo.CountActiveParticipants(ctx, now.Add(5*time.Minute))
+	if err != nil {
+		t.Fatalf("CountActiveParticipants future cutoff failed: %v", err)
+	}
+	if countFuture != 0 {
+		t.Errorf("expected 0 active characters for future cutoff, got %d", countFuture)
+	}
+
 	// 2. SaveBanquet
-	now := time.Now().UTC().Truncate(time.Second)
+	now = time.Now().UTC().Truncate(time.Second)
 	banquet := eventplaza.CelebrationBanquet{
 		ID:                  id.New(),
 		BossID:              "boss-ancient-dragon",
