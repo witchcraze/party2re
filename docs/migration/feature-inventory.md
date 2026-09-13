@@ -281,6 +281,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#453](https://github.com/witchcraze/party2re/issues/453) | Casino: Eliminate dual execution fallback paths and legacy repository exchange methods | Completed |
 | [#531](https://github.com/witchcraze/party2re/issues/531) | Core/Random: Centralized Thread-Safe RNG Provider and Direct math/rand Prohibition | Completed |
 | [#533](https://github.com/witchcraze/party2re/issues/533) | Concurrency: Automated Linter Prohibiting Raw time.Sleep in Production Services | Completed |
+| [#532](https://github.com/witchcraze/party2re/issues/532) | HTTP: Automated Linter Prohibiting context.Background and context.TODO in Handlers | Completed |
 
 
 ---

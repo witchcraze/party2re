@@ -23,6 +23,8 @@ Features (Adventure, Guild, Casino, Alchemy, etc.) should own their feature-spec
 - **No Domain Logic in HTTP Handlers:** Do not put game logic, math, or complex validations directly in HTTP handlers or GUI components.
 - **Service Layer Abstraction:** Major game operations should pass through the UI-independent application API / Service layer boundary so they can be tested and alternative clients can be added later.
 - **Authorization Depth:** While the HTTP layer parses JSON and extracts session tokens, **authorization logic** (ensuring `PlayerID` owns the character) should be enforced deeply at the Service/Domain boundary to prevent bypasses when called from other contexts.
+- **No Detached Root Contexts in Handlers:** HTTP handlers and middleware functions MUST NOT instantiate detached root contexts (`context.Background()` or `context.TODO()`). Discarding `r.Context()` drops client disconnect signals, timeouts, session identities, and ambient transaction scopes. Handlers MUST always propagate `r.Context()` or the incoming `ctx`.
+  - **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/api/http/context_lint_test.go`) during `make check` and CI.
 
 ## 6. Architecture Review Triggers
 Do not silently make substantial architectural decisions. Create an Issue if the work would change: Core responsibilities, component boundaries, dependency direction, public contracts, persistence architecture, or external API architecture.
