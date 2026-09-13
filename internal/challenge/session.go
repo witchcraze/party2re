@@ -131,8 +131,8 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 	}
 
 	if won {
-		// Update member HPs and 20% recovery
-		leaderSurvivingHP := 1
+		// Update member HPs (legacy parity with vs_challenge.cgi: direct HP carryover, zero inter-round recovery)
+		leaderSurvivingHP := 0
 		for i := range session.Members {
 			m := &session.Members[i]
 			if m.CharacterCurrentHP > 0 {
@@ -141,16 +141,15 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 					remHP = hp
 				}
 				if remHP > 0 {
-					recovery := int(float64(m.MaxHP) * 0.20)
-					m.CharacterCurrentHP = remHP + recovery
-					if m.CharacterCurrentHP > m.MaxHP {
-						m.CharacterCurrentHP = m.MaxHP
+					if remHP > m.MaxHP {
+						remHP = m.MaxHP
 					}
+					m.CharacterCurrentHP = remHP
 				} else {
 					m.CharacterCurrentHP = 0
 				}
 			}
-			if m.CharacterID == char.ID && m.CharacterCurrentHP > 0 {
+			if m.CharacterID == char.ID {
 				leaderSurvivingHP = m.CharacterCurrentHP
 			}
 		}
@@ -160,8 +159,6 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 			if hp, ok := remainingHPs[char.ID]; ok && hp > 0 {
 				survivingHP = hp
 			}
-			recovery := int(float64(maxHP) * 0.20)
-			survivingHP += recovery
 			if survivingHP > maxHP {
 				survivingHP = maxHP
 			}
@@ -253,7 +250,7 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 			MonsterName:        mName,
 			BattleResult:       battleRes,
 			Won:                true,
-			RecoveredHP:        int(float64(maxHP) * 0.20),
+			RecoveredHP:        0,
 			CharacterCurrentHP: leaderSurvivingHP,
 			RoundExp:           mExp,
 			RoundGold:          mGold,
