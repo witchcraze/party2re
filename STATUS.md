@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #453 — [Refactor] Casino: Eliminate dual execution fallback paths and legacy repository exchange methods
+Last updated: Issue #458 — [Feature] Blacksmith: Reproduce original Weapon Seal (刻印), Naming (名付け), and Blacksmith Storage (専用預かり所)
 
 ## Current phase
 
@@ -42,7 +42,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Medal & Achievements** (`internal/medal`): ✅ Small Medal exchange → Depot; milestone achievement observer.
 - **Shop** (`internal/shop`): ✅ 3 shops with job-level gates, 50% sellback, MasterCard discount, Depot auto-delivery.
 - **Depot** (`internal/depot`): ✅ Dynamic capacity (up to 500 slots), tiered expansion, sort, item sell, gold/item direct-send, standardized item consumption (`Consume`, `ConsumeOne`, `PurgeSlot`), enhancement-level & equipment stackability preservation (#558, #563), standardized `RefreshCapacity` helper across commerce modules (#559).
-- **Blacksmith** (`internal/blacksmith`): ✅ +1→+10 enhancement via `economy.TransactionRunner`.
+- **Blacksmith** (`internal/blacksmith`): ✅ Authentic 12 weapon seals (`party2/lib/blacksmith.cgi`, `_data.cgi:2209-2230`) consuming crystals (`character.crystal`, 999,999 cap), equipment naming for weapons and armors (<= 20 runes, strict sanitization), and dedicated 3-slot weapon storage (`blacksmith_deposits`) preserving seals and custom names with duplicate name prevention and equipped-weapon withdrawal gating; fictional +1..+10 numerical enhancement system purged (#458).
 - **Alchemy** (`internal/alchemy`): ✅ 112 recipes; zero fee, depot-linked overnight synthesis, home sleep completion, depot-direct delivery, recipe compendium & `comp_alc` title (#487).
 - **Bank** (`internal/bank`): ✅ Character gold deposit/withdrawal; 999,999G wallet clamp; fictional `bank_accounts` table purged (#476).
 - **Inn** (`internal/inn`): ✅ Fictional paid-inn purged; resting moved to `internal/home` (#459).

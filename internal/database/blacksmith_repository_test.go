@@ -4,9 +4,10 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
-	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/blacksmith"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 func TestBlacksmithRepositoryNilDB(t *testing.T) {
@@ -15,7 +16,7 @@ func TestBlacksmithRepositoryNilDB(t *testing.T) {
 	}
 }
 
-func TestBlacksmithRepositoryCommitEnhancement(t *testing.T) {
+func TestBlacksmithRepositoryStorage_Integration(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -27,56 +28,94 @@ func TestBlacksmithRepositoryCommitEnhancement(t *testing.T) {
 	defer db.Close()
 
 	ctx := context.Background()
-	charRepo, err := NewCharacterRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	invRepo, err := NewInventoryRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
 	bsRepo, err := NewBlacksmithRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	char, err := CreateTestCharacter(ctx, db, "Blacksmith DB Test")
+	char, err := CreateTestCharacter(ctx, db, "Blacksmith Storage Test")
 	if err != nil {
-		t.Fatal(err)
-	}
-	char.Money = 500
-	if err := charRepo.Update(ctx, char); err != nil {
 		t.Fatal(err)
 	}
 
-	inv, err := coreinventory.New(char.ID)
+	// 1. Initial list should be empty
+	initialList, err := bsRepo.ListByCharacterID(ctx, char.ID)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ListByCharacterID: %v", err)
 	}
-	sword, err := item.NewInstanceWithEnhancement("weapon-01", 1, 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = inv.Add(sword)
-
-	char.Money = 400
-	if err := bsRepo.CommitEnhancement(ctx, char, inv); err != nil {
-		t.Fatalf("CommitEnhancement() error = %v", err)
+	if len(initialList) != 0 {
+		t.Fatalf("expected 0 deposits initially, got %d", len(initialList))
 	}
 
-	restoredChar, err := charRepo.FindByID(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
+	// 2. Save a deposit in slot 1
+	dep1 := blacksmith.Deposit{
+		ID:               id.New(),
+		CharacterID:      char.ID,
+		Slot:             1,
+		ItemDefinitionID: "weapon-01",
+		SealID:           2,
+		CustomName:       "Excalibur",
+		CreatedAt:        time.Now().UTC().Truncate(time.Second),
 	}
-	if restoredChar.Money != 400 {
-		t.Errorf("restored character money = %d, want 400", restoredChar.Money)
+	if err := bsRepo.Save(ctx, dep1); err != nil {
+		t.Fatalf("Save slot 1: %v", err)
 	}
 
-	restoredInv, err := invRepo.FindByCharacterID(ctx, char.ID)
-	if err != nil {
-		t.Fatal(err)
+	// 3. Save a deposit in slot 2
+	dep2 := blacksmith.Deposit{
+		ID:               id.New(),
+		CharacterID:      char.ID,
+		Slot:             2,
+		ItemDefinitionID: "weapon-50",
+		SealID:           8,
+		CustomName:       "Frostblade",
+		CreatedAt:        time.Now().UTC().Truncate(time.Second),
 	}
-	if len(restoredInv.Items) != 1 || restoredInv.Items[0].EnhancementLevel != 2 {
-		t.Errorf("restored item enhancement level = %#v, want level 2", restoredInv)
+	if err := bsRepo.Save(ctx, dep2); err != nil {
+		t.Fatalf("Save slot 2: %v", err)
+	}
+
+	// 4. Verify list returns both deposits ordered by slot
+	deposits, err := bsRepo.ListByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("ListByCharacterID: %v", err)
+	}
+	if len(deposits) != 2 {
+		t.Fatalf("expected 2 deposits, got %d", len(deposits))
+	}
+	if deposits[0].Slot != 1 || deposits[0].ItemDefinitionID != "weapon-01" || deposits[0].SealID != 2 || deposits[0].CustomName != "Excalibur" {
+		t.Errorf("unexpected deposit 1: %+v", deposits[0])
+	}
+	if deposits[1].Slot != 2 || deposits[1].ItemDefinitionID != "weapon-50" || deposits[1].SealID != 8 || deposits[1].CustomName != "Frostblade" {
+		t.Errorf("unexpected deposit 2: %+v", deposits[1])
+	}
+
+	// 5. Verify ListByCharacterIDForUpdate within transaction
+	err = RunInTx(ctx, db, func(txCtx context.Context) error {
+		txDeposits, err := bsRepo.ListByCharacterIDForUpdate(txCtx, char.ID)
+		if err != nil {
+			return err
+		}
+		if len(txDeposits) != 2 {
+			t.Fatalf("expected 2 deposits in tx, got %d", len(txDeposits))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("RunInTx: %v", err)
+	}
+
+	// 6. Delete slot 1
+	if err := bsRepo.Delete(ctx, char.ID, 1); err != nil {
+		t.Fatalf("Delete slot 1: %v", err)
+	}
+
+	// 7. Verify only slot 2 remains
+	remaining, err := bsRepo.ListByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("ListByCharacterID after delete: %v", err)
+	}
+	if len(remaining) != 1 || remaining[0].Slot != 2 {
+		t.Fatalf("expected only slot 2 to remain, got %+v", remaining)
 	}
 }

@@ -29,6 +29,7 @@ type econServices struct {
 	store          *store.Service
 	depotRepo      *database.DepotRepository
 	equipRepo      *database.EquipmentRepository
+	blacksmithRepo *database.BlacksmithRepository
 	plantationRepo *database.PlantationRepository
 	gemBoxRepo     *database.GemBoxRepository
 	fleamarketRepo *database.FleaMarketRepository
@@ -42,6 +43,11 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 	}
 
 	gemBoxRepo, err := database.NewGemBoxRepository(db)
+	if err != nil {
+		return nil, err
+	}
+
+	equipRepo, err := database.NewEquipmentRepository(db)
 	if err != nil {
 		return nil, err
 	}
@@ -68,11 +74,18 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		return nil, err
 	}
 
+	blacksmithRepo, err := database.NewBlacksmithRepository(db)
+	if err != nil {
+		return nil, err
+	}
+
 	blacksmithService, err := blacksmith.NewService(
 		core.charRepo,
 		core.invRepo,
 		core.itemCatalog,
-		blacksmith.WithEconomy(core.economy),
+		blacksmith.WithEquipmentRepository(equipRepo),
+		blacksmith.WithStorageRepository(blacksmithRepo),
+		blacksmith.WithTransactionProvider(core.txProvider),
 	)
 	if err != nil {
 		return nil, err
@@ -123,10 +136,6 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		return nil, err
 	}
 
-	equipRepo, err := database.NewEquipmentRepository(db)
-	if err != nil {
-		return nil, err
-	}
 	auctionService, err := auction.NewService(
 		core.txProvider,
 		core.charRepo,
@@ -196,6 +205,7 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		store:          storeService,
 		depotRepo:      depotRepo,
 		equipRepo:      equipRepo,
+		blacksmithRepo: blacksmithRepo,
 		plantationRepo: plantationRepo,
 		gemBoxRepo:     gemBoxRepo,
 		fleamarketRepo: fleamarketRepo,

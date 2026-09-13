@@ -443,6 +443,191 @@
       ]
     }
   },
+  "/characters/{id}/blacksmith/name": {
+    "post": {
+      "operationId": "postCharactersIdBlacksmithName",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/blacksmith/name endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
+  "/characters/{id}/blacksmith/seal": {
+    "post": {
+      "operationId": "postCharactersIdBlacksmithSeal",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/blacksmith/seal endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
+  "/characters/{id}/blacksmith/storage": {
+    "get": {
+      "operationId": "getCharactersIdBlacksmithStorage",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "GET /characters/{id}/blacksmith/storage endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
+  "/characters/{id}/blacksmith/storage/deposit": {
+    "post": {
+      "operationId": "postCharactersIdBlacksmithStorageDeposit",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/blacksmith/storage/deposit endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
+  "/characters/{id}/blacksmith/storage/withdraw": {
+    "post": {
+      "operationId": "postCharactersIdBlacksmithStorageWithdraw",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /characters/{id}/blacksmith/storage/withdraw endpoint",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
   "/characters/{id}/change-job": {
     "post": {
       "operationId": "changeCharacterJob",

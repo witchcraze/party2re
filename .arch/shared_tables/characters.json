@@ -46,10 +46,10 @@
     },
     {
       "module": "blacksmith",
-      "caller_method": "internal/blacksmith/blacksmith.go#Service.Enhance",
+      "caller_method": "internal/blacksmith/blacksmith.go#Service.ApplySeal",
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
       "lock_order": 2,
-      "purpose": "Lock character wallet and verify enhancement fee"
+      "purpose": "Lock character to deduct crystal fee and apply weapon seal"
     },
     {
       "module": "auction",

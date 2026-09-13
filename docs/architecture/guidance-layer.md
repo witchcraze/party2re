@@ -89,7 +89,7 @@ Based on the selection criteria above, all packages in `internal/` are triaged i
 | **Auction** | `internal/auction` | `Send`, `Inspect` | `characters(2, sorted) -> inventory_items(3) -> character_depot_items(5)` | [auction.json](file:///home/witchcraze/dev/party2re/.arch/modules/auction.json) |
 | **Guild** | `internal/guild` | `CreateGuild`, `Donate` | `characters(2) -> guilds(7) -> guild_members(7)` | [guild.json](file:///home/witchcraze/dev/party2re/.arch/modules/guild.json) |
 | **Shop** | `internal/shop` | `Purchase`, `Sell` | `characters(2) -> inventory_items(3)` | [shop.json](file:///home/witchcraze/dev/party2re/.arch/modules/shop.json) |
-| **Blacksmith** | `internal/blacksmith` | `Enhance` | `characters(2) -> inventory_items(3)` | [blacksmith.json](file:///home/witchcraze/dev/party2re/.arch/modules/blacksmith.json) |
+| **Blacksmith** | `internal/blacksmith` | `ApplySeal`, `DepositWeapon`, `WithdrawWeapon` | `characters(2) -> equipment_slots/inventory_items(3) -> blacksmith_deposits(8)` | [blacksmith.json](file:///home/witchcraze/dev/party2re/.arch/modules/blacksmith.json) |
 | **Adventure** | `internal/adventure` | `StartStage`, `Complete` (Worker) | `characters(2) -> adventures(8) -> inventory_items(3)` | [adventure.json](file:///home/witchcraze/dev/party2re/.arch/modules/adventure.json) |
 | **Store** | `internal/store` | `BuildStore`, `BuyItem`, `TradeItem` | `store_sales(0) -> characters(2) -> character_depots(5)` | [store.json](file:///home/witchcraze/dev/party2re/.arch/modules/store.json) |
 

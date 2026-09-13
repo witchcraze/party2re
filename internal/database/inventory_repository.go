@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
@@ -23,16 +25,32 @@ func NewInventoryRepository(db *sql.DB) (*InventoryRepository, error) {
 func (r *InventoryRepository) Save(ctx context.Context, value coreinventory.Inventory) error {
 	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
-		if _, err := executor.ExecContext(txCtx, "DELETE FROM inventory_items WHERE character_id = ?", value.CharacterID); err != nil {
+		if len(value.Items) == 0 {
+			_, err := executor.ExecContext(txCtx, "DELETE FROM inventory_items WHERE character_id = ?", value.CharacterID)
 			return err
 		}
-		for _, instance := range value.Items {
+
+		currentIDs := make([]any, 0, len(value.Items)+1)
+		currentIDs = append(currentIDs, value.CharacterID)
+		placeholders := make([]string, len(value.Items))
+		for idx, instance := range value.Items {
+			currentIDs = append(currentIDs, instance.ID)
+			placeholders[idx] = "?"
 			if _, err := executor.ExecContext(txCtx, `
 				INSERT INTO inventory_items (id, character_id, definition_id, quantity, enhancement_level)
 				VALUES (?, ?, ?, ?, ?)
+				ON DUPLICATE KEY UPDATE
+					definition_id = VALUES(definition_id),
+					quantity = VALUES(quantity),
+					enhancement_level = VALUES(enhancement_level)
 			`, instance.ID, value.CharacterID, instance.DefinitionID, instance.Quantity, instance.EnhancementLevel); err != nil {
 				return err
 			}
+		}
+
+		query := fmt.Sprintf("DELETE FROM inventory_items WHERE character_id = ? AND id NOT IN (%s)", strings.Join(placeholders, ","))
+		if _, err := executor.ExecContext(txCtx, query, currentIDs...); err != nil {
+			return err
 		}
 		return nil
 	})

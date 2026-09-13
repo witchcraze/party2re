@@ -77,7 +77,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Gold currency wallet & transactions ([#24](https://github.com/witchcraze/party2re/issues/24))
 - [x] Item Shop purchase & 50% resale transactions ([#55](https://github.com/witchcraze/party2re/issues/55))
 - [x] Bank accounts, gold deposits, withdrawals, and player-to-player transfers ([#71](https://github.com/witchcraze/party2re/issues/71))
-- [x] Blacksmith equipment enhancement (+1 to +10) with material/gold costs ([#59](https://github.com/witchcraze/party2re/issues/59))
+- [x] Blacksmith weapon seals (12 authentic seals consuming crystals), equipment naming for weapons and armors, and dedicated 3-slot weapon storage preserving seals/names; fictional +1..+10 enhancement system purged ([#458](https://github.com/witchcraze/party2re/issues/458))
 - [x] Gem store, synthesis recipes, and weighted orb appraisals ([#72](https://github.com/witchcraze/party2re/issues/72), [#317](https://github.com/witchcraze/party2re/issues/317))
 - [x] Black Market underground trade ([#142](https://github.com/witchcraze/party2re/issues/142))
 - [x] Small Medal collection and rare reward exchange ([#160](https://github.com/witchcraze/party2re/issues/160))

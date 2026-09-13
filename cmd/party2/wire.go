@@ -230,6 +230,7 @@ func newHTTPHandler(
 		http.WithParty(cmbt.party),
 		http.WithAltar(misc.altar),
 		http.WithWishingWell(misc.wishingwell),
+		http.WithBlacksmith(econ.blacksmith),
 		http.WithMaintenance(misc.maint),
 	}
 

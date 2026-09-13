@@ -36,20 +36,21 @@ func (r *CharacterRepository) Save(ctx context.Context, value corecharacter.Char
 	}
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO characters
-			(id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, job_level, old_job_id, old_sp, job_memory_job_id, job_memory_sp, job_memory_old_job_id, job_memory_old_sp, small_medals, help_count, hero_count, pvp_wins, orb, tired, over_level, over_depot, over_monster, over_future, over_flea, over_store, color, deposit)
+			(id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, job_level, old_job_id, old_sp, job_memory_job_id, job_memory_sp, job_memory_old_job_id, job_memory_old_sp, small_medals, help_count, hero_count, pvp_wins, orb, tired, over_level, over_depot, over_monster, over_future, over_flea, over_store, color, deposit, crystal, wea_seal, wea_name, arm_name)
 		VALUES (
 			?, ?, ?, ?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, ?,
-			?, ?, ?, ?, ?
+			?, ?, ?, ?, ?, ?, ?, ?,
+			?
 		)
 	`, value.ID, value.PlayerID, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP,
 		value.Stats.HP, value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility,
 		value.Money, value.Level, value.Experience, value.SP, value.JobLevel, value.OldJobID, value.OldSP,
 		memoryJobID, memorySP, memoryOldJobID, memoryOldSP, value.SmallMedals, value.HelpCount, value.HeroCount, value.PvPWins,
 		value.Orb, value.Tired, value.OverLevel, value.OverDepot, value.OverMonster, value.OverFuture, value.OverFlea, value.OverStore, color,
-		value.Deposit)
+		value.Deposit, value.Crystal, value.WeaponSeal, value.WeaponCustomName, value.ArmorCustomName)
 	return err
 }
 
@@ -210,6 +211,7 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		`DELETE FROM adventures WHERE character_id = ?`,
 		`DELETE FROM character_custom_skills WHERE character_id = ?`,
 		`DELETE FROM equipment_slots WHERE character_id = ?`,
+		`DELETE FROM blacksmith_deposits WHERE character_id = ?`,
 		`DELETE FROM inventory_items WHERE character_id = ?`,
 		`DELETE FROM gem_box_items WHERE character_id = ?`,
 		`DELETE FROM character_gem_boxes WHERE character_id = ?`,

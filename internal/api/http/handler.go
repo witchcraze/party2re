@@ -145,6 +145,7 @@ type Handler struct {
 	altar          AltarService
 	wishingWell    WishingWellService
 	bank           BankService
+	blacksmith     BlacksmithService
 	maintenance    MaintenanceService
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
@@ -632,6 +633,14 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /parties/{id}/ready", h.handleSetPartyReady)
 	mux.HandleFunc("POST /parties/{id}/start", h.handleStartPartyAdventure)
 	mux.HandleFunc("POST /parties/{id}/sealing-battle", h.handleStartSealingBattle)
+
+	// Blacksmith
+	mux.HandleFunc("GET /blacksmith/seals", h.handleGetBlacksmithSeals)
+	mux.HandleFunc("POST /characters/{id}/blacksmith/seal", h.handleApplyBlacksmithSeal)
+	mux.HandleFunc("POST /characters/{id}/blacksmith/name", h.handleNameEquipment)
+	mux.HandleFunc("GET /characters/{id}/blacksmith/storage", h.handleGetBlacksmithStorage)
+	mux.HandleFunc("POST /characters/{id}/blacksmith/storage/deposit", h.handleDepositBlacksmithWeapon)
+	mux.HandleFunc("POST /characters/{id}/blacksmith/storage/withdraw", h.handleWithdrawBlacksmithWeapon)
 
 	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(h.maintenanceMiddleware(mux))))
 }

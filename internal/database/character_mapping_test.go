@@ -48,8 +48,8 @@ func TestScanCharacterRow_CustomError(t *testing.T) {
 func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 	scanner := &mockScanner{
 		scanFn: func(dest ...any) error {
-			if len(dest) != 37 {
-				t.Fatalf("expected 37 scan destinations, got %d", len(dest))
+			if len(dest) != 41 {
+				t.Fatalf("expected 41 scan destinations, got %d", len(dest))
 			}
 			*dest[0].(*string) = "char-1"
 			*dest[1].(*string) = "player-1"
@@ -88,6 +88,10 @@ func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 			*dest[34].(*int) = 5
 			*dest[35].(*string) = "#123456"
 			*dest[36].(*int64) = 123456789
+			*dest[37].(*int) = 450
+			*dest[38].(*int) = 7
+			*dest[39].(*string) = "Legendary Sword"
+			*dest[40].(*string) = "Dragon Armor"
 			return nil
 		},
 	}
@@ -124,6 +128,10 @@ func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 	}
 	if char.Color != "#123456" {
 		t.Errorf("unexpected color: got %q, want %q", char.Color, "#123456")
+	}
+	if char.Crystal != 450 || char.WeaponSeal != 7 || char.WeaponCustomName != "Legendary Sword" || char.ArmorCustomName != "Dragon Armor" {
+		t.Errorf("unexpected blacksmith fields: Crystal %d, Seal %d, WeaName %q, ArmName %q",
+			char.Crystal, char.WeaponSeal, char.WeaponCustomName, char.ArmorCustomName)
 	}
 }
 

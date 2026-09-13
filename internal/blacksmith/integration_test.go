@@ -3,25 +3,14 @@ package blacksmith_test
 import (
 	"context"
 	"os"
-	"sync"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/blacksmith"
-	"github.com/witchcraze/party2re/internal/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 )
 
-type fixedRandSource struct {
-	value float64
-}
-
-func (f fixedRandSource) Float64() float64 {
-	return f.value
-}
-
-func TestBlacksmithIntegrationEnhancement(t *testing.T) {
+func TestBlacksmithIntegration(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -41,21 +30,22 @@ func TestBlacksmithIntegrationEnhancement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	equipRepo, err := database.NewEquipmentRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 	bsRepo, err := database.NewBlacksmithRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
+	txProvider := database.NewTransactionProvider(db)
 
-	charService, err := character.NewService(charRepo)
+	char, err := database.CreateTestCharacter(ctx, db, "Blacksmith Live Integrator")
 	if err != nil {
 		t.Fatal(err)
 	}
-	player, err := database.CreateTestPlayer(ctx, db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	createdChar, err := charService.Create(ctx, player.ID, "Blacksmith Integrator")
-	if err != nil {
+	char.Crystal = 2000
+	if err := charRepo.Update(ctx, char); err != nil {
 		t.Fatal(err)
 	}
 
@@ -64,110 +54,133 @@ func TestBlacksmithIntegrationEnhancement(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Give character an upgradeable weapon and upgrade materials
-	inv, _ := invRepo.FindByCharacterID(ctx, createdChar.ID)
-	club, _ := item.NewInstance("weapon-01", 1)
-	materials, _ := item.NewInstance(blacksmith.DefaultMaterialDefinitionID, 10)
-	_ = inv.Add(club)
-	_ = inv.Add(materials)
-	_ = invRepo.Save(ctx, inv)
-
-	// Guarantee success with fixed random roll 0.0
-	bsService, err := blacksmith.NewServiceWithTransaction(charRepo, invRepo, bsRepo, catalog, fixedRandSource{value: 0.0})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Enhance weapon from +0 to +1
-	res, err := bsService.Enhance(ctx, createdChar.ID, club.ID)
-	if err != nil {
-		t.Fatalf("Enhance() error = %v", err)
-	}
-
-	if !res.Success || res.PreviousLevel != 0 || res.NewLevel != 1 {
-		t.Fatalf("unexpected enhance result: %#v", res)
-	}
-
-	// Verify database state
-	restoredChar, err := charRepo.FindByID(ctx, createdChar.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	expectedMoney := 200 - res.GoldCost
-	if restoredChar.Money != expectedMoney {
-		t.Errorf("restored character money = %d, want %d", restoredChar.Money, expectedMoney)
-	}
-
-	restoredInv, err := invRepo.FindByCharacterID(ctx, createdChar.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	enhancedWeapon, found := restoredInv.Find(club.ID)
-	if !found || enhancedWeapon.EnhancementLevel != 1 {
-		t.Fatalf("enhanced weapon level = %d, want 1", enhancedWeapon.EnhancementLevel)
-	}
-	if restoredInv.Quantity(blacksmith.DefaultMaterialDefinitionID) != 9 {
-		t.Errorf("remaining materials = %d, want 9", restoredInv.Quantity(blacksmith.DefaultMaterialDefinitionID))
-	}
-}
-
-func TestConcurrentEnhancementPreventsOverdraft(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	ctx := context.Background()
-	charRepo, _ := database.NewCharacterRepository(db)
-	invRepo, _ := database.NewInventoryRepository(db)
-
-	char, _ := database.CreateTestCharacter(ctx, db, "Concurrent Enhancer")
-	char.Money = 70 // only enough for 1 enhancement (50G)
-	_ = charRepo.Update(ctx, char)
-
-	catalog, _ := item.InitialCatalog()
-
-	inv, _ := coreinventory.New(char.ID)
-	sword1, _ := item.NewInstance("weapon-01", 1)
-	sword2, _ := item.NewInstance("weapon-02", 1)
-	materials, _ := item.NewInstance(blacksmith.DefaultMaterialDefinitionID, 5)
-	_ = inv.Add(sword1)
-	_ = inv.Add(sword2)
-	_ = inv.Add(materials)
-	_ = invRepo.Save(ctx, inv)
-
-	txProvider := database.NewTransactionProvider(db)
-	bsService, _ := blacksmith.NewService(
+	svc, err := blacksmith.NewService(
 		charRepo,
 		invRepo,
 		catalog,
+		blacksmith.WithEquipmentRepository(equipRepo),
+		blacksmith.WithStorageRepository(bsRepo),
 		blacksmith.WithTransactionProvider(txProvider),
-		blacksmith.WithRandomSource(fixedRandSource{value: 0.0}),
 	)
-
-	var wg sync.WaitGroup
-	errs := make(chan error, 2)
-	for _, sw := range []item.Instance{sword1, sword2} {
-		wg.Add(1)
-		go func(targetID string) {
-			defer wg.Done()
-			_, err := bsService.Enhance(ctx, char.ID, targetID)
-			errs <- err
-		}(sw.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	wg.Wait()
-	close(errs)
 
-	restoredChar, _ := charRepo.FindByID(ctx, char.ID)
-	if restoredChar.Money < 0 {
-		t.Fatalf("character money went negative: %d", restoredChar.Money)
+	// 1. Equip weapon (weapon-01) and armor (armor-01)
+	inv, err := invRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if restoredChar.Money != 20 { // 70 - 50 = 20
-		t.Errorf("character money = %d, want 20", restoredChar.Money)
+	weaInst, err := item.NewInstance("weapon-01", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	armInst, err := item.NewInstance("armor-01", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = inv.Add(weaInst)
+	_ = inv.Add(armInst)
+	if err := invRepo.Save(ctx, inv); err != nil {
+		t.Fatal(err)
+	}
+
+	equip, err := equipRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	weaDef, _ := catalog.FindByID("weapon-01")
+	armDef, _ := catalog.FindByID("armor-01")
+	_, err = equip.Equip(&inv, weaDef, weaInst.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = equip.Equip(&inv, armDef, armInst.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := equipRepo.Save(ctx, equip); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Apply Seal 2 (牙: 500 crystals)
+	seal, err := svc.ApplySeal(ctx, char.ID, 2)
+	if err != nil {
+		t.Fatalf("ApplySeal failed: %v", err)
+	}
+	if seal.ID != 2 {
+		t.Errorf("seal ID = %d, want 2", seal.ID)
+	}
+
+	restoredChar, err := charRepo.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restoredChar.Crystal != 1500 {
+		t.Errorf("char crystal = %d, want 1500", restoredChar.Crystal)
+	}
+	if restoredChar.WeaponSeal != 2 {
+		t.Errorf("char weapon seal = %d, want 2", restoredChar.WeaponSeal)
+	}
+
+	// 3. Name weapon and armor
+	if err := svc.NameEquipment(ctx, char.ID, "weapon", "DragonSlayer"); err != nil {
+		t.Fatalf("NameEquipment weapon: %v", err)
+	}
+	if err := svc.NameEquipment(ctx, char.ID, "armor", "IronPlate"); err != nil {
+		t.Fatalf("NameEquipment armor: %v", err)
+	}
+
+	namedChar, err := charRepo.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if namedChar.WeaponCustomName != "DragonSlayer" {
+		t.Errorf("weapon name = %q, want DragonSlayer", namedChar.WeaponCustomName)
+	}
+	if namedChar.ArmorCustomName != "IronPlate" {
+		t.Errorf("armor name = %q, want IronPlate", namedChar.ArmorCustomName)
+	}
+
+	// 4. Deposit weapon into storage
+	dep, err := svc.DepositWeapon(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("DepositWeapon: %v", err)
+	}
+	if dep.Slot != 1 || dep.ItemDefinitionID != "weapon-01" || dep.SealID != 2 || dep.CustomName != "DragonSlayer" {
+		t.Errorf("unexpected deposit: %+v", dep)
+	}
+
+	// Verify weapon unequipped and reset in DB
+	charAfterDep, _ := charRepo.FindByID(ctx, char.ID)
+	if charAfterDep.WeaponSeal != 0 || charAfterDep.WeaponCustomName != "" {
+		t.Errorf("character seal/name not reset: seal=%d, name=%q", charAfterDep.WeaponSeal, charAfterDep.WeaponCustomName)
+	}
+	equipAfterDep, _ := equipRepo.FindByCharacterID(ctx, char.ID)
+	if _, ok := equipAfterDep.Equipped(item.SlotMainHand); ok {
+		t.Error("weapon slot still occupied in equipment repository")
+	}
+
+	// 5. Withdraw weapon from storage
+	if err := svc.WithdrawWeapon(ctx, char.ID, 1); err != nil {
+		t.Fatalf("WithdrawWeapon: %v", err)
+	}
+
+	charAfterWithdraw, _ := charRepo.FindByID(ctx, char.ID)
+	if charAfterWithdraw.WeaponSeal != 2 || charAfterWithdraw.WeaponCustomName != "DragonSlayer" {
+		t.Errorf("restored seal=%d, name=%q (want 2, DragonSlayer)", charAfterWithdraw.WeaponSeal, charAfterWithdraw.WeaponCustomName)
+	}
+	equipAfterWithdraw, _ := equipRepo.FindByCharacterID(ctx, char.ID)
+	if _, ok := equipAfterWithdraw.Equipped(item.SlotMainHand); !ok {
+		t.Error("weapon not equipped in equipment repository after withdraw")
+	}
+
+	// 6. Verify storage slot 1 is deleted
+	storedList, err := svc.ListDeposits(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(storedList) != 0 {
+		t.Errorf("expected 0 deposits, got %d", len(storedList))
 	}
 }

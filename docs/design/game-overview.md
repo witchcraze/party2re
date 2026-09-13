@@ -150,7 +150,7 @@ The target is the game's meaningful behavior and design, not its historical impl
 - [`stages-and-monsters.md`](stages-and-monsters.md) — stage exploration and monster catalog
 - [`shops.md`](shops.md) — item purchase and 50% resale
 - [`depot.md`](depot.md) — item and currency storage
-- [`blacksmith.md`](blacksmith.md) — equipment enhancement
+- [`blacksmith.md`](blacksmith.md) — weapon seals, equipment naming, and dedicated storage
 - [`alchemy.md`](alchemy.md) — recipe crafting synthesis
 - [`bank.md`](bank.md) — bank accounts and remittances
 - [`resting.md`](resting.md) — inn and rest recovery

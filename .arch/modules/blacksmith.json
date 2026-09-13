@@ -2,7 +2,7 @@
   "$schema": "https://archify.dev/schema/module.v1.json",
   "module": "blacksmith",
   "tier": 1,
-  "description": "Equipment enhancement, gold fee deduction, and multi-slot material consumption.",
+  "description": "Authentic weapon seals (こくいん), equipment naming (なづける), and dedicated 3-slot weapon storage (専用預かり所).",
   "package": "internal/blacksmith",
   "implementation_package": "internal/blacksmith",
   "dependencies": [
@@ -19,35 +19,122 @@
       "source_ref": "internal/blacksmith/blacksmith.go#InventoryRepository"
     },
     {
+      "name": "equipment_repository",
+      "target_module": "database",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/blacksmith/blacksmith.go#EquipmentRepository"
+    },
+    {
+      "name": "storage_repository",
+      "target_module": "database",
+      "relation_type": "consumer_interface",
+      "source_ref": "internal/blacksmith/blacksmith.go#StorageRepository"
+    },
+    {
       "name": "transaction_provider",
       "target_module": "database",
       "relation_type": "consumer_interface",
       "source_ref": "internal/blacksmith/blacksmith.go#TransactionProvider"
-    },
-    {
-      "name": "transaction_runner",
-      "target_module": "economy",
-      "relation_type": "consumer_interface",
-      "source_ref": "internal/blacksmith/blacksmith.go#TransactionRunner"
     }
   ],
   "transaction_boundaries": [
     {
-      "method": "EnhanceEquipment",
-      "source_ref": "internal/blacksmith/blacksmith.go#Service.EnhanceEquipment",
+      "method": "ApplySeal",
+      "source_ref": "internal/blacksmith/blacksmith.go#Service.ApplySeal",
       "transaction_type": "ExecuteTransaction",
       "lock_sequence": [
         {
           "table": "characters",
           "tier": 2,
-          "mode": "SELECT ... FOR UPDATE (economy.Runner Rank 2)",
-          "note": "Lock character wallet and verify enhancement fee"
+          "mode": "SELECT ... FOR UPDATE (Rank 2)",
+          "note": "Lock character to deduct crystal fee and apply weapon seal"
+        },
+        {
+          "table": "equipment_slots",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (Rank 3)",
+          "note": "Lock equipment to verify weapon is equipped and seal is applicable"
+        }
+      ]
+    },
+    {
+      "method": "NameEquipment",
+      "source_ref": "internal/blacksmith/blacksmith.go#Service.NameEquipment",
+      "transaction_type": "ExecuteTransaction",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE (Rank 2)",
+          "note": "Lock character to update custom weapon or armor name"
+        },
+        {
+          "table": "equipment_slots",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (Rank 3)",
+          "note": "Lock equipment to verify target item is equipped"
+        }
+      ]
+    },
+    {
+      "method": "DepositWeapon",
+      "source_ref": "internal/blacksmith/blacksmith.go#Service.DepositWeapon",
+      "transaction_type": "ExecuteTransaction",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE (Rank 2)",
+          "note": "Lock character to clear seal and name"
+        },
+        {
+          "table": "equipment_slots",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (Rank 3)",
+          "note": "Lock equipment to unequip main hand weapon"
         },
         {
           "table": "inventory_items",
           "tier": 3,
-          "mode": "SELECT ... FOR UPDATE (economy.Runner Rank 3)",
-          "note": "Lock inventory to consume enhancement materials and update equipment level"
+          "mode": "SELECT ... FOR UPDATE (Rank 3)",
+          "note": "Lock inventory to remove weapon item"
+        },
+        {
+          "table": "blacksmith_deposits",
+          "tier": 8,
+          "mode": "SELECT ... FOR UPDATE (Rank 8)",
+          "note": "Lock blacksmith deposits to verify capacity <= 3 and unique name, then insert"
+        }
+      ]
+    },
+    {
+      "method": "WithdrawWeapon",
+      "source_ref": "internal/blacksmith/blacksmith.go#Service.WithdrawWeapon",
+      "transaction_type": "ExecuteTransaction",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE (Rank 2)",
+          "note": "Lock character to restore seal and name"
+        },
+        {
+          "table": "inventory_items",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (Rank 3)",
+          "note": "Lock inventory to add weapon item"
+        },
+        {
+          "table": "equipment_slots",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (Rank 3)",
+          "note": "Lock equipment to verify slot is empty and equip weapon"
+        },
+        {
+          "table": "blacksmith_deposits",
+          "tier": 8,
+          "mode": "SELECT ... FOR UPDATE (Rank 8)",
+          "note": "Lock blacksmith deposits to fetch and delete withdrawn item"
         }
       ]
     }

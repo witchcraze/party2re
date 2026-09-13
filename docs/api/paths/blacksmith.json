@@ -1,0 +1,28 @@
+{
+  "/blacksmith/seals": {
+    "get": {
+      "operationId": "getBlacksmithSeals",
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "GET /blacksmith/seals endpoint",
+      "tags": [
+        "Blacksmith"
+      ]
+    }
+  }
+}

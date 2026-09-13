@@ -38,34 +38,38 @@ var (
 )
 
 type Character struct {
-	ID          string
-	PlayerID    string
-	Name        string
-	JobID       string
-	Gender      string
-	Stats       Stats
-	Money       int
-	Level       int
-	Experience  int
-	SP          int // Skill Points: incremented on each level-up; used for SP-based skill learning.
-	JobLevel    int // Number of completed job changes.
-	OldJobID    string
-	OldSP       int
-	JobMemory   *JobMemory
-	SmallMedals int
-	HelpCount   int
-	HeroCount   int    // Hero count (勇者カウント hero_c): incremented when sealing a king boss.
-	PvPWins     int    // PvP Colosseum wins count (王者カウント kill_p): incremented on winning colosseum matches.
-	Orb         string // Orb collection status: string containing characters 's','r','b','g','y','p', or 'G' (Ramia awakened)
-	Tired       int    // Fatigue percentage (疲労度 %): increases in combat, resets to 0 on sleep.
-	OverLevel   bool
-	OverDepot   int
-	OverMonster int
-	OverFuture  int
-	OverFlea    int
-	OverStore   int
-	Color       string // Player chat/display color (HEX format: #RRGGBB, default: #ffffff)
-	Deposit     int64  // Bank gold deposit (預金): max 99,999,999,999,999 G
+	ID               string
+	PlayerID         string
+	Name             string
+	JobID            string
+	Gender           string
+	Stats            Stats
+	Money            int
+	Level            int
+	Experience       int
+	SP               int // Skill Points: incremented on each level-up; used for SP-based skill learning.
+	JobLevel         int // Number of completed job changes.
+	OldJobID         string
+	OldSP            int
+	JobMemory        *JobMemory
+	SmallMedals      int
+	HelpCount        int
+	HeroCount        int    // Hero count (勇者カウント hero_c): incremented when sealing a king boss.
+	PvPWins          int    // PvP Colosseum wins count (王者カウント kill_p): incremented on winning colosseum matches.
+	Orb              string // Orb collection status: string containing characters 's','r','b','g','y','p', or 'G' (Ramia awakened)
+	Tired            int    // Fatigue percentage (疲労度 %): increases in combat, resets to 0 on sleep.
+	OverLevel        bool
+	OverDepot        int
+	OverMonster      int
+	OverFuture       int
+	OverFlea         int
+	OverStore        int
+	Color            string // Player chat/display color (HEX format: #RRGGBB, default: #ffffff)
+	Deposit          int64  // Bank gold deposit (預金): max 99,999,999,999,999 G
+	Crystal          int    // Crystal currency (刻印晶 crystal): 0..999,999, used for blacksmith weapon seals.
+	WeaponSeal       int    // Weapon seal ID (wea_seal): 0..12.
+	WeaponCustomName string // Weapon custom name (wea_name): up to 20 runes.
+	ArmorCustomName  string // Armor custom name (arm_name): up to 20 runes.
 }
 
 // JobMemory is the temporary pair of job states used by the job exchange

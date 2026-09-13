@@ -1,39 +1,94 @@
-# Blacksmith Item Enhancement & Refinement Design
+# Blacksmith (鍛冶屋): Weapon Seals, Naming, and Dedicated Storage
 
 ## Overview
 
-The Blacksmith (鍛冶屋) enables characters to upgrade equipment (weapons, armors, shields, accessories) by increasing their enhancement level (`+1` to `+10`) in exchange for gold and upgrade materials.
+The Blacksmith (鍛冶屋, `party2/lib/blacksmith.cgi`) provides equipment customization and dedicated weapon management:
+1. **Weapon Seals (こくいん)**: Engraves elemental and tactical seals onto equipped weapons in exchange for crystals (`刻印晶`).
+2. **Equipment Naming (なづける)**: Customizes the display name of equipped weapons and armor.
+3. **Dedicated Weapon Storage (専用預かり所)**: Stores up to 3 customized weapons with their seals and names preserved.
 
-## Domain Model
+---
 
-### Enhancement Level
-- Base level: `+0`
-- Maximum level: `+10` (`MaxEnhancementLevel`)
+## 1. Weapon Seals (こくいん)
 
-### Enhancement Cost Calculation
-- **Gold Cost**: `basePrice * (currentLevel + 1) / 2` (minimum 50 Gold)
-- **Material Cost**: `1 + currentLevel / 3` (e.g. `item-084` 魔石のカケラ)
+### Mechanics
+- Seals can only be engraved on a weapon currently equipped in the main hand slot (`SlotMainHand`).
+- Applying a seal consumes crystals (`刻印晶`, `character.crystal`), capped at 999,999.
+- A weapon can only hold **one** seal at a time; weapons already sealed cannot receive another seal.
 
-### Success Rate Schedule
-- Level 0 -> +1: 100% (1.00)
-- Level 1 -> +2: 95% (0.95)
-- Level 2 -> +3: 90% (0.90)
-- Level 3 -> +4: 80% (0.80)
-- Level 4 -> +5: 70% (0.70)
-- Level 5 -> +6: 60% (0.60)
-- Level 6 -> +7: 50% (0.50)
-- Level 7 -> +8: 40% (0.40)
-- Level 8 -> +9: 30% (0.30)
-- Level 9 -> +10: 20% (0.20)
+### Authentic 12 Seals Specification (`_data.cgi:2209-2230`)
 
-### Stats Bonus Calculation
-- **Weapon Attack Bonus**: `baseAttack * currentLevel / 10 + currentLevel * 2`
-- **Armor Defense Bonus**: `baseDefense * currentLevel / 10 + currentLevel * 2`
+| ID | Name | Description | Crystal Cost |
+|---|---|---|---|
+| 1 | 赤の刻印 | 攻撃力上昇小 | 100 |
+| 2 | 青の刻印 | 防御力上昇小 | 100 |
+| 3 | 緑の刻印 | 技＋１ | 200 |
+| 4 | 黒の刻印 | 会心の一撃率上昇中 | 300 |
+| 5 | 白の刻印 | 命中率上昇中 | 300 |
+| 6 | 闇の刻印 | 攻撃力上昇中 | 400 |
+| 7 | 魔の刻印 | 魔法攻撃力上昇 | 500 |
+| 8 | 風の刻印 | 回避率上昇中 | 500 |
+| 9 | 妖の刻印 | 魔法防御力上昇 | 600 |
+| 10 | 雷の刻印 | 攻撃回数＋１ | 700 |
+| 11 | 獣の刻印 | 攻撃力上昇特大 | 1,000 |
+| 12 | 覇の刻印 | 全ての能力が上昇 | 1,500 |
 
-## Operations & Invariants
+### Eligibility Validation (`_can_add_wea_seals`)
+Seals cannot be applied if:
+- No weapon is equipped in `SlotMainHand`.
+- The equipped item is bare hands (`素手`).
+- The item definition type is throw (`t`) or poison/trap (`p`).
+- The weapon already possesses a seal (`wea_seal != 0`).
 
-- **Eligibility**: Only items with equipment slots (`Slot != SlotNone`) can be enhanced.
-- **Max Level**: Items at `+10` cannot be enhanced (`ErrMaxEnhancementReached`).
-- **Success**: Increases item enhancement level by 1, consumes required gold and materials.
-- **Atomicity**: Character money deduction, material consumption, and item enhancement update occur atomically via the universal runtime primitive `economy.TransactionRunner`, enforcing the global deterministic row-lock hierarchy (Rank 2 `characters` -> Rank 3 `inventory_items`).
+---
 
+## 2. Equipment Naming (なづける)
+
+### Mechanics
+- Allows players to assign a personalized name to their equipped weapon or armor.
+- Submitting an empty name resets the custom name to the item's original catalog name.
+- Custom names are stored on the character record (`wea_name`, `arm_name`) and preserved across weapon deposits/withdrawals.
+
+### Sanitization & Validation Rules
+- **Maximum Length**: 20 runes / Unicode characters.
+- **Whitespace Prohibition**: No half-width spaces (` `) or full-width spaces (`　`).
+- **Forbidden Characters**: `,`, `;`, `"`, `'`, `&`, `<`, `>` (prevents injection, CSV corruption, and XSS).
+- **At-Symbol Prohibition**: `@` and full-width `＠` (prevents delimiter collision with legacy serializations).
+
+---
+
+## 3. Dedicated Weapon Storage (専用預かり所)
+
+### Mechanics
+- Dedicated holding area exclusively for weapons (`party2/lib/blacksmith.cgi`).
+- **Capacity**: Strictly 3 slots (1, 2, 3).
+- Preserves the item's `item_definition_id`, `wea_seal`, and `wea_name`.
+
+### Operations & Invariants
+- **Deposit (`あずける`)**:
+  - Requires a weapon equipped in `SlotMainHand`.
+  - Rejects deposit if the storage already contains 3 weapons (`ErrStorageFull`).
+  - Rejects deposit if a stored weapon has the identical effective name (`customName` or catalog `Name`) (`ErrDuplicateStoredName`).
+  - Unequips and removes the weapon from the character's inventory, moving it to `blacksmith_deposits`.
+  - Clears `wea_seal` and `wea_name` on the character record.
+- **Withdraw (`ひきだす`)**:
+  - Rejects withdrawal if the character currently has any weapon equipped in `SlotMainHand` (`ErrWeaponSlotOccupied`).
+  - Restores the weapon into the character's inventory and automatically equips it.
+  - Restores the saved `wea_seal` and `wea_name` onto the character record.
+  - Deletes the record from `blacksmith_deposits`.
+
+---
+
+## 4. Concurrency & Row-Lock Hierarchy
+
+All operations execute within a single database transaction conforming strictly to the project lock hierarchy:
+
+```
+Rank 2: characters (SELECT ... FOR UPDATE)
+  ↓
+Rank 3: equipment_slots, inventory_items (SELECT ... FOR UPDATE)
+  ↓
+Rank 8: blacksmith_deposits (SELECT ... FOR UPDATE)
+```
+
+Deadlock is mathematically impossible because locks are always acquired in strictly monotonic rank order.

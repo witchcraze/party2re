@@ -29,10 +29,10 @@
     },
     {
       "module": "blacksmith",
-      "caller_method": "internal/blacksmith/blacksmith.go#Service.Enhance",
+      "caller_method": "internal/blacksmith/blacksmith.go#Service.DepositWeapon",
       "lock_mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
       "lock_order": 3,
-      "purpose": "Lock inventory to consume enhancement materials and update equipment level"
+      "purpose": "Lock inventory to remove deposited weapon"
     },
     {
       "module": "auction",

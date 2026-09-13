@@ -64,3 +64,32 @@ func (r *EquipmentRepository) FindByCharacterID(ctx context.Context, characterID
 	}
 	return value, nil
 }
+
+func (r *EquipmentRepository) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreequipment.Equipment, error) {
+	value, err := coreequipment.New(characterID)
+	if err != nil {
+		return coreequipment.Equipment{}, err
+	}
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
+		SELECT slot, instance_id
+		FROM equipment_slots
+		WHERE character_id = ?
+		ORDER BY slot
+		FOR UPDATE
+	`, characterID)
+	if err != nil {
+		return coreequipment.Equipment{}, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var slot, instanceID string
+		if err := rows.Scan(&slot, &instanceID); err != nil {
+			return coreequipment.Equipment{}, err
+		}
+		value.Slots[item.Slot(slot)] = instanceID
+	}
+	if err := rows.Err(); err != nil {
+		return coreequipment.Equipment{}, err
+	}
+	return value, nil
+}
