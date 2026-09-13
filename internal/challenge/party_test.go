@@ -104,7 +104,7 @@ func TestPartyAdvanceRoundAndHallOfFame(t *testing.T) {
 		t.Errorf("expected session round to advance to 2, got %d", updatedSess.CurrentRound)
 	}
 
-	// Check 20% MaxHP recovery
+	// Check surviving member HP carryover
 	for _, m := range updatedSess.Members {
 		if m.CharacterCurrentHP <= 0 {
 			t.Errorf("expected surviving member %s to have positive HP", m.CharacterID)
@@ -133,5 +133,99 @@ func TestPartyAdvanceRoundAndHallOfFame(t *testing.T) {
 	}
 	if hof.Members[1].CharacterName != "魔法使いボブ" || hof.Members[1].JobID != "wizard" {
 		t.Errorf("unexpected member 1 in Hall of Fame: %+v", hof.Members[1])
+	}
+}
+
+func TestSoloAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
+	repo := newMockChallengeRepo()
+	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
+
+	// Level 10 character with MaxHP 500, Defense 5 so monster damage goes through
+	c1 := createPartyTestChar("solo1", 10, 500, 35, 5)
+	c1.Name = "ソロ戦士"
+	c1.JobID = "warrior"
+	charRepo.chars[c1.ID] = c1
+
+	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{})
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	ctx := context.Background()
+
+	sess, err := svc.StartSession(ctx, c1.ID, "novice")
+	if err != nil {
+		t.Fatalf("StartSession failed: %v", err)
+	}
+
+	roundRes, updatedSess, err := svc.AdvanceRound(ctx, c1.ID, sess.ID)
+	if err != nil {
+		t.Fatalf("AdvanceRound failed: %v", err)
+	}
+	if !roundRes.Won {
+		t.Fatalf("expected solo player to win round 1")
+	}
+
+	// Legacy parity check: RecoveredHP must be 0
+	if roundRes.RecoveredHP != 0 {
+		t.Errorf("expected roundRes.RecoveredHP to be 0 (no recovery), got %d", roundRes.RecoveredHP)
+	}
+
+	// Verify surviving HP carried over directly from the last combat log
+	if len(roundRes.BattleResult.Logs) == 0 {
+		t.Fatalf("expected battle logs")
+	}
+	finalRemainingHP := roundRes.BattleResult.Logs[len(roundRes.BattleResult.Logs)-1].RemainingHP[c1.ID]
+	if updatedSess.CharacterCurrentHP != finalRemainingHP {
+		t.Errorf("expected session HP to exactly match combat final remaining HP %d, got %d",
+			finalRemainingHP, updatedSess.CharacterCurrentHP)
+	}
+}
+
+func TestPartyAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
+	repo := newMockChallengeRepo()
+	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
+
+	c1 := createPartyTestChar("p_lead", 15, 400, 40, 5)
+	c1.Name = "勇者"
+	c1.JobID = "hero"
+	charRepo.chars[c1.ID] = c1
+
+	c2 := createPartyTestChar("p_mem", 15, 300, 35, 5)
+	c2.Name = "戦士"
+	c2.JobID = "warrior"
+	charRepo.chars[c2.ID] = c2
+
+	svc, err := challenge.NewService(repo, charRepo, &corebattle.Engine{})
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	ctx := context.Background()
+
+	sess, err := svc.StartPartySession(ctx, c1.ID, []string{c1.ID, c2.ID}, "novice", "テスト隊", "#00AA00")
+	if err != nil {
+		t.Fatalf("StartPartySession failed: %v", err)
+	}
+
+	roundRes, updatedSess, err := svc.AdvanceRound(ctx, c1.ID, sess.ID)
+	if err != nil {
+		t.Fatalf("AdvanceRound failed: %v", err)
+	}
+	if !roundRes.Won {
+		t.Fatalf("expected party to win round 1")
+	}
+
+	// Legacy parity check: RecoveredHP must be 0
+	if roundRes.RecoveredHP != 0 {
+		t.Errorf("expected roundRes.RecoveredHP to be 0 (no recovery), got %d", roundRes.RecoveredHP)
+	}
+
+	// Verify member HPs match battle remaining HPs without +20% recovery
+	finalRemainingHPs := roundRes.BattleResult.Logs[len(roundRes.BattleResult.Logs)-1].RemainingHP
+	for _, m := range updatedSess.Members {
+		remHP := finalRemainingHPs[m.CharacterID]
+		if m.CharacterCurrentHP != remHP {
+			t.Errorf("expected member %s HP to match remaining HP %d, got %d",
+				m.CharacterID, remHP, m.CharacterCurrentHP)
+		}
 	}
 }

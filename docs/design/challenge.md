@@ -8,7 +8,7 @@ The Continuous Endurance Challenge Feature Module (`internal/challenge`) impleme
 
 ## Architectural Policy & Boundaries
 
-- **Session-Based Consecutive Combat**: Characters enter a challenge tier and battle consecutively from Wave 1 onwards. HP is carried forward across rounds with partial post-round recovery.
+- **Session-Based Consecutive Combat**: Characters enter a challenge tier and battle consecutively from Wave 1 onwards. HP is carried forward directly across rounds without inter-round healing (legacy parity with `vs_challenge.cgi` and `_battle.cgi`).
 - **Wave Scaling Formula**: Enemy combat stats scale dynamically based on the current round number:
   $$\text{Stat}_{\text{round}} = \text{BaseStat} \times (1 + \text{ScaleFactor} \times (\text{Round} - 1))$$
 - **Reward Ledger & Cashout vs Defeat Risk**:
@@ -38,7 +38,7 @@ The Continuous Endurance Challenge Feature Module (`internal/challenge`) impleme
       v
 [Execute Round] -> Core Battle Engine Resolve
       |
-      +---> [Victory] -> +20% Max HP Recovery (capped at Max HP)
+      +---> [Victory] -> HP Carryover (no inter-round recovery)
       |                  + Accumulate Round EXP & Gold
       |                  + Check Milestone Item Drops (every 5 rounds)
       |                  + Advance Round (CurrentRound++)
@@ -64,7 +64,7 @@ The Continuous Endurance Challenge Feature Module (`internal/challenge`) impleme
 ### 1. Multi-Player Party Challenge
 - Up to 4 players can enter endurance challenge runs together.
 - Party battles resolve simultaneously using `internal/core/battle.Engine` with dynamic turn ordering, HP, MP, CMP, and skill execution.
-- Surviving party members recover $+20\%$ of their `Max HP` between consecutive waves.
+- Surviving party members carry forward their remaining HP to the next wave without inter-round healing.
 
 ### 2. Hall of Fame (`challenge_hall_of_fame`)
 - Whenever a party sets a new tier high-water mark (`round > highest_round`), the run is immortalized in the Hall of Fame.
