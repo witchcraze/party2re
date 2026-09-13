@@ -27,10 +27,21 @@ func CalculateEquipmentStats(
 ) EquipmentStats {
 	var stats EquipmentStats
 
-	// 1. Weapon (SlotMainHand -> @weas in _data.cgi:394-500)
+	// Detect Ex Amulet (item-158) or Awakening gems (item-240..242) in accessory slot (_battle.cgi:1754)
+	hasExAmuletOrAwakening := false
+	if instID, ok := equip.Equipped(coreitem.SlotAccessory); ok {
+		if inst, found := inv.Find(instID); found {
+			no := parseItemIndex(inst.DefinitionID, "item-")
+			if no == 158 || no == 240 || no == 241 || no == 242 {
+				hasExAmuletOrAwakening = true
+			}
+		}
+	}
+
+	// 1. Weapon (SlotMainHand -> @weas in _data.cgi:394-500, _battle.cgi:1726-1745)
 	if instID, ok := equip.Equipped(coreitem.SlotMainHand); ok {
 		if inst, found := inv.Find(instID); found {
-			atk, wt := calculateWeaponStats(inst.DefinitionID, char, rng)
+			atk, wt := calculateWeaponStats(inst.DefinitionID, char, rng, hasExAmuletOrAwakening)
 			stats.AttackBonus += atk
 			stats.AgilityBonus -= wt
 		}
@@ -80,8 +91,8 @@ func parseItemIndex(defID, prefix string) int {
 	return no
 }
 
-// calculateWeaponStats returns (attackBonus, weight) according to @weas in _data.cgi:394-500.
-func calculateWeaponStats(defID string, char corecharacter.Character, rng corecharacter.RandomSource) (int, int) {
+// calculateWeaponStats returns (attackBonus, weight) according to @weas in _data.cgi:394-500 and _weapon_revision in _battle.cgi:1726-1745.
+func calculateWeaponStats(defID string, char corecharacter.Character, rng corecharacter.RandomSource, hasExAmuletOrAwakening bool) (int, int) {
 	no := parseItemIndex(defID, "weapon-")
 	if no <= 0 {
 		no = parseItemIndex(defID, "item-")
@@ -226,9 +237,11 @@ func calculateWeaponStats(defID string, char corecharacter.Character, rng corech
 	case 68:
 		return 180, r(int(float64(char.Stats.HP) * 0.2))
 	case 69:
-		return r(int(float64(char.Stats.Attack) * 1.2)), 40
+		origLv := min(char.Level, 99)
+		return r(int(float64(char.Stats.Attack)*1.2)) + int(float64(origLv)*1.5), 40
 	case 70:
-		return r(int(float64(char.Stats.Attack) * 1.6)), 50
+		origLv := min(char.Level, 99)
+		return r(int(float64(char.Stats.Attack)*1.6)) + int(float64(origLv)*2.0), 50
 	case 71:
 		randFrac := 0.25
 		if rng != nil {
@@ -236,7 +249,18 @@ func calculateWeaponStats(defID string, char corecharacter.Character, rng corech
 				randFrac = float64(v) / 1000.0
 			}
 		}
-		return int(float64(char.Stats.Attack) * (0.75 + randFrac)), 60
+		mult := 0.75 + randFrac
+		if hasExAmuletOrAwakening {
+			mult = 1.5 + randFrac
+		}
+		weaAt := int(float64(char.Stats.Attack) * mult)
+		ite158 := 1.0
+		if char.Level < 50 {
+			ite158 = 0.5
+		} else if char.Level < 75 {
+			ite158 = 0.7
+		}
+		return int(float64(weaAt) * ite158), 60
 	default:
 		return 0, 0
 	}
@@ -388,6 +412,12 @@ func calculateAccessoryStats(defID string) (int, int, int) {
 		return 40, 0, 0
 	case 124: // アルゴンリング
 		return 30, 0, 30
+	case 240: // 覚醒の紅玉 (_data.cgi:1997: at += 30, df -= 20, ag -= 20)
+		return 30, -20, -20
+	case 241: // 覚醒の蒼玉 (_data.cgi:1998: at -= 20, df += 30, ag -= 20)
+		return -20, 30, -20
+	case 242: // 覚醒の翠玉 (_data.cgi:1999: at -= 20, df -= 20, ag += 30)
+		return -20, -20, 30
 	default:
 		return 0, 0, 0
 	}
