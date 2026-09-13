@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/casino"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 )
@@ -54,14 +53,6 @@ func (m *mockPrizeCasinoRepo) GetAccount(ctx context.Context, characterID string
 
 func (m *mockPrizeCasinoRepo) GetAccountForUpdate(ctx context.Context, characterID string) (casino.Account, error) {
 	return m.GetAccount(ctx, characterID)
-}
-
-func (m *mockPrizeCasinoRepo) ExchangeGoldToCoins(ctx context.Context, characterID string, coins int64, goldCost int) (casino.Account, corecharacter.Character, error) {
-	return casino.Account{}, corecharacter.Character{}, nil
-}
-
-func (m *mockPrizeCasinoRepo) ExchangeCoinsToGold(ctx context.Context, characterID string, coins int64, goldReward int) (casino.Account, corecharacter.Character, error) {
-	return casino.Account{}, corecharacter.Character{}, nil
 }
 
 func (m *mockPrizeCasinoRepo) AdjustCoins(ctx context.Context, characterID string, coinDelta int64) (casino.Account, error) {

@@ -74,10 +74,6 @@ type DepotRepository interface {
 	Save(ctx context.Context, dep depot.Depot) error
 }
 
-type CharacterRepository interface {
-	FindByID(ctx context.Context, characterID string) (corecharacter.Character, error)
-}
-
 // ExchangePrize exchanges character's casino coins for prize items and sends them directly
 // to the character's depot storage (party2/lib/casino.cgi:596-647).
 func (s *Service) ExchangePrize(ctx context.Context, characterID string, costCoins int64, count int) (PrizeExchangeResult, error) {

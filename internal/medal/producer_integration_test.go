@@ -298,16 +298,6 @@ func (c *integrationCasinoRepo) GetAccount(_ context.Context, charID string) (ca
 	return c.account, nil
 }
 
-func (c *integrationCasinoRepo) ExchangeGoldToCoins(_ context.Context, charID string, coins int64, _ int) (casino.Account, corecharacter.Character, error) {
-	c.account.Coins += coins
-	return c.account, corecharacter.Character{ID: charID}, nil
-}
-
-func (c *integrationCasinoRepo) ExchangeCoinsToGold(_ context.Context, charID string, coins int64, _ int) (casino.Account, corecharacter.Character, error) {
-	c.account.Coins -= coins
-	return c.account, corecharacter.Character{ID: charID}, nil
-}
-
 func (c *integrationCasinoRepo) AdjustCoins(_ context.Context, _ string, delta int64) (casino.Account, error) {
 	c.account.Coins += delta
 	return c.account, nil

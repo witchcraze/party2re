@@ -6,6 +6,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
@@ -29,10 +30,36 @@ type Account struct {
 type Repository interface {
 	GetAccount(ctx context.Context, characterID string) (Account, error)
 	GetAccountForUpdate(ctx context.Context, characterID string) (Account, error)
-	ExchangeGoldToCoins(ctx context.Context, characterID string, coins int64, goldCost int) (Account, corecharacter.Character, error)
-	ExchangeCoinsToGold(ctx context.Context, characterID string, coins int64, goldReward int) (Account, corecharacter.Character, error)
 	AdjustCoins(ctx context.Context, characterID string, coinDelta int64) (Account, error)
 	DeductBetAndCreditPayout(ctx context.Context, characterID string, bet int64, payout int64) (Account, error)
+}
+
+// CharacterRepository defines character persistence required for casino operations and economy transactions.
+type CharacterRepository interface {
+	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
+	FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
+	Update(ctx context.Context, character corecharacter.Character) error
+}
+
+// InventoryRepository defines inventory persistence required for economy transactions.
+type InventoryRepository interface {
+	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error)
+	Save(ctx context.Context, inventory coreinventory.Inventory) error
+}
+
+type noopInventoryRepo struct{}
+
+func (noopInventoryRepo) FindByCharacterID(_ context.Context, charID string) (coreinventory.Inventory, error) {
+	return coreinventory.New(charID)
+}
+
+func (noopInventoryRepo) FindByCharacterIDForUpdate(_ context.Context, charID string) (coreinventory.Inventory, error) {
+	return coreinventory.New(charID)
+}
+
+func (noopInventoryRepo) Save(_ context.Context, _ coreinventory.Inventory) error {
+	return nil
 }
 
 // TransactionProvider can be injected into Service to orchestrate database transactions.
@@ -53,6 +80,7 @@ type Service struct {
 	roomRepo       RoomRepository
 	depotRepo      DepotRepository
 	charRepo       CharacterRepository
+	invRepo        InventoryRepository
 	txProvider     TransactionProvider
 	runner         TransactionRunner
 	gamePlayedHook GamePlayedHook
@@ -90,6 +118,12 @@ func WithCharacterRepository(charRepo CharacterRepository) Option {
 	}
 }
 
+func WithInventoryRepository(invRepo InventoryRepository) Option {
+	return func(s *Service) {
+		s.invRepo = invRepo
+	}
+}
+
 func WithRoomRepository(roomRepo RoomRepository) Option {
 	return func(s *Service) {
 		s.roomRepo = roomRepo
@@ -115,6 +149,21 @@ func NewService(repo Repository, opts ...Option) (*Service, error) {
 	for _, opt := range opts {
 		opt(s)
 	}
+	if s.runner == nil && s.charRepo != nil {
+		var ecoOpts []economy.Option
+		if s.txProvider != nil {
+			ecoOpts = append(ecoOpts, economy.WithTransactionProvider(s.txProvider))
+		}
+		invRepo := s.invRepo
+		if invRepo == nil {
+			invRepo = noopInventoryRepo{}
+		}
+		eco, err := economy.NewService(s.charRepo, invRepo, ecoOpts...)
+		if err != nil {
+			return nil, err
+		}
+		s.runner = eco
+	}
 	return s, nil
 }
 
@@ -133,34 +182,33 @@ func (s *Service) ExchangeGoldToCoins(ctx context.Context, characterID string, c
 	if coins <= 0 {
 		return Account{}, corecharacter.Character{}, ErrInvalidAmount
 	}
+	if s.runner == nil {
+		return Account{}, corecharacter.Character{}, errors.New("transaction runner is required for coin exchange")
+	}
 	goldCost := int(coins * GoldPerCoin)
 
-	if s.runner != nil {
-		req := economy.TransactionRequest{
-			CharacterID: characterID,
-			Cost: economy.ResourceCost{
-				Gold: goldCost,
-			},
-		}
-		var acc Account
-		res, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-			var err error
-			acc, err = s.repo.AdjustCoins(tc.Context, characterID, coins)
-			return err
-		})
-		if err != nil {
-			if errors.Is(err, economy.ErrInsufficientGold) {
-				return Account{}, corecharacter.Character{}, ErrInsufficientGold
-			}
-			if errors.Is(err, economy.ErrCharacterNotFound) {
-				return Account{}, corecharacter.Character{}, corecharacter.ErrNotFound
-			}
-			return Account{}, corecharacter.Character{}, err
-		}
-		return acc, res.Character, nil
+	req := economy.TransactionRequest{
+		CharacterID: characterID,
+		Cost: economy.ResourceCost{
+			Gold: goldCost,
+		},
 	}
-
-	return s.repo.ExchangeGoldToCoins(ctx, characterID, coins, goldCost)
+	var acc Account
+	res, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+		var err error
+		acc, err = s.repo.AdjustCoins(tc.Context, characterID, coins)
+		return err
+	})
+	if err != nil {
+		if errors.Is(err, economy.ErrInsufficientGold) {
+			return Account{}, corecharacter.Character{}, ErrInsufficientGold
+		}
+		if errors.Is(err, economy.ErrCharacterNotFound) {
+			return Account{}, corecharacter.Character{}, corecharacter.ErrNotFound
+		}
+		return Account{}, corecharacter.Character{}, err
+	}
+	return acc, res.Character, nil
 }
 
 // ExchangeCoinsToGold sells casino coins back for character gold (1 coin = 20 gold).
@@ -171,34 +219,30 @@ func (s *Service) ExchangeCoinsToGold(ctx context.Context, characterID string, c
 	if coins <= 0 {
 		return Account{}, corecharacter.Character{}, ErrInvalidAmount
 	}
+	if s.runner == nil {
+		return Account{}, corecharacter.Character{}, errors.New("transaction runner is required for coin exchange")
+	}
 	goldReward := int(coins * GoldPerCoin)
 
-	if s.runner != nil {
-		req := economy.TransactionRequest{
-			CharacterID: characterID,
-			Grant: economy.ResourceGrant{
-				Gold: goldReward,
-			},
-		}
-		var acc Account
-		res, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-			var err error
-			acc, err = s.repo.DeductBetAndCreditPayout(tc.Context, characterID, coins, 0)
-			if err != nil {
-				return err
-			}
-			return nil
-		})
-		if err != nil {
-			if errors.Is(err, economy.ErrCharacterNotFound) {
-				return Account{}, corecharacter.Character{}, corecharacter.ErrNotFound
-			}
-			return Account{}, corecharacter.Character{}, err
-		}
-		return acc, res.Character, nil
+	req := economy.TransactionRequest{
+		CharacterID: characterID,
+		Grant: economy.ResourceGrant{
+			Gold: goldReward,
+		},
 	}
-
-	return s.repo.ExchangeCoinsToGold(ctx, characterID, coins, goldReward)
+	var acc Account
+	res, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+		var err error
+		acc, err = s.repo.DeductBetAndCreditPayout(tc.Context, characterID, coins, 0)
+		return err
+	})
+	if err != nil {
+		if errors.Is(err, economy.ErrCharacterNotFound) {
+			return Account{}, corecharacter.Character{}, corecharacter.ErrNotFound
+		}
+		return Account{}, corecharacter.Character{}, err
+	}
+	return acc, res.Character, nil
 }
 
 // SpinSlot executes a slot machine spin, adjusts coins atomically according to the outcome, and returns the result and updated account.

@@ -33,10 +33,15 @@ func TestCasinoRoomMultiplayerDatabaseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 	txProvider := database.NewTransactionProvider(db)
 	svc, err := casino.NewService(
 		casinoRepo,
 		casino.WithTransactionProvider(txProvider),
+		casino.WithCharacterRepository(charRepo),
 		casino.WithRoomRepository(roomRepo),
 	)
 	if err != nil {
@@ -218,10 +223,16 @@ func TestCasinoSlotMachineDatabaseIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	svc, err := casino.NewService(casinoRepo)
+	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
+	txProvider := database.NewTransactionProvider(db)
+	svc, err := casino.NewService(
+		casinoRepo,
+		casino.WithCharacterRepository(charRepo),
+		casino.WithTransactionProvider(txProvider),
+	)
 
 	ctx := context.Background()
 
@@ -281,10 +292,16 @@ func TestCasinoSlotMachine_ConcurrencyExploitPrevented(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	svc, err := casino.NewService(casinoRepo)
+	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
+	txProvider := database.NewTransactionProvider(db)
+	svc, err := casino.NewService(
+		casinoRepo,
+		casino.WithCharacterRepository(charRepo),
+		casino.WithTransactionProvider(txProvider),
+	)
 
 	ctx := context.Background()
 
@@ -381,10 +398,15 @@ func TestCasinoIndianPoker_ConcurrencyExploitPrevented(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 	txProvider := database.NewTransactionProvider(db)
 	svc, err := casino.NewService(
 		casinoRepo,
 		casino.WithTransactionProvider(txProvider),
+		casino.WithCharacterRepository(charRepo),
 		casino.WithRoomRepository(roomRepo),
 	)
 	if err != nil {

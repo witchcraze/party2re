@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/casino"
+	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -26,6 +27,23 @@ func TestConcurrencyStressCasinoExchanges(t *testing.T) {
 
 	ctx := context.Background()
 	casinoRepo, err := NewCasinoRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	charRepo, err := NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invRepo, err := NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := NewTransactionProvider(db)
+	eco, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProvider))
+	if err != nil {
+		t.Fatal(err)
+	}
+	casinoSvc, err := casino.NewService(casinoRepo, casino.WithEconomy(eco))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,13 +71,13 @@ func TestConcurrencyStressCasinoExchanges(t *testing.T) {
 		switch action {
 		case 0:
 			// ExchangeGoldToCoins: buy 10 coins for 200 gold
-			_, _, err := casinoRepo.ExchangeGoldToCoins(ctx, charID, 10, 200)
+			_, _, err := casinoSvc.ExchangeGoldToCoins(ctx, charID, 10)
 			if err != nil && !errors.Is(err, casino.ErrInsufficientGold) {
 				return err
 			}
 		case 1:
 			// ExchangeCoinsToGold: sell 10 coins for 200 gold
-			_, _, err := casinoRepo.ExchangeCoinsToGold(ctx, charID, 10, 200)
+			_, _, err := casinoSvc.ExchangeCoinsToGold(ctx, charID, 10)
 			if err != nil && !errors.Is(err, casino.ErrInsufficientCoins) {
 				return err
 			}

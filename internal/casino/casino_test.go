@@ -14,8 +14,6 @@ import (
 
 type mockCasinoRepo struct {
 	getAccountFn      func(ctx context.Context, charID string) (casino.Account, error)
-	buyCoinsFn        func(ctx context.Context, charID string, coins int64, goldCost int) (casino.Account, corecharacter.Character, error)
-	sellCoinsFn       func(ctx context.Context, charID string, coins int64, goldReward int) (casino.Account, corecharacter.Character, error)
 	adjustFn          func(ctx context.Context, charID string, delta int64) (casino.Account, error)
 	deductAndCreditFn func(ctx context.Context, charID string, bet int64, payout int64) (casino.Account, error)
 }
@@ -29,20 +27,6 @@ func (m *mockCasinoRepo) GetAccount(ctx context.Context, charID string) (casino.
 
 func (m *mockCasinoRepo) GetAccountForUpdate(ctx context.Context, charID string) (casino.Account, error) {
 	return m.GetAccount(ctx, charID)
-}
-
-func (m *mockCasinoRepo) ExchangeGoldToCoins(ctx context.Context, charID string, coins int64, goldCost int) (casino.Account, corecharacter.Character, error) {
-	if m.buyCoinsFn != nil {
-		return m.buyCoinsFn(ctx, charID, coins, goldCost)
-	}
-	return casino.Account{CharacterID: charID, Coins: coins}, corecharacter.Character{ID: charID, Money: 10000 - goldCost}, nil
-}
-
-func (m *mockCasinoRepo) ExchangeCoinsToGold(ctx context.Context, charID string, coins int64, goldReward int) (casino.Account, corecharacter.Character, error) {
-	if m.sellCoinsFn != nil {
-		return m.sellCoinsFn(ctx, charID, coins, goldReward)
-	}
-	return casino.Account{CharacterID: charID, Coins: 1000 - coins}, corecharacter.Character{ID: charID, Money: goldReward}, nil
 }
 
 func (m *mockCasinoRepo) AdjustCoins(ctx context.Context, charID string, delta int64) (casino.Account, error) {
@@ -61,8 +45,19 @@ func (m *mockCasinoRepo) DeductBetAndCreditPayout(ctx context.Context, charID st
 
 func TestCasinoService_Exchanges(t *testing.T) {
 	ctx := context.Background()
-	repo := &mockCasinoRepo{}
-	svc, err := casino.NewService(repo)
+	var currentCoins int64 = 0
+	repo := &mockCasinoRepo{
+		adjustFn: func(_ context.Context, charID string, delta int64) (casino.Account, error) {
+			currentCoins += delta
+			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
+		},
+		deductAndCreditFn: func(_ context.Context, charID string, bet int64, payout int64) (casino.Account, error) {
+			currentCoins = currentCoins - bet + payout
+			return casino.Account{CharacterID: charID, Coins: currentCoins}, nil
+		},
+	}
+	runner := &stubTransactionRunner{money: 10000}
+	svc, err := casino.NewService(repo, casino.WithTransactionRunner(runner))
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
 	}
@@ -78,11 +73,12 @@ func TestCasinoService_Exchanges(t *testing.T) {
 	})
 
 	t.Run("Sell Coins: 50 coins -> 1000 gold reward", func(t *testing.T) {
+		runner.money = 8000
 		acc, char, err := svc.ExchangeCoinsToGold(ctx, "char1", 50)
 		if err != nil {
 			t.Fatalf("ExchangeCoinsToGold error: %v", err)
 		}
-		if acc.Coins != 950 || char.Money != 1000 {
+		if acc.Coins != 50 || char.Money != 9000 {
 			t.Errorf("acc.Coins = %d, char.Money = %d", acc.Coins, char.Money)
 		}
 	})
@@ -91,6 +87,14 @@ func TestCasinoService_Exchanges(t *testing.T) {
 		_, _, err := svc.ExchangeGoldToCoins(ctx, "char1", 0)
 		if err != casino.ErrInvalidAmount {
 			t.Errorf("got %v, want ErrInvalidAmount", err)
+		}
+	})
+
+	t.Run("Missing runner returns error", func(t *testing.T) {
+		svcNoRunner, _ := casino.NewService(repo)
+		_, _, err := svcNoRunner.ExchangeGoldToCoins(ctx, "char1", 10)
+		if err == nil {
+			t.Errorf("expected error when transaction runner is missing")
 		}
 	})
 }

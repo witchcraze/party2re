@@ -47,31 +47,26 @@ func TestCasinoRepositoryLifecycle(t *testing.T) {
 		t.Errorf("initial coins = %d, want 0", initialAcc.Coins)
 	}
 
-	// 3. Buy 100 coins (costs 2,000 gold)
-	acc, updatedChar, err := casinoRepo.ExchangeGoldToCoins(ctx, char.ID, 100, 2000)
+	// 3. Credit 100 coins via AdjustCoins
+	acc, err := casinoRepo.AdjustCoins(ctx, char.ID, 100)
 	if err != nil {
-		t.Fatalf("ExchangeGoldToCoins failed: %v", err)
+		t.Fatalf("AdjustCoins failed: %v", err)
 	}
-	if acc.Coins != 100 || updatedChar.Money != 8000 {
-		t.Errorf("coins = %d, money = %d, want 100 coins and 8000 gold", acc.Coins, updatedChar.Money)
-	}
-
-	// 4. Insufficient gold to buy coins should fail
-	if _, _, err := casinoRepo.ExchangeGoldToCoins(ctx, char.ID, 5000, 100000); !errors.Is(err, casino.ErrInsufficientGold) {
-		t.Errorf("insufficient gold err = %v, want %v", err, casino.ErrInsufficientGold)
+	if acc.Coins != 100 {
+		t.Errorf("coins = %d, want 100", acc.Coins)
 	}
 
-	// 5. Sell 30 coins (rewards 600 gold)
-	acc, updatedChar, err = casinoRepo.ExchangeCoinsToGold(ctx, char.ID, 30, 600)
+	// 4. Deduct 30 coins via AdjustCoins (remaining 70 coins)
+	acc, err = casinoRepo.AdjustCoins(ctx, char.ID, -30)
 	if err != nil {
-		t.Fatalf("ExchangeCoinsToGold failed: %v", err)
+		t.Fatalf("AdjustCoins failed: %v", err)
 	}
-	if acc.Coins != 70 || updatedChar.Money != 8600 {
-		t.Errorf("coins = %d, money = %d, want 70 coins and 8600 gold", acc.Coins, updatedChar.Money)
+	if acc.Coins != 70 {
+		t.Errorf("coins = %d, want 70", acc.Coins)
 	}
 
-	// 6. Insufficient coins to sell should fail
-	if _, _, err := casinoRepo.ExchangeCoinsToGold(ctx, char.ID, 500, 10000); !errors.Is(err, casino.ErrInsufficientCoins) {
+	// 5. Insufficient coins to deduct should fail
+	if _, err := casinoRepo.AdjustCoins(ctx, char.ID, -500); !errors.Is(err, casino.ErrInsufficientCoins) {
 		t.Errorf("insufficient coins err = %v, want %v", err, casino.ErrInsufficientCoins)
 	}
 

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #597 — [Refactor] Dungeon: Support stacking vision expansion for scouting jobs and scope goggles in map scouting (@ちず)
+Last updated: Issue #453 — [Refactor] Casino: Eliminate dual execution fallback paths and legacy repository exchange methods
 
 ## Current phase
 
@@ -47,7 +47,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Bank** (`internal/bank`): ✅ Character gold deposit/withdrawal; 999,999G wallet clamp; fictional `bank_accounts` table purged (#476).
 - **Inn** (`internal/inn`): ✅ Fictional paid-inn purged; resting moved to `internal/home` (#459).
 - **Guild** (`internal/guild`): ✅ Foundation (5,000G), dynamic Guild Points (`gpoint`) across social/combat hooks and server rankings, custom member role titles (up to 6 full-width characters via `あたえる`), hex color customization (`からー`) with server-wide uniqueness and GvG eligibility validation, formal membership application & approval gating (`参加申請中`, `あたえる` approval, `追放` rejection/expulsion with notification letters), broadcast member callouts (`よびかける`, +1 GP), visual personalization (3,000G guild mark, catalog-priced wallpapers), and 20-day inactivity automatic disbandment; fictional gold-donation leveling and capacity scaling completely purged (#490, #591).
-- **Casino** (`internal/casino`): ✅ Multi-Player Room Lobby (2..8 players, Indian Poker, High-Low, Doppelganger, speed/rate/password/spectators), authentic 13-card forehead Indian Poker (`party2/lib/casino_indian.cgi`), authentic multi-player High-Low (`party2/lib/casino_highlow.cgi`), authentic multi-player Doppelganger (`party2/lib/casino_doppel.cgi`), 18 authentic prizes with atomic Depot auto-routing (`party2/lib/casino.cgi`); fictional solo dealer poker, solo high-low, solo doppelganger and 52-card standard deck completely purged (#486, #590).
+- **Casino** (`internal/casino`): ✅ Multi-Player Room Lobby (2..8 players, Indian Poker, High-Low, Doppelganger, speed/rate/password/spectators), authentic 13-card forehead Indian Poker (`party2/lib/casino_indian.cgi`), authentic multi-player High-Low (`party2/lib/casino_highlow.cgi`), authentic multi-player Doppelganger (`party2/lib/casino_doppel.cgi`), 18 authentic prizes with atomic Depot auto-routing (`party2/lib/casino.cgi`), single deterministic `economy.TransactionRunner` exchange path eliminating legacy fallback and repository exchange methods (#453); fictional solo dealer poker, solo high-low, solo doppelganger and 52-card standard deck completely purged (#486, #590).
 - **Lottery & Raffle** (`internal/lottery`): ✅ Server-wide 20-cap Takarakuji lottery (`party2/lib/takarakuzi.cgi`, NPC `@クラゲ`), and authentic Fukubiki raffle (`party2/lib/lot.cgi`, NPC `@フクスケ`) with 3-coupon Standard (stat seeds, weekday secret treasures, small medals) and 300-coupon Special (orbs, rare materials) draws with hand-occupancy depot automatic routing; fictional gold ticket purchase and gold prizes purged (#484, #485).
 - **Monster Ranch** (`internal/monster`): ✅ Monster Grandpa stabling (50–300 cap), Home pet link (8 pets), renaming (8 chars), P2P gift, wild release (#488). Fictional crop farm purged (#488).
 - **Plantation** (`internal/plantation`): ✅ 6 seeds, 14 fertilizer reagents (Gold or Depot/Inventory items), next-midnight JST maturation, wither/yield bonuses, Depot-direct delivery (#489).

@@ -295,6 +295,7 @@ The Casino domain migrated in Issue #427, demonstrating cross-domain currency co
 - Strict `balance >= cost` semantics across Slot, Indian Poker, Doppelganger, and HighLow games.
 - Deterministic lock order: `characters` (Rank 2) is ALWAYS locked before `casino_accounts` (Rank 8). In repository layer, `DeductBetAndCreditPayout` avoids `INSERT` during normal play when updating existing accounts, preventing implicit foreign key S-lock deadlocks.
 - Verified under 50 concurrent workers executing 1,000 mixed exchange and bet operations with 0 deadlocks.
+- Single deterministic execution path: Issue #453 eliminated legacy dual-execution fallback paths (`if s.runner != nil`) and purged obsolete `ExchangeGoldToCoins` / `ExchangeCoinsToGold` methods from `CasinoRepository`, auto-wiring `s.runner` in `NewService`.
 
 ---
 
