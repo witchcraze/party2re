@@ -10,15 +10,55 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 )
 
-type Service struct {
-	repo Repository
+type CharacterReader interface {
+	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 }
 
-func NewService(repo Repository) (*Service, error) {
+type LetterSender interface {
+	SendLetter(ctx context.Context, senderID, senderName, recipientID, recipientName, content, color string) error
+}
+
+type ServiceOption func(*Service)
+
+func WithCharacterReader(cr CharacterReader) ServiceOption {
+	return func(s *Service) {
+		s.charReader = cr
+	}
+}
+
+func WithLetterSender(ls LetterSender) ServiceOption {
+	return func(s *Service) {
+		s.letterSender = ls
+	}
+}
+
+func WithClock(clock func() time.Time) ServiceOption {
+	return func(s *Service) {
+		s.nowFunc = clock
+	}
+}
+
+type Service struct {
+	repo         Repository
+	charReader   CharacterReader
+	letterSender LetterSender
+	nowFunc      func() time.Time
+}
+
+func NewService(repo Repository, opts ...ServiceOption) (*Service, error) {
 	if repo == nil {
 		return nil, errors.New("guild repository is nil")
 	}
-	return &Service{repo: repo}, nil
+	s := &Service{
+		repo: repo,
+		nowFunc: func() time.Time {
+			return time.Now().UTC()
+		},
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s, nil
 }
 
 func (s *Service) Create(ctx context.Context, creatorCharID string, name string) (Guild, Member, corecharacter.Character, error) {
@@ -37,7 +77,7 @@ func (s *Service) Create(ctx context.Context, creatorCharID string, name string)
 	}
 
 	guildID := id.New()
-	now := time.Now().UTC()
+	now := s.nowFunc().UTC()
 	g := Guild{
 		ID:                guildID,
 		Name:              name,
@@ -45,6 +85,8 @@ func (s *Service) Create(ctx context.Context, creatorCharID string, name string)
 		Points:            0,
 		Notice:            "",
 		Color:             DefaultColor,
+		Mark:              DefaultMark,
+		LastActiveAt:      now,
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
@@ -53,6 +95,7 @@ func (s *Service) Create(ctx context.Context, creatorCharID string, name string)
 		CharacterID: creatorCharID,
 		Role:        RoleLeader,
 		Title:       DefaultTitleLeader,
+		IsPending:   false,
 		JoinedAt:    now,
 	}
 
@@ -114,10 +157,16 @@ func (s *Service) Join(ctx context.Context, guildID string, characterID string) 
 		CharacterID: characterID,
 		Role:        RoleMember,
 		Title:       "",
-		JoinedAt:    time.Now().UTC(),
+		IsPending:   false,
+		JoinedAt:    s.nowFunc().UTC(),
 	}
 
-	return s.repo.AddMember(ctx, m)
+	res, err := s.repo.AddMember(ctx, m)
+	if err != nil {
+		return Member{}, err
+	}
+	_ = s.repo.TouchActive(ctx, guildID)
+	return res, nil
 }
 
 func (s *Service) Leave(ctx context.Context, guildID string, characterID string) error {
@@ -154,7 +203,11 @@ func (s *Service) Leave(ctx context.Context, guildID string, characterID string)
 		return s.repo.DisbandGuild(ctx, guildID)
 	}
 
-	return s.repo.RemoveMember(ctx, guildID, characterID)
+	if err := s.repo.RemoveMember(ctx, guildID, characterID); err != nil {
+		return err
+	}
+	_ = s.repo.TouchActive(ctx, guildID)
+	return nil
 }
 
 func (s *Service) Kick(ctx context.Context, guildID string, requesterCharID string, targetCharID string) error {
@@ -171,7 +224,7 @@ func (s *Service) Kick(ctx context.Context, guildID string, requesterCharID stri
 		return errors.New("cannot kick self; use leave")
 	}
 
-	_, members, err := s.repo.GetGuild(ctx, guildID)
+	g, members, err := s.repo.GetGuild(ctx, guildID)
 	if err != nil {
 		return err
 	}
@@ -195,7 +248,25 @@ func (s *Service) Kick(ctx context.Context, guildID string, requesterCharID stri
 		return ErrCannotKickLeader
 	}
 
-	return s.repo.RemoveMember(ctx, guildID, targetCharID)
+	if target.IsPending {
+		return s.RejectApplication(ctx, guildID, requesterCharID, targetCharID)
+	}
+
+	if err := s.repo.RemoveMember(ctx, guildID, targetCharID); err != nil {
+		return err
+	}
+	_ = s.repo.TouchActive(ctx, guildID)
+
+	if s.letterSender != nil && s.charReader != nil {
+		leaderChar, errL := s.charReader.FindByID(ctx, requesterCharID)
+		targetChar, errT := s.charReader.FindByID(ctx, targetCharID)
+		if errL == nil && errT == nil {
+			content := "【＋追放＋】" + g.Name + " (ギルマス " + leaderChar.Name + ") から追放されました"
+			_ = s.letterSender.SendLetter(ctx, requesterCharID, leaderChar.Name, targetCharID, targetChar.Name, content, leaderChar.Color)
+		}
+	}
+
+	return nil
 }
 
 func (s *Service) TransferLeadership(ctx context.Context, guildID string, currentLeaderCharID string, newLeaderCharID string) error {
@@ -234,7 +305,11 @@ func (s *Service) TransferLeadership(ctx context.Context, guildID string, curren
 		return ErrTargetNotMember
 	}
 
-	return s.repo.TransferLeadership(ctx, guildID, currentLeaderCharID, newLeaderCharID)
+	if err := s.repo.TransferLeadership(ctx, guildID, currentLeaderCharID, newLeaderCharID); err != nil {
+		return err
+	}
+	_ = s.repo.TouchActive(ctx, guildID)
+	return nil
 }
 
 // AssignCustomRole sets a custom role title on a guild member (guild.cgi:ataeru).
@@ -279,7 +354,15 @@ func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requeste
 		return ErrCannotAssignToLeader
 	}
 
-	return s.repo.AssignCustomRole(ctx, guildID, targetCharID, title)
+	if target.IsPending {
+		return s.ApproveApplication(ctx, guildID, requesterCharID, targetCharID, title)
+	}
+
+	if err := s.repo.AssignCustomRole(ctx, guildID, targetCharID, title); err != nil {
+		return err
+	}
+	_ = s.repo.TouchActive(ctx, guildID)
+	return nil
 }
 
 // UpdateColor changes the guild's hex color (guild.cgi:color).
@@ -332,7 +415,11 @@ func (s *Service) UpdateColor(ctx context.Context, guildID string, requesterChar
 		}
 	}
 
-	return s.repo.UpdateColor(ctx, guildID, normalizedColor)
+	if err := s.repo.UpdateColor(ctx, guildID, normalizedColor); err != nil {
+		return err
+	}
+	_ = s.repo.TouchActive(ctx, guildID)
+	return nil
 }
 
 func (s *Service) UpdateNotice(ctx context.Context, guildID string, requesterCharID string, notice string) error {
@@ -356,7 +443,11 @@ func (s *Service) UpdateNotice(ctx context.Context, guildID string, requesterCha
 		return ErrUnauthorized
 	}
 
-	return s.repo.UpdateNotice(ctx, guildID, notice)
+	if err := s.repo.UpdateNotice(ctx, guildID, notice); err != nil {
+		return err
+	}
+	_ = s.repo.TouchActive(ctx, guildID)
+	return nil
 }
 
 // AddPoints increments guild points directly by guild ID.

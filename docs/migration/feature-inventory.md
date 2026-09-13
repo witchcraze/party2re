@@ -266,6 +266,8 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#482](https://github.com/witchcraze/party2re/issues/482) | Guild Battles: Eliminate Elo Duels & Reproduce Live GvG Multi-Round Matches with Trophy Decorations | Completed |
 | [#483](https://github.com/witchcraze/party2re/issues/483) | Dungeon & Challenge Multi-Player: Support Party Exploration, Map Scouting Skills, and Hall of Fame Records | Completed |
 | [#490](https://github.com/witchcraze/party2re/issues/490) | Guild (Part 1): Purge Donation Leveling, Reproduce Dynamic Guild Points, Hex Colors, and Custom Titles | Completed |
+| [#591](https://github.com/witchcraze/party2re/issues/591) | Guild (Part 2): Membership Application & Approval Workflow, Broadcast Callouts, Customization, and Inactivity Disbandment | Completed |
+
 
 ---
 

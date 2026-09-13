@@ -2,6 +2,7 @@ package guild
 
 import (
 	"context"
+	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
@@ -12,6 +13,7 @@ type GuildReader interface {
 	GetGuildByCharacter(ctx context.Context, characterID string) (Guild, Member, error)
 	ListGuilds(ctx context.Context, offset, limit int) ([]Guild, error)
 	IsColorTaken(ctx context.Context, color string, excludeGuildID string) (bool, error)
+	ListInactiveGuilds(ctx context.Context, cutoff time.Time, limit int) ([]Guild, error)
 }
 
 // GuildMemberWriter defines mutation operations on guild memberships and role titles.
@@ -20,6 +22,7 @@ type GuildMemberWriter interface {
 	RemoveMember(ctx context.Context, guildID string, characterID string) error
 	TransferLeadership(ctx context.Context, guildID string, oldLeaderCharID string, newLeaderCharID string) error
 	AssignCustomRole(ctx context.Context, guildID string, targetCharID string, title string) error
+	ApproveMember(ctx context.Context, guildID string, characterID string, title string) error
 }
 
 // GuildStateWriter defines mutation operations on guild entities, customization, and points.
@@ -30,6 +33,9 @@ type GuildStateWriter interface {
 	AddPoints(ctx context.Context, guildID string, points int64) error
 	AddGuildPoints(ctx context.Context, characterID string, points int) error
 	UpdateBgimg(ctx context.Context, guildID string, bgimg string) error
+	UpdateWallpaper(ctx context.Context, guildID string, wallpaper string, fee int, leaderID string) (corecharacter.Character, error)
+	UpdateMark(ctx context.Context, guildID string, mark string, fee int, leaderID string) (corecharacter.Character, error)
+	TouchActive(ctx context.Context, guildID string) error
 	DisbandGuild(ctx context.Context, guildID string) error
 }
 

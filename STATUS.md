@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #490 — [Refactor] Guild (Part 1): Purge Donation Leveling, Reproduce Dynamic Guild Points, Hex Colors, and Custom Titles
+Last updated: Issue #591 — [Refactor] Guild (Part 2): Membership Application & Approval Workflow, Broadcast Callouts, Customization, and Inactivity Disbandment
 
 ## Current phase
 
@@ -46,7 +46,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Alchemy** (`internal/alchemy`): ✅ 112 recipes; zero fee, depot-linked overnight synthesis, home sleep completion, depot-direct delivery, recipe compendium & `comp_alc` title (#487).
 - **Bank** (`internal/bank`): ✅ Character gold deposit/withdrawal; 999,999G wallet clamp; fictional `bank_accounts` table purged (#476).
 - **Inn** (`internal/inn`): ✅ Fictional paid-inn purged; resting moved to `internal/home` (#459).
-- **Guild** (`internal/guild`): ✅ Foundation (5,000G), dynamic Guild Points (`gpoint`) across social/combat hooks and server rankings, custom member role titles (up to 6 full-width characters via `あたえる`), hex color customization (`からー`) with server-wide uniqueness and GvG eligibility validation; fictional gold-donation leveling and capacity scaling completely purged (#490). Membership application & broadcast callouts pending (#591).
+- **Guild** (`internal/guild`): ✅ Foundation (5,000G), dynamic Guild Points (`gpoint`) across social/combat hooks and server rankings, custom member role titles (up to 6 full-width characters via `あたえる`), hex color customization (`からー`) with server-wide uniqueness and GvG eligibility validation, formal membership application & approval gating (`参加申請中`, `あたえる` approval, `追放` rejection/expulsion with notification letters), broadcast member callouts (`よびかける`, +1 GP), visual personalization (3,000G guild mark, catalog-priced wallpapers), and 20-day inactivity automatic disbandment; fictional gold-donation leveling and capacity scaling completely purged (#490, #591).
 - **Casino** (`internal/casino`): ✅ Coin exchange, Indian Poker (sessions), Slot, Doppel, High-Low; 8-player shared room pending (#486).
 - **Lottery & Raffle** (`internal/lottery`): ✅ Raffle (normal/special); 4-digit lottery — 20-cap/rollover parity pending (#484, #485).
 - **Monster Ranch** (`internal/monster`): ✅ Monster Grandpa stabling (50–300 cap), Home pet link (8 pets), renaming (8 chars), P2P gift, wild release (#488). Fictional crop farm purged (#488).

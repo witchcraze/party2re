@@ -66,6 +66,20 @@
       "purpose": "Deduct guild founding fee from founder wallet"
     },
     {
+      "module": "guild",
+      "caller_method": "internal/database/guild_repository.go#GuildRepository.UpdateMark",
+      "lock_mode": "UPDATE",
+      "lock_order": 2,
+      "purpose": "Deduct guild mark change fee from leader wallet"
+    },
+    {
+      "module": "guild",
+      "caller_method": "internal/database/guild_repository.go#GuildRepository.UpdateWallpaper",
+      "lock_mode": "UPDATE",
+      "lock_order": 2,
+      "purpose": "Deduct guild wallpaper change fee from leader wallet"
+    },
+    {
       "module": "tavern",
       "caller_method": "internal/tavern/order.go#Service.OrderMeal",
       "lock_mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/guild"
@@ -14,16 +15,21 @@ type mockGuildRepo struct {
 	getGuildFn           func(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error)
 	getGuildByCharFn     func(ctx context.Context, characterID string) (guild.Guild, guild.Member, error)
 	listGuildsFn         func(ctx context.Context, offset, limit int) ([]guild.Guild, error)
+	listInactiveGuildsFn func(ctx context.Context, cutoff time.Time, limit int) ([]guild.Guild, error)
 	addMemberFn          func(ctx context.Context, member guild.Member) (guild.Member, error)
 	removeMemberFn       func(ctx context.Context, guildID string, characterID string) error
 	transferLeadershipFn func(ctx context.Context, guildID string, oldLeaderCharID string, newLeaderCharID string) error
 	assignCustomRoleFn   func(ctx context.Context, guildID string, targetCharID string, title string) error
+	approveMemberFn      func(ctx context.Context, guildID string, characterID string, title string) error
 	updateNoticeFn       func(ctx context.Context, guildID string, notice string) error
 	updateColorFn        func(ctx context.Context, guildID string, color string) error
 	isColorTakenFn       func(ctx context.Context, color string, excludeGuildID string) (bool, error)
 	addPointsFn          func(ctx context.Context, guildID string, points int64) error
 	addGuildPointsFn     func(ctx context.Context, characterID string, points int) error
+	updateMarkFn         func(ctx context.Context, guildID string, mark string, fee int, leaderID string) (corecharacter.Character, error)
 	updateBgimgFn        func(ctx context.Context, guildID string, bgimg string) error
+	updateWallpaperFn    func(ctx context.Context, guildID string, wallpaper string, fee int, leaderID string) (corecharacter.Character, error)
+	touchActiveFn        func(ctx context.Context, guildID string) error
 	disbandGuildFn       func(ctx context.Context, guildID string) error
 }
 
@@ -55,6 +61,13 @@ func (m *mockGuildRepo) ListGuilds(ctx context.Context, offset, limit int) ([]gu
 	return nil, nil
 }
 
+func (m *mockGuildRepo) ListInactiveGuilds(ctx context.Context, cutoff time.Time, limit int) ([]guild.Guild, error) {
+	if m.listInactiveGuildsFn != nil {
+		return m.listInactiveGuildsFn(ctx, cutoff, limit)
+	}
+	return nil, nil
+}
+
 func (m *mockGuildRepo) AddMember(ctx context.Context, member guild.Member) (guild.Member, error) {
 	if m.addMemberFn != nil {
 		return m.addMemberFn(ctx, member)
@@ -79,6 +92,13 @@ func (m *mockGuildRepo) TransferLeadership(ctx context.Context, guildID string, 
 func (m *mockGuildRepo) AssignCustomRole(ctx context.Context, guildID string, targetCharID string, title string) error {
 	if m.assignCustomRoleFn != nil {
 		return m.assignCustomRoleFn(ctx, guildID, targetCharID, title)
+	}
+	return nil
+}
+
+func (m *mockGuildRepo) ApproveMember(ctx context.Context, guildID string, characterID string, title string) error {
+	if m.approveMemberFn != nil {
+		return m.approveMemberFn(ctx, guildID, characterID, title)
 	}
 	return nil
 }
@@ -118,9 +138,30 @@ func (m *mockGuildRepo) AddGuildPoints(ctx context.Context, characterID string, 
 	return nil
 }
 
+func (m *mockGuildRepo) UpdateMark(ctx context.Context, guildID string, mark string, fee int, leaderID string) (corecharacter.Character, error) {
+	if m.updateMarkFn != nil {
+		return m.updateMarkFn(ctx, guildID, mark, fee, leaderID)
+	}
+	return corecharacter.Character{ID: leaderID, Money: 10000 - fee}, nil
+}
+
 func (m *mockGuildRepo) UpdateBgimg(ctx context.Context, guildID string, bgimg string) error {
 	if m.updateBgimgFn != nil {
 		return m.updateBgimgFn(ctx, guildID, bgimg)
+	}
+	return nil
+}
+
+func (m *mockGuildRepo) UpdateWallpaper(ctx context.Context, guildID string, wallpaper string, fee int, leaderID string) (corecharacter.Character, error) {
+	if m.updateWallpaperFn != nil {
+		return m.updateWallpaperFn(ctx, guildID, wallpaper, fee, leaderID)
+	}
+	return corecharacter.Character{ID: leaderID, Money: 10000 - fee}, nil
+}
+
+func (m *mockGuildRepo) TouchActive(ctx context.Context, guildID string) error {
+	if m.touchActiveFn != nil {
+		return m.touchActiveFn(ctx, guildID)
 	}
 	return nil
 }

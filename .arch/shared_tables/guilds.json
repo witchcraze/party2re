@@ -21,6 +21,20 @@
       "lock_mode": "UPDATE",
       "lock_order": 7,
       "purpose": "Update guild leader character ID"
+    },
+    {
+      "module": "guild",
+      "caller_method": "internal/database/guild_repository.go#GuildRepository.UpdateMark",
+      "lock_mode": "UPDATE",
+      "lock_order": 7,
+      "purpose": "Update guild mark and last_active_at"
+    },
+    {
+      "module": "guild",
+      "caller_method": "internal/database/guild_repository.go#GuildRepository.UpdateWallpaper",
+      "lock_mode": "UPDATE",
+      "lock_order": 7,
+      "purpose": "Update guild wallpaper and last_active_at"
     }
   ]
 }
