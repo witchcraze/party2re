@@ -18,6 +18,10 @@ The Core contains only concepts genuinely shared across the game (e.g., Player, 
 
 ## 4. Features are First-Class Components
 Features (Adventure, Guild, Casino, Alchemy, etc.) should own their feature-specific rules and state. A feature may depend on public contracts of Core or Domain components (like Battle), but **must not access another Feature Module's private implementation or persistence layer.**
+- **Prohibition of Cross-Feature Direct Imports**: Feature packages MUST NOT import peer feature packages directly. Inter-feature communication must route through public API contracts, `core/event.Dispatcher`, or composition roots (`cmd/party2/`).
+- **Prohibition of Direct Database Imports**: Feature packages MUST NOT import `internal/database` directly. Persistence must be accessed strictly through domain repository interfaces.
+- **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/package_boundary_lint_test.go`) during `make check` and CI.
+
 
 ## 5. UI and API Layer Boundary
 - **No Domain Logic in HTTP Handlers:** Do not put game logic, math, or complex validations directly in HTTP handlers or GUI components.

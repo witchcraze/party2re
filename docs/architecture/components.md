@@ -242,7 +242,8 @@ To avoid duplicate boilerplate while preventing monolithic "junk-drawer" package
 
 ## Feature modules
 
-Each feature owns its feature-specific rules and state. A feature may consume public contracts from Core or shared components, but must not access another feature's private implementation or database schema.
+Each feature owns its feature-specific rules and state. A feature may consume public contracts from Core or shared components, but must not access another feature's private implementation or database schema. Direct cross-feature imports and direct `internal/database` imports from feature packages are mechanically prohibited via Go AST static analysis (`internal/architecture/package_boundary_lint_test.go`).
+
 
 ### Implemented Feature Modules
 
