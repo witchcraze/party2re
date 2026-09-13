@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #454 — [Refactor] Architecture/ISP: Decompose whitelisted legacy interfaces for guild and ranking
+Last updated: Issue #280 — [Chore] Test/Ranking: Add unit tests for uncovered Get*Ranking service methods
 
 ## Current phase
 
@@ -66,7 +66,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Town Park & Bulletin Board** (`internal/park`): ✅ Posts with color/recipient, rate-limit, NPC divination.
 - **News & Notifications** (`internal/notification`): ✅ Server-wide announcements + per-player inbox with read/unread management.
 - **Home, Towns & Resting** (`internal/home`, `internal/town`): ✅ House construction/expiry cycles, pet phrases (30 max), mailbox (independent delete), sleep recovery; overnight carpenter parity (#459, #461).
-- **Rankings** (`internal/ranking`): ✅ 12 categories; Valkey snapshot cache, singleflight stampede guard, periodic Worker; repository decomposed to composite sub-interfaces (`CharacterRankingRepository`, `PlayerWealthRankingRepository`, `SnapshotRepository`) satisfying ISP (≤10 methods) (#454).
+- **Rankings** (`internal/ranking`): ✅ 12 categories; Valkey snapshot cache, singleflight stampede guard, periodic Worker; repository decomposed to composite sub-interfaces (`CharacterRankingRepository`, `PlayerWealthRankingRepository`, `SnapshotRepository`) satisfying ISP (≤10 methods) (#454); comprehensive unit tests with 90.9% statement coverage covering all ranking methods and options (#280).
 - **Event Plaza** (`internal/eventplaza`): ✅ Real-time plaza concurrency presence tracking (5-minute active window via Valkey Sorted Set + MariaDB), 26-item authentic merchant catalog at 3× markup across Tiers 1–3, active helper quest item exclusion, hand occupancy depot fallback delivery, and King Boss victory celebration banquets (#491).
 - **Secret Shop** (`internal/secretshop`): ✅ `job_lv >= 7` gate, 8 items at 3× price, Depot auto-delivery, puff-puff (dialogue only) (#462).
 - **Tavern & Food Delivery** (`internal/tavern`): ✅ 14-item menu, HP/MP restore, fullness on counter meal, raffle tickets on counter meal, recurring standing order food delivery across repeated solo & party adventures without erroneous consumption, fullness mutation, or ticket mis-award (`bar.cgi`, `_battle.cgi`); fictional courier quests and parcel courier purged (#475, #595).

@@ -31,6 +31,7 @@ type mockRankingRepository struct {
 	smallMedalRankings      []ranking.CharacterRankingEntry
 	smallMedalTotal         int
 	snapshots               map[ranking.RankingType]ranking.RankingSnapshot
+	err                     error
 }
 
 func newMockRepo() *mockRankingRepository {
@@ -40,55 +41,94 @@ func newMockRepo() *mockRankingRepository {
 }
 
 func (m *mockRankingRepository) GetLevelRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	if m.err != nil {
+		return nil, 0, m.err
+	}
 	return paginateSlice(m.levelRankings, limit, offset), m.levelTotal, nil
 }
 
 func (m *mockRankingRepository) GetPlayerWealthRanking(ctx context.Context, limit, offset int) ([]ranking.PlayerWealthRankingEntry, int, error) {
+	if m.err != nil {
+		return nil, 0, m.err
+	}
 	return paginateSlice(m.playerWealthRankings, limit, offset), m.playerWealthTotal, nil
 }
 
 func (m *mockRankingRepository) GetCharacterWealthRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	if m.err != nil {
+		return nil, 0, m.err
+	}
 	return paginateSlice(m.characterWealthRankings, limit, offset), m.characterWealthTotal, nil
 }
 
 func (m *mockRankingRepository) GetBattleVictoryRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	if m.err != nil {
+		return nil, 0, m.err
+	}
 	return paginateSlice(m.battleRankings, limit, offset), m.battleTotal, nil
 }
 
 func (m *mockRankingRepository) GetPvPVictoryRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	if m.err != nil {
+		return nil, 0, m.err
+	}
 	return paginateSlice(m.pvpRankings, limit, offset), m.pvpTotal, nil
 }
 
 func (m *mockRankingRepository) GetBossDefeatRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	if m.err != nil {
+		return nil, 0, m.err
+	}
 	return paginateSlice(m.bossRankings, limit, offset), m.bossTotal, nil
 }
 
 func (m *mockRankingRepository) GetAdventureVictoryRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	if m.err != nil {
+		return nil, 0, m.err
+	}
 	return paginateSlice(m.advRankings, limit, offset), m.advTotal, nil
 }
 
 func (m *mockRankingRepository) GetJobMasteryRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	if m.err != nil {
+		return nil, 0, m.err
+	}
 	return paginateSlice(m.jobMasteryRankings, limit, offset), m.jobMasteryTotal, nil
 }
 
 func (m *mockRankingRepository) GetJobPopularityRanking(ctx context.Context) ([]ranking.JobPopularityEntry, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
 	return m.jobPopularityRankings, nil
 }
 
 func (m *mockRankingRepository) GetHelperRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	if m.err != nil {
+		return nil, 0, m.err
+	}
 	return paginateSlice(m.helperRankings, limit, offset), m.helperTotal, nil
 }
 
 func (m *mockRankingRepository) GetSmallMedalRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	if m.err != nil {
+		return nil, 0, m.err
+	}
 	return paginateSlice(m.smallMedalRankings, limit, offset), m.smallMedalTotal, nil
 }
 
 func (m *mockRankingRepository) SaveSnapshot(ctx context.Context, snapshot ranking.RankingSnapshot) error {
+	if m.err != nil {
+		return m.err
+	}
 	m.snapshots[snapshot.RankingType] = snapshot
 	return nil
 }
 
 func (m *mockRankingRepository) GetSnapshot(ctx context.Context, rankingType ranking.RankingType) (ranking.RankingSnapshot, error) {
+	if m.err != nil {
+		return ranking.RankingSnapshot{}, m.err
+	}
 	s, ok := m.snapshots[rankingType]
 	if !ok {
 		return ranking.RankingSnapshot{}, ranking.ErrSnapshotNotFound
@@ -97,6 +137,9 @@ func (m *mockRankingRepository) GetSnapshot(ctx context.Context, rankingType ran
 }
 
 func (m *mockRankingRepository) GetAllSnapshots(ctx context.Context) (map[ranking.RankingType]ranking.RankingSnapshot, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
 	return m.snapshots, nil
 }
 

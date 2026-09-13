@@ -285,6 +285,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#528](https://github.com/witchcraze/party2re/issues/528) | Security: Automated Cryptographic Policy and Password Hashing Linter | Completed |
 | [#526](https://github.com/witchcraze/party2re/issues/526) | Modular Monolith: Automated Package Boundary and Cross-Feature Import Linter | Completed |
 | [#454](https://github.com/witchcraze/party2re/issues/454) | Architecture/ISP: Decompose whitelisted legacy interfaces for guild and ranking | Completed |
+| [#280](https://github.com/witchcraze/party2re/issues/280) | Test/Ranking: Add unit tests for uncovered Get*Ranking service methods | Completed |
 
 
 ---
