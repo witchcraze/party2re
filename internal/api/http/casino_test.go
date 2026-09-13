@@ -14,22 +14,20 @@ import (
 )
 
 type stubCasinoService struct {
-	getAccountFn            func(ctx context.Context, characterID string) (casino.Account, error)
-	exchangeGoldToCoinsFn   func(ctx context.Context, characterID string, coins int64) (casino.Account, corecharacter.Character, error)
-	exchangeCoinsToGoldFn   func(ctx context.Context, characterID string, coins int64) (casino.Account, corecharacter.Character, error)
-	spinSlotFn              func(ctx context.Context, characterID string, bet int64) (casino.SpinResult, casino.Account, error)
-	playHighLowFn           func(ctx context.Context, characterID string, betCoins int64, guess casino.GuessType) (casino.HighLowResult, casino.Account, error)
-	playDoppelFn            func(ctx context.Context, characterID string, bet int64, poolSize int, playerMark casino.DoppelMark) (casino.DoppelResult, casino.Account, error)
-	exchangePrizeFn         func(ctx context.Context, characterID string, costCoins int64, count int) (casino.PrizeExchangeResult, error)
-	listRoomsFn             func(ctx context.Context) ([]casino.RoomDetail, error)
-	createRoomFn            func(ctx context.Context, characterID string, req casino.CreateRoomRequest) (*casino.RoomDetail, error)
-	getRoomDetailFn         func(ctx context.Context, roomID string, viewingCharID string) (*casino.RoomDetail, error)
-	joinRoomFn              func(ctx context.Context, roomID string, characterID string, password string, fatigue int) (*casino.RoomDetail, error)
-	spectateRoomFn          func(ctx context.Context, roomID string, characterID string, password string) (*casino.RoomDetail, error)
-	leaveRoomFn             func(ctx context.Context, roomID string, characterID string) error
-	kickMemberFn            func(ctx context.Context, roomID string, leaderID string, targetID string) error
-	startIndianPokerFn      func(ctx context.Context, roomID string, leaderID string) (*casino.RoomDetail, error)
-	playIndianPokerActionFn func(ctx context.Context, roomID string, characterID string, action casino.Action) (*casino.RoomDetail, error)
+	getAccountFn          func(ctx context.Context, characterID string) (casino.Account, error)
+	exchangeGoldToCoinsFn func(ctx context.Context, characterID string, coins int64) (casino.Account, corecharacter.Character, error)
+	exchangeCoinsToGoldFn func(ctx context.Context, characterID string, coins int64) (casino.Account, corecharacter.Character, error)
+	spinSlotFn            func(ctx context.Context, characterID string, bet int64) (casino.SpinResult, casino.Account, error)
+	exchangePrizeFn       func(ctx context.Context, characterID string, costCoins int64, count int) (casino.PrizeExchangeResult, error)
+	listRoomsFn           func(ctx context.Context) ([]casino.RoomDetail, error)
+	createRoomFn          func(ctx context.Context, characterID string, req casino.CreateRoomRequest) (*casino.RoomDetail, error)
+	getRoomDetailFn       func(ctx context.Context, roomID string, viewingCharID string) (*casino.RoomDetail, error)
+	joinRoomFn            func(ctx context.Context, roomID string, characterID string, password string, fatigue int) (*casino.RoomDetail, error)
+	spectateRoomFn        func(ctx context.Context, roomID string, characterID string, password string) (*casino.RoomDetail, error)
+	leaveRoomFn           func(ctx context.Context, roomID string, characterID string) error
+	kickMemberFn          func(ctx context.Context, roomID string, leaderID string, targetID string) error
+	startGameFn           func(ctx context.Context, roomID string, leaderID string) (*casino.RoomDetail, error)
+	playRoomActionFn      func(ctx context.Context, roomID string, characterID string, req casino.RoomActionRequest) (*casino.RoomDetail, error)
 }
 
 func (s *stubCasinoService) GetAccount(ctx context.Context, characterID string) (casino.Account, error) {
@@ -58,20 +56,6 @@ func (s *stubCasinoService) SpinSlot(ctx context.Context, characterID string, be
 		return s.spinSlotFn(ctx, characterID, bet)
 	}
 	return casino.SpinResult{BetCoins: bet, Reels: [3]casino.SlotSymbol{casino.SymbolCherry, casino.SymbolCherry, casino.SymbolCherry}, IsWin: true, Multiplier: 2, PayoutCoins: bet * 2}, casino.Account{CharacterID: characterID, Coins: bet * 2}, nil
-}
-
-func (s *stubCasinoService) PlayHighLow(ctx context.Context, characterID string, betCoins int64, guess casino.GuessType) (casino.HighLowResult, casino.Account, error) {
-	if s.playHighLowFn != nil {
-		return s.playHighLowFn(ctx, characterID, betCoins, guess)
-	}
-	return casino.HighLowResult{BetCoins: betCoins, Guess: guess, Outcome: casino.OutcomeWin, Multiplier: 2, PayoutCoins: betCoins * 2}, casino.Account{CharacterID: characterID, Coins: betCoins * 2}, nil
-}
-
-func (s *stubCasinoService) PlayDoppel(ctx context.Context, characterID string, bet int64, poolSize int, playerMark casino.DoppelMark) (casino.DoppelResult, casino.Account, error) {
-	if s.playDoppelFn != nil {
-		return s.playDoppelFn(ctx, characterID, bet, poolSize, playerMark)
-	}
-	return casino.DoppelResult{BetCoins: bet, PlayerMark: playerMark, IsWin: true, Multiplier: poolSize, PayoutCoins: bet * int64(poolSize)}, casino.Account{CharacterID: characterID, Coins: bet * int64(poolSize)}, nil
 }
 
 func (s *stubCasinoService) ExchangePrize(ctx context.Context, characterID string, costCoins int64, count int) (casino.PrizeExchangeResult, error) {
@@ -143,18 +127,18 @@ func (s *stubCasinoService) KickMember(ctx context.Context, roomID string, leade
 	return nil
 }
 
-func (s *stubCasinoService) StartIndianPoker(ctx context.Context, roomID string, leaderID string) (*casino.RoomDetail, error) {
-	if s.startIndianPokerFn != nil {
-		return s.startIndianPokerFn(ctx, roomID, leaderID)
+func (s *stubCasinoService) StartGame(ctx context.Context, roomID string, leaderID string) (*casino.RoomDetail, error) {
+	if s.startGameFn != nil {
+		return s.startGameFn(ctx, roomID, leaderID)
 	}
 	detail, _ := s.GetRoomDetail(ctx, roomID, leaderID)
 	detail.Room.Round = 1
 	return detail, nil
 }
 
-func (s *stubCasinoService) PlayIndianPokerAction(ctx context.Context, roomID string, characterID string, action casino.Action) (*casino.RoomDetail, error) {
-	if s.playIndianPokerActionFn != nil {
-		return s.playIndianPokerActionFn(ctx, roomID, characterID, action)
+func (s *stubCasinoService) PlayRoomAction(ctx context.Context, roomID string, characterID string, req casino.RoomActionRequest) (*casino.RoomDetail, error) {
+	if s.playRoomActionFn != nil {
+		return s.playRoomActionFn(ctx, roomID, characterID, req)
 	}
 	detail, _ := s.GetRoomDetail(ctx, roomID, characterID)
 	return detail, nil
@@ -211,28 +195,6 @@ func TestCasinoEndpoints(t *testing.T) {
 
 	t.Run("POST /characters/{id}/casino/slot - success", func(t *testing.T) {
 		req := jsonRequest(t, http.MethodPost, "/characters/c1/casino/slot", `{"bet":10}`)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("POST /characters/{id}/casino/highlow - success", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/casino/highlow", `{"bet":10,"guess":"HIGH"}`)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("POST /characters/{id}/casino/doppel - success", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/casino/doppel", `{"bet":10,"pool_size":4,"player_mark":"★"}`)
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -327,8 +289,19 @@ func TestCasinoEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /characters/{id}/casino/rooms/{roomId}/action - success", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/casino/rooms/r1/action", `{"action":"call"}`)
+	t.Run("POST /characters/{id}/casino/rooms/{roomId}/action - highlow action", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/casino/rooms/r1/action", `{"action":"high"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("POST /characters/{id}/casino/rooms/{roomId}/action - doppel mark", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/casino/rooms/r1/action", `{"action":"mark","mark":"★"}`)
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)

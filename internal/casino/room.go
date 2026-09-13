@@ -302,7 +302,7 @@ func (s *Service) ListRooms(ctx context.Context) ([]RoomDetail, error) {
 	return s.roomRepo.ListActiveRooms(ctx)
 }
 
-// GetRoomDetail returns room details with appropriate card masking according to Party2 rules (party2/lib/casino_indian.cgi:28).
+// GetRoomDetail returns room details with appropriate card masking according to Party2 rules.
 func (s *Service) GetRoomDetail(ctx context.Context, roomID string, viewingCharID string) (*RoomDetail, error) {
 	if s.roomRepo == nil {
 		return nil, errors.New("room repository is required")
@@ -319,15 +319,43 @@ func (s *Service) GetRoomDetail(ctx context.Context, roomID string, viewingCharI
 	maskedMembers := make([]RoomMember, len(members))
 	for i, m := range members {
 		masked := m
-		if m.Card >= 0 && m.Card < len(AuthenticCardNames) {
-			masked.CardDisplay = AuthenticCardNames[m.Card]
+		if m.Card >= 0 {
+			if room.GameType == GameTypeDoppel && m.Card < len(AuthenticDoppelMarks) {
+				masked.CardDisplay = string(AuthenticDoppelMarks[m.Card])
+			} else if m.Card < len(AuthenticCardNames) {
+				masked.CardDisplay = AuthenticCardNames[m.Card]
+			}
 		}
-		// Masking rule: A player cannot see their own card while active in an in-progress round!
-		// If the player folds or game is waiting/over, card is revealed.
-		if viewingCharID != "" && m.CharacterID == viewingCharID {
-			if room.Round > 0 && m.Action != string(ActionFold) && m.Action != "おりる" && m.Action != "待機中" {
-				masked.Card = -1
-				masked.CardDisplay = "？"
+
+		if room.Round > 0 && viewingCharID != "" {
+			switch room.GameType {
+			case GameTypeIndian:
+				// Forehead card rule (party2/lib/casino_indian.cgi:28):
+				// A player cannot see their own card while active in an in-progress round, but sees others.
+				if m.CharacterID == viewingCharID && m.Action != string(ActionFold) && m.Action != "おりる" && m.Action != "待機中" {
+					masked.Card = -1
+					masked.CardDisplay = "？"
+				}
+			case GameTypeHighLow:
+				// High-Low rule (party2/lib/casino_highlow.cgi:33-50):
+				// Player sees own card and own action; others' cards are hidden, and other actions (high/low/fold) masked as "？？？"
+				if m.CharacterID != viewingCharID {
+					masked.Card = -1
+					masked.CardDisplay = "？"
+					if m.Action != "" && m.Action != "待機中" && m.Action != "つづける" && m.Action != string(HighLowActionCall) {
+						masked.Action = "？？？"
+					}
+				}
+			case GameTypeDoppel:
+				// Doppel rule (party2/lib/casino_doppel.cgi:23-36):
+				// Player sees own chosen mark; others' marks and actions are hidden
+				if m.CharacterID != viewingCharID {
+					masked.Card = -1
+					masked.CardDisplay = "？"
+					if m.Action != "" && m.Action != "待機中" {
+						masked.Action = "？？？"
+					}
+				}
 			}
 		}
 		maskedMembers[i] = masked
@@ -337,4 +365,67 @@ func (s *Service) GetRoomDetail(ctx context.Context, roomID string, viewingCharI
 		Room:    *room,
 		Members: maskedMembers,
 	}, nil
+}
+
+// StartGame starts the round for the room's configured GameType (party2/lib/_casino.cgi:24-32).
+func (s *Service) StartGame(ctx context.Context, roomID string, leaderID string) (*RoomDetail, error) {
+	if s.roomRepo == nil {
+		return nil, errors.New("room repository is required")
+	}
+	room, err := s.roomRepo.GetRoom(ctx, roomID)
+	if err != nil {
+		return nil, err
+	}
+	switch room.GameType {
+	case GameTypeIndian:
+		return s.StartIndianPoker(ctx, roomID, leaderID)
+	case GameTypeHighLow:
+		return s.StartHighLow(ctx, roomID, leaderID)
+	case GameTypeDoppel:
+		return s.StartDoppel(ctx, roomID, leaderID)
+	default:
+		return nil, ErrInvalidGameType
+	}
+}
+
+type RoomActionRequest struct {
+	Action string `json:"action"`         // "call", "high", "low", "fold", "showdown"
+	Mark   string `json:"mark,omitempty"` // For doppel: "★".."▼" or "0".."7"
+}
+
+// PlayRoomAction routes a player's action according to the room's GameType.
+func (s *Service) PlayRoomAction(ctx context.Context, roomID string, characterID string, req RoomActionRequest) (*RoomDetail, error) {
+	if s.roomRepo == nil {
+		return nil, errors.New("room repository is required")
+	}
+	room, err := s.roomRepo.GetRoom(ctx, roomID)
+	if err != nil {
+		return nil, err
+	}
+	switch room.GameType {
+	case GameTypeIndian:
+		act := Action(req.Action)
+		if !act.Valid() {
+			return nil, ErrInvalidAction
+		}
+		return s.PlayIndianPokerAction(ctx, roomID, characterID, act)
+	case GameTypeHighLow:
+		act, err := ParseHighLowAction(req.Action)
+		if err != nil {
+			return nil, err
+		}
+		return s.PlayHighLowAction(ctx, roomID, characterID, act)
+	case GameTypeDoppel:
+		input := req.Mark
+		if input == "" {
+			input = req.Action
+		}
+		markIdx, err := ParseDoppelMark(input)
+		if err != nil {
+			return nil, err
+		}
+		return s.PlayDoppelAction(ctx, roomID, characterID, markIdx)
+	default:
+		return nil, ErrInvalidGameType
+	}
 }

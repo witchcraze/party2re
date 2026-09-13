@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #485 — [Refactor] Fukubiki Raffle: Eliminate gold purchase and gold prizes, restoring Stat Seeds, Orbs, and Tavern coupon linkage
+Last updated: Issue #590 — [Feature] Casino (Part 2): Multi-Player High-Low and Doppelganger Games
 
 ## Current phase
 
@@ -47,7 +47,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Bank** (`internal/bank`): ✅ Character gold deposit/withdrawal; 999,999G wallet clamp; fictional `bank_accounts` table purged (#476).
 - **Inn** (`internal/inn`): ✅ Fictional paid-inn purged; resting moved to `internal/home` (#459).
 - **Guild** (`internal/guild`): ✅ Foundation (5,000G), dynamic Guild Points (`gpoint`) across social/combat hooks and server rankings, custom member role titles (up to 6 full-width characters via `あたえる`), hex color customization (`からー`) with server-wide uniqueness and GvG eligibility validation, formal membership application & approval gating (`参加申請中`, `あたえる` approval, `追放` rejection/expulsion with notification letters), broadcast member callouts (`よびかける`, +1 GP), visual personalization (3,000G guild mark, catalog-priced wallpapers), and 20-day inactivity automatic disbandment; fictional gold-donation leveling and capacity scaling completely purged (#490, #591).
-- **Casino** (`internal/casino`): ✅ Multi-Player Room Lobby (2..8 players, Indian Poker, High-Low, Doppelganger, speed/rate/password/spectators), authentic 13-card forehead Indian Poker (`party2/lib/casino_indian.cgi`), 18 authentic prizes with atomic Depot auto-routing (`party2/lib/casino.cgi`); fictional solo dealer poker session table completely purged (#486).
+- **Casino** (`internal/casino`): ✅ Multi-Player Room Lobby (2..8 players, Indian Poker, High-Low, Doppelganger, speed/rate/password/spectators), authentic 13-card forehead Indian Poker (`party2/lib/casino_indian.cgi`), authentic multi-player High-Low (`party2/lib/casino_highlow.cgi`), authentic multi-player Doppelganger (`party2/lib/casino_doppel.cgi`), 18 authentic prizes with atomic Depot auto-routing (`party2/lib/casino.cgi`); fictional solo dealer poker, solo high-low, solo doppelganger and 52-card standard deck completely purged (#486, #590).
 - **Lottery & Raffle** (`internal/lottery`): ✅ Server-wide 20-cap Takarakuji lottery (`party2/lib/takarakuzi.cgi`, NPC `@クラゲ`), and authentic Fukubiki raffle (`party2/lib/lot.cgi`, NPC `@フクスケ`) with 3-coupon Standard (stat seeds, weekday secret treasures, small medals) and 300-coupon Special (orbs, rare materials) draws with hand-occupancy depot automatic routing; fictional gold ticket purchase and gold prizes purged (#484, #485).
 - **Monster Ranch** (`internal/monster`): ✅ Monster Grandpa stabling (50–300 cap), Home pet link (8 pets), renaming (8 chars), P2P gift, wild release (#488). Fictional crop farm purged (#488).
 - **Plantation** (`internal/plantation`): ✅ 6 seeds, 14 fertilizer reagents (Gold or Depot/Inventory items), next-midnight JST maturation, wither/yield bonuses, Depot-direct delivery (#489).
@@ -83,7 +83,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### API & Transport
 - **Server Entrypoint** (`cmd/party2`): ✅ Typed config injection, modular service wiring (`wire.go`), Graceful Shutdown.
-- **HTTP JSON API** (`internal/api/http`): ✅ 242 paths / 263 operations (OpenAPI 3.1); dual auth (session + PAT), IDOR defense, rate-limit, CORS, maintenance middleware.
+- **HTTP JSON API** (`internal/api/http`): ✅ 251 paths / 271 operations (OpenAPI 3.1); dual auth (session + PAT), IDOR defense, rate-limit, CORS, maintenance middleware.
 
 ### Infrastructure & Operations
 - **Database** (MariaDB): ✅ Migrations `001`–`081`; `make db-migrate` / `make db-reset`; connection pool env-configurable.
@@ -98,8 +98,8 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 See [`ROADMAP.md`](ROADMAP.md) for full milestone details.
 
-1. **Parity Milestone 3 — Adventure, Combat & Dungeons**: #478, #479, #481, #482, #483
-2. **Parity Milestone 4 — Community, Events & Entertainment**: #490, #591, #491, #484, #485 (complete); next: #486
+1. **Parity Milestone 3 — Adventure, Combat & Dungeons**: #478, #479, #481, #482, #483 (completed)
+2. **Parity Milestone 4 — Community, Events & Entertainment**: #490, #591, #491, #484, #485, #486, #590 (completed)
 3. **Client Presentation & Web UI**: Issue #140
 4. **Production Asset Pipeline & Final Licensing**: Issue #143, #202
 

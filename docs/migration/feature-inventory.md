@@ -108,7 +108,7 @@ All groups below are Version 1.0 reconstruction requirements.
 ### F. Economy and side systems
 - [x] Alchemy: Free Overnight Depot-linked Synthesis & Compendium ([#60](https://github.com/witchcraze/party2re/issues/60), [#487](https://github.com/witchcraze/party2re/issues/487))
 - [x] Player Auction house and free-market operations ([#80](https://github.com/witchcraze/party2re/issues/80))
-- [x] Casino mini-games: Slot Machine ([#81](https://github.com/witchcraze/party2re/issues/81)), Indian Poker ([#82](https://github.com/witchcraze/party2re/issues/82)), Doppel ([#141](https://github.com/witchcraze/party2re/issues/141)), High & Low ([#64](https://github.com/witchcraze/party2re/issues/64))
+- [x] Casino mini-games: Multi-Player Room Lobby, Indian Poker, High & Low, Doppelganger, Slot Machine, Prize Exchange ([#81](https://github.com/witchcraze/party2re/issues/81), [#486](https://github.com/witchcraze/party2re/issues/486), [#590](https://github.com/witchcraze/party2re/issues/590))
 - [x] Lottery and raffle ticket systems ([#83](https://github.com/witchcraze/party2re/issues/83))
 - [x] Plantation seed cultivation with 6 seeds & 14 fertilizers ([#84](https://github.com/witchcraze/party2re/issues/84), [#489](https://github.com/witchcraze/party2re/issues/489))
 - [x] Collection and Monster Book encyclopedia ([#85](https://github.com/witchcraze/party2re/issues/85))
@@ -273,6 +273,8 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#484](https://github.com/witchcraze/party2re/issues/484) | Takarakuji: Purge fictional 4-digit lottery, reproducing 20-cap 30,000G rare equipment lottery and 10-day drawing cycles | Completed |
 | [#595](https://github.com/witchcraze/party2re/issues/595) | Tavern: Restore food delivery standing order, remove erroneous deletion and fullness, and trigger on party adventure | Completed |
 | [#485](https://github.com/witchcraze/party2re/issues/485) | Fukubiki Raffle: Eliminate gold purchase and gold prizes, restoring Stat Seeds, Orbs, and Tavern coupon linkage | Completed |
+| [#486](https://github.com/witchcraze/party2re/issues/486) | Casino (Part 1): Multi-Player Room Lobby, Indian Poker, and Prize Depot Routing | Completed |
+| [#590](https://github.com/witchcraze/party2re/issues/590) | Casino (Part 2): Multi-Player High-Low and Doppelganger Games | Completed |
 
 
 ---

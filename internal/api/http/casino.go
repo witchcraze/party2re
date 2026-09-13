@@ -20,8 +20,6 @@ type CasinoAccountService interface {
 
 type CasinoSoloGameService interface {
 	SpinSlot(ctx context.Context, characterID string, bet int64) (casino.SpinResult, casino.Account, error)
-	PlayHighLow(ctx context.Context, characterID string, betCoins int64, guess casino.GuessType) (casino.HighLowResult, casino.Account, error)
-	PlayDoppel(ctx context.Context, characterID string, bet int64, poolSize int, playerMark casino.DoppelMark) (casino.DoppelResult, casino.Account, error)
 }
 
 type CasinoRoomService interface {
@@ -32,8 +30,8 @@ type CasinoRoomService interface {
 	SpectateRoom(ctx context.Context, roomID string, characterID string, password string) (*casino.RoomDetail, error)
 	LeaveRoom(ctx context.Context, roomID string, characterID string) error
 	KickMember(ctx context.Context, roomID string, leaderID string, targetID string) error
-	StartIndianPoker(ctx context.Context, roomID string, leaderID string) (*casino.RoomDetail, error)
-	PlayIndianPokerAction(ctx context.Context, roomID string, characterID string, action casino.Action) (*casino.RoomDetail, error)
+	StartGame(ctx context.Context, roomID string, leaderID string) (*casino.RoomDetail, error)
+	PlayRoomAction(ctx context.Context, roomID string, characterID string, req casino.RoomActionRequest) (*casino.RoomDetail, error)
 }
 
 // CasinoService defines the casino operations exposed over HTTP.
@@ -71,27 +69,6 @@ type casinoSlotRequest struct {
 type casinoSlotResponse struct {
 	Result  casino.SpinResult `json:"result"`
 	Account casino.Account    `json:"account"`
-}
-
-type casinoHighLowRequest struct {
-	Bet   int64  `json:"bet"`
-	Guess string `json:"guess"` // "HIGH" or "LOW"
-}
-
-type casinoHighLowResponse struct {
-	Result  casino.HighLowResult `json:"result"`
-	Account casino.Account       `json:"account"`
-}
-
-type casinoDoppelRequest struct {
-	Bet        int64  `json:"bet"`
-	PoolSize   int    `json:"pool_size"`
-	PlayerMark string `json:"player_mark"`
-}
-
-type casinoDoppelResponse struct {
-	Result  casino.DoppelResult `json:"result"`
-	Account casino.Account      `json:"account"`
 }
 
 type casinoPrizeExchangeRequest struct {
@@ -204,90 +181,6 @@ func (h *Handler) handleCasinoSlot(w http.ResponseWriter, r *http.Request) {
 		}
 
 		writeJSON(w, http.StatusOK, casinoSlotResponse{
-			Result:  res,
-			Account: account,
-		})
-	})
-}
-
-func (h *Handler) handleCasinoHighLow(w http.ResponseWriter, r *http.Request) {
-	if h.casino == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("casino service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req casinoHighLowRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		if req.Bet <= 0 {
-			writeError(w, http.StatusBadRequest, casino.ErrInvalidHighLowBet)
-			return
-		}
-
-		guess := casino.GuessType(req.Guess)
-		if guess != casino.GuessHigh && guess != casino.GuessLow {
-			guess = casino.GuessHigh
-		}
-
-		res, account, err := h.casino.PlayHighLow(r.Context(), char.ID, req.Bet, guess)
-		if err != nil {
-			if errors.Is(err, casino.ErrInsufficientCoins) {
-				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
-			if errors.Is(err, casino.ErrInvalidHighLowBet) || errors.Is(err, casino.ErrInvalidGuess) {
-				writeError(w, http.StatusBadRequest, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, casinoHighLowResponse{
-			Result:  res,
-			Account: account,
-		})
-	})
-}
-
-func (h *Handler) handleCasinoDoppel(w http.ResponseWriter, r *http.Request) {
-	if h.casino == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("casino service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req casinoDoppelRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		if req.Bet <= 0 || req.PoolSize < 2 {
-			writeError(w, http.StatusBadRequest, casino.ErrInvalidDoppelBet)
-			return
-		}
-
-		mark := casino.DoppelMark(req.PlayerMark)
-		res, account, err := h.casino.PlayDoppel(r.Context(), char.ID, req.Bet, req.PoolSize, mark)
-		if err != nil {
-			if errors.Is(err, casino.ErrInsufficientCoins) {
-				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
-			if errors.Is(err, casino.ErrInvalidDoppelBet) || errors.Is(err, casino.ErrInvalidPoolSize) || errors.Is(err, casino.ErrInvalidDoppelMark) {
-				writeError(w, http.StatusBadRequest, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, casinoDoppelResponse{
 			Result:  res,
 			Account: account,
 		})

@@ -36,7 +36,8 @@ type kickCasinoRoomMemberRequest struct {
 }
 
 type casinoRoomActionRequest struct {
-	Action casino.Action `json:"action"` // "call", "showdown", "fold"
+	Action string `json:"action"`         // "call", "showdown", "fold", "high", "low", or mark
+	Mark   string `json:"mark,omitempty"` // For doppel: "★".."▼" or "0".."7"
 }
 
 func (h *Handler) handleListCasinoRooms(w http.ResponseWriter, r *http.Request) {
@@ -268,7 +269,7 @@ func (h *Handler) handleKickCasinoRoomMember(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-func (h *Handler) handleStartCasinoIndianPoker(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleStartCasinoRoomGame(w http.ResponseWriter, r *http.Request) {
 	if h.casino == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("casino service not configured"))
 		return
@@ -278,7 +279,7 @@ func (h *Handler) handleStartCasinoIndianPoker(w http.ResponseWriter, r *http.Re
 	roomID := r.PathValue("roomId")
 
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		room, err := h.casino.StartIndianPoker(r.Context(), roomID, char.ID)
+		room, err := h.casino.StartGame(r.Context(), roomID, char.ID)
 		if err != nil {
 			if errors.Is(err, casino.ErrRoomNotFound) {
 				writeError(w, http.StatusNotFound, err)
@@ -306,7 +307,7 @@ func (h *Handler) handleStartCasinoIndianPoker(w http.ResponseWriter, r *http.Re
 	})
 }
 
-func (h *Handler) handlePlayCasinoIndianPokerAction(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handlePlayCasinoRoomAction(w http.ResponseWriter, r *http.Request) {
 	if h.casino == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("casino service not configured"))
 		return
@@ -321,12 +322,12 @@ func (h *Handler) handlePlayCasinoIndianPokerAction(w http.ResponseWriter, r *ht
 			return
 		}
 
-		if !req.Action.Valid() {
-			writeError(w, http.StatusBadRequest, casino.ErrInvalidAction)
-			return
+		roomReq := casino.RoomActionRequest{
+			Action: req.Action,
+			Mark:   req.Mark,
 		}
 
-		room, err := h.casino.PlayIndianPokerAction(r.Context(), roomID, char.ID, req.Action)
+		room, err := h.casino.PlayRoomAction(r.Context(), roomID, char.ID, roomReq)
 		if err != nil {
 			if errors.Is(err, casino.ErrRoomNotFound) || errors.Is(err, casino.ErrMemberNotFound) {
 				writeError(w, http.StatusNotFound, err)
@@ -342,6 +343,12 @@ func (h *Handler) handlePlayCasinoIndianPokerAction(w http.ResponseWriter, r *ht
 			}
 			if errors.Is(err, casino.ErrInsufficientCoins) {
 				writeError(w, http.StatusUnprocessableEntity, err)
+				return
+			}
+			if errors.Is(err, casino.ErrInvalidAction) || errors.Is(err, casino.ErrInvalidHighLowAction) ||
+				errors.Is(err, casino.ErrLowNotAllowedTwo) || errors.Is(err, casino.ErrInvalidDoppelMark) ||
+				errors.Is(err, casino.ErrInvalidDoppelMarkIndex) {
+				writeError(w, http.StatusBadRequest, err)
 				return
 			}
 			writeError(w, http.StatusInternalServerError, err)

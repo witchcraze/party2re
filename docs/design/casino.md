@@ -2,16 +2,16 @@
 
 ## Overview
 
-The Casino (カジノ) in Party2 is an entertainment and wagering facility based faithfully on `party2/lib/casino.cgi`, `party2/lib/_casino.cgi`, and `party2/lib/casino_indian.cgi`.
+The Casino (カジノ) in Party2 is an entertainment and wagering facility based faithfully on `party2/lib/casino.cgi`, `party2/lib/_casino.cgi`, `party2/lib/casino_indian.cgi`, `party2/lib/casino_highlow.cgi`, and `party2/lib/casino_doppel.cgi`.
 
 It provides:
 1. **Casino Currency Exchange**: Two-way exchange between character gold and casino coins (1 Coin = 20 Gold).
 2. **Multi-Player Room Lobby**: Real-time room recruitment and turn-based games for 2 to 8 players.
 3. **Authentic Mini-Games**:
    - Multi-Player Indian Poker (`indian`) — 13-card blind bluffing game with forehead placement and pot distribution.
-   - Slot Machine — Solo 3-reel, 5-symbol paytable with 100x jackpot.
-   - High & Low (`highlow`) — Multi-Player card rank prediction (Part 2: #590).
-   - Doppelganger (`doppel`) — Multi-Player secret match wagering (Part 2: #590).
+   - Multi-Player High & Low (`highlow`) — 13-card rank prediction and split pot showdown.
+   - Multi-Player Doppelganger (`doppel`) — 8-symbol dealer matching and leadership transfer.
+   - Slot Machine (`slot`) — Solo 3-reel, 5-symbol paytable with 100x jackpot.
 4. **Prize Exchange & Depot Routing**: 18 authentic prizes delivered directly into long-term Depot storage (`character_depots`).
 
 ---
@@ -51,10 +51,13 @@ Rooms serialize multi-player games using MariaDB tables with deterministic row l
 - **Spectate (`@けんがく`)**: Gated by room spectator allowance. Spectators cannot act or receive pot rewards.
 - **Leave (`@にげる`)**: Removes player. Automatically reassigns room leader to next active member; disbands room if 0 active members remain.
 - **Kick (`@きっく`)**: Leader-only eviction of non-leader members prior to game start (`round == 0`).
+- **Unified Game Dispatch**:
+  - `POST /characters/{id}/casino/rooms/{roomId}/start`: Starts the game according to configured `game_type`.
+  - `POST /characters/{id}/casino/rooms/{roomId}/action`: Dispatches player actions according to configured `game_type`.
 
 ---
 
-## 3. Multiplayer Indian Poker (`party2/lib/casino_indian.cgi`)
+## 3. Multi-Player Indian Poker (`party2/lib/casino_indian.cgi`)
 
 ### Rules & Mechanics
 - **Deck**: 13 unique cards (`Ａ`, `２`, `３`, `４`, `５`, `６`, `７`, `８`, `９`, `10`, `Ｊ`, `Ｑ`, `Ｋ`).
@@ -74,7 +77,57 @@ Rooms serialize multi-player games using MariaDB tables with deterministic row l
 
 ---
 
-## 4. Authentic Prize Catalog & Depot Routing
+## 4. Multi-Player High & Low (`party2/lib/casino_highlow.cgi`)
+
+### Rules & Mechanics
+- **Deck**: 13 unique cards (`Ａ`..`Ｋ`), dealt 1 per player secretly.
+- **Card & Action Visibility**:
+  - Player sees their **own** card; opponents' cards are masked as `？` / `-1`.
+  - Opponents' declared competitive actions (`high`, `low`, `fold`) are masked as `？？？` during active round to prevent information leakage, while `call`/`tsuzukeru` and `待機中` remain visible.
+- **Actions**:
+  - `call` (`つづける`): Match current round bet into pot and stay in the hand.
+  - `high` (`ハイ`): Bet current round bet that own card is highest.
+  - `low` (`ロウ`): Bet current round bet that own card is lowest (requires $> 2$ participants).
+  - `fold` (`おりる`): Forfeit hand and pay current bet into pot.
+- **Round Flow & Progression**:
+  - When all active participants have acted in the round:
+    - Showdown triggers if:
+      - Active non-folded players $\le 1$, OR
+      - Any non-folded player exhausts coins (`coins <= 0`), OR
+      - Current bet reaches maximum (`current_bet >= rate * 5`), OR
+      - Number of High + Low declarations $\ge 50\%$ of active non-folded players.
+    - Otherwise: `round++`, `current_bet += rate`. Non-folded participants reset action to `""` and keep cards.
+- **Showdown Resolution**:
+  - Determine highest card among `high` callers (`higher`) and lowest card among `low` callers (`lower`).
+  - **Split Pot (3+ players)**: If both `higher` and `lower` exist and room has $> 2$ players, the pot is divided 50/50 (`pot / 2`) between both winners.
+  - **Single Winner**: If only `higher` exists, `higher` wins full pot. If only `lower` exists, `lower` wins full pot.
+  - **All Fold**: If all players folded, game ends with no winner ("お流れ") and pot clears.
+  - Members with 0 coins remaining are ejected from room; survivors reset to `待機中`.
+
+---
+
+## 5. Multi-Player Doppelganger (`party2/lib/casino_doppel.cgi`)
+
+### Rules & Mechanics
+- **Marks**: 8 symbols (`★`, `●`, `◆`, `♪`, `■`, `▲`, `†`, `▼`).
+- **Selectable Pool**: `0..min(len(participants), 7)`. For 2 players: 3 marks (`★`, `●`, `◆`); for 3 players: 4 marks; for 7+ players: all 8 marks.
+- **Mark Visibility**: Each player sees only their **own** chosen mark; all opponents' marks and actions are masked as `？` / `？？？` during the round.
+- **Wager & Selection**:
+  - Bet rate is fixed (minimum 10 coins).
+  - Coin deduction occurs on a player's **first** mark selection in the round.
+  - Players may freely change their selected mark during the round without additional coin deductions.
+- **Showdown Resolution**:
+  - Triggers immediately when all active participants have chosen a mark.
+  - The room leader is the "親" (dealer / target).
+  - Any non-leader participant ("子") whose mark matches the leader's mark is a winner:
+    - **Children Win**: If $\ge 1$ children match the leader, they split the entire pot equally (`pot / len(winners)`).
+    - **Leadership Transfer**: A winner chosen at random becomes the new room leader.
+    - **Parent Wins**: If 0 children match the leader, the leader wins the entire pot and retains room leadership.
+  - Members with 0 coins remaining are ejected from room; survivors reset to `待機中`.
+
+---
+
+## 6. Authentic Prize Catalog & Depot Routing
 
 ### 18 Authentic Prizes (`party2/lib/casino.cgi:41-65`)
 
@@ -106,7 +159,7 @@ Rooms serialize multi-player games using MariaDB tables with deterministic row l
 
 ---
 
-## 5. Concurrency & Lock Acquisition Hierarchy
+## 7. Concurrency & Lock Acquisition Hierarchy
 
 All transactional operations strictly follow the global lock acquisition hierarchy:
 ```text

@@ -10,9 +10,7 @@ import (
 )
 
 const (
-	GoldPerCoin = 20   // 1 Casino Coin = 20 Gold
-	MinBaseRate = 1    // Min bet rate
-	MaxBaseRate = 5000 // Max bet rate
+	GoldPerCoin = 20 // 1 Casino Coin = 20 Gold
 )
 
 var (
@@ -225,33 +223,6 @@ func (s *Service) SpinSlot(ctx context.Context, characterID string, bet int64) (
 
 	if s.gamePlayedHook != nil {
 		_ = s.gamePlayedHook(ctx, characterID, "slot")
-	}
-
-	return res, acc, nil
-}
-
-// PlayDoppel executes a Doppelganger mark-matching game, adjusts coins atomically according to outcome, and returns the result and updated account.
-func (s *Service) PlayDoppel(ctx context.Context, characterID string, bet int64, poolSize int, playerMark DoppelMark) (DoppelResult, Account, error) {
-	if characterID == "" {
-		return DoppelResult{}, Account{}, ErrInvalidCharacterID
-	}
-	if bet < MinBaseRate || bet > MaxBaseRate {
-		return DoppelResult{}, Account{}, ErrInvalidDoppelBet
-	}
-
-	res, err := PlayDoppelGame(bet, poolSize, playerMark)
-	if err != nil {
-		return DoppelResult{}, Account{}, err
-	}
-
-	// Atomically verify/deduct bet and credit payout
-	acc, err := s.repo.DeductBetAndCreditPayout(ctx, characterID, bet, res.PayoutCoins)
-	if err != nil {
-		return DoppelResult{}, Account{}, err
-	}
-
-	if s.gamePlayedHook != nil {
-		_ = s.gamePlayedHook(ctx, characterID, "doppel")
 	}
 
 	return res, acc, nil

@@ -318,3 +318,65 @@ func TestCasinoRoomLobby(t *testing.T) {
 		}
 	})
 }
+
+func TestRoom_UnifiedStartAndActionDispatch(t *testing.T) {
+	ctx := context.Background()
+	casinoRepo := newMockPrizeCasinoRepo()
+	roomRepo := newMockMemoryRoomRepo()
+
+	svc, err := casino.NewService(casinoRepo, casino.WithRoomRepository(roomRepo))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p1 := "u-p1"
+	p2 := "u-p2"
+	casinoRepo.accounts[p1] = casino.Account{CharacterID: p1, Coins: 500}
+	casinoRepo.accounts[p2] = casino.Account{CharacterID: p2, Coins: 500}
+
+	// 1. High-Low via unified StartGame & PlayRoomAction
+	hlRoom, _ := svc.CreateRoom(ctx, p1, casino.CreateRoomRequest{
+		Name:       "UnifiedHL",
+		GameType:   casino.GameTypeHighLow,
+		Speed:      casino.SpeedFast,
+		MaxPlayers: 2,
+		Rate:       10,
+	})
+	_, _ = svc.JoinRoom(ctx, hlRoom.Room.ID, p2, "", 0)
+
+	startedHL, err := svc.StartGame(ctx, hlRoom.Room.ID, p1)
+	if err != nil {
+		t.Fatalf("StartGame(HL) failed: %v", err)
+	}
+	if startedHL.Room.Round != 1 {
+		t.Errorf("expected round 1, got %d", startedHL.Room.Round)
+	}
+
+	_, err = svc.PlayRoomAction(ctx, hlRoom.Room.ID, p1, casino.RoomActionRequest{Action: "high"})
+	if err != nil {
+		t.Fatalf("PlayRoomAction(HL high) failed: %v", err)
+	}
+
+	// 2. Doppel via unified StartGame & PlayRoomAction
+	dpRoom, _ := svc.CreateRoom(ctx, p1, casino.CreateRoomRequest{
+		Name:       "UnifiedDP",
+		GameType:   casino.GameTypeDoppel,
+		Speed:      casino.SpeedFast,
+		MaxPlayers: 2,
+		Rate:       20,
+	})
+	_, _ = svc.JoinRoom(ctx, dpRoom.Room.ID, p2, "", 0)
+
+	startedDP, err := svc.StartGame(ctx, dpRoom.Room.ID, p1)
+	if err != nil {
+		t.Fatalf("StartGame(DP) failed: %v", err)
+	}
+	if startedDP.Room.Round != 1 {
+		t.Errorf("expected round 1, got %d", startedDP.Room.Round)
+	}
+
+	_, err = svc.PlayRoomAction(ctx, dpRoom.Room.ID, p1, casino.RoomActionRequest{Action: "mark", Mark: "★"})
+	if err != nil {
+		t.Fatalf("PlayRoomAction(DP mark) failed: %v", err)
+	}
+}

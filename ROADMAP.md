@@ -96,7 +96,7 @@ Restore crawl structures, boss challenges, and multiplayer PvP/GvG arenas.
 - [x] **Guild Battles: Eliminate Elo Duels & Reproduce Live GvG Multi-Round Matches with Trophy Decorations** (#482)
 - [x] **Dungeon & Challenge: Co-op Multi-party Lobbies & Turn Engines** (#483)
 
-##### Milestone 4: Community, Events & Entertainment *(Planned)*
+##### Milestone 4: Community, Events & Entertainment *(Completed)*
 Restore authentic social structures and mini-games.
 - [x] **Guild (Part 1): Dynamic Guild Points, Hex Colors & Custom Roles** (#490)
 - [x] **Guild (Part 2): Membership Application/Approval, Broadcast Callouts & Inactivity Disband** (#591)
@@ -104,7 +104,7 @@ Restore authentic social structures and mini-games.
 - [x] **Takarakuji Lottery: 20-Cap Tickets & Server-wide Rollover Jackpot** (#484)
 - [x] **Fukubiki Raffle: Stat Seeds, Divine Orbs & Guaranteed Tiers** (#485)
 - [x] **Casino (Part 1): Multi-Player Room Lobby, Indian Poker & Prize Depot Routing** (#486)
-- [ ] **Casino (Part 2): Multi-Player High-Low & Doppelganger Games** (#590)
+- [x] **Casino (Part 2): Multi-Player High-Low & Doppelganger Games** (#590)
 
 #### Remaining Version 1.0 Milestones:
 
