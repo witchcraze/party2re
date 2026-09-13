@@ -98,6 +98,7 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 		if p.HP <= 0 {
 			p.HP = m.MaxHP
 		}
+		p.TeamID = m.TeamColor
 		if m.TeamColor == leaderTeam {
 			allies = append(allies, p)
 		} else {

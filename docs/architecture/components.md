@@ -212,7 +212,7 @@ Battle
 Battle must not know whether it was initiated by a quest, guild, arena, boss, dungeon, or challenge feature. All combat modes build `Participant` inputs using the shared `corebattle.NewParticipantFromCharacter`, `corebattle.NewParticipantFromCharacterWithHP`, or `corebattle.ParticipantBuilder` adapters, identifying participants strictly by unique entity ID while retaining display names for combat turn logs. Direct assignment of `.Name` to `Participant.ID` is mechanically prohibited by Go AST static analysis (`internal/core/core_lint_test.go`).
 
 The battle engine provides both legacy 1v1 resolution (`Resolve`) and full multi-turn party resolution (`ResolvePartyBattle`, `_battle.cgi`, `_skill.cgi` parity):
-- **Party Combat**: Up to 4 allies vs 1–N enemies with dynamic round loops (up to 30 rounds).
+- **Party & Multi-Team Combat**: Up to 4 allies vs 1–N enemies for PvE, or 3+ teams/guilds (up to 8 players, up to 9 colors or multiple guilds) in PvP/GvG with independent faction segregation, non-leader inter-team targeting, and elimination loops until 1 team remains.
 - **Agility Turn Order**: Combatants act in descending order of Agility within each round.
 - **Skills & Resource Costs**: Job skills consuming MP (single/all targets, elemental affinity, healing) and custom blended skills consuming CMP with incantation broadcast logs and chained gem effects.
 - **Elemental Fields & Anti-Field (`_create_field`, `_check_anti_field`)**: Active field states granting +30% matching damage bonus and -20% opposing damage penalty, with turn countdowns and anti-field neutralization.

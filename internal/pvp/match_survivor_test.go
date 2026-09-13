@@ -138,3 +138,77 @@ func TestColosseum_AllTeamsFell_Draw(t *testing.T) {
 		t.Errorf("expected 0 scores on draw, got %+v", res.TeamScores)
 	}
 }
+
+func TestColosseum_3Teams_RealBattleEngine_LeaderFallsEarly(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	roomRepo := pvp.NewMemoryRoomRepository()
+
+	c1 := createTestCharacter("char-1", "RedLeader", 500)
+	c1.Stats.HP = 1
+	c1.Stats.MaxHP = 1
+	c1.Stats.Attack = 5
+	c1.Stats.Defense = 0
+	c1.Stats.Agility = 1
+
+	c2 := createTestCharacter("char-2", "BlueMember", 500)
+	c2.Stats.HP = 100
+	c2.Stats.MaxHP = 100
+	c2.Stats.Attack = 30
+	c2.Stats.Defense = 10
+	c2.Stats.Agility = 20
+
+	c3 := createTestCharacter("char-3", "GreenMember", 500)
+	c3.Stats.HP = 80
+	c3.Stats.MaxHP = 80
+	c3.Stats.Attack = 25
+	c3.Stats.Defense = 10
+	c3.Stats.Agility = 15
+
+	charRepo.add(c1)
+	charRepo.add(c2)
+	charRepo.add(c3)
+
+	svc, err := pvp.NewService(roomRepo, charRepo, corebattle.Engine{})
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	detail, err := svc.CreateRoom(ctx, c1.ID, pvp.CreateRoomRequest{
+		Name:       "Real Engine 3-Way",
+		Bet:        50,
+		MaxMembers: 3,
+		TargetWins: 2,
+	})
+	if err != nil {
+		t.Fatalf("CreateRoom failed: %v", err)
+	}
+
+	_, _ = svc.JoinRoom(ctx, c2.ID, detail.Room.ID, "")
+	_, _ = svc.JoinRoom(ctx, c3.ID, detail.Room.ID, "")
+	_, _ = svc.SelectTeam(ctx, c1.ID, detail.Room.ID, pvp.ColorRed)
+	_, _ = svc.SelectTeam(ctx, c2.ID, detail.Room.ID, pvp.ColorBlue)
+	_, _ = svc.SelectTeam(ctx, c3.ID, detail.Room.ID, pvp.ColorGreen)
+	_, err = svc.StartMatch(ctx, c1.ID, detail.Room.ID)
+	if err != nil {
+		t.Fatalf("StartMatch failed: %v", err)
+	}
+
+	res, err := svc.AdvanceRound(ctx, c1.ID, detail.Room.ID)
+	if err != nil {
+		t.Fatalf("AdvanceRound failed: %v", err)
+	}
+
+	if res.Outcome != "round_win" {
+		t.Fatalf("expected outcome round_win, got %s", res.Outcome)
+	}
+	if res.WinnerTeam != pvp.ColorBlue && res.WinnerTeam != pvp.ColorGreen {
+		t.Errorf("expected winner to be Blue or Green, got %s", res.WinnerTeam)
+	}
+	if res.TeamScores[pvp.ColorRed] != 0 {
+		t.Errorf("expected Red leader to have 0 score, got %d", res.TeamScores[pvp.ColorRed])
+	}
+	if res.TeamScores[res.WinnerTeam] != 1 {
+		t.Errorf("expected winner %s to have score 1, got %d", res.WinnerTeam, res.TeamScores[res.WinnerTeam])
+	}
+}

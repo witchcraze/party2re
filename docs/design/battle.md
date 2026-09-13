@@ -23,6 +23,7 @@ A participant in combat possesses combat attributes:
 - `ActionItems`: Slice of active combat items (`ActionItem`) for `@どうぐ` commands.
 - `RevivalTriggers`: Slice of active revival conditions/items (`pharaoh`, `undying`, `touki_shield`, `dokuro_amulet`, `cursed_revive`).
 - `Defeated`: Boolean flag indicating if participant is knocked out.
+- `TeamID`: Optional faction/team identifier (e.g., team color hex code `#FF3333` in PvP, or Guild ID in GvG). Participants sharing the same `TeamID` are treated as allies; participants with different `TeamID`s are hostile opponents.
 
 ### Action Models
 - **Job Skill (`ActionSkill`)**: Class skill requiring MP. Includes `Name`, `CostMP`, `Power`, `Element`, `TargetScope` (`TargetScopeSingleEnemy`, `TargetScopeAllEnemies`, `TargetScopeAllAllies`, `TargetScopeSelf`), and optional `Heal` boolean.
@@ -37,7 +38,8 @@ A participant in combat possesses combat attributes:
 
 ### Battle Request & Reward Model
 - `Participants`: For 1v1 combat, ordered pair `[first, second]`.
-- `Allies` & `Enemies`: For party combat, ally group (up to 4) and enemy group (1..N).
+- `Allies` & `Enemies`: For standard 2-side party combat, ally group (up to 4) and enemy group (1..N).
+- `Teams`: For multi-faction battles (PvP Colosseum with 2..8 players / up to 9 colors, GvG with multiple guilds), `map[string][]Participant` keyed by team/faction ID.
 - `VictoryReward`, `DefeatReward`, `DrawReward`: Rewards containing `Experience`, `Currency`, `ItemDefinitionID`, `ItemQuantity`, and `SmallMedals`.
 
 ## Resolution Algorithms & Formulas
@@ -45,14 +47,17 @@ A participant in combat possesses combat attributes:
 ### 1. Multi-Turn Party Battle Loop (`ResolvePartyBattle`)
 Replicating the original Party2 CGI combat engine (`_battle.cgi`, `_skill.cgi`):
 
-1. **Round Initialization (up to 30 rounds)**:
-   - Collect all living combatants from allies and enemies.
-   - If all allies are defeated -> outcome is `OutcomeDefeat` (or `OutcomeDraw` if simultaneous wipeout).
-   - If all enemies are defeated -> outcome is `OutcomeWin`.
-   - Sort active combatants in descending order of `Agility`. In case of tied agility, participant order is preserved.
+1. **Round Initialization (up to 100 turns)**:
+   - Collect all living combatants across all teams.
+   - If $\le 1$ distinct team has living participants -> combat terminates early.
+   - Sort active combatants in descending order of `Agility`. In case of tied agility, ally order is prioritized, followed by stable input order.
 
 2. **Turn Execution (per participant)**:
-   - Skip if participant has been defeated earlier in the round.
+   - Skip if participant has been defeated earlier in the round or banished.
+   - **Faction / Target Segregation**:
+     - Friendly party (`allyParty`): living participants sharing the actor's `TeamID`.
+     - Hostile party (`opponents`): living participants belonging to any opposing `TeamID`. In multi-team battles (e.g., 3 teams), all non-actor teams are mutually hostile opponents.
+     - Early exit: if `opponents` is empty, the actor's team has won and the round terminates immediately.
    - **Action Selection Priority**:
      1. If `CustomSkill` is configured and participant has sufficient CMP:
         - Deduct CMP.

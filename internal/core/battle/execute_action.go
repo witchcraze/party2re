@@ -6,22 +6,24 @@ import (
 )
 
 type battleContext struct {
-	turns         int
-	req           PartyBattleRequest
-	field         *FieldState
-	hpMap         map[string]int
-	mpMap         map[string]int
-	cmpMap        map[string]int
-	defendingMap  map[string]bool
-	statusMap     map[string]string
-	attackBuff    map[string]int
-	defenseBuff   map[string]int
-	agilityBuff   map[string]int
-	abilitiesMap  map[string][]string
-	itemsMap      map[string][]ActionItem
-	consumedItems map[string][]ConsumedItem
-	banishedMap   map[string]bool
-	logs          []TurnLog
+	turns           int
+	req             PartyBattleRequest
+	field           *FieldState
+	hpMap           map[string]int
+	mpMap           map[string]int
+	cmpMap          map[string]int
+	defendingMap    map[string]bool
+	statusMap       map[string]string
+	attackBuff      map[string]int
+	defenseBuff     map[string]int
+	agilityBuff     map[string]int
+	abilitiesMap    map[string][]string
+	itemsMap        map[string][]ActionItem
+	consumedItems   map[string][]ConsumedItem
+	banishedMap     map[string]bool
+	logs            []TurnLog
+	teamMap         map[string]string
+	allParticipants []Participant
 }
 
 func (ctx *battleContext) checkStatusSkip(actor Participant) bool {
@@ -139,14 +141,11 @@ func (ctx *battleContext) applyDamage(actor Participant, target Participant, bas
 }
 
 func (ctx *battleContext) applyMazinSynergy(fallen Participant) {
-	party := ctx.req.Enemies
-	for _, ally := range ctx.req.Allies {
-		if ally.ID == fallen.ID {
-			party = ctx.req.Allies
-			break
+	fallenTeam := ctx.teamMap[fallen.ID]
+	for _, ally := range ctx.allParticipants {
+		if ctx.teamMap[ally.ID] != fallenTeam {
+			continue
 		}
-	}
-	for _, ally := range party {
 		if ally.ID == fallen.ID || ctx.hpMap[ally.ID] <= 0 || !hasItem(ally.ItemDefinitionIDs, "item-037") || !hasItem(ally.ItemDefinitionIDs, "item-038") {
 			continue
 		}

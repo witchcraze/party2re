@@ -17,6 +17,7 @@ var (
 type Participant struct {
 	ID                string
 	Name              string
+	TeamID            string
 	HP                int
 	MaxHP             int
 	MP                int
@@ -98,6 +99,7 @@ type PartyBattleResolver interface {
 type PartyBattleRequest struct {
 	Allies        []Participant
 	Enemies       []Participant
+	Teams         map[string][]Participant
 	InitialField  *FieldState
 	VictoryReward Reward
 	DefeatReward  Reward
@@ -114,6 +116,7 @@ type ConsumedItem struct {
 type PartyBattleResult struct {
 	Outcome         Outcome                   `json:"outcome"`
 	WinnerSide      string                    `json:"winner_side"`
+	WinnerTeam      string                    `json:"winner_team,omitempty"`
 	Turns           int                       `json:"turns"`
 	BaseReward      Reward                    `json:"base_reward"`
 	BonusPercent    int                       `json:"bonus_percent"`

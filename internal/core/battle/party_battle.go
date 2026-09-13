@@ -17,27 +17,103 @@ func (p *Participant) NameOrID() string {
 	return p.ID
 }
 
-// ResolvePartyBattle resolves a multi-participant, multi-turn battle between allies and enemies.
+// ResolvePartyBattle resolves a multi-participant, multi-turn battle between allies and enemies or multiple teams.
 // Evaluates agility turn order, skills (MP), custom skills (CMP), elemental fields, and defeat revival.
 func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, error) {
-	if len(req.Allies) == 0 || len(req.Enemies) == 0 {
-		return PartyBattleResult{}, ErrInvalidRequest
-	}
-	for _, a := range req.Allies {
-		if err := validateParticipant(a); err != nil {
-			return PartyBattleResult{}, err
-		}
-	}
-	for _, e := range req.Enemies {
-		if err := validateParticipant(e); err != nil {
-			return PartyBattleResult{}, err
-		}
-	}
 	for _, reward := range []Reward{req.VictoryReward, req.DefeatReward, req.DrawReward} {
 		if err := validateReward(reward); err != nil {
 			return PartyBattleResult{}, err
 		}
 	}
+
+	var allParticipants []Participant
+	teamMap := make(map[string]string)
+	teamMembers := make(map[string][]Participant)
+	var teamOrder []string
+
+	if len(req.Teams) > 0 {
+		if len(req.Teams) < 2 {
+			return PartyBattleResult{}, ErrInvalidRequest
+		}
+		for tID := range req.Teams {
+			teamOrder = append(teamOrder, tID)
+		}
+		sort.Strings(teamOrder)
+
+		for _, tID := range teamOrder {
+			members := req.Teams[tID]
+			if len(members) == 0 {
+				return PartyBattleResult{}, ErrInvalidRequest
+			}
+			for _, p := range members {
+				if err := validateParticipant(p); err != nil {
+					return PartyBattleResult{}, err
+				}
+				if p.TeamID == "" {
+					p.TeamID = tID
+				}
+				allParticipants = append(allParticipants, p)
+				teamMap[p.ID] = p.TeamID
+				teamMembers[p.TeamID] = append(teamMembers[p.TeamID], p)
+			}
+		}
+		if len(req.Allies) == 0 && len(teamOrder) > 0 {
+			req.Allies = teamMembers[teamOrder[0]]
+			for _, tID := range teamOrder[1:] {
+				req.Enemies = append(req.Enemies, teamMembers[tID]...)
+			}
+		}
+	} else {
+		if len(req.Allies) == 0 || len(req.Enemies) == 0 {
+			return PartyBattleResult{}, ErrInvalidRequest
+		}
+		for _, a := range req.Allies {
+			if err := validateParticipant(a); err != nil {
+				return PartyBattleResult{}, err
+			}
+			tID := a.TeamID
+			if tID == "" {
+				tID = "allies"
+				a.TeamID = tID
+			}
+			allParticipants = append(allParticipants, a)
+			teamMap[a.ID] = tID
+			if _, exists := teamMembers[tID]; !exists {
+				teamOrder = append(teamOrder, tID)
+			}
+			teamMembers[tID] = append(teamMembers[tID], a)
+		}
+		for _, e := range req.Enemies {
+			if err := validateParticipant(e); err != nil {
+				return PartyBattleResult{}, err
+			}
+			tID := e.TeamID
+			if tID == "" {
+				tID = "enemies"
+				e.TeamID = tID
+			}
+			allParticipants = append(allParticipants, e)
+			teamMap[e.ID] = tID
+			if _, exists := teamMembers[tID]; !exists {
+				teamOrder = append(teamOrder, tID)
+			}
+			teamMembers[tID] = append(teamMembers[tID], e)
+		}
+	}
+
+	if len(teamMembers) < 2 {
+		return PartyBattleResult{}, ErrInvalidRequest
+	}
+
+	seenIDs := make(map[string]bool)
+	for _, p := range allParticipants {
+		if seenIDs[p.ID] {
+			return PartyBattleResult{}, ErrInvalidRequest
+		}
+		seenIDs[p.ID] = true
+	}
+
+	allyTeamID := teamOrder[0]
 
 	bonusPercent := (len(req.Allies) - 1) * 10
 	if bonusPercent < 0 {
@@ -47,37 +123,30 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 	}
 
 	ctx := &battleContext{
-		req:          req,
-		hpMap:        make(map[string]int),
-		mpMap:        make(map[string]int),
-		cmpMap:       make(map[string]int),
-		defendingMap: make(map[string]bool),
-		statusMap:    make(map[string]string),
-		attackBuff:   make(map[string]int),
-		defenseBuff:  make(map[string]int),
-		agilityBuff:  make(map[string]int),
-		abilitiesMap: make(map[string][]string),
-		itemsMap:     make(map[string][]ActionItem),
-		banishedMap:  make(map[string]bool),
+		req:             req,
+		hpMap:           make(map[string]int),
+		mpMap:           make(map[string]int),
+		cmpMap:          make(map[string]int),
+		defendingMap:    make(map[string]bool),
+		statusMap:       make(map[string]string),
+		attackBuff:      make(map[string]int),
+		defenseBuff:     make(map[string]int),
+		agilityBuff:     make(map[string]int),
+		abilitiesMap:    make(map[string][]string),
+		itemsMap:        make(map[string][]ActionItem),
+		banishedMap:     make(map[string]bool),
+		teamMap:         teamMap,
+		allParticipants: allParticipants,
 	}
 
-	for _, a := range req.Allies {
-		ctx.hpMap[a.ID] = a.HP
-		ctx.mpMap[a.ID] = a.MP
-		ctx.cmpMap[a.ID] = a.CMP
-		ctx.abilitiesMap[a.ID] = append([]string(nil), a.Abilities...)
-		ctx.defendingMap[a.ID] = a.Defending
-		ctx.statusMap[a.ID] = a.Status
-		ctx.itemsMap[a.ID] = append([]ActionItem(nil), a.ActionItems...)
-	}
-	for _, e := range req.Enemies {
-		ctx.hpMap[e.ID] = e.HP
-		ctx.mpMap[e.ID] = e.MP
-		ctx.cmpMap[e.ID] = e.CMP
-		ctx.abilitiesMap[e.ID] = append([]string(nil), e.Abilities...)
-		ctx.defendingMap[e.ID] = e.Defending
-		ctx.statusMap[e.ID] = e.Status
-		ctx.itemsMap[e.ID] = append([]ActionItem(nil), e.ActionItems...)
+	for _, p := range allParticipants {
+		ctx.hpMap[p.ID] = p.HP
+		ctx.mpMap[p.ID] = p.MP
+		ctx.cmpMap[p.ID] = p.CMP
+		ctx.abilitiesMap[p.ID] = append([]string(nil), p.Abilities...)
+		ctx.defendingMap[p.ID] = p.Defending
+		ctx.statusMap[p.ID] = p.Status
+		ctx.itemsMap[p.ID] = append([]ActionItem(nil), p.ActionItems...)
 	}
 
 	if req.InitialField != nil {
@@ -93,14 +162,13 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 
 		// 1. Gather all living combatants
 		var combatants []combatantWrapper
-		for i, a := range req.Allies {
-			if ctx.hpMap[a.ID] > 0 {
-				combatants = append(combatants, combatantWrapper{participant: a, isAlly: true, index: i})
-			}
-		}
-		for i, e := range req.Enemies {
-			if ctx.hpMap[e.ID] > 0 {
-				combatants = append(combatants, combatantWrapper{participant: e, isAlly: false, index: i})
+		for i, p := range allParticipants {
+			if ctx.hpMap[p.ID] > 0 && !ctx.banishedMap[p.ID] {
+				combatants = append(combatants, combatantWrapper{
+					participant: p,
+					isAlly:      ctx.teamMap[p.ID] == allyTeamID,
+					index:       i,
+				})
 			}
 		}
 
@@ -125,7 +193,7 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 		for _, cw := range combatants {
 			actor := cw.participant
 			actorID := actor.ID
-			if ctx.hpMap[actorID] <= 0 {
+			if ctx.hpMap[actorID] <= 0 || ctx.banishedMap[actorID] {
 				continue
 			}
 
@@ -137,31 +205,21 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 				continue
 			}
 
+			actorTeam := ctx.teamMap[actorID]
 			var opponents []Participant
 			var allyParty []Participant
 			var fullOpponents []Participant
-			if cw.isAlly {
-				fullOpponents = req.Enemies
-				for _, e := range req.Enemies {
-					if ctx.hpMap[e.ID] > 0 {
-						opponents = append(opponents, e)
+
+			for _, p := range allParticipants {
+				pTeam := ctx.teamMap[p.ID]
+				if pTeam == actorTeam {
+					if ctx.hpMap[p.ID] > 0 && !ctx.banishedMap[p.ID] {
+						allyParty = append(allyParty, p)
 					}
-				}
-				for _, a := range req.Allies {
-					if ctx.hpMap[a.ID] > 0 && !ctx.banishedMap[a.ID] {
-						allyParty = append(allyParty, a)
-					}
-				}
-			} else {
-				fullOpponents = req.Allies
-				for _, a := range req.Allies {
-					if ctx.hpMap[a.ID] > 0 && !ctx.banishedMap[a.ID] {
-						opponents = append(opponents, a)
-					}
-				}
-				for _, e := range req.Enemies {
-					if ctx.hpMap[e.ID] > 0 {
-						allyParty = append(allyParty, e)
+				} else {
+					fullOpponents = append(fullOpponents, p)
+					if ctx.hpMap[p.ID] > 0 && !ctx.banishedMap[p.ID] {
+						opponents = append(opponents, p)
 					}
 				}
 			}
@@ -221,91 +279,83 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 			}
 
 			// Check battle termination early
-			alliesDead := true
-			for _, a := range req.Allies {
-				if ctx.hpMap[a.ID] > 0 {
-					alliesDead = false
-					break
+			aliveTeams := make(map[string]bool)
+			for _, p := range allParticipants {
+				if ctx.hpMap[p.ID] > 0 && !ctx.banishedMap[p.ID] {
+					aliveTeams[ctx.teamMap[p.ID]] = true
 				}
 			}
-			enemiesDead := true
-			for _, e := range req.Enemies {
-				if ctx.hpMap[e.ID] > 0 {
-					enemiesDead = false
-					break
-				}
-			}
-			if alliesDead || enemiesDead {
+			if len(aliveTeams) <= 1 {
 				break
 			}
 		}
 
 		// Apply poison DOT at the end of each round
-		var allParticipants []Participant
-		allParticipants = append(allParticipants, req.Allies...)
-		allParticipants = append(allParticipants, req.Enemies...)
 		ctx.applyPoisonDOT(allParticipants)
 
 		// End of round field turn countdown
 		ctx.field.EndTurn()
 
-		alliesDead := true
-		for _, a := range req.Allies {
-			if ctx.hpMap[a.ID] > 0 {
-				alliesDead = false
-				break
+		aliveTeams := make(map[string]bool)
+		for _, p := range allParticipants {
+			if ctx.hpMap[p.ID] > 0 && !ctx.banishedMap[p.ID] {
+				aliveTeams[ctx.teamMap[p.ID]] = true
 			}
 		}
-		enemiesDead := true
-		for _, e := range req.Enemies {
-			if ctx.hpMap[e.ID] > 0 {
-				enemiesDead = false
-				break
-			}
-		}
-		if alliesDead || enemiesDead {
+		if len(aliveTeams) <= 1 {
 			break
 		}
 	}
 
-	alliesDead := true
+	aliveTeams := make(map[string]bool)
+	var survivingTeam string
+	for _, p := range allParticipants {
+		if ctx.hpMap[p.ID] > 0 && !ctx.banishedMap[p.ID] {
+			tID := ctx.teamMap[p.ID]
+			aliveTeams[tID] = true
+			survivingTeam = tID
+		}
+	}
+
 	var alliesSurvived []string
 	var alliesFallen []string
 	for _, a := range req.Allies {
-		if ctx.hpMap[a.ID] > 0 {
-			alliesDead = false
+		if ctx.hpMap[a.ID] > 0 && !ctx.banishedMap[a.ID] {
 			alliesSurvived = append(alliesSurvived, a.ID)
 		} else {
 			alliesFallen = append(alliesFallen, a.ID)
 		}
 	}
 
-	enemiesDead := true
-	for _, e := range req.Enemies {
-		if ctx.hpMap[e.ID] > 0 {
-			enemiesDead = false
-			break
-		}
-	}
-
 	var outcome Outcome
 	var winnerSide string
+	var winnerTeam string
 	var selectedReward Reward
-	if alliesDead && enemiesDead {
+
+	if len(aliveTeams) == 0 {
 		outcome = OutcomeDraw
 		winnerSide = "none"
+		winnerTeam = ""
 		selectedReward = req.DrawReward
-	} else if enemiesDead {
-		outcome = OutcomeWin
-		winnerSide = "allies"
-		selectedReward = req.VictoryReward
-	} else if alliesDead {
-		outcome = OutcomeDefeat
-		winnerSide = "enemies"
-		selectedReward = req.DefeatReward
+	} else if len(aliveTeams) == 1 {
+		winnerTeam = survivingTeam
+		if survivingTeam == allyTeamID {
+			outcome = OutcomeWin
+			winnerSide = "allies"
+			selectedReward = req.VictoryReward
+		} else {
+			outcome = OutcomeDefeat
+			if survivingTeam == "enemies" {
+				winnerSide = "enemies"
+			} else {
+				winnerSide = survivingTeam
+			}
+			selectedReward = req.DefeatReward
+		}
 	} else {
 		outcome = OutcomeDraw
 		winnerSide = "none"
+		winnerTeam = ""
 		selectedReward = req.DrawReward
 	}
 
@@ -314,6 +364,7 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 	return PartyBattleResult{
 		Outcome:         outcome,
 		WinnerSide:      winnerSide,
+		WinnerTeam:      winnerTeam,
 		Turns:           ctx.turns,
 		BaseReward:      selectedReward,
 		BonusPercent:    bonusPercent,

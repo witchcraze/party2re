@@ -77,6 +77,7 @@ func NewParticipantFromCharacterWithHP(char corecharacter.Character, currentHP i
 type ParticipantBuilder struct {
 	id           string
 	name         string
+	teamID       string
 	hp           int
 	maxHP        int
 	mp           int
@@ -121,6 +122,12 @@ func (b *ParticipantBuilder) FromCharacter(char corecharacter.Character) *Partic
 // WithName sets the display name.
 func (b *ParticipantBuilder) WithName(name string) *ParticipantBuilder {
 	b.name = strings.TrimSpace(name)
+	return b
+}
+
+// WithTeamID sets the team or faction identifier.
+func (b *ParticipantBuilder) WithTeamID(teamID string) *ParticipantBuilder {
+	b.teamID = strings.TrimSpace(teamID)
 	return b
 }
 
@@ -212,6 +219,7 @@ func (b *ParticipantBuilder) Build() (Participant, error) {
 	if b.name != "" {
 		p.Name = b.name
 	}
+	p.TeamID = b.teamID
 	p.MaxHP = b.maxHP
 	p.MP = b.mp
 	p.MaxMP = b.maxMP

@@ -269,6 +269,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#591](https://github.com/witchcraze/party2re/issues/591) | Guild (Part 2): Membership Application & Approval Workflow, Broadcast Callouts, Customization, and Inactivity Disbandment | Completed |
 | [#600](https://github.com/witchcraze/party2re/issues/600) | Challenge: Remove fictional 20% inter-round HP recovery and restore legacy HP carryover | Completed |
 | [#594](https://github.com/witchcraze/party2re/issues/594) | PvP+GvG: Fix multi-team survivor determination in Colosseum and Guild Battle rounds | Completed |
+| [#605](https://github.com/witchcraze/party2re/issues/605) | Combat/PvP/GvG: Core battle engine multi-team 3+ faction support, inter-team targeting, and elimination loops | Completed |
 
 
 ---
