@@ -37,7 +37,9 @@ func hasScopeGoggles(itemIDs []string) bool {
 
 // ViewMap renders the surrounding dungeon grid (legacy vs_dungeon.cgi: @ちず).
 // Base view radius is 1 (3x3 grid). If any party member is a Thief (9), Ninja (26),
-// Geomancer (27), Ranger (79), or possesses Scope Goggles (Item 197), the view radius expands to 2 (5x5 grid).
+// Geomancer (27), or Ranger (79), the view radius expands by +1. If any party member
+// possesses Scope Goggles (Item 197), the view radius expands by +1. When both apply,
+// the view radius stacks to 3 (7x7 grid).
 func (s *Service) ViewMap(ctx context.Context, characterID string) (MapView, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return MapView{}, ErrCharacterNotFound
@@ -62,46 +64,63 @@ func (s *Service) ViewMap(ctx context.Context, characterID string) (MapView, err
 	}
 	floor := dungeon.Floors[floorIdx]
 
-	radius := 1
-	bonusActive := false
-	bonusReason := ""
+	hasScoutJob := false
+	scoutReason := ""
+	hasGoggles := false
+	goggleReason := ""
 
-	// Check party members for scouting job or scope goggles
+	// Check party members for scouting job and scope goggles
 	for _, m := range exp.Members {
-		if isScoutingJob(m.JobID) {
-			radius = 2
-			bonusActive = true
-			bonusReason = "Scouting Job (" + m.JobID + "): " + m.Name
-			break
+		if !hasScoutJob && isScoutingJob(m.JobID) {
+			hasScoutJob = true
+			scoutReason = "Scouting Job (" + m.JobID + "): " + m.Name
 		}
-		if hasScopeGoggles(m.ItemIDs) {
-			radius = 2
-			bonusActive = true
-			bonusReason = "Item 197 (Scope Goggles): " + m.Name
+		if !hasGoggles && hasScopeGoggles(m.ItemIDs) {
+			hasGoggles = true
+			goggleReason = "Item 197 (Scope Goggles): " + m.Name
+		}
+		if hasScoutJob && hasGoggles {
 			break
 		}
 	}
 
 	// Fallback check if solo without members populated
-	if !bonusActive && len(exp.Members) == 0 {
+	if len(exp.Members) == 0 {
 		if char, cErr := s.characterRepo.FindByID(ctx, characterID); cErr == nil {
-			if isScoutingJob(char.JobID) {
-				radius = 2
-				bonusActive = true
-				bonusReason = "Scouting Job (" + char.JobID + "): " + char.Name
-			} else if s.invRepo != nil {
+			if !hasScoutJob && isScoutingJob(char.JobID) {
+				hasScoutJob = true
+				scoutReason = "Scouting Job (" + char.JobID + "): " + char.Name
+			}
+			if !hasGoggles && s.invRepo != nil {
 				if inv, iErr := s.invRepo.FindByCharacterID(ctx, characterID); iErr == nil {
 					for _, it := range inv.Items {
 						if hasScopeGoggles([]string{it.DefinitionID}) {
-							radius = 2
-							bonusActive = true
-							bonusReason = "Item 197 (Scope Goggles): " + char.Name
+							hasGoggles = true
+							goggleReason = "Item 197 (Scope Goggles): " + char.Name
 							break
 						}
 					}
 				}
 			}
 		}
+	}
+
+	radius := 1
+	if hasScoutJob {
+		radius++
+	}
+	if hasGoggles {
+		radius++
+	}
+
+	bonusActive := hasScoutJob || hasGoggles
+	bonusReason := ""
+	if hasScoutJob && hasGoggles {
+		bonusReason = scoutReason + " + " + goggleReason
+	} else if hasScoutJob {
+		bonusReason = scoutReason
+	} else if hasGoggles {
+		bonusReason = goggleReason
 	}
 
 	dim := 2*radius + 1

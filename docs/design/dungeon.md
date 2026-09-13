@@ -70,6 +70,8 @@ $$\text{Expedition Items} = \bigcup \text{Monster Drops} \cup \bigcup \text{Ches
 ### 2. Map Scouting (`@ちず`)
 - Characters can inspect the floor map around the party's current coordinate:
   - **Base Vision (Radius 1)**: $3 \times 3$ grid displayed around party.
-  - **Expanded Vision (Radius 2)**: $5 \times 5$ grid displayed if any party member is a scouting class (**Thief 9**, **Ninja 26**, **Geomancer 27**, **Ranger 79**) or possesses item **197 (`scope_goggles`)**.
-- Rendered with emoji/ASCII indicators (`●` current party position, `■` walls, `·` passages, `T` chests, `X` traps, `D` stairs, `?` unrevealed fog).
+  - **Scouting Job Bonus (Radius +1)**: $+1$ to radius ($5 \times 5$ grid) if any party member is a scouting class (**Thief 9**, **Ninja 26**, **Geomancer 27**, **Ranger 79**).
+  - **Scope Goggles Bonus (Radius +1)**: $+1$ to radius ($5 \times 5$ grid) if any party member possesses item **197 (`scope_goggles`)**.
+  - **Stacked Vision (Radius 3)**: $7 \times 7$ grid displayed when both a scouting job and scope goggles are present in the party.
+- Rendered with emoji/ASCII indicators (`●` current party position, `■` walls, `□` passages, out-of-bounds displayed as walls `■`).
 

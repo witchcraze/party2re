@@ -205,6 +205,83 @@ func TestPartyMapScouting(t *testing.T) {
 	if mvItem.Radius != 2 {
 		t.Errorf("expected radius 2 for item 197 holder, got %d", mvItem.Radius)
 	}
+	if len(mvItem.Tiles) != 5 || len(mvItem.Tiles[0]) != 5 {
+		t.Errorf("expected 5x5 tiles for radius 2, got %dx%d", len(mvItem.Tiles), len(mvItem.Tiles[0]))
+	}
+
+	// 5. Stacking: Scouting Job (Thief 9) + Scope Goggles (item 197) expands radius to 3 (7x7 grid)
+	cBoth := createTestChar("scout-scope-hero", 10, 100, 30, 20)
+	cBoth.JobID = "9" // Thief
+	stackCharRepo := &mockCharRepo{chars: map[string]corecharacter.Character{cBoth.ID: cBoth}}
+	stackInvRepo := &mockInventoryRepo{invs: make(map[string]coreinventory.Inventory)}
+	stackInv, _ := coreinventory.New(cBoth.ID)
+	_ = stackInv.Add(coreitem.Instance{ID: "scope-inst-2", DefinitionID: "197", Quantity: 1})
+	stackInvRepo.invs[cBoth.ID] = stackInv
+
+	stackSvc, _ := dungeon.NewService(
+		newMockDungeonRepo(),
+		stackCharRepo,
+		&corebattle.Engine{},
+		dungeon.WithInventoryProvider(stackInvRepo),
+	)
+	_, err = stackSvc.StartPartyExpedition(ctx, cBoth.ID, []string{cBoth.ID}, "dungeon-01", "")
+	if err != nil {
+		t.Fatalf("failed to start stack expedition: %v", err)
+	}
+	mvBoth, err := stackSvc.ViewMap(ctx, cBoth.ID)
+	if err != nil {
+		t.Fatalf("ViewMap failed: %v", err)
+	}
+	if mvBoth.Radius != 3 {
+		t.Errorf("expected radius 3 for scouting job + scope goggles, got %d", mvBoth.Radius)
+	}
+	if !mvBoth.ScoutingBonusActive {
+		t.Errorf("expected scouting bonus active for stacked scouting")
+	}
+	if len(mvBoth.Tiles) != 7 || len(mvBoth.Tiles[0]) != 7 {
+		t.Errorf("expected 7x7 tiles for radius 3, got %dx%d", len(mvBoth.Tiles), len(mvBoth.Tiles[0]))
+	}
+
+	// 6. Stacking in Multi-member Party: Member 1 is Thief, Member 2 holds Scope Goggles
+	cScout := createTestChar("party-thief", 10, 100, 30, 20)
+	cScout.JobID = "9"
+	cGoggleUser := createTestChar("party-goggle-user", 10, 100, 30, 20)
+	cGoggleUser.JobID = "warrior"
+	multiCharRepo := &mockCharRepo{chars: map[string]corecharacter.Character{
+		cScout.ID:      cScout,
+		cGoggleUser.ID: cGoggleUser,
+	}}
+	multiInvRepo := &mockInventoryRepo{invs: make(map[string]coreinventory.Inventory)}
+	goggleInv, _ := coreinventory.New(cGoggleUser.ID)
+	_ = goggleInv.Add(coreitem.Instance{ID: "goggle-inst", DefinitionID: "197", Quantity: 1})
+	multiInvRepo.invs[cGoggleUser.ID] = goggleInv
+
+	multiSvc, _ := dungeon.NewService(
+		newMockDungeonRepo(),
+		multiCharRepo,
+		&corebattle.Engine{},
+		dungeon.WithInventoryProvider(multiInvRepo),
+	)
+	_, err = multiSvc.StartPartyExpedition(ctx, cScout.ID, []string{cScout.ID, cGoggleUser.ID}, "dungeon-01", "")
+	if err != nil {
+		t.Fatalf("failed to start multi-party expedition: %v", err)
+	}
+	mvMulti, err := multiSvc.ViewMap(ctx, cScout.ID)
+	if err != nil {
+		t.Fatalf("ViewMap failed: %v", err)
+	}
+	if mvMulti.Radius != 3 {
+		t.Errorf("expected radius 3 for multi-party stacking, got %d", mvMulti.Radius)
+	}
+	if !mvMulti.ScoutingBonusActive {
+		t.Errorf("expected scouting bonus active for multi-party stacking")
+	}
+	if len(mvMulti.Tiles) != 7 || len(mvMulti.Tiles[0]) != 7 {
+		t.Errorf("expected 7x7 tiles for multi-party stacking radius 3, got %dx%d", len(mvMulti.Tiles), len(mvMulti.Tiles[0]))
+	}
+	if !strings.Contains(mvMulti.BonusReason, "Scouting Job") || !strings.Contains(mvMulti.BonusReason, "Scope Goggles") {
+		t.Errorf("expected BonusReason to mention both bonuses, got: %s", mvMulti.BonusReason)
+	}
 }
 
 func TestPartyTrapDamageDistribution(t *testing.T) {

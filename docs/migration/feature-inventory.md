@@ -277,6 +277,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#590](https://github.com/witchcraze/party2re/issues/590) | Casino (Part 2): Multi-Player High-Low and Doppelganger Games | Completed |
 | [#593](https://github.com/witchcraze/party2re/issues/593) | Combat/Adapter: Wire Battle Adapter to all combat features and eliminate naked combatants | Completed |
 | [#599](https://github.com/witchcraze/party2re/issues/599) | Combat/Lint: Automated AST Linter Prohibiting Direct corebattle.NewParticipantFromCharacter in Feature Packages | Completed |
+| [#597](https://github.com/witchcraze/party2re/issues/597) | Dungeon: Support stacking vision expansion for scouting jobs and scope goggles in map scouting (@ちず) | Completed |
 
 
 ---
