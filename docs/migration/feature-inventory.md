@@ -275,6 +275,8 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#485](https://github.com/witchcraze/party2re/issues/485) | Fukubiki Raffle: Eliminate gold purchase and gold prizes, restoring Stat Seeds, Orbs, and Tavern coupon linkage | Completed |
 | [#486](https://github.com/witchcraze/party2re/issues/486) | Casino (Part 1): Multi-Player Room Lobby, Indian Poker, and Prize Depot Routing | Completed |
 | [#590](https://github.com/witchcraze/party2re/issues/590) | Casino (Part 2): Multi-Player High-Low and Doppelganger Games | Completed |
+| [#593](https://github.com/witchcraze/party2re/issues/593) | Combat/Adapter: Wire Battle Adapter to all combat features and eliminate naked combatants | Completed |
+| [#599](https://github.com/witchcraze/party2re/issues/599) | Combat/Lint: Automated AST Linter Prohibiting Direct corebattle.NewParticipantFromCharacter in Feature Packages | Completed |
 
 
 ---

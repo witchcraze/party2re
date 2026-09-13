@@ -68,3 +68,8 @@ To keep files readable, maintainable, and within effective token limits for AI p
   - **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/tx_runner_lint_test.go` and `internal/database/lock_hierarchy_lint_test.go`) during `make check` and CI.
 - **Event Dispatcher**: Domain events MUST use `internal/core/event.Dispatcher` two-phase dispatch. See [`docs/architecture/cross-domain-primitives.md`](../../docs/architecture/cross-domain-primitives.md) for architecture, lock order enforcement, and migration examples.
 
+## 11. Combat Cluster Boundaries & Battle Adapter Enforcement
+- **Prohibition of Direct `corebattle.NewParticipantFromCharacter`**: Feature modules (`adventure`, `boss`, `pvp`, `gvg`, `dungeon`, `challenge`, `party`, etc.) MUST NOT construct combat participants directly from Core character models via `corebattle.NewParticipantFromCharacter`, `corebattle.NewParticipantFromCharacterWithHP`, or `FromCharacter`. Direct generation bypasses equipment stat calculation (weapons, armors, accessories), combat-time consumable items, passive triggers (e.g. `ItemToukiShield`, `ItemDokuroAmulet`, `ItemCursedTalisman`), and status orbs, producing "naked combatants".
+- **Mandatory Battle Adapter Routing**: All combat features MUST inject `battle.ParticipantBuilder` (implemented by `internal/battle.Service`) or use `battle.BuildParticipantFromData` to ensure complete, authentic character combatant construction.
+- **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/battle_adapter_lint_test.go`) during `make check`, `make arch-lint`, and CI.
+

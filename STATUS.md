@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #593 — [Refactor] Combat/Adapter: Wire Battle Adapter to all combat features and eliminate naked combatants
+Last updated: Issue #599 — [Architecture] Combat/Lint: Automated AST Linter Prohibiting Direct corebattle.NewParticipantFromCharacter in Feature Packages
 
 ## Current phase
 
@@ -21,7 +21,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ### Architecture & Repository Intelligence
 - **Agent Operating Rules** (`AGENTS.md`, `.agents/rules/`): ✅ Prescriptive constraint rules modularized into 9 rule files; rationale in `docs/architecture/`.
 - **Guidance Layer** (`.arch/`): ✅ Symbol-anchor module JSON + shared table reverse-index; verified by `arch_test.go`.
-- **AST Linter Suite** (`make check`, `make arch-lint`): ✅ TransactionRunner & dual mutation boundary enforcement (#561), lock hierarchy, file size (≤500 lines), ISP interface size (≤10 methods), dead code, Valkey keyspace.
+- **AST Linter Suite** (`make check`, `make arch-lint`): ✅ TransactionRunner & dual mutation boundary enforcement (#561), lock hierarchy, file size (≤500 lines), ISP interface size (≤10 methods), dead code, Valkey keyspace, Battle Adapter boundary enforcement (#599).
 - **Benchmark Framework** (`make bench`): ✅ Critical-path benchmarks + baseline regression detection.
 
 ### Core & Shared Components
