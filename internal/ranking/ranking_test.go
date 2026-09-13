@@ -61,3 +61,12 @@ func TestNormalizePagination(t *testing.T) {
 		})
 	}
 }
+
+func TestRepositoryInterfaceComposition(t *testing.T) {
+	repo := newMockRepo()
+	var _ ranking.CharacterRankingRepository = repo
+	var _ ranking.PlayerWealthRankingRepository = repo
+	var _ ranking.LeaderboardRepository = repo
+	var _ ranking.SnapshotRepository = repo
+	var _ ranking.Repository = repo
+}

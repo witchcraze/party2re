@@ -12,6 +12,8 @@ type RankingRepository struct {
 	db *sql.DB
 }
 
+var _ ranking.Repository = (*RankingRepository)(nil)
+
 func NewRankingRepository(db *sql.DB) (*RankingRepository, error) {
 	if db == nil {
 		return nil, errors.New("database is nil")
