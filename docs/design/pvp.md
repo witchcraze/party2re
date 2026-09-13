@@ -61,10 +61,12 @@ A character can host a Colosseum room with configurable parameters:
 2. **Health Restoration**:
    - Before Round 1 commences, all participants have their HP restored to `MaxHP`.
 
-### 4. Round Combat Resolution (`_battle.cgi:486`)
+### 4. Round Combat Resolution (`_battle.cgi:486`, `vs_player.cgi:106-122`)
 
 - Each round resolves a party battle between opposing teams using `ResolvePartyBattle`.
-- The surviving/victorious team receives 1 round win point.
+- The round winner is determined from the unique surviving team among participants (`res.RemainingHP`):
+  - If exactly 1 team has surviving members (`alive_team_c == 1`), that team receives 1 round win point (`round_win`).
+  - If 0 teams survive (mutual wipeout) or multiple teams remain (turn limit reached), the round is scored as a draw (`draw`).
 - Round turns, combat logs, and HP changes are tracked per round.
 
 ### 5. Match Settlement & Prize Pool Split
