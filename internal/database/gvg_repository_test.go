@@ -47,7 +47,7 @@ func TestGvGRepository(t *testing.T) {
 		ID:                guildA_ID,
 		Name:              guildA_Name,
 		LeaderCharacterID: charA.ID,
-		Level:             1,
+		Points:            0,
 		Color:             "#FF3333",
 		Notice:            "Guild A",
 	}
@@ -74,7 +74,7 @@ func TestGvGRepository(t *testing.T) {
 		ID:                guildB_ID,
 		Name:              guildB_Name,
 		LeaderCharacterID: charB.ID,
-		Level:             1,
+		Points:            0,
 		Color:             "#6666FF",
 		Notice:            "Guild B",
 	}

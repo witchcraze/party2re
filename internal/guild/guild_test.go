@@ -17,9 +17,13 @@ type mockGuildRepo struct {
 	addMemberFn          func(ctx context.Context, member guild.Member) (guild.Member, error)
 	removeMemberFn       func(ctx context.Context, guildID string, characterID string) error
 	transferLeadershipFn func(ctx context.Context, guildID string, oldLeaderCharID string, newLeaderCharID string) error
-	updateMemberRoleFn   func(ctx context.Context, guildID string, targetCharID string, newRole guild.Role) error
+	assignCustomRoleFn   func(ctx context.Context, guildID string, targetCharID string, title string) error
 	updateNoticeFn       func(ctx context.Context, guildID string, notice string) error
-	donateFn             func(ctx context.Context, guildID string, characterID string, amount int) (guild.Guild, guild.Member, corecharacter.Character, error)
+	updateColorFn        func(ctx context.Context, guildID string, color string) error
+	isColorTakenFn       func(ctx context.Context, color string, excludeGuildID string) (bool, error)
+	addPointsFn          func(ctx context.Context, guildID string, points int64) error
+	addGuildPointsFn     func(ctx context.Context, characterID string, points int) error
+	updateBgimgFn        func(ctx context.Context, guildID string, bgimg string) error
 	disbandGuildFn       func(ctx context.Context, guildID string) error
 }
 
@@ -72,9 +76,9 @@ func (m *mockGuildRepo) TransferLeadership(ctx context.Context, guildID string, 
 	return nil
 }
 
-func (m *mockGuildRepo) UpdateMemberRole(ctx context.Context, guildID string, targetCharID string, newRole guild.Role) error {
-	if m.updateMemberRoleFn != nil {
-		return m.updateMemberRoleFn(ctx, guildID, targetCharID, newRole)
+func (m *mockGuildRepo) AssignCustomRole(ctx context.Context, guildID string, targetCharID string, title string) error {
+	if m.assignCustomRoleFn != nil {
+		return m.assignCustomRoleFn(ctx, guildID, targetCharID, title)
 	}
 	return nil
 }
@@ -86,11 +90,39 @@ func (m *mockGuildRepo) UpdateNotice(ctx context.Context, guildID string, notice
 	return nil
 }
 
-func (m *mockGuildRepo) Donate(ctx context.Context, guildID string, characterID string, amount int) (guild.Guild, guild.Member, corecharacter.Character, error) {
-	if m.donateFn != nil {
-		return m.donateFn(ctx, guildID, characterID, amount)
+func (m *mockGuildRepo) UpdateColor(ctx context.Context, guildID string, color string) error {
+	if m.updateColorFn != nil {
+		return m.updateColorFn(ctx, guildID, color)
 	}
-	return guild.Guild{ID: guildID}, guild.Member{GuildID: guildID, CharacterID: characterID}, corecharacter.Character{ID: characterID}, nil
+	return nil
+}
+
+func (m *mockGuildRepo) IsColorTaken(ctx context.Context, color string, excludeGuildID string) (bool, error) {
+	if m.isColorTakenFn != nil {
+		return m.isColorTakenFn(ctx, color, excludeGuildID)
+	}
+	return false, nil
+}
+
+func (m *mockGuildRepo) AddPoints(ctx context.Context, guildID string, points int64) error {
+	if m.addPointsFn != nil {
+		return m.addPointsFn(ctx, guildID, points)
+	}
+	return nil
+}
+
+func (m *mockGuildRepo) AddGuildPoints(ctx context.Context, characterID string, points int) error {
+	if m.addGuildPointsFn != nil {
+		return m.addGuildPointsFn(ctx, characterID, points)
+	}
+	return nil
+}
+
+func (m *mockGuildRepo) UpdateBgimg(ctx context.Context, guildID string, bgimg string) error {
+	if m.updateBgimgFn != nil {
+		return m.updateBgimgFn(ctx, guildID, bgimg)
+	}
+	return nil
 }
 
 func (m *mockGuildRepo) DisbandGuild(ctx context.Context, guildID string) error {
@@ -110,8 +142,8 @@ func TestRole_Valid(t *testing.T) {
 		valid bool
 	}{
 		{guild.RoleLeader, true},
-		{guild.RoleOfficer, true},
 		{guild.RoleMember, true},
+		{"officer", false}, // Purged fictional role
 		{"admin", false},
 		{"", false},
 	}
@@ -122,41 +154,80 @@ func TestRole_Valid(t *testing.T) {
 	}
 }
 
-func TestGuild_Capacity(t *testing.T) {
+func TestCalculateTitleWidth(t *testing.T) {
 	tests := []struct {
-		level    int
-		capacity int
+		title string
+		want  int
 	}{
-		{0, 10},
-		{1, 10},
-		{2, 12},
-		{5, 18},
-		{10, 28},
+		{"隊長", 4},
+		{"親衛隊長", 8},
+		{"一二三四五六", 12},
+		{"一二三四五六七", 14},
+		{"Captain", 7},
+		{"123456789012", 12},
+		{"1234567890123", 13},
 	}
 	for _, tt := range tests {
-		g := guild.Guild{Level: tt.level}
-		if got := g.Capacity(); got != tt.capacity {
-			t.Errorf("Guild{Level: %d}.Capacity() = %d, want %d", tt.level, got, tt.capacity)
+		got := guild.CalculateTitleWidth(tt.title)
+		if got != tt.want {
+			t.Errorf("CalculateTitleWidth(%q) = %d, want %d", tt.title, got, tt.want)
 		}
 	}
 }
 
-func TestGuild_CalculateLevel(t *testing.T) {
+func TestValidateRoleTitle(t *testing.T) {
 	tests := []struct {
-		exp   int64
-		level int
+		name    string
+		title   string
+		wantErr error
 	}{
-		{0, 1},
-		{9999, 1},
-		{10000, 2},
-		{39999, 2},
-		{40000, 3},
-		{810000, 10},
-		{99999999, 10}, // Capped at MaxLevel
+		{"Valid kanji title", "親衛隊長", nil},
+		{"Valid 6 full-width kanji", "一二三四五六", nil},
+		{"Valid ASCII title", "Captain", nil},
+		{"Valid 12 half-width chars", "123456789012", nil},
+		{"Empty title", "", guild.ErrInvalidRoleTitle},
+		{"Contains half-width space", "隊長 副隊長", guild.ErrInvalidRoleTitle},
+		{"Contains full-width space", "隊長　副隊長", guild.ErrInvalidRoleTitle},
+		{"Contains comma", "隊長,副隊長", guild.ErrInvalidRoleTitle},
+		{"Contains at sign", "隊長@本部", guild.ErrInvalidRoleTitle},
+		{"Contains full-width at sign", "隊長＠本部", guild.ErrInvalidRoleTitle},
+		{"Reserved title 参加申請中", "参加申請中", guild.ErrReservedRoleTitle},
+		{"Reserved title ギルマス", "ギルマス", guild.ErrReservedRoleTitle},
+		{"Too long full-width (7 chars = 14 width)", "一二三四五六七", guild.ErrRoleTitleTooLong},
+		{"Too long ASCII (13 chars = 13 width)", "1234567890123", guild.ErrRoleTitleTooLong},
 	}
 	for _, tt := range tests {
-		if got := guild.CalculateLevel(tt.exp); got != tt.level {
-			t.Errorf("CalculateLevel(%d) = %d, want %d", tt.exp, got, tt.level)
+		t.Run(tt.name, func(t *testing.T) {
+			err := guild.ValidateRoleTitle(tt.title)
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("ValidateRoleTitle(%q) = %v, want %v", tt.title, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateColorFormat(t *testing.T) {
+	tests := []struct {
+		color   string
+		want    string
+		wantErr error
+	}{
+		{"#FFFFFF", "#FFFFFF", nil},
+		{"#ffffff", "#FFFFFF", nil},
+		{"#ff3333", "#FF3333", nil},
+		{"#33CCFF", "#33CCFF", nil},
+		{"invalid", "", guild.ErrInvalidColorFormat},
+		{"#FFF", "", guild.ErrInvalidColorFormat},
+		{"#GGGGGG", "", guild.ErrInvalidColorFormat},
+		{"", "", guild.ErrInvalidColorFormat},
+	}
+	for _, tt := range tests {
+		got, err := guild.ValidateColorFormat(tt.color)
+		if !errors.Is(err, tt.wantErr) {
+			t.Errorf("ValidateColorFormat(%q) error = %v, want %v", tt.color, err, tt.wantErr)
+		}
+		if err == nil && got != tt.want {
+			t.Errorf("ValidateColorFormat(%q) = %q, want %q", tt.color, got, tt.want)
 		}
 	}
 }
@@ -196,7 +267,7 @@ func TestService_Create_Validation(t *testing.T) {
 		}
 	})
 
-	t.Run("Success", func(t *testing.T) {
+	t.Run("Success initializes Points 0 and Leader Title ギルマス", func(t *testing.T) {
 		var createdGuild guild.Guild
 		var createdMember guild.Member
 		repo := &mockGuildRepo{
@@ -211,8 +282,11 @@ func TestService_Create_Validation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Create() unexpected error: %v", err)
 		}
-		if g.Name != "Knights" || m.Role != guild.RoleLeader || m.CharacterID != "char1" {
+		if g.Name != "Knights" || m.Role != guild.RoleLeader || m.Title != guild.DefaultTitleLeader || m.CharacterID != "char1" {
 			t.Errorf("created guild = %+v, member = %+v", createdGuild, createdMember)
+		}
+		if g.Points != 0 || g.Color != guild.DefaultColor {
+			t.Errorf("expected Points 0, Color #FFFFFF, got %+v", g)
 		}
 	})
 }
@@ -233,24 +307,10 @@ func TestService_Join(t *testing.T) {
 		}
 	})
 
-	t.Run("Guild full", func(t *testing.T) {
-		members := make([]guild.Member, 10)
+	t.Run("Success without capacity limits", func(t *testing.T) {
 		repo := &mockGuildRepo{
 			getGuildFn: func(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
-				return guild.Guild{ID: guildID, Level: 1}, members, nil
-			},
-		}
-		svc, _ := guild.NewService(repo)
-		_, err := svc.Join(ctx, "g1", "char1")
-		if !errors.Is(err, guild.ErrGuildFull) {
-			t.Errorf("err = %v, want %v", err, guild.ErrGuildFull)
-		}
-	})
-
-	t.Run("Success", func(t *testing.T) {
-		repo := &mockGuildRepo{
-			getGuildFn: func(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
-				return guild.Guild{ID: guildID, Level: 1}, []guild.Member{{CharacterID: "c0", Role: guild.RoleLeader}}, nil
+				return guild.Guild{ID: guildID, Points: 100}, []guild.Member{{CharacterID: "c0", Role: guild.RoleLeader}}, nil
 			},
 		}
 		svc, _ := guild.NewService(repo)
@@ -258,7 +318,7 @@ func TestService_Join(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Join() unexpected error: %v", err)
 		}
-		if m.Role != guild.RoleMember || m.CharacterID != "char1" {
+		if m.Role != guild.RoleMember || m.CharacterID != "char1" || m.Title != "" {
 			t.Errorf("joined member = %+v", m)
 		}
 	})
@@ -336,8 +396,6 @@ func TestService_Kick(t *testing.T) {
 
 	members := []guild.Member{
 		{CharacterID: "leader1", Role: guild.RoleLeader},
-		{CharacterID: "officer1", Role: guild.RoleOfficer},
-		{CharacterID: "officer2", Role: guild.RoleOfficer},
 		{CharacterID: "member1", Role: guild.RoleMember},
 	}
 	repo := &mockGuildRepo{
@@ -348,35 +406,32 @@ func TestService_Kick(t *testing.T) {
 	svc, _ := guild.NewService(repo)
 
 	t.Run("Cannot kick leader", func(t *testing.T) {
-		err := svc.Kick(ctx, "g1", "officer1", "leader1")
-		if !errors.Is(err, guild.ErrCannotKickLeader) {
-			t.Errorf("err = %v, want %v", err, guild.ErrCannotKickLeader)
-		}
-	})
-
-	t.Run("Officer cannot kick another officer", func(t *testing.T) {
-		err := svc.Kick(ctx, "g1", "officer1", "officer2")
-		if !errors.Is(err, guild.ErrCannotKickEqualOrHigherRole) {
-			t.Errorf("err = %v, want %v", err, guild.ErrCannotKickEqualOrHigherRole)
+		err := svc.Kick(ctx, "g1", "leader1", "leader1")
+		if err == nil {
+			t.Error("expected error kicking leader, got nil")
 		}
 	})
 
 	t.Run("Member cannot kick anyone", func(t *testing.T) {
-		err := svc.Kick(ctx, "g1", "member1", "officer1")
+		err := svc.Kick(ctx, "g1", "member1", "leader1")
 		if !errors.Is(err, guild.ErrUnauthorized) {
 			t.Errorf("err = %v, want %v", err, guild.ErrUnauthorized)
 		}
 	})
 
-	t.Run("Officer can kick member", func(t *testing.T) {
-		if err := svc.Kick(ctx, "g1", "officer1", "member1"); err != nil {
+	t.Run("Leader can kick member", func(t *testing.T) {
+		kicked := false
+		repo.removeMemberFn = func(_ context.Context, guildID, charID string) error {
+			if charID == "member1" {
+				kicked = true
+			}
+			return nil
+		}
+		if err := svc.Kick(ctx, "g1", "leader1", "member1"); err != nil {
 			t.Errorf("Kick() unexpected error: %v", err)
 		}
-	})
-
-	t.Run("Leader can kick officer", func(t *testing.T) {
-		if err := svc.Kick(ctx, "g1", "leader1", "officer1"); err != nil {
-			t.Errorf("Kick() unexpected error: %v", err)
+		if !kicked {
+			t.Error("expected member to be kicked")
 		}
 	})
 }
@@ -384,8 +439,8 @@ func TestService_Kick(t *testing.T) {
 func TestService_TransferLeadership(t *testing.T) {
 	ctx := context.Background()
 	members := []guild.Member{
-		{CharacterID: "leader1", Role: guild.RoleLeader},
-		{CharacterID: "member1", Role: guild.RoleMember},
+		{CharacterID: "leader1", Role: guild.RoleLeader, Title: guild.DefaultTitleLeader},
+		{CharacterID: "member1", Role: guild.RoleMember, Title: "親衛隊長"},
 	}
 	repo := &mockGuildRepo{
 		getGuildFn: func(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
@@ -425,11 +480,11 @@ func TestService_TransferLeadership(t *testing.T) {
 	})
 }
 
-func TestService_UpdateRole(t *testing.T) {
+func TestService_AssignCustomRole(t *testing.T) {
 	ctx := context.Background()
 	members := []guild.Member{
-		{CharacterID: "leader1", Role: guild.RoleLeader},
-		{CharacterID: "member1", Role: guild.RoleMember},
+		{CharacterID: "leader1", Role: guild.RoleLeader, Title: guild.DefaultTitleLeader},
+		{CharacterID: "member1", Role: guild.RoleMember, Title: ""},
 	}
 	repo := &mockGuildRepo{
 		getGuildFn: func(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
@@ -438,67 +493,170 @@ func TestService_UpdateRole(t *testing.T) {
 	}
 	svc, _ := guild.NewService(repo)
 
-	t.Run("Cannot set RoleLeader directly", func(t *testing.T) {
-		err := svc.UpdateRole(ctx, "g1", "leader1", "member1", guild.RoleLeader)
-		if !errors.Is(err, guild.ErrInvalidRole) {
-			t.Errorf("err = %v, want %v", err, guild.ErrInvalidRole)
-		}
-	})
-
-	t.Run("Unauthorized when non-leader tries to update role", func(t *testing.T) {
-		err := svc.UpdateRole(ctx, "g1", "member1", "member1", guild.RoleOfficer)
+	t.Run("Unauthorized when non-leader tries to assign custom role", func(t *testing.T) {
+		err := svc.AssignCustomRole(ctx, "g1", "member1", "member1", "隊長")
 		if !errors.Is(err, guild.ErrUnauthorized) {
 			t.Errorf("err = %v, want %v", err, guild.ErrUnauthorized)
 		}
 	})
 
-	t.Run("Success promote to officer", func(t *testing.T) {
-		updated := false
-		repo.updateMemberRoleFn = func(_ context.Context, guildID, target string, r guild.Role) error {
-			if target == "member1" && r == guild.RoleOfficer {
-				updated = true
+	t.Run("Cannot assign custom role to leader", func(t *testing.T) {
+		err := svc.AssignCustomRole(ctx, "g1", "leader1", "leader1", "大将軍")
+		if !errors.Is(err, guild.ErrCannotAssignToLeader) {
+			t.Errorf("err = %v, want %v", err, guild.ErrCannotAssignToLeader)
+		}
+	})
+
+	t.Run("Target not member", func(t *testing.T) {
+		err := svc.AssignCustomRole(ctx, "g1", "leader1", "stranger", "親衛隊")
+		if !errors.Is(err, guild.ErrTargetNotMember) {
+			t.Errorf("err = %v, want %v", err, guild.ErrTargetNotMember)
+		}
+	})
+
+	t.Run("Invalid title validations", func(t *testing.T) {
+		if err := svc.AssignCustomRole(ctx, "g1", "leader1", "member1", ""); !errors.Is(err, guild.ErrInvalidRoleTitle) {
+			t.Errorf("expected ErrInvalidRoleTitle, got %v", err)
+		}
+		if err := svc.AssignCustomRole(ctx, "g1", "leader1", "member1", "ギルマス"); !errors.Is(err, guild.ErrReservedRoleTitle) {
+			t.Errorf("expected ErrReservedRoleTitle, got %v", err)
+		}
+		if err := svc.AssignCustomRole(ctx, "g1", "leader1", "member1", "参加申請中"); !errors.Is(err, guild.ErrReservedRoleTitle) {
+			t.Errorf("expected ErrReservedRoleTitle, got %v", err)
+		}
+		if err := svc.AssignCustomRole(ctx, "g1", "leader1", "member1", "一二三四五六七"); !errors.Is(err, guild.ErrRoleTitleTooLong) {
+			t.Errorf("expected ErrRoleTitleTooLong, got %v", err)
+		}
+	})
+
+	t.Run("Success assign custom title (up to 6 full-width characters)", func(t *testing.T) {
+		var assignedTitle string
+		repo.assignCustomRoleFn = func(_ context.Context, guildID, targetCharID, title string) error {
+			if targetCharID == "member1" {
+				assignedTitle = title
 			}
 			return nil
 		}
-		if err := svc.UpdateRole(ctx, "g1", "leader1", "member1", guild.RoleOfficer); err != nil {
-			t.Fatalf("UpdateRole() unexpected error: %v", err)
+		if err := svc.AssignCustomRole(ctx, "g1", "leader1", "member1", "親衛隊長"); err != nil {
+			t.Fatalf("AssignCustomRole failed: %v", err)
 		}
-		if !updated {
-			t.Error("expected update member role to be called")
+		if assignedTitle != "親衛隊長" {
+			t.Errorf("assignedTitle = %q, want '親衛隊長'", assignedTitle)
 		}
 	})
 }
 
-func TestService_Donate(t *testing.T) {
+func TestService_UpdateColor(t *testing.T) {
 	ctx := context.Background()
-
+	members := []guild.Member{
+		{CharacterID: "leader1", Role: guild.RoleLeader},
+		{CharacterID: "member1", Role: guild.RoleMember},
+	}
 	repo := &mockGuildRepo{
-		getGuildByCharFn: func(_ context.Context, charID string) (guild.Guild, guild.Member, error) {
-			return guild.Guild{ID: "g1", Level: 1, Exp: 5000, Gold: 1000}, guild.Member{GuildID: "g1", CharacterID: charID}, nil
+		getGuildFn: func(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
+			return guild.Guild{ID: guildID, Color: "#FFFFFF"}, members, nil
 		},
 	}
 	svc, _ := guild.NewService(repo)
 
-	t.Run("Invalid donation amount", func(t *testing.T) {
-		_, _, _, err := svc.Donate(ctx, "g1", "char1", 0)
-		if !errors.Is(err, guild.ErrInvalidDonationAmount) {
-			t.Errorf("err = %v, want %v", err, guild.ErrInvalidDonationAmount)
+	t.Run("Unauthorized when non-leader changes color", func(t *testing.T) {
+		err := svc.UpdateColor(ctx, "g1", "member1", "#33CCFF")
+		if !errors.Is(err, guild.ErrUnauthorized) {
+			t.Errorf("err = %v, want %v", err, guild.ErrUnauthorized)
 		}
 	})
 
-	t.Run("Success with donation delegation", func(t *testing.T) {
-		var passedAmount int
-		repo.donateFn = func(_ context.Context, gID, cID string, amount int) (guild.Guild, guild.Member, corecharacter.Character, error) {
-			passedAmount = amount
-			return guild.Guild{ID: gID, Level: 2, Exp: 10000}, guild.Member{GuildID: gID, CharacterID: cID}, corecharacter.Character{ID: cID}, nil
+	t.Run("Invalid color format", func(t *testing.T) {
+		err := svc.UpdateColor(ctx, "g1", "leader1", "blue")
+		if !errors.Is(err, guild.ErrInvalidColorFormat) {
+			t.Errorf("err = %v, want %v", err, guild.ErrInvalidColorFormat)
 		}
+	})
 
-		g, _, _, err := svc.Donate(ctx, "g1", "char1", 5000)
-		if err != nil {
-			t.Fatalf("Donate() unexpected error: %v", err)
+	t.Run("NPC color prohibited", func(t *testing.T) {
+		err := svc.UpdateColor(ctx, "g1", "leader1", guild.NPCColor)
+		if !errors.Is(err, guild.ErrColorTaken) {
+			t.Errorf("err = %v, want %v", err, guild.ErrColorTaken)
 		}
-		if passedAmount != 5000 || g.Level != 2 || g.Exp != 10000 {
-			t.Errorf("got amount %d, level %d, exp %d; want 5000, 2, 10000", passedAmount, g.Level, g.Exp)
+	})
+
+	t.Run("Duplicate color taken by another guild", func(t *testing.T) {
+		repo.isColorTakenFn = func(_ context.Context, color, excludeGuildID string) (bool, error) {
+			if color == "#FF3333" {
+				return true, nil
+			}
+			return false, nil
+		}
+		err := svc.UpdateColor(ctx, "g1", "leader1", "#FF3333")
+		if !errors.Is(err, guild.ErrColorTaken) {
+			t.Errorf("err = %v, want %v", err, guild.ErrColorTaken)
+		}
+	})
+
+	t.Run("Success with unique hex color", func(t *testing.T) {
+		var updatedColor string
+		repo.isColorTakenFn = func(_ context.Context, color, excludeGuildID string) (bool, error) {
+			return false, nil
+		}
+		repo.updateColorFn = func(_ context.Context, guildID, color string) error {
+			updatedColor = color
+			return nil
+		}
+		if err := svc.UpdateColor(ctx, "g1", "leader1", "#33ccff"); err != nil {
+			t.Fatalf("UpdateColor failed: %v", err)
+		}
+		if updatedColor != "#33CCFF" {
+			t.Errorf("updatedColor = %q, want '#33CCFF'", updatedColor)
+		}
+	})
+
+	t.Run("Default white color allows multiple guilds", func(t *testing.T) {
+		var updatedColor string
+		repo.updateColorFn = func(_ context.Context, guildID, color string) error {
+			updatedColor = color
+			return nil
+		}
+		if err := svc.UpdateColor(ctx, "g1", "leader1", "#FFFFFF"); err != nil {
+			t.Fatalf("UpdateColor failed: %v", err)
+		}
+		if updatedColor != "#FFFFFF" {
+			t.Errorf("updatedColor = %q, want '#FFFFFF'", updatedColor)
+		}
+	})
+}
+
+func TestService_GuildPoints(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockGuildRepo{}
+	svc, _ := guild.NewService(repo)
+
+	t.Run("AddPoints delegates directly", func(t *testing.T) {
+		var addedPoints int64
+		repo.addPointsFn = func(_ context.Context, guildID string, points int64) error {
+			addedPoints = points
+			return nil
+		}
+		if err := svc.AddPoints(ctx, "g1", 100); err != nil {
+			t.Fatalf("AddPoints failed: %v", err)
+		}
+		if addedPoints != 100 {
+			t.Errorf("addedPoints = %d, want 100", addedPoints)
+		}
+	})
+
+	t.Run("AddGuildPoints delegates with character ID", func(t *testing.T) {
+		var charID string
+		var pointsAdded int
+		repo.addGuildPointsFn = func(_ context.Context, cID string, p int) error {
+			charID = cID
+			pointsAdded = p
+			return nil
+		}
+		if err := svc.AddGuildPoints(ctx, "char1", 50); err != nil {
+			t.Fatalf("AddGuildPoints failed: %v", err)
+		}
+		if charID != "char1" || pointsAdded != 50 {
+			t.Errorf("got charID %q, points %d; want 'char1', 50", charID, pointsAdded)
 		}
 	})
 }
@@ -509,7 +667,7 @@ func TestService_GetByCharacter(t *testing.T) {
 	repo := &mockGuildRepo{
 		getGuildByCharFn: func(_ context.Context, charID string) (guild.Guild, guild.Member, error) {
 			if charID == "char1" {
-				return guild.Guild{ID: "g1", Name: "MyGuild"}, guild.Member{GuildID: "g1", CharacterID: charID, Role: guild.RoleLeader}, nil
+				return guild.Guild{ID: "g1", Name: "MyGuild"}, guild.Member{GuildID: "g1", CharacterID: charID, Role: guild.RoleLeader, Title: guild.DefaultTitleLeader}, nil
 			}
 			return guild.Guild{}, guild.Member{}, guild.ErrCharacterNotInGuild
 		},

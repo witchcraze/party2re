@@ -52,12 +52,12 @@ func (m *mockGuildRepo) GetGuildByCharacter(_ context.Context, charID string) (g
 	return g, mem, nil
 }
 
-func (m *mockGuildRepo) AddExp(_ context.Context, guildID string, exp int64) error {
+func (m *mockGuildRepo) AddPoints(_ context.Context, guildID string, points int64) error {
 	g, ok := m.guilds[guildID]
 	if !ok {
 		return guild.ErrGuildNotFound
 	}
-	g.Exp += exp
+	g.Points += points
 	m.guilds[guildID] = g
 	return nil
 }
@@ -272,7 +272,7 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 
 		// Join guild
-		guildRepo.guilds["guild-1"] = guild.Guild{ID: "guild-1", Name: "Test Guild", Exp: 200}
+		guildRepo.guilds["guild-1"] = guild.Guild{ID: "guild-1", Name: "Test Guild", Points: 200}
 		guildRepo.members[char.ID] = guild.Member{GuildID: "guild-1", CharacterID: char.ID}
 
 		// Rank up wish
@@ -280,8 +280,8 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if guildRepo.guilds["guild-1"].Exp != 1200 {
-			t.Errorf("expected 1200 guild exp, got %d", guildRepo.guilds["guild-1"].Exp)
+		if guildRepo.guilds["guild-1"].Points != 1200 {
+			t.Errorf("expected 1200 guild points, got %d", guildRepo.guilds["guild-1"].Points)
 		}
 		if res.NextLocation != "home" {
 			t.Errorf("expected NextLocation home, got %s", res.NextLocation)

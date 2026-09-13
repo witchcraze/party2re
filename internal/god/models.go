@@ -137,7 +137,7 @@ type LotteryRepository interface {
 // GuildRepository provides guild operations for wishes.
 type GuildRepository interface {
 	GetGuildByCharacter(ctx context.Context, characterID string) (guild.Guild, guild.Member, error)
-	AddExp(ctx context.Context, guildID string, exp int64) error
+	AddPoints(ctx context.Context, guildID string, points int64) error
 	UpdateBgimg(ctx context.Context, guildID string, bgimg string) error
 }
 

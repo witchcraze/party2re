@@ -84,7 +84,7 @@ func (s *Service) executeHeavenWish(
 		if err != nil {
 			return fmt.Errorf("%w: ギルドに所属していません", ErrWishRequirement)
 		}
-		if err := s.guilds.AddExp(ctx, g.ID, 1000); err != nil {
+		if err := s.guilds.AddPoints(ctx, g.ID, 1000); err != nil {
 			return err
 		}
 		msg = "所属ギルドに 1,000 ポイントが加算されました！"

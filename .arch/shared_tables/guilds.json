@@ -2,10 +2,10 @@
   "$schema": "https://archify.dev/schema/shared_table.v1.json",
   "table": "guilds",
   "tier": 7,
-  "description": "Guild entities, founding leadership, total experience, and treasury gold.",
+  "description": "Guild entities, founding leadership, dynamic points, and color customization.",
   "repository_implementation": "internal/database/guild_repository.go#GuildRepository",
   "consumer_interfaces": [
-    "internal/guild/guild.go#Repository"
+    "internal/guild/repository.go#Repository"
   ],
   "callers": [
     {
@@ -17,10 +17,10 @@
     },
     {
       "module": "guild",
-      "caller_method": "internal/database/guild_repository.go#GuildRepository.Donate",
-      "lock_mode": "SELECT ... FOR UPDATE",
+      "caller_method": "internal/database/guild_repository.go#GuildRepository.TransferLeadership",
+      "lock_mode": "UPDATE",
       "lock_order": 7,
-      "purpose": "Lock guild row to recalculate total exp and credit treasury gold"
+      "purpose": "Update guild leader character ID"
     }
   ]
 }

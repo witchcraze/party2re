@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/guild"
@@ -62,8 +63,11 @@ func TestGuildServiceDatabaseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("service.Create failed: %v", err)
 	}
-	if g.Name != guildName || leaderM.Role != guild.RoleLeader {
+	if g.Name != guildName || leaderM.Role != guild.RoleLeader || leaderM.Title != guild.DefaultTitleLeader {
 		t.Errorf("unexpected guild/member: %+v, %+v", g, leaderM)
+	}
+	if g.Points != 0 || g.Color != guild.DefaultColor {
+		t.Errorf("expected points 0, color #FFFFFF, got points %d, color %s", g.Points, g.Color)
 	}
 
 	// 2. Member1 joins
@@ -71,56 +75,73 @@ func TestGuildServiceDatabaseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("service.Join failed: %v", err)
 	}
-	if m1.Role != guild.RoleMember {
-		t.Errorf("member1 role = %v, want member", m1.Role)
+	if m1.Role != guild.RoleMember || m1.Title != "" {
+		t.Errorf("member1 role = %v, title = %q; want member, ''", m1.Role, m1.Title)
 	}
 
-	// 3. Leader promotes Member1 to Officer
-	if err := service.UpdateRole(ctx, g.ID, leaderChar.ID, memberChar1.ID, guild.RoleOfficer); err != nil {
-		t.Fatalf("service.UpdateRole failed: %v", err)
+	// 3. Leader assigns custom role title to Member1 (あたえる: 親衛隊長)
+	if err := service.AssignCustomRole(ctx, g.ID, leaderChar.ID, memberChar1.ID, "親衛隊長"); err != nil {
+		t.Fatalf("service.AssignCustomRole failed: %v", err)
+	}
+	_, m1Updated, err := service.GetByCharacter(ctx, memberChar1.ID)
+	if err != nil || m1Updated.Title != "親衛隊長" {
+		t.Fatalf("expected title '親衛隊長', got %q, err = %v", m1Updated.Title, err)
 	}
 
-	// 4. Member2 joins
+	// 4. Leader updates guild color (からー)
+	testColor := fmt.Sprintf("#%06X", (time.Now().UnixNano()/1000)%0xFFFFFF)
+	if testColor == guild.DefaultColor || testColor == guild.NPCColor {
+		testColor = "#FF3333"
+	}
+	if err := service.UpdateColor(ctx, g.ID, leaderChar.ID, testColor); err != nil {
+		t.Fatalf("service.UpdateColor failed: %v", err)
+	}
+	detail, err := service.Get(ctx, g.ID)
+	if err != nil || detail.Guild.Color != testColor {
+		t.Fatalf("expected color %s, got %s, err = %v", testColor, detail.Guild.Color, err)
+	}
+
+	// 5. Member2 joins
 	_, err = service.Join(ctx, g.ID, memberChar2.ID)
 	if err != nil {
 		t.Fatalf("service.Join (member2) failed: %v", err)
 	}
 
-	// 5. Member1 (Officer) updates notice
-	if err := service.UpdateNotice(ctx, g.ID, memberChar1.ID, "Officer notice update"); err != nil {
+	// 6. Leader updates notice
+	if err := service.UpdateNotice(ctx, g.ID, leaderChar.ID, "Leader notice update"); err != nil {
 		t.Fatalf("service.UpdateNotice failed: %v", err)
 	}
 
-	// 6. Member1 (Officer) kicks Member2
-	if err := service.Kick(ctx, g.ID, memberChar1.ID, memberChar2.ID); err != nil {
+	// 7. Leader kicks Member2
+	if err := service.Kick(ctx, g.ID, leaderChar.ID, memberChar2.ID); err != nil {
 		t.Fatalf("service.Kick failed: %v", err)
 	}
 
-	// 7. Member1 donates 10000 gold -> triggers level up to Level 2
-	donatedG, _, _, err := service.Donate(ctx, g.ID, memberChar1.ID, 10000)
-	if err != nil {
-		t.Fatalf("service.Donate failed: %v", err)
+	// 8. Add Guild Points dynamically
+	if err := service.AddGuildPoints(ctx, memberChar1.ID, 100); err != nil {
+		t.Fatalf("service.AddGuildPoints failed: %v", err)
 	}
-	if donatedG.Level != 2 || donatedG.Exp != 10000 {
-		t.Errorf("donated guild level = %d, exp = %d; want level 2, exp 10000", donatedG.Level, donatedG.Exp)
+	gWithPoints, _, err := service.GetByCharacter(ctx, leaderChar.ID)
+	if err != nil || gWithPoints.Points != 100 {
+		t.Fatalf("expected points 100, got %d, err = %v", gWithPoints.Points, err)
 	}
 
-	// 8. Transfer leadership from Leader to Member1
+	// 9. Transfer leadership from Leader to Member1
 	if err := service.TransferLeadership(ctx, g.ID, leaderChar.ID, memberChar1.ID); err != nil {
 		t.Fatalf("service.TransferLeadership failed: %v", err)
 	}
 
-	// 9. Former leader leaves guild
+	// 10. Former leader leaves guild
 	if err := service.Leave(ctx, g.ID, leaderChar.ID); err != nil {
 		t.Fatalf("service.Leave failed: %v", err)
 	}
 
-	// 10. Sole leader (Member1) leaves -> disbands guild
+	// 11. Sole leader (Member1) leaves -> disbands guild
 	if err := service.Leave(ctx, g.ID, memberChar1.ID); err != nil {
 		t.Fatalf("service.Leave (sole leader disband) failed: %v", err)
 	}
 
-	// 11. Verify guild is deleted
+	// 12. Verify guild is deleted
 	if _, err := service.Get(ctx, g.ID); err == nil {
 		t.Error("expected error getting disbanded guild, got nil")
 	}

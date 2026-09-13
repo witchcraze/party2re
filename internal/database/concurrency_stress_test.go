@@ -143,7 +143,7 @@ func TestConcurrencyStressGuildConcurrentDonations(t *testing.T) {
 	}
 
 	cfg := GetStressConfig()
-	donationAmountPerOp := 50
+	pointsAmountPerOp := 50
 
 	type memberInfo struct {
 		character corecharacter.Character
@@ -151,17 +151,17 @@ func TestConcurrencyStressGuildConcurrentDonations(t *testing.T) {
 	members := make([]memberInfo, cfg.Workers)
 
 	for w := 0; w < cfg.Workers; w++ {
-		c, err := CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("GM_%s_%d", suffix, w), cfg.OpsPerWorker*donationAmountPerOp*2)
+		c, err := CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("GM_%s_%d", suffix, w), 1000)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		_, err = guildRepo.AddMember(ctx, guild.Member{
-			GuildID:          createdGuild.ID,
-			CharacterID:      c.ID,
-			Role:             guild.RoleMember,
-			JoinedAt:         now,
-			TotalDonatedGold: 0,
+			GuildID:     createdGuild.ID,
+			CharacterID: c.ID,
+			Role:        guild.RoleMember,
+			Title:       "",
+			JoinedAt:    now,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -171,37 +171,27 @@ func TestConcurrencyStressGuildConcurrentDonations(t *testing.T) {
 
 	res := RunConcurrentStressTest(t, cfg, func(workerID int, op int) error {
 		m := members[workerID]
-		_, _, _, err := guildRepo.Donate(ctx, createdGuild.ID, m.character.ID, donationAmountPerOp)
+		err := guildRepo.AddGuildPoints(ctx, m.character.ID, pointsAmountPerOp)
 		if err != nil {
-			t.Errorf("worker %d unexpected donation error: %v", workerID, err)
+			t.Errorf("worker %d unexpected guild points error: %v", workerID, err)
 			return err
 		}
 		return nil
 	})
 
-	// Verify Guild Total Gold and Member Contributions
-	finalGuild, guildMembers, err := guildRepo.GetGuild(ctx, createdGuild.ID)
+	// Verify Guild Total Points
+	finalGuild, _, err := guildRepo.GetGuild(ctx, createdGuild.ID)
 	if err != nil {
 		t.Fatalf("failed to get guild: %v", err)
 	}
 
-	expectedGuildGold := int64(res.Successes * int64(donationAmountPerOp))
-	if finalGuild.Gold != expectedGuildGold {
-		t.Fatalf("Guild gold mismatch! Expected %d, got %d", expectedGuildGold, finalGuild.Gold)
+	expectedGuildPoints := int64(res.Successes * int64(pointsAmountPerOp))
+	if finalGuild.Points != expectedGuildPoints {
+		t.Fatalf("Guild points mismatch! Expected %d, got %d", expectedGuildPoints, finalGuild.Points)
 	}
 
-	// Verify all members' total donations
-	var sumMemberDonations int64
-	for _, gm := range guildMembers {
-		sumMemberDonations += gm.TotalDonatedGold
-	}
-
-	if sumMemberDonations != expectedGuildGold {
-		t.Fatalf("Sum of member donations (%d) does not match guild gold (%d)", sumMemberDonations, expectedGuildGold)
-	}
-
-	t.Logf("Guild Concurrency Stress Test Completed: %d successful donations totaling %d gold in %v",
-		res.Successes, expectedGuildGold, res.Duration)
+	t.Logf("Guild Concurrency Stress Test Completed: %d successful points additions totaling %d points in %v",
+		res.Successes, expectedGuildPoints, res.Duration)
 }
 
 func TestConcurrencyStressShopStockDepletion(t *testing.T) {
@@ -541,11 +531,8 @@ func TestConcurrencyStressMultiDomainChaos(t *testing.T) {
 				}
 			}
 		case 1:
-			// Guild Donation
-			_, _, _, err := guildRepo.Donate(ctx, sharedGuild.ID, s1.character.ID, 10)
-			if err != nil && !errors.Is(err, guild.ErrInsufficientFunds) {
-				return err
-			}
+			// Guild Points
+			_ = guildRepo.AddGuildPoints(ctx, s1.character.ID, 10)
 		case 2:
 			// Depot Storage
 			dep, err := depotRepo.FindByCharacterID(ctx, s1.character.ID)

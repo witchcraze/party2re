@@ -2,57 +2,77 @@
 
 ## Overview
 
-The Guild (ギルド) system enables players to form cooperative social organizations. Members contribute resources through donations to level up the guild hall, expand membership capacity, and coordinate activities under a role-based hierarchy.
+The Guild (ギルド) system enables players to form cooperative social organizations (`guild.cgi`, `join_guild.cgi`). In authentic Party2, there are **no guild levels, donation EXP, or capacity scaling**. Instead, guilds compete for server-wide community influence ranked by dynamic **Guild Points (`gpoint`)** accrued organically through member social, economic, and combat activities.
 
 ## Domain Model & Roles
 
-### Guild Hierarchy (`Role`)
+### Guild Authority & Membership
 
 - **Leader (`RoleLeader` / ギルマス)**:
-  - Highest authority in the guild.
-  - Can edit guild notice / messages, transfer leadership, promote/demote officers, kick members and officers, and disband the guild.
-- **Officer (`RoleOfficer` / 役職者)**:
-  - Can edit guild notice / messages and kick regular members.
-  - Cannot kick the leader or other officers.
+  - Highest and sole administrative authority in the guild.
+  - Can assign custom role titles (`あたえる`), customize guild hex color (`からー`), update guild notice (`めっせーじ`), transfer leadership, kick members (`追放`), and disband the guild.
+  - Default title is `ギルマス` and cannot be assigned to another member or altered via `あたえる`.
 - **Member (`RoleMember` / メンバー)**:
-  - Regular guild member.
-  - Can donate gold, view guild details/members, and leave the guild.
+  - Regular guild member with no administrative permissions.
+  - Carries an optional player-defined custom title assigned by the leader.
+
+### Dynamic Guild Points (`gpoint`)
+
+Guilds do not possess numeric levels or gold treasuries. Community standing is measured by cumulative Guild Points (`gpoint`) accrued through gameplay:
+
+- **Tavern Dining (`bar.cgi`)**: +2 pt per meal consumed by a guild member.
+- **Photo Contest Placements (`contest.cgi`)**: +700 pt (1st), +300 pt (2nd), +100 pt (3rd).
+- **GvG Combat (`vs_guild.cgi`)**: +3 pt per round win, +match prize pool GP to tournament winner, +4 pt per participant.
+- **Helper Quests (`helper.cgi`)**: +100 pt on guild-specific request completion.
+- **God Wishes (`god.cgi`)**: +1,000 pt on heaven wish fulfillment (`WishGuildRank`).
+- **Home & Store Construction (`_town.cgi`)**: +(`cycle_house_day * 10`) pt on residence founding, +(`cycle_store_day * 10`) pt on boutique construction.
+- **Broadcast Callouts (`guild.cgi:よびかける`, Part 2)**: +1 pt per server-wide member dispatch.
+
+Guild influence rankings (`guild_list.cgi`) order all guilds by `points DESC, created_at ASC`.
+
+### Custom Role Titles (`あたえる`)
+
+The guild leader can assign arbitrary custom role titles to any non-leader member:
+
+1. **Authority**: Only the guild leader can assign custom role titles (`ErrUnauthorized`).
+2. **Leader Exemption**: The leader cannot assign a custom title to themselves (`ErrCannotAssignToLeader`).
+3. **Length & Visual Width**:
+   - Up to 6 full-width Japanese characters or 12 half-width ASCII characters (`MaxRoleTitleWidth = 12`).
+   - Evaluated by display width where ASCII runes count as 1 and non-ASCII runes count as 2.
+4. **Validation Rules**:
+   - Cannot be empty (`ErrInvalidRoleTitle`).
+   - Cannot contain half-width or full-width whitespace (`/　|\s/`).
+   - Cannot contain invalid characters (`, ; " ' & < > @ ＠`).
+   - Cannot use reserved system strings: `参加申請中` or `ギルマス` (`ErrReservedRoleTitle`).
+
+### Guild Color Customization (`からー`)
+
+Each guild possesses a configurable 6-digit hex color code (`#RRGGBB`):
+
+1. **Default Color**: `#FFFFFF` (White). Newly established guilds start with white. White designates friendly status and prohibits GvG battle entry (`ErrFriendlyGuildCannotBattle`). Multiple guilds may share the default white color.
+2. **Uniqueness**: Any non-white custom color must be strictly unique across all active guilds on the server (`ErrColorTaken`).
+3. **NPC Prohibition**: The reserved NPC pink color (`#FF69B4`) is prohibited (`ErrColorTaken`).
+4. **Authority**: Only the guild leader can change the guild color.
 
 ### Invariants & Business Rules
 
 1. **Unique Membership**:
-   - A character can belong to at most one guild at any time.
-   - Enforced at the database level via a primary key on `guild_members.character_id`.
-2. **Guild Creation**:
-   - Creation Fee: `5,000` gold (standard value from reference implementation). Deducted atomically from character wallet.
-   - Unique Guild Name: 1 to 32 characters, unique across all guilds.
-   - Creator immediately becomes the `RoleLeader`.
-3. **Capacity & Leveling Formula**:
-   - Base Capacity: `10` members at Level 1.
-   - Capacity Scaling: `Capacity = 10 + (Level - 1) * 2` (up to 28 members at Level 10).
-   - Experience: `1 Gold donated = 1 EXP`.
-   - Level Requirement Curve:
-     - Level 1: 0 EXP
-     - Level $L$ ($L \ge 2$): Cumulative EXP required is $(L - 1)^2 \times 10,000$.
-     - Maximum Level: 10 (`MaxLevel`).
+   - A character can belong to at most one guild at any time (`guild_members` primary key on `character_id`).
+2. **Guild Creation (`つくる`)**:
+   - Creation Fee: `5,000` gold deducted atomically from founder wallet.
+   - Unique Guild Name: 1 to 32 characters, unique server-wide.
+   - Founder automatically assumes `RoleLeader` with title `ギルマス`, initial points `0`, and color `#FFFFFF`.
+3. **Member Capacity**:
+   - Uncapped in authentic Party2 specification (no fictional leveling caps).
 4. **Member Lifecycle**:
-   - **Join**: Character cannot be in any guild; guild must have open capacity (`len(members) < capacity`).
-   - **Leave**:
-     - Regular members and officers can leave at any time.
-     - The leader cannot leave while other members remain unless leadership is transferred first (`ErrLeaderCannotLeaveWithMembers`).
-     - If the leader is the only remaining member, leaving automatically disbands the guild.
-   - **Kick**:
-     - Leaders can kick officers and members.
-     - Officers can kick members.
-     - Members cannot kick anyone.
-     - Leaders cannot be kicked.
-   - **Transfer Leadership**:
-     - Only the current leader can transfer leadership to another existing member.
-     - The former leader becomes an officer.
-   - **Disband**:
-     - Leaders can disband the guild, removing all member associations.
+   - **Join**: Character must not be in any guild.
+   - **Leave (`だったい`)**: Regular members can leave at any time. The leader cannot leave while other members remain unless leadership is transferred first (`ErrLeaderCannotLeaveWithMembers`).
+   - **Kick (`追放`)**: Only the leader can kick members. Leaders cannot be kicked.
+   - **Transfer Leadership**: Leader transfers leadership to an existing member. The former leader becomes `RoleMember` (title reset), and the new leader becomes `RoleLeader` (title `ギルマス`).
+   - **Disband (`かいさん`)**: Only the leader can disband the guild (or automatic disband when the sole member leaves). Deletion cascades to all member records.
 
-## Persistence & Transactions
+## Persistence & Transaction Ordering
 
-- All mutations affecting multiple tables (e.g. guild creation with fee deduction, gold donation with level progression and character wallet deduction) are performed in atomic database transactions (`*sql.Tx`).
-- Foreign keys with `ON DELETE CASCADE` ensure that guild deletion cascades cleanly to member associations.
+- Guild operations obey the deterministic lock acquisition hierarchy (Rank 0 -> 8):
+  - Character wallet deduction (Rank 2: `characters`) occurs before guild records (Rank 7: `guilds`, `guild_members`).
+- Points increments are performed via atomic SQL arithmetic (`points = points + ?`) to avoid lock contention during concurrent gameplay achievements.
