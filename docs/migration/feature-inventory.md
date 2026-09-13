@@ -268,6 +268,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#490](https://github.com/witchcraze/party2re/issues/490) | Guild (Part 1): Purge Donation Leveling, Reproduce Dynamic Guild Points, Hex Colors, and Custom Titles | Completed |
 | [#591](https://github.com/witchcraze/party2re/issues/591) | Guild (Part 2): Membership Application & Approval Workflow, Broadcast Callouts, Customization, and Inactivity Disbandment | Completed |
 | [#600](https://github.com/witchcraze/party2re/issues/600) | Challenge: Remove fictional 20% inter-round HP recovery and restore legacy HP carryover | Completed |
+| [#594](https://github.com/witchcraze/party2re/issues/594) | PvP+GvG: Fix multi-team survivor determination in Colosseum and Guild Battle rounds | Completed |
 
 
 ---

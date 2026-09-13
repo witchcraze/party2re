@@ -47,10 +47,11 @@ Guild members gather in ephemeral, real-time battle rooms to compete across mult
 - **Round Combat Resolution**:
   - Living participants are partitioned into Allies (sharing Room Leader's guild color) and Enemies (opposing guild colors).
   - Combat executes through `corebattle.ResolvePartyBattle`.
-  - **Round Winner**: The guild whose team defeated the opponents wins the round.
+  - **Round Winner**: Determined from the unique surviving guild among participants (`res.RemainingHP`, `vs_guild.cgi:106-122`):
+    - If exactly 1 guild has surviving members (`alive_team_c == 1`), that guild wins the round (`round_win`).
+    - If 0 guilds survive (mutual wipeout) or multiple guilds remain, the round results in a draw (`draw`) with no score or round GP awarded.
   - **Round Victory Reward**: The winning guild immediately receives **+3 GP** (`victory_points += 3`, `vs_guild.cgi:121`).
   - Round scores are tracked per guild (`guild_scores[guild_id]++`).
-  - If no teams survive, the round results in a draw with no score or round GP awarded.
 - **Match Decider & Target Wins**:
   - When a guild achieves the specified `TargetWins` (1..3):
     - The match completes (`status = completed`, `outcome = match_won`).

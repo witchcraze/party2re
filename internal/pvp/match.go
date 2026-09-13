@@ -117,14 +117,33 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 
 	var roundWinnerTeam string
 	var roundOutcome string
-	if res.Outcome == corebattle.OutcomeWin {
-		roundWinnerTeam = leaderTeam
-		roundOutcome = "round_win"
-	} else if res.Outcome == corebattle.OutcomeDefeat {
-		roundWinnerTeam = otherTeam
-		roundOutcome = "round_win"
+
+	if len(res.RemainingHP) > 0 {
+		aliveTeams := make(map[string]bool)
+		for _, m := range detail.Members {
+			if hp, ok := res.RemainingHP[m.CharacterID]; ok && hp > 0 {
+				aliveTeams[m.TeamColor] = true
+			}
+		}
+
+		if len(aliveTeams) == 1 {
+			for team := range aliveTeams {
+				roundWinnerTeam = team
+			}
+			roundOutcome = "round_win"
+		} else {
+			roundOutcome = "draw"
+		}
 	} else {
-		roundOutcome = "draw"
+		if res.Outcome == corebattle.OutcomeWin {
+			roundWinnerTeam = leaderTeam
+			roundOutcome = "round_win"
+		} else if res.Outcome == corebattle.OutcomeDefeat {
+			roundWinnerTeam = otherTeam
+			roundOutcome = "round_win"
+		} else {
+			roundOutcome = "draw"
+		}
 	}
 
 	if detail.Room.TeamScores == nil {

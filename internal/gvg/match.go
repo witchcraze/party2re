@@ -117,18 +117,47 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 	var roundWinnerGuildColor string
 	var roundOutcome string
 
-	if res.Outcome == corebattle.OutcomeWin {
-		roundWinnerGuildID = leaderGuildID
-		roundWinnerGuildName = leaderGuildName
-		roundWinnerGuildColor = leaderGuildColor
-		roundOutcome = "round_win"
-	} else if res.Outcome == corebattle.OutcomeDefeat {
-		roundWinnerGuildID = otherGuildID
-		roundWinnerGuildName = otherGuildName
-		roundWinnerGuildColor = otherGuildColor
-		roundOutcome = "round_win"
+	if len(res.RemainingHP) > 0 {
+		type guildInfo struct {
+			id    string
+			name  string
+			color string
+		}
+		aliveGuilds := make(map[string]guildInfo)
+		for _, m := range detail.Members {
+			if hp, ok := res.RemainingHP[m.CharacterID]; ok && hp > 0 {
+				aliveGuilds[m.GuildID] = guildInfo{
+					id:    m.GuildID,
+					name:  m.GuildName,
+					color: m.GuildColor,
+				}
+			}
+		}
+
+		if len(aliveGuilds) == 1 {
+			for _, g := range aliveGuilds {
+				roundWinnerGuildID = g.id
+				roundWinnerGuildName = g.name
+				roundWinnerGuildColor = g.color
+			}
+			roundOutcome = "round_win"
+		} else {
+			roundOutcome = "draw"
+		}
 	} else {
-		roundOutcome = "draw"
+		if res.Outcome == corebattle.OutcomeWin {
+			roundWinnerGuildID = leaderGuildID
+			roundWinnerGuildName = leaderGuildName
+			roundWinnerGuildColor = leaderGuildColor
+			roundOutcome = "round_win"
+		} else if res.Outcome == corebattle.OutcomeDefeat {
+			roundWinnerGuildID = otherGuildID
+			roundWinnerGuildName = otherGuildName
+			roundWinnerGuildColor = otherGuildColor
+			roundOutcome = "round_win"
+		} else {
+			roundOutcome = "draw"
+		}
 	}
 
 	if detail.Room.GuildScores == nil {
