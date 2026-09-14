@@ -5350,6 +5350,10 @@
                     "type": "integer"
                   },
                   "direction": {
+                    "description": "Exchange direction (must be gold_to_coins; reverse exchange is not supported)",
+                    "enum": [
+                      "gold_to_coins"
+                    ],
                     "type": "string"
                   }
                 },
@@ -5382,7 +5386,7 @@
                 }
               }
             },
-            "description": "Bad request - invalid input or JSON syntax"
+            "description": "Bad request - invalid input, unsupported direction, or JSON syntax"
           },
           "401": {
             "content": {
@@ -5404,6 +5408,16 @@
             },
             "description": "Forbidden - player does not own requested character or lacks permission"
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable entity - insufficient gold"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -5420,7 +5434,7 @@
             "BearerAuth": []
           }
         ],
-        "summary": "Exchange gold to/from casino coins",
+        "summary": "Exchange gold to casino coins (one-way)",
         "tags": [
           "Casino"
         ]
@@ -5947,6 +5961,16 @@
               }
             },
             "description": "Forbidden - player does not own requested character or lacks permission"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable entity - insufficient coins, character exhausted, or ineligible job for bet 200"
           },
           "500": {
             "content": {

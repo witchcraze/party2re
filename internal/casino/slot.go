@@ -34,7 +34,8 @@ var ValidBetRates = map[int64]bool{
 }
 
 var (
-	ErrInvalidBetRate = errors.New("invalid slot bet rate (allowed: 1, 10, 50, 100, 200)")
+	ErrInvalidBetRate           = errors.New("invalid slot bet rate (allowed: 1, 10, 50, 100, 200)")
+	ErrJobNotEligibleForSlot200 = errors.New("job 46 (gambler) is required for 200 slot")
 )
 
 type SpinResult struct {
@@ -45,6 +46,7 @@ type SpinResult struct {
 	PayoutCoins int64         `json:"payout_coins"`
 	NetCoins    int64         `json:"net_coins"`
 	Message     string        `json:"message"`
+	BonusCoins  int64         `json:"bonus_coins,omitempty"`
 }
 
 // EvaluateSpin determines payout and multiplier from the 3 reel symbols.

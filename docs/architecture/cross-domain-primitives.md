@@ -270,8 +270,7 @@ The Blacksmith domain migrated in Issue #426, demonstrating cross-resource trans
 The Casino domain migrated in Issue #427, demonstrating cross-domain currency conversions and wager settlements:
 
 ### Before Migration
-- Manual `runInTx` orchestration for coin exchanges (`ExchangeGoldToCoins`, `ExchangeCoinsToGold`).
-- Potential lock inversion hazard: `ExchangeCoinsToGold` previously updated `casino_accounts` (Rank 8) before `characters` (Rank 2), while `ExchangeGoldToCoins` updated `characters` before `casino_accounts`.
+- Manual `runInTx` orchestration for coin exchanges (`ExchangeGoldToCoins`).
 - Foreign key verification deadlock hazard on `casino_accounts (character_id) REFERENCES characters (id)` during payouts using `INSERT ... ON DUPLICATE KEY UPDATE` while holding `casino_accounts` locks.
 
 ### After Migration
@@ -291,11 +290,11 @@ The Casino domain migrated in Issue #427, demonstrating cross-domain currency co
       return nil
   })
   ```
-- `ExchangeCoinsToGold` executes transaction with `Grant.Gold: goldReward` and callback decrementing casino coins.
+- Authentic One-Way Exchange: In Issue #630, the divergent reverse exchange (`ExchangeCoinsToGold`) was excised per the authentic Party2 specification (`party2/lib/casino.cgi`). Casino coins cannot be sold back for gold; they are redeemed exclusively for casino prizes (`ExchangePrize`).
 - Strict `balance >= cost` semantics across Slot, Indian Poker, Doppelganger, and HighLow games.
 - Deterministic lock order: `characters` (Rank 2) is ALWAYS locked before `casino_accounts` (Rank 8). In repository layer, `DeductBetAndCreditPayout` avoids `INSERT` during normal play when updating existing accounts, preventing implicit foreign key S-lock deadlocks.
 - Verified under 50 concurrent workers executing 1,000 mixed exchange and bet operations with 0 deadlocks.
-- Single deterministic execution path: Issue #453 eliminated legacy dual-execution fallback paths (`if s.runner != nil`) and purged obsolete `ExchangeGoldToCoins` / `ExchangeCoinsToGold` methods from `CasinoRepository`, auto-wiring `s.runner` in `NewService`.
+- Single deterministic execution path: Issue #453 eliminated legacy dual-execution fallback paths (`if s.runner != nil`) and purged obsolete `ExchangeGoldToCoins` / `ExchangeCoinsToGold` methods from `CasinoRepository`, auto-wiring `s.runner` in `NewService`. Issue #630 completed parity cleanup by removing divergent reverse exchange.
 
 ---
 

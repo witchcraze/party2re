@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/casino"
 )
@@ -129,6 +130,18 @@ func (m *mockMemoryRoomRepo) DeleteRoom(ctx context.Context, roomID string) erro
 		m.rooms[roomID] = r
 	}
 	return nil
+}
+
+func (m *mockMemoryRoomRepo) PurgeIdleRooms(ctx context.Context, cutoff time.Time) (int, error) {
+	count := 0
+	for id, r := range m.rooms {
+		if r.UpdatedAt.Before(cutoff) {
+			delete(m.rooms, id)
+			delete(m.members, id)
+			count++
+		}
+	}
+	return count, nil
 }
 
 func TestCasinoRoomLobby(t *testing.T) {

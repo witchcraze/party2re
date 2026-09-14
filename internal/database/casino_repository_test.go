@@ -233,3 +233,82 @@ func TestCasinoRoomRepository_Lifecycle(t *testing.T) {
 		t.Errorf("expected ErrRoomNotFound after deletion, got %v", err)
 	}
 }
+
+func TestCasinoRoomRepository_MultiWinnerAndPurge(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	roomRepo, err := NewCasinoRoomRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	char, err := CreateTestCharacter(ctx, db, "CasinoMultiWinner")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now().UTC()
+	roomID := fmt.Sprintf("room_%d", now.UnixNano())
+	multiWinnerStr := "char_1234567890123456789012345678,char_9876543210987654321098765432,char_abcdefabcdefabcdefabcdefabcd"
+	r := casino.Room{
+		ID:                roomID,
+		Name:              fmt.Sprintf("MultiWinnerRoom_%d", now.UnixNano()),
+		GameType:          casino.GameTypeHighLow,
+		LeaderCharacterID: char.ID,
+		Speed:             18,
+		MaxPlayers:        8,
+		Rate:              10,
+		Status:            casino.RoomStatusInProgress,
+		WinnerCharacterID: &multiWinnerStr,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	m := casino.RoomMember{
+		RoomID:      roomID,
+		CharacterID: char.ID,
+		JoinedAt:    now,
+		UpdatedAt:   now,
+	}
+
+	if err := roomRepo.CreateRoom(ctx, r, m); err != nil {
+		t.Fatalf("CreateRoom with multi-winner failed: %v", err)
+	}
+
+	got, err := roomRepo.GetRoom(ctx, roomID)
+	if err != nil {
+		t.Fatalf("GetRoom failed: %v", err)
+	}
+	if got.WinnerCharacterID == nil || *got.WinnerCharacterID != multiWinnerStr {
+		t.Errorf("got WinnerCharacterID %v, want %s", got.WinnerCharacterID, multiWinnerStr)
+	}
+
+	// PurgeIdleRooms: Set updated_at to 1 hour ago
+	oneHourAgo := now.Add(-1 * time.Hour)
+	_, err = db.ExecContext(ctx, "UPDATE casino_rooms SET updated_at = ? WHERE id = ?", oneHourAgo, roomID)
+	if err != nil {
+		t.Fatalf("failed to update room updated_at: %v", err)
+	}
+
+	cutoff := now.Add(-30 * time.Minute)
+	purged, err := roomRepo.PurgeIdleRooms(ctx, cutoff)
+	if err != nil {
+		t.Fatalf("PurgeIdleRooms failed: %v", err)
+	}
+	if purged < 1 {
+		t.Errorf("purged count = %d, expected at least 1", purged)
+	}
+
+	_, err = roomRepo.GetRoom(ctx, roomID)
+	if !errors.Is(err, casino.ErrRoomNotFound) {
+		t.Errorf("expected ErrRoomNotFound after purge, got %v", err)
+	}
+}

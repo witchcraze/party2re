@@ -14,7 +14,6 @@ import (
 type CasinoAccountService interface {
 	GetAccount(ctx context.Context, characterID string) (casino.Account, error)
 	ExchangeGoldToCoins(ctx context.Context, characterID string, coins int64) (casino.Account, corecharacter.Character, error)
-	ExchangeCoinsToGold(ctx context.Context, characterID string, coins int64) (casino.Account, corecharacter.Character, error)
 	ExchangePrize(ctx context.Context, characterID string, costCoins int64, count int) (casino.PrizeExchangeResult, error)
 }
 
@@ -113,21 +112,17 @@ func (h *Handler) handleCasinoExchange(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if req.Direction != "" && req.Direction != "gold_to_coins" {
+			writeError(w, http.StatusBadRequest, errors.New("reverse exchange is not supported; coin exchange is one-way from gold to coins"))
+			return
+		}
+
 		if req.Coins <= 0 {
 			writeError(w, http.StatusBadRequest, casino.ErrInvalidAmount)
 			return
 		}
 
-		var account casino.Account
-		var updatedChar corecharacter.Character
-		var err error
-
-		if req.Direction == "coins_to_gold" {
-			account, updatedChar, err = h.casino.ExchangeCoinsToGold(r.Context(), char.ID, req.Coins)
-		} else {
-			account, updatedChar, err = h.casino.ExchangeGoldToCoins(r.Context(), char.ID, req.Coins)
-		}
-
+		account, updatedChar, err := h.casino.ExchangeGoldToCoins(r.Context(), char.ID, req.Coins)
 		if err != nil {
 			if errors.Is(err, casino.ErrInsufficientCoins) || errors.Is(err, casino.ErrInsufficientGold) {
 				writeError(w, http.StatusUnprocessableEntity, err)
@@ -168,7 +163,7 @@ func (h *Handler) handleCasinoSlot(w http.ResponseWriter, r *http.Request) {
 
 		res, account, err := h.casino.SpinSlot(r.Context(), char.ID, req.Bet)
 		if err != nil {
-			if errors.Is(err, casino.ErrInsufficientCoins) {
+			if errors.Is(err, casino.ErrInsufficientCoins) || errors.Is(err, casino.ErrCharacterExhausted) || errors.Is(err, casino.ErrJobNotEligibleForSlot200) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}

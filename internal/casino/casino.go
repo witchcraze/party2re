@@ -2,7 +2,9 @@ package casino
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
+	"math/big"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -72,18 +74,32 @@ type TransactionRunner interface {
 	ExecuteTransaction(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error)
 }
 
+// BlessingProvider checks whether a character has an active chapel blessing (Wish 5 parity).
+type BlessingProvider interface {
+	HasCasinoBlessing(ctx context.Context, characterID string) (bool, error)
+}
+
+type BlessingProviderFunc func(ctx context.Context, characterID string) (bool, error)
+
+func (f BlessingProviderFunc) HasCasinoBlessing(ctx context.Context, characterID string) (bool, error) {
+	return f(ctx, characterID)
+}
+
 // GamePlayedHook is called whenever a casino game round concludes.
 type GamePlayedHook func(ctx context.Context, characterID string, gameName string) error
 
 type Service struct {
-	repo           Repository
-	roomRepo       RoomRepository
-	depotRepo      DepotRepository
-	charRepo       CharacterRepository
-	invRepo        InventoryRepository
-	txProvider     TransactionProvider
-	runner         TransactionRunner
-	gamePlayedHook GamePlayedHook
+	repo             Repository
+	roomRepo         RoomRepository
+	depotRepo        DepotRepository
+	charRepo         CharacterRepository
+	invRepo          InventoryRepository
+	txProvider       TransactionProvider
+	runner           TransactionRunner
+	blessingProvider BlessingProvider
+	gamePlayedHook   GamePlayedHook
+	reelRoller       func(bet int64) (SpinResult, error)
+	wish5Roller      func() bool
 }
 
 type Option func(*Service)
@@ -127,6 +143,24 @@ func WithInventoryRepository(invRepo InventoryRepository) Option {
 func WithRoomRepository(roomRepo RoomRepository) Option {
 	return func(s *Service) {
 		s.roomRepo = roomRepo
+	}
+}
+
+func WithBlessingProvider(provider BlessingProvider) Option {
+	return func(s *Service) {
+		s.blessingProvider = provider
+	}
+}
+
+func WithReelRoller(roller func(bet int64) (SpinResult, error)) Option {
+	return func(s *Service) {
+		s.reelRoller = roller
+	}
+}
+
+func WithWish5Roller(roller func() bool) Option {
+	return func(s *Service) {
+		s.wish5Roller = roller
 	}
 }
 
@@ -211,41 +245,11 @@ func (s *Service) ExchangeGoldToCoins(ctx context.Context, characterID string, c
 	return acc, res.Character, nil
 }
 
-// ExchangeCoinsToGold sells casino coins back for character gold (1 coin = 20 gold).
-func (s *Service) ExchangeCoinsToGold(ctx context.Context, characterID string, coins int64) (Account, corecharacter.Character, error) {
-	if characterID == "" {
-		return Account{}, corecharacter.Character{}, ErrInvalidCharacterID
-	}
-	if coins <= 0 {
-		return Account{}, corecharacter.Character{}, ErrInvalidAmount
-	}
-	if s.runner == nil {
-		return Account{}, corecharacter.Character{}, errors.New("transaction runner is required for coin exchange")
-	}
-	goldReward := int(coins * GoldPerCoin)
-
-	req := economy.TransactionRequest{
-		CharacterID: characterID,
-		Grant: economy.ResourceGrant{
-			Gold: goldReward,
-		},
-	}
-	var acc Account
-	res, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-		var err error
-		acc, err = s.repo.DeductBetAndCreditPayout(tc.Context, characterID, coins, 0)
-		return err
-	})
-	if err != nil {
-		if errors.Is(err, economy.ErrCharacterNotFound) {
-			return Account{}, corecharacter.Character{}, corecharacter.ErrNotFound
-		}
-		return Account{}, corecharacter.Character{}, err
-	}
-	return acc, res.Character, nil
-}
-
 // SpinSlot executes a slot machine spin, adjusts coins atomically according to the outcome, and returns the result and updated account.
+// Authentic mechanics:
+// - Job 46 Gate: Bet 200 is restricted to Job 46 (Gambler) (party2/lib/casino.cgi:98, 109-111).
+// - Fatigue Gate & Increment: Tired >= 100 blocks spin (casino.cgi:532). Miss increases Tired by +1 (casino.cgi:583, 588).
+// - Wish 5 Bonus: 25% chance of +50% payout bonus on wins (casino.cgi:565-568, 577-580).
 func (s *Service) SpinSlot(ctx context.Context, characterID string, bet int64) (SpinResult, Account, error) {
 	if characterID == "" {
 		return SpinResult{}, Account{}, ErrInvalidCharacterID
@@ -254,13 +258,79 @@ func (s *Service) SpinSlot(ctx context.Context, characterID string, bet int64) (
 		return SpinResult{}, Account{}, ErrInvalidBetRate
 	}
 
-	res, err := SpinSlotMachine(bet)
-	if err != nil {
-		return SpinResult{}, Account{}, err
-	}
+	var res SpinResult
+	var acc Account
 
-	// Atomically verify/deduct bet and credit payout
-	acc, err := s.repo.DeductBetAndCreditPayout(ctx, characterID, bet, res.PayoutCoins)
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		var char corecharacter.Character
+		var err error
+		if s.charRepo != nil {
+			char, err = s.charRepo.FindByIDForUpdate(txCtx, characterID)
+			if err != nil {
+				return err
+			}
+			if char.Tired >= 100 {
+				return ErrCharacterExhausted
+			}
+			if bet == 200 && char.JobID != "job-46" && char.JobID != "46" {
+				return ErrJobNotEligibleForSlot200
+			}
+		}
+
+		if s.reelRoller != nil {
+			res, err = s.reelRoller(bet)
+		} else {
+			res, err = SpinSlotMachine(bet)
+		}
+		if err != nil {
+			return err
+		}
+
+		if res.IsWin {
+			// Wish 5 bonus: 25% chance of +50% payout bonus (party2/lib/casino.cgi:565-568, 577-580)
+			if s.blessingProvider != nil {
+				hasWish5, bErr := s.blessingProvider.HasCasinoBlessing(txCtx, characterID)
+				if bErr == nil && hasWish5 {
+					isWish5Win := false
+					if s.wish5Roller != nil {
+						isWish5Win = s.wish5Roller()
+					} else {
+						r, rErr := rand.Int(rand.Reader, big.NewInt(4))
+						if rErr == nil && r.Int64() == 0 {
+							isWish5Win = true
+						}
+					}
+					if isWish5Win {
+						bonus := res.PayoutCoins / 2
+						res.PayoutCoins += bonus
+						res.NetCoins += bonus
+						res.BonusCoins = bonus
+						res.Message += " (Wish 5 bonus: extra coins awarded!)"
+					}
+				}
+			}
+
+			acc, err = s.repo.DeductBetAndCreditPayout(txCtx, characterID, bet, res.PayoutCoins)
+			if err != nil {
+				return err
+			}
+		} else {
+			// Miss: fatigue increases by +1 (party2/lib/casino.cgi:583, 588)
+			if s.charRepo != nil {
+				char.Tired += 1
+				if err := s.charRepo.Update(txCtx, char); err != nil {
+					return err
+				}
+			}
+
+			acc, err = s.repo.DeductBetAndCreditPayout(txCtx, characterID, bet, 0)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 	if err != nil {
 		return SpinResult{}, Account{}, err
 	}

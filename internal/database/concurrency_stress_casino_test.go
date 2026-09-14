@@ -76,9 +76,9 @@ func TestConcurrencyStressCasinoExchanges(t *testing.T) {
 				return err
 			}
 		case 1:
-			// ExchangeCoinsToGold: sell 10 coins for 200 gold
-			_, _, err := casinoSvc.ExchangeCoinsToGold(ctx, charID, 10)
-			if err != nil && !errors.Is(err, casino.ErrInsufficientCoins) {
+			// AdjustCoins: add 10 coins
+			_, err := casinoRepo.AdjustCoins(ctx, charID, 10)
+			if err != nil {
 				return err
 			}
 		case 2:

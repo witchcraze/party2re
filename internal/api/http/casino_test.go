@@ -16,7 +16,6 @@ import (
 type stubCasinoService struct {
 	getAccountFn          func(ctx context.Context, characterID string) (casino.Account, error)
 	exchangeGoldToCoinsFn func(ctx context.Context, characterID string, coins int64) (casino.Account, corecharacter.Character, error)
-	exchangeCoinsToGoldFn func(ctx context.Context, characterID string, coins int64) (casino.Account, corecharacter.Character, error)
 	spinSlotFn            func(ctx context.Context, characterID string, bet int64) (casino.SpinResult, casino.Account, error)
 	exchangePrizeFn       func(ctx context.Context, characterID string, costCoins int64, count int) (casino.PrizeExchangeResult, error)
 	listRoomsFn           func(ctx context.Context) ([]casino.RoomDetail, error)
@@ -42,13 +41,6 @@ func (s *stubCasinoService) ExchangeGoldToCoins(ctx context.Context, characterID
 		return s.exchangeGoldToCoinsFn(ctx, characterID, coins)
 	}
 	return casino.Account{CharacterID: characterID, Coins: coins, UpdatedAt: time.Now()}, corecharacter.Character{ID: characterID}, nil
-}
-
-func (s *stubCasinoService) ExchangeCoinsToGold(ctx context.Context, characterID string, coins int64) (casino.Account, corecharacter.Character, error) {
-	if s.exchangeCoinsToGoldFn != nil {
-		return s.exchangeCoinsToGoldFn(ctx, characterID, coins)
-	}
-	return casino.Account{CharacterID: characterID, Coins: 0, UpdatedAt: time.Now()}, corecharacter.Character{ID: characterID, Money: int(coins * 20)}, nil
 }
 
 func (s *stubCasinoService) SpinSlot(ctx context.Context, characterID string, bet int64) (casino.SpinResult, casino.Account, error) {
@@ -193,6 +185,17 @@ func TestCasinoEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("POST /characters/{id}/casino/exchange - reverse coins_to_gold rejected", func(t *testing.T) {
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/casino/exchange", `{"direction":"coins_to_gold","coins":10}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("POST /characters/{id}/casino/slot - success", func(t *testing.T) {
 		req := jsonRequest(t, http.MethodPost, "/characters/c1/casino/slot", `{"bet":10}`)
 		req.Header.Set("Authorization", "Bearer valid-token")
@@ -201,6 +204,41 @@ func TestCasinoEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("POST /characters/{id}/casino/slot - exhausted returns 422", func(t *testing.T) {
+		exhaustedChar := char
+		exhaustedChar.ID = "c_exhausted"
+		exhaustedChar.Tired = 100
+		casService.spinSlotFn = func(_ context.Context, _ string, _ int64) (casino.SpinResult, casino.Account, error) {
+			return casino.SpinResult{}, casino.Account{}, casino.ErrCharacterExhausted
+		}
+		defer func() { casService.spinSlotFn = nil }()
+
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/casino/slot", `{"bet":10}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("expected 422 Unprocessable Entity, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("POST /characters/{id}/casino/slot - bet 200 ineligible job returns 422", func(t *testing.T) {
+		casService.spinSlotFn = func(_ context.Context, _ string, _ int64) (casino.SpinResult, casino.Account, error) {
+			return casino.SpinResult{}, casino.Account{}, casino.ErrJobNotEligibleForSlot200
+		}
+		defer func() { casService.spinSlotFn = nil }()
+
+		req := jsonRequest(t, http.MethodPost, "/characters/c1/casino/slot", `{"bet":200}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("expected 422 Unprocessable Entity, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 

@@ -302,3 +302,18 @@ func (r *CasinoRoomRepository) DeleteRoom(ctx context.Context, roomID string) er
 	`, roomID)
 	return err
 }
+
+func (r *CasinoRoomRepository) PurgeIdleRooms(ctx context.Context, cutoff time.Time) (int, error) {
+	res, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+		DELETE FROM casino_rooms
+		WHERE updated_at < ?
+	`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return int(affected), nil
+}

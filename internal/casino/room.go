@@ -161,6 +161,7 @@ type RoomLifecycleRepository interface {
 	ListActiveRooms(ctx context.Context) ([]RoomDetail, error)
 	UpdateRoom(ctx context.Context, room Room) error
 	DeleteRoom(ctx context.Context, roomID string) error
+	PurgeIdleRooms(ctx context.Context, cutoff time.Time) (int, error)
 }
 
 type RoomMemberRepository interface {
@@ -294,11 +295,23 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 	return detail, nil
 }
 
-// ListRooms returns all active rooms.
+const IdleRoomTimeout = 1800 * time.Second // 30 minutes (party2/lib/casino.cgi:38)
+
+// PurgeIdleRooms deletes rooms that have been inactive for more than 1800 seconds (party2/lib/casino.cgi:38, 124-129).
+func (s *Service) PurgeIdleRooms(ctx context.Context) (int, error) {
+	if s.roomRepo == nil {
+		return 0, errors.New("room repository is required")
+	}
+	cutoff := time.Now().UTC().Add(-IdleRoomTimeout)
+	return s.roomRepo.PurgeIdleRooms(ctx, cutoff)
+}
+
+// ListRooms returns all active rooms, purging any idle rooms (> 1800s inactive) first (party2/lib/casino.cgi:124-129).
 func (s *Service) ListRooms(ctx context.Context) ([]RoomDetail, error) {
 	if s.roomRepo == nil {
 		return nil, errors.New("room repository is required")
 	}
+	_, _ = s.PurgeIdleRooms(ctx)
 	return s.roomRepo.ListActiveRooms(ctx)
 }
 

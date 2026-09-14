@@ -108,7 +108,7 @@ All groups below are Version 1.0 reconstruction requirements.
 ### F. Economy and side systems
 - [x] Alchemy: Free Overnight Depot-linked Synthesis & Compendium ([#60](https://github.com/witchcraze/party2re/issues/60), [#487](https://github.com/witchcraze/party2re/issues/487))
 - [x] Player Auction house and free-market operations ([#80](https://github.com/witchcraze/party2re/issues/80))
-- [x] Casino mini-games: Multi-Player Room Lobby, Indian Poker, High & Low, Doppelganger, Slot Machine, Prize Exchange ([#81](https://github.com/witchcraze/party2re/issues/81), [#486](https://github.com/witchcraze/party2re/issues/486), [#590](https://github.com/witchcraze/party2re/issues/590))
+- [x] Casino mini-games: Multi-Player Room Lobby, Indian Poker, High & Low, Doppelganger, Slot Machine, Prize Exchange ([#81](https://github.com/witchcraze/party2re/issues/81), [#486](https://github.com/witchcraze/party2re/issues/486), [#590](https://github.com/witchcraze/party2re/issues/590), [#630](https://github.com/witchcraze/party2re/issues/630))
 - [x] Lottery and raffle ticket systems ([#83](https://github.com/witchcraze/party2re/issues/83))
 - [x] Plantation seed cultivation with 6 seeds & 14 fertilizers ([#84](https://github.com/witchcraze/party2re/issues/84), [#489](https://github.com/witchcraze/party2re/issues/489))
 - [x] Collection and Monster Book encyclopedia ([#85](https://github.com/witchcraze/party2re/issues/85))
@@ -279,6 +279,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#599](https://github.com/witchcraze/party2re/issues/599) | Combat/Lint: Automated AST Linter Prohibiting Direct corebattle.NewParticipantFromCharacter in Feature Packages | Completed |
 | [#597](https://github.com/witchcraze/party2re/issues/597) | Dungeon: Support stacking vision expansion for scouting jobs and scope goggles in map scouting (@ちず) | Completed |
 | [#453](https://github.com/witchcraze/party2re/issues/453) | Casino: Eliminate dual execution fallback paths and legacy repository exchange methods | Completed |
+| [#630](https://github.com/witchcraze/party2re/issues/630) | Casino: Remove divergent reverse exchange, fix multi-winner SQL truncation, and restore authentic slot mechanics | Completed |
 | [#531](https://github.com/witchcraze/party2re/issues/531) | Core/Random: Centralized Thread-Safe RNG Provider and Direct math/rand Prohibition | Completed |
 | [#533](https://github.com/witchcraze/party2re/issues/533) | Concurrency: Automated Linter Prohibiting Raw time.Sleep in Production Services | Completed |
 | [#532](https://github.com/witchcraze/party2re/issues/532) | HTTP: Automated Linter Prohibiting context.Background and context.TODO in Handlers | Completed |
@@ -286,6 +287,13 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#526](https://github.com/witchcraze/party2re/issues/526) | Modular Monolith: Automated Package Boundary and Cross-Feature Import Linter | Completed |
 | [#454](https://github.com/witchcraze/party2re/issues/454) | Architecture/ISP: Decompose whitelisted legacy interfaces for guild and ranking | Completed |
 | [#280](https://github.com/witchcraze/party2re/issues/280) | Test/Ranking: Add unit tests for uncovered Get*Ranking service methods | Completed |
+| [#458](https://github.com/witchcraze/party2re/issues/458) | Blacksmith: Reproduce original weapon seals, naming, and blacksmith storage | Completed |
+| [#491](https://github.com/witchcraze/party2re/issues/491) | Event Plaza: Purge modern automated world events, reproducing Traveling Merchant Bazaar and King Celebration Banquet | Completed |
+| [#596](https://github.com/witchcraze/party2re/issues/596) | Battle: Support Ex Amulet & Awakening Gem weapon attack scaling for Excalibur | Completed |
+| [#598](https://github.com/witchcraze/party2re/issues/598) | Test/Valkey: Implement offline unit test suites for PvP, GvG, and Dungeon Valkey repositories | Completed |
+| [#456](https://github.com/witchcraze/party2re/issues/456) | Test/Valkey: Implement offline unit test suites for Challenge and Party Valkey repositories | Completed |
+| [#451](https://github.com/witchcraze/party2re/issues/451) | Test/Valkey: Implement offline unit test suite for Session repository | Completed |
+| [#585](https://github.com/witchcraze/party2re/issues/585) | Core/Character: Standardize and consolidate updateCharacter helper across character services | Completed |
 
 
 ---

@@ -251,6 +251,13 @@ func newMiscServices(
 		casino.WithDepotRepository(econ.depotRepo),
 		casino.WithCharacterRepository(core.charRepo),
 		casino.WithRoomRepository(casinoRoomRepo),
+		casino.WithBlessingProvider(casino.BlessingProviderFunc(func(ctx context.Context, characterID string) (bool, error) {
+			b, err := chapelRepo.GetBlessing(ctx, characterID)
+			if err != nil {
+				return false, err
+			}
+			return b.ActiveBlessing == chapel.BlessingCasino, nil
+		})),
 	)
 	if err != nil {
 		return nil, err
