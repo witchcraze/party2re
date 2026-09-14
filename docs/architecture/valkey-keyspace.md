@@ -116,6 +116,9 @@ The table below catalogs all production key patterns currently active in the cod
 | `party2:gvg:character:<character_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | Room ID (`string`) | `internal/gvg` | `SetCharacterRoom` (SET EX), `GetCharacterRoom` (GET), `DeleteCharacterRoom` (DEL). Single active GvG room check. |
 | `party2:gvg:rooms` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `room_id`, Score: `CreatedAt.Unix()` | `internal/gvg` | `SaveRoom` (ZADD), `DeleteRoom` (ZREM), `ListRooms` (ZRANGE). Active GvG rooms list. |
 | `party2:eventplaza:presence` | Valkey Master | `Sorted Set (ZSet)` | 1 hour (`3600s`), sliding | Member: `character_id`, Score: `LastSeenAt.Unix()` (`float64`) | `internal/eventplaza` | `RecordPresence` (ZADD + EXPIRE 3600), `CountActiveParticipants` (lazy ZREMRANGEBYSCORE + ZCARD). Real-time Event Plaza member presence. |
+| `party2:casino:room:<room_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | JSON (`CasinoRoomState`: room config, members, deck, turn, pot, status) | `internal/casino` | Candidate C standard pattern (Issue #635). Target store for in-flight card games (Indian Poker, High-Low, Doppelganger). |
+| `party2:casino:character:<character_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | Room ID (`string`) | `internal/casino` | Single active casino room per character invariant check. |
+| `party2:casino:rooms:active` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `room_id`, Score: `UpdatedAt.Unix()` | `internal/casino` | Active casino rooms list for O(1) discovery and lazy TTL pruning. |
 
 
 ---
@@ -145,19 +148,42 @@ The following specifications define the key patterns, data types, and lifecycle 
   - Admin updates (`POST /admin/maintenance`) immediately update/invalidate Valkey.
   - Middleware fails-open or falls back safely to in-memory state if Valkey is temporarily unreachable.
 
-### 4.3 Candidate C: Party & Matchmaking Wait Lobbies (Issue #368, Issue #380 - Completed)
+### 4.3 Candidate C: Ephemeral Turn & Session Lobbies (Party, PvP, GvG, Casino & Mini-games)
 
-- **Status**: Completed in PR #376 (Issue #368) and finalized in Issue #380 with MariaDB schema cleanup (Migration 052 dropped `parties` and `party_members`).
-- **Goal**: Move transient multiplayer recruitment, wait lobbies, and ready check states from MariaDB to Valkey Master to eliminate lock contention.
-- **Implemented Key Patterns**:
-  - `party2:party:lobby:<party_id>`: `String (JSON)` containing lobby metadata and member roster. TTL: 15 minutes (`900s`), refreshed by member activity.
-  - `party2:party:lobbies`: `Sorted Set (ZSet)` indexing active recruiting parties scored by `CreatedAt.Unix()`.
-  - `party2:party:character:<character_id>`: `String` mapping character ID to current party ID. TTL: 15 minutes (`900s`). Ensures atomic single-party membership check.
-  - `party2:party:ready:<party_id>:<character_id>`: `String` flag (`"1"`). TTL: 60 seconds (`60s` countdown expiration).
-- **Lifecycle & Boundaries**:
-  - Waiting lobbies have a natural TTL of 15 minutes and expire automatically if abandoned with zero orphaned SQL rows.
-  - When the countdown expires without full ready status, the unready member's readiness flag expires automatically without blocking the lobby.
-  - When the leader starts the adventure, the party transitions into durable quest resolution: final outcomes are saved exclusively to MariaDB (`party_adventure_logs`), while characters are locked and updated via `RunInTx` in ascending ID order. Legacy `parties` and `party_members` MariaDB tables were officially dropped via Migration 052.
+- **Status**: Standardized across multiplayer domains in Issue #635 (SSOT: [`docs/architecture/transient-run-state.md`](transient-run-state.md)). Active in `internal/party` (wait lobbies), `internal/pvp` (Colosseum rooms), and `internal/gvg` (Guild battle rooms); target architecture for `internal/casino` migration.
+- **Goal**: Move transient multiplayer recruitment, wait lobbies, and in-flight turn states from MariaDB to Valkey Master to eliminate table lock contention, connection pool exhaustion, and relational write amplification.
+- **Standardized Key Architecture (`party2:<domain>:*`)**:
+  - `party2:<domain>:room:<room_id>`: `String (JSON)` holding authoritative room state, player list, bets, deck, current turn, and pot.
+  - `party2:<domain>:rooms:active`: `Sorted Set (ZSet)` indexing active public rooms scored by `UpdatedAt.Unix()` (or `CreatedAt.Unix()`) for $O(1)$ discovery and lazy TTL pruning.
+  - `party2:<domain>:character:<character_id>`: `String` mapping character ID to room ID. Guarantees single active room per character invariant across the domain.
+  - `party2:<domain>:room:<room_id>:turns`: `List` or `Stream` for turn action log / client replay.
+- **Domain Key Mappings**:
+  - **Party Lobbies (`internal/party`)**:
+    - `party2:party:lobby:<party_id>`: `String (JSON)`, 15m (`900s`) sliding TTL.
+    - `party2:party:lobbies`: `Sorted Set (ZSet)` scored by `CreatedAt.Unix()`.
+    - `party2:party:character:<character_id>`: `String`, 15m (`900s`) sliding TTL.
+    - `party2:party:ready:<party_id>:<character_id>`: `String` countdown flag, 60s TTL.
+    - *(Legacy `parties` and `party_members` MariaDB tables dropped in Migration 052)*.
+  - **Colosseum PvP (`internal/pvp`)**:
+    - `party2:pvp:room:<room_id>`: `String (JSON)`, 30m (`1800s`) sliding TTL.
+    - `party2:pvp:rooms`: `Sorted Set (ZSet)` scored by `CreatedAt.Unix()`.
+    - `party2:pvp:character:<character_id>`: `String`, 30m (`1800s`) sliding TTL.
+  - **Guild GvG Combat (`internal/gvg`)**:
+    - `party2:gvg:room:<room_id>`: `String (JSON)`, 30m (`1800s`) sliding TTL.
+    - `party2:gvg:rooms`: `Sorted Set (ZSet)` scored by `CreatedAt.Unix()`.
+    - `party2:gvg:character:<character_id>`: `String`, 30m (`1800s`) sliding TTL.
+  - **Casino Card Games (`internal/casino`)**:
+    - `party2:casino:room:<room_id>`: `String (JSON)`, 30m (`1800s`) sliding TTL. Target store for Indian Poker, High-Low, and Doppelganger.
+    - `party2:casino:rooms:active`: `Sorted Set (ZSet)` scored by `UpdatedAt.Unix()`.
+    - `party2:casino:character:<character_id>`: `String`, 30m (`1800s`) sliding TTL.
+- **Sliding TTL Lifecycle (1800s / 30m Parity)**:
+  - Adopts authentic Party2 1800-second idle deletion timeout (`party2/lib/casino.cgi:38` `$auto_delete_casino_time = 1800`, `party2/lib/quest.cgi:50` `$auto_delete_quest_time = 1800`).
+  - Every player action (joining, betting, card flips, ready toggles) refreshes the 1800s TTL. Inactive or abandoned rooms are evicted natively by Valkey without running scheduled SQL sweeper crons.
+- **Two-Phase Settlement Boundary**:
+  - Phase 1 (In-Flight Gameplay): All card flips, bets, calls, and eliminations execute 100% in Valkey Master (< 1ms latency, zero SQL queries).
+  - Phase 2 (Settlement): Upon match termination, a single MariaDB transaction (`RunInTx`) is opened. Payouts (coins, gold, medals, GP) are credited adhering strictly to the Rank 0..8 lock hierarchy. The Valkey room key is cleanly deleted (`DEL`) or set to 60s review TTL.
+- **Target Blueprint for Casino Migration**:
+  - Establishes the specification to migrate `casino_rooms` and `casino_room_members` to Valkey Master, dropping the ephemeral tables in a subsequent migration (mirroring Migration 052 for `parties`).
 
 ### 4.4 Candidate D: In-Progress Run Buffers (Issue #369)
 
@@ -337,6 +363,7 @@ All repository implementations adopting this pattern MUST handle `WRONGTYPE` gra
 | **Candidate A: Player Sessions**<br>(Issue #378 / PR #383) | `party2:player:sessions:<player_id>` | `ExpiresAt.Unix()` (7 days from creation) | Purges expired session tokens lazily on `Save`, `FindByID`, and `Revoke`. Supports multi-device logins while preventing unbounded token accumulation. |
 | **Candidate D: In-Progress Run Buffers**<br>(Issue #369: Dungeon/Challenge) | `party2:dungeon:run:{character:<id>}:active_nodes`<br>`party2:challenge:run:{character:<id>}:turn_history` | Node expiration or turn timeout timestamp | Buffers tentative reward nodes, active tile coordinates, and temp battle buffs during multi-turn exploration. On step resolution or timeout, expired nodes are lazily purged before room state transition. |
 | **Matchmaking Queues & Invitations**<br>(Candidate C / Matchmaking) | `party2:matchmaking:{queue:<mode>}:waiters`<br>`party2:party:{lobby:<id>}:invitations` | Wait timeout timestamp (e.g. `now + 120s`) | Purges timed-out players lazily during matchmaking pairing rounds or lobby queries, preventing phantom invitations without background worker polling. |
+| **Candidate C: Ephemeral Turn & Session Lobbies**<br>(Issue #635: Party, PvP, GvG, Casino) | `party2:<domain>:rooms:active` | `UpdatedAt.Unix()` (or `CreatedAt.Unix()`) | Purges expired or abandoned rooms lazily (`ZREMRANGEBYSCORE -inf <now - 1800>`) during lobby listing queries, guaranteeing that active room listings never return stale rooms without background SQL sweepers. |
 
 ---
 

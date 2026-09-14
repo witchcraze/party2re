@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #632 — [Feature] Battle/Blacksmith: Wire 12 weapon seal combat effects into Battle Adapter and restore crystal drops
+Last updated: Issue #635 — [Architecture] Core/Valkey: Standardize Ephemeral Turn & Session Lobby Architecture (Candidate C) across Multiplayer Domains
 
 
 ## Current phase
@@ -22,6 +22,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ### Architecture & Repository Intelligence
 - **Agent Operating Rules** (`AGENTS.md`, `.agents/rules/`): ✅ Prescriptive constraint rules modularized into 9 rule files; rationale in `docs/architecture/`.
 - **Guidance Layer** (`.arch/`): ✅ Symbol-anchor module JSON + shared table reverse-index; verified by `arch_test.go`.
+- **Transient State Architecture** (`docs/architecture/transient-run-state.md`, `docs/architecture/valkey-keyspace.md`): ✅ Ephemeral Turn & Session Lobby Architecture (Candidate C) standardized across multiplayer domains (Party, PvP, GvG, Casino) with authentic 1800s sliding TTL, O(1) active lobby discovery, and Two-Phase Settlement into MariaDB Master; establishes target migration blueprint for Casino multiplayer rooms (#635). In-Progress Run Buffers (Candidate D: Dungeon/Challenge) and Shared Boss HP (Candidate E) verified and active.
 - **AST Linter Suite** (`make check`, `make arch-lint`): ✅ TransactionRunner & dual mutation boundary enforcement (#561), lock hierarchy, file size (≤500 lines), ISP interface size (≤10 methods), dead code, Valkey keyspace, Battle Adapter boundary enforcement (#599), Direct math/rand prohibition (#531), Raw time.Sleep prohibition and cooperative cancellation enforcement (#533), HTTP handler detached root context prohibition (#532), Cryptographic security policy and password hashing enforcement (#528), Modular monolith package boundary and cross-feature import enforcement (#526).
 - **Benchmark Framework** (`make bench`): ✅ Critical-path benchmarks + baseline regression detection.
 

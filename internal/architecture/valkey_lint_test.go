@@ -29,6 +29,7 @@ var validProdNamespaces = []string{
 	"party2:pvp:",
 	"party2:gvg:",
 	"party2:eventplaza:",
+	"party2:casino:",
 }
 
 // Required keys documented in SSOT docs/architecture/valkey-keyspace.md
@@ -57,6 +58,8 @@ var requiredDocumentedKeys = []string{
 	"party2:gvg:character:",
 	"party2:gvg:rooms",
 	"party2:eventplaza:presence",
+	"party2:casino:room:",
+	"party2:casino:rooms:active",
 }
 
 func TestValkeyKeyspaceDocExistsAndCoversKeys(t *testing.T) {
@@ -465,6 +468,37 @@ func TestTransientRunStateDocCoversLuaAndPersistenceBoundaries(t *testing.T) {
 	for _, term := range requiredTerms {
 		if !strings.Contains(content, term) {
 			t.Errorf("docs/architecture/transient-run-state.md does not contain required architectural term %q", term)
+		}
+	}
+}
+
+func TestTransientRunStateDocCoversCandidateC(t *testing.T) {
+	repoRoot := "../.."
+	docPath := filepath.Join(repoRoot, "docs", "architecture", "transient-run-state.md")
+
+	data, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("docs/architecture/transient-run-state.md does not exist: %v", err)
+	}
+
+	content := string(data)
+	if len(strings.TrimSpace(content)) == 0 {
+		t.Fatalf("docs/architecture/transient-run-state.md is empty")
+	}
+
+	requiredTerms := []string{
+		"Candidate C",
+		"Ephemeral Turn & Session Lobby",
+		"1800",
+		"Two-Phase Settlement",
+		"party2:" + "<domain>:room:<room_id>",
+		"party2:" + "<domain>:rooms:active",
+		"casino_rooms",
+	}
+
+	for _, term := range requiredTerms {
+		if !strings.Contains(content, term) {
+			t.Errorf("docs/architecture/transient-run-state.md does not contain required Candidate C architectural term %q", term)
 		}
 	}
 }

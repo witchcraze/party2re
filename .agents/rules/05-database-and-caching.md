@@ -84,10 +84,12 @@ State authority decisions for candidates evaluated under RFC #356. Details in [`
 | :--- | :--- | :--- | :--- |
 | **A: Sessions** | `player` | Valkey Master | Delete on account cleanup; 7d TTL |
 | **B: Maintenance** | `maintenance` | Valkey Master / In-Memory | Admin updates invalidate; fail-open |
-| **C: Lobbies** | `party` | Valkey Master | Decoupled from durable adventure logs |
+| **C: Lobbies & Ephemeral Turns** | `party`, `pvp`, `gvg`, `casino` | Valkey Master (settle MariaDB) | 1800s sliding TTL; Two-Phase Settlement ([SSOT](../../docs/architecture/transient-run-state.md)) |
 | **D: Run Buffers** | `dungeon`, `challenge` | Valkey Master (settle MariaDB) | 2h sliding TTL; Lua atomic mutations ([SSOT](../../docs/architecture/transient-run-state.md)) |
 | **E: Boss Shared HP** | `boss` | Valkey Master (settle MariaDB) | Requires dedicated PoC before production adoption |
 | **F: Leaderboards** | `ranking` | MariaDB Master + Valkey Cache | Read cache only; ZSET reconstructed on miss |
+
+- **Candidate C (Ephemeral Turn & Session Lobbies)**: Volatile multiplayer turn rooms and session lobbies (Party, Colosseum PvP, Guild GvG, Casino Indian Poker/High-Low/Doppelganger, and future mini-games) are held in Valkey Master with a sliding 1800s (30-minute) TTL matching authentic legacy Party2 rules. In-flight card flips, bets, and moves execute with sub-millisecond latency in Valkey. Upon terminal match resolution, winnings and durable history are settled into MariaDB Master in a single atomic Unit of Work (`RunInTx`) following the Rank 0..8 lock hierarchy ([SSOT](../../docs/architecture/transient-run-state.md)).
 
 ### 3.4 General Caching Constraints & Keyspace Taxonomy
 - **Centralized Keyspace Specification (SSOT):** All Valkey key patterns, data types, and expiration policies MUST conform to the taxonomy defined in [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md) (`party2:<namespace>:<entity>[:<id>]`). Mechanically enforced by Go AST lint test (`internal/architecture/valkey_lint_test.go`).
