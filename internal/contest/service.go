@@ -530,7 +530,7 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 				}
 
 				if s.guilds != nil {
-					_ = s.guilds.AddGuildExp(txCtx, entries[i].CharacterID, int64(prize.GuildPoints))
+					_ = s.guilds.AddGuildPoints(txCtx, entries[i].CharacterID, prize.GuildPoints)
 				}
 
 				if s.news != nil {

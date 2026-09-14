@@ -328,10 +328,10 @@ func newMockGuildService() *mockGuildService {
 	return &mockGuildService{points: make(map[string]int64)}
 }
 
-func (m *mockGuildService) AddGuildExp(ctx context.Context, characterID string, exp int64) error {
+func (m *mockGuildService) AddGuildPoints(ctx context.Context, characterID string, points int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.points[characterID] += exp
+	m.points[characterID] += int64(points)
 	return nil
 }
 

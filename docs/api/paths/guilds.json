@@ -1,0 +1,456 @@
+{
+  "/guilds": {
+    "get": {
+      "operationId": "getGuilds",
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "GET /guilds endpoint",
+      "tags": [
+        "Guilds"
+      ]
+    },
+    "post": {
+      "operationId": "postGuilds",
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /guilds endpoint",
+      "tags": [
+        "Guilds"
+      ]
+    }
+  },
+  "/guilds/{id}": {
+    "delete": {
+      "operationId": "deleteGuildsId",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "DELETE /guilds/{id} endpoint",
+      "tags": [
+        "Guilds"
+      ]
+    },
+    "get": {
+      "operationId": "getGuildsId",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "GET /guilds/{id} endpoint",
+      "tags": [
+        "Guilds"
+      ]
+    }
+  },
+  "/guilds/{id}/applications/{applicant_id}/approve": {
+    "post": {
+      "operationId": "postGuildsIdApplicationsApplicantIdApprove",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "applicant_id parameter",
+          "in": "path",
+          "name": "applicant_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /guilds/{id}/applications/{applicant_id}/approve endpoint",
+      "tags": [
+        "Guilds"
+      ]
+    }
+  },
+  "/guilds/{id}/applications/{applicant_id}/reject": {
+    "post": {
+      "operationId": "postGuildsIdApplicationsApplicantIdReject",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "applicant_id parameter",
+          "in": "path",
+          "name": "applicant_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /guilds/{id}/applications/{applicant_id}/reject endpoint",
+      "tags": [
+        "Guilds"
+      ]
+    }
+  },
+  "/guilds/{id}/apply": {
+    "post": {
+      "operationId": "postGuildsIdApply",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /guilds/{id}/apply endpoint",
+      "tags": [
+        "Guilds"
+      ]
+    }
+  },
+  "/guilds/{id}/callout": {
+    "post": {
+      "operationId": "postGuildsIdCallout",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /guilds/{id}/callout endpoint",
+      "tags": [
+        "Guilds"
+      ]
+    }
+  },
+  "/guilds/{id}/customization": {
+    "put": {
+      "operationId": "putGuildsIdCustomization",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "PUT /guilds/{id}/customization endpoint",
+      "tags": [
+        "Guilds"
+      ]
+    }
+  },
+  "/guilds/{id}/leave": {
+    "post": {
+      "operationId": "postGuildsIdLeave",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "POST /guilds/{id}/leave endpoint",
+      "tags": [
+        "Guilds"
+      ]
+    }
+  },
+  "/guilds/{id}/members/{char_id}": {
+    "delete": {
+      "operationId": "deleteGuildsIdMembersCharId",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "char_id parameter",
+          "in": "path",
+          "name": "char_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "DELETE /guilds/{id}/members/{char_id} endpoint",
+      "tags": [
+        "Guilds"
+      ]
+    }
+  },
+  "/guilds/{id}/members/{char_id}/title": {
+    "put": {
+      "operationId": "putGuildsIdMembersCharIdTitle",
+      "parameters": [
+        {
+          "description": "id parameter",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "char_id parameter",
+          "in": "path",
+          "name": "char_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Successful operation"
+        },
+        "400": {
+          "description": "Bad request"
+        },
+        "401": {
+          "description": "Unauthorized"
+        },
+        "403": {
+          "description": "Forbidden"
+        },
+        "500": {
+          "description": "Internal server error"
+        }
+      },
+      "summary": "PUT /guilds/{id}/members/{char_id}/title endpoint",
+      "tags": [
+        "Guilds"
+      ]
+    }
+  }
+}

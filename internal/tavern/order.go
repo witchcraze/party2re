@@ -93,6 +93,11 @@ func (s *Service) OrderMeal(ctx context.Context, characterID string, itemID stri
 			}
 		}
 
+		// Award guild points (+2 GP, bar.cgi:118)
+		if s.guildPoints != nil {
+			_ = s.guildPoints.AddGuildPoints(txCtx, charID, 2)
+		}
+
 		// Update tavern status
 		now := time.Now().UTC()
 		status.IsFull = true

@@ -24,6 +24,7 @@ The Guild (ギルド) system enables players to form cooperative social organiza
 Guilds do not possess numeric levels or gold treasuries. Community standing is measured by cumulative Guild Points (`gpoint`) accrued through gameplay:
 
 - **Tavern Dining (`bar.cgi`)**: +2 pt per meal consumed by a guild member.
+- **Job Change (`job_change.cgi:195`)**: +50 pt per job change by a guild member.
 - **Photo Contest Placements (`contest.cgi`)**: +700 pt (1st), +300 pt (2nd), +100 pt (3rd).
 - **GvG Combat (`vs_guild.cgi`)**: +3 pt per round win, +match prize pool GP to tournament winner, +4 pt per participant.
 - **Helper Quests (`helper.cgi`)**: +100 pt on guild-specific request completion.
@@ -103,3 +104,22 @@ Guilds that have had no member activity for 20 consecutive days are automaticall
 - Guild operations obey the deterministic lock acquisition hierarchy (Rank 0 -> 8):
   - Character wallet deduction (Rank 2: `characters`) occurs before guild records (Rank 7: `guilds`, `guild_members`).
 - Points increments are performed via atomic SQL arithmetic (`points = points + ?`) to avoid lock contention during concurrent gameplay achievements.
+
+## HTTP REST API Endpoints
+
+| Method | Endpoint | Description | Auth |
+|---|---|---|---|
+| `GET` | `/guilds` | List guilds (paginated) | Public |
+| `POST` | `/guilds` | Create new guild | Bearer Token |
+| `GET` | `/guilds/{id}` | Get guild detail with roster | Public |
+| `DELETE` | `/guilds/{id}` | Disband guild (leader only) | Bearer Token |
+| `GET` | `/characters/{id}/guild` | Get character's current guild & membership | Public |
+| `POST` | `/guilds/{id}/apply` | Apply to join guild | Bearer Token |
+| `POST` | `/guilds/{id}/applications/{applicant_id}/approve` | Approve applicant & assign title (leader only) | Bearer Token |
+| `POST` | `/guilds/{id}/applications/{applicant_id}/reject` | Reject applicant (leader only) | Bearer Token |
+| `POST` | `/guilds/{id}/callout` | Broadcast callout message to members (+1 GP) | Bearer Token |
+| `PUT` | `/guilds/{id}/members/{char_id}/title` | Assign custom role title to member (leader only) | Bearer Token |
+| `PUT` | `/guilds/{id}/customization` | Update color, mark, wallpaper, or notice (leader only) | Bearer Token |
+| `POST` | `/guilds/{id}/leave` | Leave guild (non-leader member) | Bearer Token |
+| `DELETE` | `/guilds/{id}/members/{char_id}` | Kick member from guild (leader only) | Bearer Token |
+

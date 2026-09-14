@@ -9,6 +9,7 @@ import (
 	valkeygo "github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/chapel"
+	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/medal"
@@ -167,6 +168,16 @@ func wireHooks(
 	if soc.sched != nil && misc.lottery != nil {
 		wireTakarakujiDrawing(soc.sched)
 	}
+	if soc.sched != nil && soc.guild != nil {
+		wireGuildInactivityCheck(soc.sched)
+	}
+}
+
+// wireGuildInactivityCheck enqueues the daily JST midnight inactivity check if not already scheduled.
+func wireGuildInactivityCheck(sched *scheduling.Service) {
+	ctx := context.Background()
+	next := guild.NextMidnightJST(time.Now())
+	_ = sched.ScheduleWithID(ctx, guild.DailyInactivityCheckActionID(next), guild.ActionTypeGuildInactivityCheck, "system", nil, next)
 }
 
 // wireChapelDailyReset enqueues the daily JST midnight reset action if not already scheduled.
@@ -228,6 +239,7 @@ func newHTTPHandler(
 		http.WithGod(misc.god),
 		http.WithMonster(misc.monster),
 		http.WithContest(misc.contest),
+		http.WithGuild(soc.guild),
 		http.WithParty(cmbt.party),
 		http.WithAltar(misc.altar),
 		http.WithWishingWell(misc.wishingwell),

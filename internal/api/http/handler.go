@@ -128,6 +128,7 @@ type Handler struct {
 	dungeons       DungeonService
 	pvp            PvPService
 	gvg            GvGService
+	guild          GuildService
 	auctions       AuctionService
 	eventplaza     EventPlazaService
 	secretshop     SecretShopService
@@ -552,6 +553,21 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/gvg/rooms/{room_id}/advance", h.handleAdvanceGvGRound)
 	mux.HandleFunc("GET /gvg/standings/{guild_id}", h.handleGetGvGStanding)
 	mux.HandleFunc("GET /gvg/leaderboard", h.handleGetGvGLeaderboard)
+
+	// Guilds
+	mux.HandleFunc("GET /guilds", h.handleListGuilds)
+	mux.HandleFunc("POST /guilds", h.handleCreateGuild)
+	mux.HandleFunc("GET /guilds/{id}", h.handleGetGuild)
+	mux.HandleFunc("DELETE /guilds/{id}", h.handleDisbandGuild)
+	mux.HandleFunc("POST /guilds/{id}/apply", h.handleApplyGuild)
+	mux.HandleFunc("POST /guilds/{id}/applications/{applicant_id}/approve", h.handleApproveGuildApplication)
+	mux.HandleFunc("POST /guilds/{id}/applications/{applicant_id}/reject", h.handleRejectGuildApplication)
+	mux.HandleFunc("POST /guilds/{id}/callout", h.handleBroadcastGuildCallout)
+	mux.HandleFunc("PUT /guilds/{id}/members/{char_id}/title", h.handleAssignGuildRoleTitle)
+	mux.HandleFunc("PUT /guilds/{id}/customization", h.handleCustomizeGuild)
+	mux.HandleFunc("POST /guilds/{id}/leave", h.handleLeaveGuild)
+	mux.HandleFunc("DELETE /guilds/{id}/members/{char_id}", h.handleKickGuildMember)
+	mux.HandleFunc("GET /characters/{id}/guild", h.handleGetCharacterGuild)
 
 	// Auction Hall (Live P2P Trading, Direct Send & Inspect)
 	mux.HandleFunc("GET /auction/hall", h.handleAuctionVenueInfo)

@@ -93,6 +93,15 @@ func (m *mockLotteryRepo) GetRaffleTickets(ctx context.Context, characterID stri
 	return m.tickets[characterID], nil
 }
 
+type mockGuildPointAwarder struct {
+	points map[string]int
+}
+
+func (m *mockGuildPointAwarder) AddGuildPoints(ctx context.Context, characterID string, points int) error {
+	m.points[characterID] += points
+	return nil
+}
+
 func setupTestService(t *testing.T) (*tavern.Service, *mockCharRepo, *mockTavernRepo, *mockLotteryRepo) {
 	catalog, err := tavern.LoadDefaultCatalog()
 	if err != nil {
@@ -393,5 +402,55 @@ func TestTavern_Talk(t *testing.T) {
 	}
 	if talkRes.NPCName != "@エレナ" || talkRes.LocationName != "冒険者の酒場" || talkRes.Message == "" {
 		t.Errorf("unexpected TalkResult: %+v", talkRes)
+	}
+}
+
+func TestTavern_OrderMeal_AwardsGuildPoints(t *testing.T) {
+	catalog, err := tavern.LoadDefaultCatalog()
+	if err != nil {
+		t.Fatalf("failed to load catalog: %v", err)
+	}
+
+	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
+	tavernRepo := newMockTavernRepo()
+	txProvider := &mockTxProvider{}
+	guildAwarder := &mockGuildPointAwarder{points: make(map[string]int)}
+
+	svc, err := tavern.NewService(
+		catalog,
+		tavernRepo,
+		charRepo,
+		txProvider,
+		tavern.WithGuildPointAwarder(guildAwarder),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	ctx := context.Background()
+	charID := "char-guild"
+	charRepo.chars[charID] = corecharacter.Character{
+		ID:    charID,
+		Name:  "GuildMember",
+		Money: 500,
+		Stats: corecharacter.Stats{
+			HP:    10,
+			MaxHP: 50,
+			MP:    5,
+			MaxMP: 20,
+		},
+	}
+
+	res, err := svc.OrderMeal(ctx, charID, "tavern_curry")
+	if err != nil {
+		t.Fatalf("OrderMeal failed: %v", err)
+	}
+	if res.CharacterID != charID {
+		t.Errorf("expected character ID %s, got %s", charID, res.CharacterID)
+	}
+
+	// Legacy bar.cgi:118 awards +2 GP
+	if guildAwarder.points[charID] != 2 {
+		t.Errorf("expected 2 guild points awarded, got %d", guildAwarder.points[charID])
 	}
 }

@@ -41,6 +41,11 @@ type LotteryRepository interface {
 	GetRaffleTickets(ctx context.Context, characterID string) (int, error)
 }
 
+// GuildPointAwarder defines optional guild point award operations (bar.cgi:118).
+type GuildPointAwarder interface {
+	AddGuildPoints(ctx context.Context, characterID string, points int) error
+}
+
 // TavernCharacterStatus represents the character's eating/fullness state in the tavern.
 type TavernCharacterStatus struct {
 	CharacterID     string     `json:"character_id"`
@@ -95,6 +100,7 @@ type Service struct {
 	repo        Repository
 	charRepo    CharacterRepository
 	lotteryRepo LotteryRepository
+	guildPoints GuildPointAwarder
 	txProvider  TransactionProvider
 }
 
@@ -105,6 +111,13 @@ type Option func(*Service)
 func WithLotteryRepository(lr LotteryRepository) Option {
 	return func(s *Service) {
 		s.lotteryRepo = lr
+	}
+}
+
+// WithGuildPointAwarder sets the optional guild point awarder (bar.cgi:118).
+func WithGuildPointAwarder(gpa GuildPointAwarder) Option {
+	return func(s *Service) {
+		s.guildPoints = gpa
 	}
 }
 

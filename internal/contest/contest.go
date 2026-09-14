@@ -188,9 +188,9 @@ type CharacterRepository interface {
 	Update(ctx context.Context, char corecharacter.Character) error
 }
 
-// GuildService defines guild operations for awarding guild points/exp.
+// GuildService defines guild operations for awarding guild points.
 type GuildService interface {
-	AddGuildExp(ctx context.Context, characterID string, exp int64) error
+	AddGuildPoints(ctx context.Context, characterID string, points int) error
 }
 
 // NewsPublisher defines interface for publishing announcements.

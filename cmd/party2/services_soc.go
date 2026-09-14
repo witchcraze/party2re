@@ -47,6 +47,18 @@ func (a *depotManagerAdapter) ConsumeOne(ctx context.Context, characterID, itemI
 	return a.Consume(ctx, characterID, itemInstanceID, 1)
 }
 
+type homeLetterAdapter struct {
+	home *home.Service
+}
+
+func (a *homeLetterAdapter) SendLetter(ctx context.Context, senderID, senderName, recipientID, recipientName, content, color string) error {
+	if a.home == nil {
+		return nil
+	}
+	_, err := a.home.SendLetter(ctx, senderID, recipientID, content, color)
+	return err
+}
+
 type socServices struct {
 	guildRepo    *database.GuildRepository
 	guild        *guild.Service
@@ -68,10 +80,6 @@ func newSocServices(
 	logger logging.Logger,
 ) (*socServices, error) {
 	guildRepo, err := database.NewGuildRepository(db)
-	if err != nil {
-		return nil, err
-	}
-	guildService, err := guild.NewService(guildRepo)
 	if err != nil {
 		return nil, err
 	}
@@ -137,6 +145,15 @@ func newSocServices(
 		home.WithEconomy(core.economy),
 	)
 
+	guildService, err := guild.NewService(
+		guildRepo,
+		guild.WithCharacterReader(core.charRepo),
+		guild.WithLetterSender(&homeLetterAdapter{home: homeService}),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &socServices{
 		guildRepo:    guildRepo,
 		guild:        guildService,
@@ -162,6 +179,9 @@ func (s *socServices) registerWorkerHandlers(activityService *activity.Service, 
 		}
 		if lotteryService != nil {
 			s.worker.RegisterHandler(lottery.ActionTypeTakarakujiDraw, lottery.NewDrawHandler(lotteryService, lottery.WithScheduler(s.sched)))
+		}
+		if s.guild != nil {
+			s.worker.RegisterHandler(guild.ActionTypeGuildInactivityCheck, guild.NewInactivityCheckHandler(s.guild, guild.WithScheduler(s.sched)))
 		}
 	}
 }

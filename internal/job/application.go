@@ -43,6 +43,11 @@ func (f NewsPublisherFunc) PublishNews(ctx context.Context, category, title, con
 	return f(ctx, category, title, content, author, publishedAt)
 }
 
+// GuildPointAwarder defines optional guild point award operations (job_change.cgi:195).
+type GuildPointAwarder interface {
+	AddGuildPoints(ctx context.Context, characterID string, points int) error
+}
+
 type Service struct {
 	repository     Repository
 	catalog        *corejob.Catalog
@@ -52,6 +57,7 @@ type Service struct {
 	skills         SkillProvider
 	news           NewsPublisher
 	futureMemories FutureMemoryRepository
+	guildPoints    GuildPointAwarder
 }
 
 type Option func(*Service)
@@ -89,6 +95,13 @@ func WithSkillProvider(provider SkillProvider) Option {
 func WithNewsPublisher(news NewsPublisher) Option {
 	return func(s *Service) {
 		s.news = news
+	}
+}
+
+// WithGuildPointAwarder sets the optional guild point awarder (job_change.cgi:195).
+func WithGuildPointAwarder(gpa GuildPointAwarder) Option {
+	return func(s *Service) {
+		s.guildPoints = gpa
 	}
 }
 
@@ -221,6 +234,9 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 	}
 	if err := s.repository.Save(ctx, state); err != nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
+	}
+	if s.guildPoints != nil {
+		_ = s.guildPoints.AddGuildPoints(ctx, characterID, 50)
 	}
 	return char, state, nil
 }

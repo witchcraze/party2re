@@ -153,6 +153,15 @@ func (r *inventoryRepoStub) Save(_ context.Context, value coreinventory.Inventor
 	return nil
 }
 
+type guildAwarderStub struct {
+	points map[string]int
+}
+
+func (g *guildAwarderStub) AddGuildPoints(_ context.Context, characterID string, points int) error {
+	g.points[characterID] += points
+	return nil
+}
+
 func TestServiceListAndChangeJob(t *testing.T) {
 	state, _ := corejob.NewCharacterJob("character-1", "starter")
 	repo := &repositoryStub{value: state}
@@ -183,6 +192,39 @@ func TestServiceListAndChangeJob(t *testing.T) {
 	}
 	if updatedChar.OverLevel {
 		t.Fatalf("expected OverLevel to be reset to false on job change, got %v", updatedChar.OverLevel)
+	}
+}
+
+func TestServiceChangeJobAwardsGuildPoints(t *testing.T) {
+	state, _ := corejob.NewCharacterJob("character-1", "starter")
+	repo := &repositoryStub{value: state}
+	char := corecharacter.Character{
+		ID:        "character-1",
+		JobID:     "starter",
+		Level:     20,
+		Gender:    "male",
+		OverLevel: false,
+	}
+	charRepo := &charRepoStub{char: char}
+	guildAwarder := &guildAwarderStub{points: make(map[string]int)}
+
+	svc, err := NewService(
+		repo,
+		WithCharacterRepository(charRepo),
+		WithGuildPointAwarder(guildAwarder),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = svc.ChangeJob(context.Background(), "character-1", "job-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Legacy job_change.cgi:195 awards +50 GP
+	if guildAwarder.points["character-1"] != 50 {
+		t.Fatalf("expected 50 guild points, got %d", guildAwarder.points["character-1"])
 	}
 }
 

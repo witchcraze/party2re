@@ -138,6 +138,7 @@ func newMiscServices(
 		job.WithInventoryRepository(core.invRepo),
 		job.WithEconomy(core.economy),
 		job.WithFutureMemoryRepository(futureMemoryRepo),
+		job.WithGuildPointAwarder(soc.guild),
 		job.WithNewsPublisher(job.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
 			if soc.notification != nil {
 				_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)
@@ -210,6 +211,7 @@ func newMiscServices(
 		core.charRepo,
 		core.txProvider,
 		tavern.WithLotteryRepository(lotteryRepo),
+		tavern.WithGuildPointAwarder(soc.guild),
 	)
 	if err != nil {
 		return nil, err
@@ -302,6 +304,7 @@ func newMiscServices(
 		core.charRepo,
 		contestRepo,
 		contest.WithTransactionProvider(core.txProvider),
+		contest.WithGuildService(soc.guild),
 		contest.WithNewsPublisher(contest.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
 			_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)
 			return err
