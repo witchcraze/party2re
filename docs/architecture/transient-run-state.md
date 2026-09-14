@@ -191,19 +191,20 @@ Multiplayer rooms must handle network disconnects and player abandonment determi
 
 ---
 
-### 7. Target Implementation Blueprint for Casino Migration
+### 7. Implementation Blueprint & Status for Casino Migration
 
-Currently, `internal/casino` implements multi-player rooms via MariaDB Master tables (`casino_rooms`, `casino_room_members`). The migration to Candidate C will execute according to this blueprint:
+`internal/casino` formerly implemented multiplayer rooms via MariaDB Master tables (`casino_rooms`, `casino_room_members`). The migration to Candidate C has progressed as follows:
 
-1. **Step 1: Keyspace Standardization (`party2:casino:*`)**:
-   - Implement `ValkeyCasinoRoomRepository` backed by Valkey Master:
-     - `party2:casino:room:<room_id>`: JSON `CasinoRoomState` holding room configuration, participants, deck, pot, and game status.
-     - `party2:casino:rooms:active`: Sorted Set for active room discovery.
-     - `party2:casino:character:<character_id>`: Single active room pointer.
-2. **Step 2: Service Wire & Two-Phase Settlement**:
-   - Wire `casino.Service` to execute all card actions (`JoinRoom`, `UpdateBet`, `NextCard`, `DrawCard`) against `ValkeyCasinoRoomRepository`.
+1. **Step 1: Keyspace Standardization & Repository Implementation (Completed in Issue #635)**:
+   - Implemented `ValkeyRoomRepository` in `internal/casino` backed by Valkey Master:
+     - `party2:casino:room:<room_id>`: JSON `RoomDetail` holding room configuration, participants, deck, pot, and game status.
+     - `party2:casino:rooms:active`: Sorted Set for active room discovery and lazy TTL pruning.
+     - `party2:casino:character:<character_id>`: Single active room pointer with 1800s sliding TTL.
+2. **Step 2: Service Wire & Two-Phase Settlement (Completed in Issue #635)**:
+   - Wired `casino.Service` in `cmd/party2` to use `ValkeyRoomRepository` when `valkeyClient` is configured.
+   - All card actions (`JoinRoom`, `UpdateBet`, `NextCard`, `DrawCard`, `StartRound`) execute against `ValkeyRoomRepository` with sub-millisecond latency.
    - On game completion (`status == finished`), open a single MariaDB transaction (`RunInTx`) to credit coins to `casino_accounts` (Rank 8) for the winner(s).
-3. **Step 3: Database Schema Deprecation**:
+3. **Step 3: Database Schema Deprecation (Follow-up cleanup migration)**:
    - Retain durable financial table: `casino_accounts` (SSOT for coin balances).
    - Drop ephemeral tables via dedicated migration: `DROP TABLE casino_room_members; DROP TABLE casino_rooms;` (mirroring Migration 052 for `parties` and `party_members`).
 

@@ -60,6 +60,7 @@ var requiredDocumentedKeys = []string{
 	"party2:eventplaza:presence",
 	"party2:casino:room:",
 	"party2:casino:rooms:active",
+	"party2:casino:character:",
 }
 
 func TestValkeyKeyspaceDocExistsAndCoversKeys(t *testing.T) {

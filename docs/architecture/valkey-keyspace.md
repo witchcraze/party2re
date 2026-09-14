@@ -150,7 +150,7 @@ The following specifications define the key patterns, data types, and lifecycle 
 
 ### 4.3 Candidate C: Ephemeral Turn & Session Lobbies (Party, PvP, GvG, Casino & Mini-games)
 
-- **Status**: Standardized across multiplayer domains in Issue #635 (SSOT: [`docs/architecture/transient-run-state.md`](transient-run-state.md)). Active in `internal/party` (wait lobbies), `internal/pvp` (Colosseum rooms), and `internal/gvg` (Guild battle rooms); target architecture for `internal/casino` migration.
+- **Status**: Standardized and implemented across multiplayer domains in Issue #635 (SSOT: [`docs/architecture/transient-run-state.md`](transient-run-state.md)). Active in `internal/party` (wait lobbies), `internal/pvp` (Colosseum rooms), `internal/gvg` (Guild battle rooms), and `internal/casino` (multiplayer card game rooms).
 - **Goal**: Move transient multiplayer recruitment, wait lobbies, and in-flight turn states from MariaDB to Valkey Master to eliminate table lock contention, connection pool exhaustion, and relational write amplification.
 - **Standardized Key Architecture (`party2:<domain>:*`)**:
   - `party2:<domain>:room:<room_id>`: `String (JSON)` holding authoritative room state, player list, bets, deck, current turn, and pot.
@@ -173,7 +173,7 @@ The following specifications define the key patterns, data types, and lifecycle 
     - `party2:gvg:rooms`: `Sorted Set (ZSet)` scored by `CreatedAt.Unix()`.
     - `party2:gvg:character:<character_id>`: `String`, 30m (`1800s`) sliding TTL.
   - **Casino Card Games (`internal/casino`)**:
-    - `party2:casino:room:<room_id>`: `String (JSON)`, 30m (`1800s`) sliding TTL. Target store for Indian Poker, High-Low, and Doppelganger.
+    - `party2:casino:room:<room_id>`: `String (JSON)`, 30m (`1800s`) sliding TTL. Store for Indian Poker, High-Low, and Doppelganger.
     - `party2:casino:rooms:active`: `Sorted Set (ZSet)` scored by `UpdatedAt.Unix()`.
     - `party2:casino:character:<character_id>`: `String`, 30m (`1800s`) sliding TTL.
 - **Sliding TTL Lifecycle (1800s / 30m Parity)**:
@@ -182,8 +182,8 @@ The following specifications define the key patterns, data types, and lifecycle 
 - **Two-Phase Settlement Boundary**:
   - Phase 1 (In-Flight Gameplay): All card flips, bets, calls, and eliminations execute 100% in Valkey Master (< 1ms latency, zero SQL queries).
   - Phase 2 (Settlement): Upon match termination, a single MariaDB transaction (`RunInTx`) is opened. Payouts (coins, gold, medals, GP) are credited adhering strictly to the Rank 0..8 lock hierarchy. The Valkey room key is cleanly deleted (`DEL`) or set to 60s review TTL.
-- **Target Blueprint for Casino Migration**:
-  - Establishes the specification to migrate `casino_rooms` and `casino_room_members` to Valkey Master, dropping the ephemeral tables in a subsequent migration (mirroring Migration 052 for `parties`).
+- **Casino Implementation & Deprecation**:
+  - `ValkeyRoomRepository` implemented in `internal/casino` and wired in `cmd/party2`. Dropping the legacy ephemeral MariaDB tables (`casino_rooms` and `casino_room_members`) is scheduled for a follow-up schema cleanup migration (mirroring Migration 052 for `parties`).
 
 ### 4.4 Candidate D: In-Progress Run Buffers (Issue #369)
 
