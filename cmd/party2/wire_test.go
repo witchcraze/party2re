@@ -167,6 +167,8 @@ type mockPlazaService struct {
 
 func (m *mockPlazaService) RecordVictoryBanquet(ctx context.Context, bossID, bossName, slayerID, slayerName string, tier int) (eventplaza.CelebrationBanquet, error) {
 	m.banquetRecorded = true
+	attendees := eventplaza.BanquetAttendeesForTier(tier)
+	_ = m.RecordBanquetPresence(ctx, "banquet-1", attendees, time.Hour)
 	return eventplaza.CelebrationBanquet{
 		ID:   "banquet-1",
 		Tier: tier,
@@ -183,12 +185,8 @@ func (m *mockPlazaService) RecordBanquetPresence(ctx context.Context, banquetID 
 func TestWireBossVictoryBanquetHook_RecordsPresence(t *testing.T) {
 	plazaMock := &mockPlazaService{}
 	hook := func(ctx context.Context, bossID, bossName, slayerID, slayerName string, tier int) error {
-		banquet, hookErr := plazaMock.RecordVictoryBanquet(ctx, bossID, bossName, slayerID, slayerName, tier)
-		if hookErr != nil {
-			return hookErr
-		}
-		attendees := eventplaza.BanquetAttendeesForTier(tier)
-		return plazaMock.RecordBanquetPresence(ctx, banquet.ID, attendees, time.Hour)
+		_, err := plazaMock.RecordVictoryBanquet(ctx, bossID, bossName, slayerID, slayerName, tier)
+		return err
 	}
 
 	for _, tier := range []int{1, 2, 3} {

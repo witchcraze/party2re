@@ -9,7 +9,6 @@ import (
 	valkeygo "github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/chapel"
-	"github.com/witchcraze/party2re/internal/eventplaza"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/medal"
@@ -91,12 +90,8 @@ func wireHooks(
 	})
 
 	cmbt.boss.SetVictoryBanquetHook(func(ctx context.Context, bossID, bossName, slayerID, slayerName string, tier int) error {
-		banquet, hookErr := misc.eventplaza.RecordVictoryBanquet(ctx, bossID, bossName, slayerID, slayerName, tier)
-		if hookErr != nil {
-			return hookErr
-		}
-		attendees := eventplaza.BanquetAttendeesForTier(tier)
-		return misc.eventplaza.RecordBanquetPresence(ctx, banquet.ID, attendees, time.Hour)
+		_, err := misc.eventplaza.RecordVictoryBanquet(ctx, bossID, bossName, slayerID, slayerName, tier)
+		return err
 	})
 
 	misc.casino.SetGamePlayedHook(func(ctx context.Context, characterID string, gameName string) error {
