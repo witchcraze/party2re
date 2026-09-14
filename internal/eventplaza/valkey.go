@@ -2,6 +2,7 @@ package eventplaza
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -38,6 +39,37 @@ func (t *ValkeyPresenceTracker) RecordPresence(ctx context.Context, characterID 
 	}
 
 	expireCmd := t.client.B().Expire().Key(ValkeyPresenceKey).Seconds(ValkeyPresenceTTL).Build()
+	_ = t.client.Do(ctx, expireCmd)
+	return nil
+}
+
+// RecordBanquetPresence records virtual celebration banquet attendees in the plaza with score set to expiry timestamp.
+func (t *ValkeyPresenceTracker) RecordBanquetPresence(ctx context.Context, banquetID string, count int, duration time.Duration) error {
+	return t.RecordBanquetPresenceAt(ctx, banquetID, count, time.Now().UTC(), duration)
+}
+
+// RecordBanquetPresenceAt records virtual celebration banquet attendees with an explicit reference time.
+func (t *ValkeyPresenceTracker) RecordBanquetPresenceAt(ctx context.Context, banquetID string, count int, at time.Time, duration time.Duration) error {
+	if t.client == nil || count <= 0 {
+		return nil
+	}
+	if duration <= 0 {
+		duration = time.Hour
+	}
+	expiry := at.Add(duration)
+	score := float64(expiry.Unix())
+
+	zadd := t.client.B().Zadd().Key(ValkeyPresenceKey).ScoreMember()
+	for i := 0; i < count; i++ {
+		member := fmt.Sprintf("banquet:%s:npc:%d", banquetID, i)
+		zadd = zadd.ScoreMember(score, member)
+	}
+	if err := t.client.Do(ctx, zadd.Build()).Error(); err != nil {
+		return err
+	}
+
+	ttlSeconds := int64(duration.Seconds()) + ValkeyPresenceTTL
+	expireCmd := t.client.B().Expire().Key(ValkeyPresenceKey).Seconds(ttlSeconds).Build()
 	_ = t.client.Do(ctx, expireCmd)
 	return nil
 }

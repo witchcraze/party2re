@@ -60,6 +60,9 @@ func (s *Service) RecordVictoryBanquet(
 		return CelebrationBanquet{}, fmt.Errorf("failed to save celebration banquet: %w", err)
 	}
 
+	attendees := BanquetAttendeesForTier(tier)
+	_ = s.RecordBanquetPresence(ctx, banquet.ID, attendees, time.Hour)
+
 	return banquet, nil
 }
 

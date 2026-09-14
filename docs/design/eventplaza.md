@@ -76,6 +76,12 @@ When a player conquers a King Boss in the Boss Challenge Arena (`internal/boss`)
 - **Banquet Lifecycle**:
   - **Slayer Recognition**: Records the boss name, slayer character ID, character name, and boss tier.
   - **Duration**: Active for 24 hours (`expires_at = celebrated_at + 24h`).
+- **Plaza Concurrency Link via Valkey (`party2:eventplaza:presence`)**:
+  - Defeating a King Boss tier immediately injects virtual celebration banquet attendees into the Valkey presence tracker for 1 hour (`duration = 1 hour`), directly unlocking higher traveling merchant bazaar tiers per legacy `_win_vs_king.cgi:50-71` & `event.cgi:24-45`:
+    - **Tier 1 Boss Victory**: 10 attendees $\to$ unlocks Tier 1 Bronze Traveling Merchant.
+    - **Tier 2 Boss Victory**: 20 attendees $\to$ unlocks Tier 2 Silver Traveling Merchant.
+    - **Tier 3+ Boss Victory**: 30 attendees $\to$ unlocks Tier 3 Gold Traveling Merchant.
+  - After 1 hour, virtual attendees naturally expire and are purged by `ZREMRANGEBYSCORE`.
 - **Toasting & Morale Boost (`POST /eventplaza/banquets/{id}/toast`)**:
   - Other adventurers can join the celebration and raise a toast (`乾杯`).
   - **Rewards**: Each toast awards `300 Gold * Boss Tier` in commemorative celebration gold.

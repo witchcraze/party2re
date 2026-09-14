@@ -234,7 +234,17 @@ func TestAdventure_TavernDelivery_PostAdventureIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 1. Reserve tavern delivery for omelet rice (Price: 750, HPHeal: 500, MPHeal: 100, Tickets: 7)
+	// 1. Order meal at tavern counter first so character is full before adventure
+	_, err = tavernService.OrderMeal(ctx, char.ID, "tavern_water")
+	if err != nil {
+		t.Fatalf("OrderMeal failed: %v", err)
+	}
+	preStatus, err := tavernService.GetStatus(ctx, char.ID)
+	if err != nil || !preStatus.IsFull {
+		t.Fatalf("expected character to be full before adventure, got %v, err: %v", preStatus.IsFull, err)
+	}
+
+	// 2. Reserve tavern delivery for omelet rice (Price: 750, HPHeal: 500, MPHeal: 100, Tickets: 7)
 	deliv, err := tavernService.ReserveDelivery(ctx, char.ID, "tavern_omelet_rice")
 	if err != nil {
 		t.Fatalf("ReserveDelivery failed: %v", err)
@@ -278,6 +288,7 @@ func TestAdventure_TavernDelivery_PostAdventureIntegration(t *testing.T) {
 	}
 
 	advService.SetPostAdventureHook(func(hookCtx context.Context, characterID string) error {
+		_ = tavernService.ResetFullness(hookCtx, characterID)
 		_, err := tavernService.ClaimDelivery(hookCtx, characterID)
 		if errors.Is(err, tavern.ErrNoActiveDelivery) || errors.Is(err, tavern.ErrInsufficientFunds) {
 			return nil
@@ -308,8 +319,8 @@ func TestAdventure_TavernDelivery_PostAdventureIntegration(t *testing.T) {
 		t.Errorf("expected MP 50, got %d", updatedChar.Stats.MP)
 	}
 
-	// Gold should reflect adventure reward minus meal cost (750G)
-	expectedGold := 5000 - 750 + claimedAdv.BattleResult.Reward.Currency
+	// Gold should reflect adventure reward minus counter meal (20G) and delivery meal cost (750G)
+	expectedGold := 5000 - 20 - 750 + claimedAdv.BattleResult.Reward.Currency
 	if updatedChar.Money != expectedGold {
 		t.Errorf("expected Gold %d, got %d", expectedGold, updatedChar.Money)
 	}
@@ -322,12 +333,27 @@ func TestAdventure_TavernDelivery_PostAdventureIntegration(t *testing.T) {
 		t.Errorf("expected delivery item tavern_omelet_rice, got %s", delivAfter.ItemID)
 	}
 
-	// Raffle tickets should NOT have been awarded from delivery meals
+	// Raffle tickets: 1 from initial counter meal, 0 added from delivery meals
 	tickets, err := lotteryRepo.GetRaffleTickets(ctx, char.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tickets != 0 {
-		t.Errorf("expected 0 raffle tickets from delivery, got %d", tickets)
+	if tickets != 1 {
+		t.Errorf("expected 1 raffle ticket from counter meal, got %d", tickets)
+	}
+
+	// 5. Verify Post-Adventure fullness reset (is_eat = 0)
+	postStatus, err := tavernService.GetStatus(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetStatus failed: %v", err)
+	}
+	if postStatus.IsFull {
+		t.Errorf("expected IsFull to be false after adventure, got true")
+	}
+
+	// Character can immediately dine at the tavern counter again
+	_, err = tavernService.OrderMeal(ctx, char.ID, "tavern_water")
+	if err != nil {
+		t.Errorf("expected character to be able to dine immediately after adventure, got %v", err)
 	}
 }

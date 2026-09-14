@@ -56,8 +56,9 @@ To allow characters heading out to adventure to secure an automatic meal upon re
   - Deducts gold and restores HP/MP.
   - Does NOT set `is_full = true` and does NOT award raffle tickets (`party2/lib/_battle.cgi:1348-1376`).
   - Does NOT delete the reservation; the standing order remains active for future adventures.
-- **Automated Post-Adventure Arrival (Solo & Party)**:
-  - When a solo or party adventure concludes, the registered `PostAdventureHook` automatically executes `ClaimDelivery` to restore each participating adventurer. Insufficient funds gracefully skip delivery without cancelling the order or impeding adventure completion.
+- **Automated Post-Adventure Arrival & Fullness Reset (Solo & Party)**:
+  - When a solo or party adventure concludes, the registered `PostAdventureHook` automatically executes `ResetFullness` (clearing `is_full = false` / legacy `$m{is_eat} = 0` per `_battle.cgi:1214`), allowing characters to dine at the counter again immediately.
+  - The hook then executes `ClaimDelivery` to restore each participating adventurer with reserved delivery food. Insufficient funds gracefully skip delivery without cancelling the order or impeding adventure completion.
 
 ---
 

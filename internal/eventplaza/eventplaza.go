@@ -76,6 +76,7 @@ type Repository interface {
 
 type PresenceTracker interface {
 	RecordPresence(ctx context.Context, characterID string, at time.Time) error
+	RecordBanquetPresence(ctx context.Context, banquetID string, count int, duration time.Duration) error
 	CountActiveParticipants(ctx context.Context, cutoff time.Time) (int, error)
 }
 
@@ -264,11 +265,34 @@ func CalculateMerchantTier(participants int) (tier int, tierName string, nextThr
 	return 0, "Traveling Merchant On Journey (行商人巡回中)", Tier1Threshold
 }
 
+// BanquetAttendeesForTier returns the number of virtual celebration attendees (10–30) for a boss tier.
+// Defeating a King Boss tier yields:
+// - Tier 1: 10 attendees -> unlocks Tier 1 Traveling Merchant (Bronze)
+// - Tier 2: 20 attendees -> unlocks Tier 2 Traveling Merchant (Silver)
+// - Tier 3+: 30 attendees -> unlocks Tier 3 Traveling Merchant (Gold)
+func BanquetAttendeesForTier(tier int) int {
+	if tier <= 1 {
+		return Tier1Threshold
+	}
+	if tier == 2 {
+		return Tier2Threshold
+	}
+	return Tier3Threshold
+}
+
 func (s *Service) RecordPresence(ctx context.Context, characterID string) error {
 	if strings.TrimSpace(characterID) == "" {
 		return ErrCharacterNotFound
 	}
 	return s.recordPresence(ctx, strings.TrimSpace(characterID), s.clock.Now())
+}
+
+// RecordBanquetPresence records virtual celebration banquet attendees into the presence tracker.
+func (s *Service) RecordBanquetPresence(ctx context.Context, banquetID string, count int, duration time.Duration) error {
+	if s.presenceTracker != nil {
+		return s.presenceTracker.RecordBanquetPresence(ctx, banquetID, count, duration)
+	}
+	return nil
 }
 
 func (s *Service) GetPlazaStatus(ctx context.Context) (PlazaStatus, error) {
