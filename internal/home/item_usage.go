@@ -225,7 +225,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 
 	// Validate supported consumable items before transaction
 	switch def.Name {
-	case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル":
+	case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石":
 	default:
 		return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
 	}
@@ -408,9 +408,36 @@ func (s *Service) applyConsumableEffect(char *corecharacter.Character, def item.
 			return "", err
 		}
 		msg = "メダル王にメダルを１枚献上しました"
+	case "水晶の原石":
+		if char.WeaponSeal <= 0 {
+			msg = "しかし、何も起こらなかった…"
+		} else {
+			refund := sealRefundCrystals(char.WeaponSeal)
+			char.WeaponSeal = 0
+			char.Crystal += refund
+			if char.Crystal > 999999 {
+				char.Crystal = 999999
+			}
+			msg = fmt.Sprintf("武器に施された刻印が剥がれ落ちた！刻印晶を %d 個回収した！", refund)
+		}
 	default:
 		return "", fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
 	}
 
 	return msg, nil
+}
+
+func sealRefundCrystals(sealID int) int {
+	switch sealID {
+	case 1, 4:
+		return 25
+	case 2, 5:
+		return 250
+	case 3, 6:
+		return 2500
+	case 7, 8, 9, 10, 11, 12:
+		return 50
+	default:
+		return 0
+	}
 }

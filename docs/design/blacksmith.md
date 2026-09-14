@@ -16,22 +16,22 @@ The Blacksmith (鍛冶屋, `party2/lib/blacksmith.cgi`) provides equipment custo
 - Applying a seal consumes crystals (`刻印晶`, `character.crystal`), capped at 999,999.
 - A weapon can only hold **one** seal at a time; weapons already sealed cannot receive another seal.
 
-### Authentic 12 Seals Specification (`_data.cgi:2209-2230`)
+### Authentic 12 Seals Specification (`_data.cgi:2209-2230`, `_battle.cgi:39-44`)
 
-| ID | Name | Description | Crystal Cost |
+| ID | Name | Combat Effect | Crystal Cost |
 |---|---|---|---|
-| 1 | 赤の刻印 | 攻撃力上昇小 | 100 |
-| 2 | 青の刻印 | 防御力上昇小 | 100 |
-| 3 | 緑の刻印 | 技＋１ | 200 |
-| 4 | 黒の刻印 | 会心の一撃率上昇中 | 300 |
-| 5 | 白の刻印 | 命中率上昇中 | 300 |
-| 6 | 闇の刻印 | 攻撃力上昇中 | 400 |
-| 7 | 魔の刻印 | 魔法攻撃力上昇 | 500 |
-| 8 | 風の刻印 | 回避率上昇中 | 500 |
-| 9 | 妖の刻印 | 魔法防御力上昇 | 600 |
-| 10 | 雷の刻印 | 攻撃回数＋１ | 700 |
-| 11 | 獣の刻印 | 攻撃力上昇特大 | 1,000 |
-| 12 | 覇の刻印 | 全ての能力が上昇 | 1,500 |
+| 1 | 爪の刻印 | 攻撃力 +10 | 50 |
+| 2 | 牙の刻印 | 攻撃力 +30, 素早さ -20 | 500 |
+| 3 | 竜の刻印 | 攻撃力 +20% (武器攻撃力), 素早さ -30 | 5,000 |
+| 4 | 羽の刻印 | 素早さ +10 | 50 |
+| 5 | 翼の刻印 | 攻撃力 -10, 素早さ +30 | 500 |
+| 6 | 鳳の刻印 | 攻撃力 -20, 素早さ +1〜50 (ランダム) | 5,000 |
+| 7 | 炎の刻印 | スキル「しゃくねつ」付与 (MP 40, 威力 180, 火属性, 敵全体) | 100 |
+| 8 | 氷の刻印 | スキル「マヒャド」付与 (MP 27, 威力 160, 水属性, 敵全体) | 100 |
+| 9 | 雷の刻印 | スキル「ギガデイン」付与 (MP 40, 威力 180, 光属性, 敵全体) | 100 |
+| 10 | 神速の刻印 | アビリティ「seal_shinsoku」付与 (通常攻撃時に同ターン内で2回連続攻撃) | 100 |
+| 11 | 空の刻印 | アビリティ「seal_kuu」付与 (攻撃命中時 12.5% の確率で対象の全ステータス強化/防御状態を解除) | 100 |
+| 12 | 理の刻印 | アビリティ「seal_kotowari」付与 (MP 3 消費、通常攻撃を魔法属性化かつダメージ 80% で実行) | 100 |
 
 ### Eligibility Validation (`_can_add_wea_seals`)
 Seals cannot be applied if:
@@ -39,6 +39,16 @@ Seals cannot be applied if:
 - The equipped item is bare hands (`素手`).
 - The item definition type is throw (`t`) or poison/trap (`p`).
 - The weapon already possesses a seal (`wea_seal != 0`).
+
+### Crystal Drops & Consumable Removal (`_battle.cgi:145-150`, `_item.cgi:140-155`)
+- **Monster Crystal Drops**: When an enemy monster is defeated in combat (via direct damage, poison DOT, or job skill like Dejon), a crystal drop is checked:
+  - If the enemy is strong (`HP > 10000 || (Atk > 1500 && Def > 1500)`): 4% chance (`rand(50) < 2`).
+  - Otherwise: 2% chance (`rand(50) < 1`).
+  - Dropped crystals are awarded to participating characters upon victory (`char.crystal += drops`, capped at 999,999).
+- **Item 257 (水晶の原石)**:
+  - Consumable item usable out-of-combat from Home.
+  - If the character has a weapon seal (`char.wea_seal > 0`), the seal is stripped (`char.wea_seal = 0`), and 50% of the crystal cost is refunded to `char.crystal` (capped at 999,999).
+  - If no seal is engraved, the item is consumed with message `「しかし、何も起こらなかった…」`.
 
 ---
 

@@ -39,9 +39,13 @@ func CalculateEquipmentStats(
 	}
 
 	// 1. Weapon (SlotMainHand -> @weas in _data.cgi:394-500, _battle.cgi:1726-1745)
+	var weaponAtk int
+	hasWeapon := false
 	if instID, ok := equip.Equipped(coreitem.SlotMainHand); ok {
 		if inst, found := inv.Find(instID); found {
+			hasWeapon = true
 			atk, wt := calculateWeaponStats(inst.DefinitionID, char, rng, hasExAmuletOrAwakening)
+			weaponAtk = atk
 			stats.AttackBonus += atk
 			stats.AgilityBonus -= wt
 		}
@@ -63,6 +67,28 @@ func CalculateEquipmentStats(
 			stats.AttackBonus += atk
 			stats.DefenseBonus += def
 			stats.AgilityBonus += agi
+		}
+	}
+
+	// 4. Weapon Seal Stat Modifiers (party2/lib/_data.cgi:2209-2230, party2/lib/_battle.cgi:1405-1406)
+	if hasWeapon && char.WeaponSeal > 0 {
+		switch char.WeaponSeal {
+		case 1: // 爪: 攻撃力+10
+			stats.AttackBonus += 10
+		case 2: // 牙: 攻撃力+30, 重さ+20 (Agility -20)
+			stats.AttackBonus += 30
+			stats.AgilityBonus -= 20
+		case 3: // 竜: 攻撃力+武器の攻撃力の20%, 重さ+30 (Agility -30)
+			stats.AttackBonus += int(float64(weaponAtk) * 0.2)
+			stats.AgilityBonus -= 30
+		case 4: // 羽: 重さ-10 (Agility +10)
+			stats.AgilityBonus += 10
+		case 5: // 翼: 攻撃力-10, 重さ-30 (Agility +30)
+			stats.AttackBonus -= 10
+			stats.AgilityBonus += 30
+		case 6: // 鳳: 攻撃力-20, 重さ-50〜0 (Agility +0..49)
+			stats.AttackBonus -= 20
+			stats.AgilityBonus += randInt(rng, 50)
 		}
 	}
 

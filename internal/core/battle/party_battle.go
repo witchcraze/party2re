@@ -1,6 +1,7 @@
 package battle
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/witchcraze/party2re/internal/core/random"
@@ -130,21 +131,23 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 	}
 
 	ctx := &battleContext{
-		req:             req,
-		rng:             rng,
-		hpMap:           make(map[string]int),
-		mpMap:           make(map[string]int),
-		cmpMap:          make(map[string]int),
-		defendingMap:    make(map[string]bool),
-		statusMap:       make(map[string]string),
-		attackBuff:      make(map[string]int),
-		defenseBuff:     make(map[string]int),
-		agilityBuff:     make(map[string]int),
-		abilitiesMap:    make(map[string][]string),
-		itemsMap:        make(map[string][]ActionItem),
-		banishedMap:     make(map[string]bool),
-		teamMap:         teamMap,
-		allParticipants: allParticipants,
+		req:               req,
+		rng:               rng,
+		hpMap:             make(map[string]int),
+		mpMap:             make(map[string]int),
+		cmpMap:            make(map[string]int),
+		defendingMap:      make(map[string]bool),
+		statusMap:         make(map[string]string),
+		attackBuff:        make(map[string]int),
+		defenseBuff:       make(map[string]int),
+		agilityBuff:       make(map[string]int),
+		abilitiesMap:      make(map[string][]string),
+		itemsMap:          make(map[string][]ActionItem),
+		banishedMap:       make(map[string]bool),
+		teamMap:           teamMap,
+		allParticipants:   allParticipants,
+		allyTeamID:        allyTeamID,
+		crystalDroppedMap: make(map[string]bool),
 	}
 
 	for _, p := range allParticipants {
@@ -368,6 +371,17 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 	}
 
 	totalReward := applyBonus(selectedReward, bonusPercent)
+	if outcome == OutcomeWin {
+		totalReward.Crystals += ctx.droppedCrystals
+		if ctx.droppedCrystals > 0 {
+			ctx.logs = append(ctx.logs, TurnLog{
+				Turn:        ctx.turns,
+				ActionName:  "刻印晶獲得",
+				Message:     fmt.Sprintf("刻印晶を手に入れた！ (%d個)", ctx.droppedCrystals),
+				RemainingHP: copyHPMap(ctx.hpMap),
+			})
+		}
+	}
 
 	return PartyBattleResult{
 		Outcome:         outcome,

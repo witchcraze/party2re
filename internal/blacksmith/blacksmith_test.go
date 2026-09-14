@@ -623,3 +623,151 @@ func TestStorageDepositAndWithdraw(t *testing.T) {
 		}
 	}
 }
+
+type trackingCharRepo struct {
+	mockCharRepo
+	order *[]string
+}
+
+func (t *trackingCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	*t.order = append(*t.order, "character")
+	return t.mockCharRepo.FindByIDForUpdate(ctx, id)
+}
+
+type trackingEquipRepo struct {
+	mockEquipRepo
+	order *[]string
+}
+
+func (t *trackingEquipRepo) FindByCharacterIDForUpdate(ctx context.Context, id string) (coreequipment.Equipment, error) {
+	*t.order = append(*t.order, "equipment")
+	return t.mockEquipRepo.FindByCharacterIDForUpdate(ctx, id)
+}
+
+type trackingInvRepo struct {
+	mockInvRepo
+	order *[]string
+}
+
+func (t *trackingInvRepo) FindByCharacterIDForUpdate(ctx context.Context, id string) (coreinventory.Inventory, error) {
+	*t.order = append(*t.order, "inventory")
+	return t.mockInvRepo.FindByCharacterIDForUpdate(ctx, id)
+}
+
+type trackingStorageRepo struct {
+	mockStorageRepo
+	order *[]string
+}
+
+func (t *trackingStorageRepo) ListByCharacterIDForUpdate(ctx context.Context, id string) ([]blacksmith.Deposit, error) {
+	*t.order = append(*t.order, "storage")
+	return t.mockStorageRepo.ListByCharacterIDForUpdate(ctx, id)
+}
+
+func TestBlacksmith_LockOrderingHierarchy(t *testing.T) {
+	ctx := context.Background()
+
+	setupService := func() (*blacksmith.Service, *[]string, string) {
+		order := &[]string{}
+		charID := "char-lock-test"
+
+		cRepo := &trackingCharRepo{
+			mockCharRepo: mockCharRepo{chars: map[string]corecharacter.Character{
+				charID: {ID: charID, Name: "Tester", Crystal: 1000},
+			}},
+			order: order,
+		}
+
+		inv, _ := coreinventory.New(charID)
+		wInst := item.Instance{ID: "w-inst-1", DefinitionID: "weapon-01", Quantity: 1}
+		_ = inv.Add(wInst)
+		iRepo := &trackingInvRepo{
+			mockInvRepo: mockInvRepo{invs: map[string]coreinventory.Inventory{charID: inv}},
+			order:       order,
+		}
+
+		eq, _ := coreequipment.New(charID)
+		eq.Slots[item.SlotMainHand] = "w-inst-1"
+		eRepo := &trackingEquipRepo{
+			mockEquipRepo: mockEquipRepo{equips: map[string]coreequipment.Equipment{charID: eq}},
+			order:         order,
+		}
+
+		sRepo := &trackingStorageRepo{
+			mockStorageRepo: *newMockStorageRepo(),
+			order:           order,
+		}
+
+		catalog := setupTestCatalog(t)
+
+		svc, err := blacksmith.NewService(
+			cRepo,
+			iRepo,
+			catalog,
+			blacksmith.WithEquipmentRepository(eRepo),
+			blacksmith.WithStorageRepository(sRepo),
+		)
+		if err != nil {
+			t.Fatalf("failed to create blacksmith service: %v", err)
+		}
+		return svc, order, charID
+	}
+
+	t.Run("ApplySeal lock order: Rank 2 (Character) -> Rank 3 (Equipment, Inventory)", func(t *testing.T) {
+		svc, order, charID := setupService()
+		_, err := svc.ApplySeal(ctx, charID, 1)
+		if err != nil {
+			t.Fatalf("ApplySeal failed: %v", err)
+		}
+		expected := []string{"character", "equipment", "inventory"}
+		if len(*order) != len(expected) {
+			t.Fatalf("lock order length mismatch: got %v, want %v", *order, expected)
+		}
+		for i := range expected {
+			if (*order)[i] != expected[i] {
+				t.Errorf("step %d: got %s, want %s", i, (*order)[i], expected[i])
+			}
+		}
+	})
+
+	t.Run("DepositWeapon lock order: Rank 2 (Character) -> Rank 3 (Equipment, Inventory) -> Rank 8 (Storage)", func(t *testing.T) {
+		svc, order, charID := setupService()
+		_, err := svc.DepositWeapon(ctx, charID)
+		if err != nil {
+			t.Fatalf("DepositWeapon failed: %v", err)
+		}
+		expected := []string{"character", "equipment", "inventory", "storage"}
+		if len(*order) != len(expected) {
+			t.Fatalf("lock order length mismatch: got %v, want %v", *order, expected)
+		}
+		for i := range expected {
+			if (*order)[i] != expected[i] {
+				t.Errorf("step %d: got %s, want %s", i, (*order)[i], expected[i])
+			}
+		}
+	})
+
+	t.Run("WithdrawWeapon lock order: Rank 2 (Character) -> Rank 3 (Equipment, Inventory) -> Rank 8 (Storage)", func(t *testing.T) {
+		svc, order, charID := setupService()
+		// First deposit so there is a stored weapon
+		_, err := svc.DepositWeapon(ctx, charID)
+		if err != nil {
+			t.Fatalf("DepositWeapon failed: %v", err)
+		}
+		*order = (*order)[:0] // reset order log
+
+		err = svc.WithdrawWeapon(ctx, charID, 1)
+		if err != nil {
+			t.Fatalf("WithdrawWeapon failed: %v", err)
+		}
+		expected := []string{"character", "equipment", "inventory", "storage"}
+		if len(*order) != len(expected) {
+			t.Fatalf("lock order length mismatch: got %v, want %v", *order, expected)
+		}
+		for i := range expected {
+			if (*order)[i] != expected[i] {
+				t.Errorf("step %d: got %s, want %s", i, (*order)[i], expected[i])
+			}
+		}
+	})
+}

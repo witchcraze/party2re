@@ -942,3 +942,106 @@ func TestUseHomeItem_Depot_StackedItem(t *testing.T) {
 		t.Errorf("expected ErrItemNotFound, got %v", err)
 	}
 }
+
+func TestUseHomeItem_CrystalOre(t *testing.T) {
+	ctx := context.Background()
+
+	chars := map[string]corecharacter.Character{
+		"char-seal1": {
+			ID:         "char-seal1",
+			Name:       "SealedHero",
+			WeaponSeal: 1, // Seal 1 (爪): 50 crystals cost -> 25 refund
+			Crystal:    10,
+		},
+		"char-seal3": {
+			ID:         "char-seal3",
+			Name:       "MaxHero",
+			WeaponSeal: 3, // Seal 3 (竜): 5000 crystals cost -> 2500 refund
+			Crystal:    998000,
+		},
+		"char-noseal": {
+			ID:         "char-noseal",
+			Name:       "PlainHero",
+			WeaponSeal: 0,
+			Crystal:    50,
+		},
+	}
+	charReader := &mockCharReader{chars: chars}
+	charUpdater := &mockCharUpdater{chars: chars}
+	invMgr := &mockInventoryManager{invs: make(map[string]coreinventory.Inventory)}
+	catalog := &mockCatalog{
+		defs: map[string]coreitem.Definition{
+			"item-257": {
+				ID:            "item-257",
+				Name:          "水晶の原石",
+				UsageCategory: coreitem.UsageCategoryAnytime,
+			},
+		},
+	}
+
+	for id := range chars {
+		inv, _ := coreinventory.New(id)
+		_ = inv.Add(coreitem.Instance{ID: "inst-" + id, DefinitionID: "item-257", Quantity: 1})
+		invMgr.invs[id] = inv
+	}
+
+	repo := newMockHomeRepo(chars)
+	svc, err := NewService(
+		repo,
+		charReader,
+		WithCharacterUpdater(charUpdater),
+		WithInventoryManager(invMgr),
+		WithItemCatalog(catalog),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	// Case 1: WeaponSeal == 1 -> refund 25, WeaponSeal reset to 0
+	res1, err := svc.UseHomeItem(ctx, "char-seal1", "inst-char-seal1", "inventory")
+	if err != nil {
+		t.Fatalf("UseHomeItem for char-seal1 failed: %v", err)
+	}
+	if !res1.Consumed {
+		t.Errorf("expected item to be consumed")
+	}
+	if !strings.Contains(res1.Message, "25 個回収した") {
+		t.Errorf("unexpected message: %s", res1.Message)
+	}
+	if chars["char-seal1"].WeaponSeal != 0 {
+		t.Errorf("expected WeaponSeal reset to 0, got %d", chars["char-seal1"].WeaponSeal)
+	}
+	if chars["char-seal1"].Crystal != 35 {
+		t.Errorf("expected Crystal 35 (10 + 25), got %d", chars["char-seal1"].Crystal)
+	}
+
+	// Case 2: WeaponSeal == 3 -> refund 2500, clamped to 999999
+	res2, err := svc.UseHomeItem(ctx, "char-seal3", "inst-char-seal3", "inventory")
+	if err != nil {
+		t.Fatalf("UseHomeItem for char-seal3 failed: %v", err)
+	}
+	if !res2.Consumed {
+		t.Errorf("expected item to be consumed")
+	}
+	if chars["char-seal3"].WeaponSeal != 0 {
+		t.Errorf("expected WeaponSeal reset to 0, got %d", chars["char-seal3"].WeaponSeal)
+	}
+	if chars["char-seal3"].Crystal != 999999 {
+		t.Errorf("expected Crystal clamped to 999999, got %d", chars["char-seal3"].Crystal)
+	}
+
+	// Case 3: WeaponSeal == 0 -> nothing happened message
+	res3, err := svc.UseHomeItem(ctx, "char-noseal", "inst-char-noseal", "inventory")
+	if err != nil {
+		t.Fatalf("UseHomeItem for char-noseal failed: %v", err)
+	}
+	if !res3.Consumed {
+		t.Errorf("expected item to be consumed")
+	}
+	if res3.Message != "しかし、何も起こらなかった…" {
+		t.Errorf("expected 'しかし、何も起こらなかった…', got %s", res3.Message)
+	}
+	if chars["char-noseal"].Crystal != 50 {
+		t.Errorf("expected Crystal unchanged at 50, got %d", chars["char-noseal"].Crystal)
+	}
+}

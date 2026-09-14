@@ -778,3 +778,60 @@ func TestApplyPostBattleResult_DeadlockFreeConcurrency(t *testing.T) {
 		t.Fatalf("concurrent battle result application encountered error: %v", err)
 	}
 }
+
+func TestApplyPostBattleResult_CrystalRewards(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	invRepo := newMockInvRepo()
+	svc := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+	)
+
+	char := corecharacter.Character{
+		ID:      "char-crystal",
+		Stats:   corecharacter.Stats{HP: 100, MaxHP: 100},
+		Crystal: 100,
+	}
+	_ = charRepo.Update(ctx, char)
+	inv, _ := coreinventory.New("char-crystal")
+	_ = invRepo.Save(ctx, inv)
+
+	req := battle.ApplyPostBattleRequest{
+		CharacterIDs: []string{"char-crystal"},
+		BattleResult: corebattle.PartyBattleResult{
+			Outcome: corebattle.OutcomeWin,
+			TotalReward: corebattle.Reward{
+				Crystals: 5,
+			},
+		},
+	}
+
+	resp, err := svc.ApplyPostBattleResult(ctx, req)
+	if err != nil {
+		t.Fatalf("ApplyPostBattleResult failed: %v", err)
+	}
+
+	if resp.GainedCrystals["char-crystal"] != 5 {
+		t.Errorf("expected GainedCrystals = 5, got %d", resp.GainedCrystals["char-crystal"])
+	}
+
+	saved, _ := charRepo.FindByID(ctx, "char-crystal")
+	if saved.Crystal != 105 {
+		t.Errorf("expected character crystal 105, got %d", saved.Crystal)
+	}
+
+	// Test max clamping at 999,999
+	saved.Crystal = 999998
+	_ = charRepo.Update(ctx, saved)
+
+	_, err = svc.ApplyPostBattleResult(ctx, req)
+	if err != nil {
+		t.Fatalf("ApplyPostBattleResult clamping run failed: %v", err)
+	}
+
+	savedClamped, _ := charRepo.FindByID(ctx, "char-crystal")
+	if savedClamped.Crystal != 999999 {
+		t.Errorf("expected character crystal clamped to 999999, got %d", savedClamped.Crystal)
+	}
+}

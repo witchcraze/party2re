@@ -240,3 +240,153 @@ func TestCombatWiring_EquippedParticipantWithCurrentHP_AndGuild(t *testing.T) {
 		t.Errorf("part.TeamID = %s, want guild-warriors-99", part.TeamID)
 	}
 }
+
+func TestCombatWiring_WeaponSealsSkillsAndAbilities(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name          string
+		sealID        int
+		equipWeapon   bool
+		wantSkillName string
+		wantSkillMP   int
+		wantSkillElem string
+		wantAbility   string
+	}{
+		{
+			name:          "Seal 7: しゃくねつ",
+			sealID:        7,
+			equipWeapon:   true,
+			wantSkillName: "しゃくねつ",
+			wantSkillMP:   40,
+			wantSkillElem: "fire",
+		},
+		{
+			name:          "Seal 8: マヒャド",
+			sealID:        8,
+			equipWeapon:   true,
+			wantSkillName: "マヒャド",
+			wantSkillMP:   27,
+			wantSkillElem: "water",
+		},
+		{
+			name:          "Seal 9: ギガデイン",
+			sealID:        9,
+			equipWeapon:   true,
+			wantSkillName: "ギガデイン",
+			wantSkillMP:   40,
+			wantSkillElem: "light",
+		},
+		{
+			name:        "Seal 10: 神速 (seal_shinsoku)",
+			sealID:      10,
+			equipWeapon: true,
+			wantAbility: "seal_shinsoku",
+		},
+		{
+			name:        "Seal 11: 空 (seal_kuu)",
+			sealID:      11,
+			equipWeapon: true,
+			wantAbility: "seal_kuu",
+		},
+		{
+			name:        "Seal 12: 理 (seal_kotowari)",
+			sealID:      12,
+			equipWeapon: true,
+			wantAbility: "seal_kotowari",
+		},
+		{
+			name:        "Seal 10 without weapon: no ability granted",
+			sealID:      10,
+			equipWeapon: false,
+			wantAbility: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			charRepo := newMockCharRepo()
+			invRepo := newMockInvRepo()
+			equipRepo := newMockEquipRepo()
+
+			charID := "char-seal-" + tt.name
+			char := corecharacter.Character{
+				ID:         charID,
+				Name:       "刻印士",
+				WeaponSeal: tt.sealID,
+				Stats: corecharacter.Stats{
+					HP:      100,
+					MaxHP:   100,
+					Attack:  50,
+					Defense: 50,
+					Agility: 50,
+				},
+			}
+			_ = charRepo.Update(ctx, char)
+
+			inv, _ := coreinventory.New(charID)
+			equip, _ := coreequipment.New(charID)
+
+			if tt.equipWeapon {
+				sword, _ := coreitem.NewInstance("weapon-36", 1) // 炎の剣
+				_ = inv.Add(sword)
+				equip.Slots[coreitem.SlotMainHand] = sword.ID
+			}
+
+			_ = invRepo.Save(ctx, inv)
+			_ = equipRepo.Save(ctx, equip)
+
+			battleAdapter := battle.NewService(
+				battle.WithCharacterRepository(charRepo),
+				battle.WithInventoryRepository(invRepo),
+				battle.WithEquipmentRepository(equipRepo),
+			)
+
+			p, err := battleAdapter.BuildParticipant(ctx, charID)
+			if err != nil {
+				t.Fatalf("BuildParticipant failed: %v", err)
+			}
+
+			if tt.wantSkillName != "" {
+				found := false
+				for _, sk := range p.Skills {
+					if sk.Name == tt.wantSkillName {
+						found = true
+						if sk.MPCost != tt.wantSkillMP {
+							t.Errorf("skill MPCost = %d, want %d", sk.MPCost, tt.wantSkillMP)
+						}
+						if sk.Element != tt.wantSkillElem {
+							t.Errorf("skill Element = %s, want %s", sk.Element, tt.wantSkillElem)
+						}
+						if sk.TargetScope != corebattle.TargetScopeAllEnemies {
+							t.Errorf("skill TargetScope = %s, want all_enemies", sk.TargetScope)
+						}
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected skill %s not found in participant skills: %+v", tt.wantSkillName, p.Skills)
+				}
+			}
+
+			if tt.wantAbility != "" {
+				found := false
+				for _, ab := range p.Abilities {
+					if ab == tt.wantAbility {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected ability %s not found in participant abilities: %v", tt.wantAbility, p.Abilities)
+				}
+			} else if !tt.equipWeapon {
+				for _, ab := range p.Abilities {
+					if ab == "seal_shinsoku" || ab == "seal_kuu" || ab == "seal_kotowari" {
+						t.Errorf("unexpected seal ability %s present when no weapon equipped", ab)
+					}
+				}
+			}
+		})
+	}
+}

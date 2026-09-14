@@ -82,6 +82,7 @@ type Reward struct {
 	ItemDefinitionID string
 	ItemQuantity     int
 	SmallMedals      int
+	Crystals         int
 }
 
 type Effect struct {
@@ -224,7 +225,7 @@ func validateParticipant(value Participant) error {
 }
 
 func validateReward(value Reward) error {
-	if value.Experience < 0 || value.Currency < 0 ||
+	if value.Experience < 0 || value.Currency < 0 || value.Crystals < 0 ||
 		(value.ItemDefinitionID == "" && value.ItemQuantity != 0) ||
 		(value.ItemDefinitionID != "" && value.ItemQuantity <= 0) {
 		return ErrInvalidReward

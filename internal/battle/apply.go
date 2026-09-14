@@ -29,6 +29,7 @@ type ApplyPostBattleResponse struct {
 	UpdatedCharacters map[string]corecharacter.Character
 	GainedExperience  map[string]int
 	GainedGold        map[string]int
+	GainedCrystals    map[string]int
 	LevelUpResults    map[string]progression.LevelUpResult
 	InventoryDrops    map[string][]coreitem.Instance
 	DepotDeliveries   map[string][]coreitem.Instance
@@ -87,7 +88,7 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 
 		// 5. Apply victory rewards
 		if req.BattleResult.Outcome == corebattle.OutcomeWin {
-			gainedGold, gainedEXP, lvlRes, invDrops, depotDrops, err := s.applyRewardsForCharacter(
+			gainedGold, gainedEXP, gainedCrystals, lvlRes, invDrops, depotDrops, err := s.applyRewardsForCharacter(
 				tc.Context,
 				&tc.Character,
 				&tc.Inventory,
@@ -99,6 +100,7 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 			}
 			resp.GainedGold[charID] = gainedGold
 			resp.GainedExperience[charID] = gainedEXP
+			resp.GainedCrystals[charID] = gainedCrystals
 			resp.LevelUpResults[charID] = lvlRes
 			resp.InventoryDrops[charID] = invDrops
 			resp.DepotDeliveries[charID] = depotDrops
@@ -187,7 +189,7 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 			}
 
 			if req.BattleResult.Outcome == corebattle.OutcomeWin {
-				gainedGold, gainedEXP, lvlRes, invDrops, depotDrops, err := s.applyRewardsForCharacter(
+				gainedGold, gainedEXP, gainedCrystals, lvlRes, invDrops, depotDrops, err := s.applyRewardsForCharacter(
 					txCtx,
 					&char,
 					&inv,
@@ -199,6 +201,7 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 				}
 				resp.GainedGold[id] = gainedGold
 				resp.GainedExperience[id] = gainedEXP
+				resp.GainedCrystals[id] = gainedCrystals
 				resp.LevelUpResults[id] = lvlRes
 				resp.InventoryDrops[id] = invDrops
 				if len(depotDrops) > 0 {
@@ -352,7 +355,7 @@ func (s *Service) applyRewardsForCharacter(
 	inv *coreinventory.Inventory,
 	reward corebattle.Reward,
 	extraDrops []string,
-) (int, int, progression.LevelUpResult, []coreitem.Instance, []coreitem.Instance, error) {
+) (int, int, int, progression.LevelUpResult, []coreitem.Instance, []coreitem.Instance, error) {
 	gainedGold := reward.Currency
 	_ = char.AddMoney(gainedGold)
 
@@ -372,6 +375,15 @@ func (s *Service) applyRewardsForCharacter(
 		res, err := progression.ApplyExperienceWithJobFull(char, gainedEXP, jobDef, s.rng, opts)
 		if err == nil {
 			lvlRes = res
+		}
+	}
+
+	// Crystal rewards (_battle.cgi:145-150, 178-228)
+	gainedCrystals := reward.Crystals
+	if gainedCrystals > 0 {
+		char.Crystal += gainedCrystals
+		if char.Crystal > 999999 {
+			char.Crystal = 999999
 		}
 	}
 
@@ -405,7 +417,7 @@ func (s *Service) applyRewardsForCharacter(
 		depotDrops = append(depotDrops, inst)
 	}
 
-	return gainedGold, gainedEXP, lvlRes, invDrops, depotDrops, nil
+	return gainedGold, gainedEXP, gainedCrystals, lvlRes, invDrops, depotDrops, nil
 }
 
 func (s *Service) maxInventoryCapacity() int {
@@ -434,6 +446,7 @@ func newApplyPostBattleResponse() ApplyPostBattleResponse {
 		UpdatedCharacters: make(map[string]corecharacter.Character),
 		GainedExperience:  make(map[string]int),
 		GainedGold:        make(map[string]int),
+		GainedCrystals:    make(map[string]int),
 		LevelUpResults:    make(map[string]progression.LevelUpResult),
 		InventoryDrops:    make(map[string][]coreitem.Instance),
 		DepotDeliveries:   make(map[string][]coreitem.Instance),

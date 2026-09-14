@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #633 — [Feature] Guild: Implement HTTP REST API endpoints, wire worker inactivity check, and align GP hooks
+Last updated: Issue #632 — [Feature] Battle/Blacksmith: Wire 12 weapon seal combat effects into Battle Adapter and restore crystal drops
 
 
 ## Current phase
@@ -44,7 +44,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Medal & Achievements** (`internal/medal`): ✅ Small Medal exchange → Depot; milestone achievement observer.
 - **Shop** (`internal/shop`): ✅ 3 shops with job-level gates, 50% sellback, MasterCard discount, Depot auto-delivery.
 - **Depot** (`internal/depot`): ✅ Dynamic capacity (up to 500 slots), tiered expansion, sort, item sell, gold/item direct-send, standardized item consumption (`Consume`, `ConsumeOne`, `PurgeSlot`), enhancement-level & equipment stackability preservation (#558, #563), standardized `RefreshCapacity` helper across commerce modules (#559).
-- **Blacksmith** (`internal/blacksmith`): ✅ Authentic 12 weapon seals (`party2/lib/blacksmith.cgi`, `_data.cgi:2209-2230`) consuming crystals (`character.crystal`, 999,999 cap), equipment naming for weapons and armors (<= 20 runes, strict sanitization), and dedicated 3-slot weapon storage (`blacksmith_deposits`) preserving seals and custom names with duplicate name prevention and equipped-weapon withdrawal gating; fictional +1..+10 numerical enhancement system purged (#458).
+- **Blacksmith & Weapon Seals** (`internal/blacksmith`, `internal/battle`, `internal/core/battle`): ✅ Authentic 12 weapon seals (`party2/lib/blacksmith.cgi`, `_data.cgi:2209-2230`) consuming crystals (`character.crystal`, 999,999 cap), equipment naming for weapons and armors (<= 20 runes, strict sanitization), and dedicated 3-slot weapon storage (`blacksmith_deposits`) preserving seals and custom names with duplicate name prevention and equipped-weapon withdrawal gating (#458); 12 weapon seal combat effects wired into Battle Adapter (`CalculateEquipmentStats`, `BuildParticipant`) and battle resolver (Seals 1..6 stat scaling, Seals 7..9 action skills `しゃくねつ`/`マヒャド`/`ギガデイン`, Seal 10 `seal_shinsoku` double attack, Seal 11 `seal_kuu` dispel, Seal 12 `seal_kotowari` magic scaling), post-battle monster crystal drop rolls (`rand(50) < 1` or `2` for strong foes) and victory reward application to `character.crystal`, and consumable item 257 (水晶の原石) seal removal with 50% crystal refund (#632); fictional +1..+10 numerical enhancement system purged.
 - **Alchemy** (`internal/alchemy`): ✅ 112 recipes; zero fee, depot-linked overnight synthesis, home sleep completion, depot-direct delivery, recipe compendium & `comp_alc` title (#487).
 - **Bank** (`internal/bank`): ✅ Character gold deposit/withdrawal; 999,999G wallet clamp; fictional `bank_accounts` table purged (#476).
 - **Inn** (`internal/inn`): ✅ Fictional paid-inn purged; resting moved to `internal/home` (#459).

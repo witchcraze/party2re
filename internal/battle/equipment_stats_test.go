@@ -275,3 +275,129 @@ func TestBuildParticipant_ExcaliburAndExAmulet(t *testing.T) {
 		t.Errorf("Participant.Agility = %d, want 40", p.Agility)
 	}
 }
+
+type mockRNG struct {
+	val int
+}
+
+func (m mockRNG) Intn(max int) (int, error) {
+	if m.val >= max {
+		return max - 1, nil
+	}
+	return m.val, nil
+}
+
+func TestEquipmentStats_WeaponSeals(t *testing.T) {
+	// Base character with 100 Attack, 100 Defense, 100 Agility
+	// Using weapon-40 (巨人の斧: Atk 150, Wt 75)
+	tests := []struct {
+		name         string
+		sealID       int
+		rngVal       int
+		wantAtkBonus int
+		wantDefBonus int
+		wantAgiBonus int
+	}{
+		{
+			name:         "Seal 1 (爪): Atk +10, Agi 0",
+			sealID:       1,
+			wantAtkBonus: 150 + 10,
+			wantDefBonus: 0,
+			wantAgiBonus: -75,
+		},
+		{
+			name:         "Seal 2 (牙): Atk +30, Agi -20",
+			sealID:       2,
+			wantAtkBonus: 150 + 30,
+			wantDefBonus: 0,
+			wantAgiBonus: -75 - 20,
+		},
+		{
+			name:         "Seal 3 (竜): Atk + int(150 * 0.2) = +30, Agi -30",
+			sealID:       3,
+			wantAtkBonus: 150 + 30,
+			wantDefBonus: 0,
+			wantAgiBonus: -75 - 30,
+		},
+		{
+			name:         "Seal 4 (羽): Atk +0, Agi +10",
+			sealID:       4,
+			wantAtkBonus: 150,
+			wantDefBonus: 0,
+			wantAgiBonus: -75 + 10,
+		},
+		{
+			name:         "Seal 5 (翼): Atk -10, Agi +30",
+			sealID:       5,
+			wantAtkBonus: 150 - 10,
+			wantDefBonus: 0,
+			wantAgiBonus: -75 + 30,
+		},
+		{
+			name:         "Seal 6 (鳳): Atk -20, Agi +rand(50)",
+			sealID:       6,
+			rngVal:       25,
+			wantAtkBonus: 150 - 20,
+			wantDefBonus: 0,
+			wantAgiBonus: -75 + 25,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			char := corecharacter.Character{
+				ID:         "char-seal",
+				Name:       "刻印戦士",
+				Level:      50,
+				WeaponSeal: tt.sealID,
+				Stats: corecharacter.Stats{
+					HP:      100,
+					MaxHP:   100,
+					Attack:  100,
+					Defense: 100,
+					Agility: 100,
+				},
+			}
+			inv, _ := coreinventory.New(char.ID)
+			wea, _ := coreitem.NewInstance("weapon-40", 1)
+			_ = inv.Add(wea)
+			equip, _ := coreequipment.New(char.ID)
+			equip.Slots[coreitem.SlotMainHand] = wea.ID
+
+			stats := battle.CalculateEquipmentStats(char, inv, equip, mockRNG{val: tt.rngVal})
+
+			if stats.AttackBonus != tt.wantAtkBonus {
+				t.Errorf("AttackBonus = %d, want %d", stats.AttackBonus, tt.wantAtkBonus)
+			}
+			if stats.DefenseBonus != tt.wantDefBonus {
+				t.Errorf("DefenseBonus = %d, want %d", stats.DefenseBonus, tt.wantDefBonus)
+			}
+			if stats.AgilityBonus != tt.wantAgiBonus {
+				t.Errorf("AgilityBonus = %d, want %d", stats.AgilityBonus, tt.wantAgiBonus)
+			}
+		})
+	}
+
+	t.Run("No weapon equipped with seal", func(t *testing.T) {
+		char := corecharacter.Character{
+			ID:         "char-seal-noweap",
+			Name:       "素手刻印",
+			Level:      50,
+			WeaponSeal: 1, // 爪
+			Stats: corecharacter.Stats{
+				HP:      100,
+				MaxHP:   100,
+				Attack:  100,
+				Defense: 100,
+				Agility: 100,
+			},
+		}
+		inv, _ := coreinventory.New(char.ID)
+		equip, _ := coreequipment.New(char.ID)
+
+		stats := battle.CalculateEquipmentStats(char, inv, equip, nil)
+		if stats.AttackBonus != 0 || stats.AgilityBonus != 0 {
+			t.Errorf("expected 0 bonuses when no weapon equipped, got atk=%d, agi=%d", stats.AttackBonus, stats.AgilityBonus)
+		}
+	})
+}
