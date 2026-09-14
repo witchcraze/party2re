@@ -295,6 +295,8 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#451](https://github.com/witchcraze/party2re/issues/451) | Test/Valkey: Implement offline unit test suite for Session repository | Completed |
 | [#585](https://github.com/witchcraze/party2re/issues/585) | Core/Character: Standardize and consolidate updateCharacter helper across character services | Completed |
 | [#631](https://github.com/witchcraze/party2re/issues/631) | Lottery: Fix 20-ticket purchase concurrency race, wrap draw in transaction, and prevent silent depot drops | Completed |
+| [#633](https://github.com/witchcraze/party2re/issues/633) | Guild: Implement HTTP REST API endpoints, wire worker inactivity check, and align GP hooks | Completed |
+| [#632](https://github.com/witchcraze/party2re/issues/632) | Battle/Blacksmith: Wire 12 weapon seal combat effects into Battle Adapter and restore crystal drops | Completed |
 
 
 ---
