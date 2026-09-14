@@ -4,150 +4,18 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/witchcraze/party2re/internal/casino"
 )
 
-type mockMemoryRoomRepo struct {
-	rooms   map[string]casino.Room
-	members map[string]map[string]casino.RoomMember
-}
-
-func newMockMemoryRoomRepo() *mockMemoryRoomRepo {
-	return &mockMemoryRoomRepo{
-		rooms:   make(map[string]casino.Room),
-		members: make(map[string]map[string]casino.RoomMember),
-	}
-}
-
-func (m *mockMemoryRoomRepo) CreateRoom(ctx context.Context, room casino.Room, leader casino.RoomMember) error {
-	m.rooms[room.ID] = room
-	if m.members[room.ID] == nil {
-		m.members[room.ID] = make(map[string]casino.RoomMember)
-	}
-	m.members[room.ID][leader.CharacterID] = leader
-	return nil
-}
-
-func (m *mockMemoryRoomRepo) GetRoom(ctx context.Context, roomID string) (*casino.Room, error) {
-	r, ok := m.rooms[roomID]
-	if !ok {
-		return nil, casino.ErrRoomNotFound
-	}
-	cpy := r
-	return &cpy, nil
-}
-
-func (m *mockMemoryRoomRepo) GetRoomByName(ctx context.Context, name string) (*casino.Room, error) {
-	for _, r := range m.rooms {
-		if r.Name == name {
-			cpy := r
-			return &cpy, nil
-		}
-	}
-	return nil, casino.ErrRoomNotFound
-}
-
-func (m *mockMemoryRoomRepo) GetRoomForUpdate(ctx context.Context, roomID string) (*casino.Room, error) {
-	return m.GetRoom(ctx, roomID)
-}
-
-func (m *mockMemoryRoomRepo) ListActiveRooms(ctx context.Context) ([]casino.RoomDetail, error) {
-	var list []casino.RoomDetail
-	for _, r := range m.rooms {
-		if r.Status != casino.RoomStatusDisbanded {
-			mems, _ := m.ListMembers(ctx, r.ID)
-			list = append(list, casino.RoomDetail{Room: r, Members: mems})
-		}
-	}
-	return list, nil
-}
-
-func (m *mockMemoryRoomRepo) UpdateRoom(ctx context.Context, room casino.Room) error {
-	m.rooms[room.ID] = room
-	return nil
-}
-
-func (m *mockMemoryRoomRepo) AddMember(ctx context.Context, member casino.RoomMember) error {
-	if m.members[member.RoomID] == nil {
-		m.members[member.RoomID] = make(map[string]casino.RoomMember)
-	}
-	m.members[member.RoomID][member.CharacterID] = member
-	return nil
-}
-
-func (m *mockMemoryRoomRepo) GetMember(ctx context.Context, roomID string, characterID string) (*casino.RoomMember, error) {
-	mems, ok := m.members[roomID]
-	if !ok {
-		return nil, casino.ErrMemberNotFound
-	}
-	mem, ok := mems[characterID]
-	if !ok {
-		return nil, casino.ErrMemberNotFound
-	}
-	cpy := mem
-	return &cpy, nil
-}
-
-func (m *mockMemoryRoomRepo) GetMemberForUpdate(ctx context.Context, roomID string, characterID string) (*casino.RoomMember, error) {
-	return m.GetMember(ctx, roomID, characterID)
-}
-
-func (m *mockMemoryRoomRepo) ListMembers(ctx context.Context, roomID string) ([]casino.RoomMember, error) {
-	mems, ok := m.members[roomID]
-	if !ok {
-		return nil, nil
-	}
-	var list []casino.RoomMember
-	for _, v := range mems {
-		list = append(list, v)
-	}
-	return list, nil
-}
-
-func (m *mockMemoryRoomRepo) ListMembersForUpdate(ctx context.Context, roomID string) ([]casino.RoomMember, error) {
-	return m.ListMembers(ctx, roomID)
-}
-
-func (m *mockMemoryRoomRepo) UpdateMember(ctx context.Context, member casino.RoomMember) error {
-	if m.members[member.RoomID] != nil {
-		m.members[member.RoomID][member.CharacterID] = member
-	}
-	return nil
-}
-
-func (m *mockMemoryRoomRepo) RemoveMember(ctx context.Context, roomID string, characterID string) error {
-	if m.members[roomID] != nil {
-		delete(m.members[roomID], characterID)
-	}
-	return nil
-}
-
-func (m *mockMemoryRoomRepo) DeleteRoom(ctx context.Context, roomID string) error {
-	if r, ok := m.rooms[roomID]; ok {
-		r.Status = casino.RoomStatusDisbanded
-		m.rooms[roomID] = r
-	}
-	return nil
-}
-
-func (m *mockMemoryRoomRepo) PurgeIdleRooms(ctx context.Context, cutoff time.Time) (int, error) {
-	count := 0
-	for id, r := range m.rooms {
-		if r.UpdatedAt.Before(cutoff) {
-			delete(m.rooms, id)
-			delete(m.members, id)
-			count++
-		}
-	}
-	return count, nil
+func newMockMemoryRoomRepo() *casino.MemoryRoomRepository {
+	return casino.NewMemoryRoomRepository()
 }
 
 func TestCasinoRoomLobby(t *testing.T) {
 	ctx := context.Background()
 	casinoRepo := newMockPrizeCasinoRepo()
-	roomRepo := newMockMemoryRoomRepo()
+	roomRepo := casino.NewMemoryRoomRepository()
 
 	svc, err := casino.NewService(casinoRepo, casino.WithRoomRepository(roomRepo))
 	if err != nil {

@@ -138,6 +138,11 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 			return ErrGameNotInRound
 		}
 
+		acc, err := s.repo.GetAccountForUpdate(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+
 		member, err := s.roomRepo.GetMemberForUpdate(txCtx, roomID, characterID)
 		if err != nil {
 			return ErrMemberNotFound
@@ -169,10 +174,6 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 
 		// Deduct bet if this is the first selection for this player in this round
 		if member.Card < 0 {
-			acc, err := s.repo.GetAccount(txCtx, characterID)
-			if err != nil {
-				return err
-			}
 			betToDeduct := room.Rate
 			if acc.Coins < betToDeduct {
 				betToDeduct = acc.Coins // all-in remaining coins

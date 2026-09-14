@@ -134,6 +134,11 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 			return ErrGameNotInRound
 		}
 
+		acc, err := s.repo.GetAccountForUpdate(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+
 		member, err := s.roomRepo.GetMemberForUpdate(txCtx, roomID, characterID)
 		if err != nil {
 			return ErrMemberNotFound
@@ -143,11 +148,6 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 		}
 		if member.Action != "" && member.Action != "待機中" {
 			return ErrAlreadyActed
-		}
-
-		acc, err := s.repo.GetAccount(txCtx, characterID)
-		if err != nil {
-			return err
 		}
 
 		effectiveAction := action

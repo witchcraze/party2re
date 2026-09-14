@@ -29,10 +29,7 @@ func TestCasinoRoomMultiplayerDatabaseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	roomRepo, err := database.NewCasinoRoomRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
+	roomRepo := casino.NewMemoryRoomRepository()
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -394,10 +391,7 @@ func TestCasinoIndianPoker_ConcurrencyExploitPrevented(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	roomRepo, err := database.NewCasinoRoomRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
+	roomRepo := casino.NewMemoryRoomRepository()
 	charRepo, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)

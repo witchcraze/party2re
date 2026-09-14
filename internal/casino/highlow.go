@@ -149,6 +149,11 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 			return ErrGameNotInRound
 		}
 
+		acc, err := s.repo.GetAccountForUpdate(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+
 		member, err := s.roomRepo.GetMemberForUpdate(txCtx, roomID, characterID)
 		if err != nil {
 			return ErrMemberNotFound
@@ -178,11 +183,6 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 				return ErrLowNotAllowedTwo
 			}
 			return ErrInvalidHighLowAction
-		}
-
-		acc, err := s.repo.GetAccount(txCtx, characterID)
-		if err != nil {
-			return err
 		}
 
 		betToDeduct := room.CurrentBet

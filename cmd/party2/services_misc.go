@@ -249,10 +249,7 @@ func newMiscServices(
 			return nil, err
 		}
 	} else {
-		casinoRoomRepo, err = database.NewCasinoRoomRepository(db)
-		if err != nil {
-			return nil, err
-		}
+		casinoRoomRepo = casino.NewMemoryRoomRepository()
 	}
 	casinoService, err := casino.NewService(
 		casinoRepo,

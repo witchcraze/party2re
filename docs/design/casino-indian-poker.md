@@ -10,9 +10,9 @@ Casino coins earned can be exchanged for 18 authentic casino prizes delivered di
 
 ---
 
-## 1. Multi-Player Room Lobby (`casino_rooms`, `casino_members`)
+## 1. Multi-Player Room Lobby (Candidate C: Ephemeral Valkey Master)
 
-### Room Parameters & Creation (`@つくる`)
+Rooms and in-flight turns reside exclusively in Valkey Master (`ValkeyRoomRepository`, Candidate C Ephemeral Turn & Session Lobby Architecture, SSOT: [`docs/architecture/transient-run-state.md`](../architecture/transient-run-state.md)). Legacy MariaDB tables `casino_rooms` and `casino_members` were dropped in Migration 085.
 - **Name**: 1–50 characters, unique among non-disbanded rooms, cannot contain whitespace or delimiter characters (`,;\&<>\\/@＠`).
 - **Game Type**: `indian` (Indian Poker), `highlow` (High & Low), `doppel` (Doppelganger).
 - **Speed**: Turn countdown timer:
@@ -104,11 +104,10 @@ Casino coins earned can be exchanged for 18 authentic casino prizes delivered di
 
 ## 4. Concurrency & Lock Acquisition Hierarchy
 
-All database mutations strictly conform to deterministic lock acquisition order:
-1. **Rank 0 (Shared Peer Entity)**: `casino_rooms`, `casino_members`
-2. **Rank 2 (Character Primary Entity)**: `characters`
-3. **Rank 5 (Depot Storage)**: `character_depots`, `depot_items`
-4. **Rank 8 (Secondary Feature Records)**: `casino_accounts`
+Multi-player room lobbies and in-flight turns reside exclusively in Valkey Master (Candidate C Ephemeral Turn & Session Lobby Architecture). MariaDB transactional operations strictly follow the global lock acquisition hierarchy for financial settlements and prize exchange:
+1. **Rank 2 (Character Primary Entity)**: `characters`
+2. **Rank 5 (Depot Storage)**: `character_depots`, `depot_items`
+3. **Rank 8 (Secondary Feature Records)**: `casino_accounts`
 
 In `ExchangePrize`:
 - Depot lock (`FindByCharacterIDForUpdate` - Rank 5) is acquired first.

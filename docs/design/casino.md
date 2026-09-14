@@ -27,9 +27,9 @@ It provides:
 
 ---
 
-## 2. Multi-Player Room Lobby (`casino_rooms`, `casino_members`)
+## 2. Multi-Player Room Lobby (Candidate C: Ephemeral Valkey Master)
 
-Rooms serialize multi-player games using MariaDB tables with deterministic row locking (Rank 0 Shared Peer Entity):
+Rooms serialize multi-player games using Valkey Master (`ValkeyRoomRepository`, Candidate C Ephemeral Turn & Session Lobby Architecture, SSOT: [`docs/architecture/transient-run-state.md`](../architecture/transient-run-state.md)). Legacy MariaDB tables `casino_rooms` and `casino_members` were dropped in Migration 085.
 
 ### Creation Rules (`@つくる` / `POST /characters/{id}/casino/rooms`)
 - **Name**: 1–50 runes, unique among non-disbanded rooms, cannot contain spaces, tabs, newlines, or delimiters (`,;\&<>\\/@＠`).
@@ -160,11 +160,9 @@ Rooms serialize multi-player games using MariaDB tables with deterministic row l
 ---
 
 ## 7. Concurrency & Lock Acquisition Hierarchy
-
-All transactional operations strictly follow the global lock acquisition hierarchy:
+ 
+Multi-player room lobbies and in-flight turns reside exclusively in Valkey Master (Candidate C Ephemeral Turn & Session Lobby Architecture). MariaDB transactional operations strictly follow the global lock acquisition hierarchy for financial settlements and prize exchange:
 ```text
-Rank 0: casino_rooms, casino_members (Shared Peer Entity)
-  ↓
 Rank 2: characters (Character Primary Entity)
   ↓
 Rank 5: character_depots, depot_items (Depot Storage)

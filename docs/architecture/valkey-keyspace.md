@@ -182,8 +182,7 @@ The following specifications define the key patterns, data types, and lifecycle 
 - **Two-Phase Settlement Boundary**:
   - Phase 1 (In-Flight Gameplay): All card flips, bets, calls, and eliminations execute 100% in Valkey Master (< 1ms latency, zero SQL queries).
   - Phase 2 (Settlement): Upon match termination, a single MariaDB transaction (`RunInTx`) is opened. Payouts (coins, gold, medals, GP) are credited adhering strictly to the Rank 0..8 lock hierarchy. The Valkey room key is cleanly deleted (`DEL`) or set to 60s review TTL.
-- **Casino Implementation & Deprecation**:
-  - `ValkeyRoomRepository` implemented in `internal/casino` and wired in `cmd/party2`. Dropping the legacy ephemeral MariaDB tables (`casino_rooms` and `casino_room_members`) is scheduled for a follow-up schema cleanup migration (mirroring Migration 052 for `parties`).
+  - `ValkeyRoomRepository` implemented in `internal/casino` and wired in `cmd/party2`. Legacy ephemeral MariaDB tables (`casino_rooms` and `casino_members`) were dropped in Migration 085 (mirroring Migration 052 for `parties`).
 
 ### 4.4 Candidate D: In-Progress Run Buffers (Issue #369)
 

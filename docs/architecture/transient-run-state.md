@@ -204,9 +204,10 @@ Multiplayer rooms must handle network disconnects and player abandonment determi
    - Wired `casino.Service` in `cmd/party2` to use `ValkeyRoomRepository` when `valkeyClient` is configured.
    - All card actions (`JoinRoom`, `UpdateBet`, `NextCard`, `DrawCard`, `StartRound`) execute against `ValkeyRoomRepository` with sub-millisecond latency.
    - On game completion (`status == finished`), open a single MariaDB transaction (`RunInTx`) to credit coins to `casino_accounts` (Rank 8) for the winner(s).
-3. **Step 3: Database Schema Deprecation (Follow-up cleanup migration)**:
-   - Retain durable financial table: `casino_accounts` (SSOT for coin balances).
-   - Drop ephemeral tables via dedicated migration: `DROP TABLE casino_room_members; DROP TABLE casino_rooms;` (mirroring Migration 052 for `parties` and `party_members`).
+3. **Step 3: Database Schema Deprecation & Cleanup (Completed in Issue #635)**:
+   - Retained durable financial table: `casino_accounts` (SSOT for coin balances).
+   - Dropped ephemeral tables via Migration 085: `DROP TABLE casino_members; DROP TABLE casino_rooms;` (mirroring Migration 052 for `parties` and `party_members`).
+   - Removed dead relational repository `internal/database/casino_room_repository.go` and replaced fallback in `cmd/party2` with thread-safe `casino.NewMemoryRoomRepository()`.
 
 ---
 
