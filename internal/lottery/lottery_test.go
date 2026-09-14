@@ -3,6 +3,7 @@ package lottery_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -15,17 +16,18 @@ import (
 )
 
 type mockLotteryRepo struct {
-	getRaffleTicketsFn                func(ctx context.Context, charID string) (int, error)
-	useRaffleTicketsFn                func(ctx context.Context, charID string, count int) (int, error)
-	getActiveTakarakujiRoundFn        func(ctx context.Context) (lottery.TakarakujiRound, error)
-	createTakarakujiRoundFn           func(ctx context.Context, round lottery.TakarakujiRound) (lottery.TakarakujiRound, error)
-	countTakarakujiTicketsFn          func(ctx context.Context, roundID int) (int, error)
-	hasCharacterPurchasedTakarakujiFn func(ctx context.Context, roundID int, characterID string) (bool, error)
-	purchaseTakarakujiTicketFn        func(ctx context.Context, roundID int, characterID string, goldCost int) (lottery.TakarakujiTicket, corecharacter.Character, error)
-	getCharacterTakarakujiTicketFn    func(ctx context.Context, roundID int, characterID string) (lottery.TakarakujiTicket, error)
-	listCharacterTakarakujiTicketsFn  func(ctx context.Context, characterID string) ([]lottery.TakarakujiTicket, error)
-	listRoundTakarakujiTicketsFn      func(ctx context.Context, roundID int) ([]lottery.TakarakujiTicket, error)
-	settleTakarakujiRoundFn           func(ctx context.Context, roundID int, drawnAt time.Time, winningTickets []lottery.TakarakujiTicket) error
+	getRaffleTicketsFn                  func(ctx context.Context, charID string) (int, error)
+	useRaffleTicketsFn                  func(ctx context.Context, charID string, count int) (int, error)
+	getActiveTakarakujiRoundFn          func(ctx context.Context) (lottery.TakarakujiRound, error)
+	getActiveTakarakujiRoundForUpdateFn func(ctx context.Context) (lottery.TakarakujiRound, error)
+	createTakarakujiRoundFn             func(ctx context.Context, round lottery.TakarakujiRound) (lottery.TakarakujiRound, error)
+	countTakarakujiTicketsFn            func(ctx context.Context, roundID int) (int, error)
+	hasCharacterPurchasedTakarakujiFn   func(ctx context.Context, roundID int, characterID string) (bool, error)
+	purchaseTakarakujiTicketFn          func(ctx context.Context, roundID int, characterID string, goldCost int) (lottery.TakarakujiTicket, corecharacter.Character, error)
+	getCharacterTakarakujiTicketFn      func(ctx context.Context, roundID int, characterID string) (lottery.TakarakujiTicket, error)
+	listCharacterTakarakujiTicketsFn    func(ctx context.Context, characterID string) ([]lottery.TakarakujiTicket, error)
+	listRoundTakarakujiTicketsFn        func(ctx context.Context, roundID int) ([]lottery.TakarakujiTicket, error)
+	settleTakarakujiRoundFn             func(ctx context.Context, roundID int, drawnAt time.Time, winningTickets []lottery.TakarakujiTicket) error
 }
 
 func (m *mockLotteryRepo) GetRaffleTickets(ctx context.Context, charID string) (int, error) {
@@ -41,6 +43,15 @@ func (m *mockLotteryRepo) UseRaffleTickets(ctx context.Context, charID string, c
 	return 0, nil
 }
 func (m *mockLotteryRepo) GetActiveTakarakujiRound(ctx context.Context) (lottery.TakarakujiRound, error) {
+	if m.getActiveTakarakujiRoundFn != nil {
+		return m.getActiveTakarakujiRoundFn(ctx)
+	}
+	return lottery.TakarakujiRound{}, lottery.ErrRoundNotFound
+}
+func (m *mockLotteryRepo) GetActiveTakarakujiRoundForUpdate(ctx context.Context) (lottery.TakarakujiRound, error) {
+	if m.getActiveTakarakujiRoundForUpdateFn != nil {
+		return m.getActiveTakarakujiRoundForUpdateFn(ctx)
+	}
 	if m.getActiveTakarakujiRoundFn != nil {
 		return m.getActiveTakarakujiRoundFn(ctx)
 	}
@@ -117,6 +128,23 @@ func (m *mockDepotRepo) Save(ctx context.Context, d depot.Depot) error {
 		m.depot = make(map[string]depot.Depot)
 	}
 	m.depot[d.CharacterID] = d
+	return nil
+}
+
+type mockTxProvider struct {
+	called     bool
+	committed  bool
+	rolledBack bool
+}
+
+func (m *mockTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	m.called = true
+	err := fn(ctx)
+	if err != nil {
+		m.rolledBack = true
+		return err
+	}
+	m.committed = true
 	return nil
 }
 
@@ -516,6 +544,143 @@ func TestDrawTakarakuji(t *testing.T) {
 				t.Errorf("expected item %s in winner %s depot", w.ItemID, w.CharacterID)
 			}
 		}
+	}
+}
+
+func TestDrawTakarakuji_Premature(t *testing.T) {
+	jst := time.FixedZone("JST", 9*60*60)
+	drawTime := time.Date(2026, 9, 11, 0, 0, 0, 0, jst)
+
+	activeRound := lottery.TakarakujiRound{
+		RoundID:      1,
+		DrawDate:     drawTime,
+		IsDrawn:      false,
+		Prize1ItemID: "item-129",
+		Prize1Amount: 1,
+		Prize2ItemID: "weapon-40",
+		Prize2Amount: 2,
+		Prize3ItemID: "item-126",
+		Prize3Amount: 3,
+	}
+
+	repo := &mockLotteryRepo{
+		getActiveTakarakujiRoundFn: func(ctx context.Context) (lottery.TakarakujiRound, error) {
+			return activeRound, nil
+		},
+	}
+
+	svc, err := lottery.NewService(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt draw 1 hour before scheduled time
+	prematureTime := drawTime.Add(-1 * time.Hour)
+	_, err = svc.DrawTakarakuji(context.Background(), prematureTime)
+	if !errors.Is(err, lottery.ErrNotReadyToDraw) {
+		t.Fatalf("expected ErrNotReadyToDraw, got: %v", err)
+	}
+}
+
+func TestDrawTakarakuji_DepotFull(t *testing.T) {
+	jst := time.FixedZone("JST", 9*60*60)
+	drawTime := time.Date(2026, 9, 11, 0, 0, 0, 0, jst)
+
+	activeRound := lottery.TakarakujiRound{
+		RoundID:      1,
+		DrawDate:     drawTime,
+		IsDrawn:      false,
+		Prize1ItemID: "item-129",
+		Prize1Amount: 1,
+		Prize2ItemID: "weapon-40",
+		Prize2Amount: 2,
+		Prize3ItemID: "item-126",
+		Prize3Amount: 3,
+	}
+
+	// 20 tickets all belonging to char-full to guarantee char-full wins
+	tickets := make([]lottery.TakarakujiTicket, 20)
+	for i := 0; i < 20; i++ {
+		tickets[i] = lottery.TakarakujiTicket{
+			ID:          "t-" + string(rune('a'+i)),
+			RoundID:     1,
+			CharacterID: "char-full",
+		}
+	}
+
+	var settled bool
+	var nextRoundCreated bool
+
+	repo := &mockLotteryRepo{
+		getActiveTakarakujiRoundFn: func(ctx context.Context) (lottery.TakarakujiRound, error) {
+			return activeRound, nil
+		},
+		listRoundTakarakujiTicketsFn: func(ctx context.Context, roundID int) ([]lottery.TakarakujiTicket, error) {
+			return tickets, nil
+		},
+		settleTakarakujiRoundFn: func(ctx context.Context, roundID int, drawnAt time.Time, winningTickets []lottery.TakarakujiTicket) error {
+			settled = true
+			return nil
+		},
+		createTakarakujiRoundFn: func(ctx context.Context, round lottery.TakarakujiRound) (lottery.TakarakujiRound, error) {
+			nextRoundCreated = true
+			return round, nil
+		},
+	}
+
+	// Create depot filled to max capacity (5/5)
+	fullDepot, err := depot.NewDepotWithCapacity("char-full", 0, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 5; i++ {
+		inst, err := coreitem.NewInstance(fmt.Sprintf("weapon-%d", i+1), 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := fullDepot.AddItem(inst); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	depotRepo := &mockDepotRepo{
+		depot: map[string]depot.Depot{
+			"char-full": fullDepot,
+		},
+	}
+
+	txProv := &mockTxProvider{}
+	svc, err := lottery.NewService(repo,
+		lottery.WithDepotRepository(depotRepo),
+		lottery.WithTransactionProvider(txProv),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = svc.DrawTakarakuji(context.Background(), drawTime)
+	if err == nil {
+		t.Fatal("expected error due to full depot, got nil")
+	}
+	if !errors.Is(err, depot.ErrDepotFull) {
+		t.Fatalf("expected error wrapping depot.ErrDepotFull, got: %v", err)
+	}
+
+	// Assert transaction rollback and no round settlement / next round creation
+	if !txProv.called {
+		t.Error("expected transaction provider to be invoked")
+	}
+	if !txProv.rolledBack {
+		t.Error("expected transaction to be rolled back")
+	}
+	if txProv.committed {
+		t.Error("expected transaction NOT to be committed")
+	}
+	if settled {
+		t.Error("round should NOT have been settled when depot delivery failed")
+	}
+	if nextRoundCreated {
+		t.Error("next round should NOT have been created when depot delivery failed")
 	}
 }
 

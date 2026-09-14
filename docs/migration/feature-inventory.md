@@ -294,6 +294,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#456](https://github.com/witchcraze/party2re/issues/456) | Test/Valkey: Implement offline unit test suites for Challenge and Party Valkey repositories | Completed |
 | [#451](https://github.com/witchcraze/party2re/issues/451) | Test/Valkey: Implement offline unit test suite for Session repository | Completed |
 | [#585](https://github.com/witchcraze/party2re/issues/585) | Core/Character: Standardize and consolidate updateCharacter helper across character services | Completed |
+| [#631](https://github.com/witchcraze/party2re/issues/631) | Lottery: Fix 20-ticket purchase concurrency race, wrap draw in transaction, and prevent silent depot drops | Completed |
 
 
 ---

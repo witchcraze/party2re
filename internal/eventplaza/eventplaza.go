@@ -290,6 +290,11 @@ func (s *Service) RecordPresence(ctx context.Context, characterID string) error 
 // RecordBanquetPresence records virtual celebration banquet attendees into the presence tracker.
 func (s *Service) RecordBanquetPresence(ctx context.Context, banquetID string, count int, duration time.Duration) error {
 	if s.presenceTracker != nil {
+		if trackerWithClock, ok := s.presenceTracker.(interface {
+			RecordBanquetPresenceAt(ctx context.Context, banquetID string, count int, at time.Time, duration time.Duration) error
+		}); ok {
+			return trackerWithClock.RecordBanquetPresenceAt(ctx, banquetID, count, s.clock.Now(), duration)
+		}
 		return s.presenceTracker.RecordBanquetPresence(ctx, banquetID, count, duration)
 	}
 	return nil

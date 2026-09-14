@@ -56,6 +56,21 @@ func TestLotteryRepository_Integration(t *testing.T) {
 		t.Errorf("remaining=%d, want 7", remaining)
 	}
 
+	// Acquire advisory lock to prevent cross-package test interference during parallel test runs
+	lockConn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lockConn.Close()
+
+	var lockAcquired int
+	if err := lockConn.QueryRowContext(ctx, "SELECT GET_LOCK('takarakuji_test_mutex', 60)").Scan(&lockAcquired); err != nil || lockAcquired != 1 {
+		t.Fatalf("failed acquiring takarakuji test mutex: %v", err)
+	}
+	defer func() {
+		_, _ = lockConn.ExecContext(ctx, "SELECT RELEASE_LOCK('takarakuji_test_mutex')")
+	}()
+
 	// Clean tables for isolated round testing
 	if _, err := db.ExecContext(ctx, "DELETE FROM takarakuji_tickets"); err != nil {
 		t.Fatal(err)

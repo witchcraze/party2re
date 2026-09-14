@@ -125,6 +125,40 @@ func (r *LotteryRepository) GetActiveTakarakujiRound(ctx context.Context) (lotte
 	return round, nil
 }
 
+func (r *LotteryRepository) GetActiveTakarakujiRoundForUpdate(ctx context.Context) (lottery.TakarakujiRound, error) {
+	var round lottery.TakarakujiRound
+	var drawnAt sql.NullTime
+
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+		SELECT round_id, draw_date, is_drawn, drawn_at,
+		       prize_1_item_id, prize_1_amount,
+		       prize_2_item_id, prize_2_amount,
+		       prize_3_item_id, prize_3_amount,
+		       created_at
+		FROM takarakuji_rounds
+		WHERE is_drawn = FALSE
+		ORDER BY round_id ASC
+		LIMIT 1
+		FOR UPDATE
+	`).Scan(
+		&round.RoundID, &round.DrawDate, &round.IsDrawn, &drawnAt,
+		&round.Prize1ItemID, &round.Prize1Amount,
+		&round.Prize2ItemID, &round.Prize2Amount,
+		&round.Prize3ItemID, &round.Prize3Amount,
+		&round.CreatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return lottery.TakarakujiRound{}, lottery.ErrRoundNotFound
+	}
+	if err != nil {
+		return lottery.TakarakujiRound{}, err
+	}
+	if drawnAt.Valid {
+		round.DrawnAt = &drawnAt.Time
+	}
+	return round, nil
+}
+
 func (r *LotteryRepository) CreateTakarakujiRound(ctx context.Context, round lottery.TakarakujiRound) (lottery.TakarakujiRound, error) {
 	executor := ExecutorFromContext(ctx, r.db)
 	if round.CreatedAt.IsZero() {
@@ -184,21 +218,19 @@ func (r *LotteryRepository) PurchaseTakarakujiTicket(ctx context.Context, roundI
 	err := RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
 
-		// 1. Deduct gold
-		res, err := executor.ExecContext(txCtx, `
-			UPDATE characters
-			SET money = money - ?
-			WHERE id = ? AND money >= ?
-		`, goldCost, characterID, goldCost)
+		// 1. Lock round row for update (Rank 0) to serialize concurrent buyers and prevent over-selling
+		var isDrawn bool
+		err := executor.QueryRowContext(txCtx, `
+			SELECT is_drawn FROM takarakuji_rounds WHERE round_id = ? FOR UPDATE
+		`, roundID).Scan(&isDrawn)
+		if errors.Is(err, sql.ErrNoRows) {
+			return lottery.ErrRoundNotFound
+		}
 		if err != nil {
 			return err
 		}
-		affected, err := res.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if affected == 0 {
-			return lottery.ErrInsufficientGold
+		if isDrawn {
+			return lottery.ErrAlreadyDrawn
 		}
 
 		// 2. Check sold out limit (20 tickets max)
@@ -223,7 +255,24 @@ func (r *LotteryRepository) PurchaseTakarakujiTicket(ctx context.Context, roundI
 			return lottery.ErrAlreadyPurchased
 		}
 
-		// 4. Insert ticket
+		// 4. Deduct gold (Rank 2)
+		res, err := executor.ExecContext(txCtx, `
+			UPDATE characters
+			SET money = money - ?
+			WHERE id = ? AND money >= ?
+		`, goldCost, characterID, goldCost)
+		if err != nil {
+			return err
+		}
+		affected, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return lottery.ErrInsufficientGold
+		}
+
+		// 5. Insert ticket
 		ticket = lottery.TakarakujiTicket{
 			ID:          id.New(),
 			RoundID:     roundID,
@@ -240,7 +289,7 @@ func (r *LotteryRepository) PurchaseTakarakujiTicket(ctx context.Context, roundI
 			return err
 		}
 
-		// 5. Scan updated character
+		// 6. Scan updated character
 		char, err = scanCharacterRow(executor.QueryRowContext(txCtx, `
 			SELECT `+characterColumns+`
 			FROM characters

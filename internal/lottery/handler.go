@@ -52,7 +52,10 @@ func NewDrawHandler(service *Service, opts ...DrawOption) *DrawHandler {
 
 // Handle executes the takarakuji drawing logic and schedules the next round.
 func (h *DrawHandler) Handle(ctx context.Context, action core_scheduling.ScheduledAction) error {
-	now := time.Now().UTC()
+	now := action.ExecuteAt
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
 	result, err := h.service.DrawTakarakuji(ctx, now)
 	if err != nil {
 		return err

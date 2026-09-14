@@ -32,6 +32,7 @@ type RaffleRepository interface {
 // TakarakujiRepository defines data access for periodic Takarakuji lottery rounds and tickets.
 type TakarakujiRepository interface {
 	GetActiveTakarakujiRound(ctx context.Context) (TakarakujiRound, error)
+	GetActiveTakarakujiRoundForUpdate(ctx context.Context) (TakarakujiRound, error)
 	CreateTakarakujiRound(ctx context.Context, round TakarakujiRound) (TakarakujiRound, error)
 	CountTakarakujiTickets(ctx context.Context, roundID int) (int, error)
 	HasCharacterPurchasedTakarakuji(ctx context.Context, roundID int, characterID string) (bool, error)

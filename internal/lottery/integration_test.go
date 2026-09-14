@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,15 +37,41 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	txProvider := database.NewTransactionProvider(db)
+
 	svc, err := lottery.NewService(lotteryRepo,
 		lottery.WithCharacterRepository(charRepo),
 		lottery.WithDepotRepository(depotRepo),
+		lottery.WithTransactionProvider(txProvider),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	ctx := context.Background()
+
+	// Acquire advisory lock to prevent cross-package test interference during parallel test runs
+	lockConn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lockConn.Close()
+
+	var lockAcquired int
+	if err := lockConn.QueryRowContext(ctx, "SELECT GET_LOCK('takarakuji_test_mutex', 60)").Scan(&lockAcquired); err != nil || lockAcquired != 1 {
+		t.Fatalf("failed acquiring takarakuji test mutex: %v", err)
+	}
+	defer func() {
+		_, _ = lockConn.ExecContext(ctx, "SELECT RELEASE_LOCK('takarakuji_test_mutex')")
+	}()
+
+	// Clean tables for isolated round testing
+	if _, err := db.ExecContext(ctx, "DELETE FROM takarakuji_tickets"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "DELETE FROM takarakuji_rounds"); err != nil {
+		t.Fatal(err)
+	}
 
 	// 1. Create main test character with 100,000 gold
 	char1, err := database.CreateTestCharacter(ctx, db, "TakarakujiPlayer1")
@@ -82,8 +109,8 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 		t.Fatalf("expected ErrAlreadyPurchased, got: %v", err)
 	}
 
-	// 5. Buy remaining 19 tickets with 19 unique characters
-	for i := 2; i <= 20; i++ {
+	// 5. Buy tickets 2..19 with unique characters (19 tickets total)
+	for i := 2; i <= 19; i++ {
 		charName := fmt.Sprintf("TakarakujiBuyer%d_%d", i, time.Now().UnixNano())
 		c, err := database.CreateTestCharacter(ctx, db, charName)
 		if err != nil {
@@ -96,6 +123,58 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed buying ticket for buyer %d: %v", i, err)
 		}
+	}
+
+	// 5b. Concurrently compete for the final (20th) ticket with 10 buyers
+	const concurrentBuyers = 10
+	raceBuyers := make([]string, concurrentBuyers)
+	for i := 0; i < concurrentBuyers; i++ {
+		charName := fmt.Sprintf("TakarakujiRaceBuyer%d_%d", i, time.Now().UnixNano())
+		c, err := database.CreateTestCharacter(ctx, db, charName)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, "UPDATE characters SET money = ? WHERE id = ?", 50000, c.ID); err != nil {
+			t.Fatal(err)
+		}
+		raceBuyers[i] = c.ID
+	}
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, concurrentBuyers)
+	startBarrier := make(chan struct{})
+
+	for i := 0; i < concurrentBuyers; i++ {
+		wg.Add(1)
+		buyerID := raceBuyers[i]
+		go func() {
+			defer wg.Done()
+			<-startBarrier
+			_, pErr := svc.BuyTakarakujiTicket(ctx, buyerID)
+			errCh <- pErr
+		}()
+	}
+
+	close(startBarrier)
+	wg.Wait()
+	close(errCh)
+
+	var successCount, soldOutCount int
+	for pErr := range errCh {
+		if pErr == nil {
+			successCount++
+		} else if errors.Is(pErr, lottery.ErrSoldOut) {
+			soldOutCount++
+		} else {
+			t.Errorf("unexpected error in concurrent buy: %v", pErr)
+		}
+	}
+
+	if successCount != 1 {
+		t.Errorf("concurrent successCount = %d, want 1", successCount)
+	}
+	if soldOutCount != concurrentBuyers-1 {
+		t.Errorf("concurrent soldOutCount = %d, want %d", soldOutCount, concurrentBuyers-1)
 	}
 
 	// 6. 21st ticket attempt with a new character -> must fail with ErrSoldOut
@@ -120,8 +199,14 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 		t.Errorf("expected sold out status, got: %+v", statusSold)
 	}
 
-	// 8. Execute draw
-	drawResult, err := svc.DrawTakarakuji(ctx, time.Now().UTC())
+	// 8. Execute draw: premature attempt must return ErrNotReadyToDraw
+	_, err = svc.DrawTakarakuji(ctx, time.Now().UTC())
+	if !errors.Is(err, lottery.ErrNotReadyToDraw) {
+		t.Fatalf("expected ErrNotReadyToDraw when drawing before draw_date, got: %v", err)
+	}
+
+	// 8b. Execute draw at scheduled draw date
+	drawResult, err := svc.DrawTakarakuji(ctx, status.DrawDate.Add(time.Second))
 	if err != nil {
 		t.Fatalf("DrawTakarakuji failed: %v", err)
 	}

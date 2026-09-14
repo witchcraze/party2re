@@ -68,7 +68,7 @@ The Lottery and Raffle Feature Module (`internal/lottery`) implements the authen
 - **Location**: 宝くじ屋 (Lottery Shop)
 - **NPC**: `@クラゲ` (Kurage)
 - **Ticket Price**: 30,000 Gold per ticket
-- **Server-Wide Cap**: Exactly 20 tickets per drawing round (`TAKARAKUZI_SOLD_OUT = 20`)
+- **Server-Wide Cap**: Exactly 20 tickets per drawing round (`TAKARAKUZI_SOLD_OUT = 20`). Concurrency is strictly enforced by row-locking the active round (`takarakuji_rounds`, Rank 0 `FOR UPDATE`) before checking ticket counts and deducting player gold (Rank 2).
 - **Player Restriction**: Maximum 1 ticket per character per round (`「おひとりさまおひとつ！」`)
 - **Sold Out Handling**: Once 20 tickets are purchased, subsequent purchase attempts are rejected with NPC message `「今回の宝くじは完売したよー」` (HTTP 409 Conflict)
 
@@ -77,6 +77,8 @@ Drawings occur automatically on the **1st, 11th, and 21st** of each month at 00:
 - If purchased on day 1–10: Drawing occurs on the 11th of the current month.
 - If purchased on day 11–20: Drawing occurs on the 21st of the current month.
 - If purchased on day 21–31: Drawing occurs on the 1st of the following month.
+
+Premature drawing attempts (`now.Before(round.DrawDate)`) are rejected with `ErrNotReadyToDraw`.
 
 On purchase, the NPC informs the player:
 `「ありがとー。当たってたら YYYY/MM/DD に賞品が届くからね」`
@@ -94,19 +96,23 @@ Each round rolls one distinct prize item for each tier alongside winner counts:
 Lineup inspection (`@しょうひん`) displays the active round's prizes, item names, and winner quotas.
 
 ### 4. Drawing Mechanics & Depot Delivery
-When a drawing occurs (via background scheduler `takarakuji_draw` or on-demand date evaluation):
-1. **Pool Construction**:
+When a drawing occurs (via background scheduler `takarakuji_draw` or scheduled handler execution):
+1. **Transaction Boundary & Premature Check**:
+   - The entire drawing process runs inside an atomic database transaction (`RunInTx`).
+   - If `now.Before(round.DrawDate)`, drawing immediately aborts with `ErrNotReadyToDraw`.
+   - The active round is locked with `SELECT ... FOR UPDATE` (Rank 0).
+2. **Pool Construction**:
    - Collects all purchased tickets for the round.
    - If fewer than 20 tickets were sold, dummy entries (`<dummy_0>`, `<dummy_1>`, ...) are added until the pool reaches exactly 20 slots.
-2. **Winner Selection**:
+3. **Winner Selection**:
    - For each prize rank and its winner count, a random slot is drawn from the pool.
    - The selected slot is removed from the pool so that no character or dummy can win more than once in the same round.
-3. **Depot-Direct Delivery (`send_item`)**:
-   - If the drawn slot belongs to a real character, the prize item is instantiated (`coreitem.NewInstance`) and delivered directly into the character's Depot (`character_depots` / `depot_items`).
-   - The winning ticket is marked with `won_rank` and `won_item_id`.
-   - If the winner's Depot is at capacity, the error is safely recorded without corrupting other winners.
-4. **Round Renewal**:
-   - The completed round is marked as drawn (`is_drawn = TRUE`, `drawn_at = now`).
+4. **Depot-Direct Delivery (`send_item`) & Asset Protection**:
+   - Deliveries to real winners are sorted in ascending order of `winnerID` to guarantee deterministic Rank 5 lock ordering and prevent deadlocks.
+   - Prize items are instantiated (`coreitem.NewInstance`) and delivered directly into the character's Depot (`character_depots` / `depot_items`).
+   - If any winner's Depot is at capacity (`depot.ErrDepotFull`), the entire drawing transaction rolls back immediately: no tickets are marked won, the round remains unsettled, and rare items are never dropped or silently lost.
+5. **Round Renewal**:
+   - Upon successful delivery, the completed round is marked as drawn (`is_drawn = TRUE`, `drawn_at = now`) and tickets are settled with winning ranks and item IDs.
    - The next round is immediately created with newly randomized prizes and the next 10-day draw date.
 
 ### 5. NPC Flavor Dialogues (`@words`)
