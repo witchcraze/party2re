@@ -19,6 +19,7 @@ Adventures proceed floor-by-floor in accordance with legacy `vs_monster.cgi` and
                             ▼                                 ▼
                      [Early Defeat]                    [Early Defeat]
                      - Half EXP, 0 Gold                - Half EXP, 0 Gold
+                     - 0 Crystals                      - 0 Crystals
                      - Characters keep 1 HP            - Characters keep 1 HP
 ```
 
@@ -26,7 +27,7 @@ Adventures proceed floor-by-floor in accordance with legacy `vs_monster.cgi` and
 - Spawns 1 to 3 enemies chosen from the stage's normal monster roster (`stage.GetNormalMonsterIDs()`).
 - Normal monsters exclude designated stage bosses.
 - Multi-participant turn combat is resolved using `corebattle.PartyBattleResolver`.
-- On victory: allies advance to the next floor with their remaining HP and MP preserved across floors. Total EXP and Gold accumulate.
+- On victory: allies advance to the next floor with their remaining HP and MP preserved across floors. Total EXP, Gold, and monster Crystal drops (`TotalCrystals`, 刻印晶) accumulate.
 
 ### Floor 10: Stage Boss Battle
 - Spawns the stage boss (`stage.GetBossIDs()`). If boss IDs are not explicitly configured, the final monster in the stage's monster list is designated as the stage boss.
@@ -35,7 +36,7 @@ Adventures proceed floor-by-floor in accordance with legacy `vs_monster.cgi` and
 ### Early Defeat Handling
 - If all living party members are knocked unconscious at any floor (1–10), the crawl terminates immediately.
 - `FloorsCleared` is set to the last fully cleared floor number.
-- Total accumulated EXP is halved (`TotalEXP / 2`), and Gold reward is reduced to 0.
+- Total accumulated EXP is halved (`TotalEXP / 2`), and Gold and Crystal rewards are reduced to 0 (`TotalGold = 0`, `TotalCrystals = 0`).
 - Participating characters survive with 1 HP (preventing permanent death).
 
 ---

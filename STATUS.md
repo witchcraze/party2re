@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #635 — [Architecture] Core/Valkey: Standardize Ephemeral Turn & Session Lobby Architecture (Candidate C) across Multiplayer Domains
+Last updated: Issue #645 — [Feature] Adventure: Accumulate and persist monster crystal rewards from party battles
 
 
 ## Current phase
@@ -41,7 +41,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### Feature Modules
 - **Activity** (`internal/activity`): ✅ Training via Valkey Worker push + manual Claim fallback.
-- **Adventure** (`internal/adventure`): ✅ Authentic 10-floor dungeon crawl loop (`vs_monster.cgi`) across 28 stages (286 monsters), Floor 11 Treasure Room resolution (`_npc_action.cgi` `add_treasure`), immediate crawl execution (1-hour timer purged), chronicles, VictoryHook (#478).
+- **Adventure** (`internal/adventure`): ✅ Authentic 10-floor dungeon crawl loop (`vs_monster.cgi`) across 28 stages (286 monsters), Floor 11 Treasure Room resolution (`_npc_action.cgi` `add_treasure`), immediate crawl execution (1-hour timer purged), monster crystal rewards accumulation and persistence across solo and party dungeon crawls (#645), chronicles, VictoryHook (#478).
 - **Medal & Achievements** (`internal/medal`): ✅ Small Medal exchange → Depot; milestone achievement observer.
 - **Shop** (`internal/shop`): ✅ 3 shops with job-level gates, 50% sellback, MasterCard discount, Depot auto-delivery.
 - **Depot** (`internal/depot`): ✅ Dynamic capacity (up to 500 slots), tiered expansion, sort, item sell, gold/item direct-send, standardized item consumption (`Consume`, `ConsumeOne`, `PurgeSlot`), enhancement-level & equipment stackability preservation (#558, #563), standardized `RefreshCapacity` helper across commerce modules (#559).

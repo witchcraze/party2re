@@ -223,6 +223,76 @@ func TestCrawlSession_PartyWipeoutTerminatesCrawl(t *testing.T) {
 	}
 }
 
+func TestCrawlSession_CrystalRewardAccumulation(t *testing.T) {
+	stages, monsters := setupTestCatalogs(t)
+	stage, err := stages.FindByID("stage-01")
+	if err != nil {
+		t.Fatalf("FindByID(stage-01): %v", err)
+	}
+
+	characters := createTestCharacters()
+	session, err := adventure.NewCrawlSession(stage, characters, func(n int) int { return 0 })
+	if err != nil {
+		t.Fatalf("NewCrawlSession failed: %v", err)
+	}
+
+	resolver := crystalRewardBattleResolver{crystalsPerFloor: 3}
+	for f := 1; f <= 5; f++ {
+		res, err := session.AdvanceFloor(stages, monsters, resolver)
+		if err != nil {
+			t.Fatalf("floor %d advance error: %v", f, err)
+		}
+		if !res.Cleared {
+			t.Fatalf("floor %d should be cleared", f)
+		}
+		if session.TotalCrystals != f*3 {
+			t.Errorf("after floor %d, TotalCrystals = %d, want %d", f, session.TotalCrystals, f*3)
+		}
+	}
+
+	result := session.Result()
+	if result.TotalCrystals != 15 {
+		t.Errorf("result.TotalCrystals = %d, want 15", result.TotalCrystals)
+	}
+}
+
+func TestCrawlSession_DefeatZeroesCrystals(t *testing.T) {
+	stages, monsters := setupTestCatalogs(t)
+	stage, err := stages.FindByID("stage-01")
+	if err != nil {
+		t.Fatalf("FindByID(stage-01): %v", err)
+	}
+
+	characters := createTestCharacters()
+	session, err := adventure.NewCrawlSession(stage, characters, func(n int) int { return 0 })
+	if err != nil {
+		t.Fatalf("NewCrawlSession failed: %v", err)
+	}
+
+	resolver := crystalRewardBattleResolver{crystalsPerFloor: 5}
+	// Floor 1 win: gets 5 crystals
+	_, err = session.AdvanceFloor(stages, monsters, resolver)
+	if err != nil {
+		t.Fatalf("floor 1 advance error: %v", err)
+	}
+	if session.TotalCrystals != 5 {
+		t.Fatalf("TotalCrystals = %d, want 5", session.TotalCrystals)
+	}
+
+	// Floor 2 defeat
+	defeatEngine := &defeatBattleResolver{}
+	res, err := session.AdvanceFloor(stages, monsters, defeatEngine)
+	if err != nil {
+		t.Fatalf("floor 2 advance error: %v", err)
+	}
+	if res.Cleared {
+		t.Fatalf("floor 2 should not be cleared")
+	}
+	if session.TotalCrystals != 0 {
+		t.Errorf("after defeat, TotalCrystals = %d, want 0", session.TotalCrystals)
+	}
+}
+
 type defeatBattleResolver struct{}
 
 func (defeatBattleResolver) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
@@ -234,5 +304,26 @@ func (defeatBattleResolver) ResolvePartyBattle(req corebattle.PartyBattleRequest
 		Outcome:     corebattle.OutcomeDefeat,
 		Turns:       2,
 		RemainingHP: remHP,
+	}, nil
+}
+
+type crystalRewardBattleResolver struct {
+	crystalsPerFloor int
+}
+
+func (r crystalRewardBattleResolver) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	remHP := make(map[string]int)
+	for _, a := range req.Allies {
+		remHP[a.ID] = a.HP
+	}
+	return corebattle.PartyBattleResult{
+		Outcome:     corebattle.OutcomeWin,
+		Turns:       1,
+		RemainingHP: remHP,
+		TotalReward: corebattle.Reward{
+			Experience: 10,
+			Currency:   20,
+			Crystals:   r.crystalsPerFloor,
+		},
 	}, nil
 }

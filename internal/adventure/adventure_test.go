@@ -301,6 +301,114 @@ func TestAdventure_PostAdventureHook(t *testing.T) {
 	}
 }
 
+func TestAdventure_CrystalRewardPersistence(t *testing.T) {
+	character, err := corecharacter.New("CrystalExplorer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	character.Stats.HP = 500
+	character.Stats.MaxHP = 500
+	character.Stats.Attack = 100
+	character.Stats.Defense = 50
+	character.Crystal = 50
+
+	adventures := &repositoryStub{}
+	characters := &characterRepositoryStub{value: character}
+	adventures.characters = characters
+	clock := &testClock{now: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)}
+	stages, _ := InitialStageCatalog()
+	monsters, _ := InitialMonsterCatalog()
+
+	battleEngine := &crystalRewardPartyBattleEngine{crystalsPerFloor: 10}
+	service, err := NewServiceWithCatalogs(adventures, characters, nil, stages, monsters, battleEngine, nil, nopLogger{}, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	adv, err := service.StartStage(context.Background(), character.ID, "stage-01")
+	if err != nil {
+		t.Fatalf("StartStage failed: %v", err)
+	}
+
+	if adv.BattleResult.Outcome != corebattle.OutcomeWin {
+		t.Fatalf("expected victory, got %v", adv.BattleResult.Outcome)
+	}
+	// 10 floors * 10 crystals = 100 crystals
+	if adv.BattleResult.Reward.Crystals != 100 {
+		t.Errorf("adv.BattleResult.Reward.Crystals = %d, want 100", adv.BattleResult.Reward.Crystals)
+	}
+	// Initial 50 + 100 = 150 crystals
+	if characters.value.Crystal != 150 {
+		t.Errorf("characters.value.Crystal = %d, want 150", characters.value.Crystal)
+	}
+}
+
+func TestAdventure_CrystalRewardClamping(t *testing.T) {
+	character, err := corecharacter.New("MaxCrystalExplorer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	character.Stats.HP = 500
+	character.Stats.MaxHP = 500
+	character.Stats.Attack = 100
+	character.Stats.Defense = 50
+	character.Crystal = 999_950
+
+	adventures := &repositoryStub{}
+	characters := &characterRepositoryStub{value: character}
+	adventures.characters = characters
+	clock := &testClock{now: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)}
+	stages, _ := InitialStageCatalog()
+	monsters, _ := InitialMonsterCatalog()
+
+	battleEngine := &crystalRewardPartyBattleEngine{crystalsPerFloor: 10}
+	service, err := NewServiceWithCatalogs(adventures, characters, nil, stages, monsters, battleEngine, nil, nopLogger{}, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	adv, err := service.StartStage(context.Background(), character.ID, "stage-01")
+	if err != nil {
+		t.Fatalf("StartStage failed: %v", err)
+	}
+
+	if adv.BattleResult.Reward.Crystals != 100 {
+		t.Errorf("adv.BattleResult.Reward.Crystals = %d, want 100", adv.BattleResult.Reward.Crystals)
+	}
+	// 999,950 + 100 clamped to 999,999
+	if characters.value.Crystal != 999_999 {
+		t.Errorf("characters.value.Crystal = %d, want 999999 (MaxCrystal)", characters.value.Crystal)
+	}
+}
+
+type crystalRewardPartyBattleEngine struct {
+	crystalsPerFloor int
+}
+
+func (e crystalRewardPartyBattleEngine) Resolve(req corebattle.Request) (corebattle.Result, error) {
+	return corebattle.Result{
+		Outcome: corebattle.OutcomeWin,
+		Reward:  corebattle.Reward{Crystals: e.crystalsPerFloor},
+	}, nil
+}
+
+func (e crystalRewardPartyBattleEngine) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {
+	remHP := make(map[string]int)
+	for _, a := range req.Allies {
+		remHP[a.ID] = a.HP
+	}
+	return corebattle.PartyBattleResult{
+		Outcome:     corebattle.OutcomeWin,
+		Turns:       1,
+		RemainingHP: remHP,
+		TotalReward: corebattle.Reward{
+			Experience: 50,
+			Currency:   20,
+			Crystals:   e.crystalsPerFloor,
+		},
+	}, nil
+}
+
 func TestAdventureNewServiceNilDependencies(t *testing.T) {
 	adventures := &repositoryStub{}
 	characters := &characterRepositoryStub{}

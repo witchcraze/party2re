@@ -53,6 +53,7 @@ type DungeonCrawlResult struct {
 	TotalTurns     int                  `json:"total_turns"`
 	TotalEXP       int                  `json:"total_exp"`
 	TotalGold      int                  `json:"total_gold"`
+	TotalCrystals  int                  `json:"total_crystals"`
 	FloorResults   []DungeonFloorResult `json:"floor_results"`
 	TreasureBoxes  []TreasureBox        `json:"treasure_boxes,omitempty"`
 	PartySize      int                  `json:"party_size"`
@@ -75,6 +76,7 @@ type CrawlSession struct {
 	TotalTurns    int                       `json:"total_turns"`
 	TotalEXP      int                       `json:"total_exp"`
 	TotalGold     int                       `json:"total_gold"`
+	TotalCrystals int                       `json:"total_crystals"`
 	FloorResults  []DungeonFloorResult      `json:"floor_results"`
 	TreasureBoxes []TreasureBox             `json:"treasure_boxes,omitempty"`
 	Participants  []corebattle.Participant  `json:"participants"`
@@ -296,6 +298,7 @@ func (s *CrawlSession) AdvanceFloor(
 		s.Outcome = corebattle.OutcomeDefeat
 		s.TotalEXP = s.TotalEXP / 2
 		s.TotalGold = 0
+		s.TotalCrystals = 0
 		return res, nil
 	}
 
@@ -303,6 +306,7 @@ func (s *CrawlSession) AdvanceFloor(
 	s.FloorsCleared = s.CurrentFloor
 	s.TotalEXP += battleRes.TotalReward.Experience
 	s.TotalGold += battleRes.TotalReward.Currency
+	s.TotalCrystals += battleRes.TotalReward.Crystals
 
 	if isBoss {
 		s.StageCleared = true
@@ -398,6 +402,7 @@ func (s *CrawlSession) Result() DungeonCrawlResult {
 		TotalTurns:     s.TotalTurns,
 		TotalEXP:       s.TotalEXP,
 		TotalGold:      s.TotalGold,
+		TotalCrystals:  s.TotalCrystals,
 		FloorResults:   s.FloorResults,
 		TreasureBoxes:  s.TreasureBoxes,
 		PartySize:      len(s.Characters),

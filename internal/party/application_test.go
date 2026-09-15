@@ -576,6 +576,108 @@ func TestPartyService_StartPartyAdventure(t *testing.T) {
 	}
 }
 
+func TestPartyService_StartPartyAdventure_CrystalRewards(t *testing.T) {
+	partyRepo := newMockPartyRepository()
+	charRepo := newMockCharacterRepository()
+	invRepo := &mockInventoryRepository{inventories: make(map[string]coreinventory.Inventory)}
+
+	stages := &mockStageProvider{
+		stages: map[string]adventure.Stage{
+			"forest": {
+				ID:         "forest",
+				Name:       "はじまりの森",
+				MinLevel:   1,
+				MonsterIDs: []string{"slime"},
+			},
+		},
+	}
+	monsters := &mockMonsterProvider{
+		monsters: map[string]adventure.Monster{
+			"slime": {
+				ID:               "slime",
+				Name:             "スライム",
+				HP:               20,
+				Attack:           8,
+				Defense:          2,
+				ExperienceReward: 40,
+				GoldReward:       20,
+			},
+		},
+	}
+
+	customBattleEngine := &mockCrystalPartyBattleEngine{crystalsPerFloor: 7}
+	svc, err := NewService(
+		partyRepo,
+		charRepo,
+		invRepo,
+		stages,
+		monsters,
+		customBattleEngine,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leader := corecharacter.Character{
+		ID:      "char-leader",
+		Name:    "LeaderHero",
+		JobID:   "warrior",
+		Level:   10,
+		Stats:   corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 50, Defense: 20},
+		Crystal: 10,
+	}
+	charRepo.chars[leader.ID] = leader
+
+	p, err := svc.CreateParty(context.Background(), leader.ID, CreatePartyRequest{
+		Name:    "Crystal Party",
+		StageID: "forest",
+		Speed:   3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := svc.StartPartyAdventure(context.Background(), p.Party.ID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure failed: %v", err)
+	}
+	if res.Outcome != "win" {
+		t.Fatalf("expected win, got %s", res.Outcome)
+	}
+	// 10 floors * 7 = 70 crystals
+	if res.TotalCrystals != 70 {
+		t.Errorf("res.TotalCrystals = %d, want 70", res.TotalCrystals)
+	}
+	if len(res.Rewards) != 1 || res.Rewards[0].GainedCrystals != 70 {
+		t.Errorf("res.Rewards[0].GainedCrystals = %d, want 70", res.Rewards[0].GainedCrystals)
+	}
+	// Initial 10 + 70 = 80
+	if charRepo.chars[leader.ID].Crystal != 80 {
+		t.Errorf("charRepo.chars[leader.ID].Crystal = %d, want 80", charRepo.chars[leader.ID].Crystal)
+	}
+}
+
+type mockCrystalPartyBattleEngine struct {
+	crystalsPerFloor int
+}
+
+func (m *mockCrystalPartyBattleEngine) ResolvePartyBattle(req battle.PartyBattleRequest) (battle.PartyBattleResult, error) {
+	remHP := make(map[string]int)
+	for _, a := range req.Allies {
+		remHP[a.ID] = a.HP
+	}
+	return battle.PartyBattleResult{
+		Outcome:     battle.OutcomeWin,
+		Turns:       1,
+		RemainingHP: remHP,
+		TotalReward: battle.Reward{
+			Experience: 20,
+			Currency:   10,
+			Crystals:   m.crystalsPerFloor,
+		},
+	}, nil
+}
+
 func TestListParties(t *testing.T) {
 	svc, _, charRepo, _ := setupTestService(t)
 

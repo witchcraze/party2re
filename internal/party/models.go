@@ -118,13 +118,14 @@ type CreatePartyRequest struct {
 }
 
 type MemberRewardSummary struct {
-	CharacterID string              `json:"character_id"`
-	Name        string              `json:"name"`
-	GainedEXP   int                 `json:"gained_exp"`
-	GainedGold  int                 `json:"gained_gold"`
-	LevelBefore int                 `json:"level_before"`
-	LevelAfter  int                 `json:"level_after"`
-	Drops       []coreitem.Instance `json:"drops,omitempty"`
+	CharacterID    string              `json:"character_id"`
+	Name           string              `json:"name"`
+	GainedEXP      int                 `json:"gained_exp"`
+	GainedGold     int                 `json:"gained_gold"`
+	GainedCrystals int                 `json:"gained_crystals,omitempty"`
+	LevelBefore    int                 `json:"level_before"`
+	LevelAfter     int                 `json:"level_after"`
+	Drops          []coreitem.Instance `json:"drops,omitempty"`
 }
 
 type PartyAdventureResult struct {
@@ -135,6 +136,7 @@ type PartyAdventureResult struct {
 	Turns               int                      `json:"turns"`
 	TotalEXP            int                      `json:"total_exp"`
 	TotalGold           int                      `json:"total_gold"`
+	TotalCrystals       int                      `json:"total_crystals,omitempty"`
 	SynergyBonusPercent int                      `json:"synergy_bonus_percent"`
 	Rewards             []MemberRewardSummary    `json:"rewards"`
 	TreasureBoxes       []adventure.TreasureBox  `json:"treasure_boxes,omitempty"`

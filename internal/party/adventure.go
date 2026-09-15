@@ -141,8 +141,12 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			levelBefore := c.Level
 			gainedEXP := crawlResult.TotalEXP
 			gainedGold := crawlResult.TotalGold
+			gainedCrystals := crawlResult.TotalCrystals
 
 			_ = c.AddMoney(gainedGold)
+			if gainedCrystals > 0 {
+				_ = c.AddCrystal(gainedCrystals)
+			}
 			if gainedEXP > 0 {
 				if _, err := progression.ApplyExperience(&c, gainedEXP); err != nil {
 					return err
@@ -195,13 +199,14 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			}
 
 			rewardSummaries = append(rewardSummaries, MemberRewardSummary{
-				CharacterID: c.ID,
-				Name:        c.Name,
-				GainedEXP:   gainedEXP,
-				GainedGold:  gainedGold,
-				LevelBefore: levelBefore,
-				LevelAfter:  c.Level,
-				Drops:       drops,
+				CharacterID:    c.ID,
+				Name:           c.Name,
+				GainedEXP:      gainedEXP,
+				GainedGold:     gainedGold,
+				GainedCrystals: gainedCrystals,
+				LevelBefore:    levelBefore,
+				LevelAfter:     c.Level,
+				Drops:          drops,
 			})
 		}
 
@@ -237,6 +242,7 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			Turns:               crawlResult.TotalTurns,
 			TotalEXP:            crawlResult.TotalEXP,
 			TotalGold:           crawlResult.TotalGold,
+			TotalCrystals:       crawlResult.TotalCrystals,
 			SynergyBonusPercent: synergyBonus,
 			Rewards:             rewardSummaries,
 			TreasureBoxes:       crawlResult.TreasureBoxes,

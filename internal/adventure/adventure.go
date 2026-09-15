@@ -343,6 +343,7 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 				Reward: corebattle.Reward{
 					Experience: result.TotalEXP,
 					Currency:   result.TotalGold,
+					Crystals:   result.TotalCrystals,
 				},
 			},
 		}
@@ -351,13 +352,16 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 			_ = s.adventures.Save(ctx, adv)
 		}
 
-		// Apply experience and gold rewards
+		// Apply experience, gold, and crystal rewards
 		if result.Outcome == corebattle.OutcomeWin {
 			if result.TotalEXP > 0 {
 				_, _ = progression.ApplyExperience(&c, result.TotalEXP)
 			}
 			if result.TotalGold > 0 {
 				_ = c.AddMoney(result.TotalGold)
+			}
+			if result.TotalCrystals > 0 {
+				_ = c.AddCrystal(result.TotalCrystals)
 			}
 			if updater, ok := s.characters.(CharacterUpdater); ok {
 				_ = updater.Update(ctx, c)
