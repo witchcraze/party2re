@@ -144,7 +144,7 @@ The application-layer bridge (`internal/battle`) standardizes combat participant
   3. **Rank 5 (Depot)**: When item drops exceed inventory capacity, depots are locked in ascending character order.
 - **Resource Mutation**: Updates current HP, MP, and CMP based on `RemainingHP`, `RemainingMP`, and `RemainingCMP`. Fallen members survive with HP = 1.
 - **Consumed Item Persistence**: Items used during combat (`ConsumedItems`) are decremented from character inventory. If an equipped item was consumed or broken (e.g. 祈りの指輪), its equipment slot is automatically unequipped (`equip.Unequip`) simultaneously.
-- **Reward Distribution**: Adds gold, calculates experience growth via `progression.ApplyExperienceWithJobFull` (accounting for Stat Orbs and Job definitions), and adds item drops to inventory or routes them to Depot upon inventory overflow.
+- **Reward Distribution**: Adds gold, calculates experience growth via `progression.ApplyExperienceWithJobFull` (accounting for Stat Orbs and Job definitions), awards monster crystal drops (`character.Crystal` clamped to 999,999), and adds item drops to inventory. If inventory is full, overflow drops are routed to character depot (`DepotDeliveries`). If the depot is at capacity (`ErrDepotFull`) or unconfigured, undeposited items are strictly tracked in `LostDrops` without fabricating phantom deliveries.
 - **Single vs Multi-Character Transactions**: Single-character battles route through `economy.TransactionRunner` (`ExecuteTransaction`). Multi-character party battles route through `TransactionProvider` (`RunInTx`).
 
 ## Boundaries & Invariants

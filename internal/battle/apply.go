@@ -33,6 +33,7 @@ type ApplyPostBattleResponse struct {
 	LevelUpResults    map[string]progression.LevelUpResult
 	InventoryDrops    map[string][]coreitem.Instance
 	DepotDeliveries   map[string][]coreitem.Instance
+	LostDrops         map[string][]coreitem.Instance
 	ConsumedItems     map[string][]corebattle.ConsumedItem
 }
 
@@ -103,25 +104,10 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 			resp.GainedCrystals[charID] = gainedCrystals
 			resp.LevelUpResults[charID] = lvlRes
 			resp.InventoryDrops[charID] = invDrops
-			resp.DepotDeliveries[charID] = depotDrops
 
 			// Deliver overflow drops to Depot (Rank 5)
-			if len(depotDrops) > 0 && s.depotRepo != nil {
-				dep, err := s.depotRepo.FindByCharacterIDForUpdate(tc.Context, charID)
-				if errors.Is(err, depot.ErrNotFound) {
-					dep, err = depot.NewDepotWithCapacity(charID, tc.Character.JobLevel, 0, tc.Character.OverDepot)
-					if err != nil {
-						return err
-					}
-				} else if err != nil {
-					return err
-				}
-				for _, inst := range depotDrops {
-					_ = dep.AddItem(inst)
-				}
-				if err := s.depotRepo.Save(tc.Context, dep); err != nil {
-					return err
-				}
+			if err := s.deliverToDepot(tc.Context, charID, tc.Character, depotDrops, &resp); err != nil {
+				return err
 			}
 		}
 
@@ -206,7 +192,6 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 				resp.InventoryDrops[id] = invDrops
 				if len(depotDrops) > 0 {
 					pendingDepotDeliveries[id] = append(pendingDepotDeliveries[id], depotDrops...)
-					resp.DepotDeliveries[id] = depotDrops
 				}
 			}
 
@@ -218,25 +203,7 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 		// Phase 4: Lock & deliver to Depots in ascending order (Rank 5)
 		for _, id := range sortedIDs {
 			items := pendingDepotDeliveries[id]
-			if len(items) == 0 || s.depotRepo == nil {
-				continue
-			}
-
-			dep, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, id)
-			if errors.Is(err, depot.ErrNotFound) {
-				char := chars[id]
-				dep, err = depot.NewDepotWithCapacity(id, char.JobLevel, 0, char.OverDepot)
-				if err != nil {
-					return err
-				}
-			} else if err != nil {
-				return err
-			}
-
-			for _, inst := range items {
-				_ = dep.AddItem(inst)
-			}
-			if err := s.depotRepo.Save(txCtx, dep); err != nil {
+			if err := s.deliverToDepot(txCtx, id, chars[id], items, &resp); err != nil {
 				return err
 			}
 		}
@@ -450,6 +417,54 @@ func newApplyPostBattleResponse() ApplyPostBattleResponse {
 		LevelUpResults:    make(map[string]progression.LevelUpResult),
 		InventoryDrops:    make(map[string][]coreitem.Instance),
 		DepotDeliveries:   make(map[string][]coreitem.Instance),
+		LostDrops:         make(map[string][]coreitem.Instance),
 		ConsumedItems:     make(map[string][]corebattle.ConsumedItem),
 	}
+}
+
+func (s *Service) deliverToDepot(
+	ctx context.Context,
+	charID string,
+	char corecharacter.Character,
+	items []coreitem.Instance,
+	resp *ApplyPostBattleResponse,
+) error {
+	if len(items) == 0 {
+		return nil
+	}
+	if s.depotRepo == nil {
+		resp.LostDrops[charID] = append(resp.LostDrops[charID], items...)
+		return nil
+	}
+
+	dep, err := s.depotRepo.FindByCharacterIDForUpdate(ctx, charID)
+	if errors.Is(err, depot.ErrNotFound) {
+		dep, err = depot.NewDepotWithCapacity(charID, char.JobLevel, 0, char.OverDepot)
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	var delivered []coreitem.Instance
+	var lost []coreitem.Instance
+	for _, inst := range items {
+		if err := dep.AddItem(inst); err == nil {
+			delivered = append(delivered, inst)
+		} else {
+			lost = append(lost, inst)
+		}
+	}
+
+	if len(delivered) > 0 {
+		if err := s.depotRepo.Save(ctx, dep); err != nil {
+			return err
+		}
+		resp.DepotDeliveries[charID] = append(resp.DepotDeliveries[charID], delivered...)
+	}
+	if len(lost) > 0 {
+		resp.LostDrops[charID] = append(resp.LostDrops[charID], lost...)
+	}
+	return nil
 }
