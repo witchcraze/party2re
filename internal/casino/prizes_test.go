@@ -3,6 +3,7 @@ package casino_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/casino"
@@ -36,6 +37,7 @@ func (m *mockDepotRepo) Save(ctx context.Context, dep depot.Depot) error {
 }
 
 type mockPrizeCasinoRepo struct {
+	mu       sync.RWMutex
 	accounts map[string]casino.Account
 }
 
@@ -44,6 +46,8 @@ func newMockPrizeCasinoRepo() *mockPrizeCasinoRepo {
 }
 
 func (m *mockPrizeCasinoRepo) GetAccount(ctx context.Context, characterID string) (casino.Account, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	acc, ok := m.accounts[characterID]
 	if !ok {
 		return casino.Account{CharacterID: characterID, Coins: 0}, nil
@@ -56,14 +60,24 @@ func (m *mockPrizeCasinoRepo) GetAccountForUpdate(ctx context.Context, character
 }
 
 func (m *mockPrizeCasinoRepo) AdjustCoins(ctx context.Context, characterID string, coinDelta int64) (casino.Account, error) {
-	acc, _ := m.GetAccount(ctx, characterID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	acc, ok := m.accounts[characterID]
+	if !ok {
+		acc = casino.Account{CharacterID: characterID, Coins: 0}
+	}
 	acc.Coins += coinDelta
 	m.accounts[characterID] = acc
 	return acc, nil
 }
 
 func (m *mockPrizeCasinoRepo) DeductBetAndCreditPayout(ctx context.Context, characterID string, bet int64, payout int64) (casino.Account, error) {
-	acc, _ := m.GetAccount(ctx, characterID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	acc, ok := m.accounts[characterID]
+	if !ok {
+		acc = casino.Account{CharacterID: characterID, Coins: 0}
+	}
 	if acc.Coins < bet {
 		return acc, casino.ErrInsufficientCoins
 	}

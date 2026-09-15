@@ -177,6 +177,7 @@ type RoomMemberRepository interface {
 type RoomRepository interface {
 	RoomLifecycleRepository
 	RoomMemberRepository
+	RoomLockRepository
 }
 
 func hashPassword(pass string) string {

@@ -12,6 +12,8 @@ type MemoryRoomRepository struct {
 	rooms     map[string]Room
 	members   map[string]map[string]RoomMember
 	charRooms map[string]string
+	roomLocks map[string]*sync.Mutex
+	lockMu    sync.Mutex
 }
 
 // NewMemoryRoomRepository creates a new in-memory room repository.
@@ -20,6 +22,7 @@ func NewMemoryRoomRepository() *MemoryRoomRepository {
 		rooms:     make(map[string]Room),
 		members:   make(map[string]map[string]RoomMember),
 		charRooms: make(map[string]string),
+		roomLocks: make(map[string]*sync.Mutex),
 	}
 }
 
@@ -212,4 +215,30 @@ func (m *MemoryRoomRepository) GetCharacterRoom(_ context.Context, characterID s
 	defer m.mu.RUnlock()
 
 	return m.charRooms[characterID], nil
+}
+
+// WithRoomLock executes fn inside an exclusive lock for roomID.
+// It supports reentrant calls within the same context.
+func (m *MemoryRoomRepository) WithRoomLock(ctx context.Context, roomID string, fn func(ctx context.Context) error) error {
+	if roomID == "" {
+		return fn(ctx)
+	}
+
+	if isRoomLocked(ctx, roomID) {
+		return fn(ctx)
+	}
+
+	m.lockMu.Lock()
+	l, ok := m.roomLocks[roomID]
+	if !ok {
+		l = &sync.Mutex{}
+		m.roomLocks[roomID] = l
+	}
+	m.lockMu.Unlock()
+
+	l.Lock()
+	defer l.Unlock()
+
+	lockedCtx := withRoomLockedContext(ctx, roomID)
+	return fn(lockedCtx)
 }

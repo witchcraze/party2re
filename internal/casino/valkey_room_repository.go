@@ -170,12 +170,14 @@ func (v *ValkeyRoomRepository) GetRoomForUpdate(ctx context.Context, roomID stri
 
 // UpdateRoom updates room metadata in Valkey and refreshes sliding TTL.
 func (v *ValkeyRoomRepository) UpdateRoom(ctx context.Context, room Room) error {
-	dto, err := v.getRoomDetail(ctx, room.ID)
-	if err != nil {
-		return err
-	}
-	dto.Room = room
-	return v.saveRoomDetail(ctx, dto)
+	return v.WithRoomLock(ctx, room.ID, func(lockedCtx context.Context) error {
+		dto, err := v.getRoomDetail(lockedCtx, room.ID)
+		if err != nil {
+			return err
+		}
+		dto.Room = room
+		return v.saveRoomDetail(lockedCtx, dto)
+	})
 }
 
 // DeleteRoom removes a room and associated member mappings from Valkey.
@@ -269,38 +271,40 @@ func (v *ValkeyRoomRepository) PurgeIdleRooms(ctx context.Context, cutoff time.T
 
 // AddMember adds or updates a participant in the room.
 func (v *ValkeyRoomRepository) AddMember(ctx context.Context, member RoomMember) error {
-	dto, err := v.getRoomDetail(ctx, member.RoomID)
-	if err != nil {
-		return err
-	}
-	now := time.Now().UTC()
-	if member.JoinedAt.IsZero() {
-		member.JoinedAt = now
-	}
-	if member.UpdatedAt.IsZero() {
-		member.UpdatedAt = now
-	}
-
-	found := false
-	for i, m := range dto.Members {
-		if m.CharacterID == member.CharacterID {
-			dto.Members[i] = member
-			found = true
-			break
+	return v.WithRoomLock(ctx, member.RoomID, func(lockedCtx context.Context) error {
+		dto, err := v.getRoomDetail(lockedCtx, member.RoomID)
+		if err != nil {
+			return err
 		}
-	}
-	if !found {
-		dto.Members = append(dto.Members, member)
-	}
+		now := time.Now().UTC()
+		if member.JoinedAt.IsZero() {
+			member.JoinedAt = now
+		}
+		if member.UpdatedAt.IsZero() {
+			member.UpdatedAt = now
+		}
 
-	dto.Room.UpdatedAt = now
-	if err := v.saveRoomDetail(ctx, dto); err != nil {
-		return err
-	}
+		found := false
+		for i, m := range dto.Members {
+			if m.CharacterID == member.CharacterID {
+				dto.Members[i] = member
+				found = true
+				break
+			}
+		}
+		if !found {
+			dto.Members = append(dto.Members, member)
+		}
 
-	charKey := DefaultCharacterKeyPrefix + member.CharacterID
-	charCmd := v.client.B().Set().Key(charKey).Value(member.RoomID).Ex(DefaultLobbyTTL).Build()
-	return v.client.Do(ctx, charCmd).Error()
+		dto.Room.UpdatedAt = now
+		if err := v.saveRoomDetail(lockedCtx, dto); err != nil {
+			return err
+		}
+
+		charKey := DefaultCharacterKeyPrefix + member.CharacterID
+		charCmd := v.client.B().Set().Key(charKey).Value(member.RoomID).Ex(DefaultLobbyTTL).Build()
+		return v.client.Do(lockedCtx, charCmd).Error()
+	})
 }
 
 // GetMember retrieves a single participant from a room.
@@ -346,48 +350,52 @@ func (v *ValkeyRoomRepository) ListMembersForUpdate(ctx context.Context, roomID 
 
 // UpdateMember updates participant state in the room.
 func (v *ValkeyRoomRepository) UpdateMember(ctx context.Context, member RoomMember) error {
-	dto, err := v.getRoomDetail(ctx, member.RoomID)
-	if err != nil {
-		return err
-	}
-	found := false
-	for i, m := range dto.Members {
-		if m.CharacterID == member.CharacterID {
-			dto.Members[i] = member
-			found = true
-			break
+	return v.WithRoomLock(ctx, member.RoomID, func(lockedCtx context.Context) error {
+		dto, err := v.getRoomDetail(lockedCtx, member.RoomID)
+		if err != nil {
+			return err
 		}
-	}
-	if !found {
-		return ErrMemberNotFound
-	}
-	dto.Room.UpdatedAt = time.Now().UTC()
-	return v.saveRoomDetail(ctx, dto)
+		found := false
+		for i, m := range dto.Members {
+			if m.CharacterID == member.CharacterID {
+				dto.Members[i] = member
+				found = true
+				break
+			}
+		}
+		if !found {
+			return ErrMemberNotFound
+		}
+		dto.Room.UpdatedAt = time.Now().UTC()
+		return v.saveRoomDetail(lockedCtx, dto)
+	})
 }
 
 // RemoveMember removes a participant from the room.
 func (v *ValkeyRoomRepository) RemoveMember(ctx context.Context, roomID string, characterID string) error {
-	dto, err := v.getRoomDetail(ctx, roomID)
-	if err != nil {
-		return err
-	}
-	idx := -1
-	for i, m := range dto.Members {
-		if m.CharacterID == characterID {
-			idx = i
-			break
-		}
-	}
-	if idx >= 0 {
-		dto.Members = append(dto.Members[:idx], dto.Members[idx+1:]...)
-		dto.Room.UpdatedAt = time.Now().UTC()
-		if err := v.saveRoomDetail(ctx, dto); err != nil {
+	return v.WithRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		dto, err := v.getRoomDetail(lockedCtx, roomID)
+		if err != nil {
 			return err
 		}
-	}
-	charKey := DefaultCharacterKeyPrefix + characterID
-	_ = v.client.Do(ctx, v.client.B().Del().Key(charKey).Build())
-	return nil
+		idx := -1
+		for i, m := range dto.Members {
+			if m.CharacterID == characterID {
+				idx = i
+				break
+			}
+		}
+		if idx >= 0 {
+			dto.Members = append(dto.Members[:idx], dto.Members[idx+1:]...)
+			dto.Room.UpdatedAt = time.Now().UTC()
+			if err := v.saveRoomDetail(lockedCtx, dto); err != nil {
+				return err
+			}
+		}
+		charKey := DefaultCharacterKeyPrefix + characterID
+		_ = v.client.Do(lockedCtx, v.client.B().Del().Key(charKey).Build())
+		return nil
+	})
 }
 
 // GetCharacterRoom retrieves the room ID a character is currently associated with.
