@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -45,6 +46,7 @@ func TestValkeyRoomRepository_SaveRoom(t *testing.T) {
 		Round:             1,
 		GuildScores:       map[string]int{"guild-1": 1, "guild-2": 0},
 		CreatedAt:         time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC),
+		UpdatedAt:         time.Date(2026, 9, 13, 12, 5, 0, 0, time.UTC),
 	}
 	members := []gvg.GvGMember{
 		{
@@ -99,9 +101,13 @@ func TestValkeyRoomRepository_SaveRoom(t *testing.T) {
 		t.Errorf("saved room payload content mismatch: %+v", savedDetail)
 	}
 
-	// Second command: ZADD to rooms index
-	if cmds[1][0] != "ZADD" || cmds[1][1] != gvg.DefaultRoomsIndexKey || cmds[1][3] != room.ID {
+	// Second command: ZADD to rooms index with UpdatedAt score
+	if cmds[1][0] != "ZADD" || cmds[1][1] != gvg.DefaultRoomsActiveIndexKey || cmds[1][3] != room.ID {
 		t.Errorf("unexpected ZADD command: %v", cmds[1])
+	}
+	expectedScore := strconv.FormatInt(room.UpdatedAt.Unix(), 10)
+	if cmds[1][2] != expectedScore {
+		t.Errorf("expected score %s, got %s", expectedScore, cmds[1][2])
 	}
 
 	// 2. SET error
@@ -208,7 +214,7 @@ func TestValkeyRoomRepository_DeleteRoom(t *testing.T) {
 	if cmds[0][0] != "DEL" || cmds[0][1] != gvg.DefaultRoomKeyPrefix+"del-gvg-1" {
 		t.Errorf("unexpected DEL command: %v", cmds[0])
 	}
-	if cmds[1][0] != "ZREM" || cmds[1][1] != gvg.DefaultRoomsIndexKey || cmds[1][2] != "del-gvg-1" {
+	if cmds[1][0] != "ZREM" || cmds[1][1] != gvg.DefaultRoomsActiveIndexKey || cmds[1][2] != "del-gvg-1" {
 		t.Errorf("unexpected ZREM command: %v", cmds[1])
 	}
 
@@ -305,10 +311,22 @@ func TestValkeyRoomRepository_ListRooms(t *testing.T) {
 		t.Errorf("unexpected summaries order or IDs: %+v", summaries)
 	}
 
+	// Verify lazy pruning was executed via ZREMRANGEBYSCORE
+	pruned := false
+	for _, recorded := range client.RecordedCommandStrings() {
+		if recorded[0] == "ZREMRANGEBYSCORE" && recorded[1] == gvg.DefaultRoomsActiveIndexKey && recorded[2] == "-inf" {
+			pruned = true
+			break
+		}
+	}
+	if !pruned {
+		t.Error("expected lazy pruning via ZREMRANGEBYSCORE on DefaultRoomsActiveIndexKey")
+	}
+
 	// Verify that gvg-expired was purged via ZREM
 	purged := false
 	for _, recorded := range client.RecordedCommandStrings() {
-		if recorded[0] == "ZREM" && recorded[1] == gvg.DefaultRoomsIndexKey && recorded[2] == "gvg-expired" {
+		if recorded[0] == "ZREM" && recorded[1] == gvg.DefaultRoomsActiveIndexKey && recorded[2] == "gvg-expired" {
 			purged = true
 			break
 		}
@@ -325,6 +343,29 @@ func TestValkeyRoomRepository_ListRooms(t *testing.T) {
 	repoErr, _ := gvg.NewValkeyRoomRepository(clientErr)
 	if _, err := repoErr.ListRooms(ctx); !errors.Is(err, errZrev) {
 		t.Fatalf("expected errZrev, got %v", err)
+	}
+
+	// 3. Lazy pruning error is non-fatal
+	clientPruneErr := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		cmdParts := cmd.Commands()
+		switch cmdParts[0] {
+		case "ZREMRANGEBYSCORE":
+			return valkeytest.MakeErrorResult(errors.New("prune failure"))
+		case "ZREVRANGE":
+			return valkeytest.MakeStringSliceResult([]string{"gvg-1"})
+		case "GET":
+			return valkeytest.MakeStringResult(string(r1JSON))
+		default:
+			return valkeytest.MakeOKResult()
+		}
+	}))
+	repoPruneErr, _ := gvg.NewValkeyRoomRepository(clientPruneErr)
+	nonFatalSummaries, err := repoPruneErr.ListRooms(ctx)
+	if err != nil {
+		t.Fatalf("expected lazy pruning error to be non-fatal, got: %v", err)
+	}
+	if len(nonFatalSummaries) != 1 || nonFatalSummaries[0].ID != "gvg-1" {
+		t.Fatalf("expected 1 room, got: %+v", nonFatalSummaries)
 	}
 }
 

@@ -12,7 +12,7 @@ Guild members gather in ephemeral, real-time battle rooms to compete across mult
 
 - **Live Team Battle Resolution**: Combats are resolved dynamically through `internal/core/battle.Engine` via `ResolvePartyBattle`. All participants sharing the room leader's guild color form the Ally party, while opposing guild participants form the Enemy party.
 - **Dual-Tier Storage Model**:
-  - **Ephemeral Room State (Valkey Master)**: Rooms, active rosters, and character-to-room mappings are stored in Valkey (`party2:gvg:room:<id>`, `party2:gvg:character:<id>`, `party2:gvg:rooms`) with a 30-minute inactivity TTL. Disbanding or match completion immediately cleans up active mappings.
+  - **Ephemeral Room State (Valkey Master)**: Rooms, active rosters, and character-to-room mappings are stored in Valkey (`party2:gvg:room:<id>`, `party2:gvg:character:<id>`, `party2:gvg:rooms:active`) with a 30-minute inactivity TTL. Disbanding or match completion immediately cleans up active mappings.
   - **Canonical Persistence (MariaDB Master)**: Guild standings, accumulated Victory Points (GP), wins, losses, draws, and permanent 7-tier trophy decorations are durably recorded in `gvg_standings` using row-level pessimistic locking (`FOR UPDATE`). Guilds store their official team color in `guilds.color`.
 - **Authorization & Ownership**: All room creation, joining, starting, and advancing operations enforce strict character ownership through standard authentication middleware (`withAuthenticatedCharacter`).
 

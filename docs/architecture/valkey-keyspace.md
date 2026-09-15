@@ -111,10 +111,10 @@ The table below catalogs all production key patterns currently active in the cod
 | `party2:daily:<action>:<id>` | Valkey Master | `String` | Until next midnight JST (`EXAT` / seconds) | Date string or flag (`"1"`) | `internal/core/timer` | `ConsumeDailyQuota` (SET NX EX), `HasUsedDailyQuota` (EXISTS), `ResetDailyQuota` (DEL). Daily action and prayer quotas. |
 | `party2:pvp:room:<room_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | JSON (`RoomDetail`: `Room`, `Members`) | `internal/pvp` | `SaveRoom` (SET EX), `GetRoom` (GET), `DeleteRoom` (DEL). Ephemeral Colosseum room state. |
 | `party2:pvp:character:<character_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | Room ID (`string`) | `internal/pvp` | `SetCharacterRoom` (SET EX), `GetCharacterRoom` (GET), `DeleteCharacterRoom` (DEL). Single active room check. |
-| `party2:pvp:rooms` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `room_id`, Score: `CreatedAt.Unix()` | `internal/pvp` | `SaveRoom` (ZADD), `DeleteRoom` (ZREM), `ListRooms` (ZRANGE). Active Colosseum rooms list. |
+| `party2:pvp:rooms:active` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `room_id`, Score: `UpdatedAt.Unix()` | `internal/pvp` | `SaveRoom` (ZADD), `DeleteRoom` (ZREM), `ListRooms` (ZREVRANGE + lazy ZREMRANGEBYSCORE). Active Colosseum rooms list. |
 | `party2:gvg:room:<room_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | JSON (`RoomDetail`: `Room`, `Members`) | `internal/gvg` | `SaveRoom` (SET EX), `GetRoom` (GET), `DeleteRoom` (DEL). Ephemeral GvG room state. |
 | `party2:gvg:character:<character_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | Room ID (`string`) | `internal/gvg` | `SetCharacterRoom` (SET EX), `GetCharacterRoom` (GET), `DeleteCharacterRoom` (DEL). Single active GvG room check. |
-| `party2:gvg:rooms` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `room_id`, Score: `CreatedAt.Unix()` | `internal/gvg` | `SaveRoom` (ZADD), `DeleteRoom` (ZREM), `ListRooms` (ZRANGE). Active GvG rooms list. |
+| `party2:gvg:rooms:active` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `room_id`, Score: `UpdatedAt.Unix()` | `internal/gvg` | `SaveRoom` (ZADD), `DeleteRoom` (ZREM), `ListRooms` (ZREVRANGE + lazy ZREMRANGEBYSCORE). Active GvG rooms list. |
 | `party2:eventplaza:presence` | Valkey Master | `Sorted Set (ZSet)` | 1 hour (`3600s`), sliding | Member: `character_id`, Score: `LastSeenAt.Unix()` (`float64`) | `internal/eventplaza` | `RecordPresence` (ZADD + EXPIRE 3600), `CountActiveParticipants` (lazy ZREMRANGEBYSCORE + ZCARD). Real-time Event Plaza member presence. |
 | `party2:casino:room:<room_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | JSON (`CasinoRoomState`: room config, members, deck, turn, pot, status) | `internal/casino` | Candidate C standard pattern (Issue #635). Target store for in-flight card games (Indian Poker, High-Low, Doppelganger). |
 | `party2:casino:character:<character_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | Room ID (`string`) | `internal/casino` | Single active casino room per character invariant check. |
@@ -166,11 +166,11 @@ The following specifications define the key patterns, data types, and lifecycle 
     - *(Legacy `parties` and `party_members` MariaDB tables dropped in Migration 052)*.
   - **Colosseum PvP (`internal/pvp`)**:
     - `party2:pvp:room:<room_id>`: `String (JSON)`, 30m (`1800s`) sliding TTL.
-    - `party2:pvp:rooms`: `Sorted Set (ZSet)` scored by `CreatedAt.Unix()`.
+    - `party2:pvp:rooms:active`: `Sorted Set (ZSet)` scored by `UpdatedAt.Unix()` (lazy pruned via `ZREMRANGEBYSCORE`).
     - `party2:pvp:character:<character_id>`: `String`, 30m (`1800s`) sliding TTL.
   - **Guild GvG Combat (`internal/gvg`)**:
     - `party2:gvg:room:<room_id>`: `String (JSON)`, 30m (`1800s`) sliding TTL.
-    - `party2:gvg:rooms`: `Sorted Set (ZSet)` scored by `CreatedAt.Unix()`.
+    - `party2:gvg:rooms:active`: `Sorted Set (ZSet)` scored by `UpdatedAt.Unix()` (lazy pruned via `ZREMRANGEBYSCORE`).
     - `party2:gvg:character:<character_id>`: `String`, 30m (`1800s`) sliding TTL.
   - **Casino Card Games (`internal/casino`)**:
     - `party2:casino:room:<room_id>`: `String (JSON)`, 30m (`1800s`) sliding TTL. Store for Indian Poker, High-Low, and Doppelganger.

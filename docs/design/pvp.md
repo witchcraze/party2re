@@ -12,7 +12,7 @@ Unlike modern asynchronous snapshot Elo ladders, authentic Party2 PvP features r
 
 - **Purge of Fictional Elo Arena**: Asynchronous Elo rating calculation, defense logs, and rating tables (`arena_ratings`, `arena_matches`) have been completely purged.
 - **Relational vs Ephemeral Authority**:
-  - Room state, participant roster, team assignments, and round scores are stored ephemerally in Valkey Master (`party2:pvp:room:<id>`, `party2:pvp:character:<id>`, `party2:pvp:rooms`) with a 30-minute inactivity TTL.
+  - Room state, participant roster, team assignments, and round scores are stored ephemerally in Valkey Master (`party2:pvp:room:<id>`, `party2:pvp:character:<id>`, `party2:pvp:rooms:active`) with a 30-minute inactivity TTL.
   - Canonical player wealth (`characters.money`) and PvP victories (`characters.pvp_wins`, legacy `$m{kill_p}`) are durably persisted in MariaDB Master.
 - **Core Battle Engine Integration**: Round combat utilizes `corebattle.Engine.ResolvePartyBattle`, treating teammates as allies and opposing color participants as enemies.
 
@@ -90,7 +90,7 @@ A character can host a Colosseum room with configurable parameters:
 
 - `party2:pvp:room:<room_id>`: `String (JSON)`. Full room metadata and participant array. 30-minute TTL.
 - `party2:pvp:character:<character_id>`: `String`. Active room ID mapping. 30-minute TTL.
-- `party2:pvp:rooms`: `Sorted Set (ZSet)`. Active room index ordered by `CreatedAt`.
+- `party2:pvp:rooms:active`: `Sorted Set (ZSet)`. Active room index ordered by `UpdatedAt` with lazy TTL pruning.
 
 ### HTTP REST Endpoints
 

@@ -4,15 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"sort"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/valkey-io/valkey-go"
 )
 
 const (
-	DefaultRoomKeyPrefix      = "party2:pvp:room:"
-	DefaultCharacterKeyPrefix = "party2:pvp:character:"
-	DefaultRoomsIndexKey      = "party2:pvp:rooms"
+	DefaultRoomKeyPrefix       = "party2:pvp:room:"
+	DefaultCharacterKeyPrefix  = "party2:pvp:character:"
+	DefaultRoomsActiveIndexKey = "party2:pvp:rooms:active"
+	DefaultRoomsIndexKey       = DefaultRoomsActiveIndexKey // Deprecated: alias for backward compatibility
 )
 
 // RoomRepository manages ephemeral colosseum room state.
@@ -155,6 +158,14 @@ func NewValkeyRoomRepository(client valkey.Client) (*ValkeyRoomRepository, error
 }
 
 func (v *ValkeyRoomRepository) SaveRoom(ctx context.Context, room ColosseumRoom, members []RoomMember) error {
+	now := time.Now().UTC()
+	if room.CreatedAt.IsZero() {
+		room.CreatedAt = now
+	}
+	if room.UpdatedAt.IsZero() {
+		room.UpdatedAt = now
+	}
+
 	detail := RoomDetail{Room: room, Members: members}
 	data, err := json.Marshal(detail)
 	if err != nil {
@@ -167,8 +178,8 @@ func (v *ValkeyRoomRepository) SaveRoom(ctx context.Context, room ColosseumRoom,
 		return err
 	}
 
-	indexCmd := v.client.B().Zadd().Key(DefaultRoomsIndexKey).ScoreMember().
-		ScoreMember(float64(room.CreatedAt.Unix()), room.ID).Build()
+	indexCmd := v.client.B().Zadd().Key(DefaultRoomsActiveIndexKey).ScoreMember().
+		ScoreMember(float64(room.UpdatedAt.Unix()), room.ID).Build()
 	return v.client.Do(ctx, indexCmd).Error()
 }
 
@@ -200,12 +211,17 @@ func (v *ValkeyRoomRepository) DeleteRoom(ctx context.Context, id string) error 
 	delCmd := v.client.B().Del().Key(key).Build()
 	_ = v.client.Do(ctx, delCmd)
 
-	zremCmd := v.client.B().Zrem().Key(DefaultRoomsIndexKey).Member(id).Build()
+	zremCmd := v.client.B().Zrem().Key(DefaultRoomsActiveIndexKey).Member(id).Build()
 	return v.client.Do(ctx, zremCmd).Error()
 }
 
 func (v *ValkeyRoomRepository) ListRooms(ctx context.Context) ([]RoomSummary, error) {
-	cmd := v.client.B().Zrevrange().Key(DefaultRoomsIndexKey).Start(0).Stop(50).Build()
+	now := time.Now().UTC()
+	cutoff := float64(now.Add(-DefaultLobbyTTL).Unix())
+	remCmd := v.client.B().Zremrangebyscore().Key(DefaultRoomsActiveIndexKey).Min("-inf").Max(strconv.FormatFloat(cutoff, 'f', 0, 64)).Build()
+	_ = v.client.Do(ctx, remCmd)
+
+	cmd := v.client.B().Zrevrange().Key(DefaultRoomsActiveIndexKey).Start(0).Stop(50).Build()
 	res := v.client.Do(ctx, cmd)
 	if err := res.Error(); err != nil {
 		return nil, err
@@ -220,7 +236,7 @@ func (v *ValkeyRoomRepository) ListRooms(ctx context.Context) ([]RoomSummary, er
 	for _, id := range roomIDs {
 		detail, err := v.GetRoom(ctx, id)
 		if err != nil {
-			_ = v.client.Do(ctx, v.client.B().Zrem().Key(DefaultRoomsIndexKey).Member(id).Build())
+			_ = v.client.Do(ctx, v.client.B().Zrem().Key(DefaultRoomsActiveIndexKey).Member(id).Build())
 			continue
 		}
 		if detail.Room.Status != StatusRecruiting {
