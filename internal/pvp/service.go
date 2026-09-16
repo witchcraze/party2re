@@ -227,80 +227,86 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 
 // JoinRoom adds a character to an active colosseum room (quest.cgi:type=4).
 func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID string, password string) (RoomDetail, error) {
-	char, err := s.characters.FindByID(ctx, characterID)
-	if err != nil {
-		return RoomDetail{}, err
-	}
-	if char.Stats.HP <= 0 {
-		return RoomDetail{}, ErrCharacterUnconscious
-	}
-	if char.Tired >= 100 {
-		return RoomDetail{}, ErrCharacterExhausted
-	}
-
-	detail, err := s.repo.GetRoom(ctx, roomID)
-	if err != nil {
-		return RoomDetail{}, err
-	}
-	if detail.Room.Status != StatusRecruiting {
-		return RoomDetail{}, ErrRoomNotRecruiting
-	}
-	if len(detail.Members) >= detail.Room.MaxMembers {
-		return RoomDetail{}, ErrRoomFull
-	}
-
-	for _, m := range detail.Members {
-		if m.CharacterID == char.ID {
-			return detail, nil
+	var result RoomDetail
+	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		char, err := s.characters.FindByID(lockedCtx, characterID)
+		if err != nil {
+			return err
 		}
-	}
-
-	if existingRoomID, _ := s.repo.GetCharacterRoom(ctx, char.ID); existingRoomID != "" && existingRoomID != roomID {
-		if existing, err := s.repo.GetRoom(ctx, existingRoomID); err == nil && existing.Room.Status != StatusCompleted && existing.Room.Status != StatusDisbanded {
-			return RoomDetail{}, ErrAlreadyInRoom
+		if char.Stats.HP <= 0 {
+			return ErrCharacterUnconscious
 		}
-	}
+		if char.Tired >= 100 {
+			return ErrCharacterExhausted
+		}
 
-	if detail.Room.PasswordHash != "" && hashPassword(password) != detail.Room.PasswordHash {
-		return RoomDetail{}, ErrInvalidPassword
-	}
-	if err := checkNeedJoin(char, detail.Room.NeedJoin); err != nil {
-		return RoomDetail{}, err
-	}
+		detail, err := s.repo.GetRoom(lockedCtx, roomID)
+		if err != nil {
+			return err
+		}
+		if detail.Room.Status != StatusRecruiting {
+			return ErrRoomNotRecruiting
+		}
+		if len(detail.Members) >= detail.Room.MaxMembers {
+			return ErrRoomFull
+		}
 
-	// Deduct Bet from participant wallet
-	if err := char.DeductMoney(detail.Room.Bet); err != nil {
-		return RoomDetail{}, ErrInsufficientBetFunds
-	}
-	if err := s.characters.Update(ctx, char); err != nil {
-		return RoomDetail{}, fmt.Errorf("deduct bet from participant: %w", err)
-	}
+		for _, m := range detail.Members {
+			if m.CharacterID == char.ID {
+				result = detail
+				return nil
+			}
+		}
 
-	now := time.Now().UTC()
-	detail.Room.PrizePool += detail.Room.Bet
-	detail.Room.UpdatedAt = now
+		if existingRoomID, _ := s.repo.GetCharacterRoom(lockedCtx, char.ID); existingRoomID != "" && existingRoomID != roomID {
+			if existing, err := s.repo.GetRoom(lockedCtx, existingRoomID); err == nil && existing.Room.Status != StatusCompleted && existing.Room.Status != StatusDisbanded {
+				return ErrAlreadyInRoom
+			}
+		}
 
-	newMember := RoomMember{
-		RoomID:        roomID,
-		CharacterID:   char.ID,
-		CharacterName: char.Name,
-		JobID:         char.JobID,
-		Level:         char.Level,
-		HP:            char.Stats.HP,
-		MaxHP:         char.Stats.MaxHP,
-		TeamColor:     "",
-		IsLeader:      false,
-		ReadyState:    false,
-		JoinedAt:      now,
-	}
+		if detail.Room.PasswordHash != "" && hashPassword(password) != detail.Room.PasswordHash {
+			return ErrInvalidPassword
+		}
+		if err := checkNeedJoin(char, detail.Room.NeedJoin); err != nil {
+			return err
+		}
 
-	detail.Members = append(detail.Members, newMember)
-	if err := s.repo.SaveRoom(ctx, detail.Room, detail.Members); err != nil {
-		return RoomDetail{}, err
-	}
-	_ = s.repo.SetCharacterRoom(ctx, char.ID, roomID)
+		// Deduct Bet from participant wallet
+		if err := char.DeductMoney(detail.Room.Bet); err != nil {
+			return ErrInsufficientBetFunds
+		}
+		if err := s.characters.Update(lockedCtx, char); err != nil {
+			return fmt.Errorf("deduct bet from participant: %w", err)
+		}
 
-	return detail, nil
+		now := time.Now().UTC()
+		detail.Room.PrizePool += detail.Room.Bet
+		detail.Room.UpdatedAt = now
+
+		newMember := RoomMember{
+			RoomID:        roomID,
+			CharacterID:   char.ID,
+			CharacterName: char.Name,
+			JobID:         char.JobID,
+			Level:         char.Level,
+			HP:            char.Stats.HP,
+			MaxHP:         char.Stats.MaxHP,
+			TeamColor:     "",
+			IsLeader:      false,
+			ReadyState:    false,
+			JoinedAt:      now,
+		}
+
+		detail.Members = append(detail.Members, newMember)
+		if err := s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members); err != nil {
+			return err
+		}
+		_ = s.repo.SetCharacterRoom(lockedCtx, char.ID, roomID)
+
+		result = detail
+		return nil
+	})
+	return result, err
 }
 
 // SelectTeam assigns a participant to one of the 9 team colors (@ぱーてぃー).
@@ -310,103 +316,110 @@ func (s *Service) SelectTeam(ctx context.Context, characterID string, roomID str
 		return RoomDetail{}, ErrInvalidTeamColor
 	}
 
-	detail, err := s.repo.GetRoom(ctx, roomID)
-	if err != nil {
-		return RoomDetail{}, err
-	}
-	if detail.Room.Round > 0 || detail.Room.Status != StatusRecruiting {
-		return RoomDetail{}, ErrMatchAlreadyStarted
-	}
-
-	found := false
-	for i := range detail.Members {
-		if detail.Members[i].CharacterID == characterID {
-			detail.Members[i].TeamColor = normColor
-			found = true
-			break
+	var result RoomDetail
+	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		detail, err := s.repo.GetRoom(lockedCtx, roomID)
+		if err != nil {
+			return err
 		}
-	}
-	if !found {
-		return RoomDetail{}, ErrCharacterNotInRoom
-	}
+		if detail.Room.Round > 0 || detail.Room.Status != StatusRecruiting {
+			return ErrMatchAlreadyStarted
+		}
 
-	detail.Room.UpdatedAt = time.Now().UTC()
-	if err := s.repo.SaveRoom(ctx, detail.Room, detail.Members); err != nil {
-		return RoomDetail{}, err
-	}
-	return detail, nil
+		found := false
+		for i := range detail.Members {
+			if detail.Members[i].CharacterID == characterID {
+				detail.Members[i].TeamColor = normColor
+				found = true
+				break
+			}
+		}
+		if !found {
+			return ErrCharacterNotInRoom
+		}
+
+		detail.Room.UpdatedAt = time.Now().UTC()
+		if err := s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members); err != nil {
+			return err
+		}
+		result = detail
+		return nil
+	})
+	return result, err
 }
 
 // LeaveRoom removes a participant or disbands the room (@にげる).
 func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID string) error {
-	detail, err := s.repo.GetRoom(ctx, roomID)
-	if err != nil {
-		return err
-	}
-
-	char, err := s.characters.FindByID(ctx, characterID)
-	if err != nil {
-		return err
-	}
-
-	found := false
-	isLeader := false
-	for _, m := range detail.Members {
-		if m.CharacterID == characterID {
-			found = true
-			isLeader = m.IsLeader
-			break
-		}
-	}
-	if !found {
-		return ErrCharacterNotInRoom
-	}
-	if detail.Room.Status == StatusInProgress {
-		return ErrMatchAlreadyStarted
-	}
-
-	now := time.Now().UTC()
-
-	// If recruiting: leader leaving disbands and refunds everyone; non-leader leaving refunds themselves.
-	if detail.Room.Status == StatusRecruiting {
-		if isLeader {
-			// Disband and refund all members
-			for _, m := range detail.Members {
-				if mChar, err := s.characters.FindByID(ctx, m.CharacterID); err == nil {
-					_ = mChar.AddMoney(detail.Room.Bet)
-					_ = s.characters.Update(ctx, mChar)
-				}
-				_ = s.repo.DeleteCharacterRoom(ctx, m.CharacterID)
-			}
-			detail.Room.Status = StatusDisbanded
-			detail.Room.PrizePool = 0
-			detail.Room.UpdatedAt = now
-			return s.repo.DeleteRoom(ctx, roomID)
+	return s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		detail, err := s.repo.GetRoom(lockedCtx, roomID)
+		if err != nil {
+			return err
 		}
 
-		// Non-leader leaving: refund bet
-		_ = char.AddMoney(detail.Room.Bet)
-		_ = s.characters.Update(ctx, char)
-		_ = s.repo.DeleteCharacterRoom(ctx, char.ID)
+		char, err := s.characters.FindByID(lockedCtx, characterID)
+		if err != nil {
+			return err
+		}
 
-		var updatedMembers []RoomMember
+		found := false
+		isLeader := false
 		for _, m := range detail.Members {
-			if m.CharacterID != characterID {
-				updatedMembers = append(updatedMembers, m)
+			if m.CharacterID == characterID {
+				found = true
+				isLeader = m.IsLeader
+				break
 			}
 		}
-		detail.Members = updatedMembers
-		detail.Room.PrizePool -= detail.Room.Bet
-		if detail.Room.PrizePool < 0 {
-			detail.Room.PrizePool = 0
+		if !found {
+			return ErrCharacterNotInRoom
 		}
-		detail.Room.UpdatedAt = now
-		return s.repo.SaveRoom(ctx, detail.Room, detail.Members)
-	}
+		if detail.Room.Status == StatusInProgress {
+			return ErrMatchAlreadyStarted
+		}
 
-	// In completed or disbanded status: simply remove mapping
-	_ = s.repo.DeleteCharacterRoom(ctx, char.ID)
-	return nil
+		now := time.Now().UTC()
+
+		// If recruiting: leader leaving disbands and refunds everyone; non-leader leaving refunds themselves.
+		if detail.Room.Status == StatusRecruiting {
+			if isLeader {
+				// Disband and refund all members
+				for _, m := range detail.Members {
+					if mChar, err := s.characters.FindByID(lockedCtx, m.CharacterID); err == nil {
+						_ = mChar.AddMoney(detail.Room.Bet)
+						_ = s.characters.Update(lockedCtx, mChar)
+					}
+					_ = s.repo.DeleteCharacterRoom(lockedCtx, m.CharacterID)
+				}
+				detail.Room.Status = StatusDisbanded
+				detail.Room.PrizePool = 0
+				detail.Room.UpdatedAt = now
+				return s.repo.DeleteRoom(lockedCtx, roomID)
+			}
+
+			// Non-leader leaving: refund bet
+			_ = char.AddMoney(detail.Room.Bet)
+			_ = s.characters.Update(lockedCtx, char)
+			_ = s.repo.DeleteCharacterRoom(lockedCtx, char.ID)
+
+			var updatedMembers []RoomMember
+			for _, m := range detail.Members {
+				if m.CharacterID != characterID {
+					updatedMembers = append(updatedMembers, m)
+				}
+			}
+			detail.Members = updatedMembers
+			detail.Room.PrizePool -= detail.Room.Bet
+			if detail.Room.PrizePool < 0 {
+				detail.Room.PrizePool = 0
+			}
+			detail.Room.UpdatedAt = now
+			return s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members)
+		}
+
+		// In completed or disbanded status: simply remove mapping
+		_ = s.repo.DeleteCharacterRoom(lockedCtx, char.ID)
+		return nil
+	})
 }
 
 func (s *Service) GetRoom(ctx context.Context, roomID string) (RoomDetail, error) {

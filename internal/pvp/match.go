@@ -10,244 +10,254 @@ import (
 
 // StartMatch initiates round 1 of the Colosseum battle (@かいし).
 func (s *Service) StartMatch(ctx context.Context, leaderID string, roomID string) (RoomDetail, error) {
-	detail, err := s.repo.GetRoom(ctx, roomID)
-	if err != nil {
-		return RoomDetail{}, err
-	}
-	if detail.Room.LeaderCharacterID != leaderID {
-		return RoomDetail{}, ErrNotRoomLeader
-	}
-	if detail.Room.Status != StatusRecruiting || detail.Room.Round > 0 {
-		return RoomDetail{}, ErrMatchAlreadyStarted
-	}
-	if len(detail.Members) < MinMembers {
-		return RoomDetail{}, ErrNotEnoughParticipants
-	}
-
-	teams := make(map[string]bool)
-	for _, m := range detail.Members {
-		if m.TeamColor == "" {
-			return RoomDetail{}, ErrTeamsNotConfigured
+	var result RoomDetail
+	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		detail, err := s.repo.GetRoom(lockedCtx, roomID)
+		if err != nil {
+			return err
 		}
-		teams[m.TeamColor] = true
-	}
-	if len(teams) < 2 {
-		return RoomDetail{}, ErrNeedAtLeastTwoTeams
-	}
+		if detail.Room.LeaderCharacterID != leaderID {
+			return ErrNotRoomLeader
+		}
+		if detail.Room.Status != StatusRecruiting || detail.Room.Round > 0 {
+			return ErrMatchAlreadyStarted
+		}
+		if len(detail.Members) < MinMembers {
+			return ErrNotEnoughParticipants
+		}
 
-	// Recover HP of all participants to MaxHP
-	for i := range detail.Members {
-		detail.Members[i].HP = detail.Members[i].MaxHP
-	}
+		teams := make(map[string]bool)
+		for _, m := range detail.Members {
+			if m.TeamColor == "" {
+				return ErrTeamsNotConfigured
+			}
+			teams[m.TeamColor] = true
+		}
+		if len(teams) < 2 {
+			return ErrNeedAtLeastTwoTeams
+		}
 
-	now := time.Now().UTC()
-	detail.Room.Status = StatusInProgress
-	detail.Room.Round = 1
-	detail.Room.UpdatedAt = now
+		// Recover HP of all participants to MaxHP
+		for i := range detail.Members {
+			detail.Members[i].HP = detail.Members[i].MaxHP
+		}
 
-	if err := s.repo.SaveRoom(ctx, detail.Room, detail.Members); err != nil {
-		return RoomDetail{}, err
-	}
-	return detail, nil
+		now := time.Now().UTC()
+		detail.Room.Status = StatusInProgress
+		detail.Room.Round = 1
+		detail.Room.UpdatedAt = now
+
+		if err := s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members); err != nil {
+			return err
+		}
+		result = detail
+		return nil
+	})
+	return result, err
 }
 
 // AdvanceRound executes combat for the active round and advances the match (@かいし).
 func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID string) (RoundResolution, error) {
-	detail, err := s.repo.GetRoom(ctx, roomID)
-	if err != nil {
-		return RoundResolution{}, err
-	}
-	if detail.Room.LeaderCharacterID != leaderID {
-		return RoundResolution{}, ErrNotRoomLeader
-	}
-	if detail.Room.Status != StatusInProgress {
-		return RoundResolution{}, ErrMatchNotInProgress
-	}
-
-	// Group living members by team
-	teamMembers := make(map[string][]RoomMember)
-	for _, m := range detail.Members {
-		teamMembers[m.TeamColor] = append(teamMembers[m.TeamColor], m)
-	}
-
-	leaderTeam := ""
-	for _, m := range detail.Members {
-		if m.CharacterID == leaderID {
-			leaderTeam = m.TeamColor
-			break
+	var result RoundResolution
+	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		detail, err := s.repo.GetRoom(lockedCtx, roomID)
+		if err != nil {
+			return err
 		}
-	}
-
-	var otherTeam string
-	for _, m := range detail.Members {
-		if m.TeamColor != leaderTeam {
-			otherTeam = m.TeamColor
-			break
+		if detail.Room.LeaderCharacterID != leaderID {
+			return ErrNotRoomLeader
 		}
-	}
-
-	// Build battle participants for Leader's Team (Allies) vs Opposing Team (Enemies)
-	var allies, enemies []corebattle.Participant
-	for _, m := range detail.Members {
-		var p corebattle.Participant
-		if s.participantBuilder != nil {
-			var err error
-			p, err = s.participantBuilder.BuildParticipantWithCurrentHP(ctx, m.CharacterID, m.HP)
-			if err != nil {
-				return RoundResolution{}, err
-			}
-		} else {
-			char, err := s.characters.FindByID(ctx, m.CharacterID)
-			if err != nil {
-				return RoundResolution{}, err
-			}
-			p = corebattle.MustNewParticipant(char.ID, char.Stats.HP, char.Stats.Attack, char.Stats.Defense)
-			p.Name = char.Name
-			p.MaxHP = char.Stats.MaxHP
-			p.MP = char.Stats.MP
-			p.MaxMP = char.Stats.MaxMP
-			p.Agility = char.Stats.Agility
+		if detail.Room.Status != StatusInProgress {
+			return ErrMatchNotInProgress
 		}
-		if m.HP > 0 {
-			p.HP = m.HP
-		} else if p.HP <= 0 {
-			p.HP = m.MaxHP
-		}
-		p.TeamID = m.TeamColor
-		if m.TeamColor == leaderTeam {
-			allies = append(allies, p)
-		} else {
-			enemies = append(enemies, p)
-		}
-	}
 
-	req := corebattle.PartyBattleRequest{
-		Allies:  allies,
-		Enemies: enemies,
-	}
-
-	res, err := s.battleEngine.ResolvePartyBattle(req)
-	if err != nil {
-		return RoundResolution{}, fmt.Errorf("resolve pvp battle round: %w", err)
-	}
-
-	var roundWinnerTeam string
-	var roundOutcome string
-
-	if len(res.RemainingHP) > 0 {
-		aliveTeams := make(map[string]bool)
+		// Group living members by team
+		teamMembers := make(map[string][]RoomMember)
 		for _, m := range detail.Members {
-			if hp, ok := res.RemainingHP[m.CharacterID]; ok && hp > 0 {
-				aliveTeams[m.TeamColor] = true
+			teamMembers[m.TeamColor] = append(teamMembers[m.TeamColor], m)
+		}
+
+		leaderTeam := ""
+		for _, m := range detail.Members {
+			if m.CharacterID == leaderID {
+				leaderTeam = m.TeamColor
+				break
 			}
 		}
 
-		if len(aliveTeams) == 1 {
-			for team := range aliveTeams {
-				roundWinnerTeam = team
+		var otherTeam string
+		for _, m := range detail.Members {
+			if m.TeamColor != leaderTeam {
+				otherTeam = m.TeamColor
+				break
 			}
-			roundOutcome = "round_win"
-		} else {
-			roundOutcome = "draw"
 		}
-	} else {
-		if res.Outcome == corebattle.OutcomeWin {
-			roundWinnerTeam = leaderTeam
-			roundOutcome = "round_win"
-		} else if res.Outcome == corebattle.OutcomeDefeat {
-			roundWinnerTeam = otherTeam
-			roundOutcome = "round_win"
-		} else {
-			roundOutcome = "draw"
+
+		// Build battle participants for Leader's Team (Allies) vs Opposing Team (Enemies)
+		var allies, enemies []corebattle.Participant
+		for _, m := range detail.Members {
+			var p corebattle.Participant
+			if s.participantBuilder != nil {
+				var err error
+				p, err = s.participantBuilder.BuildParticipantWithCurrentHP(lockedCtx, m.CharacterID, m.HP)
+				if err != nil {
+					return err
+				}
+			} else {
+				char, err := s.characters.FindByID(lockedCtx, m.CharacterID)
+				if err != nil {
+					return err
+				}
+				p = corebattle.MustNewParticipant(char.ID, char.Stats.HP, char.Stats.Attack, char.Stats.Defense)
+				p.Name = char.Name
+				p.MaxHP = char.Stats.MaxHP
+				p.MP = char.Stats.MP
+				p.MaxMP = char.Stats.MaxMP
+				p.Agility = char.Stats.Agility
+			}
+			if m.HP > 0 {
+				p.HP = m.HP
+			} else if p.HP <= 0 {
+				p.HP = m.MaxHP
+			}
+			p.TeamID = m.TeamColor
+			if m.TeamColor == leaderTeam {
+				allies = append(allies, p)
+			} else {
+				enemies = append(enemies, p)
+			}
 		}
-	}
 
-	if detail.Room.TeamScores == nil {
-		detail.Room.TeamScores = make(map[string]int)
-	}
+		req := corebattle.PartyBattleRequest{
+			Allies:  allies,
+			Enemies: enemies,
+		}
 
-	matchCompleted := false
-	var overallWinner string
-	var prizePerMember int
-	var awardedIDs []string
+		res, err := s.battleEngine.ResolvePartyBattle(req)
+		if err != nil {
+			return fmt.Errorf("resolve pvp battle round: %w", err)
+		}
 
-	if roundWinnerTeam != "" {
-		detail.Room.TeamScores[roundWinnerTeam]++
-		if detail.Room.TeamScores[roundWinnerTeam] >= detail.Room.TargetWins {
-			matchCompleted = true
-			overallWinner = roundWinnerTeam
-			detail.Room.Status = StatusCompleted
-			detail.Room.WinnerTeam = roundWinnerTeam
+		var roundWinnerTeam string
+		var roundOutcome string
 
-			// Calculate and distribute prize pool to winning team members
-			var winMembers []RoomMember
+		if len(res.RemainingHP) > 0 {
+			aliveTeams := make(map[string]bool)
 			for _, m := range detail.Members {
-				if m.TeamColor == roundWinnerTeam {
-					winMembers = append(winMembers, m)
+				if hp, ok := res.RemainingHP[m.CharacterID]; ok && hp > 0 {
+					aliveTeams[m.TeamColor] = true
 				}
 			}
 
-			if len(winMembers) > 0 {
-				prizePerMember = detail.Room.PrizePool / len(winMembers)
-				for _, wm := range winMembers {
-					if wChar, err := s.characters.FindByID(ctx, wm.CharacterID); err == nil {
-						_ = wChar.AddMoney(prizePerMember)
-						wChar.PvPWins++
-						_ = s.characters.Update(ctx, wChar)
-						awardedIDs = append(awardedIDs, wChar.ID)
-						if s.victoryHook != nil {
-							_ = s.victoryHook(ctx, wChar.ID, "")
+			if len(aliveTeams) == 1 {
+				for team := range aliveTeams {
+					roundWinnerTeam = team
+				}
+				roundOutcome = "round_win"
+			} else {
+				roundOutcome = "draw"
+			}
+		} else {
+			if res.Outcome == corebattle.OutcomeWin {
+				roundWinnerTeam = leaderTeam
+				roundOutcome = "round_win"
+			} else if res.Outcome == corebattle.OutcomeDefeat {
+				roundWinnerTeam = otherTeam
+				roundOutcome = "round_win"
+			} else {
+				roundOutcome = "draw"
+			}
+		}
+
+		if detail.Room.TeamScores == nil {
+			detail.Room.TeamScores = make(map[string]int)
+		}
+
+		matchCompleted := false
+		var overallWinner string
+		var prizePerMember int
+		var awardedIDs []string
+
+		if roundWinnerTeam != "" {
+			detail.Room.TeamScores[roundWinnerTeam]++
+			if detail.Room.TeamScores[roundWinnerTeam] >= detail.Room.TargetWins {
+				matchCompleted = true
+				overallWinner = roundWinnerTeam
+				detail.Room.Status = StatusCompleted
+				detail.Room.WinnerTeam = roundWinnerTeam
+
+				// Calculate and distribute prize pool to winning team members
+				var winMembers []RoomMember
+				for _, m := range detail.Members {
+					if m.TeamColor == roundWinnerTeam {
+						winMembers = append(winMembers, m)
+					}
+				}
+
+				if len(winMembers) > 0 {
+					prizePerMember = detail.Room.PrizePool / len(winMembers)
+					for _, wm := range winMembers {
+						if wChar, err := s.characters.FindByID(lockedCtx, wm.CharacterID); err == nil {
+							_ = wChar.AddMoney(prizePerMember)
+							wChar.PvPWins++
+							_ = s.characters.Update(lockedCtx, wChar)
+							awardedIDs = append(awardedIDs, wChar.ID)
+							if s.victoryHook != nil {
+								_ = s.victoryHook(lockedCtx, wChar.ID, "")
+							}
 						}
 					}
 				}
+				detail.Room.PrizePerMember = prizePerMember
+				detail.Room.PrizePool = 0
 			}
-			detail.Room.PrizePerMember = prizePerMember
-			detail.Room.PrizePool = 0
 		}
-	}
 
-	// Forced end if round > 10 without decider
-	if !matchCompleted && detail.Room.Round >= MaxRounds {
-		matchCompleted = true
-		roundOutcome = "match_draw"
-		detail.Room.Status = StatusCompleted
-		// Refund remaining prize pool equally among all members
-		if len(detail.Members) > 0 {
-			refund := detail.Room.PrizePool / len(detail.Members)
-			for _, m := range detail.Members {
-				if mChar, err := s.characters.FindByID(ctx, m.CharacterID); err == nil {
-					_ = mChar.AddMoney(refund)
-					_ = s.characters.Update(ctx, mChar)
+		// Forced end if round > 10 without decider
+		if !matchCompleted && detail.Room.Round >= MaxRounds {
+			matchCompleted = true
+			roundOutcome = "match_draw"
+			detail.Room.Status = StatusCompleted
+			// Refund remaining prize pool equally among all members
+			if len(detail.Members) > 0 {
+				refund := detail.Room.PrizePool / len(detail.Members)
+				for _, m := range detail.Members {
+					if mChar, err := s.characters.FindByID(lockedCtx, m.CharacterID); err == nil {
+						_ = mChar.AddMoney(refund)
+						_ = s.characters.Update(lockedCtx, mChar)
+					}
 				}
+				detail.Room.PrizePool = 0
 			}
-			detail.Room.PrizePool = 0
 		}
-	}
 
-	// Advance to next round if match not completed
-	if !matchCompleted {
-		detail.Room.Round++
-		for i := range detail.Members {
-			detail.Members[i].HP = detail.Members[i].MaxHP
+		// Advance to next round if match not completed
+		if !matchCompleted {
+			detail.Room.Round++
+			for i := range detail.Members {
+				detail.Members[i].HP = detail.Members[i].MaxHP
+			}
 		}
-	}
 
-	detail.Room.UpdatedAt = time.Now().UTC()
-	if err := s.repo.SaveRoom(ctx, detail.Room, detail.Members); err != nil {
-		return RoundResolution{}, err
-	}
+		detail.Room.UpdatedAt = time.Now().UTC()
+		if err := s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members); err != nil {
+			return err
+		}
 
-	return RoundResolution{
-		Round:               detail.Room.Round,
-		Outcome:             roundOutcome,
-		WinnerTeam:          roundWinnerTeam,
-		WinnerTeamName:      TeamColorName(roundWinnerTeam),
-		TeamScores:          detail.Room.TeamScores,
-		MatchCompleted:      matchCompleted,
-		OverallWinnerTeam:   overallWinner,
-		PrizePerMember:      prizePerMember,
-		AwardedCharacterIDs: awardedIDs,
-		Turns:               res.Turns,
-		BattleLog:           res.Logs,
-	}, nil
+		result = RoundResolution{
+			Round:               detail.Room.Round,
+			Outcome:             roundOutcome,
+			WinnerTeam:          roundWinnerTeam,
+			WinnerTeamName:      TeamColorName(roundWinnerTeam),
+			TeamScores:          detail.Room.TeamScores,
+			MatchCompleted:      matchCompleted,
+			OverallWinnerTeam:   overallWinner,
+			PrizePerMember:      prizePerMember,
+			AwardedCharacterIDs: awardedIDs,
+			Turns:               res.Turns,
+			BattleLog:           res.Logs,
+		}
+		return nil
+	})
+	return result, err
 }
