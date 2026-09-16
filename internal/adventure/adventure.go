@@ -112,6 +112,16 @@ type Option func(*Service)
 func WithParticipantBuilder(builder ParticipantBuilder) Option {
 	return func(s *Service) {
 		s.participantBuilder = builder
+		if settler, ok := builder.(PostBattleSettler); ok && s.battleSettler == nil {
+			s.battleSettler = settler
+		}
+	}
+}
+
+// WithPostBattleSettler configures the PostBattleSettler.
+func WithPostBattleSettler(settler PostBattleSettler) Option {
+	return func(s *Service) {
+		s.battleSettler = settler
 	}
 }
 
@@ -127,6 +137,7 @@ type Service struct {
 	victoryHook        VictoryHook
 	postAdventureHook  PostAdventureHook
 	participantBuilder ParticipantBuilder
+	battleSettler      PostBattleSettler
 }
 
 func (s *Service) SetVictoryHook(hook VictoryHook) {
@@ -318,6 +329,9 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	}
 
 	result := session.Result()
+	if err := s.settlePostBattle(ctx, req, &result); err != nil {
+		return DungeonCrawlResult{}, err
+	}
 
 	// Persist adventure record for each participating character
 	now := s.clock.Now()
@@ -352,24 +366,38 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 			_ = s.adventures.Save(ctx, adv)
 		}
 
-		// Apply experience, gold, and crystal rewards
-		if result.Outcome == corebattle.OutcomeWin {
-			if result.TotalEXP > 0 {
-				_, _ = progression.ApplyExperience(&c, result.TotalEXP)
+		// Apply fallback experience, gold, crystal, and surviving HP/MP if battleSettler is not configured
+		if s.battleSettler == nil {
+			if hp, ok := result.ParticipantHPs[c.ID]; ok {
+				if hp <= 0 {
+					c.Stats.HP = 1
+				} else {
+					c.Stats.HP = hp
+				}
 			}
-			if result.TotalGold > 0 {
-				_ = c.AddMoney(result.TotalGold)
+			if mp, ok := result.ParticipantMPs[c.ID]; ok {
+				c.Stats.MP = mp
 			}
-			if result.TotalCrystals > 0 {
-				_ = c.AddCrystal(result.TotalCrystals)
+
+			if result.Outcome == corebattle.OutcomeWin {
+				if result.TotalEXP > 0 {
+					_, _ = progression.ApplyExperience(&c, result.TotalEXP)
+				}
+				if result.TotalGold > 0 {
+					_ = c.AddMoney(result.TotalGold)
+				}
+				if result.TotalCrystals > 0 {
+					_ = c.AddCrystal(result.TotalCrystals)
+				}
 			}
+
 			if updater, ok := s.characters.(CharacterUpdater); ok {
 				_ = updater.Update(ctx, c)
 			}
+		}
 
-			if s.victoryHook != nil {
-				_ = s.victoryHook(ctx, c.ID, result.FloorsCleared, result.TotalGold)
-			}
+		if result.Outcome == corebattle.OutcomeWin && s.victoryHook != nil {
+			_ = s.victoryHook(ctx, c.ID, result.FloorsCleared, result.TotalGold)
 		}
 
 		if s.postAdventureHook != nil {

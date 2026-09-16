@@ -298,6 +298,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#633](https://github.com/witchcraze/party2re/issues/633) | Guild: Implement HTTP REST API endpoints, wire worker inactivity check, and align GP hooks | Completed |
 | [#632](https://github.com/witchcraze/party2re/issues/632) | Battle/Blacksmith: Wire 12 weapon seal combat effects into Battle Adapter and restore crystal drops | Completed |
 | [#663](https://github.com/witchcraze/party2re/issues/663) | Battle: Fix party item drop duplication, propagate level-up errors, and support recipient-targeted drops in ApplyPostBattleResult | Completed |
+| [#655](https://github.com/witchcraze/party2re/issues/655) | Adventure: Persist Floor 11 treasure box drops, depot fallback, and surviving HP/MP | Completed |
 
 
 ---

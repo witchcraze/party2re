@@ -58,6 +58,8 @@ type DungeonCrawlResult struct {
 	TreasureBoxes  []TreasureBox        `json:"treasure_boxes,omitempty"`
 	PartySize      int                  `json:"party_size"`
 	ParticipantHPs map[string]int       `json:"participant_hps"`
+	ParticipantMPs map[string]int       `json:"participant_mps,omitempty"`
+	LostDrops      map[string][]string  `json:"lost_drops,omitempty"`
 }
 
 // CrawlSession tracks step-by-step state across the 10-floor dungeon crawl and Floor 11 treasure room.
@@ -379,8 +381,10 @@ func (s *CrawlSession) ExamineTreasure(characterID string) (*TreasureBox, error)
 // Result compiles the final outcome of the dungeon crawl.
 func (s *CrawlSession) Result() DungeonCrawlResult {
 	participantHPs := make(map[string]int, len(s.Participants))
+	participantMPs := make(map[string]int, len(s.Participants))
 	for _, p := range s.Participants {
 		participantHPs[p.ID] = p.HP
+		participantMPs[p.ID] = p.MP
 	}
 
 	outcome := s.Outcome
@@ -407,6 +411,7 @@ func (s *CrawlSession) Result() DungeonCrawlResult {
 		TreasureBoxes:  s.TreasureBoxes,
 		PartySize:      len(s.Characters),
 		ParticipantHPs: participantHPs,
+		ParticipantMPs: participantMPs,
 	}
 }
 

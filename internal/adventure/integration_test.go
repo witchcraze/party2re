@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
+	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/character"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	"github.com/witchcraze/party2re/internal/database"
@@ -355,5 +356,192 @@ func TestAdventure_TavernDelivery_PostAdventureIntegration(t *testing.T) {
 	_, err = tavernService.OrderMeal(ctx, char.ID, "tavern_water")
 	if err != nil {
 		t.Errorf("expected character to be able to dine immediately after adventure, got %v", err)
+	}
+}
+
+func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	ctx := context.Background()
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	characterService, err := character.NewService(charRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invRepo, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	equipRepo, err := database.NewEquipmentRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depotRepo, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advRepo, err := database.NewAdventureRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+
+	player, err := database.CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := characterService.Create(ctx, player.ID, "Settler Hero")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Stats.HP = 500
+	char.Stats.MaxHP = 500
+	char.Stats.MP = 100
+	char.Stats.MaxMP = 100
+	char.Stats.Attack = 200
+	char.Stats.Defense = 100
+	char.Stats.Agility = 100
+	if err := charRepo.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+
+	battleAdapter := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithEquipmentRepository(equipRepo),
+		battle.WithDepotRepository(depotRepo),
+		battle.WithBattleEngine(corebattle.Engine{}),
+		battle.WithTransactionProvider(txProvider),
+	)
+
+	clock := &fixedClock{now: time.Date(2026, 9, 16, 15, 0, 0, 0, time.UTC)}
+	stages, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	monsters, err := adventure.InitialMonsterCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	advService, err := adventure.NewServiceWithCatalogs(
+		advRepo,
+		charRepo,
+		invRepo,
+		stages,
+		monsters,
+		corebattle.Engine{},
+		nil,
+		nil,
+		clock,
+		adventure.WithParticipantBuilder(battleAdapter),
+		adventure.WithPostBattleSettler(battleAdapter),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. First run: Empty inventory -> Floor 11 treasure item saved to MariaDB inventory_items
+	crawlRes, err := advService.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{char.ID},
+		StageID:      "stage-01",
+	})
+	if err != nil {
+		t.Fatalf("ExecuteCrawl failed: %v", err)
+	}
+	if !crawlRes.StageCleared {
+		t.Fatalf("expected stage cleared, got outcome: %v", crawlRes.Outcome)
+	}
+	if len(crawlRes.TreasureBoxes) == 0 {
+		t.Fatal("expected Floor 11 treasure boxes")
+	}
+	if crawlRes.TreasureBoxes[0].DeliveredTo != "inventory" {
+		t.Errorf("expected box delivered to inventory, got %s", crawlRes.TreasureBoxes[0].DeliveredTo)
+	}
+
+	// Verify inventory in MariaDB
+	inv, err := invRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID failed: %v", err)
+	}
+	if len(inv.Items) == 0 {
+		t.Fatal("expected items in DB inventory, got 0")
+	}
+
+	// Verify character HP & MP in MariaDB
+	updatedChar, err := charRepo.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("FindByID failed: %v", err)
+	}
+	if updatedChar.Stats.HP <= 0 || updatedChar.Stats.HP > updatedChar.Stats.MaxHP {
+		t.Errorf("unexpected HP in DB: %d", updatedChar.Stats.HP)
+	}
+
+	// 2. Second run: Inventory full -> Overflow delivered to depot_items in MariaDB
+	crawlRes2, err := advService.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{char.ID},
+		StageID:      "stage-01",
+	})
+	if err != nil {
+		t.Fatalf("Second ExecuteCrawl failed: %v", err)
+	}
+	if len(crawlRes2.TreasureBoxes) == 0 {
+		t.Fatal("expected treasure boxes on second crawl")
+	}
+	if crawlRes2.TreasureBoxes[0].DeliveredTo != "depot" {
+		t.Errorf("expected box delivered to depot, got %s", crawlRes2.TreasureBoxes[0].DeliveredTo)
+	}
+
+	// Verify depot in MariaDB
+	dep, err := depotRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID for depot failed: %v", err)
+	}
+	if len(dep.Items) == 0 {
+		t.Fatal("expected items in DB depot, got 0")
+	}
+
+	// 3. Defeat verification: A weak character defeated in crawl survives with 1 HP in MariaDB
+	weakling, err := characterService.Create(ctx, player.ID, "Defeated Hero")
+	if err != nil {
+		t.Fatal(err)
+	}
+	weakling.Stats.HP = 10
+	weakling.Stats.MaxHP = 10
+	weakling.Stats.Attack = 1
+	weakling.Stats.Defense = 1
+	if err := charRepo.Update(ctx, weakling); err != nil {
+		t.Fatal(err)
+	}
+
+	crawlRes3, err := advService.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{weakling.ID},
+		StageID:      "stage-01",
+	})
+	if err != nil {
+		t.Fatalf("Third ExecuteCrawl failed: %v", err)
+	}
+	if crawlRes3.Outcome != corebattle.OutcomeDefeat {
+		t.Fatalf("expected defeat outcome, got %v", crawlRes3.Outcome)
+	}
+
+	savedWeakling, err := charRepo.FindByID(ctx, weakling.ID)
+	if err != nil {
+		t.Fatalf("FindByID for defeated hero failed: %v", err)
+	}
+	if savedWeakling.Stats.HP != 1 {
+		t.Errorf("expected defeated hero HP=1 in MariaDB, got %d", savedWeakling.Stats.HP)
 	}
 }

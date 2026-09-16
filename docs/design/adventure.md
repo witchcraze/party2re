@@ -56,10 +56,15 @@ $$\text{Count} = \text{AliveMembers} + \text{MerchantBonus} + \text{TreasureHunt
 4. **Lucky Pendant Bonus** (`item-191` / ラッキーペンダント): $1/3$ chance ($\text{rand}(3) == 0$) of +1 treasure chest.
 5. **Lower Bound**: The total count is unclamped above zero, but clamped to a minimum of 0.
 
-### Treasure Chest Examination (`ExamineTreasure`)
-- Each surviving party member may examine and claim treasure chests.
+### Treasure Chest Examination (`ExamineTreasure`) & Post-Battle Settlement
+- Each surviving party member may examine and claim treasure chests on Floor 11.
 - Master Key (`item-215` / マスターキー) allows adventurers to open additional chests.
-- Dropped items are distributed directly to player inventory or depot storage.
+- Post-battle settlement delegates to `battle.Service.ApplyPostBattleResult` (`PostBattleSettler`), enforcing atomic single-transaction persistence obeying the global lock hierarchy (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 5 `character_depots`):
+  - Obtained treasure items are added to the character's inventory (`coreinventory.Inventory`).
+  - When the inventory is full, items automatically route to the character's depot (`_npc_action.cgi:60-80`).
+  - If the depot is also full, drops are tracked in `LostDrops` without silent phantom delivery or data loss.
+  - Surviving HP and MP are persisted to `characters` in MariaDB. If defeated, fallen characters survive with 1 HP.
+  - Standard job progression, EXP with job mastery triggers, gold, and crystal rewards are applied atomically.
 
 ---
 

@@ -227,6 +227,7 @@ func newCmbtServices(
 		nil,
 		adventure.RealClock{},
 		adventure.WithParticipantBuilder(battleAdapter),
+		adventure.WithPostBattleSettler(battleAdapter),
 	)
 	if err != nil {
 		return nil, err
