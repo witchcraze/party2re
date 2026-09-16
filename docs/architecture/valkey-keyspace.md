@@ -102,6 +102,7 @@ The table below catalogs all production key patterns currently active in the cod
 | `party2:party:lobbies` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `party_id`, Score: `CreatedAt.Unix()` | `internal/party` | `SaveParty` (ZADD), `DeleteParty` (ZREM), `ListParties` (ZREVRANGE / ZRANGE). |
 | `party2:party:character:<character_id>` | Valkey Master | `String` | 15 minutes (`900s`), refreshed on activity | Party ID (`string`) | `internal/party` | `AddMember` (SET EX), `RemoveMember` / `DeleteParty` (DEL), `GetActivePartyByCharacter` (GET). O(1) single-party membership check. |
 | `party2:party:ready:<party_id>:<character_id>` | Valkey Master | `String` | 60 seconds (`60s` countdown) | Flag (`"1"`) | `internal/party` | `UpdateMemberReady` (SET EX 60 or DEL), `GetMembers` (EXISTS). Automatic ready countdown timeout. |
+| `party2:party:lock:adventure:<party_id>` | Valkey Master | `String` | 10 seconds (`10s`) safety TTL | Lock token (`id.New()`) | `internal/party` | Distributed lock for atomic adventure crawl execution serialization and concurrent start gating (Issue #653). Acquired via `SET NX EX 10`; released via atomic token-safe Lua script. |
 | `party2:boss:{boss:<boss_id>}:hp` | Valkey Master | `String` (Integer) | 2 hours (`7200s`), sliding | Remaining Boss HP (`int`) | `internal/boss` | `InitializeRaid` (SET EX), `ApplyDamage` (`boss_damage.lua`). |
 | `party2:boss:{boss:<boss_id>}:status` | Valkey Master | `String` | 2 hours (`7200s`), sliding | Status (`"active"`, `"defeated"`, `"settled"`) | `internal/boss` | `InitializeRaid`, `boss_damage.lua`, `MarkSettled`. |
 | `party2:boss:{boss:<boss_id>}:contributors` | Valkey Master | `Hash` | 2 hours (`7200s`), sliding | Field: `character_id`, Value: damage dealt (`int`) | `internal/boss` | `InitializeRaid` (DEL), `boss_damage.lua` (HINCRBY), `GetContributors` (HGETALL). |
@@ -164,6 +165,7 @@ The following specifications define the key patterns, data types, and lifecycle 
     - `party2:party:lobbies`: `Sorted Set (ZSet)` scored by `CreatedAt.Unix()`.
     - `party2:party:character:<character_id>`: `String`, 15m (`900s`) sliding TTL.
     - `party2:party:ready:<party_id>:<character_id>`: `String` countdown flag, 60s TTL.
+    - `party2:party:lock:adventure:<party_id>`: `String` lock token, 10s safety TTL for adventure crawl serialization.
     - *(Legacy `parties` and `party_members` MariaDB tables dropped in Migration 052)*.
   - **Colosseum PvP (`internal/pvp`)**:
     - `party2:pvp:room:<room_id>`: `String (JSON)`, 30m (`1800s`) sliding TTL.

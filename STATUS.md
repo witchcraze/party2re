@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #656 — [Bug] Party: Route Floor 11 treasure drops to depot on full inventory, prevent silent drop loss, and persist MP
+Last updated: Issue #653 — [Bug] Party: Prevent concurrent StartPartyAdventure double-run and duplicate dungeon rewards
 
 
 ## Current phase
@@ -78,7 +78,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **God Wishes & Limit Breaks** (`internal/god`): ✅ 19 heaven wishes, OverLevel (Lv150), underworld limit-breaks (5 stages each).
 - **Monster Grandpa & Pets** (`internal/monster`): ✅ 50–300 stable capacity, 8 home pets, P2P transfer, naming; Ranch parity pending (#488).
 - **Photo Contest** (`internal/contest`): ✅ 10-day cycle, voting, prize distribution, Hall of Fame; ISP-split to 5 sub-interfaces.
-- **Party & Co-op Quests** (`internal/party`): ✅ Up to 4 players, Valkey lobby (30min idle TTL), speed configs (3/18/25), `need_join` condition checks (`hp`/`joblv`), stage job level access gates, 10-floor dungeon crawl + Floor 11 treasure room, post-battle settlement delegation via `ApplyPostBattleResult` (`PostBattleSettler`) with automatic depot fallback on full inventory, `LostDrops` tracking on full depot, surviving HP/MP persistence (#656), synergy bonus, HP-1 survival guarantee (#478).
+- **Party & Co-op Quests** (`internal/party`): ✅ Up to 4 players, Valkey lobby (30min idle TTL), speed configs (3/18/25), `need_join` condition checks (`hp`/`joblv`), stage job level access gates, 10-floor dungeon crawl + Floor 11 treasure room, post-battle settlement delegation via `ApplyPostBattleResult` (`PostBattleSettler`) with automatic depot fallback on full inventory, `LostDrops` tracking on full depot, surviving HP/MP persistence (#656), Rank 0 distributed party adventure lock (`party2:party:lock:adventure:*`) with token-safe Lua release serializing concurrent starts and eliminating duplicate dungeon rewards (#653), synergy bonus, HP-1 survival guarantee (#478).
 - **Altar of Rebirth** (`internal/altar`): ✅ 6-orb offering, Ramia awakening (30min record), 4 otherworld-item wishes, Depot fallback.
 - **Wishing Well** (`internal/wishingwell`): ✅ SP → permanent stat growth (MHP/MMP +2/SP, ATK/DEF/AGI +1/SP).
 - **Player Store & Town Boutiques** (`internal/store`): ✅ Shop construction (50,000G/90d), gold/item listings, 26 wallpapers, 15 furniture types.
