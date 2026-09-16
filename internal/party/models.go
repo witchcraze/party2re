@@ -141,6 +141,7 @@ type PartyAdventureResult struct {
 	Rewards             []MemberRewardSummary    `json:"rewards"`
 	TreasureBoxes       []adventure.TreasureBox  `json:"treasure_boxes,omitempty"`
 	BattleResult        battle.PartyBattleResult `json:"battle_result"`
+	LostDrops           map[string][]string      `json:"lost_drops,omitempty"`
 }
 
 type PartyAdventureLog struct {

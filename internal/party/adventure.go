@@ -10,8 +10,6 @@ import (
 	"github.com/witchcraze/party2re/internal/adventure"
 	"github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreitem "github.com/witchcraze/party2re/internal/core/item"
-	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -129,85 +127,15 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 
 		crawlResult := session.Result()
 
-		// 7. Distribute Rewards and update each character
-		var rewardSummaries []MemberRewardSummary
+		// 7. Post-Battle Settlement: rewards, surviving HP/MP, and Floor 11 treasure drops
 		outcome := string(crawlResult.Outcome)
 		if crawlResult.Outcome == battle.OutcomeWin {
 			defeatedMonsterCount = crawlResult.FloorsCleared
 		}
 
-		for _, m := range members {
-			c := charMap[m.CharacterID]
-			levelBefore := c.Level
-			gainedEXP := crawlResult.TotalEXP
-			gainedGold := crawlResult.TotalGold
-			gainedCrystals := crawlResult.TotalCrystals
-
-			_ = c.AddMoney(gainedGold)
-			if gainedCrystals > 0 {
-				_ = c.AddCrystal(gainedCrystals)
-			}
-			if gainedEXP > 0 {
-				if _, err := progression.ApplyExperience(&c, gainedEXP); err != nil {
-					return err
-				}
-			}
-
-			// Apply HP changes from battle result
-			if remHP, ok := lastBattleRes.RemainingHP[c.ID]; ok {
-				if remHP <= 0 {
-					c.Stats.HP = 1 // Fallen members survive with 1 HP
-				} else {
-					c.Stats.HP = remHP
-					if c.Stats.MaxHP > 0 && c.Stats.HP > c.Stats.MaxHP {
-						c.Stats.HP = c.Stats.MaxHP
-					}
-				}
-			} else {
-				isFallen := false
-				for _, fallenID := range lastBattleRes.AlliesFallen {
-					if fallenID == c.ID {
-						isFallen = true
-						break
-					}
-				}
-				if isFallen {
-					c.Stats.HP = 1
-				}
-			}
-
-			if err := s.charRepo.Update(txCtx, c); err != nil {
-				return err
-			}
-
-			// Award item drops from Floor 11 treasure boxes if examined
-			var drops []coreitem.Instance
-			if crawlResult.Outcome == battle.OutcomeWin && s.invRepo != nil {
-				for _, box := range crawlResult.TreasureBoxes {
-					if box.OpenedBy == c.ID && box.ItemID != "" {
-						inst, err := coreitem.NewInstance(box.ItemID, 1)
-						if err == nil {
-							inv, err := s.invRepo.FindByCharacterIDForUpdate(txCtx, c.ID)
-							if err == nil {
-								_ = inv.Add(inst)
-								_ = s.invRepo.Save(txCtx, inv)
-								drops = append(drops, inst)
-							}
-						}
-					}
-				}
-			}
-
-			rewardSummaries = append(rewardSummaries, MemberRewardSummary{
-				CharacterID:    c.ID,
-				Name:           c.Name,
-				GainedEXP:      gainedEXP,
-				GainedGold:     gainedGold,
-				GainedCrystals: gainedCrystals,
-				LevelBefore:    levelBefore,
-				LevelAfter:     c.Level,
-				Drops:          drops,
-			})
+		rewardSummaries, lostDrops, err := s.settlePostBattle(txCtx, members, charMap, &crawlResult, lastBattleRes)
+		if err != nil {
+			return err
 		}
 
 		// 8. Save Adventure Log
@@ -247,6 +175,7 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			Rewards:             rewardSummaries,
 			TreasureBoxes:       crawlResult.TreasureBoxes,
 			BattleResult:        lastBattleRes,
+			LostDrops:           lostDrops,
 		}
 
 		return nil

@@ -205,6 +205,10 @@ type mockInventoryRepository struct {
 	inventories map[string]coreinventory.Inventory
 }
 
+func (r *mockInventoryRepository) FindByCharacterID(_ context.Context, characterID string) (coreinventory.Inventory, error) {
+	return r.FindByCharacterIDForUpdate(context.Background(), characterID)
+}
+
 func (r *mockInventoryRepository) FindByCharacterIDForUpdate(_ context.Context, characterID string) (coreinventory.Inventory, error) {
 	inv, ok := r.inventories[characterID]
 	if !ok {

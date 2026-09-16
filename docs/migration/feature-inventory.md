@@ -299,6 +299,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#632](https://github.com/witchcraze/party2re/issues/632) | Battle/Blacksmith: Wire 12 weapon seal combat effects into Battle Adapter and restore crystal drops | Completed |
 | [#663](https://github.com/witchcraze/party2re/issues/663) | Battle: Fix party item drop duplication, propagate level-up errors, and support recipient-targeted drops in ApplyPostBattleResult | Completed |
 | [#655](https://github.com/witchcraze/party2re/issues/655) | Adventure: Persist Floor 11 treasure box drops, depot fallback, and surviving HP/MP | Completed |
+| [#656](https://github.com/witchcraze/party2re/issues/656) | Party: Route Floor 11 treasure drops to depot on full inventory, prevent silent drop loss, and persist MP | Completed |
 
 
 ---
