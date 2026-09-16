@@ -60,6 +60,8 @@ type Service struct {
 	victoryHook        VictoryHook
 	postAdventureHook  PostAdventureHook
 	participantBuilder ParticipantBuilder
+	battleSettler      PostBattleSettler
+	depotRepo          DepotRepository
 }
 
 func (s *Service) SetVictoryHook(hook VictoryHook) {

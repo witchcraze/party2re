@@ -51,10 +51,16 @@ The Party system (`冒険中のパーティー`, `quest.cgi`, `party.cgi`) is on
   - Combat participants are strictly indexed and tracked by their canonical entity `ID` (`Participant.ID`), eliminating name collisions when multiple characters share the same display name.
   - Display names (`Participant.Name`) are maintained for combat turn log output and user presentation.
 - **Reward Distribution & Damage Persistence**:
-  - On Victory: Each participating member receives full boosted EXP and Gold, monster crystal drops (`TotalCrystals`, 刻印晶) are credited to character crystal reserves (`character.Crystal`, clamped to 999,999), character level-ups are evaluated using canonical progression rules (`progression.ApplyExperience`, properly supporting OverLevel limit breaks up to Lv 150), surviving members have their remaining battle HP persisted to `Stats.HP` (fallen members survive with 1 HP), and stage item drops are awarded to player inventories.
+  - On Victory: Each participating member receives full boosted EXP and Gold, monster crystal drops (`TotalCrystals`, 刻印晶) are credited to character crystal reserves (`character.Crystal`, clamped to 999,999), character level-ups are evaluated using canonical progression rules (`progression.ApplyExperience`, properly supporting OverLevel limit breaks up to Lv 150), surviving members have their remaining battle HP persisted to `Stats.HP` (fallen members survive with 1 HP), and surviving battle MP from `RemainingMP` is clamped to `Stats.MaxMP` and persisted to `Stats.MP`.
+  - **Floor 11 Treasure Room Drops & Depot Fallback (`vs_monster.cgi:91-137`, `_npc_action.cgi:60-80`)**:
+    - When a party clears Floor 10 (Boss), they advance to Floor 11 (Treasure Room) where living members examine and open treasure chests.
+    - Drops are recipient-targeted to the opening character (preventing party member item cloning).
+    - If the character's inventory has capacity, the item is added to inventory (`DeliveredTo = "inventory"`).
+    - If the character's inventory is full, the item automatically falls back to their Depot (`DeliveredTo = "depot"`).
+    - If the Depot is also at maximum capacity, the item is dropped/lost (`DeliveredTo = "lost"`), recorded in `LostDrops`, and excluded from acquired drops.
   - **Lifetime Milestone Progress Tracking (`VictoryHook`)**: Upon successful expedition victory, `party.Service.StartPartyAdventure` invokes the registered `VictoryHook(ctx, characterIDs, monstersDefeated, goldEarned)` callback. In `cmd/party2/main.go`, this is wired to `medalService.RecordProgress`, incrementing `adventure_victories` (+1), `monsters_slain` (+defeated monsters count), and `gold_earned` (+earned gold) for all participating characters, maintaining progression parity with solo adventures.
   - **Cooperative QoL Policy vs Legacy CGI**: In legacy Party2 Perl CGI (`_battle.cgi:209`), fallen party members received 0 rewards (`next if $ms{$name}{hp} <= 0;`). In `party2re`, this behavior was intentionally revised: all participants who took part in a victorious expedition receive full synergy-boosted EXP/Gold/Crystals and revive with 1 HP. This deliberate modern cooperative QoL design fosters teamplay and prevents penalizing tanks/support characters who sacrifice themselves for the party's victory.
-  - On Defeat: Half base EXP, 0 Gold, 0 Crystals, and characters survive with 1 HP.
+  - On Defeat: Half base EXP, 0 Gold, 0 Crystals, surviving MP is persisted, and characters survive with 1 HP.
 
 ---
 

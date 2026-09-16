@@ -211,6 +211,8 @@ func newCmbtServices(
 			return err
 		})),
 		party.WithParticipantBuilder(battleAdapter),
+		party.WithPostBattleSettler(battleAdapter),
+		party.WithDepotRepository(econ.depotRepo),
 	)
 	if err != nil {
 		return nil, err
