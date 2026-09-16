@@ -51,6 +51,7 @@ var (
 	ErrCharacterNotFound         = errors.New("character not found")
 	ErrGuildNotFound             = errors.New("guild not found")
 	ErrInvalidGuildID            = errors.New("invalid guild ID")
+	ErrAcquireRoomLockTimeout    = errors.New("failed to acquire gvg room lock: timeout")
 )
 
 // GvGStanding represents the persistent standings and trophy decorations of a guild.

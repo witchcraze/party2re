@@ -247,128 +247,139 @@ func (s *Service) JoinRoom(ctx context.Context, charID string, roomID string, pa
 		return RoomDetail{}, ErrRoomNotFound
 	}
 
-	char, err := s.characters.FindByID(ctx, charID)
-	if err != nil {
-		return RoomDetail{}, ErrCharacterNotFound
-	}
-	if char.Stats.HP <= 0 {
-		return RoomDetail{}, ErrCharacterUnconscious
-	}
-	if char.Tired >= 100 {
-		return RoomDetail{}, ErrCharacterExhausted
-	}
-
-	g, _, err := s.guilds.GetGuildByCharacter(ctx, charID)
-	if err != nil {
-		return RoomDetail{}, ErrActorNotInGuild
-	}
-	if strings.EqualFold(g.Color, DefaultColor) || g.Color == "" {
-		return RoomDetail{}, ErrFriendlyGuildCannotBattle
-	}
-
-	if _, err := s.repo.GetCharacterRoom(ctx, charID); err == nil {
-		return RoomDetail{}, ErrAlreadyInRoom
-	}
-
-	detail, err := s.repo.GetRoom(ctx, roomID)
-	if err != nil {
-		return RoomDetail{}, err
-	}
-
-	if detail.Room.Status != StatusRecruiting {
-		return RoomDetail{}, ErrRoomNotRecruiting
-	}
-	if len(detail.Members) >= detail.Room.MaxMembers {
-		return RoomDetail{}, ErrRoomFull
-	}
-	if detail.Room.PasswordHash != "" && detail.Room.PasswordHash != hashPassword(strings.TrimSpace(password)) {
-		return RoomDetail{}, ErrInvalidPassword
-	}
-	if err := checkNeedJoin(char, detail.Room.NeedJoin); err != nil {
-		return RoomDetail{}, err
-	}
-
-	for _, m := range detail.Members {
-		if m.CharacterID == charID {
-			return RoomDetail{}, ErrAlreadyInRoom
+	var result RoomDetail
+	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		char, err := s.characters.FindByID(lockedCtx, charID)
+		if err != nil {
+			return ErrCharacterNotFound
 		}
-	}
+		if char.Stats.HP <= 0 {
+			return ErrCharacterUnconscious
+		}
+		if char.Tired >= 100 {
+			return ErrCharacterExhausted
+		}
 
-	now := time.Now().UTC()
-	newMember := GvGMember{
-		RoomID:        roomID,
-		CharacterID:   char.ID,
-		CharacterName: char.Name,
-		JobID:         char.JobID,
-		Level:         char.Level,
-		HP:            char.Stats.HP,
-		MaxHP:         char.Stats.MaxHP,
-		GuildID:       g.ID,
-		GuildName:     g.Name,
-		GuildColor:    g.Color,
-		IsLeader:      false,
-		JoinedAt:      now,
-	}
+		g, _, err := s.guilds.GetGuildByCharacter(lockedCtx, charID)
+		if err != nil {
+			return ErrActorNotInGuild
+		}
+		if strings.EqualFold(g.Color, DefaultColor) || g.Color == "" {
+			return ErrFriendlyGuildCannotBattle
+		}
 
-	detail.Members = append(detail.Members, newMember)
-	detail.Room.PrizePool += JoinPrizeGP // Joiner adds 1 GP
-	detail.Room.UpdatedAt = now
+		if _, err := s.repo.GetCharacterRoom(lockedCtx, charID); err == nil {
+			return ErrAlreadyInRoom
+		}
 
-	if err := s.repo.SaveRoom(ctx, detail.Room, detail.Members); err != nil {
-		return RoomDetail{}, fmt.Errorf("save gvg room on join: %w", err)
-	}
-	if err := s.repo.SetCharacterRoom(ctx, char.ID, roomID); err != nil {
-		return RoomDetail{}, fmt.Errorf("set character room on join: %w", err)
-	}
+		detail, err := s.repo.GetRoom(lockedCtx, roomID)
+		if err != nil {
+			return err
+		}
 
-	return detail, nil
+		if detail.Room.Status != StatusRecruiting {
+			return ErrRoomNotRecruiting
+		}
+		if len(detail.Members) >= detail.Room.MaxMembers {
+			return ErrRoomFull
+		}
+		if detail.Room.PasswordHash != "" && detail.Room.PasswordHash != hashPassword(strings.TrimSpace(password)) {
+			return ErrInvalidPassword
+		}
+		if err := checkNeedJoin(char, detail.Room.NeedJoin); err != nil {
+			return err
+		}
+
+		for _, m := range detail.Members {
+			if m.CharacterID == charID {
+				return ErrAlreadyInRoom
+			}
+		}
+
+		now := time.Now().UTC()
+		newMember := GvGMember{
+			RoomID:        roomID,
+			CharacterID:   char.ID,
+			CharacterName: char.Name,
+			JobID:         char.JobID,
+			Level:         char.Level,
+			HP:            char.Stats.HP,
+			MaxHP:         char.Stats.MaxHP,
+			GuildID:       g.ID,
+			GuildName:     g.Name,
+			GuildColor:    g.Color,
+			IsLeader:      false,
+			JoinedAt:      now,
+		}
+
+		detail.Members = append(detail.Members, newMember)
+		detail.Room.PrizePool += JoinPrizeGP // Joiner adds 1 GP
+		detail.Room.UpdatedAt = now
+
+		if err := s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members); err != nil {
+			return fmt.Errorf("save gvg room on join: %w", err)
+		}
+		if err := s.repo.SetCharacterRoom(lockedCtx, char.ID, roomID); err != nil {
+			return fmt.Errorf("set character room on join: %w", err)
+		}
+
+		result = detail
+		return nil
+	})
+	return result, err
 }
 
 // LeaveRoom exits a GvG room or disbands if caller is leader.
 func (s *Service) LeaveRoom(ctx context.Context, charID string, roomID string) error {
-	detail, err := s.repo.GetRoom(ctx, roomID)
-	if err != nil {
-		return err
+	roomID = strings.TrimSpace(roomID)
+	if roomID == "" {
+		return ErrRoomNotFound
 	}
-
-	isMember := false
-	for _, m := range detail.Members {
-		if m.CharacterID == charID {
-			isMember = true
-			break
+	return s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
+		detail, err := s.repo.GetRoom(lockedCtx, roomID)
+		if err != nil {
+			return err
 		}
-	}
-	if !isMember {
-		return ErrCharacterNotInRoom
-	}
 
-	// Disband room if leader leaves or match completed
-	if detail.Room.LeaderCharacterID == charID || detail.Room.Status == StatusCompleted {
+		isMember := false
 		for _, m := range detail.Members {
-			_ = s.repo.DeleteCharacterRoom(ctx, m.CharacterID)
+			if m.CharacterID == charID {
+				isMember = true
+				break
+			}
 		}
-		return s.repo.DeleteRoom(ctx, roomID)
-	}
-
-	if detail.Room.Status != StatusRecruiting {
-		return ErrMatchNotInProgress
-	}
-
-	// Remove regular member
-	newMembers := make([]GvGMember, 0, len(detail.Members)-1)
-	for _, m := range detail.Members {
-		if m.CharacterID != charID {
-			newMembers = append(newMembers, m)
+		if !isMember {
+			return ErrCharacterNotInRoom
 		}
-	}
-	detail.Members = newMembers
-	if detail.Room.PrizePool > InitialPrizeGP {
-		detail.Room.PrizePool -= JoinPrizeGP
-	}
-	detail.Room.UpdatedAt = time.Now().UTC()
 
-	_ = s.repo.DeleteCharacterRoom(ctx, charID)
-	return s.repo.SaveRoom(ctx, detail.Room, detail.Members)
+		// Disband room if leader leaves or match completed
+		if detail.Room.LeaderCharacterID == charID || detail.Room.Status == StatusCompleted {
+			for _, m := range detail.Members {
+				_ = s.repo.DeleteCharacterRoom(lockedCtx, m.CharacterID)
+			}
+			return s.repo.DeleteRoom(lockedCtx, roomID)
+		}
+
+		if detail.Room.Status != StatusRecruiting {
+			return ErrMatchNotInProgress
+		}
+
+		// Remove regular member
+		newMembers := make([]GvGMember, 0, len(detail.Members)-1)
+		for _, m := range detail.Members {
+			if m.CharacterID != charID {
+				newMembers = append(newMembers, m)
+			}
+		}
+		detail.Members = newMembers
+		if detail.Room.PrizePool > InitialPrizeGP {
+			detail.Room.PrizePool -= JoinPrizeGP
+		}
+		detail.Room.UpdatedAt = time.Now().UTC()
+
+		_ = s.repo.DeleteCharacterRoom(lockedCtx, charID)
+		return s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members)
+	})
 }
 
 // GetRoom retrieves details of a specific GvG room.

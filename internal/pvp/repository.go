@@ -27,6 +27,7 @@ type RoomRepository interface {
 	GetCharacterRoom(ctx context.Context, characterID string) (string, error)
 	SetCharacterRoom(ctx context.Context, characterID string, roomID string) error
 	DeleteCharacterRoom(ctx context.Context, characterID string) error
+	RoomLockRepository
 }
 
 // MemoryRoomRepository is an in-memory thread-safe implementation of RoomRepository for tests.
@@ -34,6 +35,8 @@ type MemoryRoomRepository struct {
 	mu        sync.RWMutex
 	rooms     map[string]RoomDetail
 	charRooms map[string]string
+	roomLocks map[string]*sync.Mutex
+	lockMu    sync.Mutex
 }
 
 // NewMemoryRoomRepository creates a new in-memory room repository.
@@ -41,6 +44,7 @@ func NewMemoryRoomRepository() *MemoryRoomRepository {
 	return &MemoryRoomRepository{
 		rooms:     make(map[string]RoomDetail),
 		charRooms: make(map[string]string),
+		roomLocks: make(map[string]*sync.Mutex),
 	}
 }
 
@@ -142,6 +146,32 @@ func (m *MemoryRoomRepository) DeleteCharacterRoom(_ context.Context, characterI
 
 	delete(m.charRooms, characterID)
 	return nil
+}
+
+// WithRoomLock executes fn inside an exclusive lock for roomID.
+// It supports reentrant calls within the same context.
+func (m *MemoryRoomRepository) WithRoomLock(ctx context.Context, roomID string, fn func(ctx context.Context) error) error {
+	if roomID == "" {
+		return fn(ctx)
+	}
+
+	if isRoomLocked(ctx, roomID) {
+		return fn(ctx)
+	}
+
+	m.lockMu.Lock()
+	l, ok := m.roomLocks[roomID]
+	if !ok {
+		l = &sync.Mutex{}
+		m.roomLocks[roomID] = l
+	}
+	m.lockMu.Unlock()
+
+	l.Lock()
+	defer l.Unlock()
+
+	lockedCtx := withRoomLockedContext(ctx, roomID)
+	return fn(lockedCtx)
 }
 
 // ValkeyRoomRepository persists colosseum rooms in Valkey with automatic 30-minute expiration.
