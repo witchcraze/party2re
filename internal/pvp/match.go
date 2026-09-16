@@ -187,24 +187,23 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 				detail.Room.WinnerTeam = roundWinnerTeam
 
 				// Calculate and distribute prize pool to winning team members
-				var winMembers []RoomMember
+				var winIDs []string
 				for _, m := range detail.Members {
 					if m.TeamColor == roundWinnerTeam {
-						winMembers = append(winMembers, m)
+						winIDs = append(winIDs, m.CharacterID)
 					}
 				}
 
-				if len(winMembers) > 0 {
-					prizePerMember = detail.Room.PrizePool / len(winMembers)
-					for _, wm := range winMembers {
-						if wChar, err := s.characters.FindByID(lockedCtx, wm.CharacterID); err == nil {
-							_ = wChar.AddMoney(prizePerMember)
-							wChar.PvPWins++
-							_ = s.characters.Update(lockedCtx, wChar)
-							awardedIDs = append(awardedIDs, wChar.ID)
-							if s.victoryHook != nil {
-								_ = s.victoryHook(lockedCtx, wChar.ID, "")
-							}
+				if len(winIDs) > 0 {
+					prizePerMember = detail.Room.PrizePool / len(winIDs)
+					var err error
+					awardedIDs, err = s.awardPrizes(lockedCtx, winIDs, prizePerMember)
+					if err != nil {
+						return err
+					}
+					if s.victoryHook != nil {
+						for _, aID := range awardedIDs {
+							_ = s.victoryHook(lockedCtx, aID, "")
 						}
 					}
 				}
@@ -221,11 +220,12 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 			// Refund remaining prize pool equally among all members
 			if len(detail.Members) > 0 {
 				refund := detail.Room.PrizePool / len(detail.Members)
+				var memberIDs []string
 				for _, m := range detail.Members {
-					if mChar, err := s.characters.FindByID(lockedCtx, m.CharacterID); err == nil {
-						_ = mChar.AddMoney(refund)
-						_ = s.characters.Update(lockedCtx, mChar)
-					}
+					memberIDs = append(memberIDs, m.CharacterID)
+				}
+				if err := s.refundMembers(lockedCtx, memberIDs, refund); err != nil {
+					return err
 				}
 				detail.Room.PrizePool = 0
 			}

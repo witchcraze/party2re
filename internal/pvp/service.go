@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +17,7 @@ import (
 // CharacterRepository defines persistence operations on Character.
 type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
+	FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
 	Update(ctx context.Context, character corecharacter.Character) error
 }
 
@@ -56,6 +56,7 @@ type Service struct {
 	battleEngine       BattleEngine
 	victoryHook        VictoryHook
 	participantBuilder ParticipantBuilder
+	txProvider         TransactionProvider
 }
 
 func (s *Service) SetVictoryHook(hook VictoryHook) {
@@ -173,11 +174,17 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 	}
 
 	// Deduct Bet from leader wallet
-	if err := char.DeductMoney(req.Bet); err != nil {
-		return RoomDetail{}, ErrInsufficientBetFunds
-	}
-	if err := s.characters.Update(ctx, char); err != nil {
-		return RoomDetail{}, fmt.Errorf("deduct bet from leader: %w", err)
+	if err := s.runInTx(ctx, func(txCtx context.Context) error {
+		c, err := s.characters.FindByIDForUpdate(txCtx, char.ID)
+		if err != nil {
+			return err
+		}
+		if err := c.DeductMoney(req.Bet); err != nil {
+			return ErrInsufficientBetFunds
+		}
+		return s.characters.Update(txCtx, c)
+	}); err != nil {
+		return RoomDetail{}, err
 	}
 
 	now := time.Now().UTC()
@@ -272,11 +279,17 @@ func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID strin
 		}
 
 		// Deduct Bet from participant wallet
-		if err := char.DeductMoney(detail.Room.Bet); err != nil {
-			return ErrInsufficientBetFunds
-		}
-		if err := s.characters.Update(lockedCtx, char); err != nil {
-			return fmt.Errorf("deduct bet from participant: %w", err)
+		if err := s.runInTx(lockedCtx, func(txCtx context.Context) error {
+			c, err := s.characters.FindByIDForUpdate(txCtx, char.ID)
+			if err != nil {
+				return err
+			}
+			if err := c.DeductMoney(detail.Room.Bet); err != nil {
+				return ErrInsufficientBetFunds
+			}
+			return s.characters.Update(txCtx, c)
+		}); err != nil {
+			return err
 		}
 
 		now := time.Now().UTC()
@@ -383,11 +396,14 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 		if detail.Room.Status == StatusRecruiting {
 			if isLeader {
 				// Disband and refund all members
+				var memberIDs []string
 				for _, m := range detail.Members {
-					if mChar, err := s.characters.FindByID(lockedCtx, m.CharacterID); err == nil {
-						_ = mChar.AddMoney(detail.Room.Bet)
-						_ = s.characters.Update(lockedCtx, mChar)
-					}
+					memberIDs = append(memberIDs, m.CharacterID)
+				}
+				if err := s.refundMembers(lockedCtx, memberIDs, detail.Room.Bet); err != nil {
+					return err
+				}
+				for _, m := range detail.Members {
 					_ = s.repo.DeleteCharacterRoom(lockedCtx, m.CharacterID)
 				}
 				detail.Room.Status = StatusDisbanded
@@ -397,8 +413,9 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 			}
 
 			// Non-leader leaving: refund bet
-			_ = char.AddMoney(detail.Room.Bet)
-			_ = s.characters.Update(lockedCtx, char)
+			if err := s.refundMembers(lockedCtx, []string{char.ID}, detail.Room.Bet); err != nil {
+				return err
+			}
 			_ = s.repo.DeleteCharacterRoom(lockedCtx, char.ID)
 
 			var updatedMembers []RoomMember

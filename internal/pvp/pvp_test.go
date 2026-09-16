@@ -30,6 +30,10 @@ func (m *mockCharRepo) FindByID(_ context.Context, id string) (corecharacter.Cha
 	return c, nil
 }
 
+func (m *mockCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return m.FindByID(ctx, id)
+}
+
 func (m *mockCharRepo) Update(_ context.Context, character corecharacter.Character) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
