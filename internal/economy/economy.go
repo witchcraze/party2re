@@ -125,18 +125,10 @@ func (s *Service) findCharacter(ctx context.Context, characterID string) (corech
 }
 
 func (s *Service) findInventory(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-	var inv coreinventory.Inventory
-	var err error
 	if s.txProvider != nil {
-		inv, err = s.inventories.FindByCharacterIDForUpdate(ctx, characterID)
-	} else {
-		inv, err = s.inventories.FindByCharacterID(ctx, characterID)
+		return s.inventories.FindByCharacterIDForUpdate(ctx, characterID)
 	}
-	if err != nil {
-		// If inventory does not exist yet, initialize a new in-memory inventory instance
-		inv, _ = coreinventory.New(characterID)
-	}
-	return inv, nil
+	return s.inventories.FindByCharacterID(ctx, characterID)
 }
 
 // DeductGold subtracts gold from a character's wallet under an exclusive row lock.

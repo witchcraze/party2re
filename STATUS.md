@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #661 — [Bug] PvP: Enforce transactional settlement and check character update errors for bets and prizes
+Last updated: Issue #658 — [Bug] Economy: Fix inventory wipe risk caused by swallowed DB error in findInventory
 
 
 ## Current phase
@@ -36,7 +36,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Battle & Adapter** (`internal/core/battle`, `internal/battle`): ✅ Deterministic turn resolver; multi-participant party combat (4vN) and multi-faction/team combat (3+ teams/guilds up to 8 players) with independent faction targeting and elimination loops, skill/item/gem-effect/field-state/revival — full `_battle.cgi` parity (#480, #605); standardized Battle Adapter (`internal/battle`) bridging Character/Party to Participant, authentic equipment stat calculation (71 weapons including Excalibur/Dragon God sword scaling, 55 armors, 12 accessories including Awakening gems item-240..242, and Ex Amulet item-158 attack scaling) (#596), automatic Stat Orb / passive trigger binding, and atomic post-battle state application with deterministic row-lock hierarchy (Rank 2 -> Rank 3 -> Rank 5) (#496) with strict depot overflow `LostDrops` tracking and elimination of phantom `DepotDeliveries` on full/unconfigured depots (#643), recipient-targeted item drop routing eliminating multi-member duplication, progression error propagation, and response status effect retention (#663); fully wired into all 6 combat features (`pvp`, `gvg`, `boss`, `dungeon`, `challenge`, `adventure` / `party`) via `ParticipantBuilder` and `cmd/party2/wire.go`, completely eliminating naked combatants (#593).
 - **Random Number Generation** (`internal/core/random`): ✅ Centralized concurrency-safe generator (`math/rand/v2`) and deterministic seeded generator for 100% reproducible tests (#531).
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): ✅ Valkey-backed delayed queue + distributed lock worker; package coverage 92.7%.
-- **Database & Transaction Orchestration** (`internal/database`, `internal/economy`, `internal/core/event`): ✅ `RunInTx`/`ExecutorFromContext` propagation, deterministic lock hierarchy (Rank 0→8) AST-enforced, single-character `economy.TransactionRunner`, multi-aggregate/P2P `TransactionProvider` formalization (#561), consolidated safe `updateCharacter` persistence eliminating false `ErrNotFound` on unchanged updates (#585), 2-phase event dispatcher.
+- **Database & Transaction Orchestration** (`internal/database`, `internal/economy`, `internal/core/event`): ✅ `RunInTx`/`ExecutorFromContext` propagation, deterministic lock hierarchy (Rank 0→8) AST-enforced, single-character `economy.TransactionRunner`, multi-aggregate/P2P `TransactionProvider` formalization (#561), consolidated safe `updateCharacter` persistence eliminating false `ErrNotFound` on unchanged updates (#585), strict inventory read error propagation in `economy.Service.findInventory` preventing catastrophic inventory deletion on transient DB failure (#658), 2-phase event dispatcher.
 - **Common Utilities** (`internal/pagination`, `internal/id`, `internal/validation`): ✅ Keyset cursor pagination (`CursorPage[T]`), cryptographic ID, validation helpers.
 
 ### Feature Modules
