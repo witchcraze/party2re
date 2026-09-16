@@ -212,6 +212,7 @@ type AdventureLogRepository interface {
 // Repository defines persistence operations for parties and members.
 type Repository interface {
 	AdventureLogRepository
+	PartyAdventureLockRepository
 
 	SaveParty(ctx context.Context, p Party) error
 	GetParty(ctx context.Context, id string) (Party, error)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +20,8 @@ type mockPartyRepository struct {
 	memberParty map[string]string            // characterID -> partyID
 	logs        []PartyAdventureLog
 	saveLogErr  error
+	advLocksMu  sync.Mutex
+	advLocks    map[string]string
 }
 
 func newMockPartyRepository() *mockPartyRepository {
@@ -26,7 +29,37 @@ func newMockPartyRepository() *mockPartyRepository {
 		parties:     make(map[string]Party),
 		members:     make(map[string]map[string]Member),
 		memberParty: make(map[string]string),
+		advLocks:    make(map[string]string),
 	}
+}
+
+func (r *mockPartyRepository) WithPartyAdventureLock(ctx context.Context, partyID string, fn func(ctx context.Context) error) error {
+	if partyID == "" {
+		return fn(ctx)
+	}
+	if isPartyAdventureLocked(ctx, partyID) {
+		return fn(ctx)
+	}
+
+	r.advLocksMu.Lock()
+	if r.advLocks == nil {
+		r.advLocks = make(map[string]string)
+	}
+	if _, locked := r.advLocks[partyID]; locked {
+		r.advLocksMu.Unlock()
+		return ErrPartyNotRecruiting
+	}
+	r.advLocks[partyID] = "locked"
+	r.advLocksMu.Unlock()
+
+	defer func() {
+		r.advLocksMu.Lock()
+		delete(r.advLocks, partyID)
+		r.advLocksMu.Unlock()
+	}()
+
+	lockedCtx := withPartyAdventureLockedContext(ctx, partyID)
+	return fn(lockedCtx)
 }
 
 func (r *mockPartyRepository) SaveParty(_ context.Context, p Party) error {
