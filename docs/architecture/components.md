@@ -98,134 +98,52 @@ Battle engine operates independently of callers (adventures, arena, GvG, bosses,
 
 ## Feature Modules
 
-Each feature owns its specific rules and state. Cross-feature imports and direct `internal/database` imports from feature packages are mechanically prohibited by AST static analysis.
+Each feature owns its specific domain logic and state. Cross-feature imports and direct `internal/database` imports from feature packages are mechanically prohibited by AST static analysis.
 
-- **Activity** (`internal/activity`): Delayed training actions and experience awards.
-  - *Dependencies:* Character repository, Core Progression, Scheduling Service.
-  - *Persistence:* `activities` table with atomic `ClaimAndApply` concurrency locking.
-- **Adventure** (`internal/adventure`): 10-floor dungeon crawl loop across 28 stages (286 monsters), Floor 11 Treasure Room resolution, post-battle settlement delegation, inventory persistence, depot overflow fallback, and combat chronicles.
-  - *Dependencies:* Stage/Monster catalogs, Battle Resolver, Battle Adapter, Character & Inventory repositories.
-  - *Persistence:* `adventures` table; transactional lock hierarchy (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 5 `character_depots`).
-- **Shop** (`internal/shop`): Town equipment and item shops with 2× retail pricing, 50% markdown, job-level catalog gates, and depot auto-delivery.
-  - *Dependencies:* Item Catalog, Character, Inventory, Depot, Helper, Collection, Economy.
-  - *Persistence:* Atomic updates via global lock hierarchy (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 5 `character_depots`).
-- **Depot** (`internal/depot`): Persistent item storage with dynamic capacity scaling, expansions, sorting, item sales, direct-sending, stackability preservation, standardized item consumption (`Consume`, `ConsumeOne`, `PurgeSlot`), standardized `RefreshCapacity` helper, centralized reward delivery engine (`DeliverRewardItem`, `DeliverRewardItems`), and unified dual-source item resolution & consumption helpers (`ResolveItem`, `ConsumeItem`, `ConsumeDualSource`, `SaveConsumptionResult`) enforcing Rank 3 -> Rank 5 lock ordering and configurable priority across `plantation`, `blackmarket`, and `gemstore`.
-  - *Dependencies:* Character, Inventory, Economy, Collection hook.
-  - *Persistence:* `character_depots` and `depot_items` tables via `economy.TransactionRunner` and `RunInTx` (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 5 `character_depots`).
-- **Blacksmith** (`internal/blacksmith`, `internal/battle`): 12 authentic weapon seals consuming crystal currency (`character.crystal`), equipment naming, dedicated 3-slot weapon storage (`blacksmith_deposits`), seal combat effects wired into Battle Adapter, and monster crystal drops.
-  - *Dependencies:* Character, Inventory, Equipment, Blacksmith Repository.
-  - *Persistence:* `blacksmith_deposits` table and character customization columns (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 8 `blacksmith_deposits`).
-- **Alchemy** (`internal/alchemy`): Crafting item synthesis from 112 recipes consuming Depot materials directly without gold fees, Depot-direct output delivery, home rest completion, and Recipe Compendium tracking.
-  - *Dependencies:* Recipe Catalog, Item Catalog, Character, Depot, Economy.
-  - *Persistence:* `character_alchemy` and `character_alchemy_recipes` tables (Rank 2 `characters` -> Rank 5 `character_depots` -> Rank 8 `character_alchemy`).
-- **Plantation** (`internal/plantation`): Seed cultivation facility supporting 6 seeds, 14 fertilizer reagents (Gold or Depot/Inventory items), overnight maturation (`timer.NextMidnightJST`), wither/yield bonuses, and Depot harvest delivery.
-  - *Dependencies:* Item Catalog, Character, Inventory, Depot, Timer service, Database (`RunInTx`).
-  - *Persistence:* `plantation_plots` table (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 5 `character_depots` -> Rank 8 `plantation_plots`).
-- **Bank** (`internal/bank`): Gold savings deposits and withdrawals with 999,999G wallet clamp.
-  - *Dependencies:* Character repository.
-  - *Persistence:* `characters.deposit` column with Tier 2 row locking.
-- **Home & Resting** (`internal/home`): Private home profiles, visitor counters, letters/mailbox, companion phrases, sleep recovery (full HP/MP/tired recovery, online-scaled countdown lock, fullness and chapel resets), and atomic home consumable item usage.
-  - *Dependencies:* Character, Home repository, Timer service, Economy, Inventory, Depot, Tavern, Chapel.
-  - *Persistence:* `character_homes`, `home_letters`, `companion_phrases`, `home_delivery_notices` tables, Valkey timers (`party2:timer:sleep:*`, `party2:timer:asleep:*`).
-- **Guild** (`internal/guild`, `internal/api/http`): Guild founding, membership application/approval workflow, dynamic Guild Points (`gpoint`) across social and combat hooks, custom role titles, unique hex colors, broadcast callouts, visual personalization, daily 20-day inactivity disbandment worker, and REST API endpoints.
-  - *Dependencies:* Character repository, Letter sender interface.
-  - *Persistence:* `guilds` and `guild_members` tables.
-- **Casino** (`internal/casino`): Casino currency exchange (1 Coin = 20G), Multi-Player Room Lobby (2..8 players), authentic 13-card Indian Poker, multi-player High & Low, multi-player Doppelganger, 3-reel slot machine, and 18 authentic prizes with Depot auto-routing.
-  - *Dependencies:* Character, Depot repository.
-  - *Persistence:* `casino_accounts` in MariaDB (Rank 2 -> Rank 5 -> Rank 8). Ephemeral multiplayer rooms and turn state are mastered in Valkey (`party2:casino:*`, `ValkeyRoomRepository`) with 1800s sliding TTL, active ZSet index, distributed room locking (`party2:casino:lock:room:<room_id>`), and Two-Phase Settlement.
-- **Lottery & Raffle** (`internal/lottery`): Server-wide 20-cap Takarakuji lottery with pessimistic row locking (`takarakuji_rounds` Rank 0 `FOR UPDATE`), 10-day drawing cycles, and Depot prize delivery. Tavern Fukubiki raffle with 3-coupon Standard and 300-coupon Special draws with depot overflow routing.
-  - *Dependencies:* Character, Inventory, Depot, Item Catalog, Collection, TransactionProvider, Scheduling.
-  - *Persistence:* `character_lottery`, `takarakuji_rounds`, and `takarakuji_tickets` tables.
-- **Auction & Marketplace** (`internal/auction`): Live P2P trading hall (`@おくる`/`@しらべる`) with gold and equipped item transfers to depots.
-  - *Dependencies:* Character, Equipment, Inventory, Depot, Item Catalog.
-  - *Persistence:* State updates across `characters`, `inventory_items`, and `character_depot_items` with Rank 2 -> 3 -> 5 locking.
-- **Collection & Monster Book** (`internal/collection`): Illustrated monster defeat tracking and item discovery recording.
-  - *Dependencies:* Character repository.
-  - *Persistence:* `character_monster_book` and `character_item_collection` tables.
-- **Medal & Lifetime Achievements** (`internal/medal`): Small Medal exchange shop and Lifetime Milestone Achievement tracking with decoupled producer hooks (`VictoryHook`, `GamePlayedHook`, `SynthesisHook`, etc.).
-  - *Dependencies:* Character, Inventory, TransactionProvider, Action producers.
-  - *Persistence:* `character_achievements` and `character_medals` tables.
-- **Chapel & Blessings** (`internal/chapel`): Town church prayer registration, 5 blessing choices, and single active wish enforcement.
-  - *Dependencies:* Character repository.
-  - *Persistence:* `character_blessings` table.
-- **Colosseum PvP (闘技場)** (`internal/pvp`): Real-time 2..8 player room recruitment, Bet & Split prize pools, 9 team colors, multi-round party battle resolution, durable `pvp_wins` tracking, and 10-round draw refund safety.
-  - *Dependencies:* Battle Engine, Character repository, TransactionProvider.
-  - *Persistence:* Ephemeral room state in Valkey Master (`party2:pvp:*`) with distributed locking; durable wealth and wins in MariaDB with Rank 2 row locking in ascending ID order.
-- **Guild versus Guild (GvG) Combat** (`internal/gvg`): Real-time 2..8 player guild battle rooms, room GP prize pool seeding, multi-round battle resolution, round winner GP, match victory awards, and 7-tier cascading victory medals & championship cups.
-  - *Dependencies:* Battle Engine, Guild repository, Character repository.
-  - *Persistence:* Ephemeral rooms in Valkey Master (`party2:gvg:*`) with distributed locking; durable standings and trophy tiers in MariaDB `gvg_standings`.
-- **Boss Battles (封印戦)** (`internal/boss`): 4-player cooperative sealing battles, entry fatigue (+20% Tired), Dejon banishment (+30% Tired), `@ふういん` resealing, HeroCount increment, celebration banquets, news broadcast, and depot overflow reward delivery.
-  - *Dependencies:* Battle Engine, Character, Party, Inventory, Core Progression, News Publisher.
-  - *Persistence:* `character_boss_records` and `boss_challenge_history` tables (Rank 3 -> Rank 5 lock ordering).
-- **Dungeon Exploration** (`internal/dungeon`): Multi-floor grid dungeon navigation, branching tile events, party exploration, trap damage, Treasure Hunter bonus chests, map scouting (`@ちず`) with stacking vision expansion, and reward finalization with depot overflow routing.
-  - *Dependencies:* Battle Engine, Character, Inventory, Core Progression, Valkey Master.
-  - *Persistence:* `character_dungeon_records` and `dungeon_expedition_history` in MariaDB; volatile in-progress run buffers in Valkey Master (`party2:dungeon:{char:<char_id>}:*`, Candidate D).
-- **Battle Replays & Match History** (`internal/replay`): Recording and playback of step-by-step turn logs across all combat modes, character match history queries, and retention pruning.
-  - *Dependencies:* Battle Engine, Character.
-  - *Persistence:* `battle_replays` table.
-- **Endurance Challenge** (`internal/challenge`): Consecutive survival wave combat, progressive wave scaling, legacy HP carryover between rounds, party challenge runs, Hall of Fame records, and cashout reward finalization with depot overflow routing.
-  - *Dependencies:* Battle Engine, Character, Inventory, Valkey Master.
-  - *Persistence:* `character_challenge_records`, `challenge_sessions`, `challenge_hall_of_fame` tables; volatile active session buffers in Valkey Master (`party2:challenge:{char:<char_id>}:*`, Candidate D).
-- **Custom Skill Gem Synthesis** (`internal/custom_skill`): Custom skill naming, activation phrase validation, gem-box selection, CMP/slot checks, and atomic gem exchange.
-  - *Dependencies:* Character, Inventory, Gem catalog, TransactionProvider.
-  - *Persistence:* `character_custom_skills` table.
-- **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): Helper quest generation, delivery validation, alchemy material rewards, guild points, emergency rescue recovery, and HTTP API endpoints.
-  - *Dependencies:* Character, Inventory, Item, Guild repository.
-  - *Persistence:* `helper_quests` and `rescue_records` tables.
-- **Town Park & Public Bulletin Board** (`internal/park`): Public bulletin board posts, character authorship, text sanitization, rate limiting, and NPC fortune divination.
-  - *Dependencies:* Character repository.
-  - *Persistence:* `park_posts` table.
-- **News & Player Notifications** (`internal/notification`): System news announcements, personalized notification inbox, read state tracking, and retention pruning.
-  - *Dependencies:* Player repository.
-  - *Persistence:* `news_articles` and `player_notifications` tables.
-- **Player Leaderboards & Character Rankings** (`internal/ranking`): 12 competitive leaderboards with deterministic tie-breaking, pagination, Valkey caching, singleflight stampede protection, and ISP-decomposed repository sub-interfaces.
-  - *Dependencies:* Character, Player, Valkey, Scheduling.
-  - *Persistence:* `ranking_snapshots` table and Valkey cache keys (`party2:ranking:snapshot:*`).
-- **Distributed Rate Limiting & Cooldown Tracking** (`internal/ratelimit`): Atomic distributed rate limiting, endpoint spam defense, bulletin board cooldowns, and home visitor throttling.
-  - *Dependencies:* Valkey with in-memory fallback.
-  - *Persistence:* Atomic counter keys in Valkey (`party2:ratelimit:*`).
-- **Event Plaza & Victory Banquets** (`internal/eventplaza`): Town gathering state, real-time plaza presence tracking (5-minute window via Valkey Sorted Set + MariaDB), 26-item authentic merchant catalog at 3× markup across Tiers 1–3, and world boss victory celebration banquets directly linked to presence.
-  - *Dependencies:* Character, Item, Inventory, Depot, Helper Quest filter, Item Collection, Valkey.
-  - *Persistence:* `celebration_banquets`, `banquet_toasts`, `eventplaza_presences` tables and Valkey Sorted Set `party2:eventplaza:presence`.
-- **Secret Underground Shop** (`internal/secretshop`): Secret underground shop access validation (`job_lv >= 7`), 8-item rare catalog with 3× pricing multiplier, inventory-to-depot overflow routing, and puff-puff dialogue.
-  - *Dependencies:* Character, Item, Inventory, Depot.
-  - *Persistence:* Direct inventory, depot, and character balance updates.
-- **Adventurer's Tavern** (`internal/tavern`): 14-item culinary menu, restorative HP/MP meals, fullness tracking, raffle tickets, automatic fullness reset upon adventure completion (`is_eat = 0`), and standing order food delivery across solo and party adventures.
-  - *Dependencies:* Character, Lottery repository.
-  - *Persistence:* `tavern_deliveries` and `tavern_character_status` tables.
-- **Town Black Market** (`internal/blackmarket`): Rare item sacrifice recycling system awarding Rare Points, prize trade exchange for 24 equipment/item rewards delivered to Depot, and NPC interactions.
-  - *Dependencies:* Character, Item, Inventory, Depot.
-  - *Persistence:* `blackmarket_character_points` table.
-- **Flea Market** (`internal/fleamarket`): Fixed-price item marketplace (max 5 active listings per character, 1–999,999G), SQL CAS status predicate guard, and atomic purchasing transactions.
-  - *Dependencies:* Character, Item, Inventory.
-  - *Persistence:* `fleamarket_listings` table with SQL CAS status guard and cross-character row lock hierarchy (`characters` ID asc -> `inventory_items` -> `fleamarket_listings`).
-- **Gem Store & Jewel Synthesis** (`internal/gemstore`): Dedicated Gem Box storage with job-level dynamic capacity, sorting, 55+ gem synthesis formulas, player transfers, and dual-source (Inventory and Depot) unidentified orb appraisals.
-  - *Dependencies:* Character, Item, Inventory, Depot, Gem Box repository.
-  - *Persistence:* `character_gem_boxes` and `gem_box_items` tables with lock hierarchy (`characters` -> `inventory_items` -> `character_depots` -> `character_gem_boxes`).
-- **Endgame God Wishes & Limit Breaks** (`internal/god`): Celestial audiences in Heaven and Underworld, permanent attribute enhancements, currency awards, Lv99+ limit breaks (raising cap to 150), and storage capacity limit breaks.
-  - *Dependencies:* Character, Core Progression, Depot, Inventory.
-  - *Persistence:* `characters` limit break columns and `character_depots` capacity.
-- **Monster Ranch & Pet Companions** (`internal/monster`): Monster Grandpa stabling (base 50 up to 300 via `OverMonster`), home pet estate linking (up to 8 pets), nickname customization, P2P gifting with two-party locking, and wild release.
-  - *Dependencies:* Character, TransactionProvider.
-  - *Persistence:* `character_monsters` table.
-- **Photo Contest & Gallery** (`internal/contest`): Character screenshot storage, contest submissions, community voting, automated round conclusion with prize distribution, and Hall of Fame archiving.
-  - *Dependencies:* Character, News publisher, Guild service.
-  - *Persistence:* `character_photos`, `contest_rounds`, `contest_entries`, `contest_votes`, and `contest_legends` tables.
-- **Multiplayer Party & Co-op Quests** (`internal/party`): Party formation (1–4 members), recruitment lobbies, speed configs (3/18/25), readiness synchronization, Rank 0 distributed adventure lock (`party2:party:lock:adventure:*`) with token-safe Lua release, post-battle settlement delegation via `ApplyPostBattleResult`, Floor 11 treasure drops with depot overflow routing, and HP-1 survival guarantee.
-  - *Dependencies:* Character, Battle Engine, Inventory, Item, Progression, Depot, Catalogs, News publisher, Valkey.
-  - *Persistence:* Ephemeral lobbies and locks in Valkey Master (`party2:party:*`); durable quest logs in MariaDB `party_adventure_logs`.
-- **Altar of Rebirth** (`internal/altar`): 6-orb offering ritual, Ramia awakening (30min record), and 4 otherworld travel item wishes with Depot overflow fallback.
-  - *Dependencies:* Character, Inventory, Depot, Item Catalog, Economy.
-  - *Persistence:* `altar_records` and character updates via `economy.TransactionRunner`.
-- **Wishing Well** (`internal/wishingwell`): Wishing Well (@女神) SP sacrifice exchange for permanent stat growth (MHP/MMP +2/SP, ATK/DEF/AGI +1/SP).
-  - *Dependencies:* Character, Economy.
-  - *Persistence:* `characters` table with Tier 2 row locking.
-- **Player Store & Town Boutiques** (`internal/store`): Player store construction in towns 1–4 (50,000G, 90-day duration), gold and barter listings from depot (up to 20 via `OverStore`), atomic purchasing transactions, and interior customization (26 wallpapers, 15 furniture styles).
-  - *Dependencies:* Character, Depot, Item, Guild, Timer service, TxProvider.
-  - *Persistence:* `character_stores`, `store_sales`, and `store_interiors` tables (Rank 0 `store_sales` -> Rank 2 `characters` asc -> Rank 5 `character_depots` asc).
-- **Maintenance Mode** (`internal/maintenance`): Maintenance status management, administrative toggle, and HTTP middleware interception.
-  - *Dependencies:* Maintenance repository, Valkey.
-  - *Persistence:* Valkey Master / in-memory caching (`party2:maintenance:status`) backed by `system_maintenance` table in MariaDB.
+| Module | Package Path | Primary Responsibility | Dependencies | Storage & Lock Hierarchy |
+| :--- | :--- | :--- | :--- | :--- |
+| **Activity** | `internal/activity` | Delayed training actions and experience awards | Character, Progression, Scheduling | MariaDB `activities` |
+| **Adventure** | `internal/adventure` | 10-floor dungeon crawl loop, treasure room, combat chronicles | Battle, Catalogs, Character, Inventory | MariaDB `adventures` (Rank 2→3→5) |
+| **Alchemy** | `internal/alchemy` | 112-recipe crafting consuming depot materials, recipe compendium | Catalogs, Character, Depot, Economy | MariaDB `character_alchemy` (Rank 2→5→8) |
+| **Altar** | `internal/altar` | 6-orb ritual, Ramia awakening, otherworld travel wishes | Character, Inventory, Depot, Economy | MariaDB `altar_records` (Rank 2→3→5) |
+| **Auction** | `internal/auction` | Live P2P trade hall (`@おくる`/`@しらべる`) | Character, Equipment, Inventory, Depot | MariaDB `characters`, `inventory_items`, `depot_items` (Rank 2→3→5) |
+| **Bank** | `internal/bank` | Gold savings deposits/withdrawals with 999,999G wallet clamp | Character | MariaDB `characters.deposit` (Rank 2) |
+| **Black Market** | `internal/blackmarket` | Rare item sacrifice for Rare Points, depot barter rewards | Character, Item, Inventory, Depot | MariaDB `blackmarket_character_points` (Rank 2→3→5) |
+| **Blacksmith** | `internal/blacksmith` | 12 crystal weapon seals, equipment naming, 3-slot storage | Character, Inventory, Equipment | MariaDB `blacksmith_deposits` (Rank 2→3→8) |
+| **Boss** | `internal/boss` | 4-player sealing battles, Dejon banishment, HeroCount | Battle, Character, Party, Inventory, News | MariaDB `character_boss_records` (Rank 3→5) |
+| **Casino** | `internal/casino` | 2..8 player room lobby, Indian Poker, High-Low, Doppelganger, Slots | Character, Depot | Valkey Candidate C (`party2:casino:*`); MariaDB `casino_accounts` (Rank 2→5→8) |
+| **Challenge** | `internal/challenge` | 4-tier survival wave combat, HP carryover, Hall of Fame | Battle, Character, Inventory, Valkey | Valkey Candidate D (`party2:challenge:*`); MariaDB `character_challenge_records` |
+| **Chapel** | `internal/chapel` | 5 town church blessings, single active prayer constraint | Character | MariaDB `character_blessings` |
+| **Collection** | `internal/collection` | Illustrated monster defeat and item discovery encyclopedia | Character | MariaDB `character_monster_book`, `character_item_collection` |
+| **Contest** | `internal/contest` | Photo contest submissions, voting rounds, Hall of Fame | Character, News, Guild | MariaDB `character_photos`, `contest_rounds`, `contest_entries` |
+| **Custom Skill** | `internal/custom_skill` | 3-gem recipe synthesis, activation phrase validation | Character, Inventory, Gem Catalog | MariaDB `character_custom_skills` |
+| **Depot** | `internal/depot` | Persistent storage (up to 500 slots), item consumption, delivery engine | Character, Inventory, Economy | MariaDB `character_depots`, `depot_items` (Rank 2→3→5) |
+| **Dungeon** | `internal/dungeon` | Grid map exploration, party traps, map scouting (`@ちず`) | Battle, Character, Inventory, Valkey | Valkey Candidate D (`party2:dungeon:*`); MariaDB `character_dungeon_records` |
+| **Event Plaza** | `internal/eventplaza` | Real-time presence tracking, 3× markup bazaar, victory banquets | Character, Item, Inventory, Depot, Valkey | Valkey `party2:eventplaza:presence`; MariaDB `celebration_banquets` |
+| **Flea Market** | `internal/fleamarket` | Fixed-price player listings (up to 5/char, 120 server max) | Character, Item, Inventory | MariaDB `fleamarket_listings` with SQL CAS guard (Rank 2 asc→3→8) |
+| **Gem Store** | `internal/gemstore` | Dedicated gem box, 55+ synthesis formulas, orb appraisal | Character, Item, Inventory, Depot | MariaDB `character_gem_boxes`, `gem_box_items` (Rank 2→3→5→8) |
+| **God** | `internal/god` | 19 celestial wishes, Lv150 OverLevel, storage limit breaks | Character, Progression, Depot, Inventory | MariaDB `characters`, `character_depots` |
+| **Guild** | `internal/guild` | Founding, dynamic GP, custom roles, hex colors, 20d auto-disband | Character | MariaDB `guilds`, `guild_members` |
+| **GvG** | `internal/gvg` | 2..8 player guild battle rooms, GP prize pools, 7-tier medals | Battle, Guild, Character, Valkey | Valkey Candidate C (`party2:gvg:*`); MariaDB `gvg_standings` |
+| **Helper/Rescue** | `internal/helper`, `rescue` | Delivery quests, alchemy rewards, emergency state reset | Character, Inventory, Item, Guild | MariaDB `helper_quests`, `rescue_records` |
+| **Home** | `internal/home` | House profiles, letters, companion phrases, sleep recovery | Character, Timer, Economy, Inventory, Depot | Valkey `party2:timer:sleep:*`; MariaDB `character_homes`, `home_letters` |
+| **Lottery** | `internal/lottery` | 20-cap Takarakuji lottery, rollover jackpot; Tavern Fukubiki raffle | Character, Inventory, Depot, Item | MariaDB `character_lottery`, `takarakuji_rounds` (Rank 0→2→5) |
+| **Maintenance** | `internal/maintenance` | Maintenance state, admin toggle, HTTP 503 middleware | Valkey | Valkey `party2:maintenance:status`; MariaDB `system_maintenance` |
+| **Medal** | `internal/medal` | Small Medal depot shop, lifetime milestone achievement tracking | Character, Inventory, Action Hooks | MariaDB `character_medals`, `character_achievements` |
+| **Monster Ranch** | `internal/monster` | Grandpa stabling (50–300 cap), Home pet link (8), P2P gift | Character, TransactionProvider | MariaDB `character_monsters` |
+| **Notification** | `internal/notification` | System news announcements, player notification inbox | Player | MariaDB `news_articles`, `player_notifications` |
+| **Park** | `internal/park` | Public bulletin board posts, NPC divination, rate limiting | Character | MariaDB `park_posts` |
+| **Party** | `internal/party` | 1–4 player lobbies, speed configs, Rank 0 distributed lock, HP-1 | Character, Battle, Inventory, Depot, Valkey | Valkey `party2:party:*`; MariaDB `party_adventure_logs` (Rank 0 lock) |
+| **Plantation** | `internal/plantation` | 6 seeds, 14 fertilizer reagents, midnight JST maturation, harvest | Catalogs, Character, Inventory, Depot | MariaDB `plantation_plots` (Rank 2→3→5→8) |
+| **PvP** | `internal/pvp` | 2..8 player Colosseum rooms, Bet & Split prize pool, 9 colors | Battle, Character, TransactionProvider | Valkey Candidate C (`party2:pvp:*`); MariaDB `pvp_wins` (Rank 2 asc) |
+| **Ranking** | `internal/ranking` | 12 leaderboards, Valkey caching, singleflight stampede guard | Character, Player, Valkey, Scheduling | Valkey `party2:ranking:snapshot:*`; MariaDB `ranking_snapshots` |
+| **Rate Limit** | `internal/ratelimit` | Distributed atomic rate limiting, spam defense, throttling | Valkey | Valkey `party2:ratelimit:*` |
+| **Replay** | `internal/replay` | Combat turn log recording, step-by-step playback, retention | Battle, Character | MariaDB `battle_replays` |
+| **Secret Shop** | `internal/secretshop` | JobLv 7 access gate, 8 rare items at 3× price, depot delivery | Character, Item, Inventory, Depot | MariaDB `characters`, `inventory_items`, `depot_items` |
+| **Shop** | `internal/shop` | Town equipment/item shops, 50% markdown, depot auto-delivery | Catalogs, Character, Inventory, Depot | MariaDB `characters`, `inventory_items`, `depot_items` (Rank 2→3→5) |
+| **Store** | `internal/store` | Player shop construction (50kG/90d), barter listings, interiors | Character, Depot, Item, Guild, Timer | MariaDB `character_stores`, `store_sales`, `store_interiors` (Rank 0→2→5) |
+| **Tavern** | `internal/tavern` | 14-item culinary menu, restorative meals, food delivery standing orders | Character, Lottery | MariaDB `tavern_deliveries`, `tavern_character_status` |
+| **Wishing Well** | `internal/wishingwell` | SP sacrifice for permanent stat growth (HP/MP +2/SP, Stats +1/SP) | Character, Economy | MariaDB `characters` (Rank 2) |
 
 ---
 

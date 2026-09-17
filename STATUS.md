@@ -21,65 +21,65 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 ### Architecture & Repository Intelligence
 - **Agent Operating Rules** (`AGENTS.md`, `.agents/rules/`): ✅ Prescriptive constraint rules modularized into 9 rule files; rationale in `docs/architecture/`.
 - **Guidance Layer** (`.arch/`): ✅ Symbol-anchor module JSON + shared table reverse-index; verified by `arch_test.go`.
-- **Transient State Architecture** (`docs/architecture/transient-run-state.md`, `docs/architecture/valkey-keyspace.md`, `internal/casino`, `internal/pvp`, `internal/gvg`): ✅ Ephemeral Turn & Session Lobby Architecture (Candidate C) standardized across multiplayer domains (Party, PvP, GvG, Casino) with authentic 1800s sliding TTL, active ZSet index scored by `UpdatedAt.Unix()`, lazy `ZREMRANGEBYSCORE` pruning, distributed room locking (`WithRoomLock`, `party2:<domain>:lock:room:<room_id>`) with token-safe Lua release, and Two-Phase Settlement into MariaDB Master. In-Progress Run Buffers (Candidate D: Dungeon/Challenge) and Shared Boss HP (Candidate E) verified and active.
-- **AST Linter Suite** (`make check`, `make arch-lint`): ✅ Automated static analysis enforcing transaction boundaries (`TransactionRunner`), deterministic lock hierarchy (Rank 0→8), file size (≤500 lines), ISP interface size (≤10 methods), dead code, Valkey keyspace, Battle Adapter boundary enforcement, direct `math/rand` prohibition, raw `time.Sleep` prohibition, HTTP handler detached root context prohibition, cryptographic security policy, and modular monolith package boundaries.
+- **Transient State Architecture** (`docs/architecture/transient-run-state.md`, `docs/architecture/valkey-keyspace.md`): ✅ Ephemeral Turn & Session Lobby Architecture (Candidate C) across multiplayer domains with 1800s sliding TTL, active ZSet index, distributed room locking (`WithRoomLock`), and Two-Phase Settlement into MariaDB Master. In-Progress Run Buffers (Candidate D) and Shared Boss HP (Candidate E) active.
+- **AST Linter Suite** (`make check`, `make arch-lint`): ✅ Automated static analysis enforcing transaction boundaries (`TransactionRunner`), deterministic lock hierarchy (Rank 0→8), file size (≤500 lines), ISP interface size (≤10 methods), dead code, Valkey keyspace, Battle Adapter boundary, crypto policy, and package boundaries.
 - **Benchmark Framework** (`make bench`): ✅ Critical-path benchmarks + baseline regression detection.
 
 ### Core & Shared Components
 - **Player** (`internal/core/player`, `internal/player`): ✅ Registration, bcrypt (cost 12), Valkey session (7d TTL + ZSET lazy-purge), PAT (`p2_sk_...`), account deletion.
-- **Character** (`internal/core/character`, `internal/character`): ✅ Stats, progression, SP, wallet (999,999G cap), crystal currency (`AddCrystal`, `DeductCrystal`, 999,999 cap with AST linter protection), vitality bounds (`ClampVitality`, `RecoverVitality`), 1 HP fallen combat survival (`ApplyCombatSurvival`), fatigue clamping (`AddTired` 100% ceiling, `ReduceTired`), profile, customization; AST-enforced field encapsulation.
+- **Character** (`internal/core/character`, `internal/character`): ✅ Attributes, progression, wallet (999,999G cap), crystal currency (`AddCrystal`/`DeductCrystal`, 999,999 cap), vitality bounds, 1 HP combat survival, fatigue clamping (`AddTired`/`ReduceTired`), profile, customization; AST-enforced encapsulation.
 - **Timer & Daily Quotas** (`internal/core/timer`): ✅ Valkey/in-memory native TTL timers and JST-midnight daily quotas.
-- **Progression** (`internal/core/progression`): ✅ Cumulative EXP (`level²×10`), OverLevel (Lv150), Happy Seed; AST-enforced progression helper encapsulation.
+- **Progression** (`internal/core/progression`): ✅ Cumulative EXP (`level²×10`), OverLevel (Lv150), Happy Seed; AST-enforced encapsulation.
 - **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): ✅ 72-job catalog, Lv20 job change, mastery, future memory snapshots, gem synthesis triggers.
-- **Item / Inventory / Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`, `internal/economy`): ✅ 5-category catalog (269 items), UsageCategory validation, domain stackability invariants (`IsStackable`), slot management, standardized item consumption interface (`Consume`, `ConsumeItem`, `ConsumeOne`, `ConsumeOneItem`), capacity boundary enforcement (`IsFull()`) across grants and exchanges (`ErrInventoryFull`).
-- **Battle & Adapter** (`internal/core/battle`, `internal/battle`): ✅ Deterministic turn resolver; multi-participant party combat (4vN) and multi-faction/team combat (3+ teams/guilds up to 8 players) with independent faction targeting and elimination loops; standardized Battle Adapter (`internal/battle`) bridging Character/Party to Participant, authentic equipment stat calculation across 71 weapons, 55 armors, and accessories, passive trigger binding, and atomic post-battle state application with deterministic row-lock hierarchy (Rank 2 -> Rank 3 -> Rank 5), depot overflow routing, and recipient-targeted drop distribution.
+- **Item / Inventory / Equipment** (`internal/core/item`, `internal/inventory`, `internal/equipment`, `internal/economy`): ✅ 5-category catalog (269 items), stackability invariants (`IsStackable`), slot management, standardized consumption (`Consume`/`ConsumeOne`), capacity boundary enforcement (`ErrInventoryFull`).
+- **Battle & Adapter** (`internal/core/battle`, `internal/battle`): ✅ Deterministic turn resolver (1v1, 4vN, 3+ factions up to 8 players); standardized Battle Adapter bridging Character/Party to Participant, equipment stat calculation, passive triggers, and atomic post-battle state application (`ApplyPostBattleResult`).
 - **Random Number Generation** (`internal/core/random`): ✅ Concurrency-safe generator (`math/rand/v2`) and deterministic seeded generator for 100% reproducible tests.
 - **Scheduling** (`internal/core/scheduling`, `internal/scheduling`): ✅ Valkey-backed delayed queue + distributed lock worker; package coverage >90%.
-- **Database & Transaction Orchestration** (`internal/database`, `internal/economy`, `internal/core/event`): ✅ `RunInTx`/`ExecutorFromContext` ambient propagation, deterministic lock hierarchy (Rank 0→8) AST-enforced, single-character `economy.TransactionRunner`, multi-aggregate/P2P `TransactionProvider`, safe `updateCharacter` persistence, and 2-phase event dispatcher.
+- **Database & Transaction Orchestration** (`internal/database`, `internal/economy`, `internal/core/event`): ✅ Ambient `RunInTx`/`ExecutorFromContext`, deterministic lock hierarchy (Rank 0→8), single-character `economy.TransactionRunner`, multi-aggregate `TransactionProvider`, and 2-phase event dispatcher.
 - **Common Utilities** (`internal/pagination`, `internal/id`, `internal/validation`): ✅ Keyset cursor pagination (`CursorPage[T]`), cryptographic ID, validation helpers.
 
 ### Feature Modules
-- **Activity** (`internal/activity`): ✅ Training via Valkey Worker push + manual Claim fallback.
-- **Adventure** (`internal/adventure`): ✅ Authentic 10-floor dungeon crawl loop across 28 stages (286 monsters), Floor 11 Treasure Room resolution with post-battle settlement delegation via `ApplyPostBattleResult`, inventory persistence, depot overflow fallback, `LostDrops` tracking on full depot, surviving HP/MP persistence, immediate crawl execution, chronicles, and `VictoryHook`.
-- **Medal & Achievements** (`internal/medal`): ✅ Small Medal exchange → Depot; milestone achievement observer tracking lifetime gameplay metrics.
-- **Shop** (`internal/shop`): ✅ 3 town shops with job-level gates, 50% sellback, MasterCard discount, Depot auto-delivery.
-- **Depot** (`internal/depot`): ✅ Dynamic capacity (up to 500 slots), tiered expansion, sort, item sell, gold/item direct-send, standardized item consumption (`Consume`, `ConsumeOne`, `PurgeSlot`), stackability preservation, standardized `RefreshCapacity` helper across commerce modules, centralized transactional reward item delivery engine (`DeliverRewardItem`, `DeliverRewardItems`) enforcing Rank 3 -> Rank 5 lock ordering and configurable overflow policies (`PolicyTreatOverflowAsLost` vs `PolicyAbortOnDepotFull`), unified dual-source item resolution & consumption helpers (`ResolveItem`, `ConsumeItem`, `ConsumeDualSource`, `SaveConsumptionResult`) across `plantation`, `blackmarket`, and `gemstore`, and inventory capacity enforcement on withdrawals (`ErrInventoryFull`).
-- **Blacksmith & Weapon Seals** (`internal/blacksmith`, `internal/battle`, `internal/core/battle`): ✅ Authentic 12 weapon seals consuming crystals (`character.crystal`, 999,999 cap), equipment naming for weapons and armors, dedicated 3-slot weapon storage (`blacksmith_deposits`), combat seal scaling and skills wired into Battle Adapter, and crystal drop rolls upon monster defeat.
-- **Alchemy** (`internal/alchemy`): ✅ 112 recipes; zero fee, depot-linked overnight synthesis, home sleep completion, depot-direct delivery, recipe compendium & `comp_alc` title.
-- **Bank** (`internal/bank`): ✅ Character gold deposit/withdrawal; 999,999G wallet clamp.
-- **Guild** (`internal/guild`, `internal/api/http`): ✅ Foundation (5,000G), dynamic Guild Points (`gpoint`) across social/combat hooks, custom member role titles, server-unique hex colors, membership application & approval gating, broadcast callouts, visual personalization (mark, wallpapers), daily scheduled 20-day inactivity automatic disbandment worker, and full HTTP REST API endpoints with OpenAPI 3.1 specs.
-- **Casino** (`internal/casino`): ✅ Multi-Player Room Lobby (2..8 players, Indian Poker, High-Low, Doppelganger, speed/rate/password/spectators) hosted in Valkey Master (`ValkeyRoomRepository`, Candidate C) with 1800s sliding TTL, active ZSet index, distributed room locking (`party2:casino:lock:room:<room_id>`), and Two-Phase Settlement; authentic 13-card Indian Poker, multi-player High-Low, multi-player Doppelganger, 18 authentic prizes with Depot auto-routing, deterministic `economy.TransactionRunner` exchange, and slot machine with fatigue mechanics.
-- **Lottery & Raffle** (`internal/lottery`): ✅ Server-wide 20-cap Takarakuji lottery with pessimistic row locking (`takarakuji_rounds` Rank 0 `FOR UPDATE`), atomic drawings, Rank 5 depot delivery with capacity rollback protection; Fukubiki raffle with 3-coupon Standard and 300-coupon Special draws with depot overflow routing.
-- **Monster Ranch** (`internal/monster`): ✅ Monster Grandpa stabling (50–300 cap), Home pet link (8 pets), renaming (8 chars), P2P gift, wild release.
-- **Plantation** (`internal/plantation`): ✅ 6 seeds, 14 fertilizer reagents (Gold or Depot/Inventory items), next-midnight JST maturation, wither/yield bonuses, Depot-direct delivery.
-- **Auction Hall** (`internal/auction`): ✅ Live P2P trade (`@おくる`/`@しらべる`).
-- **Collection & Monster Book** (`internal/collection`): ✅ Monster + item encyclopedia; auto-record on obtain.
-- **Chapel & Blessings** (`internal/chapel`): ✅ 5 prayers, single-active constraint, daily reset Worker.
-- **Colosseum PvP (闘技場)** (`internal/pvp`): ✅ Real-time 2..8 player room recruitment, Bet & Split prize pool mechanics, 9 team colors, multi-round party battle resolution, durable `pvp_wins` tracking, draw refund on 10 rounds; Valkey room repository (Candidate C), distributed room locking, and transactional settlement (`RunInTx`) with Rank 2 row locking in ascending ID order.
-- **GvG Combat (ギルド戦)** (`internal/gvg`): ✅ Real-time 2..8 player guild battle rooms, room GP prize pool seeding, automatic guild color adoption, friendly guild battle prohibition, multi-round party battle resolution, round winner GP rewards, target wins match victory awards, 10-round draw limit, and 7-tier victory medals & championship cups cascading promotion; Valkey room repository (Candidate C) with distributed room locking.
-- **Boss Battles (封印戦)** (`internal/boss`): ✅ 4-player Party Sealing Battles, Dejon banishment (+30% Tired), `@ふういん` resealing, HeroCount increment, celebration banquets, news broadcast, and reward item delivery with depot overflow routing.
-- **Dungeon Exploration** (`internal/dungeon`): ✅ Grid-map exploration; Valkey Master run buffer (Lua CAS, 2h TTL, two-phase settle); multi-player party exploration (up to 4 players), trap damage distribution, Treasure Hunter bonus chests, map scouting (`@ちず`) with stacking vision expansion, and reward item delivery with depot overflow routing.
-- **Battle Replays** (`internal/replay`): ✅ Turn-log recorder + history viewer (keyset cursor).
-- **Endurance Challenge** (`internal/challenge`): ✅ 4-tier survival; Valkey Master session buffer; multi-player party challenge runs (up to 4 players, legacy HP carryover), Hall of Fame records with gravestones, and cashout reward finalization with depot overflow routing.
-- **Custom Skill Gem Synthesis** (`internal/custom_skill`): ✅ 3-gem recipe synthesis, CMP/slot constraints, atomic gem swap.
-- **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): ✅ Delivery quests (normal/rare/guild), emergency state reset.
-- **Town Park & Bulletin Board** (`internal/park`): ✅ Posts with color/recipient, rate-limit, NPC divination.
-- **News & Notifications** (`internal/notification`): ✅ Server-wide announcements + per-player inbox with read/unread management.
-- **Home, Towns & Resting** (`internal/home`, `internal/town`): ✅ House construction/expiry cycles, pet phrases (30 max), mailbox (independent delete), sleep recovery (full HP/MP/tired recovery, fullness and chapel resets), and atomic home consumable item usage.
-- **Rankings** (`internal/ranking`): ✅ 12 categories; Valkey snapshot cache, singleflight stampede guard, periodic Worker; repository decomposed into ISP-compliant sub-interfaces.
-- **Event Plaza** (`internal/eventplaza`): ✅ Real-time plaza concurrency presence tracking (5-minute active window via Valkey Sorted Set + MariaDB), 26-item authentic merchant catalog at 3× markup across Tiers 1–3, active helper quest item exclusion, hand occupancy depot fallback delivery, and King Boss victory celebration banquets directly linked to Valkey presence.
-- **Secret Shop** (`internal/secretshop`): ✅ `job_lv >= 7` gate, 8 items at 3× price, Depot auto-delivery, puff-puff dialogue.
-- **Tavern & Food Delivery** (`internal/tavern`): ✅ 14-item menu, HP/MP restore, fullness on counter meal, raffle tickets on counter meal, recurring standing order food delivery across solo & party adventures, and automatic post-adventure fullness reset (`is_eat = 0`).
-- **Black Market** (`internal/blackmarket`): ✅ Rare-point barter, Depot sacrifice/prize.
-- **Flea Market** (`internal/fleamarket`): ✅ Depot-linked listings (120-server max), SQL CAS + RowsAffected guard, Depot direct-receive.
-- **Gem Store** (`internal/gemstore`): ✅ Dedicated gem box (`job_lv`-scaled capacity), 55+ synthesis recipes, dual-source (inventory & depot) weighted orb appraisal.
-- **God Wishes & Limit Breaks** (`internal/god`): ✅ 19 heaven wishes, OverLevel (Lv150), underworld limit-breaks (5 stages each).
-- **Photo Contest** (`internal/contest`): ✅ 10-day cycle, voting, prize distribution, Hall of Fame; ISP-split sub-interfaces.
-- **Party & Co-op Quests** (`internal/party`): ✅ Up to 4 players, Valkey lobby (30min idle TTL), speed configs (3/18/25), `need_join` condition checks, stage job level access gates, 10-floor dungeon crawl + Floor 11 treasure room, post-battle settlement delegation via `ApplyPostBattleResult` with automatic depot fallback on full inventory, `LostDrops` tracking, Rank 0 distributed party adventure lock, and HP-1 survival guarantee.
-- **Altar of Rebirth** (`internal/altar`): ✅ 6-orb offering, Ramia awakening (30min record), 4 otherworld-item wishes, Depot fallback.
-- **Wishing Well** (`internal/wishingwell`): ✅ SP → permanent stat growth (MHP/MMP +2/SP, ATK/DEF/AGI +1/SP).
-- **Player Store & Town Boutiques** (`internal/store`): ✅ Shop construction (50,000G/90d), gold/item listings, 26 wallpapers, 15 furniture types.
-- **Maintenance Mode** (`internal/maintenance`): ✅ Valkey/in-memory cache, admin API key, 503 middleware.
+- **Activity** (`internal/activity`): ✅ Push-based worker training with manual claim fallback.
+- **Adventure** (`internal/adventure`): ✅ 10-floor dungeon crawl, Floor 11 treasure room, post-battle settlement, and combat chronicles.
+- **Medal & Achievements** (`internal/medal`): ✅ Small Medal depot exchange and lifetime gameplay milestone achievement tracking.
+- **Shop** (`internal/shop`): ✅ 3 town shops with job-level gates, 50% sellback, and depot auto-delivery.
+- **Depot** (`internal/depot`): ✅ Up to 500 slots storage, tiered expansion, sort, sell, direct-send, item consumption, and centralized transactional reward item delivery.
+- **Blacksmith & Weapon Seals** (`internal/blacksmith`): ✅ 12 crystal weapon seals, equipment naming, 3-slot weapon storage, combat seal effects, and monster crystal drops.
+- **Alchemy** (`internal/alchemy`): ✅ 112 crafting recipes, depot-linked overnight synthesis, home sleep completion, and recipe compendium.
+- **Bank** (`internal/bank`): ✅ Gold deposits and withdrawals with 999,999G wallet clamp.
+- **Guild** (`internal/guild`): ✅ Foundation, dynamic Guild Points, custom roles, hex colors, membership applications, and 20-day inactivity auto-disbandment.
+- **Casino** (`internal/casino`): ✅ Multi-player room lobby (2..8 players), Indian Poker, High-Low, Doppelganger, 3-reel slot machine, and 18 depot prizes.
+- **Lottery & Raffle** (`internal/lottery`): ✅ Server-wide 20-cap Takarakuji lottery with rollover jackpot; Tavern Fukubiki raffle (Standard & Special).
+- **Monster Ranch** (`internal/monster`): ✅ Monster stabling (50–300 cap), Home pet link (8 pets), renaming, P2P gifting, and wild release.
+- **Plantation** (`internal/plantation`): ✅ 6 seeds, 14 fertilizer reagents, midnight JST maturation, wither/yield bonuses, and depot harvest delivery.
+- **Auction Hall** (`internal/auction`): ✅ Live P2P trade hall (`@おくる`/`@しらべる`).
+- **Collection & Monster Book** (`internal/collection`): ✅ Illustrated monster and item encyclopedia with auto-record on obtain.
+- **Chapel & Blessings** (`internal/chapel`): ✅ 5 town church blessings with single-active prayer constraint and daily reset worker.
+- **Colosseum PvP** (`internal/pvp`): ✅ Real-time 2..8 player room recruitment, Bet & Split prize pools, 9 team colors, and multi-round combat resolution.
+- **GvG Combat** (`internal/gvg`): ✅ Real-time 2..8 player guild battle rooms, GP prize pools, target wins, and 7-tier cascading victory medals.
+- **Boss Battles** (`internal/boss`): ✅ 4-player cooperative sealing battles, Dejon banishment, HeroCount increments, and victory celebration banquets.
+- **Dungeon Exploration** (`internal/dungeon`): ✅ Multi-floor grid dungeon exploration, branching tile events, party traps, map scouting (`@ちず`), and treasure chests.
+- **Battle Replays** (`internal/replay`): ✅ Turn-log recorder, step-by-step playback, and match history queries.
+- **Endurance Challenge** (`internal/challenge`): ✅ 4-tier survival waves, HP carryover between rounds, party challenge runs, and Hall of Fame records.
+- **Custom Skill Gem Synthesis** (`internal/custom_skill`): ✅ Custom skill naming, phrase triggers, 3-gem recipe synthesis, and atomic gem exchange.
+- **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): ✅ Delivery quests (normal/rare/guild), reward delivery, and emergency state rescue.
+- **Town Park & Bulletin Board** (`internal/park`): ✅ Public bulletin board posts, character authorship, rate-limit, and NPC fortune divination.
+- **News & Notifications** (`internal/notification`): ✅ Server-wide news announcements and per-player inbox with read/unread tracking.
+- **Home, Towns & Resting** (`internal/home`, `internal/town`): ✅ House construction, companion phrases, mailbox, sleep recovery (full HP/MP/tired restore), and consumable usage.
+- **Rankings** (`internal/ranking`): ✅ 12 competitive leaderboards with Valkey caching, singleflight protection, and periodic worker.
+- **Event Plaza** (`internal/eventplaza`): ✅ Real-time plaza presence tracking (5-min active window), 26-item merchant catalog at 3× markup, and victory celebration banquets.
+- **Secret Shop** (`internal/secretshop`): ✅ JobLv 7 access gate, 8 rare items at 3× price, depot auto-delivery, and puff-puff dialogue.
+- **Tavern & Food Delivery** (`internal/tavern`): ✅ 14-item culinary menu, restorative meals, fullness tracking, raffle tickets, and standing order food delivery across adventures.
+- **Black Market** (`internal/blackmarket`): ✅ Rare item sacrifice recycling for Rare Points and 24 equipment/item rewards delivered to depot.
+- **Flea Market** (`internal/fleamarket`): ✅ Fixed-price player listings (up to 5/char, 120-server max), SQL CAS guard, and depot direct-receive.
+- **Gem Store** (`internal/gemstore`): ✅ Dedicated gem box storage, 55+ synthesis formulas, and dual-source (inventory & depot) orb appraisal.
+- **God Wishes & Limit Breaks** (`internal/god`): ✅ 19 celestial wishes, permanent stat enhancements, Lv150 OverLevel, and storage limit breaks.
+- **Photo Contest** (`internal/contest`): ✅ 10-day cycles, photo submissions, community voting, prize delivery, and Hall of Fame.
+- **Party & Co-op Quests** (`internal/party`): ✅ Up to 4 players, Valkey lobby, speed configs (3/18/25), need_join condition checks, 10-floor crawl, and HP-1 survival guarantee.
+- **Altar of Rebirth** (`internal/altar`): ✅ 6-orb offering ritual, Ramia awakening, and 4 otherworld travel item wishes.
+- **Wishing Well** (`internal/wishingwell`): ✅ SP sacrifice for permanent stat growth (MHP/MMP +2/SP, ATK/DEF/AGI +1/SP).
+- **Player Store & Town Boutiques** (`internal/store`): ✅ Player shop construction (50,000G/90d), gold/item listings, and interior customization (26 wallpapers, 15 furniture types).
+- **Maintenance Mode** (`internal/maintenance`): ✅ Valkey/in-memory cache, admin toggle, and 503 HTTP middleware.
 
 ### API & Transport
 - **Server Entrypoint** (`cmd/party2`): ✅ Typed config injection, modular service wiring (`wire.go`), Graceful Shutdown.
