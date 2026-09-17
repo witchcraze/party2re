@@ -1,458 +1,259 @@
 # Components
 
-This document defines the responsibilities and boundaries of the initial components.
+This document defines the responsibilities and boundaries of the application components.
 
-These are conceptual boundaries. The initial implementation uses Go.
+These are conceptual boundaries. The primary implementation language is Go.
 
-## Component definition
+## Component Definition Model
 
-Each component should be describable by:
+Each component is described by:
 
-- Responsibility
-- Inputs
-- Outputs
-- State
-- Dependencies
-- Public contract
-- Persistence requirements
-- Initial implementation
+- **Responsibility**: what the component owns and what invariants it protects.
+- **Dependencies**: direct package or service dependencies.
+- **Persistence Requirements**: database tables, keyspace patterns, and row-lock hierarchy tiers.
 
-The implementation language is intentionally not part of the component's identity.
+---
 
-## Core
+## Core Components
 
 ### Player
 
-**Responsibility:** account-level identity and authentication-related state.
-
-Does not own game-specific character state. Owns the relationship to characters created under the account.
-
-Player persistence stores a salted, iterated password hash and never stores the
-supplied password. Session state is an ephemeral record with explicit expiry and
-revocation. Per RFC #356 and Issue #366, session persistence is mastered directly in **Valkey Master**
-(`party2:session:<token>` with 7-day native TTL, `internal/player/valkey_session_repository.go`),
-eliminating relational database connection pressure on every authenticated HTTP request while relying on
-Valkey's native TTL for automated expiration and account deletion hooks for O(1) player set cleanup.
-
-In addition to interactive sessions, Player provides cryptographically secure Personal Access Tokens (API keys with prefix `p2_sk_`) for AI agents, external CLI tooling, and MCP servers (`internal/core/player/token.go`, `internal/player/application.go`). Tokens are generated with 32 bytes of secure random entropy, hashed using SHA-256 before persistence in MariaDB (`player_api_tokens`), and never stored or returned in plaintext after initial creation. Authentication transparently supports dual authentication (`Bearer <token>` routing to either Valkey session cache or MariaDB PAT verification based on the `p2_sk_` prefix). All active tokens are cascade-deleted upon player account deletion.
+**Responsibility:** Account-level identity and authentication-related state. Does not own character state.
+Player persistence stores a salted, iterated password hash (`bcrypt`, cost 12). Session state is ephemeral, mastered directly in **Valkey Master** (`party2:session:<token>` with 7-day native TTL and `party2:player:sessions:<player_id>` Sorted Set with lazy pruning). Also provides cryptographically secure Personal Access Tokens (`p2_sk_...`) hashed with SHA-256 in MariaDB (`player_api_tokens`) for API and tooling access. Dual authentication transparently handles sessions and PATs.
 
 ### Character
 
-**Responsibility:** the player's in-game character and its fundamental state.
-
-Linked to an owning `Player` via `player_id` (enforced via foreign key constraint).
-Owns invariants about its own state but should not become a God object containing every game system.
-Access to character operations is authorized against the authenticated session's player identity.
-Owns character renaming at the Naming Hall (`name_change.cgi`, 500,000 G, guild & flea market restrictions, uniqueness validation), gender/appearance changes (10,000 G), and custom profile bio, comment, and avatar image management (`character_profiles`).
-Encapsulates wallet currency and medal operations (`AddMoney`, `DeductMoney`, `HasMoney`, `AddSmallMedals`, `DeductSmallMedals`, `HasSmallMedals`) with 0-debt invariants, non-negative bounds checking, and overflow capping (strictly enforcing the authentic 999,999 G wallet ceiling reproducing `system.cgi:71`, with larger wealth stored in Bank savings). Direct mutations on `.Money` or `.SmallMedals` outside Core character and database mapping are mechanically banned by Go AST static analysis (`internal/core/core_lint_test.go`).
+**Responsibility:** The player's in-game character identity and fundamental attributes.
+Linked to `Player` via `player_id`. Owns character customization (naming hall, gender changes, profile bio/avatar), wallet operations (`Money`, strictly capped at 999,999G), and crystal currency (`Crystal`, capped at 999,999). Direct field mutations on currency and progression fields are mechanically prohibited outside Core and database mappers via Go AST static analysis.
 
 ### Progression
 
-**Responsibility:** level, experience, stats, and other fundamental character progression.
-
-Progression consumes job growth values through the public Job definition contract. It does not contain a built-in catalog of job-specific data. It provides canonical domain helpers (`ApplyExperience`, `ApplyExperienceWithJob`, `ApplyExperienceWithJobFull`, `ApplyExperienceWithProvider`, `MaxLevelForCharacter`) to calculate cumulative thresholds, award Skill Points (SP) per level with Skill Orb bonus support, trigger automatic SP-threshold skill learning, handle celestial OverLevel limit breaks up to Lv 150, and apply level-ups with legacy cap re-rolls. Fictional Rebirth mechanics are completely eliminated. Direct field mutation of character progression fields (`Experience`, `Level`, `SP`) in feature modules is mechanically prohibited by Go AST static analysis (`internal/core/core_lint_test.go`, `internal/core/progression/progression_lint_test.go`).
-
+**Responsibility:** Level, cumulative experience, stats, and character progression formulas.
+Consumes job growth definitions. Provides canonical domain helpers (`ApplyExperience`, `ApplyExperienceWithJob`, `MaxLevelForCharacter`) to calculate cumulative thresholds (`level²×10`), award Skill Points (SP) per level, trigger skill learning, and apply celestial OverLevel limit breaks up to Lv 150. Direct field mutation of `Experience`, `Level`, and `SP` is mechanically prohibited by AST linters.
 
 ### Job
 
-**Responsibility:** job definitions, job availability rules, and character job
-history.
-
-Job definitions are content data, not executable progression logic. The initial
-catalog is stored outside Go source as validated data under
-`internal/core/job/data/`. The Job component loads and validates that data at
-startup or construction time, then exposes definitions through a small lookup
-contract. Consumers do not access the data file or catalog map directly.
-Character job state (`CharacterJob`) encapsulates job transitions (`ChangeTo`),
-mastery (`RecordMastery`, `Master`, `IsMastered`), prerequisite checks, and
-retained mastery SP. The job application service coordinates the level-20
-change transaction, character reset, optional inventory consumption, and
-temporary mastered-job exchange. `Character` owns the persisted previous-job,
-job-change count, and memory snapshot fields. Direct mutation of
-`CurrentJobID` and `MasteredJobs` is prohibited outside Core and database
-layers and validated via Go AST static analysis.
-
-The data file may contain stable IDs, display names, growth values, and simple
-requirements. Dynamic requirements and dynamic growth formulas require explicit
-rules and tests; they must not be approximated by silently replacing them with
-fixed values.
-
-Visual asset paths, provenance, and licenses are maintained separately from
-domain definitions in the asset documentation and asset manifest. Job data
-must not embed legacy image paths or legacy asset bytes.
+**Responsibility:** Job catalog definitions, availability rules, and character job history.
+Job definitions are content data loaded and validated at startup from `internal/core/job/data/`. Exposes definitions through a lookup contract. `CharacterJob` encapsulates transitions (`ChangeTo`), mastery (`RecordMastery`, `Master`), prerequisite checks, and retained mastery SP. Coordinates level-20 job change transactions and temporary mastered-job memory snapshots (`よびおこす`).
 
 ### Item
 
-**Responsibility:** item definitions, catalog resolution, and concrete item instances.
-
-Keep definitions separate from instances. Defines domain stackability invariants (`IsStackable() == (Slot == SlotNone)`), ensuring discrete equipment items (weapons, armor, shields, accessories) and enhanced items (`EnhancementLevel > 0`) cannot stack (`Quantity` strictly 1) across storage systems (`internal/depot`, `internal/core/inventory`). Enforces instance creation guards (`NewInstanceWithEnhancement`) and predicate checks (`CanStackWith`).
+**Responsibility:** Item definitions, 5-category catalog resolution, and item instances.
+Separates definitions from instances. Enforces domain stackability invariants (`IsStackable() == (Slot == SlotNone)`), ensuring equipment items and enhanced items cannot stack (`Quantity` strictly 1) across storage systems (`internal/depot`, `internal/core/inventory`).
 
 ### Inventory
 
-**Responsibility:** ownership and storage of item instances.
-
-Does not contain unrelated item behavior. Encapsulates item storage mutations via `Add`, `Consume`, `ConsumeItem`, `ConsumeOne`, `ConsumeOneItem`, and `Update` (with uniqueness checks and quantity validation). Direct mutations or slicing of `Inventory.Items` outside Core inventory and database mapping are mechanically prohibited by Go AST static analysis (`internal/core/core_lint_test.go`).
+**Responsibility:** Ownership and storage of active character item instances.
+Encapsulates item storage mutations via `Add`, `Consume`, `ConsumeItem`, `ConsumeOne`, `ConsumeOneItem`, and `Update` with quantity validation. Direct mutations of `Inventory.Items` outside Core and database mapping are prohibited via AST static analysis.
 
 ### Equipment
 
-**Responsibility:** which eligible item instances are equipped and where.
-
-Encapsulates slot assignments and un-equipping via `Equip` and `Unequip` (with slot suitability and ownership checks). Direct mutations of `Equipment.Slots` outside Core equipment and database mapping are mechanically prohibited by Go AST static analysis (`internal/core/core_lint_test.go`).
+**Responsibility:** Slot assignments and un-equipping for eligible item instances.
+Encapsulates slot assignments via `Equip` and `Unequip` across 5 equipment slots (weapon, armor, shield, accessory 1, accessory 2) with suitability and ownership checks.
 
 ### Currency
 
-**Responsibility:** generic ownership and movement of game currencies.
-
-Avoid hard-coding every future currency into Core.
-
+**Responsibility:** Generic ownership and movement invariants of game currencies.
+Provides boundary interfaces for gold, small medals, casino coins, and crystal currencies without hard-coding ad-hoc rules into unrelated modules.
 
 ### Game Time / Scheduling
 
-**Responsibility:** represent and process delayed actions without owning
-feature-specific rules.
-
-A `ScheduledAction` records what is scheduled and when it becomes executable.
-The relevant feature module supplies the processing logic through an
-`ActionHandler` contract. The scheduling mechanism itself contains no
-game-rule logic.
-
-**Domain model** (`internal/core/scheduling`):
-
-- `ScheduledAction` — the unit of work:
-  - `ID`, `ActionType`, `ActorID`, `Params`, `ScheduledAt`, `ExecuteAt`
-  - `State` — allow-listed: `pending | processing | completed | failed`
-  - `RetainUntil` — auto-expiry time (set by `MarkCompleted`/`MarkFailed`)
-- State machine: `Pending → Processing → Completed | Failed`
-- `Validate()` — enforces field-size limits and the known-state allow-list;
-  must pass before any lock acquisition or handler dispatch.
-
-**Queue storage** — Valkey (`internal/scheduling`):
-
-| Valkey key | Type | Purpose |
-|---|---|---|
-| `party2:scheduled:pending` | sorted set | pending IDs scored by `ExecuteAt` unix timestamp |
-| `party2:scheduled:action:{id}` | string (JSON) | full action data; TTL set on completion/failure |
-| `party2:scheduled:lock:{id}` | string with TTL | distributed lock preventing duplicate execution |
-
-**Worker** (`internal/scheduling.Worker`):
-
-- polls `party2:scheduled:pending` on a configurable interval;
-- acquires a per-action `SET NX EX` lock before processing;
-- calls `Validate()` as defense-in-depth before lock acquisition;
-- dispatches to the registered `ActionHandler` for the action's type;
-- marks the action `completed` or `failed` and sets `RetainUntil` TTL;
-- runs inside the main process; the same `Run(ctx)` loop can be moved to
-  an independent Worker binary without interface changes.
-
-**ActionHandler contract** (`internal/scheduling.ActionHandler`):
-
-```go
-type ActionHandler interface {
-    Handle(ctx context.Context, action core_scheduling.ScheduledAction) error
-}
-```
-
-Feature modules implement this interface and register with the Worker:
-
-```go
-worker.RegisterHandler("training_complete", myFeature)
-```
-
-**Safety guarantees:**
-
-- `Validate()` rejects empty IDs, unknown states, oversized strings, and
-  excess parameters before any lock or dispatch occurs.
-- Malformed JSON in Valkey is detected on `FetchDue` and immediately
-  removed from the queue so it cannot block processing.
-- Stale queue entries (key missing) are cleaned up automatically.
-- The per-action lock TTL prevents duplicate execution across concurrent
-  Workers or restarts.
-
-**Adding a new action type:**
-
-1. Define the action type constant in the feature package.
-2. Implement `ActionHandler.Handle`.
-3. Call `scheduling.Service.Schedule` with the action type and params.
-4. Register the handler on `Worker` at startup.
-
-No changes to the scheduling mechanism itself are required.
+**Responsibility:** Represent and execute delayed actions without owning feature rules.
+`ScheduledAction` (`internal/core/scheduling`) records work units with an explicit state machine (`Pending → Processing → Completed | Failed`). Queue storage is managed in Valkey (`internal/scheduling`):
+- `party2:scheduled:pending` (Sorted Set scored by `ExecuteAt` timestamp)
+- `party2:scheduled:action:{id}` (action payload string)
+- `party2:scheduled:lock:{id}` (distributed lock preventing duplicate execution)
+The background `Worker` acquires locks, validates payloads, and dispatches to registered `ActionHandler` implementations.
 
 ### Domain Events
 
-**Responsibility:** publish meaningful domain-level facts to decouple optional consumers.
+**Responsibility:** Publish meaningful domain facts (`BattleFinished`, `CharacterLeveledUp`, `ItemObtained`, etc.) to decouple optional consumers via a two-phase in-memory dispatcher (`internal/core/event`).
 
-Examples:
+---
 
-- BattleFinished
-- QuestCompleted
-- CharacterLeveledUp
-- ItemObtained
-- JobChanged
-- GuildJoined
-
-Events are not required for every operation.
-
-## Shared components
+## Shared Components
 
 ### Battle
 
-**Responsibility:** execute and represent battles between participants.
-
-Conceptual model:
-
-```text
-Battle
-  - Participants (Standardized Participant builder / character adapter)
-  - State
-  - Actions
-  - Effects
-  - Result (Structured TurnLogs for Replay)
-```
-
-Battle must not know whether it was initiated by a quest, guild, arena, boss, dungeon, or challenge feature. All combat modes build `Participant` inputs using the standardized Battle Adapter (`internal/battle.Service` implementing feature-level `ParticipantBuilder` interfaces), identifying participants strictly by unique entity ID while retaining display names for combat turn logs. Direct assignment of `.Name` to `Participant.ID` is mechanically prohibited by Go AST static analysis (`internal/core/core_lint_test.go`).
-
-The battle engine provides both legacy 1v1 resolution (`Resolve`) and full multi-turn party resolution (`ResolvePartyBattle`, `_battle.cgi`, `_skill.cgi` parity):
-- **Party & Multi-Team Combat**: Up to 4 allies vs 1–N enemies for PvE, or 3+ teams/guilds (up to 8 players, up to 9 colors or multiple guilds) in PvP/GvG with independent faction segregation, non-leader inter-team targeting, and elimination loops until 1 team remains.
-- **Agility Turn Order**: Combatants act in descending order of Agility within each round.
-- **Skills & Resource Costs**: Job skills consuming MP (single/all targets, elemental affinity, healing) and custom blended skills consuming CMP with incantation broadcast logs and chained gem effects.
-- **Elemental Fields & Anti-Field (`_create_field`, `_check_anti_field`)**: Active field states granting +30% matching damage bonus and -20% opposing damage penalty, with turn countdowns and anti-field neutralization.
-- **Defeat & Revival (`defeat.go`)**: Pre-death triggers (`pharaoh`, `undying`, `touki_shield`, `dokuro_amulet`, `cursed_revive`) restoring combatant HP upon fatal damage.
-- **File Size Modularization**: Core battle responsibilities are decomposed into single-purpose units (`party_battle.go`, `field.go`, `defeat.go`, `action.go`, `participant.go`, `battle.go`), strictly adhering to the 500-line ceiling.
-- **Battle Adapter & Application Bridge (`internal/battle`)**: Standardized integration service bridging `internal/core/battle` with Characters, Inventories, Equipment, Job definitions, Custom Skills, and Depots. Fully wired into all 6 combat features (`pvp`, `gvg`, `boss`, `dungeon`, `challenge`, `adventure` / `party`) via `ParticipantBuilder` and `cmd/party2/wire.go`, eliminating naked combatants. Calculates authentic equipment stats across 71 weapons (`@weas`), 55 armors (`@arms`), and 9 accessories (`item-116`..`item-124`), equips action items (medicinal herbs, prayer rings), binds passives (touki shield, dokuro amulet, cursed talisman), and provides atomic `ApplyPostBattleResult` enforcing deterministic row-lock hierarchy (Rank 2: Characters ascending -> Rank 3: Inventories/Equipment ascending -> Rank 5: Depots ascending), item consumption persistence, equipment unequip on tool consumption, recipient-targeted drop routing preventing item duplication in party combat, progression error propagation, and Depot fallback routing for inventory overflow (#496, #643, #663).
-- **Battle Adapter AST Linter (`internal/architecture/battle_adapter_lint_test.go`)**: Mechanically prohibits direct calls to `corebattle.NewParticipantFromCharacter`, `NewParticipantFromCharacterWithHP`, or `.FromCharacter` in feature packages, ensuring no feature can bypass the adapter layer to construct naked combatants (`.agents/rules/03-architecture.md §11`).
+**Responsibility:** Deterministic combat resolution and post-battle state application.
+Battle engine operates independently of callers (adventures, arena, GvG, bosses, dungeons, challenges):
+- **Turn Resolver (`internal/core/battle`)**: Deterministic 1v1 and party combat (up to 4 allies vs 1–N foes) as well as multi-team combat (3+ factions up to 8 participants) with agility-ordered actions, MP/CMP skill costs, elemental field states, anti-field cancellation, and pre-death survival triggers.
+- **Battle Adapter (`internal/battle`)**: Standardized integration service bridging Character/Party entities to combat `Participant` models. Calculates authentic equipment stats across 71 weapons, 55 armors, and accessories, binds passive triggers, and provides atomic `ApplyPostBattleResult` enforcing deterministic row-lock hierarchy (Rank 2: Characters ascending -> Rank 3: Inventories/Equipment ascending -> Rank 5: Depots ascending), item consumption persistence, recipient-targeted drop distribution, progression error propagation, and depot overflow fallback.
+- **AST Guard**: Prohibits direct construction of un-adapted participants in feature modules (`battle_adapter_lint_test.go`).
 
 ### Adventure / Quest
 
-**Responsibility:** define and execute adventure-oriented game flows, including destinations, encounters, durations, requirements, and rewards.
+**Responsibility:** Define and execute adventure-oriented game flows, dungeon crawl loops, encounter progressions, and stage reward distributions.
 
-Adventure may use Battle but should not own Battle's implementation.
+### Common Foundation Packages
 
-### Common Foundation & Cross-Cutting Packages
+- **ID Generation (`internal/id`)**: Centralized 16-byte (32 hex characters) cryptographically secure identifiers (`id.New()`, `id.Sort2(a, b)`).
+- **Pagination (`internal/pagination`)**: Reusable offset and keyset cursor containers (`Page[T]`, `CursorPage[T]`) with token encoding/decoding (`EncodeCursor`, `DecodeCursor`).
+- **Validation (`internal/validation`)**: Standardized validators (HEX colors, text bounds, string sanitization).
+- **Random Number Generation (`internal/core/random`)**: Centralized thread-safe pseudo-random generator backed by `math/rand/v2` and deterministic seeded generator for reproducible tests. Direct imports of `math/rand` in production packages are prohibited by AST linter.
+- **Concurrency & Cancellation**: Cooperative context cancellation across services; raw `time.Sleep` is prohibited by AST linter.
+- **Database Infrastructure (`internal/database`)**: Ambient transaction propagation (`RunInTx`, `ExecutorFromContext`) and connection pool lifecycle management.
 
-To avoid duplicate boilerplate while preventing monolithic "junk-drawer" packages, shared cross-cutting logic is organized into single-responsibility packages:
+---
 
-- **ID Generation (`internal/id`)**: Centralized cryptographically secure ID generation (`id.New()`, `id.Generate()`, `id.NewLength(n)`) ensuring thread-safe, consistent 16-byte (32 hex characters) identifiers across all domain models without per-package duplicate helper functions.
-- **Pagination (`internal/pagination`)**: Reusable generic list container `Page[T]` (`items`, `total`, `limit`, `offset`), parameter structures (`Params`), keyset / cursor pagination container `CursorPage[T]` (`items`, `next_cursor`, `prev_cursor`, `limit`, `has_more`), parameter structures (`CursorParams`), cursor token encoder/decoder utilities (`EncodeCursor`, `DecodeCursor`, `EncodeIDCursor`, `DecodeIDCursor`), and request query parsers (`ParseRequest`, `ParseCursorRequest`, `Normalize`) ensuring standard limit/offset and keyset normalization and unified JSON envelopes across all HTTP list endpoints.
-- **Validation (`internal/validation`)**: Standardized format validators (e.g. HEX color codes `#RRGGBB`, text length bounds, HTML tag sanitization).
-- **HTTP Transport Middleware & Presentation (`internal/api/http`)**: Reusable transport helpers, including session authentication, character ownership verification wrappers (`withAuthenticatedCharacter`), admin role guards, CORS policies, and rate limiters. Direct instantiation of detached root contexts (`context.Background()` or `context.TODO()`) in HTTP handlers is mechanically prohibited via Go AST static analysis (`internal/api/http/context_lint_test.go`).
-- **Random Number Generation (`internal/core/random`)**: Centralized concurrency-safe pseudo-random number generator (`Default()`, `Intn()`, `IntN()`, `Float64()`) backed by `math/rand/v2` and deterministic seeded instances (`NewDeterministic(seed)`) for 100% reproducible combat, drop calculation, and stochastic tests. Direct imports of `math/rand` in production packages are mechanically prohibited via Go AST static analysis (`internal/architecture/rand_lint_test.go`).
-- **Concurrency & Cooperative Cancellation**: Backend services and workers must support cooperative cancellation via `context.Context` (listening to `ctx.Done()`). Raw `time.Sleep` calls in production packages are mechanically prohibited via Go AST static analysis (`internal/architecture/sleep_lint_test.go`).
-- **Cryptographic Policy & Password Hashing**: Account credentials must use `golang.org/x/crypto/bcrypt` with work factor / cost ≥ 12. Deprecated digests (`crypto/md5`, `crypto/sha1`) and insecure password hashing configurations are mechanically prohibited via Go AST static analysis (`internal/architecture/crypto_lint_test.go`).
-- **Database Infrastructure & Connection Pool (`internal/database`)**: Standardized transactional update functions for shared Core entities (e.g. updating character progression, stats, and gold) across repository boundaries, ambient transaction propagation (`RunInTx`, `ExecutorFromContext`), and configurable connection pool initialization (`Open`, `OpenWithConfig`, `OpenFromEnvironment`) tuned via environment variables (`PARTY2_DB_MAX_OPEN_CONNS`, `PARTY2_DB_MAX_IDLE_CONNS`, `PARTY2_DB_CONN_MAX_LIFETIME`, `PARTY2_DB_CONN_MAX_IDLE_TIME`) with safe defaults (25 / 25 / 5m / 1m) and graceful fallback.
+## Feature Modules
 
-## Feature modules
+Each feature owns its specific rules and state. Cross-feature imports and direct `internal/database` imports from feature packages are mechanically prohibited by AST static analysis.
 
-Each feature owns its feature-specific rules and state. A feature may consume public contracts from Core or shared components, but must not access another feature's private implementation or database schema. Direct cross-feature imports and direct `internal/database` imports from feature packages are mechanically prohibited via Go AST static analysis (`internal/architecture/package_boundary_lint_test.go`).
+- **Activity** (`internal/activity`): Delayed training actions and experience awards.
+  - *Dependencies:* Character repository, Core Progression, Scheduling Service.
+  - *Persistence:* `activities` table with atomic `ClaimAndApply` concurrency locking.
+- **Adventure** (`internal/adventure`): 10-floor dungeon crawl loop across 28 stages (286 monsters), Floor 11 Treasure Room resolution, post-battle settlement delegation, inventory persistence, depot overflow fallback, and combat chronicles.
+  - *Dependencies:* Stage/Monster catalogs, Battle Resolver, Battle Adapter, Character & Inventory repositories.
+  - *Persistence:* `adventures` table; transactional lock hierarchy (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 5 `character_depots`).
+- **Shop** (`internal/shop`): Town equipment and item shops with 2× retail pricing, 50% markdown, job-level catalog gates, and depot auto-delivery.
+  - *Dependencies:* Item Catalog, Character, Inventory, Depot, Helper, Collection, Economy.
+  - *Persistence:* Atomic updates via global lock hierarchy (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 5 `character_depots`).
+- **Depot** (`internal/depot`): Persistent item storage with dynamic capacity scaling, expansions, sorting, item sales, direct-sending, stackability preservation, standardized item consumption (`Consume`, `ConsumeOne`, `PurgeSlot`), standardized `RefreshCapacity` helper, and centralized reward delivery engine (`DeliverRewardItem`, `DeliverRewardItems`) enforcing Rank 3 -> Rank 5 lock ordering and configurable overflow policies.
+  - *Dependencies:* Character, Inventory, Economy, Collection hook.
+  - *Persistence:* `character_depots` and `depot_items` tables via `economy.TransactionRunner` and `RunInTx` (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 5 `character_depots`).
+- **Blacksmith** (`internal/blacksmith`, `internal/battle`): 12 authentic weapon seals consuming crystal currency (`character.crystal`), equipment naming, dedicated 3-slot weapon storage (`blacksmith_deposits`), seal combat effects wired into Battle Adapter, and monster crystal drops.
+  - *Dependencies:* Character, Inventory, Equipment, Blacksmith Repository.
+  - *Persistence:* `blacksmith_deposits` table and character customization columns (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 8 `blacksmith_deposits`).
+- **Alchemy** (`internal/alchemy`): Crafting item synthesis from 112 recipes consuming Depot materials directly without gold fees, Depot-direct output delivery, home rest completion, and Recipe Compendium tracking.
+  - *Dependencies:* Recipe Catalog, Item Catalog, Character, Depot, Economy.
+  - *Persistence:* `character_alchemy` and `character_alchemy_recipes` tables (Rank 2 `characters` -> Rank 5 `character_depots` -> Rank 8 `character_alchemy`).
+- **Plantation** (`internal/plantation`): Seed cultivation facility supporting 6 seeds, 14 fertilizer reagents (Gold or Depot/Inventory items), overnight maturation (`timer.NextMidnightJST`), wither/yield bonuses, and Depot harvest delivery.
+  - *Dependencies:* Item Catalog, Character, Inventory, Depot, Timer service, Database (`RunInTx`).
+  - *Persistence:* `plantation_plots` table (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 5 `character_depots` -> Rank 8 `plantation_plots`).
+- **Bank** (`internal/bank`): Gold savings deposits and withdrawals with 999,999G wallet clamp.
+  - *Dependencies:* Character repository.
+  - *Persistence:* `characters.deposit` column with Tier 2 row locking.
+- **Home & Resting** (`internal/home`): Private home profiles, visitor counters, letters/mailbox, companion phrases, sleep recovery (full HP/MP/tired recovery, online-scaled countdown lock, fullness and chapel resets), and atomic home consumable item usage.
+  - *Dependencies:* Character, Home repository, Timer service, Economy, Inventory, Depot, Tavern, Chapel.
+  - *Persistence:* `character_homes`, `home_letters`, `companion_phrases`, `home_delivery_notices` tables, Valkey timers (`party2:timer:sleep:*`, `party2:timer:asleep:*`).
+- **Guild** (`internal/guild`, `internal/api/http`): Guild founding, membership application/approval workflow, dynamic Guild Points (`gpoint`) across social and combat hooks, custom role titles, unique hex colors, broadcast callouts, visual personalization, daily 20-day inactivity disbandment worker, and REST API endpoints.
+  - *Dependencies:* Character repository, Letter sender interface.
+  - *Persistence:* `guilds` and `guild_members` tables.
+- **Casino** (`internal/casino`): Casino currency exchange (1 Coin = 20G), Multi-Player Room Lobby (2..8 players), authentic 13-card Indian Poker, multi-player High & Low, multi-player Doppelganger, 3-reel slot machine, and 18 authentic prizes with Depot auto-routing.
+  - *Dependencies:* Character, Depot repository.
+  - *Persistence:* `casino_accounts` in MariaDB (Rank 2 -> Rank 5 -> Rank 8). Ephemeral multiplayer rooms and turn state are mastered in Valkey (`party2:casino:*`, `ValkeyRoomRepository`) with 1800s sliding TTL, active ZSet index, distributed room locking (`party2:casino:lock:room:<room_id>`), and Two-Phase Settlement.
+- **Lottery & Raffle** (`internal/lottery`): Server-wide 20-cap Takarakuji lottery with pessimistic row locking (`takarakuji_rounds` Rank 0 `FOR UPDATE`), 10-day drawing cycles, and Depot prize delivery. Tavern Fukubiki raffle with 3-coupon Standard and 300-coupon Special draws with depot overflow routing.
+  - *Dependencies:* Character, Inventory, Depot, Item Catalog, Collection, TransactionProvider, Scheduling.
+  - *Persistence:* `character_lottery`, `takarakuji_rounds`, and `takarakuji_tickets` tables.
+- **Auction & Marketplace** (`internal/auction`): Live P2P trading hall (`@おくる`/`@しらべる`) with gold and equipped item transfers to depots.
+  - *Dependencies:* Character, Equipment, Inventory, Depot, Item Catalog.
+  - *Persistence:* State updates across `characters`, `inventory_items`, and `character_depot_items` with Rank 2 -> 3 -> 5 locking.
+- **Collection & Monster Book** (`internal/collection`): Illustrated monster defeat tracking and item discovery recording.
+  - *Dependencies:* Character repository.
+  - *Persistence:* `character_monster_book` and `character_item_collection` tables.
+- **Medal & Lifetime Achievements** (`internal/medal`): Small Medal exchange shop and Lifetime Milestone Achievement tracking with decoupled producer hooks (`VictoryHook`, `GamePlayedHook`, `SynthesisHook`, etc.).
+  - *Dependencies:* Character, Inventory, TransactionProvider, Action producers.
+  - *Persistence:* `character_achievements` and `character_medals` tables.
+- **Chapel & Blessings** (`internal/chapel`): Town church prayer registration, 5 blessing choices, and single active wish enforcement.
+  - *Dependencies:* Character repository.
+  - *Persistence:* `character_blessings` table.
+- **Colosseum PvP (闘技場)** (`internal/pvp`): Real-time 2..8 player room recruitment, Bet & Split prize pools, 9 team colors, multi-round party battle resolution, durable `pvp_wins` tracking, and 10-round draw refund safety.
+  - *Dependencies:* Battle Engine, Character repository, TransactionProvider.
+  - *Persistence:* Ephemeral room state in Valkey Master (`party2:pvp:*`) with distributed locking; durable wealth and wins in MariaDB with Rank 2 row locking in ascending ID order.
+- **Guild versus Guild (GvG) Combat** (`internal/gvg`): Real-time 2..8 player guild battle rooms, room GP prize pool seeding, multi-round battle resolution, round winner GP, match victory awards, and 7-tier cascading victory medals & championship cups.
+  - *Dependencies:* Battle Engine, Guild repository, Character repository.
+  - *Persistence:* Ephemeral rooms in Valkey Master (`party2:gvg:*`) with distributed locking; durable standings and trophy tiers in MariaDB `gvg_standings`.
+- **Boss Battles (封印戦)** (`internal/boss`): 4-player cooperative sealing battles, entry fatigue (+20% Tired), Dejon banishment (+30% Tired), `@ふういん` resealing, HeroCount increment, celebration banquets, news broadcast, and depot overflow reward delivery.
+  - *Dependencies:* Battle Engine, Character, Party, Inventory, Core Progression, News Publisher.
+  - *Persistence:* `character_boss_records` and `boss_challenge_history` tables (Rank 3 -> Rank 5 lock ordering).
+- **Dungeon Exploration** (`internal/dungeon`): Multi-floor grid dungeon navigation, branching tile events, party exploration, trap damage, Treasure Hunter bonus chests, map scouting (`@ちず`) with stacking vision expansion, and reward finalization with depot overflow routing.
+  - *Dependencies:* Battle Engine, Character, Inventory, Core Progression, Valkey Master.
+  - *Persistence:* `character_dungeon_records` and `dungeon_expedition_history` in MariaDB; volatile in-progress run buffers in Valkey Master (`party2:dungeon:{char:<char_id>}:*`, Candidate D).
+- **Battle Replays & Match History** (`internal/replay`): Recording and playback of step-by-step turn logs across all combat modes, character match history queries, and retention pruning.
+  - *Dependencies:* Battle Engine, Character.
+  - *Persistence:* `battle_replays` table.
+- **Endurance Challenge** (`internal/challenge`): Consecutive survival wave combat, progressive wave scaling, legacy HP carryover between rounds, party challenge runs, Hall of Fame records, and cashout reward finalization with depot overflow routing.
+  - *Dependencies:* Battle Engine, Character, Inventory, Valkey Master.
+  - *Persistence:* `character_challenge_records`, `challenge_sessions`, `challenge_hall_of_fame` tables; volatile active session buffers in Valkey Master (`party2:challenge:{char:<char_id>}:*`, Candidate D).
+- **Custom Skill Gem Synthesis** (`internal/custom_skill`): Custom skill naming, activation phrase validation, gem-box selection, CMP/slot checks, and atomic gem exchange.
+  - *Dependencies:* Character, Inventory, Gem catalog, TransactionProvider.
+  - *Persistence:* `character_custom_skills` table.
+- **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): Helper quest generation, delivery validation, alchemy material rewards, guild points, emergency rescue recovery, and HTTP API endpoints.
+  - *Dependencies:* Character, Inventory, Item, Guild repository.
+  - *Persistence:* `helper_quests` and `rescue_records` tables.
+- **Town Park & Public Bulletin Board** (`internal/park`): Public bulletin board posts, character authorship, text sanitization, rate limiting, and NPC fortune divination.
+  - *Dependencies:* Character repository.
+  - *Persistence:* `park_posts` table.
+- **News & Player Notifications** (`internal/notification`): System news announcements, personalized notification inbox, read state tracking, and retention pruning.
+  - *Dependencies:* Player repository.
+  - *Persistence:* `news_articles` and `player_notifications` tables.
+- **Player Leaderboards & Character Rankings** (`internal/ranking`): 12 competitive leaderboards with deterministic tie-breaking, pagination, Valkey caching, singleflight stampede protection, and ISP-decomposed repository sub-interfaces.
+  - *Dependencies:* Character, Player, Valkey, Scheduling.
+  - *Persistence:* `ranking_snapshots` table and Valkey cache keys (`party2:ranking:snapshot:*`).
+- **Distributed Rate Limiting & Cooldown Tracking** (`internal/ratelimit`): Atomic distributed rate limiting, endpoint spam defense, bulletin board cooldowns, and home visitor throttling.
+  - *Dependencies:* Valkey with in-memory fallback.
+  - *Persistence:* Atomic counter keys in Valkey (`party2:ratelimit:*`).
+- **Event Plaza & Victory Banquets** (`internal/eventplaza`): Town gathering state, real-time plaza presence tracking (5-minute window via Valkey Sorted Set + MariaDB), 26-item authentic merchant catalog at 3× markup across Tiers 1–3, and world boss victory celebration banquets directly linked to presence.
+  - *Dependencies:* Character, Item, Inventory, Depot, Helper Quest filter, Item Collection, Valkey.
+  - *Persistence:* `celebration_banquets`, `banquet_toasts`, `eventplaza_presences` tables and Valkey Sorted Set `party2:eventplaza:presence`.
+- **Secret Underground Shop** (`internal/secretshop`): Secret underground shop access validation (`job_lv >= 7`), 8-item rare catalog with 3× pricing multiplier, inventory-to-depot overflow routing, and puff-puff dialogue.
+  - *Dependencies:* Character, Item, Inventory, Depot.
+  - *Persistence:* Direct inventory, depot, and character balance updates.
+- **Adventurer's Tavern** (`internal/tavern`): 14-item culinary menu, restorative HP/MP meals, fullness tracking, raffle tickets, automatic fullness reset upon adventure completion (`is_eat = 0`), and standing order food delivery across solo and party adventures.
+  - *Dependencies:* Character, Lottery repository.
+  - *Persistence:* `tavern_deliveries` and `tavern_character_status` tables.
+- **Town Black Market** (`internal/blackmarket`): Rare item sacrifice recycling system awarding Rare Points, prize trade exchange for 24 equipment/item rewards delivered to Depot, and NPC interactions.
+  - *Dependencies:* Character, Item, Inventory, Depot.
+  - *Persistence:* `blackmarket_character_points` table.
+- **Flea Market** (`internal/fleamarket`): Fixed-price item marketplace (max 5 active listings per character, 1–999,999G), SQL CAS status predicate guard, and atomic purchasing transactions.
+  - *Dependencies:* Character, Item, Inventory.
+  - *Persistence:* `fleamarket_listings` table with SQL CAS status guard and cross-character row lock hierarchy (`characters` ID asc -> `inventory_items` -> `fleamarket_listings`).
+- **Gem Store & Jewel Synthesis** (`internal/gemstore`): Dedicated Gem Box storage with job-level dynamic capacity, sorting, 55+ gem synthesis formulas, player transfers, and dual-source (Inventory and Depot) unidentified orb appraisals.
+  - *Dependencies:* Character, Item, Inventory, Depot, Gem Box repository.
+  - *Persistence:* `character_gem_boxes` and `gem_box_items` tables with lock hierarchy (`characters` -> `inventory_items` -> `character_depots` -> `character_gem_boxes`).
+- **Endgame God Wishes & Limit Breaks** (`internal/god`): Celestial audiences in Heaven and Underworld, permanent attribute enhancements, currency awards, Lv99+ limit breaks (raising cap to 150), and storage capacity limit breaks.
+  - *Dependencies:* Character, Core Progression, Depot, Inventory.
+  - *Persistence:* `characters` limit break columns and `character_depots` capacity.
+- **Monster Ranch & Pet Companions** (`internal/monster`): Monster Grandpa stabling (base 50 up to 300 via `OverMonster`), home pet estate linking (up to 8 pets), nickname customization, P2P gifting with two-party locking, and wild release.
+  - *Dependencies:* Character, TransactionProvider.
+  - *Persistence:* `character_monsters` table.
+- **Photo Contest & Gallery** (`internal/contest`): Character screenshot storage, contest submissions, community voting, automated round conclusion with prize distribution, and Hall of Fame archiving.
+  - *Dependencies:* Character, News publisher, Guild service.
+  - *Persistence:* `character_photos`, `contest_rounds`, `contest_entries`, `contest_votes`, and `contest_legends` tables.
+- **Multiplayer Party & Co-op Quests** (`internal/party`): Party formation (1–4 members), recruitment lobbies, speed configs (3/18/25), readiness synchronization, Rank 0 distributed adventure lock (`party2:party:lock:adventure:*`) with token-safe Lua release, post-battle settlement delegation via `ApplyPostBattleResult`, Floor 11 treasure drops with depot overflow routing, and HP-1 survival guarantee.
+  - *Dependencies:* Character, Battle Engine, Inventory, Item, Progression, Depot, Catalogs, News publisher, Valkey.
+  - *Persistence:* Ephemeral lobbies and locks in Valkey Master (`party2:party:*`); durable quest logs in MariaDB `party_adventure_logs`.
+- **Altar of Rebirth** (`internal/altar`): 6-orb offering ritual, Ramia awakening (30min record), and 4 otherworld travel item wishes with Depot overflow fallback.
+  - *Dependencies:* Character, Inventory, Depot, Item Catalog, Economy.
+  - *Persistence:* `altar_records` and character updates via `economy.TransactionRunner`.
+- **Wishing Well** (`internal/wishingwell`): Wishing Well (@女神) SP sacrifice exchange for permanent stat growth (MHP/MMP +2/SP, ATK/DEF/AGI +1/SP).
+  - *Dependencies:* Character, Economy.
+  - *Persistence:* `characters` table with Tier 2 row locking.
+- **Player Store & Town Boutiques** (`internal/store`): Player store construction in towns 1–4 (50,000G, 90-day duration), gold and barter listings from depot (up to 20 via `OverStore`), atomic purchasing transactions, and interior customization (26 wallpapers, 15 furniture styles).
+  - *Dependencies:* Character, Depot, Item, Guild, Timer service, TxProvider.
+  - *Persistence:* `character_stores`, `store_sales`, and `store_interiors` tables (Rank 0 `store_sales` -> Rank 2 `characters` asc -> Rank 5 `character_depots` asc).
+- **Maintenance Mode** (`internal/maintenance`): Maintenance status management, administrative toggle, and HTTP middleware interception.
+  - *Dependencies:* Maintenance repository, Valkey.
+  - *Persistence:* Valkey Master / in-memory caching (`party2:maintenance:status`) backed by `system_maintenance` table in MariaDB.
 
+---
 
-### Implemented Feature Modules
+## Transaction Orchestration & Persistence Tiers
 
-- **Activity** (`internal/activity`):
-  - **Responsibility:** Delayed training actions and experience awards.
-  - **Dependencies:** Character repository, Core Progression, Scheduling Service.
-  - **Persistence:** `activities` table with atomic `ClaimAndApply` concurrency locking.
-- **Adventure** (`internal/adventure`):
-  - **Responsibility:** Authentic 10-floor dungeon crawl exploration (`vs_monster.cgi`) across 28 stages (286 monsters), stage eligibility checks (`job_lv` gates), party/solo battle invocation, Floor 11 Treasure Room resolution (`_npc_action.cgi` `add_treasure`) with post-battle settlement delegation via `battle.Service.ApplyPostBattleResult` (`PostBattleSettler`), inventory persistence, depot fallback on full inventory, `LostDrops` tracking on full depot, surviving HP/MP and defeat status (HP=1) persistence, immediate execution without artificial 1-hour expedition timers, paginated past adventure history logs (`GET /characters/{id}/adventures`), aggregate combat chronicle statistics (`GET /characters/{id}/adventure-chronicle`), and milestone progression unlocks (Try Mode, Image Setting, Calm Mode, Hard Mode, Avatar Setting, Extreme Mode).
-  - **Dependencies:** Stage/Monster catalogs, Battle Resolver, Battle Adapter (`battle.Service`), Character & Inventory repositories.
-  - **Persistence:** `adventures` table with immediate crawl outcome persistence (`floors_cleared`, `is_cleared`, `party_size`, `experience_reward`, `resolved`), and character/inventory/depot updates via transactional row-lock hierarchy (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 5 `character_depots`).
-- **Shop** (`internal/shop`):
-  - **Responsibility:** Standard town shops (Weapon Shop ブッキー, Armor Shop アマノ, Item Shop アイテムコ) with 2x retail purchase pricing, 50% resale markdown, `job_lv`-based catalog progression, helper quest objective exclusion, direct inventory vs. depot auto-transfer routing, batch purchasing directly to depot, NPC advice/inspect interactions, and secret shop discovery unlock (`job_lv >= 7`).
-  - **Dependencies:** Item Catalog, Character (wallet), Inventory, Depot, Helper (`HelperProvider`), Collection (`CollectionRecorder`), Economy.
-  - **Persistence:** Single-transaction atomic updates via character, inventory, and depot repositories obeying global lock hierarchy (`characters` Tier 2 -> `inventory_items` Tier 3 -> `character_depots` Tier 5).
-- **Depot** (`internal/depot`):
-  - **Responsibility:** Persistent item storage with legacy dynamic capacity formula (`get_depot_c`), storage expansions (`かくちょう`), item sales (`うる` / `まとめてうる`), item sorting (`せいとん`), mailing items and money (`おくる`), collection book sync, stackability invariant enforcement (`AddItem` prevents equipment merging), standardized item consumption interface (`Consume`, `ConsumeOne`, `PurgeSlot`), standardized `RefreshCapacity` helper across commerce modules (`shop`, `secretshop`, `blackmarket`, `fleamarket`, `auction`, `store`), and centralized transactional reward item delivery engine (`DeliverRewardItem`, `DeliverRewardItems`) enforcing Rank 3 Inventory -> Rank 5 Depot lock ordering, dynamic capacity refresh (`dep.RefreshCapacity(char.JobLevel, char.OverDepot)`), and configurable overflow policies (`PolicyTreatOverflowAsLost` for combat/exploration drops vs `PolicyAbortOnDepotFull` for quests/wishes/purchases) unified across `database`, `battle`, and `party`. Fictional gold storage eliminated.
-  - **Dependencies:** Character, Inventory, Economy (`economy.TransactionRunner`), Collection (hook).
-  - **Persistence:** `character_depots` (`capacity`, `ex_depot`) and `depot_items` tables with atomic single-transaction execution via `economy.TransactionRunner` and `RunInTx` obeying the global lock hierarchy (Rank 2 `characters` sorted asc -> Rank 3 `inventory_items` -> Rank 5 `character_depots`).
-- **Blacksmith** (`internal/blacksmith`, `internal/battle`, `internal/core/battle`):
-  - **Responsibility:** Authentic weapon seals (こくいん) using 12 authentic seals and crystal currency (`刻印晶`, max 999,999), equipment naming (なづける) for weapons and armors (<= 20 runes, strict sanitization), and dedicated 3-slot weapon storage (専用預かり所) preserving seals and custom names with duplicate name prevention and equipped-weapon withdrawal gating. In combat, weapon seals 1..12 are wired into the Battle Adapter (`internal/battle`) and battle engine (`internal/core/battle`): stat modifiers (Seals 1..6), action skills `しゃくねつ`/`マヒャド`/`ギガデイン` (Seals 7..9), and passive abilities `seal_shinsoku` (double attack), `seal_kuu` (dispel), and `seal_kotowari` (magic attack scaling). Defeated monsters roll crystal drops (2% normal, 4% strong foes) awarded upon victory, and consumable item 257 (`水晶の原石`) strips seals with 50% crystal refund. Fictional +1..+10 numerical enhancement system purged.
-  - **Dependencies:** Character, Inventory, Equipment, Blacksmith Repository.
-  - **Persistence:** `blacksmith_deposits` table and character customization columns (`crystal`, `wea_seal`, `wea_name`, `arm_name`) via atomic single-transaction execution obeying global lock hierarchy (Rank 2 `characters` -> Rank 3 `equipment_slots`, `inventory_items` -> Rank 8 `blacksmith_deposits`).
-- **Alchemy** (`internal/alchemy`):
-  - **Responsibility:** Overnight crafting item synthesis from 112 recipes (`recipes.json`) consuming Depot materials directly without gold fees, Depot-direct output delivery, home rest acceleration, and Recipe Compendium tracking with `comp_alc` title award.
-  - **Dependencies:** Recipe Catalog, Item Catalog, Character repository, Depot repository, Economy (`RunInTx`).
-  - **Persistence:** `character_alchemy` and `character_alchemy_recipes` tables via `internal/database/alchemy_repository.go` obeying global lock hierarchy (Rank 2 `characters` -> Rank 5 `character_depots` -> Rank 8 `character_alchemy`).
-- **Plantation** (`internal/plantation`):
-  - **Responsibility:** Seed cultivation facility hosted by NPC Lotus (`@ロータス`) reproducing legacy `plantation.cgi`. Supports 6 seed varieties, 14 fertilizer reagents (Gold or Depot/Inventory items), overnight maturation (`timer.NextMidnightJST`), wither and extra yield bonuses, and direct Depot delivery of harvested crops.
-  - **Dependencies:** Item Catalog, Character repository, Inventory repository, Depot repository, Timer service (`internal/core/timer`), Database (`RunInTx`).
-  - **Persistence:** `plantation_plots` table via `internal/database/plantation_repository.go` obeying global lock hierarchy (Rank 2 `characters` -> Rank 3 `inventory_items` -> Rank 5 `character_depots` -> Rank 8 `plantation_plots`).
-- **Bank** (`internal/bank`):
-  - **Responsibility:** Bank receptionist NPC Taxeed (`@タクシード`), character gold savings deposits, withdrawals with 999,999G wallet clamp and excess refund.
-  - **Dependencies:** Character (wallet & deposit).
-  - **Persistence:** `characters` table (`deposit` column) with Tier 2 `SELECT ... FOR UPDATE` row locking.
-- **Home & Resting** (`internal/home`):
-  - **Responsibility:** Private home profiles, visitor counters, guest letters/mailbox, pet companion phrase training and conversation, delivery notifications, character sleeping/resting (`sleep.cgi`/`home.cgi` - full HP/MP/tired recovery, online-scaled countdown lock, fullness and chapel resets), and atomic home item usage (`UseHomeItem` via `economy.TransactionRunner` with Rank 2 Character -> Rank 3 Inventory / Rank 5 Depot row locking). Fictional paid Inn decommissioned per Issue #459.
-  - **Dependencies:** Character repository, Home repository, Timer service (`internal/core/timer`), Economy Transaction Runner (`internal/economy`), Inventory service, Depot repository, Item catalog, Tavern (fullness reset), Chapel (blessing cleaner).
-  - **Persistence:** `character_homes`, `home_letters`, `companion_phrases`, `home_delivery_notices` tables, Valkey `party2:timer:sleep:<id>` and `party2:timer:asleep:<id>`.
-- **Guild** (`internal/guild`, `internal/api/http`):
-  - **Responsibility:** Guild founding (5,000G), membership lifecycle with formal application and approval gating (`参加申請中`, `あたえる` approval, `追放` rejection/expulsion with notification letters), dynamic Guild Points (`gpoint`) accrual across social/combat activities (tavern dining +2 GP, job change +50 GP, contest, GvG, callout +1 GP) and server-wide rankings, broadcast member callouts (`よびかける`, +1 GP), custom member role titles (up to 6 full-width characters via `あたえる`), visual personalization (unique hex color, 3,000G guild mark, catalog-priced wallpapers), notice board, daily scheduled 20-day inactivity automatic disbandment (`guild_inactivity_check` scheduled action), full HTTP REST API endpoints (`/guilds`, `/guilds/{id}`, `/characters/{id}/guild`), and administrative controls (kick, leadership transfer, disband) (#490, #591, #633).
-  - **Dependencies:** Character repository, Letter sender interface (`internal/home` letter repository integration).
-  - **Persistence:** `guilds` and `guild_members` tables in `internal/database/guild_repository.go` and `guild_member_repository.go` with single-guild foreign key uniqueness, atomic points arithmetic, and transactional integrity.
-- **Casino** (`internal/casino`):
-  - **Responsibility:** Casino currency exchange (1 Coin = 20 G), account management, Multi-Player Room Lobby (2..8 capacity, speed 12/18/28s, 9 bet rates, password, spectator permissions, leader controls), authentic 13-card forehead Indian Poker with card masking and round escalations (`party2/lib/casino_indian.cgi`), authentic multi-player High & Low with secret cards, action masking, and split-pot showdowns (`party2/lib/casino_highlow.cgi`), authentic multi-player Doppelganger with 8-symbol dealer matching and leadership transfer (`party2/lib/casino_doppel.cgi`), Slot Machine (3-reel, 5-symbol paytable, 100x 777 jackpot), and 18 authentic prizes with atomic direct Depot delivery; fictional solo dealer poker, solo high-low, and solo doppel completely purged (#486, #590).
-  - **Dependencies:** Character repository (wallet gold), Depot repository (`character_depots`).
-  - **Persistence:** `casino_accounts` in `internal/database/casino_repository.go` (financial SSOT) with deterministic lock hierarchy (Rank 2 Character -> Rank 5 Depot -> Rank 8 Casino Account). Candidate C architecture implemented in Issue #635 migrating ephemeral multiplayer rooms and turn state (`casino_rooms`, `casino_members`) to Valkey Master (`party2:casino:*`, `ValkeyRoomRepository`) with 1800s sliding TTL, active ZSet index, and Two-Phase Settlement. Legacy ephemeral tables dropped in Migration 085 (`085_drop_casino_rooms_and_members.sql`).
-- **Lottery & Raffle** (`internal/lottery`):
-  - **Responsibility:** Server-wide 20-cap Takarakuji lottery (`party2/lib/takarakuzi.cgi`, NPC `@クラゲ`) with 30,000G ticket price, 1 per character limit, 10-day drawing cycles (1st, 11th, 21st at 00:00 JST), and automatic Depot delivery of 1st, 2nd, and 3rd prize rare equipment and recipe items. Also provides instant Tavern raffle coupon drawings (`party2/lib/lot.cgi`, NPC `@フクスケ`) featuring 3-coupon Standard draws (stat seeds, weekday secret treasures, small medals) and 300-coupon Special draws (divine orbs and rare materials) with hand-occupancy depot automatic routing; fictional gold purchase and gold prizes completely purged.
-  - **Dependencies:** Character repository, Inventory repository, Depot repository, Core Item catalog, Item Collection recorder, Transaction provider, Scheduling Service.
-  - **Persistence:** `character_lottery`, `takarakuji_rounds`, and `takarakuji_tickets` tables in `internal/database/lottery_repository.go` with atomic transactional purchases and depot delivery.
-- **Auction & Marketplace** (`internal/auction`):
-  - **Responsibility:** Authentic live P2P trading hall (`party2/lib/auction.cgi`) overseen by NPC @ワイルド. Direct transfer of gold and equipped items to player depots (`@おくる`), real-time target player inspection (`@しらべる`), and taboo item protection.
-  - **Dependencies:** Character repository, Equipment repository, Inventory repository, Depot repository, Item catalog.
-  - **Persistence:** Direct transactional state updates to `characters`, `inventory_items`, and `character_depot_items` with Rank 2 -> 3 -> 5 pessimistic deadlock-free locking.
-- **Collection & Monster Book** (`internal/collection`):
-  - **Responsibility:** Illustrated monster defeat tracking (`character_monster_book`), item discovery recording (`character_item_collection`), and career completion percentage queries.
-  - **Dependencies:** Character repository.
-  - **Persistence:** `character_monster_book` and `character_item_collection` tables in `internal/database/collection_repository.go`.
-- **Medal & Lifetime Achievements** (`internal/medal`):
-  - **Responsibility:** Small Medal (ちいさなメダル) exchange shop (`medal.cgi`, consuming medals for rare equipment/items) and Lifetime Milestone Achievement & Commemorative Medal collection system tracking gameplay metrics (adventure victories, monsters slain, gold accumulated, bosses conquered, arena wins, casino games, alchemy crafts), event-driven progress recording via explicit decoupled producer hooks (`adventure.VictoryHook`, `party.VictoryHook`, `boss.VictoryHook`, `pvp.VictoryHook`, `GamePlayedHook`, `SynthesisHook`, `MonsterDefeatedHook`), milestone completion verification, double-claim prevention, and awarding commemorative medals (`character_medals`) and bonus small medals.
-  - **Dependencies:** Core Character, Character repository, Core Inventory, Inventory repository, TransactionProvider (`economy.Service`), wired to action producers in `cmd/party2/main.go`.
-  - **Persistence:** `character_achievements` and `character_medals` tables in `internal/database/achievement_repository.go` with pessimistic `FOR UPDATE` locking and ambient transaction propagation.
-- **Chapel & Blessings** (`internal/chapel`):
-  - **Responsibility:** Town church prayer registration (`character_blessings`), authentic 5 blessing choices (Gold, EXP, Monster recruit boost, Chest drop boost, Casino coins), single active wish enforcement (`ErrAlreadyPrayed`, HTTP 409 Conflict), Sister dialogues/facility metadata, and reward modifier calculations. Fictional donations purged in Issue #472.
-  - **Dependencies:** Character repository.
-  - **Persistence:** `character_blessings` table in `internal/database/chapel_repository.go` with pessimistic `FOR UPDATE` single-active-wish protection.
-- **Colosseum PvP (闘技場)** (`internal/pvp`):
-  - **Responsibility:** Authentic real-time 2-to-8 player multiplayer lobby rooms (`quest.cgi:type=4`, `vs_player.cgi`), Bet & Split wager economics (min 10G), 9 color team division (`@ぱーてぃー`), `@かいし` multi-team validation and participant HP restoration, multi-round party battle resolution (`_battle.cgi:486`), target wins championship detection (1-3 wins), equal prize pool split among winning team members, durable lifetime `pvp_wins` tracking (`$m{kill_p}`), and 10-round draw refund safety. Fictional asynchronous Elo rating calculations, snapshot duels, and `arena_ratings`/`arena_matches` tables have been completely purged per Issue #481.
-  - **Dependencies:** Core Battle Engine, Character repository, Transaction Provider.
-  - **Persistence:** Ephemeral room state, rosters, and scores in Valkey Master (`party2:pvp:room:<id>`, `party2:pvp:character:<id>`, `party2:pvp:rooms:active`, `party2:pvp:lock:room:<id>`) with 30m TTL and distributed room locking; durable wealth and `pvp_wins` in MariaDB Master `characters` with transactional settlement (`RunInTx`) enforcing Rank 2 row locking (`FindByIDForUpdate` sorted ascending) and strict error propagation (#661).
-- **Guild versus Guild (GvG) Combat** (`internal/gvg`):
-  - **Responsibility:** Authentic real-time 2-to-8 player multi-round guild battle rooms (`quest.cgi:type=5`, `vs_guild.cgi`), room GP prize pool seeding (2 GP initial + 1 GP per joiner), automatic guild color team assignment, friendly guild battle prohibition (`color == '#FFFFFF'`), `@かいし` multi-guild validation and participant HP restoration, multi-round party battle resolution (`corebattle.ResolvePartyBattle`), round winner GP rewards (+3 GP), target wins (1-3 wins) match victory awards (accumulated room prize pool GP + 1 Bronze Medal), all-participant +4 GP compensation across participating guilds, 10-round draw limit, and 7-tier victory medals and championship cups promotion (Bronze -> Silver -> Gold -> Order -> Trophy -> Championship Cup -> Champion Cup with 5-to-1 cascading upgrades). Fictional asynchronous Elo rating duels and `gvg_matches`/`gvg_match_rounds` tables have been completely purged per Issue #482.
-  - **Dependencies:** Core Battle Engine, Guild repository, Character repository.
-  - **Persistence:** Ephemeral room state, rosters, and scores in Valkey Master (`party2:gvg:room:<id>`, `party2:gvg:character:<id>`, `party2:gvg:rooms:active`, `party2:gvg:lock:room:<id>`) with 30m TTL and distributed room locking; durable guild standings and 7 trophy tiers in MariaDB Master `gvg_standings` and team colors in `guilds.color`.
-- **King Sealing Battles** (`internal/boss`):
-  - **Responsibility:** Authentic 4-player cooperative sealing battles against legendary ancient kings and calamitous deities (`vs_king.cgi`, `stage/king1..10.cgi`, `king99.cgi`). Handles stage-specific entry conditions (`need_join`), entry fatigue cost (+20% Tired), boss Dejon skills (`ActionKindDejon`, permanent dimensional banishment with +30% Tired penalty), victorious `@ふういん` resealing, Hero Count increments (`Character.HeroCount` / `$m{hero_c}`), worldwide server news broadcasts, celebration banquet triggering in Event Plaza (`_win_vs_king.cgi`), and staging party disbandment. Fictional 1-day 3-entry solo raid limits and transient Valkey boss HP mechanisms have been completely decommissioned per clean-room parity requirements ([Issue #479](https://github.com/witchcraze/party2re/issues/479)).
-  - **Dependencies:** Core Battle Engine, Character repository, Party repository, Inventory repository, Core Progression, News Publisher.
-  - **Persistence:** `character_boss_records` and `boss_challenge_history` tables in `internal/database/boss_repository.go` with transactional record and challenge history updates, and reward delivery via `deliverRewardItems` enforcing Rank 3 Inventory -> Rank 5 Depot lock hierarchy; `characters.hero_count` for lifetime sealing accomplishments.
-- **Dungeon Exploration** (`internal/dungeon`):
-  - **Responsibility:** Multi-floor grid dungeon navigation, branching tile event state machine (monster encounters, hazard traps, treasure chest loots, floor descent stairs, floor bosses, safe escape portals), buffered reward ledger, and atomic finalization on clear/escape vs forfeiture on wipeout. Supports multi-player party exploration (1–4 members) with coordinated movement, shared trap damage with variance, Treasure Hunter (Job 78) bonus chests (+1..+2 chests), and Map Scouting (`@ちず`) with stacking vision expansion (radius 1 for 3x3 grid, +1 for Thief/Ninja/Geomancer/Ranger, +1 for Item 197 `scope_goggles`, stacking to radius 3 for 7x7 grid). Transient in-flight exploration state and reward accumulation are buffered in Valkey Master using atomic Lua scripting (`dungeon_step.lua`) with cluster hash tags `party2:dungeon:{char:<char_id>}:*` and sliding 2-hour TTL (Candidate D, SSOT: [`docs/architecture/transient-run-state.md`](transient-run-state.md)), completely eliminating active SQL writes until Two-Phase Settlement commits to MariaDB upon clear/escape/wipeout.
-  - **Dependencies:** Core Battle Engine, Character repository, Inventory repository, Core Progression, Valkey Master (`party2:dungeon:{char:<char_id>}:*`).
-  - **Persistence:** `character_dungeon_records` and `dungeon_expedition_history` tables in `internal/database/dungeon_repository.go` for durable records/history, and reward finalization via `deliverRewardItems` enforcing Rank 3 Inventory -> Rank 5 Depot lock hierarchy; volatile active exploration buffers in Valkey Master (`ValkeyExpeditionRepository`) with thread-safe in-memory fallback.
-- **Battle Replays & Match History** (`internal/replay`):
-  - **Responsibility:** Recording and faithful playback of step-by-step turn logs (actions, damage/healing numbers, critical hits, logs, remaining HP snapshots) across all combat modes (PvP, GvG, Boss, Dungeon, Adventure, Challenge), standardized recording adapters (`ReplayRecorder`, `RecordMatchFromResult`, `RecordCharacterVsCharacter`, `RecordCharacterVsMonster`, `RecordParticipantVsParticipant`), character match history queries, and replay retention pruning.
-  - **Dependencies:** Core Battle Engine, Core Character.
-  - **Persistence:** `battle_replays` table in `internal/database/replay_repository.go`.
-- **Continuous Endurance Challenge** (`internal/challenge`):
-  - **Responsibility:** Consecutive survival wave combat resolution, progressive wave stat scaling ($1 + \text{scale} \times (\text{round}-1)$), legacy HP carryover between rounds without inter-round recovery, milestone bonus item drops, buffered reward ledger with safe retreat cashout vs 50% consolation defeat, and all-time highest streak leaderboards. Supports multi-player party challenge runs (1–4 members) with simultaneous party combat via `corebattle.PartyBattleResolver` and persistent HP carryover per member. Whenever a party sets a new tier high-water mark, the run is immortalized in the Hall of Fame (`challenge_hall_of_fame`), recording tier ID, round, party name/color, completion timestamp, and full member profiles (with fallen members marked by gravestones `chr/099.gif`). Transient active challenge session states and provisional rewards are buffered in Valkey Master using atomic Lua scripting (`challenge_round.lua`) with cluster hash tags `party2:challenge:{char:<char_id>}:*` and sliding 2-hour TTL (Candidate D, SSOT: [`docs/architecture/transient-run-state.md`](transient-run-state.md)), eliminating wave-by-wave MariaDB SQL writes until Two-Phase Settlement commits to MariaDB upon cashout/defeat.
-  - **Data Catalog:** Embedded JSON tier definitions (`internal/challenge/data/challenge_tiers.json`).
-  - **Dependencies:** Core Battle Engine, Character repository, Inventory repository, Valkey Master (`party2:challenge:{char:<char_id>}:*`).
-  - **Persistence:** `character_challenge_records`, `challenge_sessions`, and `challenge_hall_of_fame` tables in `internal/database/challenge_repository.go` and `internal/database/challenge_hall_of_fame_repository.go` for durable records, with cashout finalization applying `progression.ApplyExperience` and `deliverRewardItems` with `id.New()` ULID generation enforcing Rank 3 Inventory -> Rank 5 Depot lock hierarchy; volatile active challenge buffers in Valkey Master (`ValkeySessionRepository`) with thread-safe in-memory fallback.
-- **Custom Skill Gem Synthesis** (`internal/custom_skill`):
-  - **Responsibility:** Original custom skill naming, activation phrase validation, gem-box selection, CMP/slot checks, and atomic exchange of selected gems with the character inventory.
-  - **Data Catalog:** Gem definitions from `internal/gemstore`.
-  - **Dependencies:** Core Character, Inventory repository, Gem catalog, transaction provider.
-  - **Persistence:** `character_custom_skills` (name, phrase, CMP, and three gem IDs) in `internal/database/custom_skill_repository.go`.
-- **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`):
-  - **Responsibility:** Helper quest generation, item/monster delivery validation, alchemy material rewards, guild points contribution, emergency state rescue recovery with cooldown penalties, and HTTP JSON API endpoints (`/helpers/quests`, `/helpers/complete`, `/rescues/penalty`, `/rescues/request`).
-  - **Dependencies:** Core Character, Core Inventory, Core Item, Guild repository.
-  - **Persistence:** `helper_quests` and `rescue_records` tables in `internal/database/helper_repository.go` and `internal/database/rescue_repository.go`.
-- **Town Park & Public Bulletin Board** (`internal/park`):
-  - **Responsibility:** Public chat/bulletin board messages, character authorship, text sanitization, rate limiting, and NPC interactions (@町娘 talk, inspect, and 20-tier fortune divination).
-  - **Dependencies:** Character repository (identity verification).
-  - **Persistence:** `park_posts` table in `internal/database/park_repository.go`.
-- **News & Player Notifications** (`internal/notification`):
-  - **Responsibility:** System-wide news announcement broadcasts (`news.cgi`), categorized server announcements, personalized player notification inbox for asynchronous game alerts, read state tracking, unread count queries, and retention pruning.
-  - **Dependencies:** Core Player.
-  - **Persistence:** `news_articles` and `player_notifications` tables in `internal/database/notification_repository.go`.
-- **Player Private Home & Mailbox** (`internal/home`):
-  - **Responsibility:** Character private estate management (`home.cgi`), home wallpaper/theme customization, visitor tracking, player-to-player letter mail correspondence (inbox/outbox), companion greeting phrase customization (`ことばをおしえる`), and delivery notices ledger.
-  - **Dependencies:** Core Character, Character repository.
-  - **Persistence:** `character_homes`, `character_letters`, `character_companion_phrases`, and `character_delivery_notices` tables in `internal/database/home_repository.go`.
-- **Player Leaderboards & Character Rankings** (`internal/ranking`):
-  - **Responsibility:** Multi-category competitive leaderboards and character rankings (`ranking.cgi`, `job_ranking.cgi`, `week_ranking.cgi`), including Level, Player Wealth, Character Wealth, Battle Victories, PvP Victories, World Boss Defeats, Adventure Victories, Job Mastery, Job Popularity, Helper Quests, and Small Medals, with deterministic tie-breaking, pagination, in-memory TTL caching, Valkey distributed caching, singleflight cache stampede protection, and background worker refresh action (`party2:ranking:refresh`).
-  - **Dependencies:** Core Character, Core Player, Valkey (`github.com/valkey-io/valkey-go`), Scheduling (`internal/scheduling`).
-  - **Persistence:** `ranking_snapshots` table and dedicated high-performance query indexes in `internal/database/ranking_repository.go`, and Valkey distributed cache keys (`party2:ranking:snapshot:*`).
-- **Distributed Rate Limiting & Cooldown Tracking** (`internal/ratelimit`):
-  - **Responsibility:** Atomic distributed rate limiting, burst protection, public endpoint spam defense, park bulletin board posting cooldowns, and private home visitor throttling without SQL lookup overhead.
-  - **Dependencies:** Valkey (`github.com/valkey-io/valkey-go`) with in-memory thread-safe fallback.
-  - **Persistence:** Transient atomic counter keys in Valkey with TTL (`party2:ratelimit:*`).
-- **Server Entrypoint & Lifecycle Orchestration** (`cmd/party2`):
-  - **Responsibility:** Process initialization, configuration loading (`PARTY2_DB_DSN`, `PARTY2_DB_MAX_OPEN_CONNS`, `PARTY2_DB_MAX_IDLE_CONNS`, `PARTY2_DB_CONN_MAX_LIFETIME`, `PARTY2_DB_CONN_MAX_IDLE_TIME`, `PARTY2_VALKEY_ADDR`, `PORT`/`ADDR`), full domain repository and service wiring, background scheduler worker execution, HTTP JSON API route registration, and graceful shutdown signal handling (`SIGINT`/`SIGTERM`) with connection draining.
-  - **Dependencies:** All domain services and repositories, `internal/api/http`, `internal/scheduling`, `internal/database`, `internal/valkey`, `internal/ratelimit`, `internal/logging`.
-  - **Persistence:** Coordinates connection lifecycles for MariaDB and Valkey.
-- **OpenAPI 3.1 Modular Specification, Bundler, AST Scaffolder & CI Guard** (`docs/api/base.json`, `docs/api/paths/*.json`, `scripts/sync_openapi.go`, `internal/api/http`):
-  - **Responsibility:** Standardized machine-readable OpenAPI 3.1 REST API specification modularized into domain-specific paths (`docs/api/paths/{module}.json`) and base schemas (`docs/api/base.json`) as Single Source of Truth (SSOT). Pure Go AST toolchain (`scripts/sync_openapi.go`) deterministically bundles paths into compiled artifacts (`docs/api/openapi.json` and embedded `internal/api/http/openapi.json`), automatically scaffolds missing route definitions from `internal/api/http/handler.go`, and enforces 100% route coverage via CI (`make openapi-check`). Automated Go AST auth static analysis (`internal/api/http/auth_lint_test.go`) enforces security wrappers across all endpoints.
-  - **Dependencies:** Go standard library `net/http`, `go/ast`, `go/parser`, `//go:embed`.
-  - **Persistence:** In-memory embedded artifact and modular version-controlled repository documents.
-- **Event Plaza, Traveling Merchant Bazaar & Victory Banquets** (`internal/eventplaza`):
-  - **Responsibility:** Town event plaza gathering state, real-time plaza concurrency presence tracking (5-minute window via Valkey Sorted Set and MariaDB), traveling merchant authentic 26-item catalog with 3x markup across Tiers 1–3, active helper quest item exclusion, depot fallback routing on hand item occupancy, and world boss victory celebration banquets with celebratory toast rewards. Defeating King Bosses injects virtual banquet attendees (10–30 based on boss tier) directly into the Valkey presence tracker for 1 hour, unlocking higher traveling merchant tiers per legacy `_win_vs_king.cgi` and `event.cgi`. Strict session authentication and character ownership authorization on all mutating endpoints (`/eventplaza/presence`, `/eventplaza/merchant/purchase`, `/eventplaza/banquets/{id}/toast`).
-  - **Dependencies:** Core Character, Core Item, Core Inventory, Depot repository, Helper Quest filter, Item Collection, Character repository, Inventory repository, Valkey client.
-  - **Persistence:** `celebration_banquets`, `banquet_toasts`, and `eventplaza_presences` tables in `internal/database/eventplaza_repository.go`, backed by `party2:eventplaza:presence` Sorted Set in Valkey.
-- **Secret Underground Shop & NPC @ヒミツジ** (`internal/secretshop`):
-  - **Responsibility:** Secret underground shop discovery and access validation (JobLevel >= 7), genuine legacy 8-item rare catalog with 3x pricing multiplier, helper quest exclusion filter, inventory-to-depot routing on hand item occupancy, concurrency-safe purchasing transactions, and humorous NPC interactions (sheep dialogues, inspect lore, and flavor-only `@ぱふぱふ` puff-puff service).
-  - **Dependencies:** Core Character, Core Item, Core Inventory, Depot repository, Character repository, Inventory repository, Helper Quest filter.
-  - **Persistence:** Direct inventory, depot, and character balance persistence via character, inventory, and depot repositories.
-- **Adventurer's Tavern & Barkeep @エレナ** (`internal/tavern`):
-  - **Responsibility:** Adventurer's Tavern culinary menu (14 food, drink, dessert, and full-course items), restorative HP/MP recovery meals with fullness tracking, lottery raffle ticket rewards, automatic fullness reset upon adventure completion (`is_eat = 0` per `_battle.cgi:1214`), post-adventure meal delivery reservation and claim workflow (with automated arrival trigger via `adventure.PostAdventureHook`), and barkeep dialogue interactions (`party2/lib/bar.cgi`, `party2/lib/_battle.cgi`).
-  - **Dependencies:** Core Character, Character repository, Lottery repository.
-  - **Persistence:** `tavern_deliveries` and `tavern_character_status` tables in `internal/database/tavern_repository.go`.
-- **Town Black Market & Underworld Barter @闇商人** (`internal/blackmarket`):
-  - **Responsibility:** Town Black Market barter exchange (`party2/lib/black_market.cgi`, `闇市場`, NPC `@闇商人`). Rare item sacrifice recycling system (`SacrificeItem`) accepting eligible rare weapons, armors, and items from character inventory or depot to award Rare Points (+1) or U-Rare Points (+1 to +50), exclusive prize trade exchange (`TradePrize`) for 24 authentic equipment/item rewards delivered directly to character Depot (`預かり所`) with depot capacity check, and authentic underworld NPC dialogue and inspection interactions.
-  - **Dependencies:** Core Character, Core Item, Core Inventory, Depot, Character repository, Inventory repository, Depot repository.
-  - **Persistence:** `blackmarket_character_points` table in `internal/database/blackmarket_repository.go`. Fictional tables `blackmarket_character_purchases` and `blackmarket_market_state` dropped in migration 065.
-- **Town Delivery (Consolidated into Tavern)**:
-  - **Responsibility:** In legacy Party2, "delivery" (`@でりばりー`) is a Tavern standing order system where meals are reserved prior to departure and delivered upon adventure completion. Fictional NPC delivery quests and player courier parcel systems (`internal/delivery`) were purged in Issue #475, with authentic post-adventure food delivery consolidated under `internal/tavern`.
-  - **Persistence:** Fictional tables `delivery_quests`, `character_deliveries`, and `delivery_parcels` dropped in migration 069.
-- **Flea Market & Player Item Stalls** (`internal/fleamarket`):
-  - **Responsibility:** Player-to-player direct fixed-price item marketplace (`free.cgi`), inventory listing creation (max 5 active listings per character, 1–999,999 G price range), atomic purchasing transactions with cross-character deterministic locking, and seller cancellation and item return workflows.
-  - **Dependencies:** Core Character, Core Item, Core Inventory, Character repository, Inventory repository.
-  - **Persistence:** `fleamarket_listings` table in `internal/database/fleamarket_repository.go` with SQL Compare-And-Swap (CAS) status predicate (`WHERE id = ? AND status = 'active'`) and deterministic cross-character row lock hierarchy (`characters` ID ascending -> `inventory_items` -> `fleamarket_listings`).
-- **Gem Store & Jewel Synthesis** (`internal/gemstore`):
-  - **Responsibility:** Gem retail shop, dedicated Gem Box storage (`gem_box.cgi`) with dynamic capacity scaling based on job levels (`job_lv >= 20 ? 100 : job_lv * 5 + 5`), catalog-based inventory sorting, 55+ advanced gem synthesis formulas (`kako`), player gem transfers (`okuru`), and dual-source unidentified orb appraisals (Inventory and Depot storage) with weighted randomized loot pools (`kantei`) (`gem_store.cgi`, `_data.cgi` No. 251–255, NPC `@ジェマ`).
-  - **Dependencies:** Core Character, Core Item, Core Inventory, Core Depot, Character repository, Inventory repository, Depot repository, Gem Box repository.
-  - **Persistence:** Dedicated `character_gem_boxes` and `gem_box_items` tables via `database.GemBoxRepository`, character balance persistence, inventory items, and depot storage with deterministic lock hierarchy (`characters` -> `inventory_items` -> `character_depots` -> `character_gem_boxes`).
-- **Endgame God Wishes & Limit Breaks** (`internal/god`):
-  - **Responsibility:** Celestial audiences in Heaven (天界, NPC `@神`, `god.cgi`) and Underworld (裏天界, NPC `@神?`, `u_god.cgi`), permanent character attribute enhancements (+40 all stats), currency/resource awards, Level 99+ limit breaks (raising character level cap to 150), and tier-up capacity limit breaks (depot capacity, monster storage, job memory, flea market listings, shop listings).
-  - **Dependencies:** Core Character, Core Progression, Character repository, Depot repository, Inventory repository.
-  - **Persistence:** `characters` table (`over_level`, `over_depot`, `over_monster`, `over_future`, `over_flea`, `over_store`) and `character_depots` capacity persistence.
-- **Monster Ranch & Pet Companions** (`internal/monster`):
-  - **Responsibility:** Authentic monster ranch stabling and pet companionship facility (`farm.cgi` / `monster.cgi`, NPC `@モンジィ`). Storing befriended monsters in ranch storage (base capacity 50, 100 at Lv100, up to 300 via `OverMonster`), transferring to/from home pet estate (up to 8 pets with unique name constraint), nickname customization (up to 8 UTF-8 chars with symbol filtering), peer-to-peer monster gifting with two-party pessimistic locking, and releasing back to the wild.
-  - **Dependencies:** Core Character, Character repository, Transaction Provider.
-  - **Persistence:** `character_monsters` table in `internal/database/monster_repository.go`.
-- **Photo Contest, Screenshots & Gallery** (`internal/contest`):
-  - **Responsibility:** Character screenshots and photo gallery storage (up to 20 photos per character), photo contest entry submissions, community voting with comments, automated round conclusion with prize distribution (15,000 / 7,000 / 3,000 Gold, 10 / 6 / 3 Small Medals, 700 / 300 / 100 Guild Points), voter bonus medal distribution, Hall of Fame (殿堂入り / Legends) archiving, and news announcements (`photo.cgi` / `contest.cgi`, NPC `@ワコール`).
-  - **Dependencies:** Core Character, Character repository, News publisher, Guild service.
-  - **Persistence:** `character_photos`, `contest_rounds`, `contest_entries`, `contest_votes`, and `contest_legends` tables in `internal/database/contest_repository.go`.
-- **Multiplayer Party & Co-op Quests** (`internal/party`):
-  - **Responsibility:** Multiplayer party formation (1–4 members), recruitment lobbies, password protection, speed configurations (3/18/25, default 18), `need_join` condition check (`hp`/`joblv`), stage job level access gates (`$job_lv[$stage]`), readiness synchronization with 60-second countdown, leader management (kick, disband), coordinated multi-participant combat against dungeon/stage encounters with cooperative synergy multipliers (+10% to +30% EXP/Gold bonus), exclusive Rank 0 distributed party adventure lock (`party2:party:lock:adventure:*`) with token-safe Lua release preventing duplicate concurrent executions and reward duplication (#653), post-battle settlement delegation via `battle.ApplyPostBattleResult` (`PostBattleSettler`) adhering to deterministic lock hierarchy (Rank 2 -> Rank 3 -> Rank 5), Floor 11 treasure box drops with automatic depot fallback on full inventory, full depot drop loss tracking (`LostDrops`), surviving MP and HP persistence, shared reward distribution (`quest.cgi`, `party.cgi`), and expedition victory observer hook (`VictoryHook`) tracking for lifetime milestone achievements (`adventure_victories`, `monsters_slain`, `gold_earned`).
-  - **Dependencies:** Core Character, Core Battle, Core Inventory, Core Item, Core Progression, Character repository, Inventory repository, Depot repository, Battle Adapter (`PostBattleSettler`), Stage/Monster Catalogs, News publisher, Valkey client (`internal/valkey`).
-  - **Persistence:** Ephemeral party wait lobbies, member ready states, character index, and adventure distributed lock in Valkey Master (`party2:party:lobby:*`, `party2:party:ready:*`, `party2:party:character:*`, `party2:party:lobbies`, `party2:party:lock:adventure:*`) via `internal/party/valkey_repository.go` and `internal/party/valkey_party_lock.go` with 30-minute idle TTL auto-cleanup, 60-second ready countdown timeout, and 10-second safety lock TTL, backed by MariaDB `party_adventure_logs` table in `internal/database/party_repository.go` exclusively for durable quest outcomes.
-- **System Maintenance Mode** (`internal/maintenance`):
-  - **Responsibility:** System-wide maintenance mode status management, public status queries, and administrative configuration (enable/disable, message, estimated end time) with HTTP middleware request interception.
-  - **Dependencies:** Maintenance repository, Valkey client (`internal/valkey`).
-  - **Persistence:** Valkey Master / In-Memory caching via `internal/maintenance/valkey_repository.go` (`party2:maintenance:status`) backed by `system_maintenance` table in `internal/database/maintenance_repository.go`, eliminating MariaDB queries on normal HTTP request routing.
-- **Player Store & Town Boutiques** (`internal/store`):
-  - **Responsibility:** Player store construction in towns 1–4 (50,000 G, max 10 stores per town, 90-day timer duration, 900 GP guild award), gold and barter item listings from depot (base 10 up to 20 listings via `OverStore`), atomic purchasing and item bartering transactions, and store customization (5,000 G signboard name changes, 26 wallpaper styles from `%kabes`, and up to 5 interior furniture pieces from 15 styles with custom labels) (`store.cgi`).
-  - **Dependencies:** Core Character, Depot, Core Item, Character repository, Depot repository, Item Catalog, Guild Points registrar, Timer service (`internal/core/timer`), TxProvider (`internal/database`).
-  - **Persistence:** `character_stores`, `store_sales`, and `store_interiors` tables in `internal/database/store_repository.go` adhering to deterministic lock hierarchy (Rank 0 `store_sales` -> Rank 2 `characters` sorted asc -> Rank 5 `character_depots` sorted asc).
+### Cross-Module Application Orchestrator Pattern
 
+Cross-module workflows spanning multiple repositories use the **Application Orchestrator Pattern**:
+- **Ambient Context Boundary**: Transactions are started at the application service level via `database.RunInTx(ctx, db, fn)`.
+- **Automatic Participation**: Repositories resolve SQL executors via `database.ExecutorFromContext(ctx, r.db)` without explicit transaction passing across domain boundaries.
+- **Deadlock-Free Lock Ordering**: Enforced mechanically by Go AST static analysis (`make lock-lint`), requiring all transactions to acquire row locks strictly in ascending rank order (Rank 0 through 8). Multi-character operations order locks by ascending ID (`id.Sort2`).
+- **Cross-Domain Application Primitives (`internal/economy`)**: Single-character currency/inventory operations route through `economy.TransactionRunner`, while multi-aggregate and P2P operations use `TransactionProvider` (`RunInTx`). Raw `database.RunInTx` in feature packages is prohibited by AST static analysis.
 
-### Cross-Module Transaction Orchestration & Ambient Context Propagation
+### Storage Authority Tiers
 
-Cross-module workflows spanning multiple distinct feature and core repositories (such as auction settlement transferring character gold and inventory items) use the **Application Orchestrator Pattern**:
-- **Ambient Context Boundary**: Transactions are established at the application service / orchestrator level via `database.RunInTx(ctx, db, fn)`.
-- **Automatic Participation**: Repositories resolve their SQL executor via `database.ExecutorFromContext(ctx, r.db)` and automatically participate in the active transaction without explicit transaction object passing across domain layers.
-- **Deadlock Prevention**: All repositories and orchestrators observe the deterministic lock acquisition hierarchy defined in [`feature-modules.md`](feature-modules.md) and [`.agents/rules/05-database-and-caching.md`](../../.agents/rules/05-database-and-caching.md).
-- **Deterministic Lock Hierarchy CI Guard (`make lock-lint`)**: A Go AST static analysis linter (`internal/database/lock_hierarchy_lint_test.go`) enforces the deterministic lock acquisition hierarchy across all production transactions in `internal/` during CI (`< 0.03s`), preventing multi-resource lock inversion cycles and runtime deadlocks.
-- **Fast-Path AST Static Analysis Linter Suite**: Byte-level fast-path pre-filtering (`bytes.Contains` before invoking `parser.ParseFile`) across all repository AST linters (`internal/architecture/valkey_lint_test.go`, `internal/architecture/arch_test.go`, `internal/core/core_lint_test.go`, `internal/database/tx_lint_test.go`, `internal/api/http/auth_lint_test.go`, `internal/database/lock_hierarchy_lint_test.go`) eliminates 50%–99% of redundant full AST parses, accelerating overall linting and verification in CI and `make check` by up to 8x without compromising invariant detection accuracy.
-- **Cross-Domain Application Runtime Primitives & Transaction Execution Boundaries (`internal/economy.TransactionRunner`, `economy.TransactionProvider`)**: Standardized transaction execution primitives (`economy.Service`, `ExecuteTransaction`, `economy.Run[T]`, `economy.TransactionProvider`) governing database mutation boundaries. Single-character currency/inventory operations route through `economy.TransactionRunner` (Rank 2 `characters` -> Rank 3 `inventory_items`), while multi-aggregate and P2P operations inject `TransactionProvider` (`RunInTx`) conforming to the deterministic Rank 0–8 lock hierarchy and `id.Sort2(idA, idB)`. Direct coupling to raw `database.RunInTx` in feature packages is prohibited and verified by Go AST static analysis (`internal/architecture/tx_runner_lint_test.go`). Documented in [`cross-domain-primitives.md`](cross-domain-primitives.md).
-- **Two-Phase In-Memory Domain Event Dispatcher (`internal/core/event.Dispatcher`)**: Lightweight, thread-safe domain event bus decoupling event producers from side-effect consumers with two-phase semantics: Phase 1 (in-transaction synchronous handlers with ACID rollback guarantees) and Phase 2 (post-commit asynchronous handlers with resilient at-most-once execution).
-- **Standardized Keyset Cursor Pagination (`internal/pagination`)**: Centralized generic pagination orchestration (`BuildCursorPage`, `BuildCursorPageWithMapper`, `DecodeCursorParts`) providing consistent keyset compound token encoding/decoding, limit truncation, and bidirectional cursor links across stream/log subsystems (`park`, `home`, `replay`, `adventure`).
- 
-### Storage Authority & Data Persistence Tiers (MariaDB vs. Valkey Master)
-
-To maintain uncompromising durability for economic and progression assets while avoiding unnecessary relational database connection pressure for ephemeral state, storage authority is divided into three distinct tiers per [`.agents/rules/05-database-and-caching.md`](../../.agents/rules/05-database-and-caching.md) and the centralized keyspace specification in [`valkey-keyspace.md`](valkey-keyspace.md):
+Storage authority is divided into three distinct tiers per [`.agents/rules/05-database-and-caching.md`](../../.agents/rules/05-database-and-caching.md) and [`valkey-keyspace.md`](valkey-keyspace.md):
 
 1. **MariaDB Master (Canonical Relational Persistence)**:
-   - **Scope:** Player Accounts, Characters, Inventories, Equipment, Currencies, Jobs, Depots, Bank Accounts, Guilds, Persistent Feature State (e.g. farms, auctions, contests), and Audit/Chronicle Records (`party_adventure_logs`).
-   - **Properties:** ACID transactions, foreign keys, deterministic row-lock hierarchy (Rank 0 -> 8), zero tolerance for uncommitted data loss.
+   - *Scope:* Player Accounts, Characters, Inventories, Equipment, Currencies, Jobs, Depots, Bank Accounts, Guilds, Persistent Feature State, and Audit Records.
+   - *Guarantees:* ACID transactions, foreign keys, deterministic row-lock hierarchy (Rank 0→8), zero data loss tolerance.
 2. **Valkey Master (Primary Authoritative Ephemeral Store)**:
-   - **Scope:** Player Sessions (`party2:session:<token>`), Session Index Sets (`party2:player:sessions:<player_id>`), System Maintenance State (`party2:maintenance:status`), Party Wait Lobbies & Ready States (`party2:party:lobby:*`, `party2:party:ready:*`, `party2:party:character:*`, `party2:party:lobbies`), Scheduled Action Queues (`party2:scheduled:pending`, `party2:scheduled:action:*`), Distributed Locks (`party2:scheduled:lock:*`), Rate Limiting Counters (`party2:ratelimit:*`).
-   - **Properties:** Pure in-memory/AOF persistence with **no backing SQL tables** (except administrative fallback backup). Governed strictly by native TTL expiration or explicit application lifecycle hooks per [`valkey-keyspace.md`](valkey-keyspace.md). State loss during crash or eviction is limited to non-critical ephemeral records (e.g. requiring a player to re-login, with zero impact on assets or progression).
-3. **Valkey Cache (Read Acceleration & Projections)**:
-   - **Scope:** Competitive Leaderboards & Standings (`party2:ranking:snapshot:*`), Player Profile Projections.
-   - **Properties:** MariaDB is the Single Source of Truth; Valkey holds read-optimized projections (e.g. Sorted Sets) for O(log N) operations. Reconstructible from MariaDB on cache miss.
+   - *Scope:* Player Sessions (`party2:session:*`), Session Indices (`party2:player:sessions:*`), System Maintenance State (`party2:maintenance:status`), Party Wait Lobbies (`party2:party:lobby:*`), Ephemeral Multiplayer Card/PvP/GvG Rooms (`party2:<domain>:room:*`), Scheduled Action Queues (`party2:scheduled:*`), Distributed Locks (`party2:<domain>:lock:*`), Rate Limiting Counters (`party2:ratelimit:*`), and In-Progress Run Buffers (`party2:<domain>:{char:<id>}:*`).
+   - *Guarantees:* In-memory/AOF persistence governed by native TTL or application lifecycle hooks without backing SQL tables. Ephemeral failure causes session re-login or lobby recreation with zero impact on economic assets.
+3. **Valkey Cache (Read Projections)**:
+   - *Scope:* Competitive Leaderboards (`party2:ranking:snapshot:*`), Profile Projections.
+   - *Guarantees:* Read-optimized projection reconstructible from MariaDB on cache miss.
 
-#### Persistence Decision Tree (Durability & Rebuildability First)
+#### Persistence Decision Tree
 
 ```text
                     ┌─ Yes ─→ MariaDB Master (Wallets, Inventories, Progression)
@@ -474,40 +275,30 @@ Durability critical?
                   (Queues)      (Audit Records)
 ```
 
-#### Migration Candidates & Roadmap
-- **Candidate A: Player Authentication Sessions (`sessions`)**: Implemented via Valkey Master (`party2:session:<token>`, `party2:player:sessions:<player_id>`) to eliminate relational database connection bottleneck on every authenticated API request ([Issue #366](https://github.com/witchcraze/party2re/issues/366)), with legacy `player_sessions` table officially dropped via Migration 051, and session tracking transitioned to Sorted Set (`ZSET`) with TTL score and lazy purging to eliminate memory leaks and stale tokens ([Issue #378](https://github.com/witchcraze/party2re/issues/378)).
-- **Candidate B: System Maintenance Mode State (`system_maintenance`)**: Implemented via Valkey Master / In-Memory cache (`internal/maintenance/valkey_repository.go`) to eliminate synchronous MariaDB queries from `maintenanceMiddleware` on every incoming HTTP request ([Issue #367](https://github.com/witchcraze/party2re/issues/367)).
-- **Candidate C: Ephemeral Turn & Session Lobbies (`party`, `pvp`, `gvg`, `casino`, `matchmaking`)**: Standardized across multiplayer domains in Issue #635 (SSOT: [`docs/architecture/transient-run-state.md`](transient-run-state.md)). Implemented via Valkey Master for party recruitment/ready lobbies (legacy `parties`/`party_members` dropped in Migration 052, #380), Colosseum PvP rooms (`party2:pvp:*`), and Guild GvG rooms (`party2:gvg:*`); establishes target blueprint for migrating Casino card game rooms (`casino_rooms`, `casino_room_members`) to Valkey Master with authentic 1800s sliding TTL and Two-Phase Settlement into MariaDB Master.
-- **Candidate D: In-Progress Run Buffers (`dungeon_active_expeditions`, `challenge_sessions`)**: Evaluated and architecturally codified for Valkey Master step-by-step turn buffers and atomic Lua scripts (`dungeon_step`, `challenge_advance_round`), eliminating write amplification on MariaDB until final settlement upon exit/completion ([Issue #369](https://github.com/witchcraze/party2re/issues/369), SSOT: [`docs/architecture/transient-run-state.md`](transient-run-state.md)). Active dungeon expedition buffers ([Issue #404](https://github.com/witchcraze/party2re/issues/404)) and endurance challenge session buffers ([Issue #405](https://github.com/witchcraze/party2re/issues/405)) migrated to Valkey Master with zero SQL writes during active exploration/waves.
-- **Candidate E: World Boss Real-time Shared HP (`boss`)**: Evaluated and verified via Proof-of-Concept for real-time shared HP reduction in Valkey Master using atomic Lua scripting (`boss_damage.lua`), `{boss:<boss_id>}` cluster hash tagging, deterministic killer election, and idempotent Two-Phase Settlement into MariaDB Master ([Issue #370](https://github.com/witchcraze/party2re/issues/370), SSOT: [`docs/architecture/transient-boss-hp.md`](transient-boss-hp.md)).
-- **Candidate F: Real-time Leaderboards (`ranking`)**: Remains classified as Valkey Cache (projection), not Valkey Master.
-
-### Future Feature Modules
-
-- Web Presentation UI / Client
-
-
+---
 
 ## Component Configuration Lifecycle and Composition Root
 
-To preserve parallel testability and eliminate global state mutations (`os.Setenv` concurrency hazards):
+To preserve parallel testability and eliminate global state mutations:
 
-1. **Config Struct First**: Every configurable package (`internal/database`, `internal/valkey`, etc.) defines a pure `Config` struct holding typed configuration parameters, with a pure `DefaultConfig()` factory returning baseline defaults.
-2. **Explicit Constructor Injection**: Constructors accept typed `Config` structs or functional options. They do NOT read `os.Getenv` or environment variables directly.
-3. **Isolated Environment Loaders**: Environment parsing functions (`ConfigFromEnvironment()`) read, validate, and clamp environment variables into `Config` structs independently.
+1. **Config Struct First**: Every configurable package defines a pure `Config` struct with a `DefaultConfig()` constructor.
+2. **Explicit Injection**: Constructors accept typed `Config` structs or functional options; they do not read `os.Getenv` directly.
+3. **Isolated Environment Loaders**: Environment parsing functions (`ConfigFromEnvironment()`) validate and clamp variables independently.
 4. **Composition Root Organization (`cmd/party2/`)**:
-   - `config.go`: Top-level `Config` struct and `ConfigFromEnv()` centralizing all environment variable keys and defaults.
-   - `main.go`: High-level application entrypoint (`main`, `run`, `runWithConfig`), server lifecycle, signal trapping, and graceful shutdown (≤ 150 lines).
+   - `config.go`: Top-level `Config` struct and environment parsing.
+   - `main.go`: Process entrypoint, server lifecycle, signal trapping, and graceful shutdown (≤ 150 lines).
    - `services_core.go`: Player, Character, Inventory, Item/Job catalogs, and transaction orchestration.
    - `services_econ.go`: Shop, Bank, Depot, Blacksmith, Alchemy, Plantation, Auction, Flea Market, and Gem Store.
    - `services_cmbt.go`: Battle engine, Boss, PvP, GvG, Dungeon, Challenge, Party, Replay, and Custom Skill.
-   - `services_soc.go`: Guild, Ranking, Park, Home, Notification, Scheduling, and background Worker.
-   - `services_misc.go`: Town facilities and features (Farm, Casino, Contest, Medal, Collection, Inn, Chapel, Altar of Rebirth, Wishing Well, Activity, etc.).
-   - `wire.go`: Cross-domain event hooks (`SetVictoryHook`, `SetSynthesisHook`, `SetGamePlayedHook`) and HTTP handler composition.
+   - `services_soc.go`: Guild, Ranking, Park, Home, Notification, Scheduling, and Worker.
+   - `services_misc.go`: Town facilities and side systems (Casino, Contest, Medal, Collection, Chapel, Altar, Wishing Well, Activity, etc.).
+   - `wire.go`: Cross-domain event hooks (`VictoryHook`, `SynthesisHook`, `GamePlayedHook`, `PostAdventureHook`) and HTTP handler composition.
 
-## Component review criteria
+---
 
-For every new component ask:
+## Component Review Criteria
+
+For every new component or refactoring, verify:
 
 1. What does this component own?
 2. What does it deliberately not own?
@@ -517,10 +308,14 @@ For every new component ask:
 6. Would adding another component of the same kind require changes here?
 7. Is the component boundary justified by an actual responsibility rather than speculative abstraction?
 
-## Related documents
+---
+
+## Related Documents
 
 - [`overview.md`](overview.md) — overall architecture.
-- [`feature-modules.md`](feature-modules.md) — feature boundaries.
+- [`feature-modules.md`](feature-modules.md) — feature boundaries and lock hierarchy.
 - [`interfaces.md`](interfaces.md) — public component contracts.
+- [`transient-run-state.md`](transient-run-state.md) — ephemeral run state specification.
+- [`valkey-keyspace.md`](valkey-keyspace.md) — centralized Valkey keyspace SSOT.
 - [`../design/game-overview.md`](../design/game-overview.md) — domain context.
 - [`../../AGENTS.md`](../../AGENTS.md) — mandatory architectural rules.
