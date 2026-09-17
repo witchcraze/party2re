@@ -2,7 +2,6 @@ package party
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"github.com/witchcraze/party2re/internal/adventure"
@@ -206,49 +205,14 @@ func (s *Service) settleFallback(
 					continue
 				}
 
-				inst, err := coreitem.NewInstance(box.ItemID, 1)
+				res, err := depot.DeliverRewardItem(ctx, s.invRepo, s.depotRepo, c, box.ItemID, 1, depot.PolicyTreatOverflowAsLost)
 				if err != nil {
 					continue
 				}
-
-				delivered := false
-				// 1. Try Inventory
-				if s.invRepo != nil {
-					inv, err := s.invRepo.FindByCharacterIDForUpdate(ctx, cID)
-					if err == nil && len(inv.Items) < 1 {
-						if err := inv.Add(inst); err == nil {
-							if err := s.invRepo.Save(ctx, inv); err == nil {
-								box.DeliveredTo = "inventory"
-								drops = append(drops, inst)
-								delivered = true
-							}
-						}
-					}
-				}
-
-				if delivered {
-					continue
-				}
-
-				// 2. Try Depot
-				if s.depotRepo != nil {
-					dep, err := s.depotRepo.FindByCharacterIDForUpdate(ctx, cID)
-					if errors.Is(err, depot.ErrNotFound) {
-						dep, err = depot.NewDepotWithCapacity(cID, c.JobLevel, 0, c.OverDepot)
-					}
-					if err == nil {
-						if err := dep.AddItem(inst); err == nil {
-							if err := s.depotRepo.Save(ctx, dep); err == nil {
-								box.DeliveredTo = "depot"
-								drops = append(drops, inst)
-								delivered = true
-							}
-						}
-					}
-				}
-
-				if !delivered {
-					box.DeliveredTo = "lost"
+				box.DeliveredTo = string(res.DeliveredTo)
+				if res.DeliveredTo == depot.DeliveredToInventory || res.DeliveredTo == depot.DeliveredToDepot {
+					drops = append(drops, res.Item)
+				} else {
 					lostDrops[cID] = append(lostDrops[cID], box.ItemID)
 				}
 			}

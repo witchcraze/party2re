@@ -2,7 +2,6 @@ package battle
 
 import (
 	"context"
-	"errors"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -130,39 +129,19 @@ func (s *Service) deliverToDepot(
 	if len(items) == 0 {
 		return nil
 	}
-	if s.depotRepo == nil {
-		resp.LostDrops[charID] = append(resp.LostDrops[charID], items...)
-		return nil
+	if char.ID == "" {
+		char.ID = charID
 	}
-
-	dep, err := s.depotRepo.FindByCharacterIDForUpdate(ctx, charID)
-	if errors.Is(err, depot.ErrNotFound) {
-		dep, err = depot.NewDepotWithCapacity(charID, char.JobLevel, 0, char.OverDepot)
-		if err != nil {
-			return err
-		}
-	} else if err != nil {
+	results, err := depot.DeliverRewardItems(ctx, nil, s.depotRepo, char, items, depot.PolicyTreatOverflowAsLost)
+	if err != nil {
 		return err
 	}
-
-	var delivered []coreitem.Instance
-	var lost []coreitem.Instance
-	for _, inst := range items {
-		if err := dep.AddItem(inst); err == nil {
-			delivered = append(delivered, inst)
+	for _, r := range results {
+		if r.DeliveredTo == depot.DeliveredToDepot {
+			resp.DepotDeliveries[charID] = append(resp.DepotDeliveries[charID], r.Item)
 		} else {
-			lost = append(lost, inst)
+			resp.LostDrops[charID] = append(resp.LostDrops[charID], r.Item)
 		}
-	}
-
-	if len(delivered) > 0 {
-		if err := s.depotRepo.Save(ctx, dep); err != nil {
-			return err
-		}
-		resp.DepotDeliveries[charID] = append(resp.DepotDeliveries[charID], delivered...)
-	}
-	if len(lost) > 0 {
-		resp.LostDrops[charID] = append(resp.LostDrops[charID], lost...)
 	}
 	return nil
 }

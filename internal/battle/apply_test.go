@@ -2,6 +2,7 @@ package battle_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/battle"
@@ -42,11 +43,15 @@ func TestApplyPostBattleResult_SingleCharacter_FullDepot_LostDrops(t *testing.T)
 	_ = inv.Add(item2)
 	_ = invRepo.Save(ctx, inv)
 
-	// Depot full with 1 item (capacity = 1)
-	dep, _ := depot.NewDepot("char-full-depot")
-	dep.Capacity = 1
-	depotItem, _ := coreitem.NewInstance("item-existing-in-depot", 1)
-	_ = dep.AddItem(depotItem)
+	// Depot full with items matching refreshed capacity for JobLevel
+	depCap := depot.CalculateCapacity(char.JobLevel, 0, 0)
+	dep, _ := depot.NewDepotWithCapacity("char-full-depot", char.JobLevel, 0, 0)
+	for i := 0; i < depCap; i++ {
+		depotItem, _ := coreitem.NewInstance(fmt.Sprintf("item-existing-in-depot-%d", i), 1)
+		if err := dep.AddItem(depotItem); err != nil {
+			t.Fatalf("failed to add item %d: %v", i, err)
+		}
+	}
 	_ = depotRepo.Save(ctx, dep)
 
 	txProv := &mockTxProvider{}
@@ -68,7 +73,7 @@ func TestApplyPostBattleResult_SingleCharacter_FullDepot_LostDrops(t *testing.T)
 			"char-full-depot": 100,
 		},
 		TotalReward: corebattle.Reward{
-			Experience:       10,
+			Experience:       0,
 			Currency:         10,
 			ItemDefinitionID: "item-rare-drop",
 			ItemQuantity:     1,
@@ -101,7 +106,7 @@ func TestApplyPostBattleResult_SingleCharacter_FullDepot_LostDrops(t *testing.T)
 
 	// Verify depot was not modified or corrupted
 	savedDepot, _ := depotRepo.FindByCharacterID(ctx, "char-full-depot")
-	if len(savedDepot.Items) != 1 || savedDepot.Items[0].DefinitionID != "item-existing-in-depot" {
+	if len(savedDepot.Items) != depCap {
 		t.Errorf("depot items modified unexpectedly: %+v", savedDepot.Items)
 	}
 }
@@ -140,10 +145,14 @@ func TestApplyPostBattleResult_MultiCharacter_FullDepot_LostDrops(t *testing.T) 
 	_ = inv1.Add(i2)
 	_ = invRepo.Save(ctx, inv1)
 
-	dep1, _ := depot.NewDepot("char-multi-1")
-	dep1.Capacity = 1
-	d1, _ := coreitem.NewInstance("existing-depot-item", 1)
-	_ = dep1.AddItem(d1)
+	depCap1 := depot.CalculateCapacity(c1.JobLevel, 0, 0)
+	dep1, _ := depot.NewDepotWithCapacity("char-multi-1", c1.JobLevel, 0, 0)
+	for i := 0; i < depCap1; i++ {
+		d, _ := coreitem.NewInstance(fmt.Sprintf("existing-depot-item-%d", i), 1)
+		if err := dep1.AddItem(d); err != nil {
+			t.Fatalf("failed to add item %d to dep1: %v", i, err)
+		}
+	}
 	_ = depotRepo.Save(ctx, dep1)
 
 	// c2 inventory full (2/2); depot has space (capacity 2, 0 items)
@@ -176,7 +185,7 @@ func TestApplyPostBattleResult_MultiCharacter_FullDepot_LostDrops(t *testing.T) 
 			"char-multi-2": 80,
 		},
 		TotalReward: corebattle.Reward{
-			Experience: 20,
+			Experience: 0,
 			Currency:   20,
 		},
 	}
