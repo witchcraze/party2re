@@ -139,6 +139,9 @@ State-mutating feature modules (such as `shop`, `blacksmith`, `alchemy`, `bank`,
 5. **Sub-Resource Ownership & Repository SQL Scoping**:
    - When modifying, claiming, or deleting sub-resources belonging to a player/character (`challenge_sessions`, `takarakuji_tickets`, `dungeon_expeditions`, `letters`, `companion_phrases`), SQL queries MUST include character/player ID ownership scoping (`WHERE id = ? AND character_id = ?`).
    - Domain services and HTTP handlers must enforce ownership verification and return `ErrForbidden` (`403 Forbidden`) on unauthorized access attempts.
+6. **Cross-Storage Resolution & Consumption Engine (`internal/depot`)**:
+   - Domain modules requiring items that may reside in either character inventory or depot storage (`plantation`, `blackmarket`, `gemstore`) MUST use the unified dual-source helpers (`depot.ResolveItem`, `depot.ConsumeItem`, `depot.ConsumeDualSource`, `depot.SaveConsumptionResult`).
+   - Preserves deterministic Rank 3 (`inventory_items`) -> Rank 5 (`character_depots`) lock ordering and configurable search priorities (`PriorityInventoryFirst`, `PriorityDepotFirst`) matching legacy specifications.
 
 ## Related documents
 

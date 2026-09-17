@@ -203,40 +203,27 @@ func (s *Service) SacrificeItem(ctx context.Context, characterID string, itemIns
 			return ErrCharacterNotFound
 		}
 
-		// 2. Lock inventory (Tier 3) and search for item
+		// 2. Lock inventory (Tier 3)
 		inv, err := s.inventoryRepo.FindByCharacterIDForUpdate(txCtx, characterID)
 		if err != nil {
 			return err
 		}
 
-		inst, foundInInv := inv.Find(itemInstanceID)
-		var (
-			targetDefID string
-			foundInDep  bool
-			dep         depot.Depot
-		)
-
-		if foundInInv {
-			targetDefID = inst.DefinitionID
-		} else if s.depotRepo != nil {
-			// 3. Lock depot (Tier 5) and search for item
+		// 3. Lock depot (Tier 5)
+		var dep depot.Depot
+		if s.depotRepo != nil {
 			var depErr error
 			dep, depErr = s.depotRepo.FindByCharacterIDForUpdate(txCtx, characterID)
 			if depErr != nil {
 				return depErr
 			}
-			for _, dItem := range dep.Items {
-				if dItem.ID == itemInstanceID {
-					targetDefID = dItem.DefinitionID
-					foundInDep = true
-					break
-				}
-			}
 		}
 
-		if !foundInInv && !foundInDep {
+		resolved, err := depot.ResolveItem(&inv, &dep, depot.QueryByInstanceID(itemInstanceID), depot.PriorityInventoryFirst)
+		if err != nil {
 			return ErrUnownedItem
 		}
+		targetDefID := resolved.Item.DefinitionID
 
 		// Check sacrifice eligibility
 		yield, eligible := s.catalog.GetSacrificeYield(targetDefID)
@@ -245,20 +232,12 @@ func (s *Service) SacrificeItem(ctx context.Context, characterID string, itemIns
 		}
 
 		// Consume the item
-		if foundInInv {
-			if err := inv.Consume(itemInstanceID, 1); err != nil {
-				return err
-			}
-			if err := s.inventoryRepo.Save(txCtx, inv); err != nil {
-				return err
-			}
-		} else if foundInDep {
-			if _, err := dep.ConsumeOne(itemInstanceID); err != nil {
-				return err
-			}
-			if err := s.depotRepo.Save(txCtx, dep); err != nil {
-				return err
-			}
+		res, err := depot.ConsumeItem(&inv, &dep, depot.QueryByInstanceID(itemInstanceID), depot.PriorityInventoryFirst, 1)
+		if err != nil {
+			return err
+		}
+		if err := depot.SaveConsumptionResult(txCtx, s.inventoryRepo, s.depotRepo, res, inv, dep); err != nil {
+			return err
 		}
 
 		// 4. Lock and update points (Tier 8)
