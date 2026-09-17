@@ -107,6 +107,14 @@ func checkFileCoreRules(fset *token.FileSet, node *ast.File, filename string) []
 						message: "direct mutation of character medal field 'SmallMedals' is prohibited; use char.AddSmallMedals or char.DeductSmallMedals instead",
 					})
 				}
+				if fieldName == "Crystal" && !isAllowedCurrency {
+					violations = append(violations, coreViolation{
+						file:    filename,
+						line:    pos.Line,
+						field:   fieldName,
+						message: "direct mutation of character crystal field 'Crystal' is prohibited; use char.AddCrystal or char.DeductCrystal instead",
+					})
+				}
 
 				// Job (CurrentJobID, MasteredJobs)
 				if (fieldName == "CurrentJobID" || fieldName == "MasteredJobs") && !isAllowedJob {
@@ -151,6 +159,14 @@ func checkFileCoreRules(fset *token.FileSet, node *ast.File, filename string) []
 							line:    pos.Line,
 							field:   fieldName,
 							message: "direct mutation of character medal field 'SmallMedals' is prohibited; use char.AddSmallMedals or char.DeductSmallMedals instead",
+						})
+					}
+					if fieldName == "Crystal" && !isAllowedCurrency {
+						violations = append(violations, coreViolation{
+							file:    filename,
+							line:    pos.Line,
+							field:   fieldName,
+							message: "direct mutation of character crystal field 'Crystal' is prohibited; use char.AddCrystal or char.DeductCrystal instead",
 						})
 					}
 
@@ -279,6 +295,7 @@ var coreTargetKeywords = [][]byte{
 	[]byte("Level"),
 	[]byte("Money"),
 	[]byte("SmallMedals"),
+	[]byte("Crystal"),
 	[]byte("CurrentJobID"),
 	[]byte("MasteredJobs"),
 	[]byte("Items"),
@@ -482,6 +499,51 @@ func AwardMedals(c *Character, medals int) {
 			expectError: true,
 			field:       "SmallMedals",
 			errSnippet:  "use char.AddSmallMedals or char.DeductSmallMedals",
+		},
+		{
+			name: "Valid Currency: AddCrystal and DeductCrystal",
+			path: "internal/feature/service.go",
+			code: `package feature
+func ChargeCrystal(c *Character, amount int) error {
+	if err := c.DeductCrystal(amount); err != nil {
+		return err
+	}
+	return c.AddCrystal(amount)
+}`,
+			expectError: false,
+		},
+		{
+			name: "Violation: Crystal direct increment",
+			path: "internal/feature/service.go",
+			code: `package feature
+func AwardCrystal(c *Character, amount int) {
+	c.Crystal += amount
+}`,
+			expectError: true,
+			field:       "Crystal",
+			errSnippet:  "use char.AddCrystal or char.DeductCrystal",
+		},
+		{
+			name: "Violation: Crystal direct deduction",
+			path: "internal/feature/service.go",
+			code: `package feature
+func PayCrystal(c *Character, amount int) {
+	c.Crystal -= amount
+}`,
+			expectError: true,
+			field:       "Crystal",
+			errSnippet:  "use char.AddCrystal or char.DeductCrystal",
+		},
+		{
+			name: "Violation: Crystal direct assignment",
+			path: "internal/feature/service.go",
+			code: `package feature
+func ResetCrystal(c *Character) {
+	c.Crystal = 0
+}`,
+			expectError: true,
+			field:       "Crystal",
+			errSnippet:  "use char.AddCrystal or char.DeductCrystal",
 		},
 
 		// 3. Job State

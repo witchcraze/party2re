@@ -82,10 +82,7 @@ func (s *Service) applyRewardsForCharacter(
 	// Crystal rewards (_battle.cgi:145-150, 178-228)
 	gainedCrystals := reward.Crystals
 	if gainedCrystals > 0 {
-		char.Crystal += gainedCrystals
-		if char.Crystal > 999999 {
-			char.Crystal = 999999
-		}
+		_ = char.AddCrystal(gainedCrystals)
 	}
 
 	var invDrops []coreitem.Instance

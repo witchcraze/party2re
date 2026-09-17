@@ -356,7 +356,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | --- | --- | --- |
 | [#683](https://github.com/witchcraze/party2re/issues/683) | Storage: Unify dual-source item consumption and resolution across Inventory and Depot (`plantation`, `blackmarket`, `gemstore`) | Completed |
 | [#684](https://github.com/witchcraze/party2re/issues/684) | Core/Character: Standardize vitality & fatigue state clamping and combat recovery helpers (`battle`, `boss`, `home`, `god`) | Completed |
-| [#685](https://github.com/witchcraze/party2re/issues/685) | Core/Character: Enforce crystal currency mutation encapsulation and AST linter protection (`battle`, `home`, `blacksmith`, `core_lint_test`) | Planned |
+| [#685](https://github.com/witchcraze/party2re/issues/685) | Core/Character: Enforce crystal currency mutation encapsulation and AST linter protection (`battle`, `home`, `blacksmith`, `core_lint_test`) | Completed |
 
 ---
 

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #684 — [Architecture] Core/Character: Standardize vitality & fatigue state clamping and combat recovery helpers
+Last updated: Issue #685 — [Architecture] Core/Character: Enforce crystal currency mutation encapsulation and AST linter protection
 
 ## Current phase
 
@@ -27,7 +27,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### Core & Shared Components
 - **Player** (`internal/core/player`, `internal/player`): ✅ Registration, bcrypt (cost 12), Valkey session (7d TTL + ZSET lazy-purge), PAT (`p2_sk_...`), account deletion.
-- **Character** (`internal/core/character`, `internal/character`): ✅ Stats, progression, SP, wallet (999,999G cap), crystal currency (999,999 cap), vitality bounds (`ClampVitality`, `RecoverVitality`), 1 HP fallen combat survival (`ApplyCombatSurvival`), fatigue clamping (`AddTired` 100% ceiling, `ReduceTired`), profile, customization; AST-enforced field encapsulation.
+- **Character** (`internal/core/character`, `internal/character`): ✅ Stats, progression, SP, wallet (999,999G cap), crystal currency (`AddCrystal`, `DeductCrystal`, 999,999 cap with AST linter protection), vitality bounds (`ClampVitality`, `RecoverVitality`), 1 HP fallen combat survival (`ApplyCombatSurvival`), fatigue clamping (`AddTired` 100% ceiling, `ReduceTired`), profile, customization; AST-enforced field encapsulation.
 - **Timer & Daily Quotas** (`internal/core/timer`): ✅ Valkey/in-memory native TTL timers and JST-midnight daily quotas.
 - **Progression** (`internal/core/progression`): ✅ Cumulative EXP (`level²×10`), OverLevel (Lv150), Happy Seed; AST-enforced progression helper encapsulation.
 - **Job & Skill** (`internal/core/job`, `internal/job`, `internal/core/skill`): ✅ 72-job catalog, Lv20 job change, mastery, future memory snapshots, gem synthesis triggers.
@@ -100,7 +100,7 @@ See [`ROADMAP.md`](ROADMAP.md) for full milestone details.
 
 1. **Parity Milestone 3 — Adventure, Combat & Dungeons**: Completed.
 2. **Parity Milestone 4 — Community, Events & Entertainment**: Completed.
-3. **Domain Helper Primitives (Rule of Three)**: #683 (Dual-source storage consumption), #684 (Vitality & fatigue clamping - Completed), #685 (Crystal currency encapsulation).
+3. **Domain Helper Primitives (Rule of Three)**: #683 (Dual-source storage consumption), #684 (Vitality & fatigue clamping), #685 (Crystal currency encapsulation) — All Completed.
 4. **Client Presentation & Web UI**: Issue #140.
 5. **Production Asset Pipeline & Final Licensing**: Issue #143, #202.
 
