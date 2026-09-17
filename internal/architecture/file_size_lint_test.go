@@ -18,7 +18,6 @@ import (
 var whitelistedLegacyFileLimits = map[string]int{
 	"internal/api/http/handler.go":        1122,
 	"internal/party/valkey_repository.go": 824,
-	"internal/contest/service.go":         645,
 }
 
 const (

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #680 — [Bug] Home & Helper: Propagate character and quest save errors in sleep job memory revert and quest rotation
+Last updated: Issue #660 — [Bug] Contest: Propagate character update errors during prize settlement to prevent reward loss
 
 ## Current phase
 
@@ -74,7 +74,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Flea Market** (`internal/fleamarket`): ✅ Fixed-price player listings (up to 5/char, 120-server max), SQL CAS guard, and depot direct-receive.
 - **Gem Store** (`internal/gemstore`): ✅ Dedicated gem box storage, 55+ synthesis formulas, and dual-source (inventory & depot) orb appraisal.
 - **God Wishes & Limit Breaks** (`internal/god`): ✅ 19 celestial wishes, permanent stat enhancements, Lv150 OverLevel, and storage limit breaks.
-- **Photo Contest** (`internal/contest`): ✅ 10-day cycles, photo submissions, community voting, prize delivery, and Hall of Fame.
+- **Photo Contest** (`internal/contest`): ✅ 10-day cycles, photo submissions, community voting, prize delivery with robust error propagation, and Hall of Fame.
 - **Party & Co-op Quests** (`internal/party`): ✅ Up to 4 players, Valkey lobby, speed configs (3/18/25), need_join condition checks, 10-floor crawl, and HP-1 survival guarantee.
 - **Altar of Rebirth** (`internal/altar`): ✅ 6-orb offering ritual, Ramia awakening, and 4 otherworld travel item wishes.
 - **Wishing Well** (`internal/wishingwell`): ✅ SP sacrifice for permanent stat growth (MHP/MMP +2/SP, ATK/DEF/AGI +1/SP).
