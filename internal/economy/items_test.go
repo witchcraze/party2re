@@ -195,3 +195,29 @@ func TestFindInventory_DatabaseReadErrorPropagation(t *testing.T) {
 		}
 	})
 }
+
+func TestGrantItem_InventoryFull(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	invRepo := newTrackingInvRepo()
+
+	char := corecharacter.Character{ID: "char-full"}
+	charRepo.chars[char.ID] = char
+
+	svc, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(&mockTxProvider{}))
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	// 1st grant succeeds
+	_, _, err = svc.GrantItem(ctx, char.ID, "item-001", 1)
+	if err != nil {
+		t.Fatalf("first GrantItem failed: %v", err)
+	}
+
+	// 2nd grant into full inventory must fail with ErrInventoryFull
+	_, _, err = svc.GrantItem(ctx, char.ID, "item-002", 1)
+	if !errors.Is(err, economy.ErrInventoryFull) {
+		t.Fatalf("expected ErrInventoryFull, got %v", err)
+	}
+}
