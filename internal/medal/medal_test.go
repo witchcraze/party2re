@@ -142,9 +142,13 @@ func TestMedalService(t *testing.T) {
 		char := corecharacter.Character{ID: "char-1", SmallMedals: 10}
 		d := depot.Depot{
 			CharacterID: "char-1",
-			Capacity:    1,
+			Capacity:    5,
 			Items: []coreitem.Instance{
-				{ID: "existing-item", DefinitionID: "item-001", Quantity: 1},
+				{ID: "item-1", DefinitionID: "armor-01", Quantity: 1},
+				{ID: "item-2", DefinitionID: "armor-02", Quantity: 1},
+				{ID: "item-3", DefinitionID: "armor-03", Quantity: 1},
+				{ID: "item-4", DefinitionID: "armor-04", Quantity: 1},
+				{ID: "item-5", DefinitionID: "armor-05", Quantity: 1},
 			},
 		}
 
@@ -159,6 +163,68 @@ func TestMedalService(t *testing.T) {
 		_, _, err = svc.Claim(context.Background(), "char-1", "armor-32")
 		if !errors.Is(err, depot.ErrDepotFull) {
 			t.Errorf("expected ErrDepotFull, got %v", err)
+		}
+	})
+
+	t.Run("claim refreshes depot capacity with JobLevel and OverDepot", func(t *testing.T) {
+		char := corecharacter.Character{
+			ID:          "char-1",
+			SmallMedals: 5,
+			JobLevel:    10, // base 55
+			OverDepot:   1,  // +50
+		}
+		// Stale depot with ExDepot = 1 (+5) and stale capacity 5
+		d := depot.Depot{
+			CharacterID: "char-1",
+			ExDepot:     1,
+			Capacity:    5,
+		}
+
+		charRepo := &mockCharacterRepo{char: char}
+		depotRepo := &mockDepotRepo{dep: d}
+
+		svc, err := medal.NewService(charRepo, depotRepo, rewardsFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, updatedDepot, err := svc.Claim(context.Background(), "char-1", "armor-32")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Expected capacity: JobLevel 10 (55) + ExDepot 1 (5) + OverDepot 1 (50) = 110
+		expectedCap := depot.CalculateCapacity(10, 1, 1)
+		if updatedDepot.Capacity != expectedCap {
+			t.Errorf("expected refreshed depot capacity %d, got %d", expectedCap, updatedDepot.Capacity)
+		}
+	})
+
+	t.Run("claim initializes new depot with JobLevel and OverDepot when not found", func(t *testing.T) {
+		char := corecharacter.Character{
+			ID:          "char-1",
+			SmallMedals: 5,
+			JobLevel:    15, // base 80
+			OverDepot:   2,  // +100
+		}
+
+		charRepo := &mockCharacterRepo{char: char}
+		depotRepo := &mockDepotRepo{} // empty dep returns ErrNotFound
+
+		svc, err := medal.NewService(charRepo, depotRepo, rewardsFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, updatedDepot, err := svc.Claim(context.Background(), "char-1", "armor-32")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Expected capacity: JobLevel 15 (80) + OverDepot 2 (100) = 180
+		expectedCap := depot.CalculateCapacity(15, 0, 2)
+		if updatedDepot.Capacity != expectedCap {
+			t.Errorf("expected newly created depot capacity %d, got %d", expectedCap, updatedDepot.Capacity)
 		}
 	})
 }

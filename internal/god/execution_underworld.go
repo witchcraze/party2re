@@ -2,6 +2,7 @@ package god
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -23,9 +24,17 @@ func (s *Service) executeUnderworldWish(
 
 		if s.depots != nil {
 			dep, err := s.depots.FindByCharacterIDForUpdate(ctx, char.ID)
-			if err == nil {
-				dep.Capacity = depot.CalculateCapacity(0, dep.ExDepot, char.OverDepot)
-				_ = s.depots.Save(ctx, dep)
+			if errors.Is(err, depot.ErrNotFound) {
+				dep, err = depot.NewDepotWithCapacity(char.ID, char.JobLevel, 0, char.OverDepot)
+				if err != nil {
+					return err
+				}
+			} else if err != nil {
+				return err
+			}
+			dep.RefreshCapacity(char.JobLevel, char.OverDepot)
+			if err := s.depots.Save(ctx, dep); err != nil {
+				return err
 			}
 		}
 

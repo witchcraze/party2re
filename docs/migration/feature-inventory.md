@@ -76,7 +76,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Item definitions, 5-category data catalog, and instance ownership ([#11](https://github.com/witchcraze/party2re/issues/11), [#51](https://github.com/witchcraze/party2re/issues/51))
 - [x] Weapons, armor, shields, accessories, and consumables ([#51](https://github.com/witchcraze/party2re/issues/51))
 - [x] Inventory slot management and 5-slot equipment rules ([#19](https://github.com/witchcraze/party2re/issues/19))
-- [x] Character Item Depot storage for items with dynamic capacity ([#58](https://github.com/witchcraze/party2re/issues/58), [#558](https://github.com/witchcraze/party2re/issues/558), [#559](https://github.com/witchcraze/party2re/issues/559))
+- [x] Character Item Depot storage for items with dynamic capacity ([#58](https://github.com/witchcraze/party2re/issues/58), [#558](https://github.com/witchcraze/party2re/issues/558), [#559](https://github.com/witchcraze/party2re/issues/559), [#678](https://github.com/witchcraze/party2re/issues/678))
 - [x] Gold currency wallet & transactions (999,999G cap) ([#24](https://github.com/witchcraze/party2re/issues/24))
 - [x] Item Shop purchase & 50% resale transactions ([#55](https://github.com/witchcraze/party2re/issues/55))
 - [x] Bank accounts, gold deposits, and withdrawals with wallet clamp ([#71](https://github.com/witchcraze/party2re/issues/71), [#476](https://github.com/witchcraze/party2re/issues/476))

@@ -375,6 +375,71 @@ func TestWishDeliveredToDepotWhenInventoryFull(t *testing.T) {
 	}
 }
 
+func TestWishDeliveredToDepot_RefreshesCapacityWithJobLevelAndOverDepot(t *testing.T) {
+	svc, charRepo, invRepo, depotRepo, _, _ := setupTestService(t)
+	ctx := context.Background()
+
+	c, _ := corecharacter.New("Hero")
+	c.ID = "char-lv12"
+	c.Orb = "G"
+	c.JobLevel = 12
+	c.OverDepot = 1
+	charRepo.chars[c.ID] = c
+
+	// Pre-fill inventory so wish must go to depot
+	inv, _ := coreinventory.New(c.ID)
+	dummy, _ := coreitem.NewInstance("item-001", 1)
+	_ = inv.Add(dummy)
+	invRepo.invs[c.ID] = inv
+
+	// Case 1: Existing depot with stale capacity 5 and ExDepot = 1
+	existingDepot, _ := depot.NewDepot(c.ID)
+	existingDepot.ExDepot = 1
+	existingDepot.Capacity = 5
+	depotRepo.depots[c.ID] = existingDepot
+
+	res, err := svc.Wish(ctx, c.ID, ItemTreasureMap)
+	if err != nil {
+		t.Fatalf("unexpected wish error: %v", err)
+	}
+	if res.DeliveredTo != "depot" {
+		t.Fatalf("expected delivered to depot, got %s", res.DeliveredTo)
+	}
+
+	dep := depotRepo.depots[c.ID]
+	// JobLevel 12 (65) + ExDepot 1 (5) + OverDepot 1 (50) = 120
+	expectedCap := depot.CalculateCapacity(12, 1, 1)
+	if dep.Capacity != expectedCap {
+		t.Errorf("expected refreshed depot capacity %d, got %d", expectedCap, dep.Capacity)
+	}
+
+	// Case 2: No existing depot -> created with JobLevel 12 and OverDepot 1
+	c2, _ := corecharacter.New("Hero2")
+	c2.ID = "char-lv12-fresh"
+	c2.Orb = "G"
+	c2.JobLevel = 12
+	c2.OverDepot = 1
+	charRepo.chars[c2.ID] = c2
+
+	inv2, _ := coreinventory.New(c2.ID)
+	_ = inv2.Add(dummy)
+	invRepo.invs[c2.ID] = inv2
+
+	res2, err := svc.Wish(ctx, c2.ID, ItemTreasureMap)
+	if err != nil {
+		t.Fatalf("unexpected wish error: %v", err)
+	}
+	if res2.DeliveredTo != "depot" {
+		t.Fatalf("expected delivered to depot, got %s", res2.DeliveredTo)
+	}
+
+	dep2 := depotRepo.depots[c2.ID]
+	expectedCap2 := depot.CalculateCapacity(12, 0, 1) // 65 + 50 = 115
+	if dep2.Capacity != expectedCap2 {
+		t.Errorf("expected newly created depot capacity %d, got %d", expectedCap2, dep2.Capacity)
+	}
+}
+
 func TestOfferOrb(t *testing.T) {
 	svc, charRepo, invRepo, _, _, _ := setupTestService(t)
 	ctx := context.Background()
