@@ -107,7 +107,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Guild creation, membership application/approval workflow, dynamic Guild Points, hex colors, custom titles, broadcast callouts, and inactivity disbandment worker ([#76](https://github.com/witchcraze/party2re/issues/76), [#490](https://github.com/witchcraze/party2re/issues/490), [#591](https://github.com/witchcraze/party2re/issues/591), [#633](https://github.com/witchcraze/party2re/issues/633))
 - [x] Player communication, park, and public interactions ([#78](https://github.com/witchcraze/party2re/issues/78))
 - [x] Player private home, mailbox, and letter correspondence ([#159](https://github.com/witchcraze/party2re/issues/159))
-- [x] Helper and player rescue assistance ([#79](https://github.com/witchcraze/party2re/issues/79), [#213](https://github.com/witchcraze/party2re/issues/213))
+- [x] Helper and player rescue assistance ([#79](https://github.com/witchcraze/party2re/issues/79), [#213](https://github.com/witchcraze/party2re/issues/213), [#659](https://github.com/witchcraze/party2re/issues/659))
 - [x] Rankings (level, job, wealth, battle victories, helper, medals) with ISP-compliant repository interfaces ([#63](https://github.com/witchcraze/party2re/issues/63), [#280](https://github.com/witchcraze/party2re/issues/280), [#454](https://github.com/witchcraze/party2re/issues/454), [#470](https://github.com/witchcraze/party2re/issues/470))
 - [x] Photo Contest, screenshots, seasonal voting, and Hall of Fame ([#186](https://github.com/witchcraze/party2re/issues/186))
 

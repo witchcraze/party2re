@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #678 — [Bug] God/Altar/Medal: Fix hardcoded JobLevel 0 and missing RefreshCapacity in depot delivery and underworld expansion
+Last updated: Issue #659 — [Bug] Helper: Prevent silent quest reward item loss on full inventory with depot fallback
 
 ## Current phase
 
@@ -62,7 +62,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Battle Replays** (`internal/replay`): ✅ Turn-log recorder, step-by-step playback, and match history queries.
 - **Endurance Challenge** (`internal/challenge`): ✅ 4-tier survival waves, HP carryover between rounds, party challenge runs, and Hall of Fame records.
 - **Custom Skill Gem Synthesis** (`internal/custom_skill`): ✅ Custom skill naming, phrase triggers, 3-gem recipe synthesis, and atomic gem exchange.
-- **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): ✅ Delivery quests (normal/rare/guild), reward delivery, and emergency state rescue.
+- **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): ✅ Delivery quests (normal/rare/guild), transactional reward delivery with depot fallback and rollback guard, and emergency state rescue.
 - **Town Park & Bulletin Board** (`internal/park`): ✅ Public bulletin board posts, character authorship, rate-limit, and NPC fortune divination.
 - **News & Notifications** (`internal/notification`): ✅ Server-wide news announcements and per-player inbox with read/unread tracking.
 - **Home, Towns & Resting** (`internal/home`, `internal/town`): ✅ House construction, companion phrases, mailbox, sleep recovery (full HP/MP/tired restore), and consumable usage.
