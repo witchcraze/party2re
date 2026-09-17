@@ -428,9 +428,7 @@ func TestDepositAndWithdrawItem(t *testing.T) {
 
 	inv, _ := coreinventory.New(char.ID)
 	potion, _ := item.NewInstance("item-001", 3)
-	sword, _ := item.NewInstance("wea-01", 1)
 	_ = inv.Add(potion)
-	_ = inv.Add(sword)
 	invRepo.inventories[char.ID] = inv
 
 	service, _ := NewService(
@@ -439,7 +437,7 @@ func TestDepositAndWithdrawItem(t *testing.T) {
 		WithCollectionRecorder(collector),
 	)
 
-	// Deposit potion
+	// Deposit potion (leaves inventory empty)
 	dep, err := service.DepositItem(ctx, char.ID, potion.ID)
 	if err != nil {
 		t.Fatalf("DepositItem error: %v", err)
@@ -448,7 +446,7 @@ func TestDepositAndWithdrawItem(t *testing.T) {
 		t.Fatalf("unexpected depot items: %#v", dep.Items)
 	}
 
-	// Withdraw potion
+	// Withdraw potion (succeeds into empty inventory)
 	dep, err = service.WithdrawItem(ctx, char.ID, potion.ID)
 	if err != nil {
 		t.Fatalf("WithdrawItem error: %v", err)
@@ -460,6 +458,41 @@ func TestDepositAndWithdrawItem(t *testing.T) {
 	// Verify collection was recorded on withdrawal
 	if len(collector.recorded) != 1 || collector.recorded[0] != "item-001" {
 		t.Errorf("expected item-001 recorded in collection, got %v", collector.recorded)
+	}
+}
+
+func TestWithdrawItem_InventoryFull(t *testing.T) {
+	charRepo := &memoryCharRepo{characters: map[string]corecharacter.Character{}}
+	depotRepo := &memoryDepotRepo{depots: map[string]Depot{}}
+	invRepo := &memoryInvRepo{inventories: map[string]coreinventory.Inventory{}}
+
+	char := corecharacter.Character{ID: "char-full", JobLevel: 5}
+	charRepo.characters[char.ID] = char
+
+	// Character already holds an item in inventory
+	inv, _ := coreinventory.New(char.ID)
+	heldItem, _ := item.NewInstance("wea-01", 1)
+	_ = inv.Add(heldItem)
+	invRepo.inventories[char.ID] = inv
+
+	// Depot holds a potion
+	dp, _ := NewDepot(char.ID)
+	depotPotion, _ := item.NewInstance("item-001", 1)
+	dp.Items = []item.Instance{depotPotion}
+	depotRepo.depots[char.ID] = dp
+
+	service, _ := NewService(depotRepo, charRepo, invRepo)
+
+	// Attempting to withdraw into full inventory must return ErrInventoryFull
+	_, err := service.WithdrawItem(context.Background(), char.ID, depotPotion.ID)
+	if !errors.Is(err, ErrInventoryFull) {
+		t.Fatalf("expected ErrInventoryFull, got %v", err)
+	}
+
+	// Verify depot item was NOT purged
+	savedDepot := depotRepo.depots[char.ID]
+	if len(savedDepot.Items) != 1 || savedDepot.Items[0].ID != depotPotion.ID {
+		t.Fatalf("depot item should not have been removed: %+v", savedDepot.Items)
 	}
 }
 

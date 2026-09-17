@@ -31,6 +31,10 @@ func (s *Service) GrantItem(ctx context.Context, characterID string, itemDefinit
 			return err
 		}
 
+		if inv.IsFull() {
+			return ErrInventoryFull
+		}
+
 		inst, err := coreitem.NewInstance(itemDefinitionID, quantity)
 		if err != nil {
 			return err
@@ -264,6 +268,9 @@ func (s *Service) Exchange(ctx context.Context, req ExchangeRequest) (*ExchangeR
 
 			// Grant item if requested
 			if req.GrantDefinitionID != "" && req.GrantQuantity > 0 {
+				if inv.IsFull() {
+					return ErrInventoryFull
+				}
 				newInst, err := coreitem.NewInstance(req.GrantDefinitionID, req.GrantQuantity)
 				if err != nil {
 					return err

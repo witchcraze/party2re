@@ -166,30 +166,26 @@ func TestExecuteTransaction_ItemCostAndGrants(t *testing.T) {
 	_ = charRepo.Update(context.Background(), char)
 
 	inv, _ := coreinventory.New("char-crafter")
-	wood, _ := coreitem.NewInstance("wood", 5)
-	iron, _ := coreitem.NewInstance("iron", 2)
+	wood, _ := coreitem.NewInstance("wood", 3)
 	_ = inv.Add(wood)
-	_ = inv.Add(iron)
 	_ = invRepo.Save(context.Background(), inv)
 
-	// Consume 3 wood by definition, and iron by instance ID, grant sword
+	// Consume 3 wood by definition, grant sword
 	res, err := svc.ExecuteTransaction(context.Background(), economy.TransactionRequest{
 		CharacterID: "char-crafter",
 		Cost: economy.ResourceCost{
 			Gold:              30,
 			ItemDefinitionID:  "wood",
 			ItemDefinitionQty: 3,
-			ItemInstanceID:    iron.ID,
-			ItemInstanceQty:   1,
 		},
 		Grant: economy.ResourceGrant{
 			ItemDefinitionID: "sword_bronze",
 			ItemQuantity:     1,
 		},
 	}, func(tc *economy.TxContext) error {
-		// Verify in-context inventory state
-		if tc.Inventory.Quantity("wood") != 2 {
-			t.Errorf("expected 2 wood remaining in txCtx, got %d", tc.Inventory.Quantity("wood"))
+		// Verify in-context inventory state: wood is consumed
+		if tc.Inventory.Quantity("wood") != 0 {
+			t.Errorf("expected 0 wood remaining in txCtx, got %d", tc.Inventory.Quantity("wood"))
 		}
 		// Add additional gold grant inside callback
 		tc.AddGrant(economy.ResourceGrant{Gold: 10})
@@ -203,14 +199,45 @@ func TestExecuteTransaction_ItemCostAndGrants(t *testing.T) {
 	if res.Character.Money != 80 {
 		t.Errorf("expected 80 gold, got %d", res.Character.Money)
 	}
-	if res.Inventory.Quantity("wood") != 2 {
-		t.Errorf("expected 2 wood remaining, got %d", res.Inventory.Quantity("wood"))
+	if res.Inventory.Quantity("wood") != 0 {
+		t.Errorf("expected 0 wood remaining, got %d", res.Inventory.Quantity("wood"))
 	}
 	if res.Inventory.Quantity("sword_bronze") != 1 {
 		t.Errorf("expected 1 sword_bronze granted, got %d", res.Inventory.Quantity("sword_bronze"))
 	}
 	if res.GrantedItem == nil || res.GrantedItem.DefinitionID != "sword_bronze" {
 		t.Errorf("expected GrantedItem sword_bronze, got %v", res.GrantedItem)
+	}
+}
+
+func TestExecuteTransaction_GrantItem_InventoryFull(t *testing.T) {
+	t.Parallel()
+
+	charRepo := newMockCharRepo()
+	invRepo := newMockInvRepo()
+	svc, _ := economy.NewService(charRepo, invRepo)
+
+	char := corecharacter.Character{ID: "char-full", Money: 100}
+	_ = charRepo.Update(context.Background(), char)
+
+	inv, _ := coreinventory.New("char-full")
+	herb, _ := coreitem.NewInstance("herb", 1)
+	_ = inv.Add(herb)
+	_ = invRepo.Save(context.Background(), inv)
+
+	req := economy.TransactionRequest{
+		CharacterID: "char-full",
+		Grant: economy.ResourceGrant{
+			ItemDefinitionID: "potion",
+			ItemQuantity:     1,
+		},
+	}
+
+	_, err := svc.ExecuteTransaction(context.Background(), req, func(tc *economy.TxContext) error {
+		return nil
+	})
+	if !errors.Is(err, economy.ErrInventoryFull) {
+		t.Fatalf("expected ErrInventoryFull, got %v", err)
 	}
 }
 

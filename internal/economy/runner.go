@@ -231,6 +231,9 @@ func (s *Service) ExecuteTransaction(ctx context.Context, req TransactionRequest
 					tc.Inventory = inv
 					inventoryLoaded = true
 				}
+				if tc.Inventory.IsFull() {
+					return ErrInventoryFull
+				}
 				newInst, err := coreitem.NewInstance(g.ItemDefinitionID, g.ItemQuantity)
 				if err != nil {
 					return err

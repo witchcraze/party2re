@@ -8,6 +8,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
@@ -60,6 +61,9 @@ func (m *mockInvRepo) FindByCharacterID(ctx context.Context, characterID string)
 	if !ok {
 		return coreinventory.New(characterID)
 	}
+	itemsCopy := make([]coreitem.Instance, len(inv.Items))
+	copy(itemsCopy, inv.Items)
+	inv.Items = itemsCopy
 	return inv, nil
 }
 
@@ -71,6 +75,9 @@ func (m *mockInvRepo) Save(ctx context.Context, inv coreinventory.Inventory) err
 	if m.err != nil {
 		return m.err
 	}
+	itemsCopy := make([]coreitem.Instance, len(inv.Items))
+	copy(itemsCopy, inv.Items)
+	inv.Items = itemsCopy
 	m.invs[inv.CharacterID] = inv
 	return nil
 }
@@ -367,38 +374,56 @@ func TestExchange(t *testing.T) {
 	txProv := &mockTxProvider{}
 	svc, _ := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProv))
 
-	char := corecharacter.Character{ID: "char-1", Money: 1000, SmallMedals: 5}
-	_ = charRepo.Update(context.Background(), char)
+	t.Run("Rejects grant when inventory is full on partial consumption", func(t *testing.T) {
+		char := corecharacter.Character{ID: "char-1", Money: 1000, SmallMedals: 5}
+		_ = charRepo.Update(context.Background(), char)
+		_, inst, _ := svc.GrantItem(context.Background(), "char-1", "material-01", 10)
 
-	// Initial item
-	_, inst, _ := svc.GrantItem(context.Background(), "char-1", "material-01", 10)
+		reqFull := economy.ExchangeRequest{
+			CharacterID:        "char-1",
+			DeductGold:         300,
+			DeductMedals:       2,
+			ConsumeInstanceID:  inst.ID,
+			ConsumeInstanceQty: 4,
+			GrantDefinitionID:  "sword-01",
+			GrantQuantity:      1,
+		}
+		if _, err := svc.Exchange(context.Background(), reqFull); !errors.Is(err, economy.ErrInventoryFull) {
+			t.Fatalf("expected ErrInventoryFull on partial consumption, got %v", err)
+		}
+	})
 
-	// Compound Exchange: Deduct 300 gold, 2 medals, consume 4 materials, grant 1 equipment
-	req := economy.ExchangeRequest{
-		CharacterID:        "char-1",
-		DeductGold:         300,
-		DeductMedals:       2,
-		ConsumeInstanceID:  inst.ID,
-		ConsumeInstanceQty: 4,
-		GrantDefinitionID:  "sword-01",
-		GrantQuantity:      1,
-	}
+	t.Run("Succeeds when full consumption vacates hand slot", func(t *testing.T) {
+		char := corecharacter.Character{ID: "char-2", Money: 1000, SmallMedals: 5}
+		_ = charRepo.Update(context.Background(), char)
+		_, inst, _ := svc.GrantItem(context.Background(), "char-2", "material-01", 10)
 
-	res, err := svc.Exchange(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected exchange error: %v", err)
-	}
+		req := economy.ExchangeRequest{
+			CharacterID:        "char-2",
+			DeductGold:         300,
+			DeductMedals:       2,
+			ConsumeInstanceID:  inst.ID,
+			ConsumeInstanceQty: 10,
+			GrantDefinitionID:  "sword-01",
+			GrantQuantity:      1,
+		}
 
-	if res.Character.Money != 700 {
-		t.Errorf("expected 700 gold, got %d", res.Character.Money)
-	}
-	if res.Character.SmallMedals != 3 {
-		t.Errorf("expected 3 small medals, got %d", res.Character.SmallMedals)
-	}
-	if res.GrantedItem == nil || res.GrantedItem.DefinitionID != "sword-01" {
-		t.Errorf("expected granted sword-01, got %v", res.GrantedItem)
-	}
-	if res.Inventory.Quantity("material-01") != 6 {
-		t.Errorf("expected 6 material-01 remaining, got %d", res.Inventory.Quantity("material-01"))
-	}
+		res, err := svc.Exchange(context.Background(), req)
+		if err != nil {
+			t.Fatalf("unexpected exchange error: %v", err)
+		}
+
+		if res.Character.Money != 700 {
+			t.Errorf("expected 700 gold, got %d", res.Character.Money)
+		}
+		if res.Character.SmallMedals != 3 {
+			t.Errorf("expected 3 small medals, got %d", res.Character.SmallMedals)
+		}
+		if res.GrantedItem == nil || res.GrantedItem.DefinitionID != "sword-01" {
+			t.Errorf("expected granted sword-01, got %v", res.GrantedItem)
+		}
+		if res.Inventory.Quantity("material-01") != 0 {
+			t.Errorf("expected 0 material-01 remaining, got %d", res.Inventory.Quantity("material-01"))
+		}
+	})
 }

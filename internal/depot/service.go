@@ -154,6 +154,9 @@ func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInst
 			return err
 		}
 		dep.RefreshCapacity(tc.Character.JobLevel, tc.Character.OverDepot)
+		if tc.Inventory.IsFull() {
+			return ErrInventoryFull
+		}
 		itemInstance, err := dep.PurgeSlot(itemInstanceID)
 		if err != nil {
 			return err
