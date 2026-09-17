@@ -85,6 +85,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Small Medal collection and rare reward exchange ([#160](https://github.com/witchcraze/party2re/issues/160))
 - [x] Character lifetime milestone achievements and commemorative medals ([#70](https://github.com/witchcraze/party2re/issues/70), [#358](https://github.com/witchcraze/party2re/issues/358))
 - [x] Centralized transactional reward item delivery engine with configurable depot overflow routing ([#679](https://github.com/witchcraze/party2re/issues/679))
+- [x] Unified dual-source item resolution and consumption across Inventory and Depot with deterministic Rank 3 -> Rank 5 lock ordering ([#683](https://github.com/witchcraze/party2re/issues/683))
 
 ### D. Adventure, Maps, Stages, and Battle
 - [x] Reusable deterministic Battle component & turn resolver ([#12](https://github.com/witchcraze/party2re/issues/12), [#20](https://github.com/witchcraze/party2re/issues/20), [#36](https://github.com/witchcraze/party2re/issues/36))
@@ -353,7 +354,7 @@ All groups below are Version 1.0 reconstruction requirements.
 
 | Issue | Scope / Milestone | Status |
 | --- | --- | --- |
-| [#683](https://github.com/witchcraze/party2re/issues/683) | Storage: Unify dual-source item consumption and resolution across Inventory and Depot (`plantation`, `blackmarket`, `gemstore`, `home`) | Planned |
+| [#683](https://github.com/witchcraze/party2re/issues/683) | Storage: Unify dual-source item consumption and resolution across Inventory and Depot (`plantation`, `blackmarket`, `gemstore`) | Completed |
 | [#684](https://github.com/witchcraze/party2re/issues/684) | Core/Character: Standardize vitality & fatigue state clamping and combat recovery helpers (`battle`, `boss`, `home`, `god`) | Planned |
 | [#685](https://github.com/witchcraze/party2re/issues/685) | Core/Character: Enforce crystal currency mutation encapsulation and AST linter protection (`battle`, `home`, `blacksmith`, `core_lint_test`) | Planned |
 

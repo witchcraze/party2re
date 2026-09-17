@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 )
@@ -62,31 +61,27 @@ func (s *Service) SynthesizeGem(ctx context.Context, characterID, recipeID strin
 		consumedFromGemBox := 0
 		if _, err := removeMaterialFromGemBox(&box, recipe.Material1, s.catalog, s.items); err == nil {
 			consumedFromGemBox++
-		} else if mat1Item, ok := findMaterialInInventory(inv, recipe.Material1, s.catalog, s.items); ok {
-			if err := inv.Consume(mat1Item.ID, 1); err != nil {
-				return err
-			}
-		} else if mat1Dep, ok := findMaterialInDepot(dep, recipe.Material1, s.catalog, s.items); ok {
-			if _, err := dep.ConsumeOne(mat1Dep.ID); err != nil {
-				return err
-			}
 		} else {
-			return fmt.Errorf("%w: missing %s", ErrInsufficientMaterials, recipe.Material1)
+			mat1Query := depot.QueryByMatch(func(inst coreitem.Instance) bool {
+				name := resolveItemName(inst.DefinitionID, s.catalog, s.items)
+				return name == recipe.Material1 || inst.DefinitionID == recipe.Material1
+			})
+			if _, err := depot.ConsumeItem(&inv, &dep, mat1Query, depot.PriorityInventoryFirst, 1); err != nil {
+				return fmt.Errorf("%w: missing %s", ErrInsufficientMaterials, recipe.Material1)
+			}
 		}
 
 		// Consume material 2 (try GemBox first, then inventory, then depot)
 		if _, err := removeMaterialFromGemBox(&box, recipe.Material2, s.catalog, s.items); err == nil {
 			consumedFromGemBox++
-		} else if mat2Item, ok := findMaterialInInventory(inv, recipe.Material2, s.catalog, s.items); ok {
-			if err := inv.Consume(mat2Item.ID, 1); err != nil {
-				return err
-			}
-		} else if mat2Dep, ok := findMaterialInDepot(dep, recipe.Material2, s.catalog, s.items); ok {
-			if _, err := dep.ConsumeOne(mat2Dep.ID); err != nil {
-				return err
-			}
 		} else {
-			return fmt.Errorf("%w: missing %s", ErrInsufficientMaterials, recipe.Material2)
+			mat2Query := depot.QueryByMatch(func(inst coreitem.Instance) bool {
+				name := resolveItemName(inst.DefinitionID, s.catalog, s.items)
+				return name == recipe.Material2 || inst.DefinitionID == recipe.Material2
+			})
+			if _, err := depot.ConsumeItem(&inv, &dep, mat2Query, depot.PriorityInventoryFirst, 1); err != nil {
+				return fmt.Errorf("%w: missing %s", ErrInsufficientMaterials, recipe.Material2)
+			}
 		}
 
 		// Capacity check: if net gem box count increases
@@ -174,14 +169,17 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 			return err
 		}
 
-		targetItem, foundInInv := findItemInInventory(inv, itemInstanceOrDefID, s.catalog, s.items)
-		var foundInDepot bool
-		if !foundInInv && s.depots != nil {
-			targetItem, foundInDepot = findItemInDepot(dep, itemInstanceOrDefID, s.catalog, s.items)
-		}
-		if !foundInInv && !foundInDepot {
+		targetQuery := depot.QueryByMatch(func(inst coreitem.Instance) bool {
+			if inst.ID == itemInstanceOrDefID || inst.DefinitionID == itemInstanceOrDefID {
+				return true
+			}
+			return resolveItemName(inst.DefinitionID, s.catalog, s.items) == itemInstanceOrDefID
+		})
+		resolved, err := depot.ResolveItem(&inv, &dep, targetQuery, depot.PriorityInventoryFirst)
+		if err != nil {
 			return ErrItemNotOwned
 		}
+		targetItem := resolved.Item
 
 		itemName := resolveItemName(targetItem.DefinitionID, s.catalog, s.items)
 
@@ -193,14 +191,9 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 				return ErrGemBoxFull
 			}
 
-			if foundInInv {
-				if err := inv.Consume(targetItem.ID, 1); err != nil {
-					return err
-				}
-			} else if foundInDepot {
-				if _, err := dep.ConsumeOne(targetItem.ID); err != nil {
-					return err
-				}
+			consumeRes, err := depot.ConsumeItem(&inv, &dep, depot.QueryByInstanceID(targetItem.ID), depot.PriorityInventoryFirst, 1)
+			if err != nil {
+				return err
 			}
 
 			gemInstance, err := coreitem.NewInstance(gem.ID, 1)
@@ -212,15 +205,8 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 				return err
 			}
 
-			if foundInInv {
-				if err := s.inventories.Save(txCtx, inv); err != nil {
-					return err
-				}
-			}
-			if foundInDepot && s.depots != nil {
-				if err := s.depots.Save(txCtx, dep); err != nil {
-					return err
-				}
+			if err := depot.SaveConsumptionResult(txCtx, s.inventories, s.depots, consumeRes, inv, dep); err != nil {
+				return err
 			}
 			if err := s.gemBoxes.Save(txCtx, box); err != nil {
 				return err
@@ -268,72 +254,6 @@ func (s *Service) AppraiseItem(ctx context.Context, characterID, itemInstanceOrD
 // -------------------------------------------------------------------
 // Helper functions
 // -------------------------------------------------------------------
-
-func findItemInInventory(
-	inv coreinventory.Inventory,
-	target string,
-	catalog *Catalog,
-	items ItemDefinitionProvider,
-) (coreitem.Instance, bool) {
-	for _, inst := range inv.Items {
-		if inst.ID == target || inst.DefinitionID == target {
-			return inst, true
-		}
-		name := resolveItemName(inst.DefinitionID, catalog, items)
-		if name == target {
-			return inst, true
-		}
-	}
-	return coreitem.Instance{}, false
-}
-
-func findItemInDepot(
-	dep depot.Depot,
-	target string,
-	catalog *Catalog,
-	items ItemDefinitionProvider,
-) (coreitem.Instance, bool) {
-	for _, inst := range dep.Items {
-		if inst.ID == target || inst.DefinitionID == target {
-			return inst, true
-		}
-		name := resolveItemName(inst.DefinitionID, catalog, items)
-		if name == target {
-			return inst, true
-		}
-	}
-	return coreitem.Instance{}, false
-}
-
-func findMaterialInInventory(
-	inv coreinventory.Inventory,
-	matName string,
-	catalog *Catalog,
-	items ItemDefinitionProvider,
-) (coreitem.Instance, bool) {
-	for _, inst := range inv.Items {
-		name := resolveItemName(inst.DefinitionID, catalog, items)
-		if name == matName || inst.DefinitionID == matName {
-			return inst, true
-		}
-	}
-	return coreitem.Instance{}, false
-}
-
-func findMaterialInDepot(
-	dep depot.Depot,
-	matName string,
-	catalog *Catalog,
-	items ItemDefinitionProvider,
-) (coreitem.Instance, bool) {
-	for _, inst := range dep.Items {
-		name := resolveItemName(inst.DefinitionID, catalog, items)
-		if name == matName || inst.DefinitionID == matName {
-			return inst, true
-		}
-	}
-	return coreitem.Instance{}, false
-}
 
 func resolveItemName(defID string, catalog *Catalog, items ItemDefinitionProvider) string {
 	if g, ok := catalog.FindGemByID(defID); ok {

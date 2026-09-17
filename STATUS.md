@@ -1,7 +1,6 @@
 # Status
 
-Last updated: Issue #682 — [Chore] Docs: Streamline STATUS.md, components.md, and feature-inventory.md to extract domain helper candidates
-
+Last updated: Issue #683 — [Architecture] Storage: Unify dual-source item consumption and resolution across Inventory and Depot
 
 ## Current phase
 
@@ -44,7 +43,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Adventure** (`internal/adventure`): ✅ Authentic 10-floor dungeon crawl loop across 28 stages (286 monsters), Floor 11 Treasure Room resolution with post-battle settlement delegation via `ApplyPostBattleResult`, inventory persistence, depot overflow fallback, `LostDrops` tracking on full depot, surviving HP/MP persistence, immediate crawl execution, chronicles, and `VictoryHook`.
 - **Medal & Achievements** (`internal/medal`): ✅ Small Medal exchange → Depot; milestone achievement observer tracking lifetime gameplay metrics.
 - **Shop** (`internal/shop`): ✅ 3 town shops with job-level gates, 50% sellback, MasterCard discount, Depot auto-delivery.
-- **Depot** (`internal/depot`): ✅ Dynamic capacity (up to 500 slots), tiered expansion, sort, item sell, gold/item direct-send, standardized item consumption (`Consume`, `ConsumeOne`, `PurgeSlot`), stackability preservation, standardized `RefreshCapacity` helper across commerce modules, and centralized transactional reward item delivery engine (`DeliverRewardItem`, `DeliverRewardItems`) enforcing Rank 3 -> Rank 5 lock ordering and configurable overflow policies (`PolicyTreatOverflowAsLost` vs `PolicyAbortOnDepotFull`).
+- **Depot** (`internal/depot`): ✅ Dynamic capacity (up to 500 slots), tiered expansion, sort, item sell, gold/item direct-send, standardized item consumption (`Consume`, `ConsumeOne`, `PurgeSlot`), stackability preservation, standardized `RefreshCapacity` helper across commerce modules, centralized transactional reward item delivery engine (`DeliverRewardItem`, `DeliverRewardItems`) enforcing Rank 3 -> Rank 5 lock ordering and configurable overflow policies (`PolicyTreatOverflowAsLost` vs `PolicyAbortOnDepotFull`), and unified dual-source item resolution & consumption helpers (`ResolveItem`, `ConsumeItem`, `ConsumeDualSource`, `SaveConsumptionResult`) across `plantation`, `blackmarket`, and `gemstore`.
 - **Blacksmith & Weapon Seals** (`internal/blacksmith`, `internal/battle`, `internal/core/battle`): ✅ Authentic 12 weapon seals consuming crystals (`character.crystal`, 999,999 cap), equipment naming for weapons and armors, dedicated 3-slot weapon storage (`blacksmith_deposits`), combat seal scaling and skills wired into Battle Adapter, and crystal drop rolls upon monster defeat.
 - **Alchemy** (`internal/alchemy`): ✅ 112 recipes; zero fee, depot-linked overnight synthesis, home sleep completion, depot-direct delivery, recipe compendium & `comp_alc` title.
 - **Bank** (`internal/bank`): ✅ Character gold deposit/withdrawal; 999,999G wallet clamp.

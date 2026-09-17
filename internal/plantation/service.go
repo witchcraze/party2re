@@ -311,39 +311,15 @@ func (s *Service) Fertilize(ctx context.Context, characterID string, fertilizerI
 			}
 		} else {
 			// Item consumed from Depot first, then Inventory (legacy parity)
-			consumedFromDepot := false
-			for _, inst := range dep.Items {
-				if inst.DefinitionID == fert.ItemID {
-					if _, err := dep.Consume(inst.ID, 1); err != nil {
-						return fmt.Errorf("consume fertilizer from depot: %w", err)
-					}
-					consumedFromDepot = true
-					break
-				}
-			}
-
-			if consumedFromDepot {
-				if err := s.depots.Save(txCtx, dep); err != nil {
-					return fmt.Errorf("save depot: %w", err)
-				}
-			} else {
-				consumedFromInv := false
-				for _, inst := range inv.Items {
-					if inst.DefinitionID == fert.ItemID {
-						if err := inv.Consume(inst.ID, 1); err != nil {
-							return fmt.Errorf("consume fertilizer from inventory: %w", err)
-						}
-						consumedFromInv = true
-						break
-					}
-				}
-
-				if !consumedFromInv {
+			res, err := depot.ConsumeItem(&inv, &dep, depot.QueryByDefinitionID(fert.ItemID), depot.PriorityDepotFirst, 1)
+			if err != nil {
+				if errors.Is(err, depot.ErrItemNotFound) {
 					return ErrMissingFertilizerItem
 				}
-				if err := s.inventories.Save(txCtx, inv); err != nil {
-					return fmt.Errorf("save inventory: %w", err)
-				}
+				return fmt.Errorf("consume fertilizer: %w", err)
+			}
+			if err := depot.SaveConsumptionResult(txCtx, s.inventories, s.depots, res, inv, dep); err != nil {
+				return fmt.Errorf("save fertilizer consumption: %w", err)
 			}
 		}
 
