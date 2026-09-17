@@ -115,8 +115,8 @@ func (h *Handler) handleAlchemyLearn(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req alchemyLearnRequest
-		if r.Body != nil && r.ContentLength > 0 {
-			_ = json.NewDecoder(r.Body).Decode(&req)
+		if !decodeOptionalJSON(w, r, &req) {
+			return
 		}
 
 		res, err := h.alchemy.LearnRecipe(r.Context(), char.ID, req.Pool)
