@@ -43,7 +43,8 @@ Quests are randomly generated across four categories:
 - `characters.help_count`: Integer counter tracking the number of completed helper quests.
 - `helper_quests`: Stores quest specifications, target items, required quantities, reward items, rarity, guild flag, and completion metadata.
 - `rescue_records`: Stores character ID, rescue reason, penalty seconds, and creation timestamp.
-- **Transaction Atomicity**: `CompleteQuest` executes within an atomic database transaction (`TransactionProvider.RunInTx`), ensuring inventory deduction, reward item addition, quest completion status update, and replacement quest generation are committed atomically.
+- **Transaction Atomicity**: `CompleteQuest` executes within an atomic database transaction (`TransactionProvider.RunInTx`), ensuring inventory deduction, reward item delivery, quest completion status update, and replacement quest generation are committed atomically.
+- **Reward Delivery & Depot Fallback**: Reward items are delivered via `depot.DeliverRewardItem` (`PolicyAbortOnDepotFull`). If the character's inventory is at maximum capacity, the reward overflows to their storage depot. If the depot is also full (or unavailable), the operation aborts with `ErrDepotFull`, rolling back the entire transaction so that turn-in items and quest state are preserved with zero asset loss.
 
 ---
 

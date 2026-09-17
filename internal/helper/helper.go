@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -26,6 +27,7 @@ var (
 	ErrGuildRequired     = errors.New("guild membership required for guild quest")
 	ErrInsufficientItems = errors.New("insufficient items to complete helper quest")
 	ErrInvalidParameters = errors.New("invalid helper quest parameters")
+	ErrDepotFull         = depot.ErrDepotFull
 )
 
 type Quest struct {

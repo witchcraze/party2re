@@ -125,7 +125,14 @@ func newMiscServices(
 	if err != nil {
 		return nil, err
 	}
-	helperService := helper.NewService(helperRepo, core.charRepo, core.invRepo, nil, core.txProvider)
+	helperService := helper.NewService(
+		helperRepo,
+		core.charRepo,
+		core.invRepo,
+		nil,
+		core.txProvider,
+		helper.WithDepotRepository(econ.depotRepo),
+	)
 
 	futureMemoryRepo, err := database.NewFutureMemoryRepository(db)
 	if err != nil {

@@ -125,7 +125,7 @@ Each feature owns its specific domain logic and state. Cross-feature imports and
 | **God** | `internal/god` | 19 celestial wishes, Lv150 OverLevel, storage limit breaks | Character, Progression, Depot, Inventory | MariaDB `characters`, `character_depots` |
 | **Guild** | `internal/guild` | Founding, dynamic GP, custom roles, hex colors, 20d auto-disband | Character | MariaDB `guilds`, `guild_members` |
 | **GvG** | `internal/gvg` | 2..8 player guild battle rooms, GP prize pools, 7-tier medals | Battle, Guild, Character, Valkey | Valkey Candidate C (`party2:gvg:*`); MariaDB `gvg_standings` |
-| **Helper/Rescue** | `internal/helper`, `rescue` | Delivery quests, alchemy rewards, emergency state reset | Character, Inventory, Item, Guild | MariaDB `helper_quests`, `rescue_records` |
+| **Helper/Rescue** | `internal/helper`, `rescue` | Delivery quests, alchemy rewards, emergency state reset | Character, Inventory, Depot, Item, Guild | MariaDB `helper_quests`, `rescue_records` |
 | **Home** | `internal/home` | House profiles, letters, companion phrases, sleep recovery | Character, Timer, Economy, Inventory, Depot | Valkey `party2:timer:sleep:*`; MariaDB `character_homes`, `home_letters` |
 | **Lottery** | `internal/lottery` | 20-cap Takarakuji lottery, rollover jackpot; Tavern Fukubiki raffle | Character, Inventory, Depot, Item | MariaDB `character_lottery`, `takarakuji_rounds` (Rank 0→2→5) |
 | **Maintenance** | `internal/maintenance` | Maintenance state, admin toggle, HTTP 503 middleware | Valkey | Valkey `party2:maintenance:status`; MariaDB `system_maintenance` |

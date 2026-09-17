@@ -8,6 +8,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
 )
 
 type QuestRepository interface {
@@ -28,6 +29,11 @@ type InventoryRepository interface {
 	Save(ctx context.Context, inv coreinventory.Inventory) error
 }
 
+type DepotRepository interface {
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (depot.Depot, error)
+	Save(ctx context.Context, d depot.Depot) error
+}
+
 type GuildRepository interface {
 	FindGuildIDByCharacterID(ctx context.Context, characterID string) (string, error)
 	AddGuildPoints(ctx context.Context, guildID string, points int) error
@@ -35,6 +41,15 @@ type GuildRepository interface {
 
 type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+type Option func(*Service)
+
+// WithDepotRepository sets the DepotRepository for reward delivery overflow.
+func WithDepotRepository(repo DepotRepository) Option {
+	return func(s *Service) {
+		s.depotRepo = repo
+	}
 }
 
 type CompletionResult struct {
@@ -48,6 +63,7 @@ type Service struct {
 	quests       QuestRepository
 	characters   CharacterRepository
 	inventories  InventoryRepository
+	depotRepo    DepotRepository
 	guilds       GuildRepository
 	txProvider   TransactionProvider
 	randomSource RandomSource
@@ -59,8 +75,9 @@ func NewService(
 	inventories InventoryRepository,
 	guilds GuildRepository,
 	txProvider TransactionProvider,
+	opts ...Option,
 ) *Service {
-	return &Service{
+	s := &Service{
 		quests:       quests,
 		characters:   characters,
 		inventories:  inventories,
@@ -68,6 +85,10 @@ func NewService(
 		txProvider:   txProvider,
 		randomSource: DefaultRandomSource(),
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 func (s *Service) SetRandomSource(r RandomSource) {
@@ -170,11 +191,16 @@ func (s *Service) CompleteQuest(ctx context.Context, characterID, questID string
 		for _, it := range remainingItems {
 			_ = newInv.Add(it)
 		}
+		if err := s.inventories.Save(txCtx, newInv); err != nil {
+			return err
+		}
 
-		// Add reward item
-		rewardInst, err := item.NewInstance(q.RewardItemID, 1)
-		if err == nil {
-			_ = newInv.Add(rewardInst)
+		// Deliver reward item with depot fallback
+		if q.RewardItemID != "" {
+			_, err := depot.DeliverRewardItem(txCtx, s.inventories, s.depotRepo, char, q.RewardItemID, 1, depot.PolicyAbortOnDepotFull)
+			if err != nil {
+				return err
+			}
 		}
 
 		// Update character
@@ -192,9 +218,6 @@ func (s *Service) CompleteQuest(ctx context.Context, characterID, questID string
 		if err := s.characters.Update(txCtx, char); err != nil {
 			return err
 		}
-		if err := s.inventories.Save(txCtx, newInv); err != nil {
-			return err
-		}
 		if err := s.quests.Save(txCtx, q); err != nil {
 			return err
 		}
@@ -207,9 +230,14 @@ func (s *Service) CompleteQuest(ctx context.Context, characterID, questID string
 			newQPtr = &newQ
 		}
 
+		finalInv := newInv
+		if invAfterReward, err := s.inventories.FindByCharacterID(txCtx, characterID); err == nil {
+			finalInv = invAfterReward
+		}
+
 		res = CompletionResult{
 			Character:      char,
-			Inventory:      newInv,
+			Inventory:      finalInv,
 			CompletedQuest: q,
 			NewQuest:       newQPtr,
 		}
