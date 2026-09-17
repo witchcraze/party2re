@@ -313,7 +313,7 @@ func TestPartyAdventure_LostDropOnFullDepot_FallbackPath(t *testing.T) {
 	fillInventory(t, invRepo, leader.ID)
 
 	// 2. Fill depot to maximum capacity
-	fillDepot(t, depotRepo, leader.ID, 5)
+	fillDepot(t, depotRepo, leader.ID, depot.CalculateCapacity(leader.JobLevel, 0, 0))
 
 	partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader)
 
@@ -470,7 +470,7 @@ func TestPartyAdventure_WithBattleSettler_FullIntegration(t *testing.T) {
 	fillInventory(t, invRepo, leader.ID)
 	// Fill subMember inventory AND depot to trigger lost drop
 	fillInventory(t, invRepo, subMember.ID)
-	fillDepot(t, depotRepo, subMember.ID, 5)
+	fillDepot(t, depotRepo, subMember.ID, depot.CalculateCapacity(subMember.JobLevel, 0, 0))
 
 	// Create real battle adapter as PostBattleSettler
 	battleAdapter := battle.NewService(
