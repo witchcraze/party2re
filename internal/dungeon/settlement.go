@@ -43,7 +43,9 @@ func (s *Service) handleDungeonClear(
 
 	// 1. Commit accumulated rewards to character
 	if exp.AccumulatedExp > 0 {
-		_, _ = progression.ApplyExperience(char, exp.AccumulatedExp)
+		if _, err := progression.ApplyExperience(char, exp.AccumulatedExp); err != nil {
+			return ExpeditionStepResult{}, fmt.Errorf("applying experience: %w", err)
+		}
 	}
 	if err := char.AddMoney(exp.AccumulatedGold); err != nil {
 		return ExpeditionStepResult{}, fmt.Errorf("adding gold: %w", err)
@@ -125,7 +127,9 @@ func (s *Service) handleEscape(
 
 	// Transfer accumulated EXP & Gold to character
 	if exp.AccumulatedExp > 0 {
-		_, _ = progression.ApplyExperience(char, exp.AccumulatedExp)
+		if _, err := progression.ApplyExperience(char, exp.AccumulatedExp); err != nil {
+			return ExpeditionStepResult{}, fmt.Errorf("applying experience: %w", err)
+		}
 	}
 	if err := char.AddMoney(exp.AccumulatedGold); err != nil {
 		return ExpeditionStepResult{}, fmt.Errorf("adding gold: %w", err)
