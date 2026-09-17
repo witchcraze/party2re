@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #659 — [Bug] Helper: Prevent silent quest reward item loss on full inventory with depot fallback
+Last updated: Issue #680 — [Bug] Home & Helper: Propagate character and quest save errors in sleep job memory revert and quest rotation
 
 ## Current phase
 
@@ -62,10 +62,10 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Battle Replays** (`internal/replay`): ✅ Turn-log recorder, step-by-step playback, and match history queries.
 - **Endurance Challenge** (`internal/challenge`): ✅ 4-tier survival waves, HP carryover between rounds, party challenge runs, and Hall of Fame records.
 - **Custom Skill Gem Synthesis** (`internal/custom_skill`): ✅ Custom skill naming, phrase triggers, 3-gem recipe synthesis, and atomic gem exchange.
-- **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): ✅ Delivery quests (normal/rare/guild), transactional reward delivery with depot fallback and rollback guard, and emergency state rescue.
+- **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): ✅ Delivery quests (normal/rare/guild), transactional reward delivery with depot fallback, reliable quest rotation error propagation, and emergency state rescue.
 - **Town Park & Bulletin Board** (`internal/park`): ✅ Public bulletin board posts, character authorship, rate-limit, and NPC fortune divination.
 - **News & Notifications** (`internal/notification`): ✅ Server-wide news announcements and per-player inbox with read/unread tracking.
-- **Home, Towns & Resting** (`internal/home`, `internal/town`): ✅ House construction, companion phrases, mailbox, sleep recovery (full HP/MP/tired restore), and consumable usage.
+- **Home, Towns & Resting** (`internal/home`, `internal/town`): ✅ House construction, companion phrases, mailbox, sleep recovery (full HP/MP/tired restore, job memory revert persistence), and consumable usage.
 - **Rankings** (`internal/ranking`): ✅ 12 competitive leaderboards with Valkey caching, singleflight protection, and periodic worker.
 - **Event Plaza** (`internal/eventplaza`): ✅ Real-time plaza presence tracking (5-min active window), 26-item merchant catalog at 3× markup, and victory celebration banquets.
 - **Secret Shop** (`internal/secretshop`): ✅ JobLv 7 access gate, 8 rare items at 3× price, depot auto-delivery, and puff-puff dialogue.

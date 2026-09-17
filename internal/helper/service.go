@@ -224,11 +224,13 @@ func (s *Service) CompleteQuest(ctx context.Context, characterID, questID string
 
 		// Generate replacement quest
 		newQ, err := GenerateQuest(s.randomSource, now)
-		var newQPtr *Quest
-		if err == nil {
-			_ = s.quests.Save(txCtx, newQ)
-			newQPtr = &newQ
+		if err != nil {
+			return err
 		}
+		if err := s.quests.Save(txCtx, newQ); err != nil {
+			return err
+		}
+		newQPtr := &newQ
 
 		finalInv := newInv
 		if invAfterReward, err := s.inventories.FindByCharacterID(txCtx, characterID); err == nil {

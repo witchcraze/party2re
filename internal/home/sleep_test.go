@@ -3,6 +3,7 @@ package home
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,7 +12,8 @@ import (
 )
 
 type mockCharRepo struct {
-	chars map[string]corecharacter.Character
+	chars     map[string]corecharacter.Character
+	updateErr error
 }
 
 func (m *mockCharRepo) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
@@ -27,6 +29,9 @@ func (m *mockCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corech
 }
 
 func (m *mockCharRepo) Update(ctx context.Context, char corecharacter.Character) error {
+	if m.updateErr != nil {
+		return m.updateErr
+	}
 	m.chars[char.ID] = char
 	return nil
 }
@@ -327,4 +332,52 @@ func TestSleep_VisitingHomelessOrExpiredHouse(t *testing.T) {
 			t.Fatalf("unexpected result: %+v", res)
 		}
 	})
+}
+
+func TestSleep_JobMemoryRevertUpdateErrorPropagates(t *testing.T) {
+	ctx := context.Background()
+	charRepo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {
+				ID:   "c1",
+				Name: "Hero",
+				JobMemory: &corecharacter.JobMemory{
+					JobID: "job-temp",
+					SP:    10,
+				},
+			},
+		},
+		updateErr: errors.New("db update timeout"),
+	}
+
+	mockHomeRepo := newMockHomeRepo()
+	timerSvc := timer.NewService(nil)
+
+	svc, err := NewService(
+		mockHomeRepo,
+		charRepo,
+		WithTimer(timerSvc),
+		WithCharacterUpdater(charRepo),
+		WithBaseSleepDuration(10*time.Millisecond),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	_, err = svc.Sleep(ctx, "c1", "c1")
+	if err == nil {
+		t.Fatal("expected error from failed character update, got nil")
+	}
+	if !strings.Contains(err.Error(), "db update timeout") {
+		t.Fatalf("expected db update timeout error, got: %v", err)
+	}
+
+	// Verify sleep locks were not left locked
+	isSleeping, err := timerSvc.IsLocked(ctx, timer.CategorySleep, "c1")
+	if err != nil {
+		t.Fatalf("timer check failed: %v", err)
+	}
+	if isSleeping {
+		t.Error("expected sleep lock to be cleared when character update fails")
+	}
 }
