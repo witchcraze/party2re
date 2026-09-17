@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,7 +16,8 @@ import (
 )
 
 type mockQuestRepo struct {
-	quests map[string]helper.Quest
+	quests              map[string]helper.Quest
+	failReplacementSave bool
 }
 
 func newMockQuestRepo() *mockQuestRepo {
@@ -23,6 +25,9 @@ func newMockQuestRepo() *mockQuestRepo {
 }
 
 func (r *mockQuestRepo) Save(_ context.Context, q helper.Quest) error {
+	if r.failReplacementSave && q.CompletedAt == nil {
+		return errors.New("failed to save replacement quest")
+	}
 	r.quests[q.ID] = q
 	return nil
 }
@@ -394,6 +399,60 @@ func TestCompleteQuest_NilDepotRepo_FullInventoryReturnsError(t *testing.T) {
 
 	if !errors.Is(err, depot.ErrDepotFull) && !errors.Is(err, helper.ErrDepotFull) {
 		t.Fatalf("expected ErrDepotFull, got: %v", err)
+	}
+
+	if !txProvider.rollbackCalled {
+		t.Error("expected transaction rollback to be triggered")
+	}
+}
+
+func TestCompleteQuest_ReplacementQuestSaveErrorPropagates(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+
+	questRepo := newMockQuestRepo()
+	charRepo := &mockCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "Hero", HelpCount: 0},
+		},
+	}
+	inv, _ := coreinventory.New("char-1")
+	inst, _ := item.NewInstance("weapon-01", 2)
+	_ = inv.Add(inst)
+
+	invRepo := &mockInvRepo{inventories: map[string]coreinventory.Inventory{"char-1": inv}}
+	txProvider := &mockTxProvider{}
+
+	svc := helper.NewService(
+		questRepo,
+		charRepo,
+		invRepo,
+		nil,
+		txProvider,
+	)
+
+	quest := helper.Quest{
+		ID:            "q-rot-fail",
+		Title:         "店を始めたいのでその5",
+		Kind:          helper.KindWeapon,
+		TargetID:      "weapon-01",
+		TargetName:    "ヒノキの棒",
+		RequiredCount: 2,
+		RewardItemID:  "item-128",
+		ExpiresAt:     now.Add(24 * time.Hour),
+		CreatedAt:     now,
+	}
+	_ = questRepo.Save(ctx, quest)
+
+	// Configure replacement quest save failure
+	questRepo.failReplacementSave = true
+
+	_, err := svc.CompleteQuest(ctx, "char-1", "q-rot-fail", now)
+	if err == nil {
+		t.Fatal("expected error when saving replacement quest fails, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to save replacement quest") {
+		t.Fatalf("expected replacement quest save error, got: %v", err)
 	}
 
 	if !txProvider.rollbackCalled {

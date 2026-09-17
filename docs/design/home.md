@@ -91,7 +91,7 @@ True Party2 character recovery is conducted at Home (either one's own or a visit
   - `< 20` players: 1x base duration (60 seconds)
   - `>= 20` players: 2x base duration (120 seconds)
   - `>= 30` players: 3x base duration (180 seconds)
-- **Action Locking**: While sleeping, `party2:timer:sleep:<character_id>` locks character actions with HTTP `409 Conflict` (`"お休み中「Zzz...」 目覚めるまで X分YY秒"`).
+- **Action Locking & Persistence**: While sleeping, `party2:timer:sleep:<character_id>` locks character actions with HTTP `409 Conflict` (`"お休み中「Zzz...」 目覚めるまで X分YY秒"`). Any active temporary Job Memory is reverted and persisted to the database; if persistence fails, timer locks are released and the error is propagated to prevent state divergence.
 - **Awakening**:
   - HP and MP fully restored.
   - Tiredness (疲労度) reset to 0.

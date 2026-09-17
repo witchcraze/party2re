@@ -153,7 +153,11 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 	// Legacy parity: Revert temporary job memory if active upon going to sleep
 	if char.JobMemory != nil && s.charUpdater != nil {
 		char.RevertJobMemory()
-		_ = s.charUpdater.Update(ctx, char)
+		if err := s.charUpdater.Update(ctx, char); err != nil {
+			_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
+			_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
+			return SleepResult{}, err
+		}
 	}
 
 	return SleepResult{
