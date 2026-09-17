@@ -13,7 +13,7 @@ The Continuous Endurance Challenge Feature Module (`internal/challenge`) impleme
   $$\text{Stat}_{\text{round}} = \text{BaseStat} \times (1 + \text{ScaleFactor} \times (\text{Round} - 1))$$
 - **Reward Ledger & Cashout vs Defeat Risk**:
   - EXP and Gold accumulate in a temporary session ledger across victorious waves.
-  - **Safe Retreat (Cashout)**: Commits 100% of accumulated EXP, Gold, and milestone items to the character.
+  - **Safe Retreat (Cashout)**: Commits 100% of accumulated EXP, Gold, and milestone items to the character. EXP is processed via `progression.ApplyExperience` to apply level-ups and stat growths. Reward item instances are generated with `id.New()` and delivered with `coreinventory.Inventory` capacity enforcement, overflowing to `depot.Depot` storage (Rank 5 lock) or treated as lost drops if depot is full (`_npc_action.cgi:74-75`).
   - **Defeat**: Awards 50% consolation EXP and Gold; temporary items are forfeited.
 - **Leaderboards & Streak Records**: Tracks all-time highest streak round reached per tier with tie-breaking by earliest completion timestamp.
 

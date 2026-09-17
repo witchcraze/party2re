@@ -54,7 +54,7 @@ $$\text{Expedition Items} = \bigcup \text{Monster Drops} \cup \bigcup \text{Ches
 - On **Escape / Clear**:
   1. `progression.ApplyExperience(&char, exp)`
   2. `char.Money += gold`
-  3. All item instances generated are inserted into `inventory_items`.
+  3. Reward item instances are validated against `coreinventory.Inventory` capacity; overflow items route to `depot.Depot` (Rank 5 lock); items overflowing a full depot are treated as lost drops (`_npc_action.cgi:74-75`).
   4. Statistics updated: `highest_dungeon_cleared`, `total_expeditions`, `total_floors_cleared`, `total_chests_opened`.
 
 ---

@@ -50,7 +50,7 @@ Up to 4 players form a party in the Multiplayer Party System (`internal/party`) 
 ### 3. Victory & `@ふういん` Resealing
 Upon defeating all enemy boss participants:
 1. **Hero Count**: All party members receive **+1 Hero Count** (`characters.hero_count` / `$m{hero_c}`).
-2. **Treasure Drop**: A random item from the stage's `treasure_item_ids` is awarded.
+2. **Treasure Drop**: A random item from the stage's `treasure_item_ids` is awarded. Reward delivery uses `coreinventory.Inventory` capacity enforcement; overflow items route to `depot.Depot` storage (Rank 5 lock); items overflowing a full depot are treated as lost drops (`_npc_action.cgi:74-75`).
 3. **Exp & Gold**: Distributed to all party members.
 4. **Server News**: A worldwide announcement is broadcast: `"勇者○○が○○を封印する"`.
 5. **Celebration Banquet**: Triggers a 2-hour victory banquet in Event Plaza (`_win_vs_king.cgi`).
