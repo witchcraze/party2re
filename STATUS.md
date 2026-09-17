@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #675 — [Bug] GvG: Propagate standings and prize settlement errors in AdvanceRound
+Last updated: Issue #690 — [Bug] HTTP API: Reject invalid optional JSON before mutations
 
 ## Current phase
 
@@ -83,7 +83,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### API & Transport
 - **Server Entrypoint** (`cmd/party2`): ✅ Typed config injection, modular service wiring (`wire.go`), Graceful Shutdown.
-- **HTTP JSON API** (`internal/api/http`): ✅ 251 paths / 271 operations (OpenAPI 3.1); dual auth (session + PAT), IDOR defense, rate-limit, CORS, maintenance middleware, detached root context prohibition AST linter.
+- **HTTP JSON API** (`internal/api/http`): ✅ 251 paths / 271 operations (OpenAPI 3.1); dual auth (session + PAT), IDOR defense, rate-limit, CORS, safe optional JSON decoder & AST unhandled decode linter, maintenance middleware, detached root context prohibition AST linter.
 
 ### Infrastructure & Operations
 - **Database** (MariaDB): ✅ Migrations `001`–`085`; `make db-migrate` / `make db-reset`; connection pool env-configurable.

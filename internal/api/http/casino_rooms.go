@@ -144,7 +144,9 @@ func (h *Handler) handleJoinCasinoRoom(w http.ResponseWriter, r *http.Request) {
 
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req joinCasinoRoomRequest
-		_ = decodeJSON(w, r, &req)
+		if !decodeOptionalJSON(w, r, &req) {
+			return
+		}
 
 		room, err := h.casino.JoinRoom(r.Context(), roomID, char.ID, req.Password, char.Tired)
 		if err != nil {
@@ -182,7 +184,9 @@ func (h *Handler) handleSpectateCasinoRoom(w http.ResponseWriter, r *http.Reques
 
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req joinCasinoRoomRequest
-		_ = decodeJSON(w, r, &req)
+		if !decodeOptionalJSON(w, r, &req) {
+			return
+		}
 
 		room, err := h.casino.SpectateRoom(r.Context(), roomID, char.ID, req.Password)
 		if err != nil {

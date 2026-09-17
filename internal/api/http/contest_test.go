@@ -325,6 +325,7 @@ func TestSettleContestWithAdminKey(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodPost, server.URL+"/contest/settle", bytes.NewReader(settleBody))
 	req.Header.Set("X-Admin-Key", adminKey)
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK with admin key, got %d (err: %v)", resp.StatusCode, err)

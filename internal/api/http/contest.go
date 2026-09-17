@@ -132,8 +132,8 @@ func (h *Handler) handleSettleContest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req settleContestRequest
-	if r.Body != nil && r.ContentLength > 0 {
-		_ = json.NewDecoder(r.Body).Decode(&req)
+	if !decodeOptionalJSON(w, r, &req) {
+		return
 	}
 
 	result, err := h.contest.SettleContest(r.Context(), req.Force)

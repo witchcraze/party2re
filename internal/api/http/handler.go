@@ -757,8 +757,8 @@ func (h *Handler) handleDeletePlayerMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req deletePlayerRequest
-	if r.Body != nil && r.ContentLength > 0 {
-		_ = decodeJSON(w, r, &req)
+	if !decodeOptionalJSON(w, r, &req) {
+		return
 	}
 
 	if err := h.players.DeleteAccount(r.Context(), player.ID, req.Password); err != nil {
@@ -794,8 +794,8 @@ func (h *Handler) handleDeletePlayerByID(w http.ResponseWriter, r *http.Request)
 	}
 
 	var req deletePlayerRequest
-	if r.Body != nil && r.ContentLength > 0 {
-		_ = decodeJSON(w, r, &req)
+	if !decodeOptionalJSON(w, r, &req) {
+		return
 	}
 
 	if err := h.players.DeleteAccount(r.Context(), targetID, req.Password); err != nil {
@@ -1060,24 +1060,4 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
-}
-
-// maxRequestBodyBytes is the maximum accepted request body size (64 KiB).
-// No legitimate game API call requires more than this.
-const maxRequestBodyBytes = 64 * 1024
-
-func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	ct := r.Header.Get("Content-Type")
-	if ct != "application/json" {
-		writeError(w, http.StatusUnsupportedMediaType, errors.New("Content-Type must be application/json"))
-		return false
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(dst); err != nil {
-		writeError(w, http.StatusBadRequest, errors.New("invalid JSON body"))
-		return false
-	}
-	return true
 }

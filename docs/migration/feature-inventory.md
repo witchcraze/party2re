@@ -128,7 +128,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Player Store & Town Boutiques: store construction, depot listings, and interior styling ([#424](https://github.com/witchcraze/party2re/issues/424))
 
 ### G. Presentation, Assets, and Operations
-- [x] UI-independent HTTP JSON Application API layer (OpenAPI 3.1) ([#87](https://github.com/witchcraze/party2re/issues/87), [#254](https://github.com/witchcraze/party2re/issues/254), [#266](https://github.com/witchcraze/party2re/issues/266))
+- [x] UI-independent HTTP JSON Application API layer (OpenAPI 3.1) ([#87](https://github.com/witchcraze/party2re/issues/87), [#254](https://github.com/witchcraze/party2re/issues/254), [#266](https://github.com/witchcraze/party2re/issues/266), [#690](https://github.com/witchcraze/party2re/issues/690))
 - [x] MariaDB durable persistence & migration automation (`001`–`085`) ([#124](https://github.com/witchcraze/party2re/issues/124), [#399](https://github.com/witchcraze/party2re/issues/399))
 - [x] Valkey worker queue with AOF+RDB persistence ([#106](https://github.com/witchcraze/party2re/issues/106))
 - [x] Structured JSON logging with credential masking ([#49](https://github.com/witchcraze/party2re/issues/49))

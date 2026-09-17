@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -163,8 +162,8 @@ func (h *Handler) handleJoinGvGRoom(w http.ResponseWriter, r *http.Request) {
 	roomID := r.PathValue("room_id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req gvgJoinRoomRequest
-		if r.Body != nil && r.ContentLength > 0 {
-			_ = json.NewDecoder(r.Body).Decode(&req)
+		if !decodeOptionalJSON(w, r, &req) {
+			return
 		}
 
 		detail, err := h.gvg.JoinRoom(r.Context(), char.ID, roomID, req.Password)
