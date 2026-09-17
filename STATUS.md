@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #662 — [Architecture] Linter: Implement AST error-swallow linter and document mechanical lint test architecture
+Last updated: Issue #705 — [Bug] Dungeon: Robust transactional settlement and error propagation
 
 ## Current phase
 
