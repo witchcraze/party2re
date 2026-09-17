@@ -177,11 +177,9 @@ func (s *Service) ApplySeal(ctx context.Context, characterID string, sealID int)
 			return ErrSealNotApplicable
 		}
 
-		if char.Crystal < seal.CrystalCost {
+		if err := char.DeductCrystal(seal.CrystalCost); err != nil {
 			return ErrInsufficientCrystals
 		}
-
-		char.Crystal -= seal.CrystalCost
 		char.WeaponSeal = sealID
 
 		if err := s.characters.Update(txCtx, char); err != nil {
