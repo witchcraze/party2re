@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #660 — [Bug] Contest: Propagate character update errors during prize settlement to prevent reward loss
+Last updated: Issue #675 — [Bug] GvG: Propagate standings and prize settlement errors in AdvanceRound
 
 ## Current phase
 
@@ -56,7 +56,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Collection & Monster Book** (`internal/collection`): ✅ Illustrated monster and item encyclopedia with auto-record on obtain.
 - **Chapel & Blessings** (`internal/chapel`): ✅ 5 town church blessings with single-active prayer constraint and daily reset worker.
 - **Colosseum PvP** (`internal/pvp`): ✅ Real-time 2..8 player room recruitment, Bet & Split prize pools, 9 team colors, and multi-round combat resolution.
-- **GvG Combat** (`internal/gvg`): ✅ Real-time 2..8 player guild battle rooms, GP prize pools, target wins, and 7-tier cascading victory medals.
+- **GvG Combat** (`internal/gvg`): ✅ Real-time 2..8 player guild battle rooms, GP prize pools, target wins, standings & prize settlement error propagation, and 7-tier cascading victory medals.
 - **Boss Battles** (`internal/boss`): ✅ 4-player cooperative sealing battles, Dejon banishment, HeroCount increments, and victory celebration banquets.
 - **Dungeon Exploration** (`internal/dungeon`): ✅ Multi-floor grid dungeon exploration, branching tile events, party traps, map scouting (`@ちず`), and treasure chests.
 - **Battle Replays** (`internal/replay`): ✅ Turn-log recorder, step-by-step playback, and match history queries.

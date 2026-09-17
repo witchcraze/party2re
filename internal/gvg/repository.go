@@ -72,8 +72,16 @@ func (m *MemoryRoomRepository) SaveRoom(_ context.Context, room GvGRoom, members
 	membersCopy := make([]GvGMember, len(members))
 	copy(membersCopy, members)
 
+	roomCopy := room
+	if room.GuildScores != nil {
+		roomCopy.GuildScores = make(map[string]int, len(room.GuildScores))
+		for k, v := range room.GuildScores {
+			roomCopy.GuildScores[k] = v
+		}
+	}
+
 	m.rooms[room.ID] = RoomDetail{
-		Room:    room,
+		Room:    roomCopy,
 		Members: membersCopy,
 	}
 	return nil
@@ -89,7 +97,16 @@ func (m *MemoryRoomRepository) GetRoom(_ context.Context, id string) (RoomDetail
 	}
 	membersCopy := make([]GvGMember, len(detail.Members))
 	copy(membersCopy, detail.Members)
-	return RoomDetail{Room: detail.Room, Members: membersCopy}, nil
+
+	roomCopy := detail.Room
+	if detail.Room.GuildScores != nil {
+		roomCopy.GuildScores = make(map[string]int, len(detail.Room.GuildScores))
+		for k, v := range detail.Room.GuildScores {
+			roomCopy.GuildScores[k] = v
+		}
+	}
+
+	return RoomDetail{Room: roomCopy, Members: membersCopy}, nil
 }
 
 func (m *MemoryRoomRepository) DeleteRoom(_ context.Context, id string) error {

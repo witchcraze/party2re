@@ -193,16 +193,16 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 
 		// Handle round win: +3 GP to the round winning guild (vs_guild.cgi:121)
 		if roundWinnerGuildID != "" {
+			if err := s.standings.AddRoundWinGP(lockedCtx, roundWinnerGuildID, RoundWinGP); err != nil {
+				return err
+			}
 			detail.Room.GuildScores[roundWinnerGuildID]++
-			_ = s.standings.AddRoundWinGP(lockedCtx, roundWinnerGuildID, RoundWinGP)
 
 			if detail.Room.GuildScores[roundWinnerGuildID] >= detail.Room.TargetWins {
 				matchCompleted = true
 				overallWinnerGuildID = roundWinnerGuildID
 				overallWinnerGuildName = roundWinnerGuildName
 				roundOutcome = "match_won"
-				detail.Room.Status = StatusCompleted
-				detail.Room.WinnerGuildID = roundWinnerGuildID
 			}
 		}
 
@@ -210,7 +210,6 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 		if !matchCompleted && detail.Room.Round >= MaxRounds {
 			matchCompleted = true
 			roundOutcome = "match_draw"
-			detail.Room.Status = StatusCompleted
 		}
 
 		if matchCompleted {
@@ -233,7 +232,12 @@ func (s *Service) AdvanceRound(ctx context.Context, leaderID string, roomID stri
 				IsDraw:        overallWinnerGuildID == "",
 				ParticipantGP: participantGP,
 			}
-			_ = s.standings.RecordMatchSettlement(lockedCtx, settlement)
+			if err := s.standings.RecordMatchSettlement(lockedCtx, settlement); err != nil {
+				return err
+			}
+
+			detail.Room.Status = StatusCompleted
+			detail.Room.WinnerGuildID = overallWinnerGuildID
 		} else {
 			// Advance to next round and restore HP to MaxHP for all participants (vs_guild.cgi:142)
 			detail.Room.Round++
