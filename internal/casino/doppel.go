@@ -243,7 +243,9 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 					payout := room.Pot / int64(len(matchedChildren))
 					if payout > 0 {
 						for _, childID := range matchedChildren {
-							_, _ = s.repo.DeductBetAndCreditPayout(txCtx, childID, 0, payout)
+							if _, err := s.repo.DeductBetAndCreditPayout(txCtx, childID, 0, payout); err != nil {
+								return err
+							}
 						}
 					}
 					showdownWinners = matchedChildren
@@ -260,7 +262,9 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 				} else {
 					// Parent (Leader) wins! Leader takes the full pot
 					if room.Pot > 0 {
-						_, _ = s.repo.DeductBetAndCreditPayout(txCtx, room.LeaderCharacterID, 0, room.Pot)
+						if _, err := s.repo.DeductBetAndCreditPayout(txCtx, room.LeaderCharacterID, 0, room.Pot); err != nil {
+							return err
+						}
 					}
 					showdownWinners = []string{room.LeaderCharacterID}
 					room.WinnerCharacterID = &room.LeaderCharacterID
@@ -278,14 +282,18 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 				for _, m := range participants {
 					pAcc, err := s.repo.GetAccount(txCtx, m.CharacterID)
 					if err == nil && pAcc.Coins <= 0 {
-						_ = s.roomRepo.RemoveMember(txCtx, roomID, m.CharacterID)
+						if err := s.roomRepo.RemoveMember(txCtx, roomID, m.CharacterID); err != nil {
+							return err
+						}
 						if room.LeaderCharacterID == m.CharacterID && primaryWinner != "" {
 							room.LeaderCharacterID = primaryWinner
 						}
 					} else {
 						m.Action = "待機中"
 						m.UpdatedAt = time.Now().UTC()
-						_ = s.roomRepo.UpdateMember(txCtx, m)
+						if err := s.roomRepo.UpdateMember(txCtx, m); err != nil {
+							return err
+						}
 					}
 				}
 			}

@@ -58,6 +58,7 @@ func (s *Service) BuildHouse(ctx context.Context, characterID, townID, houseStyl
 
 			// Award guild points if applicable: cycle_days * 10
 			if s.guildPoints != nil {
+				//lint:ignore error-swallow best-effort guild points bonus
 				_ = s.guildPoints.AddGuildPoints(tc.Context, characterID, t.CycleDays*10)
 			}
 
@@ -138,6 +139,7 @@ func (s *Service) BuildHouse(ctx context.Context, characterID, townID, houseStyl
 
 	// Award guild points if applicable: cycle_days * 10
 	if s.guildPoints != nil {
+		//lint:ignore error-swallow best-effort guild points bonus
 		_ = s.guildPoints.AddGuildPoints(ctx, characterID, t.CycleDays*10)
 	}
 

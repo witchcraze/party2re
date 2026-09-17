@@ -200,6 +200,7 @@ func (s *Service) deliverPrizeToDepot(ctx context.Context, characterID, itemID s
 
 	if s.collectionRecorder != nil {
 		itemName := s.resolveItemName(itemID)
+		//lint:ignore error-swallow best-effort collection discovery
 		_ = s.collectionRecorder.RecordItemDiscovered(ctx, characterID, itemID, itemName, "takarakuji")
 	}
 

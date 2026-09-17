@@ -160,6 +160,7 @@ func (s *Service) Purchase(ctx context.Context, characterID string, itemDefiniti
 			}
 
 			if s.recorder != nil {
+				//lint:ignore error-swallow best-effort collection discovery
 				_ = s.recorder.RecordItemDiscovered(txCtx, characterID, definition.ID, definition.Name, categoryForSlot(definition.Slot))
 			}
 

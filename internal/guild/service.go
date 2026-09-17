@@ -61,6 +61,12 @@ func NewService(repo Repository, opts ...ServiceOption) (*Service, error) {
 	return s, nil
 }
 
+// touchActive performs a best-effort update of the guild's last_active_at timestamp.
+func (s *Service) touchActive(ctx context.Context, guildID string) {
+	//lint:ignore error-swallow best-effort guild activity touch
+	_ = s.repo.TouchActive(ctx, guildID)
+}
+
 func (s *Service) Create(ctx context.Context, creatorCharID string, name string) (Guild, Member, corecharacter.Character, error) {
 	creatorCharID = strings.TrimSpace(creatorCharID)
 	if creatorCharID == "" {
@@ -165,7 +171,7 @@ func (s *Service) Join(ctx context.Context, guildID string, characterID string) 
 	if err != nil {
 		return Member{}, err
 	}
-	_ = s.repo.TouchActive(ctx, guildID)
+	s.touchActive(ctx, guildID)
 	return res, nil
 }
 
@@ -206,7 +212,7 @@ func (s *Service) Leave(ctx context.Context, guildID string, characterID string)
 	if err := s.repo.RemoveMember(ctx, guildID, characterID); err != nil {
 		return err
 	}
-	_ = s.repo.TouchActive(ctx, guildID)
+	s.touchActive(ctx, guildID)
 	return nil
 }
 
@@ -255,7 +261,7 @@ func (s *Service) Kick(ctx context.Context, guildID string, requesterCharID stri
 	if err := s.repo.RemoveMember(ctx, guildID, targetCharID); err != nil {
 		return err
 	}
-	_ = s.repo.TouchActive(ctx, guildID)
+	s.touchActive(ctx, guildID)
 
 	if s.letterSender != nil && s.charReader != nil {
 		leaderChar, errL := s.charReader.FindByID(ctx, requesterCharID)
@@ -308,7 +314,7 @@ func (s *Service) TransferLeadership(ctx context.Context, guildID string, curren
 	if err := s.repo.TransferLeadership(ctx, guildID, currentLeaderCharID, newLeaderCharID); err != nil {
 		return err
 	}
-	_ = s.repo.TouchActive(ctx, guildID)
+	s.touchActive(ctx, guildID)
 	return nil
 }
 
@@ -361,7 +367,7 @@ func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requeste
 	if err := s.repo.AssignCustomRole(ctx, guildID, targetCharID, title); err != nil {
 		return err
 	}
-	_ = s.repo.TouchActive(ctx, guildID)
+	s.touchActive(ctx, guildID)
 	return nil
 }
 
@@ -418,7 +424,7 @@ func (s *Service) UpdateColor(ctx context.Context, guildID string, requesterChar
 	if err := s.repo.UpdateColor(ctx, guildID, normalizedColor); err != nil {
 		return err
 	}
-	_ = s.repo.TouchActive(ctx, guildID)
+	s.touchActive(ctx, guildID)
 	return nil
 }
 
@@ -446,7 +452,7 @@ func (s *Service) UpdateNotice(ctx context.Context, guildID string, requesterCha
 	if err := s.repo.UpdateNotice(ctx, guildID, notice); err != nil {
 		return err
 	}
-	_ = s.repo.TouchActive(ctx, guildID)
+	s.touchActive(ctx, guildID)
 	return nil
 }
 

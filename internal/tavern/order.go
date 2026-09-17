@@ -95,6 +95,7 @@ func (s *Service) OrderMeal(ctx context.Context, characterID string, itemID stri
 
 		// Award guild points (+2 GP, bar.cgi:118)
 		if s.guildPoints != nil {
+			//lint:ignore error-swallow best-effort guild points bonus
 			_ = s.guildPoints.AddGuildPoints(txCtx, charID, 2)
 		}
 

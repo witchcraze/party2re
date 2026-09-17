@@ -371,7 +371,9 @@ func (r *ChallengeRepository) FinalizeSession(ctx context.Context, s challenge.C
 		}
 
 		if goldReward > 0 {
-			_ = char.AddMoney(goldReward)
+			if err := char.AddMoney(goldReward); err != nil {
+				return err
+			}
 		}
 		if expReward > 0 {
 			if _, err := progression.ApplyExperience(&char, expReward); err != nil {

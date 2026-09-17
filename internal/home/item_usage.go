@@ -414,7 +414,9 @@ func (s *Service) applyConsumableEffect(char *corecharacter.Character, def item.
 		} else {
 			refund := sealRefundCrystals(char.WeaponSeal)
 			char.WeaponSeal = 0
-			_ = char.AddCrystal(refund)
+			if err := char.AddCrystal(refund); err != nil {
+				return "", err
+			}
 			msg = fmt.Sprintf("武器に施された刻印が剥がれ落ちた！刻印晶を %d 個回収した！", refund)
 		}
 	default:

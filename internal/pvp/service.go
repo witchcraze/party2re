@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -167,10 +168,12 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 	}
 
 	// Verify existing room
-	if existingRoomID, _ := s.repo.GetCharacterRoom(ctx, char.ID); existingRoomID != "" {
+	if existingRoomID, err := s.repo.GetCharacterRoom(ctx, char.ID); err == nil && existingRoomID != "" {
 		if existing, err := s.repo.GetRoom(ctx, existingRoomID); err == nil && existing.Room.Status != StatusCompleted && existing.Room.Status != StatusDisbanded {
 			return RoomDetail{}, ErrAlreadyInRoom
 		}
+	} else if err != nil && !errors.Is(err, ErrRoomNotFound) {
+		return RoomDetail{}, err
 	}
 
 	// Deduct Bet from leader wallet
@@ -227,7 +230,9 @@ func (s *Service) CreateRoom(ctx context.Context, characterID string, req Create
 	if err := s.repo.SaveRoom(ctx, room, members); err != nil {
 		return RoomDetail{}, err
 	}
-	_ = s.repo.SetCharacterRoom(ctx, char.ID, roomID)
+	if err := s.repo.SetCharacterRoom(ctx, char.ID, roomID); err != nil {
+		return RoomDetail{}, err
+	}
 
 	return RoomDetail{Room: room, Members: members}, nil
 }
@@ -265,10 +270,12 @@ func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID strin
 			}
 		}
 
-		if existingRoomID, _ := s.repo.GetCharacterRoom(lockedCtx, char.ID); existingRoomID != "" && existingRoomID != roomID {
+		if existingRoomID, err := s.repo.GetCharacterRoom(lockedCtx, char.ID); err == nil && existingRoomID != "" && existingRoomID != roomID {
 			if existing, err := s.repo.GetRoom(lockedCtx, existingRoomID); err == nil && existing.Room.Status != StatusCompleted && existing.Room.Status != StatusDisbanded {
 				return ErrAlreadyInRoom
 			}
+		} else if err != nil && !errors.Is(err, ErrRoomNotFound) {
+			return err
 		}
 
 		if detail.Room.PasswordHash != "" && hashPassword(password) != detail.Room.PasswordHash {
@@ -314,7 +321,9 @@ func (s *Service) JoinRoom(ctx context.Context, characterID string, roomID strin
 		if err := s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members); err != nil {
 			return err
 		}
-		_ = s.repo.SetCharacterRoom(lockedCtx, char.ID, roomID)
+		if err := s.repo.SetCharacterRoom(lockedCtx, char.ID, roomID); err != nil {
+			return err
+		}
 
 		result = detail
 		return nil
@@ -404,7 +413,9 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 					return err
 				}
 				for _, m := range detail.Members {
-					_ = s.repo.DeleteCharacterRoom(lockedCtx, m.CharacterID)
+					if err := s.repo.DeleteCharacterRoom(lockedCtx, m.CharacterID); err != nil {
+						return err
+					}
 				}
 				detail.Room.Status = StatusDisbanded
 				detail.Room.PrizePool = 0
@@ -416,7 +427,9 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 			if err := s.refundMembers(lockedCtx, []string{char.ID}, detail.Room.Bet); err != nil {
 				return err
 			}
-			_ = s.repo.DeleteCharacterRoom(lockedCtx, char.ID)
+			if err := s.repo.DeleteCharacterRoom(lockedCtx, char.ID); err != nil {
+				return err
+			}
 
 			var updatedMembers []RoomMember
 			for _, m := range detail.Members {
@@ -434,8 +447,7 @@ func (s *Service) LeaveRoom(ctx context.Context, characterID string, roomID stri
 		}
 
 		// In completed or disbanded status: simply remove mapping
-		_ = s.repo.DeleteCharacterRoom(lockedCtx, char.ID)
-		return nil
+		return s.repo.DeleteCharacterRoom(lockedCtx, char.ID)
 	})
 }
 

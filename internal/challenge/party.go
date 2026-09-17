@@ -3,6 +3,7 @@ package challenge
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -146,7 +147,9 @@ func (s *Service) StartPartySession(
 		return nil, err
 	}
 
-	_ = s.repo.SaveSession(ctx, session)
+	if err := s.repo.SaveSession(ctx, session); err != nil {
+		return nil, fmt.Errorf("saving challenge session: %w", err)
+	}
 
 	return &session, nil
 }

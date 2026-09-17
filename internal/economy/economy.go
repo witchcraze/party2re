@@ -187,7 +187,9 @@ func (s *Service) AddGold(ctx context.Context, characterID string, amount int) (
 			result = char
 			return nil
 		}
-		_ = char.AddMoney(amount)
+		if err := char.AddMoney(amount); err != nil {
+			return err
+		}
 		if err := s.characters.Update(txCtx, char); err != nil {
 			return err
 		}
@@ -256,7 +258,9 @@ func (s *Service) AddSmallMedals(ctx context.Context, characterID string, amount
 			result = char
 			return nil
 		}
-		_ = char.AddSmallMedals(amount)
+		if err := char.AddSmallMedals(amount); err != nil {
+			return err
+		}
 		if err := s.characters.Update(txCtx, char); err != nil {
 			return err
 		}

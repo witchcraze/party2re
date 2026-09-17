@@ -171,7 +171,10 @@ func (s *Service) GetCompendium(ctx context.Context, characterID string) (Compen
 		pct = (craftedCount * 100) / len(all)
 	}
 
-	state, _ := s.repo.GetSynthesisState(ctx, characterID)
+	state, err := s.repo.GetSynthesisState(ctx, characterID)
+	if err != nil {
+		return Compendium{}, fmt.Errorf("get synthesis state: %w", err)
+	}
 
 	return Compendium{
 		TotalRecipes:         len(all),

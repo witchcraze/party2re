@@ -201,7 +201,10 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 		}
 
 		// Update Hall of Fame if round > highestRound for tier
-		hof, _ := s.repo.GetHallOfFame(ctx, session.TierID)
+		hof, err := s.repo.GetHallOfFame(ctx, session.TierID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("getting hall of fame: %w", err)
+		}
 		if hof == nil || round > hof.HighestRound {
 			hofMembers := make([]HallOfFameMember, len(session.Members))
 			for i, m := range session.Members {
@@ -245,14 +248,16 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 			if pColor == "" {
 				pColor = "#FFFFFF"
 			}
-			_ = s.repo.SaveHallOfFame(ctx, HallOfFameEntry{
+			if err := s.repo.SaveHallOfFame(ctx, HallOfFameEntry{
 				TierID:       session.TierID,
 				HighestRound: round,
 				PartyName:    pName,
 				PartyColor:   pColor,
 				ClearedAt:    time.Now().UTC(),
 				Members:      hofMembers,
-			})
+			}); err != nil {
+				return nil, nil, fmt.Errorf("saving hall of fame: %w", err)
+			}
 		}
 
 		// Atomically advance round and buffer rewards in Valkey Master
@@ -272,7 +277,9 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 		outcome.Session.Members = session.Members
 		outcome.Session.PartyName = session.PartyName
 		outcome.Session.PartyColor = session.PartyColor
-		_ = s.activeStore.SaveActiveSession(ctx, outcome.Session)
+		if err := s.activeStore.SaveActiveSession(ctx, outcome.Session); err != nil {
+			return nil, nil, fmt.Errorf("saving active session: %w", err)
+		}
 
 		return &RoundResult{
 			Round:              round,
@@ -305,6 +312,7 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 	}
 
 	// Upon successful MariaDB commit, purge transient buffer from Valkey Master
+	//lint:ignore error-swallow best-effort post-commit cache eviction
 	_ = s.activeStore.DeleteActiveSession(ctx, characterID)
 
 	return &RoundResult{
@@ -368,6 +376,7 @@ func (s *Service) RetireSession(ctx context.Context, characterID string, session
 	}
 
 	// Upon successful MariaDB commit, purge transient buffer from Valkey Master
+	//lint:ignore error-swallow best-effort post-commit cache eviction
 	_ = s.activeStore.DeleteActiveSession(ctx, characterID)
 
 	return session, nil

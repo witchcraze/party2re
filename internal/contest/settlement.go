@@ -77,8 +77,12 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 					return err
 				}
 
-				_ = char.AddMoney(prize.Gold)
-				_ = char.AddSmallMedals(prize.SmallMedals)
+				if err := char.AddMoney(prize.Gold); err != nil {
+					return err
+				}
+				if err := char.AddSmallMedals(prize.SmallMedals); err != nil {
+					return err
+				}
 				if err := s.characters.Update(txCtx, char); err != nil {
 					return err
 				}
@@ -130,7 +134,9 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 					}
 					return err
 				}
-				_ = voterChar.AddSmallMedals(VoterBonusSmallMedals)
+				if err := voterChar.AddSmallMedals(VoterBonusSmallMedals); err != nil {
+					return err
+				}
 				if err := s.characters.Update(txCtx, voterChar); err != nil {
 					return err
 				}

@@ -189,7 +189,9 @@ func (s *Service) CompleteQuest(ctx context.Context, characterID, questID string
 			return err
 		}
 		for _, it := range remainingItems {
-			_ = newInv.Add(it)
+			if err := newInv.Add(it); err != nil {
+				return err
+			}
 		}
 		if err := s.inventories.Save(txCtx, newInv); err != nil {
 			return err
@@ -208,7 +210,9 @@ func (s *Service) CompleteQuest(ctx context.Context, characterID, questID string
 
 		// Award Guild Points if Guild Quest
 		if q.IsGuild && guildID != "" && s.guilds != nil {
-			_ = s.guilds.AddGuildPoints(txCtx, guildID, 100)
+			if err := s.guilds.AddGuildPoints(txCtx, guildID, 100); err != nil {
+				return err
+			}
 		}
 
 		// Update completed quest

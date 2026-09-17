@@ -174,7 +174,9 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 			for _, m := range members {
 				c := chars[m.CharacterID]
 				c.HeroCount++
-				_ = c.AddMoney(battleRes.TotalReward.Currency)
+				if err := c.AddMoney(battleRes.TotalReward.Currency); err != nil {
+					return fmt.Errorf("failed to add boss currency reward: %w", err)
+				}
 				if battleRes.TotalReward.Experience > 0 {
 					_, _ = progression.ApplyExperience(&c, battleRes.TotalReward.Experience)
 				}
@@ -218,7 +220,10 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 
 		stageTier := stageTierFromID(stage.ID)
 		for _, cID := range charIDs {
-			rec, _ := s.repo.GetOrCreateRecord(txCtx, cID)
+			rec, err := s.repo.GetOrCreateRecord(txCtx, cID)
+			if err != nil {
+				return fmt.Errorf("get or create boss record: %w", err)
+			}
 			isFirstClear := false
 			if isWin {
 				rec.TotalBossDefeats++
@@ -251,7 +256,9 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 		}
 
 		// 13. Disband party lobby
-		_ = s.partyRepo.DeleteParty(txCtx, partyID)
+		if err := s.partyRepo.DeleteParty(txCtx, partyID); err != nil {
+			return fmt.Errorf("failed to disband party: %w", err)
+		}
 
 		result = SealingBattleResult{
 			StageID:           stage.ID,
@@ -376,7 +383,9 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 				rewardItemID = s.pickTreasure(stage.TreasureItemIDs)
 			}
 			char.HeroCount++
-			_ = char.AddMoney(battleRes.TotalReward.Currency)
+			if err := char.AddMoney(battleRes.TotalReward.Currency); err != nil {
+				return fmt.Errorf("failed to add boss currency reward: %w", err)
+			}
 			if battleRes.TotalReward.Experience > 0 {
 				_, _ = progression.ApplyExperience(&char, battleRes.TotalReward.Experience)
 			}
@@ -411,7 +420,10 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 		}
 
 		stageTier := stageTierFromID(stage.ID)
-		rec, _ := s.repo.GetOrCreateRecord(txCtx, char.ID)
+		rec, err := s.repo.GetOrCreateRecord(txCtx, char.ID)
+		if err != nil {
+			return fmt.Errorf("get or create boss record: %w", err)
+		}
 		isFirstClear := false
 		if isWin {
 			rec.TotalBossDefeats++

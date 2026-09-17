@@ -236,6 +236,7 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}
 	if s.guildPoints != nil {
+		//lint:ignore error-swallow best-effort guild points bonus
 		_ = s.guildPoints.AddGuildPoints(ctx, characterID, 50)
 	}
 	return char, state, nil

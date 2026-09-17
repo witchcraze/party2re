@@ -63,6 +63,7 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 				// If transaction aborts before success, reset status back to recruiting
 				if result.Outcome == "" {
 					p.Status = StatusRecruiting
+					//lint:ignore error-swallow compensatory rollback in defer
 					_ = s.repo.UpdateParty(txCtx, p)
 				}
 			}()
@@ -174,9 +175,13 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 
 			// 9. Reset party status & ready states for members
 			p.Status = StatusRecruiting
-			_ = s.repo.UpdateParty(txCtx, p)
+			if err := s.repo.UpdateParty(txCtx, p); err != nil {
+				return fmt.Errorf("reset party status: %w", err)
+			}
 			for _, m := range members {
-				_ = s.repo.UpdateMemberReady(txCtx, partyID, m.CharacterID, false)
+				if err := s.repo.UpdateMemberReady(txCtx, partyID, m.CharacterID, false); err != nil {
+					return fmt.Errorf("reset member ready state: %w", err)
+				}
 			}
 
 			result = PartyAdventureResult{

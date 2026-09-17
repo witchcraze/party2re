@@ -39,13 +39,17 @@ func (s *Service) executeHeavenWish(
 	case WishSP:
 		wishName = "スキルを覚えたい"
 		desc = "Sp 50 アップ"
-		_ = char.AddSP(50)
+		if err := char.AddSP(50); err != nil {
+			return err
+		}
 		msg = "スキルポイントが 50 増加しました！"
 
 	case WishMoney:
 		wishName = "お金がほしい"
 		desc = "10 万G"
-		_ = char.AddMoney(100000)
+		if err := char.AddMoney(100000); err != nil {
+			return err
+		}
 		msg = "100,000 G を獲得しました！"
 
 	case WishCasinoCoins:
@@ -61,7 +65,9 @@ func (s *Service) executeHeavenWish(
 	case WishSmallMedals:
 		wishName = "小さなメダルがほしい"
 		desc = "20 枚"
-		_ = char.AddSmallMedals(20)
+		if err := char.AddSmallMedals(20); err != nil {
+			return err
+		}
 		msg = "小さなメダル 20 枚を獲得しました！"
 
 	case WishLotteryTickets:
@@ -134,10 +140,14 @@ func (s *Service) executeHeavenWish(
 		wishName = "新世界の神になりたい"
 		desc = "自分の家が…"
 		if s.profiles != nil {
-			_ = s.profiles.UpdateAvatar(ctx, char.ID, "chr/052.gif")
+			if err := s.profiles.UpdateAvatar(ctx, char.ID, "chr/052.gif"); err != nil {
+				return err
+			}
 		}
 		if s.homes != nil {
-			_ = s.homes.UpdateBgimg(ctx, char.ID, "god.gif")
+			if err := s.homes.UpdateBgimg(ctx, char.ID, "god.gif"); err != nil {
+				return err
+			}
 		}
 		msg = "新世界の神の姿と神殿のような住処を手に入れました！"
 

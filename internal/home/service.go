@@ -3,6 +3,7 @@ package home
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -83,9 +84,18 @@ func (s *Service) GetHomeView(ctx context.Context, homeCharacterID, visitorChara
 		return HomeView{}, err
 	}
 
-	unreadCount, _ := s.repo.GetUnreadLetterCount(ctx, homeCharacterID)
-	phrases, _ := s.repo.ListCompanionPhrases(ctx, homeCharacterID)
-	notices, _ := s.repo.ListDeliveryNotices(ctx, homeCharacterID, true)
+	unreadCount, err := s.repo.GetUnreadLetterCount(ctx, homeCharacterID)
+	if err != nil {
+		return HomeView{}, fmt.Errorf("getting unread letter count: %w", err)
+	}
+	phrases, err := s.repo.ListCompanionPhrases(ctx, homeCharacterID)
+	if err != nil {
+		return HomeView{}, fmt.Errorf("listing companion phrases: %w", err)
+	}
+	notices, err := s.repo.ListDeliveryNotices(ctx, homeCharacterID, true)
+	if err != nil {
+		return HomeView{}, fmt.Errorf("listing delivery notices: %w", err)
+	}
 
 	return HomeView{
 		Owner:                homeChar,

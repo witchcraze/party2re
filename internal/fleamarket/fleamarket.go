@@ -316,7 +316,9 @@ func (s *Service) PurchaseListing(
 		if err := buyerChar.DeductMoney(listing.Price); err != nil {
 			return ErrInsufficientGold
 		}
-		_ = sellerChar.AddMoney(listing.Price)
+		if err := sellerChar.AddMoney(listing.Price); err != nil {
+			return err
+		}
 
 		// 6. Deliver Item to Buyer Depot (legacy &send_item)
 		itemInst, err := coreitem.NewInstance(listing.ItemID, 1)

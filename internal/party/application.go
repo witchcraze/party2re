@@ -407,7 +407,9 @@ func (s *Service) LeaveParty(ctx context.Context, partyID, characterID string) e
 
 		if member.IsLeader {
 			p.Status = StatusDisbanded
-			_ = s.repo.UpdateParty(txCtx, p)
+			if err := s.repo.UpdateParty(txCtx, p); err != nil {
+				return err
+			}
 			return s.repo.DeleteParty(txCtx, partyID)
 		}
 
@@ -450,7 +452,9 @@ func (s *Service) DisbandParty(ctx context.Context, partyID, leaderCharID string
 			return ErrNotPartyLeader
 		}
 		p.Status = StatusDisbanded
-		_ = s.repo.UpdateParty(txCtx, p)
+		if err := s.repo.UpdateParty(txCtx, p); err != nil {
+			return err
+		}
 		return s.repo.DeleteParty(txCtx, partyID)
 	})
 }
