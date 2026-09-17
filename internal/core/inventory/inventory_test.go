@@ -174,3 +174,30 @@ func TestInventory_ConsumeItem_And_ConsumeOne(t *testing.T) {
 		t.Errorf("expected inventory to be empty, got %+v", inv.Items)
 	}
 }
+
+func TestInventoryCapacity(t *testing.T) {
+	inv, err := New("character-cap")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if inv.MaxCapacity() != DefaultMaxCapacity {
+		t.Fatalf("MaxCapacity() = %d, want %d", inv.MaxCapacity(), DefaultMaxCapacity)
+	}
+	if inv.IsFull() {
+		t.Fatal("empty inventory should not be full")
+	}
+
+	var nilInv *Inventory
+	if nilInv.IsFull() {
+		t.Fatal("nil inventory should not be full")
+	}
+
+	item1, _ := item.NewInstance("potion", 1)
+	if err := inv.Add(item1); err != nil {
+		t.Fatal(err)
+	}
+	if !inv.IsFull() {
+		t.Fatal("inventory with 1 item should be full at default capacity")
+	}
+}

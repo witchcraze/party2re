@@ -12,11 +12,28 @@ var (
 	ErrInvalidQuantity  = errors.New("item quantity is invalid")
 	ErrDuplicateItem    = errors.New("item instance already exists")
 	ErrItemNotFound     = errors.New("item instance not found")
+	ErrInventoryFull    = errors.New("inventory is full")
 )
+
+// DefaultMaxCapacity is 1, matching the legacy Party2 Perl CGI single hand slot constraint ($m{ite}).
+const DefaultMaxCapacity = 1
 
 type Inventory struct {
 	CharacterID string
 	Items       []item.Instance
+}
+
+// MaxCapacity returns the maximum number of items an inventory can hold.
+func (i *Inventory) MaxCapacity() int {
+	return DefaultMaxCapacity
+}
+
+// IsFull reports whether the inventory has reached or exceeded its maximum capacity.
+func (i *Inventory) IsFull() bool {
+	if i == nil {
+		return false
+	}
+	return len(i.Items) >= i.MaxCapacity()
 }
 
 func New(characterID string) (Inventory, error) {

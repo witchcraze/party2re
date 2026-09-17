@@ -300,6 +300,7 @@ All groups below are Version 1.0 reconstruction requirements.
 | [#663](https://github.com/witchcraze/party2re/issues/663) | Battle: Fix party item drop duplication, propagate level-up errors, and support recipient-targeted drops in ApplyPostBattleResult | Completed |
 | [#655](https://github.com/witchcraze/party2re/issues/655) | Adventure: Persist Floor 11 treasure box drops, depot fallback, and surviving HP/MP | Completed |
 | [#656](https://github.com/witchcraze/party2re/issues/656) | Party: Route Floor 11 treasure drops to depot on full inventory, prevent silent drop loss, and persist MP | Completed |
+| [#657](https://github.com/witchcraze/party2re/issues/657) | Combat: Replace raw SQL inventory inserts with capacity-validated model and Depot routing in Boss, Challenge, and Dungeon repositories | Completed |
 
 
 ---

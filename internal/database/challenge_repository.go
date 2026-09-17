@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/challenge"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/progression"
 )
 
 type ChallengeRepository struct {
@@ -362,25 +363,39 @@ func (r *ChallengeRepository) FinalizeSession(ctx context.Context, s challenge.C
 			return err
 		}
 
-		// 2. Award Character EXP & Gold
-		if expReward > 0 || goldReward > 0 {
-			updateCharQuery := `UPDATE characters SET experience = experience + ?, money = money + ? WHERE id = ?`
-			if _, err := executor.ExecContext(txCtx, updateCharQuery, expReward, goldReward, s.CharacterID); err != nil {
+		// 2. Lock Character (Rank 2) & Award EXP and Gold
+		charRepo := &CharacterRepository{db: r.db}
+		char, err := charRepo.FindByIDForUpdate(txCtx, s.CharacterID)
+		if err != nil {
+			return err
+		}
+
+		if goldReward > 0 {
+			_ = char.AddMoney(goldReward)
+		}
+		if expReward > 0 {
+			if _, err := progression.ApplyExperience(&char, expReward); err != nil {
 				return err
 			}
 		}
+		if err := charRepo.Update(txCtx, char); err != nil {
+			return err
+		}
 
-		// 3. Award Items
-		for _, itemDefID := range items {
-			if itemDefID == "" {
-				continue
+		// 3. Award Items with capacity enforcement and depot overflow (Rank 3 Inventory -> Rank 5 Depot)
+		if len(items) > 0 {
+			rewardInstances := make([]coreitem.Instance, 0, len(items))
+			for _, itemDefID := range items {
+				if itemDefID == "" {
+					continue
+				}
+				inst, err := coreitem.NewInstance(itemDefID, 1)
+				if err != nil {
+					return err
+				}
+				rewardInstances = append(rewardInstances, inst)
 			}
-			itemInstID := fmt.Sprintf("%032x", time.Now().UnixNano())
-			insertItemQuery := `
-				INSERT INTO inventory_items (id, character_id, definition_id, quantity)
-				VALUES (?, ?, ?, 1)
-			`
-			if _, err := executor.ExecContext(txCtx, insertItemQuery, itemInstID, s.CharacterID, itemDefID); err != nil {
+			if err := deliverRewardItems(txCtx, r.db, char, rewardInstances); err != nil {
 				return err
 			}
 		}

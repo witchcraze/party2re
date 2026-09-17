@@ -10,6 +10,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 type BossRepository struct {
@@ -160,22 +161,12 @@ func (r *BossRepository) RecordChallenge(
 			return err
 		}
 
-		// 4. Save item drop if present
+		// 4. Deliver reward item if present (Rank 3 Inventory -> Rank 5 Depot)
 		if rewardItem != nil {
-			insertItemQuery := `
-				INSERT INTO inventory_items (id, character_id, definition_id, quantity, enhancement_level)
-				VALUES (?, ?, ?, ?, ?)
-			`
-			_, err = executor.ExecContext(
-				txCtx,
-				insertItemQuery,
-				rewardItem.ID,
-				character.ID,
-				rewardItem.DefinitionID,
-				rewardItem.Quantity,
-				rewardItem.EnhancementLevel,
-			)
-			if err != nil {
+			if rewardItem.ID == "" {
+				rewardItem.ID = id.New()
+			}
+			if err := deliverRewardItems(txCtx, r.db, character, []coreitem.Instance{*rewardItem}); err != nil {
 				return err
 			}
 		}

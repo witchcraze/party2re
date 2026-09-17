@@ -9,6 +9,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/dungeon"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 type DungeonRepository struct {
@@ -250,22 +251,23 @@ func (r *DungeonRepository) FinalizeExpedition(
 			}
 		}
 
-		// 4. Insert rewarded item instances into inventory_items
-		for _, item := range rewardItems {
-			insertItemQuery := `
-				INSERT INTO inventory_items (id, character_id, definition_id, quantity, enhancement_level)
-				VALUES (?, ?, ?, ?, ?)
-			`
-			_, err = executor.ExecContext(
-				txCtx,
-				insertItemQuery,
-				item.ID,
-				record.CharacterID,
-				item.DefinitionID,
-				item.Quantity,
-				item.EnhancementLevel,
-			)
-			if err != nil {
+		// 4. Deliver reward item instances (Rank 3 Inventory -> Rank 5 Depot)
+		if len(rewardItems) > 0 {
+			charToUse := corecharacter.Character{ID: record.CharacterID}
+			if character != nil {
+				charToUse = *character
+			} else {
+				charRepo := &CharacterRepository{db: r.db}
+				if loaded, err := charRepo.FindByIDForUpdate(txCtx, record.CharacterID); err == nil {
+					charToUse = loaded
+				}
+			}
+			for i := range rewardItems {
+				if rewardItems[i].ID == "" {
+					rewardItems[i].ID = id.New()
+				}
+			}
+			if err := deliverRewardItems(txCtx, r.db, charToUse, rewardItems); err != nil {
 				return err
 			}
 		}
