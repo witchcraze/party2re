@@ -239,28 +239,18 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 
 func (s *Service) applyResourceUpdates(char *corecharacter.Character, charID string, res corebattle.PartyBattleResult) {
 	if remHP, ok := res.RemainingHP[charID]; ok {
-		if remHP <= 0 {
-			char.Stats.HP = 1 // Fallen combatant survives with 1 HP
-		} else {
-			char.Stats.HP = remHP
-			if char.Stats.MaxHP > 0 && char.Stats.HP > char.Stats.MaxHP {
-				char.Stats.HP = char.Stats.MaxHP
-			}
+		remMP := -1
+		if mp, hasMP := res.RemainingMP[charID]; hasMP && mp >= 0 {
+			remMP = mp
 		}
-	}
-
-	if remMP, ok := res.RemainingMP[charID]; ok && remMP >= 0 {
+		char.ApplyCombatSurvival(remHP, remMP, remHP <= 0)
+	} else if remMP, ok := res.RemainingMP[charID]; ok && remMP >= 0 {
 		char.Stats.MP = remMP
-		if char.Stats.MaxMP > 0 && char.Stats.MP > char.Stats.MaxMP {
-			char.Stats.MP = char.Stats.MaxMP
-		}
+		char.Stats.ClampVitality()
 	}
 
 	if res.BanishedIDs != nil && res.BanishedIDs[charID] {
-		char.Tired += 30
-		if char.Tired > 100 {
-			char.Tired = 100
-		}
+		char.AddTired(30)
 	}
 }
 

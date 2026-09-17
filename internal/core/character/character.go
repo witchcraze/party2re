@@ -133,6 +133,7 @@ func (s *Stats) Clamp(overLevel bool, level int) {
 			*value = limitCombat
 		}
 	}
+	s.ClampVitality()
 }
 
 type RandomSource interface {
@@ -335,8 +336,7 @@ func (c *Character) ApplyJobChange(targetJobID string, targetSP int) error {
 			*value = 10
 		}
 	}
-	c.Stats.HP = c.Stats.MaxHP
-	c.Stats.MP = c.Stats.MaxMP
+	c.RecoverVitality()
 	c.Level = InitialLevel
 	c.Experience = 0
 	c.JobLevel++
@@ -411,35 +411,6 @@ func (c *Character) ApplyFutureMemory(memory FutureMemory, currentSP, oldSP int)
 	c.SP = currentSP
 	c.OldSP = oldSP
 	return nil
-}
-
-// ResetTired resets character fatigue to 0 upon sleep or full recovery.
-func (c *Character) ResetTired() {
-	if c != nil {
-		c.Tired = 0
-	}
-}
-
-// AddTired adds fatigue percentage to character.
-func (c *Character) AddTired(delta int) {
-	if c != nil {
-		c.Tired += delta
-	}
-}
-
-// ReduceTired decreases character fatigue by delta percentage (e.g. celestial wishes).
-func (c *Character) ReduceTired(delta int) {
-	if c != nil {
-		c.Tired -= delta
-	}
-}
-
-// IsExhausted returns true if character fatigue is 100% or higher.
-func (c *Character) IsExhausted() bool {
-	if c == nil {
-		return false
-	}
-	return c.Tired >= 100
 }
 
 // RevertJobMemory restores character's original job and SP from temporary JobMemory if present.

@@ -317,7 +317,7 @@ func (s *Service) SpinSlot(ctx context.Context, characterID string, bet int64) (
 		} else {
 			// Miss: fatigue increases by +1 (party2/lib/casino.cgi:583, 588)
 			if s.charRepo != nil {
-				char.Tired += 1
+				char.AddTired(1)
 				if err := s.charRepo.Update(txCtx, char); err != nil {
 					return err
 				}

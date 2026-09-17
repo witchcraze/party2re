@@ -32,6 +32,11 @@ Every `Character` belongs to exactly one `Player`. A `Player` may own multiple c
 - Wealth beyond 999,999 G must be deposited into the Bank (`Character.Deposit`), which supports large-scale gold savings up to 99兆9999億9999万9999 G (`bank.MaxDeposit`).
 - `Character.SmallMedals` is capped at `999,999,999` (`corecharacter.MaxSmallMedals`).
 
+### 2.5 Vitality & Fatigue Invariants
+- **Vitality Bounds**: HP and MP are strictly bounded within `[0, MaxHP]` and `[0, MaxMP]` via `Stats.ClampVitality`. Restorative actions (sleeping, celestial recovery, job changes) restore full vitality via `Character.RecoverVitality`.
+- **Combat Survival Floor**: In combat settlement (`battle/apply.go`, `boss/battle.go`), fallen combatants (`HP <= 0` or fallen flag) survive with an authentic minimum floor of `1 HP` via `Character.ApplyCombatSurvival`. Surviving MP is updated and clamped within `[0, MaxMP]`.
+- **Fatigue Clamping**: Standard fatigue percentage is capped at `100%` (`AddTired`). Reaching `100%` triggers exhaustion (`IsExhausted() == true`), blocking adventures and fatigue-generating mini-games. Celestial wishes (`god.WishRefresh`, `ReduceTired(150)`) bypass the standard 0% floor to provide an authentic negative fatigue buffer against subsequent combat. Resting at home clears fatigue to 0 (`ResetTired`).
+
 ---
 
 ## 3. Data Schema & Persistence
