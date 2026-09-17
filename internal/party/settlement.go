@@ -2,6 +2,7 @@ package party
 
 import (
 	"context"
+	"fmt"
 	"slices"
 
 	"github.com/witchcraze/party2re/internal/adventure"
@@ -155,9 +156,13 @@ func (s *Service) settleFallback(
 		gainedGold := crawlResult.TotalGold
 		gainedCrystals := crawlResult.TotalCrystals
 
-		_ = c.AddMoney(gainedGold)
+		if err := c.AddMoney(gainedGold); err != nil {
+			return nil, nil, fmt.Errorf("adding gold for character %s: %w", cID, err)
+		}
 		if gainedCrystals > 0 {
-			_ = c.AddCrystal(gainedCrystals)
+			if err := c.AddCrystal(gainedCrystals); err != nil {
+				return nil, nil, fmt.Errorf("adding crystals for character %s: %w", cID, err)
+			}
 		}
 		if gainedEXP > 0 {
 			if _, err := progression.ApplyExperience(&c, gainedEXP); err != nil {

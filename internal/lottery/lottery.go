@@ -302,6 +302,7 @@ func (s *Service) PlayRaffle(ctx context.Context, characterID string, raffleType
 			}
 
 			if s.collectionRecorder != nil {
+				//lint:ignore error-swallow best-effort collection discovery
 				_ = s.collectionRecorder.RecordItemDiscovered(txCtx, characterID, prize.ItemDefinitionID, prize.Name, "item")
 			}
 		}

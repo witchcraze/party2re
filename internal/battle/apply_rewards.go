@@ -57,7 +57,11 @@ func (s *Service) applyRewardsForCharacter(
 	dropDefIDs []string,
 ) (int, int, int, progression.LevelUpResult, []coreitem.Instance, []coreitem.Instance, error) {
 	gainedGold := reward.Currency
-	_ = char.AddMoney(gainedGold)
+	if gainedGold > 0 {
+		if err := char.AddMoney(gainedGold); err != nil {
+			return 0, 0, 0, progression.LevelUpResult{}, nil, nil, err
+		}
+	}
 
 	gainedEXP := reward.Experience
 	var lvlRes progression.LevelUpResult
@@ -82,7 +86,9 @@ func (s *Service) applyRewardsForCharacter(
 	// Crystal rewards (_battle.cgi:145-150, 178-228)
 	gainedCrystals := reward.Crystals
 	if gainedCrystals > 0 {
-		_ = char.AddCrystal(gainedCrystals)
+		if err := char.AddCrystal(gainedCrystals); err != nil {
+			return 0, 0, 0, progression.LevelUpResult{}, nil, nil, err
+		}
 	}
 
 	var invDrops []coreitem.Instance

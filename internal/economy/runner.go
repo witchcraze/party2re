@@ -217,10 +217,14 @@ func (s *Service) ExecuteTransaction(ctx context.Context, req TransactionRequest
 				return ErrInvalidQuantity
 			}
 			if g.Gold > 0 {
-				_ = tc.Character.AddMoney(g.Gold)
+				if err := tc.Character.AddMoney(g.Gold); err != nil {
+					return err
+				}
 			}
 			if g.SmallMedals > 0 {
-				_ = tc.Character.AddSmallMedals(g.SmallMedals)
+				if err := tc.Character.AddSmallMedals(g.SmallMedals); err != nil {
+					return err
+				}
 			}
 			if g.ItemDefinitionID != "" && g.ItemQuantity > 0 {
 				if !inventoryLoaded {

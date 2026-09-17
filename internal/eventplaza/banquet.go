@@ -61,6 +61,7 @@ func (s *Service) RecordVictoryBanquet(
 	}
 
 	attendees := BanquetAttendeesForTier(tier)
+	//lint:ignore error-swallow best-effort banquet presence recording
 	_ = s.RecordBanquetPresence(ctx, banquet.ID, attendees, time.Hour)
 
 	return banquet, nil
@@ -112,7 +113,9 @@ func (s *Service) ToastBanquet(ctx context.Context, banquetID string, characterI
 		if rewardGold <= 0 {
 			rewardGold = DefaultToastGoldReward
 		}
-		_ = char.AddMoney(rewardGold)
+		if err := char.AddMoney(rewardGold); err != nil {
+			return err
+		}
 
 		if err := s.characterRepo.Update(txCtx, char); err != nil {
 			return fmt.Errorf("failed to update character money on toast: %w", err)

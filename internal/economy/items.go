@@ -214,10 +214,14 @@ func (s *Service) Exchange(ctx context.Context, req ExchangeRequest) (*ExchangeR
 			}
 		}
 		if req.AddGold > 0 {
-			_ = char.AddMoney(req.AddGold)
+			if err := char.AddMoney(req.AddGold); err != nil {
+				return err
+			}
 		}
 		if req.AddMedals > 0 {
-			_ = char.AddSmallMedals(req.AddMedals)
+			if err := char.AddSmallMedals(req.AddMedals); err != nil {
+				return err
+			}
 		}
 
 		// 2. Lock Inventory next

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #690 — [Bug] HTTP API: Reject invalid optional JSON before mutations
+Last updated: Issue #662 — [Architecture] Linter: Implement AST error-swallow linter and document mechanical lint test architecture
 
 ## Current phase
 
@@ -22,7 +22,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Agent Operating Rules** (`AGENTS.md`, `.agents/rules/`): ✅ Prescriptive constraint rules modularized into 9 rule files; rationale in `docs/architecture/`.
 - **Guidance Layer** (`.arch/`): ✅ Symbol-anchor module JSON + shared table reverse-index; verified by `arch_test.go`.
 - **Transient State Architecture** (`docs/architecture/transient-run-state.md`, `docs/architecture/valkey-keyspace.md`): ✅ Ephemeral Turn & Session Lobby Architecture (Candidate C) across multiplayer domains with 1800s sliding TTL, active ZSet index, distributed room locking (`WithRoomLock`), and Two-Phase Settlement into MariaDB Master. In-Progress Run Buffers (Candidate D) and Shared Boss HP (Candidate E) active.
-- **AST Linter Suite** (`make check`, `make arch-lint`): ✅ Automated static analysis enforcing transaction boundaries (`TransactionRunner`), deterministic lock hierarchy (Rank 0→8), file size (≤500 lines), ISP interface size (≤10 methods), dead code, Valkey keyspace, Battle Adapter boundary, crypto policy, and package boundaries.
+- **AST Linter Suite** (`make check`, `make arch-lint`): ✅ Automated static analysis enforcing transaction boundaries (`TransactionRunner`), deterministic lock hierarchy (Rank 0→8), silent error suppression prohibition (`error_swallow_lint_test.go`), file size (≤500 lines), ISP interface size (≤10 methods), dead code, Valkey keyspace, Battle Adapter boundary, crypto policy, and package boundaries. Documented in `docs/development/ast-linters.md`.
 - **Benchmark Framework** (`make bench`): ✅ Critical-path benchmarks + baseline regression detection.
 
 ### Core & Shared Components

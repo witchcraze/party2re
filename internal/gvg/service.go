@@ -229,6 +229,7 @@ func (s *Service) CreateRoom(ctx context.Context, creatorCharID string, req Crea
 		return RoomDetail{}, fmt.Errorf("save gvg room: %w", err)
 	}
 	if err := s.repo.SetCharacterRoom(ctx, char.ID, roomID); err != nil {
+		//lint:ignore error-swallow best-effort room cleanup on mapping failure
 		_ = s.repo.DeleteRoom(ctx, roomID)
 		return RoomDetail{}, fmt.Errorf("map character to gvg room: %w", err)
 	}
@@ -355,7 +356,9 @@ func (s *Service) LeaveRoom(ctx context.Context, charID string, roomID string) e
 		// Disband room if leader leaves or match completed
 		if detail.Room.LeaderCharacterID == charID || detail.Room.Status == StatusCompleted {
 			for _, m := range detail.Members {
-				_ = s.repo.DeleteCharacterRoom(lockedCtx, m.CharacterID)
+				if err := s.repo.DeleteCharacterRoom(lockedCtx, m.CharacterID); err != nil {
+					return err
+				}
 			}
 			return s.repo.DeleteRoom(lockedCtx, roomID)
 		}
@@ -377,7 +380,9 @@ func (s *Service) LeaveRoom(ctx context.Context, charID string, roomID string) e
 		}
 		detail.Room.UpdatedAt = time.Now().UTC()
 
-		_ = s.repo.DeleteCharacterRoom(lockedCtx, charID)
+		if err := s.repo.DeleteCharacterRoom(lockedCtx, charID); err != nil {
+			return err
+		}
 		return s.repo.SaveRoom(lockedCtx, detail.Room, detail.Members)
 	})
 }

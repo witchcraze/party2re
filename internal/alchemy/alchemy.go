@@ -387,9 +387,14 @@ func (s *Service) Claim(ctx context.Context, characterID string) (ClaimResult, e
 		// Check 100% compendium title
 		compAlcAwarded := false
 		craftedCount, err := s.repo.CountCraftedRecipes(txCtx, characterID)
-		if err == nil && craftedCount >= len(s.recipes.All()) && !state.CompAlc {
+		if err != nil {
+			return fmt.Errorf("count crafted recipes: %w", err)
+		}
+		if craftedCount >= len(s.recipes.All()) && !state.CompAlc {
 			state.CompAlc = true
-			_ = s.repo.SetCompAlcTitle(txCtx, characterID)
+			if err := s.repo.SetCompAlcTitle(txCtx, characterID); err != nil {
+				return fmt.Errorf("set comp alc title: %w", err)
+			}
 			compAlcAwarded = true
 		}
 

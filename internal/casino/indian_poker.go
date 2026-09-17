@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 )
@@ -277,15 +278,22 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 				// Eject members with 0 coins and set surviving to "待機中"
 				for _, m := range participants {
 					pAcc, err := s.repo.GetAccount(txCtx, m.CharacterID)
-					if err == nil && pAcc.Coins <= 0 {
-						_ = s.roomRepo.RemoveMember(txCtx, roomID, m.CharacterID)
+					if err != nil {
+						return fmt.Errorf("getting casino account for member %s: %w", m.CharacterID, err)
+					}
+					if pAcc.Coins <= 0 {
+						if err := s.roomRepo.RemoveMember(txCtx, roomID, m.CharacterID); err != nil {
+							return fmt.Errorf("removing eliminated member %s: %w", m.CharacterID, err)
+						}
 						if room.LeaderCharacterID == m.CharacterID && winnerID != "" {
 							room.LeaderCharacterID = winnerID
 						}
 					} else {
 						m.Action = "待機中"
 						m.UpdatedAt = time.Now().UTC()
-						_ = s.roomRepo.UpdateMember(txCtx, m)
+						if err := s.roomRepo.UpdateMember(txCtx, m); err != nil {
+							return fmt.Errorf("updating member %s status: %w", m.CharacterID, err)
+						}
 					}
 				}
 			}

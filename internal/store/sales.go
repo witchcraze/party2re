@@ -311,7 +311,9 @@ func (s *Service) BuyItem(ctx context.Context, buyerCharacterID, saleID string) 
 		if err := buyerChar.DeductMoney(sale.Price); err != nil {
 			return ErrInsufficientFunds
 		}
-		sellerChar.AddMoney(sale.Price)
+		if err := sellerChar.AddMoney(sale.Price); err != nil {
+			return err
+		}
 
 		if err := s.charRepo.Save(txCtx, *buyerChar); err != nil {
 			return err

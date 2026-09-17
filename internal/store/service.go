@@ -161,6 +161,7 @@ func (s *Service) BuildStore(ctx context.Context, characterID, townID, houseStyl
 
 		// Award guild points if applicable: 90 days * 10 = 900 GP
 		if s.guildPoints != nil {
+			//lint:ignore error-swallow best-effort guild points bonus
 			_ = s.guildPoints.AddGuildPoints(txCtx, characterID, StoreCycleDays*10)
 		}
 

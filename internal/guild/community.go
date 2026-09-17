@@ -45,7 +45,7 @@ func (s *Service) ApplyToJoin(ctx context.Context, guildID string, applicantID s
 	if _, err := s.repo.AddMember(ctx, m); err != nil {
 		return err
 	}
-	_ = s.repo.TouchActive(ctx, guildID)
+	s.touchActive(ctx, guildID)
 
 	// Send application letter to the Guild Master (join_guild.cgi:216-219)
 	if s.letterSender != nil && s.charReader != nil {
@@ -102,7 +102,7 @@ func (s *Service) ApproveApplication(ctx context.Context, guildID string, leader
 	if err := s.repo.ApproveMember(ctx, guildID, applicantID, title); err != nil {
 		return err
 	}
-	_ = s.repo.TouchActive(ctx, guildID)
+	s.touchActive(ctx, guildID)
 
 	// Send acceptance letter to applicant (guild.cgi:236-237)
 	if s.letterSender != nil && s.charReader != nil {
@@ -155,7 +155,7 @@ func (s *Service) RejectApplication(ctx context.Context, guildID string, leaderI
 	if err := s.repo.RemoveMember(ctx, guildID, applicantID); err != nil {
 		return err
 	}
-	_ = s.repo.TouchActive(ctx, guildID)
+	s.touchActive(ctx, guildID)
 
 	// Send rejection letter to applicant (guild.cgi:229-231)
 	if s.letterSender != nil && s.charReader != nil {
@@ -233,8 +233,9 @@ func (s *Service) BroadcastCallout(ctx context.Context, guildID string, senderID
 	}
 
 	// +1 Guild Point (guild.cgi:63)
+	//lint:ignore error-swallow best-effort guild activity tracking
 	_ = s.repo.AddPoints(ctx, guildID, 1)
-	_ = s.repo.TouchActive(ctx, guildID)
+	s.touchActive(ctx, guildID)
 	return nil
 }
 

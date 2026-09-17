@@ -174,6 +174,7 @@ func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInst
 				if cat == "" {
 					cat = "consumable"
 				}
+				//lint:ignore error-swallow best-effort collection discovery
 				_ = s.collector.RecordItemDiscovered(tc.Context, characterID, def.ID, def.Name, cat)
 			}
 		}

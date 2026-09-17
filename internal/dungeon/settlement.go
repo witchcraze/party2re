@@ -45,10 +45,14 @@ func (s *Service) handleDungeonClear(
 	if exp.AccumulatedExp > 0 {
 		_, _ = progression.ApplyExperience(char, exp.AccumulatedExp)
 	}
-	_ = char.AddMoney(exp.AccumulatedGold)
+	if err := char.AddMoney(exp.AccumulatedGold); err != nil {
+		return ExpeditionStepResult{}, fmt.Errorf("adding gold: %w", err)
+	}
 	medalsBonus := dungeon.Tier
 	exp.AccumulatedMedals += medalsBonus
-	_ = char.AddSmallMedals(exp.AccumulatedMedals)
+	if err := char.AddSmallMedals(exp.AccumulatedMedals); err != nil {
+		return ExpeditionStepResult{}, fmt.Errorf("adding small medals: %w", err)
+	}
 
 	rewardItems := make([]coreitem.Instance, 0, len(exp.AccumulatedItems))
 	for _, defID := range exp.AccumulatedItems {
@@ -62,7 +66,10 @@ func (s *Service) handleDungeonClear(
 	}
 
 	// 2. Update Dungeon Record
-	rec, _ := s.repo.GetRecord(ctx, char.ID)
+	rec, err := s.repo.GetRecord(ctx, char.ID)
+	if err != nil {
+		return ExpeditionStepResult{}, fmt.Errorf("getting dungeon record: %w", err)
+	}
 	rec.TotalExpeditions++
 	rec.TotalFloorsCleared += exp.CurrentFloor
 	if dungeon.Tier > rec.HighestDungeonCleared {
@@ -90,7 +97,9 @@ func (s *Service) handleDungeonClear(
 	}
 
 	// Upon successful MariaDB commit, purge transient buffer from Valkey Master
+	//lint:ignore error-swallow best-effort post-commit cache eviction
 	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
+	//lint:ignore error-swallow best-effort post-commit fallback cleanup
 	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
 
 	return ExpeditionStepResult{
@@ -118,8 +127,12 @@ func (s *Service) handleEscape(
 	if exp.AccumulatedExp > 0 {
 		_, _ = progression.ApplyExperience(char, exp.AccumulatedExp)
 	}
-	_ = char.AddMoney(exp.AccumulatedGold)
-	_ = char.AddSmallMedals(exp.AccumulatedMedals)
+	if err := char.AddMoney(exp.AccumulatedGold); err != nil {
+		return ExpeditionStepResult{}, fmt.Errorf("adding gold: %w", err)
+	}
+	if err := char.AddSmallMedals(exp.AccumulatedMedals); err != nil {
+		return ExpeditionStepResult{}, fmt.Errorf("adding small medals: %w", err)
+	}
 
 	rewardItems := make([]coreitem.Instance, 0, len(exp.AccumulatedItems))
 	for _, defID := range exp.AccumulatedItems {
@@ -132,7 +145,10 @@ func (s *Service) handleEscape(
 		})
 	}
 
-	rec, _ := s.repo.GetRecord(ctx, char.ID)
+	rec, err := s.repo.GetRecord(ctx, char.ID)
+	if err != nil {
+		return ExpeditionStepResult{}, fmt.Errorf("getting dungeon record: %w", err)
+	}
 	rec.TotalExpeditions++
 	rec.TotalFloorsCleared += exp.CurrentFloor
 
@@ -156,7 +172,9 @@ func (s *Service) handleEscape(
 	}
 
 	// Upon successful MariaDB commit, purge transient buffer from Valkey Master
+	//lint:ignore error-swallow best-effort post-commit cache eviction
 	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
+	//lint:ignore error-swallow best-effort post-commit fallback cleanup
 	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
 
 	return ExpeditionStepResult{
@@ -180,7 +198,10 @@ func (s *Service) handleWipeout(
 	exp.Status = StatusWipedOut
 	exp.UpdatedAt = now
 
-	rec, _ := s.repo.GetRecord(ctx, char.ID)
+	rec, err := s.repo.GetRecord(ctx, char.ID)
+	if err != nil {
+		return ExpeditionStepResult{}, fmt.Errorf("getting dungeon record: %w", err)
+	}
 	rec.TotalExpeditions++
 
 	histID := id.New()
@@ -203,7 +224,9 @@ func (s *Service) handleWipeout(
 	}
 
 	// Upon successful MariaDB commit, purge transient buffer from Valkey Master
+	//lint:ignore error-swallow best-effort post-commit cache eviction
 	_ = s.activeStore.DeleteActiveExpedition(ctx, char.ID)
+	//lint:ignore error-swallow best-effort post-commit fallback cleanup
 	_ = s.repo.DeleteActiveExpedition(ctx, char.ID)
 
 	return ExpeditionStepResult{

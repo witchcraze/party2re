@@ -363,7 +363,9 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 		}
 
 		if s.adventures != nil {
-			_ = s.adventures.Save(ctx, adv)
+			if err := s.adventures.Save(ctx, adv); err != nil {
+				return DungeonCrawlResult{}, fmt.Errorf("saving adventure record: %w", err)
+			}
 		}
 
 		// Apply fallback experience, gold, crystal, and surviving HP/MP if battleSettler is not configured
@@ -384,15 +386,21 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 					_, _ = progression.ApplyExperience(&c, result.TotalEXP)
 				}
 				if result.TotalGold > 0 {
-					_ = c.AddMoney(result.TotalGold)
+					if err := c.AddMoney(result.TotalGold); err != nil {
+						return DungeonCrawlResult{}, fmt.Errorf("adding gold for character %s: %w", c.ID, err)
+					}
 				}
 				if result.TotalCrystals > 0 {
-					_ = c.AddCrystal(result.TotalCrystals)
+					if err := c.AddCrystal(result.TotalCrystals); err != nil {
+						return DungeonCrawlResult{}, fmt.Errorf("adding crystals for character %s: %w", c.ID, err)
+					}
 				}
 			}
 
 			if updater, ok := s.characters.(CharacterUpdater); ok {
-				_ = updater.Update(ctx, c)
+				if err := updater.Update(ctx, c); err != nil {
+					return DungeonCrawlResult{}, fmt.Errorf("updating character %s: %w", c.ID, err)
+				}
 			}
 		}
 

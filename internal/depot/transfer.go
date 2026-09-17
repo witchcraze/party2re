@@ -56,7 +56,9 @@ func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID 
 		if err := sender.DeductMoney(amount); err != nil {
 			return ErrInsufficientFunds
 		}
-		_ = recipient.AddMoney(amount)
+		if err := recipient.AddMoney(amount); err != nil {
+			return err
+		}
 
 		if err := s.charRepo.Update(txCtx, sender); err != nil {
 			return err

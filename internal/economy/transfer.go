@@ -50,7 +50,9 @@ func (s *Service) TransferGold(ctx context.Context, fromCharacterID, toCharacter
 		if err := sender.DeductMoney(amount); err != nil {
 			return ErrInsufficientGold
 		}
-		_ = recipient.AddMoney(amount)
+		if err := recipient.AddMoney(amount); err != nil {
+			return err
+		}
 
 		if err := s.characters.Update(txCtx, sender); err != nil {
 			return err
