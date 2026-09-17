@@ -3,6 +3,7 @@ package plantation_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -526,11 +527,12 @@ func TestHarvest_DepotFull(t *testing.T) {
 		MaturesAt:    now.Add(-1 * time.Hour),
 	}
 
-	// Depot with capacity 1 and already filled
+	// Depot filled to capacity (5 slots for JobLevel 0)
 	dep, _ := depot.NewDepot(charID)
-	dep.Capacity = 1
-	dummy, _ := coreitem.NewInstance("item-001", 1)
-	_ = dep.AddItem(dummy)
+	for i := 1; i <= 5; i++ {
+		inst, _ := coreitem.NewInstance(fmt.Sprintf("armor-%02d", i), 1)
+		_ = dep.AddItem(inst)
+	}
 	_ = depotRepo.Save(context.Background(), dep)
 
 	rng := &mockRNG{values: []int{50, 0, 50, 0}}

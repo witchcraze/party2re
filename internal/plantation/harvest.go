@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
 )
 
 // Harvest collects the matured crop, evaluates wither and yield bonuses, and deposits harvested items into Depot.
@@ -20,16 +21,22 @@ func (s *Service) Harvest(ctx context.Context, characterID string) (HarvestResul
 	var res HarvestResult
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		// Rank 2: Lock Character
-		_, err := s.characters.FindByIDForUpdate(txCtx, characterID)
+		char, err := s.characters.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
 			return err
 		}
 
 		// Rank 5: Lock Depot
 		dep, err := s.depots.FindByCharacterIDForUpdate(txCtx, characterID)
-		if err != nil {
+		if errors.Is(err, depot.ErrNotFound) {
+			dep, err = depot.NewDepotWithCapacity(char.ID, char.JobLevel, 0, char.OverDepot)
+			if err != nil {
+				return err
+			}
+		} else if err != nil {
 			return err
 		}
+		dep.RefreshCapacity(char.JobLevel, char.OverDepot)
 
 		// Rank 8: Lock Plantation Plot
 		plot, err := s.plots.GetPlotForUpdate(txCtx, characterID)

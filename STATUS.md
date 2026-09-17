@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #685 — [Architecture] Core/Character: Enforce crystal currency mutation encapsulation and AST linter protection
+Last updated: Issue #678 — [Bug] God/Altar/Medal: Fix hardcoded JobLevel 0 and missing RefreshCapacity in depot delivery and underworld expansion
 
 ## Current phase
 
@@ -43,7 +43,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Adventure** (`internal/adventure`): ✅ 10-floor dungeon crawl, Floor 11 treasure room, post-battle settlement, and combat chronicles.
 - **Medal & Achievements** (`internal/medal`): ✅ Small Medal depot exchange and lifetime gameplay milestone achievement tracking.
 - **Shop** (`internal/shop`): ✅ 3 town shops with job-level gates, 50% sellback, and depot auto-delivery.
-- **Depot** (`internal/depot`): ✅ Up to 500 slots storage, tiered expansion, sort, sell, direct-send, item consumption, and centralized transactional reward item delivery.
+- **Depot** (`internal/depot`): ✅ Up to 500 slots storage, tiered expansion, sort, sell, direct-send, item consumption, centralized transactional reward item delivery, and dynamic capacity refresh across all delivery consumers.
 - **Blacksmith & Weapon Seals** (`internal/blacksmith`): ✅ 12 crystal weapon seals, equipment naming, 3-slot weapon storage, combat seal effects, and monster crystal drops.
 - **Alchemy** (`internal/alchemy`): ✅ 112 crafting recipes, depot-linked overnight synthesis, home sleep completion, and recipe compendium.
 - **Bank** (`internal/bank`): ✅ Gold deposits and withdrawals with 999,999G wallet clamp.

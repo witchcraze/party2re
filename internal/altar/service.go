@@ -170,13 +170,14 @@ func (s *Service) Wish(ctx context.Context, characterID string, itemID string) (
 			deliveredTo = "depot"
 			dep, err := s.depots.FindByCharacterIDForUpdate(txCtx, characterID)
 			if errors.Is(err, depot.ErrNotFound) {
-				dep, err = depot.NewDepotWithCapacity(char.ID, 0, 0, char.OverDepot)
+				dep, err = depot.NewDepotWithCapacity(char.ID, char.JobLevel, 0, char.OverDepot)
 				if err != nil {
 					return err
 				}
 			} else if err != nil {
 				return err
 			}
+			dep.RefreshCapacity(char.JobLevel, char.OverDepot)
 
 			inst, err := coreitem.NewInstance(itemID, 1)
 			if err != nil {
