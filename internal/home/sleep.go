@@ -249,8 +249,7 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 		char = c
 	}
 
-	char.Stats.HP = char.Stats.MaxHP
-	char.Stats.MP = char.Stats.MaxMP
+	char.RecoverVitality()
 	char.ResetTired()
 	char.RevertJobMemory()
 

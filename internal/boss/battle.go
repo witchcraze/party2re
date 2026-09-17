@@ -81,10 +81,7 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 		// 5. Entry fatigue cost: each participant gets +20% Tired ($m{tired} += 20)
 		for _, cID := range charIDs {
 			c := chars[cID]
-			c.Tired += 20
-			if c.Tired > 100 {
-				c.Tired = 100
-			}
+			c.AddTired(20)
 			chars[cID] = c
 		}
 
@@ -141,29 +138,20 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 		for _, cID := range charIDs {
 			c := chars[cID]
 			if remHP, ok := battleRes.RemainingHP[cID]; ok {
-				if remHP <= 0 {
-					c.Stats.HP = 1
-				} else {
-					c.Stats.HP = remHP
-					if c.Stats.MaxHP > 0 && c.Stats.HP > c.Stats.MaxHP {
-						c.Stats.HP = c.Stats.MaxHP
-					}
+				remMP := -1
+				if mp, hasMP := battleRes.RemainingMP[cID]; hasMP && mp >= 0 {
+					remMP = mp
 				}
-			}
-			if remMP, ok := battleRes.RemainingMP[cID]; ok && remMP >= 0 {
+				c.ApplyCombatSurvival(remHP, remMP, remHP <= 0)
+			} else if remMP, ok := battleRes.RemainingMP[cID]; ok && remMP >= 0 {
 				c.Stats.MP = remMP
-				if c.Stats.MaxMP > 0 && c.Stats.MP > c.Stats.MaxMP {
-					c.Stats.MP = c.Stats.MaxMP
-				}
+				c.Stats.ClampVitality()
 			}
 
 			// Dejon banishment: +30% Tired ($m{tired} += 30)
 			if battleRes.BanishedIDs != nil && battleRes.BanishedIDs[cID] {
 				banishedList = append(banishedList, cID)
-				c.Tired += 30
-				if c.Tired > 100 {
-					c.Tired = 100
-				}
+				c.AddTired(30)
 			}
 			chars[cID] = c
 		}
@@ -316,10 +304,7 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 		}
 
 		// Entry fatigue cost: +20% Tired ($m{tired} += 20)
-		char.Tired += 20
-		if char.Tired > 100 {
-			char.Tired = 100
-		}
+		char.AddTired(20)
 
 		var p corebattle.Participant
 		if s.participantBuilder != nil {
@@ -362,29 +347,20 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 
 		banishedList := make([]string, 0)
 		if remHP, ok := battleRes.RemainingHP[char.ID]; ok {
-			if remHP <= 0 {
-				char.Stats.HP = 1
-			} else {
-				char.Stats.HP = remHP
-				if char.Stats.MaxHP > 0 && char.Stats.HP > char.Stats.MaxHP {
-					char.Stats.HP = char.Stats.MaxHP
-				}
+			remMP := -1
+			if mp, hasMP := battleRes.RemainingMP[char.ID]; hasMP && mp >= 0 {
+				remMP = mp
 			}
-		}
-		if remMP, ok := battleRes.RemainingMP[char.ID]; ok && remMP >= 0 {
+			char.ApplyCombatSurvival(remHP, remMP, remHP <= 0)
+		} else if remMP, ok := battleRes.RemainingMP[char.ID]; ok && remMP >= 0 {
 			char.Stats.MP = remMP
-			if char.Stats.MaxMP > 0 && char.Stats.MP > char.Stats.MaxMP {
-				char.Stats.MP = char.Stats.MaxMP
-			}
+			char.Stats.ClampVitality()
 		}
 
 		// Dejon banishment: +30% Tired ($m{tired} += 30)
 		if battleRes.BanishedIDs != nil && battleRes.BanishedIDs[char.ID] {
 			banishedList = append(banishedList, char.ID)
-			char.Tired += 30
-			if char.Tired > 100 {
-				char.Tired = 100
-			}
+			char.AddTired(30)
 		}
 
 		outcome := battleRes.Outcome

@@ -24,7 +24,7 @@ Player persistence stores a salted, iterated password hash (`bcrypt`, cost 12). 
 ### Character
 
 **Responsibility:** The player's in-game character identity and fundamental attributes.
-Linked to `Player` via `player_id`. Owns character customization (naming hall, gender changes, profile bio/avatar), wallet operations (`Money`, strictly capped at 999,999G), and crystal currency (`Crystal`, capped at 999,999). Direct field mutations on currency and progression fields are mechanically prohibited outside Core and database mappers via Go AST static analysis.
+Linked to `Player` via `player_id`. Owns character customization (naming hall, gender changes, profile bio/avatar), wallet operations (`Money`, strictly capped at 999,999G), crystal currency (`Crystal`, capped at 999,999), vitality clamping (`Stats.ClampVitality`, `RecoverVitality`), 1 HP fallen combat survival (`ApplyCombatSurvival`), and fatigue management (`AddTired` capped at 100%, `ReduceTired` allowing authentic celestial buffer). Direct field mutations on currency, progression, and resource fields are mechanically prohibited outside Core and database mappers via Go AST static analysis.
 
 ### Progression
 
