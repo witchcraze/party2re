@@ -196,6 +196,9 @@ func (s *Service) Synthesize(ctx context.Context, characterID string, recipeID s
 		// Rank 5: Lock Depot
 		dep, err := s.depots.FindByCharacterIDForUpdate(txCtx, characterID)
 		if err != nil {
+			if errors.Is(err, depot.ErrNotFound) {
+				return ErrInsufficientMaterials
+			}
 			return err
 		}
 
@@ -337,7 +340,7 @@ func (s *Service) Claim(ctx context.Context, characterID string) (ClaimResult, e
 		}
 
 		// Rank 5: Lock Depot
-		dep, err := s.depots.FindByCharacterIDForUpdate(txCtx, characterID)
+		dep, err := depot.FindOrCreate(txCtx, s.depots, char)
 		if err != nil {
 			return err
 		}

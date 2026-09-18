@@ -168,17 +168,10 @@ func DeliverRewardItems(
 		return results, nil
 	}
 
-	dep, err := depotRepo.FindByCharacterIDForUpdate(ctx, char.ID)
-	if errors.Is(err, ErrNotFound) {
-		dep, err = NewDepotWithCapacity(char.ID, char.JobLevel, 0, char.OverDepot)
-		if err != nil {
-			return nil, err
-		}
-	} else if err != nil {
+	dep, err := FindOrCreate(ctx, depotRepo, char)
+	if err != nil {
 		return nil, err
 	}
-
-	dep.RefreshCapacity(char.JobLevel, char.OverDepot)
 
 	depotChanged := false
 	for _, inst := range overflow {

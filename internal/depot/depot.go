@@ -3,6 +3,7 @@ package depot
 import (
 	"context"
 	"errors"
+	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -233,6 +234,30 @@ func (d *Depot) PurgeSlot(instanceID string) (item.Instance, error) {
 // Deprecated: Use Consume or ConsumeOne for safe quantity decrements, or PurgeSlot if intentional whole-slot deletion is required.
 func (d *Depot) RemoveItem(instanceID string) (item.Instance, error) {
 	return d.PurgeSlot(instanceID)
+}
+
+// DepotFinder provides access to retrieve a depot under pessimistic lock.
+type DepotFinder interface {
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (Depot, error)
+}
+
+// FindOrCreate retrieves the character's depot under lock, initializes a new depot with JobLevel/OverDepot if not found, and refreshes capacity.
+func FindOrCreate(ctx context.Context, repo DepotFinder, char corecharacter.Character) (Depot, error) {
+	if repo == nil {
+		return Depot{}, errors.New("depot finder repository is required")
+	}
+	if strings.TrimSpace(char.ID) == "" {
+		return Depot{}, ErrInvalidCharacterID
+	}
+	dep, err := repo.FindByCharacterIDForUpdate(ctx, char.ID)
+	if errors.Is(err, ErrNotFound) {
+		return NewDepotWithCapacity(char.ID, char.JobLevel, 0, char.OverDepot)
+	}
+	if err != nil {
+		return Depot{}, err
+	}
+	dep.RefreshCapacity(char.JobLevel, char.OverDepot)
+	return dep, nil
 }
 
 type Repository interface {

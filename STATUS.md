@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #705 — [Bug] Dungeon: Robust transactional settlement and error propagation
+Last updated: Issue #712 — [Refactor] Storage: Unify FindOrCreate depot helper and fix capacity refresh across Alchemy and Auction
 
 ## Current phase
 
@@ -43,16 +43,16 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Adventure** (`internal/adventure`): ✅ 10-floor dungeon crawl, Floor 11 treasure room, post-battle settlement, and combat chronicles.
 - **Medal & Achievements** (`internal/medal`): ✅ Small Medal depot exchange and lifetime gameplay milestone achievement tracking.
 - **Shop** (`internal/shop`): ✅ 3 town shops with job-level gates, 50% sellback, and depot auto-delivery.
-- **Depot** (`internal/depot`): ✅ Up to 500 slots storage, tiered expansion, sort, sell, direct-send, item consumption, centralized transactional reward item delivery, and dynamic capacity refresh across all delivery consumers.
+- **Depot** (`internal/depot`): ✅ Up to 500 slots storage, tiered expansion, sort, sell, direct-send, item consumption, centralized transactional reward item delivery, unified `FindOrCreate` helper, and dynamic capacity refresh across delivery consumers.
 - **Blacksmith & Weapon Seals** (`internal/blacksmith`): ✅ 12 crystal weapon seals, equipment naming, 3-slot weapon storage, combat seal effects, and monster crystal drops.
-- **Alchemy** (`internal/alchemy`): ✅ 112 crafting recipes, depot-linked overnight synthesis, home sleep completion, and recipe compendium.
+- **Alchemy** (`internal/alchemy`): ✅ 112 crafting recipes, depot-linked overnight synthesis, home sleep completion, recipe compendium, and robust depot delivery with dynamic capacity refresh on claim.
 - **Bank** (`internal/bank`): ✅ Gold deposits and withdrawals with 999,999G wallet clamp.
 - **Guild** (`internal/guild`): ✅ Foundation, dynamic Guild Points, custom roles, hex colors, membership applications, and 20-day inactivity auto-disbandment.
 - **Casino** (`internal/casino`): ✅ Multi-player room lobby (2..8 players), Indian Poker, High-Low, Doppelganger, 3-reel slot machine, and 18 depot prizes.
 - **Lottery & Raffle** (`internal/lottery`): ✅ Server-wide 20-cap Takarakuji lottery with rollover jackpot; Tavern Fukubiki raffle (Standard & Special).
 - **Monster Ranch** (`internal/monster`): ✅ Monster stabling (50–300 cap), Home pet link (8 pets), renaming, P2P gifting, and wild release.
 - **Plantation** (`internal/plantation`): ✅ 6 seeds, 14 fertilizer reagents, midnight JST maturation, wither/yield bonuses, and depot harvest delivery.
-- **Auction Hall** (`internal/auction`): ✅ Live P2P trade hall (`@おくる`/`@しらべる`).
+- **Auction Hall** (`internal/auction`): ✅ Live P2P trade hall (`@おくる`/`@しらべる`) with uninitialized recipient depot initialization and dynamic capacity refresh.
 - **Collection & Monster Book** (`internal/collection`): ✅ Illustrated monster and item encyclopedia with auto-record on obtain.
 - **Chapel & Blessings** (`internal/chapel`): ✅ 5 town church blessings with single-active prayer constraint and daily reset worker.
 - **Colosseum PvP** (`internal/pvp`): ✅ Real-time 2..8 player room recruitment, Bet & Split prize pools, 9 team colors, and multi-round combat resolution.

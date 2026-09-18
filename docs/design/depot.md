@@ -33,6 +33,11 @@ Where:
 
 Because `character_depots.capacity` is initialized at character creation and character job levels advance dynamically over time, commerce and delivery modules (`shop`, `secretshop`, `blackmarket`, `fleamarket`, `auction`, `store`, `god`, `altar`, `medal`, `plantation`) MUST synchronize the in-memory depot capacity using `dep.RefreshCapacity(char.JobLevel, char.OverDepot)` before performing capacity boundary checks. This guarantees that high-level characters enjoy their full dynamic depot capacity (up to 500 slots) across all trade and item receipt operations.
 
+### Centralized Retrieval & Dynamic Capacity Initialization (`FindOrCreate`)
+
+To eliminate repetitive boilerplate and prevent uninitialized depot or stale capacity errors when delivering items (e.g., `auction`, `alchemy`, `plantation`, `delivery`), callers should use `depot.FindOrCreate(ctx, repo, char)`.
+`FindOrCreate` retrieves the depot under pessimistic lock (`FindByCharacterIDForUpdate`). If no depot record exists yet for the character, it initializes a new `Depot` with dynamic capacity reflecting the character's `JobLevel` and `OverDepot`. If a record already exists, it refreshes the capacity via `dep.RefreshCapacity(char.JobLevel, char.OverDepot)`. This ensures that recipients and crafters never fail with uninitialized `ErrNotFound` or premature `ErrDepotFull`.
+
 ## Operations & Invariants
 
 ### 1. Item Deposit & Withdrawal

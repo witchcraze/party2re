@@ -3,6 +3,7 @@ package depot
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 
@@ -870,4 +871,102 @@ func TestDepot_Consume_MultiQuantityAndPurge(t *testing.T) {
 	if err != nil || removed.Quantity != 99 || len(d.Items) != 0 {
 		t.Errorf("RemoveItem failed: err=%v, removed=%+v, remaining=%d", err, removed, len(d.Items))
 	}
+}
+
+func TestFindOrCreate(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("creates new depot when not found and sets dynamic capacity", func(t *testing.T) {
+		repo := newMemoryDepotRepo()
+		char := corecharacter.Character{
+			ID:        "char-new",
+			JobLevel:  5,
+			OverDepot: 1,
+		}
+
+		dep, err := FindOrCreate(ctx, repo, char)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if dep.CharacterID != "char-new" {
+			t.Errorf("expected CharacterID char-new, got %s", dep.CharacterID)
+		}
+		expectedCap := CalculateCapacity(5, 0, 1) // 5*5+5 + 0 + 50 = 80
+		if dep.Capacity != expectedCap {
+			t.Errorf("expected capacity %d, got %d", expectedCap, dep.Capacity)
+		}
+		if len(dep.Items) != 0 {
+			t.Errorf("expected empty items, got %d", len(dep.Items))
+		}
+	})
+
+	t.Run("loads existing depot and refreshes capacity", func(t *testing.T) {
+		repo := newMemoryDepotRepo()
+		// Existing depot with initial capacity 5 and 1 expansion
+		existing := Depot{
+			CharacterID: "char-existing",
+			ExDepot:     1,
+			Capacity:    5,
+			Items: []item.Instance{
+				{ID: "item-1", DefinitionID: "herb", Quantity: 1},
+			},
+		}
+		_ = repo.Save(ctx, existing)
+
+		char := corecharacter.Character{
+			ID:        "char-existing",
+			JobLevel:  20,
+			OverDepot: 2,
+		}
+
+		dep, err := FindOrCreate(ctx, repo, char)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if dep.CharacterID != "char-existing" {
+			t.Errorf("expected CharacterID char-existing, got %s", dep.CharacterID)
+		}
+		if len(dep.Items) != 1 {
+			t.Errorf("expected 1 item, got %d", len(dep.Items))
+		}
+		// Refreshed: jobLv 20 -> 20*5+5=105, exDepot 1 -> 5, overDepot 2 -> 100 => 210
+		expectedCap := CalculateCapacity(20, 1, 2)
+		if dep.Capacity != expectedCap {
+			t.Errorf("expected refreshed capacity %d, got %d", expectedCap, dep.Capacity)
+		}
+	})
+
+	t.Run("returns error when repo is nil", func(t *testing.T) {
+		char := corecharacter.Character{ID: "char-1"}
+		_, err := FindOrCreate(ctx, nil, char)
+		if err == nil {
+			t.Fatal("expected error for nil repo, got nil")
+		}
+	})
+
+	t.Run("returns error when character ID is empty", func(t *testing.T) {
+		repo := newMemoryDepotRepo()
+		char := corecharacter.Character{ID: ""}
+		_, err := FindOrCreate(ctx, repo, char)
+		if !errors.Is(err, ErrInvalidCharacterID) {
+			t.Fatalf("expected ErrInvalidCharacterID, got %v", err)
+		}
+	})
+
+	t.Run("propagates repository error", func(t *testing.T) {
+		repo := &errDepotFinder{err: errors.New("db disconnected")}
+		char := corecharacter.Character{ID: "char-err"}
+		_, err := FindOrCreate(ctx, repo, char)
+		if err == nil || !strings.Contains(err.Error(), "db disconnected") {
+			t.Fatalf("expected db disconnected error, got %v", err)
+		}
+	})
+}
+
+type errDepotFinder struct {
+	err error
+}
+
+func (e *errDepotFinder) FindByCharacterIDForUpdate(_ context.Context, _ string) (Depot, error) {
+	return Depot{}, e.err
 }

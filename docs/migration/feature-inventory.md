@@ -88,6 +88,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Centralized transactional reward item delivery engine with configurable depot overflow routing ([#679](https://github.com/witchcraze/party2re/issues/679))
 - [x] Unified dual-source item resolution and consumption across Inventory and Depot with deterministic Rank 3 -> Rank 5 lock ordering ([#683](https://github.com/witchcraze/party2re/issues/683))
 - [x] Crystal currency mutation encapsulation and AST linter protection ([#685](https://github.com/witchcraze/party2re/issues/685))
+- [x] Centralized depot FindOrCreate helper and dynamic capacity refresh across item delivery and trade modules ([#712](https://github.com/witchcraze/party2re/issues/712))
 
 ### D. Adventure, Maps, Stages, and Battle
 - [x] Reusable deterministic Battle component & turn resolver ([#12](https://github.com/witchcraze/party2re/issues/12), [#20](https://github.com/witchcraze/party2re/issues/20), [#36](https://github.com/witchcraze/party2re/issues/36))
