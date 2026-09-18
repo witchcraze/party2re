@@ -106,6 +106,8 @@ Multi-player party crawls grant cooperative reward boosts:
 ### Event Hooks & Integrations
 - **Victory Hook (`adventure.VictoryHook`)**: Invoked when an adventure or party expedition concludes with a victory. Automatically records milestone achievements in `internal/medal` (`adventure_victories`, `monsters_slain`, `gold_earned`).
 - **Post-Adventure Hook (`adventure.PostAdventureHook`)**: Invoked after crawl rewards and character state are committed. Automatically triggers pre-ordered meal delivery from the Adventurer's Tavern (`internal/tavern`).
+- **Hook Error Semantics**: Both hooks execute as best-effort post-settlement side-effects. Errors returned by hook implementations are logged as warnings (`s.logger.Warn`) and do not fail the completed adventure or corrupt committed character state.
+- **Settlement & Persistence Error Propagation**: All durable state mutations—including saving the `adventures` record, adding currency (`AddMoney`, `AddCrystal`), and persisting character state (`updater.Update`) in fallback settlement—strictly check and propagate errors to prevent silent state loss.
 - **Chronicle & History**: Completed runs are recorded in `adventures` and aggregated in `GET /characters/{id}/adventure-chronicle`. Milestone unlocks (Try Mode, Image Setting, Calm Mode, Hard Mode, Avatar Setting, Extreme Mode) unlock based on cleared stage counts.
 
 ---

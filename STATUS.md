@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #706 — [Bug] Challenge: Robust session persistence, Hall of Fame, and error propagation
+Last updated: Issue #707 — [Bug] Adventure: Robust settlement persistence, fallback character updates, and hook error handling
 
 ## Current phase
 
@@ -40,7 +40,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### Feature Modules
 - **Activity** (`internal/activity`): ✅ Push-based worker training with manual claim fallback.
-- **Adventure** (`internal/adventure`): ✅ 10-floor dungeon crawl, Floor 11 treasure room, post-battle settlement, and combat chronicles.
+- **Adventure** (`internal/adventure`): ✅ 10-floor dungeon crawl, Floor 11 treasure room, post-battle settlement, combat chronicles, resilient hook error handling, and robust settlement persistence error propagation.
 - **Medal & Achievements** (`internal/medal`): ✅ Small Medal depot exchange and lifetime gameplay milestone achievement tracking.
 - **Shop** (`internal/shop`): ✅ 3 town shops with job-level gates, 50% sellback, and depot auto-delivery.
 - **Depot** (`internal/depot`): ✅ Up to 500 slots storage, tiered expansion, sort, sell, direct-send, item consumption, centralized transactional reward item delivery, unified `FindOrCreate` helper, and dynamic capacity refresh across delivery consumers.
