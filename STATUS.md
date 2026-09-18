@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #713 — [Refactor] HTTP API: Enforce uniform decodeJSON and body size limits across all request handlers via AST linter
+Last updated: Issue #706 — [Bug] Challenge: Robust session persistence, Hall of Fame, and error propagation
 
 ## Current phase
 
@@ -60,7 +60,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Boss Battles** (`internal/boss`): ✅ 4-player cooperative sealing battles, Dejon banishment, HeroCount increments, and victory celebration banquets.
 - **Dungeon Exploration** (`internal/dungeon`): ✅ Multi-floor grid dungeon exploration, branching tile events, party traps, map scouting (`@ちず`), and treasure chests.
 - **Battle Replays** (`internal/replay`): ✅ Turn-log recorder, step-by-step playback, and match history queries.
-- **Endurance Challenge** (`internal/challenge`): ✅ 4-tier survival waves, HP carryover between rounds, party challenge runs, and Hall of Fame records.
+- **Endurance Challenge** (`internal/challenge`): ✅ 4-tier survival waves, HP carryover between rounds, party challenge runs, Hall of Fame records, and robust persistence error propagation across Valkey and MariaDB.
 - **Custom Skill Gem Synthesis** (`internal/custom_skill`): ✅ Custom skill naming, phrase triggers, 3-gem recipe synthesis, and atomic gem exchange.
 - **Player Rescue & Helper Quests** (`internal/helper`, `internal/rescue`): ✅ Delivery quests (normal/rare/guild), transactional reward delivery with depot fallback, reliable quest rotation error propagation, and emergency state rescue.
 - **Town Park & Bulletin Board** (`internal/park`): ✅ Public bulletin board posts, character authorship, rate-limit, and NPC fortune divination.

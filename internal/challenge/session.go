@@ -47,7 +47,10 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 
 	char, err := s.charRepo.FindByID(ctx, session.CharacterID)
 	if err != nil {
-		return nil, nil, ErrCharacterNotFound
+		if errors.Is(err, corecharacter.ErrNotFound) || errors.Is(err, ErrCharacterNotFound) {
+			return nil, nil, ErrCharacterNotFound
+		}
+		return nil, nil, err
 	}
 
 	maxHP := char.Stats.MaxHP

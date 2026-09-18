@@ -51,11 +51,15 @@ The Continuous Endurance Challenge Feature Module (`internal/challenge`) impleme
 
 ---
 
-## Persistence Schema
-
 - `character_challenge_records`: Primary key (`character_id`, `tier_id`), tracking `highest_round`, `total_attempts`, `total_victories`, and `best_cleared_at`.
 - `challenge_sessions`: Active session state tracking `character_id`, `party_id`, `members_json`, `tier_id`, `current_round`, `character_current_hp`, `accumulated_exp`, `accumulated_gold`, `accumulated_items_json`, and `status`.
 - `challenge_hall_of_fame`: Record-holding parties for each tier (`tier_id` PK, `highest_round`, `party_name`, `party_color`, `cleared_at`, `members_json`).
+
+### Error Handling & Persistence Policy
+
+- **Error Propagation**: All database writes (`SaveSession`, `SaveHallOfFame`, `FinalizeSession`) and Valkey active session mutations (`SaveActiveSession`, `AdvanceRound`) strictly propagate errors to the caller without suppression.
+- **Repository Error Distinction**: Unexpected database errors during character lookups are directly propagated to the caller, while `corecharacter.ErrNotFound` is mapped to domain `ErrCharacterNotFound`.
+- **Two-Phase Settlement**: On session retirement or defeat, durable state is first committed to MariaDB via `FinalizeSession`. Upon successful commit, the transient Valkey buffer is evicted (`DeleteActiveSession`) with a TTL safety net.
 
 ---
 

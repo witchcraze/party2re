@@ -202,10 +202,15 @@ func (r *ValkeySessionRepository) DeleteActiveSession(ctx context.Context, chara
 	sKey := r.sessionKey(characterID)
 	rKey := r.rewardsKey(characterID)
 
-	_ = r.client.DoMulti(ctx,
+	cmds := r.client.DoMulti(ctx,
 		r.client.B().Del().Key(sKey).Build(),
 		r.client.B().Del().Key(rKey).Build(),
 	)
+	for _, cmd := range cmds {
+		if err := cmd.Error(); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
