@@ -2,7 +2,9 @@ package party
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/adventure"
@@ -555,5 +557,184 @@ func TestPartyAdventure_WithBattleSettler_FullIntegration(t *testing.T) {
 	}
 	if len(leaderDrops) == 0 {
 		t.Error("expected leader to have acquired drops in reward summary")
+	}
+}
+
+func TestPartyAdventure_SaveAdventureLogErrorRollback(t *testing.T) {
+	ctx := context.Background()
+	txProvider := &mockTransactionProvider{}
+	svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(
+		t,
+		nil,
+		WithTransactionProvider(txProvider),
+	)
+
+	leader := corecharacter.Character{ID: "c-lead-err1", Name: "Leader", Level: 10, Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50}}
+	partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader)
+
+	injectedErr := errors.New("db error saving adventure log")
+	partyRepo.saveLogErr = injectedErr
+
+	_, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err == nil {
+		t.Fatal("expected error on save adventure log failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "save party adventure log") {
+		t.Errorf("expected error to contain 'save party adventure log', got: %v", err)
+	}
+	if !errors.Is(err, injectedErr) {
+		t.Errorf("expected wrapped injected error, got: %v", err)
+	}
+	if txProvider.rollbacks == 0 {
+		t.Error("expected transaction rollback, got 0 rollbacks")
+	}
+	// Verify defer reverted party status back to recruiting
+	p, _ := partyRepo.GetParty(ctx, partyID)
+	if p.Status != StatusRecruiting {
+		t.Errorf("expected party status reverted to recruiting, got %s", p.Status)
+	}
+}
+
+func TestPartyAdventure_ResetPartyStatusErrorRollback(t *testing.T) {
+	ctx := context.Background()
+	txProvider := &mockTransactionProvider{}
+	svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(
+		t,
+		nil,
+		WithTransactionProvider(txProvider),
+	)
+
+	leader := corecharacter.Character{ID: "c-lead-err2", Name: "Leader", Level: 10, Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50}}
+	partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader)
+
+	// Reset call is Call 2 of UpdateParty (Call 1 transitions to InProgress, Call 2 resets to Recruiting)
+	injectedErr := errors.New("db error resetting party status")
+	partyRepo.updatePartyErr = injectedErr
+	partyRepo.updatePartyCallCount = 0
+	partyRepo.failUpdatePartyOn = 2
+
+	_, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err == nil {
+		t.Fatal("expected error on reset party status failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "reset party status") {
+		t.Errorf("expected error to contain 'reset party status', got: %v", err)
+	}
+	if !errors.Is(err, injectedErr) {
+		t.Errorf("expected wrapped injected error, got: %v", err)
+	}
+	if txProvider.rollbacks == 0 {
+		t.Error("expected transaction rollback, got 0 rollbacks")
+	}
+}
+
+func TestPartyAdventure_ResetMemberReadyErrorRollback(t *testing.T) {
+	ctx := context.Background()
+	txProvider := &mockTransactionProvider{}
+	svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(
+		t,
+		nil,
+		WithTransactionProvider(txProvider),
+	)
+
+	leader := corecharacter.Character{ID: "c-lead-err3", Name: "Leader", Level: 10, Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50}}
+	partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader)
+
+	injectedErr := errors.New("db error resetting member ready")
+	partyRepo.updateMemberReadyErr = injectedErr
+
+	_, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err == nil {
+		t.Fatal("expected error on reset member ready failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "reset member ready state") {
+		t.Errorf("expected error to contain 'reset member ready state', got: %v", err)
+	}
+	if !errors.Is(err, injectedErr) {
+		t.Errorf("expected wrapped injected error, got: %v", err)
+	}
+	if txProvider.rollbacks == 0 {
+		t.Error("expected transaction rollback, got 0 rollbacks")
+	}
+}
+
+func TestPartyAdventure_SettlementErrorRollback(t *testing.T) {
+	ctx := context.Background()
+	txProvider := &mockTransactionProvider{}
+	svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(
+		t,
+		nil,
+		WithTransactionProvider(txProvider),
+	)
+
+	leader := corecharacter.Character{ID: "c-lead-err4", Name: "Leader", Level: 10, Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50}}
+	partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader)
+
+	injectedErr := errors.New("db error updating character stats")
+	charRepo.updateErr = injectedErr
+
+	_, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err == nil {
+		t.Fatal("expected error on settlement character update failure, got nil")
+	}
+	if !errors.Is(err, injectedErr) {
+		t.Errorf("expected wrapped injected error, got: %v", err)
+	}
+	if txProvider.rollbacks == 0 {
+		t.Error("expected transaction rollback, got 0 rollbacks")
+	}
+}
+
+func TestLeaveParty_LeaderDisband_UpdatePartyErrorRollback(t *testing.T) {
+	ctx := context.Background()
+	txProvider := &mockTransactionProvider{}
+	svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(
+		t,
+		nil,
+		WithTransactionProvider(txProvider),
+	)
+
+	leader := corecharacter.Character{ID: "c-leave-lead", Name: "Leader", Level: 10, Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50}}
+	partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader)
+
+	injectedErr := errors.New("db error disbanding party on leave")
+	partyRepo.updatePartyErr = injectedErr
+
+	err := svc.LeaveParty(ctx, partyID, leader.ID)
+	if err == nil {
+		t.Fatal("expected error on LeaveParty update failure, got nil")
+	}
+	if !errors.Is(err, injectedErr) {
+		t.Errorf("expected injected error, got: %v", err)
+	}
+	if txProvider.rollbacks == 0 {
+		t.Error("expected transaction rollback, got 0 rollbacks")
+	}
+}
+
+func TestDisbandParty_UpdatePartyErrorRollback(t *testing.T) {
+	ctx := context.Background()
+	txProvider := &mockTransactionProvider{}
+	svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(
+		t,
+		nil,
+		WithTransactionProvider(txProvider),
+	)
+
+	leader := corecharacter.Character{ID: "c-disband-lead", Name: "Leader", Level: 10, Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50}}
+	partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader)
+
+	injectedErr := errors.New("db error updating party on disband")
+	partyRepo.updatePartyErr = injectedErr
+
+	err := svc.DisbandParty(ctx, partyID, leader.ID)
+	if err == nil {
+		t.Fatal("expected error on DisbandParty update failure, got nil")
+	}
+	if !errors.Is(err, injectedErr) {
+		t.Errorf("expected injected error, got: %v", err)
+	}
+	if txProvider.rollbacks == 0 {
+		t.Error("expected transaction rollback, got 0 rollbacks")
 	}
 }

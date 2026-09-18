@@ -159,10 +159,8 @@ func (s *Service) settleFallback(
 		if err := c.AddMoney(gainedGold); err != nil {
 			return nil, nil, fmt.Errorf("adding gold for character %s: %w", cID, err)
 		}
-		if gainedCrystals > 0 {
-			if err := c.AddCrystal(gainedCrystals); err != nil {
-				return nil, nil, fmt.Errorf("adding crystals for character %s: %w", cID, err)
-			}
+		if err := c.AddCrystal(gainedCrystals); err != nil {
+			return nil, nil, fmt.Errorf("adding crystals for character %s: %w", cID, err)
 		}
 		if gainedEXP > 0 {
 			if _, err := progression.ApplyExperience(&c, gainedEXP); err != nil {

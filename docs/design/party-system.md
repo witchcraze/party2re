@@ -96,3 +96,8 @@ The Party architecture implements a two-tier storage boundary (RFC #356, Issue #
    - Character progression updates (EXP, level-ups, OverLevel), remaining HP, Gold, and inventory item rewards are atomically committed in MariaDB.
    - Durable audit records are persisted in `party_adventure_logs` (retained permanently for expedition history and audit trails).
    - Upon successful database commit, the ephemeral Valkey lobby is disbanded and cleaned up.
+
+3. **Settlement Reward & Lifecycle Error Propagation**:
+   - Currency and reward applications in `settlePostBattle` and `settleFallback` validate all rewards (guarding against invalid negative gold or crystal amounts).
+   - Any failure during post-battle character reward persistence, adventure log saving, party status reset, or member ready-state cleanup immediately propagates an error and triggers clean transaction rollback, preventing partial reward allocation or desynchronized party state.
+   - If an adventure transaction aborts prior to commit, a compensatory rollback in `defer` reverts the party status back to `recruiting`.

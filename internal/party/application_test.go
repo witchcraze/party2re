@@ -15,13 +15,18 @@ import (
 )
 
 type mockPartyRepository struct {
-	parties     map[string]Party
-	members     map[string]map[string]Member // partyID -> characterID -> Member
-	memberParty map[string]string            // characterID -> partyID
-	logs        []PartyAdventureLog
-	saveLogErr  error
-	advLocksMu  sync.Mutex
-	advLocks    map[string]string
+	parties              map[string]Party
+	members              map[string]map[string]Member // partyID -> characterID -> Member
+	memberParty          map[string]string            // characterID -> partyID
+	logs                 []PartyAdventureLog
+	saveLogErr           error
+	updatePartyErr       error
+	updatePartyCallCount int
+	failUpdatePartyOn    int // if non-zero, fail on this N-th call
+	updateMemberReadyErr error
+	deletePartyErr       error
+	advLocksMu           sync.Mutex
+	advLocks             map[string]string
 }
 
 func newMockPartyRepository() *mockPartyRepository {
@@ -114,11 +119,21 @@ func (r *mockPartyRepository) ListParties(_ context.Context, status string, limi
 }
 
 func (r *mockPartyRepository) UpdateParty(_ context.Context, p Party) error {
+	r.updatePartyCallCount++
+	if r.failUpdatePartyOn > 0 && r.updatePartyCallCount == r.failUpdatePartyOn {
+		return r.updatePartyErr
+	}
+	if r.failUpdatePartyOn == 0 && r.updatePartyErr != nil {
+		return r.updatePartyErr
+	}
 	r.parties[p.ID] = p
 	return nil
 }
 
 func (r *mockPartyRepository) DeleteParty(_ context.Context, id string) error {
+	if r.deletePartyErr != nil {
+		return r.deletePartyErr
+	}
 	delete(r.parties, id)
 	for charID := range r.members[id] {
 		delete(r.memberParty, charID)
@@ -182,6 +197,9 @@ func (r *mockPartyRepository) RemoveMember(_ context.Context, partyID, character
 }
 
 func (r *mockPartyRepository) UpdateMemberReady(_ context.Context, partyID, characterID string, ready bool) error {
+	if r.updateMemberReadyErr != nil {
+		return r.updateMemberReadyErr
+	}
 	mMap, ok := r.members[partyID]
 	if !ok {
 		return ErrCharacterNotInParty
@@ -208,7 +226,8 @@ func (r *mockPartyRepository) SaveAdventureLog(_ context.Context, log PartyAdven
 }
 
 type mockCharacterRepository struct {
-	chars map[string]corecharacter.Character
+	chars     map[string]corecharacter.Character
+	updateErr error
 }
 
 func newMockCharacterRepository() *mockCharacterRepository {
@@ -230,7 +249,24 @@ func (r *mockCharacterRepository) FindByIDForUpdate(_ context.Context, id string
 }
 
 func (r *mockCharacterRepository) Update(_ context.Context, value corecharacter.Character) error {
+	if r.updateErr != nil {
+		return r.updateErr
+	}
 	r.chars[value.ID] = value
+	return nil
+}
+
+type mockTransactionProvider struct {
+	rollbacks int
+	commits   int
+}
+
+func (p *mockTransactionProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	if err := fn(ctx); err != nil {
+		p.rollbacks++
+		return err
+	}
+	p.commits++
 	return nil
 }
 

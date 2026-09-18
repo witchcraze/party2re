@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #708 — [Bug] Casino: Member room update and elimination error propagation during settlement
+Last updated: Issue #709 — [Bug] Party: Settlement reward error handling and transactional cleanup
 
 ## Current phase
 
@@ -75,7 +75,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Gem Store** (`internal/gemstore`): ✅ Dedicated gem box storage, 55+ synthesis formulas, and dual-source (inventory & depot) orb appraisal.
 - **God Wishes & Limit Breaks** (`internal/god`): ✅ 19 celestial wishes, permanent stat enhancements, Lv150 OverLevel, and storage limit breaks.
 - **Photo Contest** (`internal/contest`): ✅ 10-day cycles, photo submissions, community voting, prize delivery with robust error propagation, and Hall of Fame.
-- **Party & Co-op Quests** (`internal/party`): ✅ Up to 4 players, Valkey lobby, speed configs (3/18/25), need_join condition checks, 10-floor crawl, and HP-1 survival guarantee.
+- **Party & Co-op Quests** (`internal/party`): ✅ Up to 4 players, Valkey lobby, speed configs (3/18/25), need_join condition checks, 10-floor crawl, HP-1 survival guarantee, and robust settlement reward & lifecycle error propagation.
 - **Altar of Rebirth** (`internal/altar`): ✅ 6-orb offering ritual, Ramia awakening, and 4 otherworld travel item wishes.
 - **Wishing Well** (`internal/wishingwell`): ✅ SP sacrifice for permanent stat growth (MHP/MMP +2/SP, ATK/DEF/AGI +1/SP).
 - **Player Store & Town Boutiques** (`internal/store`): ✅ Player shop construction (50,000G/90d), gold/item listings, and interior customization (26 wallpapers, 15 furniture types).
