@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"math/big"
 	"strconv"
 	"strings"
@@ -281,9 +282,12 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 
 				for _, m := range participants {
 					pAcc, err := s.repo.GetAccount(txCtx, m.CharacterID)
-					if err == nil && pAcc.Coins <= 0 {
+					if err != nil {
+						return fmt.Errorf("getting casino account for member %s: %w", m.CharacterID, err)
+					}
+					if pAcc.Coins <= 0 {
 						if err := s.roomRepo.RemoveMember(txCtx, roomID, m.CharacterID); err != nil {
-							return err
+							return fmt.Errorf("removing eliminated member %s: %w", m.CharacterID, err)
 						}
 						if room.LeaderCharacterID == m.CharacterID && primaryWinner != "" {
 							room.LeaderCharacterID = primaryWinner
@@ -292,7 +296,7 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 						m.Action = "待機中"
 						m.UpdatedAt = time.Now().UTC()
 						if err := s.roomRepo.UpdateMember(txCtx, m); err != nil {
-							return err
+							return fmt.Errorf("updating member %s status: %w", m.CharacterID, err)
 						}
 					}
 				}

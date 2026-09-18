@@ -170,3 +170,7 @@ Rank 5: character_depots, depot_items (Depot Storage)
 Rank 8: casino_accounts (Secondary Feature Records)
 ```
 In `ExchangePrize`, Depot lock (Rank 5) is acquired before Casino account lock (Rank 8), preventing deadlocks with concurrent transactions.
+
+### Showdown Settlement Atomicity & Error Propagation
+
+During multiplayer showdown resolution (`highlow`, `doppel`, `indian_poker`), member state updates (`s.roomRepo.UpdateMember`), eliminated member ejections (`s.roomRepo.RemoveMember`), and balance checks (`s.repo.GetAccount`) are executed within an atomic transaction (`RunInTx`). If any member update or balance inquiry fails, the error is propagated and the entire settlement transaction rolls back cleanly, preventing participant desynchronization or corrupted room state.
