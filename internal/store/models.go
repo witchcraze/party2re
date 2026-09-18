@@ -82,6 +82,23 @@ var WallpaperPrices = map[string]int{
 	"stage7":     9500,
 	"stage8":     10000,
 	"stage9":     10500,
+	"stage10":    11000,
+	"stage11":    11500,
+	"stage12":    12000,
+	"stage13":    12500,
+	"stage14":    13000,
+	"stage15":    20000,
+	"stage16":    22000,
+	"stage17":    24000,
+	"stage18":    25000,
+	"stage19":    30000,
+	"stage20":    50000,
+	"stage22":    10000,
+	"stage23":    10000,
+	"stage24":    10000,
+	"stage25":    10000,
+	"stage26_1":  10000,
+	"stage26_2":  10000,
 }
 
 type Store struct {

@@ -13,15 +13,17 @@ import (
 )
 
 type Service struct {
-	repo        StoreRepository
-	charRepo    CharacterRepository
-	depotRepo   DepotRepository
-	itemCatalog ItemCatalog
-	guildPoints GuildPointsRegistrar
-	timer       TimerService
-	txProvider  TxProvider
-	idGen       func() string
-	nowFunc     func() time.Time
+	repo              StoreRepository
+	charRepo          CharacterRepository
+	depotRepo         DepotRepository
+	itemCatalog       ItemCatalog
+	guildPoints       GuildPointsRegistrar
+	timer             TimerService
+	costumeRepo       CostumeRepository
+	homeWallpaperRepo HomeWallpaperRepository
+	txProvider        TxProvider
+	idGen             func() string
+	nowFunc           func() time.Time
 }
 
 type StoreCheckResult struct {
@@ -55,6 +57,24 @@ func WithGuildPoints(gp GuildPointsRegistrar) Option {
 func WithTimer(t TimerService) Option {
 	return func(s *Service) {
 		s.timer = t
+	}
+}
+
+func WithCostumeRepository(cr CostumeRepository) Option {
+	return func(s *Service) {
+		s.costumeRepo = cr
+	}
+}
+
+func WithHomeWallpaperRepository(hr HomeWallpaperRepository) Option {
+	return func(s *Service) {
+		s.homeWallpaperRepo = hr
+	}
+}
+
+func WithTxProvider(tx TxProvider) Option {
+	return func(s *Service) {
+		s.txProvider = tx
 	}
 }
 

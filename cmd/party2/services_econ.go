@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 
+	valkeygo "github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/alchemy"
 	"github.com/witchcraze/party2re/internal/auction"
 	"github.com/witchcraze/party2re/internal/bank"
@@ -190,6 +191,7 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 		depotRepo,
 		core.itemCatalog,
 		core.txProvider,
+		store.WithHomeWallpaperRepository(storeRepo),
 	)
 
 	return &econServices{
@@ -213,14 +215,24 @@ func newEconServices(db *sql.DB, core *coreServices) (*econServices, error) {
 	}, nil
 }
 
-func (e *econServices) initStore(core *coreServices, gp store.GuildPointsRegistrar, t store.TimerService) {
+func (e *econServices) initStore(core *coreServices, gp store.GuildPointsRegistrar, t store.TimerService, valkeyClient valkeygo.Client) {
+	opts := []store.Option{
+		store.WithGuildPoints(gp),
+		store.WithTimer(t),
+		store.WithHomeWallpaperRepository(e.storeRepo),
+	}
+	if valkeyClient != nil {
+		opts = append(opts, store.WithCostumeRepository(store.NewValkeyCostumeRepository(valkeyClient)))
+	} else {
+		opts = append(opts, store.WithCostumeRepository(store.NewMemoryCostumeRepository()))
+	}
+
 	e.store = store.NewService(
 		e.storeRepo,
 		core.charRepo,
 		e.depotRepo,
 		core.itemCatalog,
 		core.txProvider,
-		store.WithGuildPoints(gp),
-		store.WithTimer(t),
+		opts...,
 	)
 }

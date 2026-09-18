@@ -70,6 +70,24 @@
         { "step": 6, "target": "depots", "lock_order": 5, "method": "DepotRepository.Save (both)", "mode": "UPDATE" },
         { "step": 7, "target": "store_sales", "lock_order": 0, "method": "StoreRepository.DeleteSale", "mode": "DELETE" }
       ]
+    },
+    {
+      "flow": "RentCostume (衣装レンタル)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/store/oracle.go#Service.RentCostume",
+      "lock_sequence": [
+        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 2, "target": "characters", "lock_order": 2, "method": "CharacterRepository.Update", "mode": "UPDATE" }
+      ]
+    },
+    {
+      "flow": "BuyHomeWallpaper (壁紙購入)",
+      "tx_mode": "RunInTx",
+      "source_ref": "internal/store/oracle.go#Service.BuyHomeWallpaper",
+      "lock_sequence": [
+        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 2, "target": "characters", "lock_order": 2, "method": "CharacterRepository.Update", "mode": "UPDATE" }
+      ]
     }
   ]
 }

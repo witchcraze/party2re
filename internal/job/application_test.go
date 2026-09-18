@@ -490,3 +490,50 @@ func TestServiceFutureMemorySaveAndRecall(t *testing.T) {
 		t.Fatalf("expected memories to be empty, got %v (err: %v)", memories, err)
 	}
 }
+
+type mockJobCostumeResetter struct {
+	calledFor string
+}
+
+func (m *mockJobCostumeResetter) ResetCostume(_ context.Context, characterID string) error {
+	m.calledFor = characterID
+	return nil
+}
+
+func TestChangeJob_ResetsCostume(t *testing.T) {
+	char := corecharacter.Character{
+		ID:    "char-1",
+		Name:  "Hero",
+		JobID: "job-01",
+		Level: 20,
+		SP:    10,
+	}
+	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
+	repo := &repositoryStub{value: state}
+	charRepo := &charRepoStub{char: char}
+	costumeResetter := &mockJobCostumeResetter{}
+
+	catalog, _ := corejob.NewCatalog([]corejob.Definition{
+		{ID: "job-01", Name: "Job 1", MinLevel: 1},
+		{ID: "job-02", Name: "Job 2", MinLevel: 20},
+	})
+
+	svc, err := NewService(
+		repo,
+		WithCatalog(catalog),
+		WithCharacterRepository(charRepo),
+		WithCostumeResetter(costumeResetter),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = svc.ChangeJob(context.Background(), char.ID, "job-02")
+	if err != nil {
+		t.Fatalf("ChangeJob failed: %v", err)
+	}
+
+	if costumeResetter.calledFor != "char-1" {
+		t.Errorf("expected costume resetter called for char-1, got %q", costumeResetter.calledFor)
+	}
+}

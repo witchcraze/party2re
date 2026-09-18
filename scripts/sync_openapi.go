@@ -540,6 +540,8 @@ func moduleForRoute(route Route) string {
 		return "tavern"
 	case p == "/health" || p == "/maintenance" || p == "/openapi.json":
 		return "system"
+	case strings.HasPrefix(p, "/characters/{id}/oracle"):
+		return "oracle"
 	case strings.HasPrefix(p, "/characters") || p == "/jobs" || strings.HasPrefix(p, "/naming-hall"):
 		return "character"
 	default:
@@ -586,6 +588,7 @@ func moduleToTagName(module string) string {
 		"monster":      "Monster",
 		"news":         "News",
 		"notification": "Notifications",
+		"oracle":       "Oracle Shop",
 		"park":         "Park",
 		"party":        "Party",
 		"player":       "Player",

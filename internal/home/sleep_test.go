@@ -54,6 +54,15 @@ func (m *mockBlessingCleaner) ClearBlessing(ctx context.Context, characterID str
 	return nil
 }
 
+type mockCostumeResetter struct {
+	calledFor string
+}
+
+func (m *mockCostumeResetter) ResetCostume(ctx context.Context, characterID string) error {
+	m.calledFor = characterID
+	return nil
+}
+
 type mockOnlineCounter struct {
 	count int
 }
@@ -379,5 +388,46 @@ func TestSleep_JobMemoryRevertUpdateErrorPropagates(t *testing.T) {
 	}
 	if isSleeping {
 		t.Error("expected sleep lock to be cleared when character update fails")
+	}
+}
+
+func TestWake_ResetsCostume(t *testing.T) {
+	ctx := context.Background()
+	charRepo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero", Tired: 50, Stats: corecharacter.Stats{HP: 10, MaxHP: 100}},
+		},
+	}
+	mockHomeRepo := newMockHomeRepo()
+	timerSvc := timer.NewService(nil)
+
+	svc, err := NewService(
+		mockHomeRepo,
+		charRepo,
+		WithTimer(timerSvc),
+		WithCharacterUpdater(charRepo),
+		WithBaseSleepDuration(10*time.Millisecond),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	costumeResetter := &mockCostumeResetter{}
+	svc.SetCostumeResetter(costumeResetter)
+
+	_, err = svc.Sleep(ctx, "c1", "c1")
+	if err != nil {
+		t.Fatalf("Sleep failed: %v", err)
+	}
+
+	time.Sleep(15 * time.Millisecond)
+
+	_, err = svc.Wake(ctx, "c1")
+	if err != nil {
+		t.Fatalf("Wake failed: %v", err)
+	}
+
+	if costumeResetter.calledFor != "c1" {
+		t.Errorf("expected costume resetter called for c1, got %q", costumeResetter.calledFor)
 	}
 }

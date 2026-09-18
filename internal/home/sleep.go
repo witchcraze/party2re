@@ -50,6 +50,11 @@ type AlchemyCompleter interface {
 	CompleteOngoingSynthesis(ctx context.Context, characterID string) error
 }
 
+// CostumeResetter resets rented costume state upon rest.
+type CostumeResetter interface {
+	ResetCostume(ctx context.Context, characterID string) error
+}
+
 // OnlineCounter counts currently logged in players for sleep duration scaling.
 type OnlineCounter interface {
 	GetOnlineCount(ctx context.Context) (int, error)
@@ -272,6 +277,9 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 	if s.alchemy != nil {
 		_ = s.alchemy.CompleteOngoingSynthesis(ctx, characterID)
 	}
+	if s.costume != nil {
+		_ = s.costume.ResetCostume(ctx, characterID)
+	}
 
 	_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
 
@@ -295,4 +303,9 @@ func (s *Service) SetBlessingCleaner(b BlessingCleaner) {
 // SetAlchemyCompleter registers a cross-domain alchemy synthesis completer hook.
 func (s *Service) SetAlchemyCompleter(a AlchemyCompleter) {
 	s.alchemy = a
+}
+
+// SetCostumeResetter registers a cross-domain costume reset hook.
+func (s *Service) SetCostumeResetter(c CostumeResetter) {
+	s.costume = c
 }

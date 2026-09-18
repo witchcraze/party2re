@@ -1,12 +1,12 @@
 # Status
 
-Last updated: Issue #720 — [Chore] Documentation: Consolidate design docs, streamline STATUS and feature inventory, and audit domain improvements
+Last updated: Issue #721 — [Feature] Town: Oracle Shop costume rental and seasonal wallpaper boutique parity
 
 ## Current Phase
 
 **Version 1.0 Reconstruction / Refactoring — In Progress (Phase 5+)**
 
-All Version 1.0 foundational systems, core combat, 39 feature modules, and the HTTP JSON API (251 paths / 271 operations, OpenAPI 3.1) are implemented in clean-room Go (1.26.7) with 0 legacy code reuse.
+All Version 1.0 foundational systems, core combat, 39 feature modules, and the HTTP JSON API (275 paths / 297 operations, OpenAPI 3.1) are implemented in clean-room Go (1.26.7) with 0 legacy code reuse.
 
 - **Component Architecture & Boundaries**: Authoritative responsibilities, dependencies, and lock hierarchy tiers reside in [`docs/architecture/components.md`](docs/architecture/components.md).
 - **Completed Feature History**: Comprehensive issue-level traceability resides in [`docs/migration/feature-inventory.md`](docs/migration/feature-inventory.md).
