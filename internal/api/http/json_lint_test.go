@@ -86,6 +86,69 @@ func TestAST_NoIgnoredJSONDecodingInHTTPHandlers(t *testing.T) {
 	}
 }
 
+func TestAST_NoRawJSONNewDecoderInHTTPHandlers(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatalf("failed to glob go files: %v", err)
+	}
+
+	var violations []jsonDecodeViolation
+	fset := token.NewFileSet()
+
+	for _, file := range files {
+		if strings.HasSuffix(file, "_test.go") || file == "json.go" {
+			continue
+		}
+
+		src, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read file %s: %v", file, err)
+		}
+
+		node, err := parser.ParseFile(fset, file, src, 0)
+		if err != nil {
+			t.Fatalf("failed to parse file %s: %v", file, err)
+		}
+
+		ast.Inspect(node, func(n ast.Node) bool {
+			if isJSONNewDecoderCall(n) {
+				pos := fset.Position(n.Pos())
+				violations = append(violations, jsonDecodeViolation{
+					file: file,
+					line: pos.Line,
+					desc: "raw json.NewDecoder call is prohibited in HTTP handlers; use decodeJSON or decodeOptionalJSON",
+				})
+			}
+			return true
+		})
+	}
+
+	if len(violations) > 0 {
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("found %d raw json.NewDecoder violation(s) in internal/api/http:\n", len(violations)))
+		for _, v := range violations {
+			sb.WriteString(fmt.Sprintf("  %s:%d: %s\n", v.file, v.line, v.desc))
+		}
+		t.Fatal(sb.String())
+	}
+}
+
+func isJSONNewDecoderCall(n ast.Node) bool {
+	call, ok := n.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	ident, ok := sel.X.(*ast.Ident)
+	if !ok {
+		return false
+	}
+	return ident.Name == "json" && sel.Sel.Name == "NewDecoder"
+}
+
 // isDecoderCall checks if an expression is a call to decodeJSON, decodeOptionalJSON, or (*json.Decoder).Decode
 func isDecoderCall(expr ast.Expr) bool {
 	call, ok := expr.(*ast.CallExpr)

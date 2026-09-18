@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -61,8 +60,7 @@ func (h *Handler) handlePlantationSow(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req plantationSowRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid request payload"))
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 
@@ -84,8 +82,7 @@ func (h *Handler) handlePlantationFertilize(w http.ResponseWriter, r *http.Reque
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req plantationFertilizeRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid request payload"))
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 

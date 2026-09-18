@@ -135,6 +135,7 @@ func TestHTTP_PlantationSow(t *testing.T) {
 	body, _ := json.Marshal(map[string]string{"seed_id": "red"})
 	req := httptest.NewRequest(http.MethodPost, "/characters/"+charID+"/plantation/sow", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer valid-token")
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -158,6 +159,7 @@ func TestHTTP_PlantationFertilize(t *testing.T) {
 	body, _ := json.Marshal(map[string]string{"fertilizer_id": "chemical"})
 	req := httptest.NewRequest(http.MethodPost, "/characters/"+charID+"/plantation/fertilize", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer valid-token")
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -218,6 +220,7 @@ func TestHTTP_PlantationErrors(t *testing.T) {
 	body, _ := json.Marshal(map[string]string{"seed_id": "gold"})
 	req := httptest.NewRequest(http.MethodPost, "/characters/"+charID+"/plantation/sow", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer valid-token")
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnprocessableEntity {
@@ -228,6 +231,7 @@ func TestHTTP_PlantationErrors(t *testing.T) {
 	body2, _ := json.Marshal(map[string]string{"fertilizer_id": "kupo_nut"})
 	req2 := httptest.NewRequest(http.MethodPost, "/characters/"+charID+"/plantation/fertilize", bytes.NewReader(body2))
 	req2.Header.Set("Authorization", "Bearer valid-token")
+	req2.Header.Set("Content-Type", "application/json")
 	rec2 := httptest.NewRecorder()
 	router.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusUnprocessableEntity {

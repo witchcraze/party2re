@@ -1,7 +1,6 @@
 package http
 
 import (
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -35,8 +34,7 @@ func (h *Handler) handleChangeCharacterName(w http.ResponseWriter, r *http.Reque
 		var req struct {
 			Name string `json:"name"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 
@@ -74,8 +72,7 @@ func (h *Handler) handleChangeCharacterGender(w http.ResponseWriter, r *http.Req
 		var req struct {
 			Gender string `json:"gender"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 
@@ -129,8 +126,7 @@ func (h *Handler) handleUpdateCharacterProfile(w http.ResponseWriter, r *http.Re
 
 	h.withAuthenticatedCharacter(w, r, charID, func(player coreplayer.Player, char corecharacter.Character) {
 		var req character.UpdateProfileRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 
@@ -198,8 +194,7 @@ func (h *Handler) handleUploadCharacterAvatar(w http.ResponseWriter, r *http.Req
 				ImageData   string `json:"image_data"`
 				AvatarURL   string `json:"avatar_url"`
 			}
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			if !decodeJSON(w, r, &req) {
 				return
 			}
 

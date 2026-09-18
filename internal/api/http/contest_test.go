@@ -252,6 +252,7 @@ func TestContestCharacterEndpoints(t *testing.T) {
 	})
 	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/photos", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
 	resp, err = client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusCreated {
 		t.Fatalf("expected 201 Created, got %d", resp.StatusCode)
@@ -272,6 +273,7 @@ func TestContestCharacterEndpoints(t *testing.T) {
 	})
 	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/contest/enter", bytes.NewReader(entryBody))
 	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
 	resp, err = client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusCreated {
 		t.Fatalf("expected 201 Created, got %d", resp.StatusCode)
@@ -284,6 +286,7 @@ func TestContestCharacterEndpoints(t *testing.T) {
 	})
 	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/contest/vote", bytes.NewReader(voteBody))
 	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
 	resp, err = client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK, got %d", resp.StatusCode)

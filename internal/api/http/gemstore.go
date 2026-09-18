@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -115,8 +114,7 @@ func (h *Handler) handleGemStoreBuy(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req gemStoreBuyRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid request body"))
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 
@@ -144,8 +142,7 @@ func (h *Handler) handleGemStoreSell(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req gemStoreSellRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid request body"))
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 
@@ -173,8 +170,7 @@ func (h *Handler) handleGemStoreSend(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req gemStoreSendRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid request body"))
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 
@@ -202,8 +198,7 @@ func (h *Handler) handleGemStoreSynthesize(w http.ResponseWriter, r *http.Reques
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req gemStoreSynthesizeRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid request body"))
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 
@@ -231,8 +226,7 @@ func (h *Handler) handleGemStoreAppraise(w http.ResponseWriter, r *http.Request)
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req gemStoreAppraiseRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid request body"))
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 

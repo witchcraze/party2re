@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -107,8 +106,7 @@ func (h *Handler) handleGrantGodWish(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req grantWishRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid request body"))
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 

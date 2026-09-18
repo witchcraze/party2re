@@ -187,6 +187,7 @@ func TestBlackMarketEndpoints(t *testing.T) {
 		body := `{"item_instance_id":"inst-rare-1"}`
 		req := httptest.NewRequest(http.MethodPost, "/characters/c1/blackmarket/sacrifice", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer valid-token")
+		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
 		router.ServeHTTP(rec, req)
@@ -203,6 +204,7 @@ func TestBlackMarketEndpoints(t *testing.T) {
 		body := `{"prize_id":"bm_prize_087"}`
 		req := httptest.NewRequest(http.MethodPost, "/characters/c1/blackmarket/trade", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer valid-token")
+		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
 		router.ServeHTTP(rec, req)
@@ -248,6 +250,7 @@ func TestBlackMarketEndpoints(t *testing.T) {
 		body := `{"item_instance_id":"inst-common"}`
 		req := httptest.NewRequest(http.MethodPost, "/characters/c1/blackmarket/sacrifice", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer valid-token")
+		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
 		errRouter.ServeHTTP(rec, req)
@@ -276,6 +279,7 @@ func TestBlackMarketEndpoints(t *testing.T) {
 		body := `{"prize_id":"bm_prize_207"}`
 		req := httptest.NewRequest(http.MethodPost, "/characters/c1/blackmarket/trade", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer valid-token")
+		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
 		errRouter.ServeHTTP(rec, req)
@@ -304,6 +308,7 @@ func TestBlackMarketEndpoints(t *testing.T) {
 		body := `{"prize_id":"bm_prize_087"}`
 		req := httptest.NewRequest(http.MethodPost, "/characters/c1/blackmarket/trade", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer valid-token")
+		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
 		errRouter.ServeHTTP(rec, req)

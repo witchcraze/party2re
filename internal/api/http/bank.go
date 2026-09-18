@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -75,8 +74,7 @@ func (h *Handler) handleBankDeposit(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req bankDepositRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid request body"))
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 		res, err := h.bank.Deposit(r.Context(), char.ID, req.Amount)
@@ -96,8 +94,7 @@ func (h *Handler) handleBankWithdraw(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req bankWithdrawRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid request body"))
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 		res, err := h.bank.Withdraw(r.Context(), char.ID, req.Amount)
