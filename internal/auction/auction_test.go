@@ -117,9 +117,7 @@ func newMockDepotRepo() *mockDepotRepo {
 func (m *mockDepotRepo) FindByCharacterID(ctx context.Context, characterID string) (depot.Depot, error) {
 	d, ok := m.depots[characterID]
 	if !ok {
-		d, _ = depot.NewDepot(characterID)
-		d.Capacity = 10
-		return d, nil
+		return depot.Depot{}, depot.ErrNotFound
 	}
 	return d, nil
 }
@@ -498,5 +496,46 @@ func TestGetVenueInfo(t *testing.T) {
 	}
 	if len(info.Dialogue) != 3 {
 		t.Errorf("expected 3 dialogue entries, got %d", len(info.Dialogue))
+	}
+}
+
+func TestSendItem_RecipientDepotNotInitialized_CreatesDepotAndSucceeds(t *testing.T) {
+	ctx := context.Background()
+	svc, charRepo, _, invRepo, depotRepo := setupAuctionService(t)
+
+	charRepo.chars["char-1"] = corecharacter.Character{ID: "char-1", Name: "Alice", Money: 500}
+	charRepo.chars["char-2"] = corecharacter.Character{ID: "char-2", Name: "Bob", Money: 500, JobLevel: 3, OverDepot: 1}
+
+	// Setup Alice's inventory with unequipped item
+	aliceInv, _ := coreinventory.New("char-1")
+	swordInst := coreitem.Instance{ID: "inst-sword-1", DefinitionID: "sword-1", Quantity: 1, EnhancementLevel: 2}
+	_ = aliceInv.Add(swordInst)
+	_ = invRepo.Save(ctx, aliceInv)
+
+	// Bob has NO depot record saved
+	res, err := svc.Send(ctx, auction.SendRequest{
+		SenderCharacterID: "char-1",
+		TargetCharacterID: "char-2",
+		InstanceID:        "inst-sword-1",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if res.TransferredItem == nil || res.TransferredItem.DefinitionID != "sword-1" {
+		t.Fatalf("expected sword-1 transferred, got %+v", res.TransferredItem)
+	}
+
+	// Verify Bob's depot was created and capacity refreshed
+	dep, err := depotRepo.FindByCharacterID(ctx, "char-2")
+	if err != nil {
+		t.Fatalf("Bob's depot was not found: %v", err)
+	}
+	expectedCap := depot.CalculateCapacity(3, 0, 1)
+	if dep.Capacity != expectedCap {
+		t.Errorf("expected capacity %d, got %d", expectedCap, dep.Capacity)
+	}
+	if len(dep.Items) != 1 || dep.Items[0].DefinitionID != "sword-1" {
+		t.Fatalf("expected 1 item (sword-1) in Bob's depot, got %+v", dep.Items)
 	}
 }

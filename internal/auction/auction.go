@@ -185,11 +185,10 @@ func (s *Service) Send(ctx context.Context, req SendRequest) (SendResult, error)
 		}
 
 		// Rank 5: Receiver Depot lock
-		receiverDepot, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, targetID)
+		receiverDepot, err := depot.FindOrCreate(txCtx, s.depotRepo, *receiverChar)
 		if err != nil {
 			return err
 		}
-		receiverDepot.RefreshCapacity(receiverChar.JobLevel, receiverChar.OverDepot)
 
 		senderEquip, err := s.equipRepo.FindByCharacterID(txCtx, senderID)
 		if err != nil {

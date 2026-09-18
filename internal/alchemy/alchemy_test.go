@@ -50,8 +50,7 @@ func (r *memoryDepotRepo) FindByCharacterID(_ context.Context, characterID strin
 	defer r.mu.Unlock()
 	d, ok := r.depots[characterID]
 	if !ok {
-		newDepot, _ := depot.NewDepot(characterID)
-		return newDepot, nil
+		return depot.Depot{}, depot.ErrNotFound
 	}
 	itemsCopy := make([]coreitem.Instance, len(d.Items))
 	copy(itemsCopy, d.Items)
@@ -498,5 +497,96 @@ func TestLearnRecipe_PoolFilterAndExhaustion(t *testing.T) {
 	_, err = svc.LearnRecipe(ctx, char.ID, []string{"item-001"})
 	if !errors.Is(err, ErrNoRecipesToLearn) {
 		t.Errorf("expected ErrNoRecipesToLearn, got %v", err)
+	}
+}
+
+func TestSynthesize_DepotNotFound_ReturnsErrInsufficientMaterials(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	svc, _, _, _, char := setupTestService(t, &now)
+
+	// Unlock recipe
+	if err := svc.UnlockRecipe(ctx, char.ID, "rec-super-herb"); err != nil {
+		t.Fatalf("UnlockRecipe failed: %v", err)
+	}
+
+	// Character has NO depot record saved
+	_, err := svc.Synthesize(ctx, char.ID, "rec-super-herb")
+	if !errors.Is(err, ErrInsufficientMaterials) {
+		t.Fatalf("expected ErrInsufficientMaterials, got %v", err)
+	}
+}
+
+func TestClaim_DepotNotFound_CreatesDepotAndRefreshesCapacity(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	svc, charRepo, depotRepo, alchemyRepo, char := setupTestService(t, &now)
+
+	char.JobLevel = 10
+	char.OverDepot = 1
+	charRepo.characters[char.ID] = *char
+
+	// Synthesis state is completed
+	alchemyRepo.states[char.ID] = Synthesis{
+		CharacterID: char.ID,
+		RecipeID:    "rec-super-herb",
+		State:       StateCompleted,
+	}
+
+	// Character has NO depot record saved
+	res, err := svc.Claim(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("Claim failed: %v", err)
+	}
+	if res.CreatedItem.DefinitionID != "item-002" {
+		t.Errorf("expected item-002, got %s", res.CreatedItem.DefinitionID)
+	}
+
+	createdDepot, err := depotRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID failed: %v", err)
+	}
+	expectedCap := depot.CalculateCapacity(10, 0, 1)
+	if createdDepot.Capacity != expectedCap {
+		t.Errorf("expected refreshed capacity %d, got %d", expectedCap, createdDepot.Capacity)
+	}
+}
+
+func TestClaim_RefreshesStaleDepotCapacity(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	svc, charRepo, depotRepo, alchemyRepo, char := setupTestService(t, &now)
+
+	char.JobLevel = 29
+	charRepo.characters[char.ID] = *char
+
+	// Existing depot with capacity 1 and 1 item (full according to stale capacity)
+	dep, _ := depot.NewDepot(char.ID)
+	dep.Capacity = 1
+	dItem, _ := coreitem.NewInstance("item-999", 1)
+	_ = dep.AddItem(dItem)
+	_ = depotRepo.Save(ctx, dep)
+
+	alchemyRepo.states[char.ID] = Synthesis{
+		CharacterID: char.ID,
+		RecipeID:    "rec-super-herb",
+		State:       StateCompleted,
+	}
+
+	// Claim should refresh capacity to 150 (JobLevel 29) and succeed
+	res, err := svc.Claim(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("Claim failed due to stale capacity: %v", err)
+	}
+	if res.CreatedItem.DefinitionID != "item-002" {
+		t.Errorf("expected item-002, got %s", res.CreatedItem.DefinitionID)
+	}
+
+	updatedDepot, _ := depotRepo.FindByCharacterID(ctx, char.ID)
+	if updatedDepot.Capacity != 150 {
+		t.Errorf("expected capacity 150, got %d", updatedDepot.Capacity)
+	}
+	if len(updatedDepot.Items) != 2 {
+		t.Errorf("expected 2 items in depot, got %d", len(updatedDepot.Items))
 	}
 }
