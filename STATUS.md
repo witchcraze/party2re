@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #712 — [Refactor] Storage: Unify FindOrCreate depot helper and fix capacity refresh across Alchemy and Auction
+Last updated: Issue #713 — [Refactor] HTTP API: Enforce uniform decodeJSON and body size limits across all request handlers via AST linter
 
 ## Current phase
 
@@ -83,7 +83,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 
 ### API & Transport
 - **Server Entrypoint** (`cmd/party2`): ✅ Typed config injection, modular service wiring (`wire.go`), Graceful Shutdown.
-- **HTTP JSON API** (`internal/api/http`): ✅ 251 paths / 271 operations (OpenAPI 3.1); dual auth (session + PAT), IDOR defense, rate-limit, CORS, safe optional JSON decoder & AST unhandled decode linter, maintenance middleware, detached root context prohibition AST linter.
+- **HTTP JSON API** (`internal/api/http`): ✅ 251 paths / 271 operations (OpenAPI 3.1); dual auth (session + PAT), IDOR defense, rate-limit, CORS, uniform JSON decoding (`decodeJSON`/`decodeOptionalJSON`) with 64 KiB body limits & unknown-field rejection across 100% of mutating request handlers, AST unhandled & raw decoder prohibition linters, maintenance middleware, detached root context prohibition AST linter.
 
 ### Infrastructure & Operations
 - **Database** (MariaDB): ✅ Migrations `001`–`085`; `make db-migrate` / `make db-reset`; connection pool env-configurable.

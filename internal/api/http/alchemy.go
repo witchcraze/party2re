@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -75,8 +74,7 @@ func (h *Handler) handleAlchemySynthesize(w http.ResponseWriter, r *http.Request
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req alchemySynthesizeRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid request payload"))
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 

@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -55,8 +54,7 @@ func (h *Handler) handleApplyBlacksmithSeal(w http.ResponseWriter, r *http.Reque
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req applySealRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid request body"))
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 
@@ -82,8 +80,7 @@ func (h *Handler) handleNameEquipment(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req nameEquipmentRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid request body"))
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 
@@ -157,8 +154,7 @@ func (h *Handler) handleWithdrawBlacksmithWeapon(w http.ResponseWriter, r *http.
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req withdrawWeaponRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid request body"))
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 

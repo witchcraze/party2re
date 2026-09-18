@@ -162,6 +162,7 @@ func TestCharacterCustomizationHTTP(t *testing.T) {
 	// 4. POST /characters/{id}/name - Authenticated -> 200 OK
 	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/name", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
 	resp, err = client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK for rename, got %d (err: %v)", resp.StatusCode, err)
@@ -171,6 +172,7 @@ func TestCharacterCustomizationHTTP(t *testing.T) {
 	genderBody, _ := json.Marshal(map[string]string{"gender": "f"})
 	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/gender", bytes.NewReader(genderBody))
 	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
 	resp, err = client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK for gender change, got %d (err: %v)", resp.StatusCode, err)
@@ -183,6 +185,7 @@ func TestCharacterCustomizationHTTP(t *testing.T) {
 	})
 	req, _ = http.NewRequest(http.MethodPut, server.URL+"/characters/char-1/profile", bytes.NewReader(profBody))
 	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
 	resp, err = client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK for update profile, got %d (err: %v)", resp.StatusCode, err)

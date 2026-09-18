@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -53,8 +52,7 @@ func (h *Handler) handleAuctionSend(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req sendAuctionRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, err)
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 
@@ -87,8 +85,7 @@ func (h *Handler) handleAuctionSendLegacy(w http.ResponseWriter, r *http.Request
 	}
 
 	var req sendAuctionLegacyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, err)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 

@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -74,8 +73,7 @@ func (h *Handler) handleTavernOrder(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req tavernItemRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid request body"))
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 
@@ -103,8 +101,7 @@ func (h *Handler) handleTavernReserveDelivery(w http.ResponseWriter, r *http.Req
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req tavernItemRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid request body"))
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 
