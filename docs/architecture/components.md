@@ -139,7 +139,7 @@ Each feature owns its specific domain logic and state. Cross-feature imports and
 | **Ranking** | `internal/ranking` | 12 leaderboards, Valkey caching, singleflight stampede guard | Character, Player, Valkey, Scheduling | Valkey `party2:ranking:snapshot:*`; MariaDB `ranking_snapshots` |
 | **Rate Limit** | `internal/ratelimit` | Distributed atomic rate limiting, spam defense, throttling | Valkey | Valkey `party2:ratelimit:*` |
 | **Replay** | `internal/replay` | Combat turn log recording, step-by-step playback, retention | Battle, Character | MariaDB `battle_replays` |
-| **Secret Shop** | `internal/secretshop` | JobLv 7 access gate, 8 rare items at 3× price, depot delivery | Character, Item, Inventory, Depot | MariaDB `characters`, `inventory_items`, `depot_items` |
+| **Secret Shop** | `internal/secretshop` | JobLv 7 access gate, 8 rare items at 3× price, depot delivery | Character, Item, Inventory, Depot | MariaDB `characters`, `inventory_items`, `depot_items` (Rank 2→3→5) |
 | **Shop** | `internal/shop` | Town equipment/item shops, 50% markdown, depot auto-delivery | Catalogs, Character, Inventory, Depot | MariaDB `characters`, `inventory_items`, `depot_items` (Rank 2→3→5) |
 | **Store** | `internal/store` | Player shop construction (50kG/90d), barter listings, interiors | Character, Depot, Item, Guild, Timer | MariaDB `character_stores`, `store_sales`, `store_interiors` (Rank 0→2→5) |
 | **Tavern** | `internal/tavern` | 14-item culinary menu, restorative meals, food delivery standing orders | Character, Lottery | MariaDB `tavern_deliveries`, `tavern_character_status` |

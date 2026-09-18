@@ -153,7 +153,7 @@ The target is the game's meaningful behavior and design, not its historical impl
 - [`blacksmith.md`](blacksmith.md) — weapon seals, equipment naming, and dedicated storage
 - [`alchemy.md`](alchemy.md) — recipe crafting synthesis
 - [`bank.md`](bank.md) — bank accounts and remittances
-- [`resting.md`](resting.md) — inn and rest recovery
+- [`home.md`](home.md) — player private estates, sleep recovery, and correspondence
 
 ### Architecture & Rules
 - [`../architecture/overview.md`](../architecture/overview.md) — how the game is structured in software.

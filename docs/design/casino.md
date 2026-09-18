@@ -127,7 +127,44 @@ Rooms serialize multi-player games using Valkey Master (`ValkeyRoomRepository`, 
 
 ---
 
-## 6. Authentic Prize Catalog & Depot Routing
+## 6. Solo 3-Reel Slot Machine (`party2/lib/casino_slot.cgi`)
+
+### Rules & Paytable
+The Slot Machine (スロットマシン) is a single-player casino wagering game. Players wager casino coins to spin 3 reels containing 5 distinct symbols. Symbol combinations along the payline award multipliers and coin payouts.
+
+- **Reels & Symbols**: 3 reels ($R_1, R_2, R_3$) with 5 symbols:
+  - **Seven (`SymbolSeven` / ７)**
+  - **Star (`SymbolStar` / ★)**
+  - **Dagger (`SymbolDagger` / †)**
+  - **Note (`SymbolNote` / ♪)**
+  - **Cherry (`SymbolCherry` / ∞)**
+
+### Payout Multipliers
+
+| Combination | Multiplier | Payout on Bet $B$ | Description |
+| :--- | :---: | :---: | :--- |
+| **７ ７ ７** | **100x** | $100 \times B$ | 777 Jackpot |
+| **★ ★ ★** | **70x** | $70 \times B$ | Super Win |
+| **† † †** | **50x** | $50 \times B$ | Big Win |
+| **♪ ♪ ♪** | **20x** | $20 \times B$ | Standard Win |
+| **∞ ∞ ∞** | **10x** | $10 \times B$ | Triple Cherry |
+| **∞ ∞ [Any]** | **3x** | $3 \times B$ | Double Cherry (First 2 reels) |
+| Any other | **0x** | $0$ | Miss (Loss of wagered bet $B$) |
+
+### Betting Rates & Job Restrictions
+- Allowed Bet Rates: **1**, **10**, **50**, **100**, **200** coins.
+- **Job 46 Gate**: The 200-coin slot bet is restricted to characters in Job 46 (Gambler / ギャンブラー) (`party2/lib/casino.cgi:98, 109-111`). Other jobs attempting a 200-coin bet are rejected with `ErrJobNotEligibleForSlot200`.
+
+### Fatigue & Rest Interaction
+- **Fatigue Gate**: Spinning is blocked if character fatigue `Tired >= 100` (`ErrCharacterExhausted`).
+- **Fatigue Penalty on Miss**: When a spin results in a Miss, character fatigue increases by +1 (`char.AddTired(1)` per `party2/lib/casino.cgi:583, 588`).
+
+### Celestial Wish 5 Bonus
+- Characters with the celestial Casino Blessing (Wish 5 from `internal/god`) receive a 25% chance of a +50% payout bonus on winning spins (`party2/lib/casino.cgi:565-568, 577-580`).
+
+---
+
+## 7. Authentic Prize Catalog & Depot Routing
 
 ### 18 Authentic Prizes (`party2/lib/casino.cgi:41-65`)
 
@@ -159,7 +196,7 @@ Rooms serialize multi-player games using Valkey Master (`ValkeyRoomRepository`, 
 
 ---
 
-## 7. Concurrency & Lock Acquisition Hierarchy
+## 8. Concurrency & Lock Acquisition Hierarchy
  
 Multi-player room lobbies and in-flight turns reside exclusively in Valkey Master (Candidate C Ephemeral Turn & Session Lobby Architecture). MariaDB transactional operations strictly follow the global lock acquisition hierarchy for financial settlements and prize exchange:
 ```text
