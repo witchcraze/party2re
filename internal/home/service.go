@@ -42,6 +42,7 @@ type Service struct {
 	fullness          FullnessResetter
 	chapel            BlessingCleaner
 	alchemy           AlchemyCompleter
+	costume           CostumeResetter
 	onlineCounter     OnlineCounter
 	baseSleepDuration time.Duration
 	runner            TransactionRunner

@@ -1,0 +1,695 @@
+{
+  "/characters/{id}/oracle": {
+    "get": {
+      "description": "Returns Oracle Shop status, costume catalog gated by job level, home wallpapers, and current active costume rental.",
+      "operationId": "getOracleStatus",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "active_costume": {
+                    "nullable": true,
+                    "properties": {
+                      "expires_at": {
+                        "format": "date-time",
+                        "nullable": true,
+                        "type": "string"
+                      },
+                      "icon": {
+                        "type": "string"
+                      },
+                      "item_no": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "character_id": {
+                    "type": "string"
+                  },
+                  "items": {
+                    "items": {
+                      "properties": {
+                        "gender": {
+                          "type": "integer"
+                        },
+                        "icon": {
+                          "type": "string"
+                        },
+                        "item_no": {
+                          "type": "integer"
+                        },
+                        "job_req": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "price": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "item_no",
+                        "name",
+                        "price",
+                        "gender",
+                        "icon",
+                        "job_req"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "location_name": {
+                    "type": "string"
+                  },
+                  "npc_name": {
+                    "type": "string"
+                  },
+                  "wallpapers": {
+                    "items": {
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "image": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "price": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "price",
+                        "image"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "character_id",
+                  "location_name",
+                  "npc_name",
+                  "items",
+                  "wallpapers"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "Oracle Shop status retrieved successfully"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character not found"
+        }
+      },
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "summary": "Get Oracle Shop status, costume catalog, wallpapers, and active rental",
+      "tags": [
+        "Oracle Shop"
+      ]
+    }
+  },
+  "/characters/{id}/oracle/blackmarket": {
+    "post": {
+      "description": "Checks if character meets level requirements to discover Black Market from Oracle Shop hint.",
+      "operationId": "discoverOracleBlackMarket",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  },
+                  "unlocked": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "unlocked",
+                  "message"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "Black Market discovery eligibility verified"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character job level insufficient (requires job_lv \u003e= 15)"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character not found"
+        }
+      },
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "summary": "Check Black Market discovery from Oracle Shop",
+      "tags": [
+        "Oracle Shop"
+      ]
+    }
+  },
+  "/characters/{id}/oracle/inspect": {
+    "post": {
+      "description": "Inspects Oracle Shop NPC @ラクル, showing description and conditional Black Market hint for job level \u003e= 15.",
+      "operationId": "inspectOracleNPC",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "character_id": {
+                    "type": "string"
+                  },
+                  "hint": {
+                    "type": "string"
+                  },
+                  "location_name": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "npc_name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "character_id",
+                  "location_name",
+                  "npc_name",
+                  "message"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "NPC description and optional hint retrieved"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character not found"
+        }
+      },
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "summary": "Inspect Oracle NPC @ラクル",
+      "tags": [
+        "Oracle Shop"
+      ]
+    }
+  },
+  "/characters/{id}/oracle/rent": {
+    "post": {
+      "description": "Rents a costume icon from the Oracle Shop for gold, active until daily rest, midnight JST, or job change.",
+      "operationId": "rentOracleCostume",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "item_no": {
+                  "description": "Costume item number (e.g. 44..56, 138..141)",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "item_no"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "icon": {
+                    "type": "string"
+                  },
+                  "item_no": {
+                    "type": "integer"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "price": {
+                    "type": "integer"
+                  },
+                  "remaining_gold": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "item_no",
+                  "name",
+                  "icon",
+                  "price",
+                  "remaining_gold",
+                  "message"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "Costume rented successfully"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Insufficient gold or invalid costume item number"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character job level requirement not met"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character not found"
+        }
+      },
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "summary": "Rent a costume icon",
+      "tags": [
+        "Oracle Shop"
+      ]
+    }
+  },
+  "/characters/{id}/oracle/return": {
+    "post": {
+      "description": "Manually returns currently rented costume back to Oracle Shop.",
+      "operationId": "returnOracleCostume",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "message"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "Costume returned successfully"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character not found"
+        }
+      },
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "summary": "Return active rented costume",
+      "tags": [
+        "Oracle Shop"
+      ]
+    }
+  },
+  "/characters/{id}/oracle/talk": {
+    "post": {
+      "description": "Talks to Oracle Shop NPC @ラクル, receiving a randomized fortune-telling dialogue.",
+      "operationId": "talkOracleNPC",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "character_id": {
+                    "type": "string"
+                  },
+                  "location_name": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "npc_name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "character_id",
+                  "location_name",
+                  "npc_name",
+                  "message"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "NPC dialogue returned successfully"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character not found"
+        }
+      },
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "summary": "Talk to Oracle NPC @ラクル",
+      "tags": [
+        "Oracle Shop"
+      ]
+    }
+  },
+  "/characters/{id}/oracle/wallpaper": {
+    "post": {
+      "description": "Purchases and applies a seasonal or scenic wallpaper for the character's private home estate.",
+      "operationId": "buyOracleHomeWallpaper",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "wallpaper": {
+                  "description": "Wallpaper identifier (e.g. stage10, stage11...)",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "wallpaper"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  },
+                  "price": {
+                    "type": "integer"
+                  },
+                  "remaining_gold": {
+                    "type": "integer"
+                  },
+                  "wallpaper": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "wallpaper",
+                  "price",
+                  "remaining_gold",
+                  "message"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "Home wallpaper purchased and applied successfully"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Insufficient gold or invalid wallpaper identifier"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character not found"
+        }
+      },
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "summary": "Purchase home wallpaper",
+      "tags": [
+        "Oracle Shop"
+      ]
+    }
+  }
+}

@@ -300,3 +300,15 @@ func (r *StoreRepository) UpdateInteriorName(ctx context.Context, interiorID str
 	`, name, interiorID)
 	return err
 }
+
+// UpdateHomeWallpaper updates the background wallpaper of the character's home.
+func (r *StoreRepository) UpdateHomeWallpaper(ctx context.Context, characterID string, wallpaper string) error {
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+		INSERT INTO character_homes (character_id, bgimg, updated_at)
+		VALUES (?, ?, UTC_TIMESTAMP())
+		ON DUPLICATE KEY UPDATE
+			bgimg = VALUES(bgimg),
+			updated_at = VALUES(updated_at)
+	`, characterID, wallpaper)
+	return err
+}

@@ -136,6 +136,11 @@ func TestStoreRepositorySaveAndFind(t *testing.T) {
 		t.Fatalf("UpdateInteriorName() error = %v", err)
 	}
 
+	// Test UpdateHomeWallpaper
+	if err := storeRepo.UpdateHomeWallpaper(ctx, char.ID, "goods.gif"); err != nil {
+		t.Fatalf("UpdateHomeWallpaper() error = %v", err)
+	}
+
 	// Cleanup
 	_ = storeRepo.DeleteSale(ctx, sale.ID)
 	_ = storeRepo.DeleteInteriorsByStoreID(ctx, st.ID)

@@ -48,6 +48,11 @@ type GuildPointAwarder interface {
 	AddGuildPoints(ctx context.Context, characterID string, points int) error
 }
 
+// CostumeResetter resets rented costume state upon job change (goods.cgi:28).
+type CostumeResetter interface {
+	ResetCostume(ctx context.Context, characterID string) error
+}
+
 type Service struct {
 	repository     Repository
 	catalog        *corejob.Catalog
@@ -58,6 +63,7 @@ type Service struct {
 	news           NewsPublisher
 	futureMemories FutureMemoryRepository
 	guildPoints    GuildPointAwarder
+	costume        CostumeResetter
 }
 
 type Option func(*Service)
@@ -105,6 +111,13 @@ func WithGuildPointAwarder(gpa GuildPointAwarder) Option {
 	}
 }
 
+// WithCostumeResetter sets the optional costume rental resetter on job change (goods.cgi:28).
+func WithCostumeResetter(c CostumeResetter) Option {
+	return func(s *Service) {
+		s.costume = c
+	}
+}
+
 func NewService(repository Repository, opts ...Option) (*Service, error) {
 	if repository == nil {
 		return nil, errors.New("job repository is nil")
@@ -117,6 +130,11 @@ func NewService(repository Repository, opts ...Option) (*Service, error) {
 		s.catalog, _ = corejob.InitialCatalog()
 	}
 	return s, nil
+}
+
+// SetCostumeResetter registers the costume reset hook called upon job change.
+func (s *Service) SetCostumeResetter(c CostumeResetter) {
+	s.costume = c
 }
 
 func (s *Service) ListDefinitions() []corejob.Definition {
@@ -238,6 +256,10 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 	if s.guildPoints != nil {
 		//lint:ignore error-swallow best-effort guild points bonus
 		_ = s.guildPoints.AddGuildPoints(ctx, characterID, 50)
+	}
+	if s.costume != nil {
+		//lint:ignore error-swallow best-effort costume rental return on job change
+		_ = s.costume.ResetCostume(ctx, characterID)
 	}
 	return char, state, nil
 }
