@@ -2,6 +2,8 @@ package challenge_test
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/challenge"
@@ -228,4 +230,77 @@ func TestPartyAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 				m.CharacterID, remHP, m.CharacterCurrentHP)
 		}
 	}
+}
+
+func TestStartPartySession_PersistenceAndValidationErrors(t *testing.T) {
+	ctx := context.Background()
+
+	setupService := func() (*challenge.Service, *mockChallengeRepo, *mockCharRepo, *mockActiveStore) {
+		repo := newMockChallengeRepo()
+		charRepo := &mockCharRepo{
+			chars: map[string]corecharacter.Character{
+				"lead": createPartyTestChar("lead", 15, 200, 50, 30),
+				"c2":   createPartyTestChar("c2", 15, 180, 45, 25),
+			},
+		}
+		activeStore := newMockActiveStore(nil)
+		svc, err := challenge.NewService(
+			repo,
+			charRepo,
+			&corebattle.Engine{},
+			challenge.WithActiveSessionStore(activeStore),
+		)
+		if err != nil {
+			t.Fatalf("failed to create challenge service: %v", err)
+		}
+		return svc, repo, charRepo, activeStore
+	}
+
+	t.Run("empty leader character ID returns ErrCharacterNotFound", func(t *testing.T) {
+		svc, _, _, _ := setupService()
+		_, err := svc.StartPartySession(ctx, "", []string{"c2"}, "novice", "Party", "#FFFFFF")
+		if !errors.Is(err, challenge.ErrCharacterNotFound) {
+			t.Errorf("expected ErrCharacterNotFound, got %v", err)
+		}
+	})
+
+	t.Run("activeStore GetActiveSession error propagates", func(t *testing.T) {
+		svc, _, _, activeStore := setupService()
+		activeStore.getActiveSessionErr = errors.New("valkey cluster unavailable")
+
+		_, err := svc.StartPartySession(ctx, "lead", []string{"lead", "c2"}, "novice", "Party", "#FFFFFF")
+		if err == nil || !strings.Contains(err.Error(), "valkey cluster unavailable") {
+			t.Errorf("expected valkey cluster unavailable error, got %v", err)
+		}
+	})
+
+	t.Run("charRepo FindByID error propagates", func(t *testing.T) {
+		svc, _, charRepo, _ := setupService()
+		charRepo.findByIDErr = errors.New("mariadb connection lost")
+
+		_, err := svc.StartPartySession(ctx, "lead", []string{"lead", "c2"}, "novice", "Party", "#FFFFFF")
+		if err == nil || !strings.Contains(err.Error(), "mariadb connection lost") {
+			t.Errorf("expected charRepo error, got %v", err)
+		}
+	})
+
+	t.Run("activeStore SaveActiveSession error propagates", func(t *testing.T) {
+		svc, _, _, activeStore := setupService()
+		activeStore.saveActiveSessionErr = errors.New("valkey write timeout")
+
+		_, err := svc.StartPartySession(ctx, "lead", []string{"lead", "c2"}, "novice", "Party", "#FFFFFF")
+		if err == nil || !strings.Contains(err.Error(), "valkey write timeout") {
+			t.Errorf("expected activeStore save error, got %v", err)
+		}
+	})
+
+	t.Run("repo SaveSession error propagates with context", func(t *testing.T) {
+		svc, repo, _, _ := setupService()
+		repo.saveSessionErr = errors.New("duplicate key in challenge_sessions")
+
+		_, err := svc.StartPartySession(ctx, "lead", []string{"lead", "c2"}, "novice", "Party", "#FFFFFF")
+		if err == nil || !strings.Contains(err.Error(), "saving challenge session: duplicate key in challenge_sessions") {
+			t.Errorf("expected wrapped repo save session error, got %v", err)
+		}
+	})
 }

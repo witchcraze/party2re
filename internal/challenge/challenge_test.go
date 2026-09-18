@@ -12,10 +12,14 @@ import (
 )
 
 type mockCharRepo struct {
-	chars map[string]corecharacter.Character
+	chars       map[string]corecharacter.Character
+	findByIDErr error
 }
 
 func (m *mockCharRepo) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
+	if m.findByIDErr != nil {
+		return corecharacter.Character{}, m.findByIDErr
+	}
 	c, ok := m.chars[id]
 	if !ok {
 		return corecharacter.Character{}, challenge.ErrCharacterNotFound
@@ -24,9 +28,21 @@ func (m *mockCharRepo) FindByID(ctx context.Context, id string) (corecharacter.C
 }
 
 type mockChallengeRepo struct {
-	sessions map[string]challenge.ChallengeSession
-	records  map[string]challenge.CharacterChallengeRecord
-	hof      map[string]challenge.HallOfFameEntry
+	sessions             map[string]challenge.ChallengeSession
+	records              map[string]challenge.CharacterChallengeRecord
+	hof                  map[string]challenge.HallOfFameEntry
+	saveSessionErr       error
+	findSessionByIDErr   error
+	findActiveErr        error
+	updateSessionErr     error
+	saveRecordErr        error
+	findRecordErr        error
+	findRecordsByCharErr error
+	getLeaderboardErr    error
+	finalizeSessionErr   error
+	saveHofErr           error
+	getHofErr            error
+	listHofErr           error
 }
 
 func newMockChallengeRepo() *mockChallengeRepo {
@@ -38,11 +54,17 @@ func newMockChallengeRepo() *mockChallengeRepo {
 }
 
 func (m *mockChallengeRepo) SaveSession(ctx context.Context, s challenge.ChallengeSession) error {
+	if m.saveSessionErr != nil {
+		return m.saveSessionErr
+	}
 	m.sessions[s.ID] = s
 	return nil
 }
 
 func (m *mockChallengeRepo) FindSessionByID(ctx context.Context, id string) (*challenge.ChallengeSession, error) {
+	if m.findSessionByIDErr != nil {
+		return nil, m.findSessionByIDErr
+	}
 	s, ok := m.sessions[id]
 	if !ok {
 		return nil, challenge.ErrSessionNotFound
@@ -51,6 +73,9 @@ func (m *mockChallengeRepo) FindSessionByID(ctx context.Context, id string) (*ch
 }
 
 func (m *mockChallengeRepo) FindActiveSessionByCharacter(ctx context.Context, characterID string) (*challenge.ChallengeSession, error) {
+	if m.findActiveErr != nil {
+		return nil, m.findActiveErr
+	}
 	for _, s := range m.sessions {
 		if s.CharacterID == characterID && s.Status == challenge.StatusActive {
 			return &s, nil
@@ -60,17 +85,26 @@ func (m *mockChallengeRepo) FindActiveSessionByCharacter(ctx context.Context, ch
 }
 
 func (m *mockChallengeRepo) UpdateSession(ctx context.Context, s challenge.ChallengeSession) error {
+	if m.updateSessionErr != nil {
+		return m.updateSessionErr
+	}
 	m.sessions[s.ID] = s
 	return nil
 }
 
 func (m *mockChallengeRepo) SaveRecord(ctx context.Context, r challenge.CharacterChallengeRecord) error {
+	if m.saveRecordErr != nil {
+		return m.saveRecordErr
+	}
 	key := r.CharacterID + ":" + r.TierID
 	m.records[key] = r
 	return nil
 }
 
 func (m *mockChallengeRepo) FindRecord(ctx context.Context, characterID string, tierID string) (*challenge.CharacterChallengeRecord, error) {
+	if m.findRecordErr != nil {
+		return nil, m.findRecordErr
+	}
 	key := characterID + ":" + tierID
 	r, ok := m.records[key]
 	if !ok {
@@ -80,6 +114,9 @@ func (m *mockChallengeRepo) FindRecord(ctx context.Context, characterID string, 
 }
 
 func (m *mockChallengeRepo) FindRecordsByCharacter(ctx context.Context, characterID string) ([]challenge.CharacterChallengeRecord, error) {
+	if m.findRecordsByCharErr != nil {
+		return nil, m.findRecordsByCharErr
+	}
 	var list []challenge.CharacterChallengeRecord
 	for _, r := range m.records {
 		if r.CharacterID == characterID {
@@ -90,6 +127,9 @@ func (m *mockChallengeRepo) FindRecordsByCharacter(ctx context.Context, characte
 }
 
 func (m *mockChallengeRepo) GetLeaderboard(ctx context.Context, tierID string, limit int) ([]challenge.LeaderboardEntry, error) {
+	if m.getLeaderboardErr != nil {
+		return nil, m.getLeaderboardErr
+	}
 	var list []challenge.LeaderboardEntry
 	for _, r := range m.records {
 		if r.TierID == tierID && r.HighestRound > 0 {
@@ -107,6 +147,9 @@ func (m *mockChallengeRepo) GetLeaderboard(ctx context.Context, tierID string, l
 }
 
 func (m *mockChallengeRepo) FinalizeSession(ctx context.Context, s challenge.ChallengeSession, expReward int, goldReward int, items []string, newStreak int) error {
+	if m.finalizeSessionErr != nil {
+		return m.finalizeSessionErr
+	}
 	m.sessions[s.ID] = s
 	key := s.CharacterID + ":" + s.TierID
 	rec := m.records[key]
@@ -123,11 +166,17 @@ func (m *mockChallengeRepo) FinalizeSession(ctx context.Context, s challenge.Cha
 }
 
 func (m *mockChallengeRepo) SaveHallOfFame(ctx context.Context, entry challenge.HallOfFameEntry) error {
+	if m.saveHofErr != nil {
+		return m.saveHofErr
+	}
 	m.hof[entry.TierID] = entry
 	return nil
 }
 
 func (m *mockChallengeRepo) GetHallOfFame(ctx context.Context, tierID string) (*challenge.HallOfFameEntry, error) {
+	if m.getHofErr != nil {
+		return nil, m.getHofErr
+	}
 	entry, ok := m.hof[tierID]
 	if !ok {
 		return nil, nil
@@ -136,11 +185,57 @@ func (m *mockChallengeRepo) GetHallOfFame(ctx context.Context, tierID string) (*
 }
 
 func (m *mockChallengeRepo) ListHallOfFame(ctx context.Context) ([]challenge.HallOfFameEntry, error) {
+	if m.listHofErr != nil {
+		return nil, m.listHofErr
+	}
 	var list []challenge.HallOfFameEntry
 	for _, e := range m.hof {
 		list = append(list, e)
 	}
 	return list, nil
+}
+
+type mockActiveStore struct {
+	underlying             challenge.ActiveSessionStore
+	getActiveSessionErr    error
+	saveActiveSessionErr   error
+	deleteActiveSessionErr error
+	advanceRoundErr        error
+}
+
+func newMockActiveStore(underlying challenge.ActiveSessionStore) *mockActiveStore {
+	if underlying == nil {
+		underlying = challenge.NewMemorySessionRepository()
+	}
+	return &mockActiveStore{underlying: underlying}
+}
+
+func (m *mockActiveStore) GetActiveSession(ctx context.Context, characterID string) (*challenge.ChallengeSession, error) {
+	if m.getActiveSessionErr != nil {
+		return nil, m.getActiveSessionErr
+	}
+	return m.underlying.GetActiveSession(ctx, characterID)
+}
+
+func (m *mockActiveStore) SaveActiveSession(ctx context.Context, session challenge.ChallengeSession) error {
+	if m.saveActiveSessionErr != nil {
+		return m.saveActiveSessionErr
+	}
+	return m.underlying.SaveActiveSession(ctx, session)
+}
+
+func (m *mockActiveStore) DeleteActiveSession(ctx context.Context, characterID string) error {
+	if m.deleteActiveSessionErr != nil {
+		return m.deleteActiveSessionErr
+	}
+	return m.underlying.DeleteActiveSession(ctx, characterID)
+}
+
+func (m *mockActiveStore) AdvanceRound(ctx context.Context, characterID string, params challenge.AdvanceRoundParams) (challenge.AdvanceRoundOutcome, error) {
+	if m.advanceRoundErr != nil {
+		return challenge.AdvanceRoundOutcome{}, m.advanceRoundErr
+	}
+	return m.underlying.AdvanceRound(ctx, characterID, params)
 }
 
 func TestStartSession_ValidationAndCreation(t *testing.T) {

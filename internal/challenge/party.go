@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -54,7 +55,10 @@ func (s *Service) StartPartySession(
 	}
 
 	existing, err := s.activeStore.GetActiveSession(ctx, leaderCharID)
-	if err == nil && existing != nil && existing.Status == StatusActive {
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil && existing.Status == StatusActive {
 		return nil, ErrActiveSessionExists
 	}
 
@@ -64,7 +68,10 @@ func (s *Service) StartPartySession(
 	for _, mID := range memberIDs {
 		char, err := s.charRepo.FindByID(ctx, mID)
 		if err != nil {
-			return nil, ErrCharacterNotFound
+			if errors.Is(err, corecharacter.ErrNotFound) || errors.Is(err, ErrCharacterNotFound) {
+				return nil, ErrCharacterNotFound
+			}
+			return nil, err
 		}
 
 		level := char.Level
