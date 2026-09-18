@@ -3,6 +3,8 @@ package adventure
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -17,15 +19,30 @@ type testClock struct{ now time.Time }
 
 func (c *testClock) Now() time.Time { return c.now }
 
+type testLogger struct {
+	mu       sync.Mutex
+	warnings []string
+}
+
+func (l *testLogger) Warn(msg string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.warnings = append(l.warnings, fmt.Sprintf(msg, args...))
+}
+
 type repositoryStub struct {
 	mu         sync.Mutex
 	value      Adventure
 	characters *characterRepositoryStub
+	saveErr    error
 }
 
 func (r *repositoryStub) Save(_ context.Context, value Adventure) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.saveErr != nil {
+		return r.saveErr
+	}
 	r.value = value
 	return nil
 }
@@ -62,8 +79,9 @@ func (r *repositoryStub) GetAggregatedStats(_ context.Context, characterID strin
 }
 
 type characterRepositoryStub struct {
-	mu    sync.Mutex
-	value corecharacter.Character
+	mu        sync.Mutex
+	value     corecharacter.Character
+	updateErr error
 }
 
 func (r *characterRepositoryStub) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
@@ -78,6 +96,9 @@ func (r *characterRepositoryStub) FindByID(_ context.Context, id string) (corech
 func (r *characterRepositoryStub) Update(_ context.Context, value corecharacter.Character) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.updateErr != nil {
+		return r.updateErr
+	}
 	r.value = value
 	return nil
 }
@@ -517,5 +538,88 @@ func TestValidateCombatItem(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestExecuteCrawl_AdventureSaveError(t *testing.T) {
+	service, _, repository, characters := newTestService(t)
+	characters.value.Level = 10
+	repository.saveErr = errors.New("adventures database disk full")
+
+	_, err := service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
+		CharacterIDs: []string{characters.value.ID},
+		StageID:      "stage-01",
+	})
+	if err == nil || !strings.Contains(err.Error(), "saving adventure record: adventures database disk full") {
+		t.Fatalf("expected wrapped adventure save error, got: %v", err)
+	}
+}
+
+func TestExecuteCrawl_FallbackCharacterUpdateError(t *testing.T) {
+	service, _, _, characters := newTestService(t)
+	characters.value.Level = 10
+	characters.updateErr = errors.New("characters database connection timeout")
+
+	_, err := service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
+		CharacterIDs: []string{characters.value.ID},
+		StageID:      "stage-01",
+	})
+	if err == nil || !strings.Contains(err.Error(), "updating character "+characters.value.ID+": characters database connection timeout") {
+		t.Fatalf("expected wrapped character update error, got: %v", err)
+	}
+}
+
+func TestExecuteCrawl_HookErrorHandling(t *testing.T) {
+	character := corecharacter.Character{
+		ID:    "char-hook-test",
+		Name:  "Hook Tester",
+		Level: 10,
+	}
+	character.Stats.HP = 200
+	character.Stats.MaxHP = 200
+	character.Stats.Attack = 50
+	character.Stats.Defense = 20
+
+	adventures := &repositoryStub{}
+	characters := &characterRepositoryStub{value: character}
+	adventures.characters = characters
+	clock := &testClock{now: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)}
+	logger := &testLogger{}
+	inventories := newInventoryRepositoryStub()
+	stages, _ := InitialStageCatalog()
+	monsters, _ := InitialMonsterCatalog()
+	service, err := NewServiceWithCatalogs(adventures, characters, inventories, stages, monsters, corebattle.Engine{}, nil, logger, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	service.SetVictoryHook(func(ctx context.Context, characterID string, monstersDefeated int, goldEarned int) error {
+		return errors.New("simulated victory hook error")
+	})
+	service.SetPostAdventureHook(func(ctx context.Context, characterID string) error {
+		return errors.New("simulated post adventure hook error")
+	})
+
+	res, err := service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
+		CharacterIDs: []string{characters.value.ID},
+		StageID:      "stage-01",
+	})
+	if err != nil {
+		t.Fatalf("ExecuteCrawl should not fail when hooks fail, got: %v", err)
+	}
+	if !res.StageCleared {
+		t.Fatalf("expected stage to be cleared by level 10 hero")
+	}
+
+	logger.mu.Lock()
+	defer logger.mu.Unlock()
+	if len(logger.warnings) != 2 {
+		t.Fatalf("expected 2 warnings from failed hooks, got %d: %+v", len(logger.warnings), logger.warnings)
+	}
+	if !strings.Contains(logger.warnings[0], "adventure victory hook failed for character char-hook-test: simulated victory hook error") {
+		t.Errorf("unexpected victory hook warning: %s", logger.warnings[0])
+	}
+	if !strings.Contains(logger.warnings[1], "post adventure hook failed for character char-hook-test: simulated post adventure hook error") {
+		t.Errorf("unexpected post adventure hook warning: %s", logger.warnings[1])
 	}
 }

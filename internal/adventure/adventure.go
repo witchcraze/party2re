@@ -91,9 +91,13 @@ type nopLogger struct{}
 func (nopLogger) Warn(msg string, args ...any) {}
 
 // VictoryHook is called when an adventure stage concludes with a player victory.
+// It is invoked as a best-effort side-effect notification after adventure state and rewards are committed.
+// Hook execution errors are logged via Logger without failing the completed adventure.
 type VictoryHook func(ctx context.Context, characterID string, monstersDefeated int, goldEarned int) error
 
 // PostAdventureHook is called after an adventure concludes and state is applied.
+// It is invoked as a best-effort side-effect notification.
+// Hook execution errors are logged via Logger without failing the completed adventure.
 type PostAdventureHook func(ctx context.Context, characterID string) error
 
 type partyBattleResolver interface {
@@ -405,11 +409,15 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 		}
 
 		if result.Outcome == corebattle.OutcomeWin && s.victoryHook != nil {
-			_ = s.victoryHook(ctx, c.ID, result.FloorsCleared, result.TotalGold)
+			if err := s.victoryHook(ctx, c.ID, result.FloorsCleared, result.TotalGold); err != nil {
+				s.logger.Warn("adventure victory hook failed for character %s: %v", c.ID, err)
+			}
 		}
 
 		if s.postAdventureHook != nil {
-			_ = s.postAdventureHook(ctx, c.ID)
+			if err := s.postAdventureHook(ctx, c.ID); err != nil {
+				s.logger.Warn("post adventure hook failed for character %s: %v", c.ID, err)
+			}
 		}
 	}
 
