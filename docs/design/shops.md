@@ -111,7 +111,55 @@ Legacy Party2 routes purchased goods based on current inventory occupancy and qu
 
 ---
 
-## 7. Concurrency and Lock Sequence
+## 7. Secret Underground Shop & NPC @ヒミツジ (`secret.cgi` / `item.cgi:himitsunomise`)
+
+The Secret Underground Shop (`internal/secretshop`) is an exclusive hidden facility managed by the mysterious talking sheep NPC `@ヒミツジ` (Himitsuji).
+
+### 7.1. Discovery & Access Qualification
+- **Requirement**: `JobLevel >= 7` (total job change count $\ge 7$).
+- **Access Control**: Characters who do not meet this requirement receive `ErrAccessDenied` (HTTP 403 Forbidden).
+
+### 7.2. Rare Goods Catalog (3x Base Price)
+The secret shop stocks the 8 authentic rare items specified in legacy `secret.cgi:sales`:
+
+| Item ID | Definition ID | Name | Category | Base Price | Secret Price (3x) | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `secret_item_herbal_root` | `item-010` | 薬草の根っこ | Consumable | 250 G | **750 G** | 大地の生命力を宿した薬草の根。戦闘中に仲間の傷や状態異常を治療する。 |
+| `secret_item_magic_mirror` | `item-015` | 魔法の鏡 | Consumable | 300 G | **900 G** | 魔法の壁を展開し、敵の呪文を跳ね返す神秘の鏡。 |
+| `secret_item_ruby_of_protection` | `item-080` | 守りのルビー | Consumable | 500 G | **1,500 G** | 魔法の光で仲間を包み込み、受ける魔法ダメージを軽減する宝石。 |
+| `secret_item_silver_harp` | `item-078` | 銀のたてごと | Consumable | 1,400 G | **4,200 G** | 美しい音色を奏でて魔物を呼び寄せる銀製の竪琴。 |
+| `secret_item_staff_of_change` | `item-043` | へんげの杖 | Consumable | 1,000 G | **3,000 G** | 使用者の姿をモンスターの姿に変貌させる不思議な杖。 |
+| `secret_item_philosophers_enlightenment` | `item-027` | 賢者の悟り | Consumable | 10,000 G | **30,000 G** | 深遠なる知識と悟りを開いた証。上位職への転職条件を満たす秘宝。 |
+| `secret_item_spirits_ward` | `item-030` | 精霊の守り | Consumable | 5,000 G | **15,000 G** | 精霊たちの強大な加護が宿るお守り。上位職への転職条件を満たす秘宝。 |
+| `secret_item_counts_blood` | `item-031` | 伯爵の血 | Consumable | 5,000 G | **15,000 G** | 高貴なる闇の血脈を宿す秘薬。上位職への転職条件を満たす秘宝。 |
+
+- **Helper Quest Exclusion**: Active helper quest targets are filtered out of the catalog and cannot be purchased (`ErrItemUnavailableInHelperQuest`).
+- **Delivery**: If inventory slot is occupied or quantity > 1, goods route to Depot (`character_depots`).
+
+### 7.3. NPC Interactions & Puff-Puff Service
+- **Talk (`POST /characters/{id}/secretshop/talk`)**: Sheep dialogue hints (*"値段は高いメェ〜けれど、他では手に入らないレアものだメェ〜"*).
+- **Inspect (`POST /characters/{id}/secretshop/inspect`)**: Lore background of Himitsuji.
+- **Puff-Puff (`POST /characters/{id}/secretshop/puffpuff`)**: Authentic humorous interaction (*"パフパフ♥ パフパフ♥ パフパフ♥"*). No HP/MP healing or stat changes.
+
+---
+
+## 8. Commerce & Trading System Boundaries
+
+Party2 features multiple commercial facilities with distinct roles and storage models:
+
+| Facility | Module | Type | Primary Role & Storage Model | Canonical Document |
+| :--- | :--- | :--- | :--- | :--- |
+| **Town Shops** | `internal/shop` | NPC Merchant | Standard equipment & item retail (2x base) / resale (50%) | This document (`shops.md`) |
+| **Secret Shop** | `internal/secretshop` | NPC Secret | JobLv 7 gate, 8 rare items at 3x price, puff-puff | This document (`shops.md`) |
+| **Player Stores** | `internal/store` | Player Real-Estate | 50kG town boutiques, 26 wallpapers, 15 furnitures, depot barter/sales | [`store.md`](store.md) |
+| **Flea Market** | `internal/fleamarket` | Player Stalls | Fixed-price P2P stalls (120 server ceiling), depot delivery | [`fleamarket.md`](fleamarket.md) |
+| **Auction House** | `internal/auction` | P2P Trade Hall | Live player-to-player item sending (`@おくる`/`@しらべる`) | [`auction.md`](auction.md) |
+| **Black Market** | `internal/blackmarket` | Recycling Barter | Rare item sacrifice for Rare Points, 24 item/equipment exchanges | [`black-market.md`](black-market.md) |
+| **Tavern Delivery** | `internal/tavern` | Recurring Dining | Pre-ordered post-adventure meal reservations (0G upfront) | [`tavern.md`](tavern.md) |
+
+---
+
+## 9. Concurrency and Lock Sequence
 
 All financial and inventory operations execute in strict lock hierarchy:
 1. `characters` (Tier 2, `SELECT ... FOR UPDATE`)
@@ -119,4 +167,5 @@ All financial and inventory operations execute in strict lock hierarchy:
 3. `character_depots` (Tier 5, `SELECT ... FOR UPDATE`)
 
 Transactions guarantee that concurrent purchases never cause negative wallet balances, never exceed depot limits, and never drop items.
+
 

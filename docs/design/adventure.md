@@ -108,11 +108,49 @@ Multi-player party crawls grant cooperative reward boosts:
 - **Post-Adventure Hook (`adventure.PostAdventureHook`)**: Invoked after crawl rewards and character state are committed. Automatically triggers pre-ordered meal delivery from the Adventurer's Tavern (`internal/tavern`).
 - **Hook Error Semantics**: Both hooks execute as best-effort post-settlement side-effects. Errors returned by hook implementations are logged as warnings (`s.logger.Warn`) and do not fail the completed adventure or corrupt committed character state.
 - **Settlement & Persistence Error Propagation**: All durable state mutations—including saving the `adventures` record, adding currency (`AddMoney`, `AddCrystal`), and persisting character state (`updater.Update`) in fallback settlement—strictly check and propagate errors to prevent silent state loss.
-- **Chronicle & History**: Completed runs are recorded in `adventures` and aggregated in `GET /characters/{id}/adventure-chronicle`. Milestone unlocks (Try Mode, Image Setting, Calm Mode, Hard Mode, Avatar Setting, Extreme Mode) unlock based on cleared stage counts.
 
 ---
 
-## 5. Storage & Database Schema (Migration 073)
+## 5. Adventure Chronicle & Milestone Progression (`adventure_record.cgi`)
+
+The Adventure Chronicle provides authenticated players with historical logs, statistical summaries, stage completion breakdowns, and milestone progression tracking for their characters' past adventures.
+
+### Paginated History (`GET /characters/{id}/adventures`)
+Retrieves chronological records of previous expeditions with catalog-enriched stage and monster display names (`started_at DESC`).
+- `limit`: 1 to 100 (default: 20).
+- `offset`: `>= 0` (default: 0).
+- Response fields: `id`, `character_id`, `stage_id`, `stage_name`, `monster_id`, `monster_name`, `outcome`, `battle_turns`, `experience_reward`, `currency_reward`, `started_at`, `resolved`.
+
+### Statistical Aggregation (`GET /characters/{id}/adventure-chronicle`)
+Aggregates overall statistics and per-stage completion records:
+- **Overall Stats**: `total_adventures`, `total_victories`, `total_defeats`, `total_draws`, `win_rate` (rounded to 4 decimals), `total_turns`, `total_exp_earned`, `total_gold_earned`.
+- **Stage Breakdown**: `stage_id`, `stage_name`, `clear_count`, `total_attempts`.
+- **Milestone Tiers** (Unlocks based on total cleared stage counts per `adventure_record.cgi` / `vs_monster.cgi`):
+
+| Milestone Key | Display Name | Clear Count Threshold | Description |
+| :--- | :--- | :--- | :--- |
+| `try_mode` | トライモード (Try Mode) | 50 | Unlocks Try Mode adventure expeditions |
+| `image_setting` | イメージ設定 (Image Setting) | 100 | Unlocks custom character image configuration |
+| `calm_mode` | カームモード (Calm Mode) | 150 | Unlocks Calm Mode adventure expeditions |
+| `hard_mode` | ハードモード (Hard Mode) | 300 | Unlocks Hard Mode adventure challenges |
+| `avatar_setting` | アバター設定 (Avatar Setting) | 500 | Unlocks special avatar portrait customizations |
+| `extreme_mode` | エクストリームモード (Extreme Mode) | 1000 | Unlocks Extreme Mode high-difficulty adventure expeditions |
+
+---
+
+## 6. Exploration Subsystem Boundaries
+
+Party2 features three distinct exploration and dungeon crawl modes with specialized responsibilities:
+
+| Exploration Mode | Go Package | Legacy Reference | Primary Mechanics | Canonical Document |
+| :--- | :--- | :--- | :--- | :--- |
+| **Stage Adventure** | `internal/adventure` | `quest.cgi`, `vs_monster.cgi` | 10-floor sequential stage crawl, Floor 11 treasure room, job gating | This document (`adventure.md`) |
+| **Grid Dungeon** | `internal/dungeon` | `vs_dungeon.cgi`, `map/` | 2D tile matrix exploration, hazard traps, `@ちず` scouting, escape portals | [`dungeon.md`](dungeon.md) |
+| **Endurance Challenge** | `internal/challenge` | `vs_challenge.cgi`, `challenge/` | Consecutive wave survival, dynamic enemy scaling, no inter-round healing, Hall of Fame | [`challenge.md`](challenge.md) |
+
+---
+
+## 7. Storage & Database Schema (Migration 073)
 
 The `adventures` table schema reflects immediate crawl resolution, completely purging legacy timer columns:
 
@@ -135,4 +173,4 @@ The `adventures` table schema reflects immediate crawl resolution, completely pu
 | `updated_at` | DATETIME | NOT NULL | Record update timestamp |
 
 > [!NOTE]
-> Columns `available_at` and `claimed`, along with index `idx_adventures_character_claimed`, were permanently dropped in migration `073_purge_adventure_timer.sql`.
+> Fictional columns `available_at` and `claimed`, along with index `idx_adventures_character_claimed`, were permanently dropped in migration `073_purge_adventure_timer.sql`. Index `idx_adventures_character_started (character_id, started_at DESC)` supports efficient paginated history queries.
