@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #707 — [Bug] Adventure: Robust settlement persistence, fallback character updates, and hook error handling
+Last updated: Issue #708 — [Bug] Casino: Member room update and elimination error propagation during settlement
 
 ## Current phase
 
@@ -48,7 +48,7 @@ Version 1.0の完成条件は、既存プロジェクトの意味のあるゲー
 - **Alchemy** (`internal/alchemy`): ✅ 112 crafting recipes, depot-linked overnight synthesis, home sleep completion, recipe compendium, and robust depot delivery with dynamic capacity refresh on claim.
 - **Bank** (`internal/bank`): ✅ Gold deposits and withdrawals with 999,999G wallet clamp.
 - **Guild** (`internal/guild`): ✅ Foundation, dynamic Guild Points, custom roles, hex colors, membership applications, and 20-day inactivity auto-disbandment.
-- **Casino** (`internal/casino`): ✅ Multi-player room lobby (2..8 players), Indian Poker, High-Low, Doppelganger, 3-reel slot machine, and 18 depot prizes.
+- **Casino** (`internal/casino`): ✅ Multi-player room lobby (2..8 players), Indian Poker, High-Low, Doppelganger, 3-reel slot machine, 18 depot prizes, and atomic showdown settlement error propagation.
 - **Lottery & Raffle** (`internal/lottery`): ✅ Server-wide 20-cap Takarakuji lottery with rollover jackpot; Tavern Fukubiki raffle (Standard & Special).
 - **Monster Ranch** (`internal/monster`): ✅ Monster stabling (50–300 cap), Home pet link (8 pets), renaming, P2P gifting, and wild release.
 - **Plantation** (`internal/plantation`): ✅ 6 seeds, 14 fertilizer reagents, midnight JST maturation, wither/yield bonuses, and depot harvest delivery.
