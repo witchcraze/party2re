@@ -140,6 +140,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Initial SVG placeholder assets (#39)
 - [x] Documentation streamlining and SSOT consolidation (#697, #720)
 - [x] Fail-fast MariaDB and Valkey startup connectivity validation and clean resource teardown (#728, #693)
+- [x] Standardized HTTP response envelopes and error formatting (Envelope Pattern) (#741)
 - [ ] Web presentation UI / client implementation (#140)
 - [ ] Production asset production and license attribution (#143, #202)
 
