@@ -7,10 +7,12 @@ import (
 	"net"
 	nethttp "net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/valkey"
 )
 
 func TestResolveServerAddr(t *testing.T) {
@@ -86,6 +88,23 @@ func TestRunLifecycleGracefulShutdown(t *testing.T) {
 	dsn := os.Getenv("PARTY2_DB_DSN")
 	if dsn == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	valkeyAddr := os.Getenv("PARTY2_VALKEY_ADDR")
+	if valkeyAddr == "" {
+		valkeyAddr = "127.0.0.1:6379"
+	}
+	vkCfg := valkey.DefaultConfig(valkeyAddr)
+	vkCfg.DialTimeout = 500 * time.Millisecond
+	vkClient, err := valkey.NewClientWithConfig(vkCfg)
+	if err != nil {
+		t.Skipf("Valkey is not reachable at %s: %v", valkeyAddr, err)
+	}
+	defer vkClient.Close()
+	ctxPing, cancelPing := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancelPing()
+	if err := valkey.Ping(ctxPing, vkClient); err != nil {
+		t.Skipf("Valkey ping failed at %s: %v", valkeyAddr, err)
 	}
 
 	// Use an ephemeral port on localhost
@@ -194,5 +213,69 @@ func restoreEnv(key, value string) {
 		_ = os.Setenv(key, value)
 	} else {
 		_ = os.Unsetenv(key)
+	}
+}
+
+func TestRunFailsWhenValkeyIsUnreachable(t *testing.T) {
+	dsn := os.Getenv("PARTY2_DB_DSN")
+	if dsn == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	origValkeyAddr := os.Getenv("PARTY2_VALKEY_ADDR")
+	defer restoreEnv("PARTY2_VALKEY_ADDR", origValkeyAddr)
+
+	_ = os.Setenv("PARTY2_VALKEY_ADDR", "127.0.0.1:1")
+
+	err := run(context.Background(), logging.Nop())
+	if err == nil {
+		t.Fatal("run() expected error when Valkey is unreachable, got nil")
+	}
+	if !strings.Contains(err.Error(), "valkey") {
+		t.Fatalf("expected error message to mention valkey, got: %v", err)
+	}
+}
+
+func TestRunWithConfigTeardownOnValkeyFailure(t *testing.T) {
+	dsn := os.Getenv("PARTY2_DB_DSN")
+	if dsn == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	cfg, err := ConfigFromEnv()
+	if err != nil {
+		t.Fatalf("ConfigFromEnv failed: %v", err)
+	}
+
+	// Point Valkey to an unreachable address with a fast timeout
+	cfg.Valkey.Address = "127.0.0.1:1"
+	cfg.Valkey.DialTimeout = 50 * time.Millisecond
+
+	err = runWithConfig(context.Background(), cfg, logging.Nop())
+	if err == nil {
+		t.Fatal("expected runWithConfig to fail when Valkey is unreachable, got nil")
+	}
+	if !strings.Contains(err.Error(), "valkey") {
+		t.Fatalf("expected error mentioning valkey, got: %v", err)
+	}
+}
+
+func TestRunWithConfigFailsWhenContextAlreadyCanceled(t *testing.T) {
+	dsn := os.Getenv("PARTY2_DB_DSN")
+	if dsn == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	cfg, err := ConfigFromEnv()
+	if err != nil {
+		t.Fatalf("ConfigFromEnv failed: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err = runWithConfig(ctx, cfg, logging.Nop())
+	if err == nil {
+		t.Fatal("expected runWithConfig to fail when context is canceled, got nil")
 	}
 }

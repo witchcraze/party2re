@@ -1,6 +1,8 @@
 package valkey
 
 import (
+	"context"
+	"errors"
 	"net"
 	"os"
 	"strconv"
@@ -103,4 +105,12 @@ func NewClientWithConfig(cfg Config) (valkeygo.Client, error) {
 // NewClient creates a new Valkey client using the environment configuration.
 func NewClient() (valkeygo.Client, error) {
 	return NewClientWithConfig(ConfigFromEnvironment())
+}
+
+// Ping verifies connectivity to the Valkey server within the provided context.
+func Ping(ctx context.Context, client valkeygo.Client) error {
+	if client == nil {
+		return errors.New("valkey client is nil")
+	}
+	return client.Do(ctx, client.B().Ping().Build()).Error()
 }

@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"os"
@@ -138,9 +139,15 @@ func OpenFromEnvironment() (*sql.DB, error) {
 	return OpenWithConfig(cfg)
 }
 
+// Ping verifies connectivity to the database using context.Background.
 func Ping(db *sql.DB) error {
+	return PingContext(context.Background(), db)
+}
+
+// PingContext verifies connectivity to the database within the provided context.
+func PingContext(ctx context.Context, db *sql.DB) error {
 	if db == nil {
 		return errors.New("database is nil")
 	}
-	return db.Ping()
+	return db.PingContext(ctx)
 }
