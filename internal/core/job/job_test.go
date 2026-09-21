@@ -137,3 +137,136 @@ func TestCompletionJobCountAndSuppinUnlock(t *testing.T) {
 		t.Fatalf("expected CurrentJobID to be job-73, got %s", state.CurrentJobID)
 	}
 }
+
+func TestCharacterJob_Master(t *testing.T) {
+	t.Run("nil receiver is safe no-op", func(t *testing.T) {
+		var c *CharacterJob
+		c.Master("job-01")
+	})
+
+	t.Run("empty or whitespace jobID is safe no-op", func(t *testing.T) {
+		c, err := NewCharacterJob("char-1", "job-01")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		c.Master("")
+		c.Master("   ")
+		if len(c.MasteredJobs) != 0 {
+			t.Fatalf("expected 0 mastered jobs, got %d", len(c.MasteredJobs))
+		}
+	})
+
+	t.Run("adds job and trims whitespace", func(t *testing.T) {
+		c := &CharacterJob{
+			CharacterID:  "char-1",
+			CurrentJobID: "job-01",
+		}
+		c.Master("  job-02  ")
+		if len(c.MasteredJobs) != 1 || c.MasteredJobs[0] != "job-02" {
+			t.Fatalf("expected [job-02], got %v", c.MasteredJobs)
+		}
+		if c.MasteredJobSP == nil {
+			t.Fatal("expected MasteredJobSP map to be initialized")
+		}
+	})
+
+	t.Run("prevents duplicate job mastery", func(t *testing.T) {
+		c, _ := NewCharacterJob("char-1", "job-01")
+		c.Master("job-02")
+		c.Master("job-02")
+		c.Master(" job-02 ")
+		if len(c.MasteredJobs) != 1 {
+			t.Fatalf("expected exactly 1 mastered job, got %d (%v)", len(c.MasteredJobs), c.MasteredJobs)
+		}
+	})
+}
+
+func TestCharacterJob_IsMastered(t *testing.T) {
+	t.Run("nil receiver returns false", func(t *testing.T) {
+		var c *CharacterJob
+		if c.IsMastered("job-01") {
+			t.Fatal("expected nil receiver to return false")
+		}
+	})
+
+	t.Run("returns true for mastered job and trims whitespace", func(t *testing.T) {
+		c, _ := NewCharacterJob("char-1", "job-01")
+		c.Master("job-02")
+
+		if !c.IsMastered("job-02") {
+			t.Fatal("expected job-02 to be mastered")
+		}
+		if !c.IsMastered("  job-02  ") {
+			t.Fatal("expected trimmed job-02 to be mastered")
+		}
+	})
+
+	t.Run("returns false for unmastered or empty jobID", func(t *testing.T) {
+		c, _ := NewCharacterJob("char-1", "job-01")
+		c.Master("job-02")
+
+		if c.IsMastered("job-03") {
+			t.Fatal("expected job-03 to NOT be mastered")
+		}
+		if c.IsMastered("") {
+			t.Fatal("expected empty string to NOT be mastered")
+		}
+		if c.IsMastered("   ") {
+			t.Fatal("expected whitespace-only string to NOT be mastered")
+		}
+	})
+}
+
+func TestCharacterJob_HelperMethods(t *testing.T) {
+	t.Run("MasteredJobCount", func(t *testing.T) {
+		var nilJob *CharacterJob
+		if nilJob.MasteredJobCount() != 0 {
+			t.Fatalf("expected 0 for nil receiver, got %d", nilJob.MasteredJobCount())
+		}
+		c, _ := NewCharacterJob("char-1", "job-01")
+		if c.MasteredJobCount() != 0 {
+			t.Fatalf("expected 0, got %d", c.MasteredJobCount())
+		}
+		c.Master("job-01")
+		c.Master("job-02")
+		if c.MasteredJobCount() != 2 {
+			t.Fatalf("expected 2, got %d", c.MasteredJobCount())
+		}
+	})
+
+	t.Run("HasMasteredAll", func(t *testing.T) {
+		c, _ := NewCharacterJob("char-1", "job-01")
+		if c.HasMasteredAll(0) {
+			t.Fatal("expected false for required <= 0")
+		}
+		if c.HasMasteredAll(-1) {
+			t.Fatal("expected false for negative required")
+		}
+		if c.HasMasteredAll(1) {
+			t.Fatal("expected false when 0 mastered")
+		}
+		c.Master("job-01")
+		if !c.HasMasteredAll(1) {
+			t.Fatal("expected true when 1 mastered and 1 required")
+		}
+	})
+
+	t.Run("RestoreCurrentJob", func(t *testing.T) {
+		var nilJob *CharacterJob
+		nilJob.RestoreCurrentJob("job-02")
+
+		c, _ := NewCharacterJob("char-1", "job-01")
+		c.RestoreCurrentJob("")
+		if c.CurrentJobID != "job-01" {
+			t.Fatalf("expected job-01 unchanged, got %s", c.CurrentJobID)
+		}
+		c.RestoreCurrentJob("   ")
+		if c.CurrentJobID != "job-01" {
+			t.Fatalf("expected job-01 unchanged, got %s", c.CurrentJobID)
+		}
+		c.RestoreCurrentJob("  job-05  ")
+		if c.CurrentJobID != "job-05" {
+			t.Fatalf("expected job-05, got %s", c.CurrentJobID)
+		}
+	})
+}
