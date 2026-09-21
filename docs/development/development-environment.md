@@ -19,6 +19,10 @@ Docker Compose provides:
   pending scheduled actions survive container restarts. The `app` service
   connects via `PARTY2_VALKEY_ADDR: valkey:6379`.
 
+### Runtime Dependency Contract
+
+Both MariaDB and Valkey are mandatory runtime infrastructure dependencies for the application daemon (`cmd/party2`). During startup, `runWithConfig` performs timeout-bounded connectivity verification (`database.PingContext`, `valkey.Ping`) and aborts bootstrap immediately if either backing service is unreachable or misconfigured. In-memory adapters in domain packages are strictly test-only fixtures and are never used as production runtime fallbacks.
+
 ## Starting the environment
 
 From the repository root:
