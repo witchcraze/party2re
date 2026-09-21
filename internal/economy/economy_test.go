@@ -118,6 +118,35 @@ func TestSafeMultiply(t *testing.T) {
 	}
 }
 
+func TestSafeAdd(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		a, b    int
+		want    int
+		wantErr bool
+	}{
+		{a: 10, b: 20, want: 30, wantErr: false},
+		{a: 0, b: 100, want: 100, wantErr: false},
+		{a: 100, b: 0, want: 100, wantErr: false},
+		{a: -5, b: 10, want: 0, wantErr: true},
+		{a: 10, b: -5, want: 0, wantErr: true},
+		{a: math.MaxInt, b: 1, want: 0, wantErr: true},
+		{a: math.MaxInt - 10, b: 20, want: 0, wantErr: true},
+		{a: math.MaxInt - 10, b: 10, want: math.MaxInt, wantErr: false},
+	}
+
+	for _, tt := range tests {
+		got, err := economy.SafeAdd(tt.a, tt.b)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("SafeAdd(%d, %d) err = %v, wantErr = %v", tt.a, tt.b, err, tt.wantErr)
+		}
+		if !tt.wantErr && got != tt.want {
+			t.Errorf("SafeAdd(%d, %d) = %d, want %d", tt.a, tt.b, got, tt.want)
+		}
+	}
+}
+
 func TestNewService_NilDependencies(t *testing.T) {
 	t.Parallel()
 

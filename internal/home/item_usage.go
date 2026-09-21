@@ -29,17 +29,6 @@ type ItemCatalog interface {
 	FindByID(id string) (item.Definition, error)
 }
 
-func itemKindFromSlot(slot item.Slot) int {
-	switch slot {
-	case item.SlotMainHand:
-		return 1 // Weapon
-	case item.SlotOffHand, item.SlotBody, item.SlotAccessory:
-		return 2 // Armor/Shield/Accessory
-	default:
-		return 3 // Consumable / Other
-	}
-}
-
 // ListHomeItems retrieves all usable and inspectable items from inventory and depot.
 func (s *Service) ListHomeItems(ctx context.Context, characterID string) ([]HomeUsableItem, error) {
 	var results []HomeUsableItem
@@ -57,7 +46,7 @@ func (s *Service) ListHomeItems(ctx context.Context, characterID string) ([]Home
 					name = def.Name
 					slot = def.Slot
 					price = def.Price
-					kind = itemKindFromSlot(def.Slot)
+					kind = def.Kind()
 				}
 				attack := 0
 				defense := 0
@@ -99,7 +88,7 @@ func (s *Service) ListHomeItems(ctx context.Context, characterID string) ([]Home
 					name = def.Name
 					slot = def.Slot
 					price = def.Price
-					kind = itemKindFromSlot(def.Slot)
+					kind = def.Kind()
 				}
 				attack := 0
 				defense := 0
@@ -183,7 +172,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 		def = item.Definition{ID: definitionID, Name: definitionID, Price: 0}
 	}
 
-	kind := itemKindFromSlot(def.Slot)
+	kind := def.Kind()
 
 	// Inspection of weapons
 	if kind == 1 {

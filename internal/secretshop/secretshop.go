@@ -30,7 +30,7 @@ var (
 	ErrItemUnavailableInHelperQuest = errors.New("item is temporarily unavailable due to active helper request")
 	ErrInsufficientFunds            = errors.New("insufficient funds to purchase secret shop item")
 	ErrInvalidQuantity              = errors.New("invalid purchase quantity")
-	ErrPriceOverflow                = errors.New("price calculation overflow")
+	ErrPriceOverflow                = economy.ErrGoldOverflow
 	ErrDepotFull                    = depot.ErrDepotFull
 	ErrDepotNotConfigured           = errors.New("depot repository not configured")
 )
@@ -490,9 +490,5 @@ func safeMultiply(price, qty int) (int, error) {
 	if price < 0 || qty < 0 {
 		return 0, ErrInvalidQuantity
 	}
-	val, err := economy.SafeMultiply(price, qty)
-	if err != nil {
-		return 0, ErrPriceOverflow
-	}
-	return val, nil
+	return economy.SafeMultiply(price, qty)
 }

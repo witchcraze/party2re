@@ -22,7 +22,7 @@ var (
 	ErrItemNotFound      = errors.New("item not found in catalog")
 	ErrUnownedItem       = errors.New("item is not owned in inventory")
 	ErrInvalidQuantity   = errors.New("invalid transaction quantity")
-	ErrPriceOverflow     = errors.New("price calculation overflow")
+	ErrPriceOverflow     = economy.ErrGoldOverflow
 )
 
 type CharacterRepository interface {
@@ -165,11 +165,7 @@ func (s *Service) CalculateSellPrice(basePrice int) int {
 }
 
 func safeMultiply(a, b int) (int, error) {
-	val, err := economy.SafeMultiply(a, b)
-	if err != nil {
-		return 0, ErrPriceOverflow
-	}
-	return val, nil
+	return economy.SafeMultiply(a, b)
 }
 
 func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) error) error {

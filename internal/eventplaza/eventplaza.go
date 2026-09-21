@@ -36,7 +36,7 @@ var (
 	ErrDepotFull          = errors.New("depot storage is full")
 	ErrDepotNotConfigured = errors.New("depot repository not configured")
 	ErrInvalidQuantity    = errors.New("invalid purchase quantity")
-	ErrPriceOverflow      = errors.New("price calculation overflow")
+	ErrPriceOverflow      = economy.ErrGoldOverflow
 	ErrBanquetNotFound    = errors.New("celebration banquet not found")
 	ErrBanquetExpired     = errors.New("celebration banquet has already ended")
 	ErrAlreadyToasted     = errors.New("character has already toasted this victory celebration banquet")

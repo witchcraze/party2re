@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
@@ -61,14 +60,7 @@ func (s *Service) itemKind(defID string) int {
 	if err != nil {
 		return 3
 	}
-	switch def.Slot {
-	case item.SlotMainHand:
-		return 1 // Weapon
-	case item.SlotOffHand, item.SlotBody, item.SlotAccessory:
-		return 2 // Armor / Shield / Accessory
-	default:
-		return 3 // Item / Consumable / Material
-	}
+	return def.Kind()
 }
 
 // GetDepot returns the current depot state for the given character, computing dynamic capacity.
