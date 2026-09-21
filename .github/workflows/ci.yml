@@ -22,7 +22,7 @@ jobs:
              if [ -n "$unformatted" ]; then echo "Unformatted files:"; echo "$unformatted"; exit 1; fi'
 
       - name: Verify OpenAPI specification synchronization
-        run: docker compose run --rm app go run ./scripts/sync_openapi.go --check
+        run: docker compose run --rm app go run ./scripts/sync_openapi --check
 
       - name: Run static analysis
         run: docker compose run --rm app go vet ./...

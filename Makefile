@@ -6,7 +6,7 @@ fmt:
 	@echo "Formatting Go files..."
 	@gofmt -w $$(find . -name "*.go" -not -path "./vendor/*")
 	@echo "Synchronizing and formatting OpenAPI specification..."
-	@go run ./scripts/sync_openapi.go
+	@go run ./scripts/sync_openapi
 
 vet:
 	@echo "Running static analysis..."
@@ -14,16 +14,16 @@ vet:
 
 openapi-sync:
 	@echo "Synchronizing and formatting OpenAPI specification..."
-	@go run ./scripts/sync_openapi.go
+	@go run ./scripts/sync_openapi
 
 openapi-check:
 	@echo "Validating OpenAPI specification synchronization and route coverage..."
-	@go run ./scripts/sync_openapi.go --check
+	@go run ./scripts/sync_openapi --check
 	@go test -count=1 ./internal/api/http -run "OpenAPI"
 
 openapi-scaffold:
 	@echo "Scaffolding missing routes and synchronizing OpenAPI specification..."
-	@go run ./scripts/sync_openapi.go --scaffold
+	@go run ./scripts/sync_openapi --scaffold
 
 up:
 	@echo "Starting database and cache services..."

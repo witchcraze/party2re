@@ -36,7 +36,7 @@ When opening a feature or domain change PR, **always synchronize in that same PR
   - Base metadata, reusable schemas, and security schemes reside in `docs/api/base.json`.
   - Endpoint path operations reside in modular files: `docs/api/paths/{module}.json` (e.g., `character.json`, `shop.json`).
 - **NEVER edit compiled artifacts directly:**
-  - Do NOT edit `docs/api/openapi.json` or `internal/api/http/openapi.json` directly. These are compiled build artifacts generated deterministically by `scripts/sync_openapi.go`.
+  - Do NOT edit `docs/api/openapi.json` or `internal/api/http/openapi.json` directly. These are compiled build artifacts generated deterministically by `scripts/sync_openapi/`.
 - **Synchronization Workflow:**
   - Whenever an HTTP route is added or changed in `internal/api/http/handler.go`, run `make openapi-sync` (or `make openapi-scaffold`).
   - Modify the modular path specification in `docs/api/paths/{module}.json`.
