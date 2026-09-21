@@ -124,7 +124,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** with complete file 
 - **Cluster Summary**: 冒険（ダンジョン10階層）、封印の魔王、コア戦闘・スキル発動エンジン、闘技場、ギルド戦、パーティ共闘、連戦チャレンジ、手助け
 - **Shared Dependencies**: `party2/lib/_battle.cgi`, `party2/lib/_skill.cgi`, `party2/lib/ActionCounter.pm`, `party2/lib/TurnEndProcessor.pm`, `party2/lib/_data.cgi`
 - **Data Dependencies**: `party2/stage/0..27.cgi`, `party2/stage/king1..99.cgi`, `party2/challenge/0..8.cgi`, `party2/map/*`
-- **Primary Domain Packages**: `internal/adventure/`, `internal/boss/`, `internal/core/battle/`, `internal/core/skill/`, `internal/pvp/`, `internal/gvg/`, `internal/dungeon/`, `internal/challenge/`, `internal/party/`, `internal/helper/`
+- **Primary Domain Packages**: `internal/adventure/`, `internal/boss/`, `internal/core/battle/`, `internal/core/skill/`, `internal/pvp/`, `internal/gvg/`, `internal/dungeon/`, `internal/challenge/`, `internal/party/`, `internal/helperquest/`
 - **Key Testing / Linter Focus**: 逃走ペナルティ、10階層制覇、王の証と世界樹の葉、実時間ベッティング、パーティ相乗効果（2p=+10%, 3p=+20%, 4p=+30%）
 
 | Legacy Script | Authentic Role / Action | Go Domain Implementation | HTTP Handler & Migrations | Design Doc & OpenAPI | Status | Pitfalls / Parity Traps |
@@ -138,7 +138,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** with complete file 
 | `lib/vs_dungeon.cgi`, `party2/dungeon.cgi` | ダンジョン探索 | `internal/dungeon/` | `internal/api/http/adventure.go`<br/>`migrations/026_dungeon_exploration.sql` | `docs/design/dungeon.md`<br/>`docs/api/paths/dungeon.json` | Reconciling (#483) | パーティ共闘探索、トラップ宝箱判定。 |
 | `lib/vs_challenge.cgi`, `party2/challenge.cgi` | 連戦チャレンジ | `internal/challenge/` | `internal/api/http/combat.go`<br/>`migrations/028_endurance_challenge.sql` | `docs/design/challenge.md`<br/>`docs/api/paths/challenge.json` | Reconciling (#483) | 多重ラウンド勝ち抜きサバイバル、中間報酬。 |
 | `lib/quest.cgi`, `party2/party.cgi` | パーティ共闘クエスト | `internal/party/` | `internal/api/http/party.go`<br/>`migrations/048_party_and_coop_quests.sql`<br/>`migrations/052_drop_parties_and_party_members.sql` | `docs/design/party-system.md`<br/>`docs/api/paths/party.json` | Compliant | 同期マルチバトル、相乗効果補正（2p=+10%, 3p=+20%, 4p=+30%）。 |
-| `lib/helper.cgi` | 手助けクエスト | `internal/helper/` | `internal/api/http/helper_rescue.go`<br/>`migrations/031_rescue_and_helper.sql` | `docs/design/rescue-and-helper.md`<br/>`docs/api/paths/helper.json` | Backlog | プレイヤー間の救難・アイテム配送依頼掲示板。 |
+| `lib/helper.cgi` | 手助けクエスト | `internal/helperquest/` | `internal/api/http/helper_rescue.go`<br/>`migrations/031_rescue_and_helper.sql` | `docs/design/rescue-and-helper.md`<br/>`docs/api/paths/helper.json` | Backlog | プレイヤー間の救難・アイテム配送依頼掲示板。 |
 
 ---
 

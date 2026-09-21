@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #726 — [Refactor] Architecture: Encapsulate item slot domain methods and consolidate safe arithmetic utilities
+Last updated: Issue #736 — [Architecture] Governance: Clarify package boundaries and naming for internal/helperquest (Handyman Quests)
 
 ## Current Phase
 

@@ -125,7 +125,7 @@ Each feature owns its specific domain logic and state. Cross-feature imports and
 | **God** | `internal/god` | 19 celestial wishes, Lv150 OverLevel, storage limit breaks | Character, Progression, Depot, Inventory | MariaDB `characters`, `character_depots` |
 | **Guild** | `internal/guild` | Founding, dynamic GP, custom roles, hex colors, 20d auto-disband | Character | MariaDB `guilds`, `guild_members` |
 | **GvG** | `internal/gvg` | 2..8 player guild battle rooms, GP prize pools, 7-tier medals | Battle, Guild, Character, Valkey | Valkey Candidate C (`party2:gvg:*`); MariaDB `gvg_standings` |
-| **Helper/Rescue** | `internal/helper`, `rescue` | Delivery quests, alchemy rewards, emergency state reset | Character, Inventory, Depot, Item, Guild | MariaDB `helper_quests`, `rescue_records` |
+| **Helper Quest** | `internal/helperquest` | Delivery quests, alchemy rewards, guild contribution | Character, Inventory, Depot, Item, Guild | MariaDB `helper_quests` |
 | **Home** | `internal/home` | House profiles, letters, companion phrases, sleep recovery | Character, Timer, Economy, Inventory, Depot | Valkey `party2:timer:sleep:*`; MariaDB `character_homes`, `home_letters` |
 | **Lottery** | `internal/lottery` | 20-cap Takarakuji lottery, rollover jackpot; Tavern Fukubiki raffle | Character, Inventory, Depot, Item | MariaDB `character_lottery`, `takarakuji_rounds` (Rank 0→2→5) |
 | **Maintenance** | `internal/maintenance` | Maintenance state, admin toggle, HTTP 503 middleware | Valkey | Valkey `party2:maintenance:status`; MariaDB `system_maintenance` |
@@ -139,9 +139,10 @@ Each feature owns its specific domain logic and state. Cross-feature imports and
 | **Ranking** | `internal/ranking` | 12 leaderboards, Valkey caching, singleflight stampede guard | Character, Player, Valkey, Scheduling | Valkey `party2:ranking:snapshot:*`; MariaDB `ranking_snapshots` |
 | **Rate Limit** | `internal/ratelimit` | Distributed atomic rate limiting, spam defense, throttling | Valkey | Valkey `party2:ratelimit:*` |
 | **Replay** | `internal/replay` | Combat turn log recording, step-by-step playback, retention | Battle, Character | MariaDB `battle_replays` |
+| **Rescue** | `internal/rescue` | Emergency player unstuck recovery, action clearing, penalty cooldown | Character, Scheduling | MariaDB `rescue_records` |
 | **Secret Shop** | `internal/secretshop` | JobLv 7 access gate, 8 rare items at 3× price, depot delivery | Character, Item, Inventory, Depot | MariaDB `characters`, `inventory_items`, `depot_items` (Rank 2→3→5) |
 | **Shop** | `internal/shop` | Town equipment/item shops, 50% markdown, depot auto-delivery | Catalogs, Character, Inventory, Depot | MariaDB `characters`, `inventory_items`, `depot_items` (Rank 2→3→5) |
-| **Store** | `internal/store` | Player shop construction (50kG/90d), barter listings, interiors, Oracle Shop costume items purchasing (@kau), home wallpapers (@kabegami) | Character, Inventory, Depot, Item, Collection, Helper, Guild, Timer, Valkey | MariaDB `character_stores`, `store_sales`, `store_interiors`, `character_homes`, `character_item_collection` (Rank 0→2→3→5); Valkey `party2:daily:costume:*` |
+| **Store** | `internal/store` | Player shop construction (50kG/90d), barter listings, interiors, Oracle Shop costume items purchasing (@kau), home wallpapers (@kabegami) | Character, Inventory, Depot, Item, Collection, Helperquest, Guild, Timer, Valkey | MariaDB `character_stores`, `store_sales`, `store_interiors`, `character_homes`, `character_item_collection` (Rank 0→2→3→5); Valkey `party2:daily:costume:*` |
 | **Tavern** | `internal/tavern` | 14-item culinary menu, restorative meals, food delivery standing orders | Character, Lottery | MariaDB `tavern_deliveries`, `tavern_character_status` |
 | **Wishing Well** | `internal/wishingwell` | SP sacrifice for permanent stat growth (HP/MP +2/SP, Stats +1/SP) | Character, Economy | MariaDB `characters` (Rank 2) |
 

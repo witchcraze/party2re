@@ -14,24 +14,24 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
-	"github.com/witchcraze/party2re/internal/helper"
+	"github.com/witchcraze/party2re/internal/helperquest"
 	"github.com/witchcraze/party2re/internal/rescue"
 )
 
 type mockHelperService struct {
-	listQuestsFn    func(ctx context.Context, now time.Time) ([]helper.Quest, error)
-	completeQuestFn func(ctx context.Context, characterID, questID string, now time.Time) (helper.CompletionResult, error)
+	listQuestsFn    func(ctx context.Context, now time.Time) ([]helperquest.Quest, error)
+	completeQuestFn func(ctx context.Context, characterID, questID string, now time.Time) (helperquest.CompletionResult, error)
 }
 
-func (m *mockHelperService) ListQuests(ctx context.Context, now time.Time) ([]helper.Quest, error) {
+func (m *mockHelperService) ListQuests(ctx context.Context, now time.Time) ([]helperquest.Quest, error) {
 	if m.listQuestsFn != nil {
 		return m.listQuestsFn(ctx, now)
 	}
-	return []helper.Quest{
+	return []helperquest.Quest{
 		{
 			ID:            "quest-1",
 			Title:         "Test Quest",
-			Kind:          helper.KindItem,
+			Kind:          helperquest.KindItem,
 			TargetID:      "item-01",
 			TargetName:    "Potion",
 			RequiredCount: 1,
@@ -41,18 +41,18 @@ func (m *mockHelperService) ListQuests(ctx context.Context, now time.Time) ([]he
 	}, nil
 }
 
-func (m *mockHelperService) CompleteQuest(ctx context.Context, characterID, questID string, now time.Time) (helper.CompletionResult, error) {
+func (m *mockHelperService) CompleteQuest(ctx context.Context, characterID, questID string, now time.Time) (helperquest.CompletionResult, error) {
 	if m.completeQuestFn != nil {
 		return m.completeQuestFn(ctx, characterID, questID, now)
 	}
 	inv, _ := coreinventory.New(characterID)
-	return helper.CompletionResult{
+	return helperquest.CompletionResult{
 		Character: corecharacter.Character{ID: characterID, Money: 100},
 		Inventory: inv,
-		CompletedQuest: helper.Quest{
+		CompletedQuest: helperquest.Quest{
 			ID:           questID,
 			Title:        "Completed Quest",
-			Kind:         helper.KindItem,
+			Kind:         helperquest.KindItem,
 			RewardItemID: "item-02",
 		},
 	}, nil
@@ -134,7 +134,7 @@ func TestHelperAndRescueEndpoints(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", rec.Code)
 		}
-		var quests []helper.Quest
+		var quests []helperquest.Quest
 		if err := json.Unmarshal(rec.Body.Bytes(), &quests); err != nil {
 			t.Fatalf("failed to unmarshal quests: %v", err)
 		}
@@ -179,7 +179,7 @@ func TestHelperAndRescueEndpoints(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d (body: %s)", rec.Code, rec.Body.String())
 		}
-		var result helper.CompletionResult
+		var result helperquest.CompletionResult
 		if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
 			t.Fatalf("failed to unmarshal completion result: %v", err)
 		}
