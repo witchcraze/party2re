@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #727 — [Refactor] Architecture & Governance: Decouple presentation markup and enforce strict UI-agnostic service design
+Last updated: Issue #740 — [Architecture] PlayerContext: ActionURLResolver — target_endpoint の生成責任を HTTP 層に委譲する
 
 ## Current Phase
 
@@ -17,7 +17,7 @@ All Version 1.0 foundational systems, core combat, 39 feature modules, and the H
 ## Architecture & System Snapshot (What is True Now)
 
 - **Modular Monolith**: Go standard library HTTP routing with modular wire composition (`cmd/party2/wire.go`).
-- **HTTP Transport & Edge Policy**: Standardized success and error response envelopes (`SuccessResponse[T]`, `StructuredErrorResponse`), trusted proxy CIDR allowlist (`PARTY2_TRUSTED_PROXIES`) with right-to-left forwarding header traversal for spoof-proof rate limiting, safe direct exposure default via `RemoteAddr`, and aligned CORS preflight methods (`GET, POST, PUT, DELETE, OPTIONS`) and headers (`Content-Type, Authorization, X-Admin-Key`).
+- **HTTP Transport & Edge Policy**: Standardized success and error response envelopes (`SuccessResponse[T]`, `StructuredErrorResponse`), HATEOAS action resolution (`ActionURLResolver`), trusted proxy CIDR allowlist (`PARTY2_TRUSTED_PROXIES`) with right-to-left forwarding header traversal for spoof-proof rate limiting, safe direct exposure default via `RemoteAddr`, and aligned CORS preflight methods (`GET, POST, PUT, DELETE, OPTIONS`) and headers (`Content-Type, Authorization, X-Admin-Key`).
 - **Durable Persistence**: MariaDB Master (Migrations `001`–`085`) with deterministic row-lock hierarchy (Rank 0→8) and ambient transaction propagation (`database.RunInTx`).
 - **Transient State Architecture**: Ephemeral Turn & Session Lobby Architecture (Candidate C) across multiplayer domains (Casino, PvP, GvG, Party) in Valkey Master, In-Progress Run Buffers (Candidate D), and Shared Boss HP (Candidate E). SSOT: [`docs/architecture/valkey-keyspace.md`](docs/architecture/valkey-keyspace.md).
 - **Lifecycle & Infrastructure Contracts**: Fail-fast startup validation with timeout-bounded connectivity checks for MariaDB and Valkey (`cmd/party2`), zero silent in-memory production fallbacks, and deterministic teardown of allocated resources upon boot failure.
