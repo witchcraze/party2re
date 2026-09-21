@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/netip"
 	"os"
 	"strings"
 	"time"
@@ -152,6 +153,7 @@ type Handler struct {
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
 	allowedOrigins map[string]struct{}
+	trustedProxies []netip.Prefix
 	adminAPIKey    string
 }
 

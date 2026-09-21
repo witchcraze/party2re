@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
+	"github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/valkey"
 )
@@ -13,7 +15,8 @@ type Config struct {
 	DB     database.Config
 	Valkey valkey.Config
 	Server struct {
-		Addr string
+		Addr           string
+		TrustedProxies string
 	}
 	Admin struct {
 		APIKey string
@@ -35,11 +38,22 @@ func ConfigFromEnv() (Config, error) {
 		adminKey = os.Getenv("ADMIN_API_KEY")
 	}
 
+	trustedProxies := strings.TrimSpace(os.Getenv("PARTY2_TRUSTED_PROXIES"))
+	if trustedProxies != "" {
+		if _, err := http.ParseTrustedProxies(trustedProxies); err != nil {
+			return Config{}, fmt.Errorf("invalid PARTY2_TRUSTED_PROXIES: %w", err)
+		}
+	}
+
 	return Config{
 		DB:     dbCfg,
 		Valkey: valkey.ConfigFromEnvironment(),
-		Server: struct{ Addr string }{
-			Addr: resolveServerAddr(),
+		Server: struct {
+			Addr           string
+			TrustedProxies string
+		}{
+			Addr:           resolveServerAddr(),
+			TrustedProxies: trustedProxies,
 		},
 		Admin: struct{ APIKey string }{
 			APIKey: strings.TrimSpace(adminKey),

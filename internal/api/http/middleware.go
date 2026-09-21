@@ -2,33 +2,14 @@ package http
 
 import (
 	"errors"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 )
 
-func extractClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			ip := strings.TrimSpace(parts[0])
-			if ip != "" {
-				return ip
-			}
-		}
-	}
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		if ip := strings.TrimSpace(xri); ip != "" {
-			return ip
-		}
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
+func (h *Handler) extractClientIP(r *http.Request) string {
+	return ExtractClientIP(r, h.trustedProxies...)
 }
 
 // rateLimitMiddleware applies distributed / in-memory rate limiting to incoming HTTP requests.
@@ -39,7 +20,7 @@ func (h *Handler) rateLimitMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ip := extractClientIP(r)
+		ip := h.extractClientIP(r)
 		var key string
 		var limit int64
 		var window time.Duration
@@ -104,8 +85,8 @@ func (h *Handler) corsMiddleware(next http.Handler) http.Handler {
 			w.Header().Set("Vary", "Origin")
 
 			if r.Method == http.MethodOptions {
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE")
-				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin-Key")
 				w.Header().Set("Access-Control-Max-Age", "86400")
 				w.WriteHeader(http.StatusNoContent)
 				return
