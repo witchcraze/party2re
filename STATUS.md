@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #691 — [Architecture] HTTP edge: Effective CORS and trustworthy rate-limit client identity
+Last updated: Issue #693 — [Architecture] Infrastructure: Require MariaDB and Valkey at application startup
 
 ## Current Phase
 
