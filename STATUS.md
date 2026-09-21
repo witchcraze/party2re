@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #281 — [Chore] Test/Player: Improve branch coverage for Register, Login, Logout, and Authenticate error paths
+Last updated: Issue #286 — [Chore] Test/Bank+Auction: Add error-branch tests for Deposit, Withdraw, Transfer, SendItem, and SendMoney
 
 ## Current Phase
 
