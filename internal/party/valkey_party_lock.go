@@ -3,7 +3,6 @@ package party
 import (
 	"context"
 	_ "embed"
-	"sync"
 	"time"
 
 	"github.com/valkey-io/valkey-go"
@@ -23,11 +22,6 @@ var releasePartyLockLua string
 // releasePartyLockScript releases the adventure lock atomically only if the caller owns the token.
 var releasePartyLockScript = valkey.NewLuaScript(releasePartyLockLua)
 
-var (
-	memPartyLocksMu sync.Mutex
-	memPartyLocks   = make(map[string]string)
-)
-
 // WithPartyAdventureLock executes fn inside an exclusive distributed party adventure lock in Valkey Master.
 // If another adventure invocation is currently running for this party, it immediately fails with ErrPartyNotRecruiting.
 // It supports reentrant calls within the same context.
@@ -41,21 +35,21 @@ func (r *ValkeyRepository) WithPartyAdventureLock(ctx context.Context, partyID s
 	}
 
 	if r.client == nil {
-		memPartyLocksMu.Lock()
-		if _, locked := memPartyLocks[partyID]; locked {
-			memPartyLocksMu.Unlock()
+		r.memPartyLocksMu.Lock()
+		if _, locked := r.memPartyLocks[partyID]; locked {
+			r.memPartyLocksMu.Unlock()
 			return ErrPartyNotRecruiting
 		}
 		token := id.New()
-		memPartyLocks[partyID] = token
-		memPartyLocksMu.Unlock()
+		r.memPartyLocks[partyID] = token
+		r.memPartyLocksMu.Unlock()
 
 		defer func() {
-			memPartyLocksMu.Lock()
-			if memPartyLocks[partyID] == token {
-				delete(memPartyLocks, partyID)
+			r.memPartyLocksMu.Lock()
+			if r.memPartyLocks[partyID] == token {
+				delete(r.memPartyLocks, partyID)
 			}
-			memPartyLocksMu.Unlock()
+			r.memPartyLocksMu.Unlock()
 		}()
 
 		lockedCtx := withPartyAdventureLockedContext(ctx, partyID)

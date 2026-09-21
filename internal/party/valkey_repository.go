@@ -176,13 +176,15 @@ type ValkeyRepository struct {
 	updatePartyScript       *valkey.Lua
 
 	// In-memory fallback
-	mu           sync.RWMutex
-	memLobbies   map[string]Party
-	memMembers   map[string]map[string]Member
-	memCharParty map[string]string
-	memReadyExp  map[string]map[string]time.Time
-	memLobbyExp  map[string]time.Time
-	memLogs      []PartyAdventureLog
+	mu              sync.RWMutex
+	memLobbies      map[string]Party
+	memMembers      map[string]map[string]Member
+	memCharParty    map[string]string
+	memReadyExp     map[string]map[string]time.Time
+	memLobbyExp     map[string]time.Time
+	memLogs         []PartyAdventureLog
+	memPartyLocksMu sync.Mutex
+	memPartyLocks   map[string]string
 }
 
 // NewValkeyRepository constructs a new ValkeyRepository.
@@ -204,6 +206,7 @@ func NewValkeyRepository(client valkey.Client, opts ...ValkeyRepositoryOption) *
 		memCharParty:            make(map[string]string),
 		memReadyExp:             make(map[string]map[string]time.Time),
 		memLobbyExp:             make(map[string]time.Time),
+		memPartyLocks:           make(map[string]string),
 	}
 
 	for _, opt := range opts {
