@@ -7,6 +7,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/store"
 )
 
@@ -15,8 +16,7 @@ type OracleShopService interface {
 	GetOracleStatus(ctx context.Context, characterID string) (*store.OracleStatus, error)
 	OracleTalk() string
 	OracleInspect(jobLevel int) store.OracleInspectResult
-	RentCostume(ctx context.Context, characterID string, itemNo int) (*store.CostumeRentalResult, error)
-	ReturnCostume(ctx context.Context, characterID string) error
+	BuyCostumeItem(ctx context.Context, characterID string, itemNo int) (*store.CostumeBuyResult, error)
 	BuyHomeWallpaper(ctx context.Context, characterID string, wallpaper string) (*store.HomeWallpaperResult, error)
 	DiscoverBlackMarket(jobLevel int) error
 }
@@ -28,7 +28,7 @@ func WithOracleShop(oracle OracleShopService) Option {
 	}
 }
 
-type oracleRentCostumeRequest struct {
+type oracleBuyCostumeRequest struct {
 	ItemNo int `json:"item_no"`
 }
 
@@ -54,10 +54,6 @@ type oracleInspectResponse struct {
 type oracleBlackMarketResponse struct {
 	Unlocked bool   `json:"unlocked"`
 	Message  string `json:"message"`
-}
-
-type oracleReturnResponse struct {
-	Message string `json:"message"`
 }
 
 func (h *Handler) handleGetOracleStatus(w http.ResponseWriter, r *http.Request) {
@@ -114,23 +110,26 @@ func (h *Handler) handleOracleInspect(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) handleOracleRentCostume(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleOracleBuyCostume(w http.ResponseWriter, r *http.Request) {
 	if h.oracle == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("oracle shop service not configured"))
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(_ *oracleRentCostumeRequest) string {
+	withAuthenticatedCharacterAndJSON(h, w, r, func(_ *oracleBuyCostumeRequest) string {
 		return r.PathValue("id")
-	}, func(_ coreplayer.Player, char corecharacter.Character, req oracleRentCostumeRequest) {
+	}, func(_ coreplayer.Player, char corecharacter.Character, req oracleBuyCostumeRequest) {
 		if req.ItemNo <= 0 {
 			writeError(w, http.StatusBadRequest, errors.New("item_no must be positive"))
 			return
 		}
 
-		res, err := h.oracle.RentCostume(r.Context(), char.ID, req.ItemNo)
+		res, err := h.oracle.BuyCostumeItem(r.Context(), char.ID, req.ItemNo)
 		if err != nil {
-			if errors.Is(err, store.ErrCostumeNotAvailable) || errors.Is(err, store.ErrInsufficientFunds) {
+			if errors.Is(err, store.ErrCostumeNotAvailable) ||
+				errors.Is(err, store.ErrInsufficientFunds) ||
+				errors.Is(err, store.ErrItemUnavailableInHelperQuest) ||
+				errors.Is(err, depot.ErrDepotFull) {
 				writeError(w, http.StatusBadRequest, err)
 				return
 			}
@@ -138,24 +137,6 @@ func (h *Handler) handleOracleRentCostume(w http.ResponseWriter, r *http.Request
 			return
 		}
 		writeJSON(w, http.StatusOK, res)
-	})
-}
-
-func (h *Handler) handleOracleReturnCostume(w http.ResponseWriter, r *http.Request) {
-	if h.oracle == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("oracle shop service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		if err := h.oracle.ReturnCostume(r.Context(), char.ID); err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, oracleReturnResponse{
-			Message: "衣装を返却したよん",
-		})
 	})
 }
 

@@ -5,11 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
-	"sync"
 	"time"
 
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/depot"
 )
 
 const (
@@ -22,8 +25,9 @@ const (
 )
 
 var (
-	ErrCostumeNotAvailable      = errors.New("costume is not available for your job level")
-	ErrBlackMarketNotDiscovered = errors.New("you have not discovered the black market")
+	ErrCostumeNotAvailable          = errors.New("costume is not available for your job level")
+	ErrBlackMarketNotDiscovered     = errors.New("you have not discovered the black market")
+	ErrItemUnavailableInHelperQuest = errors.New("item is temporarily unavailable due to active helper request")
 )
 
 var OracleWords = []string{
@@ -76,9 +80,12 @@ type OracleInspectResult struct {
 	Hint    string `json:"hint,omitempty"`
 }
 
-type CostumeRentalResult struct {
-	ActiveCostume ActiveCostume `json:"active_costume"`
-	Message       string        `json:"message"`
+type CostumeBuyResult struct {
+	ItemNo      int    `json:"item_no"`
+	ItemName    string `json:"item_name"`
+	Price       int    `json:"price"`
+	DeliveredTo string `json:"delivered_to"`
+	Message     string `json:"message"`
 }
 
 type HomeWallpaperResult struct {
@@ -98,49 +105,6 @@ type HomeWallpaperRepository interface {
 
 type CostumeResetter interface {
 	ResetCostume(ctx context.Context, characterID string) error
-}
-
-// MemoryCostumeRepository provides thread-safe in-memory costume storage.
-type MemoryCostumeRepository struct {
-	mu       sync.RWMutex
-	costumes map[string]ActiveCostume
-}
-
-func NewMemoryCostumeRepository() *MemoryCostumeRepository {
-	return &MemoryCostumeRepository{
-		costumes: make(map[string]ActiveCostume),
-	}
-}
-
-func (r *MemoryCostumeRepository) GetActiveCostume(_ context.Context, characterID string) (*ActiveCostume, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	c, ok := r.costumes[characterID]
-	if !ok {
-		return nil, nil
-	}
-	if !c.IsActive(time.Now().UTC()) {
-		return nil, nil
-	}
-	res := c
-	return &res, nil
-}
-
-func (r *MemoryCostumeRepository) SaveActiveCostume(_ context.Context, costume ActiveCostume, _ time.Duration) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.costumes[costume.CharacterID] = costume
-	return nil
-}
-
-func (r *MemoryCostumeRepository) ClearActiveCostume(_ context.Context, characterID string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	delete(r.costumes, characterID)
-	return nil
 }
 
 // rawOracleItems maps legacy item No to name, base price, male icon, and female icon.
@@ -270,6 +234,23 @@ func (s *Service) GetOracleStatus(ctx context.Context, characterID string) (*Ora
 	}
 
 	costumes := AvailableCostumes(char.JobLevel)
+	if s.helper != nil {
+		activeHelperIDs, err := s.helper.GetActiveHelperItemIDs(ctx, s.nowFunc().UTC())
+		if err == nil && len(activeHelperIDs) > 0 {
+			excluded := make(map[string]bool, len(activeHelperIDs))
+			for _, id := range activeHelperIDs {
+				excluded[id] = true
+			}
+			filtered := make([]OracleItem, 0, len(costumes))
+			for _, c := range costumes {
+				defID := fmt.Sprintf("item-%03d", c.ItemNo)
+				if !excluded[defID] && !excluded[strconv.Itoa(c.ItemNo)] {
+					filtered = append(filtered, c)
+				}
+			}
+			costumes = filtered
+		}
+	}
 
 	// Collect wallpapers sorted by price
 	var wallpapers []WallpaperInfo
@@ -306,11 +287,11 @@ func (s *Service) GetOracleStatus(ctx context.Context, characterID string) (*Ora
 	}, nil
 }
 
-// RentCostume rents a costume from available sales pool for the day.
-func (s *Service) RentCostume(ctx context.Context, characterID string, itemNo int) (*CostumeRentalResult, error) {
+// BuyCostumeItem purchases a costume item from the Oracle shop and delivers it to inventory/depot.
+func (s *Service) BuyCostumeItem(ctx context.Context, characterID string, itemNo int) (*CostumeBuyResult, error) {
 	now := s.nowFunc().UTC()
 
-	var result *CostumeRentalResult
+	var result *CostumeBuyResult
 	err := s.txProvider.RunInTx(ctx, func(txCtx context.Context) error {
 		char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
 		if err != nil {
@@ -329,8 +310,31 @@ func (s *Service) RentCostume(ctx context.Context, characterID string, itemNo in
 			return ErrCostumeNotAvailable
 		}
 
+		if s.helper != nil {
+			activeHelperIDs, err := s.helper.GetActiveHelperItemIDs(txCtx, now)
+			if err == nil {
+				defID := fmt.Sprintf("item-%03d", itemNo)
+				for _, id := range activeHelperIDs {
+					if id == defID || id == strconv.Itoa(itemNo) {
+						return ErrItemUnavailableInHelperQuest
+					}
+				}
+			}
+		}
+
 		if char.Money < selected.Price {
 			return ErrInsufficientFunds
+		}
+
+		defID := fmt.Sprintf("item-%03d", itemNo)
+		inst, err := coreitem.NewInstance(defID, 1)
+		if err != nil {
+			return err
+		}
+
+		deliveryRes, err := depot.DeliverRewardItemInstance(txCtx, s.invRepo, s.depotRepo, char, inst, depot.PolicyAbortOnDepotFull)
+		if err != nil {
+			return err
 		}
 
 		if err := char.DeductMoney(selected.Price); err != nil {
@@ -340,36 +344,23 @@ func (s *Service) RentCostume(ctx context.Context, characterID string, itemNo in
 			return err
 		}
 
-		// Calculate expiration until next midnight JST
-		jst := time.FixedZone("JST", 9*3600)
-		nowJST := now.In(jst)
-		midnightJST := time.Date(nowJST.Year(), nowJST.Month(), nowJST.Day()+1, 0, 0, 0, 0, jst)
-		expiresAt := midnightJST.UTC()
-		ttl := expiresAt.Sub(now)
-		if ttl <= 0 {
-			ttl = 24 * time.Hour
-			expiresAt = now.Add(ttl)
+		if s.collection != nil {
+			_ = s.collection.RecordItemDiscovered(txCtx, characterID, defID, selected.Name, "ITEM")
 		}
 
-		icon := CostumeIcon(selected.ItemNo, char.Gender)
-		activeCostume := ActiveCostume{
-			CharacterID: characterID,
+		var msg string
+		if deliveryRes.DeliveredTo == depot.DeliveredToInventory {
+			msg = fmt.Sprintf("%sだな。ほい、どうぞ", selected.Name)
+		} else {
+			msg = fmt.Sprintf("%sは%sの預かり所に送っておいたよん", selected.Name, char.Name)
+		}
+
+		result = &CostumeBuyResult{
 			ItemNo:      selected.ItemNo,
 			ItemName:    selected.Name,
-			Icon:        icon,
-			RentedAt:    now,
-			ExpiresAt:   expiresAt,
-		}
-
-		if s.costumeRepo != nil {
-			if err := s.costumeRepo.SaveActiveCostume(txCtx, activeCostume, ttl); err != nil {
-				return err
-			}
-		}
-
-		result = &CostumeRentalResult{
-			ActiveCostume: activeCostume,
-			Message:       fmt.Sprintf("%sの衣装をレンタルしたよん。次の日には返してもらうよ", selected.Name),
+			Price:       selected.Price,
+			DeliveredTo: string(deliveryRes.DeliveredTo),
+			Message:     msg,
 		}
 		return nil
 	})
@@ -379,17 +370,36 @@ func (s *Service) RentCostume(ctx context.Context, characterID string, itemNo in
 	return result, nil
 }
 
-// ReturnCostume returns the rented costume, clearing active rental state.
-func (s *Service) ReturnCostume(ctx context.Context, characterID string) error {
+// ApplyCostume applies an active costume state to the character until next midnight JST or rest.
+func (s *Service) ApplyCostume(ctx context.Context, characterID string, itemNo int, itemName, icon string, expiresAt time.Time) error {
 	if s.costumeRepo == nil {
 		return nil
 	}
-	return s.costumeRepo.ClearActiveCostume(ctx, characterID)
+	now := s.nowFunc().UTC()
+	if expiresAt.IsZero() {
+		expiresAt = timer.NextMidnightJST(now).UTC()
+	}
+	ttl := expiresAt.Sub(now)
+	if ttl <= 0 {
+		ttl = 24 * time.Hour
+		expiresAt = now.Add(ttl)
+	}
+	return s.costumeRepo.SaveActiveCostume(ctx, ActiveCostume{
+		CharacterID: characterID,
+		ItemNo:      itemNo,
+		ItemName:    itemName,
+		Icon:        icon,
+		RentedAt:    now,
+		ExpiresAt:   expiresAt,
+	}, ttl)
 }
 
 // ResetCostume implements CostumeResetter, resetting costume on rest or job change.
 func (s *Service) ResetCostume(ctx context.Context, characterID string) error {
-	return s.ReturnCostume(ctx, characterID)
+	if s.costumeRepo == nil {
+		return nil
+	}
+	return s.costumeRepo.ClearActiveCostume(ctx, characterID)
 }
 
 // BuyHomeWallpaper purchases a wallpaper for the character's private home.

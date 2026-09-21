@@ -11643,6 +11643,118 @@
         ]
       }
     },
+    "/characters/{id}/oracle/buy": {
+      "post": {
+        "description": "Purchases a costume consumable item from Oracle Shop with gold. Delivers to inventory (or routes overflow to depot) and records in item collection.",
+        "operationId": "buyOracleCostume",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "item_no": {
+                    "description": "Costume item number (e.g. 44..56, 138..141)",
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "item_no"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "delivered_to": {
+                      "description": "Destination where item was delivered (inventory or depot)",
+                      "type": "string"
+                    },
+                    "item_name": {
+                      "type": "string"
+                    },
+                    "item_no": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "price": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "item_no",
+                    "item_name",
+                    "price",
+                    "delivered_to",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Costume purchased successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Insufficient gold, unavailable costume item, active helper quest conflict, or depot full"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Buy a costume consumable item",
+        "tags": [
+          "Oracle Shop"
+        ]
+      }
+    },
     "/characters/{id}/oracle/inspect": {
       "post": {
         "description": "Inspects Oracle Shop NPC @ラクル, showing description and conditional Black Market hint for job level \u003e= 15.",
@@ -11719,197 +11831,6 @@
           }
         ],
         "summary": "Inspect Oracle NPC @ラクル",
-        "tags": [
-          "Oracle Shop"
-        ]
-      }
-    },
-    "/characters/{id}/oracle/rent": {
-      "post": {
-        "description": "Rents a costume icon from the Oracle Shop for gold, active until daily rest, midnight JST, or job change.",
-        "operationId": "rentOracleCostume",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "item_no": {
-                    "description": "Costume item number (e.g. 44..56, 138..141)",
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "item_no"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "icon": {
-                      "type": "string"
-                    },
-                    "item_no": {
-                      "type": "integer"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "price": {
-                      "type": "integer"
-                    },
-                    "remaining_gold": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "item_no",
-                    "name",
-                    "icon",
-                    "price",
-                    "remaining_gold",
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Costume rented successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Insufficient gold or invalid costume item number"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character job level requirement not met"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "summary": "Rent a costume icon",
-        "tags": [
-          "Oracle Shop"
-        ]
-      }
-    },
-    "/characters/{id}/oracle/return": {
-      "post": {
-        "description": "Manually returns currently rented costume back to Oracle Shop.",
-        "operationId": "returnOracleCostume",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Costume returned successfully"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Character not found"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "summary": "Return active rented costume",
         "tags": [
           "Oracle Shop"
         ]
