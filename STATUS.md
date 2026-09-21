@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #751 — [Chore] Core/Timer: Add Valkey backend unit tests to improve test coverage
+Last updated: Issue #752 — [Chore] Job: Add unit tests for edge cases and branch coverage in job transitions
 
 ## Current Phase
 
