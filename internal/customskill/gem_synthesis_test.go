@@ -1,4 +1,4 @@
-package custom_skill_test
+package customskill_test
 
 import (
 	"context"
@@ -7,18 +7,18 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
-	"github.com/witchcraze/party2re/internal/custom_skill"
+	"github.com/witchcraze/party2re/internal/customskill"
 )
 
 type synthesisRepo struct {
-	skill *custom_skill.CustomSkill
+	skill *customskill.CustomSkill
 }
 
-func (r *synthesisRepo) SaveCustomSkill(_ context.Context, skill custom_skill.CustomSkill) error {
+func (r *synthesisRepo) SaveCustomSkill(_ context.Context, skill customskill.CustomSkill) error {
 	r.skill = &skill
 	return nil
 }
-func (r *synthesisRepo) FindCustomSkill(context.Context, string) (*custom_skill.CustomSkill, error) {
+func (r *synthesisRepo) FindCustomSkill(context.Context, string) (*customskill.CustomSkill, error) {
 	return r.skill, nil
 }
 
@@ -29,14 +29,14 @@ type synthesisCharacters struct {
 func (r *synthesisCharacters) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
 	character, ok := r.characters[id]
 	if !ok {
-		return corecharacter.Character{}, custom_skill.ErrCharacterNotFound
+		return corecharacter.Character{}, customskill.ErrCharacterNotFound
 	}
 	return character, nil
 }
 
-type synthesisGems map[string]custom_skill.GemDefinition
+type synthesisGems map[string]customskill.GemDefinition
 
-func (g synthesisGems) FindGemByID(id string) (custom_skill.GemDefinition, bool) {
+func (g synthesisGems) FindGemByID(id string) (customskill.GemDefinition, bool) {
 	value, ok := g[id]
 	return value, ok
 }
@@ -70,7 +70,7 @@ func TestSetCustomSkillSynthesizesGemsAndReturnsPreviousSelection(t *testing.T) 
 	chars := &synthesisCharacters{characters: map[string]corecharacter.Character{
 		"char-1": {ID: "char-1", Stats: corecharacter.Stats{MaxMP: 20}},
 	}}
-	service, err := custom_skill.NewService(repo, chars)
+	service, err := customskill.NewService(repo, chars)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,20 +107,20 @@ func TestSetCustomSkillRejectsInvalidNameAndLimits(t *testing.T) {
 	chars := &synthesisCharacters{characters: map[string]corecharacter.Character{
 		"char-1": {ID: "char-1", Stats: corecharacter.Stats{MaxMP: 5}},
 	}}
-	service, _ := custom_skill.NewService(repo, chars)
+	service, _ := customskill.NewService(repo, chars)
 	service.ConfigureGemSynthesis(synthesisGems{
 		"a": {ID: "a", SlotCost: 2, MPCost: 3},
 		"b": {ID: "b", SlotCost: 2, MPCost: 3},
 		"c": {ID: "c", SlotCost: 1, MPCost: 3},
 	}, invRepo, nil)
 
-	if _, err := service.SetCustomSkill(context.Background(), "char-1", "こうげき", "", [3]string{}); err != custom_skill.ErrInvalidSkillName {
+	if _, err := service.SetCustomSkill(context.Background(), "char-1", "こうげき", "", [3]string{}); err != customskill.ErrInvalidSkillName {
 		t.Fatalf("expected reserved name rejection, got %v", err)
 	}
-	if _, err := service.SetCustomSkill(context.Background(), "char-1", "valid", "", [3]string{"a", "a", ""}); err != custom_skill.ErrTooManyGemSlots {
+	if _, err := service.SetCustomSkill(context.Background(), "char-1", "valid", "", [3]string{"a", "a", ""}); err != customskill.ErrTooManyGemSlots {
 		t.Fatalf("expected slot rejection, got %v", err)
 	}
-	if _, err := service.SetCustomSkill(context.Background(), "char-1", "valid", "", [3]string{"c", "c", ""}); err != custom_skill.ErrCMPTooHigh {
+	if _, err := service.SetCustomSkill(context.Background(), "char-1", "valid", "", [3]string{"c", "c", ""}); err != customskill.ErrCMPTooHigh {
 		t.Fatalf("expected CMP rejection, got %v", err)
 	}
 }

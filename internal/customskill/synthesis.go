@@ -1,4 +1,4 @@
-package custom_skill
+package customskill
 
 import (
 	"context"

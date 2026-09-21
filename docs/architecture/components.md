@@ -116,7 +116,7 @@ Each feature owns its specific domain logic and state. Cross-feature imports and
 | **Chapel** | `internal/chapel` | 5 town church blessings, single active prayer constraint | Character | MariaDB `character_blessings` |
 | **Collection** | `internal/collection` | Illustrated monster defeat and item discovery encyclopedia | Character | MariaDB `character_monster_book`, `character_item_collection` |
 | **Contest** | `internal/contest` | Photo contest submissions, voting rounds, Hall of Fame | Character, News, Guild | MariaDB `character_photos`, `contest_rounds`, `contest_entries` |
-| **Custom Skill** | `internal/custom_skill` | 3-gem recipe synthesis, activation phrase validation | Character, Inventory, Gem Catalog | MariaDB `character_custom_skills` |
+| **Custom Skill** | `internal/customskill` | 3-gem recipe synthesis, activation phrase validation | Character, Inventory, Gem Catalog | MariaDB `character_custom_skills` |
 | **Depot** | `internal/depot` | Persistent storage (up to 500 slots), item consumption, delivery engine | Character, Inventory, Economy | MariaDB `character_depots`, `depot_items` (Rank 2→3→5) |
 | **Dungeon** | `internal/dungeon` | Grid map exploration, party traps, map scouting (`@ちず`) | Battle, Character, Inventory, Valkey | Valkey Candidate D (`party2:dungeon:*`); MariaDB `character_dungeon_records` |
 | **Event Plaza** | `internal/eventplaza` | Real-time presence tracking, 3× markup bazaar, victory banquets | Character, Item, Inventory, Depot, Valkey | Valkey `party2:eventplaza:presence`; MariaDB `celebration_banquets` |

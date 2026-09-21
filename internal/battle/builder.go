@@ -11,7 +11,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/core/skill"
-	"github.com/witchcraze/party2re/internal/custom_skill"
+	"github.com/witchcraze/party2re/internal/customskill"
 )
 
 // Legacy item IDs with passive or active combat mechanics.
@@ -61,7 +61,7 @@ func (s *Service) BuildParticipant(ctx context.Context, characterID string) (cor
 		skills = s.skillProvider.SkillsForJob(char.JobID)
 	}
 
-	var cs *custom_skill.CustomSkill
+	var cs *customskill.CustomSkill
 	if s.customSkills != nil {
 		if custom, err := s.customSkills.FindCustomSkill(ctx, charID); err == nil {
 			cs = custom
@@ -89,7 +89,7 @@ func BuildParticipantFromData(
 	inv coreinventory.Inventory,
 	equip coreequipment.Equipment,
 	skills []skill.Definition,
-	cs *custom_skill.CustomSkill,
+	cs *customskill.CustomSkill,
 ) (corebattle.Participant, error) {
 	return BuildParticipantFromDataWithRNG(char, inv, equip, skills, cs, nil)
 }
@@ -100,7 +100,7 @@ func BuildParticipantFromDataWithRNG(
 	inv coreinventory.Inventory,
 	equip coreequipment.Equipment,
 	skills []skill.Definition,
-	cs *custom_skill.CustomSkill,
+	cs *customskill.CustomSkill,
 	rng corecharacter.RandomSource,
 ) (corebattle.Participant, error) {
 	builder := corebattle.NewParticipantBuilder(char.ID).

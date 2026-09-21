@@ -14,7 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/core/skill"
-	"github.com/witchcraze/party2re/internal/custom_skill"
+	"github.com/witchcraze/party2re/internal/customskill"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
 )
@@ -177,9 +177,9 @@ func (m mockSkillProvider) SkillsForJob(jobID string) []skill.Definition {
 	return m[jobID]
 }
 
-type mockCustomSkillRepo map[string]*custom_skill.CustomSkill
+type mockCustomSkillRepo map[string]*customskill.CustomSkill
 
-func (m mockCustomSkillRepo) FindCustomSkill(_ context.Context, characterID string) (*custom_skill.CustomSkill, error) {
+func (m mockCustomSkillRepo) FindCustomSkill(_ context.Context, characterID string) (*customskill.CustomSkill, error) {
 	return m[characterID], nil
 }
 
@@ -260,7 +260,7 @@ func TestBuildParticipant(t *testing.T) {
 	skillProv := mockSkillProvider{"job-pharaoh": []skill.Definition{skillDef}}
 
 	csRepo := mockCustomSkillRepo{
-		"char-hero": &custom_skill.CustomSkill{
+		"char-hero": &customskill.CustomSkill{
 			CharacterID: "char-hero",
 			Name:        "真・奥義天翔",
 			Comment:     "燃え盛れ我が闘気！",

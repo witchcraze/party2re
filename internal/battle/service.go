@@ -10,7 +10,7 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/core/skill"
-	"github.com/witchcraze/party2re/internal/custom_skill"
+	"github.com/witchcraze/party2re/internal/customskill"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
 )
@@ -53,7 +53,7 @@ type DepotRepository interface {
 
 // CustomSkillRepository defines access to custom skill definitions.
 type CustomSkillRepository interface {
-	FindCustomSkill(ctx context.Context, characterID string) (*custom_skill.CustomSkill, error)
+	FindCustomSkill(ctx context.Context, characterID string) (*customskill.CustomSkill, error)
 }
 
 // SkillProvider defines access to job skills.

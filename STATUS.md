@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #750 — [Chore] Scripts: sync_openapi.go を scripts/sync_openapi/ サブディレクトリへ移動
+Last updated: Issue #748 — [Chore] CustomSkill: internal/custom_skill を customskill にリネーム
 
 ## Current Phase
 

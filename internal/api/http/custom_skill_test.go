@@ -9,17 +9,17 @@ import (
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
-	"github.com/witchcraze/party2re/internal/custom_skill"
+	"github.com/witchcraze/party2re/internal/customskill"
 )
 
 type stubCustomSkillService struct{}
 
-func (stubCustomSkillService) GetCustomSkill(context.Context, string) (*custom_skill.CustomSkill, error) {
-	return &custom_skill.CustomSkill{}, nil
+func (stubCustomSkillService) GetCustomSkill(context.Context, string) (*customskill.CustomSkill, error) {
+	return &customskill.CustomSkill{}, nil
 }
 
-func (stubCustomSkillService) SetCustomSkill(_ context.Context, characterID, name, comment string, gems [3]string) (*custom_skill.CustomSkill, error) {
-	return &custom_skill.CustomSkill{CharacterID: characterID, Name: name, Comment: comment, Gems: gems}, nil
+func (stubCustomSkillService) SetCustomSkill(_ context.Context, characterID, name, comment string, gems [3]string) (*customskill.CustomSkill, error) {
+	return &customskill.CustomSkill{CharacterID: characterID, Name: name, Comment: comment, Gems: gems}, nil
 }
 
 func TestCustomSkillEndpoints(t *testing.T) {

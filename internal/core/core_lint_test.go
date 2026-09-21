@@ -49,7 +49,7 @@ var (
 
 	allowedEquipmentPaths = map[string]bool{
 		"internal/core/equipment": true,
-		"internal/custom_skill":   true, // custom skill gem synthesis
+		"internal/customskill":    true, // custom skill gem synthesis
 		"internal/database":       true, // database SQL mappers & row scanning
 	}
 )

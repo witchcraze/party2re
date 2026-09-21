@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
-	"github.com/witchcraze/party2re/internal/custom_skill"
+	"github.com/witchcraze/party2re/internal/customskill"
 )
 
 type CustomSkillRepository struct {
@@ -19,7 +19,7 @@ func NewCustomSkillRepository(db *sql.DB) (*CustomSkillRepository, error) {
 	return &CustomSkillRepository{db: db}, nil
 }
 
-func (r *CustomSkillRepository) SaveCustomSkill(ctx context.Context, skill custom_skill.CustomSkill) error {
+func (r *CustomSkillRepository) SaveCustomSkill(ctx context.Context, skill customskill.CustomSkill) error {
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO character_custom_skills
 			(character_id, skill_name, skill_comment, need_cmp, gem1, gem2, gem3, updated_at)
@@ -33,8 +33,8 @@ func (r *CustomSkillRepository) SaveCustomSkill(ctx context.Context, skill custo
 	return err
 }
 
-func (r *CustomSkillRepository) FindCustomSkill(ctx context.Context, characterID string) (*custom_skill.CustomSkill, error) {
-	var skill custom_skill.CustomSkill
+func (r *CustomSkillRepository) FindCustomSkill(ctx context.Context, characterID string) (*customskill.CustomSkill, error) {
+	var skill customskill.CustomSkill
 	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
 		SELECT character_id, skill_name, skill_comment, need_cmp, gem1, gem2, gem3, updated_at
 		FROM character_custom_skills WHERE character_id = ?
