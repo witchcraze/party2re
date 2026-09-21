@@ -57,6 +57,7 @@ if command -v go >/dev/null 2>&1; then
     go run ./scripts/sync_openapi.go --check
     go test -count=1 ./internal/api/http -run "OpenAPI"
 else
+    docker compose run --rm app go run ./scripts/sync_openapi.go --check
     docker compose run --rm app go test -count=1 ./internal/api/http -run "OpenAPI"
 fi
 
