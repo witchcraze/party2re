@@ -191,16 +191,10 @@ func (s *Service) Claim(ctx context.Context, characterID string, itemID string) 
 			return ErrInsufficientMedals
 		}
 
-		dep, err := s.depots.FindByCharacterIDForUpdate(txCtx, characterID)
-		if errors.Is(err, depot.ErrNotFound) {
-			dep, err = depot.NewDepotWithCapacity(char.ID, char.JobLevel, 0, char.OverDepot)
-			if err != nil {
-				return err
-			}
-		} else if err != nil {
+		dep, err := depot.FindOrCreate(txCtx, s.depots, char)
+		if err != nil {
 			return err
 		}
-		dep.RefreshCapacity(char.JobLevel, char.OverDepot)
 
 		inst, err := coreitem.NewInstance(targetReward.ItemID, 1)
 		if err != nil {

@@ -33,10 +33,11 @@ Where:
 
 Because `character_depots.capacity` is initialized at character creation and character job levels advance dynamically over time, commerce and delivery modules (`shop`, `secretshop`, `blackmarket`, `fleamarket`, `auction`, `store`, `god`, `altar`, `medal`, `plantation`) MUST synchronize the in-memory depot capacity using `dep.RefreshCapacity(char.JobLevel, char.OverDepot)` before performing capacity boundary checks. This guarantees that high-level characters enjoy their full dynamic depot capacity (up to 500 slots) across all trade and item receipt operations.
 
-### Centralized Retrieval & Dynamic Capacity Initialization (`FindOrCreate`)
+### Root Initialization Guarantee & Centralized Retrieval (`FindOrCreate`)
 
-To eliminate repetitive boilerplate and prevent uninitialized depot or stale capacity errors when delivering items (e.g., `auction`, `alchemy`, `plantation`, `delivery`), callers should use `depot.FindOrCreate(ctx, repo, char)`.
-`FindOrCreate` retrieves the depot under pessimistic lock (`FindByCharacterIDForUpdate`). If no depot record exists yet for the character, it initializes a new `Depot` with dynamic capacity reflecting the character's `JobLevel` and `OverDepot`. If a record already exists, it refreshes the capacity via `dep.RefreshCapacity(char.JobLevel, char.OverDepot)`. This ensures that recipients and crafters never fail with uninitialized `ErrNotFound` or premature `ErrDepotFull`.
+To eliminate uninitialized depot records and stale capacity errors, a two-layer defense-in-depth architecture is enforced:
+1. **Root Guarantee (Character Creation Auto-Initialization)**: Whenever a new character is created and saved (`CharacterRepository.Save`), a default `character_depots` record (`capacity = 5`, `ex_depot = 0`) is automatically inserted within the same database transaction.
+2. **Centralized Retrieval (`FindOrCreate`)**: Across all commerce and reward domain callers (`store`, `blackmarket`, `plantation`, `casino`, `medal`, `auction`, `alchemy`, `depot/delivery`), services retrieve depots via `depot.FindOrCreate(ctx, repo, char)`. Under pessimistic lock (`FindByCharacterIDForUpdate`), if no record exists it initializes a new `Depot` with dynamic capacity reflecting the character's `JobLevel` and `OverDepot`; if a record already exists, it refreshes the capacity via `dep.RefreshCapacity(char.JobLevel, char.OverDepot)`. This permanently eliminates uninitialized `ErrNotFound` bugs and eliminates repetitive hand-rolled boilerplate across domains.
 
 ## Operations & Invariants
 

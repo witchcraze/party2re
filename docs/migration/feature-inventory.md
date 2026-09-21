@@ -88,7 +88,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Centralized transactional reward item delivery engine with configurable depot overflow routing (#679)
 - [x] Unified dual-source item resolution and consumption across Inventory and Depot with deterministic Rank 3 -> Rank 5 lock ordering (#683)
 - [x] Crystal currency mutation encapsulation and AST linter protection (#685)
-- [x] Centralized depot FindOrCreate helper and dynamic capacity refresh across item delivery and trade modules (#712)
+- [x] Centralized depot FindOrCreate helper and dynamic capacity refresh across item delivery and trade modules (#712, #725)
 
 ### D. Adventure, Maps, Stages, and Battle
 - [x] Reusable deterministic Battle component & turn resolver (#12, #20, #36, #480)

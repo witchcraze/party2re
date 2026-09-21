@@ -27,16 +27,10 @@ func (s *Service) Harvest(ctx context.Context, characterID string) (HarvestResul
 		}
 
 		// Rank 5: Lock Depot
-		dep, err := s.depots.FindByCharacterIDForUpdate(txCtx, characterID)
-		if errors.Is(err, depot.ErrNotFound) {
-			dep, err = depot.NewDepotWithCapacity(char.ID, char.JobLevel, 0, char.OverDepot)
-			if err != nil {
-				return err
-			}
-		} else if err != nil {
+		dep, err := depot.FindOrCreate(txCtx, s.depots, char)
+		if err != nil {
 			return err
 		}
-		dep.RefreshCapacity(char.JobLevel, char.OverDepot)
 
 		// Rank 8: Lock Plantation Plot
 		plot, err := s.plots.GetPlotForUpdate(txCtx, characterID)

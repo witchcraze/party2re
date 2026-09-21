@@ -199,3 +199,46 @@ func TestHarvest_DepotFullWithRefreshedCapacity(t *testing.T) {
 		t.Fatalf("expected ErrDepotFull, got %v", err)
 	}
 }
+
+func TestFertilize_WithUninitializedDepot(t *testing.T) {
+	charRepo := newMockCharRepo()
+	invRepo := newMockInvRepo()
+	depotRepo := &notFoundDepotRepo{}
+	plotRepo := newMockPlotRepo()
+	itemDefs, _ := coreitem.InitialCatalog()
+
+	charID := "c_farmer_fert"
+	charRepo.chars[charID] = corecharacter.Character{
+		ID:       charID,
+		Name:     "FertFarmer",
+		JobLevel: 5,
+		Money:    1000,
+	}
+
+	now := time.Date(2026, 9, 12, 10, 0, 0, 0, time.UTC)
+	plotRepo.plots[charID] = plantation.Plot{
+		CharacterID: charID,
+		SeedID:      "red",
+		SownAt:      now.Add(-1 * time.Hour),
+		MaturesAt:   now.Add(23 * time.Hour),
+	}
+
+	svc, err := plantation.NewService(
+		charRepo, invRepo, depotRepo, plotRepo, itemDefs,
+		plantation.WithNow(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	res, err := svc.Fertilize(context.Background(), charID, "rice_bran")
+	if err != nil {
+		t.Fatalf("Fertilize failed on uninitialized depot: %v", err)
+	}
+	if charRepo.chars[charID].Money != 850 {
+		t.Errorf("expected remaining money 850, got %d", charRepo.chars[charID].Money)
+	}
+	if res.Message != "こめぬかをまくよ！" {
+		t.Errorf("unexpected message: %s", res.Message)
+	}
+}

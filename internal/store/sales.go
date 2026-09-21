@@ -25,7 +25,7 @@ func (s *Service) ListGoldItem(ctx context.Context, characterID, depotItemInstan
 			return err
 		}
 
-		dep, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, characterID)
+		dep, err := depot.FindOrCreate(txCtx, s.depotRepo, char)
 		if err != nil {
 			return err
 		}
@@ -126,7 +126,7 @@ func (s *Service) ListBarterItem(ctx context.Context, characterID, depotItemInst
 			return err
 		}
 
-		dep, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, characterID)
+		dep, err := depot.FindOrCreate(txCtx, s.depotRepo, char)
 		if err != nil {
 			return err
 		}
@@ -219,11 +219,10 @@ func (s *Service) WithdrawListing(ctx context.Context, characterID, saleID strin
 		}
 
 		// Rank 5: depot lock
-		dep, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, characterID)
+		dep, err := depot.FindOrCreate(txCtx, s.depotRepo, char)
 		if err != nil {
 			return err
 		}
-		dep.RefreshCapacity(char.JobLevel, char.OverDepot)
 
 		if err := dep.AddItem(coreitem.Instance{
 			ID:               s.idGen(),
@@ -287,15 +286,11 @@ func (s *Service) BuyItem(ctx context.Context, buyerCharacterID, saleID string) 
 		}
 
 		// Rank 5: depots locked ascending
-		d1, d2 := buyerCharacterID, sellerID
-		if d1 > d2 {
-			d1, d2 = d2, d1
-		}
-		dep1, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, d1)
+		dep1, err := depot.FindOrCreate(txCtx, s.depotRepo, char1)
 		if err != nil {
 			return err
 		}
-		dep2, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, d2)
+		dep2, err := depot.FindOrCreate(txCtx, s.depotRepo, char2)
 		if err != nil {
 			return err
 		}
@@ -306,7 +301,6 @@ func (s *Service) BuyItem(ctx context.Context, buyerCharacterID, saleID string) 
 		} else {
 			buyerDepot = &dep2
 		}
-		buyerDepot.RefreshCapacity(buyerChar.JobLevel, buyerChar.OverDepot)
 
 		if err := buyerChar.DeductMoney(sale.Price); err != nil {
 			return ErrInsufficientFunds
@@ -372,23 +366,12 @@ func (s *Service) TradeItem(ctx context.Context, buyerCharacterID, saleID, custo
 			return err
 		}
 
-		var buyerChar, sellerChar corecharacter.Character
-		if char1.ID == buyerCharacterID {
-			buyerChar, sellerChar = char1, char2
-		} else {
-			buyerChar, sellerChar = char2, char1
-		}
-
 		// Rank 5: depots locked ascending
-		d1, d2 := buyerCharacterID, sellerID
-		if d1 > d2 {
-			d1, d2 = d2, d1
-		}
-		dep1, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, d1)
+		dep1, err := depot.FindOrCreate(txCtx, s.depotRepo, char1)
 		if err != nil {
 			return err
 		}
-		dep2, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, d2)
+		dep2, err := depot.FindOrCreate(txCtx, s.depotRepo, char2)
 		if err != nil {
 			return err
 		}
@@ -399,8 +382,6 @@ func (s *Service) TradeItem(ctx context.Context, buyerCharacterID, saleID, custo
 		} else {
 			buyerDepot, sellerDepot = &dep2, &dep1
 		}
-		buyerDepot.RefreshCapacity(buyerChar.JobLevel, buyerChar.OverDepot)
-		sellerDepot.RefreshCapacity(sellerChar.JobLevel, sellerChar.OverDepot)
 
 		// Find desired item in buyer depot
 		bIdx := -1

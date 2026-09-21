@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #724 — [Feature] Town/Store: Reconstruct authentic Oracle Shop item purchasing (@kau) and costume item usage parity
+Last updated: Issue #725 — [Refactor] Storage: Adopt depot.FindOrCreate across domain callers with character creation auto-initialization
 
 ## Current Phase
 
