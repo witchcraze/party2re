@@ -102,6 +102,29 @@ func TestMedalService(t *testing.T) {
 		}
 	})
 
+	t.Run("claim with uninitialized depot auto-initializes", func(t *testing.T) {
+		char := corecharacter.Character{ID: "char-uninit", SmallMedals: 5, JobLevel: 3}
+		charRepo := &mockCharacterRepo{char: char}
+		depotRepo := &mockDepotRepo{}
+
+		svc, err := medal.NewService(charRepo, depotRepo, rewardsFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		updatedChar, updatedDepot, err := svc.Claim(context.Background(), "char-uninit", "armor-32")
+		if err != nil {
+			t.Fatalf("Claim failed on uninitialized depot: %v", err)
+		}
+
+		if updatedChar.SmallMedals != 2 {
+			t.Errorf("expected 2 medals, got %d", updatedChar.SmallMedals)
+		}
+		if len(updatedDepot.Items) != 1 || updatedDepot.Items[0].DefinitionID != "armor-32" {
+			t.Errorf("expected armor-32 in newly created depot, got %+v", updatedDepot.Items)
+		}
+	})
+
 	t.Run("insufficient medals", func(t *testing.T) {
 		char := corecharacter.Character{ID: "char-1", SmallMedals: 2}
 		d, _ := depot.NewDepotWithCapacity("char-1", 0, 0, 0)

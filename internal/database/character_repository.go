@@ -10,6 +10,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/depot"
 )
 
 type CharacterRepository struct {
@@ -51,6 +52,15 @@ func (r *CharacterRepository) Save(ctx context.Context, value corecharacter.Char
 		memoryJobID, memorySP, memoryOldJobID, memoryOldSP, value.SmallMedals, value.HelpCount, value.HeroCount, value.PvPWins,
 		value.Orb, value.Tired, value.OverLevel, value.OverDepot, value.OverMonster, value.OverFuture, value.OverFlea, value.OverStore, color,
 		value.Deposit, value.Crystal, value.WeaponSeal, value.WeaponCustomName, value.ArmorCustomName)
+	if err != nil {
+		return err
+	}
+
+	initCap := depot.CalculateCapacity(value.JobLevel, 0, value.OverDepot)
+	_, err = ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+		INSERT IGNORE INTO character_depots (character_id, ex_depot, capacity)
+		VALUES (?, 0, ?)
+	`, value.ID, initCap)
 	return err
 }
 

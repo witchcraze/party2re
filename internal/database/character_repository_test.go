@@ -46,6 +46,20 @@ func TestCharacterRepositoryPersistsAndLoadsCharacter(t *testing.T) {
 	if err := repository.Save(ctx, want); err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
+
+	// Verify auto-initialized depot
+	depotRepo, err := NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dep, err := depotRepo.FindByCharacterID(ctx, want.ID)
+	if err != nil {
+		t.Fatalf("FindByCharacterID() after Save error = %v, want auto-initialized depot", err)
+	}
+	if dep.Capacity < 5 || dep.CharacterID != want.ID {
+		t.Fatalf("unexpected auto-initialized depot: %+v", dep)
+	}
+
 	got, err := repository.FindByID(ctx, want.ID)
 	if err != nil {
 		t.Fatalf("FindByID() error = %v", err)

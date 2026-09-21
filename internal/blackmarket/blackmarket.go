@@ -213,7 +213,7 @@ func (s *Service) SacrificeItem(ctx context.Context, characterID string, itemIns
 		var dep depot.Depot
 		if s.depotRepo != nil {
 			var depErr error
-			dep, depErr = s.depotRepo.FindByCharacterIDForUpdate(txCtx, characterID)
+			dep, depErr = depot.FindOrCreate(txCtx, s.depotRepo, char)
 			if depErr != nil {
 				return depErr
 			}
@@ -327,11 +327,10 @@ func (s *Service) TradePrize(ctx context.Context, characterID string, prizeID st
 		}
 
 		// 2. Lock depot (Tier 5) and verify capacity
-		dep, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, characterID)
+		dep, err := depot.FindOrCreate(txCtx, s.depotRepo, char)
 		if err != nil {
 			return err
 		}
-		dep.RefreshCapacity(char.JobLevel, char.OverDepot)
 
 		// 3. Lock and check points (Tier 8)
 		points := CharacterPoints{CharacterID: characterID, RarePoints: 0, URarePoints: 0}
