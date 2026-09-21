@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #740 — [Architecture] PlayerContext: ActionURLResolver — target_endpoint の生成責任を HTTP 層に委譲する
+Last updated: Issue #281 — [Chore] Test/Player: Improve branch coverage for Register, Login, Logout, and Authenticate error paths
 
 ## Current Phase
 
