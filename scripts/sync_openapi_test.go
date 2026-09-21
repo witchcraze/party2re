@@ -185,3 +185,146 @@ func TestCheckRouteCoverageMissing(t *testing.T) {
 		t.Errorf("unexpected missing route: %+v", missing[0])
 	}
 }
+
+func TestRunCheck_Synchronized(t *testing.T) {
+	tempDir := t.TempDir()
+	basePath := filepath.Join(tempDir, "base.json")
+	pathsDir := filepath.Join(tempDir, "paths")
+	docsPath := filepath.Join(tempDir, "docs_openapi.json")
+	pkgPath := filepath.Join(tempDir, "pkg_openapi.json")
+
+	if err := os.MkdirAll(pathsDir, 0755); err != nil {
+		t.Fatalf("failed to create paths dir: %v", err)
+	}
+
+	baseContent := `{"openapi": "3.1.0", "info": {"title": "Test"}, "components": {}}`
+	if err := os.WriteFile(basePath, []byte(baseContent), 0644); err != nil {
+		t.Fatalf("failed to write base.json: %v", err)
+	}
+
+	pathContent := `{"/items": {"get": {"summary": "List items"}}}`
+	if err := os.WriteFile(filepath.Join(pathsDir, "items.json"), []byte(pathContent), 0644); err != nil {
+		t.Fatalf("failed to write items.json: %v", err)
+	}
+
+	bundled, _, _, err := bundleOpenAPISpec(basePath, pathsDir)
+	if err != nil {
+		t.Fatalf("bundleOpenAPISpec failed: %v", err)
+	}
+
+	if err := os.WriteFile(docsPath, bundled, 0644); err != nil {
+		t.Fatalf("failed to write docsPath: %v", err)
+	}
+	if err := os.WriteFile(pkgPath, bundled, 0644); err != nil {
+		t.Fatalf("failed to write pkgPath: %v", err)
+	}
+
+	routes := []Route{{Method: "GET", Path: "/items"}}
+
+	// Capture modification times to ensure runCheck does not mutate files
+	statDocsBefore, _ := os.Stat(docsPath)
+	statPkgBefore, _ := os.Stat(pkgPath)
+
+	if err := runCheck(basePath, pathsDir, docsPath, pkgPath, routes); err != nil {
+		t.Fatalf("expected runCheck to succeed, got: %v", err)
+	}
+
+	statDocsAfter, _ := os.Stat(docsPath)
+	statPkgAfter, _ := os.Stat(pkgPath)
+
+	if statDocsBefore.ModTime() != statDocsAfter.ModTime() || statPkgBefore.ModTime() != statPkgAfter.ModTime() {
+		t.Errorf("runCheck mutated target files (expected read-only check)")
+	}
+}
+
+func TestRunCheck_ModularSourceDrift(t *testing.T) {
+	tempDir := t.TempDir()
+	basePath := filepath.Join(tempDir, "base.json")
+	pathsDir := filepath.Join(tempDir, "paths")
+	docsPath := filepath.Join(tempDir, "docs_openapi.json")
+	pkgPath := filepath.Join(tempDir, "pkg_openapi.json")
+
+	if err := os.MkdirAll(pathsDir, 0755); err != nil {
+		t.Fatalf("failed to create paths dir: %v", err)
+	}
+
+	baseContent := `{"openapi": "3.1.0", "info": {"title": "Test"}, "components": {}}`
+	_ = os.WriteFile(basePath, []byte(baseContent), 0644)
+	pathContent := `{"/items": {"get": {"summary": "Old summary"}}}`
+	_ = os.WriteFile(filepath.Join(pathsDir, "items.json"), []byte(pathContent), 0644)
+
+	bundled, _, _, _ := bundleOpenAPISpec(basePath, pathsDir)
+	_ = os.WriteFile(docsPath, bundled, 0644)
+	_ = os.WriteFile(pkgPath, bundled, 0644)
+
+	// Now modify the modular source without syncing to generated files
+	updatedPathContent := `{"/items": {"get": {"summary": "New drifted summary"}}}`
+	_ = os.WriteFile(filepath.Join(pathsDir, "items.json"), []byte(updatedPathContent), 0644)
+
+	routes := []Route{{Method: "GET", Path: "/items"}}
+	err := runCheck(basePath, pathsDir, docsPath, pkgPath, routes)
+	if err == nil {
+		t.Fatal("expected runCheck to fail on modular source drift, got nil")
+	}
+	if !strings.Contains(err.Error(), "out of sync") {
+		t.Errorf("expected 'out of sync' error, got: %v", err)
+	}
+}
+
+func TestRunCheck_MissingTargetFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	basePath := filepath.Join(tempDir, "base.json")
+	pathsDir := filepath.Join(tempDir, "paths")
+	docsPath := filepath.Join(tempDir, "missing_docs.json")
+	pkgPath := filepath.Join(tempDir, "missing_pkg.json")
+
+	if err := os.MkdirAll(pathsDir, 0755); err != nil {
+		t.Fatalf("failed to create paths dir: %v", err)
+	}
+
+	baseContent := `{"openapi": "3.1.0", "info": {"title": "Test"}, "components": {}}`
+	_ = os.WriteFile(basePath, []byte(baseContent), 0644)
+
+	routes := []Route{}
+	err := runCheck(basePath, pathsDir, docsPath, pkgPath, routes)
+	if err == nil {
+		t.Fatal("expected runCheck to fail on missing target files, got nil")
+	}
+	if !strings.Contains(err.Error(), "missing") {
+		t.Errorf("expected 'missing' error, got: %v", err)
+	}
+}
+
+func TestRunCheck_MissingRouteCoverage(t *testing.T) {
+	tempDir := t.TempDir()
+	basePath := filepath.Join(tempDir, "base.json")
+	pathsDir := filepath.Join(tempDir, "paths")
+	docsPath := filepath.Join(tempDir, "docs_openapi.json")
+	pkgPath := filepath.Join(tempDir, "pkg_openapi.json")
+
+	if err := os.MkdirAll(pathsDir, 0755); err != nil {
+		t.Fatalf("failed to create paths dir: %v", err)
+	}
+
+	baseContent := `{"openapi": "3.1.0", "info": {"title": "Test"}, "components": {}}`
+	_ = os.WriteFile(basePath, []byte(baseContent), 0644)
+	pathContent := `{"/items": {"get": {"summary": "Items"}}}`
+	_ = os.WriteFile(filepath.Join(pathsDir, "items.json"), []byte(pathContent), 0644)
+
+	bundled, _, _, _ := bundleOpenAPISpec(basePath, pathsDir)
+	_ = os.WriteFile(docsPath, bundled, 0644)
+	_ = os.WriteFile(pkgPath, bundled, 0644)
+
+	routes := []Route{
+		{Method: "GET", Path: "/items"},
+		{Method: "POST", Path: "/unregistered"},
+	}
+
+	err := runCheck(basePath, pathsDir, docsPath, pkgPath, routes)
+	if err == nil {
+		t.Fatal("expected runCheck to fail on missing route coverage, got nil")
+	}
+	if !strings.Contains(err.Error(), "missing from OpenAPI specification") {
+		t.Errorf("expected route coverage missing error, got: %v", err)
+	}
+}
