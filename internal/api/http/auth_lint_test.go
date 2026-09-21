@@ -144,11 +144,13 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 	}
 
 	adminRoutes := map[string]bool{
-		"POST /news":              true,
-		"POST /rankings/refresh":  true,
-		"POST /contest/settle":    true,
-		"POST /admin/maintenance": true,
-		"PUT /admin/maintenance":  true,
+		"POST /news":                   true,
+		"POST /rankings/refresh":       true,
+		"POST /contest/settle":         true,
+		"POST /admin/maintenance":      true,
+		"PUT /admin/maintenance":       true,
+		"GET /admin/players":           true,
+		"POST /admin/players/{id}/ban": true,
 	}
 
 	for _, route := range routes {

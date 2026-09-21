@@ -47,10 +47,17 @@ func DefaultRateLimitConfig() RateLimitConfig {
 	}
 }
 
+// AdminPlayerService defines administrative player management operations.
+type AdminPlayerService interface {
+	ListPlayers(ctx context.Context, sort string) ([]coreplayer.Player, error)
+	BanPlayer(ctx context.Context, playerID string) error
+}
+
 // PlayerService defines the player account operations exposed over HTTP.
 type PlayerService interface {
+	AdminPlayerService
 	Register(ctx context.Context, username, password string) (coreplayer.Player, error)
-	Login(ctx context.Context, username, password string) (coreplayer.Session, error)
+	Login(ctx context.Context, username, password string, clientIP ...string) (coreplayer.Session, error)
 	Logout(ctx context.Context, sessionID string) error
 	Authenticate(ctx context.Context, sessionID string) (coreplayer.Player, error)
 	DeleteAccount(ctx context.Context, playerID, password string) error
@@ -306,6 +313,8 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /maintenance", h.handleGetMaintenance)
 	mux.HandleFunc("POST /admin/maintenance", h.handleAdminSetMaintenance)
 	mux.HandleFunc("PUT /admin/maintenance", h.handleAdminSetMaintenance)
+	mux.HandleFunc("GET /admin/players", h.handleAdminListPlayers)
+	mux.HandleFunc("POST /admin/players/{id}/ban", h.handleAdminBanPlayer)
 
 	mux.HandleFunc("POST /players", h.handleRegisterPlayer)
 	mux.HandleFunc("DELETE /players/me", h.handleDeletePlayerMe)
@@ -728,10 +737,15 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	session, err := h.players.Login(r.Context(), req.Username, req.Password)
+	clientIP := ExtractClientIP(r, h.trustedProxies...)
+	session, err := h.players.Login(r.Context(), req.Username, req.Password, clientIP)
 	if err != nil {
 		if errors.Is(err, coreplayer.ErrAuthentication) {
 			writeError(w, http.StatusUnauthorized, err)
+			return
+		}
+		if errors.Is(err, coreplayer.ErrPlayerBanned) {
+			writeError(w, http.StatusForbidden, err)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, err)

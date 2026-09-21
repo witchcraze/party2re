@@ -18,6 +18,8 @@ var (
 	ErrInvalidPassword = errors.New("password is invalid")
 	ErrInvalidSession  = errors.New("session is invalid")
 	ErrAuthentication  = errors.New("authentication failed")
+	ErrPlayerBanned    = errors.New("player account is banned")
+	ErrPlayerNotFound  = errors.New("player not found")
 )
 
 type Player struct {
@@ -25,6 +27,9 @@ type Player struct {
 	Username     string
 	PasswordHash string
 	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	LastIP       string
+	BannedAt     *time.Time
 }
 
 type Session struct {
@@ -51,7 +56,24 @@ func New(username, password string, now time.Time) (Player, error) {
 	if err != nil {
 		return Player{}, err
 	}
-	return Player{ID: id, Username: username, PasswordHash: hash, CreatedAt: now.UTC()}, nil
+	utcNow := now.UTC()
+	return Player{
+		ID:           id,
+		Username:     username,
+		PasswordHash: hash,
+		CreatedAt:    utcNow,
+		UpdatedAt:    utcNow,
+	}, nil
+}
+
+func (p Player) IsBanned() bool {
+	return p.BannedAt != nil
+}
+
+func (p *Player) Ban(at time.Time) {
+	t := at.UTC()
+	p.BannedAt = &t
+	p.UpdatedAt = t
 }
 
 func (p Player) Authenticate(password string) bool {
