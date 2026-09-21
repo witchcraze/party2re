@@ -224,10 +224,12 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	}
 
 	// Validate supported consumable items before transaction
-	switch def.Name {
-	case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石":
-	default:
-		return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
+	if !isCostumeItem(def.Name) {
+		switch def.Name {
+		case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石":
+		default:
+			return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
+		}
 	}
 
 	if s.runner != nil {
@@ -242,7 +244,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 				},
 			}
 			txRes, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-				msg, err := s.applyConsumableEffect(&tc.Character, def)
+				msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def)
 				if err != nil {
 					return err
 				}
@@ -283,7 +285,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 				}
 				return err
 			}
-			msg, err := s.applyConsumableEffect(&tc.Character, def)
+			msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def)
 			if err != nil {
 				return err
 			}
@@ -310,7 +312,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	}
 
 	// Fallback path for unit test mocks without runner configured
-	msg, err := s.applyConsumableEffect(&char, def)
+	msg, err := s.applyConsumableEffect(ctx, &char, def)
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +345,11 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	}, nil
 }
 
-func (s *Service) applyConsumableEffect(char *corecharacter.Character, def item.Definition) (string, error) {
+func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter.Character, def item.Definition) (string, error) {
+	if costumeMsg, ok, err := s.applyCostumeConsumable(ctx, char, def.Name); ok {
+		return costumeMsg, err
+	}
+
 	var msg string
 
 	switch def.Name {

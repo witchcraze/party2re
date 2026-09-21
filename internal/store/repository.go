@@ -5,6 +5,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 )
@@ -66,4 +67,17 @@ type TimerService interface {
 
 type TxProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+type InventoryRepository interface {
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error)
+	Save(ctx context.Context, inv coreinventory.Inventory) error
+}
+
+type CollectionRecorder interface {
+	RecordItemDiscovered(ctx context.Context, characterID, itemID, itemName, category string) error
+}
+
+type HelperProvider interface {
+	GetActiveHelperItemIDs(ctx context.Context, now time.Time) ([]string, error)
 }

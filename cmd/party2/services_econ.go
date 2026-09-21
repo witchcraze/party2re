@@ -220,6 +220,7 @@ func (e *econServices) initStore(core *coreServices, gp store.GuildPointsRegistr
 		store.WithGuildPoints(gp),
 		store.WithTimer(t),
 		store.WithHomeWallpaperRepository(e.storeRepo),
+		store.WithInventoryRepository(core.invRepo),
 	}
 	if valkeyClient != nil {
 		opts = append(opts, store.WithCostumeRepository(store.NewValkeyCostumeRepository(valkeyClient)))

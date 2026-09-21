@@ -3,15 +3,58 @@ package store_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/store"
 )
+
+type mockInvRepo struct {
+	inventories map[string]coreinventory.Inventory
+}
+
+func (m *mockInvRepo) FindByCharacterIDForUpdate(_ context.Context, charID string) (coreinventory.Inventory, error) {
+	if m.inventories == nil {
+		m.inventories = make(map[string]coreinventory.Inventory)
+	}
+	inv, ok := m.inventories[charID]
+	if !ok {
+		inv, _ = coreinventory.New(charID)
+		m.inventories[charID] = inv
+	}
+	return inv, nil
+}
+
+func (m *mockInvRepo) Save(_ context.Context, inv coreinventory.Inventory) error {
+	if m.inventories == nil {
+		m.inventories = make(map[string]coreinventory.Inventory)
+	}
+	m.inventories[inv.CharacterID] = inv
+	return nil
+}
+
+type mockCollectionRecorder struct {
+	records []string
+}
+
+func (m *mockCollectionRecorder) RecordItemDiscovered(_ context.Context, charID, itemID, itemName, category string) error {
+	m.records = append(m.records, fmt.Sprintf("%s:%s:%s", charID, itemID, category))
+	return nil
+}
+
+type mockHelperProvider struct {
+	activeItemIDs []string
+}
+
+func (m *mockHelperProvider) GetActiveHelperItemIDs(_ context.Context, _ time.Time) ([]string, error) {
+	return m.activeItemIDs, nil
+}
 
 type mockHomeWallpaperRepo struct {
 	wallpapers map[string]string
@@ -261,7 +304,7 @@ func TestOracleService_GetOracleStatus(t *testing.T) {
 	}
 }
 
-func TestOracleService_RentCostume_And_Reset(t *testing.T) {
+func TestOracleService_BuyCostumeItem(t *testing.T) {
 	ctx := context.Background()
 	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
 	char := corecharacter.Character{
@@ -273,62 +316,82 @@ func TestOracleService_RentCostume_And_Reset(t *testing.T) {
 	}
 	_ = charRepo.Save(ctx, char)
 
-	costumeRepo := store.NewMemoryCostumeRepository()
+	invRepo := &mockInvRepo{}
+	depotRepo := &mockDepotRepo{depots: make(map[string]depot.Depot)}
+	collector := &mockCollectionRecorder{}
+	helper := &mockHelperProvider{activeItemIDs: []string{"item-045"}}
+
 	svc := store.NewService(
 		newMockStoreRepo(),
 		charRepo,
-		&mockDepotRepo{depots: make(map[string]depot.Depot)},
+		depotRepo,
 		&mockCatalog{items: make(map[string]coreitem.Definition)},
 		&mockTxProvider{},
-		store.WithCostumeRepository(costumeRepo),
+		store.WithInventoryRepository(invRepo),
+		store.WithCollectionRecorder(collector),
+		store.WithHelperProvider(helper),
 	)
 
-	// Item 56 requires jobLevel > 10, but char has jobLevel 5 -> ErrCostumeNotAvailable
-	_, err := svc.RentCostume(ctx, "char-1", 56)
+	// 1. Gating error: Item 56 requires jobLevel > 10
+	_, err := svc.BuyCostumeItem(ctx, "char-1", 56)
 	if !errors.Is(err, store.ErrCostumeNotAvailable) {
-		t.Fatalf("expected ErrCostumeNotAvailable for ungated item 56, got: %v", err)
+		t.Fatalf("expected ErrCostumeNotAvailable, got: %v", err)
 	}
 
-	// Item 44 (ピンクスカート, 300 G) is available at jobLevel 5
-	res, err := svc.RentCostume(ctx, "char-1", 44)
+	// 2. Helper exclusion: Item 45 is active in helper quest
+	_, err = svc.BuyCostumeItem(ctx, "char-1", 45)
+	if !errors.Is(err, store.ErrItemUnavailableInHelperQuest) {
+		t.Fatalf("expected ErrItemUnavailableInHelperQuest, got: %v", err)
+	}
+
+	// 3. Insufficient funds
+	charPoor := char
+	charPoor.ID = "poor-1"
+	charPoor.Money = 100
+	_ = charRepo.Save(ctx, charPoor)
+	_, err = svc.BuyCostumeItem(ctx, "poor-1", 44)
+	if !errors.Is(err, store.ErrInsufficientFunds) {
+		t.Fatalf("expected ErrInsufficientFunds, got: %v", err)
+	}
+
+	// 4. Success -> Delivered to inventory
+	res, err := svc.BuyCostumeItem(ctx, "char-1", 44)
 	if err != nil {
-		t.Fatalf("RentCostume failed: %v", err)
+		t.Fatalf("BuyCostumeItem failed: %v", err)
+	}
+	if res.DeliveredTo != "inventory" || res.ItemName != "ピンクスカート" || res.Price != 300 {
+		t.Errorf("unexpected buy result: %+v", res)
+	}
+	if !strings.Contains(res.Message, "ピンクスカートだな。ほい、どうぞ") {
+		t.Errorf("unexpected message: %s", res.Message)
 	}
 
-	if res.ActiveCostume.ItemNo != 44 || res.ActiveCostume.ItemName != "ピンクスカート" {
-		t.Errorf("unexpected active costume: %+v", res.ActiveCostume)
-	}
-	if res.ActiveCostume.Icon != "chr/001.gif" {
-		t.Errorf("expected icon chr/001.gif, got %s", res.ActiveCostume.Icon)
-	}
-
-	// Check character money deducted
+	// Verify money deducted and collection recorded
 	updatedChar, _ := charRepo.FindByID(ctx, "char-1")
 	if updatedChar.Money != 700 {
 		t.Errorf("expected money 700, got %d", updatedChar.Money)
 	}
-
-	// Status reflects rented costume
-	status, err := svc.GetOracleStatus(ctx, "char-1")
-	if err != nil || status.ActiveCostume == nil {
-		t.Fatalf("expected active costume in status: %+v (err: %v)", status, err)
-	}
-	if status.ActiveCostume.ItemNo != 44 {
-		t.Errorf("expected item 44 in status, got %d", status.ActiveCostume.ItemNo)
+	if len(collector.records) != 1 || collector.records[0] != "char-1:item-044:ITEM" {
+		t.Errorf("unexpected collection records: %+v", collector.records)
 	}
 
-	// Reset costume (e.g. from sleep wake or job change)
-	if err := svc.ResetCostume(ctx, "char-1"); err != nil {
-		t.Fatalf("ResetCostume failed: %v", err)
+	// 5. Fill inventory -> Overflow to depot
+	inv, _ := invRepo.FindByCharacterIDForUpdate(ctx, "char-1")
+	for i := len(inv.Items); i < coreinventory.DefaultMaxCapacity; i++ {
+		dummy, _ := coreitem.NewInstance(fmt.Sprintf("dummy-%d", i), 1)
+		_ = inv.Add(dummy)
 	}
+	_ = invRepo.Save(ctx, inv)
 
-	// Active costume should now be cleared
-	statusAfterReset, err := svc.GetOracleStatus(ctx, "char-1")
+	resOverflow, err := svc.BuyCostumeItem(ctx, "char-1", 44)
 	if err != nil {
-		t.Fatalf("GetOracleStatus failed: %v", err)
+		t.Fatalf("BuyCostumeItem overflow failed: %v", err)
 	}
-	if statusAfterReset.ActiveCostume != nil {
-		t.Errorf("expected active costume to be cleared after reset, got %+v", statusAfterReset.ActiveCostume)
+	if resOverflow.DeliveredTo != "depot" {
+		t.Errorf("expected delivered to depot, got %s", resOverflow.DeliveredTo)
+	}
+	if !strings.Contains(resOverflow.Message, "ピンクスカートはアリスの預かり所に送っておいたよん") {
+		t.Errorf("unexpected depot message: %s", resOverflow.Message)
 	}
 }
 
@@ -389,13 +452,13 @@ func TestOracleService_BuyHomeWallpaper(t *testing.T) {
 	}
 }
 
-func TestOracleService_ReturnAndResetCostume(t *testing.T) {
+func TestOracleService_ApplyAndResetCostume(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Without costumeRepo (nil safe)
 	svcNoRepo := store.NewService(nil, nil, nil, nil, nil)
-	if err := svcNoRepo.ReturnCostume(ctx, "char-1"); err != nil {
-		t.Errorf("expected nil error on nil costumeRepo, got %v", err)
+	if err := svcNoRepo.ApplyCostume(ctx, "char-1", 46, "チョビヒゲタクシード", "chr/012.gif", time.Time{}); err != nil {
+		t.Errorf("expected nil error on nil costumeRepo apply, got %v", err)
 	}
 	if err := svcNoRepo.ResetCostume(ctx, "char-1"); err != nil {
 		t.Errorf("expected nil error on nil costumeRepo reset, got %v", err)
@@ -403,32 +466,19 @@ func TestOracleService_ReturnAndResetCostume(t *testing.T) {
 
 	// 2. With costumeRepo
 	costumeRepo := store.NewMemoryCostumeRepository()
-	_ = costumeRepo.SaveActiveCostume(ctx, store.ActiveCostume{
-		CharacterID: "char-1",
-		ItemNo:      46,
-		ExpiresAt:   time.Now().Add(time.Hour),
-	}, time.Hour)
-
 	svcWithRepo := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo))
-	got, _ := costumeRepo.GetActiveCostume(ctx, "char-1")
-	if got == nil {
-		t.Fatal("expected active costume before return")
+
+	err := svcWithRepo.ApplyCostume(ctx, "char-1", 46, "チョビヒゲタクシード", "chr/012.gif", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("ApplyCostume failed: %v", err)
 	}
 
-	if err := svcWithRepo.ReturnCostume(ctx, "char-1"); err != nil {
-		t.Fatalf("ReturnCostume failed: %v", err)
-	}
-	got, _ = costumeRepo.GetActiveCostume(ctx, "char-1")
-	if got != nil {
-		t.Errorf("expected costume cleared after return, got %+v", got)
+	got, _ := costumeRepo.GetActiveCostume(ctx, "char-1")
+	if got == nil || got.ItemNo != 46 {
+		t.Fatalf("expected active costume item 46, got %+v", got)
 	}
 
 	// Test ResetCostume
-	_ = costumeRepo.SaveActiveCostume(ctx, store.ActiveCostume{
-		CharacterID: "char-1",
-		ItemNo:      55,
-		ExpiresAt:   time.Now().Add(time.Hour),
-	}, time.Hour)
 	if err := svcWithRepo.ResetCostume(ctx, "char-1"); err != nil {
 		t.Fatalf("ResetCostume failed: %v", err)
 	}

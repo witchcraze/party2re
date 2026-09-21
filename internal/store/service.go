@@ -21,6 +21,9 @@ type Service struct {
 	timer             TimerService
 	costumeRepo       CostumeRepository
 	homeWallpaperRepo HomeWallpaperRepository
+	invRepo           InventoryRepository
+	collection        CollectionRecorder
+	helper            HelperProvider
 	txProvider        TxProvider
 	idGen             func() string
 	nowFunc           func() time.Time
@@ -70,6 +73,32 @@ func WithHomeWallpaperRepository(hr HomeWallpaperRepository) Option {
 	return func(s *Service) {
 		s.homeWallpaperRepo = hr
 	}
+}
+
+func WithInventoryRepository(inv InventoryRepository) Option {
+	return func(s *Service) {
+		s.invRepo = inv
+	}
+}
+
+func WithCollectionRecorder(cr CollectionRecorder) Option {
+	return func(s *Service) {
+		s.collection = cr
+	}
+}
+
+func WithHelperProvider(h HelperProvider) Option {
+	return func(s *Service) {
+		s.helper = h
+	}
+}
+
+func (s *Service) SetCollectionRecorder(cr CollectionRecorder) {
+	s.collection = cr
+}
+
+func (s *Service) SetHelperProvider(h HelperProvider) {
+	s.helper = h
 }
 
 func WithTxProvider(tx TxProvider) Option {

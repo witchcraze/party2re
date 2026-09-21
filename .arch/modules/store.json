@@ -72,12 +72,14 @@
       ]
     },
     {
-      "flow": "RentCostume (衣装レンタル)",
+      "flow": "BuyCostumeItem (衣装アイテム購入)",
       "tx_mode": "RunInTx",
-      "source_ref": "internal/store/oracle.go#Service.RentCostume",
+      "source_ref": "internal/store/oracle.go#Service.BuyCostumeItem",
       "lock_sequence": [
         { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 2, "target": "characters", "lock_order": 2, "method": "CharacterRepository.Update", "mode": "UPDATE" }
+        { "step": 2, "target": "depots", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate (overflow only)", "mode": "SELECT ... FOR UPDATE" },
+        { "step": 3, "target": "characters", "lock_order": 2, "method": "CharacterRepository.Save", "mode": "UPDATE" },
+        { "step": 4, "target": "depots", "lock_order": 5, "method": "DepotRepository.Save (overflow only)", "mode": "UPDATE" }
       ]
     },
     {

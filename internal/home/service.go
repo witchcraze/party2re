@@ -43,6 +43,7 @@ type Service struct {
 	chapel            BlessingCleaner
 	alchemy           AlchemyCompleter
 	costume           CostumeResetter
+	costumeApplier    CostumeApplier
 	onlineCounter     OnlineCounter
 	baseSleepDuration time.Duration
 	runner            TransactionRunner

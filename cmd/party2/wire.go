@@ -126,12 +126,14 @@ func wireHooks(
 	if misc.collection != nil {
 		econ.depot.SetCollectionRecorder(misc.collection)
 		econ.shop.SetCollectionRecorder(misc.collection)
+		econ.store.SetCollectionRecorder(misc.collection)
 		if misc.eventplaza != nil {
 			misc.eventplaza.SetCollectionRecorder(misc.collection)
 		}
 	}
 	if misc.helper != nil {
 		econ.shop.SetHelperProvider(misc.helper)
+		econ.store.SetHelperProvider(misc.helper)
 		if misc.eventplaza != nil {
 			misc.eventplaza.SetHelperProvider(misc.helper)
 		}
@@ -161,6 +163,7 @@ func wireHooks(
 	}
 	if econ.store != nil {
 		soc.home.SetCostumeResetter(econ.store)
+		soc.home.SetCostumeApplier(econ.store)
 		if misc.job != nil {
 			misc.job.SetCostumeResetter(econ.store)
 		}

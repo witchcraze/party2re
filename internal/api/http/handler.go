@@ -612,12 +612,11 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("PUT /characters/{id}/store/interiors/{interior_id}/name", h.handleRenameInterior)
 	mux.HandleFunc("DELETE /characters/{id}/store/interiors", h.handleCleanInteriors)
 
-	// Oracle Shop (Town Boutique & Costume Rental)
+	// Oracle Shop (Town Boutique & Costumes)
 	mux.HandleFunc("GET /characters/{id}/oracle", h.handleGetOracleStatus)
 	mux.HandleFunc("POST /characters/{id}/oracle/talk", h.handleOracleTalk)
 	mux.HandleFunc("POST /characters/{id}/oracle/inspect", h.handleOracleInspect)
-	mux.HandleFunc("POST /characters/{id}/oracle/rent", h.handleOracleRentCostume)
-	mux.HandleFunc("POST /characters/{id}/oracle/return", h.handleOracleReturnCostume)
+	mux.HandleFunc("POST /characters/{id}/oracle/buy", h.handleOracleBuyCostume)
 	mux.HandleFunc("POST /characters/{id}/oracle/wallpaper", h.handleOracleBuyWallpaper)
 	mux.HandleFunc("POST /characters/{id}/oracle/blackmarket", h.handleOracleBlackMarket)
 
