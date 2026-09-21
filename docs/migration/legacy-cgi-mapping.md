@@ -86,7 +86,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** with complete file 
 ### CL-04: Progression, Faith & Limits (成長・職業・限界突破・信仰)
 - **Cluster Summary**: 転職、職業極め、願いの泉（SP強化）、特技設定、改名、画像変更、転生の祭壇（限界突破）、礼拝堂、天界・裏天界、小さなメダル
 - **Shared Dependencies**: `party2/lib/_data.cgi` (職業・特技定義), `party2/lib/system.cgi`
-- **Primary Domain Packages**: `internal/job/`, `internal/wishingwell/`, `internal/custom_skill/`, `internal/altar/`, `internal/chapel/`, `internal/god/`, `internal/medal/`, `internal/core/progression/`
+- **Primary Domain Packages**: `internal/job/`, `internal/wishingwell/`, `internal/customskill/`, `internal/altar/`, `internal/chapel/`, `internal/god/`, `internal/medal/`, `internal/core/progression/`
 - **Key Testing / Linter Focus**: 転生（Lv1リセット）の完全排除、Lv99→150限界突破、礼拝堂の単一祈願制約、SPステータス成長
 
 | Legacy Script | Authentic Role / Action | Go Domain Implementation | HTTP Handler & Migrations | Design Doc & OpenAPI | Status | Pitfalls / Parity Traps |
@@ -94,7 +94,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** with complete file 
 | `lib/job_change.cgi` | 転職所 (@ダーマ神官) | `internal/job/` | `internal/api/http/job.go`<br/>`migrations/007_character_jobs.sql`<br/>`migrations/059_job_change_parity.sql` | `docs/design/jobs-and-skills.md`<br/>`docs/api/paths/job.json` | Reconciling (#467) | Lv30以上条件、転職時ステータス補正 |
 | `lib/job_master.cgi` | 職業極め所 | `internal/job/` | `internal/api/http/job.go` | `docs/design/jobs-and-skills.md`<br/>`docs/api/paths/job.json` | Reconciling (#467) | 職業マスターパッシブボーナス |
 | `lib/sp_change.cgi` | 願いの泉 (@女神) | `internal/wishingwell/` | `internal/api/http/wishingwell.go`<br/>`migrations/056_eliminate_rebirth_add_sp.sql` | `docs/design/wishing-well.md`<br/>`docs/api/paths/wishing_well.json` | Compliant (#468) | SPを消費して5大ステータス強化 |
-| `lib/custom_skill.cgi` | 特技設定 (@マニャ) | `internal/custom_skill/` | `internal/api/http/custom_skill.go`<br/>`migrations/029_custom_skills.sql`<br/>`migrations/058_custom_skill_gem_synthesis.sql` | `docs/design/custom_skill.md`<br/>`docs/api/paths/custom_skill.json` | Reconciling (#469) | 呪文・特技詠唱文設定、宝玉スロット合成 |
+| `lib/custom_skill.cgi` | 特技設定 (@マニャ) | `internal/customskill/` | `internal/api/http/custom_skill.go`<br/>`migrations/029_custom_skills.sql`<br/>`migrations/058_custom_skill_gem_synthesis.sql` | `docs/design/custom_skill.md`<br/>`docs/api/paths/customskill.json` | Reconciling (#469) | 呪文・特技詠唱文設定、宝玉スロット合成 |
 | `lib/name_change.cgi` | 命名の館 (@アストロン) | `internal/character/` | `internal/api/http/character.go` | `docs/design/character-customization.md`<br/>`docs/api/paths/character.json` | Compliant | ゴールド手数料、重複ネーム検証 |
 | `lib/custom_image.cgi`, `lib/upload_image.cgi` | 画像設定所 | `internal/character/` | `internal/api/http/character.go` | `docs/design/character-customization.md`<br/>`docs/api/paths/character.json` | Compliant | カスタムアバターURL・アイコン設定 |
 | `lib/altar.cgi`, `lib/reborn.cgi` | 転生の祭壇 (@精霊ルビス) | `internal/altar/`<br/>`internal/core/progression/` | `internal/api/http/altar.go`<br/>`migrations/013_rebirth.sql`<br/>`migrations/057_altar_of_rebirth.sql` | `docs/design/altar-of-rebirth.md`<br/>`docs/design/progression.md`<br/>`docs/api/paths/altar.json` | Reconciling (#470, #471) | 🚨 Lv1転生は架空。Lv99→150限界突破（OverLevel）のみ実装 |

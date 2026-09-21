@@ -7,12 +7,12 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
-	"github.com/witchcraze/party2re/internal/custom_skill"
+	"github.com/witchcraze/party2re/internal/customskill"
 )
 
 type CustomSkillService interface {
-	GetCustomSkill(ctx context.Context, characterID string) (*custom_skill.CustomSkill, error)
-	SetCustomSkill(ctx context.Context, characterID, name, comment string, gems [3]string) (*custom_skill.CustomSkill, error)
+	GetCustomSkill(ctx context.Context, characterID string) (*customskill.CustomSkill, error)
+	SetCustomSkill(ctx context.Context, characterID, name, comment string, gems [3]string) (*customskill.CustomSkill, error)
 }
 
 func WithCustomSkill(skills CustomSkillService) Option {
@@ -70,12 +70,12 @@ func (h *Handler) handleSetCustomSkill(w http.ResponseWriter, r *http.Request) {
 		skill, err := h.customSkills.SetCustomSkill(r.Context(), char.ID, req.Name, req.Comment, gems)
 		if err != nil {
 			switch {
-			case errors.Is(err, custom_skill.ErrInvalidSkillName),
-				errors.Is(err, custom_skill.ErrInvalidSkillComment),
-				errors.Is(err, custom_skill.ErrTooManyGemSlots),
-				errors.Is(err, custom_skill.ErrCMPTooHigh),
-				errors.Is(err, custom_skill.ErrGemNotOwned),
-				errors.Is(err, custom_skill.ErrGemNotFound):
+			case errors.Is(err, customskill.ErrInvalidSkillName),
+				errors.Is(err, customskill.ErrInvalidSkillComment),
+				errors.Is(err, customskill.ErrTooManyGemSlots),
+				errors.Is(err, customskill.ErrCMPTooHigh),
+				errors.Is(err, customskill.ErrGemNotOwned),
+				errors.Is(err, customskill.ErrGemNotFound):
 				writeError(w, http.StatusBadRequest, err)
 			default:
 				writeError(w, http.StatusInternalServerError, err)

@@ -11,7 +11,7 @@ import (
 	"github.com/witchcraze/party2re/internal/boss"
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
-	"github.com/witchcraze/party2re/internal/custom_skill"
+	"github.com/witchcraze/party2re/internal/customskill"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/dungeon"
 	"github.com/witchcraze/party2re/internal/gemstore"
@@ -28,7 +28,7 @@ type cmbtServices struct {
 	dungeon     *dungeon.Service
 	replay      *replay.Service
 	challenge   *challenge.Service
-	customSkill *custom_skill.Service
+	customSkill *customskill.Service
 	party       *party.Service
 	adv         *adventure.Service
 	battle      *battle.Service
@@ -36,12 +36,12 @@ type cmbtServices struct {
 
 type customSkillGemCatalog struct{ catalog *gemstore.Catalog }
 
-func (c customSkillGemCatalog) FindGemByID(id string) (custom_skill.GemDefinition, bool) {
+func (c customSkillGemCatalog) FindGemByID(id string) (customskill.GemDefinition, bool) {
 	gem, ok := c.catalog.FindGemByID(id)
 	if !ok {
-		return custom_skill.GemDefinition{}, false
+		return customskill.GemDefinition{}, false
 	}
-	return custom_skill.GemDefinition{
+	return customskill.GemDefinition{
 		ID: gem.ID, Name: gem.Name, SlotCost: gem.SlotCost, MPCost: gem.MPCost,
 	}, true
 }
@@ -176,7 +176,7 @@ func newCmbtServices(
 		return nil, err
 	}
 
-	customSkillService, err := custom_skill.NewService(customSkillRepo, core.charRepo)
+	customSkillService, err := customskill.NewService(customSkillRepo, core.charRepo)
 	if err != nil {
 		return nil, err
 	}
