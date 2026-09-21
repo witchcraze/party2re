@@ -454,3 +454,47 @@ func TestTavern_OrderMeal_AwardsGuildPoints(t *testing.T) {
 		t.Errorf("expected 2 guild points awarded, got %d", guildAwarder.points[charID])
 	}
 }
+
+func TestService_GetMenu(t *testing.T) {
+	svc, _, _, _ := setupTestService(t)
+	menu := svc.GetMenu()
+	if len(menu) == 0 {
+		t.Fatal("expected non-empty menu from default catalog")
+	}
+	for _, item := range menu {
+		if item.ID == "" || item.Name == "" || item.Price <= 0 {
+			t.Errorf("invalid menu item: %+v", item)
+		}
+	}
+}
+
+func TestService_ResetFullness(t *testing.T) {
+	svc, charRepo, tavernRepo, _ := setupTestService(t)
+	ctx := context.Background()
+	charID := "char-reset"
+	charRepo.chars[charID] = corecharacter.Character{
+		ID:   charID,
+		Name: "ResetTester",
+	}
+
+	// 1. Invalid char ID
+	if err := svc.ResetFullness(ctx, "   "); !errors.Is(err, tavern.ErrInvalidCharacterID) {
+		t.Fatalf("expected ErrInvalidCharacterID, got %v", err)
+	}
+
+	// 2. Set fullness to true, then reset
+	tavernRepo.statuses[charID] = tavern.TavernCharacterStatus{
+		CharacterID: charID,
+		IsFull:      true,
+	}
+	if err := svc.ResetFullness(ctx, charID); err != nil {
+		t.Fatalf("ResetFullness failed: %v", err)
+	}
+	st, err := tavernRepo.GetCharacterStatus(ctx, charID)
+	if err != nil {
+		t.Fatalf("GetCharacterStatus failed: %v", err)
+	}
+	if st.IsFull {
+		t.Errorf("expected IsFull=false, got true")
+	}
+}

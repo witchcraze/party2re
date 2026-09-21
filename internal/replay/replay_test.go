@@ -363,3 +363,30 @@ func TestGetRecentReplaysByCursor(t *testing.T) {
 		t.Fatalf("unexpected page 1: %+v", page1)
 	}
 }
+
+func TestEncodeJSONAndDecodeJSON(t *testing.T) {
+	type samplePayload struct {
+		Name  string `json:"name"`
+		Count int    `json:"count"`
+	}
+
+	original := samplePayload{Name: "party", Count: 42}
+	encoded := replay.EncodeJSON(original)
+	if encoded == "" {
+		t.Fatal("expected non-empty JSON string")
+	}
+
+	decoded, err := replay.DecodeJSON[samplePayload](encoded)
+	if err != nil {
+		t.Fatalf("DecodeJSON failed: %v", err)
+	}
+	if decoded != original {
+		t.Fatalf("expected %+v, got %+v", original, decoded)
+	}
+
+	// Invalid JSON should return an error
+	_, err = replay.DecodeJSON[samplePayload]("invalid json {")
+	if err == nil {
+		t.Fatal("expected error decoding invalid JSON, got nil")
+	}
+}
