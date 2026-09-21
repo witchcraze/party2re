@@ -89,7 +89,7 @@ func (s *Service) BuildHouse(ctx context.Context, characterID, townID, houseStyl
 		}
 
 		jstExpires := expiresAt.In(timer.JST)
-		msg := fmt.Sprintf("<b>%s の家</b>の所有期間は %d月%d日%d時 までです", ownerName, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
+		msg := fmt.Sprintf("%s の家の所有期間は %d月%d日%d時 までです", ownerName, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
 
 		return &HomeCheckResult{
 			CharacterID: characterID,
@@ -164,7 +164,7 @@ func (s *Service) BuildHouse(ctx context.Context, characterID, townID, houseStyl
 	}
 
 	jstExpires := expiresAt.In(timer.JST)
-	msg := fmt.Sprintf("<b>%s の家</b>の所有期間は %d月%d日%d時 までです", char.Name, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
+	msg := fmt.Sprintf("%s の家の所有期間は %d月%d日%d時 までです", char.Name, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
 
 	return &HomeCheckResult{
 		CharacterID: characterID,
@@ -211,7 +211,7 @@ func (s *Service) CheckHouse(ctx context.Context, targetNameOrID string) (*HomeC
 		expiresAt = *h.ExpiresAt
 	}
 	jstExpires := expiresAt.In(timer.JST)
-	msg := fmt.Sprintf("<b>%s の家</b>の所有期間は %d月%d日%d時 までです", char.Name, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
+	msg := fmt.Sprintf("%s の家の所有期間は %d月%d日%d時 までです", char.Name, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
 
 	return &HomeCheckResult{
 		CharacterID: char.ID,
@@ -247,7 +247,7 @@ func (s *Service) ListTownHouses(ctx context.Context, townID string) ([]HomeChec
 			exp = *h.ExpiresAt
 		}
 		jstExpires := exp.In(timer.JST)
-		msg := fmt.Sprintf("<b>%s の家</b>の所有期間は %d月%d日%d時 までです", ownerName, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
+		msg := fmt.Sprintf("%s の家の所有期間は %d月%d日%d時 までです", ownerName, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
 		results = append(results, HomeCheckResult{
 			CharacterID: h.CharacterID,
 			OwnerName:   ownerName,

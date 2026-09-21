@@ -72,7 +72,7 @@ func (s *stubPlantationService) Harvest(ctx context.Context, characterID string)
 		Yields: []plantation.HarvestYield{
 			{ItemID: "item-001", ItemName: "薬草", Quantity: 1},
 		},
-		Message: "収穫したよ！<br>薬草を1個<br>倉庫に送っておいたよ",
+		Message: "収穫したよ！\n薬草を1個\n倉庫に送っておいたよ",
 	}, nil
 }
 

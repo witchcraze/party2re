@@ -1015,13 +1015,17 @@ func (h *Handler) handlePurchase(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusUnprocessableEntity, err)
 			return
 		}
+		npcMsg := "purchased successfully"
+		if result.TransferredToDepot {
+			npcMsg = "delivered to depot"
+		}
 		writeJSON(w, http.StatusOK, purchaseResponse{
 			CharacterID:        result.Character.ID,
 			ItemDefinitionID:   result.ItemInstance.DefinitionID,
 			Quantity:           result.ItemInstance.Quantity,
 			TotalCost:          result.TotalPrice,
 			TransferredToDepot: result.TransferredToDepot,
-			NPCMessage:         result.NPCMessage,
+			NPCMessage:         npcMsg,
 		})
 	})
 }

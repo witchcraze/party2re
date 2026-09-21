@@ -2,6 +2,7 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -99,9 +100,22 @@ func (h *Handler) handleShopBatchPurchase(w http.ResponseWriter, r *http.Request
 			CharacterID:    result.Character.ID,
 			TotalPrice:     result.TotalPrice,
 			PurchasedCount: len(result.Purchased),
-			NPCMessage:     result.NPCMessage,
+			NPCMessage:     batchPurchaseNPCMessage(shopType, char.Name),
 		})
 	})
+}
+
+func batchPurchaseNPCMessage(shopType shop.ShopType, characterName string) string {
+	switch shopType {
+	case shop.ShopTypeWeapon:
+		return "まいど！預かり所に送っておいたぜ！"
+	case shop.ShopTypeArmor:
+		return "お買い上げありがとうッス！預かり所に送っておいたッス！"
+	case shop.ShopTypeItem:
+		return fmt.Sprintf("%sニャンの預かり所の方に投げましたニャ！", characterName)
+	default:
+		return "Transferred to depot."
+	}
 }
 
 func (h *Handler) handleShopInspectNPC(w http.ResponseWriter, r *http.Request) {

@@ -59,7 +59,6 @@ func TestShopEndpoints(t *testing.T) {
 				Character:  corecharacter.Character{ID: characterID},
 				Purchased:  make([]coreitem.Instance, count),
 				TotalPrice: total,
-				NPCMessage: "batch delivered to depot",
 			}, nil
 		},
 		inspectNPCFn: func(_ context.Context, shopType shop.ShopType, _ string) (shop.NPCInspectResult, error) {
@@ -83,7 +82,6 @@ func TestShopEndpoints(t *testing.T) {
 				ItemInstance:       coreitem.Instance{ID: "inst-1", DefinitionID: itemID, Quantity: qty},
 				TotalPrice:         20 * qty,
 				TransferredToDepot: true,
-				NPCMessage:         "delivered to depot",
 			}, nil
 		},
 	}

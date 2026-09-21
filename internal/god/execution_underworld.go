@@ -54,7 +54,7 @@ func (s *Service) executeUnderworldWish(
 				MaxTier:     MaxLimitBreakTier,
 			},
 			Message:      fmt.Sprintf("預かり所の預入上限が +50 拡張されました！ (段階: %d/5)", char.OverDepot),
-			NPCSpeech:    fmt.Sprintf("ふむ。%sの願いは「もっとアイテムを預けたい」だな。<br />上限を広げてやったぞ…。さらばだ…", char.Name),
+			NPCSpeech:    fmt.Sprintf("ふむ。%sの願いは「もっとアイテムを預けたい」だな。\n上限を広げてやったぞ…。さらばだ…", char.Name),
 			NextLocation: "home",
 		}
 		return nil
@@ -81,7 +81,7 @@ func (s *Service) executeUnderworldWish(
 				MaxTier:     MaxLimitBreakTier,
 			},
 			Message:      fmt.Sprintf("モンスター預入上限が +50 拡張されました！ (段階: %d/5)", char.OverMonster),
-			NPCSpeech:    fmt.Sprintf("ふむ。%sの願いは「もっとモンスターを預けたい」だな。<br />上限を広げてやったぞ…。さらばだ…", char.Name),
+			NPCSpeech:    fmt.Sprintf("ふむ。%sの願いは「もっとモンスターを預けたい」だな。\n上限を広げてやったぞ…。さらばだ…", char.Name),
 			NextLocation: "home",
 		}
 		return nil
@@ -108,7 +108,7 @@ func (s *Service) executeUnderworldWish(
 				MaxTier:     MaxLimitBreakTier,
 			},
 			Message:      fmt.Sprintf("職業記憶上限が +1 拡張されました！ (段階: %d/5)", char.OverFuture),
-			NPCSpeech:    fmt.Sprintf("ふむ。%sの願いは「もっと職業を覚えたい」だな。<br />上限を広げてやったぞ…。さらばだ…", char.Name),
+			NPCSpeech:    fmt.Sprintf("ふむ。%sの願いは「もっと職業を覚えたい」だな。\n上限を広げてやったぞ…。さらばだ…", char.Name),
 			NextLocation: "home",
 		}
 		return nil
@@ -135,7 +135,7 @@ func (s *Service) executeUnderworldWish(
 				MaxTier:     MaxLimitBreakTier,
 			},
 			Message:      fmt.Sprintf("フリーマーケット出品枠が +1 拡張されました！ (段階: %d/5, 最大 %d 出品)", char.OverFlea, 5+char.OverFlea),
-			NPCSpeech:    fmt.Sprintf("ふむ。%sの願いは「もっとフリーマーケットで出品したい」だな。<br />上限を広げてやったぞ…。さらばだ…", char.Name),
+			NPCSpeech:    fmt.Sprintf("ふむ。%sの願いは「もっとフリーマーケットで出品したい」だな。\n上限を広げてやったぞ…。さらばだ…", char.Name),
 			NextLocation: "home",
 		}
 		return nil
@@ -162,7 +162,7 @@ func (s *Service) executeUnderworldWish(
 				MaxTier:     MaxLimitBreakTier,
 			},
 			Message:      fmt.Sprintf("店舗出品枠が +1 拡張されました！ (段階: %d/5)", char.OverStore),
-			NPCSpeech:    fmt.Sprintf("ふむ。%sの願いは「もっとお店で出品したい」だな。<br />上限を広げてやったぞ…。さらばだ…", char.Name),
+			NPCSpeech:    fmt.Sprintf("ふむ。%sの願いは「もっとお店で出品したい」だな。\n上限を広げてやったぞ…。さらばだ…", char.Name),
 			NextLocation: "home",
 		}
 		return nil

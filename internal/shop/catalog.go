@@ -3,7 +3,6 @@ package shop
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/witchcraze/party2re/internal/core/item"
 )
@@ -177,44 +176,5 @@ func GetInspectDialogue(shopType ShopType) (dialogue string, hint string) {
 		return "ほえ？なんでしょうかぁ？", SecretShopHint
 	default:
 		return "", ""
-	}
-}
-
-func SinglePurchaseNPCMessage(shopType ShopType, itemName, characterName string, sentToDepot bool) string {
-	switch shopType {
-	case ShopTypeWeapon:
-		if sentToDepot {
-			return fmt.Sprintf("まいど！<b>%s</b>は%sの預かり所に送っておいたぜ！", itemName, characterName)
-		}
-		return fmt.Sprintf("まいど！<b>%s</b>だ！受けとってくれ！", itemName)
-	case ShopTypeArmor:
-		if sentToDepot {
-			return fmt.Sprintf("お買い上げありがとうッス！<b>%s</b>は%sさんの預かり所に送っておいたッス！", itemName, characterName)
-		}
-		return fmt.Sprintf("お買い上げありがとうッス！<b>%s</b>どうぞ着てくださいッス", itemName)
-	case ShopTypeItem:
-		if sentToDepot {
-			return fmt.Sprintf("<b>%s</b>は%sニャンの預かり所の方に投げましたニャ！<br>", itemName, characterName)
-		}
-		return fmt.Sprintf("<b>%s</b>ですね。はい、どうぞ！<br>", itemName)
-	default:
-		if sentToDepot {
-			return fmt.Sprintf("%s was transferred to depot.", itemName)
-		}
-		return fmt.Sprintf("%s purchased successfully.", itemName)
-	}
-}
-
-func BatchPurchaseNPCMessage(shopType ShopType, characterName string, itemNames []string) string {
-	list := strings.Join(itemNames, "<br>")
-	switch shopType {
-	case ShopTypeWeapon:
-		return fmt.Sprintf("まいど！預かり所に送っておいたぜ！<br>-------購入リスト-------<br>%s", list)
-	case ShopTypeArmor:
-		return fmt.Sprintf("お買い上げありがとうッス！預かり所に送っておいたッス！<br>-------購入リスト-------<br>%s", list)
-	case ShopTypeItem:
-		return fmt.Sprintf("%sニャンの預かり所の方に投げましたニャ！<br>-------購入リスト-------<br>%s", characterName, list)
-	default:
-		return fmt.Sprintf("Transferred to depot:<br>%s", list)
 	}
 }
