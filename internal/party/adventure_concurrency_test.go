@@ -331,3 +331,39 @@ func TestValkeyRepository_WithPartyAdventureLock_Conflict(t *testing.T) {
 		t.Fatalf("expected subsequent lock acquisition to succeed, got %v", errSubsequent)
 	}
 }
+
+// TestValkeyRepository_WithPartyAdventureLock_InstanceIsolation asserts that separate
+// in-memory ValkeyRepository instances have isolated lock states and do not share global mutable state.
+func TestValkeyRepository_WithPartyAdventureLock_InstanceIsolation(t *testing.T) {
+	ctx := context.Background()
+	repo1 := party.NewValkeyRepository(nil)
+	repo2 := party.NewValkeyRepository(nil)
+	partyID := fmt.Sprintf("isolated-party-%d", time.Now().UnixNano())
+
+	holdLock := make(chan struct{})
+	repo1Acquired := make(chan struct{})
+
+	go func() {
+		_ = repo1.WithPartyAdventureLock(ctx, partyID, func(_ context.Context) error {
+			close(repo1Acquired)
+			<-holdLock
+			return nil
+		})
+	}()
+
+	<-repo1Acquired
+	defer close(holdLock)
+
+	// repo2 has an independent in-memory state; locking the same partyID must succeed on repo2.
+	repo2Called := false
+	err := repo2.WithPartyAdventureLock(ctx, partyID, func(_ context.Context) error {
+		repo2Called = true
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("expected repo2 lock acquisition to succeed on separate repository instance, got %v", err)
+	}
+	if !repo2Called {
+		t.Fatalf("expected repo2 lock body to be executed")
+	}
+}

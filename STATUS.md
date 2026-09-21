@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #736 — [Architecture] Governance: Clarify package boundaries and naming for internal/helperquest (Handyman Quests)
+Last updated: Issue #677 — [Chore] Party: Encapsulate in-memory adventure lock state inside ValkeyRepository struct
 
 ## Current Phase
 
