@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #286 — [Chore] Test/Bank+Auction: Add error-branch tests for Deposit, Withdraw, Transfer, SendItem, and SendMoney
+Last updated: Issue #751 — [Chore] Core/Timer: Add Valkey backend unit tests to improve test coverage
 
 ## Current Phase
 
