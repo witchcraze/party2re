@@ -374,7 +374,7 @@ func TestServiceAllJobsCompletionNotification(t *testing.T) {
 	if len(newsPub.published) != 1 {
 		t.Fatalf("expected 1 news article, got %d", len(newsPub.published))
 	}
-	expectedContent := "<span class=\"comp\">Heroが全ての職業をマスターしました！</span>"
+	expectedContent := "Heroが全ての職業をマスターしました！"
 	if newsPub.published[0] != fmt.Sprintf("job|全ジョブコンプリート|%s|@システム", expectedContent) {
 		t.Fatalf("unexpected news article: %s", newsPub.published[0])
 	}

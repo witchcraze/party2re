@@ -236,7 +236,7 @@ func (s *Service) BuildStore(ctx context.Context, characterID, townID, houseStyl
 		}
 
 		jstExpires := expiresAt.In(timer.JST)
-		msg := fmt.Sprintf("<b>%s の店</b>を建てました！店の所有期間は %d月%d日%d時 までです",
+		msg := fmt.Sprintf("%s の店を建てました！店の所有期間は %d月%d日%d時 までです",
 			char.Name, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
 
 		res = &StoreCheckResult{
@@ -332,7 +332,7 @@ func (s *Service) CheckStore(ctx context.Context, characterID string) (*StoreChe
 
 	t, _ := town.GetTown(st.TownID)
 	jstExpires := st.ExpiresAt.In(timer.JST)
-	msg := fmt.Sprintf("<b>%s</b>の所有期間は %d月%d日%d時 までです",
+	msg := fmt.Sprintf("%sの所有期間は %d月%d日%d時 までです",
 		st.StoreName, jstExpires.Month(), jstExpires.Day(), jstExpires.Hour())
 
 	return &StoreCheckResult{

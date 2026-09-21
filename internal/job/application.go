@@ -351,7 +351,7 @@ func (s *Service) checkAndNotifyCompletion(ctx context.Context, charName string,
 				ctx,
 				"job",
 				"全ジョブコンプリート",
-				fmt.Sprintf("<span class=\"comp\">%sが全ての職業をマスターしました！</span>", displayName),
+				fmt.Sprintf("%sが全ての職業をマスターしました！", displayName),
 				"@システム",
 				time.Now().UTC(),
 			)

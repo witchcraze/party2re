@@ -19,7 +19,6 @@ type PurchaseResult struct {
 	ItemInstance       item.Instance
 	TotalPrice         int
 	TransferredToDepot bool
-	NPCMessage         string
 }
 
 type BatchPurchaseItemRequest struct {
@@ -32,7 +31,6 @@ type BatchPurchaseResult struct {
 	Depot      depot.Depot             `json:"depot"`
 	Purchased  []item.Instance         `json:"purchased"`
 	TotalPrice int                     `json:"total_price"`
-	NPCMessage string                  `json:"npc_message"`
 }
 
 func shopTypeFromKind(kind int) ShopType {
@@ -141,14 +139,12 @@ func (s *Service) Purchase(ctx context.Context, characterID string, itemDefiniti
 				_ = s.recorder.RecordItemDiscovered(txCtx, characterID, definition.ID, definition.Name, definition.Category())
 			}
 
-			st := shopTypeFromKind(kind)
 			result = PurchaseResult{
 				Character:          res.Character,
 				Inventory:          res.Inventory,
 				ItemInstance:       *res.GrantedItem,
 				TotalPrice:         totalPrice,
 				TransferredToDepot: false,
-				NPCMessage:         SinglePurchaseNPCMessage(st, definition.Name, res.Character.Name, false),
 			}
 			return nil
 		}
@@ -199,7 +195,6 @@ func (s *Service) Purchase(ctx context.Context, characterID string, itemDefiniti
 			return err
 		}
 
-		st := shopTypeFromKind(kind)
 		result = PurchaseResult{
 			Character:          res.Character,
 			Inventory:          inv,
@@ -207,7 +202,6 @@ func (s *Service) Purchase(ctx context.Context, characterID string, itemDefiniti
 			ItemInstance:       inst,
 			TotalPrice:         totalPrice,
 			TransferredToDepot: true,
-			NPCMessage:         SinglePurchaseNPCMessage(st, definition.Name, res.Character.Name, true),
 		}
 		return nil
 	})
@@ -328,7 +322,6 @@ func (s *Service) BatchPurchase(ctx context.Context, characterID string, shopTyp
 			Depot:      dep,
 			Purchased:  instances,
 			TotalPrice: totalPrice,
-			NPCMessage: BatchPurchaseNPCMessage(shopType, res.Character.Name, itemNames),
 		}
 		return nil
 	})
