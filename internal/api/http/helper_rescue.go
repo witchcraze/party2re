@@ -8,7 +8,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
-	"github.com/witchcraze/party2re/internal/helper"
+	"github.com/witchcraze/party2re/internal/helperquest"
 )
 
 type completeHelperQuestRequest struct {
@@ -28,7 +28,7 @@ func (h *Handler) handleListHelperQuests(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if quests == nil {
-		quests = []helper.Quest{}
+		quests = []helperquest.Quest{}
 	}
 	writeJSON(w, http.StatusOK, quests)
 }

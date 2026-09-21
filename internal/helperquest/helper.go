@@ -1,4 +1,7 @@
-package helper
+// Package helperquest implements the legacy Party2 Helper Quests (手助けクエスト / 便利屋クエスト, lib/helper.cgi).
+// It manages community fetch quests for weapons, armors, items, and monsters, offering alchemy rewards and guild points.
+// This is a dedicated game feature domain package, NOT a generic utility package.
+package helperquest
 
 import (
 	"crypto/rand"

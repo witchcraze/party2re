@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/database"
-	"github.com/witchcraze/party2re/internal/helper"
+	"github.com/witchcraze/party2re/internal/helperquest"
 )
 
 func TestHelperRepository_Integration(t *testing.T) {
@@ -29,10 +29,10 @@ func TestHelperRepository_Integration(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Second)
 
-	q := helper.Quest{
+	q := helperquest.Quest{
 		ID:            "test-q-" + now.Format("150405"),
 		Title:         "テスト依頼その1",
-		Kind:          helper.KindWeapon,
+		Kind:          helperquest.KindWeapon,
 		TargetID:      "weapon-01",
 		TargetName:    "ヒノキの棒",
 		RequiredCount: 3,

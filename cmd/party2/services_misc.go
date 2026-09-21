@@ -16,7 +16,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/eventplaza"
 	"github.com/witchcraze/party2re/internal/god"
-	"github.com/witchcraze/party2re/internal/helper"
+	"github.com/witchcraze/party2re/internal/helperquest"
 	"github.com/witchcraze/party2re/internal/job"
 	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/maintenance"
@@ -33,7 +33,7 @@ type miscServices struct {
 	eventplaza  *eventplaza.Service
 	secretshop  *secretshop.Service
 	rescue      *rescue.Service
-	helper      *helper.Service
+	helper      *helperquest.Service
 	job         *job.Service
 	chapel      *chapel.Service
 	collection  *collection.Service
@@ -125,13 +125,13 @@ func newMiscServices(
 	if err != nil {
 		return nil, err
 	}
-	helperService := helper.NewService(
+	helperService := helperquest.NewService(
 		helperRepo,
 		core.charRepo,
 		core.invRepo,
 		nil,
 		core.txProvider,
-		helper.WithDepotRepository(econ.depotRepo),
+		helperquest.WithDepotRepository(econ.depotRepo),
 	)
 
 	futureMemoryRepo, err := database.NewFutureMemoryRepository(db)

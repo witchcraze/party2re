@@ -17,7 +17,7 @@ import (
 	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
-	"github.com/witchcraze/party2re/internal/helper"
+	"github.com/witchcraze/party2re/internal/helperquest"
 	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/ratelimit"
 	"github.com/witchcraze/party2re/internal/rescue"
@@ -94,8 +94,8 @@ type ShopService interface {
 
 // HelperService defines the helper quest operations exposed over HTTP.
 type HelperService interface {
-	ListQuests(ctx context.Context, now time.Time) ([]helper.Quest, error)
-	CompleteQuest(ctx context.Context, characterID, questID string, now time.Time) (helper.CompletionResult, error)
+	ListQuests(ctx context.Context, now time.Time) ([]helperquest.Quest, error)
+	CompleteQuest(ctx context.Context, characterID, questID string, now time.Time) (helperquest.CompletionResult, error)
 }
 
 // RescueService defines the emergency rescue operations exposed over HTTP.

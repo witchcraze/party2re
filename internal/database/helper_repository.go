@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/witchcraze/party2re/internal/helper"
+	"github.com/witchcraze/party2re/internal/helperquest"
 )
 
 type HelperRepository struct {
@@ -20,7 +20,7 @@ func NewHelperRepository(db *sql.DB) (*HelperRepository, error) {
 	return &HelperRepository{db: db}, nil
 }
 
-func (r *HelperRepository) Save(ctx context.Context, q helper.Quest) error {
+func (r *HelperRepository) Save(ctx context.Context, q helperquest.Quest) error {
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO helper_quests (
 			id, title, kind, target_id, target_name, required_count,
@@ -34,8 +34,8 @@ func (r *HelperRepository) Save(ctx context.Context, q helper.Quest) error {
 	return err
 }
 
-func (r *HelperRepository) FindByID(ctx context.Context, id string) (helper.Quest, error) {
-	var q helper.Quest
+func (r *HelperRepository) FindByID(ctx context.Context, id string) (helperquest.Quest, error) {
+	var q helperquest.Quest
 	var kindInt int
 	var completedBy sql.NullString
 	var completedAt sql.NullTime
@@ -50,13 +50,13 @@ func (r *HelperRepository) FindByID(ctx context.Context, id string) (helper.Ques
 		&q.RewardItemID, &q.IsRare, &q.IsGuild, &q.ExpiresAt, &completedAt, &completedBy, &q.CreatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
-		return helper.Quest{}, helper.ErrQuestNotFound
+		return helperquest.Quest{}, helperquest.ErrQuestNotFound
 	}
 	if err != nil {
-		return helper.Quest{}, err
+		return helperquest.Quest{}, err
 	}
 
-	q.Kind = helper.QuestKind(kindInt)
+	q.Kind = helperquest.QuestKind(kindInt)
 	if completedAt.Valid {
 		q.CompletedAt = &completedAt.Time
 	}
@@ -66,7 +66,7 @@ func (r *HelperRepository) FindByID(ctx context.Context, id string) (helper.Ques
 	return q, nil
 }
 
-func (r *HelperRepository) ListActive(ctx context.Context, now time.Time) ([]helper.Quest, error) {
+func (r *HelperRepository) ListActive(ctx context.Context, now time.Time) ([]helperquest.Quest, error) {
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, title, kind, target_id, target_name, required_count,
 		       reward_item_id, is_rare, is_guild, expires_at, completed_at, completed_by, created_at
@@ -79,9 +79,9 @@ func (r *HelperRepository) ListActive(ctx context.Context, now time.Time) ([]hel
 	}
 	defer rows.Close()
 
-	var list []helper.Quest
+	var list []helperquest.Quest
 	for rows.Next() {
-		var q helper.Quest
+		var q helperquest.Quest
 		var kindInt int
 		var completedBy sql.NullString
 		var completedAt sql.NullTime
@@ -93,7 +93,7 @@ func (r *HelperRepository) ListActive(ctx context.Context, now time.Time) ([]hel
 			return nil, err
 		}
 
-		q.Kind = helper.QuestKind(kindInt)
+		q.Kind = helperquest.QuestKind(kindInt)
 		if completedAt.Valid {
 			q.CompletedAt = &completedAt.Time
 		}

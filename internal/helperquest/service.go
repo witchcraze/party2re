@@ -1,4 +1,5 @@
-package helper
+// Package helperquest implements the helper quest service and repository interfaces.
+package helperquest
 
 import (
 	"context"

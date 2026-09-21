@@ -1,4 +1,4 @@
-package helper_test
+package helperquest_test
 
 import (
 	"context"
@@ -12,19 +12,19 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
-	"github.com/witchcraze/party2re/internal/helper"
+	"github.com/witchcraze/party2re/internal/helperquest"
 )
 
 type mockQuestRepo struct {
-	quests              map[string]helper.Quest
+	quests              map[string]helperquest.Quest
 	failReplacementSave bool
 }
 
 func newMockQuestRepo() *mockQuestRepo {
-	return &mockQuestRepo{quests: make(map[string]helper.Quest)}
+	return &mockQuestRepo{quests: make(map[string]helperquest.Quest)}
 }
 
-func (r *mockQuestRepo) Save(_ context.Context, q helper.Quest) error {
+func (r *mockQuestRepo) Save(_ context.Context, q helperquest.Quest) error {
 	if r.failReplacementSave && q.CompletedAt == nil {
 		return errors.New("failed to save replacement quest")
 	}
@@ -32,16 +32,16 @@ func (r *mockQuestRepo) Save(_ context.Context, q helper.Quest) error {
 	return nil
 }
 
-func (r *mockQuestRepo) FindByID(_ context.Context, id string) (helper.Quest, error) {
+func (r *mockQuestRepo) FindByID(_ context.Context, id string) (helperquest.Quest, error) {
 	q, ok := r.quests[id]
 	if !ok {
-		return helper.Quest{}, helper.ErrQuestNotFound
+		return helperquest.Quest{}, helperquest.ErrQuestNotFound
 	}
 	return q, nil
 }
 
-func (r *mockQuestRepo) ListActive(_ context.Context, now time.Time) ([]helper.Quest, error) {
-	var list []helper.Quest
+func (r *mockQuestRepo) ListActive(_ context.Context, now time.Time) ([]helperquest.Quest, error) {
+	var list []helperquest.Quest
 	for _, q := range r.quests {
 		if q.CompletedAt == nil && q.ExpiresAt.After(now) {
 			list = append(list, q)
@@ -161,19 +161,19 @@ func TestCompleteQuest_RewardToInventory(t *testing.T) {
 	invRepo := &mockInvRepo{inventories: map[string]coreinventory.Inventory{"char-1": inv}}
 	depotRepo := newMockDepotRepo()
 
-	svc := helper.NewService(
+	svc := helperquest.NewService(
 		questRepo,
 		charRepo,
 		invRepo,
 		nil,
 		&mockTxProvider{},
-		helper.WithDepotRepository(depotRepo),
+		helperquest.WithDepotRepository(depotRepo),
 	)
 
-	quest := helper.Quest{
+	quest := helperquest.Quest{
 		ID:            "q-normal",
 		Title:         "店を始めたいのでその1",
-		Kind:          helper.KindWeapon,
+		Kind:          helperquest.KindWeapon,
 		TargetID:      "weapon-01",
 		TargetName:    "ヒノキの棒",
 		RequiredCount: 2,
@@ -229,19 +229,19 @@ func TestCompleteQuest_RewardOverflowToDepotWhenInventoryFull(t *testing.T) {
 	invRepo := &mockInvRepo{inventories: map[string]coreinventory.Inventory{"char-1": inv}}
 	depotRepo := newMockDepotRepo()
 
-	svc := helper.NewService(
+	svc := helperquest.NewService(
 		questRepo,
 		charRepo,
 		invRepo,
 		nil,
 		&mockTxProvider{},
-		helper.WithDepotRepository(depotRepo),
+		helperquest.WithDepotRepository(depotRepo),
 	)
 
-	quest := helper.Quest{
+	quest := helperquest.Quest{
 		ID:            "q-overflow",
 		Title:         "店を始めたいのでその2",
-		Kind:          helper.KindWeapon,
+		Kind:          helperquest.KindWeapon,
 		TargetID:      "weapon-01",
 		TargetName:    "ヒノキの棒",
 		RequiredCount: 1,
@@ -317,19 +317,19 @@ func TestCompleteQuest_DepotFullRollback(t *testing.T) {
 	_ = depotRepo.Save(ctx, fullDepot)
 
 	txProvider := &mockTxProvider{}
-	svc := helper.NewService(
+	svc := helperquest.NewService(
 		questRepo,
 		charRepo,
 		invRepo,
 		nil,
 		txProvider,
-		helper.WithDepotRepository(depotRepo),
+		helperquest.WithDepotRepository(depotRepo),
 	)
 
-	quest := helper.Quest{
+	quest := helperquest.Quest{
 		ID:            "q-depot-full",
 		Title:         "店を始めたいのでその3",
-		Kind:          helper.KindWeapon,
+		Kind:          helperquest.KindWeapon,
 		TargetID:      "weapon-01",
 		TargetName:    "ヒノキの棒",
 		RequiredCount: 1,
@@ -344,7 +344,7 @@ func TestCompleteQuest_DepotFullRollback(t *testing.T) {
 		t.Fatal("expected error when both inventory and depot are full, got nil")
 	}
 
-	if !errors.Is(err, depot.ErrDepotFull) && !errors.Is(err, helper.ErrDepotFull) {
+	if !errors.Is(err, depot.ErrDepotFull) && !errors.Is(err, helperquest.ErrDepotFull) {
 		t.Fatalf("expected ErrDepotFull, got: %v", err)
 	}
 
@@ -371,7 +371,7 @@ func TestCompleteQuest_NilDepotRepo_FullInventoryReturnsError(t *testing.T) {
 
 	// No depot repository configured (nil)
 	txProvider := &mockTxProvider{}
-	svc := helper.NewService(
+	svc := helperquest.NewService(
 		questRepo,
 		charRepo,
 		invRepo,
@@ -379,10 +379,10 @@ func TestCompleteQuest_NilDepotRepo_FullInventoryReturnsError(t *testing.T) {
 		txProvider,
 	)
 
-	quest := helper.Quest{
+	quest := helperquest.Quest{
 		ID:            "q-no-depot",
 		Title:         "店を始めたいのでその4",
-		Kind:          helper.KindWeapon,
+		Kind:          helperquest.KindWeapon,
 		TargetID:      "weapon-01",
 		TargetName:    "ヒノキの棒",
 		RequiredCount: 1,
@@ -397,7 +397,7 @@ func TestCompleteQuest_NilDepotRepo_FullInventoryReturnsError(t *testing.T) {
 		t.Fatal("expected error when inventory is full and no depot configured, got nil")
 	}
 
-	if !errors.Is(err, depot.ErrDepotFull) && !errors.Is(err, helper.ErrDepotFull) {
+	if !errors.Is(err, depot.ErrDepotFull) && !errors.Is(err, helperquest.ErrDepotFull) {
 		t.Fatalf("expected ErrDepotFull, got: %v", err)
 	}
 
@@ -423,7 +423,7 @@ func TestCompleteQuest_ReplacementQuestSaveErrorPropagates(t *testing.T) {
 	invRepo := &mockInvRepo{inventories: map[string]coreinventory.Inventory{"char-1": inv}}
 	txProvider := &mockTxProvider{}
 
-	svc := helper.NewService(
+	svc := helperquest.NewService(
 		questRepo,
 		charRepo,
 		invRepo,
@@ -431,10 +431,10 @@ func TestCompleteQuest_ReplacementQuestSaveErrorPropagates(t *testing.T) {
 		txProvider,
 	)
 
-	quest := helper.Quest{
+	quest := helperquest.Quest{
 		ID:            "q-rot-fail",
 		Title:         "店を始めたいのでその5",
-		Kind:          helper.KindWeapon,
+		Kind:          helperquest.KindWeapon,
 		TargetID:      "weapon-01",
 		TargetName:    "ヒノキの棒",
 		RequiredCount: 2,
