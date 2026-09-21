@@ -3,7 +3,6 @@ package shop
 import (
 	"context"
 	"errors"
-	"math"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -36,17 +35,6 @@ type BatchPurchaseResult struct {
 	NPCMessage string                  `json:"npc_message"`
 }
 
-func itemKindFromSlot(slot item.Slot) int {
-	switch slot {
-	case item.SlotMainHand:
-		return 1 // Weapon
-	case item.SlotOffHand, item.SlotBody, item.SlotAccessory:
-		return 2 // Armor / Shield / Accessory
-	default:
-		return 3 // Consumable / Other item
-	}
-}
-
 func shopTypeFromKind(kind int) ShopType {
 	switch kind {
 	case 1:
@@ -55,17 +43,6 @@ func shopTypeFromKind(kind int) ShopType {
 		return ShopTypeArmor
 	default:
 		return ShopTypeItem
-	}
-}
-
-func categoryForSlot(slot item.Slot) string {
-	switch slot {
-	case item.SlotMainHand:
-		return "weapon"
-	case item.SlotOffHand, item.SlotBody, item.SlotAccessory:
-		return "armor"
-	default:
-		return "item"
 	}
 }
 
@@ -131,11 +108,11 @@ func (s *Service) Purchase(ctx context.Context, characterID string, itemDefiniti
 			return err
 		}
 
-		kind := itemKindFromSlot(definition.Slot)
+		kind := definition.Kind()
 		occupied := false
 		for _, inst := range inv.Items {
 			def, err := s.catalog.FindByID(inst.DefinitionID)
-			if err == nil && itemKindFromSlot(def.Slot) == kind {
+			if err == nil && def.Kind() == kind {
 				occupied = true
 				break
 			}
@@ -161,7 +138,7 @@ func (s *Service) Purchase(ctx context.Context, characterID string, itemDefiniti
 
 			if s.recorder != nil {
 				//lint:ignore error-swallow best-effort collection discovery
-				_ = s.recorder.RecordItemDiscovered(txCtx, characterID, definition.ID, definition.Name, categoryForSlot(definition.Slot))
+				_ = s.recorder.RecordItemDiscovered(txCtx, characterID, definition.ID, definition.Name, definition.Category())
 			}
 
 			st := shopTypeFromKind(kind)
@@ -283,10 +260,11 @@ func (s *Service) BatchPurchase(ctx context.Context, characterID string, shopTyp
 		}
 
 		// Check overflow in cumulative sum
-		if totalPrice > math.MaxInt-lineTotal {
+		newTotal, err := economy.SafeAdd(totalPrice, lineTotal)
+		if err != nil {
 			return BatchPurchaseResult{}, ErrPriceOverflow
 		}
-		totalPrice += lineTotal
+		totalPrice = newTotal
 
 		inst, err := item.NewInstance(it.ItemDefinitionID, it.Quantity)
 		if err != nil {

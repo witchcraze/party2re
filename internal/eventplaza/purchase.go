@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
@@ -75,10 +74,10 @@ func (s *Service) PurchaseBazaarItem(
 		}
 	}
 
-	if targetItem.Price > math.MaxInt/quantity {
+	totalCost, err := economy.SafeMultiply(targetItem.Price, quantity)
+	if err != nil {
 		return BazaarPurchaseResult{}, ErrPriceOverflow
 	}
-	totalCost := targetItem.Price * quantity
 
 	var result BazaarPurchaseResult
 

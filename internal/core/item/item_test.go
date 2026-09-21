@@ -212,3 +212,37 @@ func TestIsStackableID(t *testing.T) {
 		t.Errorf("expected potion-healing to be stackable")
 	}
 }
+
+func TestSlot_KindAndCategory(t *testing.T) {
+	tests := []struct {
+		slot         Slot
+		wantKind     int
+		wantCategory string
+	}{
+		{SlotMainHand, 1, "weapon"},
+		{SlotOffHand, 2, "armor"},
+		{SlotBody, 2, "armor"},
+		{SlotAccessory, 2, "armor"},
+		{SlotNone, 3, "item"},
+		{Slot("unknown"), 3, "item"},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.slot), func(t *testing.T) {
+			if got := tt.slot.Kind(); got != tt.wantKind {
+				t.Errorf("Slot(%q).Kind() = %d, want %d", tt.slot, got, tt.wantKind)
+			}
+			if got := tt.slot.Category(); got != tt.wantCategory {
+				t.Errorf("Slot(%q).Category() = %q, want %q", tt.slot, got, tt.wantCategory)
+			}
+
+			def := Definition{ID: "test-id", Name: "Test", Slot: tt.slot}
+			if got := def.Kind(); got != tt.wantKind {
+				t.Errorf("Definition.Kind() = %d, want %d", got, tt.wantKind)
+			}
+			if got := def.Category(); got != tt.wantCategory {
+				t.Errorf("Definition.Category() = %q, want %q", got, tt.wantCategory)
+			}
+		})
+	}
+}

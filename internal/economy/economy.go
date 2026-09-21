@@ -38,6 +38,17 @@ func SafeMultiply(a, b int) (int, error) {
 	return a * b, nil
 }
 
+// SafeAdd safely adds two non-negative integers guarding against integer overflow.
+func SafeAdd(a, b int) (int, error) {
+	if a < 0 || b < 0 {
+		return 0, ErrInvalidAmount
+	}
+	if a > math.MaxInt-b {
+		return 0, ErrGoldOverflow
+	}
+	return a + b, nil
+}
+
 // CharacterRepository defines character persistence for economy transactions.
 type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)

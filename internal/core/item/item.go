@@ -192,6 +192,44 @@ func IsValidSlot(slot Slot) bool {
 	}
 }
 
+// Kind returns the legacy numeric category code for this equipment slot:
+// 1 = Weapon (main-hand)
+// 2 = Armor / Shield / Accessory (off-hand, body, accessory)
+// 3 = Item / Consumable / Other (none or unrecognized)
+func (s Slot) Kind() int {
+	switch s {
+	case SlotMainHand:
+		return 1
+	case SlotOffHand, SlotBody, SlotAccessory:
+		return 2
+	default:
+		return 3
+	}
+}
+
+// Category returns the canonical category name for this equipment slot:
+// "weapon", "armor", or "item".
+func (s Slot) Category() string {
+	switch s {
+	case SlotMainHand:
+		return "weapon"
+	case SlotOffHand, SlotBody, SlotAccessory:
+		return "armor"
+	default:
+		return "item"
+	}
+}
+
+// Kind returns the numeric category code of this item definition based on its equipment slot.
+func (d Definition) Kind() int {
+	return d.Slot.Kind()
+}
+
+// Category returns the canonical category string of this item definition based on its equipment slot.
+func (d Definition) Category() string {
+	return d.Slot.Category()
+}
+
 func NewDefinition(id, name string, price int) (Definition, error) {
 	if strings.TrimSpace(id) == "" || strings.TrimSpace(name) == "" || price < 0 {
 		return Definition{}, ErrInvalidDefinition
