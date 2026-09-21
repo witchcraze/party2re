@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	valkeygo "github.com/valkey-io/valkey-go"
@@ -215,6 +216,15 @@ func newHTTPHandler(
 		http.WithRateLimiter(soc.limiter),
 		http.WithAdminAPIKey(cfg.Admin.APIKey),
 		http.WithAllowedOrigins(http.ParseCORSOrigins(cfg.CORS.AllowedOrigins)...),
+	}
+	if cfg.Server.TrustedProxies != "" {
+		prefixes, err := http.ParseTrustedProxies(cfg.Server.TrustedProxies)
+		if err != nil {
+			return nil, fmt.Errorf("invalid trusted proxies: %w", err)
+		}
+		opts = append(opts, http.WithTrustedProxies(prefixes...))
+	}
+	opts = append(opts,
 		http.WithHelper(misc.helper),
 		http.WithRescue(misc.rescue),
 		http.WithMedal(misc.medal),
@@ -255,7 +265,7 @@ func newHTTPHandler(
 		http.WithWishingWell(misc.wishingwell),
 		http.WithBlacksmith(econ.blacksmith),
 		http.WithMaintenance(misc.maint),
-	}
+	)
 
 	return http.NewHandler(core.playerService, core.charService, cmbt.adv, econ.shop, opts...)
 }

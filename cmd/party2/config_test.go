@@ -15,12 +15,14 @@ func TestConfigFromEnv(t *testing.T) {
 	origCORS := os.Getenv("PARTY2_CORS_ORIGINS")
 	origAddr := os.Getenv("PARTY2_ADDR")
 	origPort := os.Getenv("PORT")
+	origTrusted := os.Getenv("PARTY2_TRUSTED_PROXIES")
 	defer func() {
 		restoreEnv("PARTY2_DB_DSN", origDB)
 		restoreEnv("PARTY2_ADMIN_API_KEY", origAdmin)
 		restoreEnv("PARTY2_CORS_ORIGINS", origCORS)
 		restoreEnv("PARTY2_ADDR", origAddr)
 		restoreEnv("PORT", origPort)
+		restoreEnv("PARTY2_TRUSTED_PROXIES", origTrusted)
 	}()
 
 	t.Run("missing DB DSN returns error", func(t *testing.T) {
@@ -36,6 +38,7 @@ func TestConfigFromEnv(t *testing.T) {
 		_ = os.Setenv("PARTY2_ADMIN_API_KEY", "super-admin-key")
 		_ = os.Setenv("PARTY2_CORS_ORIGINS", "http://localhost:3000,http://app.party2.test")
 		_ = os.Setenv("PARTY2_ADDR", ":8888")
+		_ = os.Setenv("PARTY2_TRUSTED_PROXIES", "127.0.0.1/32,10.0.0.0/8")
 
 		cfg, err := ConfigFromEnv()
 		if err != nil {
@@ -54,6 +57,19 @@ func TestConfigFromEnv(t *testing.T) {
 		if cfg.Server.Addr != ":8888" {
 			t.Errorf("expected server addr :8888, got %s", cfg.Server.Addr)
 		}
+		if cfg.Server.TrustedProxies != "127.0.0.1/32,10.0.0.0/8" {
+			t.Errorf("expected trusted proxies 127.0.0.1/32,10.0.0.0/8, got %s", cfg.Server.TrustedProxies)
+		}
+	})
+
+	t.Run("invalid trusted proxies returns error", func(t *testing.T) {
+		_ = os.Setenv("PARTY2_DB_DSN", "test:test@tcp(127.0.0.1:3306)/test_db")
+		_ = os.Setenv("PARTY2_TRUSTED_PROXIES", "invalid-cidr/999")
+
+		_, err := ConfigFromEnv()
+		if err == nil {
+			t.Fatal("expected error for invalid PARTY2_TRUSTED_PROXIES, got nil")
+		}
 	})
 }
 
@@ -64,9 +80,12 @@ func TestConfigStructParallelCreation(t *testing.T) {
 	cfg := Config{
 		DB:     database.DefaultConfig("user:pass@tcp(127.0.0.1:3306)/party2"),
 		Valkey: valkey.DefaultConfig("127.0.0.1:6379"),
-		Server: struct{ Addr string }{Addr: ":8080"},
-		Admin:  struct{ APIKey string }{APIKey: "test-admin-key"},
-		CORS:   struct{ AllowedOrigins string }{AllowedOrigins: "http://example.com"},
+		Server: struct {
+			Addr           string
+			TrustedProxies string
+		}{Addr: ":8080", TrustedProxies: "127.0.0.1/32"},
+		Admin: struct{ APIKey string }{APIKey: "test-admin-key"},
+		CORS:  struct{ AllowedOrigins string }{AllowedOrigins: "http://example.com"},
 	}
 
 	if cfg.DB.DSN != "user:pass@tcp(127.0.0.1:3306)/party2" {
@@ -77,6 +96,9 @@ func TestConfigStructParallelCreation(t *testing.T) {
 	}
 	if cfg.Valkey.DialTimeout != 5*time.Second {
 		t.Errorf("unexpected valkey dial timeout: %v", cfg.Valkey.DialTimeout)
+	}
+	if cfg.Server.TrustedProxies != "127.0.0.1/32" {
+		t.Errorf("unexpected trusted proxies: %s", cfg.Server.TrustedProxies)
 	}
 	if cfg.Admin.APIKey != "test-admin-key" {
 		t.Errorf("unexpected admin api key: %s", cfg.Admin.APIKey)

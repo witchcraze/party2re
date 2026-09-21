@@ -1034,11 +1034,11 @@ func TestCORS_PreflightOptions_Allowed(t *testing.T) {
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://app.party2.game" {
 		t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, "https://app.party2.game")
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, DELETE" {
-		t.Errorf("Access-Control-Allow-Methods = %q, want %q", got, "GET, POST, DELETE")
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, PUT, DELETE, OPTIONS" {
+		t.Errorf("Access-Control-Allow-Methods = %q, want %q", got, "GET, POST, PUT, DELETE, OPTIONS")
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type, Authorization" {
-		t.Errorf("Access-Control-Allow-Headers = %q, want %q", got, "Content-Type, Authorization")
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type, Authorization, X-Admin-Key" {
+		t.Errorf("Access-Control-Allow-Headers = %q, want %q", got, "Content-Type, Authorization, X-Admin-Key")
 	}
 	if got := rec.Header().Get("Access-Control-Max-Age"); got != "86400" {
 		t.Errorf("Access-Control-Max-Age = %q, want %q", got, "86400")

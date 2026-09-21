@@ -207,9 +207,14 @@ via `PlayerService.Authenticate` before delegating to the target service.
   - `Content-Security-Policy: default-src 'none'` — disables client script execution on API responses
 - CORS policy is enforced globally via configurable allowed origins (`WithAllowedOrigins` / `PARTY2_CORS_ORIGINS`):
   - Requests from configured allowed origins receive `Access-Control-Allow-Origin: <origin>` and `Vary: Origin`.
-  - `OPTIONS` preflight requests from allowed origins receive `204 No Content` with `Access-Control-Allow-Methods: GET, POST, DELETE`, `Access-Control-Allow-Headers: Content-Type, Authorization`, and `Access-Control-Max-Age: 86400`.
+  - `OPTIONS` preflight requests from allowed origins receive `204 No Content` with `Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS`, `Access-Control-Allow-Headers: Content-Type, Authorization, X-Admin-Key`, and `Access-Control-Max-Age: 86400`.
   - Wildcard origin (`*`) is explicitly prohibited and ignored if configured.
   - Requests from unlisted origins receive no `Access-Control-Allow-Origin` headers.
+  - *CORS is a browser interoperability policy, not an authorization control.* Preflight success does not grant access; session authentication (`Authorization: Bearer <session-id>`) and administrative credentials (`X-Admin-Key`) are verified independently at the service and transport layers.
+- Client IP extraction & rate-limiting identity policy (`WithTrustedProxies` / `PARTY2_TRUSTED_PROXIES`):
+  - **Direct Exposure (Safe by Default)**: When `PARTY2_TRUSTED_PROXIES` is empty or unset, the server strictly uses `RemoteAddr` as the client IP identity. Forwarding headers (`X-Forwarded-For`, `X-Real-IP`) sent by direct clients are ignored, preventing rate-limit rotation and spoofing attacks.
+  - **Reverse Proxy Deployment**: Forwarding headers are honored only if the immediate peer (`RemoteAddr`) belongs to an explicitly configured trusted proxy CIDR or IP (e.g. `10.0.0.0/8, 127.0.0.1/32`).
+  - **Chain Traversal**: Multi-hop `X-Forwarded-For` headers are inspected right-to-left, identifying the rightmost untrusted peer as the authentic client IP. Spoofed headers prepended before reaching the trusted proxy boundary are discarded.
 - `Content-Type: application/json` is required on all endpoints that consume a
   request body. Requests with a missing or incorrect content type receive
   `415 Unsupported Media Type`.

@@ -131,6 +131,7 @@ All groups below are Version 1.0 reconstruction requirements.
 
 ### G. Presentation, Assets, and Operations
 - [x] UI-independent HTTP JSON Application API layer (OpenAPI 3.1) (#87, #254, #266, #690)
+- [x] HTTP edge security: trusted proxy CIDR allowlist for spoof-proof rate limiting and aligned CORS preflight methods and headers (#691)
 - [x] MariaDB durable persistence & migration automation (`001`–`085`) (#124, #399)
 - [x] Valkey worker queue with AOF+RDB persistence (#106)
 - [x] Structured JSON logging with credential masking (#49)
