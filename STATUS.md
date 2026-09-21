@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #752 — [Chore] Job: Add unit tests for edge cases and branch coverage in job transitions
+Last updated: Issue #750 — [Chore] Scripts: sync_openapi.go を scripts/sync_openapi/ サブディレクトリへ移動
 
 ## Current Phase
 
@@ -21,7 +21,7 @@ All Version 1.0 foundational systems, core combat, 39 feature modules, and the H
 - **Durable Persistence**: MariaDB Master (Migrations `001`–`085`) with deterministic row-lock hierarchy (Rank 0→8) and ambient transaction propagation (`database.RunInTx`).
 - **Transient State Architecture**: Ephemeral Turn & Session Lobby Architecture (Candidate C) across multiplayer domains (Casino, PvP, GvG, Party) in Valkey Master, In-Progress Run Buffers (Candidate D), and Shared Boss HP (Candidate E). SSOT: [`docs/architecture/valkey-keyspace.md`](docs/architecture/valkey-keyspace.md).
 - **Lifecycle & Infrastructure Contracts**: Fail-fast startup validation with timeout-bounded connectivity checks for MariaDB and Valkey (`cmd/party2`), zero silent in-memory production fallbacks, and deterministic teardown of allocated resources upon boot failure.
-- **AST Static Verification & CI Gates**: Automated linters enforce lock ordering, transaction runners, interface segregation (ISP), file size (≤500 lines), Valkey keyspace, error-swallow prohibition, and presentation markup decoupling (`presentation_lint_test.go`); non-mutating CI gates enforce modular OpenAPI source synchronization (`sync_openapi.go --check`) and route coverage.
+- **AST Static Verification & CI Gates**: Automated linters enforce lock ordering, transaction runners, interface segregation (ISP), file size (≤500 lines), Valkey keyspace, error-swallow prohibition, and presentation markup decoupling (`presentation_lint_test.go`); non-mutating CI gates enforce modular OpenAPI source synchronization (`sync_openapi --check`) and route coverage.
 
 ---
 

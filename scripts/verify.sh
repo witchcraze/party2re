@@ -42,7 +42,7 @@ if [ -n "$GO_FILES" ]; then
     fi
 fi
 if command -v go >/dev/null 2>&1; then
-    go run ./scripts/sync_openapi.go
+    go run ./scripts/sync_openapi
 fi
 
 echo "==> [2/7] Running static analysis (go vet)..."
@@ -54,10 +54,10 @@ fi
 
 echo "==> [3/7] Validating OpenAPI 3.1 specification and route coverage..."
 if command -v go >/dev/null 2>&1; then
-    go run ./scripts/sync_openapi.go --check
+    go run ./scripts/sync_openapi --check
     go test -count=1 ./internal/api/http -run "OpenAPI"
 else
-    docker compose run --rm app go run ./scripts/sync_openapi.go --check
+    docker compose run --rm app go run ./scripts/sync_openapi --check
     docker compose run --rm app go test -count=1 ./internal/api/http -run "OpenAPI"
 fi
 

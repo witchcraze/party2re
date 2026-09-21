@@ -59,9 +59,9 @@ Contains path definitions grouped by functional domain. Each file typically cont
 
 ---
 
-## 3. Tooling & Automation (`scripts/sync_openapi.go`)
+## 3. Tooling & Automation (`scripts/sync_openapi/`)
 
-The repository includes an automated toolchain in `scripts/sync_openapi.go` that operates with zero external runtime dependencies using pure Go standard library AST parsers:
+The repository includes an automated toolchain in `scripts/sync_openapi/` that operates with zero external runtime dependencies using pure Go standard library AST parsers:
 
 1. **Deterministic Bundler**:
    - Reads `docs/api/base.json` and merges all files in `docs/api/paths/*.json`.
