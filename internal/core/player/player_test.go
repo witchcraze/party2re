@@ -115,6 +115,29 @@ func TestSessionExpiresAndCanBeRevoked(t *testing.T) {
 	}
 }
 
+func TestPlayerBan(t *testing.T) {
+	now := time.Now()
+	p, err := New("alice", "secret", now)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.IsBanned() {
+		t.Fatal("expected player to not be banned initially")
+	}
+
+	banTime := now.Add(time.Hour)
+	p.Ban(banTime)
+	if !p.IsBanned() {
+		t.Fatal("expected player to be banned after Ban()")
+	}
+	if p.BannedAt == nil || !p.BannedAt.Equal(banTime) {
+		t.Fatalf("expected BannedAt to be %v, got %v", banTime, p.BannedAt)
+	}
+	if !p.UpdatedAt.Equal(banTime) {
+		t.Fatalf("expected UpdatedAt to be %v, got %v", banTime, p.UpdatedAt)
+	}
+}
+
 func BenchmarkHashPassword(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, err := hashPassword("my-secret-password-12345")

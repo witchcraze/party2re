@@ -51,6 +51,10 @@ func (h *Handler) authenticatePlayer(w http.ResponseWriter, r *http.Request) (co
 	}
 	player, err := h.players.Authenticate(r.Context(), sessionID)
 	if err != nil {
+		if errors.Is(err, coreplayer.ErrPlayerBanned) {
+			writeError(w, http.StatusForbidden, err)
+			return coreplayer.Player{}, false
+		}
 		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
 		return coreplayer.Player{}, false
 	}

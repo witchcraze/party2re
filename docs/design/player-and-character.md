@@ -37,11 +37,25 @@ Every `Character` belongs to exactly one `Player`. A `Player` may own multiple c
 - **Combat Survival Floor**: In combat settlement (`battle/apply.go`, `boss/battle.go`), fallen combatants (`HP <= 0` or fallen flag) survive with an authentic minimum floor of `1 HP` via `Character.ApplyCombatSurvival`. Surviving MP is updated and clamped within `[0, MaxMP]`.
 - **Fatigue Clamping**: Standard fatigue percentage is capped at `100%` (`AddTired`). Reaching `100%` triggers exhaustion (`IsExhausted() == true`), blocking adventures and fatigue-generating mini-games. Celestial wishes (`god.WishRefresh`, `ReduceTired(150)`) bypass the standard 0% floor to provide an authentic negative fatigue buffer against subsequent combat. Resting at home clears fatigue to 0 (`ResetTired`).
 
+### 2.6 Player Account Lifecycle & Ban Invariant
+- **Account State**: Each `Player` record tracks `created_at`, `updated_at`, `last_ip`, and an optional `banned_at` timestamp.
+- **Login Tracking**: Upon successful login, the player's `last_ip` and `updated_at` are refreshed.
+- **Soft-Ban Enforcement**: When an account is soft-banned (`banned_at IS NOT NULL` / `IsBanned() == true`), all active Valkey sessions and Personal Access Tokens are immediately invalidated. Subsequent login attempts (`POST /sessions`) and authenticated character requests receive HTTP `403 Forbidden` (`coreplayer.ErrPlayerBanned`).
+
 ---
 
 ## 3. Data Schema & Persistence
 
-### 3.1 Characters Table
+### 3.1 Players Table
+- `id VARCHAR(32) PRIMARY KEY`
+- `username VARCHAR(64) NOT NULL UNIQUE`
+- `password_hash VARCHAR(255) NOT NULL`
+- `banned_at DATETIME(6) NULL DEFAULT NULL`
+- `created_at DATETIME(6) NOT NULL`
+- `updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)`
+- `last_ip VARCHAR(45) NOT NULL DEFAULT ''`
+
+### 3.2 Characters Table
 - `id VARCHAR(32) PRIMARY KEY`
 - `player_id VARCHAR(32) NOT NULL` (Foreign key constraint referencing `players(id)`)
 - `name VARCHAR(64) NOT NULL`

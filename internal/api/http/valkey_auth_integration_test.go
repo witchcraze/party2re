@@ -48,6 +48,35 @@ func (m *memoryPlayerRepo) Delete(_ context.Context, id string) error {
 	return nil
 }
 
+func (m *memoryPlayerRepo) List(_ context.Context, _ string) ([]coreplayer.Player, error) {
+	result := make([]coreplayer.Player, 0, len(m.players))
+	for _, p := range m.players {
+		result = append(result, p)
+	}
+	return result, nil
+}
+
+func (m *memoryPlayerRepo) UpdateBannedAt(_ context.Context, id string, bannedAt *time.Time) error {
+	p, ok := m.players[id]
+	if !ok {
+		return coreplayer.ErrPlayerNotFound
+	}
+	p.BannedAt = bannedAt
+	m.players[id] = p
+	return nil
+}
+
+func (m *memoryPlayerRepo) UpdateLastLogin(_ context.Context, id string, ip string, at time.Time) error {
+	p, ok := m.players[id]
+	if !ok {
+		return coreplayer.ErrPlayerNotFound
+	}
+	p.LastIP = ip
+	p.UpdatedAt = at
+	m.players[id] = p
+	return nil
+}
+
 func TestValkeySessionAuth_EndToEndFlow(t *testing.T) {
 	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
 		t.Skip("PARTY2_VALKEY_ADDR is not set, skipping real Valkey test")

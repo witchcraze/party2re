@@ -35,13 +35,18 @@ type stubPlayerService struct {
 	createAPITokenFn func(ctx context.Context, playerID, name string, expiresAt *time.Time) (coreplayer.APIToken, string, error)
 	listAPITokensFn  func(ctx context.Context, playerID string) ([]coreplayer.APIToken, error)
 	revokeAPITokenFn func(ctx context.Context, playerID, tokenID string) error
+	listPlayersFn    func(ctx context.Context, sort string) ([]coreplayer.Player, error)
+	banPlayerFn      func(ctx context.Context, playerID string) error
 }
 
 func (s *stubPlayerService) Register(ctx context.Context, username, password string) (coreplayer.Player, error) {
 	return s.registerFn(ctx, username, password)
 }
-func (s *stubPlayerService) Login(ctx context.Context, username, password string) (coreplayer.Session, error) {
-	return s.loginFn(ctx, username, password)
+func (s *stubPlayerService) Login(ctx context.Context, username, password string, clientIP ...string) (coreplayer.Session, error) {
+	if s.loginFn != nil {
+		return s.loginFn(ctx, username, password)
+	}
+	return coreplayer.Session{}, nil
 }
 func (s *stubPlayerService) Logout(ctx context.Context, sessionID string) error {
 	return s.logoutFn(ctx, sessionID)
@@ -70,6 +75,18 @@ func (s *stubPlayerService) ListAPITokens(ctx context.Context, playerID string) 
 func (s *stubPlayerService) RevokeAPIToken(ctx context.Context, playerID, tokenID string) error {
 	if s.revokeAPITokenFn != nil {
 		return s.revokeAPITokenFn(ctx, playerID, tokenID)
+	}
+	return nil
+}
+func (s *stubPlayerService) ListPlayers(ctx context.Context, sort string) ([]coreplayer.Player, error) {
+	if s.listPlayersFn != nil {
+		return s.listPlayersFn(ctx, sort)
+	}
+	return nil, nil
+}
+func (s *stubPlayerService) BanPlayer(ctx context.Context, playerID string) error {
+	if s.banPlayerFn != nil {
+		return s.banPlayerFn(ctx, playerID)
 	}
 	return nil
 }

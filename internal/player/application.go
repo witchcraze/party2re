@@ -19,6 +19,9 @@ type PlayerRepository interface {
 	FindByUsername(context.Context, string) (coreplayer.Player, error)
 	FindByID(context.Context, string) (coreplayer.Player, error)
 	Delete(context.Context, string) error
+	List(ctx context.Context, sort string) ([]coreplayer.Player, error)
+	UpdateBannedAt(ctx context.Context, id string, bannedAt *time.Time) error
+	UpdateLastLogin(ctx context.Context, id string, ip string, at time.Time) error
 }
 
 type SessionRepository interface {
@@ -78,6 +81,15 @@ func WithAPITokenRepository(tokenRepo APITokenRepository) Option {
 	}
 }
 
+// WithNow sets the time provider function for deterministic testing.
+func WithNow(now func() time.Time) Option {
+	return func(s *Service) {
+		if now != nil {
+			s.now = now
+		}
+	}
+}
+
 type Service struct {
 	players    PlayerRepository
 	sessions   SessionRepository
@@ -127,13 +139,21 @@ func (s *Service) Register(ctx context.Context, username, password string) (core
 	return value, nil
 }
 
-func (s *Service) Login(ctx context.Context, username, password string) (coreplayer.Session, error) {
+func (s *Service) Login(ctx context.Context, username, password string, clientIP ...string) (coreplayer.Session, error) {
 	value, err := s.players.FindByUsername(ctx, username)
 	if err != nil || !value.Authenticate(password) {
 		s.logger.Warn(ctx, "player.login", slog.String("username", username), slog.String("reason", "authentication_failed"))
 		return coreplayer.Session{}, coreplayer.ErrAuthentication
 	}
-	session, err := coreplayer.NewSession(value.ID, s.now(), SessionDuration)
+	if value.IsBanned() {
+		s.logger.Warn(ctx, "player.login", slog.String("username", username), slog.String("reason", "player_banned"))
+		return coreplayer.Session{}, coreplayer.ErrPlayerBanned
+	}
+	now := s.now()
+	if len(clientIP) > 0 && clientIP[0] != "" {
+		_ = s.players.UpdateLastLogin(ctx, value.ID, clientIP[0], now)
+	}
+	session, err := coreplayer.NewSession(value.ID, now, SessionDuration)
 	if err != nil {
 		s.logger.Error(ctx, "player.login", err, slog.String("username", username))
 		return coreplayer.Session{}, err
@@ -181,6 +201,10 @@ func (s *Service) Authenticate(ctx context.Context, token string) (coreplayer.Pl
 			s.logger.Error(ctx, "player.authenticate", err)
 			return coreplayer.Player{}, err
 		}
+		if player.IsBanned() {
+			s.logger.Warn(ctx, "player.authenticate", slog.String("player_id", player.ID), slog.String("reason", "player_banned"))
+			return coreplayer.Player{}, coreplayer.ErrPlayerBanned
+		}
 		return player, nil
 	}
 
@@ -194,6 +218,10 @@ func (s *Service) Authenticate(ctx context.Context, token string) (coreplayer.Pl
 	if err != nil {
 		s.logger.Error(ctx, "player.authenticate", err)
 		return coreplayer.Player{}, err
+	}
+	if value.IsBanned() {
+		s.logger.Warn(ctx, "player.authenticate", slog.String("player_id", value.ID), slog.String("reason", "player_banned"))
+		return coreplayer.Player{}, coreplayer.ErrPlayerBanned
 	}
 	return value, nil
 }
@@ -291,5 +319,48 @@ func (s *Service) DeleteAccount(ctx context.Context, playerID, password string) 
 	}
 
 	s.logger.Info(ctx, "player.delete", slog.String("player_id", playerID))
+	return nil
+}
+
+// ListPlayers returns all players ordered by the specified sort criteria (name, updated_at, addr).
+func (s *Service) ListPlayers(ctx context.Context, sort string) ([]coreplayer.Player, error) {
+	return s.players.List(ctx, sort)
+}
+
+// BanPlayer sets the banned_at timestamp on the player and terminates active sessions and tokens.
+func (s *Service) BanPlayer(ctx context.Context, playerID string) error {
+	playerID = strings.TrimSpace(playerID)
+	if playerID == "" {
+		return errors.New("player ID is required")
+	}
+
+	p, err := s.players.FindByID(ctx, playerID)
+	if err != nil {
+		return err
+	}
+
+	now := s.now()
+	p.Ban(now)
+
+	if err := s.players.UpdateBannedAt(ctx, playerID, &now); err != nil {
+		s.logger.Error(ctx, "player.ban", err, slog.String("player_id", playerID))
+		return err
+	}
+
+	// Invalidate active sessions
+	if s.sessions != nil {
+		if err := s.sessions.DeleteByPlayerID(ctx, playerID); err != nil {
+			s.logger.Warn(ctx, "player.ban.sessions", slog.String("player_id", playerID), slog.String("reason", err.Error()))
+		}
+	}
+
+	// Invalidate active API tokens
+	if s.apiTokens != nil {
+		if err := s.apiTokens.DeleteByPlayerID(ctx, playerID); err != nil {
+			s.logger.Warn(ctx, "player.ban.api_tokens", slog.String("player_id", playerID), slog.String("reason", err.Error()))
+		}
+	}
+
+	s.logger.Info(ctx, "player.ban", slog.String("player_id", playerID))
 	return nil
 }

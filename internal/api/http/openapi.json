@@ -1,6 +1,77 @@
 {
   "components": {
     "schemas": {
+      "AdminBanPlayerResponse": {
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "player_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "player_id"
+        ],
+        "type": "object"
+      },
+      "AdminPlayerResponse": {
+        "properties": {
+          "banned_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_banned": {
+            "type": "boolean"
+          },
+          "last_ip": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "created_at",
+          "updated_at",
+          "last_ip",
+          "is_banned"
+        ],
+        "type": "object"
+      },
+      "AdminPlayersListResponse": {
+        "properties": {
+          "players": {
+            "items": {
+              "$ref": "#/components/schemas/AdminPlayerResponse"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "players",
+          "total"
+        ],
+        "type": "object"
+      },
       "AdventureHistoryEntry": {
         "properties": {
           "character_id": {
@@ -2401,6 +2472,167 @@
           }
         ],
         "summary": "Update system maintenance mode (Admin)",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/players": {
+      "get": {
+        "operationId": "listAdminPlayers",
+        "parameters": [
+          {
+            "description": "Sort order: addr (default: IP address asc), name (username asc), updated_at / ldate (desc)",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "addr",
+              "enum": [
+                "addr",
+                "name",
+                "updated_at",
+                "ldate"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPlayersListResponse"
+                }
+              }
+            },
+            "description": "List of players retrieved successfully"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing admin credentials"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid admin credentials or admin operations disabled"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "AdminApiKey": []
+          }
+        ],
+        "summary": "List all registered players (Admin)",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/players/{id}/ban": {
+      "post": {
+        "operationId": "banAdminPlayer",
+        "parameters": [
+          {
+            "description": "Player identifier to soft-ban",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminBanPlayerResponse"
+                }
+              }
+            },
+            "description": "Player banned successfully and sessions invalidated"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid player ID"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing admin credentials"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid admin credentials or admin operations disabled"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Player not found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "AdminApiKey": []
+          }
+        ],
+        "summary": "Soft-ban player account and invalidate active sessions (Admin)",
         "tags": [
           "Admin"
         ]

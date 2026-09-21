@@ -19,7 +19,7 @@ Each component is described by:
 ### Player
 
 **Responsibility:** Account-level identity and authentication-related state. Does not own character state.
-Player persistence stores a salted, iterated password hash (`bcrypt`, cost 12). Session state is ephemeral, mastered directly in **Valkey Master** (`party2:session:<token>` with 7-day native TTL and `party2:player:sessions:<player_id>` Sorted Set with lazy pruning). Also provides cryptographically secure Personal Access Tokens (`p2_sk_...`) hashed with SHA-256 in MariaDB (`player_api_tokens`) for API and tooling access. Dual authentication transparently handles sessions and PATs.
+Player persistence stores a salted, iterated password hash (`bcrypt`, cost 12), update timestamps, last login IP address, and soft-ban timestamps (`banned_at`). Session state is ephemeral, mastered directly in **Valkey Master** (`party2:session:<token>` with 7-day native TTL and `party2:player:sessions:<player_id>` Sorted Set with lazy pruning). Also provides cryptographically secure Personal Access Tokens (`p2_sk_...`) hashed with SHA-256 in MariaDB (`player_api_tokens`) for API and tooling access. Dual authentication transparently handles sessions and PATs, rejecting banned accounts with 403 Forbidden. Privileged administrative management (`/admin/players`, `/admin/players/{id}/ban`) enables player listing (sorted by IP, name, or last activity) and immediate account soft-banning with session/token revocation.
 
 ### Character
 

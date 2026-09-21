@@ -16,9 +16,14 @@ import (
 
 type playerRepositoryStub struct {
 	value       coreplayer.Player
+	players     []coreplayer.Player
 	saveErr     error
 	findByIDErr error
 	deleteErr   error
+	listErr     error
+	banErr      error
+	loginIP     string
+	loginAt     time.Time
 }
 
 func (r *playerRepositoryStub) Save(context.Context, coreplayer.Player) error {
@@ -44,6 +49,39 @@ func (r *playerRepositoryStub) Delete(context.Context, string) error {
 		return r.deleteErr
 	}
 	r.value = coreplayer.Player{}
+	return nil
+}
+
+func (r *playerRepositoryStub) List(ctx context.Context, sort string) ([]coreplayer.Player, error) {
+	if r.listErr != nil {
+		return nil, r.listErr
+	}
+	if len(r.players) > 0 {
+		return r.players, nil
+	}
+	if r.value.ID != "" {
+		return []coreplayer.Player{r.value}, nil
+	}
+	return nil, nil
+}
+
+func (r *playerRepositoryStub) UpdateBannedAt(ctx context.Context, id string, bannedAt *time.Time) error {
+	if r.banErr != nil {
+		return r.banErr
+	}
+	if r.value.ID == id {
+		r.value.BannedAt = bannedAt
+	}
+	return nil
+}
+
+func (r *playerRepositoryStub) UpdateLastLogin(ctx context.Context, id string, ip string, at time.Time) error {
+	r.loginIP = ip
+	r.loginAt = at
+	if r.value.ID == id {
+		r.value.LastIP = ip
+		r.value.UpdatedAt = at
+	}
 	return nil
 }
 
@@ -755,4 +793,125 @@ func TestDeleteAccountErrorBranches(t *testing.T) {
 			t.Error("expected txProvider to be called")
 		}
 	})
+}
+
+func TestService_BanPlayer_And_BannedLogin(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now()
+	p, err := coreplayer.New("bob", "password", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	players := &playerRepositoryStub{value: p}
+	sessions := &sessionRepositoryStub{}
+	tokens := newAPITokenRepositoryStub()
+
+	svc, err := NewService(players, sessions,
+		WithAPITokenRepository(tokens),
+		WithNow(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Successful login with IP
+	sess, err := svc.Login(ctx, "bob", "password", "127.0.0.1")
+	if err != nil {
+		t.Fatalf("Login failed: %v", err)
+	}
+	if sess.PlayerID != p.ID {
+		t.Fatalf("expected player ID %s, got %s", p.ID, sess.PlayerID)
+	}
+	if players.loginIP != "127.0.0.1" {
+		t.Errorf("expected loginIP 127.0.0.1, got %q", players.loginIP)
+	}
+
+	// Create API Token for testing banned authentication
+	token, rawKey, err := svc.CreateAPIToken(ctx, p.ID, "test-pat", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = token
+
+	// Authenticate succeeds before ban
+	sessions.value = sess
+	authPlayer, err := svc.Authenticate(ctx, sess.ID)
+	if err != nil {
+		t.Fatalf("Authenticate failed: %v", err)
+	}
+	if authPlayer.ID != p.ID {
+		t.Errorf("expected player ID %s, got %s", p.ID, authPlayer.ID)
+	}
+
+	// Ban the player
+	if err := svc.BanPlayer(ctx, p.ID); err != nil {
+		t.Fatalf("BanPlayer failed: %v", err)
+	}
+	if players.value.BannedAt == nil {
+		t.Fatal("expected player to be banned in repository")
+	}
+	if sessions.value.ID != "" {
+		t.Fatal("expected active session to be deleted upon ban")
+	}
+	if len(tokens.tokens) != 0 {
+		t.Fatal("expected active API tokens to be deleted upon ban")
+	}
+
+	// Ban empty ID returns error
+	if err := svc.BanPlayer(ctx, ""); err == nil {
+		t.Fatal("expected error banning empty player ID")
+	}
+
+	// Ban nonexistent ID returns error
+	players.findByIDErr = errors.New("player not found")
+	if err := svc.BanPlayer(ctx, "unknown"); err == nil {
+		t.Fatal("expected error banning unknown player")
+	}
+	players.findByIDErr = nil
+
+	// Login rejected with ErrPlayerBanned
+	if _, err := svc.Login(ctx, "bob", "password"); !errors.Is(err, coreplayer.ErrPlayerBanned) {
+		t.Fatalf("expected ErrPlayerBanned, got %v", err)
+	}
+
+	// Active session for banned player rejected with ErrPlayerBanned
+	sessions.value = sess
+	if _, err := svc.Authenticate(ctx, sess.ID); !errors.Is(err, coreplayer.ErrPlayerBanned) {
+		t.Fatalf("expected ErrPlayerBanned on session authenticate, got %v", err)
+	}
+
+	// Active PAT for banned player rejected with ErrPlayerBanned
+	tokens.Save(ctx, token)
+	if _, err := svc.Authenticate(ctx, rawKey); !errors.Is(err, coreplayer.ErrPlayerBanned) {
+		t.Fatalf("expected ErrPlayerBanned on PAT authenticate, got %v", err)
+	}
+}
+
+func TestService_ListPlayers(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now()
+	p1, _ := coreplayer.New("alice", "pass", now)
+	p2, _ := coreplayer.New("bob", "pass", now)
+
+	players := &playerRepositoryStub{players: []coreplayer.Player{p1, p2}}
+	svc, err := NewService(players, &sessionRepositoryStub{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := svc.ListPlayers(ctx, "name")
+	if err != nil {
+		t.Fatalf("ListPlayers failed: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("expected 2 players, got %d", len(list))
+	}
+
+	// Repository error propagates
+	expectedErr := errors.New("db error")
+	players.listErr = expectedErr
+	if _, err := svc.ListPlayers(ctx, "addr"); !errors.Is(err, expectedErr) {
+		t.Fatalf("expected %v, got %v", expectedErr, err)
+	}
 }
