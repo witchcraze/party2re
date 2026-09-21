@@ -116,6 +116,7 @@ Each feature owns its specific domain logic and state. Cross-feature imports and
 | **Chapel** | `internal/chapel` | 5 town church blessings, single active prayer constraint | Character | MariaDB `character_blessings` |
 | **Collection** | `internal/collection` | Illustrated monster defeat and item discovery encyclopedia | Character | MariaDB `character_monster_book`, `character_item_collection` |
 | **Contest** | `internal/contest` | Photo contest submissions, voting rounds, Hall of Fame | Character, News, Guild | MariaDB `character_photos`, `contest_rounds`, `contest_entries` |
+| **Costume** | `internal/costume` | Daily rented appearance state (`ActiveCostume`), midnight JST expiration, rest/job-change reset | None | Valkey `party2:daily:costume:*` |
 | **Custom Skill** | `internal/customskill` | 3-gem recipe synthesis, activation phrase validation | Character, Inventory, Gem Catalog | MariaDB `character_custom_skills` |
 | **Depot** | `internal/depot` | Persistent storage (up to 500 slots), item consumption, delivery engine | Character, Inventory, Economy | MariaDB `character_depots`, `depot_items` (Rank 2→3→5) |
 | **Dungeon** | `internal/dungeon` | Grid map exploration, party traps, map scouting (`@ちず`) | Battle, Character, Inventory, Valkey | Valkey Candidate D (`party2:dungeon:*`); MariaDB `character_dungeon_records` |
@@ -142,7 +143,7 @@ Each feature owns its specific domain logic and state. Cross-feature imports and
 | **Rescue** | `internal/rescue` | Emergency player unstuck recovery, action clearing, penalty cooldown | Character, Scheduling | MariaDB `rescue_records` |
 | **Secret Shop** | `internal/secretshop` | JobLv 7 access gate, 8 rare items at 3× price, depot delivery | Character, Item, Inventory, Depot | MariaDB `characters`, `inventory_items`, `depot_items` (Rank 2→3→5) |
 | **Shop** | `internal/shop` | Town equipment/item shops, 50% markdown, depot auto-delivery | Catalogs, Character, Inventory, Depot | MariaDB `characters`, `inventory_items`, `depot_items` (Rank 2→3→5) |
-| **Store** | `internal/store` | Player shop construction (50kG/90d), barter listings, interiors, Oracle Shop costume items purchasing (@kau), home wallpapers (@kabegami) | Character, Inventory, Depot, Item, Collection, Helperquest, Guild, Timer, Valkey | MariaDB `character_stores`, `store_sales`, `store_interiors`, `character_homes`, `character_item_collection` (Rank 0→2→3→5); Valkey `party2:daily:costume:*` |
+| **Store** | `internal/store` | Player shop construction (50kG/90d), barter listings, interiors, Oracle Shop costume items purchasing (@kau), home wallpapers (@kabegami) | Character, Inventory, Depot, Item, Collection, Helperquest, Guild, Timer, Costume | MariaDB `character_stores`, `store_sales`, `store_interiors`, `character_homes`, `character_item_collection` (Rank 0→2→3→5) |
 | **Tavern** | `internal/tavern` | 14-item culinary menu, restorative meals, food delivery standing orders | Character, Lottery | MariaDB `tavern_deliveries`, `tavern_character_status` |
 | **Wishing Well** | `internal/wishingwell` | SP sacrifice for permanent stat growth (HP/MP +2/SP, Stats +1/SP) | Character, Economy | MariaDB `characters` (Rank 2) |
 

@@ -8,6 +8,7 @@ import (
 	"github.com/witchcraze/party2re/internal/auction"
 	"github.com/witchcraze/party2re/internal/bank"
 	"github.com/witchcraze/party2re/internal/blacksmith"
+	"github.com/witchcraze/party2re/internal/costume"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/fleamarket"
@@ -223,9 +224,9 @@ func (e *econServices) initStore(core *coreServices, gp store.GuildPointsRegistr
 		store.WithInventoryRepository(core.invRepo),
 	}
 	if valkeyClient != nil {
-		opts = append(opts, store.WithCostumeRepository(store.NewValkeyCostumeRepository(valkeyClient)))
+		opts = append(opts, store.WithCostumeRepository(costume.NewValkeyCostumeRepository(valkeyClient)))
 	} else {
-		opts = append(opts, store.WithCostumeRepository(store.NewMemoryCostumeRepository()))
+		opts = append(opts, store.WithCostumeRepository(costume.NewMemoryCostumeRepository()))
 	}
 
 	e.store = store.NewService(

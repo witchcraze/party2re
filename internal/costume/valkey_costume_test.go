@@ -1,4 +1,4 @@
-package store
+package costume_test
 
 import (
 	"context"
@@ -9,19 +9,20 @@ import (
 	"time"
 
 	"github.com/valkey-io/valkey-go"
+	"github.com/witchcraze/party2re/internal/costume"
 	"github.com/witchcraze/party2re/internal/testutil/valkeytest"
 )
 
 func TestValkeyCostumeRepository_NilClient(t *testing.T) {
 	ctx := context.Background()
-	repo := NewValkeyCostumeRepository(nil)
+	repo := costume.NewValkeyCostumeRepository(nil)
 
-	costume, err := repo.GetActiveCostume(ctx, "c1")
-	if err != nil || costume != nil {
-		t.Fatalf("expected nil costume and nil error, got: %v, %v", costume, err)
+	activeCostume, err := repo.GetActiveCostume(ctx, "c1")
+	if err != nil || activeCostume != nil {
+		t.Fatalf("expected nil costume and nil error, got: %v, %v", activeCostume, err)
 	}
 
-	err = repo.SaveActiveCostume(ctx, ActiveCostume{CharacterID: "c1"}, time.Hour)
+	err = repo.SaveActiveCostume(ctx, costume.ActiveCostume{CharacterID: "c1"}, time.Hour)
 	if err != nil {
 		t.Fatalf("expected nil error on nil client save, got: %v", err)
 	}
@@ -39,7 +40,7 @@ func TestValkeyCostumeRepository_GetActiveCostume(t *testing.T) {
 	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
 		return valkeytest.MakeNilResult()
 	}))
-	repo := NewValkeyCostumeRepository(client)
+	repo := costume.NewValkeyCostumeRepository(client)
 	c, err := repo.GetActiveCostume(ctx, "c1")
 	if err != nil || c != nil {
 		t.Fatalf("expected nil, nil for missing key, got: %v, %v", c, err)
@@ -49,7 +50,7 @@ func TestValkeyCostumeRepository_GetActiveCostume(t *testing.T) {
 	clientErr := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
 		return valkeytest.MakeErrorResult(errors.New("valkey connection broken"))
 	}))
-	repoErr := NewValkeyCostumeRepository(clientErr)
+	repoErr := costume.NewValkeyCostumeRepository(clientErr)
 	_, err = repoErr.GetActiveCostume(ctx, "c1")
 	if err == nil {
 		t.Fatal("expected error from broken valkey connection")
@@ -57,38 +58,37 @@ func TestValkeyCostumeRepository_GetActiveCostume(t *testing.T) {
 
 	// 3. Valid JSON active costume
 	future := time.Now().Add(2 * time.Hour).UTC()
-	active := ActiveCostume{
+	active := costume.ActiveCostume{
 		CharacterID: "c1",
 		ItemNo:      46,
-		ItemName:    "メイド服",
-		Icon:        "f46.gif",
+		ItemName:    "チョビヒゲタクシード",
+		Icon:        "chr/012.gif",
+		RentedAt:    time.Now().Add(-1 * time.Hour).UTC(),
 		ExpiresAt:   future,
 	}
-	activeBytes, _ := json.Marshal(active)
+	raw, _ := json.Marshal(active)
 	clientOK := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-		return valkeytest.MakeStringResult(string(activeBytes))
+		return valkeytest.MakeStringResult(string(raw))
 	}))
-	repoOK := NewValkeyCostumeRepository(clientOK)
+	repoOK := costume.NewValkeyCostumeRepository(clientOK)
 	got, err := repoOK.GetActiveCostume(ctx, "c1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got == nil || got.ItemNo != 46 || got.Icon != "f46.gif" {
+	if got == nil || got.CharacterID != "c1" || got.ItemNo != 46 {
 		t.Fatalf("unexpected costume returned: %+v", got)
 	}
 
-	// 4. Expired costume
-	past := time.Now().Add(-2 * time.Hour).UTC()
-	expired := ActiveCostume{
+	// 4. Expired costume in cache returns nil
+	expired := costume.ActiveCostume{
 		CharacterID: "c1",
-		ItemNo:      46,
-		ExpiresAt:   past,
+		ExpiresAt:   time.Now().Add(-1 * time.Minute).UTC(),
 	}
-	expiredBytes, _ := json.Marshal(expired)
+	rawExpired, _ := json.Marshal(expired)
 	clientExpired := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-		return valkeytest.MakeStringResult(string(expiredBytes))
+		return valkeytest.MakeStringResult(string(rawExpired))
 	}))
-	repoExpired := NewValkeyCostumeRepository(clientExpired)
+	repoExpired := costume.NewValkeyCostumeRepository(clientExpired)
 	gotExpired, err := repoExpired.GetActiveCostume(ctx, "c1")
 	if err != nil || gotExpired != nil {
 		t.Fatalf("expected nil for expired costume, got: %v, %v", gotExpired, err)
@@ -96,9 +96,9 @@ func TestValkeyCostumeRepository_GetActiveCostume(t *testing.T) {
 
 	// 5. Corrupt JSON
 	clientBadJSON := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
-		return valkeytest.MakeStringResult("{corrupt-json")
+		return valkeytest.MakeStringResult("invalid json{")
 	}))
-	repoBadJSON := NewValkeyCostumeRepository(clientBadJSON)
+	repoBadJSON := costume.NewValkeyCostumeRepository(clientBadJSON)
 	_, err = repoBadJSON.GetActiveCostume(ctx, "c1")
 	if err == nil {
 		t.Fatal("expected unmarshal error on corrupt JSON")
@@ -113,15 +113,15 @@ func TestValkeyCostumeRepository_SaveActiveCostume(t *testing.T) {
 		recordedCmd = cmd.Commands()
 		return valkeytest.MakeOKResult()
 	}))
-	repo := NewValkeyCostumeRepository(client)
+	repo := costume.NewValkeyCostumeRepository(client)
 
-	costume := ActiveCostume{
+	active := costume.ActiveCostume{
 		CharacterID: "char-123",
 		ItemNo:      55,
 		ItemName:    "水着",
 		Icon:        "m55.gif",
 	}
-	err := repo.SaveActiveCostume(ctx, costume, 3600*time.Second)
+	err := repo.SaveActiveCostume(ctx, active, 3600*time.Second)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestValkeyCostumeRepository_SaveActiveCostume(t *testing.T) {
 	}
 
 	// TTL <= 0 fallback to 86400
-	err = repo.SaveActiveCostume(ctx, costume, 0)
+	err = repo.SaveActiveCostume(ctx, active, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestValkeyCostumeRepository_ClearActiveCostume(t *testing.T) {
 		recordedCmd = cmd.Commands()
 		return valkeytest.MakeOKResult()
 	}))
-	repo := NewValkeyCostumeRepository(client)
+	repo := costume.NewValkeyCostumeRepository(client)
 
 	err := repo.ClearActiveCostume(ctx, "char-123")
 	if err != nil {

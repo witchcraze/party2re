@@ -46,6 +46,7 @@ var permittedCrossFeatureCouplings = map[string]map[string]bool{
 	"internal/gvg":    {"internal/guild": true},                          // Guild battle room validation and guild standings
 	"internal/god":    {"internal/casino": true, "internal/guild": true}, // God wishes (WishCoin50000 and WishGuildPoint1000)
 	"internal/battle": {"internal/customskill": true},                    // Battle Adapter equips custom skill gems
+	"internal/store":  {"internal/costume": true},                        // Oracle shop active costume rental inspection and management
 }
 
 // getPackagePath extracts the logical package path (e.g. "internal/casino" or "internal/core/character")

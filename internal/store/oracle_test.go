@@ -11,6 +11,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/costume"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/store"
 )
@@ -269,7 +270,7 @@ func TestOracleService_GetOracleStatus(t *testing.T) {
 	}
 	_ = charRepo.Save(ctx, char)
 
-	costumeRepo := store.NewMemoryCostumeRepository()
+	costumeRepo := costume.NewMemoryCostumeRepository()
 	wallpaperRepo := &mockHomeWallpaperRepo{}
 
 	svc := store.NewService(
@@ -465,7 +466,7 @@ func TestOracleService_ApplyAndResetCostume(t *testing.T) {
 	}
 
 	// 2. With costumeRepo
-	costumeRepo := store.NewMemoryCostumeRepository()
+	costumeRepo := costume.NewMemoryCostumeRepository()
 	svcWithRepo := store.NewService(nil, nil, nil, nil, nil, store.WithCostumeRepository(costumeRepo))
 
 	err := svcWithRepo.ApplyCostume(ctx, "char-1", 46, "チョビヒゲタクシード", "chr/012.gif", time.Now().Add(time.Hour))
