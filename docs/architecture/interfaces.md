@@ -242,6 +242,16 @@ the application services. The handler's responsibility is limited to:
 A future implementation could replace the HTTP layer with a gRPC, WebSocket,
 or in-process transport without changing the application service layer.
 
+**Response envelopes & presentation decoupling:**
+
+HTTP handlers standardize API responses using common envelopes to decouple domain facts from presentation formatting:
+- **Success Envelope (`SuccessResponse[T]`)**:
+  - `data` (`T`): Structured, machine-readable domain results without UI markup.
+  - `message` (string, optional): Human-facing presentation text or dialogue (e.g. NPC speech) constructed at the transport layer.
+- **Error Envelope (`StructuredErrorResponse`)**:
+  - `error.code` (string): Standardized machine-readable error code for client/agent branching.
+  - `error.message` (string): Safe, user-facing error description. Internal system and database diagnostics are logged to operational storage and masked from API responses.
+
 ## Application logging contract
 
 Application services that need operational diagnostics receive an injected
