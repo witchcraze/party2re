@@ -1,6 +1,7 @@
 package valkey
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -172,5 +173,46 @@ func restoreEnv(key, val string) {
 		_ = os.Setenv(key, val)
 	} else {
 		_ = os.Unsetenv(key)
+	}
+}
+
+func TestPing_NilClientReturnsError(t *testing.T) {
+	t.Parallel()
+
+	if err := Ping(context.Background(), nil); err == nil {
+		t.Fatal("expected error for nil valkey client, got nil")
+	}
+}
+
+func TestPing_LiveClientOrSkip(t *testing.T) {
+	t.Parallel()
+
+	addr := os.Getenv("PARTY2_VALKEY_ADDR")
+	if addr == "" {
+		addr = "127.0.0.1:6379"
+	}
+
+	cfg := DefaultConfig(addr)
+	cfg.DialTimeout = 500 * time.Millisecond
+
+	client, err := NewClientWithConfig(cfg)
+	if err != nil {
+		t.Skipf("Valkey not reachable at %s, skipping live ping test: %v", addr, err)
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if err := Ping(ctx, client); err != nil {
+		t.Skipf("Valkey ping failed at %s, skipping: %v", addr, err)
+	}
+
+	// Canceled context should fail
+	canceledCtx, cancelImmediate := context.WithCancel(context.Background())
+	cancelImmediate()
+
+	if err := Ping(canceledCtx, client); err == nil {
+		t.Fatal("expected error with canceled context, got nil")
 	}
 }

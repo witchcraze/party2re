@@ -37,6 +37,8 @@ func run(ctx context.Context, logger logging.Logger) error {
 	return runWithConfig(ctx, cfg, logger)
 }
 
+const startupCheckTimeout = 5 * time.Second
+
 func runWithConfig(ctx context.Context, cfg Config, logger logging.Logger) error {
 	if logger == nil {
 		logger = logging.Nop()
@@ -44,22 +46,29 @@ func runWithConfig(ctx context.Context, cfg Config, logger logging.Logger) error
 
 	db, err := database.OpenWithConfig(cfg.DB)
 	if err != nil {
-		return err
+		return fmt.Errorf("database open failed: %w", err)
 	}
 	defer db.Close()
 
-	if err := database.Ping(db); err != nil {
-		return err
+	dbPingCtx, dbPingCancel := context.WithTimeout(ctx, startupCheckTimeout)
+	defer dbPingCancel()
+	if err := database.PingContext(dbPingCtx, db); err != nil {
+		return fmt.Errorf("database ping failed: %w", err)
 	}
 	logger.Info(ctx, "database.connected", slog.Int("max_open_conns", db.Stats().MaxOpenConnections))
 
 	valkeyClient, err := valkey.NewClientWithConfig(cfg.Valkey)
 	if err != nil {
-		logger.Warn(ctx, "valkey.connect.failed", slog.String("detail", err.Error()), slog.String("fallback", "in_memory"))
-		valkeyClient = nil
-	} else {
-		defer valkeyClient.Close()
+		return fmt.Errorf("valkey client init failed: %w", err)
 	}
+	defer valkeyClient.Close()
+
+	valkeyPingCtx, valkeyPingCancel := context.WithTimeout(ctx, startupCheckTimeout)
+	defer valkeyPingCancel()
+	if err := valkey.Ping(valkeyPingCtx, valkeyClient); err != nil {
+		return fmt.Errorf("valkey ping failed: %w", err)
+	}
+	logger.Info(ctx, "valkey.connected", slog.String("addr", cfg.Valkey.Address))
 
 	// 1. Wire all application services, hooks, and HTTP handler
 	app, err := wireApp(db, valkeyClient, cfg, logger)
@@ -92,6 +101,7 @@ func runWithConfig(ctx context.Context, cfg Config, logger logging.Logger) error
 	}()
 
 	workerCtx, cancelWorker := context.WithCancel(context.Background())
+	defer cancelWorker()
 	var workerWg sync.WaitGroup
 	if app.worker != nil {
 		workerWg.Add(1)

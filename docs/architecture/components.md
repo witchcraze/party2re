@@ -204,13 +204,18 @@ To preserve parallel testability and eliminate global state mutations:
 3. **Isolated Environment Loaders**: Environment parsing functions (`ConfigFromEnvironment()`) validate and clamp variables independently.
 4. **Composition Root Organization (`cmd/party2/`)**:
    - `config.go`: Top-level `Config` struct and environment parsing.
-   - `main.go`: Process entrypoint, server lifecycle, signal trapping, and graceful shutdown (≤ 150 lines).
+   - `main.go`: Process entrypoint, server lifecycle, strict startup connectivity validation (timeout-bounded MariaDB and Valkey pings), clean teardown on failure, signal trapping, and graceful shutdown (≤ 150 lines).
    - `services_core.go`: Player, Character, Inventory, Item/Job catalogs, and transaction orchestration.
    - `services_econ.go`: Shop, Bank, Depot, Blacksmith, Alchemy, Plantation, Auction, Flea Market, and Gem Store.
    - `services_cmbt.go`: Battle engine, Boss, PvP, GvG, Dungeon, Challenge, Party, Replay, and Custom Skill.
    - `services_soc.go`: Guild, Ranking, Park, Home, Notification, Scheduling, and Worker.
    - `services_misc.go`: Town facilities and side systems (Casino, Contest, Medal, Collection, Chapel, Altar, Wishing Well, Activity, etc.).
    - `wire.go`: Cross-domain event hooks (`VictoryHook`, `SynthesisHook`, `GamePlayedHook`, `PostAdventureHook`) and HTTP handler composition.
+5. **Fail-Fast Startup Connectivity & Clean Teardown**:
+   - Both MariaDB and Valkey are required runtime infrastructure dependencies in production.
+   - During bootstrap, `runWithConfig` executes blocking, timeout-bounded connectivity checks (`database.PingContext`, `valkey.Ping`) before binding network listeners or launching background workers.
+   - If either store is unreachable or unhealthy, the process aborts startup immediately with a non-zero exit status.
+   - In-flight or partially initialized resources (database connection pools, client sockets, listeners) are deterministically released via `defer` handlers to ensure zero orphan connections or goroutines.
 
 ---
 

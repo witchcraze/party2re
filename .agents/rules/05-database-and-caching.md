@@ -147,3 +147,12 @@ When designing multi-element collection keys in Valkey Master, agents and develo
   - **Asset Conservation Invariant:** Tests MUST assert strict asset conservation across all accounts/inventories (no duplicated gold/items, no phantom claims, no double-spending).
   - **Adaptive Load Scaling:** Concurrency workers and iteration counts MUST be scaled via `GetStressConfig()` (`PARTY2_STRESS_ENABLED`): fast verification in standard CI (15 workers, 10 ops/worker) and deep stress verification when `PARTY2_STRESS_ENABLED=1` (50 workers, 20 ops/worker).
 - **Centralized Test Entity Factories:** Integration and stress tests MUST utilize centralized entity factories (`CreateTestPlayer`, `CreateTestCharacterWithFunds`, `CreateTestGuildWithLeader`, `CreateTestInventoryWithItems`, `CreateTestDepot`) rather than duplicating ad-hoc player/character creation boilerplate. Factories automatically enforce domain name length constraints (<= 32 chars) and unique suffixes (`id.New()[:8]`) to prevent primary key / unique constraint collisions across repeated test runs.
+
+## 7. Lifecycle: Fail-Fast Startup Connectivity & Clean Teardown
+- **Mandatory Fail-Fast Validation**: Both MariaDB and Valkey are strictly required runtime dependencies for the production application. During application bootstrap (`cmd/party2`), the startup sequence MUST perform blocking, timeout-bounded connectivity checks (`database.PingContext` and `valkey.Ping`) against both stores before binding network listeners or serving traffic.
+- **Prohibition of Silent In-Memory Fallbacks in Production**: Application bootstrap MUST NOT catch connectivity/authentication errors and silently degrade or fall back to in-memory mocks/stores. If either data store is unreachable, unconfigured, or unhealthy, the process MUST abort startup immediately with a non-zero exit code and structured error log.
+- **Ordered Clean Teardown (Zero Orphan State)**: If startup aborts at any point during initialization (e.g. MariaDB connected, but Valkey ping timed out; or HTTP listener bind failed):
+  - Any partially allocated resources (database connection pools, Valkey client sockets, background workers, listeners) MUST be cleanly and deterministically released using structured `defer` or context cancellation.
+  - The process MUST NOT leave hanging connection pools, orphaned sockets, or leaking goroutines.
+- **Test Isolation Boundary**: In-memory repositories and mock clients are permitted strictly within unit test suites (`_test.go`), NEVER as runtime fallbacks in production wiring (`cmd/party2/wire.go`).
+

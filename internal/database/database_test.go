@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -197,5 +198,36 @@ func TestConfiguredDatabaseIsReachable(t *testing.T) {
 	var migration string
 	if err := db.QueryRow("SELECT version FROM schema_migrations WHERE version = '001_initial'").Scan(&migration); err != nil {
 		t.Fatalf("initial migration was not applied: %v", err)
+	}
+}
+
+func TestPing_NilDatabase(t *testing.T) {
+	t.Parallel()
+
+	if err := Ping(nil); err == nil {
+		t.Fatal("expected error when db is nil, got nil")
+	}
+
+	if err := PingContext(context.Background(), nil); err == nil {
+		t.Fatal("expected error when db is nil in PingContext, got nil")
+	}
+}
+
+func TestPingContext_CanceledContext(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatalf("OpenFromEnvironment() error = %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if err := PingContext(ctx, db); err == nil {
+		t.Fatal("expected error with canceled context, got nil")
 	}
 }
