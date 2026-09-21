@@ -268,8 +268,46 @@ func TestService_DepositAndWithdraw(t *testing.T) {
 		if _, err := service.Deposit(ctx, "", 100); !errors.Is(err, bank.ErrInvalidCharacterID) {
 			t.Errorf("expected ErrInvalidCharacterID, got %v", err)
 		}
+		if _, err := service.Deposit(ctx, "   ", 100); !errors.Is(err, bank.ErrInvalidCharacterID) {
+			t.Errorf("expected ErrInvalidCharacterID, got %v", err)
+		}
 		if _, err := service.Deposit(ctx, "c1", 0); !errors.Is(err, bank.ErrInvalidAmount) {
 			t.Errorf("expected ErrInvalidAmount, got %v", err)
+		}
+		if _, err := service.Deposit(ctx, "c1", -50); !errors.Is(err, bank.ErrInvalidAmount) {
+			t.Errorf("expected ErrInvalidAmount, got %v", err)
+		}
+	})
+
+	t.Run("deposit repository error", func(t *testing.T) {
+		failRepo := newMockRepository()
+		expectedErr := errors.New("db error")
+		failRepo.err = expectedErr
+		failService, _ := bank.NewService(failRepo)
+
+		if _, err := failService.Deposit(ctx, "c1", 100); !errors.Is(err, expectedErr) {
+			t.Fatalf("expected error %v, got %v", expectedErr, err)
+		}
+	})
+
+	t.Run("deposit insufficient funds", func(t *testing.T) {
+		// c1 currently has Money: 400000, try depositing 1000000
+		if _, err := service.Deposit(ctx, "c1", 1000000); !errors.Is(err, bank.ErrInsufficientFunds) {
+			t.Fatalf("expected ErrInsufficientFunds, got %v", err)
+		}
+	})
+
+	t.Run("deposit limit exceeded", func(t *testing.T) {
+		richRepo := newMockRepository()
+		richRepo.chars["rich"] = corecharacter.Character{
+			ID:      "rich",
+			Money:   bank.MaxWallet,
+			Deposit: bank.MaxDeposit - 100,
+		}
+		richService, _ := bank.NewService(richRepo)
+
+		if _, err := richService.Deposit(ctx, "rich", 200); !errors.Is(err, bank.ErrDepositLimitExceeded) {
+			t.Fatalf("expected ErrDepositLimitExceeded, got %v", err)
 		}
 	})
 
@@ -293,8 +331,32 @@ func TestService_DepositAndWithdraw(t *testing.T) {
 		if _, err := service.Withdraw(ctx, "", 100); !errors.Is(err, bank.ErrInvalidCharacterID) {
 			t.Errorf("expected ErrInvalidCharacterID, got %v", err)
 		}
+		if _, err := service.Withdraw(ctx, "   ", 100); !errors.Is(err, bank.ErrInvalidCharacterID) {
+			t.Errorf("expected ErrInvalidCharacterID, got %v", err)
+		}
+		if _, err := service.Withdraw(ctx, "c1", 0); !errors.Is(err, bank.ErrInvalidAmount) {
+			t.Errorf("expected ErrInvalidAmount, got %v", err)
+		}
 		if _, err := service.Withdraw(ctx, "c1", -10); !errors.Is(err, bank.ErrInvalidAmount) {
 			t.Errorf("expected ErrInvalidAmount, got %v", err)
+		}
+	})
+
+	t.Run("withdraw repository error", func(t *testing.T) {
+		failRepo := newMockRepository()
+		expectedErr := errors.New("db error")
+		failRepo.err = expectedErr
+		failService, _ := bank.NewService(failRepo)
+
+		if _, err := failService.Withdraw(ctx, "c1", 100); !errors.Is(err, expectedErr) {
+			t.Fatalf("expected error %v, got %v", expectedErr, err)
+		}
+	})
+
+	t.Run("withdraw insufficient deposit balance", func(t *testing.T) {
+		// c1 currently has Deposit: 50000, try withdrawing 100000
+		if _, err := service.Withdraw(ctx, "c1", 100000); !errors.Is(err, bank.ErrInsufficientBalance) {
+			t.Fatalf("expected ErrInsufficientBalance, got %v", err)
 		}
 	})
 }
