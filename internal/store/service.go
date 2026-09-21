@@ -9,6 +9,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/costume"
 	"github.com/witchcraze/party2re/internal/town"
 )
 
@@ -19,7 +20,7 @@ type Service struct {
 	itemCatalog       ItemCatalog
 	guildPoints       GuildPointsRegistrar
 	timer             TimerService
-	costumeRepo       CostumeRepository
+	costumeRepo       costume.Repository
 	homeWallpaperRepo HomeWallpaperRepository
 	invRepo           InventoryRepository
 	collection        CollectionRecorder
@@ -63,7 +64,7 @@ func WithTimer(t TimerService) Option {
 	}
 }
 
-func WithCostumeRepository(cr CostumeRepository) Option {
+func WithCostumeRepository(cr costume.Repository) Option {
 	return func(s *Service) {
 		s.costumeRepo = cr
 	}

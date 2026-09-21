@@ -1,4 +1,4 @@
-package store
+package costume
 
 import (
 	"context"
@@ -18,10 +18,12 @@ type ValkeyCostumeRepository struct {
 	client valkey.Client
 }
 
+// NewValkeyCostumeRepository creates a new Valkey-backed costume repository.
 func NewValkeyCostumeRepository(client valkey.Client) *ValkeyCostumeRepository {
 	return &ValkeyCostumeRepository{client: client}
 }
 
+// GetActiveCostume retrieves the active costume for a character from Valkey.
 func (r *ValkeyCostumeRepository) GetActiveCostume(ctx context.Context, characterID string) (*ActiveCostume, error) {
 	if r.client == nil {
 		return nil, nil
@@ -52,6 +54,7 @@ func (r *ValkeyCostumeRepository) GetActiveCostume(ctx context.Context, characte
 	return &c, nil
 }
 
+// SaveActiveCostume stores active costume state in Valkey with a TTL.
 func (r *ValkeyCostumeRepository) SaveActiveCostume(ctx context.Context, costume ActiveCostume, ttl time.Duration) error {
 	if r.client == nil {
 		return nil
@@ -72,6 +75,7 @@ func (r *ValkeyCostumeRepository) SaveActiveCostume(ctx context.Context, costume
 	return r.client.Do(ctx, cmd).Error()
 }
 
+// ClearActiveCostume deletes active costume rental state from Valkey.
 func (r *ValkeyCostumeRepository) ClearActiveCostume(ctx context.Context, characterID string) error {
 	if r.client == nil {
 		return nil

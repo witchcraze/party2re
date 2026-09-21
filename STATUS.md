@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #748 — [Chore] CustomSkill: internal/custom_skill を customskill にリネーム
+Last updated: Issue #749 — [Architecture] Store: コスチューム機能を internal/store から分離する
 
 ## Current Phase
 

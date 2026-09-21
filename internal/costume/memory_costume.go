@@ -1,4 +1,4 @@
-package store
+package costume
 
 import (
 	"context"
@@ -12,12 +12,14 @@ type MemoryCostumeRepository struct {
 	costumes map[string]ActiveCostume
 }
 
+// NewMemoryCostumeRepository creates a new in-memory costume repository.
 func NewMemoryCostumeRepository() *MemoryCostumeRepository {
 	return &MemoryCostumeRepository{
 		costumes: make(map[string]ActiveCostume),
 	}
 }
 
+// GetActiveCostume retrieves the active costume from memory if not expired.
 func (r *MemoryCostumeRepository) GetActiveCostume(_ context.Context, characterID string) (*ActiveCostume, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -33,6 +35,7 @@ func (r *MemoryCostumeRepository) GetActiveCostume(_ context.Context, characterI
 	return &res, nil
 }
 
+// SaveActiveCostume stores active costume state in memory.
 func (r *MemoryCostumeRepository) SaveActiveCostume(_ context.Context, costume ActiveCostume, _ time.Duration) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -41,6 +44,7 @@ func (r *MemoryCostumeRepository) SaveActiveCostume(_ context.Context, costume A
 	return nil
 }
 
+// ClearActiveCostume deletes active costume rental state from memory.
 func (r *MemoryCostumeRepository) ClearActiveCostume(_ context.Context, characterID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

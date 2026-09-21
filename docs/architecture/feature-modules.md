@@ -15,6 +15,7 @@ internal/
   casino/
   alchemy/
   auction/
+  costume/
   farming/
   collection/
   ranking/
@@ -29,6 +30,8 @@ When a delayed result is claimed, the feature persistence boundary must expose
 one atomic claim-and-apply operation. That operation compare-and-sets the
 claimed state and applies the resulting Core character state in the same
 transaction, so concurrent requests cannot duplicate rewards.
+
+Similarly, the `costume` feature (`internal/costume`) owns daily rented appearance state and Valkey/memory persistence, completely decoupled from `store` player-boutique transactions.
 
 The list is illustrative, not exhaustive.
 

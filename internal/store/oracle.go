@@ -12,6 +12,7 @@ import (
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/costume"
 	"github.com/witchcraze/party2re/internal/depot"
 )
 
@@ -46,18 +47,7 @@ type OracleItem struct {
 	Category string `json:"category"`
 }
 
-type ActiveCostume struct {
-	CharacterID string    `json:"character_id"`
-	ItemNo      int       `json:"item_no"`
-	ItemName    string    `json:"item_name"`
-	Icon        string    `json:"icon"`
-	RentedAt    time.Time `json:"rented_at"`
-	ExpiresAt   time.Time `json:"expires_at"`
-}
-
-func (c ActiveCostume) IsActive(now time.Time) bool {
-	return now.Before(c.ExpiresAt)
-}
+type ActiveCostume = costume.ActiveCostume
 
 type OracleStatus struct {
 	CharacterID          string          `json:"character_id"`
@@ -91,12 +81,6 @@ type CostumeBuyResult struct {
 type HomeWallpaperResult struct {
 	Wallpaper string `json:"wallpaper"`
 	Message   string `json:"message"`
-}
-
-type CostumeRepository interface {
-	GetActiveCostume(ctx context.Context, characterID string) (*ActiveCostume, error)
-	SaveActiveCostume(ctx context.Context, costume ActiveCostume, ttl time.Duration) error
-	ClearActiveCostume(ctx context.Context, characterID string) error
 }
 
 type HomeWallpaperRepository interface {
