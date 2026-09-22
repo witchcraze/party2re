@@ -17,15 +17,23 @@ The Monster system (`internal/monster`, legacy `farm.cgi` / `monster.cgi`) provi
 ## 3. Storage & Capacity Rules
 
 ### 3.1 Box Capacity (モンスター預かり所)
-- **Base Capacity**: 50 monsters.
+- **Base Capacity**: 50 monsters (100 monsters for veteran characters with completed job changes $\text{JobLevel} \ge 100$).
 - **Limit Break Expansion (`OverMonster`)**:
-  $$\text{BoxCapacity} = 50 + (50 \times \text{OverMonster}) \quad (0 \le \text{OverMonster} \le 5)$$
-  - Tier 0: 50 monsters
-  - Tier 1: 100 monsters
-  - Tier 2: 150 monsters
-  - Tier 3: 200 monsters
-  - Tier 4: 250 monsters
-  - Tier 5: 300 monsters
+  $$\text{BoxCapacity} = \text{BaseCapacity} + (50 \times \text{OverMonster}) \quad (0 \le \text{OverMonster} \le 5)$$
+  - Standard base ($50$):
+    - Tier 0: 50 monsters
+    - Tier 1: 100 monsters
+    - Tier 2: 150 monsters
+    - Tier 3: 200 monsters
+    - Tier 4: 250 monsters
+    - Tier 5: 300 monsters
+  - Veteran base ($100$, $\text{JobLevel} \ge 100$):
+    - Tier 0: 100 monsters
+    - Tier 1: 150 monsters
+    - Tier 2: 200 monsters
+    - Tier 3: 250 monsters
+    - Tier 4: 300 monsters
+    - Tier 5: 350 monsters
 
 ### 3.2 Home Pet Capacity (家のペット)
 - **Maximum Pets per Home**: Up to 8 monsters (`MaxHomePets = 8`).

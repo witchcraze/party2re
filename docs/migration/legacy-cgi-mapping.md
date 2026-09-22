@@ -9,7 +9,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** with complete file 
 ## 1. Critical Misnomer & Pitfall Warnings (取り違え厳禁)
 
 | Misnomer Trap | Authentic Legacy Specification | Go Implementation Guideline |
-| **`farm.cgi` (Monster Ranch)** | **モンスター牧場 (@モンジィ)**: 仲間モンスター保管（50〜300匹）、自宅ペット連携（8枠）、改名（8文字）、P2P譲渡、野生への解放。**作物・畑の要素は一切存在しない**。 | Dedicated to `internal/monster`. Fictional crop logic purged. (Issue #488) |
+| **`farm.cgi` (Monster Ranch)** | **モンスター牧場 (@モンジィ)**: 仲間モンスター保管（50〜350匹、転職100回以上の恩恵含む）、自宅ペット連携（8枠）、改名（8文字）、P2P譲渡、野生への解放。**作物・畑の要素は一切存在しない**。 | Dedicated to `internal/monster`. Fictional crop logic purged. (Issue #488, #787) |
 | **`plantation.cgi` (Seed Cultivation)** | **種菜園 (@ロータス)**: 6種の種（赤/青/黄/緑/銀/金）、14種の特殊肥料、枯れ率計算、翌朝タイマー、預かり所（depot）への収穫物直送。 | Dedicated to `internal/plantation` (Issue #489). |
 | **`reborn.cgi` / `altar.cgi` (No Rebirth)** | **転生の祭壇**: レベル1リセット（転生）は存在しない。**Lv99→150の限界突破（OverLevel）**および裏天界解放のみ。 | Purge fictional Rebirth system; restore OverLevel cap (Issue #470, #471). |
 | **`guild.cgi` (No Donation Leveling)** | **ギルド拠点**: ゴールド寄付によるギルドLv1〜10上げは存在しない。**活動による動的GP**、自由役職命名（6文字）、申請承認制、HEXカラー。 | Purge fictional donation levels; restore activity GP & custom roles (Issue #490). |

@@ -3,6 +3,7 @@ package monster_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -151,25 +152,40 @@ func TestValidateMonsterName(t *testing.T) {
 
 func TestBoxCapacityForCharacter(t *testing.T) {
 	tests := []struct {
+		name        string
+		jobLevel    int
+		level       int
 		overMonster int
 		wantCap     int
 	}{
-		{0, 50},
-		{1, 100},
-		{2, 150},
-		{3, 200},
-		{4, 250},
-		{5, 300},
-		{6, 300}, // capped at tier 5
-		{-1, 50}, // floored at tier 0
+		{"standard base", 0, 50, 0, 50},
+		{"standard tier 1", 0, 50, 1, 100},
+		{"standard tier 2", 0, 50, 2, 150},
+		{"standard tier 3", 0, 50, 3, 200},
+		{"standard tier 4", 0, 50, 4, 250},
+		{"standard tier 5 (max)", 0, 50, 5, 300},
+		{"standard tier 6 (clamped)", 0, 50, 6, 300},
+		{"negative tier (floored)", 0, 50, -1, 50},
+		{"high level but low job level does not grant veteran bonus", 0, 100, 0, 50},
+		{"high level 99 and low job level", 0, 99, 0, 50},
+		{"veteran job level 100 with level 1", 100, 1, 0, 100},
+		{"veteran job level 100 with level 1 and tier 5 max", 100, 1, 5, 350},
+		{"veteran job level 120 with level 50 and tier 2", 120, 50, 2, 200},
+		{"veteran job level 100 with level 1 and tier 6 (clamped)", 100, 1, 6, 350},
 	}
 
 	for _, tt := range tests {
-		char := corecharacter.Character{OverMonster: tt.overMonster}
-		got := monster.BoxCapacityForCharacter(char)
-		if got != tt.wantCap {
-			t.Errorf("BoxCapacityForCharacter(tier %d) = %d, want %d", tt.overMonster, got, tt.wantCap)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			char := corecharacter.Character{
+				JobLevel:    tt.jobLevel,
+				Level:       tt.level,
+				OverMonster: tt.overMonster,
+			}
+			got := monster.BoxCapacityForCharacter(char)
+			if got != tt.wantCap {
+				t.Errorf("BoxCapacityForCharacter(%+v) = %d, want %d", char, got, tt.wantCap)
+			}
+		})
 	}
 }
 
@@ -384,5 +400,16 @@ func TestMonsterService_GetDialogue(t *testing.T) {
 	d := svc.GetDialogue()
 	if d.NPCName != "@モンジィ" || d.Title != "モンスターじいさん" || len(d.Phrases) == 0 {
 		t.Errorf("unexpected dialogue: %+v", d)
+	}
+
+	foundCapacityPhrase := false
+	for _, phrase := range d.Phrases {
+		if strings.Contains(phrase, "転職100回以上で100匹") && strings.Contains(phrase, "最大350匹") {
+			foundCapacityPhrase = true
+			break
+		}
+	}
+	if !foundCapacityPhrase {
+		t.Errorf("expected dialogue phrase explaining 100+ reclass and 350 max capacity, got: %+v", d.Phrases)
 	}
 }
