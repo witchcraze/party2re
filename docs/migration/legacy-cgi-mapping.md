@@ -115,9 +115,9 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** with complete file 
 
 | Legacy Script | Authentic Role / Action | Go Domain Implementation | HTTP Handler & Migrations | Design Doc & OpenAPI | Status | Pitfalls / Parity Traps |
 | :--- | :--- | :--- | :--- | :--- | :---: | :--- |
-| `lib/alchemy.cgi`, `lib/_alchemy_recipe.cgi` | 錬金堂 (@トロデ) | `internal/alchemy/` | `internal/api/http/alchemy.go`<br/>`migrations/070_alchemy_overnight_depot.sql` | `docs/design/alchemy.md`<br/>`docs/api/openapi.json` | Complete (#487) | ✅ 復元完了: 完全無料、Depot素材消費、翌朝完成（自宅休息完了）、Depot直送、図鑑100%称号。 |
-| `lib/farm.cgi` | モンスター牧場 (@モンジィ) | `internal/monster/` | `internal/api/http/monster.go`<br/>`migrations/045_monster_grandpa_and_pets.sql`<br/>`migrations/071_purge_farm_plots.sql` | `docs/design/monster.md`<br/>`docs/api/openapi.json` | Complete (#488) | ✅ 復元完了: 創作の畑・作物システムを完全パージ。仲間モンスター預託（50〜300枠）、自宅ペット連携（8枠）、改名（8文字）、P2P譲渡、野生解放。 |
-| `lib/plantation.cgi` | 種菜園 (@ロータス) | `internal/plantation/` | Pending HTTP Handler | `docs/design/plantation.md` (Issue #489) | Reconciling (#489) | 6種の種、14種の肥料、水やりと枯れ率計算、翌朝収穫Depot直結。 |
+| `lib/alchemy.cgi`, `lib/_alchemy_recipe.cgi` | 錬金堂 (@トロデ) | `internal/alchemy/` | `internal/api/http/alchemy.go`<br/>`migrations/070_alchemy_overnight_depot.sql` | `docs/design/alchemy.md`<br/>`docs/api/openapi.json` | Reconciling (#788) | 完全無料・Depot素材消費・翌朝完成・Depot直送は準拠。Perl末尾コンマ構文起因で欠落した2レシピ（福袋、金の指輪）および図鑑114種判定の復元（#788）。 |
+| `lib/farm.cgi` | モンスター牧場 (@モンジィ) | `internal/monster/` | `internal/api/http/monster.go`<br/>`migrations/045_monster_grandpa_and_pets.sql`<br/>`migrations/071_purge_farm_plots.sql` | `docs/design/monster.md`<br/>`docs/api/openapi.json` | Reconciling (#787) | 創作畑パージ・仲間預託・ペット連携・改名・P2P・野生解放は準拠。転職100回ベテランボーナス枠の判定条件是正（LevelではなくJobLevel >= 100）（#787）。 |
+| `lib/plantation.cgi` | 種菜園 (@ロータス) | `internal/plantation/` | `internal/api/http/plantation.go`<br/>`migrations/072_plantation_plots.sql` | `docs/design/plantation.md`<br/>`docs/api/paths/character.json` | Compliant | ✅ 仕様監査完了: 6種の種、14種の肥料、枯れ率計算、翌朝収穫Depot直結、創作水やりなしを完全検証（PR #489）。 |
 
 ---
 
