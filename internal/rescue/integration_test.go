@@ -16,6 +16,9 @@ func TestRescueServiceIntegration_WithScheduling(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
+	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("PARTY2_VALKEY_ADDR is not configured")
+	}
 
 	ctx := context.Background()
 	db, err := database.OpenFromEnvironment()

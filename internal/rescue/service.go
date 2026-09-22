@@ -12,7 +12,6 @@ import (
 
 type RescueRepository interface {
 	Save(ctx context.Context, record RescueRecord) error
-	FindRecentByCharacterID(ctx context.Context, characterID string, since time.Time) ([]RescueRecord, error)
 	FindLatestByCharacterID(ctx context.Context, characterID string) (RescueRecord, error)
 }
 
@@ -22,7 +21,7 @@ type CharacterRepository interface {
 }
 
 type ActionCleaner interface {
-	ClearActiveActions(ctx context.Context, characterID string) error
+	ClearActiveActions(ctx context.Context, characterID string) (bool, error)
 }
 
 type Service struct {
@@ -44,6 +43,7 @@ func NewService(
 }
 
 // EmergencyRescue resets player character state when stuck or encountering errors, applying a sleep penalty cooldown.
+// If the character is safe in town with no active actions, returns early with 0 penalty cooldown per legacy rescue.cgi:56-65.
 func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason string, now time.Time) (RescueRecord, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return RescueRecord{}, ErrInvalidCharacterID
@@ -57,26 +57,32 @@ func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason strin
 		return RescueRecord{}, err
 	}
 
-	// Calculate penalty
-	penalty := DefaultPenaltySeconds
-	recentSince := now.Add(-24 * time.Hour)
-	recent, err := s.rescues.FindRecentByCharacterID(ctx, characterID, recentSince)
-	if err == nil && len(recent) > 0 {
-		penalty *= 2
+	// Clear active scheduled actions or ongoing activities
+	var cleared bool
+	if s.cleaner != nil {
+		cleared, err = s.cleaner.ClearActiveActions(ctx, characterID)
+		if err != nil {
+			return RescueRecord{}, err
+		}
 	}
 
-	// Clear active scheduled actions or ongoing activities
-	if s.cleaner != nil {
-		_ = s.cleaner.ClearActiveActions(ctx, characterID)
+	// Character is already safe in town (no ongoing or stuck activity to clear);
+	// return safe status with 0 penalty cooldown without recording a new penalty.
+	if !cleared {
+		return RescueRecord{
+			CharacterID:    char.ID,
+			Reason:         strings.TrimSpace(reason),
+			PenaltySeconds: 0,
+			CreatedAt:      now,
+		}, nil
 	}
 
 	recID := id.New()
-
 	rec := RescueRecord{
 		ID:             recID,
 		CharacterID:    char.ID,
 		Reason:         strings.TrimSpace(reason),
-		PenaltySeconds: penalty,
+		PenaltySeconds: DefaultPenaltySeconds,
 		CreatedAt:      now,
 	}
 

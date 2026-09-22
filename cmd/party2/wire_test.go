@@ -35,8 +35,8 @@ func (m *mockSchedRepo) Save(_ context.Context, _ core_scheduling.ScheduledActio
 	return nil
 }
 
-func (m *mockSchedRepo) CancelByActorID(_ context.Context, _ string) error {
-	return nil
+func (m *mockSchedRepo) CancelByActorID(_ context.Context, _ string) (int, error) {
+	return 0, nil
 }
 
 type mockChapelRepo struct {

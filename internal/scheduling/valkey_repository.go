@@ -155,22 +155,22 @@ func (r *ValkeyRepository) Save(ctx context.Context, action core_scheduling.Sche
 	return r.client.Do(ctx, r.client.B().Set().Key(actionKey).Value(string(data)).Build()).Error()
 }
 
-func (r *ValkeyRepository) CancelByActorID(ctx context.Context, actorID string) error {
+func (r *ValkeyRepository) CancelByActorID(ctx context.Context, actorID string) (int, error) {
 	if actorID == "" {
-		return nil
+		return 0, nil
 	}
 	actorKey := actorKeyPrefix + actorID
 	membersResp := r.client.Do(ctx, r.client.B().Smembers().Key(actorKey).Build())
 	if membersResp.Error() != nil {
 		if valkey.IsValkeyNil(membersResp.Error()) {
-			return nil
+			return 0, nil
 		}
-		return membersResp.Error()
+		return 0, membersResp.Error()
 	}
 
 	ids, err := membersResp.AsStrSlice()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	for _, id := range ids {
@@ -182,5 +182,5 @@ func (r *ValkeyRepository) CancelByActorID(ctx context.Context, actorID string) 
 	}
 
 	_ = r.client.Do(ctx, r.client.B().Del().Key(actorKey).Build())
-	return nil
+	return len(ids), nil
 }

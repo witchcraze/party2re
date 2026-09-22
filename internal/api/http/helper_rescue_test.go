@@ -271,4 +271,34 @@ func TestHelperAndRescueEndpoints(t *testing.T) {
 			t.Errorf("expected 600 penalty seconds, got %d", recRes.PenaltySeconds)
 		}
 	})
+
+	t.Run("POST /rescues/request - safe in town returns zero penalty", func(t *testing.T) {
+		rescueSvc.emergencyRescueFn = func(ctx context.Context, characterID, reason string, now time.Time) (rescue.RescueRecord, error) {
+			return rescue.RescueRecord{
+				CharacterID:    characterID,
+				Reason:         reason,
+				PenaltySeconds: 0,
+				CreatedAt:      now,
+			}, nil
+		}
+		defer func() { rescueSvc.emergencyRescueFn = nil }()
+
+		body := []byte(`{"character_id":"char-1","reason":"safe in town"}`)
+		req := httptest.NewRequest(http.MethodPost, "/rescues/request", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-session")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d (body: %s)", rec.Code, rec.Body.String())
+		}
+		var recRes rescue.RescueRecord
+		if err := json.Unmarshal(rec.Body.Bytes(), &recRes); err != nil {
+			t.Fatalf("failed to unmarshal rescue record: %v", err)
+		}
+		if recRes.PenaltySeconds != 0 {
+			t.Errorf("expected 0 penalty seconds for safe character, got %d", recRes.PenaltySeconds)
+		}
+	})
 }

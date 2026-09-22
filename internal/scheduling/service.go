@@ -44,12 +44,14 @@ func (s *Service) ScheduleWithID(ctx context.Context, id, actionType, actorID st
 }
 
 // CancelByActorID cancels and removes all scheduled actions for the specified actor.
-func (s *Service) CancelByActorID(ctx context.Context, actorID string) error {
+func (s *Service) CancelByActorID(ctx context.Context, actorID string) (int, error) {
 	return s.repo.CancelByActorID(ctx, actorID)
 }
 
 // ClearActiveActions clears all active and pending scheduled actions for the character,
 // fulfilling the rescue.ActionCleaner interface.
-func (s *Service) ClearActiveActions(ctx context.Context, characterID string) error {
-	return s.CancelByActorID(ctx, characterID)
+// Returns true if any active actions were cleared, or false if the character was already safe with none.
+func (s *Service) ClearActiveActions(ctx context.Context, characterID string) (bool, error) {
+	count, err := s.CancelByActorID(ctx, characterID)
+	return count > 0, err
 }

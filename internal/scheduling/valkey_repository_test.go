@@ -444,12 +444,16 @@ func TestValkeyRepository_CancelByActorID(t *testing.T) {
 		t.Fatalf("Schedule a3: %v", err)
 	}
 
-	if err := repo.CancelByActorID(ctx, "actor-target"); err != nil {
+	cancelled, err := repo.CancelByActorID(ctx, "actor-target")
+	if err != nil {
 		t.Fatalf("CancelByActorID error: %v", err)
+	}
+	if cancelled != 2 {
+		t.Errorf("expected 2 cancelled actions, got %d", cancelled)
 	}
 
 	// Verify a1 and a2 are removed from pending queue and action keys
-	_, err := client.Do(ctx, client.B().Get().Key("party2:scheduled:action:"+id1).Build()).AsBytes()
+	_, err = client.Do(ctx, client.B().Get().Key("party2:scheduled:action:"+id1).Build()).AsBytes()
 	if err == nil {
 		t.Errorf("action %s should be deleted", id1)
 	}
