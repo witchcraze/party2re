@@ -103,10 +103,10 @@ func NewService(characters CharacterRepository, monsters MonsterRepository, opts
 	return s
 }
 
-// BoxCapacityForCharacter computes maximum monster box capacity based on OverMonster limit break and level.
+// BoxCapacityForCharacter computes maximum monster box capacity based on OverMonster limit break and veteran reclass count.
 func BoxCapacityForCharacter(char corecharacter.Character) int {
 	base := BaseBoxCapacity
-	if char.Level >= 100 {
+	if char.JobLevel >= 100 {
 		base = 100
 	}
 	tier := char.OverMonster

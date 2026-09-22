@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #200 — [Feature] Admin: Administrator operations and maintenance dashboard
+Last updated: Issue #787 — [Bug] Monster: Correct veteran box capacity condition from Level >= 100 to JobLevel >= 100
 
 ## Current Phase
 

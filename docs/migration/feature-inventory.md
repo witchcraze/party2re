@@ -124,7 +124,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Secret Underground Shop and NPC @ヒミツジ (#192, #462)
 - [x] Adventurer's Tavern, culinary menu, food delivery standing orders, and post-adventure fullness reset (#185, #475, #595, #634)
 - [x] Flea Market player-to-player item stalls and SQL CAS status guard (#194, #398, #477)
-- [x] Monster Grandpa & Monster Ranch pet companion storage and stabling (#193, #488)
+- [x] Monster Grandpa & Monster Ranch pet companion storage and stabling (#193, #488, #787)
 - [x] Altar of Rebirth: 6-Orb Offering, Ramia Awakening, and Otherworld Travel Item Wishes (#471, #503)
 - [x] Player Store & Town Boutiques: store construction, depot listings, and interior styling (#424, #466)
 - [x] Oracle Shop: authentic item purchasing (@kau), consumable costume usage with gender parity, home wallpaper boutique, and Black Market discovery hint (#721, #724)
