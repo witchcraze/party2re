@@ -42,15 +42,18 @@ func TestRescueRepository_Integration(t *testing.T) {
 		t.Fatalf("Save rescue record failed: %v", err)
 	}
 
-	// 2. FindRecentByCharacterID
-	results, err := repo.FindRecentByCharacterID(ctx, "char-rescue-test", now.Add(-1*time.Hour))
+	// 2. FindLatestByCharacterID
+	latest, err := repo.FindLatestByCharacterID(ctx, "char-rescue-test")
 	if err != nil {
-		t.Fatalf("FindRecentByCharacterID failed: %v", err)
+		t.Fatalf("FindLatestByCharacterID failed: %v", err)
 	}
-	if len(results) == 0 {
-		t.Fatalf("expected at least 1 rescue record")
+	if latest.ID != rec.ID {
+		t.Errorf("expected ID %s, got %s", rec.ID, latest.ID)
 	}
-	if results[0].Reason != "Client freeze rescue" {
-		t.Errorf("unexpected reason: %s", results[0].Reason)
+	if latest.Reason != "Client freeze rescue" {
+		t.Errorf("unexpected reason: %s", latest.Reason)
+	}
+	if latest.PenaltySeconds != 600 {
+		t.Errorf("expected penalty 600, got %d", latest.PenaltySeconds)
 	}
 }

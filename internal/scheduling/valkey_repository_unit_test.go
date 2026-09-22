@@ -355,7 +355,7 @@ func TestValkeyRepository_CancelByActorID(t *testing.T) {
 	// 1. Empty actorID is no-op
 	clientEmpty := valkeytest.NewMockClient()
 	repoEmpty := NewValkeyRepository(clientEmpty)
-	if err := repoEmpty.CancelByActorID(ctx, ""); err != nil {
+	if _, err := repoEmpty.CancelByActorID(ctx, ""); err != nil {
 		t.Fatalf("expected nil error for empty actorID, got %v", err)
 	}
 	if len(clientEmpty.RecordedCommands()) != 0 {
@@ -368,7 +368,7 @@ func TestValkeyRepository_CancelByActorID(t *testing.T) {
 		return valkeytest.MakeErrorResult(errSmembers)
 	}))
 	repoErr := NewValkeyRepository(clientErr)
-	if err := repoErr.CancelByActorID(ctx, "char-err"); !errors.Is(err, errSmembers) {
+	if _, err := repoErr.CancelByActorID(ctx, "char-err"); !errors.Is(err, errSmembers) {
 		t.Fatalf("expected errSmembers, got %v", err)
 	}
 
@@ -377,8 +377,8 @@ func TestValkeyRepository_CancelByActorID(t *testing.T) {
 		return valkeytest.MakeNilResult()
 	}))
 	repoNil := NewValkeyRepository(clientNil)
-	if err := repoNil.CancelByActorID(ctx, "char-nil"); err != nil {
-		t.Fatalf("expected nil error when actor key is nil, got %v", err)
+	if cancelled, err := repoNil.CancelByActorID(ctx, "char-nil"); err != nil || cancelled != 0 {
+		t.Fatalf("expected 0 cancelled and nil error when actor key is nil, got %d, %v", cancelled, err)
 	}
 
 	// 4. Multiple actions canceled
@@ -389,8 +389,12 @@ func TestValkeyRepository_CancelByActorID(t *testing.T) {
 		return valkeytest.MakeOKResult()
 	}))
 	repoSuccess := NewValkeyRepository(clientSuccess)
-	if err := repoSuccess.CancelByActorID(ctx, "char-multi"); err != nil {
+	cancelled, err := repoSuccess.CancelByActorID(ctx, "char-multi")
+	if err != nil {
 		t.Fatalf("unexpected CancelByActorID error: %v", err)
+	}
+	if cancelled != 2 {
+		t.Fatalf("expected 2 cancelled actions, got %d", cancelled)
 	}
 
 	cmds := clientSuccess.RecordedCommandStrings()

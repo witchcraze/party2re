@@ -92,8 +92,12 @@ func TestService_CancelByActorID(t *testing.T) {
 		t.Fatalf("expected 3 actions, got %d", len(repo.actions))
 	}
 
-	if err := service.CancelByActorID(ctx, "actor_1"); err != nil {
+	cancelled, err := service.CancelByActorID(ctx, "actor_1")
+	if err != nil {
 		t.Fatalf("CancelByActorID error: %v", err)
+	}
+	if cancelled != 2 {
+		t.Errorf("expected 2 cancelled actions, got %d", cancelled)
 	}
 
 	if len(repo.actions) != 1 {
@@ -113,8 +117,12 @@ func TestService_ClearActiveActions(t *testing.T) {
 	_, _ = service.Schedule(ctx, "adventure", "char-stuck", nil, time.Now().Add(2*time.Hour))
 	_, _ = service.Schedule(ctx, "other", "char-ok", nil, time.Now().Add(1*time.Hour))
 
-	if err := service.ClearActiveActions(ctx, "char-stuck"); err != nil {
+	cleared, err := service.ClearActiveActions(ctx, "char-stuck")
+	if err != nil {
 		t.Fatalf("ClearActiveActions failed: %v", err)
+	}
+	if !cleared {
+		t.Fatalf("expected cleared == true for char-stuck")
 	}
 
 	if len(repo.actions) != 1 {
@@ -122,5 +130,14 @@ func TestService_ClearActiveActions(t *testing.T) {
 	}
 	if repo.actions[0].ActorID != "char-ok" {
 		t.Errorf("expected char-ok remaining, got %s", repo.actions[0].ActorID)
+	}
+
+	// Character without active actions returns cleared == false
+	cleared, err = service.ClearActiveActions(ctx, "char-idle")
+	if err != nil {
+		t.Fatalf("ClearActiveActions failed: %v", err)
+	}
+	if cleared {
+		t.Errorf("expected cleared == false for idle character")
 	}
 }

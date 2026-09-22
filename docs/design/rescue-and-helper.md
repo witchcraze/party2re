@@ -31,11 +31,11 @@ Quests are randomly generated across four categories:
 ## 2. Emergency Rescue System (救出処理)
 
 ### Purpose & Constraints
-- Serves as an in-game recovery utility for players in invalid or trapped states.
 - Cancels and clears any active scheduled action or dangling activity.
-- Applies a default cooldown/sleep penalty of **600 seconds (10 minutes)** (`DefaultPenaltySeconds`). If consecutive rescues occur within 24 hours, the penalty is doubled to prevent abuse.
+- Applies a flat cooldown/sleep penalty of **600 seconds (10 minutes)** (`DefaultPenaltySeconds`) when unstucking a trapped character.
+- If the character is already safe in town (has no ongoing or stuck activity to clear), rescue returns early with 0 penalty cooldown and does not record a new penalty, matching legacy `rescue.cgi:56-65` (`すでに救出処理がされています`).
 - During the penalty cooldown, character actions are restricted (`IsUnderPenalty` returns true and `CheckActionAllowed` rejects actions with `ErrCharacterUnderPenalty`).
-- Records all rescue actions in `rescue_records` for auditability and moderation.
+- Records rescue actions that unstuck trapped characters in `rescue_records` for auditability and moderation.
 
 ---
 

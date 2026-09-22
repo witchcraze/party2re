@@ -18,16 +18,6 @@ func (r *stubRescueRepo) Save(_ context.Context, record RescueRecord) error {
 	return nil
 }
 
-func (r *stubRescueRepo) FindRecentByCharacterID(_ context.Context, characterID string, since time.Time) ([]RescueRecord, error) {
-	var results []RescueRecord
-	for _, rec := range r.records {
-		if rec.CharacterID == characterID && rec.CreatedAt.After(since) {
-			results = append(results, rec)
-		}
-	}
-	return results, nil
-}
-
 func (r *stubRescueRepo) FindLatestByCharacterID(_ context.Context, characterID string) (RescueRecord, error) {
 	for _, rec := range r.records {
 		if rec.CharacterID == characterID {
@@ -56,11 +46,15 @@ func (r *stubCharRepo) Update(_ context.Context, c corecharacter.Character) erro
 
 type stubActionCleaner struct {
 	clearedCharacters []string
+	stuckCharacters   map[string]bool
 }
 
-func (c *stubActionCleaner) ClearActiveActions(_ context.Context, characterID string) error {
+func (c *stubActionCleaner) ClearActiveActions(_ context.Context, characterID string) (bool, error) {
 	c.clearedCharacters = append(c.clearedCharacters, characterID)
-	return nil
+	if c.stuckCharacters != nil {
+		return c.stuckCharacters[characterID], nil
+	}
+	return true, nil
 }
 
 func TestEmergencyRescueSuccess(t *testing.T) {
@@ -115,7 +109,7 @@ func TestEmergencyRescueSuccess(t *testing.T) {
 	}
 }
 
-func TestEmergencyRescueConsecutivePenaltyMultiplier(t *testing.T) {
+func TestEmergencyRescue_ConsecutiveRescuesDoNotDoublePenalty(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 
@@ -135,16 +129,64 @@ func TestEmergencyRescueConsecutivePenaltyMultiplier(t *testing.T) {
 			"char-1": {ID: "char-1", Name: "StuckHero"},
 		},
 	}
+	cleaner := &stubActionCleaner{
+		stuckCharacters: map[string]bool{"char-1": true},
+	}
 
-	svc := NewService(rescueRepo, charRepo, nil)
+	svc := NewService(rescueRepo, charRepo, cleaner)
 
 	rec, err := svc.EmergencyRescue(ctx, "char-1", "Second stuck", now)
 	if err != nil {
 		t.Fatalf("EmergencyRescue failed: %v", err)
 	}
 
-	if rec.PenaltySeconds != DefaultPenaltySeconds*2 {
-		t.Errorf("expected 2x penalty %d, got %d", DefaultPenaltySeconds*2, rec.PenaltySeconds)
+	if rec.PenaltySeconds != DefaultPenaltySeconds {
+		t.Errorf("expected flat penalty %d (no doubling), got %d", DefaultPenaltySeconds, rec.PenaltySeconds)
+	}
+}
+
+func TestEmergencyRescue_IdleCharacterReturnsEarlyWithZeroPenalty(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	rescueRepo := &stubRescueRepo{}
+	charRepo := &stubCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-idle": {ID: "char-idle", Name: "TownHero"},
+		},
+	}
+	cleaner := &stubActionCleaner{
+		stuckCharacters: map[string]bool{"char-idle": false}, // not stuck
+	}
+
+	svc := NewService(rescueRepo, charRepo, cleaner)
+
+	rec, err := svc.EmergencyRescue(ctx, "char-idle", "Accidental click in town", now)
+	if err != nil {
+		t.Fatalf("EmergencyRescue failed: %v", err)
+	}
+
+	if rec.PenaltySeconds != 0 {
+		t.Errorf("expected 0 penalty seconds for idle character, got %d", rec.PenaltySeconds)
+	}
+	if rec.CharacterID != "char-idle" {
+		t.Errorf("expected char-idle, got %s", rec.CharacterID)
+	}
+
+	// Must NOT record a penalty record into the repository
+	if len(rescueRepo.records) != 0 {
+		t.Errorf("expected 0 saved rescue records, got %d", len(rescueRepo.records))
+	}
+
+	// Character is not under penalty
+	underPenalty, remaining, err := svc.IsUnderPenalty(ctx, "char-idle", now)
+	if err != nil || underPenalty || remaining != 0 {
+		t.Errorf("expected not under penalty, got underPenalty=%v, remaining=%v", underPenalty, remaining)
+	}
+
+	// Character can perform actions immediately
+	if err := svc.CheckActionAllowed(ctx, "char-idle", now); err != nil {
+		t.Errorf("expected action allowed for safe character, got %v", err)
 	}
 }
 
