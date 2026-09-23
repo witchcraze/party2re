@@ -116,7 +116,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Alchemy: Free Overnight Depot-linked Synthesis & Compendium (#60, #487)
 - [x] Player Auction house and free-market operations (#80, #474)
 - [x] Casino mini-games: Multi-Player Room Lobby (Candidate C), Indian Poker, High & Low, Doppelganger, Slot Machine, Prize Exchange, and distributed room locking (#81, #82, #141, #397, #408, #453, #486, #590, #630, #635, #642, #708)
-- [x] Lottery: Server-wide 20-cap Takarakuji lottery with pessimistic row locking, and Fukubiki raffle (#83, #484, #485, #631)
+- [x] Lottery: Server-wide 20-cap Takarakuji lottery with pessimistic row locking, and Fukubiki raffle (#83, #484, #485, #631, #800)
 - [x] Plantation seed cultivation with 6 seeds, 14 fertilizers, overnight maturation, and Depot delivery (#84, #489)
 - [x] Collection and Monster Book encyclopedia with combat defeat recording, canonical thresholds (180/141), and 100% completion news (#85, #797)
 - [x] Chapel prayers and blessings (#86, #472)

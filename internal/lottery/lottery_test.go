@@ -222,6 +222,91 @@ func (m *mockCharacterRepo) Update(ctx context.Context, value corecharacter.Char
 	return nil
 }
 
+func TestTakarakujiCandidatePools(t *testing.T) {
+	if len(lottery.IttoPrizeCandidates) != 5 {
+		t.Errorf("expected 5 IttoPrizeCandidates, got %d", len(lottery.IttoPrizeCandidates))
+	}
+	ittoCount265 := 0
+	for _, c := range lottery.IttoPrizeCandidates {
+		if c == "item-265" {
+			ittoCount265++
+		}
+	}
+	if ittoCount265 != 2 {
+		t.Errorf("expected 2x item-265 in IttoPrizeCandidates, got %d", ittoCount265)
+	}
+
+	if len(lottery.NitoPrizeCandidates) != 9 {
+		t.Errorf("expected 9 NitoPrizeCandidates, got %d", len(lottery.NitoPrizeCandidates))
+	}
+	nitoCount264 := 0
+	for _, c := range lottery.NitoPrizeCandidates {
+		if c == "item-264" {
+			nitoCount264++
+		}
+	}
+	if nitoCount264 != 2 {
+		t.Errorf("expected 2x item-264 in NitoPrizeCandidates, got %d", nitoCount264)
+	}
+
+	if len(lottery.SantoPrizeCandidates) != 9 {
+		t.Errorf("expected 9 SantoPrizeCandidates, got %d", len(lottery.SantoPrizeCandidates))
+	}
+	santoCount263 := 0
+	for _, c := range lottery.SantoPrizeCandidates {
+		if c == "item-263" {
+			santoCount263++
+		}
+	}
+	if santoCount263 != 2 {
+		t.Errorf("expected 2x item-263 in SantoPrizeCandidates, got %d", santoCount263)
+	}
+}
+
+func TestRollNewRoundPrizes_Distribution(t *testing.T) {
+	trials := 5000
+	ittoHits := make(map[string]int)
+	nitoHits := make(map[string]int)
+	santoHits := make(map[string]int)
+
+	for i := 0; i < trials; i++ {
+		p1, a1, p2, a2, p3, a3, err := lottery.RollNewRoundPrizes()
+		if err != nil {
+			t.Fatalf("RollNewRoundPrizes returned error: %v", err)
+		}
+		if a1 != 1 {
+			t.Errorf("amount1 = %d; want 1", a1)
+		}
+		if a2 < 1 || a2 > 2 {
+			t.Errorf("amount2 = %d; want 1 or 2", a2)
+		}
+		if a3 < 2 || a3 > 4 {
+			t.Errorf("amount3 = %d; want 2, 3, or 4", a3)
+		}
+		ittoHits[p1]++
+		nitoHits[p2]++
+		santoHits[p3]++
+	}
+
+	// In 1st prize, item-265 has 2/5 weight (40%). In 5000 trials, expect ~2000 hits (allow 33% - 47%).
+	itto265Ratio := float64(ittoHits["item-265"]) / float64(trials)
+	if itto265Ratio < 0.33 || itto265Ratio > 0.47 {
+		t.Errorf("item-265 ratio in Itto = %f; expected ~0.40", itto265Ratio)
+	}
+
+	// In 2nd prize, item-264 has 2/9 weight (22.2%). In 5000 trials, expect ~1111 hits (allow 17% - 27%).
+	nito264Ratio := float64(nitoHits["item-264"]) / float64(trials)
+	if nito264Ratio < 0.17 || nito264Ratio > 0.27 {
+		t.Errorf("item-264 ratio in Nito = %f; expected ~0.222", nito264Ratio)
+	}
+
+	// In 3rd prize, item-263 has 2/9 weight (22.2%). In 5000 trials, expect ~1111 hits (allow 17% - 27%).
+	santo263Ratio := float64(santoHits["item-263"]) / float64(trials)
+	if santo263Ratio < 0.17 || santo263Ratio > 0.27 {
+		t.Errorf("item-263 ratio in Santo = %f; expected ~0.222", santo263Ratio)
+	}
+}
+
 func TestNextDrawDateJST(t *testing.T) {
 	jst := time.FixedZone("JST", 9*60*60)
 
@@ -695,8 +780,8 @@ func TestEvaluateRaffleRoll(t *testing.T) {
 			{wday: 1, itemID: "item-035", name: "ドラゴンの心"},
 			{wday: 2, itemID: "item-036", name: "闇のロザリオ"},
 			{wday: 3, itemID: "item-088", name: "魔銃"},
-			{wday: 4, itemID: "item-037", name: "ギザールの野菜"},
-			{wday: 5, itemID: "item-038", name: "クポの実"},
+			{wday: 4, itemID: "item-037", name: "走鳥の野菜"},
+			{wday: 5, itemID: "item-038", name: "幻獣の実"},
 			{wday: 6, itemID: "item-039", name: "ギャンブルハート"},
 		}
 

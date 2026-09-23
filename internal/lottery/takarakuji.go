@@ -30,12 +30,14 @@ var (
 	ErrDepotFull        = depot.ErrDepotFull
 )
 
-// Legacy prize candidates from party2/lib/takarakuzi.cgi
+// Legacy prize candidates from party2/lib/takarakuzi.cgi:23-53
+// Note: duplicate entries intentionally establish authentic weighted probabilities
 var (
 	IttoPrizeCandidates = []string{
 		"item-129", // 神の錬金レシピ
 		"item-266", // 奇跡の錬金レシピ
 		"item-265", // 聖なる秘石
+		"item-265", // 聖なる秘石 (2/5 weight)
 		"item-255", // 黄金の林檎
 	}
 
@@ -45,6 +47,7 @@ var (
 		"item-150",
 		"item-173",
 		"item-207",
+		"item-264", // 2/9 weight
 		"armor-40",
 		"weapon-40",
 		"item-265",
@@ -58,6 +61,7 @@ var (
 		"item-253",
 		"item-254",
 		"item-263",
+		"item-263", // 2/9 weight
 		"item-264",
 	}
 

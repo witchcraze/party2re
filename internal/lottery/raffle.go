@@ -55,8 +55,8 @@ var DayOfWeekGrandPrizes = [7]GrandPrizeItem{
 	1: {ItemDefinitionID: "item-035", Name: "ドラゴンの心"},
 	2: {ItemDefinitionID: "item-036", Name: "闇のロザリオ"},
 	3: {ItemDefinitionID: "item-088", Name: "魔銃"},
-	4: {ItemDefinitionID: "item-037", Name: "ギザールの野菜"},
-	5: {ItemDefinitionID: "item-038", Name: "クポの実"},
+	4: {ItemDefinitionID: "item-037", Name: "走鳥の野菜"},
+	5: {ItemDefinitionID: "item-038", Name: "幻獣の実"},
 	6: {ItemDefinitionID: "item-039", Name: "ギャンブルハート"},
 }
 
