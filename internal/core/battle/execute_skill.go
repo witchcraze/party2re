@@ -32,9 +32,15 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 		} else if skill.TargetScope == TargetScopeSelf {
 			healTargets = []Participant{actor}
 		} else { // TargetScopeSingleAlly or default
-			lowest := findLowestHPTarget(allyParty, ctx.hpMap)
-			if lowest != nil {
-				healTargets = []Participant{*lowest}
+			if ctx.isConfused(actor) {
+				if tgt := ctx.resolveConfusedSingleTarget(actor); tgt != nil {
+					healTargets = []Participant{*tgt}
+				}
+			} else {
+				lowest := findLowestHPTarget(allyParty, ctx.hpMap)
+				if lowest != nil {
+					healTargets = []Participant{*lowest}
+				}
 			}
 		}
 		for _, tgt := range healTargets {
@@ -62,12 +68,29 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 		var buffTargets []Participant
 		if skill.TargetScope == TargetScopeAllAllies {
 			buffTargets = allyParty
-		} else if skill.TargetScope == TargetScopeSelf || skill.TargetScope == TargetScopeSingleAlly {
+		} else if skill.TargetScope == TargetScopeSelf {
 			buffTargets = []Participant{actor}
 		} else {
-			buffTargets = []Participant{actor}
+			if ctx.isConfused(actor) {
+				if tgt := ctx.resolveConfusedSingleTarget(actor); tgt != nil {
+					buffTargets = []Participant{*tgt}
+				}
+			} else {
+				buffTargets = []Participant{actor}
+			}
 		}
 		for _, tgt := range buffTargets {
+			if ctx.statusMap[tgt.ID] == StatusSabaku || ctx.statusMap[tgt.ID] == "鎖縛" {
+				ctx.logs = append(ctx.logs, TurnLog{
+					Turn:        ctx.turns,
+					ActorID:     actor.ID,
+					ActionName:  skill.Name,
+					TargetID:    tgt.ID,
+					Message:     fmt.Sprintf("%s は鎖縛により能力があがらない！", tgt.NameOrID()),
+					RemainingHP: copyHPMap(ctx.hpMap),
+				})
+				continue
+			}
 			stat := skill.BuffStat
 			if stat == "" {
 				stat = "defense"
@@ -95,9 +118,15 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 		if skill.TargetScope == TargetScopeAllEnemies {
 			statusTargets = opponents
 		} else {
-			primaryTarget := findLowestHPTarget(opponents, ctx.hpMap)
-			if primaryTarget != nil {
-				statusTargets = []Participant{*primaryTarget}
+			if ctx.isConfused(actor) {
+				if tgt := ctx.resolveConfusedSingleTarget(actor); tgt != nil {
+					statusTargets = []Participant{*tgt}
+				}
+			} else {
+				primaryTarget := findLowestHPTarget(opponents, ctx.hpMap)
+				if primaryTarget != nil {
+					statusTargets = []Participant{*primaryTarget}
+				}
 			}
 		}
 		for _, tgt := range statusTargets {
@@ -117,9 +146,15 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 		if skill.TargetScope == TargetScopeAllEnemies {
 			targetList = opponents
 		} else {
-			primaryTarget := findLowestHPTarget(opponents, ctx.hpMap)
-			if primaryTarget != nil {
-				targetList = []Participant{*primaryTarget}
+			if ctx.isConfused(actor) {
+				if tgt := ctx.resolveConfusedSingleTarget(actor); tgt != nil {
+					targetList = []Participant{*tgt}
+				}
+			} else {
+				primaryTarget := findLowestHPTarget(opponents, ctx.hpMap)
+				if primaryTarget != nil {
+					targetList = []Participant{*primaryTarget}
+				}
 			}
 		}
 		decayMult := 1.0
@@ -163,9 +198,15 @@ func (ctx *battleContext) executeCustomSkill(actor Participant, cs *ActionCustom
 			if gem.TargetScope == TargetScopeAllAllies {
 				healTargets = allyParty
 			} else {
-				lowest := findLowestHPTarget(allyParty, ctx.hpMap)
-				if lowest != nil {
-					healTargets = []Participant{*lowest}
+				if ctx.isConfused(actor) {
+					if tgt := ctx.resolveConfusedSingleTarget(actor); tgt != nil {
+						healTargets = []Participant{*tgt}
+					}
+				} else {
+					lowest := findLowestHPTarget(allyParty, ctx.hpMap)
+					if lowest != nil {
+						healTargets = []Participant{*lowest}
+					}
 				}
 			}
 			for _, tgt := range healTargets {
@@ -193,9 +234,26 @@ func (ctx *battleContext) executeCustomSkill(actor Participant, cs *ActionCustom
 			if gem.TargetScope == TargetScopeAllAllies {
 				buffTargets = allyParty
 			} else {
-				buffTargets = []Participant{actor}
+				if ctx.isConfused(actor) {
+					if tgt := ctx.resolveConfusedSingleTarget(actor); tgt != nil {
+						buffTargets = []Participant{*tgt}
+					}
+				} else {
+					buffTargets = []Participant{actor}
+				}
 			}
 			for _, tgt := range buffTargets {
+				if ctx.statusMap[tgt.ID] == StatusSabaku || ctx.statusMap[tgt.ID] == "鎖縛" {
+					ctx.logs = append(ctx.logs, TurnLog{
+						Turn:        ctx.turns,
+						ActorID:     actor.ID,
+						ActionName:  cs.Name,
+						TargetID:    tgt.ID,
+						Message:     fmt.Sprintf("%s は鎖縛により能力があがらない！", tgt.NameOrID()),
+						RemainingHP: copyHPMap(ctx.hpMap),
+					})
+					continue
+				}
 				stat := gem.BuffStat
 				if stat == "" {
 					stat = "defense"
@@ -222,9 +280,15 @@ func (ctx *battleContext) executeCustomSkill(actor Participant, cs *ActionCustom
 			if gem.TargetScope == TargetScopeAllEnemies {
 				targetList = opponents
 			} else {
-				primaryTarget := findLowestHPTarget(opponents, ctx.hpMap)
-				if primaryTarget != nil {
-					targetList = []Participant{*primaryTarget}
+				if ctx.isConfused(actor) {
+					if tgt := ctx.resolveConfusedSingleTarget(actor); tgt != nil {
+						targetList = []Participant{*tgt}
+					}
+				} else {
+					primaryTarget := findLowestHPTarget(opponents, ctx.hpMap)
+					if primaryTarget != nil {
+						targetList = []Participant{*primaryTarget}
+					}
 				}
 			}
 			decayMult := 1.0

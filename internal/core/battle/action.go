@@ -45,11 +45,19 @@ func ValidateItemAction(it ActionItem) error {
 	return nil
 }
 
+// StatusEffect represents a status ailment affliction during combat resolution.
+type StatusEffect = string
+
 // Status ailments supported during combat resolution.
 const (
-	StatusParalyze = "paralyze" // 麻痺: 行動不能
-	StatusSleep    = "sleep"    // 眠り: 行動不能
-	StatusPoison   = "poison"   // 毒: ターン終了時DOT
+	StatusParalyze     StatusEffect = "paralyze"      // 麻痺: 行動不能
+	StatusSleep        StatusEffect = "sleep"         // 眠り: 行動不能
+	StatusPoison       StatusEffect = "poison"        // 毒: ポストアクションDOT
+	StatusDofuu        StatusEffect = "dofuu"         // 動封: 行動不能 (100% action skip, 即座に解除)
+	StatusKinju        StatusEffect = "kinju"         // 禁呪: 25%確率で自傷10%＆行動不能
+	StatusSabaku       StatusEffect = "sabaku"        // 鎖縛: 25%確率で行動不能, 50%確率で自然治癒, テンション/バフ無効
+	StatusConfusion    StatusEffect = "confusion"     // 混乱: 行動対象が全参加者からランダム, 20%自然治癒
+	StatusDeadlyPoison StatusEffect = "deadly_poison" // 猛毒/劇毒: 10%最大HPダメージ, 自然治癒なし
 )
 
 // ActionSkill represents a job or class skill that can be executed during battle.

@@ -8,6 +8,7 @@ type RevivalResult struct {
 	HP          int
 	Message     string
 	Cursed      bool
+	Status      string
 	AttackBuff  int
 	DefenseBuff int
 	AgilityBuff int
@@ -63,7 +64,7 @@ func CheckRevival(p *Participant, currentMP *int) RevivalResult {
 					Message: fmt.Sprintf("%sは不死の呪いでよみがえった！", name),
 				}
 			}
-		case "touki_shield", "dokuro_amulet":
+		case "touki_shield":
 			hp := maxHP / 2
 			if hp < 1 {
 				hp = 1
@@ -71,6 +72,17 @@ func CheckRevival(p *Participant, currentMP *int) RevivalResult {
 			return RevivalResult{
 				Revived: true,
 				HP:      hp,
+				Message: fmt.Sprintf("%sは瀕死でよみがえった！", name),
+			}
+		case "dokuro_amulet":
+			hp := maxHP / 4
+			if hp < 1 {
+				hp = 1
+			}
+			return RevivalResult{
+				Revived: true,
+				HP:      hp,
+				Status:  StatusDofuu,
 				Message: fmt.Sprintf("%sは瀕死でよみがえった！", name),
 			}
 		case "cursed_revive":

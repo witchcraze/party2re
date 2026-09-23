@@ -211,10 +211,13 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 			// Clear previous turn's defense stance when actor acts
 			ctx.defendingMap[actorID] = false
 
-			// Check status ailment incapacitation (paralysis, sleep)
+			// Check status ailment incapacitation (paralysis, sleep, dofuu, kinju, sabaku)
 			if ctx.checkStatusSkip(actor) {
 				continue
 			}
+
+			// Check confusion before action
+			ctx.checkConfusion(actor)
 
 			actorTeam := ctx.teamMap[actorID]
 			var opponents []Participant
@@ -289,6 +292,9 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 				ctx.executeNormalAttack(actor, opponents)
 			}
 
+			// Post-action poison evaluation (legacy _battle.cgi:810-855)
+			ctx.applyPostActionPoison(actor)
+
 			// Check battle termination early
 			aliveTeams := make(map[string]bool)
 			for _, p := range allParticipants {
@@ -300,9 +306,6 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 				break
 			}
 		}
-
-		// Apply poison DOT at the end of each round
-		ctx.applyPoisonDOT(allParticipants)
 
 		// End of round field turn countdown
 		ctx.field.EndTurn()
