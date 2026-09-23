@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #790 — [Bug] Battle: Restore canonical damage formula, hit/evasion checks, and critical strikes
+Last updated: Issue #791 — [Bug] Battle: Implement missing legacy status ailments and align poison lifecycle
 
 ## Current Phase
 
