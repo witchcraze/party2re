@@ -48,8 +48,8 @@ func TestScanCharacterRow_CustomError(t *testing.T) {
 func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 	scanner := &mockScanner{
 		scanFn: func(dest ...any) error {
-			if len(dest) != 41 {
-				t.Fatalf("expected 41 scan destinations, got %d", len(dest))
+			if len(dest) != 42 {
+				t.Fatalf("expected 42 scan destinations, got %d", len(dest))
 			}
 			*dest[0].(*string) = "char-1"
 			*dest[1].(*string) = "player-1"
@@ -78,20 +78,21 @@ func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 			*dest[24].(*int) = 8
 			*dest[25].(*int) = 12
 			*dest[26].(*int) = 7
-			*dest[27].(*string) = "srbgyp"
-			*dest[28].(*int) = 25
-			*dest[29].(*bool) = true
-			*dest[30].(*int) = 1
-			*dest[31].(*int) = 2
-			*dest[32].(*int) = 3
-			*dest[33].(*int) = 4
-			*dest[34].(*int) = 5
-			*dest[35].(*string) = "#123456"
-			*dest[36].(*int64) = 123456789
-			*dest[37].(*int) = 450
-			*dest[38].(*int) = 7
-			*dest[39].(*string) = "Legendary Sword"
-			*dest[40].(*string) = "Dragon Armor"
+			*dest[27].(*int) = 9
+			*dest[28].(*string) = "srbgyp"
+			*dest[29].(*int) = 25
+			*dest[30].(*bool) = true
+			*dest[31].(*int) = 1
+			*dest[32].(*int) = 2
+			*dest[33].(*int) = 3
+			*dest[34].(*int) = 4
+			*dest[35].(*int) = 5
+			*dest[36].(*string) = "#123456"
+			*dest[37].(*int64) = 123456789
+			*dest[38].(*int) = 450
+			*dest[39].(*int) = 7
+			*dest[40].(*string) = "Legendary Sword"
+			*dest[41].(*string) = "Dragon Armor"
 			return nil
 		},
 	}
@@ -113,8 +114,8 @@ func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 	if char.Deposit != 123456789 {
 		t.Errorf("unexpected deposit: got %d, want 123456789", char.Deposit)
 	}
-	if char.SP != 2 || char.SmallMedals != 5 || char.HelpCount != 8 || char.HeroCount != 12 || char.PvPWins != 7 {
-		t.Errorf("unexpected medals/help/hero/pvp/sp: SP %d, Medals %d, Help %d, Hero %d, PvPWins %d", char.SP, char.SmallMedals, char.HelpCount, char.HeroCount, char.PvPWins)
+	if char.SP != 2 || char.SmallMedals != 5 || char.HelpCount != 8 || char.HeroCount != 12 || char.PvPWins != 7 || char.CasinoWins != 9 {
+		t.Errorf("unexpected medals/help/hero/pvp/casino/sp: SP %d, Medals %d, Help %d, Hero %d, PvPWins %d, CasinoWins %d", char.SP, char.SmallMedals, char.HelpCount, char.HeroCount, char.PvPWins, char.CasinoWins)
 	}
 	if char.Tired != 25 {
 		t.Errorf("unexpected tired: got %d, want 25", char.Tired)

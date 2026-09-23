@@ -5,7 +5,7 @@
 The Casino (カジノ) in Party2 is an entertainment and wagering facility based faithfully on `party2/lib/casino.cgi`, `party2/lib/_casino.cgi`, `party2/lib/casino_indian.cgi`, `party2/lib/casino_highlow.cgi`, and `party2/lib/casino_doppel.cgi`.
 
 It provides:
-1. **Casino Currency Exchange**: Two-way exchange between character gold and casino coins (1 Coin = 20 Gold).
+1. **Casino Currency Exchange**: One-way exchange from character gold to casino coins (1 Coin = 20 Gold; cashing out coins back to gold is prohibited per legacy clean-room specification).
 2. **Multi-Player Room Lobby**: Real-time room recruitment and turn-based games for 2 to 8 players.
 3. **Authentic Mini-Games**:
    - Multi-Player Indian Poker (`indian`) — 13-card blind bluffing game with forehead placement and pot distribution.
@@ -21,7 +21,7 @@ It provides:
 - **Exchange Rate**: `1 Casino Coin = 20 Gold`.
 - **Wallet vs. Bank Balance**:
   - Buying coins deducts from character wallet gold (`characters.money`).
-  - Selling coins credits character wallet gold (subject to the 999,999G clamp).
+  - Selling coins is strictly prohibited per legacy clean-room specification (one-way exchange only, purged in #630).
 - **Non-negative Balance**:
   - `casino_accounts.coins >= 0` enforced by table schema and transactional checks.
 
@@ -49,7 +49,7 @@ Rooms serialize multi-player games using Valkey Master (`ValkeyRoomRepository`, 
 ### Participant Lifecycle
 - **Join (`@さんか`)**: Gated by `tired < 100`, `coins >= rate`, and available capacity.
 - **Spectate (`@けんがく`)**: Gated by room spectator allowance. Spectators cannot act or receive pot rewards.
-- **Leave (`@にげる`)**: Removes player. Automatically reassigns room leader to next active member; disbands room if 0 active members remain.
+- **Leave (`@にげる`)**: Removes player. Participating players incur a +1 fatigue penalty (`char.AddTired(1)` per `party2/lib/_casino.cgi:216-218`). Spectators leave freely without fatigue penalty. Automatically reassigns room leader to next active member; disbands room if 0 active members remain.
 - **Kick (`@きっく`)**: Leader-only eviction of non-leader members prior to game start (`round == 0`).
 - **Unified Game Dispatch**:
   - `POST /characters/{id}/casino/rooms/{roomId}/start`: Starts the game according to configured `game_type`.
@@ -65,7 +65,7 @@ Rooms serialize multi-player games using Valkey Master (`ValkeyRoomRepository`, 
 - **Actions**:
   - `call` (`つづける`): Pay current round bet into pot and stay in the hand.
   - `showdown` (`しょうぶ`): Pay current round bet into pot and vote to conclude.
-  - `fold` (`おりる`): Forfeit hand without paying; reveals card immediately.
+  - `fold` (`おりる`): Forfeit hand and pay current round bet into pot (`party2/lib/casino_indian.cgi:102`); reveals card immediately.
 - **Round Flow & Settlement**:
   - When all active members declare actions:
     - If all but one fold $\rightarrow$ remaining player wins.
@@ -211,3 +211,15 @@ In `ExchangePrize`, Depot lock (Rank 5) is acquired before Casino account lock (
 ### Showdown Settlement Atomicity & Error Propagation
 
 During multiplayer showdown resolution (`highlow`, `doppel`, `indian_poker`), member state updates (`s.roomRepo.UpdateMember`), eliminated member ejections (`s.roomRepo.RemoveMember`), and balance checks (`s.repo.GetAccount`) are executed within an atomic transaction (`RunInTx`). If any member update or balance inquiry fails, the error is propagated and the entire settlement transaction rolls back cleanly, preventing participant desynchronization or corrupted room state.
+
+---
+
+## 9. Casino Wins (`cas_c`) & Job Advancement
+
+- **Casino Wins Tracking**:
+  - Showdown winners in Indian Poker (`party2/lib/casino_indian.cgi:165`), High & Low (`party2/lib/casino_highlow.cgi:216`), and Doppelganger (`party2/lib/casino_doppel.cgi:120,138`) increment their character's `CasinoWins` (`cas_c`) by 1.
+  - Tracked persistently in `characters.casino_wins`.
+- **Gambler Job Advancement (Job 46)**:
+  - Advancing to Job 46 (Gambler / ギャンブラー) requires `CasinoWins >= 10` alongside holding `item-039` (ギャンブルハート) (`party2/lib/_data.cgi:134`). Characters with `< 10` casino wins cannot unlock Job 46 (`ErrJobUnavailable`).
+- **Rankings**:
+  - `characters.casino_wins` feeds into the 勝負師ランキング leaderboard (`ranking.cgi:16`).

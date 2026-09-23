@@ -138,11 +138,6 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 				return ErrGameNotInRound
 			}
 
-			acc, err := s.repo.GetAccountForUpdate(txCtx, characterID)
-			if err != nil {
-				return err
-			}
-
 			member, err := s.roomRepo.GetMemberForUpdate(txCtx, roomID, characterID)
 			if err != nil {
 				return ErrMemberNotFound
@@ -152,6 +147,11 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 			}
 			if member.Action != "" && member.Action != "待機中" {
 				return ErrAlreadyActed
+			}
+
+			acc, err := s.repo.GetAccount(txCtx, characterID)
+			if err != nil {
+				return err
 			}
 
 			effectiveAction := action
@@ -259,10 +259,22 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 					}
 				}
 
-				if winnerID != "" && room.Pot > 0 {
-					_, err = s.repo.DeductBetAndCreditPayout(txCtx, winnerID, 0, room.Pot)
-					if err != nil {
-						return err
+				if winnerID != "" {
+					if room.Pot > 0 {
+						_, err = s.repo.DeductBetAndCreditPayout(txCtx, winnerID, 0, room.Pot)
+						if err != nil {
+							return err
+						}
+					}
+					if s.charRepo != nil {
+						wChar, err := s.charRepo.FindByIDForUpdate(txCtx, winnerID)
+						if err != nil {
+							return err
+						}
+						wChar.CasinoWins++
+						if err := s.charRepo.Update(txCtx, wChar); err != nil {
+							return err
+						}
 					}
 					showdownWinner = winnerID
 				}

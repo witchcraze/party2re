@@ -283,14 +283,41 @@ func TestChangeJob_ItemRequirementsAndExemptions(t *testing.T) {
 		t.Fatalf("expected job-33, got %s", updatedChar.JobID)
 	}
 
-	// 5. job-46 (魔銃士) exemption when job-08 (賢者) is mastered -> no item needed
-	svc, _, _, _ = setupSvc(char, state, nil)
+	// 5. job-46 (ギャンブラー) requires item-039 AND CasinoWins >= 10
+	// 5a. CasinoWins < 10 -> ErrJobUnavailable even if holding item-039
+	char.JobID = "job-01"
+	char.OldJobID = ""
+	char.CasinoWins = 9
+	invWithCard, _ := coreinventory.New(char.ID)
+	cardToken, _ := item.NewInstance("item-039", 1)
+	_ = invWithCard.Add(cardToken)
+	state, _ = corejob.NewCharacterJob(char.ID, char.JobID)
+	svc, _, _, _ = setupSvc(char, state, &invWithCard)
+	_, _, err = svc.ChangeJob(ctx, char.ID, "job-46")
+	if !errors.Is(err, corejob.ErrJobUnavailable) {
+		t.Fatalf("expected ErrJobUnavailable when CasinoWins < 10, got %v", err)
+	}
+
+	// 5b. CasinoWins >= 10 but missing item-039 -> ErrRequiredItem
+	char.CasinoWins = 10
+	invEmpty, _ := coreinventory.New(char.ID)
+	svc, _, _, _ = setupSvc(char, state, &invEmpty)
+	_, _, err = svc.ChangeJob(ctx, char.ID, "job-46")
+	if !errors.Is(err, ErrRequiredItem) {
+		t.Fatalf("expected ErrRequiredItem when item-039 missing, got %v", err)
+	}
+
+	// 5c. CasinoWins >= 10 and holding item-039 -> succeeds and consumes item-039
+	svc, _, _, invRepoStub := setupSvc(char, state, &invWithCard)
 	updatedChar, _, err = svc.ChangeJob(ctx, char.ID, "job-46")
 	if err != nil {
-		t.Fatalf("expected job-46 exemption when job-08 is mastered: %v", err)
+		t.Fatalf("expected job-46 change to succeed with CasinoWins >= 10 and item-039: %v", err)
 	}
 	if updatedChar.JobID != "job-46" {
 		t.Fatalf("expected job-46, got %s", updatedChar.JobID)
+	}
+	if invRepoStub.inventory.Quantity("item-039") != 0 {
+		t.Fatalf("expected item-039 to be consumed, remaining %d", invRepoStub.inventory.Quantity("item-039"))
 	}
 
 	// 6. When item IS needed, but inventories is nil -> ErrRequiredItem
@@ -368,6 +395,34 @@ func TestChangeJob_EconomyBranches(t *testing.T) {
 	}
 	if invRepo.inv.Quantity("item-028") != 0 {
 		t.Fatalf("expected item-028 consumed, got %d", invRepo.inv.Quantity("item-028"))
+	}
+
+	// 5. job-46 in economy mode: CasinoWins < 10 returns ErrJobUnavailable
+	charRepo.char.JobID = "job-01"
+	charRepo.char.Level = 50
+	charRepo.char.CasinoWins = 5
+	ecoCharRepo.char.JobID = "job-01"
+	ecoCharRepo.char.Level = 50
+	ecoCharRepo.char.CasinoWins = 5
+	card, _ := item.NewInstance("item-039", 1)
+	_ = invRepo.inv.Add(card)
+	_, _, err = svc.ChangeJob(ctx, char.ID, "job-46")
+	if !errors.Is(err, corejob.ErrJobUnavailable) {
+		t.Fatalf("expected ErrJobUnavailable in economy mode for job-46 when CasinoWins < 10, got %v", err)
+	}
+
+	// 6. job-46 in economy mode: CasinoWins >= 10 succeeds and consumes item-039
+	charRepo.char.CasinoWins = 10
+	ecoCharRepo.char.CasinoWins = 10
+	updatedGambler, _, err := svc.ChangeJob(ctx, char.ID, "job-46")
+	if err != nil {
+		t.Fatalf("expected job-46 change to succeed in economy mode: %v", err)
+	}
+	if updatedGambler.JobID != "job-46" {
+		t.Fatalf("expected job-46, got %s", updatedGambler.JobID)
+	}
+	if invRepo.inv.Quantity("item-039") != 0 {
+		t.Fatalf("expected item-039 consumed in economy mode, got %d", invRepo.inv.Quantity("item-039"))
 	}
 }
 
