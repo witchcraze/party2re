@@ -68,3 +68,14 @@ To minimize boilerplate and guarantee uniform metadata capture across different 
   - `RecordCharacterVsMonster(ctx, combatType, initiatorChar, monsterID, monsterName, hp, atk, def, result)`: PvE boss / encounter recorder.
   - `RecordParticipantVsParticipant(ctx, combatType, initiatorPart, initiatorName, opponentPart, opponentName, result)`: Direct participant recorder.
 
+---
+
+## HTTP Endpoints
+
+| Method | Path | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/replays/{id}` | Public | Retrieve structured battle replay document with turn logs and participant snapshots |
+| `GET` | `/replays/recent` | Public | Retrieve global public recent match feed with limit and cursor pagination |
+| `GET` | `/characters/{id}/replays` | Session (`Bearer`) | Retrieve character match history with optional `combat_type` filter and cursor pagination |
+
+

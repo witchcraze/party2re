@@ -156,6 +156,7 @@ type Handler struct {
 	wishingWell    WishingWellService
 	bank           BankService
 	blacksmith     BlacksmithService
+	replay         ReplayService
 	maintenance    MaintenanceService
 	limiter        RateLimiter
 	rateLimitCfg   RateLimitConfig
@@ -565,6 +566,11 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/gvg/rooms/{room_id}/advance", h.handleAdvanceGvGRound)
 	mux.HandleFunc("GET /gvg/standings/{guild_id}", h.handleGetGvGStanding)
 	mux.HandleFunc("GET /gvg/leaderboard", h.handleGetGvGLeaderboard)
+
+	// Battle Replays
+	mux.HandleFunc("GET /replays/{id}", h.handleGetReplay)
+	mux.HandleFunc("GET /replays/recent", h.handleGetRecentReplays)
+	mux.HandleFunc("GET /characters/{id}/replays", h.handleGetCharacterReplays)
 
 	// Guilds
 	mux.HandleFunc("GET /guilds", h.handleListGuilds)

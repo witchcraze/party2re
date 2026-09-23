@@ -264,6 +264,7 @@ func newHTTPHandler(
 		http.WithDungeon(cmbt.dungeon),
 		http.WithPvP(cmbt.pvp),
 		http.WithGvG(cmbt.gvg),
+		http.WithReplay(cmbt.replay),
 		http.WithAuction(econ.auction),
 		http.WithNotification(soc.notification),
 		http.WithHome(soc.home),

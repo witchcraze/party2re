@@ -164,7 +164,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** with complete file 
 | `lib/collection.cgi`, `lib/_add_collection.cgi`, `lib/_add_monster_book.cgi`, `party2/view_monster.cgi` | 図鑑コレクション | `internal/collection/` | `internal/api/http/collection.go`<br/>`migrations/021_collection.sql`<br/>`migrations/087_character_collection_completions.sql` | `docs/design/collection.md`<br/>`docs/api/paths/collection.json` | Compliant (#797) | 戦闘・ボス討伐勝利時のモンスター図鑑記録（RecordMonsterDefeat）配線、100%コンプリート時通知・伝説トリガー |
 | `party2/news.cgi` | 新聞ログ | `internal/notification/` | `internal/api/http/notification.go`<br/>`migrations/033_news_and_notifications.sql` | `docs/design/notifications.md`<br/>`docs/api/paths/notification.json` | Compliant | 殿堂入り、イベント当選者、速報。 |
 | `party2/ranking.cgi`, `week_ranking.cgi`, `job_ranking.cgi`, `legend.cgi` | サーバー各種ランキング・殿堂入り | `internal/ranking/` | `internal/api/http/ranking.go`<br/>`migrations/035_rankings_and_leaderboards.sql` | `docs/design/ranking.md`<br/>`docs/api/paths/ranking.json` | Reconciling (#798) | 🚨 欠落: 殿堂入り（legend.cgi 6称号）、週間転職ランキング（week_ranking.cgi 週次ローテ）、勝負師(cas_c)・錬金(alc_c)ランキング |
-| `party2/replay.cgi` | 戦闘リプレイ再生 | `internal/replay/` | `internal/api/http/handler.go`<br/>`migrations/027_battle_replays.sql` | `docs/design/replay.md` | Missing (#796) | 🚨 配線欠落: `internal/replay` は実装済みだが `internal/api/http/handler.go` にHTTPエンドポイントが未登録でAPI経由の再生が不可 |
+| `party2/replay.cgi` | 戦闘リプレイ再生 | `internal/replay/` | `internal/api/http/replay.go`<br/>`migrations/027_battle_replays.sql` | `docs/design/replay.md`<br/>`docs/api/paths/replays.json` | Compliant (#796) | 戦闘リプレイ再生・個別マッチ履歴・グローバル最新フィードHTTPエンドポイント配線 |
 
 ---
 
