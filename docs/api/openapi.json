@@ -224,6 +224,103 @@
         ],
         "type": "object"
       },
+      "BattleReplay": {
+        "properties": {
+          "combat_type": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "initial_participants": {
+            "items": {
+              "$ref": "#/components/schemas/ParticipantSnapshot"
+            },
+            "type": "array"
+          },
+          "initiator_id": {
+            "type": "string"
+          },
+          "initiator_name": {
+            "type": "string"
+          },
+          "loser_id": {
+            "type": "string"
+          },
+          "opponent_id": {
+            "type": "string"
+          },
+          "opponent_name": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "total_turns": {
+            "type": "integer"
+          },
+          "turn_logs": {
+            "items": {
+              "$ref": "#/components/schemas/BattleTurnLog"
+            },
+            "type": "array"
+          },
+          "winner_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "combat_type",
+          "initiator_id",
+          "opponent_id",
+          "outcome",
+          "total_turns",
+          "initial_participants",
+          "turn_logs",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "BattleTurnLog": {
+        "properties": {
+          "action_name": {
+            "type": "string"
+          },
+          "actor_id": {
+            "type": "string"
+          },
+          "damage_dealt": {
+            "type": "integer"
+          },
+          "healing_done": {
+            "type": "integer"
+          },
+          "is_critical": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "remaining_hp": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "turn": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "BazaarItem": {
         "properties": {
           "category": {
@@ -986,6 +1083,38 @@
         ],
         "type": "object"
       },
+      "CursorPageReplayHeader": {
+        "properties": {
+          "has_more": {
+            "description": "Whether additional records exist beyond the current page",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReplayHeader"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "next_cursor": {
+            "description": "Opaque cursor token for retrieving the next page of results",
+            "type": "string"
+          },
+          "prev_cursor": {
+            "description": "Opaque cursor token for retrieving the previous page of results",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "has_more"
+        ],
+        "type": "object"
+      },
       "DeletePlayerRequest": {
         "properties": {
           "password": {
@@ -1658,6 +1787,42 @@
         ],
         "type": "object"
       },
+      "ParticipantSnapshot": {
+        "properties": {
+          "agility": {
+            "type": "integer"
+          },
+          "attack": {
+            "type": "integer"
+          },
+          "defense": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "max_hp",
+          "attack",
+          "defense"
+        ],
+        "type": "object"
+      },
       "Party": {
         "properties": {
           "created_at": {
@@ -2001,6 +2166,51 @@
         },
         "required": [
           "memory_id"
+        ],
+        "type": "object"
+      },
+      "ReplayHeader": {
+        "properties": {
+          "combat_type": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "initiator_id": {
+            "type": "string"
+          },
+          "initiator_name": {
+            "type": "string"
+          },
+          "opponent_id": {
+            "type": "string"
+          },
+          "opponent_name": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "total_turns": {
+            "type": "integer"
+          },
+          "winner_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "combat_type",
+          "initiator_id",
+          "opponent_id",
+          "outcome",
+          "total_turns",
+          "created_at"
         ],
         "type": "object"
       },
@@ -13059,6 +13269,131 @@
         ]
       }
     },
+    "/characters/{id}/replays": {
+      "get": {
+        "operationId": "getCharacterReplays",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional combat type filter (e.g. pvp, gvg, boss, dungeon, adventure, challenge)",
+            "in": "query",
+            "name": "combat_type",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum number of replays to return",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque cursor for keyset pagination",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "$ref": "#/components/schemas/ReplayHeader"
+                      },
+                      "type": "array"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CursorPageReplayHeader"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Character battle replay match history"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - character does not belong to authenticated player"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character not found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Retrieve character match history with optional combat_type filter and cursor pagination",
+        "tags": [
+          "Character",
+          "Replay"
+        ]
+      }
+    },
     "/characters/{id}/secretshop": {
       "get": {
         "description": "Checks character eligibility and returns secret shop status and available rare items.",
@@ -20559,6 +20894,148 @@
         ]
       }
     },
+    "/replays/recent": {
+      "get": {
+        "operationId": "getRecentReplays",
+        "parameters": [
+          {
+            "description": "Optional combat type filter (e.g. pvp, gvg, boss, dungeon, adventure, challenge)",
+            "in": "query",
+            "name": "combat_type",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum number of replays to return",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque cursor for keyset pagination",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "$ref": "#/components/schemas/ReplayHeader"
+                      },
+                      "type": "array"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CursorPageReplayHeader"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Recent public battle replays"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Retrieve global public recent match feed with limit and cursor pagination",
+        "tags": [
+          "Replay"
+        ]
+      }
+    },
+    "/replays/{id}": {
+      "get": {
+        "operationId": "getReplay",
+        "parameters": [
+          {
+            "description": "Unique battle replay UUID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BattleReplay"
+                }
+              }
+            },
+            "description": "Structured battle replay document with participant snapshots and turn logs"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request - invalid replay id"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Replay not found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Retrieve structured battle replay document with turn logs by ID",
+        "tags": [
+          "Replay"
+        ]
+      }
+    },
     "/rescues/penalty": {
       "get": {
         "operationId": "getRescuePenalty",
@@ -21297,6 +21774,10 @@
     {
       "description": "Goddess wishing well and skill point stat sacrifice exchange",
       "name": "WishingWell"
+    },
+    {
+      "description": "Step-by-step combat battle replay playback and match history",
+      "name": "Replay"
     }
   ]
 }

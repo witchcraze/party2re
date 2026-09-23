@@ -1862,6 +1862,131 @@
       ]
     }
   },
+  "/characters/{id}/replays": {
+    "get": {
+      "operationId": "getCharacterReplays",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Optional combat type filter (e.g. pvp, gvg, boss, dungeon, adventure, challenge)",
+          "in": "query",
+          "name": "combat_type",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Maximum number of replays to return",
+          "in": "query",
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Opaque cursor for keyset pagination",
+          "in": "query",
+          "name": "cursor",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "$ref": "#/components/schemas/ReplayHeader"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CursorPageReplayHeader"
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Character battle replay match history"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unauthorized"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Forbidden - character does not belong to authenticated player"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character not found"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Retrieve character match history with optional combat_type filter and cursor pagination",
+      "tags": [
+        "Character",
+        "Replay"
+      ]
+    }
+  },
   "/characters/{id}/store": {
     "get": {
       "operationId": "getCharactersIdStore",

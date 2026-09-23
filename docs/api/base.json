@@ -107,6 +107,10 @@
     {
       "description": "Goddess wishing well and skill point stat sacrifice exchange",
       "name": "WishingWell"
+    },
+    {
+      "description": "Step-by-step combat battle replay playback and match history",
+      "name": "Replay"
     }
   ],
   "components": {
@@ -261,6 +265,103 @@
           "toast_count",
           "message"
         ],
+        "type": "object"
+      },
+      "BattleReplay": {
+        "properties": {
+          "combat_type": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "initial_participants": {
+            "items": {
+              "$ref": "#/components/schemas/ParticipantSnapshot"
+            },
+            "type": "array"
+          },
+          "initiator_id": {
+            "type": "string"
+          },
+          "initiator_name": {
+            "type": "string"
+          },
+          "loser_id": {
+            "type": "string"
+          },
+          "opponent_id": {
+            "type": "string"
+          },
+          "opponent_name": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "total_turns": {
+            "type": "integer"
+          },
+          "turn_logs": {
+            "items": {
+              "$ref": "#/components/schemas/BattleTurnLog"
+            },
+            "type": "array"
+          },
+          "winner_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "combat_type",
+          "initiator_id",
+          "opponent_id",
+          "outcome",
+          "total_turns",
+          "initial_participants",
+          "turn_logs",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "BattleTurnLog": {
+        "properties": {
+          "action_name": {
+            "type": "string"
+          },
+          "actor_id": {
+            "type": "string"
+          },
+          "damage_dealt": {
+            "type": "integer"
+          },
+          "healing_done": {
+            "type": "integer"
+          },
+          "is_critical": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "remaining_hp": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "turn": {
+            "type": "integer"
+          }
+        },
         "type": "object"
       },
       "BazaarItem": {
@@ -1002,6 +1103,38 @@
           "items": {
             "items": {
               "$ref": "#/components/schemas/ParkPost"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Page size limit",
+            "type": "integer"
+          },
+          "next_cursor": {
+            "description": "Opaque cursor token for retrieving the next page of results",
+            "type": "string"
+          },
+          "prev_cursor": {
+            "description": "Opaque cursor token for retrieving the previous page of results",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "has_more"
+        ],
+        "type": "object"
+      },
+      "CursorPageReplayHeader": {
+        "properties": {
+          "has_more": {
+            "description": "Whether additional records exist beyond the current page",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReplayHeader"
             },
             "type": "array"
           },
@@ -1768,6 +1901,42 @@
         ],
         "type": "object"
       },
+      "ParticipantSnapshot": {
+        "properties": {
+          "agility": {
+            "type": "integer"
+          },
+          "attack": {
+            "type": "integer"
+          },
+          "defense": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "max_hp",
+          "attack",
+          "defense"
+        ],
+        "type": "object"
+      },
       "Party": {
         "properties": {
           "created_at": {
@@ -2111,6 +2280,51 @@
         },
         "required": [
           "memory_id"
+        ],
+        "type": "object"
+      },
+      "ReplayHeader": {
+        "properties": {
+          "combat_type": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "initiator_id": {
+            "type": "string"
+          },
+          "initiator_name": {
+            "type": "string"
+          },
+          "opponent_id": {
+            "type": "string"
+          },
+          "opponent_name": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "total_turns": {
+            "type": "integer"
+          },
+          "winner_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "combat_type",
+          "initiator_id",
+          "opponent_id",
+          "outcome",
+          "total_turns",
+          "created_at"
         ],
         "type": "object"
       },

@@ -1,0 +1,144 @@
+{
+  "/replays/recent": {
+    "get": {
+      "operationId": "getRecentReplays",
+      "parameters": [
+        {
+          "description": "Optional combat type filter (e.g. pvp, gvg, boss, dungeon, adventure, challenge)",
+          "in": "query",
+          "name": "combat_type",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "description": "Maximum number of replays to return",
+          "in": "query",
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Opaque cursor for keyset pagination",
+          "in": "query",
+          "name": "cursor",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "$ref": "#/components/schemas/ReplayHeader"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CursorPageReplayHeader"
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Recent public battle replays"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Retrieve global public recent match feed with limit and cursor pagination",
+      "tags": [
+        "Replay"
+      ]
+    }
+  },
+  "/replays/{id}": {
+    "get": {
+      "operationId": "getReplay",
+      "parameters": [
+        {
+          "description": "Unique battle replay UUID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BattleReplay"
+              }
+            }
+          },
+          "description": "Structured battle replay document with participant snapshots and turn logs"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid replay id"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Replay not found"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Retrieve structured battle replay document with turn logs by ID",
+      "tags": [
+        "Replay"
+      ]
+    }
+  }
+}
