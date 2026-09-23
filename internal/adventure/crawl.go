@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
@@ -44,22 +45,23 @@ type DungeonCrawlRequest struct {
 
 // DungeonCrawlResult contains the complete summary of a 10-floor dungeon crawl and treasure room.
 type DungeonCrawlResult struct {
-	AdventureIDs   map[string]string    `json:"adventure_ids"` // characterID -> adventureID
-	StageID        string               `json:"stage_id"`
-	StageName      string               `json:"stage_name"`
-	FloorsCleared  int                  `json:"floors_cleared"`
-	StageCleared   bool                 `json:"stage_cleared"`
-	Outcome        corebattle.Outcome   `json:"outcome"`
-	TotalTurns     int                  `json:"total_turns"`
-	TotalEXP       int                  `json:"total_exp"`
-	TotalGold      int                  `json:"total_gold"`
-	TotalCrystals  int                  `json:"total_crystals"`
-	FloorResults   []DungeonFloorResult `json:"floor_results"`
-	TreasureBoxes  []TreasureBox        `json:"treasure_boxes,omitempty"`
-	PartySize      int                  `json:"party_size"`
-	ParticipantHPs map[string]int       `json:"participant_hps"`
-	ParticipantMPs map[string]int       `json:"participant_mps,omitempty"`
-	LostDrops      map[string][]string  `json:"lost_drops,omitempty"`
+	AdventureIDs   map[string]string                     `json:"adventure_ids"` // characterID -> adventureID
+	StageID        string                                `json:"stage_id"`
+	StageName      string                                `json:"stage_name"`
+	FloorsCleared  int                                   `json:"floors_cleared"`
+	StageCleared   bool                                  `json:"stage_cleared"`
+	Outcome        corebattle.Outcome                    `json:"outcome"`
+	TotalTurns     int                                   `json:"total_turns"`
+	TotalEXP       int                                   `json:"total_exp"`
+	TotalGold      int                                   `json:"total_gold"`
+	TotalCrystals  int                                   `json:"total_crystals"`
+	FloorResults   []DungeonFloorResult                  `json:"floor_results"`
+	TreasureBoxes  []TreasureBox                         `json:"treasure_boxes,omitempty"`
+	PartySize      int                                   `json:"party_size"`
+	ParticipantHPs map[string]int                        `json:"participant_hps"`
+	ParticipantMPs map[string]int                        `json:"participant_mps,omitempty"`
+	LostDrops      map[string][]string                   `json:"lost_drops,omitempty"`
+	MonsterTames   map[string][]battle.MonsterTameResult `json:"monster_tames,omitempty"`
 }
 
 // CrawlSession tracks step-by-step state across the 10-floor dungeon crawl and Floor 11 treasure room.

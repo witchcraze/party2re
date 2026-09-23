@@ -26,6 +26,13 @@ func (s *Service) settlePostBattle(ctx context.Context, req DungeonCrawlRequest,
 		}
 	}
 
+	var defeatedEnemies []corebattle.Participant
+	for _, floor := range result.FloorResults {
+		if floor.Cleared && len(floor.Enemies) > 0 {
+			defeatedEnemies = append(defeatedEnemies, floor.Enemies...)
+		}
+	}
+
 	postBattleReq := battle.ApplyPostBattleRequest{
 		CharacterIDs: req.CharacterIDs,
 		BattleResult: corebattle.PartyBattleResult{
@@ -39,7 +46,8 @@ func (s *Service) settlePostBattle(ctx context.Context, req DungeonCrawlRequest,
 			RemainingHP: result.ParticipantHPs,
 			RemainingMP: result.ParticipantMPs,
 		},
-		RecipientDrops: recipientDrops,
+		RecipientDrops:  recipientDrops,
+		DefeatedEnemies: defeatedEnemies,
 	}
 
 	resp, err := s.battleSettler.ApplyPostBattleResult(ctx, postBattleReq)
@@ -56,6 +64,10 @@ func (s *Service) settlePostBattle(ctx context.Context, req DungeonCrawlRequest,
 				result.LostDrops[cID] = append(result.LostDrops[cID], inst.DefinitionID)
 			}
 		}
+	}
+
+	if len(resp.MonsterTames) > 0 {
+		result.MonsterTames = resp.MonsterTames
 	}
 
 	return nil

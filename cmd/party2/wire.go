@@ -9,11 +9,13 @@ import (
 
 	valkeygo "github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/api/http"
+	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/medal"
+	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/tavern"
 )
@@ -130,6 +132,17 @@ func wireHooks(
 		econ.store.SetCollectionRecorder(misc.collection)
 		if misc.eventplaza != nil {
 			misc.eventplaza.SetCollectionRecorder(misc.collection)
+		}
+	}
+	if cmbt.battle != nil {
+		if misc.monster != nil {
+			cmbt.battle.SetMonsterTamer(monsterTamerAdapter{misc.monster})
+		}
+		if misc.chapel != nil {
+			cmbt.battle.SetBlessingProvider(chapelBlessingAdapter{misc.chapel})
+		}
+		if misc.collection != nil {
+			cmbt.battle.SetMonsterDefeatRecorder(misc.collection)
 		}
 	}
 	if misc.helper != nil {
@@ -268,4 +281,28 @@ func newHTTPHandler(
 	)
 
 	return http.NewHandler(core.playerService, core.charService, cmbt.adv, econ.shop, opts...)
+}
+
+type monsterTamerAdapter struct {
+	svc *monster.Service
+}
+
+func (a monsterTamerAdapter) TameMonster(ctx context.Context, characterID, monsterID, customName string) error {
+	_, err := a.svc.TameMonster(ctx, characterID, monsterID, customName)
+	if errors.Is(err, monster.ErrBoxFull) {
+		return battle.ErrMonsterBoxFull
+	}
+	return err
+}
+
+type chapelBlessingAdapter struct {
+	svc *chapel.Service
+}
+
+func (a chapelBlessingAdapter) GetActiveBlessing(ctx context.Context, characterID string) (string, error) {
+	b, err := a.svc.GetBlessing(ctx, characterID)
+	if err != nil {
+		return "", err
+	}
+	return string(b.ActiveBlessing), nil
 }

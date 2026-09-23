@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #791 — [Bug] Battle: Implement missing legacy status ailments and align poison lifecycle
+Last updated: Issue #805 — Battle: Post-battle monster rising and taming parity
 
 ## Current Phase
 
