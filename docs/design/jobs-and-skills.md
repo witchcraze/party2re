@@ -74,6 +74,21 @@ Job definitions are loaded from data-driven JSON (`internal/core/job/data/jobs.j
   (`$mが全ての職業をマスターしました！`).
 - Job `job-73` (すっぴん) is exclusively unlocked for characters that have mastered all 72 jobs.
 
+### Job Mastery Catalog & Completion Rate (じょぶますたー)
+- Legacy `job_master.cgi` allowed players to inspect character job progress across all 87 jobs and view total mastery percentage (`comp_par`).
+- Exposed via `GET /characters/{id}/job-mastery` as a public inspection endpoint.
+- For each job, status is determined as:
+  - `mastered`: Recorded as mastered on the character (`MasteredJobs`) or active job meeting mastery SP (`SP >= master_sp`).
+  - `learning`: Job has been experienced (currently active, previous job `OldJobID`, or present in `History`), but mastery SP is not yet reached.
+  - `unlearned`: Job has never been experienced by the character.
+- Completion percentage (`comp_par`) follows legacy `job_master.cgi:26`:
+  ```text
+  count = mastered_count * 1.0 + learning_count * 0.5
+  comp_par = min(100, int(count / 86 * 100))
+  ```
+  where the denominator 86 derives from `$#jobs - 1` (87 catalog jobs minus 1).
+- When all 72 completion jobs (`job-01` through `job-72`) are mastered, `all_jobs_mastered` is true and completion title `completion_title` is awarded (`ジョブマスター`).
+
 ### Legacy Action Reconciliation
 
 | Legacy action | Reconstruction contract | Notes |
@@ -81,6 +96,7 @@ Job definitions are loaded from data-driven JSON (`internal/core/job/data/jobs.j
 | `てんしょく` | `POST /characters/{id}/change-job` / `Service.ChangeJob` | JSON transport replaces the text command. |
 | `おもいだす` | `POST /characters/{id}/exchange-job` / `Service.ExchangeJob` | Uses `item-168`, two mastered jobs, and a persisted temporary snapshot. |
 | `よびおこす` | `POST /characters/{id}/recall-future`, `POST /characters/{id}/future-memories` / `Service.RecallFutureMemory`, `Service.SaveFutureMemory` | Uses `item-207`, slot capacity governed by `over_future`, restores status snapshot and consumes slot. |
+| `じょぶますたー` | `GET /characters/{id}/job-mastery` / `Service.GetJobMastery` | Public inspection of 87-job catalog progress, mastery percentage, and 72-job completion flag. |
 
 ### Clean-Room Naming & IP Compliance
 In compliance with `.agents/rules/00-migration-constraints.md`:

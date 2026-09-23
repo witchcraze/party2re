@@ -1412,6 +1412,69 @@
       ]
     }
   },
+  "/characters/{id}/job-mastery": {
+    "get": {
+      "description": "Retrieves the character's job mastery catalog, complete percentage, counts, and status across all 87 jobs (job_master.cgi).",
+      "operationId": "getCharacterJobMastery",
+      "parameters": [
+        {
+          "description": "Character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CharacterJobMastery"
+              }
+            }
+          },
+          "description": "Character job mastery catalog retrieved successfully"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid character ID"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character not found"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Get character job mastery catalog and completion percentage",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
   "/characters/{id}/name": {
     "post": {
       "description": "Renames a character at the Naming Hall for 500,000 G. Requires character ownership and validates guild and market constraints.",

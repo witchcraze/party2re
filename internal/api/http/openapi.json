@@ -869,6 +869,47 @@
         ],
         "type": "object"
       },
+      "CharacterJobMastery": {
+        "properties": {
+          "all_jobs_mastered": {
+            "type": "boolean"
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "completion_title": {
+            "type": "string"
+          },
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/JobProgress"
+            },
+            "type": "array"
+          },
+          "learning_count": {
+            "type": "integer"
+          },
+          "mastered_count": {
+            "type": "integer"
+          },
+          "mastery_percentage": {
+            "type": "integer"
+          },
+          "unlearned_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_id",
+          "mastery_percentage",
+          "mastered_count",
+          "learning_count",
+          "unlearned_count",
+          "all_jobs_mastered",
+          "jobs"
+        ],
+        "type": "object"
+      },
       "CharacterResponse": {
         "properties": {
           "experience": {
@@ -1287,6 +1328,38 @@
         },
         "required": [
           "status"
+        ],
+        "type": "object"
+      },
+      "JobProgress": {
+        "properties": {
+          "current_sp": {
+            "type": "integer"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "job_name": {
+            "type": "string"
+          },
+          "master_sp": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "unlearned",
+              "learning",
+              "mastered"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "job_name",
+          "status",
+          "current_sp",
+          "master_sp"
         ],
         "type": "object"
       },
@@ -10642,6 +10715,69 @@
         "summary": "Wake character up from sleep",
         "tags": [
           "Homes"
+        ]
+      }
+    },
+    "/characters/{id}/job-mastery": {
+      "get": {
+        "description": "Retrieves the character's job mastery catalog, complete percentage, counts, and status across all 87 jobs (job_master.cgi).",
+        "operationId": "getCharacterJobMastery",
+        "parameters": [
+          {
+            "description": "Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterJobMastery"
+                }
+              }
+            },
+            "description": "Character job mastery catalog retrieved successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request - invalid character ID"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character not found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Get character job mastery catalog and completion percentage",
+        "tags": [
+          "Character"
         ]
       }
     },
