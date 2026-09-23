@@ -48,7 +48,27 @@ func (ctx *battleContext) applyDamage(actor Participant, target Participant, bas
 	if ctx.defendingMap[target.ID] {
 		dmg = dmg / 2
 	}
-	if dmg < 1 {
+
+	targetAbilities := ctx.abilitiesMap[target.ID]
+	isMagic := (element != "")
+
+	isImmune := false
+	if hasAbility(targetAbilities, "大防御") {
+		dmg = dmg / 10
+	}
+	if !isMagic && hasAbility(targetAbilities, "攻軽減") {
+		dmg = dmg / 4
+	}
+	if !isMagic && hasAbility(targetAbilities, "攻無効") {
+		dmg = 0
+		isImmune = true
+	}
+	if isMagic && hasAbility(targetAbilities, "魔無効") {
+		dmg = 0
+		isImmune = true
+	}
+
+	if !isImmune && dmg < 1 {
 		dmg = 1
 	}
 	ctx.hpMap[target.ID] -= dmg
@@ -57,7 +77,13 @@ func (ctx *battleContext) applyDamage(actor Participant, target Participant, bas
 	}
 
 	var msg string
-	if isCritical {
+	if isImmune {
+		if isMagic {
+			msg = fmt.Sprintf("%s の %s！ %s は魔法をうけつけない！", actor.NameOrID(), actionName, target.NameOrID())
+		} else {
+			msg = fmt.Sprintf("%s の %s！ %s は攻撃をうけつけない！", actor.NameOrID(), actionName, target.NameOrID())
+		}
+	} else if isCritical {
 		msg = fmt.Sprintf("%s の会心の一撃！！ %s に %d のダメージ！", actor.NameOrID(), target.NameOrID(), dmg)
 	} else if isCustom {
 		msg = fmt.Sprintf("%s 「%s」 %s！ %s に %d のダメージ！", actor.NameOrID(), incantation, actionName, target.NameOrID(), dmg)

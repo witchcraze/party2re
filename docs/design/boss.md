@@ -4,7 +4,7 @@
 
 The King Sealing Battle Feature Module (`internal/boss`) provides high-tier endgame cooperative sealing battles (`vs_king.cgi`, `stage/king1..10.cgi`, `king99.cgi`) using the shared Multi-Participant Core Battle engine (`internal/core/battle`).
 
-Up to 4 players form a party in the Multiplayer Party System (`internal/party`) under quest mode "封印戦" (quest type 6) to challenge ancient sealed kings and calamitous deities. Characters face devastating enemy skills like **Dejon** (デジョン; dimensional banishment of unconscious members with severe fatigue penalties). Victorious adventurers achieve resealing via **`@ふういん`**, gaining Hero Count (勇者カウント / `$m{hero_c}`), rare treasures, worldwide server news broadcasts, and hosting a celebratory banquet in the town Event Plaza (`internal/eventplaza`).
+Up to 6 players (4 for `king99`) form a party in the Multiplayer Party System (`internal/party`) under quest mode "封印戦" (quest type 6) to challenge ancient sealed kings and calamitous deities. Characters face devastating enemy skills like **Dejon** (デジョン; dimensional banishment of unconscious members with severe fatigue penalties). Victorious adventurers achieve resealing via **`@ふういん`**, gaining Hero Count (勇者カウント / `$m{hero_c}`), rare treasures, clear-time scaled crystals (刻印晶), worldwide server news broadcasts, and hosting a celebratory banquet in the town Event Plaza (`internal/eventplaza`).
 
 ---
 
@@ -12,8 +12,9 @@ Up to 4 players form a party in the Multiplayer Party System (`internal/party`) 
 
 - **Multi-Participant Battle Engine**: Encounters are resolved through `corebattle.PartyBattleResolver` (`corebattle.Engine{}`), handling party vs. multi-enemy boss formations, agility turn-order, MP/CMP skills, and revive/banishment rules.
 - **Authentic Stage Catalog**: 11 stages faithfully reproduced from legacy Party2 CGI data (`stage/king1.cgi` through `stage/king10.cgi`, and dynamic clone stage `king99.cgi`).
+- **Capacity Parity**: `king1` through `king10` support parties of up to **6 players** (`MaxMembers: 6`), whereas `king99` retains a **4-player limit** (`MaxMembers: 4`).
 - **No Fictional Daily Limits**: Legacy Party2 has no daily attempt caps (the previously fabricated 3-entry solo raid limit has been completely removed). Entrance is governed solely by character fatigue (`tired < 100`) and stage-specific `need_join` conditions (e.g. `hp_400_o`).
-- **Transactional Consistency**: Post-battle state transitions (HeroCount increment, entry fatigue +20%, dejon fatigue +30%, loot awards, news broadcast, banquet hooks, party disbandment) are committed within a single database transaction.
+- **Transactional Consistency**: Post-battle state transitions (HeroCount increment, entry fatigue +20%, dejon fatigue +30%, loot awards, crystal rewards, news broadcast, banquet hooks, party disbandment) are committed within a single database transaction.
 
 ---
 
@@ -21,16 +22,16 @@ Up to 4 players form a party in the Multiplayer Party System (`internal/party`) 
 
 | Stage ID | Stage Name | Leader / Boss | Speed | Max Members | Participation Gate (`need_join`) | Loot Drops |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **king1** | @全てを無に還す者@ | 破壊神 (HP 150,000) + 6 Stones | 12 | 4 | `hp_400_o` (Max HP ≥ 400) | item-059, item-071, item-104 |
-| **king2** | @全てを憎む者@ | 暗黒竜 (HP 140,000) | 12 | 4 | `hp_400_o` (Max HP ≥ 400) | item-059, item-071, item-104 |
-| **king3** | @全てを破壊する者@ | 悪魔の書 (HP 100,000) | 12 | 4 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071 |
-| **king4** | @全てを喰らう者@ | デス・マスター (HP 100,000) | 12 | 4 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
-| **king5** | @全てを司る者@ | 邪神官 (HP 100,000) | 12 | 4 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
-| **king6** | @全てを統べる者@ | 破壊神 (HP 120,000) | 12 | 4 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
-| **king7** | @全てを導く者@ | 竜神 (HP 150,000) | 12 | 4 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
-| **king8** | @全てを裁く者@ | 審判者 (HP 160,000) | 12 | 4 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
-| **king9** | @全てを赦す者@ | 救世主 (HP 180,000) | 12 | 4 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
-| **king10** | @全てを越える者@ | 創世神 (HP 200,000) | 12 | 4 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
+| **king1** | @全てを無に還す者@ | 破壊神 (HP 150,000) + 6 Stones | 12 | 6 | `hp_400_o` (Max HP ≥ 400) | item-059, item-071, item-104 |
+| **king2** | @全てを憎む者@ | 暗黒竜 (HP 140,000) | 12 | 6 | `hp_400_o` (Max HP ≥ 400) | item-059, item-071, item-104 |
+| **king3** | @全てを破壊する者@ | 悪魔の書 (HP 100,000) | 12 | 6 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071 |
+| **king4** | @全てを喰らう者@ | デス・マスター (HP 100,000) | 12 | 6 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
+| **king5** | @全てを司る者@ | 邪神官 (HP 100,000) | 12 | 6 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
+| **king6** | @全てを統べる者@ | 破壊神 (HP 120,000) | 12 | 6 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
+| **king7** | @全てを導く者@ | 竜神 (HP 150,000) | 12 | 6 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
+| **king8** | @全てを裁く者@ | 審判者 (HP 160,000) | 12 | 6 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
+| **king9** | @全てを赦す者@ | 救世主 (HP 180,000) | 12 | 6 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
+| **king10** | @全てを越える者@ | 創世神 (HP 200,000) | 12 | 6 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
 | **king99** | @自分を倒す者@ | @Player Clone (Allies Stats × 50) | 10 | 4 | `hp_400_o` (Max HP ≥ 400) | item-059, item-071, item-104 |
 
 ---
@@ -41,17 +42,52 @@ Up to 4 players form a party in the Multiplayer Party System (`internal/party`) 
 - Each participating character incurs **+20% Tired** upon entering the sealing battle (`$m{tired} += 20`).
 - Characters with `tired >= 100` or `hp <= 0` cannot enter.
 
-### 2. Dejon (デジョン) Banishment
+### 2. Defensive Traits (TMP Abilities)
+Bosses and clones feature specialized passive defensive abilities processed by `internal/core/battle`:
+- **`大防御`**: Reduces all incoming damage (physical & magic) to **10%** (0.1× damage).
+- **`攻軽減`**: Reduces incoming physical damage to **25%** (0.25× damage).
+- **`攻無効`**: Nullifies all physical damage (0 damage).
+- **`魔無効`**: Nullifies all magic attacks (0 damage) and logs: `"<user> の <action>！ <target> は魔法をうけつけない！"`.
+
+### 3. Boss Skills & Clones
+- **Authentic Job Skills**: Normal bosses (`king1`..`king10`) are assigned skills mapped to their `Job` and `OldJob` based on their `SP` and `OldSP` thresholds in addition to `dejon`.
+- **`king99` Player Clones**:
+  - Clones possess 50× HP and MP, and 2× offensive/defensive stats of the participating players.
+  - Inherit all combat skills from the player's active Job and OldJob.
+  - Clones possess the **`大防御`** defensive trait.
+
+### 4. Dejon (デジョン) Banishment
 - Bosses execute the **Dejon** skill (`ActionKindDejon = "dejon"`).
 - Target: Any opposing character whose HP is reduced to `0` or below.
 - Effect: The unconscious character is cast into another dimension and permanently removed from combat. They cannot be revived for the remainder of the battle.
 - Penalty: An additional **+30% Tired** (`$m{tired} += 30`) is applied to banished characters upon battle conclusion.
 
-### 3. Victory & `@ふういん` Resealing
+### 5. Victory, Resealing (`@ふういん`), & Rewards
 Upon defeating all enemy boss participants:
 1. **Hero Count**: All party members receive **+1 Hero Count** (`characters.hero_count` / `$m{hero_c}`).
-2. **Treasure Drop**: A random item from the stage's `treasure_item_ids` is awarded. Reward delivery uses `coreinventory.Inventory` capacity enforcement; overflow items route to `depot.Depot` storage (Rank 5 lock); items overflowing a full depot are treated as lost drops (`_npc_action.cgi:74-75`).
-3. **Exp & Gold**: Distributed to all party members.
-4. **Server News**: A worldwide announcement is broadcast: `"勇者○○が○○を封印する"`.
-5. **Celebration Banquet**: Triggers a 2-hour victory banquet in Event Plaza (`_win_vs_king.cgi`).
-6. **Lobby Disbandment**: The temporary staging party is deleted upon conclusion.
+2. **Crystals (刻印晶)**:
+   - Base crystals: Sum of `GetCrystal` for defeated bosses in normal stages; $\text{len(allies)} \times 20$ in `king99`.
+   - **Clear-Time Multiplier**:
+     - $\le 10$ minutes (600s): **3.0×**
+     - $\le 30$ minutes (1800s): **2.0×**
+     - $\le 60$ minutes (3600s): **1.5×**
+     - $> 60$ minutes: **1.0×**
+   - Directly credited to each member's crystal balance (`characters.crystal`).
+3. **Experience & Gold**:
+   - For `king1`..`king10`: Sum of boss definitions.
+   - For `king99`: Scaling formula based on party levels:
+     $$\text{EXP} = \sum (\text{Level} + \text{JobLevel}) \times 30$$
+     $$\text{Gold} = \sum \lfloor \text{Level} \times 0.5 \rfloor \times 30$$
+4. **Treasure Drop & Weekday Orbs**:
+   - A random item from the stage's `treasure_item_ids` augmented with the current weekday orb:
+     - Monday: `item-060` (月光の玉)
+     - Tuesday: `item-061` (火炎の玉)
+     - Wednesday: `item-062` (水流の玉)
+     - Thursday: `item-063` (木霊の玉)
+     - Friday: `item-064` (黄金の玉)
+     - Saturday: `item-065` (白銀の玉)
+     - Sunday: Random choice among `item-060`..`item-065`.
+   - Reward delivery uses `coreinventory.Inventory` capacity enforcement; overflow items route to `depot.Depot` storage (Rank 5 lock); items overflowing a full depot are treated as lost drops (`_npc_action.cgi:74-75`).
+5. **Server News**: A worldwide announcement is broadcast: `"勇者○○が○○を封印する"`.
+6. **Celebration Banquet**: Triggers a 2-hour victory banquet in Event Plaza (`_win_vs_king.cgi`).
+7. **Lobby Disbandment**: The temporary staging party is deleted upon conclusion.

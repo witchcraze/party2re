@@ -3,6 +3,7 @@ package boss_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -722,5 +723,141 @@ func TestNoDailyAttemptsRestriction(t *testing.T) {
 	}
 	if rec.TotalBossDefeats != 5 {
 		t.Errorf("expected 5 boss defeats, got %d", rec.TotalBossDefeats)
+	}
+}
+
+// TestCatalog_CapacityParity verifies that stages king1 through king10 have MaxMembers == 6,
+// and king99 retains MaxMembers == 4 per legacy CGI specification.
+func TestCatalog_CapacityParity(t *testing.T) {
+	for _, stage := range boss.DefaultBossCatalog() {
+		if stage.ID == "king99" {
+			if stage.MaxMembers != 4 {
+				t.Errorf("expected stage %s MaxMembers=4, got %d", stage.ID, stage.MaxMembers)
+			}
+		} else {
+			if stage.MaxMembers != 6 {
+				t.Errorf("expected stage %s MaxMembers=6, got %d", stage.ID, stage.MaxMembers)
+			}
+		}
+	}
+}
+
+// TestStartSealingBattle_CapacityEnforcement verifies that a 6-player party can challenge king1,
+// but a 5-player party attempting king99 (max 4) is rejected with ErrPartyNotReady.
+func TestStartSealingBattle_CapacityEnforcement(t *testing.T) {
+	ctx := context.Background()
+	bossRepo := newMockBossRepo()
+
+	chars := make(map[string]corecharacter.Character)
+	members6 := make([]party.Member, 6)
+	for i := 0; i < 6; i++ {
+		cID := fmt.Sprintf("hero-%d", i)
+		chars[cID] = createTestChar(cID, 50, 600, 300, 200)
+		members6[i] = party.Member{
+			PartyID:       "party-6",
+			CharacterID:   cID,
+			CharacterName: "Hero_" + cID,
+			ReadyState:    true,
+			IsLeader:      i == 0,
+		}
+	}
+	charRepo := &mockCharRepo{chars: chars}
+	partyRepo := newMockPartyRepo()
+
+	// 1. 6-player party on king1 succeeds
+	pID6 := "party-6"
+	partyRepo.parties[pID6] = party.Party{
+		ID:                pID6,
+		LeaderCharacterID: "hero-0",
+		StageID:           "king1",
+		Status:            party.StatusRecruiting,
+	}
+	partyRepo.members[pID6] = members6
+
+	service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.Configure(boss.WithPartyRepository(partyRepo))
+
+	res, err := service.StartSealingBattle(ctx, pID6, "hero-0")
+	if err != nil {
+		t.Fatalf("expected 6-player party to challenge king1 successfully, got err: %v", err)
+	}
+	if res.Outcome != corebattle.OutcomeWin {
+		t.Errorf("expected win, got %v", res.Outcome)
+	}
+
+	// 2. 5-player party on king99 exceeds capacity (max 4) and is rejected
+	pID5 := "party-5"
+	members5 := members6[:5]
+	for i := range members5 {
+		members5[i].PartyID = pID5
+	}
+	partyRepo.parties[pID5] = party.Party{
+		ID:                pID5,
+		LeaderCharacterID: "hero-0",
+		StageID:           "king99",
+		Status:            party.StatusRecruiting,
+	}
+	partyRepo.members[pID5] = members5
+
+	_, err = service.StartSealingBattle(ctx, pID5, "hero-0")
+	if !errors.Is(err, boss.ErrPartyNotReady) {
+		t.Errorf("expected ErrPartyNotReady for 5-player party on king99 (max 4), got: %v", err)
+	}
+}
+
+// TestStartSealingBattle_ClearTimeCrystals verifies that clear time crystal multipliers are applied
+// and credited to all participating party members on victory.
+func TestStartSealingBattle_ClearTimeCrystals(t *testing.T) {
+	ctx := context.Background()
+	bossRepo := newMockBossRepo()
+
+	chars := map[string]corecharacter.Character{
+		"c1": createTestChar("c1", 50, 600, 300, 200),
+		"c2": createTestChar("c2", 50, 600, 300, 200),
+	}
+	charRepo := &mockCharRepo{chars: chars}
+	partyRepo := newMockPartyRepo()
+
+	pID := "party-crystal-test"
+	// Party created 5 minutes ago (within <= 10m window -> 3.0x multiplier)
+	partyRepo.parties[pID] = party.Party{
+		ID:                pID,
+		LeaderCharacterID: "c1",
+		StageID:           "king1",
+		Status:            party.StatusRecruiting,
+		CreatedAt:         time.Now().UTC().Add(-5 * time.Minute),
+	}
+	partyRepo.members[pID] = []party.Member{
+		{PartyID: pID, CharacterID: "c1", CharacterName: "Hero_c1", ReadyState: true, IsLeader: true},
+		{PartyID: pID, CharacterID: "c2", CharacterName: "Hero_c2", ReadyState: true},
+	}
+
+	service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.Configure(boss.WithPartyRepository(partyRepo))
+
+	res, err := service.StartSealingBattle(ctx, pID, "c1")
+	if err != nil {
+		t.Fatalf("StartSealingBattle failed: %v", err)
+	}
+
+	// king1 base crystals = 70. Elapsed = 5m -> 3x multiplier -> 210 crystals.
+	if res.RewardCrystals != 210 {
+		t.Errorf("expected res.RewardCrystals == 210, got %d", res.RewardCrystals)
+	}
+
+	// Verify both characters received 210 crystals in DB
+	c1Saved := charRepo.chars["c1"]
+	c2Saved := charRepo.chars["c2"]
+	if c1Saved.Crystal != 210 {
+		t.Errorf("expected c1 Crystal == 210, got %d", c1Saved.Crystal)
+	}
+	if c2Saved.Crystal != 210 {
+		t.Errorf("expected c2 Crystal == 210, got %d", c2Saved.Crystal)
 	}
 }

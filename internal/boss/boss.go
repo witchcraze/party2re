@@ -109,6 +109,7 @@ type SealingBattleResult struct {
 	Turns             int                          `json:"turns"`
 	RewardExp         int                          `json:"reward_exp"`
 	RewardGold        int                          `json:"reward_gold"`
+	RewardCrystals    int                          `json:"reward_crystals,omitempty"`
 	RewardItemID      string                       `json:"reward_item_id,omitempty"`
 	HeroCountGained   int                          `json:"hero_count_gained"`
 	BanishedMemberIDs []string                     `json:"banished_member_ids,omitempty"`
