@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #796 — Replay: Expose HTTP endpoints and wire ReplayService into HTTP Handler
+Last updated: Issue #800 — Lottery: Restore weighted candidate pools in Takarakuji and sanitize Raffle prize item names
 
 ## Current Phase
 

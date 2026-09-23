@@ -28,8 +28,8 @@ The Lottery and Raffle Feature Module (`internal/lottery`) implements the authen
     - Monday (1): `item-035` (ドラゴンの心)
     - Tuesday (2): `item-036` (闇のロザリオ)
     - Wednesday (3): `item-088` (魔銃)
-    - Thursday (4): `item-037` (ギザールの野菜)
-    - Friday (5): `item-038` (クポの実)
+    - Thursday (4): `item-037` (走鳥の野菜)
+    - Friday (5): `item-038` (幻獣の実)
     - Saturday (6): `item-039` (ギャンブルハート)
   - **1等 (1st Prize / Red / 0.3%)**: `item-030` (精霊の守り, rolls 1..3)
   - **2等 (2nd Prize / Purple / 0.4%)**: `item-033` (スライムの心, rolls 4..7)
@@ -87,11 +87,11 @@ On purchase, the NPC informs the player:
 Each round rolls one distinct prize item for each tier alongside winner counts:
 
 - **1st Prize (1等 / Itto)**: Exactly 1 winner
-  - Candidates: `item-129` (神の錬金レシピ), `item-266` (奇跡の錬金レシピ), `item-265` (聖なる秘石), `item-255` (黄金の林檎)
+  - Candidates (5 entries, uniform random selection): `item-129` (神の錬金レシピ, 20%), `item-266` (奇跡の錬金レシピ, 20%), `item-265` (聖なる秘石, 2x weight = 40%), `item-255` (黄金の林檎, 20%)
 - **2nd Prize (2等 / Nito)**: 1 or 2 winners (`1 + rand(2)`)
-  - Candidates: `item-168`, `item-264`, `item-150`, `item-173`, `item-207`, `armor-40` (流銀の鎧), `weapon-40` (流銀の剣), `item-265`
+  - Candidates (9 entries, uniform random selection): `item-168`, `item-264` (2x weight = 22.2%), `item-150`, `item-173`, `item-207`, `armor-40` (流銀の鎧), `weapon-40` (流銀の剣), `item-265`
 - **3rd Prize (3等 / Santo)**: 2, 3, or 4 winners (`2 + rand(3)`)
-  - Candidates: `item-126` (超魔力水), `item-244`, `item-243`, `item-199`, `item-253`, `item-254`, `item-263`, `item-264`
+  - Candidates (9 entries, uniform random selection): `item-126` (超魔力水), `item-244`, `item-243`, `item-199`, `item-253`, `item-254`, `item-263` (2x weight = 22.2%), `item-264`
 
 Lineup inspection (`@しょうひん`) displays the active round's prizes, item names, and winner quotas.
 
