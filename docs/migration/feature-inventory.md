@@ -66,6 +66,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Job-based stat growth formulas (#31)
 - [x] Skill definitions, costs, and availability conditions (#18)
 - [x] Job mastery, level-20 job changes, item costs, mastered-job memory exchange, future memory snapshots ("よびおこす"), and 72-job completion title/news notification with "すっぴん" job unlock (#467, #470)
+- [x] Job mastery catalog endpoint (職業極め所, job_master.cgi) with 87-job progress and complete percentage calculation (#785)
 - [x] Home resting, sleep recovery, and tired reset (#62, #459)
 - [x] Custom skill assignment (#69)
 - [x] Wishing Well (願いの泉, @女神) SP sacrifice exchange for permanent stat growth (#468)

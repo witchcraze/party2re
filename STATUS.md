@@ -1,12 +1,12 @@
 # Status
 
-Last updated: Issue #798 — Ranking: Implement Hall of Fame (legend.cgi), weekly job change ranking, and missing ranking categories
+Last updated: Issue #785 — Job System: Implement Character Job Mastery Catalog Endpoint (job_master.cgi)
 
 ## Current Phase
 
 **Version 1.0 Reconstruction / Refactoring — In Progress (Phase 5+)**
 
-All Version 1.0 foundational systems, core combat, 39 feature modules, and the HTTP JSON API (284 paths / 306 operations, OpenAPI 3.1) are implemented in clean-room Go (1.26.7) with 0 legacy code reuse.
+All Version 1.0 foundational systems, core combat, 39 feature modules, and the HTTP JSON API (285 paths / 307 operations, OpenAPI 3.1) are implemented in clean-room Go (1.26.7) with 0 legacy code reuse.
 
 - **Component Architecture & Boundaries**: Authoritative responsibilities, dependencies, and lock hierarchy tiers reside in [`docs/architecture/components.md`](docs/architecture/components.md).
 - **Completed Feature History**: Comprehensive issue-level traceability resides in [`docs/migration/feature-inventory.md`](docs/migration/feature-inventory.md).

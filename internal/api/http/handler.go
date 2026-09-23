@@ -443,6 +443,7 @@ func (h *Handler) Router() http.Handler {
 
 	// Jobs
 	mux.HandleFunc("GET /jobs", h.handleListJobs)
+	mux.HandleFunc("GET /characters/{id}/job-mastery", h.handleGetCharacterJobMastery)
 	mux.HandleFunc("POST /characters/{id}/change-job", h.handleChangeJob)
 	mux.HandleFunc("POST /characters/{id}/exchange-job", h.handleExchangeJob)
 	mux.HandleFunc("GET /characters/{id}/future-memories", h.handleListFutureMemories)

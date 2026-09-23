@@ -11,6 +11,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	jobapp "github.com/witchcraze/party2re/internal/job"
 )
 
 type stubJobService struct {
@@ -20,6 +21,7 @@ type stubJobService struct {
 	saveFutureMemoryFn   func(ctx context.Context, characterID string) (corecharacter.FutureMemory, error)
 	recallFutureMemoryFn func(ctx context.Context, characterID, memoryID string) (corecharacter.Character, corejob.CharacterJob, error)
 	listFutureMemoriesFn func(ctx context.Context, characterID string) ([]corecharacter.FutureMemory, error)
+	getJobMasteryFn      func(ctx context.Context, characterID string) (jobapp.CharacterJobMastery, error)
 }
 
 func (s *stubJobService) ListDefinitions() []corejob.Definition {
@@ -64,6 +66,13 @@ func (s *stubJobService) ListFutureMemories(ctx context.Context, characterID str
 	return nil, nil
 }
 
+func (s *stubJobService) GetJobMastery(ctx context.Context, characterID string) (jobapp.CharacterJobMastery, error) {
+	if s.getJobMasteryFn != nil {
+		return s.getJobMasteryFn(ctx, characterID)
+	}
+	return jobapp.CharacterJobMastery{}, nil
+}
+
 func TestJobEndpoints(t *testing.T) {
 	player := coreplayer.Player{ID: "p1", Username: "hero"}
 	char := corecharacter.Character{ID: "c1", PlayerID: "p1", Name: "Hero", Level: 50}
@@ -106,6 +115,22 @@ func TestJobEndpoints(t *testing.T) {
 		},
 		listFutureMemoriesFn: func(_ context.Context, characterID string) ([]corecharacter.FutureMemory, error) {
 			return []corecharacter.FutureMemory{{ID: "fmem-1", CharacterID: characterID, JobID: "job-01", Level: 50}}, nil
+		},
+		getJobMasteryFn: func(_ context.Context, characterID string) (jobapp.CharacterJobMastery, error) {
+			if characterID == "c1" {
+				return jobapp.CharacterJobMastery{
+					CharacterID:       "c1",
+					MasteryPercentage: 50,
+					MasteredCount:     43,
+					LearningCount:     0,
+					UnlearnedCount:    44,
+					AllJobsMastered:   false,
+					Jobs: []jobapp.JobProgress{
+						{JobID: "job-01", JobName: "Fighter", Status: jobapp.JobStatusMastered, CurrentSP: 80, MasterSP: 80},
+					},
+				}, nil
+			}
+			return jobapp.CharacterJobMastery{}, corecharacter.ErrNotFound
 		},
 	}
 
@@ -216,6 +241,51 @@ func TestJobEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+	})
+
+	t.Run("GET /characters/{id}/job-mastery - success (public read)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/characters/c1/job-mastery", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var mastery jobapp.CharacterJobMastery
+		if err := json.NewDecoder(rec.Body).Decode(&mastery); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if mastery.CharacterID != "c1" || mastery.MasteryPercentage != 50 || mastery.MasteredCount != 43 {
+			t.Fatalf("unexpected mastery response: %+v", mastery)
+		}
+	})
+
+	t.Run("GET /characters/{id}/job-mastery - authenticated request also succeeds", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/characters/c1/job-mastery", nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var mastery jobapp.CharacterJobMastery
+		if err := json.NewDecoder(rec.Body).Decode(&mastery); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if mastery.CharacterID != "c1" || mastery.MasteryPercentage != 50 {
+			t.Fatalf("unexpected mastery response: %+v", mastery)
+		}
+	})
+
+	t.Run("GET /characters/{id}/job-mastery - character not found (404)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/characters/c999/job-mastery", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 Not Found, got %d", rec.Code)
 		}
 	})
 }

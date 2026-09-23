@@ -19,6 +19,7 @@ type JobService interface {
 	SaveFutureMemory(ctx context.Context, characterID string) (corecharacter.FutureMemory, error)
 	RecallFutureMemory(ctx context.Context, characterID, memoryID string) (corecharacter.Character, corejob.CharacterJob, error)
 	ListFutureMemories(ctx context.Context, characterID string) ([]corecharacter.FutureMemory, error)
+	GetJobMastery(ctx context.Context, characterID string) (jobapp.CharacterJobMastery, error)
 }
 
 // WithJob configures the job service for the Handler.
@@ -196,4 +197,29 @@ func (h *Handler) handleRecallFutureMemory(w http.ResponseWriter, r *http.Reques
 			Job:       updatedJob,
 		})
 	})
+}
+
+func (h *Handler) handleGetCharacterJobMastery(w http.ResponseWriter, r *http.Request) {
+	if h.jobs == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("job service not configured"))
+		return
+	}
+
+	charID := r.PathValue("id")
+	if charID == "" {
+		writeError(w, http.StatusBadRequest, errors.New("character id is required"))
+		return
+	}
+
+	mastery, err := h.jobs.GetJobMastery(r.Context(), charID)
+	if err != nil {
+		if errors.Is(err, corecharacter.ErrNotFound) {
+			writeError(w, http.StatusNotFound, errors.New("character not found"))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, mastery)
 }
