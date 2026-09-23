@@ -89,7 +89,7 @@ func (ctx *battleContext) executeDefend(actor Participant) {
 	})
 }
 
-func (ctx *battleContext) applyDamage(actor Participant, target Participant, baseDamage int, element string, actionName string, isCustom bool, incantation string) {
+func (ctx *battleContext) applyDamage(actor Participant, target Participant, baseDamage int, element string, actionName string, isCustom bool, incantation string, isCritical bool) {
 	mult := ctx.field.DamageMultiplier(element)
 	dmg := int(float64(baseDamage) * mult)
 	if ctx.defendingMap[target.ID] {
@@ -104,7 +104,9 @@ func (ctx *battleContext) applyDamage(actor Participant, target Participant, bas
 	}
 
 	var msg string
-	if isCustom {
+	if isCritical {
+		msg = fmt.Sprintf("%s の会心の一撃！！ %s に %d のダメージ！", actor.NameOrID(), target.NameOrID(), dmg)
+	} else if isCustom {
 		msg = fmt.Sprintf("%s 「%s」 %s！ %s に %d のダメージ！", actor.NameOrID(), incantation, actionName, target.NameOrID(), dmg)
 	} else {
 		msg = fmt.Sprintf("%s の %s！ %s に %d のダメージ！", actor.NameOrID(), actionName, target.NameOrID(), dmg)
@@ -151,6 +153,7 @@ func (ctx *battleContext) applyDamage(actor Participant, target Participant, bas
 		ActionName:  actionName,
 		TargetID:    target.ID,
 		DamageDealt: dmg,
+		IsCritical:  isCritical,
 		Message:     msg,
 		RemainingHP: copyHPMap(ctx.hpMap),
 	})
@@ -182,15 +185,48 @@ func hasItem(items []string, wanted string) bool {
 	return false
 }
 
+func isImmobilized(status string) bool {
+	return status == StatusParalyze || status == StatusSleep || status == "kinju" || status == "sabaku" || status == "禁呪" || status == "鎖縛"
+}
+
+func isExceedAg(m, y Participant, mBuff, yBuff int, rng random.Generator) bool {
+	if rng == nil {
+		return false
+	}
+	mAg := m.Agility + mBuff
+	yAg := y.Agility + yBuff
+	if mAg <= 0 {
+		return false
+	}
+	// Item 147 (伝国の懐刀): 50% check and eliminates 3x multiplier (_skill.cgi:846-849)
+	if hasItem(m.ItemDefinitionIDs, "item-147") {
+		if rng.Intn(2) != 0 {
+			return false
+		}
+		if yAg <= 0 {
+			return true
+		}
+		return rng.Float64()*float64(mAg) >= rng.Float64()*float64(yAg)
+	}
+	// Normal: 1/3 check (rand(3) < 1) and yAg * 3 (_skill.cgi:853-857)
+	if rng.Intn(3) != 0 {
+		return false
+	}
+	if yAg <= 0 {
+		return true
+	}
+	return rng.Float64()*float64(mAg) >= rng.Float64()*float64(yAg*3)
+}
+
 func (ctx *battleContext) executeNormalAttack(actor Participant, opponents []Participant) {
 	attackOnce := func() bool {
 		primaryTarget := findLowestHPTarget(opponents, ctx.hpMap)
 		if primaryTarget == nil {
 			return false
 		}
+		target := *primaryTarget
 		effAtk := actor.Attack + ctx.attackBuff[actor.ID]
-		effDef := primaryTarget.Defense + ctx.defenseBuff[primaryTarget.ID]
-		baseDmg := damage(effAtk, effDef)
+		effDef := target.Defense + ctx.defenseBuff[target.ID]
 
 		actionName := "攻撃"
 		element := ""
@@ -202,13 +238,41 @@ func (ctx *battleContext) executeNormalAttack(actor Participant, opponents []Par
 			}
 			actionName = "理力攻撃"
 			element = "magic"
-			baseDmg = int(float64(baseDmg) * 0.8)
-			if baseDmg < 1 {
-				baseDmg = 1
+			effAtk = int(float64(effAtk) * 0.8)
+			if effAtk < 1 {
+				effAtk = 1
 			}
 		}
 
-		ctx.applyDamage(actor, *primaryTarget, baseDmg, element, actionName, false, "")
+		// Critical strike check: _is_exceed_ag(actor, target)
+		isCritical := isExceedAg(actor, target, ctx.agilityBuff[actor.ID], ctx.agilityBuff[target.ID], ctx.rng)
+
+		// Evasion / Miss check:
+		// Miss if rand(100) >= hit (base 95) OR _is_exceed_ag(target, actor),
+		// UNLESS target is immobilized or actor holds 必中の剣 (weapon-63).
+		// Critical strikes bypass evasion.
+		if !isCritical && !isImmobilized(ctx.statusMap[target.ID]) && !hasItem(actor.ItemDefinitionIDs, "weapon-63") {
+			miss := (ctx.rng != nil && ctx.rng.Intn(100) >= 95)
+			if !miss && isExceedAg(target, actor, ctx.agilityBuff[target.ID], ctx.agilityBuff[actor.ID], ctx.rng) {
+				miss = true
+			}
+			if miss {
+				ctx.logs = append(ctx.logs, TurnLog{
+					Turn:        ctx.turns,
+					ActorID:     actor.ID,
+					ActionName:  actionName,
+					TargetID:    target.ID,
+					DamageDealt: 0,
+					IsCritical:  false,
+					Message:     fmt.Sprintf("ミス！%s は攻撃をかわした！", target.NameOrID()),
+					RemainingHP: copyHPMap(ctx.hpMap),
+				})
+				return true
+			}
+		}
+
+		baseDmg := CalculateDamage(effAtk, effDef, ctx.rng, isCritical)
+		ctx.applyDamage(actor, target, baseDmg, element, actionName, false, "", isCritical)
 		return true
 	}
 

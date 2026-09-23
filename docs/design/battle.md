@@ -73,9 +73,13 @@ Replicating the original Party2 CGI combat engine (`_battle.cgi`, `_skill.cgi`):
      4. Else if `Defending`:
         - Execute defend stance.
      5. Else execute **Normal Attack**:
-        - Target: First living opponent.
-        - Base Damage: $\max(1, \text{Attack}_{\text{attacker}} - \text{Defense}_{\text{defender}})$.
-        - Apply Field elemental multiplier if attacker has an elemental affinity.
+        - Target: Lowest HP living opponent.
+        - **Critical Strike Check**: Roll `isExceedAg(actor, target)`. Triggers critical strike dealing direct damage ($0.75 \times \text{Attack}$) completely bypassing defense mitigation, and logs `TurnLog.IsCritical = true` with message `"<Actor> の会心の一撃！！ <Target> に <Dmg> のダメージ！"`.
+        - **Hit & Evasion Check**: If not a critical strike, attack misses if `rand(100) >= 95` (5% base miss rate) OR if target evades via `isExceedAg(target, actor)`, UNLESS target is immobilized (`kinju`, `sabaku`, `paralyze`, `sleep`) or attacker holds 必中の剣 (`weapon-63`). On miss, logs `TurnLog.DamageDealt = 0` with message `"ミス！<Target> は攻撃をかわした！"`.
+        - **Canonical Damage Calculation**: If hit, calculate damage using the canonical DQ formula:
+          $$\text{Base} = \begin{cases} \text{Attack} \times 0.75 & \text{if critical strike} \\ \text{Attack} \times 0.5 - \text{Defense} \times 0.3 & \text{otherwise} \end{cases}$$
+          $$\text{Damage} = \max\left(1 \text{ or } 2, \text{int}(\text{Base} \times (0.9 + \text{Float64}() \times 0.3))\right)$$
+        - Apply Field elemental multiplier if action or attacker has an elemental affinity.
    - **Defeat & Revival Check (`defeat.go`)**:
      - When any participant's HP drops to $\le 0$:
      - Check `RevivalTriggers`:
@@ -97,10 +101,31 @@ Replicating the original Party2 CGI combat engine (`_battle.cgi`, `_skill.cgi`):
   - Opposing pairs: Fire $\leftrightarrow$ Water, Wind $\leftrightarrow$ Earth, Light $\leftrightarrow$ Dark.
 - **Anti-Field Suppression**: If `AntiFieldTurn > 0`, all elemental bonuses/penalties are neutralized (multiplier $1.00$).
 
-### 3. Legacy 1v1 Combat Loop (`Resolve`)
-Maintained with 100% backward compatibility:
+### 3. Canonical Damage & Combat Mechanics (`CalculateDamage`, `execute_action.go`)
+
+- **DQ Physical Damage Formula**:
+  $$\text{Base} = \begin{cases} \text{Attack} \times 0.75 & \text{if Direct / Critical} \\ \text{Attack} \times 0.5 - \text{Defense} \times 0.3 & \text{otherwise} \end{cases}$$
+  $$\text{Variance} = 0.90 + \text{Float64}() \times 0.30 \quad [0.90, 1.20)$$
+  $$\text{Damage} = \text{int}(\text{Base} \times \text{Variance})$$
+  $$\text{Minimum Damage Guarantee} = \begin{cases} \text{Intn}(2) + 1 \in \{1, 2\} & \text{if } \text{Damage} < 1 \\ \text{Damage} & \text{otherwise} \end{cases}$$
+
+- **Agility Exceed Check (`_is_exceed_ag`)**:
+  - Compares effective agility between actor $m$ and opponent $y$:
+    - Standard: $\frac{1}{3}$ chance (`rand(3) == 0`) AND $\text{rand}(m.\text{Agility}) \ge \text{rand}(y.\text{Agility} \times 3)$.
+    - Item 147 (伝国の懐刀): $\frac{1}{2}$ chance (`rand(2) == 0`) AND $\text{rand}(m.\text{Agility}) \ge \text{rand}(y.\text{Agility})$.
+  - Used symmetrically for:
+    1. Critical Strike roll: `isExceedAg(actor, target)`
+    2. Evasion roll: `isExceedAg(target, actor)`
+
+- **Multi-Target Damage Decay (`execute_skill.go`, `execute_item.go`)**:
+  - When an attack targets all enemies (`TargetScopeAllEnemies`):
+    - Damage decays cumulatively by 15% (`decayMult *= 0.85`) across successive targets in line order.
+    - If the attacker possesses Diamond Ring (`item-144`), damage decay is completely negated (`decayMult = 1.0`).
+
+### 4. 1v1 Combat Resolution (`Resolve`)
+Deterministic 1v1 duel resolution utilizing the canonical damage formula:
 - Alternating attacks between `first` and `second`.
-- Damage: $\max(1, \text{Attack} - \text{Defense})$.
+- Damage computed via `CalculateDamage(attacker.Attack, defender.Defense, rng, false)`.
 - Terminates upon knockout or simultaneous knockout (`OutcomeDraw`).
 
 ### Legacy Defeat Synergies

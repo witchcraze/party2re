@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #787 — [Bug] Monster: Correct veteran box capacity condition from Level >= 100 to JobLevel >= 100
+Last updated: Issue #790 — [Bug] Battle: Restore canonical damage formula, hit/evasion checks, and critical strikes
 
 ## Current Phase
 

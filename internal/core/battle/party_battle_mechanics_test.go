@@ -15,7 +15,7 @@ func TestPartyBattle_DefendMitigation(t *testing.T) {
 			corebattle.NewParticipantBuilder("hero").
 				WithName("Hero").
 				WithStats(100, 50, 10).
-				WithAgility(100).
+				WithAgility(10).
 				MustBuild(),
 		},
 		Enemies: []corebattle.Participant{
@@ -27,6 +27,10 @@ func TestPartyBattle_DefendMitigation(t *testing.T) {
 				MustBuild(),
 		},
 		VictoryReward: corebattle.Reward{Experience: 100},
+		RNG: customRNG{
+			float64Func: func() float64 { return 1.0 / 3.0 }, // variance 1.0
+			intnFunc:    func(n int) int { return 1 },        // no crit
+		},
 	}
 
 	res, err := engine.ResolvePartyBattle(req)
@@ -34,11 +38,11 @@ func TestPartyBattle_DefendMitigation(t *testing.T) {
 		t.Fatalf("ResolvePartyBattle failed: %v", err)
 	}
 
-	// Normal damage: 50 - 10 = 40. With defending: 40 / 2 = 20.
+	// Canonical damage: 50*0.5 - 10*0.3 = 22. With defending: 22 / 2 = 11.
 	if len(res.Logs) > 0 {
 		firstAtk := res.Logs[0]
-		if firstAtk.DamageDealt != 20 {
-			t.Errorf("expected 20 damage due to 50%% defense mitigation, got %d", firstAtk.DamageDealt)
+		if firstAtk.DamageDealt != 11 {
+			t.Errorf("expected 11 damage due to 50%% defense mitigation, got %d", firstAtk.DamageDealt)
 		}
 	}
 }
@@ -116,6 +120,10 @@ func TestPartyBattle_JobSkill_BuffStat(t *testing.T) {
 			{ID: "dummy", Name: "Dummy", HP: 200, Attack: 10, Defense: 10, Agility: 10},
 		},
 		VictoryReward: corebattle.Reward{Experience: 50},
+		RNG: customRNG{
+			float64Func: func() float64 { return 1.0 / 3.0 }, // variance 1.0
+			intnFunc:    func(n int) int { return 1 },        // no crit
+		},
 	}
 
 	res, err := engine.ResolvePartyBattle(req)
@@ -123,17 +131,17 @@ func TestPartyBattle_JobSkill_BuffStat(t *testing.T) {
 		t.Fatalf("ResolvePartyBattle failed: %v", err)
 	}
 
-	// Attacker normal damage would be 40 - 10 = 30.
-	// With +30 attack buff from Bard: (40 + 30) - 10 = 60!
+	// Attacker normal damage would be 40*0.5 - 10*0.3 = 17.
+	// With +30 attack buff from Bard: 70*0.5 - 10*0.3 = 32!
 	foundBuffedAttack := false
 	for _, l := range res.Logs {
-		if l.ActorID == "attacker" && l.DamageDealt == 60 {
+		if l.ActorID == "attacker" && l.DamageDealt == 32 {
 			foundBuffedAttack = true
 			break
 		}
 	}
 	if !foundBuffedAttack {
-		t.Errorf("expected attacker to deal 60 damage with buff, logs: %+v", res.Logs)
+		t.Errorf("expected attacker to deal 32 damage with buff, logs: %+v", res.Logs)
 	}
 }
 
@@ -221,7 +229,7 @@ func TestPartyBattle_MultiGemCustomSkill(t *testing.T) {
 				MustBuild(),
 		},
 		Enemies: []corebattle.Participant{
-			{ID: "orc", Name: "Orc", HP: 30, Attack: 10, Defense: 10, Agility: 10},
+			{ID: "orc", Name: "Orc", HP: 20, Attack: 10, Defense: 10, Agility: 10},
 		},
 		VictoryReward: corebattle.Reward{Experience: 50},
 	}
@@ -274,18 +282,22 @@ func TestPartyBattleMazinSetAbsorbsFallenAllyAttack(t *testing.T) {
 			{ID: "fallen", HP: 1, MaxHP: 1, Attack: 80, Defense: 1, Agility: 1},
 			{ID: "mazin", HP: 100, MaxHP: 100, Attack: 10, Defense: 1, Agility: 50, ItemDefinitionIDs: []string{"item-037", "item-038"}},
 		},
-		Enemies:       []corebattle.Participant{{ID: "enemy", HP: 100, MaxHP: 100, Attack: 100, Defense: 1, Agility: 100}},
+		Enemies:       []corebattle.Participant{{ID: "enemy", HP: 100, MaxHP: 100, Attack: 20, Defense: 1, Agility: 100}},
 		VictoryReward: corebattle.Reward{Experience: 1},
+		RNG: customRNG{
+			float64Func: func() float64 { return 1.0 / 3.0 }, // variance 1.0
+			intnFunc:    func(n int) int { return 1 },        // no crit
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, log := range res.Logs {
-		if log.ActorID == "mazin" && log.DamageDealt == 49 {
+		if log.ActorID == "mazin" && log.DamageDealt == 24 {
 			return
 		}
 	}
-	t.Fatalf("expected Mazin attack 10 + 40 against defense 1, logs: %+v", res.Logs)
+	t.Fatalf("expected Mazin attack 10 + 40 against defense 1 (canonical damage 24), logs: %+v", res.Logs)
 }
 
 type fixedFloatRNG struct {
@@ -466,18 +478,22 @@ func TestPartyBattle_Seal12_Kotowari_MagicAttack(t *testing.T) {
 				WithName("Hero").
 				WithStats(100, 50, 10).
 				WithMP(10, 10).
-				WithAgility(100).
+				WithAgility(10).
 				WithAbilities("seal_kotowari").
 				MustBuild(),
 		},
 		Enemies: []corebattle.Participant{
 			corebattle.NewParticipantBuilder("boss").
 				WithName("Boss").
-				WithStats(30, 10, 10).
+				WithStats(15, 10, 10).
 				WithAgility(10).
 				MustBuild(),
 		},
 		VictoryReward: corebattle.Reward{Experience: 100},
+		RNG: customRNG{
+			float64Func: func() float64 { return 1.0 / 3.0 }, // variance 1.0
+			intnFunc:    func(n int) int { return 1 },        // no crit
+		},
 	}
 
 	res, err := engine.ResolvePartyBattle(req)
@@ -485,14 +501,14 @@ func TestPartyBattle_Seal12_Kotowari_MagicAttack(t *testing.T) {
 		t.Fatalf("ResolvePartyBattle failed: %v", err)
 	}
 
-	// Hero has 50 Atk, Boss has 10 Def -> normal base damage = 50 - 10 = 40.
-	// Seal 12 consumes 3 MP, scales to int(40 * 0.8) = 32 damage, ActionName = "理力攻撃".
+	// Hero has 50 Atk * 0.8 = 40 Atk. Boss has 10 Def -> base damage = 40*0.5 - 10*0.3 = 17.
+	// Seal 12 consumes 3 MP, ActionName = "理力攻撃".
 	foundKotowari := false
 	for _, l := range res.Logs {
 		if l.ActorID == "hero" && l.ActionName == "理力攻撃" {
 			foundKotowari = true
-			if l.DamageDealt != 32 {
-				t.Errorf("expected 32 damage (40 * 0.8), got %d", l.DamageDealt)
+			if l.DamageDealt != 17 {
+				t.Errorf("expected 17 damage, got %d", l.DamageDealt)
 			}
 			break
 		}

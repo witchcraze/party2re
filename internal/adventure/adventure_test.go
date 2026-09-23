@@ -575,10 +575,11 @@ func TestExecuteCrawl_HookErrorHandling(t *testing.T) {
 		Name:  "Hook Tester",
 		Level: 10,
 	}
-	character.Stats.HP = 200
-	character.Stats.MaxHP = 200
-	character.Stats.Attack = 50
-	character.Stats.Defense = 20
+	character.Stats.HP = 500
+	character.Stats.MaxHP = 500
+	character.Stats.Attack = 100
+	character.Stats.Defense = 50
+	character.Stats.Agility = 50
 
 	adventures := &repositoryStub{}
 	characters := &characterRepositoryStub{value: character}

@@ -225,7 +225,7 @@ func TestPartyBattle_DefeatAndRevival(t *testing.T) {
 		},
 		Enemies: []corebattle.Participant{
 			// Enemy acts first and deals lethal damage
-			{ID: "one_shotter", Name: "OneShotter", HP: 80, Attack: 60, Defense: 5, Agility: 90},
+			{ID: "one_shotter", Name: "OneShotter", HP: 20, Attack: 60, Defense: 5, Agility: 90},
 		},
 		VictoryReward: corebattle.Reward{Experience: 100},
 	}
@@ -283,6 +283,10 @@ func TestPartyBattle_AntiFieldSuppression(t *testing.T) {
 			{ID: "target", Name: "Target", HP: 500, Attack: 5, Defense: 10, Agility: 10},
 		},
 		VictoryReward: corebattle.Reward{Experience: 50},
+		RNG: customRNG{
+			float64Func: func() float64 { return 1.0 / 3.0 }, // variance 1.0
+			intnFunc:    func(n int) int { return 1 },        // no crit
+		},
 	}
 
 	res, err := engine.ResolvePartyBattle(reqAnti)
@@ -290,11 +294,11 @@ func TestPartyBattle_AntiFieldSuppression(t *testing.T) {
 		t.Fatalf("ResolvePartyBattle failed: %v", err)
 	}
 
-	// Normal damage: (50 + 20) - 10 = 60.
+	// Canonical damage: (50 + 20)*0.5 - 10*0.3 = 32.
 	// Because anti-field is active, multiplier is 1.0 (NOT 1.3).
 	if len(res.Logs) > 0 && res.Logs[0].ActionName == "火炎斬り" {
-		if res.Logs[0].DamageDealt != 60 {
-			t.Errorf("expected standard unboosted damage (60) under anti-field, got %d", res.Logs[0].DamageDealt)
+		if res.Logs[0].DamageDealt != 32 {
+			t.Errorf("expected standard unboosted damage (32) under anti-field, got %d", res.Logs[0].DamageDealt)
 		}
 	}
 }
@@ -316,9 +320,13 @@ func TestPartyBattle_UndyingRevival(t *testing.T) {
 			},
 		},
 		Enemies: []corebattle.Participant{
-			{ID: "reaper", Name: "Reaper", HP: 40, Attack: 50, Defense: 5, Agility: 90},
+			{ID: "reaper", Name: "Reaper", HP: 20, Attack: 50, Defense: 5, Agility: 90},
 		},
 		VictoryReward: corebattle.Reward{Experience: 100},
+		RNG: customRNG{
+			float64Func: func() float64 { return 1.0 / 3.0 }, // variance 1.0
+			intnFunc:    func(n int) int { return 1 },        // no miss, no crit
+		},
 	}
 
 	res, err := engine.ResolvePartyBattle(reqUndying)
