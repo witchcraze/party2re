@@ -124,7 +124,7 @@ var defaultFertilizers = []Fertilizer{
 	},
 	{
 		ID:         "yggdrasil_dew",
-		Name:       "世界樹のしずく",
+		Name:       "霊樹のしずく",
 		Price:      0,
 		ItemID:     "item-005",
 		ProbBonus:  30,
@@ -134,7 +134,7 @@ var defaultFertilizers = []Fertilizer{
 	},
 	{
 		ID:         "gysahl_greens",
-		Name:       "ギザールの野菜",
+		Name:       "走鳥の野菜",
 		Price:      0,
 		ItemID:     "item-037",
 		ProbBonus:  35,
@@ -144,7 +144,7 @@ var defaultFertilizers = []Fertilizer{
 	},
 	{
 		ID:         "kupo_nut",
-		Name:       "クポの実",
+		Name:       "幻獣の実",
 		Price:      0,
 		ItemID:     "item-038",
 		ProbBonus:  50,
@@ -174,7 +174,7 @@ var defaultFertilizers = []Fertilizer{
 	},
 	{
 		ID:         "padekia_root",
-		Name:       "パデキアの根っこ",
+		Name:       "薬草の根っこ",
 		Price:      0,
 		ItemID:     "item-010",
 		ProbBonus:  10,

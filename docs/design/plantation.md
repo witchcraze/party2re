@@ -5,7 +5,7 @@
 The Plantation facility (種菜園, NPC @ロータス) reproduces legacy `lib/plantation.cgi` seed cultivation, overnight crop maturation, and direct Depot harvest delivery.
 Unlike modern farming mini-games with tile-grids or watering schedules, authentic Party2 cultivation adheres strictly to the original specification:
 - **6 Seed Varieties**: Red, Blue, Yellow, Green, Silver, and Gold seeds purchased with Gold directly at the facility.
-- **14 Unique Fertilizer Reagents**: 5 purchased with Gold (こめぬか, あぶらかす, 骨粉, 石灰, 化学肥料) and 9 consumed from Depot storage (or active Inventory) (世界樹のしずく, ギザールの野菜, クポの実, ギャンブルハート, 魔法の粉, パデキアの根っこ, 満月草, 馬のフン, 極上肥料).
+- **14 Unique Fertilizer Reagents**: 5 purchased with Gold (こめぬか, あぶらかす, 骨粉, 石灰, 化学肥料) and 9 consumed from Depot storage (or active Inventory) (霊樹のしずく, 走鳥の野菜, 幻獣の実, ギャンブルハート, 魔法の粉, 薬草の根っこ, 満月草, 馬のフン, 極上肥料).
 - **Overnight Maturation**: Crops mature at the next midnight in Japan Standard Time (`timer.NextMidnightJST`).
 - **Wither Failure & Yield Multipliers**: Each fertilizer defines a wither probability (`0%` to `40%`), a high-quality probability bonus (`0%` to `60%`), and extra yield bonus (`0` to `10` extra items).
 - **Depot-Direct Delivery**: Harvested herbs, seeds, and stat nuts are deposited directly into the player's Depot (`character_depots`, `depot_items`).
@@ -35,12 +35,12 @@ Unlike modern farming mini-games with tile-grids or watering schedules, authenti
 | `bone_meal` | 骨粉 | 200 G | - | +10% | 10% | +1 | Gold |
 | `lime` | 石灰 | 200 G | - | +20% | 25% | +1 | Gold |
 | `chemical` | 化学肥料 | 500 G | - | +30% | 35% | +2 | Gold |
-| `yggdrasil_dew` | 世界樹のしずく | Item | `item-005` | +30% | 10% | +5 | Depot -> Inventory |
-| `gysahl_greens` | ギザールの野菜 | Item | `item-037` | +35% | 20% | +7 | Depot -> Inventory |
-| `kupo_nut` | クポの実 | Item | `item-038` | +50% | 8% | +3 | Depot -> Inventory |
+| `yggdrasil_dew` | 霊樹のしずく | Item | `item-005` | +30% | 10% | +5 | Depot -> Inventory |
+| `gysahl_greens` | 走鳥の野菜 | Item | `item-037` | +35% | 20% | +7 | Depot -> Inventory |
+| `kupo_nut` | 幻獣の実 | Item | `item-038` | +50% | 8% | +3 | Depot -> Inventory |
 | `gambler_heart` | ギャンブルハート | Item | `item-039` | +50% | 40% | +10 | Depot -> Inventory |
 | `magic_powder` | 魔法の粉 | Item | `item-081` | +28% | 0% | +2 | Depot -> Inventory |
-| `padekia_root` | パデキアの根っこ | Item | `item-010` | +10% | 25% | +5 | Depot -> Inventory |
+| `padekia_root` | 薬草の根っこ | Item | `item-010` | +10% | 25% | +5 | Depot -> Inventory |
 | `full_moon_herb` | 満月草 | Item | `item-008` | +15% | 8% | +2 | Depot -> Inventory |
 | `horse_dung` | 馬のフン | Item | `item-130` | +25% | 5% | +3 | Depot -> Inventory |
 | `superb` | 極上肥料 | Item | `item-182` | +60% | 3% | +4 | Depot -> Inventory |
