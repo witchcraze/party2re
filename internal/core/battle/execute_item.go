@@ -133,11 +133,16 @@ func (ctx *battleContext) executeItem(actor Participant, it *ActionItem, allyPar
 				targetList = []Participant{*primaryTarget}
 			}
 		}
+		decayMult := 1.0
+		hasDiamondRing := hasItem(actor.ItemDefinitionIDs, "item-144")
 		for _, tgt := range targetList {
-			effAtk := actor.Attack + ctx.attackBuff[actor.ID] + it.Power
+			effAtk := float64(actor.Attack+ctx.attackBuff[actor.ID]+it.Power) * decayMult
 			effDef := tgt.Defense + ctx.defenseBuff[tgt.ID]
-			baseDmg := damage(effAtk, effDef)
-			ctx.applyDamage(actor, tgt, baseDmg, it.Element, it.Name, false, "")
+			baseDmg := CalculateDamage(int(effAtk), effDef, ctx.rng, false)
+			ctx.applyDamage(actor, tgt, baseDmg, it.Element, it.Name, false, "", false)
+			if it.TargetScope == TargetScopeAllEnemies && !hasDiamondRing {
+				decayMult *= 0.85
+			}
 		}
 	}
 

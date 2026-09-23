@@ -116,22 +116,22 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 		var targetList []Participant
 		if skill.TargetScope == TargetScopeAllEnemies {
 			targetList = opponents
-		} else if skill.TargetScope == TargetScopeSingleEnemy || skill.TargetScope == "" {
-			primaryTarget := findLowestHPTarget(opponents, ctx.hpMap)
-			if primaryTarget != nil {
-				targetList = []Participant{*primaryTarget}
-			}
 		} else {
 			primaryTarget := findLowestHPTarget(opponents, ctx.hpMap)
 			if primaryTarget != nil {
 				targetList = []Participant{*primaryTarget}
 			}
 		}
+		decayMult := 1.0
+		hasDiamondRing := hasItem(actor.ItemDefinitionIDs, "item-144")
 		for _, tgt := range targetList {
-			effAtk := actor.Attack + ctx.attackBuff[actor.ID] + skill.Power
+			effAtk := float64(actor.Attack+ctx.attackBuff[actor.ID]+skill.Power) * decayMult
 			effDef := tgt.Defense + ctx.defenseBuff[tgt.ID]
-			baseDmg := damage(effAtk, effDef)
-			ctx.applyDamage(actor, tgt, baseDmg, skill.Element, skill.Name, false, "")
+			baseDmg := CalculateDamage(int(effAtk), effDef, ctx.rng, false)
+			ctx.applyDamage(actor, tgt, baseDmg, skill.Element, skill.Name, false, "", false)
+			if skill.TargetScope == TargetScopeAllEnemies && !hasDiamondRing {
+				decayMult *= 0.85
+			}
 		}
 	}
 }
@@ -227,11 +227,16 @@ func (ctx *battleContext) executeCustomSkill(actor Participant, cs *ActionCustom
 					targetList = []Participant{*primaryTarget}
 				}
 			}
+			decayMult := 1.0
+			hasDiamondRing := hasItem(actor.ItemDefinitionIDs, "item-144")
 			for _, tgt := range targetList {
-				effAtk := actor.Attack + ctx.attackBuff[actor.ID] + gem.Power
+				effAtk := float64(actor.Attack+ctx.attackBuff[actor.ID]+gem.Power) * decayMult
 				effDef := tgt.Defense + ctx.defenseBuff[tgt.ID]
-				baseDmg := damage(effAtk, effDef)
-				ctx.applyDamage(actor, tgt, baseDmg, gem.Element, cs.Name, true, cs.Incantation)
+				baseDmg := CalculateDamage(int(effAtk), effDef, ctx.rng, false)
+				ctx.applyDamage(actor, tgt, baseDmg, gem.Element, cs.Name, true, cs.Incantation, false)
+				if gem.TargetScope == TargetScopeAllEnemies && !hasDiamondRing {
+					decayMult *= 0.85
+				}
 			}
 		}
 	}

@@ -22,6 +22,7 @@ func createTestCharacters() []corecharacter.Character {
 				MaxMP:   50,
 				Attack:  60,
 				Defense: 30,
+				Agility: 30,
 			},
 		},
 		{
@@ -37,6 +38,7 @@ func createTestCharacters() []corecharacter.Character {
 				MaxMP:   30,
 				Attack:  50,
 				Defense: 25,
+				Agility: 25,
 			},
 		},
 		{
@@ -52,6 +54,7 @@ func createTestCharacters() []corecharacter.Character {
 				MaxMP:   40,
 				Attack:  55,
 				Defense: 25,
+				Agility: 35,
 			},
 		},
 	}

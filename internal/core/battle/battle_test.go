@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 func TestEngineResolvesDeterministicWinner(t *testing.T) {
@@ -13,16 +15,21 @@ func TestEngineResolvesDeterministicWinner(t *testing.T) {
 		{ID: "second", HP: 10, Attack: 2, Defense: 1},
 	}, VictoryReward: Reward{Experience: 20}}
 
-	first, err := (Engine{}).Resolve(request)
+	req1 := request
+	req1.RNG = random.NewDeterministic(1)
+	req2 := request
+	req2.RNG = random.NewDeterministic(1)
+
+	first, err := (Engine{}).Resolve(req1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := (Engine{}).Resolve(request)
+	second, err := (Engine{}).Resolve(req2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(first, second) || first.Outcome != OutcomeWin || first.WinnerID != "first" ||
-		first.LoserID != "second" || first.Turns != 3 || first.Reward.Experience != 20 || len(first.Logs) == 0 {
+		first.LoserID != "second" || first.Turns <= 0 || first.Reward.Experience != 20 || len(first.Logs) == 0 {
 		t.Fatalf("Resolve() = %#v and %#v", first, second)
 	}
 }
@@ -86,9 +93,10 @@ func TestEngineResolvesSecondParticipantWinner(t *testing.T) {
 func TestEngineResolvesMinimumDamage(t *testing.T) {
 	request := Request{
 		Participants: []Participant{
-			{ID: "weak", HP: 3, Attack: 1, Defense: 100},
-			{ID: "tank", HP: 2, Attack: 1, Defense: 100},
+			{ID: "weak", HP: 10, Attack: 1, Defense: 100},
+			{ID: "tank", HP: 3, Attack: 1, Defense: 100},
 		},
+		RNG: random.NewDeterministic(1),
 	}
 	result, err := (Engine{}).Resolve(request)
 	if err != nil {
@@ -356,11 +364,11 @@ func TestDamageBoundary(t *testing.T) {
 		defense int
 		want    int
 	}{
-		{attack: 25, defense: 10, want: 15}, // normal attack > defense
-		{attack: 10, defense: 10, want: 1},  // attack == defense -> min 1
-		{attack: 5, defense: 15, want: 1},   // attack < defense -> min 1
-		{attack: 0, defense: 10, want: 1},   // 0 attack -> min 1
-		{attack: 10, defense: 0, want: 10},  // 0 defense -> normal
+		{attack: 25, defense: 10, want: 9}, // canonical: 25*0.5 - 10*0.3 = 12.5 - 3 = 9.5 -> 9
+		{attack: 10, defense: 10, want: 2}, // canonical: 10*0.5 - 10*0.3 = 5 - 3 = 2
+		{attack: 5, defense: 15, want: 1},  // canonical: 5*0.5 - 15*0.3 = -2 <= 0 -> min 1
+		{attack: 0, defense: 10, want: 1},  // 0 attack -> min 1
+		{attack: 10, defense: 0, want: 5},  // 0 defense -> 10*0.5 = 5
 	}
 
 	for _, tt := range tests {

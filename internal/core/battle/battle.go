@@ -42,6 +42,7 @@ type Request struct {
 	VictoryReward Reward
 	DefeatReward  Reward
 	DrawReward    Reward
+	RNG           random.Generator
 }
 
 type Outcome string
@@ -161,9 +162,13 @@ func (Engine) Resolve(request Request) (Result, error) {
 	firstHP, secondHP := first.HP, second.HP
 	turns := 0
 	var logs []TurnLog
+	rng := request.RNG
+	if rng == nil {
+		rng = random.Default()
+	}
 	for firstHP > 0 && secondHP > 0 {
 		turns++
-		dmg1 := damage(first.Attack, second.Defense)
+		dmg1 := CalculateDamage(first.Attack, second.Defense, rng, false)
 		secondHP -= dmg1
 		if secondHP < 0 {
 			secondHP = 0
@@ -182,13 +187,13 @@ func (Engine) Resolve(request Request) (Result, error) {
 		})
 
 		if secondHP <= 0 {
-			if firstHP-damage(second.Attack, first.Defense) <= 0 {
+			if firstHP-CalculateDamage(second.Attack, first.Defense, rng, false) <= 0 {
 				return Result{Outcome: OutcomeDraw, Turns: turns, Reward: request.DrawReward, Logs: logs}, nil
 			}
 			return Result{Outcome: OutcomeWin, WinnerID: first.ID, LoserID: second.ID, Turns: turns, Reward: request.VictoryReward, Logs: logs}, nil
 		}
 
-		dmg2 := damage(second.Attack, first.Defense)
+		dmg2 := CalculateDamage(second.Attack, first.Defense, rng, false)
 		firstHP -= dmg2
 		if firstHP < 0 {
 			firstHP = 0
@@ -233,10 +238,31 @@ func validateReward(value Reward) error {
 	return nil
 }
 
-func damage(attack, defense int) int {
-	value := attack - defense
-	if value < 1 {
-		return 1
+// CalculateDamage computes damage according to canonical DQ / legacy Party2 rules:
+// - Physical base: int(Atk * 0.5 - Def * 0.3).
+// - Direct / Critical strike: int(Atk * 0.75), bypassing defense mitigation.
+// - Random variance: multiplied by 0.9..1.2 (rand(0.3) + 0.9).
+// - Minimum damage: if resulting damage < 1, deals 1 or 2 (int(rand(2) + 1)).
+func CalculateDamage(attack, defense int, rng random.Generator, isDirect bool) int {
+	var base float64
+	if isDirect {
+		base = float64(attack) * 0.75
+	} else {
+		base = float64(attack)*0.5 - float64(defense)*0.3
 	}
-	return value
+	variance := 1.0
+	minDmg := 1
+	if rng != nil {
+		variance = 0.9 + rng.Float64()*0.3
+		minDmg = rng.Intn(2) + 1
+	}
+	dmg := int(base * variance)
+	if dmg < 1 {
+		return minDmg
+	}
+	return dmg
+}
+
+func damage(attack, defense int) int {
+	return CalculateDamage(attack, defense, nil, false)
 }
