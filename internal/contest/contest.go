@@ -149,6 +149,8 @@ type SettlementResult struct {
 	PrizesDistributed bool           `json:"prizes_distributed"`
 	Postponed         bool           `json:"postponed"`
 	ExtendedUntil     time.Time      `json:"extended_until,omitempty"`
+	NextRound         int            `json:"next_round,omitempty"`
+	NextRoundEndTime  time.Time      `json:"next_round_end_time,omitempty"`
 	VotersRewarded    int            `json:"voters_rewarded"`
 	Message           string         `json:"message"`
 }

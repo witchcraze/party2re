@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/chapel"
+	"github.com/witchcraze/party2re/internal/contest"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/eventplaza"
 	"github.com/witchcraze/party2re/internal/logging"
@@ -78,7 +80,7 @@ func TestRegisterWorkerHandlers_ChapelReset(t *testing.T) {
 		t.Fatalf("NewService failed: %v", err)
 	}
 
-	soc.registerWorkerHandlers(nil, chapelService, nil)
+	soc.registerWorkerHandlers(nil, chapelService, nil, nil)
 
 	// Dispatch chapel_reset action via worker
 	ctx := context.Background()
@@ -211,5 +213,170 @@ func TestWireBossVictoryBanquetHook_RecordsPresence(t *testing.T) {
 		if plazaMock.recordedDuration != time.Hour {
 			t.Errorf("tier %d: expected duration 1h, got %v", tier, plazaMock.recordedDuration)
 		}
+	}
+}
+
+type stubCharRepo struct{}
+
+func (m *stubCharRepo) FindByID(_ context.Context, _ string) (corecharacter.Character, error) {
+	return corecharacter.Character{}, corecharacter.ErrNotFound
+}
+
+func (m *stubCharRepo) FindByIDForUpdate(_ context.Context, _ string) (corecharacter.Character, error) {
+	return corecharacter.Character{}, corecharacter.ErrNotFound
+}
+
+func (m *stubCharRepo) Update(_ context.Context, _ corecharacter.Character) error {
+	return nil
+}
+
+type stubContestRepo struct {
+	contest.ContestRepository
+	activeRound contest.ContestRound
+	activeErr   error
+	saveRoundFn func(round contest.ContestRound) error
+}
+
+func (m *stubContestRepo) GetActiveRound(_ context.Context) (contest.ContestRound, error) {
+	if m.activeErr != nil {
+		return contest.ContestRound{}, m.activeErr
+	}
+	return m.activeRound, nil
+}
+
+func (m *stubContestRepo) GetActiveRoundForUpdate(_ context.Context) (contest.ContestRound, error) {
+	if m.activeErr != nil {
+		return contest.ContestRound{}, m.activeErr
+	}
+	return m.activeRound, nil
+}
+
+func (m *stubContestRepo) ListEntriesByRound(_ context.Context, _ int) ([]contest.ContestEntry, error) {
+	return nil, nil
+}
+
+func (m *stubContestRepo) SaveRound(_ context.Context, round contest.ContestRound) error {
+	if m.saveRoundFn != nil {
+		return m.saveRoundFn(round)
+	}
+	return nil
+}
+
+func TestRegisterWorkerHandlers_ContestSettlement(t *testing.T) {
+	repo := &mockSchedRepo{}
+	worker := scheduling.NewWorker(repo, time.Second, logging.Nop())
+	sched := scheduling.NewService(repo)
+
+	soc := &socServices{
+		worker: worker,
+		sched:  sched,
+	}
+
+	endTime := time.Now().Add(-time.Minute)
+	savedRound := contest.ContestRound{}
+	contestRepo := &stubContestRepo{
+		activeRound: contest.ContestRound{
+			Round:     1,
+			Status:    contest.StatusActive,
+			StartTime: endTime.Add(-10 * 24 * time.Hour),
+			EndTime:   endTime,
+		},
+		saveRoundFn: func(r contest.ContestRound) error {
+			savedRound = r
+			return nil
+		},
+	}
+	contestSvc, err := contest.NewService(&stubCharRepo{}, contestRepo)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	soc.registerWorkerHandlers(nil, nil, nil, contestSvc)
+
+	// Dispatch contest_settlement action via worker
+	ctx := context.Background()
+	action := core_scheduling.ScheduledAction{
+		ID:          "act-contest-settle-test",
+		ActionType:  contest.ActionTypeContestSettlement,
+		ActorID:     "system",
+		ScheduledAt: endTime,
+		ExecuteAt:   endTime,
+		State:       core_scheduling.StatePending,
+	}
+
+	worker.ProcessAction(ctx, action)
+
+	if savedRound.Round != 1 {
+		t.Errorf("expected round 1 to be saved, got %d", savedRound.Round)
+	}
+	if !savedRound.EndTime.After(endTime) {
+		t.Errorf("expected extended EndTime after %v, got %v", endTime, savedRound.EndTime)
+	}
+
+	if len(repo.actions) != 1 {
+		t.Fatalf("expected 1 scheduled action, got %d", len(repo.actions))
+	}
+	scheduled := repo.actions[0]
+	if scheduled.ActionType != contest.ActionTypeContestSettlement {
+		t.Errorf("expected ActionType %s, got %s", contest.ActionTypeContestSettlement, scheduled.ActionType)
+	}
+}
+
+func TestWireContestSettlement(t *testing.T) {
+	repo := &mockSchedRepo{}
+	sched := scheduling.NewService(repo)
+
+	endTime := time.Now().Add(10 * 24 * time.Hour)
+	contestRepo := &stubContestRepo{
+		activeRound: contest.ContestRound{
+			Round:     2,
+			Status:    contest.StatusActive,
+			StartTime: time.Now(),
+			EndTime:   endTime,
+		},
+	}
+	contestSvc, err := contest.NewService(&stubCharRepo{}, contestRepo)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	wireContestSettlement(sched, contestSvc)
+
+	if len(repo.actions) != 1 {
+		t.Fatalf("expected 1 scheduled action, got %d", len(repo.actions))
+	}
+
+	action := repo.actions[0]
+	if action.ActionType != contest.ActionTypeContestSettlement {
+		t.Errorf("expected ActionType %s, got %s", contest.ActionTypeContestSettlement, action.ActionType)
+	}
+	expectedID := contest.SettlementActionID(2, endTime)
+	if action.ID != expectedID {
+		t.Errorf("expected action ID %q, got %q", expectedID, action.ID)
+	}
+	if action.ActorID != "system" {
+		t.Errorf("expected ActorID system, got %s", action.ActorID)
+	}
+	if !action.ExecuteAt.Equal(endTime) {
+		t.Errorf("expected ExecuteAt %v, got %v", endTime, action.ExecuteAt)
+	}
+}
+
+func TestWireContestSettlement_NoActiveRound(t *testing.T) {
+	repo := &mockSchedRepo{}
+	sched := scheduling.NewService(repo)
+
+	contestRepo := &stubContestRepo{
+		activeErr: contest.ErrContestNotFound,
+	}
+	contestSvc, err := contest.NewService(&stubCharRepo{}, contestRepo)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	wireContestSettlement(sched, contestSvc)
+
+	if len(repo.actions) != 0 {
+		t.Errorf("expected 0 actions scheduled when no active round, got %d", len(repo.actions))
 	}
 }

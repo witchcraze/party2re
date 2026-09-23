@@ -11,6 +11,7 @@ import (
 	"github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/chapel"
+	"github.com/witchcraze/party2re/internal/contest"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/lottery"
@@ -192,7 +193,7 @@ func wireHooks(
 		}
 	}
 
-	soc.registerWorkerHandlers(misc.activity, misc.chapel, misc.lottery)
+	soc.registerWorkerHandlers(misc.activity, misc.chapel, misc.lottery, misc.contest)
 
 	if soc.sched != nil && misc.chapel != nil {
 		wireChapelDailyReset(soc.sched)
@@ -203,6 +204,20 @@ func wireHooks(
 	if soc.sched != nil && soc.guild != nil {
 		wireGuildInactivityCheck(soc.sched)
 	}
+	if soc.sched != nil && misc.contest != nil {
+		wireContestSettlement(soc.sched, misc.contest)
+	}
+}
+
+// wireContestSettlement enqueues the contest settlement action if not already scheduled.
+func wireContestSettlement(sched *scheduling.Service, contestSvc *contest.Service) {
+	ctx := context.Background()
+	activeRound, err := contestSvc.GetActiveRound(ctx)
+	if err != nil {
+		return
+	}
+	next := activeRound.EndTime
+	_ = sched.ScheduleWithID(ctx, contest.SettlementActionID(activeRound.Round, next), contest.ActionTypeContestSettlement, "system", nil, next)
 }
 
 // wireGuildInactivityCheck enqueues the daily JST midnight inactivity check if not already scheduled.

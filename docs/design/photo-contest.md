@@ -52,6 +52,13 @@ When a contest is settled:
 - **Hall of Fame (殿堂入り)**: The 1st place entry is permanently archived into `contest_legends`.
 - **System Announcement**: Broadcasts news announcements for top 3 winners.
 
+### 4.5 Automated Scheduling & Settlement (`ContestSettlementHandler`)
+- Contest settlements are automatically scheduled as recurring actions (`ActionTypeContestSettlement = "contest_settlement"`) managed by `scheduling.Service`.
+- On server startup, `wireContestSettlement` registers the settlement check for the current active round's `EndTime` using deterministic action ID `contest_settlement:<round>:<timestamp>`.
+- When triggered by `scheduling.Worker`:
+  - If quorum (5+ entries) is satisfied, prizes and voter bonuses are distributed, the champion is archived into `contest_legends`, the next preparing round is promoted to active, and the next settlement action is scheduled.
+  - If quorum is not satisfied, the round is postponed and extended by 10 days without prize distribution, and the next check is scheduled for the extended deadline.
+
 ---
 
 ## 5. Supported Operations & HTTP API

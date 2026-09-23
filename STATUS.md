@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #800 — Lottery: Restore weighted candidate pools in Takarakuji and sanitize Raffle prize item names
+Last updated: Issue #801 — Contest: Wire recurring ContestSettlement action into scheduling service
 
 ## Current Phase
 
