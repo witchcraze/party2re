@@ -114,7 +114,7 @@ Each feature owns its specific domain logic and state. Cross-feature imports and
 | **Casino** | `internal/casino` | 2..8 player room lobby, Indian Poker, High-Low, Doppelganger, Slots | Character, Depot | Valkey Candidate C (`party2:casino:*`); MariaDB `casino_accounts` (Rank 2→5→8) |
 | **Challenge** | `internal/challenge` | 4-tier survival wave combat, HP carryover, Hall of Fame | Battle, Character, Inventory, Valkey | Valkey Candidate D (`party2:challenge:*`); MariaDB `character_challenge_records` |
 | **Collection** | `internal/collection` | Illustrated monster defeat and item discovery encyclopedia, 100% completion milestones | Character, Notification | MariaDB `character_monster_book`, `character_item_collection`, `character_collection_completions` |
-| **Contest** | `internal/contest` | Photo contest submissions, voting rounds, Hall of Fame | Character, News, Guild | MariaDB `character_photos`, `contest_rounds`, `contest_entries` |
+| **Contest** | `internal/contest` | Photo contest submissions, voting rounds, recurring settlement, Hall of Fame | Character, News, Guild, Scheduling | MariaDB `character_photos`, `contest_rounds`, `contest_entries`, `contest_votes`, `contest_legends` |
 | **Costume** | `internal/costume` | Daily rented appearance state (`ActiveCostume`), midnight JST expiration, rest/job-change reset | None | Valkey `party2:daily:costume:*` |
 | **Custom Skill** | `internal/customskill` | 3-gem recipe synthesis, activation phrase validation | Character, Inventory, Gem Catalog | MariaDB `character_custom_skills` |
 | **Depot** | `internal/depot` | Persistent storage (up to 500 slots), item consumption, delivery engine | Character, Inventory, Economy | MariaDB `character_depots`, `depot_items` (Rank 2→3→5) |

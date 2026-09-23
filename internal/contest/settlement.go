@@ -43,6 +43,8 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 
 			result.Postponed = true
 			result.ExtendedUntil = activeRound.EndTime
+			result.NextRound = activeRound.Round
+			result.NextRoundEndTime = activeRound.EndTime
 			result.Message = "Contest postponed and extended due to insufficient entries"
 			return nil
 		}
@@ -173,6 +175,9 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 			if err := s.contests.SaveRound(txCtx, nextPrep); err != nil {
 				return err
 			}
+
+			result.NextRound = prepRound.Round
+			result.NextRoundEndTime = prepRound.EndTime
 		} else {
 			// If no preparing round existed, create next active and preparing rounds
 			nextActive := ContestRound{
@@ -198,6 +203,9 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 			if err := s.contests.SaveRound(txCtx, nextPrep); err != nil {
 				return err
 			}
+
+			result.NextRound = nextActive.Round
+			result.NextRoundEndTime = nextActive.EndTime
 		}
 
 		result.Rankings = entries

@@ -461,3 +461,8 @@ func (s *Service) GetLegends(ctx context.Context, limit, offset int) (pagination
 	}
 	return pagination.NewPage(items, total, limit, offset), nil
 }
+
+// GetActiveRound returns the current active contest round.
+func (s *Service) GetActiveRound(ctx context.Context) (ContestRound, error) {
+	return s.contests.GetActiveRound(ctx)
+}

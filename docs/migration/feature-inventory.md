@@ -110,7 +110,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Player private home, mailbox, and letter correspondence (#159, #461, #680)
 - [x] Helper and player rescue assistance (#79, #213, #659, #680)
 - [x] Rankings (level, job, wealth, battle victories, helper, medals) with ISP-compliant repository interfaces (#63, #280, #454, #470)
-- [x] Photo Contest, screenshots, seasonal voting, prize settlement error propagation, and Hall of Fame (#186, #660)
+- [x] Photo Contest, screenshots, seasonal voting, prize settlement error propagation, scheduled settlement action wiring, and Hall of Fame (#186, #660, #801)
 
 ### F. Economy and Side Systems
 - [x] Alchemy: Free Overnight Depot-linked Synthesis & Compendium (#60, #487)
