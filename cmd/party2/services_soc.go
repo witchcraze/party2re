@@ -175,6 +175,7 @@ func (s *socServices) registerWorkerHandlers(activityService *activity.Service, 
 			s.worker.RegisterHandler(activity.ActivityActionTypeTrainingComplete, activity.NewTrainingHandler(activityService))
 		}
 		s.worker.RegisterHandler(ranking.RankingActionTypeRefresh, ranking.NewRefreshHandler(s.ranking))
+		s.worker.RegisterHandler(ranking.RankingActionTypeRotateWeekly, ranking.NewRotateWeeklyHandler(s.ranking))
 		if chapelService != nil {
 			s.worker.RegisterHandler(chapel.ActionTypeChapelReset, chapel.NewResetHandler(chapelService, chapel.WithScheduler(s.sched)))
 		}

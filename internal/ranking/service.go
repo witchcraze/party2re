@@ -73,7 +73,7 @@ func NewService(repo Repository, opts ...ServiceOption) (*Service, error) {
 
 // GetRankingByType retrieves ranking for a dynamic type string.
 func (s *Service) GetRankingByType(ctx context.Context, rankingType RankingType, limit, offset int, useSnapshot bool) (any, error) {
-	switch rankingType {
+	switch NormalizeRankingType(rankingType) {
 	case RankingTypeLevel:
 		return s.GetLevelRanking(ctx, limit, offset, useSnapshot)
 	case RankingTypePlayerWealth:
@@ -96,6 +96,12 @@ func (s *Service) GetRankingByType(ctx context.Context, rankingType RankingType,
 		return s.GetHelperRanking(ctx, limit, offset, useSnapshot)
 	case RankingTypeSmallMedals:
 		return s.GetSmallMedalRanking(ctx, limit, offset, useSnapshot)
+	case RankingTypeCasinoWins:
+		return s.GetCasinoWinsRanking(ctx, limit, offset, useSnapshot)
+	case RankingTypeAlchemy:
+		return s.GetAlchemyRanking(ctx, limit, offset, useSnapshot)
+	case RankingTypeWeeklyJobChange:
+		return s.GetWeeklyJobChangeRanking(ctx, limit, offset, useSnapshot)
 	default:
 		return nil, ErrInvalidRankingType
 	}

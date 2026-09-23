@@ -30,13 +30,23 @@ type mockRankingRepository struct {
 	helperTotal             int
 	smallMedalRankings      []ranking.CharacterRankingEntry
 	smallMedalTotal         int
+	casinoWinsRankings      []ranking.CharacterRankingEntry
+	casinoWinsTotal         int
+	alchemyRankings         []ranking.CharacterRankingEntry
+	alchemyTotal            int
+	weeklyJobChangeRankings []ranking.CharacterRankingEntry
+	weeklyJobChangeTotal    int
+	activeWeeklyJobChanges  map[string]int
+	legends                 map[ranking.LegendCategory][]ranking.LegendEntry
 	snapshots               map[ranking.RankingType]ranking.RankingSnapshot
 	err                     error
 }
 
 func newMockRepo() *mockRankingRepository {
 	return &mockRankingRepository{
-		snapshots: make(map[ranking.RankingType]ranking.RankingSnapshot),
+		snapshots:              make(map[ranking.RankingType]ranking.RankingSnapshot),
+		activeWeeklyJobChanges: make(map[string]int),
+		legends:                make(map[ranking.LegendCategory][]ranking.LegendEntry),
 	}
 }
 
@@ -141,6 +151,82 @@ func (m *mockRankingRepository) GetAllSnapshots(ctx context.Context) (map[rankin
 		return nil, m.err
 	}
 	return m.snapshots, nil
+}
+
+func (m *mockRankingRepository) GetCasinoWinsRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	if m.err != nil {
+		return nil, 0, m.err
+	}
+	return paginateSlice(m.casinoWinsRankings, limit, offset), m.casinoWinsTotal, nil
+}
+
+func (m *mockRankingRepository) GetAlchemyRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	if m.err != nil {
+		return nil, 0, m.err
+	}
+	return paginateSlice(m.alchemyRankings, limit, offset), m.alchemyTotal, nil
+}
+
+func (m *mockRankingRepository) GetWeeklyJobChangeRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	if m.err != nil {
+		return nil, 0, m.err
+	}
+	return paginateSlice(m.weeklyJobChangeRankings, limit, offset), m.weeklyJobChangeTotal, nil
+}
+
+func (m *mockRankingRepository) IncrementJobChangeCount(ctx context.Context, characterID string) error {
+	if m.err != nil {
+		return m.err
+	}
+	m.activeWeeklyJobChanges[characterID]++
+	return nil
+}
+
+func (m *mockRankingRepository) GetActiveWeeklyJobChangeRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	if m.err != nil {
+		return nil, 0, m.err
+	}
+	return paginateSlice(m.weeklyJobChangeRankings, limit, offset), m.weeklyJobChangeTotal, nil
+}
+
+func (m *mockRankingRepository) ResetWeeklyJobChanges(ctx context.Context) error {
+	if m.err != nil {
+		return m.err
+	}
+	m.activeWeeklyJobChanges = make(map[string]int)
+	return nil
+}
+
+func (m *mockRankingRepository) RecordLegend(ctx context.Context, entry ranking.LegendEntry) (bool, error) {
+	if m.err != nil {
+		return false, m.err
+	}
+	for _, existing := range m.legends[entry.Category] {
+		if existing.CharacterID == entry.CharacterID {
+			return false, nil
+		}
+	}
+	entry.ID = int64(len(m.legends[entry.Category]) + 1)
+	m.legends[entry.Category] = append(m.legends[entry.Category], entry)
+	return true, nil
+}
+
+func (m *mockRankingRepository) GetLegendInductees(ctx context.Context, category ranking.LegendCategory) ([]ranking.LegendEntry, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.legends[category], nil
+}
+
+func (m *mockRankingRepository) GetLegendCategoryCounts(ctx context.Context) (map[ranking.LegendCategory]int, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	counts := make(map[ranking.LegendCategory]int)
+	for cat, entries := range m.legends {
+		counts[cat] = len(entries)
+	}
+	return counts, nil
 }
 
 func paginateSlice[T any](items []T, limit, offset int) []T {
@@ -315,8 +401,8 @@ func TestService_RefreshAllSnapshots(t *testing.T) {
 		t.Fatalf("unexpected error refreshing all snapshots: %v", err)
 	}
 
-	if len(repo.snapshots) != 11 {
-		t.Fatalf("expected 11 snapshots saved in repository, got %d", len(repo.snapshots))
+	if len(repo.snapshots) != 13 {
+		t.Fatalf("expected 13 snapshots saved in repository, got %d", len(repo.snapshots))
 	}
 }
 

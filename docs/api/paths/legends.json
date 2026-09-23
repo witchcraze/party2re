@@ -1,0 +1,88 @@
+{
+  "/legends": {
+    "get": {
+      "operationId": "getLegends",
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            }
+          },
+          "description": "List of Hall of Fame categories with inductee counts"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "List Hall of Fame categories with induction counts",
+      "tags": [
+        "Legends"
+      ]
+    }
+  },
+  "/legends/{category}": {
+    "get": {
+      "operationId": "getLegendCategory",
+      "parameters": [
+        {
+          "description": "Hall of Fame category slug (comp_job, comp_mon, comp_wea, comp_arm, comp_ite, comp_alc)",
+          "in": "path",
+          "name": "category",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Hall of Fame category inductees sorted chronologically"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid category"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Get Hall of Fame inductees for category",
+      "tags": [
+        "Legends"
+      ]
+    }
+  }
+}

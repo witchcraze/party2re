@@ -431,8 +431,15 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("GET /rankings/job-popularity", h.handleGetJobPopularityRanking)
 	mux.HandleFunc("GET /rankings/helpers", h.handleGetHelperRanking)
 	mux.HandleFunc("GET /rankings/medals", h.handleGetSmallMedalRanking)
+	mux.HandleFunc("GET /rankings/casino-wins", h.handleGetCasinoWinsRanking)
+	mux.HandleFunc("GET /rankings/alchemy", h.handleGetAlchemyRanking)
+	mux.HandleFunc("GET /rankings/weekly-job-change", h.handleGetWeeklyJobChangeRanking)
 	mux.HandleFunc("GET /rankings/{type}", h.handleGetRankingByType)
 	mux.HandleFunc("POST /rankings/refresh", h.handleRefreshRankings)
+
+	// Hall of Fame (legend.cgi)
+	mux.HandleFunc("GET /legends", h.handleGetLegends)
+	mux.HandleFunc("GET /legends/{category}", h.handleGetLegendCategory)
 
 	// Jobs
 	mux.HandleFunc("GET /jobs", h.handleListJobs)

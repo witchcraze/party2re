@@ -8,6 +8,7 @@ import (
 
 // RefreshSnapshot calculates and persists a snapshot for the specified ranking type.
 func (s *Service) RefreshSnapshot(ctx context.Context, rankingType RankingType) error {
+	rankingType = NormalizeRankingType(rankingType)
 	now := s.nowFunc().UTC()
 	var (
 		data       any
@@ -60,6 +61,18 @@ func (s *Service) RefreshSnapshot(ctx context.Context, rankingType RankingType) 
 	case RankingTypeSmallMedals:
 		var entries []CharacterRankingEntry
 		entries, totalCount, err = s.repo.GetSmallMedalRanking(ctx, 100, 0)
+		data = entries
+	case RankingTypeCasinoWins:
+		var entries []CharacterRankingEntry
+		entries, totalCount, err = s.repo.GetCasinoWinsRanking(ctx, 100, 0)
+		data = entries
+	case RankingTypeAlchemy:
+		var entries []CharacterRankingEntry
+		entries, totalCount, err = s.repo.GetAlchemyRanking(ctx, 100, 0)
+		data = entries
+	case RankingTypeWeeklyJobChange:
+		var entries []CharacterRankingEntry
+		entries, totalCount, err = s.repo.GetWeeklyJobChangeRanking(ctx, 100, 0)
 		data = entries
 	default:
 		return ErrInvalidRankingType
@@ -116,6 +129,8 @@ func (s *Service) RefreshAllSnapshots(ctx context.Context) error {
 		RankingTypeJobPopularity,
 		RankingTypeHelper,
 		RankingTypeSmallMedals,
+		RankingTypeCasinoWins,
+		RankingTypeAlchemy,
 	}
 
 	for _, t := range types {

@@ -1,4 +1,74 @@
 {
+  "/rankings/alchemy": {
+    "get": {
+      "operationId": "getAlchemyRanking",
+      "parameters": [
+        {
+          "description": "Limit",
+          "in": "query",
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Offset",
+          "in": "query",
+          "name": "offset",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Use snapshot cache",
+          "in": "query",
+          "name": "snapshot",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Alchemy syntheses ranking (alc_c)"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Get alchemy craft syntheses ranking leaderboard (alc_c)",
+      "tags": [
+        "Rankings"
+      ]
+    }
+  },
   "/rankings/battles": {
     "get": {
       "operationId": "getBattleRanking",
@@ -46,6 +116,76 @@
         }
       },
       "summary": "Get battle victories ranking leaderboard",
+      "tags": [
+        "Rankings"
+      ]
+    }
+  },
+  "/rankings/casino-wins": {
+    "get": {
+      "operationId": "getCasinoWinsRanking",
+      "parameters": [
+        {
+          "description": "Limit",
+          "in": "query",
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Offset",
+          "in": "query",
+          "name": "offset",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Use snapshot cache",
+          "in": "query",
+          "name": "snapshot",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Casino wins ranking (cas_c)"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Get casino showdown wins ranking leaderboard (cas_c)",
       "tags": [
         "Rankings"
       ]
@@ -445,6 +585,76 @@
         }
       },
       "summary": "Get player wealth ranking leaderboard",
+      "tags": [
+        "Rankings"
+      ]
+    }
+  },
+  "/rankings/weekly-job-change": {
+    "get": {
+      "operationId": "getWeeklyJobChangeRanking",
+      "parameters": [
+        {
+          "description": "Limit",
+          "in": "query",
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Offset",
+          "in": "query",
+          "name": "offset",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Use snapshot cache",
+          "in": "query",
+          "name": "snapshot",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Weekly job change ranking"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Get weekly job change ranking leaderboard",
       "tags": [
         "Rankings"
       ]

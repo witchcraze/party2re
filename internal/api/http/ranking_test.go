@@ -24,6 +24,11 @@ type mockHTTPRankingService struct {
 	jobPopularityPage ranking.RankingPage[ranking.JobPopularityEntry]
 	helperPage        ranking.RankingPage[ranking.CharacterRankingEntry]
 	medalPage         ranking.RankingPage[ranking.CharacterRankingEntry]
+	casinoWinsPage    ranking.RankingPage[ranking.CharacterRankingEntry]
+	alchemyPage       ranking.RankingPage[ranking.CharacterRankingEntry]
+	weeklyJobPage     ranking.RankingPage[ranking.CharacterRankingEntry]
+	legends           []ranking.LegendCategoryInfo
+	legendPages       map[ranking.LegendCategory]ranking.LegendCategoryPage
 	refreshedTypes    []ranking.RankingType
 	refreshedAll      bool
 }
@@ -61,14 +66,43 @@ func (m *mockHTTPRankingService) GetHelperRanking(ctx context.Context, limit, of
 func (m *mockHTTPRankingService) GetSmallMedalRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.medalPage, nil
 }
+func (m *mockHTTPRankingService) GetCasinoWinsRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
+	return m.casinoWinsPage, nil
+}
+func (m *mockHTTPRankingService) GetAlchemyRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
+	return m.alchemyPage, nil
+}
+func (m *mockHTTPRankingService) GetWeeklyJobChangeRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
+	return m.weeklyJobPage, nil
+}
+func (m *mockHTTPRankingService) GetLegends(ctx context.Context) ([]ranking.LegendCategoryInfo, error) {
+	return m.legends, nil
+}
+func (m *mockHTTPRankingService) GetLegendCategory(ctx context.Context, category ranking.LegendCategory) (ranking.LegendCategoryPage, error) {
+	if !ranking.IsValidLegendCategory(category) {
+		return ranking.LegendCategoryPage{}, ranking.ErrInvalidLegendCategory
+	}
+	if m.legendPages != nil {
+		if page, ok := m.legendPages[category]; ok {
+			return page, nil
+		}
+	}
+	return ranking.LegendCategoryPage{Category: category}, nil
+}
 func (m *mockHTTPRankingService) GetRankingByType(ctx context.Context, rankingType ranking.RankingType, limit, offset int, useSnapshot bool) (any, error) {
-	switch rankingType {
+	switch ranking.NormalizeRankingType(rankingType) {
 	case ranking.RankingTypeLevel:
 		return m.levelPage, nil
 	case ranking.RankingTypePlayerWealth:
 		return m.wealthPage, nil
 	case ranking.RankingTypeJobPopularity:
 		return m.jobPopularityPage, nil
+	case ranking.RankingTypeCasinoWins:
+		return m.casinoWinsPage, nil
+	case ranking.RankingTypeAlchemy:
+		return m.alchemyPage, nil
+	case ranking.RankingTypeWeeklyJobChange:
+		return m.weeklyJobPage, nil
 	default:
 		return nil, ranking.ErrInvalidRankingType
 	}
@@ -274,6 +308,54 @@ func TestRankingEndpoints(t *testing.T) {
 			name:       "GET /rankings/unknown_type (400 Bad Request)",
 			method:     http.MethodGet,
 			url:        "/rankings/unknown_type",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "GET /rankings/casino-wins",
+			method:     http.MethodGet,
+			url:        "/rankings/casino-wins",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /rankings/alchemy",
+			method:     http.MethodGet,
+			url:        "/rankings/alchemy",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /rankings/weekly-job-change",
+			method:     http.MethodGet,
+			url:        "/rankings/weekly-job-change",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /rankings/cas_c (legacy alias)",
+			method:     http.MethodGet,
+			url:        "/rankings/cas_c",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /rankings/alc_c (legacy alias)",
+			method:     http.MethodGet,
+			url:        "/rankings/alc_c",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /legends",
+			method:     http.MethodGet,
+			url:        "/legends",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /legends/comp_job",
+			method:     http.MethodGet,
+			url:        "/legends/comp_job",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /legends/invalid_cat (400 Bad Request)",
+			method:     http.MethodGet,
+			url:        "/legends/invalid_cat",
 			wantStatus: http.StatusBadRequest,
 		},
 		{
