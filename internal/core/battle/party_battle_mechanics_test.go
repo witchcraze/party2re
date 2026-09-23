@@ -621,3 +621,127 @@ func TestPartyBattle_MonsterCrystalDrops(t *testing.T) {
 		})
 	}
 }
+
+func TestPartyBattle_TMP_DefensiveTraits(t *testing.T) {
+	engine := corebattle.Engine{}
+
+	// 1. 大防御: All damage is reduced to 1/10
+	t.Run("大防御 reduces all damage to 1/10", func(t *testing.T) {
+		req := corebattle.PartyBattleRequest{
+			Allies: []corebattle.Participant{
+				corebattle.NewParticipantBuilder("hero").
+					WithName("Hero").
+					WithStats(100, 100, 10).
+					WithAgility(100).
+					MustBuild(),
+			},
+			Enemies: []corebattle.Participant{
+				corebattle.NewParticipantBuilder("clone").
+					WithName("KingClone").
+					WithStats(1000, 10, 10).
+					WithAgility(10).
+					WithAbilities("大防御").
+					MustBuild(),
+			},
+			RNG: customRNG{
+				float64Func: func() float64 { return 1.0 / 3.0 }, // variance 1.0
+				intnFunc:    func(n int) int { return 1 },        // no crit, no miss
+			},
+		}
+
+		res, err := engine.ResolvePartyBattle(req)
+		if err != nil {
+			t.Fatalf("ResolvePartyBattle failed: %v", err)
+		}
+		// Base damage: 100*0.5 - 10*0.3 = 47. With 大防御: 47 / 10 = 4.
+		if len(res.Logs) > 0 {
+			firstAtk := res.Logs[0]
+			if firstAtk.DamageDealt != 4 {
+				t.Errorf("expected 4 damage with 大防御, got %d", firstAtk.DamageDealt)
+			}
+		}
+	})
+
+	// 2. 攻軽減: Physical damage is reduced to 1/4
+	t.Run("攻軽減 reduces physical damage to 1/4", func(t *testing.T) {
+		req := corebattle.PartyBattleRequest{
+			Allies: []corebattle.Participant{
+				corebattle.NewParticipantBuilder("hero").
+					WithName("Hero").
+					WithStats(100, 100, 10).
+					WithAgility(100).
+					MustBuild(),
+			},
+			Enemies: []corebattle.Participant{
+				corebattle.NewParticipantBuilder("boss").
+					WithName("Boss").
+					WithStats(1000, 10, 10).
+					WithAgility(10).
+					WithAbilities("攻軽減").
+					MustBuild(),
+			},
+			RNG: customRNG{
+				float64Func: func() float64 { return 1.0 / 3.0 }, // variance 1.0
+				intnFunc:    func(n int) int { return 1 },        // no crit, no miss
+			},
+		}
+
+		res, err := engine.ResolvePartyBattle(req)
+		if err != nil {
+			t.Fatalf("ResolvePartyBattle failed: %v", err)
+		}
+		// Base damage: 100*0.5 - 10*0.3 = 47. With 攻軽減: 47 / 4 = 11.
+		if len(res.Logs) > 0 {
+			firstAtk := res.Logs[0]
+			if firstAtk.DamageDealt != 11 {
+				t.Errorf("expected 11 damage with 攻軽減, got %d", firstAtk.DamageDealt)
+			}
+		}
+	})
+
+	// 3. 魔無効: Magic damage becomes 0
+	t.Run("魔無効 nullifies magic damage", func(t *testing.T) {
+		req := corebattle.PartyBattleRequest{
+			Allies: []corebattle.Participant{
+				corebattle.NewParticipantBuilder("mage").
+					WithName("Mage").
+					WithStats(100, 10, 10).
+					WithMP(50, 50).
+					WithAgility(100).
+					WithSkills(corebattle.ActionSkill{
+						ID:          "fireball",
+						Name:        "メラゾーマ",
+						Kind:        "attack",
+						Power:       60,
+						Element:     "fire",
+						TargetScope: "single_enemy",
+						MPCost:      10,
+					}).
+					MustBuild(),
+			},
+			Enemies: []corebattle.Participant{
+				corebattle.NewParticipantBuilder("stone").
+					WithName("RedStone").
+					WithStats(1000, 10, 10).
+					WithAgility(10).
+					WithAbilities("魔無効").
+					MustBuild(),
+			},
+			RNG: customRNG{
+				float64Func: func() float64 { return 1.0 / 3.0 },
+				intnFunc:    func(n int) int { return 1 },
+			},
+		}
+
+		res, err := engine.ResolvePartyBattle(req)
+		if err != nil {
+			t.Fatalf("ResolvePartyBattle failed: %v", err)
+		}
+		if len(res.Logs) > 0 {
+			firstAtk := res.Logs[0]
+			if firstAtk.DamageDealt != 0 {
+				t.Errorf("expected 0 damage with 魔無効, got %d", firstAtk.DamageDealt)
+			}
+		}
+	})
+}
