@@ -164,6 +164,9 @@ func TestAdventure_Floor11Treasure_PersistedToInventory(t *testing.T) {
 	if crawlRes.TreasureBoxes[0].DeliveredTo != "inventory" {
 		t.Errorf("expected treasure box delivered to inventory, got %s", crawlRes.TreasureBoxes[0].DeliveredTo)
 	}
+	if settler.lastReq.Habitat == "" {
+		t.Errorf("expected Habitat to be populated, got empty")
+	}
 }
 
 func TestAdventure_Floor11Treasure_DepotFallbackWhenInventoryFull(t *testing.T) {

@@ -208,6 +208,19 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 				_ = s.newsPub.PublishNews(txCtx, "boss", newsMsg, newsMsg, "System", time.Now().UTC())
 			}
 
+			if s.monsterRecorder != nil {
+				for _, m := range members {
+					if stage.ID == "king99" {
+						_ = s.monsterRecorder.RecordMonsterDefeat(txCtx, m.CharacterID, "king99-clone", "影", "封印戦")
+					} else {
+						for i, b := range stage.Bosses {
+							monID := parseBossMonsterID(b.Icon, fmt.Sprintf("%s-boss-%d", stage.ID, i))
+							_ = s.monsterRecorder.RecordMonsterDefeat(txCtx, m.CharacterID, monID, b.Name, "封印戦")
+						}
+					}
+				}
+			}
+
 			leaderChar := chars[leaderCharID]
 			stageTier := stageTierFromID(stage.ID)
 			if s.victoryBanquetHook != nil {

@@ -861,3 +861,94 @@ func TestStartSealingBattle_ClearTimeCrystals(t *testing.T) {
 		t.Errorf("expected c2 Crystal == 210, got %d", c2Saved.Crystal)
 	}
 }
+
+type mockBossMonsterDefeatRecorder struct {
+	calls []string
+}
+
+func (m *mockBossMonsterDefeatRecorder) RecordMonsterDefeat(_ context.Context, charID, mID, mName, habitat string) error {
+	m.calls = append(m.calls, charID+":"+mID+":"+mName+":"+habitat)
+	return nil
+}
+
+func TestStartSealingBattle_RecordMonsterDefeat(t *testing.T) {
+	ctx := context.Background()
+	bossRepo := newMockBossRepo()
+
+	chars := map[string]corecharacter.Character{
+		"c1": createTestChar("c1", 50, 600, 300, 200),
+		"c2": createTestChar("c2", 50, 600, 300, 200),
+	}
+	charRepo := &mockCharRepo{chars: chars}
+	partyRepo := newMockPartyRepo()
+
+	pID := "party-defeat-test"
+	partyRepo.parties[pID] = party.Party{
+		ID:                pID,
+		LeaderCharacterID: "c1",
+		StageID:           "king1",
+		Status:            party.StatusRecruiting,
+		CreatedAt:         time.Now().UTC(),
+	}
+	partyRepo.members[pID] = []party.Member{
+		{PartyID: pID, CharacterID: "c1", CharacterName: "Hero_c1", ReadyState: true, IsLeader: true},
+		{PartyID: pID, CharacterID: "c2", CharacterName: "Hero_c2", ReadyState: true},
+	}
+
+	recorder := &mockBossMonsterDefeatRecorder{}
+	service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.Configure(
+		boss.WithPartyRepository(partyRepo),
+		boss.WithMonsterDefeatRecorder(recorder),
+	)
+
+	_, err = service.StartSealingBattle(ctx, pID, "c1")
+	if err != nil {
+		t.Fatalf("StartSealingBattle failed: %v", err)
+	}
+
+	// king1 has 7 bosses, 2 party members -> 14 calls total
+	if len(recorder.calls) != 14 {
+		t.Fatalf("expected 14 recorder calls, got %d: %v", len(recorder.calls), recorder.calls)
+	}
+
+	// First call should be c1 against Red Stone (mon/190.gif -> monster-190)
+	expectedFirst := "c1:monster-190:レッドストーン:封印戦"
+	if recorder.calls[0] != expectedFirst {
+		t.Errorf("expected call 0 = %q, got %q", expectedFirst, recorder.calls[0])
+	}
+}
+
+func TestChallengeBoss_RecordMonsterDefeat(t *testing.T) {
+	ctx := context.Background()
+	bossRepo := newMockBossRepo()
+
+	chars := map[string]corecharacter.Character{
+		"hero-solo": createTestChar("hero-solo", 50, 600, 300, 200),
+	}
+	charRepo := &mockCharRepo{chars: chars}
+
+	recorder := &mockBossMonsterDefeatRecorder{}
+	service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.Configure(boss.WithMonsterDefeatRecorder(recorder))
+
+	_, err = service.ChallengeBoss(ctx, "hero-solo", "king99")
+	if err != nil {
+		t.Fatalf("ChallengeBoss failed: %v", err)
+	}
+
+	// king99 clone defeat should record clone defeat
+	if len(recorder.calls) != 1 {
+		t.Fatalf("expected 1 recorder call for king99, got %d: %v", len(recorder.calls), recorder.calls)
+	}
+	expected := "hero-solo:king99-clone:影:封印戦"
+	if recorder.calls[0] != expected {
+		t.Errorf("expected %q, got %q", expected, recorder.calls[0])
+	}
+}

@@ -280,10 +280,6 @@ func (s *Service) processMonsterTaming(
 				BoxFull:     false,
 				Message:     msg,
 			})
-
-			if s.monsterRecorder != nil {
-				_ = s.monsterRecorder.RecordMonsterDefeat(ctx, char.ID, monsterID, baseName, "")
-			}
 		}
 	}
 

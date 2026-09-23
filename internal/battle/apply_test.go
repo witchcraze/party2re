@@ -473,3 +473,95 @@ func TestApplyPostBattleResult_RemainingStatus(t *testing.T) {
 		t.Errorf("expected RemainingStatus to contain poison, got: %+v", resp.RemainingStatus)
 	}
 }
+
+func TestApplyPostBattleResult_RecordMonsterDefeat(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	invRepo := newMockInvRepo()
+	equipRepo := newMockEquipRepo()
+	txProv := &mockTxProvider{}
+
+	char1 := corecharacter.Character{
+		ID:    "char-p1",
+		Name:  "勇者",
+		JobID: "job-01",
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100},
+	}
+	char2 := corecharacter.Character{
+		ID:    "char-p2",
+		Name:  "魔法使い",
+		JobID: "job-02",
+		Stats: corecharacter.Stats{HP: 80, MaxHP: 80},
+	}
+	_ = charRepo.Update(ctx, char1)
+	_ = charRepo.Update(ctx, char2)
+	inv1, _ := coreinventory.New("char-p1")
+	inv2, _ := coreinventory.New("char-p2")
+	_ = invRepo.Save(ctx, inv1)
+	_ = invRepo.Save(ctx, inv2)
+
+	recorder := &mockMonsterDefeatRecorder{}
+
+	svc := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithEquipmentRepository(equipRepo),
+		battle.WithTransactionProvider(txProv),
+		battle.WithMonsterDefeatRecorder(recorder),
+	)
+
+	// Defeated enemies: 1 PvE slime, 1 PvP human opponent (char-enemy)
+	defeatedEnemies := []corebattle.Participant{
+		{ID: "monster-002-f1-1", Name: "スライムA"},
+		{ID: "char-enemy-01", Name: "対戦相手"},
+	}
+
+	// 1. Win outcome
+	reqWin := battle.ApplyPostBattleRequest{
+		CharacterIDs: []string{"char-p1", "char-p2"},
+		BattleResult: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeWin,
+			RemainingHP: map[string]int{"char-p1": 90, "char-p2": 70},
+		},
+		DefeatedEnemies: defeatedEnemies,
+		Habitat:         "迷いの森",
+	}
+
+	_, err := svc.ApplyPostBattleResult(ctx, reqWin)
+	if err != nil {
+		t.Fatalf("ApplyPostBattleResult win failed: %v", err)
+	}
+
+	// Should record defeat for char-p1 and char-p2, but ONLY for monster-002 (not char-enemy-01)
+	if len(recorder.calls) != 2 {
+		t.Fatalf("expected 2 recorder calls, got %d: %v", len(recorder.calls), recorder.calls)
+	}
+	expectedCall1 := "char-p1:monster-002:スライム:迷いの森"
+	expectedCall2 := "char-p2:monster-002:スライム:迷いの森"
+	if recorder.calls[0] != expectedCall1 {
+		t.Errorf("call 0: want %q, got %q", expectedCall1, recorder.calls[0])
+	}
+	if recorder.calls[1] != expectedCall2 {
+		t.Errorf("call 1: want %q, got %q", expectedCall2, recorder.calls[1])
+	}
+
+	// 2. Defeat outcome -> no defeat recording
+	recorder.calls = nil
+	reqLose := battle.ApplyPostBattleRequest{
+		CharacterIDs: []string{"char-p1"},
+		BattleResult: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeDefeat,
+			RemainingHP: map[string]int{"char-p1": 0},
+		},
+		DefeatedEnemies: defeatedEnemies,
+		Habitat:         "迷いの森",
+	}
+
+	_, err = svc.ApplyPostBattleResult(ctx, reqLose)
+	if err != nil {
+		t.Fatalf("ApplyPostBattleResult lose failed: %v", err)
+	}
+	if len(recorder.calls) != 0 {
+		t.Errorf("expected 0 recorder calls on defeat, got %d", len(recorder.calls))
+	}
+}

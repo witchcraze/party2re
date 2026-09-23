@@ -81,4 +81,38 @@ func TestCollectionRepository_Integration(t *testing.T) {
 	if totalItems != 1 {
 		t.Errorf("total items = %d, want 1", totalItems)
 	}
+
+	// 6. Test MarkCompleted and IsCompleted
+	isComp, err := repo.IsCompleted(ctx, char.ID, "monster_book")
+	if err != nil {
+		t.Fatalf("IsCompleted check failed: %v", err)
+	}
+	if isComp {
+		t.Errorf("expected IsCompleted=false initially")
+	}
+
+	newly, err := repo.MarkCompleted(ctx, char.ID, "monster_book")
+	if err != nil {
+		t.Fatalf("MarkCompleted failed: %v", err)
+	}
+	if !newly {
+		t.Errorf("expected newly=true on initial completion")
+	}
+
+	isComp, err = repo.IsCompleted(ctx, char.ID, "monster_book")
+	if err != nil {
+		t.Fatalf("IsCompleted check after mark failed: %v", err)
+	}
+	if !isComp {
+		t.Errorf("expected IsCompleted=true after mark")
+	}
+
+	// Idempotent second MarkCompleted
+	newlySecond, err := repo.MarkCompleted(ctx, char.ID, "monster_book")
+	if err != nil {
+		t.Fatalf("second MarkCompleted failed: %v", err)
+	}
+	if newlySecond {
+		t.Errorf("expected newly=false on duplicate completion")
+	}
 }

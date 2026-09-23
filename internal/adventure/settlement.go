@@ -33,6 +33,11 @@ func (s *Service) settlePostBattle(ctx context.Context, req DungeonCrawlRequest,
 		}
 	}
 
+	habitat := result.StageName
+	if habitat == "" {
+		habitat = result.StageID
+	}
+
 	postBattleReq := battle.ApplyPostBattleRequest{
 		CharacterIDs: req.CharacterIDs,
 		BattleResult: corebattle.PartyBattleResult{
@@ -48,6 +53,7 @@ func (s *Service) settlePostBattle(ctx context.Context, req DungeonCrawlRequest,
 		},
 		RecipientDrops:  recipientDrops,
 		DefeatedEnemies: defeatedEnemies,
+		Habitat:         habitat,
 	}
 
 	resp, err := s.battleSettler.ApplyPostBattleResult(ctx, postBattleReq)

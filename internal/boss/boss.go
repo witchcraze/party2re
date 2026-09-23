@@ -213,6 +213,18 @@ func WithParticipantBuilder(builder ParticipantBuilder) ServiceOption {
 	}
 }
 
+// MonsterDefeatRecorder registers defeated monsters into the player's Monster Book.
+type MonsterDefeatRecorder interface {
+	RecordMonsterDefeat(ctx context.Context, characterID, monsterID, monsterName, habitat string) error
+}
+
+// WithMonsterDefeatRecorder configures the MonsterDefeatRecorder.
+func WithMonsterDefeatRecorder(recorder MonsterDefeatRecorder) ServiceOption {
+	return func(s *Service) {
+		s.monsterRecorder = recorder
+	}
+}
+
 type Service struct {
 	repo               Repository
 	characterRepo      CharacterRepository
@@ -226,6 +238,7 @@ type Service struct {
 	txProvider         TransactionProvider
 	rng                corecharacter.RandomSource
 	participantBuilder ParticipantBuilder
+	monsterRecorder    MonsterDefeatRecorder
 }
 
 func (s *Service) SetVictoryBanquetHook(hook VictoryBanquetHook) {
@@ -234,6 +247,10 @@ func (s *Service) SetVictoryBanquetHook(hook VictoryBanquetHook) {
 
 func (s *Service) SetVictoryHook(hook VictoryHook) {
 	s.victoryHook = hook
+}
+
+func (s *Service) SetMonsterDefeatRecorder(recorder MonsterDefeatRecorder) {
+	s.monsterRecorder = recorder
 }
 
 func NewService(

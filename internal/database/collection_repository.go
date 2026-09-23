@@ -110,3 +110,33 @@ func (r *CollectionRepository) GetItemCollectionCount(ctx context.Context, chara
 	`, characterID).Scan(&count)
 	return count, err
 }
+
+func (r *CollectionRepository) MarkCompleted(ctx context.Context, characterID, kind string) (bool, error) {
+	res, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+		INSERT IGNORE INTO character_collection_completions (
+			character_id, kind, completed_at
+		) VALUES (?, ?, UTC_TIMESTAMP())
+	`, characterID, kind)
+	if err != nil {
+		return false, err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return rows > 0, nil
+}
+
+func (r *CollectionRepository) IsCompleted(ctx context.Context, characterID, kind string) (bool, error) {
+	var exists int
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+		SELECT 1 FROM character_collection_completions WHERE character_id = ? AND kind = ?
+	`, characterID, kind).Scan(&exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}

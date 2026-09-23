@@ -2,6 +2,7 @@ package boss
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -227,4 +228,15 @@ func buildFallbackParticipant(char corecharacter.Character) corebattle.Participa
 	p.MaxMP = char.Stats.MaxMP
 	p.Agility = char.Stats.Agility
 	return p
+}
+
+func parseBossMonsterID(icon, defaultID string) string {
+	if icon != "" {
+		trimmed := strings.TrimPrefix(icon, "mon/")
+		trimmed = strings.TrimSuffix(trimmed, ".gif")
+		if trimmed != "" {
+			return "monster-" + trimmed
+		}
+	}
+	return defaultID
 }
