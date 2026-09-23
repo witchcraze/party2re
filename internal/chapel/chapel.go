@@ -104,7 +104,7 @@ type ChapelStatus struct {
 type RewardModifiers struct {
 	ExpMultiplier           float64 `json:"exp_multiplier"`
 	GoldMultiplier          float64 `json:"gold_multiplier"`
-	DropBonusRate           float64 `json:"drop_bonus_rate"`
+	ExtraChestBonus         int     `json:"extra_chest_bonus"`
 	MonsterRecruitBonusRate float64 `json:"monster_recruit_bonus_rate"`
 }
 
@@ -113,26 +113,29 @@ func ComputeRewardModifiers(blessing BlessingType, roll float64) RewardModifiers
 	mods := RewardModifiers{
 		ExpMultiplier:           1.0,
 		GoldMultiplier:          1.0,
-		DropBonusRate:           0.0,
+		ExtraChestBonus:         0,
 		MonsterRecruitBonusRate: 0.0,
 	}
 
 	switch blessing {
 	case BlessingExp:
-		// 25% chance of 1.5x EXP
+		// 25% chance of 1.5x EXP (party2/lib/_battle.cgi:190-193, rand(4) < 1)
 		if roll < 0.25 {
 			mods.ExpMultiplier = 1.5
 		}
 	case BlessingGold:
-		// 25% chance of 1.5x Gold
+		// 25% chance of 1.5x Gold (party2/lib/_battle.cgi:186-189, rand(4) < 1)
 		if roll < 0.25 {
 			mods.GoldMultiplier = 1.5
 		}
 	case BlessingMonster:
-		// Monster recruit rate +50%
-		mods.MonsterRecruitBonusRate = 0.50
+		// Monster recruit rate +0.25% flat (party2/lib/_battle.cgi:237, $par += 0.5 out of 200)
+		mods.MonsterRecruitBonusRate = 0.0025
 	case BlessingDrop:
-		mods.DropBonusRate = 0.10
+		// 20% chance of +1 treasure chest (party2/lib/_npc_action.cgi:501, rand(5) < 1)
+		if roll < 0.20 {
+			mods.ExtraChestBonus = 1
+		}
 	}
 
 	return mods

@@ -9,6 +9,7 @@ import (
 	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/job"
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/core/skill"
 	"github.com/witchcraze/party2re/internal/customskill"
 	"github.com/witchcraze/party2re/internal/depot"
@@ -237,4 +238,13 @@ func (s *Service) runInTx(ctx context.Context, fn func(txCtx context.Context) er
 		return s.txProvider.RunInTx(ctx, fn)
 	}
 	return fn(ctx)
+}
+
+func (s *Service) rollIntn(n int) int {
+	if s.rng != nil {
+		if val, err := s.rng.Intn(n); err == nil {
+			return val
+		}
+	}
+	return random.Intn(n)
 }

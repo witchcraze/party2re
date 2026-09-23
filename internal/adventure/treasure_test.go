@@ -109,6 +109,38 @@ func TestCalculateTreasureCount_CombinedBonuses(t *testing.T) {
 	}
 }
 
+func TestCalculateTreasureCount_BlessingBonus(t *testing.T) {
+	// rng(5) == 0: triggers +1 box (20% chance)
+	gotTriggered := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
+		AliveMembers:        4,
+		HasTreasureBlessing: true,
+		Rng:                 func(n int) int { return 0 },
+	})
+	if gotTriggered != 5 {
+		t.Errorf("gotTriggered = %d, want 5 (4 + 1)", gotTriggered)
+	}
+
+	// rng(5) == 1: does not trigger
+	gotNotTriggered := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
+		AliveMembers:        4,
+		HasTreasureBlessing: true,
+		Rng:                 func(n int) int { return 1 },
+	})
+	if gotNotTriggered != 4 {
+		t.Errorf("gotNotTriggered = %d, want 4", gotNotTriggered)
+	}
+
+	// HasTreasureBlessing = false: does not trigger even if rng returns 0
+	gotDisabled := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
+		AliveMembers:        4,
+		HasTreasureBlessing: false,
+		Rng:                 func(n int) int { return 0 },
+	})
+	if gotDisabled != 4 {
+		t.Errorf("gotDisabled = %d, want 4", gotDisabled)
+	}
+}
+
 func TestGenerateTreasureBoxes(t *testing.T) {
 	pool := []string{"item-001", "item-002", "item-003"}
 	boxes := adventure.GenerateTreasureBoxes(3, pool, func(n int) int { return 0 })

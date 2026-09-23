@@ -63,16 +63,22 @@ func TestComputeRewardModifiers(t *testing.T) {
 		t.Errorf("Gold Blessing lucky roll: gold=%f, exp=%f", mods.GoldMultiplier, mods.ExpMultiplier)
 	}
 
-	// 4. Drop Blessing -> +10% drop bonus rate
-	mods = chapel.ComputeRewardModifiers(chapel.BlessingDrop, 0.0)
-	if mods.DropBonusRate != 0.10 {
-		t.Errorf("Drop Blessing: rate=%f", mods.DropBonusRate)
+	// 4. Drop Blessing with roll < 0.20 -> +1 extra chest
+	mods = chapel.ComputeRewardModifiers(chapel.BlessingDrop, 0.15)
+	if mods.ExtraChestBonus != 1 {
+		t.Errorf("Drop Blessing lucky roll: extra=%d, want 1", mods.ExtraChestBonus)
 	}
 
-	// 5. Monster Blessing -> +50% monster recruit bonus rate
+	// 5. Drop Blessing with roll >= 0.20 -> 0 extra chests
+	mods = chapel.ComputeRewardModifiers(chapel.BlessingDrop, 0.50)
+	if mods.ExtraChestBonus != 0 {
+		t.Errorf("Drop Blessing unlucky roll: extra=%d, want 0", mods.ExtraChestBonus)
+	}
+
+	// 6. Monster Blessing -> +0.25% flat monster recruit bonus rate (+0.5 out of 200)
 	mods = chapel.ComputeRewardModifiers(chapel.BlessingMonster, 0.0)
-	if mods.MonsterRecruitBonusRate != 0.50 {
-		t.Errorf("Monster Blessing: recruit rate=%f, want 0.50", mods.MonsterRecruitBonusRate)
+	if mods.MonsterRecruitBonusRate != 0.0025 {
+		t.Errorf("Monster Blessing: recruit rate=%f, want 0.0025", mods.MonsterRecruitBonusRate)
 	}
 }
 

@@ -66,25 +66,26 @@ type DungeonCrawlResult struct {
 
 // CrawlSession tracks step-by-step state across the 10-floor dungeon crawl and Floor 11 treasure room.
 type CrawlSession struct {
-	ID            string                    `json:"id"`
-	StageID       string                    `json:"stage_id"`
-	StageName     string                    `json:"stage_name"`
-	LeaderID      string                    `json:"leader_id"`
-	CharacterIDs  []string                  `json:"character_ids"`
-	Characters    []corecharacter.Character `json:"-"`
-	CurrentFloor  int                       `json:"current_floor"`
-	FloorsCleared int                       `json:"floors_cleared"`
-	StageCleared  bool                      `json:"stage_cleared"`
-	Concluded     bool                      `json:"concluded"`
-	Outcome       corebattle.Outcome        `json:"outcome"`
-	TotalTurns    int                       `json:"total_turns"`
-	TotalEXP      int                       `json:"total_exp"`
-	TotalGold     int                       `json:"total_gold"`
-	TotalCrystals int                       `json:"total_crystals"`
-	FloorResults  []DungeonFloorResult      `json:"floor_results"`
-	TreasureBoxes []TreasureBox             `json:"treasure_boxes,omitempty"`
-	Participants  []corebattle.Participant  `json:"participants"`
-	Rng           func(n int) int           `json:"-"`
+	ID                  string                    `json:"id"`
+	StageID             string                    `json:"stage_id"`
+	StageName           string                    `json:"stage_name"`
+	LeaderID            string                    `json:"leader_id"`
+	CharacterIDs        []string                  `json:"character_ids"`
+	Characters          []corecharacter.Character `json:"-"`
+	CurrentFloor        int                       `json:"current_floor"`
+	FloorsCleared       int                       `json:"floors_cleared"`
+	StageCleared        bool                      `json:"stage_cleared"`
+	Concluded           bool                      `json:"concluded"`
+	Outcome             corebattle.Outcome        `json:"outcome"`
+	TotalTurns          int                       `json:"total_turns"`
+	TotalEXP            int                       `json:"total_exp"`
+	TotalGold           int                       `json:"total_gold"`
+	TotalCrystals       int                       `json:"total_crystals"`
+	FloorResults        []DungeonFloorResult      `json:"floor_results"`
+	TreasureBoxes       []TreasureBox             `json:"treasure_boxes,omitempty"`
+	Participants        []corebattle.Participant  `json:"participants"`
+	HasTreasureBlessing bool                      `json:"has_treasure_blessing,omitempty"`
+	Rng                 func(n int) int           `json:"-"`
 }
 
 // NewCrawlSession creates an initialized 10-floor crawl session at Floor 1.
@@ -348,11 +349,12 @@ func (s *CrawlSession) spawnTreasureBoxes() {
 	}
 
 	boxCount := CalculateTreasureCount(TreasureCalculationInput{
-		AliveMembers:      aliveCount,
-		HasMerchant:       hasMerchant,
-		HasTreasureHunter: hasTreasureHunter,
-		HasLuckyPendant:   hasLuckyPendant,
-		Rng:               s.Rng,
+		AliveMembers:        aliveCount,
+		HasMerchant:         hasMerchant,
+		HasTreasureHunter:   hasTreasureHunter,
+		HasLuckyPendant:     hasLuckyPendant,
+		HasTreasureBlessing: s.HasTreasureBlessing,
+		Rng:                 s.Rng,
 	})
 
 	s.TreasureBoxes = GenerateTreasureBoxes(boxCount, []string{"item-001", "item-002"}, s.Rng)
