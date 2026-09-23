@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #801 — Contest: Wire recurring ContestSettlement action into scheduling service
+Last updated: Issue #816 — Plantation: Sanitize third-party IP item names to clean-room names
 
 ## Current Phase
 

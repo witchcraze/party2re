@@ -193,6 +193,44 @@ func TestCatalogs(t *testing.T) {
 	}
 }
 
+func TestCleanRoomFertilizerNames(t *testing.T) {
+	testCases := []struct {
+		id         string
+		cleanName  string
+		legacyName string
+		itemID     string
+	}{
+		{id: "yggdrasil_dew", cleanName: "霊樹のしずく", legacyName: "世界樹のしずく", itemID: "item-005"},
+		{id: "gysahl_greens", cleanName: "走鳥の野菜", legacyName: "ギザールの野菜", itemID: "item-037"},
+		{id: "kupo_nut", cleanName: "幻獣の実", legacyName: "クポの実", itemID: "item-038"},
+		{id: "padekia_root", cleanName: "薬草の根っこ", legacyName: "パデキアの根っこ", itemID: "item-010"},
+	}
+
+	for _, tc := range testCases {
+		fert, ok := plantation.FindFertilizer(tc.id)
+		if !ok {
+			t.Fatalf("fertilizer %s not found", tc.id)
+		}
+		if fert.Name != tc.cleanName {
+			t.Errorf("fertilizer %s Name: expected %q, got %q", tc.id, tc.cleanName, fert.Name)
+		}
+		if fert.ItemID != tc.itemID {
+			t.Errorf("fertilizer %s ItemID: expected %q, got %q", tc.id, tc.itemID, fert.ItemID)
+		}
+
+		// Lookup by clean-room name should succeed
+		byClean, okClean := plantation.FindFertilizer(tc.cleanName)
+		if !okClean || byClean.ID != tc.id {
+			t.Errorf("lookup by clean name %q failed: %+v", tc.cleanName, byClean)
+		}
+
+		// Lookup by legacy copyrighted name should fail
+		if _, okLegacy := plantation.FindFertilizer(tc.legacyName); okLegacy {
+			t.Errorf("lookup by legacy copyrighted name %q should fail, but succeeded", tc.legacyName)
+		}
+	}
+}
+
 func TestGetStatus(t *testing.T) {
 	svc, charRepo, _, _, plotRepo := setupTestHarness(t)
 	ctx := context.Background()
@@ -377,6 +415,36 @@ func TestFertilize(t *testing.T) {
 	}
 	if _, err := svc.Fertilize(ctx, charID4, "kupo_nut"); !errors.Is(err, plantation.ErrMissingFertilizerItem) {
 		t.Fatalf("expected ErrMissingFertilizerItem, got %v", err)
+	}
+
+	// 6. Fertilize with clean-room item from Depot using clean-room name
+	charID5 := "c5"
+	charRepo.chars[charID5] = corecharacter.Character{ID: charID5, Name: "Hero5", Money: 100}
+	plotRepo.plots[charID5] = plantation.Plot{
+		CharacterID: charID5,
+		SeedID:      "green",
+		SownAt:      now,
+		MaturesAt:   timer.NextMidnightJST(now),
+	}
+	dep5, _ := depot.NewDepot(charID5)
+	dep5.Capacity = 50
+	cleanItem, _ := coreitem.NewInstance("item-037", 1) // 走鳥の野菜
+	_ = dep5.AddItem(cleanItem)
+	_ = depotRepo.Save(ctx, dep5)
+
+	res5, err := svc.Fertilize(ctx, charID5, "走鳥の野菜")
+	if err != nil {
+		t.Fatalf("Fertilize with clean-room name 走鳥の野菜 failed: %v", err)
+	}
+	if *res5.Plot.FertilizerID != "gysahl_greens" {
+		t.Errorf("expected fertilizer gysahl_greens, got %v", res5.Plot.FertilizerID)
+	}
+	if res5.Message != "走鳥の野菜をまくよ！" {
+		t.Errorf("expected message '走鳥の野菜をまくよ！', got %q", res5.Message)
+	}
+	d5, _ := depotRepo.FindByCharacterID(ctx, charID5)
+	if d5.Quantity("item-037") != 0 {
+		t.Errorf("expected 0 item-037 in depot, got %d", d5.Quantity("item-037"))
 	}
 }
 
