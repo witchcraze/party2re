@@ -113,8 +113,7 @@ Each feature owns its specific domain logic and state. Cross-feature imports and
 | **Boss** | `internal/boss` | 4-player sealing battles, Dejon banishment, HeroCount | Battle, Character, Party, Inventory, News | MariaDB `character_boss_records` (Rank 3→5) |
 | **Casino** | `internal/casino` | 2..8 player room lobby, Indian Poker, High-Low, Doppelganger, Slots | Character, Depot | Valkey Candidate C (`party2:casino:*`); MariaDB `casino_accounts` (Rank 2→5→8) |
 | **Challenge** | `internal/challenge` | 4-tier survival wave combat, HP carryover, Hall of Fame | Battle, Character, Inventory, Valkey | Valkey Candidate D (`party2:challenge:*`); MariaDB `character_challenge_records` |
-| **Chapel** | `internal/chapel` | 5 town church blessings, single active prayer constraint | Character | MariaDB `character_blessings` |
-| **Collection** | `internal/collection` | Illustrated monster defeat and item discovery encyclopedia | Character | MariaDB `character_monster_book`, `character_item_collection` |
+| **Collection** | `internal/collection` | Illustrated monster defeat and item discovery encyclopedia, 100% completion milestones | Character, Notification | MariaDB `character_monster_book`, `character_item_collection`, `character_collection_completions` |
 | **Contest** | `internal/contest` | Photo contest submissions, voting rounds, Hall of Fame | Character, News, Guild | MariaDB `character_photos`, `contest_rounds`, `contest_entries` |
 | **Costume** | `internal/costume` | Daily rented appearance state (`ActiveCostume`), midnight JST expiration, rest/job-change reset | None | Valkey `party2:daily:costume:*` |
 | **Custom Skill** | `internal/customskill` | 3-gem recipe synthesis, activation phrase validation | Character, Inventory, Gem Catalog | MariaDB `character_custom_skills` |

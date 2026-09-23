@@ -22,6 +22,7 @@ type ApplyPostBattleRequest struct {
 	RecipientDrops       map[string][]string // Optional recipient-targeted drop item definition IDs (characterID -> []itemDefID)
 	RecipientCharacterID string              // Optional recipient character ID for DropItems / BattleResult.TotalReward drops
 	DefeatedEnemies      []corebattle.Participant
+	Habitat              string // Habitat/stage name for monster book recording
 }
 
 // ApplyPostBattleResponse contains the committed state for each participating character.
@@ -129,6 +130,9 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 	}
 
 	if req.BattleResult.Outcome == corebattle.OutcomeWin && len(req.DefeatedEnemies) > 0 {
+		if s.monsterRecorder != nil {
+			s.recordDefeatedMonsters(ctx, []string{charID}, req.DefeatedEnemies, req.Habitat)
+		}
 		if tames := s.processMonsterTaming(ctx, finalChar, finalInv, finalEquip, req.DefeatedEnemies); len(tames) > 0 {
 			resp.MonsterTames[charID] = tames
 		}
@@ -259,6 +263,9 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 	}
 
 	if req.BattleResult.Outcome == corebattle.OutcomeWin && len(req.DefeatedEnemies) > 0 {
+		if s.monsterRecorder != nil {
+			s.recordDefeatedMonsters(ctx, sortedIDs, req.DefeatedEnemies, req.Habitat)
+		}
 		recipientID := req.RecipientCharacterID
 		if recipientID == "" && len(sortedIDs) > 0 {
 			recipientID = sortedIDs[0]
@@ -273,6 +280,19 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 	}
 
 	return resp, nil
+}
+
+func (s *Service) recordDefeatedMonsters(ctx context.Context, charIDs []string, defeatedEnemies []corebattle.Participant, habitat string) {
+	for _, enemy := range defeatedEnemies {
+		if strings.HasPrefix(enemy.ID, "char-") || strings.HasPrefix(enemy.ID, "user-") {
+			continue
+		}
+		monsterID := ParseDefeatedMonsterID(enemy.ID)
+		baseName := CleanMonsterName(enemy.Name)
+		for _, cID := range charIDs {
+			_ = s.monsterRecorder.RecordMonsterDefeat(ctx, cID, monsterID, baseName, habitat)
+		}
+	}
 }
 
 func (s *Service) applyResourceUpdates(char *corecharacter.Character, charID string, res corebattle.PartyBattleResult) {

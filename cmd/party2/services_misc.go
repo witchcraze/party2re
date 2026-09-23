@@ -171,7 +171,17 @@ func newMiscServices(
 	if err != nil {
 		return nil, err
 	}
-	collectionService, err := collection.NewService(collectionRepo, 100, 100)
+	var colOpts []collection.Option
+	if core.charRepo != nil {
+		colOpts = append(colOpts, collection.WithCharacterRepository(core.charRepo))
+	}
+	if soc.notification != nil {
+		colOpts = append(colOpts, collection.WithNewsPublisher(collection.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
+			_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)
+			return err
+		})))
+	}
+	collectionService, err := collection.NewService(collectionRepo, collection.DefaultTotalMonsters, collection.DefaultTotalItems, colOpts...)
 	if err != nil {
 		return nil, err
 	}

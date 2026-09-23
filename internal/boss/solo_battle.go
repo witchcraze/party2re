@@ -144,6 +144,17 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 				_ = s.newsPub.PublishNews(txCtx, "boss", newsMsg, newsMsg, "System", time.Now().UTC())
 			}
 
+			if s.monsterRecorder != nil {
+				if stage.ID == "king99" {
+					_ = s.monsterRecorder.RecordMonsterDefeat(txCtx, char.ID, "king99-clone", "影", "封印戦")
+				} else {
+					for i, b := range stage.Bosses {
+						monID := parseBossMonsterID(b.Icon, fmt.Sprintf("%s-boss-%d", stage.ID, i))
+						_ = s.monsterRecorder.RecordMonsterDefeat(txCtx, char.ID, monID, b.Name, "封印戦")
+					}
+				}
+			}
+
 			stageTier := stageTierFromID(stage.ID)
 			if s.victoryBanquetHook != nil {
 				_ = s.victoryBanquetHook(txCtx, stage.ID, stage.Name, char.ID, char.Name, stageTier)

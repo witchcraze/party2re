@@ -2,15 +2,18 @@ package collection_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/collection"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
 type mockCollectionRepo struct {
-	monsters map[string]collection.MonsterBookEntry
-	items    map[string]collection.ItemCollectionEntry
+	monsters    map[string]collection.MonsterBookEntry
+	items       map[string]collection.ItemCollectionEntry
+	completions map[string]bool // key: charID + ":" + kind
 }
 
 func (m *mockCollectionRepo) RecordMonsterDefeat(_ context.Context, charID, mID, mName, habitat string) error {
@@ -72,11 +75,89 @@ func (m *mockCollectionRepo) GetItemCollectionCount(_ context.Context, _ string)
 	return len(m.items), nil
 }
 
+func (m *mockCollectionRepo) MarkCompleted(_ context.Context, charID, kind string) (bool, error) {
+	key := charID + ":" + kind
+	if m.completions[key] {
+		return false, nil
+	}
+	m.completions[key] = true
+	return true, nil
+}
+
+func (m *mockCollectionRepo) IsCompleted(_ context.Context, charID, kind string) (bool, error) {
+	return m.completions[charID+":"+kind], nil
+}
+
+type mockNewsPublisher struct {
+	articles []newsArticle
+}
+
+type newsArticle struct {
+	Category    string
+	Title       string
+	Content     string
+	Author      string
+	PublishedAt time.Time
+}
+
+func (p *mockNewsPublisher) PublishNews(_ context.Context, category, title, content, author string, publishedAt time.Time) error {
+	p.articles = append(p.articles, newsArticle{
+		Category:    category,
+		Title:       title,
+		Content:     content,
+		Author:      author,
+		PublishedAt: publishedAt,
+	})
+	return nil
+}
+
+type mockCharRepo struct {
+	characters map[string]corecharacter.Character
+}
+
+func (r *mockCharRepo) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
+	if c, ok := r.characters[id]; ok {
+		return c, nil
+	}
+	return corecharacter.Character{}, fmt.Errorf("character not found: %s", id)
+}
+
+func TestCollectionService_Defaults(t *testing.T) {
+	repo := &mockCollectionRepo{
+		monsters:    make(map[string]collection.MonsterBookEntry),
+		items:       make(map[string]collection.ItemCollectionEntry),
+		completions: make(map[string]bool),
+	}
+
+	// 0 or negative thresholds fall back to canonical defaults (180 monsters, 141 items)
+	svc, err := collection.NewService(repo, 0, 0)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	_, prog, err := svc.GetMonsterBook(context.Background(), "char1")
+	if err != nil {
+		t.Fatalf("GetMonsterBook failed: %v", err)
+	}
+	if prog.TotalCatalogCount != 180 {
+		t.Errorf("expected 180 total monsters, got %d", prog.TotalCatalogCount)
+	}
+
+	_, itemProg, err := svc.GetItemCollection(context.Background(), "char1", "")
+	if err != nil {
+		t.Fatalf("GetItemCollection failed: %v", err)
+	}
+	if itemProg.TotalCatalogCount != 141 {
+		t.Errorf("expected 141 total items, got %d", itemProg.TotalCatalogCount)
+	}
+}
+
 func TestCollectionService_MonsterBook(t *testing.T) {
 	ctx := context.Background()
 	repo := &mockCollectionRepo{
-		monsters: make(map[string]collection.MonsterBookEntry),
-		items:    make(map[string]collection.ItemCollectionEntry),
+		monsters:    make(map[string]collection.MonsterBookEntry),
+		items:       make(map[string]collection.ItemCollectionEntry),
+		completions: make(map[string]bool),
 	}
 
 	svc, err := collection.NewService(repo, 10, 10)
@@ -105,6 +186,9 @@ func TestCollectionService_MonsterBook(t *testing.T) {
 	if progress.DiscoveredCount != 1 || progress.CompletionPercentage != 10.0 {
 		t.Errorf("progress: count=%d, percentage=%f", progress.DiscoveredCount, progress.CompletionPercentage)
 	}
+	if progress.IsCompleted {
+		t.Errorf("expected IsCompleted=false")
+	}
 
 	bookCount, err := repo.GetMonsterBookCount(ctx, "char1")
 	if err != nil || bookCount != 1 {
@@ -112,30 +196,120 @@ func TestCollectionService_MonsterBook(t *testing.T) {
 	}
 }
 
-func TestCollectionService_ItemCollection(t *testing.T) {
+func TestCollectionService_MonsterBookCompletionNews(t *testing.T) {
 	ctx := context.Background()
 	repo := &mockCollectionRepo{
-		monsters: make(map[string]collection.MonsterBookEntry),
-		items:    make(map[string]collection.ItemCollectionEntry),
+		monsters:    make(map[string]collection.MonsterBookEntry),
+		items:       make(map[string]collection.ItemCollectionEntry),
+		completions: make(map[string]bool),
+	}
+	pub := &mockNewsPublisher{}
+	charRepo := &mockCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-hero": {ID: "char-hero", Name: "勇者アベル"},
+		},
 	}
 
-	svc, _ := collection.NewService(repo, 10, 5)
-
-	// 1. Discover items
-	_ = svc.RecordItemDiscovered(ctx, "char1", "wea_sword", "Iron Sword", "WEAPON")
-	_ = svc.RecordItemDiscovered(ctx, "char1", "arm_shield", "Iron Shield", "SHIELD")
-	_ = svc.RecordItemDiscovered(ctx, "char1", "wea_sword", "Iron Sword", "WEAPON") // duplicate
-
-	// 2. Query Weapon category
-	entries, progress, err := svc.GetItemCollection(ctx, "char1", "WEAPON")
+	// Threshold set to 2 monsters for test
+	svc, err := collection.NewService(
+		repo,
+		2,
+		141,
+		collection.WithNewsPublisher(pub),
+		collection.WithCharacterRepository(charRepo),
+	)
 	if err != nil {
-		t.Fatalf("GetItemCollection failed: %v", err)
+		t.Fatalf("NewService failed: %v", err)
 	}
-	if len(entries) != 1 || entries[0].ItemID != "wea_sword" {
-		t.Errorf("expected 1 weapon entry, got %d", len(entries))
+
+	// 1st monster
+	if err := svc.RecordMonsterDefeat(ctx, "char-hero", "mon-001", "スライム", "平原"); err != nil {
+		t.Fatalf("defeat 1 failed: %v", err)
 	}
-	// Total discovered items is 2 out of 5 = 40%
-	if progress.DiscoveredCount != 2 || progress.CompletionPercentage != 40.0 {
-		t.Errorf("progress: discovered=%d, percentage=%f", progress.DiscoveredCount, progress.CompletionPercentage)
+	if len(pub.articles) != 0 {
+		t.Fatalf("expected no news yet, got %d", len(pub.articles))
+	}
+
+	// 2nd monster -> hits 100%!
+	if err := svc.RecordMonsterDefeat(ctx, "char-hero", "mon-002", "ドラキー", "洞窟"); err != nil {
+		t.Fatalf("defeat 2 failed: %v", err)
+	}
+	if len(pub.articles) != 1 {
+		t.Fatalf("expected 1 news article, got %d", len(pub.articles))
+	}
+	expectedMsg := "勇者アベルがモンスターブックをコンプリートしました！"
+	if pub.articles[0].Content != expectedMsg {
+		t.Errorf("expected content %q, got %q", expectedMsg, pub.articles[0].Content)
+	}
+	if pub.articles[0].Category != "collection" {
+		t.Errorf("expected category collection, got %q", pub.articles[0].Category)
+	}
+
+	// 3rd monster -> already completed, idempotent (no duplicate news)
+	if err := svc.RecordMonsterDefeat(ctx, "char-hero", "mon-003", "ゴーレム", "砂漠"); err != nil {
+		t.Fatalf("defeat 3 failed: %v", err)
+	}
+	if len(pub.articles) != 1 {
+		t.Errorf("expected still 1 news article, got %d", len(pub.articles))
+	}
+
+	_, prog, _ := svc.GetMonsterBook(ctx, "char-hero")
+	if !prog.IsCompleted {
+		t.Errorf("expected IsCompleted=true")
+	}
+}
+
+func TestCollectionService_ItemCollectionCompletionNews(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockCollectionRepo{
+		monsters:    make(map[string]collection.MonsterBookEntry),
+		items:       make(map[string]collection.ItemCollectionEntry),
+		completions: make(map[string]bool),
+	}
+	pub := &mockNewsPublisher{}
+	charRepo := &mockCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-collector": {ID: "char-collector", Name: "コレクター"},
+		},
+	}
+
+	// Threshold set to 2 items for test
+	svc, err := collection.NewService(
+		repo,
+		180,
+		2,
+		collection.WithNewsPublisher(pub),
+		collection.WithCharacterRepository(charRepo),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	// 1st item
+	if err := svc.RecordItemDiscovered(ctx, "char-collector", "item-001", "やくそう", "ITEM"); err != nil {
+		t.Fatalf("item 1 failed: %v", err)
+	}
+	if len(pub.articles) != 0 {
+		t.Fatalf("expected no news yet, got %d", len(pub.articles))
+	}
+
+	// 2nd item -> hits 100%!
+	if err := svc.RecordItemDiscovered(ctx, "char-collector", "item-002", "どくけしそう", "ITEM"); err != nil {
+		t.Fatalf("item 2 failed: %v", err)
+	}
+	if len(pub.articles) != 1 {
+		t.Fatalf("expected 1 news article, got %d", len(pub.articles))
+	}
+	expectedMsg := "コレクターがアイテム図鑑をコンプリートしました！"
+	if pub.articles[0].Content != expectedMsg {
+		t.Errorf("expected content %q, got %q", expectedMsg, pub.articles[0].Content)
+	}
+
+	// Duplicate discovery -> no duplicate news
+	if err := svc.RecordItemDiscovered(ctx, "char-collector", "item-001", "やくそう", "ITEM"); err != nil {
+		t.Fatalf("item dup failed: %v", err)
+	}
+	if len(pub.articles) != 1 {
+		t.Errorf("expected still 1 news article, got %d", len(pub.articles))
 	}
 }
