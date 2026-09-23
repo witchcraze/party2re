@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/casino"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
 func newMockMemoryRoomRepo() *casino.MemoryRoomRepository {
@@ -260,4 +261,216 @@ func TestRoom_UnifiedStartAndActionDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PlayRoomAction(DP mark) failed: %v", err)
 	}
+}
+
+func TestRoom_LeaveRoomFatigue(t *testing.T) {
+	ctx := context.Background()
+	casinoRepo := newMockPrizeCasinoRepo()
+	roomRepo := casino.NewMemoryRoomRepository()
+	charRepo := &inMemoryCharRepo{chars: make(map[string]corecharacter.Character)}
+
+	p1 := "part-1"
+	p2 := "part-2"
+	spec := "spec-1"
+
+	charRepo.chars[p1] = corecharacter.Character{ID: p1, Name: "P1", Tired: 10}
+	charRepo.chars[p2] = corecharacter.Character{ID: p2, Name: "P2", Tired: 20}
+	charRepo.chars[spec] = corecharacter.Character{ID: spec, Name: "Spec", Tired: 0}
+
+	casinoRepo.accounts[p1] = casino.Account{CharacterID: p1, Coins: 500}
+	casinoRepo.accounts[p2] = casino.Account{CharacterID: p2, Coins: 500}
+	casinoRepo.accounts[spec] = casino.Account{CharacterID: spec, Coins: 500}
+
+	svc, err := casino.NewService(
+		casinoRepo,
+		casino.WithRoomRepository(roomRepo),
+		casino.WithCharacterRepository(charRepo),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	detail, err := svc.CreateRoom(ctx, p1, casino.CreateRoomRequest{
+		Name:            "FatigueRoom",
+		GameType:        casino.GameTypeIndian,
+		Speed:           casino.SpeedFast,
+		MaxPlayers:      4,
+		Rate:            10,
+		AllowSpectators: true,
+	})
+	if err != nil {
+		t.Fatalf("CreateRoom failed: %v", err)
+	}
+	roomID := detail.Room.ID
+
+	// P2 joins as participant
+	if _, err := svc.JoinRoom(ctx, roomID, p2, "", 0); err != nil {
+		t.Fatalf("P2 JoinRoom failed: %v", err)
+	}
+
+	// Spectator joins as spectator
+	if _, err := svc.SpectateRoom(ctx, roomID, spec, ""); err != nil {
+		t.Fatalf("Spec SpectateRoom failed: %v", err)
+	}
+
+	// Start game
+	if _, err := svc.StartGame(ctx, roomID, p1); err != nil {
+		t.Fatalf("StartGame failed: %v", err)
+	}
+
+	// 1. Spectator leaves active room -> fatigue must remain unchanged
+	if err := svc.LeaveRoom(ctx, roomID, spec); err != nil {
+		t.Fatalf("Spec LeaveRoom failed: %v", err)
+	}
+	specChar, _ := charRepo.FindByID(ctx, spec)
+	if specChar.Tired != 0 {
+		t.Errorf("expected spectator Tired=0, got %d", specChar.Tired)
+	}
+
+	// 2. Participant P2 leaves active room -> fatigue must increment by 1
+	if err := svc.LeaveRoom(ctx, roomID, p2); err != nil {
+		t.Fatalf("P2 LeaveRoom failed: %v", err)
+	}
+	p2Char, _ := charRepo.FindByID(ctx, p2)
+	if p2Char.Tired != 21 {
+		t.Errorf("expected participant P2 Tired=21, got %d", p2Char.Tired)
+	}
+}
+
+func TestRoom_ShowdownIncrementsCasinoWins(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("Indian Poker showdown increments winner CasinoWins", func(t *testing.T) {
+		casinoRepo := newMockPrizeCasinoRepo()
+		roomRepo := casino.NewMemoryRoomRepository()
+		charRepo := &inMemoryCharRepo{chars: make(map[string]corecharacter.Character)}
+
+		p1 := "ip-p1"
+		p2 := "ip-p2"
+		charRepo.chars[p1] = corecharacter.Character{ID: p1, Name: "P1", CasinoWins: 0}
+		charRepo.chars[p2] = corecharacter.Character{ID: p2, Name: "P2", CasinoWins: 3}
+		casinoRepo.accounts[p1] = casino.Account{CharacterID: p1, Coins: 500}
+		casinoRepo.accounts[p2] = casino.Account{CharacterID: p2, Coins: 500}
+
+		svc, _ := casino.NewService(casinoRepo, casino.WithRoomRepository(roomRepo), casino.WithCharacterRepository(charRepo))
+		room, _ := svc.CreateRoom(ctx, p1, casino.CreateRoomRequest{
+			Name: "IPWins", GameType: casino.GameTypeIndian, Speed: casino.SpeedFast, MaxPlayers: 2, Rate: 10,
+		})
+		_, _ = svc.JoinRoom(ctx, room.Room.ID, p2, "", 0)
+		_, _ = svc.StartGame(ctx, room.Room.ID, p1)
+
+		// Set cards so P2 wins (P1=2, P2=12)
+		m1, _ := roomRepo.GetMember(ctx, room.Room.ID, p1)
+		m1.Card = 2
+		_ = roomRepo.UpdateMember(ctx, *m1)
+		m2, _ := roomRepo.GetMember(ctx, room.Room.ID, p2)
+		m2.Card = 12
+		_ = roomRepo.UpdateMember(ctx, *m2)
+
+		_, _ = svc.PlayIndianPokerAction(ctx, room.Room.ID, p1, casino.ActionShowdown)
+		_, err := svc.PlayIndianPokerAction(ctx, room.Room.ID, p2, casino.ActionShowdown)
+		if err != nil {
+			t.Fatalf("Showdown failed: %v", err)
+		}
+
+		c1, _ := charRepo.FindByID(ctx, p1)
+		c2, _ := charRepo.FindByID(ctx, p2)
+		if c1.CasinoWins != 0 {
+			t.Errorf("expected loser P1 CasinoWins=0, got %d", c1.CasinoWins)
+		}
+		if c2.CasinoWins != 4 {
+			t.Errorf("expected winner P2 CasinoWins=4 (was 3), got %d", c2.CasinoWins)
+		}
+	})
+
+	t.Run("High & Low showdown increments split winners CasinoWins", func(t *testing.T) {
+		casinoRepo := newMockPrizeCasinoRepo()
+		roomRepo := casino.NewMemoryRoomRepository()
+		charRepo := &inMemoryCharRepo{chars: make(map[string]corecharacter.Character)}
+
+		p1 := "hl-p1"
+		p2 := "hl-p2"
+		p3 := "hl-p3"
+		charRepo.chars[p1] = corecharacter.Character{ID: p1, Name: "P1", CasinoWins: 0}
+		charRepo.chars[p2] = corecharacter.Character{ID: p2, Name: "P2", CasinoWins: 5}
+		charRepo.chars[p3] = corecharacter.Character{ID: p3, Name: "P3", CasinoWins: 2}
+		casinoRepo.accounts[p1] = casino.Account{CharacterID: p1, Coins: 500}
+		casinoRepo.accounts[p2] = casino.Account{CharacterID: p2, Coins: 500}
+		casinoRepo.accounts[p3] = casino.Account{CharacterID: p3, Coins: 500}
+
+		svc, _ := casino.NewService(casinoRepo, casino.WithRoomRepository(roomRepo), casino.WithCharacterRepository(charRepo))
+		room, _ := svc.CreateRoom(ctx, p1, casino.CreateRoomRequest{
+			Name: "HLWins", GameType: casino.GameTypeHighLow, Speed: casino.SpeedFast, MaxPlayers: 3, Rate: 10,
+		})
+		_, _ = svc.JoinRoom(ctx, room.Room.ID, p2, "", 0)
+		_, _ = svc.JoinRoom(ctx, room.Room.ID, p3, "", 0)
+		_, _ = svc.StartGame(ctx, room.Room.ID, p1)
+
+		// P1 gets high card 12, P2 gets low card 0, P3 gets middle card 5
+		m1, _ := roomRepo.GetMember(ctx, room.Room.ID, p1)
+		m1.Card = 12
+		_ = roomRepo.UpdateMember(ctx, *m1)
+		m2, _ := roomRepo.GetMember(ctx, room.Room.ID, p2)
+		m2.Card = 0
+		_ = roomRepo.UpdateMember(ctx, *m2)
+		m3, _ := roomRepo.GetMember(ctx, room.Room.ID, p3)
+		m3.Card = 5
+		_ = roomRepo.UpdateMember(ctx, *m3)
+
+		_, _ = svc.PlayHighLowAction(ctx, room.Room.ID, p1, casino.HighLowActionHigh)
+		_, _ = svc.PlayHighLowAction(ctx, room.Room.ID, p2, casino.HighLowActionLow)
+		_, err := svc.PlayHighLowAction(ctx, room.Room.ID, p3, casino.HighLowActionFold)
+		if err != nil {
+			t.Fatalf("PlayHighLowAction failed: %v", err)
+		}
+
+		c1, _ := charRepo.FindByID(ctx, p1)
+		c2, _ := charRepo.FindByID(ctx, p2)
+		c3, _ := charRepo.FindByID(ctx, p3)
+		if c1.CasinoWins != 1 {
+			t.Errorf("expected high winner P1 CasinoWins=1, got %d", c1.CasinoWins)
+		}
+		if c2.CasinoWins != 6 {
+			t.Errorf("expected low winner P2 CasinoWins=6 (was 5), got %d", c2.CasinoWins)
+		}
+		if c3.CasinoWins != 2 {
+			t.Errorf("expected folded P3 CasinoWins=2, got %d", c3.CasinoWins)
+		}
+	})
+
+	t.Run("Doppelganger showdown increments winner CasinoWins", func(t *testing.T) {
+		casinoRepo := newMockPrizeCasinoRepo()
+		roomRepo := casino.NewMemoryRoomRepository()
+		charRepo := &inMemoryCharRepo{chars: make(map[string]corecharacter.Character)}
+
+		leader := "dp-leader"
+		child := "dp-child"
+		charRepo.chars[leader] = corecharacter.Character{ID: leader, Name: "Leader", CasinoWins: 1}
+		charRepo.chars[child] = corecharacter.Character{ID: child, Name: "Child", CasinoWins: 0}
+		casinoRepo.accounts[leader] = casino.Account{CharacterID: leader, Coins: 500}
+		casinoRepo.accounts[child] = casino.Account{CharacterID: child, Coins: 500}
+
+		svc, _ := casino.NewService(casinoRepo, casino.WithRoomRepository(roomRepo), casino.WithCharacterRepository(charRepo))
+		room, _ := svc.CreateRoom(ctx, leader, casino.CreateRoomRequest{
+			Name: "DPWins", GameType: casino.GameTypeDoppel, Speed: casino.SpeedFast, MaxPlayers: 2, Rate: 10,
+		})
+		_, _ = svc.JoinRoom(ctx, room.Room.ID, child, "", 0)
+		_, _ = svc.StartGame(ctx, room.Room.ID, leader)
+
+		// Leader chooses mark 0, child chooses mark 0 -> Child matches and wins!
+		_, _ = svc.PlayDoppelAction(ctx, room.Room.ID, leader, 0)
+		_, err := svc.PlayDoppelAction(ctx, room.Room.ID, child, 0)
+		if err != nil {
+			t.Fatalf("PlayDoppelAction failed: %v", err)
+		}
+
+		cLeader, _ := charRepo.FindByID(ctx, leader)
+		cChild, _ := charRepo.FindByID(ctx, child)
+		if cLeader.CasinoWins != 1 {
+			t.Errorf("expected losing leader CasinoWins=1, got %d", cLeader.CasinoWins)
+		}
+		if cChild.CasinoWins != 1 {
+			t.Errorf("expected winning child CasinoWins=1, got %d", cChild.CasinoWins)
+		}
+	})
 }

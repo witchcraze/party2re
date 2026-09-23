@@ -44,9 +44,11 @@ Job definitions are loaded from data-driven JSON (`internal/core/job/data/jobs.j
   character's job record.
 - Special jobs may require one catalog item (or a weapon item) when changing
   into them. The item is consumed atomically with the character and job
-  update. Re-entering a mastered job does not consume the item; a mastered
-  player of the leisure job may enter the Sage or Gambler jobs without the
-  item.
+  update. Re-entering a previously held or mastered job does not consume the item;
+  mastering the leisure job (`job-08` / 遊び人) allows entering Sage (`job-33` / 賢者)
+  without an item (`party2/lib/_data.cgi:82`).
+  Entering Gambler (`job-46` / ギャンブラー) requires `CasinoWins >= 10` alongside
+  holding `item-039` (`party2/lib/_data.cgi:134`).
 
 ### Job Memory Exchange (おもいだす)
 - With item `item-168` (Memory Fragment), a character may temporarily replace

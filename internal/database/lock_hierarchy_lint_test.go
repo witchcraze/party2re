@@ -101,7 +101,7 @@ func classifyLockCall(recvName, methodName, relPath string) (LockRank, string, b
 		strings.Contains(m, "sale") || strings.Contains(m, "room") {
 		return RankSharedPeerEntity, fmt.Sprintf("%s.%s", recvName, methodName), true
 	}
-	if strings.Contains(r, "party") || strings.Contains(r, "contest") || strings.Contains(r, "casinoroom") {
+	if strings.Contains(r, "party") || strings.Contains(r, "contest") || strings.Contains(r, "casinoroom") || strings.Contains(r, "room") {
 		return RankSharedPeerEntity, fmt.Sprintf("%s.%s", recvName, methodName), true
 	}
 

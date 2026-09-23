@@ -153,11 +153,6 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 				return ErrGameNotInRound
 			}
 
-			acc, err := s.repo.GetAccountForUpdate(txCtx, characterID)
-			if err != nil {
-				return err
-			}
-
 			member, err := s.roomRepo.GetMemberForUpdate(txCtx, roomID, characterID)
 			if err != nil {
 				return ErrMemberNotFound
@@ -167,6 +162,11 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 			}
 			if member.Action != "" && member.Action != "待機中" {
 				return ErrAlreadyActed
+			}
+
+			acc, err := s.repo.GetAccount(txCtx, characterID)
+			if err != nil {
+				return err
 			}
 
 			// Re-fetch all members to validate participant count and rules
@@ -335,6 +335,19 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 				} else {
 					// Everyone folded or no high/low winners
 					room.WinnerCharacterID = nil
+				}
+
+				for _, winnerID := range showdownWinners {
+					if s.charRepo != nil {
+						wChar, err := s.charRepo.FindByIDForUpdate(txCtx, winnerID)
+						if err != nil {
+							return err
+						}
+						wChar.CasinoWins++
+						if err := s.charRepo.Update(txCtx, wChar); err != nil {
+							return err
+						}
+					}
 				}
 
 				room.Round = 0

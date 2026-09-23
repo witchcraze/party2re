@@ -170,6 +170,11 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 	if err != nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}
+	if targetJobID == "job-46" && targetJobID != char.JobID && targetJobID != char.OldJobID && !state.IsMastered(targetJobID) {
+		if char.CasinoWins < 10 {
+			return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
+		}
+	}
 	if err := state.ChangeTo(targetDef, char.Level, char.Gender); err != nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}
@@ -181,8 +186,7 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 	requiredItem := targetDef.RequiredItem()
 	needItem := requiredItem != "" && targetJobID != char.JobID && targetJobID != char.OldJobID &&
 		!state.IsMastered(targetJobID) &&
-		!(targetJobID == "job-33" && state.IsMastered("job-08")) &&
-		!(targetJobID == "job-46" && state.IsMastered("job-08"))
+		!(targetJobID == "job-33" && state.IsMastered("job-08"))
 
 	if s.economy != nil {
 		req := economy.TransactionRequest{CharacterID: characterID, LockInventory: needItem}
@@ -202,6 +206,11 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 				currentState.RecordMastery(currentJobID, tc.Character.SP, s.masterySP(currentDef))
 			}
 			s.checkAndNotifyCompletion(tc.Context, tc.Character.Name, &currentState)
+			if targetJobID == "job-46" && targetJobID != tc.Character.JobID && targetJobID != tc.Character.OldJobID && !currentState.IsMastered(targetJobID) {
+				if tc.Character.CasinoWins < 10 {
+					return corejob.ErrJobUnavailable
+				}
+			}
 			if err := currentState.ChangeTo(targetDef, tc.Character.Level, tc.Character.Gender); err != nil {
 				return err
 			}

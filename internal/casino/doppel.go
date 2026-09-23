@@ -142,17 +142,17 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 				return ErrGameNotInRound
 			}
 
-			acc, err := s.repo.GetAccountForUpdate(txCtx, characterID)
-			if err != nil {
-				return err
-			}
-
 			member, err := s.roomRepo.GetMemberForUpdate(txCtx, roomID, characterID)
 			if err != nil {
 				return ErrMemberNotFound
 			}
 			if member.IsSpectator {
 				return ErrSpectatorCannot
+			}
+
+			acc, err := s.repo.GetAccount(txCtx, characterID)
+			if err != nil {
+				return err
 			}
 
 			members, err := s.roomRepo.ListMembersForUpdate(txCtx, roomID)
@@ -269,6 +269,19 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 					}
 					showdownWinners = []string{room.LeaderCharacterID}
 					room.WinnerCharacterID = &room.LeaderCharacterID
+				}
+
+				for _, winnerID := range showdownWinners {
+					if s.charRepo != nil {
+						wChar, err := s.charRepo.FindByIDForUpdate(txCtx, winnerID)
+						if err != nil {
+							return err
+						}
+						wChar.CasinoWins++
+						if err := s.charRepo.Update(txCtx, wChar); err != nil {
+							return err
+						}
+					}
 				}
 
 				room.Round = 0

@@ -163,6 +163,18 @@ func (s *Service) LeaveRoom(ctx context.Context, roomID string, characterID stri
 				return err
 			}
 
+			// Participating player leaving room incurs fatigue penalty (party2/lib/_casino.cgi:216-218)
+			if s.charRepo != nil {
+				char, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
+				if err != nil {
+					return err
+				}
+				char.AddTired(1)
+				if err := s.charRepo.Update(txCtx, char); err != nil {
+					return err
+				}
+			}
+
 			// Count remaining active non-spectators
 			var activeMembers []RoomMember
 			for _, m := range remaining {
