@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #805 — Battle: Post-battle monster rising and taming parity
+Last updated: Issue #783 — Battle & Exploration: Wire chapel blessings to battle and exploration rewards and fix probability formulas
 
 ## Current Phase
 

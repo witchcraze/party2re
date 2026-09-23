@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -129,6 +130,18 @@ func WithPostBattleSettler(settler PostBattleSettler) Option {
 	}
 }
 
+// BlessingProvider queries active chapel blessings for a character.
+type BlessingProvider interface {
+	GetActiveBlessing(ctx context.Context, characterID string) (string, error)
+}
+
+// WithBlessingProvider configures the BlessingProvider.
+func WithBlessingProvider(provider BlessingProvider) Option {
+	return func(s *Service) {
+		s.blessingProvider = provider
+	}
+}
+
 type Service struct {
 	adventures         Repository
 	characters         CharacterRepository
@@ -142,6 +155,7 @@ type Service struct {
 	postAdventureHook  PostAdventureHook
 	participantBuilder ParticipantBuilder
 	battleSettler      PostBattleSettler
+	blessingProvider   BlessingProvider
 }
 
 func (s *Service) SetVictoryHook(hook VictoryHook) {
@@ -150,6 +164,10 @@ func (s *Service) SetVictoryHook(hook VictoryHook) {
 
 func (s *Service) SetPostAdventureHook(hook PostAdventureHook) {
 	s.postAdventureHook = hook
+}
+
+func (s *Service) SetBlessingProvider(provider BlessingProvider) {
+	s.blessingProvider = provider
 }
 
 func NewService(adventures Repository, characters CharacterRepository, battle corebattle.Resolver, scheduler any, logger Logger) (*Service, error) {
@@ -311,6 +329,20 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	session, err := NewCrawlSessionWithParticipants(stage, characters, participants, req.Rng)
 	if err != nil {
 		return DungeonCrawlResult{}, err
+	}
+
+	if s.blessingProvider != nil {
+		for _, c := range characters {
+			if b, err := s.blessingProvider.GetActiveBlessing(ctx, c.ID); err == nil {
+				switch strings.ToLower(strings.TrimSpace(b)) {
+				case "drop", "4", "treasure_wish", "宝箱がほしい":
+					session.HasTreasureBlessing = true
+				}
+				if session.HasTreasureBlessing {
+					break
+				}
+			}
+		}
 	}
 
 	// Advance through all 10 floors

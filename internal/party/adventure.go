@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
@@ -119,6 +120,20 @@ func (s *Service) StartPartyAdventure(ctx context.Context, partyID, leaderCharID
 			}
 			if err != nil {
 				return err
+			}
+
+			if s.blessingProvider != nil {
+				for _, c := range participatingChars {
+					if b, err := s.blessingProvider.GetActiveBlessing(ctx, c.ID); err == nil {
+						switch strings.ToLower(strings.TrimSpace(b)) {
+						case "drop", "4", "treasure_wish", "宝箱がほしい":
+							session.HasTreasureBlessing = true
+						}
+						if session.HasTreasureBlessing {
+							break
+						}
+					}
+				}
 			}
 
 			var lastBattleRes battle.PartyBattleResult
@@ -237,4 +252,21 @@ func WithPostAdventureHook(hook PostAdventureHook) Option {
 // SetPostAdventureHook sets the PostAdventureHook on an existing service.
 func (s *Service) SetPostAdventureHook(hook PostAdventureHook) {
 	s.postAdventureHook = hook
+}
+
+// BlessingProvider queries active chapel blessings for a character.
+type BlessingProvider interface {
+	GetActiveBlessing(ctx context.Context, characterID string) (string, error)
+}
+
+// WithBlessingProvider configures the BlessingProvider for the service.
+func WithBlessingProvider(provider BlessingProvider) Option {
+	return func(s *Service) {
+		s.blessingProvider = provider
+	}
+}
+
+// SetBlessingProvider sets the BlessingProvider on an existing service.
+func (s *Service) SetBlessingProvider(provider BlessingProvider) {
+	s.blessingProvider = provider
 }

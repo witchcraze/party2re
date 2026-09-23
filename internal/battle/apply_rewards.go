@@ -56,8 +56,14 @@ func (s *Service) applyRewardsForCharacter(
 	reward corebattle.Reward,
 	dropDefIDs []string,
 ) (int, int, int, progression.LevelUpResult, []coreitem.Instance, []coreitem.Instance, error) {
+	blessing := s.queryBlessing(ctx, char.ID)
+
 	gainedGold := reward.Currency
 	if gainedGold > 0 {
+		// Chapel Blessing 1 ("お金がほしい"): 25% chance of 1.5x Gold (party2/lib/_battle.cgi:186-189, rand(4) < 1)
+		if isGoldBlessing(blessing) && s.rollIntn(4) == 0 {
+			gainedGold = int(float64(gainedGold) * 1.5)
+		}
 		if err := char.AddMoney(gainedGold); err != nil {
 			return 0, 0, 0, progression.LevelUpResult{}, nil, nil, err
 		}
@@ -66,6 +72,10 @@ func (s *Service) applyRewardsForCharacter(
 	gainedEXP := reward.Experience
 	var lvlRes progression.LevelUpResult
 	if gainedEXP > 0 {
+		// Chapel Blessing 2 ("強くなりたい"): 25% chance of 1.5x EXP (party2/lib/_battle.cgi:190-193, rand(4) < 1)
+		if isExpBlessing(blessing) && s.rollIntn(4) == 0 {
+			gainedEXP = int(float64(gainedEXP) * 1.5)
+		}
 		opts := ExtractStatOrbOptions(*inv)
 		if s.skillProvider != nil && char.JobID != "" {
 			opts.JobSkills = s.skillProvider.SkillsForJob(char.JobID)
@@ -89,6 +99,11 @@ func (s *Service) applyRewardsForCharacter(
 		if err := char.AddCrystal(gainedCrystals); err != nil {
 			return 0, 0, 0, progression.LevelUpResult{}, nil, nil, err
 		}
+	}
+
+	// Chapel Blessing 4 ("宝箱がほしい"): 20% chance of +1 drop (party2/lib/_npc_action.cgi:501, rand(5) < 1)
+	if len(dropDefIDs) > 0 && isDropBlessing(blessing) && s.rollIntn(5) == 0 {
+		dropDefIDs = append(dropDefIDs, dropDefIDs[0])
 	}
 
 	var invDrops []coreitem.Instance

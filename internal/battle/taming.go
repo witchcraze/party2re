@@ -11,7 +11,6 @@ import (
 	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
-	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 // ErrMonsterBoxFull is returned or matched when a character's monster box is at capacity.
@@ -117,13 +116,7 @@ func ParseDefeatedMonsterID(id string) string {
 // rollTameSuccess rolls whether a monster recruitment succeeds given par (probability = par / 200).
 func (s *Service) rollTameSuccess(par float64) bool {
 	threshold := int(par * 10.0)
-	if s.rng != nil {
-		roll, err := s.rng.Intn(2000)
-		if err == nil {
-			return roll < threshold
-		}
-	}
-	return random.Intn(2000) < threshold
+	return s.rollIntn(2000) < threshold
 }
 
 // checkDragonRulerSet checks whether the character has weapon-36 and armor-39 equipped.
@@ -157,21 +150,56 @@ func hasMonsterFoodItem(inv coreinventory.Inventory) bool {
 	return false
 }
 
-// checkMonsterBlessing queries whether the character has an active monster blessing (wish 3).
-func (s *Service) checkMonsterBlessing(ctx context.Context, charID string) bool {
+func (s *Service) queryBlessing(ctx context.Context, charID string) string {
 	if s.blessingProvider == nil {
-		return false
+		return ""
 	}
 	blessing, err := s.blessingProvider.GetActiveBlessing(ctx, charID)
 	if err != nil {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(blessing))
+}
+
+func isGoldBlessing(blessing string) bool {
+	switch blessing {
+	case "gold", "1", "gold_wish", "お金がほしい":
+		return true
+	default:
 		return false
 	}
-	switch strings.ToLower(strings.TrimSpace(blessing)) {
+}
+
+func isExpBlessing(blessing string) bool {
+	switch blessing {
+	case "exp", "2", "exp_wish", "強くなりたい":
+		return true
+	default:
+		return false
+	}
+}
+
+func isMonsterBlessing(blessing string) bool {
+	switch blessing {
 	case "monster", "3", "monster_wish", "モンスターと仲良くしたい":
 		return true
 	default:
 		return false
 	}
+}
+
+func isDropBlessing(blessing string) bool {
+	switch blessing {
+	case "drop", "4", "treasure_wish", "宝箱がほしい":
+		return true
+	default:
+		return false
+	}
+}
+
+// checkMonsterBlessing queries whether the character has an active monster blessing (wish 3).
+func (s *Service) checkMonsterBlessing(ctx context.Context, charID string) bool {
+	return isMonsterBlessing(s.queryBlessing(ctx, charID))
 }
 
 // processMonsterTaming handles post-battle monster rising and taming for a recipient character.

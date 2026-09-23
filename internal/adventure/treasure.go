@@ -26,11 +26,12 @@ var defaultBoxNames = []string{
 
 // TreasureCalculationInput specifies the party state when arriving at Floor 11 (Treasure Room).
 type TreasureCalculationInput struct {
-	AliveMembers      int
-	HasMerchant       bool
-	HasTreasureHunter bool
-	HasLuckyPendant   bool
-	Rng               func(n int) int
+	AliveMembers        int
+	HasMerchant         bool
+	HasTreasureHunter   bool
+	HasLuckyPendant     bool
+	HasTreasureBlessing bool
+	Rng                 func(n int) int
 }
 
 // CalculateTreasureCount calculates the number of treasure boxes spawned on Floor 11
@@ -59,6 +60,11 @@ func CalculateTreasureCount(input TreasureCalculationInput) int {
 
 	// Lucky Pendant (item-191): 1/3 chance of +1 box (rand(3) < 1)
 	if input.HasLuckyPendant && rng(3) == 0 {
+		count++
+	}
+
+	// Chapel Blessing 4 ("宝箱がほしい"): 20% chance of +1 box (party2/lib/_npc_action.cgi:501, rand(5) < 1)
+	if input.HasTreasureBlessing && rng(5) == 0 {
 		count++
 	}
 
