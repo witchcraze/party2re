@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #783 — Battle & Exploration: Wire chapel blessings to battle and exploration rewards and fix probability formulas
+Last updated: Issue #793 — Party: Wire party synergy multiplier into adventure reward settlement
 
 ## Current Phase
 
