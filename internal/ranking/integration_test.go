@@ -91,8 +91,53 @@ func TestRankingServiceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAllSnapshots failed: %v", err)
 	}
-	if len(allSnaps) != 11 {
-		t.Errorf("expected 11 snapshots, got %d", len(allSnaps))
+	if len(allSnaps) < 13 {
+		t.Errorf("expected at least 13 snapshots, got %d", len(allSnaps))
+	}
+
+	// 3b. Casino wins and Alchemy rankings
+	casPage, err := svc.GetCasinoWinsRanking(ctx, 10, 0, false)
+	if err != nil {
+		t.Fatalf("GetCasinoWinsRanking failed: %v", err)
+	}
+	if casPage.RankingType != ranking.RankingTypeCasinoWins {
+		t.Errorf("expected casino_wins ranking type, got %s", casPage.RankingType)
+	}
+
+	alcPage, err := svc.GetAlchemyRanking(ctx, 10, 0, false)
+	if err != nil {
+		t.Fatalf("GetAlchemyRanking failed: %v", err)
+	}
+	if alcPage.RankingType != ranking.RankingTypeAlchemy {
+		t.Errorf("expected alchemy ranking type, got %s", alcPage.RankingType)
+	}
+
+	// 3c. Weekly job changes and rotation
+	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+		t.Fatalf("RotateWeeklyJobChangeRanking failed: %v", err)
+	}
+	weeklyPage, err := svc.GetWeeklyJobChangeRanking(ctx, 10, 0, true)
+	if err != nil {
+		t.Fatalf("GetWeeklyJobChangeRanking failed: %v", err)
+	}
+	if weeklyPage.RankingType != ranking.RankingTypeWeeklyJobChange {
+		t.Errorf("expected weekly_job_change ranking type, got %s", weeklyPage.RankingType)
+	}
+
+	// 3d. Hall of Fame
+	legends, err := svc.GetLegends(ctx)
+	if err != nil {
+		t.Fatalf("GetLegends failed: %v", err)
+	}
+	if len(legends) != 6 {
+		t.Fatalf("expected 6 legend categories, got %d", len(legends))
+	}
+	legPage, err := svc.GetLegendCategory(ctx, ranking.LegendCategoryJobMastery)
+	if err != nil {
+		t.Fatalf("GetLegendCategory failed: %v", err)
+	}
+	if legPage.Category != ranking.LegendCategoryJobMastery {
+		t.Errorf("expected comp_job category, got %s", legPage.Category)
 	}
 
 	// 4. Cold-start Service instance (clean in-memory cache) falls back to database snapshot

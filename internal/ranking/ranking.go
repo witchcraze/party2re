@@ -20,6 +20,9 @@ const (
 	RankingTypeJobPopularity    RankingType = "job_popularity"
 	RankingTypeHelper           RankingType = "helper"
 	RankingTypeSmallMedals      RankingType = "small_medals"
+	RankingTypeCasinoWins       RankingType = "casino_wins"
+	RankingTypeAlchemy          RankingType = "alchemy"
+	RankingTypeWeeklyJobChange  RankingType = "weekly_job_change"
 )
 
 var (
@@ -89,9 +92,23 @@ type RankingSnapshot struct {
 	UpdatedAt    time.Time   `json:"updated_at"`
 }
 
+// NormalizeRankingType converts aliases (e.g. legacy Perl CGI identifiers) to canonical RankingType.
+func NormalizeRankingType(t RankingType) RankingType {
+	switch t {
+	case "cas_c":
+		return RankingTypeCasinoWins
+	case "alc_c":
+		return RankingTypeAlchemy
+	case "week_job_change", "weekly-job-change":
+		return RankingTypeWeeklyJobChange
+	default:
+		return t
+	}
+}
+
 // IsValidRankingType returns true if the specified ranking type is supported.
 func IsValidRankingType(t RankingType) bool {
-	switch t {
+	switch NormalizeRankingType(t) {
 	case RankingTypeLevel,
 		RankingTypePlayerWealth,
 		RankingTypeCharacterWealth,
@@ -102,7 +119,10 @@ func IsValidRankingType(t RankingType) bool {
 		RankingTypeJobMastery,
 		RankingTypeJobPopularity,
 		RankingTypeHelper,
-		RankingTypeSmallMedals:
+		RankingTypeSmallMedals,
+		RankingTypeCasinoWins,
+		RankingTypeAlchemy,
+		RankingTypeWeeklyJobChange:
 		return true
 	default:
 		return false

@@ -53,6 +53,11 @@ type CostumeResetter interface {
 	ResetCostume(ctx context.Context, characterID string) error
 }
 
+// JobChangeTracker tracks job change events for weekly leaderboards (week_ranking.cgi).
+type JobChangeTracker interface {
+	RecordJobChange(ctx context.Context, characterID string) error
+}
+
 type Service struct {
 	repository     Repository
 	catalog        *corejob.Catalog
@@ -64,6 +69,7 @@ type Service struct {
 	futureMemories FutureMemoryRepository
 	guildPoints    GuildPointAwarder
 	costume        CostumeResetter
+	jobTracker     JobChangeTracker
 }
 
 type Option func(*Service)
@@ -71,6 +77,12 @@ type Option func(*Service)
 func WithCatalog(catalog *corejob.Catalog) Option {
 	return func(s *Service) {
 		s.catalog = catalog
+	}
+}
+
+func WithJobChangeTracker(tracker JobChangeTracker) Option {
+	return func(s *Service) {
+		s.jobTracker = tracker
 	}
 }
 
@@ -135,6 +147,11 @@ func NewService(repository Repository, opts ...Option) (*Service, error) {
 // SetCostumeResetter registers the costume reset hook called upon job change.
 func (s *Service) SetCostumeResetter(c CostumeResetter) {
 	s.costume = c
+}
+
+// SetJobChangeTracker registers the weekly job change tracker called upon job change.
+func (s *Service) SetJobChangeTracker(tracker JobChangeTracker) {
+	s.jobTracker = tracker
 }
 
 func (s *Service) ListDefinitions() []corejob.Definition {
@@ -230,6 +247,18 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 			}
 			return corecharacter.Character{}, corejob.CharacterJob{}, err
 		}
+		if s.guildPoints != nil {
+			//lint:ignore error-swallow best-effort guild points bonus
+			_ = s.guildPoints.AddGuildPoints(ctx, characterID, 50)
+		}
+		if s.costume != nil {
+			//lint:ignore error-swallow best-effort costume rental return on job change
+			_ = s.costume.ResetCostume(ctx, characterID)
+		}
+		if s.jobTracker != nil {
+			//lint:ignore error-swallow best-effort weekly job change tracking
+			_ = s.jobTracker.RecordJobChange(ctx, characterID)
+		}
 		return updated, updatedState, nil
 	}
 
@@ -269,6 +298,10 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 	if s.costume != nil {
 		//lint:ignore error-swallow best-effort costume rental return on job change
 		_ = s.costume.ResetCostume(ctx, characterID)
+	}
+	if s.jobTracker != nil {
+		//lint:ignore error-swallow best-effort weekly job change tracking
+		_ = s.jobTracker.RecordJobChange(ctx, characterID)
 	}
 	return char, state, nil
 }
@@ -407,94 +440,4 @@ func (s *Service) masterySPForJob(jobID string) int {
 		return 0
 	}
 	return s.masterySP(def)
-}
-
-func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, targetOldJobID string) (corecharacter.Character, corejob.CharacterJob, error) {
-	if s.characters == nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, errors.New("character repository not configured")
-	}
-	char, err := s.characters.FindByID(ctx, characterID)
-	if err != nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, err
-	}
-	state, err := s.loadState(ctx, char)
-	if err != nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, err
-	}
-	if char.JobMemory != nil {
-		memory := *char.JobMemory
-		if err := char.ApplyJobMemory(memory.JobID, memory.SP, memory.OldJobID, memory.OldSP); err != nil {
-			return corecharacter.Character{}, corejob.CharacterJob{}, err
-		}
-		char.JobMemory = nil
-		if err := s.characters.Update(ctx, char); err != nil {
-			return corecharacter.Character{}, corejob.CharacterJob{}, err
-		}
-		return char, state, nil
-	}
-	if targetJobID == "" || targetOldJobID == "" || targetJobID == targetOldJobID ||
-		!state.IsMastered(targetJobID) || !state.IsMastered(targetOldJobID) {
-		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
-	}
-	targetSPValue, ok := state.MasteredSP(targetJobID)
-	if !ok {
-		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
-	}
-	targetOldSPValue, ok := state.MasteredSP(targetOldJobID)
-	if !ok {
-		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
-	}
-	if s.economy != nil {
-		req := economy.TransactionRequest{CharacterID: characterID, LockInventory: true,
-			Cost: economy.ResourceCost{ItemDefinitionID: "item-168", ItemDefinitionQty: 1}}
-		var updated corecharacter.Character
-		_, err := s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-			tc.Character.JobMemory = &corecharacter.JobMemory{JobID: tc.Character.JobID, SP: tc.Character.SP, OldJobID: tc.Character.OldJobID, OldSP: tc.Character.OldSP}
-			if err := tc.Character.ApplyJobMemory(targetJobID, targetSPValue, targetOldJobID, targetOldSPValue); err != nil {
-				return err
-			}
-			if err := s.repository.Save(tc.Context, state); err != nil {
-				return err
-			}
-			updated = tc.Character
-			return nil
-		})
-		if err != nil {
-			if errors.Is(err, economy.ErrItemNotFound) || errors.Is(err, economy.ErrInsufficientItemQuantity) {
-				return corecharacter.Character{}, corejob.CharacterJob{}, ErrRequiredItem
-			}
-			return corecharacter.Character{}, corejob.CharacterJob{}, err
-		}
-		return updated, state, nil
-	}
-	if s.inventories == nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, ErrRequiredItem
-	}
-	inventory, err := s.inventories.FindByCharacterID(ctx, characterID)
-	if err != nil || inventory.Quantity("item-168") < 1 {
-		return corecharacter.Character{}, corejob.CharacterJob{}, ErrRequiredItem
-	}
-	for _, instance := range inventory.Items {
-		if instance.DefinitionID == "item-168" {
-			if err := inventory.Consume(instance.ID, 1); err != nil {
-				return corecharacter.Character{}, corejob.CharacterJob{}, err
-			}
-			break
-		}
-	}
-	memory := &corecharacter.JobMemory{JobID: char.JobID, SP: char.SP, OldJobID: char.OldJobID, OldSP: char.OldSP}
-	if err := char.ApplyJobMemory(targetJobID, targetSPValue, targetOldJobID, targetOldSPValue); err != nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, err
-	}
-	char.JobMemory = memory
-	if err := s.characters.Update(ctx, char); err != nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, err
-	}
-	if err := s.repository.Save(ctx, state); err != nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, fmt.Errorf("save job memory: %w", err)
-	}
-	if err := s.inventories.Save(ctx, inventory); err != nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, err
-	}
-	return char, state, nil
 }

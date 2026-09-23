@@ -22,6 +22,11 @@ type RankingService interface {
 	GetJobPopularityRanking(ctx context.Context, useSnapshot bool) (ranking.RankingPage[ranking.JobPopularityEntry], error)
 	GetHelperRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	GetSmallMedalRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
+	GetCasinoWinsRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
+	GetAlchemyRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
+	GetWeeklyJobChangeRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
+	GetLegends(ctx context.Context) ([]ranking.LegendCategoryInfo, error)
+	GetLegendCategory(ctx context.Context, category ranking.LegendCategory) (ranking.LegendCategoryPage, error)
 	GetRankingByType(ctx context.Context, rankingType ranking.RankingType, limit, offset int, useSnapshot bool) (any, error)
 	RefreshSnapshot(ctx context.Context, rankingType ranking.RankingType) error
 	RefreshAllSnapshots(ctx context.Context) error
@@ -163,6 +168,84 @@ func (h *Handler) handleGetSmallMedalRanking(w http.ResponseWriter, r *http.Requ
 	limit, offset, useSnapshot := parsePaginationAndSnapshotParams(r)
 	page, err := h.rankings.GetSmallMedalRanking(r.Context(), limit, offset, useSnapshot)
 	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+func (h *Handler) handleGetCasinoWinsRanking(w http.ResponseWriter, r *http.Request) {
+	if h.rankings == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("ranking service not configured"))
+		return
+	}
+	limit, offset, useSnapshot := parsePaginationAndSnapshotParams(r)
+	page, err := h.rankings.GetCasinoWinsRanking(r.Context(), limit, offset, useSnapshot)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+func (h *Handler) handleGetAlchemyRanking(w http.ResponseWriter, r *http.Request) {
+	if h.rankings == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("ranking service not configured"))
+		return
+	}
+	limit, offset, useSnapshot := parsePaginationAndSnapshotParams(r)
+	page, err := h.rankings.GetAlchemyRanking(r.Context(), limit, offset, useSnapshot)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+func (h *Handler) handleGetWeeklyJobChangeRanking(w http.ResponseWriter, r *http.Request) {
+	if h.rankings == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("ranking service not configured"))
+		return
+	}
+	limit, offset, useSnapshot := parsePaginationAndSnapshotParams(r)
+	page, err := h.rankings.GetWeeklyJobChangeRanking(r.Context(), limit, offset, useSnapshot)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+func (h *Handler) handleGetLegends(w http.ResponseWriter, r *http.Request) {
+	if h.rankings == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("ranking service not configured"))
+		return
+	}
+	legends, err := h.rankings.GetLegends(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, legends)
+}
+
+func (h *Handler) handleGetLegendCategory(w http.ResponseWriter, r *http.Request) {
+	if h.rankings == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("ranking service not configured"))
+		return
+	}
+	catStr := r.PathValue("category")
+	category := ranking.LegendCategory(catStr)
+	if !ranking.IsValidLegendCategory(category) {
+		writeError(w, http.StatusBadRequest, ranking.ErrInvalidLegendCategory)
+		return
+	}
+	page, err := h.rankings.GetLegendCategory(r.Context(), category)
+	if err != nil {
+		if errors.Is(err, ranking.ErrInvalidLegendCategory) {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}

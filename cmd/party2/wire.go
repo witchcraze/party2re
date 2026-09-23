@@ -17,6 +17,7 @@ import (
 	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/monster"
+	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/tavern"
 )
@@ -192,6 +193,9 @@ func wireHooks(
 			misc.job.SetCostumeResetter(econ.store)
 		}
 	}
+	if misc.job != nil && soc.ranking != nil {
+		misc.job.SetJobChangeTracker(soc.ranking)
+	}
 
 	soc.registerWorkerHandlers(misc.activity, misc.chapel, misc.lottery, misc.contest)
 
@@ -207,6 +211,16 @@ func wireHooks(
 	if soc.sched != nil && misc.contest != nil {
 		wireContestSettlement(soc.sched, misc.contest)
 	}
+	if soc.sched != nil && soc.ranking != nil {
+		wireRankingWeeklyRotation(soc.sched)
+	}
+}
+
+// wireRankingWeeklyRotation enqueues the weekly Sunday midnight job change ranking rotation if not already scheduled.
+func wireRankingWeeklyRotation(sched *scheduling.Service) {
+	ctx := context.Background()
+	next := ranking.NextSundayMidnightJST(time.Now())
+	_ = sched.ScheduleWithID(ctx, ranking.WeeklyRotateActionID(next), ranking.RankingActionTypeRotateWeekly, "system", nil, next)
 }
 
 // wireContestSettlement enqueues the contest settlement action if not already scheduled.

@@ -136,7 +136,7 @@ Each feature owns its specific domain logic and state. Cross-feature imports and
 | **Party** | `internal/party` | 1–4 player lobbies, speed configs, Rank 0 distributed lock, HP-1 | Character, Battle, Inventory, Depot, Valkey | Valkey `party2:party:*`; MariaDB `party_adventure_logs` (Rank 0 lock) |
 | **Plantation** | `internal/plantation` | 6 seeds, 14 fertilizer reagents, midnight JST maturation, harvest | Catalogs, Character, Inventory, Depot | MariaDB `plantation_plots` (Rank 2→3→5→8) |
 | **PvP** | `internal/pvp` | 2..8 player Colosseum rooms, Bet & Split prize pool, 9 colors | Battle, Character, TransactionProvider | Valkey Candidate C (`party2:pvp:*`); MariaDB `pvp_wins` (Rank 2 asc) |
-| **Ranking** | `internal/ranking` | 12 leaderboards, Valkey caching, singleflight stampede guard | Character, Player, Valkey, Scheduling | Valkey `party2:ranking:snapshot:*`; MariaDB `ranking_snapshots` |
+| **Ranking** | `internal/ranking` | 14 leaderboards, Hall of Fame (legend.cgi), weekly job change ranking with Sunday rotation, Valkey caching, singleflight stampede guard | Character, Player, Valkey, Scheduling | Valkey `party2:ranking:snapshot:*`; MariaDB `ranking_snapshots`, `legend_records`, `weekly_job_changes` |
 | **Rate Limit** | `internal/ratelimit` | Distributed atomic rate limiting, spam defense, throttling | Valkey | Valkey `party2:ratelimit:*` |
 | **Replay** | `internal/replay` | Combat turn log recording, step-by-step playback, retention | Battle, Character | MariaDB `battle_replays` |
 | **Rescue** | `internal/rescue` | Emergency player unstuck recovery, action clearing, penalty cooldown | Character, Scheduling | MariaDB `rescue_records` |
