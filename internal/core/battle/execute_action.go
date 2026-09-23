@@ -216,7 +216,7 @@ func (ctx *battleContext) executeNormalAttack(actor Participant, opponents []Par
 					TargetID:    target.ID,
 					DamageDealt: 0,
 					IsCritical:  false,
-					Message:     fmt.Sprintf("ミス！%s は攻撃をかわした！", target.NameOrID()),
+					Message:     fmt.Sprintf("%s の %s！ ミス！%s は攻撃をかわした！", actor.NameOrID(), actionName, target.NameOrID()),
 					RemainingHP: copyHPMap(ctx.hpMap),
 				})
 				return true

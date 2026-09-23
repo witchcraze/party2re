@@ -84,7 +84,7 @@ Replicating the original Party2 CGI combat engine (`_battle.cgi`, `_skill.cgi`):
      5. Else execute **Normal Attack**:
         - Target: Lowest HP living opponent (or random participant if confused).
         - **Critical Strike Check**: Roll `isExceedAg(actor, target)`. Triggers critical strike dealing direct damage ($0.75 \times \text{Attack}$) completely bypassing defense mitigation, and logs `TurnLog.IsCritical = true` with message `"<Actor> の会心の一撃！！ <Target> に <Dmg> のダメージ！"`.
-        - **Hit & Evasion Check**: If not a critical strike, attack misses if `rand(100) >= 95` (5% base miss rate) OR if target evades via `isExceedAg(target, actor)`, UNLESS target is immobilized (`kinju`, `sabaku`, `paralyze`, `sleep`, `dofuu`) or attacker holds 必中の剣 (`weapon-63`). On miss, logs `TurnLog.DamageDealt = 0` with message `"ミス！<Target> は攻撃をかわした！"`.
+        - **Hit & Evasion Check**: If not a critical strike, attack misses if `rand(100) >= 95` (5% base miss rate) OR if target evades via `isExceedAg(target, actor)`, UNLESS target is immobilized (`kinju`, `sabaku`, `paralyze`, `sleep`, `dofuu`) or attacker holds 必中の剣 (`weapon-63`). On miss, logs `TurnLog.DamageDealt = 0` with message `"<Actor> の <Action>！ ミス！<Target> は攻撃をかわした！"`.
         - **Canonical Damage Calculation**: If hit, calculate damage using the canonical DQ formula:
           $$\text{Base} = \begin{cases} \text{Attack} \times 0.75 & \text{if critical strike} \\ \text{Attack} \times 0.5 - \text{Defense} \times 0.3 & \text{otherwise} \end{cases}$$
           $$\text{Damage} = \max\left(1 \text{ or } 2, \text{int}(\text{Base} \times (0.9 + \text{Float64}() \times 0.3))\right)$$
