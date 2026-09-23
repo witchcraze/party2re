@@ -54,6 +54,15 @@ Replicating the original Party2 CGI combat engine (`_battle.cgi`, `_skill.cgi`):
 
 2. **Turn Execution (per participant)**:
    - Skip if participant has been defeated earlier in the round or banished.
+   - **Status Ailment Incapacitation Check (`execute_status.go`)**:
+     - `dofuu` (動封): 100% turn skip, clears status immediately.
+     - `paralyze` (麻痺): 33% cure chance (`rand(3) < 1`, cures and acts), 67% skips turn.
+     - `sleep` (眠り): 33% cure chance (`rand(3) < 1`, cures and acts), 67% skips turn.
+     - `kinju` (禁呪): 25% chance to trigger 10% MaxHP self-damage, clear status, and skip turn. 75% chance acts normally. Immobilizes evasion.
+     - `sabaku` (鎖縛): 25% chance to skip turn (with 50% chance to self-cure on skip). 75% chance acts normally. Blocks stat buffs and tension gain. Immobilizes evasion.
+     - If turn skipped by incapacitation, skip further action and post-action poison evaluation.
+   - **Confusion Check & Target Redirection**:
+     - `confusion` (混乱): 20% cure chance (`rand(5) < 1`). If uncured, logs confusion message; single-target attacks, skills, and items redirect to a random participant selected from all living participants (allies and enemies).
    - **Faction / Target Segregation**:
      - Friendly party (`allyParty`): living participants sharing the actor's `TeamID`.
      - Hostile party (`opponents`): living participants belonging to any opposing `TeamID`. In multi-team battles (e.g., 3 teams), all non-actor teams are mutually hostile opponents.
@@ -62,31 +71,35 @@ Replicating the original Party2 CGI combat engine (`_battle.cgi`, `_skill.cgi`):
      1. If `CustomSkill` is configured and participant has sufficient CMP:
         - Deduct CMP.
         - Log incantation quote: `"<Name> calls: '<Incantation>'!"`.
-        - Execute each `GemEffect` sequentially (damage, heal, create field, or create anti-field).
+        - Execute each `GemEffect` sequentially (damage, heal, create field, or create anti-field). Single-target effects redirect if confused.
      2. Else if `JobSkill` is configured and participant has sufficient MP:
         - Deduct MP.
-        - Apply job skill effects according to `TargetScope` and `Element`.
+        - Apply job skill effects according to `TargetScope` and `Element`. Single-target effects redirect if confused. Buffs are blocked if target has `sabaku`.
      3. Else if participant has available `ActionItems`:
         - Use the first available `ActionItem` (validated with `UsageCategoryCombatOnly`).
-        - Execute item effect (Heal, Buff, Status, or Attack) and consume item from combatant's active items.
+        - Execute item effect (Heal, Buff, Status, or Attack) and consume item from combatant's active items. Single-target effects redirect if confused. Buffs are blocked if target has `sabaku`.
         - Log item action: `"<Actor> は <Item> をつかった！ ..."`.
      4. Else if `Defending`:
         - Execute defend stance.
      5. Else execute **Normal Attack**:
-        - Target: Lowest HP living opponent.
+        - Target: Lowest HP living opponent (or random participant if confused).
         - **Critical Strike Check**: Roll `isExceedAg(actor, target)`. Triggers critical strike dealing direct damage ($0.75 \times \text{Attack}$) completely bypassing defense mitigation, and logs `TurnLog.IsCritical = true` with message `"<Actor> の会心の一撃！！ <Target> に <Dmg> のダメージ！"`.
-        - **Hit & Evasion Check**: If not a critical strike, attack misses if `rand(100) >= 95` (5% base miss rate) OR if target evades via `isExceedAg(target, actor)`, UNLESS target is immobilized (`kinju`, `sabaku`, `paralyze`, `sleep`) or attacker holds 必中の剣 (`weapon-63`). On miss, logs `TurnLog.DamageDealt = 0` with message `"ミス！<Target> は攻撃をかわした！"`.
+        - **Hit & Evasion Check**: If not a critical strike, attack misses if `rand(100) >= 95` (5% base miss rate) OR if target evades via `isExceedAg(target, actor)`, UNLESS target is immobilized (`kinju`, `sabaku`, `paralyze`, `sleep`, `dofuu`) or attacker holds 必中の剣 (`weapon-63`). On miss, logs `TurnLog.DamageDealt = 0` with message `"<Actor> の <Action>！ ミス！<Target> は攻撃をかわした！"`.
         - **Canonical Damage Calculation**: If hit, calculate damage using the canonical DQ formula:
           $$\text{Base} = \begin{cases} \text{Attack} \times 0.75 & \text{if critical strike} \\ \text{Attack} \times 0.5 - \text{Defense} \times 0.3 & \text{otherwise} \end{cases}$$
           $$\text{Damage} = \max\left(1 \text{ or } 2, \text{int}(\text{Base} \times (0.9 + \text{Float64}() \times 0.3))\right)$$
         - Apply Field elemental multiplier if action or attacker has an elemental affinity.
+   - **Post-Action Poison Lifecycle (`execute_status.go`)**:
+     - Evaluated immediately after actor acts (if actor remains alive):
+       - `deadly_poison` (猛毒/劇毒): deals 10% MaxHP damage (capped at 950–1049 if >999). Natural cure cannot occur.
+       - `poison` (毒): deals 10% MaxHP damage (capped at 950–1049 if >999). If alive, rolls 20% natural cure chance (`rand(5) < 1`); clears status on success.
    - **Defeat & Revival Check (`defeat.go`)**:
      - When any participant's HP drops to $\le 0$:
      - Check `RevivalTriggers`:
        - `pharaoh`: Revives at 100% MaxHP (consumed on use).
        - `undying`: Revives at 50% MaxHP (consumed on use).
        - `touki_shield`: Revives at 30% MaxHP (consumed on use).
-       - `dokuro_amulet`: Revives at 25% MaxHP (consumed on use).
+       - `dokuro_amulet`: Revives at 25% MaxHP with `dofuu` (動封) applied (consumed on use).
        - `cursed_revive`: Revives at 1 HP (consumed on use).
      - If revived: HP set to revival amount, log revival message, participant remains active.
      - If not revived: Mark `Defeated = true`, HP clamped to 0.

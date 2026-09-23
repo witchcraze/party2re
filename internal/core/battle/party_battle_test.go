@@ -211,21 +211,22 @@ func TestPartyBattle_DefeatAndRevival(t *testing.T) {
 	reqPharaoh := corebattle.PartyBattleRequest{
 		Allies: []corebattle.Participant{
 			{
-				ID:        "pharaoh_hero",
-				Name:      "PharaohHero",
-				HP:        20,
-				MaxHP:     100,
-				MP:        50,
-				MaxMP:     100,
-				Attack:    50,
-				Defense:   5,
-				Agility:   10,
-				Abilities: []string{"pharaoh"},
+				ID:                "pharaoh_hero",
+				Name:              "PharaohHero",
+				HP:                20,
+				MaxHP:             100,
+				MP:                50,
+				MaxMP:             100,
+				Attack:            50,
+				Defense:           5,
+				Agility:           10,
+				Abilities:         []string{"pharaoh"},
+				ItemDefinitionIDs: []string{"weapon-63"},
 			},
 		},
 		Enemies: []corebattle.Participant{
 			// Enemy acts first and deals lethal damage
-			{ID: "one_shotter", Name: "OneShotter", HP: 20, Attack: 60, Defense: 5, Agility: 90},
+			{ID: "one_shotter", Name: "OneShotter", HP: 20, Attack: 60, Defense: 5, Agility: 90, ItemDefinitionIDs: []string{"weapon-63"}},
 		},
 		VictoryReward: corebattle.Reward{Experience: 100},
 	}

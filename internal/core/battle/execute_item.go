@@ -45,9 +45,15 @@ func (ctx *battleContext) executeItem(actor Participant, it *ActionItem, allyPar
 		} else if it.TargetScope == TargetScopeSelf {
 			healTargets = []Participant{actor}
 		} else {
-			lowest := findLowestHPTarget(allyParty, ctx.hpMap)
-			if lowest != nil {
-				healTargets = []Participant{*lowest}
+			if ctx.isConfused(actor) {
+				if tgt := ctx.resolveConfusedSingleTarget(actor); tgt != nil {
+					healTargets = []Participant{*tgt}
+				}
+			} else {
+				lowest := findLowestHPTarget(allyParty, ctx.hpMap)
+				if lowest != nil {
+					healTargets = []Participant{*lowest}
+				}
 			}
 		}
 		for _, tgt := range healTargets {
@@ -76,9 +82,26 @@ func (ctx *battleContext) executeItem(actor Participant, it *ActionItem, allyPar
 		if it.TargetScope == TargetScopeAllAllies {
 			buffTargets = allyParty
 		} else {
-			buffTargets = []Participant{actor}
+			if ctx.isConfused(actor) {
+				if tgt := ctx.resolveConfusedSingleTarget(actor); tgt != nil {
+					buffTargets = []Participant{*tgt}
+				}
+			} else {
+				buffTargets = []Participant{actor}
+			}
 		}
 		for _, tgt := range buffTargets {
+			if ctx.statusMap[tgt.ID] == StatusSabaku || ctx.statusMap[tgt.ID] == "鎖縛" {
+				ctx.logs = append(ctx.logs, TurnLog{
+					Turn:        ctx.turns,
+					ActorID:     actor.ID,
+					ActionName:  it.Name,
+					TargetID:    tgt.ID,
+					Message:     fmt.Sprintf("%s は鎖縛により能力があがらない！", tgt.NameOrID()),
+					RemainingHP: copyHPMap(ctx.hpMap),
+				})
+				continue
+			}
 			stat := it.BuffStat
 			if stat == "" {
 				stat = "defense"
@@ -106,9 +129,15 @@ func (ctx *battleContext) executeItem(actor Participant, it *ActionItem, allyPar
 		if it.TargetScope == TargetScopeAllEnemies {
 			statusTargets = opponents
 		} else {
-			primaryTarget := findLowestHPTarget(opponents, ctx.hpMap)
-			if primaryTarget != nil {
-				statusTargets = []Participant{*primaryTarget}
+			if ctx.isConfused(actor) {
+				if tgt := ctx.resolveConfusedSingleTarget(actor); tgt != nil {
+					statusTargets = []Participant{*tgt}
+				}
+			} else {
+				primaryTarget := findLowestHPTarget(opponents, ctx.hpMap)
+				if primaryTarget != nil {
+					statusTargets = []Participant{*primaryTarget}
+				}
 			}
 		}
 		for _, tgt := range statusTargets {
@@ -128,9 +157,15 @@ func (ctx *battleContext) executeItem(actor Participant, it *ActionItem, allyPar
 		if it.TargetScope == TargetScopeAllEnemies {
 			targetList = opponents
 		} else {
-			primaryTarget := findLowestHPTarget(opponents, ctx.hpMap)
-			if primaryTarget != nil {
-				targetList = []Participant{*primaryTarget}
+			if ctx.isConfused(actor) {
+				if tgt := ctx.resolveConfusedSingleTarget(actor); tgt != nil {
+					targetList = []Participant{*tgt}
+				}
+			} else {
+				primaryTarget := findLowestHPTarget(opponents, ctx.hpMap)
+				if primaryTarget != nil {
+					targetList = []Participant{*primaryTarget}
+				}
 			}
 		}
 		decayMult := 1.0

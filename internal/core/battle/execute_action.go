@@ -31,53 +31,6 @@ type battleContext struct {
 	droppedCrystals   int
 }
 
-func (ctx *battleContext) checkStatusSkip(actor Participant) bool {
-	st := ctx.statusMap[actor.ID]
-	switch st {
-	case StatusParalyze:
-		if ctx.rng.Float64() < 0.33 {
-			ctx.statusMap[actor.ID] = ""
-			ctx.logs = append(ctx.logs, TurnLog{
-				Turn:        ctx.turns,
-				ActorID:     actor.ID,
-				ActionName:  "回復",
-				Message:     fmt.Sprintf("%s の麻痺が治った！", actor.NameOrID()),
-				RemainingHP: copyHPMap(ctx.hpMap),
-			})
-			return false
-		}
-		ctx.logs = append(ctx.logs, TurnLog{
-			Turn:        ctx.turns,
-			ActorID:     actor.ID,
-			ActionName:  "行動不能",
-			Message:     fmt.Sprintf("%s は麻痺して動くことができない！", actor.NameOrID()),
-			RemainingHP: copyHPMap(ctx.hpMap),
-		})
-		return true
-	case StatusSleep:
-		if ctx.rng.Float64() < 0.33 {
-			ctx.statusMap[actor.ID] = ""
-			ctx.logs = append(ctx.logs, TurnLog{
-				Turn:        ctx.turns,
-				ActorID:     actor.ID,
-				ActionName:  "起床",
-				Message:     fmt.Sprintf("%s は眠りから覚めた！", actor.NameOrID()),
-				RemainingHP: copyHPMap(ctx.hpMap),
-			})
-			return false
-		}
-		ctx.logs = append(ctx.logs, TurnLog{
-			Turn:        ctx.turns,
-			ActorID:     actor.ID,
-			ActionName:  "眠り",
-			Message:     fmt.Sprintf("%s は眠っている！", actor.NameOrID()),
-			RemainingHP: copyHPMap(ctx.hpMap),
-		})
-		return true
-	}
-	return false
-}
-
 func (ctx *battleContext) executeDefend(actor Participant) {
 	ctx.defendingMap[actor.ID] = true
 	ctx.logs = append(ctx.logs, TurnLog{
@@ -124,6 +77,9 @@ func (ctx *battleContext) applyDamage(actor Participant, target Participant, bas
 				ctx.attackBuff[target.ID] += rev.AttackBuff
 				ctx.defenseBuff[target.ID] += rev.DefenseBuff
 				ctx.agilityBuff[target.ID] += rev.AgilityBuff
+				if rev.Status != "" {
+					ctx.statusMap[target.ID] = rev.Status
+				}
 				msg += " " + rev.Message
 				if rev.Cursed {
 					ctx.abilitiesMap[target.ID] = append(ctx.abilitiesMap[target.ID], "cursed")
@@ -185,10 +141,6 @@ func hasItem(items []string, wanted string) bool {
 	return false
 }
 
-func isImmobilized(status string) bool {
-	return status == StatusParalyze || status == StatusSleep || status == "kinju" || status == "sabaku" || status == "禁呪" || status == "鎖縛"
-}
-
 func isExceedAg(m, y Participant, mBuff, yBuff int, rng random.Generator) bool {
 	if rng == nil {
 		return false
@@ -220,7 +172,7 @@ func isExceedAg(m, y Participant, mBuff, yBuff int, rng random.Generator) bool {
 
 func (ctx *battleContext) executeNormalAttack(actor Participant, opponents []Participant) {
 	attackOnce := func() bool {
-		primaryTarget := findLowestHPTarget(opponents, ctx.hpMap)
+		primaryTarget := ctx.resolveAttackTarget(actor, opponents)
 		if primaryTarget == nil {
 			return false
 		}
@@ -264,7 +216,7 @@ func (ctx *battleContext) executeNormalAttack(actor Participant, opponents []Par
 					TargetID:    target.ID,
 					DamageDealt: 0,
 					IsCritical:  false,
-					Message:     fmt.Sprintf("ミス！%s は攻撃をかわした！", target.NameOrID()),
+					Message:     fmt.Sprintf("%s の %s！ ミス！%s は攻撃をかわした！", actor.NameOrID(), actionName, target.NameOrID()),
 					RemainingHP: copyHPMap(ctx.hpMap),
 				})
 				return true
@@ -280,57 +232,6 @@ func (ctx *battleContext) executeNormalAttack(actor Participant, opponents []Par
 		// Seal 10 (神速): Normal attack strikes twice (_skill.cgi:111, _data.cgi:2220)
 		if hasAbility(ctx.abilitiesMap[actor.ID], "seal_shinsoku") {
 			attackOnce()
-		}
-	}
-}
-
-func (ctx *battleContext) applyPoisonDOT(combatants []Participant) {
-	for _, p := range combatants {
-		if ctx.statusMap[p.ID] == StatusPoison && ctx.hpMap[p.ID] > 0 {
-			maxHP := p.MaxHP
-			if maxHP <= 0 {
-				maxHP = p.HP
-			}
-			dotDmg := maxHP / 10
-			if dotDmg < 1 {
-				dotDmg = 1
-			}
-			ctx.hpMap[p.ID] -= dotDmg
-			if ctx.hpMap[p.ID] < 0 {
-				ctx.hpMap[p.ID] = 0
-			}
-			msg := fmt.Sprintf("%s は毒により %d のダメージをうけた！", p.NameOrID(), dotDmg)
-			if ctx.hpMap[p.ID] <= 0 {
-				curMP := ctx.mpMap[p.ID]
-				targetCopy := p
-				targetCopy.Abilities = ctx.abilitiesMap[p.ID]
-				rev := CheckRevival(&targetCopy, &curMP)
-				ctx.mpMap[p.ID] = curMP
-				if rev.Revived {
-					ctx.hpMap[p.ID] = rev.HP
-					ctx.attackBuff[p.ID] += rev.AttackBuff
-					ctx.defenseBuff[p.ID] += rev.DefenseBuff
-					ctx.agilityBuff[p.ID] += rev.AgilityBuff
-					msg += " " + rev.Message
-					if rev.Cursed {
-						ctx.abilitiesMap[p.ID] = append(ctx.abilitiesMap[p.ID], "cursed")
-					} else {
-						ctx.abilitiesMap[p.ID] = nil
-					}
-				} else {
-					ctx.applyMazinSynergy(p)
-					ctx.checkCrystalDrop(p)
-				}
-			}
-			ctx.logs = append(ctx.logs, TurnLog{
-				Turn:        ctx.turns,
-				ActorID:     p.ID,
-				ActionName:  "毒ダメージ",
-				TargetID:    p.ID,
-				DamageDealt: dotDmg,
-				Message:     msg,
-				RemainingHP: copyHPMap(ctx.hpMap),
-			})
 		}
 	}
 }
