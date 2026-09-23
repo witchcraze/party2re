@@ -21,6 +21,7 @@ type ApplyPostBattleRequest struct {
 	DropItems            []string            // Extra dropped item definition IDs (e.g. stage/boss drops)
 	RecipientDrops       map[string][]string // Optional recipient-targeted drop item definition IDs (characterID -> []itemDefID)
 	RecipientCharacterID string              // Optional recipient character ID for DropItems / BattleResult.TotalReward drops
+	DefeatedEnemies      []corebattle.Participant
 }
 
 // ApplyPostBattleResponse contains the committed state for each participating character.
@@ -35,6 +36,7 @@ type ApplyPostBattleResponse struct {
 	LostDrops         map[string][]coreitem.Instance
 	ConsumedItems     map[string][]corebattle.ConsumedItem
 	RemainingStatus   map[string]string
+	MonsterTames      map[string][]MonsterTameResult
 }
 
 // ApplyPostBattleResult applies battle outcomes (HP, MP, fatigue, consumed items, EXP, gold, crystals, drops)
@@ -62,6 +64,10 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 		CharacterID:   charID,
 		LockInventory: true,
 	}
+
+	var finalChar corecharacter.Character
+	var finalInv coreinventory.Inventory
+	var finalEquip coreequipment.Equipment
 
 	_, err := s.txRunner.ExecuteTransaction(ctx, txReq, func(tc *economy.TxContext) error {
 		// 1. Load equipment (Rank 3) if available
@@ -113,16 +119,30 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 		}
 
 		resp.UpdatedCharacters[charID] = tc.Character
+		finalChar = tc.Character
+		finalInv = tc.Inventory
+		finalEquip = equip
 		return nil
 	})
 	if err != nil {
 		return ApplyPostBattleResponse{}, err
 	}
+
+	if req.BattleResult.Outcome == corebattle.OutcomeWin && len(req.DefeatedEnemies) > 0 {
+		if tames := s.processMonsterTaming(ctx, finalChar, finalInv, finalEquip, req.DefeatedEnemies); len(tames) > 0 {
+			resp.MonsterTames[charID] = tames
+		}
+	}
+
 	return resp, nil
 }
 
 func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs []string, req ApplyPostBattleRequest) (ApplyPostBattleResponse, error) {
 	resp := newApplyPostBattleResponse(req.BattleResult)
+
+	var finalChars map[string]corecharacter.Character
+	var finalInvs map[string]coreinventory.Inventory
+	var finalEquips map[string]coreequipment.Equipment
 
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		// Phase 1: Lock characters in ascending lexicographical order (Rank 2)
@@ -229,11 +249,29 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 			}
 		}
 
+		finalChars = chars
+		finalInvs = invs
+		finalEquips = equips
 		return nil
 	})
 	if err != nil {
 		return ApplyPostBattleResponse{}, err
 	}
+
+	if req.BattleResult.Outcome == corebattle.OutcomeWin && len(req.DefeatedEnemies) > 0 {
+		recipientID := req.RecipientCharacterID
+		if recipientID == "" && len(sortedIDs) > 0 {
+			recipientID = sortedIDs[0]
+		}
+		if char, ok := finalChars[recipientID]; ok {
+			inv := finalInvs[recipientID]
+			equip := finalEquips[recipientID]
+			if tames := s.processMonsterTaming(ctx, char, inv, equip, req.DefeatedEnemies); len(tames) > 0 {
+				resp.MonsterTames[recipientID] = tames
+			}
+		}
+	}
+
 	return resp, nil
 }
 
@@ -334,5 +372,6 @@ func newApplyPostBattleResponse(res corebattle.PartyBattleResult) ApplyPostBattl
 		LostDrops:         make(map[string][]coreitem.Instance),
 		ConsumedItems:     make(map[string][]corebattle.ConsumedItem),
 		RemainingStatus:   res.RemainingStatus,
+		MonsterTames:      make(map[string][]MonsterTameResult),
 	}
 }

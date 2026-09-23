@@ -79,18 +79,21 @@ type BattleEngine interface {
 
 // Service orchestrates battle participation mapping and post-battle state application.
 type Service struct {
-	charRepo      CharacterRepository
-	invRepo       InventoryRepository
-	equipRepo     EquipmentRepository
-	depotRepo     DepotRepository
-	jobProvider   job.DefinitionProvider
-	skillProvider SkillProvider
-	customSkills  CustomSkillRepository
-	txRunner      economy.TransactionRunner
-	txProvider    TransactionProvider
-	engine        BattleEngine
-	rng           corecharacter.RandomSource
-	maxInvCap     int
+	charRepo         CharacterRepository
+	invRepo          InventoryRepository
+	equipRepo        EquipmentRepository
+	depotRepo        DepotRepository
+	jobProvider      job.DefinitionProvider
+	skillProvider    SkillProvider
+	customSkills     CustomSkillRepository
+	txRunner         economy.TransactionRunner
+	txProvider       TransactionProvider
+	engine           BattleEngine
+	rng              corecharacter.RandomSource
+	maxInvCap        int
+	monsterTamer     MonsterTamer
+	blessingProvider BlessingProvider
+	monsterRecorder  MonsterDefeatRecorder
 }
 
 // Option configures Service dependencies.
@@ -180,6 +183,42 @@ func WithMaxInventoryCapacity(cap int) Option {
 			s.maxInvCap = cap
 		}
 	}
+}
+
+// WithMonsterTamer sets the MonsterTamer dependency.
+func WithMonsterTamer(tamer MonsterTamer) Option {
+	return func(s *Service) {
+		s.monsterTamer = tamer
+	}
+}
+
+// WithBlessingProvider sets the BlessingProvider dependency.
+func WithBlessingProvider(provider BlessingProvider) Option {
+	return func(s *Service) {
+		s.blessingProvider = provider
+	}
+}
+
+// WithMonsterDefeatRecorder sets the MonsterDefeatRecorder dependency.
+func WithMonsterDefeatRecorder(recorder MonsterDefeatRecorder) Option {
+	return func(s *Service) {
+		s.monsterRecorder = recorder
+	}
+}
+
+// SetMonsterTamer sets the MonsterTamer dependency.
+func (s *Service) SetMonsterTamer(tamer MonsterTamer) {
+	s.monsterTamer = tamer
+}
+
+// SetBlessingProvider sets the BlessingProvider dependency.
+func (s *Service) SetBlessingProvider(provider BlessingProvider) {
+	s.blessingProvider = provider
+}
+
+// SetMonsterDefeatRecorder sets the MonsterDefeatRecorder dependency.
+func (s *Service) SetMonsterDefeatRecorder(recorder MonsterDefeatRecorder) {
+	s.monsterRecorder = recorder
 }
 
 // NewService creates a new battle adapter Service.

@@ -72,3 +72,43 @@ All monster mutations run within Unit of Work database transactions (`RunInTx`) 
 - `characters` locked with `FOR UPDATE` (sorted in ascending character ID order during transfers).
 - `character_monsters` rows locked with `FOR UPDATE`.
 - Zero IDOR: All operations verify session authentication and character ownership.
+
+---
+
+## 7. Post-Battle Monster Rising & Taming (戦闘後モンスター起き上がり)
+
+Legacy reference: `party2/lib/_battle.cgi:230-265`.
+
+Upon victory in combat (`OutcomeWin`), each defeated enemy participant undergoes an authentic legacy recruitment roll to determine if it "rises up and looks this way" (`起き上がりこちらを見ている`).
+
+### 7.1 Combat Strength Formula (`strong`)
+
+$$\text{strong}(p) = \lfloor \text{MaxHP} + \text{MaxMP} + \text{Attack} + (\text{Defense} \times 0.5) + \text{Agility} \rfloor$$
+
+An enemy is classified as strong (`is_strong`) if:
+$$\text{strong}(\text{enemy}) > \text{strong}(\text{player}) \times 0.5$$
+
+### 7.2 Recruitment Probability Formula (`$par`)
+
+Base probability parameter:
+- If weak enemy: $\text{par} = 2.0$
+- If strong enemy: $\text{par} = 1.0$ (or $\text{par} = 2.0$ if player's job is Monster Tamer / 魔物使い `job-12`)
+
+Flat bonus additions to $\text{par}$:
+1. **Monster Food** (`item-077` / 魔物のエサ): $+2.0$ if present in player inventory.
+2. **Chapel Blessing 3** (`BlessingMonster` / 願い3: "モンスターと仲良くしたい"): $+0.5$ if active.
+3. **Dragon Ruler Equipment Set**: $+0.5$ if both Dragon God Staff (`weapon-36` / 竜神の杖) and Champion Cloak (`armor-39` / 王者のマント) are equipped.
+4. **Captured Status** (`captured` / `捕縛`): $+4.0$ if the enemy was captured during combat.
+
+Recruitment check succeeds if:
+$$\text{rand}(200) < \text{par} \iff \text{Intn}(2000) < \lfloor \text{par} \times 10 \rfloor$$
+
+### 7.3 Capacity Check & Dialogue Messages
+
+If the roll succeeds:
+- **Monster Book Registration**: Recorded via `MonsterDefeatRecorder` (`internal/collection`).
+- **Box Capacity Check**: If the character's Monster Grandpa box is at maximum capacity (`ErrMonsterBoxFull`):
+  > `なんと {enemyName} が起き上がりこちらを見ている。しかし、{playerName}のモンスター預かり所はいっぱいだった。{enemyName}は悲しそうに去っていった…`
+- **Taming Success**:
+  > `なんと {enemyName} が起き上がりこちらを見ている。{enemyName}はうれしそうに{playerName}のモンスター預かり所に向かった`
+

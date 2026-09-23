@@ -71,6 +71,13 @@ func (s *Service) settleWithBattleSettler(
 		charIDs[i] = m.CharacterID
 	}
 
+	var defeatedEnemies []corebattle.Participant
+	for _, floor := range crawlResult.FloorResults {
+		if floor.Cleared && len(floor.Enemies) > 0 {
+			defeatedEnemies = append(defeatedEnemies, floor.Enemies...)
+		}
+	}
+
 	postBattleReq := battleadapter.ApplyPostBattleRequest{
 		CharacterIDs: charIDs,
 		BattleResult: corebattle.PartyBattleResult{
@@ -87,7 +94,8 @@ func (s *Service) settleWithBattleSettler(
 			BanishedIDs:   lastBattleRes.BanishedIDs,
 			ConsumedItems: lastBattleRes.ConsumedItems,
 		},
-		RecipientDrops: recipientDrops,
+		RecipientDrops:  recipientDrops,
+		DefeatedEnemies: defeatedEnemies,
 	}
 
 	resp, err := s.battleSettler.ApplyPostBattleResult(ctx, postBattleReq)

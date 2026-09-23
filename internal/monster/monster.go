@@ -189,8 +189,13 @@ func (s *Service) TameMonster(ctx context.Context, characterID, monsterID, custo
 	if customName == "" {
 		customName = monsterID
 	}
-	if err := ValidateMonsterName(customName); err != nil {
-		return MonsterInstance{}, err
+	if utf8.RuneCountInString(customName) > 32 {
+		return MonsterInstance{}, ErrNameTooLong
+	}
+	for _, r := range customName {
+		if unicode.IsSpace(r) || r == '\u3000' || strings.ContainsRune(",;\"'&<>@", r) {
+			return MonsterInstance{}, ErrInvalidName
+		}
 	}
 
 	var created MonsterInstance
