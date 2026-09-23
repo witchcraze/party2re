@@ -738,3 +738,195 @@ func TestDisbandParty_UpdatePartyErrorRollback(t *testing.T) {
 		t.Error("expected transaction rollback, got 0 rollbacks")
 	}
 }
+
+func TestPartyService_StartPartyAdventure_SynergyMultiplierRewards(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name              string
+		memberCount       int
+		expectedSynergy   int
+		expectedBaseEXP   int
+		expectedBaseGold  int
+		expectedFinalEXP  int
+		expectedFinalGold int
+	}{
+		{
+			name:              "1-player party (0% synergy)",
+			memberCount:       1,
+			expectedSynergy:   0,
+			expectedBaseEXP:   1000,
+			expectedBaseGold:  500,
+			expectedFinalEXP:  1000,
+			expectedFinalGold: 500,
+		},
+		{
+			name:              "2-player party (+10% synergy)",
+			memberCount:       2,
+			expectedSynergy:   10,
+			expectedBaseEXP:   1000,
+			expectedBaseGold:  500,
+			expectedFinalEXP:  1100,
+			expectedFinalGold: 550,
+		},
+		{
+			name:              "3-player party (+20% synergy)",
+			memberCount:       3,
+			expectedSynergy:   20,
+			expectedBaseEXP:   1000,
+			expectedBaseGold:  500,
+			expectedFinalEXP:  1200,
+			expectedFinalGold: 600,
+		},
+		{
+			name:              "4-player party (+30% synergy)",
+			memberCount:       4,
+			expectedSynergy:   30,
+			expectedBaseEXP:   1000,
+			expectedBaseGold:  500,
+			expectedFinalEXP:  1300,
+			expectedFinalGold: 650,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var recordedGold int
+			victoryHook := func(_ context.Context, _ []string, _ int, goldEarned int) error {
+				recordedGold = goldEarned
+				return nil
+			}
+
+			svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(
+				t,
+				fixedBattleEngine{outcome: corebattle.OutcomeWin},
+				WithVictoryHook(victoryHook),
+			)
+
+			leader := corecharacter.Character{
+				ID:    fmt.Sprintf("lead-%d", tc.memberCount),
+				Name:  "Leader",
+				Level: 10,
+				Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+			}
+
+			var members []corecharacter.Character
+			for i := 1; i < tc.memberCount; i++ {
+				members = append(members, corecharacter.Character{
+					ID:    fmt.Sprintf("mem-%d-%d", tc.memberCount, i),
+					Name:  fmt.Sprintf("Member%d", i),
+					Level: 10,
+					Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+				})
+			}
+
+			partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader, members...)
+
+			res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+			if err != nil {
+				t.Fatalf("StartPartyAdventure failed: %v", err)
+			}
+
+			if res.Outcome != "win" {
+				t.Fatalf("expected win outcome, got %s", res.Outcome)
+			}
+			if res.SynergyBonusPercent != tc.expectedSynergy {
+				t.Errorf("expected SynergyBonusPercent=%d, got %d", tc.expectedSynergy, res.SynergyBonusPercent)
+			}
+			if res.TotalEXP != tc.expectedFinalEXP {
+				t.Errorf("expected TotalEXP=%d, got %d", tc.expectedFinalEXP, res.TotalEXP)
+			}
+			if res.TotalGold != tc.expectedFinalGold {
+				t.Errorf("expected TotalGold=%d, got %d", tc.expectedFinalGold, res.TotalGold)
+			}
+
+			// Verify rewards per member
+			if len(res.Rewards) != tc.memberCount {
+				t.Fatalf("expected %d reward entries, got %d", tc.memberCount, len(res.Rewards))
+			}
+			for _, r := range res.Rewards {
+				if r.GainedEXP != tc.expectedFinalEXP {
+					t.Errorf("member %s expected GainedEXP=%d, got %d", r.CharacterID, tc.expectedFinalEXP, r.GainedEXP)
+				}
+				if r.GainedGold != tc.expectedFinalGold {
+					t.Errorf("member %s expected GainedGold=%d, got %d", r.CharacterID, tc.expectedFinalGold, r.GainedGold)
+				}
+			}
+
+			// Verify adventure log persistence
+			if len(partyRepo.logs) != 1 {
+				t.Fatalf("expected 1 adventure log saved, got %d", len(partyRepo.logs))
+			}
+			log := partyRepo.logs[0]
+			if log.TotalEXP != tc.expectedFinalEXP {
+				t.Errorf("log TotalEXP=%d, got %d", tc.expectedFinalEXP, log.TotalEXP)
+			}
+			if log.TotalGold != tc.expectedFinalGold {
+				t.Errorf("log TotalGold=%d, got %d", tc.expectedFinalGold, log.TotalGold)
+			}
+			if log.SynergyBonusPercent != tc.expectedSynergy {
+				t.Errorf("log SynergyBonusPercent=%d, got %d", tc.expectedSynergy, log.SynergyBonusPercent)
+			}
+
+			// Verify victory hook receives scaled gold
+			if recordedGold != tc.expectedFinalGold {
+				t.Errorf("victoryHook expected gold=%d, got %d", tc.expectedFinalGold, recordedGold)
+			}
+		})
+	}
+}
+
+func TestPartyService_StartPartyAdventure_Defeat_UnboostedRewards(t *testing.T) {
+	ctx := context.Background()
+
+	svc, partyRepo, charRepo, _, _ := setupPartyAdventureTestService(
+		t,
+		fixedBattleEngine{outcome: corebattle.OutcomeDefeat},
+	)
+
+	leader := corecharacter.Character{
+		ID:    "defeat-lead",
+		Name:  "Leader",
+		Level: 10,
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+	}
+	mem1 := corecharacter.Character{
+		ID:    "defeat-mem1",
+		Name:  "Member1",
+		Level: 10,
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+	}
+	mem2 := corecharacter.Character{
+		ID:    "defeat-mem2",
+		Name:  "Member2",
+		Level: 10,
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+	}
+	mem3 := corecharacter.Character{
+		ID:    "defeat-mem3",
+		Name:  "Member3",
+		Level: 10,
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+	}
+
+	partyID := createReadyParty(ctx, t, svc, partyRepo, charRepo, leader, mem1, mem2, mem3)
+
+	res, err := svc.StartPartyAdventure(ctx, partyID, leader.ID)
+	if err != nil {
+		t.Fatalf("StartPartyAdventure failed: %v", err)
+	}
+
+	if res.Outcome != "defeat" {
+		t.Fatalf("expected defeat outcome, got %s", res.Outcome)
+	}
+	if res.SynergyBonusPercent != 30 {
+		t.Errorf("expected SynergyBonusPercent=30, got %d", res.SynergyBonusPercent)
+	}
+	if res.TotalGold != 0 {
+		t.Errorf("expected TotalGold=0 on defeat, got %d", res.TotalGold)
+	}
+	// Defeated on floor 1 without clears, base EXP = 0
+	if res.TotalEXP != 0 {
+		t.Errorf("expected TotalEXP=0 on defeat, got %d", res.TotalEXP)
+	}
+}
