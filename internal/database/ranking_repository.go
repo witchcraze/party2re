@@ -135,42 +135,6 @@ func (r *RankingRepository) GetCharacterWealthRanking(ctx context.Context, limit
 	return entries, total, nil
 }
 
-func (r *RankingRepository) GetBattleVictoryRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
-	total, err := r.countCharacters(ctx)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	query := `
-		SELECT c.id, c.player_id, COALESCE(p.username, ''), c.name, c.job_id, c.gender,
-		       c.level, c.experience, c.sp,
-		       (COALESCE(c.pvp_wins, 0) + COALESCE(br.total_boss_defeats, 0) + COALESCE(adv.adventure_wins, 0)) AS total_victories,
-		       COALESCE(c.pvp_wins, 0) AS pvp_wins
-		FROM characters c
-		LEFT JOIN players p ON c.player_id = p.id
-		LEFT JOIN character_boss_records br ON c.id = br.character_id
-		LEFT JOIN (
-			SELECT character_id, COUNT(*) AS adventure_wins
-			FROM adventures
-			WHERE outcome = 'WIN'
-			GROUP BY character_id
-		) adv ON c.id = adv.character_id
-		ORDER BY total_victories DESC, c.level DESC, c.id ASC
-		LIMIT ? OFFSET ?
-	`
-	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-
-	entries, err := scanCharacterRankingEntries(rows, offset)
-	if err != nil {
-		return nil, 0, err
-	}
-	return entries, total, nil
-}
-
 func (r *RankingRepository) GetPvPVictoryRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
 	total, err := r.countCharacters(ctx)
 	if err != nil {

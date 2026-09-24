@@ -14,7 +14,9 @@ type RankingService interface {
 	GetLevelRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	GetPlayerWealthRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.PlayerWealthRankingEntry], error)
 	GetCharacterWealthRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
-	GetBattleVictoryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
+	GetMonsterKillsRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
+	GetMaoCountRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
+	GetHeroCountRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	GetPvPVictoryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	GetBossDefeatRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
 	GetAdventureVictoryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error)
@@ -104,13 +106,41 @@ func (h *Handler) handleGetCharacterWealthRanking(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, page)
 }
 
-func (h *Handler) handleGetBattleRanking(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleGetMonsterKillsRanking(w http.ResponseWriter, r *http.Request) {
 	if h.rankings == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("ranking service not configured"))
 		return
 	}
 	limit, offset, useSnapshot := parsePaginationAndSnapshotParams(r)
-	page, err := h.rankings.GetBattleVictoryRanking(r.Context(), limit, offset, useSnapshot)
+	page, err := h.rankings.GetMonsterKillsRanking(r.Context(), limit, offset, useSnapshot)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+func (h *Handler) handleGetMaoCountRanking(w http.ResponseWriter, r *http.Request) {
+	if h.rankings == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("ranking service not configured"))
+		return
+	}
+	limit, offset, useSnapshot := parsePaginationAndSnapshotParams(r)
+	page, err := h.rankings.GetMaoCountRanking(r.Context(), limit, offset, useSnapshot)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+func (h *Handler) handleGetHeroCountRanking(w http.ResponseWriter, r *http.Request) {
+	if h.rankings == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("ranking service not configured"))
+		return
+	}
+	limit, offset, useSnapshot := parsePaginationAndSnapshotParams(r)
+	page, err := h.rankings.GetHeroCountRanking(r.Context(), limit, offset, useSnapshot)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return

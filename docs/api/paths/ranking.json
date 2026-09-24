@@ -69,58 +69,6 @@
       ]
     }
   },
-  "/rankings/battles": {
-    "get": {
-      "operationId": "getBattleRanking",
-      "parameters": [
-        {
-          "description": "Limit",
-          "in": "query",
-          "name": "limit",
-          "required": false,
-          "schema": {
-            "type": "integer"
-          }
-        }
-      ],
-      "responses": {
-        "200": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          },
-          "description": "Battle victories ranking"
-        },
-        "400": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Bad request - invalid input or JSON syntax"
-        },
-        "500": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ErrorResponse"
-              }
-            }
-          },
-          "description": "Internal server error"
-        }
-      },
-      "summary": "Get battle victories ranking leaderboard",
-      "tags": [
-        "Rankings"
-      ]
-    }
-  },
   "/rankings/casino-wins": {
     "get": {
       "operationId": "getCasinoWinsRanking",
@@ -295,6 +243,76 @@
       ]
     }
   },
+  "/rankings/hero-count": {
+    "get": {
+      "operationId": "getHeroCountRanking",
+      "parameters": [
+        {
+          "description": "Limit",
+          "in": "query",
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Offset",
+          "in": "query",
+          "name": "offset",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Use snapshot cache",
+          "in": "query",
+          "name": "snapshot",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Hero achievements ranking (hero_c)"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Get hero achievements ranking leaderboard (hero_c / 勇者ランキング)",
+      "tags": [
+        "Rankings"
+      ]
+    }
+  },
   "/rankings/job-mastery": {
     "get": {
       "operationId": "getJobMasteryRanking",
@@ -440,6 +458,76 @@
       ]
     }
   },
+  "/rankings/mao-count": {
+    "get": {
+      "operationId": "getMaoCountRanking",
+      "parameters": [
+        {
+          "description": "Limit",
+          "in": "query",
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Offset",
+          "in": "query",
+          "name": "offset",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Use snapshot cache",
+          "in": "query",
+          "name": "snapshot",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Demon king defeats ranking (mao_c)"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Get demon king defeats ranking leaderboard (mao_c / 魔王ランキング)",
+      "tags": [
+        "Rankings"
+      ]
+    }
+  },
   "/rankings/medals": {
     "get": {
       "operationId": "getSmallMedalRanking",
@@ -487,6 +575,76 @@
         }
       },
       "summary": "Get small medal collection ranking",
+      "tags": [
+        "Rankings"
+      ]
+    }
+  },
+  "/rankings/monster-kills": {
+    "get": {
+      "operationId": "getMonsterKillsRanking",
+      "parameters": [
+        {
+          "description": "Limit",
+          "in": "query",
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Offset",
+          "in": "query",
+          "name": "offset",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "description": "Use snapshot cache",
+          "in": "query",
+          "name": "snapshot",
+          "required": false,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Monster kills ranking (kill_m)"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Bad request - invalid input or JSON syntax"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "summary": "Get monster kills ranking leaderboard (kill_m / 英雄ランキング)",
       "tags": [
         "Rankings"
       ]

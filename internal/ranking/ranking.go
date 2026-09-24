@@ -12,7 +12,6 @@ const (
 	RankingTypeLevel            RankingType = "level"
 	RankingTypePlayerWealth     RankingType = "player_wealth"
 	RankingTypeCharacterWealth  RankingType = "character_wealth"
-	RankingTypeBattleVictory    RankingType = "battle_victory"
 	RankingTypePvPVictory       RankingType = "pvp_victory"
 	RankingTypeBossDefeat       RankingType = "boss_defeat"
 	RankingTypeAdventureVictory RankingType = "adventure_victory"
@@ -23,6 +22,9 @@ const (
 	RankingTypeCasinoWins       RankingType = "casino_wins"
 	RankingTypeAlchemy          RankingType = "alchemy"
 	RankingTypeWeeklyJobChange  RankingType = "weekly_job_change"
+	RankingTypeMonsterKills     RankingType = "monster_kills"
+	RankingTypeMaoCount         RankingType = "mao_count"
+	RankingTypeHeroCount        RankingType = "hero_count"
 )
 
 var (
@@ -95,10 +97,20 @@ type RankingSnapshot struct {
 // NormalizeRankingType converts aliases (e.g. legacy Perl CGI identifiers) to canonical RankingType.
 func NormalizeRankingType(t RankingType) RankingType {
 	switch t {
-	case "cas_c":
+	case "kill_p", "pvp-victory":
+		return RankingTypePvPVictory
+	case "kill_m", "monster-kills":
+		return RankingTypeMonsterKills
+	case "mao_c", "mao-count":
+		return RankingTypeMaoCount
+	case "hero_c", "hero-count":
+		return RankingTypeHeroCount
+	case "cas_c", "casino-wins":
 		return RankingTypeCasinoWins
 	case "alc_c":
 		return RankingTypeAlchemy
+	case "help_c", "helpers":
+		return RankingTypeHelper
 	case "week_job_change", "weekly-job-change":
 		return RankingTypeWeeklyJobChange
 	default:
@@ -112,7 +124,6 @@ func IsValidRankingType(t RankingType) bool {
 	case RankingTypeLevel,
 		RankingTypePlayerWealth,
 		RankingTypeCharacterWealth,
-		RankingTypeBattleVictory,
 		RankingTypePvPVictory,
 		RankingTypeBossDefeat,
 		RankingTypeAdventureVictory,
@@ -122,7 +133,10 @@ func IsValidRankingType(t RankingType) bool {
 		RankingTypeSmallMedals,
 		RankingTypeCasinoWins,
 		RankingTypeAlchemy,
-		RankingTypeWeeklyJobChange:
+		RankingTypeWeeklyJobChange,
+		RankingTypeMonsterKills,
+		RankingTypeMaoCount,
+		RankingTypeHeroCount:
 		return true
 	default:
 		return false

@@ -19,7 +19,9 @@ type mockHTTPRankingService struct {
 	levelPage         ranking.RankingPage[ranking.CharacterRankingEntry]
 	wealthPage        ranking.RankingPage[ranking.PlayerWealthRankingEntry]
 	charWealthPage    ranking.RankingPage[ranking.CharacterRankingEntry]
-	battlePage        ranking.RankingPage[ranking.CharacterRankingEntry]
+	monsterKillsPage  ranking.RankingPage[ranking.CharacterRankingEntry]
+	maoCountPage      ranking.RankingPage[ranking.CharacterRankingEntry]
+	heroCountPage     ranking.RankingPage[ranking.CharacterRankingEntry]
 	jobMasteryPage    ranking.RankingPage[ranking.CharacterRankingEntry]
 	jobPopularityPage ranking.RankingPage[ranking.JobPopularityEntry]
 	helperPage        ranking.RankingPage[ranking.CharacterRankingEntry]
@@ -42,17 +44,23 @@ func (m *mockHTTPRankingService) GetPlayerWealthRanking(ctx context.Context, lim
 func (m *mockHTTPRankingService) GetCharacterWealthRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.charWealthPage, nil
 }
-func (m *mockHTTPRankingService) GetBattleVictoryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
-	return m.battlePage, nil
+func (m *mockHTTPRankingService) GetMonsterKillsRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
+	return m.monsterKillsPage, nil
+}
+func (m *mockHTTPRankingService) GetMaoCountRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
+	return m.maoCountPage, nil
+}
+func (m *mockHTTPRankingService) GetHeroCountRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
+	return m.heroCountPage, nil
 }
 func (m *mockHTTPRankingService) GetPvPVictoryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
-	return m.battlePage, nil
+	return m.monsterKillsPage, nil
 }
 func (m *mockHTTPRankingService) GetBossDefeatRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
-	return m.battlePage, nil
+	return m.monsterKillsPage, nil
 }
 func (m *mockHTTPRankingService) GetAdventureVictoryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
-	return m.battlePage, nil
+	return m.monsterKillsPage, nil
 }
 func (m *mockHTTPRankingService) GetJobMasteryRanking(ctx context.Context, limit, offset int, useSnapshot bool) (ranking.RankingPage[ranking.CharacterRankingEntry], error) {
 	return m.jobMasteryPage, nil
@@ -103,6 +111,12 @@ func (m *mockHTTPRankingService) GetRankingByType(ctx context.Context, rankingTy
 		return m.alchemyPage, nil
 	case ranking.RankingTypeWeeklyJobChange:
 		return m.weeklyJobPage, nil
+	case ranking.RankingTypeMonsterKills:
+		return m.monsterKillsPage, nil
+	case ranking.RankingTypeMaoCount:
+		return m.maoCountPage, nil
+	case ranking.RankingTypeHeroCount:
+		return m.heroCountPage, nil
 	default:
 		return nil, ranking.ErrInvalidRankingType
 	}
@@ -165,9 +179,25 @@ func TestRankingEndpoints(t *testing.T) {
 			Offset:       0,
 			CalculatedAt: now,
 		},
-		battlePage: ranking.RankingPage[ranking.CharacterRankingEntry]{
-			RankingType:  ranking.RankingTypeBattleVictory,
-			Entries:      []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", Score: 25}},
+		monsterKillsPage: ranking.RankingPage[ranking.CharacterRankingEntry]{
+			RankingType:  ranking.RankingTypeMonsterKills,
+			Entries:      []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", Score: 42}},
+			Total:        1,
+			Limit:        20,
+			Offset:       0,
+			CalculatedAt: now,
+		},
+		maoCountPage: ranking.RankingPage[ranking.CharacterRankingEntry]{
+			RankingType:  ranking.RankingTypeMaoCount,
+			Entries:      []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", Score: 3}},
+			Total:        1,
+			Limit:        20,
+			Offset:       0,
+			CalculatedAt: now,
+		},
+		heroCountPage: ranking.RankingPage[ranking.CharacterRankingEntry]{
+			RankingType:  ranking.RankingTypeHeroCount,
+			Entries:      []ranking.CharacterRankingEntry{{Rank: 1, CharacterID: "c1", Score: 7}},
 			Total:        1,
 			Limit:        20,
 			Offset:       0,
@@ -256,9 +286,21 @@ func TestRankingEndpoints(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
-			name:       "GET /rankings/battles",
+			name:       "GET /rankings/monster-kills",
 			method:     http.MethodGet,
-			url:        "/rankings/battles",
+			url:        "/rankings/monster-kills",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /rankings/mao-count",
+			method:     http.MethodGet,
+			url:        "/rankings/mao-count",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /rankings/hero-count",
+			method:     http.MethodGet,
+			url:        "/rankings/hero-count",
 			wantStatus: http.StatusOK,
 		},
 		{
@@ -302,6 +344,42 @@ func TestRankingEndpoints(t *testing.T) {
 			name:       "GET /rankings/job_popularity (dynamic route)",
 			method:     http.MethodGet,
 			url:        "/rankings/job_popularity",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /rankings/monster_kills (dynamic route)",
+			method:     http.MethodGet,
+			url:        "/rankings/monster_kills",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /rankings/kill_m (legacy alias dynamic route)",
+			method:     http.MethodGet,
+			url:        "/rankings/kill_m",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /rankings/mao_count (dynamic route)",
+			method:     http.MethodGet,
+			url:        "/rankings/mao_count",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /rankings/mao_c (legacy alias dynamic route)",
+			method:     http.MethodGet,
+			url:        "/rankings/mao_c",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /rankings/hero_count (dynamic route)",
+			method:     http.MethodGet,
+			url:        "/rankings/hero_count",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "GET /rankings/hero_c (legacy alias dynamic route)",
+			method:     http.MethodGet,
+			url:        "/rankings/hero_c",
 			wantStatus: http.StatusOK,
 		},
 		{
