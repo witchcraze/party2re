@@ -216,6 +216,9 @@ func (s *CrawlSession) AdvanceFloor(
 			)
 			p.Name = m.Name
 			p.Agility = m.Agility
+			p.MaxHP = m.HP
+			p.MP = m.MP
+			p.MaxMP = m.MP
 			floorEXP += m.ExperienceReward
 			floorGold += m.GoldReward
 			enemies = append(enemies, p)
@@ -234,6 +237,9 @@ func (s *CrawlSession) AdvanceFloor(
 			)
 			p.Name = m.Name
 			p.Agility = m.Agility
+			p.MaxHP = m.HP
+			p.MP = m.MP
+			p.MaxMP = m.MP
 			floorEXP += m.ExperienceReward
 			floorGold += m.GoldReward
 			enemies = append(enemies, p)
@@ -242,7 +248,9 @@ func (s *CrawlSession) AdvanceFloor(
 
 	if len(enemies) == 0 {
 		// Fallback placeholder if catalogs were missing entry
-		enemies = append(enemies, corebattle.MustNewParticipant("stray-1", 10, 5, 2))
+		p := corebattle.MustNewParticipant("stray-1", 10, 5, 2)
+		p.MaxHP = 10
+		enemies = append(enemies, p)
 	}
 
 	var livingAllies []corebattle.Participant

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -950,5 +951,75 @@ func TestChallengeBoss_RecordMonsterDefeat(t *testing.T) {
 	expected := "hero-solo:king99-clone:影:封印戦"
 	if recorder.calls[0] != expected {
 		t.Errorf("expected %q, got %q", expected, recorder.calls[0])
+	}
+}
+
+func TestUnsealDemonKing_Success(t *testing.T) {
+	ctx := context.Background()
+	bossRepo := newMockBossRepo()
+
+	char1 := createTestChar("c1", 50, 600, 300, 200)
+	char1.MaoCount = 0
+	char2 := createTestChar("c2", 50, 600, 300, 200)
+	char2.MaoCount = 2
+
+	chars := map[string]corecharacter.Character{
+		"c1": char1,
+		"c2": char2,
+	}
+	charRepo := &mockCharRepo{chars: chars}
+	newsPub := &mockNewsPublisher{}
+
+	service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.Configure(boss.WithNewsPublisher(newsPub))
+
+	// Call with unordered IDs including an NPC
+	err = service.UnsealDemonKing(ctx, []string{"c2", "@summoned_pet", "c1"})
+	if err != nil {
+		t.Fatalf("UnsealDemonKing failed: %v", err)
+	}
+
+	updated1 := charRepo.chars["c1"]
+	if updated1.MaoCount != 1 {
+		t.Errorf("expected c1 MaoCount = 1, got %d", updated1.MaoCount)
+	}
+	updated2 := charRepo.chars["c2"]
+	if updated2.MaoCount != 3 {
+		t.Errorf("expected c2 MaoCount = 3, got %d", updated2.MaoCount)
+	}
+
+	// Verify news publication
+	if len(newsPub.published) == 0 {
+		t.Fatal("expected news to be published on unsealing demon king")
+	}
+	lastNews := newsPub.published[len(newsPub.published)-1]
+	if !strings.Contains(lastNews, "封印が解かれました") {
+		t.Errorf("expected news message to mention 封印が解かれました, got %q", lastNews)
+	}
+}
+
+func TestUnsealDemonKing_Validation(t *testing.T) {
+	ctx := context.Background()
+	bossRepo := newMockBossRepo()
+	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
+
+	service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Empty list returns error
+	err = service.UnsealDemonKing(ctx, nil)
+	if err == nil {
+		t.Error("expected error for empty character list")
+	}
+
+	// Only NPCs -> no error, nothing updated
+	err = service.UnsealDemonKing(ctx, []string{"@npc1", "@npc2"})
+	if err != nil {
+		t.Errorf("expected nil error for NPC-only list, got %v", err)
 	}
 }

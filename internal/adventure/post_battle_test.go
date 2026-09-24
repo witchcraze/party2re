@@ -295,3 +295,51 @@ func TestAdventure_Defeat_HPSetToOneAndPersisted(t *testing.T) {
 		t.Fatalf("expected outcome defeat, got %v", crawlRes.Outcome)
 	}
 }
+
+func TestAdventure_StageEX_UnsealDemonKing(t *testing.T) {
+	// Strong character capable of clearing stage-20 (封印の地)
+	char, err := corecharacter.New("MaoSlayer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 99
+	char.JobLevel = 20
+	char.Stats.HP = 50000
+	char.Stats.MaxHP = 50000
+	char.Stats.Attack = 20000
+	char.Stats.Defense = 20000
+	char.Stats.Agility = 20000
+
+	settler := &mockPostBattleSettler{}
+	svc, _ := setupTestAdventureService(t, char, settler)
+
+	// 1. Clear Stage-20 (封印の地 / Stage EX)
+	crawlRes, err := svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{char.ID},
+		StageID:      "stage-20",
+	})
+	if err != nil {
+		t.Fatalf("ExecuteCrawl stage-20 failed: %v", err)
+	}
+	if !crawlRes.StageCleared {
+		t.Fatalf("expected stage-20 to be cleared, outcome: %v", crawlRes.Outcome)
+	}
+	if !settler.lastReq.UnsealDemonKing {
+		t.Errorf("expected settler.lastReq.UnsealDemonKing = true for stage-20, got false")
+	}
+
+	// 2. Clear Stage-01 (Normal starter stage) -> UnsealDemonKing must be false
+	crawlResNormal, err := svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{char.ID},
+		StageID:      "stage-01",
+	})
+	if err != nil {
+		t.Fatalf("ExecuteCrawl stage-01 failed: %v", err)
+	}
+	if !crawlResNormal.StageCleared {
+		t.Fatalf("expected stage-01 to be cleared, outcome: %v", crawlResNormal.Outcome)
+	}
+	if settler.lastReq.UnsealDemonKing {
+		t.Errorf("expected settler.lastReq.UnsealDemonKing = false for stage-01, got true")
+	}
+}
