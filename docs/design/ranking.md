@@ -44,7 +44,13 @@ The permanent Hall of Fame honors all players who have achieved complete 100% ma
 | `comp_ite` | アイテムニスト | Item Encyclopedia completed (アイテム図鑑コンプリート) |
 | `comp_alc` | アルケミスト | All alchemy recipes completed (錬金レシピコンプリート) |
 
+- **Automatic Completion Induction**: Progression milestones automatically trigger `RecordLegend` via decoupled `LegendInductor` hooks:
+  - `comp_mon`: Reaching 180 defeated monsters in `internal/collection` invokes `RecordLegend("comp_mon", characterID)`.
+  - `comp_ite`: Reaching 141 discovered items in `internal/collection` invokes `RecordLegend("comp_ite", characterID)`.
+  - `comp_job`: Mastering all 72 completion jobs in `internal/job` invokes `RecordLegend("comp_job", characterID)`.
+  - `comp_alc`: Crafting all compendium recipes in `internal/alchemy` invokes `RecordLegend("comp_alc", characterID)`.
 - **Permanent & Idempotent**: Inductees are stored permanently in MariaDB (`legend_records`). Duplicate inductions for the same character in a category are ignored (`INSERT IGNORE`, guarded by `uk_legend_category_character`).
+- **Profile Auto-Enrichment**: When induction is triggered from domain completion hooks, missing character details (`name`, `color`, `guild_name`, `avatar_url`, `comment`) are enriched directly from `characters`, `character_profiles`, `guild_members`, and `guilds` tables in MariaDB.
 - **Chronological Ordering**: Hall of Fame queries return inductees in chronological order of achievement (`inducted_at ASC, id ASC`).
 
 ### 3. Weekly Job Change Ranking (`week_ranking.cgi`)

@@ -191,6 +191,20 @@ func (r *memoryAlchemyRepo) SetCompAlcTitle(_ context.Context, characterID strin
 	return nil
 }
 
+type mockLegendInductor struct {
+	calls []legendCall
+}
+
+type legendCall struct {
+	Category    string
+	CharacterID string
+}
+
+func (m *mockLegendInductor) RecordLegend(_ context.Context, category, characterID string) error {
+	m.calls = append(m.calls, legendCall{Category: category, CharacterID: characterID})
+	return nil
+}
+
 func setupTestService(t *testing.T, simTime *time.Time) (*Service, *memoryCharRepo, *memoryDepotRepo, *memoryAlchemyRepo, *corecharacter.Character) {
 	charRepo := newMemoryCharRepo()
 	depotRepo := newMemoryDepotRepo()
@@ -410,6 +424,8 @@ func TestCompendium_100PercentCompletionAndTitle(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 	svc, _, depotRepo, _, char := setupTestService(t, &now)
+	legend := &mockLegendInductor{}
+	svc.SetLegendInductor(legend)
 
 	// Catalog has 2 recipes: rec-super-herb and rec-dragon-grass
 	_ = svc.UnlockRecipe(ctx, char.ID, "rec-super-herb")
@@ -444,6 +460,9 @@ func TestCompendium_100PercentCompletionAndTitle(t *testing.T) {
 	if claim1.CompAlcAwarded {
 		t.Errorf("comp_alc should not be awarded at 50%% completion")
 	}
+	if len(legend.calls) != 0 {
+		t.Errorf("expected no legend calls at 50%% completion, got %d", len(legend.calls))
+	}
 
 	// Craft second recipe (100% completion)
 	_, _ = svc.Synthesize(ctx, char.ID, "rec-dragon-grass")
@@ -454,6 +473,12 @@ func TestCompendium_100PercentCompletionAndTitle(t *testing.T) {
 	}
 	if !claim2.CompAlcAwarded {
 		t.Errorf("comp_alc MUST be awarded at 100%% completion")
+	}
+	if len(legend.calls) != 1 {
+		t.Fatalf("expected 1 legend call at 100%% completion, got %d", len(legend.calls))
+	}
+	if legend.calls[0].Category != "comp_alc" || legend.calls[0].CharacterID != char.ID {
+		t.Errorf("unexpected legend call: %+v", legend.calls[0])
 	}
 
 	finalComp, _ := svc.GetCompendium(ctx, char.ID)

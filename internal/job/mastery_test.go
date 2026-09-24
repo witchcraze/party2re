@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
@@ -273,5 +274,96 @@ func TestGetJobMastery(t *testing.T) {
 	}
 	if mastery.MasteredCount != 72 {
 		t.Errorf("expected 72 mastered, got %d", mastery.MasteredCount)
+	}
+}
+
+type mockLegendInductor struct {
+	calls []legendCall
+}
+
+type legendCall struct {
+	Category    string
+	CharacterID string
+}
+
+func (m *mockLegendInductor) RecordLegend(_ context.Context, category, characterID string) error {
+	m.calls = append(m.calls, legendCall{Category: category, CharacterID: characterID})
+	return nil
+}
+
+type mockNewsPublisher struct {
+	newsCount int
+}
+
+func (m *mockNewsPublisher) PublishNews(_ context.Context, _, _, _, _ string, _ time.Time) error {
+	m.newsCount++
+	return nil
+}
+
+func TestCheckAndApplyMastery_AllJobsMastered_LegendInduction(t *testing.T) {
+	ctx := context.Background()
+	jobRepo := newMemoryJobRepository()
+	charRepo := newMemoryCharRepository()
+	legend := &mockLegendInductor{}
+	news := &mockNewsPublisher{}
+
+	svc, err := job.NewService(
+		jobRepo,
+		job.WithCharacterRepository(charRepo),
+		job.WithLegendInductor(legend),
+		job.WithNewsPublisher(news),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	// 71 jobs mastered (job-01 to job-71)
+	mastered71 := make([]string, 0, 71)
+	for i := 1; i <= 71; i++ {
+		mastered71 = append(mastered71, fmt.Sprintf("job-%02d", i))
+	}
+
+	charRepo.data["char-legend"] = corecharacter.Character{
+		ID:    "char-legend",
+		Name:  "JobMasterHero",
+		JobID: "job-72",
+		SP:    500, // plenty of SP
+	}
+	jobRepo.data["char-legend"] = corejob.CharacterJob{
+		CharacterID:  "char-legend",
+		CurrentJobID: "job-72",
+		MasteredJobs: mastered71,
+	}
+
+	// Master 72nd job
+	mastered, err := svc.CheckAndApplyMastery(ctx, "char-legend", 500)
+	if err != nil {
+		t.Fatalf("CheckAndApplyMastery failed: %v", err)
+	}
+	if !mastered {
+		t.Fatal("expected 72nd job to be mastered")
+	}
+
+	// Verify news and legend induction
+	if news.newsCount != 1 {
+		t.Errorf("expected 1 news publication, got %d", news.newsCount)
+	}
+	if len(legend.calls) != 1 {
+		t.Fatalf("expected 1 legend call, got %d", len(legend.calls))
+	}
+	if legend.calls[0].Category != "comp_job" || legend.calls[0].CharacterID != "char-legend" {
+		t.Errorf("unexpected legend call: %+v", legend.calls[0])
+	}
+
+	// Second check -> already completed, idempotent
+	masteredAgain, err := svc.CheckAndApplyMastery(ctx, "char-legend", 500)
+	if err != nil {
+		t.Fatalf("second CheckAndApplyMastery failed: %v", err)
+	}
+	if masteredAgain {
+		t.Error("expected second mastery to return false")
+	}
+	if len(legend.calls) != 1 {
+		t.Errorf("expected still 1 legend call, got %d", len(legend.calls))
 	}
 }

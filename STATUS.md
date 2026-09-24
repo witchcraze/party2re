@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #825 — Ranking: Restore missing authentic legacy categories (英雄 kill_m, 魔王 mao_c, 勇者 hero_c)
+Last updated: Issue #824 — Hall of Fame: Wire RecordLegend induction to 100% completion events in Collection, Job Mastery, and Alchemy
 
 ## Current Phase
 
