@@ -49,12 +49,28 @@ func TestRankingServiceIntegration(t *testing.T) {
 		t.Errorf("expected player_wealth ranking type, got %s", wealthPage.RankingType)
 	}
 
-	battlePage, err := svc.GetBattleVictoryRanking(ctx, 10, 0, false)
+	mkPage, err := svc.GetMonsterKillsRanking(ctx, 10, 0, false)
 	if err != nil {
-		t.Fatalf("GetBattleVictoryRanking failed: %v", err)
+		t.Fatalf("GetMonsterKillsRanking failed: %v", err)
 	}
-	if battlePage.RankingType != ranking.RankingTypeBattleVictory {
-		t.Errorf("expected battle_victory ranking type, got %s", battlePage.RankingType)
+	if mkPage.RankingType != ranking.RankingTypeMonsterKills {
+		t.Errorf("expected monster_kills ranking type, got %s", mkPage.RankingType)
+	}
+
+	maoPage, err := svc.GetMaoCountRanking(ctx, 10, 0, false)
+	if err != nil {
+		t.Fatalf("GetMaoCountRanking failed: %v", err)
+	}
+	if maoPage.RankingType != ranking.RankingTypeMaoCount {
+		t.Errorf("expected mao_count ranking type, got %s", maoPage.RankingType)
+	}
+
+	heroPage, err := svc.GetHeroCountRanking(ctx, 10, 0, false)
+	if err != nil {
+		t.Fatalf("GetHeroCountRanking failed: %v", err)
+	}
+	if heroPage.RankingType != ranking.RankingTypeHeroCount {
+		t.Errorf("expected hero_count ranking type, got %s", heroPage.RankingType)
 	}
 
 	jobPopPage, err := svc.GetJobPopularityRanking(ctx, false)

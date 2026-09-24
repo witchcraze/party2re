@@ -116,15 +116,15 @@ func TestRankingRepository_Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 5. PvP Wins
+	// 5. PvP Wins & Authentic Combat Counters
 	_, err = db.ExecContext(ctx, `
-		UPDATE characters SET pvp_wins = 25 WHERE id = ?
+		UPDATE characters SET pvp_wins = 25, monster_kills = 88, mao_count = 5, hero_count = 14 WHERE id = ?
 	`, c1.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = db.ExecContext(ctx, `
-		UPDATE characters SET pvp_wins = 5 WHERE id = ?
+		UPDATE characters SET pvp_wins = 5, monster_kills = 30, mao_count = 1, hero_count = 2 WHERE id = ?
 	`, c2.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -206,17 +206,45 @@ func TestRankingRepository_Integration(t *testing.T) {
 		}
 	}
 
-	// === Test Battle Victory Ranking ===
-	battleRankings, _, err := rankingRepo.GetBattleVictoryRanking(ctx, 10000, 0)
+	// === Test Monster Kills Ranking (kill_m / 英雄ランキング) ===
+	mkRankings, _, err := rankingRepo.GetMonsterKillsRanking(ctx, 10000, 0)
 	if err != nil {
-		t.Fatalf("GetBattleVictoryRanking failed: %v", err)
+		t.Fatalf("GetMonsterKillsRanking failed: %v", err)
 	}
-	for _, entry := range battleRankings {
-		if entry.CharacterID == c1.ID {
-			// c1: 25 pvp + 12 boss + 2 adv = 39
-			if entry.Score != 39 {
-				t.Fatalf("expected c1 total victories 39, got %d", entry.Score)
-			}
+	for _, entry := range mkRankings {
+		if entry.CharacterID == c1.ID && entry.Score != 88 {
+			t.Fatalf("expected c1 monster kills 88, got %d", entry.Score)
+		}
+		if entry.CharacterID == c2.ID && entry.Score != 30 {
+			t.Fatalf("expected c2 monster kills 30, got %d", entry.Score)
+		}
+	}
+
+	// === Test Mao Count Ranking (mao_c / 魔王ランキング) ===
+	maoRankings, _, err := rankingRepo.GetMaoCountRanking(ctx, 10000, 0)
+	if err != nil {
+		t.Fatalf("GetMaoCountRanking failed: %v", err)
+	}
+	for _, entry := range maoRankings {
+		if entry.CharacterID == c1.ID && entry.Score != 5 {
+			t.Fatalf("expected c1 mao count 5, got %d", entry.Score)
+		}
+		if entry.CharacterID == c2.ID && entry.Score != 1 {
+			t.Fatalf("expected c2 mao count 1, got %d", entry.Score)
+		}
+	}
+
+	// === Test Hero Count Ranking (hero_c / 勇者ランキング) ===
+	heroRankings, _, err := rankingRepo.GetHeroCountRanking(ctx, 10000, 0)
+	if err != nil {
+		t.Fatalf("GetHeroCountRanking failed: %v", err)
+	}
+	for _, entry := range heroRankings {
+		if entry.CharacterID == c1.ID && entry.Score != 14 {
+			t.Fatalf("expected c1 hero count 14, got %d", entry.Score)
+		}
+		if entry.CharacterID == c2.ID && entry.Score != 2 {
+			t.Fatalf("expected c2 hero count 2, got %d", entry.Score)
 		}
 	}
 

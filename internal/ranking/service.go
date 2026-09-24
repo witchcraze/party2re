@@ -80,8 +80,6 @@ func (s *Service) GetRankingByType(ctx context.Context, rankingType RankingType,
 		return s.GetPlayerWealthRanking(ctx, limit, offset, useSnapshot)
 	case RankingTypeCharacterWealth:
 		return s.GetCharacterWealthRanking(ctx, limit, offset, useSnapshot)
-	case RankingTypeBattleVictory:
-		return s.GetBattleVictoryRanking(ctx, limit, offset, useSnapshot)
 	case RankingTypePvPVictory:
 		return s.GetPvPVictoryRanking(ctx, limit, offset, useSnapshot)
 	case RankingTypeBossDefeat:
@@ -102,6 +100,12 @@ func (s *Service) GetRankingByType(ctx context.Context, rankingType RankingType,
 		return s.GetAlchemyRanking(ctx, limit, offset, useSnapshot)
 	case RankingTypeWeeklyJobChange:
 		return s.GetWeeklyJobChangeRanking(ctx, limit, offset, useSnapshot)
+	case RankingTypeMonsterKills:
+		return s.GetMonsterKillsRanking(ctx, limit, offset, useSnapshot)
+	case RankingTypeMaoCount:
+		return s.GetMaoCountRanking(ctx, limit, offset, useSnapshot)
+	case RankingTypeHeroCount:
+		return s.GetHeroCountRanking(ctx, limit, offset, useSnapshot)
 	default:
 		return nil, ErrInvalidRankingType
 	}

@@ -14,10 +14,12 @@ type ProgressionRankingRepository interface {
 
 // CombatRankingRepository defines queries for battle, PvP, boss, and adventure leaderboards.
 type CombatRankingRepository interface {
-	GetBattleVictoryRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	GetPvPVictoryRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	GetBossDefeatRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	GetAdventureVictoryRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
+	GetMonsterKillsRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
+	GetMaoCountRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
+	GetHeroCountRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 }
 
 // ActivityRankingRepository defines queries for auxiliary activities and side-system leaderboards.

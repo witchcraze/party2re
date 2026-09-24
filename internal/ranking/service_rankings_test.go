@@ -304,10 +304,10 @@ func TestService_GetSmallMedalRanking(t *testing.T) {
 
 func TestService_AdditionalCoverageBranches(t *testing.T) {
 	repo := newMockRepo()
-	repo.battleRankings = []ranking.CharacterRankingEntry{
+	repo.monsterKillsRankings = []ranking.CharacterRankingEntry{
 		{Rank: 1, CharacterID: "c1", Score: 10},
 	}
-	repo.battleTotal = 1
+	repo.monsterKillsTotal = 1
 	repo.jobMasteryRankings = []ranking.CharacterRankingEntry{
 		{Rank: 1, CharacterID: "c1", Score: 5},
 	}
@@ -327,13 +327,13 @@ func TestService_AdditionalCoverageBranches(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	// Battle victory snapshot cache hit
-	if err := svc.RefreshSnapshot(ctx, ranking.RankingTypeBattleVictory); err != nil {
-		t.Fatalf("refresh battle snapshot: %v", err)
+	// Monster kills snapshot cache hit
+	if err := svc.RefreshSnapshot(ctx, ranking.RankingTypeMonsterKills); err != nil {
+		t.Fatalf("refresh monster kills snapshot: %v", err)
 	}
-	battleCached, err := svc.GetBattleVictoryRanking(ctx, 10, 0, true)
-	if err != nil || !battleCached.IsSnapshot {
-		t.Fatalf("expected cached battle ranking: %+v, %v", battleCached, err)
+	mkCached, err := svc.GetMonsterKillsRanking(ctx, 10, 0, true)
+	if err != nil || !mkCached.IsSnapshot {
+		t.Fatalf("expected cached monster kills ranking: %+v, %v", mkCached, err)
 	}
 
 	// Job mastery snapshot cache hit
@@ -350,7 +350,9 @@ func TestService_AdditionalCoverageBranches(t *testing.T) {
 		ranking.RankingTypeLevel,
 		ranking.RankingTypePlayerWealth,
 		ranking.RankingTypeCharacterWealth,
-		ranking.RankingTypeBattleVictory,
+		ranking.RankingTypeMonsterKills,
+		ranking.RankingTypeMaoCount,
+		ranking.RankingTypeHeroCount,
 		ranking.RankingTypePvPVictory,
 		ranking.RankingTypeBossDefeat,
 		ranking.RankingTypeAdventureVictory,
@@ -372,8 +374,14 @@ func TestService_AdditionalCoverageBranches(t *testing.T) {
 
 	// Error branches
 	repo.err = errors.New("generic error")
-	if _, err := svc.GetBattleVictoryRanking(ctx, 10, 0, false); err == nil {
-		t.Fatalf("expected error for battle victory")
+	if _, err := svc.GetMonsterKillsRanking(ctx, 10, 0, false); err == nil {
+		t.Fatalf("expected error for monster kills")
+	}
+	if _, err := svc.GetMaoCountRanking(ctx, 10, 0, false); err == nil {
+		t.Fatalf("expected error for mao count")
+	}
+	if _, err := svc.GetHeroCountRanking(ctx, 10, 0, false); err == nil {
+		t.Fatalf("expected error for hero count")
 	}
 	if _, err := svc.GetJobMasteryRanking(ctx, 10, 0, false); err == nil {
 		t.Fatalf("expected error for job mastery")

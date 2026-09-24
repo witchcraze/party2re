@@ -207,3 +207,87 @@ func (r *RankingRepository) GetLegendCategoryCounts(ctx context.Context) (map[ra
 	}
 	return counts, nil
 }
+
+// GetMonsterKillsRanking returns character rankings sorted by defeated strong enemies (kill_m / 英雄ランキング).
+func (r *RankingRepository) GetMonsterKillsRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	total, err := r.countCharacters(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	query := `
+		SELECT c.id, c.player_id, COALESCE(p.username, ''), c.name, c.job_id, c.gender,
+		       c.level, c.experience, c.sp, c.monster_kills AS score, c.level AS secondary_score
+		FROM characters c
+		LEFT JOIN players p ON c.player_id = p.id
+		ORDER BY c.monster_kills DESC, c.level DESC, c.id ASC
+		LIMIT ? OFFSET ?
+	`
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	entries, err := scanCharacterRankingEntries(rows, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	return entries, total, nil
+}
+
+// GetMaoCountRanking returns character rankings sorted by unsealed demon king defeats (mao_c / 魔王ランキング).
+func (r *RankingRepository) GetMaoCountRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	total, err := r.countCharacters(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	query := `
+		SELECT c.id, c.player_id, COALESCE(p.username, ''), c.name, c.job_id, c.gender,
+		       c.level, c.experience, c.sp, c.mao_count AS score, c.level AS secondary_score
+		FROM characters c
+		LEFT JOIN players p ON c.player_id = p.id
+		ORDER BY c.mao_count DESC, c.level DESC, c.id ASC
+		LIMIT ? OFFSET ?
+	`
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	entries, err := scanCharacterRankingEntries(rows, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	return entries, total, nil
+}
+
+// GetHeroCountRanking returns character rankings sorted by hero achievements (hero_c / 勇者ランキング).
+func (r *RankingRepository) GetHeroCountRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	total, err := r.countCharacters(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	query := `
+		SELECT c.id, c.player_id, COALESCE(p.username, ''), c.name, c.job_id, c.gender,
+		       c.level, c.experience, c.sp, c.hero_count AS score, c.level AS secondary_score
+		FROM characters c
+		LEFT JOIN players p ON c.player_id = p.id
+		ORDER BY c.hero_count DESC, c.level DESC, c.id ASC
+		LIMIT ? OFFSET ?
+	`
+	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	entries, err := scanCharacterRankingEntries(rows, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	return entries, total, nil
+}

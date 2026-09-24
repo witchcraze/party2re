@@ -29,9 +29,17 @@ func (s *Service) RefreshSnapshot(ctx context.Context, rankingType RankingType) 
 		var entries []CharacterRankingEntry
 		entries, totalCount, err = s.repo.GetCharacterWealthRanking(ctx, 100, 0)
 		data = entries
-	case RankingTypeBattleVictory:
+	case RankingTypeMonsterKills:
 		var entries []CharacterRankingEntry
-		entries, totalCount, err = s.repo.GetBattleVictoryRanking(ctx, 100, 0)
+		entries, totalCount, err = s.repo.GetMonsterKillsRanking(ctx, 100, 0)
+		data = entries
+	case RankingTypeMaoCount:
+		var entries []CharacterRankingEntry
+		entries, totalCount, err = s.repo.GetMaoCountRanking(ctx, 100, 0)
+		data = entries
+	case RankingTypeHeroCount:
+		var entries []CharacterRankingEntry
+		entries, totalCount, err = s.repo.GetHeroCountRanking(ctx, 100, 0)
 		data = entries
 	case RankingTypePvPVictory:
 		var entries []CharacterRankingEntry
@@ -121,7 +129,6 @@ func (s *Service) RefreshAllSnapshots(ctx context.Context) error {
 		RankingTypeLevel,
 		RankingTypePlayerWealth,
 		RankingTypeCharacterWealth,
-		RankingTypeBattleVictory,
 		RankingTypePvPVictory,
 		RankingTypeBossDefeat,
 		RankingTypeAdventureVictory,
@@ -131,6 +138,9 @@ func (s *Service) RefreshAllSnapshots(ctx context.Context) error {
 		RankingTypeSmallMedals,
 		RankingTypeCasinoWins,
 		RankingTypeAlchemy,
+		RankingTypeMonsterKills,
+		RankingTypeMaoCount,
+		RankingTypeHeroCount,
 	}
 
 	for _, t := range types {

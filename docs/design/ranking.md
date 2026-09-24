@@ -17,8 +17,10 @@ The ranking engine calculates standings across 14 distinct game metrics:
 | **Level Ranking** | `level` | `level DESC, experience DESC, id ASC` | Characters |
 | **Player Wealth Ranking** | `player_wealth` | `(bank_balance + sum(characters.money)) DESC, id ASC` | Players |
 | **Character Held Gold Ranking** | `character_wealth` | `money DESC, level DESC, id ASC` | Characters |
-| **Battle Victory Ranking** | `battle_victory` | `(pvp_wins + boss_defeats + adventure_wins) DESC, level DESC, id ASC` | Characters |
-| **PvP Arena Victory Ranking** | `pvp_victory` | `pvp_wins DESC, rating DESC, level DESC, id ASC` | Characters |
+| **Monster Kills Ranking (`kill_m`)** | `monster_kills` | `monster_kills DESC, level DESC, id ASC` | Characters |
+| **Demon King Defeats Ranking (`mao_c`)** | `mao_count` | `mao_count DESC, level DESC, id ASC` | Characters |
+| **Hero Achievements Ranking (`hero_c`)** | `hero_count` | `hero_count DESC, level DESC, id ASC` | Characters |
+| **PvP Arena Victory Ranking (`kill_p`)** | `pvp_victory` | `pvp_wins DESC, rating DESC, level DESC, id ASC` | Characters |
 | **World Boss Defeat Ranking** | `boss_defeat` | `boss_defeats DESC, highest_tier DESC, level DESC, id ASC` | Characters |
 | **Adventure Victory Ranking** | `adventure_victory` | `adventure_wins DESC, level DESC, id ASC` | Characters |
 | **Job Mastery Ranking** | `job_mastery` | `count(mastered_jobs) DESC, level DESC, id ASC` | Characters |
@@ -76,7 +78,9 @@ The permanent Hall of Fame honors all players who have achieved complete 100% ma
 | `GET` | `/rankings/levels` | Public | Character Level leaderboard (`?limit=20&offset=0&snapshot=true`) |
 | `GET` | `/rankings/wealth` | Public | Player Total Wealth leaderboard (`?limit=20&offset=0&snapshot=true`) |
 | `GET` | `/rankings/characters-wealth` | Public | Character Held Gold leaderboard (`?limit=20&offset=0&snapshot=true`) |
-| `GET` | `/rankings/battles` | Public | Battle Total Victories leaderboard (`?limit=20&offset=0&snapshot=true`) |
+| `GET` | `/rankings/monster-kills` | Public | Monster Kills (`kill_m`) leaderboard (`?limit=20&offset=0&snapshot=true`) |
+| `GET` | `/rankings/mao-count` | Public | Demon King Defeats (`mao_c`) leaderboard (`?limit=20&offset=0&snapshot=true`) |
+| `GET` | `/rankings/hero-count` | Public | Hero Achievements (`hero_c`) leaderboard (`?limit=20&offset=0&snapshot=true`) |
 | `GET` | `/rankings/job-mastery` | Public | Mastered Jobs leaderboard (`?limit=20&offset=0&snapshot=true`) |
 | `GET` | `/rankings/job-popularity` | Public | Job distribution & popularity statistics (`?snapshot=true`) |
 | `GET` | `/rankings/helpers` | Public | Helper Quests completed leaderboard (`?limit=20&offset=0&snapshot=true`) |
@@ -93,7 +97,7 @@ The permanent Hall of Fame honors all players who have achieved complete 100% ma
 
 ## Persistence
 
-Data is managed and indexed in MariaDB via `migrations/035_rankings_and_leaderboards.sql`, `migrations/056_eliminate_rebirth_add_sp.sql`, and `migrations/089_legend_and_week_ranking.sql`:
+Data is managed and indexed in MariaDB via `migrations/035_rankings_and_leaderboards.sql`, `migrations/056_eliminate_rebirth_add_sp.sql`, `migrations/089_legend_and_week_ranking.sql`, and `migrations/091_ranking_monster_kills_mao_hero_indexes.sql`:
 - `ranking_snapshots`: (ranking_type PRIMARY KEY, snapshot_data, total_count, calculated_at, updated_at)
 - `legend_records`: (id AUTO_INCREMENT, category, character_id, character_name, guild_name, color, icon, message, inducted_at, UNIQUE KEY `uk_legend_category_character` (category, character_id))
 - `weekly_job_changes`: (character_id PRIMARY KEY, change_count)
@@ -102,6 +106,9 @@ Data is managed and indexed in MariaDB via `migrations/035_rankings_and_leaderbo
   - `idx_characters_money` on `characters(money DESC, id ASC)`
   - `idx_characters_help` on `characters(help_count DESC, level DESC, id ASC)`
   - `idx_characters_casino_wins` on `characters(casino_wins DESC, level DESC, id ASC)`
+  - `idx_characters_monster_kills` on `characters(monster_kills DESC, level DESC, id ASC)`
+  - `idx_characters_mao_count` on `characters(mao_count DESC, level DESC, id ASC)`
+  - `idx_characters_hero_count` on `characters(hero_count DESC, level DESC, id ASC)`
   - `idx_character_alchemy_crafts` on `character_alchemy(total_crafts DESC)`
   - `idx_legend_category_inducted` on `legend_records(category, inducted_at ASC, id ASC)`
   - `idx_adventures_char_outcome` on `adventures(character_id, outcome)`

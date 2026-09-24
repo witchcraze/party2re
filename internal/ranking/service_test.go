@@ -15,8 +15,12 @@ type mockRankingRepository struct {
 	playerWealthTotal       int
 	characterWealthRankings []ranking.CharacterRankingEntry
 	characterWealthTotal    int
-	battleRankings          []ranking.CharacterRankingEntry
-	battleTotal             int
+	monsterKillsRankings    []ranking.CharacterRankingEntry
+	monsterKillsTotal       int
+	maoCountRankings        []ranking.CharacterRankingEntry
+	maoCountTotal           int
+	heroCountRankings       []ranking.CharacterRankingEntry
+	heroCountTotal          int
 	pvpRankings             []ranking.CharacterRankingEntry
 	pvpTotal                int
 	bossRankings            []ranking.CharacterRankingEntry
@@ -71,11 +75,25 @@ func (m *mockRankingRepository) GetCharacterWealthRanking(ctx context.Context, l
 	return paginateSlice(m.characterWealthRankings, limit, offset), m.characterWealthTotal, nil
 }
 
-func (m *mockRankingRepository) GetBattleVictoryRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+func (m *mockRankingRepository) GetMonsterKillsRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
 	if m.err != nil {
 		return nil, 0, m.err
 	}
-	return paginateSlice(m.battleRankings, limit, offset), m.battleTotal, nil
+	return paginateSlice(m.monsterKillsRankings, limit, offset), m.monsterKillsTotal, nil
+}
+
+func (m *mockRankingRepository) GetMaoCountRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	if m.err != nil {
+		return nil, 0, m.err
+	}
+	return paginateSlice(m.maoCountRankings, limit, offset), m.maoCountTotal, nil
+}
+
+func (m *mockRankingRepository) GetHeroCountRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	if m.err != nil {
+		return nil, 0, m.err
+	}
+	return paginateSlice(m.heroCountRankings, limit, offset), m.heroCountTotal, nil
 }
 
 func (m *mockRankingRepository) GetPvPVictoryRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
@@ -315,23 +333,52 @@ func TestService_GetPlayerWealthRanking(t *testing.T) {
 	}
 }
 
-func TestService_GetBattleVictoryRanking(t *testing.T) {
+func TestService_GetAuthenticCombatRankings(t *testing.T) {
 	repo := newMockRepo()
-	repo.battleRankings = []ranking.CharacterRankingEntry{
-		{Rank: 1, CharacterID: "c1", CharacterName: "Champion", Score: 150, Level: 30},
-		{Rank: 2, CharacterID: "c2", CharacterName: "Challenger", Score: 95, Level: 28},
+	repo.monsterKillsRankings = []ranking.CharacterRankingEntry{
+		{Rank: 1, CharacterID: "c1", CharacterName: "MonsterSlayer", Score: 150, Level: 30},
+		{Rank: 2, CharacterID: "c2", CharacterName: "Hunter", Score: 95, Level: 28},
 	}
-	repo.battleTotal = 2
+	repo.monsterKillsTotal = 2
+
+	repo.maoCountRankings = []ranking.CharacterRankingEntry{
+		{Rank: 1, CharacterID: "c3", CharacterName: "DemonBane", Score: 5, Level: 50},
+	}
+	repo.maoCountTotal = 1
+
+	repo.heroCountRankings = []ranking.CharacterRankingEntry{
+		{Rank: 1, CharacterID: "c4", CharacterName: "LegendaryHero", Score: 12, Level: 45},
+	}
+	repo.heroCountTotal = 1
 
 	svc, _ := ranking.NewService(repo)
 	ctx := context.Background()
 
-	page, err := svc.GetBattleVictoryRanking(ctx, 10, 0, false)
+	// Monster Kills (kill_m / 英雄ランキング)
+	mkPage, err := svc.GetMonsterKillsRanking(ctx, 10, 0, false)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected error for monster kills: %v", err)
 	}
-	if page.Total != 2 || page.Entries[0].Score != 150 {
-		t.Fatalf("unexpected result: %+v", page)
+	if mkPage.Total != 2 || mkPage.Entries[0].Score != 150 {
+		t.Fatalf("unexpected monster kills result: %+v", mkPage)
+	}
+
+	// Mao Count (mao_c / 魔王ランキング)
+	maoPage, err := svc.GetMaoCountRanking(ctx, 10, 0, false)
+	if err != nil {
+		t.Fatalf("unexpected error for mao count: %v", err)
+	}
+	if maoPage.Total != 1 || maoPage.Entries[0].Score != 5 {
+		t.Fatalf("unexpected mao count result: %+v", maoPage)
+	}
+
+	// Hero Count (hero_c / 勇者ランキング)
+	heroPage, err := svc.GetHeroCountRanking(ctx, 10, 0, false)
+	if err != nil {
+		t.Fatalf("unexpected error for hero count: %v", err)
+	}
+	if heroPage.Total != 1 || heroPage.Entries[0].Score != 12 {
+		t.Fatalf("unexpected hero count result: %+v", heroPage)
 	}
 }
 
@@ -401,8 +448,8 @@ func TestService_RefreshAllSnapshots(t *testing.T) {
 		t.Fatalf("unexpected error refreshing all snapshots: %v", err)
 	}
 
-	if len(repo.snapshots) != 13 {
-		t.Fatalf("expected 13 snapshots saved in repository, got %d", len(repo.snapshots))
+	if len(repo.snapshots) != 15 {
+		t.Fatalf("expected 15 snapshots saved in repository, got %d", len(repo.snapshots))
 	}
 }
 
