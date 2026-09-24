@@ -26,20 +26,15 @@ func TestCharacterJobChangesAndRecordsHistory(t *testing.T) {
 
 func TestCharacterJobRejectsUnmetRequirements(t *testing.T) {
 	state, _ := NewCharacterJob("character-1", "starter")
-	target, _ := NewDefinition("advanced", "Advanced", 3, 3, 3, 3, 3, 10, "female")
+	target, _ := NewDefinition("advanced", "Advanced", 3, 3, 3, 3, 3, 3, "female")
 	if err := state.ChangeTo(target, 9, "male"); !errors.Is(err, ErrJobUnavailable) {
 		t.Fatalf("ChangeTo() error = %v", err)
 	}
-
 }
 
-func TestCharacterJobRequiresLevelTwentyAndMasteredPrerequisites(t *testing.T) {
+func TestCharacterJobRequiresLevelTwenty(t *testing.T) {
 	state, _ := NewCharacterJob("character-1", "starter")
-	target := Definition{ID: "advanced", Name: "Advanced", MinLevel: 1, RequiredJobIDs: []string{"base"}}
-	if err := state.ChangeTo(target, 20, "unspecified"); !errors.Is(err, ErrJobUnavailable) {
-		t.Fatalf("missing prerequisite error = %v", err)
-	}
-	state.Master("base")
+	target := Definition{ID: "advanced", Name: "Advanced", CMPTier: 1}
 	if err := state.ChangeTo(target, 19, "unspecified"); !errors.Is(err, ErrJobUnavailable) {
 		t.Fatalf("low level error = %v", err)
 	}
@@ -85,7 +80,7 @@ func TestIsCompletionJob(t *testing.T) {
 
 func TestCompletionJobCountAndSuppinUnlock(t *testing.T) {
 	state, _ := NewCharacterJob("character-1", "job-01")
-	suppinDef, _ := NewDefinition("job-73", "すっぴん", 5, 5, 4, 4, 4, 20, "")
+	suppinDef, _ := NewDefinition("job-73", "すっぴん", 5, 5, 4, 4, 4, 4, "")
 
 	// Cannot change to job-73 without AllJobsMastered
 	if err := state.ChangeTo(suppinDef, 20, "male"); !errors.Is(err, ErrJobUnavailable) {

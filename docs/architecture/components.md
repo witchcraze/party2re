@@ -34,7 +34,7 @@ Consumes job growth definitions. Provides canonical domain helpers (`ApplyExperi
 ### Job
 
 **Responsibility:** Job catalog definitions, availability rules, and character job history.
-Job definitions are content data loaded and validated at startup from `internal/core/job/data/`. Exposes definitions through a lookup contract. `CharacterJob` encapsulates transitions (`ChangeTo`), mastery (`RecordMastery`, `Master`), prerequisite checks, and retained mastery SP. Coordinates level-20 job change transactions, temporary mastered-job memory snapshots (`よびおこす`), and character job mastery catalog / completion percentage calculation (`job_master.cgi`).
+Job definitions are content data loaded and validated at startup from `internal/core/job/data/`. Exposes definitions through a lookup contract. `CharacterJob` encapsulates transitions (`ChangeTo`), mastery (`RecordMastery`, `Master`), prerequisite tree checks (`_is_need_job`), milestone counters (`MonsterKills`, `PvPWins`, `HeroCount`, `MaoCount`, `CasinoWins`, `JobLevel`), CMP tier rating (`c_mp_tier`), and retained mastery SP. Coordinates level-20 job change transactions, equipped armor consumption for FireFighter (`job-84`), temporary mastered-job memory snapshots (`よびおこす`), and character job mastery catalog / completion percentage calculation (`job_master.cgi`).
 
 ### Item
 

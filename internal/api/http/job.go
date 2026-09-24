@@ -76,7 +76,7 @@ func (h *Handler) handleChangeJob(w http.ResponseWriter, r *http.Request) {
 		updatedChar, updatedJob, err := h.jobs.ChangeJob(r.Context(), char.ID, req.JobID)
 		if err != nil {
 			if errors.Is(err, corejob.ErrJobUnavailable) || errors.Is(err, corejob.ErrDefinitionNotFound) ||
-				errors.Is(err, jobapp.ErrRequiredItem) {
+				errors.Is(err, jobapp.ErrRequiredItem) || errors.Is(err, jobapp.ErrRequiredArmor) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}

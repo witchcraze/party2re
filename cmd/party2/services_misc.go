@@ -143,6 +143,7 @@ func newMiscServices(
 		job.WithCatalog(core.jobCatalog),
 		job.WithCharacterRepository(core.charRepo),
 		job.WithInventoryRepository(core.invRepo),
+		job.WithEquipmentRepository(econ.equipRepo),
 		job.WithEconomy(core.economy),
 		job.WithFutureMemoryRepository(futureMemoryRepo),
 		job.WithGuildPointAwarder(soc.guild),

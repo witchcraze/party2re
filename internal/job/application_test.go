@@ -96,7 +96,7 @@ func TestServiceMaster(t *testing.T) {
 func TestServiceCheckAndApplyMastery(t *testing.T) {
 	state, _ := corejob.NewCharacterJob("character-1", "mage")
 	repository := &repositoryStub{value: state}
-	catalog, _ := corejob.NewCatalog([]corejob.Definition{{ID: "mage", Name: "Mage", MinLevel: 1, MasterySP: 5}})
+	catalog, _ := corejob.NewCatalog([]corejob.Definition{{ID: "mage", Name: "Mage", CMPTier: 1, MasterySP: 5}})
 	service, _ := NewService(repository, WithCatalog(catalog))
 
 	// Level 50 does not trigger mastery
@@ -241,8 +241,8 @@ func TestServiceChangeJobUsesSPMasteryAndConsumesRequiredItem(t *testing.T) {
 	_ = inventory.Add(itemInstance)
 	invRepo := &inventoryRepoStub{inventory: inventory}
 	catalog, _ := corejob.NewCatalog([]corejob.Definition{
-		{ID: "job-old", Name: "Old", MinLevel: 1, MasterySP: 10},
-		{ID: "job-new", Name: "New", MinLevel: 1, RequiredItemID: "job-token"},
+		{ID: "job-old", Name: "Old", CMPTier: 1, MasterySP: 10},
+		{ID: "job-new", Name: "New", CMPTier: 1, RequiredItemID: "job-token"},
 	})
 	svc, err := NewService(repo, WithCatalog(catalog), WithCharacterRepository(charRepo), WithInventoryRepository(invRepo))
 	if err != nil {
@@ -272,8 +272,8 @@ func TestServiceChangeJobRejectsLowLevelAndMissingItem(t *testing.T) {
 	repo := &repositoryStub{value: state}
 	charRepo := &charRepoStub{char: char}
 	catalog, _ := corejob.NewCatalog([]corejob.Definition{
-		{ID: "job-old", Name: "Old", MinLevel: 1},
-		{ID: "job-new", Name: "New", MinLevel: 1, RequiredItemID: "token"},
+		{ID: "job-old", Name: "Old", CMPTier: 1},
+		{ID: "job-new", Name: "New", CMPTier: 1, RequiredItemID: "token"},
 	})
 	svc, _ := NewService(repo, WithCatalog(catalog), WithCharacterRepository(charRepo))
 	if _, _, err := svc.ChangeJob(context.Background(), char.ID, "job-new"); !errors.Is(err, corejob.ErrJobUnavailable) {
@@ -327,7 +327,7 @@ func TestServiceMasteryUsesFinalSkillSPInsteadOfLevel(t *testing.T) {
 	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
 	repo := &repositoryStub{value: state}
 	charRepo := &charRepoStub{char: char}
-	catalog, _ := corejob.NewCatalog([]corejob.Definition{{ID: "mage", Name: "Mage", MinLevel: 1}})
+	catalog, _ := corejob.NewCatalog([]corejob.Definition{{ID: "mage", Name: "Mage", CMPTier: 1}})
 	skills := skillProviderStub{"mage": {
 		{ID: "first", RequiredSP: 2, Effect: corebattle.Effect{Kind: "damage"}},
 		{ID: "final", RequiredSP: 7, Effect: corebattle.Effect{Kind: "damage"}},
@@ -514,8 +514,8 @@ func TestChangeJob_ResetsCostume(t *testing.T) {
 	costumeResetter := &mockJobCostumeResetter{}
 
 	catalog, _ := corejob.NewCatalog([]corejob.Definition{
-		{ID: "job-01", Name: "Job 1", MinLevel: 1},
-		{ID: "job-02", Name: "Job 2", MinLevel: 20},
+		{ID: "job-01", Name: "Job 1", CMPTier: 1},
+		{ID: "job-02", Name: "Job 2", CMPTier: 2},
 	})
 
 	svc, err := NewService(

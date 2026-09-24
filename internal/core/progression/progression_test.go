@@ -487,6 +487,40 @@ func TestApplyHappySeed(t *testing.T) {
 	}
 }
 
+func TestApplyExperience_Job49DynamicSPGrowth(t *testing.T) {
+	char, err := character.New("OnionKnight")
+	if err != nil {
+		t.Fatal(err)
+	}
+	char.Level = 20
+	char.SP = 300 // at level-up SP becomes 301, growth = int(301 * 0.02) = 6
+	char.Experience = 4000
+	beforeHP := char.Stats.MaxHP
+	beforeAtk := char.Stats.Attack
+
+	onionDef := job.Definition{ID: "job-49", Name: "若芽剣士"}
+	// Sequence random returns max growth: 6
+	rnd := &sequenceRandomSource{values: []int{6, 6, 6, 6, 6}}
+
+	threshold, _ := ExperienceForNextLevel(20) // 21 * 21 * 10 = 4410
+	needed := threshold - char.Experience
+
+	res, err := ApplyExperienceWithJob(&char, needed, onionDef, rnd, false, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.LevelsGained != 1 {
+		t.Fatalf("expected 1 level gained, got %d", res.LevelsGained)
+	}
+	// HP gets +1 guaranteed bonus: 6 + 1 = 7
+	if char.Stats.MaxHP != beforeHP+7 {
+		t.Errorf("expected HP gain of 7, got %d", char.Stats.MaxHP-beforeHP)
+	}
+	if char.Stats.Attack != beforeAtk+6 {
+		t.Errorf("expected Attack gain of 6, got %d", char.Stats.Attack-beforeAtk)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
