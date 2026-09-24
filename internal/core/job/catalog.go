@@ -30,7 +30,7 @@ func NewCatalog(definitions []Definition) (*Catalog, error) {
 		if definition.ID == "" || definition.Name == "" || definition.HPGrowth < 0 ||
 			definition.MPGrowth < 0 || definition.AttackGrowth < 0 ||
 			definition.DefenseGrowth < 0 || definition.AgilityGrowth < 0 ||
-			definition.MinLevel < 1 || definition.MasterySP < 0 {
+			definition.CMPTier < 0 || definition.CMPTier > 5 || definition.MasterySP < 0 {
 			return nil, ErrInvalidDefinition
 		}
 		if _, exists := catalog.definitions[definition.ID]; exists {

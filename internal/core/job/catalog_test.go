@@ -103,7 +103,7 @@ func TestInitialCatalogValidatesAndExercisesEveryDefinition(t *testing.T) {
 			}
 			if definition.HPGrowth < 0 || definition.MPGrowth < 0 ||
 				definition.AttackGrowth < 0 || definition.DefenseGrowth < 0 ||
-				definition.AgilityGrowth < 0 || definition.MinLevel < 1 {
+				definition.AgilityGrowth < 0 || definition.CMPTier < 0 || definition.CMPTier > 5 {
 				t.Fatalf("invalid definition = %#v", definition)
 			}
 			if _, exists := seen[definition.ID]; exists {
@@ -127,15 +127,12 @@ func TestInitialCatalogValidatesAndExercisesEveryDefinition(t *testing.T) {
 				state.AllJobsMastered = true
 			}
 			if definition.ID == "starter" {
-				if err := state.ChangeTo(definition, definition.MinLevel, "unspecified"); !errors.Is(err, ErrJobUnavailable) {
+				if err := state.ChangeTo(definition, MinimumChangeLevel, "unspecified"); !errors.Is(err, ErrJobUnavailable) {
 					t.Fatalf("starter ChangeTo() error = %v, want %v", err, ErrJobUnavailable)
 				}
 				return
 			}
-			level := definition.MinLevel
-			if level < MinimumChangeLevel {
-				level = MinimumChangeLevel
-			}
+			level := MinimumChangeLevel
 			if err := state.ChangeTo(definition, level, definition.RequiredGender); err != nil {
 				t.Fatalf("ChangeTo() at minimum level: %v", err)
 			}
@@ -158,10 +155,7 @@ func TestInitialCatalogExercisesMinimumLevelBoundaryForEveryJob(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			level := definition.MinLevel - 1
-			if level >= MinimumChangeLevel {
-				level = MinimumChangeLevel - 1
-			}
+			level := MinimumChangeLevel - 1
 			if err := state.ChangeTo(definition, level, definition.RequiredGender); !errors.Is(err, ErrJobUnavailable) {
 				t.Fatalf("ChangeTo() below minimum level error = %v, want %v", err, ErrJobUnavailable)
 			}
@@ -170,11 +164,11 @@ func TestInitialCatalogExercisesMinimumLevelBoundaryForEveryJob(t *testing.T) {
 }
 
 func TestCatalogRejectsDuplicatesInvalidDefinitionsAndUnknownIDs(t *testing.T) {
-	definition, _ := NewDefinition("starter", "Starter", 0, 0, 0, 0, 0, 1, "")
+	definition, _ := NewDefinition("starter", "Starter", 0, 0, 0, 0, 0, 0, "")
 	if _, err := NewCatalog([]Definition{definition, definition}); !errors.Is(err, ErrInvalidDefinition) {
 		t.Fatalf("duplicate error = %v, want %v", err, ErrInvalidDefinition)
 	}
-	if _, err := NewCatalog([]Definition{{ID: "broken", Name: "Broken", HPGrowth: -1, MinLevel: 1}}); !errors.Is(err, ErrInvalidDefinition) {
+	if _, err := NewCatalog([]Definition{{ID: "broken", Name: "Broken", HPGrowth: -1, CMPTier: 1}}); !errors.Is(err, ErrInvalidDefinition) {
 		t.Fatalf("invalid error = %v, want %v", err, ErrInvalidDefinition)
 	}
 	catalog, err := NewCatalog([]Definition{definition})

@@ -49,17 +49,17 @@ type Definition struct {
 	RequiredJobIDs []string `json:"required_job_ids,omitempty"`
 	RequiredItemID string   `json:"required_item_id,omitempty"`
 	MasterySP      int      `json:"mastery_sp,omitempty"`
-	MinLevel       int      `json:"min_level"`
+	CMPTier        int      `json:"c_mp_tier"`
 }
 
-func NewDefinition(id, name string, hp, mp, attack, defense, agility, minLevel int, gender string) (Definition, error) {
+func NewDefinition(id, name string, hp, mp, attack, defense, agility, cmpTier int, gender string) (Definition, error) {
 	if strings.TrimSpace(id) == "" || strings.TrimSpace(name) == "" || hp < 0 || mp < 0 ||
-		attack < 0 || defense < 0 || agility < 0 || minLevel < 1 {
+		attack < 0 || defense < 0 || agility < 0 || cmpTier < 0 || cmpTier > 5 {
 		return Definition{}, ErrInvalidDefinition
 	}
 	return Definition{
 		ID: id, Name: name, HPGrowth: hp, MPGrowth: mp, AttackGrowth: attack,
-		DefenseGrowth: defense, AgilityGrowth: agility, RequiredGender: gender, MinLevel: minLevel,
+		DefenseGrowth: defense, AgilityGrowth: agility, RequiredGender: gender, CMPTier: cmpTier,
 	}, nil
 }
 
@@ -88,17 +88,12 @@ func (c *CharacterJob) ChangeTo(target Definition, level int, gender string) err
 	if c == nil || c.CharacterID == "" || c.CurrentJobID == "" {
 		return ErrInvalidCharacter
 	}
-	if target.ID == "" || level < MinimumChangeLevel || level < target.MinLevel ||
+	if target.ID == "" || target.ID == "starter" || level < MinimumChangeLevel ||
 		(target.RequiredGender != "" && target.RequiredGender != gender) {
 		return ErrJobUnavailable
 	}
 	if target.ID == SuppinJobID && !c.AllJobsMastered {
 		return ErrJobUnavailable
-	}
-	for _, requiredJobID := range target.RequiredJobIDs {
-		if !c.IsMastered(requiredJobID) {
-			return ErrJobUnavailable
-		}
 	}
 	if target.ID != c.CurrentJobID {
 		c.History = append(c.History, Change{FromJobID: c.CurrentJobID, ToJobID: target.ID})

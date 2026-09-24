@@ -64,6 +64,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Fundamental stats and initial character bounds (#24)
 - [x] Job definitions, data catalog, and job change history (#17, #38, #50)
 - [x] Job-based stat growth formulas (#31)
+- [x] Job prerequisite tree (_is_need_job), milestone counters (kill_m, kill_p, hero_c, mao_c, cas_c, job_lv), equipped armor consumption for FireFighter, CMP tier growth calculation, and Onion Knight SP-based dynamic stat growth (#784)
 - [x] Skill definitions, costs, and availability conditions (#18)
 - [x] Job mastery, level-20 job changes, item costs, mastered-job memory exchange, future memory snapshots ("よびおこす"), and 72-job completion title/news notification with "すっぴん" job unlock (#467, #470)
 - [x] Job mastery catalog endpoint (職業極め所, job_master.cgi) with 87-job progress and complete percentage calculation (#785)

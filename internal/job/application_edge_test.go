@@ -271,17 +271,19 @@ func TestChangeJob_ItemRequirementsAndExemptions(t *testing.T) {
 		t.Fatalf("expected job-34 with mastered SP 180, got job=%s SP=%d", updatedChar.JobID, updatedChar.SP)
 	}
 
-	// 4. job-33 (算術士) exemption when job-08 (賢者) is mastered -> no item needed
+	// 4. job-33 (賢者) access when old job is job-08 (遊び人) -> no item needed
+	// Legacy: &_is_need_job(8, 33) means current or old job must be job-08 or job-33.
+	char.OldJobID = "job-08"
 	state, _ = corejob.NewCharacterJob(char.ID, char.JobID)
-	state.RecordMastery("job-08", 50, 50) // job-08 mastered
 	svc, _, _, _ = setupSvc(char, state, nil)
 	updatedChar, _, err = svc.ChangeJob(ctx, char.ID, "job-33")
 	if err != nil {
-		t.Fatalf("expected job-33 exemption when job-08 is mastered: %v", err)
+		t.Fatalf("expected job-33 access when old job is job-08: %v", err)
 	}
 	if updatedChar.JobID != "job-33" {
 		t.Fatalf("expected job-33, got %s", updatedChar.JobID)
 	}
+	char.OldJobID = "job-02" // restore
 
 	// 5. job-46 (ギャンブラー) requires item-039 AND CasinoWins >= 10
 	// 5a. CasinoWins < 10 -> ErrJobUnavailable even if holding item-039
@@ -321,6 +323,8 @@ func TestChangeJob_ItemRequirementsAndExemptions(t *testing.T) {
 	}
 
 	// 6. When item IS needed, but inventories is nil -> ErrRequiredItem
+	// job-34 (勇者) also requires HeroCount >= 5.
+	char.HeroCount = 5
 	state, _ = corejob.NewCharacterJob(char.ID, char.JobID)
 	svc, _, _, _ = setupSvc(char, state, nil)
 	_, _, err = svc.ChangeJob(ctx, char.ID, "job-34")
@@ -354,7 +358,8 @@ func TestChangeJob_ItemRequirementsAndExemptions(t *testing.T) {
 
 func TestChangeJob_EconomyBranches(t *testing.T) {
 	ctx := context.Background()
-	char := corecharacter.Character{ID: "char-eco", Name: "EcoHero", JobID: "job-01", Level: 50, Gender: "male", OverLevel: true}
+	// job-34 (Hero) requires HeroCount >= 5 and item-028 when changing fresh.
+	char := corecharacter.Character{ID: "char-eco", Name: "EcoHero", JobID: "job-01", Level: 50, Gender: "male", OverLevel: true, HeroCount: 5}
 	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
 	repo := &repositoryStub{value: state}
 	charRepo := &charRepoStub{char: char}
@@ -654,12 +659,13 @@ func TestService_ChangeMethod(t *testing.T) {
 	// 1. When FindByCharacterID returns error, Change falls back to NewCharacterJob and succeeds
 	errRepo := &errRepoStub{findErr: errors.New("not found")}
 	svc, _ := NewService(errRepo)
-	target, _ := corejob.NewDefinition("starter", "Starter", 1, 1, 1, 1, 1, 1, "")
+	// Use a real job (job-01) since ChangeTo now rejects "starter" per legacy spec.
+	target, _ := corejob.NewDefinition("job-01", "Warrior", 1, 1, 1, 1, 1, 1, "")
 	state, err := svc.Change(ctx, "char-new", target, 20, "unspecified")
 	if err != nil {
 		t.Fatalf("expected Change to initialize new state on find error: %v", err)
 	}
-	if state.CharacterID != "char-new" || state.CurrentJobID != "starter" {
+	if state.CharacterID != "char-new" || state.CurrentJobID != "job-01" {
 		t.Fatalf("unexpected state: %#v", state)
 	}
 

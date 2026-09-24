@@ -19,14 +19,39 @@ Each job in the game is defined with:
 - `Name`: Display name (e.g. `見習い`, `戦士`)
 - `Growth Rates`: Stat multipliers applied per level-up:
   - `HPGrowth`, `MPGrowth`, `AttackGrowth`, `DefenseGrowth`, `AgilityGrowth`
-- `MinLevel`: Minimum character level required to change to this job.
+  - Special: Onion Knight (`job-49` / たまねぎ剣士) gains dynamic stat growth equal to `int(SP * 0.02)` across all stats on level up (`party2/lib/_data.cgi:142`).
+- `CMPTier`: Combat MP tier index (`0`..`5`) into `@c_mp_rate` (0.0, 0.5, 0.8, 1.0, 1.5, 2.0).
 - `RequiredGender`: Optional gender requirement (`male`, `female`, or empty for any).
+- `RequiredJobIDs`: Optional list of prerequisite job IDs required to change into this job.
 
 Job definitions are loaded from data-driven JSON (`internal/core/job/data/jobs.json`).
 
-### Job Changes & History
-- A normal job change requires character level 20 or higher, plus the target
-  job's level, gender, and mastered-job prerequisites.
+### Combat MP (CMP) Formula
+CMP represents maximum MP in combat, calculated from the character's level and the tier rates of both the current job and previous job (`party2/lib/_battle.cgi:1708`):
+```text
+tier_rates = [0.0, 0.5, 0.8, 1.0, 1.5, 2.0]
+cmp = int(min(level, 99) * (tier_rates[current_job_tier] + tier_rates[old_job_tier]))
+```
+
+### Job Changes & Prerequisites
+- All job changes require character level 20 or higher (`party2/lib/job_change.cgi:147`).
+- Target job requirements are evaluated via clean-room `ValidateRequirements`:
+  - **Prerequisite Tree** (`_is_need_job`): For jobs with `RequiredJobIDs`, either `CurrentJobID` or `OldJobID` must match one of the required IDs (`party2/lib/_data.cgi:303-309`).
+  - **Gender Restrictions**: Male-only (jobs 13, 15, 17, 19, 47) and Female-only (jobs 14, 16, 18, 20, 48).
+  - **Milestone Gating**:
+    - Berserker (`job-21` / バーサーカー): requires `MonsterKills > 200` (`kill_m`).
+    - Dark Knight (`job-22` / 暗黒騎士): requires `PvPWins > 50` (`kill_p`).
+    - Demon Lord (`job-35` / 魔王): requires `MaoCount >= 1` (`mao_c`) and `item-029`.
+    - Hero (`job-34` / 勇者): requires `HeroCount >= 5` (`hero_c`) and `item-028`.
+    - Gambler (`job-46` / ギャンブラー): requires `CasinoWins >= 10` (`cas_c`) and `item-039`.
+    - Majin (`job-52` / 魔人): requires `MonsterKills > 1000` (`kill_m`).
+    - Gladiator (`job-74` / 剣闘士): requires `PvPWins > 30` (`kill_p`) when coming from base fighter jobs.
+    - Dual Blader (`job-77` / 双剣士): requires `MonsterKills > 1500` (`kill_m`).
+    - Treasure Hunter (`job-78` / トレジャーハンター): requires `JobLevel >= 50` (`job_lv`).
+    - Onion Knight (`job-49` / たまねぎ剣士): requires `SP >= 300` when not having visited the job.
+    - Dragon Noble (`job-70` / 天竜人): requires having previously held `job-70`.
+    - Fire Fighter (`job-84` / 炎闘士): requires having equipped `armor-29` (炎の鎧) in the body slot, which is unequipped and consumed upon change (`job_change.cgi:181-188`).
+  - **Item Consumption**: Special jobs require consuming an item from inventory unless re-entering current, old, or mastered job, or entering Sage/Gambler from Leisure job (`job-08` / 遊び人) (`job_change.cgi:164-179`).
 - A change halves Max HP, Max MP, Attack, Defense, and Agility using integer
   truncation, clamping each result to 10. Current HP/MP are restored to the
   new maxima, level becomes 1, experience becomes 0, and the job-change count
@@ -42,13 +67,6 @@ Job definitions are loaded from data-driven JSON (`internal/core/job/data/jobs.j
   of that job's final skill. Level 99 is not a mastery condition.
 - Mastered jobs and their retained mastery SP are tracked persistently on the
   character's job record.
-- Special jobs may require one catalog item (or a weapon item) when changing
-  into them. The item is consumed atomically with the character and job
-  update. Re-entering a previously held or mastered job does not consume the item;
-  mastering the leisure job (`job-08` / 遊び人) allows entering Sage (`job-33` / 賢者)
-  without an item (`party2/lib/_data.cgi:82`).
-  Entering Gambler (`job-46` / ギャンブラー) requires `CasinoWins >= 10` alongside
-  holding `item-039` (`party2/lib/_data.cgi:134`).
 
 ### Job Memory Exchange (おもいだす)
 - With item `item-168` (Memory Fragment), a character may temporarily replace

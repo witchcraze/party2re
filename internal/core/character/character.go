@@ -57,6 +57,8 @@ type Character struct {
 	HeroCount        int    // Hero count (勇者カウント hero_c): incremented when sealing a king boss.
 	PvPWins          int    // PvP Colosseum wins count (王者カウント kill_p): incremented on winning colosseum matches.
 	CasinoWins       int    // Casino wins count (勝負師カウント cas_c): incremented on winning casino table games.
+	MonsterKills     int    // Monster defeat count (撃退数 kill_m): incremented on winning monster battles.
+	MaoCount         int    // Demon king unseal count (魔王カウント mao_c): incremented on unsealing the demon king.
 	Orb              string // Orb collection status: string containing characters 's','r','b','g','y','p', or 'G' (Ramia awakened)
 	Tired            int    // Fatigue percentage (疲労度 %): increases in combat, resets to 0 on sleep.
 	OverLevel        bool

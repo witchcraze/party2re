@@ -176,7 +176,7 @@ func ApplyExperienceWithJobFull(value *character.Character, amount int, definiti
 		}
 
 		if definition.ID != "" {
-			if err := applyGrowth(&value.Stats, definition, random, opts.StatOrbItems, value.OverLevel, value.Level); err != nil {
+			if err := applyGrowth(&value.Stats, definition, value.SP, random, opts.StatOrbItems, value.OverLevel, value.Level); err != nil {
 				return result, err
 			}
 		}
@@ -185,13 +185,25 @@ func ApplyExperienceWithJobFull(value *character.Character, amount int, definiti
 	return result, nil
 }
 
-func applyGrowth(stats *character.Stats, definition job.Definition, random character.RandomSource, statOrbItems map[string]bool, overLevel bool, level int) error {
+func applyGrowth(stats *character.Stats, definition job.Definition, sp int, random character.RandomSource, statOrbItems map[string]bool, overLevel bool, level int) error {
+	hpGrowth := definition.HPGrowth
+	mpGrowth := definition.MPGrowth
+	atkGrowth := definition.AttackGrowth
+	defGrowth := definition.DefenseGrowth
+	agiGrowth := definition.AgilityGrowth
+
+	// たまねぎ剣士 (job-49): stat growth is SP-linked: int(sp * 0.02) across all 5 stats (_data.cgi:148-152).
+	if definition.ID == "job-49" {
+		spGrowth := int(float64(sp) * 0.02)
+		hpGrowth, mpGrowth, atkGrowth, defGrowth, agiGrowth = spGrowth, spGrowth, spGrowth, spGrowth, spGrowth
+	}
+
 	growths := []int{
-		definition.HPGrowth,
-		definition.MPGrowth,
-		definition.AttackGrowth,
-		definition.DefenseGrowth,
-		definition.AgilityGrowth,
+		hpGrowth,
+		mpGrowth,
+		atkGrowth,
+		defGrowth,
+		agiGrowth,
 	}
 	for _, growth := range growths {
 		if growth < 0 {
@@ -199,24 +211,24 @@ func applyGrowth(stats *character.Stats, definition job.Definition, random chara
 		}
 	}
 
-	hp, err := growthValue(definition.HPGrowth, random, statOrbItems[ItemLifeStatOrb])
+	hp, err := growthValue(hpGrowth, random, statOrbItems[ItemLifeStatOrb])
 	if err != nil {
 		return err
 	}
 	hp++ // HP minimum +1 guaranteed (旧CGI: ++$v for hp)
-	mp, err := growthValue(definition.MPGrowth, random, statOrbItems[ItemMagicStatOrb])
+	mp, err := growthValue(mpGrowth, random, statOrbItems[ItemMagicStatOrb])
 	if err != nil {
 		return err
 	}
-	attack, err := growthValue(definition.AttackGrowth, random, statOrbItems[ItemPowerStatOrb])
+	attack, err := growthValue(atkGrowth, random, statOrbItems[ItemPowerStatOrb])
 	if err != nil {
 		return err
 	}
-	defense, err := growthValue(definition.DefenseGrowth, random, statOrbItems[ItemDefenseStatOrb])
+	defense, err := growthValue(defGrowth, random, statOrbItems[ItemDefenseStatOrb])
 	if err != nil {
 		return err
 	}
-	agility, err := growthValue(definition.AgilityGrowth, random, statOrbItems[ItemAgilityStatOrb])
+	agility, err := growthValue(agiGrowth, random, statOrbItems[ItemAgilityStatOrb])
 	if err != nil {
 		return err
 	}
