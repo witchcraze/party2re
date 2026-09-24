@@ -105,6 +105,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Dungeon Exploration & Continuous Endurance Challenge multi-player runs, map scouting (@ちず), Hall of Fame records, and Valkey Master run buffers (#162, #404, #405, #483, #597, #600, #657)
 - [x] Battle replay records and match history viewer (#66, #796)
 - [x] Standardized Battle Adapter: Character/Party to Battle Participant Mapping, equipment stat scaling, recipient-targeted item drop routing, and Post-Battle State Application (#496, #593, #596, #599, #605, #643, #663)
+- [x] Post-battle milestone counter increments: MonsterKills (kill_m) on defeating strong enemies (&is_strong) and MaoCount (mao_c) on unsealing the demon king (Stage EX / 封印の地) (#823)
 
 ### E. Social and Competitive Systems
 - [x] Guild creation, membership application/approval workflow, dynamic Guild Points, hex colors, custom titles, broadcast callouts, and inactivity disbandment worker (#76, #490, #591, #633)

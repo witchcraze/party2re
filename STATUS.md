@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #784 — Job System: Restore job prerequisite tree, milestone counters, and CMP growth rate tiers
+Last updated: Issue #823 — Combat: Increment MonsterKills on defeating strong enemies and MaoCount on unsealing demon king
 
 ## Current Phase
 

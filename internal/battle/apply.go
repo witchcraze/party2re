@@ -23,6 +23,7 @@ type ApplyPostBattleRequest struct {
 	RecipientCharacterID string              // Optional recipient character ID for DropItems / BattleResult.TotalReward drops
 	DefeatedEnemies      []corebattle.Participant
 	Habitat              string // Habitat/stage name for monster book recording
+	UnsealDemonKing      bool   // Completing Stage EX / unsealing demon king (vs_monster.cgi:218)
 }
 
 // ApplyPostBattleResponse contains the committed state for each participating character.
@@ -117,6 +118,9 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 			if err := s.deliverToDepot(tc.Context, charID, tc.Character, depotDrops, &resp); err != nil {
 				return err
 			}
+
+			s.applyMonsterKills(&tc.Character, tc.Inventory, equip, req.BattleResult, req.DefeatedEnemies)
+			s.applyMaoCount(&tc.Character, req)
 		}
 
 		resp.UpdatedCharacters[charID] = tc.Character
@@ -219,6 +223,9 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 				if len(depotDrops) > 0 {
 					pendingDepotDeliveries[id] = append(pendingDepotDeliveries[id], depotDrops...)
 				}
+
+				s.applyMonsterKills(&char, inv, equip, req.BattleResult, req.DefeatedEnemies)
+				s.applyMaoCount(&char, req)
 			}
 
 			chars[id] = char

@@ -54,6 +54,7 @@ func (s *Service) settlePostBattle(ctx context.Context, req DungeonCrawlRequest,
 		RecipientDrops:  recipientDrops,
 		DefeatedEnemies: defeatedEnemies,
 		Habitat:         habitat,
+		UnsealDemonKing: result.StageCleared && IsDemonKingUnsealStage(result.StageID, result.StageName),
 	}
 
 	resp, err := s.battleSettler.ApplyPostBattleResult(ctx, postBattleReq)

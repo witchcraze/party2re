@@ -565,3 +565,259 @@ func TestApplyPostBattleResult_RecordMonsterDefeat(t *testing.T) {
 		t.Errorf("expected 0 recorder calls on defeat, got %d", len(recorder.calls))
 	}
 }
+
+func TestApplyPostBattleResult_MonsterKills_StrongEnemies(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	invRepo := newMockInvRepo()
+	equipRepo := newMockEquipRepo()
+	txProv := &mockTxProvider{}
+
+	// Player with stats: MaxHP 100, MaxMP 50, Atk 20, Def 20, Agi 10
+	// Strong(player) = 100 + 50 + 20 + 10 + 10 = 190. Half = 95.
+	char := corecharacter.Character{
+		ID:           "char-killer",
+		Name:         "モンスターハンター",
+		JobID:        "job-warrior",
+		MonsterKills: 0,
+		Stats: corecharacter.Stats{
+			HP:      100,
+			MaxHP:   100,
+			MP:      50,
+			MaxMP:   50,
+			Attack:  20,
+			Defense: 20,
+			Agility: 10,
+		},
+	}
+	_ = charRepo.Update(ctx, char)
+
+	inv, _ := coreinventory.New("char-killer")
+	_ = invRepo.Save(ctx, inv)
+
+	svc := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithEquipmentRepository(equipRepo),
+		battle.WithTransactionProvider(txProv),
+	)
+
+	// Enemy 1: Strong monster (Strong = 200 + 50 + 30 + 15 + 20 = 315 > 95)
+	strongEnemy1 := corebattle.Participant{
+		ID:      "monster-strong-1",
+		Name:    "ドラゴン",
+		HP:      200,
+		MaxHP:   200,
+		MP:      50,
+		MaxMP:   50,
+		Attack:  30,
+		Defense: 30,
+		Agility: 20,
+	}
+	// Enemy 2: Weak monster (Strong = 10 + 0 + 5 + 1 + 2 = 18 <= 95)
+	weakEnemy := corebattle.Participant{
+		ID:      "monster-weak-1",
+		Name:    "スライム",
+		HP:      10,
+		MaxHP:   10,
+		MP:      0,
+		MaxMP:   0,
+		Attack:  5,
+		Defense: 2,
+		Agility: 2,
+	}
+	// Enemy 3: Strong human opponent (PvP: ID starts with char-)
+	pvpEnemy := corebattle.Participant{
+		ID:      "char-rival",
+		Name:    "ライバル",
+		HP:      200,
+		MaxHP:   200,
+		MP:      50,
+		MaxMP:   50,
+		Attack:  30,
+		Defense: 30,
+		Agility: 20,
+	}
+
+	// 1. Victory against 1 strong monster + 1 weak monster + 1 PvP opponent
+	// Only strong monster should increment MonsterKills (+1)
+	req1 := battle.ApplyPostBattleRequest{
+		CharacterIDs: []string{"char-killer"},
+		BattleResult: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeWin,
+			RemainingHP: map[string]int{"char-killer": 80},
+		},
+		DefeatedEnemies: []corebattle.Participant{strongEnemy1, weakEnemy, pvpEnemy},
+	}
+
+	resp, err := svc.ApplyPostBattleResult(ctx, req1)
+	if err != nil {
+		t.Fatalf("ApplyPostBattleResult failed: %v", err)
+	}
+
+	updated := resp.UpdatedCharacters["char-killer"]
+	if updated.MonsterKills != 1 {
+		t.Errorf("expected MonsterKills = 1, got %d", updated.MonsterKills)
+	}
+
+	// 2. Victory against 2 strong monsters -> increments by +2 (now total 3)
+	strongEnemy2 := corebattle.Participant{
+		ID:      "monster-strong-2",
+		Name:    "ゴーレム",
+		HP:      150,
+		MaxHP:   150,
+		MP:      20,
+		MaxMP:   20,
+		Attack:  40,
+		Defense: 40,
+		Agility: 10,
+	}
+	req2 := battle.ApplyPostBattleRequest{
+		CharacterIDs: []string{"char-killer"},
+		BattleResult: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeWin,
+			RemainingHP: map[string]int{"char-killer": 60},
+		},
+		DefeatedEnemies: []corebattle.Participant{strongEnemy1, strongEnemy2},
+	}
+	resp2, err := svc.ApplyPostBattleResult(ctx, req2)
+	if err != nil {
+		t.Fatalf("ApplyPostBattleResult 2 failed: %v", err)
+	}
+	if resp2.UpdatedCharacters["char-killer"].MonsterKills != 3 {
+		t.Errorf("expected MonsterKills = 3, got %d", resp2.UpdatedCharacters["char-killer"].MonsterKills)
+	}
+
+	// 3. Victory when character was knocked out (HP <= 0) -> no increment
+	reqKnockedOut := battle.ApplyPostBattleRequest{
+		CharacterIDs: []string{"char-killer"},
+		BattleResult: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeWin,
+			RemainingHP: map[string]int{"char-killer": 0},
+		},
+		DefeatedEnemies: []corebattle.Participant{strongEnemy1},
+	}
+	resp3, err := svc.ApplyPostBattleResult(ctx, reqKnockedOut)
+	if err != nil {
+		t.Fatalf("ApplyPostBattleResult 3 failed: %v", err)
+	}
+	if resp3.UpdatedCharacters["char-killer"].MonsterKills != 3 {
+		t.Errorf("expected MonsterKills = 3 for unconscious character, got %d", resp3.UpdatedCharacters["char-killer"].MonsterKills)
+	}
+
+	// 4. Defeat outcome -> no increment
+	reqDefeat := battle.ApplyPostBattleRequest{
+		CharacterIDs: []string{"char-killer"},
+		BattleResult: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeDefeat,
+			RemainingHP: map[string]int{"char-killer": 0},
+		},
+		DefeatedEnemies: []corebattle.Participant{strongEnemy1},
+	}
+	resp4, err := svc.ApplyPostBattleResult(ctx, reqDefeat)
+	if err != nil {
+		t.Fatalf("ApplyPostBattleResult 4 failed: %v", err)
+	}
+	if resp4.UpdatedCharacters["char-killer"].MonsterKills != 3 {
+		t.Errorf("expected MonsterKills = 3 on defeat, got %d", resp4.UpdatedCharacters["char-killer"].MonsterKills)
+	}
+}
+
+func TestApplyPostBattleResult_MaoCount_Unseal(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	invRepo := newMockInvRepo()
+	equipRepo := newMockEquipRepo()
+	txProv := &mockTxProvider{}
+
+	char1 := corecharacter.Character{
+		ID:       "char-unseal-1",
+		Name:     "封印解除者1",
+		MaoCount: 0,
+		Stats: corecharacter.Stats{
+			HP:    100,
+			MaxHP: 100,
+		},
+	}
+	char2 := corecharacter.Character{
+		ID:       "char-unseal-2",
+		Name:     "封印解除者2",
+		MaoCount: 0,
+		Stats: corecharacter.Stats{
+			HP:    100,
+			MaxHP: 100,
+		},
+	}
+	_ = charRepo.Update(ctx, char1)
+	_ = charRepo.Update(ctx, char2)
+
+	inv1, _ := coreinventory.New("char-unseal-1")
+	inv2, _ := coreinventory.New("char-unseal-2")
+	_ = invRepo.Save(ctx, inv1)
+	_ = invRepo.Save(ctx, inv2)
+
+	svc := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithEquipmentRepository(equipRepo),
+		battle.WithTransactionProvider(txProv),
+	)
+
+	// 1. Victory with UnsealDemonKing = true
+	reqUnseal := battle.ApplyPostBattleRequest{
+		CharacterIDs: []string{"char-unseal-1", "char-unseal-2"},
+		BattleResult: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeWin,
+			RemainingHP: map[string]int{"char-unseal-1": 100, "char-unseal-2": 100},
+		},
+		UnsealDemonKing: true,
+	}
+
+	resp, err := svc.ApplyPostBattleResult(ctx, reqUnseal)
+	if err != nil {
+		t.Fatalf("ApplyPostBattleResult failed: %v", err)
+	}
+
+	if resp.UpdatedCharacters["char-unseal-1"].MaoCount != 1 {
+		t.Errorf("expected char 1 MaoCount = 1, got %d", resp.UpdatedCharacters["char-unseal-1"].MaoCount)
+	}
+	if resp.UpdatedCharacters["char-unseal-2"].MaoCount != 1 {
+		t.Errorf("expected char 2 MaoCount = 1, got %d", resp.UpdatedCharacters["char-unseal-2"].MaoCount)
+	}
+
+	// 2. Victory with Habitat = "封印の地" (Stage EX)
+	reqHabitat := battle.ApplyPostBattleRequest{
+		CharacterIDs: []string{"char-unseal-1"},
+		BattleResult: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeWin,
+			RemainingHP: map[string]int{"char-unseal-1": 100},
+		},
+		Habitat: "封印の地",
+	}
+
+	resp2, err := svc.ApplyPostBattleResult(ctx, reqHabitat)
+	if err != nil {
+		t.Fatalf("ApplyPostBattleResult habitat failed: %v", err)
+	}
+	if resp2.UpdatedCharacters["char-unseal-1"].MaoCount != 2 {
+		t.Errorf("expected char 1 MaoCount = 2, got %d", resp2.UpdatedCharacters["char-unseal-1"].MaoCount)
+	}
+
+	// 3. Normal battle without unseal -> MaoCount should not change
+	reqNormal := battle.ApplyPostBattleRequest{
+		CharacterIDs: []string{"char-unseal-1"},
+		BattleResult: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeWin,
+			RemainingHP: map[string]int{"char-unseal-1": 100},
+		},
+		Habitat: "プニプニ平原",
+	}
+
+	resp3, err := svc.ApplyPostBattleResult(ctx, reqNormal)
+	if err != nil {
+		t.Fatalf("ApplyPostBattleResult normal failed: %v", err)
+	}
+	if resp3.UpdatedCharacters["char-unseal-1"].MaoCount != 2 {
+		t.Errorf("expected char 1 MaoCount to remain 2, got %d", resp3.UpdatedCharacters["char-unseal-1"].MaoCount)
+	}
+}

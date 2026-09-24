@@ -91,3 +91,13 @@ Upon defeating all enemy boss participants:
 5. **Server News**: A worldwide announcement is broadcast: `"勇者○○が○○を封印する"`.
 6. **Celebration Banquet**: Triggers a 2-hour victory banquet in Event Plaza (`_win_vs_king.cgi`).
 7. **Lobby Disbandment**: The temporary staging party is deleted upon conclusion.
+
+---
+
+## 6. Demon King Unsealing (`UnsealDemonKing`)
+
+In authentic legacy Party2 (`vs_monster.cgi:218`), clearing Stage EX (封印の地 / `stage-20`) unseals the ancient kings, triggering the sealing battle era:
+- **Mao Count**: All participating non-NPC characters gain **+1 Mao Count** (`characters.mao_count` / `$m{mao_c}`).
+- **Worldwide News**: Broadcasts `"<heroes>によって封印されし者達の封印が解かれました！"`.
+- **Rank 2 Locking**: Character rows are locked in ascending lexicographical order within a single transaction.
+
