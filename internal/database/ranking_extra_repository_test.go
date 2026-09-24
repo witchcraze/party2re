@@ -215,4 +215,34 @@ func TestRankingExtraRepository_Integration(t *testing.T) {
 	if counts[ranking.LegendCategoryJobMastery] < 1 {
 		t.Fatalf("expected comp_job count >= 1, got %d", counts[ranking.LegendCategoryJobMastery])
 	}
+
+	// 5. Test auto-enrichment when profile fields are omitted in LegendEntry
+	minimalEntry := ranking.LegendEntry{
+		Category:    ranking.LegendCategoryMonsterMastery,
+		CharacterID: charID,
+	}
+	newlyInductedMin, err := rankingRepo.RecordLegend(ctx, minimalEntry)
+	if err != nil {
+		t.Fatalf("RecordLegend with minimalEntry failed: %v", err)
+	}
+	if !newlyInductedMin {
+		t.Fatal("expected newlyInductedMin to be true")
+	}
+	monInductees, err := rankingRepo.GetLegendInductees(ctx, ranking.LegendCategoryMonsterMastery)
+	if err != nil {
+		t.Fatalf("GetLegendInductees for comp_mon failed: %v", err)
+	}
+	foundMon := false
+	for _, ind := range monInductees {
+		if ind.CharacterID == charID {
+			foundMon = true
+			if ind.CharacterName != c.Name {
+				t.Fatalf("expected auto-enriched CharacterName %s, got %s", c.Name, ind.CharacterName)
+			}
+			break
+		}
+	}
+	if !foundMon {
+		t.Fatalf("legend record for minimal entry %s not found", charID)
+	}
 }

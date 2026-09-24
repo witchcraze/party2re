@@ -76,6 +76,17 @@ type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 }
 
+// LegendInductor defines permanent Hall of Fame induction contract (legend.cgi).
+type LegendInductor interface {
+	RecordLegend(ctx context.Context, category, characterID string) error
+}
+
+type LegendInductorFunc func(ctx context.Context, category, characterID string) error
+
+func (f LegendInductorFunc) RecordLegend(ctx context.Context, category, characterID string) error {
+	return f(ctx, category, characterID)
+}
+
 type Option func(*Service)
 
 func WithNewsPublisher(pub NewsPublisher) Option {
@@ -90,12 +101,19 @@ func WithCharacterRepository(repo CharacterRepository) Option {
 	}
 }
 
+func WithLegendInductor(inductor LegendInductor) Option {
+	return func(s *Service) {
+		s.legend = inductor
+	}
+}
+
 type Service struct {
 	repo          Repository
 	totalMonsters int
 	totalItems    int
 	newsPub       NewsPublisher
 	charRepo      CharacterRepository
+	legend        LegendInductor
 }
 
 func NewService(repo Repository, totalMonsters, totalItems int, opts ...Option) (*Service, error) {
@@ -117,6 +135,10 @@ func NewService(repo Repository, totalMonsters, totalItems int, opts ...Option) 
 		opt(s)
 	}
 	return s, nil
+}
+
+func (s *Service) SetLegendInductor(inductor LegendInductor) {
+	s.legend = inductor
 }
 
 func (s *Service) RecordMonsterDefeat(ctx context.Context, characterID, monsterID, monsterName, habitat string) error {
@@ -149,6 +171,9 @@ func (s *Service) checkMonsterBookCompletion(ctx context.Context, characterID st
 		charName := s.resolveCharacterName(ctx, characterID)
 		msg := fmt.Sprintf("%sがモンスターブックをコンプリートしました！", charName)
 		_ = s.newsPub.PublishNews(ctx, "collection", msg, msg, "System", time.Now().UTC())
+	}
+	if s.legend != nil {
+		_ = s.legend.RecordLegend(ctx, "comp_mon", characterID)
 	}
 }
 
@@ -208,6 +233,9 @@ func (s *Service) checkItemCollectionCompletion(ctx context.Context, characterID
 		charName := s.resolveCharacterName(ctx, characterID)
 		msg := fmt.Sprintf("%sがアイテム図鑑をコンプリートしました！", charName)
 		_ = s.newsPub.PublishNews(ctx, "collection", msg, msg, "System", time.Now().UTC())
+	}
+	if s.legend != nil {
+		_ = s.legend.RecordLegend(ctx, "comp_ite", characterID)
 	}
 }
 

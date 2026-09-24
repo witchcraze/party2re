@@ -122,6 +122,20 @@ func (r *mockCharRepo) FindByID(_ context.Context, id string) (corecharacter.Cha
 	return corecharacter.Character{}, fmt.Errorf("character not found: %s", id)
 }
 
+type mockLegendInductor struct {
+	inductions []legendCall
+}
+
+type legendCall struct {
+	Category    string
+	CharacterID string
+}
+
+func (m *mockLegendInductor) RecordLegend(_ context.Context, category, characterID string) error {
+	m.inductions = append(m.inductions, legendCall{Category: category, CharacterID: characterID})
+	return nil
+}
+
 func TestCollectionService_Defaults(t *testing.T) {
 	repo := &mockCollectionRepo{
 		monsters:    make(map[string]collection.MonsterBookEntry),
@@ -204,6 +218,7 @@ func TestCollectionService_MonsterBookCompletionNews(t *testing.T) {
 		completions: make(map[string]bool),
 	}
 	pub := &mockNewsPublisher{}
+	legend := &mockLegendInductor{}
 	charRepo := &mockCharRepo{
 		characters: map[string]corecharacter.Character{
 			"char-hero": {ID: "char-hero", Name: "勇者アベル"},
@@ -217,6 +232,7 @@ func TestCollectionService_MonsterBookCompletionNews(t *testing.T) {
 		141,
 		collection.WithNewsPublisher(pub),
 		collection.WithCharacterRepository(charRepo),
+		collection.WithLegendInductor(legend),
 	)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
@@ -228,6 +244,9 @@ func TestCollectionService_MonsterBookCompletionNews(t *testing.T) {
 	}
 	if len(pub.articles) != 0 {
 		t.Fatalf("expected no news yet, got %d", len(pub.articles))
+	}
+	if len(legend.inductions) != 0 {
+		t.Fatalf("expected no legend induction yet, got %d", len(legend.inductions))
 	}
 
 	// 2nd monster -> hits 100%!
@@ -244,13 +263,22 @@ func TestCollectionService_MonsterBookCompletionNews(t *testing.T) {
 	if pub.articles[0].Category != "collection" {
 		t.Errorf("expected category collection, got %q", pub.articles[0].Category)
 	}
+	if len(legend.inductions) != 1 {
+		t.Fatalf("expected 1 legend induction, got %d", len(legend.inductions))
+	}
+	if legend.inductions[0].Category != "comp_mon" || legend.inductions[0].CharacterID != "char-hero" {
+		t.Errorf("unexpected legend induction: %+v", legend.inductions[0])
+	}
 
-	// 3rd monster -> already completed, idempotent (no duplicate news)
+	// 3rd monster -> already completed, idempotent (no duplicate news or induction)
 	if err := svc.RecordMonsterDefeat(ctx, "char-hero", "mon-003", "ゴーレム", "砂漠"); err != nil {
 		t.Fatalf("defeat 3 failed: %v", err)
 	}
 	if len(pub.articles) != 1 {
 		t.Errorf("expected still 1 news article, got %d", len(pub.articles))
+	}
+	if len(legend.inductions) != 1 {
+		t.Errorf("expected still 1 legend induction, got %d", len(legend.inductions))
 	}
 
 	_, prog, _ := svc.GetMonsterBook(ctx, "char-hero")
@@ -267,6 +295,7 @@ func TestCollectionService_ItemCollectionCompletionNews(t *testing.T) {
 		completions: make(map[string]bool),
 	}
 	pub := &mockNewsPublisher{}
+	legend := &mockLegendInductor{}
 	charRepo := &mockCharRepo{
 		characters: map[string]corecharacter.Character{
 			"char-collector": {ID: "char-collector", Name: "コレクター"},
@@ -280,6 +309,7 @@ func TestCollectionService_ItemCollectionCompletionNews(t *testing.T) {
 		2,
 		collection.WithNewsPublisher(pub),
 		collection.WithCharacterRepository(charRepo),
+		collection.WithLegendInductor(legend),
 	)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
@@ -291,6 +321,9 @@ func TestCollectionService_ItemCollectionCompletionNews(t *testing.T) {
 	}
 	if len(pub.articles) != 0 {
 		t.Fatalf("expected no news yet, got %d", len(pub.articles))
+	}
+	if len(legend.inductions) != 0 {
+		t.Fatalf("expected no legend induction yet, got %d", len(legend.inductions))
 	}
 
 	// 2nd item -> hits 100%!
@@ -304,12 +337,21 @@ func TestCollectionService_ItemCollectionCompletionNews(t *testing.T) {
 	if pub.articles[0].Content != expectedMsg {
 		t.Errorf("expected content %q, got %q", expectedMsg, pub.articles[0].Content)
 	}
+	if len(legend.inductions) != 1 {
+		t.Fatalf("expected 1 legend induction, got %d", len(legend.inductions))
+	}
+	if legend.inductions[0].Category != "comp_ite" || legend.inductions[0].CharacterID != "char-collector" {
+		t.Errorf("unexpected legend induction: %+v", legend.inductions[0])
+	}
 
-	// Duplicate discovery -> no duplicate news
+	// Duplicate discovery -> no duplicate news or induction
 	if err := svc.RecordItemDiscovered(ctx, "char-collector", "item-001", "やくそう", "ITEM"); err != nil {
 		t.Fatalf("item dup failed: %v", err)
 	}
 	if len(pub.articles) != 1 {
 		t.Errorf("expected still 1 news article, got %d", len(pub.articles))
+	}
+	if len(legend.inductions) != 1 {
+		t.Errorf("expected still 1 legend induction, got %d", len(legend.inductions))
 	}
 }

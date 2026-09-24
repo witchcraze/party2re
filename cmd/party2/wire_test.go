@@ -2,16 +2,24 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/contest"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
+	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/eventplaza"
 	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/tavern"
 )
@@ -378,5 +386,192 @@ func TestWireContestSettlement_NoActiveRound(t *testing.T) {
 
 	if len(repo.actions) != 0 {
 		t.Errorf("expected 0 actions scheduled when no active round, got %d", len(repo.actions))
+	}
+}
+
+type stubRankingRepo struct {
+	ranking.Repository
+	legends []ranking.LegendEntry
+}
+
+func (s *stubRankingRepo) RecordLegend(_ context.Context, entry ranking.LegendEntry) (bool, error) {
+	for _, l := range s.legends {
+		if l.Category == entry.Category && l.CharacterID == entry.CharacterID {
+			return false, nil
+		}
+	}
+	s.legends = append(s.legends, entry)
+	return true, nil
+}
+
+func (s *stubRankingRepo) GetLegendInductees(_ context.Context, category ranking.LegendCategory) ([]ranking.LegendEntry, error) {
+	var result []ranking.LegendEntry
+	for _, l := range s.legends {
+		if l.Category == category {
+			result = append(result, l)
+		}
+	}
+	return result, nil
+}
+
+func TestLegendInductorAdapter(t *testing.T) {
+	repo := &stubRankingRepo{}
+	rankingSvc, err := ranking.NewService(repo)
+	if err != nil {
+		t.Fatalf("failed to create ranking service: %v", err)
+	}
+
+	adapter := legendInductorAdapter{ranking: rankingSvc}
+
+	ctx := context.Background()
+	// Record monster completion
+	if err := adapter.RecordLegend(ctx, "comp_mon", "char-hero"); err != nil {
+		t.Fatalf("RecordLegend failed: %v", err)
+	}
+
+	if len(repo.legends) != 1 {
+		t.Fatalf("expected 1 legend record, got %d", len(repo.legends))
+	}
+	if repo.legends[0].Category != "comp_mon" || repo.legends[0].CharacterID != "char-hero" {
+		t.Errorf("unexpected legend record: %+v", repo.legends[0])
+	}
+
+	// Idempotent duplicate
+	if err := adapter.RecordLegend(ctx, "comp_mon", "char-hero"); err != nil {
+		t.Fatalf("duplicate RecordLegend failed: %v", err)
+	}
+	if len(repo.legends) != 1 {
+		t.Errorf("expected still 1 legend record, got %d", len(repo.legends))
+	}
+
+	// Nil ranking check
+	nilAdapter := legendInductorAdapter{ranking: nil}
+	if err := nilAdapter.RecordLegend(ctx, "comp_job", "char-hero"); err != nil {
+		t.Errorf("expected nil error on nil ranking, got %v", err)
+	}
+}
+
+func TestLegendInductor_EndToEndIntegration(t *testing.T) {
+	dsn := os.Getenv("PARTY2_DB_DSN")
+	if dsn == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatalf("OpenFromEnvironment failed: %v", err)
+	}
+	defer db.Close()
+
+	cfg, err := ConfigFromEnv()
+	if err != nil {
+		t.Fatalf("ConfigFromEnv failed: %v", err)
+	}
+
+	wiring, err := wireApp(db, nil, cfg, logging.Nop())
+	if err != nil {
+		t.Fatalf("wireApp failed: %v", err)
+	}
+
+	server := httptest.NewServer(wiring.handler.Router())
+	defer server.Close()
+
+	ctx := context.Background()
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	playerRepo, err := database.NewPlayerRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	prefix := fmt.Sprintf("wir_%d_", time.Now().UnixNano()%1000000)
+	p, err := coreplayer.New(prefix+"p", "pass", time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := playerRepo.Save(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = playerRepo.Delete(ctx, p.ID)
+	})
+
+	c, err := corecharacter.NewWithOptions(prefix+"Hero", "warrior", "m", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.PlayerID = p.ID
+	c.Color = "#123456"
+	if err := charRepo.Save(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test GET /legends/comp_mon before induction
+	resp, err := http.Get(server.URL + "/legends/comp_mon")
+	if err != nil {
+		t.Fatalf("GET /legends/comp_mon failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	var pageBefore ranking.LegendCategoryPage
+	if err := json.NewDecoder(resp.Body).Decode(&pageBefore); err != nil {
+		t.Fatalf("decode page failed: %v", err)
+	}
+	initialCount := pageBefore.Total
+
+	// Induct directly through legendInductorAdapter or collection/job/alchemy
+	rankingRepo, err := database.NewRankingRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rankingSvc, err := ranking.NewService(rankingRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter := legendInductorAdapter{ranking: rankingSvc}
+
+	if err := adapter.RecordLegend(ctx, "comp_mon", c.ID); err != nil {
+		t.Fatalf("adapter.RecordLegend failed: %v", err)
+	}
+
+	// Test GET /legends/comp_mon after induction
+	respAfter, err := http.Get(server.URL + "/legends/comp_mon")
+	if err != nil {
+		t.Fatalf("GET /legends/comp_mon after induction failed: %v", err)
+	}
+	defer respAfter.Body.Close()
+	if respAfter.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", respAfter.StatusCode)
+	}
+
+	var pageAfter ranking.LegendCategoryPage
+	if err := json.NewDecoder(respAfter.Body).Decode(&pageAfter); err != nil {
+		t.Fatalf("decode page after induction failed: %v", err)
+	}
+
+	if pageAfter.Total != initialCount+1 {
+		t.Fatalf("expected total %d, got %d", initialCount+1, pageAfter.Total)
+	}
+
+	found := false
+	for _, entry := range pageAfter.Entries {
+		if entry.CharacterID == c.ID {
+			found = true
+			if entry.CharacterName != c.Name {
+				t.Errorf("expected CharacterName %s, got %s", c.Name, entry.CharacterName)
+			}
+			if entry.Color != c.Color {
+				t.Errorf("expected Color %s, got %s", c.Color, entry.Color)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("inducted character %s not found in GET /legends/comp_mon", c.ID)
 	}
 }

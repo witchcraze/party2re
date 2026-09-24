@@ -2,6 +2,8 @@ package database
 
 import (
 	"context"
+	"database/sql"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/ranking"
 )
@@ -117,6 +119,47 @@ func (r *RankingRepository) ResetWeeklyJobChanges(ctx context.Context) error {
 
 // RecordLegend records a character's completion in the permanent Hall of Fame.
 func (r *RankingRepository) RecordLegend(ctx context.Context, entry ranking.LegendEntry) (bool, error) {
+	if entry.CharacterName == "" || entry.Color == "" || entry.GuildName == "" || entry.Icon == "" || entry.Message == "" {
+		var name, color, guildName, avatarURL, comment sql.NullString
+		queryDetails := `
+			SELECT c.name, c.color, COALESCE(g.name, ''), COALESCE(cp.avatar_url, ''), COALESCE(cp.comment, '')
+			FROM characters c
+			LEFT JOIN character_profiles cp ON c.id = cp.character_id
+			LEFT JOIN guild_members gm ON c.id = gm.character_id
+			LEFT JOIN guilds g ON gm.guild_id = g.id
+			WHERE c.id = ?
+		`
+		err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, queryDetails, entry.CharacterID).Scan(
+			&name, &color, &guildName, &avatarURL, &comment,
+		)
+		if err == nil {
+			if entry.CharacterName == "" && name.Valid && name.String != "" {
+				entry.CharacterName = name.String
+			}
+			if entry.Color == "" && color.Valid && color.String != "" {
+				entry.Color = color.String
+			}
+			if entry.GuildName == "" && guildName.Valid && guildName.String != "" {
+				entry.GuildName = guildName.String
+			}
+			if entry.Icon == "" && avatarURL.Valid && avatarURL.String != "" {
+				entry.Icon = avatarURL.String
+			}
+			if entry.Message == "" && comment.Valid && comment.String != "" {
+				entry.Message = comment.String
+			}
+		}
+	}
+	if entry.CharacterName == "" {
+		entry.CharacterName = entry.CharacterID
+	}
+	if entry.Color == "" {
+		entry.Color = "#ffffff"
+	}
+	if entry.InductedAt.IsZero() {
+		entry.InductedAt = time.Now().UTC()
+	}
+
 	query := `
 		INSERT IGNORE INTO legend_records (
 			category, character_id, character_name, guild_name, color, icon, message, inducted_at

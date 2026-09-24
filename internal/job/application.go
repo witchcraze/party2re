@@ -64,6 +64,17 @@ type JobChangeTracker interface {
 	RecordJobChange(ctx context.Context, characterID string) error
 }
 
+// LegendInductor defines permanent Hall of Fame induction contract (legend.cgi).
+type LegendInductor interface {
+	RecordLegend(ctx context.Context, category, characterID string) error
+}
+
+type LegendInductorFunc func(ctx context.Context, category, characterID string) error
+
+func (f LegendInductorFunc) RecordLegend(ctx context.Context, category, characterID string) error {
+	return f(ctx, category, characterID)
+}
+
 type Service struct {
 	repository     Repository
 	catalog        *corejob.Catalog
@@ -77,6 +88,7 @@ type Service struct {
 	costume        CostumeResetter
 	jobTracker     JobChangeTracker
 	equipment      EquipmentRepository
+	legend         LegendInductor
 }
 
 type Option func(*Service)
@@ -143,6 +155,13 @@ func WithCostumeResetter(c CostumeResetter) Option {
 	}
 }
 
+// WithLegendInductor sets the optional Hall of Fame legend inductor (legend.cgi).
+func WithLegendInductor(inductor LegendInductor) Option {
+	return func(s *Service) {
+		s.legend = inductor
+	}
+}
+
 func NewService(repository Repository, opts ...Option) (*Service, error) {
 	if repository == nil {
 		return nil, errors.New("job repository is nil")
@@ -165,6 +184,11 @@ func (s *Service) SetCostumeResetter(c CostumeResetter) {
 // SetJobChangeTracker registers the weekly job change tracker called upon job change.
 func (s *Service) SetJobChangeTracker(tracker JobChangeTracker) {
 	s.jobTracker = tracker
+}
+
+// SetLegendInductor registers the Hall of Fame legend inductor called upon all job mastery.
+func (s *Service) SetLegendInductor(inductor LegendInductor) {
+	s.legend = inductor
 }
 
 func (s *Service) ListDefinitions() []corejob.Definition {
@@ -255,6 +279,9 @@ func (s *Service) checkAndNotifyCompletion(ctx context.Context, charName string,
 				"@システム",
 				time.Now().UTC(),
 			)
+		}
+		if s.legend != nil {
+			_ = s.legend.RecordLegend(ctx, "comp_job", state.CharacterID)
 		}
 	}
 }

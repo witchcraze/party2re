@@ -196,6 +196,18 @@ func wireHooks(
 	if misc.job != nil && soc.ranking != nil {
 		misc.job.SetJobChangeTracker(soc.ranking)
 	}
+	if soc.ranking != nil {
+		legendInductor := legendInductorAdapter{ranking: soc.ranking}
+		if misc.collection != nil {
+			misc.collection.SetLegendInductor(legendInductor)
+		}
+		if misc.job != nil {
+			misc.job.SetLegendInductor(legendInductor)
+		}
+		if econ.alchemy != nil {
+			econ.alchemy.SetLegendInductor(legendInductor)
+		}
+	}
 
 	soc.registerWorkerHandlers(misc.activity, misc.chapel, misc.lottery, misc.contest)
 
@@ -344,4 +356,19 @@ func (a chapelBlessingAdapter) GetActiveBlessing(ctx context.Context, characterI
 		return "", err
 	}
 	return string(b.ActiveBlessing), nil
+}
+
+type legendInductorAdapter struct {
+	ranking *ranking.Service
+}
+
+func (a legendInductorAdapter) RecordLegend(ctx context.Context, category, characterID string) error {
+	if a.ranking == nil {
+		return nil
+	}
+	_, err := a.ranking.RecordLegend(ctx, ranking.LegendEntry{
+		Category:    ranking.LegendCategory(category),
+		CharacterID: characterID,
+	})
+	return err
 }

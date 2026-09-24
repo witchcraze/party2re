@@ -88,6 +88,17 @@ type TransactionProvider interface {
 
 type SynthesisHook func(ctx context.Context, characterID string, recipeID string) error
 
+// LegendInductor defines permanent Hall of Fame induction contract (legend.cgi).
+type LegendInductor interface {
+	RecordLegend(ctx context.Context, category, characterID string) error
+}
+
+type LegendInductorFunc func(ctx context.Context, category, characterID string) error
+
+func (f LegendInductorFunc) RecordLegend(ctx context.Context, category, characterID string) error {
+	return f(ctx, category, characterID)
+}
+
 type Option func(*Service)
 
 func WithTransactionProvider(txProvider TransactionProvider) Option {
@@ -99,6 +110,12 @@ func WithTransactionProvider(txProvider TransactionProvider) Option {
 func WithSynthesisHook(hook SynthesisHook) Option {
 	return func(s *Service) {
 		s.synthesisHook = hook
+	}
+}
+
+func WithLegendInductor(inductor LegendInductor) Option {
+	return func(s *Service) {
+		s.legend = inductor
 	}
 }
 
@@ -116,6 +133,7 @@ type Service struct {
 	recipes       *RecipeCatalog
 	items         coreitem.DefinitionProvider
 	synthesisHook SynthesisHook
+	legend        LegendInductor
 	nowFunc       func() time.Time
 	rngMu         sync.Mutex
 	rng           random.Generator
@@ -154,6 +172,10 @@ func NewService(
 
 func (s *Service) SetSynthesisHook(hook SynthesisHook) {
 	s.synthesisHook = hook
+}
+
+func (s *Service) SetLegendInductor(inductor LegendInductor) {
+	s.legend = inductor
 }
 
 func (s *Service) now() time.Time {
@@ -399,6 +421,9 @@ func (s *Service) Claim(ctx context.Context, characterID string) (ClaimResult, e
 				return fmt.Errorf("set comp alc title: %w", err)
 			}
 			compAlcAwarded = true
+			if s.legend != nil {
+				_ = s.legend.RecordLegend(txCtx, "comp_alc", characterID)
+			}
 		}
 
 		clearedRecipeID := state.RecipeID
