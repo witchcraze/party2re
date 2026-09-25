@@ -216,21 +216,10 @@ func (ctx *battleContext) checkStatusSkip(actor Participant) bool {
 	}
 }
 
-func (ctx *battleContext) applyPostActionPoison(actor Participant) {
-	if ctx.hpMap[actor.ID] <= 0 || ctx.banishedMap[actor.ID] {
-		return
-	}
-	st := ctx.statusMap[actor.ID]
-	isDeadly := st == StatusDeadlyPoison || st == "猛毒" || st == "劇毒"
-	isStandard := st == StatusPoison || st == "poison" || st == "毒"
-
-	if !isDeadly && !isStandard {
-		return
-	}
-
-	maxHP := actor.MaxHP
+func (ctx *battleContext) executePoisonTick(target Participant, statusName string) {
+	maxHP := target.MaxHP
 	if maxHP <= 0 {
-		maxHP = actor.HP
+		maxHP = target.HP
 	}
 	dotDmg := maxHP / 10
 	if dotDmg < 1 {
@@ -240,52 +229,89 @@ func (ctx *battleContext) applyPostActionPoison(actor Participant) {
 		dotDmg = 950 + ctx.rng.Intn(100)
 	}
 
-	ctx.hpMap[actor.ID] -= dotDmg
-	if ctx.hpMap[actor.ID] < 0 {
-		ctx.hpMap[actor.ID] = 0
+	ctx.hpMap[target.ID] -= dotDmg
+	if ctx.hpMap[target.ID] < 0 {
+		ctx.hpMap[target.ID] = 0
 	}
 
-	statusName := "毒"
-	if isDeadly {
-		statusName = "猛毒"
-	}
-	msg := fmt.Sprintf("%s は%sにより %d のダメージをうけた！", actor.NameOrID(), statusName, dotDmg)
+	msg := fmt.Sprintf("%s は%sにより %d のダメージをうけた！", target.NameOrID(), statusName, dotDmg)
 
-	if ctx.hpMap[actor.ID] <= 0 {
-		curMP := ctx.mpMap[actor.ID]
-		targetCopy := actor
-		targetCopy.Abilities = ctx.abilitiesMap[actor.ID]
+	if ctx.hpMap[target.ID] <= 0 {
+		curMP := ctx.mpMap[target.ID]
+		targetCopy := target
+		targetCopy.Abilities = ctx.abilitiesMap[target.ID]
 		rev := CheckRevival(&targetCopy, &curMP)
-		ctx.mpMap[actor.ID] = curMP
+		ctx.mpMap[target.ID] = curMP
 		if rev.Revived {
-			ctx.hpMap[actor.ID] = rev.HP
-			ctx.attackBuff[actor.ID] += rev.AttackBuff
-			ctx.defenseBuff[actor.ID] += rev.DefenseBuff
-			ctx.agilityBuff[actor.ID] += rev.AgilityBuff
+			ctx.hpMap[target.ID] = rev.HP
+			ctx.attackBuff[target.ID] += rev.AttackBuff
+			ctx.defenseBuff[target.ID] += rev.DefenseBuff
+			ctx.agilityBuff[target.ID] += rev.AgilityBuff
 			if rev.Status != "" {
-				ctx.statusMap[actor.ID] = rev.Status
+				ctx.statusMap[target.ID] = rev.Status
 			}
 			msg += " " + rev.Message
 			if rev.Cursed {
-				ctx.abilitiesMap[actor.ID] = append(ctx.abilitiesMap[actor.ID], "cursed")
+				ctx.abilitiesMap[target.ID] = append(ctx.abilitiesMap[target.ID], "cursed")
 			} else {
-				ctx.abilitiesMap[actor.ID] = nil
+				ctx.abilitiesMap[target.ID] = nil
 			}
 		} else {
-			ctx.applyMazinSynergy(actor)
-			ctx.checkCrystalDrop(actor)
+			ctx.statusMap[target.ID] = ""
+			ctx.applyMazinSynergy(target)
+			ctx.checkCrystalDrop(target)
 		}
 	}
 
 	ctx.logs = append(ctx.logs, TurnLog{
 		Turn:        ctx.turns,
-		ActorID:     actor.ID,
+		ActorID:     target.ID,
 		ActionName:  "毒ダメージ",
-		TargetID:    actor.ID,
+		TargetID:    target.ID,
 		DamageDealt: dotDmg,
 		Message:     msg,
 		RemainingHP: copyHPMap(ctx.hpMap),
 	})
+}
+
+// applyPartyVirulentPoison deals 10% MaxHP DoT damage to all other allies afflicted with 劇毒 whenever an ally acts (legacy _battle.cgi:792-807).
+func (ctx *battleContext) applyPartyVirulentPoison(actor Participant, allParticipants []Participant) {
+	actorTeam := ctx.teamMap[actor.ID]
+	for _, p := range allParticipants {
+		if p.ID == actor.ID || ctx.teamMap[p.ID] != actorTeam {
+			continue
+		}
+		if ctx.hpMap[p.ID] <= 0 || ctx.banishedMap[p.ID] {
+			continue
+		}
+		st := ctx.statusMap[p.ID]
+		if st == StatusVirulentPoison || st == "劇毒" {
+			ctx.executePoisonTick(p, "劇毒")
+		}
+	}
+}
+
+func (ctx *battleContext) applyPostActionPoison(actor Participant) {
+	if ctx.hpMap[actor.ID] <= 0 || ctx.banishedMap[actor.ID] {
+		return
+	}
+	st := ctx.statusMap[actor.ID]
+	isVirulent := st == StatusVirulentPoison || st == "劇毒"
+	isDeadly := st == StatusDeadlyPoison || st == "猛毒"
+	isStandard := st == StatusPoison || st == "poison" || st == "毒"
+
+	if !isVirulent && !isDeadly && !isStandard {
+		return
+	}
+
+	statusName := "毒"
+	if isVirulent {
+		statusName = "劇毒"
+	} else if isDeadly {
+		statusName = "猛毒"
+	}
+
+	ctx.executePoisonTick(actor, statusName)
 
 	// Natural cure roll: only standard poison has 20% natural cure chance (legacy _battle.cgi:851)
 	if isStandard && ctx.hpMap[actor.ID] > 0 {

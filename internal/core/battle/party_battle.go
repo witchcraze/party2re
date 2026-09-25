@@ -292,6 +292,9 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 				ctx.executeNormalAttack(actor, opponents)
 			}
 
+			// Post-action virulent poison for other party members (legacy _battle.cgi:792-807)
+			ctx.applyPartyVirulentPoison(actor, allParticipants)
+
 			// Post-action poison evaluation (legacy _battle.cgi:810-855)
 			ctx.applyPostActionPoison(actor)
 
