@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #824 — Hall of Fame: Wire RecordLegend induction to 100% completion events in Collection, Job Mastery, and Alchemy
+Last updated: Issue #830 — Job: Fix non-atomic armor-29 consumption and partial mutation vulnerability in FireFighter change
 
 ## Current Phase
 
