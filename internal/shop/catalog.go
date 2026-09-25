@@ -10,9 +10,10 @@ import (
 type ShopType string
 
 const (
-	ShopTypeWeapon ShopType = "weapon"
-	ShopTypeArmor  ShopType = "armor"
-	ShopTypeItem   ShopType = "item"
+	ShopTypeWeapon    ShopType = "weapon"
+	ShopTypeArmor     ShopType = "armor"
+	ShopTypeItem      ShopType = "item"
+	ShopTypeAccessory ShopType = "accessory"
 )
 
 const SecretShopHint = "＠ひみつのみせ に行きたい"
@@ -50,7 +51,7 @@ type NPCInspectResult struct {
 
 func ValidateShopType(st ShopType) bool {
 	switch st {
-	case ShopTypeWeapon, ShopTypeArmor, ShopTypeItem:
+	case ShopTypeWeapon, ShopTypeArmor, ShopTypeItem, ShopTypeAccessory:
 		return true
 	default:
 		return false
@@ -58,7 +59,7 @@ func ValidateShopType(st ShopType) bool {
 }
 
 // GetSalesItemIDs returns the legacy catalog item IDs for a given shop type and job level.
-// Corresponds 1:1 to party2/lib/weapon.cgi:18, armor.cgi:17, and item.cgi:17-22.
+// Corresponds 1:1 to party2/lib/weapon.cgi:18, armor.cgi:17, item.cgi:17-22, and accessory.cgi:17-29.
 func GetSalesItemIDs(shopType ShopType, jobLv int) ([]string, error) {
 	switch shopType {
 	case ShopTypeWeapon:
@@ -67,6 +68,8 @@ func GetSalesItemIDs(shopType ShopType, jobLv int) ([]string, error) {
 		return getArmorSalesItemIDs(jobLv), nil
 	case ShopTypeItem:
 		return getItemSalesItemIDs(jobLv), nil
+	case ShopTypeAccessory:
+		return getAccessorySalesItemIDs(jobLv), nil
 	default:
 		return nil, ErrInvalidShopType
 	}
@@ -125,6 +128,33 @@ func getItemSalesItemIDs(jobLv int) []string {
 	return res
 }
 
+func getAccessorySalesItemIDs(jobLv int) []string {
+	var ids []int
+	switch {
+	case jobLv >= 100:
+		ids = []int{
+			143, 144, 145, 146, 147, 148, 149, 150, 151,
+			158, 169, 175,
+			218, 219, 220, 222, 223, 225, 226, 228, 229, 230,
+			181, 182, 189, 190, 248,
+		}
+	case jobLv >= 50:
+		ids = []int{
+			144, 145, 146, 147, 148,
+			158, 169, 175,
+			218, 219, 220, 222, 223, 225, 226, 228, 229, 230,
+			248,
+		}
+	default:
+		ids = []int{147, 148, 158, 169, 175, 222}
+	}
+	res := make([]string, len(ids))
+	for i, id := range ids {
+		res[i] = fmt.Sprintf("item-%03d", id)
+	}
+	return res
+}
+
 func GetShopMeta(shopType ShopType) (title string, npcName string) {
 	switch shopType {
 	case ShopTypeWeapon:
@@ -133,6 +163,8 @@ func GetShopMeta(shopType ShopType) (title string, npcName string) {
 		return "防具屋", "@アマノ"
 	case ShopTypeItem:
 		return "道具屋", "@アイテムコ"
+	case ShopTypeAccessory:
+		return "アクセサリー屋", "@ミラ"
 	default:
 		return "", ""
 	}
@@ -161,6 +193,12 @@ func GetShopWords(shopType ShopType) []string {
 			"道具は戦闘中に使うニャ！",
 			"この世界のどこかに秘密の店というあやしいお店があるらしいですよぉ",
 		}
+	case ShopTypeAccessory:
+		return []string{
+			"ここはアクセサリー屋。ここでしか手に入らないアイテムばっかりよ",
+			"おすすめのアクセサリーを買うと良いと思うわ！",
+			"独占禁止法？　ぼったくり？　細かいことはいいの！",
+		}
 	default:
 		return nil
 	}
@@ -174,6 +212,8 @@ func GetInspectDialogue(shopType ShopType) (dialogue string, hint string) {
 		return "な、な、何を見ているッスか！？！", ""
 	case ShopTypeItem:
 		return "ほえ？なんでしょうかぁ？", SecretShopHint
+	case ShopTypeAccessory:
+		return "なにか私についてる？", ""
 	default:
 		return "", ""
 	}

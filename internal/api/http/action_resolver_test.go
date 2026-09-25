@@ -66,6 +66,14 @@ func TestActionURLResolver(t *testing.T) {
 			wantURL:    "/characters/char-999/shop/item",
 		},
 		{
+			name:       "shop accessory action",
+			actionID:   "shop_accessory",
+			label:      "装飾品屋を見る",
+			category:   "shop",
+			wantMethod: http.MethodGet,
+			wantURL:    "/characters/char-999/shop/accessory",
+		},
+		{
 			name:       "shop batch purchase action",
 			actionID:   "shop_batch_purchase",
 			label:      "まとめ買い",

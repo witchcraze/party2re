@@ -209,6 +209,8 @@ type stubShopService struct {
 	inspectNPCFn         func(ctx context.Context, shopType shop.ShopType, characterID string) (shop.NPCInspectResult, error)
 	talkNPCFn            func(ctx context.Context, shopType shop.ShopType) (string, error)
 	discoverSecretShopFn func(ctx context.Context, characterID string) (bool, string, error)
+	purchaseInShopFn     func(ctx context.Context, characterID string, shopType shop.ShopType, itemDefinitionID string, quantity int) (shop.PurchaseResult, error)
+	synthesizeFn         func(ctx context.Context, characterID string, recipeTarget string) (shop.SynthesisResult, error)
 }
 
 func (s *stubShopService) Purchase(ctx context.Context, characterID, itemDefinitionID string, quantity int) (shop.PurchaseResult, error) {
@@ -216,6 +218,12 @@ func (s *stubShopService) Purchase(ctx context.Context, characterID, itemDefinit
 		return s.purchaseFn(ctx, characterID, itemDefinitionID, quantity)
 	}
 	return shop.PurchaseResult{}, nil
+}
+func (s *stubShopService) PurchaseInShop(ctx context.Context, characterID string, shopType shop.ShopType, itemDefinitionID string, quantity int) (shop.PurchaseResult, error) {
+	if s.purchaseInShopFn != nil {
+		return s.purchaseInShopFn(ctx, characterID, shopType, itemDefinitionID, quantity)
+	}
+	return s.Purchase(ctx, characterID, itemDefinitionID, quantity)
 }
 func (s *stubShopService) Sell(ctx context.Context, characterID, itemInstanceID string, quantity int) (shop.SaleResult, error) {
 	if s.sellFn != nil {
@@ -252,6 +260,12 @@ func (s *stubShopService) DiscoverSecretShop(ctx context.Context, characterID st
 		return s.discoverSecretShopFn(ctx, characterID)
 	}
 	return true, "unlocked", nil
+}
+func (s *stubShopService) Synthesize(ctx context.Context, characterID string, recipeTarget string) (shop.SynthesisResult, error) {
+	if s.synthesizeFn != nil {
+		return s.synthesizeFn(ctx, characterID, recipeTarget)
+	}
+	return shop.SynthesisResult{}, nil
 }
 
 // -------------------------------------------------------------------

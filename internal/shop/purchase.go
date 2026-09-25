@@ -60,15 +60,27 @@ func (s *Service) isItemInActiveHelper(ctx context.Context, itemID string) bool 
 	return false
 }
 
-// Purchase buys an item at 2x retail price.
+// Purchase buys an item at retail price.
 // If the target slot is empty in inventory and quantity is 1, it is delivered to inventory.
 // If the slot is already occupied, quantity > 1, or depot transfer occurs, it is sent to depot.
 func (s *Service) Purchase(ctx context.Context, characterID string, itemDefinitionID string, quantity int) (PurchaseResult, error) {
+	definition, err := s.catalog.FindByID(itemDefinitionID)
+	if err != nil {
+		return PurchaseResult{}, ErrItemNotFound
+	}
+	return s.PurchaseInShop(ctx, characterID, shopTypeFromKind(definition.Kind()), itemDefinitionID, quantity)
+}
+
+// PurchaseInShop buys an item from a specific shop type, applying shop-specific pricing and messages.
+func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopType ShopType, itemDefinitionID string, quantity int) (PurchaseResult, error) {
 	if quantity <= 0 || quantity > MaxTransactionQuantity {
 		return PurchaseResult{}, ErrInvalidQuantity
 	}
 	if characterID == "" {
 		return PurchaseResult{}, corecharacter.ErrNotFound
+	}
+	if !ValidateShopType(shopType) {
+		return PurchaseResult{}, ErrInvalidShopType
 	}
 
 	definition, err := s.catalog.FindByID(itemDefinitionID)
@@ -80,7 +92,7 @@ func (s *Service) Purchase(ctx context.Context, characterID string, itemDefiniti
 		return PurchaseResult{}, ErrItemUnavailable
 	}
 
-	unitPrice, err := s.CalculateRetailPrice(definition.Price)
+	unitPrice, err := s.CalculateRetailPriceForShop(shopType, itemDefinitionID, definition.Price)
 	if err != nil {
 		return PurchaseResult{}, err
 	}
@@ -98,6 +110,22 @@ func (s *Service) Purchase(ctx context.Context, characterID string, itemDefiniti
 		}
 		if char.Money < totalPrice {
 			return ErrInsufficientFunds
+		}
+
+		if shopType == ShopTypeAccessory {
+			sales, err := GetSalesItemIDs(shopType, char.JobLevel)
+			if err == nil {
+				found := false
+				for _, sid := range sales {
+					if sid == itemDefinitionID {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return ErrItemNotFound
+				}
+			}
 		}
 
 		// 2. Lock Inventory (Rank 3)
@@ -154,17 +182,10 @@ func (s *Service) Purchase(ctx context.Context, characterID string, itemDefiniti
 			return ErrDepotNotConfigured
 		}
 
-		dep, err := s.depots.FindByCharacterIDForUpdate(txCtx, characterID)
+		dep, err := depot.FindOrCreate(txCtx, s.depots, char)
 		if err != nil {
-			if !errors.Is(err, depot.ErrNotFound) {
-				return err
-			}
-			dep, err = depot.NewDepotWithCapacity(characterID, char.JobLevel, 0, char.OverDepot)
-			if err != nil {
-				return err
-			}
+			return err
 		}
-		dep.RefreshCapacity(char.JobLevel, char.OverDepot)
 
 		inst, err := item.NewInstance(itemDefinitionID, quantity)
 		if err != nil {
@@ -280,17 +301,10 @@ func (s *Service) BatchPurchase(ctx context.Context, characterID string, shopTyp
 		}
 
 		// 2. Lock Depot (Rank 5)
-		dep, err := s.depots.FindByCharacterIDForUpdate(txCtx, characterID)
+		dep, err := depot.FindOrCreate(txCtx, s.depots, char)
 		if err != nil {
-			if !errors.Is(err, depot.ErrNotFound) {
-				return err
-			}
-			dep, err = depot.NewDepotWithCapacity(characterID, char.JobLevel, 0, char.OverDepot)
-			if err != nil {
-				return err
-			}
+			return err
 		}
-		dep.RefreshCapacity(char.JobLevel, char.OverDepot)
 
 		// Pre-validate & add all items to depot
 		for _, inst := range instances {

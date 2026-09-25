@@ -534,7 +534,7 @@ func moduleForRoute(route Route) string {
 		return "rescue"
 	case strings.HasPrefix(p, "/characters/{id}/secretshop"):
 		return "secretshop"
-	case strings.HasPrefix(p, "/shop"):
+	case strings.HasPrefix(p, "/characters/{id}/shop") || strings.HasPrefix(p, "/shop"):
 		return "shop"
 	case strings.HasPrefix(p, "/characters/{id}/tavern") || strings.HasPrefix(p, "/tavern"):
 		return "tavern"
