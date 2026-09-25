@@ -121,7 +121,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Casino mini-games: Multi-Player Room Lobby (Candidate C), Indian Poker, High & Low, Doppelganger, Slot Machine, Prize Exchange, distributed room locking, CasinoWins tracking (cas_c), Gambler job unlock gating, and escape fatigue (#81, #82, #141, #397, #408, #453, #486, #590, #630, #635, #642, #708, #799)
 - [x] Lottery: Server-wide 20-cap Takarakuji lottery with pessimistic row locking, and Fukubiki raffle (#83, #484, #485, #631, #800)
 - [x] Plantation seed cultivation with 6 seeds, 14 fertilizers, overnight maturation, and Depot delivery (#84, #489, #816)
-- [x] Collection and Monster Book encyclopedia with combat defeat recording, canonical thresholds (180/141), and 100% completion news (#85, #797)
+- [x] Collection and Monster Book encyclopedia with combat defeat recording, canonical thresholds (180 monsters, 141 items, 71 weapons, 55 armors), 100% completion news, and comp_wea/comp_arm Hall of Fame induction (#85, #797, #832)
 - [x] Chapel prayers and blessings (#86, #472)
 - [x] Event Plaza, traveling merchant bazaar, and victory celebration banquets linked to Valkey presence (#161, #491, #634)
 - [x] Secret Underground Shop and NPC @ヒミツジ (#192, #462)

@@ -510,6 +510,8 @@ func (h *Handler) Router() http.Handler {
 	// Collections
 	mux.HandleFunc("GET /characters/{id}/collections/monsters", h.handleGetMonsterBook)
 	mux.HandleFunc("GET /characters/{id}/collections/items", h.handleGetItemCollection)
+	mux.HandleFunc("GET /characters/{id}/collections/weapons", h.handleGetWeaponCollection)
+	mux.HandleFunc("GET /characters/{id}/collections/armors", h.handleGetArmorCollection)
 
 	// Achievements & Commemorative Medals
 	mux.HandleFunc("GET /characters/{id}/achievements", h.handleGetCharacterAchievements)

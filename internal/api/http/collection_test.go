@@ -13,8 +13,10 @@ import (
 )
 
 type stubCollectionService struct {
-	getMonsterBookFn    func(ctx context.Context, characterID string) ([]collection.MonsterBookEntry, collection.CompletionProgress, error)
-	getItemCollectionFn func(ctx context.Context, characterID, category string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error)
+	getMonsterBookFn      func(ctx context.Context, characterID string) ([]collection.MonsterBookEntry, collection.CompletionProgress, error)
+	getItemCollectionFn   func(ctx context.Context, characterID, category string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error)
+	getWeaponCollectionFn func(ctx context.Context, characterID string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error)
+	getArmorCollectionFn  func(ctx context.Context, characterID string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error)
 }
 
 func (s *stubCollectionService) GetMonsterBook(ctx context.Context, characterID string) ([]collection.MonsterBookEntry, collection.CompletionProgress, error) {
@@ -27,6 +29,20 @@ func (s *stubCollectionService) GetMonsterBook(ctx context.Context, characterID 
 func (s *stubCollectionService) GetItemCollection(ctx context.Context, characterID, category string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error) {
 	if s.getItemCollectionFn != nil {
 		return s.getItemCollectionFn(ctx, characterID, category)
+	}
+	return nil, collection.CompletionProgress{}, nil
+}
+
+func (s *stubCollectionService) GetWeaponCollection(ctx context.Context, characterID string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error) {
+	if s.getWeaponCollectionFn != nil {
+		return s.getWeaponCollectionFn(ctx, characterID)
+	}
+	return nil, collection.CompletionProgress{}, nil
+}
+
+func (s *stubCollectionService) GetArmorCollection(ctx context.Context, characterID string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error) {
+	if s.getArmorCollectionFn != nil {
+		return s.getArmorCollectionFn(ctx, characterID)
 	}
 	return nil, collection.CompletionProgress{}, nil
 }
@@ -57,6 +73,16 @@ func TestCollectionEndpoints(t *testing.T) {
 				{ItemID: "i1", ItemName: "Herb", Category: "consumable"},
 			}, collection.CompletionProgress{DiscoveredCount: 1, TotalCatalogCount: 5, CompletionPercentage: 20.0}, nil
 		},
+		getWeaponCollectionFn: func(_ context.Context, characterID string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error) {
+			return []collection.ItemCollectionEntry{
+				{ItemID: "w1", ItemName: "Wooden Stick", Category: "weapon"},
+			}, collection.CompletionProgress{DiscoveredCount: 1, TotalCatalogCount: 71, CompletionPercentage: 1.4}, nil
+		},
+		getArmorCollectionFn: func(_ context.Context, characterID string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error) {
+			return []collection.ItemCollectionEntry{
+				{ItemID: "a1", ItemName: "Cloth Clothes", Category: "armor"},
+			}, collection.CompletionProgress{DiscoveredCount: 1, TotalCatalogCount: 55, CompletionPercentage: 1.8}, nil
+		},
 	}
 
 	h := newTestHandler(
@@ -82,6 +108,28 @@ func TestCollectionEndpoints(t *testing.T) {
 
 	t.Run("GET /characters/{id}/collections/items - success", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/characters/c1/collections/items?category=consumable", nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("GET /characters/{id}/collections/weapons - success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/characters/c1/collections/weapons", nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("GET /characters/{id}/collections/armors - success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/characters/c1/collections/armors", nil)
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
