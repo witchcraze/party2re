@@ -2,13 +2,13 @@
 
 ## Overview
 
-The Alchemy system (錬金術 / 錬金堂, NPC @トロデ) provides overnight crafting and item synthesis from 112 data-driven recipes.
+The Alchemy system (錬金術 / 錬金堂, NPC @トロデ) provides overnight crafting and item synthesis from 114 data-driven recipes.
 Unlike modern instant-crafting or fee-charging MMO systems, authentic Party2 synthesis adheres to the following principles:
 - **Zero Gold Fee**: Trode performs synthesis entirely free of charge (`lib/alchemy.cgi`).
 - **Depot-Linked Materials**: Ingredients are consumed directly from the player's Depot (`character_depots`, `depot_items`), rather than active inventory.
 - **Overnight Maturation & Home Rest**: Synthesis requires time to mature until the next morning (`timer.NextMidnightJST`) or completes instantly when resting at home (`internal/home/sleep.go` `Wake`).
 - **Depot-Direct Delivery**: Completed synthesized items are deposited directly into the player's Depot upon claim.
-- **Recipe Compendium**: Players discover and learn recipes (via recipe books or base materials), tracking learned and crafted statuses across all 112 recipes.
+- **Recipe Compendium**: Players discover and learn recipes (via recipe books or base materials), tracking learned and crafted statuses across all 114 recipes.
 - **Title Award**: Achieving 100% compendium crafted completion awards the `comp_alc` title (`$title .= "comp_alc,"`).
 
 ---
@@ -25,7 +25,7 @@ A recipe consists of:
 
 ### Recipe Catalog
 - Loaded from data-driven definitions (`internal/alchemy/data/recipes.json`).
-- 112 canonical recipes matching legacy `party2/lib/_alchemy_recipe.cgi`.
+- 114 canonical recipes matching legacy `party2/lib/_alchemy_recipe.cgi` (including `魔獣の皮` + `幸せの種` -> `福袋`, and `祈りの指輪` + `金塊` -> `金の指輪`).
 - All ingredient item definition IDs and result item definition IDs map 1:1 with entries in the global Item Catalog (`internal/core/item`).
 - Zero gold fee across all recipes.
 
@@ -77,7 +77,7 @@ A recipe consists of:
    - Save updated Depot.
    - Mark recipe as crafted in `character_alchemy_recipes`.
    - Increment `total_crafts`.
-   - If total unique crafted recipes equals 112 (100%) and `comp_alc` not yet awarded, set `comp_alc = true` and record title.
+   - If total unique crafted recipes equals 114 (100%) and `comp_alc` not yet awarded, set `comp_alc = true` and record title.
    - Reset synthesis state to `state = none`.
    - Trigger optional `SynthesisHook` (e.g. for Commemorative Medal milestone tracking).
 

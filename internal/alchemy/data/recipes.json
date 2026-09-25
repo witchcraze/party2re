@@ -1742,5 +1742,37 @@
         "quantity": 1
       }
     ]
+  },
+  {
+    "id": "recipe-113",
+    "name": "福袋の合成",
+    "result_item_definition_id": "item-125",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-131",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-022",
+        "quantity": 1
+      }
+    ]
+  },
+  {
+    "id": "recipe-114",
+    "name": "金の指輪の合成",
+    "result_item_definition_id": "item-118",
+    "result_quantity": 1,
+    "ingredients": [
+      {
+        "definition_id": "item-012",
+        "quantity": 1
+      },
+      {
+        "definition_id": "item-134",
+        "quantity": 1
+      }
+    ]
   }
 ]
