@@ -104,6 +104,31 @@ func (m *mockTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Contex
 	return fn(ctx)
 }
 
+type mockCollectionRecorder struct {
+	calls []recordedItem
+	err   error
+}
+
+type recordedItem struct {
+	CharacterID string
+	ItemID      string
+	ItemName    string
+	Category    string
+}
+
+func (m *mockCollectionRecorder) RecordItemDiscovered(_ context.Context, characterID, itemID, itemName, category string) error {
+	if m.err != nil {
+		return m.err
+	}
+	m.calls = append(m.calls, recordedItem{
+		CharacterID: characterID,
+		ItemID:      itemID,
+		ItemName:    itemName,
+		Category:    category,
+	})
+	return nil
+}
+
 func setupTest(t *testing.T, opts ...secretshop.Option) (*secretshop.Service, *mockCharacterRepo, *mockInventoryRepo, *secretshop.Catalog) {
 	t.Helper()
 
@@ -524,5 +549,133 @@ func TestPurchaseItemValidationErrors(t *testing.T) {
 	_, err = svc.PurchaseItem(ctx, "char-high", "non_existent_item", 1)
 	if !errors.Is(err, secretshop.ErrItemNotFound) {
 		t.Fatalf("expected ErrItemNotFound, got %v", err)
+	}
+}
+
+func TestPurchaseItem_RecordsCollectionDiscovery(t *testing.T) {
+	recorder := &mockCollectionRecorder{}
+	depotRepo := newMockDepotRepo()
+	svc, charRepo, _, _ := setupTest(t,
+		secretshop.WithDepotRepository(depotRepo),
+		secretshop.WithCollectionRecorder(recorder),
+	)
+	ctx := context.Background()
+
+	eligible := createTestCharacter("char-high", "Veteran", 20, 7, 100000)
+	_ = charRepo.Update(ctx, eligible)
+
+	// Single purchase into empty inventory -> goes to inventory and records collection discovery
+	res, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root", 1)
+	if err != nil {
+		t.Fatalf("PurchaseItem failed: %v", err)
+	}
+	if res.TransferredToDepot {
+		t.Fatal("expected item to be in inventory")
+	}
+
+	if len(recorder.calls) != 1 {
+		t.Fatalf("expected 1 collection record call, got %d", len(recorder.calls))
+	}
+	record := recorder.calls[0]
+	if record.CharacterID != "char-high" {
+		t.Errorf("expected character ID char-high, got %s", record.CharacterID)
+	}
+	if record.ItemID != "item-010" {
+		t.Errorf("expected item ID item-010, got %s", record.ItemID)
+	}
+	if record.ItemName != "薬草の根っこ" {
+		t.Errorf("expected item name 薬草の根っこ, got %s", record.ItemName)
+	}
+	if record.Category != "consumable" && record.Category != "item" {
+		t.Errorf("expected category consumable or item, got %s", record.Category)
+	}
+}
+
+func TestPurchaseItem_DepotTransferDoesNotRecordCollection(t *testing.T) {
+	recorder := &mockCollectionRecorder{}
+	depotRepo := newMockDepotRepo()
+	svc, charRepo, _, _ := setupTest(t,
+		secretshop.WithDepotRepository(depotRepo),
+		secretshop.WithCollectionRecorder(recorder),
+	)
+	ctx := context.Background()
+
+	eligible := createTestCharacter("char-high", "Veteran", 20, 7, 100000)
+	_ = charRepo.Update(ctx, eligible)
+
+	// Buy first item -> enters inventory, records collection
+	_, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root", 1)
+	if err != nil {
+		t.Fatalf("first purchase failed: %v", err)
+	}
+	if len(recorder.calls) != 1 {
+		t.Fatalf("expected 1 record after first purchase, got %d", len(recorder.calls))
+	}
+
+	// Buy second item -> transfers to depot, MUST NOT record collection (legacy parity)
+	res2, err := svc.PurchaseItem(ctx, "char-high", "secret_item_magic_mirror", 1)
+	if err != nil {
+		t.Fatalf("second purchase failed: %v", err)
+	}
+	if !res2.TransferredToDepot {
+		t.Fatal("expected second item to transfer to depot")
+	}
+	if len(recorder.calls) != 1 {
+		t.Fatalf("expected still 1 record after depot transfer, got %d", len(recorder.calls))
+	}
+
+	// Buy multi-quantity item -> transfers to depot, MUST NOT record collection
+	res3, err := svc.PurchaseItem(ctx, "char-high", "secret_item_ruby_of_protection", 2)
+	if err != nil {
+		t.Fatalf("multi-quantity purchase failed: %v", err)
+	}
+	if !res3.TransferredToDepot {
+		t.Fatal("expected multi-quantity item to transfer to depot")
+	}
+	if len(recorder.calls) != 1 {
+		t.Fatalf("expected still 1 record after multi-quantity depot transfer, got %d", len(recorder.calls))
+	}
+}
+
+func TestPurchaseItem_CollectionRecorderErrorSwallowed(t *testing.T) {
+	recorder := &mockCollectionRecorder{
+		err: errors.New("collection repository failure"),
+	}
+	depotRepo := newMockDepotRepo()
+	svc, charRepo, _, _ := setupTest(t,
+		secretshop.WithDepotRepository(depotRepo),
+		secretshop.WithCollectionRecorder(recorder),
+	)
+	ctx := context.Background()
+
+	eligible := createTestCharacter("char-high", "Veteran", 20, 7, 100000)
+	_ = charRepo.Update(ctx, eligible)
+
+	// Best-effort collection discovery: purchase must succeed even if collection recording returns an error
+	res, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root", 1)
+	if err != nil {
+		t.Fatalf("expected purchase to succeed despite collection error, got %v", err)
+	}
+	if res.TransferredToDepot {
+		t.Fatal("expected item to be in inventory")
+	}
+}
+
+func TestService_SetCollectionRecorder(t *testing.T) {
+	recorder := &mockCollectionRecorder{}
+	depotRepo := newMockDepotRepo()
+	svc, charRepo, _, _ := setupTest(t, secretshop.WithDepotRepository(depotRepo))
+	svc.SetCollectionRecorder(recorder)
+
+	ctx := context.Background()
+	eligible := createTestCharacter("char-high", "Veteran", 20, 7, 100000)
+	_ = charRepo.Update(ctx, eligible)
+
+	_, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root", 1)
+	if err != nil {
+		t.Fatalf("purchase failed: %v", err)
+	}
+	if len(recorder.calls) != 1 {
+		t.Fatalf("expected 1 record call after SetCollectionRecorder, got %d", len(recorder.calls))
 	}
 }

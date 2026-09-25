@@ -135,6 +135,9 @@ func wireHooks(
 		if misc.eventplaza != nil {
 			misc.eventplaza.SetCollectionRecorder(misc.collection)
 		}
+		if misc.secretshop != nil {
+			misc.secretshop.SetCollectionRecorder(misc.collection)
+		}
 	}
 	if cmbt.battle != nil {
 		if misc.monster != nil {

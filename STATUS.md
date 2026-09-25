@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #832 — Collection: Implement Weapon and Armor Catalogs and wire comp_wea/comp_arm Hall of Fame induction
+Last updated: Issue #780 — SecretShop: Trigger Collection Discovery on Direct Inventory Purchase
 
 ## Current Phase
 
