@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #831 — Job: Enforce OverLevel restriction and gender compatibility in ExchangeJob
+Last updated: Issue #826 — Battle: Restore Virulent Poison (劇毒) ally-turn party DoT mechanic
 
 ## Current Phase
 

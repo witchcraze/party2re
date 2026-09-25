@@ -90,9 +90,10 @@ Replicating the original Party2 CGI combat engine (`_battle.cgi`, `_skill.cgi`):
           $$\text{Damage} = \max\left(1 \text{ or } 2, \text{int}(\text{Base} \times (0.9 + \text{Float64}() \times 0.3))\right)$$
         - Apply Field elemental multiplier if action or attacker has an elemental affinity.
    - **Post-Action Poison Lifecycle (`execute_status.go`)**:
-     - Evaluated immediately after actor acts (if actor remains alive):
-       - `deadly_poison` (猛毒/劇毒): deals 10% MaxHP damage (capped at 950–1049 if >999). Natural cure cannot occur.
-       - `poison` (毒): deals 10% MaxHP damage (capped at 950–1049 if >999). If alive, rolls 20% natural cure chance (`rand(5) < 1`); clears status on success.
+     - Evaluated immediately after actor acts:
+       - `virulent_poison` (劇毒): deals 10% MaxHP damage (capped at 950–1049 if >999) to all other living party members afflicted with `劇毒` on every ally action (`party2/lib/_battle.cgi:792-807`), followed by 10% MaxHP damage to the actor if afflicted (`_battle.cgi:810`). Natural cure cannot occur.
+       - `deadly_poison` (猛毒): deals 10% MaxHP damage (capped at 950–1049 if >999) to the actor at the end of their own turn (`_battle.cgi:810`). Natural cure cannot occur.
+       - `poison` (毒): deals 10% MaxHP damage (capped at 950–1049 if >999) to the actor at the end of their own turn (`_battle.cgi:840`). If alive, rolls 20% natural cure chance (`rand(5) < 1`); clears status on success.
    - **Defeat & Revival Check (`defeat.go`)**:
      - When any participant's HP drops to $\le 0$:
      - Check `RevivalTriggers`:

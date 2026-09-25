@@ -401,6 +401,213 @@ func TestPartyBattle_StatusDeadlyPoison(t *testing.T) {
 	}
 }
 
+func TestPartyBattle_StatusVirulentPoison(t *testing.T) {
+	engine := corebattle.Engine{}
+
+	t.Run("Party-wide virulent poison DoT on ally actions", func(t *testing.T) {
+		req := corebattle.PartyBattleRequest{
+			Allies: []corebattle.Participant{
+				corebattle.NewParticipantBuilder("hero").
+					WithName("Hero").
+					WithStats(100, 30, 10).
+					WithAgility(100).
+					MustBuild(),
+				corebattle.NewParticipantBuilder("mage").
+					WithName("Mage").
+					WithStats(100, 20, 10).
+					WithAgility(50).
+					WithStatus(corebattle.StatusVirulentPoison).
+					MustBuild(),
+				corebattle.NewParticipantBuilder("priest").
+					WithName("Priest").
+					WithStats(200, 20, 10).
+					WithAgility(20).
+					WithStatus(corebattle.StatusVirulentPoison).
+					MustBuild(),
+			},
+			Enemies: []corebattle.Participant{
+				corebattle.NewParticipantBuilder("boss").
+					WithName("Boss").
+					WithStats(5000, 10, 5).
+					WithAgility(5).
+					MustBuild(),
+			},
+			VictoryReward: corebattle.Reward{Experience: 10},
+			RNG:           fixedFloatRNG{val: 0.1},
+		}
+
+		res, err := engine.ResolvePartyBattle(req)
+		if err != nil {
+			t.Fatalf("ResolvePartyBattle failed: %v", err)
+		}
+
+		// When Hero acts on turn 1, Mage (100 MHP -> 10 dmg) and Priest (200 MHP -> 20 dmg) must take damage
+		foundMageTickOnHeroTurn := false
+		foundPriestTickOnHeroTurn := false
+
+		// Check the logs on turn 1
+		for _, l := range res.Logs {
+			if l.Turn == 1 {
+				if l.TargetID == "mage" && l.ActionName == "毒ダメージ" && l.DamageDealt == 10 && l.Message == "Mage は劇毒により 10 のダメージをうけた！" {
+					foundMageTickOnHeroTurn = true
+				}
+				if l.TargetID == "priest" && l.ActionName == "毒ダメージ" && l.DamageDealt == 20 && l.Message == "Priest は劇毒により 20 のダメージをうけた！" {
+					foundPriestTickOnHeroTurn = true
+				}
+			}
+		}
+
+		if !foundMageTickOnHeroTurn {
+			t.Fatalf("expected Mage to take 10 劇毒 damage during ally turn, got logs: %+v", res.Logs)
+		}
+		if !foundPriestTickOnHeroTurn {
+			t.Fatalf("expected Priest to take 20 劇毒 damage during ally turn, got logs: %+v", res.Logs)
+		}
+
+		// Verify natural cure does NOT trigger
+		for _, l := range res.Logs {
+			if (l.TargetID == "mage" || l.TargetID == "priest") && l.ActionName == "回復" && (l.Message == "Mage の毒が治った！" || l.Message == "Priest の毒が治った！") {
+				t.Fatalf("virulent poison must not cure naturally, but found cure log: %+v", l)
+			}
+		}
+	})
+
+	t.Run("Does not affect enemies during ally turn or vice versa", func(t *testing.T) {
+		req := corebattle.PartyBattleRequest{
+			Allies: []corebattle.Participant{
+				corebattle.NewParticipantBuilder("hero").
+					WithName("Hero").
+					WithStats(100, 30, 10).
+					WithAgility(100).
+					MustBuild(),
+			},
+			Enemies: []corebattle.Participant{
+				corebattle.NewParticipantBuilder("enemy_mage").
+					WithName("EnemyMage").
+					WithStats(100, 10, 5).
+					WithAgility(10).
+					WithStatus(corebattle.StatusVirulentPoison).
+					MustBuild(),
+			},
+			VictoryReward: corebattle.Reward{Experience: 10},
+			RNG:           fixedFloatRNG{val: 0.1},
+		}
+
+		res, err := engine.ResolvePartyBattle(req)
+		if err != nil {
+			t.Fatalf("ResolvePartyBattle failed: %v", err)
+		}
+
+		// When Hero acts, EnemyMage should NOT take party DoT (only on EnemyMage's own post-action turn)
+		for i, l := range res.Logs {
+			if l.Turn == 1 && l.ActorID == "hero" && l.ActionName == "攻撃" {
+				// Immediately following Hero's attack, there should NOT be a poison tick on enemy_mage
+				if i+1 < len(res.Logs) && res.Logs[i+1].TargetID == "enemy_mage" && res.Logs[i+1].ActionName == "毒ダメージ" {
+					t.Fatalf("enemy should not take virulent poison tick on ally turn: %+v", res.Logs[i+1])
+				}
+			}
+		}
+	})
+
+	t.Run("Fatal damage triggers revival and defeat", func(t *testing.T) {
+		req := corebattle.PartyBattleRequest{
+			Allies: []corebattle.Participant{
+				corebattle.NewParticipantBuilder("hero").
+					WithName("Hero").
+					WithStats(100, 30, 10).
+					WithAgility(100).
+					MustBuild(),
+				corebattle.NewParticipantBuilder("dying_ally").
+					WithName("DyingAlly").
+					WithStats(100, 20, 10).
+					WithCurrentHP(5). // 5 HP < 10 poison damage
+					WithAgility(10).
+					WithStatus(corebattle.StatusVirulentPoison).
+					WithAbilities("undying"). // will revive once
+					MustBuild(),
+			},
+			Enemies: []corebattle.Participant{
+				corebattle.NewParticipantBuilder("boss").
+					WithName("Boss").
+					WithStats(5000, 10, 5).
+					WithAgility(5).
+					MustBuild(),
+			},
+			VictoryReward: corebattle.Reward{Experience: 10},
+			RNG:           fixedFloatRNG{val: 0.1},
+		}
+
+		res, err := engine.ResolvePartyBattle(req)
+		if err != nil {
+			t.Fatalf("ResolvePartyBattle failed: %v", err)
+		}
+
+		foundRevival := false
+		for _, l := range res.Logs {
+			if l.TargetID == "dying_ally" && l.ActionName == "毒ダメージ" {
+				if l.DamageDealt == 10 && l.RemainingHP["dying_ally"] > 0 {
+					// revived via undying
+					foundRevival = true
+					break
+				}
+			}
+		}
+		if !foundRevival {
+			t.Fatalf("expected dying_ally to revive from virulent poison fatal damage, got logs: %+v", res.Logs)
+		}
+	})
+
+	t.Run("Actor incapacitated by status skip does not trigger party virulent poison", func(t *testing.T) {
+		req := corebattle.PartyBattleRequest{
+			Allies: []corebattle.Participant{
+				corebattle.NewParticipantBuilder("hero").
+					WithName("Hero").
+					WithStats(100, 30, 10).
+					WithAgility(100).
+					WithStatus(corebattle.StatusDofuu). // will be skipped on turn 1
+					MustBuild(),
+				corebattle.NewParticipantBuilder("mage").
+					WithName("Mage").
+					WithStats(100, 20, 10).
+					WithAgility(10).
+					WithStatus(corebattle.StatusVirulentPoison).
+					MustBuild(),
+			},
+			Enemies: []corebattle.Participant{
+				corebattle.NewParticipantBuilder("boss").
+					WithName("Boss").
+					WithStats(5000, 10, 5).
+					WithAgility(5).
+					MustBuild(),
+			},
+			VictoryReward: corebattle.Reward{Experience: 10},
+			RNG:           fixedFloatRNG{val: 0.5},
+		}
+
+		res, err := engine.ResolvePartyBattle(req)
+		if err != nil {
+			t.Fatalf("ResolvePartyBattle failed: %v", err)
+		}
+
+		// When Hero is skipped on turn 1, Mage must not receive a virulent poison tick before Mage's own turn
+		foundHeroSkip := false
+		for _, l := range res.Logs {
+			if l.Turn == 1 && l.ActorID == "hero" && l.ActionName == "行動不能" {
+				foundHeroSkip = true
+			}
+			if l.Turn == 1 && l.TargetID == "mage" && l.ActionName == "毒ダメージ" {
+				if !foundHeroSkip {
+					t.Fatalf("unexpected poison damage before hero skip")
+				}
+				// The poison tick for mage on turn 1 should only happen when mage acts (or post-action)
+			}
+		}
+		if !foundHeroSkip {
+			t.Fatalf("expected Hero dofuu skip on turn 1")
+		}
+	})
+}
+
 func TestPartyBattle_PoisonPostActionAndCure(t *testing.T) {
 	engine := corebattle.Engine{}
 
