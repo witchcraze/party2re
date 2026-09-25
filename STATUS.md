@@ -1,12 +1,12 @@
 # Status
 
-Last updated: Issue #788 — Alchemy: Restore missing legacy recipes (福袋, 金の指輪) and 114 canonical compendium threshold
+Last updated: Issue #779 — Accessory Shop (@ミラ) and 48 synthesis recipes (&acce) with Item 180 guarantee
 
 ## Current Phase
 
 **Version 1.0 Reconstruction / Refactoring — In Progress (Phase 5+)**
 
-All Version 1.0 foundational systems, core combat, 39 feature modules, and the HTTP JSON API (289 paths / 311 operations, OpenAPI 3.1) are implemented in clean-room Go (1.26.7) with 0 legacy code reuse.
+All Version 1.0 foundational systems, core combat, 39 feature modules, and the HTTP JSON API (293 paths / 315 operations, OpenAPI 3.1) are implemented in clean-room Go (1.26.7) with 0 legacy code reuse.
 
 - **Component Architecture & Boundaries**: Authoritative responsibilities, dependencies, and lock hierarchy tiers reside in [`docs/architecture/components.md`](docs/architecture/components.md).
 - **Completed Feature History**: Comprehensive issue-level traceability resides in [`docs/migration/feature-inventory.md`](docs/migration/feature-inventory.md).

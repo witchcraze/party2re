@@ -150,11 +150,23 @@ func (s *Service) SetCollectionRecorder(recorder CollectionRecorder) {
 	s.recorder = recorder
 }
 
-func (s *Service) CalculateRetailPrice(basePrice int) (int, error) {
+func (s *Service) CalculateRetailPriceForShop(shopType ShopType, itemID string, basePrice int) (int, error) {
 	if basePrice <= 0 {
 		return 0, nil
 	}
-	return safeMultiply(basePrice, 2)
+	multiplier := 2
+	if shopType == ShopTypeAccessory {
+		if itemID == "item-150" || itemID == "item-151" {
+			multiplier = 1000
+		} else {
+			multiplier = 10
+		}
+	}
+	return safeMultiply(basePrice, multiplier)
+}
+
+func (s *Service) CalculateRetailPrice(basePrice int) (int, error) {
+	return s.CalculateRetailPriceForShop(ShopTypeItem, "", basePrice)
 }
 
 func (s *Service) CalculateSellPrice(basePrice int) int {
@@ -231,7 +243,7 @@ func (s *Service) GetCatalog(ctx context.Context, shopType ShopType, characterID
 		if err != nil {
 			continue
 		}
-		retailPrice, err := s.CalculateRetailPrice(def.Price)
+		retailPrice, err := s.CalculateRetailPriceForShop(shopType, def.ID, def.Price)
 		if err != nil {
 			continue
 		}

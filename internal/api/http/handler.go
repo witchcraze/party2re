@@ -91,12 +91,14 @@ type AdventureService interface {
 // ShopService defines the shop operations exposed over HTTP.
 type ShopService interface {
 	Purchase(ctx context.Context, characterID string, itemDefinitionID string, quantity int) (shop.PurchaseResult, error)
+	PurchaseInShop(ctx context.Context, characterID string, shopType shop.ShopType, itemDefinitionID string, quantity int) (shop.PurchaseResult, error)
 	Sell(ctx context.Context, characterID string, itemInstanceID string, quantity int) (shop.SaleResult, error)
 	GetCatalog(ctx context.Context, shopType shop.ShopType, characterID string) (shop.ShopCatalog, error)
 	BatchPurchase(ctx context.Context, characterID string, shopType shop.ShopType, items []shop.BatchPurchaseItemRequest) (shop.BatchPurchaseResult, error)
 	InspectNPC(ctx context.Context, shopType shop.ShopType, characterID string) (shop.NPCInspectResult, error)
 	TalkNPC(ctx context.Context, shopType shop.ShopType) (string, error)
 	DiscoverSecretShop(ctx context.Context, characterID string) (bool, string, error)
+	Synthesize(ctx context.Context, characterID string, recipeTarget string) (shop.SynthesisResult, error)
 }
 
 // HelperService defines the helper quest operations exposed over HTTP.
@@ -348,6 +350,10 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/shop/{type}/inspect", h.handleShopInspectNPC)
 	mux.HandleFunc("POST /characters/{id}/shop/{type}/talk", h.handleShopTalkNPC)
 	mux.HandleFunc("POST /characters/{id}/shop/discover-secret", h.handleShopDiscoverSecret)
+	mux.HandleFunc("POST /characters/{id}/shop/accessory/buy", h.handleAccessoryBuy)
+	mux.HandleFunc("POST /characters/{id}/shop/accessory/sell", h.handleAccessorySell)
+	mux.HandleFunc("POST /characters/{id}/shop/accessory/synthesize", h.handleAccessorySynthesize)
+	mux.HandleFunc("GET /characters/{id}/shop/accessory/recipes", h.handleAccessoryRecipes)
 
 	mux.HandleFunc("GET /characters/{id}/depot", h.handleGetDepot)
 	mux.HandleFunc("POST /characters/{id}/depot/deposit", h.handleDepositDepotItem)

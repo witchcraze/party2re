@@ -89,6 +89,10 @@ func defaultActionEndpoints() map[string]ActionEndpoint {
 			Method:      http.MethodGet,
 			PathPattern: "/characters/%s/shop/item",
 		},
+		"shop_accessory": {
+			Method:      http.MethodGet,
+			PathPattern: "/characters/%s/shop/accessory",
+		},
 		"shop_batch_purchase": {
 			Method:      http.MethodPost,
 			PathPattern: "/characters/%s/shop/batch-purchase",

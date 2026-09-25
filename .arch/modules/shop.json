@@ -27,8 +27,8 @@
   ],
   "transaction_boundaries": [
     {
-      "method": "Purchase",
-      "source_ref": "internal/shop/purchase.go#Service.Purchase",
+      "method": "PurchaseInShop",
+      "source_ref": "internal/shop/purchase.go#Service.PurchaseInShop",
       "transaction_type": "RunInTx",
       "lock_sequence": [
         {
@@ -42,6 +42,25 @@
           "tier": 3,
           "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
           "note": "Lock inventory slots to verify capacity and add item"
+        }
+      ]
+    },
+    {
+      "method": "Synthesize",
+      "source_ref": "internal/shop/synthesis.go#Service.Synthesize",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT ... FOR UPDATE (FindByIDForUpdate)",
+          "note": "Lock character"
+        },
+        {
+          "table": "inventory_items",
+          "tier": 3,
+          "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
+          "note": "Lock inventory to check and consume item-180"
         }
       ]
     },
