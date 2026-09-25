@@ -285,3 +285,24 @@ func IsArmorConsumed(targetID, currentJobID, oldJobID string) bool {
 	}
 	return true
 }
+
+// RequiresItemPossession reports whether changing to target requires possessing
+// its required item in inventory.
+// Matches legacy _data.cgi requirements:
+// - Bypassed if character is or was already the target job (_is_need_job(target))
+// - 賢者 (job-33) bypasses item requirement if character is or was 遊び人 (job-08)
+// - ギャンブラー (job-46) still requires item-039 even if coming from 遊び人 (job-08)
+// - job-84 uses armor, not standard item
+func RequiresItemPossession(target Definition, currentJobID, oldJobID string) bool {
+	reqItem := target.RequiredItem()
+	if reqItem == "" || target.ID == "job-84" {
+		return false
+	}
+	if currentJobID == target.ID || oldJobID == target.ID {
+		return false
+	}
+	if target.ID == "job-33" && (currentJobID == "job-08" || oldJobID == "job-08") {
+		return false
+	}
+	return true
+}

@@ -50,8 +50,8 @@ cmp = int(min(level, 99) * (tier_rates[current_job_tier] + tier_rates[old_job_ti
     - Treasure Hunter (`job-78` / トレジャーハンター): requires `JobLevel >= 50` (`job_lv`).
     - Onion Knight (`job-49` / たまねぎ剣士): requires `SP >= 300` when not having visited the job.
     - Dragon Noble (`job-70` / 天竜人): requires having previously held `job-70`.
-    - Fire Fighter (`job-84` / 炎闘士): requires having equipped `armor-29` (炎の鎧) in the body slot, which is unequipped and consumed upon change (`job_change.cgi:181-188`).
-  - **Item Consumption**: Special jobs require consuming an item from inventory unless re-entering current, old, or mastered job, or entering Sage/Gambler from Leisure job (`job-08` / 遊び人) (`job_change.cgi:164-179`).
+    - Fire Fighter (`job-84` / 炎闘士): requires having equipped `armor-29` (炎の鎧) in the body slot in addition to prerequisite jobs (1, 4, 25, 30). Pre-validated before mutation and unequipped/consumed atomically within the job change transaction (`job_change.cgi:181-188`).
+  - **Item Possession & Consumption**: Special jobs require possessing an item from inventory unless re-entering current, old, or mastered job, or entering Sage from Leisure job (`job-08` / 遊び人). Entering Gambler from Leisure job still requires possessing `item-039` (イカサマのサイコロ), but consumption is exempt (`job_change.cgi:164-179`). Item possession is pre-validated before committing any mutations.
 - A change halves Max HP, Max MP, Attack, Defense, and Agility using integer
   truncation, clamping each result to 10. Current HP/MP are restored to the
   new maxima, level becomes 1, experience becomes 0, and the job-change count

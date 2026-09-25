@@ -9,6 +9,7 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreequipment "github.com/witchcraze/party2re/internal/core/equipment"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
@@ -576,5 +577,97 @@ func TestServiceChangeJobRecordsWeeklyJobChange(t *testing.T) {
 
 	if tracker.calledFor != "character-1" {
 		t.Fatalf("expected job tracker called for character-1, got %q", tracker.calledFor)
+	}
+}
+
+func TestChangeJob_FireFighter_RequiresEquippedArmor_PreValidation(t *testing.T) {
+	ctx := context.Background()
+
+	char := corecharacter.Character{
+		ID:        "char-1",
+		JobID:     "job-01",
+		OldJobID:  "job-04",
+		Level:     50,
+		Gender:    "unspecified",
+		OverLevel: true,
+	}
+	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
+	repo := &repositoryStub{value: state}
+	charRepo := &charRepoStub{char: char}
+	inv, _ := coreinventory.New(char.ID)
+	invRepo := &inventoryRepoStub{inventory: inv}
+	equip, _ := coreequipment.New(char.ID)
+	equipRepo := &equipmentRepoStub{equipment: equip}
+
+	svc, err := NewService(
+		repo,
+		WithCharacterRepository(charRepo),
+		WithInventoryRepository(invRepo),
+		WithEquipmentRepository(equipRepo),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = svc.ChangeJob(ctx, char.ID, "job-84")
+	if !errors.Is(err, ErrRequiredArmor) {
+		t.Fatalf("expected ErrRequiredArmor, got %v", err)
+	}
+	if charRepo.char.JobID != "job-01" {
+		t.Fatalf("expected JobID to remain job-01, got %s", charRepo.char.JobID)
+	}
+	if repo.value.CurrentJobID != "job-01" {
+		t.Fatalf("expected state CurrentJobID to remain job-01, got %s", repo.value.CurrentJobID)
+	}
+}
+
+func TestChangeJob_Gambler_FromPlayboy_RequiresItemOwnership_PreValidation(t *testing.T) {
+	ctx := context.Background()
+
+	char := corecharacter.Character{
+		ID:         "char-1",
+		JobID:      "job-08",
+		Level:      50,
+		Gender:     "unspecified",
+		CasinoWins: 10,
+		OverLevel:  true,
+	}
+	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
+	repo := &repositoryStub{value: state}
+	charRepo := &charRepoStub{char: char}
+	inv, _ := coreinventory.New(char.ID)
+	invRepo := &inventoryRepoStub{inventory: inv}
+
+	svc, err := NewService(
+		repo,
+		WithCharacterRepository(charRepo),
+		WithInventoryRepository(invRepo),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Missing item-039 -> ErrRequiredItem
+	_, _, err = svc.ChangeJob(ctx, char.ID, "job-46")
+	if !errors.Is(err, ErrRequiredItem) {
+		t.Fatalf("expected ErrRequiredItem when playboy lacks item-039, got %v", err)
+	}
+	if charRepo.char.JobID != "job-08" {
+		t.Fatalf("expected JobID to remain job-08, got %s", charRepo.char.JobID)
+	}
+
+	// With item-039 -> succeeds and item is NOT consumed
+	dice, _ := item.NewInstance("item-039", 1)
+	_ = invRepo.inventory.Add(dice)
+
+	updatedChar, _, err := svc.ChangeJob(ctx, char.ID, "job-46")
+	if err != nil {
+		t.Fatalf("expected success with item-039, got %v", err)
+	}
+	if updatedChar.JobID != "job-46" {
+		t.Fatalf("expected job-46, got %s", updatedChar.JobID)
+	}
+	if invRepo.inventory.Quantity("item-039") != 1 {
+		t.Fatalf("expected item-039 preserved (not consumed), got %d", invRepo.inventory.Quantity("item-039"))
 	}
 }

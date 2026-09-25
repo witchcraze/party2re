@@ -280,3 +280,56 @@ func TestIsItemAndArmorConsumed(t *testing.T) {
 		t.Errorf("expected non-armor job to not consume armor")
 	}
 }
+
+func TestRequiresItemPossession(t *testing.T) {
+	// Standard item job: Hero (job-34) requires item-028
+	hero := job.Definition{ID: "job-34"}
+	if !job.RequiresItemPossession(hero, "job-01", "starter") {
+		t.Errorf("expected hero to require item possession from warrior")
+	}
+	if job.RequiresItemPossession(hero, "job-34", "starter") {
+		t.Errorf("expected hero NOT to require item if current job is hero")
+	}
+	if job.RequiresItemPossession(hero, "job-01", "job-34") {
+		t.Errorf("expected hero NOT to require item if old job is hero")
+	}
+
+	// Sage (job-33): exempt if coming from Asobinin (job-08)
+	sage := job.Definition{ID: "job-33"}
+	if job.RequiresItemPossession(sage, "job-08", "starter") {
+		t.Errorf("expected sage NOT to require item from asobinin")
+	}
+	if job.RequiresItemPossession(sage, "job-01", "job-08") {
+		t.Errorf("expected sage NOT to require item if old job was asobinin")
+	}
+	if !job.RequiresItemPossession(sage, "job-01", "starter") {
+		t.Errorf("expected sage to require item from warrior")
+	}
+
+	// Gambler (job-46): STILL requires item-039 even if coming from Asobinin (job-08)
+	gambler := job.Definition{ID: "job-46"}
+	if !job.RequiresItemPossession(gambler, "job-08", "starter") {
+		t.Errorf("expected gambler to require item possession even from asobinin")
+	}
+	if !job.RequiresItemPossession(gambler, "job-01", "job-08") {
+		t.Errorf("expected gambler to require item possession even with asobinin old job")
+	}
+	if !job.RequiresItemPossession(gambler, "job-01", "starter") {
+		t.Errorf("expected gambler to require item possession from warrior")
+	}
+	if job.RequiresItemPossession(gambler, "job-46", "starter") {
+		t.Errorf("expected gambler NOT to require item if already gambler")
+	}
+
+	// FireFighter (job-84): uses armor, not standard item
+	fireFighter := job.Definition{ID: "job-84"}
+	if job.RequiresItemPossession(fireFighter, "job-01", "starter") {
+		t.Errorf("expected firefighter NOT to require standard item")
+	}
+
+	// Non-item job (job-01)
+	warrior := job.Definition{ID: "job-01"}
+	if job.RequiresItemPossession(warrior, "job-02", "starter") {
+		t.Errorf("expected warrior NOT to require item")
+	}
+}

@@ -10,10 +10,12 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 // equipmentRepoStub implements EquipmentRepository for tests.
 type equipmentRepoStub struct {
+	saveErr   error
 	equipment coreequipment.Equipment
 }
 
@@ -22,6 +24,9 @@ func (e *equipmentRepoStub) FindByCharacterID(_ context.Context, _ string) (core
 }
 
 func (e *equipmentRepoStub) Save(_ context.Context, value coreequipment.Equipment) error {
+	if e.saveErr != nil {
+		return e.saveErr
+	}
 	e.equipment = value
 	return nil
 }
@@ -191,4 +196,258 @@ func TestChangeJob_FireFighterWithoutArmor(t *testing.T) {
 	if !errors.Is(err, ErrRequiredArmor) {
 		t.Fatalf("expected ErrRequiredArmor without armor-29 equipped, got %v", err)
 	}
+}
+
+// TestChangeJob_FireFighter_MissingArmor_DoesNotMutateJob verifies character job
+// remains unchanged in DB when armor-29 is missing in economy transaction mode.
+func TestChangeJob_FireFighter_MissingArmor_DoesNotMutateJob(t *testing.T) {
+	ctx := context.Background()
+
+	char := corecharacter.Character{
+		ID:        "char-ff-missing",
+		JobID:     "job-01",
+		OldJobID:  "job-04",
+		Level:     50,
+		Gender:    "unspecified",
+		OverLevel: true,
+	}
+	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
+	repo := &repositoryStub{value: state}
+	ecoCharRepo := &errCharRepoStub{char: char}
+	inv, _ := coreinventory.New(char.ID)
+	invRepo := &errInventoryRepoStub{inv: inv}
+	ecoSvc, err := economy.NewService(ecoCharRepo, invRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	equip, _ := coreequipment.New(char.ID)
+	equipRepo := &equipmentRepoStub{equipment: equip}
+
+	svc, err := NewService(
+		repo,
+		WithCharacterRepository(ecoCharRepo),
+		WithInventoryRepository(invRepo),
+		WithEquipmentRepository(equipRepo),
+		WithEconomy(ecoSvc),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = svc.ChangeJob(ctx, char.ID, "job-84")
+	if !errors.Is(err, ErrRequiredArmor) {
+		t.Fatalf("expected ErrRequiredArmor, got %v", err)
+	}
+
+	// Verify character in repository is completely untouched
+	savedChar, err := ecoCharRepo.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if savedChar.JobID != "job-01" {
+		t.Fatalf("character JobID was mutated to %s, expected job-01", savedChar.JobID)
+	}
+	if repo.value.CurrentJobID != "job-01" {
+		t.Fatalf("job state was mutated to %s, expected job-01", repo.value.CurrentJobID)
+	}
+}
+
+// TestChangeJob_FireFighter_WrongArmor_DoesNotMutateJob verifies character job
+// remains unchanged in DB when wearing armor-01 instead of armor-29.
+func TestChangeJob_FireFighter_WrongArmor_DoesNotMutateJob(t *testing.T) {
+	ctx := context.Background()
+
+	char := corecharacter.Character{
+		ID:        "char-ff-wrong",
+		JobID:     "job-01",
+		OldJobID:  "job-04",
+		Level:     50,
+		Gender:    "unspecified",
+		OverLevel: true,
+	}
+	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
+	repo := &repositoryStub{value: state}
+	ecoCharRepo := &errCharRepoStub{char: char}
+
+	inv, _ := coreinventory.New(char.ID)
+	wrongArmor, _ := item.NewInstance("armor-01", 1)
+	_ = inv.Add(wrongArmor)
+	invRepo := &errInventoryRepoStub{inv: inv}
+
+	equip, _ := coreequipment.New(char.ID)
+	equip.Slots[item.SlotBody] = wrongArmor.ID
+	equipRepo := &equipmentRepoStub{equipment: equip}
+
+	ecoSvc, err := economy.NewService(ecoCharRepo, invRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	svc, err := NewService(
+		repo,
+		WithCharacterRepository(ecoCharRepo),
+		WithInventoryRepository(invRepo),
+		WithEquipmentRepository(equipRepo),
+		WithEconomy(ecoSvc),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = svc.ChangeJob(ctx, char.ID, "job-84")
+	if !errors.Is(err, ErrRequiredArmor) {
+		t.Fatalf("expected ErrRequiredArmor when wearing armor-01, got %v", err)
+	}
+
+	// Verify character in repository is completely unchanged
+	savedChar, err := ecoCharRepo.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if savedChar.JobID != "job-01" {
+		t.Fatalf("character JobID was mutated to %s, expected job-01", savedChar.JobID)
+	}
+	if repo.value.CurrentJobID != "job-01" {
+		t.Fatalf("job state was mutated to %s, expected job-01", repo.value.CurrentJobID)
+	}
+
+	// Verify armor-01 remains equipped and unconsumed
+	if equipRepo.equipment.Slots[item.SlotBody] != wrongArmor.ID {
+		t.Fatal("expected armor-01 to remain equipped in body slot")
+	}
+	if invRepo.inv.Quantity("armor-01") != 1 {
+		t.Fatal("expected armor-01 to remain in inventory")
+	}
+}
+
+// TestChangeJob_FireFighter_ArmorSaveFailure_RollsBack verifies atomic rollback
+// if armor consumption fails during the transaction.
+func TestChangeJob_FireFighter_ArmorSaveFailure_RollsBack(t *testing.T) {
+	ctx := context.Background()
+
+	char := corecharacter.Character{
+		ID:        "char-ff-rollback",
+		JobID:     "job-01",
+		OldJobID:  "job-04",
+		Level:     50,
+		Gender:    "unspecified",
+		OverLevel: true,
+	}
+	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
+	repo := &repositoryStub{value: state}
+	ecoCharRepo := &errCharRepoStub{char: char}
+
+	inv, _ := coreinventory.New(char.ID)
+	fireArmor, _ := item.NewInstance("armor-29", 1)
+	_ = inv.Add(fireArmor)
+	invRepo := &errInventoryRepoStub{inv: inv}
+
+	equip, _ := coreequipment.New(char.ID)
+	equip.Slots[item.SlotBody] = fireArmor.ID
+	equipRepo := &equipmentRepoStub{
+		equipment: equip,
+		saveErr:   errors.New("simulated equipment save error"),
+	}
+
+	ecoSvc, err := economy.NewService(ecoCharRepo, invRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	svc, err := NewService(
+		repo,
+		WithCharacterRepository(ecoCharRepo),
+		WithInventoryRepository(invRepo),
+		WithEquipmentRepository(equipRepo),
+		WithEconomy(ecoSvc),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = svc.ChangeJob(ctx, char.ID, "job-84")
+	if err == nil {
+		t.Fatal("expected error due to simulated save failure")
+	}
+
+	// Character must NOT have mutated to job-84
+	savedChar, err := ecoCharRepo.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if savedChar.JobID != "job-01" {
+		t.Fatalf("expected JobID to remain job-01 after rollback, got %s", savedChar.JobID)
+	}
+}
+
+// TestChangeJob_Gambler_FromPlayboy_RequiresItemOwnership verifies that changing to
+// job-46 from job-08 requires possessing item-039 in inventory even though consumption is exempt.
+func TestChangeJob_Gambler_FromPlayboy_RequiresItemOwnership(t *testing.T) {
+	ctx := context.Background()
+
+	runTest := func(t *testing.T, currentJob, oldJob string) {
+		char := corecharacter.Character{
+			ID:         "char-playboy",
+			JobID:      currentJob,
+			OldJobID:   oldJob,
+			Level:      50,
+			Gender:     "unspecified",
+			CasinoWins: 10,
+			OverLevel:  true,
+		}
+		state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
+		repo := &repositoryStub{value: state}
+		ecoCharRepo := &errCharRepoStub{char: char}
+
+		// 1. Without item-039 in inventory -> returns ErrRequiredItem
+		invEmpty, _ := coreinventory.New(char.ID)
+		invRepo := &errInventoryRepoStub{inv: invEmpty}
+
+		ecoSvc, err := economy.NewService(ecoCharRepo, invRepo)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		svc, err := NewService(
+			repo,
+			WithCharacterRepository(ecoCharRepo),
+			WithInventoryRepository(invRepo),
+			WithEconomy(ecoSvc),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, _, err = svc.ChangeJob(ctx, char.ID, "job-46")
+		if !errors.Is(err, ErrRequiredItem) {
+			t.Fatalf("expected ErrRequiredItem when lacking item-039, got %v", err)
+		}
+		if ecoCharRepo.char.JobID != currentJob {
+			t.Fatalf("expected JobID to remain %s, got %s", currentJob, ecoCharRepo.char.JobID)
+		}
+
+		// 2. With item-039 in inventory -> succeeds, and item-039 is NOT consumed (exempt)
+		diceItem, _ := item.NewInstance("item-039", 1)
+		_ = invRepo.inv.Add(diceItem)
+
+		updatedChar, _, err := svc.ChangeJob(ctx, char.ID, "job-46")
+		if err != nil {
+			t.Fatalf("expected success when owning item-039: %v", err)
+		}
+		if updatedChar.JobID != "job-46" {
+			t.Fatalf("expected job-46, got %s", updatedChar.JobID)
+		}
+		if invRepo.inv.Quantity("item-039") != 1 {
+			t.Fatalf("expected item-039 preserved (exempt from consumption), remaining: %d", invRepo.inv.Quantity("item-039"))
+		}
+	}
+
+	t.Run("current_job_is_playboy", func(t *testing.T) {
+		runTest(t, "job-08", "job-01")
+	})
+
+	t.Run("old_job_is_playboy", func(t *testing.T) {
+		runTest(t, "job-01", "job-08")
+	})
 }

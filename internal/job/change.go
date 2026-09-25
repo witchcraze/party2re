@@ -52,6 +52,29 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		}
 	}
 
+	requiredItem := targetDef.RequiredItem()
+	needsItemPossession := !isBypassJob && corejob.RequiresItemPossession(targetDef, char.JobID, char.OldJobID)
+	consumesItem := needsItemPossession && !corejob.IsItemExempt(targetJobID, char.JobID, char.OldJobID)
+	needArmor := !isBypassJob && corejob.IsArmorConsumed(targetJobID, char.JobID, char.OldJobID)
+
+	// Pre-validate required item possession before executing mutations.
+	if needsItemPossession {
+		if s.inventories == nil {
+			return corecharacter.Character{}, corejob.CharacterJob{}, ErrRequiredItem
+		}
+		inventory, err := s.inventories.FindByCharacterID(ctx, characterID)
+		if err != nil || inventory.Quantity(requiredItem) < 1 {
+			return corecharacter.Character{}, corejob.CharacterJob{}, ErrRequiredItem
+		}
+	}
+
+	// Pre-validate equipped armor before executing mutations.
+	if needArmor {
+		if err := s.verifyEquippedArmor(ctx, characterID); err != nil {
+			return corecharacter.Character{}, corejob.CharacterJob{}, err
+		}
+	}
+
 	if err := state.ChangeTo(targetDef, char.Level, char.Gender); err != nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}
@@ -61,17 +84,9 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 	s.checkAndNotifyCompletion(ctx, char.Name, &state)
 	targetSPValue := targetSP(state, char, targetJobID)
 
-	requiredItem := targetDef.RequiredItem()
-	// isBypassJob already captures current/old/mastered: no item or armor is consumed for bypass jobs.
-	// needItem uses requiredItem from targetDef (not the bare ID lookup in IsItemConsumed) to
-	// correctly handle jobs with RequiredItemID set via the catalog, including test fixtures.
-	needItem := !isBypassJob && requiredItem != "" && requiredItem != "armor-29" &&
-		!corejob.IsItemExempt(targetJobID, char.JobID, char.OldJobID)
-	needArmor := !isBypassJob && corejob.IsArmorConsumed(targetJobID, char.JobID, char.OldJobID)
-
 	if s.economy != nil {
-		req := economy.TransactionRequest{CharacterID: characterID, LockInventory: needItem}
-		if needItem {
+		req := economy.TransactionRequest{CharacterID: characterID, LockInventory: consumesItem}
+		if consumesItem {
 			req.Cost.ItemDefinitionID = requiredItem
 			req.Cost.ItemDefinitionQty = 1
 		}
@@ -97,6 +112,11 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 			if err := s.repository.Save(tc.Context, currentState); err != nil {
 				return err
 			}
+			if needArmor {
+				if err := s.consumeEquippedArmor(tc.Context, characterID); err != nil {
+					return err
+				}
+			}
 			updated, updatedState = tc.Character, currentState
 			return nil
 		})
@@ -105,13 +125,6 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 				return corecharacter.Character{}, corejob.CharacterJob{}, ErrRequiredItem
 			}
 			return corecharacter.Character{}, corejob.CharacterJob{}, err
-		}
-		// Armor consumption for job-84 happens outside the item-economy transaction
-		// (armor is equipment state, not inventory economy).
-		if needArmor {
-			if err := s.consumeEquippedArmor(ctx, characterID); err != nil {
-				return corecharacter.Character{}, corejob.CharacterJob{}, err
-			}
 		}
 		if s.guildPoints != nil {
 			//lint:ignore error-swallow best-effort guild points bonus
@@ -128,7 +141,7 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		return updated, updatedState, nil
 	}
 
-	if needItem {
+	if consumesItem {
 		if s.inventories == nil {
 			return corecharacter.Character{}, corejob.CharacterJob{}, ErrRequiredItem
 		}
@@ -195,9 +208,33 @@ func (s *Service) buildChangeContextNoItems(char corecharacter.Character, state 
 		MonsterKills:     char.MonsterKills,
 		MaoCount:         char.MaoCount,
 		AllJobsMastered:  state.AllJobsMastered || state.HasMasteredAllCompletionJobs(),
-		HasRequiredItem:  true, // item possession is verified separately (see needItem below)
-		HasEquippedArmor: true, // armor presence is verified separately (see needArmor below)
+		HasRequiredItem:  true, // item possession is verified separately (see needsItemPossession above)
+		HasEquippedArmor: true, // armor presence is verified separately (see needArmor above)
 	}
+}
+
+// verifyEquippedArmor checks that armor-29 is currently equipped in the body slot.
+func (s *Service) verifyEquippedArmor(ctx context.Context, characterID string) error {
+	if s.equipment == nil || s.inventories == nil {
+		return ErrRequiredArmor
+	}
+	equip, err := s.equipment.FindByCharacterID(ctx, characterID)
+	if err != nil {
+		return ErrRequiredArmor
+	}
+	instID, ok := equip.Equipped(coreitem.SlotBody)
+	if !ok {
+		return ErrRequiredArmor
+	}
+	inv, err := s.inventories.FindByCharacterID(ctx, characterID)
+	if err != nil {
+		return ErrRequiredArmor
+	}
+	inst, found := inv.Find(instID)
+	if !found || inst.DefinitionID != "armor-29" {
+		return ErrRequiredArmor
+	}
+	return nil
 }
 
 // consumeEquippedArmor unequips and destroys armor-29 from the body slot (job_change.cgi:181-188).
