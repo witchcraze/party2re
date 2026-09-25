@@ -19,6 +19,9 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 	if err != nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}
+	if char.OverLevel {
+		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
+	}
 	state, err := s.loadState(ctx, char)
 	if err != nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
@@ -38,6 +41,20 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 		!state.IsMastered(targetJobID) || !state.IsMastered(targetOldJobID) {
 		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
 	}
+	targetDef, err := s.GetDefinition(targetJobID)
+	if err != nil {
+		return corecharacter.Character{}, corejob.CharacterJob{}, err
+	}
+	if targetDef.RequiredGender != "" && targetDef.RequiredGender != char.Gender {
+		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
+	}
+	targetOldDef, err := s.GetDefinition(targetOldJobID)
+	if err != nil {
+		return corecharacter.Character{}, corejob.CharacterJob{}, err
+	}
+	if targetOldDef.RequiredGender != "" && targetOldDef.RequiredGender != char.Gender {
+		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
+	}
 	targetSPValue, ok := state.MasteredSP(targetJobID)
 	if !ok {
 		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
@@ -51,6 +68,11 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 			Cost: economy.ResourceCost{ItemDefinitionID: "item-168", ItemDefinitionQty: 1}}
 		var updated corecharacter.Character
 		_, err := s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+			if tc.Character.OverLevel ||
+				(targetDef.RequiredGender != "" && targetDef.RequiredGender != tc.Character.Gender) ||
+				(targetOldDef.RequiredGender != "" && targetOldDef.RequiredGender != tc.Character.Gender) {
+				return corejob.ErrJobUnavailable
+			}
 			tc.Character.JobMemory = &corecharacter.JobMemory{JobID: tc.Character.JobID, SP: tc.Character.SP, OldJobID: tc.Character.OldJobID, OldSP: tc.Character.OldSP}
 			if err := tc.Character.ApplyJobMemory(targetJobID, targetSPValue, targetOldJobID, targetOldSPValue); err != nil {
 				return err
