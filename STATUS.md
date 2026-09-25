@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #780 — SecretShop: Trigger Collection Discovery on Direct Inventory Purchase
+Last updated: Issue #788 — Alchemy: Restore missing legacy recipes (福袋, 金の指輪) and 114 canonical compendium threshold
 
 ## Current Phase
 

@@ -40,7 +40,7 @@ func (s *stubAlchemyService) GetCompendium(ctx context.Context, characterID stri
 		return s.getCompendiumFn(ctx, characterID)
 	}
 	return alchemy.Compendium{
-		TotalRecipes:         112,
+		TotalRecipes:         114,
 		LearnedCount:         1,
 		CraftedCount:         0,
 		CompletionPercentage: 0,
@@ -133,8 +133,8 @@ func TestHTTP_GetCharacterAlchemy(t *testing.T) {
 		t.Fatalf("decode response failed: %v", err)
 	}
 
-	if body.Compendium.TotalRecipes != 112 {
-		t.Errorf("expected 112 total recipes, got %d", body.Compendium.TotalRecipes)
+	if body.Compendium.TotalRecipes != 114 {
+		t.Errorf("expected 114 total recipes, got %d", body.Compendium.TotalRecipes)
 	}
 }
 

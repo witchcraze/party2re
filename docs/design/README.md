@@ -104,7 +104,7 @@ graph TD
 - [`home.md`](home.md) — Private town estate construction (towns 1–4), companion phrase training, player mailbox (independent deletion), and free sleep recovery (`sleep.cgi`).
 - [`town_park.md`](town_park.md) — Public bulletin board messaging, NPC dialogs, and daily fortune divinations (@町娘).
 - [`tavern.md`](tavern.md) — Adventurer's Tavern 14-item culinary menu, restorative meals, fullness tracking, raffle tickets, and post-adventure standing order delivery.
-- [`alchemy.md`](alchemy.md) — 112 crafting recipes consuming depot materials, recipe compendium, and overnight home sleep synthesis.
+- [`alchemy.md`](alchemy.md) — 114 crafting recipes consuming depot materials, recipe compendium, and overnight home sleep synthesis.
 - [`blacksmith.md`](blacksmith.md) — 12 authentic crystal weapon seals, equipment naming, and 3-slot dedicated weapon storage.
 - [`monster.md`](monster.md) — Monster Grandpa ranch stabling (50–350 cap), Home pet companions (up to 8), renaming, P2P gifting, and wild release.
 - [`plantation.md`](plantation.md) — Seed cultivation with 6 seeds, 14 fertilizer reagents, midnight JST maturation, and depot harvest delivery.

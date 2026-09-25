@@ -104,7 +104,7 @@ Each feature owns its specific domain logic and state. Cross-feature imports and
 | :--- | :--- | :--- | :--- | :--- |
 | **Activity** | `internal/activity` | Delayed training actions and experience awards | Character, Progression, Scheduling | MariaDB `activities` |
 | **Adventure** | `internal/adventure` | 10-floor dungeon crawl loop, treasure room, combat chronicles | Battle, Catalogs, Character, Inventory | MariaDB `adventures` (Rank 2→3→5) |
-| **Alchemy** | `internal/alchemy` | 112-recipe crafting consuming depot materials, recipe compendium | Catalogs, Character, Depot, Economy | MariaDB `character_alchemy` (Rank 2→5→8) |
+| **Alchemy** | `internal/alchemy` | 114-recipe crafting consuming depot materials, recipe compendium | Catalogs, Character, Depot, Economy | MariaDB `character_alchemy` (Rank 2→5→8) |
 | **Altar** | `internal/altar` | 6-orb ritual, Ramia awakening, otherworld travel wishes | Character, Inventory, Depot, Economy | MariaDB `altar_records` (Rank 2→3→5) |
 | **Auction** | `internal/auction` | Live P2P trade hall (`@おくる`/`@しらべる`) | Character, Equipment, Inventory, Depot | MariaDB `characters`, `inventory_items`, `depot_items` (Rank 2→3→5) |
 | **Bank** | `internal/bank` | Gold savings deposits/withdrawals with 999,999G wallet clamp | Character | MariaDB `characters.deposit` (Rank 2) |
