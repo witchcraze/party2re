@@ -3,6 +3,7 @@ package collection_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,7 +65,7 @@ func (m *mockCollectionRepo) RecordItemDiscovered(_ context.Context, charID, ite
 func (m *mockCollectionRepo) GetItemCollection(_ context.Context, _, category string) ([]collection.ItemCollectionEntry, error) {
 	var list []collection.ItemCollectionEntry
 	for _, v := range m.items {
-		if category == "" || v.Category == category {
+		if category == "" || strings.EqualFold(v.Category, category) {
 			list = append(list, v)
 		}
 	}
@@ -353,5 +354,184 @@ func TestCollectionService_ItemCollectionCompletionNews(t *testing.T) {
 	}
 	if len(legend.inductions) != 1 {
 		t.Errorf("expected still 1 legend induction, got %d", len(legend.inductions))
+	}
+}
+
+func TestCollectionService_WeaponAndArmorDefaults(t *testing.T) {
+	repo := &mockCollectionRepo{
+		items:       make(map[string]collection.ItemCollectionEntry),
+		completions: make(map[string]bool),
+	}
+	svc, err := collection.NewService(repo, 0, 0)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	_, weaProg, err := svc.GetWeaponCollection(context.Background(), "char1")
+	if err != nil {
+		t.Fatalf("GetWeaponCollection failed: %v", err)
+	}
+	if weaProg.TotalCatalogCount != collection.DefaultTotalWeapons {
+		t.Errorf("expected %d total weapons, got %d", collection.DefaultTotalWeapons, weaProg.TotalCatalogCount)
+	}
+
+	_, armProg, err := svc.GetArmorCollection(context.Background(), "char1")
+	if err != nil {
+		t.Fatalf("GetArmorCollection failed: %v", err)
+	}
+	if armProg.TotalCatalogCount != collection.DefaultTotalArmors {
+		t.Errorf("expected %d total armors, got %d", collection.DefaultTotalArmors, armProg.TotalCatalogCount)
+	}
+}
+
+func TestCollectionService_WeaponCollectionCompletionNews(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockCollectionRepo{
+		items:       make(map[string]collection.ItemCollectionEntry),
+		completions: make(map[string]bool),
+	}
+	pub := &mockNewsPublisher{}
+	legend := &mockLegendInductor{}
+	charRepo := &mockCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-hero": {ID: "char-hero", Name: "勇者アベル"},
+		},
+	}
+
+	svc, err := collection.NewService(
+		repo,
+		180,
+		141,
+		collection.WithTotalWeapons(2),
+		collection.WithNewsPublisher(pub),
+		collection.WithCharacterRepository(charRepo),
+		collection.WithLegendInductor(legend),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	// 1st weapon
+	if err := svc.RecordItemDiscovered(ctx, "char-hero", "wea-001", "ひのきの棒", "weapon"); err != nil {
+		t.Fatalf("weapon 1 failed: %v", err)
+	}
+	if len(pub.articles) != 0 || len(legend.inductions) != 0 {
+		t.Fatalf("expected no news or induction yet")
+	}
+
+	// 2nd weapon -> 100%!
+	if err := svc.RecordItemDiscovered(ctx, "char-hero", "wea-002", "竹の槍", "WEAPON"); err != nil {
+		t.Fatalf("weapon 2 failed: %v", err)
+	}
+	if len(pub.articles) != 1 {
+		t.Fatalf("expected 1 news article, got %d", len(pub.articles))
+	}
+	expectedMsg := "勇者アベルが武器図鑑をコンプリートしました！"
+	if pub.articles[0].Content != expectedMsg {
+		t.Errorf("expected content %q, got %q", expectedMsg, pub.articles[0].Content)
+	}
+	if len(legend.inductions) != 1 {
+		t.Fatalf("expected 1 legend induction, got %d", len(legend.inductions))
+	}
+	if legend.inductions[0].Category != "comp_wea" || legend.inductions[0].CharacterID != "char-hero" {
+		t.Errorf("unexpected legend induction: %+v", legend.inductions[0])
+	}
+
+	// Duplicate discovery -> idempotent
+	if err := svc.RecordItemDiscovered(ctx, "char-hero", "wea-001", "ひのきの棒", "main-hand"); err != nil {
+		t.Fatalf("weapon dup failed: %v", err)
+	}
+	if len(pub.articles) != 1 || len(legend.inductions) != 1 {
+		t.Errorf("expected no duplicate news or induction")
+	}
+
+	entries, prog, err := svc.GetWeaponCollection(ctx, "char-hero")
+	if err != nil || len(entries) != 2 || !prog.IsCompleted || prog.CompletionPercentage != 100.0 {
+		t.Errorf("progress mismatch: %+v, entries: %d", prog, len(entries))
+	}
+}
+
+func TestCollectionService_ArmorCollectionCompletionNews(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockCollectionRepo{
+		items:       make(map[string]collection.ItemCollectionEntry),
+		completions: make(map[string]bool),
+	}
+	pub := &mockNewsPublisher{}
+	legend := &mockLegendInductor{}
+	charRepo := &mockCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-hero": {ID: "char-hero", Name: "勇者アベル"},
+		},
+	}
+
+	svc, err := collection.NewService(
+		repo,
+		180,
+		141,
+		collection.WithTotalArmors(2),
+		collection.WithNewsPublisher(pub),
+		collection.WithCharacterRepository(charRepo),
+		collection.WithLegendInductor(legend),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	// 1st armor
+	if err := svc.RecordItemDiscovered(ctx, "char-hero", "arm-001", "布の服", "armor"); err != nil {
+		t.Fatalf("armor 1 failed: %v", err)
+	}
+	if len(pub.articles) != 0 || len(legend.inductions) != 0 {
+		t.Fatalf("expected no news or induction yet")
+	}
+
+	// 2nd armor -> 100%!
+	if err := svc.RecordItemDiscovered(ctx, "char-hero", "arm-002", "皮の鎧", "ARMOR"); err != nil {
+		t.Fatalf("armor 2 failed: %v", err)
+	}
+	if len(pub.articles) != 1 {
+		t.Fatalf("expected 1 news article, got %d", len(pub.articles))
+	}
+	expectedMsg := "勇者アベルが防具図鑑をコンプリートしました！"
+	if pub.articles[0].Content != expectedMsg {
+		t.Errorf("expected content %q, got %q", expectedMsg, pub.articles[0].Content)
+	}
+	if len(legend.inductions) != 1 {
+		t.Fatalf("expected 1 legend induction, got %d", len(legend.inductions))
+	}
+	if legend.inductions[0].Category != "comp_arm" || legend.inductions[0].CharacterID != "char-hero" {
+		t.Errorf("unexpected legend induction: %+v", legend.inductions[0])
+	}
+
+	// Duplicate discovery -> idempotent
+	if err := svc.RecordItemDiscovered(ctx, "char-hero", "arm-001", "布の服", "shield"); err != nil {
+		t.Fatalf("armor dup failed: %v", err)
+	}
+	if len(pub.articles) != 1 || len(legend.inductions) != 1 {
+		t.Errorf("expected no duplicate news or induction")
+	}
+
+	entries, prog, err := svc.GetArmorCollection(ctx, "char-hero")
+	if err != nil || len(entries) != 2 || !prog.IsCompleted || prog.CompletionPercentage != 100.0 {
+		t.Errorf("progress mismatch: %+v, entries: %d", prog, len(entries))
+	}
+}
+
+func TestCollectionService_ValidationAndClamping(t *testing.T) {
+	repo := &mockCollectionRepo{
+		items:       make(map[string]collection.ItemCollectionEntry),
+		completions: make(map[string]bool),
+	}
+	svc, err := collection.NewService(repo, 1, 1, collection.WithTotalWeapons(1), collection.WithTotalArmors(1))
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	if _, _, err := svc.GetWeaponCollection(context.Background(), ""); err != collection.ErrInvalidCharacterID {
+		t.Errorf("expected ErrInvalidCharacterID, got %v", err)
+	}
+	if _, _, err := svc.GetArmorCollection(context.Background(), ""); err != collection.ErrInvalidCharacterID {
+		t.Errorf("expected ErrInvalidCharacterID, got %v", err)
 	}
 }

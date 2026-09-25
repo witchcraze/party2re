@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -14,6 +15,10 @@ const (
 	DefaultTotalMonsters = 180
 	// DefaultTotalItems is the canonical completion threshold from legacy Party2 (collection.cgi: my $default_ites = 141;).
 	DefaultTotalItems = 141
+	// DefaultTotalWeapons is the canonical completion threshold from legacy Party2 (collection.cgi: $#weas = 71).
+	DefaultTotalWeapons = 71
+	// DefaultTotalArmors is the canonical completion threshold from legacy Party2 (collection.cgi: $#arms = 55).
+	DefaultTotalArmors = 55
 )
 
 var (
@@ -107,10 +112,24 @@ func WithLegendInductor(inductor LegendInductor) Option {
 	}
 }
 
+func WithTotalWeapons(n int) Option {
+	return func(s *Service) {
+		s.totalWeapons = n
+	}
+}
+
+func WithTotalArmors(n int) Option {
+	return func(s *Service) {
+		s.totalArmors = n
+	}
+}
+
 type Service struct {
 	repo          Repository
 	totalMonsters int
 	totalItems    int
+	totalWeapons  int
+	totalArmors   int
 	newsPub       NewsPublisher
 	charRepo      CharacterRepository
 	legend        LegendInductor
@@ -130,9 +149,17 @@ func NewService(repo Repository, totalMonsters, totalItems int, opts ...Option) 
 		repo:          repo,
 		totalMonsters: totalMonsters,
 		totalItems:    totalItems,
+		totalWeapons:  DefaultTotalWeapons,
+		totalArmors:   DefaultTotalArmors,
 	}
 	for _, opt := range opts {
 		opt(s)
+	}
+	if s.totalWeapons <= 0 {
+		s.totalWeapons = DefaultTotalWeapons
+	}
+	if s.totalArmors <= 0 {
+		s.totalArmors = DefaultTotalArmors
 	}
 	return s, nil
 }
@@ -203,6 +230,17 @@ func (s *Service) GetMonsterBook(ctx context.Context, characterID string) ([]Mon
 	return entries, progress, nil
 }
 
+func normalizeCategory(cat string) string {
+	switch strings.ToLower(strings.TrimSpace(cat)) {
+	case "weapon", "main-hand":
+		return "weapon"
+	case "armor", "shield", "off-hand", "body", "accessory":
+		return "armor"
+	default:
+		return "item"
+	}
+}
+
 func (s *Service) RecordItemDiscovered(ctx context.Context, characterID, itemID, itemName, category string) error {
 	if characterID == "" {
 		return ErrInvalidCharacterID
@@ -210,11 +248,63 @@ func (s *Service) RecordItemDiscovered(ctx context.Context, characterID, itemID,
 	if itemID == "" {
 		return ErrInvalidItemID
 	}
-	if err := s.repo.RecordItemDiscovered(ctx, characterID, itemID, itemName, category); err != nil {
+	normCat := normalizeCategory(category)
+	if err := s.repo.RecordItemDiscovered(ctx, characterID, itemID, itemName, normCat); err != nil {
 		return err
 	}
-	s.checkItemCollectionCompletion(ctx, characterID)
+	switch normCat {
+	case "weapon":
+		s.checkWeaponCollectionCompletion(ctx, characterID)
+	case "armor":
+		s.checkArmorCollectionCompletion(ctx, characterID)
+	default:
+		s.checkItemCollectionCompletion(ctx, characterID)
+	}
 	return nil
+}
+
+func (s *Service) checkWeaponCollectionCompletion(ctx context.Context, characterID string) {
+	if s.totalWeapons <= 0 {
+		return
+	}
+	_, progress, err := s.GetWeaponCollection(ctx, characterID)
+	if err != nil || !progress.IsCompleted {
+		return
+	}
+	newlyCompleted, err := s.repo.MarkCompleted(ctx, characterID, "weapon")
+	if err != nil || !newlyCompleted {
+		return
+	}
+	if s.newsPub != nil {
+		charName := s.resolveCharacterName(ctx, characterID)
+		msg := fmt.Sprintf("%sが武器図鑑をコンプリートしました！", charName)
+		_ = s.newsPub.PublishNews(ctx, "collection", msg, msg, "System", time.Now().UTC())
+	}
+	if s.legend != nil {
+		_ = s.legend.RecordLegend(ctx, "comp_wea", characterID)
+	}
+}
+
+func (s *Service) checkArmorCollectionCompletion(ctx context.Context, characterID string) {
+	if s.totalArmors <= 0 {
+		return
+	}
+	_, progress, err := s.GetArmorCollection(ctx, characterID)
+	if err != nil || !progress.IsCompleted {
+		return
+	}
+	newlyCompleted, err := s.repo.MarkCompleted(ctx, characterID, "armor")
+	if err != nil || !newlyCompleted {
+		return
+	}
+	if s.newsPub != nil {
+		charName := s.resolveCharacterName(ctx, characterID)
+		msg := fmt.Sprintf("%sが防具図鑑をコンプリートしました！", charName)
+		_ = s.newsPub.PublishNews(ctx, "collection", msg, msg, "System", time.Now().UTC())
+	}
+	if s.legend != nil {
+		_ = s.legend.RecordLegend(ctx, "comp_arm", characterID)
+	}
 }
 
 func (s *Service) checkItemCollectionCompletion(ctx context.Context, characterID string) {
@@ -264,6 +354,58 @@ func (s *Service) GetItemCollection(ctx context.Context, characterID, category s
 		TotalCatalogCount:    s.totalItems,
 		CompletionPercentage: percentage,
 		IsCompleted:          s.totalItems > 0 && totalDiscovered >= s.totalItems,
+	}
+	return entries, progress, nil
+}
+
+func (s *Service) GetWeaponCollection(ctx context.Context, characterID string) ([]ItemCollectionEntry, CompletionProgress, error) {
+	if characterID == "" {
+		return nil, CompletionProgress{}, ErrInvalidCharacterID
+	}
+	entries, err := s.repo.GetItemCollection(ctx, characterID, "weapon")
+	if err != nil {
+		return nil, CompletionProgress{}, err
+	}
+	discovered := len(entries)
+	percentage := 0.0
+	if s.totalWeapons > 0 {
+		percentage = (float64(discovered) / float64(s.totalWeapons)) * 100.0
+		if percentage > 100.0 {
+			percentage = 100.0
+		}
+	}
+
+	progress := CompletionProgress{
+		DiscoveredCount:      discovered,
+		TotalCatalogCount:    s.totalWeapons,
+		CompletionPercentage: percentage,
+		IsCompleted:          s.totalWeapons > 0 && discovered >= s.totalWeapons,
+	}
+	return entries, progress, nil
+}
+
+func (s *Service) GetArmorCollection(ctx context.Context, characterID string) ([]ItemCollectionEntry, CompletionProgress, error) {
+	if characterID == "" {
+		return nil, CompletionProgress{}, ErrInvalidCharacterID
+	}
+	entries, err := s.repo.GetItemCollection(ctx, characterID, "armor")
+	if err != nil {
+		return nil, CompletionProgress{}, err
+	}
+	discovered := len(entries)
+	percentage := 0.0
+	if s.totalArmors > 0 {
+		percentage = (float64(discovered) / float64(s.totalArmors)) * 100.0
+		if percentage > 100.0 {
+			percentage = 100.0
+		}
+	}
+
+	progress := CompletionProgress{
+		DiscoveredCount:      discovered,
+		TotalCatalogCount:    s.totalArmors,
+		CompletionPercentage: percentage,
+		IsCompleted:          s.totalArmors > 0 && discovered >= s.totalArmors,
 	}
 	return entries, progress, nil
 }

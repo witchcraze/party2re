@@ -444,6 +444,22 @@ func TestLegendInductorAdapter(t *testing.T) {
 		t.Errorf("expected still 1 legend record, got %d", len(repo.legends))
 	}
 
+	// Record weapon completion
+	if err := adapter.RecordLegend(ctx, "comp_wea", "char-hero"); err != nil {
+		t.Fatalf("RecordLegend comp_wea failed: %v", err)
+	}
+	if len(repo.legends) != 2 || repo.legends[1].Category != "comp_wea" {
+		t.Errorf("expected comp_wea legend record, got %+v", repo.legends)
+	}
+
+	// Record armor completion
+	if err := adapter.RecordLegend(ctx, "comp_arm", "char-hero"); err != nil {
+		t.Fatalf("RecordLegend comp_arm failed: %v", err)
+	}
+	if len(repo.legends) != 3 || repo.legends[2].Category != "comp_arm" {
+		t.Errorf("expected comp_arm legend record, got %+v", repo.legends)
+	}
+
 	// Nil ranking check
 	nilAdapter := legendInductorAdapter{ranking: nil}
 	if err := nilAdapter.RecordLegend(ctx, "comp_job", "char-hero"); err != nil {

@@ -1,12 +1,12 @@
 # Status
 
-Last updated: Issue #826 — Battle: Restore Virulent Poison (劇毒) ally-turn party DoT mechanic
+Last updated: Issue #832 — Collection: Implement Weapon and Armor Catalogs and wire comp_wea/comp_arm Hall of Fame induction
 
 ## Current Phase
 
 **Version 1.0 Reconstruction / Refactoring — In Progress (Phase 5+)**
 
-All Version 1.0 foundational systems, core combat, 39 feature modules, and the HTTP JSON API (287 paths / 309 operations, OpenAPI 3.1) are implemented in clean-room Go (1.26.7) with 0 legacy code reuse.
+All Version 1.0 foundational systems, core combat, 39 feature modules, and the HTTP JSON API (289 paths / 311 operations, OpenAPI 3.1) are implemented in clean-room Go (1.26.7) with 0 legacy code reuse.
 
 - **Component Architecture & Boundaries**: Authoritative responsibilities, dependencies, and lock hierarchy tiers reside in [`docs/architecture/components.md`](docs/architecture/components.md).
 - **Completed Feature History**: Comprehensive issue-level traceability resides in [`docs/migration/feature-inventory.md`](docs/migration/feature-inventory.md).

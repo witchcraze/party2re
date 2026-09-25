@@ -14,6 +14,8 @@ import (
 type CollectionService interface {
 	GetMonsterBook(ctx context.Context, characterID string) ([]collection.MonsterBookEntry, collection.CompletionProgress, error)
 	GetItemCollection(ctx context.Context, characterID, category string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error)
+	GetWeaponCollection(ctx context.Context, characterID string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error)
+	GetArmorCollection(ctx context.Context, characterID string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error)
 }
 
 // WithCollection configures the collection service for the Handler.
@@ -29,6 +31,16 @@ type monsterBookResponse struct {
 }
 
 type itemCollectionResponse struct {
+	Entries  []collection.ItemCollectionEntry `json:"entries"`
+	Progress collection.CompletionProgress    `json:"progress"`
+}
+
+type weaponCollectionResponse struct {
+	Entries  []collection.ItemCollectionEntry `json:"entries"`
+	Progress collection.CompletionProgress    `json:"progress"`
+}
+
+type armorCollectionResponse struct {
 	Entries  []collection.ItemCollectionEntry `json:"entries"`
 	Progress collection.CompletionProgress    `json:"progress"`
 }
@@ -70,6 +82,48 @@ func (h *Handler) handleGetItemCollection(w http.ResponseWriter, r *http.Request
 		}
 
 		writeJSON(w, http.StatusOK, itemCollectionResponse{
+			Entries:  entries,
+			Progress: progress,
+		})
+	})
+}
+
+func (h *Handler) handleGetWeaponCollection(w http.ResponseWriter, r *http.Request) {
+	if h.collections == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("collection service not configured"))
+		return
+	}
+
+	charID := r.PathValue("id")
+	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+		entries, progress, err := h.collections.GetWeaponCollection(r.Context(), char.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, weaponCollectionResponse{
+			Entries:  entries,
+			Progress: progress,
+		})
+	})
+}
+
+func (h *Handler) handleGetArmorCollection(w http.ResponseWriter, r *http.Request) {
+	if h.collections == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("collection service not configured"))
+		return
+	}
+
+	charID := r.PathValue("id")
+	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+		entries, progress, err := h.collections.GetArmorCollection(r.Context(), char.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, armorCollectionResponse{
 			Entries:  entries,
 			Progress: progress,
 		})

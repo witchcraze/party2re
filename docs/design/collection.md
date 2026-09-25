@@ -23,16 +23,34 @@ The Collection and Monster Book Feature Module (`internal/collection`) provides 
 
 ---
 
-### Item Collection Registry (アイテム図鑑)
+### Weapon Encyclopedia (武器図鑑)
+
+- **Trigger**: When a weapon is acquired (shop purchase, drops, alchemy synthesis, auction buyout, depot withdrawal), it is registered in the character's collection registry with category `weapon`.
+- **Data Tracked**: `ItemID`, `ItemName`, `Category` (`"weapon"`), `DiscoveredAt`.
+- **Completion Progress**:
+  $$\text{Completion Percentage} = \min\left(100.0, \frac{\text{Unique Weapons Discovered}}{\text{Total Weapon Catalog Count (71)}} \times 100\right)$$
+
+---
+
+### Armor Encyclopedia (防具図鑑)
+
+- **Trigger**: When an armor, shield, or accessory is acquired, it is registered in the character's collection registry with category `armor`.
+- **Data Tracked**: `ItemID`, `ItemName`, `Category` (`"armor"`), `DiscoveredAt`.
+- **Completion Progress**:
+  $$\text{Completion Percentage} = \min\left(100.0, \frac{\text{Unique Armors Discovered}}{\text{Total Armor Catalog Count (55)}} \times 100\right)$$
+
+---
+
+### Item Collection Registry (道具図鑑)
 
 - **Trigger**: When an item is acquired (shop purchase, drops, alchemy synthesis, auction buyout, depot withdrawal), it is registered in the character's Item Collection registry.
 - **Data Tracked**:
   - `ItemID`: Unique item definition ID.
   - `ItemName`: Name of the item.
-  - `Category`: Item category (`WEAPON`, `ARMOR`, `SHIELD`, `ACCESSORY`, `ITEM`).
+  - `Category`: Item category (`weapon`, `armor`, `item`).
   - `DiscoveredAt`: Initial registration timestamp.
 - **Completion Progress**:
-  $$\text{Completion Percentage} = \min\left(100.0, \frac{\text{Unique Items Discovered}}{\text{Total Item Catalog Count}} \times 100\right)$$
+  $$\text{Completion Percentage} = \min\left(100.0, \frac{\text{Unique Items Discovered}}{\text{Total Item Catalog Count (141)}} \times 100\right)$$
 
 ---
 
@@ -43,19 +61,21 @@ The Collection and Monster Book Feature Module (`internal/collection`) provides 
 
 ---
 
-## Completion Milestones & News Broadcasts
+## Completion Milestones, News Broadcasts & Hall of Fame Induction
 
-Faithfully reproduces legacy Party2 (`lib/_add_monster_book.cgi`, `lib/collection.cgi`):
+Faithfully reproduces legacy Party2 (`lib/_add_monster_book.cgi`, `lib/collection.cgi`, `legend.cgi`):
 
 - **Canonical Completion Thresholds**:
   - **Monster Book**: 180 unique monsters (`DefaultTotalMonsters = 180`).
-  - **Item Collection**: 141 unique items (`DefaultTotalItems = 141`).
-- **100% Completion Announcements**:
-  - Upon reaching 180 monsters for the first time, a server news announcement is published:
-    `"<span class=\"comp\">{CharacterName}がモンスターブックをコンプリートしました！</span>"`
-  - Upon reaching 141 items for the first time, a server news announcement is published:
-    `"<span class=\"comp\">{CharacterName}がアイテムコレクションをコンプリートする！</span>"`
-  - Milestone recordings are persisted idempotently in `character_collection_completions` (`PRIMARY KEY (character_id, kind)`) so subsequent defeats or discoveries never trigger duplicate news notifications.
+  - **Weapon Encyclopedia**: 71 unique weapons (`DefaultTotalWeapons = 71`, `$#weas`).
+  - **Armor Encyclopedia**: 55 unique armors (`DefaultTotalArmors = 55`, `$#arms`).
+  - **Item Encyclopedia**: 141 unique items (`DefaultTotalItems = 141`, `$default_ites`).
+- **100% Completion Announcements & Hall of Fame Induction**:
+  - Upon reaching 180 monsters: publishes news `"{CharacterName}がモンスターブックをコンプリートしました！"` and inducts into Hall of Fame under `comp_mon` (モンスターマスター).
+  - Upon reaching 71 weapons: publishes news `"{CharacterName}が武器図鑑をコンプリートしました！"` and inducts into Hall of Fame under `comp_wea` (ウェポンキラー).
+  - Upon reaching 55 armors: publishes news `"{CharacterName}が防具図鑑をコンプリートしました！"` and inducts into Hall of Fame under `comp_arm` (アーマーキング).
+  - Upon reaching 141 items: publishes news `"{CharacterName}がアイテム図鑑をコンプリートしました！"` and inducts into Hall of Fame under `comp_ite` (アイテムニスト).
+  - Milestone recordings are persisted idempotently in `character_collection_completions` (`PRIMARY KEY (character_id, kind)`) so subsequent defeats or discoveries never trigger duplicate news notifications or duplicate legend inductions.
 
 ---
 
