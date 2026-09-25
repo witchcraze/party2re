@@ -290,13 +290,13 @@ func TestServiceChangeJobRejectsLowLevelAndMissingItem(t *testing.T) {
 
 func TestServiceExchangeJobRestoresRememberedPair(t *testing.T) {
 	char := corecharacter.Character{
-		ID: "character-1", JobID: "job-current", SP: 2, OldJobID: "job-old", OldSP: 1,
+		ID: "character-1", JobID: "job-01", SP: 2, OldJobID: "job-02", OldSP: 1,
 	}
 	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
-	state.Master("job-a")
-	state.Master("job-b")
-	state.MasteredJobSP["job-a"] = 20
-	state.MasteredJobSP["job-b"] = 30
+	state.Master("job-03")
+	state.Master("job-04")
+	state.MasteredJobSP["job-03"] = 20
+	state.MasteredJobSP["job-04"] = 30
 	repo := &repositoryStub{value: state}
 	charRepo := &charRepoStub{char: char}
 	inventory, _ := coreinventory.New(char.ID)
@@ -305,11 +305,11 @@ func TestServiceExchangeJobRestoresRememberedPair(t *testing.T) {
 	invRepo := &inventoryRepoStub{inventory: inventory}
 	svc, _ := NewService(repo, WithCharacterRepository(charRepo), WithInventoryRepository(invRepo))
 
-	updated, _, err := svc.ExchangeJob(context.Background(), char.ID, "job-a", "job-b")
+	updated, _, err := svc.ExchangeJob(context.Background(), char.ID, "job-03", "job-04")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.JobID != "job-a" || updated.SP != 20 || updated.OldJobID != "job-b" ||
+	if updated.JobID != "job-03" || updated.SP != 20 || updated.OldJobID != "job-04" ||
 		updated.OldSP != 30 || updated.JobMemory == nil {
 		t.Fatalf("exchanged character = %#v", updated)
 	}
@@ -317,7 +317,7 @@ func TestServiceExchangeJobRestoresRememberedPair(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if restored.JobID != "job-current" || restored.SP != 2 || restored.OldJobID != "job-old" ||
+	if restored.JobID != "job-01" || restored.SP != 2 || restored.OldJobID != "job-02" ||
 		restored.OldSP != 1 || restored.JobMemory != nil {
 		t.Fatalf("restored character = %#v", restored)
 	}

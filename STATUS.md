@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #830 — Job: Fix non-atomic armor-29 consumption and partial mutation vulnerability in FireFighter change
+Last updated: Issue #831 — Job: Enforce OverLevel restriction and gender compatibility in ExchangeJob
 
 ## Current Phase
 

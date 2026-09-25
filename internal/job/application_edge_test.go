@@ -684,3 +684,169 @@ func TestService_ChangeMethod(t *testing.T) {
 		t.Fatalf("expected save error in Change, got %v", err)
 	}
 }
+
+func TestExchangeJob_OverLevel_Rejected(t *testing.T) {
+	ctx := context.Background()
+	char := corecharacter.Character{
+		ID:        "char-overlevel",
+		Name:      "ReincarnatedHero",
+		JobID:     "job-01",
+		OldJobID:  "job-02",
+		SP:        50,
+		OldSP:     40,
+		OverLevel: true,
+	}
+	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
+	state.RecordMastery("job-03", 80, 80)
+	state.RecordMastery("job-04", 100, 100)
+
+	repo := &repositoryStub{value: state}
+	charRepo := &charRepoStub{char: char}
+	inv, _ := coreinventory.New(char.ID)
+	crystal, _ := item.NewInstance("item-168", 1)
+	_ = inv.Add(crystal)
+	invRepo := &inventoryRepoStub{inventory: inv}
+
+	svc, _ := NewService(repo, WithCharacterRepository(charRepo), WithInventoryRepository(invRepo))
+
+	// 1. OverLevel character cannot exchange jobs (item-168 present, mastered jobs)
+	_, _, err := svc.ExchangeJob(ctx, char.ID, "job-03", "job-04")
+	if !errors.Is(err, corejob.ErrJobUnavailable) {
+		t.Fatalf("expected ErrJobUnavailable for OverLevel character, got %v", err)
+	}
+
+	// 2. OverLevel character cannot exchange jobs in economy mode
+	ecoCharRepo := &errCharRepoStub{char: char}
+	ecoInvRepo := &errInventoryRepoStub{inv: inv}
+	ecoSvc, _ := economy.NewService(ecoCharRepo, ecoInvRepo)
+	svcEco, _ := NewService(repo, WithCharacterRepository(ecoCharRepo), WithInventoryRepository(ecoInvRepo), WithEconomy(ecoSvc))
+	_, _, err = svcEco.ExchangeJob(ctx, char.ID, "job-03", "job-04")
+	if !errors.Is(err, corejob.ErrJobUnavailable) {
+		t.Fatalf("expected ErrJobUnavailable for OverLevel character in economy mode, got %v", err)
+	}
+
+	// 3. OverLevel character cannot restore previous job memory
+	charWithMemory := char
+	charWithMemory.JobMemory = &corecharacter.JobMemory{
+		JobID:    "job-01",
+		SP:       50,
+		OldJobID: "job-02",
+		OldSP:    40,
+	}
+	charRepoMemory := &charRepoStub{char: charWithMemory}
+	svcMemory, _ := NewService(repo, WithCharacterRepository(charRepoMemory), WithInventoryRepository(invRepo))
+	_, _, err = svcMemory.ExchangeJob(ctx, char.ID, "ignored", "ignored")
+	if !errors.Is(err, corejob.ErrJobUnavailable) {
+		t.Fatalf("expected ErrJobUnavailable when restoring job memory for OverLevel character, got %v", err)
+	}
+}
+
+func TestExchangeJob_GenderMismatch_Rejected(t *testing.T) {
+	ctx := context.Background()
+
+	// Male character
+	maleChar := corecharacter.Character{
+		ID:        "char-male",
+		Name:      "MaleHero",
+		Gender:    "m",
+		JobID:     "job-01",
+		OldJobID:  "job-02",
+		SP:        50,
+		OldSP:     40,
+		OverLevel: false,
+	}
+	maleState, _ := corejob.NewCharacterJob(maleChar.ID, maleChar.JobID)
+	maleState.RecordMastery("job-03", 80, 80)
+	maleState.RecordMastery("job-13", 90, 90)   // 吟遊詩人: required_gender = "m"
+	maleState.RecordMastery("job-14", 100, 100) // 踊り子: required_gender = "f"
+	maleState.RecordMastery("job-16", 140, 140) // 白魔術師: required_gender = "f"
+
+	invMale, _ := coreinventory.New(maleChar.ID)
+	crystal, _ := item.NewInstance("item-168", 10)
+	_ = invMale.Add(crystal)
+
+	maleRepo := &repositoryStub{value: maleState}
+	maleCharRepo := &charRepoStub{char: maleChar}
+	maleInvRepo := &inventoryRepoStub{inventory: invMale}
+	svcMale, _ := NewService(maleRepo, WithCharacterRepository(maleCharRepo), WithInventoryRepository(maleInvRepo))
+
+	// Male attempting to recall female-exclusive job as targetJobID
+	_, _, err := svcMale.ExchangeJob(ctx, maleChar.ID, "job-14", "job-03")
+	if !errors.Is(err, corejob.ErrJobUnavailable) {
+		t.Fatalf("expected ErrJobUnavailable when male recalls female-exclusive job-14 as targetJobID, got %v", err)
+	}
+
+	// Male attempting to recall female-exclusive job as targetOldJobID
+	_, _, err = svcMale.ExchangeJob(ctx, maleChar.ID, "job-03", "job-14")
+	if !errors.Is(err, corejob.ErrJobUnavailable) {
+		t.Fatalf("expected ErrJobUnavailable when male recalls female-exclusive job-14 as targetOldJobID, got %v", err)
+	}
+
+	// Male attempting to recall female-exclusive job-16
+	_, _, err = svcMale.ExchangeJob(ctx, maleChar.ID, "job-16", "job-03")
+	if !errors.Is(err, corejob.ErrJobUnavailable) {
+		t.Fatalf("expected ErrJobUnavailable when male recalls female-exclusive job-16, got %v", err)
+	}
+
+	// Male recalling male-exclusive job-13 and neutral job-03 succeeds
+	maleUpdated, _, err := svcMale.ExchangeJob(ctx, maleChar.ID, "job-13", "job-03")
+	if err != nil {
+		t.Fatalf("expected male recalling job-13 to succeed, got %v", err)
+	}
+	if maleUpdated.JobID != "job-13" || maleUpdated.OldJobID != "job-03" {
+		t.Fatalf("unexpected jobs after exchange: JobID=%s, OldJobID=%s", maleUpdated.JobID, maleUpdated.OldJobID)
+	}
+
+	// Female character
+	femaleChar := corecharacter.Character{
+		ID:        "char-female",
+		Name:      "FemaleHero",
+		Gender:    "f",
+		JobID:     "job-01",
+		OldJobID:  "job-02",
+		SP:        50,
+		OldSP:     40,
+		OverLevel: false,
+	}
+	femaleState, _ := corejob.NewCharacterJob(femaleChar.ID, femaleChar.JobID)
+	femaleState.RecordMastery("job-03", 80, 80)
+	femaleState.RecordMastery("job-13", 90, 90)   // 吟遊詩人: required_gender = "m"
+	femaleState.RecordMastery("job-14", 100, 100) // 踊り子: required_gender = "f"
+	femaleState.RecordMastery("job-47", 160, 160) // ソルジャー: required_gender = "m"
+
+	invFemale, _ := coreinventory.New(femaleChar.ID)
+	crystalFemale, _ := item.NewInstance("item-168", 10)
+	_ = invFemale.Add(crystalFemale)
+
+	femaleRepo := &repositoryStub{value: femaleState}
+	femaleCharRepo := &charRepoStub{char: femaleChar}
+	femaleInvRepo := &inventoryRepoStub{inventory: invFemale}
+	svcFemale, _ := NewService(femaleRepo, WithCharacterRepository(femaleCharRepo), WithInventoryRepository(femaleInvRepo))
+
+	// Female attempting to recall male-exclusive job-13 as targetJobID
+	_, _, err = svcFemale.ExchangeJob(ctx, femaleChar.ID, "job-13", "job-03")
+	if !errors.Is(err, corejob.ErrJobUnavailable) {
+		t.Fatalf("expected ErrJobUnavailable when female recalls male-exclusive job-13 as targetJobID, got %v", err)
+	}
+
+	// Female attempting to recall male-exclusive job-13 as targetOldJobID
+	_, _, err = svcFemale.ExchangeJob(ctx, femaleChar.ID, "job-03", "job-13")
+	if !errors.Is(err, corejob.ErrJobUnavailable) {
+		t.Fatalf("expected ErrJobUnavailable when female recalls male-exclusive job-13 as targetOldJobID, got %v", err)
+	}
+
+	// Female attempting to recall male-exclusive job-47
+	_, _, err = svcFemale.ExchangeJob(ctx, femaleChar.ID, "job-47", "job-03")
+	if !errors.Is(err, corejob.ErrJobUnavailable) {
+		t.Fatalf("expected ErrJobUnavailable when female recalls male-exclusive job-47, got %v", err)
+	}
+
+	// Female recalling female-exclusive job-14 and neutral job-03 succeeds
+	femaleUpdated, _, err := svcFemale.ExchangeJob(ctx, femaleChar.ID, "job-14", "job-03")
+	if err != nil {
+		t.Fatalf("expected female recalling job-14 to succeed, got %v", err)
+	}
+	if femaleUpdated.JobID != "job-14" || femaleUpdated.OldJobID != "job-03" {
+		t.Fatalf("unexpected jobs after exchange: JobID=%s, OldJobID=%s", femaleUpdated.JobID, femaleUpdated.OldJobID)
+	}
+}
