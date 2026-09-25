@@ -124,7 +124,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Collection and Monster Book encyclopedia with combat defeat recording, canonical thresholds (180 monsters, 141 items, 71 weapons, 55 armors), 100% completion news, and comp_wea/comp_arm Hall of Fame induction (#85, #797, #832)
 - [x] Chapel prayers and blessings (#86, #472)
 - [x] Event Plaza, traveling merchant bazaar, and victory celebration banquets linked to Valkey presence (#161, #491, #634)
-- [x] Secret Underground Shop and NPC @ヒミツジ (#192, #462)
+- [x] Secret Underground Shop and NPC @ヒミツジ with collection discovery on direct purchase (#192, #462, #780)
 - [x] Adventurer's Tavern, culinary menu, food delivery standing orders, and post-adventure fullness reset (#185, #475, #595, #634)
 - [x] Flea Market player-to-player item stalls and SQL CAS status guard (#194, #398, #477)
 - [x] Monster Grandpa & Monster Ranch pet companion storage and stabling (#193, #488, #787)

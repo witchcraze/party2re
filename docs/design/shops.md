@@ -134,7 +134,7 @@ The secret shop stocks the 8 authentic rare items specified in legacy `secret.cg
 | `secret_item_counts_blood` | `item-031` | 伯爵の血 | Consumable | 5,000 G | **15,000 G** | 高貴なる闇の血脈を宿す秘薬。上位職への転職条件を満たす秘宝。 |
 
 - **Helper Quest Exclusion**: Active helper quest targets are filtered out of the catalog and cannot be purchased (`ErrItemUnavailableInHelperQuest`).
-- **Delivery**: If inventory slot is occupied or quantity > 1, goods route to Depot (`character_depots`).
+- **Delivery & Collection Discovery**: If the character's consumable inventory slot is empty and purchase quantity is 1, the item enters character inventory (`inventory_items`) and is automatically registered in the item collection via `collection.Recorder.RecordItemDiscovered` (matching legacy `secret.cgi:44-46` `&add_collection`). If the slot is occupied or quantity > 1, the item routes to Depot (`character_depots`) via `depot.FindOrCreate` without triggering collection discovery.
 
 ### 7.3. NPC Interactions & Puff-Puff Service
 - **Talk (`POST /characters/{id}/secretshop/talk`)**: Sheep dialogue hints (*"値段は高いメェ〜けれど、他では手に入らないレアものだメェ〜"*).
