@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #842 — Eliminate duplicate non-transactional state mutation, news broadcast, and legend induction in ChangeJob
+Last updated: Issue #841 — Prevent retail price bypass in BatchPurchase and restrict to batch-compatible shops and active catalog
 
 ## Current Phase
 

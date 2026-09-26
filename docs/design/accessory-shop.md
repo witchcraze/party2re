@@ -71,6 +71,9 @@ Purchasing an item above the character's current tier is rejected with `ErrLevel
    - Items are delivered directly into the character depot.
    - Shopkeeper returns depot transfer dialogue.
 
+3. **No Batch Purchasing (`まとめて買う`)**:
+   - In 1:1 legacy parity with `party2/lib/accessory.cgi:100-101`, accessory shops do not offer batch purchasing (`まとめて買う`). Batch purchase requests specifying `accessory` are rejected with `ErrInvalidShopType` (HTTP 400).
+
 ---
 
 ## 5. Accessory Synthesis (`&acce`)

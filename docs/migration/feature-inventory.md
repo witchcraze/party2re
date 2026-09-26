@@ -80,7 +80,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Inventory slot management and 5-slot equipment rules (#19)
 - [x] Character Item Depot storage for items with dynamic capacity (#58, #558, #559, #678)
 - [x] Gold currency wallet & transactions (999,999G cap) (#24)
-- [x] Item Shop purchase & 50% resale transactions (#55, #465)
+- [x] Item Shop purchase, batch purchase (`まとめて買う`), & 50% resale transactions (#55, #465, #841)
 - [x] Accessory Shop (`lib/accessory.cgi`, NPC: `@ミラ`) with job level-gated catalog (tiers 0, 50, 100), 10×/1000× retail pricing, depot routing, and 48 accessory synthesis recipes with Item 180 (合成の秘薬) guarantee (#779)
 - [x] Bank accounts, gold deposits, and withdrawals with wallet clamp (#71, #476)
 - [x] Blacksmith weapon seals (12 authentic seals consuming crystals), equipment naming, and 3-slot weapon storage (#458, #632)

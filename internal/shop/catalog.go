@@ -58,6 +58,18 @@ func ValidateShopType(st ShopType) bool {
 	}
 }
 
+// SupportsBatchPurchase returns true if the shop type offers batch purchasing (まとめて買う).
+// In legacy Party2, only weapon, armor, and item shops support batch purchases.
+// Accessory shops and secret shops do not support batch purchases.
+func SupportsBatchPurchase(st ShopType) bool {
+	switch st {
+	case ShopTypeWeapon, ShopTypeArmor, ShopTypeItem:
+		return true
+	default:
+		return false
+	}
+}
+
 // GetSalesItemIDs returns the legacy catalog item IDs for a given shop type and job level.
 // Corresponds 1:1 to party2/lib/weapon.cgi:18, armor.cgi:17, item.cgi:17-22, and accessory.cgi:17-29.
 func GetSalesItemIDs(shopType ShopType, jobLv int) ([]string, error) {
