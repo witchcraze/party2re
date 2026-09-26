@@ -51,6 +51,8 @@ The Collection and Monster Book Feature Module (`internal/collection`) provides 
   - `DiscoveredAt`: Initial registration timestamp.
 - **Completion Progress**:
   $$\text{Completion Percentage} = \min\left(100.0, \frac{\text{Unique Items Discovered}}{\text{Total Item Catalog Count (141)}} \times 100\right)$$
+- **Category Isolation**:
+  Completion count and progress evaluation for the item compendium are strictly filtered by category (`"item"`). Discovering weapons or armors stored in the shared collection table does not increase the item collection count or advance `comp_ite` threshold progress.
 
 ---
 

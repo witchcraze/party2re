@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #779 — Accessory Shop (@ミラ) and 48 synthesis recipes (&acce) with Item 180 guarantee
+Last updated: Issue #840 — Restrict GetItemCollectionCount to item category to prevent premature comp_ite completion
 
 ## Current Phase
 
