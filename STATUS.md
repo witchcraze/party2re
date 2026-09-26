@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #792 — Source helper quests from Depot and Monster Ranch with direct Depot reward delivery
+Last updated: Issue #782 — Route custom skill gem synthesis to Gem Box storage and purge fictional MaxMP check
 
 ## Current Phase
 

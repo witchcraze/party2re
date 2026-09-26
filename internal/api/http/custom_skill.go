@@ -8,6 +8,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/customskill"
+	"github.com/witchcraze/party2re/internal/gemstore"
 )
 
 type CustomSkillService interface {
@@ -73,9 +74,9 @@ func (h *Handler) handleSetCustomSkill(w http.ResponseWriter, r *http.Request) {
 			case errors.Is(err, customskill.ErrInvalidSkillName),
 				errors.Is(err, customskill.ErrInvalidSkillComment),
 				errors.Is(err, customskill.ErrTooManyGemSlots),
-				errors.Is(err, customskill.ErrCMPTooHigh),
 				errors.Is(err, customskill.ErrGemNotOwned),
-				errors.Is(err, customskill.ErrGemNotFound):
+				errors.Is(err, customskill.ErrGemNotFound),
+				errors.Is(err, gemstore.ErrGemBoxFull):
 				writeError(w, http.StatusBadRequest, err)
 			default:
 				writeError(w, http.StatusInternalServerError, err)

@@ -69,7 +69,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Job mastery, level-20 job changes, item costs, mastered-job memory exchange with OverLevel guard and gender compatibility restrictions, future memory snapshots ("よびおこす"), and 72-job completion title/news notification with "すっぴん" job unlock (#467, #470, #831)
 - [x] Job mastery catalog endpoint (職業極め所, job_master.cgi) with 87-job progress and complete percentage calculation (#785)
 - [x] Home resting, sleep recovery, and tired reset (#62, #459)
-- [x] Custom skill assignment (#69)
+- [x] Custom skill assignment and Gem Box synthesis routing (#69, #782)
 - [x] Wishing Well (願いの泉, @女神) SP sacrifice exchange for permanent stat growth (#468)
 - [x] Standardize vitality & fatigue state clamping and combat recovery helpers (#684)
 - [x] Endgame wishes, stat boosts, and Lv99+ / storage limit breaks (#187)

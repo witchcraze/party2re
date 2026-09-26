@@ -41,12 +41,13 @@ var compositionRoots = map[string]bool{
 // permittedCrossFeatureCouplings defines the strictly limited set of documented domain relationships
 // between specific feature packages. No new entries may be added without formal architecture review.
 var permittedCrossFeatureCouplings = map[string]map[string]bool{
-	"internal/party":  {"internal/adventure": true},                      // Multi-player party adventure 10-floor crawl loop
-	"internal/boss":   {"internal/party": true},                          // 4-player party recruitment for King sealing battles
-	"internal/gvg":    {"internal/guild": true},                          // Guild battle room validation and guild standings
-	"internal/god":    {"internal/casino": true, "internal/guild": true}, // God wishes (WishCoin50000 and WishGuildPoint1000)
-	"internal/battle": {"internal/customskill": true},                    // Battle Adapter equips custom skill gems
-	"internal/store":  {"internal/costume": true},                        // Oracle shop active costume rental inspection and management
+	"internal/party":       {"internal/adventure": true},                      // Multi-player party adventure 10-floor crawl loop
+	"internal/boss":        {"internal/party": true},                          // 4-player party recruitment for King sealing battles
+	"internal/gvg":         {"internal/guild": true},                          // Guild battle room validation and guild standings
+	"internal/god":         {"internal/casino": true, "internal/guild": true}, // God wishes (WishCoin50000 and WishGuildPoint1000)
+	"internal/battle":      {"internal/customskill": true},                    // Battle Adapter equips custom skill gems
+	"internal/store":       {"internal/costume": true},                        // Oracle shop active costume rental inspection and management
+	"internal/customskill": {"internal/gemstore": true},                       // Custom skill gem synthesis consumes and returns gems to Gem Box
 }
 
 // getPackagePath extracts the logical package path (e.g. "internal/casino" or "internal/core/character")

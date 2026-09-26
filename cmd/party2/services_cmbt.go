@@ -184,7 +184,7 @@ func newCmbtServices(
 	if err != nil {
 		return nil, err
 	}
-	customSkillService.ConfigureGemSynthesis(customSkillGemCatalog{catalog: gemCatalog}, core.invRepo, core.txProvider)
+	customSkillService.ConfigureGemSynthesis(customSkillGemCatalog{catalog: gemCatalog}, econ.gemBoxRepo, core.txProvider)
 
 	adventureRepo, err := database.NewAdventureRepository(db)
 	if err != nil {

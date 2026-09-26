@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/customskill"
+	"github.com/witchcraze/party2re/internal/gemstore"
 )
 
 type synthesisRepo struct {
@@ -41,32 +41,45 @@ func (g synthesisGems) FindGemByID(id string) (customskill.GemDefinition, bool) 
 	return value, ok
 }
 
-type synthesisInventory struct{ value coreinventory.Inventory }
-
-func (r *synthesisInventory) FindByCharacterIDForUpdate(context.Context, string) (coreinventory.Inventory, error) {
-	return r.value, nil
+type synthesisGemBox struct {
+	box gemstore.GemBox
 }
-func (r *synthesisInventory) Save(_ context.Context, value coreinventory.Inventory) error {
-	r.value = value
+
+func (r *synthesisGemBox) FindByCharacterIDForUpdate(context.Context, string) (gemstore.GemBox, error) {
+	return r.box, nil
+}
+func (r *synthesisGemBox) Save(_ context.Context, value gemstore.GemBox) error {
+	r.box = value
 	return nil
+}
+
+func countGems(items []coreitem.Instance, definitionID string) int {
+	count := 0
+	for _, inst := range items {
+		if inst.DefinitionID == definitionID {
+			count++
+		}
+	}
+	return count
 }
 
 func TestSetCustomSkillSynthesizesGemsAndReturnsPreviousSelection(t *testing.T) {
 	repo := &synthesisRepo{}
-	inventory, err := coreinventory.New("char-1")
-	if err != nil {
-		t.Fatal(err)
-	}
+	var items []coreitem.Instance
 	for _, id := range []string{"ruby", "diamond"} {
-		instance, createErr := coreitem.NewInstance(id, 1)
-		if createErr != nil {
-			t.Fatal(createErr)
-		}
-		if err := inventory.Add(instance); err != nil {
+		instance, err := coreitem.NewInstance(id, 1)
+		if err != nil {
 			t.Fatal(err)
 		}
+		items = append(items, instance)
 	}
-	invRepo := &synthesisInventory{value: inventory}
+	boxRepo := &synthesisGemBox{
+		box: gemstore.GemBox{
+			CharacterID: "char-1",
+			Capacity:    10,
+			Items:       items,
+		},
+	}
 	chars := &synthesisCharacters{characters: map[string]corecharacter.Character{
 		"char-1": {ID: "char-1", Stats: corecharacter.Stats{MaxMP: 20}},
 	}}
@@ -77,33 +90,39 @@ func TestSetCustomSkillSynthesizesGemsAndReturnsPreviousSelection(t *testing.T) 
 	service.ConfigureGemSynthesis(synthesisGems{
 		"ruby":    {ID: "ruby", SlotCost: 1, MPCost: 4},
 		"diamond": {ID: "diamond", SlotCost: 2, MPCost: 8},
-	}, invRepo, nil)
+	}, boxRepo, nil)
 
 	first, err := service.SetCustomSkill(context.Background(), "char-1", "炎の舞", "いくぞ", [3]string{"ruby", "", ""})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.CMP != 4 || invRepo.value.Quantity("ruby") != 0 {
-		t.Fatalf("unexpected first synthesis: %+v, inventory=%+v", first, invRepo.value)
+	if first.CMP != 4 || countGems(boxRepo.box.Items, "ruby") != 0 {
+		t.Fatalf("unexpected first synthesis: %+v, gembox=%+v", first, boxRepo.box)
 	}
 
 	second, err := service.SetCustomSkill(context.Background(), "char-1", "星の雨", "", [3]string{"diamond", "", ""})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if second.CMP != 8 || invRepo.value.Quantity("ruby") != 1 || invRepo.value.Quantity("diamond") != 0 {
-		t.Fatalf("previous gem was not swapped: %+v, inventory=%+v", second, invRepo.value)
+	if second.CMP != 8 || countGems(boxRepo.box.Items, "ruby") != 1 || countGems(boxRepo.box.Items, "diamond") != 0 {
+		t.Fatalf("previous gem was not swapped: %+v, gembox=%+v", second, boxRepo.box)
 	}
 }
 
 func TestSetCustomSkillRejectsInvalidNameAndLimits(t *testing.T) {
 	repo := &synthesisRepo{}
-	inventory, _ := coreinventory.New("char-1")
+	var items []coreitem.Instance
 	for _, id := range []string{"a", "a", "c", "c"} {
 		instance, _ := coreitem.NewInstance(id, 1)
-		_ = inventory.Add(instance)
+		items = append(items, instance)
 	}
-	invRepo := &synthesisInventory{value: inventory}
+	boxRepo := &synthesisGemBox{
+		box: gemstore.GemBox{
+			CharacterID: "char-1",
+			Capacity:    10,
+			Items:       items,
+		},
+	}
 	chars := &synthesisCharacters{characters: map[string]corecharacter.Character{
 		"char-1": {ID: "char-1", Stats: corecharacter.Stats{MaxMP: 5}},
 	}}
@@ -112,7 +131,7 @@ func TestSetCustomSkillRejectsInvalidNameAndLimits(t *testing.T) {
 		"a": {ID: "a", SlotCost: 2, MPCost: 3},
 		"b": {ID: "b", SlotCost: 2, MPCost: 3},
 		"c": {ID: "c", SlotCost: 1, MPCost: 3},
-	}, invRepo, nil)
+	}, boxRepo, nil)
 
 	if _, err := service.SetCustomSkill(context.Background(), "char-1", "こうげき", "", [3]string{}); err != customskill.ErrInvalidSkillName {
 		t.Fatalf("expected reserved name rejection, got %v", err)
@@ -120,7 +139,7 @@ func TestSetCustomSkillRejectsInvalidNameAndLimits(t *testing.T) {
 	if _, err := service.SetCustomSkill(context.Background(), "char-1", "valid", "", [3]string{"a", "a", ""}); err != customskill.ErrTooManyGemSlots {
 		t.Fatalf("expected slot rejection, got %v", err)
 	}
-	if _, err := service.SetCustomSkill(context.Background(), "char-1", "valid", "", [3]string{"c", "c", ""}); err != customskill.ErrCMPTooHigh {
-		t.Fatalf("expected CMP rejection, got %v", err)
+	if _, err := service.SetCustomSkill(context.Background(), "char-1", "valid", "", [3]string{"b", "", ""}); err != customskill.ErrGemNotOwned {
+		t.Fatalf("expected gem not owned rejection, got %v", err)
 	}
 }
