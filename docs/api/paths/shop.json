@@ -530,8 +530,7 @@
                   "enum": [
                     "weapon",
                     "armor",
-                    "item",
-                    "accessory"
+                    "item"
                   ],
                   "type": "string"
                 }

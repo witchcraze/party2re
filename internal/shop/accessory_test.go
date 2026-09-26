@@ -42,7 +42,7 @@ func TestAccessoryPricing(t *testing.T) {
 	svc, _, _, _, _ := setupAccessoryTestService(t)
 
 	// Normal accessory item: 10x base price
-	price147, err := svc.CalculateRetailPriceForShop(shop.ShopTypeAccessory, "item-147", 50)
+	price147, err := svc.CalculateRetailPrice(shop.ShopTypeAccessory, "item-147", 50)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestAccessoryPricing(t *testing.T) {
 	}
 
 	// Rare items (item-150 and item-151): 1000x base price
-	price150, err := svc.CalculateRetailPriceForShop(shop.ShopTypeAccessory, "item-150", 150)
+	price150, err := svc.CalculateRetailPrice(shop.ShopTypeAccessory, "item-150", 150)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestAccessoryPricing(t *testing.T) {
 		t.Errorf("item-150 price = %d, want 150000 (150 * 1000)", price150)
 	}
 
-	price151, err := svc.CalculateRetailPriceForShop(shop.ShopTypeAccessory, "item-151", 50)
+	price151, err := svc.CalculateRetailPrice(shop.ShopTypeAccessory, "item-151", 50)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestAccessoryPricing(t *testing.T) {
 	}
 
 	// Overflow guard test
-	_, err = svc.CalculateRetailPriceForShop(shop.ShopTypeAccessory, "item-150", math.MaxInt/500)
+	_, err = svc.CalculateRetailPrice(shop.ShopTypeAccessory, "item-150", math.MaxInt/500)
 	if err == nil {
 		t.Errorf("expected overflow error for large price, got nil")
 	}

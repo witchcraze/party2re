@@ -3,6 +3,7 @@ package shop
 import (
 	"context"
 	"errors"
+	"slices"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -92,7 +93,7 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 		return PurchaseResult{}, ErrItemUnavailable
 	}
 
-	unitPrice, err := s.CalculateRetailPriceForShop(shopType, itemDefinitionID, definition.Price)
+	unitPrice, err := s.CalculateRetailPrice(shopType, itemDefinitionID, definition.Price)
 	if err != nil {
 		return PurchaseResult{}, err
 	}
@@ -241,16 +242,12 @@ func (s *Service) BatchPurchase(ctx context.Context, characterID string, shopTyp
 	if characterID == "" {
 		return BatchPurchaseResult{}, corecharacter.ErrNotFound
 	}
-	if !ValidateShopType(shopType) {
+	if !SupportsBatchPurchase(shopType) {
 		return BatchPurchaseResult{}, ErrInvalidShopType
 	}
 	if s.depots == nil {
 		return BatchPurchaseResult{}, ErrDepotNotConfigured
 	}
-
-	totalPrice := 0
-	var instances []item.Instance
-	var itemNames []string
 
 	for _, it := range items {
 		if it.Quantity <= 0 || it.Quantity > MaxTransactionQuantity {
@@ -259,34 +256,6 @@ func (s *Service) BatchPurchase(ctx context.Context, characterID string, shopTyp
 		if s.isItemInActiveHelper(ctx, it.ItemDefinitionID) {
 			return BatchPurchaseResult{}, ErrItemUnavailable
 		}
-
-		def, err := s.catalog.FindByID(it.ItemDefinitionID)
-		if err != nil {
-			return BatchPurchaseResult{}, ErrItemNotFound
-		}
-
-		unitPrice, err := s.CalculateRetailPrice(def.Price)
-		if err != nil {
-			return BatchPurchaseResult{}, err
-		}
-		lineTotal, err := safeMultiply(unitPrice, it.Quantity)
-		if err != nil {
-			return BatchPurchaseResult{}, err
-		}
-
-		// Check overflow in cumulative sum
-		newTotal, err := economy.SafeAdd(totalPrice, lineTotal)
-		if err != nil {
-			return BatchPurchaseResult{}, ErrPriceOverflow
-		}
-		totalPrice = newTotal
-
-		inst, err := item.NewInstance(it.ItemDefinitionID, it.Quantity)
-		if err != nil {
-			return BatchPurchaseResult{}, err
-		}
-		instances = append(instances, inst)
-		itemNames = append(itemNames, def.Name)
 	}
 
 	var result BatchPurchaseResult
@@ -296,6 +265,47 @@ func (s *Service) BatchPurchase(ctx context.Context, characterID string, shopTyp
 		if err != nil {
 			return corecharacter.ErrNotFound
 		}
+
+		salesIDs, err := GetSalesItemIDs(shopType, char.JobLevel)
+		if err != nil {
+			return err
+		}
+
+		totalPrice := 0
+		var instances []item.Instance
+		for _, it := range items {
+			if !slices.Contains(salesIDs, it.ItemDefinitionID) {
+				return ErrItemNotFound
+			}
+
+			def, err := s.catalog.FindByID(it.ItemDefinitionID)
+			if err != nil {
+				return ErrItemNotFound
+			}
+
+			unitPrice, err := s.CalculateRetailPrice(shopType, it.ItemDefinitionID, def.Price)
+			if err != nil {
+				return err
+			}
+			lineTotal, err := safeMultiply(unitPrice, it.Quantity)
+			if err != nil {
+				return err
+			}
+
+			// Check overflow in cumulative sum
+			newTotal, err := economy.SafeAdd(totalPrice, lineTotal)
+			if err != nil {
+				return ErrPriceOverflow
+			}
+			totalPrice = newTotal
+
+			inst, err := item.NewInstance(it.ItemDefinitionID, it.Quantity)
+			if err != nil {
+				return err
+			}
+			instances = append(instances, inst)
+		}
+
 		if char.Money < totalPrice {
 			return ErrInsufficientFunds
 		}

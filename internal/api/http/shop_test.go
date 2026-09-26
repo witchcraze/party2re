@@ -48,10 +48,19 @@ func TestShopEndpoints(t *testing.T) {
 				},
 			}, nil
 		},
-		batchPurchaseFn: func(_ context.Context, characterID string, _ shop.ShopType, items []shop.BatchPurchaseItemRequest) (shop.BatchPurchaseResult, error) {
+		batchPurchaseFn: func(_ context.Context, characterID string, shopType shop.ShopType, items []shop.BatchPurchaseItemRequest) (shop.BatchPurchaseResult, error) {
+			if !shop.SupportsBatchPurchase(shopType) {
+				return shop.BatchPurchaseResult{}, shop.ErrInvalidShopType
+			}
 			total := 0
 			count := 0
 			for _, it := range items {
+				if it.ItemDefinitionID == "missing-item" {
+					return shop.BatchPurchaseResult{}, shop.ErrItemNotFound
+				}
+				if it.ItemDefinitionID == "quest-item" {
+					return shop.BatchPurchaseResult{}, shop.ErrItemUnavailable
+				}
 				total += 20 * it.Quantity
 				count += it.Quantity
 			}
@@ -146,6 +155,48 @@ func TestShopEndpoints(t *testing.T) {
 		}
 		if resp["purchased_count"] != float64(3) {
 			t.Errorf("expected purchased_count 3, got %v", resp["purchased_count"])
+		}
+	})
+
+	t.Run("POST /characters/{id}/shop/batch-purchase incompatible shop type", func(t *testing.T) {
+		body := `{"shop_type":"accessory","items":[{"item_definition_id":"item-147","quantity":1}]}`
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/shop/batch-purchase", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rr := httptest.NewRecorder()
+
+		router.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for accessory shop, got %d: %s", rr.Code, rr.Body.String())
+		}
+	})
+
+	t.Run("POST /characters/{id}/shop/batch-purchase item not found", func(t *testing.T) {
+		body := `{"shop_type":"weapon","items":[{"item_definition_id":"missing-item","quantity":1}]}`
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/shop/batch-purchase", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rr := httptest.NewRecorder()
+
+		router.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 for missing item, got %d: %s", rr.Code, rr.Body.String())
+		}
+	})
+
+	t.Run("POST /characters/{id}/shop/batch-purchase item unavailable", func(t *testing.T) {
+		body := `{"shop_type":"weapon","items":[{"item_definition_id":"quest-item","quantity":1}]}`
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/shop/batch-purchase", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rr := httptest.NewRecorder()
+
+		router.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("expected 422 for active helper item, got %d: %s", rr.Code, rr.Body.String())
 		}
 	})
 

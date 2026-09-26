@@ -32,11 +32,12 @@ func setupParityTest(t *testing.T) (*shop.Service, *characterRepoStub, *inventor
 	t.Helper()
 	w1, _ := item.NewEquipmentDefinition("weapon-01", "Club", 50, item.SlotMainHand)
 	w2, _ := item.NewEquipmentDefinition("weapon-02", "Copper Sword", 120, item.SlotMainHand)
+	w7, _ := item.NewEquipmentDefinition("weapon-07", "Rapier", 300, item.SlotMainHand)
 	a1, _ := item.NewEquipmentDefinition("armor-01", "Plain Clothes", 30, item.SlotBody)
 	i1, _ := item.NewDefinition("item-001", "Herb", 10)
 	i2, _ := item.NewDefinition("item-007", "Antidote", 15)
 
-	catalog, err := item.NewCatalog([]item.Definition{w1, w2, a1, i1, i2})
+	catalog, err := item.NewCatalog([]item.Definition{w1, w2, w7, a1, i1, i2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,16 +67,43 @@ func setupParityTest(t *testing.T) (*shop.Service, *characterRepoStub, *inventor
 func TestCalculateRetailPrice(t *testing.T) {
 	svc, _, _, _, _, _ := setupParityTest(t)
 
-	price, err := svc.CalculateRetailPrice(100)
+	// Standard shop: 2x multiplier
+	priceItem, err := svc.CalculateRetailPrice(shop.ShopTypeItem, "item-001", 100)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if price != 200 {
-		t.Errorf("retail price = %d, want 200", price)
+	if priceItem != 200 {
+		t.Errorf("retail price = %d, want 200", priceItem)
+	}
+
+	priceWeapon, err := svc.CalculateRetailPrice(shop.ShopTypeWeapon, "weapon-01", 50)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if priceWeapon != 100 {
+		t.Errorf("retail price = %d, want 100", priceWeapon)
+	}
+
+	// Accessory shop: 10x multiplier
+	priceAcce, err := svc.CalculateRetailPrice(shop.ShopTypeAccessory, "item-147", 50)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if priceAcce != 500 {
+		t.Errorf("retail price = %d, want 500", priceAcce)
+	}
+
+	// Rare accessory items: 1000x multiplier
+	price150, err := svc.CalculateRetailPrice(shop.ShopTypeAccessory, "item-150", 150)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if price150 != 150000 {
+		t.Errorf("retail price = %d, want 150000", price150)
 	}
 
 	// Non-positive price
-	zeroPrice, err := svc.CalculateRetailPrice(0)
+	zeroPrice, err := svc.CalculateRetailPrice(shop.ShopTypeItem, "item-001", 0)
 	if err != nil || zeroPrice != 0 {
 		t.Errorf("zero price = %d, err = %v", zeroPrice, err)
 	}
@@ -237,7 +265,7 @@ func TestBatchPurchase_DirectToDepot(t *testing.T) {
 
 	req := []shop.BatchPurchaseItemRequest{
 		{ItemDefinitionID: "weapon-01", Quantity: 2}, // 50 * 2 * 2 = 200
-		{ItemDefinitionID: "item-007", Quantity: 5},  // 15 * 2 * 5 = 150
+		{ItemDefinitionID: "weapon-02", Quantity: 1}, // 100 * 2 * 1 = 200
 	}
 
 	result, err := svc.BatchPurchase(context.Background(), char.ID, shop.ShopTypeWeapon, req)
@@ -245,8 +273,8 @@ func TestBatchPurchase_DirectToDepot(t *testing.T) {
 		t.Fatalf("BatchPurchase error: %v", err)
 	}
 
-	if result.TotalPrice != 350 {
-		t.Errorf("result.TotalPrice = %d, want 350", result.TotalPrice)
+	if result.TotalPrice != 440 {
+		t.Errorf("result.TotalPrice = %d, want 440", result.TotalPrice)
 	}
 
 	// Inventory must be untouched (all to depot)
@@ -264,10 +292,83 @@ func TestBatchPurchase_DirectToDepot(t *testing.T) {
 		t.Fatalf("depot items count = %d, want 2", len(dep.Items))
 	}
 
-	// Money: 2000 - 350 = 1650
+	// Money: 2000 - 440 = 1560
 	savedChar, _ := charRepo.FindByID(context.Background(), char.ID)
-	if savedChar.Money != 1650 {
-		t.Errorf("savedChar.Money = %d, want 1650", savedChar.Money)
+	if savedChar.Money != 1560 {
+		t.Errorf("savedChar.Money = %d, want 1560", savedChar.Money)
+	}
+}
+
+func TestBatchPurchase_UnsupportedShop(t *testing.T) {
+	svc, charRepo, _, _, _, _ := setupParityTest(t)
+	char := createTestCharacter(t, charRepo, "Hero", 2000)
+
+	req := []shop.BatchPurchaseItemRequest{
+		{ItemDefinitionID: "weapon-01", Quantity: 1},
+	}
+
+	// Accessory shop does not support batch purchase
+	_, err := svc.BatchPurchase(context.Background(), char.ID, shop.ShopTypeAccessory, req)
+	if !errors.Is(err, shop.ErrInvalidShopType) {
+		t.Errorf("expected ErrInvalidShopType for ShopTypeAccessory, got %v", err)
+	}
+
+	// Arbitrary/unknown shop type
+	_, err = svc.BatchPurchase(context.Background(), char.ID, shop.ShopType("secret"), req)
+	if !errors.Is(err, shop.ErrInvalidShopType) {
+		t.Errorf("expected ErrInvalidShopType for unknown shop, got %v", err)
+	}
+}
+
+func TestBatchPurchase_CatalogValidation(t *testing.T) {
+	svc, charRepo, _, _, _, _ := setupParityTest(t)
+	char := createTestCharacter(t, charRepo, "Hero", 2000)
+	char.JobLevel = 0
+	_ = charRepo.Update(context.Background(), char)
+
+	// 1. Attempting to buy an item from the wrong shop (item-007 at weapon shop)
+	reqWrongShop := []shop.BatchPurchaseItemRequest{
+		{ItemDefinitionID: "item-007", Quantity: 1},
+	}
+	_, err := svc.BatchPurchase(context.Background(), char.ID, shop.ShopTypeWeapon, reqWrongShop)
+	if !errors.Is(err, shop.ErrItemNotFound) {
+		t.Errorf("expected ErrItemNotFound for item-007 in weapon shop, got %v", err)
+	}
+
+	// 2. Attempting to buy an unearned item due to low JobLevel
+	// weapon-07 is available only for jobLv >= 1 (6 + jobLv = weapon-07 when jobLv=1)
+	reqHigherTier := []shop.BatchPurchaseItemRequest{
+		{ItemDefinitionID: "weapon-07", Quantity: 1},
+	}
+	_, err = svc.BatchPurchase(context.Background(), char.ID, shop.ShopTypeWeapon, reqHigherTier)
+	if !errors.Is(err, shop.ErrItemNotFound) {
+		t.Errorf("expected ErrItemNotFound for weapon-07 at jobLv 0, got %v", err)
+	}
+
+	// Now increase JobLevel to 1, weapon-07 should succeed
+	char.JobLevel = 1
+	_ = charRepo.Update(context.Background(), char)
+	res, err := svc.BatchPurchase(context.Background(), char.ID, shop.ShopTypeWeapon, reqHigherTier)
+	if err != nil {
+		t.Fatalf("expected weapon-07 to succeed at jobLv 1, got error: %v", err)
+	}
+	if len(res.Purchased) != 1 || res.Purchased[0].DefinitionID != "weapon-07" {
+		t.Errorf("expected weapon-07 purchased, got %v", res.Purchased)
+	}
+}
+
+func TestBatchPurchase_HelperExclusion(t *testing.T) {
+	svc, charRepo, _, _, helperMock, _ := setupParityTest(t)
+	char := createTestCharacter(t, charRepo, "Hero", 2000)
+
+	helperMock.activeIDs = []string{"weapon-01"}
+
+	req := []shop.BatchPurchaseItemRequest{
+		{ItemDefinitionID: "weapon-01", Quantity: 1},
+	}
+	_, err := svc.BatchPurchase(context.Background(), char.ID, shop.ShopTypeWeapon, req)
+	if !errors.Is(err, shop.ErrItemUnavailable) {
+		t.Errorf("expected ErrItemUnavailable for active helper quest item, got %v", err)
 	}
 }
 

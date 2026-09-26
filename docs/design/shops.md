@@ -87,10 +87,13 @@ Legacy Party2 routes purchased goods based on current inventory occupancy and qu
    - If the depot has insufficient remaining capacity, the purchase fails with `ErrDepotFull` and the entire transaction rolls back.
    - Shopkeeper delivers depot delivery message informing the player that goods have been sent to their depot.
 
-3. **Batch Purchase (`handleShopBatchPurchase`)**:
-   - Allows bulk purchasing of multiple catalog items at once.
-   - All batch purchased items route directly to the depot.
-   - Total capacity is verified up-front before database locking.
+3. **Batch Purchase (`handleShopBatchPurchase` / `まとめて買う`)**:
+   - Allows bulk purchasing of multiple catalog items at once, matching legacy `weapon.cgi:116`, `armor.cgi:115`, and `item.cgi:137`.
+   - **Supported Shop Types**: Only `weapon`, `armor`, and `item` shops offer batch purchasing. Unsupported shops (e.g. `accessory`, `secret`) reject batch purchases with `ErrInvalidShopType` (HTTP 400).
+   - **Sales Catalog & Level Validation**: Each requested item is strictly validated against the shop's active sales catalog for the character's JobLevel (`GetSalesItemIDs(shopType, job_lv)`). Any item not currently sold or unearned is rejected with `ErrItemNotFound` (HTTP 404).
+   - **Helper Quest Exclusion**: Any item actively requested by a helper quest is rejected with `ErrItemUnavailable` (HTTP 422).
+   - **Pricing**: Each item's price is calculated using the shop-specific retail multiplier via unified `CalculateRetailPrice(shopType, itemID, basePrice)`.
+   - **Depot Routing**: All batch purchased items route directly to the depot atomically. Total capacity is verified prior to transaction commit.
 
 ---
 

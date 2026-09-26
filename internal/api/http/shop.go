@@ -38,7 +38,10 @@ type discoverSecretResponse struct {
 }
 
 func mapShopHTTPError(w http.ResponseWriter, err error) {
-	if errors.Is(err, corecharacter.ErrNotFound) || errors.Is(err, shop.ErrUnownedItem) || errors.Is(err, shop.ErrRecipeNotFound) {
+	if errors.Is(err, corecharacter.ErrNotFound) ||
+		errors.Is(err, shop.ErrUnownedItem) ||
+		errors.Is(err, shop.ErrRecipeNotFound) ||
+		errors.Is(err, shop.ErrItemNotFound) {
 		writeError(w, http.StatusNotFound, err)
 		return
 	}
@@ -114,8 +117,6 @@ func batchPurchaseNPCMessage(shopType shop.ShopType, characterName string) strin
 		return "お買い上げありがとうッス！預かり所に送っておいたッス！"
 	case shop.ShopTypeItem:
 		return fmt.Sprintf("%sニャンの預かり所の方に投げましたニャ！", characterName)
-	case shop.ShopTypeAccessory:
-		return fmt.Sprintf("%sの預かり所の方に投げたわ", characterName)
 	default:
 		return "Transferred to depot."
 	}
