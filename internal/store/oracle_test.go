@@ -42,11 +42,26 @@ func (m *mockInvRepo) Save(_ context.Context, inv coreinventory.Inventory) error
 
 type mockCollectionRecorder struct {
 	records []string
+	calls   []collectionRecordCall
+	err     error
+}
+
+type collectionRecordCall struct {
+	CharacterID string
+	ItemID      string
+	ItemName    string
+	Category    string
 }
 
 func (m *mockCollectionRecorder) RecordItemDiscovered(_ context.Context, charID, itemID, itemName, category string) error {
 	m.records = append(m.records, fmt.Sprintf("%s:%s:%s", charID, itemID, category))
-	return nil
+	m.calls = append(m.calls, collectionRecordCall{
+		CharacterID: charID,
+		ItemID:      itemID,
+		ItemName:    itemName,
+		Category:    category,
+	})
+	return m.err
 }
 
 type mockHelperProvider struct {

@@ -130,7 +130,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Flea Market player-to-player item stalls and SQL CAS status guard (#194, #398, #477)
 - [x] Monster Grandpa & Monster Ranch pet companion storage and stabling (#193, #488, #787)
 - [x] Altar of Rebirth: 6-Orb Offering, Ramia Awakening, and Otherworld Travel Item Wishes (#471, #503)
-- [x] Player Store & Town Boutiques: store construction, depot listings, and interior styling (#424, #466)
+- [x] Player Store & Town Boutiques: store construction, depot listings, interior styling, and purchase/trade collection discovery (#424, #466, #843)
 - [x] Oracle Shop: authentic item purchasing (@kau), consumable costume usage with gender parity, home wallpaper boutique, and Black Market discovery hint (#721, #724)
 
 ### G. Presentation, Assets, and Operations

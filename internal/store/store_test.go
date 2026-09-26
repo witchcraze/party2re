@@ -680,3 +680,133 @@ func TestStoreService_TradeItem_HighJobLevel_ExceedsInitialCapacity(t *testing.T
 		t.Errorf("expected 6 items in buyer depot (consumed 1, received 1), got %d", len(updatedDep2.Items))
 	}
 }
+
+func TestStoreService_CollectionRecordingOnBuyAndTrade(t *testing.T) {
+	ctx := context.Background()
+	svc, _, charRepo, depotRepo, catalog := setupTestService(t)
+
+	// Enrich catalog definitions with slots so categories resolve cleanly
+	catalog.items["wpn_001"] = coreitem.Definition{
+		ID:    "wpn_001",
+		Name:  "ひのきのぼう",
+		Price: 100,
+		Slot:  coreitem.SlotMainHand,
+	}
+	catalog.items["arm_001"] = coreitem.Definition{
+		ID:    "arm_001",
+		Name:  "布の服",
+		Price: 200,
+		Slot:  coreitem.SlotBody,
+	}
+	catalog.items["itm_001"] = coreitem.Definition{
+		ID:    "itm_001",
+		Name:  "やくそう",
+		Price: 10,
+		Slot:  coreitem.SlotNone,
+	}
+
+	collector := &mockCollectionRecorder{}
+	svc.SetCollectionRecorder(collector)
+
+	// Build a store for c1
+	if _, err := svc.BuildStore(ctx, "c1", "town1", "001", "マイショップ"); err != nil {
+		t.Fatalf("BuildStore failed: %v", err)
+	}
+
+	// 1. Test BuyItem collection recording
+	// Populate c1 depot with wpn_001
+	dep1, _ := depotRepo.FindByCharacterID(ctx, "c1")
+	dep1.Items = []coreitem.Instance{
+		{ID: "c1_wpn", DefinitionID: "wpn_001", Quantity: 1},
+	}
+	_ = depotRepo.Save(ctx, dep1)
+
+	// c1 lists wpn_001 for 1000G
+	sale, err := svc.ListGoldItem(ctx, "c1", "c1_wpn", 1000)
+	if err != nil {
+		t.Fatalf("ListGoldItem failed: %v", err)
+	}
+
+	// c2 buys wpn_001
+	if err := svc.BuyItem(ctx, "c2", sale.ID); err != nil {
+		t.Fatalf("BuyItem failed: %v", err)
+	}
+
+	if len(collector.calls) != 1 {
+		t.Fatalf("expected 1 collection record call after BuyItem, got %d", len(collector.calls))
+	}
+	buyCall := collector.calls[0]
+	if buyCall.CharacterID != "c2" || buyCall.ItemID != "wpn_001" || buyCall.ItemName != "ひのきのぼう" || buyCall.Category != "weapon" {
+		t.Errorf("unexpected collection call after BuyItem: %+v", buyCall)
+	}
+
+	// 2. Test TradeItem collection recording
+	// Populate c1 depot with arm_001
+	dep1, _ = depotRepo.FindByCharacterID(ctx, "c1")
+	dep1.Items = append(dep1.Items, coreitem.Instance{ID: "c1_arm", DefinitionID: "arm_001", Quantity: 1})
+	_ = depotRepo.Save(ctx, dep1)
+
+	// c1 lists arm_001 for barter wishing for "やくそう"
+	barterSale, err := svc.ListBarterItem(ctx, "c1", "c1_arm", "やくそう")
+	if err != nil {
+		t.Fatalf("ListBarterItem failed: %v", err)
+	}
+
+	// Populate c2 depot with itm_001
+	dep2, _ := depotRepo.FindByCharacterID(ctx, "c2")
+	dep2.Items = append(dep2.Items, coreitem.Instance{ID: "c2_herb", DefinitionID: "itm_001", Quantity: 1})
+	_ = depotRepo.Save(ctx, dep2)
+
+	// c2 trades for arm_001
+	if err := svc.TradeItem(ctx, "c2", barterSale.ID, "c2_herb"); err != nil {
+		t.Fatalf("TradeItem failed: %v", err)
+	}
+
+	if len(collector.calls) != 2 {
+		t.Fatalf("expected 2 collection record calls after TradeItem, got %d", len(collector.calls))
+	}
+	tradeCall := collector.calls[1]
+	if tradeCall.CharacterID != "c2" || tradeCall.ItemID != "arm_001" || tradeCall.ItemName != "布の服" || tradeCall.Category != "armor" {
+		t.Errorf("unexpected collection call after TradeItem: %+v", tradeCall)
+	}
+
+	// 3. Test Error-Swallowing: collection failure must not abort purchase or barter
+	collector.err = fmt.Errorf("database collection failure")
+
+	// c1 lists another wpn_001
+	dep1, _ = depotRepo.FindByCharacterID(ctx, "c1")
+	dep1.Items = append(dep1.Items, coreitem.Instance{ID: "c1_wpn2", DefinitionID: "wpn_001", Quantity: 1})
+	_ = depotRepo.Save(ctx, dep1)
+
+	sale2, err := svc.ListGoldItem(ctx, "c1", "c1_wpn2", 500)
+	if err != nil {
+		t.Fatalf("ListGoldItem 2 failed: %v", err)
+	}
+
+	// BuyItem should succeed despite collector error
+	if err := svc.BuyItem(ctx, "c2", sale2.ID); err != nil {
+		t.Errorf("BuyItem should succeed even if collection recording fails, got: %v", err)
+	}
+
+	// c1 lists arm_001 for barter
+	dep1, _ = depotRepo.FindByCharacterID(ctx, "c1")
+	dep1.Items = append(dep1.Items, coreitem.Instance{ID: "c1_arm2", DefinitionID: "arm_001", Quantity: 1})
+	_ = depotRepo.Save(ctx, dep1)
+
+	barterSale2, err := svc.ListBarterItem(ctx, "c1", "c1_arm2", "やくそう")
+	if err != nil {
+		t.Fatalf("ListBarterItem 2 failed: %v", err)
+	}
+
+	dep2, _ = depotRepo.FindByCharacterID(ctx, "c2")
+	dep2.Items = append(dep2.Items, coreitem.Instance{ID: "c2_herb2", DefinitionID: "itm_001", Quantity: 1})
+	_ = depotRepo.Save(ctx, dep2)
+
+	// TradeItem should succeed despite collector error
+	if err := svc.TradeItem(ctx, "c2", barterSale2.ID, "c2_herb2"); err != nil {
+		t.Errorf("TradeItem should succeed even if collection recording fails, got: %v", err)
+	}
+
+	// Suppress unused charRepo warning
+	_ = charRepo
+}
