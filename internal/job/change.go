@@ -75,15 +75,6 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		}
 	}
 
-	if err := state.ChangeTo(targetDef, char.Level, char.Gender); err != nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, err
-	}
-	if currentDef, err := s.GetDefinition(char.JobID); err == nil {
-		state.RecordMastery(char.JobID, char.SP, s.masterySP(currentDef))
-	}
-	s.checkAndNotifyCompletion(ctx, char.Name, &state)
-	targetSPValue := targetSP(state, char, targetJobID)
-
 	if s.economy != nil {
 		req := economy.TransactionRequest{CharacterID: characterID, LockInventory: consumesItem}
 		if consumesItem {
@@ -93,6 +84,11 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		var updated corecharacter.Character
 		var updatedState corejob.CharacterJob
 		_, err := s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+			if needArmor {
+				if err := s.consumeEquippedArmor(tc.Context, characterID); err != nil {
+					return err
+				}
+			}
 			currentState, err := s.loadState(tc.Context, tc.Character)
 			if err != nil {
 				return err
@@ -111,11 +107,6 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 			}
 			if err := s.repository.Save(tc.Context, currentState); err != nil {
 				return err
-			}
-			if needArmor {
-				if err := s.consumeEquippedArmor(tc.Context, characterID); err != nil {
-					return err
-				}
 			}
 			updated, updatedState = tc.Character, currentState
 			return nil
@@ -166,6 +157,14 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 			return corecharacter.Character{}, corejob.CharacterJob{}, err
 		}
 	}
+	if currentDef, err := s.GetDefinition(char.JobID); err == nil {
+		state.RecordMastery(char.JobID, char.SP, s.masterySP(currentDef))
+	}
+	s.checkAndNotifyCompletion(ctx, char.Name, &state)
+	if err := state.ChangeTo(targetDef, char.Level, char.Gender); err != nil {
+		return corecharacter.Character{}, corejob.CharacterJob{}, err
+	}
+	targetSPValue := targetSP(state, char, targetJobID)
 	if err := char.ApplyJobChange(targetJobID, targetSPValue); err != nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}

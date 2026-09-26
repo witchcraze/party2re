@@ -61,6 +61,7 @@ cmp = int(min(level, 99) * (tier_rates[current_job_tier] + tier_rates[old_job_ti
   restores the SP retained in its mastery record; an unvisited job starts at
   zero SP.
 - Every job change records a transition in the character's job history (`FromJobID` -> `ToJobID`).
+- All state mutations, item/armor consumption, and completion side effects (all-job mastery news broadcasts and Hall of Fame legend inductions) execute strictly within the transaction boundary; transaction failures guarantee zero leaked news or legend side effects.
 
 ### Job Mastery
 - A job becomes **Mastered** when the character's SP reaches the required SP
