@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #841 — Prevent retail price bypass in BatchPurchase and restrict to batch-compatible shops and active catalog
+Last updated: Issue #792 — Source helper quests from Depot and Monster Ranch with direct Depot reward delivery
 
 ## Current Phase
 

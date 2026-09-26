@@ -7,7 +7,6 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 )
@@ -24,15 +23,19 @@ type CharacterRepository interface {
 	Update(ctx context.Context, c corecharacter.Character) error
 }
 
-type InventoryRepository interface {
-	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
-	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error)
-	Save(ctx context.Context, inv coreinventory.Inventory) error
-}
-
 type DepotRepository interface {
 	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (depot.Depot, error)
 	Save(ctx context.Context, d depot.Depot) error
+}
+
+type FarmMonster struct {
+	ID        string `json:"id"`
+	MonsterID string `json:"monster_id"`
+}
+
+type FarmRepository interface {
+	ListRanchMonsters(ctx context.Context, characterID string) ([]FarmMonster, error)
+	Delete(ctx context.Context, id string) error
 }
 
 type GuildRepository interface {
@@ -46,16 +49,23 @@ type TransactionProvider interface {
 
 type Option func(*Service)
 
-// WithDepotRepository sets the DepotRepository for reward delivery overflow.
+// WithDepotRepository sets the DepotRepository for storage sourcing and reward delivery.
 func WithDepotRepository(repo DepotRepository) Option {
 	return func(s *Service) {
 		s.depotRepo = repo
 	}
 }
 
+// WithFarmRepository sets the FarmRepository for ranch companion monster turn-ins.
+func WithFarmRepository(repo FarmRepository) Option {
+	return func(s *Service) {
+		s.farmRepo = repo
+	}
+}
+
 type CompletionResult struct {
 	Character      corecharacter.Character `json:"character"`
-	Inventory      coreinventory.Inventory `json:"inventory"`
+	Depot          depot.Depot             `json:"depot"`
 	CompletedQuest Quest                   `json:"completed_quest"`
 	NewQuest       *Quest                  `json:"new_quest,omitempty"`
 }
@@ -63,8 +73,8 @@ type CompletionResult struct {
 type Service struct {
 	quests       QuestRepository
 	characters   CharacterRepository
-	inventories  InventoryRepository
 	depotRepo    DepotRepository
+	farmRepo     FarmRepository
 	guilds       GuildRepository
 	txProvider   TransactionProvider
 	randomSource RandomSource
@@ -73,7 +83,6 @@ type Service struct {
 func NewService(
 	quests QuestRepository,
 	characters CharacterRepository,
-	inventories InventoryRepository,
 	guilds GuildRepository,
 	txProvider TransactionProvider,
 	opts ...Option,
@@ -81,7 +90,6 @@ func NewService(
 	s := &Service{
 		quests:       quests,
 		characters:   characters,
-		inventories:  inventories,
 		guilds:       guilds,
 		txProvider:   txProvider,
 		randomSource: DefaultRandomSource(),
@@ -150,60 +158,81 @@ func (s *Service) CompleteQuest(ctx context.Context, characterID, questID string
 			guildID = gID
 		}
 
-		inv, err := s.inventories.FindByCharacterIDForUpdate(txCtx, characterID)
+		if s.depotRepo == nil {
+			return errors.New("depot repository is required")
+		}
+		dep, err := depot.FindOrCreate(txCtx, s.depotRepo, char)
 		if err != nil {
 			return err
 		}
 
-		// Count matching items
-		matchingCount := 0
-		for _, it := range inv.Items {
-			if it.DefinitionID == q.TargetID {
-				matchingCount += it.Quantity
+		if q.Kind == KindMonster {
+			if s.farmRepo == nil {
+				return errors.New("farm repository is required for monster quest")
 			}
-		}
-
-		if matchingCount < q.RequiredCount {
-			return ErrInsufficientItems
-		}
-
-		// Deduct items
-		needed := q.RequiredCount
-		var remainingItems []item.Instance
-		for _, it := range inv.Items {
-			if it.DefinitionID == q.TargetID && needed > 0 {
-				if it.Quantity <= needed {
-					needed -= it.Quantity
-					continue
-				}
-				it.Quantity -= needed
-				needed = 0
-				remainingItems = append(remainingItems, it)
-				continue
-			}
-			remainingItems = append(remainingItems, it)
-		}
-
-		// Rebuild inventory with remaining items
-		newInv, err := coreinventory.New(characterID)
-		if err != nil {
-			return err
-		}
-		for _, it := range remainingItems {
-			if err := newInv.Add(it); err != nil {
-				return err
-			}
-		}
-		if err := s.inventories.Save(txCtx, newInv); err != nil {
-			return err
-		}
-
-		// Deliver reward item with depot fallback
-		if q.RewardItemID != "" {
-			_, err := depot.DeliverRewardItem(txCtx, s.inventories, s.depotRepo, char, q.RewardItemID, 1, depot.PolicyAbortOnDepotFull)
+			monsters, err := s.farmRepo.ListRanchMonsters(txCtx, characterID)
 			if err != nil {
 				return err
 			}
+
+			var matching []FarmMonster
+			for _, m := range monsters {
+				if m.MonsterID == q.TargetID {
+					matching = append(matching, m)
+				}
+			}
+
+			if len(matching) < q.RequiredCount {
+				return ErrInsufficientItems
+			}
+
+			for i := 0; i < q.RequiredCount; i++ {
+				if err := s.farmRepo.Delete(txCtx, matching[i].ID); err != nil {
+					return err
+				}
+			}
+		} else {
+			if dep.Quantity(q.TargetID) < q.RequiredCount {
+				return ErrInsufficientItems
+			}
+
+			type consumeTarget struct {
+				id  string
+				qty int
+			}
+			needed := q.RequiredCount
+			var targets []consumeTarget
+			for _, it := range dep.Items {
+				if it.DefinitionID == q.TargetID && needed > 0 {
+					qty := it.Quantity
+					if qty > needed {
+						qty = needed
+					}
+					targets = append(targets, consumeTarget{id: it.ID, qty: qty})
+					needed -= qty
+				}
+			}
+
+			for _, t := range targets {
+				if _, err := dep.Consume(t.id, t.qty); err != nil {
+					return err
+				}
+			}
+		}
+
+		// Deliver reward directly to Depot
+		if q.RewardItemID != "" {
+			rewardInst, err := item.NewInstance(q.RewardItemID, 1)
+			if err != nil {
+				return err
+			}
+			if err := dep.AddItem(rewardInst); err != nil {
+				return err
+			}
+		}
+
+		if err := s.depotRepo.Save(txCtx, dep); err != nil {
+			return err
 		}
 
 		// Update character
@@ -237,14 +266,9 @@ func (s *Service) CompleteQuest(ctx context.Context, characterID, questID string
 		}
 		newQPtr := &newQ
 
-		finalInv := newInv
-		if invAfterReward, err := s.inventories.FindByCharacterID(txCtx, characterID); err == nil {
-			finalInv = invAfterReward
-		}
-
 		res = CompletionResult{
 			Character:      char,
-			Inventory:      finalInv,
+			Depot:          dep,
 			CompletedQuest: q,
 			NewQuest:       newQPtr,
 		}

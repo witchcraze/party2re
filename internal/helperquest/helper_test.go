@@ -7,8 +7,8 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/depot"
 )
 
 type stubQuestRepo struct {
@@ -63,24 +63,24 @@ func (r *stubCharRepo) Update(_ context.Context, c corecharacter.Character) erro
 	return nil
 }
 
-type stubInvRepo struct {
-	inventories map[string]coreinventory.Inventory
+type stubDepotRepo struct {
+	depots map[string]depot.Depot
 }
 
-func (r *stubInvRepo) FindByCharacterID(_ context.Context, characterID string) (coreinventory.Inventory, error) {
-	inv, ok := r.inventories[characterID]
+func newStubDepotRepo() *stubDepotRepo {
+	return &stubDepotRepo{depots: make(map[string]depot.Depot)}
+}
+
+func (r *stubDepotRepo) FindByCharacterIDForUpdate(_ context.Context, characterID string) (depot.Depot, error) {
+	d, ok := r.depots[characterID]
 	if !ok {
-		return coreinventory.New(characterID)
+		return depot.NewDepotWithCapacity(characterID, 5, 0, 0)
 	}
-	return inv, nil
+	return d, nil
 }
 
-func (r *stubInvRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-	return r.FindByCharacterID(ctx, characterID)
-}
-
-func (r *stubInvRepo) Save(_ context.Context, inv coreinventory.Inventory) error {
-	r.inventories[inv.CharacterID] = inv
+func (r *stubDepotRepo) Save(_ context.Context, d depot.Depot) error {
+	r.depots[d.CharacterID] = d
 	return nil
 }
 
@@ -156,23 +156,21 @@ func TestCompleteQuestSuccess(t *testing.T) {
 		},
 	}
 
-	inv, _ := coreinventory.New("char-1")
+	dep, _ := depot.NewDepotWithCapacity("char-1", 5, 0, 0)
 	inst1, _ := item.NewInstance("weapon-01", 1)
 	inst2, _ := item.NewInstance("weapon-01", 1)
-	_ = inv.Add(inst1)
-	_ = inv.Add(inst2)
+	_ = dep.AddItem(inst1)
+	_ = dep.AddItem(inst2)
 
-	invRepo := &stubInvRepo{
-		inventories: map[string]coreinventory.Inventory{
-			"char-1": inv,
-		},
-	}
+	depotRepo := newStubDepotRepo()
+	_ = depotRepo.Save(ctx, dep)
+
 	guildRepo := &stubGuildRepo{
 		guildPoints: make(map[string]int),
 		charGuild:   map[string]string{"char-1": "guild-1"},
 	}
 
-	svc := NewService(questRepo, charRepo, invRepo, guildRepo, &stubTransactionProvider{})
+	svc := NewService(questRepo, charRepo, guildRepo, &stubTransactionProvider{}, WithDepotRepository(depotRepo))
 
 	quest := Quest{
 		ID:            "quest-1",
@@ -200,11 +198,11 @@ func TestCompleteQuestSuccess(t *testing.T) {
 	if result.Character.HelpCount != 1 {
 		t.Errorf("expected HelpCount 1, got %d", result.Character.HelpCount)
 	}
-	if len(result.Inventory.Items) != 1 {
-		t.Errorf("expected 1 reward item in inventory, got %d items", len(result.Inventory.Items))
+	if len(result.Depot.Items) != 1 {
+		t.Errorf("expected 1 reward item in depot, got %d items", len(result.Depot.Items))
 	}
-	if result.Inventory.Items[0].DefinitionID != "item-128" {
-		t.Errorf("expected reward item-128, got %s", result.Inventory.Items[0].DefinitionID)
+	if result.Depot.Items[0].DefinitionID != "item-128" {
+		t.Errorf("expected reward item-128, got %s", result.Depot.Items[0].DefinitionID)
 	}
 }
 
@@ -218,20 +216,19 @@ func TestCompleteGuildQuestAwardsPoints(t *testing.T) {
 			"char-1": {ID: "char-1", Name: "Member", HelpCount: 2},
 		},
 	}
-	inv, _ := coreinventory.New("char-1")
-	for i := 0; i < 4; i++ {
-		inst, _ := item.NewInstance("item-001", 1)
-		_ = inv.Add(inst)
-	}
-	invRepo := &stubInvRepo{
-		inventories: map[string]coreinventory.Inventory{"char-1": inv},
-	}
+	dep, _ := depot.NewDepotWithCapacity("char-1", 5, 0, 0)
+	inst, _ := item.NewInstance("item-001", 4)
+	_ = dep.AddItem(inst)
+
+	depotRepo := newStubDepotRepo()
+	_ = depotRepo.Save(ctx, dep)
+
 	guildRepo := &stubGuildRepo{
 		guildPoints: make(map[string]int),
 		charGuild:   map[string]string{"char-1": "guild-1"},
 	}
 
-	svc := NewService(questRepo, charRepo, invRepo, guildRepo, &stubTransactionProvider{})
+	svc := NewService(questRepo, charRepo, guildRepo, &stubTransactionProvider{}, WithDepotRepository(depotRepo))
 
 	quest := Quest{
 		ID:            "quest-g1",
@@ -271,10 +268,9 @@ func TestCompleteQuestRejectsExpired(t *testing.T) {
 			"char-1": {ID: "char-1", Name: "Member"},
 		},
 	}
-	invRepo := &stubInvRepo{inventories: make(map[string]coreinventory.Inventory)}
 	guildRepo := &stubGuildRepo{charGuild: make(map[string]string)}
 
-	svc := NewService(questRepo, charRepo, invRepo, guildRepo, &stubTransactionProvider{})
+	svc := NewService(questRepo, charRepo, guildRepo, &stubTransactionProvider{}, WithDepotRepository(newStubDepotRepo()))
 
 	quest := Quest{
 		ID:            "quest-exp",
@@ -312,7 +308,7 @@ func TestGetActiveHelperItemIDs(t *testing.T) {
 		ExpiresAt: now.Add(10 * time.Hour),
 	})
 
-	svc := NewService(questRepo, &stubCharRepo{}, &stubInvRepo{}, &stubGuildRepo{}, &stubTransactionProvider{})
+	svc := NewService(questRepo, &stubCharRepo{}, &stubGuildRepo{}, &stubTransactionProvider{})
 	itemIDs, err := svc.GetActiveHelperItemIDs(ctx, now)
 	if err != nil {
 		t.Fatalf("GetActiveHelperItemIDs failed: %v", err)
@@ -340,15 +336,12 @@ func TestCompleteQuestTransactionFailure(t *testing.T) {
 			"char-1": {ID: "char-1", Name: "HelperHero"},
 		},
 	}
-	inv, _ := coreinventory.New("char-1")
-	invInst, _ := item.NewInstance("weapon-01", 3)
-	_ = inv.Add(invInst)
+	dep, _ := depot.NewDepotWithCapacity("char-1", 5, 0, 0)
+	depInst, _ := item.NewInstance("weapon-01", 3)
+	_ = dep.AddItem(depInst)
 
-	invRepo := &stubInvRepo{
-		inventories: map[string]coreinventory.Inventory{
-			"char-1": inv,
-		},
-	}
+	depotRepo := newStubDepotRepo()
+	_ = depotRepo.Save(ctx, dep)
 	guildRepo := &stubGuildRepo{charGuild: make(map[string]string)}
 
 	quest := Quest{
@@ -363,7 +356,7 @@ func TestCompleteQuestTransactionFailure(t *testing.T) {
 	}
 	_ = questRepo.Save(ctx, quest)
 
-	svc := NewService(questRepo, charRepo, invRepo, guildRepo, &failingTxProvider{})
+	svc := NewService(questRepo, charRepo, guildRepo, &failingTxProvider{}, WithDepotRepository(depotRepo))
 
 	_, err := svc.CompleteQuest(ctx, "char-1", "quest-fail-tx", now)
 	if err == nil {
@@ -373,7 +366,7 @@ func TestCompleteQuestTransactionFailure(t *testing.T) {
 
 func TestService_SetRandomSource(t *testing.T) {
 	questRepo := newStubQuestRepo()
-	svc := NewService(questRepo, &stubCharRepo{}, &stubInvRepo{}, &stubGuildRepo{}, &stubTransactionProvider{})
+	svc := NewService(questRepo, &stubCharRepo{}, &stubGuildRepo{}, &stubTransactionProvider{})
 	mockRand := &mockRandomSource{values: []int{0, 1, 0, 0}}
 	svc.SetRandomSource(mockRand)
 	if svc.randomSource != mockRand {

@@ -23,7 +23,7 @@ Quests are randomly generated across four categories:
 
 ### Lifecycle and Expiration
 - Quests remain active for **6 days** (`ExpiresAt = CreatedAt + 6 days`).
-- Upon completion, required items are consumed from the character's inventory/storage, rewards are granted, the character's `help_count` is incremented, and a fresh replacement quest is generated.
+- Upon completion, required items/equipment are deducted from the player's **Depot** (`check_depot`), or monsters are deducted from the **Monster Ranch** box (`check_farm`), quest rewards are delivered directly to the player's **Depot** (`send_item`), the character's `help_count` is incremented, and a fresh replacement quest is generated.
 - Stale expired quests are refreshed with newly generated quests.
 
 ---
@@ -43,8 +43,11 @@ Quests are randomly generated across four categories:
 - `characters.help_count`: Integer counter tracking the number of completed helper quests.
 - `helper_quests`: Stores quest specifications, target items, required quantities, reward items, rarity, guild flag, and completion metadata.
 - `rescue_records`: Stores character ID, rescue reason, penalty seconds, and creation timestamp.
-- **Transaction Atomicity**: `CompleteQuest` executes within an atomic database transaction (`TransactionProvider.RunInTx`), ensuring inventory deduction, reward item delivery, quest completion status update, and replacement quest generation are committed atomically.
-- **Reward Delivery & Depot Fallback**: Reward items are delivered via `depot.DeliverRewardItem` (`PolicyAbortOnDepotFull`). If the character's inventory is at maximum capacity, the reward overflows to their storage depot. If the depot is also full (or unavailable), the operation aborts with `ErrDepotFull`, rolling back the entire transaction so that turn-in items and quest state are preserved with zero asset loss.
+- **Transaction Atomicity**: `CompleteQuest` executes within an atomic database transaction (`TransactionProvider.RunInTx`), ensuring turn-in verification, item/monster deduction, direct depot reward delivery, quest completion status update, and replacement quest generation are committed atomically.
+- **Storage Sourcing & Direct Depot Reward Delivery**:
+  - **Equipment & Items (Kinds 1, 2, 3)**: Checked and deducted from `DepotRepository` (`character_depots`, `depot_items`), matching legacy `party2/lib/helper.cgi:113` (`check_depot`). Character bag inventory is not touched.
+  - **Companion Monsters (Kind 4)**: Checked and deducted from `FarmRepository` (`character_monsters`, `location = 'box'`), matching legacy `check_farm`.
+  - **Direct Depot Delivery**: Reward items are delivered directly into the player's Depot (`send_item($m, 3, $pay)`). If the player's Depot is at full capacity and cannot accept the reward item, the operation aborts with `ErrDepotFull`, rolling back the entire transaction so that turn-in items and quest state are preserved with zero asset loss.
 
 ---
 

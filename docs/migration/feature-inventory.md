@@ -112,7 +112,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Guild creation, membership application/approval workflow, dynamic Guild Points, hex colors, custom titles, broadcast callouts, and inactivity disbandment worker (#76, #490, #591, #633)
 - [x] Player communication, park, and public interactions (#78)
 - [x] Player private home, mailbox, and letter correspondence (#159, #461, #680)
-- [x] Helper and player rescue assistance (#79, #213, #659, #680)
+- [x] Helper and player rescue assistance (#79, #213, #659, #680, #792)
 - [x] Rankings (level, job, wealth, pvp victory, helper, medals, casino wins, alchemy syntheses, weekly job changes, authentic monster kills, demon king defeats, and hero achievements; purged fabricated battle victories) and permanent Hall of Fame (legend.cgi) with automatic completion induction hooks across Collection, Job Mastery, and Alchemy (#63, #280, #454, #470, #798, #824, #825)
 - [x] Photo Contest, screenshots, seasonal voting, prize settlement error propagation, scheduled settlement action wiring, and Hall of Fame (#186, #660, #801)
 
