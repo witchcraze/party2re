@@ -17,8 +17,8 @@ Player Stores represent permanent commercial real-estate built within the 4 town
 | `売る` (ゴールド) | `&uru_gold` | `StoreService.ListGoldItem` | `POST /characters/{id}/store/listings/gold` | **Reconciled (1:1)**: Lists depot item for direct gold sale (1–9,999,999 G). Capacity: 10 + `OverStore` * 2 (10–20 items). |
 | `売る` (物々交換) | `&uru_barter` | `StoreService.ListBarterItem` | `POST /characters/{id}/store/listings/barter` | **Reconciled (1:1)**: Lists depot item specifying exact desired barter item name. |
 | `とりけし` | `&torikesi` | `StoreService.WithdrawListing` | `DELETE /characters/{id}/store/listings/{sale_id}` | **Reconciled (1:1)**: Cancels store listing and returns the item safely to owner's depot. |
-| `かう` (ゴールド) | `&kau_gold` | `StoreService.BuyItem` | `POST /characters/{id}/store/sales/{sale_id}/buy` | **Reconciled (1:1)**: Buyer pays listed gold. Gold deposited into seller wallet, item moved into buyer depot. |
-| `かう` (物々交換) | `&kau_barter` | `StoreService.TradeItem` | `POST /characters/{id}/store/sales/{sale_id}/trade` | **Reconciled (1:1)**: Buyer exchanges matching depot item for listed item. Both items transferred atomically. |
+| `かう` (ゴールド) | `&kau_gold` | `StoreService.BuyItem` | `POST /characters/{id}/store/sales/{sale_id}/buy` | **Reconciled (1:1)**: Buyer pays listed gold. Gold deposited into seller wallet, item moved into buyer depot. Collection discovery (`RecordItemDiscovered`) triggered for buyer (`party2/lib/store.cgi:175-176`). |
+| `かう` (物々交換) | `&kau_barter` | `StoreService.TradeItem` | `POST /characters/{id}/store/sales/{sale_id}/trade` | **Reconciled (1:1)**: Buyer exchanges matching depot item for listed item. Both items transferred atomically. Collection discovery (`RecordItemDiscovered`) triggered for buyer (`party2/lib/store.cgi:276-277`). |
 | `かんばん` | `&kanban` | `StoreService.ChangeStoreName` | `POST /characters/{id}/store/name` | **Reconciled (1:1)**: Modifies store signboard name for 5,000 G. Max 8 characters, validated and sanitized. |
 | `かべがみ` | `&kabegami` | `StoreService.ChangeWallpaper` | `POST /characters/{id}/store/wallpaper` | **Reconciled (1:1)**: Updates boutique wallpaper from 26 historical styles (`%kabes`) with tier pricing (0–10,500 G). |
 | `おく` (インテリア) | `&oku` | `StoreService.AddInterior` | `POST /characters/{id}/store/interiors` | **Reconciled (1:1)**: Places furniture from 15 available styles (`001`–`023`) for 1,000 G each (max 5 interiors). |
@@ -89,3 +89,5 @@ erDiagram
    - Max 5 furniture pieces per store (`MaxInteriorCount = 5`).
    - Furniture costs 1,000 G per piece; wallpaper costs range from 0 G to 10,500 G.
    - Store and interior names cannot exceed 8 characters and are validated against reserved delimiters.
+6. **Collection Discovery & Catalog Registration**:
+   - Acquiring items or equipment through player store purchases (`BuyItem`) or barter exchanges (`TradeItem`) triggers collection discovery (`RecordItemDiscovered`) for the buyer character, registering the acquired item, weapon, or armor in their personal collection compendium (`party2/lib/store.cgi:175-176, 276-277`).

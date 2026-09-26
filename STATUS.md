@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #840 — Restrict GetItemCollectionCount to item category to prevent premature comp_ite completion
+Last updated: Issue #843 — Trigger collection discovery on player store purchases and trades
 
 ## Current Phase
 

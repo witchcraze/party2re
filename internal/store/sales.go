@@ -331,7 +331,17 @@ func (s *Service) BuyItem(ctx context.Context, buyerCharacterID, saleID string) 
 			return err
 		}
 
-		return s.repo.DeleteSale(txCtx, saleID)
+		if err := s.repo.DeleteSale(txCtx, saleID); err != nil {
+			return err
+		}
+
+		if s.collection != nil {
+			itemName, cat := s.resolveItemInfo(sale.ItemDefinitionID, sale.ItemName)
+			//lint:ignore error-swallow best-effort collection discovery
+			_ = s.collection.RecordItemDiscovered(txCtx, buyerCharacterID, sale.ItemDefinitionID, itemName, cat)
+		}
+
+		return nil
 	})
 }
 
@@ -445,6 +455,29 @@ func (s *Service) TradeItem(ctx context.Context, buyerCharacterID, saleID, custo
 			return err
 		}
 
-		return s.repo.DeleteSale(txCtx, saleID)
+		if err := s.repo.DeleteSale(txCtx, saleID); err != nil {
+			return err
+		}
+
+		if s.collection != nil {
+			itemName, cat := s.resolveItemInfo(sale.ItemDefinitionID, sale.ItemName)
+			//lint:ignore error-swallow best-effort collection discovery
+			_ = s.collection.RecordItemDiscovered(txCtx, buyerCharacterID, sale.ItemDefinitionID, itemName, cat)
+		}
+
+		return nil
 	})
+}
+
+func (s *Service) resolveItemInfo(defID, fallbackName string) (string, string) {
+	cat, name := "item", fallbackName
+	if s.itemCatalog != nil {
+		if def, err := s.itemCatalog.FindByID(defID); err == nil {
+			cat = def.Category()
+			if def.Name != "" {
+				name = def.Name
+			}
+		}
+	}
+	return name, cat
 }
