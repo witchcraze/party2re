@@ -121,6 +121,16 @@ func newMiscServices(
 	}
 	rescueService := rescue.NewService(rescueRepo, core.charRepo, soc.sched)
 
+	monsterRepo, err := database.NewMonsterRepository(db)
+	if err != nil {
+		return nil, err
+	}
+	monsterService := monster.NewService(
+		core.charRepo,
+		monsterRepo,
+		monster.WithTransactionProvider(core.txProvider),
+	)
+
 	helperRepo, err := database.NewHelperRepository(db)
 	if err != nil {
 		return nil, err
@@ -128,10 +138,10 @@ func newMiscServices(
 	helperService := helperquest.NewService(
 		helperRepo,
 		core.charRepo,
-		core.invRepo,
 		nil,
 		core.txProvider,
 		helperquest.WithDepotRepository(econ.depotRepo),
+		helperquest.WithFarmRepository(&helperFarmAdapter{repo: monsterRepo}),
 	)
 
 	futureMemoryRepo, err := database.NewFutureMemoryRepository(db)
@@ -309,16 +319,6 @@ func newMiscServices(
 		return nil, err
 	}
 
-	monsterRepo, err := database.NewMonsterRepository(db)
-	if err != nil {
-		return nil, err
-	}
-	monsterService := monster.NewService(
-		core.charRepo,
-		monsterRepo,
-		monster.WithTransactionProvider(core.txProvider),
-	)
-
 	contestRepo, err := database.NewContestRepository(db)
 	if err != nil {
 		return nil, err
@@ -401,4 +401,27 @@ func newMiscServices(
 		altar:       altarService,
 		wishingwell: wishingwellService,
 	}, nil
+}
+
+type helperFarmAdapter struct {
+	repo *database.MonsterRepository
+}
+
+func (a *helperFarmAdapter) ListRanchMonsters(ctx context.Context, characterID string) ([]helperquest.FarmMonster, error) {
+	monsters, err := a.repo.ListByCharacterIDAndLocation(ctx, characterID, monster.LocationBox)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]helperquest.FarmMonster, len(monsters))
+	for i, m := range monsters {
+		res[i] = helperquest.FarmMonster{
+			ID:        m.ID,
+			MonsterID: m.MonsterID,
+		}
+	}
+	return res, nil
+}
+
+func (a *helperFarmAdapter) Delete(ctx context.Context, id string) error {
+	return a.repo.Delete(ctx, id)
 }

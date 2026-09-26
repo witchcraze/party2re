@@ -12,8 +12,8 @@ import (
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/helperquest"
 	"github.com/witchcraze/party2re/internal/rescue"
 )
@@ -45,10 +45,9 @@ func (m *mockHelperService) CompleteQuest(ctx context.Context, characterID, ques
 	if m.completeQuestFn != nil {
 		return m.completeQuestFn(ctx, characterID, questID, now)
 	}
-	inv, _ := coreinventory.New(characterID)
 	return helperquest.CompletionResult{
 		Character: corecharacter.Character{ID: characterID, Money: 100},
-		Inventory: inv,
+		Depot:     depot.Depot{CharacterID: characterID},
 		CompletedQuest: helperquest.Quest{
 			ID:           questID,
 			Title:        "Completed Quest",

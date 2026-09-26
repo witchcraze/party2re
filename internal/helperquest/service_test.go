@@ -9,7 +9,6 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/helperquest"
@@ -71,27 +70,6 @@ func (r *mockCharRepo) Update(_ context.Context, c corecharacter.Character) erro
 	return nil
 }
 
-type mockInvRepo struct {
-	inventories map[string]coreinventory.Inventory
-}
-
-func (r *mockInvRepo) FindByCharacterID(_ context.Context, characterID string) (coreinventory.Inventory, error) {
-	inv, ok := r.inventories[characterID]
-	if !ok {
-		return coreinventory.New(characterID)
-	}
-	return inv, nil
-}
-
-func (r *mockInvRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error) {
-	return r.FindByCharacterID(ctx, characterID)
-}
-
-func (r *mockInvRepo) Save(_ context.Context, inv coreinventory.Inventory) error {
-	r.inventories[inv.CharacterID] = inv
-	return nil
-}
-
 type mockDepotRepo struct {
 	depots map[string]depot.Depot
 }
@@ -113,6 +91,42 @@ func (r *mockDepotRepo) Save(_ context.Context, d depot.Depot) error {
 	return nil
 }
 
+type mockFarmMonster struct {
+	id          string
+	characterID string
+	monsterID   string
+	isAtHome    bool
+}
+
+type mockFarmRepo struct {
+	monsters map[string]mockFarmMonster
+}
+
+func newMockFarmRepo() *mockFarmRepo {
+	return &mockFarmRepo{monsters: make(map[string]mockFarmMonster)}
+}
+
+func (r *mockFarmRepo) ListRanchMonsters(_ context.Context, characterID string) ([]helperquest.FarmMonster, error) {
+	var list []helperquest.FarmMonster
+	for _, m := range r.monsters {
+		if m.characterID == characterID && !m.isAtHome {
+			list = append(list, helperquest.FarmMonster{
+				ID:        m.id,
+				MonsterID: m.monsterID,
+			})
+		}
+	}
+	return list, nil
+}
+
+func (r *mockFarmRepo) Delete(_ context.Context, id string) error {
+	if _, ok := r.monsters[id]; !ok {
+		return errors.New("monster not found")
+	}
+	delete(r.monsters, id)
+	return nil
+}
+
 type mockTxProvider struct {
 	rollbackCalled bool
 }
@@ -126,25 +140,7 @@ func (p *mockTxProvider) RunInTx(ctx context.Context, fn func(ctx context.Contex
 	return nil
 }
 
-func fillInventory(t *testing.T, charID string, count int) coreinventory.Inventory {
-	t.Helper()
-	inv, err := coreinventory.New(charID)
-	if err != nil {
-		t.Fatalf("failed to create inventory: %v", err)
-	}
-	for i := 0; i < count; i++ {
-		inst, err := item.NewInstance(fmt.Sprintf("item-filler-%03d", i), 1)
-		if err != nil {
-			t.Fatalf("failed to create item: %v", err)
-		}
-		if err := inv.Add(inst); err != nil {
-			t.Fatalf("failed to add item %d: %v", i, err)
-		}
-	}
-	return inv
-}
-
-func TestCompleteQuest_RewardToInventory(t *testing.T) {
+func TestCompleteQuest_WeaponTurnInAndRewardFromDepot(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
 
@@ -154,24 +150,26 @@ func TestCompleteQuest_RewardToInventory(t *testing.T) {
 			"char-1": {ID: "char-1", Name: "Hero", HelpCount: 0, JobLevel: 5},
 		},
 	}
-	inv, _ := coreinventory.New("char-1")
-	inst, _ := item.NewInstance("weapon-01", 2)
-	_ = inv.Add(inst)
 
-	invRepo := &mockInvRepo{inventories: map[string]coreinventory.Inventory{"char-1": inv}}
+	dep, _ := depot.NewDepotWithCapacity("char-1", 5, 0, 0)
+	w1, _ := item.NewInstance("weapon-01", 1)
+	w2, _ := item.NewInstance("weapon-01", 1)
+	_ = dep.AddItem(w1)
+	_ = dep.AddItem(w2)
+
 	depotRepo := newMockDepotRepo()
+	_ = depotRepo.Save(ctx, dep)
 
 	svc := helperquest.NewService(
 		questRepo,
 		charRepo,
-		invRepo,
 		nil,
 		&mockTxProvider{},
 		helperquest.WithDepotRepository(depotRepo),
 	)
 
 	quest := helperquest.Quest{
-		ID:            "q-normal",
+		ID:            "q-weapon",
 		Title:         "店を始めたいのでその1",
 		Kind:          helperquest.KindWeapon,
 		TargetID:      "weapon-01",
@@ -183,27 +181,31 @@ func TestCompleteQuest_RewardToInventory(t *testing.T) {
 	}
 	_ = questRepo.Save(ctx, quest)
 
-	res, err := svc.CompleteQuest(ctx, "char-1", "q-normal", now)
+	res, err := svc.CompleteQuest(ctx, "char-1", "q-weapon", now)
 	if err != nil {
 		t.Fatalf("CompleteQuest failed: %v", err)
 	}
 
-	// Reward should be in inventory
-	if len(res.Inventory.Items) != 1 {
-		t.Fatalf("expected 1 item in inventory, got %d", len(res.Inventory.Items))
+	// Weapons consumed, reward item in depot
+	savedDep, err := depotRepo.FindByCharacterIDForUpdate(ctx, "char-1")
+	if err != nil {
+		t.Fatalf("failed to load depot: %v", err)
 	}
-	if res.Inventory.Items[0].DefinitionID != "item-128" {
-		t.Errorf("expected reward item-128 in inventory, got %s", res.Inventory.Items[0].DefinitionID)
+	if len(savedDep.Items) != 1 {
+		t.Fatalf("expected 1 item in depot, got %d", len(savedDep.Items))
 	}
-
-	// Depot should have no items
-	dep, err := depotRepo.FindByCharacterIDForUpdate(ctx, "char-1")
-	if err == nil && len(dep.Items) > 0 {
-		t.Errorf("expected empty depot, got %d items", len(dep.Items))
+	if savedDep.Items[0].DefinitionID != "item-128" {
+		t.Errorf("expected reward item-128 in depot, got %s", savedDep.Items[0].DefinitionID)
+	}
+	if res.Character.HelpCount != 1 {
+		t.Errorf("expected HelpCount 1, got %d", res.Character.HelpCount)
+	}
+	if res.CompletedQuest.CompletedAt == nil {
+		t.Errorf("expected CompletedAt to be set")
 	}
 }
 
-func TestCompleteQuest_RewardOverflowToDepotWhenInventoryFull(t *testing.T) {
+func TestCompleteQuest_ItemTurnInAndRewardFromDepot(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
 
@@ -214,36 +216,168 @@ func TestCompleteQuest_RewardOverflowToDepotWhenInventoryFull(t *testing.T) {
 		},
 	}
 
-	// Inventory with 20 items: 19 filler items + 1 stack of required items (2x weapon-01).
-	// RequiredCount is 1, so consuming 1 leaves 1x weapon-01 in that slot.
-	// Therefore, inventory remains at exactly 20 slots (full).
-	inv := fillInventory(t, "char-1", 19)
-	stackedTarget, _ := item.NewInstance("weapon-01", 2)
-	if err := inv.Add(stackedTarget); err != nil {
-		t.Fatalf("failed to add stacked target: %v", err)
-	}
-	if !inv.IsFull() {
-		t.Fatalf("expected inventory to be full (20 items), got %d", len(inv.Items))
-	}
+	dep, _ := depot.NewDepotWithCapacity("char-1", 5, 0, 0)
+	itInst, _ := item.NewInstance("item-001", 3)
+	_ = dep.AddItem(itInst)
 
-	invRepo := &mockInvRepo{inventories: map[string]coreinventory.Inventory{"char-1": inv}}
 	depotRepo := newMockDepotRepo()
+	_ = depotRepo.Save(ctx, dep)
 
 	svc := helperquest.NewService(
 		questRepo,
 		charRepo,
-		invRepo,
 		nil,
 		&mockTxProvider{},
 		helperquest.WithDepotRepository(depotRepo),
 	)
 
 	quest := helperquest.Quest{
-		ID:            "q-overflow",
-		Title:         "店を始めたいのでその2",
-		Kind:          helperquest.KindWeapon,
-		TargetID:      "weapon-01",
-		TargetName:    "ヒノキの棒",
+		ID:            "q-item",
+		Title:         "非常用にその1",
+		Kind:          helperquest.KindItem,
+		TargetID:      "item-001",
+		TargetName:    "薬草",
+		RequiredCount: 2,
+		RewardItemID:  "item-128",
+		ExpiresAt:     now.Add(24 * time.Hour),
+		CreatedAt:     now,
+	}
+	_ = questRepo.Save(ctx, quest)
+
+	res, err := svc.CompleteQuest(ctx, "char-1", "q-item", now)
+	if err != nil {
+		t.Fatalf("CompleteQuest failed: %v", err)
+	}
+
+	savedDep, err := depotRepo.FindByCharacterIDForUpdate(ctx, "char-1")
+	if err != nil {
+		t.Fatalf("failed to load depot: %v", err)
+	}
+	if savedDep.Quantity("item-001") != 1 {
+		t.Errorf("expected 1 remaining item-001 in depot, got %d", savedDep.Quantity("item-001"))
+	}
+	if savedDep.Quantity("item-128") != 1 {
+		t.Errorf("expected 1 reward item-128 in depot, got %d", savedDep.Quantity("item-128"))
+	}
+	if res.Character.HelpCount != 1 {
+		t.Errorf("expected HelpCount 1, got %d", res.Character.HelpCount)
+	}
+}
+
+func TestCompleteQuest_MonsterTurnInFromRanch(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+
+	questRepo := newMockQuestRepo()
+	charRepo := &mockCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "Hero", HelpCount: 0, JobLevel: 5},
+		},
+	}
+
+	dep, _ := depot.NewDepotWithCapacity("char-1", 5, 0, 0)
+	depotRepo := newMockDepotRepo()
+	_ = depotRepo.Save(ctx, dep)
+
+	farmRepo := newMockFarmRepo()
+	farmRepo.monsters["mon-1"] = mockFarmMonster{
+		id:          "mon-1",
+		characterID: "char-1",
+		monsterID:   "monster-001",
+	}
+	farmRepo.monsters["mon-2"] = mockFarmMonster{
+		id:          "mon-2",
+		characterID: "char-1",
+		monsterID:   "monster-001",
+	}
+
+	svc := helperquest.NewService(
+		questRepo,
+		charRepo,
+		nil,
+		&mockTxProvider{},
+		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithFarmRepository(farmRepo),
+	)
+
+	quest := helperquest.Quest{
+		ID:            "q-monster",
+		Title:         "かわいいのでその1",
+		Kind:          helperquest.KindMonster,
+		TargetID:      "monster-001",
+		TargetName:    "ドットスライム",
+		RequiredCount: 2,
+		RewardItemID:  "item-128",
+		ExpiresAt:     now.Add(24 * time.Hour),
+		CreatedAt:     now,
+	}
+	_ = questRepo.Save(ctx, quest)
+
+	res, err := svc.CompleteQuest(ctx, "char-1", "q-monster", now)
+	if err != nil {
+		t.Fatalf("CompleteQuest failed: %v", err)
+	}
+
+	// Monsters should be removed from farm
+	remainingMonsters, err := farmRepo.ListRanchMonsters(ctx, "char-1")
+	if err != nil {
+		t.Fatalf("failed to list farm monsters: %v", err)
+	}
+	if len(remainingMonsters) != 0 {
+		t.Errorf("expected 0 monsters in farm, got %d", len(remainingMonsters))
+	}
+
+	// Reward should be in depot
+	savedDep, err := depotRepo.FindByCharacterIDForUpdate(ctx, "char-1")
+	if err != nil {
+		t.Fatalf("failed to load depot: %v", err)
+	}
+	if savedDep.Quantity("item-128") != 1 {
+		t.Errorf("expected 1 reward item-128 in depot, got %d", savedDep.Quantity("item-128"))
+	}
+	if res.Character.HelpCount != 1 {
+		t.Errorf("expected HelpCount 1, got %d", res.Character.HelpCount)
+	}
+}
+
+func TestCompleteQuest_MonsterTurnIn_IgnoresHomePets(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+
+	questRepo := newMockQuestRepo()
+	charRepo := &mockCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "Hero", HelpCount: 0},
+		},
+	}
+	dep, _ := depot.NewDepotWithCapacity("char-1", 5, 0, 0)
+	depotRepo := newMockDepotRepo()
+	_ = depotRepo.Save(ctx, dep)
+
+	farmRepo := newMockFarmRepo()
+	// Monster is living at home as a pet, NOT in the ranch box
+	farmRepo.monsters["mon-home"] = mockFarmMonster{
+		id:          "mon-home",
+		characterID: "char-1",
+		monsterID:   "monster-001",
+		isAtHome:    true,
+	}
+
+	svc := helperquest.NewService(
+		questRepo,
+		charRepo,
+		nil,
+		&mockTxProvider{},
+		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithFarmRepository(farmRepo),
+	)
+
+	quest := helperquest.Quest{
+		ID:            "q-mon-home",
+		Title:         "かわいいのでその2",
+		Kind:          helperquest.KindMonster,
+		TargetID:      "monster-001",
+		TargetName:    "ドットスライム",
 		RequiredCount: 1,
 		RewardItemID:  "item-128",
 		ExpiresAt:     now.Add(24 * time.Hour),
@@ -251,41 +385,9 @@ func TestCompleteQuest_RewardOverflowToDepotWhenInventoryFull(t *testing.T) {
 	}
 	_ = questRepo.Save(ctx, quest)
 
-	res, err := svc.CompleteQuest(ctx, "char-1", "q-overflow", now)
-	if err != nil {
-		t.Fatalf("CompleteQuest failed: %v", err)
-	}
-
-	// Inventory should still be full at 20 items
-	savedInv, err := invRepo.FindByCharacterID(ctx, "char-1")
-	if err != nil {
-		t.Fatalf("failed to load saved inventory: %v", err)
-	}
-	if len(savedInv.Items) != 20 {
-		t.Errorf("expected 20 items in inventory, got %d", len(savedInv.Items))
-	}
-	if len(res.Inventory.Items) != 20 {
-		t.Errorf("expected 20 items in result inventory, got %d", len(res.Inventory.Items))
-	}
-
-	// Depot should have received the reward item
-	dep, err := depotRepo.FindByCharacterIDForUpdate(ctx, "char-1")
-	if err != nil {
-		t.Fatalf("failed to load depot: %v", err)
-	}
-	if len(dep.Items) != 1 {
-		t.Fatalf("expected 1 item in depot, got %d", len(dep.Items))
-	}
-	if dep.Items[0].DefinitionID != "item-128" {
-		t.Errorf("expected reward item-128 in depot, got %s", dep.Items[0].DefinitionID)
-	}
-
-	// Quest completed and character help count incremented
-	if res.CompletedQuest.CompletedAt == nil {
-		t.Errorf("expected CompletedAt to be set")
-	}
-	if res.Character.HelpCount != 1 {
-		t.Errorf("expected HelpCount 1, got %d", res.Character.HelpCount)
+	_, err := svc.CompleteQuest(ctx, "char-1", "q-mon-home", now)
+	if !errors.Is(err, helperquest.ErrInsufficientItems) {
+		t.Fatalf("expected ErrInsufficientItems when monster is only at home, got: %v", err)
 	}
 }
 
@@ -300,38 +402,39 @@ func TestCompleteQuest_DepotFullRollback(t *testing.T) {
 		},
 	}
 
-	// Inventory is full: 19 fillers + 1 slot with 2x weapon-01
-	inv := fillInventory(t, "char-1", 19)
-	stackedTarget, _ := item.NewInstance("weapon-01", 2)
-	_ = inv.Add(stackedTarget)
-	invRepo := &mockInvRepo{inventories: map[string]coreinventory.Inventory{"char-1": inv}}
-
-	// Depot is also completely full
+	// Depot is completely full (5 slots, distinct items)
 	depotRepo := newMockDepotRepo()
 	cap := depot.CalculateCapacity(0, 0, 0)
 	fullDepot, _ := depot.NewDepotWithCapacity("char-1", 0, 0, 0)
 	for i := 0; i < cap; i++ {
-		dummy, _ := item.NewInstance(fmt.Sprintf("item-depot-%03d", i), 1)
+		dummy, _ := item.NewInstance(fmt.Sprintf("weapon-filler-%03d", i), 1)
 		_ = fullDepot.AddItem(dummy)
 	}
 	_ = depotRepo.Save(ctx, fullDepot)
+
+	farmRepo := newMockFarmRepo()
+	farmRepo.monsters["mon-1"] = mockFarmMonster{
+		id:          "mon-1",
+		characterID: "char-1",
+		monsterID:   "monster-001",
+	}
 
 	txProvider := &mockTxProvider{}
 	svc := helperquest.NewService(
 		questRepo,
 		charRepo,
-		invRepo,
 		nil,
 		txProvider,
 		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithFarmRepository(farmRepo),
 	)
 
 	quest := helperquest.Quest{
 		ID:            "q-depot-full",
-		Title:         "店を始めたいのでその3",
-		Kind:          helperquest.KindWeapon,
-		TargetID:      "weapon-01",
-		TargetName:    "ヒノキの棒",
+		Title:         "かわいいのでその3",
+		Kind:          helperquest.KindMonster,
+		TargetID:      "monster-001",
+		TargetName:    "ドットスライム",
 		RequiredCount: 1,
 		RewardItemID:  "item-128",
 		ExpiresAt:     now.Add(24 * time.Hour),
@@ -341,7 +444,7 @@ func TestCompleteQuest_DepotFullRollback(t *testing.T) {
 
 	_, err := svc.CompleteQuest(ctx, "char-1", "q-depot-full", now)
 	if err == nil {
-		t.Fatal("expected error when both inventory and depot are full, got nil")
+		t.Fatal("expected error when depot is full, got nil")
 	}
 
 	if !errors.Is(err, depot.ErrDepotFull) && !errors.Is(err, helperquest.ErrDepotFull) {
@@ -353,7 +456,97 @@ func TestCompleteQuest_DepotFullRollback(t *testing.T) {
 	}
 }
 
-func TestCompleteQuest_NilDepotRepo_FullInventoryReturnsError(t *testing.T) {
+func TestCompleteQuest_InsufficientDepotItems(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+
+	questRepo := newMockQuestRepo()
+	charRepo := &mockCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "Hero", HelpCount: 0},
+		},
+	}
+	dep, _ := depot.NewDepotWithCapacity("char-1", 5, 0, 0)
+	w, _ := item.NewInstance("weapon-01", 1)
+	_ = dep.AddItem(w)
+	depotRepo := newMockDepotRepo()
+	_ = depotRepo.Save(ctx, dep)
+
+	svc := helperquest.NewService(
+		questRepo,
+		charRepo,
+		nil,
+		&mockTxProvider{},
+		helperquest.WithDepotRepository(depotRepo),
+	)
+
+	quest := helperquest.Quest{
+		ID:            "q-insufficient",
+		Title:         "店を始めたいのでその2",
+		Kind:          helperquest.KindWeapon,
+		TargetID:      "weapon-01",
+		RequiredCount: 2, // Needs 2, depot only has 1
+		RewardItemID:  "item-128",
+		ExpiresAt:     now.Add(24 * time.Hour),
+		CreatedAt:     now,
+	}
+	_ = questRepo.Save(ctx, quest)
+
+	_, err := svc.CompleteQuest(ctx, "char-1", "q-insufficient", now)
+	if !errors.Is(err, helperquest.ErrInsufficientItems) {
+		t.Fatalf("expected ErrInsufficientItems, got: %v", err)
+	}
+}
+
+func TestCompleteQuest_InsufficientFarmMonsters(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+
+	questRepo := newMockQuestRepo()
+	charRepo := &mockCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "Hero", HelpCount: 0},
+		},
+	}
+	dep, _ := depot.NewDepotWithCapacity("char-1", 5, 0, 0)
+	depotRepo := newMockDepotRepo()
+	_ = depotRepo.Save(ctx, dep)
+
+	farmRepo := newMockFarmRepo()
+	farmRepo.monsters["mon-1"] = mockFarmMonster{
+		id:          "mon-1",
+		characterID: "char-1",
+		monsterID:   "monster-001",
+	}
+
+	svc := helperquest.NewService(
+		questRepo,
+		charRepo,
+		nil,
+		&mockTxProvider{},
+		helperquest.WithDepotRepository(depotRepo),
+		helperquest.WithFarmRepository(farmRepo),
+	)
+
+	quest := helperquest.Quest{
+		ID:            "q-mon-insufficient",
+		Title:         "かわいいのでその4",
+		Kind:          helperquest.KindMonster,
+		TargetID:      "monster-001",
+		RequiredCount: 2, // Needs 2, farm only has 1
+		RewardItemID:  "item-128",
+		ExpiresAt:     now.Add(24 * time.Hour),
+		CreatedAt:     now,
+	}
+	_ = questRepo.Save(ctx, quest)
+
+	_, err := svc.CompleteQuest(ctx, "char-1", "q-mon-insufficient", now)
+	if !errors.Is(err, helperquest.ErrInsufficientItems) {
+		t.Fatalf("expected ErrInsufficientItems, got: %v", err)
+	}
+}
+
+func TestCompleteQuest_NilDepotRepo_ReturnsError(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
 
@@ -364,27 +557,19 @@ func TestCompleteQuest_NilDepotRepo_FullInventoryReturnsError(t *testing.T) {
 		},
 	}
 
-	inv := fillInventory(t, "char-1", 19)
-	stackedTarget, _ := item.NewInstance("weapon-01", 2)
-	_ = inv.Add(stackedTarget)
-	invRepo := &mockInvRepo{inventories: map[string]coreinventory.Inventory{"char-1": inv}}
-
-	// No depot repository configured (nil)
-	txProvider := &mockTxProvider{}
+	// No depot repo configured
 	svc := helperquest.NewService(
 		questRepo,
 		charRepo,
-		invRepo,
 		nil,
-		txProvider,
+		&mockTxProvider{},
 	)
 
 	quest := helperquest.Quest{
 		ID:            "q-no-depot",
-		Title:         "店を始めたいのでその4",
+		Title:         "店を始めたいのでその3",
 		Kind:          helperquest.KindWeapon,
 		TargetID:      "weapon-01",
-		TargetName:    "ヒノキの棒",
 		RequiredCount: 1,
 		RewardItemID:  "item-128",
 		ExpiresAt:     now.Add(24 * time.Hour),
@@ -394,15 +579,48 @@ func TestCompleteQuest_NilDepotRepo_FullInventoryReturnsError(t *testing.T) {
 
 	_, err := svc.CompleteQuest(ctx, "char-1", "q-no-depot", now)
 	if err == nil {
-		t.Fatal("expected error when inventory is full and no depot configured, got nil")
+		t.Fatal("expected error when depot repo is nil, got nil")
 	}
+}
 
-	if !errors.Is(err, depot.ErrDepotFull) && !errors.Is(err, helperquest.ErrDepotFull) {
-		t.Fatalf("expected ErrDepotFull, got: %v", err)
+func TestCompleteQuest_MonsterQuest_NilFarmRepo_ReturnsError(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+
+	questRepo := newMockQuestRepo()
+	charRepo := &mockCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "Hero", HelpCount: 0},
+		},
 	}
+	dep, _ := depot.NewDepotWithCapacity("char-1", 5, 0, 0)
+	depotRepo := newMockDepotRepo()
+	_ = depotRepo.Save(ctx, dep)
 
-	if !txProvider.rollbackCalled {
-		t.Error("expected transaction rollback to be triggered")
+	// No farm repo configured
+	svc := helperquest.NewService(
+		questRepo,
+		charRepo,
+		nil,
+		&mockTxProvider{},
+		helperquest.WithDepotRepository(depotRepo),
+	)
+
+	quest := helperquest.Quest{
+		ID:            "q-no-farm",
+		Title:         "かわいいのでその5",
+		Kind:          helperquest.KindMonster,
+		TargetID:      "monster-001",
+		RequiredCount: 1,
+		RewardItemID:  "item-128",
+		ExpiresAt:     now.Add(24 * time.Hour),
+		CreatedAt:     now,
+	}
+	_ = questRepo.Save(ctx, quest)
+
+	_, err := svc.CompleteQuest(ctx, "char-1", "q-no-farm", now)
+	if err == nil {
+		t.Fatal("expected error when farm repo is nil for monster quest, got nil")
 	}
 }
 
@@ -416,19 +634,19 @@ func TestCompleteQuest_ReplacementQuestSaveErrorPropagates(t *testing.T) {
 			"char-1": {ID: "char-1", Name: "Hero", HelpCount: 0},
 		},
 	}
-	inv, _ := coreinventory.New("char-1")
-	inst, _ := item.NewInstance("weapon-01", 2)
-	_ = inv.Add(inst)
+	dep, _ := depot.NewDepotWithCapacity("char-1", 5, 0, 0)
+	w, _ := item.NewInstance("weapon-01", 2)
+	_ = dep.AddItem(w)
+	depotRepo := newMockDepotRepo()
+	_ = depotRepo.Save(ctx, dep)
 
-	invRepo := &mockInvRepo{inventories: map[string]coreinventory.Inventory{"char-1": inv}}
 	txProvider := &mockTxProvider{}
-
 	svc := helperquest.NewService(
 		questRepo,
 		charRepo,
-		invRepo,
 		nil,
 		txProvider,
+		helperquest.WithDepotRepository(depotRepo),
 	)
 
 	quest := helperquest.Quest{
@@ -444,7 +662,6 @@ func TestCompleteQuest_ReplacementQuestSaveErrorPropagates(t *testing.T) {
 	}
 	_ = questRepo.Save(ctx, quest)
 
-	// Configure replacement quest save failure
 	questRepo.failReplacementSave = true
 
 	_, err := svc.CompleteQuest(ctx, "char-1", "q-rot-fail", now)
