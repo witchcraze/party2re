@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #843 — Trigger collection discovery on player store purchases and trades
+Last updated: Issue #842 — Eliminate duplicate non-transactional state mutation, news broadcast, and legend induction in ChangeJob
 
 ## Current Phase
 
