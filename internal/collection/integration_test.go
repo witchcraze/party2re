@@ -56,11 +56,33 @@ func TestCollectionServiceDatabaseIntegration(t *testing.T) {
 	_ = svc.RecordItemDiscovered(ctx, char.ID, "arm_aegis", "Aegis Shield", "SHIELD")
 
 	// 5. Get Item Collection
+	// Querying "item" category should have 0 items even though weapon and armor were recorded
+	itemsOnly, itemProgressOnly, err := svc.GetItemCollection(ctx, char.ID, "item")
+	if err != nil {
+		t.Fatalf("GetItemCollection (item) failed: %v", err)
+	}
+	if len(itemsOnly) != 0 || itemProgressOnly.DiscoveredCount != 0 {
+		t.Errorf("expected 0 items, got len=%d discovered=%d", len(itemsOnly), itemProgressOnly.DiscoveredCount)
+	}
+
+	// Record an item
+	_ = svc.RecordItemDiscovered(ctx, char.ID, "itm_potion", "Potion", "ITEM")
+
+	// Now "item" category should have 1 item
+	itemsOnly, itemProgressOnly, err = svc.GetItemCollection(ctx, char.ID, "item")
+	if err != nil {
+		t.Fatalf("GetItemCollection (item after add) failed: %v", err)
+	}
+	if len(itemsOnly) != 1 || itemProgressOnly.DiscoveredCount != 1 {
+		t.Errorf("expected 1 item, got len=%d discovered=%d", len(itemsOnly), itemProgressOnly.DiscoveredCount)
+	}
+
+	// Unfiltered ("") should include all 3 discovered entries
 	items, itemProgress, err := svc.GetItemCollection(ctx, char.ID, "")
 	if err != nil {
-		t.Fatalf("GetItemCollection failed: %v", err)
+		t.Fatalf("GetItemCollection (all) failed: %v", err)
 	}
-	if len(items) != 2 || itemProgress.DiscoveredCount != 2 {
+	if len(items) != 3 || itemProgress.DiscoveredCount != 3 {
 		t.Errorf("items count = %d, progress = %+v", len(items), itemProgress)
 	}
 }

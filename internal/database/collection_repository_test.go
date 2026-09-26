@@ -74,12 +74,57 @@ func TestCollectionRepository_Integration(t *testing.T) {
 		t.Errorf("items: %+v", items)
 	}
 
-	totalItems, err := repo.GetItemCollectionCount(ctx, char.ID)
+	// Record armor and item to verify category filtering in counts
+	if err := repo.RecordItemDiscovered(ctx, char.ID, "arm_shield", "Iron Shield", "ARMOR"); err != nil {
+		t.Fatalf("RecordItemDiscovered armor failed: %v", err)
+	}
+	if err := repo.RecordItemDiscovered(ctx, char.ID, "itm_herb", "Medicinal Herb", "ITEM"); err != nil {
+		t.Fatalf("RecordItemDiscovered item failed: %v", err)
+	}
+
+	// Total across all categories (category == "")
+	totalAll, err := repo.GetItemCollectionCount(ctx, char.ID, "")
 	if err != nil {
-		t.Fatalf("GetItemCollectionCount failed: %v", err)
+		t.Fatalf("GetItemCollectionCount (all) failed: %v", err)
+	}
+	if totalAll != 3 {
+		t.Errorf("total all items = %d, want 3", totalAll)
+	}
+
+	// Filter by WEAPON
+	totalWeapons, err := repo.GetItemCollectionCount(ctx, char.ID, "WEAPON")
+	if err != nil {
+		t.Fatalf("GetItemCollectionCount (WEAPON) failed: %v", err)
+	}
+	if totalWeapons != 1 {
+		t.Errorf("total weapons = %d, want 1", totalWeapons)
+	}
+
+	// Filter by ARMOR
+	totalArmors, err := repo.GetItemCollectionCount(ctx, char.ID, "ARMOR")
+	if err != nil {
+		t.Fatalf("GetItemCollectionCount (ARMOR) failed: %v", err)
+	}
+	if totalArmors != 1 {
+		t.Errorf("total armors = %d, want 1", totalArmors)
+	}
+
+	// Filter by ITEM
+	totalItems, err := repo.GetItemCollectionCount(ctx, char.ID, "ITEM")
+	if err != nil {
+		t.Fatalf("GetItemCollectionCount (ITEM) failed: %v", err)
 	}
 	if totalItems != 1 {
 		t.Errorf("total items = %d, want 1", totalItems)
+	}
+
+	// Filter by non-existent category
+	totalNonExistent, err := repo.GetItemCollectionCount(ctx, char.ID, "ACCESSORY")
+	if err != nil {
+		t.Fatalf("GetItemCollectionCount (ACCESSORY) failed: %v", err)
+	}
+	if totalNonExistent != 0 {
+		t.Errorf("total non-existent = %d, want 0", totalNonExistent)
 	}
 
 	// 6. Test MarkCompleted and IsCompleted

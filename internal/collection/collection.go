@@ -59,7 +59,7 @@ type Repository interface {
 
 	RecordItemDiscovered(ctx context.Context, characterID, itemID, itemName, category string) error
 	GetItemCollection(ctx context.Context, characterID, category string) ([]ItemCollectionEntry, error)
-	GetItemCollectionCount(ctx context.Context, characterID string) (int, error)
+	GetItemCollectionCount(ctx context.Context, characterID, category string) (int, error)
 
 	// MarkCompleted records 100% completion milestone for a collection kind (e.g. "monster_book", "item").
 	// Returns true if this was the initial completion (rows affected == 1).
@@ -311,7 +311,7 @@ func (s *Service) checkItemCollectionCompletion(ctx context.Context, characterID
 	if s.totalItems <= 0 {
 		return
 	}
-	count, err := s.repo.GetItemCollectionCount(ctx, characterID)
+	count, err := s.repo.GetItemCollectionCount(ctx, characterID, "item")
 	if err != nil || count < s.totalItems {
 		return
 	}
@@ -337,7 +337,7 @@ func (s *Service) GetItemCollection(ctx context.Context, characterID, category s
 	if err != nil {
 		return nil, CompletionProgress{}, err
 	}
-	totalDiscovered, err := s.repo.GetItemCollectionCount(ctx, characterID)
+	totalDiscovered, err := s.repo.GetItemCollectionCount(ctx, characterID, category)
 	if err != nil {
 		return nil, CompletionProgress{}, err
 	}

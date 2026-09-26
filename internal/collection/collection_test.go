@@ -72,8 +72,17 @@ func (m *mockCollectionRepo) GetItemCollection(_ context.Context, _, category st
 	return list, nil
 }
 
-func (m *mockCollectionRepo) GetItemCollectionCount(_ context.Context, _ string) (int, error) {
-	return len(m.items), nil
+func (m *mockCollectionRepo) GetItemCollectionCount(_ context.Context, _, category string) (int, error) {
+	if category == "" {
+		return len(m.items), nil
+	}
+	count := 0
+	for _, v := range m.items {
+		if strings.EqualFold(v.Category, category) {
+			count++
+		}
+	}
+	return count, nil
 }
 
 func (m *mockCollectionRepo) MarkCompleted(_ context.Context, charID, kind string) (bool, error) {
@@ -533,5 +542,132 @@ func TestCollectionService_ValidationAndClamping(t *testing.T) {
 	}
 	if _, _, err := svc.GetArmorCollection(context.Background(), ""); err != collection.ErrInvalidCharacterID {
 		t.Errorf("expected ErrInvalidCharacterID, got %v", err)
+	}
+}
+
+func TestCollectionService_WeaponAndArmorDiscoveriesDoNotTriggerItemCompletion(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockCollectionRepo{
+		items:       make(map[string]collection.ItemCollectionEntry),
+		completions: make(map[string]bool),
+	}
+	pub := &mockNewsPublisher{}
+	legend := &mockLegendInductor{}
+	charRepo := &mockCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-collector": {ID: "char-collector", Name: "収集王"},
+		},
+	}
+
+	// Canonical totals: 180 monsters, 141 items, 71 weapons, 55 armors
+	svc, err := collection.NewService(
+		repo,
+		collection.DefaultTotalMonsters,
+		collection.DefaultTotalItems,
+		collection.WithNewsPublisher(pub),
+		collection.WithCharacterRepository(charRepo),
+		collection.WithLegendInductor(legend),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	// 1. Discover all 71 weapons
+	for i := 1; i <= 71; i++ {
+		wID := fmt.Sprintf("wea-%03d", i)
+		wName := fmt.Sprintf("武器%d", i)
+		if err := svc.RecordItemDiscovered(ctx, "char-collector", wID, wName, "weapon"); err != nil {
+			t.Fatalf("weapon %d failed: %v", i, err)
+		}
+	}
+
+	// 2. Discover all 55 armors
+	for i := 1; i <= 55; i++ {
+		aID := fmt.Sprintf("arm-%03d", i)
+		aName := fmt.Sprintf("防具%d", i)
+		if err := svc.RecordItemDiscovered(ctx, "char-collector", aID, aName, "armor"); err != nil {
+			t.Fatalf("armor %d failed: %v", i, err)
+		}
+	}
+
+	// 3. Discover 15 items -> total rows in repo is 71 + 55 + 15 = 141 (the item threshold!)
+	for i := 1; i <= 15; i++ {
+		itID := fmt.Sprintf("ite-%03d", i)
+		itName := fmt.Sprintf("アイテム%d", i)
+		if err := svc.RecordItemDiscovered(ctx, "char-collector", itID, itName, "item"); err != nil {
+			t.Fatalf("item %d failed: %v", i, err)
+		}
+	}
+
+	// Verify weapon and armor completions were triggered
+	if ok, _ := repo.IsCompleted(ctx, "char-collector", "weapon"); !ok {
+		t.Errorf("expected weapon collection to be completed")
+	}
+	if ok, _ := repo.IsCompleted(ctx, "char-collector", "armor"); !ok {
+		t.Errorf("expected armor collection to be completed")
+	}
+
+	// Verify item collection is NOT completed despite total entries = 141
+	if ok, _ := repo.IsCompleted(ctx, "char-collector", "item"); ok {
+		t.Fatalf("item collection MUST NOT be marked completed when only 15 items are discovered")
+	}
+
+	// Check item collection progress
+	entries, prog, err := svc.GetItemCollection(ctx, "char-collector", "item")
+	if err != nil {
+		t.Fatalf("GetItemCollection failed: %v", err)
+	}
+	if len(entries) != 15 {
+		t.Errorf("expected 15 item entries, got %d", len(entries))
+	}
+	if prog.DiscoveredCount != 15 {
+		t.Errorf("expected DiscoveredCount 15, got %d", prog.DiscoveredCount)
+	}
+	if prog.IsCompleted {
+		t.Errorf("expected IsCompleted to be false")
+	}
+	expectedPct := (15.0 / 141.0) * 100.0
+	if fmt.Sprintf("%.2f", prog.CompletionPercentage) != fmt.Sprintf("%.2f", expectedPct) {
+		t.Errorf("expected completion percentage %.2f, got %.2f", expectedPct, prog.CompletionPercentage)
+	}
+
+	// Verify legend inductor has comp_wea and comp_arm, but NOT comp_ite
+	for _, ind := range legend.inductions {
+		if ind.Category == "comp_ite" {
+			t.Fatalf("comp_ite was prematurely inducted into Hall of Fame!")
+		}
+	}
+
+	// Now discover the remaining 126 items (from 16 to 141)
+	for i := 16; i <= 141; i++ {
+		itID := fmt.Sprintf("ite-%03d", i)
+		itName := fmt.Sprintf("アイテム%d", i)
+		if err := svc.RecordItemDiscovered(ctx, "char-collector", itID, itName, "item"); err != nil {
+			t.Fatalf("item %d failed: %v", i, err)
+		}
+	}
+
+	// Now item collection should be 100% complete
+	if ok, _ := repo.IsCompleted(ctx, "char-collector", "item"); !ok {
+		t.Errorf("expected item collection to be completed after discovering all 141 items")
+	}
+	_, finalProg, err := svc.GetItemCollection(ctx, "char-collector", "item")
+	if err != nil {
+		t.Fatalf("final GetItemCollection failed: %v", err)
+	}
+	if finalProg.DiscoveredCount != 141 || !finalProg.IsCompleted || finalProg.CompletionPercentage != 100.0 {
+		t.Errorf("expected 100%% complete item collection, got %+v", finalProg)
+	}
+
+	// Verify comp_ite is now inducted
+	foundCompIte := false
+	for _, ind := range legend.inductions {
+		if ind.Category == "comp_ite" && ind.CharacterID == "char-collector" {
+			foundCompIte = true
+			break
+		}
+	}
+	if !foundCompIte {
+		t.Errorf("expected comp_ite to be inducted into Hall of Fame after 141 items")
 	}
 }

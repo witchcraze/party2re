@@ -103,11 +103,11 @@ func (r *CollectionRepository) GetItemCollection(ctx context.Context, characterI
 	return entries, rows.Err()
 }
 
-func (r *CollectionRepository) GetItemCollectionCount(ctx context.Context, characterID string) (int, error) {
+func (r *CollectionRepository) GetItemCollectionCount(ctx context.Context, characterID, category string) (int, error) {
 	var count int
 	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM character_item_collection WHERE character_id = ?
-	`, characterID).Scan(&count)
+		SELECT COUNT(*) FROM character_item_collection WHERE character_id = ? AND (? = '' OR category = ?)
+	`, characterID, category, category).Scan(&count)
 	return count, err
 }
 
