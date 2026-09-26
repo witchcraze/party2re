@@ -44,12 +44,12 @@ var (
 		"internal/core/inventory": true,
 		"internal/depot":          true, // depot storage items (Depot.Items)
 		"internal/gemstore":       true, // gem box storage items (GemBox.Items)
+		"internal/customskill":    true, // custom skill gem box items (GemBox.Items)
 		"internal/database":       true, // database SQL mappers & row scanning
 	}
 
 	allowedEquipmentPaths = map[string]bool{
 		"internal/core/equipment": true,
-		"internal/customskill":    true, // custom skill gem synthesis
 		"internal/database":       true, // database SQL mappers & row scanning
 	}
 )

@@ -12,9 +12,9 @@ job mastery, priorities, and four-slot equipment are not part of this feature.
 - A gem selection contains `gem1`, `gem2`, and `gem3`; empty positions are
   allowed.
 - The sum of gem slot costs must be at most 3.
-- The sum of gem CMP costs must not exceed the character's maximum MP.
-- Selected gems are removed from inventory atomically. Gems from the previous
-  configuration are returned before the new selection is consumed.
+- Selected gems are removed from the character's gem box (`character_gem_boxes` / `gem_box_items`)
+  atomically. Gems from the previous configuration are returned to the gem box before the new selection
+  is consumed.
 - The skill name is required, at most 60 Unicode characters, cannot contain
   whitespace or `;<>`, and cannot equal a reserved command name:
   `こうげき`, `ぼうぎょ`, `てんしょん`, `ささやき`, `にげる`, `すくしょ`,
@@ -27,6 +27,6 @@ job mastery, priorities, and four-slot equipment are not part of this feature.
 `character_custom_skills` stores the name, phrase, computed CMP cost, and three
 gem IDs. `POST /characters/{id}/custom-skills` accepts `name`, `comment`, and
 `gems` (or `gem1`/`gem2`/`gem3`). `GET` returns the saved `custom_skill`.
-Inventory and custom-skill writes share one transaction boundary.
+Gem box storage and custom-skill writes share one transaction boundary.
 
 Combat execution of the synthesized skill remains a separate concern.

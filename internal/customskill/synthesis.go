@@ -2,13 +2,14 @@ package customskill
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
-	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/gemstore"
 )
 
 func (s *Service) GetCustomSkill(ctx context.Context, characterID string) (*CustomSkill, error) {
@@ -25,15 +26,28 @@ func (s *Service) SetCustomSkill(ctx context.Context, characterID, name, comment
 	if err := validateText(comment, false); err != nil {
 		return nil, err
 	}
-	if s.gems == nil || s.inventory == nil {
+	if s.gems == nil || s.gemBox == nil {
 		return nil, ErrGemDependencies
 	}
 	var result *CustomSkill
 	run := func(txCtx context.Context) error {
-		inventory, err := s.inventory.FindByCharacterIDForUpdate(txCtx, characterID)
+		char, err := s.charRepo.FindByID(txCtx, characterID)
 		if err != nil {
+			return ErrCharacterNotFound
+		}
+		expectedCap := gemstore.CalculateGemBoxCapacity(char.JobLevel)
+		box, err := s.gemBox.FindByCharacterIDForUpdate(txCtx, characterID)
+		if errors.Is(err, gemstore.ErrGemBoxNotFound) {
+			box = gemstore.GemBox{
+				CharacterID: characterID,
+				Capacity:    expectedCap,
+				Items:       []coreitem.Instance{},
+			}
+		} else if err != nil {
 			return err
 		}
+		box.Capacity = expectedCap
+
 		var slotTotal, cmpTotal int
 		required := make(map[string]int)
 		for _, gemID := range gems {
@@ -50,17 +64,8 @@ func (s *Service) SetCustomSkill(ctx context.Context, characterID, name, comment
 			if slotTotal > 3 {
 				return ErrTooManyGemSlots
 			}
-			if inventory.Quantity(gemID) < required[gemID] {
-				return ErrGemNotOwned
-			}
 		}
-		char, err := s.charRepo.FindByID(txCtx, characterID)
-		if err != nil {
-			return ErrCharacterNotFound
-		}
-		if cmpTotal > char.Stats.MaxMP {
-			return ErrCMPTooHigh
-		}
+
 		previous, err := s.repo.FindCustomSkill(txCtx, characterID)
 		if err != nil {
 			return err
@@ -70,39 +75,50 @@ func (s *Service) SetCustomSkill(ctx context.Context, characterID, name, comment
 				if oldGem == "" {
 					continue
 				}
-				instance, found := firstItem(inventory, oldGem)
-				if found {
-					instance.Quantity++
-					if err := inventory.Update(instance); err != nil {
-						return err
-					}
-				} else {
-					instance, err := coreitem.NewInstance(oldGem, 1)
-					if err != nil {
-						return err
-					}
-					if err := inventory.Add(instance); err != nil {
-						return err
-					}
+				instance, createErr := coreitem.NewInstance(oldGem, 1)
+				if createErr != nil {
+					return createErr
 				}
+				box.Items = append(box.Items, instance)
 			}
 		}
+
+		for gemID, count := range required {
+			owned := 0
+			for _, item := range box.Items {
+				if item.DefinitionID == gemID {
+					owned++
+				}
+			}
+			if owned < count {
+				return ErrGemNotOwned
+			}
+		}
+
 		for _, gemID := range gems {
 			if gemID == "" {
 				continue
 			}
-			instance, found := firstItem(inventory, gemID)
-			if !found {
+			if _, err := box.RemoveItem(gemID); err != nil {
 				return ErrGemNotOwned
 			}
-			if err := inventory.Consume(instance.ID, 1); err != nil {
-				return err
-			}
 		}
-		result = &CustomSkill{CharacterID: characterID, Name: name, Comment: comment,
-			CMP: cmpTotal, Gems: gems, UpdatedAt: time.Now().UTC()}
-		if err := s.inventory.Save(txCtx, inventory); err != nil {
+
+		if box.Count() > box.Capacity {
+			return gemstore.ErrGemBoxFull
+		}
+
+		if err := s.gemBox.Save(txCtx, box); err != nil {
 			return err
+		}
+
+		result = &CustomSkill{
+			CharacterID: characterID,
+			Name:        name,
+			Comment:     comment,
+			CMP:         cmpTotal,
+			Gems:        gems,
+			UpdatedAt:   time.Now().UTC(),
 		}
 		return s.repo.SaveCustomSkill(txCtx, *result)
 	}
@@ -134,13 +150,4 @@ func validateText(value string, name bool) error {
 		}
 	}
 	return nil
-}
-
-func firstItem(inventory coreinventory.Inventory, definitionID string) (coreitem.Instance, bool) {
-	for _, instance := range inventory.Items {
-		if instance.DefinitionID == definitionID && instance.Quantity > 0 {
-			return instance, true
-		}
-	}
-	return coreitem.Instance{}, false
 }
