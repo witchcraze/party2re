@@ -62,7 +62,7 @@ func TestMemorySessionRepository_LifecycleAndErrors(t *testing.T) {
 
 	charID := "mem-chal-char-01"
 	sessID := "mem-chal-sess-01"
-	sess := sampleChallengeSession(sessID, charID, "novice")
+	sess := sampleChallengeSession(sessID, charID, "0")
 
 	// 1. Initially nil
 	got, err := repo.GetActiveSession(ctx, charID)
@@ -146,7 +146,7 @@ func TestMemorySessionRepository_TTL(t *testing.T) {
 	repo := challenge.NewMemorySessionRepository(challenge.WithSessionTTL(shortTTL))
 
 	charID := "mem-ttl-chal-char"
-	sess := sampleChallengeSession("mem-ttl-chal-sess", charID, "novice")
+	sess := sampleChallengeSession("mem-ttl-chal-sess", charID, "0")
 
 	if err := repo.SaveActiveSession(ctx, sess); err != nil {
 		t.Fatal(err)
@@ -201,7 +201,7 @@ func TestValkeySessionRepository_LifecycleAndErrors(t *testing.T) {
 	}
 
 	// 2. SaveActiveSession
-	sess := sampleChallengeSession(sessID, charID, "novice")
+	sess := sampleChallengeSession(sessID, charID, "0")
 	if err := repo.SaveActiveSession(ctx, sess); err != nil {
 		t.Fatalf("SaveActiveSession failed: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestValkeySessionRepository_ConcurrentRounds(t *testing.T) {
 
 	// Initialize sessions for all characters
 	for i, cid := range charIDs {
-		sess := sampleChallengeSession(fmt.Sprintf("conc-sess-%02d", i), cid, "novice")
+		sess := sampleChallengeSession(fmt.Sprintf("conc-sess-%02d", i), cid, "0")
 		if err := repo.SaveActiveSession(ctx, sess); err != nil {
 			t.Fatalf("SaveActiveSession for %s failed: %v", cid, err)
 		}
@@ -435,9 +435,9 @@ func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
 		chars: map[string]corecharacter.Character{
 			charID: {
 				ID:         charID,
-				Level:      20,
-				Experience: 5000,
-				Stats:      corecharacter.Stats{HP: 300, MaxHP: 300, Attack: 100, Defense: 50},
+				Level:      1,
+				Experience: 0,
+				Stats:      corecharacter.Stats{HP: 10, MaxHP: 10, Attack: 5, Defense: 0},
 			},
 		},
 	}
@@ -456,31 +456,17 @@ func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Start session
-	sess, err := service.StartSession(ctx, charID, "novice")
+	sess, err := service.StartSession(ctx, charID, "0")
 	if err != nil {
 		t.Fatalf("StartSession failed: %v", err)
 	}
 
-	// Advance 1 round to win
-	_, updatedSess, err := service.AdvanceRound(ctx, charID, sess.ID)
-	if err != nil {
-		t.Fatalf("AdvanceRound failed: %v", err)
-	}
-	if updatedSess.CurrentRound != 2 {
-		t.Fatalf("expected round 2, got %d", updatedSess.CurrentRound)
-	}
-
-	// Verify it's in Valkey
-	valkeySess, err := valkeyStore.GetActiveSession(ctx, charID)
-	if err != nil || valkeySess == nil {
-		t.Fatalf("expected session in Valkey, got %v, err: %v", valkeySess, err)
-	}
-
-	// 2. Attempt Cashout while MariaDB fails
-	_, err = service.Cashout(ctx, sess.ID)
+	// 2. Trigger session defeat while MariaDB FinalizeSession fails
+	res, _, err := service.AdvanceRound(ctx, charID, sess.ID)
 	if err == nil {
-		t.Fatalf("expected Cashout to fail due to MariaDB commit failure")
+		t.Fatalf("expected AdvanceRound to fail on defeat due to MariaDB commit failure")
 	}
+	_ = res
 
 	// Two-Phase Settlement Contract: Valkey buffer MUST NOT be deleted on MariaDB failure!
 	valkeySessAfterFail, err := valkeyStore.GetActiveSession(ctx, charID)
@@ -491,15 +477,15 @@ func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
 		t.Fatalf("Valkey buffer was wiped prematurely on MariaDB failure! Buffer must be preserved for retry.")
 	}
 
-	// 3. Resolve MariaDB failure and retry Cashout
+	// 3. Resolve MariaDB failure and retry defeat settlement
 	failingRepo.failFinalize = false
 
-	cashoutRes, err := service.Cashout(ctx, sess.ID)
+	resRetry, _, err := service.AdvanceRound(ctx, charID, sess.ID)
 	if err != nil {
-		t.Fatalf("retry Cashout failed: %v", err)
+		t.Fatalf("retry AdvanceRound failed: %v", err)
 	}
-	if cashoutRes.RoundsCleared != 1 {
-		t.Errorf("expected 1 round cleared, got %d", cashoutRes.RoundsCleared)
+	if !resRetry.SessionEnded || resRetry.SessionStatus != challenge.StatusDefeated {
+		t.Errorf("expected session to end in defeat on retry, got status=%v", resRetry.SessionStatus)
 	}
 
 	// Upon successful MariaDB commit, Valkey buffer MUST be purged

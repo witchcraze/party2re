@@ -45,14 +45,17 @@ type ChallengeMonster struct {
 }
 
 type ChallengeTier struct {
-	ID                string           `json:"id"`
-	Name              string           `json:"name"`
-	Description       string           `json:"description"`
-	MinLevel          int              `json:"min_level"`
-	BaseMonster       ChallengeMonster `json:"base_monster"`
-	ScaleFactor       float64          `json:"scale_factor"`
-	MilestoneInterval int              `json:"milestone_interval"`
-	MilestoneItemPool []string         `json:"milestone_item_pool"`
+	ID               string             `json:"id"`
+	Name             string             `json:"name"`
+	Description      string             `json:"description"`
+	MinLevel         int                `json:"min_level"`
+	MaxParticipants  int                `json:"max_participants"`
+	NeedJoin         string             `json:"need_join,omitempty"`
+	NeedOverLv       bool               `json:"need_over_lv,omitempty"`
+	TreasureRound    int                `json:"treasure_round"`
+	TreasureItemPool []string           `json:"treasure_item_pool,omitempty"`
+	BaseMonster      ChallengeMonster   `json:"base_monster,omitempty"`
+	MonsterPool      []ChallengeMonster `json:"monster_pool,omitempty"`
 }
 
 type ChallengeMember struct {
@@ -142,14 +145,6 @@ type RoundResult struct {
 	AwardedItem        string            `json:"awarded_item,omitempty"`
 	SessionEnded       bool              `json:"session_ended"`
 	SessionStatus      SessionStatus     `json:"session_status"`
-}
-
-type CashoutResult struct {
-	RoundsCleared  int      `json:"rounds_cleared"`
-	AwardedExp     int      `json:"awarded_exp"`
-	AwardedGold    int      `json:"awarded_gold"`
-	AwardedItems   []string `json:"awarded_items"`
-	NewRecordRound int      `json:"new_record_round"`
 }
 
 // AdvanceRoundParams encapsulates the parameters for advancing an active challenge session round atomically.
@@ -300,7 +295,7 @@ func loadTiers() (map[string]ChallengeTier, error) {
 }
 
 func (s *Service) ListTiers() []ChallengeTier {
-	order := []string{"novice", "intermediate", "master", "abyss"}
+	order := []string{"0", "1", "2", "3", "4", "5", "6", "7", "8"}
 	var list []ChallengeTier
 	for _, id := range order {
 		if t, ok := s.tiers[id]; ok {

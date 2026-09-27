@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,11 +13,13 @@ import (
 )
 
 var (
-	ErrTooManyPartyMembers = errors.New("challenge party exceeds maximum 4 members")
+	ErrTooManyPartyMembers = errors.New("challenge party exceeds stage maximum participants")
 	ErrPartyEmpty          = errors.New("challenge party must have at least 1 member")
+	ErrNeedJoinNotMet      = errors.New("character does not meet stage join condition")
+	ErrNeedOverLvNotMet    = errors.New("character does not meet reincarnation requirement")
 )
 
-// StartPartySession initializes a survival challenge run for up to 4 party members.
+// StartPartySession initializes a survival challenge run for up to stage MaxParticipants party members.
 func (s *Service) StartPartySession(
 	ctx context.Context,
 	leaderCharID string,
@@ -50,7 +53,11 @@ func (s *Service) StartPartySession(
 		memberIDs = append([]string{leaderCharID}, memberIDs...)
 	}
 
-	if len(memberIDs) > 4 {
+	maxParts := tier.MaxParticipants
+	if maxParts <= 0 {
+		maxParts = 4
+	}
+	if len(memberIDs) > maxParts {
 		return nil, ErrTooManyPartyMembers
 	}
 
@@ -82,6 +89,16 @@ func (s *Service) StartPartySession(
 			return nil, ErrLevelTooLow
 		}
 
+		if tier.NeedJoin != "" {
+			if err := validateNeedJoin(tier.NeedJoin, char); err != nil {
+				return nil, fmt.Errorf("%w: %v", ErrNeedJoinNotMet, err)
+			}
+		}
+
+		if tier.NeedOverLv && char.OldJobID == "" {
+			return nil, ErrNeedOverLvNotMet
+		}
+
 		maxHP := char.Stats.MaxHP
 		if maxHP <= 0 {
 			maxHP = char.Stats.HP
@@ -110,7 +127,7 @@ func (s *Service) StartPartySession(
 			CharacterName:      char.Name,
 			Icon:               icon,
 			JobID:              char.JobID,
-			OldJobID:           "",
+			OldJobID:           char.OldJobID,
 			Level:              char.Level,
 			CharacterCurrentHP: currHP,
 			MaxHP:              maxHP,
@@ -159,4 +176,39 @@ func (s *Service) StartPartySession(
 	}
 
 	return &session, nil
+}
+
+func validateNeedJoin(needJoin string, char corecharacter.Character) error {
+	needJoin = strings.TrimSpace(needJoin)
+	if needJoin == "" || needJoin == "0" {
+		return nil
+	}
+	parts := strings.Split(needJoin, "_")
+	if len(parts) != 3 {
+		return nil
+	}
+	key := parts[0]
+	val, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return nil
+	}
+	uo := parts[2] // "u" (< val) or "o" (>= val)
+
+	switch key {
+	case "hp":
+		if uo == "u" && char.Stats.MaxHP >= val {
+			return fmt.Errorf("HP must be under %d", val)
+		}
+		if uo == "o" && char.Stats.MaxHP < val {
+			return fmt.Errorf("HP must be at least %d", val)
+		}
+	case "joblv":
+		if uo == "u" && char.JobLevel >= val {
+			return fmt.Errorf("Job level must be under %d", val)
+		}
+		if uo == "o" && char.JobLevel < val {
+			return fmt.Errorf("Job level must be at least %d", val)
+		}
+	}
+	return nil
 }

@@ -40,7 +40,7 @@ func TestChallengeRepository(t *testing.T) {
 	s := challenge.ChallengeSession{
 		ID:                 sessionID,
 		CharacterID:        char.ID,
-		TierID:             "novice",
+		TierID:             "0",
 		CurrentRound:       1,
 		CharacterCurrentHP: 150,
 		AccumulatedExp:     50,
@@ -82,7 +82,7 @@ func TestChallengeRepository(t *testing.T) {
 	}
 
 	// 5. FinalizeSession
-	s.Status = challenge.StatusClaimed
+	s.Status = challenge.StatusDefeated
 	if err := repo.FinalizeSession(ctx, s, 120, 80, []string{"potion_minor"}, 2); err != nil {
 		t.Fatalf("FinalizeSession failed: %v", err)
 	}
@@ -118,16 +118,16 @@ func TestChallengeRepository(t *testing.T) {
 	}
 
 	// 6. FindRecord
-	rec, err := repo.FindRecord(ctx, char.ID, "novice")
+	rec, err := repo.FindRecord(ctx, char.ID, "0")
 	if err != nil || rec == nil {
 		t.Fatalf("FindRecord failed: %v", err)
 	}
-	if rec.HighestRound != 2 || rec.TotalVictories != 2 || rec.TotalAttempts != 1 {
+	if rec.HighestRound != 2 || rec.TotalVictories != 0 || rec.TotalAttempts != 1 {
 		t.Errorf("unexpected record: %#v", rec)
 	}
 
 	// 7. GetLeaderboard
-	leaderboard, err := repo.GetLeaderboard(ctx, "novice", 100)
+	leaderboard, err := repo.GetLeaderboard(ctx, "0", 100)
 	if err != nil || len(leaderboard) == 0 {
 		t.Fatalf("GetLeaderboard failed: %v", err)
 	}
@@ -200,10 +200,10 @@ func TestChallengeRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 	sess1 := challenge.ChallengeSession{
 		ID:                 fmt.Sprintf("chal_ovf_%016x", now.UnixNano()),
 		CharacterID:        char.ID,
-		TierID:             "novice",
+		TierID:             "0",
 		CurrentRound:       2,
 		CharacterCurrentHP: 100,
-		Status:             challenge.StatusClaimed,
+		Status:             challenge.StatusDefeated,
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}
@@ -225,10 +225,10 @@ func TestChallengeRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 	sess2 := challenge.ChallengeSession{
 		ID:                 fmt.Sprintf("chal_ovf_%016x", now.UnixNano()+1),
 		CharacterID:        char.ID,
-		TierID:             "novice",
+		TierID:             "0",
 		CurrentRound:       3,
 		CharacterCurrentHP: 100,
-		Status:             challenge.StatusClaimed,
+		Status:             challenge.StatusDefeated,
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}
@@ -265,10 +265,10 @@ func TestChallengeRepository_ItemDeliveryAndDepotFallback(t *testing.T) {
 	sess3 := challenge.ChallengeSession{
 		ID:                 fmt.Sprintf("chal_ovf_%016x", now.UnixNano()+2),
 		CharacterID:        char.ID,
-		TierID:             "novice",
+		TierID:             "0",
 		CurrentRound:       4,
 		CharacterCurrentHP: 100,
-		Status:             challenge.StatusClaimed,
+		Status:             challenge.StatusDefeated,
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}

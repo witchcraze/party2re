@@ -21,16 +21,16 @@ func setupSessionTestService(t *testing.T) (*challenge.Service, *mockChallengeRe
 				Level:      30,
 				Experience: 10000,
 				Stats: corecharacter.Stats{
-					HP:      500,
-					MaxHP:   500,
+					HP:      350,
+					MaxHP:   350,
 					Attack:  150,
 					Defense: 100,
 				},
 			},
 			"weakling": {
 				ID:         "weakling",
-				Level:      5,
-				Experience: 100,
+				Level:      1,
+				Experience: 0,
 				Stats: corecharacter.Stats{
 					HP:      10,
 					MaxHP:   10,
@@ -76,7 +76,7 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 
 	t.Run("charRepo FindByID error propagates", func(t *testing.T) {
 		svc, _, charRepo, _ := setupSessionTestService(t)
-		sess, err := svc.StartSession(ctx, "hero", "novice")
+		sess, err := svc.StartSession(ctx, "hero", "0")
 		if err != nil {
 			t.Fatalf("StartSession failed: %v", err)
 		}
@@ -91,7 +91,7 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 
 	t.Run("repo GetHallOfFame error propagates with context", func(t *testing.T) {
 		svc, repo, _, _ := setupSessionTestService(t)
-		sess, err := svc.StartSession(ctx, "hero", "novice")
+		sess, err := svc.StartSession(ctx, "hero", "0")
 		if err != nil {
 			t.Fatalf("StartSession failed: %v", err)
 		}
@@ -106,7 +106,7 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 
 	t.Run("repo SaveHallOfFame error propagates with context", func(t *testing.T) {
 		svc, repo, _, _ := setupSessionTestService(t)
-		sess, err := svc.StartSession(ctx, "hero", "novice")
+		sess, err := svc.StartSession(ctx, "hero", "0")
 		if err != nil {
 			t.Fatalf("StartSession failed: %v", err)
 		}
@@ -121,7 +121,7 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 
 	t.Run("activeStore AdvanceRound error propagates", func(t *testing.T) {
 		svc, _, _, activeStore := setupSessionTestService(t)
-		sess, err := svc.StartSession(ctx, "hero", "novice")
+		sess, err := svc.StartSession(ctx, "hero", "0")
 		if err != nil {
 			t.Fatalf("StartSession failed: %v", err)
 		}
@@ -136,7 +136,7 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 
 	t.Run("activeStore SaveActiveSession error propagates with context", func(t *testing.T) {
 		svc, _, _, activeStore := setupSessionTestService(t)
-		sess, err := svc.StartSession(ctx, "hero", "novice")
+		sess, err := svc.StartSession(ctx, "hero", "0")
 		if err != nil {
 			t.Fatalf("StartSession failed: %v", err)
 		}
@@ -151,7 +151,7 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 
 	t.Run("repo FinalizeSession on defeat error propagates", func(t *testing.T) {
 		svc, repo, _, _ := setupSessionTestService(t)
-		sess, err := svc.StartSession(ctx, "weakling", "novice")
+		sess, err := svc.StartSession(ctx, "weakling", "0")
 		if err != nil {
 			t.Fatalf("StartSession failed: %v", err)
 		}
@@ -160,43 +160,6 @@ func TestAdvanceRound_PersistenceErrors(t *testing.T) {
 
 		_, _, err = svc.AdvanceRound(ctx, "weakling", sess.ID)
 		if err == nil || !strings.Contains(err.Error(), "mariadb deadlocked") {
-			t.Errorf("expected finalize session error, got %v", err)
-		}
-	})
-}
-
-func TestRetireSession_PersistenceErrors(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("empty character ID returns ErrCharacterNotFound", func(t *testing.T) {
-		svc, _, _, _ := setupSessionTestService(t)
-		_, err := svc.RetireSession(ctx, "", "sess-1")
-		if !errors.Is(err, challenge.ErrCharacterNotFound) {
-			t.Errorf("expected ErrCharacterNotFound, got %v", err)
-		}
-	})
-
-	t.Run("activeStore GetActiveSession error propagates", func(t *testing.T) {
-		svc, _, _, activeStore := setupSessionTestService(t)
-		activeStore.getActiveSessionErr = errors.New("valkey unreachable")
-
-		_, err := svc.RetireSession(ctx, "hero", "sess-1")
-		if err == nil || !strings.Contains(err.Error(), "valkey unreachable") {
-			t.Errorf("expected valkey error, got %v", err)
-		}
-	})
-
-	t.Run("repo FinalizeSession error propagates", func(t *testing.T) {
-		svc, repo, _, _ := setupSessionTestService(t)
-		sess, err := svc.StartSession(ctx, "hero", "novice")
-		if err != nil {
-			t.Fatalf("StartSession failed: %v", err)
-		}
-
-		repo.finalizeSessionErr = errors.New("mariadb foreign key violation")
-
-		_, err = svc.RetireSession(ctx, "hero", sess.ID)
-		if err == nil || !strings.Contains(err.Error(), "mariadb foreign key violation") {
 			t.Errorf("expected finalize session error, got %v", err)
 		}
 	})
@@ -212,35 +175,6 @@ func TestExecuteRound_Errors(t *testing.T) {
 		_, err := svc.ExecuteRound(ctx, "sess-1")
 		if err == nil || !strings.Contains(err.Error(), "db session query failed") {
 			t.Errorf("expected repo find error, got %v", err)
-		}
-	})
-}
-
-func TestCashout_Errors(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("repo FindSessionByID error propagates", func(t *testing.T) {
-		svc, repo, _, _ := setupSessionTestService(t)
-		repo.findSessionByIDErr = errors.New("db cashout query failed")
-
-		_, err := svc.Cashout(ctx, "sess-1")
-		if err == nil || !strings.Contains(err.Error(), "db cashout query failed") {
-			t.Errorf("expected repo find error, got %v", err)
-		}
-	})
-
-	t.Run("RetireSession failure propagates during cashout", func(t *testing.T) {
-		svc, repo, _, _ := setupSessionTestService(t)
-		sess, err := svc.StartSession(ctx, "hero", "novice")
-		if err != nil {
-			t.Fatalf("StartSession failed: %v", err)
-		}
-
-		repo.finalizeSessionErr = errors.New("finalize in cashout failed")
-
-		_, err = svc.Cashout(ctx, sess.ID)
-		if err == nil || !strings.Contains(err.Error(), "finalize in cashout failed") {
-			t.Errorf("expected finalize error during cashout, got %v", err)
 		}
 	})
 }

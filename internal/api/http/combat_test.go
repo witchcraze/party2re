@@ -261,40 +261,6 @@ func TestCombatEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /characters/{id}/challenges/retire", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/retire", `{"session_id":"sess-1"}`)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d", rec.Code)
-		}
-	})
-
-	t.Run("POST /characters/{id}/challenges/retire - forbidden for non-owned session", func(t *testing.T) {
-		hForbidden := newTestHandler(
-			t,
-			pService,
-			cService,
-			&stubAdventureService{},
-			&stubShopService{},
-			apihttp.WithChallenge(&stubChallengeService{
-				retireSessionFn: func(ctx context.Context, characterID string, sessionID string) (*challenge.ChallengeSession, error) {
-					return nil, challenge.ErrForbidden
-				},
-			}),
-		)
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/challenges/retire", `{"session_id":"other-sess"}`)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rec := httptest.NewRecorder()
-		hForbidden.Router().ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusForbidden {
-			t.Fatalf("expected 403 Forbidden, got %d", rec.Code)
-		}
-	})
-
 	// Bosses
 	t.Run("GET /characters/{id}/bosses", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/characters/c1/bosses", nil)

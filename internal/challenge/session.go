@@ -10,6 +10,7 @@ import (
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/random"
 )
 
 func (s *Service) StartSession(ctx context.Context, characterID string, tierID string) (*ChallengeSession, error) {
@@ -61,15 +62,24 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 		maxHP = 100
 	}
 
-	// Scale monster for round
 	round := session.CurrentRound
-	scale := 1.0 + float64(round-1)*tier.ScaleFactor
-	mHP := int(math.Round(float64(tier.BaseMonster.BaseHP) * scale))
-	mAtk := int(math.Round(float64(tier.BaseMonster.BaseAttack) * scale))
-	mDef := int(math.Round(float64(tier.BaseMonster.BaseDefense) * scale))
-	mExp := int(math.Round(float64(tier.BaseMonster.BaseExp) * scale))
-	mGold := int(math.Round(float64(tier.BaseMonster.BaseGold) * scale))
-	mName := fmt.Sprintf("%s (Wave %d)", tier.BaseMonster.Name, round)
+
+	// Select monster from pool or base monster
+	var baseM ChallengeMonster
+	if len(tier.MonsterPool) > 0 {
+		baseM = tier.MonsterPool[(round-1)%len(tier.MonsterPool)]
+	} else {
+		baseM = tier.BaseMonster
+	}
+
+	// Scale monster for round: fixed formula 1.0 + 0.10 * round
+	scale := 1.0 + 0.10*float64(round)
+	mHP := int(math.Round(float64(baseM.BaseHP) * scale))
+	mAtk := int(math.Round(float64(baseM.BaseAttack) * scale))
+	mDef := int(math.Round(float64(baseM.BaseDefense) * scale))
+	mExp := int(math.Round(float64(baseM.BaseExp) * scale))
+	mGold := int(math.Round(float64(baseM.BaseGold) * scale))
+	mName := fmt.Sprintf("%s (Round %d)", baseM.Name, round)
 
 	monsterParticipant := corebattle.MustNewParticipant(mName, mHP, mAtk, mDef)
 	var battleRes corebattle.Result
@@ -197,10 +207,13 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 			leaderSurvivingHP = survivingHP
 		}
 
-		// Milestone item check
+		// Authentic Treasure Room trigger: round >= TreasureRound, 10% chance if no item awarded yet
 		var awardedItem string
-		if tier.MilestoneInterval > 0 && round%tier.MilestoneInterval == 0 && len(tier.MilestoneItemPool) > 0 {
-			awardedItem = tier.MilestoneItemPool[(round/tier.MilestoneInterval-1)%len(tier.MilestoneItemPool)]
+		if len(session.AccumulatedItems) == 0 && round >= tier.TreasureRound && len(tier.TreasureItemPool) > 0 {
+			if random.Float64() < 0.10 {
+				idx := random.Intn(len(tier.TreasureItemPool))
+				awardedItem = tier.TreasureItemPool[idx]
+			}
 		}
 
 		// Update Hall of Fame if round > highestRound for tier
@@ -304,13 +317,14 @@ func (s *Service) AdvanceRound(ctx context.Context, characterID string, sessionI
 	session.CharacterCurrentHP = 0
 	session.UpdatedAt = time.Now().UTC()
 
-	// On defeat, half exp/gold awarded, items forfeited
-	awardedExp := session.AccumulatedExp / 2
-	awardedGold := session.AccumulatedGold / 2
+	// On defeat, award 100% of accumulated EXP, Gold, and items
+	awardedExp := session.AccumulatedExp
+	awardedGold := session.AccumulatedGold
+	awardedItems := session.AccumulatedItems
 	clearedRounds := round - 1
 
 	// Two-Phase Settlement: commit durable state to MariaDB first
-	if err := s.repo.FinalizeSession(ctx, *session, awardedExp, awardedGold, nil, clearedRounds); err != nil {
+	if err := s.repo.FinalizeSession(ctx, *session, awardedExp, awardedGold, awardedItems, clearedRounds); err != nil {
 		return nil, nil, err
 	}
 
@@ -339,69 +353,6 @@ func (s *Service) ExecuteRound(ctx context.Context, sessionID string) (*RoundRes
 	}
 	res, _, err := s.AdvanceRound(ctx, session.CharacterID, sessionID)
 	return res, err
-}
-
-func (s *Service) RetireSession(ctx context.Context, characterID string, sessionID string) (*ChallengeSession, error) {
-	if strings.TrimSpace(characterID) == "" {
-		return nil, ErrCharacterNotFound
-	}
-
-	session, err := s.activeStore.GetActiveSession(ctx, characterID)
-	if err != nil {
-		return nil, err
-	}
-	if session == nil || session.ID != sessionID {
-		if targetSession, fErr := s.repo.FindSessionByID(ctx, sessionID); fErr == nil && targetSession != nil {
-			if targetSession.CharacterID != characterID {
-				return nil, ErrForbidden
-			}
-		}
-		return nil, ErrSessionNotFound
-	}
-	if session.CharacterID != characterID {
-		return nil, ErrForbidden
-	}
-	if session.Status != StatusActive {
-		return nil, ErrSessionNotActive
-	}
-
-	clearedRounds := session.CurrentRound - 1
-	session.Status = StatusClaimed
-	session.UpdatedAt = time.Now().UTC()
-
-	exp := session.AccumulatedExp
-	gold := session.AccumulatedGold
-	items := session.AccumulatedItems
-
-	// Two-Phase Settlement: commit durable state to MariaDB first
-	if err := s.repo.FinalizeSession(ctx, *session, exp, gold, items, clearedRounds); err != nil {
-		return nil, err
-	}
-
-	// Upon successful MariaDB commit, purge transient buffer from Valkey Master
-	//lint:ignore error-swallow best-effort post-commit cache eviction
-	_ = s.activeStore.DeleteActiveSession(ctx, characterID)
-
-	return session, nil
-}
-
-func (s *Service) Cashout(ctx context.Context, sessionID string) (*CashoutResult, error) {
-	session, err := s.repo.FindSessionByID(ctx, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	retired, err := s.RetireSession(ctx, session.CharacterID, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	clearedRounds := retired.CurrentRound - 1
-	return &CashoutResult{
-		RoundsCleared:  clearedRounds,
-		AwardedExp:     retired.AccumulatedExp,
-		AwardedGold:    retired.AccumulatedGold,
-		AwardedItems:   retired.AccumulatedItems,
-		NewRecordRound: clearedRounds,
-	}, nil
 }
 
 func (s *Service) GetSession(ctx context.Context, characterID string, sessionID string) (*ChallengeSession, error) {

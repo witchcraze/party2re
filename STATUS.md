@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Refactor secretshop helper item lookup using slices.Contains
+Last updated: Issue #789 — [Bug] Challenge: Purge fictional tiers and cashout, restoring 9 authentic legacy stages
 
 ## Current Phase
 
