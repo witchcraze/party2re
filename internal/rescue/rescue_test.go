@@ -190,6 +190,48 @@ func TestEmergencyRescue_IdleCharacterReturnsEarlyWithZeroPenalty(t *testing.T) 
 	}
 }
 
+func TestService_Unstuck(t *testing.T) {
+	ctx := context.Background()
+
+	rescueRepo := &stubRescueRepo{}
+	charRepo := &stubCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-unstuck": {ID: "char-unstuck", Name: "AdminTarget"},
+		},
+	}
+	cleaner := &stubActionCleaner{}
+	svc := NewService(rescueRepo, charRepo, cleaner)
+
+	t.Run("success", func(t *testing.T) {
+		err := svc.Unstuck(ctx, "char-unstuck")
+		if err != nil {
+			t.Fatalf("expected success, got %v", err)
+		}
+
+		if len(cleaner.clearedCharacters) != 1 || cleaner.clearedCharacters[0] != "char-unstuck" {
+			t.Fatalf("expected cleaner invoked with char-unstuck, got %v", cleaner.clearedCharacters)
+		}
+
+		if len(rescueRepo.records) != 0 {
+			t.Errorf("expected 0 saved rescue records for Unstuck, got %d", len(rescueRepo.records))
+		}
+	})
+
+	t.Run("empty_id", func(t *testing.T) {
+		err := svc.Unstuck(ctx, "   ")
+		if !errors.Is(err, ErrInvalidCharacterID) {
+			t.Fatalf("expected ErrInvalidCharacterID, got %v", err)
+		}
+	})
+
+	t.Run("not_found", func(t *testing.T) {
+		err := svc.Unstuck(ctx, "char-non-existent")
+		if !errors.Is(err, corecharacter.ErrNotFound) {
+			t.Fatalf("expected corecharacter.ErrNotFound, got %v", err)
+		}
+	})
+}
+
 func TestEmergencyRescueInvokesActionCleaner(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)

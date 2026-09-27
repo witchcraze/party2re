@@ -167,6 +167,21 @@
         ],
         "type": "object"
       },
+      "AdminUnstuckCharacterResponse": {
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "message"
+        ],
+        "type": "object"
+      },
       "AuctionListing": {
         "properties": {
           "buyout_price": {

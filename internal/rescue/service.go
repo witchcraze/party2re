@@ -42,6 +42,27 @@ func NewService(
 	}
 }
 
+// Unstuck resets the character's active and pending scheduled actions without applying
+// a rescue penalty cooldown (admin refresh per legacy party2/admin.cgi:121-131).
+func (s *Service) Unstuck(ctx context.Context, characterID string) error {
+	characterID = strings.TrimSpace(characterID)
+	if characterID == "" {
+		return ErrInvalidCharacterID
+	}
+
+	if _, err := s.characters.FindByID(ctx, characterID); err != nil {
+		return err
+	}
+
+	if s.cleaner != nil {
+		if _, err := s.cleaner.ClearActiveActions(ctx, characterID); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // EmergencyRescue resets player character state when stuck or encountering errors, applying a sleep penalty cooldown.
 // If the character is safe in town with no active actions, returns early with 0 penalty cooldown per legacy rescue.cgi:56-65.
 func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason string, now time.Time) (RescueRecord, error) {

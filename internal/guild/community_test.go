@@ -490,6 +490,137 @@ func TestService_Customization_MarkAndWallpaper(t *testing.T) {
 	})
 }
 
+func TestService_RemoveCharacterFromGuild(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("empty id", func(t *testing.T) {
+		svc, _ := guild.NewService(&mockGuildRepo{})
+		if err := svc.RemoveCharacterFromGuild(ctx, "  "); err != nil {
+			t.Errorf("expected nil error for empty ID, got %v", err)
+		}
+	})
+
+	t.Run("not in guild", func(t *testing.T) {
+		repo := &mockGuildRepo{
+			getGuildByCharFn: func(ctx context.Context, characterID string) (guild.Guild, guild.Member, error) {
+				return guild.Guild{}, guild.Member{}, guild.ErrCharacterNotInGuild
+			},
+		}
+		svc, _ := guild.NewService(repo)
+		if err := svc.RemoveCharacterFromGuild(ctx, "c1"); err != nil {
+			t.Errorf("expected nil error when character not in guild, got %v", err)
+		}
+	})
+
+	t.Run("sole member disbands guild", func(t *testing.T) {
+		var disbanded bool
+		repo := &mockGuildRepo{
+			getGuildByCharFn: func(ctx context.Context, characterID string) (guild.Guild, guild.Member, error) {
+				return guild.Guild{ID: "g1"}, guild.Member{CharacterID: characterID}, nil
+			},
+			getGuildFn: func(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
+				return guild.Guild{ID: "g1"}, []guild.Member{{CharacterID: "c1"}}, nil
+			},
+			disbandGuildFn: func(ctx context.Context, gID string) error {
+				disbanded = true
+				return nil
+			},
+		}
+		svc, _ := guild.NewService(repo)
+		if err := svc.RemoveCharacterFromGuild(ctx, "c1"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !disbanded {
+			t.Errorf("expected guild to be disbanded")
+		}
+	})
+
+	t.Run("regular member removed", func(t *testing.T) {
+		var removedID string
+		repo := &mockGuildRepo{
+			getGuildByCharFn: func(ctx context.Context, characterID string) (guild.Guild, guild.Member, error) {
+				return guild.Guild{ID: "g1"}, guild.Member{CharacterID: characterID, Role: guild.RoleMember}, nil
+			},
+			getGuildFn: func(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
+				return guild.Guild{ID: "g1"}, []guild.Member{
+					{CharacterID: "leader", Role: guild.RoleLeader},
+					{CharacterID: "c2", Role: guild.RoleMember},
+				}, nil
+			},
+			removeMemberFn: func(ctx context.Context, guildID string, characterID string) error {
+				removedID = characterID
+				return nil
+			},
+		}
+		svc, _ := guild.NewService(repo)
+		if err := svc.RemoveCharacterFromGuild(ctx, "c2"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if removedID != "c2" {
+			t.Errorf("expected c2 to be removed, got %v", removedID)
+		}
+	})
+
+	t.Run("leader transfers leadership to successor with title", func(t *testing.T) {
+		var transferredTo string
+		repo := &mockGuildRepo{
+			getGuildByCharFn: func(ctx context.Context, characterID string) (guild.Guild, guild.Member, error) {
+				return guild.Guild{ID: "g1"}, guild.Member{CharacterID: characterID, Role: guild.RoleLeader}, nil
+			},
+			getGuildFn: func(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
+				return guild.Guild{ID: "g1"}, []guild.Member{
+					{CharacterID: "leader", Role: guild.RoleLeader},
+					{CharacterID: "mem1", Role: guild.RoleMember, Title: "Member"},
+					{CharacterID: "mem2", Role: guild.RoleMember, Title: "副ギルマス"}, // Sub-leader
+				}, nil
+			},
+			transferLeadershipFn: func(ctx context.Context, guildID string, oldLeader, newLeader string) error {
+				transferredTo = newLeader
+				return nil
+			},
+			removeMemberFn: func(ctx context.Context, guildID string, characterID string) error {
+				return nil
+			},
+		}
+		svc, _ := guild.NewService(repo)
+		if err := svc.RemoveCharacterFromGuild(ctx, "leader"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if transferredTo != "mem2" {
+			t.Errorf("expected leadership transferred to mem2, got %v", transferredTo)
+		}
+	})
+
+	t.Run("leader transfers leadership to first available member", func(t *testing.T) {
+		var transferredTo string
+		repo := &mockGuildRepo{
+			getGuildByCharFn: func(ctx context.Context, characterID string) (guild.Guild, guild.Member, error) {
+				return guild.Guild{ID: "g1"}, guild.Member{CharacterID: characterID, Role: guild.RoleLeader}, nil
+			},
+			getGuildFn: func(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
+				return guild.Guild{ID: "g1"}, []guild.Member{
+					{CharacterID: "leader", Role: guild.RoleLeader},
+					{CharacterID: "mem1", Role: guild.RoleMember, Title: "Member"},
+				}, nil
+			},
+			transferLeadershipFn: func(ctx context.Context, guildID string, oldLeader, newLeader string) error {
+				transferredTo = newLeader
+				return nil
+			},
+			removeMemberFn: func(ctx context.Context, guildID string, characterID string) error {
+				return nil
+			},
+		}
+		svc, _ := guild.NewService(repo)
+		if err := svc.RemoveCharacterFromGuild(ctx, "leader"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if transferredTo != "mem1" {
+			t.Errorf("expected leadership transferred to mem1, got %v", transferredTo)
+		}
+	})
+}
+
 func TestService_DisbandInactiveGuilds(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)

@@ -60,6 +60,7 @@ func (m *mockHelperService) CompleteQuest(ctx context.Context, characterID, ques
 type mockRescueService struct {
 	emergencyRescueFn func(ctx context.Context, characterID, reason string, now time.Time) (rescue.RescueRecord, error)
 	isUnderPenaltyFn  func(ctx context.Context, characterID string, now time.Time) (bool, time.Duration, error)
+	unstuckFn         func(ctx context.Context, characterID string) error
 }
 
 func (m *mockRescueService) EmergencyRescue(ctx context.Context, characterID, reason string, now time.Time) (rescue.RescueRecord, error) {
@@ -80,6 +81,13 @@ func (m *mockRescueService) IsUnderPenalty(ctx context.Context, characterID stri
 		return m.isUnderPenaltyFn(ctx, characterID, now)
 	}
 	return false, 0, nil
+}
+
+func (m *mockRescueService) Unstuck(ctx context.Context, characterID string) error {
+	if m.unstuckFn != nil {
+		return m.unstuckFn(ctx, characterID)
+	}
+	return nil
 }
 
 func TestHelperAndRescueEndpoints(t *testing.T) {
