@@ -2,7 +2,6 @@ package customskill_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -50,7 +49,7 @@ func TestSetCustomSkillAllowsCMPExceedingMaxMPWhenSlotsValid(t *testing.T) {
 	}
 }
 
-func TestSetCustomSkillRejectsWhenGemBoxCapacityExceededOnReturn(t *testing.T) {
+func TestSetCustomSkillAllowsReturningGemsWhenBoxFullOrOverCapacity(t *testing.T) {
 	repo := &synthesisRepo{}
 	// Initially, previous skill has 2 gems equipped
 	repo.skill = &customskill.CustomSkill{
@@ -85,9 +84,16 @@ func TestSetCustomSkillRejectsWhenGemBoxCapacityExceededOnReturn(t *testing.T) {
 		"g2": {ID: "g2", SlotCost: 1, MPCost: 2},
 	}, boxRepo, nil)
 
-	// Unequipping both gems (new skill has 0 gems) would return 2 gems into a box that is already 5/5
-	_, err = service.SetCustomSkill(context.Background(), "char-cap", "空スキル", "", [3]string{"", "", ""})
-	if !errors.Is(err, gemstore.ErrGemBoxFull) {
-		t.Fatalf("expected ErrGemBoxFull when returning gems to full box, got %v", err)
+	// Unequipping both gems (new skill has 0 gems) returns 2 gems into a box that is already 5/5.
+	// Since owned gems are equipment being unslotted rather than deposited, this must succeed.
+	skill, err := service.SetCustomSkill(context.Background(), "char-cap", "空スキル", "", [3]string{"", "", ""})
+	if err != nil {
+		t.Fatalf("expected returning gems to succeed even when capacity exceeded, got: %v", err)
+	}
+	if skill.CMP != 0 {
+		t.Fatalf("expected CMP 0, got %d", skill.CMP)
+	}
+	if len(boxRepo.box.Items) != 7 {
+		t.Fatalf("expected 7 items in GemBox, got %d", len(boxRepo.box.Items))
 	}
 }

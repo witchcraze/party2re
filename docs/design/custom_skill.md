@@ -15,6 +15,9 @@ job mastery, priorities, and four-slot equipment are not part of this feature.
 - Selected gems are removed from the character's gem box (`character_gem_boxes` / `gem_box_items`)
   atomically. Gems from the previous configuration are returned to the gem box before the new selection
   is consumed.
+- Gem swapping and unsetting operate exclusively on gems already owned by the character. Custom
+  skill configuration does not enforce deposit capacity limits on the GemBox (preventing lockout when a
+  job change resets dynamic capacity below existing gem inventory).
 - The skill name is required, at most 60 Unicode characters, cannot contain
   whitespace or `;<>`, and cannot equal a reserved command name:
   `こうげき`, `ぼうぎょ`, `てんしょん`, `ささやき`, `にげる`, `すくしょ`,
