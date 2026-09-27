@@ -104,10 +104,6 @@ func (s *Service) SetCustomSkill(ctx context.Context, characterID, name, comment
 			}
 		}
 
-		if box.Count() > box.Capacity {
-			return gemstore.ErrGemBoxFull
-		}
-
 		if err := s.gemBox.Save(txCtx, box); err != nil {
 			return err
 		}

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #852 — Adopt depot.FindOrCreate for buyer delivery and restore listing collection discovery
+Last updated: Issue #850 — Custom Skill: Prevent GemBox capacity lockout when swapping or unsetting gems after job change
 
 ## Current Phase
 
