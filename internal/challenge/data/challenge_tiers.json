@@ -142,7 +142,7 @@
     "name": "即死博打",
     "description": "一撃必殺と不確実性が交錯する危険な賭け場。",
     "min_level": 1,
-    "max_participants": 4,
+    "max_participants": 3,
     "treasure_round": 10,
     "treasure_item_pool": ["item-004", "item-005", "item-006"],
     "monster_pool": [
@@ -220,7 +220,7 @@
     "name": "鉄壁要塞",
     "description": "強固な防御を誇る鉱石とメタルの要塞。",
     "min_level": 1,
-    "max_participants": 3,
+    "max_participants": 4,
     "treasure_round": 20,
     "treasure_item_pool": ["item-006", "item-007", "item-008"],
     "monster_pool": [
@@ -303,7 +303,7 @@
     "name": "最強王者",
     "description": "伝説の魔物たちが勢揃いする頂上決戦。",
     "min_level": 1,
-    "max_participants": 1,
+    "max_participants": 4,
     "treasure_round": 30,
     "treasure_item_pool": ["item-008", "item-009", "item-010"],
     "monster_pool": [
@@ -426,7 +426,7 @@
     "name": "真・最強王者",
     "description": "転生者のみが足を踏み入れることを許される、真の極限試練。",
     "min_level": 1,
-    "max_participants": 1,
+    "max_participants": 4,
     "need_over_lv": true,
     "treasure_round": 30,
     "treasure_item_pool": ["item-010", "item-011", "item-012"],

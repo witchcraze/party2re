@@ -404,18 +404,26 @@ func (r *ChallengeRepository) FinalizeSession(ctx context.Context, s challenge.C
 
 		// 4. Update Character Challenge Record
 		now := time.Now().UTC()
+		attemptsInc := 0
+		victoriesInc := 0
+		if s.Status == challenge.StatusDefeated || s.Status == challenge.StatusClaimed {
+			attemptsInc = 1
+		} else {
+			victoriesInc = 1
+		}
+
 		upsertRecordQuery := `
 			INSERT INTO character_challenge_records (
 				character_id, tier_id, highest_round, total_attempts,
 				total_victories, best_cleared_at
-			) VALUES (?, ?, ?, 1, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?)
 			ON DUPLICATE KEY UPDATE
 				best_cleared_at = IF(VALUES(highest_round) > highest_round, VALUES(best_cleared_at), best_cleared_at),
 				highest_round = IF(VALUES(highest_round) > highest_round, VALUES(highest_round), highest_round),
-				total_attempts = total_attempts + 1,
+				total_attempts = total_attempts + VALUES(total_attempts),
 				total_victories = total_victories + VALUES(total_victories)
 		`
-		if _, err := executor.ExecContext(txCtx, upsertRecordQuery, s.CharacterID, s.TierID, newStreak, newStreak, now); err != nil {
+		if _, err := executor.ExecContext(txCtx, upsertRecordQuery, s.CharacterID, s.TierID, newStreak, attemptsInc, victoriesInc, now); err != nil {
 			return err
 		}
 
