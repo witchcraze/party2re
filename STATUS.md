@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #850 — Custom Skill: Prevent GemBox capacity lockout when swapping or unsetting gems after job change
+Last updated: Issue #806 — Implement player unstuck (admin_refresh) and guild membership cleanup on ban
 
 ## Current Phase
 

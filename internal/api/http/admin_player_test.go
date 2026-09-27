@@ -144,6 +144,103 @@ func TestAdminListPlayers(t *testing.T) {
 	})
 }
 
+func TestAdminUnstuckCharacter(t *testing.T) {
+	adminKey := "test-admin-secret"
+	var unstuckCharID string
+	rescueService := &mockRescueService{
+		unstuckFn: func(ctx context.Context, characterID string) error {
+			if characterID == "unknown" {
+				return corecharacter.ErrNotFound
+			}
+			if characterID == "err" {
+				return errors.New("internal error")
+			}
+			unstuckCharID = characterID
+			return nil
+		},
+	}
+
+	h, err := apihttp.NewHandler(
+		&stubPlayerService{},
+		&stubCharacterService{},
+		&stubAdventureService{},
+		&stubShopService{},
+		apihttp.WithAdminAPIKey(adminKey),
+		apihttp.WithRescue(rescueService),
+	)
+	if err != nil {
+		t.Fatalf("failed to create handler: %v", err)
+	}
+	router := h.Router()
+
+	t.Run("401 Unauthorized without admin key", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/characters/c123/unstuck", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized, got %d", rec.Code)
+		}
+	})
+
+	t.Run("403 Forbidden with invalid admin key", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/characters/c123/unstuck", nil)
+		req.Header.Set("X-Admin-Key", "wrong-key")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden, got %d", rec.Code)
+		}
+	})
+
+	t.Run("200 OK on successful unstuck", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/characters/c123/unstuck", nil)
+		req.Header.Set("X-Admin-Key", adminKey)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if unstuckCharID != "c123" {
+			t.Errorf("expected unstuckCharID c123, got %q", unstuckCharID)
+		}
+		var resp struct {
+			Message     string `json:"message"`
+			CharacterID string `json:"character_id"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse JSON: %v", err)
+		}
+		if resp.CharacterID != "c123" {
+			t.Errorf("expected response character_id c123, got %q", resp.CharacterID)
+		}
+	})
+
+	t.Run("404 NotFound for nonexistent character", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/characters/unknown/unstuck", nil)
+		req.Header.Set("X-Admin-Key", adminKey)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 NotFound, got %d", rec.Code)
+		}
+	})
+
+	t.Run("500 InternalServerError on unexpected error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/characters/err/unstuck", nil)
+		req.Header.Set("X-Admin-Key", adminKey)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500 InternalServerError, got %d", rec.Code)
+		}
+	})
+}
+
 func TestAdminBanPlayer(t *testing.T) {
 	adminKey := "test-admin-secret"
 	var bannedPlayerID string
@@ -319,6 +416,7 @@ func TestAdmin_Regression_NonAdminRejected(t *testing.T) {
 		{http.MethodPut, "/admin/maintenance"},
 		{http.MethodGet, "/admin/players"},
 		{http.MethodPost, "/admin/players/p123/ban"},
+		{http.MethodPost, "/admin/characters/c123/unstuck"},
 	}
 
 	for _, ep := range endpoints {

@@ -2,6 +2,7 @@ package guild
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -290,6 +291,63 @@ func (s *Service) ChangeWallpaper(ctx context.Context, guildID string, leaderID 
 	}
 
 	return s.repo.UpdateWallpaper(ctx, guildID, normalized, price, leaderID)
+}
+
+// RemoveCharacterFromGuild removes a character from their guild upon admin action or deletion (lib/system.cgi:delete_guild_member).
+// If the character is not in a guild, it returns nil.
+// If the character is the sole member, the guild is disbanded.
+// If the character is the leader and other members exist, leadership is transferred before removal.
+func (s *Service) RemoveCharacterFromGuild(ctx context.Context, characterID string) error {
+	characterID = strings.TrimSpace(characterID)
+	if characterID == "" {
+		return nil
+	}
+
+	g, member, err := s.repo.GetGuildByCharacter(ctx, characterID)
+	if err != nil {
+		if errors.Is(err, ErrCharacterNotInGuild) || errors.Is(err, ErrGuildNotFound) {
+			return nil
+		}
+		return err
+	}
+
+	_, members, err := s.repo.GetGuild(ctx, g.ID)
+	if err != nil {
+		return err
+	}
+
+	if len(members) <= 1 {
+		return s.repo.DisbandGuild(ctx, g.ID)
+	}
+
+	if member.Role == RoleLeader {
+		var successorID string
+		for _, m := range members {
+			if m.CharacterID != characterID && strings.Contains(m.Title, "ギルマス") {
+				successorID = m.CharacterID
+				break
+			}
+		}
+		if successorID == "" {
+			for _, m := range members {
+				if m.CharacterID != characterID {
+					successorID = m.CharacterID
+					break
+				}
+			}
+		}
+		if successorID != "" {
+			if err := s.repo.TransferLeadership(ctx, g.ID, characterID, successorID); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := s.repo.RemoveMember(ctx, g.ID, characterID); err != nil {
+		return err
+	}
+	s.touchActive(ctx, g.ID)
+	return nil
 }
 
 // DisbandInactiveGuilds inspects guilds with no member activity for >= 20 days and disbands them (join_guild.cgi:check_dead_guild).

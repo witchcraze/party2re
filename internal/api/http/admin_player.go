@@ -6,7 +6,9 @@ import (
 	"strings"
 	"time"
 
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/rescue"
 )
 
 type adminPlayerResponse struct {
@@ -27,6 +29,11 @@ type adminPlayersListResponse struct {
 type adminBanPlayerResponse struct {
 	Message  string `json:"message"`
 	PlayerID string `json:"player_id"`
+}
+
+type adminUnstuckCharacterResponse struct {
+	Message     string `json:"message"`
+	CharacterID string `json:"character_id"`
 }
 
 func (h *Handler) handleAdminListPlayers(w http.ResponseWriter, r *http.Request) {
@@ -83,5 +90,40 @@ func (h *Handler) handleAdminBanPlayer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, adminBanPlayerResponse{
 		Message:  "player banned successfully",
 		PlayerID: playerID,
+	})
+}
+
+func (h *Handler) handleAdminUnstuckCharacter(w http.ResponseWriter, r *http.Request) {
+	if !h.authenticateAdmin(w, r) {
+		return
+	}
+
+	characterID := strings.TrimSpace(r.PathValue("id"))
+	if characterID == "" {
+		writeError(w, http.StatusBadRequest, errors.New("character id is required"))
+		return
+	}
+
+	if h.rescues == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("rescue service not available"))
+		return
+	}
+
+	if err := h.rescues.Unstuck(r.Context(), characterID); err != nil {
+		if errors.Is(err, rescue.ErrInvalidCharacterID) {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		if errors.Is(err, corecharacter.ErrNotFound) || strings.Contains(strings.ToLower(err.Error()), "not found") {
+			writeError(w, http.StatusNotFound, err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, adminUnstuckCharacterResponse{
+		Message:     "character unstuck successfully",
+		CharacterID: characterID,
 	})
 }

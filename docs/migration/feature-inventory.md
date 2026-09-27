@@ -57,7 +57,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Player deletion and maintenance behavior (#134, #190, #367)
 - [x] Name changes and profile customization (#198)
 - [x] Notifications, news, and player notification inbox (#67)
-- [x] Administrator operations (#190)
+- [x] Administrator operations (#190, #806)
 
 ### B. Character, Progression, Jobs, and Skills
 - [x] Level and cumulative experience progression (#10)
