@@ -659,6 +659,15 @@ func TestCollectionService_WeaponAndArmorDiscoveriesDoNotTriggerItemCompletion(t
 		t.Errorf("expected 100%% complete item collection, got %+v", finalProg)
 	}
 
+	// Also verify that an empty category defaults to "item" correctly
+	_, emptyCatProg, err := svc.GetItemCollection(ctx, "char-collector", "")
+	if err != nil {
+		t.Fatalf("final GetItemCollection (empty category) failed: %v", err)
+	}
+	if emptyCatProg.DiscoveredCount != 141 || !emptyCatProg.IsCompleted || emptyCatProg.CompletionPercentage != 100.0 {
+		t.Errorf("expected 100%% complete item collection with empty category, got %+v", emptyCatProg)
+	}
+
 	// Verify comp_ite is now inducted
 	foundCompIte := false
 	for _, ind := range legend.inductions {

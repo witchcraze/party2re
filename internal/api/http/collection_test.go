@@ -106,6 +106,17 @@ func TestCollectionEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("GET /characters/{id}/collections/items - default category", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/characters/c1/collections/items", nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("GET /characters/{id}/collections/items - success", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/characters/c1/collections/items?category=consumable", nil)
 		req.Header.Set("Authorization", "Bearer valid-token")
