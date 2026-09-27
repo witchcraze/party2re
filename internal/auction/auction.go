@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -228,13 +229,9 @@ func (s *Service) Send(ctx context.Context, req SendRequest) (SendResult, error)
 			return ErrTabooItem
 		}
 
-		hasSlot := false
-		for _, existing := range receiverDepot.Items {
-			if existing.DefinitionID == inst.DefinitionID {
-				hasSlot = true
-				break
-			}
-		}
+		hasSlot := slices.ContainsFunc(receiverDepot.Items, func(existing coreitem.Instance) bool {
+			return existing.DefinitionID == inst.DefinitionID
+		})
 		if !hasSlot && len(receiverDepot.Items) >= receiverDepot.Capacity {
 			return ErrDepotFull
 		}

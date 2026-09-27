@@ -3,6 +3,7 @@ package customskill
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -139,10 +140,8 @@ func validateText(value string, name bool) error {
 		if value == "" || strings.IndexFunc(value, unicode.IsSpace) >= 0 {
 			return ErrInvalidSkillName
 		}
-		for _, blocked := range []string{"こうげき", "ぼうぎょ", "てんしょん", "ささやき", "にげる", "すくしょ", "すすむ"} {
-			if value == blocked {
-				return ErrInvalidSkillName
-			}
+		if slices.Contains([]string{"こうげき", "ぼうぎょ", "てんしょん", "ささやき", "にげる", "すくしょ", "すすむ"}, value) {
+			return ErrInvalidSkillName
 		}
 	}
 	return nil

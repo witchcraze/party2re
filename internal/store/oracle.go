@@ -298,10 +298,8 @@ func (s *Service) BuyCostumeItem(ctx context.Context, characterID string, itemNo
 			activeHelperIDs, err := s.helper.GetActiveHelperItemIDs(txCtx, now)
 			if err == nil {
 				defID := fmt.Sprintf("item-%03d", itemNo)
-				for _, id := range activeHelperIDs {
-					if id == defID || id == strconv.Itoa(itemNo) {
-						return ErrItemUnavailableInHelperQuest
-					}
+				if slices.Contains(activeHelperIDs, defID) || slices.Contains(activeHelperIDs, strconv.Itoa(itemNo)) {
+					return ErrItemUnavailableInHelperQuest
 				}
 			}
 		}
