@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #806 — Implement player unstuck (admin_refresh) and guild membership cleanup on ban
+Last updated: Refactor shop active helper lookup using slices.Contains
 
 ## Current Phase
 

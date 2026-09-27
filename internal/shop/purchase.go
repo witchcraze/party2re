@@ -53,12 +53,7 @@ func (s *Service) isItemInActiveHelper(ctx context.Context, itemID string) bool 
 	if err != nil {
 		return false
 	}
-	for _, actID := range active {
-		if actID == itemID {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(active, itemID)
 }
 
 // Purchase buys an item at retail price.
