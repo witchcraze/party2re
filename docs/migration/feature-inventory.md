@@ -127,7 +127,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Event Plaza, traveling merchant bazaar, and victory celebration banquets linked to Valkey presence (#161, #491, #634)
 - [x] Secret Underground Shop and NPC @ヒミツジ with collection discovery on direct purchase (#192, #462, #780)
 - [x] Adventurer's Tavern, culinary menu, food delivery standing orders, and post-adventure fullness reset (#185, #475, #595, #634)
-- [x] Flea Market player-to-player item stalls and SQL CAS status guard (#194, #398, #477)
+- [x] Flea Market player-to-player item stalls, depot auto-initialization, collection discovery, and SQL CAS status guard (#194, #398, #477, #852)
 - [x] Monster Grandpa & Monster Ranch pet companion storage and stabling (#193, #488, #787)
 - [x] Altar of Rebirth: 6-Orb Offering, Ramia Awakening, and Otherworld Travel Item Wishes (#471, #503)
 - [x] Player Store & Town Boutiques: store construction, depot listings, interior styling, and purchase/trade collection discovery (#424, #466, #843)

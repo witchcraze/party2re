@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #851 — Enforce default "item" category in GetItemCollection to prevent compendium cross-contamination and false completion
+Last updated: Issue #852 — Adopt depot.FindOrCreate for buyer delivery and restore listing collection discovery
 
 ## Current Phase
 
