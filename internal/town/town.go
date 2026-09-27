@@ -2,6 +2,7 @@ package town
 
 import (
 	"errors"
+	"slices"
 	"strings"
 )
 
@@ -85,11 +86,5 @@ func IsValidHouseStyle(townID, houseStyle string) bool {
 	if !ok {
 		return false
 	}
-	cleanStyle := strings.TrimSpace(houseStyle)
-	for _, style := range t.HouseStyles {
-		if style == cleanStyle {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(t.HouseStyles, strings.TrimSpace(houseStyle))
 }
