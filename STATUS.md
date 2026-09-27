@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #789 — [Bug] Challenge: Purge fictional tiers and cashout, restoring 9 authentic legacy stages
+Last updated: Refactor shop active helper lookup using slices.Contains
 
 ## Current Phase
 
