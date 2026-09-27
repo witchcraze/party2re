@@ -214,7 +214,6 @@ func (h *Handler) handleAdvanceChallenge(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-
 func (h *Handler) handleGetChallengeHallOfFame(w http.ResponseWriter, r *http.Request) {
 	if h.challenges == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("challenge service not configured"))

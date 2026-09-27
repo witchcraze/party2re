@@ -261,7 +261,6 @@ func TestCombatEndpoints(t *testing.T) {
 		}
 	})
 
-
 	// Bosses
 	t.Run("GET /characters/{id}/bosses", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/characters/c1/bosses", nil)

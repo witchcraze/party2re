@@ -45,17 +45,17 @@ type ChallengeMonster struct {
 }
 
 type ChallengeTier struct {
-	ID                string             `json:"id"`
-	Name              string             `json:"name"`
-	Description       string             `json:"description"`
-	MinLevel          int                `json:"min_level"`
-	MaxParticipants   int                `json:"max_participants"`
-	NeedJoin          string             `json:"need_join,omitempty"`
-	NeedOverLv        bool               `json:"need_over_lv,omitempty"`
-	TreasureRound     int                `json:"treasure_round"`
-	TreasureItemPool  []string           `json:"treasure_item_pool,omitempty"`
-	BaseMonster       ChallengeMonster   `json:"base_monster,omitempty"`
-	MonsterPool       []ChallengeMonster `json:"monster_pool,omitempty"`
+	ID               string             `json:"id"`
+	Name             string             `json:"name"`
+	Description      string             `json:"description"`
+	MinLevel         int                `json:"min_level"`
+	MaxParticipants  int                `json:"max_participants"`
+	NeedJoin         string             `json:"need_join,omitempty"`
+	NeedOverLv       bool               `json:"need_over_lv,omitempty"`
+	TreasureRound    int                `json:"treasure_round"`
+	TreasureItemPool []string           `json:"treasure_item_pool,omitempty"`
+	BaseMonster      ChallengeMonster   `json:"base_monster,omitempty"`
+	MonsterPool      []ChallengeMonster `json:"monster_pool,omitempty"`
 }
 
 type ChallengeMember struct {
@@ -146,7 +146,6 @@ type RoundResult struct {
 	SessionEnded       bool              `json:"session_ended"`
 	SessionStatus      SessionStatus     `json:"session_status"`
 }
-
 
 // AdvanceRoundParams encapsulates the parameters for advancing an active challenge session round atomically.
 type AdvanceRoundParams struct {
