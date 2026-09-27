@@ -7,11 +7,11 @@ import (
 
 	valkeygo "github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/character"
-	"github.com/witchcraze/party2re/internal/guild"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/economy"
+	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/player"
@@ -128,7 +128,7 @@ func (c *coreServices) initPlayerAndChar(
 
 	charService, err := character.NewService(
 		c.charRepo,
-		charOpts...
+		charOpts...,
 	)
 	if err != nil {
 		return err
@@ -149,7 +149,7 @@ func (c *coreServices) initPlayerAndChar(
 	playerService, err := player.NewService(
 		c.playerRepo,
 		c.sessionRepo,
-		playerOpts...
+		playerOpts...,
 	)
 	if err != nil {
 		return err
