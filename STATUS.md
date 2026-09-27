@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #795 — Restore Stage 26 Four Seasons Dungeon, stage drop pools, and purge dead timers
+Last updated: Issue #789 — [Bug] Challenge: Purge fictional tiers and cashout, restoring 9 authentic legacy stages
 
 ## Current Phase
 

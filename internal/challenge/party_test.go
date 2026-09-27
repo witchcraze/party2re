@@ -46,8 +46,8 @@ func TestStartPartyChallengeSession(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	// 1. Success starting party session
-	sess, err := svc.StartPartySession(ctx, "lead", []string{"lead", "c2"}, "novice", "栄光の騎士団", "#00FF00")
+	// 1. Success starting party session on stage "1" (allows up to 2 participants, hp < 400)
+	sess, err := svc.StartPartySession(ctx, "lead", []string{"lead", "c2"}, "1", "栄光の騎士団", "#00FF00")
 	if err != nil {
 		t.Fatalf("StartPartySession failed: %v", err)
 	}
@@ -63,20 +63,26 @@ func TestStartPartyChallengeSession(t *testing.T) {
 	if sess.PartyColor != "#00FF00" {
 		t.Errorf("expected party color #00FF00, got %s", sess.PartyColor)
 	}
+
+	// 2. Stage "0" allows max 1 participant -> ErrTooManyPartyMembers
+	_, err = svc.StartPartySession(ctx, "lead", []string{"lead", "c2"}, "0", "TooMany", "#00FF00")
+	if !errors.Is(err, challenge.ErrTooManyPartyMembers) {
+		t.Errorf("expected ErrTooManyPartyMembers for stage 0 with 2 members, got %v", err)
+	}
 }
 
 func TestPartyAdvanceRoundAndHallOfFame(t *testing.T) {
 	repo := newMockChallengeRepo()
 	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
 
-	c1 := createPartyTestChar("lead", 30, 500, 100, 80)
+	c1 := createPartyTestChar("lead", 30, 350, 100, 80)
 	c1.Name = "勇者アリス"
 	c1.JobID = "paladin"
 	c1.Stats.MP = 50
 	c1.Stats.MaxMP = 50
 	charRepo.chars[c1.ID] = c1
 
-	c2 := createPartyTestChar("c2", 30, 400, 90, 70)
+	c2 := createPartyTestChar("c2", 30, 350, 90, 70)
 	c2.Name = "魔法使いボブ"
 	c2.JobID = "wizard"
 	c2.Stats.MP = 100
@@ -89,7 +95,7 @@ func TestPartyAdvanceRoundAndHallOfFame(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	sess, err := svc.StartPartySession(ctx, "lead", []string{"lead", "c2"}, "novice", "ドリームチーム", "#FF0000")
+	sess, err := svc.StartPartySession(ctx, "lead", []string{"lead", "c2"}, "1", "ドリームチーム", "#FF0000")
 	if err != nil {
 		t.Fatalf("StartPartySession failed: %v", err)
 	}
@@ -114,7 +120,7 @@ func TestPartyAdvanceRoundAndHallOfFame(t *testing.T) {
 	}
 
 	// Check Hall of Fame record
-	hof, err := svc.GetHallOfFame(ctx, "novice")
+	hof, err := svc.GetHallOfFame(ctx, "1")
 	if err != nil {
 		t.Fatalf("GetHallOfFame failed: %v", err)
 	}
@@ -142,8 +148,8 @@ func TestSoloAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 	repo := newMockChallengeRepo()
 	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
 
-	// Level 10 character with MaxHP 500, Defense 5 so monster damage goes through
-	c1 := createPartyTestChar("solo1", 10, 500, 35, 5)
+	// Level 10 character with MaxHP 350, Attack 150, Defense 5 so monster damage goes through
+	c1 := createPartyTestChar("solo1", 10, 350, 150, 5)
 	c1.Name = "ソロ戦士"
 	c1.JobID = "warrior"
 	charRepo.chars[c1.ID] = c1
@@ -154,7 +160,7 @@ func TestSoloAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	sess, err := svc.StartSession(ctx, c1.ID, "novice")
+	sess, err := svc.StartSession(ctx, c1.ID, "0")
 	if err != nil {
 		t.Fatalf("StartSession failed: %v", err)
 	}
@@ -187,12 +193,12 @@ func TestPartyAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 	repo := newMockChallengeRepo()
 	charRepo := &mockCharRepo{chars: make(map[string]corecharacter.Character)}
 
-	c1 := createPartyTestChar("p_lead", 15, 400, 40, 5)
+	c1 := createPartyTestChar("p_lead", 15, 350, 140, 5)
 	c1.Name = "勇者"
 	c1.JobID = "hero"
 	charRepo.chars[c1.ID] = c1
 
-	c2 := createPartyTestChar("p_mem", 15, 300, 35, 5)
+	c2 := createPartyTestChar("p_mem", 15, 300, 135, 5)
 	c2.Name = "戦士"
 	c2.JobID = "warrior"
 	charRepo.chars[c2.ID] = c2
@@ -203,7 +209,7 @@ func TestPartyAdvanceRound_NoFictionalHPRecovery(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	sess, err := svc.StartPartySession(ctx, c1.ID, []string{c1.ID, c2.ID}, "novice", "テスト隊", "#00AA00")
+	sess, err := svc.StartPartySession(ctx, c1.ID, []string{c1.ID, c2.ID}, "1", "テスト隊", "#00AA00")
 	if err != nil {
 		t.Fatalf("StartPartySession failed: %v", err)
 	}
@@ -258,7 +264,7 @@ func TestStartPartySession_PersistenceAndValidationErrors(t *testing.T) {
 
 	t.Run("empty leader character ID returns ErrCharacterNotFound", func(t *testing.T) {
 		svc, _, _, _ := setupService()
-		_, err := svc.StartPartySession(ctx, "", []string{"c2"}, "novice", "Party", "#FFFFFF")
+		_, err := svc.StartPartySession(ctx, "", []string{"c2"}, "0", "Party", "#FFFFFF")
 		if !errors.Is(err, challenge.ErrCharacterNotFound) {
 			t.Errorf("expected ErrCharacterNotFound, got %v", err)
 		}
@@ -268,7 +274,7 @@ func TestStartPartySession_PersistenceAndValidationErrors(t *testing.T) {
 		svc, _, _, activeStore := setupService()
 		activeStore.getActiveSessionErr = errors.New("valkey cluster unavailable")
 
-		_, err := svc.StartPartySession(ctx, "lead", []string{"lead", "c2"}, "novice", "Party", "#FFFFFF")
+		_, err := svc.StartPartySession(ctx, "lead", []string{"lead"}, "0", "Party", "#FFFFFF")
 		if err == nil || !strings.Contains(err.Error(), "valkey cluster unavailable") {
 			t.Errorf("expected valkey cluster unavailable error, got %v", err)
 		}
@@ -278,7 +284,7 @@ func TestStartPartySession_PersistenceAndValidationErrors(t *testing.T) {
 		svc, _, charRepo, _ := setupService()
 		charRepo.findByIDErr = errors.New("mariadb connection lost")
 
-		_, err := svc.StartPartySession(ctx, "lead", []string{"lead", "c2"}, "novice", "Party", "#FFFFFF")
+		_, err := svc.StartPartySession(ctx, "lead", []string{"lead"}, "0", "Party", "#FFFFFF")
 		if err == nil || !strings.Contains(err.Error(), "mariadb connection lost") {
 			t.Errorf("expected charRepo error, got %v", err)
 		}
@@ -288,7 +294,7 @@ func TestStartPartySession_PersistenceAndValidationErrors(t *testing.T) {
 		svc, _, _, activeStore := setupService()
 		activeStore.saveActiveSessionErr = errors.New("valkey write timeout")
 
-		_, err := svc.StartPartySession(ctx, "lead", []string{"lead", "c2"}, "novice", "Party", "#FFFFFF")
+		_, err := svc.StartPartySession(ctx, "lead", []string{"lead"}, "0", "Party", "#FFFFFF")
 		if err == nil || !strings.Contains(err.Error(), "valkey write timeout") {
 			t.Errorf("expected activeStore save error, got %v", err)
 		}
@@ -298,7 +304,7 @@ func TestStartPartySession_PersistenceAndValidationErrors(t *testing.T) {
 		svc, repo, _, _ := setupService()
 		repo.saveSessionErr = errors.New("duplicate key in challenge_sessions")
 
-		_, err := svc.StartPartySession(ctx, "lead", []string{"lead", "c2"}, "novice", "Party", "#FFFFFF")
+		_, err := svc.StartPartySession(ctx, "lead", []string{"lead"}, "0", "Party", "#FFFFFF")
 		if err == nil || !strings.Contains(err.Error(), "saving challenge session: duplicate key in challenge_sessions") {
 			t.Errorf("expected wrapped repo save session error, got %v", err)
 		}

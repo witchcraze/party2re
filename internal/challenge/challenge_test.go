@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/witchcraze/party2re/internal/challenge"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -159,7 +158,7 @@ func (m *mockChallengeRepo) FinalizeSession(ctx context.Context, s challenge.Cha
 	rec.TotalVictories += newStreak
 	if newStreak > rec.HighestRound {
 		rec.HighestRound = newStreak
-		rec.BestClearedAt = time.Now().UTC()
+		rec.BestClearedAt = s.UpdatedAt
 	}
 	m.records[key] = rec
 	return nil
@@ -242,17 +241,17 @@ func TestStartSession_ValidationAndCreation(t *testing.T) {
 	ctx := context.Background()
 	charRepo := &mockCharRepo{
 		chars: map[string]corecharacter.Character{
-			"low_char": {
-				ID:         "low_char",
+			"high_hp_char": {
+				ID:         "high_hp_char",
 				Level:      1,
 				Experience: 10,
-				Stats:      corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 20, Defense: 10},
+				Stats:      corecharacter.Stats{HP: 500, MaxHP: 500, Attack: 20, Defense: 10},
 			},
 			"valid_char": {
 				ID:         "valid_char",
 				Level:      15,
 				Experience: 2500,
-				Stats:      corecharacter.Stats{HP: 150, MaxHP: 150, Attack: 40, Defense: 20},
+				Stats:      corecharacter.Stats{HP: 200, MaxHP: 200, Attack: 40, Defense: 20},
 			},
 		},
 	}
@@ -262,29 +261,29 @@ func TestStartSession_ValidationAndCreation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 1. Level too low for tier
-	_, err = service.StartSession(ctx, "low_char", "novice")
-	if !errors.Is(err, challenge.ErrLevelTooLow) {
-		t.Errorf("expected ErrLevelTooLow, got %v", err)
+	// 1. NeedJoin not met (stage 0 requires MaxHP < 400)
+	_, err = service.StartSession(ctx, "high_hp_char", "0")
+	if !errors.Is(err, challenge.ErrNeedJoinNotMet) {
+		t.Errorf("expected ErrNeedJoinNotMet, got %v", err)
 	}
 
 	// 2. Success Start
-	session, err := service.StartSession(ctx, "valid_char", "novice")
+	session, err := service.StartSession(ctx, "valid_char", "0")
 	if err != nil {
 		t.Fatalf("StartSession failed: %v", err)
 	}
-	if session.CurrentRound != 1 || session.CharacterCurrentHP != 150 || session.Status != challenge.StatusActive {
+	if session.CurrentRound != 1 || session.CharacterCurrentHP != 200 || session.Status != challenge.StatusActive {
 		t.Errorf("unexpected session: %#v", session)
 	}
 
 	// 3. Active session already exists
-	_, err = service.StartSession(ctx, "valid_char", "novice")
+	_, err = service.StartSession(ctx, "valid_char", "0")
 	if !errors.Is(err, challenge.ErrActiveSessionExists) {
 		t.Errorf("expected ErrActiveSessionExists, got %v", err)
 	}
 }
 
-func TestExecuteRound_VictoryProgressionAndMilestone(t *testing.T) {
+func TestExecuteRound_VictoryProgression(t *testing.T) {
 	ctx := context.Background()
 	charRepo := &mockCharRepo{
 		chars: map[string]corecharacter.Character{
@@ -292,7 +291,7 @@ func TestExecuteRound_VictoryProgressionAndMilestone(t *testing.T) {
 				ID:         "hero",
 				Level:      31,
 				Experience: 10000,
-				Stats:      corecharacter.Stats{HP: 500, MaxHP: 500, Attack: 150, Defense: 100},
+				Stats:      corecharacter.Stats{HP: 350, MaxHP: 350, Attack: 150, Defense: 100},
 			},
 		},
 	}
@@ -302,13 +301,13 @@ func TestExecuteRound_VictoryProgressionAndMilestone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	session, err := service.StartSession(ctx, "hero", "novice")
+	session, err := service.StartSession(ctx, "hero", "0")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Execute 5 rounds
-	for round := 1; round <= 5; round++ {
+	// Execute 3 rounds
+	for round := 1; round <= 3; round++ {
 		res, err := service.ExecuteRound(ctx, session.ID)
 		if err != nil {
 			t.Fatalf("ExecuteRound %d failed: %v", round, err)
@@ -316,37 +315,14 @@ func TestExecuteRound_VictoryProgressionAndMilestone(t *testing.T) {
 		if !res.Won {
 			t.Fatalf("round %d expected victory", round)
 		}
-		if round == 5 {
-			if res.AwardedItem == "" {
-				t.Errorf("expected milestone item at round 5")
-			}
-		}
 	}
 
 	active, err := service.GetActiveSession(ctx, "hero")
 	if err != nil || active == nil {
 		t.Fatalf("expected active session, got %v", err)
 	}
-	if active.CurrentRound != 6 || active.AccumulatedExp <= 0 || len(active.AccumulatedItems) != 1 {
-		t.Errorf("unexpected session state after 5 rounds: %#v", active)
-	}
-
-	// Cashout
-	cashout, err := service.Cashout(ctx, session.ID)
-	if err != nil {
-		t.Fatalf("Cashout failed: %v", err)
-	}
-	if cashout.RoundsCleared != 5 || cashout.AwardedExp != active.AccumulatedExp || len(cashout.AwardedItems) != 1 {
-		t.Errorf("unexpected cashout result: %#v", cashout)
-	}
-
-	// Record verification
-	rec, err := service.GetRecord(ctx, "hero", "novice")
-	if err != nil || rec == nil {
-		t.Fatalf("GetRecord failed: %v", err)
-	}
-	if rec.HighestRound != 5 || rec.TotalVictories != 5 || rec.TotalAttempts != 1 {
-		t.Errorf("unexpected record: %#v", rec)
+	if active.CurrentRound != 4 || active.AccumulatedExp <= 0 {
+		t.Errorf("unexpected session state after 3 rounds: %#v", active)
 	}
 }
 
@@ -356,8 +332,8 @@ func TestExecuteRound_DefeatTerminatesSession(t *testing.T) {
 		chars: map[string]corecharacter.Character{
 			"weak_hero": {
 				ID:         "weak_hero",
-				Level:      7,
-				Experience: 500,
+				Level:      1,
+				Experience: 0,
 				Stats:      corecharacter.Stats{HP: 10, MaxHP: 10, Attack: 5, Defense: 0},
 			},
 		},
@@ -368,7 +344,7 @@ func TestExecuteRound_DefeatTerminatesSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	session, err := service.StartSession(ctx, "weak_hero", "novice")
+	session, err := service.StartSession(ctx, "weak_hero", "0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,13 +372,13 @@ func TestChallenge_OwnershipVerification(t *testing.T) {
 				ID:         "owner_char",
 				Level:      20,
 				Experience: 5000,
-				Stats:      corecharacter.Stats{HP: 300, MaxHP: 300, Attack: 80, Defense: 50},
+				Stats:      corecharacter.Stats{HP: 300, MaxHP: 300, Attack: 180, Defense: 100},
 			},
 			"attacker_char": {
 				ID:         "attacker_char",
 				Level:      20,
 				Experience: 5000,
-				Stats:      corecharacter.Stats{HP: 300, MaxHP: 300, Attack: 80, Defense: 50},
+				Stats:      corecharacter.Stats{HP: 300, MaxHP: 300, Attack: 180, Defense: 100},
 			},
 		},
 	}
@@ -412,7 +388,7 @@ func TestChallenge_OwnershipVerification(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	session, err := service.StartSession(ctx, "owner_char", "novice")
+	session, err := service.StartSession(ctx, "owner_char", "0")
 	if err != nil {
 		t.Fatalf("StartSession failed: %v", err)
 	}
@@ -423,33 +399,19 @@ func TestChallenge_OwnershipVerification(t *testing.T) {
 		t.Errorf("expected ErrForbidden for AdvanceRound by non-owner, got %v", err)
 	}
 
-	// 2. RetireSession from attacker_char should return ErrForbidden
-	_, err = service.RetireSession(ctx, "attacker_char", session.ID)
-	if !errors.Is(err, challenge.ErrForbidden) {
-		t.Errorf("expected ErrForbidden for RetireSession by non-owner, got %v", err)
-	}
-
-	// 3. GetSession from attacker_char should return ErrForbidden
+	// 2. GetSession from attacker_char should return ErrForbidden
 	_, err = service.GetSession(ctx, "attacker_char", session.ID)
 	if !errors.Is(err, challenge.ErrForbidden) {
 		t.Errorf("expected ErrForbidden for GetSession by non-owner, got %v", err)
 	}
 
-	// 4. Owner should succeed
+	// 3. Owner should succeed
 	roundRes, updatedSession, err := service.AdvanceRound(ctx, "owner_char", session.ID)
 	if err != nil {
 		t.Fatalf("AdvanceRound by owner failed: %v", err)
 	}
 	if !roundRes.Won || updatedSession.CurrentRound != 2 {
 		t.Errorf("unexpected round result: %#v", roundRes)
-	}
-
-	retired, err := service.RetireSession(ctx, "owner_char", session.ID)
-	if err != nil {
-		t.Fatalf("RetireSession by owner failed: %v", err)
-	}
-	if retired.Status != challenge.StatusClaimed {
-		t.Errorf("expected status claimed, got %v", retired.Status)
 	}
 }
 
@@ -459,7 +421,7 @@ func TestMockChallengeRepository_SaveRecord(t *testing.T) {
 
 	r := challenge.CharacterChallengeRecord{
 		CharacterID:    "char-1",
-		TierID:         "tier-1",
+		TierID:         "0",
 		HighestRound:   4,
 		TotalAttempts:  1,
 		TotalVictories: 4,
@@ -468,7 +430,7 @@ func TestMockChallengeRepository_SaveRecord(t *testing.T) {
 		t.Fatalf("SaveRecord failed: %v", err)
 	}
 
-	found, err := repo.FindRecord(ctx, "char-1", "tier-1")
+	found, err := repo.FindRecord(ctx, "char-1", "0")
 	if err != nil || found == nil {
 		t.Fatalf("FindRecord failed: %v", err)
 	}

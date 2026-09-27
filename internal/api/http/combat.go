@@ -17,7 +17,6 @@ type ChallengeService interface {
 	StartSession(ctx context.Context, characterID string, tierID string) (*challenge.ChallengeSession, error)
 	StartPartySession(ctx context.Context, leaderID string, memberIDs []string, tierID string, partyName string, partyColor string) (*challenge.ChallengeSession, error)
 	AdvanceRound(ctx context.Context, characterID string, sessionID string) (*challenge.RoundResult, *challenge.ChallengeSession, error)
-	RetireSession(ctx context.Context, characterID string, sessionID string) (*challenge.ChallengeSession, error)
 	GetCharacterRecords(ctx context.Context, characterID string) ([]challenge.CharacterChallengeRecord, error)
 	GetHallOfFame(ctx context.Context, tierID string) (*challenge.HallOfFameEntry, error)
 	ListHallOfFame(ctx context.Context) ([]challenge.HallOfFameEntry, error)
@@ -46,10 +45,6 @@ type startPartyChallengeRequest struct {
 }
 
 type advanceChallengeRequest struct {
-	SessionID string `json:"session_id"`
-}
-
-type retireChallengeRequest struct {
 	SessionID string `json:"session_id"`
 }
 
@@ -219,47 +214,6 @@ func (h *Handler) handleAdvanceChallenge(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-func (h *Handler) handleRetireChallenge(w http.ResponseWriter, r *http.Request) {
-	if h.challenges == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("challenge service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req retireChallengeRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		if req.SessionID == "" {
-			writeError(w, http.StatusBadRequest, errors.New("session_id is required"))
-			return
-		}
-
-		session, err := h.challenges.RetireSession(r.Context(), char.ID, req.SessionID)
-		if err != nil {
-			if errors.Is(err, challenge.ErrSessionNotFound) {
-				writeError(w, http.StatusNotFound, err)
-				return
-			}
-			if errors.Is(err, challenge.ErrForbidden) {
-				writeError(w, http.StatusForbidden, err)
-				return
-			}
-			if errors.Is(err, challenge.ErrSessionNotActive) {
-				writeError(w, http.StatusUnprocessableEntity, err)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, challengeSessionResponse{
-			Session: session,
-		})
-	})
-}
 
 func (h *Handler) handleGetChallengeHallOfFame(w http.ResponseWriter, r *http.Request) {
 	if h.challenges == nil {

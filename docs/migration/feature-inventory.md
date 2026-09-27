@@ -103,7 +103,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Colosseum PvP: Real-time 8-player Bet & Split combat, 9 team colors, multi-round party battle resolution, and distributed room locking (#75, #481, #594, #644, #652, #661)
 - [x] Guild versus Guild (GvG) Combat: Live multi-round matches, GP prize pools, target wins, and 7-tier victory medals & championship cups (#77, #482, #594, #644, #652, #675)
 - [x] 4-player Party Sealing Boss Battles, Dejon banishment, Hero Count increments, and victory celebration banquets (#73, #479, #657)
-- [x] Dungeon Exploration & Continuous Endurance Challenge multi-player runs, map scouting (@ちず), Hall of Fame records, and Valkey Master run buffers (#162, #404, #405, #483, #597, #600, #657)
+- [x] Dungeon Exploration & Continuous Endurance Challenge multi-player runs, map scouting (@ちず), Hall of Fame records, and Valkey Master run buffers (#162, #404, #405, #483, #597, #600, #657, #789)
 - [x] Battle replay records and match history viewer (#66, #796)
 - [x] Standardized Battle Adapter: Character/Party to Battle Participant Mapping, equipment stat scaling, recipient-targeted item drop routing, and Post-Battle State Application (#496, #593, #596, #599, #605, #643, #663)
 - [x] Post-battle milestone counter increments: MonsterKills (kill_m) on defeating strong enemies (&is_strong) and MaoCount (mao_c) on unsealing the demon king (Stage EX / 封印の地) (#823)
