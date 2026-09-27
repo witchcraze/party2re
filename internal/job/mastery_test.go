@@ -48,6 +48,10 @@ func (r *memoryCharRepository) FindByID(ctx context.Context, id string) (corecha
 	return v, nil
 }
 
+func (r *memoryCharRepository) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return r.FindByID(ctx, id)
+}
+
 func (r *memoryCharRepository) Update(ctx context.Context, value corecharacter.Character) error {
 	r.data[value.ID] = value
 	return nil

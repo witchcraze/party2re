@@ -21,11 +21,13 @@ type Repository interface {
 
 type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
+	FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error)
 	Update(ctx context.Context, value corecharacter.Character) error
 }
 
 type InventoryRepository interface {
 	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
+	FindByCharacterIDForUpdate(ctx context.Context, characterID string) (coreinventory.Inventory, error)
 	Save(ctx context.Context, value coreinventory.Inventory) error
 }
 
@@ -169,6 +171,11 @@ func NewService(repository Repository, opts ...Option) (*Service, error) {
 	s := &Service{repository: repository}
 	for _, opt := range opts {
 		opt(s)
+	}
+	if s.economy == nil && s.characters != nil && s.inventories != nil {
+		if eco, err := economy.NewService(s.characters, s.inventories); err == nil {
+			s.economy = eco
+		}
 	}
 	if s.catalog == nil {
 		s.catalog, _ = corejob.InitialCatalog()

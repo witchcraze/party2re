@@ -66,7 +66,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Job-based stat growth formulas (#31)
 - [x] Job prerequisite tree (_is_need_job), milestone counters (kill_m, kill_p, hero_c, mao_c, cas_c, job_lv), atomic equipped armor consumption for FireFighter, exempt item possession gating for Gambler, CMP tier growth calculation, Onion Knight SP-based dynamic stat growth, and transactional side-effect isolation (#784, #830, #842)
 - [x] Skill definitions, costs, and availability conditions (#18)
-- [x] Job mastery, level-20 job changes, item costs, mastered-job memory exchange with OverLevel guard and gender compatibility restrictions, future memory snapshots ("よびおこす"), and 72-job completion title/news notification with "すっぴん" job unlock (#467, #470, #831)
+- [x] Job mastery, level-20 job changes, item costs, mastered-job memory exchange with OverLevel guard and gender compatibility restrictions, future memory snapshots ("よびおこす"), and 72-job completion title/news notification with "すっぴん" job unlock (#467, #470, #831, #853)
 - [x] Job mastery catalog endpoint (職業極め所, job_master.cgi) with 87-job progress and complete percentage calculation (#785)
 - [x] Home resting, sleep recovery, and tired reset (#62, #459)
 - [x] Custom skill assignment and Gem Box synthesis routing (#69, #782, #850)

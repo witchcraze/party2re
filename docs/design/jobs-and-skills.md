@@ -79,6 +79,7 @@ cmp = int(min(level, 99) * (tier_rates[current_job_tier] + tier_rates[old_job_ti
   from recalling or swapping job memories (`ErrJobUnavailable`, `party2/lib/job_change.cgi:361-364`).
 - Both target jobs (`targetJobID` and `targetOldJobID`) must satisfy gender compatibility
   with the character's gender (`RequiredGender`, `party2/lib/job_change.cgi:388-395`).
+- All state mutations for job exchange and memory restoration execute strictly under transactional row locks via economy.ExecuteTransaction (party2/lib/job_change.cgi:361-400, 525-549).
 
 
 ### Future Memory & Recall (よびおこす)

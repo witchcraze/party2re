@@ -20,6 +20,9 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 	if s.characters == nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, errors.New("character repository not configured")
 	}
+	if s.economy == nil {
+		return corecharacter.Character{}, corejob.CharacterJob{}, errors.New("economy service not configured")
+	}
 	char, err := s.characters.FindByID(ctx, characterID)
 	if err != nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
@@ -75,103 +78,45 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		}
 	}
 
-	if s.economy != nil {
-		req := economy.TransactionRequest{CharacterID: characterID, LockInventory: consumesItem}
-		if consumesItem {
-			req.Cost.ItemDefinitionID = requiredItem
-			req.Cost.ItemDefinitionQty = 1
-		}
-		var updated corecharacter.Character
-		var updatedState corejob.CharacterJob
-		_, err := s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-			if needArmor {
-				if err := s.consumeEquippedArmor(tc.Context, characterID); err != nil {
-					return err
-				}
-			}
-			currentState, err := s.loadState(tc.Context, tc.Character)
-			if err != nil {
-				return err
-			}
-			currentJobID := currentState.CurrentJobID
-			if currentDef, err := s.GetDefinition(currentJobID); err == nil {
-				currentState.RecordMastery(currentJobID, tc.Character.SP, s.masterySP(currentDef))
-			}
-			s.checkAndNotifyCompletion(tc.Context, tc.Character.Name, &currentState)
-			if err := currentState.ChangeTo(targetDef, tc.Character.Level, tc.Character.Gender); err != nil {
-				return err
-			}
-			targetSPValue := targetSP(currentState, tc.Character, targetJobID)
-			if err := tc.Character.ApplyJobChange(targetJobID, targetSPValue); err != nil {
-				return err
-			}
-			if err := s.repository.Save(tc.Context, currentState); err != nil {
-				return err
-			}
-			updated, updatedState = tc.Character, currentState
-			return nil
-		})
-		if err != nil {
-			if errors.Is(err, economy.ErrItemNotFound) || errors.Is(err, economy.ErrInsufficientItemQuantity) {
-				return corecharacter.Character{}, corejob.CharacterJob{}, ErrRequiredItem
-			}
-			return corecharacter.Character{}, corejob.CharacterJob{}, err
-		}
-		if s.guildPoints != nil {
-			//lint:ignore error-swallow best-effort guild points bonus
-			_ = s.guildPoints.AddGuildPoints(ctx, characterID, 50)
-		}
-		if s.costume != nil {
-			//lint:ignore error-swallow best-effort costume rental return on job change
-			_ = s.costume.ResetCostume(ctx, characterID)
-		}
-		if s.jobTracker != nil {
-			//lint:ignore error-swallow best-effort weekly job change tracking
-			_ = s.jobTracker.RecordJobChange(ctx, characterID)
-		}
-		return updated, updatedState, nil
-	}
-
+	req := economy.TransactionRequest{CharacterID: characterID, LockInventory: consumesItem}
 	if consumesItem {
-		if s.inventories == nil {
-			return corecharacter.Character{}, corejob.CharacterJob{}, ErrRequiredItem
-		}
-		inventory, err := s.inventories.FindByCharacterID(ctx, characterID)
-		if err != nil || inventory.Quantity(requiredItem) < 1 {
-			return corecharacter.Character{}, corejob.CharacterJob{}, ErrRequiredItem
-		}
-		for _, instance := range inventory.Items {
-			if instance.DefinitionID == requiredItem {
-				if err := inventory.Consume(instance.ID, 1); err != nil {
-					return corecharacter.Character{}, corejob.CharacterJob{}, err
-				}
-				break
+		req.Cost.ItemDefinitionID = requiredItem
+		req.Cost.ItemDefinitionQty = 1
+	}
+	var updated corecharacter.Character
+	var updatedState corejob.CharacterJob
+	_, err = s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+		if needArmor {
+			if err := s.consumeEquippedArmor(tc.Context, characterID); err != nil {
+				return err
 			}
 		}
-		if err := s.inventories.Save(ctx, inventory); err != nil {
-			return corecharacter.Character{}, corejob.CharacterJob{}, err
+		currentState, err := s.loadState(tc.Context, tc.Character)
+		if err != nil {
+			return err
 		}
-	}
-	if needArmor {
-		if err := s.consumeEquippedArmor(ctx, characterID); err != nil {
-			return corecharacter.Character{}, corejob.CharacterJob{}, err
+		currentJobID := currentState.CurrentJobID
+		if currentDef, err := s.GetDefinition(currentJobID); err == nil {
+			currentState.RecordMastery(currentJobID, tc.Character.SP, s.masterySP(currentDef))
 		}
-	}
-	if currentDef, err := s.GetDefinition(char.JobID); err == nil {
-		state.RecordMastery(char.JobID, char.SP, s.masterySP(currentDef))
-	}
-	s.checkAndNotifyCompletion(ctx, char.Name, &state)
-	if err := state.ChangeTo(targetDef, char.Level, char.Gender); err != nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, err
-	}
-	targetSPValue := targetSP(state, char, targetJobID)
-	if err := char.ApplyJobChange(targetJobID, targetSPValue); err != nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, err
-	}
-	if err := s.characters.Update(ctx, char); err != nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, err
-	}
-	if err := s.repository.Save(ctx, state); err != nil {
+		s.checkAndNotifyCompletion(tc.Context, tc.Character.Name, &currentState)
+		if err := currentState.ChangeTo(targetDef, tc.Character.Level, tc.Character.Gender); err != nil {
+			return err
+		}
+		targetSPValue := targetSP(currentState, tc.Character, targetJobID)
+		if err := tc.Character.ApplyJobChange(targetJobID, targetSPValue); err != nil {
+			return err
+		}
+		if err := s.repository.Save(tc.Context, currentState); err != nil {
+			return err
+		}
+		updated, updatedState = tc.Character, currentState
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, economy.ErrItemNotFound) || errors.Is(err, economy.ErrInsufficientItemQuantity) {
+			return corecharacter.Character{}, corejob.CharacterJob{}, ErrRequiredItem
+		}
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}
 	if s.guildPoints != nil {
@@ -186,7 +131,7 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		//lint:ignore error-swallow best-effort weekly job change tracking
 		_ = s.jobTracker.RecordJobChange(ctx, characterID)
 	}
-	return char, state, nil
+	return updated, updatedState, nil
 }
 
 // buildChangeContextNoItems assembles corejob.ChangeContext for ValidateRequirements calls.
