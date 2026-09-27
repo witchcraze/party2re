@@ -37,6 +37,9 @@ func TestCollectionServiceDatabaseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// cleanup to avoid database pollution from previous failures
+	db.ExecContext(ctx, "DELETE FROM character_item_collection WHERE character_id = ?", char.ID)
+	db.ExecContext(ctx, "DELETE FROM character_monster_collection WHERE character_id = ?", char.ID)
 
 	// 2. Record monster defeats
 	_ = svc.RecordMonsterDefeat(ctx, char.ID, "mon_dragon", "Red Dragon", "Volcano")
@@ -77,12 +80,12 @@ func TestCollectionServiceDatabaseIntegration(t *testing.T) {
 		t.Errorf("expected 1 item, got len=%d discovered=%d", len(itemsOnly), itemProgressOnly.DiscoveredCount)
 	}
 
-	// Unfiltered ("") should include all 3 discovered entries
+	// Because we now default empty category to "item", it should only return 1 entry.
 	items, itemProgress, err := svc.GetItemCollection(ctx, char.ID, "")
 	if err != nil {
 		t.Fatalf("GetItemCollection (all) failed: %v", err)
 	}
-	if len(items) != 3 || itemProgress.DiscoveredCount != 3 {
+	if len(items) != 1 || itemProgress.DiscoveredCount != 1 {
 		t.Errorf("items count = %d, progress = %+v", len(items), itemProgress)
 	}
 }
