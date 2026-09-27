@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -346,15 +347,10 @@ func (s *Service) ListAvailableBazaarItems(ctx context.Context) ([]BazaarItem, i
 		activeHelperIDs = ids
 	}
 
-	isHelperItem := make(map[string]bool, len(activeHelperIDs))
-	for _, id := range activeHelperIDs {
-		isHelperItem[id] = true
-	}
-
 	var available []BazaarItem
 	for _, item := range s.bazaarCatalog {
 		if item.TierRequired == tier {
-			if isHelperItem[item.ItemDefinitionID] {
+			if slices.Contains(activeHelperIDs, item.ItemDefinitionID) {
 				continue
 			}
 			available = append(available, item)
