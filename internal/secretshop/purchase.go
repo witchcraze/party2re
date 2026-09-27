@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
@@ -62,10 +63,8 @@ func (s *Service) PurchaseItem(
 			if err != nil {
 				return err
 			}
-			for _, helperDefID := range activeHelperItemIDs {
-				if helperDefID == shopItem.ItemDefinitionID {
-					return ErrItemUnavailableInHelperQuest
-				}
+			if slices.Contains(activeHelperItemIDs, shopItem.ItemDefinitionID) {
+				return ErrItemUnavailableInHelperQuest
 			}
 		}
 
