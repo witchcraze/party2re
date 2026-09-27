@@ -1,11 +1,12 @@
 package alchemy
 
 import (
+	"cmp"
 	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -95,8 +96,8 @@ func (c *RecipeCatalog) All() []Recipe {
 	for _, r := range c.recipes {
 		list = append(list, r)
 	}
-	sort.Slice(list, func(i, j int) bool {
-		return list[i].ID < list[j].ID
+	slices.SortFunc(list, func(a, b Recipe) int {
+		return cmp.Compare(a.ID, b.ID)
 	})
 	return list
 }
