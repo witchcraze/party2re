@@ -13,6 +13,14 @@ type TransactionRunner interface {
 	ExecuteTransaction(ctx context.Context, req economy.TransactionRequest, fn economy.TransactionCallback) (*economy.TransactionResult, error)
 }
 
+type HomePetReader interface {
+	ListHomePets(ctx context.Context, characterID string) ([]HomePet, error)
+}
+
+func WithHomePetReader(r HomePetReader) ServiceOption {
+	return func(s *Service) { s.petReader = r }
+}
+
 type ServiceOption func(*Service)
 
 func WithVisitorLimiter(_ Limiter, _ time.Duration) ServiceOption {

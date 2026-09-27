@@ -47,6 +47,11 @@ type Service struct {
 	onlineCounter     OnlineCounter
 	baseSleepDuration time.Duration
 	runner            TransactionRunner
+	petReader         HomePetReader
+}
+
+func (s *Service) SetHomePetReader(r HomePetReader) {
+	s.petReader = r
 }
 
 func NewService(repo Repository, charReader CharacterReader, opts ...ServiceOption) (*Service, error) {
@@ -298,6 +303,17 @@ func (s *Service) TeachCompanionPhrase(ctx context.Context, characterID, phrase 
 		return CompanionPhrase{}, err
 	}
 
+	if s.petReader == nil {
+		return CompanionPhrase{}, ErrNoPetsAtHome
+	}
+	pets, err := s.petReader.ListHomePets(ctx, characterID)
+	if err != nil {
+		return CompanionPhrase{}, err
+	}
+	if len(pets) == 0 {
+		return CompanionPhrase{}, ErrNoPetsAtHome
+	}
+
 	phrases, err := s.repo.ListCompanionPhrases(ctx, characterID)
 	if err != nil {
 		return CompanionPhrase{}, err
@@ -341,18 +357,36 @@ func (s *Service) randomInt(max int) int {
 }
 
 // TalkToCompanion returns a greeting phrase spoken by the companion.
-func (s *Service) TalkToCompanion(ctx context.Context, characterID string) (string, error) {
+func (s *Service) TalkToCompanion(ctx context.Context, characterID string) (CompanionTalkResult, error) {
+	if s.petReader == nil {
+		return CompanionTalkResult{}, ErrNoPetsAtHome
+	}
+	pets, err := s.petReader.ListHomePets(ctx, characterID)
+	if err != nil {
+		return CompanionTalkResult{}, err
+	}
+	if len(pets) == 0 {
+		return CompanionTalkResult{}, ErrNoPetsAtHome
+	}
+
+	petIdx := s.randomInt(len(pets))
+	petName := pets[petIdx].DisplayName()
+
 	phrases, err := s.repo.ListCompanionPhrases(ctx, characterID)
 	if err != nil {
-		return "", err
+		return CompanionTalkResult{}, err
 	}
 
-	if len(phrases) == 0 {
-		return "クエッ？（何か言いたそうにこちらを見つめている）", nil
+	dialogue := "クエッ？（何か言いたそうにこちらを見つめている）"
+	if len(phrases) > 0 {
+		phraseIdx := s.randomInt(len(phrases))
+		dialogue = phrases[phraseIdx].Phrase
 	}
 
-	idx := s.randomInt(len(phrases))
-	return phrases[idx].Phrase, nil
+	return CompanionTalkResult{
+		PetName:  petName,
+		Dialogue: dialogue,
+	}, nil
 }
 
 // AddDeliveryNotice records an incoming delivery notice for a character.

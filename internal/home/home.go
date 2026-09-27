@@ -32,7 +32,32 @@ var (
 	ErrInsufficientFunds    = errors.New("insufficient funds to build house")
 	ErrItemNotFound         = errors.New("item not found")
 	ErrCannotUseHere        = errors.New("cannot use item here")
+	ErrNoPetsAtHome         = errors.New("no pets at home")
 )
+
+// HomePet represents a resident monster pet staying at character home.
+type HomePet struct {
+	ID         string `json:"id"`
+	CustomName string `json:"custom_name"`
+	MonsterID  string `json:"monster_id,omitempty"`
+}
+
+// DisplayName returns the display name of the resident pet.
+func (p HomePet) DisplayName() string {
+	if strings.TrimSpace(p.CustomName) != "" {
+		return strings.TrimSpace(p.CustomName)
+	}
+	if strings.TrimSpace(p.MonsterID) != "" {
+		return strings.TrimSpace(p.MonsterID)
+	}
+	return DefaultCompanionName
+}
+
+// CompanionTalkResult represents the spoken dialogue and speaker pet name.
+type CompanionTalkResult struct {
+	PetName  string `json:"pet_name"`
+	Dialogue string `json:"dialogue"`
+}
 
 const (
 	DefaultCompanionName   = "ペット"

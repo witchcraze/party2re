@@ -15,6 +15,7 @@ import (
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/inventory"
+	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
@@ -48,11 +49,28 @@ func TestHomeServiceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	svc, err := home.NewService(homeRepo, charRepo, home.WithCharacterUpdater(charRepo))
+	monsterRepo, err := database.NewMonsterRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	svc, err := home.NewService(
+		homeRepo,
+		charRepo,
+		home.WithCharacterUpdater(charRepo),
+		home.WithHomePetReader(&testPetAdapter{repo: monsterRepo}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_ = monsterRepo.Save(ctx, monster.MonsterInstance{
+		ID:          "inst-pet-1",
+		CharacterID: char1.ID,
+		MonsterID:   "m001",
+		CustomName:  "ポチ",
+		Location:    "home",
+	})
 
 	// 1. Visit & View
 	view, err := svc.GetHomeView(ctx, char1.ID, char2.ID)
@@ -99,8 +117,8 @@ func TestHomeServiceIntegration(t *testing.T) {
 	}
 
 	talk, err := svc.TalkToCompanion(ctx, char1.ID)
-	if err != nil || talk != "いらっしゃい！" {
-		t.Errorf("expected 'いらっしゃい！', got %s, err=%v", talk, err)
+	if err != nil || talk.Dialogue != "いらっしゃい！" || talk.PetName != "ポチ" {
+		t.Errorf("expected 'いらっしゃい！' from 'ポチ', got %+v, err=%v", talk, err)
 	}
 
 	err = svc.ForgetCompanionPhrase(ctx, phrase.ID, char1.ID)
@@ -131,6 +149,26 @@ func TestHomeServiceIntegration(t *testing.T) {
 	if checkRes.OwnerName != char1.Name {
 		t.Errorf("expected owner %s, got %s", char1.Name, checkRes.OwnerName)
 	}
+}
+
+type testPetAdapter struct {
+	repo *database.MonsterRepository
+}
+
+func (a *testPetAdapter) ListHomePets(ctx context.Context, characterID string) ([]home.HomePet, error) {
+	monsters, err := a.repo.ListByCharacterIDAndLocation(ctx, characterID, "home")
+	if err != nil {
+		return nil, err
+	}
+	res := make([]home.HomePet, len(monsters))
+	for i, m := range monsters {
+		res[i] = home.HomePet{
+			ID:         m.ID,
+			CustomName: m.CustomName,
+			MonsterID:  m.MonsterID,
+		}
+	}
+	return res, nil
 }
 
 type testDepotManagerAdapter struct {

@@ -41,6 +41,14 @@ func (m *mockCharUpdater) Update(ctx context.Context, char corecharacter.Charact
 	return nil
 }
 
+type mockPetReader struct {
+	pets map[string][]HomePet
+}
+
+func (m *mockPetReader) ListHomePets(ctx context.Context, characterID string) ([]HomePet, error) {
+	return m.pets[characterID], nil
+}
+
 type mockHomeRepo struct {
 	homes   map[string]CharacterHome
 	letters map[string]Letter
@@ -328,12 +336,21 @@ func TestHomeService(t *testing.T) {
 	rng := random.NewDeterministic(42)
 	charUpdater := &mockCharUpdater{chars: chars.chars}
 
+	petReader := &mockPetReader{
+		pets: map[string][]HomePet{
+			"char-1": {
+				{ID: "pet-1", CustomName: "ポチ", MonsterID: "m001"},
+			},
+		},
+	}
+
 	service, err := NewService(
 		repo,
 		chars,
 		WithNowFunc(func() time.Time { return fixedTime }),
 		WithRNG(rng),
 		WithCharacterUpdater(charUpdater),
+		WithHomePetReader(petReader),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -547,8 +564,8 @@ func TestHomeService(t *testing.T) {
 	t.Run("companion phrases teaching and talking", func(t *testing.T) {
 		// Companion talks when no phrases taught -> default fallback
 		talk, err := service.TalkToCompanion(ctx, "char-1")
-		if err != nil || talk == "" {
-			t.Errorf("TalkToCompanion failed: %v, talk=%s", err, talk)
+		if err != nil || talk.Dialogue == "" || talk.PetName != "ポチ" {
+			t.Errorf("TalkToCompanion failed: %v, talk=%+v", err, talk)
 		}
 
 		// Teach phrase
@@ -565,8 +582,8 @@ func TestHomeService(t *testing.T) {
 
 		// Companion talks taught phrase
 		talk, err = service.TalkToCompanion(ctx, "char-1")
-		if err != nil || talk != "クエッ！" {
-			t.Errorf("expected 'クエッ！', got %s", talk)
+		if err != nil || talk.Dialogue != "クエッ！" || talk.PetName != "ポチ" {
+			t.Errorf("expected 'クエッ！' from 'ポチ', got %+v", talk)
 		}
 
 		// Forget phrase
@@ -578,6 +595,19 @@ func TestHomeService(t *testing.T) {
 		phrases, _ = service.ListCompanionPhrases(ctx, "char-1")
 		if len(phrases) != 0 {
 			t.Errorf("expected 0 phrases after forget, got %d", len(phrases))
+		}
+	})
+
+	t.Run("0 pets rejection with ErrNoPetsAtHome", func(t *testing.T) {
+		// char-2 has 0 pets
+		_, err := service.TeachCompanionPhrase(ctx, "char-2", "こんにちは")
+		if !errors.Is(err, ErrNoPetsAtHome) {
+			t.Errorf("expected ErrNoPetsAtHome, got %v", err)
+		}
+
+		_, err = service.TalkToCompanion(ctx, "char-2")
+		if !errors.Is(err, ErrNoPetsAtHome) {
+			t.Errorf("expected ErrNoPetsAtHome, got %v", err)
 		}
 	})
 
@@ -614,7 +644,12 @@ func TestConcurrentTalkToCompanion(t *testing.T) {
 		},
 	}
 	repo := newMockHomeRepo()
-	service, err := NewService(repo, chars)
+	petReader := &mockPetReader{
+		pets: map[string][]HomePet{
+			"char-1": {{ID: "pet-1", CustomName: "ポチ"}},
+		},
+	}
+	service, err := NewService(repo, chars, WithHomePetReader(petReader))
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -632,9 +667,9 @@ func TestConcurrentTalkToCompanion(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < iterations; i++ {
-				phrase, err := service.TalkToCompanion(ctx, "char-1")
-				if err != nil || phrase == "" {
-					t.Errorf("unexpected TalkToCompanion result: %v, %s", err, phrase)
+				res, err := service.TalkToCompanion(ctx, "char-1")
+				if err != nil || res.Dialogue == "" || res.PetName != "ポチ" {
+					t.Errorf("unexpected TalkToCompanion result: %v, %+v", err, res)
 				}
 			}
 		}()

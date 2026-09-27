@@ -41,7 +41,7 @@ type HomeCompanionService interface {
 	TeachCompanionPhrase(ctx context.Context, characterID, phrase string) (home.CompanionPhrase, error)
 	ForgetCompanionPhrase(ctx context.Context, phraseID, characterID string) error
 	ListCompanionPhrases(ctx context.Context, characterID string) ([]home.CompanionPhrase, error)
-	TalkToCompanion(ctx context.Context, characterID string) (string, error)
+	TalkToCompanion(ctx context.Context, characterID string) (home.CompanionTalkResult, error)
 }
 
 // HomeLivingService defines resting, waking, and delivery notice operations.
@@ -85,6 +85,7 @@ type teachPhraseRequest struct {
 }
 
 type companionTalkResponse struct {
+	PetName  string `json:"pet_name,omitempty"`
 	Dialogue string `json:"dialogue"`
 }
 
@@ -340,7 +341,7 @@ func (h *Handler) handleTeachCompanionPhrase(w http.ResponseWriter, r *http.Requ
 
 		phrase, err := h.homes.TeachCompanionPhrase(r.Context(), char.ID, req.Phrase)
 		if err != nil {
-			if errors.Is(err, home.ErrEmptyPhrase) || errors.Is(err, home.ErrPhraseTooLong) || errors.Is(err, home.ErrMaxPhrasesReached) {
+			if errors.Is(err, home.ErrEmptyPhrase) || errors.Is(err, home.ErrPhraseTooLong) || errors.Is(err, home.ErrMaxPhrasesReached) || errors.Is(err, home.ErrNoPetsAtHome) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
@@ -382,13 +383,20 @@ func (h *Handler) handleTalkToCompanion(w http.ResponseWriter, r *http.Request) 
 	}
 
 	charID := r.PathValue("id")
-	dialogue, err := h.homes.TalkToCompanion(r.Context(), charID)
+	res, err := h.homes.TalkToCompanion(r.Context(), charID)
 	if err != nil {
+		if errors.Is(err, home.ErrNoPetsAtHome) {
+			writeError(w, http.StatusUnprocessableEntity, err)
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, companionTalkResponse{Dialogue: dialogue})
+	writeJSON(w, http.StatusOK, companionTalkResponse{
+		PetName:  res.PetName,
+		Dialogue: res.Dialogue,
+	})
 }
 
 func (h *Handler) handleListDeliveryNotices(w http.ResponseWriter, r *http.Request) {

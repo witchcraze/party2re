@@ -50,15 +50,18 @@ Asynchronous direct messaging between characters:
 
 ### 3. Companion Greeting Phrases (`character_companion_phrases`)
 
-The resident home companion/pet can be trained with customized greetings:
+The resident home companion/pet (linked to resident monster pets staying at Home, `internal/monster.LocationHome`, max 8 slots) can be trained with customized greetings:
+- **Resident Monster Pet Requirement**:
+  - If a character has 0 pets residing at Home (`ListHomePets`), talking or teaching phrases is rejected with `ErrNoPetsAtHome` (HTTP `422 Unprocessable Entity`), matching legacy CGI behavior ("教える相手がいません" / "しかし、誰もいなかった…").
 - **Teaching Phrases (`ことばをおしえる`)**:
   - Up to 30 unique phrases per companion (original CGI specification).
   - Length: 1 to 120 characters per phrase (original CGI specification).
 - **Forgetting Phrases (`ことばをわすれさせる`)**:
   - Owner can remove individual phrases by ID.
 - **Talking (`＠はなす`)**:
-  - Interacting with the companion randomly picks one of the taught phrases.
-  - If no phrases are taught, a cute default greeting is returned.
+  - Randomly selects one speaker pet from resident home pets and picks one of the taught phrases.
+  - Returns `CompanionTalkResult` containing `PetName` (display name of the chosen pet) and `Dialogue`.
+  - If no phrases are taught, a default greeting (`"クエッ？（何か言いたそうにこちらを見つめている）"`) is spoken by the chosen pet.
 
 ### 4. Remote Depot & Inventory Item Usage (`＠つかう`)
 

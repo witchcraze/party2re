@@ -379,6 +379,16 @@
           },
           "description": "Forbidden - player does not own requested character or lacks permission"
         },
+        "422": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unprocessable entity - phrase invalid, max phrases reached, or no pets at home"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -429,6 +439,17 @@
           "content": {
             "application/json": {
               "schema": {
+                "properties": {
+                  "dialogue": {
+                    "type": "string"
+                  },
+                  "pet_name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "dialogue"
+                ],
                 "type": "object"
               }
             }
@@ -521,6 +542,16 @@
             }
           },
           "description": "Bad request - invalid input or JSON syntax"
+        },
+        "422": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Unprocessable entity - no pets at home"
         },
         "500": {
           "content": {
@@ -712,10 +743,10 @@
           "application/json": {
             "schema": {
               "properties": {
-                "wallpaper": {
+                "color": {
                   "type": "string"
                 },
-                "welcome_message": {
+                "companion_name": {
                   "type": "string"
                 }
               },
