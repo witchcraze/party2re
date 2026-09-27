@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #778 — [Refactor] Home: Wire home companion dialogue to resident monster pets (max 8) and purge obsolete OpenAPI fields
+Last updated: Refactor slice membership checks using slices.Contains
 
 ## Current Phase
 

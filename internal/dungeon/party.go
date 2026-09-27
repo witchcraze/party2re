@@ -3,6 +3,7 @@ package dungeon
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -46,14 +47,7 @@ func (s *Service) StartPartyExpedition(
 	}
 
 	// Ensure leader is first
-	hasLeader := false
-	for _, mID := range memberIDs {
-		if mID == leaderCharID {
-			hasLeader = true
-			break
-		}
-	}
-	if !hasLeader {
+	if !slices.Contains(memberIDs, leaderCharID) {
 		memberIDs = append([]string{leaderCharID}, memberIDs...)
 	}
 

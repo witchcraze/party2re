@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -42,14 +43,7 @@ func (s *Service) StartPartySession(
 	}
 
 	// Ensure leader is first
-	hasLeader := false
-	for _, mID := range memberIDs {
-		if mID == leaderCharID {
-			hasLeader = true
-			break
-		}
-	}
-	if !hasLeader {
+	if !slices.Contains(memberIDs, leaderCharID) {
 		memberIDs = append([]string{leaderCharID}, memberIDs...)
 	}
 
