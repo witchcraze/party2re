@@ -1,70 +1,548 @@
 [
   {
-    "id": "novice",
-    "name": "初級チャレンジ (Novice Trial)",
-    "description": "駆け出し冒険者のためのサバイバル連戦。スライムやゴブリンの群れに立ち向かう。",
-    "min_level": 5,
+    "id": "0",
+    "name": "最弱逆襲",
+    "description": "初心者向けの試練。モンスターの最弱種からの逆襲に立ち向かう。",
+    "min_level": 1,
+    "max_participants": 1,
+    "need_join": "hp_400_u",
+    "treasure_round": 10,
+    "treasure_item_pool": ["item-001", "item-002"],
     "base_monster": {
-      "name": "修行スライム",
-      "base_hp": 120,
-      "base_attack": 25,
-      "base_defense": 10,
-      "base_exp": 15,
-      "base_gold": 8
-    },
-    "scale_factor": 0.08,
-    "milestone_interval": 5,
-    "milestone_item_pool": ["potion_minor", "herb_medicinal"]
+      "name": "スライム",
+      "base_hp": 150,
+      "base_attack": 100,
+      "base_defense": 50,
+      "base_exp": 20,
+      "base_gold": 5
+    }
   },
   {
-    "id": "intermediate",
-    "name": "中級チャレンジ (Veteran Trial)",
-    "description": "熟練冒険者向けのエンドレス試練。オーガやスケルトンナイトが次々と襲いかかる。",
-    "min_level": 20,
+    "id": "1",
+    "name": "怒羊牧場",
+    "description": "狂暴化した羊たちの牧場での生存戦。",
+    "min_level": 1,
+    "max_participants": 2,
+    "need_join": "hp_400_u",
+    "treasure_round": 10,
+    "treasure_item_pool": ["item-001", "item-002", "item-003"],
     "base_monster": {
-      "name": "闘技場オーガ",
-      "base_hp": 350,
-      "base_attack": 65,
-      "base_defense": 35,
-      "base_exp": 60,
-      "base_gold": 35
-    },
-    "scale_factor": 0.10,
-    "milestone_interval": 5,
-    "milestone_item_pool": ["potion_standard", "elixir_minor", "iron_ore"]
-  },
-  {
-    "id": "master",
-    "name": "上級チャレンジ (Master Trial)",
-    "description": "歴戦の勇士に課される極限の闘技。ドラゴンやグレーターデーモンとの連戦。",
-    "min_level": 40,
-    "base_monster": {
-      "name": "修羅の魔獣",
-      "base_hp": 900,
+      "name": "ラースシープ",
+      "base_hp": 200,
       "base_attack": 140,
-      "base_defense": 80,
-      "base_exp": 220,
-      "base_gold": 120
-    },
-    "scale_factor": 0.12,
-    "milestone_interval": 5,
-    "milestone_item_pool": ["potion_high", "elixir_standard", "mithril_ore"]
+      "base_defense": 100,
+      "base_exp": 40,
+      "base_gold": 21
+    }
   },
   {
-    "id": "abyss",
-    "name": "奈落チャレンジ (Abyss Trial)",
-    "description": "底知れぬ深淵の試練。神域の怪異が無限の猛威を振るう。",
-    "min_level": 60,
-    "base_monster": {
-      "name": "深淵の幻影",
-      "base_hp": 2000,
-      "base_attack": 280,
-      "base_defense": 160,
-      "base_exp": 600,
-      "base_gold": 350
-    },
-    "scale_factor": 0.15,
-    "milestone_interval": 5,
-    "milestone_item_pool": ["elixir_high", "orichalcum_ore", "philosophers_stone"]
+    "id": "2",
+    "name": "恐怖肝試",
+    "description": "死霊や悪霊が蠢く恐怖の試練。",
+    "min_level": 1,
+    "max_participants": 2,
+    "treasure_round": 10,
+    "treasure_item_pool": ["item-002", "item-003", "item-004"],
+    "monster_pool": [
+      {
+        "name": "ゴースト",
+        "base_hp": 220,
+        "base_attack": 150,
+        "base_defense": 80,
+        "base_exp": 45,
+        "base_gold": 25
+      },
+      {
+        "name": "メイジゴースト",
+        "base_hp": 250,
+        "base_attack": 170,
+        "base_defense": 90,
+        "base_exp": 55,
+        "base_gold": 30
+      },
+      {
+        "name": "ミイラ男",
+        "base_hp": 300,
+        "base_attack": 180,
+        "base_defense": 120,
+        "base_exp": 65,
+        "base_gold": 35
+      },
+      {
+        "name": "マミー",
+        "base_hp": 320,
+        "base_attack": 190,
+        "base_defense": 130,
+        "base_exp": 70,
+        "base_gold": 40
+      },
+      {
+        "name": "ガイコツ剣士",
+        "base_hp": 350,
+        "base_attack": 210,
+        "base_defense": 150,
+        "base_exp": 80,
+        "base_gold": 50
+      },
+      {
+        "name": "ブラッドハンド",
+        "base_hp": 280,
+        "base_attack": 200,
+        "base_defense": 110,
+        "base_exp": 75,
+        "base_gold": 45
+      },
+      {
+        "name": "死霊",
+        "base_hp": 380,
+        "base_attack": 230,
+        "base_defense": 160,
+        "base_exp": 90,
+        "base_gold": 60
+      }
+    ]
+  },
+  {
+    "id": "3",
+    "name": "幻覚猛毒",
+    "description": "猛毒を撒き散らすキノコたちの胞子迷宮。",
+    "min_level": 1,
+    "max_participants": 3,
+    "treasure_round": 10,
+    "treasure_item_pool": ["item-003", "item-004", "item-005"],
+    "monster_pool": [
+      {
+        "name": "オバケキノコ",
+        "base_hp": 300,
+        "base_attack": 160,
+        "base_defense": 100,
+        "base_exp": 60,
+        "base_gold": 30
+      },
+      {
+        "name": "ドクキノコ",
+        "base_hp": 330,
+        "base_attack": 180,
+        "base_defense": 110,
+        "base_exp": 70,
+        "base_gold": 40
+      },
+      {
+        "name": "マージマタンゴ",
+        "base_hp": 380,
+        "base_attack": 200,
+        "base_defense": 130,
+        "base_exp": 85,
+        "base_gold": 50
+      }
+    ]
+  },
+  {
+    "id": "4",
+    "name": "即死博打",
+    "description": "一撃必殺と不確実性が交錯する危険な賭け場。",
+    "min_level": 1,
+    "max_participants": 3,
+    "treasure_round": 10,
+    "treasure_item_pool": ["item-004", "item-005", "item-006"],
+    "monster_pool": [
+      {
+        "name": "イタズラ妖精",
+        "base_hp": 250,
+        "base_attack": 220,
+        "base_defense": 80,
+        "base_exp": 80,
+        "base_gold": 70
+      },
+      {
+        "name": "ギャンブル妖精",
+        "base_hp": 280,
+        "base_attack": 250,
+        "base_defense": 90,
+        "base_exp": 100,
+        "base_gold": 120
+      },
+      {
+        "name": "ブルーストーン",
+        "base_hp": 500,
+        "base_attack": 150,
+        "base_defense": 300,
+        "base_exp": 90,
+        "base_gold": 60
+      },
+      {
+        "name": "あやしい影",
+        "base_hp": 300,
+        "base_attack": 240,
+        "base_defense": 100,
+        "base_exp": 110,
+        "base_gold": 80
+      },
+      {
+        "name": "ミミック",
+        "base_hp": 450,
+        "base_attack": 280,
+        "base_defense": 200,
+        "base_exp": 150,
+        "base_gold": 200
+      },
+      {
+        "name": "パンドラボックス",
+        "base_hp": 600,
+        "base_attack": 350,
+        "base_defense": 250,
+        "base_exp": 250,
+        "base_gold": 350
+      }
+    ]
+  },
+  {
+    "id": "5",
+    "name": "花火大会",
+    "description": "大爆発を引き起こす岩石群との激闘。",
+    "min_level": 1,
+    "max_participants": 4,
+    "treasure_round": 20,
+    "treasure_item_pool": ["item-005", "item-006", "item-007"],
+    "monster_pool": [
+      {
+        "name": "爆弾岩",
+        "base_hp": 800,
+        "base_attack": 300,
+        "base_defense": 200,
+        "base_exp": 180,
+        "base_gold": 150
+      }
+    ]
+  },
+  {
+    "id": "6",
+    "name": "鉄壁要塞",
+    "description": "強固な防御を誇る鉱石とメタルの要塞。",
+    "min_level": 1,
+    "max_participants": 4,
+    "treasure_round": 20,
+    "treasure_item_pool": ["item-006", "item-007", "item-008"],
+    "monster_pool": [
+      {
+        "name": "レッドストーン",
+        "base_hp": 600,
+        "base_attack": 280,
+        "base_defense": 400,
+        "base_exp": 200,
+        "base_gold": 150
+      },
+      {
+        "name": "ブルーストーン",
+        "base_hp": 600,
+        "base_attack": 280,
+        "base_defense": 400,
+        "base_exp": 200,
+        "base_gold": 150
+      },
+      {
+        "name": "イエローストーン",
+        "base_hp": 600,
+        "base_attack": 280,
+        "base_defense": 400,
+        "base_exp": 200,
+        "base_gold": 150
+      },
+      {
+        "name": "グリーンストーン",
+        "base_hp": 600,
+        "base_attack": 280,
+        "base_defense": 400,
+        "base_exp": 200,
+        "base_gold": 150
+      },
+      {
+        "name": "パープルストーン",
+        "base_hp": 600,
+        "base_attack": 280,
+        "base_defense": 400,
+        "base_exp": 200,
+        "base_gold": 150
+      },
+      {
+        "name": "シルバーストーン",
+        "base_hp": 700,
+        "base_attack": 300,
+        "base_defense": 450,
+        "base_exp": 250,
+        "base_gold": 200
+      },
+      {
+        "name": "ブラックストーン",
+        "base_hp": 800,
+        "base_attack": 320,
+        "base_defense": 500,
+        "base_exp": 300,
+        "base_gold": 250
+      },
+      {
+        "name": "メタルスライム",
+        "base_hp": 20,
+        "base_attack": 100,
+        "base_defense": 999,
+        "base_exp": 1000,
+        "base_gold": 500
+      },
+      {
+        "name": "ハグレメタル",
+        "base_hp": 30,
+        "base_attack": 150,
+        "base_defense": 999,
+        "base_exp": 3000,
+        "base_gold": 1000
+      }
+    ]
+  },
+  {
+    "id": "7",
+    "name": "最強王者",
+    "description": "伝説の魔物たちが勢揃いする頂上決戦。",
+    "min_level": 1,
+    "max_participants": 4,
+    "treasure_round": 30,
+    "treasure_item_pool": ["item-008", "item-009", "item-010"],
+    "monster_pool": [
+      {
+        "name": "人面樹",
+        "base_hp": 1000,
+        "base_attack": 400,
+        "base_defense": 300,
+        "base_exp": 500,
+        "base_gold": 400
+      },
+      {
+        "name": "亡霊剣士",
+        "base_hp": 1100,
+        "base_attack": 450,
+        "base_defense": 320,
+        "base_exp": 550,
+        "base_gold": 450
+      },
+      {
+        "name": "デビルシェル",
+        "base_hp": 1500,
+        "base_attack": 380,
+        "base_defense": 500,
+        "base_exp": 600,
+        "base_gold": 500
+      },
+      {
+        "name": "ゴーレム",
+        "base_hp": 1800,
+        "base_attack": 500,
+        "base_defense": 450,
+        "base_exp": 700,
+        "base_gold": 550
+      },
+      {
+        "name": "闇の魔術士",
+        "base_hp": 1200,
+        "base_attack": 550,
+        "base_defense": 280,
+        "base_exp": 750,
+        "base_gold": 600
+      },
+      {
+        "name": "ギガンテス",
+        "base_hp": 2200,
+        "base_attack": 600,
+        "base_defense": 350,
+        "base_exp": 850,
+        "base_gold": 700
+      },
+      {
+        "name": "ひくいどり",
+        "base_hp": 1400,
+        "base_attack": 520,
+        "base_defense": 300,
+        "base_exp": 800,
+        "base_gold": 650
+      },
+      {
+        "name": "ベヒーモス",
+        "base_hp": 2500,
+        "base_attack": 650,
+        "base_defense": 400,
+        "base_exp": 1000,
+        "base_gold": 800
+      },
+      {
+        "name": "キングスライム",
+        "base_hp": 2000,
+        "base_attack": 480,
+        "base_defense": 380,
+        "base_exp": 900,
+        "base_gold": 750
+      },
+      {
+        "name": "死霊の騎士",
+        "base_hp": 1600,
+        "base_attack": 580,
+        "base_defense": 360,
+        "base_exp": 950,
+        "base_gold": 800
+      },
+      {
+        "name": "竜王",
+        "base_hp": 3000,
+        "base_attack": 750,
+        "base_defense": 500,
+        "base_exp": 1500,
+        "base_gold": 1200
+      },
+      {
+        "name": "片翼の天使",
+        "base_hp": 3200,
+        "base_attack": 800,
+        "base_defense": 480,
+        "base_exp": 1800,
+        "base_gold": 1500
+      },
+      {
+        "name": "ディアボロス",
+        "base_hp": 3500,
+        "base_attack": 850,
+        "base_defense": 520,
+        "base_exp": 2000,
+        "base_gold": 1800
+      },
+      {
+        "name": "ボマー",
+        "base_hp": 1500,
+        "base_attack": 900,
+        "base_defense": 250,
+        "base_exp": 1200,
+        "base_gold": 1000
+      }
+    ]
+  },
+  {
+    "id": "8",
+    "name": "真・最強王者",
+    "description": "転生者のみが足を踏み入れることを許される、真の極限試練。",
+    "min_level": 1,
+    "max_participants": 4,
+    "need_over_lv": true,
+    "treasure_round": 30,
+    "treasure_item_pool": ["item-010", "item-011", "item-012"],
+    "monster_pool": [
+      {
+        "name": "人面樹",
+        "base_hp": 1200,
+        "base_attack": 450,
+        "base_defense": 350,
+        "base_exp": 600,
+        "base_gold": 500
+      },
+      {
+        "name": "亡霊剣士",
+        "base_hp": 1300,
+        "base_attack": 500,
+        "base_defense": 360,
+        "base_exp": 650,
+        "base_gold": 550
+      },
+      {
+        "name": "デビルシェル",
+        "base_hp": 1800,
+        "base_attack": 430,
+        "base_defense": 550,
+        "base_exp": 700,
+        "base_gold": 600
+      },
+      {
+        "name": "ゴーレム",
+        "base_hp": 2200,
+        "base_attack": 580,
+        "base_defense": 500,
+        "base_exp": 800,
+        "base_gold": 650
+      },
+      {
+        "name": "闇の魔術士",
+        "base_hp": 1500,
+        "base_attack": 620,
+        "base_defense": 320,
+        "base_exp": 850,
+        "base_gold": 700
+      },
+      {
+        "name": "ギガンテス",
+        "base_hp": 2600,
+        "base_attack": 680,
+        "base_defense": 400,
+        "base_exp": 950,
+        "base_gold": 800
+      },
+      {
+        "name": "ひくいどり",
+        "base_hp": 1700,
+        "base_attack": 600,
+        "base_defense": 350,
+        "base_exp": 900,
+        "base_gold": 750
+      },
+      {
+        "name": "ベヒーモス",
+        "base_hp": 3000,
+        "base_attack": 730,
+        "base_defense": 450,
+        "base_exp": 1200,
+        "base_gold": 900
+      },
+      {
+        "name": "キングスライム",
+        "base_hp": 2400,
+        "base_attack": 550,
+        "base_defense": 420,
+        "base_exp": 1000,
+        "base_gold": 850
+      },
+      {
+        "name": "死霊の騎士",
+        "base_hp": 1900,
+        "base_attack": 650,
+        "base_defense": 400,
+        "base_exp": 1100,
+        "base_gold": 900
+      },
+      {
+        "name": "竜王",
+        "base_hp": 3500,
+        "base_attack": 850,
+        "base_defense": 550,
+        "base_exp": 1800,
+        "base_gold": 1400
+      },
+      {
+        "name": "片翼の天使",
+        "base_hp": 3800,
+        "base_attack": 900,
+        "base_defense": 520,
+        "base_exp": 2000,
+        "base_gold": 1700
+      },
+      {
+        "name": "ディアボロス",
+        "base_hp": 4000,
+        "base_attack": 950,
+        "base_defense": 580,
+        "base_exp": 2500,
+        "base_gold": 2000
+      },
+      {
+        "name": "ボマー",
+        "base_hp": 1800,
+        "base_attack": 1000,
+        "base_defense": 300,
+        "base_exp": 1500,
+        "base_gold": 1200
+      }
+    ]
   }
 ]

@@ -557,7 +557,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/challenges/start", h.handleStartChallenge)
 	mux.HandleFunc("POST /characters/{id}/challenges/party-start", h.handleStartPartyChallenge)
 	mux.HandleFunc("POST /characters/{id}/challenges/advance", h.handleAdvanceChallenge)
-	mux.HandleFunc("POST /characters/{id}/challenges/retire", h.handleRetireChallenge)
 	mux.HandleFunc("GET /characters/{id}/bosses", h.handleListBosses)
 	mux.HandleFunc("POST /characters/{id}/bosses/fight", h.handleChallengeBoss)
 	mux.HandleFunc("GET /characters/{id}/dungeons", h.handleListDungeons)

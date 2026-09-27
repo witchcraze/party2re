@@ -39,7 +39,7 @@ func TestValkeySessionRepository_NewAndFallback(t *testing.T) {
 				CharacterCurrentHP: 150,
 			},
 		},
-		TierID:             "novice",
+		TierID:             "0",
 		CurrentRound:       1,
 		CharacterCurrentHP: 150,
 		AccumulatedExp:     10,
@@ -106,7 +106,7 @@ func TestValkeySessionRepository_SaveActiveSession(t *testing.T) {
 				CharacterName:      "LeaderHero",
 				Icon:               "chr/001.gif",
 				JobID:              "warrior",
-				OldJobID:           "novice",
+				OldJobID:           "0",
 				Level:              25,
 				MaxHP:              180,
 				MaxMP:              50,
@@ -129,7 +129,7 @@ func TestValkeySessionRepository_SaveActiveSession(t *testing.T) {
 				Agility:            45,
 			},
 		},
-		TierID:             "veteran",
+		TierID:             "1",
 		CurrentRound:       3,
 		CharacterCurrentHP: 160,
 		AccumulatedExp:     250,
@@ -234,7 +234,7 @@ func TestValkeySessionRepository_GetActiveSession(t *testing.T) {
 		"party_name":           "Solo Runner",
 		"party_color":          "#0000FF",
 		"members":              membersJSON,
-		"tier_id":              "expert",
+		"tier_id":              "0",
 		"current_round":        "5",
 		"character_current_hp": "200",
 		"status":               string(challenge.StatusActive),
@@ -268,7 +268,7 @@ func TestValkeySessionRepository_GetActiveSession(t *testing.T) {
 	if active.ID != "chal-get-1" || active.PartyID != "party-solo" || active.PartyColor != "#0000FF" {
 		t.Errorf("unexpected identity fields: %+v", active)
 	}
-	if active.CurrentRound != 5 || active.CharacterCurrentHP != 200 || active.TierID != "expert" {
+	if active.CurrentRound != 5 || active.CharacterCurrentHP != 200 || active.TierID != "0" {
 		t.Errorf("unexpected progress fields: %+v", active)
 	}
 	if active.AccumulatedExp != 800 || active.AccumulatedGold != 1500 {
@@ -381,7 +381,7 @@ func TestValkeySessionRepository_AdvanceRound(t *testing.T) {
 		"300",                        // [3] total_gold
 		itemsJSON,                    // [4] items
 		now.Format(time.RFC3339Nano), // [5] updated_at
-		"veteran",                    // [6] tier_id
+		"0",                          // [6] tier_id
 		now.Format(time.RFC3339Nano), // [7] created_at
 	}
 
@@ -417,7 +417,7 @@ func TestValkeySessionRepository_AdvanceRound(t *testing.T) {
 	if len(outcome.Session.AccumulatedItems) != 1 || outcome.Session.AccumulatedItems[0] != "reward-sword" {
 		t.Errorf("unexpected items: %+v", outcome.Session.AccumulatedItems)
 	}
-	if outcome.Session.TierID != "veteran" {
+	if outcome.Session.TierID != "0" {
 		t.Errorf("unexpected tier: %s", outcome.Session.TierID)
 	}
 
@@ -482,7 +482,7 @@ func TestChallengeService_OfflineServiceQueriesAndOptions(t *testing.T) {
 	engine := corebattle.Engine{}
 
 	tierMap := map[string]challenge.ChallengeTier{
-		"novice": {ID: "novice", Name: "Novice Tier", MinLevel: 1},
+		"0": {ID: "0", Name: "最弱逆襲", MinLevel: 1},
 	}
 
 	service, err := challenge.NewService(
@@ -511,7 +511,7 @@ func TestChallengeService_OfflineServiceQueriesAndOptions(t *testing.T) {
 	}
 
 	// Test GetLeaderboard
-	lb, err := service.GetLeaderboard(ctx, "novice", 10)
+	lb, err := service.GetLeaderboard(ctx, "0", 10)
 	if err != nil {
 		t.Fatalf("GetLeaderboard failed: %v", err)
 	}
@@ -532,15 +532,5 @@ func TestChallengeService_OfflineServiceQueriesAndOptions(t *testing.T) {
 	_, err = service.GetActiveSession(ctx, "")
 	if err == nil {
 		t.Errorf("expected error for empty charID in GetActiveSession")
-	}
-
-	// Test RetireSession / Cashout error branches
-	_, err = service.RetireSession(ctx, "", "sess-1")
-	if err == nil {
-		t.Errorf("expected ErrCharacterNotFound for empty characterID")
-	}
-	_, err = service.Cashout(ctx, "nonexistent-sess")
-	if !errors.Is(err, challenge.ErrSessionNotFound) {
-		t.Errorf("expected ErrSessionNotFound for nonexistent session cashout, got %v", err)
 	}
 }

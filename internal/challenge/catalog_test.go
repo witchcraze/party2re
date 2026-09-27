@@ -19,35 +19,38 @@ func TestLoadTiers_EmbeddedJSON(t *testing.T) {
 	}
 
 	tiers := svc.ListTiers()
-	if len(tiers) == 0 {
-		t.Fatal("expected at least one tier, got 0")
+	if len(tiers) != 9 {
+		t.Fatalf("expected 9 authentic stages, got %d", len(tiers))
 	}
 
-	expectedIDs := []string{"novice", "intermediate", "master", "abyss"}
+	expectedIDs := []string{"0", "1", "2", "3", "4", "5", "6", "7", "8"}
 	found := make(map[string]bool)
 	for _, tier := range tiers {
 		found[tier.ID] = true
 	}
 	for _, id := range expectedIDs {
 		if !found[id] {
-			t.Errorf("expected tier %q not found in catalog", id)
+			t.Errorf("expected stage %q not found in catalog", id)
 		}
 	}
 
-	// Spot-check a specific tier value loaded from JSON.
+	// Spot-check stage 0 loaded from JSON.
 	for _, tier := range tiers {
-		if tier.ID == "novice" {
-			if tier.MinLevel != 5 {
-				t.Errorf("novice tier: expected MinLevel=5, got %d", tier.MinLevel)
+		if tier.ID == "0" {
+			if tier.MaxParticipants != 1 {
+				t.Errorf("stage 0: expected MaxParticipants=1, got %d", tier.MaxParticipants)
 			}
-			if tier.BaseMonster.BaseHP != 120 {
-				t.Errorf("novice tier: expected BaseHP=120, got %d", tier.BaseMonster.BaseHP)
+			if tier.NeedJoin != "hp_400_u" {
+				t.Errorf("stage 0: expected NeedJoin=hp_400_u, got %q", tier.NeedJoin)
 			}
-			if tier.MilestoneInterval != 5 {
-				t.Errorf("novice tier: expected MilestoneInterval=5, got %d", tier.MilestoneInterval)
+			if tier.BaseMonster.BaseHP != 150 {
+				t.Errorf("stage 0: expected BaseHP=150, got %d", tier.BaseMonster.BaseHP)
 			}
-			if len(tier.MilestoneItemPool) != 2 {
-				t.Errorf("novice tier: expected 2 milestone items, got %d", len(tier.MilestoneItemPool))
+			if tier.TreasureRound != 10 {
+				t.Errorf("stage 0: expected TreasureRound=10, got %d", tier.TreasureRound)
+			}
+			if len(tier.TreasureItemPool) != 2 {
+				t.Errorf("stage 0: expected 2 treasure items, got %d", len(tier.TreasureItemPool))
 			}
 		}
 	}
