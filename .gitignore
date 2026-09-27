@@ -21,6 +21,7 @@ coverage.txt
 /runtime/
 /.benchmarks/
 /.cache/
+/.worktrees/
 
 # Editor and IDE metadata.
 .idea/

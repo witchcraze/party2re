@@ -282,6 +282,8 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 	}
 
 	_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
+	_ = s.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, characterID)
+	_ = s.timer.ResetDailyQuota(ctx, "dungeon_once", characterID)
 
 	return WakeResult{
 		Success:   true,

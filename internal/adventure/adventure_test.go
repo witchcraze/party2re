@@ -13,6 +13,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/timer"
 )
 
 type testClock struct{ now time.Time }
@@ -158,12 +159,12 @@ func TestStartStageSuccess(t *testing.T) {
 	service, clock, repository, characters := newTestService(t)
 	characters.value.Level = 10
 
-	adv, err := service.StartStage(context.Background(), characters.value.ID, "stage-01")
+	adv, err := service.StartStage(context.Background(), characters.value.ID, StarterAdventure)
 	if err != nil {
 		t.Fatalf("StartStage() error = %v", err)
 	}
-	if adv.StageID != "stage-01" {
-		t.Errorf("StageID = %s, want stage-01", adv.StageID)
+	if adv.StageID != StarterAdventure {
+		t.Errorf("StageID = %s, want %s", adv.StageID, StarterAdventure)
 	}
 	if !adv.Resolved {
 		t.Errorf("Resolved = false, want true (immediate resolution)")
@@ -346,7 +347,7 @@ func TestAdventure_CrystalRewardPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	adv, err := service.StartStage(context.Background(), character.ID, "stage-01")
+	adv, err := service.StartStage(context.Background(), character.ID, StarterAdventure)
 	if err != nil {
 		t.Fatalf("StartStage failed: %v", err)
 	}
@@ -388,7 +389,7 @@ func TestAdventure_CrystalRewardClamping(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	adv, err := service.StartStage(context.Background(), character.ID, "stage-01")
+	adv, err := service.StartStage(context.Background(), character.ID, StarterAdventure)
 	if err != nil {
 		t.Fatalf("StartStage failed: %v", err)
 	}
@@ -622,5 +623,77 @@ func TestExecuteCrawl_HookErrorHandling(t *testing.T) {
 	}
 	if !strings.Contains(logger.warnings[1], "post adventure hook failed for character char-hook-test: simulated post adventure hook error") {
 		t.Errorf("unexpected post adventure hook warning: %s", logger.warnings[1])
+	}
+}
+
+func TestExecuteCrawl_DailyOnceLock(t *testing.T) {
+	character, err := corecharacter.New("DailyExplorer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	character.Level = 99
+	character.Stats.HP = 1000
+	character.Stats.MaxHP = 1000
+	character.Stats.Attack = 1000
+	character.Stats.Defense = 500
+
+	adventures := &repositoryStub{}
+	characters := &characterRepositoryStub{value: character}
+	adventures.characters = characters
+	clock := &testClock{now: time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)}
+	stages, _ := InitialStageCatalog()
+	monsters, _ := InitialMonsterCatalog()
+	service, err := NewServiceWithCatalogs(adventures, characters, nil, stages, monsters, corebattle.Engine{}, nil, nopLogger{}, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	timerSvc := timer.NewService(nil)
+	service.SetTimerService(timerSvc)
+
+	// Normal stage should succeed without lock restriction
+	_, err = service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
+		CharacterIDs: []string{character.ID},
+		StageID:      "stage-00",
+	})
+	if err != nil {
+		t.Fatalf("ExecuteCrawl for stage-00 failed: %v", err)
+	}
+
+	// First attempt on stage-26 should succeed and acquire the lock
+	res, err := service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
+		CharacterIDs: []string{character.ID},
+		StageID:      "stage-26",
+	})
+	if err != nil {
+		t.Fatalf("first ExecuteCrawl for stage-26 failed: %v", err)
+	}
+	if !res.StageCleared {
+		t.Errorf("expected stage-26 to be cleared")
+	}
+
+	// Verify timer lock was acquired
+	hasLock, err := timerSvc.IsLocked(context.Background(), timer.CategoryDungeonOnce, character.ID)
+	if err != nil || !hasLock {
+		t.Errorf("expected timer lock for %s to be set", character.ID)
+	}
+
+	// Second attempt on stage-26 on the same day should fail with ErrDailyOnceAlreadyUsed
+	_, err = service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
+		CharacterIDs: []string{character.ID},
+		StageID:      "stage-26",
+	})
+	if !errors.Is(err, ErrDailyOnceAlreadyUsed) {
+		t.Fatalf("expected ErrDailyOnceAlreadyUsed, got: %v", err)
+	}
+
+	// Releasing lock (e.g. via Home sleep wake) allows entry again
+	_ = timerSvc.ReleaseLock(context.Background(), timer.CategoryDungeonOnce, character.ID)
+	_, err = service.ExecuteCrawl(context.Background(), DungeonCrawlRequest{
+		CharacterIDs: []string{character.ID},
+		StageID:      "stage-26",
+	})
+	if err != nil {
+		t.Fatalf("ExecuteCrawl after lock release failed: %v", err)
 	}
 }

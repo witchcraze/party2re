@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #852 — Adopt depot.FindOrCreate for buyer delivery and restore listing collection discovery
+Last updated: Issue #795 — Restore Stage 26 Four Seasons Dungeon, stage drop pools, and purge dead timers
 
 ## Current Phase
 

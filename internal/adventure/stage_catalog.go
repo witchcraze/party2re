@@ -18,13 +18,43 @@ var (
 	ErrJobLevelRequirementNotMet = errors.New("character job level requirement not met for stage")
 )
 
-// Stage defines an adventure destination with required levels, normal monsters, and boss encounters.
+// SeasonalStageData defines monster encounters and loot pools for a seasonal variant of Stage 26.
+type SeasonalStageData struct {
+	Season          string   `json:"season"`
+	BossIDs         []string `json:"boss_ids"`
+	MonsterIDs      []string `json:"monster_ids"`
+	TreasureWeapons []string `json:"treasure_weapons"`
+	TreasureArmors  []string `json:"treasure_armors"`
+	TreasureItems   []string `json:"treasure_items"`
+}
+
+// Stage defines an adventure destination with required levels, normal monsters, boss encounters, and treasure pools.
 type Stage struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	MinLevel   int      `json:"min_level"`
-	MonsterIDs []string `json:"monster_ids"`
-	BossIDs    []string `json:"boss_ids,omitempty"`
+	ID              string              `json:"id"`
+	Name            string              `json:"name"`
+	MinLevel        int                 `json:"min_level"`
+	MonsterIDs      []string            `json:"monster_ids"`
+	BossIDs         []string            `json:"boss_ids,omitempty"`
+	TreasureWeapons []string            `json:"treasure_weapons,omitempty"`
+	TreasureArmors  []string            `json:"treasure_armors,omitempty"`
+	TreasureItems   []string            `json:"treasure_items,omitempty"`
+	Seasons         []SeasonalStageData `json:"seasons,omitempty"`
+}
+
+// ForSeason returns a copy of the Stage configured for the given seasonal variant.
+func (s Stage) ForSeason(season string) Stage {
+	for _, sd := range s.Seasons {
+		if strings.EqualFold(sd.Season, season) {
+			cp := s
+			cp.MonsterIDs = sd.MonsterIDs
+			cp.BossIDs = sd.BossIDs
+			cp.TreasureWeapons = sd.TreasureWeapons
+			cp.TreasureArmors = sd.TreasureArmors
+			cp.TreasureItems = sd.TreasureItems
+			return cp
+		}
+	}
+	return s
 }
 
 // GetBossIDs returns the stage boss IDs (for Floor 10).
@@ -59,12 +89,15 @@ func (s Stage) GetNormalMonsterIDs() []string {
 }
 
 type stageJSON struct {
-	ID              string   `json:"id"`
-	Name            string   `json:"name"`
-	MinLevel        int      `json:"min_level"`
-	MonsterIDs      []string `json:"monster_ids"`
-	BossIDs         []string `json:"boss_ids,omitempty"`
-	DurationSeconds int      `json:"duration_seconds,omitempty"` // legacy compat, purged from domain
+	ID              string              `json:"id"`
+	Name            string              `json:"name"`
+	MinLevel        int                 `json:"min_level"`
+	MonsterIDs      []string            `json:"monster_ids"`
+	BossIDs         []string            `json:"boss_ids,omitempty"`
+	TreasureWeapons []string            `json:"treasure_weapons,omitempty"`
+	TreasureArmors  []string            `json:"treasure_armors,omitempty"`
+	TreasureItems   []string            `json:"treasure_items,omitempty"`
+	Seasons         []SeasonalStageData `json:"seasons,omitempty"`
 }
 
 // NewStage creates a Stage definition without duration (purging the fictional timer).
@@ -129,6 +162,18 @@ func (c *StageCatalog) FindByID(id string) (Stage, error) {
 	}
 	s, ok := c.stages[id]
 	if !ok {
+		var num int
+		if _, err := fmt.Sscanf(id, "stage-%d", &num); err == nil {
+			formatted := fmt.Sprintf("stage-%02d", num)
+			if s2, ok2 := c.stages[formatted]; ok2 {
+				return s2, nil
+			}
+		} else if _, err := fmt.Sscanf(id, "%d", &num); err == nil {
+			formatted := fmt.Sprintf("stage-%02d", num)
+			if s2, ok2 := c.stages[formatted]; ok2 {
+				return s2, nil
+			}
+		}
 		return Stage{}, ErrStageNotFound
 	}
 	return s, nil
@@ -154,19 +199,21 @@ func RequiredJobLevel(stageID string) int {
 	var num int
 	_, _ = fmt.Sscanf(stageID, "stage-%d", &num)
 	switch num {
-	case 1, 2:
+	case 0, 1:
 		return 0
-	case 23: // legacy stage 22
+	case 22:
 		return 6
-	case 25: // legacy stage 24
+	case 24:
 		return 50
-	case 26: // legacy stage 25
+	case 25:
 		return 10
+	case 26, 27:
+		return 0
 	default:
-		if num >= 3 && num <= 15 {
-			return num - 2
+		if num >= 2 && num <= 14 {
+			return num - 1
 		}
-		if num > 15 {
+		if num > 14 {
 			return 14
 		}
 		return 0
@@ -202,6 +249,10 @@ func InitialStageCatalog() (*StageCatalog, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid stage %s: %w", raw.ID, err)
 		}
+		stage.TreasureWeapons = raw.TreasureWeapons
+		stage.TreasureArmors = raw.TreasureArmors
+		stage.TreasureItems = raw.TreasureItems
+		stage.Seasons = raw.Seasons
 		stages = append(stages, stage)
 	}
 	return NewStageCatalog(stages)

@@ -12,11 +12,13 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
+	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
 const (
-	StarterAdventure = "stage-01"
+	StarterAdventure = "stage-00"
 	AdventureReward  = 20
 	AdventureEnemyID = "starter-opponent"
 )
@@ -27,6 +29,7 @@ var (
 	ErrCannotUseInCombat    = item.ErrCannotUseInCombat
 	ErrCharacterUnconscious = errors.New("character is unconscious (HP <= 0) and cannot adventure")
 	ErrCharacterExhausted   = errors.New("character is exhausted (tired >= 100) and must rest")
+	ErrDailyOnceAlreadyUsed = errors.New("character has already challenged the once-daily dungeon today")
 )
 
 // ValidateCombatItem validates that an item is allowed for use in combat actions.
@@ -54,14 +57,6 @@ type Adventure struct {
 	Resolved         bool
 }
 
-type Clock interface {
-	Now() time.Time
-}
-
-type RealClock struct{}
-
-func (RealClock) Now() time.Time { return time.Now().UTC() }
-
 type Repository interface {
 	Save(ctx context.Context, value Adventure) error
 	FindByID(ctx context.Context, id string) (Adventure, error)
@@ -70,76 +65,13 @@ type Repository interface {
 	GetAggregatedStats(ctx context.Context, characterID string) (AggregatedStats, error)
 }
 
-type InventoryRepository interface {
-	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
-	Save(ctx context.Context, value coreinventory.Inventory) error
-}
-
 type CharacterRepository interface {
 	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
 }
 
-type CharacterUpdater interface {
-	Update(ctx context.Context, value corecharacter.Character) error
-}
-
-type Logger interface {
-	Warn(msg string, args ...any)
-}
-
-type nopLogger struct{}
-
-func (nopLogger) Warn(msg string, args ...any) {}
-
-// VictoryHook is called when an adventure stage concludes with a player victory.
-// It is invoked as a best-effort side-effect notification after adventure state and rewards are committed.
-// Hook execution errors are logged via Logger without failing the completed adventure.
-type VictoryHook func(ctx context.Context, characterID string, monstersDefeated int, goldEarned int) error
-
-// PostAdventureHook is called after an adventure concludes and state is applied.
-// It is invoked as a best-effort side-effect notification.
-// Hook execution errors are logged via Logger without failing the completed adventure.
-type PostAdventureHook func(ctx context.Context, characterID string) error
-
-type partyBattleResolver interface {
-	ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error)
-}
-
-// ParticipantBuilder constructs a Participant from a character ID.
-type ParticipantBuilder interface {
-	BuildParticipant(ctx context.Context, characterID string) (corebattle.Participant, error)
-}
-
-// Option configures optional parameters on Service.
-type Option func(*Service)
-
-// WithParticipantBuilder configures the ParticipantBuilder.
-func WithParticipantBuilder(builder ParticipantBuilder) Option {
-	return func(s *Service) {
-		s.participantBuilder = builder
-		if settler, ok := builder.(PostBattleSettler); ok && s.battleSettler == nil {
-			s.battleSettler = settler
-		}
-	}
-}
-
-// WithPostBattleSettler configures the PostBattleSettler.
-func WithPostBattleSettler(settler PostBattleSettler) Option {
-	return func(s *Service) {
-		s.battleSettler = settler
-	}
-}
-
-// BlessingProvider queries active chapel blessings for a character.
-type BlessingProvider interface {
-	GetActiveBlessing(ctx context.Context, characterID string) (string, error)
-}
-
-// WithBlessingProvider configures the BlessingProvider.
-func WithBlessingProvider(provider BlessingProvider) Option {
-	return func(s *Service) {
-		s.blessingProvider = provider
-	}
+type InventoryRepository interface {
+	FindByCharacterID(ctx context.Context, characterID string) (coreinventory.Inventory, error)
+	Save(ctx context.Context, value coreinventory.Inventory) error
 }
 
 type Service struct {
@@ -156,6 +88,7 @@ type Service struct {
 	participantBuilder ParticipantBuilder
 	battleSettler      PostBattleSettler
 	blessingProvider   BlessingProvider
+	timer              TimerService
 }
 
 func (s *Service) SetVictoryHook(hook VictoryHook) {
@@ -168,6 +101,10 @@ func (s *Service) SetPostAdventureHook(hook PostAdventureHook) {
 
 func (s *Service) SetBlessingProvider(provider BlessingProvider) {
 	s.blessingProvider = provider
+}
+
+func (s *Service) SetTimerService(timer TimerService) {
+	s.timer = timer
 }
 
 func NewService(adventures Repository, characters CharacterRepository, battle corebattle.Resolver, scheduler any, logger Logger) (*Service, error) {
@@ -309,6 +246,29 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 		return DungeonCrawlResult{}, err
 	}
 
+	if stage.ID == "stage-26" && s.timer != nil {
+		for _, c := range characters {
+			locked, err := s.timer.IsLocked(ctx, timer.CategoryDungeonOnce, c.ID)
+			if err != nil {
+				return DungeonCrawlResult{}, err
+			}
+			if locked {
+				return DungeonCrawlResult{}, fmt.Errorf("%w: %sはすでに本日の限定ダンジョン探索を終えています。自宅で睡眠をとると再度挑戦できます", ErrDailyOnceAlreadyUsed, c.Name)
+			}
+		}
+	}
+
+	rng := req.Rng
+	if rng == nil {
+		rng = random.Intn
+	}
+
+	if len(stage.Seasons) > 0 {
+		seasonNames := []string{"spring", "summer", "autumn", "winter"}
+		chosenSeason := seasonNames[rng(len(seasonNames))]
+		stage = stage.ForSeason(chosenSeason)
+	}
+
 	var pbr corebattle.PartyBattleResolver = corebattle.Engine{}
 	if r, ok := s.battle.(partyBattleResolver); ok {
 		pbr = r
@@ -329,6 +289,12 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	session, err := NewCrawlSessionWithParticipants(stage, characters, participants, req.Rng)
 	if err != nil {
 		return DungeonCrawlResult{}, err
+	}
+
+	if stage.ID == "stage-26" && s.timer != nil {
+		for _, c := range characters {
+			_ = s.timer.SetLock(ctx, timer.CategoryDungeonOnce, c.ID, 7*24*time.Hour)
+		}
 	}
 
 	if s.blessingProvider != nil {

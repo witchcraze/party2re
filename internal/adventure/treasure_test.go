@@ -2,6 +2,7 @@ package adventure_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
 )
@@ -156,5 +157,142 @@ func TestGenerateTreasureBoxes(t *testing.T) {
 	}
 	if boxes[2].ID != "box-3" || boxes[2].Name != "普通の宝箱C" {
 		t.Errorf("unexpected box[2]: %+v", boxes[2])
+	}
+}
+
+func TestCalculateTreasureCount_StageMultiplier(t *testing.T) {
+	for _, stageID := range []string{"stage-17", "stage-20", "stage-21"} {
+		got := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
+			AliveMembers: 2,
+			StageID:      stageID,
+		})
+		if got != 6 {
+			t.Errorf("CalculateTreasureCount for %s: got %d, want 6 (2 * 3)", stageID, got)
+		}
+	}
+
+	// Normal stage should not have 3x multiplier
+	gotNormal := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
+		AliveMembers: 2,
+		StageID:      "stage-00",
+	})
+	if gotNormal != 2 {
+		t.Errorf("CalculateTreasureCount for stage-00: got %d, want 2", gotNormal)
+	}
+}
+
+func TestCalculateTreasureCount_GamblerBonus(t *testing.T) {
+	// Gambler bonus: rng(3) - rng(2)
+	// Case 1: Max positive bonus: rng(3) = 2, rng(2) = 0 -> +2
+	gotPos := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
+		AliveMembers: 4,
+		HasGambler:   true,
+		Rng: func(n int) int {
+			if n == 3 {
+				return 2
+			}
+			return 0
+		},
+	})
+	if gotPos != 6 {
+		t.Errorf("gotPos = %d, want 6 (4 + 2)", gotPos)
+	}
+
+	// Case 2: Negative penalty without Lucky Pendant: rng(3) = 0, rng(2) = 1 -> -1 (4 - 1 = 3)
+	gotNeg := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
+		AliveMembers: 4,
+		HasGambler:   true,
+		Rng: func(n int) int {
+			if n == 3 {
+				return 0
+			}
+			return 1
+		},
+	})
+	if gotNeg != 3 {
+		t.Errorf("gotNeg = %d, want 3 (4 - 1)", gotNeg)
+	}
+
+	// Case 3: Negative penalty WITH Lucky Pendant: guarded to not fall below baseCount (4)
+	gotGuarded := adventure.CalculateTreasureCount(adventure.TreasureCalculationInput{
+		AliveMembers:    4,
+		HasGambler:      true,
+		HasLuckyPendant: true,
+		Rng: func(n int) int {
+			if n == 3 {
+				return 0
+			}
+			return 1
+		},
+	})
+	if gotGuarded < 4 {
+		t.Errorf("gotGuarded = %d, expected >= 4 with Lucky Pendant", gotGuarded)
+	}
+}
+
+func TestGetDayOfWeekOrb(t *testing.T) {
+	tests := []struct {
+		weekday time.Weekday
+		rngVal  int
+		wantOrb string
+	}{
+		{time.Monday, 0, "item-060"},
+		{time.Tuesday, 0, "item-061"},
+		{time.Wednesday, 0, "item-062"},
+		{time.Thursday, 0, "item-063"},
+		{time.Friday, 0, "item-064"},
+		{time.Saturday, 0, "item-065"},
+		{time.Sunday, 2, "item-062"}, // Sunday with rng(6) = 2 -> 60 + 2 = 62
+		{time.Sunday, 5, "item-065"}, // Sunday with rng(6) = 5 -> 60 + 5 = 65
+	}
+
+	for _, tt := range tests {
+		// 2026-08-23 was Sunday (0), 2026-08-24 Monday (1), etc.
+		date := time.Date(2026, 8, 23+int(tt.weekday), 12, 0, 0, 0, time.UTC)
+		orb := adventure.GetDayOfWeekOrb(date, func(n int) int { return tt.rngVal })
+		if orb != tt.wantOrb {
+			t.Errorf("GetDayOfWeekOrb(%v) = %s, want %s", tt.weekday, orb, tt.wantOrb)
+		}
+	}
+}
+
+func TestGenerateTreasureBoxesWithPools(t *testing.T) {
+	pools := adventure.StageTreasurePools{
+		Weapons: []string{"weapon-01"},
+		Armors:  []string{"armor-01"},
+		Items:   []string{"item-001"},
+	}
+
+	// rand(4) + 1:
+	// if rng(4) == 0 -> v = 1 -> weapon
+	// if rng(4) == 1 -> v = 2 -> armor
+	// if rng(4) == 2 -> v = 3 -> item
+	// if rng(4) == 3 -> v = 4 (clamped to 3) -> item
+	// When n == 4, roll category:
+	// box 0: 0 -> v=1 (weapon)
+	// box 1: 1 -> v=2 (armor)
+	// box 2: 2 -> v=3 (item)
+	categoryRolls := []int{0, 1, 2}
+	rollIdx := 0
+	rng := func(n int) int {
+		if n == 4 && rollIdx < len(categoryRolls) {
+			r := categoryRolls[rollIdx]
+			rollIdx++
+			return r
+		}
+		return 0
+	}
+
+	now := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC) // Monday -> item-060
+	boxes := adventure.GenerateTreasureBoxesWithPools(3, pools, now, rng)
+
+	if len(boxes) != 3 {
+		t.Fatalf("expected 3 boxes, got %d", len(boxes))
+	}
+	if boxes[0].ItemID != "weapon-01" {
+		t.Errorf("box[0] ItemID = %s, want weapon-01", boxes[0].ItemID)
+	}
+	if boxes[1].ItemID != "armor-01" {
+		t.Errorf("box[1] ItemID = %s, want armor-01", boxes[1].ItemID)
 	}
 }

@@ -3432,5 +3432,41 @@
     "exp_reward": 160,
     "gold_reward": 200,
     "drop_item_ids": []
+  },
+  {
+    "id": "monster-287",
+    "name": "パンサーボス",
+    "hp": 700,
+    "mp": 16,
+    "attack": 56,
+    "defense": 10,
+    "agility": 61,
+    "exp_reward": 200,
+    "gold_reward": 50,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-288",
+    "name": "チビベロス",
+    "hp": 12,
+    "mp": 0,
+    "attack": 15,
+    "defense": 0,
+    "agility": 15,
+    "exp_reward": 33,
+    "gold_reward": 5,
+    "drop_item_ids": []
+  },
+  {
+    "id": "monster-289",
+    "name": "カマクラＵＦＯ",
+    "hp": 500,
+    "mp": 46,
+    "attack": 43,
+    "defense": 30,
+    "agility": 25,
+    "exp_reward": 100,
+    "gold_reward": 150,
+    "drop_item_ids": []
   }
 ]

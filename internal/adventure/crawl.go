@@ -3,6 +3,7 @@ package adventure
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/battle"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -69,6 +70,7 @@ type CrawlSession struct {
 	ID                  string                    `json:"id"`
 	StageID             string                    `json:"stage_id"`
 	StageName           string                    `json:"stage_name"`
+	Stage               Stage                     `json:"-"`
 	LeaderID            string                    `json:"leader_id"`
 	CharacterIDs        []string                  `json:"character_ids"`
 	Characters          []corecharacter.Character `json:"-"`
@@ -129,6 +131,7 @@ func NewCrawlSessionWithParticipants(
 		ID:           id.New(),
 		StageID:      stage.ID,
 		StageName:    stage.Name,
+		Stage:        stage,
 		LeaderID:     characters[0].ID,
 		CharacterIDs: charIDs,
 		Characters:   characters,
@@ -333,6 +336,7 @@ func (s *CrawlSession) AdvanceFloor(
 func (s *CrawlSession) spawnTreasureBoxes() {
 	aliveCount := 0
 	hasMerchant := false
+	hasGambler := false
 	hasTreasureHunter := false
 	hasLuckyPendant := false
 
@@ -351,21 +355,37 @@ func (s *CrawlSession) spawnTreasureBoxes() {
 		if c.JobID == "merchant" || c.JobID == "7" {
 			hasMerchant = true
 		}
+		if c.JobID == "gambler" || c.JobID == "81" {
+			hasGambler = true
+		}
 		if c.JobID == "treasure_hunter" || c.JobID == "78" {
 			hasTreasureHunter = true
 		}
 	}
 
 	boxCount := CalculateTreasureCount(TreasureCalculationInput{
+		StageID:             s.StageID,
 		AliveMembers:        aliveCount,
 		HasMerchant:         hasMerchant,
+		HasGambler:          hasGambler,
 		HasTreasureHunter:   hasTreasureHunter,
 		HasLuckyPendant:     hasLuckyPendant,
 		HasTreasureBlessing: s.HasTreasureBlessing,
 		Rng:                 s.Rng,
 	})
 
-	s.TreasureBoxes = GenerateTreasureBoxes(boxCount, []string{"item-001", "item-002"}, s.Rng)
+	itemPool := s.Stage.TreasureItems
+	if len(itemPool) == 0 && len(s.Stage.TreasureWeapons) == 0 && len(s.Stage.TreasureArmors) == 0 {
+		itemPool = []string{"item-001", "item-002"}
+	}
+
+	pools := StageTreasurePools{
+		Weapons: s.Stage.TreasureWeapons,
+		Armors:  s.Stage.TreasureArmors,
+		Items:   itemPool,
+	}
+
+	s.TreasureBoxes = GenerateTreasureBoxesWithPools(boxCount, pools, time.Now().UTC(), s.Rng)
 }
 
 // ExamineTreasure opens a treasure box on Floor 11 (@しらべる).
