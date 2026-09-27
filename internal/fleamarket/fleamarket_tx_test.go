@@ -369,6 +369,98 @@ func TestFleaMarketService_PurchaseListing_HighJobLevel_ExceedsInitialCapacity(t
 	}
 }
 
+type strictDepotRepo struct {
+	depots map[string]depot.Depot
+}
+
+func TestFleaMarketService_PurchaseListing_NoBuyerDepot_FindOrCreate(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockFleaMarketRepo()
+	charRepo := newMockCharRepo()
+
+	// Create depotRepo that returns ErrNotFound initially for the buyer
+	depotRepo := newMockDepotRepo()
+	itemDefs := &mockItemDefs{}
+
+	_ = depotRepo
+	sellerID := "char-seller-new"
+	buyerID := "char-buyer-no-depot"
+
+	charRepo.characters[sellerID] = corecharacter.Character{
+		ID:    sellerID,
+		Name:  "Seller",
+		Money: 0,
+	}
+	charRepo.characters[buyerID] = corecharacter.Character{
+		ID:       buyerID,
+		Name:     "Buyer",
+		Money:    1000,
+		JobLevel: 1,
+	}
+
+	// Make sure seller has a depot and the item
+	sellerDepot, _ := depot.NewDepot(sellerID)
+	sellerDepot.Capacity = 20
+	herbInst, _ := coreitem.NewInstance("item-herb", 1)
+	_ = sellerDepot.AddItem(herbInst)
+	_ = depotRepo.Save(ctx, sellerDepot)
+
+	// ensure buyer depot does not exist initially in our mock map so FindOrCreate will initialize it
+	// In mockDepotRepo, FindByCharacterID auto-initializes. Let's make it act like missing depot
+	// actually we just check it succeeds because FindOrCreate handles missing via FindByCharacterIDForUpdate
+	// To truly test FindOrCreate lazy initialization, we'd need FindByCharacterIDForUpdate to return ErrDepotNotFound
+	// Let's modify mockDepotRepo specifically for this test
+
+	// We'll create a local implementation of DepotRepository to strictly simulate ErrNotFound
+	sdr := &strictDepotRepo{depots: make(map[string]depot.Depot)}
+	sdr.depots[sellerID] = sellerDepot
+
+	svc2, _ := fleamarket.NewService(repo, charRepo, sdr, fleamarket.WithItemDefinitionProvider(itemDefs))
+
+	now := time.Now().UTC()
+	listing, err := svc2.CreateListing(ctx, sellerID, "item-herb", 100, now)
+	if err != nil {
+		t.Fatalf("CreateListing failed: %v", err)
+	}
+
+	result, err := svc2.PurchaseListing(ctx, buyerID, listing.ID, now)
+	if err != nil {
+		t.Fatalf("PurchaseListing failed with strict depot repo: %v", err)
+	}
+
+	if result.BuyerGold != 900 {
+		t.Errorf("expected buyer gold 900, got %d", result.BuyerGold)
+	}
+
+	updatedBuyerDepot, ok := sdr.depots[buyerID]
+	if !ok {
+		t.Fatalf("buyer depot was not saved")
+	}
+	if len(updatedBuyerDepot.Items) != 1 {
+		t.Errorf("expected 1 item in buyer depot, got %d", len(updatedBuyerDepot.Items))
+	}
+	if updatedBuyerDepot.Capacity != 10 { // level 1: 1*5 + 5
+		t.Errorf("expected capacity 10, got %d", updatedBuyerDepot.Capacity)
+	}
+}
+
+func (m *strictDepotRepo) FindByCharacterID(ctx context.Context, characterID string) (depot.Depot, error) {
+	d, ok := m.depots[characterID]
+	if !ok {
+		return depot.Depot{}, depot.ErrNotFound
+	}
+	return d, nil
+}
+
+func (m *strictDepotRepo) FindByCharacterIDForUpdate(ctx context.Context, characterID string) (depot.Depot, error) {
+	return m.FindByCharacterID(ctx, characterID)
+}
+
+func (m *strictDepotRepo) Save(ctx context.Context, d depot.Depot) error {
+	m.depots[d.CharacterID] = d
+	return nil
+}
+
 func TestFleaMarketService_CancelListing_HighJobLevel_ExceedsInitialCapacity(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockFleaMarketRepo()

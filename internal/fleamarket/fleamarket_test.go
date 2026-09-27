@@ -148,6 +148,30 @@ func (m *mockDepotRepo) Save(ctx context.Context, d depot.Depot) error {
 	return nil
 }
 
+type mockCollectionRecorder struct {
+	calls []struct {
+		charID   string
+		itemID   string
+		itemName string
+		category string
+	}
+}
+
+func (m *mockCollectionRecorder) RecordItemDiscovered(ctx context.Context, characterID, itemID, itemName, category string) error {
+	m.calls = append(m.calls, struct {
+		charID   string
+		itemID   string
+		itemName string
+		category string
+	}{
+		charID:   characterID,
+		itemID:   itemID,
+		itemName: itemName,
+		category: category,
+	})
+	return nil
+}
+
 type mockItemDefs struct{}
 
 func (m *mockItemDefs) FindByID(id string) (coreitem.Definition, error) {
@@ -242,6 +266,66 @@ func TestFleaMarketService_CreateListing(t *testing.T) {
 	_, err = svc.CreateListing(ctx, sellerID, "item-herb", 100, now)
 	if !errors.Is(err, fleamarket.ErrMaxListingsReached) {
 		t.Errorf("expected ErrMaxListingsReached, got %v", err)
+	}
+}
+
+func TestFleaMarketService_CreateListing_CollectionDiscovery(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockFleaMarketRepo()
+	charRepo := newMockCharRepo()
+	depotRepo := newMockDepotRepo()
+	itemDefs := &mockItemDefs{}
+	recorder := &mockCollectionRecorder{}
+
+	svc, _ := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(itemDefs), fleamarket.WithCollectionRecorder(recorder))
+
+	sellerID := "char-seller-col"
+	charRepo.characters[sellerID] = corecharacter.Character{
+		ID:    sellerID,
+		Name:  "SellerHero",
+		Money: 500,
+	}
+	sellerDepot, _ := depot.NewDepot(sellerID)
+	sellerDepot.Capacity = 20
+	inst, _ := coreitem.NewInstance("wea-sword", 1)
+	_ = sellerDepot.AddItem(inst)
+	_ = depotRepo.Save(ctx, sellerDepot)
+
+	now := time.Now().UTC()
+
+	// 1. Verify RecordItemDiscovered is called with correct parameters
+	_, err := svc.CreateListing(ctx, sellerID, "wea-sword", 300, now)
+	if err != nil {
+		t.Fatalf("CreateListing failed: %v", err)
+	}
+
+	if len(recorder.calls) != 1 {
+		t.Fatalf("expected 1 call to RecordItemDiscovered, got %d", len(recorder.calls))
+	}
+	call := recorder.calls[0]
+	if call.charID != sellerID {
+		t.Errorf("expected charID %s, got %s", sellerID, call.charID)
+	}
+	if call.itemID != "wea-sword" {
+		t.Errorf("expected itemID 'wea-sword', got %s", call.itemID)
+	}
+	if call.itemName != "銅の剣" {
+		t.Errorf("expected itemName '銅の剣', got %s", call.itemName)
+	}
+	if call.category != "main-hand" {
+		t.Errorf("expected category 'main-hand', got %s", call.category)
+	}
+
+	// 2. Verify nil collection recorder functions cleanly
+	svcNilRecorder, _ := fleamarket.NewService(repo, charRepo, depotRepo, fleamarket.WithItemDefinitionProvider(itemDefs))
+
+	inst2, _ := coreitem.NewInstance("item-herb", 1)
+	_ = sellerDepot.AddItem(inst2)
+	_ = depotRepo.Save(ctx, sellerDepot)
+
+	_, err = svcNilRecorder.CreateListing(ctx, sellerID, "item-herb", 50, now)
+	if err != nil {
+		t.Fatalf("CreateListing with nil recorder failed: %v", err)
 	}
 }
 

@@ -89,6 +89,10 @@ type DepotRepository interface {
 	Save(ctx context.Context, value depot.Depot) error
 }
 
+type CollectionRecorder interface {
+	RecordItemDiscovered(ctx context.Context, characterID, itemID, itemName, category string) error
+}
+
 type ItemDefinitionProvider = coreitem.DefinitionProvider
 
 type TransactionProvider interface {
@@ -96,14 +100,25 @@ type TransactionProvider interface {
 }
 
 type Service struct {
-	repo       FleaMarketRepository
-	charRepo   CharacterRepository
-	depotRepo  DepotRepository
-	itemDefs   ItemDefinitionProvider
-	txProvider TransactionProvider
+	repo               FleaMarketRepository
+	charRepo           CharacterRepository
+	depotRepo          DepotRepository
+	itemDefs           ItemDefinitionProvider
+	txProvider         TransactionProvider
+	collectionRecorder CollectionRecorder
 }
 
 type Option func(*Service)
+
+func WithCollectionRecorder(recorder CollectionRecorder) Option {
+	return func(s *Service) {
+		s.collectionRecorder = recorder
+	}
+}
+
+func (s *Service) SetCollectionRecorder(recorder CollectionRecorder) {
+	s.collectionRecorder = recorder
+}
 
 func WithTransactionProvider(txProvider TransactionProvider) Option {
 	return func(s *Service) {
@@ -244,7 +259,12 @@ func (s *Service) CreateListing(
 			CreatedAt:         now,
 		}
 
-		return s.repo.CreateListing(txCtx, created)
+		err = s.repo.CreateListing(txCtx, created)
+		if err == nil && s.collectionRecorder != nil {
+			//lint:ignore error-swallow best-effort collection discovery
+			_ = s.collectionRecorder.RecordItemDiscovered(txCtx, seller.ID, consumedItem.DefinitionID, itemName, itemCategory)
+		}
+		return err
 	})
 
 	if err != nil {
@@ -306,11 +326,10 @@ func (s *Service) PurchaseListing(
 		}
 
 		// 4. Lock buyer depot (Rank 5)
-		buyerDepot, err := s.depotRepo.FindByCharacterIDForUpdate(txCtx, buyerCharacterID)
+		buyerDepot, err := depot.FindOrCreate(txCtx, s.depotRepo, buyerChar)
 		if err != nil {
 			return err
 		}
-		buyerDepot.RefreshCapacity(buyerChar.JobLevel, buyerChar.OverDepot)
 
 		// 5. Transfer Gold
 		if err := buyerChar.DeductMoney(listing.Price); err != nil {

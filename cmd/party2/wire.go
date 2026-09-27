@@ -132,6 +132,9 @@ func wireHooks(
 		econ.depot.SetCollectionRecorder(misc.collection)
 		econ.shop.SetCollectionRecorder(misc.collection)
 		econ.store.SetCollectionRecorder(misc.collection)
+		if econ.fleamarket != nil {
+			econ.fleamarket.SetCollectionRecorder(misc.collection)
+		}
 		if misc.eventplaza != nil {
 			misc.eventplaza.SetCollectionRecorder(misc.collection)
 		}
