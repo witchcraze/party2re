@@ -435,9 +435,9 @@ func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
 		chars: map[string]corecharacter.Character{
 			charID: {
 				ID:         charID,
-				Level:      20,
-				Experience: 5000,
-				Stats:      corecharacter.Stats{HP: 300, MaxHP: 300, Attack: 100, Defense: 50},
+				Level:      1,
+				Experience: 0,
+				Stats:      corecharacter.Stats{HP: 10, MaxHP: 10, Attack: 5, Defense: 0},
 			},
 		},
 	}
@@ -461,20 +461,12 @@ func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
 		t.Fatalf("StartSession failed: %v", err)
 	}
 
-	// Advance 1 round to win
-	_, updatedSess, err := service.AdvanceRound(ctx, charID, sess.ID)
-	if err != nil {
-		t.Fatalf("AdvanceRound failed: %v", err)
+	// 2. Trigger session defeat while MariaDB FinalizeSession fails
+	res, _, err := service.AdvanceRound(ctx, charID, sess.ID)
+	if err == nil {
+		t.Fatalf("expected AdvanceRound to fail on defeat due to MariaDB commit failure")
 	}
-	if updatedSess.CurrentRound != 2 {
-		t.Fatalf("expected round 2, got %d", updatedSess.CurrentRound)
-	}
-
-	// Verify it's in Valkey
-	valkeySess, err := valkeyStore.GetActiveSession(ctx, charID)
-	if err != nil || valkeySess == nil {
-		t.Fatalf("expected session in Valkey, got %v, err: %v", valkeySess, err)
-	}
+	_ = res
 
 	// Two-Phase Settlement Contract: Valkey buffer MUST NOT be deleted on MariaDB failure!
 	valkeySessAfterFail, err := valkeyStore.GetActiveSession(ctx, charID)
@@ -483,5 +475,25 @@ func TestTwoPhaseSettlement_CommitFailureRetainsValkey(t *testing.T) {
 	}
 	if valkeySessAfterFail == nil {
 		t.Fatalf("Valkey buffer was wiped prematurely on MariaDB failure! Buffer must be preserved for retry.")
+	}
+
+	// 3. Resolve MariaDB failure and retry defeat settlement
+	failingRepo.failFinalize = false
+
+	resRetry, _, err := service.AdvanceRound(ctx, charID, sess.ID)
+	if err != nil {
+		t.Fatalf("retry AdvanceRound failed: %v", err)
+	}
+	if !resRetry.SessionEnded || resRetry.SessionStatus != challenge.StatusDefeated {
+		t.Errorf("expected session to end in defeat on retry, got status=%v", resRetry.SessionStatus)
+	}
+
+	// Upon successful MariaDB commit, Valkey buffer MUST be purged
+	valkeySessAfterSuccess, err := valkeyStore.GetActiveSession(ctx, charID)
+	if err != nil {
+		t.Fatalf("GetActiveSession failed: %v", err)
+	}
+	if valkeySessAfterSuccess != nil {
+		t.Fatalf("Valkey buffer was NOT purged after successful commit: %#v", valkeySessAfterSuccess)
 	}
 }

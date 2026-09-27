@@ -71,19 +71,41 @@ func TestChallengeIntegrationFlow(t *testing.T) {
 		t.Errorf("unexpected started session: %#v", session)
 	}
 
-	// 2. Execute Consecutive Rounds until defeat or completion
-	roundRes, err := service.ExecuteRound(ctx, session.ID)
-	if err != nil {
-		t.Fatalf("ExecuteRound failed: %v", err)
-	}
-	if roundRes.Round != 1 {
-		t.Errorf("expected round 1, got %d", roundRes.Round)
+	// 2. Execute Consecutive Rounds until defeat so FinalizeSession is triggered
+	var lastRes *challenge.RoundResult
+	for r := 1; r <= 100; r++ {
+		roundRes, err := service.ExecuteRound(ctx, session.ID)
+		if err != nil {
+			t.Fatalf("ExecuteRound %d failed: %v", r, err)
+		}
+		lastRes = roundRes
+		if roundRes.SessionEnded {
+			break
+		}
 	}
 
-	// 3. Verify Leaderboard Query
+	if lastRes == nil || lastRes.Won || !lastRes.SessionEnded {
+		t.Fatalf("expected session to end in defeat, got %#v", lastRes)
+	}
+
+	// 3. Verify Leaderboard Score
+	clearedRounds := lastRes.Round - 1
 	leaderboard, err := service.GetLeaderboard(ctx, "0", 100)
 	if err != nil {
 		t.Fatalf("GetLeaderboard failed: %v", err)
 	}
-	_ = leaderboard
+
+	found := false
+	for _, entry := range leaderboard {
+		if entry.CharacterID == char.ID {
+			found = true
+			if entry.HighestRound != clearedRounds {
+				t.Errorf("expected highest round %d, got %d", clearedRounds, entry.HighestRound)
+			}
+			break
+		}
+	}
+	if !found && clearedRounds > 0 {
+		t.Errorf("character %s not found in challenge leaderboard for cleared rounds %d", char.ID, clearedRounds)
+	}
 }
