@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"slices"
 )
 
 //go:embed data/secret_items.json
@@ -57,9 +58,7 @@ func LoadCatalog(data []byte) (*Catalog, error) {
 
 // Items returns all items in the catalog.
 func (c *Catalog) Items() []Item {
-	copied := make([]Item, len(c.items))
-	copy(copied, c.items)
-	return copied
+	return slices.Clone(c.items)
 }
 
 // FindByID finds an item by secret item ID.
