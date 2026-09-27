@@ -9,6 +9,14 @@ labels: ["bug"]
 
 <!-- What is wrong? -->
 
+> [!NOTE]
+> **Ponytail Architecture Guidance (Jules-Ready Standard)**:
+> - **Short Core Directive**: `<Directive: e.g. Adopt Shared Primitive depot.FindOrCreate / Zero-Abstraction Guard>`
+> - **Do NOT**: `<Anti-patterns to avoid: e.g. Create custom bootstrapping functions or ad-hoc wrappers>`
+> - **Do INSTEAD**: `<Shortest-path minimal route: e.g. In internal/...:line, replace manual query with canonical helper>`
+> - **Specific Code Targets**: `<file:lines, wire.go>`
+> - **Architecture Considerations Linkage**: `- [x] No architectural impact (<Ponytail rationale: e.g. 5-line diff, zero new abstractions>)`
+
 ## Affected Components
 
 - **Packages / Modules**: `internal/<module>`
