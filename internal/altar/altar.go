@@ -3,6 +3,7 @@ package altar
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -64,12 +65,7 @@ var AllowedWishItems = []string{
 }
 
 func IsValidWishItem(itemID string) bool {
-	for _, id := range AllowedWishItems {
-		if id == itemID {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(AllowedWishItems, itemID)
 }
 
 // OrbName returns the Japanese display name of the orb symbol.
