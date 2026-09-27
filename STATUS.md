@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Refactor town house style validation using slices.Contains
+Last updated: Refactor event plaza bazaar item filtering using slices.Contains
 
 ## Current Phase
 
