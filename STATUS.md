@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Refactor town house style validation using slices.Contains
+Last updated: Refactor altar wish item validation using slices.Contains
 
 ## Current Phase
 
