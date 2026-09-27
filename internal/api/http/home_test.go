@@ -37,7 +37,7 @@ type mockHomeService struct {
 	teachCompanionPhraseFn  func(ctx context.Context, characterID, phrase string) (home.CompanionPhrase, error)
 	forgetCompanionPhraseFn func(ctx context.Context, phraseID, characterID string) error
 	listCompanionPhrasesFn  func(ctx context.Context, characterID string) ([]home.CompanionPhrase, error)
-	talkToCompanionFn       func(ctx context.Context, characterID string) (string, error)
+	talkToCompanionFn       func(ctx context.Context, characterID string) (home.CompanionTalkResult, error)
 	listDeliveryNoticesFn   func(ctx context.Context, characterID string, unclearedOnly bool) ([]home.DeliveryNotice, error)
 	clearDeliveryNoticesFn  func(ctx context.Context, characterID string) error
 	sleepFn                 func(ctx context.Context, characterID, targetHomeID string) (home.SleepResult, error)
@@ -207,11 +207,11 @@ func (m *mockHomeService) ListCompanionPhrases(ctx context.Context, characterID 
 	return []home.CompanionPhrase{{ID: "phrase-1", CharacterID: characterID, Phrase: "Hi"}}, nil
 }
 
-func (m *mockHomeService) TalkToCompanion(ctx context.Context, characterID string) (string, error) {
+func (m *mockHomeService) TalkToCompanion(ctx context.Context, characterID string) (home.CompanionTalkResult, error) {
 	if m.talkToCompanionFn != nil {
 		return m.talkToCompanionFn(ctx, characterID)
 	}
-	return "クエッ！", nil
+	return home.CompanionTalkResult{PetName: "ポチ", Dialogue: "クエッ！"}, nil
 }
 
 func (m *mockHomeService) ListDeliveryNotices(ctx context.Context, characterID string, unclearedOnly bool) ([]home.DeliveryNotice, error) {
@@ -319,6 +319,22 @@ func TestHomeEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("GET /homes/{id}/companion/talk - 422 ErrNoPetsAtHome", func(t *testing.T) {
+		noPetsSvc := &mockHomeService{
+			talkToCompanionFn: func(ctx context.Context, characterID string) (home.CompanionTalkResult, error) {
+				return home.CompanionTalkResult{}, home.ErrNoPetsAtHome
+			},
+		}
+		noPetsHandler, _ := apihttp.NewHandler(players, chars, advs, shops, apihttp.WithHome(noPetsSvc))
+		req := httptest.NewRequest(http.MethodGet, "/homes/char-1/companion/talk", nil)
+		rec := httptest.NewRecorder()
+		noPetsHandler.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("expected 422 Unprocessable Entity, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 

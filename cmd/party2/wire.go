@@ -12,7 +12,9 @@ import (
 	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/contest"
+	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/guild"
+	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/medal"
@@ -186,6 +188,9 @@ func wireHooks(
 			cmbt.party.SetPostAdventureHook(postAdventureHook)
 		}
 	}
+	if misc.monsterRepo != nil {
+		soc.home.SetHomePetReader(&homePetAdapter{repo: misc.monsterRepo})
+	}
 	if misc.chapel != nil {
 		soc.home.SetBlessingCleaner(misc.chapel)
 	}
@@ -338,6 +343,26 @@ func newHTTPHandler(
 	)
 
 	return http.NewHandler(core.playerService, core.charService, cmbt.adv, econ.shop, opts...)
+}
+
+type homePetAdapter struct {
+	repo *database.MonsterRepository
+}
+
+func (a *homePetAdapter) ListHomePets(ctx context.Context, characterID string) ([]home.HomePet, error) {
+	monsters, err := a.repo.ListByCharacterIDAndLocation(ctx, characterID, monster.LocationHome)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]home.HomePet, len(monsters))
+	for i, m := range monsters {
+		res[i] = home.HomePet{
+			ID:         m.ID,
+			CustomName: m.CustomName,
+			MonsterID:  m.MonsterID,
+		}
+	}
+	return res, nil
 }
 
 type monsterTamerAdapter struct {

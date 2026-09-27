@@ -43,6 +43,7 @@ type miscServices struct {
 	casino      *casino.Service
 	god         *god.Service
 	monster     *monster.Service
+	monsterRepo *database.MonsterRepository
 	contest     *contest.Service
 	altar       *altar.Service
 	wishingwell *wishingwell.Service
@@ -395,6 +396,7 @@ func newMiscServices(
 		casino:      casinoService,
 		god:         godService,
 		monster:     monsterService,
+		monsterRepo: monsterRepo,
 		contest:     contestService,
 		maint:       maintService,
 		activity:    activityService,

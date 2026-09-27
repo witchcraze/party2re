@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Refactor core domain slice search logic using slices.Contains
+Last updated: Issue #778 — [Refactor] Home: Wire home companion dialogue to resident monster pets (max 8) and purge obsolete OpenAPI fields
 
 ## Current Phase
 
