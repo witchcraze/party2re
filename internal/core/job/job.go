@@ -2,6 +2,7 @@ package job
 
 import (
 	"errors"
+	"slices"
 	"strings"
 )
 
@@ -116,10 +117,8 @@ func (c *CharacterJob) Master(jobID string) {
 		return
 	}
 	jobID = strings.TrimSpace(jobID)
-	for _, m := range c.MasteredJobs {
-		if m == jobID {
-			return
-		}
+	if slices.Contains(c.MasteredJobs, jobID) {
+		return
 	}
 	c.MasteredJobs = append(c.MasteredJobs, jobID)
 	if c.MasteredJobSP == nil {
@@ -167,13 +166,7 @@ func (c *CharacterJob) IsMastered(jobID string) bool {
 	if c == nil {
 		return false
 	}
-	jobID = strings.TrimSpace(jobID)
-	for _, m := range c.MasteredJobs {
-		if m == jobID {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.MasteredJobs, strings.TrimSpace(jobID))
 }
 
 // MasteredCompletionJobCount returns the number of distinct jobs mastered among

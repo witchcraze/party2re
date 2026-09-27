@@ -2,6 +2,7 @@ package character
 
 import (
 	"errors"
+	"slices"
 	"strings"
 )
 
@@ -23,12 +24,7 @@ var (
 var ValidOrbRunes = []rune{OrbSilver, OrbRed, OrbBlue, OrbGreen, OrbYellow, OrbPurple}
 
 func IsValidOrbRune(r rune) bool {
-	for _, orb := range ValidOrbRunes {
-		if orb == r {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ValidOrbRunes, r)
 }
 
 // HasOrb checks whether character has offered or collected the specified orb color.

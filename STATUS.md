@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #853 — Eliminate redundant non-transactional fallback branches in ChangeJob and wrap JobMemory restoration in transaction
+Last updated: Refactor core domain slice search logic using slices.Contains
 
 ## Current Phase
 

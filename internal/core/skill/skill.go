@@ -2,6 +2,7 @@ package skill
 
 import (
 	"errors"
+	"slices"
 	"strings"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -50,7 +51,7 @@ func (d Definition) CanUse(request UseRequest) error {
 		}
 		return ErrUnavailable
 	}
-	if len(d.RequiredJobIDs) > 0 && !contains(d.RequiredJobIDs, request.Character.JobID) {
+	if len(d.RequiredJobIDs) > 0 && !slices.Contains(d.RequiredJobIDs, request.Character.JobID) {
 		return ErrUnavailable
 	}
 	if request.RequiredItemID != "" && (request.HasItem == nil || !request.HasItem(request.RequiredItemID)) {
@@ -65,13 +66,4 @@ func (d Definition) Use(request UseRequest) (corebattle.Effect, error) {
 	}
 	request.Character.Stats.MP -= d.MPCost
 	return d.Effect, nil
-}
-
-func contains(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
 }
