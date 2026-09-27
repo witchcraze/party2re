@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Refactor altar wish item validation using slices.Contains
+Last updated: Refactor secret shop available items filtering using slices.Contains
 
 ## Current Phase
 
