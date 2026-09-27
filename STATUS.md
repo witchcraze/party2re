@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #795 — Restore Stage 26 Four Seasons Dungeon, stage drop pools, and purge dead timers
+Last updated: Refactor secretshop helper item lookup using slices.Contains
 
 ## Current Phase
 
