@@ -166,7 +166,7 @@ func TestChangeJob_ValidationAndPrerequisites(t *testing.T) {
 
 	// Character lookup fails
 	charRepoErr := &errCharRepoStub{findErr: errors.New("db error")}
-	svcCharErr, _ := NewService(repo, WithCharacterRepository(charRepoErr))
+	svcCharErr, _ := NewService(repo, WithCharacterRepository(charRepoErr), WithInventoryRepository(&errInventoryRepoStub{}))
 	_, _, err = svcCharErr.ChangeJob(ctx, "char-1", "job-02")
 	if err == nil || err.Error() != "db error" {
 		t.Fatalf("expected db error, got %v", err)
@@ -175,7 +175,7 @@ func TestChangeJob_ValidationAndPrerequisites(t *testing.T) {
 	// Target definition not found
 	char := corecharacter.Character{ID: "char-1", Name: "Hero", JobID: "job-01", Level: 50, Gender: "male", OverLevel: true}
 	charRepo := &charRepoStub{char: char}
-	svc, _ := NewService(repo, WithCharacterRepository(charRepo))
+	svc, _ := NewService(repo, WithCharacterRepository(charRepo), WithInventoryRepository(&inventoryRepoStub{}))
 	_, _, err = svc.ChangeJob(ctx, "char-1", "non-existent-job")
 	if err == nil {
 		t.Fatal("expected error for non-existent target job")
@@ -185,7 +185,7 @@ func TestChangeJob_ValidationAndPrerequisites(t *testing.T) {
 	charWithMemory := char
 	charWithMemory.JobMemory = &corecharacter.JobMemory{JobID: "job-03", SP: 50}
 	charRepoMem := &charRepoStub{char: charWithMemory}
-	svcMem, _ := NewService(repo, WithCharacterRepository(charRepoMem))
+	svcMem, _ := NewService(repo, WithCharacterRepository(charRepoMem), WithInventoryRepository(&inventoryRepoStub{}))
 	_, _, err = svcMem.ChangeJob(ctx, "char-1", "job-02")
 	if !errors.Is(err, corejob.ErrJobUnavailable) {
 		t.Fatalf("expected ErrJobUnavailable when JobMemory is present, got %v", err)
@@ -195,7 +195,7 @@ func TestChangeJob_ValidationAndPrerequisites(t *testing.T) {
 	charLowLevel := char
 	charLowLevel.Level = 5
 	charRepoLow := &charRepoStub{char: charLowLevel}
-	svcLow, _ := NewService(repo, WithCharacterRepository(charRepoLow))
+	svcLow, _ := NewService(repo, WithCharacterRepository(charRepoLow), WithInventoryRepository(&inventoryRepoStub{}))
 	_, _, err = svcLow.ChangeJob(ctx, "char-1", "job-02")
 	if err == nil {
 		t.Fatal("expected level requirement error")
@@ -206,7 +206,7 @@ func TestChangeJob_ValidationAndPrerequisites(t *testing.T) {
 	charMale.Level = 50
 	charMale.Gender = "male"
 	charRepoMale := &charRepoStub{char: charMale}
-	svcMale, _ := NewService(repo, WithCharacterRepository(charRepoMale))
+	svcMale, _ := NewService(repo, WithCharacterRepository(charRepoMale), WithInventoryRepository(&inventoryRepoStub{}))
 	_, _, err = svcMale.ChangeJob(ctx, "char-1", "job-81")
 	if err == nil {
 		t.Fatal("expected gender requirement error for job-81")
@@ -225,8 +225,11 @@ func TestChangeJob_ItemRequirementsAndExemptions(t *testing.T) {
 		opts = append(opts, WithCharacterRepository(charRepo))
 		if inv != nil {
 			invRepo = &inventoryRepoStub{inventory: *inv}
-			opts = append(opts, WithInventoryRepository(invRepo))
+		} else {
+			emptyInv, _ := coreinventory.New(char.ID)
+			invRepo = &inventoryRepoStub{inventory: emptyInv}
 		}
+		opts = append(opts, WithInventoryRepository(invRepo))
 		svc, _ := NewService(repo, opts...)
 		return svc, repo, charRepo, invRepo
 	}
@@ -443,6 +446,7 @@ func TestChangeJob_GuildPointsAndNews(t *testing.T) {
 	svc, err := NewService(
 		repo,
 		WithCharacterRepository(charRepo),
+		WithInventoryRepository(&inventoryRepoStub{}),
 		WithGuildPointAwarder(awarder),
 		WithNewsPublisher(news),
 	)
@@ -498,7 +502,7 @@ func TestExchangeJob_Comprehensive(t *testing.T) {
 
 	// 2. Character lookup error
 	charRepoErr := &errCharRepoStub{findErr: errors.New("char find err")}
-	svcCharErr, _ := NewService(&repositoryStub{value: state}, WithCharacterRepository(charRepoErr))
+	svcCharErr, _ := NewService(&repositoryStub{value: state}, WithCharacterRepository(charRepoErr), WithInventoryRepository(&errInventoryRepoStub{}))
 	_, _, err = svcCharErr.ExchangeJob(ctx, char.ID, "job-03", "job-04")
 	if err == nil || err.Error() != "char find err" {
 		t.Fatalf("expected char find err, got %v", err)
@@ -514,7 +518,7 @@ func TestExchangeJob_Comprehensive(t *testing.T) {
 	}
 	repo := &repositoryStub{value: state}
 	charRepo := &charRepoStub{char: charWithMemory}
-	svc, _ := NewService(repo, WithCharacterRepository(charRepo))
+	svc, _ := NewService(repo, WithCharacterRepository(charRepo), WithInventoryRepository(&inventoryRepoStub{}))
 	restoredChar, _, err := svc.ExchangeJob(ctx, char.ID, "ignored", "ignored")
 	if err != nil {
 		t.Fatalf("ExchangeJob restore failed: %v", err)
@@ -539,7 +543,7 @@ func TestExchangeJob_Comprehensive(t *testing.T) {
 		{"targetOld not mastered", "job-03", "job-05"},
 	}
 	charRepo = &charRepoStub{char: char}
-	svc, _ = NewService(repo, WithCharacterRepository(charRepo))
+	svc, _ = NewService(repo, WithCharacterRepository(charRepo), WithInventoryRepository(&inventoryRepoStub{}))
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, _, err := svc.ExchangeJob(ctx, char.ID, tc.target, tc.targetOld)
@@ -549,13 +553,14 @@ func TestExchangeJob_Comprehensive(t *testing.T) {
 		})
 	}
 
-	// 5. Non-economy mode: inventory is nil -> ErrRequiredItem
-	_, _, err = svc.ExchangeJob(ctx, char.ID, "job-03", "job-04")
-	if !errors.Is(err, ErrRequiredItem) {
-		t.Fatalf("expected ErrRequiredItem when inventory is nil, got %v", err)
+	// 5. Calling ExchangeJob when s.economy == nil returns "economy service not configured"
+	svcNoEco, _ := NewService(repo, WithCharacterRepository(charRepo))
+	_, _, err = svcNoEco.ExchangeJob(ctx, char.ID, "job-03", "job-04")
+	if err == nil || err.Error() != "economy service not configured" {
+		t.Fatalf("expected economy service not configured error, got %v", err)
 	}
 
-	// 6. Non-economy mode: item-168 missing -> ErrRequiredItem
+	// 6. Missing item-168 -> ErrRequiredItem
 	inv, _ := coreinventory.New(char.ID)
 	invRepo := &inventoryRepoStub{inventory: inv}
 	svcInv, _ := NewService(repo, WithCharacterRepository(charRepo), WithInventoryRepository(invRepo))
@@ -564,7 +569,7 @@ func TestExchangeJob_Comprehensive(t *testing.T) {
 		t.Fatalf("expected ErrRequiredItem when item-168 is missing, got %v", err)
 	}
 
-	// 7. Non-economy mode: item-168 present -> success, memory saved, item consumed
+	// 7. Item-168 present -> success, memory saved, item consumed
 	book, _ := item.NewInstance("item-168", 1)
 	_ = invRepo.inventory.Add(book)
 	exchangedChar, _, err := svcInv.ExchangeJob(ctx, char.ID, "job-03", "job-04")

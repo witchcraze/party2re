@@ -130,6 +130,10 @@ func (c *charRepoStub) FindByID(_ context.Context, _ string) (corecharacter.Char
 	return c.char, nil
 }
 
+func (c *charRepoStub) FindByIDForUpdate(_ context.Context, _ string) (corecharacter.Character, error) {
+	return c.char, nil
+}
+
 func (c *charRepoStub) Update(_ context.Context, char corecharacter.Character) error {
 	c.char = char
 	return nil
@@ -146,6 +150,10 @@ func (s skillProviderStub) SkillsForJob(jobID string) []skill.Definition {
 }
 
 func (r *inventoryRepoStub) FindByCharacterID(_ context.Context, _ string) (coreinventory.Inventory, error) {
+	return r.inventory, nil
+}
+
+func (r *inventoryRepoStub) FindByCharacterIDForUpdate(_ context.Context, _ string) (coreinventory.Inventory, error) {
 	return r.inventory, nil
 }
 
@@ -174,7 +182,7 @@ func TestServiceListAndChangeJob(t *testing.T) {
 		OverLevel: true,
 	}
 	charRepo := &charRepoStub{char: char}
-	svc, err := NewService(repo, WithCharacterRepository(charRepo))
+	svc, err := NewService(repo, WithCharacterRepository(charRepo), WithInventoryRepository(&inventoryRepoStub{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,6 +220,7 @@ func TestServiceChangeJobAwardsGuildPoints(t *testing.T) {
 	svc, err := NewService(
 		repo,
 		WithCharacterRepository(charRepo),
+		WithInventoryRepository(&inventoryRepoStub{}),
 		WithGuildPointAwarder(guildAwarder),
 	)
 	if err != nil {
@@ -276,7 +285,7 @@ func TestServiceChangeJobRejectsLowLevelAndMissingItem(t *testing.T) {
 		{ID: "job-old", Name: "Old", CMPTier: 1},
 		{ID: "job-new", Name: "New", CMPTier: 1, RequiredItemID: "token"},
 	})
-	svc, _ := NewService(repo, WithCatalog(catalog), WithCharacterRepository(charRepo))
+	svc, _ := NewService(repo, WithCatalog(catalog), WithCharacterRepository(charRepo), WithInventoryRepository(&inventoryRepoStub{}))
 	if _, _, err := svc.ChangeJob(context.Background(), char.ID, "job-new"); !errors.Is(err, corejob.ErrJobUnavailable) {
 		t.Fatalf("low-level error = %v", err)
 	}
@@ -523,6 +532,7 @@ func TestChangeJob_ResetsCostume(t *testing.T) {
 		repo,
 		WithCatalog(catalog),
 		WithCharacterRepository(charRepo),
+		WithInventoryRepository(&inventoryRepoStub{}),
 		WithCostumeResetter(costumeResetter),
 	)
 	if err != nil {
@@ -564,6 +574,7 @@ func TestServiceChangeJobRecordsWeeklyJobChange(t *testing.T) {
 	svc, err := NewService(
 		repo,
 		WithCharacterRepository(charRepo),
+		WithInventoryRepository(&inventoryRepoStub{}),
 		WithJobChangeTracker(tracker),
 	)
 	if err != nil {
