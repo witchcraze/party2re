@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -285,26 +286,23 @@ func (s *Service) PuffPuff(ctx context.Context, characterID string) (*PuffPuffRe
 }
 
 func (s *Service) getAvailableItems(ctx context.Context) ([]Item, error) {
-	var excludedDefIDs map[string]bool
+	var activeHelperItemIDs []string
 	if s.helperFilter != nil {
-		activeHelperItemIDs, err := s.helperFilter.GetActiveHelperItemIDs(ctx)
+		ids, err := s.helperFilter.GetActiveHelperItemIDs(ctx)
 		if err != nil {
 			return nil, err
 		}
-		excludedDefIDs = make(map[string]bool, len(activeHelperItemIDs))
-		for _, defID := range activeHelperItemIDs {
-			excludedDefIDs[defID] = true
-		}
+		activeHelperItemIDs = ids
 	}
 
 	items := s.catalog.Items()
-	if len(excludedDefIDs) == 0 {
+	if len(activeHelperItemIDs) == 0 {
 		return items, nil
 	}
 
 	var filtered []Item
 	for _, item := range items {
-		if !excludedDefIDs[item.ItemDefinitionID] {
+		if !slices.Contains(activeHelperItemIDs, item.ItemDefinitionID) {
 			filtered = append(filtered, item)
 		}
 	}
