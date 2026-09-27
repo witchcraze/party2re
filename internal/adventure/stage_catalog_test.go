@@ -101,14 +101,17 @@ func TestRequiredJobLevel_LegacyParity(t *testing.T) {
 		stageID string
 		want    int
 	}{
+		{"stage-00", 0},
 		{"stage-01", 0},
-		{"stage-02", 0},
-		{"stage-03", 1},
-		{"stage-04", 2},
-		{"stage-15", 13},
-		{"stage-23", 6},  // legacy stage 22
-		{"stage-25", 50}, // legacy stage 24
-		{"stage-26", 10}, // legacy stage 25
+		{"stage-02", 1},
+		{"stage-03", 2},
+		{"stage-04", 3},
+		{"stage-14", 13},
+		{"stage-22", 6},  // legacy stage 22: ワイルドアピアリー
+		{"stage-24", 50}, // legacy stage 24: 白亜の宮殿
+		{"stage-25", 10}, // legacy stage 25: 氷の彫刻館
+		{"stage-26", 0},  // legacy stage 26: 神秘の森 / 四季
+		{"stage-27", 0},  // legacy stage 27: ハロウィンタウン
 	}
 
 	for _, tt := range tests {
@@ -133,34 +136,70 @@ func TestCanAccessStage(t *testing.T) {
 		JobLevel: 0,
 	}
 
-	// stage-01: minLevel 1, jobLevel 0 -> OK
-	if err := cat.CanAccessStage(novice, "stage-01"); err != nil {
-		t.Errorf("novice should access stage-01, got: %v", err)
+	// stage-00: minLevel 1, jobLevel 0 -> OK
+	if err := cat.CanAccessStage(novice, "stage-00"); err != nil {
+		t.Errorf("novice should access stage-00, got: %v", err)
 	}
 
-	// stage-03: minLevel 6, jobLevel 1 -> Level fails first
-	if err := cat.CanAccessStage(novice, "stage-03"); err != adventure.ErrLevelRequirementNotMet {
+	// stage-02: minLevel 5, jobLevel 1 -> Level fails first
+	if err := cat.CanAccessStage(novice, "stage-02"); err != adventure.ErrLevelRequirementNotMet {
 		t.Errorf("expected ErrLevelRequirementNotMet, got: %v", err)
 	}
 
-	// Lv 20, JobLevel 0 -> JobLevel fails on stage-03 (requires jobLevel 1)
+	// Lv 20, JobLevel 0 -> JobLevel fails on stage-02 (requires jobLevel 1)
 	experiencedNovice := corecharacter.Character{
 		ID:       "c-2",
 		Level:    20,
 		JobLevel: 0,
 	}
-	if err := cat.CanAccessStage(experiencedNovice, "stage-03"); err != adventure.ErrJobLevelRequirementNotMet {
+	if err := cat.CanAccessStage(experiencedNovice, "stage-02"); err != adventure.ErrJobLevelRequirementNotMet {
 		t.Errorf("expected ErrJobLevelRequirementNotMet, got: %v", err)
 	}
 
-	// Lv 20, JobLevel 1 -> OK for stage-03
+	// Lv 20, JobLevel 1 -> OK for stage-02
 	reincarnated := corecharacter.Character{
 		ID:       "c-3",
 		Level:    20,
 		JobLevel: 1,
 	}
-	if err := cat.CanAccessStage(reincarnated, "stage-03"); err != nil {
-		t.Errorf("reincarnated should access stage-03, got: %v", err)
+	if err := cat.CanAccessStage(reincarnated, "stage-02"); err != nil {
+		t.Errorf("reincarnated should access stage-02, got: %v", err)
+	}
+}
+
+func TestStage26Seasons(t *testing.T) {
+	cat, err := adventure.InitialStageCatalog()
+	if err != nil {
+		t.Fatalf("InitialStageCatalog() error = %v", err)
+	}
+
+	stage26, err := cat.FindByID("stage-26")
+	if err != nil {
+		t.Fatalf("FindByID(stage-26) error = %v", err)
+	}
+
+	if len(stage26.Seasons) != 4 {
+		t.Fatalf("stage-26 seasons count = %d, want 4", len(stage26.Seasons))
+	}
+
+	seasonsExpected := map[string]struct {
+		wantBoss   string
+		wantWeapon string
+	}{
+		"spring": {wantBoss: "monster-279", wantWeapon: "weapon-01"},
+		"summer": {wantBoss: "monster-287", wantWeapon: "weapon-06"},
+		"autumn": {wantBoss: "monster-016", wantWeapon: "weapon-01"},
+		"winter": {wantBoss: "monster-289", wantWeapon: "weapon-01"},
+	}
+
+	for season, expected := range seasonsExpected {
+		seasonal := stage26.ForSeason(season)
+		if len(seasonal.BossIDs) == 0 || seasonal.BossIDs[0] != expected.wantBoss {
+			t.Errorf("season %s boss = %v, want %s", season, seasonal.BossIDs, expected.wantBoss)
+		}
+		if len(seasonal.TreasureWeapons) == 0 || seasonal.TreasureWeapons[0] != expected.wantWeapon {
+			t.Errorf("season %s weapon = %v, want %s", season, seasonal.TreasureWeapons, expected.wantWeapon)
+		}
 	}
 }
 

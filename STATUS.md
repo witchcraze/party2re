@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #850 — Custom Skill: Prevent GemBox capacity lockout when swapping or unsetting gems after job change
+Last updated: Issue #795 — Restore Stage 26 Four Seasons Dungeon, stage drop pools, and purge dead timers
 
 ## Current Phase
 

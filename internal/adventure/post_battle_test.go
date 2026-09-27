@@ -282,7 +282,7 @@ func TestAdventure_Defeat_HPSetToOneAndPersisted(t *testing.T) {
 
 	crawlRes, err := svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
 		CharacterIDs: []string{char.ID},
-		StageID:      "stage-01",
+		StageID:      "stage-00",
 	})
 	if err != nil {
 		t.Fatalf("ExecuteCrawl failed: %v", err)

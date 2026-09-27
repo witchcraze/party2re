@@ -431,3 +431,41 @@ func TestWake_ResetsCostume(t *testing.T) {
 		t.Errorf("expected costume resetter called for c1, got %q", costumeResetter.calledFor)
 	}
 }
+
+func TestWake_ResetsDailyOnceDungeon(t *testing.T) {
+	ctx := context.Background()
+	charRepo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero", Tired: 50, Stats: corecharacter.Stats{HP: 10, MaxHP: 100}},
+		},
+	}
+	mockHomeRepo := newMockHomeRepo()
+	timerSvc := timer.NewService(nil)
+
+	// Pre-lock CategoryDungeonOnce
+	_ = timerSvc.SetLock(ctx, timer.CategoryDungeonOnce, "c1", 24*time.Hour)
+	_ = timerSvc.SetLock(ctx, timer.CategoryAsleep, "c1", 24*time.Hour)
+
+	svc, err := NewService(
+		mockHomeRepo,
+		charRepo,
+		WithTimer(timerSvc),
+		WithCharacterUpdater(charRepo),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	_, err = svc.Wake(ctx, "c1")
+	if err != nil {
+		t.Fatalf("Wake failed: %v", err)
+	}
+
+	locked, err := timerSvc.IsLocked(ctx, timer.CategoryDungeonOnce, "c1")
+	if err != nil {
+		t.Fatalf("IsLocked error: %v", err)
+	}
+	if locked {
+		t.Error("expected CategoryDungeonOnce to be unlocked after Wake")
+	}
+}

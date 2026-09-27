@@ -296,6 +296,71 @@ func TestCrawlSession_DefeatZeroesCrystals(t *testing.T) {
 	}
 }
 
+func TestCrawlSession_GamblerAndStageMultipliers(t *testing.T) {
+	stages, monsters := setupTestCatalogs(t)
+	stage17, err := stages.FindByID("stage-17")
+	if err != nil {
+		t.Fatalf("FindByID(stage-17): %v", err)
+	}
+
+	gamblerChar := []corecharacter.Character{
+		{
+			ID:       "gambler-1",
+			Name:     "勝負師",
+			JobID:    "81",
+			Level:    50,
+			JobLevel: 10,
+			Stats: corecharacter.Stats{
+				HP:      50000,
+				MaxHP:   50000,
+				Attack:  20000,
+				Defense: 20000,
+			},
+		},
+	}
+
+	// Gambler bonus: rng(3) - rng(2). With rng(3)=2, rng(2)=0 -> bonus = +2
+	rng := func(n int) int {
+		if n == 3 {
+			return 2
+		}
+		return 0
+	}
+
+	session, err := adventure.NewCrawlSession(stage17, gamblerChar, rng)
+	if err != nil {
+		t.Fatalf("NewCrawlSession: %v", err)
+	}
+
+	engine := corebattle.Engine{}
+	// Advance through all 10 floors
+	for f := 1; f <= 10; f++ {
+		res, err := session.AdvanceFloor(stages, monsters, engine)
+		if err != nil {
+			t.Fatalf("floor %d advance error: %v", f, err)
+		}
+		if !res.Cleared {
+			t.Fatalf("floor %d should be cleared", f)
+		}
+	}
+
+	// Floor 11 is the treasure room
+	res, err := session.AdvanceFloor(stages, monsters, engine)
+	if err != nil {
+		t.Fatalf("floor 11 treasure room error: %v", err)
+	}
+	if !res.Cleared {
+		t.Fatalf("floor 11 should be cleared")
+	}
+
+	// Expected boxes:
+	// Stage 17 has 3x multiplier: 1 alive member * 3 = 3 base boxes.
+	// Gambler adds +2 bonus. Total = 5 boxes!
+	if len(session.TreasureBoxes) != 5 {
+		t.Errorf("len(TreasureBoxes) = %d, want 5 (1*3 + 2)", len(session.TreasureBoxes))
+	}
+}
+
 type defeatBattleResolver struct{}
 
 func (defeatBattleResolver) ResolvePartyBattle(req corebattle.PartyBattleRequest) (corebattle.PartyBattleResult, error) {

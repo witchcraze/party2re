@@ -46,15 +46,40 @@ Adventures proceed floor-by-floor in accordance with legacy `vs_monster.cgi` and
 Upon defeating the Floor 10 boss, the party enters Floor 11 (Treasure Room) per legacy `vs_monster.cgi` (`$boss_round + 1`) and `_npc_action.cgi` (`add_treasure`).
 
 ### Treasure Box Count Calculation
-The number of treasure chests generated in Floor 11 follows legacy Party2 rules:
+The number of treasure chests generated in Floor 11 follows legacy Party2 rules (`vs_monster.cgi:90-100`):
 
-$$\text{Count} = \text{AliveMembers} + \text{MerchantBonus} + \text{TreasureHunterBonus} + \text{LuckyPendantBonus}$$
+$$\text{Count} = \text{BaseCount} + \text{MerchantBonus} + \text{TreasureHunterBonus} + \text{LuckyPendantBonus} + \text{GamblerBonus}$$
 
-1. **Base Count**: 1 treasure chest per surviving (alive) party member (`AliveMembers`).
+1. **Base Count**:
+   - Standard Stages: 1 treasure chest per surviving (alive) party member (`AliveMembers`).
+   - Multiplier Stages (Stage 17 幻の秘境, Stage 20 天空城, Stage 21 カオスフィールド): 3 treasure chests per surviving party member ($\text{AliveMembers} \times 3$).
 2. **Merchant Job Bonus** (`merchant` / Job 7): +1 treasure chest.
 3. **Treasure Hunter Job Bonus** (`treasure_hunter` / Job 78): +1 to +2 treasure chests ($1 + \text{rand}(2)$).
 4. **Lucky Pendant Bonus** (`item-191` / ラッキーペンダント): $1/3$ chance ($\text{rand}(3) == 0$) of +1 treasure chest.
-5. **Lower Bound**: The total count is unclamped above zero, but clamped to a minimum of 0.
+5. **Gambler Job Bonus** (`gambler` / Job 81): $+\text{rand}(3) - \text{rand}(2)$ treasure chests. If the gambler holds a Lucky Pendant (`item-191`), the total cannot drop below $\text{BaseCount}$.
+6. **Lower Bound**: The total count is unclamped above zero, but clamped to a minimum of 0.
+
+### Treasure Box Loot Pool Distribution & Weekday Orbs
+Loot in Floor 11 chests is drawn from the stage's drop tables (`treasure_weapons`, `treasure_armors`, `treasure_items`) per `_npc_action.cgi:540-550`:
+- **Distribution**: Category roll $v = \text{rand}(4) + 1$ (if $v > 3$, $v = 3$):
+  - $v = 1$: Weapon (25% chance, drawn from stage `treasure_weapons`).
+  - $v = 2$: Armor (25% chance, drawn from stage `treasure_armors`).
+  - $v = 3$: Item / Tool (50% chance, drawn from stage `treasure_items`).
+- **Weekday Orb Pool Injection**: The current day-of-week orb is dynamically injected into the Tool pool:
+  - Sunday: Random orb (`item-060` through `item-065`).
+  - Monday: 月のオーブ (`item-060`).
+  - Tuesday: 火のオーブ (`item-061`).
+  - Wednesday: 水のオーブ (`item-062`).
+  - Thursday: 木のオーブ (`item-063`).
+  - Friday: 金のオーブ (`item-064`).
+  - Saturday: 土のオーブ (`item-065`).
+
+### Once-Daily Challenge Lock (`CategoryDungeonOnce` / `$m{once}`)
+- Certain limited dungeons can only be challenged once per day (until the character sleeps at Home):
+  - Stage 26: 神秘の森 / 四季のダンジョン
+  - Dungeon 16: 機軍要塞
+- Enforced via Valkey `TimerService` (`timer.CategoryDungeonOnce = "dungeon_once"`).
+- Automatically cleared when the adventurer awakens from sleep at Home (`internal/home.Service.Wake`).
 
 ### Treasure Chest Examination (`ExamineTreasure`) & Post-Battle Settlement
 - Each surviving party member may examine and claim treasure chests on Floor 11.
