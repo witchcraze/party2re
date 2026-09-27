@@ -333,6 +333,9 @@ func (s *Service) GetItemCollection(ctx context.Context, characterID, category s
 	if characterID == "" {
 		return nil, CompletionProgress{}, ErrInvalidCharacterID
 	}
+	if strings.TrimSpace(category) == "" {
+		category = "item"
+	}
 	entries, err := s.repo.GetItemCollection(ctx, characterID, category)
 	if err != nil {
 		return nil, CompletionProgress{}, err

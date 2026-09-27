@@ -77,12 +77,12 @@ func TestCollectionServiceDatabaseIntegration(t *testing.T) {
 		t.Errorf("expected 1 item, got len=%d discovered=%d", len(itemsOnly), itemProgressOnly.DiscoveredCount)
 	}
 
-	// Unfiltered ("") should include all 3 discovered entries
+	// Default category ("") should strictly isolate to items, excluding weapons and armors
 	items, itemProgress, err := svc.GetItemCollection(ctx, char.ID, "")
 	if err != nil {
-		t.Fatalf("GetItemCollection (all) failed: %v", err)
+		t.Fatalf("GetItemCollection (default) failed: %v", err)
 	}
-	if len(items) != 3 || itemProgress.DiscoveredCount != 3 {
-		t.Errorf("items count = %d, progress = %+v", len(items), itemProgress)
+	if len(items) != 1 || itemProgress.DiscoveredCount != 1 {
+		t.Errorf("items count = %d (want 1), progress = %+v (want discovered 1)", len(items), itemProgress)
 	}
 }

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #782 — Route custom skill gem synthesis to Gem Box storage and purge fictional MaxMP check
+Last updated: Issue #851 — Enforce default "item" category in GetItemCollection to prevent compendium cross-contamination and false completion
 
 ## Current Phase
 

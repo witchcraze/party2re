@@ -631,6 +631,32 @@ func TestCollectionService_WeaponAndArmorDiscoveriesDoNotTriggerItemCompletion(t
 		t.Errorf("expected completion percentage %.2f, got %.2f", expectedPct, prog.CompletionPercentage)
 	}
 
+	// Verify calling GetItemCollection with empty string defaults to "item" category
+	// and does NOT count weapons or armors toward completion
+	defaultEntries, defaultProg, err := svc.GetItemCollection(ctx, "char-collector", "")
+	if err != nil {
+		t.Fatalf("GetItemCollection with empty category failed: %v", err)
+	}
+	if len(defaultEntries) != 15 {
+		t.Errorf("expected 15 item entries with empty category, got %d", len(defaultEntries))
+	}
+	if defaultProg.DiscoveredCount != 15 {
+		t.Errorf("expected DiscoveredCount 15 with empty category, got %d", defaultProg.DiscoveredCount)
+	}
+	if defaultProg.IsCompleted {
+		t.Errorf("expected IsCompleted to be false with empty category")
+	}
+
+	// Also verify whitespace-only category defaults to "item"
+	wsEntries, wsProg, err := svc.GetItemCollection(ctx, "char-collector", "   ")
+	if err != nil {
+		t.Fatalf("GetItemCollection with whitespace category failed: %v", err)
+	}
+	if len(wsEntries) != 15 || wsProg.DiscoveredCount != 15 || wsProg.IsCompleted {
+		t.Errorf("expected 15 item entries and uncompleted for whitespace category, got len=%d discovered=%d isCompleted=%v",
+			len(wsEntries), wsProg.DiscoveredCount, wsProg.IsCompleted)
+	}
+
 	// Verify legend inductor has comp_wea and comp_arm, but NOT comp_ite
 	for _, ind := range legend.inductions {
 		if ind.Category == "comp_ite" {
@@ -669,5 +695,64 @@ func TestCollectionService_WeaponAndArmorDiscoveriesDoNotTriggerItemCompletion(t
 	}
 	if !foundCompIte {
 		t.Errorf("expected comp_ite to be inducted into Hall of Fame after 141 items")
+	}
+}
+
+func TestCollectionService_GetItemCollection_DefaultsToItemCategory(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockCollectionRepo{
+		items:       make(map[string]collection.ItemCollectionEntry),
+		completions: make(map[string]bool),
+	}
+	svc, err := collection.NewService(repo, 180, 10)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	// Record 2 weapons, 2 armors, and 3 items
+	_ = svc.RecordItemDiscovered(ctx, "char-1", "w1", "Sword", "weapon")
+	_ = svc.RecordItemDiscovered(ctx, "char-1", "w2", "Axe", "weapon")
+	_ = svc.RecordItemDiscovered(ctx, "char-1", "a1", "Shield", "armor")
+	_ = svc.RecordItemDiscovered(ctx, "char-1", "a2", "Helmet", "armor")
+	_ = svc.RecordItemDiscovered(ctx, "char-1", "i1", "Potion", "item")
+	_ = svc.RecordItemDiscovered(ctx, "char-1", "i2", "Ether", "item")
+	_ = svc.RecordItemDiscovered(ctx, "char-1", "i3", "Elixir", "item")
+
+	testCases := []struct {
+		name     string
+		category string
+	}{
+		{name: "empty string", category: ""},
+		{name: "whitespace only", category: "   \t\n"},
+		{name: "explicit item", category: "item"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			entries, progress, err := svc.GetItemCollection(ctx, "char-1", tc.category)
+			if err != nil {
+				t.Fatalf("GetItemCollection failed: %v", err)
+			}
+			if len(entries) != 3 {
+				t.Errorf("expected 3 item entries, got %d", len(entries))
+			}
+			for _, e := range entries {
+				if e.Category != "item" {
+					t.Errorf("expected category 'item', got %q for item %s", e.Category, e.ItemID)
+				}
+			}
+			if progress.DiscoveredCount != 3 {
+				t.Errorf("expected DiscoveredCount 3, got %d", progress.DiscoveredCount)
+			}
+			if progress.TotalCatalogCount != 10 {
+				t.Errorf("expected TotalCatalogCount 10, got %d", progress.TotalCatalogCount)
+			}
+			if progress.CompletionPercentage != 30.0 {
+				t.Errorf("expected CompletionPercentage 30.0, got %f", progress.CompletionPercentage)
+			}
+			if progress.IsCompleted {
+				t.Errorf("expected IsCompleted false, got true")
+			}
+		})
 	}
 }

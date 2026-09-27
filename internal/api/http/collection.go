@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/witchcraze/party2re/internal/collection"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -75,6 +76,9 @@ func (h *Handler) handleGetItemCollection(w http.ResponseWriter, r *http.Request
 	charID := r.PathValue("id")
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		category := r.URL.Query().Get("category")
+		if strings.TrimSpace(category) == "" {
+			category = "item"
+		}
 		entries, progress, err := h.collections.GetItemCollection(r.Context(), char.ID, category)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)

@@ -62,6 +62,7 @@ func TestCollectionEndpoints(t *testing.T) {
 			return corecharacter.Character{}, corecharacter.ErrNotFound
 		},
 	}
+	var lastItemCategory string
 	colService := &stubCollectionService{
 		getMonsterBookFn: func(_ context.Context, characterID string) ([]collection.MonsterBookEntry, collection.CompletionProgress, error) {
 			return []collection.MonsterBookEntry{
@@ -69,6 +70,7 @@ func TestCollectionEndpoints(t *testing.T) {
 			}, collection.CompletionProgress{DiscoveredCount: 1, TotalCatalogCount: 10, CompletionPercentage: 10.0}, nil
 		},
 		getItemCollectionFn: func(_ context.Context, characterID, category string) ([]collection.ItemCollectionEntry, collection.CompletionProgress, error) {
+			lastItemCategory = category
 			return []collection.ItemCollectionEntry{
 				{ItemID: "i1", ItemName: "Herb", Category: "consumable"},
 			}, collection.CompletionProgress{DiscoveredCount: 1, TotalCatalogCount: 5, CompletionPercentage: 20.0}, nil
@@ -106,7 +108,7 @@ func TestCollectionEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("GET /characters/{id}/collections/items - success", func(t *testing.T) {
+	t.Run("GET /characters/{id}/collections/items - success with explicit category", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/characters/c1/collections/items?category=consumable", nil)
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
@@ -114,6 +116,23 @@ func TestCollectionEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if lastItemCategory != "consumable" {
+			t.Fatalf("expected category 'consumable', got %q", lastItemCategory)
+		}
+	})
+
+	t.Run("GET /characters/{id}/collections/items - default category item when omitted", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/characters/c1/collections/items", nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if lastItemCategory != "item" {
+			t.Fatalf("expected category to default to 'item', got %q", lastItemCategory)
 		}
 	})
 
