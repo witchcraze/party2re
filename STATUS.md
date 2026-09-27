@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Refactor shop active helper lookup using slices.Contains
+Last updated: Refactor town house style validation using slices.Contains
 
 ## Current Phase
 
