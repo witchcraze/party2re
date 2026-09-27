@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Refactor altar wish item validation using slices.Contains
+Last updated: Issue #853 — Eliminate redundant non-transactional fallback branches in ChangeJob and wrap JobMemory restoration in transaction
 
 ## Current Phase
 

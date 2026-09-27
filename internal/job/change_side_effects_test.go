@@ -160,7 +160,7 @@ func TestChangeJob_TransactionSuccess_TriggersSideEffectsExactlyOnce(t *testing.
 	}
 }
 
-func TestChangeJob_NoEconomy_TriggersSideEffectsExactlyOnce(t *testing.T) {
+func TestChangeJob_NearCompleteMasteryNotifiesNewsAndLegend(t *testing.T) {
 	ctx := context.Background()
 
 	char := corecharacter.Character{
@@ -174,7 +174,14 @@ func TestChangeJob_NoEconomy_TriggersSideEffectsExactlyOnce(t *testing.T) {
 		OverLevel: true,
 	}
 
-	charRepo := &charRepoStub{char: char}
+	charRepo := &errCharRepoStub{char: char}
+	inv, _ := coreinventory.New(char.ID)
+	invRepo := &errInventoryRepoStub{inv: inv}
+	ecoSvc, err := economy.NewService(charRepo, invRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	var legendCalls []legendCallEntry
 	legend := LegendInductorFunc(func(_ context.Context, category, characterID string) error {
 		legendCalls = append(legendCalls, legendCallEntry{Category: category, CharacterID: characterID})
@@ -186,6 +193,8 @@ func TestChangeJob_NoEconomy_TriggersSideEffectsExactlyOnce(t *testing.T) {
 	svc, err := NewService(
 		dummyRepo,
 		WithCharacterRepository(charRepo),
+		WithInventoryRepository(invRepo),
+		WithEconomy(ecoSvc),
 		WithLegendInductor(legend),
 		WithNewsPublisher(news),
 	)
@@ -199,7 +208,7 @@ func TestChangeJob_NoEconomy_TriggersSideEffectsExactlyOnce(t *testing.T) {
 
 	updatedChar, updatedState, err := svc.ChangeJob(ctx, char.ID, "job-02")
 	if err != nil {
-		t.Fatalf("expected ChangeJob to succeed in fallback mode, got %v", err)
+		t.Fatalf("expected ChangeJob to succeed, got %v", err)
 	}
 
 	if updatedChar.JobID != "job-02" {
@@ -209,9 +218,9 @@ func TestChangeJob_NoEconomy_TriggersSideEffectsExactlyOnce(t *testing.T) {
 		t.Fatalf("expected current job state job-02, got %s", updatedState.CurrentJobID)
 	}
 	if len(news.published) != 1 {
-		t.Fatalf("expected exactly 1 news article in fallback mode, got %d: %v", len(news.published), news.published)
+		t.Fatalf("expected exactly 1 news article, got %d: %v", len(news.published), news.published)
 	}
 	if len(legendCalls) != 1 {
-		t.Fatalf("expected exactly 1 legend call in fallback mode, got %d: %v", len(legendCalls), legendCalls)
+		t.Fatalf("expected exactly 1 legend call, got %d: %v", len(legendCalls), legendCalls)
 	}
 }

@@ -51,7 +51,7 @@ func TestChangeJob_MilestoneGating(t *testing.T) {
 	makeSvc := func(char corecharacter.Character, state corejob.CharacterJob) *Service {
 		repo := &repositoryStub{value: state}
 		charRepo := &charRepoStub{char: char}
-		svc, _ := NewService(repo, WithCharacterRepository(charRepo))
+		svc, _ := NewService(repo, WithCharacterRepository(charRepo), WithInventoryRepository(&inventoryRepoStub{}))
 		return svc
 	}
 
