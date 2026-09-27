@@ -11,6 +11,7 @@ import (
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/economy"
+	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/player"
@@ -93,12 +94,13 @@ func newCoreServices(db *sql.DB, valkeyClient valkeygo.Client) (*coreServices, e
 
 func (c *coreServices) initPlayerAndChar(
 	guildRepo *database.GuildRepository,
+	guildService *guild.Service,
 	fleamarketRepo *database.FleaMarketRepository,
 	notificationService *notification.Service,
 	logger logging.Logger,
 ) error {
-	charService, err := character.NewService(
-		c.charRepo,
+	var charOpts []character.Option
+	charOpts = append(charOpts,
 		character.WithTransactionProvider(c.txProvider),
 		character.WithNewsPublisher(character.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
 			_, err := notificationService.PublishNews(ctx, cat, title, content, author, pubAt)
@@ -119,17 +121,35 @@ func (c *coreServices) initPlayerAndChar(
 			return count > 0, nil
 		})),
 	)
+
+	if guildService != nil {
+		charOpts = append(charOpts, character.WithCleanupHook(character.CleanupHookFunc(guildService.RemoveCharacterFromGuild)))
+	}
+
+	charService, err := character.NewService(
+		c.charRepo,
+		charOpts...,
+	)
 	if err != nil {
 		return err
+	}
+
+	var playerOpts []player.Option
+	playerOpts = append(playerOpts,
+		player.WithCharacterService(charService),
+		player.WithAPITokenRepository(c.playerAPITokenRepo),
+		player.WithTransactionProvider(c.txProvider),
+		player.WithLogger(logger),
+	)
+
+	if guildService != nil {
+		playerOpts = append(playerOpts, player.WithGuildCleaner(guildService))
 	}
 
 	playerService, err := player.NewService(
 		c.playerRepo,
 		c.sessionRepo,
-		player.WithCharacterService(charService),
-		player.WithAPITokenRepository(c.playerAPITokenRepo),
-		player.WithTransactionProvider(c.txProvider),
-		player.WithLogger(logger),
+		playerOpts...,
 	)
 	if err != nil {
 		return err

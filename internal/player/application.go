@@ -45,11 +45,22 @@ type CharacterService interface {
 	Delete(ctx context.Context, playerID, characterID string) error
 }
 
+type GuildMembershipCleaner interface {
+	RemoveCharacterFromGuild(ctx context.Context, characterID string) error
+}
+
 type TransactionProvider interface {
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
 type Option func(*Service)
+
+// WithGuildCleaner sets the guild membership cleaner used on player bans.
+func WithGuildCleaner(cleaner GuildMembershipCleaner) Option {
+	return func(s *Service) {
+		s.guildCleaner = cleaner
+	}
+}
 
 // WithLogger configures a logger for the player service.
 func WithLogger(logger logging.Logger) Option {
@@ -91,13 +102,14 @@ func WithNow(now func() time.Time) Option {
 }
 
 type Service struct {
-	players    PlayerRepository
-	sessions   SessionRepository
-	apiTokens  APITokenRepository
-	characters CharacterService
-	txProvider TransactionProvider
-	logger     logging.Logger
-	now        func() time.Time
+	players      PlayerRepository
+	sessions     SessionRepository
+	apiTokens    APITokenRepository
+	characters   CharacterService
+	txProvider   TransactionProvider
+	guildCleaner GuildMembershipCleaner
+	logger       logging.Logger
+	now          func() time.Time
 }
 
 func NewService(players PlayerRepository, sessions SessionRepository, opts ...Option) (*Service, error) {
@@ -358,6 +370,22 @@ func (s *Service) BanPlayer(ctx context.Context, playerID string) error {
 	if s.apiTokens != nil {
 		if err := s.apiTokens.DeleteByPlayerID(ctx, playerID); err != nil {
 			s.logger.Warn(ctx, "player.ban.api_tokens", slog.String("player_id", playerID), slog.String("reason", err.Error()))
+		}
+	}
+
+	// Remove guild memberships for all characters of the banned player (admin.cgi:109)
+	if s.characters != nil && s.guildCleaner != nil {
+		chars, err := s.characters.FindByPlayerID(ctx, playerID)
+		if err == nil {
+			for _, char := range chars {
+				if err := s.guildCleaner.RemoveCharacterFromGuild(ctx, char.ID); err != nil {
+					s.logger.Warn(ctx, "player.ban.guild_clean",
+						slog.String("player_id", playerID),
+						slog.String("character_id", char.ID),
+						slog.String("reason", err.Error()),
+					)
+				}
+			}
 		}
 	}
 

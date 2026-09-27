@@ -280,6 +280,15 @@ func (c *charServiceStub) Delete(ctx context.Context, playerID, characterID stri
 	return nil
 }
 
+type guildMembershipCleanerStub struct {
+	removed []string
+}
+
+func (s *guildMembershipCleanerStub) RemoveCharacterFromGuild(ctx context.Context, characterID string) error {
+	s.removed = append(s.removed, characterID)
+	return nil
+}
+
 type txProviderStub struct {
 	called bool
 	err    error
@@ -806,9 +815,18 @@ func TestService_BanPlayer_And_BannedLogin(t *testing.T) {
 	players := &playerRepositoryStub{value: p}
 	sessions := &sessionRepositoryStub{}
 	tokens := newAPITokenRepositoryStub()
+	chars := &charServiceStub{
+		chars: []corecharacter.Character{
+			{ID: "char-1"},
+			{ID: "char-2"},
+		},
+	}
+	guildCleaner := &guildMembershipCleanerStub{}
 
 	svc, err := NewService(players, sessions,
 		WithAPITokenRepository(tokens),
+		WithCharacterService(chars),
+		WithGuildCleaner(guildCleaner),
 		WithNow(func() time.Time { return now }),
 	)
 	if err != nil {
@@ -856,6 +874,9 @@ func TestService_BanPlayer_And_BannedLogin(t *testing.T) {
 	}
 	if len(tokens.tokens) != 0 {
 		t.Fatal("expected active API tokens to be deleted upon ban")
+	}
+	if len(guildCleaner.removed) != 2 || guildCleaner.removed[0] != "char-1" || guildCleaner.removed[1] != "char-2" {
+		t.Fatalf("expected guild cleaner to be called for characters char-1 and char-2, got %v", guildCleaner.removed)
 	}
 
 	// Ban empty ID returns error

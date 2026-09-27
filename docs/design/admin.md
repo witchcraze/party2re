@@ -7,7 +7,7 @@ Administrative operations provide privileged server and account management tools
 In Party2 Reconstruction, administrative operations are secured via authoritative HTTP endpoints guarded by master administrative API keys, providing:
 - **System Maintenance Mode**: Emergency maintenance toggle and schedule broadcast (`/admin/maintenance`).
 - **Player Account Management**: Multi-criteria player listing and account soft-banning (`/admin/players`, `/admin/players/{id}/ban`).
-- **Rescue Operations**: Emergency unstuck action clearing (`/rescue`).
+- **Rescue Operations**: Emergency unstuck action clearing (`/rescue`, `/admin/characters/{id}/unstuck`).
 
 ---
 
@@ -39,6 +39,7 @@ All `/admin/*` routes enforce strict credential verification:
 - **Semantics**: Sets `banned_at = CURRENT_TIMESTAMP(6)` in MariaDB `players` table.
 - **Session Revocation**: Synchronously purges all active player sessions from Valkey Master via `sessions.DeleteByPlayerID(ctx, playerID)`.
 - **Token Invalidation**: Deletes active Personal Access Tokens (PATs) for the player.
+- **Guild Cleanup**: Automatically removes all characters owned by the banned player from their respective guilds, transferring leadership or disbanding as necessary.
 - **Enforcement**:
   - `POST /sessions` (Login): Returns HTTP `403 Forbidden` (`coreplayer.ErrPlayerBanned`).
   - Authenticated character and gameplay requests: Returns HTTP `403 Forbidden` (`coreplayer.ErrPlayerBanned`).
@@ -52,7 +53,8 @@ All `/admin/*` routes enforce strict credential verification:
 | `POST` | `/admin/maintenance` | Admin (`X-Admin-Key`) | Enables or configures system maintenance mode. |
 | `PUT` | `/admin/maintenance` | Admin (`X-Admin-Key`) | Updates system maintenance mode configuration. |
 | `GET` | `/admin/players` | Admin (`X-Admin-Key`) | Returns registered players list with optional sorting (`sort=addr\|name\|updated_at`). |
-| `POST` | `/admin/players/{id}/ban` | Admin (`X-Admin-Key`) | Soft-bans player account and revokes active sessions. |
+| `POST` | `/admin/players/{id}/ban` | Admin (`X-Admin-Key`) | Soft-bans player account, revokes active sessions, and cleans up guild memberships. |
+| `POST` | `/admin/characters/{id}/unstuck` | Admin (`X-Admin-Key`) | Unstucks character by clearing active actions without saving a rescue record. |
 
 ---
 

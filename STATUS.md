@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #789 — [Bug] Challenge: Purge fictional tiers and cashout, restoring 9 authentic legacy stages
+Last updated: Issue #806 — Implement player unstuck (admin_refresh) and guild membership cleanup on ban
 
 ## Current Phase
 

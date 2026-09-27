@@ -111,6 +111,7 @@ type HelperService interface {
 type RescueService interface {
 	EmergencyRescue(ctx context.Context, characterID, reason string, now time.Time) (rescue.RescueRecord, error)
 	IsUnderPenalty(ctx context.Context, characterID string, now time.Time) (bool, time.Duration, error)
+	Unstuck(ctx context.Context, characterID string) error
 }
 
 // Handler holds all HTTP handlers for the game API.
@@ -318,6 +319,7 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("PUT /admin/maintenance", h.handleAdminSetMaintenance)
 	mux.HandleFunc("GET /admin/players", h.handleAdminListPlayers)
 	mux.HandleFunc("POST /admin/players/{id}/ban", h.handleAdminBanPlayer)
+	mux.HandleFunc("POST /admin/characters/{id}/unstuck", h.handleAdminUnstuckCharacter)
 
 	mux.HandleFunc("POST /players", h.handleRegisterPlayer)
 	mux.HandleFunc("DELETE /players/me", h.handleDeletePlayerMe)
