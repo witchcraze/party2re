@@ -66,7 +66,7 @@ func TestAdventure_ImmediateDungeonCrawlIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	adv, err := service.StartStage(ctx, char.ID, "stage-01")
+	adv, err := service.StartStage(ctx, char.ID, adventure.StarterAdventure)
 	if err != nil {
 		t.Fatalf("StartStage failed: %v", err)
 	}
@@ -140,15 +140,15 @@ func TestAdventureHistoryAndChronicleIntegration(t *testing.T) {
 	}
 
 	// Start 2 adventures (immediately resolved)
-	adv1, err := service.StartStage(ctx, char.ID, "stage-01")
+	adv1, err := service.StartStage(ctx, char.ID, adventure.StarterAdventure)
 	if err != nil {
-		t.Fatalf("StartStage(stage-01) error = %v", err)
+		t.Fatalf("StartStage(StarterAdventure) error = %v", err)
 	}
 
 	clock.now = clock.now.Add(time.Minute)
-	adv2, err := service.StartStage(ctx, char.ID, "stage-01")
+	adv2, err := service.StartStage(ctx, char.ID, adventure.StarterAdventure)
 	if err != nil {
-		t.Fatalf("StartStage(stage-01) error = %v", err)
+		t.Fatalf("StartStage(StarterAdventure) error = %v", err)
 	}
 
 	// Query paginated history
@@ -171,7 +171,7 @@ func TestAdventureHistoryAndChronicleIntegration(t *testing.T) {
 	if chronicle.TotalAdventures != 2 {
 		t.Fatalf("expected 2 adventures, got %d", chronicle.TotalAdventures)
 	}
-	if len(chronicle.Stages) == 0 || chronicle.Stages[0].StageID != "stage-01" {
+	if len(chronicle.Stages) == 0 || chronicle.Stages[0].StageID != adventure.StarterAdventure {
 		t.Fatalf("unexpected stage stats: %+v", chronicle.Stages)
 	}
 	if len(chronicle.Milestones) == 0 {
@@ -298,7 +298,7 @@ func TestAdventure_TavernDelivery_PostAdventureIntegration(t *testing.T) {
 	})
 
 	// 3. Start adventure (immediate execution + PostAdventureHook)
-	claimedAdv, err := advService.StartStage(ctx, char.ID, "stage-01")
+	claimedAdv, err := advService.StartStage(ctx, char.ID, adventure.StarterAdventure)
 	if err != nil {
 		t.Fatalf("StartStage failed: %v", err)
 	}
@@ -456,7 +456,7 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 	// 1. First run: Empty inventory -> Floor 11 treasure item saved to MariaDB inventory_items
 	crawlRes, err := advService.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
 		CharacterIDs: []string{char.ID},
-		StageID:      "stage-01",
+		StageID:      adventure.StarterAdventure,
 	})
 	if err != nil {
 		t.Fatalf("ExecuteCrawl failed: %v", err)
@@ -492,7 +492,7 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 	// 2. Second run: Inventory full -> Overflow delivered to depot_items in MariaDB
 	crawlRes2, err := advService.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
 		CharacterIDs: []string{char.ID},
-		StageID:      "stage-01",
+		StageID:      adventure.StarterAdventure,
 	})
 	if err != nil {
 		t.Fatalf("Second ExecuteCrawl failed: %v", err)
@@ -528,7 +528,7 @@ func TestAdventurePostBattleSettlement_Integration(t *testing.T) {
 
 	crawlRes3, err := advService.ExecuteCrawl(ctx, adventure.DungeonCrawlRequest{
 		CharacterIDs: []string{weakling.ID},
-		StageID:      "stage-01",
+		StageID:      adventure.StarterAdventure,
 	})
 	if err != nil {
 		t.Fatalf("Third ExecuteCrawl failed: %v", err)

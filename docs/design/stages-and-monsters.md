@@ -7,41 +7,44 @@ This document describes the stage hierarchy, monster encounters, and clean-room 
 ## Structure and Catalogs
 
 ### 1. Stages (`stages.json`)
-- **Stage ID (`id`)**: Stable identifier (`stage-01` through `stage-28`).
+- **Stage ID (`id`)**: Stable identifier (`stage-00` through `stage-27`), in 1:1 parity with legacy Party2 stage scripts (`0.cgi` to `27.cgi`).
 - **Name (`name`)**: The Japanese name of the stage location.
 - **Minimum Level (`min_level`)**: The recommended character/job level requirement to safely enter the stage.
 - **Monster IDs (`monster_ids`)**: List of monster references encountered in the stage.
+- **Boss IDs (`boss_ids`)**: Designated Floor 10 boss encounters.
+- **Treasure Pools (`treasure_weapons`, `treasure_armors`, `treasure_items`)**: Authentic drop tables from legacy `@treasures`.
 - **Dungeon Crawl Structure**: Authentic 10-floor dungeon crawl loop (`vs_monster.cgi`). Floors 1–9 spawn random stage enemies, Floor 10 features the stage boss battle, and upon victory, Floor 11 serves as the Treasure Room (`add_treasure`). Adventures resolve immediately upon initiation without artificial waiting timers.
+- **Seasonal Stage Variants**: Stage 26 (`四季のダンジョン` / `神秘の森`) supports 4 seasonal variants (`spring`, `summer`, `autumn`, `winter`) selected randomly upon crawl execution, configuring season-specific monster rosters, bosses, and treasure drop pools.
 
-### Standard Adventure Stages (01–28)
-1. **プニプニ平原** (`stage-01`): Level 1+ introductory meadow.
-2. **キノコの森** (`stage-02`): Level 3+ forest filled with fungal and small beast creatures.
-3. **幽霊城** (`stage-03`): Level 6+ haunted castle with undead encounters.
-4. **海辺の洞窟** (`stage-04`): Level 9+ coastal caverns.
-5. **地獄の砂浜** (`stage-05`): Level 12+ hostile coastal shores.
-6. **魔術師の塔** (`stage-06`): Level 15+ arcane spire.
-7. **荒野の獣道** (`stage-07`): Level 18+ wild beasts in rocky wilderness.
-8. **マグマ山** (`stage-08`): Level 21+ volcanic domain.
-9. **妖精の森** (`stage-09`): Level 24+ mystical fey woods.
-10. **スライムランド** (`stage-10`): Level 27+ slime habitat.
-11. **死霊の沼地** (`stage-11`): Level 30+ cursed marshlands.
-12. **ドラゴンの谷** (`stage-12`): Level 33+ valley of drakes and dragons.
-13. **暗黒魔城** (`stage-13`): Level 36+ fortress of darkness.
-14. **死の大地** (`stage-14`): Level 39+ desolated wasteland.
-15. **魔界** (`stage-15`): Level 42+ netherworld realm.
-16. **鏡の世界** (`stage-16`): Level 30+ shadow realm with doppelganger and shadow enemies.
-17. **マダムガーデン** (`stage-17`): Level 35+ garden estate.
-18. **幻の秘境** (`stage-18`): Level 40+ hidden sanctuary.
-19. **闇のランプ** (`stage-19`): Level 45+ shadowy lamp cavern.
-20. **封印の地** (`stage-20`): Level 50+ sealed ground.
-21. **天空城** (`stage-21`): Level 55+ floating sky citadel.
-22. **カオスフィールド** (`stage-22`): Level 60+ chaotic rift.
-23. **ワイルドアピアリー** (`stage-23`): Level 65+ wild apiary nesting grounds.
-24. **プニプニ雪原** (`stage-24`): Level 70+ frozen snowfields.
-25. **白亜の宮殿** (`stage-25`): Level 75+ chalk palace.
-26. **氷の彫刻館** (`stage-26`): Level 80+ glacial museum of ice sculptures.
-27. **神秘の森** (`stage-27`): Level 85+ ancient mystical forest.
-28. **ハロウィンタウン** (`stage-28`): Level 90+ festival town of tricks and treats.
+### Standard Adventure Stages (00–27)
+0. **プニプニ平原** (`stage-00`): Level 1+ introductory meadow.
+1. **キノコの森** (`stage-01`): Level 3+ forest filled with fungal and small beast creatures.
+2. **幽霊城** (`stage-02`): Level 5+ haunted castle with undead encounters. Requires JobLevel 1.
+3. **海辺の洞窟** (`stage-03`): Level 8+ coastal caverns. Requires JobLevel 2.
+4. **地獄の砂浜** (`stage-04`): Level 11+ hostile coastal shores. Requires JobLevel 3.
+5. **魔術師の塔** (`stage-05`): Level 14+ arcane spire. Requires JobLevel 4.
+6. **荒野の獣道** (`stage-06`): Level 17+ wild beasts in rocky wilderness. Requires JobLevel 5.
+7. **マグマ山** (`stage-07`): Level 20+ volcanic domain. Requires JobLevel 6.
+8. **妖精の森** (`stage-08`): Level 23+ mystical fey woods. Requires JobLevel 7.
+9. **スライムランド** (`stage-09`): Level 26+ slime habitat. Requires JobLevel 8.
+10. **死霊の沼地** (`stage-10`): Level 29+ cursed marshlands. Requires JobLevel 9.
+11. **ドラゴンの谷** (`stage-11`): Level 32+ valley of drakes and dragons. Requires JobLevel 10.
+12. **暗黒魔城** (`stage-12`): Level 35+ fortress of darkness. Requires JobLevel 11.
+13. **死の大地** (`stage-13`): Level 38+ desolated wasteland. Requires JobLevel 12.
+14. **魔界** (`stage-14`): Level 41+ netherworld realm. Requires JobLevel 13.
+15. **鏡の世界** (`stage-15`): Level 30+ shadow realm with doppelganger and shadow enemies.
+16. **マダムガーデン** (`stage-16`): Level 35+ garden estate.
+17. **幻の秘境** (`stage-17`): Level 40+ hidden sanctuary (3x treasure chest multiplier).
+18. **闇のランプ** (`stage-18`): Level 45+ shadowy lamp cavern.
+19. **封印の地** (`stage-19`): Level 50+ sealed ground.
+20. **天空城** (`stage-20`): Level 55+ floating sky citadel (3x treasure chest multiplier).
+21. **カオスフィールド** (`stage-21`): Level 60+ chaotic rift (3x treasure chest multiplier).
+22. **ワイルドアピアリー** (`stage-22`): Level 65+ wild apiary nesting grounds. Requires JobLevel 6.
+23. **プニプニ雪原** (`stage-23`): Level 70+ frozen snowfields.
+24. **白亜の宮殿** (`stage-24`): Level 75+ chalk palace. Requires JobLevel 50.
+25. **氷の彫刻館** (`stage-25`): Level 80+ glacial museum of ice sculptures. Requires JobLevel 10.
+26. **神秘の森 / 四季のダンジョン** (`stage-26`): Level 85+ seasonal dungeon with Spring, Summer, Autumn, and Winter variants. Once-daily challenge lock (`CategoryDungeonOnce`).
+27. **ハロウィンタウン** (`stage-27`): Level 90+ festival town of tricks and treats.
 
 ### 2. Monsters (`monsters.json`)
 Each monster definition specifies:

@@ -2,6 +2,8 @@ package adventure
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/core/random"
 )
@@ -26,12 +28,21 @@ var defaultBoxNames = []string{
 
 // TreasureCalculationInput specifies the party state when arriving at Floor 11 (Treasure Room).
 type TreasureCalculationInput struct {
+	StageID             string
 	AliveMembers        int
 	HasMerchant         bool
+	HasGambler          bool
 	HasTreasureHunter   bool
 	HasLuckyPendant     bool
 	HasTreasureBlessing bool
 	Rng                 func(n int) int
+}
+
+func isThreeTimesTreasureStage(stageID string) bool {
+	id := strings.ToLower(strings.TrimSpace(stageID))
+	return id == "stage-17" || id == "17" ||
+		id == "stage-20" || id == "20" ||
+		id == "stage-21" || id == "21"
 }
 
 // CalculateTreasureCount calculates the number of treasure boxes spawned on Floor 11
@@ -46,11 +57,26 @@ func CalculateTreasureCount(input TreasureCalculationInput) int {
 	}
 
 	// Base count: 1 box per alive party member
+	// Legacy vs_monster.cgi:92: Stages 17, 20, 21 grant 3x treasure multiplier
 	count := input.AliveMembers
+	if isThreeTimesTreasureStage(input.StageID) {
+		count = input.AliveMembers * 3
+	}
+	baseCount := count
 
 	// Merchant (job 7): +1 box
 	if input.HasMerchant {
 		count++
+	}
+
+	// Gambler (job 81): + rand(3) - rand(2)
+	// (party2/lib/vs_monster.cgi:94-97)
+	// If Lucky Pendant (item-191) is held and count drops below baseCount, restored to baseCount.
+	if input.HasGambler {
+		count += rng(3) - rng(2)
+		if input.HasLuckyPendant && count < baseCount {
+			count = baseCount
+		}
 	}
 
 	// Treasure Hunter (job 78): +1 to +2 boxes (1 + rand(2))
@@ -74,6 +100,27 @@ func CalculateTreasureCount(input TreasureCalculationInput) int {
 	return count
 }
 
+// StageTreasurePools defines candidate item pools across equipment and consumables for Floor 11.
+type StageTreasurePools struct {
+	Weapons []string
+	Armors  []string
+	Items   []string
+}
+
+// GetDayOfWeekOrb returns the canonical weekday orb item ID matching legacy Party2 (_npc_action.cgi:541-543).
+// Sunday (0): random among item-060..item-065
+// Monday (1) .. Saturday (6): item-060 .. item-065
+func GetDayOfWeekOrb(t time.Time, rng func(n int) int) string {
+	if rng == nil {
+		rng = random.Intn
+	}
+	wday := t.Weekday()
+	if wday == time.Sunday {
+		return fmt.Sprintf("item-%03d", 60+rng(6))
+	}
+	return fmt.Sprintf("item-%03d", 60+int(wday)-1)
+}
+
 // TreasureBox represents an individual treasure chest discovered on Floor 11.
 type TreasureBox struct {
 	ID          string `json:"id"`
@@ -84,17 +131,29 @@ type TreasureBox struct {
 	DeliveredTo string `json:"delivered_to,omitempty"` // "inventory" or "depot"
 }
 
-// GenerateTreasureBoxes creates the list of treasure chests for Floor 11.
+// GenerateTreasureBoxes creates the list of treasure chests for Floor 11 (legacy convenience wrapper).
 func GenerateTreasureBoxes(count int, dropPool []string, rng func(n int) int) []TreasureBox {
+	return GenerateTreasureBoxesWithPools(count, StageTreasurePools{Items: dropPool}, time.Now().UTC(), rng)
+}
+
+// GenerateTreasureBoxesWithPools creates treasure chests using authentic legacy drop distribution (_npc_action.cgi:540-550):
+// - Appends current day-of-week orb to items candidate pool
+// - 25% weapon, 25% armor, 50% tool/item (v = int(rand(4)) + 1; v = 3 if v > 3)
+func GenerateTreasureBoxesWithPools(count int, pools StageTreasurePools, now time.Time, rng func(n int) int) []TreasureBox {
 	if count <= 0 {
 		return nil
 	}
 	if rng == nil {
 		rng = random.Intn
 	}
-	if len(dropPool) == 0 {
-		dropPool = []string{"item-001"}
-	}
+
+	items := make([]string, len(pools.Items), len(pools.Items)+1)
+	copy(items, pools.Items)
+	orb := GetDayOfWeekOrb(now, rng)
+	items = append(items, orb)
+
+	weapons := pools.Weapons
+	armors := pools.Armors
 
 	boxes := make([]TreasureBox, count)
 	for i := 0; i < count; i++ {
@@ -103,7 +162,40 @@ func GenerateTreasureBoxes(count int, dropPool []string, rng func(n int) int) []
 		if i >= 26 {
 			suffix = rune('a' + ((i - 26) % 26))
 		}
-		itemDefID := dropPool[rng(len(dropPool))]
+
+		// Roll category: 1=weapon (25%), 2=armor (25%), 3 or 4=item (50%)
+		v := rng(4) + 1
+		if v > 3 {
+			v = 3
+		}
+
+		var itemDefID string
+		switch v {
+		case 1:
+			if len(weapons) > 0 {
+				itemDefID = weapons[rng(len(weapons))]
+			} else if len(items) > 0 {
+				itemDefID = items[rng(len(items))]
+			}
+		case 2:
+			if len(armors) > 0 {
+				itemDefID = armors[rng(len(armors))]
+			} else if len(items) > 0 {
+				itemDefID = items[rng(len(items))]
+			}
+		default: // 3
+			if len(items) > 0 {
+				itemDefID = items[rng(len(items))]
+			} else if len(weapons) > 0 {
+				itemDefID = weapons[rng(len(weapons))]
+			} else if len(armors) > 0 {
+				itemDefID = armors[rng(len(armors))]
+			}
+		}
+
+		if itemDefID == "" {
+			itemDefID = "item-001"
+		}
 
 		boxes[i] = TreasureBox{
 			ID:     fmt.Sprintf("box-%d", i+1),

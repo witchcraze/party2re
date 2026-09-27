@@ -14,10 +14,11 @@ const (
 	PrefixTimer = "party2:timer:"
 	PrefixDaily = "party2:daily:"
 
-	CategorySleep  = "sleep"
-	CategoryAsleep = "asleep"
-	CategoryHouse  = "house"
-	CategoryStore  = "store"
+	CategorySleep       = "sleep"
+	CategoryAsleep      = "asleep"
+	CategoryHouse       = "house"
+	CategoryStore       = "store"
+	CategoryDungeonOnce = "dungeon_once"
 )
 
 var (
