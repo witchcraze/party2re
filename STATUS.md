@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Refactor secret shop available items filtering using slices.Contains
+Last updated: Refactor event plaza bazaar item filtering using slices.Contains
 
 ## Current Phase
 
