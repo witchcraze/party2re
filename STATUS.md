@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Refactor event plaza bazaar item filtering using slices.Contains
+Last updated: Refactor core domain slice search logic using slices.Contains
 
 ## Current Phase
 
