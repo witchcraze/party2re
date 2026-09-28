@@ -172,8 +172,11 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 			}
 		}
 		if s.jobRestorer != nil {
-			//lint:ignore error-swallow best-effort job state restoration on sleep
-			_ = s.jobRestorer.RestoreActiveJob(ctx, characterID, memoryJobID)
+			if err := s.jobRestorer.RestoreActiveJob(ctx, characterID, memoryJobID); err != nil {
+				_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
+				_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
+				return SleepResult{}, err
+			}
 		}
 	}
 
@@ -286,8 +289,9 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 	}
 
 	if memoryJobID != "" && s.jobRestorer != nil {
-		//lint:ignore error-swallow best-effort job state restoration on wake
-		_ = s.jobRestorer.RestoreActiveJob(ctx, characterID, memoryJobID)
+		if err := s.jobRestorer.RestoreActiveJob(ctx, characterID, memoryJobID); err != nil {
+			return WakeResult{}, err
+		}
 	}
 
 	if s.fullness != nil {

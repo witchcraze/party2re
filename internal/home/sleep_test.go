@@ -48,12 +48,13 @@ func (m *mockFullnessResetter) ResetFullness(ctx context.Context, characterID st
 type mockJobStateRestorer struct {
 	restoredCharacterID string
 	restoredJobID       string
+	restoreErr          error
 }
 
 func (m *mockJobStateRestorer) RestoreActiveJob(ctx context.Context, characterID, jobID string) error {
 	m.restoredCharacterID = characterID
 	m.restoredJobID = jobID
-	return nil
+	return m.restoreErr
 }
 
 type mockBlessingCleaner struct {
@@ -404,6 +405,90 @@ func TestSleep_JobMemoryRevertUpdateErrorPropagates(t *testing.T) {
 	}
 	if isSleeping {
 		t.Error("expected sleep lock to be cleared when character update fails")
+	}
+}
+
+func TestSleep_JobStateRestorerErrorPropagates(t *testing.T) {
+	ctx := context.Background()
+	charRepo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {
+				ID:   "c1",
+				Name: "Hero",
+				JobMemory: &corecharacter.JobMemory{
+					JobID: "job-temp",
+					SP:    10,
+				},
+			},
+		},
+	}
+
+	mockHomeRepo := newMockHomeRepo()
+	timerSvc := timer.NewService(nil)
+	jobRestorer := &mockJobStateRestorer{restoreErr: errors.New("job restorer db error")}
+
+	svc, err := NewService(
+		mockHomeRepo,
+		charRepo,
+		WithTimer(timerSvc),
+		WithCharacterUpdater(charRepo),
+		WithJobStateRestorer(jobRestorer),
+		WithBaseSleepDuration(10*time.Millisecond),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	_, err = svc.Sleep(ctx, "c1", "c1")
+	if err == nil || !strings.Contains(err.Error(), "job restorer db error") {
+		t.Fatalf("expected job restorer db error, got: %v", err)
+	}
+
+	// Verify sleep locks were released on error
+	isSleeping, err := timerSvc.IsLocked(ctx, timer.CategorySleep, "c1")
+	if err != nil {
+		t.Fatalf("timer check failed: %v", err)
+	}
+	if isSleeping {
+		t.Error("expected sleep lock to be cleared when job restorer fails")
+	}
+}
+
+func TestWake_JobStateRestorerErrorPropagates(t *testing.T) {
+	ctx := context.Background()
+	charRepo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {
+				ID:   "c1",
+				Name: "Hero",
+				JobMemory: &corecharacter.JobMemory{
+					JobID: "job-temp",
+					SP:    10,
+				},
+			},
+		},
+	}
+
+	mockHomeRepo := newMockHomeRepo()
+	timerSvc := timer.NewService(nil)
+	_ = timerSvc.SetLock(ctx, timer.CategoryAsleep, "c1", 24*time.Hour)
+
+	jobRestorer := &mockJobStateRestorer{restoreErr: errors.New("wake job restorer db error")}
+
+	svc, err := NewService(
+		mockHomeRepo,
+		charRepo,
+		WithTimer(timerSvc),
+		WithCharacterUpdater(charRepo),
+		WithJobStateRestorer(jobRestorer),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	_, err = svc.Wake(ctx, "c1")
+	if err == nil || !strings.Contains(err.Error(), "wake job restorer db error") {
+		t.Fatalf("expected wake job restorer db error, got: %v", err)
 	}
 }
 
