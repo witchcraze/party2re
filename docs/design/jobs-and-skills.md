@@ -80,6 +80,7 @@ cmp = int(min(level, 99) * (tier_rates[current_job_tier] + tier_rates[old_job_ti
 - Both target jobs (`targetJobID` and `targetOldJobID`) must satisfy gender compatibility
   with the character's gender (`RequiredGender`, `party2/lib/job_change.cgi:388-395`).
 - All state mutations for job exchange and memory restoration execute strictly under transactional row locks via economy.ExecuteTransaction (party2/lib/job_change.cgi:361-400, 525-549).
+- Active job synchronization invariant: `CharacterJob.CurrentJobID` (`character_jobs.current_job_id`) is strictly synchronized with `Character.JobID` (`characters.job_id`) across temporary job exchange, manual memory reversal, and home sleep job memory restoration (`home.Sleep`).
 
 
 ### Future Memory & Recall (よびおこす)

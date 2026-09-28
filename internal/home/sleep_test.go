@@ -45,6 +45,17 @@ func (m *mockFullnessResetter) ResetFullness(ctx context.Context, characterID st
 	return nil
 }
 
+type mockJobStateRestorer struct {
+	restoredCharacterID string
+	restoredJobID       string
+}
+
+func (m *mockJobStateRestorer) RestoreActiveJob(ctx context.Context, characterID, jobID string) error {
+	m.restoredCharacterID = characterID
+	m.restoredJobID = jobID
+	return nil
+}
+
 type mockBlessingCleaner struct {
 	calledFor string
 }
@@ -232,19 +243,21 @@ func TestSleep_JobMemoryReversal(t *testing.T) {
 
 	timerSvc := timer.NewService(nil)
 	mockHomeRepo := newMockHomeRepo()
+	jobRestorer := &mockJobStateRestorer{}
 
 	svc, err := NewService(
 		mockHomeRepo,
 		charRepo,
 		WithTimer(timerSvc),
 		WithCharacterUpdater(charRepo),
+		WithJobStateRestorer(jobRestorer),
 		WithBaseSleepDuration(10*time.Millisecond),
 	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
 
-	// Going to sleep restores original job memory
+	// Going to sleep restores original job memory and synchronizes CharacterJob.CurrentJobID
 	_, err = svc.Sleep(ctx, "c1", "c1")
 	if err != nil {
 		t.Fatalf("failed to sleep: %v", err)
@@ -256,6 +269,9 @@ func TestSleep_JobMemoryReversal(t *testing.T) {
 	}
 	if updated.JobID != "mage" || updated.SP != 20 {
 		t.Fatalf("expected Job to be restored to mage (SP 20), got JobID=%s, SP=%d", updated.JobID, updated.SP)
+	}
+	if jobRestorer.restoredCharacterID != "c1" || jobRestorer.restoredJobID != "mage" {
+		t.Fatalf("expected JobStateRestorer called for c1 with job mage, got char=%s, job=%s", jobRestorer.restoredCharacterID, jobRestorer.restoredJobID)
 	}
 }
 

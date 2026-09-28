@@ -55,6 +55,11 @@ type CostumeResetter interface {
 	ResetCostume(ctx context.Context, characterID string) error
 }
 
+// JobStateRestorer restores character_jobs.current_job_id upon rest when reverting JobMemory.
+type JobStateRestorer interface {
+	RestoreActiveJob(ctx context.Context, characterID, jobID string) error
+}
+
 // OnlineCounter counts currently logged in players for sleep duration scaling.
 type OnlineCounter interface {
 	GetOnlineCount(ctx context.Context) (int, error)
@@ -156,12 +161,19 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 	_ = s.timer.SetLock(ctx, timer.CategoryAsleep, characterID, 24*time.Hour)
 
 	// Legacy parity: Revert temporary job memory if active upon going to sleep
-	if char.JobMemory != nil && s.charUpdater != nil {
+	if char.JobMemory != nil {
+		memoryJobID := char.JobMemory.JobID
 		char.RevertJobMemory()
-		if err := s.charUpdater.Update(ctx, char); err != nil {
-			_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
-			_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
-			return SleepResult{}, err
+		if s.charUpdater != nil {
+			if err := s.charUpdater.Update(ctx, char); err != nil {
+				_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
+				_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
+				return SleepResult{}, err
+			}
+		}
+		if s.jobRestorer != nil {
+			//lint:ignore error-swallow best-effort job state restoration on sleep
+			_ = s.jobRestorer.RestoreActiveJob(ctx, characterID, memoryJobID)
 		}
 	}
 
@@ -258,6 +270,11 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 		char = c
 	}
 
+	var memoryJobID string
+	if char.JobMemory != nil {
+		memoryJobID = char.JobMemory.JobID
+	}
+
 	char.RecoverVitality()
 	char.ResetTired()
 	char.RevertJobMemory()
@@ -266,6 +283,11 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 		if err := s.charUpdater.Update(ctx, char); err != nil {
 			return WakeResult{}, err
 		}
+	}
+
+	if memoryJobID != "" && s.jobRestorer != nil {
+		//lint:ignore error-swallow best-effort job state restoration on wake
+		_ = s.jobRestorer.RestoreActiveJob(ctx, characterID, memoryJobID)
 	}
 
 	if s.fullness != nil {
@@ -310,4 +332,9 @@ func (s *Service) SetAlchemyCompleter(a AlchemyCompleter) {
 // SetCostumeResetter registers a cross-domain costume reset hook.
 func (s *Service) SetCostumeResetter(c CostumeResetter) {
 	s.costume = c
+}
+
+// SetJobStateRestorer registers a cross-domain job state restorer hook.
+func (s *Service) SetJobStateRestorer(r JobStateRestorer) {
+	s.jobRestorer = r
 }

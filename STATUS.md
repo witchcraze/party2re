@@ -1,6 +1,6 @@
 # Status
 
-Last updated: [Refactor] Modernize job catalog sorting using slices.SortFunc and cmp.Compare
+Last updated: Issue #880 — [Bug] Job: Reconcile CharacterJob.CurrentJobID synchronization across ExchangeJob and Home.Sleep
 
 ## Current Phase
 

@@ -45,6 +45,12 @@ func WithTimer(t TimerService) ServiceOption {
 	}
 }
 
+func WithJobStateRestorer(r JobStateRestorer) ServiceOption {
+	return func(s *Service) {
+		s.jobRestorer = r
+	}
+}
+
 func WithCharacterUpdater(u CharacterUpdater) ServiceOption {
 	return func(s *Service) {
 		s.charUpdater = u

@@ -204,8 +204,11 @@ func wireHooks(
 			misc.job.SetCostumeResetter(econ.store)
 		}
 	}
-	if misc.job != nil && soc.ranking != nil {
-		misc.job.SetJobChangeTracker(soc.ranking)
+	if misc.job != nil {
+		soc.home.SetJobStateRestorer(misc.job)
+		if soc.ranking != nil {
+			misc.job.SetJobChangeTracker(soc.ranking)
+		}
 	}
 	if soc.ranking != nil {
 		legendInductor := legendInductorAdapter{ranking: soc.ranking}

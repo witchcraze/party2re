@@ -314,7 +314,7 @@ func TestServiceExchangeJobRestoresRememberedPair(t *testing.T) {
 	invRepo := &inventoryRepoStub{inventory: inventory}
 	svc, _ := NewService(repo, WithCharacterRepository(charRepo), WithInventoryRepository(invRepo))
 
-	updated, _, err := svc.ExchangeJob(context.Background(), char.ID, "job-03", "job-04")
+	updated, updatedState, err := svc.ExchangeJob(context.Background(), char.ID, "job-03", "job-04")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,13 +322,34 @@ func TestServiceExchangeJobRestoresRememberedPair(t *testing.T) {
 		updated.OldSP != 30 || updated.JobMemory == nil {
 		t.Fatalf("exchanged character = %#v", updated)
 	}
-	restored, _, err := svc.ExchangeJob(context.Background(), char.ID, "", "")
+	if updatedState.CurrentJobID != "job-03" || repo.value.CurrentJobID != "job-03" {
+		t.Fatalf("expected state CurrentJobID to be job-03, got updatedState=%s, repo=%s", updatedState.CurrentJobID, repo.value.CurrentJobID)
+	}
+
+	restored, restoredState, err := svc.ExchangeJob(context.Background(), char.ID, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if restored.JobID != "job-01" || restored.SP != 2 || restored.OldJobID != "job-02" ||
 		restored.OldSP != 1 || restored.JobMemory != nil {
 		t.Fatalf("restored character = %#v", restored)
+	}
+	if restoredState.CurrentJobID != "job-01" || repo.value.CurrentJobID != "job-01" {
+		t.Fatalf("expected state CurrentJobID to be restored to job-01, got restoredState=%s, repo=%s", restoredState.CurrentJobID, repo.value.CurrentJobID)
+	}
+}
+
+func TestServiceRestoreActiveJob(t *testing.T) {
+	state, _ := corejob.NewCharacterJob("character-1", "job-01")
+	repo := &repositoryStub{value: state}
+	svc, _ := NewService(repo)
+
+	err := svc.RestoreActiveJob(context.Background(), "character-1", "job-05")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repo.value.CurrentJobID != "job-05" {
+		t.Fatalf("expected repo.value.CurrentJobID to be job-05, got %s", repo.value.CurrentJobID)
 	}
 }
 
