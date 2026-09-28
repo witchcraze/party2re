@@ -88,6 +88,14 @@ type CrawlSession struct {
 	Participants        []corebattle.Participant  `json:"participants"`
 	HasTreasureBlessing bool                      `json:"has_treasure_blessing,omitempty"`
 	Rng                 func(n int) int           `json:"-"`
+	nowFunc             func() time.Time          `json:"-"`
+}
+
+func (s *CrawlSession) now() time.Time {
+	if s.nowFunc != nil {
+		return s.nowFunc()
+	}
+	return time.Now().UTC()
 }
 
 // NewCrawlSession creates an initialized 10-floor crawl session at Floor 1.
@@ -385,7 +393,7 @@ func (s *CrawlSession) spawnTreasureBoxes() {
 		Items:   itemPool,
 	}
 
-	s.TreasureBoxes = GenerateTreasureBoxesWithPools(boxCount, pools, time.Now().UTC(), s.Rng)
+	s.TreasureBoxes = GenerateTreasureBoxesWithPools(boxCount, pools, s.now(), s.Rng)
 }
 
 // ExamineTreasure opens a treasure box on Floor 11 (@しらべる).

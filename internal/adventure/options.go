@@ -91,3 +91,10 @@ func WithTimerService(timer TimerService) Option {
 		s.timer = timer
 	}
 }
+
+// WithNowFunc configures a custom nowFunc for deterministic time generation.
+func WithNowFunc(nowFunc func() time.Time) Option {
+	return func(s *Service) {
+		s.nowFunc = nowFunc
+	}
+}

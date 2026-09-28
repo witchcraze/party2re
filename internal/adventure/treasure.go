@@ -108,13 +108,15 @@ type StageTreasurePools struct {
 }
 
 // GetDayOfWeekOrb returns the canonical weekday orb item ID matching legacy Party2 (_npc_action.cgi:541-543).
+// Weekday is evaluated in JST (UTC+9) matching authentic server time.
 // Sunday (0): random among item-060..item-065
 // Monday (1) .. Saturday (6): item-060 .. item-065
 func GetDayOfWeekOrb(t time.Time, rng func(n int) int) string {
 	if rng == nil {
 		rng = random.Intn
 	}
-	wday := t.Weekday()
+	jst := time.FixedZone("JST", 9*60*60)
+	wday := t.In(jst).Weekday()
 	if wday == time.Sunday {
 		return fmt.Sprintf("item-%03d", 60+rng(6))
 	}

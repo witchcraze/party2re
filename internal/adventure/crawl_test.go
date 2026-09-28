@@ -1,7 +1,9 @@
 package adventure_test
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/adventure"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -359,6 +361,96 @@ func TestCrawlSession_GamblerAndStageMultipliers(t *testing.T) {
 	if len(session.TreasureBoxes) != 5 {
 		t.Errorf("len(TreasureBoxes) = %d, want 5 (1*3 + 2)", len(session.TreasureBoxes))
 	}
+}
+
+func TestCrawlSession_NowFuncInjectedJSTOrb(t *testing.T) {
+	stages, monsters := setupTestCatalogs(t)
+	stage1, err := stages.FindByID("stage-01")
+	if err != nil {
+		t.Fatalf("FindByID(stage-01): %v", err)
+	}
+
+	characters := createTestCharacters()[:1]
+	// Inject a time corresponding to JST Monday 08:00 (UTC Sunday 23:00)
+	fixedUTC := time.Date(2026, 8, 23, 23, 0, 0, 0, time.UTC)
+
+	// Configure Service with WithNowFunc
+	repo := &mockAdvRepo{}
+	charRepo := &mockCharRepo{chars: map[string]corecharacter.Character{characters[0].ID: characters[0]}}
+	engine := corebattle.Engine{}
+
+	svc, err := adventure.NewServiceWithCatalogs(
+		repo, charRepo, nil, stages, monsters, engine, nil, nil, adventure.RealClock{},
+		adventure.WithNowFunc(func() time.Time { return fixedUTC }),
+	)
+	if err != nil {
+		t.Fatalf("NewServiceWithCatalogs error: %v", err)
+	}
+
+	// Execute crawl via Service
+	res, err := svc.ExecuteCrawl(context.Background(), adventure.DungeonCrawlRequest{
+		CharacterIDs: []string{characters[0].ID},
+		StageID:      stage1.ID,
+		Rng: func(n int) int {
+			if n == 4 {
+				// Category roll: rng(4)+1 where 3 or 4 = item (default/tool pool).
+				// Return 2 -> v = 3 (item pool)
+				return 2
+			}
+			if n == 27 {
+				// stage-01 has 26 treasure items + 1 orb = 27 items total.
+				// Return index 26 (last index) for the injected JST Monday orb (item-060).
+				return 26
+			}
+			return 0
+		},
+	})
+	if err != nil {
+		t.Fatalf("ExecuteCrawl error: %v", err)
+	}
+
+	if len(res.TreasureBoxes) == 0 {
+		t.Fatalf("expected treasure boxes")
+	}
+
+	// JST Monday orb is item-060
+	foundOrb := false
+	for _, box := range res.TreasureBoxes {
+		if box.ItemID == "item-060" {
+			foundOrb = true
+			break
+		}
+	}
+	if !foundOrb {
+		t.Errorf("expected item-060 (Monday JST orb) in treasure boxes, got boxes: %+v", res.TreasureBoxes)
+	}
+}
+
+type mockAdvRepo struct{}
+
+func (mockAdvRepo) Save(ctx context.Context, value adventure.Adventure) error { return nil }
+func (mockAdvRepo) FindByID(ctx context.Context, id string) (adventure.Adventure, error) {
+	return adventure.Adventure{}, nil
+}
+func (mockAdvRepo) ListByCharacterID(ctx context.Context, characterID string, limit, offset int) ([]adventure.Adventure, int, error) {
+	return nil, 0, nil
+}
+func (mockAdvRepo) ListByCharacterIDByCursor(ctx context.Context, characterID string, limit int, beforeTime time.Time, beforeID string) ([]adventure.Adventure, error) {
+	return nil, nil
+}
+func (mockAdvRepo) GetAggregatedStats(ctx context.Context, characterID string) (adventure.AggregatedStats, error) {
+	return adventure.AggregatedStats{}, nil
+}
+
+type mockCharRepo struct {
+	chars map[string]corecharacter.Character
+}
+
+func (m mockCharRepo) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
+	if c, ok := m.chars[id]; ok {
+		return c, nil
+	}
+	return corecharacter.Character{}, corecharacter.ErrNotFound
 }
 
 type defeatBattleResolver struct{}

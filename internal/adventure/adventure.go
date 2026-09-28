@@ -83,12 +83,23 @@ type Service struct {
 	battle             corebattle.Resolver
 	logger             Logger
 	clock              Clock
+	nowFunc            func() time.Time
 	victoryHook        VictoryHook
 	postAdventureHook  PostAdventureHook
 	participantBuilder ParticipantBuilder
 	battleSettler      PostBattleSettler
 	blessingProvider   BlessingProvider
 	timer              TimerService
+}
+
+func (s *Service) now() time.Time {
+	if s.nowFunc != nil {
+		return s.nowFunc()
+	}
+	if s.clock != nil {
+		return s.clock.Now()
+	}
+	return time.Now()
 }
 
 func (s *Service) SetVictoryHook(hook VictoryHook) {
@@ -290,6 +301,7 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	if err != nil {
 		return DungeonCrawlResult{}, err
 	}
+	session.nowFunc = s.now
 
 	if stage.ID == "stage-26" && s.timer != nil {
 		for _, c := range characters {
@@ -336,7 +348,7 @@ func (s *Service) ExecuteCrawl(ctx context.Context, req DungeonCrawlRequest) (Du
 	}
 
 	// Persist adventure record for each participating character
-	now := s.clock.Now()
+	now := s.now()
 	for _, c := range characters {
 		advID := id.New()
 		result.AdventureIDs[c.ID] = advID
