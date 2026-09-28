@@ -110,17 +110,8 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 
 		if shopType == ShopTypeAccessory {
 			sales, err := GetSalesItemIDs(shopType, char.JobLevel)
-			if err == nil {
-				found := false
-				for _, sid := range sales {
-					if sid == itemDefinitionID {
-						found = true
-						break
-					}
-				}
-				if !found {
-					return ErrItemNotFound
-				}
+			if err == nil && !slices.Contains(sales, itemDefinitionID) {
+				return ErrItemNotFound
 			}
 		}
 

@@ -221,14 +221,10 @@ func (s *Service) GetOracleStatus(ctx context.Context, characterID string) (*Ora
 	if s.helper != nil {
 		activeHelperIDs, err := s.helper.GetActiveHelperItemIDs(ctx, s.nowFunc().UTC())
 		if err == nil && len(activeHelperIDs) > 0 {
-			excluded := make(map[string]bool, len(activeHelperIDs))
-			for _, id := range activeHelperIDs {
-				excluded[id] = true
-			}
 			filtered := make([]OracleItem, 0, len(costumes))
 			for _, c := range costumes {
 				defID := fmt.Sprintf("item-%03d", c.ItemNo)
-				if !excluded[defID] && !excluded[strconv.Itoa(c.ItemNo)] {
+				if !slices.Contains(activeHelperIDs, defID) && !slices.Contains(activeHelperIDs, strconv.Itoa(c.ItemNo)) {
 					filtered = append(filtered, c)
 				}
 			}
@@ -298,10 +294,8 @@ func (s *Service) BuyCostumeItem(ctx context.Context, characterID string, itemNo
 			activeHelperIDs, err := s.helper.GetActiveHelperItemIDs(txCtx, now)
 			if err == nil {
 				defID := fmt.Sprintf("item-%03d", itemNo)
-				for _, id := range activeHelperIDs {
-					if id == defID || id == strconv.Itoa(itemNo) {
-						return ErrItemUnavailableInHelperQuest
-					}
+				if slices.Contains(activeHelperIDs, defID) || slices.Contains(activeHelperIDs, strconv.Itoa(itemNo)) {
+					return ErrItemUnavailableInHelperQuest
 				}
 			}
 		}
