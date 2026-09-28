@@ -1,6 +1,6 @@
 # Status
 
-Last updated: [Refactor] Modernize plantation harvest batch sorting using slices.SortFunc
+Last updated: [Refactor] Modernize party lobby sorting using slices.SortFunc
 
 ## Current Phase
 
