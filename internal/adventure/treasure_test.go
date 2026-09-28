@@ -248,11 +248,21 @@ func TestGetDayOfWeekOrb(t *testing.T) {
 
 	for _, tt := range tests {
 		// 2026-08-23 was Sunday (0), 2026-08-24 Monday (1), etc.
-		date := time.Date(2026, 8, 23+int(tt.weekday), 12, 0, 0, 0, time.UTC)
+		date := time.Date(2026, 8, 23+int(tt.weekday), 12, 0, 0, 0, time.FixedZone("JST", 9*60*60))
 		orb := adventure.GetDayOfWeekOrb(date, func(n int) int { return tt.rngVal })
 		if orb != tt.wantOrb {
 			t.Errorf("GetDayOfWeekOrb(%v) = %s, want %s", tt.weekday, orb, tt.wantOrb)
 		}
+	}
+}
+
+func TestGetDayOfWeekOrb_JSTBoundary(t *testing.T) {
+	// 2026-08-23 23:00 UTC is Sunday in UTC, but 2026-08-24 08:00 JST (Monday) in JST (UTC+9).
+	utcSundayNight := time.Date(2026, 8, 23, 23, 0, 0, 0, time.UTC)
+	orb := adventure.GetDayOfWeekOrb(utcSundayNight, func(n int) int { return 0 })
+	// Should evaluate in JST to Monday (item-060), NOT UTC Sunday.
+	if orb != "item-060" {
+		t.Errorf("GetDayOfWeekOrb(UTC Sunday 23:00 = JST Monday 08:00) = %s, want item-060", orb)
 	}
 }
 

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #880 — [Bug] Job: Reconcile CharacterJob.CurrentJobID synchronization across ExchangeJob and Home.Sleep
+Last updated: Issue #882 — [Bug] Adventure: Evaluate Floor 11 weekday orb drops in Japan Standard Time (JST)
 
 ## Current Phase
 

@@ -96,7 +96,7 @@ All groups below are Version 1.0 reconstruction requirements.
 ### D. Adventure, Maps, Stages, and Battle
 - [x] Reusable deterministic Battle component & turn resolver (#12, #20, #36, #480, #826)
 - [x] Data-driven Stage Catalog (28 stages) and Monster Catalog (286 clean-room monsters) (#56)
-- [x] Multi-stage adventure and dungeon exploration: Authentic 10-floor dungeon crawl loop, Floor 11 Treasure Room, depot overflow fallback, and immediate crawl execution (#57, #74, #478, #655)
+- [x] Multi-stage adventure and dungeon exploration: Authentic 10-floor dungeon crawl loop, Floor 11 Treasure Room, depot overflow fallback, immediate crawl execution, and JST weekday orb evaluation with nowFunc time injection (#57, #74, #478, #655, #882)
 - [x] Multiplayer party formation, co-op adventures, synergy bonuses, speed configs (3/18/25), need_join condition checks, distributed party adventure locking, and group quests (#188, #478, #653, #656, #709, #793)
 - [x] Adventure history logs, stage clear stats, and milestone progression unlocks (#199)
 - [x] Push-based background ScheduledAction completion via Valkey Worker (#106, #109, #110)
