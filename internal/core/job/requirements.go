@@ -1,5 +1,9 @@
 package job
 
+import (
+	"slices"
+)
+
 // legacyItemRequirements contains the catalog IDs used by special jobs. The
 // IDs are stable content identifiers; callers still verify ownership through
 // the inventory domain before consuming them.
@@ -82,12 +86,7 @@ type ChangeContext struct {
 // isNeedJob reports whether CurrentJobID or OldJobID matches any of the specified job IDs.
 // Matches legacy Party2 _data.cgi:303-309 sub _is_need_job.
 func isNeedJob(ctx ChangeContext, jobIDs []string) bool {
-	for _, id := range jobIDs {
-		if ctx.CurrentJobID == id || ctx.OldJobID == id {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(jobIDs, ctx.CurrentJobID) || slices.Contains(jobIDs, ctx.OldJobID)
 }
 
 // ValidateRequirements checks whether a character satisfies all legacy conditions
