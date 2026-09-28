@@ -452,6 +452,12 @@ func TestSleep_JobStateRestorerErrorPropagates(t *testing.T) {
 	if isSleeping {
 		t.Error("expected sleep lock to be cleared when job restorer fails")
 	}
+
+	// Verify character state in repo was NOT updated/persisted when job restorer failed prior to charUpdater.Update
+	charAfter := charRepo.chars["c1"]
+	if charAfter.JobMemory == nil || charAfter.JobMemory.JobID != "job-temp" {
+		t.Errorf("expected character JobMemory to remain unpersisted when JobStateRestorer fails, got: %+v", charAfter.JobMemory)
+	}
 }
 
 func TestWake_JobStateRestorerErrorPropagates(t *testing.T) {

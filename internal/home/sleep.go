@@ -163,16 +163,16 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 	// Legacy parity: Revert temporary job memory if active upon going to sleep
 	if char.JobMemory != nil {
 		memoryJobID := char.JobMemory.JobID
-		char.RevertJobMemory()
-		if s.charUpdater != nil {
-			if err := s.charUpdater.Update(ctx, char); err != nil {
+		if s.jobRestorer != nil {
+			if err := s.jobRestorer.RestoreActiveJob(ctx, characterID, memoryJobID); err != nil {
 				_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
 				_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
 				return SleepResult{}, err
 			}
 		}
-		if s.jobRestorer != nil {
-			if err := s.jobRestorer.RestoreActiveJob(ctx, characterID, memoryJobID); err != nil {
+		char.RevertJobMemory()
+		if s.charUpdater != nil {
+			if err := s.charUpdater.Update(ctx, char); err != nil {
 				_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
 				_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
 				return SleepResult{}, err
@@ -278,18 +278,18 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 		memoryJobID = char.JobMemory.JobID
 	}
 
+	if memoryJobID != "" && s.jobRestorer != nil {
+		if err := s.jobRestorer.RestoreActiveJob(ctx, characterID, memoryJobID); err != nil {
+			return WakeResult{}, err
+		}
+	}
+
 	char.RecoverVitality()
 	char.ResetTired()
 	char.RevertJobMemory()
 
 	if s.charUpdater != nil {
 		if err := s.charUpdater.Update(ctx, char); err != nil {
-			return WakeResult{}, err
-		}
-	}
-
-	if memoryJobID != "" && s.jobRestorer != nil {
-		if err := s.jobRestorer.RestoreActiveJob(ctx, characterID, memoryJobID); err != nil {
 			return WakeResult{}, err
 		}
 	}
