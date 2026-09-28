@@ -8,7 +8,9 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	corejob "github.com/witchcraze/party2re/internal/core/job"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/job"
 )
 
 type mockCharRepo struct {
@@ -55,6 +57,19 @@ func (m *mockJobStateRestorer) RestoreActiveJob(ctx context.Context, characterID
 	m.restoredCharacterID = characterID
 	m.restoredJobID = jobID
 	return m.restoreErr
+}
+
+type mockJobRepo struct {
+	state corejob.CharacterJob
+}
+
+func (m *mockJobRepo) Save(_ context.Context, value corejob.CharacterJob) error {
+	m.state = value
+	return nil
+}
+
+func (m *mockJobRepo) FindByCharacterID(_ context.Context, _ string) (corejob.CharacterJob, error) {
+	return m.state, nil
 }
 
 type mockBlessingCleaner struct {
@@ -244,14 +259,19 @@ func TestSleep_JobMemoryReversal(t *testing.T) {
 
 	timerSvc := timer.NewService(nil)
 	mockHomeRepo := newMockHomeRepo()
-	jobRestorer := &mockJobStateRestorer{}
+	initialJobState, _ := corejob.NewCharacterJob("c1", "warrior")
+	jobRepo := &mockJobRepo{state: initialJobState}
+	jobSvc, err := job.NewService(jobRepo)
+	if err != nil {
+		t.Fatalf("failed to create job service: %v", err)
+	}
 
 	svc, err := NewService(
 		mockHomeRepo,
 		charRepo,
 		WithTimer(timerSvc),
 		WithCharacterUpdater(charRepo),
-		WithJobStateRestorer(jobRestorer),
+		WithJobStateRestorer(jobSvc),
 		WithBaseSleepDuration(10*time.Millisecond),
 	)
 	if err != nil {
@@ -269,10 +289,15 @@ func TestSleep_JobMemoryReversal(t *testing.T) {
 		t.Fatalf("expected JobMemory to be cleared, got %+v", updated.JobMemory)
 	}
 	if updated.JobID != "mage" || updated.SP != 20 {
-		t.Fatalf("expected Job to be restored to mage (SP 20), got JobID=%s, SP=%d", updated.JobID, updated.SP)
+		t.Fatalf("expected Character.JobID to be restored to mage (SP 20), got JobID=%s, SP=%d", updated.JobID, updated.SP)
 	}
-	if jobRestorer.restoredCharacterID != "c1" || jobRestorer.restoredJobID != "mage" {
-		t.Fatalf("expected JobStateRestorer called for c1 with job mage, got char=%s, job=%s", jobRestorer.restoredCharacterID, jobRestorer.restoredJobID)
+
+	savedJobState, err := jobRepo.FindByCharacterID(ctx, "c1")
+	if err != nil {
+		t.Fatalf("failed to find job state: %v", err)
+	}
+	if savedJobState.CurrentJobID != "mage" {
+		t.Fatalf("expected CharacterJob.CurrentJobID to be restored to mage, got %s", savedJobState.CurrentJobID)
 	}
 }
 
@@ -457,44 +482,6 @@ func TestSleep_JobStateRestorerErrorPropagates(t *testing.T) {
 	charAfter := charRepo.chars["c1"]
 	if charAfter.JobMemory == nil || charAfter.JobMemory.JobID != "job-temp" {
 		t.Errorf("expected character JobMemory to remain unpersisted when JobStateRestorer fails, got: %+v", charAfter.JobMemory)
-	}
-}
-
-func TestWake_JobStateRestorerErrorPropagates(t *testing.T) {
-	ctx := context.Background()
-	charRepo := &mockCharRepo{
-		chars: map[string]corecharacter.Character{
-			"c1": {
-				ID:   "c1",
-				Name: "Hero",
-				JobMemory: &corecharacter.JobMemory{
-					JobID: "job-temp",
-					SP:    10,
-				},
-			},
-		},
-	}
-
-	mockHomeRepo := newMockHomeRepo()
-	timerSvc := timer.NewService(nil)
-	_ = timerSvc.SetLock(ctx, timer.CategoryAsleep, "c1", 24*time.Hour)
-
-	jobRestorer := &mockJobStateRestorer{restoreErr: errors.New("wake job restorer db error")}
-
-	svc, err := NewService(
-		mockHomeRepo,
-		charRepo,
-		WithTimer(timerSvc),
-		WithCharacterUpdater(charRepo),
-		WithJobStateRestorer(jobRestorer),
-	)
-	if err != nil {
-		t.Fatalf("failed to create service: %v", err)
-	}
-
-	_, err = svc.Wake(ctx, "c1")
-	if err == nil || !strings.Contains(err.Error(), "wake job restorer db error") {
-		t.Fatalf("expected wake job restorer db error, got: %v", err)
 	}
 }
 

@@ -273,17 +273,6 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 		char = c
 	}
 
-	var memoryJobID string
-	if char.JobMemory != nil {
-		memoryJobID = char.JobMemory.JobID
-	}
-
-	if memoryJobID != "" && s.jobRestorer != nil {
-		if err := s.jobRestorer.RestoreActiveJob(ctx, characterID, memoryJobID); err != nil {
-			return WakeResult{}, err
-		}
-	}
-
 	char.RecoverVitality()
 	char.ResetTired()
 	char.RevertJobMemory()
