@@ -2,8 +2,10 @@ package job
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -293,10 +295,23 @@ func (s *Service) checkAndNotifyCompletion(ctx context.Context, charName string,
 	}
 }
 
+func isNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, sql.ErrNoRows) || errors.Is(err, corejob.ErrInvalidCharacter) || errors.Is(err, corecharacter.ErrNotFound) {
+		return true
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "not found")
+}
+
 func (s *Service) loadState(ctx context.Context, char corecharacter.Character) (corejob.CharacterJob, error) {
 	state, err := s.repository.FindByCharacterID(ctx, char.ID)
 	if err != nil {
-		return corejob.NewCharacterJob(char.ID, char.JobID)
+		if isNotFound(err) {
+			return corejob.NewCharacterJob(char.ID, char.JobID)
+		}
+		return corejob.CharacterJob{}, err
 	}
 	return state, nil
 }

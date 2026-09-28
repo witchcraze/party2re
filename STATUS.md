@@ -1,6 +1,6 @@
 # Status
 
-Last updated: [Refactor] Modernize plantation harvest batch sorting using slices.SortFunc
+Last updated: Issue #880 — [Bug] Job: Reconcile CharacterJob.CurrentJobID synchronization across ExchangeJob and Home.Sleep
 
 ## Current Phase
 

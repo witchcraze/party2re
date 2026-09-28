@@ -9,6 +9,26 @@ import (
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
+// RestoreActiveJob restores state.CurrentJobID to jobID and saves state to repository.
+func (s *Service) RestoreActiveJob(ctx context.Context, characterID, jobID string) error {
+	if s.repository == nil {
+		return errors.New("job repository is nil")
+	}
+	state, err := s.repository.FindByCharacterID(ctx, characterID)
+	if err != nil {
+		if isNotFound(err) {
+			state, err = corejob.NewCharacterJob(characterID, jobID)
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+	state.RestoreCurrentJob(jobID)
+	return s.repository.Save(ctx, state)
+}
+
 // ExchangeJob swaps a character's current and old job classes using item-168.
 func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, targetOldJobID string) (corecharacter.Character, corejob.CharacterJob, error) {
 	if s.characters == nil {
@@ -24,13 +44,10 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 	if char.OverLevel {
 		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
 	}
-	state, err := s.loadState(ctx, char)
-	if err != nil {
-		return corecharacter.Character{}, corejob.CharacterJob{}, err
-	}
 	if char.JobMemory != nil {
 		req := economy.TransactionRequest{CharacterID: characterID}
 		var restored corecharacter.Character
+		var restoredState corejob.CharacterJob
 		_, err := s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
 			if tc.Character.JobMemory == nil {
 				return errors.New("no job memory to restore")
@@ -40,13 +57,27 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 				return err
 			}
 			tc.Character.JobMemory = nil
+			st, err := s.loadState(tc.Context, tc.Character)
+			if err != nil {
+				return err
+			}
+			st.RestoreCurrentJob(memory.JobID)
+			if err := s.repository.Save(tc.Context, st); err != nil {
+				return err
+			}
 			restored = tc.Character
+			restoredState = st
 			return nil
 		})
 		if err != nil {
 			return corecharacter.Character{}, corejob.CharacterJob{}, err
 		}
-		return restored, state, nil
+		return restored, restoredState, nil
+	}
+
+	state, err := s.loadState(ctx, char)
+	if err != nil {
+		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}
 	if targetJobID == "" || targetOldJobID == "" || targetJobID == targetOldJobID ||
 		!state.IsMastered(targetJobID) || !state.IsMastered(targetOldJobID) {
@@ -83,6 +114,7 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 		},
 	}
 	var updated corecharacter.Character
+	var updatedState corejob.CharacterJob
 	_, err = s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
 		if tc.Character.OverLevel ||
 			(targetDef.RequiredGender != "" && targetDef.RequiredGender != tc.Character.Gender) ||
@@ -98,10 +130,16 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 		if err := tc.Character.ApplyJobMemory(targetJobID, targetSPValue, targetOldJobID, targetOldSPValue); err != nil {
 			return err
 		}
-		if err := s.repository.Save(tc.Context, state); err != nil {
+		st, err := s.loadState(tc.Context, tc.Character)
+		if err != nil {
+			return err
+		}
+		st.RestoreCurrentJob(targetJobID)
+		if err := s.repository.Save(tc.Context, st); err != nil {
 			return err
 		}
 		updated = tc.Character
+		updatedState = st
 		return nil
 	})
 	if err != nil {
@@ -110,5 +148,5 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 		}
 		return corecharacter.Character{}, corejob.CharacterJob{}, err
 	}
-	return updated, state, nil
+	return updated, updatedState, nil
 }

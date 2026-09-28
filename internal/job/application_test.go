@@ -314,7 +314,7 @@ func TestServiceExchangeJobRestoresRememberedPair(t *testing.T) {
 	invRepo := &inventoryRepoStub{inventory: inventory}
 	svc, _ := NewService(repo, WithCharacterRepository(charRepo), WithInventoryRepository(invRepo))
 
-	updated, _, err := svc.ExchangeJob(context.Background(), char.ID, "job-03", "job-04")
+	updated, updatedState, err := svc.ExchangeJob(context.Background(), char.ID, "job-03", "job-04")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,13 +322,54 @@ func TestServiceExchangeJobRestoresRememberedPair(t *testing.T) {
 		updated.OldSP != 30 || updated.JobMemory == nil {
 		t.Fatalf("exchanged character = %#v", updated)
 	}
-	restored, _, err := svc.ExchangeJob(context.Background(), char.ID, "", "")
+	if updatedState.CurrentJobID != "job-03" || repo.value.CurrentJobID != "job-03" {
+		t.Fatalf("expected state CurrentJobID to be job-03, got updatedState=%s, repo=%s", updatedState.CurrentJobID, repo.value.CurrentJobID)
+	}
+
+	restored, restoredState, err := svc.ExchangeJob(context.Background(), char.ID, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if restored.JobID != "job-01" || restored.SP != 2 || restored.OldJobID != "job-02" ||
 		restored.OldSP != 1 || restored.JobMemory != nil {
 		t.Fatalf("restored character = %#v", restored)
+	}
+	if restoredState.CurrentJobID != "job-01" || repo.value.CurrentJobID != "job-01" {
+		t.Fatalf("expected state CurrentJobID to be restored to job-01, got restoredState=%s, repo=%s", restoredState.CurrentJobID, repo.value.CurrentJobID)
+	}
+}
+
+func TestServiceRestoreActiveJob(t *testing.T) {
+	ctx := context.Background()
+	state, _ := corejob.NewCharacterJob("character-1", "job-01")
+	repo := &repositoryStub{value: state}
+	svc, _ := NewService(repo)
+
+	// 1. Success case
+	err := svc.RestoreActiveJob(ctx, "character-1", "job-05")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repo.value.CurrentJobID != "job-05" {
+		t.Fatalf("expected repo.value.CurrentJobID to be job-05, got %s", repo.value.CurrentJobID)
+	}
+
+	// 2. Repository FindByCharacterID unexpected error is NOT swallowed as NotFound
+	dbErr := errors.New("db connection failure")
+	errRepo := &errRepoStub{findErr: dbErr}
+	svcErr, _ := NewService(errRepo)
+	err = svcErr.RestoreActiveJob(ctx, "character-1", "job-05")
+	if !errors.Is(err, dbErr) {
+		t.Fatalf("expected dbErr, got %v", err)
+	}
+
+	// 3. Repository Save error is propagated
+	saveErr := errors.New("save failure")
+	errSaveRepo := &errRepoStub{value: state, saveErr: saveErr}
+	svcSaveErr, _ := NewService(errSaveRepo)
+	err = svcSaveErr.RestoreActiveJob(ctx, "character-1", "job-05")
+	if !errors.Is(err, saveErr) {
+		t.Fatalf("expected saveErr, got %v", err)
 	}
 }
 

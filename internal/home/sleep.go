@@ -8,6 +8,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 var (
@@ -53,6 +54,11 @@ type AlchemyCompleter interface {
 // CostumeResetter resets rented costume state upon rest.
 type CostumeResetter interface {
 	ResetCostume(ctx context.Context, characterID string) error
+}
+
+// JobStateRestorer restores character_jobs.current_job_id upon rest when reverting JobMemory.
+type JobStateRestorer interface {
+	RestoreActiveJob(ctx context.Context, characterID, jobID string) error
 }
 
 // OnlineCounter counts currently logged in players for sleep duration scaling.
@@ -156,12 +162,44 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 	_ = s.timer.SetLock(ctx, timer.CategoryAsleep, characterID, 24*time.Hour)
 
 	// Legacy parity: Revert temporary job memory if active upon going to sleep
-	if char.JobMemory != nil && s.charUpdater != nil {
-		char.RevertJobMemory()
-		if err := s.charUpdater.Update(ctx, char); err != nil {
-			_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
-			_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
-			return SleepResult{}, err
+	if char.JobMemory != nil {
+		if s.runner != nil {
+			req := economy.TransactionRequest{CharacterID: characterID}
+			_, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+				if tc.Character.JobMemory == nil {
+					return nil
+				}
+				memoryJobID := tc.Character.JobMemory.JobID
+				tc.Character.RevertJobMemory()
+				if s.jobRestorer != nil {
+					if err := s.jobRestorer.RestoreActiveJob(tc.Context, characterID, memoryJobID); err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
+				_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
+				return SleepResult{}, err
+			}
+		} else {
+			memoryJobID := char.JobMemory.JobID
+			if s.jobRestorer != nil {
+				if err := s.jobRestorer.RestoreActiveJob(ctx, characterID, memoryJobID); err != nil {
+					_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
+					_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
+					return SleepResult{}, err
+				}
+			}
+			char.RevertJobMemory()
+			if s.charUpdater != nil {
+				if err := s.charUpdater.Update(ctx, char); err != nil {
+					_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
+					_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
+					return SleepResult{}, err
+				}
+			}
 		}
 	}
 
@@ -310,4 +348,9 @@ func (s *Service) SetAlchemyCompleter(a AlchemyCompleter) {
 // SetCostumeResetter registers a cross-domain costume reset hook.
 func (s *Service) SetCostumeResetter(c CostumeResetter) {
 	s.costume = c
+}
+
+// SetJobStateRestorer registers a cross-domain job state restorer hook.
+func (s *Service) SetJobStateRestorer(r JobStateRestorer) {
+	s.jobRestorer = r
 }
