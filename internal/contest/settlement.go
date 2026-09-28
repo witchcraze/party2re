@@ -1,10 +1,11 @@
 package contest
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -53,11 +54,11 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 		prepRound, prepErr := s.contests.GetPreparingRoundForUpdate(txCtx)
 
 		// Sort entries descending by Votes, then ascending by CreatedAt
-		sort.SliceStable(entries, func(i, j int) bool {
-			if entries[i].Votes != entries[j].Votes {
-				return entries[i].Votes > entries[j].Votes
+		slices.SortStableFunc(entries, func(a, b ContestEntry) int {
+			if c := cmp.Compare(b.Votes, a.Votes); c != 0 {
+				return c
 			}
-			return entries[i].CreatedAt.Before(entries[j].CreatedAt)
+			return a.CreatedAt.Compare(b.CreatedAt)
 		})
 
 		// Assign ranks and distribute prizes to top 3
