@@ -1,6 +1,6 @@
 # Status
 
-Last updated: [Refactor] Modernize job catalog sorting using slices.SortFunc and cmp.Compare
+Last updated: [Refactor] Modernize adventure catalog sorting using slices.SortFunc and cmp.Compare
 
 ## Current Phase
 
