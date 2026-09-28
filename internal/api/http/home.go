@@ -385,6 +385,10 @@ func (h *Handler) handleTalkToCompanion(w http.ResponseWriter, r *http.Request) 
 	charID := r.PathValue("id")
 	res, err := h.homes.TalkToCompanion(r.Context(), charID)
 	if err != nil {
+		if errors.Is(err, home.ErrCharacterNotFound) {
+			writeError(w, http.StatusNotFound, err)
+			return
+		}
 		if errors.Is(err, home.ErrNoPetsAtHome) {
 			writeError(w, http.StatusUnprocessableEntity, err)
 			return

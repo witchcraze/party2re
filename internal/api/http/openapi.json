@@ -10643,6 +10643,43 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "properties": {
+                    "companion_phrase_count": {
+                      "type": "integer"
+                    },
+                    "home": {
+                      "type": "object"
+                    },
+                    "is_owner": {
+                      "type": "boolean"
+                    },
+                    "owner": {
+                      "type": "object"
+                    },
+                    "recent_delivery_count": {
+                      "type": "integer"
+                    },
+                    "resident_pets": {
+                      "items": {
+                        "properties": {
+                          "custom_name": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "monster_id": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "unread_letter_count": {
+                      "type": "integer"
+                    }
+                  },
                   "type": "object"
                 }
               }
@@ -18056,6 +18093,16 @@
               }
             },
             "description": "Bad request - invalid input or JSON syntax"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character not found"
           },
           "422": {
             "content": {

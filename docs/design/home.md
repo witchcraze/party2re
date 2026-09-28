@@ -48,11 +48,14 @@ Asynchronous direct messaging between characters:
   - **Physical Purge Lifecycle**: When both the sender and recipient have deleted the letter, the database record is physically removed.
   - **Transactional Concurrency Guarantee**: Concurrent deletion by sender and recipient is serialized within `RunInTx` using pessimistic row-locking (`SELECT ... FOR UPDATE`), eliminating lost updates and ensuring reliable physical purging when both parties delete.
 
-### 3. Companion Greeting Phrases (`character_companion_phrases`)
+### 3. Companion Greeting Phrases & Resident Companions (`character_companion_phrases`, `home_members`)
 
-The resident home companion/pet (linked to resident monster pets staying at Home, `internal/monster.LocationHome`, max 8 slots) can be trained with customized greetings:
-- **Resident Monster Pet Requirement**:
-  - If a character has 0 pets residing at Home (`ListHomePets`), talking or teaching phrases is rejected with `ErrNoPetsAtHome` (HTTP `422 Unprocessable Entity`), matching legacy CGI behavior ("教える相手がいません" / "しかし、誰もいなかった…").
+The resident home companion/pet pool aggregates both monster pets brought home from the ranch (`internal/monster.LocationHome`) and Heaven Wish NPC companions (Ortega, Cat, Maid) stored in `home_members` (`HomePetReader` adapter):
+- **Resident Companion Pool (`ListHomePets`)**:
+  - Queries ranch monster pets at home plus Heaven Wish companions stored in `home_members`, returning unified `HomePet` entries exposed in `HomeView.ResidentPets`.
+- **Resident Companion Requirement & Character Guard**:
+  - `TalkToCompanion` validates character existence upfront, returning `ErrCharacterNotFound` (HTTP `404 Not Found`) if the character ID does not exist.
+  - If a character exists but has 0 pets or companions residing at Home (`ListHomePets`), talking or teaching phrases is rejected with `ErrNoPetsAtHome` (HTTP `422 Unprocessable Entity`), matching legacy CGI behavior ("教える相手がいません" / "しかし、誰もいなかった…").
 - **Teaching Phrases (`ことばをおしえる`)**:
   - Up to 30 unique phrases per companion (original CGI specification).
   - Length: 1 to 120 characters per phrase (original CGI specification).

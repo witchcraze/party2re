@@ -126,6 +126,7 @@ type HomeView struct {
 	CompanionPhraseCount int                     `json:"companion_phrase_count"`
 	RecentDeliveryCount  int                     `json:"recent_delivery_count"`
 	IsOwner              bool                    `json:"is_owner"`
+	ResidentPets         []HomePet               `json:"resident_pets,omitempty"`
 }
 
 // HomeCheckResult represents the response for the legacy "chekku" action.

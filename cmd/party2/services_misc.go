@@ -29,26 +29,27 @@ import (
 )
 
 type miscServices struct {
-	medal       *medal.Service
-	eventplaza  *eventplaza.Service
-	secretshop  *secretshop.Service
-	rescue      *rescue.Service
-	helper      *helperquest.Service
-	job         *job.Service
-	chapel      *chapel.Service
-	collection  *collection.Service
-	lottery     *lottery.Service
-	tavern      *tavern.Service
-	blackmarket *blackmarket.Service
-	casino      *casino.Service
-	god         *god.Service
-	monster     *monster.Service
-	monsterRepo *database.MonsterRepository
-	contest     *contest.Service
-	altar       *altar.Service
-	wishingwell *wishingwell.Service
-	maint       *maintenance.Service
-	activity    *activity.Service
+	medal          *medal.Service
+	eventplaza     *eventplaza.Service
+	secretshop     *secretshop.Service
+	rescue         *rescue.Service
+	helper         *helperquest.Service
+	job            *job.Service
+	chapel         *chapel.Service
+	collection     *collection.Service
+	lottery        *lottery.Service
+	tavern         *tavern.Service
+	blackmarket    *blackmarket.Service
+	casino         *casino.Service
+	god            *god.Service
+	monster        *monster.Service
+	monsterRepo    *database.MonsterRepository
+	homeMemberRepo *database.HomeMemberRepository
+	contest        *contest.Service
+	altar          *altar.Service
+	wishingwell    *wishingwell.Service
+	maint          *maintenance.Service
+	activity       *activity.Service
 }
 
 func newMiscServices(
@@ -382,26 +383,27 @@ func newMiscServices(
 	}
 
 	return &miscServices{
-		medal:       medalService,
-		eventplaza:  eventplazaService,
-		secretshop:  secretshopService,
-		rescue:      rescueService,
-		helper:      helperService,
-		job:         jobService,
-		chapel:      chapelService,
-		collection:  collectionService,
-		lottery:     lotteryService,
-		tavern:      tavernService,
-		blackmarket: blackmarketService,
-		casino:      casinoService,
-		god:         godService,
-		monster:     monsterService,
-		monsterRepo: monsterRepo,
-		contest:     contestService,
-		maint:       maintService,
-		activity:    activityService,
-		altar:       altarService,
-		wishingwell: wishingwellService,
+		medal:          medalService,
+		eventplaza:     eventplazaService,
+		secretshop:     secretshopService,
+		rescue:         rescueService,
+		helper:         helperService,
+		job:            jobService,
+		chapel:         chapelService,
+		collection:     collectionService,
+		lottery:        lotteryService,
+		tavern:         tavernService,
+		blackmarket:    blackmarketService,
+		casino:         casinoService,
+		god:            godService,
+		monster:        monsterService,
+		monsterRepo:    monsterRepo,
+		homeMemberRepo: homeMemberRepo,
+		contest:        contestService,
+		maint:          maintService,
+		activity:       activityService,
+		altar:          altarService,
+		wishingwell:    wishingwellService,
 	}, nil
 }
 

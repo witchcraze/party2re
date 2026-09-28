@@ -188,8 +188,11 @@ func wireHooks(
 			cmbt.party.SetPostAdventureHook(postAdventureHook)
 		}
 	}
-	if misc.monsterRepo != nil {
-		soc.home.SetHomePetReader(&homePetAdapter{repo: misc.monsterRepo})
+	if misc.monsterRepo != nil || misc.homeMemberRepo != nil {
+		soc.home.SetHomePetReader(&homePetAdapter{
+			monsterRepo:    misc.monsterRepo,
+			homeMemberRepo: misc.homeMemberRepo,
+		})
 	}
 	if misc.chapel != nil {
 		soc.home.SetBlessingCleaner(misc.chapel)
@@ -349,22 +352,41 @@ func newHTTPHandler(
 }
 
 type homePetAdapter struct {
-	repo *database.MonsterRepository
+	monsterRepo    *database.MonsterRepository
+	homeMemberRepo *database.HomeMemberRepository
 }
 
 func (a *homePetAdapter) ListHomePets(ctx context.Context, characterID string) ([]home.HomePet, error) {
-	monsters, err := a.repo.ListByCharacterIDAndLocation(ctx, characterID, monster.LocationHome)
-	if err != nil {
-		return nil, err
-	}
-	res := make([]home.HomePet, len(monsters))
-	for i, m := range monsters {
-		res[i] = home.HomePet{
-			ID:         m.ID,
-			CustomName: m.CustomName,
-			MonsterID:  m.MonsterID,
+	var res []home.HomePet
+
+	if a.monsterRepo != nil {
+		monsters, err := a.monsterRepo.ListByCharacterIDAndLocation(ctx, characterID, monster.LocationHome)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range monsters {
+			res = append(res, home.HomePet{
+				ID:         m.ID,
+				CustomName: m.CustomName,
+				MonsterID:  m.MonsterID,
+			})
 		}
 	}
+
+	if a.homeMemberRepo != nil {
+		members, err := a.homeMemberRepo.FindByCharacterID(ctx, characterID)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range members {
+			res = append(res, home.HomePet{
+				ID:         m.ID,
+				CustomName: m.Name,
+				MonsterID:  m.Icon,
+			})
+		}
+	}
+
 	return res, nil
 }
 

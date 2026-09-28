@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #882 — [Bug] Adventure: Evaluate Floor 11 weekday orb drops in Japan Standard Time (JST)
+Last updated: Issue #881 — [Bug] Home: Aggregate Heaven Wish companions into HomePetReader and expose resident pets in HomeView
 
 ## Current Phase
 
