@@ -624,11 +624,8 @@ func TestHomePetAdapter_HeavenWishCompanionIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := corecharacter.NewWithOptions("HeavenCompanionHero", "warrior", "m", nil)
+	c, err := database.CreateTestCharacter(ctx, db, "HeavenCompanionHero")
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := charRepo.Save(ctx, c); err != nil {
 		t.Fatal(err)
 	}
 
