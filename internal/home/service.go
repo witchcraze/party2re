@@ -105,6 +105,15 @@ func (s *Service) GetHomeView(ctx context.Context, homeCharacterID, visitorChara
 		return HomeView{}, fmt.Errorf("listing delivery notices: %w", err)
 	}
 
+	var residentPets []HomePet
+	if s.petReader != nil {
+		pets, err := s.petReader.ListHomePets(ctx, homeCharacterID)
+		if err != nil {
+			return HomeView{}, fmt.Errorf("listing home pets: %w", err)
+		}
+		residentPets = pets
+	}
+
 	return HomeView{
 		Owner:                homeChar,
 		Home:                 h,
@@ -112,6 +121,7 @@ func (s *Service) GetHomeView(ctx context.Context, homeCharacterID, visitorChara
 		CompanionPhraseCount: len(phrases),
 		RecentDeliveryCount:  len(notices),
 		IsOwner:              isOwner,
+		ResidentPets:         residentPets,
 	}, nil
 }
 
@@ -359,6 +369,14 @@ func (s *Service) randomInt(max int) int {
 
 // TalkToCompanion returns a greeting phrase spoken by the companion.
 func (s *Service) TalkToCompanion(ctx context.Context, characterID string) (CompanionTalkResult, error) {
+	_, err := s.charReader.FindByID(ctx, characterID)
+	if err != nil {
+		if errors.Is(err, corecharacter.ErrNotFound) {
+			return CompanionTalkResult{}, ErrCharacterNotFound
+		}
+		return CompanionTalkResult{}, err
+	}
+
 	if s.petReader == nil {
 		return CompanionTalkResult{}, ErrNoPetsAtHome
 	}

@@ -598,14 +598,53 @@ func TestHomeService(t *testing.T) {
 		}
 	})
 
+	t.Run("Heaven Wish companion support in home view, talking, teaching", func(t *testing.T) {
+		// Set Heaven Wish companion for char-2 (0 ranch monsters, 1 Heaven companion Ortega)
+		petReader.pets["char-2"] = []HomePet{
+			{ID: "m-ortega", CustomName: "オルテガ", MonsterID: "ortega_icon"},
+		}
+
+		// GetHomeView returns ResidentPets
+		view, err := service.GetHomeView(ctx, "char-2", "char-2")
+		if err != nil {
+			t.Fatalf("GetHomeView failed: %v", err)
+		}
+		if len(view.ResidentPets) != 1 || view.ResidentPets[0].CustomName != "オルテガ" {
+			t.Errorf("expected resident pet オルテガ, got %+v", view.ResidentPets)
+		}
+
+		// Teach phrase to Heaven companion
+		_, err = service.TeachCompanionPhrase(ctx, "char-2", "父さんは生きている！")
+		if err != nil {
+			t.Fatalf("TeachCompanionPhrase failed: %v", err)
+		}
+
+		// Talk to Heaven companion
+		talk, err := service.TalkToCompanion(ctx, "char-2")
+		if err != nil {
+			t.Fatalf("TalkToCompanion failed: %v", err)
+		}
+		if talk.PetName != "オルテガ" || talk.Dialogue != "父さんは生きている！" {
+			t.Errorf("unexpected dialogue response: %+v", talk)
+		}
+	})
+
+	t.Run("TalkToCompanion non-existent character returns ErrCharacterNotFound", func(t *testing.T) {
+		_, err := service.TalkToCompanion(ctx, "non-existent-char")
+		if !errors.Is(err, ErrCharacterNotFound) {
+			t.Errorf("expected ErrCharacterNotFound, got %v", err)
+		}
+	})
+
 	t.Run("0 pets rejection with ErrNoPetsAtHome", func(t *testing.T) {
-		// char-2 has 0 pets
-		_, err := service.TeachCompanionPhrase(ctx, "char-2", "こんにちは")
+		// char-3 has 0 pets
+		chars.chars["char-3"] = corecharacter.Character{ID: "char-3", Name: "Guest"}
+		_, err := service.TeachCompanionPhrase(ctx, "char-3", "こんにちは")
 		if !errors.Is(err, ErrNoPetsAtHome) {
 			t.Errorf("expected ErrNoPetsAtHome, got %v", err)
 		}
 
-		_, err = service.TalkToCompanion(ctx, "char-2")
+		_, err = service.TalkToCompanion(ctx, "char-3")
 		if !errors.Is(err, ErrNoPetsAtHome) {
 			t.Errorf("expected ErrNoPetsAtHome, got %v", err)
 		}
