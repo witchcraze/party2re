@@ -5,7 +5,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -367,8 +367,8 @@ func (r *ValkeyRepository) ListParties(ctx context.Context, status string, limit
 		}
 
 		// Sort newest first
-		sort.Slice(activeList, func(i, j int) bool {
-			return activeList[i].CreatedAt.After(activeList[j].CreatedAt)
+		slices.SortFunc(activeList, func(a, b PartySummary) int {
+			return b.CreatedAt.Compare(a.CreatedAt)
 		})
 
 		total := len(activeList)
@@ -580,6 +580,16 @@ func (r *ValkeyRepository) AddMember(ctx context.Context, m Member) error {
 	return mapLuaError(res.Error())
 }
 
+func compareMembers(a, b Member) int {
+	if a.IsLeader != b.IsLeader {
+		if a.IsLeader {
+			return -1
+		}
+		return 1
+	}
+	return a.JoinedAt.Compare(b.JoinedAt)
+}
+
 // GetMembers retrieves all members of a party lobby, resolving ready states against 60-second countdowns.
 func (r *ValkeyRepository) GetMembers(ctx context.Context, partyID string) ([]Member, error) {
 	if r.client == nil {
@@ -599,12 +609,7 @@ func (r *ValkeyRepository) GetMembers(ctx context.Context, partyID string) ([]Me
 			}
 			list = append(list, m)
 		}
-		sort.Slice(list, func(i, j int) bool {
-			if list[i].IsLeader != list[j].IsLeader {
-				return list[i].IsLeader
-			}
-			return list[i].JoinedAt.Before(list[j].JoinedAt)
-		})
+		slices.SortStableFunc(list, compareMembers)
 		return list, nil
 	}
 
@@ -631,12 +636,7 @@ func (r *ValkeyRepository) GetMembers(ctx context.Context, partyID string) ([]Me
 		}
 	}
 
-	sort.Slice(state.Members, func(i, j int) bool {
-		if state.Members[i].IsLeader != state.Members[j].IsLeader {
-			return state.Members[i].IsLeader
-		}
-		return state.Members[i].JoinedAt.Before(state.Members[j].JoinedAt)
-	})
+	slices.SortStableFunc(state.Members, compareMembers)
 
 	return state.Members, nil
 }

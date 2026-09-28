@@ -1,6 +1,6 @@
 # Status
 
-Last updated: [Refactor] Modernize contest entry sorting using slices.SortStableFunc
+Last updated: [Refactor] Modernize party lobby and member sorting using slices package
 
 ## Current Phase
 
