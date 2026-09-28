@@ -1,10 +1,11 @@
 package plantation
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
@@ -115,8 +116,8 @@ func (s *Service) Harvest(ctx context.Context, characterID string) (HarvestResul
 			}
 			batches = append(batches, itemBatch{id: itemID, name: itemName, quantity: qty})
 		}
-		sort.Slice(batches, func(i, j int) bool {
-			return batches[i].id < batches[j].id
+		slices.SortFunc(batches, func(a, b itemBatch) int {
+			return cmp.Compare(a.id, b.id)
 		})
 
 		for _, b := range batches {

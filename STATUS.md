@@ -1,6 +1,6 @@
 # Status
 
-Last updated: [Refactor] Modernize contest entry sorting using slices.SortStableFunc
+Last updated: [Refactor] Modernize plantation harvest batch sorting using slices.SortFunc
 
 ## Current Phase
 
