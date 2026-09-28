@@ -1,6 +1,6 @@
 # Status
 
-Last updated: [Refactor] Modernize depot item sorting using slices.SortStableFunc and cmp.Compare
+Last updated: [Refactor] Modernize gem box sorting using slices.SortStableFunc and cmp.Compare
 
 ## Current Phase
 
