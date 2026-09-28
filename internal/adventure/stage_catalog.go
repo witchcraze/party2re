@@ -1,11 +1,12 @@
 package adventure
 
 import (
+	"cmp"
 	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -187,8 +188,8 @@ func (c *StageCatalog) Stages() []Stage {
 	for _, s := range c.stages {
 		values = append(values, s)
 	}
-	sort.Slice(values, func(i, j int) bool {
-		return values[i].ID < values[j].ID
+	slices.SortFunc(values, func(a, b Stage) int {
+		return cmp.Compare(a.ID, b.ID)
 	})
 	return values
 }

@@ -1,11 +1,12 @@
 package adventure
 
 import (
+	"cmp"
 	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -86,8 +87,8 @@ func (c *MonsterCatalog) Monsters() []Monster {
 	for _, m := range c.monsters {
 		values = append(values, m)
 	}
-	sort.Slice(values, func(i, j int) bool {
-		return values[i].ID < values[j].ID
+	slices.SortFunc(values, func(a, b Monster) int {
+		return cmp.Compare(a.ID, b.ID)
 	})
 	return values
 }
