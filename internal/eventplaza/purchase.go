@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
@@ -67,10 +68,8 @@ func (s *Service) PurchaseBazaarItem(
 		if err != nil {
 			return BazaarPurchaseResult{}, fmt.Errorf("failed to get active helper items: %w", err)
 		}
-		for _, helperID := range activeHelperIDs {
-			if helperID == targetItem.ItemDefinitionID {
-				return BazaarPurchaseResult{}, ErrItemUnavailable
-			}
+		if slices.Contains(activeHelperIDs, targetItem.ItemDefinitionID) {
+			return BazaarPurchaseResult{}, ErrItemUnavailable
 		}
 	}
 
