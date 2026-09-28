@@ -1,6 +1,6 @@
 # Status
 
-Last updated: [Refactor] Modernize gem box sorting using slices.SortStableFunc and cmp.Compare
+Last updated: [Refactor] Modernize contest entry sorting using slices.SortStableFunc
 
 ## Current Phase
 
