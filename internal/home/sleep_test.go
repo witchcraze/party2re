@@ -485,6 +485,126 @@ func TestSleep_JobStateRestorerErrorPropagates(t *testing.T) {
 	}
 }
 
+func TestSleep_TransactionalJobMemoryReversal(t *testing.T) {
+	ctx := context.Background()
+	char := corecharacter.Character{
+		ID:       "c1",
+		Name:     "Hero",
+		JobID:    "warrior",
+		SP:       10,
+		OldJobID: "novice",
+		OldSP:    5,
+		JobMemory: &corecharacter.JobMemory{
+			JobID:    "mage",
+			SP:       20,
+			OldJobID: "apprentice",
+			OldSP:    15,
+		},
+	}
+	chars := map[string]corecharacter.Character{"c1": char}
+	charReader := &mockCharReader{chars: chars}
+	mockHomeRepo := newMockHomeRepo(chars)
+	timerSvc := timer.NewService(nil)
+
+	initialJobState, _ := corejob.NewCharacterJob("c1", "warrior")
+	jobRepo := &mockJobRepo{state: initialJobState}
+	jobSvc, err := job.NewService(jobRepo)
+	if err != nil {
+		t.Fatalf("failed to create job service: %v", err)
+	}
+
+	runner := &mockTransactionRunner{chars: chars}
+
+	svc, err := NewService(
+		mockHomeRepo,
+		charReader,
+		WithTimer(timerSvc),
+		WithJobStateRestorer(jobSvc),
+		WithTransactionRunner(runner),
+		WithBaseSleepDuration(10*time.Millisecond),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	// Going to sleep in transactional mode restores job memory and updates character_jobs.current_job_id
+	_, err = svc.Sleep(ctx, "c1", "c1")
+	if err != nil {
+		t.Fatalf("failed to sleep in transactional mode: %v", err)
+	}
+
+	txChar := runner.chars["c1"]
+	if txChar.JobMemory != nil {
+		t.Fatalf("expected JobMemory to be cleared, got %+v", txChar.JobMemory)
+	}
+	if txChar.JobID != "mage" || txChar.SP != 20 {
+		t.Fatalf("expected characters.job_id to be restored to mage (SP 20), got JobID=%s, SP=%d", txChar.JobID, txChar.SP)
+	}
+
+	savedJobState, err := jobRepo.FindByCharacterID(ctx, "c1")
+	if err != nil {
+		t.Fatalf("failed to find job state: %v", err)
+	}
+	if savedJobState.CurrentJobID != "mage" {
+		t.Fatalf("expected character_jobs.current_job_id to be restored to mage, got %s", savedJobState.CurrentJobID)
+	}
+}
+
+func TestSleep_TransactionalJobStateRestorerFailureRollback(t *testing.T) {
+	ctx := context.Background()
+	char := corecharacter.Character{
+		ID:    "c1",
+		Name:  "Hero",
+		JobID: "warrior",
+		JobMemory: &corecharacter.JobMemory{
+			JobID: "mage",
+			SP:    20,
+		},
+	}
+	chars := map[string]corecharacter.Character{"c1": char}
+	charReader := &mockCharReader{chars: chars}
+	mockHomeRepo := newMockHomeRepo(chars)
+	timerSvc := timer.NewService(nil)
+
+	failingJobRestorer := &mockJobStateRestorer{restoreErr: errors.New("simulated job restorer failure")}
+	runner := &mockTransactionRunner{chars: chars}
+
+	svc, err := NewService(
+		mockHomeRepo,
+		charReader,
+		WithTimer(timerSvc),
+		WithJobStateRestorer(failingJobRestorer),
+		WithTransactionRunner(runner),
+		WithBaseSleepDuration(10*time.Millisecond),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	_, err = svc.Sleep(ctx, "c1", "c1")
+	if err == nil || !strings.Contains(err.Error(), "simulated job restorer failure") {
+		t.Fatalf("expected simulated job restorer failure error, got: %v", err)
+	}
+
+	// Verify sleep timer lock was released
+	isSleeping, err := timerSvc.IsLocked(ctx, timer.CategorySleep, "c1")
+	if err != nil {
+		t.Fatalf("timer check failed: %v", err)
+	}
+	if isSleeping {
+		t.Error("expected sleep lock to be cleared when transaction fails")
+	}
+
+	// Verify transaction rolled back: characters table still has warrior and intact JobMemory
+	txChar := runner.chars["c1"]
+	if txChar.JobID != "warrior" {
+		t.Errorf("expected JobID to remain warrior on rollback, got %s", txChar.JobID)
+	}
+	if txChar.JobMemory == nil || txChar.JobMemory.JobID != "mage" {
+		t.Errorf("expected JobMemory to remain intact on rollback, got %+v", txChar.JobMemory)
+	}
+}
+
 func TestWake_ResetsCostume(t *testing.T) {
 	ctx := context.Background()
 	charRepo := &mockCharRepo{
