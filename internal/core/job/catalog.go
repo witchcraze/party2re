@@ -1,11 +1,12 @@
 package job
 
 import (
+	"cmp"
 	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 )
 
 var ErrDefinitionNotFound = errors.New("job definition not found")
@@ -61,8 +62,8 @@ func (c *Catalog) Definitions() []Definition {
 	for _, definition := range c.definitions {
 		values = append(values, definition)
 	}
-	sort.Slice(values, func(i, j int) bool {
-		return values[i].ID < values[j].ID
+	slices.SortFunc(values, func(a, b Definition) int {
+		return cmp.Compare(a.ID, b.ID)
 	})
 	return values
 }
