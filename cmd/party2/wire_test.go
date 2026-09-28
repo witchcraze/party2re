@@ -18,6 +18,8 @@ import (
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/eventplaza"
+	"github.com/witchcraze/party2re/internal/god"
+	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/scheduling"
@@ -589,5 +591,108 @@ func TestLegendInductor_EndToEndIntegration(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("inducted character %s not found in GET /legends/comp_mon", c.ID)
+	}
+}
+
+func TestHomePetAdapter_HeavenWishCompanionIntegration(t *testing.T) {
+	dsn := os.Getenv("PARTY2_DB_DSN")
+	if dsn == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatalf("OpenFromEnvironment failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	homeRepo, err := database.NewHomeRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	monsterRepo, err := database.NewMonsterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	homeMemberRepo, err := database.NewHomeMemberRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := corecharacter.NewWithOptions("HeavenCompanionHero", "warrior", "m", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := charRepo.Save(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+
+	// Store Ortega in home_members (0 farm monsters present)
+	member := god.HomeMember{
+		ID:          "hm-ortega-test",
+		CharacterID: c.ID,
+		IsNPC:       true,
+		Name:        "オルテガ",
+		Icon:        "ortega_icon",
+		Color:       "#ffffff",
+		CreatedAt:   time.Now().UTC(),
+	}
+	if err := homeMemberRepo.AddMember(ctx, member); err != nil {
+		t.Fatalf("AddMember failed: %v", err)
+	}
+
+	adapter := &homePetAdapter{
+		monsterRepo:    monsterRepo,
+		homeMemberRepo: homeMemberRepo,
+	}
+
+	homeSvc, err := home.NewService(
+		homeRepo,
+		charRepo,
+		home.WithHomePetReader(adapter),
+	)
+	if err != nil {
+		t.Fatalf("home.NewService failed: %v", err)
+	}
+
+	// 1. Verify GetHomeView exposes Ortega in ResidentPets
+	view, err := homeSvc.GetHomeView(ctx, c.ID, c.ID)
+	if err != nil {
+		t.Fatalf("GetHomeView failed: %v", err)
+	}
+	if len(view.ResidentPets) != 1 {
+		t.Fatalf("expected 1 resident pet, got %d", len(view.ResidentPets))
+	}
+	if view.ResidentPets[0].CustomName != "オルテガ" || view.ResidentPets[0].MonsterID != "ortega_icon" {
+		t.Errorf("unexpected resident pet: %+v", view.ResidentPets[0])
+	}
+
+	// 2. Verify TalkToCompanion uses Ortega for default dialogue
+	talkRes, err := homeSvc.TalkToCompanion(ctx, c.ID)
+	if err != nil {
+		t.Fatalf("TalkToCompanion failed: %v", err)
+	}
+	if talkRes.PetName != "オルテガ" {
+		t.Errorf("expected pet name オルテガ, got %s", talkRes.PetName)
+	}
+
+	// 3. Teach a phrase and verify Ortega speaks taught phrase
+	phraseText := "父さんは生きている！"
+	_, err = homeSvc.TeachCompanionPhrase(ctx, c.ID, phraseText)
+	if err != nil {
+		t.Fatalf("TeachCompanionPhrase failed: %v", err)
+	}
+
+	talkRes2, err := homeSvc.TalkToCompanion(ctx, c.ID)
+	if err != nil {
+		t.Fatalf("TalkToCompanion after teach failed: %v", err)
+	}
+	if talkRes2.PetName != "オルテガ" || talkRes2.Dialogue != phraseText {
+		t.Errorf("expected オルテガ speaking %q, got %+v", phraseText, talkRes2)
 	}
 }
