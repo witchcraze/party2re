@@ -8,6 +8,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 var (
@@ -162,20 +163,42 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 
 	// Legacy parity: Revert temporary job memory if active upon going to sleep
 	if char.JobMemory != nil {
-		memoryJobID := char.JobMemory.JobID
-		if s.jobRestorer != nil {
-			if err := s.jobRestorer.RestoreActiveJob(ctx, characterID, memoryJobID); err != nil {
+		if s.runner != nil {
+			req := economy.TransactionRequest{CharacterID: characterID}
+			_, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+				if tc.Character.JobMemory == nil {
+					return nil
+				}
+				memoryJobID := tc.Character.JobMemory.JobID
+				tc.Character.RevertJobMemory()
+				if s.jobRestorer != nil {
+					if err := s.jobRestorer.RestoreActiveJob(tc.Context, characterID, memoryJobID); err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+			if err != nil {
 				_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
 				_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
 				return SleepResult{}, err
 			}
-		}
-		char.RevertJobMemory()
-		if s.charUpdater != nil {
-			if err := s.charUpdater.Update(ctx, char); err != nil {
-				_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
-				_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
-				return SleepResult{}, err
+		} else {
+			memoryJobID := char.JobMemory.JobID
+			if s.jobRestorer != nil {
+				if err := s.jobRestorer.RestoreActiveJob(ctx, characterID, memoryJobID); err != nil {
+					_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
+					_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
+					return SleepResult{}, err
+				}
+			}
+			char.RevertJobMemory()
+			if s.charUpdater != nil {
+				if err := s.charUpdater.Update(ctx, char); err != nil {
+					_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
+					_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
+					return SleepResult{}, err
+				}
 			}
 		}
 	}
