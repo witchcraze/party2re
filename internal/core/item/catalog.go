@@ -1,12 +1,11 @@
 package item
 
 import (
-	"cmp"
 	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -76,8 +75,8 @@ func (c *Catalog) Definitions() []Definition {
 	for _, definition := range c.definitions {
 		values = append(values, definition)
 	}
-	slices.SortFunc(values, func(a, b Definition) int {
-		return cmp.Compare(a.ID, b.ID)
+	sort.Slice(values, func(i, j int) bool {
+		return values[i].ID < values[j].ID
 	})
 	return values
 }

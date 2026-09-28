@@ -1,10 +1,9 @@
 package gemstore
 
 import (
-	"cmp"
 	"context"
 	"errors"
-	"slices"
+	"sort"
 	"strings"
 	"sync"
 
@@ -193,11 +192,13 @@ func (s *Service) SortGemBox(ctx context.Context, characterID string) (GemBox, e
 			return err
 		}
 
-		slices.SortStableFunc(box.Items, func(a, b coreitem.Instance) int {
-			if c := cmp.Compare(s.catalog.GemRank(a.DefinitionID), s.catalog.GemRank(b.DefinitionID)); c != 0 {
-				return c
+		sort.SliceStable(box.Items, func(i, j int) bool {
+			rankI := s.catalog.GemRank(box.Items[i].DefinitionID)
+			rankJ := s.catalog.GemRank(box.Items[j].DefinitionID)
+			if rankI != rankJ {
+				return rankI < rankJ
 			}
-			return cmp.Compare(a.DefinitionID, b.DefinitionID)
+			return box.Items[i].DefinitionID < box.Items[j].DefinitionID
 		})
 
 		if err := s.gemBoxes.Save(txCtx, box); err != nil {

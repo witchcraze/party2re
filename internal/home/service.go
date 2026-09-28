@@ -44,6 +44,7 @@ type Service struct {
 	alchemy           AlchemyCompleter
 	costume           CostumeResetter
 	costumeApplier    CostumeApplier
+	jobRestorer       JobStateRestorer
 	onlineCounter     OnlineCounter
 	baseSleepDuration time.Duration
 	runner            TransactionRunner
