@@ -1,13 +1,15 @@
 package depot
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
@@ -280,13 +282,11 @@ func (s *Service) SortItems(ctx context.Context, characterID string) (Depot, err
 		if err != nil {
 			return err
 		}
-		sort.SliceStable(dep.Items, func(i, j int) bool {
-			kindI := s.itemKind(dep.Items[i].DefinitionID)
-			kindJ := s.itemKind(dep.Items[j].DefinitionID)
-			if kindI != kindJ {
-				return kindI < kindJ
+		slices.SortStableFunc(dep.Items, func(a, b item.Instance) int {
+			if c := cmp.Compare(s.itemKind(a.DefinitionID), s.itemKind(b.DefinitionID)); c != 0 {
+				return c
 			}
-			return dep.Items[i].DefinitionID < dep.Items[j].DefinitionID
+			return cmp.Compare(a.DefinitionID, b.DefinitionID)
 		})
 		if err := s.saveDepot(tc.Context, dep); err != nil {
 			return err
