@@ -1,6 +1,6 @@
 # Status
 
-Last updated: [Refactor] Modernize item catalog sorting using slices.SortFunc and cmp.Compare
+Last updated: [Refactor] Modernize depot item sorting using slices.SortStableFunc and cmp.Compare
 
 ## Current Phase
 
