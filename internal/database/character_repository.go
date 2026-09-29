@@ -122,17 +122,18 @@ func (r *CharacterRepository) Update(ctx context.Context, value corecharacter.Ch
 
 func (r *CharacterRepository) GetProfile(ctx context.Context, characterID string) (character.Profile, error) {
 	var (
-		charID    string
-		comment   string
-		avatarURL string
-		rawBio    sql.NullString
-		updatedAt time.Time
+		charID     string
+		comment    string
+		avatarURL  string
+		auraEffect int
+		rawBio     sql.NullString
+		updatedAt  time.Time
 	)
 	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT character_id, comment, avatar_url, bio_data, updated_at
+		SELECT character_id, comment, avatar_url, aura_effect, bio_data, updated_at
 		FROM character_profiles
 		WHERE character_id = ?
-	`, characterID).Scan(&charID, &comment, &avatarURL, &rawBio, &updatedAt)
+	`, characterID).Scan(&charID, &comment, &avatarURL, &auraEffect, &rawBio, &updatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return character.Profile{
 			CharacterID: characterID,
@@ -153,6 +154,7 @@ func (r *CharacterRepository) GetProfile(ctx context.Context, characterID string
 		CharacterID: charID,
 		Comment:     comment,
 		AvatarURL:   avatarURL,
+		AuraEffect:  auraEffect,
 		BioData:     bio,
 		UpdatedAt:   updatedAt,
 	}, nil
@@ -169,14 +171,15 @@ func (r *CharacterRepository) SaveProfile(ctx context.Context, profile character
 	}
 
 	_, err = ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
-		INSERT INTO character_profiles (character_id, comment, avatar_url, bio_data, updated_at)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO character_profiles (character_id, comment, avatar_url, aura_effect, bio_data, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			comment = VALUES(comment),
 			avatar_url = VALUES(avatar_url),
+			aura_effect = VALUES(aura_effect),
 			bio_data = VALUES(bio_data),
 			updated_at = VALUES(updated_at)
-	`, profile.CharacterID, profile.Comment, profile.AvatarURL, bioJSON, profile.UpdatedAt)
+	`, profile.CharacterID, profile.Comment, profile.AvatarURL, profile.AuraEffect, bioJSON, profile.UpdatedAt)
 	return err
 }
 

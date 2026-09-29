@@ -40,6 +40,7 @@ var (
 	ErrInvalidImageFormat     = errors.New("invalid image format: allowed formats are PNG, JPEG, GIF, WebP, SVG")
 	ErrImageTooLarge          = errors.New("image size exceeds maximum allowed limit (2 MB)")
 	ErrForbidden              = errors.New("forbidden: character does not belong to authenticated player")
+	ErrInvalidAuraEffect      = errors.New("invalid aura effect: must be between 0 and 8")
 )
 
 // Prohibited character patterns in character names
@@ -52,6 +53,7 @@ type Profile struct {
 	CharacterID string            `json:"character_id"`
 	Comment     string            `json:"comment"`
 	AvatarURL   string            `json:"avatar_url"`
+	AuraEffect  int               `json:"aura_effect"`
 	BioData     map[string]string `json:"bio_data,omitempty"`
 	UpdatedAt   time.Time         `json:"updated_at"`
 }
@@ -64,9 +66,10 @@ type ProfileView struct {
 
 // UpdateProfileRequest defines parameters for updating a character's profile.
 type UpdateProfileRequest struct {
-	Comment   *string           `json:"comment,omitempty"`
-	AvatarURL *string           `json:"avatar_url,omitempty"`
-	BioData   map[string]string `json:"bio_data,omitempty"`
+	Comment    *string           `json:"comment,omitempty"`
+	AvatarURL  *string           `json:"avatar_url,omitempty"`
+	AuraEffect *int              `json:"aura_effect,omitempty"`
+	BioData    map[string]string `json:"bio_data,omitempty"`
 }
 
 // NamingHallDialogue provides NPC dialogue and pricing information.
@@ -97,6 +100,14 @@ func ValidateName(name string) error {
 		if unicode.IsSpace(r) || r == '\u3000' || unicode.IsControl(r) {
 			return ErrInvalidName
 		}
+	}
+	return nil
+}
+
+// ValidateAuraEffect verifies that aura effect integer is between 0 and 8.
+func ValidateAuraEffect(effect int) error {
+	if effect < 0 || effect > 8 {
+		return ErrInvalidAuraEffect
 	}
 	return nil
 }

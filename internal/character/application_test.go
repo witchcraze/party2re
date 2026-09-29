@@ -325,20 +325,22 @@ func TestService_ProfileOperations(t *testing.T) {
 	// 2. Update profile
 	comment := "I am a mighty adventurer."
 	avatarURL := "https://example.com/avatar.png"
+	auraEffect := 3
 	bio := map[string]string{
 		"hobby":     "Fishing",
 		"like_food": "Apple",
 	}
 
 	updatedProfile, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
-		Comment:   &comment,
-		AvatarURL: &avatarURL,
-		BioData:   bio,
+		Comment:    &comment,
+		AvatarURL:  &avatarURL,
+		AuraEffect: &auraEffect,
+		BioData:    bio,
 	})
 	if err != nil {
 		t.Fatalf("UpdateProfile() failed: %v", err)
 	}
-	if updatedProfile.Comment != comment || updatedProfile.AvatarURL != avatarURL || updatedProfile.BioData["hobby"] != "Fishing" {
+	if updatedProfile.Comment != comment || updatedProfile.AvatarURL != avatarURL || updatedProfile.AuraEffect != 3 || updatedProfile.BioData["hobby"] != "Fishing" {
 		t.Fatalf("unexpected profile data: %+v", updatedProfile)
 	}
 
@@ -364,6 +366,28 @@ func TestService_ProfileOperations(t *testing.T) {
 		BioData: longKeyBio,
 	}); !errors.Is(err, ErrBioKeyTooLong) {
 		t.Fatalf("expected ErrBioKeyTooLong, got %v", err)
+	}
+
+	// 4. Aura effect validation (0..8 valid, < 0 or > 8 invalid)
+	validAuras := []int{0, 1, 8}
+	for _, aura := range validAuras {
+		val := aura
+		prof, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+			AuraEffect: &val,
+		})
+		if err != nil || prof.AuraEffect != aura {
+			t.Errorf("expected valid aura effect %d, got err %v", aura, err)
+		}
+	}
+
+	invalidAuras := []int{-1, 9, 100}
+	for _, aura := range invalidAuras {
+		val := aura
+		if _, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+			AuraEffect: &val,
+		}); !errors.Is(err, ErrInvalidAuraEffect) {
+			t.Errorf("expected ErrInvalidAuraEffect for %d, got %v", aura, err)
+		}
 	}
 }
 

@@ -390,6 +390,11 @@
           "application/json": {
             "schema": {
               "properties": {
+                "aura_effect": {
+                  "maximum": 8,
+                  "minimum": 0,
+                  "type": "integer"
+                },
                 "avatar_url": {
                   "type": "string"
                 },
@@ -1726,6 +1731,11 @@
           "application/json": {
             "schema": {
               "properties": {
+                "aura_effect": {
+                  "maximum": 8,
+                  "minimum": 0,
+                  "type": "integer"
+                },
                 "avatar_url": {
                   "type": "string"
                 },

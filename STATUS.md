@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #894 — [Feature] Home: Expose GET /homes/{id}/companion/phrases endpoint and synchronize OpenAPI
+Last updated: Issue #786 — Character Customization: Restore Aura Effect (effect1) in Profile and Avatar Settings
 
 ## Current Phase
 
