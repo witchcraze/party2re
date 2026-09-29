@@ -3,11 +3,11 @@ package http
 import (
 	"crypto/subtle"
 	"errors"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"net/http"
 	"strings"
 	"time"
-	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 )
 
 // authenticateAdmin extracts administrator credentials from the request and validates them.
