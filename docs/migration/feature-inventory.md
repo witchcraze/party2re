@@ -51,7 +51,7 @@ All groups below are Version 1.0 reconstruction requirements.
 ### A. Application Foundation and Account Lifecycle
 - [x] Character/player registration & password hashing (#21)
 - [x] Login and session authentication lifecycle in Valkey Master (#21, #366, #378)
-- [x] Character profile and status display (#87)
+- [x] Character profile and status display (#87, #786)
 - [x] Player-character ownership verification linkage (#131)
 - [x] Personal Access Token (API Key) generation and dual authentication (#163)
 - [x] Player deletion and maintenance behavior (#134, #190, #367)

@@ -66,6 +66,7 @@ func (s *stubCharacterServiceExtended) GetProfile(ctx context.Context, character
 			CharacterID: characterID,
 			Comment:     "Mighty adventurer",
 			AvatarURL:   "https://example.com/avatar.png",
+			AuraEffect:  3,
 		},
 	}, nil
 }
@@ -82,10 +83,18 @@ func (s *stubCharacterServiceExtended) UpdateProfile(ctx context.Context, charac
 	if req.AvatarURL != nil {
 		avatarURL = *req.AvatarURL
 	}
+	auraEffect := 0
+	if req.AuraEffect != nil {
+		if err := character.ValidateAuraEffect(*req.AuraEffect); err != nil {
+			return character.Profile{}, err
+		}
+		auraEffect = *req.AuraEffect
+	}
 	return character.Profile{
 		CharacterID: characterID,
 		Comment:     comment,
 		AvatarURL:   avatarURL,
+		AuraEffect:  auraEffect,
 		BioData:     req.BioData,
 	}, nil
 }
@@ -151,6 +160,15 @@ func TestCharacterCustomizationHTTP(t *testing.T) {
 		t.Fatalf("expected 200 OK for profile view, got %d (err: %v)", resp.StatusCode, err)
 	}
 
+	var profileView character.ProfileView
+	if err := json.NewDecoder(resp.Body).Decode(&profileView); err != nil {
+		t.Fatalf("failed to decode profile view response: %v", err)
+	}
+	resp.Body.Close()
+	if profileView.Profile.AuraEffect != 3 {
+		t.Fatalf("expected profile.aura_effect == 3 in GET response, got %d", profileView.Profile.AuraEffect)
+	}
+
 	// 3. POST /characters/{id}/name - Unauthenticated -> 401
 	body, _ := json.Marshal(map[string]string{"name": "NewHero"})
 	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/name", bytes.NewReader(body))
@@ -180,8 +198,9 @@ func TestCharacterCustomizationHTTP(t *testing.T) {
 
 	// 6. PUT /characters/{id}/profile - Authenticated -> 200 OK
 	profBody, _ := json.Marshal(map[string]interface{}{
-		"comment":    "New bio comment",
-		"avatar_url": "https://example.com/avatar2.png",
+		"comment":     "New bio comment",
+		"avatar_url":  "https://example.com/avatar2.png",
+		"aura_effect": 4,
 	})
 	req, _ = http.NewRequest(http.MethodPut, server.URL+"/characters/char-1/profile", bytes.NewReader(profBody))
 	req.Header.Set("Authorization", "Bearer valid-session")
@@ -189,6 +208,25 @@ func TestCharacterCustomizationHTTP(t *testing.T) {
 	resp, err = client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK for update profile, got %d (err: %v)", resp.StatusCode, err)
+	}
+
+	var updatedProf character.Profile
+	_ = json.NewDecoder(resp.Body).Decode(&updatedProf)
+	resp.Body.Close()
+	if updatedProf.AuraEffect != 4 {
+		t.Fatalf("expected aura_effect 4, got %d", updatedProf.AuraEffect)
+	}
+
+	// 6b. PUT /characters/{id}/profile - Invalid Aura Effect -> 400 Bad Request
+	invalidProfBody, _ := json.Marshal(map[string]interface{}{
+		"aura_effect": 99,
+	})
+	req, _ = http.NewRequest(http.MethodPut, server.URL+"/characters/char-1/profile", bytes.NewReader(invalidProfBody))
+	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for invalid aura_effect, got %d (err: %v)", resp.StatusCode, err)
 	}
 
 	// 7. POST /characters/{id}/avatar - Multipart Upload -> 200 OK

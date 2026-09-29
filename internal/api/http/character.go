@@ -136,7 +136,8 @@ func (h *Handler) handleUpdateCharacterProfile(w http.ResponseWriter, r *http.Re
 			case errors.Is(err, character.ErrCommentTooLong),
 				errors.Is(err, character.ErrBioKeyTooLong),
 				errors.Is(err, character.ErrBioValueTooLong),
-				errors.Is(err, character.ErrInvalidAvatarURL):
+				errors.Is(err, character.ErrInvalidAvatarURL),
+				errors.Is(err, character.ErrInvalidAuraEffect):
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			case errors.Is(err, corecharacter.ErrNotFound):
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "character not found"})

@@ -362,6 +362,13 @@ func (s *Service) UpdateProfile(ctx context.Context, characterID string, req Upd
 		currentProfile.AvatarURL = strings.TrimSpace(*req.AvatarURL)
 	}
 
+	if req.AuraEffect != nil {
+		if err := ValidateAuraEffect(*req.AuraEffect); err != nil {
+			return Profile{}, err
+		}
+		currentProfile.AuraEffect = *req.AuraEffect
+	}
+
 	if req.BioData != nil {
 		if err := ValidateBioData(req.BioData); err != nil {
 			return Profile{}, err
