@@ -11,6 +11,7 @@ import (
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/home"
 )
 
 func TestAuthHelpers(t *testing.T) {
@@ -127,6 +128,69 @@ func TestAuthHelpers(t *testing.T) {
 
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("expected 400, got %d", rec.Code)
+		}
+	})
+}
+
+func TestSleepingActionGuard_Returns409Conflict(t *testing.T) {
+	player := coreplayer.Player{ID: "p-1", Username: "sleeper"}
+	char := corecharacter.Character{ID: "c-1", PlayerID: "p-1", Name: "SleeperHero"}
+
+	players := &stubPlayerService{
+		authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
+			return player, nil
+		},
+	}
+	chars := &stubCharacterService{
+		getFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			return char, nil
+		},
+	}
+	homeSvc := &mockHomeService{
+		getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {
+			return home.SleepStatus{
+				Sleeping:         true,
+				RemainingSeconds: 300,
+				Message:          "お休み中「Zzz...」 目覚めるまで 5分00秒",
+			}, nil
+		},
+	}
+
+	handler, err := apihttp.NewHandler(
+		players,
+		chars,
+		&stubAdventureService{},
+		&stubShopService{},
+		apihttp.WithHome(homeSvc),
+	)
+	if err != nil {
+		t.Fatalf("failed to create handler: %v", err)
+	}
+	router := handler.Router()
+
+	t.Run("POST /adventures when sleeping returns 409 Conflict", func(t *testing.T) {
+		body := bytes.NewBufferString(`{"character_id":"c-1","stage_id":"stage-01"}`)
+		req := httptest.NewRequest(http.MethodPost, "/adventures", body)
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusConflict {
+			t.Errorf("expected 409 Conflict, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("POST /shop/purchase when sleeping returns 409 Conflict", func(t *testing.T) {
+		body := bytes.NewBufferString(`{"character_id":"c-1","item_definition_id":"item-001","quantity":1}`)
+		req := httptest.NewRequest(http.MethodPost, "/shop/purchase", body)
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusConflict {
+			t.Errorf("expected 409 Conflict, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 }

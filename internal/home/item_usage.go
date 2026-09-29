@@ -52,11 +52,9 @@ func (s *Service) ListHomeItems(ctx context.Context, characterID string) ([]Home
 				defense := 0
 				weight := 0
 				if kind == 1 {
-					attack = price/10 + 1
-					weight = price/20 + 1
+					attack, weight = item.GetWeaponNominalStats(inst.DefinitionID)
 				} else if kind == 2 {
-					defense = price/10 + 1
-					weight = price/20 + 1
+					defense, weight = item.GetArmorNominalStats(inst.DefinitionID)
 				}
 				results = append(results, HomeUsableItem{
 					InstanceID:   inst.ID,
@@ -94,11 +92,9 @@ func (s *Service) ListHomeItems(ctx context.Context, characterID string) ([]Home
 				defense := 0
 				weight := 0
 				if kind == 1 {
-					attack = price/10 + 1
-					weight = price/20 + 1
+					attack, weight = item.GetWeaponNominalStats(inst.DefinitionID)
 				} else if kind == 2 {
-					defense = price/10 + 1
-					weight = price/20 + 1
+					defense, weight = item.GetArmorNominalStats(inst.DefinitionID)
 				}
 				results = append(results, HomeUsableItem{
 					InstanceID:   inst.ID,
@@ -176,8 +172,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 
 	// Inspection of weapons
 	if kind == 1 {
-		power := def.Price/10 + 1
-		weight := def.Price/20 + 1
+		power, weight := item.GetWeaponNominalStats(definitionID)
 		msg := fmt.Sprintf("武器名：%s / 強さ：%d / 重さ：%d / 価格：%dG", def.Name, power, weight, def.Price)
 		return &UseHomeItemResult{
 			Action:    "inspect",
@@ -191,8 +186,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 
 	// Inspection of armors/accessories
 	if kind == 2 {
-		defense := def.Price/10 + 1
-		weight := def.Price/20 + 1
+		defense, weight := item.GetArmorNominalStats(definitionID)
 		msg := fmt.Sprintf("防具名：%s / 強さ：%d / 重さ：%d / 価格：%dG", def.Name, defense, weight, def.Price)
 		return &UseHomeItemResult{
 			Action:    "inspect",
@@ -215,9 +209,12 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	// Validate supported consumable items before transaction
 	if !isCostumeItem(def.Name) {
 		switch def.Name {
-		case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石":
+		case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石",
+			"基本錬金レシピ", "応用錬金レシピ", "神の錬金レシピ":
 		default:
-			return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
+			if def.ID != "item-127" && def.ID != "item-128" && def.ID != "item-129" {
+				return nil, fmt.Errorf("%w: %sはここでは使えません", ErrCannotUseHere, def.Name)
+			}
 		}
 	}
 
@@ -335,6 +332,10 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 }
 
 func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter.Character, def item.Definition) (string, error) {
+	if recipeMsg, ok, err := s.applyRecipeScrollConsumable(ctx, char, def); ok {
+		return recipeMsg, err
+	}
+
 	if costumeMsg, ok, err := s.applyCostumeConsumable(ctx, char, def.Name); ok {
 		return costumeMsg, err
 	}

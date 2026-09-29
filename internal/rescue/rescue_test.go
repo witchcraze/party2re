@@ -44,6 +44,18 @@ func (r *stubCharRepo) Update(_ context.Context, c corecharacter.Character) erro
 	return nil
 }
 
+type stubTimerService struct {
+	locks map[string]time.Duration
+}
+
+func (t *stubTimerService) SetLock(_ context.Context, category, targetID string, duration time.Duration) error {
+	if t.locks == nil {
+		t.locks = make(map[string]time.Duration)
+	}
+	t.locks[category+":"+targetID] = duration
+	return nil
+}
+
 type stubActionCleaner struct {
 	clearedCharacters []string
 	stuckCharacters   map[string]bool
@@ -230,6 +242,35 @@ func TestService_Unstuck(t *testing.T) {
 			t.Fatalf("expected corecharacter.ErrNotFound, got %v", err)
 		}
 	})
+}
+
+func TestEmergencyRescue_SetsSleepTimerLock(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+
+	rescueRepo := &stubRescueRepo{}
+	charRepo := &stubCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-timer": {ID: "char-timer", Name: "StuckHero"},
+		},
+	}
+	cleaner := &stubActionCleaner{
+		stuckCharacters: map[string]bool{"char-timer": true},
+	}
+	timerSvc := &stubTimerService{}
+
+	svc := NewService(rescueRepo, charRepo, cleaner)
+	svc.SetTimerService(timerSvc)
+
+	_, err := svc.EmergencyRescue(ctx, "char-timer", "Stuck in dungeon", now)
+	if err != nil {
+		t.Fatalf("EmergencyRescue failed: %v", err)
+	}
+
+	dur, ok := timerSvc.locks["sleep:char-timer"]
+	if !ok || dur != 600*time.Second {
+		t.Errorf("expected sleep timer lock 600s, got ok=%v, duration=%v", ok, dur)
+	}
 }
 
 func TestEmergencyRescueInvokesActionCleaner(t *testing.T) {

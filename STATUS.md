@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #786 — Character Customization: Restore Aura Effect (effect1) in Profile and Avatar Settings
+Last updated: Issue #777 — Home/Sleep: Reproduce $m{once} daily dungeon reset, alchemy recipe scroll consumption, and sleeping action guard
 
 ## Current Phase
 

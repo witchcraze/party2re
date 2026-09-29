@@ -1,11 +1,11 @@
 package http
 
 import (
+	"crypto/subtle"
 	"errors"
 	"net/http"
 	"strings"
-
-	"crypto/subtle"
+	"time"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 )
@@ -132,15 +132,25 @@ func withAuthenticatedCharacterAndJSON[Req any](
 	fn(player, char, req)
 }
 
-// ensureNotSleeping checks if the character is currently sleeping. If sleeping, writes 409 Conflict.
+// ensureNotSleeping checks if the character is currently sleeping or under rescue penalty. If sleeping, writes 409 Conflict.
 func (h *Handler) ensureNotSleeping(w http.ResponseWriter, r *http.Request, charID string) bool {
-	if h.homes == nil {
-		return true
+	if h.homes != nil {
+		status, err := h.homes.GetSleepStatus(r.Context(), charID)
+		if err == nil && (status.Sleeping || status.CanWake) {
+			msg := status.Message
+			if msg == "" || msg == "起きています" {
+				msg = "お休み中「Zzz...」"
+			}
+			writeError(w, http.StatusConflict, errors.New(msg))
+			return false
+		}
 	}
-	status, err := h.homes.GetSleepStatus(r.Context(), charID)
-	if err == nil && status.Sleeping {
-		writeError(w, http.StatusConflict, errors.New(status.Message))
-		return false
+	if h.rescues != nil {
+		underPenalty, _, err := h.rescues.IsUnderPenalty(r.Context(), charID, time.Now().UTC())
+		if err == nil && underPenalty {
+			writeError(w, http.StatusConflict, errors.New("お休み中「Zzz...」"))
+			return false
+		}
 	}
 	return true
 }

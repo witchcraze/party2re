@@ -7,8 +7,13 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/id"
 )
+
+type TimerService interface {
+	SetLock(ctx context.Context, category, targetID string, duration time.Duration) error
+}
 
 type RescueRepository interface {
 	Save(ctx context.Context, record RescueRecord) error
@@ -28,6 +33,11 @@ type Service struct {
 	rescues    RescueRepository
 	characters CharacterRepository
 	cleaner    ActionCleaner
+	timer      TimerService
+}
+
+func (s *Service) SetTimerService(ts TimerService) {
+	s.timer = ts
 }
 
 func NewService(
@@ -109,6 +119,10 @@ func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason strin
 
 	if err := s.rescues.Save(ctx, rec); err != nil {
 		return RescueRecord{}, err
+	}
+
+	if s.timer != nil {
+		_ = s.timer.SetLock(ctx, timer.CategorySleep, char.ID, time.Duration(DefaultPenaltySeconds)*time.Second)
 	}
 
 	return rec, nil

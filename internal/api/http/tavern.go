@@ -53,7 +53,7 @@ func (h *Handler) handleGetCharacterTavernStatus(w http.ResponseWriter, r *http.
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		status, err := h.tavern.GetStatus(r.Context(), char.ID)
 		if err != nil {
 			h.writeTavernError(w, err)
@@ -71,7 +71,7 @@ func (h *Handler) handleTavernOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req tavernItemRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -99,7 +99,7 @@ func (h *Handler) handleTavernReserveDelivery(w http.ResponseWriter, r *http.Req
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req tavernItemRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -127,7 +127,7 @@ func (h *Handler) handleGetTavernDelivery(w http.ResponseWriter, r *http.Request
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		delivery, err := h.tavern.GetDelivery(r.Context(), char.ID)
 		if err != nil {
 			h.writeTavernError(w, err)

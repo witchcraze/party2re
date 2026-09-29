@@ -122,6 +122,9 @@ func newMiscServices(
 		return nil, err
 	}
 	rescueService := rescue.NewService(rescueRepo, core.charRepo, soc.sched)
+	if soc.timer != nil {
+		rescueService.SetTimerService(soc.timer)
+	}
 
 	monsterRepo, err := database.NewMonsterRepository(db)
 	if err != nil {

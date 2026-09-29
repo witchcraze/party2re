@@ -1047,7 +1047,7 @@ type saleResponse struct {
 }
 
 func (h *Handler) handlePurchase(w http.ResponseWriter, r *http.Request) {
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *purchaseRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *purchaseRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req purchaseRequest) {
 		result, err := h.shops.Purchase(r.Context(), char.ID, req.ItemDefinitionID, req.Quantity)
@@ -1071,7 +1071,7 @@ func (h *Handler) handlePurchase(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleSell(w http.ResponseWriter, r *http.Request) {
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *sellRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *sellRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req sellRequest) {
 		result, err := h.shops.Sell(r.Context(), char.ID, req.ItemInstanceID, req.Quantity)

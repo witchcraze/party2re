@@ -298,7 +298,6 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 
 	char.RecoverVitality()
 	char.ResetTired()
-	char.RevertJobMemory()
 
 	if s.charUpdater != nil {
 		if err := s.charUpdater.Update(ctx, char); err != nil {

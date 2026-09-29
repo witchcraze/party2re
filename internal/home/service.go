@@ -49,6 +49,7 @@ type Service struct {
 	baseSleepDuration time.Duration
 	runner            TransactionRunner
 	petReader         HomePetReader
+	recipeLearner     RecipeLearner
 }
 
 func (s *Service) SetHomePetReader(r HomePetReader) {

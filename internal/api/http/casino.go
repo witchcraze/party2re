@@ -86,7 +86,7 @@ func (h *Handler) handleGetCasinoAccount(w http.ResponseWriter, r *http.Request)
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		account, err := h.casino.GetAccount(r.Context(), char.ID)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
@@ -106,7 +106,7 @@ func (h *Handler) handleCasinoExchange(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req casinoExchangeRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -150,7 +150,7 @@ func (h *Handler) handleCasinoSlot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req casinoSlotRequest
 		if !decodeJSON(w, r, &req) {
 			return

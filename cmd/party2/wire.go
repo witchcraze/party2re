@@ -61,7 +61,7 @@ func wireApp(
 	}
 
 	econ.initStore(core, soc.guildRepo, soc.timer, valkeyClient)
-	wireHooks(cmbt, econ, misc, soc)
+	wireHooks(core, cmbt, econ, misc, soc)
 
 	apiHandler, err := newHTTPHandler(cfg, core, econ, cmbt, soc, misc)
 	if err != nil {
@@ -76,6 +76,7 @@ func wireApp(
 
 // wireHooks consolidates all domain event hook registrations across services.
 func wireHooks(
+	core *coreServices,
 	cmbt *cmbtServices,
 	econ *econServices,
 	misc *miscServices,
@@ -199,6 +200,7 @@ func wireHooks(
 	}
 	if econ.alchemy != nil {
 		soc.home.SetAlchemyCompleter(econ.alchemy)
+		soc.home.SetRecipeLearner(&recipeLearnerAdapter{alchemy: econ.alchemy, catalog: core.itemCatalog})
 	}
 	if econ.store != nil {
 		soc.home.SetCostumeResetter(econ.store)
