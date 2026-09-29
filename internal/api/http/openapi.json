@@ -17858,6 +17858,71 @@
       }
     },
     "/homes/{id}/companion/phrases": {
+      "get": {
+        "description": "Retrieve list of taught greeting phrases for the home companion",
+        "operationId": "listCompanionPhrases",
+        "parameters": [
+          {
+            "description": "Home Character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "properties": {
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "phrase": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "List of taught companion phrases"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "List companion greeting phrases",
+        "tags": [
+          "Homes"
+        ]
+      },
       "post": {
         "operationId": "teachCompanionPhrase",
         "parameters": [

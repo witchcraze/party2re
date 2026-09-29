@@ -353,6 +353,26 @@ func (h *Handler) handleTeachCompanionPhrase(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+func (h *Handler) handleListCompanionPhrases(w http.ResponseWriter, r *http.Request) {
+	if h.homes == nil {
+		writeError(w, http.StatusNotImplemented, errors.New("home service not configured"))
+		return
+	}
+
+	charID := r.PathValue("id")
+	phrases, err := h.homes.ListCompanionPhrases(r.Context(), charID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	if phrases == nil {
+		phrases = []home.CompanionPhrase{}
+	}
+
+	writeJSON(w, http.StatusOK, phrases)
+}
+
 func (h *Handler) handleForgetCompanionPhrase(w http.ResponseWriter, r *http.Request) {
 	if h.homes == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("home service not configured"))

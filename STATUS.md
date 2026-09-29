@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #881 — [Bug] Home: Aggregate Heaven Wish companions into HomePetReader and expose resident pets in HomeView
+Last updated: Issue #894 — [Feature] Home: Expose GET /homes/{id}/companion/phrases endpoint and synchronize OpenAPI
 
 ## Current Phase
 

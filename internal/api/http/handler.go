@@ -409,6 +409,7 @@ func (h *Handler) Router() http.Handler {
 
 	mux.HandleFunc("GET /homes/{id}", h.handleGetHomeView)
 	mux.HandleFunc("POST /homes/{id}/settings", h.handleUpdateHomeSettings)
+	mux.HandleFunc("GET /homes/{id}/companion/phrases", h.handleListCompanionPhrases)
 	mux.HandleFunc("POST /homes/{id}/companion/phrases", h.handleTeachCompanionPhrase)
 	mux.HandleFunc("DELETE /homes/{id}/companion/phrases/{phrase_id}", h.handleForgetCompanionPhrase)
 	mux.HandleFunc("GET /homes/{id}/companion/talk", h.handleTalkToCompanion)
