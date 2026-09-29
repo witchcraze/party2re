@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -443,6 +444,43 @@ func TestHomeEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusNoContent {
 			t.Fatalf("expected 204 No Content, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("GET /homes/{id}/companion/phrases - success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/homes/char-1/companion/phrases", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var res []home.CompanionPhrase
+		if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if len(res) != 1 || res[0].Phrase != "Hi" {
+			t.Errorf("unexpected phrases: %+v", res)
+		}
+	})
+
+	t.Run("GET /homes/{id}/companion/phrases - empty array when no phrases", func(t *testing.T) {
+		emptyPhrasesSvc := &mockHomeService{
+			listCompanionPhrasesFn: func(ctx context.Context, characterID string) ([]home.CompanionPhrase, error) {
+				return nil, nil
+			},
+		}
+		emptyHandler, _ := apihttp.NewHandler(players, chars, advs, shops, apihttp.WithHome(emptyPhrasesSvc))
+		req := httptest.NewRequest(http.MethodGet, "/homes/char-1/companion/phrases", nil)
+		rec := httptest.NewRecorder()
+		emptyHandler.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		bodyStr := strings.TrimSpace(rec.Body.String())
+		if bodyStr != "[]" {
+			t.Errorf("expected empty JSON array '[]', got %q", bodyStr)
 		}
 	})
 
