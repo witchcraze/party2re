@@ -13097,7 +13097,7 @@
     },
     "/characters/{id}/profile": {
       "get": {
-        "description": "Retrieves public character information including stats, bio comment, avatar URL, and custom metadata.",
+        "description": "Retrieves public character information including stats, bio comment, avatar URL, aura effect, and custom metadata.",
         "operationId": "getCharacterProfile",
         "parameters": [
           {
@@ -13112,6 +13112,47 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "character": {
+                      "$ref": "#/components/schemas/Character"
+                    },
+                    "profile": {
+                      "properties": {
+                        "aura_effect": {
+                          "maximum": 8,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "avatar_url": {
+                          "type": "string"
+                        },
+                        "bio_data": {
+                          "additionalProperties": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "character_id": {
+                          "type": "string"
+                        },
+                        "comment": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
             "description": "Character profile retrieved successfully"
           },
           "404": {
@@ -13124,7 +13165,7 @@
         ]
       },
       "post": {
-        "description": "Updates bio comment, avatar URL, and custom metadata for a character.",
+        "description": "Updates bio comment, avatar URL, aura effect, and custom metadata for a character.",
         "operationId": "updateCharacterProfile",
         "parameters": [
           {
@@ -13168,10 +13209,43 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "aura_effect": {
+                      "maximum": 8,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "bio_data": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "character_id": {
+                      "type": "string"
+                    },
+                    "comment": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
             "description": "Profile updated successfully"
           },
           "400": {
-            "description": "Invalid comment length, avatar URL, or bio attributes"
+            "description": "Invalid comment length, avatar URL, aura effect, or bio attributes"
           },
           "401": {
             "description": "Unauthorized"
@@ -13189,7 +13263,7 @@
         ]
       },
       "put": {
-        "description": "Updates bio comment, avatar URL, and custom metadata for a character.",
+        "description": "Updates bio comment, avatar URL, aura effect, and custom metadata for a character.",
         "operationId": "replaceCharacterProfile",
         "parameters": [
           {
@@ -13207,6 +13281,11 @@
             "application/json": {
               "schema": {
                 "properties": {
+                  "aura_effect": {
+                    "maximum": 8,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
                   "avatar_url": {
                     "type": "string"
                   },
@@ -13228,10 +13307,43 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "aura_effect": {
+                      "maximum": 8,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "avatar_url": {
+                      "type": "string"
+                    },
+                    "bio_data": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "character_id": {
+                      "type": "string"
+                    },
+                    "comment": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
             "description": "Profile updated successfully"
           },
           "400": {
-            "description": "Invalid comment length, avatar URL, or bio attributes"
+            "description": "Invalid comment length, avatar URL, aura effect, or bio attributes"
           },
           "401": {
             "description": "Unauthorized"

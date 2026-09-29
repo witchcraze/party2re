@@ -66,6 +66,7 @@ func (s *stubCharacterServiceExtended) GetProfile(ctx context.Context, character
 			CharacterID: characterID,
 			Comment:     "Mighty adventurer",
 			AvatarURL:   "https://example.com/avatar.png",
+			AuraEffect:  3,
 		},
 	}, nil
 }
@@ -157,6 +158,15 @@ func TestCharacterCustomizationHTTP(t *testing.T) {
 	resp, err = client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK for profile view, got %d (err: %v)", resp.StatusCode, err)
+	}
+
+	var profileView character.ProfileView
+	if err := json.NewDecoder(resp.Body).Decode(&profileView); err != nil {
+		t.Fatalf("failed to decode profile view response: %v", err)
+	}
+	resp.Body.Close()
+	if profileView.Profile.AuraEffect != 3 {
+		t.Fatalf("expected profile.aura_effect == 3 in GET response, got %d", profileView.Profile.AuraEffect)
 	}
 
 	// 3. POST /characters/{id}/name - Unauthenticated -> 401
