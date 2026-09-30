@@ -12,21 +12,37 @@ Keep `main` as the sole integration branch. Feature branches must be short-lived
 - Use Conventional Commits prefixes: `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`.
 - Include the issue number: `<type>/<issue-number>-<short-desc>` (e.g., `feat/160-small-medals`).
 
-**Safe Branching Procedure:**
+**Safe Branching & Working Tree Hygiene Procedure:**
 Never branch directly from another feature branch unless explicitly stacking PRs.
-1. `git checkout main`
-2. `git pull --ff-only origin main`
-3. `git checkout -b <type>/<issue-number>-<short-description>`
+1. Check working tree cleanliness: `rtk git status --porcelain`. If uncommitted changes exist, safely stash or commit them before switching branches (`rtk git stash push -u -m "autostash-<task>-$(date +%s)"`). Never blindly discard changes via `reset --hard`.
+2. Switch to main: `rtk git checkout main`
+3. Synchronize main: `rtk git pull --ff-only origin main` (if branch diverged, halt and resolve before branching).
+4. Create feature branch: `rtk git checkout -b <type>/<issue-number>-<short-description>`
 
 **Merge Strategy & PR Titles:**
 - Always use **Squash and Merge**.
 - Because of Squash and Merge, **the PR Title MUST strictly follow Conventional Commits** (e.g., `feat: implement small medals`). This ensures the `main` branch history remains pristine and automatically parsable.
 
+**Post-Merge Local Cleanup & Main Reset Procedure:**
+Upon merging a PR (Squash and Merge):
+1. Switch back to main: `rtk git checkout main`
+2. Synchronize main: `rtk git pull --ff-only origin main`
+3. Delete local feature branch: `rtk git branch -D <branch-name> 2>/dev/null || true`
+4. Prune remote tracking branches: `rtk git fetch origin --prune`
+5. If changes were stashed prior to branching, notify the developer to inspect and restore when appropriate (`rtk git stash pop`).
+
 ## 2. Issue and PR Workflow
 - **No substantial work without an Issue:** Do not begin substantial implementation from an informal request without an Issue.
 - **Templates:** Check `.github/ISSUE_TEMPLATE` and `.github/PULL_REQUEST_TEMPLATE.md`. Every Issue **must** use the provided repository Issue template. Every PR **must** use the repository PR template and all checkboxes must be honestly verified. Do not bypass templates.
-- **Searchable Issue Naming & Tagging:**
-  - Issue titles MUST follow the format `[<Type>] <Domain/Module>: <Concise Summary>` (e.g., `[Bug] Mailbox: Fix mutual deletion of player letters upon single-party deletion`, `[Feature] Ranking: Implement valkey ranking snapshot caching`).
+- **Searchable Issue Naming, Sizing, and Deterministic Labeling Rules (SSOT):**
+  - **Issue Titles:** MUST strictly follow `[<Type>] <Domain>: <Specific Action / Target>` (e.g., `[Bug] Home: Return 404 in GET /homes/{id}/companion/phrases`, `[Feature] HTTP: Guard action endpoints against active sleep penalty`). Prohibit vague titles like `Fix bug` or `Update system`.
+  - **Deterministic Size Classification (Both Creation & Triage):**
+    Every issue MUST be classified into exactly one size label upon creation, enabling zero-token triage:
+    1. **`size/large` (Large / Interactive -> Recommended: agy / kickoff)**: Requires DB migration (DDL), cross-package transactions, 500-line ceiling/1122-line ratchet refactoring, or interactive user design decisions.
+    2. **`size/medium` (Medium: diff <= 150 lines -> Recommended: Jules Pro)**: Standard single-package feature or refactoring, or adding/modifying endpoints requiring OpenAPI (`paths/<pkg>.json`) synchronization.
+    3. **`size/small` (Small: diff <= 50 lines -> Recommended: Jules Flash)**: Localized bug fix, formula/cap adjustment, single-handler guard, or unit test addition.
+  - **Zero-Token Triage Guarantee:** When querying candidate issues (`gh issue list --limit 15 --json number,title,labels`), agents and developers MUST determine the recommended mode directly from the `size/*` label without reading the issue body.
+  - **Blocking Status:** If an issue is blocked by unaligned legacy specs or missing prerequisite modules, tag it with `status/needs-spec` (excluded from immediate kickoff candidates).
   - The Issue body MUST explicitly state the primary affected component/package and database tables (e.g., `Affected Component: internal/home`, `Database Tables: character_letters`).
 - **Pre-Registration De-duplication Check:**
   - Before creating any new Issue, agents MUST search existing open issues using targeted domain/entity keywords (`gh issue list --state open --search "<domain-or-keyword>" --json number,title,labels`).
@@ -52,7 +68,14 @@ Never branch directly from another feature branch unless explicitly stacking PRs
   - Before committing changes and opening a PR upon task completion, agents and developers MUST re-inspect the active issue (`gh issue view <issue-number>`).
   - Cross-check every item in Acceptance Criteria, Scope, and specific requirements against the implemented code, tests, and documentation to verify zero omissions.
   - Do not proceed to commit changes or open a PR until all acceptance criteria and issue requirements are verified as completely satisfied.
-- **Bounded Tasks:** Select a bounded task. If the requested work is too large, split it into smaller Issues; preserve independently testable acceptance criteria; do not silently expand the current Issue.
+- **Bounded Tasks & Anti-Fat-Issue Rule (1 Issue = 1 PR = 1 Mergeable Unit):**
+  - **Single Responsibility Principle:** An issue MUST represent a cohesive, reviewable, and independently testable unit of work that maps directly to a single PR. Never create monolithic "umbrella" issues combining multiple unrelated domain fixes, cross-cutting layers, and sub-features.
+  - **4 Mandatory Split Triggers (必須分割判定ルール):** If an issue meets ANY of the following criteria, it is **FAT** and MUST be decomposed into smaller, atomic sub-issues before starting implementation:
+    1. **Multi-Package Trigger:** The scope spans 2 or more independent domain/feature packages (e.g., `internal/home` AND `internal/rescue`). Each package must have its own issue.
+    2. **Cross-Layer Trigger:** The scope mixes domain/core business logic with cross-cutting HTTP middleware/auth routing or database schema migrations. HTTP-wide guards and schema migrations must be isolated into dedicated tickets.
+    3. **Independent Verifiability Trigger:** Sub-features can be tested, reviewed, and merged independently without functional dependencies.
+    4. **Blast Radius & Ratchet Trigger:** The scope risks touching ratchet-capped files (e.g., `internal/api/http/handler.go` capped at 1122 lines) or production files near the 500-line ceiling (`file_size_lint_test.go`).
+  - **Sizing Check:** When creating or refining an issue, verify that the ticket is strictly restricted to a single primary package or layer. If scope creeps, split immediately.
 
 ## 3. TDD and Local Verification (Tiered Strategy)
 For non-trivial behavior:
