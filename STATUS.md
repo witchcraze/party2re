@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #902 — Boss: Evaluate day-of-week orb drop in JST and inject nowFunc in Boss Service
+Last updated: Issue #903 — Home: Return 404 ErrCharacterNotFound for non-existent characters in GET /homes/{id}/companion/phrases
 
 ## Current Phase
 

@@ -18029,6 +18029,16 @@
             },
             "description": "Bad request"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character not found"
+          },
           "500": {
             "content": {
               "application/json": {

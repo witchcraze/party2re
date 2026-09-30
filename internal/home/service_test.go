@@ -636,6 +636,13 @@ func TestHomeService(t *testing.T) {
 		}
 	})
 
+	t.Run("ListCompanionPhrases non-existent character returns ErrCharacterNotFound", func(t *testing.T) {
+		_, err := service.ListCompanionPhrases(ctx, "non-existent-char")
+		if !errors.Is(err, ErrCharacterNotFound) {
+			t.Errorf("expected ErrCharacterNotFound, got %v", err)
+		}
+	})
+
 	t.Run("0 pets rejection with ErrNoPetsAtHome", func(t *testing.T) {
 		// char-3 has 0 pets
 		chars.chars["char-3"] = corecharacter.Character{ID: "char-3", Name: "Guest"}

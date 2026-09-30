@@ -362,6 +362,10 @@ func (h *Handler) handleListCompanionPhrases(w http.ResponseWriter, r *http.Requ
 	charID := r.PathValue("id")
 	phrases, err := h.homes.ListCompanionPhrases(r.Context(), charID)
 	if err != nil {
+		if errors.Is(err, home.ErrCharacterNotFound) {
+			writeError(w, http.StatusNotFound, err)
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}

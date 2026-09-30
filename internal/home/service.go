@@ -356,6 +356,13 @@ func (s *Service) ForgetCompanionPhrase(ctx context.Context, phraseID, character
 
 // ListCompanionPhrases returns all taught phrases for a character's companion.
 func (s *Service) ListCompanionPhrases(ctx context.Context, characterID string) ([]CompanionPhrase, error) {
+	_, err := s.charReader.FindByID(ctx, characterID)
+	if err != nil {
+		if errors.Is(err, corecharacter.ErrNotFound) {
+			return nil, ErrCharacterNotFound
+		}
+		return nil, err
+	}
 	return s.repo.ListCompanionPhrases(ctx, characterID)
 }
 
