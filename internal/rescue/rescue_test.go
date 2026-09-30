@@ -7,6 +7,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/timer"
 )
 
 type stubRescueRepo struct {
@@ -68,8 +69,9 @@ func TestEmergencyRescueSuccess(t *testing.T) {
 		},
 	}
 	cleaner := &stubActionCleaner{}
+	timerSvc := timer.NewService(nil)
 
-	svc := NewService(rescueRepo, charRepo, cleaner)
+	svc := NewService(rescueRepo, charRepo, cleaner, timerSvc)
 
 	rec, err := svc.EmergencyRescue(ctx, "char-1", "Screen frozen", now)
 	if err != nil {
@@ -84,6 +86,16 @@ func TestEmergencyRescueSuccess(t *testing.T) {
 	}
 	if len(cleaner.clearedCharacters) != 1 || cleaner.clearedCharacters[0] != "char-1" {
 		t.Errorf("expected action cleaner called for char-1")
+	}
+
+	// Verify timer.CategorySleep lock was set for 600s
+	locked, err := timerSvc.IsLocked(ctx, timer.CategorySleep, "char-1")
+	if err != nil || !locked {
+		t.Errorf("expected timer.CategorySleep locked, got locked=%v, err=%v", locked, err)
+	}
+	lockRem, err := timerSvc.GetRemainingLock(ctx, timer.CategorySleep, "char-1")
+	if err != nil || lockRem <= 590*time.Second || lockRem > 600*time.Second {
+		t.Errorf("expected ~600s remaining lock, got %v (err: %v)", lockRem, err)
 	}
 
 	// Character is under penalty immediately after rescue
@@ -132,8 +144,9 @@ func TestEmergencyRescue_ConsecutiveRescuesDoNotDoublePenalty(t *testing.T) {
 	cleaner := &stubActionCleaner{
 		stuckCharacters: map[string]bool{"char-1": true},
 	}
+	timerSvc := timer.NewService(nil)
 
-	svc := NewService(rescueRepo, charRepo, cleaner)
+	svc := NewService(rescueRepo, charRepo, cleaner, timerSvc)
 
 	rec, err := svc.EmergencyRescue(ctx, "char-1", "Second stuck", now)
 	if err != nil {
@@ -142,6 +155,43 @@ func TestEmergencyRescue_ConsecutiveRescuesDoNotDoublePenalty(t *testing.T) {
 
 	if rec.PenaltySeconds != DefaultPenaltySeconds {
 		t.Errorf("expected flat penalty %d (no doubling), got %d", DefaultPenaltySeconds, rec.PenaltySeconds)
+	}
+}
+
+func TestEmergencyRescue_AccumulatesSleepTimerWhenAlreadyLocked(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+
+	rescueRepo := &stubRescueRepo{}
+	charRepo := &stubCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", Name: "StuckHero"},
+		},
+	}
+	cleaner := &stubActionCleaner{
+		stuckCharacters: map[string]bool{"char-1": true},
+	}
+	timerSvc := timer.NewService(nil)
+
+	// Pre-lock with 200 seconds of sleep
+	if err := timerSvc.SetLock(ctx, timer.CategorySleep, "char-1", 200*time.Second); err != nil {
+		t.Fatalf("failed to pre-lock timer: %v", err)
+	}
+
+	svc := NewService(rescueRepo, charRepo, cleaner, timerSvc)
+
+	_, err := svc.EmergencyRescue(ctx, "char-1", "Rescue during active sleep", now)
+	if err != nil {
+		t.Fatalf("EmergencyRescue failed: %v", err)
+	}
+
+	rem, err := timerSvc.GetRemainingLock(ctx, timer.CategorySleep, "char-1")
+	if err != nil {
+		t.Fatalf("GetRemainingLock failed: %v", err)
+	}
+	// Expected ~800 seconds (200s + 600s)
+	if rem < 790*time.Second || rem > 805*time.Second {
+		t.Errorf("expected accumulated lock (~800s), got %v", rem)
 	}
 }
 
@@ -158,8 +208,9 @@ func TestEmergencyRescue_IdleCharacterReturnsEarlyWithZeroPenalty(t *testing.T) 
 	cleaner := &stubActionCleaner{
 		stuckCharacters: map[string]bool{"char-idle": false}, // not stuck
 	}
+	timerSvc := timer.NewService(nil)
 
-	svc := NewService(rescueRepo, charRepo, cleaner)
+	svc := NewService(rescueRepo, charRepo, cleaner, timerSvc)
 
 	rec, err := svc.EmergencyRescue(ctx, "char-idle", "Accidental click in town", now)
 	if err != nil {
@@ -176,6 +227,12 @@ func TestEmergencyRescue_IdleCharacterReturnsEarlyWithZeroPenalty(t *testing.T) 
 	// Must NOT record a penalty record into the repository
 	if len(rescueRepo.records) != 0 {
 		t.Errorf("expected 0 saved rescue records, got %d", len(rescueRepo.records))
+	}
+
+	// Timer lock must NOT be set for idle character
+	locked, err := timerSvc.IsLocked(ctx, timer.CategorySleep, "char-idle")
+	if err != nil || locked {
+		t.Errorf("expected timer not locked for idle character, got locked=%v, err=%v", locked, err)
 	}
 
 	// Character is not under penalty
@@ -200,7 +257,8 @@ func TestService_Unstuck(t *testing.T) {
 		},
 	}
 	cleaner := &stubActionCleaner{}
-	svc := NewService(rescueRepo, charRepo, cleaner)
+	timerSvc := timer.NewService(nil)
+	svc := NewService(rescueRepo, charRepo, cleaner, timerSvc)
 
 	t.Run("success", func(t *testing.T) {
 		err := svc.Unstuck(ctx, "char-unstuck")
@@ -243,7 +301,8 @@ func TestEmergencyRescueInvokesActionCleaner(t *testing.T) {
 		},
 	}
 	cleaner := &stubActionCleaner{}
-	svc := NewService(rescueRepo, charRepo, cleaner)
+	timerSvc := timer.NewService(nil)
+	svc := NewService(rescueRepo, charRepo, cleaner, timerSvc)
 
 	_, err := svc.EmergencyRescue(ctx, "char-42", "Stuck in infinite task", now)
 	if err != nil {
