@@ -484,6 +484,22 @@ func TestHomeEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("GET /homes/{id}/companion/phrases - 404 ErrCharacterNotFound", func(t *testing.T) {
+		notFoundSvc := &mockHomeService{
+			listCompanionPhrasesFn: func(ctx context.Context, characterID string) ([]home.CompanionPhrase, error) {
+				return nil, home.ErrCharacterNotFound
+			},
+		}
+		notFoundHandler, _ := apihttp.NewHandler(players, chars, advs, shops, apihttp.WithHome(notFoundSvc))
+		req := httptest.NewRequest(http.MethodGet, "/homes/non-existent/companion/phrases", nil)
+		rec := httptest.NewRecorder()
+		notFoundHandler.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 Not Found, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("POST /homes/{id}/companion/phrases - success", func(t *testing.T) {
 		body, _ := json.Marshal(map[string]string{
 			"phrase": "おかえり！",

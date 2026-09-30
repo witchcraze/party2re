@@ -54,7 +54,7 @@ The resident home companion/pet pool aggregates both monster pets brought home f
 - **Resident Companion Pool (`ListHomePets`)**:
   - Queries ranch monster pets at home plus Heaven Wish companions stored in `home_members`, returning unified `HomePet` entries exposed in `HomeView.ResidentPets`.
 - **Resident Companion Requirement & Character Guard**:
-  - `TalkToCompanion` validates character existence upfront, returning `ErrCharacterNotFound` (HTTP `404 Not Found`) if the character ID does not exist.
+  - `TalkToCompanion` and `ListCompanionPhrases` validate character existence upfront, returning `ErrCharacterNotFound` (HTTP `404 Not Found`) if the character ID does not exist.
   - If a character exists but has 0 pets or companions residing at Home (`ListHomePets`), talking or teaching phrases is rejected with `ErrNoPetsAtHome` (HTTP `422 Unprocessable Entity`), matching legacy CGI behavior ("教える相手がいません" / "しかし、誰もいなかった…").
 - **Teaching Phrases (`ことばをおしえる`)**:
   - Up to 30 unique phrases per companion (original CGI specification).
