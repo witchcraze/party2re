@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #901 — HTTP: Guard character action endpoints against active sleep and rescue penalty locks
+Last updated: Issue #900 — Rescue: Set 10-minute sleep penalty timer (timer.CategorySleep) upon emergency rescue
 
 ## Current Phase
 

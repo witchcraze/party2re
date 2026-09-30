@@ -32,9 +32,9 @@ Quests are randomly generated across four categories:
 
 ### Purpose & Constraints
 - Cancels and clears any active scheduled action or dangling activity.
-- Applies a flat cooldown/sleep penalty of **600 seconds (10 minutes)** (`DefaultPenaltySeconds`) when unstucking a trapped character.
-- If the character is already safe in town (has no ongoing or stuck activity to clear), rescue returns early with 0 penalty cooldown and does not record a new penalty, matching legacy `rescue.cgi:56-65` (`すでに救出処理がされています`).
-- During the penalty cooldown, character actions are restricted (`IsUnderPenalty` returns true and `CheckActionAllowed` rejects actions with `ErrCharacterUnderPenalty`).
+- Applies a cooldown/sleep penalty of **600 seconds (10 minutes)** (`DefaultPenaltySeconds`) via ephemeral lock (`timer.CategorySleep`) in Valkey/memory when unstucking a trapped character. If the character already has active sleep remaining, the 10-minute penalty accumulates onto the remaining duration (`rem + 600s`), strictly matching legacy `rescue.cgi:58-59` (`$m{sleep} = $m{sleep} > 0 ? $m{sleep} + $sleep_time * 60 : $sleep_time * 60`).
+- If the character is already safe in town (has no ongoing or stuck activity to clear), rescue returns early with 0 penalty cooldown and does not set the sleep timer or record a new penalty, matching legacy `rescue.cgi:56-65` (`すでに救出処理がされています`).
+- During the penalty cooldown, character actions are restricted across all action endpoints via sleep guard (`timer.CategorySleep` returning 409 Conflict), as well as domain checks (`IsUnderPenalty` returns true and `CheckActionAllowed` rejects actions with `ErrCharacterUnderPenalty`).
 - Records rescue actions that unstuck trapped characters in `rescue_records` for auditability and moderation.
 
 ---

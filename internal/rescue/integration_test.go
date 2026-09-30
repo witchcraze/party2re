@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/rescue"
 	"github.com/witchcraze/party2re/internal/scheduling"
@@ -43,12 +44,14 @@ func TestRescueServiceIntegration_WithScheduling(t *testing.T) {
 
 	var schedService *scheduling.Service
 	var schedRepo *scheduling.ValkeyRepository
+	var timerSvc timer.Service
 	if os.Getenv("PARTY2_VALKEY_ADDR") != "" {
 		valkeyClient, err := vk.NewClient()
 		if err == nil {
 			defer valkeyClient.Close()
 			schedRepo = scheduling.NewValkeyRepository(valkeyClient)
 			schedService = scheduling.NewService(schedRepo)
+			timerSvc = timer.NewService(valkeyClient)
 
 			// Enqueue a scheduled action for this character
 			_, err = schedService.Schedule(ctx, "adventure:complete", char.ID, map[string]string{"key": "val"}, time.Now().Add(1*time.Hour))
@@ -58,7 +61,7 @@ func TestRescueServiceIntegration_WithScheduling(t *testing.T) {
 		}
 	}
 
-	svc := rescue.NewService(rescueRepo, charRepo, schedService)
+	svc := rescue.NewService(rescueRepo, charRepo, schedService, timerSvc)
 
 	now := time.Now().UTC()
 	rec, err := svc.EmergencyRescue(ctx, char.ID, "Stuck during integration test", now)
@@ -67,6 +70,14 @@ func TestRescueServiceIntegration_WithScheduling(t *testing.T) {
 	}
 	if rec.CharacterID != char.ID {
 		t.Errorf("expected character ID %s, got %s", char.ID, rec.CharacterID)
+	}
+
+	// Verify timer lock
+	if timerSvc != nil {
+		locked, err := timerSvc.IsLocked(ctx, timer.CategorySleep, char.ID)
+		if err != nil || !locked {
+			t.Errorf("expected sleep timer locked, got locked=%v, err=%v", locked, err)
+		}
 	}
 
 	// Verify penalty

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/id"
 )
 
@@ -24,21 +25,29 @@ type ActionCleaner interface {
 	ClearActiveActions(ctx context.Context, characterID string) (bool, error)
 }
 
+type TimerService interface {
+	SetLock(ctx context.Context, category, targetID string, duration time.Duration) error
+	GetRemainingLock(ctx context.Context, category, targetID string) (time.Duration, error)
+}
+
 type Service struct {
 	rescues    RescueRepository
 	characters CharacterRepository
 	cleaner    ActionCleaner
+	timer      TimerService
 }
 
 func NewService(
 	rescues RescueRepository,
 	characters CharacterRepository,
 	cleaner ActionCleaner,
+	timer TimerService,
 ) *Service {
 	return &Service{
 		rescues:    rescues,
 		characters: characters,
 		cleaner:    cleaner,
+		timer:      timer,
 	}
 }
 
@@ -109,6 +118,16 @@ func (s *Service) EmergencyRescue(ctx context.Context, characterID, reason strin
 
 	if err := s.rescues.Save(ctx, rec); err != nil {
 		return RescueRecord{}, err
+	}
+
+	if s.timer != nil {
+		duration := time.Duration(DefaultPenaltySeconds) * time.Second
+		if rem, err := s.timer.GetRemainingLock(ctx, timer.CategorySleep, char.ID); err == nil && rem > 0 {
+			duration += rem
+		}
+		if err := s.timer.SetLock(ctx, timer.CategorySleep, char.ID, duration); err != nil {
+			return RescueRecord{}, err
+		}
 	}
 
 	return rec, nil
