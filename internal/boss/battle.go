@@ -173,7 +173,7 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 
 			// 10a. Day-of-week orb bonus added to treasure candidates
 			candidates := append([]string(nil), stage.TreasureItemIDs...)
-			orb := getDayOfWeekOrb(time.Now().UTC(), s.rng)
+			orb := getDayOfWeekOrb(s.now(), s.rng)
 			candidates = append(candidates, orb)
 			rewardItemID = s.pickTreasure(candidates)
 
@@ -205,7 +205,7 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 
 			newsMsg = fmt.Sprintf("勇者%sが%sを封印する", strings.Join(heroNames, "、"), stage.Name)
 			if s.newsPub != nil {
-				_ = s.newsPub.PublishNews(txCtx, "boss", newsMsg, newsMsg, "System", time.Now().UTC())
+				_ = s.newsPub.PublishNews(txCtx, "boss", newsMsg, newsMsg, "System", s.now())
 			}
 
 			if s.monsterRecorder != nil {
@@ -240,7 +240,7 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 		}
 
 		// 12. Record challenge history & records
-		now := time.Now().UTC()
+		now := s.now()
 		var rewardItemInst *coreitem.Instance
 		if rewardItemID != "" {
 			rewardItemInst = &coreitem.Instance{

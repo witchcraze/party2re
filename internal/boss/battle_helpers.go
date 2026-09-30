@@ -172,7 +172,8 @@ func calculateTotalCrystals(stage BossStage, allies []corecharacter.Character, e
 }
 
 func getDayOfWeekOrb(t time.Time, rng corecharacter.RandomSource) string {
-	wday := t.Weekday() // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+	jst := time.FixedZone("JST", 9*60*60)
+	wday := t.In(jst).Weekday() // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
 	if wday == time.Sunday {
 		offset := 0
 		if rng != nil {

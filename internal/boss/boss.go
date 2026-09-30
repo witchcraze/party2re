@@ -225,6 +225,13 @@ func WithMonsterDefeatRecorder(recorder MonsterDefeatRecorder) ServiceOption {
 	}
 }
 
+// WithNowFunc configures a custom time provider for testing.
+func WithNowFunc(fn func() time.Time) ServiceOption {
+	return func(s *Service) {
+		s.nowFunc = fn
+	}
+}
+
 type Service struct {
 	repo               Repository
 	characterRepo      CharacterRepository
@@ -239,6 +246,14 @@ type Service struct {
 	rng                corecharacter.RandomSource
 	participantBuilder ParticipantBuilder
 	monsterRecorder    MonsterDefeatRecorder
+	nowFunc            func() time.Time
+}
+
+func (s *Service) now() time.Time {
+	if s.nowFunc != nil {
+		return s.nowFunc()
+	}
+	return time.Now().UTC()
 }
 
 func (s *Service) SetVictoryBanquetHook(hook VictoryBanquetHook) {

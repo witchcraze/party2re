@@ -116,7 +116,7 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 			heroCountGained = 1
 
 			candidates := append([]string(nil), stage.TreasureItemIDs...)
-			orb := getDayOfWeekOrb(time.Now().UTC(), s.rng)
+			orb := getDayOfWeekOrb(s.now(), s.rng)
 			candidates = append(candidates, orb)
 			rewardItemID = s.pickTreasure(candidates)
 
@@ -141,7 +141,7 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 
 			newsMsg = fmt.Sprintf("勇者%sが%sを封印する", char.Name, stage.Name)
 			if s.newsPub != nil {
-				_ = s.newsPub.PublishNews(txCtx, "boss", newsMsg, newsMsg, "System", time.Now().UTC())
+				_ = s.newsPub.PublishNews(txCtx, "boss", newsMsg, newsMsg, "System", s.now())
 			}
 
 			if s.monsterRecorder != nil {
@@ -169,7 +169,7 @@ func (s *Service) ChallengeBoss(ctx context.Context, characterID, bossID string)
 			return err
 		}
 
-		now := time.Now().UTC()
+		now := s.now()
 		var rewardItemInst *coreitem.Instance
 		if rewardItemID != "" {
 			rewardItemInst = &coreitem.Instance{
