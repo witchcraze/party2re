@@ -72,7 +72,7 @@ func (h *Handler) handleAlchemySynthesize(w http.ResponseWriter, r *http.Request
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req alchemySynthesizeRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -94,7 +94,7 @@ func (h *Handler) handleAlchemyClaim(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		res, err := h.alchemy.Claim(r.Context(), char.ID)
 		if err != nil {
 			h.writeAlchemyError(w, err)
@@ -111,7 +111,7 @@ func (h *Handler) handleAlchemyLearn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req alchemyLearnRequest
 		if !decodeOptionalJSON(w, r, &req) {
 			return

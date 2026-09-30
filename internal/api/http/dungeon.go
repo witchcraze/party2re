@@ -89,7 +89,7 @@ func (h *Handler) handleStartDungeon(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req startDungeonRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -127,7 +127,7 @@ func (h *Handler) handleStartPartyDungeon(w http.ResponseWriter, r *http.Request
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req startPartyDungeonRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -170,7 +170,7 @@ func (h *Handler) handleMoveDungeon(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req moveDungeonRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -204,7 +204,7 @@ func (h *Handler) handleEscapeDungeon(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		res, err := h.dungeons.Escape(r.Context(), char.ID)
 		if err != nil {
 			if errors.Is(err, dungeon.ErrNoActiveExpedition) {

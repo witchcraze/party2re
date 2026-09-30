@@ -68,7 +68,7 @@ func (h *Handler) handleChallengeBoss(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req challengeBossRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -126,7 +126,7 @@ func (h *Handler) handleStartSealingBattle(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *startSealingBattleRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *startSealingBattleRequest) string {
 		return req.CharacterID
 	}, func(player coreplayer.Player, char corecharacter.Character, req startSealingBattleRequest) {
 		res, err := h.bosses.StartSealingBattle(r.Context(), partyID, char.ID)

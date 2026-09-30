@@ -106,7 +106,7 @@ func (h *Handler) handleCasinoExchange(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req casinoExchangeRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -150,7 +150,7 @@ func (h *Handler) handleCasinoSlot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req casinoSlotRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -194,7 +194,7 @@ func (h *Handler) handleCasinoExchangePrize(w http.ResponseWriter, r *http.Reque
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req casinoPrizeExchangeRequest
 		if !decodeJSON(w, r, &req) {
 			return

@@ -67,7 +67,7 @@ func (h *Handler) handleCreateCasinoRoom(w http.ResponseWriter, r *http.Request)
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req createCasinoRoomRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -142,7 +142,7 @@ func (h *Handler) handleJoinCasinoRoom(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
 	roomID := r.PathValue("roomId")
 
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req joinCasinoRoomRequest
 		if !decodeOptionalJSON(w, r, &req) {
 			return
@@ -282,7 +282,7 @@ func (h *Handler) handleStartCasinoRoomGame(w http.ResponseWriter, r *http.Reque
 	charID := r.PathValue("id")
 	roomID := r.PathValue("roomId")
 
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		room, err := h.casino.StartGame(r.Context(), roomID, char.ID)
 		if err != nil {
 			if errors.Is(err, casino.ErrRoomNotFound) {
@@ -320,7 +320,7 @@ func (h *Handler) handlePlayCasinoRoomAction(w http.ResponseWriter, r *http.Requ
 	charID := r.PathValue("id")
 	roomID := r.PathValue("roomId")
 
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req casinoRoomActionRequest
 		if !decodeJSON(w, r, &req) {
 			return

@@ -79,7 +79,7 @@ func (h *Handler) handleGetShopCatalog(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleShopBatchPurchase(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req batchPurchaseRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -145,7 +145,7 @@ func (h *Handler) handleShopTalkNPC(w http.ResponseWriter, r *http.Request) {
 	shopTypeStr := r.PathValue("type")
 	shopType := shop.ShopType(shopTypeStr)
 
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		msg, err := h.shops.TalkNPC(r.Context(), shopType)
 		if err != nil {
 			mapShopHTTPError(w, err)
@@ -159,7 +159,7 @@ func (h *Handler) handleShopTalkNPC(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleShopDiscoverSecret(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		unlocked, msg, err := h.shops.DiscoverSecretShop(r.Context(), char.ID)
 		if err != nil {
 			mapShopHTTPError(w, err)
@@ -200,7 +200,7 @@ func (r accessorySynthesizeRequest) resolvedTarget() string {
 
 func (h *Handler) handleAccessoryBuy(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req accessoryBuyRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -238,7 +238,7 @@ func (h *Handler) handleAccessoryBuy(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleAccessorySell(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req accessorySellRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -260,7 +260,7 @@ func (h *Handler) handleAccessorySell(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleAccessorySynthesize(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req accessorySynthesizeRequest
 		if !decodeJSON(w, r, &req) {
 			return

@@ -71,7 +71,7 @@ func (h *Handler) handleCreatePvPRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req pvpCreateRoomRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -161,7 +161,7 @@ func (h *Handler) handleJoinPvPRoom(w http.ResponseWriter, r *http.Request) {
 
 	charID := r.PathValue("id")
 	roomID := r.PathValue("room_id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req pvpJoinRoomRequest
 		if !decodeOptionalJSON(w, r, &req) {
 			return
@@ -226,7 +226,7 @@ func (h *Handler) handleSelectPvPTeam(w http.ResponseWriter, r *http.Request) {
 
 	charID := r.PathValue("id")
 	roomID := r.PathValue("room_id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req pvpSelectTeamRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -262,7 +262,7 @@ func (h *Handler) handleStartPvPMatch(w http.ResponseWriter, r *http.Request) {
 
 	charID := r.PathValue("id")
 	roomID := r.PathValue("room_id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		detail, err := h.pvp.StartMatch(r.Context(), char.ID, roomID)
 		if err != nil {
 			if errors.Is(err, pvp.ErrRoomNotFound) {
@@ -294,7 +294,7 @@ func (h *Handler) handleAdvancePvPRound(w http.ResponseWriter, r *http.Request) 
 
 	charID := r.PathValue("id")
 	roomID := r.PathValue("room_id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		res, err := h.pvp.AdvanceRound(r.Context(), char.ID, roomID)
 		if err != nil {
 			if errors.Is(err, pvp.ErrRoomNotFound) {

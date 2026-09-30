@@ -52,7 +52,7 @@ func (h *Handler) handleApplyBlacksmithSeal(w http.ResponseWriter, r *http.Reque
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req applySealRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -78,7 +78,7 @@ func (h *Handler) handleNameEquipment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req nameEquipmentRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -131,7 +131,7 @@ func (h *Handler) handleDepositBlacksmithWeapon(w http.ResponseWriter, r *http.R
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		dep, err := h.blacksmith.DepositWeapon(r.Context(), char.ID)
 		if err != nil {
 			h.writeBlacksmithError(w, err)
@@ -152,7 +152,7 @@ func (h *Handler) handleWithdrawBlacksmithWeapon(w http.ResponseWriter, r *http.
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req withdrawWeaponRequest
 		if !decodeJSON(w, r, &req) {
 			return

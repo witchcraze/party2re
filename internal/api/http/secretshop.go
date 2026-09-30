@@ -106,7 +106,7 @@ func (h *Handler) handleSecretShopPuffPuff(w http.ResponseWriter, r *http.Reques
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		result, err := h.secretshop.PuffPuff(r.Context(), char.ID)
 		if err != nil {
 			h.writeSecretShopError(w, err)
@@ -124,7 +124,7 @@ func (h *Handler) handleSecretShopPurchase(w http.ResponseWriter, r *http.Reques
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req secretShopPurchaseRequest
 		if !decodeJSON(w, r, &req) {
 			return

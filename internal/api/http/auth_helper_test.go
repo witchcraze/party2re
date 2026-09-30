@@ -11,6 +11,7 @@ import (
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/home"
 )
 
 func TestAuthHelpers(t *testing.T) {
@@ -211,6 +212,236 @@ func TestAdminAuth(t *testing.T) {
 		router.ServeHTTP(rec, req)
 		if rec.Code != http.StatusCreated {
 			t.Errorf("expected 201 Created for valid Bearer token, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestGuardSleepingCharacter(t *testing.T) {
+	player := coreplayer.Player{ID: "player-1", Username: "hero"}
+	char := corecharacter.Character{ID: "char-1", PlayerID: "player-1", Name: "Hero"}
+
+	players := &stubPlayerService{
+		authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
+			if sessionID == "valid-session" {
+				return player, nil
+			}
+			return coreplayer.Player{}, errors.New("invalid session")
+		},
+	}
+	chars := &stubCharacterService{
+		getFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			if id == "char-1" {
+				return char, nil
+			}
+			return corecharacter.Character{}, corecharacter.ErrNotFound
+		},
+	}
+
+	t.Run("returns true when homes service is nil", func(t *testing.T) {
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{})
+		if err != nil {
+			t.Fatalf("failed to create handler: %v", err)
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/adventures", bytes.NewReader([]byte(`{"character_id":"char-1","stage_id":"stage-1"}`)))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		h.Router().ServeHTTP(rec, req)
+		if rec.Code == http.StatusConflict {
+			t.Errorf("expected not conflict when homes is nil, got %d", rec.Code)
+		}
+	})
+
+	t.Run("returns 409 Conflict when character is actively sleeping", func(t *testing.T) {
+		mockHome := &mockHomeService{
+			getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {
+				return home.SleepStatus{
+					Sleeping:         true,
+					RemainingSeconds: 300,
+					Message:          "お休み中「Zzz...」 目覚めるまで 5分00秒",
+				}, nil
+			},
+		}
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome))
+		if err != nil {
+			t.Fatalf("failed to create handler: %v", err)
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/adventures", bytes.NewReader([]byte(`{"character_id":"char-1","stage_id":"stage-1"}`)))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		h.Router().ServeHTTP(rec, req)
+		if rec.Code != http.StatusConflict {
+			t.Errorf("expected 409 Conflict, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("returns 409 Conflict when character is ready to wake (CategoryAsleep locked)", func(t *testing.T) {
+		mockHome := &mockHomeService{
+			getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {
+				return home.SleepStatus{
+					Sleeping:         false,
+					CanWake:          true,
+					RemainingSeconds: 0,
+					Message:          "目を覚ます準備ができました",
+				}, nil
+			},
+		}
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome))
+		if err != nil {
+			t.Fatalf("failed to create handler: %v", err)
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/adventures", bytes.NewReader([]byte(`{"character_id":"char-1","stage_id":"stage-1"}`)))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		h.Router().ServeHTTP(rec, req)
+		if rec.Code != http.StatusConflict {
+			t.Errorf("expected 409 Conflict, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("allows action when character is awake", func(t *testing.T) {
+		mockHome := &mockHomeService{
+			getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {
+				return home.SleepStatus{
+					Sleeping: false,
+					CanWake:  false,
+					Message:  "起きています",
+				}, nil
+			},
+		}
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome))
+		if err != nil {
+			t.Fatalf("failed to create handler: %v", err)
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/adventures", bytes.NewReader([]byte(`{"character_id":"char-1","stage_id":"stage-1"}`)))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		h.Router().ServeHTTP(rec, req)
+		if rec.Code == http.StatusConflict {
+			t.Errorf("expected awake character not to be blocked by conflict, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("shop batch purchase returns 409 Conflict when sleeping", func(t *testing.T) {
+		mockHome := &mockHomeService{
+			getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {
+				return home.SleepStatus{
+					Sleeping:         true,
+					RemainingSeconds: 300,
+					Message:          "お休み中「Zzz...」 目覚めるまで 5分00秒",
+				}, nil
+			},
+		}
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome))
+		if err != nil {
+			t.Fatalf("failed to create handler: %v", err)
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/characters/char-1/shop/batch-purchase", bytes.NewReader([]byte(`{"shop_type":"item","items":[]}`)))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		h.Router().ServeHTTP(rec, req)
+		if rec.Code != http.StatusConflict {
+			t.Errorf("expected 409 Conflict for shop when sleeping, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("combat challenge start returns 409 Conflict when sleeping", func(t *testing.T) {
+		mockHome := &mockHomeService{
+			getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {
+				return home.SleepStatus{
+					Sleeping:         true,
+					RemainingSeconds: 300,
+					Message:          "お休み中「Zzz...」 目覚めるまで 5分00秒",
+				}, nil
+			},
+		}
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome), apihttp.WithChallenge(&stubChallengeService{}))
+		if err != nil {
+			t.Fatalf("failed to create handler: %v", err)
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/characters/char-1/challenges/start", bytes.NewReader([]byte(`{"tier_id":"tier-1"}`)))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		h.Router().ServeHTTP(rec, req)
+		if rec.Code != http.StatusConflict {
+			t.Errorf("expected 409 Conflict for challenge when sleeping, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("pvp room create returns 409 Conflict when sleeping", func(t *testing.T) {
+		mockHome := &mockHomeService{
+			getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {
+				return home.SleepStatus{
+					Sleeping:         true,
+					RemainingSeconds: 300,
+					Message:          "お休み中「Zzz...」 目覚めるまで 5分00秒",
+				}, nil
+			},
+		}
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome), apihttp.WithPvP(&stubColosseumPvPService{}))
+		if err != nil {
+			t.Fatalf("failed to create handler: %v", err)
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/characters/char-1/pvp/rooms", bytes.NewReader([]byte(`{"name":"Room"}`)))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		h.Router().ServeHTTP(rec, req)
+		if rec.Code != http.StatusConflict {
+			t.Errorf("expected 409 Conflict for pvp when sleeping, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("casino exchange returns 409 Conflict when sleeping", func(t *testing.T) {
+		mockHome := &mockHomeService{
+			getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {
+				return home.SleepStatus{
+					Sleeping:         true,
+					RemainingSeconds: 300,
+					Message:          "お休み中「Zzz...」 目覚めるまで 5分00秒",
+				}, nil
+			},
+		}
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome), apihttp.WithCasino(&stubCasinoService{}))
+		if err != nil {
+			t.Fatalf("failed to create handler: %v", err)
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/characters/char-1/casino/exchange", bytes.NewReader([]byte(`{"coins":10}`)))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		h.Router().ServeHTTP(rec, req)
+		if rec.Code != http.StatusConflict {
+			t.Errorf("expected 409 Conflict for casino when sleeping, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("auction send returns 409 Conflict when sleeping", func(t *testing.T) {
+		mockHome := &mockHomeService{
+			getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {
+				return home.SleepStatus{
+					Sleeping:         true,
+					RemainingSeconds: 300,
+					Message:          "お休み中「Zzz...」 目覚めるまで 5分00秒",
+				}, nil
+			},
+		}
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome), apihttp.WithAuction(&stubAuctionService{}))
+		if err != nil {
+			t.Fatalf("failed to create handler: %v", err)
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/characters/char-1/auction/send", bytes.NewReader([]byte(`{"target_character_id":"char-2","gold":100}`)))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		h.Router().ServeHTTP(rec, req)
+		if rec.Code != http.StatusConflict {
+			t.Errorf("expected 409 Conflict for auction when sleeping, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 }
