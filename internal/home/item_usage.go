@@ -213,7 +213,7 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	}
 
 	// Validate supported consumable items before transaction
-	if !isCostumeItem(def.Name) {
+	if !isCostumeItem(def.Name) && !isRecipeScrollItem(def.Name) {
 		switch def.Name {
 		case "命の木の実", "不思議な木の実", "力の種", "守りの種", "素早さの種", "スキルの種", "幸せの種", "ファイト一発", "気合の霊薬", "小さなメダル", "水晶の原石":
 		default:
@@ -335,6 +335,9 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 }
 
 func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter.Character, def item.Definition) (string, error) {
+	if isRecipeScrollItem(def.Name) {
+		return s.applyRecipeScrollConsumable(ctx, char, def.Name)
+	}
 	if costumeMsg, ok, err := s.applyCostumeConsumable(ctx, char, def.Name); ok {
 		return costumeMsg, err
 	}

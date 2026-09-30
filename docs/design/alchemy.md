@@ -81,9 +81,15 @@ A recipe consists of:
    - Reset synthesis state to `state = none`.
    - Trigger optional `SynthesisHook` (e.g. for Commemorative Medal milestone tracking).
 
-### 5. Learn Recipe (`POST /characters/{id}/alchemy/learn`)
+### 5. Learn Recipe & Recipe Scroll Books (`internal/home/recipe_usage.go`)
 - Discovers a new unlearned recipe matching `allowed_bases` filter (or any recipe if empty).
 - Inserts entry into `character_alchemy_recipes` with `is_crafted = false`.
+- **Home Recipe Scroll Consumption**:
+  - `基本錬金レシピ` (Item 127, 500G): Teaches 1 unlearned recipe from 34 basic base items.
+  - `応用錬金レシピ` (Item 128, 2000G): Teaches 1 unlearned recipe from 30 advanced base items.
+  - `神の錬金レシピ` (Item 129, 7000G): Teaches 1 unlearned recipe from all recipes (empty pool filter).
+  - Pool exhaustion: 1 scroll item is still consumed and `"この錬金レシピからこれ以上習得できる錬金方法はないようだ…"` is returned.
+  - Integrated into `internal/home` via consumer-side `RecipeLearner` interface.
 
 ---
 
