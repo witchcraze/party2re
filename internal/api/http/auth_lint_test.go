@@ -200,6 +200,8 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		hasAuth := containsAny(calls,
 			"withAuthenticatedCharacter",
 			"withAuthenticatedCharacterAndJSON",
+			"withAuthenticatedActionCharacter",
+			"withAuthenticatedActionCharacterAndJSON",
 			"authenticatePlayer",
 			"authorizeCharacter",
 		)
@@ -345,7 +347,7 @@ func verifyCharacterIDRequestPayloads(t *testing.T, pkg *ast.Package, handlers m
 	// Verify all handlers referencing these structs invoke withAuthenticatedCharacterAndJSON
 	for handlerName, fnDecl := range handlers {
 		calls := extractFunctionCalls(fnDecl)
-		hasAuthHelper := containsAny(calls, "withAuthenticatedCharacterAndJSON", "withAuthenticatedCharacter", "authenticatePlayer")
+		hasAuthHelper := containsAny(calls, "withAuthenticatedCharacterAndJSON", "withAuthenticatedActionCharacterAndJSON", "withAuthenticatedCharacter", "withAuthenticatedActionCharacter", "authenticatePlayer")
 
 		// Check if the handler uses any charReqType
 		ast.Inspect(fnDecl.Body, func(n ast.Node) bool {

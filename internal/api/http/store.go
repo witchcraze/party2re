@@ -77,7 +77,7 @@ func (h *Handler) handleBuildStore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	townID := r.PathValue("town_id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *buildStoreRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *buildStoreRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req buildStoreRequest) {
 		res, err := h.stores.BuildStore(r.Context(), char.ID, townID, req.HouseStyle, req.StoreName)
@@ -168,7 +168,7 @@ func (h *Handler) handleListGoldItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(_ *listGoldItemRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(_ *listGoldItemRequest) string {
 		return r.PathValue("id")
 	}, func(_ coreplayer.Player, char corecharacter.Character, req listGoldItemRequest) {
 		sale, err := h.stores.ListGoldItem(r.Context(), char.ID, req.DepotItemInstanceID, req.Price)
@@ -198,7 +198,7 @@ func (h *Handler) handleListBarterItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(_ *listBarterItemRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(_ *listBarterItemRequest) string {
 		return r.PathValue("id")
 	}, func(_ coreplayer.Player, char corecharacter.Character, req listBarterItemRequest) {
 		sale, err := h.stores.ListBarterItem(r.Context(), char.ID, req.DepotItemInstanceID, req.WishItemName)
@@ -256,7 +256,7 @@ func (h *Handler) handleBuyStoreItem(w http.ResponseWriter, r *http.Request) {
 
 	charID := r.PathValue("id")
 	saleID := r.PathValue("sale_id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		err := h.stores.BuyItem(r.Context(), char.ID, saleID)
 		if err != nil {
 			if errors.Is(err, store.ErrCannotBuyOwnItem) || errors.Is(err, store.ErrInsufficientFunds) {
@@ -285,7 +285,7 @@ func (h *Handler) handleTradeStoreItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	saleID := r.PathValue("sale_id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(_ *tradeItemRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(_ *tradeItemRequest) string {
 		return r.PathValue("id")
 	}, func(_ coreplayer.Player, char corecharacter.Character, req tradeItemRequest) {
 		err := h.stores.TradeItem(r.Context(), char.ID, saleID, req.DepotItemInstanceID)

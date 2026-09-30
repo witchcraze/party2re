@@ -92,7 +92,7 @@ func (h *Handler) handleCreateFleaMarketListing(w http.ResponseWriter, r *http.R
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req createFleaMarketListingRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -116,7 +116,7 @@ func (h *Handler) handlePurchaseFleaMarketListing(w http.ResponseWriter, r *http
 
 	charID := r.PathValue("id")
 	listingID := r.PathValue("listing_id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		res, err := h.fleamarket.PurchaseListing(r.Context(), char.ID, listingID, time.Now().UTC())
 		if err != nil {
 			h.writeFleaMarketError(w, err)
@@ -135,7 +135,7 @@ func (h *Handler) handleCancelFleaMarketListing(w http.ResponseWriter, r *http.R
 
 	charID := r.PathValue("id")
 	listingID := r.PathValue("listing_id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		cancelled, err := h.fleamarket.CancelListing(r.Context(), char.ID, listingID)
 		if err != nil {
 			h.writeFleaMarketError(w, err)

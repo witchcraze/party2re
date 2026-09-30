@@ -72,7 +72,7 @@ func (h *Handler) handleCreateGvGRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req gvgCreateRoomRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -160,7 +160,7 @@ func (h *Handler) handleJoinGvGRoom(w http.ResponseWriter, r *http.Request) {
 
 	charID := r.PathValue("id")
 	roomID := r.PathValue("room_id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req gvgJoinRoomRequest
 		if !decodeOptionalJSON(w, r, &req) {
 			return
@@ -226,7 +226,7 @@ func (h *Handler) handleStartGvGMatch(w http.ResponseWriter, r *http.Request) {
 
 	charID := r.PathValue("id")
 	roomID := r.PathValue("room_id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		detail, err := h.gvg.StartMatch(r.Context(), char.ID, roomID)
 		if err != nil {
 			if errors.Is(err, gvg.ErrRoomNotFound) {
@@ -258,7 +258,7 @@ func (h *Handler) handleAdvanceGvGRound(w http.ResponseWriter, r *http.Request) 
 
 	charID := r.PathValue("id")
 	roomID := r.PathValue("room_id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		res, err := h.gvg.AdvanceRound(r.Context(), char.ID, roomID)
 		if err != nil {
 			if errors.Is(err, gvg.ErrRoomNotFound) {

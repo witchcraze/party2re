@@ -132,15 +132,64 @@ func withAuthenticatedCharacterAndJSON[Req any](
 	fn(player, char, req)
 }
 
-// ensureNotSleeping checks if the character is currently sleeping. If sleeping, writes 409 Conflict.
-func (h *Handler) ensureNotSleeping(w http.ResponseWriter, r *http.Request, charID string) bool {
+// guardSleepingCharacter checks if the character is currently sleeping or awaiting wake-up.
+// If locked in sleep or asleep state, writes 409 Conflict and returns false.
+func (h *Handler) guardSleepingCharacter(w http.ResponseWriter, r *http.Request, charID string) bool {
 	if h.homes == nil {
 		return true
 	}
 	status, err := h.homes.GetSleepStatus(r.Context(), charID)
-	if err == nil && status.Sleeping {
-		writeError(w, http.StatusConflict, errors.New(status.Message))
-		return false
+	if err == nil {
+		if status.Sleeping {
+			msg := status.Message
+			if msg == "" {
+				msg = "お休み中「Zzz...」"
+			}
+			writeError(w, http.StatusConflict, errors.New(msg))
+			return false
+		}
+		if status.CanWake {
+			writeError(w, http.StatusConflict, errors.New("お休み中「Zzz...」 目を覚ましてください"))
+			return false
+		}
 	}
 	return true
+}
+
+// ensureNotSleeping is an alias for guardSleepingCharacter for backward compatibility.
+func (h *Handler) ensureNotSleeping(w http.ResponseWriter, r *http.Request, charID string) bool {
+	return h.guardSleepingCharacter(w, r, charID)
+}
+
+// withAuthenticatedActionCharacter validates player authentication, character ownership,
+// and ensures the character is not sleeping before invoking the callback.
+func (h *Handler) withAuthenticatedActionCharacter(
+	w http.ResponseWriter,
+	r *http.Request,
+	characterID string,
+	fn func(player coreplayer.Player, char corecharacter.Character),
+) {
+	h.withAuthenticatedCharacter(w, r, characterID, func(player coreplayer.Player, char corecharacter.Character) {
+		if !h.guardSleepingCharacter(w, r, char.ID) {
+			return
+		}
+		fn(player, char)
+	})
+}
+
+// withAuthenticatedActionCharacterAndJSON decodes a JSON request body and validates player authentication,
+// character ownership, and active wakefulness before invoking the callback.
+func withAuthenticatedActionCharacterAndJSON[Req any](
+	h *Handler,
+	w http.ResponseWriter,
+	r *http.Request,
+	getCharID func(req *Req) string,
+	fn func(player coreplayer.Player, char corecharacter.Character, req Req),
+) {
+	withAuthenticatedCharacterAndJSON(h, w, r, getCharID, func(player coreplayer.Player, char corecharacter.Character, req Req) {
+		if !h.guardSleepingCharacter(w, r, char.ID) {
+			return
+		}
+		fn(player, char, req)
+	})
 }

@@ -50,7 +50,7 @@ func (h *Handler) handleAuctionSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req sendAuctionRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -102,6 +102,10 @@ func (h *Handler) handleAuctionSendLegacy(w http.ResponseWriter, r *http.Request
 	}
 	if senderChar.PlayerID != p.ID {
 		writeError(w, http.StatusForbidden, errors.New("you do not own this character"))
+		return
+	}
+
+	if !h.guardSleepingCharacter(w, r, senderChar.ID) {
 		return
 	}
 

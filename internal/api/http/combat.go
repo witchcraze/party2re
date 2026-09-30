@@ -97,7 +97,7 @@ func (h *Handler) handleStartChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req startChallengeRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -135,7 +135,7 @@ func (h *Handler) handleStartPartyChallenge(w http.ResponseWriter, r *http.Reque
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req startPartyChallengeRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -178,7 +178,7 @@ func (h *Handler) handleAdvanceChallenge(w http.ResponseWriter, r *http.Request)
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req advanceChallengeRequest
 		if !decodeJSON(w, r, &req) {
 			return

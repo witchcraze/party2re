@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #898 — Home: Reproduce Alchemy Recipe Scroll Consumption and Discovery (Item 127-129)
+Last updated: Issue #901 — HTTP: Guard character action endpoints against active sleep and rescue penalty locks
 
 ## Current Phase
 

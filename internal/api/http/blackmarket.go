@@ -113,7 +113,7 @@ func (h *Handler) handleBlackMarketSacrifice(w http.ResponseWriter, r *http.Requ
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req blackMarketSacrificeRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -136,7 +136,7 @@ func (h *Handler) handleBlackMarketTrade(w http.ResponseWriter, r *http.Request)
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req blackMarketTradeRequest
 		if !decodeJSON(w, r, &req) {
 			return
