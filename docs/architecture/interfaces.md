@@ -242,12 +242,10 @@ the application services. The handler's responsibility is limited to:
 A future implementation could replace the HTTP layer with a gRPC, WebSocket,
 or in-process transport without changing the application service layer.
 
-**Response envelopes & presentation decoupling:**
+**Response contract & presentation decoupling:**
 
-HTTP handlers standardize API responses using common envelopes to decouple domain facts from presentation formatting:
-- **Success Envelope (`SuccessResponse[T]`)**:
-  - `data` (`T`): Structured, machine-readable domain results without UI markup.
-  - `message` (string, optional): Human-facing presentation text or dialogue (e.g. NPC speech) constructed at the transport layer.
+HTTP handlers standardize API responses following pragmatic REST conventions and presentation decoupling:
+- **Direct Domain Payloads (Success)**: Successful operations return structured domain resources directly at the JSON root, avoiding unnecessary `{ "data": ... }` envelope nesting (YAGNI). When presentation dialogue or NPC text is required (e.g., shopkeeper reactions), handlers include dedicated presentation attributes (such as `npc_message`) within the response structure. The generic `SuccessResponse[T]` helper in `response.go` remains available for endpoints that explicitly decouple envelope metadata.
 - **Error Envelope (`StructuredErrorResponse`)**:
   - `error.code` (string): Standardized machine-readable error code for client/agent branching.
   - `error.message` (string): Safe, user-facing error description. Internal system and database diagnostics are logged to operational storage and masked from API responses.

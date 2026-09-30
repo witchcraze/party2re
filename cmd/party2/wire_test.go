@@ -630,8 +630,9 @@ func TestHomePetAdapter_HeavenWishCompanionIntegration(t *testing.T) {
 	}
 
 	// Store Ortega in home_members (0 farm monsters present)
+	memberID := fmt.Sprintf("hm-o-%d", time.Now().UnixNano()%1000000000000000)
 	member := god.HomeMember{
-		ID:          "hm-ortega-test",
+		ID:          memberID,
 		CharacterID: c.ID,
 		IsNPC:       true,
 		Name:        "オルテガ",
@@ -642,6 +643,9 @@ func TestHomePetAdapter_HeavenWishCompanionIntegration(t *testing.T) {
 	if err := homeMemberRepo.AddMember(ctx, member); err != nil {
 		t.Fatalf("AddMember failed: %v", err)
 	}
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(ctx, "DELETE FROM home_members WHERE id = ?", memberID)
+	})
 
 	adapter := &homePetAdapter{
 		monsterRepo:    monsterRepo,
