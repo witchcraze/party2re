@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #900 — Rescue: Set 10-minute sleep penalty timer (timer.CategorySleep) upon emergency rescue
+Last updated: Issue #902 — Boss: Evaluate day-of-week orb drop in JST and inject nowFunc in Boss Service
 
 ## Current Phase
 

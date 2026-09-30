@@ -323,6 +323,61 @@ func TestChallengeBoss_Victory(t *testing.T) {
 	}
 }
 
+// TestChallengeBoss_WithNowFunc_WeekdayOrb verifies that injecting WithNowFunc
+// correctly determines the day-of-week orb based on JST time during boss victory.
+func TestChallengeBoss_WithNowFunc_WeekdayOrb(t *testing.T) {
+	ctx := context.Background()
+	bossRepo := newMockBossRepo()
+	charRepo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"hero": createTestChar("hero", 99, 500000, 999999, 99999),
+		},
+	}
+	bossRepo.charRepo = charRepo
+
+	// Custom boss stage with empty TreasureItemIDs so the day-of-week orb is the only candidate.
+	customStage := boss.BossStage{
+		ID:         "test-king-orb",
+		Name:       "Test Orb Boss",
+		LeaderName: "Orb Master",
+		Speed:      10,
+		MaxMembers: 1,
+		Bosses: []boss.BossMonster{
+			{
+				Name:    "Boss Minion",
+				HP:      10,
+				MaxHP:   10,
+				Attack:  1,
+				Defense: 1,
+			},
+		},
+		TreasureItemIDs: nil, // Only the day-of-week orb will be in candidates
+	}
+
+	// 2026-09-27 23:00:00 UTC is Monday 08:00:00 JST -> should drop item-060
+	jstMonday := time.Date(2026, 9, 27, 23, 0, 0, 0, time.UTC)
+
+	service, err := boss.NewService(bossRepo, charRepo, corebattle.Engine{}, customStage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.Configure(boss.WithNowFunc(func() time.Time {
+		return jstMonday
+	}))
+
+	res, err := service.ChallengeBoss(ctx, "hero", "test-king-orb")
+	if err != nil {
+		t.Fatalf("ChallengeBoss failed: %v", err)
+	}
+
+	if res.Outcome != corebattle.OutcomeWin {
+		t.Fatalf("expected victory, got %v", res.Outcome)
+	}
+	if res.RewardItemID != "item-060" {
+		t.Errorf("expected JST Monday orb 'item-060', got '%s'", res.RewardItemID)
+	}
+}
+
 // TestChallengeBoss_Defeat verifies that a weak character loses without gaining rewards.
 func TestChallengeBoss_Defeat(t *testing.T) {
 	ctx := context.Background()
@@ -567,6 +622,77 @@ func TestStartSealingBattle_PartyVictoryAndResealing(t *testing.T) {
 	// 4. Party deleted/disbanded after sealing
 	if !partyRepo.deleted[pID] {
 		t.Errorf("expected party to be deleted after sealing battle")
+	}
+}
+
+// TestStartSealingBattle_WithNowFunc_WeekdayOrb verifies that party sealing battle
+// awards the correct JST weekday orb when WithNowFunc is provided.
+func TestStartSealingBattle_WithNowFunc_WeekdayOrb(t *testing.T) {
+	ctx := context.Background()
+	bossRepo := newMockBossRepo()
+	charRepo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"lead": createTestChar("lead", 50, 2000, 500, 300),
+			"mem":  createTestChar("mem", 50, 2000, 500, 300),
+		},
+	}
+	bossRepo.charRepo = charRepo
+
+	pID := "test-party-orb"
+	partyRepo := newMockPartyRepo()
+	partyRepo.parties[pID] = party.Party{
+		ID:                pID,
+		LeaderCharacterID: "lead",
+		StageID:           "party-orb-stage",
+		Status:            party.StatusRecruiting,
+	}
+	partyRepo.members[pID] = []party.Member{
+		{PartyID: pID, CharacterID: "lead", CharacterName: "Hero_lead", ReadyState: true, IsLeader: true},
+		{PartyID: pID, CharacterID: "mem", CharacterName: "Hero_mem", ReadyState: true},
+	}
+
+	customStage := boss.BossStage{
+		ID:         "party-orb-stage",
+		Name:       "Party Orb Stage",
+		LeaderName: "Orb King",
+		Speed:      10,
+		MaxMembers: 2,
+		Bosses: []boss.BossMonster{
+			{
+				Name:    "Minion",
+				HP:      10,
+				MaxHP:   10,
+				Attack:  1,
+				Defense: 1,
+			},
+		},
+		TreasureItemIDs: nil, // Only orb will be added to candidates
+	}
+
+	// 2026-09-27 23:00:00 UTC = 2026-09-28 08:00:00 JST (Monday) -> item-060
+	jstMonday := time.Date(2026, 9, 27, 23, 0, 0, 0, time.UTC)
+
+	service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{}, customStage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.Configure(
+		boss.WithPartyRepository(partyRepo),
+		boss.WithNowFunc(func() time.Time {
+			return jstMonday
+		}),
+	)
+
+	res, err := service.StartSealingBattle(ctx, pID, "lead")
+	if err != nil {
+		t.Fatalf("StartSealingBattle failed: %v", err)
+	}
+
+	if res.Outcome != corebattle.OutcomeWin {
+		t.Fatalf("expected victory, got %v", res.Outcome)
+	}
+	if res.RewardItemID != "item-060" {
+		t.Errorf("expected JST Monday orb 'item-060', got '%s'", res.RewardItemID)
 	}
 }
 

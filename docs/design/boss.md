@@ -79,7 +79,7 @@ Upon defeating all enemy boss participants:
      $$\text{EXP} = \sum (\text{Level} + \text{JobLevel}) \times 30$$
      $$\text{Gold} = \sum \lfloor \text{Level} \times 0.5 \rfloor \times 30$$
 4. **Treasure Drop & Weekday Orbs**:
-   - A random item from the stage's `treasure_item_ids` augmented with the current weekday orb:
+   - A random item from the stage's `treasure_item_ids` augmented with the current weekday orb (evaluated in Japan Standard Time / JST matching authentic legacy Party2 `_npc_action.cgi:541-543`):
      - Monday: `item-060` (月光の玉)
      - Tuesday: `item-061` (火炎の玉)
      - Wednesday: `item-062` (水流の玉)

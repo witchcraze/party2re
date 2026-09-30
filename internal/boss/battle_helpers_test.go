@@ -248,3 +248,29 @@ func TestGetDayOfWeekOrb(t *testing.T) {
 		t.Errorf("expected item-063 for Sunday with rng=3, got %s", orbSun)
 	}
 }
+
+func TestGetDayOfWeekOrb_JSTBoundary(t *testing.T) {
+	// 2026-09-27 23:00:00 UTC is 2026-09-28 08:00:00 JST (Monday).
+	// UTC evaluates to Sunday, but in JST it is Monday -> item-060.
+	utcSunJstMon := time.Date(2026, 9, 27, 23, 0, 0, 0, time.UTC)
+	orb := getDayOfWeekOrb(utcSunJstMon, nil)
+	if orb != "item-060" {
+		t.Errorf("expected item-060 for JST Monday morning (UTC Sunday 23:00), got %s", orb)
+	}
+
+	// 2026-09-27 14:59:59 UTC is 2026-09-27 23:59:59 JST (Sunday).
+	// Sunday -> random orb among item-060..item-065 (with fixedRNG val: 2 -> item-062).
+	utcSunJstSun := time.Date(2026, 9, 27, 14, 59, 59, 0, time.UTC)
+	orbSun := getDayOfWeekOrb(utcSunJstSun, fixedRNG{val: 2})
+	if orbSun != "item-062" {
+		t.Errorf("expected item-062 for JST Sunday night, got %s", orbSun)
+	}
+
+	// 2026-09-27 15:00:00 UTC is 2026-09-28 00:00:00 JST (Monday 00:00 JST).
+	// Boundary check at exactly midnight JST -> item-060.
+	utcSunJstMonMidnight := time.Date(2026, 9, 27, 15, 0, 0, 0, time.UTC)
+	orbMonMidnight := getDayOfWeekOrb(utcSunJstMonMidnight, nil)
+	if orbMonMidnight != "item-060" {
+		t.Errorf("expected item-060 for JST Monday 00:00 (UTC Sunday 15:00), got %s", orbMonMidnight)
+	}
+}
