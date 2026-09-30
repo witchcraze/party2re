@@ -42,6 +42,7 @@ type Service struct {
 	fullness          FullnessResetter
 	chapel            BlessingCleaner
 	alchemy           AlchemyCompleter
+	recipeLearner     RecipeLearner
 	costume           CostumeResetter
 	costumeApplier    CostumeApplier
 	jobRestorer       JobStateRestorer

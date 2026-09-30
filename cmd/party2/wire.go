@@ -8,10 +8,12 @@ import (
 	"time"
 
 	valkeygo "github.com/valkey-io/valkey-go"
+	"github.com/witchcraze/party2re/internal/alchemy"
 	"github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/battle"
 	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/contest"
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/home"
@@ -61,7 +63,7 @@ func wireApp(
 	}
 
 	econ.initStore(core, soc.guildRepo, soc.timer, valkeyClient)
-	wireHooks(cmbt, econ, misc, soc)
+	wireHooks(core, cmbt, econ, misc, soc)
 
 	apiHandler, err := newHTTPHandler(cfg, core, econ, cmbt, soc, misc)
 	if err != nil {
@@ -76,6 +78,7 @@ func wireApp(
 
 // wireHooks consolidates all domain event hook registrations across services.
 func wireHooks(
+	core *coreServices,
 	cmbt *cmbtServices,
 	econ *econServices,
 	misc *miscServices,
@@ -199,6 +202,10 @@ func wireHooks(
 	}
 	if econ.alchemy != nil {
 		soc.home.SetAlchemyCompleter(econ.alchemy)
+		soc.home.SetRecipeLearner(alchemyRecipeLearnerAdapter{
+			alchemy: econ.alchemy,
+			items:   core.itemCatalog,
+		})
 	}
 	if econ.store != nil {
 		soc.home.SetCostumeResetter(econ.store)
@@ -427,4 +434,51 @@ func (a legendInductorAdapter) RecordLegend(ctx context.Context, category, chara
 		CharacterID: characterID,
 	})
 	return err
+}
+
+type alchemyRecipeLearnerAdapter struct {
+	alchemy *alchemy.Service
+	items   coreitem.DefinitionProvider
+}
+
+func (a alchemyRecipeLearnerAdapter) LearnRecipe(ctx context.Context, characterID string, pool []string) (home.LearnedRecipe, error) {
+	if a.alchemy == nil {
+		return home.LearnedRecipe{}, home.ErrRecipeLearnerUnavailable
+	}
+	r, err := a.alchemy.LearnRecipe(ctx, characterID, pool)
+	if err != nil {
+		if errors.Is(err, alchemy.ErrNoRecipesToLearn) {
+			return home.LearnedRecipe{}, home.ErrNoRecipesToLearn
+		}
+		return home.LearnedRecipe{}, err
+	}
+	baseName := ""
+	materialName := ""
+	if len(r.Ingredients) > 0 {
+		if a.items != nil {
+			if def, err := a.items.FindByID(r.Ingredients[0].DefinitionID); err == nil {
+				baseName = def.Name
+			}
+		}
+		if baseName == "" {
+			baseName = r.Ingredients[0].DefinitionID
+		}
+
+		if len(r.Ingredients) > 1 {
+			if a.items != nil {
+				if def, err := a.items.FindByID(r.Ingredients[1].DefinitionID); err == nil {
+					materialName = def.Name
+				}
+			}
+			if materialName == "" {
+				materialName = r.Ingredients[1].DefinitionID
+			}
+		} else {
+			materialName = baseName
+		}
+	}
+	return home.LearnedRecipe{
+		BaseName:     baseName,
+		MaterialName: materialName,
+	}, nil
 }

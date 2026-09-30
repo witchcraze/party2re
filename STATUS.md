@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #786 — Character Customization: Restore Aura Effect (effect1) in Profile and Avatar Settings
+Last updated: Issue #898 — Home: Reproduce Alchemy Recipe Scroll Consumption and Discovery (Item 127-129)
 
 ## Current Phase
 
