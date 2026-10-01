@@ -11,8 +11,8 @@ func TestNewCreatesLevelOneCharacter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	if got.ID == "" || got.PlayerID != "" || got.Name != "Alice" || got.JobID != DefaultJobID ||
-		got.Gender != DefaultGender || got.Level != InitialLevel || got.Experience != 0 ||
+	if got.ID == "" || got.PlayerID != "" || got.Name != "Alice" || got.JobID != "job-01" ||
+		got.Gender != "m" || got.Level != InitialLevel || got.Experience != 0 ||
 		got.Money != InitialMoney {
 		t.Fatalf("New() = %#v", got)
 	}
@@ -37,18 +37,42 @@ func (r *sequenceRandom) Intn(_ int) (int, error) {
 }
 
 func TestNewWithOptionsUsesInitialValuesAndSelectedIdentity(t *testing.T) {
-	got, err := NewWithOptions("Alice", "starter-2", "female", &sequenceRandom{
+	got, err := NewWithOptions("Alice", "job-02", "female", &sequenceRandom{
 		values: []int{2, 1, 0, 2, 1},
 	})
 	if err != nil {
 		t.Fatalf("NewWithOptions() error = %v", err)
 	}
-	if got.JobID != "starter-2" || got.Gender != "female" || got.Money != InitialMoney {
+	if got.JobID != "job-02" || got.Gender != "f" || got.Money != InitialMoney {
 		t.Fatalf("NewWithOptions() identity = %#v", got)
 	}
 	wantStats := Stats{MaxHP: 32, MaxMP: 7, HP: 32, MP: 7, Attack: 6, Defense: 8, Agility: 7}
 	if got.Stats != wantStats {
 		t.Fatalf("NewWithOptions() stats = %#v, want %#v", got.Stats, wantStats)
+	}
+}
+
+func TestNewWithOptionsRejectsInvalidStarterJobsAndGenders(t *testing.T) {
+	// Disallowed job
+	if _, err := NewWithOptions("Alice", "starter", "m", nil); err == nil {
+		t.Fatal("expected error for fictional starter job, got nil")
+	}
+	if _, err := NewWithOptions("Alice", "job-13", "m", nil); err == nil {
+		t.Fatal("expected error for non-starter job-13, got nil")
+	}
+	if _, err := NewWithOptions("Alice", "", "m", nil); err == nil {
+		t.Fatal("expected error for empty job, got nil")
+	}
+
+	// Disallowed gender
+	if _, err := NewWithOptions("Alice", "job-01", "unspecified", nil); err == nil {
+		t.Fatal("expected error for fictional unspecified gender, got nil")
+	}
+	if _, err := NewWithOptions("Alice", "job-01", "other", nil); err == nil {
+		t.Fatal("expected error for fictional other gender, got nil")
+	}
+	if _, err := NewWithOptions("Alice", "job-01", "", nil); err == nil {
+		t.Fatal("expected error for empty gender, got nil")
 	}
 }
 
@@ -60,7 +84,7 @@ func TestNewRejectsInvalidNames(t *testing.T) {
 		{name: "empty", input: ""},
 		{name: "whitespace", input: "   "},
 		{name: "too long", input: "123456789012345678901234567890123"},
-		{name: "control character", input: "Alice\n"},
+		{name: "control character", input: "Ali\x00ce"},
 	}
 
 	for _, test := range tests {

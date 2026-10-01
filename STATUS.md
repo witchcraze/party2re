@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #899 — [Bug] Home: Restore authentic weapon and armor catalog stats in equipment appraisal
+Last updated: Issue #771 — [Feature] Validator: Shared user input sanitization and character creation validation
 
 ## Current Phase
 
@@ -17,7 +17,7 @@ All Version 1.0 foundational systems, core combat, 39 feature modules, and the H
 ## Architecture & System Snapshot (What is True Now)
 
 - **Modular Monolith**: Go standard library HTTP routing with modular wire composition (`cmd/party2/wire.go`).
-- **HTTP Transport & Edge Policy**: Standardized direct RESTful JSON payloads, structured error responses (`StructuredErrorResponse`), HATEOAS action resolution (`ActionURLResolver`), trusted proxy CIDR allowlist (`PARTY2_TRUSTED_PROXIES`) with right-to-left forwarding header traversal for spoof-proof rate limiting, safe direct exposure default via `RemoteAddr`, and aligned CORS preflight methods (`GET, POST, PUT, DELETE, OPTIONS`) and headers (`Content-Type, Authorization, X-Admin-Key`).
+- **HTTP Transport & Edge Policy**: Standardized direct RESTful JSON payloads, structured error responses (`StructuredErrorResponse`), HATEOAS action resolution (`ActionURLResolver`), trusted proxy CIDR allowlist (`PARTY2_TRUSTED_PROXIES`) with right-to-left forwarding header traversal for spoof-proof rate limiting, safe direct exposure default via `RemoteAddr`, aligned CORS preflight methods (`GET, POST, PUT, DELETE, OPTIONS`) and headers (`Content-Type, Authorization, X-Admin-Key`), and centralized Unicode NFC sanitization with control/zero-width/Bidi/Zalgo protections (`internal/validation`).
 - **Durable Persistence**: MariaDB Master (Migrations `001`–`091`) with deterministic row-lock hierarchy (Rank 0→8) and ambient transaction propagation (`database.RunInTx`).
 - **Transient State Architecture**: Ephemeral Turn & Session Lobby Architecture (Candidate C) across multiplayer domains (Casino, PvP, GvG, Party) in Valkey Master, In-Progress Run Buffers (Candidate D), and Shared Boss HP (Candidate E). SSOT: [`docs/architecture/valkey-keyspace.md`](docs/architecture/valkey-keyspace.md).
 - **Lifecycle & Infrastructure Contracts**: Fail-fast startup validation with timeout-bounded connectivity checks for MariaDB and Valkey (`cmd/party2`), zero silent in-memory production fallbacks, and deterministic teardown of allocated resources upon boot failure.

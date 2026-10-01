@@ -93,6 +93,7 @@ func (s *stubPlayerService) BanPlayer(ctx context.Context, playerID string) erro
 
 type stubCharacterService struct {
 	createFn                func(ctx context.Context, playerID, name string) (corecharacter.Character, error)
+	createWithOptionsFn     func(ctx context.Context, playerID, name string, options character.CreationOptions) (corecharacter.Character, error)
 	getFn                   func(ctx context.Context, id string) (corecharacter.Character, error)
 	changeNameFn            func(ctx context.Context, characterID, newName string) (corecharacter.Character, error)
 	changeGenderFn          func(ctx context.Context, characterID, newGender string) (corecharacter.Character, error)
@@ -108,6 +109,16 @@ func (s *stubCharacterService) Create(ctx context.Context, playerID, name string
 		return s.createFn(ctx, playerID, name)
 	}
 	return corecharacter.Character{}, nil
+}
+
+func (s *stubCharacterService) CreateWithOptions(ctx context.Context, playerID, name string, options character.CreationOptions) (corecharacter.Character, error) {
+	if s.createWithOptionsFn != nil {
+		return s.createWithOptionsFn(ctx, playerID, name, options)
+	}
+	if s.createFn != nil {
+		return s.createFn(ctx, playerID, name)
+	}
+	return corecharacter.Character{ID: "char-1", PlayerID: playerID, Name: name, JobID: options.JobID, Gender: options.Gender}, nil
 }
 func (s *stubCharacterService) Get(ctx context.Context, id string) (corecharacter.Character, error) {
 	if s.getFn != nil {

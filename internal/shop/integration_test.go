@@ -41,7 +41,7 @@ func TestShopIntegrationPurchaseAndSell(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	createdChar, err := charService.Create(ctx, player.ID, "Shop Integrator")
+	createdChar, err := charService.Create(ctx, player.ID, "ShopIntegrator")
 	if err != nil {
 		t.Fatal(err)
 	}

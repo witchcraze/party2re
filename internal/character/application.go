@@ -126,7 +126,10 @@ func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) erro
 }
 
 func (s *Service) Create(ctx context.Context, playerID, name string) (corecharacter.Character, error) {
-	return s.CreateWithOptions(ctx, playerID, name, CreationOptions{})
+	return s.CreateWithOptions(ctx, playerID, name, CreationOptions{
+		JobID:  "job-01",
+		Gender: "m",
+	})
 }
 
 func (s *Service) CreateWithOptions(ctx context.Context, playerID, name string, options CreationOptions) (corecharacter.Character, error) {
@@ -134,11 +137,8 @@ func (s *Service) CreateWithOptions(ctx context.Context, playerID, name string, 
 	if playerID == "" {
 		return corecharacter.Character{}, ErrInvalidPlayer
 	}
-	if options.JobID == "" {
-		options.JobID = corecharacter.DefaultJobID
-	}
-	if options.Gender == "" {
-		options.Gender = corecharacter.DefaultGender
+	if err := ValidateName(name); err != nil {
+		return corecharacter.Character{}, err
 	}
 	value, err := corecharacter.NewWithOptions(name, options.JobID, options.Gender, nil)
 	if err != nil {
