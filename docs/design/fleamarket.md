@@ -3,7 +3,7 @@
 ## Overview
 
 The Flea Market (`fleamarket`) subsystem cleanly reconstructs and modernizes the original Party2 `free.cgi` ("フリーマーケット") mechanics.
-In contrast to the auction house (bidding and timed auction settlement) and the NPC item shop (fixed 50% resale price), the Flea Market enables players to set up casual player-to-player stalls to list items directly from their **Depot storage (`depot.cgi`)** for direct fixed-price purchase by other adventurers.
+In contrast to the auction hall (live P2P transfer and unscripted bartering venue) and the NPC item shop (fixed 50% resale price), the Flea Market enables players to set up casual player-to-player stalls to list items directly from their **Depot storage (`depot.cgi`)** for direct fixed-price purchase by other adventurers.
 
 ---
 

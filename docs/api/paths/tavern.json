@@ -191,7 +191,7 @@
   },
   "/characters/{id}/tavern/delivery/claim": {
     "post": {
-      "description": "Claims and eats the reserved delivery meal, deducting gold, restoring HP/MP, and awarding raffle tickets.",
+      "description": "Claims and eats the reserved delivery meal, deducting gold, and restoring HP/MP.",
       "operationId": "claimTavernDelivery",
       "parameters": [
         {
