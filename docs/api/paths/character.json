@@ -7,11 +7,22 @@
           "application/json": {
             "schema": {
               "properties": {
+                "gender": {
+                  "description": "Character gender ('m' or 'f')",
+                  "type": "string"
+                },
+                "job_id": {
+                  "description": "Starter job ID (1..12 or job-01..job-12)",
+                  "type": "string"
+                },
                 "name": {
+                  "description": "Character name (1..32 runes)",
                   "type": "string"
                 }
               },
               "required": [
+                "gender",
+                "job_id",
                 "name"
               ],
               "type": "object"

@@ -516,7 +516,7 @@ func TestLegendInductor_EndToEndIntegration(t *testing.T) {
 		_ = playerRepo.Delete(ctx, p.ID)
 	})
 
-	c, err := corecharacter.NewWithOptions(prefix+"Hero", "warrior", "m", nil)
+	c, err := corecharacter.NewWithOptions(prefix+"Hero", "job-01", "m", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -24,7 +24,7 @@ Player persistence stores a salted, iterated password hash (`bcrypt`, cost 12), 
 ### Character
 
 **Responsibility:** The player's in-game character identity and fundamental attributes.
-Linked to `Player` via `player_id`. Owns character customization (naming hall, gender changes, profile bio/avatar, aura effect 0..8), wallet operations (`Money`, strictly capped at 999,999G), crystal currency operations (`AddCrystal`, `DeductCrystal`, strictly capped at 999,999), vitality clamping (`Stats.ClampVitality`, `RecoverVitality`), 1 HP fallen combat survival (`ApplyCombatSurvival`), and fatigue management (`AddTired` capped at 100%, `ReduceTired` allowing authentic celestial buffer). Direct field mutations on currency (`Money`, `SmallMedals`, `Crystal`), progression, and resource fields are mechanically prohibited outside Core and database mappers via Go AST static analysis.
+Linked to `Player` via `player_id`. Owns character creation invariants requiring valid starter jobs (1..12) and gender (`'m'` or `'f'`), character customization (naming hall, gender changes, profile bio/avatar, aura effect 0..8), wallet operations (`Money`, strictly capped at 999,999G), crystal currency operations (`AddCrystal`, `DeductCrystal`, strictly capped at 999,999), vitality clamping (`Stats.ClampVitality`, `RecoverVitality`), 1 HP fallen combat survival (`ApplyCombatSurvival`), and fatigue management (`AddTired` capped at 100%, `ReduceTired` allowing authentic celestial buffer). Direct field mutations on currency (`Money`, `SmallMedals`, `Crystal`), progression, and resource fields are mechanically prohibited outside Core and database mappers via Go AST static analysis.
 
 ### Progression
 
@@ -89,7 +89,7 @@ Battle engine operates independently of callers (adventures, arena, GvG, bosses,
 
 - **ID Generation (`internal/id`)**: Centralized 16-byte (32 hex characters) cryptographically secure identifiers (`id.New()`, `id.Sort2(a, b)`).
 - **Pagination (`internal/pagination`)**: Reusable offset and keyset cursor containers (`Page[T]`, `CursorPage[T]`) with token encoding/decoding (`EncodeCursor`, `DecodeCursor`).
-- **Validation (`internal/validation`)**: Standardized validators (HEX colors, text bounds, string sanitization).
+- **Validation (`internal/validation`)**: Standardized text sanitization and input validators (Unicode NFC normalization, automated whitespace trimming, C0/C1 control character rejection, zero-width space/BOM rejection, bidirectional override rejection, Zalgo diacritical mark capping $\le 2$, character name validation, and starter job/gender checks).
 - **Random Number Generation (`internal/core/random`)**: Centralized thread-safe pseudo-random generator backed by `math/rand/v2` and deterministic seeded generator for reproducible tests. Direct imports of `math/rand` in production packages are prohibited by AST linter.
 - **Concurrency & Cancellation**: Cooperative context cancellation across services; raw `time.Sleep` is prohibited by AST linter.
 - **Database Infrastructure (`internal/database`)**: Ambient transaction propagation (`RunInTx`, `ExecutorFromContext`) and connection pool lifecycle management.

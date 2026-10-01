@@ -52,7 +52,7 @@ func TestRankingExtraRepository_Integration(t *testing.T) {
 		_ = playerRepo.Delete(ctx, playerID)
 	})
 
-	c, err := corecharacter.NewWithOptions(prefix+"Char", "warrior", "m", nil)
+	c, err := corecharacter.NewWithOptions(prefix+"Char", "job-01", "m", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

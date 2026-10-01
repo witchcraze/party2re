@@ -35,6 +35,13 @@ func (s *stubCharacterServiceExtended) Create(ctx context.Context, playerID, nam
 	return corecharacter.Character{ID: "char-1", PlayerID: playerID, Name: name}, nil
 }
 
+func (s *stubCharacterServiceExtended) CreateWithOptions(ctx context.Context, playerID, name string, options character.CreationOptions) (corecharacter.Character, error) {
+	if s.createFn != nil {
+		return s.createFn(ctx, playerID, name)
+	}
+	return corecharacter.Character{ID: "char-1", PlayerID: playerID, Name: name, JobID: options.JobID, Gender: options.Gender}, nil
+}
+
 func (s *stubCharacterServiceExtended) Get(ctx context.Context, id string) (corecharacter.Character, error) {
 	if s.getFn != nil {
 		return s.getFn(ctx, id)
@@ -242,5 +249,59 @@ func TestCharacterCustomizationHTTP(t *testing.T) {
 	resp, err = client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK for avatar upload, got %d (err: %v)", resp.StatusCode, err)
+	}
+}
+
+func TestCreateCharacterEndpoint(t *testing.T) {
+	playerSvc := &stubPlayerService{
+		authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
+			if sessionID == "valid-session" {
+				return coreplayer.Player{ID: "player-1", Username: "player1"}, nil
+			}
+			return coreplayer.Player{}, errors.New("unauthorized")
+		},
+	}
+	charSvc := &stubCharacterServiceExtended{}
+
+	handler, err := apihttp.NewHandler(playerSvc, charSvc, &stubAdventureService{}, &stubShopService{})
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+	server := httptest.NewServer(handler.Router())
+	defer server.Close()
+
+	client := &http.Client{}
+
+	// 1. Unauthenticated -> 401
+	body, _ := json.Marshal(map[string]string{
+		"name":   "Hero",
+		"job_id": "job-01",
+		"gender": "m",
+	})
+	req, _ := http.NewRequest(http.MethodPost, server.URL+"/characters", bytes.NewReader(body))
+	resp, err := client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized, got %d", resp.StatusCode)
+	}
+
+	// 2. Authenticated valid creation -> 201
+	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 Created, got %d", resp.StatusCode)
+	}
+
+	// 3. Error from character service (e.g. invalid job/gender) -> 422
+	charSvc.createFn = func(ctx context.Context, playerID, name string) (corecharacter.Character, error) {
+		return corecharacter.Character{}, errors.New("invalid job")
+	}
+	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 Unprocessable Entity, got %d", resp.StatusCode)
 	}
 }

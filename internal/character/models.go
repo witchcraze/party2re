@@ -4,24 +4,21 @@ import (
 	"context"
 	"errors"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 const (
-	NameChangeCost      = 500000          // 500,000 Gold
-	GenderChangeCost    = 10000           // 10,000 Gold
-	MaxCommentLength    = 160             // 160 runes
-	MaxBioFieldLength   = 160             // 160 runes
-	MaxBioKeyLength     = 32              // 32 runes
-	MaxAvatarURLLength  = 512             // 512 chars
-	MaxAvatarSizeBytes  = 2 * 1024 * 1024 // 2 MB
-	MaxCharacterNameLen = 32              // 32 runes
+	NameChangeCost     = 500000          // 500,000 Gold
+	GenderChangeCost   = 10000           // 10,000 Gold
+	MaxCommentLength   = 160             // 160 runes
+	MaxBioFieldLength  = 160             // 160 runes
+	MaxBioKeyLength    = 32              // 32 runes
+	MaxAvatarURLLength = 512             // 512 chars
+	MaxAvatarSizeBytes = 2 * 1024 * 1024 // 2 MB
 )
 
 var (
@@ -32,7 +29,7 @@ var (
 	ErrActiveMarketDisallowed = errors.New("cannot change name with active flea market listings")
 	ErrSameName               = errors.New("new name is identical to current name")
 	ErrSameGender             = errors.New("new gender is identical to current gender")
-	ErrInvalidGender          = errors.New("invalid gender: must be m, f, other, or unspecified")
+	ErrInvalidGender          = errors.New("invalid gender: must be m or f")
 	ErrCommentTooLong         = errors.New("profile comment exceeds maximum length of 160 characters")
 	ErrBioKeyTooLong          = errors.New("bio field key exceeds maximum length of 32 characters")
 	ErrBioValueTooLong        = errors.New("bio field value exceeds maximum length of 160 characters")
@@ -41,11 +38,6 @@ var (
 	ErrImageTooLarge          = errors.New("image size exceeds maximum allowed limit (2 MB)")
 	ErrForbidden              = errors.New("forbidden: character does not belong to authenticated player")
 	ErrInvalidAuraEffect      = errors.New("invalid aura effect: must be between 0 and 8")
-)
-
-// Prohibited character patterns in character names
-var (
-	prohibitedNameChars = regexp.MustCompile(`[,;\"\'&<>\\\/@＠]`)
 )
 
 // Profile represents player customization bio and avatar state.
@@ -83,23 +75,8 @@ type NamingHallDialogue struct {
 
 // ValidateName verifies character name constraints.
 func ValidateName(name string) error {
-	if !utf8.ValidString(name) {
+	if _, err := validation.ValidateCharacterName(name); err != nil {
 		return ErrInvalidName
-	}
-	trimmed := strings.TrimSpace(name)
-	runeCount := utf8.RuneCountInString(trimmed)
-	if runeCount < 1 || runeCount > MaxCharacterNameLen {
-		return ErrInvalidName
-	}
-	// Check prohibited punctuation/symbols
-	if prohibitedNameChars.MatchString(trimmed) {
-		return ErrInvalidName
-	}
-	// Check for any internal whitespace or Japanese fullwidth space
-	for _, r := range trimmed {
-		if unicode.IsSpace(r) || r == '\u3000' || unicode.IsControl(r) {
-			return ErrInvalidName
-		}
 	}
 	return nil
 }
@@ -112,26 +89,26 @@ func ValidateAuraEffect(effect int) error {
 	return nil
 }
 
-// ValidateGender checks that gender is among allowed values.
+// ValidateGender checks that gender is among allowed values ('m' or 'f').
 func ValidateGender(gender string) (string, error) {
-	normalized := strings.ToLower(strings.TrimSpace(gender))
-	switch normalized {
-	case "m", "male", "男":
-		return "m", nil
-	case "f", "female", "女":
-		return "f", nil
-	case "other", "unspecified", "その他":
-		return "unspecified", nil
-	default:
+	val, err := validation.ValidateGender(gender)
+	if err != nil {
 		return "", ErrInvalidGender
 	}
+	return val, nil
 }
 
-// ValidateComment checks comment length.
+// ValidateComment checks comment length and contents.
 func ValidateComment(comment string) error {
 	trimmed := strings.TrimSpace(comment)
-	if utf8.RuneCountInString(trimmed) > MaxCommentLength {
-		return ErrCommentTooLong
+	if trimmed == "" {
+		return nil
+	}
+	if _, err := validation.ValidateMultiLine(trimmed, MaxCommentLength); err != nil {
+		if errors.Is(err, validation.ErrTooLong) {
+			return ErrCommentTooLong
+		}
+		return err
 	}
 	return nil
 }
@@ -171,12 +148,20 @@ func ValidateBioData(bio map[string]string) error {
 	}
 	for k, v := range bio {
 		kTrimmed := strings.TrimSpace(k)
-		if utf8.RuneCountInString(kTrimmed) > MaxBioKeyLength || kTrimmed == "" {
-			return ErrBioKeyTooLong
+		if _, err := validation.ValidateSingleLine(kTrimmed, MaxBioKeyLength); err != nil {
+			if errors.Is(err, validation.ErrTooLong) || errors.Is(err, validation.ErrEmpty) {
+				return ErrBioKeyTooLong
+			}
+			return err
 		}
 		vTrimmed := strings.TrimSpace(v)
-		if utf8.RuneCountInString(vTrimmed) > MaxBioFieldLength {
-			return ErrBioValueTooLong
+		if vTrimmed != "" {
+			if _, err := validation.ValidateMultiLine(vTrimmed, MaxBioFieldLength); err != nil {
+				if errors.Is(err, validation.ErrTooLong) {
+					return ErrBioValueTooLong
+				}
+				return err
+			}
 		}
 	}
 	return nil

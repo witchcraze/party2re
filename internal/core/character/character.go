@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -16,11 +17,9 @@ import (
 const maxNameLength = 32
 
 const (
-	DefaultJobID  = "starter"
-	DefaultGender = "unspecified"
-	DefaultColor  = "#ffffff"
-	InitialMoney  = 200
-	InitialLevel  = 1
+	DefaultColor = "#ffffff"
+	InitialMoney = 200
+	InitialLevel = 1
 )
 
 const (
@@ -35,6 +34,8 @@ var (
 	ErrInsufficientFunds  = errors.New("insufficient money")
 	ErrInsufficientMedals = errors.New("insufficient small medals")
 	ErrInvalidColor       = errors.New("invalid color format, must be #RRGGBB")
+	ErrInvalidStarterJob  = errors.New("starter job must be between 1 and 12 (job-01 to job-12)")
+	ErrInvalidGender      = errors.New("gender must be 'm' or 'f'")
 )
 
 type Character struct {
@@ -153,20 +154,43 @@ func (cryptoRandomSource) Intn(max int) (int, error) {
 	return int(value.Int64()), nil
 }
 
-func New(name string) (Character, error) {
-	return NewWithOptions(name, DefaultJobID, DefaultGender, cryptoRandomSource{})
+// New creates a new character. For tests and quick instantiation, jobID and gender can be omitted,
+// defaulting to authentic starter job 'job-01' and gender 'm'.
+// In production character creation, explicit starter job and gender selection are required.
+func New(name string, opts ...string) (Character, error) {
+	jobID := "job-01"
+	gender := "m"
+	if len(opts) >= 1 && opts[0] != "" {
+		jobID = opts[0]
+	}
+	if len(opts) >= 2 && opts[1] != "" {
+		gender = opts[1]
+	}
+	return NewWithOptions(name, jobID, gender, cryptoRandomSource{})
 }
 
 func NewWithOptions(name, jobID, gender string, random RandomSource) (Character, error) {
-	if !utf8.ValidString(name) || containsControl(name) {
+	if !utf8.ValidString(name) {
 		return Character{}, ErrInvalidName
 	}
-	name = strings.TrimSpace(name)
-	if !validName(name) {
+	trimmedName := strings.TrimSpace(name)
+	runeCount := utf8.RuneCountInString(trimmedName)
+	if runeCount < 1 || runeCount > maxNameLength {
 		return Character{}, ErrInvalidName
 	}
-	if strings.TrimSpace(jobID) == "" || strings.TrimSpace(gender) == "" {
-		return Character{}, errors.New("job and gender are required")
+	for _, r := range trimmedName {
+		if unicode.IsControl(r) {
+			return Character{}, ErrInvalidName
+		}
+	}
+
+	validJob, err := validateStarterJob(jobID)
+	if err != nil {
+		return Character{}, err
+	}
+	validGender, err := validateGender(gender)
+	if err != nil {
+		return Character{}, err
 	}
 	if random == nil {
 		random = cryptoRandomSource{}
@@ -179,14 +203,48 @@ func NewWithOptions(name, jobID, gender string, random RandomSource) (Character,
 
 	return Character{
 		ID:     id.New(),
-		Name:   name,
-		JobID:  strings.TrimSpace(jobID),
-		Gender: strings.TrimSpace(gender),
+		Name:   trimmedName,
+		JobID:  validJob,
+		Gender: validGender,
 		Stats:  stats,
 		Money:  InitialMoney,
 		Level:  InitialLevel,
 		Color:  DefaultColor,
 	}, nil
+}
+
+func validateStarterJob(jobID string) (string, error) {
+	trimmed := strings.ToLower(strings.TrimSpace(jobID))
+	if trimmed == "" {
+		return "", ErrInvalidStarterJob
+	}
+	if num, err := strconv.Atoi(trimmed); err == nil {
+		if num >= 1 && num <= 12 {
+			return fmt.Sprintf("job-%02d", num), nil
+		}
+		return "", ErrInvalidStarterJob
+	}
+	if strings.HasPrefix(trimmed, "job-") {
+		numStr := strings.TrimPrefix(trimmed, "job-")
+		if num, err := strconv.Atoi(numStr); err == nil && len(numStr) == 2 {
+			if num >= 1 && num <= 12 {
+				return trimmed, nil
+			}
+		}
+	}
+	return "", ErrInvalidStarterJob
+}
+
+func validateGender(gender string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(gender))
+	switch normalized {
+	case "m", "male", "男":
+		return "m", nil
+	case "f", "female", "女":
+		return "f", nil
+	default:
+		return "", ErrInvalidGender
+	}
 }
 
 func initialStats(random RandomSource) (Stats, error) {
@@ -228,26 +286,6 @@ func initialStats(random RandomSource) (Stats, error) {
 		Defense: defense,
 		Agility: agility,
 	}, nil
-}
-
-func containsControl(name string) bool {
-	for _, r := range name {
-		if unicode.IsControl(r) {
-			return true
-		}
-	}
-	return false
-}
-
-func validName(name string) bool {
-	if !utf8.ValidString(name) {
-		return false
-	}
-	length := utf8.RuneCountInString(name)
-	if length < 1 || length > maxNameLength {
-		return false
-	}
-	return !containsControl(name)
 }
 
 // AddMoney safely credits currency to the character, capping at MaxMoney and guarding against negative amounts.

@@ -148,11 +148,35 @@ func TestService_CreateAndGet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char, err := service.Create(context.Background(), "player-1", "Hero")
+	// 1. Missing or invalid job/gender rejection via CreateWithOptions
+	if _, err := service.CreateWithOptions(context.Background(), "player-1", "Hero", CreationOptions{}); err == nil {
+		t.Fatal("expected error when creating character with missing job and gender, got nil")
+	}
+	if _, err := service.CreateWithOptions(context.Background(), "player-1", "Hero", CreationOptions{JobID: "starter", Gender: "m"}); err == nil {
+		t.Fatal("expected error when creating character with fictional starter job, got nil")
+	}
+	if _, err := service.CreateWithOptions(context.Background(), "player-1", "Hero", CreationOptions{JobID: "job-01", Gender: "unspecified"}); err == nil {
+		t.Fatal("expected error when creating character with fictional unspecified gender, got nil")
+	}
+
+	// 2. Successful creation via Create using authentic defaults (job-01, m)
+	defaultChar, err := service.Create(context.Background(), "player-default", "DefaultHero")
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
-	if char.Name != "Hero" || char.PlayerID != "player-1" {
+	if defaultChar.JobID != "job-01" || defaultChar.Gender != "m" {
+		t.Fatalf("expected job-01 and m, got %+v", defaultChar)
+	}
+
+	// 2. Successful creation with valid starter job and gender
+	char, err := service.CreateWithOptions(context.Background(), "player-1", "Hero", CreationOptions{
+		JobID:  "job-01",
+		Gender: "m",
+	})
+	if err != nil {
+		t.Fatalf("CreateWithOptions() error = %v", err)
+	}
+	if char.Name != "Hero" || char.PlayerID != "player-1" || char.JobID != "job-01" || char.Gender != "m" {
 		t.Fatalf("unexpected char: %+v", char)
 	}
 
@@ -186,7 +210,7 @@ func TestService_ChangeName(t *testing.T) {
 	}
 
 	// 1. Setup rich character
-	char, _ := service.Create(context.Background(), "player-1", "OldHero")
+	char, _ := service.CreateWithOptions(context.Background(), "player-1", "OldHero", CreationOptions{JobID: "job-01", Gender: "m"})
 	char.Money = 600000
 	_ = repo.Update(context.Background(), char)
 
@@ -220,7 +244,7 @@ func TestService_ChangeName(t *testing.T) {
 	// 5. Reset gold & test taken name
 	renamed.Money = 600000
 	_ = repo.Update(context.Background(), renamed)
-	_, _ = service.Create(context.Background(), "player-2", "TakenHero")
+	_, _ = service.CreateWithOptions(context.Background(), "player-2", "TakenHero", CreationOptions{JobID: "job-01", Gender: "m"})
 	if _, err := service.ChangeName(context.Background(), char.ID, "TakenHero"); !errors.Is(err, ErrNameAlreadyTaken) {
 		t.Fatalf("expected ErrNameAlreadyTaken, got %v", err)
 	}
@@ -270,6 +294,7 @@ func TestService_ChangeGender(t *testing.T) {
 	service, _ := NewService(repo)
 
 	char, _ := service.CreateWithOptions(context.Background(), "player-1", "Hero", CreationOptions{
+		JobID:  "job-01",
 		Gender: "m",
 	})
 	char.Money = 20000
@@ -311,7 +336,7 @@ func TestService_ProfileOperations(t *testing.T) {
 	repo := newMockRepository()
 	service, _ := NewService(repo)
 
-	char, _ := service.Create(context.Background(), "player-1", "Hero")
+	char, _ := service.CreateWithOptions(context.Background(), "player-1", "Hero", CreationOptions{JobID: "job-01", Gender: "m"})
 
 	// 1. Get default profile
 	view, err := service.GetProfile(context.Background(), char.ID)
@@ -395,7 +420,7 @@ func TestService_UploadAvatar(t *testing.T) {
 	repo := newMockRepository()
 	service, _ := NewService(repo)
 
-	char, _ := service.Create(context.Background(), "player-1", "Hero")
+	char, _ := service.CreateWithOptions(context.Background(), "player-1", "Hero", CreationOptions{JobID: "job-01", Gender: "m"})
 
 	// 1. Valid PNG upload
 	pngHeader := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4")
@@ -441,9 +466,9 @@ func TestService_Delete(t *testing.T) {
 		})
 
 		service, _ := NewService(repo, WithCleanupHook(hook))
-		char, err := service.Create(ctx, "player-123", "Hero")
+		char, err := service.CreateWithOptions(ctx, "player-123", "Hero", CreationOptions{JobID: "job-01", Gender: "m"})
 		if err != nil {
-			t.Fatalf("Create() error = %v", err)
+			t.Fatalf("CreateWithOptions() error = %v", err)
 		}
 
 		if err := service.Delete(ctx, "player-123", char.ID); err != nil {
@@ -462,7 +487,7 @@ func TestService_Delete(t *testing.T) {
 	t.Run("rejects deletion by non-owner player", func(t *testing.T) {
 		repo := newMockRepository()
 		service, _ := NewService(repo)
-		char, _ := service.Create(ctx, "player-owner", "OwnerHero")
+		char, _ := service.CreateWithOptions(ctx, "player-owner", "OwnerHero", CreationOptions{JobID: "job-01", Gender: "m"})
 
 		err := service.Delete(ctx, "player-intruder", char.ID)
 		if !errors.Is(err, ErrForbidden) {
@@ -473,7 +498,7 @@ func TestService_Delete(t *testing.T) {
 	t.Run("allows deletion when playerID is empty (system/admin delete)", func(t *testing.T) {
 		repo := newMockRepository()
 		service, _ := NewService(repo)
-		char, _ := service.Create(ctx, "player-owner", "OwnerHero")
+		char, _ := service.CreateWithOptions(ctx, "player-owner", "OwnerHero", CreationOptions{JobID: "job-01", Gender: "m"})
 
 		if err := service.Delete(ctx, "", char.ID); err != nil {
 			t.Fatalf("expected nil error for admin delete, got %v", err)

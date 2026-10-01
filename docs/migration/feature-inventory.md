@@ -49,7 +49,8 @@ The quantities are inventory indicators, not Version 1 API counts.
 All groups below are Version 1.0 reconstruction requirements.
 
 ### A. Application Foundation and Account Lifecycle
-- [x] Character/player registration & password hashing (#21)
+- [x] Character/player registration, password hashing, and authentic character creation validation (#21, #771)
+- [x] Shared user input sanitization and character creation validation (#771)
 - [x] Login and session authentication lifecycle in Valkey Master (#21, #366, #378)
 - [x] Character profile and status display (#87, #786)
 - [x] Player-character ownership verification linkage (#131)

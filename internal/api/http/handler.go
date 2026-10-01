@@ -4,6 +4,7 @@
 package http
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -69,6 +70,7 @@ type PlayerService interface {
 // CharacterService defines the character operations exposed over HTTP.
 type CharacterService interface {
 	Create(ctx context.Context, playerID string, name string) (corecharacter.Character, error)
+	CreateWithOptions(ctx context.Context, playerID string, name string, options character.CreationOptions) (corecharacter.Character, error)
 	Get(ctx context.Context, id string) (corecharacter.Character, error)
 	ChangeName(ctx context.Context, characterID, newName string) (corecharacter.Character, error)
 	ChangeGender(ctx context.Context, characterID, newGender string) (corecharacter.Character, error)
@@ -708,17 +710,12 @@ func (h *Handler) Router() http.Handler {
 	return securityHeadersMiddleware(h.corsMiddleware(h.rateLimitMiddleware(h.maintenanceMiddleware(mux))))
 }
 
-// -------------------------------------------------------------------
 // Health
-// -------------------------------------------------------------------
-
 func (h *Handler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// -------------------------------------------------------------------
 // Player / Session
-// -------------------------------------------------------------------
 
 type registerPlayerRequest struct {
 	Username string `json:"username"`
@@ -865,12 +862,14 @@ func (h *Handler) handleDeletePlayerByID(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// -------------------------------------------------------------------
 // Character
-// -------------------------------------------------------------------
 
 type createCharacterRequest struct {
-	Name string `json:"name"`
+	Name   string `json:"name"`
+	JobID  string `json:"job_id"`
+	Job    string `json:"job"`
+	Gender string `json:"gender"`
+	Sex    string `json:"sex"`
 }
 
 type characterResponse struct {
@@ -901,12 +900,14 @@ func (h *Handler) handleCreateCharacter(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-
 	var req createCharacterRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	char, err := h.characters.Create(r.Context(), player.ID, req.Name)
+	char, err := h.characters.CreateWithOptions(r.Context(), player.ID, req.Name, character.CreationOptions{
+		JobID:  cmp.Or(req.JobID, req.Job),
+		Gender: cmp.Or(req.Gender, req.Sex),
+	})
 	if err != nil {
 		writeError(w, http.StatusUnprocessableEntity, err)
 		return

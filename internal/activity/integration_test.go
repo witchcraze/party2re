@@ -44,7 +44,7 @@ func TestTrainingPersistsResultAndCharacterAcrossServiceRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, err := characterService.Create(ctx, player.ID, "Training Integration")
+	value, err := characterService.Create(ctx, player.ID, "TrainingHero")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestConcurrentTrainingClaimsApplyRewardOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, err := characterService.Create(ctx, player.ID, "Concurrent Training")
+	value, err := characterService.Create(ctx, player.ID, "ConcurrentTrainer")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func TestTrainingScheduledActionIntegration(t *testing.T) {
 	characters, _ := database.NewCharacterRepository(db)
 	characterService, _ := character.NewService(characters)
 	player, _ := database.CreateTestPlayer(ctx, db)
-	value, _ := characterService.Create(ctx, player.ID, "Worker Training")
+	value, _ := characterService.Create(ctx, player.ID, "WorkerTrainer")
 
 	start := time.Now().UTC()
 	clock := &fixedClock{now: start}

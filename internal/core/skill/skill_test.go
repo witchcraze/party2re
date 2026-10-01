@@ -9,13 +9,13 @@ import (
 )
 
 func TestSkillUseChecksConditionsConsumesMPAndReturnsBattleEffect(t *testing.T) {
-	value, err := corecharacter.NewWithOptions("Alice", "vanguard", "unspecified", nil)
+	value, err := corecharacter.NewWithOptions("Alice", "job-01", "m", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	value.SP = 1 // SP must meet RequiredSP threshold
 	value.Stats.MP = 5
-	definition, err := NewDefinition("power-strike", "Power Strike", []string{"vanguard"}, 1, 3,
+	definition, err := NewDefinition("power-strike", "Power Strike", []string{"job-01"}, 1, 3,
 		corebattle.Effect{Kind: "damage", Power: 10})
 	if err != nil {
 		t.Fatal(err)
