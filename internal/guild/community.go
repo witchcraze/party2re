@@ -293,34 +293,24 @@ func (s *Service) ChangeWallpaper(ctx context.Context, guildID string, leaderID 
 	return s.repo.UpdateWallpaper(ctx, guildID, normalized, price, leaderID)
 }
 
-// RemoveCharacterFromGuild removes a character from their guild upon admin action or deletion (lib/system.cgi:delete_guild_member).
-// If the character is not in a guild, it returns nil.
-// If the character is the sole member, the guild is disbanded.
-// If the character is the leader and other members exist, leadership is transferred before removal.
-func (s *Service) RemoveCharacterFromGuild(ctx context.Context, characterID string) error {
-	characterID = strings.TrimSpace(characterID)
-	if characterID == "" {
+func (s *Service) publishDissolutionNews(ctx context.Context, guildName string, publishedAt time.Time) {
+	if s.newsPub != nil {
+		msg := "ギルド『" + guildName + "』が解散しました"
+		//lint:ignore error-swallow best-effort news publication for guild dissolution
+		_ = s.newsPub.PublishNews(ctx, "guild", msg, msg, "System", publishedAt)
+	}
+}
+
+func (s *Service) removeMemberInternal(ctx context.Context, g Guild, members []Member, characterID string, role Role) error {
+	if len(members) <= 1 {
+		if err := s.repo.DisbandGuild(ctx, g.ID); err != nil {
+			return err
+		}
+		s.publishDissolutionNews(ctx, g.Name, s.nowFunc())
 		return nil
 	}
 
-	g, member, err := s.repo.GetGuildByCharacter(ctx, characterID)
-	if err != nil {
-		if errors.Is(err, ErrCharacterNotInGuild) || errors.Is(err, ErrGuildNotFound) {
-			return nil
-		}
-		return err
-	}
-
-	_, members, err := s.repo.GetGuild(ctx, g.ID)
-	if err != nil {
-		return err
-	}
-
-	if len(members) <= 1 {
-		return s.repo.DisbandGuild(ctx, g.ID)
-	}
-
-	if member.Role == RoleLeader {
+	if role == RoleLeader {
 		var successorID string
 		for _, m := range members {
 			if m.CharacterID != characterID && strings.Contains(m.Title, "ギルマス") {
@@ -350,6 +340,90 @@ func (s *Service) RemoveCharacterFromGuild(ctx context.Context, characterID stri
 	return nil
 }
 
+// Leave removes a character from the guild (join_guild.cgi:dattai).
+// If the character is the sole member, the guild is disbanded and dissolution news is published.
+// If the character is the leader and other members remain, leadership is transferred before removal.
+func (s *Service) Leave(ctx context.Context, guildID string, characterID string) error {
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return ErrInvalidGuildID
+	}
+	characterID = strings.TrimSpace(characterID)
+	if characterID == "" {
+		return ErrCharacterNotFound
+	}
+
+	g, members, err := s.repo.GetGuild(ctx, guildID)
+	if err != nil {
+		return err
+	}
+
+	var currentMember *Member
+	for i := range members {
+		if members[i].CharacterID == characterID {
+			currentMember = &members[i]
+			break
+		}
+	}
+	if currentMember == nil {
+		return ErrCharacterNotInGuild
+	}
+
+	return s.removeMemberInternal(ctx, g, members, characterID, currentMember.Role)
+}
+
+// RemoveCharacterFromGuild removes a character from their guild upon admin action or deletion (lib/system.cgi:delete_guild_member).
+// If the character is not in a guild, it returns nil.
+// If the character is the sole member, the guild is disbanded and dissolution news is published.
+// If the character is the leader and other members exist, leadership is transferred before removal.
+func (s *Service) RemoveCharacterFromGuild(ctx context.Context, characterID string) error {
+	characterID = strings.TrimSpace(characterID)
+	if characterID == "" {
+		return nil
+	}
+
+	g, member, err := s.repo.GetGuildByCharacter(ctx, characterID)
+	if err != nil {
+		if errors.Is(err, ErrCharacterNotInGuild) || errors.Is(err, ErrGuildNotFound) {
+			return nil
+		}
+		return err
+	}
+
+	_, members, err := s.repo.GetGuild(ctx, g.ID)
+	if err != nil {
+		return err
+	}
+
+	return s.removeMemberInternal(ctx, g, members, characterID, member.Role)
+}
+
+// Disband allows the guild master to disband the guild (join_guild.cgi:kaisan).
+func (s *Service) Disband(ctx context.Context, guildID string, leaderCharID string) error {
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return ErrInvalidGuildID
+	}
+	leaderCharID = strings.TrimSpace(leaderCharID)
+	if leaderCharID == "" {
+		return ErrCharacterNotFound
+	}
+
+	g, member, err := s.repo.GetGuildByCharacter(ctx, leaderCharID)
+	if err != nil {
+		return err
+	}
+	if g.ID != guildID || member.Role != RoleLeader {
+		return ErrUnauthorized
+	}
+
+	if err := s.repo.DisbandGuild(ctx, guildID); err != nil {
+		return err
+	}
+	s.publishDissolutionNews(ctx, g.Name, s.nowFunc())
+	return nil
+}
+
 // DisbandInactiveGuilds inspects guilds with no member activity for >= 20 days and disbands them (join_guild.cgi:check_dead_guild).
 func (s *Service) DisbandInactiveGuilds(ctx context.Context, now time.Time, limit int) (int, []string, error) {
 	cutoff := now.Add(-InactivityDisbandDuration)
@@ -362,6 +436,7 @@ func (s *Service) DisbandInactiveGuilds(ctx context.Context, now time.Time, limi
 	for _, g := range inactive {
 		if err := s.repo.DisbandGuild(ctx, g.ID); err == nil {
 			disbanded = append(disbanded, g.ID)
+			s.publishDissolutionNews(ctx, g.Name, now)
 		}
 	}
 

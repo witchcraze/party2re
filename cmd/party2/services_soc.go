@@ -150,6 +150,10 @@ func newSocServices(
 		guildRepo,
 		guild.WithCharacterReader(core.charRepo),
 		guild.WithLetterSender(&homeLetterAdapter{home: homeService}),
+		guild.WithNewsPublisher(guild.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
+			_, err := notificationService.PublishNews(ctx, cat, title, content, author, pubAt)
+			return err
+		})),
 	)
 	if err != nil {
 		return nil, err

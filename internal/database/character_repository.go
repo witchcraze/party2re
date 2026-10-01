@@ -220,7 +220,6 @@ func (r *CharacterRepository) Delete(ctx context.Context, id string) error {
 		`DELETE FROM character_medals WHERE character_id = ?`,
 		`DELETE FROM character_achievements WHERE character_id = ?`,
 		`DELETE FROM guild_members WHERE character_id = ?`,
-		`UPDATE guilds SET leader_character_id = NULL WHERE leader_character_id = ?`,
 		`DELETE FROM activities WHERE character_id = ?`,
 		`DELETE FROM adventures WHERE character_id = ?`,
 		`DELETE FROM character_custom_skills WHERE character_id = ?`,

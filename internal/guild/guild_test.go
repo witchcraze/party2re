@@ -373,30 +373,104 @@ func TestService_Join(t *testing.T) {
 	})
 }
 
+type mockNewsPublisher struct {
+	calls []struct {
+		Category    string
+		Title       string
+		Content     string
+		Author      string
+		PublishedAt time.Time
+	}
+}
+
+func (m *mockNewsPublisher) PublishNews(ctx context.Context, category, title, content, author string, publishedAt time.Time) error {
+	m.calls = append(m.calls, struct {
+		Category    string
+		Title       string
+		Content     string
+		Author      string
+		PublishedAt time.Time
+	}{
+		Category:    category,
+		Title:       title,
+		Content:     content,
+		Author:      author,
+		PublishedAt: publishedAt,
+	})
+	return nil
+}
+
 func TestService_Leave(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("Leader cannot leave with other members", func(t *testing.T) {
+	t.Run("Leader leaves with other members transfers leadership (title candidate preferred)", func(t *testing.T) {
+		var transferredTo string
+		var removedChar string
 		repo := &mockGuildRepo{
 			getGuildFn: func(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
-				return guild.Guild{ID: guildID}, []guild.Member{
+				return guild.Guild{ID: guildID, Name: "TestGuild"}, []guild.Member{
 					{CharacterID: "leader1", Role: guild.RoleLeader},
-					{CharacterID: "member1", Role: guild.RoleMember},
+					{CharacterID: "member1", Role: guild.RoleMember, Title: "一般"},
+					{CharacterID: "member2", Role: guild.RoleMember, Title: "ギルマス代行"},
 				}, nil
+			},
+			transferLeadershipFn: func(_ context.Context, guildID, oldLeader, newLeader string) error {
+				transferredTo = newLeader
+				return nil
+			},
+			removeMemberFn: func(_ context.Context, guildID, charID string) error {
+				removedChar = charID
+				return nil
 			},
 		}
 		svc, _ := guild.NewService(repo)
-		err := svc.Leave(ctx, "g1", "leader1")
-		if !errors.Is(err, guild.ErrLeaderCannotLeaveWithMembers) {
-			t.Errorf("err = %v, want %v", err, guild.ErrLeaderCannotLeaveWithMembers)
+		if err := svc.Leave(ctx, "g1", "leader1"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if transferredTo != "member2" {
+			t.Errorf("transferredTo = %s, want member2 (title candidate)", transferredTo)
+		}
+		if removedChar != "leader1" {
+			t.Errorf("removedChar = %s, want leader1", removedChar)
 		}
 	})
 
-	t.Run("Sole leader leaving disbands guild", func(t *testing.T) {
+	t.Run("Leader leaves with other members transfers leadership (next member fallback)", func(t *testing.T) {
+		var transferredTo string
+		var removedChar string
+		repo := &mockGuildRepo{
+			getGuildFn: func(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
+				return guild.Guild{ID: guildID, Name: "TestGuild"}, []guild.Member{
+					{CharacterID: "leader1", Role: guild.RoleLeader},
+					{CharacterID: "member1", Role: guild.RoleMember, Title: "一般"},
+				}, nil
+			},
+			transferLeadershipFn: func(_ context.Context, guildID, oldLeader, newLeader string) error {
+				transferredTo = newLeader
+				return nil
+			},
+			removeMemberFn: func(_ context.Context, guildID, charID string) error {
+				removedChar = charID
+				return nil
+			},
+		}
+		svc, _ := guild.NewService(repo)
+		if err := svc.Leave(ctx, "g1", "leader1"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if transferredTo != "member1" {
+			t.Errorf("transferredTo = %s, want member1", transferredTo)
+		}
+		if removedChar != "leader1" {
+			t.Errorf("removedChar = %s, want leader1", removedChar)
+		}
+	})
+
+	t.Run("Sole leader leaving disbands guild and publishes news", func(t *testing.T) {
 		disbanded := false
 		repo := &mockGuildRepo{
 			getGuildFn: func(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
-				return guild.Guild{ID: guildID}, []guild.Member{
+				return guild.Guild{ID: guildID, Name: "孤独なギルド"}, []guild.Member{
 					{CharacterID: "leader1", Role: guild.RoleLeader},
 				}, nil
 			},
@@ -405,12 +479,27 @@ func TestService_Leave(t *testing.T) {
 				return nil
 			},
 		}
-		svc, _ := guild.NewService(repo)
+		news := &mockNewsPublisher{}
+		svc, _ := guild.NewService(repo, guild.WithNewsPublisher(news))
 		if err := svc.Leave(ctx, "g1", "leader1"); err != nil {
 			t.Fatalf("Leave() unexpected error: %v", err)
 		}
 		if !disbanded {
 			t.Error("expected sole leader leave to trigger disband")
+		}
+		if len(news.calls) != 1 {
+			t.Fatalf("expected 1 news publication, got %d", len(news.calls))
+		}
+		call := news.calls[0]
+		if call.Category != "guild" {
+			t.Errorf("news Category = %s, want guild", call.Category)
+		}
+		expectedMsg := "ギルド『孤独なギルド』が解散しました"
+		if call.Title != expectedMsg || call.Content != expectedMsg {
+			t.Errorf("news Title/Content = %s, want %s", call.Title, expectedMsg)
+		}
+		if call.Author != "System" {
+			t.Errorf("news Author = %s, want System", call.Author)
 		}
 	})
 
@@ -749,9 +838,9 @@ func TestService_Disband(t *testing.T) {
 		getGuildByCharFn: func(_ context.Context, charID string) (guild.Guild, guild.Member, error) {
 			switch charID {
 			case "leader":
-				return guild.Guild{ID: "g1"}, guild.Member{GuildID: "g1", CharacterID: "leader", Role: guild.RoleLeader}, nil
+				return guild.Guild{ID: "g1", Name: "解散ギルド"}, guild.Member{GuildID: "g1", CharacterID: "leader", Role: guild.RoleLeader}, nil
 			case "member":
-				return guild.Guild{ID: "g1"}, guild.Member{GuildID: "g1", CharacterID: "member", Role: guild.RoleMember}, nil
+				return guild.Guild{ID: "g1", Name: "解散ギルド"}, guild.Member{GuildID: "g1", CharacterID: "member", Role: guild.RoleMember}, nil
 			default:
 				return guild.Guild{}, guild.Member{}, guild.ErrCharacterNotInGuild
 			}
@@ -784,13 +873,31 @@ func TestService_Disband(t *testing.T) {
 		}
 	})
 
-	t.Run("successful disband", func(t *testing.T) {
-		err := svc.Disband(ctx, "g1", "leader")
+	t.Run("successful disband publishes news", func(t *testing.T) {
+		news := &mockNewsPublisher{}
+		svcWithNews, _ := guild.NewService(repo, guild.WithNewsPublisher(news))
+		err := svcWithNews.Disband(ctx, "g1", "leader")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if disbandedID != "g1" {
 			t.Errorf("disbandedID = %s, want g1", disbandedID)
+		}
+		if len(news.calls) != 1 {
+			t.Fatalf("expected 1 news publication, got %d", len(news.calls))
+		}
+		if news.calls[0].Category != "guild" {
+			t.Errorf("news Category = %s, want guild", news.calls[0].Category)
+		}
+		expectedTitle := "ギルド『解散ギルド』が解散しました"
+		if news.calls[0].Title != expectedTitle {
+			t.Errorf("news Title = %s, want %s", news.calls[0].Title, expectedTitle)
+		}
+		if news.calls[0].Content != expectedTitle {
+			t.Errorf("news Content = %s, want %s", news.calls[0].Content, expectedTitle)
+		}
+		if news.calls[0].Author != "System" {
+			t.Errorf("news Author = %s, want System", news.calls[0].Author)
 		}
 	})
 }
