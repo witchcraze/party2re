@@ -70,9 +70,9 @@ The resident home companion/pet pool aggregates both monster pets brought home f
 
 Adventurers can inspect equipment and consume location-2 items directly from their home interface:
 - **Weapon & Armor Inspection**:
-  - Weapons: Displays power, weight, and gold price (`武器名：%s / 強さ：%d / 重さ：%d / 価格：%dG`).
-  - Armors/Shields/Accessories: Displays defense, weight, and gold price (`防具名：%s / 強さ：%d / 重さ：%d / 価格：%dG`).
-  - Weight calculation: `price / 20 + 1`.
+  - Weapons: Displays authentic power (attack), weight, and gold price (`武器名：%s / 強さ：%d / 重さ：%d / 価格：%dG`) matching legacy `@weas` (`party2/lib/_data.cgi:394-500`, `party2/lib/home.cgi:274-277`).
+  - Armors/Shields/Accessories: Displays authentic defense, weight, and gold price (`防具名：%s / 強さ：%d / 重さ：%d / 価格：%dG`) matching legacy `@arms` (`party2/lib/_data.cgi:506-613`, `party2/lib/home.cgi:278-281`).
+  - Stats are resolved directly from the item definition or authentic catalog nominal stats (deprecating obsolete `price / 20 + 1` and `price / 10 + 1` placeholders).
 - **Consumable Usage**:
   - Stat-boosting seeds:
     - `命の木の実`, `不思議な木の実`, `力の種`, `守りの種`, `素早さの種`: Increase respective stats by 1–3 (or HP 3–5). If character has `OverLevel == true`, the stat gain is clamped to 0.

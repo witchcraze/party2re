@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #774 — [Bug] Guild: Restore Guild Master succession and auto-dissolution on member deletion
+Last updated: Issue #899 — [Bug] Home: Restore authentic weapon and armor catalog stats in equipment appraisal
 
 ## Current Phase
 
