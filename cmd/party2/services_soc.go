@@ -184,6 +184,7 @@ func (s *socServices) registerWorkerHandlers(activityService *activity.Service, 
 		}
 		if s.guild != nil {
 			s.worker.RegisterHandler(guild.ActionTypeGuildInactivityCheck, guild.NewInactivityCheckHandler(s.guild, guild.WithScheduler(s.sched)))
+			s.worker.RegisterHandler(guild.ActionTypeGuildPointDecay, guild.NewPointDecayHandler(s.guild, guild.WithPointDecayScheduler(s.sched)))
 		}
 		if contestService != nil {
 			s.worker.RegisterHandler(contest.ActionTypeContestSettlement, contest.NewContestSettlementHandler(contestService, contest.WithScheduler(s.sched)))

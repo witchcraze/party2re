@@ -39,10 +39,16 @@ type GuildStateWriter interface {
 	DisbandGuild(ctx context.Context, guildID string) error
 }
 
-// GuildWriter composes member and guild state mutation interfaces.
+// GuildPointsWriter defines point decay and batch point manipulation on guilds.
+type GuildPointsWriter interface {
+	DecayGuildPoints(ctx context.Context, factor float64) error
+}
+
+// GuildWriter composes member, guild state, and points mutation interfaces.
 type GuildWriter interface {
 	GuildMemberWriter
 	GuildStateWriter
+	GuildPointsWriter
 }
 
 // Repository composes read and write operations for guild persistence.

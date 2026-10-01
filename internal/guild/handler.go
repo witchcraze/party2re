@@ -75,3 +75,59 @@ func (h *InactivityCheckHandler) Handle(ctx context.Context, action core_schedul
 
 	return nil
 }
+
+const (
+	// ActionTypeGuildPointDecay is the scheduled action type for daily 20% guild point decay (login.cgi:448).
+	ActionTypeGuildPointDecay = "guild_point_decay"
+)
+
+// DailyPointDecayActionID returns the deterministic scheduled action ID for a given JST date.
+func DailyPointDecayActionID(targetTime time.Time) string {
+	jst := time.FixedZone("JST", 9*60*60)
+	return "guild_point_decay:" + targetTime.In(jst).Format("2006-01-02")
+}
+
+// PointDecayOption configures a PointDecayHandler.
+type PointDecayOption func(*PointDecayHandler)
+
+// WithPointDecayScheduler configures the scheduler used to re-enqueue daily recurring point decay.
+func WithPointDecayScheduler(scheduler Scheduler) PointDecayOption {
+	return func(h *PointDecayHandler) {
+		h.scheduler = scheduler
+	}
+}
+
+// PointDecayHandler implements scheduling.ActionHandler to decay guild points daily.
+type PointDecayHandler struct {
+	service   *Service
+	scheduler Scheduler
+	nowFunc   func() time.Time
+}
+
+// NewPointDecayHandler creates a new PointDecayHandler.
+func NewPointDecayHandler(service *Service, opts ...PointDecayOption) *PointDecayHandler {
+	h := &PointDecayHandler{
+		service: service,
+		nowFunc: func() time.Time { return time.Now().UTC() },
+	}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
+}
+
+// Handle executes the daily guild point decay and re-schedules the next daily action.
+func (h *PointDecayHandler) Handle(ctx context.Context, action core_scheduling.ScheduledAction) error {
+	now := h.nowFunc()
+	if err := h.service.DecayGuildPoints(ctx, DefaultPointDecayFactor); err != nil {
+		return err
+	}
+
+	if h.scheduler != nil {
+		nextExec := NextMidnightJST(now)
+		nextID := DailyPointDecayActionID(nextExec)
+		_ = h.scheduler.ScheduleWithID(ctx, nextID, ActionTypeGuildPointDecay, "system", nil, nextExec)
+	}
+
+	return nil
+}

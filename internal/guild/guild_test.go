@@ -31,6 +31,7 @@ type mockGuildRepo struct {
 	updateWallpaperFn    func(ctx context.Context, guildID string, wallpaper string, fee int, leaderID string) (corecharacter.Character, error)
 	touchActiveFn        func(ctx context.Context, guildID string) error
 	disbandGuildFn       func(ctx context.Context, guildID string) error
+	decayGuildPointsFn   func(ctx context.Context, factor float64) error
 }
 
 func (m *mockGuildRepo) CreateGuild(ctx context.Context, g guild.Guild, creator guild.Member, fee int) (guild.Guild, guild.Member, corecharacter.Character, error) {
@@ -169,6 +170,13 @@ func (m *mockGuildRepo) TouchActive(ctx context.Context, guildID string) error {
 func (m *mockGuildRepo) DisbandGuild(ctx context.Context, guildID string) error {
 	if m.disbandGuildFn != nil {
 		return m.disbandGuildFn(ctx, guildID)
+	}
+	return nil
+}
+
+func (m *mockGuildRepo) DecayGuildPoints(ctx context.Context, factor float64) error {
+	if m.decayGuildPointsFn != nil {
+		return m.decayGuildPointsFn(ctx, factor)
 	}
 	return nil
 }

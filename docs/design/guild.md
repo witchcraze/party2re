@@ -99,11 +99,24 @@ Guilds that have had no member activity for 20 consecutive days are automaticall
 - Any guild activity (creation, member join/apply, approval, role title assignment, callout, mark/wallpaper update, notice/color update) touches `last_active_at = NOW()`.
 - A daily scheduled worker (`guild_inactivity_check`, `scheduling.ActionHandler`) inspects guilds where `last_active_at < NOW() - 20 days` and cleanly disbands them.
 
+### Daily 20% Guild Point Decay (`login.cgi:448`)
+
+In authentic Party2 (`party2/login.cgi:448`), during the daily maintenance cycle (`$update_cycle_day`), all guild records have their Guild Points decayed by 20% to prevent indefinite hoarding and maintain dynamic guild ranking competition:
+
+```perl
+$gpoint = int( $gpoint * 0.8 );
+```
+
+- **Formula**: `floor(current_points * factor)`. Defaults to factor `0.8` (20% decay). Guilds with 0 GP remain at 0 and do not drop below 0.
+- **Scheduled Batch**: Executed automatically once daily at 00:00:00 JST via scheduled action `guild_point_decay` (`ActionTypeGuildPointDecay`).
+- **Administrative Endpoint**: Can also be executed or parameterized manually via `POST /admin/guilds/decay-points`.
+
 ## Persistence & Transaction Ordering
 
 - Guild operations obey the deterministic lock acquisition hierarchy (Rank 0 -> 8):
   - Character wallet deduction (Rank 2: `characters`) occurs before guild records (Rank 7: `guilds`, `guild_members`).
 - Points increments are performed via atomic SQL arithmetic (`points = points + ?`) to avoid lock contention during concurrent gameplay achievements.
+- Point decay executes via atomic SQL batch update (`UPDATE guilds SET points = FLOOR(points * ?), updated_at = ? WHERE points > 0`) wrapped in a Unit of Work transaction.
 
 ## HTTP REST API Endpoints
 
@@ -122,4 +135,6 @@ Guilds that have had no member activity for 20 consecutive days are automaticall
 | `PUT` | `/guilds/{id}/customization` | Update color, mark, wallpaper, or notice (leader only) | Bearer Token |
 | `POST` | `/guilds/{id}/leave` | Leave guild (non-leader member) | Bearer Token |
 | `DELETE` | `/guilds/{id}/members/{char_id}` | Kick member from guild (leader only) | Bearer Token |
+| `POST` | `/admin/guilds/decay-points` | Batch decay guild points by 20% (Admin) | Admin Key |
+
 

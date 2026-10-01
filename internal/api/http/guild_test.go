@@ -17,22 +17,23 @@ import (
 )
 
 type stubGuildService struct {
-	guilds        []guild.Guild
-	detail        guild.Detail
-	member        guild.Member
-	char          corecharacter.Character
-	err           error
-	lastCallout   string
-	lastCustomCol string
-	lastCustomMrk string
-	lastCustomWlp string
-	lastNotice    string
-	lastTitle     string
-	approvedApp   bool
-	rejectedApp   bool
-	disbanded     bool
-	left          bool
-	kicked        bool
+	guilds             []guild.Guild
+	detail             guild.Detail
+	member             guild.Member
+	char               corecharacter.Character
+	err                error
+	lastCallout        string
+	lastCustomCol      string
+	lastCustomMrk      string
+	lastCustomWlp      string
+	lastNotice         string
+	lastTitle          string
+	approvedApp        bool
+	rejectedApp        bool
+	disbanded          bool
+	left               bool
+	kicked             bool
+	decayGuildPointsFn func(ctx context.Context, factor float64) error
 }
 
 func (s *stubGuildService) Get(_ context.Context, guildID string) (guild.Detail, error) {
@@ -156,6 +157,13 @@ func (s *stubGuildService) Leave(_ context.Context, guildID, characterID string)
 	}
 	s.left = true
 	return nil
+}
+
+func (s *stubGuildService) DecayGuildPoints(ctx context.Context, factor float64) error {
+	if s.decayGuildPointsFn != nil {
+		return s.decayGuildPointsFn(ctx, factor)
+	}
+	return s.err
 }
 
 func newGuildJSONRequest(method, url string, body any, sessionID string) *http.Request {

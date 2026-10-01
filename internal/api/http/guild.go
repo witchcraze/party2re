@@ -44,12 +44,18 @@ type GuildLifecycle interface {
 	Leave(ctx context.Context, guildID string, characterID string) error
 }
 
+// GuildPointManager defines guild point batch and administration operations.
+type GuildPointManager interface {
+	DecayGuildPoints(ctx context.Context, factor float64) error
+}
+
 // GuildService composes all guild operations exposed over HTTP.
 type GuildService interface {
 	GuildReader
 	GuildManager
 	GuildCustomizer
 	GuildLifecycle
+	GuildPointManager
 }
 
 // WithGuild configures the guild service for the Handler.

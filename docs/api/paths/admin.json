@@ -86,6 +86,82 @@
       ]
     }
   },
+  "/admin/guilds/decay-points": {
+    "post": {
+      "operationId": "AdminDecayGuildPoints",
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AdminDecayGuildPointsRequest"
+            }
+          }
+        },
+        "description": "Guild point decay configuration"
+      },
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminDecayGuildPointsResponse"
+              }
+            }
+          },
+          "description": "Guild points decayed successfully"
+        },
+        "400": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Invalid decay factor"
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Missing admin credentials"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Invalid admin credentials or admin operations disabled"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Internal server error"
+        }
+      },
+      "security": [
+        {
+          "AdminApiKey": []
+        }
+      ],
+      "summary": "Execute batch decay of guild points (Admin)",
+      "tags": [
+        "Admin"
+      ]
+    }
+  },
   "/admin/maintenance": {
     "post": {
       "operationId": "setMaintenancePost",

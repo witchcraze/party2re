@@ -336,3 +336,121 @@ func TestGuildRepository_ConcurrentPoints(t *testing.T) {
 		t.Errorf("final guild points = %d, want %d", finalGuild.Points, expectedPoints)
 	}
 }
+
+func TestGuildRepository_DecayGuildPoints(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	guildRepo, err := NewGuildRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	createGuildWithPoints := func(nameSuffix string, initialPoints int64) guild.Guild {
+		char, err := CreateTestCharacter(ctx, db, "Char_"+nameSuffix)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gID := fmt.Sprintf("g_decay_%s_%08x", nameSuffix, time.Now().UnixNano()%100000000)
+		gName := fmt.Sprintf("DecayGuild_%s_%d", nameSuffix, time.Now().UnixNano()%1000000)
+		now := time.Now().UTC()
+		g := guild.Guild{
+			ID:                gID,
+			Name:              gName,
+			LeaderCharacterID: char.ID,
+			Points:            0,
+			Notice:            "Test Notice",
+			Color:             guild.DefaultColor,
+			Mark:              guild.DefaultMark,
+			LastActiveAt:      now,
+			CreatedAt:         now,
+			UpdatedAt:         now,
+		}
+		mem := guild.Member{
+			GuildID:     gID,
+			CharacterID: char.ID,
+			Role:        guild.RoleLeader,
+			Title:       guild.DefaultTitleLeader,
+			JoinedAt:    now,
+		}
+		createdGuild, _, _, err := guildRepo.CreateGuild(ctx, g, mem, 0)
+		if err != nil {
+			t.Fatalf("failed to create guild %s: %v", nameSuffix, err)
+		}
+		// If initialPoints > 0, set points directly since CreateGuild sets 0
+		if initialPoints > 0 {
+			if err := guildRepo.AddPoints(ctx, createdGuild.ID, initialPoints); err != nil {
+				t.Fatalf("failed to set initial points: %v", err)
+			}
+		}
+		return createdGuild
+	}
+
+	g100 := createGuildWithPoints("100", 100)
+	g9 := createGuildWithPoints("9", 9)
+	g1 := createGuildWithPoints("1", 1)
+	g0 := createGuildWithPoints("0", 0)
+
+	// Execute decay with legacy factor 0.8
+	if err := guildRepo.DecayGuildPoints(ctx, 0.8); err != nil {
+		t.Fatalf("DecayGuildPoints failed: %v", err)
+	}
+
+	g100After, _, err := guildRepo.GetGuild(ctx, g100.ID)
+	if err != nil {
+		t.Fatalf("failed to get g100: %v", err)
+	}
+	if g100After.Points != 80 {
+		t.Errorf("g100 points = %d, want 80", g100After.Points)
+	}
+
+	g9After, _, err := guildRepo.GetGuild(ctx, g9.ID)
+	if err != nil {
+		t.Fatalf("failed to get g9: %v", err)
+	}
+	if g9After.Points != 7 {
+		t.Errorf("g9 points = %d, want 7", g9After.Points)
+	}
+
+	g1After, _, err := guildRepo.GetGuild(ctx, g1.ID)
+	if err != nil {
+		t.Fatalf("failed to get g1: %v", err)
+	}
+	if g1After.Points != 0 {
+		t.Errorf("g1 points = %d, want 0", g1After.Points)
+	}
+
+	g0After, _, err := guildRepo.GetGuild(ctx, g0.ID)
+	if err != nil {
+		t.Fatalf("failed to get g0: %v", err)
+	}
+	if g0After.Points != 0 {
+		t.Errorf("g0 points = %d, want 0", g0After.Points)
+	}
+
+	// Successive decay run
+	if err := guildRepo.DecayGuildPoints(ctx, 0.8); err != nil {
+		t.Fatalf("second DecayGuildPoints failed: %v", err)
+	}
+	g100Second, _, _ := guildRepo.GetGuild(ctx, g100.ID)
+	if g100Second.Points != 64 {
+		t.Errorf("g100 points after 2nd decay = %d, want 64", g100Second.Points)
+	}
+	g9Second, _, _ := guildRepo.GetGuild(ctx, g9.ID)
+	if g9Second.Points != 5 {
+		t.Errorf("g9 points after 2nd decay = %d, want 5", g9Second.Points)
+	}
+	g1Second, _, _ := guildRepo.GetGuild(ctx, g1.ID)
+	if g1Second.Points != 0 {
+		t.Errorf("g1 points after 2nd decay = %d, want 0", g1Second.Points)
+	}
+}

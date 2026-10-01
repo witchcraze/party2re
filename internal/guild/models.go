@@ -35,6 +35,7 @@ const (
 	DefaultMark               = "0"
 	MarkChangeFee             = 3000                // Gold required to change guild mark (3,000G in join_guild.cgi)
 	InactivityDisbandDuration = 20 * 24 * time.Hour // 20 days of inactivity before automatic disbandment (join_guild.cgi:29)
+	DefaultPointDecayFactor   = 0.8                 // Daily 20% point decay factor (login.cgi:448 parity)
 )
 
 var (
@@ -65,6 +66,7 @@ var (
 	ErrCalloutMessageTooLong        = errors.New("callout message exceeds maximum allowed length")
 	ErrInvalidWallpaper             = errors.New("invalid wallpaper")
 	ErrInvalidMark                  = errors.New("invalid guild mark")
+	ErrInvalidDecayFactor           = errors.New("decay factor must be greater than 0 and less than or equal to 1")
 )
 
 var hexColorRegex = regexp.MustCompile(`^#[0-9A-F]{6}$`)
