@@ -35,31 +35,31 @@ In authentic Party2, the Black Market is not a gold shop. It operates purely as 
 
 - **Prize Redemption**: Accumulated points can be exchanged for exclusive weapons, armor, accessories, and consumables across two catalogs:
   - **12 Regular Rare Prizes**:
-    - `bm_prize_087` (まほうのそろばん): 1 Rare Point
-    - `bm_prize_088` (ほのおのツメ): 2 Rare Points
-    - `bm_prize_089` (こおりのたて): 3 Rare Points
-    - `bm_prize_090` (ほのおのたて): 4 Rare Points
-    - `bm_prize_091` (ふうじんのたて): 5 Rare Points
-    - `bm_prize_092` (ちからのゆびわ): 6 Rare Points
-    - `bm_prize_093` (はやてのリング): 7 Rare Points
-    - `bm_prize_094` (ドラゴンシールド): 8 Rare Points
-    - `bm_prize_095` (みかがみのたて): 9 Rare Points
-    - `bm_prize_207` (メタルキングの剣): 10 Rare Points
-    - `bm_prize_208` (オーガシールド): 10 Rare Points
-    - `bm_prize_209` (いのりのゆびわ): 10 Rare Points
+    - `bm_prize_087` (まほうのそろばん, `item-087`): 1 Rare Point
+    - `bm_prize_057` (ほのおのツメ, `item-057`): 4 Rare Points
+    - `bm_prize_060` (氷の盾, `item-060`): 2 Rare Points
+    - `bm_prize_061` (炎の盾, `item-061`): 2 Rare Points
+    - `bm_prize_062` (風神の盾, `item-062`): 2 Rare Points
+    - `bm_prize_063` (ドラゴンシールド, `item-063`): 2 Rare Points
+    - `bm_prize_064` (水鏡の盾, `item-064`): 2 Rare Points
+    - `bm_prize_065` (オーガシールド, `item-065`): 2 Rare Points
+    - `bm_prize_237` (はやてのリング, `item-237`): 2 Rare Points
+    - `bm_prize_216` (ちからのゆびわ, `item-216`): 3 Rare Points
+    - `bm_prize_243` (いのりのゆびわ, `item-243`): 3 Rare Points
+    - `bm_prize_207` (メタルキングの剣, `item-207`): 10 Rare Points
   - **12 Ultra-Rare Prizes**:
-    - `bm_uprize_096` (きせきのつるぎ): 5 U-Rare Points
-    - `bm_uprize_097` (ふしぎなボレロ): 5 U-Rare Points
-    - `bm_uprize_098` (しあわせのくつ): 5 U-Rare Points
-    - `bm_uprize_099` (はかいのつるぎ): 10 U-Rare Points
-    - `bm_uprize_100` (あくまのよろい): 10 U-Rare Points
-    - `bm_uprize_101` (しにがみのたて): 10 U-Rare Points
-    - `bm_uprize_102` (ほしふるうでわ): 15 U-Rare Points
-    - `bm_uprize_103` (ごうけつのうでわ): 15 U-Rare Points
-    - `bm_uprize_104` (おうごんのティアラ): 15 U-Rare Points
-    - `bm_uprize_105` (メタルキングのよろい): 20 U-Rare Points
-    - `bm_uprize_106` (メタルキングのたて): 20 U-Rare Points
-    - `bm_uprize_107` (やまびこのぼうし): 20 U-Rare Points
+    - `bm_uprize_059` (きせきのつるぎ, `item-059`): 5 U-Rare Points
+    - `bm_uprize_199` (ふしぎなボレロ, `item-199`): 5 U-Rare Points
+    - `bm_uprize_246` (しあわせのくつ, `item-246`): 5 U-Rare Points
+    - `bm_uprize_185` (はかいのつるぎ, `item-185`): 10 U-Rare Points
+    - `bm_uprize_194` (あくまのよろい, `item-194`): 10 U-Rare Points
+    - `bm_uprize_195` (しにがみのたて, `item-195`): 10 U-Rare Points
+    - `bm_uprize_258` (ほしふるうでわ, `item-258`): 10 U-Rare Points
+    - `bm_uprize_259` (ごうけつのうでわ, `item-259`): 10 U-Rare Points
+    - `bm_uprize_255` (おうごんのティアラ, `item-255`): 15 U-Rare Points
+    - `bm_uprize_210` (メタルキングの鎧, `item-210`): 15 U-Rare Points
+    - `bm_uprize_204` (メタルキングの盾, `item-204`): 15 U-Rare Points
+    - `bm_uprize_262` (やまびこのぼうし, `item-262`): 20 U-Rare Points
 - **Depot Delivery & Capacity Verification**:
   - Prizes are delivered directly into the character's Depot (`預かり所`), NOT character inventory.
   - Depot capacity is verified via `depot.CalculateCapacity(char.JobLevel, dep.ExDepot, char.OverDepot)`. If depot capacity is exceeded, the trade is rejected with `ErrDepotFull`.

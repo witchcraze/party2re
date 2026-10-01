@@ -52,12 +52,16 @@ Available items in each shop expand according to the character's `job_lv` (the c
   Adds `armor-12` .. `armor-16` (Magic Armor, Dark Armor, Holy Armor, Battle Suit, Master Armor)
 
 ### 3.3. Item Shop (`item.cgi`)
-- **`job_lv <= 4`**:
-  `item-001` .. `item-005` (Herb, Antidote Herb, Moon Herb, Magic Water, Sage Stone)
-- **`5 <= job_lv <= 9`**:
-  Adds `item-006` .. `item-009`, `item-101` (Dragon Wing, Demon Wing, Angel Wing, Chimera Wing, Warp Mirror)
-- **`job_lv >= 10`**:
-  Adds `item-010` .. `item-012`, `item-102` (Torch, Fairy Water, Holy Water, Return Mirror)
+- **`job_lv == 0`** (Base):
+  `item-001` (薬草 / Herb), `item-007` (毒消し草 / Antidote Herb), `item-008` (満月草 / Moon Herb), `item-009` (天使の鈴 / Angel Bell), `item-127` (思い出の鈴 / Memory Bell)
+- **`job_lv >= 1`**:
+  Adds `item-002` (上薬草 / High Herb), `item-011` (魔法の聖水 / Magic Water), `item-014` (守りの石 / Protection Stone), `item-079` (くもの糸 / Spider Thread)
+- **`job_lv >= 3`**:
+  Adds `item-041` (べじたりあん / Vegetarian Dish), `item-042` (毒りんご / Poison Apple)
+- **`job_lv >= 5`**:
+  Adds `item-003` (特薬草 / Special Herb), `item-076` (妖精の粉 / Fairy Powder), `item-101` (魔法のじゅうたん / Magic Carpet)
+- **`job_lv >= 7`**:
+  Adds `item-102` (パフパフ / Puff-Puff Scroll)
 
 ---
 

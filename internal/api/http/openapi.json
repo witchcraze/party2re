@@ -5442,7 +5442,7 @@
         },
         "summary": "POST /characters/{id}/blacksmith/name endpoint",
         "tags": [
-          "Character"
+          "Blacksmith"
         ]
       }
     },
@@ -5479,7 +5479,7 @@
         },
         "summary": "POST /characters/{id}/blacksmith/seal endpoint",
         "tags": [
-          "Character"
+          "Blacksmith"
         ]
       }
     },
@@ -5516,7 +5516,7 @@
         },
         "summary": "GET /characters/{id}/blacksmith/storage endpoint",
         "tags": [
-          "Character"
+          "Blacksmith"
         ]
       }
     },
@@ -5553,7 +5553,7 @@
         },
         "summary": "POST /characters/{id}/blacksmith/storage/deposit endpoint",
         "tags": [
-          "Character"
+          "Blacksmith"
         ]
       }
     },
@@ -5590,7 +5590,7 @@
         },
         "summary": "POST /characters/{id}/blacksmith/storage/withdraw endpoint",
         "tags": [
-          "Character"
+          "Blacksmith"
         ]
       }
     },
@@ -16030,7 +16030,7 @@
     },
     "/characters/{id}/tavern/delivery/claim": {
       "post": {
-        "description": "Claims and eats the reserved delivery meal, deducting gold, restoring HP/MP, and awarding raffle tickets.",
+        "description": "Claims and eats the reserved delivery meal, deducting gold, and restoring HP/MP.",
         "operationId": "claimTavernDelivery",
         "parameters": [
           {
