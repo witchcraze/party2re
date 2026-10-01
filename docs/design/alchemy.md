@@ -82,7 +82,8 @@ A recipe consists of:
    - Trigger optional `SynthesisHook` (e.g. for Commemorative Medal milestone tracking).
 
 ### 5. Learn Recipe & Recipe Scroll Books (`internal/home/recipe_usage.go`)
-- Discovers a new unlearned recipe matching `allowed_bases` filter (or any recipe if empty).
+- Discovers a new unlearned recipe matching `allowed_bases` filter on the base ingredient (`r.Ingredients[0]`, or any recipe if empty).
+- Strictly matches only the base item (`$recipes{$learn}`) per legacy `party2/lib/_alchemy_recipe.cgi` and `home.cgi:535-546`, preventing secondary materials from matching and ensuring God-only `#` recipes cannot leak into basic or advanced scroll discovery pools.
 - Inserts entry into `character_alchemy_recipes` with `is_crafted = false`.
 - **Home Recipe Scroll Consumption**:
   - `基本錬金レシピ` (Item 127, 500G): Teaches 1 unlearned recipe from 34 basic base items.

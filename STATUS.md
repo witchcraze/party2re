@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #903 — Home: Return 404 ErrCharacterNotFound for non-existent characters in GET /homes/{id}/companion/phrases
+Last updated: Issue #911 — Alchemy: Restrict recipe scroll discovery to base ingredient matching legacy @learns filter
 
 ## Current Phase
 
