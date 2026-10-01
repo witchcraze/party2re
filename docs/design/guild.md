@@ -91,13 +91,28 @@ Active members can broadcast messages to all fellow guild members:
    - Validated against the legacy wallpaper catalog (`%kabes` in `_data.cgi:330-388`).
    - Pricing ranges from `0` Gold (`none.gif`) to `50,000` Gold (`stage20.gif`), deducted atomically from the leader's wallet (Rank 2).
 
+### Guild Master Succession & Dissolution News (`system.cgi:1124-1183`, `join_guild.cgi:367-436`)
+
+1. **Guild Master Succession**:
+   - When a Guild Master leaves the guild (`POST /guilds/{id}/leave`) or their character is deleted (`RemoveCharacterFromGuild` cleanup hook), leadership is automatically transferred to another member if other members remain.
+   - **Successor Priority**:
+     1. An active member whose custom title contains `ギルマス` (e.g. `副ギルマス`, `ギルマス補佐`).
+     2. If no member matches, the next eligible member in the roster (by order of joining).
+   - Once leadership is successfully transferred, the departing leader is removed from the roster.
+2. **Auto-Dissolution & Server News Announcement**:
+   - When the last member of a guild leaves or is deleted, or when the leader manually disbands the guild (`DELETE /guilds/{id}`), or upon 20-day inactivity auto-disbandment, the guild is dissolved.
+   - Upon dissolution, a system-wide server news announcement is published via `NewsPublisher`:
+     `ギルド『<GuildName>』が解散しました` (Category: `guild`, Author: `System`).
+3. **Database Cascade Invariant**:
+   - Character deletion (`character_repository.Delete`) no longer runs raw `UPDATE guilds SET leader_character_id = NULL`. Guild leadership and dissolution are handled strictly through the domain cleanup hook prior to physical character deletion, preserving the invariant that every existing guild has a valid leader.
+
 ### 20-Day Inactivity Automatic Disbandment (`auto_delete_guild_day = 20`)
 
 Guilds that have had no member activity for 20 consecutive days are automatically disbanded:
 
 - Each guild tracks `last_active_at TIMESTAMP`.
 - Any guild activity (creation, member join/apply, approval, role title assignment, callout, mark/wallpaper update, notice/color update) touches `last_active_at = NOW()`.
-- A daily scheduled worker (`guild_inactivity_check`, `scheduling.ActionHandler`) inspects guilds where `last_active_at < NOW() - 20 days` and cleanly disbands them.
+- A daily scheduled worker (`guild_inactivity_check`, `scheduling.ActionHandler`) inspects guilds where `last_active_at < NOW() - 20 days` and cleanly disbands them, publishing the dissolution news announcement.
 
 ### Daily 20% Guild Point Decay (`login.cgi:448`)
 
@@ -133,8 +148,9 @@ $gpoint = int( $gpoint * 0.8 );
 | `POST` | `/guilds/{id}/callout` | Broadcast callout message to members (+1 GP) | Bearer Token |
 | `PUT` | `/guilds/{id}/members/{char_id}/title` | Assign custom role title to member (leader only) | Bearer Token |
 | `PUT` | `/guilds/{id}/customization` | Update color, mark, wallpaper, or notice (leader only) | Bearer Token |
-| `POST` | `/guilds/{id}/leave` | Leave guild (non-leader member) | Bearer Token |
+| `POST` | `/guilds/{id}/leave` | Leave guild (triggers succession if leader, or dissolution if last member) | Bearer Token |
 | `DELETE` | `/guilds/{id}/members/{char_id}` | Kick member from guild (leader only) | Bearer Token |
 | `POST` | `/admin/guilds/decay-points` | Batch decay guild points by 20% (Admin) | Admin Key |
+
 
 

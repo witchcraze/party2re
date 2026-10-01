@@ -512,26 +512,37 @@ func TestService_RemoveCharacterFromGuild(t *testing.T) {
 		}
 	})
 
-	t.Run("sole member disbands guild", func(t *testing.T) {
+	t.Run("sole member disbands guild and publishes news", func(t *testing.T) {
 		var disbanded bool
 		repo := &mockGuildRepo{
 			getGuildByCharFn: func(ctx context.Context, characterID string) (guild.Guild, guild.Member, error) {
-				return guild.Guild{ID: "g1"}, guild.Member{CharacterID: characterID}, nil
+				return guild.Guild{ID: "g1", Name: "ひとりギルド"}, guild.Member{CharacterID: characterID}, nil
 			},
 			getGuildFn: func(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
-				return guild.Guild{ID: "g1"}, []guild.Member{{CharacterID: "c1"}}, nil
+				return guild.Guild{ID: "g1", Name: "ひとりギルド"}, []guild.Member{{CharacterID: "c1"}}, nil
 			},
 			disbandGuildFn: func(ctx context.Context, gID string) error {
 				disbanded = true
 				return nil
 			},
 		}
-		svc, _ := guild.NewService(repo)
+		news := &mockNewsPublisher{}
+		svc, _ := guild.NewService(repo, guild.WithNewsPublisher(news))
 		if err := svc.RemoveCharacterFromGuild(ctx, "c1"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !disbanded {
 			t.Errorf("expected guild to be disbanded")
+		}
+		if len(news.calls) != 1 {
+			t.Fatalf("expected 1 news publication, got %d", len(news.calls))
+		}
+		expectedTitle := "ギルド『ひとりギルド』が解散しました"
+		if news.calls[0].Title != expectedTitle {
+			t.Errorf("news Title = %s, want %s", news.calls[0].Title, expectedTitle)
+		}
+		if news.calls[0].Author != "System" {
+			t.Errorf("news Author = %s, want System", news.calls[0].Author)
 		}
 	})
 
@@ -643,7 +654,8 @@ func TestService_DisbandInactiveGuilds(t *testing.T) {
 		},
 	}
 
-	svc, _ := guild.NewService(repo)
+	news := &mockNewsPublisher{}
+	svc, _ := guild.NewService(repo, guild.WithNewsPublisher(news))
 	count, list, err := svc.DisbandInactiveGuilds(ctx, now, 50)
 	if err != nil {
 		t.Fatalf("DisbandInactiveGuilds error: %v", err)
@@ -656,5 +668,16 @@ func TestService_DisbandInactiveGuilds(t *testing.T) {
 	}
 	if len(disbandedIDs) != 2 {
 		t.Errorf("expected 2 repository DisbandGuild calls, got %d", len(disbandedIDs))
+	}
+	if len(news.calls) != 2 {
+		t.Fatalf("expected 2 news publications, got %d", len(news.calls))
+	}
+	expectedTitle1 := "ギルド『GhostGuild1』が解散しました"
+	expectedTitle2 := "ギルド『GhostGuild2』が解散しました"
+	if news.calls[0].Title != expectedTitle1 || news.calls[1].Title != expectedTitle2 {
+		t.Errorf("news titles = [%s, %s], want [%s, %s]", news.calls[0].Title, news.calls[1].Title, expectedTitle1, expectedTitle2)
+	}
+	if !news.calls[0].PublishedAt.Equal(now) || !news.calls[1].PublishedAt.Equal(now) {
+		t.Errorf("news PublishedAt expected %v", now)
 	}
 }

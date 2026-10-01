@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #775 — [Feature] Guild: Implement Daily 20% Guild Point Decay Batch
+Last updated: Issue #774 — [Bug] Guild: Restore Guild Master succession and auto-dissolution on member deletion
 
 ## Current Phase
 

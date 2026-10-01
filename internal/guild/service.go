@@ -18,6 +18,16 @@ type LetterSender interface {
 	SendLetter(ctx context.Context, senderID, senderName, recipientID, recipientName, content, color string) error
 }
 
+type NewsPublisher interface {
+	PublishNews(ctx context.Context, category, title, content, author string, publishedAt time.Time) error
+}
+
+type NewsPublisherFunc func(ctx context.Context, category, title, content, author string, publishedAt time.Time) error
+
+func (f NewsPublisherFunc) PublishNews(ctx context.Context, category, title, content, author string, publishedAt time.Time) error {
+	return f(ctx, category, title, content, author, publishedAt)
+}
+
 type ServiceOption func(*Service)
 
 func WithCharacterReader(cr CharacterReader) ServiceOption {
@@ -32,6 +42,12 @@ func WithLetterSender(ls LetterSender) ServiceOption {
 	}
 }
 
+func WithNewsPublisher(np NewsPublisher) ServiceOption {
+	return func(s *Service) {
+		s.newsPub = np
+	}
+}
+
 func WithClock(clock func() time.Time) ServiceOption {
 	return func(s *Service) {
 		s.nowFunc = clock
@@ -42,6 +58,7 @@ type Service struct {
 	repo         Repository
 	charReader   CharacterReader
 	letterSender LetterSender
+	newsPub      NewsPublisher
 	nowFunc      func() time.Time
 }
 
@@ -173,47 +190,6 @@ func (s *Service) Join(ctx context.Context, guildID string, characterID string) 
 	}
 	s.touchActive(ctx, guildID)
 	return res, nil
-}
-
-func (s *Service) Leave(ctx context.Context, guildID string, characterID string) error {
-	guildID = strings.TrimSpace(guildID)
-	if guildID == "" {
-		return ErrInvalidGuildID
-	}
-	characterID = strings.TrimSpace(characterID)
-	if characterID == "" {
-		return ErrCharacterNotFound
-	}
-
-	_, members, err := s.repo.GetGuild(ctx, guildID)
-	if err != nil {
-		return err
-	}
-
-	var currentMember *Member
-	for i := range members {
-		if members[i].CharacterID == characterID {
-			currentMember = &members[i]
-			break
-		}
-	}
-	if currentMember == nil {
-		return ErrCharacterNotInGuild
-	}
-
-	if currentMember.Role == RoleLeader {
-		if len(members) > 1 {
-			return ErrLeaderCannotLeaveWithMembers
-		}
-		// Sole member leaving disbands the guild
-		return s.repo.DisbandGuild(ctx, guildID)
-	}
-
-	if err := s.repo.RemoveMember(ctx, guildID, characterID); err != nil {
-		return err
-	}
-	s.touchActive(ctx, guildID)
-	return nil
 }
 
 func (s *Service) Kick(ctx context.Context, guildID string, requesterCharID string, targetCharID string) error {
@@ -470,25 +446,4 @@ func (s *Service) AddGuildPoints(ctx context.Context, characterID string, points
 		return nil
 	}
 	return s.repo.AddGuildPoints(ctx, characterID, points)
-}
-
-func (s *Service) Disband(ctx context.Context, guildID string, leaderCharID string) error {
-	guildID = strings.TrimSpace(guildID)
-	if guildID == "" {
-		return ErrInvalidGuildID
-	}
-	leaderCharID = strings.TrimSpace(leaderCharID)
-	if leaderCharID == "" {
-		return ErrCharacterNotFound
-	}
-
-	g, member, err := s.repo.GetGuildByCharacter(ctx, leaderCharID)
-	if err != nil {
-		return err
-	}
-	if g.ID != guildID || member.Role != RoleLeader {
-		return ErrUnauthorized
-	}
-
-	return s.repo.DisbandGuild(ctx, guildID)
 }
