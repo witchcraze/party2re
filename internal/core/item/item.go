@@ -110,6 +110,8 @@ type Definition struct {
 	Price         int           `json:"price"`
 	Slot          Slot          `json:"slot,omitempty"`
 	UsageCategory UsageCategory `json:"usage_category,omitempty"`
+	Power         int           `json:"power,omitempty"`
+	Weight        int           `json:"weight,omitempty"`
 }
 
 // IsUsableAtHome returns whether the item definition can be actively consumed at Home.

@@ -127,8 +127,8 @@ func TestItemUsage(t *testing.T) {
 	depotMgr := &mockDepotManager{depots: make(map[string]depot.Depot)}
 	catalog := &mockCatalog{
 		defs: map[string]coreitem.Definition{
-			"item-wea":    {ID: "item-wea", Name: "銅の剣", Price: 100, Slot: coreitem.SlotMainHand},
-			"item-arm":    {ID: "item-arm", Name: "革の鎧", Price: 150, Slot: coreitem.SlotBody},
+			"item-wea":    {ID: "item-wea", Name: "銅の剣", Price: 100, Slot: coreitem.SlotMainHand, Power: 14, Weight: 9},
+			"item-arm":    {ID: "item-arm", Name: "革の鎧", Price: 150, Slot: coreitem.SlotBody, Power: 12, Weight: 4},
 			"item-seed1":  {ID: "item-seed1", Name: "命の木の実", Price: 50, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryAnytime},
 			"item-seed2":  {ID: "item-seed2", Name: "不思議な木の実", Price: 50, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryAnytime},
 			"item-seed3":  {ID: "item-seed3", Name: "力の種", Price: 50, Slot: coreitem.SlotNone, UsageCategory: coreitem.UsageCategoryAnytime},
@@ -1043,5 +1043,168 @@ func TestUseHomeItem_CrystalOre(t *testing.T) {
 	}
 	if chars["char-noseal"].Crystal != 50 {
 		t.Errorf("expected Crystal unchanged at 50, got %d", chars["char-noseal"].Crystal)
+	}
+}
+
+func TestItemUsage_AuthenticEquipmentAppraisal(t *testing.T) {
+	ctx := context.Background()
+
+	cat, err := coreitem.DefaultCatalog()
+	if err != nil {
+		t.Fatalf("DefaultCatalog failed: %v", err)
+	}
+
+	charID := "char-appraise"
+	chars := map[string]corecharacter.Character{
+		charID: {
+			ID:       charID,
+			PlayerID: "player-appraise",
+			Name:     "鑑定士",
+			Level:    10,
+		},
+	}
+	charReader := &mockCharReader{chars: chars}
+	charUpdater := &mockCharUpdater{chars: chars}
+	repo := newMockHomeRepo(chars)
+
+	invMgr := &mockInventoryManager{invs: make(map[string]coreinventory.Inventory)}
+	depotMgr := &mockDepotManager{depots: make(map[string]depot.Depot)}
+
+	inv, _ := coreinventory.New(charID)
+	// Add authentic weapons from party2/lib/_data.cgi:394-500
+	_ = inv.Add(coreitem.Instance{ID: "inst-bamboo", DefinitionID: "weapon-02", Quantity: 1})
+	_ = inv.Add(coreitem.Instance{ID: "inst-copper", DefinitionID: "weapon-08", Quantity: 1})
+	_ = inv.Add(coreitem.Instance{ID: "inst-steel", DefinitionID: "weapon-13", Quantity: 1})
+	_ = inv.Add(coreitem.Instance{ID: "inst-zombie", DefinitionID: "weapon-15", Quantity: 1})
+	_ = inv.Add(coreitem.Instance{ID: "inst-hagure-w", DefinitionID: "weapon-40", Quantity: 1})
+	invMgr.invs[charID] = inv
+
+	dp, _ := depot.NewDepot(charID)
+	// Add authentic armors from party2/lib/_data.cgi:506-613
+	dp.Items = append(dp.Items,
+		coreitem.Instance{ID: "inst-cloth", DefinitionID: "armor-01", Quantity: 1},
+		coreitem.Instance{ID: "inst-leather", DefinitionID: "armor-04", Quantity: 1},
+		coreitem.Instance{ID: "inst-chain", DefinitionID: "armor-07", Quantity: 1},
+		coreitem.Instance{ID: "inst-iron-a", DefinitionID: "armor-11", Quantity: 1},
+		coreitem.Instance{ID: "inst-steel-a", DefinitionID: "armor-16", Quantity: 1},
+		coreitem.Instance{ID: "inst-hagure-a", DefinitionID: "armor-40", Quantity: 1},
+	)
+	depotMgr.depots[charID] = dp
+
+	svc, err := NewService(
+		repo,
+		charReader,
+		WithCharacterUpdater(charUpdater),
+		WithInventoryManager(invMgr),
+		WithDepotManager(depotMgr),
+		WithItemCatalog(cat),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	weaponTests := []struct {
+		instID      string
+		expectedMsg string
+		disallowed  string // old Price/10 + 1 or Price/20 + 1
+	}{
+		{
+			instID:      "inst-bamboo",
+			expectedMsg: "武器名：竹の槍 / 強さ：4 / 重さ：2 / 価格：30G",
+			disallowed:  "",
+		},
+		{
+			instID:      "inst-copper",
+			expectedMsg: "武器名：銅の剣 / 強さ：14 / 重さ：9 / 価格：400G",
+			disallowed:  "強さ：41", // old price/10+1 = 41
+		},
+		{
+			instID:      "inst-steel",
+			expectedMsg: "武器名：鋼鉄の剣 / 強さ：30 / 重さ：20 / 価格：1800G",
+			disallowed:  "強さ：181", // old price/10+1 = 181
+		},
+		{
+			instID:      "inst-zombie",
+			expectedMsg: "武器名：不死殺しの剣 / 強さ：44 / 重さ：24 / 価格：3500G",
+			disallowed:  "強さ：351", // old price/10+1 = 351
+		},
+		{
+			instID:      "inst-hagure-w",
+			expectedMsg: "武器名：流銀の剣 / 強さ：150 / 重さ：75 / 価格：20000G",
+			disallowed:  "強さ：2001", // old price/10+1 = 2001
+		},
+	}
+
+	for _, tt := range weaponTests {
+		t.Run("weapon_"+tt.instID, func(t *testing.T) {
+			res, err := svc.UseHomeItem(ctx, charID, tt.instID, "inventory")
+			if err != nil {
+				t.Fatalf("UseHomeItem failed: %v", err)
+			}
+			if res.Action != "inspect" || res.Consumed {
+				t.Errorf("expected inspect action without consumption, got %+v", res)
+			}
+			if res.Message != tt.expectedMsg {
+				t.Errorf("Message = %q, want %q", res.Message, tt.expectedMsg)
+			}
+			if tt.disallowed != "" && strings.Contains(res.Message, tt.disallowed) {
+				t.Errorf("Message contains obsolete Price/10 calculation %q: %s", tt.disallowed, res.Message)
+			}
+		})
+	}
+
+	armorTests := []struct {
+		instID      string
+		expectedMsg string
+		disallowed  string
+	}{
+		{
+			instID:      "inst-cloth",
+			expectedMsg: "防具名：布の服 / 強さ：3 / 重さ：0 / 価格：20G",
+			disallowed:  "重さ：2", // old price/20+1 = 2
+		},
+		{
+			instID:      "inst-leather",
+			expectedMsg: "防具名：皮の鎧 / 強さ：12 / 重さ：4 / 価格：150G",
+			disallowed:  "強さ：16", // old price/10+1 = 16
+		},
+		{
+			instID:      "inst-chain",
+			expectedMsg: "防具名：鎖かたびら / 強さ：24 / 重さ：8 / 価格：540G",
+			disallowed:  "強さ：55", // old price/10+1 = 55
+		},
+		{
+			instID:      "inst-iron-a",
+			expectedMsg: "防具名：鉄の鎧 / 強さ：43 / 重さ：17 / 価格：1200G",
+			disallowed:  "強さ：121", // old price/10+1 = 121
+		},
+		{
+			instID:      "inst-steel-a",
+			expectedMsg: "防具名：鋼鉄の鎧 / 強さ：52 / 重さ：20 / 価格：3700G",
+			disallowed:  "強さ：371", // old price/10+1 = 371
+		},
+		{
+			instID:      "inst-hagure-a",
+			expectedMsg: "防具名：流銀の鎧 / 強さ：150 / 重さ：45 / 価格：30000G",
+			disallowed:  "強さ：3001", // old price/10+1 = 3001
+		},
+	}
+
+	for _, tt := range armorTests {
+		t.Run("armor_"+tt.instID, func(t *testing.T) {
+			res, err := svc.UseHomeItem(ctx, charID, tt.instID, "depot")
+			if err != nil {
+				t.Fatalf("UseHomeItem failed: %v", err)
+			}
+			if res.Action != "inspect" || res.Consumed {
+				t.Errorf("expected inspect action without consumption, got %+v", res)
+			}
+			if res.Message != tt.expectedMsg {
+				t.Errorf("Message = %q, want %q", res.Message, tt.expectedMsg)
+			}
+			if tt.disallowed != "" && strings.Contains(res.Message, tt.disallowed) {
+				t.Errorf("Message contains obsolete Price/10 calculation %q: %s", tt.disallowed, res.Message)
+			}
+		})
 	}
 }

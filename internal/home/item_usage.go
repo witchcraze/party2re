@@ -10,6 +10,7 @@ import (
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/core/progression"
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
 )
@@ -27,6 +28,24 @@ type InventoryManager interface {
 
 type ItemCatalog interface {
 	FindByID(id string) (item.Definition, error)
+}
+
+type homeRNGAdapter struct {
+	gen random.Generator
+}
+
+func (a homeRNGAdapter) Intn(n int) (int, error) {
+	if a.gen == nil || n <= 0 {
+		return 0, nil
+	}
+	return a.gen.Intn(n), nil
+}
+
+func (s *Service) randomSource() corecharacter.RandomSource {
+	if s == nil || s.rng == nil {
+		return nil
+	}
+	return homeRNGAdapter{gen: s.rng}
 }
 
 // ListHomeItems retrieves all usable and inspectable items from inventory and depot.
@@ -52,11 +71,15 @@ func (s *Service) ListHomeItems(ctx context.Context, characterID string) ([]Home
 				defense := 0
 				weight := 0
 				if kind == 1 {
-					attack = price/10 + 1
-					weight = price/20 + 1
+					attack, weight = def.Power, def.Weight
+					if attack == 0 && weight == 0 {
+						attack, weight = item.NominalWeaponStats(inst.DefinitionID)
+					}
 				} else if kind == 2 {
-					defense = price/10 + 1
-					weight = price/20 + 1
+					defense, weight = def.Power, def.Weight
+					if defense == 0 && weight == 0 {
+						defense, weight = item.NominalArmorStats(inst.DefinitionID)
+					}
 				}
 				results = append(results, HomeUsableItem{
 					InstanceID:   inst.ID,
@@ -94,11 +117,15 @@ func (s *Service) ListHomeItems(ctx context.Context, characterID string) ([]Home
 				defense := 0
 				weight := 0
 				if kind == 1 {
-					attack = price/10 + 1
-					weight = price/20 + 1
+					attack, weight = def.Power, def.Weight
+					if attack == 0 && weight == 0 {
+						attack, weight = item.NominalWeaponStats(inst.DefinitionID)
+					}
 				} else if kind == 2 {
-					defense = price/10 + 1
-					weight = price/20 + 1
+					defense, weight = def.Power, def.Weight
+					if defense == 0 && weight == 0 {
+						defense, weight = item.NominalArmorStats(inst.DefinitionID)
+					}
 				}
 				results = append(results, HomeUsableItem{
 					InstanceID:   inst.ID,
@@ -176,8 +203,10 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 
 	// Inspection of weapons
 	if kind == 1 {
-		power := def.Price/10 + 1
-		weight := def.Price/20 + 1
+		power, weight := def.Power, def.Weight
+		if power == 0 && weight == 0 {
+			power, weight = item.CalculateWeaponStats(def.ID, char, s.randomSource(), false)
+		}
 		msg := fmt.Sprintf("武器名：%s / 強さ：%d / 重さ：%d / 価格：%dG", def.Name, power, weight, def.Price)
 		return &UseHomeItemResult{
 			Action:    "inspect",
@@ -191,8 +220,10 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 
 	// Inspection of armors/accessories
 	if kind == 2 {
-		defense := def.Price/10 + 1
-		weight := def.Price/20 + 1
+		defense, weight := def.Power, def.Weight
+		if defense == 0 && weight == 0 {
+			defense, weight = item.CalculateArmorStats(def.ID, char, s.randomSource())
+		}
 		msg := fmt.Sprintf("防具名：%s / 強さ：%d / 重さ：%d / 価格：%dG", def.Name, defense, weight, def.Price)
 		return &UseHomeItemResult{
 			Action:    "inspect",
