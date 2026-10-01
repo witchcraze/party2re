@@ -82,3 +82,52 @@ func TestInactivityCheckHandler(t *testing.T) {
 
 	_ = now
 }
+
+func TestPointDecayHandler(t *testing.T) {
+	ctx := context.Background()
+
+	decayedCalled := false
+	var decayFactor float64
+	repo := &mockGuildRepo{
+		decayGuildPointsFn: func(ctx context.Context, factor float64) error {
+			decayedCalled = true
+			decayFactor = factor
+			return nil
+		},
+	}
+
+	svc, err := guild.NewService(repo)
+	if err != nil {
+		t.Fatalf("NewService error: %v", err)
+	}
+
+	sched := &mockScheduler{}
+	handler := guild.NewPointDecayHandler(svc,
+		guild.WithPointDecayScheduler(sched),
+	)
+
+	action := core_scheduling.ScheduledAction{
+		ID:         "test-decay-action",
+		ActionType: guild.ActionTypeGuildPointDecay,
+	}
+
+	err = handler.Handle(ctx, action)
+	if err != nil {
+		t.Fatalf("Handle error: %v", err)
+	}
+
+	if !decayedCalled {
+		t.Errorf("expected DecayGuildPoints to be called")
+	}
+	if decayFactor != guild.DefaultPointDecayFactor {
+		t.Errorf("expected factor %f, got %f", guild.DefaultPointDecayFactor, decayFactor)
+	}
+
+	if len(sched.scheduledActions) != 1 {
+		t.Fatalf("expected 1 rescheduled action, got %d", len(sched.scheduledActions))
+	}
+	nextAction := sched.scheduledActions[0]
+	if nextAction.ActionType != guild.ActionTypeGuildPointDecay {
+		t.Errorf("expected action type %q, got %q", guild.ActionTypeGuildPointDecay, nextAction.ActionType)
+	}
+}

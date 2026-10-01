@@ -243,6 +243,7 @@ func wireHooks(
 	}
 	if soc.sched != nil && soc.guild != nil {
 		wireGuildInactivityCheck(soc.sched)
+		wireGuildPointDecay(soc.sched)
 	}
 	if soc.sched != nil && misc.contest != nil {
 		wireContestSettlement(soc.sched, misc.contest)
@@ -275,6 +276,13 @@ func wireGuildInactivityCheck(sched *scheduling.Service) {
 	ctx := context.Background()
 	next := guild.NextMidnightJST(time.Now())
 	_ = sched.ScheduleWithID(ctx, guild.DailyInactivityCheckActionID(next), guild.ActionTypeGuildInactivityCheck, "system", nil, next)
+}
+
+// wireGuildPointDecay enqueues the daily JST midnight guild point decay if not already scheduled.
+func wireGuildPointDecay(sched *scheduling.Service) {
+	ctx := context.Background()
+	next := guild.NextMidnightJST(time.Now())
+	_ = sched.ScheduleWithID(ctx, guild.DailyPointDecayActionID(next), guild.ActionTypeGuildPointDecay, "system", nil, next)
 }
 
 // wireChapelDailyReset enqueues the daily JST midnight reset action if not already scheduled.

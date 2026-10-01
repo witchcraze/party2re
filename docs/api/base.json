@@ -167,6 +167,35 @@
         ],
         "type": "object"
       },
+      "AdminDecayGuildPointsRequest": {
+        "properties": {
+          "factor": {
+            "description": "Decay factor between 0 and 1. Defaults to 0.8 (20% decay).",
+            "example": 0.8,
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "AdminDecayGuildPointsResponse": {
+        "properties": {
+          "factor": {
+            "example": 0.8,
+            "format": "double",
+            "type": "number"
+          },
+          "status": {
+            "example": "ok",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "factor"
+        ],
+        "type": "object"
+      },
       "AdminUnstuckCharacterResponse": {
         "properties": {
           "character_id": {

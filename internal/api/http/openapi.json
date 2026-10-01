@@ -16,6 +16,35 @@
         ],
         "type": "object"
       },
+      "AdminDecayGuildPointsRequest": {
+        "properties": {
+          "factor": {
+            "description": "Decay factor between 0 and 1. Defaults to 0.8 (20% decay).",
+            "example": 0.8,
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "AdminDecayGuildPointsResponse": {
+        "properties": {
+          "factor": {
+            "example": 0.8,
+            "format": "double",
+            "type": "number"
+          },
+          "status": {
+            "example": "ok",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "factor"
+        ],
+        "type": "object"
+      },
       "AdminPlayerResponse": {
         "properties": {
           "banned_at": {
@@ -2727,6 +2756,82 @@
           }
         ],
         "summary": "Unstuck character by clearing active actions without saving a rescue record (Admin)",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/guilds/decay-points": {
+      "post": {
+        "operationId": "AdminDecayGuildPoints",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminDecayGuildPointsRequest"
+              }
+            }
+          },
+          "description": "Guild point decay configuration"
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminDecayGuildPointsResponse"
+                }
+              }
+            },
+            "description": "Guild points decayed successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid decay factor"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing admin credentials"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid admin credentials or admin operations disabled"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "AdminApiKey": []
+          }
+        ],
+        "summary": "Execute batch decay of guild points (Admin)",
         "tags": [
           "Admin"
         ]

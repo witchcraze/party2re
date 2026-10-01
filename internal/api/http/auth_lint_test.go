@@ -158,6 +158,7 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 		"GET /admin/players":                  true,
 		"POST /admin/players/{id}/ban":        true,
 		"POST /admin/characters/{id}/unstuck": true,
+		"POST /admin/guilds/decay-points":     true,
 	}
 
 	for _, route := range routes {
