@@ -84,17 +84,14 @@ func (s *Service) LearnRecipe(ctx context.Context, characterID string, allowedBa
 			continue
 		}
 		if len(baseFilter) > 0 {
-			match := false
-			for _, ing := range r.Ingredients {
-				if baseFilter[ing.DefinitionID] {
-					match = true
-					break
-				}
-				if def, err := s.items.FindByID(ing.DefinitionID); err == nil {
-					if baseFilter[def.Name] {
-						match = true
-						break
-					}
+			if len(r.Ingredients) == 0 {
+				continue
+			}
+			base := r.Ingredients[0]
+			match := baseFilter[base.DefinitionID]
+			if !match && s.items != nil {
+				if def, err := s.items.FindByID(base.DefinitionID); err == nil {
+					match = baseFilter[def.Name]
 				}
 			}
 			if !match {
