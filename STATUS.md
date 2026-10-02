@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #944 — [Specification] PlayerContext: Define Action Catalog & Legacy Precondition Matrix
+Last updated: Issue #933 — [Architecture] Contest: Decouple Dialogue from ContestOverview and format at HTTP layer
 
 ## Current Phase
 

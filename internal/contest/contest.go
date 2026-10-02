@@ -122,14 +122,6 @@ type ContestLegend struct {
 	SettledAt     time.Time `json:"settled_at"`
 }
 
-// Dialogue represents NPC @ワコール dialogue in the Photo Contest venue.
-type Dialogue struct {
-	NPCName  string   `json:"npc_name"`
-	Title    string   `json:"title"`
-	Greeting string   `json:"greeting"`
-	Phrases  []string `json:"phrases"`
-}
-
 // ContestOverview summarizes the state of the active, preparing, and past contest rounds.
 type ContestOverview struct {
 	ActiveRound    *ContestRound  `json:"active_round,omitempty"`
@@ -138,7 +130,6 @@ type ContestOverview struct {
 	EntryCount     int            `json:"entry_count"`
 	MinEntries     int            `json:"min_entries"`
 	IsPostponed    bool           `json:"is_postponed"`
-	Dialogue       Dialogue       `json:"dialogue"`
 }
 
 // SettlementResult summarizes the result of concluding a contest round.

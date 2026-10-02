@@ -353,21 +353,13 @@ func (m *mockNewsPublisher) PublishNews(ctx context.Context, category, title, co
 
 // Tests
 
-func TestDialogueAndOverview(t *testing.T) {
+func TestOverview(t *testing.T) {
 	charRepo := newMockCharRepo()
 	contestRepo := newMockContestRepo()
 
 	svc, err := contest.NewService(charRepo, contestRepo)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
-	}
-
-	dialogue := svc.GetDialogue()
-	if dialogue.NPCName != "@ワコール" {
-		t.Errorf("expected NPCName @ワコール, got %s", dialogue.NPCName)
-	}
-	if len(dialogue.Phrases) == 0 {
-		t.Error("expected dialogue phrases, got empty")
 	}
 
 	ctx := context.Background()
