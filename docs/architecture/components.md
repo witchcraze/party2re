@@ -56,6 +56,11 @@ Encapsulates slot assignments via `Equip` and `Unequip` across 5 equipment slots
 **Responsibility:** Generic ownership and movement invariants of game currencies.
 Provides boundary interfaces for gold, small medals, casino coins, and crystal currencies without hard-coding ad-hoc rules into unrelated modules.
 
+### PlayerContext
+
+**Responsibility:** Evaluates and projects the real-time executable action space (observation space) for active characters.
+Maintains the static Action Catalog (`internal/playercontext/catalog.go`) defining top-level player actions, required parameters, and precondition gate requirements (Dead, Fatigue, Sleep, Ongoing Timer, Currency). Provides `playercontext.Query(ctx, charID)` which resolves the character's live snapshot and executes the Action Evaluator pipeline against active `ScheduledAction` timers to produce the authoritative whitelist of available actions for the Client/Agent Gateway.
+
 ### Game Time / Scheduling
 
 **Responsibility:** Represent and execute delayed actions without owning feature rules.
