@@ -3,10 +3,13 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/plantation"
 )
@@ -34,6 +37,30 @@ type plantationFertilizeRequest struct {
 	FertilizerID string `json:"fertilizer_id"`
 }
 
+type plantationStatusResponse struct {
+	Plot        *plantation.Plot        `json:"plot,omitempty"`
+	Status      plantation.PlotStatus   `json:"status"`
+	Seeds       []plantation.Seed       `json:"seeds"`
+	Fertilizers []plantation.Fertilizer `json:"fertilizers"`
+	Dialogue    string                  `json:"dialogue"`
+}
+
+type plantationSowResponse struct {
+	Plot    plantation.Plot `json:"plot"`
+	Message string          `json:"message"`
+}
+
+type plantationFertilizeResponse struct {
+	Plot    plantation.Plot `json:"plot"`
+	Message string          `json:"message"`
+}
+
+type plantationHarvestResponse struct {
+	Withered bool                      `json:"withered"`
+	Yields   []plantation.HarvestYield `json:"yields,omitempty"`
+	Message  string                    `json:"message"`
+}
+
 func (h *Handler) handleGetCharacterPlantation(w http.ResponseWriter, r *http.Request) {
 	if h.plantation == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("plantation service not configured"))
@@ -47,7 +74,19 @@ func (h *Handler) handleGetCharacterPlantation(w http.ResponseWriter, r *http.Re
 			h.writePlantationError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, status)
+
+		dialogue := ""
+		if len(plantation.DefaultLotusDialogues) > 0 {
+			dialogue = plantation.DefaultLotusDialogues[random.IntN(len(plantation.DefaultLotusDialogues))]
+		}
+
+		writeJSON(w, http.StatusOK, plantationStatusResponse{
+			Plot:        status.Plot,
+			Status:      status.Status,
+			Seeds:       status.Seeds,
+			Fertilizers: status.Fertilizers,
+			Dialogue:    dialogue,
+		})
 	})
 }
 
@@ -69,7 +108,10 @@ func (h *Handler) handlePlantationSow(w http.ResponseWriter, r *http.Request) {
 			h.writePlantationError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, res)
+		writeJSON(w, http.StatusOK, plantationSowResponse{
+			Plot:    res.Plot,
+			Message: fmt.Sprintf("%sをまいたよ！", res.SeedName),
+		})
 	})
 }
 
@@ -91,7 +133,10 @@ func (h *Handler) handlePlantationFertilize(w http.ResponseWriter, r *http.Reque
 			h.writePlantationError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, res)
+		writeJSON(w, http.StatusOK, plantationFertilizeResponse{
+			Plot:    res.Plot,
+			Message: fmt.Sprintf("%sをまくよ！", res.FertilizerName),
+		})
 	})
 }
 
@@ -108,7 +153,25 @@ func (h *Handler) handlePlantationHarvest(w http.ResponseWriter, r *http.Request
 			h.writePlantationError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, res)
+
+		var msg string
+		if res.Withered {
+			msg = fmt.Sprintf("%sは芽が出なかったよ…", res.SeedName)
+		} else {
+			var msgBuilder strings.Builder
+			msgBuilder.WriteString("収穫したよ！\n")
+			for _, y := range res.Yields {
+				msgBuilder.WriteString(fmt.Sprintf("%sを%d個\n", y.ItemName, y.Quantity))
+			}
+			msgBuilder.WriteString("倉庫に送っておいたよ")
+			msg = msgBuilder.String()
+		}
+
+		writeJSON(w, http.StatusOK, plantationHarvestResponse{
+			Withered: res.Withered,
+			Yields:   res.Yields,
+			Message:  msg,
+		})
 	})
 }
 

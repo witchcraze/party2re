@@ -68,19 +68,18 @@ type StatusResponse struct {
 	Status      PlotStatus   `json:"status"`
 	Seeds       []Seed       `json:"seeds"`
 	Fertilizers []Fertilizer `json:"fertilizers"`
-	Dialogue    string       `json:"dialogue"`
 }
 
 // SowResult represents the outcome of sowing a seed.
 type SowResult struct {
-	Plot    Plot   `json:"plot"`
-	Message string `json:"message"`
+	Plot     Plot   `json:"plot"`
+	SeedName string `json:"seed_name"`
 }
 
 // FertilizeResult represents the outcome of applying fertilizer.
 type FertilizeResult struct {
-	Plot    Plot   `json:"plot"`
-	Message string `json:"message"`
+	Plot           Plot   `json:"plot"`
+	FertilizerName string `json:"fertilizer_name"`
 }
 
 // HarvestYield represents a harvested item batch.
@@ -93,6 +92,6 @@ type HarvestYield struct {
 // HarvestResult represents the outcome of harvesting a plot.
 type HarvestResult struct {
 	Withered bool           `json:"withered"`
+	SeedName string         `json:"seed_name,omitempty"`
 	Yields   []HarvestYield `json:"yields,omitempty"`
-	Message  string         `json:"message"`
 }

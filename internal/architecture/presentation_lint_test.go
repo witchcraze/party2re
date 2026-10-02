@@ -1,6 +1,7 @@
 package architecture_test
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -88,17 +89,36 @@ func TestProhibitHTMLInDomainPackages(t *testing.T) {
 	}
 }
 
+// whitelistedLegacyPresentationFields records pre-existing legacy struct fields declaring presentation strings
+// (NPCMessage, NPCSpeech, Dialogue) in untouched domain packages.
+// Each entry maps pkg.Struct.Field to the issue tracking its decoupling.
+// No new fields may be added. When a field is decoupled, it MUST be removed from this map to ratchet down.
+var whitelistedLegacyPresentationFields = map[string]string{
+	"auction.VenueInfo.Dialogue":                  "Issue #931",
+	"blackmarket.TalkResult.Dialogue":             "Issue #930",
+	"contest.ContestOverview.Dialogue":            "Issue #933",
+	"eventplaza.BazaarPurchaseResult.NPCMessage":  "Issue #926",
+	"god.WishResult.NPCSpeech":                    "Issue #928",
+	"home.CompanionTalkResult.Dialogue":           "Issue #932",
+	"lottery.TakarakujiPurchaseResult.NPCMessage": "Issue #927",
+	"secretshop.PurchaseResult.NPCMessage":        "Issue #925",
+	"shop.NPCInspectResult.Dialogue":              "Issue #929",
+}
+
 // TestProhibitPresentationFieldsInDomainModels verifies that domain service result structs
-// do not declare presentation-specific string fields like NPCMessage or NPCSpeech.
+// do not declare presentation-specific string fields like NPCMessage, NPCSpeech, or Dialogue.
+// Pre-existing violations in untouched domain packages are locked in whitelistedLegacyPresentationFields;
+// any new violation or un-ratcheted removal fails the test.
 func TestProhibitPresentationFieldsInDomainModels(t *testing.T) {
 	repoRoot, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatalf("failed to determine repository root: %v", err)
 	}
 
-	internalDir := filepath.Join(repoRoot, "internal/shop")
+	internalDir := filepath.Join(repoRoot, "internal")
 	fset := token.NewFileSet()
 
+	seenWhitelisted := make(map[string]bool)
 	var violations []string
 
 	err = filepath.Walk(internalDir, func(path string, info os.FileInfo, err error) error {
@@ -112,10 +132,21 @@ func TestProhibitPresentationFieldsInDomainModels(t *testing.T) {
 			return nil
 		}
 
+		cleanPath := filepath.ToSlash(path)
+
+		// Transport layer (HTTP), architecture linter, and test utilities are exempt
+		if strings.Contains(cleanPath, "/api/http/") ||
+			strings.Contains(cleanPath, "/architecture/") ||
+			strings.Contains(cleanPath, "/testutil/") {
+			return nil
+		}
+
 		node, err := parser.ParseFile(fset, path, nil, 0)
 		if err != nil {
 			return err
 		}
+
+		pkgName := node.Name.Name
 
 		ast.Inspect(node, func(n ast.Node) bool {
 			ts, ok := n.(*ast.TypeSpec)
@@ -129,10 +160,16 @@ func TestProhibitPresentationFieldsInDomainModels(t *testing.T) {
 
 			for _, f := range st.Fields.List {
 				for _, name := range f.Names {
-					if name.Name == "NPCMessage" || name.Name == "NPCSpeech" {
+					if name.Name == "NPCMessage" || name.Name == "NPCSpeech" || name.Name == "Dialogue" {
+						key := pkgName + "." + ts.Name.Name + "." + name.Name
+						if _, ok := whitelistedLegacyPresentationFields[key]; ok {
+							seenWhitelisted[key] = true
+							continue
+						}
 						pos := fset.Position(name.Pos())
 						relPath, _ := filepath.Rel(repoRoot, path)
-						violations = append(violations, relPath+":"+strconv.Itoa(pos.Line)+": struct "+ts.Name.Name+" declares prohibited presentation field: "+name.Name)
+						violations = append(violations, fmt.Sprintf("%s:%d: struct %s.%s declares prohibited presentation field: %s",
+							relPath, pos.Line, pkgName, ts.Name.Name, name.Name))
 					}
 				}
 			}
@@ -143,7 +180,14 @@ func TestProhibitPresentationFieldsInDomainModels(t *testing.T) {
 	})
 
 	if err != nil {
-		t.Fatalf("failed to walk shop directory: %v", err)
+		t.Fatalf("failed to walk internal directory: %v", err)
+	}
+
+	// Ratchet down check: every whitelisted entry must still exist in the codebase
+	for key, issue := range whitelistedLegacyPresentationFields {
+		if !seenWhitelisted[key] {
+			violations = append(violations, fmt.Sprintf("whitelisted legacy presentation field %q (%s) is no longer present; remove it from whitelistedLegacyPresentationFields to ratchet down", key, issue))
+		}
 	}
 
 	if len(violations) > 0 {

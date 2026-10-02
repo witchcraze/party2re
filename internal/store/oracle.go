@@ -66,8 +66,7 @@ type WallpaperInfo struct {
 }
 
 type OracleInspectResult struct {
-	Message string `json:"message"`
-	Hint    string `json:"hint,omitempty"`
+	Hint string `json:"hint,omitempty"`
 }
 
 type CostumeBuyResult struct {
@@ -75,12 +74,10 @@ type CostumeBuyResult struct {
 	ItemName    string `json:"item_name"`
 	Price       int    `json:"price"`
 	DeliveredTo string `json:"delivered_to"`
-	Message     string `json:"message"`
 }
 
 type HomeWallpaperResult struct {
 	Wallpaper string `json:"wallpaper"`
-	Message   string `json:"message"`
 }
 
 type HomeWallpaperRepository interface {
@@ -176,11 +173,9 @@ func OracleTalk() string {
 	return OracleWords[idx]
 }
 
-// OracleInspect returns legacy NPC inspection dialogue and Black Market hint if eligible (job_lv >= 15).
+// OracleInspect returns Black Market hint if eligible (job_lv >= 15).
 func OracleInspect(jobLevel int) OracleInspectResult {
-	res := OracleInspectResult{
-		Message: OracleInspectMessage,
-	}
+	res := OracleInspectResult{}
 	if jobLevel >= MinBlackMarketJobLv {
 		res.Hint = OracleBlackMarketHint
 	}
@@ -332,19 +327,11 @@ func (s *Service) BuyCostumeItem(ctx context.Context, characterID string, itemNo
 			_ = s.collection.RecordItemDiscovered(txCtx, characterID, defID, selected.Name, "ITEM")
 		}
 
-		var msg string
-		if deliveryRes.DeliveredTo == depot.DeliveredToInventory {
-			msg = fmt.Sprintf("%sだな。ほい、どうぞ", selected.Name)
-		} else {
-			msg = fmt.Sprintf("%sは%sの預かり所に送っておいたよん", selected.Name, char.Name)
-		}
-
 		result = &CostumeBuyResult{
 			ItemNo:      selected.ItemNo,
 			ItemName:    selected.Name,
 			Price:       selected.Price,
 			DeliveredTo: string(deliveryRes.DeliveredTo),
-			Message:     msg,
 		}
 		return nil
 	})
@@ -425,7 +412,6 @@ func (s *Service) BuyHomeWallpaper(ctx context.Context, characterID string, wall
 
 		result = &HomeWallpaperResult{
 			Wallpaper: savedWallpaper,
-			Message:   fmt.Sprintf("%sの家の壁紙を %s に、張り替えておいたよん", char.Name, cleanWallpaper),
 		}
 		return nil
 	})

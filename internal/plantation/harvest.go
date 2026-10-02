@@ -67,7 +67,7 @@ func (s *Service) Harvest(ctx context.Context, characterID string) (HarvestResul
 			}
 			res = HarvestResult{
 				Withered: true,
-				Message:  fmt.Sprintf("%sは芽が出なかったよ…", seed.Name),
+				SeedName: seed.Name,
 			}
 			return nil
 		}
@@ -139,22 +139,17 @@ func (s *Service) Harvest(ctx context.Context, characterID string) (HarvestResul
 		}
 
 		yields := make([]HarvestYield, 0, len(batches))
-		var msgBuilder strings.Builder
-		msgBuilder.WriteString("収穫したよ！\n")
 		for _, b := range batches {
 			yields = append(yields, HarvestYield{
 				ItemID:   b.id,
 				ItemName: b.name,
 				Quantity: b.quantity,
 			})
-			msgBuilder.WriteString(fmt.Sprintf("%sを%d個\n", b.name, b.quantity))
 		}
-		msgBuilder.WriteString("倉庫に送っておいたよ")
 
 		res = HarvestResult{
 			Withered: false,
 			Yields:   yields,
-			Message:  msgBuilder.String(),
 		}
 		return nil
 	})
