@@ -112,7 +112,7 @@ func (h *Handler) handleGemStoreBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req gemStoreBuyRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -140,7 +140,7 @@ func (h *Handler) handleGemStoreSell(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req gemStoreSellRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -168,7 +168,7 @@ func (h *Handler) handleGemStoreSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req gemStoreSendRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -196,7 +196,7 @@ func (h *Handler) handleGemStoreSynthesize(w http.ResponseWriter, r *http.Reques
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req gemStoreSynthesizeRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -224,7 +224,7 @@ func (h *Handler) handleGemStoreAppraise(w http.ResponseWriter, r *http.Request)
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req gemStoreAppraiseRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -270,7 +270,7 @@ func (h *Handler) handleSortGemBox(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		box, err := h.gemstore.SortGemBox(r.Context(), char.ID)
 		if err != nil {
 			h.writeGemStoreError(w, err)

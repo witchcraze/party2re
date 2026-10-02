@@ -216,6 +216,9 @@ func TestHTTPAuthenticationAndAuthorizationLinter(t *testing.T) {
 	// 4. Verify request structs containing CharacterID field are handled via withAuthenticatedCharacterAndJSON
 	verifyCharacterIDRequestPayloads(t, httpPkg, handlers)
 
+	// 5. Verify town facility mutating endpoints strictly enforce action guards (sleeping / rescue penalty lock)
+	verifyTownFacilityActionGuards(t, handlers)
+
 	t.Logf("Successfully verified HTTP auth invariants across %d production files (%d parsed) in %s", checkedFiles, parsedFiles, time.Since(start))
 }
 
@@ -372,6 +375,102 @@ func containsAny(slice []string, targets ...string) bool {
 		}
 	}
 	return false
+}
+
+func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncDecl) {
+	t.Helper()
+
+	requiredActionGuardHandlers := map[string]string{
+		// Bank
+		"handleBankDeposit":  "bank.go",
+		"handleBankWithdraw": "bank.go",
+		// Job
+		"handleChangeJob":          "job.go",
+		"handleExchangeJob":        "job.go",
+		"handleSaveFutureMemory":   "job.go",
+		"handleRecallFutureMemory": "job.go",
+		// Depot
+		"handleDepositDepotItem":  "depot.go",
+		"handleWithdrawDepotItem": "depot.go",
+		"handleSellDepotItem":     "depot.go",
+		"handleSellDepotBatch":    "depot.go",
+		"handleSortDepot":         "depot.go",
+		"handleExpandDepot":       "depot.go",
+		"handleDepotSendMoney":    "depot.go",
+		"handleDepotSendItem":     "depot.go",
+		// Plantation
+		"handlePlantationSow":       "plantation.go",
+		"handlePlantationFertilize": "plantation.go",
+		"handlePlantationHarvest":   "plantation.go",
+		// Altar
+		"handleAltarPray":  "altar.go",
+		"handleAltarWish":  "altar.go",
+		"handleAltarOffer": "altar.go",
+		// Chapel
+		"handleChapelPray": "chapel.go",
+		// Wishing Well
+		"handleWishingWellExchange": "wishingwell.go",
+		// Contest
+		"handleEnterContest":         "contest.go",
+		"handleVoteContest":          "contest.go",
+		"handleSaveCharacterPhoto":   "contest.go",
+		"handleDeleteCharacterPhoto": "contest.go",
+		// Gemstore
+		"handleGemStoreBuy":        "gemstore.go",
+		"handleGemStoreSell":       "gemstore.go",
+		"handleGemStoreSend":       "gemstore.go",
+		"handleGemStoreSynthesize": "gemstore.go",
+		"handleGemStoreAppraise":   "gemstore.go",
+		"handleSortGemBox":         "gemstore.go",
+		// Lottery
+		"handlePlayRaffle":          "lottery.go",
+		"handleBuyTakarakujiTicket": "lottery.go",
+		// Event Plaza
+		"handlePostEventPlazaPresence":         "eventplaza.go",
+		"handlePostEventPlazaMerchantPurchase": "eventplaza.go",
+		"handlePostEventPlazaBanquetToast":     "eventplaza.go",
+		// Tavern
+		"handleTavernOrder":           "tavern.go",
+		"handleTavernReserveDelivery": "tavern.go",
+		"handleTavernCancelDelivery":  "tavern.go",
+		"handleTavernClaimDelivery":   "tavern.go",
+		"handleTavernTalk":            "tavern.go",
+		// Custom Skill
+		"handleSetCustomSkill": "custom_skill.go",
+		// Guild
+		"handleCreateGuild":             "guild.go",
+		"handleApplyGuild":              "guild.go",
+		"handleApproveGuildApplication": "guild.go",
+		"handleRejectGuildApplication":  "guild.go",
+		"handleBroadcastGuildCallout":   "guild.go",
+		"handleAssignGuildRoleTitle":    "guild.go",
+		"handleCustomizeGuild":          "guild.go",
+		"handleLeaveGuild":              "guild.go",
+		"handleKickGuildMember":         "guild.go",
+		"handleDisbandGuild":            "guild.go",
+		// Medal
+		"handleClaimMedalReward": "medal.go",
+		"handleClaimAchievement": "medal.go",
+		// Adventure
+		"handleStartAdventure": "handler.go",
+	}
+
+	for handlerName, sourceFile := range requiredActionGuardHandlers {
+		fnDecl, exists := handlers[handlerName]
+		if !exists {
+			t.Errorf("action guard violation: expected handler %s (%s) not found in AST index", handlerName, sourceFile)
+			continue
+		}
+
+		calls := extractFunctionCalls(fnDecl)
+		hasActionGuard := containsAny(calls, "withAuthenticatedActionCharacter", "withAuthenticatedActionCharacterAndJSON")
+		hasPlainGuard := containsAny(calls, "withAuthenticatedCharacter", "withAuthenticatedCharacterAndJSON")
+
+		if !hasActionGuard || hasPlainGuard {
+			t.Errorf("action guard violation: facility handler %s (%s) must enforce withAuthenticatedActionCharacter(AndJSON) and cannot regress to plain withAuthenticatedCharacter(AndJSON) (calls: %v)",
+				handlerName, sourceFile, calls)
+		}
+	}
 }
 
 // Ensure unused import safety

@@ -53,7 +53,7 @@ func (h *Handler) handleSetCustomSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req customSkillRequest
 		if !decodeJSON(w, r, &req) {
 			return

@@ -53,7 +53,7 @@ func (h *Handler) handleClaimMedalReward(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *claimMedalRewardRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *claimMedalRewardRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req claimMedalRewardRequest) {
 		updatedChar, updatedDepot, err := h.medals.Claim(r.Context(), char.ID, req.ItemID)
@@ -127,7 +127,7 @@ func (h *Handler) handleClaimAchievement(w http.ResponseWriter, r *http.Request)
 	charID := r.PathValue("id")
 	achievementID := r.PathValue("achievement_id")
 
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		res, err := h.medals.ClaimAchievement(r.Context(), char.ID, achievementID)
 		if err != nil {
 			if errors.Is(err, medal.ErrAchievementNotFound) {

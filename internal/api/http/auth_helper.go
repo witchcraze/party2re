@@ -156,11 +156,6 @@ func (h *Handler) guardSleepingCharacter(w http.ResponseWriter, r *http.Request,
 	return true
 }
 
-// ensureNotSleeping is an alias for guardSleepingCharacter for backward compatibility.
-func (h *Handler) ensureNotSleeping(w http.ResponseWriter, r *http.Request, charID string) bool {
-	return h.guardSleepingCharacter(w, r, charID)
-}
-
 // withAuthenticatedActionCharacter validates player authentication, character ownership,
 // and ensures the character is not sleeping before invoking the callback.
 func (h *Handler) withAuthenticatedActionCharacter(

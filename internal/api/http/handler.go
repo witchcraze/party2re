@@ -983,12 +983,9 @@ type adventureResponse struct {
 }
 
 func (h *Handler) handleStartAdventure(w http.ResponseWriter, r *http.Request) {
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *startAdventureRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *startAdventureRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req startAdventureRequest) {
-		if !h.ensureNotSleeping(w, r, char.ID) {
-			return
-		}
 		adv, err := h.adventures.StartStage(r.Context(), char.ID, req.StageID)
 		if err != nil {
 			if errors.Is(err, adventure.ErrLevelRequirementNotMet) || errors.Is(err, adventure.ErrJobLevelRequirementNotMet) {

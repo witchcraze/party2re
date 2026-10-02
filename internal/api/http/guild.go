@@ -183,7 +183,7 @@ func (h *Handler) handleCreateGuild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *createGuildRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *createGuildRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req createGuildRequest) {
 		g, m, _, err := h.guild.Create(r.Context(), char.ID, req.Name)
@@ -207,7 +207,7 @@ func (h *Handler) handleApplyGuild(w http.ResponseWriter, r *http.Request) {
 	}
 
 	guildID := r.PathValue("id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *guildActionCharacterRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *guildActionCharacterRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, _ guildActionCharacterRequest) {
 		if err := h.guild.ApplyToJoin(r.Context(), guildID, char.ID); err != nil {
@@ -228,7 +228,7 @@ func (h *Handler) handleApproveGuildApplication(w http.ResponseWriter, r *http.R
 
 	guildID := r.PathValue("id")
 	applicantID := r.PathValue("applicant_id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *approveGuildApplicationRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *approveGuildApplicationRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req approveGuildApplicationRequest) {
 		title := req.Title
@@ -253,7 +253,7 @@ func (h *Handler) handleRejectGuildApplication(w http.ResponseWriter, r *http.Re
 
 	guildID := r.PathValue("id")
 	applicantID := r.PathValue("applicant_id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *guildActionCharacterRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *guildActionCharacterRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, _ guildActionCharacterRequest) {
 		if err := h.guild.RejectApplication(r.Context(), guildID, char.ID, applicantID); err != nil {
@@ -273,7 +273,7 @@ func (h *Handler) handleBroadcastGuildCallout(w http.ResponseWriter, r *http.Req
 	}
 
 	guildID := r.PathValue("id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *broadcastGuildCalloutRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *broadcastGuildCalloutRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req broadcastGuildCalloutRequest) {
 		if err := h.guild.BroadcastCallout(r.Context(), guildID, char.ID, req.Message); err != nil {
@@ -294,7 +294,7 @@ func (h *Handler) handleAssignGuildRoleTitle(w http.ResponseWriter, r *http.Requ
 
 	guildID := r.PathValue("id")
 	targetCharID := r.PathValue("char_id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *assignGuildRoleTitleRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *assignGuildRoleTitleRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req assignGuildRoleTitleRequest) {
 		if err := h.guild.AssignCustomRole(r.Context(), guildID, char.ID, targetCharID, req.Title); err != nil {
@@ -314,7 +314,7 @@ func (h *Handler) handleCustomizeGuild(w http.ResponseWriter, r *http.Request) {
 	}
 
 	guildID := r.PathValue("id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *customizeGuildRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *customizeGuildRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req customizeGuildRequest) {
 		if req.Color != "" {
@@ -354,7 +354,7 @@ func (h *Handler) handleLeaveGuild(w http.ResponseWriter, r *http.Request) {
 	}
 
 	guildID := r.PathValue("id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *guildActionCharacterRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *guildActionCharacterRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, _ guildActionCharacterRequest) {
 		if err := h.guild.Leave(r.Context(), guildID, char.ID); err != nil {
@@ -375,7 +375,7 @@ func (h *Handler) handleKickGuildMember(w http.ResponseWriter, r *http.Request) 
 
 	guildID := r.PathValue("id")
 	targetCharID := r.PathValue("char_id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *guildActionCharacterRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *guildActionCharacterRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, _ guildActionCharacterRequest) {
 		if err := h.guild.Kick(r.Context(), guildID, char.ID, targetCharID); err != nil {
@@ -395,7 +395,7 @@ func (h *Handler) handleDisbandGuild(w http.ResponseWriter, r *http.Request) {
 	}
 
 	guildID := r.PathValue("id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *guildActionCharacterRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *guildActionCharacterRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, _ guildActionCharacterRequest) {
 		if err := h.guild.Disband(r.Context(), guildID, char.ID); err != nil {

@@ -63,7 +63,7 @@ func (h *Handler) handleChangeJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req changeJobRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -98,7 +98,7 @@ func (h *Handler) handleExchangeJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req exchangeJobRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -149,7 +149,7 @@ func (h *Handler) handleSaveFutureMemory(w http.ResponseWriter, r *http.Request)
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		snapshot, err := h.jobs.SaveFutureMemory(r.Context(), char.ID)
 		if err != nil {
 			if errors.Is(err, corejob.ErrJobUnavailable) || errors.Is(err, jobapp.ErrRequiredItem) ||
@@ -172,7 +172,7 @@ func (h *Handler) handleRecallFutureMemory(w http.ResponseWriter, r *http.Reques
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req recallFutureMemoryRequest
 		if !decodeJSON(w, r, &req) {
 			return

@@ -153,7 +153,7 @@ func (h *Handler) handleDepositDepotItem(w http.ResponseWriter, r *http.Request)
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req depositItemRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -175,7 +175,7 @@ func (h *Handler) handleWithdrawDepotItem(w http.ResponseWriter, r *http.Request
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req withdrawItemRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -197,7 +197,7 @@ func (h *Handler) handleSellDepotItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req sellDepotItemRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -222,7 +222,7 @@ func (h *Handler) handleSellDepotBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req sellDepotBatchRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -247,7 +247,7 @@ func (h *Handler) handleSortDepot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		dep, err := h.depot.SortItems(r.Context(), char.ID)
 		if err != nil {
 			mapDepotHTTPError(w, err)
@@ -264,7 +264,7 @@ func (h *Handler) handleExpandDepot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		dep, err := h.depot.Expand(r.Context(), char.ID)
 		if err != nil {
 			mapDepotHTTPError(w, err)
@@ -281,7 +281,7 @@ func (h *Handler) handleDepotSendMoney(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req sendMoneyRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -308,7 +308,7 @@ func (h *Handler) handleDepotSendItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req sendItemRequest
 		if !decodeJSON(w, r, &req) {
 			return

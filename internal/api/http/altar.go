@@ -90,7 +90,7 @@ func (h *Handler) handleAltarPray(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		result, err := h.altar.Pray(r.Context(), char.ID)
 		if err != nil {
 			if errors.Is(err, altar.ErrInsufficientOrbs) {
@@ -116,7 +116,7 @@ func (h *Handler) handleAltarWish(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req altarWishRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -147,7 +147,7 @@ func (h *Handler) handleAltarOffer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req altarOfferRequest
 		if !decodeJSON(w, r, &req) {
 			return

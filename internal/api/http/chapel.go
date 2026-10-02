@@ -74,7 +74,7 @@ func (h *Handler) handleChapelPray(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req prayChapelRequest
 		if !decodeJSON(w, r, &req) {
 			return
