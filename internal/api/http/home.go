@@ -10,6 +10,7 @@ import (
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/pagination"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 // HomeEstateService defines estate, item, and color operations.
@@ -159,7 +160,7 @@ func (h *Handler) handleSendLetter(w http.ResponseWriter, r *http.Request) {
 			}
 			if errors.Is(err, home.ErrInvalidSender) || errors.Is(err, home.ErrInvalidRecipient) ||
 				errors.Is(err, home.ErrCannotSendToSelf) || errors.Is(err, home.ErrEmptyContent) ||
-				errors.Is(err, home.ErrContentTooLong) {
+				errors.Is(err, home.ErrContentTooLong) || isTextValidationError(err) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
@@ -341,7 +342,9 @@ func (h *Handler) handleTeachCompanionPhrase(w http.ResponseWriter, r *http.Requ
 
 		phrase, err := h.homes.TeachCompanionPhrase(r.Context(), char.ID, req.Phrase)
 		if err != nil {
-			if errors.Is(err, home.ErrEmptyPhrase) || errors.Is(err, home.ErrPhraseTooLong) || errors.Is(err, home.ErrMaxPhrasesReached) || errors.Is(err, home.ErrNoPetsAtHome) {
+			if errors.Is(err, home.ErrEmptyPhrase) || errors.Is(err, home.ErrPhraseTooLong) ||
+				errors.Is(err, home.ErrMaxPhrasesReached) || errors.Is(err, home.ErrNoPetsAtHome) ||
+				isTextValidationError(err) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
@@ -462,4 +465,13 @@ func (h *Handler) handleClearDeliveryNotices(w http.ResponseWriter, r *http.Requ
 
 		w.WriteHeader(http.StatusNoContent)
 	})
+}
+
+func isTextValidationError(err error) bool {
+	return errors.Is(err, validation.ErrControlCharacter) ||
+		errors.Is(err, validation.ErrZeroWidth) ||
+		errors.Is(err, validation.ErrBidiOverride) ||
+		errors.Is(err, validation.ErrZalgo) ||
+		errors.Is(err, validation.ErrEmpty) ||
+		errors.Is(err, validation.ErrTooLong)
 }

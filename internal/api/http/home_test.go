@@ -16,6 +16,7 @@ import (
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/pagination"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 type mockHomeService struct {
@@ -388,6 +389,29 @@ func TestHomeEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("POST /letters - invalid text rejection returns 422", func(t *testing.T) {
+		invalidSvc := &mockHomeService{
+			sendLetterFn: func(ctx context.Context, senderID, recipientID, content, color string) (home.Letter, error) {
+				return home.Letter{}, validation.ErrControlCharacter
+			},
+		}
+		h, _ := apihttp.NewHandler(players, chars, advs, shops, apihttp.WithHome(invalidSvc))
+		body, _ := json.Marshal(map[string]string{
+			"sender_character_id":    "char-1",
+			"recipient_character_id": "char-2",
+			"content":                "Hello\x00World",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/letters", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("expected 422 Unprocessable Entity, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("GET /letters/inbox - success", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/letters/inbox?character_id=char-1", nil)
 		req.Header.Set("Authorization", "Bearer valid-session")
@@ -512,6 +536,27 @@ func TestHomeEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("expected 201 Created, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("POST /homes/{id}/companion/phrases - invalid text rejection returns 422", func(t *testing.T) {
+		invalidSvc := &mockHomeService{
+			teachCompanionPhraseFn: func(ctx context.Context, characterID, phrase string) (home.CompanionPhrase, error) {
+				return home.CompanionPhrase{}, validation.ErrControlCharacter
+			},
+		}
+		h, _ := apihttp.NewHandler(players, chars, advs, shops, apihttp.WithHome(invalidSvc))
+		body, _ := json.Marshal(map[string]string{
+			"phrase": "Hello\nWorld",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/homes/char-1/companion/phrases", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("expected 422 Unprocessable Entity, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 

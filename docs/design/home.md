@@ -35,7 +35,7 @@ Asynchronous direct messaging between characters:
   - Letters are addressed from a sender character to a recipient character.
   - Sending to self is rejected (`ErrCannotSendToSelf`).
 - **Letter Attributes**:
-  - `content`: 1 to 1,000 characters.
+  - `content`: 1 to 1,000 characters. Sanitized via `internal/validation.ValidateMultiLine`: Unicode NFC normalized, permits newlines (`\n`, `\r`), and rejects C0/C1 control characters, zero-width characters (`\u200B`, `\u200C`, `\u200D`, `\uFEFF`), bidirectional text overrides (`\u202A`–`\u202E`, `\u2066`–`\u2069`), and excessive combining diacritics (Zalgo).
   - `color`: Custom font color HEX code (default: `#000000`).
   - `is_read`: Boolean status with timestamp `read_at`.
 - **Folder Navigation**:
@@ -58,8 +58,7 @@ The resident home companion/pet pool aggregates both monster pets brought home f
   - If a character exists but has 0 pets or companions residing at Home (`ListHomePets`), talking or teaching phrases is rejected with `ErrNoPetsAtHome` (HTTP `422 Unprocessable Entity`), matching legacy CGI behavior ("教える相手がいません" / "しかし、誰もいなかった…").
 - **Teaching Phrases (`ことばをおしえる`)**:
   - Up to 30 unique phrases per companion (original CGI specification).
-  - Length: 1 to 120 characters per phrase (original CGI specification).
-- **Forgetting Phrases (`ことばをわすれさせる`)**:
+  - Length: 1 to 120 characters per phrase (original CGI specification). Sanitized via `internal/validation.ValidateSingleLine`: Unicode NFC normalized, single-line (newlines rejected), and rejects C0/C1 control characters, zero-width characters (`\u200B`, `\u200C`, `\u200D`, `\uFEFF`), bidirectional text overrides (`\u202A`–`\u202E`, `\u2066`–`\u2069`), and excessive combining diacritics (Zalgo).
   - Owner can remove individual phrases by ID.
 - **Talking (`＠はなす`)**:
   - Randomly selects one speaker pet from resident home pets and picks one of the taught phrases.

@@ -10,6 +10,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 type mockCharReader struct {
@@ -561,6 +562,42 @@ func TestHomeService(t *testing.T) {
 		}
 	})
 
+	t.Run("send letter validation and NFC normalization", func(t *testing.T) {
+		// Control character rejection
+		_, err := service.SendLetter(ctx, "char-1", "char-2", "Hello\x00World", "")
+		if !errors.Is(err, validation.ErrControlCharacter) {
+			t.Errorf("expected ErrControlCharacter, got %v", err)
+		}
+
+		// Zero-width character rejection
+		_, err = service.SendLetter(ctx, "char-1", "char-2", "Hello\u200BWorld", "")
+		if !errors.Is(err, validation.ErrZeroWidth) {
+			t.Errorf("expected ErrZeroWidth, got %v", err)
+		}
+
+		// Bidi override rejection
+		_, err = service.SendLetter(ctx, "char-1", "char-2", "Hello\u202EWorld", "")
+		if !errors.Is(err, validation.ErrBidiOverride) {
+			t.Errorf("expected ErrBidiOverride, got %v", err)
+		}
+
+		// Zalgo rejection
+		_, err = service.SendLetter(ctx, "char-1", "char-2", "Hello Z\u0300\u0301\u0302algo", "")
+		if !errors.Is(err, validation.ErrZalgo) {
+			t.Errorf("expected ErrZalgo, got %v", err)
+		}
+
+		// NFC normalization: NFD "Cafe\u0301" becomes NFC "Café" (\u00e9)
+		letter, err := service.SendLetter(ctx, "char-1", "char-2", "Cafe\u0301", "")
+		if err != nil {
+			t.Fatalf("expected SendLetter to succeed, got %v", err)
+		}
+		expectedContent := "Café"
+		if letter.Content != expectedContent {
+			t.Errorf("expected NFC normalized content %q, got %q", expectedContent, letter.Content)
+		}
+	})
+
 	t.Run("companion phrases teaching and talking", func(t *testing.T) {
 		// Companion talks when no phrases taught -> default fallback
 		talk, err := service.TalkToCompanion(ctx, "char-1")
@@ -596,6 +633,49 @@ func TestHomeService(t *testing.T) {
 		if len(phrases) != 0 {
 			t.Errorf("expected 0 phrases after forget, got %d", len(phrases))
 		}
+	})
+
+	t.Run("teach companion phrase validation and NFC normalization", func(t *testing.T) {
+		// Newline rejection
+		_, err := service.TeachCompanionPhrase(ctx, "char-1", "Hello\nWorld")
+		if !errors.Is(err, validation.ErrControlCharacter) {
+			t.Errorf("expected ErrControlCharacter for newline, got %v", err)
+		}
+
+		// Control character rejection
+		_, err = service.TeachCompanionPhrase(ctx, "char-1", "Hello\x07World")
+		if !errors.Is(err, validation.ErrControlCharacter) {
+			t.Errorf("expected ErrControlCharacter, got %v", err)
+		}
+
+		// Zero-width character rejection
+		_, err = service.TeachCompanionPhrase(ctx, "char-1", "Hello\uFEFFWorld")
+		if !errors.Is(err, validation.ErrZeroWidth) {
+			t.Errorf("expected ErrZeroWidth, got %v", err)
+		}
+
+		// Bidi override rejection
+		_, err = service.TeachCompanionPhrase(ctx, "char-1", "Hello\u2066World")
+		if !errors.Is(err, validation.ErrBidiOverride) {
+			t.Errorf("expected ErrBidiOverride, got %v", err)
+		}
+
+		// Zalgo rejection
+		_, err = service.TeachCompanionPhrase(ctx, "char-1", "Z\u0300\u0301\u0302algo")
+		if !errors.Is(err, validation.ErrZalgo) {
+			t.Errorf("expected ErrZalgo, got %v", err)
+		}
+
+		// NFC normalization: NFD "Cafe\u0301" becomes NFC "Café" (\u00e9)
+		cp, err := service.TeachCompanionPhrase(ctx, "char-1", "Cafe\u0301")
+		if err != nil {
+			t.Fatalf("expected TeachCompanionPhrase to succeed, got %v", err)
+		}
+		expectedPhrase := "Café"
+		if cp.Phrase != expectedPhrase {
+			t.Errorf("expected NFC normalized phrase %q, got %q", expectedPhrase, cp.Phrase)
+		}
+		_ = service.ForgetCompanionPhrase(ctx, cp.ID, "char-1")
 	})
 
 	t.Run("Heaven Wish companion support in home view, talking, teaching", func(t *testing.T) {

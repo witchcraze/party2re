@@ -1,8 +1,11 @@
 package home
 
 import (
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 func TestValidateLetter(t *testing.T) {
@@ -18,6 +21,13 @@ func TestValidateLetter(t *testing.T) {
 			senderCharacterID:    "char-1",
 			recipientCharacterID: "char-2",
 			content:              "Hello! Let's adventure together.",
+			expectErr:            nil,
+		},
+		{
+			name:                 "valid multiline letter",
+			senderCharacterID:    "char-1",
+			recipientCharacterID: "char-2",
+			content:              "Hello!\nLet's adventure together.\r\nSee you tomorrow!",
 			expectErr:            nil,
 		},
 		{
@@ -55,13 +65,41 @@ func TestValidateLetter(t *testing.T) {
 			content:              strings.Repeat("a", MaxLetterContentLength+1),
 			expectErr:            ErrContentTooLong,
 		},
+		{
+			name:                 "content with disallowed control character",
+			senderCharacterID:    "char-1",
+			recipientCharacterID: "char-2",
+			content:              "Hello\x00World",
+			expectErr:            validation.ErrControlCharacter,
+		},
+		{
+			name:                 "content with zero-width character",
+			senderCharacterID:    "char-1",
+			recipientCharacterID: "char-2",
+			content:              "Hello\u200BWorld",
+			expectErr:            validation.ErrZeroWidth,
+		},
+		{
+			name:                 "content with bidi override",
+			senderCharacterID:    "char-1",
+			recipientCharacterID: "char-2",
+			content:              "Hello\u202EWorld",
+			expectErr:            validation.ErrBidiOverride,
+		},
+		{
+			name:                 "content with zalgo diacritics",
+			senderCharacterID:    "char-1",
+			recipientCharacterID: "char-2",
+			content:              "Hello Z\u0300\u0301\u0302algo",
+			expectErr:            validation.ErrZalgo,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateLetter(tt.senderCharacterID, tt.recipientCharacterID, tt.content)
 			if tt.expectErr != nil {
-				if err != tt.expectErr {
+				if !errors.Is(err, tt.expectErr) {
 					t.Fatalf("expected error %v, got %v", tt.expectErr, err)
 				}
 			} else {
@@ -94,13 +132,38 @@ func TestValidatePhrase(t *testing.T) {
 			phrase:    strings.Repeat("a", MaxPhraseLength+1),
 			expectErr: ErrPhraseTooLong,
 		},
+		{
+			name:      "phrase with newline disallowed in single line",
+			phrase:    "Hello\nWorld",
+			expectErr: validation.ErrControlCharacter,
+		},
+		{
+			name:      "phrase with control character",
+			phrase:    "Hello\x07World",
+			expectErr: validation.ErrControlCharacter,
+		},
+		{
+			name:      "phrase with zero-width character",
+			phrase:    "Hello\uFEFFWorld",
+			expectErr: validation.ErrZeroWidth,
+		},
+		{
+			name:      "phrase with bidi override",
+			phrase:    "Hello\u2066World",
+			expectErr: validation.ErrBidiOverride,
+		},
+		{
+			name:      "phrase with zalgo diacritics",
+			phrase:    "Z\u0300\u0301\u0302algo",
+			expectErr: validation.ErrZalgo,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidatePhrase(tt.phrase)
 			if tt.expectErr != nil {
-				if err != tt.expectErr {
+				if !errors.Is(err, tt.expectErr) {
 					t.Fatalf("expected error %v, got %v", tt.expectErr, err)
 				}
 			} else {
