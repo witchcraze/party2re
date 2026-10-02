@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #935 — [Chore] Docs: Slim down rules, STATUS.md, and development docs to reduce token bloat
+Last updated: Issue #944 — [Specification] PlayerContext: Define Action Catalog & Legacy Precondition Matrix
 
 ## Current Phase
 
@@ -29,7 +29,7 @@ All Version 1.0 foundational systems, core combat, 39 feature modules, and the H
 
 See [`ROADMAP.md`](ROADMAP.md) for full milestone details.
 
-1. **Client/Agent Gateway & CQRS Architecture**: Action Catalog (#944), availability engine (#938), `GET /context` (#939), `POST /actions` Gateway (#646), and phased purge of legacy REST routes (#947–#950).
+1. **Client/Agent Gateway & CQRS Architecture**: Availability engine (#938), `GET /context` (#939), `POST /actions` Gateway (#646), and phased purge of legacy REST routes (#947–#950). (Action Catalog defined in #944).
 2. **Headless E2E Gameplay Simulation**: Deterministic multi-turn gameplay loop verification (Issue #650).
 3. **Client Presentation & Web UI**: Browser client and Server-Driven UI (Issue #140).
 4. **Production Asset Pipeline & Final Licensing**: Production asset mapping and license attribution catalog (Issues #143, #202).
