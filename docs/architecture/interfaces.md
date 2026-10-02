@@ -250,6 +250,17 @@ HTTP handlers standardize API responses following pragmatic REST conventions and
   - `error.code` (string): Standardized machine-readable error code for client/agent branching.
   - `error.message` (string): Safe, user-facing error description. Internal system and database diagnostics are logged to operational storage and masked from API responses.
 
+### Client / Agent Gateway (CQRS Architecture)
+
+To support modern Web UI (Server-Driven UI), autonomous AI Agents, and Chatbot integrations (Line/Discord) without client-side routing sprawl or token bloat, the application exposes a unified two-pillar CQRS Gateway:
+
+| Pillar | Method & Path | Responsibility | Output |
+|---|---|---|---|
+| **Query (Observe)** | `GET /characters/{id}/context` | Character snapshot, active timers, and **authoritative whitelist of available actions**. | Lightweight snapshot + `available_actions` (with `required_params`) |
+| **Command (Execute)** | `POST /characters/{id}/actions` | Single-entry-point command dispatcher for all state mutations. | `{ success, result, context }` (updates client state in 1 round trip) |
+
+See [`client-agent-api.md`](client-agent-api.md) for the complete protocol specification, LLM tool integration, and Server-Driven UI lifecycle.
+
 ## Application logging contract
 
 Application services that need operational diagnostics receive an injected
