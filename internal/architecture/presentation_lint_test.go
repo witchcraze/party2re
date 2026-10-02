@@ -98,7 +98,6 @@ var whitelistedLegacyPresentationFields = map[string]string{
 	"blackmarket.TalkResult.Dialogue":             "Issue #930",
 	"eventplaza.BazaarPurchaseResult.NPCMessage":  "Issue #926",
 	"god.WishResult.NPCSpeech":                    "Issue #928",
-	"home.CompanionTalkResult.Dialogue":           "Issue #932",
 	"lottery.TakarakujiPurchaseResult.NPCMessage": "Issue #927",
 	"secretshop.PurchaseResult.NPCMessage":        "Issue #925",
 	"shop.NPCInspectResult.Dialogue":              "Issue #929",

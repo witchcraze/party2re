@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #946 — [Architecture] PlayerContext: Automated Drift-Detection Test between Action Catalog and OpenAPI Specification
+Last updated: Issue #932 — [Architecture] Home: Decouple Dialogue from CompanionTalkResult and format at HTTP layer
 
 ## Current Phase
 

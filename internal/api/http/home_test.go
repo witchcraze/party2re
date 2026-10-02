@@ -213,7 +213,7 @@ func (m *mockHomeService) TalkToCompanion(ctx context.Context, characterID strin
 	if m.talkToCompanionFn != nil {
 		return m.talkToCompanionFn(ctx, characterID)
 	}
-	return home.CompanionTalkResult{PetName: "ポチ", Dialogue: "クエッ！"}, nil
+	return home.CompanionTalkResult{PetName: "ポチ", Phrase: "クエッ！"}, nil
 }
 
 func (m *mockHomeService) ListDeliveryNotices(ctx context.Context, characterID string, unclearedOnly bool) ([]home.DeliveryNotice, error) {
@@ -567,6 +567,42 @@ func TestHomeEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var resp struct {
+			PetName  string `json:"pet_name"`
+			Dialogue string `json:"dialogue"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if resp.PetName != "ポチ" || resp.Dialogue != "クエッ！" {
+			t.Errorf("unexpected response: %+v", resp)
+		}
+	})
+
+	t.Run("GET /homes/{id}/companion/talk - default dialogue fallback", func(t *testing.T) {
+		fallbackSvc := &mockHomeService{
+			talkToCompanionFn: func(ctx context.Context, characterID string) (home.CompanionTalkResult, error) {
+				return home.CompanionTalkResult{PetName: "ポチ", Phrase: ""}, nil
+			},
+		}
+		fallbackHandler, _ := apihttp.NewHandler(players, chars, advs, shops, apihttp.WithHome(fallbackSvc))
+		req := httptest.NewRequest(http.MethodGet, "/homes/char-1/companion/talk", nil)
+		rec := httptest.NewRecorder()
+		fallbackHandler.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var resp struct {
+			PetName  string `json:"pet_name"`
+			Dialogue string `json:"dialogue"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if resp.Dialogue != "クエッ？（何か言いたそうにこちらを見つめている）" {
+			t.Errorf("expected fallback dialogue, got %q", resp.Dialogue)
 		}
 	})
 

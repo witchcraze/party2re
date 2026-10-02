@@ -599,9 +599,9 @@ func TestHomeService(t *testing.T) {
 	})
 
 	t.Run("companion phrases teaching and talking", func(t *testing.T) {
-		// Companion talks when no phrases taught -> default fallback
+		// Companion talks when no phrases taught -> returns empty phrase
 		talk, err := service.TalkToCompanion(ctx, "char-1")
-		if err != nil || talk.Dialogue == "" || talk.PetName != "ポチ" {
+		if err != nil || talk.Phrase != "" || talk.PetName != "ポチ" {
 			t.Errorf("TalkToCompanion failed: %v, talk=%+v", err, talk)
 		}
 
@@ -619,7 +619,7 @@ func TestHomeService(t *testing.T) {
 
 		// Companion talks taught phrase
 		talk, err = service.TalkToCompanion(ctx, "char-1")
-		if err != nil || talk.Dialogue != "クエッ！" || talk.PetName != "ポチ" {
+		if err != nil || talk.Phrase != "クエッ！" || talk.PetName != "ポチ" {
 			t.Errorf("expected 'クエッ！' from 'ポチ', got %+v", talk)
 		}
 
@@ -704,7 +704,7 @@ func TestHomeService(t *testing.T) {
 		if err != nil {
 			t.Fatalf("TalkToCompanion failed: %v", err)
 		}
-		if talk.PetName != "オルテガ" || talk.Dialogue != "父さんは生きている！" {
+		if talk.PetName != "オルテガ" || talk.Phrase != "父さんは生きている！" {
 			t.Errorf("unexpected dialogue response: %+v", talk)
 		}
 	})
@@ -794,7 +794,7 @@ func TestConcurrentTalkToCompanion(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < iterations; i++ {
 				res, err := service.TalkToCompanion(ctx, "char-1")
-				if err != nil || res.Dialogue == "" || res.PetName != "ポチ" {
+				if err != nil || res.Phrase == "" || res.PetName != "ポチ" {
 					t.Errorf("unexpected TalkToCompanion result: %v, %+v", err, res)
 				}
 			}

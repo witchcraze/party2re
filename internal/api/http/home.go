@@ -85,6 +85,8 @@ type teachPhraseRequest struct {
 	Phrase string `json:"phrase"`
 }
 
+const defaultCompanionDialogue = "クエッ？（何か言いたそうにこちらを見つめている）"
+
 type companionTalkResponse struct {
 	PetName  string `json:"pet_name,omitempty"`
 	Dialogue string `json:"dialogue"`
@@ -424,9 +426,14 @@ func (h *Handler) handleTalkToCompanion(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	dialogue := res.Phrase
+	if dialogue == "" {
+		dialogue = defaultCompanionDialogue
+	}
+
 	writeJSON(w, http.StatusOK, companionTalkResponse{
 		PetName:  res.PetName,
-		Dialogue: res.Dialogue,
+		Dialogue: dialogue,
 	})
 }
 

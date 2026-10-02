@@ -693,7 +693,7 @@ func TestHomePetAdapter_HeavenWishCompanionIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TalkToCompanion after teach failed: %v", err)
 	}
-	if talkRes2.PetName != "オルテガ" || talkRes2.Dialogue != phraseText {
+	if talkRes2.PetName != "オルテガ" || talkRes2.Phrase != phraseText {
 		t.Errorf("expected オルテガ speaking %q, got %+v", phraseText, talkRes2)
 	}
 }
