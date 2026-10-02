@@ -53,10 +53,10 @@ func (p HomePet) DisplayName() string {
 	return DefaultCompanionName
 }
 
-// CompanionTalkResult represents the spoken dialogue and speaker pet name.
+// CompanionTalkResult represents the chosen phrase and speaker pet name.
 type CompanionTalkResult struct {
-	PetName  string `json:"pet_name"`
-	Dialogue string `json:"dialogue"`
+	PetName string `json:"pet_name"`
+	Phrase  string `json:"phrase,omitempty"`
 }
 
 const (

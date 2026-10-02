@@ -405,15 +405,15 @@ func (s *Service) TalkToCompanion(ctx context.Context, characterID string) (Comp
 		return CompanionTalkResult{}, err
 	}
 
-	dialogue := "クエッ？（何か言いたそうにこちらを見つめている）"
+	var phrase string
 	if len(phrases) > 0 {
 		phraseIdx := s.randomInt(len(phrases))
-		dialogue = phrases[phraseIdx].Phrase
+		phrase = phrases[phraseIdx].Phrase
 	}
 
 	return CompanionTalkResult{
-		PetName:  petName,
-		Dialogue: dialogue,
+		PetName: petName,
+		Phrase:  phrase,
 	}, nil
 }
 

@@ -62,8 +62,8 @@ The resident home companion/pet pool aggregates both monster pets brought home f
   - Owner can remove individual phrases by ID.
 - **Talking (`＠はなす`)**:
   - Randomly selects one speaker pet from resident home pets and picks one of the taught phrases.
-  - Returns `CompanionTalkResult` containing `PetName` (display name of the chosen pet) and `Dialogue`.
-  - If no phrases are taught, a default greeting (`"クエッ？（何か言いたそうにこちらを見つめている）"`) is spoken by the chosen pet.
+  - Returns `CompanionTalkResult` containing `PetName` (display name of the chosen pet) and `Phrase` (selected phrase, empty string if none taught).
+  - The HTTP transport layer formats presentation dialogue: if `Phrase` is empty, fallback greeting (`"クエッ？（何か言いたそうにこちらを見つめている）"`) is presented in `companionTalkResponse.Dialogue`.
 
 ### 4. Remote Depot & Inventory Item Usage (`＠つかう`)
 

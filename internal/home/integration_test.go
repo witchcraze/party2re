@@ -117,7 +117,7 @@ func TestHomeServiceIntegration(t *testing.T) {
 	}
 
 	talk, err := svc.TalkToCompanion(ctx, char1.ID)
-	if err != nil || talk.Dialogue != "いらっしゃい！" || talk.PetName != "ポチ" {
+	if err != nil || talk.Phrase != "いらっしゃい！" || talk.PetName != "ポチ" {
 		t.Errorf("expected 'いらっしゃい！' from 'ポチ', got %+v, err=%v", talk, err)
 	}
 
