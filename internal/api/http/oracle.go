@@ -3,7 +3,9 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
@@ -56,6 +58,19 @@ type oracleBlackMarketResponse struct {
 	Message  string `json:"message"`
 }
 
+type oracleBuyCostumeResponse struct {
+	ItemNo      int    `json:"item_no"`
+	ItemName    string `json:"item_name"`
+	Price       int    `json:"price"`
+	DeliveredTo string `json:"delivered_to"`
+	Message     string `json:"message"`
+}
+
+type oracleBuyWallpaperResponse struct {
+	Wallpaper string `json:"wallpaper"`
+	Message   string `json:"message"`
+}
+
 func (h *Handler) handleGetOracleStatus(w http.ResponseWriter, r *http.Request) {
 	if h.oracle == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("oracle shop service not configured"))
@@ -104,7 +119,7 @@ func (h *Handler) handleOracleInspect(w http.ResponseWriter, r *http.Request) {
 			CharacterID:  char.ID,
 			LocationName: store.OracleLocationName,
 			NPCName:      store.OracleNPCName,
-			Message:      res.Message,
+			Message:      store.OracleInspectMessage,
 			Hint:         res.Hint,
 		})
 	})
@@ -136,7 +151,21 @@ func (h *Handler) handleOracleBuyCostume(w http.ResponseWriter, r *http.Request)
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, res)
+
+		var msg string
+		if res.DeliveredTo == string(depot.DeliveredToInventory) {
+			msg = fmt.Sprintf("%sだな。ほい、どうぞ", res.ItemName)
+		} else {
+			msg = fmt.Sprintf("%sは%sの預かり所に送っておいたよん", res.ItemName, char.Name)
+		}
+
+		writeJSON(w, http.StatusOK, oracleBuyCostumeResponse{
+			ItemNo:      res.ItemNo,
+			ItemName:    res.ItemName,
+			Price:       res.Price,
+			DeliveredTo: res.DeliveredTo,
+			Message:     msg,
+		})
 	})
 }
 
@@ -163,7 +192,14 @@ func (h *Handler) handleOracleBuyWallpaper(w http.ResponseWriter, r *http.Reques
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, res)
+
+		cleanWallpaper := strings.TrimSuffix(res.Wallpaper, ".gif")
+		msg := fmt.Sprintf("%sの家の壁紙を %s に、張り替えておいたよん", char.Name, cleanWallpaper)
+
+		writeJSON(w, http.StatusOK, oracleBuyWallpaperResponse{
+			Wallpaper: res.Wallpaper,
+			Message:   msg,
+		})
 	})
 }
 

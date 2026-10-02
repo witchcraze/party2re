@@ -238,7 +238,7 @@ func TestFertilize_WithUninitializedDepot(t *testing.T) {
 	if charRepo.chars[charID].Money != 850 {
 		t.Errorf("expected remaining money 850, got %d", charRepo.chars[charID].Money)
 	}
-	if res.Message != "こめぬかをまくよ！" {
-		t.Errorf("unexpected message: %s", res.Message)
+	if res.FertilizerName != "こめぬか" {
+		t.Errorf("unexpected fertilizer name: %s", res.FertilizerName)
 	}
 }

@@ -60,7 +60,6 @@ func (s *stubOracleShopService) BuyCostumeItem(ctx context.Context, characterID 
 		ItemName:    "ピンクスカート",
 		Price:       300,
 		DeliveredTo: "inventory",
-		Message:     "ピンクスカートだな。ほい、どうぞ",
 	}, nil
 }
 
@@ -70,7 +69,6 @@ func (s *stubOracleShopService) BuyHomeWallpaper(ctx context.Context, characterI
 	}
 	return &store.HomeWallpaperResult{
 		Wallpaper: wallpaper + ".gif",
-		Message:   "ボブの家の壁紙を " + wallpaper + " に、張り替えておいたよん",
 	}, nil
 }
 
@@ -197,12 +195,18 @@ func TestOracleShopEndpoints(t *testing.T) {
 			t.Errorf("expected 200 OK, got %d", resp.StatusCode)
 		}
 
-		var buyResp store.CostumeBuyResult
+		var buyResp struct {
+			store.CostumeBuyResult
+			Message string `json:"message"`
+		}
 		if err := json.NewDecoder(resp.Body).Decode(&buyResp); err != nil {
 			t.Fatalf("failed to decode response: %v", err)
 		}
 		if buyResp.ItemNo != 44 || buyResp.DeliveredTo != "inventory" {
 			t.Errorf("unexpected buy response: %+v", buyResp)
+		}
+		if buyResp.Message != "ピンクスカートだな。ほい、どうぞ" {
+			t.Errorf("expected costume buy message, got %q", buyResp.Message)
 		}
 	})
 
@@ -264,6 +268,20 @@ func TestOracleShopEndpoints(t *testing.T) {
 
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("expected 200 OK, got %d", resp.StatusCode)
+		}
+
+		var wallResp struct {
+			Wallpaper string `json:"wallpaper"`
+			Message   string `json:"message"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&wallResp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if wallResp.Wallpaper != "goods.gif" {
+			t.Errorf("expected goods.gif, got %s", wallResp.Wallpaper)
+		}
+		if wallResp.Message != "Heroの家の壁紙を goods に、張り替えておいたよん" {
+			t.Errorf("expected wallpaper message, got %q", wallResp.Message)
 		}
 	})
 

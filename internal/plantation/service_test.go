@@ -439,8 +439,8 @@ func TestFertilize(t *testing.T) {
 	if *res5.Plot.FertilizerID != "gysahl_greens" {
 		t.Errorf("expected fertilizer gysahl_greens, got %v", res5.Plot.FertilizerID)
 	}
-	if res5.Message != "走鳥の野菜をまくよ！" {
-		t.Errorf("expected message '走鳥の野菜をまくよ！', got %q", res5.Message)
+	if res5.FertilizerName != "走鳥の野菜" {
+		t.Errorf("expected fertilizer name '走鳥の野菜', got %q", res5.FertilizerName)
 	}
 	d5, _ := depotRepo.FindByCharacterID(ctx, charID5)
 	if d5.Quantity("item-037") != 0 {

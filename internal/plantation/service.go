@@ -172,15 +172,11 @@ func (s *Service) GetStatus(ctx context.Context, characterID string) (StatusResp
 		}
 	}
 
-	dialogueIndex := s.rng.Intn(len(DefaultLotusDialogues))
-	dialogue := DefaultLotusDialogues[dialogueIndex]
-
 	return StatusResponse{
 		Plot:        plotPtr,
 		Status:      status,
 		Seeds:       AllSeeds(),
 		Fertilizers: AllFertilizers(),
-		Dialogue:    dialogue,
 	}, nil
 }
 
@@ -240,8 +236,8 @@ func (s *Service) Sow(ctx context.Context, characterID string, seedID string) (S
 		}
 
 		res = SowResult{
-			Plot:    plot,
-			Message: fmt.Sprintf("%sをまいたよ！", seed.Name),
+			Plot:     plot,
+			SeedName: seed.Name,
 		}
 		return nil
 	})
@@ -330,8 +326,8 @@ func (s *Service) Fertilize(ctx context.Context, characterID string, fertilizerI
 		}
 
 		res = FertilizeResult{
-			Plot:    plot,
-			Message: fmt.Sprintf("%sをまくよ！", fert.Name),
+			Plot:           plot,
+			FertilizerName: fert.Name,
 		}
 		return nil
 	})

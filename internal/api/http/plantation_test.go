@@ -30,7 +30,6 @@ func (s *stubPlantationService) GetStatus(ctx context.Context, characterID strin
 		Status:      plantation.StatusNone,
 		Seeds:       plantation.AllSeeds(),
 		Fertilizers: plantation.AllFertilizers(),
-		Dialogue:    "種をまいて何ができるかはお楽しみ〜♪",
 	}, nil
 }
 
@@ -45,7 +44,7 @@ func (s *stubPlantationService) Sow(ctx context.Context, characterID string, see
 			SownAt:      time.Now(),
 			MaturesAt:   time.Now().Add(12 * time.Hour),
 		},
-		Message: "赤の種をまいたよ！",
+		SeedName: "赤の種",
 	}, nil
 }
 
@@ -59,7 +58,7 @@ func (s *stubPlantationService) Fertilize(ctx context.Context, characterID strin
 			SeedID:       "red",
 			FertilizerID: &fertilizerID,
 		},
-		Message: "化学肥料をまくよ！",
+		FertilizerName: "化学肥料",
 	}, nil
 }
 
@@ -72,7 +71,6 @@ func (s *stubPlantationService) Harvest(ctx context.Context, characterID string)
 		Yields: []plantation.HarvestYield{
 			{ItemID: "item-001", ItemName: "薬草", Quantity: 1},
 		},
-		Message: "収穫したよ！\n薬草を1個\n倉庫に送っておいたよ",
 	}, nil
 }
 
@@ -116,7 +114,10 @@ func TestHTTP_GetCharacterPlantation(t *testing.T) {
 		t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var res plantation.StatusResponse
+	var res struct {
+		plantation.StatusResponse
+		Dialogue string `json:"dialogue"`
+	}
 	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
 		t.Fatalf("decode response error: %v", err)
 	}
@@ -125,6 +126,9 @@ func TestHTTP_GetCharacterPlantation(t *testing.T) {
 	}
 	if len(res.Seeds) != 6 {
 		t.Errorf("expected 6 seeds, got %d", len(res.Seeds))
+	}
+	if res.Dialogue == "" {
+		t.Errorf("expected non-empty dialogue")
 	}
 }
 
@@ -143,12 +147,18 @@ func TestHTTP_PlantationSow(t *testing.T) {
 		t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var res plantation.SowResult
+	var res struct {
+		plantation.SowResult
+		Message string `json:"message"`
+	}
 	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
 		t.Fatalf("decode response error: %v", err)
 	}
 	if res.Plot.SeedID != "red" {
 		t.Errorf("expected seed red, got %s", res.Plot.SeedID)
+	}
+	if res.Message != "赤の種をまいたよ！" {
+		t.Errorf("expected message, got %q", res.Message)
 	}
 }
 
@@ -167,12 +177,18 @@ func TestHTTP_PlantationFertilize(t *testing.T) {
 		t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var res plantation.FertilizeResult
+	var res struct {
+		plantation.FertilizeResult
+		Message string `json:"message"`
+	}
 	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
 		t.Fatalf("decode response error: %v", err)
 	}
 	if *res.Plot.FertilizerID != "chemical" {
 		t.Errorf("expected chemical fertilizer, got %v", res.Plot.FertilizerID)
+	}
+	if res.Message != "化学肥料をまくよ！" {
+		t.Errorf("expected message, got %q", res.Message)
 	}
 }
 
@@ -189,7 +205,10 @@ func TestHTTP_PlantationHarvest(t *testing.T) {
 		t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var res plantation.HarvestResult
+	var res struct {
+		plantation.HarvestResult
+		Message string `json:"message"`
+	}
 	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
 		t.Fatalf("decode response error: %v", err)
 	}
@@ -198,6 +217,9 @@ func TestHTTP_PlantationHarvest(t *testing.T) {
 	}
 	if len(res.Yields) != 1 {
 		t.Errorf("expected 1 yield, got %d", len(res.Yields))
+	}
+	if res.Message != "収穫したよ！\n薬草を1個\n倉庫に送っておいたよ" {
+		t.Errorf("expected harvest message, got %q", res.Message)
 	}
 }
 

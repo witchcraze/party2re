@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -230,9 +229,6 @@ func TestOracleTalk_CanonicalWords(t *testing.T) {
 func TestOracleInspect_LegacyParity(t *testing.T) {
 	// JobLevel < 15: No hint
 	res := store.OracleInspect(10)
-	if !strings.Contains(res.Message, "おっ？なんじゃなんじゃ？わしゃ何も知らんよ") {
-		t.Errorf("expected legacy inspect message, got: %q", res.Message)
-	}
 	if res.Hint != "" {
 		t.Errorf("expected no hint for jobLevel < 15, got: %q", res.Hint)
 	}
@@ -378,9 +374,6 @@ func TestOracleService_BuyCostumeItem(t *testing.T) {
 	if res.DeliveredTo != "inventory" || res.ItemName != "ピンクスカート" || res.Price != 300 {
 		t.Errorf("unexpected buy result: %+v", res)
 	}
-	if !strings.Contains(res.Message, "ピンクスカートだな。ほい、どうぞ") {
-		t.Errorf("unexpected message: %s", res.Message)
-	}
 
 	// Verify money deducted and collection recorded
 	updatedChar, _ := charRepo.FindByID(ctx, "char-1")
@@ -405,9 +398,6 @@ func TestOracleService_BuyCostumeItem(t *testing.T) {
 	}
 	if resOverflow.DeliveredTo != "depot" {
 		t.Errorf("expected delivered to depot, got %s", resOverflow.DeliveredTo)
-	}
-	if !strings.Contains(resOverflow.Message, "ピンクスカートはアリスの預かり所に送っておいたよん") {
-		t.Errorf("unexpected depot message: %s", resOverflow.Message)
 	}
 }
 
@@ -445,9 +435,6 @@ func TestOracleService_BuyHomeWallpaper(t *testing.T) {
 
 	if res.Wallpaper != "goods.gif" {
 		t.Errorf("expected goods.gif, got %s", res.Wallpaper)
-	}
-	if !strings.Contains(res.Message, "ボブの家の壁紙を goods に、張り替えておいたよん") {
-		t.Errorf("unexpected message: %s", res.Message)
 	}
 
 	// Check wallpaper updated in repo
