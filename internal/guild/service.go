@@ -89,8 +89,8 @@ func (s *Service) Create(ctx context.Context, creatorCharID string, name string)
 	if creatorCharID == "" {
 		return Guild{}, Member{}, corecharacter.Character{}, ErrCharacterNotFound
 	}
-	name = strings.TrimSpace(name)
-	if name == "" || len([]rune(name)) > MaxNameLength {
+	validName, err := ValidateGuildName(name)
+	if err != nil {
 		return Guild{}, Member{}, corecharacter.Character{}, ErrInvalidGuildName
 	}
 
@@ -103,7 +103,7 @@ func (s *Service) Create(ctx context.Context, creatorCharID string, name string)
 	now := s.nowFunc().UTC()
 	g := Guild{
 		ID:                guildID,
-		Name:              name,
+		Name:              validName,
 		LeaderCharacterID: creatorCharID,
 		Points:            0,
 		Notice:            "",

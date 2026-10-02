@@ -6,6 +6,19 @@ The Guild (ギルド) system enables players to form cooperative social organiza
 
 ## Domain Model & Roles
 
+### Guild Creation & Name Validation (`つくる`, `join_guild.cgi:246-250`)
+
+Guild creation adheres strictly to authentic legacy constraints and shared validation security standards:
+
+- **Creation Fee**: 5,000 Gold (`CreationFee`) deducted atomically from the creator's wallet.
+- **Pre-condition**: Creator must not currently belong to or lead any guild.
+- **Name Constraints**:
+  - Length: 1 to 32 runes (`MaxNameLength = 32`).
+  - Whitespace: ASCII whitespace (`\s`) and Japanese fullwidth spaces (`\u3000`) are rejected (both surrounding and internal).
+  - Prohibited Characters: `[,;\"\'&<>\\\/@＠]` are rejected.
+  - Unicode Security: Normalized via Unicode NFC; C0/C1 control characters, zero-width characters, bidirectional overrides, and Zalgo text (>2 consecutive combining marks) are rejected.
+  - Uniqueness: Guild names must be unique across the server.
+
 ### Guild Authority & Membership
 
 - **Leader (`RoleLeader` / ギルマス)**:

@@ -152,6 +152,54 @@ func ValidateCharacterName(name string) (string, error) {
 	return sanitized, nil
 }
 
+// ValidateGuildName validates guild names according to legacy Party2 rules and modern safety checks:
+// - Max 32 runes
+// - No ASCII whitespace (\s) or Japanese fullwidth spaces (\u3000) (internal or surrounding)
+// - No prohibited symbols ([,;\"\'&<>\\\/@＠])
+// - No control characters, zero-width characters, bidi overrides, or Zalgo marks
+// - Unicode NFC normalization
+func ValidateGuildName(name string) (string, error) {
+	if name == "" {
+		return "", ErrEmpty
+	}
+	normalized := norm.NFC.String(name)
+	if normalized == "" {
+		return "", ErrEmpty
+	}
+	if utf8.RuneCountInString(normalized) > 32 {
+		return "", ErrTooLong
+	}
+	if prohibitedNameChars.MatchString(normalized) {
+		return "", ErrProhibitedCharacter
+	}
+
+	consecutiveCombining := 0
+	for _, r := range normalized {
+		if unicode.IsSpace(r) || r == '\u3000' {
+			return "", ErrInternalWhitespace
+		}
+		if isC0OrC1Control(r) {
+			return "", ErrControlCharacter
+		}
+		if isZeroWidth(r) {
+			return "", ErrZeroWidth
+		}
+		if isBidiOverride(r) {
+			return "", ErrBidiOverride
+		}
+		if isCombiningMark(r) {
+			consecutiveCombining++
+			if consecutiveCombining > 2 {
+				return "", ErrZalgo
+			}
+		} else {
+			consecutiveCombining = 0
+		}
+	}
+
+	return normalized, nil
+}
+
 // ValidateStarterJob verifies and normalizes starter job ID.
 // Accepts numeric 1..12 or canonical job-01..job-12.
 func ValidateStarterJob(jobID string) (string, error) {

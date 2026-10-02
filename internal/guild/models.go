@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 type Role string
@@ -82,6 +84,16 @@ func CalculateTitleWidth(s string) int {
 		}
 	}
 	return width
+}
+
+// ValidateGuildName validates guild name constraints according to legacy specifications (join_guild.cgi:246-250)
+// and shared validation security standards (Unicode NFC, max 32 runes, no whitespace, no prohibited symbols, no control/bidi/zalgo).
+func ValidateGuildName(name string) (string, error) {
+	normName, err := validation.ValidateGuildName(name)
+	if err != nil {
+		return "", ErrInvalidGuildName
+	}
+	return normName, nil
 }
 
 // ValidateRoleTitle validates custom role titles according to legacy specifications (guild.cgi:ataeru):
