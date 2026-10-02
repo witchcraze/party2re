@@ -6,18 +6,18 @@ description: Guidelines for system architecture, modular monolith design, layer 
 # Architecture Principles
 
 ## 1. Feature Expansion is a Primary Goal
-New features should be possible without unnecessarily modifying the core or unrelated features. Extensibility must come from clear boundaries, not from abstraction for its own sake.
+New features should be possible without modifying core or unrelated features. Extensibility comes from clear boundaries, not premature abstraction.
 - Prefer: isolated feature modules, explicit responsibilities, stable contracts, data-driven content.
-- Avoid: growing a central God object, feature-specific branches scattered through core code, reaching into another feature's internal implementation.
+- Avoid: growing a central God object, feature-specific branches in core code, accessing another feature's internal state.
 
 ## 2. Start as a Modular Monolith
-Use a single repository and initially prefer a single application/process where practical. Logical component boundaries are required, but physical service separation (microservices) is not. Do not introduce microservices unless a concrete requirement justifies them.
+Single repository and single application process. Logical component boundaries are required, but physical service separation (microservices) is banned unless justified by concrete requirements.
 
 ## 3. Core Must Remain Small
-The Core contains only concepts genuinely shared across the game (e.g., Player, Character, Stats, Progression, Items, Time). Feature-specific concepts belong in their respective feature module. Do not put feature-specific logic into Core merely for convenience.
+Core contains only genuinely shared concepts (Player, Character, Stats, Progression, Items, Time). Feature-specific concepts belong strictly in their respective feature module.
 
 ## 4. Features are First-Class Components
-Features (Adventure, Guild, Casino, Alchemy, etc.) should own their feature-specific rules and state. A feature may depend on public contracts of Core or Domain components (like Battle), but **must not access another Feature Module's private implementation or persistence layer.**
+Features (Adventure, Guild, Casino, Alchemy, etc.) own their feature-specific rules and state. A feature may depend on public contracts of Core or Domain components (like Battle), but **must not access another Feature Module's private implementation or persistence layer.**
 - **Prohibition of Cross-Feature Direct Imports**: Feature packages MUST NOT import peer feature packages directly. Inter-feature communication must route through public API contracts, `core/event.Dispatcher`, or composition roots (`cmd/party2/`).
 - **Prohibition of Direct Database Imports**: Feature packages MUST NOT import `internal/database` directly. Persistence must be accessed strictly through domain repository interfaces.
 - **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/package_boundary_lint_test.go`) during `make check` and CI.
@@ -36,14 +36,13 @@ Features (Adventure, Guild, Casino, Alchemy, etc.) should own their feature-spec
 Do not silently make substantial architectural decisions. Create an Issue if the work would change: Core responsibilities, component boundaries, dependency direction, public contracts, persistence architecture, or external API architecture.
 
 ## 7. Common Components and DRY Guidelines
-- **No Monolithic `util`/`common` Packages**: Do not create generic "junk-drawer" packages (`util` / `common`). Instead, place shared logic in single-responsibility, focused packages (e.g. `internal/id`, `internal/pagination`, `internal/validation`, `internal/api/http/middleware`).
-- **No Generic "Helper" Packages & Domain Identity of `internal/helperquest`**: Generic "helper" packages are strictly forbidden. The package `internal/helperquest` represents the legacy Party2 Helper Quests (`lib/helper.cgi` / 手助け・便利屋クエスト `@リッカ`) and is a first-class gameplay feature domain package, not a common utility module. Shared utilities must never be placed in `internal/helperquest`.
-- **Rule of Three for General Utilities**: For general logic, formatting, and mathematical operations, prefer local implementation until duplication occurs across 3+ modules. Then extract to a dedicated shared package to avoid premature abstraction.
-- **Immediate Centralization for Security & Concurrency**: Security enforcement (session authentication, character ownership validation wrappers like `withAuthenticatedCharacter`) and concurrency-critical utilities (thread-safe RNG via `internal/core/random`) MUST be centralized and reused immediately across all endpoints. Never duplicate auth or random state logic locally. Direct imports of `math/rand` in production packages are prohibited.
-  - **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/rand_lint_test.go`) during `make check` and CI.
-- **Shared Entity Persistence**: Repositories mutating shared Core entities (e.g. character stats, money, level, medals) must use centralized persistence helpers in `internal/database` rather than maintaining scattered raw SQL update queries across multiple repository files.
-- **Encapsulation of Core Domain Attributes (Rich Domain Models)**: Attribute mappings, categorical logic, and evaluations intrinsically belonging to Core domain models/value objects (such as `item.Slot.Kind()`, `item.Slot.Category()`, or character state evaluations) MUST be encapsulated directly on those domain types (`internal/core/*`). Feature services MUST NOT implement private helper functions or ad-hoc switch statements to reconstruct core domain model properties.
-- **Centralized Safe Arithmetic**: Currency, price, and quantity calculations subject to integer overflow MUST use centralized safe arithmetic utilities in `internal/economy` (`economy.SafeMultiply`, `economy.SafeAdd`). Feature packages MUST NOT define local, duplicate multiplication/addition overflow checks or local overflow error types.
+- **No Monolithic `util`/`common` Packages**: Generic "junk-drawer" packages are BANNED. Shared logic belongs in single-responsibility packages (`internal/id`, `internal/pagination`, `internal/validation`).
+- **No Generic "Helper" Packages & Domain Identity of `internal/helperquest`**: Generic "helper" packages are strictly forbidden. The package `internal/helperquest` represents the legacy Party2 Helper Quests (`lib/helper.cgi`) and is a gameplay feature domain package, not a utility module.
+- **Rule of Three for General Utilities**: Prefer local implementation until duplication occurs across 3+ modules before extracting shared utilities.
+- **Immediate Centralization for Security & Concurrency**: Security enforcement (`withAuthenticatedCharacter`) and thread-safe RNG (`internal/core/random`) MUST be centralized immediately. Direct imports of `math/rand` in production packages are prohibited (verified by `rand_lint_test.go`).
+- **Shared Entity Persistence**: Repositories mutating shared Core entities must use centralized persistence helpers in `internal/database` rather than scattered raw SQL updates.
+- **Encapsulation of Core Domain Attributes**: Core domain evaluations (e.g. `item.Slot.Kind()`) MUST be encapsulated directly on domain types (`internal/core/*`), never reconstructed via ad-hoc switches in feature services.
+- **Centralized Safe Arithmetic**: Currency/quantity arithmetic subject to integer overflow MUST use `internal/economy` (`economy.SafeMultiply`, `economy.SafeAdd`). Local duplicate overflow checks are prohibited.
 
 ## 8. Configuration & Environment Variable Boundaries
 To preserve testability, decouple packages from global runtime state, and prevent hidden configuration dependencies:
@@ -70,12 +69,7 @@ To keep files readable, maintainable, and within effective token limits for AI p
 - **Transactional Mutation Boundaries**:
   - **Single-Character Currency & Inventory Operations**: Operations modifying a single character's wallet, medals, or inventory items MUST route through `economy.TransactionRunner` (`ExecuteTransaction` or `economy.Run[T]`). Feature services MUST NOT roll their own ad-hoc transaction orchestration or row locking for single-character currency/inventory mutations.
   - **Peer-to-Peer (P2P) and Multi-Aggregate Operations**: Operations orchestrating transfers between multiple characters (e.g. sender & receiver, buyer & seller) or mutating multiple domain aggregates across storage/table boundaries (e.g. `character_depots`, `gem_boxes`, `flea_market_items`, `player_stores`, `auction_listings`) MUST inject a transaction boundary provider interface (`TransactionProvider` / `RunInTx(ctx, fn) error`, matching `economy.TransactionProvider`).
-  - **Deterministic Lock Hierarchy Enforcement**: Any P2P or multi-aggregate transaction MUST strictly adhere to the global pessimistic lock hierarchy (Rank 0 → Rank 8) defined in `.agents/rules/05-database-and-caching.md`:
-    - Rank 0: Shared peer entity (e.g. `flea_market_items`, `parcels`, `auction_listings`)
-    - Rank 2: Character entities — multiple characters MUST be locked in ascending lexicographical order via `id.Sort2(charID1, charID2)`.
-    - Rank 3: Inventory items (`inventory_items`).
-    - Rank 5: Depot storage (`character_depots`).
-    - Rank 8: Secondary domain feature records (`gem_boxes`, `player_stores`, etc.).
+  - **Deterministic Lock Hierarchy Enforcement**: Any P2P or multi-aggregate transaction MUST strictly adhere to the global pessimistic lock hierarchy (Rank 0 → Rank 8) defined in [`.agents/rules/05-database-and-caching.md`](05-database-and-caching.md) and [`docs/architecture/cross-domain-primitives.md`](../../docs/architecture/cross-domain-primitives.md).
   - **Prohibition of Direct Infrastructure Coupling**: Feature packages MUST NOT import `internal/database` directly to invoke raw `database.RunInTx(ctx, db, ...)` or hold raw `*sql.DB` / `db` identifiers. All database transaction boundaries must be injected via interfaces.
   - **Continuous Mechanical Verification**: Enforced automatically via Go AST static analysis (`internal/architecture/tx_runner_lint_test.go` and `internal/database/lock_hierarchy_lint_test.go`) during `make check` and CI.
 - **Event Dispatcher**: Domain events MUST use `internal/core/event.Dispatcher` two-phase dispatch. See [`docs/architecture/cross-domain-primitives.md`](../../docs/architecture/cross-domain-primitives.md) for architecture, lock order enforcement, and migration examples.

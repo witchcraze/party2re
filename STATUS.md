@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #761 — [Refactor] Architecture: Decouple presentation dialogue from store and plantation domain models and expand AST linter
+Last updated: Issue #935 — [Chore] Docs: Slim down rules, STATUS.md, and development docs to reduce token bloat
 
 ## Current Phase
 
@@ -16,12 +16,12 @@ All Version 1.0 foundational systems, core combat, 39 feature modules, and the H
 
 ## Architecture & System Snapshot (What is True Now)
 
-- **Modular Monolith**: Go standard library HTTP routing with modular wire composition (`cmd/party2/wire.go`).
-- **HTTP Transport & Edge Policy**: Standardized direct RESTful JSON payloads, structured error responses (`StructuredErrorResponse`), HATEOAS action resolution (`ActionURLResolver`), trusted proxy CIDR allowlist (`PARTY2_TRUSTED_PROXIES`) with right-to-left forwarding header traversal for spoof-proof rate limiting, safe direct exposure default via `RemoteAddr`, aligned CORS preflight methods (`GET, POST, PUT, DELETE, OPTIONS`) and headers (`Content-Type, Authorization, X-Admin-Key`), and centralized Unicode NFC sanitization with control/zero-width/Bidi/Zalgo protections (`internal/validation`).
+- **Modular Monolith**: Go stdlib HTTP routing with modular wire composition (`cmd/party2/wire.go`).
+- **HTTP Transport & Edge Policy**: RESTful JSON API with structured error responses, HATEOAS actions, trusted proxy rate limiting, and centralized Unicode NFC sanitization (`internal/validation`).
 - **Durable Persistence**: MariaDB Master (Migrations `001`–`091`) with deterministic row-lock hierarchy (Rank 0→8) and ambient transaction propagation (`database.RunInTx`).
-- **Transient State Architecture**: Ephemeral Turn & Session Lobby Architecture (Candidate C) across multiplayer domains (Casino, PvP, GvG, Party) in Valkey Master, In-Progress Run Buffers (Candidate D), and Shared Boss HP (Candidate E). SSOT: [`docs/architecture/valkey-keyspace.md`](docs/architecture/valkey-keyspace.md).
-- **Lifecycle & Infrastructure Contracts**: Fail-fast startup validation with timeout-bounded connectivity checks for MariaDB and Valkey (`cmd/party2`), zero silent in-memory production fallbacks, and deterministic teardown of allocated resources upon boot failure.
-- **AST Static Verification & CI Gates**: Automated linters enforce lock ordering, transaction runners, interface segregation (ISP), file size (≤500 lines), Valkey keyspace, error-swallow prohibition, and presentation markup/dialogue decoupling across all domain packages with ratcheting whitelist (`presentation_lint_test.go`); non-mutating CI gates enforce modular OpenAPI source synchronization (`sync_openapi --check`) and route coverage.
+- **Transient State**: Valkey Master for ephemeral lobbies & turns (Candidate C), run buffers (Candidate D), and shared boss HP (Candidate E). SSOT: [`docs/architecture/valkey-keyspace.md`](docs/architecture/valkey-keyspace.md).
+- **Lifecycle Contracts**: Fail-fast startup checks for MariaDB/Valkey with clean resource teardown on error.
+- **AST Gates & CI**: Automated AST linters (locks, tx runners, ISP, file size ≤500 lines, Valkey keyspace, presentation decoupling) and non-mutating OpenAPI sync checks (`sync_openapi --check`). SSOT: [`docs/development/ast-linters.md`](docs/development/ast-linters.md).
 
 ---
 
