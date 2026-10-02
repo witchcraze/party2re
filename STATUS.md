@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #771 — [Feature] Validator: Shared user input sanitization and character creation validation
+Last updated: Issue #919 — [Bug] Guild: Reconcile guild name input validation with authentic legacy constraints
 
 ## Current Phase
 

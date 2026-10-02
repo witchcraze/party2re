@@ -3,6 +3,7 @@ package guild_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -292,14 +293,64 @@ func TestService_Create_Validation(t *testing.T) {
 		}
 	})
 
-	t.Run("Empty or too long guild name", func(t *testing.T) {
+	t.Run("Invalid guild names rejected", func(t *testing.T) {
 		svc, _ := guild.NewService(&mockGuildRepo{})
-		if _, _, _, err := svc.Create(ctx, "char1", ""); !errors.Is(err, guild.ErrInvalidGuildName) {
-			t.Errorf("err = %v, want %v", err, guild.ErrInvalidGuildName)
+		invalidNames := []struct {
+			name  string
+			input string
+		}{
+			{"empty", ""},
+			{"whitespace only", "   "},
+			{"leading ascii space", " Knights"},
+			{"trailing ascii space", "Knights "},
+			{"internal ascii space", "Knights of Round"},
+			{"japanese fullwidth space", "騎士団　本部"},
+			{"tab character", "Knights\tRound"},
+			{"newline character", "Knights\nRound"},
+			{"too long name (33 runes)", strings.Repeat("A", 33)},
+			{"prohibited comma", "Knights,Round"},
+			{"prohibited semicolon", "Knights;Round"},
+			{"prohibited double quote", `"Knights"`},
+			{"prohibited single quote", "'Knights'"},
+			{"prohibited ampersand", "Knights&Round"},
+			{"prohibited less than", "<Knights>"},
+			{"prohibited greater than", "Knights>Round"},
+			{"prohibited at sign", "@Knights"},
+			{"prohibited fullwidth at sign", "＠Knights"},
+			{"prohibited backslash", `Knights\Round`},
+			{"prohibited slash", "Knights/Round"},
+			{"control character C0", "Knights\x00Round"},
+			{"control character C1", "Knights\u0080Round"},
+			{"zero-width space", "Knights\u200BRound"},
+			{"bidi override", "Knights\u202ERound"},
+			{"zalgo text", "Z\u0300\u0301\u0302algo"},
 		}
-		longName := "This Guild Name Exceeds Thirty Two Characters Easily"
-		if _, _, _, err := svc.Create(ctx, "char1", longName); !errors.Is(err, guild.ErrInvalidGuildName) {
-			t.Errorf("err = %v, want %v", err, guild.ErrInvalidGuildName)
+
+		for _, tc := range invalidNames {
+			t.Run(tc.name, func(t *testing.T) {
+				if _, _, _, err := svc.Create(ctx, "char1", tc.input); !errors.Is(err, guild.ErrInvalidGuildName) {
+					t.Errorf("Create(%q) err = %v, want %v", tc.input, err, guild.ErrInvalidGuildName)
+				}
+			})
+		}
+	})
+
+	t.Run("Success normalizes guild name with NFC", func(t *testing.T) {
+		var createdGuild guild.Guild
+		repo := &mockGuildRepo{
+			createGuildFn: func(_ context.Context, g guild.Guild, m guild.Member, fee int) (guild.Guild, guild.Member, corecharacter.Character, error) {
+				createdGuild = g
+				return g, m, corecharacter.Character{ID: m.CharacterID, Money: 5000}, nil
+			},
+		}
+		svc, _ := guild.NewService(repo)
+		// Decomposed unicode "Ka\u0301" -> NFC "Ká"
+		g, _, _, err := svc.Create(ctx, "char1", "Ka\u0301")
+		if err != nil {
+			t.Fatalf("Create() unexpected error: %v", err)
+		}
+		if g.Name != "Ká" || createdGuild.Name != "Ká" {
+			t.Errorf("expected NFC normalized name %q, got %q (repo: %q)", "Ká", g.Name, createdGuild.Name)
 		}
 	})
 
@@ -900,4 +951,50 @@ func TestService_Disband(t *testing.T) {
 			t.Errorf("news Author = %s, want System", news.calls[0].Author)
 		}
 	})
+}
+
+func TestValidateGuildName(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		wantErr    error
+		wantOutput string
+	}{
+		{"valid ascii name", "Knights", nil, "Knights"},
+		{"valid japanese name", "勇者のギルド", nil, "勇者のギルド"},
+		{"valid max 32 runes", strings.Repeat("あ", 32), nil, strings.Repeat("あ", 32)},
+		{"nfc normalized", "Ka\u0301", nil, "Ká"},
+		{"exceeds 32 runes", strings.Repeat("あ", 33), guild.ErrInvalidGuildName, ""},
+		{"empty name", "", guild.ErrInvalidGuildName, ""},
+		{"whitespace only", "   ", guild.ErrInvalidGuildName, ""},
+		{"leading space", " Knights", guild.ErrInvalidGuildName, ""},
+		{"trailing space", "Knights ", guild.ErrInvalidGuildName, ""},
+		{"internal space", "Knights of Round", guild.ErrInvalidGuildName, ""},
+		{"japanese fullwidth space", "騎士団　本部", guild.ErrInvalidGuildName, ""},
+		{"prohibited comma", "Knights,Round", guild.ErrInvalidGuildName, ""},
+		{"prohibited at sign", "@Knights", guild.ErrInvalidGuildName, ""},
+		{"prohibited fullwidth at sign", "＠Knights", guild.ErrInvalidGuildName, ""},
+		{"control character", "Knights\x00", guild.ErrInvalidGuildName, ""},
+		{"zero-width space", "Knights\u200B", guild.ErrInvalidGuildName, ""},
+		{"bidi override", "Knights\u202E", guild.ErrInvalidGuildName, ""},
+		{"zalgo text", "Z\u0300\u0301\u0302algo", guild.ErrInvalidGuildName, ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := guild.ValidateGuildName(tc.input)
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("ValidateGuildName(%q) err = %v; want %v", tc.input, err, tc.wantErr)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("ValidateGuildName(%q) unexpected err = %v", tc.input, err)
+				}
+				if got != tc.wantOutput {
+					t.Errorf("ValidateGuildName(%q) = %q; want %q", tc.input, got, tc.wantOutput)
+				}
+			}
+		})
+	}
 }

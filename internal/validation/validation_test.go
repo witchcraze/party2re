@@ -413,3 +413,211 @@ func TestValidateGender(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateGuildName(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		wantErr    error
+		wantOutput string
+	}{
+		{
+			name:       "valid standard name",
+			input:      "Knights",
+			wantErr:    nil,
+			wantOutput: "Knights",
+		},
+		{
+			name:       "valid japanese name",
+			input:      "勇者のギルド",
+			wantErr:    nil,
+			wantOutput: "勇者のギルド",
+		},
+		{
+			name:       "valid 32-character name",
+			input:      strings.Repeat("あ", 32),
+			wantErr:    nil,
+			wantOutput: strings.Repeat("あ", 32),
+		},
+		{
+			name:       "nfc normalization converts decomposed characters",
+			input:      "Ka\u0301",
+			wantErr:    nil,
+			wantOutput: "Ká",
+		},
+		{
+			name:       "33-character name exceeds limit",
+			input:      strings.Repeat("あ", 33),
+			wantErr:    validation.ErrTooLong,
+			wantOutput: "",
+		},
+		{
+			name:       "empty name",
+			input:      "",
+			wantErr:    validation.ErrEmpty,
+			wantOutput: "",
+		},
+		{
+			name:       "whitespace only name",
+			input:      "   ",
+			wantErr:    validation.ErrInternalWhitespace,
+			wantOutput: "",
+		},
+		{
+			name:       "leading whitespace rejected",
+			input:      " Knights",
+			wantErr:    validation.ErrInternalWhitespace,
+			wantOutput: "",
+		},
+		{
+			name:       "trailing whitespace rejected",
+			input:      "Knights ",
+			wantErr:    validation.ErrInternalWhitespace,
+			wantOutput: "",
+		},
+		{
+			name:       "internal ascii whitespace rejected",
+			input:      "Alice Bob",
+			wantErr:    validation.ErrInternalWhitespace,
+			wantOutput: "",
+		},
+		{
+			name:       "japanese fullwidth space rejected",
+			input:      "アリス　ボブ",
+			wantErr:    validation.ErrInternalWhitespace,
+			wantOutput: "",
+		},
+		{
+			name:       "tab whitespace rejected",
+			input:      "Alice\tBob",
+			wantErr:    validation.ErrInternalWhitespace,
+			wantOutput: "",
+		},
+		{
+			name:       "newline rejected",
+			input:      "Alice\nBob",
+			wantErr:    validation.ErrInternalWhitespace,
+			wantOutput: "",
+		},
+		{
+			name:       "contains prohibited comma",
+			input:      "Alice,Bob",
+			wantErr:    validation.ErrProhibitedCharacter,
+			wantOutput: "",
+		},
+		{
+			name:       "contains prohibited semicolon",
+			input:      "Alice;Bob",
+			wantErr:    validation.ErrProhibitedCharacter,
+			wantOutput: "",
+		},
+		{
+			name:       "contains prohibited double quote",
+			input:      `"Alice"`,
+			wantErr:    validation.ErrProhibitedCharacter,
+			wantOutput: "",
+		},
+		{
+			name:       "contains prohibited single quote",
+			input:      "'Alice'",
+			wantErr:    validation.ErrProhibitedCharacter,
+			wantOutput: "",
+		},
+		{
+			name:       "contains prohibited ampersand",
+			input:      "Alice&Bob",
+			wantErr:    validation.ErrProhibitedCharacter,
+			wantOutput: "",
+		},
+		{
+			name:       "contains prohibited less than",
+			input:      "<Alice>",
+			wantErr:    validation.ErrProhibitedCharacter,
+			wantOutput: "",
+		},
+		{
+			name:       "contains prohibited greater than",
+			input:      "Alice>Bob",
+			wantErr:    validation.ErrProhibitedCharacter,
+			wantOutput: "",
+		},
+		{
+			name:       "contains prohibited at sign",
+			input:      "@Alice",
+			wantErr:    validation.ErrProhibitedCharacter,
+			wantOutput: "",
+		},
+		{
+			name:       "contains prohibited fullwidth at sign",
+			input:      "＠Alice",
+			wantErr:    validation.ErrProhibitedCharacter,
+			wantOutput: "",
+		},
+		{
+			name:       "contains prohibited backslash",
+			input:      `Alice\Bob`,
+			wantErr:    validation.ErrProhibitedCharacter,
+			wantOutput: "",
+		},
+		{
+			name:       "contains prohibited slash",
+			input:      "Alice/Bob",
+			wantErr:    validation.ErrProhibitedCharacter,
+			wantOutput: "",
+		},
+		{
+			name:       "contains c0 control character",
+			input:      "Alice\x00Bob",
+			wantErr:    validation.ErrControlCharacter,
+			wantOutput: "",
+		},
+		{
+			name:       "contains c1 control character",
+			input:      "Alice\u0080Bob",
+			wantErr:    validation.ErrControlCharacter,
+			wantOutput: "",
+		},
+		{
+			name:       "contains zero-width space",
+			input:      "Alice\u200BBob",
+			wantErr:    validation.ErrZeroWidth,
+			wantOutput: "",
+		},
+		{
+			name:       "contains zero-width non-joiner",
+			input:      "Alice\u200CBob",
+			wantErr:    validation.ErrZeroWidth,
+			wantOutput: "",
+		},
+		{
+			name:       "contains bidi override",
+			input:      "Alice\u202EBob",
+			wantErr:    validation.ErrBidiOverride,
+			wantOutput: "",
+		},
+		{
+			name:       "contains zalgo marks",
+			input:      "Z\u0300\u0301\u0302algo",
+			wantErr:    validation.ErrZalgo,
+			wantOutput: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := validation.ValidateGuildName(tc.input)
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("ValidateGuildName(%q) error = %v; want %v", tc.input, err, tc.wantErr)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("ValidateGuildName(%q) unexpected error = %v", tc.input, err)
+				}
+				if got != tc.wantOutput {
+					t.Errorf("ValidateGuildName(%q) = %q; want %q", tc.input, got, tc.wantOutput)
+				}
+			}
+		})
+	}
+}
