@@ -76,35 +76,9 @@ Completed features are tracked in [`docs/migration/feature-inventory.md`](docs/m
 
 **Summary**: All core feature modules are implemented, including Player/Character lifecycle, Battle Engine, Adventure, Economy (Shop/Bank/Auction/Flea Market/Gem Store/Black Market), Social systems (Guild/GvG/PvP/Dungeons/Casino/Lottery/Home/Tavern/Delivery), and the complete HTTP JSON API layer (203 routes, OpenAPI 3.1).
 
-#### Legacy Clean-room Specification Parity Milestones (4-Phase Roadmap):
+#### Legacy Clean-room Specification Parity Milestones:
 
-Following a comprehensive clean-room specification audit of all 40 legacy CGI modules, 33 reconciliation issues (#459–#491) were identified and scheduled into 4 dependency-ordered milestones. Milestone 1 is complete (see `docs/migration/legacy-cgi-mapping.md`).
-
-##### Milestone 2: Economic, Life & Production Loop *(Completed)*
-Reconcile facilities and production mechanics that depend on Depot storage and overnight cycles.
-- [x] **Tavern Food Delivery: Scheduled Post-Adventure Buffs** (#475)
-- [x] **Alchemy: Free Overnight Depot-linked Synthesis & Compendium** (#487)
-- [x] **Monster Ranch: Monster Stabling, Home Pet Link, Naming & P2P Gifting** (#488)
-- [x] **Plantation: 6 Seeds, 14 Fertilizer Reagents & Overnight Depot Harvest** (#489)
-
-##### Milestone 3: Adventure, Dungeons & Live Combat *(Completed)*
-Restore crawl structures, boss challenges, and multiplayer PvP/GvG arenas.
-- [x] **Battle Adapter: Standardize Character/Party Mapping & Post-Battle State Application** (#496)
-- [x] **Adventure: 10-Floor Dungeon Crawl, Flee Penalties & Boss Battles** (#478)
-- [x] **Sealing Boss Arena: Proof of Kingship, Revive Counters & Leaves** (#479)
-- [x] **Colosseum PvP: Eliminate Elo Arena & Reproduce Real-time 8-Player Bet & Split Battles** (#481)
-- [x] **Guild Battles: Eliminate Elo Duels & Reproduce Live GvG Multi-Round Matches with Trophy Decorations** (#482)
-- [x] **Dungeon & Challenge: Co-op Multi-party Lobbies & Turn Engines** (#483)
-
-##### Milestone 4: Community, Events & Entertainment *(Completed)*
-Restore authentic social structures and mini-games.
-- [x] **Guild (Part 1): Dynamic Guild Points, Hex Colors & Custom Roles** (#490)
-- [x] **Guild (Part 2): Membership Application/Approval, Broadcast Callouts & Inactivity Disband** (#591)
-- [x] **Event Plaza: Real-time Concurrency Headcount & 3x Markup Catalog** (#491)
-- [x] **Takarakuji Lottery: 20-Cap Tickets & Server-wide Rollover Jackpot** (#484)
-- [x] **Fukubiki Raffle: Stat Seeds, Divine Orbs & Guaranteed Tiers** (#485)
-- [x] **Casino (Part 1): Multi-Player Room Lobby, Indian Poker & Prize Depot Routing** (#486)
-- [x] **Casino (Part 2): Multi-Player High-Low & Doppelganger Games** (#590)
+All 4 dependency-ordered milestones (Milestone 1 Core/System, Milestone 2 Economy/Production, Milestone 3 Adventure/Combat/Arenas, Milestone 4 Community/Entertainment) are completed. Comprehensive issue-level traceability and feature catalogs reside in [`docs/migration/feature-inventory.md`](docs/migration/feature-inventory.md) and [`docs/migration/legacy-cgi-mapping.md`](docs/migration/legacy-cgi-mapping.md).
 
 #### Remaining Version 1.0 Milestones:
 

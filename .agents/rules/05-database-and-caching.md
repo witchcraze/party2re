@@ -55,42 +55,17 @@ To prevent conflating caching with primary persistence, the system strictly sepa
    - MariaDB remains the canonical Single Source of Truth. Valkey holds read-optimized projections (e.g. Leaderboard Sorted Sets, profile caches).
    - Loss on crash or eviction is completely harmless because projections can be deterministically reconstructed from MariaDB on demand.
 
-### 3.2 Hierarchical Persistence Decision Tree (Durability & Rebuildability First)
-High mutation frequency or throughput alone is **NOT** a justification for making Valkey the primary store (all currency movements must remain in MariaDB). Storage authority MUST follow this hierarchical evaluation:
+### 3.2 Persistence Decision Criteria
+High mutation frequency alone does NOT justify Valkey as primary store (all currency movements must remain in MariaDB).
+- **Durable / Wealth / Inventory / Progression**: MUST use MariaDB Master.
+- **Naturally Expiring (TTL) or Rebuildable from SQL**: Valkey Master or Valkey Cache.
+- Full rationale and decision matrix reside in [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md).
 
-```text
-                    ┌─ Yes ─→ MariaDB Master (Wallets, Inventories, Progression)
-Durability critical?
-                    │
-                    No
-                    ↓
-              Naturally expiring (TTL)?
-                    │
-             ┌──────┴──────┐
-            Yes            No
-             ↓              ↓
-        Valkey Master   Rebuildable from SQL / audit logs?
-        (Sessions)          │
-                       ┌────┴────┐
-                      Yes       No
-                       ↓         ↓
-                  Valkey Master MariaDB Master
-                  (Queues)      (Audit Records)
-```
-
-### 3.3 State Migration Decision Table (Candidates A–F)
-State authority decisions for candidates evaluated under RFC #356. Details in [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md) §4.
-
-| Candidate | Domain | Authority | Key Constraint |
-| :--- | :--- | :--- | :--- |
-| **A: Sessions** | `player` | Valkey Master | Delete on account cleanup; 7d TTL |
-| **B: Maintenance** | `maintenance` | Valkey Master / In-Memory | Admin updates invalidate; fail-open |
-| **C: Lobbies & Ephemeral Turns** | `party`, `pvp`, `gvg`, `casino` | Valkey Master (settle MariaDB) | 1800s sliding TTL; Two-Phase Settlement ([SSOT](../../docs/architecture/transient-run-state.md)) |
-| **D: Run Buffers** | `dungeon`, `challenge` | Valkey Master (settle MariaDB) | 2h sliding TTL; Lua atomic mutations ([SSOT](../../docs/architecture/transient-run-state.md)) |
-| **E: Boss Shared HP** | `boss` | Valkey Master (settle MariaDB) | Requires dedicated PoC before production adoption |
-| **F: Leaderboards** | `ranking` | MariaDB Master + Valkey Cache | Read cache only; ZSET reconstructed on miss |
-
-- **Candidate C (Ephemeral Turn & Session Lobbies)**: Volatile multiplayer turn rooms and session lobbies (Party, Colosseum PvP, Guild GvG, Casino Indian Poker/High-Low/Doppelganger, and future mini-games) are held in Valkey Master with a sliding 1800s (30-minute) TTL matching authentic legacy Party2 rules. In-flight card flips, bets, and moves execute with sub-millisecond latency in Valkey. Upon terminal match resolution, winnings and durable history are settled into MariaDB Master in a single atomic Unit of Work (`RunInTx`) following the Rank 0..8 lock hierarchy ([SSOT](../../docs/architecture/transient-run-state.md)).
+### 3.3 Transient State Candidates (Candidates A–F)
+Evaluated under RFC #356 (SSOT: [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md)):
+- **Candidate C (Ephemeral Turn & Session Lobbies)**: Volatile multiplayer turn rooms (Party, Colosseum PvP, Guild GvG, Casino) reside in Valkey Master (1800s sliding TTL) with Two-Phase Settlement into MariaDB Master (`RunInTx`). Details: [`docs/architecture/transient-run-state.md`](../../docs/architecture/transient-run-state.md).
+- **Candidate D (In-Progress Run Buffers)**: Dungeon & Challenge exploration gauntlets reside in Valkey Master (7200s sliding TTL) with atomic Lua steps and Two-Phase Settlement. Details: [`docs/architecture/transient-run-state.md`](../../docs/architecture/transient-run-state.md).
+- **Candidate E (Boss Shared HP)**: World Boss raid encounters with atomic damage Lua and settlement coordinator. Details: [`docs/architecture/transient-boss-hp.md`](../../docs/architecture/transient-boss-hp.md).
 
 ### 3.4 General Caching Constraints & Keyspace Taxonomy
 - **Centralized Keyspace Specification (SSOT):** All Valkey key patterns, data types, and expiration policies MUST conform to the taxonomy defined in [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md) (`party2:<namespace>:<entity>[:<id>]`). Mechanically enforced by Go AST lint test (`internal/architecture/valkey_lint_test.go`).
@@ -100,28 +75,26 @@ State authority decisions for candidates evaluated under RFC #356. Details in [`
 - **Concrete Requirements Only:** Do not introduce Valkey without a concrete feature requirement or measured performance benefit.
 - **Performance Caching:** Do not pre-emptively cache static/master data (Items, Jobs) in Valkey. Introduce read-caching only if empirical measurement proves SQL is a bottleneck.
 
-### 3.5 Valkey Lua Scripting Standards & Physical Organization
-See [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md) §5.5–5.6 for details and performance benchmarks.
+### 3.5 Valkey Lua Scripting Standards
+See [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md) §5.5–5.6.
 - **When to Use**: ONLY for atomic conditional state transitions or CAS operations unachievable via native commands (`INCR`, `SET NX`). NEVER use for single-key updates or when native commands suffice.
 - **Budgets & Complexity**: Execution time MUST be < 1ms; complexity MUST NOT exceed O(1) or O(log N).
 - **BANNED in Lua**: Unbounded loops, large iterations, wildcard key scans (`KEYS *`), JSON parsing inside Lua, blocking calls. Enforced by `internal/architecture/valkey_lint_test.go`.
 - **Mandatory Hash Tagging**: Multi-key operations MUST use `{...}` hash tags (e.g. `{char:<id>}`). Cross-slot multi-key scripts are BANNED.
 - **In-Memory Parity**: Services MUST implement 100% equivalent atomic logic and error codes in their Go in-memory fallback (`internal/valkey/memory.go`).
-- **Physical Organization (`//go:embed`)**: Scripts MUST reside in `<pkg>/lua/*.lua` files and be embedded via `//go:embed`. Raw multiline string script constants in Go source files are BANNED. Preload with `valkey.NewLuaScript` (`EVALSHA`).
 
 ### 3.6 Collection Data Type Selection & Ephemeral Element Expiration (Set vs ZSet vs Hash)
-When designing multi-element collection keys in Valkey Master, agents and developers MUST evaluate the lifecycle of child elements according to the following rules:
-- **String or Hash (`HSET`, `HGETALL`)**:
-  - Use for single-record entities with known fields, CAS semantics, or direct key-value state (e.g. `party2:party:{lobby:<id>}:state`).
-- **Standard Set (`SADD`, `SMEMBERS`, `SREM`)**:
-  - Use ONLY for collections where all elements share the exact same lifetime as the parent key (all-or-nothing parent TTL), or where elements are bounded, static, and never independently expire (e.g. static tag indexes or fixed party member IDs bounded by lobby lifecycle).
-  - Standard Sets MUST NOT be used when child elements have distinct or rolling expiration times.
+- **String or Hash (`HSET`, `HGETALL`)**: Single-record entities with known fields, CAS semantics, or direct key-value state.
+- **Standard Set (`SADD`, `SMEMBERS`, `SREM`)**: Use ONLY where all elements share the exact same lifetime as parent key, or elements are bounded and never independently expire. Standard Sets MUST NOT be used when child elements have distinct or rolling expiration times.
 - **TTL-Scored Sorted Set (`ZADD`, `ZREMRANGEBYSCORE`, `ZRANGE`) [Approved SSOT Pattern]**:
-  - MUST be used whenever child elements represent independently expiring ephemeral resources (e.g. player session tokens `party2:player:sessions:<player_id>`, matchmaking wait queues, candidate challenge tokens, or in-progress run reward buffers).
-  - **Score**: The element's expiration timestamp in Unix seconds (`float64(ExpiresAt.Unix())`).
-  - **Lazy Purging**: Read/write paths (`Save`, `Find`, `Revoke`) MUST purge expired elements via `ZREMRANGEBYSCORE key -inf <now.Unix()>`.
-  - **No Background Daemons**: Do NOT implement background ticker goroutines to poll and purge expired elements from Valkey; lazy purging at query/write time is O(log(N) + M) and eliminates thread lifecycle overhead.
-  - **Zero-Downtime Upgrade (`WRONGTYPE`)**: When migrating from legacy Set keys, repository logic MUST catch `WRONGTYPE` errors on `ZADD` or `ZRANGE` and gracefully upgrade or fallback to avoid downtime or manual key purges.
+  - MUST be used whenever child elements represent independently expiring ephemeral resources (sessions, queues, tokens).
+  - **Score**: Unix timestamp seconds (`float64(ExpiresAt.Unix())`).
+  - **Lazy Purging**: Read/write paths MUST purge expired elements via `ZREMRANGEBYSCORE key -inf <now.Unix()>`. Background polling daemons are BANNED.
+  - **Zero-Downtime Upgrade (`WRONGTYPE`)**: Catch `WRONGTYPE` on migration from legacy Set keys and gracefully upgrade.
+
+### 3.7 Physical Organization (`//go:embed`)
+- Scripts MUST reside in `<pkg>/lua/*.lua` files and be embedded via `//go:embed`.
+- Raw multiline string script constants in Go source files are BANNED. Preload with `valkey.NewLuaScript` (`EVALSHA`).
 
 ## 4. Sub-Resource Repository SQL Scoping and Ownership Authorization
 - **Strict SQL Scoping:** When modifying, finalizing, or deleting sub-resources belonging to a player or character (e.g., `challenge_sessions`, `lottery_tickets`, `auction_listings`, `character_challenge_records`, `character_boss_records`, `dungeon_expeditions`, `letters`, `companion_phrases`), SQL queries MUST include ownership predicates in the `WHERE` clause:

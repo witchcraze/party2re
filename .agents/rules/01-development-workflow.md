@@ -12,24 +12,18 @@ Keep `main` as the sole integration branch. Feature branches must be short-lived
 - Use Conventional Commits prefixes: `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`.
 - Include the issue number: `<type>/<issue-number>-<short-desc>` (e.g., `feat/160-small-medals`).
 
-**Safe Branching & Working Tree Hygiene Procedure:**
-Never branch directly from another feature branch unless explicitly stacking PRs.
-1. Check working tree cleanliness: `rtk git status --porcelain`. If uncommitted changes exist, safely stash or commit them before switching branches (`rtk git stash push -u -m "autostash-<task>-$(date +%s)"`). Never blindly discard changes via `reset --hard`.
-2. Switch to main: `rtk git checkout main`
-3. Synchronize main: `rtk git pull --ff-only origin main` (if branch diverged, halt and resolve before branching).
-4. Create feature branch: `rtk git checkout -b <type>/<issue-number>-<short-description>`
+**Safe Branching & Working Tree Hygiene:**
+1. Check working tree cleanliness: `rtk git status --porcelain`. Stash or commit uncommitted changes before switching branches. Never use `reset --hard` blindly.
+2. Checkout and sync main: `rtk git checkout main && rtk git pull --ff-only origin main`.
+3. Create feature branch: `rtk git checkout -b <type>/<issue-number>-<short-description>`.
 
 **Merge Strategy & PR Titles:**
-- Always use **Squash and Merge**.
-- Because of Squash and Merge, **the PR Title MUST strictly follow Conventional Commits** (e.g., `feat: implement small medals`). This ensures the `main` branch history remains pristine and automatically parsable.
+- Always **Squash and Merge**. PR Titles MUST follow Conventional Commits (e.g., `feat: implement small medals`).
 
-**Post-Merge Local Cleanup & Main Reset Procedure:**
-Upon merging a PR (Squash and Merge):
-1. Switch back to main: `rtk git checkout main`
-2. Synchronize main: `rtk git pull --ff-only origin main`
-3. Delete local feature branch: `rtk git branch -D <branch-name> 2>/dev/null || true`
-4. Prune remote tracking branches: `rtk git fetch origin --prune`
-5. If changes were stashed prior to branching, notify the developer to inspect and restore when appropriate (`rtk git stash pop`).
+**Post-Merge Local Cleanup:**
+1. Return to synced main: `rtk git checkout main && rtk git pull --ff-only origin main`.
+2. Delete local branch: `rtk git branch -D <branch-name> 2>/dev/null || true`.
+3. Prune remote tracking branches: `rtk git fetch origin --prune`.
 
 ## 2. Issue and PR Workflow
 - **No substantial work without an Issue:** Do not begin substantial implementation from an informal request without an Issue.
@@ -53,16 +47,9 @@ Upon merging a PR (Squash and Merge):
   - Before creating any new Issue, agents MUST search existing open issues using targeted domain/entity keywords (`gh issue list --state open --search "<domain-or-keyword>" --json number,title,labels`).
   - If an open issue already tracks the problem, update or refine the existing issue rather than registering a duplicate.
 - **Related Tickets Synchronization (Body-First Update Rule):**
-  - When a PR modifies shared domain models, changes storage contracts, fixes bugs, or alters premises affecting other open issues, agents MUST synchronize the affected open issues.
-  - **Body-First Requirement:** Agents MUST update the issue body directly (`gh issue edit <number> --body ...` or `--body-file`). Agents MUST NEVER rely solely on issue comments for codebase updates, because `gh issue view` does not display comments by default and subsequent agents/collaborators will operate from stale premises.
-  - **Standardized Alert Callout Format:** Prepend a standardized GitHub alert callout directly at the top of `## Problem` (or `## Context` if `## Problem` is missing):
-    ```markdown
-    > [!NOTE]
-    > **Codebase Context Update (Issue #<resolved-issue> resolved via PR #<pr-number>)**:
-    > <Concise description of changes made to the codebase and what was fixed/superseded>.
-    > <Clear statement of what remains active or in-scope for this issue>.
-    ```
-  - **Unblocking Dependent Tickets:** If an open issue was blocked by the resolved issue (`status/blocked`), verify if all preceding tickets are now complete. If so, remove `status/blocked` (`gh issue edit <number> --remove-label "status/blocked"`) and note in the callout that the issue is now unblocked and ready for implementation.
+  - When a PR modifies shared models, storage contracts, bugs, or premises affecting other open issues, agents MUST update affected open issue bodies directly (`gh issue edit <number> --body ...`). Never rely solely on comments (not shown by `gh issue view` by default).
+  - Prepend a standardized `> [!NOTE]` callout at the top of `## Problem` detailing resolved issue #, PR #, changes made, and remaining active scope.
+  - If dependent issues were blocked (`status/blocked`), verify if dependencies are satisfied, remove `status/blocked` (`gh issue edit <number> --remove-label "status/blocked"`), and note unblocking in the callout.
 - **Prerequisite & Feasibility Verification:**
   - When creating issues for security, auth, or cross-cutting features, verify whether required underlying infrastructure/models (e.g., Admin role, RBAC, config keys) already exist in the codebase.
   - If prerequisites are missing, explicitly document them in the Issue body along with concrete architectural options (e.g. Option A, Option B) and note that specification alignment is required before implementation.
@@ -92,13 +79,8 @@ For non-trivial behavior:
 5. **Outer Loop:** Auto-format code with `make fmt`, then run unified local verification with `make check` (runs format check, `go vet`, host test suite, and fast smoke build).
 
 ### Unit & Integration Test Time Budget Policy vs. Benchmarking
-- **No Sub-Second Assertions in Unit/Integration Tests:**
-  - Functional tests (`go test`) MUST NOT enforce strict sub-second wall-clock thresholds (e.g., `elapsed < 200ms` or `elapsed < 1s`). Strict timing assertions in functional tests are inherently fragile in shared, virtualized, containerized, or CPU-throttled CI environments.
-  - Wall-clock timeout bounds in functional tests must be liberal dead-man safety bounds (e.g., 2.0s–5.0s) strictly designed to catch deadlocks, infinite loops, or hanging goroutines.
-  - Informational timing measurements should be emitted using `t.Logf` rather than failing tests via `t.Errorf`.
-- **Continuous Performance Verification via Dedicated Benchmarks:**
-  - Latency, throughput, and performance regression tracking MUST be verified via Go standard benchmarks (`testing.B`, `Benchmark*`) using `scripts/benchmark.sh` / `make bench`.
-  - Baselines are recorded (`./scripts/benchmark.sh --record`) and regressions are tracked deterministically without flaking functional test runs.
+- **No Sub-Second Assertions in Unit/Integration Tests:** Functional tests (`go test`) MUST NOT enforce sub-second wall-clock thresholds (fragile in CI/virtualized environments). Use liberal dead-man bounds (2.0s–5.0s) strictly to catch deadlocks/hanging goroutines. Emit informational timing via `t.Logf`.
+- **Dedicated Benchmarks for Performance:** Verify throughput and latency regressions via Go benchmarks (`testing.B`) using `scripts/benchmark.sh` / `make bench`. SSOT: [`docs/development/benchmarking.md`](../../docs/development/benchmarking.md).
 
 ## 4. Definition of Done
 A ticket is complete only when applicable:
