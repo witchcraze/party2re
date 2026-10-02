@@ -12,7 +12,6 @@ import (
 )
 
 type ContestService interface {
-	GetDialogue() contest.Dialogue
 	GetOverview(ctx context.Context) (contest.ContestOverview, error)
 	SavePhoto(ctx context.Context, characterID, title, location, imageURL, caption, metadata string) (contest.Photo, error)
 	ListPhotos(ctx context.Context, characterID string) ([]contest.Photo, error)
@@ -30,6 +29,38 @@ func WithContest(c ContestService) Option {
 	return func(h *Handler) {
 		h.contest = c
 	}
+}
+
+type contestDialogue struct {
+	NPCName  string   `json:"npc_name"`
+	Title    string   `json:"title"`
+	Greeting string   `json:"greeting"`
+	Phrases  []string `json:"phrases"`
+}
+
+var defaultContestDialogue = contestDialogue{
+	NPCName:  "@ワコール",
+	Title:    "フォトコン会場",
+	Greeting: "フォトコンテストの会場、略してフォトコン会場へようこそ。私が主催者のワコールざます",
+	Phrases: []string{
+		"ここでは、あなたが撮ったスクリーンショットを消したり、コンテストに応募したりできるざます",
+		"コンテスト上位入賞者には、ゴールドと賞品が授与されるざます",
+		"コンテスト１位の作品に投票した参加者にも小さなメダルが配られるざます",
+		"フォトコンで重要なのは、何が写っているかはもちろん。タイトルやコメントなども重要なポイントざます",
+		"自分で撮ったスクリーンショットを見たり消すことができるざます",
+		"ただ撮るだけではなく、コスプレしたり色々と工夫することが大事ざます",
+		"スクリーンショットは最大20枚まで所持することができるざます。それ以上は、＠けす必要があるざます",
+	},
+}
+
+type contestVenueResponse struct {
+	ActiveRound    *contest.ContestRound  `json:"active_round,omitempty"`
+	PreparingRound *contest.ContestRound  `json:"preparing_round,omitempty"`
+	ActiveEntries  []contest.ContestEntry `json:"active_entries,omitempty"`
+	EntryCount     int                    `json:"entry_count"`
+	MinEntries     int                    `json:"min_entries"`
+	IsPostponed    bool                   `json:"is_postponed"`
+	Dialogue       contestDialogue        `json:"dialogue"`
 }
 
 type savePhotoRequest struct {
@@ -66,7 +97,15 @@ func (h *Handler) handleGetContestVenue(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, overview)
+	writeJSON(w, http.StatusOK, contestVenueResponse{
+		ActiveRound:    overview.ActiveRound,
+		PreparingRound: overview.PreparingRound,
+		ActiveEntries:  overview.ActiveEntries,
+		EntryCount:     overview.EntryCount,
+		MinEntries:     overview.MinEntries,
+		IsPostponed:    overview.IsPostponed,
+		Dialogue:       defaultContestDialogue,
+	})
 }
 
 func (h *Handler) handleGetContestCurrent(w http.ResponseWriter, r *http.Request) {

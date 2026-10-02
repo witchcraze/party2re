@@ -16,7 +16,6 @@ import (
 )
 
 type stubContestService struct {
-	getDialogueFn       func() contest.Dialogue
 	getOverviewFn       func(ctx context.Context) (contest.ContestOverview, error)
 	savePhotoFn         func(ctx context.Context, characterID, title, location, imageURL, caption, metadata string) (contest.Photo, error)
 	listPhotosFn        func(ctx context.Context, characterID string) ([]contest.Photo, error)
@@ -27,13 +26,6 @@ type stubContestService struct {
 	getPastResultsFn    func(ctx context.Context) (*contest.ContestRound, []contest.ContestEntry, error)
 	getLegendsFn        func(ctx context.Context, limit, offset int) (pagination.Page[contest.ContestLegend], error)
 	settleContestFn     func(ctx context.Context, force bool) (contest.SettlementResult, error)
-}
-
-func (s *stubContestService) GetDialogue() contest.Dialogue {
-	if s.getDialogueFn != nil {
-		return s.getDialogueFn()
-	}
-	return contest.Dialogue{NPCName: "@ワコール"}
 }
 
 func (s *stubContestService) GetOverview(ctx context.Context) (contest.ContestOverview, error) {
@@ -108,9 +100,6 @@ func (s *stubContestService) SettleContest(ctx context.Context, force bool) (con
 
 func TestContestPublicEndpoints(t *testing.T) {
 	stub := &stubContestService{
-		getDialogueFn: func() contest.Dialogue {
-			return contest.Dialogue{NPCName: "@ワコール", Title: "フォトコン会場"}
-		},
 		getOverviewFn: func(ctx context.Context) (contest.ContestOverview, error) {
 			return contest.ContestOverview{MinEntries: 5}, nil
 		},
@@ -142,6 +131,23 @@ func TestContestPublicEndpoints(t *testing.T) {
 	resp, err := http.Get(server.URL + "/contest/venue")
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /contest/venue failed: resp=%v, err=%v", resp, err)
+	}
+	var venue struct {
+		MinEntries int `json:"min_entries"`
+		Dialogue   struct {
+			NPCName string   `json:"npc_name"`
+			Title   string   `json:"title"`
+			Phrases []string `json:"phrases"`
+		} `json:"dialogue"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&venue); err != nil {
+		t.Fatalf("failed to decode GET /contest/venue response: %v", err)
+	}
+	if venue.Dialogue.NPCName != "@ワコール" {
+		t.Errorf("expected NPCName @ワコール, got %s", venue.Dialogue.NPCName)
+	}
+	if len(venue.Dialogue.Phrases) == 0 {
+		t.Errorf("expected non-empty dialogue phrases")
 	}
 
 	// 2. GET /contest/current

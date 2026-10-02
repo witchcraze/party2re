@@ -77,29 +77,10 @@ func (s *Service) runInTx(ctx context.Context, fn func(txCtx context.Context) er
 	return fn(ctx)
 }
 
-// GetDialogue returns the NPC @ワコール dialogue in the Photo Contest venue.
-func (s *Service) GetDialogue() Dialogue {
-	return Dialogue{
-		NPCName:  "@ワコール",
-		Title:    "フォトコン会場",
-		Greeting: "フォトコンテストの会場、略してフォトコン会場へようこそ。私が主催者のワコールざます",
-		Phrases: []string{
-			"ここでは、あなたが撮ったスクリーンショットを消したり、コンテストに応募したりできるざます",
-			"コンテスト上位入賞者には、ゴールドと賞品が授与されるざます",
-			"コンテスト１位の作品に投票した参加者にも小さなメダルが配られるざます",
-			"フォトコンで重要なのは、何が写っているかはもちろん。タイトルやコメントなども重要なポイントざます",
-			"自分で撮ったスクリーンショットを見たり消すことができるざます",
-			"ただ撮るだけではなく、コスプレしたり色々と工夫することが大事ざます",
-			"スクリーンショットは最大20枚まで所持することができるざます。それ以上は、＠けす必要があるざます",
-		},
-	}
-}
-
 // GetOverview returns a summary of current contest rounds and active submissions.
 func (s *Service) GetOverview(ctx context.Context) (ContestOverview, error) {
 	overview := ContestOverview{
 		MinEntries: MinEntriesForContest,
-		Dialogue:   s.GetDialogue(),
 	}
 
 	activeRound, err := s.contests.GetActiveRound(ctx)

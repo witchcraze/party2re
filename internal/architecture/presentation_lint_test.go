@@ -96,7 +96,6 @@ func TestProhibitHTMLInDomainPackages(t *testing.T) {
 var whitelistedLegacyPresentationFields = map[string]string{
 	"auction.VenueInfo.Dialogue":                  "Issue #931",
 	"blackmarket.TalkResult.Dialogue":             "Issue #930",
-	"contest.ContestOverview.Dialogue":            "Issue #933",
 	"eventplaza.BazaarPurchaseResult.NPCMessage":  "Issue #926",
 	"god.WishResult.NPCSpeech":                    "Issue #928",
 	"home.CompanionTalkResult.Dialogue":           "Issue #932",
