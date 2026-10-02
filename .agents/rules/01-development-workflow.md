@@ -38,11 +38,16 @@ Upon merging a PR (Squash and Merge):
   - **Issue Titles:** MUST strictly follow `[<Type>] <Domain>: <Specific Action / Target>` (e.g., `[Bug] Home: Return 404 in GET /homes/{id}/companion/phrases`, `[Feature] HTTP: Guard action endpoints against active sleep penalty`). Prohibit vague titles like `Fix bug` or `Update system`.
   - **Deterministic Size Classification (Both Creation & Triage):**
     Every issue MUST be classified into exactly one size label upon creation, enabling zero-token triage:
-    1. **`size/large` (Large / Interactive -> Recommended: agy / kickoff)**: Requires DB migration (DDL), cross-package transactions, 500-line ceiling/1122-line ratchet refactoring, or interactive user design decisions.
+    1. **`size/large` (Large / Interactive -> Recommended: agy / interactive)**: Requires DB migration (DDL), cross-package transactions, 500-line ceiling/1122-line ratchet refactoring, or interactive user design decisions.
     2. **`size/medium` (Medium: diff <= 150 lines -> Recommended: Jules Pro)**: Standard single-package feature or refactoring, or adding/modifying endpoints requiring OpenAPI (`paths/<pkg>.json`) synchronization.
     3. **`size/small` (Small: diff <= 50 lines -> Recommended: Jules Flash)**: Localized bug fix, formula/cap adjustment, single-handler guard, or unit test addition.
   - **Zero-Token Triage Guarantee:** When querying candidate issues (`gh issue list --limit 15 --json number,title,labels`), agents and developers MUST determine the recommended mode directly from the `size/*` label without reading the issue body.
-  - **Blocking Status:** If an issue is blocked by unaligned legacy specs or missing prerequisite modules, tag it with `status/needs-spec` (excluded from immediate kickoff candidates).
+  - **Blocking Status Labels (明確な使い分けルール):**
+    - **`status/needs-spec`**: Use when legacy specifications, formulas, or architectural designs are incomplete, undecided, or pending discussion/RFC. Implementation cannot proceed until specs are clarified.
+    - **`status/blocked`**: Use when the specification is clear, but another ticket/PR should or must be executed first (e.g., foundational infrastructure/models, security/auth guards on overlapping handlers, sequential PRs, or prerequisite domain logic).
+      - **Predecessor Callout Rule**: When applying `status/blocked`, the issue body MUST explicitly record the preceding ticket number(s) (e.g., `Blocked by: #123 (先行チケット #123 の完了後に着手)`).
+      - **Zero-Token Triage Exclusion**: Issues tagged with `status/blocked` (alongside `status/needs-spec` and `priority: low`) MUST be filtered out / excluded from candidate proposals during issue triage.
+      - **Post-Merge Unblocking**: When the preceding ticket is merged, the post-merge process inspects dependent tickets, updates their context, and removes `status/blocked` if all dependencies are satisfied.
   - The Issue body MUST explicitly state the primary affected component/package and database tables (e.g., `Affected Component: internal/home`, `Database Tables: character_letters`).
 - **Pre-Registration De-duplication Check:**
   - Before creating any new Issue, agents MUST search existing open issues using targeted domain/entity keywords (`gh issue list --state open --search "<domain-or-keyword>" --json number,title,labels`).
@@ -57,6 +62,7 @@ Upon merging a PR (Squash and Merge):
     > <Concise description of changes made to the codebase and what was fixed/superseded>.
     > <Clear statement of what remains active or in-scope for this issue>.
     ```
+  - **Unblocking Dependent Tickets:** If an open issue was blocked by the resolved issue (`status/blocked`), verify if all preceding tickets are now complete. If so, remove `status/blocked` (`gh issue edit <number> --remove-label "status/blocked"`) and note in the callout that the issue is now unblocked and ready for implementation.
 - **Prerequisite & Feasibility Verification:**
   - When creating issues for security, auth, or cross-cutting features, verify whether required underlying infrastructure/models (e.g., Admin role, RBAC, config keys) already exist in the codebase.
   - If prerequisites are missing, explicitly document them in the Issue body along with concrete architectural options (e.g. Option A, Option B) and note that specification alignment is required before implementation.
