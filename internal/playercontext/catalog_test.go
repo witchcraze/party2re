@@ -1,9 +1,6 @@
 package playercontext_test
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/playercontext"
@@ -80,41 +77,5 @@ func TestGateFlags_Has(t *testing.T) {
 	}
 	if gates.Has(playercontext.GateCooldownCheck) {
 		t.Error("did not expect GateCooldownCheck to be present")
-	}
-}
-
-func TestDefaultCatalog_OpenAPIParity(t *testing.T) {
-	// Locate openapi.json relative to repository root
-	specPath := filepath.Join("..", "api", "http", "openapi.json")
-	data, err := os.ReadFile(specPath)
-	if err != nil {
-		t.Fatalf("failed to read openapi.json at %s: %v", specPath, err)
-	}
-
-	var openAPISpec struct {
-		Paths map[string]map[string]struct {
-			OperationID string `json:"operationId"`
-		} `json:"paths"`
-	}
-
-	if err := json.Unmarshal(data, &openAPISpec); err != nil {
-		t.Fatalf("failed to parse openapi.json: %v", err)
-	}
-
-	knownOps := make(map[string]bool)
-	for _, methods := range openAPISpec.Paths {
-		for _, op := range methods {
-			if op.OperationID != "" {
-				knownOps[op.OperationID] = true
-			}
-		}
-	}
-
-	actions := playercontext.AllActions()
-	for _, act := range actions {
-		if !knownOps[act.OperationID] {
-			t.Errorf("action %s references OperationID %q which does not exist in openapi.json",
-				act.ID, act.OperationID)
-		}
 	}
 }

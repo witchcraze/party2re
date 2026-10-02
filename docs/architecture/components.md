@@ -59,7 +59,7 @@ Provides boundary interfaces for gold, small medals, casino coins, and crystal c
 ### PlayerContext
 
 **Responsibility:** Evaluates and projects the real-time executable action space (observation space) for active characters.
-Maintains the static Action Catalog (`internal/playercontext/catalog.go`) defining top-level player actions, required parameters, and precondition gate requirements (Dead, Fatigue, Sleep, Ongoing Timer, Currency). Provides `playercontext.Query(ctx, charID)` which resolves the character's live snapshot and executes the Action Evaluator pipeline against active `ScheduledAction` timers to produce the authoritative whitelist of available actions for the Client/Agent Gateway.
+Maintains the static Action Catalog (`internal/playercontext/catalog.go`) defining top-level player actions, required parameters, and precondition gate requirements (Dead, Fatigue, Sleep, Ongoing Timer, Currency). Provides `playercontext.Query(ctx, charID)` which resolves the character's live snapshot and executes the Action Evaluator pipeline against active `ScheduledAction` timers to produce the authoritative whitelist of available actions for the Client/Agent Gateway. Automatically verifies static schema drift against `docs/api/openapi.json` (`internal/playercontext/catalog_lint_test.go`) to prevent parameter and operation mismatch.
 
 ### Game Time / Scheduling
 

@@ -50,6 +50,25 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "amount": {
+                  "description": "Deposit amount in gold",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "amount"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
         "200": {
           "description": "Successful operation"
@@ -161,6 +180,25 @@
           }
         }
       ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "amount": {
+                  "description": "Withdrawal amount in gold",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "amount"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
       "responses": {
         "200": {
           "description": "Successful operation"
