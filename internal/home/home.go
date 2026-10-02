@@ -4,10 +4,10 @@ import (
 	"errors"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 var (
@@ -179,12 +179,14 @@ func ValidateLetter(senderID, recipientID, content string) error {
 		return ErrCannotSendToSelf
 	}
 
-	cleanContent := strings.TrimSpace(content)
-	if cleanContent == "" {
-		return ErrEmptyContent
-	}
-	if utf8.RuneCountInString(cleanContent) > MaxLetterContentLength {
-		return ErrContentTooLong
+	if _, err := validation.ValidateMultiLine(content, MaxLetterContentLength); err != nil {
+		if errors.Is(err, validation.ErrEmpty) {
+			return ErrEmptyContent
+		}
+		if errors.Is(err, validation.ErrTooLong) {
+			return ErrContentTooLong
+		}
+		return err
 	}
 
 	return nil
@@ -192,12 +194,14 @@ func ValidateLetter(senderID, recipientID, content string) error {
 
 // ValidatePhrase validates companion phrase text.
 func ValidatePhrase(phrase string) error {
-	clean := strings.TrimSpace(phrase)
-	if clean == "" {
-		return ErrEmptyPhrase
-	}
-	if utf8.RuneCountInString(clean) > MaxPhraseLength {
-		return ErrPhraseTooLong
+	if _, err := validation.ValidateSingleLine(phrase, MaxPhraseLength); err != nil {
+		if errors.Is(err, validation.ErrEmpty) {
+			return ErrEmptyPhrase
+		}
+		if errors.Is(err, validation.ErrTooLong) {
+			return ErrPhraseTooLong
+		}
+		return err
 	}
 	return nil
 }

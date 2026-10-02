@@ -14,6 +14,7 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/ratelimit"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 type CharacterReader interface {
@@ -196,7 +197,7 @@ func (s *Service) SendLetter(ctx context.Context, senderID, recipientID, content
 		SenderName:           sender.Name,
 		RecipientCharacterID: recipient.ID,
 		RecipientName:        recipient.Name,
-		Content:              strings.TrimSpace(content),
+		Content:              validation.SanitizeText(content),
 		Color:                cleanColor,
 		IsRead:               false,
 		ReadAt:               nil,
@@ -338,7 +339,7 @@ func (s *Service) TeachCompanionPhrase(ctx context.Context, characterID, phrase 
 	cp := CompanionPhrase{
 		ID:          id.New(),
 		CharacterID: characterID,
-		Phrase:      strings.TrimSpace(phrase),
+		Phrase:      validation.SanitizeText(phrase),
 		CreatedAt:   now,
 	}
 

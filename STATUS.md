@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #919 — [Bug] Guild: Reconcile guild name input validation with authentic legacy constraints
+Last updated: Issue #920 — [Refactor] Home: Adopt shared text validation for letters and companion phrases
 
 ## Current Phase
 
