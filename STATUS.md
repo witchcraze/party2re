@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #920 — [Refactor] Home: Adopt shared text validation for letters and companion phrases
+Last updated: Issue #912 — [Feature] HTTP: Extend sleep and rescue action guard to remaining town and facility endpoints
 
 ## Current Phase
 

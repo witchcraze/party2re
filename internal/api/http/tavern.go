@@ -71,7 +71,7 @@ func (h *Handler) handleTavernOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req tavernItemRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -99,7 +99,7 @@ func (h *Handler) handleTavernReserveDelivery(w http.ResponseWriter, r *http.Req
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req tavernItemRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -145,7 +145,7 @@ func (h *Handler) handleTavernCancelDelivery(w http.ResponseWriter, r *http.Requ
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		if err := h.tavern.CancelDelivery(r.Context(), char.ID); err != nil {
 			h.writeTavernError(w, err)
 			return
@@ -164,7 +164,7 @@ func (h *Handler) handleTavernClaimDelivery(w http.ResponseWriter, r *http.Reque
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		result, err := h.tavern.ClaimDelivery(r.Context(), char.ID)
 		if err != nil {
 			h.writeTavernError(w, err)
@@ -182,7 +182,7 @@ func (h *Handler) handleTavernTalk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		talk, err := h.tavern.Talk(r.Context(), char.ID)
 		if err != nil {
 			h.writeTavernError(w, err)

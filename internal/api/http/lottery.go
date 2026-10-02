@@ -74,7 +74,7 @@ func (h *Handler) handlePlayRaffle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req playRaffleRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -129,7 +129,7 @@ func (h *Handler) handleBuyTakarakujiTicket(w http.ResponseWriter, r *http.Reque
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		res, err := h.lottery.BuyTakarakujiTicket(r.Context(), char.ID)
 		if err != nil {
 			if errors.Is(err, lottery.ErrInsufficientGold) {

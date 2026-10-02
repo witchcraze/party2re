@@ -53,7 +53,7 @@ func (h *Handler) handleWishingWellExchange(w http.ResponseWriter, r *http.Reque
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req wishingWellExchangeRequest
 		if !decodeJSON(w, r, &req) {
 			return

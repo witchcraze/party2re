@@ -72,7 +72,7 @@ func (h *Handler) handleBankDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req bankDepositRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -92,7 +92,7 @@ func (h *Handler) handleBankWithdraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req bankWithdrawRequest
 		if !decodeJSON(w, r, &req) {
 			return

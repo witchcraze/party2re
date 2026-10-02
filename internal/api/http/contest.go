@@ -180,7 +180,7 @@ func (h *Handler) handleSaveCharacterPhoto(w http.ResponseWriter, r *http.Reques
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req savePhotoRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -212,7 +212,7 @@ func (h *Handler) handleDeleteCharacterPhoto(w http.ResponseWriter, r *http.Requ
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		photoID := r.PathValue("photoId")
 		if photoID == "" {
 			writeError(w, http.StatusBadRequest, errors.New("photoId is required"))
@@ -244,7 +244,7 @@ func (h *Handler) handleEnterContest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req enterContestRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -281,7 +281,7 @@ func (h *Handler) handleVoteContest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req voteContestRequest
 		if !decodeJSON(w, r, &req) {
 			return

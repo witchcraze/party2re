@@ -73,7 +73,7 @@ func (h *Handler) handlePostEventPlazaPresence(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *recordPresenceRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *recordPresenceRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, _ recordPresenceRequest) {
 		if err := h.eventplaza.RecordPresence(r.Context(), char.ID); err != nil {
@@ -123,7 +123,7 @@ func (h *Handler) handlePostEventPlazaMerchantPurchase(w http.ResponseWriter, r 
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *purchaseBazaarItemRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *purchaseBazaarItemRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req purchaseBazaarItemRequest) {
 		if req.Quantity <= 0 {
@@ -197,7 +197,7 @@ func (h *Handler) handlePostEventPlazaBanquetToast(w http.ResponseWriter, r *htt
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *toastBanquetRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *toastBanquetRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req toastBanquetRequest) {
 		result, err := h.eventplaza.ToastBanquet(r.Context(), banquetID, char.ID)

@@ -58,7 +58,7 @@ func (h *Handler) handlePlantationSow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req plantationSowRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -80,7 +80,7 @@ func (h *Handler) handlePlantationFertilize(w http.ResponseWriter, r *http.Reque
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req plantationFertilizeRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -102,7 +102,7 @@ func (h *Handler) handlePlantationHarvest(w http.ResponseWriter, r *http.Request
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		res, err := h.plantation.Harvest(r.Context(), char.ID)
 		if err != nil {
 			h.writePlantationError(w, err)
