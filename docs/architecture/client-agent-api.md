@@ -223,8 +223,19 @@ Chatbot frameworks handle state transitions with zero routing boilerplate:
 
 ## 6. Related Issues & Implementation Roadmap
 
+### Phase 1: Gateway Core Construction
 - **#944**: `[Specification] PlayerContext: Define Action Catalog & Legacy Precondition Matrix` (Master Action Catalog & Params Schema)
+- **#946**: `[Architecture] PlayerContext: Automated Drift-Detection Test between Action Catalog and OpenAPI Specification` (Automated Schema Linting)
 - **#938**: `[Feature] PlayerContext: Action Evaluator Engine with ScheduledAction Cooldown Gate` (Availability Filtering)
 - **#939**: `[Feature] HTTP/PlayerContext: GET /context handler & Client Context Model` (Query Pillar)
 - **#646**: `[Feature] Client/Agent: Unified Action Gateway Dispatcher (POST /actions) & Server-Driven Execution` (Command Pillar)
-- **#650**: `[Architecture] Test: Headless E2E Gameplay Simulation Test Architecture Design & Ticket Decomposition` (E2E Validation)
+
+### Phase 2: Phased Legacy REST Purge & Migration
+- **#947**: `[Architecture] API/Migration: Migrate Economy endpoints (Bank, Shop, Depot, Market) to Action Gateway and purge legacy routes`
+- **#948**: `[Architecture] API/Migration: Migrate Combat & Adventure endpoints (Adventure, Dungeon, Boss, PvP) to Action Gateway and purge legacy routes`
+- **#949**: `[Architecture] API/Migration: Migrate Town, Faith & Social endpoints (Home, Casino, Chapel, Guild) to Action Gateway and purge legacy routes`
+- **#950**: `[Architecture] API/Cleanup: Shrink handler.go to <150 lines and purge legacy paths from OpenAPI specification`
+
+### Phase 3: Client Verification & Presentation
+- **#650**: `[Architecture] Test: Headless E2E Gameplay Simulation Test Architecture Design & Ticket Decomposition` (E2E Validation via Gateway)
+- **#140**: `[Feature] Client Presentation: Web UI Client and Presentation Layer` (Server-Driven UI)

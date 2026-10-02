@@ -82,9 +82,15 @@ All 4 dependency-ordered milestones (Milestone 1 Core/System, Milestone 2 Econom
 
 #### Remaining Version 1.0 Milestones:
 
-1. **Client Presentation & Web UI**
-   - Web application client / UI-independent presentation layer (Issue #140)
-2. **Production Asset Pipeline & Final Licensing**
+1. **Client/Agent Gateway & CQRS Architecture (In Progress)**
+   - Query Pillar (`GET /context`) & Command Pillar (`POST /actions`) (#944, #946, #938, #939, #646)
+   - Phased migration and complete purge of legacy individual REST routes (#947, #948, #949, #950)
+   - Establishes a radical, token-efficient 2-tool API surface for AI Agents, Web UI, and Chatbots
+2. **Headless E2E Gameplay Simulation Test Framework**
+   - Deterministic multi-turn game loop simulation via the Action Gateway (Issue #650)
+3. **Client Presentation & Web UI**
+   - Web application client / Server-Driven UI powered entirely by the Gateway (Issue #140)
+4. **Production Asset Pipeline & Final Licensing**
    - Production asset mapping and license attribution catalog
 
 ---
