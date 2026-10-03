@@ -22,17 +22,6 @@ var (
 	ErrDepotNotConfigured      = errors.New("depot repository is not configured")
 )
 
-var DefaultTalkDialogues = []string{
-	"よく来たな…。ここは闇市場だ…",
-	"表の世界では手に入れられない物を取引している…",
-	"物の取引は金では買えないもの…。つまり、魂…ゴホッゴホッ…ではなく、レアアイテムだ…",
-	"お前の魂…ではなく、お前が装備しているレアアイテムをささげろ…",
-	"レアアイテムをささげることによって…お前のレアポイントが増える…",
-	"レアポイントにより取引できるアイテムが違う…",
-}
-
-const InspectDialogue = "…お前の魂で取引したいのか？"
-
 type CharacterPoints struct {
 	CharacterID string `json:"character_id"`
 	RarePoints  int    `json:"rare_points"`
@@ -56,7 +45,6 @@ type PointsStatus = Status
 type TalkResult struct {
 	CharacterID string `json:"character_id"`
 	NPCName     string `json:"npc_name"`
-	Dialogue    string `json:"dialogue"`
 }
 
 type SacrificeResult struct {

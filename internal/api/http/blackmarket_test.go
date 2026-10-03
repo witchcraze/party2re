@@ -43,7 +43,6 @@ func (s *stubBlackMarketService) Talk(ctx context.Context, characterID string) (
 	return &blackmarket.TalkResult{
 		CharacterID: characterID,
 		NPCName:     blackmarket.NPCName,
-		Dialogue:    "よく来たな…。ここは闇市場だ…",
 	}, nil
 }
 
@@ -54,7 +53,6 @@ func (s *stubBlackMarketService) Inspect(ctx context.Context, characterID string
 	return &blackmarket.TalkResult{
 		CharacterID: characterID,
 		NPCName:     blackmarket.NPCName,
-		Dialogue:    blackmarket.InspectDialogue,
 	}, nil
 }
 
@@ -165,6 +163,9 @@ func TestBlackMarketEndpoints(t *testing.T) {
 		}
 		if !strings.Contains(rec.Body.String(), blackmarket.NPCName) {
 			t.Errorf("expected NPC name in talk response, got: %s", rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"dialogue"`) {
+			t.Errorf("expected dialogue in talk response, got: %s", rec.Body.String())
 		}
 	})
 

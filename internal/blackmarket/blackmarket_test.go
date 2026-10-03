@@ -266,9 +266,6 @@ func TestTalkAndInspect(t *testing.T) {
 	if talk.NPCName != "@闇商人" {
 		t.Errorf("expected @闇商人, got %s", talk.NPCName)
 	}
-	if talk.Dialogue == "" {
-		t.Errorf("expected non-empty dialogue")
-	}
 
 	inspect, err := svc.Inspect(ctx, "char-talker")
 	if err != nil {
@@ -276,9 +273,6 @@ func TestTalkAndInspect(t *testing.T) {
 	}
 	if inspect.NPCName != "@闇商人" {
 		t.Errorf("expected @闇商人, got %s", inspect.NPCName)
-	}
-	if inspect.Dialogue != "…お前の魂で取引したいのか？" {
-		t.Errorf("expected authentic inspect dialogue, got %s", inspect.Dialogue)
 	}
 }
 

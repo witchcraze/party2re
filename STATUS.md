@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #931 — [Architecture] Auction: Decouple Dialogue from VenueInfo and format at HTTP layer
+Last updated: Issue #930 — [Architecture] BlackMarket: Decouple Dialogue from TalkResult and format at HTTP layer
 
 ## Current Phase
 
