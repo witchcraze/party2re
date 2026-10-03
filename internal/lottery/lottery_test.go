@@ -480,8 +480,8 @@ func TestBuyTakarakujiTicket(t *testing.T) {
 		if res.RemainingGold != 70000 {
 			t.Errorf("remaining gold = %d", res.RemainingGold)
 		}
-		if !strings.Contains(res.NPCMessage, "2026/09/11") && !strings.Contains(res.NPCMessage, "2026/9/11") {
-			t.Errorf("NPC message = %s; want to mention 2026/09/11", res.NPCMessage)
+		if got := res.DrawDate.In(time.FixedZone("JST", 9*60*60)).Format("2006/01/02"); got != "2026/09/11" {
+			t.Errorf("draw date = %s; want 2026/09/11", got)
 		}
 	})
 

@@ -3,7 +3,9 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
@@ -144,8 +146,19 @@ func (h *Handler) handleBuyTakarakujiTicket(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		writeJSON(w, http.StatusOK, res)
+		drawDate := res.DrawDate.In(time.FixedZone("JST", 9*60*60))
+		writeJSON(w, http.StatusOK, buyTakarakujiTicketResponse{
+			Ticket:        res.Ticket,
+			RemainingGold: res.RemainingGold,
+			NPCMessage:    fmt.Sprintf("ありがとー。当たってたら %04d/%02d/%02d に賞品が届くからね", drawDate.Year(), drawDate.Month(), drawDate.Day()),
+		})
 	})
+}
+
+type buyTakarakujiTicketResponse struct {
+	Ticket        lottery.TakarakujiTicket `json:"ticket"`
+	RemainingGold int                      `json:"remaining_gold"`
+	NPCMessage    string                   `json:"npc_message"`
 }
 
 func (h *Handler) handleGetCharacterTakarakujiTicket(w http.ResponseWriter, r *http.Request) {

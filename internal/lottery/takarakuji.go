@@ -120,7 +120,7 @@ type TakarakujiStatus struct {
 type TakarakujiPurchaseResult struct {
 	Ticket        TakarakujiTicket `json:"ticket"`
 	RemainingGold int              `json:"remaining_gold"`
-	NPCMessage    string           `json:"npc_message"`
+	DrawDate      time.Time        `json:"draw_date"`
 }
 
 type TakarakujiWinner struct {
@@ -303,14 +303,10 @@ func (s *Service) BuyTakarakujiTicket(ctx context.Context, characterID string) (
 		return TakarakujiPurchaseResult{}, err
 	}
 
-	jst := time.FixedZone("JST", 9*60*60)
-	drawDateJST := round.DrawDate.In(jst)
-	npcMessage := fmt.Sprintf("ありがとー。当たってたら %04d/%02d/%02d に賞品が届くからね", drawDateJST.Year(), drawDateJST.Month(), drawDateJST.Day())
-
 	return TakarakujiPurchaseResult{
 		Ticket:        ticket,
 		RemainingGold: updatedChar.Money,
-		NPCMessage:    npcMessage,
+		DrawDate:      round.DrawDate,
 	}, nil
 }
 
