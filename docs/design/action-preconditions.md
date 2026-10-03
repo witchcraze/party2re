@@ -14,7 +14,7 @@ Each action is statically linked to its corresponding OpenAPI 3.1 `operationId` 
 
 ## 2. Legacy Specification Parity (Ground Truth)
 
-In legacy Party2 (`party.cgi`, `lib/*.cgi`), action availability is governed by five core state gates:
+The legacy behavior reference (`party.cgi`, `lib/*.cgi`) and the approved Scheduling infrastructure are reconciled through six state gates:
 
 1. **Dead Gate (`$m{hp} <= 0`)**:
    - Deceased characters cannot participate in battles (`vs_monster`, `vs_player`, `boss`), play casino games, purchase items, or perform economic transactions.
@@ -24,11 +24,14 @@ In legacy Party2 (`party.cgi`, `lib/*.cgi`), action availability is governed by 
    - **Allowed**: Rest (`home_sleep`), food (`tavern_order`), banking, storage management, and shopping.
 3. **Sleep Gate (`$m{sleep} > 0`)**:
    - Under `party.cgi:14`, any character with remaining sleep seconds is routed unconditionally to `sleep.cgi`.
-   - **All actions are completely blocked** except `home_wake` (waking up when timer completes).
+   - Ordinary actions remain blocked while the sleep duration is active or wake recovery is pending. `home_wake` is offered only when the duration has elapsed and recovery is pending.
+   - **Emergency exception**: `rescue.cgi:53-65` accepts rescue during existing sleep and adds a penalty. `rescue_request` therefore has no awake requirement.
 4. **Cooldown Gate (`party2:scheduled:actor:<id>`)**:
-   - Characters actively executing delayed actions (adventures or training) cannot execute concurrent town or expedition actions.
+   - Characters with Pending or Processing ScheduledActions cannot execute cooldown-gated town or expedition actions. Passing ExecuteAt does not imply settlement; Completed/Failed records do not block. The actor Set is an index, not an exclusive lock ([Scheduled work lifecycle](scheduling.md)).
 5. **Currency Gate (`$m{money} > 0`)**:
-   - Actions requiring non-zero gold or entry fees (e.g., bank deposits, purchases, gambling bets, lottery tickets, tavern meals).
+   - Currency-gated entry actions require positive wallet gold. Exact amounts, selected-item prices, alternate currencies and domain-specific prerequisites remain execution-service checks; the catalog has no request payload to evaluate them.
+6. **Location Gate**:
+   - The initial observation scene is `town` (#939). Facility entry actions require this scene; global rescue is exempt. Persistent character locations and facility-specific scenes are deferred to #947–#949 rather than inferred from action categories.
 
 ---
 
@@ -44,7 +47,7 @@ const (
 	GateFatigueCheck                        // Requires Tired < 100 (Not exhausted)
 	GateSleepCheck                          // Requires Sleep == 0 (Awake)
 	GateCooldownCheck                       // Requires no active ScheduledAction
-	GateCurrencyCheck                       // Requires positive currency / sufficient gold
+	GateCurrencyCheck                       // Requires positive wallet gold for entry
 	GateLocationCheck                       // Requires valid facility / town presence
 )
 ```
@@ -98,9 +101,21 @@ The table below documents all 42 canonical actions in `internal/playercontext/ca
 | `monster_tame` | モンスター捕獲・預託 | `social` | `tameMonster` | `["monster_id"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
 | `helper_complete` | 何でも屋クエスト報告 | `social` | `completeHelperQuest` | `["quest_id"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
 | `park_post` | 交流広場に伝言投稿 | `social` | `postParkMessage` | `["message"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `rescue_request` | 緊急救出要請 | `social` | `requestEmergencyRescue` | `[]` | ❌ | ❌ | ✅ | ❌ | ❌ |
+| `rescue_request` | 緊急救出要請 | `social` | `requestEmergencyRescue` | `[]` | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 *(Note: All facility actions implicitly require `GateLocationCheck` except `rescue_request`, which is a global recovery action).*
+
+`home_wake` also requires wakeable lifecycle state even though it has no Sleep flag. An already-awake character is not offered a redundant wake action. A healthy awake character has 41 entry actions; a sleeping character has only rescue; a character awaiting wake recovery has wake and rescue, in catalog order.
+
+### Evaluation and read contract
+
+The pipeline evaluates Dead → Fatigue → Sleep → Cooldown → Currency → Location, stopping at the first rejecting gate for each action. Each gate honors its RequiredGates exemptions; wake eligibility is an explicit recovery rule. Gate evaluation is pure and changes no state.
+
+`playercontext.Service.Query` reads Character and unfinished ScheduledActions, then existing Sleep duration and Asleep recovery flag. Character has no invented Sleeping or location field. The returned snapshot includes those observations, and the availability list contains only ActionIDs, without URLs, HTTP knowledge or presentation text. #939 can reuse this snapshot without refetching Character or timers.
+
+For a nonempty actor index this entails one MariaDB Character lookup and four Valkey commands (SMEMBERS, MGET, sleep TTL, Asleep EXISTS); an empty index avoids MGET. Each input is read once. This is not a transaction across stores, and action execution must revalidate changing state.
+
+No CharacterSnapshot or availability-result cache is introduced. The catalog is small; any cache should follow measurements and an explicit invalidation design covering Character updates and timer/lifecycle changes.
 
 ---
 

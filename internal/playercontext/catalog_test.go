@@ -36,8 +36,11 @@ func TestDefaultCatalog_Integrity(t *testing.T) {
 		}
 		seenOperationIDs[act.OperationID] = true
 
-		if act.RequiredGates == 0 {
+		if act.RequiredGates == 0 && act.ID != "rescue_request" {
 			t.Errorf("action %s has zero RequiredGates", act.ID)
+		}
+		if act.ID == "rescue_request" && act.RequiredGates != 0 {
+			t.Error("emergency rescue must remain exempt from condition gates")
 		}
 
 		// Verify GetAction works for every item in catalog
