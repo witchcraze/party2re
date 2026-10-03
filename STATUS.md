@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #972 — Scheduling actor-indexed unfinished-work query
+Last updated: Issue #938 — PlayerContext availability evaluator and read query
 
 ## Current Phase
 
@@ -22,6 +22,7 @@ All Version 1.0 foundational systems, core combat, 39 feature modules, and the H
 - **Transient State**: Valkey Master for ephemeral lobbies & turns (Candidate C), run buffers (Candidate D), shared boss HP (Candidate E), and actor-indexed unfinished ScheduledActions (Pending/Processing). SSOT: [`docs/architecture/valkey-keyspace.md`](docs/architecture/valkey-keyspace.md).
 - **Lifecycle Contracts**: Fail-fast startup checks for MariaDB/Valkey with clean resource teardown on error.
 - **AST Gates & CI**: Automated AST linters (locks, tx runners, ISP, file size ≤500 lines, Valkey keyspace, presentation decoupling), action catalog OpenAPI drift detector (`catalog_lint_test.go`), and non-mutating OpenAPI sync checks (`sync_openapi --check`). SSOT: [`docs/development/ast-linters.md`](docs/development/ast-linters.md).
+- **PlayerContext**: Uncached Character/ScheduledAction/Sleep observations and ordered six-gate ActionID evaluation; initial town scene and positive-gold entry filtering. HTTP `GET /context` remains #939.
 
 ---
 
@@ -29,7 +30,7 @@ All Version 1.0 foundational systems, core combat, 39 feature modules, and the H
 
 See [`ROADMAP.md`](ROADMAP.md) for full milestone details.
 
-1. **Client/Agent Gateway & CQRS Architecture**: Availability engine (#938), `GET /context` (#939), `POST /actions` Gateway (#646), and phased purge of legacy REST routes (#947–#950). (Action Catalog defined in #944, Drift detection in #946).
+1. **Client/Agent Gateway & CQRS Architecture**: `GET /context` (#939), `POST /actions` Gateway (#646), and phased purge of legacy REST routes (#947–#950). (Action Catalog defined in #944, Drift detection in #946; availability engine and Scheduling reads implemented in #938/#972).
 2. **Headless E2E Gameplay Simulation**: Deterministic multi-turn gameplay loop verification (Issue #650).
 3. **Client Presentation & Web UI**: Browser client and Server-Driven UI (Issue #140).
 4. **Production Asset Pipeline & Final Licensing**: Production asset mapping and license attribution catalog (Issues #143, #202).

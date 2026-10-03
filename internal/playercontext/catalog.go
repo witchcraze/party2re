@@ -108,7 +108,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "home",
 		OperationID:    "homeWake",
 		RequiredParams: []string{},
-		// Note: Waking up is the sole action permitted while sleeping.
+		// Note: Wake requires an expired sleep timer and pending recovery; rescue is also exempt.
 		RequiredGates: GateLocationCheck,
 	},
 	{
@@ -415,7 +415,7 @@ var DefaultCatalog = []ActionDefinition{
 		OperationID:    "requestEmergencyRescue",
 		RequiredParams: []string{},
 		// Note: Emergency rescue can be invoked while dead or asleep to unstick state.
-		RequiredGates: GateSleepCheck,
+		RequiredGates: 0,
 	},
 }
 

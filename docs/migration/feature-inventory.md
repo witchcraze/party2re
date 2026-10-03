@@ -151,6 +151,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] PlayerContext: Action Catalog & Legacy Precondition Matrix (#944)
 - [x] PlayerContext: Automated Drift-Detection Test between Action Catalog and OpenAPI Specification (#946)
 - [x] Scheduling: Actor-indexed unfinished-work query, Pending/Processing lifecycle and bulk Valkey reads (#972)
+- [x] PlayerContext: Ordered six-gate availability evaluator and uncached read query, sleep/wake lifecycle and rescue exemption (#938); HTTP observation handler remains #939
 - [ ] Web presentation UI / client implementation (#140)
 - [ ] Production asset production and license attribution (#143, #202)
 
