@@ -65,6 +65,11 @@ func setupFacilitySleepGuardTest(t *testing.T, sleepStatus home.SleepStatus) htt
 		apihttp.WithCustomSkill(&stubCustomSkillService{}),
 		apihttp.WithGuild(&stubGuildService{}),
 		apihttp.WithMedal(&mockMedalService{}),
+		apihttp.WithAlchemy(&stubAlchemyService{}),
+		apihttp.WithBlackMarket(&stubBlackMarketService{}),
+		apihttp.WithSecretShop(&stubSecretShopService{}),
+		apihttp.WithBlacksmith(&stubBlacksmithService{}),
+		apihttp.WithFleaMarket(&stubFleaMarketService{}),
 	)
 	if err != nil {
 		t.Fatalf("failed to create handler: %v", err)
@@ -152,6 +157,34 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		// Medal
 		{"medal_claim_reward", http.MethodPost, "/medals/claim", `{"character_id":"char-1","item_id":"reward-1"}`},
 		{"medal_claim_achievement", http.MethodPost, "/characters/char-1/achievements/ach-1/claim", `{}`},
+		// Shop & Commercial
+		{"shop_purchase", http.MethodPost, "/shop/purchase", `{"character_id":"char-1","item_definition_id":"herb","quantity":1}`},
+		{"shop_sell", http.MethodPost, "/shop/sell", `{"character_id":"char-1","item_instance_id":"item-1","quantity":1}`},
+		{"shop_batch_purchase", http.MethodPost, "/characters/char-1/shop/batch-purchase", `{"shop_type":"item","items":[{"item_definition_id":"herb","quantity":1}]}`},
+		{"shop_talk", http.MethodPost, "/characters/char-1/shop/item/talk", `{}`},
+		{"shop_discover_secret", http.MethodPost, "/characters/char-1/shop/discover-secret", `{}`},
+		{"shop_accessory_buy", http.MethodPost, "/characters/char-1/shop/accessory/buy", `{"item_definition_id":"acc-1","quantity":1}`},
+		{"shop_accessory_sell", http.MethodPost, "/characters/char-1/shop/accessory/sell", `{"item_instance_id":"item-1","quantity":1}`},
+		{"shop_accessory_synthesize", http.MethodPost, "/characters/char-1/shop/accessory/synthesize", `{"recipe_target":"acc-2"}`},
+		// Alchemy
+		{"alchemy_synthesize", http.MethodPost, "/characters/char-1/alchemy/synthesize", `{"recipe_id":"rec-1"}`},
+		{"alchemy_claim", http.MethodPost, "/characters/char-1/alchemy/claim", `{}`},
+		{"alchemy_learn", http.MethodPost, "/characters/char-1/alchemy/learn", `{}`},
+		// Black Market
+		{"blackmarket_sacrifice", http.MethodPost, "/characters/char-1/blackmarket/sacrifice", `{"item_instance_id":"item-1"}`},
+		{"blackmarket_trade", http.MethodPost, "/characters/char-1/blackmarket/trade", `{"prize_id":"prize-1"}`},
+		// Secret Shop
+		{"secretshop_puffpuff", http.MethodPost, "/characters/char-1/secretshop/puffpuff", `{}`},
+		{"secretshop_purchase", http.MethodPost, "/characters/char-1/secretshop/purchase", `{"item_id":"item-1","quantity":1}`},
+		// Blacksmith
+		{"blacksmith_seal", http.MethodPost, "/characters/char-1/blacksmith/seal", `{"seal_id":1}`},
+		{"blacksmith_name", http.MethodPost, "/characters/char-1/blacksmith/name", `{"target":"weapon","name":"Excalibur"}`},
+		{"blacksmith_deposit", http.MethodPost, "/characters/char-1/blacksmith/storage/deposit", `{}`},
+		{"blacksmith_withdraw", http.MethodPost, "/characters/char-1/blacksmith/storage/withdraw", `{"slot":1}`},
+		// Flea Market
+		{"fleamarket_create", http.MethodPost, "/characters/char-1/fleamarket/listings", `{"item_id":"item-1","price":100}`},
+		{"fleamarket_purchase", http.MethodPost, "/characters/char-1/fleamarket/listings/list-1/purchase", `{}`},
+		{"fleamarket_cancel", http.MethodDelete, "/characters/char-1/fleamarket/listings/list-1", ``},
 	}
 
 	t.Run("sleeping character is rejected with 409 Conflict across all facility endpoints", func(t *testing.T) {

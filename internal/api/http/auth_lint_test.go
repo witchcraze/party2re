@@ -453,6 +453,34 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleClaimAchievement": "medal.go",
 		// Adventure
 		"handleStartAdventure": "handler.go",
+		// Shop & Commercial
+		"handlePurchase":            "handler.go",
+		"handleSell":                "handler.go",
+		"handleShopBatchPurchase":   "shop.go",
+		"handleShopTalkNPC":         "shop.go",
+		"handleShopDiscoverSecret":  "shop.go",
+		"handleAccessoryBuy":        "shop.go",
+		"handleAccessorySell":       "shop.go",
+		"handleAccessorySynthesize": "shop.go",
+		// Alchemy
+		"handleAlchemySynthesize": "alchemy.go",
+		"handleAlchemyClaim":      "alchemy.go",
+		"handleAlchemyLearn":      "alchemy.go",
+		// Black Market
+		"handleBlackMarketSacrifice": "blackmarket.go",
+		"handleBlackMarketTrade":     "blackmarket.go",
+		// Secret Shop
+		"handleSecretShopPuffPuff": "secretshop.go",
+		"handleSecretShopPurchase": "secretshop.go",
+		// Blacksmith
+		"handleApplyBlacksmithSeal":      "blacksmith.go",
+		"handleNameEquipment":            "blacksmith.go",
+		"handleDepositBlacksmithWeapon":  "blacksmith.go",
+		"handleWithdrawBlacksmithWeapon": "blacksmith.go",
+		// Flea Market
+		"handleCreateFleaMarketListing":   "fleamarket.go",
+		"handlePurchaseFleaMarketListing": "fleamarket.go",
+		"handleCancelFleaMarketListing":   "fleamarket.go",
 	}
 
 	for handlerName, sourceFile := range requiredActionGuardHandlers {
