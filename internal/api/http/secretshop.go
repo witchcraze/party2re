@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -29,6 +30,11 @@ func WithSecretShop(service SecretShopService) Option {
 type secretShopPurchaseRequest struct {
 	ItemID   string `json:"item_id"`
 	Quantity int    `json:"quantity"`
+}
+
+type secretShopPurchaseResponse struct {
+	*secretshop.PurchaseResult
+	NPCMessage string `json:"npc_message"`
 }
 
 type secretShopDialogueResponse struct {
@@ -140,7 +146,14 @@ func (h *Handler) handleSecretShopPurchase(w http.ResponseWriter, r *http.Reques
 			return
 		}
 
-		writeJSON(w, http.StatusOK, result)
+		message := fmt.Sprintf("%sメェ〜。持ってけメェ〜", result.Item.Name)
+		if result.TransferredToDepot {
+			message = fmt.Sprintf("%sは%sメェ〜の預かり所の方に投げましたメェ〜", result.Item.Name, char.Name)
+		}
+		writeJSON(w, http.StatusOK, secretShopPurchaseResponse{
+			PurchaseResult: result,
+			NPCMessage:     message,
+		})
 	})
 }
 

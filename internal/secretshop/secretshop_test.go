@@ -399,10 +399,6 @@ func TestPurchaseItemDirectToInventory(t *testing.T) {
 	if result.TransferredToDepot {
 		t.Fatal("expected item to be in inventory, not depot")
 	}
-	expectedMsg := "薬草の根っこメェ〜。持ってけメェ〜"
-	if result.NPCMessage != expectedMsg {
-		t.Fatalf("expected NPCMessage %q, got %q", expectedMsg, result.NPCMessage)
-	}
 
 	// Verify inventory
 	inv, _ := invRepo.FindByCharacterID(ctx, "char-high")
@@ -436,10 +432,6 @@ func TestPurchaseItemTransferToDepot(t *testing.T) {
 
 	if !res2.TransferredToDepot {
 		t.Fatal("expected second item to be transferred to depot")
-	}
-	expectedMsg := "魔法の鏡はVeteranメェ〜の預かり所の方に投げましたメェ〜"
-	if res2.NPCMessage != expectedMsg {
-		t.Fatalf("expected NPCMessage %q, got %q", expectedMsg, res2.NPCMessage)
 	}
 
 	// Verify depot has the second item

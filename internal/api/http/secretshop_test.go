@@ -2,6 +2,7 @@ package http_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -174,17 +175,47 @@ func TestSecretShopEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /characters/{id}/secretshop/purchase success", func(t *testing.T) {
-		req := jsonRequest(t, http.MethodPost, "/characters/c1/secretshop/purchase", `{"item_id":"secret_item_herbal_root","quantity":1}`)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		rr := httptest.NewRecorder()
+	for _, tc := range []struct {
+		name    string
+		toDepot bool
+		message string
+	}{
+		{"inventory", false, "Test Itemメェ〜。持ってけメェ〜"},
+		{"depot", true, "Test ItemはHeroメェ〜の預かり所の方に投げましたメェ〜"},
+	} {
+		t.Run("POST /characters/{id}/secretshop/purchase "+tc.name, func(t *testing.T) {
+			ssService.purchaseItemFn = func(ctx context.Context, characterID, itemID string, quantity int) (*secretshop.PurchaseResult, error) {
+				result, err := (&stubSecretShopService{}).PurchaseItem(ctx, characterID, itemID, quantity)
+				result.TransferredToDepot = tc.toDepot
+				return result, err
+			}
+			t.Cleanup(func() { ssService.purchaseItemFn = nil })
+			req := jsonRequest(t, http.MethodPost, "/characters/c1/secretshop/purchase", `{"item_id":"secret_item_herbal_root","quantity":1}`)
+			req.Header.Set("Authorization", "Bearer valid-token")
+			rr := httptest.NewRecorder()
 
-		router.ServeHTTP(rr, req)
+			router.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
-		}
-	})
+			if rr.Code != http.StatusOK {
+				t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
+			}
+			var response struct {
+				secretshop.PurchaseResult
+				NPCMessage string `json:"npc_message"`
+			}
+			if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+				t.Fatal(err)
+			}
+			if response.NPCMessage != tc.message {
+				t.Fatalf("npc_message = %q; want %q", response.NPCMessage, tc.message)
+			}
+			if response.CharacterID != "c1" || response.Item.Name != "Test Item" || response.Quantity != 1 ||
+				response.TotalPrice != 1000 || response.RemainingGold != 5000 || response.InventoryInstanceID != "inst-1" ||
+				response.TransferredToDepot != tc.toDepot {
+				t.Fatalf("unexpected purchase result: %+v", response.PurchaseResult)
+			}
+		})
+	}
 
 	t.Run("POST /characters/{id}/secretshop/purchase insufficient funds", func(t *testing.T) {
 		ssServiceErr := &stubSecretShopService{

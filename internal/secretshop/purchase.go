@@ -3,7 +3,6 @@ package secretshop
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 
@@ -21,7 +20,6 @@ type PurchaseResult struct {
 	RemainingGold       int    `json:"remaining_gold"`
 	InventoryInstanceID string `json:"inventory_instance_id"`
 	TransferredToDepot  bool   `json:"transferred_to_depot"`
-	NPCMessage          string `json:"npc_message"`
 }
 
 // PurchaseItem purchases rare items from the secret shop with transactional protection.
@@ -134,7 +132,6 @@ func (s *Service) PurchaseItem(
 				RemainingGold:       res.Character.Money,
 				InventoryInstanceID: res.GrantedItem.ID,
 				TransferredToDepot:  false,
-				NPCMessage:          fmt.Sprintf("%sメェ〜。持ってけメェ〜", shopItem.Name),
 			}
 			return nil
 		}
@@ -186,7 +183,6 @@ func (s *Service) PurchaseItem(
 			RemainingGold:       res.Character.Money,
 			InventoryInstanceID: inst.ID,
 			TransferredToDepot:  true,
-			NPCMessage:          fmt.Sprintf("%sは%sメェ〜の預かり所の方に投げましたメェ〜", shopItem.Name, char.Name),
 		}
 		return nil
 	}
