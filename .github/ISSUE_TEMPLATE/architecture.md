@@ -41,3 +41,12 @@ labels: ["architecture"]
 ## Documentation
 
 <!-- Which architecture/design documents need to be updated? -->
+
+## Relationships & Dependencies
+
+<!-- Link prerequisite or related Issues.
+     - If blocked by another ticket, link natively via `gh issue edit <id> --add-blocked-by <id>` after creation.
+     - If decomposed from a parent epic/tracking issue, link via `gh issue edit <id> --parent <parent-id>`. -->
+- **Parent Issue**: None (or #)
+- **Blocked by**: None (or #)
+- **Related issues**: 

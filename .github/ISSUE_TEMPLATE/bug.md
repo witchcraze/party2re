@@ -59,6 +59,11 @@ labels: ["bug"]
 - [ ] No architectural impact
 - [ ] Architectural impact — explain below
 
-## Related issues
+## Relationships & Dependencies
 
-<!-- Link related Issues or regressions. -->
+<!-- Link prerequisite or related Issues.
+     - If blocked by another ticket, link natively via `gh issue edit <id> --add-blocked-by <id>` after creation.
+     - If decomposed from a parent epic/tracking issue, link via `gh issue edit <id> --parent <parent-id>`. -->
+- **Parent Issue**: None (or #)
+- **Blocked by**: None (or #)
+- **Related issues**: 
