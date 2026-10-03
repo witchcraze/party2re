@@ -107,7 +107,11 @@ Legacy Party2 routes purchased goods based on current inventory occupancy and qu
 - Each NPC responds with advice explaining mechanics (e.g. weight reducing agility, batch purchasing sending to depot).
 
 ### 6.2. NPC Inspect (`/shop/{type}/inspect`)
-- Inspecting weapon or armor NPCs yields defensive or humorous remarks.
+- **Presentation Decoupling**: In adherence to `.agents/rules/03-architecture.md §5`, domain service results return pure structured data (`ShopType`, `NPCName`, `SecretShopHint`), while human-facing dialogue lines are formatted at the HTTP transport/presentation layer (`internal/api/http`).
+- Inspecting weapon or armor NPCs yields defensive or humorous remarks:
+  - Weapon (`ブッキー`): *"おいおい、俺は武器じゃねぇぜ"*
+  - Armor (`アマノ`): *"な、な、何を見ているッスか！？！"*
+  - Accessory (`ミラ`): *"なにか私についてる？"*
 - Inspecting Itemko (`アイテムコ`) returns:
   - Dialogue: *"ほえ？なんでしょうかぁ？"*
   - Secret Shop Hint: *"＠ひみつのみせ に行きたい"*

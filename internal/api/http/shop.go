@@ -122,6 +122,21 @@ func batchPurchaseNPCMessage(shopType shop.ShopType, characterName string) strin
 	}
 }
 
+func shopInspectDialogue(shopType shop.ShopType) string {
+	switch shopType {
+	case shop.ShopTypeWeapon:
+		return "おいおい、俺は武器じゃねぇぜ"
+	case shop.ShopTypeArmor:
+		return "な、な、何を見ているッスか！？！"
+	case shop.ShopTypeItem:
+		return "ほえ？なんでしょうかぁ？"
+	case shop.ShopTypeAccessory:
+		return "なにか私についてる？"
+	default:
+		return ""
+	}
+}
+
 func (h *Handler) handleShopInspectNPC(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
 	shopTypeStr := r.PathValue("type")
@@ -134,7 +149,7 @@ func (h *Handler) handleShopInspectNPC(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, npcDialogueResponse{
-			Dialogue:       res.Dialogue,
+			Dialogue:       shopInspectDialogue(shopType),
 			SecretShopHint: res.SecretShopHint,
 		})
 	})

@@ -215,11 +215,6 @@ func TestAccessoryShopMetaAndDialogue(t *testing.T) {
 		t.Errorf("GetShopMeta(ShopTypeAccessory) = (%q, %q), want (アクセサリー屋, @ミラ)", title, npc)
 	}
 
-	dialogue, hint := shop.GetInspectDialogue(shop.ShopTypeAccessory)
-	if dialogue != "なにか私についてる？" || hint != "" {
-		t.Errorf("GetInspectDialogue(ShopTypeAccessory) = (%q, %q), want (なにか私についてる？, \"\")", dialogue, hint)
-	}
-
 	words := shop.GetShopWords(shop.ShopTypeAccessory)
 	if len(words) == 0 {
 		t.Errorf("GetShopWords(ShopTypeAccessory) is empty")

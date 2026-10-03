@@ -61,7 +61,6 @@ func TestAccessoryShopHTTPEndpoints(t *testing.T) {
 			return shop.NPCInspectResult{
 				ShopType: shopType,
 				NPCName:  "@ミラ",
-				Dialogue: "なにか私についてる？",
 			}, nil
 		},
 		purchaseInShopFn: func(_ context.Context, characterID string, shopType shop.ShopType, itemDefinitionID string, quantity int) (shop.PurchaseResult, error) {
