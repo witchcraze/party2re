@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #928 — [Architecture] God: Decouple NPCSpeech from WishResult and format at HTTP layer
+Last updated: Issue #927 — [Architecture] Lottery: Decouple NPCMessage from TakarakujiPurchaseResult and format at HTTP layer
 
 ## Current Phase
 

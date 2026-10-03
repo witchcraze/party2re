@@ -80,8 +80,10 @@ Drawings occur automatically on the **1st, 11th, and 21st** of each month at 00:
 
 Premature drawing attempts (`now.Before(round.DrawDate)`) are rejected with `ErrNotReadyToDraw`.
 
-On purchase, the NPC informs the player:
+On purchase, the NPC informs the player (`party2/lib/takarakuzi.cgi:124`):
 `「ありがとー。当たってたら YYYY/MM/DD に賞品が届くからね」`
+
+The domain purchase result returns only state (`Ticket`, `RemainingGold`, `DrawDate`); the dialogue is formatted from `DrawDate` (JST) at the HTTP layer (`npc_message`) per `.agents/rules/03-architecture.md §5`.
 
 ### 3. Prize Catalog & Candidate Lineup
 Each round rolls one distinct prize item for each tier alongside winner counts:

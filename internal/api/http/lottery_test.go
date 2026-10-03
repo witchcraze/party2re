@@ -2,6 +2,7 @@ package http_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -58,7 +59,7 @@ func (s *stubLotteryService) BuyTakarakujiTicket(ctx context.Context, characterI
 	return lottery.TakarakujiPurchaseResult{
 		Ticket:        lottery.TakarakujiTicket{ID: "t-1", RoundID: 1, CharacterID: characterID},
 		RemainingGold: 70000,
-		NPCMessage:    "ありがとー。当たってたら賞品が届くからね",
+		DrawDate:      time.Date(2026, 9, 10, 15, 0, 0, 0, time.UTC), // 2026/09/11 00:00 JST
 	}, nil
 }
 
@@ -119,6 +120,19 @@ func TestLotteryEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var res struct {
+			RemainingGold int    `json:"remaining_gold"`
+			NPCMessage    string `json:"npc_message"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if want := "ありがとー。当たってたら 2026/09/11 に賞品が届くからね"; res.NPCMessage != want {
+			t.Fatalf("npc_message = %q; want %q", res.NPCMessage, want)
+		}
+		if res.RemainingGold != 70000 {
+			t.Fatalf("remaining_gold = %d; want 70000", res.RemainingGold)
 		}
 	})
 

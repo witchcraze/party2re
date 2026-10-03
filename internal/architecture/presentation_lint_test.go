@@ -94,9 +94,8 @@ func TestProhibitHTMLInDomainPackages(t *testing.T) {
 // Each entry maps pkg.Struct.Field to the issue tracking its decoupling.
 // No new fields may be added. When a field is decoupled, it MUST be removed from this map to ratchet down.
 var whitelistedLegacyPresentationFields = map[string]string{
-	"eventplaza.BazaarPurchaseResult.NPCMessage":  "Issue #926",
-	"lottery.TakarakujiPurchaseResult.NPCMessage": "Issue #927",
-	"secretshop.PurchaseResult.NPCMessage":        "Issue #925",
+	"eventplaza.BazaarPurchaseResult.NPCMessage": "Issue #926",
+	"secretshop.PurchaseResult.NPCMessage":       "Issue #925",
 }
 
 // TestProhibitPresentationFieldsInDomainModels verifies that domain service result structs
