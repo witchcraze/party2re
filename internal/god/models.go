@@ -85,7 +85,6 @@ type WishResult struct {
 	Character    corecharacter.Character `json:"character"`
 	Wish         Wish                    `json:"wish"`
 	Message      string                  `json:"message"`
-	NPCSpeech    string                  `json:"npc_speech"`
 	NextLocation string                  `json:"next_location,omitempty"`
 }
 

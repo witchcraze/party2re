@@ -79,8 +79,7 @@ func TestGodEndpoints(t *testing.T) {
 					Name:  "強くなりたい",
 					Realm: realm,
 				},
-				Message:   "Wish granted",
-				NPCSpeech: "Speech",
+				Message: "Wish granted",
 			}, nil
 		},
 	}
@@ -140,6 +139,45 @@ func TestGodEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		var res struct {
+			Message   string `json:"message"`
+			NPCSpeech string `json:"npc_speech"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		expectedSpeech := "ふむ。Heroの願いは「強くなりたい」だな。\nHeroの願いを叶えたぞ…。機会があればまたあえるだろう…。さらばだ…"
+		if res.NPCSpeech != expectedSpeech {
+			t.Fatalf("expected NPCSpeech %q, got %q", expectedSpeech, res.NPCSpeech)
+		}
+	})
+
+	t.Run("POST /characters/{id}/god/wish underworld dialogue", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]string{
+			"realm":   "underworld",
+			"wish_id": "wish_expand_depot",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/god/wish", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer valid-token")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		var res struct {
+			NPCSpeech string `json:"npc_speech"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		expectedSpeech := "ふむ。Heroの願いは「強くなりたい」だな。\n上限を広げてやったぞ…。さらばだ…"
+		if res.NPCSpeech != expectedSpeech {
+			t.Fatalf("expected NPCSpeech %q, got %q", expectedSpeech, res.NPCSpeech)
 		}
 	})
 

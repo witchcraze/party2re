@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -138,7 +139,17 @@ func (h *Handler) handleGrantGodWish(w http.ResponseWriter, r *http.Request) {
 			Character: res.Character,
 			Wish:      res.Wish,
 			Message:   res.Message,
-			NPCSpeech: res.NPCSpeech,
+			NPCSpeech: godWishNPCSpeech(realm, res.Wish, char.Name),
 		})
 	})
+}
+
+func godWishNPCSpeech(realm god.Realm, wish god.Wish, characterName string) string {
+	if wish.ID == god.WishLover {
+		return "それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…"
+	}
+	if realm == god.RealmUnderworld {
+		return fmt.Sprintf("ふむ。%sの願いは「%s」だな。\n上限を広げてやったぞ…。さらばだ…", characterName, wish.Name)
+	}
+	return fmt.Sprintf("ふむ。%sの願いは「%s」だな。\n%sの願いを叶えたぞ…。機会があればまたあえるだろう…。さらばだ…", characterName, wish.Name, characterName)
 }

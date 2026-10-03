@@ -73,7 +73,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Custom skill assignment and Gem Box synthesis routing (#69, #782, #850)
 - [x] Wishing Well (願いの泉, @女神) SP sacrifice exchange for permanent stat growth (#468)
 - [x] Standardize vitality & fatigue state clamping and combat recovery helpers (#684)
-- [x] Endgame wishes, stat boosts, and Lv99+ / storage limit breaks (#187)
+- [x] Endgame wishes, stat boosts, Lv99+ / storage limit breaks, and presentation dialogue decoupling (#187, #928)
 
 ### C. Items, Equipment, Storage, and Currency
 - [x] Item definitions, 5-category data catalog, and instance ownership (#11, #51)
