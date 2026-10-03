@@ -412,8 +412,8 @@ func TestNPC_Inspect_And_Talk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InspectNPC weapon error: %v", err)
 	}
-	if resW.Dialogue != "おいおい、俺は武器じゃねぇぜ" {
-		t.Errorf("weapon inspect dialogue mismatch: %s", resW.Dialogue)
+	if resW.ShopType != shop.ShopTypeWeapon || resW.NPCName != "@ブッキー" {
+		t.Errorf("weapon inspect mismatch: %+v", resW)
 	}
 
 	// Item shop inspect (has secret shop hint)
@@ -421,8 +421,8 @@ func TestNPC_Inspect_And_Talk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InspectNPC item error: %v", err)
 	}
-	if resI.Dialogue != "ほえ？なんでしょうかぁ？" {
-		t.Errorf("item inspect dialogue mismatch: %s", resI.Dialogue)
+	if resI.ShopType != shop.ShopTypeItem || resI.NPCName != "@アイテムコ" {
+		t.Errorf("item inspect mismatch: %+v", resI)
 	}
 	if resI.SecretShopHint != "＠ひみつのみせ に行きたい" {
 		t.Errorf("item inspect secret shop hint mismatch: %s", resI.SecretShopHint)

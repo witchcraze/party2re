@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #930 — [Architecture] BlackMarket: Decouple Dialogue from TalkResult and format at HTTP layer
+Last updated: Issue #929 — [Architecture] Shop: Decouple Dialogue from NPCInspectResult and format at HTTP layer
 
 ## Current Phase
 

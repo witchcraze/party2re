@@ -356,11 +356,13 @@ func (s *Service) InspectNPC(ctx context.Context, shopType ShopType, characterID
 		return NPCInspectResult{}, ErrInvalidShopType
 	}
 	_, npc := GetShopMeta(shopType)
-	dialogue, hint := GetInspectDialogue(shopType)
+	hint := ""
+	if shopType == ShopTypeItem {
+		hint = SecretShopHint
+	}
 	return NPCInspectResult{
 		ShopType:       shopType,
 		NPCName:        npc,
-		Dialogue:       dialogue,
 		SecretShopHint: hint,
 	}, nil
 }

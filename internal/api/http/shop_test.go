@@ -71,10 +71,12 @@ func TestShopEndpoints(t *testing.T) {
 			}, nil
 		},
 		inspectNPCFn: func(_ context.Context, shopType shop.ShopType, _ string) (shop.NPCInspectResult, error) {
-			dialogue, hint := shop.GetInspectDialogue(shopType)
+			hint := ""
+			if shopType == shop.ShopTypeItem {
+				hint = shop.SecretShopHint
+			}
 			return shop.NPCInspectResult{
 				ShopType:       shopType,
-				Dialogue:       dialogue,
 				SecretShopHint: hint,
 			}, nil
 		},

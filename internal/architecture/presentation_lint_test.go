@@ -98,7 +98,6 @@ var whitelistedLegacyPresentationFields = map[string]string{
 	"god.WishResult.NPCSpeech":                    "Issue #928",
 	"lottery.TakarakujiPurchaseResult.NPCMessage": "Issue #927",
 	"secretshop.PurchaseResult.NPCMessage":        "Issue #925",
-	"shop.NPCInspectResult.Dialogue":              "Issue #929",
 }
 
 // TestProhibitPresentationFieldsInDomainModels verifies that domain service result structs

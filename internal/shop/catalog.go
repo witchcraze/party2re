@@ -45,7 +45,6 @@ type ShopCatalog struct {
 type NPCInspectResult struct {
 	ShopType       ShopType `json:"shop_type"`
 	NPCName        string   `json:"npc_name"`
-	Dialogue       string   `json:"dialogue"`
 	SecretShopHint string   `json:"secret_shop_hint,omitempty"`
 }
 
@@ -213,20 +212,5 @@ func GetShopWords(shopType ShopType) []string {
 		}
 	default:
 		return nil
-	}
-}
-
-func GetInspectDialogue(shopType ShopType) (dialogue string, hint string) {
-	switch shopType {
-	case ShopTypeWeapon:
-		return "おいおい、俺は武器じゃねぇぜ", ""
-	case ShopTypeArmor:
-		return "な、な、何を見ているッスか！？！", ""
-	case ShopTypeItem:
-		return "ほえ？なんでしょうかぁ？", SecretShopHint
-	case ShopTypeAccessory:
-		return "なにか私についてる？", ""
-	default:
-		return "", ""
 	}
 }
