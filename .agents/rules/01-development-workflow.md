@@ -35,13 +35,13 @@ Keep `main` as the sole integration branch. Feature branches must be short-lived
     1. **`size/large` (Large / Interactive -> Recommended: agy / interactive)**: Requires DB migration (DDL), cross-package transactions, 500-line ceiling/1122-line ratchet refactoring, or interactive user design decisions.
     2. **`size/medium` (Medium: diff <= 150 lines -> Recommended: Jules Pro)**: Standard single-package feature or refactoring, or adding/modifying endpoints requiring OpenAPI (`paths/<pkg>.json`) synchronization.
     3. **`size/small` (Small: diff <= 50 lines -> Recommended: Jules Flash)**: Localized bug fix, formula/cap adjustment, single-handler guard, or unit test addition.
-  - **Zero-Token Triage Guarantee:** When querying candidate issues (`gh issue list --limit 15 --json number,title,labels`), agents and developers MUST determine the recommended mode directly from the `size/*` label without reading the issue body.
-  - **Blocking Status Labels (明確な使い分けルール):**
-    - **`status/needs-spec`**: Use when legacy specifications, formulas, or architectural designs are incomplete, undecided, or pending discussion/RFC. Implementation cannot proceed until specs are clarified.
-    - **`status/blocked`**: Use when the specification is clear, but another ticket/PR should or must be executed first (e.g., foundational infrastructure/models, security/auth guards on overlapping handlers, sequential PRs, or prerequisite domain logic).
-      - **Predecessor Callout Rule**: When applying `status/blocked`, the issue body MUST explicitly record the preceding ticket number(s) (e.g., `Blocked by: #123 (先行チケット #123 の完了後に着手)`).
-      - **Zero-Token Triage Exclusion**: Issues tagged with `status/blocked` (alongside `status/needs-spec` and `priority: low`) MUST be filtered out / excluded from candidate proposals during issue triage.
-      - **Post-Merge Unblocking**: When the preceding ticket is merged, the post-merge process inspects dependent tickets, updates their context, and removes `status/blocked` if all dependencies are satisfied.
+  - **Issue Status & Dependency Management Rules (明確な使い分けルール):**
+    - **`status/needs-spec` (Label)**: Use when legacy specifications, formulas, or architectural designs are incomplete, undecided, or pending discussion/RFC. Implementation cannot proceed until specs are clarified.
+    - **Native Issue Dependencies (`blocked by` / `blocking`)**: Use GitHub native dependencies instead of manual labels when the specification is clear, but another ticket/PR must be executed first (e.g., foundational infrastructure/models, security/auth guards on overlapping handlers, sequential PRs, or prerequisite domain logic).
+      - **Native Registration**: When an issue depends on another issue, link it natively via `gh issue edit <issue-number> --add-blocked-by <predecessor-number>`. Do NOT apply a manual `status/blocked` label (`status/blocked` is deprecated).
+      - **Sub-issues / Parent Hierarchy**: When decomposing large features or epics under the Anti-Fat-Issue rule, link child issues to the tracking issue via `gh issue edit <parent-number> --add-sub-issue <child-number>` (or `--parent <parent-number>`).
+      - **Zero-Token Triage Exclusion**: When querying candidate issues, filter out blocked tickets directly using GitHub native search syntax (`gh issue list --search "is:open -is:blocked" --json number,title,labels`) and exclude `status/needs-spec` and `priority: low`.
+      - **Automatic Unblocking on Merge**: When a preceding ticket is merged and closed, GitHub automatically resolves the blocker (0 open blockers). Subsequent triage workflows immediately observe the unblocked ticket without manual label-stripping overhead.
   - The Issue body MUST explicitly state the primary affected component/package and database tables (e.g., `Affected Component: internal/home`, `Database Tables: character_letters`).
 - **Pre-Registration De-duplication Check:**
   - Before creating any new Issue, agents MUST search existing open issues using targeted domain/entity keywords (`gh issue list --state open --search "<domain-or-keyword>" --json number,title,labels`).
@@ -49,7 +49,7 @@ Keep `main` as the sole integration branch. Feature branches must be short-lived
 - **Related Tickets Synchronization (Body-First Update Rule):**
   - When a PR modifies shared models, storage contracts, bugs, or premises affecting other open issues, agents MUST update affected open issue bodies directly (`gh issue edit <number> --body ...`). Never rely solely on comments (not shown by `gh issue view` by default).
   - Prepend a standardized `> [!NOTE]` callout at the top of `## Problem` detailing resolved issue #, PR #, changes made, and remaining active scope.
-  - If dependent issues were blocked (`status/blocked`), verify if dependencies are satisfied, remove `status/blocked` (`gh issue edit <number> --remove-label "status/blocked"`), and note unblocking in the callout.
+  - If dependent issues were blocked, verify that GitHub native dependency reflects all blockers resolved (automatic upon PR merge/issue close). Prepend the standardized `> [!NOTE]` callout noting that prerequisites are satisfied and the issue is unblocked.
 - **Prerequisite & Feasibility Verification:**
   - When creating issues for security, auth, or cross-cutting features, verify whether required underlying infrastructure/models (e.g., Admin role, RBAC, config keys) already exist in the codebase.
   - If prerequisites are missing, explicitly document them in the Issue body along with concrete architectural options (e.g. Option A, Option B) and note that specification alignment is required before implementation.
