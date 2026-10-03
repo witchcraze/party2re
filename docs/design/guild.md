@@ -107,13 +107,14 @@ Active members can broadcast messages to all fellow guild members:
 ### Guild Master Succession & Dissolution News (`system.cgi:1124-1183`, `join_guild.cgi:367-436`)
 
 1. **Guild Master Succession**:
-   - When a Guild Master leaves the guild (`POST /guilds/{id}/leave`) or their character is deleted (`RemoveCharacterFromGuild` cleanup hook), leadership is automatically transferred to another member if other members remain.
+   - When a Guild Master leaves the guild (`POST /guilds/{id}/leave`) or their character is deleted (`RemoveCharacterFromGuild` cleanup hook), leadership is automatically transferred to another active member if other active members remain.
+   - Pending applicants (`is_pending == true`) are strictly excluded from leadership succession candidates.
    - **Successor Priority**:
-     1. An active member whose custom title contains `ギルマス` (e.g. `副ギルマス`, `ギルマス補佐`).
-     2. If no member matches, the next eligible member in the roster (by order of joining).
+     1. An active member (`!is_pending`) whose custom title contains `ギルマス` (e.g. `副ギルマス`, `ギルマス補佐`).
+     2. If no member matches, the next eligible active member in the roster (by order of joining).
    - Once leadership is successfully transferred, the departing leader is removed from the roster.
 2. **Auto-Dissolution & Server News Announcement**:
-   - When the last member of a guild leaves or is deleted, or when the leader manually disbands the guild (`DELETE /guilds/{id}`), or upon 20-day inactivity auto-disbandment, the guild is dissolved.
+   - When the last active member of a guild leaves or is deleted (including when only the leader and pending applicants exist, or when the guild is empty), or when the leader manually disbands the guild (`DELETE /guilds/{id}`), or upon 20-day inactivity auto-disbandment, the guild is dissolved. Pending applicants cannot maintain or inherit a leaderless guild.
    - Upon dissolution, a system-wide server news announcement is published via `NewsPublisher`:
      `ギルド『<GuildName>』が解散しました` (Category: `guild`, Author: `System`).
 3. **Database Cascade Invariant**:

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #957 — [Bug] HTTP: Extend sleep and rescue action guards to remaining commerce and crafting endpoints
+Last updated: Issue #956 — [Bug] Guild: Prevent unapproved pending applicants from inheriting leadership on leader departure
 
 ## Current Phase
 
