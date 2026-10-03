@@ -15,6 +15,7 @@ import (
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/park"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 type mockParkService struct {
@@ -231,6 +232,27 @@ func TestParkEndpoints(t *testing.T) {
 
 		if rec.Code != http.StatusTooManyRequests {
 			t.Fatalf("expected 429, got %d", rec.Code)
+		}
+	})
+
+	t.Run("POST /park/posts - text validation error", func(t *testing.T) {
+		invalidPark := &mockParkService{
+			postFn: func(ctx context.Context, charID, content, color, recipient string) (park.Post, error) {
+				return park.Post{}, validation.ErrControlCharacter
+			},
+		}
+		h, _ := apihttp.NewHandler(players, chars, adv, shopSvc, apihttp.WithPark(invalidPark))
+		r := h.Router()
+
+		payload := []byte(`{"character_id":"char-1","content":"bad\u0000text"}`)
+		req := httptest.NewRequest(http.MethodPost, "/park/posts", bytes.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-session")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("expected 422, got %d", rec.Code)
 		}
 	})
 

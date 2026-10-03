@@ -78,7 +78,8 @@ func NewService(repo Repository, charReader CharacterReader, opts ...ServiceOpti
 
 // PostMessage creates a new public message in the park.
 func (s *Service) PostMessage(ctx context.Context, characterID, content, color, recipient string) (Post, error) {
-	if err := ValidatePost(characterID, content, color, recipient); err != nil {
+	validContent, err := ValidatePost(characterID, content, color, recipient)
+	if err != nil {
 		return Post{}, err
 	}
 
@@ -111,7 +112,7 @@ func (s *Service) PostMessage(ctx context.Context, characterID, content, color, 
 		}
 	}
 
-	cleanContent := SanitizeContent(content)
+	cleanContent := SanitizeContent(validContent)
 	cleanRecipient := strings.TrimSpace(recipient)
 	if len(cleanRecipient) > 64 {
 		cleanRecipient = cleanRecipient[:64]

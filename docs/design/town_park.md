@@ -14,6 +14,8 @@ Players can submit public bulletin board messages:
 - **Author Identity**: Each post is bound to a verified character owned by the authenticated player session.
 - **Content Validation & Sanitization**:
   - Length constraint: 1 to 200 characters (UTF-8 runes).
+  - Unicode NFC normalization & whitespace trimming via shared validator (`validation.ValidateMultiLine`).
+  - Security guards: Rejection of C0/C1 control characters (except newlines `\n` and `\r`), zero-width formatting characters (e.g. `\u200B`), bidirectional override characters (e.g. `\u202E`), and excessive combining diacritical marks (Zalgo text).
   - HTML escaping: All HTML tags and special characters (`<`, `>`, `&`, `"`, `'`) are escaped (`SanitizeContent`).
 - **Color & Recipient Styling**:
   - Optional custom font color (e.g. HEX `#ff0000`, max 16 characters). Default: `#000000`.
