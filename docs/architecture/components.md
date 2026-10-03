@@ -124,7 +124,7 @@ Each feature owns its specific domain logic and state. Cross-feature imports and
 | **Custom Skill** | `internal/customskill` | 3-gem recipe synthesis, activation phrase validation | Character, Gem Box, Gem Catalog | MariaDB `character_custom_skills` |
 | **Depot** | `internal/depot` | Persistent storage (up to 500 slots), item consumption, delivery engine | Character, Inventory, Economy | MariaDB `character_depots`, `depot_items` (Rank 2→3→5) |
 | **Dungeon** | `internal/dungeon` | Grid map exploration, party traps, map scouting (`@ちず`) | Battle, Character, Inventory, Valkey | Valkey Candidate D (`party2:dungeon:*`); MariaDB `character_dungeon_records` |
-| **Event Plaza** | `internal/eventplaza` | Real-time presence tracking, 3× markup bazaar, victory banquets | Character, Item, Inventory, Depot, Valkey | Valkey `party2:eventplaza:presence`; MariaDB `celebration_banquets` |
+| **Event Plaza** | `internal/eventplaza` | Real-time presence tracking, 3× markup bazaar, victory banquets; structured purchase facts with NPC dialogue formatted by HTTP | Character, Item, Inventory, Depot, Valkey | Valkey `party2:eventplaza:presence`; MariaDB `celebration_banquets` |
 | **Flea Market** | `internal/fleamarket` | Fixed-price player listings (up to 5/char, 120 server max) | Character, Item, Inventory | MariaDB `fleamarket_listings` with SQL CAS guard (Rank 2 asc→3→8) |
 | **Gem Store** | `internal/gemstore` | Dedicated gem box, 55+ synthesis formulas, orb appraisal | Character, Item, Inventory, Depot | MariaDB `character_gem_boxes`, `gem_box_items` (Rank 2→3→5→8) |
 | **God** | `internal/god` | 19 celestial wishes, Lv150 OverLevel, storage limit breaks | Character, Progression, Depot, Inventory | MariaDB `characters`, `character_depots` |

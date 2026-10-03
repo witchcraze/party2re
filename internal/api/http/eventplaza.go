@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -41,6 +42,11 @@ type purchaseBazaarItemRequest struct {
 	CharacterID string `json:"character_id"`
 	ItemID      string `json:"item_id"`
 	Quantity    int    `json:"quantity"`
+}
+
+type purchaseBazaarItemResponse struct {
+	eventplaza.BazaarPurchaseResult
+	NPCMessage string `json:"npc_message"`
 }
 
 type listBanquetsResponse struct {
@@ -159,7 +165,14 @@ func (h *Handler) handlePostEventPlazaMerchantPurchase(w http.ResponseWriter, r 
 			return
 		}
 
-		writeJSON(w, http.StatusOK, result)
+		message := fmt.Sprintf("はい、%sです", result.Item.Name)
+		if result.TransferredToDepot {
+			message = fmt.Sprintf("%sは%sさんの預かり所に送っておきましたよ", result.Item.Name, char.Name)
+		}
+		writeJSON(w, http.StatusOK, purchaseBazaarItemResponse{
+			BazaarPurchaseResult: result,
+			NPCMessage:           message,
+		})
 	})
 }
 

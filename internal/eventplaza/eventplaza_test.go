@@ -513,9 +513,6 @@ func TestPurchaseBazaarItem_InventoryAndDepotRouting(t *testing.T) {
 	if res.TransferredToDepot {
 		t.Errorf("expected transferred to depot = false")
 	}
-	if res.NPCMessage != "はい、身代わり人形です" {
-		t.Errorf("unexpected NPC message: %s", res.NPCMessage)
-	}
 
 	inv, _ := invRepo.FindByCharacterID(ctx, charID)
 	if len(inv.Items) != 1 || inv.Items[0].DefinitionID != "item-072" {
@@ -541,9 +538,6 @@ func TestPurchaseBazaarItem_InventoryAndDepotRouting(t *testing.T) {
 	}
 	if !res.TransferredToDepot {
 		t.Errorf("expected transferred to depot = true when inventory slot occupied")
-	}
-	if res.NPCMessage != "魔法の粉はHeroさんの預かり所に送っておきましたよ" {
-		t.Errorf("unexpected NPC message: %s", res.NPCMessage)
 	}
 
 	dep, err := depotRepo.FindByCharacterID(ctx, charID)

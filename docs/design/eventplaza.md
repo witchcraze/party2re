@@ -59,6 +59,8 @@ All items are sold at exactly **3× base price** (`$ites[$i][2] *= 3`), reflecti
 Items currently requested by ongoing Town Helper Quests (`get_helper_item(3)`) are strictly omitted from listing and cannot be purchased (returns HTTP 409 Conflict).
 
 #### Hand Occupancy & Depot Routing
+Purchase results contain structured item, payment, and delivery facts. The HTTP response DTO formats `npc_message` using the item name, authenticated character name, and depot delivery flag; the domain service contains no NPC dialogue.
+
 Authentic delivery mechanics based on hand item slot occupancy:
 - **Direct Hand Delivery**: If the player's consumable item slot is empty and `quantity == 1`, the item is added directly to character inventory with NPC message:
   `"はい、$nameです"`
