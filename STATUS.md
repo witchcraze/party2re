@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #959 — [Refactor] Guild: Adopt shared text validation for callout messages and role titles
+Last updated: Issue #958 — [Refactor] Park: Adopt shared text validation for bulletin board posts
 
 ## Current Phase
 

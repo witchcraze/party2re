@@ -86,7 +86,7 @@ func (h *Handler) handlePostParkMessage(w http.ResponseWriter, r *http.Request) 
 				writeError(w, http.StatusTooManyRequests, err)
 				return
 			}
-			if errors.Is(err, park.ErrEmptyContent) || errors.Is(err, park.ErrContentTooLong) || errors.Is(err, park.ErrInvalidColor) {
+			if errors.Is(err, park.ErrEmptyContent) || errors.Is(err, park.ErrContentTooLong) || errors.Is(err, park.ErrInvalidColor) || isTextValidationError(err) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}

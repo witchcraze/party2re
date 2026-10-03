@@ -12,6 +12,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 	"github.com/witchcraze/party2re/internal/park"
 	"github.com/witchcraze/party2re/internal/ratelimit"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 type mockRepository struct {
@@ -163,6 +164,54 @@ func TestService_PostMessage(t *testing.T) {
 		_, err := svc.PostMessage(ctx, "non-existent", "test", "", "")
 		if err != park.ErrCharacterNotFound {
 			t.Fatalf("expected ErrCharacterNotFound, got %v", err)
+		}
+	})
+
+	t.Run("Post normalizes NFD to NFC", func(t *testing.T) {
+		laterTime := fixedTime.Add(10 * time.Second)
+		nfcSvc, _ := park.NewService(
+			repo,
+			charReader,
+			park.WithRateLimit(3*time.Second),
+			park.WithNowFunc(func() time.Time { return laterTime }),
+		)
+		post, err := nfcSvc.PostMessage(ctx, "char-1", "Ka\u0301llout", "", "")
+		if err != nil {
+			t.Fatalf("expected success, got %v", err)
+		}
+		if post.Content != "Kállout" {
+			t.Errorf("expected NFC content Kállout, got %q", post.Content)
+		}
+	})
+
+	t.Run("Post rejects control characters", func(t *testing.T) {
+		laterTime := fixedTime.Add(20 * time.Second)
+		nfcSvc, _ := park.NewService(
+			repo,
+			charReader,
+			park.WithRateLimit(3*time.Second),
+			park.WithNowFunc(func() time.Time { return laterTime }),
+		)
+		_, err := nfcSvc.PostMessage(ctx, "char-1", "bad\x00post", "", "")
+		if !errors.Is(err, validation.ErrControlCharacter) {
+			t.Fatalf("expected ErrControlCharacter, got %v", err)
+		}
+	})
+
+	t.Run("Post preserves newlines in multiline content", func(t *testing.T) {
+		laterTime := fixedTime.Add(30 * time.Second)
+		nfcSvc, _ := park.NewService(
+			repo,
+			charReader,
+			park.WithRateLimit(3*time.Second),
+			park.WithNowFunc(func() time.Time { return laterTime }),
+		)
+		post, err := nfcSvc.PostMessage(ctx, "char-1", "1行目\n2行目", "", "")
+		if err != nil {
+			t.Fatalf("expected success, got %v", err)
+		}
+		if post.Content != "1行目\n2行目" {
+			t.Errorf("expected multiline preserved, got %q", post.Content)
 		}
 	})
 }

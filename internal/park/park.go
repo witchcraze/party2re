@@ -6,9 +6,9 @@ import (
 	"html"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/witchcraze/party2re/internal/core/random"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 var (
@@ -42,28 +42,30 @@ type DivinationResult struct {
 	Message    string `json:"message"`
 }
 
-// SanitizeContent trims spaces and escapes HTML tags.
+// SanitizeContent trims spaces, normalizes to Unicode NFC, and escapes HTML tags.
 func SanitizeContent(content string) string {
-	trimmed := strings.TrimSpace(content)
-	return html.EscapeString(trimmed)
+	return html.EscapeString(validation.SanitizeText(content))
 }
 
-// ValidatePost validates the input fields for creating a post.
-func ValidatePost(characterID, content, color, recipient string) error {
+// ValidatePost validates the input fields for creating a post and returns the normalized content.
+func ValidatePost(characterID, content, color, recipient string) (string, error) {
 	if strings.TrimSpace(characterID) == "" {
-		return ErrInvalidCharacterID
+		return "", ErrInvalidCharacterID
 	}
-	cleanContent := strings.TrimSpace(content)
-	if cleanContent == "" {
-		return ErrEmptyContent
-	}
-	if utf8.RuneCountInString(cleanContent) > MaxContentLength {
-		return ErrContentTooLong
+	normalizedContent, err := validation.ValidateMultiLine(content, MaxContentLength)
+	if err != nil {
+		if errors.Is(err, validation.ErrEmpty) {
+			return "", ErrEmptyContent
+		}
+		if errors.Is(err, validation.ErrTooLong) {
+			return "", ErrContentTooLong
+		}
+		return "", err
 	}
 	if len(color) > MaxColorLength {
-		return ErrInvalidColor
+		return "", ErrInvalidColor
 	}
-	return nil
+	return normalizedContent, nil
 }
 
 // TownGirlNPC represents the @町娘 NPC in the park.
