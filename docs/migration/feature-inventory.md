@@ -86,7 +86,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Bank accounts, gold deposits, and withdrawals with wallet clamp (#71, #476)
 - [x] Blacksmith weapon seals (12 authentic seals consuming crystals), equipment naming, and 3-slot weapon storage (#458, #632)
 - [x] Gem store, synthesis recipes, and dual-source (inventory & depot) weighted orb appraisals (#72, #317, #464, #560)
-- [x] Black Market underground trade and rare point barter (#142, #463)
+- [x] Black Market underground trade, rare point barter, and presentation dialogue decoupling (#142, #463, #930)
 - [x] Small Medal collection and rare reward exchange (#160, #473)
 - [x] Character lifetime milestone achievements and commemorative medals (#70, #358, #473)
 - [x] Centralized transactional reward item delivery engine with configurable depot overflow routing (#679)

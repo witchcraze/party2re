@@ -2,11 +2,9 @@ package blackmarket
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -142,7 +140,7 @@ func (s *Service) GetPointsStatus(ctx context.Context, characterID string) (*Sta
 	return s.GetStatus(ctx, characterID)
 }
 
-// Talk returns random atmospheric underworld dialogue from NPC @闇商人.
+// Talk returns NPC @闇商人 information.
 func (s *Service) Talk(ctx context.Context, characterID string) (*TalkResult, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return nil, ErrCharacterNotFound
@@ -153,21 +151,13 @@ func (s *Service) Talk(ctx context.Context, characterID string) (*TalkResult, er
 		return nil, ErrCharacterNotFound
 	}
 
-	dialogues := DefaultTalkDialogues
-	n, err := rand.Int(rand.Reader, big.NewInt(int64(len(dialogues))))
-	if err != nil {
-		return nil, err
-	}
-	dialogue := dialogues[n.Int64()]
-
 	return &TalkResult{
 		CharacterID: char.ID,
 		NPCName:     NPCName,
-		Dialogue:    dialogue,
 	}, nil
 }
 
-// Inspect returns NPC @闇商人 inspection dialogue matching legacy Party2 CGI.
+// Inspect returns NPC @闇商人 inspection information matching legacy Party2 CGI.
 func (s *Service) Inspect(ctx context.Context, characterID string) (*TalkResult, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return nil, ErrCharacterNotFound
@@ -181,7 +171,6 @@ func (s *Service) Inspect(ctx context.Context, characterID string) (*TalkResult,
 	return &TalkResult{
 		CharacterID: char.ID,
 		NPCName:     NPCName,
-		Dialogue:    InspectDialogue,
 	}, nil
 }
 
