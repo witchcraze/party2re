@@ -284,7 +284,6 @@ func (s *Service) executeHeavenWish(
 				Available:   true,
 			},
 			Message:      "それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…",
-			NPCSpeech:    "それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…",
 			NextLocation: "",
 		}
 		return nil
@@ -325,7 +324,6 @@ func (s *Service) executeHeavenWish(
 			Available:   true,
 		},
 		Message:      msg,
-		NPCSpeech:    fmt.Sprintf("ふむ。%sの願いは「%s」だな。\n%sの願いを叶えたぞ…。機会があればまたあえるだろう…。さらばだ…", char.Name, wishName, char.Name),
 		NextLocation: "home",
 	}
 	return nil

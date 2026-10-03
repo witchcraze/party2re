@@ -19,6 +19,9 @@ Upon successfully granting a wish, the character is automatically returned to th
    - **Legacy Location**: Accessible via Black Pegasus Reins (`黒い天馬のたづな`, Item No. 262).
    - **Theme**: System capacity limit breaks (depot, monster box, job memory, flea market listings, shop listings).
 
+> [!NOTE]
+> Per `.agents/rules/03-architecture.md §5`, all NPC god dialogues (`NPCSpeech`) are decoupled from the domain model (`WishResult`) and formatted exclusively at the HTTP presentation layer (`internal/api/http/god.go`).
+
 ---
 
 ## 3. Wishes Catalog & Rules

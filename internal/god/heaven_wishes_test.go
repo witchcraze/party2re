@@ -474,8 +474,8 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if res.NextLocation != "" {
 			t.Errorf("expected empty NextLocation, got %s", res.NextLocation)
 		}
-		if res.NPCSpeech != "それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…" {
-			t.Errorf("unexpected NPC speech: %s", res.NPCSpeech)
+		if res.Message != "それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…" {
+			t.Errorf("unexpected message: %s", res.Message)
 		}
 	})
 }
