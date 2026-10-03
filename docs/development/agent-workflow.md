@@ -34,7 +34,7 @@ If an Issue is too large, split it before implementation.
 
 ## During implementation
 
-Follow:
+Choose development checks using the stages in [`testing.md`](testing.md#2-tiered-verification-strategy), then follow:
 
 ```text
 Issue (acceptance criteria)
@@ -44,8 +44,9 @@ Issue (acceptance criteria)
   -> update docs/architecture/components.md & STATUS.md (current state)
   -> re-check active issue (verify acceptance criteria & zero omissions)
   -> make fmt
-  -> make check
-  -> commit changes & open PR
+  -> make check (wait for completion)
+  -> commit & push (pre-push reuses successful verification)
+  -> open PR
 ```
 
 Before committing changes upon task completion, agents MUST re-inspect the active Issue (`gh issue view <issue-number>`) and cross-check each acceptance criterion to guarantee zero omissions before committing and opening the PR.
@@ -72,7 +73,7 @@ Examples:
 
 Before ending a session:
 
-- run relevant tests and `make check`;
+- confirm relevant tests and full verification cover the final changes; reuse successful checks as described in [`testing.md`](testing.md#2-tiered-verification-strategy);
 - synchronize documentation:
   - update `STATUS.md` current component state and immediate priorities (avoid appending historical logs);
   - update `docs/design/<feature>.md` if game mechanics or formulas were added/modified;

@@ -18,6 +18,8 @@ The Issue should contain:
 - out-of-scope items;
 - dependencies.
 
+Issue bodies describe the work and its acceptance criteria; implementation tools and providers are not ticket requirements. Size labels indicate complexity without selecting an executor.
+
 ## Two-stage documentation lifecycle
 
 To avoid pre-emptive documentation rework while ensuring permanent design documents remain 100% synchronized with actual code:
@@ -48,6 +50,12 @@ A PR should:
 - update `STATUS.md` current state summary (without appending historical changelogs);
 - remain within the Issue scope.
 
+
+## Dependent PRs and merge verification
+
+Prefer merging a prerequisite PR before opening its dependent PR against `main`. If PRs are stacked, record the dependency and keep the prerequisite branch until the dependent PR is rebased and retargeted.
+
+Before merging, confirm the final diff, passing remote CI for the current head, and native Issue linkage (`gh pr view <number> --json closingIssuesReferences`). `Closes #<number>` creates a native link only when the PR targets the default branch; a body reference alone is insufficient ([GitHub documentation](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)). After retargeting, verify linkage and CI again; see [`ci-cd.md`](ci-cd.md#ci-evidence-and-failure-investigation).
 
 ## Ticket size
 
@@ -80,6 +88,8 @@ The decision should record:
 A ticket is complete only when its acceptance criteria are satisfied, tests pass, review is complete, and the PR is merged.
 
 Do not mark work complete merely because the implementation exists locally.
+
+After merging, confirm the Issue closed, synchronize local `main`, and clean up the merged branch. Update affected open Issue bodies with the resolved prerequisite and remaining scope; verify dependent Issues have no open blockers before describing them as unblocked.
 
 ## Related documents
 

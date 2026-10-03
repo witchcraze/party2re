@@ -31,10 +31,11 @@ Keep `main` as the sole integration branch. Feature branches must be short-lived
 - **Searchable Issue Naming, Sizing, and Deterministic Labeling Rules (SSOT):**
   - **Issue Titles:** MUST strictly follow `[<Type>] <Domain>: <Specific Action / Target>` (e.g., `[Bug] Home: Return 404 in GET /homes/{id}/companion/phrases`, `[Feature] HTTP: Guard action endpoints against active sleep penalty`). Prohibit vague titles like `Fix bug` or `Update system`.
   - **Deterministic Size Classification (Both Creation & Triage):**
+    Issue bodies MUST describe work independently of implementation tools or providers; do not add execution-strategy or executor-recommendation sections. Size labels MUST describe work complexity only.
     Every issue MUST be classified into exactly one size label upon creation, enabling zero-token triage:
-    1. **`size/large` (Large / Interactive -> Recommended: agy / interactive)**: Requires DB migration (DDL), cross-package transactions, 500-line ceiling/1122-line ratchet refactoring, or interactive user design decisions.
-    2. **`size/medium` (Medium: diff <= 150 lines -> Recommended: Jules Pro)**: Standard single-package feature or refactoring, or adding/modifying endpoints requiring OpenAPI (`paths/<pkg>.json`) synchronization.
-    3. **`size/small` (Small: diff <= 50 lines -> Recommended: Jules Flash)**: Localized bug fix, formula/cap adjustment, single-handler guard, or unit test addition.
+    1. **`size/large` (Large / Interactive)**: Requires DB migration (DDL), cross-package transactions, 500-line ceiling/1122-line ratchet refactoring, or interactive user design decisions.
+    2. **`size/medium` (Medium: diff <= 150 lines)**: Standard single-package feature or refactoring, or adding/modifying endpoints requiring OpenAPI (`paths/<pkg>.json`) synchronization.
+    3. **`size/small` (Small: diff <= 50 lines)**: Localized bug fix, formula/cap adjustment, single-handler guard, or unit test addition.
   - **Issue Status & Dependency Management Rules (明確な使い分けルール):**
     - **`status/needs-spec` (Label)**: Use when legacy specifications, formulas, or architectural designs are incomplete, undecided, or pending discussion/RFC. Implementation cannot proceed until specs are clarified.
     - **Native Issue Dependencies (`blocked by` / `blocking`)**: Use GitHub native dependencies instead of manual labels when the specification is clear, but another ticket/PR must be executed first (e.g., foundational infrastructure/models, security/auth guards on overlapping handlers, sequential PRs, or prerequisite domain logic).

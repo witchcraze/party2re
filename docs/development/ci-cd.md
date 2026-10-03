@@ -16,9 +16,13 @@ The CI pipeline should progressively cover:
 
 The exact workflow and commands should reflect the actual repository and must not be documented speculatively.
 
-The current workflow runs the Go checks inside the development container
-defined by `Dockerfile.dev` and `compose.yaml`. MariaDB is started by Docker
-Compose for the integration tests.
+The current [CI workflow](../../.github/workflows/ci.yml) runs Go checks with atomic coverage inside the development container defined by `Dockerfile.dev` and `compose.yaml`. Docker Compose starts MariaDB and Valkey for integration tests; production-image verification currently checks the build.
+
+## CI evidence and failure investigation
+
+CI runs on pushes to `main` and PRs targeting `main`. The default PR triggers are opening, synchronization and reopening; changing the base alone does not start CI ([GitHub documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request)). After retargeting, use a supported trigger and confirm a successful `verify` run for the final head before merging. An absent check is not a passing check.
+
+Treat a new CI failure as a possible regression. Compare the failing test on the PR and its pre-change baseline in isolated checkouts under matching conditions before attributing it to an existing issue. Record revisions, commands and failure evidence; for random behavior, capture or control the seed. Preserve behavioral assertions when fixing an unstable fixture.
 
 ## Docker image verification
 
