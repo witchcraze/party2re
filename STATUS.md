@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #932 — [Architecture] Home: Decouple Dialogue from CompanionTalkResult and format at HTTP layer
+Last updated: Issue #957 — [Bug] HTTP: Extend sleep and rescue action guards to remaining commerce and crafting endpoints
 
 ## Current Phase
 
