@@ -436,7 +436,8 @@ func (h *Handler) writeGuildError(w http.ResponseWriter, err error) {
 		errors.Is(err, guild.ErrApplicationAlreadyPending),
 		errors.Is(err, guild.ErrMemberNotPending),
 		errors.Is(err, guild.ErrMemberIsPending),
-		errors.Is(err, guild.ErrNoticeTooLong):
+		errors.Is(err, guild.ErrNoticeTooLong),
+		isTextValidationError(err):
 		writeError(w, http.StatusBadRequest, err)
 	default:
 		if strings.Contains(err.Error(), "not found") {

@@ -9,6 +9,7 @@ import (
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/guild"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 type sentLetterRecord struct {
@@ -412,6 +413,72 @@ func TestService_BroadcastCallout(t *testing.T) {
 		err := svc.BroadcastCallout(ctx, guildID, member1, "   ")
 		if !errors.Is(err, guild.ErrEmptyCalloutMessage) {
 			t.Errorf("expected ErrEmptyCalloutMessage, got %v", err)
+		}
+	})
+
+	t.Run("fails on message too long", func(t *testing.T) {
+		svc, _ := guild.NewService(&mockGuildRepo{})
+		err := svc.BroadcastCallout(ctx, guildID, member1, strings.Repeat("あ", guild.MaxNoticeLength+1))
+		if !errors.Is(err, guild.ErrCalloutMessageTooLong) {
+			t.Errorf("expected ErrCalloutMessageTooLong, got %v", err)
+		}
+	})
+
+	t.Run("fails on control character", func(t *testing.T) {
+		svc, _ := guild.NewService(&mockGuildRepo{})
+		err := svc.BroadcastCallout(ctx, guildID, member1, "Hello\x00World")
+		if !errors.Is(err, validation.ErrControlCharacter) {
+			t.Errorf("expected ErrControlCharacter, got %v", err)
+		}
+	})
+
+	t.Run("fails on zero-width space", func(t *testing.T) {
+		svc, _ := guild.NewService(&mockGuildRepo{})
+		err := svc.BroadcastCallout(ctx, guildID, member1, "Hello\u200BWorld")
+		if !errors.Is(err, validation.ErrZeroWidth) {
+			t.Errorf("expected ErrZeroWidth, got %v", err)
+		}
+	})
+
+	t.Run("fails on bidi override", func(t *testing.T) {
+		svc, _ := guild.NewService(&mockGuildRepo{})
+		err := svc.BroadcastCallout(ctx, guildID, member1, "Hello\u202EWorld")
+		if !errors.Is(err, validation.ErrBidiOverride) {
+			t.Errorf("expected ErrBidiOverride, got %v", err)
+		}
+	})
+
+	t.Run("fails on zalgo text", func(t *testing.T) {
+		svc, _ := guild.NewService(&mockGuildRepo{})
+		err := svc.BroadcastCallout(ctx, guildID, member1, "Z\u0300\u0301\u0302algo")
+		if !errors.Is(err, validation.ErrZalgo) {
+			t.Errorf("expected ErrZalgo, got %v", err)
+		}
+	})
+
+	t.Run("delivers sanitized NFC message to members", func(t *testing.T) {
+		letterSender := &mockLetterSender{}
+		repo := &mockGuildRepo{
+			getGuildFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
+				return guild.Guild{ID: guildID, Name: "騎士団"}, []guild.Member{
+					{GuildID: guildID, CharacterID: member1, Role: guild.RoleMember},
+				}, nil
+			},
+			addPointsFn: func(ctx context.Context, gID string, pts int64) error {
+				return nil
+			},
+		}
+		svc, _ := guild.NewService(repo, guild.WithLetterSender(letterSender))
+		// "Ka\u0301llout" is NFD ("Ká" decomposed); should be normalized to NFC "Kállout"
+		err := svc.BroadcastCallout(ctx, guildID, member1, "Ka\u0301llout")
+		if err != nil {
+			t.Fatalf("BroadcastCallout error: %v", err)
+		}
+		if len(letterSender.letters) != 1 {
+			t.Fatalf("expected 1 letter sent, got %d", len(letterSender.letters))
+		}
+		if letterSender.letters[0].Content != "Kállout" {
+			t.Errorf("expected NFC normalized 'Kállout', got %q", letterSender.letters[0].Content)
 		}
 	})
 }
