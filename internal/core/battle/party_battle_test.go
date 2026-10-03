@@ -389,6 +389,13 @@ func TestPartyBattle_HealingSkill(t *testing.T) {
 			{ID: "slime", Name: "Slime", HP: 10, Attack: 5, Defense: 2, Agility: 10},
 		},
 		VictoryReward: corebattle.Reward{Experience: 50},
+		// Guarantee the warrior's attack lands after the wounded-ally heal.
+		// Random misses can extend combat until both allies are full, at which
+		// point a later heal legitimately selects the first equal-HP ally.
+		RNG: customRNG{
+			float64Func: func() float64 { return 1.0 / 3.0 },
+			intnFunc:    func(n int) int { return 1 },
+		},
 	}
 
 	res, err := engine.ResolvePartyBattle(reqHeal)
