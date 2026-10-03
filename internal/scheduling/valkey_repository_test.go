@@ -46,6 +46,74 @@ func validTestAction(id string, executeAt time.Time) core_scheduling.ScheduledAc
 	}
 }
 
+func TestValkeyRepository_FindPendingByActorID_Lifecycle(t *testing.T) {
+	client := openValkeyClient(t)
+	t.Cleanup(client.Close)
+	ctx := context.Background()
+	repo := scheduling.NewValkeyRepository(client)
+	actor := "actor-query-lifecycle"
+	otherActor := actor + "-other"
+	ids := []string{actor + "-pending", actor + "-processing", actor + "-other", actor + "-missing"}
+	defer cleanupKeys(t, client, ids...)
+	t.Cleanup(func() {
+		if err := client.Do(ctx, client.B().Del().Key("party2:scheduled:actor:"+actor, "party2:scheduled:actor:"+otherActor).Build()).Error(); err != nil {
+			t.Errorf("cleanup actor indexes: %v", err)
+		}
+	})
+	for i, id := range ids[:3] {
+		action := validTestAction(id, time.Now().Add(-time.Minute).UTC())
+		action.ActorID = actor
+		if i == 2 {
+			action.ActorID = otherActor
+		}
+		if err := repo.Schedule(ctx, action); err != nil {
+			t.Fatal(err)
+		}
+		if i == 1 {
+			action.State = core_scheduling.StateProcessing
+			if err := repo.Save(ctx, action); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := client.Do(ctx, client.B().Sadd().Key("party2:scheduled:actor:"+actor).Member(ids[3]).Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.FindPendingByActorID(ctx, actor)
+	if err != nil || len(got) != 2 {
+		t.Fatalf("unfinished work: got %+v, %v", got, err)
+	}
+	seen := make(map[string]core_scheduling.State)
+	for _, action := range got {
+		if action.ActorID != actor {
+			t.Errorf("unexpected actor: %s", action.ActorID)
+		}
+		seen[action.ID] = action.State
+	}
+	if seen[ids[0]] != core_scheduling.StatePending || seen[ids[1]] != core_scheduling.StateProcessing {
+		t.Fatalf("unexpected active states: %v", seen)
+	}
+	for _, action := range got {
+		if action.State == core_scheduling.StatePending {
+			action.State = core_scheduling.StateFailed
+		} else {
+			action.State = core_scheduling.StateCompleted
+		}
+		action.RetainUntil = time.Now().Add(time.Hour)
+		if err := repo.Save(ctx, action); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err = repo.FindPendingByActorID(ctx, actor)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("settled work must not block: got %+v, %v", got, err)
+	}
+	other, err := repo.FindPendingByActorID(ctx, otherActor)
+	if err != nil || len(other) != 1 || other[0].ID != ids[2] {
+		t.Fatalf("other actor work: got %+v, %v", other, err)
+	}
+}
+
 func TestValkeyRepository_Schedule_StoresActionAndEnqueues(t *testing.T) {
 	client := openValkeyClient(t)
 	defer client.Close()

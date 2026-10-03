@@ -68,6 +68,8 @@ Maintains the static Action Catalog (`internal/playercontext/catalog.go`) defini
 - `party2:scheduled:pending` (Sorted Set scored by `ExecuteAt` timestamp)
 - `party2:scheduled:action:{id}` (action payload string)
 - `party2:scheduled:lock:{id}` (distributed lock preventing duplicate execution)
+- `party2:scheduled:actor:{actor_id}` (Set of indexed action IDs, not an exclusive actor lock)
+`FindPendingByActorID` reads the actor Set with SMEMBERS and bulk-loads payloads with MGET, returning Pending/Processing records including overdue work. Terminal and missing records are omitted; invalid records and storage errors propagate. This read contract supports PlayerContext without an additional SQL query or result cache. Lifecycle rules: [`scheduling.md`](../design/scheduling.md).
 The background `Worker` acquires locks, validates payloads, and dispatches to registered `ActionHandler` implementations.
 
 ### Domain Events

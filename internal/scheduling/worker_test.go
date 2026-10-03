@@ -38,6 +38,16 @@ func (m *mockRepository) FetchDue(ctx context.Context, upTo time.Time, limit int
 	return m.actions, nil
 }
 
+func (m *mockRepository) FindPendingByActorID(_ context.Context, actorID string) ([]core_scheduling.ScheduledAction, error) {
+	var actions []core_scheduling.ScheduledAction
+	for _, action := range m.actions {
+		if action.ActorID == actorID && (action.State == core_scheduling.StatePending || action.State == core_scheduling.StateProcessing) {
+			actions = append(actions, action)
+		}
+	}
+	return actions, nil
+}
+
 func (m *mockRepository) AcquireLock(ctx context.Context, actionID string, lockTTL time.Duration) (bool, error) {
 	if m.acquireLockErr != nil {
 		return false, m.acquireLockErr
