@@ -39,6 +39,16 @@ func (m *mockSchedRepo) FetchDue(_ context.Context, _ time.Time, _ int) ([]core_
 	return nil, nil
 }
 
+func (m *mockSchedRepo) FindPendingByActorID(_ context.Context, actorID string) ([]core_scheduling.ScheduledAction, error) {
+	var actions []core_scheduling.ScheduledAction
+	for _, action := range m.actions {
+		if action.ActorID == actorID && (action.State == core_scheduling.StatePending || action.State == core_scheduling.StateProcessing) {
+			actions = append(actions, action)
+		}
+	}
+	return actions, nil
+}
+
 func (m *mockSchedRepo) AcquireLock(_ context.Context, _ string, _ time.Duration) (bool, error) {
 	return true, nil
 }

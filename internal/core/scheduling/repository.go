@@ -10,6 +10,11 @@ type ScheduledActionRepository interface {
 	// Schedule adds a new action to be executed in the future.
 	Schedule(ctx context.Context, action ScheduledAction) error
 
+	// FindPendingByActorID returns unfinished (Pending or Processing) work for an actor,
+	// including overdue actions awaiting settlement. Missing payloads are skipped;
+	// storage failures or invalid payloads return an error without partial results.
+	FindPendingByActorID(ctx context.Context, actorID string) ([]ScheduledAction, error)
+
 	// FetchDue returns actions that are due for execution at or before the given time.
 	// It may limit the number of returned actions to prevent overwhelming the worker.
 	FetchDue(ctx context.Context, upTo time.Time, limit int) ([]ScheduledAction, error)
