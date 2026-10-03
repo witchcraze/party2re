@@ -59,6 +59,7 @@ The guild leader can assign arbitrary custom role titles to any non-leader membe
 4. **Validation Rules**:
    - Cannot be empty (`ErrInvalidRoleTitle`).
    - Cannot contain half-width or full-width whitespace (`/　|\s/`).
+   - Unicode Security: Validated via `validation.ValidateSingleLine` (Unicode NFC normalization, max 12 runes, rejects C0/C1 control characters, zero-width characters, bidirectional overrides, and Zalgo text).
    - Cannot contain invalid characters (`, ; " ' & < > @ ＠`).
    - Cannot use reserved system strings: `参加申請中` or `ギルマス` (`ErrReservedRoleTitle`).
 
@@ -84,8 +85,8 @@ In legacy Party2, players join guilds via a formal application and approval gati
 
 Active members can broadcast messages to all fellow guild members:
 
-- Any active member (`!is_pending`) can invoke `BroadcastCallout` with a message (up to 200 characters).
-- Delivers a letter to every active guild member.
+- Any active member (`!is_pending`) can invoke `BroadcastCallout` with a message (up to 200 characters). Sanitized via `internal/validation.ValidateSingleLine` (Unicode NFC normalized, single-line, rejecting control characters, zero-width characters, bidirectional overrides, and Zalgo text).
+- Delivers the sanitized letter to every active guild member.
 - Awards **+1 Guild Point (`gpoint`)** to the guild.
 - Updates `last_active_at` timestamp.
 

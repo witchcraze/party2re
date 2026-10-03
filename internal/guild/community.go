@@ -7,6 +7,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 // ApplyToJoin registers an applicant in the guild with is_pending = true (join_guild.cgi:sanka).
@@ -182,12 +183,15 @@ func (s *Service) BroadcastCallout(ctx context.Context, guildID string, senderID
 		return ErrCharacterNotFound
 	}
 
-	trimmedMessage := strings.TrimSpace(message)
-	if trimmedMessage == "" {
-		return ErrEmptyCalloutMessage
-	}
-	if len([]rune(trimmedMessage)) > MaxNoticeLength {
-		return ErrCalloutMessageTooLong
+	sanitizedMessage, err := validation.ValidateSingleLine(message, MaxNoticeLength)
+	if err != nil {
+		if errors.Is(err, validation.ErrEmpty) {
+			return ErrEmptyCalloutMessage
+		}
+		if errors.Is(err, validation.ErrTooLong) {
+			return ErrCalloutMessageTooLong
+		}
+		return err
 	}
 
 	_, members, err := s.repo.GetGuild(ctx, guildID)
@@ -229,7 +233,7 @@ func (s *Service) BroadcastCallout(ctx context.Context, guildID string, senderID
 					recName = rc.Name
 				}
 			}
-			_ = s.letterSender.SendLetter(ctx, senderID, senderName, m.CharacterID, recName, trimmedMessage, senderColor)
+			_ = s.letterSender.SendLetter(ctx, senderID, senderName, m.CharacterID, recName, sanitizedMessage, senderColor)
 		}
 	}
 

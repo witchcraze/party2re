@@ -96,7 +96,8 @@ func ValidateGuildName(name string) (string, error) {
 	return normName, nil
 }
 
-// ValidateRoleTitle validates custom role titles according to legacy specifications (guild.cgi:ataeru):
+// ValidateRoleTitle validates custom role titles according to legacy specifications (guild.cgi:ataeru)
+// and shared validation security standards (Unicode NFC, no control chars, zero-width, bidi, or zalgo):
 // - Must not be empty
 // - Must not contain whitespace (half-width or full-width)
 // - Must not contain invalid characters: , ; " ' & < > @ ＠
@@ -109,13 +110,20 @@ func ValidateRoleTitle(title string) error {
 	if strings.ContainsAny(title, " \t\r\n\u3000") {
 		return ErrInvalidRoleTitle
 	}
-	if strings.ContainsAny(title, ",;\"'&<>@＠") {
+	normalized, err := validation.ValidateSingleLine(title, MaxRoleTitleWidth)
+	if err != nil {
+		if errors.Is(err, validation.ErrTooLong) {
+			return ErrRoleTitleTooLong
+		}
 		return ErrInvalidRoleTitle
 	}
-	if title == "参加申請中" || title == "ギルマス" {
+	if strings.ContainsAny(normalized, ",;\"'&<>@＠") {
+		return ErrInvalidRoleTitle
+	}
+	if normalized == "参加申請中" || normalized == "ギルマス" {
 		return ErrReservedRoleTitle
 	}
-	if CalculateTitleWidth(title) > MaxRoleTitleWidth {
+	if CalculateTitleWidth(normalized) > MaxRoleTitleWidth {
 		return ErrRoleTitleTooLong
 	}
 	return nil

@@ -245,6 +245,13 @@ func TestValidateRoleTitle(t *testing.T) {
 		{"Reserved title ギルマス", "ギルマス", guild.ErrReservedRoleTitle},
 		{"Too long full-width (7 chars = 14 width)", "一二三四五六七", guild.ErrRoleTitleTooLong},
 		{"Too long ASCII (13 chars = 13 width)", "1234567890123", guild.ErrRoleTitleTooLong},
+		{"Leading space", " 隊長", guild.ErrInvalidRoleTitle},
+		{"Trailing space", "隊長 ", guild.ErrInvalidRoleTitle},
+		{"Control character", "隊長\x00", guild.ErrInvalidRoleTitle},
+		{"Zero-width space", "隊長\u200B", guild.ErrInvalidRoleTitle},
+		{"Bidi override", "隊長\u202E", guild.ErrInvalidRoleTitle},
+		{"Zalgo text", "隊\u0300\u0301\u0302長", guild.ErrInvalidRoleTitle},
+		{"NFC normalization valid", "Ka\u0301pt", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

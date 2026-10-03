@@ -14,6 +14,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/guild"
+	"github.com/witchcraze/party2re/internal/validation"
 )
 
 type stubGuildService struct {
@@ -451,6 +452,7 @@ func TestGuild_ErrorMappings(t *testing.T) {
 		{"reserved title", guild.ErrReservedRoleTitle, http.StatusBadRequest},
 		{"empty callout", guild.ErrEmptyCalloutMessage, http.StatusBadRequest},
 		{"notice too long", guild.ErrNoticeTooLong, http.StatusBadRequest},
+		{"callout control char", validation.ErrControlCharacter, http.StatusBadRequest},
 	}
 
 	for _, tt := range tests {

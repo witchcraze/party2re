@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #956 — [Bug] Guild: Prevent unapproved pending applicants from inheriting leadership on leader departure
+Last updated: Issue #959 — [Refactor] Guild: Adopt shared text validation for callout messages and role titles
 
 ## Current Phase
 
