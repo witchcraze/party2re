@@ -196,7 +196,6 @@ func TestHandlePostEventPlazaMerchantPurchase(t *testing.T) {
 				RemainingGold:       5000,
 				InventoryInstanceID: "inst-123",
 				TransferredToDepot:  false,
-				NPCMessage:          "はい、身代わり人形です",
 			}, nil
 		},
 	}

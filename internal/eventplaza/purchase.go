@@ -20,7 +20,6 @@ type BazaarPurchaseResult struct {
 	RemainingGold       int        `json:"remaining_gold"`
 	InventoryInstanceID string     `json:"inventory_instance_id"`
 	TransferredToDepot  bool       `json:"transferred_to_depot"`
-	NPCMessage          string     `json:"npc_message"`
 }
 
 func (s *Service) PurchaseBazaarItem(
@@ -144,7 +143,6 @@ func (s *Service) PurchaseBazaarItem(
 				RemainingGold:       res.Character.Money,
 				InventoryInstanceID: res.GrantedItem.ID,
 				TransferredToDepot:  false,
-				NPCMessage:          fmt.Sprintf("はい、%sです", targetItem.Name),
 			}
 			return nil
 		}
@@ -210,7 +208,6 @@ func (s *Service) PurchaseBazaarItem(
 			RemainingGold:       res.Character.Money,
 			InventoryInstanceID: inst.ID,
 			TransferredToDepot:  true,
-			NPCMessage:          fmt.Sprintf("%sは%sさんの預かり所に送っておきましたよ", targetItem.Name, char.Name),
 		}
 		return nil
 	}

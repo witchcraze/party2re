@@ -93,9 +93,7 @@ func TestProhibitHTMLInDomainPackages(t *testing.T) {
 // (NPCMessage, NPCSpeech, Dialogue) in untouched domain packages.
 // Each entry maps pkg.Struct.Field to the issue tracking its decoupling.
 // No new fields may be added. When a field is decoupled, it MUST be removed from this map to ratchet down.
-var whitelistedLegacyPresentationFields = map[string]string{
-	"eventplaza.BazaarPurchaseResult.NPCMessage": "Issue #926",
-}
+var whitelistedLegacyPresentationFields = map[string]string{}
 
 // TestProhibitPresentationFieldsInDomainModels verifies that domain service result structs
 // do not declare presentation-specific string fields like NPCMessage, NPCSpeech, or Dialogue.

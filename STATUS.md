@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #925 — [Architecture] SecretShop: Decouple NPCMessage from PurchaseResult and format at HTTP layer
+Last updated: Issue #926 — [Architecture] EventPlaza: Decouple NPCMessage from BazaarPurchaseResult and format at HTTP layer
 
 ## Current Phase
 
