@@ -146,6 +146,7 @@ The secret shop stocks the 8 authentic rare items specified in legacy `secret.cg
 
 - **Helper Quest Exclusion**: Active helper quest targets are filtered out of the catalog and cannot be purchased (`ErrItemUnavailableInHelperQuest`).
 - **Delivery & Collection Discovery**: If the character's consumable inventory slot is empty and purchase quantity is 1, the item enters character inventory (`inventory_items`) and is automatically registered in the item collection via `collection.Recorder.RecordItemDiscovered` (matching legacy `secret.cgi:44-46` `&add_collection`). If the slot is occupied or quantity > 1, the item routes to Depot (`character_depots`) via `depot.FindOrCreate` without triggering collection discovery.
+- **Purchase Dialogue**: The presentation layer formats the purchase acknowledgement from the item name and delivery destination: `<item>メェ〜。持ってけメェ〜` for inventory, or `<item>は<character>メェ〜の預かり所の方に投げましたメェ〜` for depot delivery (legacy `secret.cgi:40-44`). Domain purchase results contain structured purchase facts only.
 
 ### 7.3. NPC Interactions & Puff-Puff Service
 - **Talk (`POST /characters/{id}/secretshop/talk`)**: Sheep dialogue hints (*"値段は高いメェ〜けれど、他では手に入らないレアものだメェ〜"*).
@@ -178,5 +179,4 @@ All financial and inventory operations execute in strict lock hierarchy:
 3. `character_depots` (Tier 5, `SELECT ... FOR UPDATE`)
 
 Transactions guarantee that concurrent purchases never cause negative wallet balances, never exceed depot limits, and never drop items.
-
 

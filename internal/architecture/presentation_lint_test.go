@@ -95,7 +95,6 @@ func TestProhibitHTMLInDomainPackages(t *testing.T) {
 // No new fields may be added. When a field is decoupled, it MUST be removed from this map to ratchet down.
 var whitelistedLegacyPresentationFields = map[string]string{
 	"eventplaza.BazaarPurchaseResult.NPCMessage": "Issue #926",
-	"secretshop.PurchaseResult.NPCMessage":       "Issue #925",
 }
 
 // TestProhibitPresentationFieldsInDomainModels verifies that domain service result structs

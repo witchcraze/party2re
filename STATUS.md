@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #927 — [Architecture] Lottery: Decouple NPCMessage from TakarakujiPurchaseResult and format at HTTP layer
+Last updated: Issue #925 — [Architecture] SecretShop: Decouple NPCMessage from PurchaseResult and format at HTTP layer
 
 ## Current Phase
 
