@@ -61,9 +61,8 @@ func (s *stubAuctionService) GetVenueInfo() auction.VenueInfo {
 		return s.getVenueFn()
 	}
 	return auction.VenueInfo{
-		Title:    auction.VenueName,
-		NPCName:  auction.NPCName,
-		Dialogue: auction.DialogueWords,
+		Title:   auction.VenueName,
+		NPCName: auction.NPCName,
 	}
 }
 
@@ -102,10 +101,17 @@ func TestAuctionEndpoints(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK, got %d", rec.Code)
 		}
-		var info auction.VenueInfo
+		var info struct {
+			Title    string   `json:"title"`
+			NPCName  string   `json:"npc_name"`
+			Dialogue []string `json:"dialogue"`
+		}
 		decodeResponseBody(t, rec.Body.Bytes(), &info)
 		if info.Title != "オークション会場" || info.NPCName != "@ワイルド" {
 			t.Errorf("unexpected venue info: %+v", info)
+		}
+		if len(info.Dialogue) != 3 {
+			t.Errorf("expected 3 dialogue entries, got %d", len(info.Dialogue))
 		}
 	})
 
