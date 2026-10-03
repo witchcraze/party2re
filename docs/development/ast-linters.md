@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-Party2 maintains an in-tree suite of automated Go AST (Abstract Syntax Tree) linters implemented directly as standard Go unit tests. These linters run with zero external binary dependencies (no `golangci-lint`, no `errcheck`, no third-party installations) and execute instantaneously on any host via `go test` and `make check` / `make arch-lint`.
+Party2 maintains an in-tree suite of automated Go AST (Abstract Syntax Tree) linters implemented directly as standard Go unit tests. These linters run with zero external binary dependencies (no `golangci-lint`, no `errcheck`, no third-party installations) via `go test`, `make check` or `make arch-lint`.
 
 The purpose of these linters is to enforce enduring architectural invariants, security rules, and code cleanliness mechanically, eliminating reviewer fatigue and preventing structural regressions during fast-paced agentic and human development.
 
@@ -20,7 +20,7 @@ The purpose of these linters is to enforce enduring architectural invariants, se
 | **`file_size_lint_test.go`** | Enforces a strict upper limit of ≤ 500 lines per Go source file. | Prevents monolithic file creep and forces high modularity and cohesion. |
 | **`interface_size_lint_test.go`** | Restricts consumer-defined interface sizes (≤ 10 methods). | Prevents fat interfaces and ensures lean, mockable dependencies conforming to interface segregation. |
 | **`package_boundary_lint_test.go`** | Enforces layered architectural boundaries (e.g. domain layers cannot import HTTP, database layers cannot import presentation). | Keeps system architecture strictly acyclic and modular. |
-| **`rand_lint_test.go`** | Prohibits unseeded or non-deterministic random number generators in battle/progression calculations. | Guarantees reproducible, seedable simulation and combat execution. |
+| **`rand_lint_test.go`** | Prohibits direct legacy `math/rand` imports in production code; test files are excluded. | Supports `core/random` usage; reproducible fixtures remain the test author's responsibility. |
 | **`sleep_lint_test.go`** | Prohibits raw `time.Sleep` calls in production packages. | Prevents thread blocking and latency spikes in async services. |
 | **`tx_runner_lint_test.go`** | Restricts direct transaction management (`RunInTx`, `BeginTx`) to authorized coordinator packages. | Prevents nested transaction hazards and chaotic commit boundaries. |
 | **`unused_definitions_lint_test.go`** | Identifies unreferenced top-level constants, unmarshaled DTOs, and orphaned types. | Enforces continuous codebase cleanliness. |

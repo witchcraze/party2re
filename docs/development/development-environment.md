@@ -5,8 +5,7 @@
 This document describes the reproducible local development environment for
 Party2 Re.
 
-The Go toolchain and Go dependencies run inside Docker. A Go installation on
-the host machine is not required.
+Local `make fmt`, `make test`, and the normal `make check` path use the host Go toolchain. Docker provides MariaDB, Valkey and a Go development container; `make test-docker` runs tests in that container. See [`testing.md`](testing.md) for verification stages.
 
 ## Services
 
@@ -34,7 +33,7 @@ docker compose up -d mariadb valkey
 Both services must be healthy before the `app` service starts.
 The `app` service waits for both health checks automatically.
 
-Run the application database health check with:
+Start the application, including dependency startup checks, with:
 
 ```sh
 docker compose run --rm app go run ./cmd/party2
@@ -45,9 +44,7 @@ docker compose run --rm app go run ./cmd/party2
 The development connection string is supplied to the application through
 `PARTY2_DB_DSN` in `compose.yaml`.
 
-The application also accepts `PARTY2_DB_DSN` when run with another environment.
-When it is not set, it uses the local-development default for a MariaDB server
-at `localhost:3306`.
+Running outside Compose also requires `PARTY2_DB_DSN`; startup fails when it is unset. For host execution, supply a DSN pointing to the local MariaDB service at `127.0.0.1:3306`.
 
 ## Database initialization and migration
 

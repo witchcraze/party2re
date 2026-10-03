@@ -15,15 +15,17 @@ Avoid tests tightly coupled to private data structures; a refactor preserving be
 
 ## 2. Tiered Verification Strategy
 
-### Inner Loop (Fast Host Execution)
-Day-to-day development relies on the host machine's Go toolchain for instant feedback:
-- **`make test`**: Runs unit tests (`go test -count=1 ./...`). Skips DB/Valkey tests if services are absent.
-- **`make test-integration`**: Runs tests against local container infrastructure (`127.0.0.1:3306` MariaDB and `127.0.0.1:6379` Valkey; start via `make up`).
+| Stage | Verification |
+| --- | --- |
+| TDD iteration | `go test -count=1 ./<package> -run '<test>'` |
+| Change ready | `go test -count=1 ./<package>` for affected packages |
+| Before commit | `make check`; wait for completion |
+| Push | Let the pre-push hook reuse the successful check or verify changed content |
+| Clean database verification needed | `make check-clean` resets the database and forces full verification |
 
-### Outer Loop (Strict Container Verification)
-Strict verification guarantees reproducibility locally and in CI:
-- **`make check`**: Prioritizes fast host-based verification (`gofmt`, `openapi-check`, `go vet`, AST linters, cached host test suite) followed by a fast smoke image build (`make smoke`). Routine turnaround is < 20s.
-- **`make check-clean`**: Full database reset (`DROP & recreate`), cache invalidation, and scratch pipeline run.
+For DB/Valkey changes, run affected-package tests with live services and connection settings (`PARTY2_DB_DSN`, `PARTY2_VALKEY_ADDR`). `make test-integration` supplies local connection settings and tests all packages; start services via `make up` and apply migrations via `make db-migrate`. `make test` also tests all packages; integration coverage depends on connection settings.
+
+`make check` runs formatting, static analysis, OpenAPI/architecture checks, migrations, the full test suite and a smoke image build. It and the pre-push hook call the same `scripts/verify.sh`, which reuses a successful result for an unchanged working tree. Do not start duplicate checks concurrently or repeat a successful check solely for push or session end. If the verification environment changes, use `FORCE_VERIFY=1 make check`.
 
 ---
 
@@ -38,7 +40,7 @@ make up
 # Auto-format Go code and synchronize OpenAPI 3.1 specifications
 make fmt
 
-# Fast host-based unit tests
+# All-package host tests (integration coverage depends on connection settings)
 make test
 
 # Host-based integration tests (requires make up)
@@ -68,6 +70,7 @@ make db-reset
 
 - **Avoid Premature Test Frameworks**: Do not proactively build complex test frameworks; introduce helpers only when duplication becomes a concrete burden.
 - **Explicit Setup over Magic**: Test helpers must not obscure what is being tested. Explicit setup is preferred over implicit abstraction.
+- **Reproducible Outcomes**: For exact outcome assertions, inject controlled RNG and clock inputs. Randomized tests should report their seed for replay.
 - **Shared Factories**: Use centralized test factories (`CreateTestPlayer`, `CreateTestCharacterWithFunds`, `CreateTestGuildWithLeader`) for integration tests to ensure unique IDs and valid name lengths.
 
 ---
