@@ -384,8 +384,7 @@ func (s *Service) buildInspectResult(ctx context.Context, char corecharacter.Cha
 
 func (s *Service) GetVenueInfo() VenueInfo {
 	return VenueInfo{
-		Title:    VenueName,
-		NPCName:  NPCName,
-		Dialogue: DialogueWords,
+		Title:   VenueName,
+		NPCName: NPCName,
 	}
 }

@@ -16,12 +16,6 @@ const (
 	NPCName   = "@ワイルド"
 )
 
-var DialogueWords = []string{
-	"ここはオークション会場です。他のプレイヤーとアイテム交換やアイテム売買をする場所です。",
-	"入札や出品のようなシステムはないです。自由に競りをしてください。",
-	"相手が実際にそのアイテムや落札金を持っているのか「＠しらべる」で見ることができます。",
-}
-
 var (
 	ErrCannotSendToSelf  = errors.New("cannot send to yourself")
 	ErrTargetNotFound    = errors.New("target player does not exist")
@@ -82,9 +76,8 @@ type EquippedItemInfo struct {
 }
 
 type VenueInfo struct {
-	Title    string   `json:"title"`
-	NPCName  string   `json:"npc_name"`
-	Dialogue []string `json:"dialogue"`
+	Title   string `json:"title"`
+	NPCName string `json:"npc_name"`
 }
 
 type CharacterRepository interface {

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: Issue #958 — [Refactor] Park: Adopt shared text validation for bulletin board posts
+Last updated: Issue #931 — [Architecture] Auction: Decouple Dialogue from VenueInfo and format at HTTP layer
 
 ## Current Phase
 

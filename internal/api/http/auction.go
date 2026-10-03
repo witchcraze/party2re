@@ -165,6 +165,18 @@ func (h *Handler) handleAuctionInspect(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+var auctionDialogue = []string{
+	"ここはオークション会場です。他のプレイヤーとアイテム交換やアイテム売買をする場所です。",
+	"入札や出品のようなシステムはないです。自由に競りをしてください。",
+	"相手が実際にそのアイテムや落札金を持っているのか「＠しらべる」で見ることができます。",
+}
+
+type auctionVenueInfoResponse struct {
+	Title    string   `json:"title"`
+	NPCName  string   `json:"npc_name"`
+	Dialogue []string `json:"dialogue"`
+}
+
 func (h *Handler) handleAuctionVenueInfo(w http.ResponseWriter, r *http.Request) {
 	if h.auctions == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("auction service not configured"))
@@ -172,7 +184,11 @@ func (h *Handler) handleAuctionVenueInfo(w http.ResponseWriter, r *http.Request)
 	}
 
 	info := h.auctions.GetVenueInfo()
-	writeJSON(w, http.StatusOK, info)
+	writeJSON(w, http.StatusOK, auctionVenueInfoResponse{
+		Title:    info.Title,
+		NPCName:  info.NPCName,
+		Dialogue: auctionDialogue,
+	})
 }
 
 func (h *Handler) writeAuctionError(w http.ResponseWriter, err error) {

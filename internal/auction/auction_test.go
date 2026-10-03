@@ -550,9 +550,6 @@ func TestGetVenueInfo(t *testing.T) {
 	if info.NPCName != "@ワイルド" {
 		t.Errorf("expected @ワイルド, got %s", info.NPCName)
 	}
-	if len(info.Dialogue) != 3 {
-		t.Errorf("expected 3 dialogue entries, got %d", len(info.Dialogue))
-	}
 }
 
 func TestSendItem_RecipientDepotNotInitialized_CreatesDepotAndSucceeds(t *testing.T) {
