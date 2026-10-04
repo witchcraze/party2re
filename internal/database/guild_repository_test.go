@@ -454,3 +454,82 @@ func TestGuildRepository_DecayGuildPoints(t *testing.T) {
 		t.Errorf("g1 points after 2nd decay = %d, want 0", g1Second.Points)
 	}
 }
+
+func TestGuildRepository_TransferLeadership_PendingApplicant(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	guildRepo, err := NewGuildRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	guildName := fmt.Sprintf("SuccG_%08x", time.Now().UnixNano()%0xFFFFFFFF)
+	gCreated, leaderChar, err := CreateTestGuildWithLeader(ctx, db, guildName, 10000)
+	if err != nil {
+		t.Fatalf("CreateTestGuildWithLeader failed: %v", err)
+	}
+	applicantChar, err := CreateTestCharacter(ctx, db, "PendingSuccApp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	guildID := gCreated.ID
+	now := time.Now().UTC().Truncate(time.Second)
+
+	// Add pending applicant
+	_, err = guildRepo.AddMember(ctx, guild.Member{
+		GuildID:     guildID,
+		CharacterID: applicantChar.ID,
+		Role:        guild.RoleMember,
+		Title:       "参加申請中",
+		IsPending:   true,
+		JoinedAt:    now.Add(time.Second),
+	})
+	if err != nil {
+		t.Fatalf("AddMember failed: %v", err)
+	}
+
+	// Transfer leadership to pending applicant
+	if err := guildRepo.TransferLeadership(ctx, guildID, leaderChar.ID, applicantChar.ID); err != nil {
+		t.Fatalf("TransferLeadership failed: %v", err)
+	}
+
+	gAfter, membersAfter, err := guildRepo.GetGuild(ctx, guildID)
+	if err != nil {
+		t.Fatalf("GetGuild failed: %v", err)
+	}
+	if gAfter.LeaderCharacterID != applicantChar.ID {
+		t.Errorf("leader = %q, want %q", gAfter.LeaderCharacterID, applicantChar.ID)
+	}
+
+	for _, m := range membersAfter {
+		if m.CharacterID == applicantChar.ID {
+			if m.Role != guild.RoleLeader {
+				t.Errorf("successor role = %v, want %v", m.Role, guild.RoleLeader)
+			}
+			if m.Title != guild.DefaultTitleLeader {
+				t.Errorf("successor title = %q, want %q", m.Title, guild.DefaultTitleLeader)
+			}
+			if m.IsPending {
+				t.Errorf("successor IsPending = true, want false")
+			}
+		}
+		if m.CharacterID == leaderChar.ID {
+			if m.Role != guild.RoleMember {
+				t.Errorf("former leader role = %v, want %v", m.Role, guild.RoleMember)
+			}
+			if m.Title != "" {
+				t.Errorf("former leader title = %q, want empty", m.Title)
+			}
+		}
+	}
+}

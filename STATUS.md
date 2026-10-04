@@ -1,6 +1,6 @@
 # Status
 
-Last reviewed: Issue #993 — Guild: Approve legacy roster-based succession; implementation pending in #1006
+Last reviewed: Issue #1006 — Guild/Succession: Restore pending-inclusive roster selection on leader departure
 
 ## Current Phase
 
@@ -40,7 +40,7 @@ See [`ROADMAP.md`](ROADMAP.md) for full milestone details.
 ## Confirmed & Pending Decisions
 
 - **Confirmed**: Go initial language, modular monolith, small Core, independent Battle engine, MariaDB persistence, Valkey worker queue/ephemeral lobbies, zero legacy code/asset reuse, legacy behavioral parity as the reconstruction target, not a completed certification. Known differences are recorded in [the documentation audit](docs/migration/documentation-audit.md).
-- **Guild succession**: #993 approved pending-inclusive roster selection and roster-count dissolution. Current Go retains applicant exclusion until #1006 implements the [recorded rule](docs/design/guild.md#guild-master-succession--dissolution-news).
+- **Guild succession**: Restored legacy pending-inclusive roster selection and roster-count dissolution under `lib/system.cgi:1124-1183` (#993, #1006; [spec & provenance](docs/design/guild.md#guild-master-succession--dissolution-news)).
 - **Pending**: Frontend framework, final software license (MIT/Apache-2.0/AGPLv3), final creative asset licenses (Creative Commons).
 
 ---
