@@ -147,4 +147,4 @@ The AI agent or bot can immediately construct the payload for `POST /characters/
 }
 ```
 
-If an action has empty `required_params` (e.g. `home_sleep`, `job_change`), `params` may be omitted or sent as `{}`.
+If an action has empty `required_params` (e.g. `home_sleep`, `home_wake`), `params` may be omitted or sent as `{}`.

@@ -1,6 +1,6 @@
 # Status
 
-Last reviewed: Issue #991 — Guild/Roles: Persist the normalized title used during validation
+Last reviewed: Issue #990 — PlayerContext/Catalog: Detect and declare missing required action parameters
 
 ## Current Phase
 
