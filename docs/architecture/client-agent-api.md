@@ -132,7 +132,12 @@ with `409 ACTION_UNAVAILABLE`. Scheduled/timer read errors stop execution with
 `500 ACTION_PREFLIGHT_FAILED`, without execution or context. An earlier
 `available_actions` list is never execution authorization.
 Preserve the shared Sleep/CanWake guard for ordinary commands and explicit
-Wake/Rescue exceptions. Domain services still validate exact amounts, currencies,
+Wake/Rescue exceptions. During an active sleep duration, an explicit Wake request
+reaches the service and returns its recognized early-wake rejection without
+restoring vitality. GET still offers Wake only when recovery is ready; an awake
+character's Wake request remains entry-ineligible. Duration expiry alone leaves
+ordinary commands blocked until explicit Wake clears pending recovery.
+Domain services still validate exact amounts, currencies,
 items and state. Adapters call services directly and reuse HTTP result composition;
 they do not invoke REST handlers through internal HTTP requests or copy game rules.
 

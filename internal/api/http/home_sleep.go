@@ -34,6 +34,24 @@ type wakeResponse struct {
 	Character characterResponse `json:"character"`
 }
 
+func toSleepResponse(res home.SleepResult) sleepResponse {
+	return sleepResponse{
+		Sleeping:         res.Sleeping,
+		DurationSeconds:  res.DurationSeconds,
+		RemainingSeconds: res.RemainingSeconds,
+		HomeCharacterID:  res.HomeCharacterID,
+		Message:          res.Message,
+	}
+}
+
+func toWakeResponse(res home.WakeResult) wakeResponse {
+	return wakeResponse{
+		Success:   res.Success,
+		Message:   res.Message,
+		Character: toCharacterResponse(res.Character),
+	}
+}
+
 func (h *Handler) handleHomeSleep(w http.ResponseWriter, r *http.Request) {
 	if h.homes == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("home service not configured"))
@@ -61,13 +79,7 @@ func (h *Handler) handleHomeSleep(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, sleepResponse{
-			Sleeping:         res.Sleeping,
-			DurationSeconds:  res.DurationSeconds,
-			RemainingSeconds: res.RemainingSeconds,
-			HomeCharacterID:  res.HomeCharacterID,
-			Message:          res.Message,
-		})
+		writeJSON(w, http.StatusOK, toSleepResponse(res))
 	})
 }
 
@@ -112,10 +124,6 @@ func (h *Handler) handleHomeWake(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, wakeResponse{
-			Success:   res.Success,
-			Message:   res.Message,
-			Character: toCharacterResponse(res.Character),
-		})
+		writeJSON(w, http.StatusOK, toWakeResponse(res))
 	})
 }

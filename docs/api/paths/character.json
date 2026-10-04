@@ -1,7 +1,7 @@
 {
   "/api/v1/characters/{id}/actions": {
     "post": {
-      "description": "Authenticated dispatch with strict parameters and uncached entry/sleep checks. Connected commands: adventure_start with required string stage_id calls StartStage; rescue_request with required string reason calls EmergencyRescue, including during sleep/cooldown and unfinished work. Both return existing service results. Empty stage_id retains the service's starter-stage default; empty/blank reason is rejected by Rescue. Other catalog IDs return 501 until connected. Known success/rejection refreshes the shared context; unexpected execution failure returns no context and does not guarantee rollback or safe replay. No idempotency guarantee. Never automatically replay POST to recover a failed observation.",
+      "description": "Authenticated dispatch with strict parameters and uncached entry/sleep checks. Connected commands: adventure_start with required string stage_id calls StartStage; rescue_request with required string reason calls EmergencyRescue, including during sleep/cooldown and unfinished work; home_sleep with optional target_home_id calls Sleep; home_wake with no inputs calls Wake. Home sleep is free and accepts dead/fatigued actors under existing service rules; omitted/empty target_home_id retains the actor's own-home default, while a different target is a destination only. Ordinary commands remain blocked during sleep and pending recovery. Early Wake reaches the service and returns HOME_STILL_SLEEPING without recovering; elapsed duration still requires explicit Wake to restore HP/MP/fatigue and clear recovery. GET offers Wake only when ready; awake Wake remains ACTION_UNAVAILABLE. Empty stage_id retains the starter-stage default; empty/blank reason is rejected by Rescue. Other catalog IDs return 501 until connected. Known success/rejection refreshes the shared context; unexpected execution failure returns no context and does not guarantee rollback or safe replay. No idempotency guarantee. Never automatically replay POST to recover a failed observation.",
       "operationId": "executeCharacterAction",
       "parameters": [
         {
@@ -22,7 +22,7 @@
             }
           }
         },
-        "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only stage_id; rescue_request params accepts only reason. Each requires its non-null string parameter; actor identity comes from the owned path.",
+        "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only required non-null string stage_id; rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it.",
         "required": true
       },
       "responses": {
@@ -34,7 +34,7 @@
               }
             }
           },
-          "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED."
+          "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED."
         },
         "400": {
           "content": {
@@ -101,7 +101,7 @@
               }
             }
           },
-          "description": "Unknown ActionID: ACTION_NOT_FOUND. Missing character uses transport error; a character disappearing during Adventure/Rescue execution returns CHARACTER_NOT_FOUND with refresh when possible."
+          "description": "Unknown ActionID: ACTION_NOT_FOUND. Missing character uses transport error; Adventure/Rescue/Home service character-not-found returns CHARACTER_NOT_FOUND. Home rejects missing/expired destination houses with HOME_HOUSE_NOT_FOUND / HOME_HOUSE_EXPIRED. Known service rejections refresh context when possible."
         },
         "409": {
           "content": {
@@ -111,7 +111,7 @@
               }
             }
           },
-          "description": "Current entry or Sleep/CanWake exclusion: ACTION_UNAVAILABLE, or mapped service rejection, with refreshed context when possible."
+          "description": "Current entry or Sleep/CanWake exclusion: ACTION_UNAVAILABLE. Home service rejections: HOME_ALREADY_SLEEPING, HOME_STILL_SLEEPING (early Wake does not restore vitality), HOME_NOT_SLEEPING. Preserves the recognized rejection and refreshes context when possible."
         },
         "415": {
           "content": {
