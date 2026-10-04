@@ -1,6 +1,6 @@
 # Status
 
-Last reviewed: Issue #939 — HTTP/PlayerContext observation endpoint
+Last reviewed: Issue #646 — approved Gateway contract and implementation decomposition
 
 ## Current Phase
 
@@ -23,6 +23,7 @@ The Go project contains the foundational systems, core combat, 39 feature module
 - **Lifecycle Contracts**: Fail-fast startup checks for MariaDB/Valkey with clean resource teardown on error.
 - **AST Gates & CI**: Automated AST linters (locks, tx runners, ISP, file size ≤500 lines, Valkey keyspace, presentation decoupling), action catalog OpenAPI drift detector (`catalog_lint_test.go`), and non-mutating OpenAPI sync checks (`sync_openapi --check`). SSOT: [`docs/development/ast-linters.md`](docs/development/ast-linters.md).
 - **PlayerContext**: Uncached Character/ScheduledAction/Sleep observations and ordered six-gate ActionID evaluation; initial town scene, positive-gold entry filtering, and legacy-accurate death gating (combat quests only). Owned HTTP `GET /api/v1/characters/{id}/context` exposes a shared transport DTO, all pending/sleep timers, action metadata, profile avatars and an initial town placeholder scene (#939).
+- **Action Gateway contract**: Approved success-preserving context-refresh failure responses and GET-only recovery (#646; [contract](docs/architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions)). Runtime `POST /actions` remains unimplemented; no idempotent replay guarantee is introduced.
 
 ---
 
@@ -30,7 +31,7 @@ The Go project contains the foundational systems, core combat, 39 feature module
 
 See [`ROADMAP.md`](ROADMAP.md) for full milestone details.
 
-1. **Client/Agent Gateway & CQRS Architecture**: `POST /actions` Gateway (#646), and phased purge of legacy REST routes (#947–#950). (Action Catalog defined in #944, Drift detection in #946; observation endpoint, availability engine and Scheduling reads implemented in #939/#938/#972).
+1. **Client/Agent Gateway & CQRS Architecture**: Implement common `POST /actions` dispatch (#1010), Bank/Home/Rescue/Adventure adapters (#1011–#1014) and initial loop verification (#1015). Remaining command coverage and phased REST retirement stay under #947–#950. Contract/decomposition is approved in #646; observation is implemented in #939/#938/#972.
 2. **Headless E2E Gameplay Simulation**: Deterministic multi-turn gameplay loop verification (Issue #650).
 3. **Client Presentation & Web UI**: Browser client and Server-Driven UI (Issue #140).
 4. **Production Asset Pipeline & Final Licensing**: Production asset mapping and license attribution catalog (Issues #654, #729; specification pending).
