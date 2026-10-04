@@ -1,6 +1,6 @@
 # Status
 
-Last reviewed: Issue #989 — PlayerContext: Restrict death gates to legacy actions that require them
+Last reviewed: Issue #985 — HTTP/Home: Guard home mutations during sleep and wake recovery
 
 ## Current Phase
 

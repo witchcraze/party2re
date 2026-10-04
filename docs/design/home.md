@@ -96,7 +96,7 @@ True Party2 character recovery is conducted at Home (either one's own or a visit
   - `< 20` players: 1x base duration (60 seconds)
   - `>= 20` players: 2x base duration (120 seconds)
   - `>= 30` players: 3x base duration (180 seconds)
-- **Action Locking & HTTP Guard**: While sleeping or under emergency rescue penalty, active timer locks (`timer.CategorySleep` and `timer.CategoryAsleep`) block all character action and state-mutating endpoints across the game—including adventures (`POST /adventures`), combat/bosses/PvP/GvG/dungeons, commerce and crafting (shop buy/sell, accessory store, alchemy synthesis/claim/learn, black market, secret shop, blacksmithing, flea market listings/purchases), and town facilities (bank deposits/withdrawals, job changes and memory manipulation, depot storage and transfers, plantation farming, altar offerings, chapel prayers, wishing well exchanges, photo contests, gem store trading, lottery/raffles, event plaza interactions, tavern orders and deliveries, custom skills, guild management, and medal exchanges)—via HTTP layer action guards (`withAuthenticatedActionCharacter` and `withAuthenticatedActionCharacterAndJSON`), rejecting requests with HTTP `409 Conflict` (`"お休み中「Zzz...」 目覚めるまで X分YY秒"` or `"お休み中「Zzz...」 目を覚ましてください"`). If sleep-state lookup fails (due to storage error or canceled context), the guard halts execution immediately and writes HTTP `500 Internal Server Error`, ensuring no state-mutating callbacks are invoked on read failures. Any active temporary Job Memory is reverted upon entering sleep.
+- **Action Locking & HTTP Guard**: While sleeping or under emergency rescue penalty, active timer locks (`timer.CategorySleep` and `timer.CategoryAsleep`) block all character action and state-mutating endpoints across the game—including adventures (`POST /adventures`), combat/bosses/PvP/GvG/dungeons, commerce and crafting (shop buy/sell, accessory store, alchemy synthesis/claim/learn, black market, secret shop, blacksmithing, flea market listings/purchases), town facilities (bank deposits/withdrawals, job changes and memory manipulation, depot storage and transfers, plantation farming, altar offerings, chapel prayers, wishing well exchanges, photo contests, gem store trading, lottery/raffles, event plaza interactions, tavern orders and deliveries, custom skills, guild management, and medal exchanges), and Home mutations (home settings updates, sending/reading/deleting letters, teaching/forgetting companion phrases, and clearing delivery notices)—via HTTP layer action guards (`withAuthenticatedActionCharacter` and `withAuthenticatedActionCharacterAndJSON`), rejecting requests with HTTP `409 Conflict` (`"お休み中「Zzz...」 目覚めるまで X分YY秒"` or `"お休み中「Zzz...」 目を覚ましてください"`). Explicit recovery commands (`POST /characters/{id}/home/wake`) and read-only observation queries (viewing home, listing mailbox letters, querying unread count, viewing phrases, listening to companion talk dialogue, and reading delivery notices) remain exempt from action locking. If sleep-state lookup fails (due to storage error or canceled context), the guard halts execution immediately and writes HTTP `500 Internal Server Error`, ensuring no state-mutating callbacks are invoked on read failures. Any active temporary Job Memory is reverted upon entering sleep.
 - **Awakening**:
   - HP and MP fully restored.
   - Tiredness (疲労度) reset to 0.
@@ -119,21 +119,21 @@ True Party2 character recovery is conducted at Home (either one's own or a visit
 | `GET` | `/characters/{id}/home/items` | Owner Session | List inspectable and usable items in inventory & depot |
 | `POST` | `/characters/{id}/home/items/use` | Owner Session | Inspect equipment or consume seeds/medals/fatigue items from home |
 | `GET` | `/homes/{id}` | Optional | Get aggregated home view for character `id` (with optional `?visitor_id=...`) |
-| `POST` | `/homes/{id}/settings` | Owner Session | Update home settings (companion name) |
-| `POST` | `/homes/{id}/companion/phrases` | Owner Session | Teach a new greeting phrase to the home companion (max 120 chars) |
-| `DELETE` | `/homes/{id}/companion/phrases/{phrase_id}` | Owner Session | Forget a taught companion phrase |
+| `POST` | `/homes/{id}/settings` | Owner Action Session | Update home settings (companion name) |
+| `POST` | `/homes/{id}/companion/phrases` | Owner Action Session | Teach a new greeting phrase to the home companion (max 120 chars) |
+| `DELETE` | `/homes/{id}/companion/phrases/{phrase_id}` | Owner Action Session | Forget a taught companion phrase |
 | `GET` | `/homes/{id}/companion/talk` | Public | Talk to the home companion to hear a random greeting |
 | `GET` | `/homes/{id}/notices` | Owner Session | List delivery notices for character |
-| `POST` | `/homes/{id}/notices/clear` | Owner Session | Clear/acknowledge all delivery notices |
+| `POST` | `/homes/{id}/notices/clear` | Owner Action Session | Clear/acknowledge all delivery notices |
 | `POST` | `/characters/{id}/home/sleep` | Owner Session | Start sleeping at home (or target player's home) |
 | `GET` | `/characters/{id}/home/sleep` | Owner Session | Check current sleep timer and status |
 | `POST` | `/characters/{id}/home/wake` | Owner Session | Wake up with full HP/MP/tired recovery and reset hooks |
-| `POST` | `/letters` | Sender Session | Send a new letter to a recipient character |
+| `POST` | `/letters` | Sender Action Session | Send a new letter to a recipient character |
 | `GET` | `/letters/inbox` | Recipient Session | List received letters (`?character_id=...&limit=...&offset=...`) |
 | `GET` | `/letters/outbox` | Sender Session | List sent letters (`?character_id=...&limit=...&offset=...`) |
 | `GET` | `/letters/unread-count` | Recipient Session | Get unread letter count for character |
-| `POST` | `/letters/{id}/read` | Recipient Session | Mark a letter as read |
-| `DELETE` | `/letters/{id}` | Sender or Recipient Session | Delete a letter from sender's outbox or recipient's inbox |
+| `POST` | `/letters/{id}/read` | Recipient Action Session | Mark a letter as read |
+| `DELETE` | `/letters/{id}` | Sender or Recipient Action Session | Delete a letter from sender's outbox or recipient's inbox |
 
 ---
 
