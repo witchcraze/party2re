@@ -30,7 +30,7 @@ Prefer:
 
 Do not create a large implementation plan when a smaller ticket can be completed first.
 
-If an Issue is too large, split it before implementation.
+Assess the Issue's complexity and cohesive objective using [ticket size and decomposition](issue-workflow.md#ticket-size-and-decomposition). Consider splitting when it improves understanding, verification and merging. Keep coupled changes together when that better serves the same acceptance criteria, and briefly record the reason when scope raises decomposition concerns. Revise the size estimate as investigation clarifies the work.
 
 ## During implementation
 

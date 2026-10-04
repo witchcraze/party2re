@@ -28,19 +28,21 @@ Keep `main` as the sole integration branch. Feature branches must be short-lived
 ## 2. Issue and PR Workflow
 - **No substantial work without an Issue:** Do not begin substantial implementation from an informal request without an Issue.
 - **Templates:** Check `.github/ISSUE_TEMPLATE` and `.github/PULL_REQUEST_TEMPLATE.md`. Every Issue **must** use the provided repository Issue template. Every PR **must** use the repository PR template and all checkboxes must be honestly verified. Do not bypass templates.
-- **Searchable Issue Naming, Sizing, and Deterministic Labeling Rules (SSOT):**
+- **Searchable Issue Naming and Complexity Labeling Rules (SSOT):**
   - **Issue Titles:** MUST strictly follow `[<Type>] <Domain>: <Specific Action / Target>` (e.g., `[Bug] Home: Return 404 in GET /homes/{id}/companion/phrases`, `[Feature] HTTP: Guard action endpoints against active sleep penalty`). Prohibit vague titles like `Fix bug` or `Update system`.
-  - **Deterministic Size Classification (Both Creation & Triage):**
+  - **Size Estimates (Creation, Refinement & Triage):**
     Issue bodies MUST describe work independently of implementation tools or providers; do not add execution-strategy or executor-recommendation sections. Size labels MUST describe work complexity only.
-    Every issue MUST be classified into exactly one size label upon creation, enabling zero-token triage:
-    1. **`size/large` (Large / Interactive)**: Requires DB migration (DDL), cross-package transactions, 500-line ceiling/1122-line ratchet refactoring, or interactive user design decisions.
-    2. **`size/medium` (Medium: diff <= 150 lines)**: Standard single-package feature or refactoring, or adding/modifying endpoints requiring OpenAPI (`paths/<pkg>.json`) synchronization.
-    3. **`size/small` (Small: diff <= 50 lines)**: Localized bug fix, formula/cap adjustment, single-handler guard, or unit test addition.
+    Every issue MUST have exactly one size label upon creation. Use the following as initial estimates of the expected work:
+    1. **`size/small`**: Localized work that can be completed using established contracts and patterns.
+    2. **`size/medium`**: Work requiring investigation, implementation and verification across multiple cases, with a clear responsibility and completion target.
+    3. **`size/large`**: Work with substantial design uncertainty, broad impact, or complex migration/transaction coordination.
+    Choose the estimate that best fits the work as a whole; these descriptions are judgment aids, not automatic triggers. Reviewers and implementers MAY revise the label as investigation clarifies complexity; maintain exactly one size label and briefly explain material changes in the Issue or PR.
+    Use line counts, package/layer count, DDL, transactions and capped-file edits as signals of review effort and risk; none alone imposes an issue-diff ceiling, a size label or decomposition. Account for the nature of tests, documentation, generated artifacts and code moves when assessing review effort.
   - **Issue Status & Dependency Management Rules (明確な使い分けルール):**
     - **`status/needs-spec` (Label)**: Use when legacy specifications, formulas, or architectural designs are incomplete, undecided, or pending discussion/RFC. Implementation cannot proceed until specs are clarified.
     - **Native Issue Dependencies (`blocked by` / `blocking`)**: Use GitHub native dependencies instead of manual labels when the specification is clear, but another ticket/PR must be executed first (e.g., foundational infrastructure/models, security/auth guards on overlapping handlers, sequential PRs, or prerequisite domain logic).
       - **Native Registration**: When an issue depends on another issue, link it natively via `gh issue edit <issue-number> --add-blocked-by <predecessor-number>`. Do NOT apply a manual `status/blocked` label (`status/blocked` is deprecated).
-      - **Sub-issues / Parent Hierarchy**: When decomposing large features or epics under the Anti-Fat-Issue rule, link child issues to the tracking issue via `gh issue edit <parent-number> --add-sub-issue <child-number>` (or `--parent <parent-number>`).
+      - **Sub-issues / Parent Hierarchy**: When decomposing features or epics under the bounded-task guidance below, link child issues to the tracking issue via `gh issue edit <parent-number> --add-sub-issue <child-number>` (or `--parent <parent-number>`).
       - **Zero-Token Triage Exclusion**: When querying candidate issues, filter out blocked tickets directly using GitHub native search syntax (`gh issue list --search "is:open -is:blocked" --json number,title,labels`) and exclude `status/needs-spec` and `priority: low`.
       - **Automatic Unblocking on Merge**: When a preceding ticket is merged and closed, GitHub automatically resolves the blocker (0 open blockers). Subsequent triage workflows immediately observe the unblocked ticket without manual label-stripping overhead.
   - The Issue body MUST explicitly state the primary affected component/package and database tables (e.g., `Affected Component: internal/home`, `Database Tables: character_letters`).
@@ -63,14 +65,11 @@ Keep `main` as the sole integration branch. Feature branches must be short-lived
   - Before committing changes and opening a PR upon task completion, agents and developers MUST re-inspect the active issue (`gh issue view <issue-number>`).
   - Cross-check every item in Acceptance Criteria, Scope, and specific requirements against the implemented code, tests, and documentation to verify zero omissions.
   - Do not proceed to commit changes or open a PR until all acceptance criteria and issue requirements are verified as completely satisfied.
-- **Bounded Tasks & Anti-Fat-Issue Rule (1 Issue = 1 PR = 1 Mergeable Unit):**
-  - **Single Responsibility Principle:** An issue MUST represent a cohesive, reviewable, and independently testable unit of work that maps directly to a single PR. Never create monolithic "umbrella" issues combining multiple unrelated domain fixes, cross-cutting layers, and sub-features.
-  - **4 Mandatory Split Triggers (必須分割判定ルール):** If an issue meets ANY of the following criteria, it is **FAT** and MUST be decomposed into smaller, atomic sub-issues before starting implementation:
-    1. **Multi-Package Trigger:** The scope spans 2 or more independent domain/feature packages (e.g., `internal/home` AND `internal/rescue`). Each package must have its own issue.
-    2. **Cross-Layer Trigger:** The scope mixes domain/core business logic with cross-cutting HTTP middleware/auth routing or database schema migrations. HTTP-wide guards and schema migrations must be isolated into dedicated tickets.
-    3. **Independent Verifiability Trigger:** Sub-features can be tested, reviewed, and merged independently without functional dependencies.
-    4. **Blast Radius & Ratchet Trigger:** The scope risks touching ratchet-capped files (e.g., `internal/api/http/handler.go` capped at 1122 lines) or production files near the 500-line ceiling (`file_size_lint_test.go`).
-  - **Sizing Check:** When creating or refining an issue, verify that the ticket is strictly restricted to a single primary package or layer. If scope creeps, split immediately.
+- **Bounded Tasks (1 Issue = 1 PR = 1 Mergeable Unit):**
+  - **Cohesive Objective:** An issue MUST represent one cohesive, reviewable and independently verifiable objective that maps to a single PR. Unrelated objectives MUST NOT be bundled merely for convenience.
+  - **Decomposition Judgment:** When creating, refining or implementing an issue, assess whether splitting would make the work easier to understand, verify and merge. Independent objectives, broad impact, independently useful sub-features and separable prerequisites are reasons to consider decomposition. Reassess the scope when investigation reveals additional work.
+  - **Coupled Changes:** Changes across packages/layers, schema changes and refactoring MAY remain together when they support the same acceptance criteria and keeping them together improves understanding, verification or consistency. When retaining work that raises decomposition concerns, briefly record the reason in the Issue or PR. This rationale does not introduce a separate approval gate; apply existing requirements for unresolved specifications and significant architectural decisions.
+  - **Capped Files:** Touching a file near a production line ceiling or ratchet MUST NOT by itself force a split. Assess whether the required restructuring is cohesive with the objective or would be easier to review as a prerequisite. Existing architecture boundaries, production-file ceilings and ratchets MUST still be satisfied.
 
 ## 3. TDD and Local Verification (Tiered Strategy)
 For non-trivial behavior:
