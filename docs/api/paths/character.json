@@ -1,7 +1,7 @@
 {
   "/api/v1/characters/{id}/actions": {
     "post": {
-      "description": "Authenticated dispatch with strict parameters and uncached entry/sleep checks. Adapters remain unconnected in #1010: catalog IDs return 501 until connected. Known success/rejection refreshes the shared context; unexpected execution failure returns no context and does not guarantee rollback or safe replay. No idempotency guarantee. Never automatically replay POST to recover a failed observation.",
+      "description": "Authenticated dispatch with strict parameters and uncached entry/sleep checks. Connected command: adventure_start with required string stage_id calls StartStage and returns the existing stage-start result. Empty stage_id retains the service's starter-stage default. Other catalog IDs return 501 until connected. Known success/rejection refreshes the shared context; unexpected execution failure returns no context and does not guarantee rollback or safe replay. No idempotency guarantee. Never automatically replay POST to recover a failed observation.",
       "operationId": "executeCharacterAction",
       "parameters": [
         {
@@ -22,7 +22,7 @@
             }
           }
         },
-        "description": "One JSON document, at most 64 KiB; Content-Type must be application/json.",
+        "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only stage_id (required, non-null string); actor identity comes from the owned path.",
         "required": true
       },
       "responses": {
@@ -34,7 +34,7 @@
               }
             }
           },
-          "description": "Known command success; refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED."
+          "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED."
         },
         "400": {
           "content": {
@@ -81,7 +81,7 @@
               }
             }
           },
-          "description": "Authentication/ownership rejection exposes no context; known service rejection preserves its mapped code and refreshes when possible."
+          "description": "Authentication/ownership rejection exposes no context. Adventure service rejects level/job-level requirements with ADVENTURE_LEVEL_REQUIRED / ADVENTURE_JOB_LEVEL_REQUIRED and refreshes when possible."
         },
         "404": {
           "content": {
@@ -101,7 +101,7 @@
               }
             }
           },
-          "description": "Unknown ActionID: ACTION_NOT_FOUND. Missing character uses transport error. Known service rejection refreshes when possible."
+          "description": "Unknown ActionID: ACTION_NOT_FOUND. Missing character uses transport error; a character disappearing during Adventure execution returns CHARACTER_NOT_FOUND with refresh when possible."
         },
         "409": {
           "content": {
@@ -131,7 +131,7 @@
               }
             }
           },
-          "description": "Known service validation rejection preserves its mapped code and refreshes when possible."
+          "description": "Adventure service rejections: ADVENTURE_STAGE_NOT_FOUND, ADVENTURE_UNCONSCIOUS, ADVENTURE_EXHAUSTED, ADVENTURE_DAILY_LIMIT. Preserves the mapped code and refreshes when possible; current catalog exclusion instead returns 409 ACTION_UNAVAILABLE."
         },
         "500": {
           "content": {

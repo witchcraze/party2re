@@ -1,13 +1,13 @@
 # Client & Agent API — CQRS & Server-Driven UI Architecture
 
-This document describes the implemented HTTP observation and common command boundaries, with service adapters still pending.
+This document describes the implemented HTTP observation and command boundaries, including the stage adventure start adapter.
 
 | Boundary | Status | Tracking |
 |---|---|---|
 | Action catalog and OpenAPI drift checks | Implemented | #944, #946 |
 | PlayerContext evaluator and character/scheduling reads | Implemented in-process; legacy parity still requires review | #938, #972 |
 | HTTP context query | Implemented; owned character observation with four canonical slots | #939 |
-| HTTP action dispatcher | Common boundary implemented; domain adapters remain unconnected | #646 (decision), #1010 (boundary), #1011–#1015 (adapters/verification) |
+| HTTP action dispatcher | Common boundary and adventure_start implemented; Bank/Home/Rescue adapters pending | #646 (decision), #1010 (boundary), #1014 (Adventure), #1011–#1013/#1015 (remaining adapters/verification) |
 | Individual REST route retirement | Planned after Gateway migration | #947–#950 |
 
 Current clients use the registered routes in [OpenAPI](../api/openapi.json).
@@ -59,7 +59,7 @@ standard HTTP wrapper, calls the existing uncached `playercontext.Service.Query`
 and enriches its facts with profile avatar and job catalog presentation. Its
 `PlayerContextResponse` DTO and reusable OpenAPI schema are also the required
 context contract for the command gateway specified in #646 and implemented in
-#1010. Domain command adapters and initial loop verification remain #1011–#1015.
+#1010. Adventure start is connected in #1014; Bank/Home/Rescue adapters and initial loop verification remain #1011–#1013/#1015.
 
 The four top-level fields are:
 
@@ -108,8 +108,8 @@ The four top-level fields are:
 ## 3. Command Pillar: `POST /api/v1/characters/{id}/actions`
 
 The command contract below was approved during #646 on 2026-10-04. The common
-route and dispatch boundary are implemented in #1010; no domain command adapters
-are registered yet. This does not certify Gateway coverage or retire existing
+route and dispatch boundary are implemented in #1010; stage adventure start is
+connected in #1014. This does not certify complete Gateway coverage or retire existing
 REST routes. The initial implementation is split by HTTP responsibility
 and service adapter; remaining operations belong to #947–#949.
 
@@ -166,6 +166,35 @@ Parameter decoding completes before state reads and execution. Only the mapped
 4xx errors are known rejections; all other execution errors use `EXECUTION_FAILED`.
 Both GET and command refresh composition reject ownership changes observed while
 reading profile enrichment.
+
+### Connected stage adventure command
+
+`adventure_start` accepts only `{ "stage_id": "stage-00" }`. A supplied non-null
+string is required; an empty string retains `StartStage`'s existing starter-stage
+default. The adapter calls the existing Adventure service once with the owned
+actor and request context. `result` reuses the `POST /adventures` fields: `id`,
+`character_id`, `stage_id`, `started_at`, `floors_cleared`, `is_cleared`,
+`party_size`, `resolved`, and `experience_reward`. The crawl resolves immediately;
+this connection adds no scheduled expedition or new game rule.
+
+| Service rejection | HTTP | Stable code |
+|---|---|---|
+| Stage not found | 422 | `ADVENTURE_STAGE_NOT_FOUND` |
+| Level requirement | 403 | `ADVENTURE_LEVEL_REQUIRED` |
+| Job level requirement | 403 | `ADVENTURE_JOB_LEVEL_REQUIRED` |
+| Unconscious character | 422 | `ADVENTURE_UNCONSCIOUS` |
+| Exhausted character | 422 | `ADVENTURE_EXHAUSTED` |
+| Once-daily entry already used | 422 | `ADVENTURE_DAILY_LIMIT` |
+| Character no longer exists | 404 | `CHARACTER_NOT_FOUND` |
+
+Catalog exclusions (including HP=0, fatigue, sleep, pending wake recovery and
+unfinished Pending/Processing work) return `409 ACTION_UNAVAILABLE` before
+service execution. A ready deadline does not clear unfinished work. Service
+validation remains authoritative for exact stage requirements and state changes
+after preflight; unexpected service/store errors use `500 EXECUTION_FAILED`.
+Both known outcomes use the refresh/recovery contract below.
+
+### Outcome responses
 
 | Condition | HTTP response | Client behavior |
 |---|---|---|
