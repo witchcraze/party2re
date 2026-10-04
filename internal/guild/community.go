@@ -233,7 +233,9 @@ func (s *Service) BroadcastCallout(ctx context.Context, guildID string, senderID
 					recName = rc.Name
 				}
 			}
-			_ = s.letterSender.SendLetter(ctx, senderID, senderName, m.CharacterID, recName, sanitizedMessage, senderColor)
+			if err := s.letterSender.SendLetter(ctx, senderID, senderName, m.CharacterID, recName, sanitizedMessage, senderColor); err != nil {
+				return err
+			}
 		}
 	}
 

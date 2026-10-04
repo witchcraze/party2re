@@ -1,6 +1,6 @@
 # Status
 
-Last reviewed: Issue #981 — HTTP/Sleep reject actions on sleep-state lookup failure
+Last reviewed: Issue #992 — Guild/Callout: Return delivery errors before awarding activity points
 
 ## Current Phase
 

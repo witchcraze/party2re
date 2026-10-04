@@ -110,7 +110,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Post-battle milestone counter increments: MonsterKills (kill_m) on defeating strong enemies (&is_strong) and MaoCount (mao_c) on unsealing the demon king (Stage EX / 封印の地) (#823)
 
 ### E. Social and Competitive Systems
-- [x] Guild creation, membership application/approval workflow, dynamic Guild Points, daily 20% GP decay batch, hex colors, custom titles, broadcast callouts, inactivity disbandment worker, Guild Master succession (excluding pending applicants), dissolution news publication, and reconciled cascade (#76, #490, #591, #633, #774, #775, #956)
+- [x] Guild creation, membership application/approval workflow, dynamic Guild Points, daily 20% GP decay batch, hex colors, custom titles, broadcast callouts, inactivity disbandment worker, Guild Master succession (excluding pending applicants), dissolution news publication, and reconciled cascade (#76, #490, #591, #633, #774, #775, #956, #992)
 - [x] Player communication, park, and public interactions (#78)
 - [x] Player private home, mailbox, letter correspondence, resident monster pet linkage (max 8), OpenAPI companion field cleanup, Heaven Wish companion aggregation in HomePetReader, alchemy recipe scroll consumption, authentic equipment appraisal catalog stats, HTTP sleep action guard extended to all town facilities, commerce, and crafting endpoints, and shared text validation adoption for letters and companion phrases (#159, #461, #680, #778, #881, #894, #898, #899, #901, #903, #912, #920, #957, #981)
 - [x] Helper and player rescue assistance (#79, #213, #659, #680, #792, #900)
