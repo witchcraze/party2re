@@ -21,8 +21,9 @@ The current evaluator uses six gates. This is an implementation snapshot, not ce
 The gate descriptions below summarize the current implementation:
 
 1. **Dead Gate (`$m{hp} <= 0`)**:
-   - Deceased characters cannot participate in battles (`vs_monster`, `vs_player`, `boss`), play casino games, purchase items, or perform economic transactions.
-   - **Exceptions**: `home_sleep` (revives HP/MP to full in `sleep.cgi`), `home_wake`, `chapel_pray` (prayer for daily blessing; does not require living HP in legacy dispatch), and `rescue_request` (emergency unstick).
+   - In legacy Party2 (`lib/quest.cgi:479, 902`), characters with HP <= 0 are prohibited from creating or joining combat quests and expeditions (`adventure_start`, `challenge_start`, `dungeon_start`, `boss_fight`, `pvp_room_create`).
+   - Noncombat town and facility actions (banking `lib/bank.cgi:77–103`, commerce `lib/weapon.cgi:53–85`, crafting, casino, progression, social chat `lib/system.cgi:639–676`, and recovery) do NOT require living HP in legacy dispatch.
+   - Deceased characters in town can freely access noncombat facilities, deposit/withdraw, trade, or rest at `home_sleep` to restore full HP and MP (`lib/sleep.cgi:32`).
 2. **Fatigue Gate (`$m{tired} >= 100`)**:
    - Exhausted characters cannot initiate stamina-draining tasks (battles, dungeon runs, boss raids, or casino gambling).
    - **Allowed**: Rest (`home_sleep`), food (`tavern_order`), banking, storage management, and shopping.
@@ -47,7 +48,7 @@ Condition gates are represented via bitmask flags in `internal/playercontext`:
 type GateFlags uint32
 
 const (
-	GateDeadCheck     GateFlags = 1 << iota // Requires HP > 0 (Alive)
+	GateDeadCheck     GateFlags = 1 << iota // Requires HP > 0 (Alive; combat quests only)
 	GateFatigueCheck                        // Requires Tired < 100 (Not exhausted)
 	GateSleepCheck                          // Requires Sleep == 0 (Awake)
 	GateCooldownCheck                       // Requires no active ScheduledAction
@@ -72,44 +73,44 @@ The table below documents all 42 current catalog entries in `internal/playercont
 | `home_sleep` | 自宅・宿屋で休む | `home` | `homeSleep` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `home_wake` | 目を覚ます | `home` | `homeWake` | `[]` | ❌ | ❌ | ❌ | ❌ | ❌ |
 | `chapel_pray` | 礼拝堂で祈る（祈願） | `home` | `prayAtChapel` | `["blessing"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `bank_deposit` | 銀行に預金する | `economy` | `postCharactersIdBankDeposit` | `["amount"]` | ✅ | ❌ | ✅ | ✅ | ✅ |
-| `bank_withdraw` | 銀行から引き出す | `economy` | `postCharactersIdBankWithdraw` | `["amount"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `depot_deposit` | 預かり所にアイテムを預ける | `economy` | `postCharactersIdDepotDeposit` | `["item_id"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `depot_withdraw` | 預かり所からアイテムを引き出す | `economy` | `postCharactersIdDepotWithdraw` | `["item_id"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `auction_send` | 仕送り・送金 | `economy` | `postCharactersIdAuctionSend` | `[]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `fleamarket_list` | フリーマーケット出品 | `economy` | `createFleaMarketListing` | `["item_id", "price"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `fleamarket_purchase` | フリーマーケット購入 | `economy` | `purchaseFleaMarketListing` | `[]` | ✅ | ❌ | ✅ | ✅ | ✅ |
-| `shop_purchase` | 店でアイテム購入 | `shop` | `shopPurchase` | `["item_definition_id"]` | ✅ | ❌ | ✅ | ✅ | ✅ |
-| `shop_sell` | 店にアイテム売却 | `shop` | `shopSell` | `["item_instance_id"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `shop_accessory_buy` | 装飾品購入 | `shop` | `shopAccessoryBuy` | `["item_definition_id"]` | ✅ | ❌ | ✅ | ✅ | ✅ |
-| `gemstore_buy` | 宝石購入 | `shop` | `buyGem` | `["gem_id"]` | ✅ | ❌ | ✅ | ✅ | ✅ |
-| `secretshop_purchase` | ヒミツの店で購入 | `shop` | `purchaseSecretShopItem` | `["item_id"]` | ✅ | ❌ | ✅ | ✅ | ✅ |
-| `blackmarket_trade` | 闇市景品交換 | `shop` | `tradeBlackMarketPrize` | `[]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `blacksmith_seal` | 鍛冶屋で刻印強化 | `crafting` | `postCharactersIdBlacksmithSeal` | `[]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `alchemy_synthesize` | 錬金調合 | `crafting` | `postCharactersIdAlchemySynthesize` | `[]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `custom_skill_set` | カスタムスキル作成 | `crafting` | `setCustomSkill` | `["name"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `plantation_sow` | 種菜園に種まき | `crafting` | `postCharactersIdPlantationSow` | `[]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `plantation_harvest` | 種菜園から収穫 | `crafting` | `postCharactersIdPlantationHarvest` | `[]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `casino_slot` | カジノスロット | `entertainment` | `playCasinoSlot` | `["bet"]` | ✅ | ✅ | ✅ | ✅ | ❌ |
-| `casino_highlow` | ハイ＆ロー | `entertainment` | `playCasinoHighLow` | `["bet", "guess"]` | ✅ | ✅ | ✅ | ✅ | ❌ |
-| `casino_doppel` | ドッペルゲンガー | `entertainment` | `playCasinoDoppel` | `["bet", "pool_size", "player_mark"]` | ✅ | ✅ | ✅ | ✅ | ❌ |
-| `lottery_raffle` | 福引を引く | `entertainment` | `playRaffle` | `["raffle_type"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `lottery_takarakuji_buy` | 宝くじ購入 | `entertainment` | `buyTakarakujiTicket` | `[]` | ✅ | ❌ | ✅ | ✅ | ✅ |
-| `tavern_order` | 酒場で食事注文 | `entertainment` | `orderTavernMeal` | `[]` | ✅ | ❌ | ✅ | ✅ | ✅ |
-| `contest_enter` | フォトコンテスト応募 | `entertainment` | `enterContest` | `["photo_id", "title"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `wishingwell_exchange` | 願いの泉でSP交換 | `growth` | `exchangeWishingWellSP` | `["stat", "sp"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `altar_pray` | 復活の祭壇（祈り） | `growth` | `prayAltarRamia` | `[]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `god_wish` | 神の願い・限界突破 | `growth` | `grantGodWish` | `["wish_id"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `job_change` | ダーマ神殿で転職 | `growth` | `changeCharacterJob` | `[]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `medal_claim` | 小さなメダル景品交換 | `growth` | `claimMedalReward` | `["reward_id"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `monster_tame` | モンスター捕獲・預託 | `social` | `tameMonster` | `["monster_id"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `helper_complete` | 何でも屋クエスト報告 | `social` | `completeHelperQuest` | `["quest_id"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `park_post` | 交流広場に伝言投稿 | `social` | `postParkMessage` | `["message"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `bank_deposit` | 銀行に預金する | `economy` | `postCharactersIdBankDeposit` | `["amount"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
+| `bank_withdraw` | 銀行から引き出す | `economy` | `postCharactersIdBankWithdraw` | `["amount"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `depot_deposit` | 預かり所にアイテムを預ける | `economy` | `postCharactersIdDepotDeposit` | `["item_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `depot_withdraw` | 預かり所からアイテムを引き出す | `economy` | `postCharactersIdDepotWithdraw` | `["item_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `auction_send` | 仕送り・送金 | `economy` | `postCharactersIdAuctionSend` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `fleamarket_list` | フリーマーケット出品 | `economy` | `createFleaMarketListing` | `["item_id", "price"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `fleamarket_purchase` | フリーマーケット購入 | `economy` | `purchaseFleaMarketListing` | `[]` | ❌ | ❌ | ✅ | ✅ | ✅ |
+| `shop_purchase` | 店でアイテム購入 | `shop` | `shopPurchase` | `["item_definition_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
+| `shop_sell` | 店にアイテム売却 | `shop` | `shopSell` | `["item_instance_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `shop_accessory_buy` | 装飾品購入 | `shop` | `shopAccessoryBuy` | `["item_definition_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
+| `gemstore_buy` | 宝石購入 | `shop` | `buyGem` | `["gem_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
+| `secretshop_purchase` | ヒミツの店で購入 | `shop` | `purchaseSecretShopItem` | `["item_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
+| `blackmarket_trade` | 闇市景品交換 | `shop` | `tradeBlackMarketPrize` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `blacksmith_seal` | 鍛冶屋で刻印強化 | `crafting` | `postCharactersIdBlacksmithSeal` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `alchemy_synthesize` | 錬金調合 | `crafting` | `postCharactersIdAlchemySynthesize` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `custom_skill_set` | カスタムスキル作成 | `crafting` | `setCustomSkill` | `["name"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `plantation_sow` | 種菜園に種まき | `crafting` | `postCharactersIdPlantationSow` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `plantation_harvest` | 種菜園から収穫 | `crafting` | `postCharactersIdPlantationHarvest` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `casino_slot` | カジノスロット | `entertainment` | `playCasinoSlot` | `["bet"]` | ❌ | ✅ | ✅ | ✅ | ❌ |
+| `casino_highlow` | ハイ＆ロー | `entertainment` | `playCasinoHighLow` | `["bet", "guess"]` | ❌ | ✅ | ✅ | ✅ | ❌ |
+| `casino_doppel` | ドッペルゲンガー | `entertainment` | `playCasinoDoppel` | `["bet", "pool_size", "player_mark"]` | ❌ | ✅ | ✅ | ✅ | ❌ |
+| `lottery_raffle` | 福引を引く | `entertainment` | `playRaffle` | `["raffle_type"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `lottery_takarakuji_buy` | 宝くじ購入 | `entertainment` | `buyTakarakujiTicket` | `[]` | ❌ | ❌ | ✅ | ✅ | ✅ |
+| `tavern_order` | 酒場で食事注文 | `entertainment` | `orderTavernMeal` | `[]` | ❌ | ❌ | ✅ | ✅ | ✅ |
+| `contest_enter` | フォトコンテスト応募 | `entertainment` | `enterContest` | `["photo_id", "title"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `wishingwell_exchange` | 願いの泉でSP交換 | `growth` | `exchangeWishingWellSP` | `["stat", "sp"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `altar_pray` | 復活の祭壇（祈り） | `growth` | `prayAltarRamia` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `god_wish` | 神の願い・限界突破 | `growth` | `grantGodWish` | `["wish_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `job_change` | ダーマ神殿で転職 | `growth` | `changeCharacterJob` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `medal_claim` | 小さなメダル景品交換 | `growth` | `claimMedalReward` | `["reward_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `monster_tame` | モンスター捕獲・預託 | `social` | `tameMonster` | `["monster_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `helper_complete` | 何でも屋クエスト報告 | `social` | `completeHelperQuest` | `["quest_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `park_post` | 交流広場に伝言投稿 | `social` | `postParkMessage` | `["message"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `rescue_request` | 緊急救出要請 | `social` | `requestEmergencyRescue` | `[]` | ❌ | ❌ | ❌ | ❌ | ❌ |
 
-*(Note: All facility actions implicitly require `GateLocationCheck` except `rescue_request`, which is a global recovery action).*
+*(Note: All facility actions implicitly require `GateLocationCheck` except `rescue_request`, which is a global recovery action. In legacy Party2, only combat/expedition quests under `lib/quest.cgi:479, 902` require living HP; town actions under `lib/system.cgi:639–655` execute regardless of character HP).*
 
-`home_wake` also requires wakeable lifecycle state even though it has no Sleep flag. An already-awake character is not offered a redundant wake action. A healthy awake character has 41 entry actions; a sleeping character has only rescue; a character awaiting wake recovery has wake and rescue, in catalog order.
+`home_wake` also requires wakeable lifecycle state even though it has no Sleep flag. An already-awake character is not offered a redundant wake action. A healthy awake character has 41 entry actions; a dead awake character has 36 entry actions (combat actions blocked); a sleeping character has only rescue; a character awaiting wake recovery has wake and rescue, in catalog order.
 
 ### Evaluation and read contract
 
