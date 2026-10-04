@@ -242,7 +242,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "crafting",
 		OperationID:    "postCharactersIdBlacksmithSeal",
 		RequiredParams: []string{},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
+		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "alchemy_synthesize",

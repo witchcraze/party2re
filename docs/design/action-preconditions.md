@@ -85,7 +85,7 @@ The table below documents all 42 current catalog entries in `internal/playercont
 | `gemstore_buy` | 宝石購入 | `shop` | `buyGem` | `["gem_id"]` | ✅ | ❌ | ✅ | ✅ | ✅ |
 | `secretshop_purchase` | ヒミツの店で購入 | `shop` | `purchaseSecretShopItem` | `["item_id"]` | ✅ | ❌ | ✅ | ✅ | ✅ |
 | `blackmarket_trade` | 闇市景品交換 | `shop` | `tradeBlackMarketPrize` | `[]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `blacksmith_seal` | 鍛冶屋で刻印強化 | `crafting` | `postCharactersIdBlacksmithSeal` | `[]` | ✅ | ❌ | ✅ | ✅ | ✅ |
+| `blacksmith_seal` | 鍛冶屋で刻印強化 | `crafting` | `postCharactersIdBlacksmithSeal` | `[]` | ✅ | ❌ | ✅ | ✅ | ❌ |
 | `alchemy_synthesize` | 錬金調合 | `crafting` | `postCharactersIdAlchemySynthesize` | `[]` | ✅ | ❌ | ✅ | ✅ | ❌ |
 | `custom_skill_set` | カスタムスキル作成 | `crafting` | `setCustomSkill` | `["name"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
 | `plantation_sow` | 種菜園に種まき | `crafting` | `postCharactersIdPlantationSow` | `[]` | ✅ | ❌ | ✅ | ✅ | ❌ |
