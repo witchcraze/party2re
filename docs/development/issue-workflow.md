@@ -57,19 +57,22 @@ Prefer merging a prerequisite PR before opening its dependent PR against `main`.
 
 Before merging, confirm the final diff, passing remote CI for the current head, and native Issue linkage (`gh pr view <number> --json closingIssuesReferences`). `Closes #<number>` creates a native link only when the PR targets the default branch; a body reference alone is insufficient ([GitHub documentation](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)). After retargeting, verify linkage and CI again; see [`ci-cd.md`](ci-cd.md#ci-evidence-and-failure-investigation).
 
-## Ticket size
+## Ticket size and decomposition
 
-Prefer:
+The [workflow rule](../../.agents/rules/01-development-workflow.md#2-issue-and-pr-workflow) owns size estimates and scope decisions. Each Issue has one size label, chosen from the expected complexity of the whole task. Investigation can change that estimate; update the label and briefly explain a material change in the Issue or PR.
 
-```text
-one behavior
-+
-its tests
-+
-minimum implementation
-```
+Line counts help assess review effort. A large test matrix, generated specification updates or a code move can produce a substantial diff while leaving the implementation straightforward. DDL, package/layer count and edits to capped files also require judgment about their actual impact. They do not automatically determine a size label or require a separate ticket.
 
-Large features should be split into multiple Issues.
+An Issue brings together one objective, its implementation, tests and necessary contract/documentation updates. Consider splitting when doing so makes the work easier to understand, verify and merge. Independently useful changes or prerequisite work are often good candidates; coupled changes can be clearer to validate together. A large estimate can still describe one cohesive PR.
+
+When keeping work together despite decomposition concerns, state the reason briefly in the Issue or PR. For example:
+
+- A Gateway adapter, catalog/OpenAPI input metadata and tests share the acceptance criteria for connecting one command; reviewing them together verifies the complete contract.
+- A feature and its schema change may remain together when a single review keeps their contract consistent. An independently useful storage migration may be clearer as a prerequisite PR.
+- Moving a configuration function out of a capped handler can belong with its new adapter. A broader handler restructuring may be easier to review separately.
+- Fixes to unrelated Bank and Rescue behavior have separate objectives and should be tracked independently.
+
+The judgment applies to task boundaries. Existing architecture, security and production-file limits continue to govern the implementation; unresolved significant design choices still follow the architecture-decision workflow below.
 
 ## Architecture decision tickets
 
