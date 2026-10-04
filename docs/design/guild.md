@@ -87,8 +87,8 @@ Active members can broadcast messages to all fellow guild members:
 
 - Any active member (`!is_pending`) can invoke `BroadcastCallout` with a message (up to 200 characters). Sanitized via `internal/validation.ValidateSingleLine` (Unicode NFC normalized, single-line, rejecting control characters, zero-width characters, bidirectional overrides, and Zalgo text).
 - Delivers the sanitized letter to every active guild member.
-- Awards **+1 Guild Point (`gpoint`)** to the guild.
-- Updates `last_active_at` timestamp.
+- If delivery of a letter fails, the broadcast terminates immediately and returns the delivery error without awarding Guild Points or updating `last_active_at` (earlier successful deliveries to preceding members are preserved and not rolled back).
+- Upon complete successful delivery to all active members, awards **+1 Guild Point (`gpoint`)** to the guild and updates `last_active_at` timestamp.
 
 ### Visual Customization: Color, Mark & Wallpaper
 
