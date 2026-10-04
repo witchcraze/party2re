@@ -1,6 +1,6 @@
 # Status
 
-Last reviewed: Issue #987 — PlayerContext blacksmith_seal currency gate removal
+Last reviewed: Issue #988 — PlayerContext casino coin games currency gate removal
 
 ## Current Phase
 

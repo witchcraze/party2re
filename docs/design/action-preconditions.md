@@ -90,9 +90,9 @@ The table below documents all 42 current catalog entries in `internal/playercont
 | `custom_skill_set` | カスタムスキル作成 | `crafting` | `setCustomSkill` | `["name"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
 | `plantation_sow` | 種菜園に種まき | `crafting` | `postCharactersIdPlantationSow` | `[]` | ✅ | ❌ | ✅ | ✅ | ❌ |
 | `plantation_harvest` | 種菜園から収穫 | `crafting` | `postCharactersIdPlantationHarvest` | `[]` | ✅ | ❌ | ✅ | ✅ | ❌ |
-| `casino_slot` | カジノスロット | `entertainment` | `playCasinoSlot` | `["bet"]` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `casino_highlow` | ハイ＆ロー | `entertainment` | `playCasinoHighLow` | `["bet", "guess"]` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `casino_doppel` | ドッペルゲンガー | `entertainment` | `playCasinoDoppel` | `["bet", "pool_size", "player_mark"]` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `casino_slot` | カジノスロット | `entertainment` | `playCasinoSlot` | `["bet"]` | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `casino_highlow` | ハイ＆ロー | `entertainment` | `playCasinoHighLow` | `["bet", "guess"]` | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `casino_doppel` | ドッペルゲンガー | `entertainment` | `playCasinoDoppel` | `["bet", "pool_size", "player_mark"]` | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `lottery_raffle` | 福引を引く | `entertainment` | `playRaffle` | `["raffle_type"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
 | `lottery_takarakuji_buy` | 宝くじ購入 | `entertainment` | `buyTakarakujiTicket` | `[]` | ✅ | ❌ | ✅ | ✅ | ✅ |
 | `tavern_order` | 酒場で食事注文 | `entertainment` | `orderTavernMeal` | `[]` | ✅ | ❌ | ✅ | ✅ | ✅ |

@@ -114,6 +114,11 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	if !slices.Contains(gotZeroGold, "blacksmith_seal") {
 		t.Errorf("zero wallet gold incorrectly suppressed blacksmith_seal")
 	}
+	for _, id := range []string{"casino_slot", "casino_highlow", "casino_doppel"} {
+		if !slices.Contains(gotZeroGold, id) {
+			t.Errorf("zero wallet gold incorrectly suppressed %s", id)
+		}
+	}
 	exhausted := healthySnapshot()
 	exhausted.Character.Tired = 100
 	got := Evaluate(exhausted)
