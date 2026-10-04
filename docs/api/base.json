@@ -2765,6 +2765,246 @@
           "character_id"
         ],
         "type": "object"
+      },
+      "CharacterSnapshot": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "job_name": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string",
+            "description": "Reserved asset ID; empty until production asset mappings are defined."
+          },
+          "icon_url": {
+            "type": "string",
+            "description": "Existing profile avatar URL or data URI; empty when unset."
+          },
+          "level": {
+            "type": "integer"
+          },
+          "hp": {
+            "type": "integer"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "mp": {
+            "type": "integer"
+          },
+          "max_mp": {
+            "type": "integer"
+          },
+          "gold": {
+            "type": "integer"
+          },
+          "tired": {
+            "type": "integer"
+          },
+          "is_dead": {
+            "type": "boolean"
+          },
+          "is_sleeping": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "job_id",
+          "job_name",
+          "icon",
+          "icon_url",
+          "level",
+          "hp",
+          "max_hp",
+          "mp",
+          "max_mp",
+          "gold",
+          "tired",
+          "is_dead",
+          "is_sleeping"
+        ]
+      },
+      "SceneSpeaker": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "icon_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "icon_url"
+        ]
+      },
+      "SceneOpponent": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "icon_url": {
+            "type": "string"
+          },
+          "hp": {
+            "type": "integer"
+          },
+          "max_hp": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "icon_url",
+          "hp",
+          "max_hp"
+        ]
+      },
+      "SceneSnapshot": {
+        "type": "object",
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "bgimg": {
+            "type": "string"
+          },
+          "bgimg_url": {
+            "type": "string",
+            "description": "Self-authored SVG data URI for the initial town; production assets are deferred."
+          },
+          "dialogue": {
+            "type": "string"
+          },
+          "speaker": {
+            "$ref": "#/components/schemas/SceneSpeaker"
+          },
+          "opponent": {
+            "$ref": "#/components/schemas/SceneOpponent"
+          }
+        },
+        "required": [
+          "location_id",
+          "title",
+          "bgimg",
+          "bgimg_url",
+          "dialogue"
+        ]
+      },
+      "OngoingActionSnapshot": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Scheduled action ID, or sleep for the observed sleep/wake recovery timer."
+          },
+          "action_type": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "execute_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "remaining_seconds": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "is_ready": {
+            "type": "boolean",
+            "description": "Deadline has elapsed. Pending/Processing work remains unfinished; this does not certify settlement."
+          }
+        },
+        "required": [
+          "id",
+          "action_type",
+          "label",
+          "execute_at",
+          "remaining_seconds",
+          "is_ready"
+        ]
+      },
+      "ContextAction": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "primary",
+              "secondary"
+            ]
+          },
+          "required_params": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "action",
+          "label",
+          "category",
+          "style",
+          "required_params"
+        ]
+      },
+      "PlayerContextResponse": {
+        "type": "object",
+        "properties": {
+          "character": {
+            "$ref": "#/components/schemas/CharacterSnapshot"
+          },
+          "scene": {
+            "$ref": "#/components/schemas/SceneSnapshot"
+          },
+          "ongoing_actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OngoingActionSnapshot"
+            }
+          },
+          "available_actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContextAction"
+            }
+          }
+        },
+        "required": [
+          "character",
+          "scene",
+          "ongoing_actions",
+          "available_actions"
+        ],
+        "description": "Uncached observation with all active timers and eligible entry actions. Command services still validate exact amounts, currencies, items and state."
       }
     },
     "securitySchemes": {

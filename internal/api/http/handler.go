@@ -20,6 +20,7 @@ import (
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/helperquest"
 	"github.com/witchcraze/party2re/internal/pagination"
+	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/ratelimit"
 	"github.com/witchcraze/party2re/internal/rescue"
 	"github.com/witchcraze/party2re/internal/shop"
@@ -118,6 +119,7 @@ type RescueService interface {
 
 // Handler holds all HTTP handlers for the game API.
 type Handler struct {
+	playerContext  *playercontext.Service
 	players        PlayerService
 	characters     CharacterService
 	adventures     AdventureService
@@ -335,6 +337,7 @@ func (h *Handler) Router() http.Handler {
 
 	mux.HandleFunc("POST /characters", h.handleCreateCharacter)
 	mux.HandleFunc("GET /characters/{id}", h.handleGetCharacter)
+	mux.HandleFunc("GET /api/v1/characters/{id}/context", h.handleGetPlayerContext)
 	mux.HandleFunc("DELETE /characters/{id}", h.handleDeleteCharacter)
 	mux.HandleFunc("GET /characters/{id}/profile", h.handleGetCharacterProfile)
 	mux.HandleFunc("POST /characters/{id}/profile", h.handleUpdateCharacterProfile)

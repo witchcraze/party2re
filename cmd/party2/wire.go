@@ -21,6 +21,7 @@ import (
 	"github.com/witchcraze/party2re/internal/lottery"
 	"github.com/witchcraze/party2re/internal/medal"
 	"github.com/witchcraze/party2re/internal/monster"
+	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/scheduling"
 	"github.com/witchcraze/party2re/internal/tavern"
@@ -318,6 +319,9 @@ func newHTTPHandler(
 			return nil, fmt.Errorf("invalid trusted proxies: %w", err)
 		}
 		opts = append(opts, http.WithTrustedProxies(prefixes...))
+	}
+	if soc.schedRepo != nil {
+		opts = append(opts, http.WithPlayerContext(playercontext.NewService(core.charRepo, soc.schedRepo, soc.timer)))
 	}
 	opts = append(opts,
 		http.WithHelper(misc.helper),
