@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/text/unicode/norm"
+
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/guild"
 )
@@ -227,37 +229,41 @@ func TestCalculateTitleWidth(t *testing.T) {
 
 func TestValidateRoleTitle(t *testing.T) {
 	tests := []struct {
-		name    string
-		title   string
-		wantErr error
+		name     string
+		title    string
+		wantNorm string
+		wantErr  error
 	}{
-		{"Valid kanji title", "親衛隊長", nil},
-		{"Valid 6 full-width kanji", "一二三四五六", nil},
-		{"Valid ASCII title", "Captain", nil},
-		{"Valid 12 half-width chars", "123456789012", nil},
-		{"Empty title", "", guild.ErrInvalidRoleTitle},
-		{"Contains half-width space", "隊長 副隊長", guild.ErrInvalidRoleTitle},
-		{"Contains full-width space", "隊長　副隊長", guild.ErrInvalidRoleTitle},
-		{"Contains comma", "隊長,副隊長", guild.ErrInvalidRoleTitle},
-		{"Contains at sign", "隊長@本部", guild.ErrInvalidRoleTitle},
-		{"Contains full-width at sign", "隊長＠本部", guild.ErrInvalidRoleTitle},
-		{"Reserved title 参加申請中", "参加申請中", guild.ErrReservedRoleTitle},
-		{"Reserved title ギルマス", "ギルマス", guild.ErrReservedRoleTitle},
-		{"Too long full-width (7 chars = 14 width)", "一二三四五六七", guild.ErrRoleTitleTooLong},
-		{"Too long ASCII (13 chars = 13 width)", "1234567890123", guild.ErrRoleTitleTooLong},
-		{"Leading space", " 隊長", guild.ErrInvalidRoleTitle},
-		{"Trailing space", "隊長 ", guild.ErrInvalidRoleTitle},
-		{"Control character", "隊長\x00", guild.ErrInvalidRoleTitle},
-		{"Zero-width space", "隊長\u200B", guild.ErrInvalidRoleTitle},
-		{"Bidi override", "隊長\u202E", guild.ErrInvalidRoleTitle},
-		{"Zalgo text", "隊\u0300\u0301\u0302長", guild.ErrInvalidRoleTitle},
-		{"NFC normalization valid", "Ka\u0301pt", nil},
+		{"Valid kanji title", "親衛隊長", "親衛隊長", nil},
+		{"Valid 6 full-width kanji", "一二三四五六", "一二三四五六", nil},
+		{"Valid ASCII title", "Captain", "Captain", nil},
+		{"Valid 12 half-width chars", "123456789012", "123456789012", nil},
+		{"Empty title", "", "", guild.ErrInvalidRoleTitle},
+		{"Contains half-width space", "隊長 副隊長", "", guild.ErrInvalidRoleTitle},
+		{"Contains full-width space", "隊長　副隊長", "", guild.ErrInvalidRoleTitle},
+		{"Contains comma", "隊長,副隊長", "", guild.ErrInvalidRoleTitle},
+		{"Contains at sign", "隊長@本部", "", guild.ErrInvalidRoleTitle},
+		{"Contains full-width at sign", "隊長＠本部", "", guild.ErrInvalidRoleTitle},
+		{"Reserved title 参加申請中", "参加申請中", "", guild.ErrReservedRoleTitle},
+		{"Reserved title ギルマス", "ギルマス", "", guild.ErrReservedRoleTitle},
+		{"Too long full-width (7 chars = 14 width)", "一二三四五六七", "", guild.ErrRoleTitleTooLong},
+		{"Too long ASCII (13 chars = 13 width)", "1234567890123", "", guild.ErrRoleTitleTooLong},
+		{"Leading space", " 隊長", "", guild.ErrInvalidRoleTitle},
+		{"Trailing space", "隊長 ", "", guild.ErrInvalidRoleTitle},
+		{"Control character", "隊長\x00", "", guild.ErrInvalidRoleTitle},
+		{"Zero-width space", "隊長\u200B", "", guild.ErrInvalidRoleTitle},
+		{"Bidi override", "隊長\u202E", "", guild.ErrInvalidRoleTitle},
+		{"Zalgo text", "隊\u0300\u0301\u0302長", "", guild.ErrInvalidRoleTitle},
+		{"NFC normalization valid", "Ka\u0301pt", "Kápt", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := guild.ValidateRoleTitle(tt.title)
+			got, err := guild.ValidateRoleTitle(tt.title)
 			if !errors.Is(err, tt.wantErr) {
-				t.Errorf("ValidateRoleTitle(%q) = %v, want %v", tt.title, err, tt.wantErr)
+				t.Errorf("ValidateRoleTitle(%q) err = %v, want %v", tt.title, err, tt.wantErr)
+			}
+			if tt.wantErr == nil && got != tt.wantNorm {
+				t.Errorf("ValidateRoleTitle(%q) = %q, want %q", tt.title, got, tt.wantNorm)
 			}
 		})
 	}
@@ -738,6 +744,56 @@ func TestService_AssignCustomRole(t *testing.T) {
 		}
 		if assignedTitle != "親衛隊長" {
 			t.Errorf("assignedTitle = %q, want '親衛隊長'", assignedTitle)
+		}
+	})
+
+	t.Run("Persists NFC normalized role title for decomposed input", func(t *testing.T) {
+		decomposed := strings.Repeat("e\u0301", 6)
+		var assignedTitle string
+		repo.assignCustomRoleFn = func(_ context.Context, guildID, targetCharID, title string) error {
+			if targetCharID == "member1" {
+				assignedTitle = title
+			}
+			return nil
+		}
+		if err := svc.AssignCustomRole(ctx, "g1", "leader1", "member1", decomposed); err != nil {
+			t.Fatalf("AssignCustomRole failed: %v", err)
+		}
+		expected := norm.NFC.String(decomposed)
+		if assignedTitle != expected {
+			t.Errorf("assignedTitle = %q (width %d), want %q (width %d)",
+				assignedTitle, guild.CalculateTitleWidth(assignedTitle),
+				expected, guild.CalculateTitleWidth(expected))
+		}
+	})
+
+	t.Run("Persists NFC normalized role title when routing through pending approval", func(t *testing.T) {
+		pendingMembers := []guild.Member{
+			{GuildID: "g_pending", CharacterID: "leader1", Role: guild.RoleLeader},
+			{GuildID: "g_pending", CharacterID: "applicant1", Role: guild.RoleMember, IsPending: true},
+		}
+		var approvedTitle string
+		pendingRepo := &mockGuildRepo{
+			getGuildFn: func(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
+				return guild.Guild{ID: guildID, LeaderCharacterID: "leader1"}, pendingMembers, nil
+			},
+			approveMemberFn: func(_ context.Context, guildID, charID, title string) error {
+				if charID == "applicant1" {
+					approvedTitle = title
+				}
+				return nil
+			},
+		}
+		pendingSvc, _ := guild.NewService(pendingRepo)
+		decomposed := strings.Repeat("e\u0301", 6)
+		if err := pendingSvc.AssignCustomRole(ctx, "g_pending", "leader1", "applicant1", decomposed); err != nil {
+			t.Fatalf("AssignCustomRole on pending member failed: %v", err)
+		}
+		expected := norm.NFC.String(decomposed)
+		if approvedTitle != expected {
+			t.Errorf("approvedTitle = %q (width %d), want %q (width %d)",
+				approvedTitle, guild.CalculateTitleWidth(approvedTitle),
+				expected, guild.CalculateTitleWidth(expected))
 		}
 	})
 }

@@ -307,7 +307,8 @@ func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requeste
 		return ErrCharacterNotFound
 	}
 
-	if err := ValidateRoleTitle(title); err != nil {
+	normalizedTitle, err := ValidateRoleTitle(title)
+	if err != nil {
 		return err
 	}
 
@@ -337,10 +338,10 @@ func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requeste
 	}
 
 	if target.IsPending {
-		return s.ApproveApplication(ctx, guildID, requesterCharID, targetCharID, title)
+		return s.ApproveApplication(ctx, guildID, requesterCharID, targetCharID, normalizedTitle)
 	}
 
-	if err := s.repo.AssignCustomRole(ctx, guildID, targetCharID, title); err != nil {
+	if err := s.repo.AssignCustomRole(ctx, guildID, targetCharID, normalizedTitle); err != nil {
 		return err
 	}
 	s.touchActive(ctx, guildID)

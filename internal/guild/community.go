@@ -75,7 +75,8 @@ func (s *Service) ApproveApplication(ctx context.Context, guildID string, leader
 		return ErrCharacterNotFound
 	}
 
-	if err := ValidateRoleTitle(title); err != nil {
+	normalizedTitle, err := ValidateRoleTitle(title)
+	if err != nil {
 		return err
 	}
 
@@ -101,7 +102,7 @@ func (s *Service) ApproveApplication(ctx context.Context, guildID string, leader
 		return ErrMemberNotPending
 	}
 
-	if err := s.repo.ApproveMember(ctx, guildID, applicantID, title); err != nil {
+	if err := s.repo.ApproveMember(ctx, guildID, applicantID, normalizedTitle); err != nil {
 		return err
 	}
 	s.touchActive(ctx, guildID)

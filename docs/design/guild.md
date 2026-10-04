@@ -59,7 +59,7 @@ The guild leader can assign arbitrary custom role titles to any non-leader membe
 4. **Validation Rules**:
    - Cannot be empty (`ErrInvalidRoleTitle`).
    - Cannot contain half-width or full-width whitespace (`/　|\s/`).
-   - Unicode Security: Validated via `validation.ValidateSingleLine` (Unicode NFC normalization, max 12 runes, rejects C0/C1 control characters, zero-width characters, bidirectional overrides, and Zalgo text).
+   - Unicode Security: Validated via `validation.ValidateSingleLine` (Unicode NFC normalization, max 12 runes, rejects C0/C1 control characters, zero-width characters, bidirectional overrides, and Zalgo text). The validated NFC-normalized title is returned and persisted across role assignment and approval paths.
    - Cannot contain invalid characters (`, ; " ' & < > @ ＠`).
    - Cannot use reserved system strings: `参加申請中` or `ギルマス` (`ErrReservedRoleTitle`).
 

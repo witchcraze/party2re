@@ -1,6 +1,6 @@
 # Status
 
-Last reviewed: Issue #992 — Guild/Callout: Return delivery errors before awarding activity points
+Last reviewed: Issue #991 — Guild/Roles: Persist the normalized title used during validation
 
 ## Current Phase
 
