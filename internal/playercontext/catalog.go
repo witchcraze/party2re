@@ -5,7 +5,8 @@ type GateFlags uint32
 
 const (
 	// GateDeadCheck requires the character to be alive (HP > 0).
-	// Dead characters are blocked from combat, commerce, and general actions.
+	// In legacy Party2 (lib/quest.cgi:479, 902), dead characters are blocked from combat,
+	// trials, dungeons, and PvP. Noncombat town and facility actions do not require living HP.
 	GateDeadCheck GateFlags = 1 << iota
 
 	// GateFatigueCheck requires the character to not be exhausted (Tired < 100).
@@ -130,7 +131,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "economy",
 		OperationID:    "postCharactersIdBankDeposit",
 		RequiredParams: []string{"amount"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 	},
 	{
 		ID:             "bank_withdraw",
@@ -138,7 +139,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "economy",
 		OperationID:    "postCharactersIdBankWithdraw",
 		RequiredParams: []string{"amount"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "depot_deposit",
@@ -146,7 +147,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "economy",
 		OperationID:    "postCharactersIdDepotDeposit",
 		RequiredParams: []string{"item_id"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "depot_withdraw",
@@ -154,7 +155,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "economy",
 		OperationID:    "postCharactersIdDepotWithdraw",
 		RequiredParams: []string{"item_id"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "auction_send",
@@ -162,7 +163,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "economy",
 		OperationID:    "postCharactersIdAuctionSend",
 		RequiredParams: []string{},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "fleamarket_list",
@@ -170,7 +171,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "economy",
 		OperationID:    "createFleaMarketListing",
 		RequiredParams: []string{"item_id", "price"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "fleamarket_purchase",
@@ -178,7 +179,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "economy",
 		OperationID:    "purchaseFleaMarketListing",
 		RequiredParams: []string{},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 	},
 
 	// =========================================================================
@@ -190,7 +191,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "shop",
 		OperationID:    "shopPurchase",
 		RequiredParams: []string{"item_definition_id"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 	},
 	{
 		ID:             "shop_sell",
@@ -198,7 +199,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "shop",
 		OperationID:    "shopSell",
 		RequiredParams: []string{"item_instance_id"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "shop_accessory_buy",
@@ -206,7 +207,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "shop",
 		OperationID:    "shopAccessoryBuy",
 		RequiredParams: []string{"item_definition_id"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 	},
 	{
 		ID:             "gemstore_buy",
@@ -214,7 +215,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "shop",
 		OperationID:    "buyGem",
 		RequiredParams: []string{"gem_id"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 	},
 	{
 		ID:             "secretshop_purchase",
@@ -222,7 +223,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "shop",
 		OperationID:    "purchaseSecretShopItem",
 		RequiredParams: []string{"item_id"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 	},
 	{
 		ID:             "blackmarket_trade",
@@ -230,7 +231,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "shop",
 		OperationID:    "tradeBlackMarketPrize",
 		RequiredParams: []string{"prize_id"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 
 	// =========================================================================
@@ -242,7 +243,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "crafting",
 		OperationID:    "postCharactersIdBlacksmithSeal",
 		RequiredParams: []string{},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "alchemy_synthesize",
@@ -250,7 +251,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "crafting",
 		OperationID:    "postCharactersIdAlchemySynthesize",
 		RequiredParams: []string{},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "custom_skill_set",
@@ -258,7 +259,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "crafting",
 		OperationID:    "setCustomSkill",
 		RequiredParams: []string{"name"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "plantation_sow",
@@ -266,7 +267,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "crafting",
 		OperationID:    "postCharactersIdPlantationSow",
 		RequiredParams: []string{},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "plantation_harvest",
@@ -274,7 +275,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "crafting",
 		OperationID:    "postCharactersIdPlantationHarvest",
 		RequiredParams: []string{},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 
 	// =========================================================================
@@ -286,7 +287,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "entertainment",
 		OperationID:    "playCasinoSlot",
 		RequiredParams: []string{"bet"},
-		RequiredGates:  GateDeadCheck | GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "casino_highlow",
@@ -294,7 +295,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "entertainment",
 		OperationID:    "playCasinoHighLow",
 		RequiredParams: []string{"bet", "guess"},
-		RequiredGates:  GateDeadCheck | GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "casino_doppel",
@@ -302,7 +303,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "entertainment",
 		OperationID:    "playCasinoDoppel",
 		RequiredParams: []string{"bet", "pool_size", "player_mark"},
-		RequiredGates:  GateDeadCheck | GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "lottery_raffle",
@@ -310,7 +311,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "entertainment",
 		OperationID:    "playRaffle",
 		RequiredParams: []string{"raffle_type"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "lottery_takarakuji_buy",
@@ -318,7 +319,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "entertainment",
 		OperationID:    "buyTakarakujiTicket",
 		RequiredParams: []string{},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 	},
 	{
 		ID:             "tavern_order",
@@ -326,7 +327,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "entertainment",
 		OperationID:    "orderTavernMeal",
 		RequiredParams: []string{"item_id"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 	},
 	{
 		ID:             "contest_enter",
@@ -334,7 +335,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "entertainment",
 		OperationID:    "enterContest",
 		RequiredParams: []string{"photo_id", "title"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 
 	// =========================================================================
@@ -346,7 +347,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "growth",
 		OperationID:    "exchangeWishingWellSP",
 		RequiredParams: []string{"stat", "sp"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "altar_pray",
@@ -354,7 +355,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "growth",
 		OperationID:    "prayAltarRamia",
 		RequiredParams: []string{},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "god_wish",
@@ -362,7 +363,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "growth",
 		OperationID:    "grantGodWish",
 		RequiredParams: []string{"wish_id"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "job_change",
@@ -370,7 +371,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "growth",
 		OperationID:    "changeCharacterJob",
 		RequiredParams: []string{"job_id"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "medal_claim",
@@ -378,7 +379,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "growth",
 		OperationID:    "claimMedalReward",
 		RequiredParams: []string{"reward_id"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 
 	// =========================================================================
@@ -390,7 +391,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "social",
 		OperationID:    "tameMonster",
 		RequiredParams: []string{"monster_id"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "helper_complete",
@@ -398,7 +399,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "social",
 		OperationID:    "completeHelperQuest",
 		RequiredParams: []string{"quest_id"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "park_post",
@@ -406,7 +407,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "social",
 		OperationID:    "postParkMessage",
 		RequiredParams: []string{"message"},
-		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "rescue_request",

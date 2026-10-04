@@ -73,8 +73,24 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		change func(*Snapshot)
 		want   []string
 	}{
-		{"dead", func(s *Snapshot) { s.Character.Stats.HP = 0 }, []string{"home_sleep", "chapel_pray", "rescue_request"}},
-		{"dead without money", func(s *Snapshot) { s.Character.Stats.HP = 0; s.Character.Money = 0 }, []string{"home_sleep", "chapel_pray", "rescue_request"}},
+		{"dead", func(s *Snapshot) { s.Character.Stats.HP = 0 }, []string{
+			"home_sleep", "chapel_pray",
+			"bank_deposit", "bank_withdraw", "depot_deposit", "depot_withdraw", "auction_send", "fleamarket_list", "fleamarket_purchase",
+			"shop_purchase", "shop_sell", "shop_accessory_buy", "gemstore_buy", "secretshop_purchase", "blackmarket_trade",
+			"blacksmith_seal", "alchemy_synthesize", "custom_skill_set", "plantation_sow", "plantation_harvest",
+			"casino_slot", "casino_highlow", "casino_doppel", "lottery_raffle", "lottery_takarakuji_buy", "tavern_order", "contest_enter",
+			"wishingwell_exchange", "altar_pray", "god_wish", "job_change", "medal_claim",
+			"monster_tame", "helper_complete", "park_post", "rescue_request",
+		}},
+		{"dead without money", func(s *Snapshot) { s.Character.Stats.HP = 0; s.Character.Money = 0 }, []string{
+			"home_sleep", "chapel_pray",
+			"bank_withdraw", "depot_deposit", "depot_withdraw", "auction_send", "fleamarket_list",
+			"shop_sell", "blackmarket_trade",
+			"blacksmith_seal", "alchemy_synthesize", "custom_skill_set", "plantation_sow", "plantation_harvest",
+			"casino_slot", "casino_highlow", "casino_doppel", "lottery_raffle", "contest_enter",
+			"wishingwell_exchange", "altar_pray", "god_wish", "job_change", "medal_claim",
+			"monster_tame", "helper_complete", "park_post", "rescue_request",
+		}},
 		{"sleeping", func(s *Snapshot) { s.Sleeping = true; s.SleepRemaining = time.Minute }, []string{"rescue_request"}},
 		{"wakeable", func(s *Snapshot) { s.Sleeping = true; s.CanWake = true }, []string{"home_wake", "rescue_request"}},
 		{"sleep timer only", func(s *Snapshot) { s.SleepRemaining = time.Minute }, []string{"rescue_request"}},
@@ -169,5 +185,76 @@ func TestEvaluation_OrderAndShortCircuit(t *testing.T) {
 		if len(got) != 0 || !reflect.DeepEqual(visited, want) {
 			t.Fatalf("stop %d: actions=%v visited=%v want=%v", stop, got, visited, want)
 		}
+	}
+}
+
+func TestEvaluate_DeadNonCombatActions(t *testing.T) {
+	s := Snapshot{Character: character.Character{Money: 100}, LocationID: LocationTown}
+	for _, id := range []string{"bank_withdraw", "park_post", "shop_purchase"} {
+		t.Run(id, func(t *testing.T) {
+			if !slices.Contains(Evaluate(s), id) {
+				t.Errorf("noncombat legacy action hidden solely by HP=0: %s", id)
+			}
+		})
+	}
+}
+
+func TestEvaluate_LivingVsDeadCombatContrast(t *testing.T) {
+	combatActions := []string{
+		"adventure_start", "challenge_start", "dungeon_start", "boss_fight", "pvp_room_create",
+	}
+	sampleNonCombatActions := []string{
+		"bank_withdraw", "bank_deposit", "shop_purchase", "shop_sell",
+		"blacksmith_seal", "casino_slot", "job_change", "park_post",
+	}
+
+	living := healthySnapshot()
+	living.Character.Stats.HP = 100
+	living.Character.Money = 100
+	gotLiving := Evaluate(living)
+
+	dead := healthySnapshot()
+	dead.Character.Stats.HP = 0
+	dead.Character.Money = 100
+	gotDead := Evaluate(dead)
+
+	// Combat actions must be available to living characters, but blocked for dead characters
+	for _, act := range combatActions {
+		t.Run("combat/"+act, func(t *testing.T) {
+			if !slices.Contains(gotLiving, act) {
+				t.Errorf("living character missing combat action: %s", act)
+			}
+			if slices.Contains(gotDead, act) {
+				t.Errorf("dead character must NOT be offered combat action: %s", act)
+			}
+		})
+	}
+
+	// Noncombat actions must be available to both living and dead characters
+	for _, act := range sampleNonCombatActions {
+		t.Run("noncombat/"+act, func(t *testing.T) {
+			if !slices.Contains(gotLiving, act) {
+				t.Errorf("living character missing noncombat action: %s", act)
+			}
+			if !slices.Contains(gotDead, act) {
+				t.Errorf("dead character incorrectly blocked from noncombat action: %s", act)
+			}
+		})
+	}
+
+	// When dead, SleepGate and CooldownGate must still be enforced
+	deadAsleep := dead
+	deadAsleep.Sleeping = true
+	deadAsleep.SleepRemaining = time.Minute
+	gotDeadAsleep := Evaluate(deadAsleep)
+	if !reflect.DeepEqual(gotDeadAsleep, []string{"rescue_request"}) {
+		t.Errorf("dead and sleeping character should only have rescue_request, got %v", gotDeadAsleep)
+	}
+
+	deadPending := dead
+	deadPending.OngoingActions = []scheduling.ScheduledAction{{State: scheduling.StatePending}}
+	gotDeadPending := Evaluate(deadPending)
+	if !reflect.DeepEqual(gotDeadPending, []string{"rescue_request"}) {
+		t.Errorf("dead character with pending action should only have rescue_request, got %v", gotDeadPending)
 	}
 }
