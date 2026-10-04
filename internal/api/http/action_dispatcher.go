@@ -120,7 +120,11 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusForbidden, errors.New("forbidden: character belongs to another player"))
 			return
 		}
-		if !slices.Contains(current.AvailableActions, req.Action) {
+		// A premature Wake reaches the service for its recognized rejection.
+		// GET still offers Wake only when recovery is ready; an awake actor
+		// remains subject to entry eligibility.
+		earlyWake := req.Action == "home_wake" && current.Snapshot.SleepRemaining > 0
+		if !earlyWake && !slices.Contains(current.AvailableActions, req.Action) {
 			h.writeActionRejection(w, r, player.ID, char.ID, http.StatusConflict, ErrorDetail{Code: "ACTION_UNAVAILABLE", Message: "Action is currently unavailable."})
 			return
 		}

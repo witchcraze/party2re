@@ -62,13 +62,6 @@ type HomeService interface {
 	HomeLivingService
 }
 
-// WithHome configures the HomeService for the Handler.
-func WithHome(h HomeService) Option {
-	return func(handler *Handler) {
-		handler.homes = h
-	}
-}
-
 type updateHomeRequest struct {
 	CompanionName string `json:"companion_name"`
 	Color         string `json:"color,omitempty"`

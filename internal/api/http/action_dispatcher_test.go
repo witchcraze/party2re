@@ -512,14 +512,14 @@ func TestActionGatewayNoInputAndRecoveryExceptions(t *testing.T) {
 		}
 		assertGatewayError(t, got, "INVALID_ACTION_PARAMS")
 	}
-	// Wake remains entry-gated while the sleep duration is active.
+	// Premature Wake reaches the service, which owns the recovery check.
 	f := newGatewayFixture(t)
 	timers := timer.NewService(nil)
 	if err := timers.SetLock(context.Background(), timer.CategorySleep, "hero", time.Hour); err != nil {
 		t.Fatal(err)
 	}
 	status, got := gatewayRequest(t, f.router("home_wake", timers), "hero", "session", "application/json", `{"action":"home_wake"}`, nil)
-	if status != 409 || f.executions != 0 {
+	if status != 200 || f.executions != 1 {
 		t.Fatalf("premature wake: %d %s", status, got)
 	}
 }
