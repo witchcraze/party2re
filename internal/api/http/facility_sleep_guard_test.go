@@ -12,9 +12,14 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/shop"
 )
 
 func setupFacilitySleepGuardTest(t *testing.T, sleepStatus home.SleepStatus) http.Handler {
+	return setupFacilitySleepGuardTestWithError(t, sleepStatus, nil)
+}
+
+func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepStatus, sleepErr error) http.Handler {
 	t.Helper()
 
 	player := coreplayer.Player{ID: "player-1", Username: "hero"}
@@ -40,6 +45,9 @@ func setupFacilitySleepGuardTest(t *testing.T, sleepStatus home.SleepStatus) htt
 
 	mockHome := &mockHomeService{
 		getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {
+			if sleepErr != nil {
+				return home.SleepStatus{}, sleepErr
+			}
 			return sleepStatus, nil
 		},
 	}
@@ -272,6 +280,111 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 						tc.name, tc.method, tc.path, rec.Code, rec.Body.String())
 				}
 			})
+		}
+	})
+
+	t.Run("sleep status lookup failure returns 500 across all facility endpoints", func(t *testing.T) {
+		router := setupFacilitySleepGuardTestWithError(t, home.SleepStatus{}, errors.New("timer service error"))
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				var req *http.Request
+				if tc.body != "" {
+					req = httptest.NewRequest(tc.method, tc.path, bytes.NewReader([]byte(tc.body)))
+					req.Header.Set("Content-Type", "application/json")
+				} else {
+					req = httptest.NewRequest(tc.method, tc.path, nil)
+				}
+				req.Header.Set("Authorization", "Bearer valid-session")
+
+				rec := httptest.NewRecorder()
+				router.ServeHTTP(rec, req)
+
+				if rec.Code != http.StatusInternalServerError {
+					t.Errorf("expected 500 Internal Server Error when sleep lookup fails for %s (%s %s), got %d: %s",
+						tc.name, tc.method, tc.path, rec.Code, rec.Body.String())
+				}
+			})
+		}
+	})
+
+	t.Run("sleep lookup failure never invokes facility action callback", func(t *testing.T) {
+		called := false
+		player := coreplayer.Player{ID: "player-1", Username: "hero"}
+		char := corecharacter.Character{ID: "char-1", PlayerID: "player-1", Name: "Hero"}
+		players := &stubPlayerService{
+			authenticateFn: func(_ context.Context, _ string) (coreplayer.Player, error) { return player, nil },
+		}
+		chars := &stubCharacterService{
+			getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
+		}
+		mockHome := &mockHomeService{
+			getSleepStatusFn: func(_ context.Context, _ string) (home.SleepStatus, error) {
+				return home.SleepStatus{}, errors.New("timer lookup failed")
+			},
+		}
+		mockShop := &stubShopService{
+			purchaseFn: func(_ context.Context, _, _ string, _ int) (shop.PurchaseResult, error) {
+				called = true
+				return shop.PurchaseResult{}, nil
+			},
+		}
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, mockShop, apihttp.WithHome(mockHome))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/shop/purchase", bytes.NewReader([]byte(`{"character_id":"char-1","item_definition_id":"herb","quantity":1}`)))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusInternalServerError {
+			t.Errorf("expected 500, got %d", rec.Code)
+		}
+		if called {
+			t.Error("expected shop purchase callback not to be invoked on sleep lookup failure")
+		}
+	})
+
+	t.Run("canceled context during sleep lookup returns 500 and never invokes callback", func(t *testing.T) {
+		called := false
+		player := coreplayer.Player{ID: "player-1", Username: "hero"}
+		char := corecharacter.Character{ID: "char-1", PlayerID: "player-1", Name: "Hero"}
+		players := &stubPlayerService{
+			authenticateFn: func(_ context.Context, _ string) (coreplayer.Player, error) { return player, nil },
+		}
+		chars := &stubCharacterService{
+			getFn: func(_ context.Context, id string) (corecharacter.Character, error) { return char, nil },
+		}
+		mockHome := &mockHomeService{
+			getSleepStatusFn: func(ctx context.Context, _ string) (home.SleepStatus, error) {
+				return home.SleepStatus{}, ctx.Err()
+			},
+		}
+		mockShop := &stubShopService{
+			purchaseFn: func(_ context.Context, _, _ string, _ int) (shop.PurchaseResult, error) {
+				called = true
+				return shop.PurchaseResult{}, nil
+			},
+		}
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, mockShop, apihttp.WithHome(mockHome))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		req := httptest.NewRequest(http.MethodPost, "/shop/purchase", bytes.NewReader([]byte(`{"character_id":"char-1","item_definition_id":"herb","quantity":1}`))).WithContext(ctx)
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.Router().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusInternalServerError {
+			t.Errorf("expected 500, got %d", rec.Code)
+		}
+		if called {
+			t.Error("expected shop purchase callback not to be invoked on canceled context")
 		}
 	})
 }
