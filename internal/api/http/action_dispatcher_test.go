@@ -134,6 +134,8 @@ func (f *gatewayFixture) router(action string, timers playercontext.TimerReader,
 		command = withActionCommand(action, func(ctx context.Context, id string, p gatewayParams) (any, error) {
 			return f.execute(ctx, id, p.Amount)
 		}, gatewayRejection)
+	} else if action == "rescue_request" {
+		command = withActionCommand(action, func(ctx context.Context, id string, p rescueActionParams) (any, error) { return f.execute(ctx, id, 0) }, gatewayRejection)
 	} else {
 		command = withActionCommand(action, func(ctx context.Context, id string, p struct{}) (any, error) { return f.execute(ctx, id, 0) }, gatewayRejection)
 	}
@@ -482,6 +484,7 @@ func TestActionGatewayNoInputAndRecoveryExceptions(t *testing.T) {
 					}
 				}
 				if action == "rescue_request" {
+					params = `,"params":{"reason":"stuck"}`
 					if err := timers.SetLock(context.Background(), timer.CategorySleep, "hero", time.Hour); err != nil {
 						t.Fatal(err)
 					}

@@ -67,7 +67,8 @@
                 }
               },
               "required": [
-                "character_id"
+                "character_id",
+                "reason"
               ],
               "type": "object"
             }

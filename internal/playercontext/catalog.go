@@ -414,7 +414,7 @@ var DefaultCatalog = []ActionDefinition{
 		Label:          "緊急救出要請",
 		Category:       "social",
 		OperationID:    "requestEmergencyRescue",
-		RequiredParams: []string{},
+		RequiredParams: []string{"reason"},
 		// Note: Emergency rescue can be invoked while dead or asleep to unstick state.
 		RequiredGates: 0,
 	},

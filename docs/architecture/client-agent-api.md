@@ -7,7 +7,7 @@ This document describes the implemented HTTP observation and command boundaries,
 | Action catalog and OpenAPI drift checks | Implemented | #944, #946 |
 | PlayerContext evaluator and character/scheduling reads | Implemented in-process; legacy parity still requires review | #938, #972 |
 | HTTP context query | Implemented; owned character observation with four canonical slots | #939 |
-| HTTP action dispatcher | Common boundary and adventure_start implemented; Bank/Home/Rescue adapters pending | #646 (decision), #1010 (boundary), #1014 (Adventure), #1011–#1013/#1015 (remaining adapters/verification) |
+| HTTP action dispatcher | Common boundary, adventure_start and rescue_request implemented; Bank/Home adapters pending | #646 (decision), #1010 (boundary), #1014 (Adventure), #1013 (Rescue), #1011–#1012/#1015 (remaining adapters/verification) |
 | Individual REST route retirement | Planned after Gateway migration | #947–#950 |
 
 Current clients use the registered routes in [OpenAPI](../api/openapi.json).
@@ -59,7 +59,7 @@ standard HTTP wrapper, calls the existing uncached `playercontext.Service.Query`
 and enriches its facts with profile avatar and job catalog presentation. Its
 `PlayerContextResponse` DTO and reusable OpenAPI schema are also the required
 context contract for the command gateway specified in #646 and implemented in
-#1010. Adventure start is connected in #1014; Bank/Home/Rescue adapters and initial loop verification remain #1011–#1013/#1015.
+#1010. Adventure start and Rescue are connected in #1014/#1013; Bank/Home adapters and initial loop verification remain #1011–#1012/#1015.
 
 The four top-level fields are:
 
@@ -109,7 +109,7 @@ The four top-level fields are:
 
 The command contract below was approved during #646 on 2026-10-04. The common
 route and dispatch boundary are implemented in #1010; stage adventure start is
-connected in #1014. This does not certify complete Gateway coverage or retire existing
+connected in #1014 and emergency rescue in #1013. This does not certify complete Gateway coverage or retire existing
 REST routes. The initial implementation is split by HTTP responsibility
 and service adapter; remaining operations belong to #947–#949.
 
@@ -193,6 +193,23 @@ service execution. A ready deadline does not clear unfinished work. Service
 validation remains authoritative for exact stage requirements and state changes
 after preflight; unexpected service/store errors use `500 EXECUTION_FAILED`.
 Both known outcomes use the refresh/recovery contract below.
+
+### Connected emergency rescue command
+
+`rescue_request` accepts only `{ "reason": "stuck activity" }`, with a required
+non-null string. Actor identity comes from the owned path. Empty or whitespace-only
+reasons reach existing service validation and return `422 RESCUE_INVALID_REASON`;
+invalid actor IDs map to `400 RESCUE_INVALID_CHARACTER_ID`, and a missing service
+character maps to `404 CHARACTER_NOT_FOUND`. Unexpected service/store errors
+remain `500 EXECUTION_FAILED` with unknown outcome and no context.
+
+The adapter calls `EmergencyRescue` once with the request context and current UTC
+time. Rescue remains an explicit entry/sleep recovery exception during sleep,
+cooldown and unfinished work. Its structured `RescueRecord` result includes
+`id`, `character_id`, `reason`, `penalty_seconds` and `created_at`, including the
+service's idle/no-op result. Cleanup and penalties remain service-owned; rescue
+does not guarantee removal of sleep. Known success/rejection survives refresh
+failure under the shared contract. Existing REST rescue routes remain available.
 
 ### Outcome responses
 
@@ -318,8 +335,8 @@ Chatbot frameworks handle state transitions with zero routing boilerplate:
 Closing #646 records the specification decision, not completion of these children.
 The integration scenario includes explicit Wake because timer readiness alone
 does not settle recovery. Rescue is independently testable and has its own ticket.
-Its Go service requires a reason although current catalog metadata omits it;
-#1013 reconciles that input contract without inventing a default or legacy rule.
+Its Go service requires a reason; #1013 synchronizes catalog/OpenAPI metadata
+with that input contract without inventing a default or legacy rule.
 During staged connection, GET lists catalog entry candidates; unconnected
 commands return the explicit 501 above. Remaining catalog entries and granular
 REST operations stay under #947–#949, each requiring decomposition before work.

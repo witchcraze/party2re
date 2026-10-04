@@ -1,6 +1,6 @@
 # Status
 
-Last reviewed: Issue #1014 — stage adventure start connected to Action Gateway
+Last reviewed: Issue #1013 — emergency rescue connected to Action Gateway
 
 ## Current Phase
 
@@ -23,7 +23,7 @@ The Go project contains the foundational systems, core combat, 39 feature module
 - **Lifecycle Contracts**: Fail-fast startup checks for MariaDB/Valkey with clean resource teardown on error.
 - **AST Gates & CI**: Automated AST linters (locks, tx runners, ISP, file size ≤500 lines, Valkey keyspace, presentation decoupling), action catalog OpenAPI drift detector (`catalog_lint_test.go`), and non-mutating OpenAPI sync checks (`sync_openapi --check`). SSOT: [`docs/development/ast-linters.md`](docs/development/ast-linters.md).
 - **PlayerContext**: Uncached Character/ScheduledAction/Sleep observations and ordered six-gate ActionID evaluation; initial town scene, positive-gold entry filtering, and legacy-accurate death gating (combat quests only). Owned HTTP `GET /api/v1/characters/{id}/context` exposes a shared transport DTO, all pending/sleep timers, action metadata, profile avatars and an initial town placeholder scene (#939).
-- **Action Gateway**: Common authenticated `POST /api/v1/characters/{id}/actions` dispatch, typed params and fail-closed entry/sleep checks (#1010). `adventure_start` calls the existing stage-start service with required `stage_id` and preserves its result/errors (#1014). Known success/rejection survives context-refresh failure with GET-only recovery (#646; [contract](docs/architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions)). Catalog availability remains entry eligibility and unconnected commands return 501. No idempotent replay guarantee is introduced.
+- **Action Gateway**: Common authenticated `POST /api/v1/characters/{id}/actions` dispatch, typed params and fail-closed entry/sleep checks (#1010). `adventure_start` calls the existing stage-start service with required `stage_id` (#1014); `rescue_request` calls EmergencyRescue with required `reason`, including during sleep/unfinished work (#1013). Both preserve existing service results/errors. Known success/rejection survives context-refresh failure with GET-only recovery (#646; [contract](docs/architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions)). Catalog availability remains entry eligibility and unconnected commands return 501. No idempotent replay guarantee is introduced.
 
 ---
 
@@ -31,7 +31,7 @@ The Go project contains the foundational systems, core combat, 39 feature module
 
 See [`ROADMAP.md`](ROADMAP.md) for full milestone details.
 
-1. **Client/Agent Gateway & CQRS Architecture**: Connect Bank/Home/Rescue adapters (#1011–#1013) and verify the initial loop (#1015). Adventure start is connected (#1014). Remaining command coverage and phased REST retirement stay under #947–#950. Common dispatch is implemented in #1010; observation is implemented in #939/#938/#972.
+1. **Client/Agent Gateway & CQRS Architecture**: Connect Bank/Home adapters (#1011–#1012) and verify the initial loop (#1015). Adventure start and Rescue are connected (#1014/#1013). Remaining command coverage and phased REST retirement stay under #947–#950. Common dispatch is implemented in #1010; observation is implemented in #939/#938/#972.
 2. **Headless E2E Gameplay Simulation**: Deterministic multi-turn gameplay loop verification (Issue #650).
 3. **Client Presentation & Web UI**: Browser client and Server-Driven UI (Issue #140).
 4. **Production Asset Pipeline & Final Licensing**: Production asset mapping and license attribution catalog (Issues #654, #729; specification pending).
