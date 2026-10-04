@@ -126,26 +126,37 @@ func verifyActionDrift(act playercontext.ActionDefinition, ops map[string]openAP
 		return errs
 	}
 
-	// If no required parameters are expected, no further requestBody validation is needed.
-	if len(act.RequiredParams) == 0 {
-		return errs
-	}
-
 	// 3. Request Body Schema & Parameter Completeness Check
 	if op.RequestBody == nil || len(op.RequestBody.Content) == 0 {
-		errs = append(errs, fmt.Sprintf("action %q (operationId: %q) specifies required_params %v, but OpenAPI operation has no requestBody defined",
-			act.ID, act.OperationID, act.RequiredParams))
+		if len(act.RequiredParams) > 0 {
+			errs = append(errs, fmt.Sprintf("action %q (operationId: %q) specifies required_params %v, but OpenAPI operation has no requestBody defined",
+				act.ID, act.OperationID, act.RequiredParams))
+		}
 		return errs
 	}
 
 	mediaType, hasJSON := op.RequestBody.Content["application/json"]
 	if !hasJSON {
-		errs = append(errs, fmt.Sprintf("action %q (operationId: %q) specifies required_params %v, but OpenAPI requestBody missing application/json content",
-			act.ID, act.OperationID, act.RequiredParams))
+		if len(act.RequiredParams) > 0 {
+			errs = append(errs, fmt.Sprintf("action %q (operationId: %q) specifies required_params %v, but OpenAPI requestBody missing application/json content",
+				act.ID, act.OperationID, act.RequiredParams))
+		}
 		return errs
 	}
 
 	schema := resolveSchema(spec, mediaType.Schema)
+
+	// Verify all schema-required properties (excluding server-injected character_id) are declared.
+	for _, reqField := range schema.Required {
+		if reqField == "character_id" {
+			continue
+		}
+		if !slices.Contains(act.RequiredParams, reqField) {
+			errs = append(errs, fmt.Sprintf("action %q (operationId: %q) missing required_param %q declared in OpenAPI requestBody schema",
+				act.ID, act.OperationID, reqField))
+		}
+	}
+
 	definedProps := make([]string, 0, len(schema.Properties))
 	for p := range schema.Properties {
 		definedProps = append(definedProps, p)
@@ -153,6 +164,13 @@ func verifyActionDrift(act playercontext.ActionDefinition, ops map[string]openAP
 	sort.Strings(definedProps)
 
 	for _, reqParam := range act.RequiredParams {
+		// Server-injected identity must not be declared as a user-supplied command parameter
+		if reqParam == "character_id" {
+			errs = append(errs, fmt.Sprintf("action %q (operationId: %q) specifies server-injected identity parameter %q in required_params",
+				act.ID, act.OperationID, reqParam))
+			continue
+		}
+
 		// Check if property is defined in requestBody schema
 		if _, exists := schema.Properties[reqParam]; !exists {
 			errs = append(errs, fmt.Sprintf("action %q (operationId: %q) specifies required_param %q, but OpenAPI requestBody schema only defines properties %v",
@@ -233,6 +251,44 @@ func TestCatalog_DriftDetection_Diagnostics(t *testing.T) {
 					},
 				},
 			},
+			"/test/multi": {
+				"post": {
+					OperationID: "testMulti",
+					RequestBody: &openAPIRequestBody{
+						Content: map[string]openAPIMediaType{
+							"application/json": {
+								Schema: openAPISchema{
+									Type: "object",
+									Properties: map[string]openAPISchema{
+										"photo_id": {Type: "string"},
+										"title":    {Type: "string"},
+									},
+									Required: []string{"photo_id", "title"},
+								},
+							},
+						},
+					},
+				},
+			},
+			"/test/identity": {
+				"post": {
+					OperationID: "testIdentity",
+					RequestBody: &openAPIRequestBody{
+						Content: map[string]openAPIMediaType{
+							"application/json": {
+								Schema: openAPISchema{
+									Type: "object",
+									Properties: map[string]openAPISchema{
+										"character_id": {Type: "string"},
+										"target_id":    {Type: "string"},
+									},
+									Required: []string{"character_id", "target_id"},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		Components: openAPIComponents{
 			Schemas: map[string]openAPISchema{},
@@ -290,6 +346,51 @@ func TestCatalog_DriftDetection_Diagnostics(t *testing.T) {
 				RequiredParams: []string{"amount"},
 			},
 			wantSubstrs: []string{`specifies required_param "amount", but it is not marked as required in OpenAPI requestBody schema`},
+		},
+		{
+			name: "Empty required parameters when schema requires fields",
+			act: playercontext.ActionDefinition{
+				ID:             "bank_empty",
+				OperationID:    "testDeposit",
+				RequiredParams: []string{},
+			},
+			wantSubstrs: []string{`missing required_param "amount" declared in OpenAPI requestBody schema`},
+		},
+		{
+			name: "Partially incomplete required parameters",
+			act: playercontext.ActionDefinition{
+				ID:             "contest_partial",
+				OperationID:    "testMulti",
+				RequiredParams: []string{"photo_id"},
+			},
+			wantSubstrs: []string{`missing required_param "title" declared in OpenAPI requestBody schema`},
+		},
+		{
+			name: "Valid action with server-injected identity parameter excluded",
+			act: playercontext.ActionDefinition{
+				ID:             "action_identity_valid",
+				OperationID:    "testIdentity",
+				RequiredParams: []string{"target_id"},
+			},
+			wantSubstrs: nil,
+		},
+		{
+			name: "Action erroneously declares server-injected identity parameter",
+			act: playercontext.ActionDefinition{
+				ID:             "action_identity_invalid",
+				OperationID:    "testIdentity",
+				RequiredParams: []string{"character_id", "target_id"},
+			},
+			wantSubstrs: []string{`specifies server-injected identity parameter "character_id" in required_params`},
+		},
+		{
+			name: "Valid action with empty parameters when schema requires nothing",
+			act: playercontext.ActionDefinition{
+				ID:             "action_no_params",
+				OperationID:    "testOptional",
+				RequiredParams: []string{},
+			},
+			wantSubstrs: nil,
 		},
 	}
 

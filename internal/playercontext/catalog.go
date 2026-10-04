@@ -229,7 +229,7 @@ var DefaultCatalog = []ActionDefinition{
 		Label:          "闇市景品交換",
 		Category:       "shop",
 		OperationID:    "tradeBlackMarketPrize",
-		RequiredParams: []string{},
+		RequiredParams: []string{"prize_id"},
 		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 
@@ -325,7 +325,7 @@ var DefaultCatalog = []ActionDefinition{
 		Label:          "酒場で食事注文",
 		Category:       "entertainment",
 		OperationID:    "orderTavernMeal",
-		RequiredParams: []string{},
+		RequiredParams: []string{"item_id"},
 		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 	},
 	{
@@ -369,7 +369,7 @@ var DefaultCatalog = []ActionDefinition{
 		Label:          "ダーマ神殿で転職",
 		Category:       "growth",
 		OperationID:    "changeCharacterJob",
-		RequiredParams: []string{},
+		RequiredParams: []string{"job_id"},
 		RequiredGates:  GateDeadCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{

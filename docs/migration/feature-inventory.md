@@ -154,6 +154,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] PlayerContext: Ordered six-gate availability evaluator and uncached read query, sleep/wake lifecycle and rescue exemption (#938); HTTP observation handler remains #939
 - [x] PlayerContext: Blacksmith sealing currency gate removal to match legacy crystal requirement (#987)
 - [x] PlayerContext: Casino coin games currency gate removal to match legacy coin requirement (#988)
+- [x] PlayerContext: Detect and declare missing required action parameters (#990)
 - [ ] Web presentation UI / client implementation (#140)
 - [ ] Production asset manifest, resolver, and license attribution (#654, #729; specification pending)
 
