@@ -101,7 +101,7 @@ Replicating the original Party2 CGI combat engine (`_battle.cgi`, `_skill.cgi`):
        - `undying`: Revives at 50% MaxHP (consumed on use).
        - `touki_shield`: Revives at 30% MaxHP (consumed on use).
        - `dokuro_amulet`: Revives at 25% MaxHP with `dofuu` (動封) applied (consumed on use).
-       - `cursed_revive`: Revives at 1 HP (consumed on use).
+       - `cursed_revive`: Item 260 revives at 30% MaxHP, adds 300 Attack (capped at 999), and applies cursed state; see the detailed rule below and legacy `_battle.cgi:75–85`.
      - If revived: HP set to revival amount, log revival message, participant remains active.
      - If not revived: Mark `Defeated = true`, HP clamped to 0.
 
@@ -193,7 +193,7 @@ The application-layer bridge (`internal/battle`) standardizes combat participant
 
 - **Context Isolation**: The Battle engine never queries database persistence or mutates external character state directly. It returns an immutable `Result` containing turn logs and rewards.
 - **Consumer Ownership**: Feature modules (`adventure`, `dungeon`, `boss`, `pvp`, `gvg`, `challenge`, `party`) utilize `internal/battle` to map character/monster models to `Participant` and handle post-battle reward persistence atomically via `economy.TransactionRunner` or `TransactionProvider`.
-- **Minimum Damage Guarantee**: Every offensive attack or damaging skill inflicts at least 1 damage.
+- **Damage floor scope**: The physical base formula has a 1-or-2 damage fallback. Misses, evasion, immunity, and subsequent modifiers can yield zero; this is not a minimum for every attack or skill.
 - **Round Ceiling**: Party battles terminate at a maximum of 30 rounds to prevent infinite loops.
 - **File Size Constraint**: All battle module source files are kept $\le 500$ lines.
 

@@ -1,77 +1,58 @@
-# Dungeon Exploration and Branching Maps Design
+# Dungeon Exploration and Maps
 
-## Overview
+Dungeon behavior is defined by legacy `lib/vs_dungeon.cgi` and the selected
+`map/<dungeon>/<map>.cgi`, including its event subroutines. Map symbols alone
+do not describe every event. Current Go is in `internal/dungeon`.
 
-The Dungeon Exploration Feature Module (`internal/dungeon`) provides deep multi-floor expeditions with grid navigation, hazard traps, treasure chest loots, monster combat, floor bosses, and accumulated reward ledger mechanics (`vs_dungeon.cgi`, `map/`) using the shared Core Battle engine (`internal/core/battle`).
+## Legacy movement and map events
 
----
+The leader performs the initial advance. Afterwards cardinal movement is
+available once enemies are defeated. Movement advances the shared round and
+dispatches the selected map's `event_<symbol>`; active enemies ordinarily block
+movement. A wall hit invokes the wall event without advancing coordinates.
 
-## Architectural Policy & Boundaries
+| Symbol | Legacy behavior |
+|---|---|
+| `0` | Passage; the base event may spawn a monster with `rand(2) <= 1` |
+| `1` | Wall; additional impassable symbols come from the selected map's `@wall` |
+| `S` | Start tile |
+| `B` | Base boss event, guarded by its event flag |
+| `I` | Example hidden passage displayed as a wall (`map/0/1.cgi`, `map/1/1.cgi`) |
+| `2`, `3`, etc. | Map-owned events, such as one-time treasure triggers |
+| Other letters/numbers | Map-specific keys, doors, stairs, bosses, hazards, or routes |
 
-- **Expedition State Machine**: Active expedition lifecycle (position, current floor, remaining turn limit, temporary health, buffered reward ledger) is isolated inside `internal/dungeon`.
-- **Core Battle Isolation**: Monster encounters and floor boss battles invoke `internal/core/battle.Engine` language-agnostically with participant snapshots.
-- **Accumulated Reward Ledger**: EXP, Gold, and item drops obtained during an expedition are buffered in temporary expedition state (`dungeon_active_expeditions`).
-- **Transactional Finalization**:
-  - **Dungeon Clear / Safe Escape**: Accumulated ledger rewards are committed atomically to character progression and inventory.
-  - **Wipeout (Defeat / Turn Timeout)**: The expedition terminates with defeat, forfeiting all unbanked ledger rewards without corrupting base character state.
+For example `map/1/1.cgi` has key `K` and conditional door `D`; `map/2/1.cgi`
+uses `F` to choose a next map and `7` for its floor boss. It is incorrect to
+universally interpret `D` as stairs or `I` as an impassable wall.
 
----
+Each map supplies `$max_round` (examples range from 20 to 200); there is no
+universal 25–35-turn floor budget. At the limit, further movement is blocked
+and the legacy message requests escape/disbandment. Do not equate that guard
+with automatic wipeout and zero rewards without checking the exit flow.
 
-## Domain Rules & Navigation Mechanics
+## Scouting, party traps, and treasure
 
-### 1. Tile Map Specification
+Legacy `@ちず` defaults to radius 1. The acting character's job 9, 26, 27, or
+79 supplies radius 2; held item 197 adds one. The original checks the actor,
+not the presence of any qualifying party member. Visible tiles use the map's
+display definitions and out-of-bounds walls.
 
-Each floor is represented by a 2D grid matrix of ASCII tile characters:
+`_trap_d` damages each party member by `int(base × (0.9 + rand(0.3)))`; each
+map supplies the base damage. It does not establish a universal 15%-MaxHP trap.
+`_add_treasure` starts from `$#partys`, and acting Job 78 adds `1 + int(rand(2))`.
+Inspect map event flags and the shared treasure/exit routines for actual reward
+delivery and replay prevention; do not invent a floor-scaled 100G chest rule.
 
-| Tile Symbol | Meaning | Event Behavior |
-| :--- | :--- | :--- |
-| `S` | Start Point | Initial spawn point or staircase descent arrival tile. |
-| `0` | Normal Passage | Navigable floor tile with random encounter probability (50% monster combat). |
-| `1` | Impassable Wall | Cannot be traversed. Moving into a wall is rejected with `ErrImpassableWall`. |
-| `T` | Treasure Chest | Grants floor-scaled gold ($100 \times \text{Floor}$) and item drops to the temporary reward ledger. |
-| `X` | Hazard Trap | Triggers trap mechanism inflicting percentage damage ($\max(10, 15\% \text{Max HP})$). |
-| `D` | Down Stairs | Descends to the next floor ($+1$), resetting position to the next floor's `StartX, StartY` and replenishing floor turns. |
-| `B` | Floor Boss | Initiates climatic boss battle. Defeating the boss clears the dungeon and triggers full rewards commit. |
-| `E` | Safe Escape Portal | Safely evacuates the player from the dungeon, locking in all accumulated ledger rewards. |
+## Current implementation and remaining reconciliation
 
----
+Go currently dispatches generic `T/X/D/B/E` events in `expedition.go`, uses
+Valkey working state/rewards, and finalizes durable records in MariaDB.
+That generic event model does not reproduce all legacy map-owned events.
+Its turn-limit wipeout, trap bases, treasure generation, and party scouting
+need comparison with the behavior above; they are implementation differences,
+not canonical rules inferred from the Go catalog.
 
-### 2. Turn Limits & Expedition Exhaustion
-
-- Each floor has a maximum turn allocation (`MaxTurnsPerFloor = 25..35`).
-- Moving in cardinal directions (`north`, `south`, `east`, `west`) consumes 1 turn.
-- If `TurnsRemaining <= 0`, the player suffers exhaustion wipeout, forfeiting unbanked expedition loot.
-
----
-
-### 3. Combat & Reward Ledger Calculations
-
-$$\text{Expedition EXP} = \sum \text{Monster EXP} + \text{Dungeon Clear Bonus}$$
-$$\text{Expedition Gold} = \sum \text{Monster Gold} + \sum \text{Chest Gold} + \text{Dungeon Clear Bonus}$$
-$$\text{Expedition Items} = \bigcup \text{Monster Drops} \cup \bigcup \text{Chest Loots}$$
-
-- On **Wipeout**: Character receives $0$ EXP, $0$ Gold, and $0$ items from the expedition ledger.
-- On **Escape / Clear**:
-  1. `progression.ApplyExperience(&char, exp)`
-  2. `char.Money += gold`
-  3. Reward item instances are validated against `coreinventory.Inventory` capacity; overflow items route to `depot.Depot` (Rank 5 lock); items overflowing a full depot are treated as lost drops (`_npc_action.cgi:74-75`).
-  4. Statistics updated: `highest_dungeon_cleared`, `total_expeditions`, `total_floors_cleared`, `total_chests_opened`.
-
----
-
-## Multi-Player Party Exploration & Scouting Mechanics
-
-### 1. Party Expeditions
-- Up to 4 characters can form an expedition party (`members` in `dungeon_active_expeditions`).
-- The party leader coordinates movement and exploration decisions.
-- Hazard trap (`X`) damage is distributed across all party members, applying per-member variance ($0.9 + 0.3 \times \text{rand}$).
-- **Treasure Hunter (Job 78)**: Grants $+1$ to $+2$ bonus treasure chests when opening chests, increasing found gold and item drops.
-
-### 2. Map Scouting (`@ちず`)
-- Characters can inspect the floor map around the party's current coordinate:
-  - **Base Vision (Radius 1)**: $3 \times 3$ grid displayed around party.
-  - **Scouting Job Bonus (Radius +1)**: $+1$ to radius ($5 \times 5$ grid) if any party member is a scouting class (**Thief 9**, **Ninja 26**, **Geomancer 27**, **Ranger 79**).
-  - **Scope Goggles Bonus (Radius +1)**: $+1$ to radius ($5 \times 5$ grid) if any party member possesses item **197 (`scope_goggles`)**.
-  - **Stacked Vision (Radius 3)**: $7 \times 7$ grid displayed when both a scouting job and scope goggles are present in the party.
-- Rendered with emoji/ASCII indicators (`●` current party position, `■` walls, `□` passages, out-of-bounds displayed as walls `■`).
-
+Active state is no longer mastered by a SQL `dungeon_active_expeditions` table.
+See [run-state architecture](../architecture/transient-run-state.md),
+[current API](../api/paths/dungeon.json), and
+[documented differences](../migration/documentation-audit.md).

@@ -1,5 +1,4 @@
 {
-  "$schema": "https://archify.dev/schema/module.v1.json",
   "module": "adventure",
   "tier": 1,
   "description": "Stage exploration, 10-floor party dungeon crawl, battle resolution, and rewards.",
@@ -29,27 +28,9 @@
     {
       "method": "StartStage",
       "source_ref": "internal/adventure/adventure.go#Service.StartStage",
-      "transaction_type": "Direct",
-      "lock_sequence": [
-        {
-          "table": "characters",
-          "tier": 2,
-          "mode": "SELECT",
-          "note": "Verify character level requirement against stage min level"
-        },
-        {
-          "table": "adventures",
-          "tier": 8,
-          "mode": "INSERT",
-          "note": "Persist new adventure session"
-        },
-        {
-          "table": "characters",
-          "tier": 2,
-          "mode": "UPDATE",
-          "note": "Apply experience level-up and credit gold reward"
-        }
-      ]
+      "transaction_type": "Delegated",
+      "lock_sequence": [],
+      "note": "StartStage performs ordinary access reads and delegates immediate crawl execution; battle settlement uses internal/battle. This wrapper is not a single RunInTx boundary. Legacy access parity is tracked in docs/migration/documentation-audit.md."
     }
   ]
 }

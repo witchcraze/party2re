@@ -23,8 +23,6 @@
 The following notes explain the decisions made during the initial Phase 0–2 design work. They are historical rationale, not additional permanent requirements. Current requirements are defined by the sections above and the current architecture/design documents.
 
 
-The following notes preserve the reasoning that led to the current architecture. They are intentionally included so that a future developer or coding agent can reconstruct *why* these decisions were made rather than treating them as arbitrary rules.
-
 ### Why the old implementation is not being ported
 
 The original implementation has a large amount of tightly coupled code, including game logic, persistence, request handling, and presentation concerns. The project is also intentionally free to change its implementation language.

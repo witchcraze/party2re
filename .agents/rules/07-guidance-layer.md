@@ -6,8 +6,8 @@ description: Guidelines for managing the Guidance Layer (.arch/*.json), module s
 # Guidance Layer Principles
 
 ## 1. Ground Truth vs. Guidance Layer
-- **Source Code & Comments are the Ground Truth**: 
-  Production source code, tests, and inline comments constitute the absolute, definitive truth of the system.
+- **Verify Implementation in Source**:
+  Production source code determines what the current implementation executes. Tests and comments are evidence to inspect, not proof that game behavior is correct. During reconstruction, MUST use the original project's behavior as the game specification authority under `00-migration-constraints.md`.
 - **`.arch/` is the Guidance Layer (Navigation Index)**: 
   `.arch/*.json` files are not an authoritative answer key, but an index and navigation layer designed to guide agents to where answers reside without requiring brute-force scans of the entire repository.
 - **Always Verify via `source_ref`**:
@@ -24,11 +24,10 @@ A module qualifies for a dedicated `.arch/modules/<module>.json` file only if it
 4. **C4 (Async Scheduling)**: Integrates with Valkey delayed job queues and background execution workers.
 
 ### B. Scope Tiers
-- **Tier 1 (High-Leverage Priority - 8 modules)**:
-  `tavern` (active), `delivery` (active), `bank`, `auction`, `guild`, `shop`, `blacksmith`, `adventure`.
-  *These represent the high-concurrency, high-risk core features.*
+- **Tier 1 (Priority navigation)**:
+  MUST prioritize `tavern`, `auction`, `guild`, `shop`, `blacksmith`, `adventure`, and `store` when investigating transactions. A priority designation MUST NOT imply that a module-level JSON exists or waive C1–C4. Depot mailing belongs to `internal/depot`; MUST NOT infer an `internal/delivery` module from the feature name.
 - **Tier 2 (On-Demand - authored when modified)**:
-  `alchemy`, `dungeon`, `casino`, `medal`, `depot`, `activity`, `farm`, `park`, `home`, `collection`, `chapel`, `secretshop`, `blackmarket`, `eventplaza`, `pvp`, `gvg`, `boss`, `rescue`.
+  `bank`, `alchemy`, `dungeon`, `casino`, `medal`, `depot`, `activity`, `monster`, `plantation`, `park`, `home`, `collection`, `chapel`, `secretshop`, `blackmarket`, `gemstore`, `fleamarket`, `eventplaza`, `pvp`, `gvg`, `boss`, `rescue`. A single-row bank savings update does not justify duplicating its repository in a module index.
 - **Tier 3 (Out-of-Scope - No module-level JSON)**:
   Stateless utilities (`id`, `pagination`, `validation`, `logging`, `ratelimit`, `valkey`) and core domain entities (`core/*`).
 
@@ -38,19 +37,19 @@ To ensure definitions remain immutable against everyday code refactorings and li
   Format: `path/to/file.go#SymbolName` or `path/to/file.go#Struct.Method` (e.g., `internal/tavern/tavern.go#Service.OrderMeal` or `internal/tavern/tavern.go#CharacterRepository`).
 
 ## 4. Reverse Fan-in Shared Table Index (.arch/shared_tables/)
-Agents MUST inspect `.arch/shared_tables/<table_name>.json` (`characters`, `inventory_items`, `bank_accounts`, `guilds`) before refactoring shared domain entities to verify lock hierarchies and blast radius. See [`docs/architecture/guidance-layer.md`](../../docs/architecture/guidance-layer.md) §5.
+Agents MUST inspect the available `.arch/shared_tables/<table_name>.json` (`characters`, `inventory_items`, `guilds`) before refactoring shared domain entities. MUST inspect source callers beyond these partial indices; absence from an index does not imply absence of dependency. Bank savings live in `characters.deposit`, not a separate `bank_accounts` table. See [`docs/architecture/guidance-layer.md`](../../docs/architecture/guidance-layer.md).
 
 ## 5. Automated Mechanical Verification
-All `.arch` definitions and symbol coordinates are mechanically verified via Go AST in `internal/architecture/arch_test.go` on `make check` / `go test ./...`. All referenced symbols and `RunInTx` declarations MUST physically exist in Go source code. See [`docs/architecture/guidance-layer.md`](../../docs/architecture/guidance-layer.md) §6.
+Referenced symbols and transaction declarations MUST pass the Go AST checks in `internal/architecture/arch_test.go` on `make check` / `go test ./...`. Agents MUST separately verify table names, lock sequences, delegated calls, and completeness against source; those semantic properties are not proven by the symbol check. See [`docs/architecture/guidance-layer.md`](../../docs/architecture/guidance-layer.md).
 
 ## 6. Go Idiom & Implementation Compatibility Guidelines
 To maintain idiomatic Go design while maximizing Guidance Layer navigability:
 1. **Consumer-Defined Interfaces (`Accept interfaces, return structs`)**:
    - Modules declare external dependencies as Go interfaces in their own package (e.g., `internal/tavern/tavern.go` defines `CharacterRepository`).
    - `.arch` references these interface symbols directly, ensuring decoupled architecture.
-2. **Explicit Use-Case Methods & Single Transaction Boundaries**:
-   - Each use-case method (e.g., `OrderMeal`, `SendParcel`) acts as a single transaction boundary (`RunInTx`).
-   - Locking and mutations execute in explicit linear sequence within the method body.
+2. **Explicit Use-Case Methods & Transaction Boundaries**:
+   - MUST identify whether a use case owns `RunInTx`, invokes `ExecuteTransaction`, or delegates settlement to an adapter.
+   - MUST document the actual lock acquisition sequence separately from ordinary reads/writes; MUST NOT label a delegating entry point as an atomic transaction over its whole workflow.
 3. **Self-Documenting Concurrency Docstrings (Go Doc as Ground Truth)**:
    - For exported methods involving pessimistic locking or cross-table mutations, annotate the Go doc comment with transaction semantics:
      ```go

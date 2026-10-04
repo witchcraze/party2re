@@ -74,7 +74,7 @@ Once Version 1.0 is established, the project should transition from **reconstruc
 
 Completed features are tracked in [`docs/migration/feature-inventory.md`](docs/migration/feature-inventory.md) (the authoritative SSOT for Version 1.0 completion records). The full list of merged issues and feature groups is maintained there.
 
-**Summary**: All core feature modules are implemented, including Player/Character lifecycle, Battle Engine, Adventure, Economy (Shop/Bank/Auction/Flea Market/Gem Store/Black Market), Social systems (Guild/GvG/PvP/Dungeons/Casino/Lottery/Home/Tavern/Delivery), and the complete HTTP JSON API layer (203 routes, OpenAPI 3.1).
+**Summary**: All core feature modules are implemented, including Player/Character lifecycle, Battle Engine, Adventure, Economy (Shop/Bank/Auction/Flea Market/Gem Store/Black Market), Social systems (Guild/GvG/PvP/Dungeons/Casino/Lottery/Home/Tavern/Delivery), and the current HTTP JSON API layer ([OpenAPI 3.1](docs/api/openapi.json)). Implemented modules and merged parity milestones do not prove complete behavioral equivalence; [known differences](docs/migration/documentation-audit.md) remain to be resolved against the original project.
 
 #### Legacy Clean-room Specification Parity Milestones:
 
@@ -91,7 +91,7 @@ All 4 dependency-ordered milestones (Milestone 1 Core/System, Milestone 2 Econom
 3. **Client Presentation & Web UI**
    - Web application client / Server-Driven UI powered entirely by the Gateway (Issue #140)
 4. **Production Asset Pipeline & Final Licensing**
-   - Production asset mapping and license attribution catalog
+   - Production asset manifest (#654, specification pending), resolver (#729), and license attribution catalog
 
 ---
 

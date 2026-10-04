@@ -7,7 +7,7 @@ Administrative operations provide privileged server and account management tools
 In Party2 Reconstruction, administrative operations are secured via authoritative HTTP endpoints guarded by master administrative API keys, providing:
 - **System Maintenance Mode**: Emergency maintenance toggle and schedule broadcast (`/admin/maintenance`).
 - **Player Account Management**: Multi-criteria player listing and account soft-banning (`/admin/players`, `/admin/players/{id}/ban`).
-- **Rescue Operations**: Emergency unstuck action clearing (`/rescue`, `/admin/characters/{id}/unstuck`).
+- **Rescue Operations**: Emergency unstuck action clearing (`/admin/characters/{id}/unstuck`). Player rescue requests use the separate `/rescues/request` route.
 
 ---
 
@@ -22,7 +22,7 @@ All `/admin/*` routes enforce strict credential verification:
    - Compares provided credentials against `h.adminAPIKey` using `crypto/subtle.ConstantTimeCompare` to defend against timing side-channel attacks.
 3. **Rejection Semantics**:
    - `401 Unauthorized`: Credentials missing from the request.
-   - `403 Forbidden`: Credentials present but invalid, or server started without an administrative key configured (`ADMIN_API_KEY` unset).
+   - `403 Forbidden`: Credentials present but invalid, or server started without an administrative key configured (`PARTY2_ADMIN_API_KEY`, with `ADMIN_API_KEY` as the compatibility fallback).
 
 ---
 

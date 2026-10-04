@@ -67,7 +67,7 @@ if v > 9:
 ```
 
 ### Current HP/MP Preservation
-Level advancement increases maximum HP and maximum MP (`MaxHP`, `MaxMP`). It deliberately does **not** restore current HP and MP (`HP`, `MP`). Recovery must be achieved through healing items or resting at an Inn.
+Level advancement increases maximum HP and maximum MP (`MaxHP`, `MaxMP`). It deliberately does **not** restore current HP and MP (`HP`, `MP`). Recovery must be achieved through healing items or free sleep recovery at Home ([home.md](home.md)).
 
 ### Stat Orb Growth Modifiers
 

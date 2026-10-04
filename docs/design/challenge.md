@@ -33,7 +33,7 @@ The Continuous Endurance Challenge Feature Module (`internal/challenge`) impleme
 | `5` | 花火大会 | 4 | None | Round 20 | 爆弾岩 |
 | `6` | 鉄壁要塞 | 3 | None | Round 20 | レッドストーン, ブルーストーン, イエローストーン, グリーンストーン, パープルストーン, シルバーストーン, ブラックストーン, メタルスライム, ハグレメタル |
 | `7` | 最強王者 | 1 | None | Round 30 | 人面樹, 亡霊剣士, デビルシェル, ゴーレム, 闇の魔術士, ギガンテス, ひくいどり, ベヒーモス, キングスライム, 死霊の騎士, 竜王, 片翼の天使, ディアボロス, ボマー |
-| `8` | 真・最強王者 | 1 | Reincarnation (`need_over_lv`) | Round 30 | Stage 7 pool with Hard Mode stat scaling |
+| `8` | 真・最強王者 | 1 | Celestial OverLevel (`need_over_lv`; no level reset) | Round 30 | Stage 7 pool with Hard Mode stat scaling |
 
 ---
 

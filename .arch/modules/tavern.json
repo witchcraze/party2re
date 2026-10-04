@@ -1,27 +1,35 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "module": "tavern",
   "domain": "冒険者の酒場 (@エレナ)",
-  "description": "Adventurer's tavern culinary menu, restorative meal orders, raffle ticket bonuses, and post-adventure meal delivery reservations (owns tavern_deliveries, tavern_character_status). Distinct from delivery_parcels / character_deliveries (owned by delivery module).",
+  "description": "Adventurer tavern meals, raffle ticket bonuses, and post-adventure meal delivery reservations. Item/money mailing is owned by depot; there is no delivery package.",
   "entrypoint": "internal/tavern/tavern.go",
   "dependencies": [
     {
       "module": "core/character",
       "relation_type": "public_service_call",
-      "methods": ["FindByID", "FindByIDForUpdate", "Update"],
+      "methods": [
+        "FindByID",
+        "FindByIDForUpdate",
+        "Update"
+      ],
       "source_ref": "internal/tavern/tavern.go#CharacterRepository"
     },
     {
       "module": "lottery",
       "relation_type": "public_service_call",
       "optional": true,
-      "methods": ["AddRaffleTickets", "GetRaffleTickets"],
+      "methods": [
+        "AddRaffleTickets",
+        "GetRaffleTickets"
+      ],
       "source_ref": "internal/tavern/tavern.go#LotteryRepository"
     },
     {
       "module": "database",
       "relation_type": "transaction_provider",
-      "methods": ["RunInTx"],
+      "methods": [
+        "RunInTx"
+      ],
       "source_ref": "internal/database/tx.go#TransactionProvider"
     }
   ],
@@ -31,10 +39,10 @@
       "tx_mode": "RunInTx",
       "source_ref": "internal/tavern/order.go#Service.OrderMeal",
       "lock_sequence": [
-        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
-        { "step": 2, "target": "characters", "method": "CharacterRepository.Update" },
-        { "step": 3, "target": "lottery_tickets", "method": "LotteryRepository.AddRaffleTickets", "optional": true },
-        { "step": 4, "target": "tavern_character_status", "lock_order": 8, "method": "Repository.UpsertCharacterStatus" }
+        {"step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate"},
+        {"step": 2, "target": "characters", "method": "CharacterRepository.Update"},
+        {"step": 3, "target": "character_lottery", "method": "LotteryRepository.AddRaffleTickets", "optional": true},
+        {"step": 4, "target": "tavern_character_status", "lock_order": 8, "method": "Repository.UpsertCharacterStatus"}
       ]
     },
     {
@@ -42,12 +50,12 @@
       "tx_mode": "RunInTx",
       "source_ref": "internal/tavern/delivery.go#Service.ClaimDelivery",
       "lock_sequence": [
-        { "step": 1, "target": "tavern_deliveries", "method": "Repository.GetDelivery" },
-        { "step": 2, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate" },
-        { "step": 3, "target": "characters", "method": "CharacterRepository.Update" },
-        { "step": 4, "target": "lottery_tickets", "method": "LotteryRepository.AddRaffleTickets", "optional": true },
-        { "step": 5, "target": "tavern_character_status", "lock_order": 8, "method": "Repository.UpsertCharacterStatus" },
-        { "step": 6, "target": "tavern_deliveries", "lock_order": 8, "method": "Repository.DeleteDelivery" }
+        {"step": 1, "target": "tavern_deliveries", "method": "Repository.GetDelivery"},
+        {"step": 2, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate"},
+        {"step": 3, "target": "characters", "method": "CharacterRepository.Update"},
+        {"step": 4, "target": "character_lottery", "method": "LotteryRepository.AddRaffleTickets", "optional": true},
+        {"step": 5, "target": "tavern_character_status", "lock_order": 8, "method": "Repository.UpsertCharacterStatus"},
+        {"step": 6, "target": "tavern_deliveries", "lock_order": 8, "method": "Repository.DeleteDelivery"}
       ]
     }
   ]

@@ -1,6 +1,19 @@
 # Client & Agent API — CQRS & Server-Driven UI Architecture
 
-This document describes the enduring architecture for how clients (Web UI, AI Agents, Line Bot, Discord Bot) interact with the Party2 Re backend.
+This document describes the planned client boundary, not the current HTTP API contract.
+
+| Boundary | Status | Tracking |
+|---|---|---|
+| Action catalog and OpenAPI drift checks | Implemented | #944, #946 |
+| PlayerContext evaluator and character/scheduling reads | Implemented in-process; legacy parity still requires review | #938, #972 |
+| HTTP context query | Planned; not registered in the router | #939 |
+| HTTP action dispatcher | Planned; failure/refresh semantics need specification | #646 |
+| Individual REST route retirement | Planned after Gateway migration | #947–#950 |
+
+Current clients use the registered routes in [OpenAPI](../api/openapi.json).
+The `/api/v1` prefix and payloads below are proposed examples; the current
+router uses unversioned paths. Do not remove working REST contracts before
+their replacement is implemented and verified against the original Party2.
 
 ---
 
@@ -59,7 +72,7 @@ The discovery entry point for any client session.
     "tired": 20
   },
   "ongoing_action": {
-    "action_type": "adventure",
+    "action_type": "activity:training_complete",
     "execute_at": "2026-10-02T10:05:00Z",
     "remaining_seconds": 120
   },
@@ -78,7 +91,7 @@ The discovery entry point for any client session.
     },
     {
       "action": "home_sleep",
-      "label": "宿屋で休む",
+      "label": "自宅で休む",
       "category": "home",
       "required_params": []
     }
@@ -87,9 +100,9 @@ The discovery entry point for any client session.
 ```
 
 ### Invariants:
-- **No Token Bloat**: `available_actions` contains **only top-level executable actions** (approx. 30–40 actions). Individual items or shop goods are manipulated within their respective sub-actions or parameters.
+- **Compact discovery**: `available_actions` contains top-level actions from the catalog. Individual items or shop goods use parameters or feature queries; do not duplicate the catalog count here.
 - **Strict Whitelist**: Actions restricted by HP (`hp <= 0`), Fatigue (`tired >= 100`), Sleep/Restraint (`ongoing_action != null`), or Money are automatically excluded by the Action Evaluator.
-- **Smart Timer Sleep**: If `ongoing_action` is active, clients can inspect `remaining_seconds` and sleep without polling the server.
+- **Timer observation**: Pending/Processing work blocks applicable actions even when its deadline has passed. A deadline is not proof of completion. After waiting, fetch fresh context before choosing an action; use bounded retry delays for overdue work.
 
 ---
 
@@ -147,7 +160,7 @@ When domain preconditions fail (e.g. insufficient gold, exhausted stamina), the 
   "success": false,
   "error": {
     "code": "FATIGUE_LIMIT_REACHED",
-    "message": "疲労度が100%です。宿屋で休んでください。"
+    "message": "疲労度が100%です。自宅で休んでください。"
   },
   "context": {
     "character": { ... },
@@ -155,7 +168,7 @@ When domain preconditions fail (e.g. insufficient gold, exhausted stamina), the 
     "available_actions": [
       {
         "action": "home_sleep",
-        "label": "宿屋で休む",
+        "label": "自宅で休む",
         "category": "home",
         "required_params": []
       }
@@ -181,17 +194,19 @@ context = get_character_context(char_id)
 
 while True:
     if context.ongoing_action:
-        sleep(context.ongoing_action.remaining_seconds)
+        sleep(max(context.ongoing_action.remaining_seconds, retry_delay))
+        context = get_character_context(char_id)
+        continue
     
     # LLM selects action from context.available_actions
     chosen_action, params = llm.decide(context.available_actions)
     
     resp = execute_character_action(char_id, chosen_action, params)
-    context = resp.context  # Context updated automatically
+    context = resp.context or get_character_context(char_id)
 ```
 
 **Benefits**:
-- Zero OpenAPI prompt bloat: no need to inject 180+ endpoint definitions into LLM system prompts.
+- Compact tool definitions: clients need not inject the entire REST specification into the model prompt.
 - Zero URL hallucination: the LLM only selects from the authoritative `available_actions` list.
 
 ### 4.2 Web UI (Server-Driven UI)
@@ -210,14 +225,16 @@ Chatbot frameworks handle state transitions with zero routing boilerplate:
 
 ---
 
-## 5. Architectural Invariants
+## 5. Planned architectural constraints
 
 1. **Authentication & Ownership**:
    All gateway calls verify character ownership (`char.PlayerID == player.ID`) using `withAuthenticatedCharacter`.
 2. **Domain Service Decoupling**:
    Transport handlers and the Action Dispatcher contain no business rules; they decode parameters, invoke application services, and format responses.
-3. **Best-Effort Context Refresh**:
-   If context calculation encounters an unexpected failure, the mutation result is still committed and returned.
+3. **Context refresh failure**:
+   #646 must specify how a successful mutation and a subsequent context-read
+   failure are reported. A retry must not duplicate the mutation. The examples
+   above show the intended normal response, not an implemented failure contract.
 
 ---
 

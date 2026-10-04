@@ -1,5 +1,4 @@
 {
-  "$schema": "https://archify.dev/schema/shared_table.v1.json",
   "table": "inventory_items",
   "tier": 3,
   "description": "Character item inventory instances, quantities, enhancements, and slot states.",

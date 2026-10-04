@@ -38,7 +38,7 @@ Each action in a battle produces an immutable turn step entry:
 
 - `pvp`: Player versus Player Arena combat matches.
 - `gvg`: Guild versus Guild roster round skirmishes.
-- `boss`: King and World Boss raid challenges.
+- `boss`: King sealing encounters.
 - `dungeon`: Multi-floor dungeon monster and boss fights.
 - `adventure`: Multi-stage adventure progression encounters.
 - `challenge`: Continuous endurance challenge battles.

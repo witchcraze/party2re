@@ -34,8 +34,9 @@ When the application is distributed as a container, CI should verify that the ge
 
 Where practical, game behavior should be testable through the application API/command boundary without requiring GUI interaction. This supports automated integration testing and preserves the possibility of alternative clients in the future.
 
-## Future external API capability
+## Current API and planned client verification
 
-The architecture should preserve the possibility of exposing appropriate application operations through an external API in the future.
-
-For example, an AI Agent could eventually play the game by interacting with those operations programmatically. This is an architectural direction, not a requirement to publish a network API during the initial implementation.
+The HTTP JSON API already exists. Its registered routes and specification are
+verified by the current checks. Context/action Gateway handlers (#939/#646),
+headless gameplay simulations (#650), and browser presentation (#140) are
+remaining work. Do not describe external API access itself as unimplemented.

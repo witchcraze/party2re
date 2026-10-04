@@ -14,6 +14,8 @@ This project is currently rebuilding Party2 toward Version 1.0. These are transi
 - Use the existing game only as a source of behavioral and functional requirements.
 - Reconstruct the implementation from the desired domain model and requirements.
 - The existing Party2 implementation is a behavioral/design reference only.
+- During reconstruction, the original project's observable behavior is authoritative for game specifications. Current Go code, tests, and documentation MUST NOT be used to justify a conflicting game rule.
+- When legacy behavior, the written specification, and the Go implementation differ, MUST record the legacy reference, the intended rule, and the implementation gap separately. Only an explicitly approved change may supersede the legacy behavior.
 
 ## 2. Handling Ambiguity
 

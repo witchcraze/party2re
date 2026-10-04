@@ -2,7 +2,7 @@
 
 This directory serves as the **Single Source of Truth (SSOT)** for enduring game and domain rules in Party2 reconstruction (`party2re`), per [`.agents/rules/02-documentation-sync.md`](../../.agents/rules/02-documentation-sync.md).
 
-Specifications here represent language-agnostic gameplay mechanics, formulas, caps, state machines, and system boundaries derived faithfully from the original Party2 Perl CGI reference codebase (`party2/`).
+Specifications here represent language-agnostic gameplay mechanics, formulas, caps, state machines, and system boundaries whose authority is the original Party2 Perl CGI reference codebase (`party2/`). Implementation notes and planned protocols are identified separately. A Go test or merged issue does not establish legacy parity; see [known differences and audit scope](../migration/documentation-audit.md).
 
 ---
 
@@ -60,6 +60,12 @@ graph TD
 
 ## Canonical Design Document Sitemap
 
+### Client boundary and scheduling
+- [`action-preconditions.md`](action-preconditions.md) — Current catalog snapshot, availability gates, and known legacy differences.
+- [`scheduling.md`](scheduling.md) — Unfinished work and terminal retention lifecycle.
+- [`accessory-shop.md`](accessory-shop.md) — Accessory sales and synthesis.
+- [`admin.md`](admin.md) — Administrative character inspection and controls.
+
 ### 1. Account, Identity & Character Foundation
 - [`player-and-character.md`](player-and-character.md) — Account authentication, character identity, wallet (999,999G), vitality, crystal currency, and fatigue caps.
 - [`character-customization.md`](character-customization.md) — Naming hall, gender changes, title display, and custom font colors (`#RRGGBB`).
@@ -70,7 +76,7 @@ graph TD
 
 ### 2. Character Progression, Jobs & Skills
 - [`progression.md`](progression.md) — Cumulative experience thresholds ($10 \times \text{Level}^2$), Level 99 baseline, stats, and celestial OverLevel (Lv 150).
-- [`jobs-and-skills.md`](jobs-and-skills.md) — 72-job catalog, Level 20 job changes, job mastery, and skill activation mechanics.
+- [`jobs-and-skills.md`](jobs-and-skills.md) — Job catalog, Level 20 job changes, job mastery, and skill activation mechanics.
 - [`items-and-equipment.md`](items-and-equipment.md) — 5-category item catalog, equipment invariants, and consumption helpers.
 - [`custom_skill.md`](custom_skill.md) — Custom skill synthesis using 3-gem formulas and trigger phrase matching.
 - [`wishing-well.md`](wishing-well.md) — Wishing Well (願いの泉, @女神) SP sacrifice exchange for permanent stat boosts.
@@ -82,7 +88,7 @@ graph TD
 - [`adventure.md`](adventure.md) — Sequential 10-floor dungeon crawl, Floor 11 treasure room, adventure chronicle history, and milestone unlocks.
 - [`dungeon.md`](dungeon.md) — 2D grid tile matrix exploration, hazard traps, `@ちず` scouting jobs, and escape portals.
 - [`challenge.md`](challenge.md) — Continuous wave survival trial, enemy stat scaling, no inter-round healing, and Hall of Fame.
-- [`boss.md`](boss.md) — 4-player cooperative Sealing Demon battles, Proof of Kingship, Dejon banishment, and victory banquets.
+- [`boss.md`](boss.md) — 6-player king1–10 / 4-player king99 sealing battles, eligibility, Dejon banishment, and victory banquets.
 - [`party-system.md`](party-system.md) — 1–4 player co-op adventure lobbies, speed configuration, `need_join` condition gates, and synergy bonuses.
 - [`pvp.md`](pvp.md) — Colosseum real-time 2..8 player Bet & Split arena, 9 team colors, and multi-round combat resolution.
 - [`gvg.md`](gvg.md) — Guild vs Guild 2..8 player live matches, GP prize pools, target wins, and 7-tier championship medals.
@@ -119,7 +125,7 @@ graph TD
 - [`lottery.md`](lottery.md) — Server-wide 20-ticket Takarakuji lottery with rollover jackpot, and Tavern Fukubiki raffle.
 - [`photo-contest.md`](photo-contest.md) — 10-day seasonal cycles, screenshot submissions, community voting, prize delivery, and Hall of Fame.
 - [`collection.md`](collection.md) — Illustrated monster encyclopedia and item discovery compendium with auto-record.
-- [`ranking.md`](ranking.md) — 12 competitive leaderboards with Valkey snapshot caching and singleflight stampede guard.
+- [`ranking.md`](ranking.md) — 16 competitive leaderboards with Valkey snapshot caching and singleflight stampede guard.
 - [`rescue-and-helper.md`](rescue-and-helper.md) — Emergency unstuck rescue with cooldown penalty, and 4-category helper quest board.
 - [`activities.md`](activities.md) — Delayed background training actions with push-based worker resolution.
 - [`game-overview.md`](game-overview.md) — High-level domain overview and feature expansion model.

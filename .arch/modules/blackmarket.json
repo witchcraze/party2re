@@ -1,5 +1,4 @@
 {
-  "$schema": "https://archify.dev/schema/module.v1.json",
   "module": "blackmarket",
   "tier": 1,
   "description": "Town black market rare item point sacrifice, and prize trade exchanges.",

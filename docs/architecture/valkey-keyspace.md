@@ -1,113 +1,53 @@
-# Valkey Keyspace Specification & Operational Guidelines
+# Valkey Keyspace and Lifetimes
 
-This document serves as the **Single Source of Truth (SSOT)** for all Valkey key patterns, data types, expiration policies, and operational rules in Party2 Re.
+This inventory describes current storage names and lifetimes. Mandatory rules
+are in [05-database-and-caching.md](../../.agents/rules/05-database-and-caching.md).
+Storage choices do not define game behavior; legacy Party2 remains authoritative.
 
-Whenever new keys or caching patterns are introduced, this document MUST be updated in the same Pull Request to maintain architectural clarity, prevent key collisions, and eliminate memory leaks.
+## Storage authority
 
----
+- MariaDB owns durable wealth, inventory, progression, and audit records.
+- Valkey owns ephemeral sessions, lobbies, run buffers, locks, and scheduled work.
+- Valkey caches SQL-backed maintenance state and JSON ranking snapshots.
 
-## 1. Architectural Role & Storage Authority Tiers
+A TTL or explicit cleanup lifecycle must be specified. Unfinished scheduled
+work deliberately has no TTL; it remains Pending/Processing until terminal
+processing or cancellation. Deadlines do not imply completion. Valkey loss is
+not generally harmless: active sessions/work may be lost, and financial
+settlement needs its own verified idempotency and recovery boundary.
 
-In accordance with **RFC #356** and [`.agents/rules/05-database-and-caching.md`](../../.agents/rules/05-database-and-caching.md), storage in Party2 Re is divided into three tiers:
+## Naming and Cluster Hash Tag
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ 1. MariaDB Master (Canonical Relational Persistence)                        │
-│    - Durable player assets, progression, currencies, inventories, audits    │
-│    - ACID transactions, foreign keys, deterministic lock hierarchy (Rank 0..8)│
-└──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │
-                    ┌──────────────────┴──────────────────┐
-                    ▼                                     ▼
-┌──────────────────────────────────────┐┌──────────────────────────────────────┐
-│ 2. Valkey Master (Authoritative)     ││ 3. Valkey Cache (Read Acceleration)  │
-│    - Ephemeral state (NO SQL table)  ││    - Read-optimized projections      │
-│    - Sessions, wait queues, locks    ││    - Leaderboard snapshots           │
-│    - Governed by native TTL expiry   ││    - 100% reconstructible on miss    │
-└──────────────────────────────────────┘└──────────────────────────────────────┘
-```
+Keys use `party2:<namespace>:<entity>[:<identifier>]`; identifiers can contain
+UUID punctuation and hash tags. The registered taxonomy includes session,
+player, maintenance, scheduled, ratelimit, ranking, party, dungeon, challenge,
+timer, daily, pvp, gvg, eventplaza, and casino. Tests can use `party2:test:`.
+The historical `party2:boss:` namespace remains registered in the linter but
+does not imply a live shared-HP boss store.
 
-1. **MariaDB Master**: Canonical persistence. Absolute source of truth for wealth, progression, inventories, and audit trails.
-2. **Valkey Master**: Primary authoritative store for **ephemeral or volatile state** with **no underlying SQL table**. Governed strictly by native TTL or explicit application lifecycle hooks. Restart loss (up to 1s with AOF `everysec`) causes zero economic or progression corruption.
-3. **Valkey Cache**: Read acceleration layer. MariaDB is the source of truth. Projections (e.g. Leaderboard Sorted Sets) are fully rebuildable on cache miss or eviction.
+Multi-key scripts require a common Hash Tag for a clustered deployment.
+Dungeon/Challenge use `{char:<id>}`. **Current Party lobby scripts use untagged
+keys**; they run against the standalone deployment and do not establish cluster
+readiness. Introducing Cluster requires resolving those multi-key placements.
 
----
-
-## 2. Key Naming Conventions & Taxonomy Hierarchy
-
-### 2.1 Standard Format
-
-All keys across Party2 Re MUST conform to the hierarchical colon-delimited taxonomy:
-
-```text
-party2:<namespace>:<entity>[:<identifier>...]
-```
-
-- **Root Prefix**: Always `party2:`. Enforces namespace isolation on shared or multi-tenant Valkey clusters.
-- **Namespace**: The domain or architectural subsystem (`session`, `player`, `maintenance`, `scheduled`, `ratelimit`, `ranking`, `party`, `dungeon`, `challenge`, `boss`, `timer`, `daily`, `pvp`, `gvg`, `eventplaza`).
-- **Entity**: The specific resource or data collection (`action`, `lock`, `snapshot`, `status`, `sessions`).
-- **Identifier**: Dynamic identifier (`token`, `player_id`, `action_id`, `category`, etc.).
-- **Case**: Strictly lowercase ASCII alphanumeric with colons `:` as delimiters. Compound entity terms use snake_case (`status`, `pending`, `snapshot`).
-
-### 2.2 Test Isolation Prefix
-
-Automated tests connecting to live Valkey instances MUST use the `test` namespace:
-
-```text
-party2:test:<module>:<entity>[:<identifier>]
-```
-
-Examples:
-- `party2:test:session:<token>`
-- `party2:test:player:sessions:<player_id>`
-- `party2:test:maintenance:status`
-
-### 2.3 Cluster Hash Tagging Convention (`{...}`)
-
-In a clustered Valkey topology (Valkey Cluster), keys are distributed across 16,384 discrete hash slots. Multi-key operations, atomic transactions, and Lua scripts require all referenced keys to reside in the exact same hash slot.
-
-To guarantee that related multi-key resources hash to the identical slot without triggering `CROSSSLOT Keys in request don't hash to the same slot` errors, the dynamic co-locating entity identifier MUST be enclosed in curly braces `{...}`:
-
-```text
-party2:<namespace>:{<entity>:<id>}[:<sub_resource>]
-```
-
-Examples:
-- `party2:party:{lobby:123}:state`
-- `party2:party:{lobby:123}:ready:char456`
-- `party2:dungeon:{run:789}:step`
-- `party2:dungeon:{run:789}:rewards`
-
-**Operational Rule:** Any multi-key atomic Lua script MUST ensure that all dynamic keys passed in `KEYS[...]` share the identical hash tag `{...}`. Single-node standalone deployments also remain fully compatible with curly brace notation.
-
----
-
-## 3. Master Key Inventory (Comprehensive SSOT Catalog)
-
-The table below catalogs all production key patterns currently active in the codebase:
+## Current key inventory
 
 | Key Pattern / Template | Storage Tier | Data Type | Expiration Policy (TTL) | Value / Serialization Format | Owner Module | Mutating Operations & Invalidation Hooks |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | `party2:session:<token>` | Valkey Master | `String` | 7 days (`604800s`), sliding or fixed | JSON (`PlayerSession`: `token`, `player_id`, `created_at`, `expires_at`) | `internal/player` | `CreateSession` (SET EX), `GetSession` (GET), `DeleteSession` (DEL), `DeleteSessionsByPlayerID` (bulk DEL). |
 | `party2:player:sessions:<player_id>` | Valkey Master | `Sorted Set (ZSet)` | 7 days (`604800s`), refreshed on login | Member: session token, Score: `ExpiresAt.Unix()` (`float64`) | `internal/player` | `Save` (ZADD + EXPIRE + lazy ZREMRANGEBYSCORE), `FindByID` (lazy ZREMRANGEBYSCORE), `Revoke` (ZREM + lazy ZREMRANGEBYSCORE), `DeleteByPlayerID` (ZRANGE -> DEL tokens + DEL key). Automatic expiration score tracking eliminates stale token accumulation. |
-| `party2:maintenance:status` | Valkey Master / In-Memory | `String` | None (Persistent / Admin managed) | JSON (`SystemMaintenance`: `enabled`, `message`, `starts_at`, `ends_at`, `updated_at`) | `internal/maintenance` | `SetStatus` (SET without TTL), `GetStatus` (GET with in-memory sync), admin endpoints (`POST/PUT /admin/maintenance`). Backed by `system_maintenance` MariaDB table. |
-| `party2:scheduled:pending` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic queue) | Member: Action ID (`string`), Score: `ExecuteAt.Unix()` (`float64`) | `internal/scheduling` | `ScheduleAction` (ZADD), `ClaimPendingActions` (ZRANGEBYSCORE + ZREM), `CancelAction` (ZREM). |
-| `party2:scheduled:action:<id>` | Valkey Master | `String` | 1 hour after execution or cancel | JSON (`ScheduledAction`: `id`, `action_type`, `payload`, `execute_at`, `state`) | `internal/scheduling` | `ScheduleAction` (SET), `GetAction` (GET), `CompleteAction` / `FailAction` / `CancelAction` (EXPIRE 1h). |
-| `party2:scheduled:lock:<id>` | Distributed Coordination | `String` | 30 seconds (`30s` lock timeout) | Worker Node ID (`string`) | `internal/scheduling` | `ClaimPendingActions` (SET NX EX 30), released via DEL on completion or auto-released on worker crash. |
+| `party2:maintenance:status` | SQL-backed projection | `String` | None (Persistent / Admin managed) | JSON (`SystemMaintenance`: `enabled`, `message`, `starts_at`, `ends_at`, `updated_at`) | `internal/maintenance` | `SetStatus` (SET without TTL), `GetStatus` (GET with in-memory sync), admin endpoints (`POST/PUT /admin/maintenance`). Backed by `system_maintenance` MariaDB table. |
+| `party2:scheduled:pending` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic queue) | Member: Action ID (`string`), Score: `ExecuteAt.Unix()` (`float64`) | `internal/scheduling` | `ScheduleAction` (ZADD), `FetchDue` (ZRANGEBYSCORE; terminal Save removes pending membership), `CancelAction` (ZREM). |
+| `party2:scheduled:action:<id>` | Valkey Master | `String` | No TTL while unfinished; 24h terminal retention; cancellation deletes | JSON (`ScheduledAction`: `id`, `action_type`, `payload`, `execute_at`, `state`) | `internal/scheduling` | `ScheduleAction` (SET), `GetAction` (GET), `Save` (SET with RetainUntil for terminal actions), `CancelByActorID` (DEL). |
+| `party2:scheduled:lock:<id>` | Distributed Coordination | `String` | 5 minutes (`300s` worker lock) | Flag (`"1"`) | `internal/scheduling` | `AcquireLock` (SET NX EX 300), released via DEL on completion or auto-released on worker crash. |
 | `party2:scheduled:actor:<actor_id>` | Valkey Master | `Set` | None; membership removed on completion/failure, index deleted on actor cancellation | Scheduled Action IDs (`string`) | `internal/scheduling` | `Schedule` (SADD), `FindPendingByActorID` (SMEMBERS + MGET, Pending/Processing only), `Save` (SREM for terminal states), `CancelByActorID` (DEL). An index, not an exclusive actor lock. |
 | `party2:ratelimit:<key>` | Distributed Coordination | `String` (Atomic Int) | Window duration (e.g. 60s or 900s) | Integer counter | `internal/ratelimit` | `Allow` (`INCR` + conditional `EXPIRE` on count == 1). |
 | `party2:ranking:snapshot:<category>` | Valkey Cache | `String` | 5 minutes (`300s`) | JSON (`RankingSnapshot`: entries, refreshed_at) | `internal/ranking` | `SetSnapshot` (SET EX 300), `GetSnapshot` (GET). Rebuilt on miss from MariaDB `ranking_snapshots` table. |
-| `party2:ranking:refresh` | Scheduled Task ID | Task Payload | Executed via ScheduledAction | Constant task identifier string | `internal/ranking` | Registered in background worker scheduler to periodically refresh ranking snapshots. |
 | `party2:party:lobby:<party_id>` | Valkey Master | `String` | 15 minutes (`900s`), refreshed on activity | JSON (`LobbyState`: `Party`, `Members`) | `internal/party` | `SaveParty`, `GetParty`, `UpdateParty`, `DeleteParty`. Automatic expiration of abandoned lobbies. |
 | `party2:party:lobbies` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `party_id`, Score: `CreatedAt.Unix()` | `internal/party` | `SaveParty` (ZADD), `DeleteParty` (ZREM), `ListParties` (ZREVRANGE / ZRANGE). |
 | `party2:party:character:<character_id>` | Valkey Master | `String` | 15 minutes (`900s`), refreshed on activity | Party ID (`string`) | `internal/party` | `AddMember` (SET EX), `RemoveMember` / `DeleteParty` (DEL), `GetActivePartyByCharacter` (GET). O(1) single-party membership check. |
 | `party2:party:ready:<party_id>:<character_id>` | Valkey Master | `String` | 60 seconds (`60s` countdown) | Flag (`"1"`) | `internal/party` | `UpdateMemberReady` (SET EX 60 or DEL), `GetMembers` (EXISTS). Automatic ready countdown timeout. |
 | `party2:party:lock:adventure:<party_id>` | Valkey Master | `String` | 10 seconds (`10s`) safety TTL | Lock token (`id.New()`) | `internal/party` | Distributed lock for atomic adventure crawl execution serialization and concurrent start gating (Issue #653). Acquired via `SET NX EX 10`; released via atomic token-safe Lua script. |
-| `party2:boss:{boss:<boss_id>}:hp` | Valkey Master | `String` (Integer) | 2 hours (`7200s`), sliding | Remaining Boss HP (`int`) | `internal/boss` | `InitializeRaid` (SET EX), `ApplyDamage` (`boss_damage.lua`). |
-| `party2:boss:{boss:<boss_id>}:status` | Valkey Master | `String` | 2 hours (`7200s`), sliding | Status (`"active"`, `"defeated"`, `"settled"`) | `internal/boss` | `InitializeRaid`, `boss_damage.lua`, `MarkSettled`. |
-| `party2:boss:{boss:<boss_id>}:contributors` | Valkey Master | `Hash` | 2 hours (`7200s`), sliding | Field: `character_id`, Value: damage dealt (`int`) | `internal/boss` | `InitializeRaid` (DEL), `boss_damage.lua` (HINCRBY), `GetContributors` (HGETALL). |
-| `party2:boss:{boss:<boss_id>}:killer` | Valkey Master | `String` | 2 hours (`7200s`), sliding | Killer Character ID (`string`) | `internal/boss` | `InitializeRaid` (DEL), `boss_damage.lua` (SET on defeat). |
-| `party2:boss:{boss:<boss_id>}:run_id` | Valkey Master | `String` | 2 hours (`7200s`), sliding | Unique Run UUID (`string`) | `internal/boss` | `InitializeRaid` (SET EX), idempotency check on settlement. |
 | `party2:timer:<category>:<id>` | Valkey Master | `String` | Dynamic (e.g. 60s–180s for sleep, 5d–20d for house estate lease) | Flag (`"1"`) | `internal/core/timer` | `SetLock` (SET EX), `IsLocked` (EXISTS), `GetRemainingLock` (TTL), `ReleaseLock` (DEL). Ephemeral action cooldown, sleep locks, and house estate lease cache. |
 | `party2:daily:<action>:<id>` | Valkey Master | `String` | Until next midnight JST (`EXAT` / seconds) | Date string or flag (`"1"`) | `internal/core/timer` | `ConsumeDailyQuota` (SET NX EX), `HasUsedDailyQuota` (EXISTS), `ResetDailyQuota` (DEL). Daily action and prayer quotas. |
 | `party2:daily:costume:<character_id>` | Valkey Master | `String` | Until next midnight JST (seconds) | JSON (`ActiveCostume`: `item_no`, `name`, `icon`, `expires_at`) | `internal/costume` | `SaveCostume` (SET EX), `GetCostume` (GET), `ClearCostume` (DEL). Active Oracle Shop costume rental state, auto-expiring at midnight JST or cleared upon rest / job change. |
@@ -120,180 +60,40 @@ The table below catalogs all production key patterns currently active in the cod
 | `party2:gvg:rooms:active` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `room_id`, Score: `UpdatedAt.Unix()` | `internal/gvg` | `SaveRoom` (ZADD), `DeleteRoom` (ZREM), `ListRooms` (ZREVRANGE + lazy ZREMRANGEBYSCORE). Active GvG rooms list. |
 | `party2:gvg:lock:room:<room_id>` | Valkey Master | `String` | 10 seconds (`10s`) safety TTL | Lock token (`id.New()`) | `internal/gvg` | Distributed lock for atomic GvG room member mutations and match round execution (Issue #652). Acquired via `SET NX EX 10` with retry; released via atomic Lua script. |
 | `party2:eventplaza:presence` | Valkey Master | `Sorted Set (ZSet)` | 1 hour (`3600s`), sliding | Member: `character_id`, Score: `LastSeenAt.Unix()` (`float64`) | `internal/eventplaza` | `RecordPresence` (ZADD + EXPIRE 3600), `CountActiveParticipants` (lazy ZREMRANGEBYSCORE + ZCARD). Real-time Event Plaza member presence. |
-| `party2:casino:room:<room_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | JSON (`CasinoRoomState`: room config, members, deck, turn, pot, status) | `internal/casino` | Candidate C standard pattern (Issue #635). Target store for in-flight card games (Indian Poker, High-Low, Doppelganger). |
+| `party2:casino:room:<room_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | JSON (`CasinoRoomState`: room config, members, deck, turn, pot, status) | `internal/casino` | Candidate C standard pattern (Issue #635). Active store for in-flight card games (Indian Poker, High-Low, Doppelganger). |
 | `party2:casino:character:<character_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | Room ID (`string`) | `internal/casino` | Single active casino room per character invariant check. |
-| `party2:casino:rooms:active` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `room_id`, Score: `UpdatedAt.Unix()` | `internal/casino` | Active casino rooms list for O(1) discovery and lazy TTL pruning. |
+| `party2:casino:rooms:active` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `room_id`, Score: `UpdatedAt.Unix()` | `internal/casino` | Active casino rooms list for indexed discovery and lazy TTL pruning. |
 | `party2:casino:lock:room:<room_id>` | Valkey Master | `String` | 10 seconds (`10s`) safety TTL | Lock token (`id.New()`) | `internal/casino` | Distributed lock for atomic multiplayer turn serialization and room member mutations (Issue #642). Acquired via `SET NX EX 10` with retry; released via atomic Lua script. |
 
+Dungeon and Challenge additionally use the hash-tagged state/reward keys in
+[transient-run-state.md](transient-run-state.md), with 7200s sliding lifetimes.
+`party2:ranking:refresh` is a scheduled **action type**, not a separately stored
+Valkey key. The withdrawn Candidate E `party2:boss:` keys and `boss_damage`
+script are documented only in [the historical note](transient-boss-hp.md).
 
----
+## Index lifetimes: TTL-Scored Sorted Set with Lazy Purging
 
-## 4. Codified Guidelines for State Candidates (RFC #356 Roadmap)
+Session tokens have independent expiry; their index scores are `ExpiresAt` and
+reads/writes purge expired members with `ZREMRANGEBYSCORE`. Room indices can
+instead score last activity and purge entries older than the owner's TTL.
+Do not confuse these expiration indices with `party2:scheduled:pending`, whose
+score is **execution time**, or with the unfinished-action actor Set. Purging
+overdue scheduled work as if it expired would lose pending actions.
 
-The following specifications define the key patterns, data types, and lifecycle semantics for state candidates evaluated under RFC #356:
+`WRONGTYPE` migration handling is owner-specific: the session adapter can
+replace a legacy Set index and revoke its indexed tokens. This is not permission
+to blindly delete arbitrary financial/session state on any type error.
 
-### 4.1 Candidate A: Player Authentication Sessions (Issue #366, Issue #378 - Completed)
+Candidate D: In-Progress Run Buffers currently store provisional rewards in
+hashes (including JSON item arrays), not in hypothetical `active_nodes` or
+`turn_history` ZSets. Matchmaking/invitation patterns need an actual feature
+requirement before adding keys.
 
-- **Status**: Completed in PR #366 (Issue #366) and optimized with TTL-scored Sorted Sets in Issue #378; legacy `player_sessions` MariaDB table dropped in Migration 051.
-- **Goal**: Move ephemeral authentication sessions from MariaDB to Valkey Master (`session:<token> -> player_id, EX 604800`) to eliminate relational database connection pool bottlenecks on every authenticated HTTP request.
-- **Key Patterns**:
-  - `party2:session:<token>`: `String (JSON)`. 7-day TTL (`604800s`).
-  - `party2:player:sessions:<player_id>`: `Sorted Set (ZSet)` tracking active tokens by expiration score.
-- **Lifecycle & Boundaries**:
-  - Ephemeral, natural 7-day TTL. On crash/eviction, the player simply re-authenticates.
-  - Account deletion hooks (`CleanupHook` / `DeleteAccount`) explicitly remove active session keys via `DeleteByPlayerID`.
+## Lua Script Registry
 
-### 4.2 Candidate B: System Maintenance Mode State (Issue #367 - Completed)
-
-- **Status**: Completed in Issue #367.
-- **Goal**: Eliminate synchronous MariaDB queries from `maintenanceMiddleware` on every incoming HTTP request by maintaining low-cardinality global maintenance flags in Valkey Master / In-Memory.
-- **Key Patterns**:
-  - `party2:maintenance:status`: `String (JSON)` without TTL. Backed by MariaDB `system_maintenance` table.
-- **Lifecycle & Boundaries**:
-  - Admin updates (`POST /admin/maintenance`) immediately update/invalidate Valkey.
-  - Middleware fails-open or falls back safely to in-memory state if Valkey is temporarily unreachable.
-
-### 4.3 Candidate C: Ephemeral Turn & Session Lobbies (Party, PvP, GvG, Casino & Mini-games)
-
-- **Status**: Standardized and implemented across multiplayer domains in Issue #635 (SSOT: [`docs/architecture/transient-run-state.md`](transient-run-state.md)). Active in `internal/party` (wait lobbies), `internal/pvp` (Colosseum rooms), `internal/gvg` (Guild battle rooms), and `internal/casino` (multiplayer card game rooms).
-- **Goal**: Move transient multiplayer recruitment, wait lobbies, and in-flight turn states from MariaDB to Valkey Master to eliminate table lock contention, connection pool exhaustion, and relational write amplification.
-- **Standardized Key Architecture (`party2:<domain>:*`)**:
-  - `party2:<domain>:room:<room_id>`: `String (JSON)` holding authoritative room state, player list, bets, deck, current turn, and pot.
-  - `party2:<domain>:rooms:active`: `Sorted Set (ZSet)` indexing active public rooms scored by `UpdatedAt.Unix()` (or `CreatedAt.Unix()`) for $O(1)$ discovery and lazy TTL pruning.
-  - `party2:<domain>:character:<character_id>`: `String` mapping character ID to room ID. Guarantees single active room per character invariant across the domain.
-  - `party2:<domain>:room:<room_id>:turns`: `List` or `Stream` for turn action log / client replay.
-- **Domain Key Mappings**:
-  - **Party Lobbies (`internal/party`)**:
-    - `party2:party:lobby:<party_id>`: `String (JSON)`, 15m (`900s`) sliding TTL.
-    - `party2:party:lobbies`: `Sorted Set (ZSet)` scored by `CreatedAt.Unix()`.
-    - `party2:party:character:<character_id>`: `String`, 15m (`900s`) sliding TTL.
-    - `party2:party:ready:<party_id>:<character_id>`: `String` countdown flag, 60s TTL.
-    - `party2:party:lock:adventure:<party_id>`: `String` lock token, 10s safety TTL for adventure crawl serialization.
-    - *(Legacy `parties` and `party_members` MariaDB tables dropped in Migration 052)*.
-  - **Colosseum PvP (`internal/pvp`)**:
-    - `party2:pvp:room:<room_id>`: `String (JSON)`, 30m (`1800s`) sliding TTL.
-    - `party2:pvp:rooms:active`: `Sorted Set (ZSet)` scored by `UpdatedAt.Unix()` (lazy pruned via `ZREMRANGEBYSCORE`).
-    - `party2:pvp:character:<character_id>`: `String`, 30m (`1800s`) sliding TTL.
-  - **Guild GvG Combat (`internal/gvg`)**:
-    - `party2:gvg:room:<room_id>`: `String (JSON)`, 30m (`1800s`) sliding TTL.
-    - `party2:gvg:rooms:active`: `Sorted Set (ZSet)` scored by `UpdatedAt.Unix()` (lazy pruned via `ZREMRANGEBYSCORE`).
-    - `party2:gvg:character:<character_id>`: `String`, 30m (`1800s`) sliding TTL.
-  - **Casino Card Games (`internal/casino`)**:
-    - `party2:casino:room:<room_id>`: `String (JSON)`, 30m (`1800s`) sliding TTL. Store for Indian Poker, High-Low, and Doppelganger.
-    - `party2:casino:rooms:active`: `Sorted Set (ZSet)` scored by `UpdatedAt.Unix()`.
-    - `party2:casino:character:<character_id>`: `String`, 30m (`1800s`) sliding TTL.
-- **Sliding TTL Lifecycle (1800s / 30m Parity)**:
-  - Adopts authentic Party2 1800-second idle deletion timeout (`party2/lib/casino.cgi:38` `$auto_delete_casino_time = 1800`, `party2/lib/quest.cgi:50` `$auto_delete_quest_time = 1800`).
-  - Every player action (joining, betting, card flips, ready toggles) refreshes the 1800s TTL. Inactive or abandoned rooms are evicted natively by Valkey without running scheduled SQL sweeper crons.
-- **Two-Phase Settlement Boundary**:
-  - Phase 1 (In-Flight Gameplay): All card flips, bets, calls, and eliminations execute 100% in Valkey Master (< 1ms latency, zero SQL queries).
-  - Phase 2 (Settlement): Upon match termination, a single MariaDB transaction (`RunInTx`) is opened. Payouts (coins, gold, medals, GP) are credited adhering strictly to the Rank 0..8 lock hierarchy. The Valkey room key is cleanly deleted (`DEL`) or set to 60s review TTL.
-  - `ValkeyRoomRepository` implemented in `internal/casino` and wired in `cmd/party2`. Legacy ephemeral MariaDB tables (`casino_rooms` and `casino_members`) were dropped in Migration 085 (mirroring Migration 052 for `parties`).
-
-### 4.4 Candidate D: In-Progress Run Buffers (Issue #369)
-
-- **Status**: Evaluated and Architecturally Codified (SSOT: [`docs/architecture/transient-run-state.md`](transient-run-state.md)).
-- **Goal**: Buffer active multi-turn dungeon expeditions and challenge gauntlets in Valkey Master, eliminating relational write amplification per turn.
-- **Key Patterns (with Mandatory Cluster Hash Tagging `{char:<character_id>}`)**:
-  - `party2:dungeon:{char:<character_id>}:state`: `Hash` holding `expedition_id`, `dungeon_id`, `current_floor`, `pos_x`, `pos_y`, `current_hp`, `turns_remaining`, `status`. TTL: 2 hours (`7200s`), sliding.
-  - `party2:dungeon:{char:<character_id>}:rewards`: `Hash` holding uncommitted provisional item drops, gold, exp, medals. TTL: 2 hours (`7200s`), sliding.
-  - `party2:dungeon:{char:<character_id>}:revealed`: `Set` of visited `floor:x:y` coordinates for fog-of-war tracking. TTL: 2 hours (`7200s`), sliding.
-  - `party2:challenge:{char:<character_id>}:session`: `Hash` holding `session_id`, `tier_id`, `current_round`, `current_hp`, `status`. TTL: 2 hours (`7200s`), sliding.
-  - `party2:challenge:{char:<character_id>}:rewards`: `Hash` holding uncommitted provisional rewards (exp, gold, items). TTL: 2 hours (`7200s`), sliding.
-- **Lifecycle & Boundaries (Two-Phase Settlement)**:
-  - Phase 1 (Active Run): All turn updates and reward buffering occur 100% in Valkey Master via atomic Lua scripts (`dungeon_step`, `challenge_advance_round`). MariaDB is not touched.
-  - Phase 2 (Settlement): Upon victory, retreat, or defeat, an atomic MariaDB transaction executes via `RunInTx`: durable inventory items are awarded, progression updated, and the Valkey run buffer is immediately deleted (`DEL`).
-
-### 4.5 Candidate E: World Boss Real-time Shared HP (Issue #370)
-
-- **Goal**: High-frequency concurrent boss raid damage resolution without MariaDB single-row lock serialization (SSOT: [`docs/architecture/transient-boss-hp.md`](transient-boss-hp.md)).
-- **Key Patterns (with Mandatory Cluster Hash Tagging `{boss:<boss_id>}`)**:
-  - `party2:boss:{boss:<boss_id>}:hp`: `String` (Atomic integer counter). Current remaining HP. TTL: 2 hours (`7200s`), sliding.
-  - `party2:boss:{boss:<boss_id>}:status`: `String`. Status (`"active"`, `"defeated"`, `"settled"`). TTL: 2 hours (`7200s`), sliding.
-  - `party2:boss:{boss:<boss_id>}:contributors`: `Hash`. Field: `character_id`, Value: damage tally. TTL: 2 hours (`7200s`), sliding.
-  - `party2:boss:{boss:<boss_id>}:killer`: `String`. Killer character ID elected by Lua script. TTL: 2 hours (`7200s`), sliding.
-  - `party2:boss:{boss:<boss_id>}:run_id`: `String`. Unique execution UUID for idempotent settlement. TTL: 2 hours (`7200s`), sliding.
-- **Lifecycle & Boundaries (Two-Phase Settlement)**:
-  - Phase 1 (Active Raid): Concurrent attacks execute entirely against Valkey Master via atomic Lua script (`boss_damage.lua`). Evaluates overkill prevention, tallies contributor damage (`HINCRBY`), elects exactly one killer when HP reaches 0, and refreshes 2h TTL. Zero MariaDB queries or locks during combat.
-  - Phase 2 (Settlement): The elected killer is designated the settlement coordinator and commits permanent loot (MVP bonus, Last-Hit bonus, participation rewards, completion logs) in MariaDB Master via `RunInTx`. The status in Valkey is then marked `"settled"`. Unfinalized defeats can be safely and idempotently reconciled.
-
-### 4.6 Candidate F: Real-time Leaderboards (`ranking`) (Valkey Cache, Not Master)
-
-- **Authority**: MariaDB Master + Valkey Cache.
-- **Goal**: Read acceleration for high-traffic leaderboard views without overloading MariaDB queries.
-- **Semantics & Lifecycle**:
-  - Sorted Sets (`ZADD` / `ZREVRANGE`) provide O(log N) ranking queries.
-  - MariaDB remains the canonical source of truth (`ranking_snapshots` table).
-  - Data is refreshed periodically via background worker (`party2:ranking:refresh`) or reconstructed on cache miss.
-
----
-
-## 5. Operational Hygiene & Anti-Patterns
-
-### 5.1 Strict Prohibition of `KEYS *` / Unindexed `SCAN` in Production
-
-> [!CAUTION]
-> **Never use `KEYS *` or unindexed wildcard `SCAN` in production code.**
-> Valkey is single-threaded for command execution. Scanning the entire keyspace blocks all incoming client requests, leading to server timeouts and cascading failures.
-
-- **Anti-Pattern (Banned)**:
-  ```go
-  // BANNED: Never search for keys using wildcard patterns
-  keys, _ := client.Do(ctx, client.B().Keys().Pattern("party2:session:*").Build()).AsStrSlice()
-  ```
-- **Approved Pattern (Index Tracking with Purging)**:
-  Maintain a dedicated tracking `Sorted Set` for reverse lookup, ordered retrieval, and lazy expiration purging:
-  ```go
-  // APPROVED: Query the index sorted set to retrieve specific keys in O(1)
-  tokens, _ := client.Do(ctx, client.B().Zrange().Key("party2:player:sessions:" + playerID).Min("0").Max("-1").Build()).AsStrSlice()
-  for _, token := range tokens {
-      client.Do(ctx, client.B().Del().Key("party2:session:" + token).Build())
-  }
-  client.Do(ctx, client.B().Del().Key("party2:player:sessions:" + playerID).Build())
-  ```
-
-### 5.2 Mandatory TTL for Valkey Master Keys
-
-> [!IMPORTANT]
-> **Every key stored in Valkey Master MUST have an explicit TTL or a documented application lifecycle hook.**
-> Writing keys without expiration to Valkey Master causes unbounded memory growth and eventual OOM eviction.
-
-- Any key without a natural TTL is considered a memory leak bug, with the sole exception of static administrative singletons (`party2:maintenance:status`) whose lifecycle is strictly governed by admin mutations and MariaDB backup.
-- In-flight execution keys (such as `party2:scheduled:action:<id>`) MUST apply a terminal TTL (e.g. 1 hour) upon completion or cancellation.
-
-### 5.3 Test Isolation & Safe Cleanup
-
-- All unit and integration tests connecting to Valkey MUST use key prefixes starting with `party2:test:`.
-- Tests MUST clean up only their specific created test keys using `DEL`.
-- **`FLUSHDB` and `FLUSHALL` are strictly forbidden**, even in automated test suites, to prevent wiping state from other tests running concurrently or local developer sessions.
-
-### 5.4 Centralized Client Management
-
-- Valkey client configuration and connection setup MUST use `internal/valkey.NewClient()` and `internal/valkey.GetConfig()`.
-- The application process (`cmd/party2/main.go`) initializes a single multiplexed Valkey client instance and injects it into domain repositories.
-- The client connection is gracefully closed during application shutdown after background workers and HTTP listeners have stopped.
-
-### 5.5 Valkey Lua Scripting Standards & Operational Constraints
-
-Valkey evaluates Lua scripts atomically in a single thread, guaranteeing serializability, no partial updates, and zero lock overhead in the application layer. However, because Valkey is single-threaded, a poorly designed Lua script will block all incoming client commands. All Lua scripts in Party2 Re must strictly adhere to the following operational constraints:
-- **Mandatory Criteria:** Use Lua scripts (`valkey.NewLuaScript`) ONLY for atomic conditional state transitions, multi-key validation, or CAS checks that cannot be achieved with single native commands (`INCR`, `HSET`, `SET NX`).
-- **Execution Budget:** Scripts MUST complete within sub-millisecond limits (< 1ms) with complexity <= O(log N).
-- **Prohibited in Lua:** Wildcard scans (`KEYS *`, `SCAN`), unbounded loops, and heavy JSON serialization in Lua.
-- **Cluster Hash Tagging:** Multi-key scripts MUST enclose the co-locating entity ID in `{...}`.
-- **In-Memory Fallback Parity:** Repositories using Lua scripts MUST provide 100% equivalent atomic validation and state mutation in Go in-memory fallback stores.
-- **Preloading:** Scripts MUST be preloaded via `valkey.NewLuaScript` (`EVALSHA` with automatic fallback on `NOSCRIPT`).
-
-#### 5.5.1 Lua Script Physical Organization (`//go:embed`)
-
-Valkey Lua scripts MUST NOT be defined as raw multiline string constants inside Go source files. They MUST reside in dedicated external files and be embedded at compile time:
-- **Dedicated Subdirectory**: Store scripts under a `lua/` subdirectory within the owning package (e.g., `internal/dungeon/lua/dungeon_step.lua`, `internal/challenge/lua/challenge_round.lua`).
-- **Compile-Time Embedding**: Embed script sources into string variables using Go standard `//go:embed` directives (e.g., `//go:embed lua/dungeon_step.lua\nvar dungeonStepLua string`).
-- **Zero Runtime File I/O**: `//go:embed` compiles the Lua source directly into the static binary, requiring no filesystem access or dynamic asset packaging at runtime.
-- **Tooling and Readability**: Dedicated `.lua` files enable editor syntax highlighting, external linting/formatting, and clean PR diffs without Go string escaping overhead.
-
-### 5.6 Lua Script Registry & Operational Catalog
-
-The following table catalogs all production and planned Lua scripts active in Party2 Re:
+The following registry describes current scripts. Exact arguments and error
+codes are owned by the embedded `.lua` source; this table is navigation, not
+a claim that every service operation consists of one atomic script.
 
 | Script Identifier | Source Location | Target Keys (`KEYS[...]`) | Parameters (`ARGV[...]`) | Operation Description & Invariant Guarantees |
 | :--- | :--- | :--- | :--- | :--- |
@@ -301,89 +101,21 @@ The following table catalogs all production and planned Lua scripts active in Pa
 | `party_remove_member` | `internal/party/valkey_repository.go` (`removeMemberLua`) | `KEYS[1]`: `lobbyKey`<br>`KEYS[2]`: `characterKey`<br>`KEYS[3]`: `readyKey` | `ARGV[1]`: Character ID<br>`ARGV[2]`: Lobby TTL | Atomically removes a member from the party lobby roster, deletes their character-to-party reverse index and ready check countdown key, and refreshes lobby TTL. |
 | `party_update_member_ready` | `internal/party/valkey_repository.go` (`updateMemberReadyLua`) | `KEYS[1]`: `lobbyKey`<br>`KEYS[2]`: `readyKey` | `ARGV[1]`: Character ID<br>`ARGV[2]`: Ready Flag (`"1"` or `"0"`)<br>`ARGV[3]`: Lobby TTL<br>`ARGV[4]`: Ready TTL | Atomically toggles a member's ready flag in the lobby state and synchronizes the 60-second ready countdown key (`SET EX 60` or `DEL`). Rejects if character is not a member (`ERR_CHAR_NOT_IN_PARTY`). |
 | `party_update_party` | `internal/party/valkey_repository.go` (`updatePartyLua`) | `KEYS[1]`: `lobbyKey`<br>`KEYS[2]`: `lobbiesIndexKey` | `ARGV[1]`: Party JSON<br>`ARGV[2]`: Lobby TTL<br>`ARGV[3]`: Status (`"recruiting"`, `"disbanded"`, `"completed"`)<br>`ARGV[4]`: Party ID | Atomically updates party configuration (e.g. stage, speed, max members) and removes the party from the recruiting index set (`ZREM`) if transitioned to `disbanded` or `completed`. |
-| *Planned: `zset_ttl_purge`* | Planned SSOT Pattern (Issue #386) | `KEYS[1]`: `ZSet` Key | `ARGV[1]`: Current Timestamp | Atomically purges expired members scored by TTL (`ZREMRANGEBYSCORE`) and returns remaining active count in a single round-trip. |
 | `dungeon_step` | `internal/dungeon/lua/dungeon_step.lua` (`dungeonStepLua`) | `KEYS[1]`: `party2:dungeon:{char:<id>}:state`<br>`KEYS[2]`: `party2:dungeon:{char:<id>}:rewards` | `ARGV[1]`: Expected Expedition ID<br>`ARGV[2]`: Floor<br>`ARGV[3]`: Pos X<br>`ARGV[4]`: Pos Y<br>`ARGV[5]`: HP Delta<br>`ARGV[6]`: Turns Delta<br>`ARGV[7]`: Exp Delta<br>`ARGV[8]`: Gold Delta<br>`ARGV[9]`: Medals Delta<br>`ARGV[10]`: Item ID<br>`ARGV[11]`: Timestamp<br>`ARGV[12]`: TTL (7200s) | Atomically advances exploration coordinates, updates HP/turns budget, and buffers provisional room loot without touching MariaDB during active run. |
 | `challenge_advance_round` | `internal/challenge/lua/challenge_round.lua` (`challengeRoundLua`) | `KEYS[1]`: `party2:challenge:{char:<id>}:session`<br>`KEYS[2]`: `party2:challenge:{char:<id>}:rewards` | `ARGV[1]`: Expected Session ID<br>`ARGV[2]`: Surviving HP<br>`ARGV[3]`: Exp Delta<br>`ARGV[4]`: Gold Delta<br>`ARGV[5]`: Item ID<br>`ARGV[6]`: Timestamp<br>`ARGV[7]`: TTL (7200s) | Atomically advances endurance challenge wave round, persists surviving HP, and accumulates wave rewards without touching MariaDB during active run. |
-| `boss_damage` | `internal/boss/lua.go` (`bossDamageLua`) | `KEYS[1]`: `party2:boss:{boss:<id>}:hp`<br>`KEYS[2]`: `party2:boss:{boss:<id>}:status`<br>`KEYS[3]`: `party2:boss:{boss:<id>}:contributors`<br>`KEYS[4]`: `party2:boss:{boss:<id>}:killer`<br>`KEYS[5]`: `party2:boss:{boss:<id>}:run_id` | `ARGV[1]`: Attacker ID<br>`ARGV[2]`: Incoming Damage<br>`ARGV[3]`: TTL (7200s) | Atomically decrements world boss HP, prevents overkill, tallies contributor damage (`HINCRBY`), elects exactly one killer when HP reaches 0, transitions status to `defeated`, and returns execution outcome without MariaDB row locks. |
 | `casino_release_room_lock` | `internal/casino/lua/release_room_lock.lua` (`releaseRoomLockLua`) | `KEYS[1]`: `lockKey` (`party2:casino:lock:room:<room_id>`) | `ARGV[1]`: Lock Token (`token`) | Atomically deletes the room lock key if and only if its value matches the caller's lock token, preventing accidental release of expired or re-acquired locks. |
 | `pvp_release_room_lock` | `internal/pvp/lua/release_room_lock.lua` (`releaseRoomLockLua`) | `KEYS[1]`: `lockKey` (`party2:pvp:lock:room:<room_id>`) | `ARGV[1]`: Lock Token (`token`) | Atomically deletes the room lock key if and only if its value matches the caller's lock token, preventing accidental release of expired or re-acquired locks (Issue #652). |
 | `gvg_release_room_lock` | `internal/gvg/lua/release_room_lock.lua` (`releaseRoomLockLua`) | `KEYS[1]`: `lockKey` (`party2:gvg:lock:room:<room_id>`) | `ARGV[1]`: Lock Token (`token`) | Atomically deletes the room lock key if and only if its value matches the caller's lock token, preventing accidental release of expired or re-acquired locks (Issue #652). |
 
-### 5.7 Approved Pattern: Ephemeral Element Tracking via TTL-Scored Sorted Sets with Lazy Purging
+Lua scripts live in feature `lua/` directories and use `go:embed`. Party scripts
+operate on bounded member JSON; Dungeon/Challenge reward arrays also use JSON.
+Payload limits, complexity, and execution budgets require review/measurement.
+Do not claim a sub-millisecond guarantee from embedding or command linting.
 
-#### 5.7.1 The Architectural Problem
-Standard Valkey Sets (`SADD`, `SMEMBERS`, `SREM`) only allow setting an expiration TTL on the key itself, not on individual members inside the Set.
+## Mechanical verification
 
-When tracking ephemeral 1:N relationships where child items expire independently (such as player session tokens, matchmaking wait queues, candidate challenge tokens, or multi-turn exploration buffers), standard Sets lead to two systemic problems:
-1. **Accumulation of Stale Elements:** Expired items linger in the Set indefinitely unless explicitly removed.
-2. **Broken Parent TTL Guarantees:** Any operation refreshing the parent key's TTL keeps expired members trapped inside for days or weeks. Conversely, using a short parent key TTL evicts active unexpired members prematurely.
-3. **Flawed Alternative (Background Scanners):** Running periodic background worker goroutines to iterate and purge expired keys wastes CPU cycles, floods the Valkey connection pool, and introduces eventual consistency gaps.
-
-#### 5.7.2 The Core Approved SSOT Pattern
-To solve this, Party2 Re mandates the **TTL-Scored Sorted Set with Lazy Purging Pattern**:
-- **Data Structure:** A Valkey Sorted Set (`ZSET`) where:
-  - **Member:** Unique identifier of the child element (e.g. `session_id`, `challenge_token`, `queued_character_id`).
-  - **Score:** Unix timestamp in seconds indicating the element's exact expiration time (`float64(ExpiresAt.Unix())`).
-- **Pipelined / Atomic Command Sequence:**
-  1. **Add / Refresh Element:**
-     ```text
-     ZADD <parent_key> <expires_at_unix> <member_id>
-     ```
-  2. **Lazy Purge (O(log N + M)):**
-     ```text
-     ZREMRANGEBYSCORE <parent_key> -inf <now_unix>
-     ```
-     Removes all elements whose expiration timestamp is in the past.
-  3. **Touch Parent TTL:**
-     ```text
-     EXPIRE <parent_key> <max_parent_ttl_seconds>
-     ```
-     Sets or extends the parent key's TTL to encompass the furthest expiration horizon of any active member.
-  4. **Query Active Elements:**
-     Always lazily purge first (step 2), then query:
-     ```text
-     ZRANGE <parent_key> 0 -1
-     ```
-     Guarantees that query results never contain stale or expired entries.
-  5. **Revoke Single Element:**
-     ```text
-     ZREM <parent_key> <member_id>
-     ZREMRANGEBYSCORE <parent_key> -inf <now_unix>
-     DEL <child_key>
-     ```
-  6. **Cascade Delete All Elements:**
-     ```text
-     ZRANGE <parent_key> 0 -1 -> DEL child_key_1 child_key_2 ... parent_key
-     ```
-
-#### 5.7.3 Resilience & Zero-Downtime Migration (`WRONGTYPE`)
-When existing deployments transition an existing key from a standard Set to a Sorted Set, Valkey will return a `WRONGTYPE Operation against a key holding the wrong kind of value` error.
-All repository implementations adopting this pattern MUST handle `WRONGTYPE` gracefully:
-- **On Write (`ZADD`):**
-  If `WRONGTYPE` is returned, delete the legacy key (`DEL`) and retry `ZADD`.
-- **On Read / Deletion (`ZRANGE`):**
-  If `WRONGTYPE` is returned, fall back to `SMEMBERS` to retrieve legacy members, delete them, and delete the parent key.
-
-#### 5.7.4 Application Blueprints for Upcoming RFC #356 State Candidates
-
-| Candidate / Feature | Parent Key Pattern | Child Score Semantics | Lazy Purge & Invariant Behavior |
-| :--- | :--- | :--- | :--- |
-| **Candidate A: Player Sessions**<br>(Issue #378 / PR #383) | `party2:player:sessions:<player_id>` | `ExpiresAt.Unix()` (7 days from creation) | Purges expired session tokens lazily on `Save`, `FindByID`, and `Revoke`. Supports multi-device logins while preventing unbounded token accumulation. |
-| **Candidate D: In-Progress Run Buffers**<br>(Issue #369: Dungeon/Challenge) | `party2:dungeon:run:{character:<id>}:active_nodes`<br>`party2:challenge:run:{character:<id>}:turn_history` | Node expiration or turn timeout timestamp | Buffers tentative reward nodes, active tile coordinates, and temp battle buffs during multi-turn exploration. On step resolution or timeout, expired nodes are lazily purged before room state transition. |
-| **Matchmaking Queues & Invitations**<br>(Candidate C / Matchmaking) | `party2:matchmaking:{queue:<mode>}:waiters`<br>`party2:party:{lobby:<id>}:invitations` | Wait timeout timestamp (e.g. `now + 120s`) | Purges timed-out players lazily during matchmaking pairing rounds or lobby queries, preventing phantom invitations without background worker polling. |
-| **Candidate C: Ephemeral Turn & Session Lobbies**<br>(Issue #635: Party, PvP, GvG, Casino) | `party2:<domain>:rooms:active` | `UpdatedAt.Unix()` (or `CreatedAt.Unix()`) | Purges expired or abandoned rooms lazily (`ZREMRANGEBYSCORE -inf <now - 1800>`) during lobby listing queries, guaranteeing that active room listings never return stale rooms without background SQL sweepers. |
-
----
-
-
-## 6. Mechanical Verification & CI Enforcement
-
-Conformance to this keyspace specification is mechanically verified during CI:
-
-1. **AST Keyspace Linting (`internal/architecture/valkey_lint_test.go`)**:
-   - Inspects all Go source files under `internal/`.
-   - Validates that every string literal starting with `party2:` adheres to registered namespaces.
-   - Forbids any call to the banned `Keys()` command in production code.
-   - Verifies that all registered production key patterns are documented in this specification file.
-2. **Execution in CI Pipeline (`make check`)**:
-   - Runs automatically as part of step `[4/7]` via `go test ./internal/architecture`.
+`internal/architecture/valkey_lint_test.go` checks registered string prefixes,
+selected required documentation terms, banned commands, and Lua embedding.
+It does not validate TTL values, exhaustively discover dynamic keys, verify
+cluster colocation, prove crash recovery, or benchmark runtime complexity.
+Run the architectural tests and `make check` after keyspace changes.

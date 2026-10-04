@@ -1,5 +1,4 @@
 {
-  "$schema": "https://archify.dev/schema/module.v1.json",
   "module": "blacksmith",
   "tier": 1,
   "description": "Authentic weapon seals (こくいん), equipment naming (なづける), and dedicated 3-slot weapon storage (専用預かり所).",
@@ -41,7 +40,7 @@
     {
       "method": "ApplySeal",
       "source_ref": "internal/blacksmith/blacksmith.go#Service.ApplySeal",
-      "transaction_type": "ExecuteTransaction",
+      "transaction_type": "RunInTx",
       "lock_sequence": [
         {
           "table": "characters",
@@ -60,7 +59,7 @@
     {
       "method": "NameEquipment",
       "source_ref": "internal/blacksmith/blacksmith.go#Service.NameEquipment",
-      "transaction_type": "ExecuteTransaction",
+      "transaction_type": "RunInTx",
       "lock_sequence": [
         {
           "table": "characters",
@@ -79,7 +78,7 @@
     {
       "method": "DepositWeapon",
       "source_ref": "internal/blacksmith/blacksmith.go#Service.DepositWeapon",
-      "transaction_type": "ExecuteTransaction",
+      "transaction_type": "RunInTx",
       "lock_sequence": [
         {
           "table": "characters",
@@ -110,7 +109,7 @@
     {
       "method": "WithdrawWeapon",
       "source_ref": "internal/blacksmith/blacksmith.go#Service.WithdrawWeapon",
-      "transaction_type": "ExecuteTransaction",
+      "transaction_type": "RunInTx",
       "lock_sequence": [
         {
           "table": "characters",

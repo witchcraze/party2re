@@ -1,5 +1,4 @@
 {
-  "$schema": "https://archify.dev/schema/module.v1.json",
   "module": "shop",
   "tier": 1,
   "description": "Item purchase and selling with deterministic character gold and inventory slot synchronization.",
@@ -42,6 +41,12 @@
           "tier": 3,
           "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
           "note": "Lock inventory slots to verify capacity and add item"
+        },
+        {
+          "table": "character_depots / depot_items",
+          "tier": 5,
+          "mode": "SELECT ... FOR UPDATE",
+          "note": "Depot materials/output for synthesis; conditional occupied-slot or multi-quantity delivery for purchase"
         }
       ]
     },
@@ -61,6 +66,12 @@
           "tier": 3,
           "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
           "note": "Lock inventory to check and consume item-180"
+        },
+        {
+          "table": "character_depots / depot_items",
+          "tier": 5,
+          "mode": "SELECT ... FOR UPDATE",
+          "note": "Depot materials/output for synthesis; conditional occupied-slot or multi-quantity delivery for purchase"
         }
       ]
     },
