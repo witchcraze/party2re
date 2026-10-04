@@ -1,6 +1,6 @@
 # Status
 
-Last reviewed: Issue #983 — HTTP/Park: Apply the shared sleep guard to park actions
+Last reviewed: Issue #982 — Scheduling: Propagate actor-index write failures before enqueueing actions
 
 ## Current Phase
 
@@ -19,7 +19,7 @@ The Go project contains the foundational systems, core combat, 39 feature module
 - **Modular Monolith**: Go stdlib HTTP routing with modular wire composition (`cmd/party2/wire.go`).
 - **HTTP Transport & Edge Policy**: RESTful JSON API with structured error responses, HATEOAS actions, trusted proxy rate limiting, and centralized Unicode NFC sanitization (`internal/validation`).
 - **Durable Persistence**: MariaDB Master (Migrations `001`–`092`) with deterministic row-lock hierarchy (Rank 0→8) and ambient transaction propagation (`database.RunInTx`).
-- **Transient State**: Valkey Master for ephemeral lobbies & turns (Candidate C), run buffers (Candidate D), actor-indexed unfinished ScheduledActions (Pending/Processing). SSOT: [`docs/architecture/valkey-keyspace.md`](docs/architecture/valkey-keyspace.md).
+- **Transient State**: Valkey Master for ephemeral lobbies & turns (Candidate C), run buffers (Candidate D), actor-indexed unfinished ScheduledActions (Pending/Processing; write error propagation & cleanup on schedule). SSOT: [`docs/architecture/valkey-keyspace.md`](docs/architecture/valkey-keyspace.md).
 - **Lifecycle Contracts**: Fail-fast startup checks for MariaDB/Valkey with clean resource teardown on error.
 - **AST Gates & CI**: Automated AST linters (locks, tx runners, ISP, file size ≤500 lines, Valkey keyspace, presentation decoupling), action catalog OpenAPI drift detector (`catalog_lint_test.go`), and non-mutating OpenAPI sync checks (`sync_openapi --check`). SSOT: [`docs/development/ast-linters.md`](docs/development/ast-linters.md).
 - **PlayerContext**: Uncached Character/ScheduledAction/Sleep observations and ordered six-gate ActionID evaluation; initial town scene, positive-gold entry filtering, and legacy-accurate death gating (combat quests only). HTTP `GET /context` remains #939.

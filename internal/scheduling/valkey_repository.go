@@ -27,6 +27,12 @@ const (
 	actorKeyPrefix  = "party2:scheduled:actor:"
 )
 
+// Schedule stores action data, indexes it by ActorID (if non-empty), and adds it
+// to the pending queue sorted set. If indexing by ActorID or enqueueing fails,
+// any partially written data or index entry is cleaned up on a best-effort basis
+// and the error is returned to prevent orphan un-indexed or un-enqueued work.
+// Subsequent retries safely overwrite any leftover payload via idempotent SET,
+// SADD, and ZADD operations.
 func (r *ValkeyRepository) Schedule(ctx context.Context, action core_scheduling.ScheduledAction) error {
 	data, err := json.Marshal(action)
 	if err != nil {
@@ -36,20 +42,28 @@ func (r *ValkeyRepository) Schedule(ctx context.Context, action core_scheduling.
 	actionKey := actionKeyPrefix + action.ID
 
 	// Save action data
-	err = r.client.Do(ctx, r.client.B().Set().Key(actionKey).Value(string(data)).Build()).Error()
-	if err != nil {
+	if err := r.client.Do(ctx, r.client.B().Set().Key(actionKey).Value(string(data)).Build()).Error(); err != nil {
 		return err
 	}
 
 	// Index by actor ID if present
 	if action.ActorID != "" {
-		_ = r.client.Do(ctx, r.client.B().Sadd().Key(actorKeyPrefix+action.ActorID).Member(action.ID).Build())
+		if err := r.client.Do(ctx, r.client.B().Sadd().Key(actorKeyPrefix+action.ActorID).Member(action.ID).Build()).Error(); err != nil {
+			r.client.Do(ctx, r.client.B().Del().Key(actionKey).Build())
+			return err
+		}
 	}
 
 	// Add to pending queue sorted set
 	score := float64(action.ExecuteAt.Unix())
-	err = r.client.Do(ctx, r.client.B().Zadd().Key(pendingQueueKey).ScoreMember().ScoreMember(score, action.ID).Build()).Error()
-	return err
+	if err := r.client.Do(ctx, r.client.B().Zadd().Key(pendingQueueKey).ScoreMember().ScoreMember(score, action.ID).Build()).Error(); err != nil {
+		if action.ActorID != "" {
+			r.client.Do(ctx, r.client.B().Srem().Key(actorKeyPrefix+action.ActorID).Member(action.ID).Build())
+		}
+		r.client.Do(ctx, r.client.B().Del().Key(actionKey).Build())
+		return err
+	}
+	return nil
 }
 
 func (r *ValkeyRepository) FetchDue(ctx context.Context, upTo time.Time, limit int) ([]core_scheduling.ScheduledAction, error) {

@@ -106,7 +106,29 @@ func TestValkeyRepository_Schedule(t *testing.T) {
 		t.Fatalf("expected errSet, got %v", err)
 	}
 
-	// 4. Error on ZADD
+	// 4. Error on SADD
+	errSadd := errors.New("valkey sadd error")
+	clientSaddErr := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		if cmd.Commands()[0] == "SADD" {
+			return valkeytest.MakeErrorResult(errSadd)
+		}
+		return valkeytest.MakeOKResult()
+	}))
+	repoSaddErr := NewValkeyRepository(clientSaddErr)
+	if err := repoSaddErr.Schedule(ctx, action); !errors.Is(err, errSadd) {
+		t.Fatalf("expected errSadd, got %v", err)
+	}
+	saddCmds := clientSaddErr.RecordedCommandStrings()
+	for _, c := range saddCmds {
+		if c[0] == "ZADD" {
+			t.Fatalf("unexpected ZADD executed after SADD failure: %v", saddCmds)
+		}
+	}
+	if len(saddCmds) != 3 || saddCmds[2][0] != "DEL" || saddCmds[2][1] != actionKeyPrefix+"act-01" {
+		t.Fatalf("expected SET, SADD, DEL on SADD failure, got: %v", saddCmds)
+	}
+
+	// 5. Error on ZADD with ActorID
 	errZadd := errors.New("valkey zadd error")
 	clientZaddErr := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
 		if cmd.Commands()[0] == "ZADD" {
@@ -117,6 +139,98 @@ func TestValkeyRepository_Schedule(t *testing.T) {
 	repoZaddErr := NewValkeyRepository(clientZaddErr)
 	if err := repoZaddErr.Schedule(ctx, action); !errors.Is(err, errZadd) {
 		t.Fatalf("expected errZadd, got %v", err)
+	}
+	zaddCmds := clientZaddErr.RecordedCommandStrings()
+	if len(zaddCmds) != 5 || zaddCmds[3][0] != "SREM" || zaddCmds[4][0] != "DEL" {
+		t.Fatalf("expected SET, SADD, ZADD, SREM, DEL on ZADD failure, got: %v", zaddCmds)
+	}
+
+	// 6. Error on ZADD without ActorID
+	clientZaddNoActorErr := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		if cmd.Commands()[0] == "ZADD" {
+			return valkeytest.MakeErrorResult(errZadd)
+		}
+		return valkeytest.MakeOKResult()
+	}))
+	repoZaddNoActorErr := NewValkeyRepository(clientZaddNoActorErr)
+	if err := repoZaddNoActorErr.Schedule(ctx, actionNoActor); !errors.Is(err, errZadd) {
+		t.Fatalf("expected errZadd, got %v", err)
+	}
+	zaddNoActorCmds := clientZaddNoActorErr.RecordedCommandStrings()
+	if len(zaddNoActorCmds) != 3 || zaddNoActorCmds[2][0] != "DEL" {
+		t.Fatalf("expected SET, ZADD, DEL on ZADD failure without ActorID, got: %v", zaddNoActorCmds)
+	}
+}
+
+func TestPostReviewScheduleIndexFailure(t *testing.T) {
+	failure := errors.New("actor index unavailable")
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(_ context.Context, c valkey.Completed) valkey.ValkeyResult {
+		if c.Commands()[0] == "SADD" {
+			return valkeytest.MakeErrorResult(failure)
+		}
+		return valkeytest.MakeOKResult()
+	}))
+	err := NewValkeyRepository(client).Schedule(context.Background(), core_scheduling.ScheduledAction{
+		ID:         "a",
+		ActorID:    "hero",
+		ActionType: "test",
+		State:      core_scheduling.StatePending,
+		ExecuteAt:  time.Now().Add(time.Hour),
+	})
+	if !errors.Is(err, failure) {
+		t.Errorf("Schedule succeeded without actor index: got %v", err)
+	}
+}
+
+func TestValkeyRepository_ScheduleAndQuery(t *testing.T) {
+	ctx := context.Background()
+	storedKeys := make(map[string]string)
+	actorSets := make(map[string][]string)
+
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(_ context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		args := cmd.Commands()
+		switch args[0] {
+		case "SET":
+			storedKeys[args[1]] = args[2]
+			return valkeytest.MakeOKResult()
+		case "SADD":
+			actorSets[args[1]] = append(actorSets[args[1]], args[2])
+			return valkeytest.MakeOKResult()
+		case "ZADD":
+			return valkeytest.MakeOKResult()
+		case "SMEMBERS":
+			return valkeytest.MakeStringSliceResult(actorSets[args[1]])
+		case "MGET":
+			var results []string
+			for _, k := range args[1:] {
+				results = append(results, storedKeys[k])
+			}
+			return valkeytest.MakeStringSliceResult(results)
+		default:
+			return valkeytest.MakeOKResult()
+		}
+	}))
+
+	repo := NewValkeyRepository(client)
+	action := core_scheduling.ScheduledAction{
+		ID:          "act-query-01",
+		ActorID:     "hero-01",
+		ActionType:  "test:query",
+		State:       core_scheduling.StatePending,
+		ScheduledAt: time.Now().UTC(),
+		ExecuteAt:   time.Now().UTC().Add(time.Hour),
+	}
+
+	if err := repo.Schedule(ctx, action); err != nil {
+		t.Fatalf("unexpected Schedule error: %v", err)
+	}
+
+	found, err := repo.FindPendingByActorID(ctx, "hero-01")
+	if err != nil {
+		t.Fatalf("unexpected FindPendingByActorID error: %v", err)
+	}
+	if len(found) != 1 || found[0].ID != action.ID {
+		t.Fatalf("expected found action %q, got: %+v", action.ID, found)
 	}
 }
 

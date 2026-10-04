@@ -100,7 +100,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Multi-stage adventure and dungeon exploration: Authentic 10-floor dungeon crawl loop, Floor 11 Treasure Room, depot overflow fallback, immediate crawl execution, and JST weekday orb evaluation with nowFunc time injection (#57, #74, #478, #655, #882)
 - [x] Multiplayer party formation, co-op adventures, synergy bonuses, speed configs (3/18/25), need_join condition checks, distributed party adventure locking, and group quests (#188, #478, #653, #656, #709, #793)
 - [x] Adventure history logs, stage clear stats, and milestone progression unlocks (#199)
-- [x] Push-based background ScheduledAction completion via Valkey Worker (#106, #109, #110)
+- [x] Push-based background ScheduledAction completion via Valkey Worker, with actor index write error propagation prior to queue enqueueing (#106, #109, #110, #982)
 - [x] Colosseum PvP: Real-time 8-player Bet & Split combat, 9 team colors, multi-round party battle resolution, and distributed room locking (#75, #481, #594, #644, #652, #661)
 - [x] Guild versus Guild (GvG) Combat: Live multi-round matches, GP prize pools, target wins, and 7-tier victory medals & championship cups (#77, #482, #594, #644, #652, #675)
 - [x] 6-player king1–10 / 4-player king99 Party Sealing Boss Battles, Dejon banishment, Hero Count increments, JST weekday orb evaluation with nowFunc injection, and victory celebration banquets (#73, #479, #657, #902)
