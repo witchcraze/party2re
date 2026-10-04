@@ -16,13 +16,13 @@ Each action is statically linked to its corresponding OpenAPI 3.1 `operationId` 
 
 The current evaluator uses six gates. This is an implementation snapshot, not certification that all flags reproduce legacy behavior.
 
-**Confirmed differences requiring implementation correction:** legacy `lib/chapel.cgi` prayer sets a blessing without charging gold or reviving HP. Its current catalog label and positive-gold gate are therefore incorrect. Legacy `lib/blacksmith.cgi` seal payment checks and deducts crystals, as does the Go seal service; the catalog's gold gate can reject a valid crystal-funded action. `home_sleep` describes free home sleep, not a paid inn. Preserve these differences until the catalog is corrected; do not treat the matrix as the game specification.
+**Confirmed differences requiring implementation correction:** legacy `lib/blacksmith.cgi` seal payment checks and deducts crystals, as does the Go seal service; the catalog's gold gate can reject a valid crystal-funded action. `home_sleep` describes free home sleep, not a paid inn. Preserve these differences until the catalog is corrected; do not treat the matrix as the game specification. (Issue #986 reconciled `chapel_pray` to a free daily blessing without gold gating or revival metadata).
 
 The gate descriptions below summarize the current implementation:
 
 1. **Dead Gate (`$m{hp} <= 0`)**:
    - Deceased characters cannot participate in battles (`vs_monster`, `vs_player`, `boss`), play casino games, purchase items, or perform economic transactions.
-   - **Exceptions**: `home_sleep` (revives HP/MP to full in `sleep.cgi`), `home_wake`, `chapel_pray` (current exemption; prayer is not revival), and `rescue_request` (emergency unstick).
+   - **Exceptions**: `home_sleep` (revives HP/MP to full in `sleep.cgi`), `home_wake`, `chapel_pray` (prayer for daily blessing; does not require living HP in legacy dispatch), and `rescue_request` (emergency unstick).
 2. **Fatigue Gate (`$m{tired} >= 100`)**:
    - Exhausted characters cannot initiate stamina-draining tasks (battles, dungeon runs, boss raids, or casino gambling).
    - **Allowed**: Rest (`home_sleep`), food (`tavern_order`), banking, storage management, and shopping.
@@ -71,7 +71,7 @@ The table below documents all 42 current catalog entries in `internal/playercont
 | `pvp_room_create` | 対戦部屋作成 | `adventure` | `postCharactersIdPvpRooms` | `[]` | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `home_sleep` | 自宅・宿屋で休む | `home` | `homeSleep` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `home_wake` | 目を覚ます | `home` | `homeWake` | `[]` | ❌ | ❌ | ❌ | ❌ | ❌ |
-| `chapel_pray` | 礼拝堂で祈る（祈願・蘇生） | `home` | `prayAtChapel` | `["blessing"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
+| `chapel_pray` | 礼拝堂で祈る（祈願） | `home` | `prayAtChapel` | `["blessing"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `bank_deposit` | 銀行に預金する | `economy` | `postCharactersIdBankDeposit` | `["amount"]` | ✅ | ❌ | ✅ | ✅ | ✅ |
 | `bank_withdraw` | 銀行から引き出す | `economy` | `postCharactersIdBankWithdraw` | `["amount"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
 | `depot_deposit` | 預かり所にアイテムを預ける | `economy` | `postCharactersIdDepotDeposit` | `["item_id"]` | ✅ | ❌ | ✅ | ✅ | ❌ |
