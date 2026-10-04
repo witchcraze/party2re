@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "module": "gemstore",
   "domain": "宝石店・宝石合成・鑑定",
   "description": "Gem store retail, synthesis recipe formulas, player gem transfer, and orb appraisal system.",
@@ -8,31 +7,46 @@
     {
       "module": "core/character",
       "relation_type": "public_service_call",
-      "methods": ["FindByID", "FindByIDForUpdate", "Update"],
+      "methods": [
+        "FindByID",
+        "FindByIDForUpdate",
+        "Update"
+      ],
       "source_ref": "internal/gemstore/types.go#CharacterRepository"
     },
     {
       "module": "core/inventory",
       "relation_type": "public_service_call",
-      "methods": ["FindByCharacterID", "FindByCharacterIDForUpdate", "Save"],
+      "methods": [
+        "FindByCharacterID",
+        "FindByCharacterIDForUpdate",
+        "Save"
+      ],
       "source_ref": "internal/gemstore/types.go#InventoryRepository"
     },
     {
       "module": "core/item",
       "relation_type": "catalog_data",
-      "methods": ["FindByID"],
+      "methods": [
+        "FindByID"
+      ],
       "source_ref": "internal/gemstore/types.go#ItemDefinitionProvider"
     },
     {
       "module": "depot",
       "relation_type": "public_service_call",
-      "methods": ["FindByCharacterIDForUpdate", "Save"],
+      "methods": [
+        "FindByCharacterIDForUpdate",
+        "Save"
+      ],
       "source_ref": "internal/gemstore/types.go#DepotRepository"
     },
     {
       "module": "database",
       "relation_type": "transaction_provider",
-      "methods": ["RunInTx"],
+      "methods": [
+        "RunInTx"
+      ],
       "source_ref": "internal/database/tx.go#TransactionProvider"
     }
   ],
@@ -42,10 +56,10 @@
       "tx_mode": "RunInTx",
       "source_ref": "internal/gemstore/trade.go#Service.BuyGem",
       "lock_sequence": [
-        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 2, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 3, "target": "characters", "lock_order": 2, "method": "CharacterRepository.Update", "mode": "UPDATE" },
-        { "step": 4, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.Save", "mode": "UPDATE" }
+        {"step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 2, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 3, "target": "characters", "method": "CharacterRepository.Update", "mode": "UPDATE"},
+        {"step": 4, "target": "character_gem_boxes", "method": "GemBoxRepository.Save", "mode": "UPDATE"}
       ]
     },
     {
@@ -53,10 +67,10 @@
       "tx_mode": "RunInTx",
       "source_ref": "internal/gemstore/trade.go#Service.SellGem",
       "lock_sequence": [
-        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 2, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 3, "target": "characters", "lock_order": 2, "method": "CharacterRepository.Update", "mode": "UPDATE" },
-        { "step": 4, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.Save", "mode": "UPDATE" }
+        {"step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 2, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 3, "target": "characters", "method": "CharacterRepository.Update", "mode": "UPDATE"},
+        {"step": 4, "target": "character_gem_boxes", "method": "GemBoxRepository.Save", "mode": "UPDATE"}
       ]
     },
     {
@@ -64,11 +78,11 @@
       "tx_mode": "RunInTx",
       "source_ref": "internal/gemstore/transfer.go#Service.SendGem",
       "lock_sequence": [
-        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate (min(sender,recipient))", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 2, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate (max(sender,recipient))", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 3, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.FindByCharacterIDForUpdate (min(sender,recipient))", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 4, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.FindByCharacterIDForUpdate (max(sender,recipient))", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 5, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.Save (sender & recipient)", "mode": "UPDATE" }
+        {"step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate (min(sender,recipient))", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 2, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate (max(sender,recipient))", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 3, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.FindByCharacterIDForUpdate (min(sender,recipient))", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 4, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.FindByCharacterIDForUpdate (max(sender,recipient))", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 5, "target": "character_gem_boxes", "method": "GemBoxRepository.Save (sender & recipient)", "mode": "UPDATE"}
       ]
     },
     {
@@ -76,11 +90,11 @@
       "tx_mode": "RunInTx",
       "source_ref": "internal/gemstore/synthesis.go#Service.SynthesizeGem",
       "lock_sequence": [
-        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 2, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 3, "target": "character_depots", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 4, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 5, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.Save", "mode": "UPDATE" }
+        {"step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 2, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 3, "target": "character_depots", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 4, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 5, "target": "character_gem_boxes", "method": "GemBoxRepository.Save", "mode": "UPDATE"}
       ]
     },
     {
@@ -88,13 +102,13 @@
       "tx_mode": "RunInTx",
       "source_ref": "internal/gemstore/synthesis.go#Service.AppraiseItem",
       "lock_sequence": [
-        { "step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 2, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 3, "target": "character_depots", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 4, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE" },
-        { "step": 5, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.Save", "mode": "UPDATE" },
-        { "step": 6, "target": "character_depots", "lock_order": 5, "method": "DepotRepository.Save", "mode": "UPDATE" },
-        { "step": 7, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.Save", "mode": "UPDATE" }
+        {"step": 1, "target": "characters", "lock_order": 2, "method": "CharacterRepository.FindByIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 2, "target": "inventory_items", "lock_order": 3, "method": "InventoryRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 3, "target": "character_depots", "lock_order": 5, "method": "DepotRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 4, "target": "character_gem_boxes", "lock_order": 8, "method": "GemBoxRepository.FindByCharacterIDForUpdate", "mode": "SELECT ... FOR UPDATE"},
+        {"step": 5, "target": "inventory_items", "method": "InventoryRepository.Save", "mode": "UPDATE"},
+        {"step": 6, "target": "character_depots", "method": "DepotRepository.Save", "mode": "UPDATE"},
+        {"step": 7, "target": "character_gem_boxes", "method": "GemBoxRepository.Save", "mode": "UPDATE"}
       ]
     }
   ]

@@ -103,7 +103,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Push-based background ScheduledAction completion via Valkey Worker (#106, #109, #110)
 - [x] Colosseum PvP: Real-time 8-player Bet & Split combat, 9 team colors, multi-round party battle resolution, and distributed room locking (#75, #481, #594, #644, #652, #661)
 - [x] Guild versus Guild (GvG) Combat: Live multi-round matches, GP prize pools, target wins, and 7-tier victory medals & championship cups (#77, #482, #594, #644, #652, #675)
-- [x] 4-player Party Sealing Boss Battles, Dejon banishment, Hero Count increments, JST weekday orb evaluation with nowFunc injection, and victory celebration banquets (#73, #479, #657, #902)
+- [x] 6-player king1–10 / 4-player king99 Party Sealing Boss Battles, Dejon banishment, Hero Count increments, JST weekday orb evaluation with nowFunc injection, and victory celebration banquets (#73, #479, #657, #902)
 - [x] Dungeon Exploration & Continuous Endurance Challenge multi-player runs, map scouting (@ちず), Hall of Fame records, and Valkey Master run buffers (#162, #404, #405, #483, #597, #600, #657, #789)
 - [x] Battle replay records and match history viewer (#66, #796)
 - [x] Standardized Battle Adapter: Character/Party to Battle Participant Mapping, equipment stat scaling, recipient-targeted item drop routing, and Post-Battle State Application (#496, #593, #596, #599, #605, #643, #663)
@@ -153,7 +153,7 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] Scheduling: Actor-indexed unfinished-work query, Pending/Processing lifecycle and bulk Valkey reads (#972)
 - [x] PlayerContext: Ordered six-gate availability evaluator and uncached read query, sleep/wake lifecycle and rescue exemption (#938); HTTP observation handler remains #939
 - [ ] Web presentation UI / client implementation (#140)
-- [ ] Production asset production and license attribution (#143, #202)
+- [ ] Production asset manifest, resolver, and license attribution (#654, #729; specification pending)
 
 ---
 

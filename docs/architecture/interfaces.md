@@ -55,29 +55,19 @@ Rust Battle
 
 without requiring consumers to understand the implementation language.
 
-The initial in-process contract accepts exactly two participants and returns a
-win or draw result with the winner, loser, turn count, and selected reward. The
-initial resolver uses deterministic minimum damage of one and does not know why
-the battle was started. More detailed battle rules must preserve this
-consumer-facing boundary.
 
-The three request rewards are interpreted from the first participant's
-perspective: `VictoryReward` when it wins, `DefeatReward` when it loses, and
-`DrawReward` for a draw. Battle selects and returns the reward; the initiating
-feature decides whether and how that reward is applied to a player, character,
-inventory, or another recipient.
-
-Skill definitions return a small `Effect` value through the same public
-contract. Skill availability checks remain outside Battle and can depend on
-the character's job, level, MP, and an inventory ownership callback.
+`core/battle` exposes both two-participant and party/faction combat contracts.
+The resolver receives participant snapshots and returns outcomes/logs without
+owning persistence or the reason for combat. `internal/battle` binds game models
+and applies outcomes within the initiating feature's transaction boundary.
+The detailed legacy mechanics are in [battle.md](../design/battle.md).
 
 ## Delayed-result claims
 
-Activity and Adventure claim persistence exposes a public claim-and-apply
-operation. The operation accepts the feature result and the resulting Core
-character state, then compare-and-sets the claimed flag and persists the
-character state in one transaction. A failed compare-and-set returns an
-already-claimed result without applying the character state.
+Activity owns an atomic claim-and-apply persistence operation: the claimed flag
+and character reward state change together. Adventure now resolves immediately
+and has no delayed claim endpoint. Scheduling must not impose the initial
+training workflow on unrelated legacy combat.
 
 ## ScheduledAction contract
 
@@ -177,26 +167,16 @@ The initial transport layer is an HTTP JSON API using only the Go standard
 library `net/http`. The `Handler` struct is constructed with injected
 application service interfaces and exposes a `ServeMux` via `Router()`.
 
-**Endpoints:**
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/health` | Health check — always public |
-| `POST` | `/players` | Player registration |
-| `POST` | `/sessions` | Login — returns a session token |
-| `DELETE` | `/sessions` | Logout — revokes the current session |
-| `POST` | `/characters` | Create a character (authenticated) |
-| `GET` | `/characters/{id}` | Get character state (authenticated) |
-| `POST` | `/adventures` | Start a stage adventure (authenticated) |
-| `POST` | `/adventures/{id}/claim` | Claim an adventure result (authenticated) |
-| `POST` | `/shop/purchase` | Purchase items (authenticated) |
-| `POST` | `/shop/sell` | Sell items (authenticated) |
+**Routes and authentication:**
 
-**Authentication:**
-
-All endpoints except `GET /health`, `POST /players`, and `POST /sessions`
-require `Authorization: Bearer <session-id>`. The handler validates the session
-via `PlayerService.Authenticate` before delegating to the target service.
+The complete current transport contract is in [OpenAPI](../api/openapi.json),
+generated from `docs/api/base.json` and modular paths. Routes are unversioned.
+Session Bearer tokens and Personal Access Tokens authenticate player operations;
+administrative endpoints use their explicit admin credential contract.
+Public health, registration, login, and discovery routes do not all require a
+player session. Consult each operation's security definition rather than an
+obsolete blanket exception list.
 
 **Request invariants and security headers enforced at the transport layer:**
 
@@ -252,14 +232,14 @@ HTTP handlers standardize API responses following pragmatic REST conventions and
 
 ### Client / Agent Gateway (CQRS Architecture)
 
-To support modern Web UI (Server-Driven UI), autonomous AI Agents, and Chatbot integrations (Line/Discord) without client-side routing sprawl or token bloat, the application exposes a unified two-pillar CQRS Gateway:
+To support modern Web UI (Server-Driven UI), autonomous AI Agents, and Chatbot integrations (Line/Discord) without client-side routing sprawl or token bloat, the application plans a unified two-pillar CQRS Gateway. The HTTP boundaries below are not registered yet (#939/#646):
 
 | Pillar | Method & Path | Responsibility | Output |
 |---|---|---|---|
 | **Query (Observe)** | `GET /characters/{id}/context` | Character snapshot, active timers, and **authoritative whitelist of available actions**. | Lightweight snapshot + `available_actions` (with `required_params`) |
 | **Command (Execute)** | `POST /characters/{id}/actions` | Single-entry-point command dispatcher for all state mutations. | `{ success, result, context }` (updates client state in 1 round trip) |
 
-See [`client-agent-api.md`](client-agent-api.md) for the complete protocol specification, LLM tool integration, and Server-Driven UI lifecycle.
+See [`client-agent-api.md`](client-agent-api.md) for the proposed protocol and implementation status, LLM tool integration, and Server-Driven UI lifecycle.
 
 ## Application logging contract
 

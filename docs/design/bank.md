@@ -53,6 +53,6 @@ Savings are stored per character (`Character.Deposit int64`) rather than at the 
 
 ## Transaction & Concurrency Invariants
 
-- Deposits and withdrawals operate strictly within the `characters` table using Tier 2 row locking (`SELECT ... FOR UPDATE`).
-- Deadlock-free by design: each bank operation targets a single character record, eliminating multi-row lock ordering concerns.
+- Deposits and withdrawals operate strictly within the `characters` table using Rank 2 row locking (`SELECT ... FOR UPDATE`).
+- Each standalone bank operation locks one character row. Composite operations must still follow the global lock hierarchy; a single-row repository does not certify deadlock freedom for an arbitrary caller.
 - Character bank deposits are included in wealth rankings (`characters.money + characters.deposit`).

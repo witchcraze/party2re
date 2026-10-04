@@ -75,7 +75,7 @@ cmp = int(min(level, 99) * (tier_rates[current_job_tier] + tier_rates[old_job_ti
 - The original pair is stored as job memory and restored by the next exchange.
   Memory exchange does not apply the normal level/stat penalty or increment
   the job-change count.
-- Reincarnated characters with OverLevel status (`OverLevel == true`) are prohibited
+- Characters with celestial OverLevel status (`OverLevel == true`) are prohibited
   from recalling or swapping job memories (`ErrJobUnavailable`, `party2/lib/job_change.cgi:361-364`).
 - Both target jobs (`targetJobID` and `targetOldJobID`) must satisfy gender compatibility
   with the character's gender (`RequiredGender`, `party2/lib/job_change.cgi:388-395`).

@@ -4,9 +4,9 @@ This document establishes the architecture, workflow, and developer/agent rules 
 
 ---
 
-## 1. Architectural Architecture & Single Source of Truth (SSOT)
+## 1. Architecture & Single Source of Truth (SSOT)
 
-The Party2 HTTP REST API exposes over 185 endpoints and 200 operations. To prevent massive context-window bloat, latency, and merge conflicts associated with editing a single 16,500+ line JSON document, the OpenAPI specification is split into modular source files.
+The registered Party2 HTTP routes are documented in [the generated specification](../api/openapi.json). The OpenAPI specification is split into modular source files to keep edits focused and reduce merge conflicts.
 
 ```text
 docs/api/
@@ -18,7 +18,7 @@ docs/api/
 │   ├── auth.json
 │   ├── character.json
 │   ├── shop.json
-│   └── ... (38 modular domain files)
+│   └── ...                   <-- Other domain path files
 └── openapi.json              <-- COMPILED ARTIFACT (DO NOT EDIT DIRECTLY)
 
 internal/api/http/
@@ -47,7 +47,7 @@ Contains top-level OpenAPI 3.1 metadata:
 - `components`: Reusable data schemas (`components.schemas`) and security schemes (`components.securitySchemes`).
 
 ### `docs/api/paths/{module}.json`
-Contains path definitions grouped by functional domain. Each file typically contains 2 to 15 path definitions (under 500 lines), allowing fast targeted edits with minimal token consumption:
+Contains path definitions grouped by functional domain. File sizes depend on the domain's routes and schemas; the Go production-file line ceiling does not apply to these JSON sources:
 - Each key is a URL path pattern (e.g. `"/characters/{id}/avatar"`).
 - Path items contain HTTP method operations (`"get"`, `"post"`, `"put"`, `"delete"`).
 - Every operation must define:
@@ -88,8 +88,6 @@ The repository includes an automated toolchain in `scripts/sync_openapi/` that o
    ```
 2. **Run automatic scaffolding**:
    ```bash
-   make openapi-sync
-   # or
    make openapi-scaffold
    ```
    The tool automatically parses `handler.go` via AST, identifies the route's domain (e.g. `character` or `auth`), creates or appends the endpoint boilerplate to `docs/api/paths/{module}.json`, and bundles the compiled artifacts.

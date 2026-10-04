@@ -36,9 +36,7 @@ Unlock or attempt additional content
         +------> social / economic / collection systems
 ```
 
-A particularly important characteristic is that many activities are time-based: the player starts an action and a result becomes available later.
-
-Resolution (such as battle resolution and reward calculation) occurs at the scheduled completion time via background worker processing rather than being deferred until player claim time. This ensures character stats and state at the moment the activity concludes are faithfully applied to battle outcomes and progression.
+Legacy Party2 combines interactive turns, free sleep recovery, and timed systems such as overnight synthesis/cultivation. It does not resolve every battle through a delayed background job. The current Adventure crawl resolves immediately; Scheduling processes only work explicitly enqueued by its owner. The initial training slice is documented separately and is not evidence of legacy training rules.
 
 ## Character development
 
@@ -88,7 +86,7 @@ The reconstruction should distinguish:
 - ownership;
 - equipped state.
 
-This leaves room for future mechanics such as enhancement, randomized properties, trading, durability, and special items.
+This separates ownership from catalog identity. Additional enhancement, durability, or random-property mechanics require an approved specification; the data model alone does not make them legacy requirements.
 
 ## Social and competitive systems
 
@@ -149,10 +147,10 @@ The target is the game's meaningful behavior and design, not its historical impl
 - [`activities.md`](activities.md) — delayed training activities
 - [`stages-and-monsters.md`](stages-and-monsters.md) — stage exploration and monster catalog
 - [`shops.md`](shops.md) — item purchase and 50% resale
-- [`depot.md`](depot.md) — item and currency storage
+- [`depot.md`](depot.md) — item storage and delivery
 - [`blacksmith.md`](blacksmith.md) — weapon seals, equipment naming, and dedicated storage
 - [`alchemy.md`](alchemy.md) — recipe crafting synthesis
-- [`bank.md`](bank.md) — bank accounts and remittances
+- [`bank.md`](bank.md) — character savings and withdrawals
 - [`home.md`](home.md) — player private estates, sleep recovery, and correspondence
 
 ### Architecture & Rules

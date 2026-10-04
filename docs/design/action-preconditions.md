@@ -2,23 +2,27 @@
 
 ## 1. Overview & CQRS Integration
 
-In the Party2 Re CQRS Client/Agent Gateway architecture ([`docs/architecture/client-agent-api.md`](../architecture/client-agent-api.md)), client frontends (Web UI, AI Agents, Line/Discord Bots) interact with the backend via two unified operations:
+In the Party2 Re CQRS Client/Agent Gateway architecture ([`docs/architecture/client-agent-api.md`](../architecture/client-agent-api.md)), client frontends are planned to use two unified operations. The HTTP handlers are pending #939/#646; these are proposed protocol examples:
 - **Observation**: `GET /api/v1/characters/{id}/context` (returns character snapshot, active cooldowns, and a whitelist of executable actions)
 - **Execution**: `POST /api/v1/characters/{id}/actions` (dispatches state transition commands)
 
-To prevent LLM context window bloating (Token Bloat), the Action Catalog registers **strictly top-level facilities, services, and commands** (~30–40 actions). Sub-selections (such as specific item IDs, skill recipes, or shop item choices) are handled within individual action parameter payloads.
+To prevent LLM context window bloating (Token Bloat), the Action Catalog registers **strictly top-level facilities, services, and commands** (42 entries in the current catalog). Sub-selections (such as specific item IDs, skill recipes, or shop item choices) are handled within individual action parameter payloads.
 
 Each action is statically linked to its corresponding OpenAPI 3.1 `operationId` and explicit `required_params` keys, enabling AI agents and automated clients to construct valid API payloads without guessing or inspecting massive OpenAPI specs.
 
 ---
 
-## 2. Legacy Specification Parity (Ground Truth)
+## 2. Current evaluator gates and legacy review
 
-The legacy behavior reference (`party.cgi`, `lib/*.cgi`) and the approved Scheduling infrastructure are reconciled through six state gates:
+The current evaluator uses six gates. This is an implementation snapshot, not certification that all flags reproduce legacy behavior.
+
+**Confirmed differences requiring implementation correction:** legacy `lib/chapel.cgi` prayer sets a blessing without charging gold or reviving HP. Its current catalog label and positive-gold gate are therefore incorrect. Legacy `lib/blacksmith.cgi` seal payment checks and deducts crystals, as does the Go seal service; the catalog's gold gate can reject a valid crystal-funded action. `home_sleep` describes free home sleep, not a paid inn. Preserve these differences until the catalog is corrected; do not treat the matrix as the game specification.
+
+The gate descriptions below summarize the current implementation:
 
 1. **Dead Gate (`$m{hp} <= 0`)**:
    - Deceased characters cannot participate in battles (`vs_monster`, `vs_player`, `boss`), play casino games, purchase items, or perform economic transactions.
-   - **Exceptions**: `home_sleep` (revives HP/MP to full in `sleep.cgi`), `home_wake`, `chapel_pray` (church revival), and `rescue_request` (emergency unstick).
+   - **Exceptions**: `home_sleep` (revives HP/MP to full in `sleep.cgi`), `home_wake`, `chapel_pray` (current exemption; prayer is not revival), and `rescue_request` (emergency unstick).
 2. **Fatigue Gate (`$m{tired} >= 100`)**:
    - Exhausted characters cannot initiate stamina-draining tasks (battles, dungeon runs, boss raids, or casino gambling).
    - **Allowed**: Rest (`home_sleep`), food (`tavern_order`), banking, storage management, and shopping.
@@ -56,7 +60,7 @@ const (
 
 ## 4. Action Catalog Precondition Matrix
 
-The table below documents all 42 canonical actions in `internal/playercontext/catalog.go`, their OpenAPI 3.1 mapping, required execution parameters, and precondition gates.
+The table below documents all 42 current catalog entries in `internal/playercontext/catalog.go`, their OpenAPI 3.1 mapping, required execution parameters, and precondition gates.
 
 | ID | Label | Category | OpenAPI OperationID | Required Params | Dead Gate (HP>0) | Fatigue Gate (<100) | Sleep Gate (Awake) | Cooldown Gate | Currency Gate |
 |---|---|---|---|---|:---:|:---:|:---:|:---:|:---:|
@@ -119,7 +123,7 @@ No CharacterSnapshot or availability-result cache is introduced. The catalog is 
 
 ---
 
-## 5. Client & Agent Tool Calling Contract
+## 5. Proposed Client & Agent Tool Calling Contract (#939/#646)
 
 When clients receive `available_actions` via `GET /context`:
 

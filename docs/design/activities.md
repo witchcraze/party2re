@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the specification for delayed background activities, specifically character Training (訓練).
+This document records the initial Go training slice. Its one-hour duration and 10 EXP reward are implementation choices, not verified legacy Party2 requirements. The legacy equivalent and inclusion in the reconstruction baseline require review; do not use this slice to infer delayed adventure or combat rules.
 
 ## Overview
 
@@ -24,5 +24,5 @@ Delayed activities represent time-based tasks that characters can undertake. Whe
    - When `AvailableAt` is reached, the Worker dequeues the action, acquires a distributed lock, and executes `TrainingHandler`.
    - `TrainingHandler` applies the 10 EXP to the character and marks `Claimed = true` in a single atomic database transaction.
 3. **Manual Claim Fallback (`Claim`)**:
-   - If Valkey is unavailable or manual claim is used, the client can request claim after `AvailableAt`.
+   - The existing manual claim endpoint can be used after `AvailableAt`; production startup still requires Valkey. This is not a general runtime failover contract.
    - `ClaimAndApply` executes an atomic compare-and-set on the `claimed` column to prevent duplicate reward application under concurrent attempts.

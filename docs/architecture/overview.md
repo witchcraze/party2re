@@ -106,7 +106,7 @@ The desired dependency direction is:
 
 ```text
 Feature -> Core / public component contract
-Feature -> Shared infrastructure
+Feature -> Injected persistence / transaction contracts
 ```
 
 Avoid:
@@ -143,15 +143,14 @@ The architecture should make the next feature easier, not merely make the curren
 - [`../design/game-overview.md`](../design/game-overview.md) — game/domain context.
 - [`../../STATUS.md`](../../STATUS.md) — current implementation status.
 
-## UI-independent operations and future external access
 
-Game behavior should be implemented independently of any specific UI.
+## UI-independent operations and external access
 
-Major player-visible game operations should be executable through an application-level API or command boundary rather than being implemented directly in GUI event handlers. This keeps the game logic testable and makes alternative clients possible.
-
-The architecture should also avoid assumptions that would prevent exposing appropriate game operations through an external API in the future. For example, this may eventually allow an AI Agent or another automated client to play the game through the same public operations available to a human player.
-
-This is an architectural capability to preserve, not a requirement to expose a public network API during the initial implementation.
+Game behavior lives behind application services. The current HTTP JSON API is
+implemented and documented in [OpenAPI](../api/openapi.json). The public client
+presentation and the context/action Gateway remain planned (#140/#939/#646).
+See [client-agent-api.md](client-agent-api.md) for migration sequencing; API
+availability must not be confused with a completed browser client.
 
 ## Application logging
 

@@ -1,5 +1,4 @@
 {
-  "$schema": "https://archify.dev/schema/module.v1.json",
   "module": "auction",
   "tier": 1,
   "description": "Auction hall live P2P trading and direct send/inspect facility without server-side bidding.",
@@ -50,7 +49,7 @@
           "note": "Lock sender inventory to consume transferred item"
         },
         {
-          "table": "character_depot_items",
+          "table": "character_depots / depot_items",
           "tier": 5,
           "mode": "SELECT ... FOR UPDATE (FindByCharacterIDForUpdate)",
           "note": "Lock recipient depot to add transferred item"

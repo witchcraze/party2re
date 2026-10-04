@@ -1,5 +1,4 @@
 {
-  "$schema": "https://archify.dev/schema/module.v1.json",
   "module": "guild",
   "tier": 1,
   "description": "Guild founding, dynamic guild points, custom roles, hex color, marks, wallpapers, membership workflow, and broadcast callouts.",

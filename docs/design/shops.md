@@ -103,10 +103,12 @@ Legacy Party2 routes purchased goods based on current inventory occupancy and qu
 
 ## 6. NPC Interactions and Secret Shop Discovery
 
-### 6.1. NPC Dialogue (`/shop/{type}/talk`)
+Current routes and payloads are maintained in [shop OpenAPI](../api/paths/shop.json); dialogue capabilities below do not imply separate legacy-style URL paths.
+
+### 6.1. NPC Dialogue
 - Each NPC responds with advice explaining mechanics (e.g. weight reducing agility, batch purchasing sending to depot).
 
-### 6.2. NPC Inspect (`/shop/{type}/inspect`)
+### 6.2. NPC Inspect
 - **Presentation Decoupling**: In adherence to `.agents/rules/03-architecture.md §5`, domain service results return pure structured data (`ShopType`, `NPCName`, `SecretShopHint`), while human-facing dialogue lines are formatted at the HTTP transport/presentation layer (`internal/api/http`).
 - Inspecting weapon or armor NPCs yields defensive or humorous remarks:
   - Weapon (`ブッキー`): *"おいおい、俺は武器じゃねぇぜ"*
@@ -116,7 +118,7 @@ Legacy Party2 routes purchased goods based on current inventory occupancy and qu
   - Dialogue: *"ほえ？なんでしょうかぁ？"*
   - Secret Shop Hint: *"＠ひみつのみせ に行きたい"*
 
-### 6.3. Secret Shop Discovery (`/shop/discover-secret`)
+### 6.3. Secret Shop Discovery
 - Requires `job_lv >= 7`.
 - Unlocks the secret shop location, giving access to rare items and puff-puff services.
 

@@ -35,10 +35,10 @@ Use domain events or explicit observer hooks (e.g., `VictoryHook`, `SynthesisHoo
 
 ## 7. Core Domain Invariant & Helper Enforcement (Go AST Linting)
 Direct struct field mutations across Core domain entities by feature modules are strictly prohibited to prevent rule bypasses, integer overflows, concurrency races, and duplication bugs:
-- **Progression (`Experience`, `Level`)**: Must route through `progression.ApplyExperience` or `progression.Rebirth` (ensuring OverLevel Lv 150 thresholds, cumulative experience calculations, and stat growths are applied).
+- **Progression (`Experience`, `Level`)**: Must route through the appropriate `progression.ApplyExperience*` helper (ensuring OverLevel Lv 150 thresholds, cumulative experience calculations, and stat growths are applied). MUST NOT introduce a reincarnation/reset loop absent from the legacy specification.
 - **Currency & Economy (`Money`, `SmallMedals`)**: Must route through `char.AddMoney`, `char.DeductMoney`, `char.AddSmallMedals`, `char.DeductSmallMedals`, or the universal runtime primitive `economy.TransactionRunner` (`ExecuteTransaction`) (ensuring 0-debt invariants, non-negative amounts, deterministic lock order, and max currency caps).
 - **Job & Skill State (`CurrentJobID`, `MasteredJobs`)**: Must route through `CharacterJob.ChangeTo` and `CharacterJob.Master` (ensuring prerequisite level/gender validation and history logging).
 - **Inventory & Items (`Inventory.Items`)**: Must route through `Inventory.Add`, `Inventory.Consume`, or `Inventory.Update` (ensuring instance uniqueness and quantity consistency).
 - **Equipment & Slots (`Equipment.Slots`)**: Must route through `Equipment.Equip` or `Equipment.Unequip` (ensuring slot compatibility and ownership verification).
 
-These encapsulation boundaries are mechanically enforced across all Go source files outside `internal/core` (and database repository mappings) via Go AST static analysis (`internal/core/core_lint_test.go` and `internal/core/progression/progression_lint_test.go`), running with 0 runtime overhead in 0.1s during `make check`.
+These encapsulation boundaries MUST pass the Go AST checks in `internal/core/core_lint_test.go` during `make check`. Passing structural checks MUST NOT be treated as proof of legacy specification parity.

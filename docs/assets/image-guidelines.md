@@ -17,7 +17,7 @@
 Used for small character/player representations.
 
 - Typical size: 20 × 20 px
-- Maximum size: 40 × 40 px
+- Observed legacy upper size: 40 × 40 px
 - Aspect ratio: Flexible
 - Transparency: Supported
 
@@ -40,7 +40,7 @@ Default placeholder: `character-default`
 Used for monster, enemy, and similar entity representations.
 
 - Typical size: 40 × 40 px
-- Maximum size: 140 × 140 px
+- Observed legacy upper size: 140 × 140 px
 - Aspect ratio: Flexible
 - Transparency: Supported
 
@@ -63,7 +63,7 @@ Default placeholder: `monster-default`
 Used for small visual effects or effect indicators.
 
 - Typical size: 30 × 30 px
-- Maximum size: 50 × 50 px
+- Observed legacy upper size: 50 × 50 px
 - Aspect ratio: Flexible
 - Transparency: Supported
 
@@ -79,13 +79,11 @@ Default placeholder: `effect-default`
 Used for very small status, category, or decorative indicators.
 
 - Typical size: 13 × 13 px
-- Maximum size: 15 × 14 px
+- Observed legacy upper size: 15 × 14 px
 - Aspect ratio: Flexible
 - Transparency: Supported
 
-The maximum reflects the observed original assets. If the new UI requires a
-different scale, an explicit asset-type revision should be made rather than
-silently exceeding this limit.
+This is an observation of original assets, not an enforced limit for the new UI. Record concrete presentation requirements in the asset work queue.
 
 #### Placeholder Types
 
@@ -99,7 +97,7 @@ Default placeholder: `mark-default`
 Used for map, stage, field, and other background elements.
 
 - Typical size: 40 × 40 px
-- Maximum size: 180 × 180 px
+- Observed legacy upper size: 180 × 180 px
 - Aspect ratio: Flexible
 
 The original Party2 background assets are predominantly 40 × 40 px tiles, with
@@ -122,7 +120,7 @@ Used for buttons, labels, badges, banners, logos, and other non-gameplay UI
 graphics.
 
 - Typical size: 50 × 16 px
-- Maximum size: 468 × 60 px
+- Observed legacy upper size: 468 × 60 px
 - Aspect ratio: Flexible
 
 The original project contains many small UI graphics as well as larger title
@@ -161,4 +159,18 @@ created. Actual placeholder files should be added when they become necessary.
 
 Expected placeholder location:
 
-    assets/images/placeholders/<asset-type>/<placeholder-name>.png
+    assets/images/placeholders/<asset-type>/<placeholder-name>.<format>
+
+Existing repository-created placeholders are SVGs; other names listed above
+are reserved suggestions, not files that already exist. The inventory and
+provenance belong in [required-images.md](required-images.md):
+
+| Type | Existing placeholder | Size |
+|---|---|---|
+| Character | `character/character-default.svg` | 128 × 128 |
+| Battle | `battle/battle-default.svg` | 256 × 128 |
+| Adventure | `adventure/adventure-default.svg` | 256 × 128 |
+| Job | `job/job-default.svg` | 96 × 96 |
+
+These recorded sizes override the observed legacy icon dimensions for temporary
+illustrations. They do not settle final UI display sizes or final artwork.

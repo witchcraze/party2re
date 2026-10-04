@@ -11,7 +11,7 @@ Up to 6 players (4 for `king99`) form a party in the Multiplayer Party System (`
 ## Architectural Policy & Boundaries
 
 - **Multi-Participant Battle Engine**: Encounters are resolved through `corebattle.PartyBattleResolver` (`corebattle.Engine{}`), handling party vs. multi-enemy boss formations, agility turn-order, MP/CMP skills, and revive/banishment rules.
-- **Authentic Stage Catalog**: 11 stages faithfully reproduced from legacy Party2 CGI data (`stage/king1.cgi` through `stage/king10.cgi`, and dynamic clone stage `king99.cgi`).
+- **Stage Catalog**: The Go catalog represents 11 legacy stages (`stage/king1.cgi` through `stage/king10.cgi`, and dynamic clone stage `king99.cgi`). The original definitions remain authoritative; catalog presence alone does not certify all mechanics.
 - **Capacity Parity**: `king1` through `king10` support parties of up to **6 players** (`MaxMembers: 6`), whereas `king99` retains a **4-player limit** (`MaxMembers: 4`).
 - **No Fictional Daily Limits**: Legacy Party2 has no daily attempt caps (the previously fabricated 3-entry solo raid limit has been completely removed). Entrance is governed solely by character fatigue (`tired < 100`) and stage-specific `need_join` conditions (e.g. `hp_400_o`).
 - **Transactional Consistency**: Post-battle state transitions (HeroCount increment, entry fatigue +20%, dejon fatigue +30%, loot awards, crystal rewards, news broadcast, banquet hooks, party disbandment) are committed within a single database transaction.
@@ -20,23 +20,36 @@ Up to 6 players (4 for `king99`) form a party in the Multiplayer Party System (`
 
 ## Authentic King Stages
 
-| Stage ID | Stage Name | Leader / Boss | Speed | Max Members | Participation Gate (`need_join`) | Loot Drops |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **king1** | @全てを無に還す者@ | 破壊神 (HP 150,000) + 6 Stones | 12 | 6 | `hp_400_o` (Max HP ≥ 400) | item-059, item-071, item-104 |
-| **king2** | @全てを憎む者@ | 暗黒竜 (HP 140,000) | 12 | 6 | `hp_400_o` (Max HP ≥ 400) | item-059, item-071, item-104 |
-| **king3** | @全てを破壊する者@ | 悪魔の書 (HP 100,000) | 12 | 6 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071 |
-| **king4** | @全てを喰らう者@ | デス・マスター (HP 100,000) | 12 | 6 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
-| **king5** | @全てを司る者@ | 邪神官 (HP 100,000) | 12 | 6 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
-| **king6** | @全てを統べる者@ | 破壊神 (HP 120,000) | 12 | 6 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
-| **king7** | @全てを導く者@ | 竜神 (HP 150,000) | 12 | 6 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
-| **king8** | @全てを裁く者@ | 審判者 (HP 160,000) | 12 | 6 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
-| **king9** | @全てを赦す者@ | 救世主 (HP 180,000) | 12 | 6 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
-| **king10** | @全てを越える者@ | 創世神 (HP 200,000) | 12 | 6 | `hp_300_o` (Max HP ≥ 300) | item-059, item-071, item-072 |
-| **king99** | @自分を倒す者@ | @Player Clone (Allies Stats × 50) | 10 | 4 | `hp_400_o` (Max HP ≥ 400) | item-059, item-071, item-104 |
+The following names, leaders, capacities, and gates were checked against lines
+3–7 of each original stage CGI. All stages use speed 12. In `quest.cgi:947–952`,
+`hp_N_o` requires Max HP ≥ N, while `hp_N_u` requires Max HP < N.
+
+| Stage ID | Stage Name | Leader | Max Members | Participation Gate |
+|---|---|---|---|---|
+| **king1** | @全てを無に還す者@ | 破壊神 | 6 | `hp_400_o` |
+| **king2** | @全てを憎む者@ | 暗黒竜 | 6 | `hp_400_o` |
+| **king3** | @全てを破壊する者@ | 悪魔の書 | 6 | `hp_300_o` |
+| **king4** | @全てを呪う者@ | 暗黒の盾 | 6 | `hp_300_o` |
+| **king5** | @全てを支配する者@ | ドールマスター | 6 | `hp_200_o` |
+| **king6** | @二重世界@ | 闇のクリスタル | 6 | `hp_200_o` |
+| **king7** | @全てを爆発させる者@ | ボマー | 6 | `hp_200_o` |
+| **king8** | @闇でおおいつくす者@ | 魔人のツボ | 6 | `hp_400_u` |
+| **king9** | @悪の城@ | 悪の城 | 6 | `hp_200_u` |
+| **king10** | @無限に増殖する者@ | スライムボックス | 6 | `hp_100_u` |
+| **king99** | @罪と罰@ | Party leader / player clones | 4 | `hp_200_o` |
+
+Detailed enemy stats and weighted treasures belong to each original CGI's
+`@bosses`/`@treasures`, represented by `internal/boss/catalog.go`. Repeated
+treasure entries are weights; do not replace them with a unique-item list.
 
 ---
 
 ## Battle Mechanics
+
+The following describes the current Go battle/settlement behavior. Verify the
+original battle routines before treating an implementation formula as legacy
+parity. The CGI exposes `＠ふういん` after enemies are defeated; Go currently
+combines resolution and settlement in the service operation.
 
 ### 1. Entry & Fatigue Cost
 - Each participating character incurs **+20% Tired** upon entering the sealing battle (`$m{tired} += 20`).
@@ -60,7 +73,7 @@ Bosses and clones feature specialized passive defensive abilities processed by `
 - Bosses execute the **Dejon** skill (`ActionKindDejon = "dejon"`).
 - Target: Any opposing character whose HP is reduced to `0` or below.
 - Effect: The unconscious character is cast into another dimension and permanently removed from combat. They cannot be revived for the remainder of the battle.
-- Penalty: An additional **+30% Tired** (`$m{tired} += 30`) is applied to banished characters upon battle conclusion.
+- Penalty: An additional **+30% Tired** is applied. Legacy `vs_king.cgi:dejon` applies it at banishment; Go settlement applies it upon battle conclusion.
 
 ### 5. Victory, Resealing (`@ふういん`), & Rewards
 Upon defeating all enemy boss participants:
@@ -96,8 +109,11 @@ Upon defeating all enemy boss participants:
 
 ## 6. Demon King Unsealing (`UnsealDemonKing`)
 
-In authentic legacy Party2 (`vs_monster.cgi:218`), clearing Stage EX (封印の地 / `stage-20`) unseals the ancient kings, triggering the sealing battle era:
+In legacy Party2 (`lib/vs_monster.cgi:105`), stage **19** invokes `make_vs_king`, unsealing the ancient kings and triggering the sealing battle era:
 - **Mao Count**: All participating non-NPC characters gain **+1 Mao Count** (`characters.mao_count` / `$m{mao_c}`).
 - **Worldwide News**: Broadcasts `"<heroes>によって封印されし者達の封印が解かれました！"`.
 - **Rank 2 Locking**: Character rows are locked in ascending lexicographical order within a single transaction.
 
+Current `internal/adventure/unseal.go` also accepts stage 20. That extra trigger
+is a [documented implementation difference](../migration/documentation-audit.md),
+not a canonical legacy rule. Rank 2 locking describes the Go persistence boundary.

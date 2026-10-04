@@ -14,15 +14,15 @@ description: Guidelines for database transaction boundaries, concurrency control
   - When acquiring pessimistic locks (`SELECT ... FOR UPDATE`) across multiple domain tables or rows in a single transaction, locks MUST be acquired in a strictly deterministic numeric rank order (Rank 0 -> Rank 8). Mechanically verified via Go AST linter (`internal/database/lock_hierarchy_lint_test.go`, `make lock-lint`):
     | Rank | Category | Target Tables & Methods | Concurrency Role |
     | :--- | :--- | :--- | :--- |
-    | **Rank 0** | **Shared Peer Entities** | `auctions`, `delivery_parcels`, `fleamarket_listings`, `parties`, `contest_rounds`<br>(`GetListingByIDForUpdate`, `GetParcelByIDForUpdate`, `GetPartyForUpdate`, `GetActiveRoundForUpdate`, `GetPreparingRoundForUpdate`) | Serializes concurrent contenders on shared state upfront before touching player/character assets. |
+    | **Rank 0** | **Shared Peer Entities** | `fleamarket_listings`, `store_sales`, `contest_rounds`, `takarakuji_rounds`<br>(listing, sale, round, or room `*ForUpdate` methods) | Serializes concurrent contenders on shared state upfront before touching player/character assets. Valkey lobby locks are separate coordination mechanisms. |
     | **Rank 1** | **Player Account** | `players` (`playerRepo.*ForUpdate`, `players.*ForUpdate`) | Account-level mutations and security credentials. |
     | **Rank 2** | **Character Primary Entity** | `characters` (`charRepo.FindByIDForUpdate`, `characterRepo.FindByIDForUpdate`, `characters.FindByIDForUpdate`) | Primary game actor; multiple characters MUST be locked in ascending ID order (`id1 < id2`). |
     | **Rank 3** | **Inventory & Equipment** | `inventory_items`, `equipment_slots`<br>(`invRepo.FindByCharacterIDForUpdate`, `inventories.FindByCharacterIDForUpdate`) | Dependent character items; must NEVER be locked before Character. |
     | **Rank 4** | **Job Progression** | `character_jobs`, `character_job_masteries`<br>(`jobRepo.*ForUpdate`) | Job changes and skill loadouts. |
     | **Rank 5** | **Depot Storage** | `character_depots`, `depot_items`<br>(`depotRepo.FindByCharacterIDForUpdate`, `depots.FindByCharacterIDForUpdate`) | Long-term bank/item storage. |
-    | **Rank 6** | **Bank Account** | `bank_accounts`, `bank_transfers`<br>(`bankRepo.*ForUpdate`) | Player/character banking and currency transfers. |
+    | **Rank 6** | **Reserved Bank Category** | `bankRepo.*ForUpdate` classification in the lock linter | MUST NOT infer separate account/transfer tables; current bank savings are `characters.deposit` and use Rank 2. |
     | **Rank 7** | **Guilds** | `guilds`, `guild_members`<br>(`guildRepo.*ForUpdate`) | Guild management; multiple guilds MUST be locked in ascending ID order (`id1 < id2`). |
-    | **Rank 8** | **Secondary Feature Records** | `character_achievements`, `farm_plots`, `character_points`, `character_monsters`<br>(`achievementRepo.GetAchievementForUpdate`, `blackMarketRepo.GetCharacterPointsForUpdate`, `monsters.FindByIDForUpdate`, `farmRepo.*ForUpdate`) | Secondary domain features and progression counters. |
+    | **Rank 8** | **Secondary Feature Records** | `character_achievements`, `plantation_plots`, `blackmarket_character_points`, `character_monsters`<br>(achievement, points, monster, or plantation `*ForUpdate` methods) | Secondary domain features and progression counters. |
 - **BANNED ANTI-PATTERNS (Lost Updates & Deadlocks):**
   - **Unprotected Read-Modify-Write:** Do NOT read structs (e.g., Character) outside a transaction, mutate them in Go memory, and then blindly save them back. This will erase concurrent changes (like Adventure rewards).
   - **Direct `BeginTx` in Repositories:** Do NOT call `r.db.BeginTx` directly in repositories. Always use `RunInTx(ctx, r.db, ...)` and `ExecutorFromContext(ctx, r.db)`. (Note: This is automatically validated by the Go AST linter in `internal/database/tx_lint_test.go` on every `make check`).
@@ -49,10 +49,10 @@ To prevent conflating caching with primary persistence, the system strictly sepa
    - ACID transactions, foreign keys, and deterministic row-lock hierarchy (Rank 0 -> 8) guarantee consistency.
 2. **Valkey Master (Primary Authoritative Ephemeral Store)**:
    - Valkey is the Single Source of Truth with **no underlying SQL table**.
-   - Used **exclusively** for volatile, ephemeral, or deterministically rebuildable state where data loss on application restart (up to 1s with AOF `everysec`) causes zero corruption to player wealth, progression, or economic trust.
+   - MUST NOT use volatile state as the sole authority for durable player wealth or progression. MUST verify settlement/recovery behavior separately; AOF `everysec` and a passing test do not guarantee lossless unfinished work or cross-store atomicity.
    - Features utilizing Valkey Master rely on native TTL expiration or explicit application lifecycle hooks for garbage collection.
 3. **Valkey Cache (Projection / Read Acceleration Layer)**:
-   - MariaDB remains the canonical Single Source of Truth. Valkey holds read-optimized projections (e.g. Leaderboard Sorted Sets, profile caches).
+   - MariaDB remains the canonical Single Source of Truth. Valkey holds read-optimized projections (e.g. JSON ranking snapshots and SQL-backed maintenance projections).
    - Loss on crash or eviction is completely harmless because projections can be deterministically reconstructed from MariaDB on demand.
 
 ### 3.2 Persistence Decision Criteria
@@ -61,33 +61,31 @@ High mutation frequency alone does NOT justify Valkey as primary store (all curr
 - **Naturally Expiring (TTL) or Rebuildable from SQL**: Valkey Master or Valkey Cache.
 - Full rationale and decision matrix reside in [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md).
 
-### 3.3 Transient State Candidates (Candidates A–F)
-Evaluated under RFC #356 (SSOT: [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md)):
-- **Candidate C (Ephemeral Turn & Session Lobbies)**: Volatile multiplayer turn rooms (Party, Colosseum PvP, Guild GvG, Casino) reside in Valkey Master (1800s sliding TTL) with Two-Phase Settlement into MariaDB Master (`RunInTx`). Details: [`docs/architecture/transient-run-state.md`](../../docs/architecture/transient-run-state.md).
-- **Candidate D (In-Progress Run Buffers)**: Dungeon & Challenge exploration gauntlets reside in Valkey Master (7200s sliding TTL) with atomic Lua steps and Two-Phase Settlement. Details: [`docs/architecture/transient-run-state.md`](../../docs/architecture/transient-run-state.md).
-- **Candidate E (Boss Shared HP)**: World Boss raid encounters with atomic damage Lua and settlement coordinator. Details: [`docs/architecture/transient-boss-hp.md`](../../docs/architecture/transient-boss-hp.md).
+### 3.3 Transient Feature State
+- Lobbies and run buffers MUST follow their owner-specific lifetime and settlement contract in [`docs/architecture/transient-run-state.md`](../../docs/architecture/transient-run-state.md) and [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md).
+- MUST NOT reintroduce the withdrawn Candidate E World Boss design as a legacy requirement. Current boss behavior is specified by [`docs/design/boss.md`](../../docs/design/boss.md).
 
 ### 3.4 General Caching Constraints & Keyspace Taxonomy
 - **Centralized Keyspace Specification (SSOT):** All Valkey key patterns, data types, and expiration policies MUST conform to the taxonomy defined in [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md) (`party2:<namespace>:<entity>[:<id>]`). Mechanically enforced by Go AST lint test (`internal/architecture/valkey_lint_test.go`).
 - **Strict Prohibition of `KEYS *`:** Never execute `KEYS *` or unindexed wildcard `SCAN` in production code. Use Set indexing (e.g. `party2:player:sessions:<player_id>`) for O(1) multi-key lookups or cascade invalidation.
-- **Mandatory TTL Policy:** Every key written to Valkey Master MUST supply an explicit TTL at write time, with the sole exception of documented administrative singletons (`party2:maintenance:status`).
+- **Mandatory Lifetime Policy:** Every Valkey key MUST have an explicit TTL or a documented removal lifecycle in the keyspace inventory. MUST preserve unfinished scheduled work until terminal processing/cancellation; MUST NOT expire a live queue or actor index merely to satisfy a generic TTL rule. New non-expiring keys MUST document ownership and cleanup.
 - **SQL First for Assets:** The relational database (SQL) is the primary source of truth for critical persistent player state. Do not use Valkey as the primary persistence for critical player data.
 - **Concrete Requirements Only:** Do not introduce Valkey without a concrete feature requirement or measured performance benefit.
 - **Performance Caching:** Do not pre-emptively cache static/master data (Items, Jobs) in Valkey. Introduce read-caching only if empirical measurement proves SQL is a bottleneck.
 
 ### 3.5 Valkey Lua Scripting Standards
-See [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md) §5.5–5.6.
+See [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keyspace.md).
 - **When to Use**: ONLY for atomic conditional state transitions or CAS operations unachievable via native commands (`INCR`, `SET NX`). NEVER use for single-key updates or when native commands suffice.
 - **Budgets & Complexity**: Execution time MUST be < 1ms; complexity MUST NOT exceed O(1) or O(log N).
-- **BANNED in Lua**: Unbounded loops, large iterations, wildcard key scans (`KEYS *`), JSON parsing inside Lua, blocking calls. Enforced by `internal/architecture/valkey_lint_test.go`.
+- **BANNED in Lua**: Unbounded loops, large iterations or JSON payloads, wildcard key scans (`KEYS *`), blocking calls. Existing bounded party-roster JSON operations MUST stay bounded by the lobby capacity. The linter verifies banned commands and embedding; timing, complexity, and payload bounds MUST be reviewed separately.
 - **Mandatory Hash Tagging**: Multi-key operations MUST use `{...}` hash tags (e.g. `{char:<id>}`). Cross-slot multi-key scripts are BANNED.
-- **In-Memory Parity**: Services MUST implement 100% equivalent atomic logic and error codes in their Go in-memory fallback (`internal/valkey/memory.go`).
+- **In-Memory Parity**: Test adapters in each owning feature package MUST implement equivalent atomic logic and error codes. MUST NOT assume a shared `internal/valkey/memory.go` adapter exists or introduce a production fallback on connectivity failure.
 
 ### 3.6 Collection Data Type Selection & Ephemeral Element Expiration (Set vs ZSet vs Hash)
 - **String or Hash (`HSET`, `HGETALL`)**: Single-record entities with known fields, CAS semantics, or direct key-value state.
 - **Standard Set (`SADD`, `SMEMBERS`, `SREM`)**: Use ONLY where all elements share the exact same lifetime as parent key, or elements are bounded and never independently expire. Standard Sets MUST NOT be used when child elements have distinct or rolling expiration times.
 - **TTL-Scored Sorted Set (`ZADD`, `ZREMRANGEBYSCORE`, `ZRANGE`) [Approved SSOT Pattern]**:
-  - MUST be used whenever child elements represent independently expiring ephemeral resources (sessions, queues, tokens).
+  - MUST be used for indices whose members expire independently (such as sessions/tokens). MUST NOT apply this rule to lifecycle-managed ScheduledAction actor Sets; Pending/Processing work remains indexed until terminal processing or cancellation.
   - **Score**: Unix timestamp seconds (`float64(ExpiresAt.Unix())`).
   - **Lazy Purging**: Read/write paths MUST purge expired elements via `ZREMRANGEBYSCORE key -inf <now.Unix()>`. Background polling daemons are BANNED.
   - **Zero-Downtime Upgrade (`WRONGTYPE`)**: Catch `WRONGTYPE` on migration from legacy Set keys and gracefully upgrade.
@@ -97,24 +95,24 @@ See [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keys
 - Raw multiline string script constants in Go source files are BANNED. Preload with `valkey.NewLuaScript` (`EVALSHA`).
 
 ## 4. Sub-Resource Repository SQL Scoping and Ownership Authorization
-- **Strict SQL Scoping:** When modifying, finalizing, or deleting sub-resources belonging to a player or character (e.g., `challenge_sessions`, `lottery_tickets`, `auction_listings`, `character_challenge_records`, `character_boss_records`, `dungeon_expeditions`, `letters`, `companion_phrases`), SQL queries MUST include ownership predicates in the `WHERE` clause:
+- **Strict SQL Scoping:** When modifying, finalizing, or deleting sub-resources belonging to a player or character (e.g., `character_challenge_records`, `character_boss_records`, `character_letters`, `home_companion_phrases`), SQL queries MUST include ownership predicates in the `WHERE` clause:
   - `WHERE id = ? AND character_id = ?` (or `WHERE id = ? AND player_id = ?`)
 - **Defense in Depth:** In addition to API handler layer authorization (`withAuthenticatedCharacter` / `authorizeCharacter`), repositories and domain services MUST verify sub-resource ownership so that direct calls or bypassed routing cannot perform IDOR (Insecure Direct Object Reference) mutations.
 - **Differentiating Status vs Ownership Errors:** Repositories and domain services should distinguish between non-existent resources (`ErrNotFound`), unauthorized ownership mismatches (`ErrForbidden`), and invalid lifecycle states (`ErrNotActive`, `ErrAlreadyClaimed`).
 
 ## 5. CAS (Compare-And-Swap) / Conditional Status Update Pattern for Shared State
-- **Conditional Lifecycle State Transitions:** For peer-to-peer and shared state entities undergoing lifecycle state transitions (Auctions, Deliveries, Mailbox, Trades, Guild donations):
+- **Conditional Lifecycle State Transitions:** For peer-to-peer and shared state entities undergoing lifecycle state transitions (Flea Market listings, player store sales, and contest/lottery rounds):
   - SQL `UPDATE` queries MUST include conditional status guards:
     ```sql
-    UPDATE delivery_parcels
-    SET status = ?, claimed_at = ?
-    WHERE id = ? AND status = 'pending'
+    UPDATE fleamarket_listings
+    SET status = 'sold'
+    WHERE id = ? AND status = 'active'
     ```
-- **RowsAffected Validation:** Repositories executing state transition `UPDATE` queries MUST inspect `result.RowsAffected()`. If `affected == 0`, return a domain conflict error (e.g., `ErrParcelAlreadyClaimed`, `ErrListingNotActive`) rather than treating 0 affected rows as a silent success.
-- **Pessimistic Locking Order for Shared Peer-to-Peer Entities:** When processing operations on shared peer-to-peer entities (such as delivery parcel claim/cancellation or auction buyout/bidding), acquire an exclusive row-level lock on the shared entity (`GetParcelByIDForUpdate` / `SELECT ... FOR UPDATE`) at the entry of the transaction boundary before executing mutations on dependent characters/wallets/inventories. This serializes concurrent contenders on the shared entity and avoids cross-table foreign key deadlocks.
+- **RowsAffected Validation:** Repositories executing conditional state transition `UPDATE` queries MUST inspect `result.RowsAffected()`. If `affected == 0`, return the appropriate domain conflict error rather than treating 0 affected rows as a silent success.
+- **Pessimistic Locking Order for Shared Peer-to-Peer Entities:** When processing a shared listing or sale, acquire its Rank 0 row lock before dependent characters/wallets/storage. Direct auction/depot transfers have no listing entity and MUST start with ascending character locks. MUST NOT invent bidding, buyout, parcel, or guild-donation mechanics from transaction examples.
 
 ## 6. Mandatory Concurrency Stress Testing for P2P and Shared-Resource State Mutations
-- **Mandatory Paired Stress Test:** Any feature introducing or altering state mutations on shared resources, peer-to-peer asset transfers, competitive bids/purchases, or parallel contender claims (e.g. Bank transfers, Auction bidding/buyout, Flea Market listings/purchases, Delivery parcel claim/cancellation, Guild donations, World Boss raids) MUST include a paired concurrency stress test.
+- **Mandatory Paired Stress Test:** Any feature introducing or altering state mutations on shared resources, peer-to-peer asset transfers, purchases, or parallel contender claims (e.g. Auction/Depot direct transfers, Flea Market listings/purchases, Store sales, Guild activity points, or contest/lottery settlement) MUST include a paired concurrency stress test.
 - **Standardized Concurrency Test Harness:** Tests MUST use the shared concurrency harness (`testutil.RunConcurrentStressTest` or `testutil.RunRace` / `testutil.RunRace2` in `internal/testutil` or `internal/database/testutil`):
   - **Deadlock & Timeout Assertion:** The harness automatically verifies that zero deadlocks or lock wait timeouts occur (`IsDeadlockError` count == 0). Any detected deadlock fails the test immediately via `t.Fatalf`.
   - **Asset Conservation Invariant:** Tests MUST assert strict asset conservation across all accounts/inventories (no duplicated gold/items, no phantom claims, no double-spending).
@@ -127,5 +125,4 @@ See [`docs/architecture/valkey-keyspace.md`](../../docs/architecture/valkey-keys
 - **Ordered Clean Teardown (Zero Orphan State)**: If startup aborts at any point during initialization (e.g. MariaDB connected, but Valkey ping timed out; or HTTP listener bind failed):
   - Any partially allocated resources (database connection pools, Valkey client sockets, background workers, listeners) MUST be cleanly and deterministically released using structured `defer` or context cancellation.
   - The process MUST NOT leave hanging connection pools, orphaned sockets, or leaking goroutines.
-- **Test Isolation Boundary**: In-memory repositories and mock clients are permitted strictly within unit test suites (`_test.go`), NEVER as runtime fallbacks in production wiring (`cmd/party2/wire.go`).
-
+- **Test Isolation Boundary**: In-memory adapters MAY be selected by factories for explicitly injected test dependencies. Production bootstrap MUST supply validated real stores; factory nil-client test branches MUST NOT become connectivity-error fallbacks.

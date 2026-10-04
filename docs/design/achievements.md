@@ -17,7 +17,7 @@ Completing milestones unlocks prestigious commemorative medals (記念メダル 
 | `adventure_victories` | Total victories achieved in stage adventures | Clearing adventure battles (`internal/adventure`, `internal/party`) |
 | `monsters_slain` | Total non-boss monsters defeated in combat | Battles won in adventures, dungeons, and party co-op |
 | `gold_earned` | Cumulative gold currency accumulated | Rewards from battles, deliveries, quests, sales, and party co-op |
-| `bosses_slain` | Total King / World Bosses conquered | World boss victories (`internal/boss`) |
+| `bosses_slain` | Total King sealing encounters conquered | King sealing victories (`internal/boss`) |
 | `pvp_victories` | Total victories achieved in PvP Arena | Ranked Arena combat victories (`internal/pvp`) |
 | `casino_games` | Total rounds played across casino games | Slot Machine, Poker, Doppel, High-Low (`internal/casino`) |
 | `alchemy_crafts` | Total successful alchemy recipes synthesized | Item alchemy conversions (`internal/alchemy`) |

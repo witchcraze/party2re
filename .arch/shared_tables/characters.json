@@ -1,5 +1,4 @@
 {
-  "$schema": "https://archify.dev/schema/shared_table.v1.json",
   "table": "characters",
   "tier": 2,
   "description": "Primary player character state, attributes, wallet money, and progression.",

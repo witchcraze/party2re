@@ -14,13 +14,15 @@ description: Rules for maintaining the Single Source of Truth (SSOT) and synchro
 
 Do not use `STATUS.md` or `ROADMAP.md` as substitutes for permanent architecture/design documentation.
 
+During reconstruction, game specifications MUST be checked against the original project under `00-migration-constraints.md`. MUST distinguish legacy requirements, current implementation, and planned changes; NEVER rewrite a correct legacy rule to match an incorrect implementation. See [`docs/README.md`](../../docs/README.md) for document ownership.
+
 ## 2. Documentation Role and Timing
 - **Design Docs are not Implementation Details:** Documentation in `docs/design/` should represent enduring design and domain rules (e.g., game formulas, system boundaries, core behavior). It does not need to perfectly mirror 100% of the implementation details (like private helpers, internal data structures, or SQL queries).
 - **Recording Domain Rules:** When discovering important game rules or formulas during the clean-room investigation, actively record these language-agnostic rules in `docs/design/` as valuable project assets.
 - **Avoid Pre-emptive Detailed Tech Specs:** While domain rules should be documented early, do not pre-draft overly rigid technical specification files (e.g., defining exact structs and function signatures in markdown) before writing code. Let the detailed technical boundaries settle through TDD and code, then finalize the documentation.
 
 ## 3. Feature Documentation Sync within PR
-When opening a feature or domain change PR, **always synchronize in that same PR**:
+When opening a feature or domain change PR, **review these documents in that same PR and update each affected document**:
 1. `docs/design/<feature>.md` — language-agnostic rules, formulas, and state transitions.
 2. `docs/architecture/components.md` — component responsibilities.
 3. `docs/migration/feature-inventory.md` — feature tracking status.
@@ -38,7 +40,7 @@ When opening a feature or domain change PR, **always synchronize in that same PR
 - **NEVER edit compiled artifacts directly:**
   - Do NOT edit `docs/api/openapi.json` or `internal/api/http/openapi.json` directly. These are compiled build artifacts generated deterministically by `scripts/sync_openapi/`.
 - **Synchronization Workflow:**
-  - Whenever an HTTP route is added or changed in `internal/api/http/handler.go`, run `make openapi-sync` (or `make openapi-scaffold`).
+  - Whenever an HTTP route is added or changed in `internal/api/http/handler.go`, update its modular specification; use `make openapi-scaffold` only when missing-route scaffolding is needed.
   - Modify the modular path specification in `docs/api/paths/{module}.json`.
   - Run `make openapi-sync` to recompile both artifacts.
   - CI enforces 100% route coverage and synchronization via `make openapi-check`.

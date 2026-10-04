@@ -2,13 +2,13 @@
 
 ## Purpose
 
-This document defines the 5-category item classification, pricing and inventory ownership models, and the 5-slot equipment system.
+This document defines the 5-category item classification, pricing and inventory ownership models, and the current Go equipment representation. Legacy equipment uses weapon, armor, and held-item fields; additional slot categories are implementation metadata whose gameplay equivalence must be checked.
 
 ## Item System
 
 ### Separation of Definition and Instance
 - **`ItemDefinition`**: Static catalog definition defining what an item is, its base price, and its equipment slot.
-- **`ItemInstance`**: Concrete owned item entity possessing a unique ID, item definition ID, stack quantity, and enhancement level (+0 to +10).
+- **`ItemInstance`**: Concrete owned item entity possessing a unique ID, item definition ID, stack quantity, and an enhancement metadata field (+0 to +10 in current Go). The metadata does not establish a legacy gold/material enhancement mechanic; authentic weapon seals are documented in [blacksmith.md](blacksmith.md).
 
 ### 5-Category Item Catalog
 Definitions are organized into five JSON data catalogs:
@@ -38,13 +38,12 @@ Derived from the authentic Party2 Perl CGI `@ites` table (`$ites[no][3]`), every
 
 ## Equipment System
 
-### Equipment Slots
-A character has 5 distinct equipment slots:
+### Current Go equipment slots
+The exported slot enum has four equipment categories; no `SlotAccessory1` or `SlotAccessory2` exists:
 - `SlotMainHand` (`main-hand`): Main-hand weapon.
 - `SlotOffHand` (`off-hand`): Off-hand shield or secondary weapon.
 - `SlotBody` (`body`): Body armor.
-- `SlotAccessory1` / `SlotAccessory` (`accessory`): Accessory slot 1.
-- `SlotAccessory2` (`accessory`): Accessory slot 2.
+- `SlotAccessory` (`accessory`): One accessory category. Do not invent a second accessory slot from this enum.
 
 ### Invariants & Rules
 1. **Ownership Requirement**: Only items currently in the character's active inventory can be equipped.
