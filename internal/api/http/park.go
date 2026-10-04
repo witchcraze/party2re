@@ -77,7 +77,7 @@ func (h *Handler) handlePostParkMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *postParkMessageRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *postParkMessageRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req postParkMessageRequest) {
 		post, err := h.park.PostMessage(r.Context(), char.ID, req.Content, req.Color, req.RecipientName)
@@ -104,7 +104,7 @@ func (h *Handler) handleParkNPCTalk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *parkCharacterActionRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *parkCharacterActionRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req parkCharacterActionRequest) {
 		dialogue, err := h.park.TalkToNPC(r.Context(), char.ID)
@@ -123,7 +123,7 @@ func (h *Handler) handleParkNPCDivinate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *parkCharacterActionRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *parkCharacterActionRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req parkCharacterActionRequest) {
 		result, err := h.park.Divinate(r.Context(), char.ID)

@@ -55,3 +55,13 @@ Data is persisted in MariaDB via `park_posts`:
 - Primary Key: UUID `id` (CHAR 32)
 - Foreign Key: `character_id` referencing `characters(id)` with `ON DELETE CASCADE`.
 - Indexes: `(created_at DESC)` and `(character_id, created_at DESC)`.
+
+---
+
+## Action Gateway & Sleep/Wake Recovery Guards
+
+All park character action endpoints (`POST /park/posts`, `POST /park/npc/talk`, `POST /park/npc/divinate`) require an active, awake character:
+- Rejection of sleeping characters (`Sleeping = true`): Returns HTTP 409 Conflict with the sleep message.
+- Rejection of pending wake recovery (`CanWake = true`): Returns HTTP 409 Conflict with wake recovery prompt (`お休み中「Zzz...」 目を覚ましてください`).
+- Read-only observation endpoints (`GET /park/posts`, `GET /park/npc/inspect`) remain unblocked to allow viewing bulletin messages and inspecting the environment while resting.
+

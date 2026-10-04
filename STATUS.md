@@ -1,6 +1,6 @@
 # Status
 
-Last reviewed: Issue #984 — HTTP/Store: Guard owner mutations during sleep and wake recovery
+Last reviewed: Issue #983 — HTTP/Park: Apply the shared sleep guard to park actions
 
 ## Current Phase
 
