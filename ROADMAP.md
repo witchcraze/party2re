@@ -72,23 +72,20 @@ Once Version 1.0 is established, the project should transition from **reconstruc
 
 #### Completed Feature Modules & Subsystems
 
-Completed features are tracked in [`docs/migration/feature-inventory.md`](docs/migration/feature-inventory.md) (the authoritative SSOT for Version 1.0 completion records). The full list of merged issues and feature groups is maintained there.
+The [frozen feature inventory](docs/migration/feature-inventory.md) records the initial reconstruction snapshot. Detailed completion history is available in GitHub/Git; [STATUS](STATUS.md) describes major current capabilities and gaps.
 
 **Summary**: All core feature modules are implemented, including Player/Character lifecycle, Battle Engine, Adventure, Economy (Shop/Bank/Auction/Flea Market/Gem Store/Black Market), Social systems (Guild/GvG/PvP/Dungeons/Casino/Lottery/Home/Tavern/Delivery), and the current HTTP JSON API layer ([OpenAPI 3.1](docs/api/openapi.json)). Implemented modules and merged parity milestones do not prove complete behavioral equivalence; [known differences](docs/migration/documentation-audit.md) remain to be resolved against the original project.
 
 #### Legacy Clean-room Specification Parity Milestones:
 
-All 4 dependency-ordered milestones (Milestone 1 Core/System, Milestone 2 Economy/Production, Milestone 3 Adventure/Combat/Arenas, Milestone 4 Community/Entertainment) are completed. Comprehensive issue-level traceability and feature catalogs reside in [`docs/migration/feature-inventory.md`](docs/migration/feature-inventory.md) and [`docs/migration/legacy-cgi-mapping.md`](docs/migration/legacy-cgi-mapping.md).
+The initial Core/System, Economy/Production, Adventure/Combat/Arenas and Community/Entertainment reconstruction milestones are recorded in the [frozen inventory](docs/migration/feature-inventory.md). [Legacy CGI mapping](docs/migration/legacy-cgi-mapping.md) remains the navigation to behavioral evidence and reconstruction targets; [known differences](docs/migration/documentation-audit.md) remain active reconciliation work.
 
 #### Remaining Version 1.0 Milestones:
 
 1. **Client/Agent Gateway & CQRS Architecture (In Progress)**
-   - Query Pillar implemented: owned `GET /api/v1/characters/{id}/context`, all timers and shared context DTO (#944, #946, #938, #939)
-   - Command contract approved in #646: preserve success/result when refresh fails, re-fetch GET only, and do not automatically replay unknown command outcomes
-   - Common authenticated command boundary implemented (#1010), including typed parameters, fail-closed entry/sleep checks and outcome-preserving context refresh; stage Adventure start (#1014) and emergency Rescue with required reason (#1013) connected
-   - Command adapters remain #1011–#1012 (Bank/Home), with #1015 covering Deposit → Sleep → controlled expiry → Wake → Adventure integration
-   - Phased migration and complete purge of legacy individual REST routes (#947, #948, #949, #950)
-   - Establishes a radical, token-efficient 2-tool API surface for AI Agents, Web UI, and Chatbots
+   - Complete command coverage and verify the initial stateful gameplay loop (#1015).
+   - Retire individual REST routes only after their replacement commands are implemented and verified (#947–#950).
+   - Preserve the enduring [command/recovery contract](docs/architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions); current coverage is summarized in [STATUS](STATUS.md).
 2. **Headless E2E Gameplay Simulation Test Framework**
    - Deterministic multi-turn game loop simulation via the Action Gateway (Issue #650)
 3. **Client Presentation & Web UI**
@@ -107,7 +104,7 @@ Each week:
 3. implement only the selected scope;
 4. run focused tests;
 5. perform architecture review;
-6. update status/roadmap;
+6. update affected explanations when capabilities, contracts or plans change;
 7. finish with a clean repository state.
 
 Avoid spending the weekly token budget on broad refactors unless they are necessary to unblock the next feature.
@@ -121,4 +118,4 @@ Avoid spending the weekly token budget on broad refactors unless they are necess
 - `docs/architecture/` — permanent architecture.
 - `docs/design/` — permanent game/design model.
 - `docs/development/` — permanent development workflow.
-- `docs/migration/feature-inventory.md` — Version 1.0 feature inventory.
+- `docs/migration/feature-inventory.md` — frozen reconstruction snapshot.

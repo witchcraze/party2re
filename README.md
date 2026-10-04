@@ -250,7 +250,7 @@ docker run --rm \
 - [`AGENTS.md`](AGENTS.md) — AIエージェントを含む開発者向けの基本方針
 - [`ROADMAP.md`](ROADMAP.md) — 開発フェーズと今後の計画
 - [`STATUS.md`](STATUS.md) — 現在の状態と決定事項
-- [`docs/migration/feature-inventory.md`](docs/migration/feature-inventory.md) — Version 1.0の機能・画像棚卸し
+- [`docs/migration/feature-inventory.md`](docs/migration/feature-inventory.md) — 再構築時の機能・画像棚卸し記録（固定スナップショット）
 - [`docs/design/game-overview.md`](docs/design/game-overview.md) — ゲームの概要・設計上の理解
 - [`docs/architecture/overview.md`](docs/architecture/overview.md) — アーキテクチャ概要
 - [`docs/architecture/components.md`](docs/architecture/components.md) — コンポーネント定義

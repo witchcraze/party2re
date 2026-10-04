@@ -1,15 +1,15 @@
 # Status
 
-Last reviewed: Issue #1013 — emergency rescue connected to Action Gateway
+Capability snapshot reviewed on 2026-10-04. Detailed task history is available in GitHub/Git.
 
 ## Current Phase
 
 **Version 1.0 Reconstruction / Refactoring — In Progress (Phase 5+)**
 
-The Go project contains the foundational systems, core combat, 39 feature modules, and the HTTP JSON API (296 paths / 319 operations, OpenAPI 3.1), implemented in clean-room Go (1.26.7) with 0 legacy code reuse.
+The Go project contains the foundational systems, core combat, the main game feature modules and the HTTP JSON API, implemented in clean-room Go with no legacy code reuse. Current routes and schemas are described in [OpenAPI](docs/api/openapi.json).
 
 - **Component Architecture & Boundaries**: Authoritative responsibilities, dependencies, and lock hierarchy tiers reside in [`docs/architecture/components.md`](docs/architecture/components.md).
-- **Completed Feature History**: Comprehensive issue-level traceability resides in [`docs/migration/feature-inventory.md`](docs/migration/feature-inventory.md).
+- **Reconstruction Reference**: The [frozen feature inventory](docs/migration/feature-inventory.md) preserves an earlier reconstruction snapshot; it is not a live completion log.
 - **Domain Design Specifications**: Language-agnostic rules, formulas, and state transitions reside in [`docs/design/README.md`](docs/design/README.md).
 
 ---
@@ -18,20 +18,20 @@ The Go project contains the foundational systems, core combat, 39 feature module
 
 - **Modular Monolith**: Go stdlib HTTP routing with modular wire composition (`cmd/party2/wire.go`).
 - **HTTP Transport & Edge Policy**: RESTful JSON API with structured error responses, HATEOAS actions, trusted proxy rate limiting, and centralized Unicode NFC sanitization (`internal/validation`).
-- **Durable Persistence**: MariaDB Master (Migrations `001`–`092`) with deterministic row-lock hierarchy (Rank 0→8) and ambient transaction propagation (`database.RunInTx`).
+- **Durable Persistence**: MariaDB Master with deterministic row-lock hierarchy and ambient transaction propagation. See [component contracts](docs/architecture/components.md) and the repository migrations for details.
 - **Transient State**: Valkey Master for ephemeral lobbies & turns (Candidate C), run buffers (Candidate D), actor-indexed unfinished ScheduledActions (Pending/Processing; write error propagation & cleanup on schedule). SSOT: [`docs/architecture/valkey-keyspace.md`](docs/architecture/valkey-keyspace.md).
 - **Lifecycle Contracts**: Fail-fast startup checks for MariaDB/Valkey with clean resource teardown on error.
 - **AST Gates & CI**: Automated AST linters (locks, tx runners, ISP, file size ≤500 lines, Valkey keyspace, presentation decoupling), action catalog OpenAPI drift detector (`catalog_lint_test.go`), and non-mutating OpenAPI sync checks (`sync_openapi --check`). SSOT: [`docs/development/ast-linters.md`](docs/development/ast-linters.md).
-- **PlayerContext**: Uncached Character/ScheduledAction/Sleep observations and ordered six-gate ActionID evaluation; initial town scene, positive-gold entry filtering, and legacy-accurate death gating (combat quests only). Owned HTTP `GET /api/v1/characters/{id}/context` exposes a shared transport DTO, all pending/sleep timers, action metadata, profile avatars and an initial town placeholder scene (#939).
-- **Action Gateway**: Common authenticated `POST /api/v1/characters/{id}/actions` dispatch, typed params and fail-closed entry/sleep checks (#1010). `adventure_start` calls the existing stage-start service with required `stage_id` (#1014); `rescue_request` calls EmergencyRescue with required `reason`, including during sleep/unfinished work (#1013). Both preserve existing service results/errors. Known success/rejection survives context-refresh failure with GET-only recovery (#646; [contract](docs/architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions)). Catalog availability remains entry eligibility and unconnected commands return 501. No idempotent replay guarantee is introduced.
+- **PlayerContext**: Owned `GET /api/v1/characters/{id}/context` provides an uncached shared observation of the character, unfinished work, sleep recovery and eligible actions, with an initial town placeholder scene.
+- **Action Gateway**: Authenticated `POST /api/v1/characters/{id}/actions` and shared outcome/refresh handling are available. Current command coverage includes `adventure_start` and `rescue_request`; Bank/Home and remaining command coverage are still incomplete. Catalog availability means entry eligibility; unconnected commands return 501. Known results survive refresh failure with GET-only recovery, with no idempotent replay guarantee. See the [command contract](docs/architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions).
 
 ---
 
 ## Immediate Priorities (Next Actions)
 
-See [`ROADMAP.md`](ROADMAP.md) for full milestone details.
+See [`ROADMAP.md`](ROADMAP.md) for remaining milestones and [open Issues](https://github.com/witchcraze/party2re/issues) for detailed scope/dependencies.
 
-1. **Client/Agent Gateway & CQRS Architecture**: Connect Bank/Home adapters (#1011–#1012) and verify the initial loop (#1015). Adventure start and Rescue are connected (#1014/#1013). Remaining command coverage and phased REST retirement stay under #947–#950. Common dispatch is implemented in #1010; observation is implemented in #939/#938/#972.
+1. **Client/Agent Gateway**: Finish command coverage, verify the initial gameplay loop and retire REST routes after verified replacements exist. Initial loop work is tracked in [#1015](https://github.com/witchcraze/party2re/issues/1015); broader migration remains under #947–#950.
 2. **Headless E2E Gameplay Simulation**: Deterministic multi-turn gameplay loop verification (Issue #650).
 3. **Client Presentation & Web UI**: Browser client and Server-Driven UI (Issue #140).
 4. **Production Asset Pipeline & Final Licensing**: Production asset mapping and license attribution catalog (Issues #654, #729; specification pending).
@@ -41,7 +41,6 @@ See [`ROADMAP.md`](ROADMAP.md) for full milestone details.
 ## Confirmed & Pending Decisions
 
 - **Confirmed**: Go initial language, modular monolith, small Core, independent Battle engine, MariaDB persistence, Valkey worker queue/ephemeral lobbies, zero legacy code/asset reuse, legacy behavioral parity as the reconstruction target, not a completed certification. Known differences are recorded in [the documentation audit](docs/migration/documentation-audit.md).
-- **Guild succession**: Restored legacy pending-inclusive roster selection and roster-count dissolution under `lib/system.cgi:1124-1183` (#993, #1006; [spec & provenance](docs/design/guild.md#guild-master-succession--dissolution-news)).
 - **Pending**: Frontend framework, final software license (MIT/Apache-2.0/AGPLv3), final creative asset licenses (Creative Commons).
 
 ---
@@ -52,4 +51,4 @@ See [`ROADMAP.md`](ROADMAP.md) for full milestone details.
 - `docs/architecture/` — permanent software architecture.
 - `docs/design/` — permanent game/domain design specifications.
 - `ROADMAP.md` — phase and future-work planning.
-- `docs/migration/feature-inventory.md` — Version 1.0 feature completion inventory.
+- `docs/migration/feature-inventory.md` — frozen reconstruction snapshot.

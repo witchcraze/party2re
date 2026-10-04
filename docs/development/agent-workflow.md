@@ -40,8 +40,7 @@ Choose development checks using the stages in [`testing.md`](testing.md#2-tiered
 Issue (acceptance criteria)
   -> write / update tests (TDD)
   -> implement minimum solution
-  -> write / update docs/design/<feature>.md (language-agnostic spec)
-  -> update docs/architecture/components.md & STATUS.md (current state)
+  -> assess documentation impact and update affected explanations
   -> re-check active issue (verify acceptance criteria & zero omissions)
   -> make fmt
   -> make check (wait for completion)
@@ -74,11 +73,8 @@ Examples:
 Before ending a session:
 
 - confirm relevant tests and full verification cover the final changes; reuse successful checks as described in [`testing.md`](testing.md#2-tiered-verification-strategy);
-- synchronize documentation:
-  - update `STATUS.md` current component state and immediate priorities (avoid appending historical logs);
-  - update `docs/design/<feature>.md` if game mechanics or formulas were added/modified;
-  - update `docs/architecture/components.md` if component responsibilities or boundaries were added/modified;
-  - update `docs/migration/feature-inventory.md` and `ROADMAP.md` if milestones progressed;
+- assess whether any owning explanation is outdated and update it under the [documentation rule](../../.agents/rules/02-documentation-sync.md#3-update-affected-explanations-within-pr); no fixed document list or per-ticket completion entry is required;
+- preserve the frozen inventory as historical reference; keep current missing coverage, unverified behavior and known differences discoverable through their responsible documents or open Issues;
 - leave unfinished work clearly represented by an Issue;
 - do not leave undocumented temporary architecture.
 

@@ -55,11 +55,12 @@ labels: ["feature"]
 
 ## Documentation impact
 
-<!-- Note: Do NOT pre-draft docs/design/ markdown files before coding.
-     Design specifications (docs/design/<feature>.md), components.md, and STATUS.md will be created/synced within the implementation PR. -->
+<!-- Identify explanations/contracts this change may make outdated, using
+     .agents/rules/02-documentation-sync.md. Update affected owner documents
+     in the implementation PR; detailed task history belongs in GitHub/Git. -->
 
-- [ ] Include language-agnostic design specification (`docs/design/<feature>.md`) in implementation PR
-- [ ] Update `docs/architecture/components.md` and `STATUS.md` in implementation PR
+- [ ] No documentation update expected — explain why
+- [ ] Update affected explanations/contracts in implementation PR — list documents below
 
 ## Dependencies / licenses
 

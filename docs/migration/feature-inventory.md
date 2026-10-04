@@ -1,4 +1,12 @@
-# Version 1.0 Feature Inventory
+# Version 1.0 Feature Inventory — Frozen Snapshot
+
+> Frozen on 2026-10-04 at [baseline 33d0ad2](https://github.com/witchcraze/party2re/tree/33d0ad276e13808a02198c63b109cee0b486a6b2).
+> The inventory below preserves the reconstruction record at that revision, including
+> its then-open work and checklist. It is not maintained for subsequent Issue/PR
+> completions and is not a current coverage or parity certification.
+> See [STATUS](../../STATUS.md) for current capabilities/gaps, [ROADMAP](../../ROADMAP.md)
+> and [open Issues](https://github.com/witchcraze/party2re/issues) for remaining work,
+> and [known differences](documentation-audit.md) for unresolved findings.
 
 > Temporary Version 1 reconstruction document.
 >

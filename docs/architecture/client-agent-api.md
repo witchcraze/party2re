@@ -1,14 +1,6 @@
 # Client & Agent API — CQRS & Server-Driven UI Architecture
 
-This document describes the implemented HTTP observation and command boundaries, including the stage adventure start adapter.
-
-| Boundary | Status | Tracking |
-|---|---|---|
-| Action catalog and OpenAPI drift checks | Implemented | #944, #946 |
-| PlayerContext evaluator and character/scheduling reads | Implemented in-process; legacy parity still requires review | #938, #972 |
-| HTTP context query | Implemented; owned character observation with four canonical slots | #939 |
-| HTTP action dispatcher | Common boundary, adventure_start and rescue_request implemented; Bank/Home adapters pending | #646 (decision), #1010 (boundary), #1014 (Adventure), #1013 (Rescue), #1011–#1012/#1015 (remaining adapters/verification) |
-| Individual REST route retirement | Planned after Gateway migration | #947–#950 |
+This document defines the HTTP observation and command contracts, service boundaries and client recovery behavior. See [STATUS](../../STATUS.md) for major current capabilities/gaps and [ROADMAP](../../ROADMAP.md) for remaining milestones; detailed progress and dependencies are tracked in GitHub.
 
 Current clients use the registered routes in [OpenAPI](../api/openapi.json).
 `GET /api/v1/characters/{id}/context` and `POST /api/v1/characters/{id}/actions`
@@ -58,8 +50,7 @@ The authenticated discovery endpoint verifies character ownership using the
 standard HTTP wrapper, calls the existing uncached `playercontext.Service.Query`,
 and enriches its facts with profile avatar and job catalog presentation. Its
 `PlayerContextResponse` DTO and reusable OpenAPI schema are also the required
-context contract for the command gateway specified in #646 and implemented in
-#1010. Adventure start and Rescue are connected in #1014/#1013; Bank/Home adapters and initial loop verification remain #1011–#1012/#1015.
+context contract for the command gateway.
 
 The four top-level fields are:
 
@@ -70,7 +61,7 @@ The four top-level fields are:
 - `scene`: the initial `town` hub, title, background ID/URL, dialogue, and
   optional structured speaker/opponent. The background is a self-authored SVG
   data URI placeholder; no legacy images are reused. Production art resolution
-  remains #654/#729, and dynamic facility/combat scenes remain #947–#949.
+  and dynamic facility/combat scenes are remaining work linked from STATUS.
 - `ongoing_actions`: every unfinished scheduled action, plus an observed
   sleep/wake recovery timer when present. Empty observations return `[]`.
   Entries contain `id`, `action_type`, `label`, `execute_at`, rounded-up
@@ -107,11 +98,7 @@ The four top-level fields are:
 
 ## 3. Command Pillar: `POST /api/v1/characters/{id}/actions`
 
-The command contract below was approved during #646 on 2026-10-04. The common
-route and dispatch boundary are implemented in #1010; stage adventure start is
-connected in #1014 and emergency rescue in #1013. This does not certify complete Gateway coverage or retire existing
-REST routes. The initial implementation is split by HTTP responsibility
-and service adapter; remaining operations belong to #947–#949.
+The command outcome/recovery contract was approved in [#646](https://github.com/witchcraze/party2re/issues/646) on 2026-10-04. Service adapters preserve existing game rules and persistence while the HTTP boundary owns parameter decoding and response composition. Current coverage and route retirement are tracked separately from this contract.
 
 ### Request Body
 
@@ -153,7 +140,7 @@ they do not invoke REST handlers through internal HTTP requests or copy game rul
 
 `result` preserves the existing operation's structured result and transport-owned
 presentation. A non-null `context` uses exactly the shared `PlayerContextResponse`
-from #939, including all four slots and non-null arrays. Refresh is an uncached
+defined in section 2, including all four slots and non-null arrays. Refresh is an uncached
 read after execution, not part of the mutation transaction. Recheck ownership
 before returning context; failed reads, enrichment or ownership checks never
 return partial observations.
@@ -167,7 +154,7 @@ Parameter decoding completes before state reads and execution. Only the mapped
 Both GET and command refresh composition reject ownership changes observed while
 reading profile enrichment.
 
-### Connected stage adventure command
+### Stage adventure command contract
 
 `adventure_start` accepts only `{ "stage_id": "stage-00" }`. A supplied non-null
 string is required; an empty string retains `StartStage`'s existing starter-stage
@@ -194,7 +181,7 @@ validation remains authoritative for exact stage requirements and state changes
 after preflight; unexpected service/store errors use `500 EXECUTION_FAILED`.
 Both known outcomes use the refresh/recovery contract below.
 
-### Connected emergency rescue command
+### Emergency rescue command contract
 
 `rescue_request` accepts only `{ "reason": "stuck activity" }`, with a required
 non-null string. Actor identity comes from the owned path. Empty or whitespace-only
@@ -312,42 +299,10 @@ Chatbot frameworks handle state transitions with zero routing boilerplate:
 
 ---
 
-## 6. Related Issues & Implementation Roadmap
+## 6. Related documents
 
-### Phase 1: Gateway Core Construction
-- **#944**: `[Specification] PlayerContext: Define Action Catalog & Legacy Precondition Matrix` (Master Action Catalog & Params Schema)
-- **#946**: `[Architecture] PlayerContext: Automated Drift-Detection Test between Action Catalog and OpenAPI Specification` (Automated Schema Linting)
-- **#938**: `[Feature] PlayerContext: Action Evaluator Engine with ScheduledAction Cooldown Gate` (Availability Filtering)
-- **#939**: `[Feature] HTTP/PlayerContext: GET /context handler & Client Context Model` (Query Pillar)
-- **#646**: `[Architecture] HTTP/Gateway: Define command failure contract and decompose initial implementation` (approved contract and ticket decomposition; no runtime implementation)
-
-### Initial command implementation
-
-| Issue | Scope | Prerequisites |
-|---|---|---|
-| [#1010](https://github.com/witchcraze/party2re/issues/1010) | Common authenticated dispatch, params, outcome/refresh envelope and OpenAPI | #646 |
-| [#1011](https://github.com/witchcraze/party2re/issues/1011) | Bank deposit/withdraw adapters | #646, #1010 |
-| [#1012](https://github.com/witchcraze/party2re/issues/1012) | Home sleep/explicit wake adapters | #646, #1010 |
-| [#1013](https://github.com/witchcraze/party2re/issues/1013) | Rescue adapter and existing required reason input metadata | #646, #1010 |
-| [#1014](https://github.com/witchcraze/party2re/issues/1014) | Stage adventure start adapter | #646, #1010 |
-| [#1015](https://github.com/witchcraze/party2re/issues/1015) | Deposit → Sleep → controlled expiry → Wake → Adventure integration and GET-only refresh recovery | #646, #1011, #1012, #1014 |
-
-Closing #646 records the specification decision, not completion of these children.
-The integration scenario includes explicit Wake because timer readiness alone
-does not settle recovery. Rescue is independently testable and has its own ticket.
-Its Go service requires a reason; #1013 synchronizes catalog/OpenAPI metadata
-with that input contract without inventing a default or legacy rule.
-During staged connection, GET lists catalog entry candidates; unconnected
-commands return the explicit 501 above. Remaining catalog entries and granular
-REST operations stay under #947–#949, each requiring decomposition before work.
-Their native implementation blockers remain open after #646 closes.
-
-### Phase 2: Phased Legacy REST Purge & Migration
-- **#947**: `[Architecture] API/Migration: Migrate Economy endpoints (Bank, Shop, Depot, Market) to Action Gateway and purge legacy routes`
-- **#948**: `[Architecture] API/Migration: Migrate Combat & Adventure endpoints (Adventure, Dungeon, Boss, PvP) to Action Gateway and purge legacy routes`
-- **#949**: `[Architecture] API/Migration: Migrate Town, Faith & Social endpoints (Home, Casino, Chapel, Guild) to Action Gateway and purge legacy routes`
-- **#950**: `[Architecture] API/Cleanup: Shrink handler.go to <150 lines and purge legacy paths from OpenAPI specification`
-
-### Phase 3: Client Verification & Presentation
-- **#650**: `[Architecture] Test: Headless E2E Gameplay Simulation Test Architecture Design & Ticket Decomposition` (E2E Validation via Gateway)
-- **#140**: `[Feature] Client Presentation: Web UI Client and Presentation Layer` (Server-Driven UI)
+- [STATUS](../../STATUS.md): major current capabilities, command coverage and gaps.
+- [ROADMAP](../../ROADMAP.md): remaining milestones and migration direction.
+- [OpenAPI](../api/openapi.json): registered routes and transport schemas.
+- [Components](components.md#playercontext): observation/command responsibility boundaries.
+- [Action preconditions](../design/action-preconditions.md): game-entry eligibility and behavioral evidence.

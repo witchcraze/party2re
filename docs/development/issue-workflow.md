@@ -20,18 +20,15 @@ The Issue should contain:
 
 Issue bodies describe the work and its acceptance criteria; implementation tools and providers are not ticket requirements. Size labels indicate complexity without selecting an executor.
 
-## Two-stage documentation lifecycle
+## Documentation follows changed explanations
 
-To avoid pre-emptive documentation rework while ensuring permanent design documents remain 100% synchronized with actual code:
+The Issue captures the goal, observable requirements and acceptance criteria. Permanent documents explain enduring rules, contracts and decisions; detailed work history belongs in GitHub/Git.
 
-1. **Stage 1 — Issue Creation (Pre-implementation)**:
-   - Do **not** create or pre-draft specification files (`docs/design/*.md`) before coding.
-   - Describe requirements, calculations, and observable behavior directly in the Issue's **Acceptance Criteria**.
-2. **Stage 2 — PR Implementation (Post-implementation synchronization)**:
-   - Implement the code and unit/integration tests.
-   - Once domain rules, formulas, and state transitions are settled, create or update the language-agnostic design specification (`docs/design/<feature>.md`) **within the same implementation PR**.
-   - Synchronize `docs/architecture/components.md` and `STATUS.md` in the same PR.
-   - **Pre-commit issue re-check**: Re-inspect the active Issue (`gh issue view <issue-number>`) and cross-check each acceptance criterion against code, tests, and documentation to guarantee zero omissions before committing and opening the PR.
+During implementation, assess which explanations the change makes outdated and update their owning documents in the same PR, using the [documentation rule](../../.agents/rules/02-documentation-sync.md#3-update-affected-explanations-within-pr) and [documentation map](../README.md). Game-rule changes affect design documents, responsibility/contract changes affect architecture documents, and procedure changes affect developer documentation. STATUS and ROADMAP change when their major capabilities, gaps or remaining milestones change.
+
+A routine implementation change can leave these explanations accurate. In that case, briefly state that no documentation update is needed. The frozen reconstruction inventory is historical reference, not a completion log to append to each PR. Preserve specification/decision evidence links where they support an explanation, and keep missing coverage and unverified behavior discoverable.
+
+Before committing, re-inspect the active Issue (`gh issue view <issue-number>`) and cross-check each acceptance criterion against the implementation, validation and any affected documentation.
 
 ## PR is the unit of review
 
@@ -46,8 +43,7 @@ A PR should:
 - reference its Issue;
 - explain the behavior change;
 - identify tests;
-- include domain design docs (`docs/design/<feature>.md`) and component updates (`docs/architecture/components.md`);
-- update `STATUS.md` current state summary (without appending historical changelogs);
+- assess documentation impact and update affected explanations/contracts, or explain why none needs updating;
 - remain within the Issue scope.
 
 

@@ -21,11 +21,13 @@ Use the documents according to these roles:
 
 - `AGENTS.md` & `.agents/rules/*.md` — mandatory rules for agents and development.
 - `README.md` — human-facing project introduction.
-- `STATUS.md` — current project state; what is true now.
-- `ROADMAP.md` — planned work and phase progression.
+- `STATUS.md` — major current capabilities, limitations and immediate gaps.
+- `ROADMAP.md` — remaining milestones and planned direction.
 - `docs/architecture/` — enduring software architecture.
 - `docs/design/` — enduring game/domain design.
 - `docs/development/` — enduring development procedures.
+- `docs/migration/feature-inventory.md` — frozen reconstruction snapshot; historical reference.
+- GitHub Issues / PRs and Git history — task progress and detailed change history.
 - `.github/ISSUE_TEMPLATE/` — mandatory ticket/review formats.
 
 The distinction is important:
@@ -43,6 +45,8 @@ AGENTS.md (and .agents/rules/)
 ```
 
 Do not use `STATUS.md` or `ROADMAP.md` as substitutes for permanent architecture/design documentation.
+
+Update the owning documents when a change makes their explanations outdated, as defined in `.agents/rules/02-documentation-sync.md`. Do not append completion records for each Issue/PR or routinely update the frozen inventory. Use [`docs/README.md`](docs/README.md) to locate current contracts, gaps and historical evidence.
 
 ### Rules vs. Architecture Docs — Placement Criteria
 

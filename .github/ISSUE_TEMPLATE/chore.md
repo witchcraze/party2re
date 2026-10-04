@@ -41,11 +41,12 @@ labels: ["chore"]
 
 ## Documentation impact
 
-<!-- Note: Do NOT pre-draft documentation files before coding.
-     Documentation will be updated within the implementation PR. -->
+<!-- Identify explanations/contracts this change may make outdated under
+     .agents/rules/02-documentation-sync.md. Update their owner documents
+     in the same PR; no frozen-inventory completion entry is required. -->
 
 - [ ] None
-- [ ] Update documentation within implementation PR
+- [ ] Update affected explanations/contracts within implementation PR — list documents below
 
 ## Architecture impact
 
