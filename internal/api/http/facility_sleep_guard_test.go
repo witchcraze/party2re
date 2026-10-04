@@ -78,6 +78,7 @@ func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepSt
 		apihttp.WithSecretShop(&stubSecretShopService{}),
 		apihttp.WithBlacksmith(&stubBlacksmithService{}),
 		apihttp.WithFleaMarket(&stubFleaMarketService{}),
+		apihttp.WithStore(&stubStoreService{}),
 	)
 	if err != nil {
 		t.Fatalf("failed to create handler: %v", err)
@@ -201,6 +202,18 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"home_teach_phrase", http.MethodPost, "/homes/char-1/companion/phrases", `{"phrase":"hello"}`},
 		{"home_forget_phrase", http.MethodDelete, "/homes/char-1/companion/phrases/phrase-1", ``},
 		{"home_clear_notices", http.MethodPost, "/homes/char-1/notices/clear", `{}`},
+		// Store
+		{"store_build", http.MethodPost, "/towns/town1/stores", `{"character_id":"char-1","house_style":"001","store_name":"マイショップ"}`},
+		{"store_list_gold", http.MethodPost, "/characters/char-1/store/listings/gold", `{"depot_item_instance_id":"inst-1","price":1000}`},
+		{"store_list_barter", http.MethodPost, "/characters/char-1/store/listings/barter", `{"depot_item_instance_id":"inst-1","wish_item_name":"やくそう"}`},
+		{"store_withdraw_listing", http.MethodDelete, "/characters/char-1/store/listings/sale-1", ``},
+		{"store_buy", http.MethodPost, "/characters/char-1/store/sales/sale-1/buy", ``},
+		{"store_trade", http.MethodPost, "/characters/char-1/store/sales/sale-1/trade", `{"depot_item_instance_id":"inst-barter"}`},
+		{"store_change_name", http.MethodPost, "/characters/char-1/store/name", `{"store_name":"新看板"}`},
+		{"store_change_wallpaper", http.MethodPost, "/characters/char-1/store/wallpaper", `{"wallpaper":"farm"}`},
+		{"store_add_interior", http.MethodPost, "/characters/char-1/store/interiors", `{"furniture_id":"001"}`},
+		{"store_rename_interior", http.MethodPut, "/characters/char-1/store/interiors/int-1/name", `{"name":"お気に入りの机"}`},
+		{"store_clean_interiors", http.MethodDelete, "/characters/char-1/store/interiors", ``},
 	}
 
 	t.Run("sleeping character is rejected with 409 Conflict across all facility endpoints", func(t *testing.T) {

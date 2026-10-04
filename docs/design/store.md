@@ -91,3 +91,6 @@ erDiagram
    - Store and interior names cannot exceed 8 characters and are validated against reserved delimiters.
 6. **Collection Discovery & Catalog Registration**:
    - Acquiring items or equipment through player store purchases (`BuyItem`) or barter exchanges (`TradeItem`) triggers collection discovery (`RecordItemDiscovered`) for the buyer character, registering the acquired item, weapon, or armor in their personal collection compendium (`party2/lib/store.cgi:175-176, 276-277`).
+7. **Action Gateway & Sleep/Rescue Guards**:
+   - All player store state-mutating operations (store construction, listing items, withdrawing listings, purchasing, trading, changing store name, changing wallpaper, placing furniture, renaming furniture, and cleaning interiors) require an awake character. Requests from sleeping or rescue-recovering characters are rejected with HTTP 409 Conflict.
+

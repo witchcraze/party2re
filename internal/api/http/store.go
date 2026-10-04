@@ -230,7 +230,7 @@ func (h *Handler) handleWithdrawListing(w http.ResponseWriter, r *http.Request) 
 
 	charID := r.PathValue("id")
 	saleID := r.PathValue("sale_id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		err := h.stores.WithdrawListing(r.Context(), char.ID, saleID)
 		if err != nil {
 			if errors.Is(err, store.ErrListingNotFound) {
@@ -315,7 +315,7 @@ func (h *Handler) handleChangeStoreName(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(_ *changeStoreNameRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(_ *changeStoreNameRequest) string {
 		return r.PathValue("id")
 	}, func(_ coreplayer.Player, char corecharacter.Character, req changeStoreNameRequest) {
 		err := h.stores.ChangeStoreName(r.Context(), char.ID, req.StoreName)
@@ -345,7 +345,7 @@ func (h *Handler) handleChangeWallpaper(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(_ *changeWallpaperRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(_ *changeWallpaperRequest) string {
 		return r.PathValue("id")
 	}, func(_ coreplayer.Player, char corecharacter.Character, req changeWallpaperRequest) {
 		err := h.stores.ChangeWallpaper(r.Context(), char.ID, req.Wallpaper)
@@ -371,7 +371,7 @@ func (h *Handler) handleAddInterior(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(_ *addInteriorRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(_ *addInteriorRequest) string {
 		return r.PathValue("id")
 	}, func(_ coreplayer.Player, char corecharacter.Character, req addInteriorRequest) {
 		interior, err := h.stores.AddInterior(r.Context(), char.ID, req.FurnitureID)
@@ -402,7 +402,7 @@ func (h *Handler) handleRenameInterior(w http.ResponseWriter, r *http.Request) {
 	}
 
 	interiorID := r.PathValue("interior_id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(_ *renameInteriorRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(_ *renameInteriorRequest) string {
 		return r.PathValue("id")
 	}, func(_ coreplayer.Player, char corecharacter.Character, req renameInteriorRequest) {
 		err := h.stores.RenameInterior(r.Context(), char.ID, interiorID, req.Name)
@@ -429,7 +429,7 @@ func (h *Handler) handleCleanInteriors(w http.ResponseWriter, r *http.Request) {
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		err := h.stores.CleanInteriors(r.Context(), char.ID)
 		if err != nil {
 			if errors.Is(err, store.ErrStoreNotFound) {
