@@ -85,8 +85,8 @@ All 4 dependency-ordered milestones (Milestone 1 Core/System, Milestone 2 Econom
 1. **Client/Agent Gateway & CQRS Architecture (In Progress)**
    - Query Pillar implemented: owned `GET /api/v1/characters/{id}/context`, all timers and shared context DTO (#944, #946, #938, #939)
    - Command contract approved in #646: preserve success/result when refresh fails, re-fetch GET only, and do not automatically replay unknown command outcomes
-   - Common authenticated command boundary implemented (#1010), including typed parameters, fail-closed entry/sleep checks and outcome-preserving context refresh; stage Adventure start connected (#1014)
-   - Command adapters remain #1011–#1013 (Bank/Home/Rescue), with #1015 covering Deposit → Sleep → controlled expiry → Wake → Adventure integration
+   - Common authenticated command boundary implemented (#1010), including typed parameters, fail-closed entry/sleep checks and outcome-preserving context refresh; stage Adventure start (#1014) and emergency Rescue with required reason (#1013) connected
+   - Command adapters remain #1011–#1012 (Bank/Home), with #1015 covering Deposit → Sleep → controlled expiry → Wake → Adventure integration
    - Phased migration and complete purge of legacy individual REST routes (#947, #948, #949, #950)
    - Establishes a radical, token-efficient 2-tool API surface for AI Agents, Web UI, and Chatbots
 2. **Headless E2E Gameplay Simulation Test Framework**

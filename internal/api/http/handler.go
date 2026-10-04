@@ -226,13 +226,6 @@ func WithHelper(helpers HelperService) Option {
 	}
 }
 
-// WithRescue configures the emergency rescue service for the Handler.
-func WithRescue(rescues RescueService) Option {
-	return func(h *Handler) {
-		h.rescues = rescues
-	}
-}
-
 // WithAllowedOrigins configures the whitelist of allowed CORS origins.
 // Any wildcard ("*") or empty entries are ignored/discarded.
 func WithAllowedOrigins(origins ...string) Option {
