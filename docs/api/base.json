@@ -3005,6 +3005,124 @@
           "available_actions"
         ],
         "description": "Uncached observation with all active timers and eligible entry actions. Command services still validate exact amounts, currencies, items and state."
+      },
+      "ActionErrorDetail": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "CharacterActionRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Catalog ActionID. Eligible entries do not certify adapter coverage."
+          },
+          "params": {
+            "type": "object",
+            "description": "Typed command parameters. Required values cannot be absent/null; unknown fields and actor overrides are rejected. May be omitted for no-input commands.",
+            "properties": {
+              "character_id": {
+                "not": {}
+              },
+              "player_id": {
+                "not": {}
+              }
+            }
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": false
+      },
+      "CharacterActionSuccess": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "result": {},
+          "context": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PlayerContextResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "context_error": {
+            "$ref": "#/components/schemas/ActionErrorDetail"
+          }
+        },
+        "required": [
+          "success",
+          "result",
+          "context"
+        ],
+        "additionalProperties": false,
+        "description": "Known success is preserved, including result and HTTP 200, when refresh fails. Context is then null with CONTEXT_REFRESH_FAILED; re-fetch GET context only."
+      },
+      "CharacterActionFailure": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": false
+          },
+          "error": {
+            "$ref": "#/components/schemas/ActionErrorDetail"
+          }
+        },
+        "required": [
+          "success",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "CharacterActionRejection": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": false
+          },
+          "error": {
+            "$ref": "#/components/schemas/ActionErrorDetail"
+          },
+          "context": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PlayerContextResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "context_error": {
+            "$ref": "#/components/schemas/ActionErrorDetail"
+          }
+        },
+        "required": [
+          "success",
+          "error",
+          "context"
+        ],
+        "additionalProperties": false,
+        "description": "Known service or entry rejection retains its original 4xx/code even if refresh fails. No partial context is returned."
       }
     },
     "securitySchemes": {

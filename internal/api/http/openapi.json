@@ -1,6 +1,22 @@
 {
   "components": {
     "schemas": {
+      "ActionErrorDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
       "AdminBanPlayerResponse": {
         "properties": {
           "message": {
@@ -855,6 +871,108 @@
           "mp",
           "max_mp",
           "gold"
+        ],
+        "type": "object"
+      },
+      "CharacterActionFailure": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ActionErrorDetail"
+          },
+          "success": {
+            "const": false
+          }
+        },
+        "required": [
+          "success",
+          "error"
+        ],
+        "type": "object"
+      },
+      "CharacterActionRejection": {
+        "additionalProperties": false,
+        "description": "Known service or entry rejection retains its original 4xx/code even if refresh fails. No partial context is returned.",
+        "properties": {
+          "context": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PlayerContextResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "context_error": {
+            "$ref": "#/components/schemas/ActionErrorDetail"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ActionErrorDetail"
+          },
+          "success": {
+            "const": false
+          }
+        },
+        "required": [
+          "success",
+          "error",
+          "context"
+        ],
+        "type": "object"
+      },
+      "CharacterActionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "Catalog ActionID. Eligible entries do not certify adapter coverage.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "params": {
+            "description": "Typed command parameters. Required values cannot be absent/null; unknown fields and actor overrides are rejected. May be omitted for no-input commands.",
+            "properties": {
+              "character_id": {
+                "not": {}
+              },
+              "player_id": {
+                "not": {}
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "CharacterActionSuccess": {
+        "additionalProperties": false,
+        "description": "Known success is preserved, including result and HTTP 200, when refresh fails. Context is then null with CONTEXT_REFRESH_FAILED; re-fetch GET context only.",
+        "properties": {
+          "context": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PlayerContextResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "context_error": {
+            "$ref": "#/components/schemas/ActionErrorDetail"
+          },
+          "result": {},
+          "success": {
+            "const": true
+          }
+        },
+        "required": [
+          "success",
+          "result",
+          "context"
         ],
         "type": "object"
       },
@@ -3453,6 +3571,179 @@
         "summary": "Start stage adventure",
         "tags": [
           "Adventure"
+        ]
+      }
+    },
+    "/api/v1/characters/{id}/actions": {
+      "post": {
+        "description": "Authenticated dispatch with strict parameters and uncached entry/sleep checks. Adapters remain unconnected in #1010: catalog IDs return 501 until connected. Known success/rejection refreshes the shared context; unexpected execution failure returns no context and does not guarantee rollback or safe replay. No idempotency guarantee. Never automatically replay POST to recover a failed observation.",
+        "operationId": "executeCharacterAction",
+        "parameters": [
+          {
+            "description": "Owned character ID; actor identity cannot be overridden in params",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CharacterActionRequest"
+              }
+            }
+          },
+          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterActionSuccess"
+                }
+              }
+            },
+            "description": "Known command success; refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CharacterActionFailure"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CharacterActionRejection"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Malformed outer JSON uses the existing transport error. Invalid typed params return INVALID_ACTION_PARAMS without execution/context. Known service rejection may include refreshed context."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid session; no context."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CharacterActionRejection"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Authentication/ownership rejection exposes no context; known service rejection preserves its mapped code and refreshes when possible."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CharacterActionFailure"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CharacterActionRejection"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Unknown ActionID: ACTION_NOT_FOUND. Missing character uses transport error. Known service rejection refreshes when possible."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterActionRejection"
+                }
+              }
+            },
+            "description": "Current entry or Sleep/CanWake exclusion: ACTION_UNAVAILABLE, or mapped service rejection, with refreshed context when possible."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content-Type must be application/json; no execution/context."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterActionRejection"
+                }
+              }
+            },
+            "description": "Known service validation rejection preserves its mapped code and refreshes when possible."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CharacterActionFailure"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Authorization read failure uses transport error. ACTION_PREFLIGHT_FAILED stops execution on state-read failure. EXECUTION_FAILED leaves mutation outcome unknown; neither failure returns context."
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterActionFailure"
+                }
+              }
+            },
+            "description": "Known unconnected ID or unconfigured dependency: ACTION_NOT_IMPLEMENTED; no execution/context."
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Execute an owned character action and preserve its outcome across context refresh failures",
+        "tags": [
+          "Character"
         ]
       }
     },

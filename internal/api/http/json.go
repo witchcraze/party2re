@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 )
 
 // maxRequestBodyBytes is the maximum accepted request body size (64 KiB).
@@ -59,4 +60,31 @@ func decodeOptionalJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	}
 
 	return decodeJSON(w, r, dst)
+}
+
+// decodeActionParams uses the same strict typed decoding as request bodies.
+// Checking raw required values prevents JSON null from silently becoming a Go
+// zero value. Actor identity is supplied separately from the authenticated path.
+func decodeActionParams(raw json.RawMessage, required []string, dst any) error {
+	if len(raw) == 0 {
+		raw = json.RawMessage(`{}`)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
+		return errors.New("params must be an object")
+	}
+	for name := range fields {
+		if strings.EqualFold(name, "character_id") || strings.EqualFold(name, "player_id") {
+			return errors.New("actor overrides are forbidden")
+		}
+	}
+	for _, name := range required {
+		value, exists := fields[name]
+		if !exists || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			return errors.New("missing required action parameter")
+		}
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	return dec.Decode(dst)
 }
