@@ -19,13 +19,6 @@ type BankService interface {
 	TalkNPC() string
 }
 
-// WithBank configures the bank service for the Handler.
-func WithBank(b BankService) Option {
-	return func(h *Handler) {
-		h.bank = b
-	}
-}
-
 type bankDepositRequest struct {
 	Amount int64 `json:"amount"`
 }

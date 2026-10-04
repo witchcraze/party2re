@@ -159,6 +159,30 @@ Parameter decoding completes before state reads and execution. Only the mapped
 Both GET and command refresh composition reject ownership changes observed while
 reading profile enrichment.
 
+### Bank command contract
+
+`bank_deposit` and `bank_withdraw` accept only `{ "amount": 5000 }`, with a
+required non-null signed 64-bit integer. The owned path supplies the actor; each
+command calls the corresponding Bank service once with the request context.
+Exact positive-amount, funds, balance and limit validation remains service-owned.
+Both results preserve the REST fields `character_id`, `money`, `deposit`,
+`amount` and `message`; withdrawal also preserves `actual_withdrawn` and
+`refunded`, including excess returned to savings when the wallet reaches its cap.
+
+| Service rejection | HTTP | Stable code |
+|---|---|---|
+| Invalid actor ID | 400 | `BANK_INVALID_CHARACTER_ID` |
+| Nonpositive amount | 400 | `BANK_INVALID_AMOUNT` |
+| Insufficient wallet funds | 400 | `BANK_INSUFFICIENT_FUNDS` |
+| Insufficient savings balance | 400 | `BANK_INSUFFICIENT_BALANCE` |
+| Savings limit exceeded | 400 | `BANK_DEPOSIT_LIMIT_EXCEEDED` |
+| Character no longer exists | 404 | `CHARACTER_NOT_FOUND` |
+
+Entry exclusions and sleep/pending wake guards prevent service execution under
+the shared boundary. Known results/rejections use the refresh contract below;
+unknown service/store failures remain `500 EXECUTION_FAILED`. Bank REST routes
+remain available until their tracked retirement.
+
 ### Stage adventure command contract
 
 `adventure_start` accepts only `{ "stage_id": "stage-00" }`. A supplied non-null
