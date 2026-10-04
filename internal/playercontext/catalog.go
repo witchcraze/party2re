@@ -286,7 +286,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "entertainment",
 		OperationID:    "playCasinoSlot",
 		RequiredParams: []string{"bet"},
-		RequiredGates:  GateDeadCheck | GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
+		RequiredGates:  GateDeadCheck | GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "casino_highlow",
@@ -294,7 +294,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "entertainment",
 		OperationID:    "playCasinoHighLow",
 		RequiredParams: []string{"bet", "guess"},
-		RequiredGates:  GateDeadCheck | GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
+		RequiredGates:  GateDeadCheck | GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "casino_doppel",
@@ -302,7 +302,7 @@ var DefaultCatalog = []ActionDefinition{
 		Category:       "entertainment",
 		OperationID:    "playCasinoDoppel",
 		RequiredParams: []string{"bet", "pool_size", "player_mark"},
-		RequiredGates:  GateDeadCheck | GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
+		RequiredGates:  GateDeadCheck | GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
 		ID:             "lottery_raffle",
