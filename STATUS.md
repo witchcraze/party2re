@@ -1,6 +1,6 @@
 # Status
 
-Last reviewed: Issue #985 — HTTP/Home: Guard home mutations during sleep and wake recovery
+Last reviewed: Issue #984 — HTTP/Store: Guard owner mutations during sleep and wake recovery
 
 ## Current Phase
 

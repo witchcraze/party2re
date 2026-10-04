@@ -489,6 +489,18 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleTeachCompanionPhrase":  "home.go",
 		"handleForgetCompanionPhrase": "home.go",
 		"handleClearDeliveryNotices":  "home.go",
+		// Store
+		"handleBuildStore":      "store.go",
+		"handleListGoldItem":    "store.go",
+		"handleListBarterItem":  "store.go",
+		"handleWithdrawListing": "store.go",
+		"handleBuyStoreItem":    "store.go",
+		"handleTradeStoreItem":  "store.go",
+		"handleChangeStoreName": "store.go",
+		"handleChangeWallpaper": "store.go",
+		"handleAddInterior":     "store.go",
+		"handleRenameInterior":  "store.go",
+		"handleCleanInteriors":  "store.go",
 	}
 
 	for handlerName, sourceFile := range requiredActionGuardHandlers {

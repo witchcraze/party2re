@@ -10,6 +10,7 @@ import (
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/store"
 )
 
@@ -351,6 +352,177 @@ func TestStoreHTTP_Endpoints(t *testing.T) {
 
 		if rec.Code != http.StatusNoContent {
 			t.Fatalf("expected 204 No Content, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestStoreHTTP_OwnerMutations_SleepGuardAndForbidden(t *testing.T) {
+	player1 := coreplayer.Player{ID: "player-1", Username: "Tester"}
+	player2 := coreplayer.Player{ID: "player-2", Username: "Intruder"}
+	char1 := corecharacter.Character{
+		ID:       "char-1",
+		PlayerID: "player-1",
+		Name:     "Hero",
+		Money:    100000,
+	}
+
+	players := &stubPlayerService{
+		authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
+			switch sessionID {
+			case "valid-session":
+				return player1, nil
+			case "other-session":
+				return player2, nil
+			default:
+				return coreplayer.Player{}, coreplayer.ErrInvalidSession
+			}
+		},
+	}
+
+	characters := &stubCharacterService{
+		getFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			if id == "char-1" {
+				return char1, nil
+			}
+			return corecharacter.Character{}, corecharacter.ErrNotFound
+		},
+	}
+
+	var serviceCalls int
+	storeSvc := &stubStoreService{
+		withdrawListingFn: func(ctx context.Context, characterID, saleID string) error {
+			serviceCalls++
+			return nil
+		},
+		changeStoreNameFn: func(ctx context.Context, characterID, newName string) error {
+			serviceCalls++
+			return nil
+		},
+		changeWallpaperFn: func(ctx context.Context, characterID, wallpaper string) error {
+			serviceCalls++
+			return nil
+		},
+		addInteriorFn: func(ctx context.Context, characterID, furnitureID string) (*store.Interior, error) {
+			serviceCalls++
+			return &store.Interior{ID: "int-1", FurnitureID: furnitureID}, nil
+		},
+		renameInteriorFn: func(ctx context.Context, characterID, interiorID, newName string) error {
+			serviceCalls++
+			return nil
+		},
+		cleanInteriorsFn: func(ctx context.Context, characterID string) error {
+			serviceCalls++
+			return nil
+		},
+	}
+
+	var currentSleepStatus home.SleepStatus
+	mockHome := &mockHomeService{
+		getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {
+			return currentSleepStatus, nil
+		},
+	}
+
+	handler := newTestHandler(
+		t,
+		players,
+		characters,
+		&stubAdventureService{},
+		&stubShopService{},
+		apihttp.WithHome(mockHome),
+		apihttp.WithStore(storeSvc),
+	)
+	server := handler.Router()
+
+	testMutations := []struct {
+		name      string
+		method    string
+		path      string
+		body      string
+		awakeCode int
+	}{
+		{"withdraw_listing", http.MethodDelete, "/characters/char-1/store/listings/sale-1", "", http.StatusNoContent},
+		{"change_name", http.MethodPost, "/characters/char-1/store/name", `{"store_name":"新看板"}`, http.StatusOK},
+		{"change_wallpaper", http.MethodPost, "/characters/char-1/store/wallpaper", `{"wallpaper":"farm"}`, http.StatusOK},
+		{"add_interior", http.MethodPost, "/characters/char-1/store/interiors", `{"furniture_id":"001"}`, http.StatusCreated},
+		{"rename_interior", http.MethodPut, "/characters/char-1/store/interiors/int-1/name", `{"name":"デスク"}`, http.StatusOK},
+		{"clean_interiors", http.MethodDelete, "/characters/char-1/store/interiors", "", http.StatusNoContent},
+	}
+
+	for _, mode := range []struct {
+		desc   string
+		status home.SleepStatus
+	}{
+		{"sleeping", home.SleepStatus{Sleeping: true, RemainingSeconds: 300}},
+		{"can_wake", home.SleepStatus{CanWake: true, RemainingSeconds: 0}},
+	} {
+		t.Run(mode.desc+" blocks all owner mutations with 409", func(t *testing.T) {
+			currentSleepStatus = mode.status
+			for _, tc := range testMutations {
+				t.Run(tc.name, func(t *testing.T) {
+					beforeCalls := serviceCalls
+					req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+					req.Header.Set("Authorization", "Bearer valid-session")
+					if tc.body != "" {
+						req.Header.Set("Content-Type", "application/json")
+					}
+					rec := httptest.NewRecorder()
+					server.ServeHTTP(rec, req)
+
+					if rec.Code != http.StatusConflict {
+						t.Errorf("expected 409 Conflict, got %d: %s", rec.Code, rec.Body.String())
+					}
+					if serviceCalls != beforeCalls {
+						t.Errorf("service method was invoked despite %s state", mode.desc)
+					}
+				})
+			}
+		})
+	}
+
+	t.Run("other-player access is rejected with 403 Forbidden", func(t *testing.T) {
+		currentSleepStatus = home.SleepStatus{}
+		for _, tc := range testMutations {
+			t.Run(tc.name, func(t *testing.T) {
+				beforeCalls := serviceCalls
+				req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+				req.Header.Set("Authorization", "Bearer other-session")
+				if tc.body != "" {
+					req.Header.Set("Content-Type", "application/json")
+				}
+				rec := httptest.NewRecorder()
+				server.ServeHTTP(rec, req)
+
+				if rec.Code != http.StatusForbidden {
+					t.Errorf("expected 403 Forbidden, got %d: %s", rec.Code, rec.Body.String())
+				}
+				if serviceCalls != beforeCalls {
+					t.Errorf("service method was invoked for unauthorized character access")
+				}
+			})
+		}
+	})
+
+	t.Run("awake character successfully executes mutations", func(t *testing.T) {
+		currentSleepStatus = home.SleepStatus{}
+		for _, tc := range testMutations {
+			t.Run(tc.name, func(t *testing.T) {
+				beforeCalls := serviceCalls
+				req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+				req.Header.Set("Authorization", "Bearer valid-session")
+				if tc.body != "" {
+					req.Header.Set("Content-Type", "application/json")
+				}
+				rec := httptest.NewRecorder()
+				server.ServeHTTP(rec, req)
+
+				if rec.Code != tc.awakeCode {
+					t.Errorf("expected %d, got %d: %s", tc.awakeCode, rec.Code, rec.Body.String())
+				}
+				if serviceCalls != beforeCalls+1 {
+					t.Errorf("expected service to be called once, was called %d times", serviceCalls-beforeCalls)
+				}
+			})
 		}
 	})
 }
