@@ -124,16 +124,15 @@ membership approval in the reference implementation.
 The pending-row filter in `lib/join_guild.cgi:340-347` belongs to guild-name
 propagation during renaming; it is not a succession or dissolution rule.
 
-#### Approved reconstruction rule (#993; implementation #1006)
+#### Approved reconstruction rule (#993; implemented in #1006)
 
 On 2026-10-04, the user explicitly chose restoration of legacy roster-based
 succession in #993: 「原典方式へ戻す（再構築方針に沿う推奨案）」. Pending rows
 therefore count toward guild survival and can inherit leadership. The pending
-exclusion introduced by #956 / PR #962 is not the intended reconstruction rule.
-The gameplay correction is separately scoped to #1006; this decision changes
-documentation, not running behavior.
+exclusion introduced by #956 / PR #962 was replaced in #1006 with the legacy
+roster-based rule.
 
-| Remaining roster after master departure | Approved roster-based selection | Current Go selection (until #1006) |
+| Remaining roster after master departure | Approved roster-based selection | Historical Go selection (#956, corrected in #1006) |
 |---|---|---|
 | Pending applicants only | Prefer a title containing `ギルマス`, otherwise the first row; guild survives | Dissolve the guild |
 | Active members and pending applicants | Prefer a title containing `ギルマス` across all rows, otherwise the first row | Apply the same priority to active members only |
@@ -168,10 +167,10 @@ Roster priority uses the existing repository order (`joined_at ASC`, then
 3. **Database Cascade Invariant**:
    - Character deletion (`character_repository.Delete`) no longer runs raw `UPDATE guilds SET leader_character_id = NULL`. Guild leadership and dissolution are handled strictly through the domain cleanup hook prior to physical character deletion, preserving the invariant that every existing guild has a valid leader.
 
-**Current implementation gap**: Until #1006, `removeMemberInternal` considers only
-remaining active members for both succession and dissolution. Existing #956
-tests verify that current deviation, not the approved rule above. The decision
-retains the historical record of #956 / PR #962 without claiming legacy parity.
+**Implementation status**: Implemented in #1006. `removeMemberInternal` evaluates
+the entire remaining roster for both succession and dissolution without a pending filter.
+Unselected applicants remain pending; sole-member departure disbands the guild and
+publishes server news.
 
 ### 20-Day Inactivity Automatic Disbandment (`auto_delete_guild_day = 20`)
 

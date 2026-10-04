@@ -309,14 +309,14 @@ func (s *Service) publishDissolutionNews(ctx context.Context, guildName string, 
 }
 
 func (s *Service) removeMemberInternal(ctx context.Context, g Guild, members []Member, characterID string, role Role) error {
-	var remainingActive []Member
+	var remaining []Member
 	for _, m := range members {
-		if !m.IsPending && m.CharacterID != characterID {
-			remainingActive = append(remainingActive, m)
+		if m.CharacterID != characterID {
+			remaining = append(remaining, m)
 		}
 	}
 
-	if len(remainingActive) == 0 {
+	if len(remaining) == 0 {
 		if err := s.repo.DisbandGuild(ctx, g.ID); err != nil {
 			return err
 		}
@@ -325,15 +325,12 @@ func (s *Service) removeMemberInternal(ctx context.Context, g Guild, members []M
 	}
 
 	if role == RoleLeader {
-		var successorID string
-		for _, m := range remainingActive {
+		successorID := remaining[0].CharacterID
+		for _, m := range remaining {
 			if strings.Contains(m.Title, "ギルマス") {
 				successorID = m.CharacterID
 				break
 			}
-		}
-		if successorID == "" {
-			successorID = remainingActive[0].CharacterID
 		}
 		if err := s.repo.TransferLeadership(ctx, g.ID, characterID, successorID); err != nil {
 			return err

@@ -146,3 +146,86 @@ func TestGuildServiceDatabaseIntegration(t *testing.T) {
 		t.Error("expected error getting disbanded guild, got nil")
 	}
 }
+
+func TestGuildService_PendingSuccessionIntegration(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	guildRepo, err := database.NewGuildRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	service, err := guild.NewService(guildRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	leaderChar, err := database.CreateTestCharacter(ctx, db, "SvcSuccLeader")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = ? WHERE id = ?", 20000, leaderChar.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	applicantChar, err := database.CreateTestCharacter(ctx, db, "SvcSuccApplicant")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	guildName := fmt.Sprintf("IntegSucc_%s", leaderChar.ID[:8])
+
+	// 1. Create Guild
+	g, _, _, err := service.Create(ctx, leaderChar.ID, guildName)
+	if err != nil {
+		t.Fatalf("service.Create failed: %v", err)
+	}
+
+	// 2. Applicant applies to join
+	if err := service.ApplyToJoin(ctx, g.ID, applicantChar.ID); err != nil {
+		t.Fatalf("service.ApplyToJoin failed: %v", err)
+	}
+
+	// 3. Leader leaves -> leadership transfers to applicant, guild preserved
+	if err := service.Leave(ctx, g.ID, leaderChar.ID); err != nil {
+		t.Fatalf("service.Leave (leader departure) failed: %v", err)
+	}
+
+	// 4. Verify guild is preserved and applicant is now leader
+	gDetail, err := service.Get(ctx, g.ID)
+	if err != nil {
+		t.Fatalf("expected guild to be preserved, got error: %v", err)
+	}
+	if gDetail.Guild.LeaderCharacterID != applicantChar.ID {
+		t.Errorf("leader = %q, want %q", gDetail.Guild.LeaderCharacterID, applicantChar.ID)
+	}
+	if len(gDetail.Members) != 1 {
+		t.Fatalf("expected 1 remaining member, got %d", len(gDetail.Members))
+	}
+	newLeaderMember := gDetail.Members[0]
+	if newLeaderMember.CharacterID != applicantChar.ID {
+		t.Errorf("member = %q, want %q", newLeaderMember.CharacterID, applicantChar.ID)
+	}
+	if newLeaderMember.Role != guild.RoleLeader || newLeaderMember.Title != guild.DefaultTitleLeader || newLeaderMember.IsPending {
+		t.Errorf("unexpected member state: role=%v, title=%q, isPending=%v", newLeaderMember.Role, newLeaderMember.Title, newLeaderMember.IsPending)
+	}
+
+	// 5. New leader leaves -> sole member left -> guild disbands
+	if err := service.Leave(ctx, g.ID, applicantChar.ID); err != nil {
+		t.Fatalf("service.Leave (sole leader departure) failed: %v", err)
+	}
+
+	if _, err := service.Get(ctx, g.ID); err == nil {
+		t.Error("expected error getting disbanded guild, got nil")
+	}
+}
