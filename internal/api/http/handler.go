@@ -120,6 +120,7 @@ type RescueService interface {
 // Handler holds all HTTP handlers for the game API.
 type Handler struct {
 	playerContext  *playercontext.Service
+	actionCommands map[string]actionCommand
 	players        PlayerService
 	characters     CharacterService
 	adventures     AdventureService
@@ -338,6 +339,7 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters", h.handleCreateCharacter)
 	mux.HandleFunc("GET /characters/{id}", h.handleGetCharacter)
 	mux.HandleFunc("GET /api/v1/characters/{id}/context", h.handleGetPlayerContext)
+	mux.HandleFunc("POST /api/v1/characters/{id}/actions", h.handleCharacterAction)
 	mux.HandleFunc("DELETE /characters/{id}", h.handleDeleteCharacter)
 	mux.HandleFunc("GET /characters/{id}/profile", h.handleGetCharacterProfile)
 	mux.HandleFunc("POST /characters/{id}/profile", h.handleUpdateCharacterProfile)

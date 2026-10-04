@@ -1,18 +1,18 @@
 # Client & Agent API — CQRS & Server-Driven UI Architecture
 
-This document describes the implemented HTTP observation boundary and the planned command gateway.
+This document describes the implemented HTTP observation and common command boundaries, with service adapters still pending.
 
 | Boundary | Status | Tracking |
 |---|---|---|
 | Action catalog and OpenAPI drift checks | Implemented | #944, #946 |
 | PlayerContext evaluator and character/scheduling reads | Implemented in-process; legacy parity still requires review | #938, #972 |
 | HTTP context query | Implemented; owned character observation with four canonical slots | #939 |
-| HTTP action dispatcher | Contract approved; runtime implementation planned | #646 (decision), #1010–#1015 |
+| HTTP action dispatcher | Common boundary implemented; domain adapters remain unconnected | #646 (decision), #1010 (boundary), #1011–#1015 (adapters/verification) |
 | Individual REST route retirement | Planned after Gateway migration | #947–#950 |
 
 Current clients use the registered routes in [OpenAPI](../api/openapi.json).
-`GET /api/v1/characters/{id}/context` is registered. Existing REST routes remain
-unversioned; `POST /actions` is planned. Do not remove working REST contracts
+`GET /api/v1/characters/{id}/context` and `POST /api/v1/characters/{id}/actions`
+are registered. Existing REST routes remain unversioned. Do not remove working REST contracts
 before their replacement is implemented and verified against the original Party2.
 
 ---
@@ -58,8 +58,8 @@ The authenticated discovery endpoint verifies character ownership using the
 standard HTTP wrapper, calls the existing uncached `playercontext.Service.Query`,
 and enriches its facts with profile avatar and job catalog presentation. Its
 `PlayerContextResponse` DTO and reusable OpenAPI schema are also the required
-context contract for the command gateway specified in #646, with implementation
-planned in #1010–#1015.
+context contract for the command gateway specified in #646 and implemented in
+#1010. Domain command adapters and initial loop verification remain #1011–#1015.
 
 The four top-level fields are:
 
@@ -107,9 +107,10 @@ The four top-level fields are:
 
 ## 3. Command Pillar: `POST /api/v1/characters/{id}/actions`
 
-The command contract below was approved during #646 on 2026-10-04. The route
-is still unimplemented; this decision does not certify Gateway coverage or retire
-existing REST routes. The initial implementation is split by HTTP responsibility
+The command contract below was approved during #646 on 2026-10-04. The common
+route and dispatch boundary are implemented in #1010; no domain command adapters
+are registered yet. This does not certify Gateway coverage or retire existing
+REST routes. The initial implementation is split by HTTP responsibility
 and service adapter; remaining operations belong to #947–#949.
 
 ### Request Body
@@ -141,7 +142,8 @@ no command and expose no context.
 
 Re-read current entry eligibility before execution; reject an ineligible entry
 with `409 ACTION_UNAVAILABLE`. Scheduled/timer read errors stop execution with
-500. An earlier `available_actions` list is never execution authorization.
+`500 ACTION_PREFLIGHT_FAILED`, without execution or context. An earlier
+`available_actions` list is never execution authorization.
 Preserve the shared Sleep/CanWake guard for ordinary commands and explicit
 Wake/Rescue exceptions. Domain services still validate exact amounts, currencies,
 items and state. Adapters call services directly and reuse HTTP result composition;
@@ -155,6 +157,15 @@ from #939, including all four slots and non-null arrays. Refresh is an uncached
 read after execution, not part of the mutation transaction. Recheck ownership
 before returning context; failed reads, enrichment or ownership checks never
 return partial observations.
+
+The HTTP-owned registration seam `withActionCommand` binds a catalog ID to a
+typed parameter struct, direct service invocation and explicit 4xx error mapper.
+It is configured once during Handler construction, rejects unknown/duplicate
+registrations, and treats a nil execution function as an unconfigured dependency.
+Parameter decoding completes before state reads and execution. Only the mapped
+4xx errors are known rejections; all other execution errors use `EXECUTION_FAILED`.
+Both GET and command refresh composition reject ownership changes observed while
+reading profile enrichment.
 
 | Condition | HTTP response | Client behavior |
 |---|---|---|

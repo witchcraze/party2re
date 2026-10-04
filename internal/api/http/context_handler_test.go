@@ -67,7 +67,7 @@ func contextRouter(t *testing.T, readers *contextReaders, timers timer.Service, 
 			if readers.noAvatar {
 				avatar = ""
 			}
-			return character.ProfileView{Profile: character.Profile{AvatarURL: avatar}}, profileErr
+			return character.ProfileView{Character: readers.char, Profile: character.Profile{AvatarURL: avatar}}, profileErr
 		},
 	}
 	players := &stubPlayerService{authenticateFn: func(ctx context.Context, session string) (coreplayer.Player, error) {

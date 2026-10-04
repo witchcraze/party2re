@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -136,27 +137,39 @@ func withAuthenticatedCharacterAndJSON[Req any](
 // If locked in sleep or asleep state, writes 409 Conflict and returns false.
 // If querying sleep status fails, writes 500 Internal Server Error and returns false.
 func (h *Handler) guardSleepingCharacter(w http.ResponseWriter, r *http.Request, charID string) bool {
-	if h.homes == nil {
-		return true
-	}
-	status, err := h.homes.GetSleepStatus(r.Context(), charID)
+	message, err := h.sleepingCharacterMessage(r.Context(), charID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return false
+	}
+	if message != "" {
+		writeError(w, http.StatusConflict, errors.New(message))
+		return false
+	}
+	return true
+}
+
+// sleepingCharacterMessage shares the Sleep/CanWake guard between REST and the
+// Gateway while leaving their response envelopes to the callers.
+func (h *Handler) sleepingCharacterMessage(ctx context.Context, charID string) (string, error) {
+	if h.homes == nil {
+		return "", nil
+	}
+	status, err := h.homes.GetSleepStatus(ctx, charID)
+	if err != nil {
+		return "", err
 	}
 	if status.Sleeping {
 		msg := status.Message
 		if msg == "" {
 			msg = "お休み中「Zzz...」"
 		}
-		writeError(w, http.StatusConflict, errors.New(msg))
-		return false
+		return msg, nil
 	}
 	if status.CanWake {
-		writeError(w, http.StatusConflict, errors.New("お休み中「Zzz...」 目を覚ましてください"))
-		return false
+		return "お休み中「Zzz...」 目を覚ましてください", nil
 	}
-	return true
+	return "", nil
 }
 
 // withAuthenticatedActionCharacter validates player authentication, character ownership,

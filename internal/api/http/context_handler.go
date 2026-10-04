@@ -21,7 +21,7 @@ func WithPlayerContext(service *playercontext.Service) Option {
 }
 
 // PlayerContextResponse is the shared observation DTO for GET /context and the
-// future action gateway. Arrays are always present, including when empty.
+// action gateway. Arrays are always present, including when empty.
 type PlayerContextResponse struct {
 	Character        CharacterSnapshot       `json:"character"`
 	Scene            SceneSnapshot           `json:"scene"`
@@ -119,6 +119,9 @@ func (h *Handler) playerContextResponse(ctx context.Context, result playercontex
 	profile, err := h.characters.GetProfile(ctx, c.ID)
 	if err != nil {
 		return PlayerContextResponse{}, err
+	}
+	if profile.Character.PlayerID != c.PlayerID {
+		return PlayerContextResponse{}, errors.New("context ownership changed during profile read")
 	}
 	response := PlayerContextResponse{
 		Character: CharacterSnapshot{ID: c.ID, Name: c.Name, JobID: c.JobID, Level: c.Level,
