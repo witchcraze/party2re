@@ -1001,6 +1001,75 @@
         ],
         "type": "object"
       },
+      "CharacterSnapshot": {
+        "properties": {
+          "gold": {
+            "type": "integer"
+          },
+          "hp": {
+            "type": "integer"
+          },
+          "icon": {
+            "description": "Reserved asset ID; empty until production asset mappings are defined.",
+            "type": "string"
+          },
+          "icon_url": {
+            "description": "Existing profile avatar URL or data URI; empty when unset.",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_dead": {
+            "type": "boolean"
+          },
+          "is_sleeping": {
+            "type": "boolean"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "job_name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "max_mp": {
+            "type": "integer"
+          },
+          "mp": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tired": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "job_id",
+          "job_name",
+          "icon",
+          "icon_url",
+          "level",
+          "hp",
+          "max_hp",
+          "mp",
+          "max_mp",
+          "gold",
+          "tired",
+          "is_dead",
+          "is_sleeping"
+        ],
+        "type": "object"
+      },
       "CharacterStats": {
         "properties": {
           "agility": {
@@ -1096,6 +1165,40 @@
           "image_url",
           "caption",
           "settled_at"
+        ],
+        "type": "object"
+      },
+      "ContextAction": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "required_params": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "style": {
+            "enum": [
+              "primary",
+              "secondary"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "label",
+          "category",
+          "style",
+          "required_params"
         ],
         "type": "object"
       },
@@ -1608,6 +1711,41 @@
           "content",
           "is_read",
           "created_at"
+        ],
+        "type": "object"
+      },
+      "OngoingActionSnapshot": {
+        "properties": {
+          "action_type": {
+            "type": "string"
+          },
+          "execute_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "Scheduled action ID, or sleep for the observed sleep/wake recovery timer.",
+            "type": "string"
+          },
+          "is_ready": {
+            "description": "Deadline has elapsed. Pending/Processing work remains unfinished; this does not certify settlement.",
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "remaining_seconds": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "action_type",
+          "label",
+          "execute_at",
+          "remaining_seconds",
+          "is_ready"
         ],
         "type": "object"
       },
@@ -2203,6 +2341,36 @@
         ],
         "type": "object"
       },
+      "PlayerContextResponse": {
+        "description": "Uncached observation with all active timers and eligible entry actions. Command services still validate exact amounts, currencies, items and state.",
+        "properties": {
+          "available_actions": {
+            "items": {
+              "$ref": "#/components/schemas/ContextAction"
+            },
+            "type": "array"
+          },
+          "character": {
+            "$ref": "#/components/schemas/CharacterSnapshot"
+          },
+          "ongoing_actions": {
+            "items": {
+              "$ref": "#/components/schemas/OngoingActionSnapshot"
+            },
+            "type": "array"
+          },
+          "scene": {
+            "$ref": "#/components/schemas/SceneSnapshot"
+          }
+        },
+        "required": [
+          "character",
+          "scene",
+          "ongoing_actions",
+          "available_actions"
+        ],
+        "type": "object"
+      },
       "PlayerResponse": {
         "properties": {
           "created_at": {
@@ -2328,6 +2496,78 @@
           "outcome",
           "total_turns",
           "created_at"
+        ],
+        "type": "object"
+      },
+      "SceneOpponent": {
+        "properties": {
+          "hp": {
+            "type": "integer"
+          },
+          "icon_url": {
+            "type": "string"
+          },
+          "max_hp": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "icon_url",
+          "hp",
+          "max_hp"
+        ],
+        "type": "object"
+      },
+      "SceneSnapshot": {
+        "properties": {
+          "bgimg": {
+            "type": "string"
+          },
+          "bgimg_url": {
+            "description": "Self-authored SVG data URI for the initial town; production assets are deferred.",
+            "type": "string"
+          },
+          "dialogue": {
+            "type": "string"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "opponent": {
+            "$ref": "#/components/schemas/SceneOpponent"
+          },
+          "speaker": {
+            "$ref": "#/components/schemas/SceneSpeaker"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "title",
+          "bgimg",
+          "bgimg_url",
+          "dialogue"
+        ],
+        "type": "object"
+      },
+      "SceneSpeaker": {
+        "properties": {
+          "icon_url": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "icon_url"
         ],
         "type": "object"
       },
@@ -3213,6 +3453,93 @@
         "summary": "Start stage adventure",
         "tags": [
           "Adventure"
+        ]
+      }
+    },
+    "/api/v1/characters/{id}/context": {
+      "get": {
+        "operationId": "getCharacterContext",
+        "parameters": [
+          {
+            "description": "Owned character ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerContextResponse"
+                }
+              }
+            },
+            "description": "Character observation; arrays are empty when no entries exist."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid session"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character belongs to another player"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Character not found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Observation query or profile service failed; no partial context is returned"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Player context service not configured"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Observe character state, town scene, all active timers and eligible actions",
+        "tags": [
+          "Character"
         ]
       }
     },

@@ -1,4 +1,91 @@
 {
+  "/api/v1/characters/{id}/context": {
+    "get": {
+      "operationId": "getCharacterContext",
+      "parameters": [
+        {
+          "description": "Owned character ID",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlayerContextResponse"
+              }
+            }
+          },
+          "description": "Character observation; arrays are empty when no entries exist."
+        },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Missing or invalid session"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character belongs to another player"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Character not found"
+        },
+        "500": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Observation query or profile service failed; no partial context is returned"
+        },
+        "501": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Player context service not configured"
+        }
+      },
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Observe character state, town scene, all active timers and eligible actions",
+      "tags": [
+        "Character"
+      ]
+    }
+  },
   "/characters": {
     "post": {
       "operationId": "createCharacter",

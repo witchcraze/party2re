@@ -83,7 +83,8 @@ All 4 dependency-ordered milestones (Milestone 1 Core/System, Milestone 2 Econom
 #### Remaining Version 1.0 Milestones:
 
 1. **Client/Agent Gateway & CQRS Architecture (In Progress)**
-   - Query Pillar (`GET /context`) & Command Pillar (`POST /actions`) (#944, #946, #938, #939, #646)
+   - Query Pillar implemented: owned `GET /api/v1/characters/{id}/context`, all timers and shared context DTO (#944, #946, #938, #939)
+   - Command Pillar (`POST /actions`) remains #646
    - Phased migration and complete purge of legacy individual REST routes (#947, #948, #949, #950)
    - Establishes a radical, token-efficient 2-tool API surface for AI Agents, Web UI, and Chatbots
 2. **Headless E2E Gameplay Simulation Test Framework**

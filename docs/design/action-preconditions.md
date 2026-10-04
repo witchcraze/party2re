@@ -2,7 +2,7 @@
 
 ## 1. Overview & CQRS Integration
 
-In the Party2 Re CQRS Client/Agent Gateway architecture ([`docs/architecture/client-agent-api.md`](../architecture/client-agent-api.md)), client frontends are planned to use two unified operations. The HTTP handlers are pending #939/#646; these are proposed protocol examples:
+In the Party2 Re CQRS Client/Agent Gateway architecture ([`docs/architecture/client-agent-api.md`](../architecture/client-agent-api.md)), client frontends are planned to use two unified operations. HTTP observation is implemented in #939; command execution remains planned in #646:
 - **Observation**: `GET /api/v1/characters/{id}/context` (returns character snapshot, active cooldowns, and a whitelist of executable actions)
 - **Execution**: `POST /api/v1/characters/{id}/actions` (dispatches state transition commands)
 
@@ -16,7 +16,7 @@ Each action is statically linked to its corresponding OpenAPI 3.1 `operationId` 
 
 The current evaluator uses six gates. This is an implementation snapshot, not certification that all flags reproduce legacy behavior.
 
-**Confirmed differences requiring implementation correction:** legacy `lib/blacksmith.cgi` seal payment checks and deducts crystals, as does the Go seal service; the catalog's gold gate can reject a valid crystal-funded action. `home_sleep` describes free home sleep, not a paid inn. Preserve these differences until the catalog is corrected; do not treat the matrix as the game specification. (Issue #986 reconciled `chapel_pray` to a free daily blessing without gold gating or revival metadata).
+**Reviewed currency corrections:** prayer is a free daily blessing (#986), blacksmith seals use crystals (#987), and casino games use coins (#988); none of these catalog entries requires wallet gold. Exact execution prerequisites remain service-owned. Home sleep is free; it is not a paid-inn mechanic.
 
 The gate descriptions below summarize the current implementation:
 
@@ -85,7 +85,7 @@ The table below documents all 42 current catalog entries in `internal/playercont
 | `shop_accessory_buy` | 装飾品購入 | `shop` | `shopAccessoryBuy` | `["item_definition_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
 | `gemstore_buy` | 宝石購入 | `shop` | `buyGem` | `["gem_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
 | `secretshop_purchase` | ヒミツの店で購入 | `shop` | `purchaseSecretShopItem` | `["item_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
-| `blackmarket_trade` | 闇市景品交換 | `shop` | `tradeBlackMarketPrize` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `blackmarket_trade` | 闇市景品交換 | `shop` | `tradeBlackMarketPrize` | `["prize_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `blacksmith_seal` | 鍛冶屋で刻印強化 | `crafting` | `postCharactersIdBlacksmithSeal` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `alchemy_synthesize` | 錬金調合 | `crafting` | `postCharactersIdAlchemySynthesize` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `custom_skill_set` | カスタムスキル作成 | `crafting` | `setCustomSkill` | `["name"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
@@ -96,12 +96,12 @@ The table below documents all 42 current catalog entries in `internal/playercont
 | `casino_doppel` | ドッペルゲンガー | `entertainment` | `playCasinoDoppel` | `["bet", "pool_size", "player_mark"]` | ❌ | ✅ | ✅ | ✅ | ❌ |
 | `lottery_raffle` | 福引を引く | `entertainment` | `playRaffle` | `["raffle_type"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `lottery_takarakuji_buy` | 宝くじ購入 | `entertainment` | `buyTakarakujiTicket` | `[]` | ❌ | ❌ | ✅ | ✅ | ✅ |
-| `tavern_order` | 酒場で食事注文 | `entertainment` | `orderTavernMeal` | `[]` | ❌ | ❌ | ✅ | ✅ | ✅ |
+| `tavern_order` | 酒場で食事注文 | `entertainment` | `orderTavernMeal` | `["item_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
 | `contest_enter` | フォトコンテスト応募 | `entertainment` | `enterContest` | `["photo_id", "title"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `wishingwell_exchange` | 願いの泉でSP交換 | `growth` | `exchangeWishingWellSP` | `["stat", "sp"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `altar_pray` | 復活の祭壇（祈り） | `growth` | `prayAltarRamia` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `god_wish` | 神の願い・限界突破 | `growth` | `grantGodWish` | `["wish_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `job_change` | ダーマ神殿で転職 | `growth` | `changeCharacterJob` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `job_change` | ダーマ神殿で転職 | `growth` | `changeCharacterJob` | `["job_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `medal_claim` | 小さなメダル景品交換 | `growth` | `claimMedalReward` | `["reward_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `monster_tame` | モンスター捕獲・預託 | `social` | `tameMonster` | `["monster_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `helper_complete` | 何でも屋クエスト報告 | `social` | `completeHelperQuest` | `["quest_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
@@ -116,7 +116,7 @@ The table below documents all 42 current catalog entries in `internal/playercont
 
 The pipeline evaluates Dead → Fatigue → Sleep → Cooldown → Currency → Location, stopping at the first rejecting gate for each action. Each gate honors its RequiredGates exemptions; wake eligibility is an explicit recovery rule. Gate evaluation is pure and changes no state.
 
-`playercontext.Service.Query` reads Character and unfinished ScheduledActions, then existing Sleep duration and Asleep recovery flag. Character has no invented Sleeping or location field. The returned snapshot includes those observations, and the availability list contains only ActionIDs, without URLs, HTTP knowledge or presentation text. #939 can reuse this snapshot without refetching Character or timers.
+`playercontext.Service.Query` reads Character and unfinished ScheduledActions, then existing Sleep duration and Asleep recovery flag. Character has no invented Sleeping or location field. The returned snapshot includes those observations, and the availability list contains only ActionIDs, without URLs, HTTP knowledge or presentation text. #939 maps these facts into an HTTP DTO without refetching query facts; its standard ownership wrapper and avatar enrichment perform separate authorization/profile reads.
 
 For a nonempty actor index this entails one MariaDB Character lookup and four Valkey commands (SMEMBERS, MGET, sleep TTL, Asleep EXISTS); an empty index avoids MGET. Each input is read once. This is not a transaction across stores, and action execution must revalidate changing state.
 
@@ -124,7 +124,7 @@ No CharacterSnapshot or availability-result cache is introduced. The catalog is 
 
 ---
 
-## 5. Proposed Client & Agent Tool Calling Contract (#939/#646)
+## 5. Client & Agent Observation and Planned Command Contract (#939/#646)
 
 When clients receive `available_actions` via `GET /context`:
 
@@ -133,6 +133,7 @@ When clients receive `available_actions` via `GET /context`:
   "action": "bank_deposit",
   "label": "銀行に預金する",
   "category": "economy",
+  "style": "secondary",
   "required_params": ["amount"]
 }
 ```

@@ -68,6 +68,7 @@ type socServices struct {
 	home         *home.Service
 	notification *notification.Service
 	sched        *scheduling.Service
+	schedRepo    *scheduling.ValkeyRepository
 	limiter      http.RateLimiter
 	worker       *scheduling.Worker
 	timer        timer.Service
@@ -112,6 +113,7 @@ func newSocServices(
 	var (
 		limiter        http.RateLimiter = ratelimit.NewMemoryLimiter()
 		schedService   *scheduling.Service
+		schedRepo      *scheduling.ValkeyRepository
 		worker         *scheduling.Worker
 		rankingService *ranking.Service
 	)
@@ -121,7 +123,7 @@ func newSocServices(
 	} else {
 		limiter = ratelimit.NewValkeyLimiter(valkeyClient)
 		rankingCache := ranking.NewValkeySnapshotCache(valkeyClient)
-		schedRepo := scheduling.NewValkeyRepository(valkeyClient)
+		schedRepo = scheduling.NewValkeyRepository(valkeyClient)
 		schedService = scheduling.NewService(schedRepo)
 		rankingService, _ = ranking.NewService(rankingRepo, ranking.WithSnapshotCache(rankingCache))
 		worker = scheduling.NewWorker(schedRepo, 5*time.Second, logger)
@@ -160,6 +162,7 @@ func newSocServices(
 	}
 
 	return &socServices{
+		schedRepo:    schedRepo,
 		guildRepo:    guildRepo,
 		guild:        guildService,
 		ranking:      rankingService,

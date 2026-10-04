@@ -1,19 +1,19 @@
 # Client & Agent API — CQRS & Server-Driven UI Architecture
 
-This document describes the planned client boundary, not the current HTTP API contract.
+This document describes the implemented HTTP observation boundary and the planned command gateway.
 
 | Boundary | Status | Tracking |
 |---|---|---|
 | Action catalog and OpenAPI drift checks | Implemented | #944, #946 |
 | PlayerContext evaluator and character/scheduling reads | Implemented in-process; legacy parity still requires review | #938, #972 |
-| HTTP context query | Planned; not registered in the router | #939 |
+| HTTP context query | Implemented; owned character observation with four canonical slots | #939 |
 | HTTP action dispatcher | Planned; failure/refresh semantics need specification | #646 |
 | Individual REST route retirement | Planned after Gateway migration | #947–#950 |
 
 Current clients use the registered routes in [OpenAPI](../api/openapi.json).
-The `/api/v1` prefix and payloads below are proposed examples; the current
-router uses unversioned paths. Do not remove working REST contracts before
-their replacement is implemented and verified against the original Party2.
+`GET /api/v1/characters/{id}/context` is registered. Existing REST routes remain
+unversioned; `POST /actions` is planned. Do not remove working REST contracts
+before their replacement is implemented and verified against the original Party2.
 
 ---
 
@@ -54,55 +54,53 @@ Instead of scattering game logic across hundreds of disconnected REST URLs, the 
 
 ## 2. Query Pillar: `GET /api/v1/characters/{id}/context`
 
-The discovery entry point for any client session.
+The authenticated discovery endpoint verifies character ownership using the
+standard HTTP wrapper, calls the existing uncached `playercontext.Service.Query`,
+and enriches its facts with profile avatar and job catalog presentation. Its
+`PlayerContextResponse` DTO and reusable OpenAPI schema are also the required
+context contract for the future #646 command gateway.
 
-### Response Specification
+The four top-level fields are:
 
-```json
-{
-  "character": {
-    "id": "char-123",
-    "name": "勇者太郎",
-    "job_id": "warrior",
-    "hp": 150,
-    "max_hp": 200,
-    "mp": 30,
-    "max_mp": 50,
-    "gold": 12000,
-    "tired": 20
-  },
-  "ongoing_action": {
-    "action_type": "activity:training_complete",
-    "execute_at": "2026-10-02T10:05:00Z",
-    "remaining_seconds": 120
-  },
-  "available_actions": [
-    {
-      "action": "bank_deposit",
-      "label": "銀行に預ける",
-      "category": "economy",
-      "required_params": ["amount"]
-    },
-    {
-      "action": "shop_weapon",
-      "label": "武器屋へ行く",
-      "category": "shop",
-      "required_params": []
-    },
-    {
-      "action": "home_sleep",
-      "label": "自宅で休む",
-      "category": "home",
-      "required_params": []
-    }
-  ]
-}
-```
+- `character`: ID/name/job ID and name, level, HP/MP maxima and current values,
+  wallet gold, fatigue, death and sleeping flags, and icon fields. `icon_url`
+  uses the existing profile AvatarURL (URL or data URI), or an empty string.
+  The asset ID remains empty until production mappings are specified.
+- `scene`: the initial `town` hub, title, background ID/URL, dialogue, and
+  optional structured speaker/opponent. The background is a self-authored SVG
+  data URI placeholder; no legacy images are reused. Production art resolution
+  remains #654/#729, and dynamic facility/combat scenes remain #947–#949.
+- `ongoing_actions`: every unfinished scheduled action, plus an observed
+  sleep/wake recovery timer when present. Empty observations return `[]`.
+  Entries contain `id`, `action_type`, `label`, `execute_at`, rounded-up
+  nonnegative `remaining_seconds`, and `is_ready`. Scheduled deadlines are
+  ordered ascending, with ID breaking ties. Sleep deadlines are estimates
+  derived from the remaining lock duration, not persisted queue records.
+- `available_actions`: eligible catalog entries in catalog order, with
+  `action`, `label`, `category`, `style`, and `required_params` (always an array).
+  Adventure controls use `primary`; other controls use `secondary`.
 
-### Invariants:
-- **Compact discovery**: `available_actions` contains top-level actions from the catalog. Individual items or shop goods use parameters or feature queries; do not duplicate the catalog count here.
-- **Strict Whitelist**: Actions restricted by HP (`hp <= 0`), Fatigue (`tired >= 100`), Sleep/Restraint (`ongoing_action != null`), or Money are automatically excluded by the Action Evaluator.
-- **Timer observation**: Pending/Processing work blocks applicable actions even when its deadline has passed. A deadline is not proof of completion. After waiting, fetch fresh context before choosing an action; use bounded retry delays for overdue work.
+### Invariants
+
+- **Entry eligibility**: catalog gating is action-specific. HP=0 excludes
+  combat entries, but permits legacy noncombat town actions. Free prayer,
+  crystal-funded sealing and coin games do not require wallet gold.
+  Exact prices, amounts, alternative currencies, items and game state still
+  require validation by the execution service.
+- **Unfinished work**: Pending/Processing entries remain visible and block
+  applicable actions after ExecuteAt. `is_ready` denotes deadline arrival,
+  never successful settlement. Refresh context with bounded retry delays for
+  overdue work; do not infer completed mutations from a countdown.
+- **Sleep recovery**: active sleep exposes rescue; expired sleep with recovery
+  pending exposes wake and rescue. The sleep observation remains until explicit
+  wake recovery clears it, with `is_ready: true` and zero remaining seconds.
+- **Failure boundary**: session and ownership errors return 401/403 (missing
+  characters return 404). Query errors and propagated profile-service errors return 500 without partial
+  context. An unconfigured query service returns 501 after authentication.
+- **Read consistency**: authorization, query facts and profile reads are not a
+  cross-store transaction. No observation/result cache is introduced; command
+  execution must revalidate current state. Character facts come from the query
+  snapshot, not the separate profile view's character projection.
 
 ---
 
@@ -138,7 +136,7 @@ Returns both the domain execution result AND the refreshed client context in a s
       "gold": 7000,
       "tired": 20
     },
-    "ongoing_action": null,
+    "ongoing_actions": [],
     "available_actions": [
       {
         "action": "bank_withdraw",
@@ -164,7 +162,7 @@ When domain preconditions fail (e.g. insufficient gold, exhausted stamina), the 
   },
   "context": {
     "character": { ... },
-    "ongoing_action": null,
+    "ongoing_actions": [],
     "available_actions": [
       {
         "action": "home_sleep",
@@ -193,11 +191,9 @@ AI Agents interact with Party2 Re using **only two LLM Tools**:
 context = get_character_context(char_id)
 
 while True:
-    if context.ongoing_action:
-        sleep(max(context.ongoing_action.remaining_seconds, retry_delay))
-        context = get_character_context(char_id)
-        continue
-    
+    # Select from available_actions even while timers exist: wake/rescue
+    # can be eligible. A ready timer does not certify settled work.
+    # Poll with a bounded retry delay when no suitable action is chosen.
     # LLM selects action from context.available_actions
     chosen_action, params = llm.decide(context.available_actions)
     
@@ -225,7 +221,7 @@ Chatbot frameworks handle state transitions with zero routing boilerplate:
 
 ---
 
-## 5. Planned architectural constraints
+## 5. Architectural constraints
 
 1. **Authentication & Ownership**:
    All gateway calls verify character ownership (`char.PlayerID == player.ID`) using `withAuthenticatedCharacter`.

@@ -151,7 +151,8 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] PlayerContext: Action Catalog & Legacy Precondition Matrix (#944)
 - [x] PlayerContext: Automated Drift-Detection Test between Action Catalog and OpenAPI Specification (#946)
 - [x] Scheduling: Actor-indexed unfinished-work query, Pending/Processing lifecycle and bulk Valkey reads (#972)
-- [x] PlayerContext: Ordered six-gate availability evaluator and uncached read query, sleep/wake lifecycle and rescue exemption (#938); HTTP observation handler remains #939
+- [x] PlayerContext: Ordered six-gate availability evaluator and uncached read query, sleep/wake lifecycle and rescue exemption (#938)
+- [x] PlayerContext: Owned HTTP observation endpoint, shared context DTO/OpenAPI, all pending/sleep timers, profile avatars and self-authored town scene placeholder (#939)
 - [x] PlayerContext: Blacksmith sealing currency gate removal to match legacy crystal requirement (#987)
 - [x] PlayerContext: Casino coin games currency gate removal to match legacy coin requirement (#988)
 - [x] PlayerContext: Restrict death gates to legacy actions that require them (#989)
