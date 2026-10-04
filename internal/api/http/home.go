@@ -125,7 +125,7 @@ func (h *Handler) handleUpdateHomeSettings(w http.ResponseWriter, r *http.Reques
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req updateHomeRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -151,7 +151,7 @@ func (h *Handler) handleSendLetter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *sendLetterRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *sendLetterRequest) string {
 		return req.SenderCharacterID
 	}, func(_ coreplayer.Player, sender corecharacter.Character, req sendLetterRequest) {
 		letter, err := h.homes.SendLetter(r.Context(), sender.ID, req.RecipientCharacterID, req.Content, req.Color)
@@ -276,7 +276,7 @@ func (h *Handler) handleReadLetter(w http.ResponseWriter, r *http.Request) {
 	}
 
 	letterID := r.PathValue("id")
-	withAuthenticatedCharacterAndJSON(h, w, r, func(req *readLetterRequest) string {
+	withAuthenticatedActionCharacterAndJSON(h, w, r, func(req *readLetterRequest) string {
 		return req.CharacterID
 	}, func(_ coreplayer.Player, char corecharacter.Character, req readLetterRequest) {
 		err := h.homes.ReadLetter(r.Context(), letterID, char.ID)
@@ -310,7 +310,7 @@ func (h *Handler) handleDeleteLetter(w http.ResponseWriter, r *http.Request) {
 	}
 
 	letterID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		err := h.homes.DeleteLetter(r.Context(), letterID, char.ID)
 		if err != nil {
 			if errors.Is(err, home.ErrLetterNotFound) {
@@ -336,7 +336,7 @@ func (h *Handler) handleTeachCompanionPhrase(w http.ResponseWriter, r *http.Requ
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req teachPhraseRequest
 		if !decodeJSON(w, r, &req) {
 			return
@@ -390,7 +390,7 @@ func (h *Handler) handleForgetCompanionPhrase(w http.ResponseWriter, r *http.Req
 
 	charID := r.PathValue("id")
 	phraseID := r.PathValue("phrase_id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		err := h.homes.ForgetCompanionPhrase(r.Context(), phraseID, char.ID)
 		if err != nil {
 			if errors.Is(err, home.ErrPhraseNotFound) {
@@ -463,7 +463,7 @@ func (h *Handler) handleClearDeliveryNotices(w http.ResponseWriter, r *http.Requ
 	}
 
 	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
+	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		err := h.homes.ClearDeliveryNotices(r.Context(), char.ID)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)

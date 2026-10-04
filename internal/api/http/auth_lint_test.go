@@ -481,6 +481,14 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleCreateFleaMarketListing":   "fleamarket.go",
 		"handlePurchaseFleaMarketListing": "fleamarket.go",
 		"handleCancelFleaMarketListing":   "fleamarket.go",
+		// Home
+		"handleUpdateHomeSettings":    "home.go",
+		"handleSendLetter":            "home.go",
+		"handleReadLetter":            "home.go",
+		"handleDeleteLetter":          "home.go",
+		"handleTeachCompanionPhrase":  "home.go",
+		"handleForgetCompanionPhrase": "home.go",
+		"handleClearDeliveryNotices":  "home.go",
 	}
 
 	for handlerName, sourceFile := range requiredActionGuardHandlers {

@@ -193,6 +193,14 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"fleamarket_create", http.MethodPost, "/characters/char-1/fleamarket/listings", `{"item_id":"item-1","price":100}`},
 		{"fleamarket_purchase", http.MethodPost, "/characters/char-1/fleamarket/listings/list-1/purchase", `{}`},
 		{"fleamarket_cancel", http.MethodDelete, "/characters/char-1/fleamarket/listings/list-1", ``},
+		// Home
+		{"home_settings", http.MethodPost, "/homes/char-1/settings", `{"companion_name":"ペット"}`},
+		{"home_send_letter", http.MethodPost, "/letters", `{"sender_character_id":"char-1","recipient_character_id":"char-2","content":"hello"}`},
+		{"home_read_letter", http.MethodPost, "/letters/letter-1/read", `{"character_id":"char-1"}`},
+		{"home_delete_letter", http.MethodDelete, "/letters/letter-1?character_id=char-1", ``},
+		{"home_teach_phrase", http.MethodPost, "/homes/char-1/companion/phrases", `{"phrase":"hello"}`},
+		{"home_forget_phrase", http.MethodDelete, "/homes/char-1/companion/phrases/phrase-1", ``},
+		{"home_clear_notices", http.MethodPost, "/homes/char-1/notices/clear", `{}`},
 	}
 
 	t.Run("sleeping character is rejected with 409 Conflict across all facility endpoints", func(t *testing.T) {
@@ -385,6 +393,24 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		}
 		if called {
 			t.Error("expected shop purchase callback not to be invoked on canceled context")
+		}
+	})
+
+	t.Run("explicit wake recovery command is exempt from action guard when sleeping or can_wake", func(t *testing.T) {
+		for _, status := range []home.SleepStatus{
+			{Sleeping: true, RemainingSeconds: 300, Message: "お休み中「Zzz...」"},
+			{Sleeping: false, CanWake: true, RemainingSeconds: 0, Message: "お休み中「Zzz...」 目を覚ましてください"},
+		} {
+			router := setupFacilitySleepGuardTest(t, status)
+			req := httptest.NewRequest(http.MethodPost, "/characters/char-1/home/wake", nil)
+			req.Header.Set("Authorization", "Bearer valid-session")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code == http.StatusConflict {
+				t.Errorf("expected explicit wake command not to be blocked by 409 action guard, got %d: %s",
+					rec.Code, rec.Body.String())
+			}
 		}
 	})
 }
