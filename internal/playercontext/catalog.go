@@ -113,12 +113,12 @@ var DefaultCatalog = []ActionDefinition{
 	},
 	{
 		ID:             "chapel_pray",
-		Label:          "礼拝堂で祈る（祈願・蘇生）",
+		Label:          "礼拝堂で祈る（祈願）",
 		Category:       "home",
 		OperationID:    "prayAtChapel",
 		RequiredParams: []string{"blessing"},
-		// Note: Dead characters can pray at the chapel for revival.
-		RequiredGates: GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
+		// Note: Daily blessing prayer is free and does not require wallet gold.
+		RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 
 	// =========================================================================

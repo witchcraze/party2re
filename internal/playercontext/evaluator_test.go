@@ -74,7 +74,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		want   []string
 	}{
 		{"dead", func(s *Snapshot) { s.Character.Stats.HP = 0 }, []string{"home_sleep", "chapel_pray", "rescue_request"}},
-		{"dead without money", func(s *Snapshot) { s.Character.Stats.HP = 0; s.Character.Money = 0 }, []string{"home_sleep", "rescue_request"}},
+		{"dead without money", func(s *Snapshot) { s.Character.Stats.HP = 0; s.Character.Money = 0 }, []string{"home_sleep", "chapel_pray", "rescue_request"}},
 		{"sleeping", func(s *Snapshot) { s.Sleeping = true; s.SleepRemaining = time.Minute }, []string{"rescue_request"}},
 		{"wakeable", func(s *Snapshot) { s.Sleeping = true; s.CanWake = true }, []string{"home_wake", "rescue_request"}},
 		{"sleep timer only", func(s *Snapshot) { s.SleepRemaining = time.Minute }, []string{"rescue_request"}},
@@ -104,6 +104,12 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	healthy := Evaluate(healthySnapshot())
 	if len(healthy) != 41 || slices.Contains(healthy, "home_wake") {
 		t.Fatalf("healthy catalog: %v", healthy)
+	}
+	zeroGold := healthySnapshot()
+	zeroGold.Character.Money = 0
+	gotZeroGold := Evaluate(zeroGold)
+	if !slices.Contains(gotZeroGold, "chapel_pray") {
+		t.Errorf("zero wallet gold incorrectly suppressed chapel_pray")
 	}
 	exhausted := healthySnapshot()
 	exhausted.Character.Tired = 100
