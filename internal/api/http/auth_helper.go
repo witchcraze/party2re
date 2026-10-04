@@ -134,24 +134,27 @@ func withAuthenticatedCharacterAndJSON[Req any](
 
 // guardSleepingCharacter checks if the character is currently sleeping or awaiting wake-up.
 // If locked in sleep or asleep state, writes 409 Conflict and returns false.
+// If querying sleep status fails, writes 500 Internal Server Error and returns false.
 func (h *Handler) guardSleepingCharacter(w http.ResponseWriter, r *http.Request, charID string) bool {
 	if h.homes == nil {
 		return true
 	}
 	status, err := h.homes.GetSleepStatus(r.Context(), charID)
-	if err == nil {
-		if status.Sleeping {
-			msg := status.Message
-			if msg == "" {
-				msg = "お休み中「Zzz...」"
-			}
-			writeError(w, http.StatusConflict, errors.New(msg))
-			return false
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return false
+	}
+	if status.Sleeping {
+		msg := status.Message
+		if msg == "" {
+			msg = "お休み中「Zzz...」"
 		}
-		if status.CanWake {
-			writeError(w, http.StatusConflict, errors.New("お休み中「Zzz...」 目を覚ましてください"))
-			return false
-		}
+		writeError(w, http.StatusConflict, errors.New(msg))
+		return false
+	}
+	if status.CanWake {
+		writeError(w, http.StatusConflict, errors.New("お休み中「Zzz...」 目を覚ましてください"))
+		return false
 	}
 	return true
 }

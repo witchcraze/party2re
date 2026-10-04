@@ -1,6 +1,6 @@
 # Status
 
-Last reviewed: Issue #988 — PlayerContext casino coin games currency gate removal
+Last reviewed: Issue #981 — HTTP/Sleep reject actions on sleep-state lookup failure
 
 ## Current Phase
 

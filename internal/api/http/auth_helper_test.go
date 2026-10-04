@@ -444,4 +444,46 @@ func TestGuardSleepingCharacter(t *testing.T) {
 			t.Errorf("expected 409 Conflict for auction when sleeping, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
+
+	t.Run("sleep status lookup failure returns 500 Conflict-free error", func(t *testing.T) {
+		mockHome := &mockHomeService{
+			getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {
+				return home.SleepStatus{}, errors.New("storage error")
+			},
+		}
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome), apihttp.WithChallenge(&stubChallengeService{}))
+		if err != nil {
+			t.Fatalf("failed to create handler: %v", err)
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/characters/char-1/challenges/start", bytes.NewReader([]byte(`{"tier_id":"tier-1"}`)))
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		h.Router().ServeHTTP(rec, req)
+		if rec.Code != http.StatusInternalServerError {
+			t.Errorf("expected 500 Internal Server Error for challenge when sleep lookup fails, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("sleep status lookup context canceled returns 500 error", func(t *testing.T) {
+		mockHome := &mockHomeService{
+			getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {
+				return home.SleepStatus{}, ctx.Err()
+			},
+		}
+		h, err := apihttp.NewHandler(players, chars, &stubAdventureService{}, &stubShopService{}, apihttp.WithHome(mockHome), apihttp.WithChallenge(&stubChallengeService{}))
+		if err != nil {
+			t.Fatalf("failed to create handler: %v", err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/characters/char-1/challenges/start", bytes.NewReader([]byte(`{"tier_id":"tier-1"}`))).WithContext(ctx)
+		req.Header.Set("Authorization", "Bearer valid-session")
+		req.Header.Set("Content-Type", "application/json")
+		h.Router().ServeHTTP(rec, req)
+		if rec.Code != http.StatusInternalServerError {
+			t.Errorf("expected 500 Internal Server Error for challenge on canceled context, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
 }
