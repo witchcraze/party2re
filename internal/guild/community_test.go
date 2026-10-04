@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/text/unicode/norm"
+
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/validation"
@@ -271,6 +273,39 @@ func TestService_ApproveApplication(t *testing.T) {
 		err := svc.ApproveApplication(ctx, guildID, leaderID, applicantID, "隊長")
 		if !errors.Is(err, guild.ErrMemberNotPending) {
 			t.Errorf("expected ErrMemberNotPending, got %v", err)
+		}
+	})
+
+	t.Run("persists NFC normalized role title for decomposed input", func(t *testing.T) {
+		decomposed := strings.Repeat("e\u0301", 6)
+		var approvedTitle string
+		repo := &mockGuildRepo{
+			getGuildFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
+				return guild.Guild{ID: guildID, Name: "Legendary", LeaderCharacterID: leaderID}, []guild.Member{
+					{GuildID: guildID, CharacterID: leaderID, Role: guild.RoleLeader, IsPending: false},
+					{GuildID: guildID, CharacterID: applicantID, Role: guild.RoleMember, IsPending: true, Title: guild.DefaultTitlePending},
+				}, nil
+			},
+			approveMemberFn: func(ctx context.Context, gID string, charID string, title string) error {
+				approvedTitle = title
+				return nil
+			},
+			touchActiveFn: func(ctx context.Context, gID string) error {
+				return nil
+			},
+		}
+
+		svc, _ := guild.NewService(repo)
+		err := svc.ApproveApplication(ctx, guildID, leaderID, applicantID, decomposed)
+		if err != nil {
+			t.Fatalf("ApproveApplication error: %v", err)
+		}
+
+		expected := norm.NFC.String(decomposed)
+		if approvedTitle != expected {
+			t.Errorf("approvedTitle = %q (width %d), want %q (width %d)",
+				approvedTitle, guild.CalculateTitleWidth(approvedTitle),
+				expected, guild.CalculateTitleWidth(expected))
 		}
 	})
 }

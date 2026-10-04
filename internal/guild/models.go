@@ -103,30 +103,31 @@ func ValidateGuildName(name string) (string, error) {
 // - Must not contain invalid characters: , ; " ' & < > @ ＠
 // - Must not be reserved titles: "参加申請中" or "ギルマス"
 // - Visual width must be <= 12 (6 full-width / 12 half-width characters)
-func ValidateRoleTitle(title string) error {
+// Returns the NFC-normalized title string and nil on success.
+func ValidateRoleTitle(title string) (string, error) {
 	if title == "" {
-		return ErrInvalidRoleTitle
+		return "", ErrInvalidRoleTitle
 	}
 	if strings.ContainsAny(title, " \t\r\n\u3000") {
-		return ErrInvalidRoleTitle
+		return "", ErrInvalidRoleTitle
 	}
 	normalized, err := validation.ValidateSingleLine(title, MaxRoleTitleWidth)
 	if err != nil {
 		if errors.Is(err, validation.ErrTooLong) {
-			return ErrRoleTitleTooLong
+			return "", ErrRoleTitleTooLong
 		}
-		return ErrInvalidRoleTitle
+		return "", ErrInvalidRoleTitle
 	}
 	if strings.ContainsAny(normalized, ",;\"'&<>@＠") {
-		return ErrInvalidRoleTitle
+		return "", ErrInvalidRoleTitle
 	}
 	if normalized == "参加申請中" || normalized == "ギルマス" {
-		return ErrReservedRoleTitle
+		return "", ErrReservedRoleTitle
 	}
 	if CalculateTitleWidth(normalized) > MaxRoleTitleWidth {
-		return ErrRoleTitleTooLong
+		return "", ErrRoleTitleTooLong
 	}
-	return nil
+	return normalized, nil
 }
 
 // ValidateColorFormat validates that a hex color string is in #RRGGBB format and normalizes to uppercase.
