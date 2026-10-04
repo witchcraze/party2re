@@ -1,6 +1,6 @@
 # Status
 
-Last reviewed: Issue #979 — documentation inventory and legacy authority reconciliation
+Last reviewed: Issue #987 — PlayerContext blacksmith_seal currency gate removal
 
 ## Current Phase
 

@@ -111,6 +111,9 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	if !slices.Contains(gotZeroGold, "chapel_pray") {
 		t.Errorf("zero wallet gold incorrectly suppressed chapel_pray")
 	}
+	if !slices.Contains(gotZeroGold, "blacksmith_seal") {
+		t.Errorf("zero wallet gold incorrectly suppressed blacksmith_seal")
+	}
 	exhausted := healthySnapshot()
 	exhausted.Character.Tired = 100
 	got := Evaluate(exhausted)
