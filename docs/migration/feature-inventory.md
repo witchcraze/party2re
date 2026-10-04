@@ -111,7 +111,7 @@ All groups below are Version 1.0 reconstruction requirements.
 
 ### E. Social and Competitive Systems
 - [x] Guild creation, membership application/approval workflow, dynamic Guild Points, daily 20% GP decay batch, hex colors, custom titles, broadcast callouts, inactivity disbandment worker, Guild Master succession (excluding pending applicants), dissolution news publication, and reconciled cascade (#76, #490, #591, #633, #774, #775, #956, #991, #992)
-- [x] Player communication, park, and public interactions (#78)
+- [x] Player communication, park, and public interactions, with HTTP sleep action guard extended to park message posting, NPC talk, and NPC divination (#78, #983)
 - [x] Player private home, mailbox, letter correspondence, resident monster pet linkage (max 8), OpenAPI companion field cleanup, Heaven Wish companion aggregation in HomePetReader, alchemy recipe scroll consumption, authentic equipment appraisal catalog stats, HTTP sleep action guard extended to all town facilities, commerce, crafting, and home mutation endpoints, and shared text validation adoption for letters and companion phrases (#159, #461, #680, #778, #881, #894, #898, #899, #901, #903, #912, #920, #957, #981, #985)
 - [x] Helper and player rescue assistance (#79, #213, #659, #680, #792, #900)
 - [x] Rankings (level, job, wealth, pvp victory, helper, medals, casino wins, alchemy syntheses, weekly job changes, authentic monster kills, demon king defeats, and hero achievements; purged fabricated battle victories) and permanent Hall of Fame (legend.cgi) with automatic completion induction hooks across Collection, Job Mastery, and Alchemy (#63, #280, #454, #470, #798, #824, #825)

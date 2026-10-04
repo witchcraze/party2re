@@ -501,6 +501,10 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		"handleAddInterior":     "store.go",
 		"handleRenameInterior":  "store.go",
 		"handleCleanInteriors":  "store.go",
+		// Park
+		"handlePostParkMessage": "park.go",
+		"handleParkNPCTalk":     "park.go",
+		"handleParkNPCDivinate": "park.go",
 	}
 
 	for handlerName, sourceFile := range requiredActionGuardHandlers {

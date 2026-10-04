@@ -13,6 +13,7 @@ import (
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/pagination"
 	"github.com/witchcraze/party2re/internal/park"
 	"github.com/witchcraze/party2re/internal/validation"
@@ -304,4 +305,140 @@ func TestParkEndpoints(t *testing.T) {
 			t.Fatalf("expected 200, got %d", rec.Code)
 		}
 	})
+}
+
+func TestParkSleepGuard(t *testing.T) {
+	player := coreplayer.Player{ID: "player-1", Username: "user1"}
+	char := corecharacter.Character{ID: "char-1", PlayerID: "player-1", Name: "TestHero"}
+
+	players := &stubPlayerService{
+		authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
+			if sessionID == "valid-session" {
+				return player, nil
+			}
+			return coreplayer.Player{}, errors.New("unauthorized")
+		},
+	}
+	chars := &stubCharacterService{
+		getFn: func(ctx context.Context, id string) (corecharacter.Character, error) {
+			if id == "char-1" {
+				return char, nil
+			}
+			return corecharacter.Character{}, corecharacter.ErrNotFound
+		},
+	}
+	adv := &stubAdventureService{}
+	shopSvc := &stubShopService{}
+	parkSvc := &mockParkService{}
+
+	var currentSleepStatus home.SleepStatus
+	var sleepErr error
+	mockHome := &mockHomeService{
+		getSleepStatusFn: func(ctx context.Context, characterID string) (home.SleepStatus, error) {
+			if sleepErr != nil {
+				return home.SleepStatus{}, sleepErr
+			}
+			return currentSleepStatus, nil
+		},
+	}
+
+	handler, err := apihttp.NewHandler(
+		players,
+		chars,
+		adv,
+		shopSvc,
+		apihttp.WithHome(mockHome),
+		apihttp.WithPark(parkSvc),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := handler.Router()
+
+	testActions := []struct {
+		name      string
+		method    string
+		path      string
+		body      string
+		awakeCode int
+	}{
+		{"post_message", http.MethodPost, "/park/posts", `{"character_id":"char-1","content":"hello"}`, http.StatusCreated},
+		{"npc_talk", http.MethodPost, "/park/npc/talk", `{"character_id":"char-1"}`, http.StatusOK},
+		{"npc_divinate", http.MethodPost, "/park/npc/divinate", `{"character_id":"char-1"}`, http.StatusOK},
+	}
+
+	for _, tc := range testActions {
+		t.Run(tc.name+"_sleeping_blocked_409", func(t *testing.T) {
+			currentSleepStatus = home.SleepStatus{
+				Sleeping:         true,
+				RemainingSeconds: 300,
+				Message:          "お休み中「Zzz...」",
+			}
+			sleepErr = nil
+
+			req := httptest.NewRequest(tc.method, tc.path, bytes.NewReader([]byte(tc.body)))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer valid-session")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusConflict {
+				t.Fatalf("expected 409 Conflict, got %d: %s", rec.Code, rec.Body.String())
+			}
+		})
+
+		t.Run(tc.name+"_can_wake_blocked_409", func(t *testing.T) {
+			currentSleepStatus = home.SleepStatus{
+				Sleeping:         false,
+				CanWake:          true,
+				RemainingSeconds: 0,
+				Message:          "お休み中「Zzz...」 目を覚ましてください",
+			}
+			sleepErr = nil
+
+			req := httptest.NewRequest(tc.method, tc.path, bytes.NewReader([]byte(tc.body)))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer valid-session")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusConflict {
+				t.Fatalf("expected 409 Conflict, got %d: %s", rec.Code, rec.Body.String())
+			}
+		})
+
+		t.Run(tc.name+"_awake_success", func(t *testing.T) {
+			currentSleepStatus = home.SleepStatus{
+				Sleeping: false,
+				CanWake:  false,
+				Message:  "起きています",
+			}
+			sleepErr = nil
+
+			req := httptest.NewRequest(tc.method, tc.path, bytes.NewReader([]byte(tc.body)))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer valid-session")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != tc.awakeCode {
+				t.Fatalf("expected %d, got %d: %s", tc.awakeCode, rec.Code, rec.Body.String())
+			}
+		})
+
+		t.Run(tc.name+"_sleep_error_500", func(t *testing.T) {
+			currentSleepStatus = home.SleepStatus{}
+			sleepErr = errors.New("db error")
+
+			req := httptest.NewRequest(tc.method, tc.path, bytes.NewReader([]byte(tc.body)))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer valid-session")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusInternalServerError {
+				t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
 }

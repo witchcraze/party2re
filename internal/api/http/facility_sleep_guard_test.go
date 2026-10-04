@@ -79,6 +79,7 @@ func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepSt
 		apihttp.WithBlacksmith(&stubBlacksmithService{}),
 		apihttp.WithFleaMarket(&stubFleaMarketService{}),
 		apihttp.WithStore(&stubStoreService{}),
+		apihttp.WithPark(&mockParkService{}),
 	)
 	if err != nil {
 		t.Fatalf("failed to create handler: %v", err)
@@ -214,6 +215,10 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"store_add_interior", http.MethodPost, "/characters/char-1/store/interiors", `{"furniture_id":"001"}`},
 		{"store_rename_interior", http.MethodPut, "/characters/char-1/store/interiors/int-1/name", `{"name":"お気に入りの机"}`},
 		{"store_clean_interiors", http.MethodDelete, "/characters/char-1/store/interiors", ``},
+		// Park
+		{"park_post_message", http.MethodPost, "/park/posts", `{"character_id":"char-1","content":"hello"}`},
+		{"park_npc_talk", http.MethodPost, "/park/npc/talk", `{"character_id":"char-1"}`},
+		{"park_npc_divinate", http.MethodPost, "/park/npc/divinate", `{"character_id":"char-1"}`},
 	}
 
 	t.Run("sleeping character is rejected with 409 Conflict across all facility endpoints", func(t *testing.T) {

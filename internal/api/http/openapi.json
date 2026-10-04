@@ -20440,6 +20440,16 @@
             },
             "description": "Forbidden - player does not own requested character or lacks permission"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict - character is currently sleeping or awaiting wake-up"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -20564,6 +20574,16 @@
               }
             },
             "description": "Forbidden - player does not own requested character or lacks permission"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict - character is currently sleeping or awaiting wake-up"
           },
           "500": {
             "content": {
@@ -20727,6 +20747,16 @@
               }
             },
             "description": "Forbidden - player does not own requested character or lacks permission"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict - character is currently sleeping or awaiting wake-up"
           },
           "500": {
             "content": {
