@@ -305,7 +305,7 @@ func NewHandler(
 		shops:          shops,
 		allowedOrigins: make(map[string]struct{}),
 	}
-	for _, opt := range opts {
+	for _, opt := range append([]Option{adventureStartCommand(adventures)}, opts...) {
 		if opt != nil {
 			opt(h)
 		}

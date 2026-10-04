@@ -158,8 +158,9 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] PlayerContext: Restrict death gates to legacy actions that require them (#989)
 - [x] PlayerContext: Detect and declare missing required action parameters (#990)
 - [x] Action Gateway: Approved command outcome/context-refresh failure contract and bounded implementation decomposition (#646; specification only)
-- [x] Action Gateway: Common authenticated HTTP dispatch, strict typed params, fail-closed entry/sleep checks and outcome-preserving context refresh; no domain commands connected (#1010)
-- [ ] Action Gateway: Initial Bank/Home/Rescue/Adventure adapters (#1011–#1014) and multi-step loop verification (#1015)
+- [x] Action Gateway: Common authenticated HTTP dispatch, strict typed params, fail-closed entry/sleep checks and outcome-preserving context refresh (#1010)
+- [x] Action Gateway: Stage Adventure start adapter using existing StartStage/result composition and explicit service rejection codes; REST routes retained (#1014)
+- [ ] Action Gateway: Initial Bank/Home/Rescue adapters (#1011–#1013) and multi-step loop verification (#1015)
 - [ ] Web presentation UI / client implementation (#140)
 - [ ] Production asset manifest, resolver, and license attribution (#654, #729; specification pending)
 
