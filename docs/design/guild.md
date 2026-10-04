@@ -105,21 +105,73 @@ Active members can broadcast messages to all fellow guild members:
    - Validated against the legacy wallpaper catalog (`%kabes` in `_data.cgi:330-388`).
    - Pricing ranges from `0` Gold (`none.gif`) to `50,000` Gold (`stage20.gif`), deducted atomically from the leader's wallet (Rank 2).
 
-### Guild Master Succession & Dissolution News (`system.cgi:1124-1183`, `join_guild.cgi:367-436`)
+### Guild Master Succession & Dissolution News
+
+#### Legacy requirements and provenance
+
+`lib/system.cgi:1124-1183` (`delete_guild_member`) dissolves the guild when the
+roster has at most one row before removal. When the master departs from a larger
+roster, it prefers the first remaining row whose title contains `ギルマス`, then
+falls back to the first remaining roster row. Pending applications are roster
+rows (`lib/join_guild.cgi:196-214`) and are not excluded from either calculation.
+
+The routine replaces the successor's title with `ギルマス` and updates the guild's
+master record. It does not update the successor's personal guild affiliation,
+unlike ordinary application approval (`lib/guild.cgi:209-239`). Including an
+applicant in succession therefore does not establish complete, consistent
+membership approval in the reference implementation.
+
+The pending-row filter in `lib/join_guild.cgi:340-347` belongs to guild-name
+propagation during renaming; it is not a succession or dissolution rule.
+
+#### Approved reconstruction rule (#993; implementation #1006)
+
+On 2026-10-04, the user explicitly chose restoration of legacy roster-based
+succession in #993: 「原典方式へ戻す（再構築方針に沿う推奨案）」. Pending rows
+therefore count toward guild survival and can inherit leadership. The pending
+exclusion introduced by #956 / PR #962 is not the intended reconstruction rule.
+The gameplay correction is separately scoped to #1006; this decision changes
+documentation, not running behavior.
+
+| Remaining roster after master departure | Approved roster-based selection | Current Go selection (until #1006) |
+|---|---|---|
+| Pending applicants only | Prefer a title containing `ギルマス`, otherwise the first row; guild survives | Dissolve the guild |
+| Active members and pending applicants | Prefer a title containing `ギルマス` across all rows, otherwise the first row | Apply the same priority to active members only |
+| Multiple preferred-title candidates | First matching row in roster order | First matching active row in roster order |
+
+The ordinary application flow gives pending rows the title `参加申請中`; preferred
+titles on pending rows are not produced by that flow. Selection itself does not
+add an eligibility exception for such rows.
+
+In the reconstruction, replacing an applicant's pending title with `ギルマス`
+maps to `RoleLeader`, title `ギルマス`, and `is_pending = false`, using the existing
+leadership transfer contract. Unselected applicants remain pending. Succession
+does not invoke ordinary approval or add an acceptance letter. Go stores guild
+affiliation in the membership relation and has no second personal-affiliation
+field; the reference's inconsistent personal affiliation is recorded above,
+rather than introducing duplicate membership state to reproduce it.
+
+Roster priority uses the existing repository order (`joined_at ASC`, then
+`character_id ASC` for timestamp ties). The reference uses file-row order.
 
 1. **Guild Master Succession**:
-   - When a Guild Master leaves the guild (`POST /guilds/{id}/leave`) or their character is deleted (`RemoveCharacterFromGuild` cleanup hook), leadership is automatically transferred to another active member if other active members remain.
-   - Pending applicants (`is_pending == true`) are strictly excluded from leadership succession candidates.
+   - When a Guild Master leaves the guild (`POST /guilds/{id}/leave`) or their character is deleted (`RemoveCharacterFromGuild` cleanup hook), leadership transfers to a remaining roster row, including a pending applicant.
    - **Successor Priority**:
-     1. An active member (`!is_pending`) whose custom title contains `ギルマス` (e.g. `副ギルマス`, `ギルマス補佐`).
-     2. If no member matches, the next eligible active member in the roster (by order of joining).
+     1. The first remaining row whose title contains `ギルマス` (e.g. `副ギルマス`, `ギルマス補佐`).
+     2. If no title matches, the first remaining row in roster order.
    - Once leadership is successfully transferred, the departing leader is removed from the roster.
 2. **Auto-Dissolution & Server News Announcement**:
-   - When the last active member of a guild leaves or is deleted (including when only the leader and pending applicants exist, or when the guild is empty), or when the leader manually disbands the guild (`DELETE /guilds/{id}`), or upon 20-day inactivity auto-disbandment, the guild is dissolved. Pending applicants cannot maintain or inherit a leaderless guild.
+   - Removal from a roster containing at most one row dissolves the guild. Removing a non-leader from a larger roster only removes that row. Pending rows count in both rules; the last active member's departure does not by itself imply dissolution.
+   - Manual disbandment by the leader (`DELETE /guilds/{id}`) and 20-day inactivity disbandment also dissolve the guild.
    - Upon dissolution, a system-wide server news announcement is published via `NewsPublisher`:
      `ギルド『<GuildName>』が解散しました` (Category: `guild`, Author: `System`).
 3. **Database Cascade Invariant**:
    - Character deletion (`character_repository.Delete`) no longer runs raw `UPDATE guilds SET leader_character_id = NULL`. Guild leadership and dissolution are handled strictly through the domain cleanup hook prior to physical character deletion, preserving the invariant that every existing guild has a valid leader.
+
+**Current implementation gap**: Until #1006, `removeMemberInternal` considers only
+remaining active members for both succession and dissolution. Existing #956
+tests verify that current deviation, not the approved rule above. The decision
+retains the historical record of #956 / PR #962 without claiming legacy parity.
 
 ### 20-Day Inactivity Automatic Disbandment (`auto_delete_guild_day = 20`)
 
@@ -166,6 +218,4 @@ $gpoint = int( $gpoint * 0.8 );
 | `POST` | `/guilds/{id}/leave` | Leave guild (triggers succession if leader, or dissolution if last member) | Bearer Token |
 | `DELETE` | `/guilds/{id}/members/{char_id}` | Kick member from guild (leader only) | Bearer Token |
 | `POST` | `/admin/guilds/decay-points` | Batch decay guild points by 20% (Admin) | Admin Key |
-
-
 
