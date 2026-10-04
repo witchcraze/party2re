@@ -7,7 +7,7 @@ This document describes the implemented HTTP observation boundary and the planne
 | Action catalog and OpenAPI drift checks | Implemented | #944, #946 |
 | PlayerContext evaluator and character/scheduling reads | Implemented in-process; legacy parity still requires review | #938, #972 |
 | HTTP context query | Implemented; owned character observation with four canonical slots | #939 |
-| HTTP action dispatcher | Planned; failure/refresh semantics need specification | #646 |
+| HTTP action dispatcher | Contract approved; runtime implementation planned | #646 (decision), #1010–#1015 |
 | Individual REST route retirement | Planned after Gateway migration | #947–#950 |
 
 Current clients use the registered routes in [OpenAPI](../api/openapi.json).
@@ -47,7 +47,7 @@ Instead of scattering game logic across hundreds of disconnected REST URLs, the 
 
 | Pillar | Endpoint | Responsibility | Payload |
 |---|---|---|---|
-| **Query (Observe)** | `GET /api/v1/characters/{id}/context` | **Observation & Next Moves** | Lightweight character snapshot, active timers, and **whitelist of currently executable actions**. |
+| **Query (Observe)** | `GET /api/v1/characters/{id}/context` | **Observation & Next Moves** | Lightweight character snapshot, active timers, and eligible action entry candidates. Exact parameters remain service-validated. |
 | **Command (Execute)** | `POST /api/v1/characters/{id}/actions` | **State Transition** | Accepts `{ action, params }`, dispatches to domain services, and returns `{ result, context }`. |
 
 ---
@@ -58,7 +58,8 @@ The authenticated discovery endpoint verifies character ownership using the
 standard HTTP wrapper, calls the existing uncached `playercontext.Service.Query`,
 and enriches its facts with profile avatar and job catalog presentation. Its
 `PlayerContextResponse` DTO and reusable OpenAPI schema are also the required
-context contract for the future #646 command gateway.
+context contract for the command gateway specified in #646, with implementation
+planned in #1010–#1015.
 
 The four top-level fields are:
 
@@ -106,7 +107,10 @@ The four top-level fields are:
 
 ## 3. Command Pillar: `POST /api/v1/characters/{id}/actions`
 
-The universal command execution gateway.
+The command contract below was approved during #646 on 2026-10-04. The route
+is still unimplemented; this decision does not certify Gateway coverage or retire
+existing REST routes. The initial implementation is split by HTTP responsibility
+and service adapter; remaining operations belong to #947–#949.
 
 ### Request Body
 
@@ -119,61 +123,76 @@ The universal command execution gateway.
 }
 ```
 
-### Success Response (200 OK)
+### Input and execution boundary
 
-Returns both the domain execution result AND the refreshed client context in a single round-trip:
+The authenticated path character is the actor. Reject actor identity fields such
+as `character_id` or `player_id` inside `params`; operation-specific target IDs
+such as `target_home_id` remain valid. Use the standard ownership wrapper and
+propagate the request context to every service/read call.
+
+`params` is a JSON object when present. It may be omitted for commands with no
+required inputs. Missing/null required values, incorrect types, unknown fields,
+and actor overrides return `400 INVALID_ACTION_PARAMS` without executing a
+command. Preserve strict JSON decoding, the 64 KiB limit and existing transport
+errors for authentication, ownership, content type and malformed envelopes.
+Unknown actions return `404 ACTION_NOT_FOUND`; known but unconnected commands or
+unconfigured services return `501 ACTION_NOT_IMPLEMENTED`. These failures perform
+no command and expose no context.
+
+Re-read current entry eligibility before execution; reject an ineligible entry
+with `409 ACTION_UNAVAILABLE`. Scheduled/timer read errors stop execution with
+500. An earlier `available_actions` list is never execution authorization.
+Preserve the shared Sleep/CanWake guard for ordinary commands and explicit
+Wake/Rescue exceptions. Domain services still validate exact amounts, currencies,
+items and state. Adapters call services directly and reuse HTTP result composition;
+they do not invoke REST handlers through internal HTTP requests or copy game rules.
+
+### Command outcome and context refresh
+
+`result` preserves the existing operation's structured result and transport-owned
+presentation. A non-null `context` uses exactly the shared `PlayerContextResponse`
+from #939, including all four slots and non-null arrays. Refresh is an uncached
+read after execution, not part of the mutation transaction. Recheck ownership
+before returning context; failed reads, enrichment or ownership checks never
+return partial observations.
+
+| Condition | HTTP response | Client behavior |
+|---|---|---|
+| Command succeeds, refresh succeeds | 200, `success: true`, `result`, `context` | Replace observed context. |
+| Command succeeds, refresh fails | 200, `success: true`, original `result`, `context: null`, `context_error` | Re-fetch GET context only; do not resend the command. |
+| Known domain/precondition rejection, refresh succeeds | Mapped 4xx, `success: false`, structured `error`, `context` | Show the rejection and recovery candidates. |
+| Known domain/precondition rejection, refresh fails | Preserve original 4xx and `error`; `context: null`, `context_error` | Re-fetch GET context only. |
+| Unexpected execution error | 500, `success: false`, `error.code: EXECUTION_FAILED`; no context | Treat the mutation outcome as unknown; do not automatically resend. |
+
+`error` and `context_error` use the existing `{ code, message }` error detail
+shape. Refresh errors use `CONTEXT_REFRESH_FAILED` with a safe public message;
+internal storage details are not exposed. Successful refresh omits
+`context_error`. For example, a completed bank deposit with a failed refresh is:
 
 ```json
 {
   "success": true,
   "result": {
-    "deposited": 5000,
-    "balance": 15000
+    "character_id": "char-123",
+    "money": 7000,
+    "deposit": 15000,
+    "amount": 5000,
+    "message": "5000 Gお預かりいたしました"
   },
-  "context": {
-    "character": {
-      "id": "char-123",
-      "gold": 7000,
-      "tired": 20
-    },
-    "ongoing_actions": [],
-    "available_actions": [
-      {
-        "action": "bank_withdraw",
-        "label": "預金を引き出す",
-        "category": "economy",
-        "required_params": ["amount"]
-      }
-    ]
+  "context": null,
+  "context_error": {
+    "code": "CONTEXT_REFRESH_FAILED",
+    "message": "操作は完了しました。状態を再取得してください。"
   }
 }
 ```
 
-### Domain Error Response (4xx)
-
-When domain preconditions fail (e.g. insufficient gold, exhausted stamina), the gateway returns structured error details alongside the refreshed context so the client knows what actions ARE available to recover:
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "FATIGUE_LIMIT_REACHED",
-    "message": "疲労度が100%です。自宅で休んでください。"
-  },
-  "context": {
-    "character": { ... },
-    "ongoing_actions": [],
-    "available_actions": [
-      {
-        "action": "home_sleep",
-        "label": "自宅で休む",
-        "category": "home",
-        "required_params": []
-      }
-    ]
-  }
-}
-```
+This contract prevents a refresh failure from disguising a known successful
+mutation as a retryable command failure. It does **not** provide idempotency or
+exactly-once execution. A lost response, timeout or unexpected execution error can
+leave the outcome unknown; GET context is an observation, not a command receipt.
+Do not automatically replay POST. Safe command replay would require a separate
+idempotency-key/result-storage design, outside this scope.
 
 ---
 
@@ -209,8 +228,10 @@ while True:
 
 1. Initial load calls `GET /context` to populate the global state store (Pinia / Redux).
 2. Navigation buttons and facility menus are rendered dynamically from `available_actions`.
-3. Action buttons submit `{ action, params }` to `POST /actions`.
-4. The response directly replaces the store's `context`, automatically updating UI buttons, HP/MP bars, and timers without separate reload calls.
+3. Action buttons submit `{ action, params }` to `POST /actions` once.
+4. A non-null response context replaces the store's observation. If refresh
+   failed, preserve the command result/error and re-fetch GET context without
+   replaying POST. A transport failure does not authorize automatic replay.
 
 ### 4.3 Line / Discord Bots
 
@@ -228,9 +249,9 @@ Chatbot frameworks handle state transitions with zero routing boilerplate:
 2. **Domain Service Decoupling**:
    Transport handlers and the Action Dispatcher contain no business rules; they decode parameters, invoke application services, and format responses.
 3. **Context refresh failure**:
-   #646 must specify how a successful mutation and a subsequent context-read
-   failure are reported. A retry must not duplicate the mutation. The examples
-   above show the intended normal response, not an implemented failure contract.
+   Preserve the command outcome and report refresh failure separately under
+   section 3. Clients re-read context; the dispatcher never retries a mutation
+   to repair a failed observation.
 
 ---
 
@@ -241,7 +262,28 @@ Chatbot frameworks handle state transitions with zero routing boilerplate:
 - **#946**: `[Architecture] PlayerContext: Automated Drift-Detection Test between Action Catalog and OpenAPI Specification` (Automated Schema Linting)
 - **#938**: `[Feature] PlayerContext: Action Evaluator Engine with ScheduledAction Cooldown Gate` (Availability Filtering)
 - **#939**: `[Feature] HTTP/PlayerContext: GET /context handler & Client Context Model` (Query Pillar)
-- **#646**: `[Feature] Client/Agent: Unified Action Gateway Dispatcher (POST /actions) & Server-Driven Execution` (Command Pillar)
+- **#646**: `[Architecture] HTTP/Gateway: Define command failure contract and decompose initial implementation` (approved contract and ticket decomposition; no runtime implementation)
+
+### Initial command implementation
+
+| Issue | Scope | Prerequisites |
+|---|---|---|
+| [#1010](https://github.com/witchcraze/party2re/issues/1010) | Common authenticated dispatch, params, outcome/refresh envelope and OpenAPI | #646 |
+| [#1011](https://github.com/witchcraze/party2re/issues/1011) | Bank deposit/withdraw adapters | #646, #1010 |
+| [#1012](https://github.com/witchcraze/party2re/issues/1012) | Home sleep/explicit wake adapters | #646, #1010 |
+| [#1013](https://github.com/witchcraze/party2re/issues/1013) | Rescue adapter and existing required reason input metadata | #646, #1010 |
+| [#1014](https://github.com/witchcraze/party2re/issues/1014) | Stage adventure start adapter | #646, #1010 |
+| [#1015](https://github.com/witchcraze/party2re/issues/1015) | Deposit → Sleep → controlled expiry → Wake → Adventure integration and GET-only refresh recovery | #646, #1011, #1012, #1014 |
+
+Closing #646 records the specification decision, not completion of these children.
+The integration scenario includes explicit Wake because timer readiness alone
+does not settle recovery. Rescue is independently testable and has its own ticket.
+Its Go service requires a reason although current catalog metadata omits it;
+#1013 reconciles that input contract without inventing a default or legacy rule.
+During staged connection, GET lists catalog entry candidates; unconnected
+commands return the explicit 501 above. Remaining catalog entries and granular
+REST operations stay under #947–#949, each requiring decomposition before work.
+Their native implementation blockers remain open after #646 closes.
 
 ### Phase 2: Phased Legacy REST Purge & Migration
 - **#947**: `[Architecture] API/Migration: Migrate Economy endpoints (Bank, Shop, Depot, Market) to Action Gateway and purge legacy routes`

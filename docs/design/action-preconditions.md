@@ -2,7 +2,7 @@
 
 ## 1. Overview & CQRS Integration
 
-In the Party2 Re CQRS Client/Agent Gateway architecture ([`docs/architecture/client-agent-api.md`](../architecture/client-agent-api.md)), client frontends are planned to use two unified operations. HTTP observation is implemented in #939; command execution remains planned in #646:
+In the Party2 Re CQRS Client/Agent Gateway architecture ([`docs/architecture/client-agent-api.md`](../architecture/client-agent-api.md)), client frontends are planned to use two unified operations. HTTP observation is implemented in #939; the command contract is approved in #646 and initial execution remains planned in #1010–#1015:
 - **Observation**: `GET /api/v1/characters/{id}/context` (returns character snapshot, active cooldowns, and a whitelist of executable actions)
 - **Execution**: `POST /api/v1/characters/{id}/actions` (dispatches state transition commands)
 

@@ -157,6 +157,8 @@ All groups below are Version 1.0 reconstruction requirements.
 - [x] PlayerContext: Casino coin games currency gate removal to match legacy coin requirement (#988)
 - [x] PlayerContext: Restrict death gates to legacy actions that require them (#989)
 - [x] PlayerContext: Detect and declare missing required action parameters (#990)
+- [x] Action Gateway: Approved command outcome/context-refresh failure contract and bounded implementation decomposition (#646; specification only)
+- [ ] Action Gateway: Common HTTP dispatch (#1010), initial Bank/Home/Rescue/Adventure adapters (#1011–#1014) and multi-step loop verification (#1015)
 - [ ] Web presentation UI / client implementation (#140)
 - [ ] Production asset manifest, resolver, and license attribution (#654, #729; specification pending)
 
