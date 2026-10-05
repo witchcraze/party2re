@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/witchcraze/party2re/internal/bank"
+	"github.com/witchcraze/party2re/internal/character"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
@@ -384,5 +385,243 @@ func TestBankGatewayUnconfigured(t *testing.T) {
 			t.Fatalf("status=%d: %s", status, got)
 		}
 		assertGatewayError(t, got, "ACTION_NOT_IMPLEMENTED")
+	}
+}
+
+type injectableProfileRepo struct {
+	profiles      map[string]character.Profile
+	getProfileErr error
+	saveCalls     int
+}
+
+func (r *injectableProfileRepo) GetProfile(_ context.Context, id string) (character.Profile, error) {
+	if r.getProfileErr != nil {
+		return character.Profile{}, r.getProfileErr
+	}
+	p, ok := r.profiles[id]
+	if !ok {
+		return character.Profile{CharacterID: id, BioData: make(map[string]string), UpdatedAt: time.Now().UTC()}, nil
+	}
+	return p, nil
+}
+
+func (r *injectableProfileRepo) SaveProfile(_ context.Context, p character.Profile) error {
+	r.saveCalls++
+	r.profiles[p.CharacterID] = p
+	return nil
+}
+
+type realCharRepoForBankTest struct {
+	chars map[string]corecharacter.Character
+}
+
+func (r *realCharRepoForBankTest) Save(_ context.Context, c corecharacter.Character) error {
+	r.chars[c.ID] = c
+	return nil
+}
+
+func (r *realCharRepoForBankTest) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
+	c, ok := r.chars[id]
+	if !ok {
+		return corecharacter.Character{}, corecharacter.ErrNotFound
+	}
+	return c, nil
+}
+
+func (r *realCharRepoForBankTest) FindByPlayerID(_ context.Context, playerID string) ([]corecharacter.Character, error) {
+	var list []corecharacter.Character
+	for _, c := range r.chars {
+		if c.PlayerID == playerID {
+			list = append(list, c)
+		}
+	}
+	return list, nil
+}
+
+func (r *realCharRepoForBankTest) Update(_ context.Context, c corecharacter.Character) error {
+	r.chars[c.ID] = c
+	return nil
+}
+
+func (r *realCharRepoForBankTest) Delete(_ context.Context, id string) error {
+	delete(r.chars, id)
+	return nil
+}
+
+type realBankRepoForBankTest struct {
+	charRepo *realCharRepoForBankTest
+}
+
+func (r *realBankRepoForBankTest) GetCharacter(ctx context.Context, actorID string) (corecharacter.Character, error) {
+	return r.charRepo.FindByID(ctx, actorID)
+}
+
+func (r *realBankRepoForBankTest) Deposit(ctx context.Context, actorID string, amount int64) (corecharacter.Character, error) {
+	c, err := r.charRepo.FindByID(ctx, actorID)
+	if err != nil {
+		return corecharacter.Character{}, err
+	}
+	money, deposit, err := bank.CalculateDeposit(c.Money, c.Deposit, amount)
+	if err != nil {
+		return corecharacter.Character{}, err
+	}
+	c.Money, c.Deposit = money, deposit
+	_ = r.charRepo.Update(ctx, c)
+	return c, nil
+}
+
+func (r *realBankRepoForBankTest) Withdraw(ctx context.Context, actorID string, amount int64) (corecharacter.Character, int, int64, error) {
+	c, err := r.charRepo.FindByID(ctx, actorID)
+	if err != nil {
+		return corecharacter.Character{}, 0, 0, err
+	}
+	money, deposit, actual, refunded, err := bank.CalculateWithdrawal(c.Money, c.Deposit, amount)
+	if err != nil {
+		return corecharacter.Character{}, 0, 0, err
+	}
+	c.Money, c.Deposit = money, deposit
+	_ = r.charRepo.Update(ctx, c)
+	return c, actual, refunded, nil
+}
+
+type emptyActionsReader struct{}
+
+func (emptyActionsReader) FindPendingByActorID(context.Context, string) ([]scheduling.ScheduledAction, error) {
+	return nil, nil
+}
+
+func TestBankGatewayRealCharacterServiceProfileReadFailure(t *testing.T) {
+	charRepo := &realCharRepoForBankTest{
+		chars: map[string]corecharacter.Character{
+			"hero": {
+				ID:       "hero",
+				PlayerID: "owner",
+				Name:     "Hero",
+				JobID:    "job-01",
+				Level:    10,
+				Money:    100,
+				Deposit:  1000,
+				Stats:    corecharacter.Stats{HP: 50, MaxHP: 100, MP: 20, MaxMP: 20},
+			},
+		},
+	}
+	profileRepo := &injectableProfileRepo{
+		profiles: map[string]character.Profile{
+			"hero": {
+				CharacterID: "hero",
+				AvatarURL:   "https://example.com/saved-avatar.png",
+				BioData:     map[string]string{"key": "saved bio"},
+				Comment:     "initial comment",
+				UpdatedAt:   time.Now().UTC(),
+			},
+		},
+	}
+
+	realCharService, err := character.NewService(charRepo, character.WithProfileRepository(profileRepo))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bankService, err := bank.NewService(&realBankRepoForBankTest{charRepo: charRepo})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f := newGatewayFixture(t)
+	handler, err := NewHandler(
+		f,
+		realCharService,
+		&struct{ AdventureService }{},
+		&struct{ ShopService }{},
+		WithPlayerContext(playercontext.NewService(charRepo, emptyActionsReader{}, timer.NewService(nil))),
+		WithBank(bankService),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := handler.Router()
+
+	// 1. Inject storage failure beneath real CharacterService
+	profileRepo.getProfileErr = errors.New("simulated profile storage failure")
+
+	// Post bank_deposit amount=10
+	status, got := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"bank_deposit","params":{"amount":10}}`, nil)
+	if status != http.StatusOK {
+		t.Fatalf("expected HTTP 200, got %d: %s", status, got)
+	}
+	if string(got["success"]) != "true" {
+		t.Fatalf("expected success=true, got %s", got["success"])
+	}
+
+	// Result must be preserved
+	var depositResult bank.DepositResult
+	if err := json.Unmarshal(got["result"], &depositResult); err != nil {
+		t.Fatal(err)
+	}
+	if depositResult.Amount != 10 || depositResult.Money != 90 || depositResult.Deposit != 1010 {
+		t.Fatalf("unexpected deposit result: %+v", depositResult)
+	}
+
+	// Context must be null and context_error must be CONTEXT_REFRESH_FAILED
+	if string(got["context"]) != "null" {
+		t.Fatalf("expected context=null, got %s", got["context"])
+	}
+	if !strings.Contains(string(got["context_error"]), "CONTEXT_REFRESH_FAILED") {
+		t.Fatalf("expected CONTEXT_REFRESH_FAILED in context_error, got %s", got["context_error"])
+	}
+
+	// Verify UpdateProfile with only Comment fails during read error, makes zero SaveProfile calls,
+	// and preserves existing saved AvatarURL and BioData.
+	profileRepo.saveCalls = 0
+	newComment := "Attempted comment overwrite during failure"
+	_, err = realCharService.UpdateProfile(context.Background(), "hero", character.UpdateProfileRequest{
+		Comment: &newComment,
+	})
+	if !errors.Is(err, profileRepo.getProfileErr) {
+		t.Fatalf("expected profile read error from UpdateProfile, got %v", err)
+	}
+	if profileRepo.saveCalls != 0 {
+		t.Fatalf("expected 0 SaveProfile calls during failed read, got %d", profileRepo.saveCalls)
+	}
+	storedProfile := profileRepo.profiles["hero"]
+	if storedProfile.AvatarURL != "https://example.com/saved-avatar.png" || storedProfile.BioData["key"] != "saved bio" {
+		t.Fatalf("stored profile was corrupted or wiped during failed update: %+v", storedProfile)
+	}
+
+	// 2. Healthy-read contrast: clear error, deposit succeeds with full context, partial update preserves fields
+	profileRepo.getProfileErr = nil
+
+	status, gotHealthy := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"bank_deposit","params":{"amount":10}}`, nil)
+	if status != http.StatusOK || string(gotHealthy["success"]) != "true" {
+		t.Fatalf("expected HTTP 200 success, got status=%d: %s", status, gotHealthy)
+	}
+	if string(gotHealthy["context"]) == "null" {
+		t.Fatalf("expected non-null context on healthy read, got null")
+	}
+	if _, exists := gotHealthy["context_error"]; exists && string(gotHealthy["context_error"]) != "null" {
+		t.Fatalf("expected null context_error, got %s", gotHealthy["context_error"])
+	}
+	var observation PlayerContextResponse
+	if err := json.Unmarshal(gotHealthy["context"], &observation); err != nil {
+		t.Fatal(err)
+	}
+	if observation.Character.IconURL != "https://example.com/saved-avatar.png" {
+		t.Fatalf("expected icon_url to match saved avatar, got %q", observation.Character.IconURL)
+	}
+
+	// Partial update succeeds and preserves AvatarURL and BioData
+	healthyComment := "Healthy updated comment"
+	updated, err := realCharService.UpdateProfile(context.Background(), "hero", character.UpdateProfileRequest{
+		Comment: &healthyComment,
+	})
+	if err != nil {
+		t.Fatalf("expected healthy UpdateProfile to succeed, got %v", err)
+	}
+	if updated.Comment != healthyComment || updated.AvatarURL != "https://example.com/saved-avatar.png" || updated.BioData["key"] != "saved bio" {
+		t.Fatalf("healthy partial update lost fields: %+v", updated)
+	}
+	storedHealthy := profileRepo.profiles["hero"]
+	if storedHealthy.Comment != healthyComment || storedHealthy.AvatarURL != "https://example.com/saved-avatar.png" || storedHealthy.BioData["key"] != "saved bio" {
+		t.Fatalf("stored profile lost fields after healthy partial update: %+v", storedHealthy)
 	}
 }
