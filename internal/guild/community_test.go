@@ -372,7 +372,7 @@ func TestService_BroadcastCallout(t *testing.T) {
 	member2 := "member-2"
 	pendingMember := "pending-1"
 
-	t.Run("broadcast delivers letter to active members and awards +1 GP", func(t *testing.T) {
+	t.Run("broadcast delivers letter to all members including pending in roster order and awards +1 GP", func(t *testing.T) {
 		letterSender := &mockLetterSender{}
 		charReader := &mockCharReader{
 			chars: map[string]corecharacter.Character{
@@ -388,8 +388,8 @@ func TestService_BroadcastCallout(t *testing.T) {
 			getGuildFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
 				return guild.Guild{ID: guildID, Name: "Fellowship"}, []guild.Member{
 					{GuildID: guildID, CharacterID: member1, IsPending: false},
-					{GuildID: guildID, CharacterID: member2, IsPending: false},
 					{GuildID: guildID, CharacterID: pendingMember, IsPending: true},
+					{GuildID: guildID, CharacterID: member2, IsPending: false},
 				}, nil
 			},
 			addPointsFn: func(ctx context.Context, gID string, pts int64) error {
@@ -419,13 +419,14 @@ func TestService_BroadcastCallout(t *testing.T) {
 			t.Errorf("expected guild to be touched active")
 		}
 
-		// Letters sent to active members (member1 and member2), pendingMember skipped
-		if len(letterSender.letters) != 2 {
-			t.Fatalf("expected 2 letters sent, got %d", len(letterSender.letters))
+		// Letters sent to all members in roster order (including pending applicant)
+		if len(letterSender.letters) != 3 {
+			t.Fatalf("expected 3 letters sent, got %d", len(letterSender.letters))
 		}
-		for _, l := range letterSender.letters {
-			if l.RecipientID == pendingMember {
-				t.Errorf("pending member should not receive member broadcast letters")
+		expectedRecipients := []string{member1, pendingMember, member2}
+		for i, l := range letterSender.letters {
+			if l.RecipientID != expectedRecipients[i] {
+				t.Errorf("letter %d: expected recipient %q, got %q", i, expectedRecipients[i], l.RecipientID)
 			}
 			if l.Content != "今夜ギルド戦に参加できる人集まって！" {
 				t.Errorf("unexpected content: %q", l.Content)
@@ -434,17 +435,29 @@ func TestService_BroadcastCallout(t *testing.T) {
 	})
 
 	t.Run("fails if sender is pending applicant", func(t *testing.T) {
+		letterSender := &mockLetterSender{}
+		pointsAdded := int64(0)
 		repo := &mockGuildRepo{
 			getGuildFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
 				return guild.Guild{ID: guildID}, []guild.Member{
 					{GuildID: guildID, CharacterID: pendingMember, IsPending: true},
 				}, nil
 			},
+			addPointsFn: func(ctx context.Context, gID string, pts int64) error {
+				pointsAdded += pts
+				return nil
+			},
 		}
-		svc, _ := guild.NewService(repo)
+		svc, _ := guild.NewService(repo, guild.WithLetterSender(letterSender))
 		err := svc.BroadcastCallout(ctx, guildID, pendingMember, "こんにちは！")
 		if !errors.Is(err, guild.ErrUnauthorized) {
 			t.Errorf("expected ErrUnauthorized, got %v", err)
+		}
+		if len(letterSender.letters) != 0 {
+			t.Errorf("expected 0 letters sent by pending sender, got %d", len(letterSender.letters))
+		}
+		if pointsAdded != 0 {
+			t.Errorf("expected 0 points added by pending sender, got %d", pointsAdded)
 		}
 	})
 
@@ -610,6 +623,57 @@ func TestService_BroadcastCallout(t *testing.T) {
 		}
 		if letterSender.letters[0].RecipientID != member1 || letterSender.letters[1].RecipientID != member2 {
 			t.Errorf("unexpected delivery order: %+v", letterSender.letters)
+		}
+	})
+
+	t.Run("pending recipient delivery failure returns error, preserves earlier delivery, skips point award", func(t *testing.T) {
+		deliveryErr := errors.New("mail storage unavailable for pending recipient")
+		letterSender := &mockLetterSender{
+			sendLetterFn: func(ctx context.Context, senderID, senderName, recipientID, recipientName, content, color string) error {
+				if recipientID == pendingMember {
+					return deliveryErr
+				}
+				return nil
+			},
+		}
+		pointsAdded := int64(0)
+		touched := false
+		repo := &mockGuildRepo{
+			getGuildFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
+				return guild.Guild{ID: guildID, Name: "Fellowship"}, []guild.Member{
+					{GuildID: guildID, CharacterID: member1, IsPending: false},
+					{GuildID: guildID, CharacterID: pendingMember, IsPending: true},
+					{GuildID: guildID, CharacterID: member2, IsPending: false},
+				}, nil
+			},
+			addPointsFn: func(ctx context.Context, gID string, pts int64) error {
+				pointsAdded += pts
+				return nil
+			},
+			touchActiveFn: func(ctx context.Context, gID string) error {
+				touched = true
+				return nil
+			},
+		}
+
+		svc, _ := guild.NewService(repo, guild.WithLetterSender(letterSender))
+		err := svc.BroadcastCallout(ctx, guildID, member1, "こんにちは")
+		if !errors.Is(err, deliveryErr) {
+			t.Fatalf("expected error %v, got %v", deliveryErr, err)
+		}
+		if pointsAdded != 0 {
+			t.Errorf("expected 0 points added on delivery failure, got %d", pointsAdded)
+		}
+		if touched {
+			t.Errorf("expected touchActive not to be called on delivery failure")
+		}
+		if len(letterSender.letters) != 2 {
+			t.Errorf("expected 2 delivery attempts before stopping, got %d", len(letterSender.letters))
+		}
+		if len(letterSender.letters) >= 2 {
+			if letterSender.letters[0].RecipientID != member1 || letterSender.letters[1].RecipientID != pendingMember {
+				t.Errorf("unexpected delivery attempts: %+v", letterSender.letters)
+			}
 		}
 	})
 }
