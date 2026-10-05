@@ -71,6 +71,28 @@ Dungeon and Challenge additionally use the hash-tagged state/reward keys in
 Valkey key. The withdrawn Candidate E `party2:boss:` keys and `boss_damage`
 script are documented only in [the historical note](transient-boss-hp.md).
 
+## Approved navigation storage boundary
+
+The [progressive observation/navigation contract](client-agent-api.md#approved-navigation-and-progressive-observation-contract)
+approved in #1047 uses the existing Valkey deployment for ordinary facility,
+subject and page selection. This is a planned contract, not an entry in the
+implemented key inventory above. The implementation must register its namespace
+and verify the actual schema/key placement before claiming coverage.
+
+Use `party2:playercontext:navigation:<character_id>` as one bounded String record,
+owned through the `playercontext` navigation repository. Its TTL is seven days
+(`604800s`), renewed on successful navigation/selection writes, without renewal
+or creation on GET. Selection is ephemeral primary interaction state, not a
+SQL-backed cache; loss/expiry supplies the default town selection. Concurrent
+navigation uses the last successful write. No new SQL table, arbitrary form
+storage, history stack or distributed game-state revision is needed.
+
+Room membership, active run buffers and sleep remain in their existing owning
+keys. Observe these authoritative facts to compose active scenes; never duplicate
+them in navigation or end/settle an activity because its selection key is absent.
+Using a separate key separates ownership and lifetime within the same deployment;
+it does not introduce another infrastructure service or cross-store transaction.
+
 ## Index lifetimes: TTL-Scored Sorted Set with Lazy Purging
 
 Session tokens have independent expiry; their index scores are `ExpiresAt` and

@@ -84,7 +84,8 @@ The initial Core/System, Economy/Production, Adventure/Combat/Arenas and Communi
 
 1. **Client/Agent Gateway & CQRS Architecture (In Progress)**
    - Complete remaining command coverage; the initial stateful gameplay loop is covered by focused HTTP integration tests.
-   - Retire individual REST routes only after their replacement commands are implemented and verified (#947–#950).
+   - Implement the approved progressive observation/navigation contract: retain ordinary facility/subject selection in existing Valkey, narrow choices by current scene and derive active-game scenes from feature-owned state (#1047).
+   - Retire individual REST routes only after their replacement commands and observations are implemented and verified, retaining deliberate route exceptions (#947–#950).
    - Preserve the enduring [command/recovery contract](docs/architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions); current coverage is summarized in [STATUS](STATUS.md).
 2. **Headless E2E Gameplay Simulation Test Framework**
    - Deterministic multi-turn game loop simulation via the Action Gateway (Issue #650)
