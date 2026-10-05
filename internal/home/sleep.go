@@ -159,7 +159,10 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 		return SleepResult{}, err
 	}
 	// Ephemeral pending wake flag valid up to 24 hours
-	_ = s.timer.SetLock(ctx, timer.CategoryAsleep, characterID, 24*time.Hour)
+	if err := s.timer.SetLock(ctx, timer.CategoryAsleep, characterID, 24*time.Hour); err != nil {
+		_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
+		return SleepResult{}, err
+	}
 
 	// Legacy parity: Revert temporary job memory if active upon going to sleep
 	if char.JobMemory != nil {
@@ -234,7 +237,10 @@ func (s *Service) GetSleepStatus(ctx context.Context, characterID string) (Sleep
 		}, nil
 	}
 
-	asleep, _ := s.timer.IsLocked(ctx, timer.CategoryAsleep, characterID)
+	asleep, err := s.timer.IsLocked(ctx, timer.CategoryAsleep, characterID)
+	if err != nil {
+		return SleepStatus{}, err
+	}
 	if asleep {
 		return SleepStatus{
 			Sleeping:         false,
@@ -268,7 +274,10 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 		return WakeResult{}, fmt.Errorf("%w: お休み中「Zzz...」 目覚めるまで %d分%02d秒", ErrStillSleeping, mins, secs)
 	}
 
-	asleep, _ := s.timer.IsLocked(ctx, timer.CategoryAsleep, characterID)
+	asleep, err := s.timer.IsLocked(ctx, timer.CategoryAsleep, characterID)
+	if err != nil {
+		return WakeResult{}, err
+	}
 	if !asleep {
 		char, err := s.charReader.FindByID(ctx, characterID)
 		if err != nil {
@@ -306,21 +315,35 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 	}
 
 	if s.fullness != nil {
-		_ = s.fullness.ResetFullness(ctx, characterID)
+		if err := s.fullness.ResetFullness(ctx, characterID); err != nil {
+			return WakeResult{}, err
+		}
 	}
 	if s.chapel != nil {
-		_ = s.chapel.ClearBlessing(ctx, characterID)
+		if err := s.chapel.ClearBlessing(ctx, characterID); err != nil {
+			return WakeResult{}, err
+		}
 	}
 	if s.alchemy != nil {
-		_ = s.alchemy.CompleteOngoingSynthesis(ctx, characterID)
+		if err := s.alchemy.CompleteOngoingSynthesis(ctx, characterID); err != nil {
+			return WakeResult{}, err
+		}
 	}
 	if s.costume != nil {
-		_ = s.costume.ResetCostume(ctx, characterID)
+		if err := s.costume.ResetCostume(ctx, characterID); err != nil {
+			return WakeResult{}, err
+		}
 	}
 
-	_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
-	_ = s.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, characterID)
-	_ = s.timer.ResetDailyQuota(ctx, "dungeon_once", characterID)
+	if err := s.timer.ReleaseLock(ctx, timer.CategoryDungeonOnce, characterID); err != nil {
+		return WakeResult{}, err
+	}
+	if err := s.timer.ResetDailyQuota(ctx, "dungeon_once", characterID); err != nil {
+		return WakeResult{}, err
+	}
+	if err := s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID); err != nil {
+		return WakeResult{}, err
+	}
 
 	return WakeResult{
 		Success:   true,

@@ -40,11 +40,12 @@ func (m *mockCharRepo) Update(ctx context.Context, char corecharacter.Character)
 
 type mockFullnessResetter struct {
 	calledFor string
+	err       error
 }
 
 func (m *mockFullnessResetter) ResetFullness(ctx context.Context, characterID string) error {
 	m.calledFor = characterID
-	return nil
+	return m.err
 }
 
 type mockJobStateRestorer struct {
@@ -74,20 +75,32 @@ func (m *mockJobRepo) FindByCharacterID(_ context.Context, _ string) (corejob.Ch
 
 type mockBlessingCleaner struct {
 	calledFor string
+	err       error
 }
 
 func (m *mockBlessingCleaner) ClearBlessing(ctx context.Context, characterID string) error {
 	m.calledFor = characterID
-	return nil
+	return m.err
+}
+
+type mockAlchemyCompleter struct {
+	calledFor string
+	err       error
+}
+
+func (m *mockAlchemyCompleter) CompleteOngoingSynthesis(ctx context.Context, characterID string) error {
+	m.calledFor = characterID
+	return m.err
 }
 
 type mockCostumeResetter struct {
 	calledFor string
+	err       error
 }
 
 func (m *mockCostumeResetter) ResetCostume(ctx context.Context, characterID string) error {
 	m.calledFor = characterID
-	return nil
+	return m.err
 }
 
 type mockOnlineCounter struct {
@@ -681,5 +694,259 @@ func TestWake_ResetsDailyOnceDungeon(t *testing.T) {
 	}
 	if locked {
 		t.Error("expected CategoryDungeonOnce to be unlocked after Wake")
+	}
+}
+
+func TestWake_PropagatesHookErrors_AndDoesNotFinalizeRecovery(t *testing.T) {
+	ctx := context.Background()
+	errFullness := errors.New("tavern fullness error")
+	errBlessing := errors.New("chapel blessing error")
+	errAlchemy := errors.New("alchemy completion error")
+	errCostume := errors.New("costume reset error")
+	errDungeonLock := errors.New("valkey dungeon_once unlock error")
+	errQuotaReset := errors.New("valkey quota reset error")
+	errAsleepUnlock := errors.New("valkey asleep unlock error")
+	errIsLocked := errors.New("valkey isLocked check error")
+
+	cases := []struct {
+		name        string
+		fullnessErr error
+		blessingErr error
+		alchemyErr  error
+		costumeErr  error
+		timerSetup  func(*mockTimer)
+		wantErr     error
+	}{
+		{
+			name:        "FullnessResetter failure propagates",
+			fullnessErr: errFullness,
+			wantErr:     errFullness,
+		},
+		{
+			name:        "BlessingCleaner failure propagates",
+			blessingErr: errBlessing,
+			wantErr:     errBlessing,
+		},
+		{
+			name:       "AlchemyCompleter failure propagates",
+			alchemyErr: errAlchemy,
+			wantErr:    errAlchemy,
+		},
+		{
+			name:       "CostumeResetter failure propagates",
+			costumeErr: errCostume,
+			wantErr:    errCostume,
+		},
+		{
+			name:    "CategoryDungeonOnce lock release failure propagates",
+			wantErr: errDungeonLock,
+			timerSetup: func(mt *mockTimer) {
+				mt.releaseLockErrs = map[string]error{timer.CategoryDungeonOnce: errDungeonLock}
+			},
+		},
+		{
+			name:    "dungeon_once daily quota reset failure propagates",
+			wantErr: errQuotaReset,
+			timerSetup: func(mt *mockTimer) {
+				mt.resetQuotaErrs = map[string]error{"dungeon_once": errQuotaReset}
+			},
+		},
+		{
+			name:    "CategoryAsleep lock release failure propagates",
+			wantErr: errAsleepUnlock,
+			timerSetup: func(mt *mockTimer) {
+				mt.releaseLockErrs = map[string]error{timer.CategoryAsleep: errAsleepUnlock}
+			},
+		},
+		{
+			name:    "CategoryAsleep IsLocked check failure propagates",
+			wantErr: errIsLocked,
+			timerSetup: func(mt *mockTimer) {
+				mt.isLockedErr = errIsLocked
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			charRepo := &mockCharRepo{
+				chars: map[string]corecharacter.Character{
+					"c1": {ID: "c1", Name: "Hero", Tired: 60, Stats: corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50}},
+				},
+			}
+			mt := &mockTimer{}
+			_ = mt.SetLock(ctx, timer.CategoryAsleep, "c1", 24*time.Hour)
+			_ = mt.SetLock(ctx, timer.CategoryDungeonOnce, "c1", 24*time.Hour)
+			if tc.timerSetup != nil {
+				tc.timerSetup(mt)
+			}
+
+			fullness := &mockFullnessResetter{err: tc.fullnessErr}
+			blessing := &mockBlessingCleaner{err: tc.blessingErr}
+			alchemy := &mockAlchemyCompleter{err: tc.alchemyErr}
+			costume := &mockCostumeResetter{err: tc.costumeErr}
+
+			svc, err := NewService(
+				newMockHomeRepo(),
+				charRepo,
+				WithTimer(mt),
+				WithCharacterUpdater(charRepo),
+				WithFullnessResetter(fullness),
+				WithBlessingCleaner(blessing),
+			)
+			if err != nil {
+				t.Fatalf("NewService failed: %v", err)
+			}
+			svc.SetAlchemyCompleter(alchemy)
+			svc.SetCostumeResetter(costume)
+
+			res, err := svc.Wake(ctx, "c1")
+			if err == nil {
+				t.Fatalf("expected error %v, got nil (res=%+v)", tc.wantErr, res)
+			}
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("expected error %v, got %v", tc.wantErr, err)
+			}
+			if res.Success {
+				t.Errorf("expected WakeResult.Success to be false on error")
+			}
+
+			// In all failure cases except IsLocked error (where timer read itself failed),
+			// verify CategoryAsleep lock was NOT released
+			if tc.timerSetup == nil || tc.name != "CategoryAsleep IsLocked check failure propagates" {
+				asleepLocked, _ := mt.IsLocked(ctx, timer.CategoryAsleep, "c1")
+				if !asleepLocked {
+					t.Errorf("expected CategoryAsleep to remain locked after failure %s", tc.name)
+				}
+			}
+
+			// Honest observation of partial effect: vitality was recovered before the hook failure
+			if tc.timerSetup == nil {
+				updatedChar := charRepo.chars["c1"]
+				if updatedChar.Stats.HP != 100 || updatedChar.Stats.MP != 50 || updatedChar.Tired != 0 {
+					t.Errorf("expected partial vitality recovery to be persisted in repo, got HP=%d, MP=%d, Tired=%d",
+						updatedChar.Stats.HP, updatedChar.Stats.MP, updatedChar.Tired)
+				}
+			}
+		})
+	}
+}
+
+func TestWake_HealthyContrast_CompletesAllHooksAndClearsRecovery(t *testing.T) {
+	ctx := context.Background()
+	charRepo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero", Tired: 60, Stats: corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50}},
+		},
+	}
+	mt := &mockTimer{}
+	_ = mt.SetLock(ctx, timer.CategoryAsleep, "c1", 24*time.Hour)
+	_ = mt.SetLock(ctx, timer.CategoryDungeonOnce, "c1", 24*time.Hour)
+
+	fullness := &mockFullnessResetter{}
+	blessing := &mockBlessingCleaner{}
+	alchemy := &mockAlchemyCompleter{}
+	costume := &mockCostumeResetter{}
+
+	svc, err := NewService(
+		newMockHomeRepo(),
+		charRepo,
+		WithTimer(mt),
+		WithCharacterUpdater(charRepo),
+		WithFullnessResetter(fullness),
+		WithBlessingCleaner(blessing),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+	svc.SetAlchemyCompleter(alchemy)
+	svc.SetCostumeResetter(costume)
+
+	res, err := svc.Wake(ctx, "c1")
+	if err != nil {
+		t.Fatalf("Wake failed: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("expected WakeResult.Success = true")
+	}
+	if fullness.calledFor != "c1" {
+		t.Errorf("expected fullness reset for c1")
+	}
+	if blessing.calledFor != "c1" {
+		t.Errorf("expected blessing cleared for c1")
+	}
+	if alchemy.calledFor != "c1" {
+		t.Errorf("expected alchemy completed for c1")
+	}
+	if costume.calledFor != "c1" {
+		t.Errorf("expected costume reset for c1")
+	}
+
+	// Locks must be released
+	asleepLocked, _ := mt.IsLocked(ctx, timer.CategoryAsleep, "c1")
+	if asleepLocked {
+		t.Errorf("expected CategoryAsleep lock to be released")
+	}
+	dungeonLocked, _ := mt.IsLocked(ctx, timer.CategoryDungeonOnce, "c1")
+	if dungeonLocked {
+		t.Errorf("expected CategoryDungeonOnce lock to be released")
+	}
+
+	// Subsequent wake is idempotent and reports already awake
+	wake2, err := svc.Wake(ctx, "c1")
+	if err != nil {
+		t.Fatalf("second Wake failed: %v", err)
+	}
+	if !wake2.Success || !strings.Contains(wake2.Message, "すでに目覚めています") {
+		t.Errorf("expected already awake message on second Wake, got: %+v", wake2)
+	}
+}
+
+func TestWake_RetryAfterHookFailure(t *testing.T) {
+	ctx := context.Background()
+	charRepo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero", Tired: 60, Stats: corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50}},
+		},
+	}
+	mt := &mockTimer{}
+	_ = mt.SetLock(ctx, timer.CategoryAsleep, "c1", 24*time.Hour)
+
+	fullness := &mockFullnessResetter{err: errors.New("transient tavern error")}
+	svc, err := NewService(
+		newMockHomeRepo(),
+		charRepo,
+		WithTimer(mt),
+		WithCharacterUpdater(charRepo),
+		WithFullnessResetter(fullness),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	// Attempt 1 fails
+	res1, err := svc.Wake(ctx, "c1")
+	if err == nil {
+		t.Fatalf("expected error on attempt 1, got nil (res=%+v)", res1)
+	}
+	asleep1, _ := mt.IsLocked(ctx, timer.CategoryAsleep, "c1")
+	if !asleep1 {
+		t.Fatalf("expected CategoryAsleep still locked after attempt 1")
+	}
+
+	// Transient error resolves
+	fullness.err = nil
+
+	// Attempt 2 succeeds
+	res2, err := svc.Wake(ctx, "c1")
+	if err != nil {
+		t.Fatalf("expected success on attempt 2, got: %v", err)
+	}
+	if !res2.Success {
+		t.Fatalf("expected WakeResult.Success = true on attempt 2")
+	}
+	asleep2, _ := mt.IsLocked(ctx, timer.CategoryAsleep, "c1")
+	if asleep2 {
+		t.Fatalf("expected CategoryAsleep unlocked after attempt 2")
 	}
 }

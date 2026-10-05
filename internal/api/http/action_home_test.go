@@ -3,7 +3,9 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"net/http/httptest"
 	"slices"
 	"testing"
 	"time"
@@ -281,4 +283,97 @@ func TestHomeGatewayAwakeWakeRemainsUnavailable(t *testing.T) {
 		t.Fatalf("status=%d: %s", status, got)
 	}
 	assertGatewayError(t, got, "ACTION_UNAVAILABLE")
+}
+
+type stubFullnessResetter struct {
+	err error
+}
+
+func (s *stubFullnessResetter) ResetFullness(ctx context.Context, characterID string) error {
+	return s.err
+}
+
+func TestHomeGatewayWakeHookFailure_ReportsExecutionFailed_AndDoesNotClearAsleep(t *testing.T) {
+	f := newHomeGatewayFixture(t)
+	fullness := &stubFullnessResetter{err: errors.New("simulated tavern fullness failure")}
+	f.service.SetFullnessResetter(fullness)
+
+	router := f.router(f.timers)
+
+	// Put hero to sleep
+	status, got := f.request(router, "home_sleep", "")
+	if status != 200 {
+		t.Fatalf("home_sleep failed: %d %s", status, got)
+	}
+
+	// Release CategorySleep lock to simulate sleep duration elapsed, pending wake ready
+	if err := f.timers.ReleaseLock(f.expectedContext, timer.CategorySleep, "hero"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt wake while hook is failing
+	status, got = f.request(router, "home_wake", "")
+	if status != 500 {
+		t.Fatalf("expected 500 for failed hook, got %d: %s", status, got)
+	}
+	assertGatewayError(t, got, "EXECUTION_FAILED")
+
+	// CategoryAsleep lock must NOT be released
+	locked, err := f.timers.IsLocked(f.expectedContext, timer.CategoryAsleep, "hero")
+	if err != nil || !locked {
+		t.Fatalf("expected CategoryAsleep to remain locked after hook failure, got locked=%t, err=%v", locked, err)
+	}
+
+	// Partial effect observed honestly: vitality was recovered in DB, but recovery not finalized
+	if f.char.Stats.HP != 100 || f.char.Stats.MP != 50 || f.char.Tired != 0 {
+		t.Fatalf("expected partial vitality recovery to be persisted, got HP=%d, MP=%d, Tired=%d",
+			f.char.Stats.HP, f.char.Stats.MP, f.char.Tired)
+	}
+
+	// Check GET context
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/characters/hero/context", nil).WithContext(f.expectedContext)
+	getReq.Header.Set("Authorization", "Bearer session")
+	getRecorder := httptest.NewRecorder()
+	router.ServeHTTP(getRecorder, getReq)
+	if getRecorder.Code != 200 {
+		t.Fatalf("GET context failed: %d body=%s", getRecorder.Code, getRecorder.Body.String())
+	}
+	var getCtx PlayerContextResponse
+	if err := json.Unmarshal(getRecorder.Body.Bytes(), &getCtx); err != nil {
+		t.Fatal(err)
+	}
+	if !getCtx.Character.IsSleeping || !hasHomeAction(getCtx, "home_wake") || hasHomeAction(getCtx, "adventure_start") {
+		t.Fatalf("expected context to remain sleeping with home_wake available, got: %+v", getCtx)
+	}
+	if getCtx.Character.HP != 100 || getCtx.Character.MP != 50 || getCtx.Character.Tired != 0 {
+		t.Fatalf("expected honest observation of partial vitality recovery in GET context, got: %+v", getCtx.Character)
+	}
+
+	// Transient hook error is resolved
+	fullness.err = nil
+
+	// Subsequent wake succeeds
+	status, got = f.request(router, "home_wake", "")
+	if status != 200 {
+		t.Fatalf("expected 200 for resolved hook, got %d: %s", status, got)
+	}
+	var wake wakeResponse
+	if err := json.Unmarshal(got["result"], &wake); err != nil {
+		t.Fatal(err)
+	}
+	if !wake.Success {
+		t.Fatalf("expected wake success, got: %+v", wake)
+	}
+
+	// CategoryAsleep lock is now released
+	locked, err = f.timers.IsLocked(f.expectedContext, timer.CategoryAsleep, "hero")
+	if err != nil || locked {
+		t.Fatalf("expected CategoryAsleep to be unlocked after successful wake, got locked=%t, err=%v", locked, err)
+	}
+
+	// Context observation updated: wake no longer available, adventure_start now available
+	obs := homeObservation(t, got)
+	if obs.Character.IsSleeping || hasHomeAction(obs, "home_wake") || !hasHomeAction(obs, "adventure_start") {
+		t.Fatalf("expected awake context, got: %+v", obs)
+	}
 }

@@ -23,10 +23,17 @@ func (m *mockGuildPoints) AddGuildPoints(ctx context.Context, characterID string
 }
 
 type mockTimer struct {
-	locks map[string]time.Duration
+	locks           map[string]time.Duration
+	setLockErr      error
+	isLockedErr     error
+	releaseLockErrs map[string]error
+	resetQuotaErrs  map[string]error
 }
 
 func (m *mockTimer) SetLock(ctx context.Context, category, targetID string, duration time.Duration) error {
+	if m.setLockErr != nil {
+		return m.setLockErr
+	}
 	if m.locks == nil {
 		m.locks = make(map[string]time.Duration)
 	}
@@ -35,6 +42,9 @@ func (m *mockTimer) SetLock(ctx context.Context, category, targetID string, dura
 }
 
 func (m *mockTimer) IsLocked(ctx context.Context, category, targetID string) (bool, error) {
+	if m.isLockedErr != nil {
+		return false, m.isLockedErr
+	}
 	_, ok := m.locks[category+":"+targetID]
 	return ok, nil
 }
@@ -48,11 +58,17 @@ func (m *mockTimer) GetRemainingLock(ctx context.Context, category, targetID str
 }
 
 func (m *mockTimer) ReleaseLock(ctx context.Context, category, targetID string) error {
+	if err, ok := m.releaseLockErrs[category]; ok && err != nil {
+		return err
+	}
 	delete(m.locks, category+":"+targetID)
 	return nil
 }
 
 func (m *mockTimer) ResetDailyQuota(ctx context.Context, action, targetID string) error {
+	if err, ok := m.resetQuotaErrs[action]; ok && err != nil {
+		return err
+	}
 	return nil
 }
 
