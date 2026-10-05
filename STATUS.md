@@ -31,7 +31,7 @@ The Go project contains the foundational systems, core combat, the main game fea
 
 See [`ROADMAP.md`](ROADMAP.md) for remaining milestones and [open Issues](https://github.com/witchcraze/party2re/issues) for detailed scope/dependencies.
 
-1. **Client/Agent Gateway**: Finish command coverage, verify the initial gameplay loop and retire REST routes after verified replacements exist. Initial loop work is tracked in [#1015](https://github.com/witchcraze/party2re/issues/1015); broader migration remains under #947–#950.
+1. **Client/Agent Gateway**: Finish command coverage and retire REST routes after verified replacements exist (#947–#950). The initial Deposit → Sleep → explicit Wake → Adventure loop is covered by stateful HTTP integration tests, including GET-only recovery after context refresh failures; the broader E2E framework remains separate.
 2. **Headless E2E Gameplay Simulation**: Deterministic multi-turn gameplay loop verification (Issue #650).
 3. **Client Presentation & Web UI**: Browser client and Server-Driven UI (Issue #140).
 4. **Production Asset Pipeline & Final Licensing**: Production asset mapping and license attribution catalog (Issues #654, #729; specification pending).

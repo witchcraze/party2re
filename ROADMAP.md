@@ -83,7 +83,7 @@ The initial Core/System, Economy/Production, Adventure/Combat/Arenas and Communi
 #### Remaining Version 1.0 Milestones:
 
 1. **Client/Agent Gateway & CQRS Architecture (In Progress)**
-   - Complete command coverage and verify the initial stateful gameplay loop (#1015).
+   - Complete remaining command coverage; the initial stateful gameplay loop is covered by focused HTTP integration tests.
    - Retire individual REST routes only after their replacement commands are implemented and verified (#947–#950).
    - Preserve the enduring [command/recovery contract](docs/architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions); current coverage is summarized in [STATUS](STATUS.md).
 2. **Headless E2E Gameplay Simulation Test Framework**
