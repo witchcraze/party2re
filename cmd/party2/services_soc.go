@@ -156,6 +156,7 @@ func newSocServices(
 			_, err := notificationService.PublishNews(ctx, cat, title, content, author, pubAt)
 			return err
 		})),
+		guild.WithTransactionProvider(database.NewTransactionProvider(db)),
 	)
 	if err != nil {
 		return nil, err

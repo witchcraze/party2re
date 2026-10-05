@@ -10,6 +10,7 @@ import (
 // GuildReader defines read operations on guilds and their memberships.
 type GuildReader interface {
 	GetGuild(ctx context.Context, guildID string) (Guild, []Member, error)
+	GetGuildForUpdate(ctx context.Context, guildID string) (Guild, []Member, error)
 	GetGuildByCharacter(ctx context.Context, characterID string) (Guild, Member, error)
 	ListGuilds(ctx context.Context, offset, limit int) ([]Guild, error)
 	IsColorTaken(ctx context.Context, color string, excludeGuildID string) (bool, error)

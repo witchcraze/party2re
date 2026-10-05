@@ -289,31 +289,70 @@ func (r *GuildRepository) AddGuildPoints(ctx context.Context, characterID string
 }
 
 func (r *GuildRepository) TransferLeadership(ctx context.Context, guildID string, oldLeaderID, newLeaderID string) error {
+	if oldLeaderID == newLeaderID {
+		return nil
+	}
 	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
 		now := time.Now().UTC()
-		if _, err := executor.ExecContext(txCtx, `
+
+		// 1. Guard guilds row against stale current leader (and non-existent guild)
+		res, err := executor.ExecContext(txCtx, `
 			UPDATE guilds
 			SET leader_character_id = ?, last_active_at = ?, updated_at = ?
-			WHERE id = ?
-		`, newLeaderID, now, now, guildID); err != nil {
+			WHERE id = ? AND leader_character_id = ?
+		`, newLeaderID, now, now, guildID, oldLeaderID)
+		if err != nil {
 			return err
 		}
+		rows, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			var count int
+			err := executor.QueryRowContext(txCtx, `SELECT COUNT(*) FROM guilds WHERE id = ?`, guildID).Scan(&count)
+			if err != nil {
+				return err
+			}
+			if count == 0 {
+				return guild.ErrGuildNotFound
+			}
+			return guild.ErrUnauthorized
+		}
 
-		if _, err := executor.ExecContext(txCtx, `
+		// 2. Demote old leader in guild_members
+		res, err = executor.ExecContext(txCtx, `
 			UPDATE guild_members
 			SET role = ?, title = ?
 			WHERE guild_id = ? AND character_id = ?
-		`, string(guild.RoleMember), "", guildID, oldLeaderID); err != nil {
+		`, string(guild.RoleMember), "", guildID, oldLeaderID)
+		if err != nil {
 			return err
 		}
+		rows, err = res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return guild.ErrCharacterNotInGuild
+		}
 
-		if _, err := executor.ExecContext(txCtx, `
+		// 3. Promote new leader in guild_members
+		res, err = executor.ExecContext(txCtx, `
 			UPDATE guild_members
 			SET role = ?, title = ?, is_pending = FALSE
 			WHERE guild_id = ? AND character_id = ?
-		`, string(guild.RoleLeader), guild.DefaultTitleLeader, guildID, newLeaderID); err != nil {
+		`, string(guild.RoleLeader), guild.DefaultTitleLeader, guildID, newLeaderID)
+		if err != nil {
 			return err
+		}
+		rows, err = res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return guild.ErrTargetNotMember
 		}
 
 		return nil
@@ -450,17 +489,4 @@ func (r *GuildRepository) UpdateWallpaper(ctx context.Context, guildID string, w
 		return corecharacter.Character{}, err
 	}
 	return updatedChar, nil
-}
-
-func (r *GuildRepository) DisbandGuild(ctx context.Context, guildID string) error {
-	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
-		executor := ExecutorFromContext(txCtx, r.db)
-		if _, err := executor.ExecContext(txCtx, `DELETE FROM guild_members WHERE guild_id = ?`, guildID); err != nil {
-			return err
-		}
-		if _, err := executor.ExecContext(txCtx, `DELETE FROM guilds WHERE id = ?`, guildID); err != nil {
-			return err
-		}
-		return nil
-	})
 }

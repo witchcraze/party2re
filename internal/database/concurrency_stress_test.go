@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -835,4 +836,206 @@ func TestConcurrencyStressFleaMarketPurchaseVsCancel(t *testing.T) {
 
 	t.Logf("Flea Market Concurrency Stress Test PASSED: Phase 1 Purchases=%d, Phase 2 BuyWins=%d, Phase 2 CancelWins=%d, 0 Deadlocks, 0 Gold Drift",
 		totalSimultaneousPurchases, buyWins, cancelWins)
+}
+
+func TestConcurrencyStressGuildConcurrentDepartures(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+
+	guildRepo, err := NewGuildRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := NewTransactionProvider(db)
+	guildSvc, err := guild.NewService(guildRepo, guild.WithTransactionProvider(txProvider))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Setup: Multiple guilds, each with a leader + mixed regular members + pending applicants
+	const numGuilds = 3
+	type guildFixture struct {
+		guild        guild.Guild
+		characterIDs []string
+	}
+
+	fixtures := make([]guildFixture, numGuilds)
+	suffix := id.New()[:8]
+	now := time.Now().UTC()
+
+	for gIdx := 0; gIdx < numGuilds; gIdx++ {
+		gName := fmt.Sprintf("StressDep_%s_%d", suffix, gIdx)
+		createdG, leaderChar, err := CreateTestGuildWithLeader(ctx, db, gName, 50000)
+		if err != nil {
+			t.Fatalf("failed to create test guild %d: %v", gIdx, err)
+		}
+
+		charIDs := []string{leaderChar.ID}
+
+		// Add 2 approved members
+		for mIdx := 0; mIdx < 2; mIdx++ {
+			c, err := CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("DM_%s_%d_%d", suffix, gIdx, mIdx), 1000)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = guildRepo.AddMember(ctx, guild.Member{
+				GuildID:     createdG.ID,
+				CharacterID: c.ID,
+				Role:        guild.RoleMember,
+				Title:       "",
+				IsPending:   false,
+				JoinedAt:    now.Add(time.Duration(mIdx+1) * time.Minute),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			charIDs = append(charIDs, c.ID)
+		}
+
+		// Add 2 pending applicants
+		for pIdx := 0; pIdx < 2; pIdx++ {
+			c, err := CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("DP_%s_%d_%d", suffix, gIdx, pIdx), 1000)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = guildRepo.AddMember(ctx, guild.Member{
+				GuildID:     createdG.ID,
+				CharacterID: c.ID,
+				Role:        guild.RoleMember,
+				Title:       guild.DefaultTitlePending,
+				IsPending:   true,
+				JoinedAt:    now.Add(time.Duration(pIdx+10) * time.Minute),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			charIDs = append(charIDs, c.ID)
+		}
+
+		fixtures[gIdx] = guildFixture{
+			guild:        createdG,
+			characterIDs: charIDs,
+		}
+	}
+
+	cfg := GetStressConfig()
+	var deadlockCount int64
+	var opCount int64
+
+	res := RunConcurrentStressTest(t, cfg, func(workerID int, op int) error {
+		atomic.AddInt64(&opCount, 1)
+		r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerID*1000+op)))
+
+		fix := fixtures[r.Intn(numGuilds)]
+		charID := fix.characterIDs[r.Intn(len(fix.characterIDs))]
+
+		var opErr error
+		if r.Intn(2) == 0 {
+			// Leave
+			opErr = guildSvc.Leave(ctx, fix.guild.ID, charID)
+		} else {
+			// Character-cleanup departure
+			opErr = guildSvc.RemoveCharacterFromGuild(ctx, charID)
+		}
+
+		if opErr != nil {
+			if IsDeadlockError(opErr) {
+				atomic.AddInt64(&deadlockCount, 1)
+				t.Errorf("worker %d DEADLOCK detected: %v", workerID, opErr)
+				return opErr
+			}
+			// Normal recognized race outcomes: character already departed, guild already disbanded,
+			// or database serialization conflict (e.g. MariaDB 1020 record changed during concurrent dissolution)
+			if errors.Is(opErr, guild.ErrCharacterNotInGuild) ||
+				errors.Is(opErr, guild.ErrGuildNotFound) ||
+				errors.Is(opErr, guild.ErrCharacterNotFound) ||
+				strings.Contains(opErr.Error(), "1020") ||
+				strings.Contains(opErr.Error(), "try restarting transaction") {
+				return nil
+			}
+			t.Errorf("worker %d unexpected error: %v", workerID, opErr)
+			return opErr
+		}
+		return nil
+	})
+
+	if deadlockCount > 0 {
+		t.Fatalf("Encountered %d DEADLOCK(s) during concurrent departures stress test", deadlockCount)
+	}
+
+	// Verify surviving guild and member invariants across all test guilds
+	for _, fix := range fixtures {
+		gDetail, err := guildSvc.Get(ctx, fix.guild.ID)
+		if err != nil {
+			if errors.Is(err, guild.ErrGuildNotFound) {
+				// Guild was disbanded: verify zero rows in guild_members
+				var memberCount int
+				err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_members WHERE guild_id = ?", fix.guild.ID).Scan(&memberCount)
+				if err != nil {
+					t.Fatalf("failed to query member count: %v", err)
+				}
+				if memberCount != 0 {
+					t.Fatalf("INVARIANT VIOLATION: disbanded guild %s still has %d rows in guild_members", fix.guild.ID, memberCount)
+				}
+				continue
+			}
+			t.Fatalf("unexpected Get error for guild %s: %v", fix.guild.ID, err)
+		}
+
+		// Guild survived:
+		// 1. Must have >= 1 member
+		if len(gDetail.Members) == 0 {
+			t.Fatalf("INVARIANT VIOLATION: surviving guild %s has 0 members in guild_members (orphan guild pointing to leader %s)",
+				fix.guild.ID, gDetail.Guild.LeaderCharacterID)
+		}
+
+		// 2. Leader must exist and be present in guild_members
+		if gDetail.Guild.LeaderCharacterID == "" {
+			t.Fatalf("INVARIANT VIOLATION: surviving guild %s has empty LeaderCharacterID", fix.guild.ID)
+		}
+
+		var leaderCount int
+		var leaderFoundInMembers bool
+		for _, m := range gDetail.Members {
+			if m.Role == guild.RoleLeader {
+				leaderCount++
+			}
+			if m.CharacterID == gDetail.Guild.LeaderCharacterID {
+				leaderFoundInMembers = true
+				if m.Role != guild.RoleLeader {
+					t.Errorf("INVARIANT VIOLATION: leader %s has role %v, want RoleLeader", m.CharacterID, m.Role)
+				}
+			}
+		}
+
+		if !leaderFoundInMembers {
+			t.Fatalf("INVARIANT VIOLATION: leader %s of surviving guild %s is NOT present in guild_members",
+				gDetail.Guild.LeaderCharacterID, fix.guild.ID)
+		}
+		if leaderCount != 1 {
+			t.Fatalf("INVARIANT VIOLATION: surviving guild %s has %d leaders (want exactly 1)", fix.guild.ID, leaderCount)
+		}
+
+		// 3. Verify database count directly
+		var dbMemberCount int
+		err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_members WHERE guild_id = ?", fix.guild.ID).Scan(&dbMemberCount)
+		if err != nil {
+			t.Fatalf("failed to query member count: %v", err)
+		}
+		if dbMemberCount != len(gDetail.Members) {
+			t.Fatalf("member count mismatch: db=%d, service=%d", dbMemberCount, len(gDetail.Members))
+		}
+	}
+
+	t.Logf("Guild Concurrent Departures Stress Test PASSED: TotalOps=%d, 0 Deadlocks, all guild/leader invariants verified (errors=%d)",
+		res.TotalOps, res.Failures)
 }

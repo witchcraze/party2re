@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"strings"
-	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/validation"
@@ -300,15 +299,7 @@ func (s *Service) ChangeWallpaper(ctx context.Context, guildID string, leaderID 
 	return s.repo.UpdateWallpaper(ctx, guildID, normalized, price, leaderID)
 }
 
-func (s *Service) publishDissolutionNews(ctx context.Context, guildName string, publishedAt time.Time) {
-	if s.newsPub != nil {
-		msg := "ギルド『" + guildName + "』が解散しました"
-		//lint:ignore error-swallow best-effort news publication for guild dissolution
-		_ = s.newsPub.PublishNews(ctx, "guild", msg, msg, "System", publishedAt)
-	}
-}
-
-func (s *Service) removeMemberInternal(ctx context.Context, g Guild, members []Member, characterID string, role Role) error {
+func (s *Service) removeMemberInternal(ctx context.Context, g Guild, members []Member, characterID string, role Role) (bool, error) {
 	var remaining []Member
 	for _, m := range members {
 		if m.CharacterID != characterID {
@@ -318,10 +309,9 @@ func (s *Service) removeMemberInternal(ctx context.Context, g Guild, members []M
 
 	if len(remaining) == 0 {
 		if err := s.repo.DisbandGuild(ctx, g.ID); err != nil {
-			return err
+			return false, err
 		}
-		s.publishDissolutionNews(ctx, g.Name, s.nowFunc())
-		return nil
+		return true, nil
 	}
 
 	if role == RoleLeader {
@@ -333,15 +323,15 @@ func (s *Service) removeMemberInternal(ctx context.Context, g Guild, members []M
 			}
 		}
 		if err := s.repo.TransferLeadership(ctx, g.ID, characterID, successorID); err != nil {
-			return err
+			return false, err
 		}
 	}
 
 	if err := s.repo.RemoveMember(ctx, g.ID, characterID); err != nil {
-		return err
+		return false, err
 	}
 	s.touchActive(ctx, g.ID)
-	return nil
+	return false, nil
 }
 
 // Leave removes a character from the guild (join_guild.cgi:dattai).
@@ -357,23 +347,45 @@ func (s *Service) Leave(ctx context.Context, guildID string, characterID string)
 		return ErrCharacterNotFound
 	}
 
-	g, members, err := s.repo.GetGuild(ctx, guildID)
+	var (
+		disbanded          bool
+		disbandedGuildName string
+	)
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		g, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
+		if err != nil {
+			return err
+		}
+
+		var currentMember *Member
+		for i := range members {
+			if members[i].CharacterID == characterID {
+				currentMember = &members[i]
+				break
+			}
+		}
+		if currentMember == nil {
+			return ErrCharacterNotInGuild
+		}
+
+		var dErr error
+		disbanded, dErr = s.removeMemberInternal(txCtx, g, members, characterID, currentMember.Role)
+		if dErr != nil {
+			return dErr
+		}
+		if disbanded {
+			disbandedGuildName = g.Name
+		}
+		return nil
+	})
 	if err != nil {
 		return err
 	}
 
-	var currentMember *Member
-	for i := range members {
-		if members[i].CharacterID == characterID {
-			currentMember = &members[i]
-			break
-		}
+	if disbanded {
+		s.publishDissolutionNews(ctx, disbandedGuildName, s.nowFunc())
 	}
-	if currentMember == nil {
-		return ErrCharacterNotInGuild
-	}
-
-	return s.removeMemberInternal(ctx, g, members, characterID, currentMember.Role)
+	return nil
 }
 
 // RemoveCharacterFromGuild removes a character from their guild upon admin action or deletion (lib/system.cgi:delete_guild_member).
@@ -386,63 +398,54 @@ func (s *Service) RemoveCharacterFromGuild(ctx context.Context, characterID stri
 		return nil
 	}
 
-	g, member, err := s.repo.GetGuildByCharacter(ctx, characterID)
-	if err != nil {
-		if errors.Is(err, ErrCharacterNotInGuild) || errors.Is(err, ErrGuildNotFound) {
+	var (
+		disbanded          bool
+		disbandedGuildName string
+	)
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		g, _, err := s.repo.GetGuildByCharacter(txCtx, characterID)
+		if err != nil {
+			if errors.Is(err, ErrCharacterNotInGuild) || errors.Is(err, ErrGuildNotFound) {
+				return nil
+			}
+			return err
+		}
+
+		gLocked, members, err := s.repo.GetGuildForUpdate(txCtx, g.ID)
+		if err != nil {
+			if errors.Is(err, ErrGuildNotFound) {
+				return nil
+			}
+			return err
+		}
+
+		var currentMember *Member
+		for i := range members {
+			if members[i].CharacterID == characterID {
+				currentMember = &members[i]
+				break
+			}
+		}
+		if currentMember == nil {
 			return nil
 		}
-		return err
-	}
 
-	_, members, err := s.repo.GetGuild(ctx, g.ID)
-	if err != nil {
-		return err
-	}
-
-	return s.removeMemberInternal(ctx, g, members, characterID, member.Role)
-}
-
-// Disband allows the guild master to disband the guild (join_guild.cgi:kaisan).
-func (s *Service) Disband(ctx context.Context, guildID string, leaderCharID string) error {
-	guildID = strings.TrimSpace(guildID)
-	if guildID == "" {
-		return ErrInvalidGuildID
-	}
-	leaderCharID = strings.TrimSpace(leaderCharID)
-	if leaderCharID == "" {
-		return ErrCharacterNotFound
-	}
-
-	g, member, err := s.repo.GetGuildByCharacter(ctx, leaderCharID)
-	if err != nil {
-		return err
-	}
-	if g.ID != guildID || member.Role != RoleLeader {
-		return ErrUnauthorized
-	}
-
-	if err := s.repo.DisbandGuild(ctx, guildID); err != nil {
-		return err
-	}
-	s.publishDissolutionNews(ctx, g.Name, s.nowFunc())
-	return nil
-}
-
-// DisbandInactiveGuilds inspects guilds with no member activity for >= 20 days and disbands them (join_guild.cgi:check_dead_guild).
-func (s *Service) DisbandInactiveGuilds(ctx context.Context, now time.Time, limit int) (int, []string, error) {
-	cutoff := now.Add(-InactivityDisbandDuration)
-	inactive, err := s.repo.ListInactiveGuilds(ctx, cutoff, limit)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	var disbanded []string
-	for _, g := range inactive {
-		if err := s.repo.DisbandGuild(ctx, g.ID); err == nil {
-			disbanded = append(disbanded, g.ID)
-			s.publishDissolutionNews(ctx, g.Name, now)
+		var dErr error
+		disbanded, dErr = s.removeMemberInternal(txCtx, gLocked, members, characterID, currentMember.Role)
+		if dErr != nil {
+			return dErr
 		}
+		if disbanded {
+			disbandedGuildName = gLocked.Name
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
-	return len(disbanded), disbanded, nil
+	if disbanded {
+		s.publishDissolutionNews(ctx, disbandedGuildName, s.nowFunc())
+	}
+	return nil
 }
