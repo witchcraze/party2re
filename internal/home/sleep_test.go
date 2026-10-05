@@ -827,6 +827,15 @@ func TestWake_PropagatesHookErrors_AndDoesNotFinalizeRecovery(t *testing.T) {
 					t.Errorf("expected partial vitality recovery to be persisted in repo, got HP=%d, MP=%d, Tired=%d",
 						updatedChar.Stats.HP, updatedChar.Stats.MP, updatedChar.Tired)
 				}
+			} else if tc.name == "CategoryAsleep IsLocked check failure propagates" {
+				unchangedChar := charRepo.chars["c1"]
+				if unchangedChar.Stats.HP != 10 || unchangedChar.Stats.MP != 5 || unchangedChar.Tired != 60 {
+					t.Errorf("expected no recovery writes on IsLocked failure, got HP=%d, MP=%d, Tired=%d",
+						unchangedChar.Stats.HP, unchangedChar.Stats.MP, unchangedChar.Tired)
+				}
+				if strings.Contains(res.Message, "すでに目覚めています") {
+					t.Errorf("expected no false awake message on IsLocked failure, got: %s", res.Message)
+				}
 			}
 		})
 	}
@@ -949,4 +958,85 @@ func TestWake_RetryAfterHookFailure(t *testing.T) {
 	if asleep2 {
 		t.Fatalf("expected CategoryAsleep unlocked after attempt 2")
 	}
+}
+
+func TestGetSleepStatus_PrerequisiteReadFailuresAndContrasts(t *testing.T) {
+	ctx := context.Background()
+	charRepo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {ID: "c1", Name: "Hero"},
+		},
+	}
+
+	t.Run("duration read failure propagates", func(t *testing.T) {
+		mt := &mockTimer{getRemainingLockErr: errors.New("valkey sleep lock failure")}
+		svc, err := NewService(newMockHomeRepo(), charRepo, WithTimer(mt))
+		if err != nil {
+			t.Fatal(err)
+		}
+		status, err := svc.GetSleepStatus(ctx, "c1")
+		if err == nil {
+			t.Fatalf("expected error, got status: %+v", status)
+		}
+	})
+
+	t.Run("pending-recovery read failure propagates when duration lock expired", func(t *testing.T) {
+		mt := &mockTimer{isLockedErr: errors.New("valkey asleep lock failure")}
+		svc, err := NewService(newMockHomeRepo(), charRepo, WithTimer(mt))
+		if err != nil {
+			t.Fatal(err)
+		}
+		status, err := svc.GetSleepStatus(ctx, "c1")
+		if err == nil {
+			t.Fatalf("expected error, got status: %+v", status)
+		}
+	})
+
+	t.Run("active sleep contrast when duration lock remaining", func(t *testing.T) {
+		mt := &mockTimer{}
+		_ = mt.SetLock(ctx, timer.CategorySleep, "c1", 10*time.Minute)
+		_ = mt.SetLock(ctx, timer.CategoryAsleep, "c1", 24*time.Hour)
+		svc, err := NewService(newMockHomeRepo(), charRepo, WithTimer(mt))
+		if err != nil {
+			t.Fatal(err)
+		}
+		status, err := svc.GetSleepStatus(ctx, "c1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !status.Sleeping || status.CanWake {
+			t.Errorf("expected sleeping=true, can_wake=false, got: %+v", status)
+		}
+	})
+
+	t.Run("pending wake contrast when duration lock expired but asleep locked", func(t *testing.T) {
+		mt := &mockTimer{}
+		_ = mt.SetLock(ctx, timer.CategoryAsleep, "c1", 24*time.Hour)
+		svc, err := NewService(newMockHomeRepo(), charRepo, WithTimer(mt))
+		if err != nil {
+			t.Fatal(err)
+		}
+		status, err := svc.GetSleepStatus(ctx, "c1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if status.Sleeping || !status.CanWake {
+			t.Errorf("expected sleeping=false, can_wake=true, got: %+v", status)
+		}
+	})
+
+	t.Run("awake contrast when neither lock active", func(t *testing.T) {
+		mt := &mockTimer{}
+		svc, err := NewService(newMockHomeRepo(), charRepo, WithTimer(mt))
+		if err != nil {
+			t.Fatal(err)
+		}
+		status, err := svc.GetSleepStatus(ctx, "c1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if status.Sleeping || status.CanWake {
+			t.Errorf("expected sleeping=false, can_wake=false, got: %+v", status)
+		}
+	})
 }
