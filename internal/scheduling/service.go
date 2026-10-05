@@ -51,7 +51,11 @@ func (s *Service) CancelByActorID(ctx context.Context, actorID string) (int, err
 // ClearActiveActions clears all active and pending scheduled actions for the character,
 // fulfilling the rescue.ActionCleaner interface.
 // Returns true if any active actions were cleared, or false if the character was already safe with none.
+// Returns an error and cleared=false if cancellation encountered a storage failure.
 func (s *Service) ClearActiveActions(ctx context.Context, characterID string) (bool, error) {
 	count, err := s.CancelByActorID(ctx, characterID)
-	return count > 0, err
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }

@@ -48,10 +48,14 @@ func (r *stubCharRepo) Update(_ context.Context, c corecharacter.Character) erro
 type stubActionCleaner struct {
 	clearedCharacters []string
 	stuckCharacters   map[string]bool
+	err               error
 }
 
 func (c *stubActionCleaner) ClearActiveActions(_ context.Context, characterID string) (bool, error) {
 	c.clearedCharacters = append(c.clearedCharacters, characterID)
+	if c.err != nil {
+		return false, c.err
+	}
 	if c.stuckCharacters != nil {
 		return c.stuckCharacters[characterID], nil
 	}
@@ -311,5 +315,40 @@ func TestEmergencyRescueInvokesActionCleaner(t *testing.T) {
 
 	if len(cleaner.clearedCharacters) != 1 || cleaner.clearedCharacters[0] != "char-42" {
 		t.Fatalf("expected cleaner invoked with char-42, got %v", cleaner.clearedCharacters)
+	}
+}
+
+func TestEmergencyRescueActionCleanerFailure(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+
+	cleanerErr := errors.New("valkey cleanup failure")
+	rescueRepo := &stubRescueRepo{}
+	charRepo := &stubCharRepo{
+		characters: map[string]corecharacter.Character{
+			"char-cleaner-fail": {ID: "char-cleaner-fail", Name: "FailHero"},
+		},
+	}
+	cleaner := &stubActionCleaner{err: cleanerErr}
+	timerSvc := timer.NewService(nil)
+	svc := NewService(rescueRepo, charRepo, cleaner, timerSvc)
+
+	rec, err := svc.EmergencyRescue(ctx, "char-cleaner-fail", "Screen stuck", now)
+	if !errors.Is(err, cleanerErr) {
+		t.Fatalf("expected cleanerErr %v, got %v", cleanerErr, err)
+	}
+	if rec.CharacterID != "" || rec.PenaltySeconds != 0 {
+		t.Fatalf("expected empty rescue record, got %+v", rec)
+	}
+
+	// Verify no rescue record was saved
+	if len(rescueRepo.records) != 0 {
+		t.Fatalf("expected 0 rescue records saved after cleaner failure, got %d", len(rescueRepo.records))
+	}
+
+	// Verify no timer lock was set
+	locked, err := timerSvc.IsLocked(ctx, timer.CategorySleep, "char-cleaner-fail")
+	if err != nil || locked {
+		t.Fatalf("expected timer not locked, got locked=%v, err=%v", locked, err)
 	}
 }

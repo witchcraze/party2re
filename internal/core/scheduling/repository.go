@@ -30,6 +30,7 @@ type ScheduledActionRepository interface {
 	Save(ctx context.Context, action ScheduledAction) error
 
 	// CancelByActorID removes and cancels all pending/scheduled actions for the specified actor.
-	// Returns the number of cancelled actions.
+	// Halts and propagates storage failures without deleting the actor index for unresolved work.
+	// Returns the number of successfully removed actions and any storage error encountered.
 	CancelByActorID(ctx context.Context, actorID string) (int, error)
 }
