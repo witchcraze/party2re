@@ -533,3 +533,156 @@ func TestGuildRepository_TransferLeadership_PendingApplicant(t *testing.T) {
 		}
 	}
 }
+
+func TestGuildRepository_TransferLeadership_InvalidSuccessor(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	guildRepo, err := NewGuildRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	guildName := fmt.Sprintf("InvSuccG_%08x", time.Now().UnixNano()%0xFFFFFFFF)
+	gCreated, leaderChar, err := CreateTestGuildWithLeader(ctx, db, guildName, 10000)
+	if err != nil {
+		t.Fatalf("CreateTestGuildWithLeader failed: %v", err)
+	}
+
+	// Create a real character who is NOT in the guild
+	nonMemberChar, err := CreateTestCharacter(ctx, db, "NonMemberSucc")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt transfer to a non-member successor
+	err = guildRepo.TransferLeadership(ctx, gCreated.ID, leaderChar.ID, nonMemberChar.ID)
+	if !errors.Is(err, guild.ErrTargetNotMember) {
+		t.Fatalf("expected ErrTargetNotMember, got %v", err)
+	}
+
+	// Verify no partial leadership change occurred
+	gAfter, membersAfter, err := guildRepo.GetGuild(ctx, gCreated.ID)
+	if err != nil {
+		t.Fatalf("GetGuild failed: %v", err)
+	}
+	if gAfter.LeaderCharacterID != leaderChar.ID {
+		t.Errorf("leader = %q, want %q (should remain unchanged)", gAfter.LeaderCharacterID, leaderChar.ID)
+	}
+	if len(membersAfter) != 1 || membersAfter[0].CharacterID != leaderChar.ID || membersAfter[0].Role != guild.RoleLeader {
+		t.Errorf("leader membership modified on failed transfer: %+v", membersAfter)
+	}
+}
+
+func TestGuildRepository_TransferLeadership_StaleLeader(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	guildRepo, err := NewGuildRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	guildName := fmt.Sprintf("StaleLdrG_%08x", time.Now().UnixNano()%0xFFFFFFFF)
+	gCreated, leaderChar, err := CreateTestGuildWithLeader(ctx, db, guildName, 10000)
+	if err != nil {
+		t.Fatalf("CreateTestGuildWithLeader failed: %v", err)
+	}
+	memberChar, err := CreateTestCharacter(ctx, db, "MemberForStale")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = guildRepo.AddMember(ctx, guild.Member{
+		GuildID:     gCreated.ID,
+		CharacterID: memberChar.ID,
+		Role:        guild.RoleMember,
+		Title:       "",
+		JoinedAt:    time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt transfer with incorrect/stale oldLeaderID
+	staleLeaderID := "stale_char_" + id.New()[:8]
+	err = guildRepo.TransferLeadership(ctx, gCreated.ID, staleLeaderID, memberChar.ID)
+	if !errors.Is(err, guild.ErrUnauthorized) {
+		t.Fatalf("expected ErrUnauthorized, got %v", err)
+	}
+
+	// Verify no partial leadership change occurred
+	gAfter, _, err := guildRepo.GetGuild(ctx, gCreated.ID)
+	if err != nil {
+		t.Fatalf("GetGuild failed: %v", err)
+	}
+	if gAfter.LeaderCharacterID != leaderChar.ID {
+		t.Errorf("leader = %q, want %q (should remain unchanged)", gAfter.LeaderCharacterID, leaderChar.ID)
+	}
+}
+
+func TestGuildRepository_GetGuildForUpdate(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	guildRepo, err := NewGuildRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	guildName := fmt.Sprintf("LockG_%08x", time.Now().UnixNano()%0xFFFFFFFF)
+	gCreated, leaderChar, err := CreateTestGuildWithLeader(ctx, db, guildName, 10000)
+	if err != nil {
+		t.Fatalf("CreateTestGuildWithLeader failed: %v", err)
+	}
+
+	// Inside RunInTx, acquire Rank 7 lock
+	err = RunInTx(ctx, db, func(txCtx context.Context) error {
+		gLocked, members, err := guildRepo.GetGuildForUpdate(txCtx, gCreated.ID)
+		if err != nil {
+			return err
+		}
+		if gLocked.ID != gCreated.ID {
+			t.Errorf("locked guild ID = %s, want %s", gLocked.ID, gCreated.ID)
+		}
+		if len(members) != 1 || members[0].CharacterID != leaderChar.ID {
+			t.Errorf("unexpected members: %+v", members)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("GetGuildForUpdate in tx failed: %v", err)
+	}
+
+	// Non-existent guild returns ErrGuildNotFound
+	_, _, err = guildRepo.GetGuildForUpdate(ctx, "nonexistent_guild_id")
+	if !errors.Is(err, guild.ErrGuildNotFound) {
+		t.Fatalf("expected ErrGuildNotFound, got %v", err)
+	}
+}

@@ -158,19 +158,21 @@ Roster priority uses the existing repository order (`joined_at ASC`, then
    - **Successor Priority**:
      1. The first remaining row whose title contains `ギルマス` (e.g. `副ギルマス`, `ギルマス補佐`).
      2. If no title matches, the first remaining row in roster order.
+   - **Serialized Mutation**: Roster snapshot selection, successor determination, leadership transfer, and member removal or dissolution execute within a single serialized database transaction (`s.runInTx`). `TransferLeadership` enforces atomic conditional updates (`RowsAffected`) so that stale leader attempts or non-member promotions fail fast and roll back without partial mutation.
    - Once leadership is successfully transferred, the departing leader is removed from the roster.
 2. **Auto-Dissolution & Server News Announcement**:
    - Removal from a roster containing at most one row dissolves the guild. Removing a non-leader from a larger roster only removes that row. Pending rows count in both rules; the last active member's departure does not by itself imply dissolution.
    - Manual disbandment by the leader (`DELETE /guilds/{id}`) and 20-day inactivity disbandment also dissolve the guild.
-   - Upon dissolution, a system-wide server news announcement is published via `NewsPublisher`:
+   - **Post-Commit News Semantics**: Upon dissolution, a system-wide server news announcement is published via `NewsPublisher` strictly after the database transaction commits successfully:
      `ギルド『<GuildName>』が解散しました` (Category: `guild`, Author: `System`).
 3. **Database Cascade Invariant**:
    - Character deletion (`character_repository.Delete`) no longer runs raw `UPDATE guilds SET leader_character_id = NULL`. Guild leadership and dissolution are handled strictly through the domain cleanup hook prior to physical character deletion, preserving the invariant that every existing guild has a valid leader.
 
-**Implementation status**: Implemented in #1006. `removeMemberInternal` evaluates
+**Implementation status**: Implemented in #1006 and hardened in #1036. `removeMemberInternal` evaluates
 the entire remaining roster for both succession and dissolution without a pending filter.
-Unselected applicants remain pending; sole-member departure disbands the guild and
-publishes server news.
+Roster selection and departure mutations are fully serialized under Rank-7 row locks (`GetGuildForUpdate`),
+preventing concurrent departure races that could leave orphan guilds. Unselected applicants remain pending;
+sole-member departure disbands the guild and publishes server news post-commit.
 
 ### 20-Day Inactivity Automatic Disbandment (`auto_delete_guild_day = 20`)
 
@@ -178,7 +180,7 @@ Guilds that have had no member activity for 20 consecutive days are automaticall
 
 - Each guild tracks `last_active_at TIMESTAMP`.
 - Any guild activity (creation, member join/apply, approval, role title assignment, callout, mark/wallpaper update, notice/color update) touches `last_active_at = NOW()`.
-- A daily scheduled worker (`guild_inactivity_check`, `scheduling.ActionHandler`) inspects guilds where `last_active_at < NOW() - 20 days` and cleanly disbands them, publishing the dissolution news announcement.
+- A daily scheduled worker (`guild_inactivity_check`, `scheduling.ActionHandler`) inspects guilds where `last_active_at < NOW() - 20 days` and cleanly disbands them, publishing the dissolution news announcement post-commit.
 
 ### Daily 20% Guild Point Decay (`login.cgi:448`)
 
@@ -196,6 +198,12 @@ $gpoint = int( $gpoint * 0.8 );
 
 - Guild operations obey the deterministic lock acquisition hierarchy (Rank 0 -> 8):
   - Character wallet deduction (Rank 2: `characters`) occurs before guild records (Rank 7: `guilds`, `guild_members`).
+- **Departure & Succession Serialization (Unit of Work)**:
+  - Member departure (`Leave`), character-cleanup departure (`RemoveCharacterFromGuild`), and manual disbandment (`Disband`) run inside a Unit of Work transaction via ambient transaction propagation (`s.runInTx`).
+  - Pessimistic locking (Rank 7): `GetGuildForUpdate` acquires exclusive locks (`SELECT ... FOR UPDATE`) on the guild record in `guilds` and all its member rows in `guild_members` ordered deterministically by `joined_at ASC, character_id ASC`.
+  - Atomicity of departure mutation: Roster selection, transfer/removal, and dissolution execute inside the same transaction, preventing concurrent departure race conditions.
+  - Strict conditional validation (`RowsAffected`): `TransferLeadership` and `RemoveMember` verify that exactly one row was affected. Stale leader attempts return `ErrUnauthorized`, non-member successor promotions return `ErrTargetNotMember`, and missing members return `ErrCharacterNotInGuild`, rolling back the transaction with zero partial leadership mutation.
+  - Dissolution Server News: Server news broadcasts occur strictly after a successful database transaction commit, preventing false news broadcasts on rolled-back transactions.
 - Points increments are performed via atomic SQL arithmetic (`points = points + ?`) to avoid lock contention during concurrent gameplay achievements.
 - Point decay executes via atomic SQL batch update (`UPDATE guilds SET points = FLOOR(points * ?), updated_at = ? WHERE points > 0`) wrapped in a Unit of Work transaction.
 

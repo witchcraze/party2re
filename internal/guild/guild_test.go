@@ -16,6 +16,7 @@ import (
 type mockGuildRepo struct {
 	createGuildFn        func(ctx context.Context, g guild.Guild, creator guild.Member, fee int) (guild.Guild, guild.Member, corecharacter.Character, error)
 	getGuildFn           func(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error)
+	getGuildForUpdateFn  func(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error)
 	getGuildByCharFn     func(ctx context.Context, characterID string) (guild.Guild, guild.Member, error)
 	listGuildsFn         func(ctx context.Context, offset, limit int) ([]guild.Guild, error)
 	listInactiveGuildsFn func(ctx context.Context, cutoff time.Time, limit int) ([]guild.Guild, error)
@@ -49,6 +50,13 @@ func (m *mockGuildRepo) GetGuild(ctx context.Context, guildID string) (guild.Gui
 		return m.getGuildFn(ctx, guildID)
 	}
 	return guild.Guild{}, nil, guild.ErrGuildNotFound
+}
+
+func (m *mockGuildRepo) GetGuildForUpdate(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
+	if m.getGuildForUpdateFn != nil {
+		return m.getGuildForUpdateFn(ctx, guildID)
+	}
+	return m.GetGuild(ctx, guildID)
 }
 
 func (m *mockGuildRepo) GetGuildByCharacter(ctx context.Context, characterID string) (guild.Guild, guild.Member, error) {

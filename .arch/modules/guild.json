@@ -94,6 +94,38 @@
           "note": "Update guild wallpaper and last_active_at"
         }
       ]
+    },
+    {
+      "method": "RemoveMember",
+      "source_ref": "internal/database/guild_member_repository.go#GuildRepository.RemoveMember",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "guild_members",
+          "tier": 7,
+          "mode": "DELETE",
+          "note": "Remove member row from guild"
+        }
+      ]
+    },
+    {
+      "method": "DisbandGuild",
+      "source_ref": "internal/database/guild_member_repository.go#GuildRepository.DisbandGuild",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "guild_members",
+          "tier": 7,
+          "mode": "DELETE",
+          "note": "Delete all memberships of dissolved guild"
+        },
+        {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "DELETE",
+          "note": "Delete guild entity"
+        }
+      ]
     }
   ]
 }

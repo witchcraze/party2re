@@ -28,6 +28,11 @@ func (f NewsPublisherFunc) PublishNews(ctx context.Context, category, title, con
 	return f(ctx, category, title, content, author, publishedAt)
 }
 
+// TransactionProvider executes functions within atomic database transactions.
+type TransactionProvider interface {
+	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
 type ServiceOption func(*Service)
 
 func WithCharacterReader(cr CharacterReader) ServiceOption {
@@ -48,6 +53,12 @@ func WithNewsPublisher(np NewsPublisher) ServiceOption {
 	}
 }
 
+func WithTransactionProvider(tx TransactionProvider) ServiceOption {
+	return func(s *Service) {
+		s.txProvider = tx
+	}
+}
+
 func WithClock(clock func() time.Time) ServiceOption {
 	return func(s *Service) {
 		s.nowFunc = clock
@@ -59,6 +70,7 @@ type Service struct {
 	charReader   CharacterReader
 	letterSender LetterSender
 	newsPub      NewsPublisher
+	txProvider   TransactionProvider
 	nowFunc      func() time.Time
 }
 
@@ -76,6 +88,13 @@ func NewService(repo Repository, opts ...ServiceOption) (*Service, error) {
 		opt(s)
 	}
 	return s, nil
+}
+
+func (s *Service) runInTx(ctx context.Context, fn func(txCtx context.Context) error) error {
+	if s.txProvider != nil {
+		return s.txProvider.RunInTx(ctx, fn)
+	}
+	return fn(ctx)
 }
 
 // touchActive performs a best-effort update of the guild's last_active_at timestamp.
@@ -265,33 +284,35 @@ func (s *Service) TransferLeadership(ctx context.Context, guildID string, curren
 		return nil
 	}
 
-	_, members, err := s.repo.GetGuild(ctx, guildID)
-	if err != nil {
-		return err
-	}
-
-	var currentLeader, newLeader *Member
-	for i := range members {
-		if members[i].CharacterID == currentLeaderCharID {
-			currentLeader = &members[i]
+	return s.runInTx(ctx, func(txCtx context.Context) error {
+		_, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
+		if err != nil {
+			return err
 		}
-		if members[i].CharacterID == newLeaderCharID {
-			newLeader = &members[i]
+
+		var currentLeader, newLeader *Member
+		for i := range members {
+			if members[i].CharacterID == currentLeaderCharID {
+				currentLeader = &members[i]
+			}
+			if members[i].CharacterID == newLeaderCharID {
+				newLeader = &members[i]
+			}
 		}
-	}
 
-	if currentLeader == nil || currentLeader.Role != RoleLeader {
-		return ErrUnauthorized
-	}
-	if newLeader == nil {
-		return ErrTargetNotMember
-	}
+		if currentLeader == nil || currentLeader.Role != RoleLeader {
+			return ErrUnauthorized
+		}
+		if newLeader == nil {
+			return ErrTargetNotMember
+		}
 
-	if err := s.repo.TransferLeadership(ctx, guildID, currentLeaderCharID, newLeaderCharID); err != nil {
-		return err
-	}
-	s.touchActive(ctx, guildID)
-	return nil
+		if err := s.repo.TransferLeadership(txCtx, guildID, currentLeaderCharID, newLeaderCharID); err != nil {
+			return err
+		}
+		s.touchActive(txCtx, guildID)
+		return nil
+	})
 }
 
 // AssignCustomRole sets a custom role title on a guild member (guild.cgi:ataeru).
