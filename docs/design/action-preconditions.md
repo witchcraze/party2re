@@ -2,13 +2,16 @@
 
 ## 1. Overview & CQRS Integration
 
-In the Party2 Re CQRS Client/Agent Gateway architecture ([`docs/architecture/client-agent-api.md`](../architecture/client-agent-api.md)), client frontends are planned to use two unified operations. HTTP observation is implemented in #939; the command contract is approved in #646 and initial execution remains planned in #1010–#1015:
-- **Observation**: `GET /api/v1/characters/{id}/context` (returns character snapshot, active cooldowns, and a whitelist of executable actions)
+In the Party2 Re CQRS Client/Agent Gateway architecture ([`docs/architecture/client-agent-api.md`](../architecture/client-agent-api.md)), clients use two unified operations. HTTP observation and initial commands exist; the approved progressive observation/navigation contract describes their remaining facility replacement:
+- **Observation**: `GET /api/v1/characters/{id}/context` (returns character facts, unfinished work and eligible entry candidates; the approved replacement adds selected facility data and connected, typed choices)
 - **Execution**: `POST /api/v1/characters/{id}/actions` (dispatches state transition commands)
 
 To prevent LLM context window bloating (Token Bloat), the Action Catalog registers **strictly top-level facilities, services, and commands** (42 entries in the current catalog). Sub-selections (such as specific item IDs, skill recipes, or shop item choices) are handled within individual action parameter payloads.
 
-Each action is statically linked to its corresponding OpenAPI 3.1 `operationId` and explicit `required_params` keys, enabling AI agents and automated clients to construct valid API payloads without guessing or inspecting massive OpenAPI specs.
+Each action is statically linked to an OpenAPI 3.1 contract and explicit
+`required_params`. Names alone do not describe parameter types or target choices.
+The approved replacement supplies strict schemas and selected-value templates;
+retirement must not leave command validation linked to a removed REST operation.
 
 ---
 
@@ -36,7 +39,43 @@ The gate descriptions below summarize the current implementation:
 5. **Currency Gate (`$m{money} > 0`)**:
    - Currency-gated entry actions require positive wallet gold. Exact amounts, selected-item prices, alternate currencies and domain-specific prerequisites remain execution-service checks; the catalog has no request payload to evaluate them.
 6. **Location Gate**:
-   - The initial observation scene is `town` (#939). Facility entry actions require this scene; global rescue is exempt. Persistent character locations and facility-specific scenes are deferred to #947–#949 rather than inferred from action categories.
+   - The current initial observation is `town`; its gate accepts facility entry
+     from that placeholder. This does not implement actual facility/session
+     gating. The approved replacement below uses saved facility selection and
+     authoritative feature activity, never catalog categories.
+
+### Approved progressive location and selection rules
+
+[The shared navigation contract](../architecture/client-agent-api.md#approved-navigation-and-progressive-observation-contract)
+was approved through #1047 on 2026-10-06. Its implementation is separate from
+this decision. Current place and previous selections narrow the next choices:
+town destinations, facility subjects, then applicable operations with the
+selected target prefilled. Selected values are still explicit command inputs;
+browsing never authorizes a mutation or silently changes its target.
+
+Ordinary location/selection uses a small character-scoped Valkey record. Actual
+room membership, dungeon/challenge progress and sleep remain feature-owned and
+determine active scenes. Entry, continuation and recovery are distinct:
+
+- Facility entry uses current scene and actual activity. Choosing a different
+  screen cannot enter/leave a room or abandon a run.
+- Continuation uses existing member/observer/leader and run/turn rules. It does
+  not inherit the town-only entry gate or a generic unfinished-work exclusion
+  that would prevent the very action needed to finish that activity.
+- Sleep permits its existing Rescue exception and explicitly ready Wake. Expiry
+  and `is_ready` never mean recovery or settlement occurred.
+- Missing/expired ordinary selection defaults to town; missing selection does
+  not complete or erase an active feature. Conflicting exclusive activities need
+  an honest recovery/conflict observation, not arbitrary priority or cleanup.
+
+The original persists facility/home selection (`party2/party.cgi:14–30`,
+`lib/system.cgi:267–318,418–435`) and replaces town choices inside games
+(`_casino.cgi:10–32`, `vs_dungeon.cgi:33–48`, `vs_challenge.cgi:24–30`). Public
+versus own-home actions differ (`home.cgi:26–39,73–105`). These are dispatch
+requirements; current Go gates and a TTL alone do not establish complete parity.
+The ephemeral navigation record is an approved simplicity trade-off, not a new
+durable Core Character location. Legacy presence/log effects remain explicit
+reconciliation work in each owning migration.
 
 ---
 

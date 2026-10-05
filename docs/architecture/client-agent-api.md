@@ -94,6 +94,197 @@ The four top-level fields are:
   execution must revalidate current state. Character facts come from the query
   snapshot, not the separate profile view's character projection.
 
+### Approved navigation and progressive observation contract
+
+The direction approved in [#1047](https://github.com/witchcraze/party2re/issues/1047)
+on 2026-10-06 replaces the initial globally broad town menu with choices derived
+from the current facility, previously selected subject and actual activity.
+This section specifies the replacement; it does not describe implemented
+facility observations or authorize route deletion.
+
+Clients retain two operations. GET observes the current interaction without a
+view selector. POST changes location/selection or executes a feature operation.
+For example, enter the weapon shop, select a product, then enter only quantity
+on the purchase form. The server supplies the selected product ID in a command
+template; the submitted mutation still explicitly identifies that product.
+
+Ordinary facility and subject selection belongs to `playercontext`, behind a
+small repository contract, using the existing Valkey deployment. Store one
+bounded character-scoped record with registered scene/subject identifiers and
+the selected collection page. Use a seven-day TTL renewed on successful
+navigation/selection writes, without a background refresher. GET does not renew
+or create this record. Missing/expired selection defaults to the town hub;
+selection loss does not terminate an activity. No new SQL navigation table,
+general form storage, navigation history stack or global game-state revision
+is required. Concurrent navigation uses the last successful write; clients of
+one character share its selection. See the [storage boundary](valkey-keyspace.md#approved-navigation-storage-boundary).
+
+Sleep, room participation and active runs remain authoritative in their existing
+feature services/stores. Their facts determine active scenes and permitted
+continuations; selection cannot join, spectate, leave, escape, recover vitality
+or settle rewards. Composition supplies public feature read adapters; the
+navigation owner never reads another feature's private persistence directly.
+`scene.location_id` identifies the observed interaction, not an invented Core
+Character location or a location inferred from catalog categories.
+
+The legacy persisted facility dispatch and home target are evidence for this
+interaction model (`party2/party.cgi:14–30`, `lib/system.cgi:9–24,267–318,418–435`).
+Valkey selection is deliberately ephemeral: the original persisted location
+does not establish a promise that lost navigation must be restored. Legacy
+presence/log updates on movement (`system.cgi:964–985`) need their own facility
+reconciliation; merely changing the saved selector does not implement them.
+
+#### Selection commands and typed discovery
+
+The shared navigation commands are `scene_enter`, `scene_select`, `scene_page`
+and `scene_back`. Destinations, subject kinds and paging inputs are closed,
+typed contracts registered by the relevant adapter. Back means the registered
+parent scene, not browser history. A facility/subject change clears subordinate
+selection and paging. Navigation commands have no price, fatigue, scheduled
+cooldown or implicit feature mutation. Recovery and active-session restrictions
+still apply: browsing cannot bypass sleep or abandon a run.
+
+```json
+{"action":"scene_enter","params":{"destination":"shop_weapon"}}
+```
+
+```json
+{"action":"scene_select","params":{"target_kind":"item","target_id":"weapon-01"}}
+```
+
+Retain the four top-level observation slots and non-null collection arrays.
+Extend `scene` with a registered kind, selected subject and one typed payload;
+list, detail, room and run variants have their own schemas. Include only the
+selected facility's information, alongside the shared actor/recovery facts.
+Presentation fields remain HTTP-owned; domain services supply structured facts.
+
+For example, the proposed selected-product response has the following `scene`
+fragment, alongside the existing character and the two non-null action arrays.
+The selected ID is a catalog ID, not an inventory instance or authorization:
+
+```json
+{
+  "location_id": "shop_weapon",
+  "kind": "shop_item",
+  "subject": {"target_kind": "item", "target_id": "weapon-01"},
+  "data": {"item_definition_id": "weapon-01"}
+}
+```
+
+Each facility schema adds its verified detail fields, such as the displayed
+price, availability and service-defined quantity bounds; this fragment is not a
+complete catalog DTO. Common presentation fields retain their existing contract.
+
+`available_actions` narrows to applicable facility operations, selection controls,
+continuations and recovery choices. Static catalog membership alone does not
+advertise execution support. Disclose adapter support separately from entry
+eligibility, and do not offer an unconnected command as executable. Each offered
+action supplies its strict `params_schema` and, where useful, `params_template`;
+`required_params` still lists the complete command's required fields. Previously
+selected values appear as constants/templates, so a client asks only for remaining
+inputs without guessing IDs or parameter types. For example:
+
+```json
+{
+  "action": "shop_purchase",
+  "required_params": ["item_definition_id", "quantity"],
+  "params_template": {"item_definition_id": "weapon-01"},
+  "params_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["item_definition_id", "quantity"],
+    "properties": {
+      "item_definition_id": {"type": "string", "const": "weapon-01"},
+      "quantity": {"type": "integer", "minimum": 1}
+    }
+  }
+}
+```
+
+The mutation sends the full typed params. Never fill an omitted mutation target
+from mutable navigation, substitute a newer selection, or treat a template as
+authorization. The service rechecks price, funds, inventory, membership and state.
+Concurrent navigation cannot redirect a submitted operation to a different
+target. Observation/preflight and execution remain separate reads/transactions;
+no new cross-store atomicity or command replay guarantee is introduced.
+
+#### Actor, target, paging and read failures
+
+The owned path character is always the actor and viewer. Other home/store/room/
+guild/listing IDs are targets. A selected public home never supplies the actor
+for sleep or grants its private letters, notices, inventories or controls.
+Viewer/visitor IDs come from authentication, not caller-supplied identity fields.
+Public DTOs whitelist fields instead of serializing raw Character/HomeView/room
+state. Casino lobby summaries exclude hidden cards/marks/actions; member,
+spectator and nonparticipant detail follows verified game-specific visibility.
+Selecting a room cannot bypass password or spectator admission.
+
+Select one primary pageable collection per scene. Reuse limit 20 by default and
+maximum 100, with keyset cursors where the owning service supports them and
+offset paging otherwise. Expose the mode and next-page inputs. Reject malformed,
+mixed or cross-scene/target/filter paging; include an ID tie-breaker in ordering.
+No cross-page snapshot consistency is promised. Lists/details use bounded typed
+fields and existing media bounds; never repeat large inline image blobs per row,
+silently truncate records, or load every facility into one observation. The
+existing actor avatar can contain a data URI from a 2 MiB upload, so a smaller
+blanket byte cap must not break it. Per-variant field/payload bounds are part of
+the implementation's schema and acceptance tests, not an excuse to remove data.
+
+A disappeared/expired saved subject produces a typed `selection_unavailable`
+scene with safe back/reselect choices, without stale private data or persisting
+a guessed fallback. Invalid selection inputs return 400; unknown targets return
+404; access failures use the feature's mapped 403/404 without secrets. Storage/
+required enrichment errors return 500 without partial observation; unconfigured
+adapters return 501. Do not disguise failed reads as an expired subject/default.
+
+GET and post-command refresh use the same selection and feature-read composition.
+Known command success/rejection survives any failed refresh under section 3;
+recover with GET only. Navigation itself follows the same outcome contract.
+After join/start/leave/escape, actual feature state determines the active scene;
+a later selector-write failure cannot erase a confirmed game operation. A GET
+does not advance pages, navigate, join/spectate/leave, Wake, acknowledge notices,
+harvest/claim, advance combat or draw/settle a game. Narrow existing owner-defined
+lifecycle effects (room expiry/index pruning, projection population, lottery
+current-round provisioning) must be documented and tested individually, with
+errors propagated; they are not gameplay settlement.
+
+#### Entry and continuation
+
+Entry is evaluated against current facility and actual activity, not today's
+town placeholder. Active-session commands use the owning membership/role/run
+and turn state; a generic unfinished-work or town-entry gate must not block
+legal continuation, escape/leave or recovery. Pending/Processing scheduled work
+remains visible after its deadline. Sleep and pending Wake retain their explicit
+Wake/Rescue rules. Contradictory exclusive activity facts produce an authorized
+recovery/conflict scene, suppress new entries and expose verified recovery/leave
+choices; do not select an arbitrary winner or discard unfinished sessions.
+
+Legacy dispatch evidence is `quest.cgi:189–199,1047–1075`,
+`vs_dungeon.cgi:33–48`, `vs_challenge.cgi:24–30`, and `_casino.cgi:10–32`.
+These anchors establish distinct entry/continuation menus, not complete combat
+formula parity. Each facility migration must reconcile its full actions/call
+paths and existing Go gaps before retirement.
+
+#### Route retirement and deliberate exceptions
+
+Gameplay operations migrate through commands; required references migrate through
+the observation/selection contract. Each removed route needs its tested
+replacement, exact input/output/visibility reconciliation, independent command
+schema validation and removal of obsolete discovery links. Resolving #1047 alone
+does not satisfy these implementation gates. Retain unmatched/shared operations
+until their own bounded migration is complete.
+
+System/bootstrap, account/session/API-token and character lifecycle, admin
+maintenance/batch operations, and player-scoped notifications remain outside the
+owned-character gameplay Gateway. Admin-only news publication, contest settlement
+and ranking refresh remain admin operations even where their existing paths lack
+an `/admin` prefix. Public news, rankings/legends, replay sharing, and approved
+sanitized public home/store/guild projections may retain anonymous routes; normal
+interactive clients still obtain gameplay information through context. Other
+public facility GETs are migration candidates, not automatic permanent exceptions.
+The complete checked route inventory and implementation ownership live in #1047
+and its linked migration issues, rather than a duplicate permanent rollout log.
+
 ---
 
 ## 3. Command Pillar: `POST /api/v1/characters/{id}/actions`
@@ -337,7 +528,9 @@ while True:
 ### 4.2 Web UI (Server-Driven UI)
 
 1. Initial load calls `GET /context` to populate the global state store (Pinia / Redux).
-2. Navigation buttons and facility menus are rendered dynamically from `available_actions`.
+2. Navigation and facility choices come from typed scene data and
+   `available_actions`; selected values prefill command templates. The approved
+   progressive model above replaces the initial globally broad catalog menu.
 3. Action buttons submit `{ action, params }` to `POST /actions` once.
 4. A non-null response context replaces the store's observation. If refresh
    failed, preserve the command result/error and re-fetch GET context without
