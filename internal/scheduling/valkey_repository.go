@@ -186,6 +186,11 @@ func (r *ValkeyRepository) Save(ctx context.Context, action core_scheduling.Sche
 	return r.client.Do(ctx, r.client.B().Set().Key(actionKey).Value(string(data)).Build()).Error()
 }
 
+// CancelByActorID cancels and removes all scheduled actions for the specified actor.
+// If removing any action from the pending queue or deleting action/lock payloads fails,
+// dependent destructive cleanup halts immediately, preserving the actor index and
+// remaining entries so unresolved work remains discoverable for recovery.
+// Returns the number of successfully removed actions and any storage error encountered.
 func (r *ValkeyRepository) CancelByActorID(ctx context.Context, actorID string) (int, error) {
 	if actorID == "" {
 		return 0, nil
@@ -203,15 +208,29 @@ func (r *ValkeyRepository) CancelByActorID(ctx context.Context, actorID string) 
 	if err != nil {
 		return 0, err
 	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
 
+	cancelled := 0
 	for _, id := range ids {
 		actionKey := actionKeyPrefix + id
 		lockKey := lockKeyPrefix + id
-		_ = r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build())
-		_ = r.client.Do(ctx, r.client.B().Del().Key(actionKey).Build())
-		_ = r.client.Do(ctx, r.client.B().Del().Key(lockKey).Build())
+
+		if err := r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build()).Error(); err != nil && !valkey.IsValkeyNil(err) {
+			return cancelled, err
+		}
+		if err := r.client.Do(ctx, r.client.B().Del().Key(actionKey).Build()).Error(); err != nil && !valkey.IsValkeyNil(err) {
+			return cancelled, err
+		}
+		if err := r.client.Do(ctx, r.client.B().Del().Key(lockKey).Build()).Error(); err != nil && !valkey.IsValkeyNil(err) {
+			return cancelled, err
+		}
+		cancelled++
 	}
 
-	_ = r.client.Do(ctx, r.client.B().Del().Key(actorKey).Build())
-	return len(ids), nil
+	if err := r.client.Do(ctx, r.client.B().Del().Key(actorKey).Build()).Error(); err != nil && !valkey.IsValkeyNil(err) {
+		return cancelled, err
+	}
+	return cancelled, nil
 }
