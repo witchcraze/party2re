@@ -21,3 +21,13 @@ If actor-index registration (`SADD`) or pending queue enqueueing (`ZADD`) fails:
 - The underlying storage error is returned to the caller, guaranteeing that un-indexed or un-enqueued actions are never reported as successfully scheduled.
 - Subsequent retries safely overwrite and recreate the entries through idempotent `SET`, `SADD`, and `ZADD` operations.
 
+## Due Action Fetching & Error Semantics
+
+When fetching due actions (`FetchDue`):
+1. Candidate action IDs due for execution are retrieved from the pending queue (`ZRANGEBYSCORE party2:scheduled:pending`).
+2. For each action ID, the payload is retrieved (`GET party2:scheduled:action:<id>`).
+3. If the payload is genuinely absent (`valkey.IsValkeyNil`), it is treated as a stale queue entry and cleaned up from the pending queue (`ZREM`). Any cleanup error is propagated to the caller.
+4. If reading the payload encounters a transient network/storage failure or context cancellation, the queued entry is preserved in `party2:scheduled:pending` and the read error is returned immediately to the worker, ensuring unfinished work is neither discarded nor permanently stranded.
+5. If the payload is malformed JSON or violates domain invariants (`Validate()`), the invalid entry is cleaned up from the pending queue (and deleted from storage if malformed) to prevent repeated processing failures.
+
+

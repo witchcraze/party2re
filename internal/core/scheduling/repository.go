@@ -17,6 +17,8 @@ type ScheduledActionRepository interface {
 
 	// FetchDue returns actions that are due for execution at or before the given time.
 	// It may limit the number of returned actions to prevent overwhelming the worker.
+	// Stale entries with genuinely absent payloads are cleaned up from the queue.
+	// Transient storage/read failures preserve queued entries and return an error.
 	FetchDue(ctx context.Context, upTo time.Time, limit int) ([]ScheduledAction, error)
 
 	// AcquireLock attempts to lock the action for processing.
