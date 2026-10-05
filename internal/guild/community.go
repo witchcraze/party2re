@@ -172,7 +172,7 @@ func (s *Service) RejectApplication(ctx context.Context, guildID string, leaderI
 	return nil
 }
 
-// BroadcastCallout sends a broadcast message to all active guild members and awards +1 Guild Point (guild.cgi:yobikakeru).
+// BroadcastCallout sends a broadcast message to all guild members (including pending applicants) and awards +1 Guild Point (guild.cgi:yobikakeru).
 func (s *Service) BroadcastCallout(ctx context.Context, guildID string, senderID string, message string) error {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -221,12 +221,9 @@ func (s *Service) BroadcastCallout(ctx context.Context, guildID string, senderID
 		}
 	}
 
-	// Deliver letter to each active member
+	// Deliver letter to each member (including pending applicants in roster order)
 	if s.letterSender != nil {
 		for _, m := range members {
-			if m.IsPending {
-				continue
-			}
 			recName := m.CharacterID
 			if s.charReader != nil {
 				if rc, err := s.charReader.FindByID(ctx, m.CharacterID); err == nil {
