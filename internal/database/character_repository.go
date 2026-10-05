@@ -147,7 +147,9 @@ func (r *CharacterRepository) GetProfile(ctx context.Context, characterID string
 
 	bio := make(map[string]string)
 	if rawBio.Valid && rawBio.String != "" {
-		_ = json.Unmarshal([]byte(rawBio.String), &bio)
+		if err := json.Unmarshal([]byte(rawBio.String), &bio); err != nil {
+			return character.Profile{}, err
+		}
 	}
 
 	return character.Profile{

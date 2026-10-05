@@ -11,9 +11,11 @@ import (
 )
 
 type mockRepository struct {
-	characters map[string]corecharacter.Character
-	profiles   map[string]Profile
-	err        error
+	characters       map[string]corecharacter.Character
+	profiles         map[string]Profile
+	err              error
+	getProfileErr    error
+	saveProfileCalls int
 }
 
 func newMockRepository() *mockRepository {
@@ -83,7 +85,13 @@ func (r *mockRepository) Update(_ context.Context, value corecharacter.Character
 	return nil
 }
 
-func (r *mockRepository) GetProfile(_ context.Context, characterID string) (Profile, error) {
+func (r *mockRepository) GetProfile(ctx context.Context, characterID string) (Profile, error) {
+	if err := ctx.Err(); err != nil {
+		return Profile{}, err
+	}
+	if r.getProfileErr != nil {
+		return Profile{}, r.getProfileErr
+	}
 	if r.err != nil {
 		return Profile{}, r.err
 	}
@@ -95,6 +103,7 @@ func (r *mockRepository) GetProfile(_ context.Context, characterID string) (Prof
 }
 
 func (r *mockRepository) SaveProfile(_ context.Context, profile Profile) error {
+	r.saveProfileCalls++
 	if r.err != nil {
 		return r.err
 	}
@@ -513,4 +522,104 @@ func TestService_Delete(t *testing.T) {
 			t.Fatalf("expected ErrNotFound, got %v", err)
 		}
 	})
+}
+
+func TestService_Profile_ReadErrorPropagationAndPreservation(t *testing.T) {
+	repo := newMockRepository()
+	service, err := NewService(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := service.Create(context.Background(), "player-1", "Hero")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Initial healthy profile with avatar and bio
+	initialComment := "Initial comment"
+	initialAvatar := "https://example.com/saved-avatar.png"
+	initialBio := map[string]string{"key": "saved bio"}
+	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+		Comment:   &initialComment,
+		AvatarURL: &initialAvatar,
+		BioData:   initialBio,
+	})
+	if err != nil {
+		t.Fatalf("initial UpdateProfile failed: %v", err)
+	}
+
+	// 2. GetProfile propagates storage errors
+	storageErr := errors.New("database connection lost")
+	repo.getProfileErr = storageErr
+	_, err = service.GetProfile(context.Background(), char.ID)
+	if !errors.Is(err, storageErr) {
+		t.Fatalf("expected storageErr from GetProfile, got %v", err)
+	}
+
+	// 3. GetProfile propagates cancellation errors
+	repo.getProfileErr = nil
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = service.GetProfile(canceledCtx, char.ID)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled from GetProfile, got %v", err)
+	}
+
+	// 4. UpdateProfile fails when profile read fails, makes 0 SaveProfile calls, preserves existing data
+	repo.saveProfileCalls = 0
+	repo.getProfileErr = storageErr
+	newComment := "New comment attempting to overwrite"
+	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+		Comment: &newComment,
+	})
+	if !errors.Is(err, storageErr) {
+		t.Fatalf("expected storageErr from UpdateProfile, got %v", err)
+	}
+	if repo.saveProfileCalls != 0 {
+		t.Fatalf("expected 0 SaveProfile calls on read error, got %d", repo.saveProfileCalls)
+	}
+
+	// In storage, existing AvatarURL and BioData are still intact
+	stored := repo.profiles[char.ID]
+	if stored.AvatarURL != initialAvatar || stored.BioData["key"] != "saved bio" || stored.Comment != initialComment {
+		t.Fatalf("stored profile was corrupted or overwritten on read error: %+v", stored)
+	}
+
+	// 5. Healthy partial update preserves saved AvatarURL and BioData
+	repo.getProfileErr = nil
+	updatedComment := "Healthy updated comment"
+	updated, err := service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+		Comment: &updatedComment,
+	})
+	if err != nil {
+		t.Fatalf("healthy UpdateProfile failed: %v", err)
+	}
+	if updated.Comment != updatedComment {
+		t.Errorf("comment not updated: %s", updated.Comment)
+	}
+	if updated.AvatarURL != initialAvatar {
+		t.Errorf("avatar not preserved in return: %s", updated.AvatarURL)
+	}
+	if updated.BioData["key"] != "saved bio" {
+		t.Errorf("bio data not preserved in return: %v", updated.BioData)
+	}
+
+	storedAfter := repo.profiles[char.ID]
+	if storedAfter.AvatarURL != initialAvatar || storedAfter.BioData["key"] != "saved bio" || storedAfter.Comment != updatedComment {
+		t.Fatalf("stored profile lost avatar or bio during partial update: %+v", storedAfter)
+	}
+
+	// 6. Genuinely absent profile returns default profile without error
+	absentChar, err := service.Create(context.Background(), "player-1", "AbsentHero")
+	if err != nil {
+		t.Fatal(err)
+	}
+	absentView, err := service.GetProfile(context.Background(), absentChar.ID)
+	if err != nil {
+		t.Fatalf("expected nil error for absent profile, got %v", err)
+	}
+	if absentView.Profile.CharacterID != absentChar.ID || absentView.Profile.AvatarURL != "" {
+		t.Fatalf("unexpected default profile for absent char: %+v", absentView.Profile)
+	}
 }

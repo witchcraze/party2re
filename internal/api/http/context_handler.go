@@ -113,6 +113,8 @@ func (h *Handler) handleGetPlayerContext(w http.ResponseWriter, r *http.Request)
 
 // playerContextResponse enriches read facts with HTTP-owned presentation. It
 // performs no mutations and never treats an eligible entry as command approval.
+// Profile read errors are propagated to callers so GET /context yields 500 and
+// command gateway refresh yields CONTEXT_REFRESH_FAILED instead of defaulting.
 func (h *Handler) playerContextResponse(ctx context.Context, result playercontext.Result, now time.Time) (PlayerContextResponse, error) {
 	s := result.Snapshot
 	c := s.Character

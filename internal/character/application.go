@@ -303,7 +303,9 @@ func (s *Service) ChangeGender(ctx context.Context, characterID, newGender strin
 	return result, nil
 }
 
-// GetProfile retrieves a character's stats and public profile.
+// GetProfile retrieves a character's stats and public profile. It propagates
+// repository storage and context cancellation errors; genuinely missing profiles
+// remain supported by returning a default profile.
 func (s *Service) GetProfile(ctx context.Context, characterID string) (ProfileView, error) {
 	char, err := s.repository.FindByID(ctx, characterID)
 	if err != nil {
@@ -318,7 +320,11 @@ func (s *Service) GetProfile(ctx context.Context, characterID string) (ProfileVi
 
 	if s.profileRepo != nil {
 		stored, err := s.profileRepo.GetProfile(ctx, characterID)
-		if err == nil && stored.CharacterID != "" {
+		if err != nil {
+			if !errors.Is(err, ErrNotFound) {
+				return ProfileView{}, err
+			}
+		} else if stored.CharacterID != "" {
 			profile = stored
 		}
 	}
@@ -330,6 +336,9 @@ func (s *Service) GetProfile(ctx context.Context, characterID string) (ProfileVi
 }
 
 // UpdateProfile modifies a character's custom bio, comment, and avatar URL.
+// It verifies the character exists and reads the current profile. If reading the
+// existing profile fails due to a repository error (other than absent profile),
+// the error is returned immediately without persisting changes, preserving existing profile fields.
 func (s *Service) UpdateProfile(ctx context.Context, characterID string, req UpdateProfileRequest) (Profile, error) {
 	// Verify character exists
 	if _, err := s.repository.FindByID(ctx, characterID); err != nil {
@@ -343,9 +352,17 @@ func (s *Service) UpdateProfile(ctx context.Context, characterID string, req Upd
 
 	if s.profileRepo != nil {
 		stored, err := s.profileRepo.GetProfile(ctx, characterID)
-		if err == nil && stored.CharacterID != "" {
+		if err != nil {
+			if !errors.Is(err, ErrNotFound) {
+				return Profile{}, err
+			}
+		} else if stored.CharacterID != "" {
 			currentProfile = stored
 		}
+	}
+
+	if currentProfile.BioData == nil {
+		currentProfile.BioData = make(map[string]string)
 	}
 
 	if req.Comment != nil {

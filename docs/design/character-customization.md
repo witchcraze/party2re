@@ -76,3 +76,4 @@ The Character Customization & Naming Hall system (`internal/character`, legacy `
 - **Atomicity & Locking**: Name changes and gender modifications lock the target character row with `SELECT ... FOR UPDATE` within a database transaction (`RunInTx`).
 - **IDOR Protection**: All mutating `/characters/{id}/*` endpoints enforce session token authentication and verify that the character belongs to the authenticated player (`withAuthenticatedCharacter`).
 - **Unique Name Integrity**: Character name uniqueness is validated and supported by an index on `characters(name)`.
+- **Profile Read & Update Integrity**: Querying or updating a profile propagates storage and cancellation errors; unreadable persisted data does not become a default profile. Partial updates require a successful prerequisite read of existing profile data, preventing silent overwrite of avatar or bio fields on storage failure.
