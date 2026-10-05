@@ -93,6 +93,18 @@ func WithBlessingCleaner(b BlessingCleaner) ServiceOption {
 	}
 }
 
+func WithAlchemyCompleter(a AlchemyCompleter) ServiceOption {
+	return func(s *Service) {
+		s.alchemy = a
+	}
+}
+
+func WithCostumeResetter(c CostumeResetter) ServiceOption {
+	return func(s *Service) {
+		s.costume = c
+	}
+}
+
 func WithOnlineCounter(c OnlineCounter) ServiceOption {
 	return func(s *Service) {
 		s.onlineCounter = c

@@ -16,6 +16,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/eventplaza"
 	"github.com/witchcraze/party2re/internal/god"
@@ -705,5 +706,137 @@ func TestHomePetAdapter_HeavenWishCompanionIntegration(t *testing.T) {
 	}
 	if talkRes2.PetName != "オルテガ" || talkRes2.Phrase != phraseText {
 		t.Errorf("expected オルテガ speaking %q, got %+v", phraseText, talkRes2)
+	}
+}
+
+type wireMockCharRepo struct {
+	char corecharacter.Character
+}
+
+func (m *wireMockCharRepo) FindByID(_ context.Context, id string) (corecharacter.Character, error) {
+	if id == m.char.ID {
+		return m.char, nil
+	}
+	return corecharacter.Character{}, corecharacter.ErrNotFound
+}
+
+func (m *wireMockCharRepo) FindByIDForUpdate(ctx context.Context, id string) (corecharacter.Character, error) {
+	return m.FindByID(ctx, id)
+}
+
+func (m *wireMockCharRepo) Update(_ context.Context, char corecharacter.Character) error {
+	m.char = char
+	return nil
+}
+
+type wireMockHomeRepo struct {
+	home.Repository
+}
+
+type mockRecoveryTavern struct {
+	calledID string
+	err      error
+}
+
+func (m *mockRecoveryTavern) ResetFullness(_ context.Context, charID string) error {
+	m.calledID = charID
+	return m.err
+}
+
+type mockRecoveryChapel struct {
+	calledID string
+	err      error
+}
+
+func (m *mockRecoveryChapel) ClearBlessing(_ context.Context, charID string) error {
+	m.calledID = charID
+	return m.err
+}
+
+type mockRecoveryAlchemy struct {
+	calledID string
+	err      error
+}
+
+func (m *mockRecoveryAlchemy) CompleteOngoingSynthesis(_ context.Context, charID string) error {
+	m.calledID = charID
+	return m.err
+}
+
+type mockRecoveryStore struct {
+	calledID string
+	err      error
+}
+
+func (m *mockRecoveryStore) ResetCostume(_ context.Context, charID string) error {
+	m.calledID = charID
+	return m.err
+}
+
+func TestWireHomeRecoveryHooks_WiringAndErrorPropagation(t *testing.T) {
+	ctx := context.Background()
+	char := corecharacter.Character{
+		ID:    "char-wire",
+		Name:  "WireHero",
+		Tired: 50,
+		Stats: corecharacter.Stats{HP: 10, MaxHP: 100, MP: 5, MaxMP: 50},
+	}
+	charRepo := &wireMockCharRepo{char: char}
+	timerSvc := timer.NewService(nil)
+
+	homeSvc, err := home.NewService(
+		&wireMockHomeRepo{},
+		charRepo,
+		home.WithTimer(timerSvc),
+		home.WithCharacterUpdater(charRepo),
+	)
+	if err != nil {
+		t.Fatalf("home.NewService failed: %v", err)
+	}
+
+	tavernMock := &mockRecoveryTavern{}
+	chapelMock := &mockRecoveryChapel{}
+	alchemyMock := &mockRecoveryAlchemy{}
+	storeMock := &mockRecoveryStore{}
+
+	soc := &socServices{home: homeSvc}
+
+	// Mirror wireHooks wiring:
+	soc.home.SetFullnessResetter(tavernMock)
+	soc.home.SetBlessingCleaner(chapelMock)
+	soc.home.SetAlchemyCompleter(alchemyMock)
+	soc.home.SetCostumeResetter(storeMock)
+
+	// Set asleep flag
+	_ = timerSvc.SetLock(ctx, timer.CategoryAsleep, "char-wire", 24*time.Hour)
+
+	// 1. Success case: all hooks called
+	res, err := soc.home.Wake(ctx, "char-wire")
+	if err != nil {
+		t.Fatalf("Wake failed: %v", err)
+	}
+	if !res.Success {
+		t.Errorf("expected Wake success")
+	}
+	if tavernMock.calledID != "char-wire" || chapelMock.calledID != "char-wire" || alchemyMock.calledID != "char-wire" || storeMock.calledID != "char-wire" {
+		t.Errorf("hooks not all called for char-wire: tavern=%s chapel=%s alchemy=%s store=%s",
+			tavernMock.calledID, chapelMock.calledID, alchemyMock.calledID, storeMock.calledID)
+	}
+	asleep, _ := timerSvc.IsLocked(ctx, timer.CategoryAsleep, "char-wire")
+	if asleep {
+		t.Errorf("expected CategoryAsleep unlocked after successful Wake")
+	}
+
+	// 2. Failure case: hook error propagates and preserves CategoryAsleep
+	_ = timerSvc.SetLock(ctx, timer.CategoryAsleep, "char-wire", 24*time.Hour)
+	tavernMock.err = errors.New("simulated tavern error")
+
+	_, err = soc.home.Wake(ctx, "char-wire")
+	if err == nil {
+		t.Fatalf("expected error from failing tavern hook, got nil")
+	}
+	asleep, _ = timerSvc.IsLocked(ctx, timer.CategoryAsleep, "char-wire")
+	if !asleep {
+		t.Errorf("expected CategoryAsleep to remain locked when hook fails")
 	}
 }

@@ -103,6 +103,11 @@ True Party2 character recovery is conducted at Home (either one's own or a visit
   - Temporary Job Memory reverted.
   - Tavern fullness state reset (`tavern.ResetFullness`).
   - Chapel prayers and active blessings cleared (`chapel.ClearBlessing`).
+  - Ongoing alchemy synthesis completed (`alchemy.CompleteOngoingSynthesis`).
+  - Costume rental reset (`store.ResetCostume`).
+  - Daily once-dungeon timer lock (`timer.CategoryDungeonOnce`) released and daily quota (`dungeon_once`) reset.
+  - Pending recovery flag (`timer.CategoryAsleep`) released upon successful completion of all required hooks and cleanups.
+  - **Hook Failure & Partial-Outcome Semantics**: If any mandatory recovery hook or timer cleanup fails during Wake, the execution halts and returns an error (HTTP 500 / `EXECUTION_FAILED` in Gateway actions). The pending recovery flag (`timer.CategoryAsleep`) is NOT released, keeping the character in pending recovery and blocking ordinary actions. Any effects applied before the point of failure (such as restored HP/MP/tiredness or earlier hooks) remain intact without cross-store rollback. Clients must observe actual state via GET queries without assuming complete rollback or automatic retry. Subsequent explicit Wake calls can complete remaining hooks and finalize recovery once transient errors are cleared.
 
 ---
 
