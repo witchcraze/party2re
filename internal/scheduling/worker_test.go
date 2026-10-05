@@ -263,6 +263,43 @@ func TestWorker_processActions_FetchDueError(t *testing.T) {
 	}
 }
 
+func TestWorker_processActions_RecoveryAfterTransientFetchError(t *testing.T) {
+	repo := newMockRepository()
+	repo.fetchDueErr = errors.New("transient network error")
+	logger := &mockLogger{}
+	worker := NewWorker(repo, time.Minute, logger)
+
+	handler := &mockHandler{}
+	worker.RegisterHandler("action", handler)
+
+	action := core_scheduling.ScheduledAction{
+		ID:         "recover-1",
+		ActionType: "action",
+		ActorID:    "char-1",
+		State:      core_scheduling.StatePending,
+		ExecuteAt:  time.Now().Add(-time.Minute),
+	}
+	repo.actions = []core_scheduling.ScheduledAction{action}
+
+	// First attempt: FetchDue fails
+	worker.processActions(context.Background())
+	if handler.handled {
+		t.Fatal("handler should not have been called during fetch error")
+	}
+
+	// Clear error to simulate recovery
+	repo.fetchDueErr = nil
+
+	// Second attempt: FetchDue succeeds
+	worker.processActions(context.Background())
+	if !handler.handled {
+		t.Fatal("handler should have been called after transient error resolved")
+	}
+	if repo.saved["recover-1"].State != core_scheduling.StateCompleted {
+		t.Errorf("expected completed state, got %s", repo.saved["recover-1"].State)
+	}
+}
+
 func TestWorker_processAction_AcquireLockError(t *testing.T) {
 	repo := newMockRepository()
 	repo.acquireLockErr = errors.New("lock backend failure")

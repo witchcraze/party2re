@@ -289,7 +289,7 @@ func TestValkeyRepository_FetchDue(t *testing.T) {
 			case actionKeyPrefix + "valid-1":
 				return valkeytest.MakeStringResult(string(validJSON))
 			case actionKeyPrefix + "missing-2":
-				return valkeytest.MakeErrorResult(errors.New("key missing"))
+				return valkeytest.MakeNilResult()
 			case actionKeyPrefix + "malformed-3":
 				return valkeytest.MakeStringResult("{invalid-json-content")
 			case actionKeyPrefix + "invalid-4":
@@ -327,6 +327,222 @@ func TestValkeyRepository_FetchDue(t *testing.T) {
 	}
 	if !reflect.DeepEqual(dels, []string{actionKeyPrefix + "malformed-3"}) {
 		t.Errorf("unexpected DEL cleanup calls: %v", dels)
+	}
+}
+
+func TestValkeyRepository_FetchDue_TransientReadError(t *testing.T) {
+	ctx := context.Background()
+	validAction := core_scheduling.ScheduledAction{
+		ID:         "act-transient-1",
+		ActionType: "adventure:explore",
+		ActorID:    "char-transient",
+		State:      core_scheduling.StatePending,
+		ExecuteAt:  time.Now().UTC(),
+	}
+	validJSON, _ := json.Marshal(validAction)
+
+	transientErr := errors.New("connection reset by peer")
+	failGet := true
+
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		c := cmd.Commands()
+		switch c[0] {
+		case "ZRANGEBYSCORE":
+			return valkeytest.MakeStringSliceResult([]string{"act-transient-1"})
+		case "GET":
+			if failGet {
+				return valkeytest.MakeErrorResult(transientErr)
+			}
+			return valkeytest.MakeStringResult(string(validJSON))
+		case "ZREM":
+			t.Errorf("unexpected ZREM called during transient read error: %v", c)
+			return valkeytest.MakeOKResult()
+		}
+		return valkeytest.MakeOKResult()
+	}))
+
+	repo := NewValkeyRepository(client)
+
+	// 1. Transient GET failure must propagate error and NOT call ZREM
+	actions, err := repo.FetchDue(ctx, time.Now(), 10)
+	if !errors.Is(err, transientErr) {
+		t.Fatalf("expected transientErr, got %v", err)
+	}
+	if actions != nil {
+		t.Fatalf("expected nil actions on error, got %v", actions)
+	}
+
+	// Verify no ZREM was issued
+	for _, cmd := range client.RecordedCommandStrings() {
+		if cmd[0] == "ZREM" {
+			t.Fatalf("ZREM was called on transient failure: %v", cmd)
+		}
+	}
+
+	// 2. Subsequent healthy fetch recovers and returns the action
+	failGet = false
+	actions, err = repo.FetchDue(ctx, time.Now(), 10)
+	if err != nil {
+		t.Fatalf("unexpected FetchDue error after recovery: %v", err)
+	}
+	if len(actions) != 1 || actions[0].ID != "act-transient-1" {
+		t.Fatalf("expected 1 action 'act-transient-1', got %d actions: %+v", len(actions), actions)
+	}
+}
+
+func TestValkeyRepository_FetchDue_ContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		c := cmd.Commands()
+		switch c[0] {
+		case "ZRANGEBYSCORE":
+			return valkeytest.MakeStringSliceResult([]string{"act-cancel-1"})
+		case "GET":
+			return valkeytest.MakeErrorResult(ctx.Err())
+		case "ZREM":
+			t.Errorf("unexpected ZREM called during context cancellation: %v", c)
+			return valkeytest.MakeOKResult()
+		}
+		return valkeytest.MakeOKResult()
+	}))
+
+	repo := NewValkeyRepository(client)
+	actions, err := repo.FetchDue(ctx, time.Now(), 10)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+	if actions != nil {
+		t.Fatalf("expected nil actions on context cancel, got %v", actions)
+	}
+}
+
+func TestValkeyRepository_FetchDue_GenuinelyAbsentKey_CleanupError(t *testing.T) {
+	ctx := context.Background()
+	cleanupErr := errors.New("zrem connection failure")
+
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		c := cmd.Commands()
+		switch c[0] {
+		case "ZRANGEBYSCORE":
+			return valkeytest.MakeStringSliceResult([]string{"stale-1"})
+		case "GET":
+			return valkeytest.MakeNilResult()
+		case "ZREM":
+			return valkeytest.MakeErrorResult(cleanupErr)
+		}
+		return valkeytest.MakeOKResult()
+	}))
+
+	repo := NewValkeyRepository(client)
+	actions, err := repo.FetchDue(ctx, time.Now(), 10)
+	if !errors.Is(err, cleanupErr) {
+		t.Fatalf("expected cleanupErr, got %v", err)
+	}
+	if actions != nil {
+		t.Fatalf("expected nil actions on cleanup error, got %v", actions)
+	}
+}
+
+func TestValkeyRepository_FetchDue_ActorObservationConsistency(t *testing.T) {
+	ctx := context.Background()
+	storedKeys := make(map[string]string)
+	actorSets := make(map[string][]string)
+	var pendingQueue []string
+
+	transientFail := false
+	transientErr := errors.New("transient network blip")
+
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(_ context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		args := cmd.Commands()
+		switch args[0] {
+		case "SET":
+			storedKeys[args[1]] = args[2]
+			return valkeytest.MakeOKResult()
+		case "SADD":
+			actorSets[args[1]] = append(actorSets[args[1]], args[2])
+			return valkeytest.MakeOKResult()
+		case "ZADD":
+			member := args[len(args)-1]
+			pendingQueue = append(pendingQueue, member)
+			return valkeytest.MakeOKResult()
+		case "ZRANGEBYSCORE":
+			return valkeytest.MakeStringSliceResult(pendingQueue)
+		case "GET":
+			if transientFail {
+				return valkeytest.MakeErrorResult(transientErr)
+			}
+			val, ok := storedKeys[args[1]]
+			if !ok {
+				return valkeytest.MakeNilResult()
+			}
+			return valkeytest.MakeStringResult(val)
+		case "SMEMBERS":
+			return valkeytest.MakeStringSliceResult(actorSets[args[1]])
+		case "MGET":
+			var results []string
+			for _, k := range args[1:] {
+				results = append(results, storedKeys[k])
+			}
+			return valkeytest.MakeStringSliceResult(results)
+		case "ZREM":
+			target := args[len(args)-1]
+			var updated []string
+			for _, m := range pendingQueue {
+				if m != target {
+					updated = append(updated, m)
+				}
+			}
+			pendingQueue = updated
+			return valkeytest.MakeOKResult()
+		default:
+			return valkeytest.MakeOKResult()
+		}
+	}))
+
+	repo := NewValkeyRepository(client)
+
+	action := core_scheduling.ScheduledAction{
+		ID:          "act-actor-obs-1",
+		ActorID:     "hero-obs",
+		ActionType:  "adventure:step",
+		State:       core_scheduling.StatePending,
+		ScheduledAt: time.Now().UTC(),
+		ExecuteAt:   time.Now().UTC().Add(-time.Minute), // due now
+	}
+
+	if err := repo.Schedule(ctx, action); err != nil {
+		t.Fatalf("unexpected Schedule error: %v", err)
+	}
+
+	// Initial actor query returns Pending action
+	pending, err := repo.FindPendingByActorID(ctx, "hero-obs")
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("expected 1 pending action for hero-obs, got %d, err: %v", len(pending), err)
+	}
+
+	// Simulate transient read error during FetchDue
+	transientFail = true
+	_, err = repo.FetchDue(ctx, time.Now(), 10)
+	if !errors.Is(err, transientErr) {
+		t.Fatalf("expected transientErr, got %v", err)
+	}
+
+	// Actor observation MUST remain consistent (work is still pending and queued)
+	pendingAfterFail, err := repo.FindPendingByActorID(ctx, "hero-obs")
+	if err != nil || len(pendingAfterFail) != 1 {
+		t.Fatalf("expected 1 pending action after transient failure, got %d, err: %v", len(pendingAfterFail), err)
+	}
+	if len(pendingQueue) != 1 || pendingQueue[0] != action.ID {
+		t.Fatalf("pending queue lost entry during transient failure: %v", pendingQueue)
+	}
+
+	// Clear failure, fetch due again
+	transientFail = false
+	dueActions, err := repo.FetchDue(ctx, time.Now(), 10)
+	if err != nil || len(dueActions) != 1 {
+		t.Fatalf("expected 1 due action after recovery, got %d, err: %v", len(dueActions), err)
 	}
 }
 

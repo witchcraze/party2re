@@ -66,6 +66,12 @@ func (r *ValkeyRepository) Schedule(ctx context.Context, action core_scheduling.
 	return nil
 }
 
+// FetchDue queries actions due up to upTo from the pending queue sorted set.
+// If an action key is genuinely missing (valkey.IsValkeyNil), the stale entry
+// is removed from the pending queue. If reading the payload fails due to a
+// transient storage error or context cancellation, the queued entry is preserved
+// and the error is returned immediately to the worker. Malformed or invalid
+// actions are purged from the queue to prevent repeated processing.
 func (r *ValkeyRepository) FetchDue(ctx context.Context, upTo time.Time, limit int) ([]core_scheduling.ScheduledAction, error) {
 	scoreStr := strconv.FormatInt(upTo.Unix(), 10)
 
@@ -91,23 +97,34 @@ func (r *ValkeyRepository) FetchDue(ctx context.Context, upTo time.Time, limit i
 		actionKey := actionKeyPrefix + id
 		val, err := r.client.Do(ctx, r.client.B().Get().Key(actionKey).Build()).AsBytes()
 		if err != nil {
-			// Key missing: remove stale queue entry
-			r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build())
-			continue
+			if valkey.IsValkeyNil(err) {
+				// Key missing: remove stale queue entry
+				if remErr := r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build()).Error(); remErr != nil && !valkey.IsValkeyNil(remErr) {
+					return nil, remErr
+				}
+				continue
+			}
+			return nil, err
 		}
 
 		var action core_scheduling.ScheduledAction
 		if err := json.Unmarshal(val, &action); err != nil {
 			// Malformed JSON: remove from queue and delete key to prevent re-fetch
-			r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build())
-			r.client.Do(ctx, r.client.B().Del().Key(actionKey).Build())
+			if remErr := r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build()).Error(); remErr != nil && !valkey.IsValkeyNil(remErr) {
+				return nil, remErr
+			}
+			if delErr := r.client.Do(ctx, r.client.B().Del().Key(actionKey).Build()).Error(); delErr != nil && !valkey.IsValkeyNil(delErr) {
+				return nil, delErr
+			}
 			continue
 		}
 
 		// Reject actions that fail domain-level invariants (e.g. unknown state,
 		// oversized fields). Remove from queue to prevent repeated processing.
 		if err := action.Validate(); err != nil {
-			r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build())
+			if remErr := r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build()).Error(); remErr != nil && !valkey.IsValkeyNil(remErr) {
+				return nil, remErr
+			}
 			continue
 		}
 
