@@ -623,3 +623,149 @@ func TestService_Profile_ReadErrorPropagationAndPreservation(t *testing.T) {
 		t.Fatalf("unexpected default profile for absent char: %+v", absentView.Profile)
 	}
 }
+
+func TestService_UpdateProfile_ValidationFailureMakesZeroSaveCalls(t *testing.T) {
+	repo := newMockRepository()
+	service, err := NewService(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := service.Create(context.Background(), "player-1", "Hero")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Initial profile
+	initComment := "Valid initial comment"
+	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+		Comment: &initComment,
+	})
+	if err != nil {
+		t.Fatalf("setup UpdateProfile failed: %v", err)
+	}
+	repo.saveProfileCalls = 0
+
+	// 2. Overlong comment
+	longComment := strings.Repeat("a", MaxCommentLength+1)
+	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+		Comment: &longComment,
+	})
+	if !errors.Is(err, ErrCommentTooLong) {
+		t.Fatalf("expected ErrCommentTooLong, got %v", err)
+	}
+	if repo.saveProfileCalls != 0 {
+		t.Errorf("expected 0 SaveProfile calls on invalid comment, got %d", repo.saveProfileCalls)
+	}
+
+	// 3. Invalid avatar URL
+	badAvatar := "ftp://example.com/avatar.png"
+	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+		AvatarURL: &badAvatar,
+	})
+	if !errors.Is(err, ErrInvalidAvatarURL) {
+		t.Fatalf("expected ErrInvalidAvatarURL, got %v", err)
+	}
+	if repo.saveProfileCalls != 0 {
+		t.Errorf("expected 0 SaveProfile calls on invalid avatar, got %d", repo.saveProfileCalls)
+	}
+
+	// 4. Invalid aura effect
+	badAura := 99
+	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+		AuraEffect: &badAura,
+	})
+	if !errors.Is(err, ErrInvalidAuraEffect) {
+		t.Fatalf("expected ErrInvalidAuraEffect, got %v", err)
+	}
+	if repo.saveProfileCalls != 0 {
+		t.Errorf("expected 0 SaveProfile calls on invalid aura, got %d", repo.saveProfileCalls)
+	}
+
+	// 5. Invalid bio key
+	longBioKey := map[string]string{strings.Repeat("k", MaxBioKeyLength+1): "val"}
+	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+		BioData: longBioKey,
+	})
+	if !errors.Is(err, ErrBioKeyTooLong) {
+		t.Fatalf("expected ErrBioKeyTooLong, got %v", err)
+	}
+	if repo.saveProfileCalls != 0 {
+		t.Errorf("expected 0 SaveProfile calls on invalid bio key, got %d", repo.saveProfileCalls)
+	}
+
+	// 6. Invalid bio value
+	longBioVal := map[string]string{"valid_key": strings.Repeat("v", MaxBioFieldLength+1)}
+	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+		BioData: longBioVal,
+	})
+	if !errors.Is(err, ErrBioValueTooLong) {
+		t.Fatalf("expected ErrBioValueTooLong, got %v", err)
+	}
+	if repo.saveProfileCalls != 0 {
+		t.Errorf("expected 0 SaveProfile calls on invalid bio value, got %d", repo.saveProfileCalls)
+	}
+
+	// Ensure stored profile remains unchanged
+	stored := repo.profiles[char.ID]
+	if stored.Comment != initComment {
+		t.Fatalf("stored profile was mutated after validation errors: %+v", stored)
+	}
+}
+
+type mockTransactionProvider struct {
+	runInTxCalls int
+	fn           func(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+func (m *mockTransactionProvider) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	m.runInTxCalls++
+	if m.fn != nil {
+		return m.fn(ctx, fn)
+	}
+	return fn(ctx)
+}
+
+func TestService_UpdateProfile_InvokesTransactionProvider(t *testing.T) {
+	repo := newMockRepository()
+	txProv := &mockTransactionProvider{}
+	service, err := NewService(repo, WithTransactionProvider(txProv))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := service.Create(context.Background(), "player-1", "TxHero")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	comment := "Tx comment"
+	_, err = service.UpdateProfile(context.Background(), char.ID, UpdateProfileRequest{
+		Comment: &comment,
+	})
+	if err != nil {
+		t.Fatalf("UpdateProfile failed: %v", err)
+	}
+	if txProv.runInTxCalls == 0 {
+		t.Fatalf("expected RunInTx to be called, got %d", txProv.runInTxCalls)
+	}
+}
+
+func TestService_UpdateProfile_NonexistentCharacterReturnsNotFound(t *testing.T) {
+	repo := newMockRepository()
+	service, err := NewService(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	comment := "Any comment"
+	_, err = service.UpdateProfile(context.Background(), "nonexistent-id", UpdateProfileRequest{
+		Comment: &comment,
+	})
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for nonexistent character, got %v", err)
+	}
+	if repo.saveProfileCalls != 0 {
+		t.Errorf("expected 0 SaveProfile calls for nonexistent character, got %d", repo.saveProfileCalls)
+	}
+}

@@ -73,7 +73,12 @@ The Character Customization & Naming Hall system (`internal/character`, legacy `
 
 ## 7. Concurrency & Security Guarantees
 
-- **Atomicity & Locking**: Name changes and gender modifications lock the target character row with `SELECT ... FOR UPDATE` within a database transaction (`RunInTx`).
+- **Atomicity & Locking**: Name changes, gender modifications, and profile updates lock the target character row with `SELECT ... FOR UPDATE` within a database transaction (`RunInTx`).
+- **Atomic Partial Profile Updates & Field Preservation**:
+  - `UpdateProfile` validates all submitted fields upfront, enters a database transaction (`RunInTx`), and acquires an exclusive row lock on `characters` (`findForUpdate`).
+  - Concurrent partial updates (e.g. updating `comment` in one request and `avatar_url` in another) serialize on the character row lock. Each transaction reads the latest committed profile state, merges its modified fields into the record, and UPSERTs the result, preserving disjoint fields without lost updates.
+  - Concurrent first-profile creation is safely serialized by the lock on `characters`, avoiding reliance on locking non-existent rows in `character_profiles`.
 - **IDOR Protection**: All mutating `/characters/{id}/*` endpoints enforce session token authentication and verify that the character belongs to the authenticated player (`withAuthenticatedCharacter`).
 - **Unique Name Integrity**: Character name uniqueness is validated and supported by an index on `characters(name)`.
 - **Profile Read & Update Integrity**: Querying or updating a profile propagates storage and cancellation errors; unreadable persisted data does not become a default profile. Partial updates require a successful prerequisite read of existing profile data, preventing silent overwrite of avatar or bio fields on storage failure.
+
