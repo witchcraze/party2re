@@ -110,7 +110,7 @@ func (s *Service) StartIndianPoker(ctx context.Context, roomID string, leaderID 
 		return nil, err
 	}
 
-	return s.GetRoomDetail(ctx, roomID, leaderID)
+	return s.getRoomDetail(ctx, roomID, leaderID)
 }
 
 // PlayIndianPokerAction processes a player's round action (call, showdown, fold)
@@ -322,5 +322,5 @@ func (s *Service) PlayIndianPokerAction(ctx context.Context, roomID string, char
 		_ = s.gamePlayedHook(ctx, showdownWinner, "indian_poker")
 	}
 
-	return s.GetRoomDetail(ctx, roomID, characterID)
+	return s.getRoomDetail(ctx, roomID, characterID)
 }

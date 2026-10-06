@@ -76,7 +76,7 @@ func (s *Service) JoinRoom(ctx context.Context, roomID string, characterID strin
 		return nil, err
 	}
 
-	return s.GetRoomDetail(ctx, roomID, characterID)
+	return s.getRoomDetail(ctx, roomID, characterID)
 }
 
 // SpectateRoom adds a character as a spectator to a room (party2/lib/casino.cgi:475-518).
@@ -126,7 +126,7 @@ func (s *Service) SpectateRoom(ctx context.Context, roomID string, characterID s
 		return nil, err
 	}
 
-	return s.GetRoomDetail(ctx, roomID, characterID)
+	return s.getRoomDetail(ctx, roomID, characterID)
 }
 
 // LeaveRoom removes a character from a room, transferring leader or disbanding if empty (party2/lib/_casino.cgi:193-239).

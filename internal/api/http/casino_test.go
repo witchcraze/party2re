@@ -18,7 +18,7 @@ type stubCasinoService struct {
 	exchangeGoldToCoinsFn func(ctx context.Context, characterID string, coins int64) (casino.Account, corecharacter.Character, error)
 	spinSlotFn            func(ctx context.Context, characterID string, bet int64) (casino.SpinResult, casino.Account, error)
 	exchangePrizeFn       func(ctx context.Context, characterID string, costCoins int64, count int) (casino.PrizeExchangeResult, error)
-	listRoomsFn           func(ctx context.Context) ([]casino.RoomDetail, error)
+	listRoomsFn           func(ctx context.Context) ([]casino.RoomSummary, error)
 	createRoomFn          func(ctx context.Context, characterID string, req casino.CreateRoomRequest) (*casino.RoomDetail, error)
 	getRoomDetailFn       func(ctx context.Context, roomID string, viewingCharID string) (*casino.RoomDetail, error)
 	joinRoomFn            func(ctx context.Context, roomID string, characterID string, password string, fatigue int) (*casino.RoomDetail, error)
@@ -64,11 +64,11 @@ func (s *stubCasinoService) ExchangePrize(ctx context.Context, characterID strin
 	}, nil
 }
 
-func (s *stubCasinoService) ListRooms(ctx context.Context) ([]casino.RoomDetail, error) {
+func (s *stubCasinoService) ListRooms(ctx context.Context) ([]casino.RoomSummary, error) {
 	if s.listRoomsFn != nil {
 		return s.listRoomsFn(ctx)
 	}
-	return []casino.RoomDetail{}, nil
+	return []casino.RoomSummary{}, nil
 }
 
 func (s *stubCasinoService) CreateRoom(ctx context.Context, characterID string, req casino.CreateRoomRequest) (*casino.RoomDetail, error) {
@@ -89,6 +89,14 @@ func (s *stubCasinoService) GetRoomDetail(ctx context.Context, roomID string, vi
 		Room:    casino.Room{ID: roomID, Name: "TestRoom", GameType: casino.GameTypeIndian, LeaderCharacterID: "c1", Rate: 10},
 		Members: []casino.RoomMember{{RoomID: roomID, CharacterID: "c1", Card: -1}},
 	}, nil
+}
+
+func (s *stubCasinoService) GetRoomView(ctx context.Context, roomID, playerID, characterID string) (*casino.RoomView, error) {
+	detail, err := s.GetRoomDetail(ctx, roomID, characterID)
+	if err != nil {
+		return nil, err
+	}
+	return &casino.RoomView{Room: casino.RoomObservation{RoomSummary: casino.RoomSummary{ID: detail.Room.ID}}, Members: []casino.MemberObservation{}}, nil
 }
 
 func (s *stubCasinoService) JoinRoom(ctx context.Context, roomID string, characterID string, password string, fatigue int) (*casino.RoomDetail, error) {
@@ -285,7 +293,8 @@ func TestCasinoEndpoints(t *testing.T) {
 	})
 
 	t.Run("GET /casino/rooms/{roomId} - success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/casino/rooms/r1", nil)
+		req := httptest.NewRequest(http.MethodGet, "/casino/rooms/r1?character_id=c1", nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 

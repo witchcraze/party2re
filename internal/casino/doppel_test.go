@@ -107,7 +107,7 @@ func TestMultiplayerDoppel_ChildrenWin_LeaderTransfer(t *testing.T) {
 	}
 
 	// Masking check: P1 sees own mark "★", other members see "？" and action "？？？"
-	p2View, _ := svc.GetRoomDetail(ctx, roomID, p2)
+	p2View, _ := casino.RoomSnapshotForTest(svc, ctx, roomID, p2)
 	for _, m := range p2View.Members {
 		if m.CharacterID == p1 {
 			if m.CardDisplay != "？" || m.Card != -1 {

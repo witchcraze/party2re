@@ -97,7 +97,7 @@ func TestMultiplayerHighLow_FullLifecycle(t *testing.T) {
 
 	// 4. Card & action masking check (party2/lib/casino_highlow.cgi:33-50)
 	// In High-Low: player sees their OWN card; other players' cards are masked as "？"
-	p1View, err := svc.GetRoomDetail(ctx, roomID, p1)
+	p1View, err := casino.RoomSnapshotForTest(svc, ctx, roomID, p1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestMultiplayerHighLow_FullLifecycle(t *testing.T) {
 	if _, err := svc.PlayHighLowAction(ctx, roomID, p1, casino.HighLowActionHigh); err != nil {
 		t.Fatalf("P1 High error: %v", err)
 	}
-	p2View, _ := svc.GetRoomDetail(ctx, roomID, p2)
+	p2View, _ := casino.RoomSnapshotForTest(svc, ctx, roomID, p2)
 	for _, m := range p2View.Members {
 		if m.CharacterID == p1 && m.Action != "？？？" {
 			t.Errorf("P2 should see P1's action masked as '？？？', got %s", m.Action)

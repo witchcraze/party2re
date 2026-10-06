@@ -545,7 +545,7 @@ func TestCasinoService_PurgeIdleRooms(t *testing.T) {
 	if len(rooms) != 1 {
 		t.Fatalf("expected 1 active room, got %d", len(rooms))
 	}
-	if rooms[0].Room.ID != "room-active" {
-		t.Errorf("room ID = %q, want room-active", rooms[0].Room.ID)
+	if rooms[0].ID != "room-active" {
+		t.Errorf("room ID = %q, want room-active", rooms[0].ID)
 	}
 }

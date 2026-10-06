@@ -746,6 +746,227 @@
         ],
         "type": "object"
       },
+      "CasinoMemberObservation": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "Game-specific masking uses ？？？ for a hidden action.",
+            "type": "string"
+          },
+          "card": {
+            "description": "-1 for absent or hidden cards/marks.",
+            "maximum": 12,
+            "minimum": -1,
+            "type": "integer"
+          },
+          "card_display": {
+            "description": "？ for a hidden card/mark.",
+            "type": "string"
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "character_name": {
+            "type": "string"
+          },
+          "is_spectator": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "character_id",
+          "is_spectator",
+          "action",
+          "card"
+        ],
+        "type": "object"
+      },
+      "CasinoRoomObservation": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_spectators": {
+            "type": "boolean"
+          },
+          "current_bet": {
+            "type": "integer"
+          },
+          "game_type": {
+            "enum": [
+              "indian",
+              "highlow",
+              "doppel"
+            ],
+            "type": "string"
+          },
+          "has_password": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "leader_character_id": {
+            "type": "string"
+          },
+          "max_bet": {
+            "type": "integer"
+          },
+          "max_players": {
+            "maximum": 8,
+            "minimum": 2,
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 50,
+            "type": "string"
+          },
+          "participant_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "pot": {
+            "type": "integer"
+          },
+          "rate": {
+            "type": "integer"
+          },
+          "round": {
+            "type": "integer"
+          },
+          "spectator_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "speed": {
+            "enum": [
+              12,
+              18,
+              28
+            ],
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "waiting",
+              "in_progress",
+              "disbanded"
+            ],
+            "type": "string"
+          },
+          "winner_character_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "game_type",
+          "speed",
+          "max_players",
+          "rate",
+          "has_password",
+          "allow_spectators",
+          "status",
+          "participant_count",
+          "spectator_count",
+          "leader_character_id",
+          "round",
+          "current_bet",
+          "max_bet",
+          "pot"
+        ],
+        "type": "object"
+      },
+      "CasinoRoomSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_spectators": {
+            "type": "boolean"
+          },
+          "game_type": {
+            "enum": [
+              "indian",
+              "highlow",
+              "doppel"
+            ],
+            "type": "string"
+          },
+          "has_password": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "max_players": {
+            "maximum": 8,
+            "minimum": 2,
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 50,
+            "type": "string"
+          },
+          "participant_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "rate": {
+            "type": "integer"
+          },
+          "spectator_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "speed": {
+            "enum": [
+              12,
+              18,
+              28
+            ],
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "waiting",
+              "in_progress",
+              "disbanded"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "game_type",
+          "speed",
+          "max_players",
+          "rate",
+          "has_password",
+          "allow_spectators",
+          "status",
+          "participant_count",
+          "spectator_count"
+        ],
+        "type": "object"
+      },
+      "CasinoRoomView": {
+        "additionalProperties": false,
+        "properties": {
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/CasinoMemberObservation"
+            },
+            "type": "array"
+          },
+          "room": {
+            "$ref": "#/components/schemas/CasinoRoomObservation"
+          }
+        },
+        "required": [
+          "room",
+          "members"
+        ],
+        "type": "object"
+      },
       "CelebrationBanquet": {
         "properties": {
           "boss_id": {
@@ -3998,25 +4219,41 @@
     },
     "/casino/rooms": {
       "get": {
+        "description": "Anonymous lobby of at most 100 active rooms. Cards, marks, actions and private member state are excluded. Casino-owned idle expiry/index pruning may remove stale rooms; failures return 500. No gameplay advancement or admission.",
         "operationId": "getCasinoRooms",
         "responses": {
           "200": {
-            "description": "Successful operation"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "rooms": {
+                      "items": {
+                        "$ref": "#/components/schemas/CasinoRoomSummary"
+                      },
+                      "maxItems": 100,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "rooms"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bounded lobby; empty rooms is []"
           },
           "500": {
-            "description": "Internal server error"
+            "description": "Required expiry or storage failure"
+          },
+          "501": {
+            "description": "Casino service not configured"
           }
         },
-        "summary": "GET /casino/rooms endpoint",
+        "security": [],
+        "summary": "List safe public casino lobby summaries",
         "tags": [
           "Casino"
         ]
@@ -4024,6 +4261,7 @@
     },
     "/casino/rooms/{roomId}": {
       "get": {
+        "description": "character_id selects an owned character, never an arbitrary viewer. Service verifies authenticated player ownership and actual participant or admitted spectator membership. Game-specific card/mark/action masking applies in active rounds; completed rounds reveal results only to admitted viewers. GET never joins, spectates, starts, advances or settles a game, or refreshes room lifetime.",
         "operationId": "getCasinoRoomsRoomId",
         "parameters": [
           {
@@ -4034,11 +4272,37 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Owned character used as viewer; requires existing room admission.",
+            "in": "query",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful operation"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "room": {
+                      "$ref": "#/components/schemas/CasinoRoomView"
+                    }
+                  },
+                  "required": [
+                    "room"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Whitelisted viewer projection"
           },
           "400": {
             "description": "Bad request"
@@ -4047,13 +4311,24 @@
             "description": "Unauthorized"
           },
           "403": {
-            "description": "Forbidden"
+            "description": "Character belongs to another player or is not admitted to this room"
+          },
+          "404": {
+            "description": "Character or room missing, disbanded or expired"
           },
           "500": {
             "description": "Internal server error"
+          },
+          "501": {
+            "description": "Casino service not configured"
           }
         },
-        "summary": "GET /casino/rooms/{roomId} endpoint",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Observe a casino room as an owned admitted character",
         "tags": [
           "Casino"
         ]

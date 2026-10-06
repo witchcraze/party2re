@@ -27,25 +27,41 @@
   },
   "/casino/rooms": {
     "get": {
+      "description": "Anonymous lobby of at most 100 active rooms. Cards, marks, actions and private member state are excluded. Casino-owned idle expiry/index pruning may remove stale rooms; failures return 500. No gameplay advancement or admission.",
       "operationId": "getCasinoRooms",
       "responses": {
         "200": {
-          "description": "Successful operation"
-        },
-        "400": {
-          "description": "Bad request"
-        },
-        "401": {
-          "description": "Unauthorized"
-        },
-        "403": {
-          "description": "Forbidden"
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "rooms": {
+                    "items": {
+                      "$ref": "#/components/schemas/CasinoRoomSummary"
+                    },
+                    "maxItems": 100,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "rooms"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "Bounded lobby; empty rooms is []"
         },
         "500": {
-          "description": "Internal server error"
+          "description": "Required expiry or storage failure"
+        },
+        "501": {
+          "description": "Casino service not configured"
         }
       },
-      "summary": "GET /casino/rooms endpoint",
+      "security": [],
+      "summary": "List safe public casino lobby summaries",
       "tags": [
         "Casino"
       ]
@@ -53,6 +69,7 @@
   },
   "/casino/rooms/{roomId}": {
     "get": {
+      "description": "character_id selects an owned character, never an arbitrary viewer. Service verifies authenticated player ownership and actual participant or admitted spectator membership. Game-specific card/mark/action masking applies in active rounds; completed rounds reveal results only to admitted viewers. GET never joins, spectates, starts, advances or settles a game, or refreshes room lifetime.",
       "operationId": "getCasinoRoomsRoomId",
       "parameters": [
         {
@@ -63,11 +80,37 @@
           "schema": {
             "type": "string"
           }
+        },
+        {
+          "description": "Owned character used as viewer; requires existing room admission.",
+          "in": "query",
+          "name": "character_id",
+          "required": true,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          }
         }
       ],
       "responses": {
         "200": {
-          "description": "Successful operation"
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "room": {
+                    "$ref": "#/components/schemas/CasinoRoomView"
+                  }
+                },
+                "required": [
+                  "room"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "Whitelisted viewer projection"
         },
         "400": {
           "description": "Bad request"
@@ -76,13 +119,24 @@
           "description": "Unauthorized"
         },
         "403": {
-          "description": "Forbidden"
+          "description": "Character belongs to another player or is not admitted to this room"
+        },
+        "404": {
+          "description": "Character or room missing, disbanded or expired"
         },
         "500": {
           "description": "Internal server error"
+        },
+        "501": {
+          "description": "Casino service not configured"
         }
       },
-      "summary": "GET /casino/rooms/{roomId} endpoint",
+      "security": [
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Observe a casino room as an owned admitted character",
       "tags": [
         "Casino"
       ]

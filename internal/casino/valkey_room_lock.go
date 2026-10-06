@@ -59,9 +59,7 @@ func (v *ValkeyRoomRepository) WithRoomLock(ctx context.Context, roomID string, 
 			break
 		}
 		if !valkey.IsValkeyNil(res.Error()) {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
+			return res.Error()
 		}
 
 		select {
