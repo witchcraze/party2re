@@ -73,6 +73,20 @@ func (w *Worker) processAction(ctx context.Context, action core_scheduling.Sched
 		return
 	}
 
+	// Terminal records left in the queue need metadata cleanup only. Their handler
+	// has already run; a surviving lock must not prevent finalization.
+	if action.State == core_scheduling.StateCompleted || action.State == core_scheduling.StateFailed {
+		if err := w.repo.Save(ctx, action); err != nil {
+			w.logger.Error(ctx, "Failed to finalize terminal action metadata", err, slog.String("action_id", action.ID))
+		}
+		return
+	}
+	// Processing may have applied feature effects even if final persistence failed.
+	// Lock expiry is not permission to replay an uncertain outcome.
+	if action.State == core_scheduling.StateProcessing {
+		return
+	}
+
 	// Attempt to acquire lock to prevent duplicate processing
 	acquired, err := w.repo.AcquireLock(ctx, action.ID, 5*time.Minute)
 	if err != nil {

@@ -6,6 +6,13 @@ An actor's unfinished-work query returns that actor's Pending and Processing rec
 
 The query changes no records or timers and establishes no exclusive actor lock. Feature services remain responsible for validating and settling their own actions. Scheduling contains no feature-specific eligibility rules.
 
+An unsuccessful final-state write does not authorize executing the feature again.
+Processing may represent an already applied but unrecorded outcome and remains
+unfinished until reconciled or cancelled. A recorded Completed/Failed outcome
+requires only metadata cleanup, never another feature execution. Storage ordering,
+retention and partial failures are defined in the
+[terminal persistence contract](../architecture/valkey-keyspace.md#scheduled-terminal-persistence-and-recovery).
+
 The implementation uses the existing actor Set index and one bulk payload read: two Valkey commands for a nonempty index, with work proportional to its number of entries. It introduces neither a Character snapshot cache nor an action-availability cache.
 
 ## Scheduling Registration & Failure Semantics
@@ -43,6 +50,5 @@ If removing any action from the pending queue or deleting action/lock payloads f
 - The storage error is propagated to callers along with the count of successfully cancelled actions.
 - Callers such as `ClearActiveActions` return `cleared=false, err` to prevent callers like `EmergencyRescue` from recording unearned penalties or falsely assuming a clean slate when work remains.
 - Subsequent retries safely resume and complete cancellation via idempotent `ZREM` and `DEL` operations.
-
 
 

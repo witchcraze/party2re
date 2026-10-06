@@ -19,14 +19,19 @@ type ScheduledActionRepository interface {
 	// It may limit the number of returned actions to prevent overwhelming the worker.
 	// Stale entries with genuinely absent payloads are cleaned up from the queue.
 	// Transient storage/read failures preserve queued entries and return an error.
+	// Queued terminal records may be returned for metadata-only finalization;
+	// they must never be dispatched to feature handlers again.
 	FetchDue(ctx context.Context, upTo time.Time, limit int) ([]ScheduledAction, error)
 
 	// AcquireLock attempts to lock the action for processing.
 	// Returns true if lock was acquired, false if already locked/processed.
 	AcquireLock(ctx context.Context, actionID string, lockTTL time.Duration) (bool, error)
 
-	// Save updates an action's state (e.g. after processing).
-	// If it's completed/failed, it might move it to a different storage or set a TTL.
+	// Save updates an action's state. Terminal payload persistence precedes cleanup;
+	// a payload write failure leaves unfinished discovery/coordination untouched.
+	// Cleanup failures propagate after the terminal outcome has been persisted.
+	// Queue membership is removed last so terminal metadata can be retried without
+	// handler replay. Retention is based on the original RetainUntil, not retry time.
 	Save(ctx context.Context, action ScheduledAction) error
 
 	// CancelByActorID removes and cancels all pending/scheduled actions for the specified actor.

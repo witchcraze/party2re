@@ -620,12 +620,12 @@ func TestValkeyRepository_Save(t *testing.T) {
 	}
 
 	cmdsComp := clientCompleted.RecordedCommandStrings()
-	// Should do: ZREM pending, SREM actor, DEL lock, SET action with EX
+	// Persist terminal payload first; remove queue membership last.
 	var operations []string
 	for _, c := range cmdsComp {
 		operations = append(operations, c[0])
 	}
-	expectedOps := []string{"ZREM", "SREM", "DEL", "SET"}
+	expectedOps := []string{"SET", "DEL", "SREM", "ZREM"}
 	if !reflect.DeepEqual(operations, expectedOps) {
 		t.Fatalf("expected operations %v, got %v", expectedOps, operations)
 	}
@@ -648,12 +648,12 @@ func TestValkeyRepository_Save(t *testing.T) {
 		t.Fatalf("unexpected Save error: %v", err)
 	}
 	cmdsPast := clientPast.RecordedCommandStrings()
-	// ZREM pending, DEL lock, DEL action (no SREM because ActorID is empty)
+	// SET terminal, DEL lock, DEL expired action, ZREM (no actor index).
 	var opsPast []string
 	for _, c := range cmdsPast {
 		opsPast = append(opsPast, c[0])
 	}
-	expectedOpsPast := []string{"ZREM", "DEL", "DEL"}
+	expectedOpsPast := []string{"SET", "DEL", "DEL", "ZREM"}
 	if !reflect.DeepEqual(opsPast, expectedOpsPast) {
 		t.Fatalf("expected operations %v, got %v", expectedOpsPast, opsPast)
 	}
