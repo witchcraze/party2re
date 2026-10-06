@@ -126,6 +126,25 @@
           "note": "Delete guild entity"
         }
       ]
+    },
+    {
+      "method": "removeAuthorizedMember",
+      "source_ref": "internal/guild/removal.go#Service.removeAuthorizedMember",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Kick and RejectApplication delegate current leadership authorization to this shared removal boundary; notification follows successful RunInTx."
+        },
+        {
+          "table": "guild_members",
+          "tier": 7,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Lock roster in joined_at ASC, character_id ASC order; validate requester/target role and pending state before ambient RemoveMember deletion."
+        }
+      ]
     }
   ]
 }

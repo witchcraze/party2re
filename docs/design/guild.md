@@ -198,10 +198,12 @@ $gpoint = int( $gpoint * 0.8 );
 
 - Guild operations obey the deterministic lock acquisition hierarchy (Rank 0 -> 8):
   - Character wallet deduction (Rank 2: `characters`) occurs before guild records (Rank 7: `guilds`, `guild_members`).
-- **Departure & Succession Serialization (Unit of Work)**:
-  - Member departure (`Leave`), character-cleanup departure (`RemoveCharacterFromGuild`), and manual disbandment (`Disband`) run inside a Unit of Work transaction via ambient transaction propagation (`s.runInTx`).
+- **Membership Removal & Succession Serialization (Unit of Work)**:
+  - Member departure (`Leave`), character-cleanup departure (`RemoveCharacterFromGuild`), leadership transfer (`TransferLeadership`), expulsion (`Kick`), applicant rejection (`RejectApplication`), and manual disbandment (`Disband`) use ambient transaction propagation (`s.runInTx`).
   - Pessimistic locking (Rank 7): `GetGuildForUpdate` acquires exclusive locks (`SELECT ... FOR UPDATE`) on the guild record in `guilds` and all its member rows in `guild_members` ordered deterministically by `joined_at ASC, character_id ASC`.
   - Atomicity of departure mutation: Roster selection, transfer/removal, and dissolution execute inside the same transaction, preventing concurrent departure race conditions.
+  - Expulsion and applicant rejection share a locked removal workflow. Current guild leadership, requester membership/role, target membership/role and pending state are checked against the locked roster before deletion. A former leader cannot remove a promoted successor. `Kick` selects expulsion versus rejection from the locked target state; `RejectApplication` rejects an already approved member with `ErrMemberNotPending`.
+  - Expulsion/rejection letters retain their existing content and best-effort delivery. They are attempted only after the removal transaction succeeds. With an incoming outer SQL transaction, letter persistence joins that transaction and is rolled back with membership removal; notification visibility then waits for the outer commit. A failed removal sends no success letter.
   - Strict conditional validation (`RowsAffected`): `TransferLeadership` and `RemoveMember` verify that exactly one row was affected. Stale leader attempts return `ErrUnauthorized`, non-member successor promotions return `ErrTargetNotMember`, and missing members return `ErrCharacterNotInGuild`, rolling back the transaction with zero partial leadership mutation.
   - Dissolution Server News: Server news broadcasts occur strictly after a successful database transaction commit, preventing false news broadcasts on rolled-back transactions.
 - Points increments are performed via atomic SQL arithmetic (`points = points + ?`) to avoid lock contention during concurrent gameplay achievements.
@@ -225,4 +227,3 @@ $gpoint = int( $gpoint * 0.8 );
 | `POST` | `/guilds/{id}/leave` | Leave guild (triggers succession if leader, or dissolution if last member) | Bearer Token |
 | `DELETE` | `/guilds/{id}/members/{char_id}` | Kick member from guild (leader only) | Bearer Token |
 | `POST` | `/admin/guilds/decay-points` | Batch decay guild points by 20% (Admin) | Admin Key |
-

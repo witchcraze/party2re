@@ -211,6 +211,9 @@ func (s *Service) Join(ctx context.Context, guildID string, characterID string) 
 	return res, nil
 }
 
+// Kick removes an active member or delegates pending removal to the rejection workflow.
+// Transaction: RunInTx (authorization, classification and removal; notification follows success).
+// Lock Order: guilds(7) -> guild_members(7).
 func (s *Service) Kick(ctx context.Context, guildID string, requesterCharID string, targetCharID string) error {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -225,49 +228,7 @@ func (s *Service) Kick(ctx context.Context, guildID string, requesterCharID stri
 		return errors.New("cannot kick self; use leave")
 	}
 
-	g, members, err := s.repo.GetGuild(ctx, guildID)
-	if err != nil {
-		return err
-	}
-
-	var requester, target *Member
-	for i := range members {
-		if members[i].CharacterID == requesterCharID {
-			requester = &members[i]
-		}
-		if members[i].CharacterID == targetCharID {
-			target = &members[i]
-		}
-	}
-	if requester == nil || requester.Role != RoleLeader {
-		return ErrUnauthorized
-	}
-	if target == nil {
-		return ErrTargetNotMember
-	}
-	if target.Role == RoleLeader {
-		return ErrCannotKickLeader
-	}
-
-	if target.IsPending {
-		return s.RejectApplication(ctx, guildID, requesterCharID, targetCharID)
-	}
-
-	if err := s.repo.RemoveMember(ctx, guildID, targetCharID); err != nil {
-		return err
-	}
-	s.touchActive(ctx, guildID)
-
-	if s.letterSender != nil && s.charReader != nil {
-		leaderChar, errL := s.charReader.FindByID(ctx, requesterCharID)
-		targetChar, errT := s.charReader.FindByID(ctx, targetCharID)
-		if errL == nil && errT == nil {
-			content := "【＋追放＋】" + g.Name + " (ギルマス " + leaderChar.Name + ") から追放されました"
-			_ = s.letterSender.SendLetter(ctx, requesterCharID, leaderChar.Name, targetCharID, targetChar.Name, content, leaderChar.Color)
-		}
-	}
-
-	return nil
+	return s.removeAuthorizedMember(ctx, guildID, requesterCharID, targetCharID, false)
 }
 
 func (s *Service) TransferLeadership(ctx context.Context, guildID string, currentLeaderCharID string, newLeaderCharID string) error {
