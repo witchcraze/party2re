@@ -8,9 +8,34 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
-	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/ranking"
 )
+
+func findRankingEntry(
+	ctx context.Context,
+	charID string,
+	fetch func(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error),
+) (*ranking.CharacterRankingEntry, int, error) {
+	const pageSize = 10
+	totalCount := 0
+	for offset := 0; ; offset += pageSize {
+		entries, total, err := fetch(ctx, pageSize, offset)
+		if err != nil {
+			return nil, 0, err
+		}
+		totalCount = total
+		for i := range entries {
+			if entries[i].CharacterID == charID {
+				entry := entries[i]
+				return &entry, totalCount, nil
+			}
+		}
+		if len(entries) == 0 || offset+len(entries) >= total {
+			break
+		}
+	}
+	return nil, totalCount, nil
+}
 
 func TestRankingExtraRepository_Integration(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
@@ -21,7 +46,11 @@ func TestRankingExtraRepository_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close db failed: %v", err)
+		}
+	})
 
 	rankingRepo, err := NewRankingRepository(db)
 	if err != nil {
@@ -40,16 +69,15 @@ func TestRankingExtraRepository_Integration(t *testing.T) {
 	now := time.Now().UTC()
 	prefix := fmt.Sprintf("rkx_%d_", time.Now().UnixNano()%1000000)
 
-	playerID := prefix + "p1"
-	p, err := coreplayer.New(playerID, "pass", now)
+	// Base test player & fixture character
+	p, err := CreateTestPlayer(ctx, db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := playerRepo.Save(ctx, p); err != nil {
-		t.Fatal(err)
-	}
 	t.Cleanup(func() {
-		_ = playerRepo.Delete(ctx, playerID)
+		if err := playerRepo.Delete(ctx, p.ID); err != nil {
+			t.Errorf("cleanup player %s failed: %v", p.ID, err)
+		}
 	})
 
 	c, err := corecharacter.NewWithOptions(prefix+"Char", "job-01", "m", nil)
@@ -65,57 +93,117 @@ func TestRankingExtraRepository_Integration(t *testing.T) {
 	}
 	charID := c.ID
 	t.Cleanup(func() {
-		_ = charRepo.Delete(ctx, charID)
+		if err := charRepo.Delete(ctx, charID); err != nil {
+			t.Errorf("cleanup char %s failed: %v", charID, err)
+		}
 	})
 
-	// 1. Test GetCasinoWinsRanking
-	casRankings, total, err := rankingRepo.GetCasinoWinsRanking(ctx, 10, 0)
+	// Seed interfering characters with higher/tied scores ahead of the test fixture to verify
+	// that ranking integration assertions succeed even when the fixture is pushed beyond the first page.
+	interferePlayer, err := CreateTestPlayer(ctx, db)
 	if err != nil {
-		t.Fatalf("GetCasinoWinsRanking failed: %v", err)
+		t.Fatal(err)
 	}
-	if total < 1 {
-		t.Fatalf("expected total >= 1, got %d", total)
-	}
-	foundCas := false
-	for _, entry := range casRankings {
-		if entry.CharacterID == charID {
-			foundCas = true
-			if entry.Score != 15 {
-				t.Fatalf("expected casino wins score 15, got %d", entry.Score)
+	t.Cleanup(func() {
+		if err := playerRepo.Delete(ctx, interferePlayer.ID); err != nil {
+			t.Errorf("cleanup interfere player %s failed: %v", interferePlayer.ID, err)
+		}
+	})
+
+	const numInterfering = 11
+	for i := 0; i < numInterfering; i++ {
+		intChar, err := corecharacter.NewWithOptions(fmt.Sprintf("%si%d", prefix, i), "job-01", "m", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		intChar.PlayerID = interferePlayer.ID
+		// Mix of higher scores (> 15) and tied scores (15 with higher level 30 vs fixture's 25)
+		if i%2 == 0 {
+			intChar.CasinoWins = 20
+			intChar.Level = 25
+		} else {
+			intChar.CasinoWins = 15
+			intChar.Level = 30
+		}
+		if err := charRepo.Save(ctx, intChar); err != nil {
+			t.Fatal(err)
+		}
+		intCharID := intChar.ID
+		t.Cleanup(func() {
+			if err := charRepo.Delete(ctx, intCharID); err != nil {
+				t.Errorf("cleanup interfere char %s failed: %v", intCharID, err)
 			}
-			break
+		})
+
+		// Seed interfering alchemy crafts ahead of fixture's 42 (crafts = 50)
+		_, err = db.ExecContext(ctx, "INSERT INTO character_alchemy (character_id, total_crafts) VALUES (?, ?)", intCharID, 50)
+		if err != nil {
+			t.Fatalf("insert interfering alchemy failed: %v", err)
+		}
+
+		// Seed interfering weekly job changes ahead of fixture's 2 (change count = 5)
+		_, err = db.ExecContext(ctx, "INSERT INTO weekly_job_changes (character_id, change_count) VALUES (?, ?)", intCharID, 5)
+		if err != nil {
+			t.Fatalf("insert interfering weekly job changes failed: %v", err)
 		}
 	}
-	if !foundCas {
-		t.Fatalf("character %s not found in casino wins ranking", charID)
+
+	// 1. Test GetCasinoWinsRanking
+	// Verify that page 0 does not contain our fixture because of the interfering rows.
+	firstPageCas, casTotal, err := rankingRepo.GetCasinoWinsRanking(ctx, 10, 0)
+	if err != nil {
+		t.Fatalf("GetCasinoWinsRanking page 0 failed: %v", err)
+	}
+	if casTotal < numInterfering+1 {
+		t.Fatalf("expected casino total >= %d, got %d", numInterfering+1, casTotal)
+	}
+	for _, entry := range firstPageCas {
+		if entry.CharacterID == charID {
+			t.Fatalf("expected fixture %s to be pushed past first page by interfering rows", charID)
+		}
+	}
+
+	// Verify that paginated search locates our fixture and validates its score.
+	casEntry, _, err := findRankingEntry(ctx, charID, rankingRepo.GetCasinoWinsRanking)
+	if err != nil {
+		t.Fatalf("findRankingEntry for casino wins failed: %v", err)
+	}
+	if casEntry == nil {
+		t.Fatalf("character %s not found in casino wins ranking across pages", charID)
+	}
+	if casEntry.Score != 15 {
+		t.Fatalf("expected casino wins score 15, got %d", casEntry.Score)
 	}
 
 	// 2. Test GetAlchemyRanking
-	// Insert character_alchemy record
+	// Insert character_alchemy record for the test fixture
 	_, err = db.ExecContext(ctx, "INSERT INTO character_alchemy (character_id, total_crafts) VALUES (?, ?) ON DUPLICATE KEY UPDATE total_crafts = ?", charID, 42, 42)
 	if err != nil {
 		t.Fatalf("insert character_alchemy failed: %v", err)
 	}
 
-	alcRankings, alcTotal, err := rankingRepo.GetAlchemyRanking(ctx, 10, 0)
+	firstPageAlc, alcTotal, err := rankingRepo.GetAlchemyRanking(ctx, 10, 0)
 	if err != nil {
-		t.Fatalf("GetAlchemyRanking failed: %v", err)
+		t.Fatalf("GetAlchemyRanking page 0 failed: %v", err)
 	}
-	if alcTotal < 1 {
-		t.Fatalf("expected alcTotal >= 1, got %d", alcTotal)
+	if alcTotal < numInterfering+1 {
+		t.Fatalf("expected alchemy total >= %d, got %d", numInterfering+1, alcTotal)
 	}
-	foundAlc := false
-	for _, entry := range alcRankings {
+	for _, entry := range firstPageAlc {
 		if entry.CharacterID == charID {
-			foundAlc = true
-			if entry.Score != 42 {
-				t.Fatalf("expected alchemy craft score 42, got %d", entry.Score)
-			}
-			break
+			t.Fatalf("expected fixture %s to be pushed past first page in alchemy ranking", charID)
 		}
 	}
-	if !foundAlc {
-		t.Fatalf("character %s not found in alchemy ranking", charID)
+
+	alcEntry, _, err := findRankingEntry(ctx, charID, rankingRepo.GetAlchemyRanking)
+	if err != nil {
+		t.Fatalf("findRankingEntry for alchemy ranking failed: %v", err)
+	}
+	if alcEntry == nil {
+		t.Fatalf("character %s not found in alchemy ranking across pages", charID)
+	}
+	if alcEntry.Score != 42 {
+		t.Fatalf("expected alchemy craft score 42, got %d", alcEntry.Score)
 	}
 
 	// 3. Test Weekly Job Changes
@@ -126,25 +214,28 @@ func TestRankingExtraRepository_Integration(t *testing.T) {
 		t.Fatalf("second IncrementJobChangeCount failed: %v", err)
 	}
 
-	wjcRankings, wjcTotal, err := rankingRepo.GetActiveWeeklyJobChangeRanking(ctx, 10, 0)
+	firstPageWJC, wjcTotal, err := rankingRepo.GetActiveWeeklyJobChangeRanking(ctx, 10, 0)
 	if err != nil {
-		t.Fatalf("GetActiveWeeklyJobChangeRanking failed: %v", err)
+		t.Fatalf("GetActiveWeeklyJobChangeRanking page 0 failed: %v", err)
 	}
-	if wjcTotal < 1 {
-		t.Fatalf("expected wjcTotal >= 1, got %d", wjcTotal)
+	if wjcTotal < numInterfering+1 {
+		t.Fatalf("expected weekly job change total >= %d, got %d", numInterfering+1, wjcTotal)
 	}
-	foundWJC := false
-	for _, entry := range wjcRankings {
+	for _, entry := range firstPageWJC {
 		if entry.CharacterID == charID {
-			foundWJC = true
-			if entry.Score != 2 {
-				t.Fatalf("expected weekly job change count 2, got %d", entry.Score)
-			}
-			break
+			t.Fatalf("expected fixture %s to be pushed past first page in weekly job changes", charID)
 		}
 	}
-	if !foundWJC {
-		t.Fatalf("character %s not found in active weekly job changes", charID)
+
+	wjcEntry, _, err := findRankingEntry(ctx, charID, rankingRepo.GetActiveWeeklyJobChangeRanking)
+	if err != nil {
+		t.Fatalf("findRankingEntry for weekly job changes failed: %v", err)
+	}
+	if wjcEntry == nil {
+		t.Fatalf("character %s not found in active weekly job changes across pages", charID)
+	}
+	if wjcEntry.Score != 2 {
+		t.Fatalf("expected weekly job change count 2, got %d", wjcEntry.Score)
 	}
 
 	// Test ResetWeeklyJobChanges
