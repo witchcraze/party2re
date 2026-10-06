@@ -100,6 +100,7 @@ True Party2 character recovery is conducted at Home (either one's own or a visit
 - **Awakening**:
   - HP and MP fully restored.
   - Tiredness (疲労度) reset to 0.
+  - **SQL Recovery Boundary**: Production Wake uses the existing Economy transaction runner to read the current Character under its row lock, restore HP/MP/tiredness, and persist it in one SQL transaction. Currency, bank deposits, progression and other unrelated fields are retained from that locked state, so concurrent committed updates are not overwritten. This transaction commits before the required recovery hooks and Valkey cleanup; those phases retain the partial-outcome contract below.
   - Temporary Job Memory reverted.
   - Tavern fullness state reset (`tavern.ResetFullness`).
   - Chapel prayers and active blessings cleared (`chapel.ClearBlessing`).

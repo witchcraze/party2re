@@ -291,27 +291,37 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 	}
 
 	var char corecharacter.Character
-	if s.charUpdater != nil {
+	if s.runner != nil {
+		// Commit vitality recovery before mandatory hooks and Valkey cleanup.
+		// Mutate the runner's current locked state, preserving unrelated assets.
+		res, err := s.runner.ExecuteTransaction(ctx, economy.TransactionRequest{CharacterID: characterID}, func(tc *economy.TxContext) error {
+			tc.Character.RecoverVitality()
+			tc.Character.ResetTired()
+			return nil
+		})
+		if err != nil {
+			return WakeResult{}, err
+		}
+		char = res.Character
+	} else if s.charUpdater != nil {
 		c, err := s.charUpdater.FindByIDForUpdate(ctx, characterID)
 		if err != nil {
 			return WakeResult{}, err
 		}
 		char = c
+		char.RecoverVitality()
+		char.ResetTired()
+		if err := s.charUpdater.Update(ctx, char); err != nil {
+			return WakeResult{}, err
+		}
 	} else {
 		c, err := s.charReader.FindByID(ctx, characterID)
 		if err != nil {
 			return WakeResult{}, err
 		}
 		char = c
-	}
-
-	char.RecoverVitality()
-	char.ResetTired()
-
-	if s.charUpdater != nil {
-		if err := s.charUpdater.Update(ctx, char); err != nil {
-			return WakeResult{}, err
-		}
+		char.RecoverVitality()
+		char.ResetTired()
 	}
 
 	if s.fullness != nil {
