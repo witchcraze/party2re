@@ -120,7 +120,9 @@ func (s *Service) ApproveApplication(ctx context.Context, guildID string, leader
 }
 
 // RejectApplication rejects a pending applicant and removes them from the guild (guild.cgi:ataeru/tsuihou).
-// Sends a rejection letter to the applicant.
+// Sends a rejection letter after successful removal, using the incoming ambient context.
+// Transaction: RunInTx (authorization, pending-state validation and removal).
+// Lock Order: guilds(7) -> guild_members(7).
 func (s *Service) RejectApplication(ctx context.Context, guildID string, leaderID string, applicantID string) error {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -132,44 +134,7 @@ func (s *Service) RejectApplication(ctx context.Context, guildID string, leaderI
 		return ErrCharacterNotFound
 	}
 
-	g, members, err := s.repo.GetGuild(ctx, guildID)
-	if err != nil {
-		return err
-	}
-	if g.LeaderCharacterID != leaderID {
-		return ErrUnauthorized
-	}
-
-	var target *Member
-	for i := range members {
-		if members[i].CharacterID == applicantID {
-			target = &members[i]
-			break
-		}
-	}
-	if target == nil {
-		return ErrTargetNotMember
-	}
-	if !target.IsPending {
-		return ErrMemberNotPending
-	}
-
-	if err := s.repo.RemoveMember(ctx, guildID, applicantID); err != nil {
-		return err
-	}
-	s.touchActive(ctx, guildID)
-
-	// Send rejection letter to applicant (guild.cgi:229-231)
-	if s.letterSender != nil && s.charReader != nil {
-		leaderChar, errL := s.charReader.FindByID(ctx, leaderID)
-		applicantChar, errA := s.charReader.FindByID(ctx, applicantID)
-		if errL == nil && errA == nil {
-			content := "【＋不合格＋】残念ながら " + g.Name + " (ギルマス " + leaderChar.Name + ") から参加を拒否されました"
-			_ = s.letterSender.SendLetter(ctx, leaderID, leaderChar.Name, applicantID, applicantChar.Name, content, leaderChar.Color)
-		}
-	}
-
-	return nil
+	return s.removeAuthorizedMember(ctx, guildID, leaderID, applicantID, true)
 }
 
 // BroadcastCallout sends a broadcast message to all guild members (including pending applicants) and awards +1 Guild Point (guild.cgi:yobikakeru).
