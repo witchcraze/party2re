@@ -75,7 +75,7 @@ The common command boundary (`internal/api/http/action_dispatcher.go`) registers
 - `party2:scheduled:actor:{actor_id}` (Set of indexed action IDs, not an exclusive actor lock)
 `Schedule` requires actions with an `ActorID` to successfully index into this Set before enqueueing into the pending queue; failure halts registration and cleans up partial writes, guaranteeing that queued work is discoverable.
 `FindPendingByActorID` reads the actor Set with SMEMBERS and bulk-loads payloads with MGET, returning Pending/Processing records including overdue work. Terminal and missing records are omitted; invalid records and storage errors propagate. This read contract supports PlayerContext without an additional SQL query or result cache. Lifecycle rules: [`scheduling.md`](../design/scheduling.md).
-The background `Worker` acquires locks, validates payloads, and dispatches to registered `ActionHandler` implementations.
+The background `Worker` validates payloads, acquires locks for Pending work, and dispatches to registered `ActionHandler` implementations. Processing work is not replayed after lock expiry because its feature outcome may be uncertain. Queued Completed/Failed records receive metadata-only finalization without handler dispatch. Terminal persistence precedes destructive cleanup; required write failures propagate. The partial-step and retention contract is documented in [Valkey keyspace](valkey-keyspace.md#scheduled-terminal-persistence-and-recovery).
 
 ### Domain Events
 

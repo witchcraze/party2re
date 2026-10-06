@@ -72,6 +72,7 @@ func (r *ValkeyRepository) Schedule(ctx context.Context, action core_scheduling.
 // transient storage error or context cancellation, the queued entry is preserved
 // and the error is returned immediately to the worker. Malformed or invalid
 // actions are purged from the queue to prevent repeated processing.
+// Valid terminal records are returned for metadata-only worker finalization.
 func (r *ValkeyRepository) FetchDue(ctx context.Context, upTo time.Time, limit int) ([]core_scheduling.ScheduledAction, error) {
 	scoreStr := strconv.FormatInt(upTo.Unix(), 10)
 
@@ -151,6 +152,9 @@ func (r *ValkeyRepository) AcquireLock(ctx context.Context, actionID string, loc
 	return true, nil
 }
 
+// Save persists a terminal outcome before cleanup. Cleanup stops on the first
+// error and removes queue membership last, allowing metadata-only worker retries.
+// Failed payload writes leave unfinished discovery and coordination untouched.
 func (r *ValkeyRepository) Save(ctx context.Context, action core_scheduling.ScheduledAction) error {
 	data, err := json.Marshal(action)
 	if err != nil {
@@ -160,26 +164,35 @@ func (r *ValkeyRepository) Save(ctx context.Context, action core_scheduling.Sche
 	actionKey := actionKeyPrefix + action.ID
 
 	if action.State == core_scheduling.StateCompleted || action.State == core_scheduling.StateFailed {
-		// Remove from pending queue
-		r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(action.ID).Build())
-
-		// Remove from actor index
-		if action.ActorID != "" {
-			r.client.Do(ctx, r.client.B().Srem().Key(actorKeyPrefix+action.ActorID).Member(action.ID).Build())
-		}
-
-		// Delete lock
-		r.client.Do(ctx, r.client.B().Del().Key(lockKeyPrefix+action.ID).Build())
-
-		// Save updated action with TTL based on RetainUntil
+		// Even expired outcomes must replace Processing before destructive cleanup.
+		// Otherwise a failed DEL could leave unfinished work looking settled.
+		cmd := r.client.B().Set().Key(actionKey).Value(string(data)).Build()
+		expired := false
 		if !action.RetainUntil.IsZero() {
 			ttlSecs := int64(time.Until(action.RetainUntil).Seconds())
 			if ttlSecs > 0 {
-				return r.client.Do(ctx, r.client.B().Set().Key(actionKey).Value(string(data)).ExSeconds(ttlSecs).Build()).Error()
+				cmd = r.client.B().Set().Key(actionKey).Value(string(data)).ExSeconds(ttlSecs).Build()
+			} else {
+				expired = true
 			}
-			// If TTL is negative, just delete it immediately
-			return r.client.Do(ctx, r.client.B().Del().Key(actionKey).Build()).Error()
 		}
+		if err := r.client.Do(ctx, cmd).Error(); err != nil {
+			return err
+		}
+		if err := r.client.Do(ctx, r.client.B().Del().Key(lockKeyPrefix+action.ID).Build()).Error(); err != nil {
+			return err
+		}
+		if action.ActorID != "" {
+			if err := r.client.Do(ctx, r.client.B().Srem().Key(actorKeyPrefix+action.ActorID).Member(action.ID).Build()).Error(); err != nil {
+				return err
+			}
+		}
+		if expired {
+			if err := r.client.Do(ctx, r.client.B().Del().Key(actionKey).Build()).Error(); err != nil {
+				return err
+			}
+		}
+		return r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(action.ID).Build()).Error()
 	}
 
 	// Just update the action data without TTL

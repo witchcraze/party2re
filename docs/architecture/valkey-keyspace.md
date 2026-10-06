@@ -71,6 +71,40 @@ Dungeon and Challenge additionally use the hash-tagged state/reward keys in
 Valkey key. The withdrawn Candidate E `party2:boss:` keys and `boss_damage`
 script are documented only in [the historical note](transient-boss-hp.md).
 
+## Scheduled terminal persistence and recovery
+
+`ValkeyRepository.Save` persists Completed/Failed before deleting the worker
+lock, removing actor membership, and finally removing pending queue membership.
+Each required write error propagates and stops subsequent cleanup. If the
+terminal SET fails before being applied, the stored Processing payload, queue,
+actor index and lock remain unchanged. A lost response can leave the write's
+outcome uncertain; this ordering does not make the writes atomic.
+
+Terminal retention uses the remaining whole seconds until the original
+`RetainUntil` (normally 24 hours after completion/failure). Retrying metadata
+does not start a new retention window. A zero deadline keeps a persistent
+terminal payload. With less than one whole second remaining, Save first writes
+a persistent terminal payload, then deletes it after lock/actor cleanup and
+before queue removal. A failed payload DEL therefore leaves a terminal record
+queued for recovery, rather than an unfinished record hidden from discovery.
+
+After a successful terminal SET, later cleanup failures leave the known outcome
+and its retention policy intact. `FetchDue` may return such terminal records;
+Worker retries Save as metadata-only finalization, even if a lock remains,
+without transitioning to Processing or invoking the feature handler. If an
+already expired/deleted payload is missing, FetchDue removes only its stale
+queue entry. If prolonged cleanup failure outlasts retention, the actor Set may
+retain a stale ID until actor cancellation; actor observation skips missing or
+terminal payloads without modifying the index.
+
+Processing has no TTL and remains visible to actor observation. Worker never
+redispatches Processing, including after lock expiry: the feature handler may
+already have applied effects before final persistence failed. This state requires
+feature-specific reconciliation or explicit cancellation, not automatic replay.
+Worker logs persistence/cleanup errors; Save returns them to direct callers.
+These guarantees concern scheduling metadata, not exactly-once feature execution
+or lossless SQL/Valkey settlement across a crash.
+
 ## Approved navigation storage boundary
 
 The [progressive observation/navigation contract](client-agent-api.md#approved-navigation-and-progressive-observation-contract)
