@@ -128,7 +128,7 @@ func (s *Service) StartHighLow(ctx context.Context, roomID string, leaderID stri
 		return nil, err
 	}
 
-	return s.GetRoomDetail(ctx, roomID, leaderID)
+	return s.getRoomDetail(ctx, roomID, leaderID)
 }
 
 // PlayHighLowAction processes a player's round action (call, high, low, fold)
@@ -397,5 +397,5 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 		}
 	}
 
-	return s.GetRoomDetail(ctx, roomID, characterID)
+	return s.getRoomDetail(ctx, roomID, characterID)
 }

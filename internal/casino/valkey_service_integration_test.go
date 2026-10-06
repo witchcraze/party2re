@@ -277,7 +277,7 @@ func TestValkeyService_ConcurrentIndianPokerTurns(t *testing.T) {
 	}
 
 	// 5. Inspect resulting room state
-	roomDetail, err := svc.GetRoomDetail(ctx, roomID, players[0])
+	roomDetail, err := casino.RoomSnapshotForTest(svc, ctx, roomID, players[0])
 	if err != nil {
 		t.Fatalf("failed to get room detail: %v", err)
 	}
@@ -365,7 +365,7 @@ func TestValkeyService_ConcurrentJoinsRespectMaxPlayers(t *testing.T) {
 		t.Errorf("expected exactly 2 successful joiners, got %d", joinedCount)
 	}
 
-	detail, err := svc.GetRoomDetail(ctx, roomID, leader)
+	detail, err := casino.RoomSnapshotForTest(svc, ctx, roomID, leader)
 	if err != nil {
 		t.Fatalf("failed to get room detail: %v", err)
 	}

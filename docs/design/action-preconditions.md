@@ -73,6 +73,11 @@ The original persists facility/home selection (`party2/party.cgi:14–30`,
 (`_casino.cgi:10–32`, `vs_dungeon.cgi:33–48`, `vs_challenge.cgi:24–30`). Public
 versus own-home actions differ (`home.cgi:26–39,73–105`). These are dispatch
 requirements; current Go gates and a TTL alone do not establish complete parity.
+Casino detail observation additionally requires owned-character authentication
+and existing participant/spectator admission. It never implicitly joins or
+spectates, and it does not apply a town-entry or sleep gate to an admitted
+viewer. The [Casino visibility contract](casino.md#observation-and-visibility)
+defines its phase-specific masking and owner-defined expiry effects.
 The ephemeral navigation record is an approved simplicity trade-off, not a new
 durable Core Character location. Legacy presence/log effects remain explicit
 reconciliation work in each owning migration.

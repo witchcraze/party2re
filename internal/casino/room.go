@@ -308,77 +308,28 @@ func (s *Service) PurgeIdleRooms(ctx context.Context) (int, error) {
 }
 
 // ListRooms returns all active rooms, purging any idle rooms (> 1800s inactive) first (party2/lib/casino.cgi:124-129).
-func (s *Service) ListRooms(ctx context.Context) ([]RoomDetail, error) {
+func (s *Service) ListRooms(ctx context.Context) ([]RoomSummary, error) {
 	if s.roomRepo == nil {
 		return nil, errors.New("room repository is required")
 	}
-	_, _ = s.PurgeIdleRooms(ctx)
-	return s.roomRepo.ListActiveRooms(ctx)
-}
-
-// GetRoomDetail returns room details with appropriate card masking according to Party2 rules.
-func (s *Service) GetRoomDetail(ctx context.Context, roomID string, viewingCharID string) (*RoomDetail, error) {
-	if s.roomRepo == nil {
-		return nil, errors.New("room repository is required")
+	if _, err := s.PurgeIdleRooms(ctx); err != nil {
+		return nil, err
 	}
-	room, err := s.roomRepo.GetRoom(ctx, roomID)
+	rooms, err := s.roomRepo.ListActiveRooms(ctx)
 	if err != nil {
 		return nil, err
 	}
-	members, err := s.roomRepo.ListMembers(ctx, roomID)
-	if err != nil {
-		return nil, err
-	}
-
-	maskedMembers := make([]RoomMember, len(members))
-	for i, m := range members {
-		masked := m
-		if m.Card >= 0 {
-			if room.GameType == GameTypeDoppel && m.Card < len(AuthenticDoppelMarks) {
-				masked.CardDisplay = string(AuthenticDoppelMarks[m.Card])
-			} else if m.Card < len(AuthenticCardNames) {
-				masked.CardDisplay = AuthenticCardNames[m.Card]
-			}
+	result := make([]RoomSummary, 0, len(rooms))
+	for _, detail := range rooms {
+		if detail.Room.Status == RoomStatusDisbanded {
+			continue
 		}
-
-		if room.Round > 0 && viewingCharID != "" {
-			switch room.GameType {
-			case GameTypeIndian:
-				// Forehead card rule (party2/lib/casino_indian.cgi:28):
-				// A player cannot see their own card while active in an in-progress round, but sees others.
-				if m.CharacterID == viewingCharID && m.Action != string(ActionFold) && m.Action != "おりる" && m.Action != "待機中" {
-					masked.Card = -1
-					masked.CardDisplay = "？"
-				}
-			case GameTypeHighLow:
-				// High-Low rule (party2/lib/casino_highlow.cgi:33-50):
-				// Player sees own card and own action; others' cards are hidden, and other actions (high/low/fold) masked as "？？？"
-				if m.CharacterID != viewingCharID {
-					masked.Card = -1
-					masked.CardDisplay = "？"
-					if m.Action != "" && m.Action != "待機中" && m.Action != "つづける" && m.Action != string(HighLowActionCall) {
-						masked.Action = "？？？"
-					}
-				}
-			case GameTypeDoppel:
-				// Doppel rule (party2/lib/casino_doppel.cgi:23-36):
-				// Player sees own chosen mark; others' marks and actions are hidden
-				if m.CharacterID != viewingCharID {
-					masked.Card = -1
-					masked.CardDisplay = "？"
-					if m.Action != "" && m.Action != "待機中" {
-						masked.Action = "？？？"
-					}
-				}
-			}
+		result = append(result, summarizeRoom(detail))
+		if len(result) == 100 {
+			break
 		}
-		maskedMembers[i] = masked
 	}
-
-	return &RoomDetail{
-		Room:    *room,
-		Members: maskedMembers,
-	}, nil
+	return result, nil
 }
 
 // StartGame starts the round for the room's configured GameType (party2/lib/_casino.cgi:24-32).

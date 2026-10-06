@@ -118,7 +118,7 @@ func (s *Service) StartDoppel(ctx context.Context, roomID string, leaderID strin
 		return nil, err
 	}
 
-	return s.GetRoomDetail(ctx, roomID, leaderID)
+	return s.getRoomDetail(ctx, roomID, leaderID)
 }
 
 // PlayDoppelAction handles a participant's mark selection, coin deduction, and showdown evaluation (party2/lib/casino_doppel.cgi:41-146).
@@ -329,5 +329,5 @@ func (s *Service) PlayDoppelAction(ctx context.Context, roomID string, character
 		}
 	}
 
-	return s.GetRoomDetail(ctx, roomID, characterID)
+	return s.getRoomDetail(ctx, roomID, characterID)
 }

@@ -55,6 +55,49 @@ Rooms serialize multi-player games using Valkey Master (`ValkeyRoomRepository`, 
   - `POST /characters/{id}/casino/rooms/{roomId}/start`: Starts the game according to configured `game_type`.
   - `POST /characters/{id}/casino/rooms/{roomId}/action`: Dispatches player actions according to configured `game_type`.
 
+### Observation and visibility
+
+The anonymous lobby is a window of at most 100 active rooms containing identity,
+game, speed, capacity, base rate, password requirement, spectator allowance,
+status and participant/spectator counts. It excludes member identities, cards,
+marks, actions, pot and private timestamps. Empty lists are non-null arrays.
+Gateway selection and paging remain separate composition work.
+
+Detail requires a session and an owned `character_id`, verified again at the
+Casino service boundary, plus actual participant or admitted spectator
+membership. Anonymous requests return 401, nonowned/nonmember characters 403,
+and absent/disbanded/expired rooms 404. Selection never grants admission: join
+and spectate remain explicit mutations enforcing password; spectate also checks
+spectator allowance.
+
+| Game / phase | Participant | Admitted spectator |
+| --- | --- | --- |
+| Indian, active | Own card hidden unless folded or waiting; other cards and declarations visible | Participant cards/declarations visible |
+| Highlow, active | Own card/action visible; other cards hidden except waiting members; competitive declarations hidden, continue/wait visible | Same rules without an own participant card |
+| Doppel, active | Own mark visible; other marks hidden | All participant marks hidden |
+| Before start / after settlement (`round <= 0`) | Remaining cards/marks and declarations visible | Same visibility |
+
+Spectator records expose no playable cards/actions. Hidden cards/marks use
+`card: -1` and `card_display: "？"`. Go Doppel actions encode the selected mark
+itself, so other participants' mark actions are masked as `"？？？"`; the legacy
+routine displays actions separately from hidden cards. Evidence is
+`lib/casino_indian.cgi:22–33`, `lib/casino_highlow.cgi:33–50`,
+`lib/casino_doppel.cgi:23–36`, admission in `lib/casino.cgi:382–516`, and common
+dispatch in `lib/_casino.cgi:10–32,100–111`. Current settlement returns to
+waiting with round zero; there is no separate finished room status. Formula
+parity and settlement history are outside this read-boundary inspection.
+
+Reads never start, advance, wager or settle. Detail uses the existing room lock
+for a consistent phase/member snapshot and does not renew activity/TTL. Casino
+owns the 30-minute idle lifetime: lobby reads invoke expiry, which rechecks
+activity under that lock before deletion, then prune stale index entries.
+Expiry, store and required detail-name enrichment failures propagate instead
+of becoming empty observations. Lobby counts require no name enrichment.
+Valkey TTL remains the live-state lifetime authority; no cross-store settlement
+guarantee is added. Legacy expiry also applied a sleep penalty
+(`lib/casino.cgi:178–190`); that side effect remains reconciliation work under
+[#949](https://github.com/witchcraze/party2re/issues/949).
+
 ---
 
 ## 3. Multi-Player Indian Poker (`party2/lib/casino_indian.cgi`)
@@ -82,7 +125,7 @@ Rooms serialize multi-player games using Valkey Master (`ValkeyRoomRepository`, 
 ### Rules & Mechanics
 - **Deck**: 13 unique cards (`Ａ`..`Ｋ`), dealt 1 per player secretly.
 - **Card & Action Visibility**:
-  - Player sees their **own** card; opponents' cards are masked as `？` / `-1`.
+  - During an active round, player sees their **own** card; opponents' cards are masked as `？` / `-1`, except waiting members whose cards remain visible (`lib/casino_highlow.cgi:45`). At round zero, remaining cards are revealed to admitted viewers.
   - Opponents' declared competitive actions (`high`, `low`, `fold`) are masked as `？？？` during active round to prevent information leakage, while `call`/`tsuzukeru` and `待機中` remain visible.
 - **Actions**:
   - `call` (`つづける`): Match current round bet into pot and stay in the hand.

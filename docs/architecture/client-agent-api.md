@@ -219,6 +219,16 @@ state. Casino lobby summaries exclude hidden cards/marks/actions; member,
 spectator and nonparticipant detail follows verified game-specific visibility.
 Selecting a room cannot bypass password or spectator admission.
 
+Casino provides `ListRooms` lobby summaries and `GetRoomView` for owned admitted
+participants/spectators. Its detail adapter verifies the session's player and
+character ownership; the `character_id` query selects an owned character rather
+than supplying a trusted viewer identity. Anonymous detail is 401 and nonmember
+detail is 403. Projections whitelist fields and follow the
+[game-specific visibility contract](../design/casino.md#observation-and-visibility).
+The existing REST lobby is a window of at most 100 rooms; Gateway selection,
+paging and active-scene composition still require adapters. These primitives
+do not retire routes or connect Casino Gateway commands.
+
 Select one primary pageable collection per scene. Reuse limit 20 by default and
 maximum 100, with keyset cursors where the owning service supports them and
 offset paging otherwise. Expose the mode and next-page inputs. Reject malformed,

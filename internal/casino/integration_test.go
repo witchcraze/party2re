@@ -92,7 +92,7 @@ func TestCasinoRoomMultiplayerDatabaseIntegration(t *testing.T) {
 	}
 
 	// 6. Check forehead card masking: char1 cannot see own card, can see char2's
-	detail1, err := svc.GetRoomDetail(ctx, room.Room.ID, char1.ID)
+	detail1, err := casino.RoomSnapshotForTest(svc, ctx, room.Room.ID, char1.ID)
 	if err != nil {
 		t.Fatalf("GetRoomDetail char1 failed: %v", err)
 	}

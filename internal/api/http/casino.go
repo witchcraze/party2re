@@ -22,9 +22,9 @@ type CasinoSoloGameService interface {
 }
 
 type CasinoRoomService interface {
-	ListRooms(ctx context.Context) ([]casino.RoomDetail, error)
+	ListRooms(ctx context.Context) ([]casino.RoomSummary, error)
 	CreateRoom(ctx context.Context, characterID string, req casino.CreateRoomRequest) (*casino.RoomDetail, error)
-	GetRoomDetail(ctx context.Context, roomID string, viewingCharID string) (*casino.RoomDetail, error)
+	GetRoomView(ctx context.Context, roomID, playerID, characterID string) (*casino.RoomView, error)
 	JoinRoom(ctx context.Context, roomID string, characterID string, password string, fatigue int) (*casino.RoomDetail, error)
 	SpectateRoom(ctx context.Context, roomID string, characterID string, password string) (*casino.RoomDetail, error)
 	LeaveRoom(ctx context.Context, roomID string, characterID string) error

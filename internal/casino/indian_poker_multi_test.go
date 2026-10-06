@@ -59,7 +59,7 @@ func TestMultiplayerIndianPoker_FullLifecycle(t *testing.T) {
 	}
 
 	// 4. Card masking check (Forehead card rule: see others, not own!)
-	p1View, err := svc.GetRoomDetail(ctx, roomID, p1)
+	p1View, err := casino.RoomSnapshotForTest(svc, ctx, roomID, p1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestMultiplayerIndianPoker_FullLifecycle(t *testing.T) {
 		t.Fatalf("P3 Fold error: %v", err)
 	}
 	// P3 folded: their own card should now be visible to them!
-	p3View, err := svc.GetRoomDetail(ctx, roomID, p3)
+	p3View, err := casino.RoomSnapshotForTest(svc, ctx, roomID, p3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestMultiplayerIndianPoker_FullLifecycle(t *testing.T) {
 	}
 
 	// After showdown, all cards are revealed
-	revealedView, _ := svc.GetRoomDetail(ctx, roomID, p1)
+	revealedView, _ := casino.RoomSnapshotForTest(svc, ctx, roomID, p1)
 	for _, m := range revealedView.Members {
 		if m.CardDisplay == "？" {
 			t.Errorf("expected revealed cards after showdown for %s, got '？'", m.CharacterID)

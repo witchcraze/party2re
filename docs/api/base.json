@@ -3123,6 +3123,227 @@
         ],
         "additionalProperties": false,
         "description": "Known service or entry rejection retains its original 4xx/code even if refresh fails. No partial context is returned."
+      },
+      "CasinoRoomSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 50
+          },
+          "game_type": {
+            "type": "string",
+            "enum": [
+              "indian",
+              "highlow",
+              "doppel"
+            ]
+          },
+          "speed": {
+            "type": "integer",
+            "enum": [
+              12,
+              18,
+              28
+            ]
+          },
+          "max_players": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 8
+          },
+          "rate": {
+            "type": "integer"
+          },
+          "has_password": {
+            "type": "boolean"
+          },
+          "allow_spectators": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "in_progress",
+              "disbanded"
+            ]
+          },
+          "participant_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "spectator_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "game_type",
+          "speed",
+          "max_players",
+          "rate",
+          "has_password",
+          "allow_spectators",
+          "status",
+          "participant_count",
+          "spectator_count"
+        ]
+      },
+      "CasinoRoomObservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 50
+          },
+          "game_type": {
+            "type": "string",
+            "enum": [
+              "indian",
+              "highlow",
+              "doppel"
+            ]
+          },
+          "speed": {
+            "type": "integer",
+            "enum": [
+              12,
+              18,
+              28
+            ]
+          },
+          "max_players": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 8
+          },
+          "rate": {
+            "type": "integer"
+          },
+          "has_password": {
+            "type": "boolean"
+          },
+          "allow_spectators": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "in_progress",
+              "disbanded"
+            ]
+          },
+          "participant_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "spectator_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "leader_character_id": {
+            "type": "string"
+          },
+          "round": {
+            "type": "integer"
+          },
+          "current_bet": {
+            "type": "integer"
+          },
+          "max_bet": {
+            "type": "integer"
+          },
+          "pot": {
+            "type": "integer"
+          },
+          "winner_character_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "game_type",
+          "speed",
+          "max_players",
+          "rate",
+          "has_password",
+          "allow_spectators",
+          "status",
+          "participant_count",
+          "spectator_count",
+          "leader_character_id",
+          "round",
+          "current_bet",
+          "max_bet",
+          "pot"
+        ]
+      },
+      "CasinoMemberObservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "character_name": {
+            "type": "string"
+          },
+          "is_spectator": {
+            "type": "boolean"
+          },
+          "action": {
+            "type": "string",
+            "description": "Game-specific masking uses ？？？ for a hidden action."
+          },
+          "card": {
+            "type": "integer",
+            "minimum": -1,
+            "maximum": 12,
+            "description": "-1 for absent or hidden cards/marks."
+          },
+          "card_display": {
+            "type": "string",
+            "description": "？ for a hidden card/mark."
+          }
+        },
+        "required": [
+          "character_id",
+          "is_spectator",
+          "action",
+          "card"
+        ]
+      },
+      "CasinoRoomView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "room": {
+            "$ref": "#/components/schemas/CasinoRoomObservation"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CasinoMemberObservation"
+            }
+          }
+        },
+        "required": [
+          "room",
+          "members"
+        ]
       }
     },
     "securitySchemes": {

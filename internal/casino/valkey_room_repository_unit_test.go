@@ -435,6 +435,9 @@ func TestValkeyRoomRepository_PurgeIdleRooms(t *testing.T) {
 		if cmdStr[0] == "ZRANGEBYSCORE" {
 			return valkeytest.MakeStringSliceResult([]string{"idle-1", "idle-2"})
 		}
+		if cmdStr[0] == "GET" {
+			return valkeytest.MakeNilResult()
+		}
 		return valkeytest.MakeOKResult()
 	}))
 

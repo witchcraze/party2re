@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strconv"
 	"time"
 
 	"github.com/valkey-io/valkey-go"
@@ -183,54 +182,20 @@ func (v *ValkeyRoomRepository) UpdateRoom(ctx context.Context, room Room) error 
 // DeleteRoom removes a room and associated member mappings from Valkey.
 func (v *ValkeyRoomRepository) DeleteRoom(ctx context.Context, roomID string) error {
 	dto, err := v.getRoomDetail(ctx, roomID)
-	if err == nil && dto != nil {
+	if err != nil && !errors.Is(err, ErrRoomNotFound) {
+		return err
+	}
+	if dto != nil {
 		for _, m := range dto.Members {
-			charKey := DefaultCharacterKeyPrefix + m.CharacterID
-			_ = v.client.Do(ctx, v.client.B().Del().Key(charKey).Build())
-		}
-	}
-	roomKey := DefaultRoomKeyPrefix + roomID
-	_ = v.client.Do(ctx, v.client.B().Del().Key(roomKey).Build())
-	zremCmd := v.client.B().Zrem().Key(DefaultRoomsActiveIndexKey).Member(roomID).Build()
-	return v.client.Do(ctx, zremCmd).Error()
-}
-
-// ListActiveRooms lists non-disbanded rooms from the active sorted set with lazy pruning.
-func (v *ValkeyRoomRepository) ListActiveRooms(ctx context.Context) ([]RoomDetail, error) {
-	now := time.Now().UTC()
-	cutoff := float64(now.Add(-DefaultLobbyTTL).Unix())
-	remCmd := v.client.B().Zremrangebyscore().Key(DefaultRoomsActiveIndexKey).Min("-inf").Max(strconv.FormatFloat(cutoff, 'f', 0, 64)).Build()
-	_ = v.client.Do(ctx, remCmd)
-
-	cmd := v.client.B().Zrevrange().Key(DefaultRoomsActiveIndexKey).Start(0).Stop(100).Build()
-	res := v.client.Do(ctx, cmd)
-	if err := res.Error(); err != nil {
-		return nil, err
-	}
-
-	roomIDs, err := res.AsStrSlice()
-	if err != nil {
-		return nil, err
-	}
-
-	var list []RoomDetail
-	for _, id := range roomIDs {
-		dto, err := v.getRoomDetail(ctx, id)
-		if err != nil {
-			if errors.Is(err, ErrRoomNotFound) {
-				_ = v.client.Do(ctx, v.client.B().Zrem().Key(DefaultRoomsActiveIndexKey).Member(id).Build())
+			if err := v.client.Do(ctx, v.client.B().Del().Key(DefaultCharacterKeyPrefix+m.CharacterID).Build()).Error(); err != nil {
+				return err
 			}
-			continue
-		}
-		if dto.Room.Status != RoomStatusDisbanded {
-			v.populateMemberNames(ctx, dto.Members)
-			list = append(list, RoomDetail{
-				Room:    dto.Room,
-				Members: dto.Members,
-			})
 		}
 	}
-	return list, nil
+	if err := v.client.Do(ctx, v.client.B().Del().Key(DefaultRoomKeyPrefix+roomID).Build()).Error(); err != nil {
+		return err
+	}
+	return v.client.Do(ctx, v.client.B().Zrem().Key(DefaultRoomsActiveIndexKey).Member(roomID).Build()).Error()
 }
 
 // GetRoomByName searches for an active room with the given name.
@@ -246,27 +211,6 @@ func (v *ValkeyRoomRepository) GetRoomByName(ctx context.Context, name string) (
 		}
 	}
 	return nil, ErrRoomNotFound
-}
-
-// PurgeIdleRooms explicitly deletes rooms whose last activity is before cutoff.
-func (v *ValkeyRoomRepository) PurgeIdleRooms(ctx context.Context, cutoff time.Time) (int, error) {
-	cmd := v.client.B().Zrangebyscore().Key(DefaultRoomsActiveIndexKey).
-		Min("-inf").Max(strconv.FormatFloat(float64(cutoff.Unix()), 'f', 0, 64)).Build()
-	res := v.client.Do(ctx, cmd)
-	if err := res.Error(); err != nil {
-		return 0, err
-	}
-	expiredIDs, err := res.AsStrSlice()
-	if err != nil {
-		return 0, err
-	}
-	count := 0
-	for _, id := range expiredIDs {
-		if err := v.DeleteRoom(ctx, id); err == nil {
-			count++
-		}
-	}
-	return count, nil
 }
 
 // AddMember adds or updates a participant in the room.
@@ -316,7 +260,9 @@ func (v *ValkeyRoomRepository) GetMember(ctx context.Context, roomID string, cha
 	for _, m := range dto.Members {
 		if m.CharacterID == characterID {
 			cpy := m
-			v.populateMemberName(ctx, &cpy)
+			if err := v.populateMemberName(ctx, &cpy); err != nil {
+				return nil, err
+			}
 			return &cpy, nil
 		}
 	}
@@ -339,7 +285,9 @@ func (v *ValkeyRoomRepository) ListMembers(ctx context.Context, roomID string) (
 	}
 	members := make([]RoomMember, len(dto.Members))
 	copy(members, dto.Members)
-	v.populateMemberNames(ctx, members)
+	if err := v.populateMemberNames(ctx, members); err != nil {
+		return nil, err
+	}
 	return members, nil
 }
 
@@ -410,20 +358,4 @@ func (v *ValkeyRoomRepository) GetCharacterRoom(ctx context.Context, characterID
 		return "", err
 	}
 	return res.ToString()
-}
-
-func (v *ValkeyRoomRepository) populateMemberName(ctx context.Context, m *RoomMember) {
-	if m.CharacterName != "" || v.charRepo == nil {
-		return
-	}
-	ch, err := v.charRepo.FindByID(ctx, m.CharacterID)
-	if err == nil {
-		m.CharacterName = ch.Name
-	}
-}
-
-func (v *ValkeyRoomRepository) populateMemberNames(ctx context.Context, members []RoomMember) {
-	for i := range members {
-		v.populateMemberName(ctx, &members[i])
-	}
 }

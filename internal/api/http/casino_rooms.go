@@ -10,7 +10,7 @@ import (
 )
 
 type listCasinoRoomsResponse struct {
-	Rooms []casino.RoomDetail `json:"rooms"`
+	Rooms []casino.RoomSummary `json:"rooms"`
 }
 
 type createCasinoRoomRequest struct {
@@ -52,7 +52,7 @@ func (h *Handler) handleListCasinoRooms(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if rooms == nil {
-		rooms = []casino.RoomDetail{}
+		rooms = []casino.RoomSummary{}
 	}
 
 	writeJSON(w, http.StatusOK, listCasinoRoomsResponse{
@@ -115,21 +115,22 @@ func (h *Handler) handleGetCasinoRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	roomID := r.PathValue("roomId")
-	viewingCharID := r.URL.Query().Get("character_id")
-
-	room, err := h.casino.GetRoomDetail(r.Context(), roomID, viewingCharID)
-	if err != nil {
-		if errors.Is(err, casino.ErrRoomNotFound) {
-			writeError(w, http.StatusNotFound, err)
+	h.withAuthenticatedCharacter(w, r, r.URL.Query().Get("character_id"), func(player coreplayer.Player, char corecharacter.Character) {
+		room, err := h.casino.GetRoomView(r.Context(), r.PathValue("roomId"), player.ID, char.ID)
+		if err != nil {
+			switch {
+			case errors.Is(err, casino.ErrRoomNotFound), errors.Is(err, corecharacter.ErrNotFound):
+				writeError(w, http.StatusNotFound, err)
+			case errors.Is(err, casino.ErrRoomViewForbidden):
+				writeError(w, http.StatusForbidden, err)
+			default:
+				writeError(w, http.StatusInternalServerError, err)
+			}
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, casinoRoomResponse{
-		Room: *room,
+		writeJSON(w, http.StatusOK, struct {
+			Room casino.RoomView `json:"room"`
+		}{Room: *room})
 	})
 }
 
