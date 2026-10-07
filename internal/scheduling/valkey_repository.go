@@ -67,6 +67,9 @@ func (r *ValkeyRepository) Schedule(ctx context.Context, action core_scheduling.
 }
 
 // FetchDue queries actions due up to upTo from the pending queue sorted set.
+// It traverses the queue in bounded batches, excluding preserved Processing
+// records from execution candidates while leaving their authoritative storage and
+// actor discovery intact.
 // If an action key is genuinely missing (valkey.IsValkeyNil), the stale entry
 // is removed from the pending queue. If reading the payload fails due to a
 // transient storage error or context cancellation, the queued entry is preserved
@@ -74,62 +77,106 @@ func (r *ValkeyRepository) Schedule(ctx context.Context, action core_scheduling.
 // actions are purged from the queue to prevent repeated processing.
 // Valid terminal records are returned for metadata-only worker finalization.
 func (r *ValkeyRepository) FetchDue(ctx context.Context, upTo time.Time, limit int) ([]core_scheduling.ScheduledAction, error) {
-	scoreStr := strconv.FormatInt(upTo.Unix(), 10)
-
-	// Get IDs from pending queue
-	cmd := r.client.B().Zrangebyscore().Key(pendingQueueKey).Min("-inf").Max(scoreStr).Limit(0, int64(limit)).Build()
-	resp := r.client.Do(ctx, cmd)
-	if resp.Error() != nil {
-		return nil, resp.Error()
-	}
-
-	ids, err := resp.AsStrSlice()
-	if err != nil {
-		return nil, err
-	}
-
-	if len(ids) == 0 {
+	if limit <= 0 {
 		return nil, nil
 	}
 
-	var actions []core_scheduling.ScheduledAction
+	scoreStr := strconv.FormatInt(upTo.Unix(), 10)
+	batchSize := int64(limit)
+	if batchSize < 50 {
+		batchSize = 50
+	}
+	maxScan := int64(limit) * 20
+	if maxScan < 1000 {
+		maxScan = 1000
+	}
 
-	for _, id := range ids {
-		actionKey := actionKeyPrefix + id
-		val, err := r.client.Do(ctx, r.client.B().Get().Key(actionKey).Build()).AsBytes()
+	var actions []core_scheduling.ScheduledAction
+	offset := int64(0)
+	totalScanned := int64(0)
+
+	for totalScanned < maxScan && len(actions) < limit {
+		toFetch := batchSize
+		if totalScanned+toFetch > maxScan {
+			toFetch = maxScan - totalScanned
+		}
+		if toFetch <= 0 {
+			break
+		}
+
+		cmd := r.client.B().Zrangebyscore().Key(pendingQueueKey).Min("-inf").Max(scoreStr).Limit(offset, toFetch).Build()
+		resp := r.client.Do(ctx, cmd)
+		if resp.Error() != nil {
+			return nil, resp.Error()
+		}
+
+		ids, err := resp.AsStrSlice()
 		if err != nil {
-			if valkey.IsValkeyNil(err) {
-				// Key missing: remove stale queue entry
+			return nil, err
+		}
+
+		if len(ids) == 0 {
+			break
+		}
+
+		retainedInBatch := int64(0)
+		for _, id := range ids {
+			totalScanned++
+			actionKey := actionKeyPrefix + id
+			val, err := r.client.Do(ctx, r.client.B().Get().Key(actionKey).Build()).AsBytes()
+			if err != nil {
+				if valkey.IsValkeyNil(err) {
+					// Key missing: remove stale queue entry
+					if remErr := r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build()).Error(); remErr != nil && !valkey.IsValkeyNil(remErr) {
+						return nil, remErr
+					}
+					continue
+				}
+				return nil, err
+			}
+
+			var action core_scheduling.ScheduledAction
+			if err := json.Unmarshal(val, &action); err != nil {
+				// Malformed JSON: remove from queue and delete key to prevent re-fetch
+				if remErr := r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build()).Error(); remErr != nil && !valkey.IsValkeyNil(remErr) {
+					return nil, remErr
+				}
+				if delErr := r.client.Do(ctx, r.client.B().Del().Key(actionKey).Build()).Error(); delErr != nil && !valkey.IsValkeyNil(delErr) {
+					return nil, delErr
+				}
+				continue
+			}
+
+			// Reject actions that fail domain-level invariants (e.g. unknown state,
+			// oversized fields). Remove from queue to prevent repeated processing.
+			if err := action.Validate(); err != nil {
 				if remErr := r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build()).Error(); remErr != nil && !valkey.IsValkeyNil(remErr) {
 					return nil, remErr
 				}
 				continue
 			}
-			return nil, err
+
+			retainedInBatch++
+
+			// Processing records represent uncertain outcomes that must not be replayed.
+			// They are preserved in the queue and actor index, but excluded from execution candidates.
+			if action.State == core_scheduling.StateProcessing {
+				continue
+			}
+
+			actions = append(actions, action)
+			if len(actions) == limit {
+				break
+			}
 		}
 
-		var action core_scheduling.ScheduledAction
-		if err := json.Unmarshal(val, &action); err != nil {
-			// Malformed JSON: remove from queue and delete key to prevent re-fetch
-			if remErr := r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build()).Error(); remErr != nil && !valkey.IsValkeyNil(remErr) {
-				return nil, remErr
-			}
-			if delErr := r.client.Do(ctx, r.client.B().Del().Key(actionKey).Build()).Error(); delErr != nil && !valkey.IsValkeyNil(delErr) {
-				return nil, delErr
-			}
-			continue
-		}
+		// Adjust offset by the entries that were retained in the queue.
+		offset += retainedInBatch
 
-		// Reject actions that fail domain-level invariants (e.g. unknown state,
-		// oversized fields). Remove from queue to prevent repeated processing.
-		if err := action.Validate(); err != nil {
-			if remErr := r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build()).Error(); remErr != nil && !valkey.IsValkeyNil(remErr) {
-				return nil, remErr
-			}
-			continue
+		// If fewer entries than requested were returned, the due queue is exhausted.
+		if int64(len(ids)) < toFetch {
+			break
 		}
-
-		actions = append(actions, action)
 	}
 
 	return actions, nil

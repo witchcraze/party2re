@@ -47,9 +47,11 @@ func (w *Worker) Run(ctx context.Context) {
 	}
 }
 
+const defaultFetchLimit = 50
+
 func (w *Worker) processActions(ctx context.Context) {
 	// Fetch actions due up to now
-	actions, err := w.repo.FetchDue(ctx, time.Now(), 50)
+	actions, err := w.repo.FetchDue(ctx, time.Now(), defaultFetchLimit)
 	if err != nil {
 		w.logger.Error(ctx, "Failed to fetch due actions", err)
 		return
@@ -83,6 +85,8 @@ func (w *Worker) processAction(ctx context.Context, action core_scheduling.Sched
 	}
 	// Processing may have applied feature effects even if final persistence failed.
 	// Lock expiry is not permission to replay an uncertain outcome.
+	// FetchDue excludes Processing from candidate batches; defense-in-depth ensures
+	// direct dispatches never re-execute them.
 	if action.State == core_scheduling.StateProcessing {
 		return
 	}

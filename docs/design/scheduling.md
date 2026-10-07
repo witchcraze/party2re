@@ -36,6 +36,7 @@ When fetching due actions (`FetchDue`):
 3. If the payload is genuinely absent (`valkey.IsValkeyNil`), it is treated as a stale queue entry and cleaned up from the pending queue (`ZREM`). Any cleanup error is propagated to the caller.
 4. If reading the payload encounters a transient network/storage failure or context cancellation, the queued entry is preserved in `party2:scheduled:pending` and the read error is returned immediately to the worker, ensuring unfinished work is neither discarded nor permanently stranded.
 5. If the payload is malformed JSON or violates domain invariants (`Validate()`), the invalid entry is cleaned up from the pending queue (and deleted from storage if malformed) to prevent repeated processing failures.
+6. Actions in `Processing` state are preserved in storage and the queue without being replayed; they are excluded from execution candidates so subsequent due work is not starved. Traversal progresses through the sorted queue in bounded batches, adjusting pagination offsets by the number of retained entries when cleanup or stale purges remove entries from the traversed set.
 
 ## Action Cancellation & Failure Semantics
 
