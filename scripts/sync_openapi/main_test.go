@@ -162,6 +162,39 @@ func TestDuplicatePathDetection(t *testing.T) {
 	}
 }
 
+func TestSchemaNumbersSurviveSync(t *testing.T) {
+	tempDir := t.TempDir()
+	basePath := filepath.Join(tempDir, "base.json")
+	pathsDir := filepath.Join(tempDir, "paths")
+	if err := os.Mkdir(pathsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	bounds := `{"minimum":-9223372036854775808,"maximum":9223372036854775807}`
+	if err := os.WriteFile(basePath, []byte(`{"components":{"schemas":{"Amount":`+bounds+`}}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	pathFile := filepath.Join(pathsDir, "character.json")
+	if err := os.WriteFile(pathFile, []byte(`{"/existing":{"post":{"schema":`+bounds+`}}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Exercise the rewriting path as well as formatting and bundling.
+	if _, err := scaffoldMissingRoutes(pathsDir, []Route{{Method: "GET", Path: "/characters/{id}/context"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := formatPathFiles(pathsDir); err != nil {
+		t.Fatal(err)
+	}
+	bundled, _, _, err := bundleOpenAPISpec(basePath, pathsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, bound := range []string{`"minimum": -9223372036854775808`, `"maximum": 9223372036854775807`} {
+		if strings.Count(string(bundled), bound) != 2 {
+			t.Fatalf("base or path schema number was rounded: %s", bundled)
+		}
+	}
+}
+
 func TestCheckRouteCoverageMissing(t *testing.T) {
 	bundledData := []byte(`{
   "openapi": "3.1.0",

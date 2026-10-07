@@ -328,6 +328,20 @@ Unknown actions return `404 ACTION_NOT_FOUND`; known but unconnected commands or
 unconfigured services return `501 ACTION_NOT_IMPLEMENTED`. These failures perform
 no command and expose no context.
 
+Catalog entries migrated to `executeCharacterAction` validate against their own
+`CharacterActionRequest.allOf` condition in OpenAPI, selected by
+`if.properties.action.const` with `action` required. Each ActionID must have
+exactly one condition whose `then.properties.params` resolves to a strict object
+schema without actor identity inputs. Its required fields must match the catalog;
+`then` requires the params envelope exactly when those fields are nonempty.
+Home sleep permits optional `target_home_id`; Home wake permits only empty params.
+Bank amounts span signed int64, and command strings permit empty values for
+service-owned validation/defaults. The catalog drift check rejects missing,
+duplicate, malformed or unresolved contracts even for no-input commands.
+Unmigrated entries retain their REST-operation checks. Removing a replaced REST
+operation therefore does not remove its migrated command's validation; route
+retirement still requires the tracked replacement verification.
+
 Re-read current entry eligibility before execution; reject an ineligible entry
 with `409 ACTION_UNAVAILABLE`. Scheduled/timer read errors stop execution with
 `500 ACTION_PREFLIGHT_FAILED`, without execution or context. An earlier

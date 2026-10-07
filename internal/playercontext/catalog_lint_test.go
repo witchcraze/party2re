@@ -38,10 +38,19 @@ type openAPIMediaType struct {
 }
 
 type openAPISchema struct {
-	Ref        string                   `json:"$ref"`
-	Type       string                   `json:"type"`
-	Properties map[string]openAPISchema `json:"properties"`
-	Required   []string                 `json:"required"`
+	Ref                  string                   `json:"$ref"`
+	Type                 string                   `json:"type"`
+	Properties           map[string]openAPISchema `json:"properties"`
+	Required             []string                 `json:"required"`
+	AllOf                []openAPISchema          `json:"allOf"`
+	If                   *openAPISchema           `json:"if"`
+	Then                 *openAPISchema           `json:"then"`
+	Const                json.RawMessage          `json:"const"`
+	AdditionalProperties json.RawMessage          `json:"additionalProperties"`
+	Format               string                   `json:"format"`
+	Minimum              json.Number              `json:"minimum"`
+	Maximum              json.Number              `json:"maximum"`
+	MinLength            int                      `json:"minLength"`
 }
 
 var actionIDPattern = regexp.MustCompile(`^[a-z0-9]+_[a-z0-9_]+$`)
@@ -85,15 +94,80 @@ func loadOpenAPISpec(t *testing.T) *openAPISpec {
 	return &spec
 }
 
-// resolveSchema resolves $ref schemas against components.schemas if present.
-func resolveSchema(spec *openAPISpec, s openAPISchema) openAPISchema {
-	if s.Ref != "" && strings.HasPrefix(s.Ref, "#/components/schemas/") {
-		refName := strings.TrimPrefix(s.Ref, "#/components/schemas/")
-		if resolved, ok := spec.Components.Schemas[refName]; ok {
-			return resolved
+// resolveSchema follows local references and fails closed on missing/cyclic refs.
+func resolveSchema(spec *openAPISpec, s openAPISchema) (openAPISchema, error) {
+	seen := make(map[string]bool)
+	for s.Ref != "" {
+		if seen[s.Ref] {
+			return openAPISchema{}, fmt.Errorf("cyclic schema reference %q", s.Ref)
+		}
+		seen[s.Ref] = true
+		resolved, ok := spec.Components.Schemas[strings.TrimPrefix(s.Ref, "#/components/schemas/")]
+		if !strings.HasPrefix(s.Ref, "#/components/schemas/") || !ok {
+			return openAPISchema{}, fmt.Errorf("unresolved schema reference %q", s.Ref)
+		}
+		s = resolved
+	}
+	return s, nil
+}
+
+// gatewayParams selects one documented action condition, never the shared envelope.
+func gatewayParams(act playercontext.ActionDefinition, spec *openAPISpec, envelope openAPISchema) (openAPISchema, error) {
+	var matches []openAPISchema
+	for i, condition := range envelope.AllOf {
+		if condition.If == nil {
+			return openAPISchema{}, fmt.Errorf("condition %d: malformed action discriminator", i)
+		}
+		selector, err := resolveSchema(spec, *condition.If)
+		if err != nil {
+			return openAPISchema{}, err
+		}
+		var id string
+		if selector.Type != "object" || len(selector.Properties) != 1 || len(selector.Required) != 1 || selector.Required[0] != "action" || json.Unmarshal(selector.Properties["action"].Const, &id) != nil || !actionIDPattern.MatchString(id) {
+			return openAPISchema{}, fmt.Errorf("condition %d: malformed action discriminator", i)
+		}
+		if id == act.ID {
+			matches = append(matches, condition)
 		}
 	}
-	return s
+	if len(matches) != 1 {
+		return openAPISchema{}, fmt.Errorf("found %d command conditions; require exactly one", len(matches))
+	}
+	if matches[0].Then == nil {
+		return openAPISchema{}, fmt.Errorf("missing object then schema")
+	}
+	then, err := resolveSchema(spec, *matches[0].Then)
+	if err != nil {
+		return openAPISchema{}, err
+	}
+	if then.Type != "object" {
+		return openAPISchema{}, fmt.Errorf("missing object then schema")
+	}
+	params, ok := then.Properties["params"]
+	if !ok {
+		return openAPISchema{}, fmt.Errorf("missing params schema")
+	}
+	if slices.Contains(then.Required, "params") != (len(act.RequiredParams) > 0) {
+		return openAPISchema{}, fmt.Errorf("params envelope requirement does not match required_params %v", act.RequiredParams)
+	}
+	params, err = resolveSchema(spec, params)
+	if err != nil {
+		return openAPISchema{}, err
+	}
+	if params.Type != "object" || string(params.AdditionalProperties) != "false" {
+		return openAPISchema{}, fmt.Errorf("params must be a strict object (additionalProperties: false)")
+	}
+	for name := range params.Properties {
+		if strings.EqualFold(name, "character_id") || strings.EqualFold(name, "player_id") {
+			return openAPISchema{}, fmt.Errorf("actor identity input %q is forbidden in params", name)
+		}
+	}
+	for _, name := range params.Required {
+		if strings.EqualFold(name, "character_id") || strings.EqualFold(name, "player_id") {
+			return openAPISchema{}, fmt.Errorf("actor identity input %q is forbidden in params", name)
+		}
+	}
+	return params, nil
 }
 
 // extractOperations indexes all OpenAPI operations by operationId.
@@ -127,8 +201,8 @@ func verifyActionDrift(act playercontext.ActionDefinition, ops map[string]openAP
 	}
 
 	// 3. Request Body Schema & Parameter Completeness Check
-	if op.RequestBody == nil || len(op.RequestBody.Content) == 0 {
-		if len(act.RequiredParams) > 0 {
+	if op.RequestBody == nil {
+		if len(act.RequiredParams) > 0 || act.OperationID == "executeCharacterAction" {
 			errs = append(errs, fmt.Sprintf("action %q (operationId: %q) specifies required_params %v, but OpenAPI operation has no requestBody defined",
 				act.ID, act.OperationID, act.RequiredParams))
 		}
@@ -137,14 +211,20 @@ func verifyActionDrift(act playercontext.ActionDefinition, ops map[string]openAP
 
 	mediaType, hasJSON := op.RequestBody.Content["application/json"]
 	if !hasJSON {
-		if len(act.RequiredParams) > 0 {
+		if len(act.RequiredParams) > 0 || act.OperationID == "executeCharacterAction" {
 			errs = append(errs, fmt.Sprintf("action %q (operationId: %q) specifies required_params %v, but OpenAPI requestBody missing application/json content",
 				act.ID, act.OperationID, act.RequiredParams))
 		}
 		return errs
 	}
 
-	schema := resolveSchema(spec, mediaType.Schema)
+	schema, err := resolveSchema(spec, mediaType.Schema)
+	if err == nil && act.OperationID == "executeCharacterAction" {
+		schema, err = gatewayParams(act, spec, schema)
+	}
+	if err != nil {
+		return append(errs, fmt.Sprintf("action %q (operationId: %q): %v", act.ID, act.OperationID, err))
+	}
 
 	// Verify all schema-required properties (excluding server-injected character_id) are declared.
 	for _, reqField := range schema.Required {

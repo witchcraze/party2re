@@ -12,6 +12,11 @@ Each action is statically linked to an OpenAPI 3.1 contract and explicit
 `required_params`. Names alone do not describe parameter types or target choices.
 The approved replacement supplies strict schemas and selected-value templates;
 retirement must not leave command validation linked to a removed REST operation.
+Migrated entries use `executeCharacterAction` and their ActionID-specific params
+condition; unmigrated entries remain linked to their REST operation. The
+[command input contract](../architecture/client-agent-api.md#input-and-execution-boundary)
+owns schema selection and drift validation. Gates and required parameter names
+are independent of this transport mapping.
 
 ---
 
@@ -109,16 +114,16 @@ The table below documents all 42 current catalog entries in `internal/playercont
 
 | ID | Label | Category | OpenAPI OperationID | Required Params | Dead Gate (HP>0) | Fatigue Gate (<100) | Sleep Gate (Awake) | Cooldown Gate | Currency Gate |
 |---|---|---|---|---|:---:|:---:|:---:|:---:|:---:|
-| `adventure_start` | 冒険に出る | `adventure` | `startAdventure` | `["stage_id"]` | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `adventure_start` | 冒険に出る | `adventure` | `executeCharacterAction` | `["stage_id"]` | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `challenge_start` | 試練の道（連戦チャレンジ） | `adventure` | `startChallengeSession` | `["tier_id"]` | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `dungeon_start` | ダンジョン探索 | `adventure` | `startDungeonExpedition` | `["dungeon_id"]` | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `boss_fight` | ボス討伐 | `adventure` | `fightBoss` | `["boss_id"]` | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `pvp_room_create` | 対戦部屋作成 | `adventure` | `postCharactersIdPvpRooms` | `[]` | ✅ | ✅ | ✅ | ✅ | ❌ |
-| `home_sleep` | 自宅・宿屋で休む | `home` | `homeSleep` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `home_wake` | 目を覚ます | `home` | `homeWake` | `[]` | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `home_sleep` | 自宅・宿屋で休む | `home` | `executeCharacterAction` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `home_wake` | 目を覚ます | `home` | `executeCharacterAction` | `[]` | ❌ | ❌ | ❌ | ❌ | ❌ |
 | `chapel_pray` | 礼拝堂で祈る（祈願） | `home` | `prayAtChapel` | `["blessing"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `bank_deposit` | 銀行に預金する | `economy` | `postCharactersIdBankDeposit` | `["amount"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
-| `bank_withdraw` | 銀行から引き出す | `economy` | `postCharactersIdBankWithdraw` | `["amount"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `bank_deposit` | 銀行に預金する | `economy` | `executeCharacterAction` | `["amount"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
+| `bank_withdraw` | 銀行から引き出す | `economy` | `executeCharacterAction` | `["amount"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `depot_deposit` | 預かり所にアイテムを預ける | `economy` | `postCharactersIdDepotDeposit` | `["item_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `depot_withdraw` | 預かり所からアイテムを引き出す | `economy` | `postCharactersIdDepotWithdraw` | `["item_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `auction_send` | 仕送り・送金 | `economy` | `postCharactersIdAuctionSend` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
@@ -150,7 +155,7 @@ The table below documents all 42 current catalog entries in `internal/playercont
 | `monster_tame` | モンスター捕獲・預託 | `social` | `tameMonster` | `["monster_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `helper_complete` | 何でも屋クエスト報告 | `social` | `completeHelperQuest` | `["quest_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `park_post` | 交流広場に伝言投稿 | `social` | `postParkMessage` | `["message"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
-| `rescue_request` | 緊急救出要請 | `social` | `requestEmergencyRescue` | `[]` | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `rescue_request` | 緊急救出要請 | `social` | `executeCharacterAction` | `["reason"]` | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 *(Note: All facility actions implicitly require `GateLocationCheck` except `rescue_request`, which is a global recovery action. In legacy Party2, only combat/expedition quests under `lib/quest.cgi:479, 902` require living HP; town actions under `lib/system.cgi:639–655` execute regardless of character HP).*
 
