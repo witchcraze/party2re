@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -238,16 +239,37 @@ func TestRankingExtraRepository_Integration(t *testing.T) {
 		t.Fatalf("expected weekly job change count 2, got %d", wjcEntry.Score)
 	}
 
-	// Test ResetWeeklyJobChanges
-	if err := rankingRepo.ResetWeeklyJobChanges(ctx); err != nil {
-		t.Fatalf("ResetWeeklyJobChanges failed: %v", err)
+	// Test ResetWeeklyJobChanges within an isolated rollback boundary so
+	// global Sunday-midnight rotation is verified against all active records
+	// without permanently deleting unrelated shared development/test data.
+	errRollback := errors.New("rollback weekly reset")
+	err = RunInTx(ctx, db, func(txCtx context.Context) error {
+		if err := rankingRepo.ResetWeeklyJobChanges(txCtx); err != nil {
+			return fmt.Errorf("ResetWeeklyJobChanges failed: %w", err)
+		}
+		wjcAfter, wjcTotalAfter, err := rankingRepo.GetActiveWeeklyJobChangeRanking(txCtx, 10, 0)
+		if err != nil {
+			return fmt.Errorf("GetActiveWeeklyJobChangeRanking after reset failed: %w", err)
+		}
+		if wjcTotalAfter != 0 || len(wjcAfter) != 0 {
+			return fmt.Errorf("expected 0 active weekly job changes after reset in transaction, got %d", wjcTotalAfter)
+		}
+		return errRollback
+	})
+	if err != nil && !errors.Is(err, errRollback) {
+		t.Fatalf("isolated ResetWeeklyJobChanges assertion failed: %v", err)
 	}
-	wjcAfter, wjcTotalAfter, err := rankingRepo.GetActiveWeeklyJobChangeRanking(ctx, 10, 0)
+
+	// Outside the isolated rollback transaction, verify that active records survived and were restored.
+	wjcRestored, _, err := findRankingEntry(ctx, charID, rankingRepo.GetActiveWeeklyJobChangeRanking)
 	if err != nil {
-		t.Fatalf("GetActiveWeeklyJobChangeRanking after reset failed: %v", err)
+		t.Fatalf("findRankingEntry after rollback failed: %v", err)
 	}
-	if wjcTotalAfter != 0 || len(wjcAfter) != 0 {
-		t.Fatalf("expected 0 active weekly job changes after reset, got %d", wjcTotalAfter)
+	if wjcRestored == nil {
+		t.Fatalf("expected fixture %s to survive rollback of weekly reset", charID)
+	}
+	if wjcRestored.Score != 2 {
+		t.Fatalf("expected weekly job change count 2 after rollback, got %d", wjcRestored.Score)
 	}
 
 	// 4. Test Hall of Fame (legend_records)
@@ -335,5 +357,82 @@ func TestRankingExtraRepository_Integration(t *testing.T) {
 	}
 	if !foundMon {
 		t.Fatalf("legend record for minimal entry %s not found", charID)
+	}
+}
+
+func TestRankingExtraRepository_Integration_ResetIsolation(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close db failed: %v", err)
+		}
+	})
+
+	ctx := context.Background()
+	playerRepo, err := NewPlayerRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	charRepo, err := NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Seed sentinel player and character representing unrelated persisted data.
+	sentinelPlayer, err := CreateTestPlayer(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := playerRepo.Delete(ctx, sentinelPlayer.ID); err != nil {
+			t.Errorf("cleanup sentinel player %s failed: %v", sentinelPlayer.ID, err)
+		}
+	})
+
+	sentinelPrefix := fmt.Sprintf("snt_%d_", time.Now().UnixNano()%1000000)
+	sentinelChar, err := corecharacter.NewWithOptions(sentinelPrefix+"Char", "job-01", "m", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sentinelChar.PlayerID = sentinelPlayer.ID
+	if err := charRepo.Save(ctx, sentinelChar); err != nil {
+		t.Fatal(err)
+	}
+	sentinelCharID := sentinelChar.ID
+	t.Cleanup(func() {
+		if err := charRepo.Delete(ctx, sentinelCharID); err != nil {
+			t.Errorf("cleanup sentinel char %s failed: %v", sentinelCharID, err)
+		}
+	})
+
+	const sentinelCount = 7
+	_, err = db.ExecContext(ctx, "INSERT INTO weekly_job_changes (character_id, change_count) VALUES (?, ?)", sentinelCharID, sentinelCount)
+	if err != nil {
+		t.Fatalf("insert sentinel weekly job change failed: %v", err)
+	}
+
+	// 2. Run the complete integration test across repeated executions to verify
+	// that unrelated persisted records are preserved across test runs and teardown paths.
+	for run := 1; run <= 2; run++ {
+		t.Run(fmt.Sprintf("CompleteIntegration_Run%d", run), func(subT *testing.T) {
+			TestRankingExtraRepository_Integration(subT)
+		})
+
+		// 3. Verify sentinel unrelated weekly count survives after the complete integration test and its cleanup.
+		var currentCount int
+		err = db.QueryRowContext(ctx, "SELECT change_count FROM weekly_job_changes WHERE character_id = ?", sentinelCharID).Scan(&currentCount)
+		if err != nil {
+			t.Fatalf("sentinel weekly job change record disappeared after run %d: %v", run, err)
+		}
+		if currentCount != sentinelCount {
+			t.Fatalf("expected sentinel count %d to survive after run %d, got %d", sentinelCount, run, currentCount)
+		}
 	}
 }
