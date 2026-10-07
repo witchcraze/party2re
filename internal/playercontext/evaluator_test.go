@@ -74,6 +74,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		want   []string
 	}{
 		{"dead", func(s *Snapshot) { s.Character.Stats.HP = 0 }, []string{
+			"scene_enter", "scene_select", "scene_page", "scene_back",
 			"home_sleep", "chapel_pray",
 			"bank_deposit", "bank_withdraw", "depot_deposit", "depot_withdraw", "auction_send", "fleamarket_list", "fleamarket_purchase",
 			"shop_purchase", "shop_sell", "shop_accessory_buy", "gemstore_buy", "secretshop_purchase", "blackmarket_trade",
@@ -83,6 +84,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 			"monster_tame", "helper_complete", "park_post", "rescue_request",
 		}},
 		{"dead without money", func(s *Snapshot) { s.Character.Stats.HP = 0; s.Character.Money = 0 }, []string{
+			"scene_enter", "scene_select", "scene_page", "scene_back",
 			"home_sleep", "chapel_pray",
 			"bank_withdraw", "depot_deposit", "depot_withdraw", "auction_send", "fleamarket_list",
 			"shop_sell", "blackmarket_trade",
@@ -118,7 +120,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		})
 	}
 	healthy := Evaluate(healthySnapshot())
-	if len(healthy) != 41 || slices.Contains(healthy, "home_wake") {
+	if len(healthy) != 45 || slices.Contains(healthy, "home_wake") {
 		t.Fatalf("healthy catalog: %v", healthy)
 	}
 	zeroGold := healthySnapshot()
@@ -138,8 +140,8 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	exhausted := healthySnapshot()
 	exhausted.Character.Tired = 100
 	got := Evaluate(exhausted)
-	if len(got) != 33 {
-		t.Fatalf("exhausted action count = %d, want 33", len(got))
+	if len(got) != 37 {
+		t.Fatalf("exhausted action count = %d, want 37", len(got))
 	}
 	for _, action := range []string{"home_sleep", "bank_deposit", "shop_purchase", "tavern_order", "rescue_request"} {
 		if !slices.Contains(got, action) {

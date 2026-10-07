@@ -30,6 +30,7 @@ type TimerReader interface {
 type Result struct {
 	Snapshot         Snapshot
 	AvailableActions []string
+	Navigation       *NavigationObservation
 }
 
 // Service builds uncached player observations using existing read contracts.
@@ -37,19 +38,32 @@ type Service struct {
 	characters CharacterReader
 	actions    ActionReader
 	timers     TimerReader
+	navigation NavigationRepository
+	scenes     map[string]SceneDefinition
 }
 
 // NewService requires character, scheduled-action and sleep-timer readers.
-func NewService(characters CharacterReader, actions ActionReader, timers TimerReader) *Service {
-	return &Service{characters: characters, actions: actions, timers: timers}
+func NewService(characters CharacterReader, actions ActionReader, timers TimerReader, options ...func(*Service)) *Service {
+	s := &Service{characters: characters, actions: actions, timers: timers}
+	for _, option := range options {
+		option(s)
+	}
+	return s
 }
 
 // Query reads each state source once and evaluates entry actions in the initial
 // town scene. Reads are not a cross-store transaction; execution must revalidate.
 func (s *Service) Query(ctx context.Context, charID string) (Result, error) {
+	return s.query(ctx, charID, "")
+}
+
+func (s *Service) query(ctx context.Context, charID, ownerID string) (Result, error) {
 	char, err := s.characters.FindByID(ctx, charID)
 	if err != nil {
 		return Result{}, fmt.Errorf("load context character: %w", err)
+	}
+	if ownerID != "" && (char.PlayerID != ownerID || char.ID != charID) {
+		return Result{}, ErrNavigationForbidden
 	}
 	actions, err := s.actions.FindPendingByActorID(ctx, charID)
 	if err != nil {
@@ -71,5 +85,9 @@ func (s *Service) Query(ctx context.Context, charID string) (Result, error) {
 		CanWake:        remaining <= 0 && asleep,
 		LocationID:     LocationTown,
 	}
-	return Result{Snapshot: snapshot, AvailableActions: Evaluate(snapshot)}, nil
+	navigation, err := s.observeNavigation(ctx, charID)
+	if err != nil {
+		return Result{}, err
+	}
+	return Result{Snapshot: snapshot, AvailableActions: Evaluate(snapshot), Navigation: navigation}, nil
 }

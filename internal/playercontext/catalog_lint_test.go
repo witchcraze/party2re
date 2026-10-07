@@ -51,6 +51,9 @@ type openAPISchema struct {
 	Minimum              json.Number              `json:"minimum"`
 	Maximum              json.Number              `json:"maximum"`
 	MinLength            int                      `json:"minLength"`
+	MaxLength            int                      `json:"maxLength"`
+	Pattern              string                   `json:"pattern"`
+	Enum                 []any                    `json:"enum"`
 }
 
 var actionIDPattern = regexp.MustCompile(`^[a-z0-9]+_[a-z0-9_]+$`)

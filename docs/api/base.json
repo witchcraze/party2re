@@ -2593,7 +2593,7 @@
             "type": "string"
           },
           "description": {
-            "example": "\u79d8\u4f1d\u306e\u30b9\u30d1\u30a4\u30b9\u3092\u716e\u8fbc\u3093\u3060\u30ab\u30ec\u30fc\u3002\u30b9\u30bf\u30df\u30ca\u304c\u6e67\u3044\u3066HP\u3092\u56de\u5fa9\u3059\u308b\u3002",
+            "example": "秘伝のスパイスを煮込んだカレー。スタミナが湧いてHPを回復する。",
             "type": "string"
           },
           "hp_heal": {
@@ -2609,7 +2609,7 @@
             "type": "integer"
           },
           "name": {
-            "example": "\u30b9\u30d1\u30a4\u30b9\u9999\u308b\u7279\u88fd\u30ab\u30ec\u30fc",
+            "example": "スパイス香る特製カレー",
             "type": "string"
           },
           "price": {
@@ -2701,7 +2701,7 @@
             "type": "boolean"
           },
           "location_name": {
-            "example": "\u5192\u967a\u8005\u306e\u9152\u5834",
+            "example": "冒険者の酒場",
             "type": "string"
           },
           "max_hp": {
@@ -2714,7 +2714,7 @@
             "type": "integer"
           },
           "npc_name": {
-            "example": "@\u30a8\u30ec\u30ca",
+            "example": "@エレナ",
             "type": "string"
           }
         },
@@ -2897,6 +2897,9 @@
           },
           "opponent": {
             "$ref": "#/components/schemas/SceneOpponent"
+          },
+          "navigation": {
+            "$ref": "#/components/schemas/NavigationObservation"
           }
         },
         "required": [
@@ -3237,6 +3240,168 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "scene_enter"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "destination": {
+                      "type": "string",
+                      "enum": [
+                        "town",
+                        "bank",
+                        "home",
+                        "shop_weapon",
+                        "shop_armor",
+                        "shop_item",
+                        "shop_accessory"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "destination"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "scene_select"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "target_kind": {
+                      "type": "string",
+                      "enum": [
+                        "item"
+                      ]
+                    },
+                    "target_id": {
+                      "type": "string",
+                      "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+                      "description": "An item ID available in the selected shop catalog for the owned actor."
+                    }
+                  },
+                  "required": [
+                    "target_kind",
+                    "target_id"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "scene_page"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "destination": {
+                      "type": "string",
+                      "enum": [
+                        "town",
+                        "bank",
+                        "home",
+                        "shop_weapon",
+                        "shop_armor",
+                        "shop_item",
+                        "shop_accessory"
+                      ]
+                    },
+                    "offset": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1000000
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100,
+                      "default": 20
+                    }
+                  },
+                  "required": [
+                    "destination",
+                    "offset"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "scene_back"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "required": [],
+                  "additionalProperties": false
+                }
+              }
+            }
           }
         ]
       },
@@ -3536,6 +3701,72 @@
           "room",
           "members"
         ]
+      },
+      "NavigationSubject": {
+        "type": "object",
+        "properties": {
+          "target_kind": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "target_id": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "target_kind",
+          "target_id"
+        ],
+        "additionalProperties": false,
+        "description": "Both strings are empty when no subject is selected; otherwise validated by the registered adapter."
+      },
+      "NavigationSelection": {
+        "type": "object",
+        "properties": {
+          "destination": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/NavigationSubject"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "destination",
+          "subject",
+          "offset",
+          "limit"
+        ],
+        "additionalProperties": false,
+        "description": "Bounded ordinary selection. Limit 0 means the default 20; no feature activity or actor identity is stored."
+      },
+      "NavigationObservation": {
+        "type": "object",
+        "properties": {
+          "selection": {
+            "$ref": "#/components/schemas/NavigationSelection"
+          },
+          "unavailable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "selection",
+          "unavailable"
+        ],
+        "additionalProperties": false,
+        "description": "Saved selection read without writes or TTL renewal. Unavailable subjects remain selected; required read errors fail the observation."
       }
     },
     "securitySchemes": {

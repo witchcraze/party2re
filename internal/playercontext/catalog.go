@@ -47,6 +47,10 @@ type ActionDefinition struct {
 // DefaultCatalog defines the canonical list of top-level game actions and their legacy preconditions.
 // Granular item or skill selections are handled within individual endpoints/sub-commands.
 var DefaultCatalog = []ActionDefinition{
+	{ID: "scene_enter", Label: "施設を選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"destination"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "scene_select", Label: "対象を選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"target_kind", "target_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "scene_page", Label: "ページを選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"destination", "offset"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "scene_back", Label: "戻る", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	// =========================================================================
 	// Category: adventure (Combat & Expeditions)
 	// =========================================================================

@@ -52,11 +52,20 @@ The gate descriptions below summarize the current implementation:
 ### Approved progressive location and selection rules
 
 [The shared navigation contract](../architecture/client-agent-api.md#approved-navigation-and-progressive-observation-contract)
-was approved through #1047 on 2026-10-06. Its implementation is separate from
-this decision. Current place and previous selections narrow the next choices:
+was approved through #1047 on 2026-10-06. Ordinary selection is implemented;
+the shared composer and facility observations remain separate from this decision.
+Current place and previous selections narrow the next choices:
 town destinations, facility subjects, then applicable operations with the
 selected target prefilled. Selected values are still explicit command inputs;
 browsing never authorizes a mutation or silently changes its target.
+
+The navigation commands use owned actor authorization and existing sleep/pending
+recovery/unfinished-work guards. They do not require living HP, wallet gold or
+fatigue capacity, and do not add a cooldown or any gameplay mutation. A GET reads
+selection without a write or TTL renewal. Expired selection defaults to town;
+an unavailable selected subject remains explicit without a persisted fallback.
+Until the shared composer exists, saved selection is observation metadata and
+does not reinterpret the initial town entry gate as actual feature location.
 
 Ordinary location/selection uses a small character-scoped Valkey record. Actual
 room membership, dungeon/challenge progress and sleep remain feature-owned and

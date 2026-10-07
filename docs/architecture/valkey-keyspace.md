@@ -21,7 +21,7 @@ settlement needs its own verified idempotency and recovery boundary.
 Keys use `party2:<namespace>:<entity>[:<identifier>]`; identifiers can contain
 UUID punctuation and hash tags. The registered taxonomy includes session,
 player, maintenance, scheduled, ratelimit, ranking, party, dungeon, challenge,
-timer, daily, pvp, gvg, eventplaza, and casino. Tests can use `party2:test:`.
+timer, daily, pvp, gvg, eventplaza, casino, and playercontext. Tests can use `party2:test:`.
 The historical `party2:boss:` namespace remains registered in the linter but
 does not imply a live shared-HP boss store.
 
@@ -34,6 +34,7 @@ readiness. Introducing Cluster requires resolving those multi-key placements.
 
 | Key Pattern / Template | Storage Tier | Data Type | Expiration Policy (TTL) | Value / Serialization Format | Owner Module | Mutating Operations & Invalidation Hooks |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `party2:playercontext:navigation:<character_id>` | Valkey Master | `String` | 7 days (`604800s`), renewed only by successful navigation writes | JSON (`Selection`: registered destination, typed subject, bounded offset/limit); no actor override or feature activity | `internal/playercontext` | `Load` (GET only), `Save` (one atomic SET EX 604800). Missing/expired selection defaults to town without writing. |
 | `party2:session:<token>` | Valkey Master | `String` | 7 days (`604800s`), sliding or fixed | JSON (`PlayerSession`: `token`, `player_id`, `created_at`, `expires_at`) | `internal/player` | `CreateSession` (SET EX), `GetSession` (GET), `DeleteSession` (DEL), `DeleteSessionsByPlayerID` (bulk DEL). |
 | `party2:player:sessions:<player_id>` | Valkey Master | `Sorted Set (ZSet)` | 7 days (`604800s`), refreshed on login | Member: session token, Score: `ExpiresAt.Unix()` (`float64`) | `internal/player` | `Save` (ZADD + EXPIRE + lazy ZREMRANGEBYSCORE), `FindByID` (lazy ZREMRANGEBYSCORE), `Revoke` (ZREM + lazy ZREMRANGEBYSCORE), `DeleteByPlayerID` (ZRANGE -> DEL tokens + DEL key). Automatic expiration score tracking eliminates stale token accumulation. |
 | `party2:maintenance:status` | SQL-backed projection | `String` | None (Persistent / Admin managed) | JSON (`SystemMaintenance`: `enabled`, `message`, `starts_at`, `ends_at`, `updated_at`) | `internal/maintenance` | `SetStatus` (SET without TTL), `GetStatus` (GET with in-memory sync), admin endpoints (`POST/PUT /admin/maintenance`). Backed by `system_maintenance` MariaDB table. |
@@ -109,9 +110,11 @@ or lossless SQL/Valkey settlement across a crash.
 
 The [progressive observation/navigation contract](client-agent-api.md#approved-navigation-and-progressive-observation-contract)
 approved in #1047 uses the existing Valkey deployment for ordinary facility,
-subject and page selection. This is a planned contract, not an entry in the
-implemented key inventory above. The implementation must register its namespace
-and verify the actual schema/key placement before claiming coverage.
+subject and page selection. The repository is composed with the production
+Valkey client and registered in the key inventory above. Saved identifiers are
+at most 128 ASCII letters/digits/underscore/hyphen; the fixed record has one
+subject and one page, with offset at most 1,000,000 and limit at most 100.
+The reader rejects malformed/unknown fields and records exceeding 2 KiB.
 
 Use `party2:playercontext:navigation:<character_id>` as one bounded String record,
 owned through the `playercontext` navigation repository. Its TTL is seven days

@@ -222,7 +222,10 @@ func (s *Service) GetCatalog(ctx context.Context, shopType ShopType, characterID
 	var excludedIDs map[string]bool
 	if s.helper != nil {
 		active, err := s.helper.GetActiveHelperItemIDs(ctx, s.now())
-		if err == nil && len(active) > 0 {
+		if err != nil {
+			return ShopCatalog{}, err
+		}
+		if len(active) > 0 {
 			excludedIDs = make(map[string]bool, len(active))
 			for _, id := range active {
 				excludedIDs[id] = true

@@ -17,7 +17,7 @@ import (
 // actionCommand separates parameter decoding from execution so invalid requests
 // never reach a service. Only explicit 4xx mappings are known rejections.
 type actionCommand struct {
-	prepare func(json.RawMessage) (func(context.Context, string) (any, error), error)
+	prepare func(json.RawMessage) (func(context.Context, string, string) (any, error), error)
 	reject  func(error) (int, ErrorDetail)
 }
 
@@ -32,12 +32,12 @@ func withActionCommand[P any](id string, execute func(context.Context, string, P
 	}
 	command := actionCommand{reject: reject}
 	if execute != nil {
-		command.prepare = func(raw json.RawMessage) (func(context.Context, string) (any, error), error) {
+		command.prepare = func(raw json.RawMessage) (func(context.Context, string, string) (any, error), error) {
 			var params P
 			if err := decodeActionParams(raw, def.RequiredParams, &params); err != nil {
 				return nil, err
 			}
-			return func(ctx context.Context, actorID string) (any, error) { return execute(ctx, actorID, params) }, nil
+			return func(ctx context.Context, _ string, actorID string) (any, error) { return execute(ctx, actorID, params) }, nil
 		}
 	}
 	return func(h *Handler) {
@@ -139,7 +139,7 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		}
-		result, err := execute(r.Context(), char.ID)
+		result, err := execute(r.Context(), player.ID, char.ID)
 		if err != nil {
 			if command.reject != nil {
 				status, detail := command.reject(err)

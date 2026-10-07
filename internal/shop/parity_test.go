@@ -13,10 +13,11 @@ import (
 
 type mockHelperProvider struct {
 	activeIDs []string
+	err       error
 }
 
 func (m *mockHelperProvider) GetActiveHelperItemIDs(_ context.Context, _ time.Time) ([]string, error) {
-	return m.activeIDs, nil
+	return m.activeIDs, m.err
 }
 
 type mockCollectionRecorder struct {
@@ -256,6 +257,16 @@ func TestGetCatalog_JobLevelProgression_And_HelperExclusion(t *testing.T) {
 				t.Errorf("item-007 retail price = %d, want 30", it.RetailPrice)
 			}
 		}
+	}
+}
+
+func TestGetCatalogPropagatesRequiredHelperReadFailure(t *testing.T) {
+	svc, chars, _, _, helper, _ := setupParityTest(t)
+	char := createTestCharacter(t, chars, "Hero", 1000)
+	helper.err = errors.New("helper store unavailable")
+	got, err := svc.GetCatalog(context.Background(), shop.ShopTypeWeapon, char.ID)
+	if !errors.Is(err, helper.err) || got.Items != nil {
+		t.Fatalf("partial catalog: %+v %v", got, err)
 	}
 }
 
