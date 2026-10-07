@@ -111,13 +111,13 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			writeActionFailure(w, http.StatusBadRequest, "INVALID_ACTION_PARAMS", "Invalid action parameters.")
 			return
 		}
-		current, err := h.playerContext.Query(r.Context(), char.ID)
+		current, err := h.playerContext.Query(r.Context(), char.ID, player.ID)
 		if err != nil {
+			if errors.Is(err, playercontext.ErrNavigationForbidden) {
+				writeError(w, http.StatusForbidden, err)
+				return
+			}
 			writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify current action eligibility.")
-			return
-		}
-		if current.Snapshot.Character.PlayerID != player.ID {
-			writeError(w, http.StatusForbidden, errors.New("forbidden: character belongs to another player"))
 			return
 		}
 		// A premature Wake reaches the service for its recognized rejection.
@@ -163,8 +163,8 @@ func (h *Handler) writeActionRejection(w http.ResponseWriter, r *http.Request, p
 
 func (h *Handler) refreshActionContext(ctx context.Context, playerID, charID string) (*PlayerContextResponse, *ErrorDetail) {
 	failure := &ErrorDetail{Code: "CONTEXT_REFRESH_FAILED", Message: "状態を再取得してください。操作を再送しないでください。"}
-	result, err := h.playerContext.Query(ctx, charID)
-	if err != nil || result.Snapshot.Character.PlayerID != playerID {
+	result, err := h.playerContext.Query(ctx, charID, playerID)
+	if err != nil {
 		return nil, failure
 	}
 	observation, err := h.playerContextResponse(ctx, result, time.Now().UTC())

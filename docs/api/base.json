@@ -2877,20 +2877,25 @@
         "type": "object",
         "properties": {
           "location_id": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "maxLength": 128
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 128
           },
           "bgimg": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 128
           },
           "bgimg_url": {
             "type": "string",
             "description": "Self-authored SVG data URI for the initial town; production assets are deferred."
           },
           "dialogue": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 1024
           },
           "speaker": {
             "$ref": "#/components/schemas/SceneSpeaker"
@@ -2898,8 +2903,21 @@
           "opponent": {
             "$ref": "#/components/schemas/SceneOpponent"
           },
-          "navigation": {
-            "$ref": "#/components/schemas/NavigationObservation"
+          "kind": {
+            "type": "string",
+            "enum": [
+              "town",
+              "facility",
+              "subject",
+              "selection_unavailable"
+            ]
+          },
+          "subject": {
+            "$ref": "#/components/schemas/SelectedSceneSubject"
+          },
+          "data": {},
+          "support": {
+            "$ref": "#/components/schemas/SceneSupport"
           }
         },
         "required": [
@@ -2907,7 +2925,106 @@
           "title",
           "bgimg",
           "bgimg_url",
-          "dialogue"
+          "dialogue",
+          "kind",
+          "data",
+          "support"
+        ],
+        "additionalProperties": false,
+        "description": "Registered selected scene. Initial facility/subject variants expose navigation controls only, not replacement facility details. No GET writes, TTL renewal or gameplay mutation.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "town"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/TownSceneData"
+                },
+                "location_id": {
+                  "const": "town"
+                }
+              },
+              "not": {
+                "required": [
+                  "subject"
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/SelectionSceneData"
+                }
+              },
+              "not": {
+                "required": [
+                  "subject"
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "subject"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/SelectionSceneData"
+                }
+              },
+              "required": [
+                "subject"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "selection_unavailable"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/SelectionSceneData"
+                }
+              }
+            }
+          }
         ]
       },
       "OngoingActionSnapshot": {
@@ -2949,13 +3066,16 @@
         "type": "object",
         "properties": {
           "action": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 128
           },
           "label": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 128
           },
           "category": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 128
           },
           "style": {
             "type": "string",
@@ -2969,6 +3089,38 @@
             "items": {
               "type": "string"
             }
+          },
+          "params_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "type": {
+                "const": "object"
+              },
+              "additionalProperties": {
+                "const": false
+              },
+              "properties": {
+                "type": "object"
+              },
+              "required": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "type",
+              "additionalProperties",
+              "properties",
+              "required"
+            ],
+            "description": "Same strict ActionID-specific Gateway params schema, with explicit selected constants. Required lists the complete command; send full mutation params."
+          },
+          "params_template": {
+            "type": "object",
+            "description": "Explicit selected values only; never an implicit mutation-target binding."
           }
         },
         "required": [
@@ -2976,8 +3128,10 @@
           "label",
           "category",
           "style",
-          "required_params"
-        ]
+          "required_params",
+          "params_schema"
+        ],
+        "additionalProperties": false
       },
       "PlayerContextResponse": {
         "type": "object",
@@ -3007,7 +3161,7 @@
           "ongoing_actions",
           "available_actions"
         ],
-        "description": "Uncached observation with all active timers and eligible entry actions. Command services still validate exact amounts, currencies, items and state."
+        "description": "Shared GET/post-command selected-scene composition with four slots and non-null arrays. Only connected, scene-appropriate eligible commands are offered; required reads fail the whole observation."
       },
       "ActionErrorDetail": {
         "type": "object",
@@ -3751,22 +3905,214 @@
         "additionalProperties": false,
         "description": "Bounded ordinary selection. Limit 0 means the default 20; no feature activity or actor identity is stored."
       },
-      "NavigationObservation": {
+      "ScenePageInput": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
-          "selection": {
-            "$ref": "#/components/schemas/NavigationSelection"
+          "destination": {
+            "type": "string",
+            "enum": [
+              "town",
+              "bank",
+              "home",
+              "shop_weapon",
+              "shop_armor",
+              "shop_item",
+              "shop_accessory"
+            ]
           },
-          "unavailable": {
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "destination",
+          "offset",
+          "limit"
+        ]
+      },
+      "ScenePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "const": "offset"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ScenePageInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "mode",
+          "offset",
+          "limit",
+          "next"
+        ]
+      },
+      "SceneDestination": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "maxLength": 128
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "supported": {
+            "type": "boolean"
+          },
+          "enter_params": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "destination": {
+                "type": "string",
+                "enum": [
+                  "town",
+                  "bank",
+                  "home",
+                  "shop_weapon",
+                  "shop_armor",
+                  "shop_item",
+                  "shop_accessory"
+                ]
+              }
+            },
+            "required": [
+              "destination"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "supported",
+          "enter_params"
+        ]
+      },
+      "TownSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "destinations": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/SceneDestination"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/ScenePage"
+          }
+        },
+        "required": [
+          "destinations",
+          "page"
+        ]
+      },
+      "SelectionSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "parent": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "parent"
+        ]
+      },
+      "SelectedSceneSubject": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "target_kind": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "maxLength": 128
+          },
+          "target_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "target_kind",
+          "target_id"
+        ]
+      },
+      "SceneActionSupport": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "maxLength": 128
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "entry_eligible": {
             "type": "boolean"
           }
         },
         "required": [
-          "selection",
-          "unavailable"
-        ],
+          "action",
+          "connected",
+          "entry_eligible"
+        ]
+      },
+      "SceneSupport": {
+        "type": "object",
         "additionalProperties": false,
-        "description": "Saved selection read without writes or TTL renewal. Unavailable subjects remain selected; required read errors fail the observation."
+        "properties": {
+          "observation": {
+            "const": "controls"
+          },
+          "actions": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/SceneActionSupport"
+            }
+          }
+        },
+        "required": [
+          "observation",
+          "actions"
+        ],
+        "description": "Controls-only scene support. Connection is separate from entry eligibility; service execution still revalidates. Facility detail adapters add their own typed observation variants."
       }
     },
     "securitySchemes": {

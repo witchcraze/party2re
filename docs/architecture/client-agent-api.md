@@ -58,18 +58,20 @@ The four top-level fields are:
   wallet gold, fatigue, death and sleeping flags, and icon fields. `icon_url`
   uses the existing profile AvatarURL (URL or data URI), or an empty string.
   The asset ID remains empty until production mappings are specified.
-- `scene`: the initial `town` hub, title, background ID/URL, dialogue, and
-  optional structured speaker/opponent. The background is a self-authored SVG
-  data URI placeholder; no legacy images are reused. Production art resolution
-  and dynamic facility/combat scenes are remaining work linked from STATUS.
+- `scene`: registered `kind`, selected `location_id`, optional `subject`, typed
+  `data`, connection/eligibility `support`, and HTTP-owned presentation fields.
+  Town uses a self-authored SVG placeholder; initial facility/subject scenes
+  contain controls only. Production art and feature-owned active scenes remain
+  separate work.
 - `ongoing_actions`: every unfinished scheduled action, plus an observed
   sleep/wake recovery timer when present. Empty observations return `[]`.
   Entries contain `id`, `action_type`, `label`, `execute_at`, rounded-up
   nonnegative `remaining_seconds`, and `is_ready`. Scheduled deadlines are
   ordered ascending, with ID breaking ties. Sleep deadlines are estimates
   derived from the remaining lock duration, not persisted queue records.
-- `available_actions`: eligible catalog entries in catalog order, with
-  `action`, `label`, `category`, `style`, and `required_params` (always an array).
+- `available_actions`: connected, scene-appropriate eligible commands in catalog
+  order, with `action`, `label`, `category`, `style`, `required_params` (always an
+  array), strict `params_schema` and optional explicit `params_template`.
   Adventure controls use `primary`; other controls use `secondary`.
 
 ### Invariants
@@ -88,7 +90,9 @@ The four top-level fields are:
   wake recovery clears it, with `is_ready: true` and zero remaining seconds.
 - **Failure boundary**: session and ownership errors return 401/403 (missing
   characters return 404). Query errors and propagated profile-service errors return 500 without partial
-  context. An unconfigured query service returns 501 after authentication.
+  context. An unconfigured query service or selected-scene adapter returns 501
+  after authentication. Query rechecks the owned viewer before selection or
+  facility reads; enrichment checks profile ownership again.
 - **Read consistency**: authorization, query facts and profile reads are not a
   cross-store transaction. No observation/result cache is introduced; command
   execution must revalidate current state. Character facts come from the query
@@ -156,19 +160,39 @@ the registered parent. Enter/select reset subject/page descendants.
 
 The initial offset page input requires `destination` and `offset` (0–1,000,000),
 with optional `limit` (default 20, maximum 100). It applies only to a registered
-shop list without a selected subject and must match the saved destination.
+pageable list (town destinations or a Shop list) without a selected subject and
+must match the saved destination.
 Cursor/mixed/unknown fields and null values are rejected. Keyset paging is added
 alongside adapters whose existing service supports it; no cursor is invented
 for these static Shop lists. Back never accepts a caller-supplied parent.
 
-Until the shared composer in [#1049](https://github.com/witchcraze/party2re/issues/1049),
-the four-slot town observation and broad entry eligibility remain. The optional
-`scene.navigation` adds typed `{selection, unavailable}` metadata, read by both
-GET and command refresh. A disappeared selected subject stays in that metadata
-with `unavailable:true`; no fallback is saved. Required storage/subject-read errors
-fail the whole observation. The eventual `selection_unavailable` scene below is
-the composer's rendering contract. Navigation remains blocked during sleep,
-pending recovery and unfinished scheduled work, and writes no feature state.
+GET and command refresh share the HTTP selected-scene composer, replacing interim
+`scene.navigation` metadata with `town`, `facility`, `subject`, or
+`selection_unavailable` variants. Initial facility/subject data contains only
+the registered `parent`; `support.observation:controls` discloses that limited
+observation. It does not replace Shop catalogs, Home views or other facility
+readers; their adapters add verified typed data in the owning issues.
+
+Town's primary collection is `data.destinations`, ordered by destination ID,
+with explicit `enter_params`, observation support and offset page/next inputs.
+Pages contain at most 100 rows, identifiers at most 128 characters, and
+presentation fields use per-variant OpenAPI bounds. Rows contain no images;
+the actor's existing avatar bounds are unchanged. `scene.support.actions`
+separates `connected` from `entry_eligible`; execution still revalidates.
+
+The composer uses registered facility command IDs, subjects and parents rather
+than catalog categories. Offered actions copy their embedded OpenAPI command
+schema, with selected constants and explicit templates. Home controls template
+the owned actor's `target_home_id`. Without a configured navigation store,
+connected entry discovery remains usable. Dispatcher entry evaluation is
+separate: a full explicit command never binds its target to the displayed scene.
+Feature-owned active scenes and continuation gates remain #1050 work.
+
+A disappeared subject stays explicit in `selection_unavailable`, with safe
+back/reselect choices and no saved fallback. Required storage, subject-read and
+adapter enrichment errors fail the whole observation. Navigation remains
+blocked during sleep, pending recovery and unfinished scheduled work, and
+writes no feature state.
 
 #### Scoped legacy navigation reconciliation
 
@@ -182,12 +206,23 @@ reconcile as follows; facility-specific gameplay/actions retain their owners.
 | `いどう` → `idou`, registered `@places` → saved `$m{lib}` | Gateway `scene_enter` → `playercontext.Service.Enter`; the initial closed registry covers the destinations above. Remaining facilities belong to #947–#949. |
 | `まち` → `machi`, registered `@towns` → saved `$m{lib}` | Default town selection through `scene_enter` / `scene_back`; estate/town-specific projections remain #949 work. |
 | `ほーむ` → `homu`, `$m{home}` target/fallback | Own `home` destination through `scene_enter`; typed public-home target validation/projection remains #1053. An unavailable target is explicitly retained instead of adopting the legacy fallback. |
-| Reload dispatch: sleep before `$m{lib}`, default `park` | Existing sleep/Wake/Rescue and town placeholder are retained; feature-owned active-scene composition is #1050. The approved ephemeral selector never ends an activity. |
+| Reload dispatch: sleep before `$m{lib}`, default `park` | Shared GET/refresh composer renders saved ordinary selection with explicit sleep/Wake/Rescue; feature-owned active scenes remain #1050. The selector never ends an activity. |
 | `ぎるど` → `girudo` | Guild observation/management remains #949; no membership change through navigation. |
 | `ささやき` → `sasayaki`, `はなす` → `hanasu`, `しらべる` → `shiraberu` | Facility/social dialogue and presence reconciliation remains #947–#949; existing REST readers/operations are retained. |
 | `ろぐあうと` → `roguauto` (`system.cgi:944–961`) | Existing `DELETE /sessions` → Player.Logout supersedes the old index redirect; no navigation side effect. |
 | `すくしょ` → `sukusho` (`system.cgi:165–196`); `br` separator | Stored photo acquisition/Contest reconciliation remains #949; client rendering belongs to #140. Separator superseded by structured actions. |
 | Movement → `leave_member`, reload/log/presence | Deliberately excluded from selector writes; facility reconciliation belongs to #947–#949. No room join/leave, cooldown, recovery or settlement is introduced here. |
+
+The inspected Home dispatch (`lib/home.cgi:26–39,73–105,138–201,237–265,
+379–435,443–507,591–604`) retains these independent owners:
+
+| Home action / call path | Replacement or deferred owner |
+| --- | --- |
+| Public/own `ねる` → `neru` | Connected `home_sleep` → Home.Sleep; own-home controls use an explicit actor template. Public-home selection/projection is #1053. Explicit submitted targets remain service-validated; `home_wake` is the approved departure from implicit GET recovery. |
+| `あいてむずかん`, `もんすたーぶっく`, `じょぶますたー`, `ぷろふぃーる`, `ぼうけんのきろく` → reference dispatch | Existing Collection/Monster/Job/Character/Adventure REST references remain; #1053 owns Home observation and #948/#949 remaining retirement. |
+| Own-only `つかう`, `てがみをかく`, `てがみをよむ`, `からー`, `ことばをおしえる`, `ことばをわすれさせる` | Existing Home item/mail/color/companion service and REST operations remain; private/public projection is #1053, mutation migration #949. |
+| `かすたむすきる`, conditional `いめーじ` | Existing custom-skill/profile/avatar routes remain; #949 owns gameplay migration, #654/#729 asset mapping. Commented-out avatar/upload actions are not registered behavior. |
+| `br`, own-home letter/money notice acknowledgment on render | Separator becomes structured controls; GET never acknowledges notices. Home read/notice reconciliation remains #1053/#949. |
 
 Subject selection and paging are the approved typed Gateway controls, not claims
 of new gameplay or formula parity. No legacy source or assets are reused.

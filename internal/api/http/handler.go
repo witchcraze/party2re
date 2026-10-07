@@ -120,6 +120,7 @@ type RescueService interface {
 // Handler holds all HTTP handlers for the game API.
 type Handler struct {
 	playerContext  *playercontext.Service
+	sceneAdapters  map[string]sceneAdapter
 	actionCommands map[string]actionCommand
 	players        PlayerService
 	characters     CharacterService

@@ -174,7 +174,7 @@
   },
   "/api/v1/characters/{id}/context": {
     "get": {
-      "description": " scene.navigation observes the ordinary selection without creating it or renewing its TTL. Missing/expired selection is town; disappeared selected subjects stay explicit with unavailable:true. The displayed scene remains the town placeholder until shared scene composition is delivered.",
+      "description": "Shares selected-scene composition with post-command refresh. Observes ordinary navigation without writes or TTL renewal. Expired selection is town; disappeared subjects use selection_unavailable. Initial facility and subject payloads provide controls only; facility read replacements are separate. Offered commands include strict params_schema and explicit params_template values.",
       "operationId": "getCharacterContext",
       "parameters": [
         {
@@ -246,7 +246,7 @@
               }
             }
           },
-          "description": "Player context service not configured"
+          "description": "Player context service or selected scene adapter not configured; no partial observation"
         }
       },
       "security": [
@@ -254,7 +254,7 @@
           "BearerAuth": []
         }
       ],
-      "summary": "Observe character state, town scene, all active timers and eligible actions",
+      "summary": "Observe character, selected scene, unfinished work and connected choices",
       "tags": [
         "Character"
       ]

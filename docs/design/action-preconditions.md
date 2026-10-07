@@ -3,14 +3,14 @@
 ## 1. Overview & CQRS Integration
 
 In the Party2 Re CQRS Client/Agent Gateway architecture ([`docs/architecture/client-agent-api.md`](../architecture/client-agent-api.md)), clients use two unified operations. HTTP observation and initial commands exist; the approved progressive observation/navigation contract describes their remaining facility replacement:
-- **Observation**: `GET /api/v1/characters/{id}/context` (returns character facts, unfinished work and eligible entry candidates; the approved replacement adds selected facility data and connected, typed choices)
+- **Observation**: `GET /api/v1/characters/{id}/context` (returns character facts, unfinished work, typed selected scenes and connected eligible choices; verified facility detail remains adapter-owned)
 - **Execution**: `POST /api/v1/characters/{id}/actions` (dispatches state transition commands)
 
 To prevent LLM context window bloating (Token Bloat), the Action Catalog registers **strictly top-level facilities, services, and commands** (42 entries in the current catalog). Sub-selections (such as specific item IDs, skill recipes, or shop item choices) are handled within individual action parameter payloads.
 
 Each action is statically linked to an OpenAPI 3.1 contract and explicit
 `required_params`. Names alone do not describe parameter types or target choices.
-The approved replacement supplies strict schemas and selected-value templates;
+The shared composer supplies strict schemas and selected-value templates;
 retirement must not leave command validation linked to a removed REST operation.
 Migrated entries use `executeCharacterAction` and their ActionID-specific params
 condition; unmigrated entries remain linked to their REST operation. The
@@ -44,16 +44,16 @@ The gate descriptions below summarize the current implementation:
 5. **Currency Gate (`$m{money} > 0`)**:
    - Currency-gated entry actions require positive wallet gold. Exact amounts, selected-item prices, alternate currencies and domain-specific prerequisites remain execution-service checks; the catalog has no request payload to evaluate them.
 6. **Location Gate**:
-   - The current initial observation is `town`; its gate accepts facility entry
-     from that placeholder. This does not implement actual facility/session
-     gating. The approved replacement below uses saved facility selection and
-     authoritative feature activity, never catalog categories.
+   - Service entry evaluation still uses the initial town gate. HTTP observation
+     separately narrows connected choices by registered facility/subject facts.
+     Displayed selection is not target authorization. Actual feature/session
+     entry/continuation gating remains #1050 work.
 
 ### Approved progressive location and selection rules
 
 [The shared navigation contract](../architecture/client-agent-api.md#approved-navigation-and-progressive-observation-contract)
-was approved through #1047 on 2026-10-06. Ordinary selection is implemented;
-the shared composer and facility observations remain separate from this decision.
+was approved through #1047 on 2026-10-06. Ordinary selection and the shared
+controls composer are implemented; verified facility observations remain separate.
 Current place and previous selections narrow the next choices:
 town destinations, facility subjects, then applicable operations with the
 selected target prefilled. Selected values are still explicit command inputs;
@@ -64,7 +64,8 @@ recovery/unfinished-work guards. They do not require living HP, wallet gold or
 fatigue capacity, and do not add a cooldown or any gameplay mutation. A GET reads
 selection without a write or TTL renewal. Expired selection defaults to town;
 an unavailable selected subject remains explicit without a persisted fallback.
-Until the shared composer exists, saved selection is observation metadata and
+The composer renders saved selection, distinguishes adapter connection from
+entry eligibility and offers only connected scene-appropriate commands. This
 does not reinterpret the initial town entry gate as actual feature location.
 
 Ordinary location/selection uses a small character-scoped Valkey record. Actual
@@ -192,7 +193,13 @@ When clients receive `available_actions` via `GET /context`:
   "label": "銀行に預金する",
   "category": "economy",
   "style": "secondary",
-  "required_params": ["amount"]
+  "required_params": ["amount"],
+  "params_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {"amount": {"type": "integer", "format": "int64", "minimum": -9223372036854775808, "maximum": 9223372036854775807}},
+    "required": ["amount"]
+  }
 }
 ```
 

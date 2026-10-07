@@ -1862,15 +1862,51 @@
         "type": "object"
       },
       "ContextAction": {
+        "additionalProperties": false,
         "properties": {
           "action": {
+            "maxLength": 128,
             "type": "string"
           },
           "category": {
+            "maxLength": 128,
             "type": "string"
           },
           "label": {
+            "maxLength": 128,
             "type": "string"
+          },
+          "params_schema": {
+            "additionalProperties": true,
+            "description": "Same strict ActionID-specific Gateway params schema, with explicit selected constants. Required lists the complete command; send full mutation params.",
+            "properties": {
+              "additionalProperties": {
+                "const": false
+              },
+              "properties": {
+                "type": "object"
+              },
+              "required": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": {
+                "const": "object"
+              }
+            },
+            "required": [
+              "type",
+              "additionalProperties",
+              "properties",
+              "required"
+            ],
+            "type": "object"
+          },
+          "params_template": {
+            "description": "Explicit selected values only; never an implicit mutation-target binding.",
+            "type": "object"
           },
           "required_params": {
             "items": {
@@ -1891,7 +1927,8 @@
           "label",
           "category",
           "style",
-          "required_params"
+          "required_params",
+          "params_schema"
         ],
         "type": "object"
       },
@@ -2336,23 +2373,6 @@
           "enabled",
           "message",
           "updated_at"
-        ],
-        "type": "object"
-      },
-      "NavigationObservation": {
-        "additionalProperties": false,
-        "description": "Saved selection read without writes or TTL renewal. Unavailable subjects remain selected; required read errors fail the observation.",
-        "properties": {
-          "selection": {
-            "$ref": "#/components/schemas/NavigationSelection"
-          },
-          "unavailable": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "selection",
-          "unavailable"
         ],
         "type": "object"
       },
@@ -3101,7 +3121,7 @@
         "type": "object"
       },
       "PlayerContextResponse": {
-        "description": "Uncached observation with all active timers and eligible entry actions. Command services still validate exact amounts, currencies, items and state.",
+        "description": "Shared GET/post-command selected-scene composition with four slots and non-null arrays. Only connected, scene-appropriate eligible commands are offered; required reads fail the whole observation.",
         "properties": {
           "available_actions": {
             "items": {
@@ -3258,6 +3278,73 @@
         ],
         "type": "object"
       },
+      "SceneActionSupport": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "type": "string"
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "entry_eligible": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "action",
+          "connected",
+          "entry_eligible"
+        ],
+        "type": "object"
+      },
+      "SceneDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "enter_params": {
+            "additionalProperties": false,
+            "properties": {
+              "destination": {
+                "enum": [
+                  "town",
+                  "bank",
+                  "home",
+                  "shop_weapon",
+                  "shop_armor",
+                  "shop_item",
+                  "shop_accessory"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "destination"
+            ],
+            "type": "object"
+          },
+          "id": {
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "type": "string"
+          },
+          "supported": {
+            "type": "boolean"
+          },
+          "title": {
+            "maxLength": 128,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "supported",
+          "enter_params"
+        ],
+        "type": "object"
+      },
       "SceneOpponent": {
         "properties": {
           "hp": {
@@ -3281,23 +3368,198 @@
         ],
         "type": "object"
       },
+      "ScenePage": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "mode": {
+            "const": "offset"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ScenePageInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "offset": {
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode",
+          "offset",
+          "limit",
+          "next"
+        ],
+        "type": "object"
+      },
+      "ScenePageInput": {
+        "additionalProperties": false,
+        "properties": {
+          "destination": {
+            "enum": [
+              "town",
+              "bank",
+              "home",
+              "shop_weapon",
+              "shop_armor",
+              "shop_item",
+              "shop_accessory"
+            ],
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "destination",
+          "offset",
+          "limit"
+        ],
+        "type": "object"
+      },
       "SceneSnapshot": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "town"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "subject"
+                ]
+              },
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/TownSceneData"
+                },
+                "location_id": {
+                  "const": "town"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "subject"
+                ]
+              },
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/SelectionSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "subject"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/SelectionSceneData"
+                }
+              },
+              "required": [
+                "subject"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "selection_unavailable"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/SelectionSceneData"
+                }
+              }
+            }
+          }
+        ],
+        "description": "Registered selected scene. Initial facility/subject variants expose navigation controls only, not replacement facility details. No GET writes, TTL renewal or gameplay mutation.",
         "properties": {
           "bgimg": {
+            "maxLength": 128,
             "type": "string"
           },
           "bgimg_url": {
             "description": "Self-authored SVG data URI for the initial town; production assets are deferred.",
             "type": "string"
           },
+          "data": {},
           "dialogue": {
+            "maxLength": 1024,
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "town",
+              "facility",
+              "subject",
+              "selection_unavailable"
+            ],
             "type": "string"
           },
           "location_id": {
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
             "type": "string"
-          },
-          "navigation": {
-            "$ref": "#/components/schemas/NavigationObservation"
           },
           "opponent": {
             "$ref": "#/components/schemas/SceneOpponent"
@@ -3305,7 +3567,14 @@
           "speaker": {
             "$ref": "#/components/schemas/SceneSpeaker"
           },
+          "subject": {
+            "$ref": "#/components/schemas/SelectedSceneSubject"
+          },
+          "support": {
+            "$ref": "#/components/schemas/SceneSupport"
+          },
           "title": {
+            "maxLength": 128,
             "type": "string"
           }
         },
@@ -3314,7 +3583,10 @@
           "title",
           "bgimg",
           "bgimg_url",
-          "dialogue"
+          "dialogue",
+          "kind",
+          "data",
+          "support"
         ],
         "type": "object"
       },
@@ -3330,6 +3602,27 @@
         "required": [
           "name",
           "icon_url"
+        ],
+        "type": "object"
+      },
+      "SceneSupport": {
+        "additionalProperties": false,
+        "description": "Controls-only scene support. Connection is separate from entry eligibility; service execution still revalidates. Facility detail adapters add their own typed observation variants.",
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/SceneActionSupport"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "observation": {
+            "const": "controls"
+          }
+        },
+        "required": [
+          "observation",
+          "actions"
         ],
         "type": "object"
       },
@@ -3361,6 +3654,39 @@
           "category",
           "price",
           "description"
+        ],
+        "type": "object"
+      },
+      "SelectedSceneSubject": {
+        "additionalProperties": false,
+        "properties": {
+          "target_id": {
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "type": "string"
+          },
+          "target_kind": {
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_kind",
+          "target_id"
+        ],
+        "type": "object"
+      },
+      "SelectionSceneData": {
+        "additionalProperties": false,
+        "properties": {
+          "parent": {
+            "maxLength": 128,
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent"
         ],
         "type": "object"
       },
@@ -3651,6 +3977,26 @@
         },
         "required": [
           "character_id"
+        ],
+        "type": "object"
+      },
+      "TownSceneData": {
+        "additionalProperties": false,
+        "properties": {
+          "destinations": {
+            "items": {
+              "$ref": "#/components/schemas/SceneDestination"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/ScenePage"
+          }
+        },
+        "required": [
+          "destinations",
+          "page"
         ],
         "type": "object"
       }
@@ -4393,7 +4739,7 @@
     },
     "/api/v1/characters/{id}/context": {
       "get": {
-        "description": " scene.navigation observes the ordinary selection without creating it or renewing its TTL. Missing/expired selection is town; disappeared selected subjects stay explicit with unavailable:true. The displayed scene remains the town placeholder until shared scene composition is delivered.",
+        "description": "Shares selected-scene composition with post-command refresh. Observes ordinary navigation without writes or TTL renewal. Expired selection is town; disappeared subjects use selection_unavailable. Initial facility and subject payloads provide controls only; facility read replacements are separate. Offered commands include strict params_schema and explicit params_template values.",
         "operationId": "getCharacterContext",
         "parameters": [
           {
@@ -4465,7 +4811,7 @@
                 }
               }
             },
-            "description": "Player context service not configured"
+            "description": "Player context service or selected scene adapter not configured; no partial observation"
           }
         },
         "security": [
@@ -4473,7 +4819,7 @@
             "BearerAuth": []
           }
         ],
-        "summary": "Observe character state, town scene, all active timers and eligible actions",
+        "summary": "Observe character, selected scene, unfinished work and connected choices",
         "tags": [
           "Character"
         ]
