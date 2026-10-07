@@ -38,8 +38,10 @@ func (m *mockCharRepo) Update(ctx context.Context, char corecharacter.Character)
 }
 
 type mockTavernRepo struct {
-	statuses   map[string]tavern.TavernCharacterStatus
-	deliveries map[string]tavern.DeliveryReservation
+	statuses          map[string]tavern.TavernCharacterStatus
+	deliveries        map[string]tavern.DeliveryReservation
+	getStatusErr      error
+	upsertStatusCalls int
 }
 
 func newMockTavernRepo() *mockTavernRepo {
@@ -50,6 +52,12 @@ func newMockTavernRepo() *mockTavernRepo {
 }
 
 func (m *mockTavernRepo) GetCharacterStatus(ctx context.Context, characterID string) (tavern.TavernCharacterStatus, error) {
+	if m.getStatusErr != nil {
+		return tavern.TavernCharacterStatus{}, m.getStatusErr
+	}
+	if err := ctx.Err(); err != nil {
+		return tavern.TavernCharacterStatus{}, err
+	}
 	s, ok := m.statuses[characterID]
 	if !ok {
 		return tavern.TavernCharacterStatus{CharacterID: characterID, IsFull: false}, nil
@@ -58,6 +66,10 @@ func (m *mockTavernRepo) GetCharacterStatus(ctx context.Context, characterID str
 }
 
 func (m *mockTavernRepo) UpsertCharacterStatus(ctx context.Context, status tavern.TavernCharacterStatus) error {
+	m.upsertStatusCalls++
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	m.statuses[status.CharacterID] = status
 	return nil
 }
@@ -484,8 +496,10 @@ func TestService_ResetFullness(t *testing.T) {
 
 	// 2. Set fullness to true, then reset
 	tavernRepo.statuses[charID] = tavern.TavernCharacterStatus{
-		CharacterID: charID,
-		IsFull:      true,
+		CharacterID:     charID,
+		IsFull:          true,
+		TotalMealsEaten: 7,
+		TotalGoldSpent:  1234,
 	}
 	if err := svc.ResetFullness(ctx, charID); err != nil {
 		t.Fatalf("ResetFullness failed: %v", err)
@@ -496,5 +510,213 @@ func TestService_ResetFullness(t *testing.T) {
 	}
 	if st.IsFull {
 		t.Errorf("expected IsFull=false, got true")
+	}
+	if st.TotalMealsEaten != 7 || st.TotalGoldSpent != 1234 {
+		t.Errorf("expected counters preserved, got meals=%d gold=%d", st.TotalMealsEaten, st.TotalGoldSpent)
+	}
+
+	// 3. Storage error: must propagate error without UPSERT or overwriting history
+	sentinelErr := errors.New("sentinel storage error")
+	tavernRepo.getStatusErr = sentinelErr
+	callsBefore := tavernRepo.upsertStatusCalls
+	if err := svc.ResetFullness(ctx, charID); !errors.Is(err, sentinelErr) {
+		t.Fatalf("expected sentinelErr, got %v", err)
+	}
+	if tavernRepo.upsertStatusCalls != callsBefore {
+		t.Errorf("expected no UpsertCharacterStatus call on error, got %d calls", tavernRepo.upsertStatusCalls-callsBefore)
+	}
+	tavernRepo.getStatusErr = nil
+
+	// Verify history remained intact
+	st, err = tavernRepo.GetCharacterStatus(ctx, charID)
+	if err != nil {
+		t.Fatalf("GetCharacterStatus failed: %v", err)
+	}
+	if st.TotalMealsEaten != 7 || st.TotalGoldSpent != 1234 {
+		t.Errorf("expected historical fields intact, got meals=%d gold=%d", st.TotalMealsEaten, st.TotalGoldSpent)
+	}
+
+	// 4. Canceled context: must propagate without UPSERT
+	canceledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	callsBefore = tavernRepo.upsertStatusCalls
+	if err := svc.ResetFullness(canceledCtx, charID); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+	if tavernRepo.upsertStatusCalls != callsBefore {
+		t.Errorf("expected no UpsertCharacterStatus call on cancel, got %d calls", tavernRepo.upsertStatusCalls-callsBefore)
+	}
+
+	// 5. Missing status default: nonexistent record initializes with IsFull=false
+	missingCharID := "char-missing-status"
+	if err := svc.ResetFullness(ctx, missingCharID); err != nil {
+		t.Fatalf("ResetFullness for missing status failed: %v", err)
+	}
+	missingSt, err := tavernRepo.GetCharacterStatus(ctx, missingCharID)
+	if err != nil {
+		t.Fatalf("GetCharacterStatus failed: %v", err)
+	}
+	if missingSt.IsFull {
+		t.Errorf("expected IsFull=false for newly initialized status")
+	}
+}
+
+func TestTavern_GetStatus_StorageError(t *testing.T) {
+	svc, charRepo, tavernRepo, _ := setupTestService(t)
+	ctx := context.Background()
+	charID := "char-status-err"
+	charRepo.chars[charID] = corecharacter.Character{
+		ID:    charID,
+		Name:  "StatusHero",
+		Money: 500,
+	}
+
+	sentinelErr := errors.New("read storage failure")
+	tavernRepo.getStatusErr = sentinelErr
+
+	_, err := svc.GetStatus(ctx, charID)
+	if !errors.Is(err, sentinelErr) {
+		t.Fatalf("expected sentinelErr, got %v", err)
+	}
+
+	// Canceled context
+	tavernRepo.getStatusErr = nil
+	canceledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	_, err = svc.GetStatus(canceledCtx, charID)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+
+	// Missing status: succeeds with IsFull=false
+	st, err := svc.GetStatus(ctx, charID)
+	if err != nil {
+		t.Fatalf("GetStatus with missing status failed: %v", err)
+	}
+	if st.IsFull {
+		t.Errorf("expected IsFull=false for missing status")
+	}
+}
+
+func TestTavern_OrderMeal_StorageError(t *testing.T) {
+	svc, charRepo, tavernRepo, _ := setupTestService(t)
+	ctx := context.Background()
+	charID := "char-order-err"
+	charRepo.chars[charID] = corecharacter.Character{
+		ID:    charID,
+		Name:  "OrderHero",
+		Money: 1000,
+		Stats: corecharacter.Stats{HP: 50, MaxHP: 100},
+	}
+	tavernRepo.statuses[charID] = tavern.TavernCharacterStatus{
+		CharacterID:     charID,
+		IsFull:          false,
+		TotalMealsEaten: 5,
+		TotalGoldSpent:  1000,
+	}
+
+	sentinelErr := errors.New("order storage failure")
+	tavernRepo.getStatusErr = sentinelErr
+	callsBefore := tavernRepo.upsertStatusCalls
+
+	_, err := svc.OrderMeal(ctx, charID, "tavern_curry")
+	if !errors.Is(err, sentinelErr) {
+		t.Fatalf("expected sentinelErr, got %v", err)
+	}
+	if tavernRepo.upsertStatusCalls != callsBefore {
+		t.Errorf("expected no status upsert on error")
+	}
+	if charRepo.chars[charID].Money != 1000 {
+		t.Errorf("expected money intact, got %d", charRepo.chars[charID].Money)
+	}
+	tavernRepo.getStatusErr = nil
+
+	// Verify history preserved
+	st, err := tavernRepo.GetCharacterStatus(ctx, charID)
+	if err != nil {
+		t.Fatalf("GetCharacterStatus failed: %v", err)
+	}
+	if st.TotalMealsEaten != 5 || st.TotalGoldSpent != 1000 {
+		t.Errorf("expected counters preserved, got meals=%d gold=%d", st.TotalMealsEaten, st.TotalGoldSpent)
+	}
+
+	// Healthy contrast
+	res, err := svc.OrderMeal(ctx, charID, "tavern_curry")
+	if err != nil {
+		t.Fatalf("OrderMeal failed: %v", err)
+	}
+	if res.RemainingGold != 600 {
+		t.Errorf("expected 600 remaining gold, got %d", res.RemainingGold)
+	}
+	st, err = tavernRepo.GetCharacterStatus(ctx, charID)
+	if err != nil {
+		t.Fatalf("GetCharacterStatus failed: %v", err)
+	}
+	if st.TotalMealsEaten != 6 || st.TotalGoldSpent != 1400 || !st.IsFull {
+		t.Errorf("unexpected updated status: %+v", st)
+	}
+}
+
+func TestTavern_ClaimDelivery_StorageError(t *testing.T) {
+	svc, charRepo, tavernRepo, _ := setupTestService(t)
+	ctx := context.Background()
+	charID := "char-claim-err"
+	charRepo.chars[charID] = corecharacter.Character{
+		ID:    charID,
+		Name:  "ClaimHero",
+		Money: 2000,
+		Stats: corecharacter.Stats{HP: 20, MaxHP: 100},
+	}
+	tavernRepo.statuses[charID] = tavern.TavernCharacterStatus{
+		CharacterID:     charID,
+		IsFull:          false,
+		TotalMealsEaten: 3,
+		TotalGoldSpent:  800,
+	}
+
+	_, err := svc.ReserveDelivery(ctx, charID, "tavern_omelet_rice")
+	if err != nil {
+		t.Fatalf("ReserveDelivery failed: %v", err)
+	}
+
+	sentinelErr := errors.New("claim storage failure")
+	tavernRepo.getStatusErr = sentinelErr
+	callsBefore := tavernRepo.upsertStatusCalls
+
+	_, err = svc.ClaimDelivery(ctx, charID)
+	if !errors.Is(err, sentinelErr) {
+		t.Fatalf("expected sentinelErr, got %v", err)
+	}
+	if tavernRepo.upsertStatusCalls != callsBefore {
+		t.Errorf("expected no status upsert on error")
+	}
+	if charRepo.chars[charID].Money != 2000 {
+		t.Errorf("expected money intact, got %d", charRepo.chars[charID].Money)
+	}
+	tavernRepo.getStatusErr = nil
+
+	// Verify history preserved
+	st, err := tavernRepo.GetCharacterStatus(ctx, charID)
+	if err != nil {
+		t.Fatalf("GetCharacterStatus failed: %v", err)
+	}
+	if st.TotalMealsEaten != 3 || st.TotalGoldSpent != 800 {
+		t.Errorf("expected counters preserved, got meals=%d gold=%d", st.TotalMealsEaten, st.TotalGoldSpent)
+	}
+
+	// Healthy contrast
+	res, err := svc.ClaimDelivery(ctx, charID)
+	if err != nil {
+		t.Fatalf("ClaimDelivery failed: %v", err)
+	}
+	if res.RemainingGold != 1250 {
+		t.Errorf("expected 1250 remaining gold, got %d", res.RemainingGold)
+	}
+	st, err = tavernRepo.GetCharacterStatus(ctx, charID)
+	if err != nil {
+		t.Fatalf("GetCharacterStatus failed: %v", err)
+	}
+	if st.TotalMealsEaten != 4 || st.TotalGoldSpent != 1550 {
+		t.Errorf("unexpected updated status: %+v", st)
 	}
 }

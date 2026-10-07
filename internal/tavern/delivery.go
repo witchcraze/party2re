@@ -128,6 +128,11 @@ func (s *Service) ClaimDelivery(ctx context.Context, characterID string) (OrderR
 			return err
 		}
 
+		status, err := s.repo.GetCharacterStatus(txCtx, charID)
+		if err != nil {
+			return err
+		}
+
 		if char.Money < delivery.Price {
 			return ErrInsufficientFunds
 		}
@@ -168,10 +173,6 @@ func (s *Service) ClaimDelivery(ctx context.Context, characterID string) (OrderR
 		}
 
 		// Update tavern status
-		status, err := s.repo.GetCharacterStatus(txCtx, charID)
-		if err != nil {
-			status = TavernCharacterStatus{CharacterID: charID}
-		}
 		now := time.Now().UTC()
 		status.LastEatenAt = &now
 		status.TotalMealsEaten++

@@ -176,11 +176,7 @@ func (s *Service) GetStatus(ctx context.Context, characterID string) (TavernStat
 
 	status, err := s.repo.GetCharacterStatus(ctx, charID)
 	if err != nil {
-		// Non-fatal if no status yet: defaults to not full
-		status = TavernCharacterStatus{
-			CharacterID: charID,
-			IsFull:      false,
-		}
+		return TavernStatus{}, err
 	}
 
 	var deliveryPtr *DeliveryReservation
@@ -213,9 +209,7 @@ func (s *Service) ResetFullness(ctx context.Context, characterID string) error {
 
 	status, err := s.repo.GetCharacterStatus(ctx, charID)
 	if err != nil {
-		status = TavernCharacterStatus{
-			CharacterID: charID,
-		}
+		return err
 	}
 	status.IsFull = false
 	status.UpdatedAt = time.Now().UTC()
