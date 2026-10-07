@@ -16,7 +16,9 @@ type ScheduledActionRepository interface {
 	FindPendingByActorID(ctx context.Context, actorID string) ([]ScheduledAction, error)
 
 	// FetchDue returns actions that are due for execution at or before the given time.
-	// It may limit the number of returned actions to prevent overwhelming the worker.
+	// It traverses the pending queue in bounded batches, excluding preserved Processing
+	// records from returned candidates while retaining their authoritative state and
+	// actor discovery. It limits returned actions to prevent overwhelming the worker.
 	// Stale entries with genuinely absent payloads are cleaned up from the queue.
 	// Transient storage/read failures preserve queued entries and return an error.
 	// Queued terminal records may be returned for metadata-only finalization;
