@@ -278,6 +278,8 @@ func (s *Service) TransferLeadership(ctx context.Context, guildID string, curren
 
 // AssignCustomRole sets a custom role title on a guild member (guild.cgi:ataeru).
 // Only the guild leader can assign role titles.
+// Transaction: RunInTx (authorization, target classification and mutation; pending delegates to ApproveApplication).
+// Lock Order: guilds(7) -> guild_members(7).
 func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requesterCharID string, targetCharID string, title string) error {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -294,40 +296,42 @@ func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requeste
 		return err
 	}
 
-	_, members, err := s.repo.GetGuild(ctx, guildID)
-	if err != nil {
-		return err
-	}
-
-	var requester, target *Member
-	for i := range members {
-		if members[i].CharacterID == requesterCharID {
-			requester = &members[i]
+	return s.runInTx(ctx, func(txCtx context.Context) error {
+		lockedGuild, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
+		if err != nil {
+			return err
 		}
-		if members[i].CharacterID == targetCharID {
-			target = &members[i]
+
+		var requester, target *Member
+		for i := range members {
+			if members[i].CharacterID == requesterCharID {
+				requester = &members[i]
+			}
+			if members[i].CharacterID == targetCharID {
+				target = &members[i]
+			}
 		}
-	}
 
-	if requester == nil || requester.Role != RoleLeader {
-		return ErrUnauthorized
-	}
-	if target == nil {
-		return ErrTargetNotMember
-	}
-	if target.Role == RoleLeader {
-		return ErrCannotAssignToLeader
-	}
+		if lockedGuild.LeaderCharacterID != requesterCharID || requester == nil || requester.Role != RoleLeader || requester.IsPending {
+			return ErrUnauthorized
+		}
+		if target == nil {
+			return ErrTargetNotMember
+		}
+		if target.Role == RoleLeader {
+			return ErrCannotAssignToLeader
+		}
 
-	if target.IsPending {
-		return s.ApproveApplication(ctx, guildID, requesterCharID, targetCharID, normalizedTitle)
-	}
+		if target.IsPending {
+			return s.ApproveApplication(txCtx, guildID, requesterCharID, targetCharID, normalizedTitle)
+		}
 
-	if err := s.repo.AssignCustomRole(ctx, guildID, targetCharID, normalizedTitle); err != nil {
-		return err
-	}
-	s.touchActive(ctx, guildID)
-	return nil
+		if err := s.repo.AssignCustomRole(txCtx, guildID, targetCharID, normalizedTitle); err != nil {
+			return err
+		}
+		s.touchActive(txCtx, guildID)
+		return nil
+	})
 }
 
 // UpdateColor changes the guild's hex color (guild.cgi:color).

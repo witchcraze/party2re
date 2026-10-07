@@ -266,7 +266,8 @@ func TestService_ApproveApplication(t *testing.T) {
 		repo := &mockGuildRepo{
 			getGuildFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
 				return guild.Guild{ID: guildID, LeaderCharacterID: leaderID}, []guild.Member{
-					{GuildID: guildID, CharacterID: applicantID, IsPending: false},
+					{GuildID: guildID, CharacterID: leaderID, Role: guild.RoleLeader, IsPending: false},
+					{GuildID: guildID, CharacterID: applicantID, Role: guild.RoleMember, IsPending: false},
 				}, nil
 			},
 		}

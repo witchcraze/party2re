@@ -145,6 +145,44 @@
           "note": "Lock roster in joined_at ASC, character_id ASC order; validate requester/target role and pending state before ambient RemoveMember deletion."
         }
       ]
+    },
+    {
+      "method": "AssignCustomRole",
+      "source_ref": "internal/guild/service.go#Service.AssignCustomRole",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Verify current guild leadership under exclusive lock before custom role mutation or delegation to ApproveApplication."
+        },
+        {
+          "table": "guild_members",
+          "tier": 7,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Lock roster in deterministic order; validate requester leadership and target role/pending state before updating title or delegating."
+        }
+      ]
+    },
+    {
+      "method": "ApproveApplication",
+      "source_ref": "internal/guild/community.go#Service.ApproveApplication",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Verify current guild leadership under exclusive lock before approving applicant; acceptance notification follows successful transaction."
+        },
+        {
+          "table": "guild_members",
+          "tier": 7,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Lock roster in deterministic order; validate requester leadership and target pending status before updating member row."
+        }
+      ]
     }
   ]
 }
