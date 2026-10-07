@@ -15,6 +15,7 @@ import (
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/notification"
 	"github.com/witchcraze/party2re/internal/player"
+	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
 type coreServices struct {
@@ -31,6 +32,7 @@ type coreServices struct {
 	charService        *character.Service
 	playerService      *player.Service
 	economy            *economy.Service
+	navigation         *playercontext.ValkeyNavigationRepository
 }
 
 func newCoreServices(db *sql.DB, valkeyClient valkeygo.Client) (*coreServices, error) {
@@ -78,6 +80,7 @@ func newCoreServices(db *sql.DB, valkeyClient valkeygo.Client) (*coreServices, e
 	}
 
 	return &coreServices{
+		navigation:         playercontext.NewValkeyNavigationRepository(valkeyClient),
 		txProvider:         txProvider,
 		charRepo:           charRepo,
 		invRepo:            invRepo,

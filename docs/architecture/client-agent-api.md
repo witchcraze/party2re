@@ -99,8 +99,9 @@ The four top-level fields are:
 The direction approved in [#1047](https://github.com/witchcraze/party2re/issues/1047)
 on 2026-10-06 replaces the initial globally broad town menu with choices derived
 from the current facility, previously selected subject and actual activity.
-This section specifies the replacement; it does not describe implemented
-facility observations or authorize route deletion.
+This section specifies the replacement. Ordinary selection is implemented;
+facility composition and progressive action discovery remain separate work.
+Selection storage does not authorize route deletion.
 
 Clients retain two operations. GET observes the current interaction without a
 view selector. POST changes location/selection or executes a feature operation.
@@ -143,6 +144,53 @@ parent scene, not browser history. A facility/subject change clears subordinate
 selection and paging. Navigation commands have no price, fatigue, scheduled
 cooldown or implicit feature mutation. Recovery and active-session restrictions
 still apply: browsing cannot bypass sleep or abandon a run.
+
+The initial registry accepts `town`, `bank`, `home` and the four ordinary shops
+(`shop_weapon`, `shop_armor`, `shop_item`, `shop_accessory`), with town as each
+facility's parent. Shop subjects use `target_kind:item` and IDs validated by
+the owned actor's existing Shop catalog, including its eligibility filters.
+Other subject kinds/public-home targets are registered by their owning adapters;
+merely entering `home` does not choose another character or grant private access.
+`scene_back` clears a selected subject to its facility list; otherwise it selects
+the registered parent. Enter/select reset subject/page descendants.
+
+The initial offset page input requires `destination` and `offset` (0–1,000,000),
+with optional `limit` (default 20, maximum 100). It applies only to a registered
+shop list without a selected subject and must match the saved destination.
+Cursor/mixed/unknown fields and null values are rejected. Keyset paging is added
+alongside adapters whose existing service supports it; no cursor is invented
+for these static Shop lists. Back never accepts a caller-supplied parent.
+
+Until the shared composer in [#1049](https://github.com/witchcraze/party2re/issues/1049),
+the four-slot town observation and broad entry eligibility remain. The optional
+`scene.navigation` adds typed `{selection, unavailable}` metadata, read by both
+GET and command refresh. A disappeared selected subject stays in that metadata
+with `unavailable:true`; no fallback is saved. Required storage/subject-read errors
+fail the whole observation. The eventual `selection_unavailable` scene below is
+the composer's rendering contract. Navigation remains blocked during sleep,
+pending recovery and unfinished scheduled work, and writes no feature state.
+
+#### Scoped legacy navigation reconciliation
+
+The inspected sources are `party2/party.cgi:14–30` and
+`lib/system.cgi:9–24,267–318,418–435,964–985` (paths relative to the original
+Party2 distribution). The full shared `set_action` list and scoped call paths
+reconcile as follows; facility-specific gameplay/actions retain their owners.
+
+| Legacy action / dispatch | Replacement or deferred owner |
+| --- | --- |
+| `いどう` → `idou`, registered `@places` → saved `$m{lib}` | Gateway `scene_enter` → `playercontext.Service.Enter`; the initial closed registry covers the destinations above. Remaining facilities belong to #947–#949. |
+| `まち` → `machi`, registered `@towns` → saved `$m{lib}` | Default town selection through `scene_enter` / `scene_back`; estate/town-specific projections remain #949 work. |
+| `ほーむ` → `homu`, `$m{home}` target/fallback | Own `home` destination through `scene_enter`; typed public-home target validation/projection remains #1053. An unavailable target is explicitly retained instead of adopting the legacy fallback. |
+| Reload dispatch: sleep before `$m{lib}`, default `park` | Existing sleep/Wake/Rescue and town placeholder are retained; feature-owned active-scene composition is #1050. The approved ephemeral selector never ends an activity. |
+| `ぎるど` → `girudo` | Guild observation/management remains #949; no membership change through navigation. |
+| `ささやき` → `sasayaki`, `はなす` → `hanasu`, `しらべる` → `shiraberu` | Facility/social dialogue and presence reconciliation remains #947–#949; existing REST readers/operations are retained. |
+| `ろぐあうと` → `roguauto` (`system.cgi:944–961`) | Existing `DELETE /sessions` → Player.Logout supersedes the old index redirect; no navigation side effect. |
+| `すくしょ` → `sukusho` (`system.cgi:165–196`); `br` separator | Stored photo acquisition/Contest reconciliation remains #949; client rendering belongs to #140. Separator superseded by structured actions. |
+| Movement → `leave_member`, reload/log/presence | Deliberately excluded from selector writes; facility reconciliation belongs to #947–#949. No room join/leave, cooldown, recovery or settlement is introduced here. |
+
+Subject selection and paging are the approved typed Gateway controls, not claims
+of new gameplay or formula parity. No legacy source or assets are reused.
 
 ```json
 {"action":"scene_enter","params":{"destination":"shop_weapon"}}

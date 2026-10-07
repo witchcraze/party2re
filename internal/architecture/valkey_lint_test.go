@@ -14,6 +14,7 @@ import (
 
 // Registered production Valkey namespaces
 var validProdNamespaces = []string{
+	"party2:playercontext:",
 	"party2:session:",
 	"party2:player:",
 	"party2:maintenance:",
@@ -34,6 +35,7 @@ var validProdNamespaces = []string{
 
 // Required keys documented in SSOT docs/architecture/valkey-keyspace.md
 var requiredDocumentedKeys = []string{
+	"party2:playercontext:navigation:",
 	"party2:session:",
 	"party2:player:sessions:",
 	"party2:maintenance:status",
