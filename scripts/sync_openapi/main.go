@@ -157,7 +157,7 @@ func bundleOpenAPISpec(basePath, pathsDir string) ([]byte, int, int, error) {
 	}
 
 	var specMap map[string]interface{}
-	if err := json.Unmarshal(baseData, &specMap); err != nil {
+	if err := decodeJSONNumbers(baseData, &specMap); err != nil {
 		return nil, 0, 0, fmt.Errorf("invalid base JSON in %s: %w", basePath, err)
 	}
 
@@ -187,7 +187,7 @@ func bundleOpenAPISpec(basePath, pathsDir string) ([]byte, int, int, error) {
 		}
 
 		var pathItems map[string]interface{}
-		if err := json.Unmarshal(data, &pathItems); err != nil {
+		if err := decodeJSONNumbers(data, &pathItems); err != nil {
 			return nil, 0, 0, fmt.Errorf("invalid JSON in %s: %w", filePath, err)
 		}
 
@@ -243,7 +243,7 @@ func scaffoldMissingRoutes(pathsDir string, handlerRoutes []Route) (int, error) 
 				return 0, err
 			}
 			var items map[string]map[string]interface{}
-			if err := json.Unmarshal(data, &items); err != nil {
+			if err := decodeJSONNumbers(data, &items); err != nil {
 				return 0, fmt.Errorf("invalid JSON in %s: %w", filePath, err)
 			}
 			modulePaths[modName] = items
@@ -312,7 +312,7 @@ func formatPathFiles(pathsDir string) error {
 				return err
 			}
 			var obj map[string]interface{}
-			if err := json.Unmarshal(data, &obj); err != nil {
+			if err := decodeJSONNumbers(data, &obj); err != nil {
 				return err
 			}
 			formatted, err := json.MarshalIndent(obj, "", "  ")
@@ -326,6 +326,16 @@ func formatPathFiles(pathsDir string) error {
 		}
 	}
 	return nil
+}
+
+// Keep schema bounds exact instead of rounding int64 values through float64.
+func decodeJSONNumbers(data []byte, target any) error {
+	if !json.Valid(data) {
+		return fmt.Errorf("invalid JSON")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	return decoder.Decode(target)
 }
 
 func checkRouteCoverage(bundledData []byte, handlerRoutes []Route) []Route {
