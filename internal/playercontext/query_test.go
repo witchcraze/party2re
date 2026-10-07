@@ -77,8 +77,9 @@ func TestQuery_ReadStateAndAvailability(t *testing.T) {
 			ctx := context.WithValue(context.Background(), struct{}{}, tc.name)
 			char := healthySnapshot().Character
 			char.ID = "character"
+			char.PlayerID = "owner"
 			readers := &queryReaders{character: char, actions: tc.actions, remaining: tc.remaining, asleep: tc.asleep, ctx: ctx}
-			got, err := NewService(readers, readers, readers).Query(ctx, char.ID)
+			got, err := NewService(readers, readers, readers).Query(ctx, char.ID, "owner")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -105,8 +106,8 @@ func TestQuery_PropagatesReadErrors(t *testing.T) {
 		t.Run(stage, func(t *testing.T) {
 			ctx := context.Background()
 			wantErr := errors.New(stage + " unavailable")
-			readers := &queryReaders{character: character.Character{ID: "character"}, ctx: ctx, errAt: stage, err: wantErr}
-			got, err := NewService(readers, readers, readers).Query(ctx, "character")
+			readers := &queryReaders{character: character.Character{ID: "character", PlayerID: "owner"}, ctx: ctx, errAt: stage, err: wantErr}
+			got, err := NewService(readers, readers, readers).Query(ctx, "character", "owner")
 			if !errors.Is(err, wantErr) || !reflect.DeepEqual(got, Result{}) {
 				t.Fatalf("got %+v, %v; want zero result and %v", got, err, wantErr)
 			}
@@ -118,7 +119,7 @@ func TestQuery_PropagatesReadErrors(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	readers := &queryReaders{character: character.Character{ID: "character"}, ctx: ctx}
-	if _, err := NewService(readers, readers, readers).Query(ctx, "character"); !errors.Is(err, context.Canceled) {
+	if _, err := NewService(readers, readers, readers).Query(ctx, "character", "owner"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancellation: %v", err)
 	}
 }
@@ -127,6 +128,7 @@ func TestQuery_ExistingTimerLifecycle(t *testing.T) {
 	ctx := context.Background()
 	char := healthySnapshot().Character
 	char.ID = "character"
+	char.PlayerID = "owner"
 	readers := &queryReaders{character: char, ctx: ctx}
 	timers := timer.NewService(nil)
 	service := NewService(readers, readers, timers)
@@ -137,7 +139,7 @@ func TestQuery_ExistingTimerLifecycle(t *testing.T) {
 	}
 	assertActions := func(want []string) {
 		t.Helper()
-		got, err := service.Query(ctx, char.ID)
+		got, err := service.Query(ctx, char.ID, "owner")
 		if err != nil || !reflect.DeepEqual(got.AvailableActions, want) {
 			t.Fatalf("actions=%v, err=%v, want %v", got.AvailableActions, err, want)
 		}
@@ -151,4 +153,17 @@ func TestQuery_ExistingTimerLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertActions(Evaluate(healthySnapshot()))
+}
+
+func TestQuery_RejectsViewerBeforeReadingSelection(t *testing.T) {
+	s, store, readers, _ := navigationFixture(t)
+	for _, owner := range []string{"", "other"} {
+		readers.calls = nil
+		if got, err := s.Query(readers.ctx, "hero", owner); !errors.Is(err, ErrNavigationForbidden) || !reflect.DeepEqual(got, Result{}) {
+			t.Fatalf("owner %q: %+v %v", owner, got, err)
+		}
+		if store.reads != 0 || len(readers.calls) > 1 {
+			t.Fatalf("read after failed authorization: %v", readers.calls)
+		}
+	}
 }

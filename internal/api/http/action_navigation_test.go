@@ -49,7 +49,7 @@ func (s *gatewayNavigationStore) Save(ctx context.Context, actor string, n playe
 func navigationRouter(t *testing.T, f *gatewayFixture, store *gatewayNavigationStore, available *bool, readErr *error) http.Handler {
 	t.Helper()
 	service := playercontext.NewService(f, f, timer.NewService(nil), playercontext.WithNavigation(store,
-		playercontext.SceneDefinition{ID: "town"},
+		playercontext.SceneDefinition{ID: "town", Pageable: true},
 		playercontext.SceneDefinition{ID: "bank", Parent: "town"},
 		playercontext.SceneDefinition{ID: "shop_weapon", Parent: "town", SubjectKind: "item", Pageable: true,
 			SubjectAvailable: func(ctx context.Context, actor, target string) (bool, error) {
@@ -93,7 +93,7 @@ func TestNavigationGatewayAndGETShareSelection(t *testing.T) {
 	f, store, available := newGatewayFixture(t), &gatewayNavigationStore{}, true
 	var readErr error
 	router := navigationRouter(t, f, store, &available, &readErr)
-	if status, got := navigationGET(t, router); status != 200 || got.Scene.Navigation.Selection.Destination != "town" || store.writes != 0 {
+	if status, got := navigationGET(t, router); status != 200 || got.Scene.LocationID != "town" || store.writes != 0 {
 		t.Fatalf("default: %d %+v", status, got)
 	}
 	for _, body := range []string{
@@ -112,7 +112,7 @@ func TestNavigationGatewayAndGETShareSelection(t *testing.T) {
 			t.Fatal(err)
 		}
 		status, observed := navigationGET(t, router)
-		if status != 200 || !reflect.DeepEqual(observed.Scene, refreshed.Scene) || observed.Scene.Navigation.Selection != store.selection {
+		if status != 200 || !reflect.DeepEqual(observed.Scene, refreshed.Scene) || observed.Scene.LocationID != store.selection.Destination {
 			t.Fatalf("GET differs: %+v / %+v", observed, refreshed)
 		}
 	}
@@ -204,7 +204,7 @@ func TestNavigationGatewayFailuresAndGETOnlyRecovery(t *testing.T) {
 				}
 				store.loadErr, f.profileErr = nil, nil
 				status, got := navigationGET(t, router)
-				if status != 200 || got.Scene.Navigation.Selection.Destination != "bank" || store.writes != 1 {
+				if status != 200 || got.Scene.LocationID != "bank" || store.writes != 1 {
 					t.Fatalf("GET recovery: %d %+v", status, got)
 				}
 			}
@@ -217,7 +217,7 @@ func TestNavigationUnavailableSubjectAndRequiredReadFailure(t *testing.T) {
 	var readErr error
 	router := navigationRouter(t, f, store, &available, &readErr)
 	status, got := navigationGET(t, router)
-	if status != 200 || !got.Scene.Navigation.Unavailable || got.Scene.Navigation.Selection != store.selection || store.writes != 0 {
+	if status != 200 || got.Scene.Kind != "selection_unavailable" || got.Scene.Subject == nil || *got.Scene.Subject != store.selection.Subject || store.writes != 0 {
 		t.Fatalf("unavailable: %d %+v", status, got)
 	}
 	readErr = errors.New("required subject store failed")
@@ -241,7 +241,7 @@ func TestNavigationKnownRejectionSurvivesFailedRefresh(t *testing.T) {
 		t.Fatalf("refresh code: %+v %v", detail, err)
 	}
 	f.profileErr = nil
-	if status, got := navigationGET(t, router); status != 200 || got.Scene.Navigation.Selection != store.selection || store.writes != 0 {
+	if status, got := navigationGET(t, router); status != 200 || got.Scene.LocationID != store.selection.Destination || store.writes != 0 {
 		t.Fatalf("GET recovery: %d %+v", status, got)
 	}
 }

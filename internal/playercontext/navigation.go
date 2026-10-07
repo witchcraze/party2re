@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 )
@@ -59,6 +60,16 @@ type PageParams struct {
 }
 
 func (s *Service) NavigationConfigured() bool { return s.navigation != nil }
+
+// SceneDefinitions returns the closed registry in stable ID order for adapters.
+func (s *Service) SceneDefinitions() []SceneDefinition {
+	definitions := make([]SceneDefinition, 0, len(s.scenes))
+	for _, d := range s.scenes {
+		definitions = append(definitions, d)
+	}
+	slices.SortFunc(definitions, func(a, b SceneDefinition) int { return strings.Compare(a.ID, b.ID) })
+	return definitions
+}
 
 // WithNavigation injects the existing Valkey record and closed scene registry.
 func WithNavigation(store NavigationRepository, definitions ...SceneDefinition) func(*Service) {

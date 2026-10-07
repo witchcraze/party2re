@@ -51,10 +51,14 @@ func NewService(characters CharacterReader, actions ActionReader, timers TimerRe
 	return s
 }
 
-// Query reads each state source once and evaluates entry actions in the initial
-// town scene. Reads are not a cross-store transaction; execution must revalidate.
-func (s *Service) Query(ctx context.Context, charID string) (Result, error) {
-	return s.query(ctx, charID, "")
+// Query verifies the owned viewer before any feature reads. Entry evaluation
+// remains separate from HTTP scene composition and command connection support.
+// Reads are not a cross-store transaction; execution must revalidate.
+func (s *Service) Query(ctx context.Context, charID, ownerID string) (Result, error) {
+	if ownerID == "" {
+		return Result{}, ErrNavigationForbidden
+	}
+	return s.query(ctx, charID, ownerID)
 }
 
 func (s *Service) query(ctx context.Context, charID, ownerID string) (Result, error) {

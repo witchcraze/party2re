@@ -41,7 +41,7 @@ func navigationFixture(t *testing.T) (*Service, *navigationStore, *queryReaders,
 	store := &navigationStore{}
 	available := true
 	s := NewService(r, r, r, WithNavigation(store,
-		SceneDefinition{ID: "town"},
+		SceneDefinition{ID: "town", Pageable: true},
 		SceneDefinition{ID: "bank", Parent: "town"},
 		SceneDefinition{ID: "shop_weapon", Parent: "town", SubjectKind: "item", Pageable: true,
 			SubjectAvailable: func(ctx context.Context, actorID, targetID string) (bool, error) {
@@ -60,7 +60,7 @@ func TestNavigationTransitionsAndObservation(t *testing.T) {
 	observe := func(want Selection, unavailable bool) {
 		t.Helper()
 		before := store.writes
-		got, err := s.Query(ctx, "hero")
+		got, err := s.Query(ctx, "hero", "owner")
 		if err != nil || got.Navigation == nil || got.Navigation.Selection != want || got.Navigation.Unavailable != unavailable {
 			t.Fatalf("observation=%+v err=%v want=%+v unavailable=%v", got.Navigation, err, want, unavailable)
 		}
@@ -72,6 +72,10 @@ func TestNavigationTransitionsAndObservation(t *testing.T) {
 	if store.selection != (Selection{}) {
 		t.Fatal("GET created selection")
 	}
+	if _, err := s.Page(ctx, "owner", "hero", PageParams{Destination: "town", Offset: 20}); err != nil {
+		t.Fatal(err)
+	}
+	observe(Selection{Destination: "town", Offset: 20, Limit: 20}, false)
 	if _, err := s.Enter(ctx, "owner", "hero", "shop_weapon"); err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +121,7 @@ func TestNavigationTransitionsAndObservation(t *testing.T) {
 	// Navigation does not recover or remove feature-owned state on selection loss.
 	r.asleep = true
 	store.selection = Selection{}
-	got, err := s.Query(ctx, "hero")
+	got, err := s.Query(ctx, "hero", "owner")
 	if err != nil || !got.Snapshot.Sleeping || !got.Snapshot.CanWake {
 		t.Fatalf("lost sleep: %+v %v", got, err)
 	}
@@ -158,7 +162,7 @@ func TestNavigationRejectsInvalidTargetsAndPreservesFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	store.loadErr = wantErr
-	if got, err := s.Query(ctx, "hero"); !errors.Is(err, wantErr) || !reflect.DeepEqual(got, Result{}) {
+	if got, err := s.Query(ctx, "hero", "owner"); !errors.Is(err, wantErr) || !reflect.DeepEqual(got, Result{}) {
 		t.Fatalf("partial result: %+v %v", got, err)
 	}
 	canceled, cancel := context.WithCancel(ctx)

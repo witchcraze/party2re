@@ -84,7 +84,7 @@ The initial Core/System, Economy/Production, Adventure/Combat/Arenas and Communi
 
 1. **Client/Agent Gateway & CQRS Architecture (In Progress)**
    - Complete remaining command coverage; the initial stateful gameplay loop is covered by focused HTTP integration tests.
-   - Complete the approved progressive observation contract: compose saved Valkey facility/subject/page selection into scenes, narrow choices by current scene and derive active-game scenes from feature-owned state (#1049/#1050).
+   - Extend the shared selected-scene composer with verified facility detail adapters and derive active-game scenes from feature-owned state (#1050–#1055).
    - Retire individual REST routes only after their replacement commands and observations are implemented and verified, retaining deliberate route exceptions (#947–#950).
    - Preserve the enduring [command/recovery contract](docs/architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions); current coverage is summarized in [STATUS](STATUS.md).
 2. **Headless E2E Gameplay Simulation Test Framework**

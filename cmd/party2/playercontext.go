@@ -9,7 +9,7 @@ import (
 
 func newPlayerContext(core *coreServices, soc *socServices, econ *econServices) *playercontext.Service {
 	scenes := []playercontext.SceneDefinition{
-		{ID: "town"}, {ID: "bank", Parent: "town"}, {ID: "home", Parent: "town"},
+		{ID: "town", Pageable: true}, {ID: "bank", Parent: "town"}, {ID: "home", Parent: "town"},
 	}
 	for _, kind := range []shop.ShopType{shop.ShopTypeWeapon, shop.ShopTypeArmor, shop.ShopTypeItem, shop.ShopTypeAccessory} {
 		scenes = append(scenes, playercontext.SceneDefinition{

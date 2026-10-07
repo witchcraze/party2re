@@ -29,6 +29,7 @@ type contextReaders struct {
 	calls      int
 	noAvatar   bool
 	queryOwner string
+	avatarURL  string
 }
 
 func (s *contextReaders) FindByID(ctx context.Context, id string) (corecharacter.Character, error) {
@@ -64,6 +65,9 @@ func contextRouter(t *testing.T, readers *contextReaders, timers timer.Service, 
 		},
 		getProfileFn: func(ctx context.Context, id string) (character.ProfileView, error) {
 			avatar := "https://example.com/avatar.png"
+			if readers.avatarURL != "" {
+				avatar = readers.avatarURL
+			}
 			if readers.noAvatar {
 				avatar = ""
 			}
@@ -78,6 +82,7 @@ func contextRouter(t *testing.T, readers *contextReaders, timers timer.Service, 
 	}}
 	return newTestHandler(t, players, chars, &stubAdventureService{}, &stubShopService{},
 		apihttp.WithPlayerContext(playercontext.NewService(readers, readers, timers)),
+		apihttp.WithHome(&mockHomeService{}), apihttp.WithRescue(&mockRescueService{}),
 		apihttp.WithJob(&stubJobService{listDefinitionsFn: func() []corejob.Definition { return []corejob.Definition{{ID: "job-01", Name: "戦士"}} }})).Router()
 }
 
@@ -142,25 +147,15 @@ func TestPlayerContextHTTP_States(t *testing.T) {
 				}
 			}
 			want := playercontext.Evaluate(playercontext.Snapshot{Character: readers.char, LocationID: "town"})
+			want = slices.DeleteFunc(want, func(id string) bool {
+				return !slices.Contains([]string{"adventure_start", "home_sleep", "home_wake", "rescue_request"}, id)
+			})
 			if !reflect.DeepEqual(ids, want) {
 				t.Fatalf("actions=%v want=%v", ids, want)
 			}
-			for _, id := range []string{"chapel_pray", "blacksmith_seal", "casino_slot"} {
-				if tc.tired < 100 && !slices.Contains(ids, id) {
-					t.Errorf("missing legacy-permitted action %s", id)
-				}
-			}
-			if tc.gold > 0 {
-				for id, param := range map[string]string{"blackmarket_trade": "prize_id", "tavern_order": "item_id", "job_change": "job_id"} {
-					found := false
-					for _, a := range got.AvailableActions {
-						if a.Action == id {
-							found = slices.Contains(a.RequiredParams, param)
-						}
-					}
-					if !found {
-						t.Errorf("mandatory input %s missing from %s", param, id)
-					}
+			for _, a := range got.AvailableActions {
+				if len(a.ParamsSchema) == 0 {
+					t.Fatalf("missing strict schema: %+v", a)
 				}
 			}
 		})
@@ -262,6 +257,15 @@ func TestPlayerContextHTTP_AuthAndFailures(t *testing.T) {
 }
 
 type failingContextTimer struct{ timer.Service }
+
+func TestPlayerContextHTTP_PreservesUploadSizedAvatar(t *testing.T) {
+	avatar := "data:image/png;base64," + strings.Repeat("A", ((2*1024*1024+2)/3)*4)
+	readers := &contextReaders{char: corecharacter.Character{ID: "hero", PlayerID: "player-1"}, avatarURL: avatar}
+	got := fetchContext(t, contextRouter(t, readers, timer.NewService(nil), nil))
+	if got.Character.IconURL != avatar {
+		t.Fatal("avatar was truncated")
+	}
+}
 
 func (s failingContextTimer) GetRemainingLock(context.Context, string, string) (time.Duration, error) {
 	return 0, errors.New("timer unavailable")
