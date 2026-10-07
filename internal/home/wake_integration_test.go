@@ -12,6 +12,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/tavern"
 	"github.com/witchcraze/party2re/internal/testutil"
 	"github.com/witchcraze/party2re/internal/valkey"
 )
@@ -43,6 +44,18 @@ func (r *wakeCharacterRepository) Update(ctx context.Context, c corecharacter.Ch
 type wakeFullnessHook func(context.Context, string) error
 
 func (f wakeFullnessHook) ResetFullness(ctx context.Context, id string) error { return f(ctx, id) }
+
+type failingTavernStatusReader struct {
+	*database.TavernRepository
+	getErr error
+}
+
+func (r *failingTavernStatusReader) GetCharacterStatus(ctx context.Context, id string) (tavern.TavernCharacterStatus, error) {
+	if r.getErr != nil {
+		return tavern.TavernCharacterStatus{}, r.getErr
+	}
+	return r.TavernRepository.GetCharacterStatus(ctx, id)
+}
 
 func TestWake_SQLRecovery(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
@@ -236,5 +249,164 @@ func TestWake_SQLRecovery(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestWake_RealTavernFullnessReset(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("SQL and Valkey integration environment is not configured")
+	}
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	client, err := valkey.NewClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	timers := timer.NewService(client)
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	homeRepo, err := database.NewHomeRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invRepo, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+	eco, err := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProvider))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	realTavernRepo, err := database.NewTavernRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failingRepo := &failingTavernStatusReader{TavernRepository: realTavernRepo}
+	catalog, err := tavern.LoadDefaultCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tavernSvc, err := tavern.NewService(catalog, failingRepo, charRepo, txProvider)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	homeSvc, err := home.NewService(homeRepo, charRepo, home.WithCharacterUpdater(charRepo), home.WithEconomy(eco), home.WithTimer(timers))
+	if err != nil {
+		t.Fatal(err)
+	}
+	homeSvc.SetFullnessResetter(tavernSvc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	char, err := database.CreateTestCharacter(ctx, db, "WakeTavern")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx := context.Background()
+		_ = timers.ReleaseLock(cleanupCtx, timer.CategoryAsleep, char.ID)
+		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM tavern_character_status WHERE character_id = ?", char.ID)
+		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", char.ID)
+		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", char.ID)
+		_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", char.PlayerID)
+	})
+
+	// Setup depleted vitality and ready Asleep in Valkey
+	char.Stats.HP, char.Stats.MP, char.Tired = 1, 0, 80
+	if err := charRepo.Update(ctx, char); err != nil {
+		t.Fatal(err)
+	}
+	if err := timers.SetLock(ctx, timer.CategoryAsleep, char.ID, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+
+	// Seed real SQL tavern status with meals and gold spent
+	now := time.Now().UTC().Truncate(time.Second)
+	seedStatus := tavern.TavernCharacterStatus{
+		CharacterID:     char.ID,
+		IsFull:          true,
+		TotalMealsEaten: 7,
+		TotalGoldSpent:  1234,
+		LastEatenAt:     &now,
+	}
+	if err := realTavernRepo.UpsertCharacterStatus(ctx, seedStatus); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Inject storage failure on GetCharacterStatus
+	sentinelErr := errors.New("injected storage read failure")
+	failingRepo.getErr = sentinelErr
+
+	res, err := homeSvc.Wake(ctx, char.ID)
+	if !errors.Is(err, sentinelErr) {
+		t.Fatalf("expected sentinelErr from Wake, got %v (res=%+v)", err, res)
+	}
+
+	// Assert pending recovery retained
+	asleep, err := timers.IsLocked(ctx, timer.CategoryAsleep, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !asleep {
+		t.Errorf("expected CategoryAsleep lock retained after hook failure")
+	}
+
+	// Assert prior vitality commit remains intact
+	updatedChar, err := charRepo.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedChar.Stats.HP != updatedChar.Stats.MaxHP || updatedChar.Stats.MP != updatedChar.Stats.MaxMP || updatedChar.Tired != 0 {
+		t.Errorf("expected vitality recovery committed before hook failure: %+v", updatedChar)
+	}
+
+	// Assert historical fields in tavern_character_status remain unchanged (NO whole-status UPSERT zeros)
+	persistedStatus, err := realTavernRepo.GetCharacterStatus(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !persistedStatus.IsFull || persistedStatus.TotalMealsEaten != 7 || persistedStatus.TotalGoldSpent != 1234 || persistedStatus.LastEatenAt == nil {
+		t.Errorf("expected historical counters preserved, got: %+v", persistedStatus)
+	}
+
+	// 2. Healthy contrast: disable failure injection and retry Wake
+	failingRepo.getErr = nil
+	res, err = homeSvc.Wake(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("expected successful Wake on healthy retry: %v", err)
+	}
+	if !res.Success {
+		t.Errorf("expected Wake success = true")
+	}
+
+	// Fullness cleared, counters preserved
+	finalStatus, err := realTavernRepo.GetCharacterStatus(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if finalStatus.IsFull {
+		t.Errorf("expected IsFull=false after successful Wake")
+	}
+	if finalStatus.TotalMealsEaten != 7 || finalStatus.TotalGoldSpent != 1234 {
+		t.Errorf("expected counters preserved, got: %+v", finalStatus)
+	}
+
+	// CategoryAsleep lock released
+	asleep, err = timers.IsLocked(ctx, timer.CategoryAsleep, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if asleep {
+		t.Errorf("expected CategoryAsleep lock released after successful Wake")
 	}
 }

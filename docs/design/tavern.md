@@ -62,7 +62,17 @@ To allow characters heading out to adventure to secure an automatic meal upon re
 
 ---
 
-### 4. Barkeep NPC Dialogue (`Talk`)
+### 4. Persistence & Fullness Error Contract
+
+The tavern module tracks persistent character eating history (`tavern_character_status`) including `is_full`, `last_eaten_at`, `total_meals_eaten`, and `total_gold_spent`:
+- **Prerequisite Read Invariant**: Unreadable fullness state (database storage errors or context cancellation) is strictly treated as an error across all four consuming operations (`GetStatus`, `ResetFullness`, `OrderMeal`, `ClaimDelivery`). Errors are propagated immediately without writing default empty statuses or overwriting historical meal/gold counters with zeros.
+- **Absent Record Semantics**: When a character has no persisted record in `tavern_character_status` (`sql.ErrNoRows`), the repository returns an initialized default non-full status (`is_full = false`, zero counters) with a `nil` error, allowing first-time counter orders, delivery claims, and sleep/adventure resets to proceed seamlessly.
+- **Atomic Rollback**: If reading the prerequisite status fails during `OrderMeal` or `ClaimDelivery`, the enclosing transaction rolls back before any mutations take effect, preserving character gold, health stats, and delivery reservations intact.
+- **Home Wake Integration**: In `HomeService.Wake`, failure of `ResetFullness` halts the awakening process, returning the storage error and retaining the `timer.CategoryAsleep` pending recovery lock while preserving previously committed vitality restoration.
+
+---
+
+### 5. Barkeep NPC Dialogue (`Talk`)
 
 Conversing with `@エレナ` provides randomized lore, dining recommendations, and advice:
 - "いらっしゃい！冒険者の酒場へようこそ。美味しいご飯と飲み物を用意してるわよ♪"

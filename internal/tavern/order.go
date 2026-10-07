@@ -35,10 +35,7 @@ func (s *Service) OrderMeal(ctx context.Context, characterID string, itemID stri
 
 		status, err := s.repo.GetCharacterStatus(txCtx, charID)
 		if err != nil {
-			status = TavernCharacterStatus{
-				CharacterID: charID,
-				IsFull:      false,
-			}
+			return err
 		}
 
 		if status.IsFull {
