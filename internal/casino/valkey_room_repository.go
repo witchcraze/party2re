@@ -125,6 +125,14 @@ func (v *ValkeyRoomRepository) getRoomDetail(ctx context.Context, roomID string)
 	return &dto, nil
 }
 
+// saveRoomDetail persists the room JSON payload with sliding TTL and synchronizes the active rooms index.
+//
+// Writer-side partial failure boundary:
+// The room payload is written via SET before updating the active rooms index (party2:casino:rooms:active).
+// If the index update (ZADD/ZREM) or member key deletion fails, the error is propagated truthfully to the caller.
+// Because these operations are not cross-key transactional in Valkey, the room payload may already have been updated.
+// Callers must not assume payload rollback and clients must not perform blind command retries; partial state
+// remains observable by room ID (GetRoom), while lobby discovery reflects the index state until a subsequent renewal succeeds.
 func (v *ValkeyRoomRepository) saveRoomDetail(ctx context.Context, dto *valkeyRoomDetailDTO) error {
 	dto.PasswordHash = dto.Room.PasswordHash
 	data, err := json.Marshal(dto)
@@ -140,15 +148,21 @@ func (v *ValkeyRoomRepository) saveRoomDetail(ctx context.Context, dto *valkeyRo
 
 	if dto.Room.Status == RoomStatusDisbanded {
 		zremCmd := v.client.B().Zrem().Key(DefaultRoomsActiveIndexKey).Member(dto.Room.ID).Build()
-		_ = v.client.Do(ctx, zremCmd)
+		if err := v.client.Do(ctx, zremCmd).Error(); err != nil {
+			return err
+		}
 		for _, m := range dto.Members {
 			charKey := DefaultCharacterKeyPrefix + m.CharacterID
-			_ = v.client.Do(ctx, v.client.B().Del().Key(charKey).Build())
+			if err := v.client.Do(ctx, v.client.B().Del().Key(charKey).Build()).Error(); err != nil {
+				return err
+			}
 		}
 	} else {
 		zaddCmd := v.client.B().Zadd().Key(DefaultRoomsActiveIndexKey).ScoreMember().
 			ScoreMember(float64(dto.Room.UpdatedAt.Unix()), dto.Room.ID).Build()
-		_ = v.client.Do(ctx, zaddCmd)
+		if err := v.client.Do(ctx, zaddCmd).Error(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -168,6 +182,8 @@ func (v *ValkeyRoomRepository) GetRoomForUpdate(ctx context.Context, roomID stri
 }
 
 // UpdateRoom updates room metadata in Valkey and refreshes sliding TTL.
+// Active index renewal failures are propagated. If the active index update fails,
+// the room payload SET may already have applied in Valkey; callers must not assume rollback or retry blindly.
 func (v *ValkeyRoomRepository) UpdateRoom(ctx context.Context, room Room) error {
 	return v.WithRoomLock(ctx, room.ID, func(lockedCtx context.Context) error {
 		dto, err := v.getRoomDetail(lockedCtx, room.ID)
@@ -341,8 +357,7 @@ func (v *ValkeyRoomRepository) RemoveMember(ctx context.Context, roomID string, 
 			}
 		}
 		charKey := DefaultCharacterKeyPrefix + characterID
-		_ = v.client.Do(lockedCtx, v.client.B().Del().Key(charKey).Build())
-		return nil
+		return v.client.Do(lockedCtx, v.client.B().Del().Key(charKey).Build()).Error()
 	})
 }
 

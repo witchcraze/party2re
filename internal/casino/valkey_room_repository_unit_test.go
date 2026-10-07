@@ -450,3 +450,168 @@ func TestValkeyRoomRepository_PurgeIdleRooms(t *testing.T) {
 		t.Errorf("expected 2 purged rooms, got %d", count)
 	}
 }
+
+func TestValkeyRoomRepository_SaveRoomDetail_PropagatesActiveIndexErrors(t *testing.T) {
+	ctx := context.Background()
+
+	room := casino.Room{
+		ID:        "room-err-1",
+		Status:    casino.RoomStatusWaiting,
+		UpdatedAt: time.Now().UTC(),
+	}
+	member := casino.RoomMember{
+		RoomID:      "room-err-1",
+		CharacterID: "char-1",
+	}
+
+	type dto struct {
+		Room    casino.Room         `json:"room"`
+		Members []casino.RoomMember `json:"members"`
+	}
+	rawJSON, _ := json.Marshal(dto{
+		Room:    room,
+		Members: []casino.RoomMember{member},
+	})
+
+	expectedErr := errors.New("valkey ZADD failed")
+
+	client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+		cmdStr := cmd.Commands()
+		switch cmdStr[0] {
+		case "GET":
+			return valkeytest.MakeStringResult(string(rawJSON))
+		case "SET":
+			return valkeytest.MakeOKResult()
+		case "ZADD":
+			return valkeytest.MakeErrorResult(expectedErr)
+		default:
+			return valkeytest.MakeOKResult()
+		}
+	}))
+
+	repo, _ := casino.NewValkeyRoomRepository(client)
+
+	// UpdateRoom must propagate the ZADD error instead of swallowing it
+	err := repo.UpdateRoom(ctx, room)
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected UpdateRoom to return %v, got %v", expectedErr, err)
+	}
+
+	// AddMember must propagate the ZADD error
+	newMember := casino.RoomMember{
+		RoomID:      "room-err-1",
+		CharacterID: "char-2",
+	}
+	err = repo.AddMember(ctx, newMember)
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected AddMember to return %v, got %v", expectedErr, err)
+	}
+
+	// UpdateMember must propagate the ZADD error
+	err = repo.UpdateMember(ctx, member)
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected UpdateMember to return %v, got %v", expectedErr, err)
+	}
+}
+
+func TestValkeyRoomRepository_SaveRoomDetail_DisbandedAndRemoveErrors(t *testing.T) {
+	ctx := context.Background()
+
+	room := casino.Room{
+		ID:        "room-err-2",
+		Status:    casino.RoomStatusDisbanded,
+		UpdatedAt: time.Now().UTC(),
+	}
+	member := casino.RoomMember{
+		RoomID:      "room-err-2",
+		CharacterID: "char-1",
+	}
+
+	type dto struct {
+		Room    casino.Room         `json:"room"`
+		Members []casino.RoomMember `json:"members"`
+	}
+	rawJSON, _ := json.Marshal(dto{
+		Room:    room,
+		Members: []casino.RoomMember{member},
+	})
+
+	t.Run("ZREM failure on disbanded room propagates", func(t *testing.T) {
+		expectedErr := errors.New("valkey ZREM failed")
+		client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+			cmdStr := cmd.Commands()
+			switch cmdStr[0] {
+			case "GET":
+				return valkeytest.MakeStringResult(string(rawJSON))
+			case "SET":
+				return valkeytest.MakeOKResult()
+			case "ZREM":
+				return valkeytest.MakeErrorResult(expectedErr)
+			default:
+				return valkeytest.MakeOKResult()
+			}
+		}))
+		repo, _ := casino.NewValkeyRoomRepository(client)
+		err := repo.UpdateRoom(ctx, room)
+		if !errors.Is(err, expectedErr) {
+			t.Fatalf("expected UpdateRoom to return %v, got %v", expectedErr, err)
+		}
+	})
+
+	t.Run("DEL member failure on disbanded room propagates", func(t *testing.T) {
+		expectedErr := errors.New("valkey DEL member failed")
+		client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+			cmdStr := cmd.Commands()
+			switch cmdStr[0] {
+			case "GET":
+				return valkeytest.MakeStringResult(string(rawJSON))
+			case "SET":
+				return valkeytest.MakeOKResult()
+			case "ZREM":
+				return valkeytest.MakeOKResult()
+			case "DEL":
+				return valkeytest.MakeErrorResult(expectedErr)
+			default:
+				return valkeytest.MakeOKResult()
+			}
+		}))
+		repo, _ := casino.NewValkeyRoomRepository(client)
+		err := repo.UpdateRoom(ctx, room)
+		if !errors.Is(err, expectedErr) {
+			t.Fatalf("expected UpdateRoom to return %v, got %v", expectedErr, err)
+		}
+	})
+
+	t.Run("RemoveMember DEL failure propagates", func(t *testing.T) {
+		activeRoom := casino.Room{
+			ID:        "room-err-2",
+			Status:    casino.RoomStatusWaiting,
+			UpdatedAt: time.Now().UTC(),
+		}
+		activeJSON, _ := json.Marshal(dto{
+			Room:    activeRoom,
+			Members: []casino.RoomMember{member},
+		})
+		expectedErr := errors.New("valkey DEL charKey failed")
+		client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+			cmdStr := cmd.Commands()
+			switch cmdStr[0] {
+			case "GET":
+				return valkeytest.MakeStringResult(string(activeJSON))
+			case "SET":
+				return valkeytest.MakeOKResult()
+			case "ZADD":
+				return valkeytest.MakeOKResult()
+			case "DEL":
+				return valkeytest.MakeErrorResult(expectedErr)
+			default:
+				return valkeytest.MakeOKResult()
+			}
+		}))
+		repo, _ := casino.NewValkeyRoomRepository(client)
+		err := repo.RemoveMember(ctx, "room-err-2", "char-1")
+		if !errors.Is(err, expectedErr) {
+			t.Fatalf("expected RemoveMember to return %v, got %v", expectedErr, err)
+		}
+	})
+}

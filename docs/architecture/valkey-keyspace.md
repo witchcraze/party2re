@@ -61,9 +61,9 @@ readiness. Introducing Cluster requires resolving those multi-key placements.
 | `party2:gvg:rooms:active` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `room_id`, Score: `UpdatedAt.Unix()` | `internal/gvg` | `SaveRoom` (ZADD), `DeleteRoom` (ZREM), `ListRooms` (ZREVRANGE + lazy ZREMRANGEBYSCORE). Active GvG rooms list. |
 | `party2:gvg:lock:room:<room_id>` | Valkey Master | `String` | 10 seconds (`10s`) safety TTL | Lock token (`id.New()`) | `internal/gvg` | Distributed lock for atomic GvG room member mutations and match round execution (Issue #652). Acquired via `SET NX EX 10` with retry; released via atomic Lua script. |
 | `party2:eventplaza:presence` | Valkey Master | `Sorted Set (ZSet)` | 1 hour (`3600s`), sliding | Member: `character_id`, Score: `LastSeenAt.Unix()` (`float64`) | `internal/eventplaza` | `RecordPresence` (ZADD + EXPIRE 3600), `CountActiveParticipants` (lazy ZREMRANGEBYSCORE + ZCARD). Real-time Event Plaza member presence. |
-| `party2:casino:room:<room_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | JSON (`CasinoRoomState`: room config, members, deck, turn, pot, status) | `internal/casino` | Candidate C standard pattern (Issue #635). Active store for in-flight card games (Indian Poker, High-Low, Doppelganger). |
+| `party2:casino:room:<room_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | JSON (`CasinoRoomState`: room config, members, deck, turn, pot, status) | `internal/casino` | Candidate C standard pattern (Issue #635). Payload SET EX precedes active index update; partial progress survives index failure without rollback. |
 | `party2:casino:character:<character_id>` | Valkey Master | `String` | 30 minutes (`1800s`), refreshed on activity | Room ID (`string`) | `internal/casino` | Single active casino room per character invariant check. |
-| `party2:casino:rooms:active` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `room_id`, Score: `UpdatedAt.Unix()` | `internal/casino` | Active casino rooms list for indexed discovery and lazy TTL pruning. |
+| `party2:casino:rooms:active` | Valkey Master | `Sorted Set (ZSet)` | None (Dynamic index) | Member: `room_id`, Score: `UpdatedAt.Unix()` | `internal/casino` | Active casino rooms list for indexed discovery and lazy TTL pruning. Renewal write errors propagate; stale index is pruned by ListActiveRooms while room payload is preserved by locked expiry recheck. |
 | `party2:casino:lock:room:<room_id>` | Valkey Master | `String` | 10 seconds (`10s`) safety TTL | Lock token (`id.New()`) | `internal/casino` | Distributed lock for atomic multiplayer turn serialization and room member mutations (Issue #642). Acquired via `SET NX EX 10` with retry; released via atomic Lua script. |
 
 Dungeon and Challenge additionally use the hash-tagged state/reward keys in
@@ -142,6 +142,13 @@ overdue scheduled work as if it expired would lose pending actions.
 `WRONGTYPE` migration handling is owner-specific: the session adapter can
 replace a legacy Set index and revoke its indexed tokens. This is not permission
 to blindly delete arbitrary financial/session state on any type error.
+
+Casino room persistence and writer-side partial failure boundary:
+`ValkeyRoomRepository.saveRoomDetail` updates the room payload (`party2:casino:room:<room_id>`) with sliding TTL before synchronizing the active index (`party2:casino:rooms:active` ZADD/ZREM).
+All write errors, including active index renewal failure, propagate to the caller.
+Because Valkey multi-key operations are not cross-key transactional here, if the active index write fails, the room payload may already have been updated in Valkey.
+Callers truthfully receive the write error and must not assume payload rollback.
+Clients and callers must not execute blind command replay on write errors (which could double-apply wagers or game steps); the partial state remains observable by ID (`GetRoom`), while lobby discovery (`ListRooms`/`ListActiveRooms`) remains dependent on the active index score. Subsequent successful renewals restore active index discovery.
 
 Candidate D: In-Progress Run Buffers currently store provisional rewards in
 hashes (including JSON item arrays), not in hypothetical `active_nodes` or
