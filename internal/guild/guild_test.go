@@ -698,7 +698,7 @@ func TestService_AssignCustomRole(t *testing.T) {
 	}
 	repo := &mockGuildRepo{
 		getGuildFn: func(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
-			return guild.Guild{ID: guildID}, members, nil
+			return guild.Guild{ID: guildID, LeaderCharacterID: "leader1"}, members, nil
 		},
 	}
 	svc, _ := guild.NewService(repo)

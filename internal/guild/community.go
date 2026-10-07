@@ -62,7 +62,9 @@ func (s *Service) ApplyToJoin(ctx context.Context, guildID string, applicantID s
 }
 
 // ApproveApplication approves a pending applicant, assigns their role title, and clears is_pending (guild.cgi:ataeru).
-// Sends an acceptance letter to the applicant.
+// Sends an acceptance letter to the applicant after successful approval, using the incoming ambient context.
+// Transaction: RunInTx (authorization, target classification and approval; notification follows success).
+// Lock Order: guilds(7) -> guild_members(7).
 func (s *Service) ApproveApplication(ctx context.Context, guildID string, leaderID string, applicantID string, title string) error {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -79,39 +81,53 @@ func (s *Service) ApproveApplication(ctx context.Context, guildID string, leader
 		return err
 	}
 
-	g, members, err := s.repo.GetGuild(ctx, guildID)
+	var g Guild
+	err = s.runInTx(ctx, func(txCtx context.Context) error {
+		lockedGuild, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
+		if err != nil {
+			return err
+		}
+
+		var requester, target *Member
+		for i := range members {
+			if members[i].CharacterID == leaderID {
+				requester = &members[i]
+			}
+			if members[i].CharacterID == applicantID {
+				target = &members[i]
+			}
+		}
+
+		if lockedGuild.LeaderCharacterID != leaderID || requester == nil || requester.Role != RoleLeader || requester.IsPending {
+			return ErrUnauthorized
+		}
+		if target == nil {
+			return ErrTargetNotMember
+		}
+		if !target.IsPending {
+			return ErrMemberNotPending
+		}
+
+		if err := s.repo.ApproveMember(txCtx, guildID, applicantID, normalizedTitle); err != nil {
+			return err
+		}
+		s.touchActive(txCtx, guildID)
+		g = lockedGuild
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-	if g.LeaderCharacterID != leaderID {
-		return ErrUnauthorized
-	}
-
-	var target *Member
-	for i := range members {
-		if members[i].CharacterID == applicantID {
-			target = &members[i]
-			break
-		}
-	}
-	if target == nil {
-		return ErrTargetNotMember
-	}
-	if !target.IsPending {
-		return ErrMemberNotPending
-	}
-
-	if err := s.repo.ApproveMember(ctx, guildID, applicantID, normalizedTitle); err != nil {
-		return err
-	}
-	s.touchActive(ctx, guildID)
 
 	// Send acceptance letter to applicant (guild.cgi:236-237)
+	// Production letters persist through the incoming ambient context. An outer
+	// transaction therefore rolls them back along with the membership mutation.
 	if s.letterSender != nil && s.charReader != nil {
 		leaderChar, errL := s.charReader.FindByID(ctx, leaderID)
 		applicantChar, errA := s.charReader.FindByID(ctx, applicantID)
 		if errL == nil && errA == nil {
 			content := "【＋参加許可証＋】" + g.Name + " (ギルマス " + leaderChar.Name + ") から参加許可をもらいました"
+			//lint:ignore error-swallow existing best-effort membership notification
 			_ = s.letterSender.SendLetter(ctx, leaderID, leaderChar.Name, applicantID, applicantChar.Name, content, leaderChar.Color)
 		}
 	}
