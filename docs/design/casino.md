@@ -98,6 +98,20 @@ guarantee is added. Legacy expiry also applied a sleep penalty
 (`lib/casino.cgi:178–190`); that side effect remains reconciliation work under
 [#949](https://github.com/witchcraze/party2re/issues/949).
 
+### Writer-side persistence and partial failure boundary
+
+Room mutation operations (`CreateRoom`, `UpdateRoom`, `AddMember`, `UpdateMember`, `RemoveMember`, `DeleteRoom`) synchronize both the room detail payload (`party2:casino:room:<room_id>`) with sliding TTL (1800s) and the active index (`party2:casino:rooms:active`).
+
+In `ValkeyRoomRepository.saveRoomDetail`:
+1. The room JSON payload is written via `SET ... EX 1800`.
+2. The active index is updated: `ZADD` with `UpdatedAt.Unix()` score for active rooms, or `ZREM` and member key deletion for disbanded rooms.
+3. Errors from both the payload SET and the subsequent active index ZADD/ZREM or member key operations are propagated truthfully to callers.
+
+Because Valkey operations are not cross-key transactional here:
+- If active index renewal (`ZADD`) fails, the room payload `SET` may already have succeeded in Valkey.
+- Write failures must never authorize blind command replay; clients must not assume payload rollback, as blindly retrying a failed command could double-deduct wagers or violate round action sequencing on an already-mutated payload.
+- In this partial-write state, the renewed room remains intact and queryable by ID (`GetRoom`), while lobby discovery (`ListRooms` / `ListActiveRooms`) relies on the active index score. When that score crosses the 30-minute cutoff, `PurgeIdleRooms` rechecks the locked payload timestamp and preserves the room, while `ListActiveRooms` prunes the stale index from lobby discovery until a subsequent successful renewal write restores the index score.
+
 ---
 
 ## 3. Multi-Player Indian Poker (`party2/lib/casino_indian.cgi`)
