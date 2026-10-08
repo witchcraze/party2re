@@ -107,6 +107,11 @@ and existing participant/spectator admission. It never implicitly joins or
 spectates, and it does not apply a town-entry or sleep gate to an admitted
 viewer. The [Casino visibility contract](casino.md#observation-and-visibility)
 defines its phase-specific masking and owner-defined expiry effects.
+Ordinary Casino room selection exposes public summaries and explicit admission
+targets only. Actual admission supplies masked detail and role/phase controls;
+leave is recovery, while conflict/sleep suppress start/kick/play. The unsupported
+solo `casino_highlow`/`casino_doppel` catalog entries are replaced by actual
+room-game choices; they are not connected commands.
 The ephemeral navigation record is an approved simplicity trade-off, not a new
 durable Core Character location. Legacy presence/log effects remain explicit
 reconciliation work in each owning migration.
@@ -165,8 +170,11 @@ The table below documents the entry, navigation and recovery controls in `intern
 | `plantation_sow` | 種菜園に種まき | `crafting` | `postCharactersIdPlantationSow` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `plantation_harvest` | 種菜園から収穫 | `crafting` | `postCharactersIdPlantationHarvest` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `casino_slot` | カジノスロット | `entertainment` | `playCasinoSlot` | `["bet"]` | ❌ | ✅ | ✅ | ✅ | ❌ |
-| `casino_highlow` | ハイ＆ロー | `entertainment` | `playCasinoHighLow` | `["bet", "guess"]` | ❌ | ✅ | ✅ | ✅ | ❌ |
-| `casino_doppel` | ドッペルゲンガー | `entertainment` | `playCasinoDoppel` | `["bet", "pool_size", "player_mark"]` | ❌ | ✅ | ✅ | ✅ | ❌ |
+| `casino_exchange` | コイン両替 | `entertainment` | `executeCharacterAction` | `["coins"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `casino_prize_exchange` | 賞品交換 | `entertainment` | `executeCharacterAction` | `["cost_coins", "count"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `casino_room_create` | カジノ部屋作成 | `social` | `executeCharacterAction` | `["name", "game_type", "speed", "max_players", "rate", "allow_spectators"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
+| `casino_room_join` | カジノ部屋参加 | `social` | `executeCharacterAction` | `["room_id"]` | ❌ | ✅ | ✅ | ✅ | ❌ |
+| `casino_room_spectate` | カジノ部屋観戦 | `social` | `executeCharacterAction` | `["room_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `lottery_raffle` | 福引を引く | `entertainment` | `playRaffle` | `["raffle_type"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `lottery_takarakuji_buy` | 宝くじ購入 | `entertainment` | `buyTakarakujiTicket` | `[]` | ❌ | ❌ | ✅ | ✅ | ✅ |
 | `tavern_order` | 酒場で食事注文 | `entertainment` | `orderTavernMeal` | `["item_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
@@ -183,7 +191,7 @@ The table below documents the entry, navigation and recovery controls in `intern
 
 *(Note: All facility actions implicitly require `GateLocationCheck` except `rescue_request`, which is a global recovery action. In legacy Party2, only combat/expedition quests under `lib/quest.cgi:479, 902` require living HP; town actions under `lib/system.cgi:639–655` execute regardless of character HP).*
 
-`home_wake` also requires wakeable lifecycle state even though it has no Sleep flag. An already-awake character is not offered a redundant wake action. A healthy awake character has 41 entry actions; a dead awake character has 36 entry actions (combat actions blocked); a sleeping character has only rescue; a character awaiting wake recovery has wake and rescue, in catalog order.
+`home_wake` also requires wakeable lifecycle state even though it has no Sleep flag. An already-awake character is not offered a redundant wake action. Dead awake characters retain noncombat entries; sleeping characters have only rescue; characters awaiting wake recovery have wake and rescue, in catalog order. Entry counts follow the current catalog, while exposed controls also require scene eligibility and a connected adapter.
 
 ### Evaluation and read contract
 

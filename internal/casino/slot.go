@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 )
 
 type SlotSymbol string
@@ -31,6 +32,19 @@ var ValidBetRates = map[int64]bool{
 	50:  true,
 	100: true,
 	200: true,
+}
+
+// SlotBetRates returns the existing wager menu, including the Job 46 gate.
+func SlotBetRates(jobID string) []int64 {
+	rates := make([]int64, 0, len(ValidBetRates))
+	for rate := range ValidBetRates {
+		if rate == 200 && jobID != "job-46" && jobID != "46" {
+			continue
+		}
+		rates = append(rates, rate)
+	}
+	slices.Sort(rates)
+	return rates
 }
 
 var (

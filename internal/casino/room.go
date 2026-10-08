@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -346,11 +347,9 @@ func (s *Service) ListRooms(ctx context.Context) ([]RoomSummary, error) {
 			continue
 		}
 		result = append(result, summarizeRoom(detail))
-		if len(result) == 100 {
-			break
-		}
 	}
-	return result, nil
+	slices.SortFunc(result, func(a, b RoomSummary) int { return strings.Compare(a.ID, b.ID) })
+	return result[:min(100, len(result))], nil
 }
 
 // StartGame starts the round for the room's configured GameType (party2/lib/_casino.cgi:24-32).

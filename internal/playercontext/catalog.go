@@ -48,7 +48,7 @@ type ActionDefinition struct {
 
 // DefaultCatalog defines the canonical list of top-level game actions and their legacy preconditions.
 // Granular item or skill selections are handled within individual endpoints/sub-commands.
-var DefaultCatalog = append([]ActionDefinition{
+var DefaultCatalog = append(append([]ActionDefinition{
 	{ID: "scene_enter", Label: "施設を選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"destination"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "scene_select", Label: "対象を選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"target_kind", "target_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "scene_page", Label: "ページを選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"destination"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
@@ -296,22 +296,6 @@ var DefaultCatalog = append([]ActionDefinition{
 		RequiredGates:  GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
-		ID:             "casino_highlow",
-		Label:          "ハイ＆ロー",
-		Category:       "entertainment",
-		OperationID:    "playCasinoHighLow",
-		RequiredParams: []string{"bet", "guess"},
-		RequiredGates:  GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
-	{
-		ID:             "casino_doppel",
-		Label:          "ドッペルゲンガー",
-		Category:       "entertainment",
-		OperationID:    "playCasinoDoppel",
-		RequiredParams: []string{"bet", "pool_size", "player_mark"},
-		RequiredGates:  GateFatigueCheck | GateSleepCheck | GateCooldownCheck | GateLocationCheck,
-	},
-	{
 		ID:             "lottery_raffle",
 		Label:          "福引を引く",
 		Category:       "entertainment",
@@ -424,7 +408,7 @@ var DefaultCatalog = append([]ActionDefinition{
 		// Note: Emergency rescue can be invoked while dead or asleep to unstick state.
 		RequiredGates: 0,
 	},
-}, continuationCatalog...)
+}, casinoCatalog...), continuationCatalog...)
 
 // AllActions returns a slice copy of the canonical default action catalog.
 func AllActions() []ActionDefinition {

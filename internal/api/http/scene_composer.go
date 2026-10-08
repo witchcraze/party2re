@@ -78,6 +78,9 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 		case "home_inbox", "home_outbox":
 			adapter.title = map[string]string{"home_inbox": "受信箱", "home_outbox": "送信箱"}[definition.ID]
 			adapter.read = h.homeMailboxSceneData
+		case "casino":
+			adapter.title, adapter.commands = "カジノ", []string{"casino_slot", "casino_exchange", "casino_prize_exchange", "casino_room_create"}
+			adapter.read = h.casinoSceneData
 		case "shop_weapon", "shop_armor", "shop_item", "shop_accessory":
 			adapter.title = map[string]string{"shop_weapon": "武器店", "shop_armor": "防具店", "shop_item": "道具店", "shop_accessory": "装飾品店"}[definition.ID]
 			adapter.commands = []string{"shop_purchase"}
@@ -131,7 +134,7 @@ func pageDestinations(rows []SceneDestination, n playercontext.Selection) TownSc
 }
 
 func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext.Result, response *PlayerContextResponse) error {
-	if active, err := h.composeActivityScene(result, response); active || err != nil {
+	if active, err := h.composeActivityScene(ctx, result, response); active || err != nil {
 		return err
 	}
 	n := playercontext.Selection{Destination: "town"}
@@ -180,6 +183,21 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 		}
 		scene.Data = data
 		switch data := data.(type) {
+		case CasinoLobbySceneData:
+			scene.Support.Observation = "details"
+			if data.Page.Next != nil {
+				choices = append(choices, "scene_page")
+				p := data.Page.Next
+				templates["scene_page"] = map[string]any{"destination": p.Destination, "offset": p.Offset, "limit": p.Limit}
+			}
+		case CasinoSelectedSceneData:
+			scene.Support.Observation, scene.Title = "details", data.Room.Name
+			choices = []string{"casino_room_join"}
+			templates["casino_room_join"] = map[string]any{"room_id": data.Room.ID}
+			if data.SpectateParams != nil {
+				choices = append(choices, "casino_room_spectate")
+				templates["casino_room_spectate"] = map[string]any{"room_id": data.Room.ID}
+			}
 		case ShopCatalogSceneData:
 			scene.Support.Observation, scene.Title = "details", data.Title
 			if data.Page.Next != nil {

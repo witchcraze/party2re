@@ -79,9 +79,10 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 			"bank_deposit", "bank_withdraw", "depot_deposit", "depot_withdraw", "auction_send", "fleamarket_list", "fleamarket_purchase",
 			"shop_purchase", "shop_sell", "shop_accessory_buy", "gemstore_buy", "secretshop_purchase", "blackmarket_trade",
 			"blacksmith_seal", "alchemy_synthesize", "custom_skill_set", "plantation_sow", "plantation_harvest",
-			"casino_slot", "casino_highlow", "casino_doppel", "lottery_raffle", "lottery_takarakuji_buy", "tavern_order", "contest_enter",
+			"casino_slot", "lottery_raffle", "lottery_takarakuji_buy", "tavern_order", "contest_enter",
 			"wishingwell_exchange", "altar_pray", "god_wish", "job_change", "medal_claim",
 			"monster_tame", "helper_complete", "park_post", "rescue_request",
+			"casino_exchange", "casino_prize_exchange", "casino_room_create", "casino_room_join", "casino_room_spectate",
 		}},
 		{"dead without money", func(s *Snapshot) { s.Character.Stats.HP = 0; s.Character.Money = 0 }, []string{
 			"scene_enter", "scene_select", "scene_page", "scene_back",
@@ -89,9 +90,10 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 			"bank_withdraw", "depot_deposit", "depot_withdraw", "auction_send", "fleamarket_list",
 			"shop_sell", "blackmarket_trade",
 			"blacksmith_seal", "alchemy_synthesize", "custom_skill_set", "plantation_sow", "plantation_harvest",
-			"casino_slot", "casino_highlow", "casino_doppel", "lottery_raffle", "contest_enter",
+			"casino_slot", "lottery_raffle", "contest_enter",
 			"wishingwell_exchange", "altar_pray", "god_wish", "job_change", "medal_claim",
 			"monster_tame", "helper_complete", "park_post", "rescue_request",
+			"casino_exchange", "casino_prize_exchange", "casino_room_create", "casino_room_join", "casino_room_spectate",
 		}},
 		{"sleeping", func(s *Snapshot) { s.Sleeping = true; s.SleepRemaining = time.Minute }, []string{"rescue_request"}},
 		{"wakeable", func(s *Snapshot) { s.Sleeping = true; s.CanWake = true }, []string{"home_wake", "rescue_request"}},
@@ -120,7 +122,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		})
 	}
 	healthy := Evaluate(healthySnapshot())
-	if len(healthy) != 45 || slices.Contains(healthy, "home_wake") {
+	if len(healthy) != 48 || slices.Contains(healthy, "home_wake") {
 		t.Fatalf("healthy catalog: %v", healthy)
 	}
 	zeroGold := healthySnapshot()
@@ -132,7 +134,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	if !slices.Contains(gotZeroGold, "blacksmith_seal") {
 		t.Errorf("zero wallet gold incorrectly suppressed blacksmith_seal")
 	}
-	for _, id := range []string{"casino_slot", "casino_highlow", "casino_doppel"} {
+	for _, id := range []string{"casino_slot", "casino_prize_exchange", "casino_room_join"} {
 		if !slices.Contains(gotZeroGold, id) {
 			t.Errorf("zero wallet gold incorrectly suppressed %s", id)
 		}
@@ -140,8 +142,8 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	exhausted := healthySnapshot()
 	exhausted.Character.Tired = 100
 	got := Evaluate(exhausted)
-	if len(got) != 37 {
-		t.Fatalf("exhausted action count = %d, want 37", len(got))
+	if len(got) != 41 {
+		t.Fatalf("exhausted action count = %d, want 41", len(got))
 	}
 	for _, action := range []string{"home_sleep", "bank_deposit", "shop_purchase", "tavern_order", "rescue_request"} {
 		if !slices.Contains(got, action) {
