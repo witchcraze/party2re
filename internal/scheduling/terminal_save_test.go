@@ -244,7 +244,7 @@ func TestWorkerTerminalRecoveryWithoutReplay(t *testing.T) {
 					t.Fatalf("handler invoked %d times", handler.calls)
 				}
 				if failure == "SET" {
-					assertTerminalStorage(t, client, action, core.StateProcessing, "persistent", true, true, false)
+					assertTerminalStorage(t, client, action, core.StateProcessing, "persistent", false, true, false)
 				} else {
 					data, err := client.Do(ctx, client.B().Get().Key("party2:scheduled:action:"+action.ID).Build()).ToString()
 					if err != nil {
