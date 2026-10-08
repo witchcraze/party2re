@@ -694,15 +694,12 @@ func (r *ValkeyRepository) GetActivePartyByCharacter(ctx context.Context, charac
 
 	p, err := r.GetParty(ctx, partyID)
 	if err != nil {
-		// Stale character index, clean up
-		_ = r.client.Do(ctx, r.client.B().Del().Key(r.characterKey(characterID)).Build()).Error()
-		return Party{}, Member{}, ErrNotFound
+		return Party{}, Member{}, err
 	}
 
 	m, err := r.GetMember(ctx, partyID, characterID)
 	if err != nil {
-		_ = r.client.Do(ctx, r.client.B().Del().Key(r.characterKey(characterID)).Build()).Error()
-		return Party{}, Member{}, ErrNotFound
+		return Party{}, Member{}, err
 	}
 
 	return p, m, nil

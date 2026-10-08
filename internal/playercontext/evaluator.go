@@ -19,6 +19,7 @@ type Snapshot struct {
 	CanWake        bool
 	SleepRemaining time.Duration
 	LocationID     string
+	Activities     []Activity
 }
 
 // Evaluator applies one availability rule, honoring action-specific exemptions.
@@ -38,7 +39,17 @@ func Evaluate(snapshot Snapshot) []string {
 
 func evaluate(catalog []ActionDefinition, snapshot *Snapshot, evaluators []Evaluator) []string {
 	ids := make([]string, 0, len(catalog))
+	location := activityLocation(snapshot.ActiveActivities())
 	for _, action := range catalog {
+		if action.ActivityKind != "" {
+			if continuationAllowed(action, snapshot, location) {
+				ids = append(ids, action.ID)
+			}
+			continue
+		}
+		if location != "" && action.ID != "home_wake" && action.ID != "rescue_request" {
+			continue
+		}
 		allowed := true
 		for _, evaluator := range evaluators {
 			if !evaluator.Allows(action, snapshot) {

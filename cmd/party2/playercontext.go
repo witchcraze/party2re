@@ -9,7 +9,7 @@ import (
 	"github.com/witchcraze/party2re/internal/shop"
 )
 
-func newPlayerContext(core *coreServices, soc *socServices, econ *econServices) *playercontext.Service {
+func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, cmbt *cmbtServices, misc *miscServices) *playercontext.Service {
 	scenes := []playercontext.SceneDefinition{
 		{ID: "town", Pageable: true}, {ID: "bank", Parent: "town"},
 		{ID: "home", Parent: "town", SubjectKind: "home", SubjectAvailable: func(ctx context.Context, _, target string) (bool, error) {
@@ -39,5 +39,6 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices) 
 			},
 		})
 	}
-	return playercontext.NewService(core.charRepo, soc.schedRepo, soc.timer, playercontext.WithNavigation(core.navigation, scenes...))
+	readers := contextActivityReaders{party: cmbt.party, pvp: cmbt.pvp, gvg: cmbt.gvg, dungeon: cmbt.dungeon, challenge: cmbt.challenge, casino: misc.casino}
+	return playercontext.NewService(core.charRepo, soc.schedRepo, soc.timer, playercontext.WithNavigation(core.navigation, scenes...), playercontext.WithActivities(readers.read))
 }

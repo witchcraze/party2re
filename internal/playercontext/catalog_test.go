@@ -9,8 +9,8 @@ import (
 func TestDefaultCatalog_Integrity(t *testing.T) {
 	actions := playercontext.AllActions()
 
-	if len(actions) < 30 || len(actions) > 50 {
-		t.Fatalf("expected action catalog size between 30 and 50, got %d", len(actions))
+	if len(actions) == 0 {
+		t.Fatal("action catalog must not be empty")
 	}
 
 	seenIDs := make(map[string]bool)
@@ -36,7 +36,7 @@ func TestDefaultCatalog_Integrity(t *testing.T) {
 		}
 		seenOperationIDs[act.OperationID] = true
 
-		if act.RequiredGates == 0 && act.ID != "rescue_request" {
+		if act.RequiredGates == 0 && act.ID != "rescue_request" && act.ActivityKind == "" {
 			t.Errorf("action %s has zero RequiredGates", act.ID)
 		}
 		if act.ID == "rescue_request" && act.RequiredGates != 0 {

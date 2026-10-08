@@ -7,8 +7,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-
-	"github.com/witchcraze/party2re/internal/core/scheduling"
 )
 
 var (
@@ -169,9 +167,7 @@ func (s *Service) navigate(ctx context.Context, playerID, actorID string, transi
 	if err != nil {
 		return Selection{}, err
 	}
-	if r.Snapshot.Sleeping || slices.ContainsFunc(r.Snapshot.OngoingActions, func(a scheduling.ScheduledAction) bool {
-		return a.State == scheduling.StatePending || a.State == scheduling.StateProcessing
-	}) {
+	if len(r.Snapshot.ActiveActivities()) > 0 {
 		return Selection{}, ErrNavigationUnavailable
 	}
 	n, err := transition(r.Navigation.Selection)

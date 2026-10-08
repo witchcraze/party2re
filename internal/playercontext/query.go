@@ -3,6 +3,7 @@ package playercontext
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/core/character"
@@ -35,11 +36,12 @@ type Result struct {
 
 // Service builds uncached player observations using existing read contracts.
 type Service struct {
-	characters CharacterReader
-	actions    ActionReader
-	timers     TimerReader
-	navigation NavigationRepository
-	scenes     map[string]SceneDefinition
+	characters     CharacterReader
+	actions        ActionReader
+	timers         TimerReader
+	navigation     NavigationRepository
+	scenes         map[string]SceneDefinition
+	readActivities ActivityReader
 }
 
 // NewService requires character, scheduled-action and sleep-timer readers.
@@ -73,6 +75,9 @@ func (s *Service) query(ctx context.Context, charID, ownerID string) (Result, er
 	if err != nil {
 		return Result{}, fmt.Errorf("load context scheduled actions: %w", err)
 	}
+	actions = slices.DeleteFunc(slices.Clone(actions), func(a scheduling.ScheduledAction) bool {
+		return a.State != scheduling.StatePending && a.State != scheduling.StateProcessing
+	})
 	remaining, err := s.timers.GetRemainingLock(ctx, timer.CategorySleep, charID)
 	if err != nil {
 		return Result{}, fmt.Errorf("load context sleep timer: %w", err)
@@ -89,9 +94,22 @@ func (s *Service) query(ctx context.Context, charID, ownerID string) (Result, er
 		CanWake:        remaining <= 0 && asleep,
 		LocationID:     LocationTown,
 	}
+	if s.readActivities != nil {
+		snapshot.Activities, err = s.readActivities(ctx, char.PlayerID, charID)
+		if err != nil {
+			return Result{}, fmt.Errorf("load context activities: %w", err)
+		}
+	}
+	if location := activityLocation(snapshot.ActiveActivities()); location != "" {
+		snapshot.LocationID = location
+		return Result{Snapshot: snapshot, AvailableActions: Evaluate(snapshot)}, nil
+	}
 	navigation, err := s.observeNavigation(ctx, charID)
 	if err != nil {
 		return Result{}, err
+	}
+	if navigation != nil {
+		snapshot.LocationID = navigation.Selection.Destination
 	}
 	return Result{Snapshot: snapshot, AvailableActions: Evaluate(snapshot), Navigation: navigation}, nil
 }

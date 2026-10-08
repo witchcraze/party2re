@@ -112,7 +112,10 @@ func (r *ValkeySessionRepository) GetActiveSession(ctx context.Context, characte
 		return nil, nil
 	}
 
-	rMap, _ := cmds[1].AsStrMap()
+	rMap, err := cmds[1].AsStrMap()
+	if err != nil {
+		return nil, err
+	}
 
 	round, _ := strconv.Atoi(sMap["current_round"])
 	hp, _ := strconv.Atoi(sMap["character_current_hp"])

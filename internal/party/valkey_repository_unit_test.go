@@ -532,6 +532,29 @@ func TestValkeyRepository_GetActivePartyByCharacter(t *testing.T) {
 	if _, _, err := repoErr.GetActivePartyByCharacter(ctx, "char-err"); !errors.Is(err, errKey) {
 		t.Fatalf("expected errKey, got %v", err)
 	}
+	for _, failRead := range []int{1, 2, 3} {
+		reads := 0
+		client := valkeytest.NewMockClient(valkeytest.WithDoHandler(func(_ context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+			c := cmd.Commands()
+			if c[0] != "GET" && c[0] != "EXISTS" {
+				t.Fatalf("observation mutated storage: %v", c)
+			}
+			if c[0] == "EXISTS" {
+				return valkeytest.MakeIntResult(1)
+			}
+			reads++
+			if reads == failRead {
+				return valkeytest.MakeErrorResult(errKey)
+			}
+			if reads == 1 {
+				return valkeytest.MakeStringResult("party-active-1")
+			}
+			return valkeytest.MakeStringResult(string(validData))
+		}))
+		if _, _, err := party.NewValkeyRepository(client).GetActivePartyByCharacter(ctx, "char-lead-1"); !errors.Is(err, errKey) {
+			t.Fatalf("read %d error suppressed: %v", failRead, err)
+		}
+	}
 }
 
 func TestValkeyRepository_RemoveMember(t *testing.T) {

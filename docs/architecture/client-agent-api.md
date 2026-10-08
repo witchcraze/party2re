@@ -62,8 +62,8 @@ The four top-level fields are:
   `data`, connection/eligibility `support`, and HTTP-owned presentation fields.
   Town uses a self-authored SVG placeholder; Home uses typed public/owned details
   and mailbox pages. Other initial facility/subject scenes contain controls only.
-  Production art and feature-owned active scenes remain
-  separate work.
+  Actual activities use a typed owned-facts projection; conflicting activities
+  use an explicit recovery scene. Production art remains separate work.
 - `ongoing_actions`: every unfinished scheduled action, plus an observed
   sleep/wake recovery timer when present. Empty observations return `[]`.
   Entries contain `id`, `action_type`, `label`, `execute_at`, rounded-up
@@ -198,12 +198,36 @@ the observed home's `target_home_id`, while the authenticated actor remains the
 sleeping character. Owner-private fields are never inferred from a target ID. Without a configured navigation store,
 connected entry discovery remains usable. Dispatcher entry evaluation is
 separate: a full explicit command never binds its target to the displayed scene.
-Feature-owned active scenes and continuation gates remain #1050 work.
+Actual sleep, unfinished scheduling, Party/PvP/GvG/Casino membership and
+Dungeon/Challenge buffers override ordinary selection. Activity observations
+contain only kind, ID, owned role, phase, round/floor, an existing optional party
+relation and eligible continuation IDs. Room secrets, cards, provisional rewards
+and private member data are excluded. These observations use production
+public-service readers; historical SQL records never determine activity.
+
+`scene.kind:activity` carries `data.activities`; `activity_conflict` retains all
+contradictory exclusive facts and only verified leave/recovery candidates.
+An explicitly linked live Party roster and one Dungeon/Challenge run are one
+activity, with the run selecting the scene. Multiple runs still conflict; no
+missing relationship is inferred. Terminal run buffers remain observable until
+their feature owner removes them; observing them never replays settlement.
+Buffers indexed only by the controlling actor do not authorize other
+participants to execute that actor's commands or invent a participant index.
+
+Continuation eligibility comes from actual membership, role and phase, instead
+of entry's town/cooldown/HP/fatigue/currency gates. Exact readiness, team setup,
+prices and parameters remain service checks. Casino participants that have
+already acted cannot act again in Indian/Highlow; Doppel retains its existing
+service behavior. Spectators receive leave only. `support.actions.mode` marks
+continuation/recovery controls with `entry_eligible:false`; only eligible controls
+are listed, and `connected` still distinguishes implemented execution.
+Unconnected continuation IDs have strict Gateway schemas and remain 501 until
+their owning mutation migrations connect them. No REST route is retired here.
 
 A disappeared subject stays explicit in `selection_unavailable`, with safe
 back/reselect choices and no saved fallback. Required storage, subject-read and
 adapter enrichment errors fail the whole observation. Navigation remains
-blocked during sleep, pending recovery and unfinished scheduled work, and
+blocked during any actual activity, pending recovery and unfinished work, and
 writes no feature state.
 
 #### Scoped legacy navigation reconciliation
@@ -218,7 +242,7 @@ reconcile as follows; facility-specific gameplay/actions retain their owners.
 | `いどう` → `idou`, registered `@places` → saved `$m{lib}` | Gateway `scene_enter` → `playercontext.Service.Enter`; the initial closed registry covers the destinations above. Remaining facilities belong to #947–#949. |
 | `まち` → `machi`, registered `@towns` → saved `$m{lib}` | Default town selection through `scene_enter` / `scene_back`; estate/town-specific projections remain #949 work. |
 | `ほーむ` → `homu`, `$m{home}` target/fallback | Own `home` through `scene_enter` and public Home targets through `scene_select` → Home.GetHomeView. Query authenticates the actor; unavailable targets remain explicit. An unavailable target is explicitly retained instead of adopting the legacy fallback. |
-| Reload dispatch: sleep before `$m{lib}`, default `park` | Shared GET/refresh composer renders saved ordinary selection with explicit sleep/Wake/Rescue; feature-owned active scenes remain #1050. The selector never ends an activity. |
+| Reload dispatch: sleep before `$m{lib}`, default `park` | Shared GET/refresh derives owned activity/recovery before ordinary selection. Expired sleep requires explicit Wake; conflicting activities remain explicit. The selector never ends an activity. |
 | `ぎるど` → `girudo` | Guild observation/management remains #949; no membership change through navigation. |
 | `ささやき` → `sasayaki`, `はなす` → `hanasu`, `しらべる` → `shiraberu` | Facility/social dialogue and presence reconciliation remains #947–#949; existing REST readers/operations are retained. |
 | `ろぐあうと` → `roguauto` (`system.cgi:944–961`) | Existing `DELETE /sessions` → Player.Logout supersedes the old index redirect; no navigation side effect. |
@@ -365,8 +389,9 @@ errors propagated; they are not gameplay settlement.
 
 #### Entry and continuation
 
-Entry is evaluated against current facility and actual activity, not today's
-town placeholder. Active-session commands use the owning membership/role/run
+Entry is evaluated against current facility and actual activity. Ordinary town
+entries remain available; selected facilities narrow applicable operations,
+while navigation requires no active work. Active-session commands use the owning membership/role/run
 and turn state; a generic unfinished-work or town-entry gate must not block
 legal continuation, escape/leave or recovery. Pending/Processing scheduled work
 remains visible after its deadline. Sleep and pending Wake retain their explicit
@@ -379,6 +404,23 @@ Legacy dispatch evidence is `quest.cgi:189–199,1047–1075`,
 These anchors establish distinct entry/continuation menus, not complete combat
 formula parity. Each facility migration must reconcile its full actions/call
 paths and existing Go gaps before retirement.
+
+The inspected activity-dispatch actions reconcile as follows (paths relative
+to the original `party2` distribution). This maps observation/continuation
+authority; it makes no combat, wager or settlement formula parity claim.
+
+| Legacy dispatch / actions | Current observation or retained execution / owner |
+| --- | --- |
+| `party.cgi:14–30`: sleep → saved module → park, then member read/action dispatch | Shared owned Query derives sleep/work/room/run facts before ordinary selection. Explicit Wake/Rescue is the approved transport/recovery contract; GET never performs legacy automatic recovery. |
+| `lib/quest.cgi:189–199,1047–1075`: `つくる`, `さんか`, `けんがく`; `パーティー`, `とうぎじょう`, `ギルドバトル`, `ダンジョン`, `チャレンジ` selectors | Existing Party.CreateParty/JoinParty, PvP/GvG.CreateRoom/JoinRoom, Dungeon.StartPartyExpedition and Challenge.StartPartySession remain behind registered REST routes. Observation reads existing membership/run services. Full entry, spectator and category selection migrations belong to #948; selection alone grants no admission. |
+| Party preparation / departure | Public Party.GetActiveParty supplies verified membership. Candidate `party_ready`/`party_start`/`party_leave` correspond to SetReady/StartPartyAdventure/LeaveParty and retained `/parties/{id}` ready/start/leave routes; mutation connection remains #948. |
+| `lib/vs_player.cgi:32–41`, `vs_guild.cgi:31–38`: `かいし`, pre-round `しらべる` and PvP `ぱーてぃー` | GetCharacterRoom verifies actor membership; leader start/advance and phase-legal leave/team candidates correspond to existing PvP/GvG services and retained character room routes. Detail/party inspection and full mutation migration remain #948. |
+| `lib/_casino.cgi:10–32,100–111`: `にげる`, `すくしょ`, `かいし`, `さそう`, leader `きっく`; delegated game actions | Casino.GetCharacterRoomView reuses owned admitted GetRoomView. Leave/start/turn candidates refer to LeaveRoom/StartGame/PlayRoomAction and retained character room routes. Kick/admission/full detail composition remain #1055/#949; invitation/screenshot have no Casino service replacements and remain explicit #949 reconciliation. |
+| `lib/casino_indian.cgi:10–16`: `つづける`, `しょうぶ`, `おりる`; `casino_highlow.cgi:10–27`: `つづける`, `ハイ`, conditional `ロウ`, `おりる`; `casino_doppel.cgi:10–15`: generated marks | Existing PlayRoomAction delegates to each game service. Activity exposes turn eligibility only; game-specific parameter choices and Gateway mutation connection remain #1055/#949. Existing REST action route stays available. |
+| `lib/vs_dungeon.cgi:33–48`: leader initial `すすむ`, `にし`, `きた`, `みなみ`, `ひがし`, `ちず`, treasure `しらべる` | Owned GetActiveExpedition supplies phase/floor; Move and Escape remain existing REST operations and unconnected continuation candidates. Current StartPartyExpedition/Move bundle initialization/tile resolution; separate initial advance/treasure observation is not a verified replacement. Map, treasure and per-turn battle/action reconciliation remain #948. |
+| `lib/vs_challenge.cgi:20–46`: treasure `しらべる`, phase-dependent `すすむ` | Owned GetActiveSession supplies phase/round; AdvanceRound remains the retained character challenge advance operation and unconnected candidate. Treasure/battle/party detail reconciliation remains #948. |
+| Inherited `lib/_skill.cgi:22–29,78–79,282–317`: spectator `ささやき`/`にげる`/`すくしょ`, generated job/custom skills and `すとっく`, then `add_battle_action` | Shared member/spectator dispatch is inspected only to establish activity authority. No generated skill menu or per-turn battle command is replaced here; skill/stock/combat and battle spectator reconciliation remain #948, screenshot/social presentation #949/#140. Existing feature and battle operations stay registered. |
+| `lib/sleep.cgi:18–42`: empty action menu, elapsed automatic vitality recovery | Existing timer facts preserve sleep and elapsed recovery pending; only explicit connected Wake/Rescue commands can recover. GET changes no vitality, timer or feature record. |
 
 #### Route retirement and deliberate exceptions
 

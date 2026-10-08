@@ -102,7 +102,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		{"processing", func(s *Snapshot) {
 			s.OngoingActions = []scheduling.ScheduledAction{{State: scheduling.StateProcessing}}
 		}, []string{"rescue_request"}},
-		{"non-town", func(s *Snapshot) { s.LocationID = "dungeon" }, []string{"rescue_request"}},
+		{"non-town", func(s *Snapshot) { s.LocationID = "dungeon" }, []string{"scene_enter", "scene_select", "scene_page", "scene_back", "dungeon_start", "rescue_request"}},
 		{"all constraints", func(s *Snapshot) {
 			s.Character.Stats.HP = 0
 			s.Character.Tired = 100

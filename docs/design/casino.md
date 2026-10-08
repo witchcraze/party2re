@@ -87,7 +87,17 @@ dispatch in `lib/_casino.cgi:10–32,100–111`. Current settlement returns to
 waiting with round zero; there is no separate finished room status. Formula
 parity and settlement history are outside this read-boundary inspection.
 
-Reads never start, advance, wager or settle. Detail uses the existing room lock
+Reads never start, advance, wager or settle.
+
+Gateway activity discovers the owned actor's existing character-room mapping
+through `GetCharacterRoomView`, then applies `GetRoomView` authorization/masking.
+It projects only room ID, role, phase/round and continuation eligibility; full
+game facts remain this feature's reader responsibility. Spectators get leave
+only. Participant turn candidates respect existing Indian/Highlow declared-action
+checks and Doppel's current service behavior. These are unconnected Gateway
+controls until mutation migration; retained REST operations remain available.
+
+Detail uses the existing room lock
 for a consistent phase/member snapshot and does not renew activity/TTL. Casino
 owns the 30-minute idle lifetime: lobby reads invoke expiry, which rechecks
 activity under that lock before deletion, then prune stale index entries.

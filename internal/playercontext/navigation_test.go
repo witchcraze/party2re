@@ -64,8 +64,8 @@ func TestNavigationTransitionsAndObservation(t *testing.T) {
 		if err != nil || got.Navigation == nil || got.Navigation.Selection != want || got.Navigation.Unavailable != unavailable {
 			t.Fatalf("observation=%+v err=%v want=%+v unavailable=%v", got.Navigation, err, want, unavailable)
 		}
-		if store.writes != before || got.Snapshot.LocationID != "town" {
-			t.Fatal("observation mutated selection or changed pre-composer scene")
+		if store.writes != before || got.Snapshot.LocationID != want.Destination {
+			t.Fatal("observation mutated selection or lost selected location")
 		}
 	}
 	observe(Selection{Destination: "town"}, false)

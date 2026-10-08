@@ -1,9 +1,16 @@
 package playercontext
 
-// LocationGate limits facility entry actions to the initial town scene.
-// ponytail: town scene only (#939), extend with facility scene contracts in #947–#949.
+import "strings"
+
+// LocationGate separates ordinary facility entries from recovery/continuation.
 type LocationGate struct{}
 
 func (LocationGate) Allows(action ActionDefinition, snapshot *Snapshot) bool {
-	return !action.RequiredGates.Has(GateLocationCheck) || snapshot.LocationID == LocationTown
+	if !action.RequiredGates.Has(GateLocationCheck) || action.ID == "home_wake" || action.Category == "navigation" {
+		return true
+	}
+	if snapshot.LocationID == LocationTown {
+		return true
+	}
+	return strings.HasPrefix(action.ID, snapshot.LocationID+"_") || (strings.HasPrefix(snapshot.LocationID, "shop_") && strings.HasPrefix(action.ID, "shop_"))
 }
