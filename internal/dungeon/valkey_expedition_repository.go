@@ -119,7 +119,10 @@ func (r *ValkeyExpeditionRepository) GetActiveExpedition(ctx context.Context, ch
 		return nil, nil
 	}
 
-	rMap, _ := cmds[1].AsStrMap()
+	rMap, err := cmds[1].AsStrMap()
+	if err != nil {
+		return nil, err
+	}
 
 	floor, _ := strconv.Atoi(sMap["current_floor"])
 	posX, _ := strconv.Atoi(sMap["pos_x"])

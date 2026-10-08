@@ -185,6 +185,7 @@ type RoomLifecycleRepository interface {
 }
 
 type RoomMemberRepository interface {
+	GetCharacterRoom(ctx context.Context, characterID string) (string, error)
 	AddMember(ctx context.Context, member RoomMember) error
 	GetMember(ctx context.Context, roomID string, characterID string) (*RoomMember, error)
 	GetMemberForUpdate(ctx context.Context, roomID string, characterID string) (*RoomMember, error)

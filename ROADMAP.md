@@ -84,7 +84,7 @@ The initial Core/System, Economy/Production, Adventure/Combat/Arenas and Communi
 
 1. **Client/Agent Gateway & CQRS Architecture (In Progress)**
    - Complete remaining command coverage; the initial stateful gameplay loop is covered by focused HTTP integration tests.
-   - Extend the shared selected-scene composer with verified facility detail adapters and derive active-game scenes from feature-owned state (#1050–#1055).
+   - Extend selected/activity scene composition with remaining verified facility and full game detail adapters; connect role/phase-specific continuation mutations (#1051/#1052/#1055 and migration children).
    - Retire individual REST routes only after their replacement commands and observations are implemented and verified, retaining deliberate route exceptions (#947–#950).
    - Preserve the enduring [command/recovery contract](docs/architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions); current coverage is summarized in [STATUS](STATUS.md).
 2. **Headless E2E Gameplay Simulation Test Framework**

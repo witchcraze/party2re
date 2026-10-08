@@ -25,6 +25,12 @@ old SQL room repository are historical, not future migration targets. Durable
 startup checks. Factory nil-client branches exist for test injection; they are
 not permitted runtime connectivity-error fallback.
 
+PlayerContext observes these owners through public service ports. Party's actor
+reader propagates lobby/member storage failures and performs no stale-index
+deletion; missing live state remains absent. Casino discovers actual admission
+through its character-room mapping, then uses its authorized masked projection.
+Navigation has no authority over these lobbies and never joins or leaves them.
+
 Lobby TTL is an implementation lifetime, not proof of legacy timeout parity.
 Do not invent generic auto-fold, forfeiture/refund, turn-history keys, or a
 60-second post-game retention policy. Each owning game must define and verify
@@ -51,6 +57,10 @@ state, advances the round, updates HP/rewards, and refreshes TTLs. Exact fields,
 argument order, errors, and return tuples are defined in the embedded sources.
 These scripts protect their own transitions; application reads, combat
 resolution, and SQL settlement are separate operations.
+
+Active Dungeon/Challenge observations propagate required state and reward-read
+failures. A terminal buffer still present in Valkey remains observable until
+owner cleanup; reading it never retries settlement or refreshes lifetime.
 
 ## Two-Phase Settlement
 

@@ -2909,7 +2909,9 @@
               "town",
               "facility",
               "subject",
-              "selection_unavailable"
+              "selection_unavailable",
+              "activity",
+              "activity_conflict"
             ]
           },
           "subject": {
@@ -2931,7 +2933,7 @@
           "support"
         ],
         "additionalProperties": false,
-        "description": "Registered selected scene. Home and Shop use typed details; Bank exposes controls. GET never writes or renews selection.",
+        "description": "Registered selected or feature-owned activity scene. Actual sleep, unfinished work, membership and runs override ordinary selection; conflicting exclusive facts are preserved. GET never joins, advances, settles or recovers gameplay.",
         "allOf": [
           {
             "if": {
@@ -3170,6 +3172,33 @@
                     }
                   }
                 }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "activity",
+                    "activity_conflict"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/ActivitySceneData"
+                }
+              },
+              "not": {
+                "required": [
+                  "subject"
+                ]
               }
             }
           }
@@ -3735,6 +3764,547 @@
                   "additionalProperties": false
                 }
               }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "party_ready"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "party_id": {
+                      "type": "string"
+                    },
+                    "ready": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "party_id",
+                    "ready"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "party_start"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "party_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "party_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "party_leave"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "party_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "party_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "pvp_team"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "room_id": {
+                      "type": "string"
+                    },
+                    "team_color": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "room_id",
+                    "team_color"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "pvp_start"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "room_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "room_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "pvp_advance"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "room_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "room_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "pvp_leave"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "room_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "room_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "gvg_start"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "room_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "room_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "gvg_advance"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "room_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "room_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "gvg_leave"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "room_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "room_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "dungeon_move"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "direction": {
+                      "type": "string",
+                      "enum": [
+                        "north",
+                        "south",
+                        "east",
+                        "west"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "direction"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "dungeon_escape"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": []
+                }
+              },
+              "required": []
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "challenge_advance"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "session_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "session_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "casino_room_start"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "room_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "room_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "casino_room_leave"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "room_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "room_id"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "casino_room_action"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "room_id": {
+                      "type": "string"
+                    },
+                    "action": {
+                      "type": "string"
+                    },
+                    "mark": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "room_id",
+                    "action"
+                  ]
+                }
+              },
+              "required": [
+                "params"
+              ]
             }
           }
         ]
@@ -4304,6 +4874,14 @@
           },
           "entry_eligible": {
             "type": "boolean"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "continuation",
+              "recovery"
+            ],
+            "description": "Present for service-verified activity continuations/recovery. entry_eligible is false for these controls; connected still determines execution support."
           }
         },
         "required": [
@@ -4834,6 +5412,78 @@
           "offset",
           "limit",
           "next"
+        ]
+      },
+      "ActivityFact": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "party",
+              "pvp",
+              "gvg",
+              "dungeon",
+              "challenge",
+              "casino",
+              "sleep",
+              "scheduled"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "actor",
+              "member",
+              "leader",
+              "spectator"
+            ]
+          },
+          "phase": {
+            "type": "string"
+          },
+          "round": {
+            "type": "integer"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Eligible role/phase continuation candidates. Conflicts expose only verified recovery/leave candidates. Execution connection is reported separately in scene.support.actions."
+          },
+          "party_id": {
+            "type": "string",
+            "description": "Existing explicit run-to-party relation when present; a matching live roster and its single run are one activity. Missing linkage is never inferred."
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "role",
+          "phase",
+          "round",
+          "actions"
+        ]
+      },
+      "ActivitySceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "activities": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/ActivityFact"
+            }
+          }
+        },
+        "required": [
+          "activities"
         ]
       }
     },

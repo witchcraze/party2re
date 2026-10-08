@@ -320,7 +320,7 @@ func newHTTPHandler(
 		opts = append(opts, http.WithTrustedProxies(prefixes...))
 	}
 	if soc.schedRepo != nil {
-		opts = append(opts, http.WithPlayerContext(newPlayerContext(core, soc, econ)))
+		opts = append(opts, http.WithPlayerContext(newPlayerContext(core, soc, econ, cmbt, misc)))
 	}
 	opts = append(opts,
 		http.WithHelper(misc.helper),

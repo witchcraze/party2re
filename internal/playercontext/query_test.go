@@ -84,6 +84,9 @@ func TestQuery_ReadStateAndAvailability(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := Snapshot{Character: char, OngoingActions: tc.actions, SleepRemaining: tc.remaining, Sleeping: tc.wantSleeping, CanWake: tc.wantWake, LocationID: LocationTown}
+			if location := activityLocation(want.ActiveActivities()); location != "" {
+				want.LocationID = location
+			}
 			if !reflect.DeepEqual(got.Snapshot, want) {
 				t.Fatalf("snapshot=%+v, want %+v", got.Snapshot, want)
 			}

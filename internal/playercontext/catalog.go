@@ -42,11 +42,13 @@ type ActionDefinition struct {
 	OperationID    string    `json:"operation_id"`
 	RequiredParams []string  `json:"required_params"`
 	RequiredGates  GateFlags `json:"required_gates"`
+	ActivityKind   string    `json:"activity_kind,omitempty"`
+	Recovery       bool      `json:"recovery,omitempty"`
 }
 
 // DefaultCatalog defines the canonical list of top-level game actions and their legacy preconditions.
 // Granular item or skill selections are handled within individual endpoints/sub-commands.
-var DefaultCatalog = []ActionDefinition{
+var DefaultCatalog = append([]ActionDefinition{
 	{ID: "scene_enter", Label: "施設を選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"destination"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "scene_select", Label: "対象を選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"target_kind", "target_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "scene_page", Label: "ページを選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"destination"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
@@ -422,7 +424,7 @@ var DefaultCatalog = []ActionDefinition{
 		// Note: Emergency rescue can be invoked while dead or asleep to unstick state.
 		RequiredGates: 0,
 	},
-}
+}, continuationCatalog...)
 
 // AllActions returns a slice copy of the canonical default action catalog.
 func AllActions() []ActionDefinition {

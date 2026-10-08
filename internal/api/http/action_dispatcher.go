@@ -128,7 +128,8 @@ func (h *Handler) handleCharacterAction(w http.ResponseWriter, r *http.Request) 
 			h.writeActionRejection(w, r, player.ID, char.ID, http.StatusConflict, ErrorDetail{Code: "ACTION_UNAVAILABLE", Message: "Action is currently unavailable."})
 			return
 		}
-		if req.Action != "home_wake" && req.Action != "rescue_request" {
+		def, _ := actionDefinition(req.Action)
+		if req.Action != "home_wake" && req.Action != "rescue_request" && !def.Recovery {
 			message, err := h.sleepingCharacterMessage(r.Context(), char.ID)
 			if err != nil {
 				writeActionFailure(w, http.StatusInternalServerError, "ACTION_PREFLIGHT_FAILED", "Unable to verify current sleep state.")

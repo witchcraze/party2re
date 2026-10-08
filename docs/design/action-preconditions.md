@@ -6,7 +6,7 @@ In the Party2 Re CQRS Client/Agent Gateway architecture ([`docs/architecture/cli
 - **Observation**: `GET /api/v1/characters/{id}/context` (returns character facts, unfinished work, typed selected scenes and connected eligible choices; verified facility detail remains adapter-owned)
 - **Execution**: `POST /api/v1/characters/{id}/actions` (dispatches state transition commands)
 
-To prevent LLM context window bloating (Token Bloat), the Action Catalog registers **strictly top-level facilities, services, and commands** (42 entries in the current catalog). Sub-selections (such as specific item IDs, skill recipes, or shop item choices) are handled within individual action parameter payloads.
+To prevent LLM context window bloating (Token Bloat), the Action Catalog registers **strictly top-level facilities, services, and commands**, including verified activity continuations. Sub-selections (such as specific item IDs, skill recipes, or shop item choices) are handled within individual action parameter payloads.
 
 Each action is statically linked to an OpenAPI 3.1 contract and explicit
 `required_params`. Names alone do not describe parameter types or target choices.
@@ -50,10 +50,12 @@ The gate descriptions below summarize the current implementation:
 5. **Currency Gate (`$m{money} > 0`)**:
    - Currency-gated entry actions require positive wallet gold. Exact amounts, selected-item prices, alternate currencies and domain-specific prerequisites remain execution-service checks; the catalog has no request payload to evaluate them.
 6. **Location Gate**:
-   - Service entry evaluation still uses the initial town gate. HTTP observation
-     separately narrows connected choices by registered facility/subject facts.
-     Displayed selection is not target authorization. Actual feature/session
-     entry/continuation gating remains #1050 work.
+   - Service entry evaluation uses ordinary selected facility and actual activity.
+     Ordinary town entries remain discoverable; selected facilities narrow their
+     operations. Actual activity blocks new entries and ordinary navigation.
+     Displayed selection is not target authorization. Continuation candidates
+     require owning membership/role/phase and bypass generic entry gates;
+     conflicts retain only verified leave/recovery candidates.
 
 ### Approved progressive location and selection rules
 
@@ -77,7 +79,8 @@ selection without a write or TTL renewal. Expired selection defaults to town;
 an unavailable selected subject remains explicit without a persisted fallback.
 The composer renders saved selection, distinguishes adapter connection from
 entry eligibility and offers only connected scene-appropriate commands. This
-does not reinterpret the initial town entry gate as actual feature location.
+uses actual activity before ordinary selection, without converting selection
+into membership or a run. A missing or failed selector never hides active work.
 
 Ordinary location/selection uses a small character-scoped Valkey record. Actual
 room membership, dungeon/challenge progress and sleep remain feature-owned and
@@ -131,7 +134,7 @@ const (
 
 ## 4. Action Catalog Precondition Matrix
 
-The table below documents all 42 current catalog entries in `internal/playercontext/catalog.go`, their OpenAPI 3.1 mapping, required execution parameters, and precondition gates.
+The table below documents the entry, navigation and recovery controls in `internal/playercontext/catalog.go`, their OpenAPI 3.1 mapping, required execution parameters, and precondition gates. Activity continuations in `catalog_continuation.go` use membership/role/phase facts instead of these entry gates; their strict parameters are defined in the OpenAPI source and their native-service mapping is owned by [the Gateway contract](../architecture/client-agent-api.md#entry-and-continuation).
 
 | ID | Label | Category | OpenAPI OperationID | Required Params | Dead Gate (HP>0) | Fatigue Gate (<100) | Sleep Gate (Awake) | Cooldown Gate | Currency Gate |
 |---|---|---|---|---|:---:|:---:|:---:|:---:|:---:|
@@ -186,9 +189,9 @@ The table below documents all 42 current catalog entries in `internal/playercont
 
 The pipeline evaluates Dead → Fatigue → Sleep → Cooldown → Currency → Location, stopping at the first rejecting gate for each action. Each gate honors its RequiredGates exemptions; wake eligibility is an explicit recovery rule. Gate evaluation is pure and changes no state.
 
-`playercontext.Service.Query` reads Character and unfinished ScheduledActions, then existing Sleep duration and Asleep recovery flag. Character has no invented Sleeping or location field. The returned snapshot includes those observations, and the availability list contains only ActionIDs, without URLs, HTTP knowledge or presentation text. #939 maps these facts into an HTTP DTO without refetching query facts; its standard ownership wrapper and avatar enrichment perform separate authorization/profile reads.
+`playercontext.Service.Query` authorizes the owning player before reading unfinished ScheduledActions, Sleep duration, Asleep recovery and required public feature activity ports. Character has no invented Sleeping or location field. Pending/Processing work stays visible after its deadline; persisted Completed/Failed records are excluded even when scheduling cleanup is pending. Activity is a whitelist of actor membership/run facts, not raw room or reward state. Missing/expired selection cannot end activity, and ordinary subject reads are skipped while activity is authoritative. Required storage/read failures fail GET and shared refresh; confirmed command results still survive failed refresh.
 
-For a nonempty actor index this entails one MariaDB Character lookup and four Valkey commands (SMEMBERS, MGET, sleep TTL, Asleep EXISTS); an empty index avoids MGET. Each input is read once. This is not a transaction across stores, and action execution must revalidate changing state.
+Scheduling and timers use existing actor-index/timer reads; activity adapters add their owning service reads. An explicitly linked Party roster and one run are one activity; otherwise simultaneous exclusive facts produce conflict recovery without an arbitrary winner. Terminal run buffers remain observed until owner cleanup and GET never finalizes them. This is not a transaction across stores, and action execution must revalidate changing state. [The Gateway contract](../architecture/client-agent-api.md#entry-and-continuation) owns continuation support and scoped legacy dispatch reconciliation.
 
 No CharacterSnapshot or availability-result cache is introduced. The catalog is small; any cache should follow measurements and an explicit invalidation design covering Character updates and timer/lifecycle changes.
 

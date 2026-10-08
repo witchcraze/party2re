@@ -30,6 +30,7 @@ type SceneActionSupport struct {
 	Action        string `json:"action"`
 	Connected     bool   `json:"connected"`
 	EntryEligible bool   `json:"entry_eligible"`
+	Mode          string `json:"mode,omitempty"`
 }
 
 type SceneDestination struct {
@@ -130,6 +131,9 @@ func pageDestinations(rows []SceneDestination, n playercontext.Selection) TownSc
 }
 
 func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext.Result, response *PlayerContextResponse) error {
+	if active, err := h.composeActivityScene(result, response); active || err != nil {
+		return err
+	}
 	n := playercontext.Selection{Destination: "town"}
 	unavailable := false
 	if result.Navigation != nil {
