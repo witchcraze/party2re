@@ -190,7 +190,7 @@ func TestActivityRoleAndPhaseControls(t *testing.T) {
 		{"gvg", gvg.StatusInProgress, "leader", 1, []string{"gvg_leave", "gvg_advance"}},
 		{"gvg", gvg.StatusInProgress, "member", 1, []string{}},
 		{"gvg", gvg.StatusCompleted, "member", 1, []string{"gvg_leave"}},
-		{"casino", string(casino.RoomStatusWaiting), "leader", 0, []string{"casino_room_leave", "casino_room_start"}},
+		{"casino", string(casino.RoomStatusWaiting), "leader", 0, []string{"casino_room_leave", "casino_room_start", "casino_room_kick"}},
 		{"casino", string(casino.RoomStatusWaiting), "member", 0, []string{"casino_room_leave"}},
 		{"casino", string(casino.RoomStatusWaiting), "spectator", 0, []string{"casino_room_leave"}},
 	} {

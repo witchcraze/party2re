@@ -1,28 +1,38 @@
 package http
 
 import (
+	"context"
 	"slices"
 
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
-// ActivitySceneData is a whitelisted owned observation; it contains no room
-// secrets, cards, rewards or another character's private state.
+// ActivitySceneData retains owned facts and authorized feature projections;
+// private game facts remain masked by the owning service.
 type ActivitySceneData struct {
 	Activities []playercontext.Activity `json:"activities"`
+	Casino     *CasinoRoomSceneData     `json:"casino,omitempty"`
 }
 
-func (h *Handler) composeActivityScene(result playercontext.Result, response *PlayerContextResponse) (bool, error) {
+func (h *Handler) composeActivityScene(ctx context.Context, result playercontext.Result, response *PlayerContextResponse) (bool, error) {
 	facts := result.Snapshot.ActiveActivities()
 	if len(facts) == 0 {
 		return false, nil
 	}
+	data := ActivitySceneData{Activities: facts}
 	for i := range facts {
+		if facts[i].Kind == "casino" {
+			var err error
+			data.Casino, err = h.casinoActivityData(ctx, result, facts[i])
+			if err != nil {
+				return true, err
+			}
+		}
 		facts[i].Actions = slices.DeleteFunc(facts[i].Actions, func(id string) bool { return !slices.Contains(result.AvailableActions, id) })
 	}
 	titles := map[string]string{"sleep": "休息中", "scheduled": "実行待ち", "party": "パーティー", "pvp": "対戦部屋", "gvg": "ギルド戦", "dungeon": "ダンジョン探索", "challenge": "試練", "casino": "カジノ", "activity_conflict": "活動の状態を確認してください"}
 	kind := result.Snapshot.LocationID
-	scene := SceneSnapshot{Kind: "activity", LocationID: kind, Title: titles[kind], Dialogue: "現在の活動を確認してください。", Data: ActivitySceneData{Activities: facts}, Support: SceneSupport{Observation: "details", Actions: []SceneActionSupport{}}}
+	scene := SceneSnapshot{Kind: "activity", LocationID: kind, Title: titles[kind], Dialogue: "現在の活動を確認してください。", Data: data, Support: SceneSupport{Observation: "details", Actions: []SceneActionSupport{}}}
 	if kind == "activity_conflict" {
 		scene.Kind = "activity_conflict"
 	}

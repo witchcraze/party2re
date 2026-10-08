@@ -160,29 +160,16 @@ func (r contextActivityReaders) read(ctx context.Context, owner, actor string) (
 		return nil, fmt.Errorf("casino activity: %w", err)
 	}
 	if view != nil {
-		a := playercontext.Activity{Kind: "casino", ID: view.Room.ID, Phase: string(view.Room.Status), Round: view.Room.Round, Role: "member", Actions: []string{"casino_room_leave"}}
-		found := false
-		for _, m := range view.Members {
-			if m.CharacterID != actor {
-				continue
-			}
-			found = true
-			if m.IsSpectator {
-				a.Role = "spectator"
-			} else {
-				if view.Room.LeaderCharacterID == actor {
-					a.Role = "leader"
-				}
-				if a.Role == "leader" && view.Room.Round == 0 && view.Room.Status == casino.RoomStatusWaiting {
-					a.Actions = append(a.Actions, "casino_room_start")
-				}
-				if view.Room.Round > 0 && view.Room.Status == casino.RoomStatusInProgress && (view.Room.GameType == casino.GameTypeDoppel || m.Action == "" || m.Action == "待機中") {
-					a.Actions = append(a.Actions, "casino_room_action")
-				}
-			}
+		controls, err := view.Controls(actor)
+		if err != nil {
+			return nil, err
 		}
-		if !found {
-			return nil, casino.ErrRoomViewForbidden
+		a := playercontext.Activity{Kind: "casino", ID: view.Room.ID, Phase: string(view.Room.Status), Round: view.Room.Round, Role: controls.Role, Actions: []string{"casino_room_leave"}}
+		if controls.CanStart {
+			a.Actions = append(a.Actions, "casino_room_start", "casino_room_kick")
+		}
+		if len(controls.Actions) > 0 {
+			a.Actions = append(a.Actions, "casino_room_action")
 		}
 		facts = append(facts, a)
 	}

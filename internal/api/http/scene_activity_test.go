@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/casino"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/playercontext"
@@ -31,7 +32,11 @@ func TestActiveScenesOverrideSelectionAndNeverMutate(t *testing.T) {
 				return facts, readErr
 			}
 			pc := playercontext.NewService(f, f, timer.NewService(nil), playercontext.WithNavigation(store, playercontext.SceneDefinition{ID: "town"}, playercontext.SceneDefinition{ID: "bank", Parent: "town"}), playercontext.WithActivities(read))
-			router := f.router("rescue_request", timer.NewService(nil), WithPlayerContext(pc))
+			opts := []Option{WithPlayerContext(pc)}
+			if kind == "casino" {
+				opts = append(opts, WithCasino(&casinoActivityProjection{view: &casino.RoomView{Room: casino.RoomObservation{RoomSummary: casino.RoomSummary{ID: "active", GameType: casino.GameTypeIndian, Status: casino.RoomStatusInProgress}}, Members: []casino.MemberObservation{{CharacterID: "hero", Action: "fold"}}}}))
+			}
+			router := f.router("rescue_request", timer.NewService(nil), opts...)
 			status, observed := navigationGET(t, router)
 			if status != 200 || observed.Scene.Kind != "activity" || observed.Scene.LocationID != kind || observed.Scene.Subject != nil || observed.Scene.Speaker != nil || observed.Scene.Opponent != nil || observed.Scene.BgimgURL != "" || observed.AvailableActions == nil || observed.OngoingActions == nil || store.writes != 0 || f.executions != 0 {
 				t.Fatalf("active GET: %d %+v", status, observed)

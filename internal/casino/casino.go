@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"math/big"
+	"slices"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -272,7 +273,7 @@ func (s *Service) SpinSlot(ctx context.Context, characterID string, bet int64) (
 			if char.Tired >= 100 {
 				return ErrCharacterExhausted
 			}
-			if bet == 200 && char.JobID != "job-46" && char.JobID != "46" {
+			if !slices.Contains(SlotBetRates(char.JobID), bet) {
 				return ErrJobNotEligibleForSlot200
 			}
 		}

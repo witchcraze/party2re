@@ -61,7 +61,11 @@ The anonymous lobby is a window of at most 100 active rooms containing identity,
 game, speed, capacity, base rate, password requirement, spectator allowance,
 status and participant/spectator counts. It excludes member identities, cards,
 marks, actions, pot and private timestamps. Empty lists are non-null arrays.
-Gateway selection and paging remain separate composition work.
+Gateway ordinary selection uses the existing shared navigation record. Lobby
+pages contain at most 100 rooms from that public window, ordered by room ID,
+with explicit offset/limit and next-page parameters. This is not discovery of
+all rooms or a cross-page snapshot. A selected room exposes only its public
+summary and explicit join/spectate target parameters; it grants no admission.
 
 Detail requires a session and an owned `character_id`, verified again at the
 Casino service boundary, plus actual participant or admitted spectator
@@ -91,11 +95,19 @@ Reads never start, advance, wager or settle.
 
 Gateway activity discovers the owned actor's existing character-room mapping
 through `GetCharacterRoomView`, then applies `GetRoomView` authorization/masking.
-It projects only room ID, role, phase/round and continuation eligibility; full
-game facts remain this feature's reader responsibility. Spectators get leave
-only. Participant turn candidates respect existing Indian/Highlow declared-action
-checks and Doppel's current service behavior. These are unconnected Gateway
-controls until mutation migration; retained REST operations remain available.
+Context adds the authorized masked room view, the actor's coin balance and
+service-owned role/phase controls to the activity facts, including conflicts.
+Actual admission overrides ordinary selection, even if the selector cannot be
+read. Spectators get leave only. Waiting leaders get start and kick targets;
+active participants get game action values, with Low only for more than two
+participants and Doppel marks bounded by participant count. Conflicts or sleep
+retain room facts and leave recovery while suppressing start/kick/play choices.
+If admission/phase/turn eligibility changes between the activity and detail
+reads, context fails rather than presenting mixed facts; retry observation with
+GET. These are unconnected Gateway controls until mutation migration; retained
+REST operations remain available. Lobby menus expose existing account coins,
+one-way exchange rate, prize catalog and job-gated slot rates without executing
+any of those operations.
 
 Detail uses the existing room lock
 for a consistent phase/member snapshot and does not renew activity/TTL. Casino
@@ -107,6 +119,30 @@ Valkey TTL remains the live-state lifetime authority; no cross-store settlement
 guarantee is added. Legacy expiry also applied a sleep penalty
 (`lib/casino.cgi:178–190`); that side effect remains reconciliation work under
 [#949](https://github.com/witchcraze/party2re/issues/949).
+
+### Scoped legacy dispatch reconciliation
+
+This maps the inspected observation/admission/choice paths, not wager or
+settlement formulas. Paths are relative to the original `party2` distribution.
+All operational REST routes remain until their mutation replacements are verified.
+
+| Legacy action / call path | Observation / retained service and transport / remaining owner |
+| --- | --- |
+| `lib/casino.cgi:94–113,195–381`: `つくる`, `インディアン`, `ハイロウ`, `ドッペル` creation selectors | Lobby navigation is separate from `CreateRoom` with explicit `game_type`; retained POST `/characters/{id}/casino/rooms`. Gateway `casino_room_create` candidate is unconnected; adapter belongs to #949. |
+| `lib/casino.cgi:95–96,382–518`: `さんか`, `けんがく`, optional `あいことば` | Public selected summary supplies explicit room targets; `JoinRoom`/`SpectateRoom` enforce password, capacity/balance/fatigue or spectator allowance. Retained join/spectate POST routes; Gateway admission candidates remain unconnected under #949. |
+| `lib/casino.cgi:97–113,523–594`: `＄1/10/50/100/200すろっと` | Read menu uses existing wager rates and Job 46's 200-coin gate. `SpinSlot` and retained POST `/characters/{id}/casino/slot`; Gateway connection remains #949. |
+| `lib/casino.cgi:97–113,596–688`: `こうかん`, `りょうがえ` | Account, prize catalog and `GoldPerCoin` facts; `ExchangePrize`/`ExchangeGoldToCoins` remain prize-exchange/exchange POST operations. Explicit costs/counts/coins are command inputs; reading never exchanges. Gateway adapters remain #949. |
+| `lib/_casino.cgi:10–32,100–111,148–239`: `にげる`, `かいし`, leader `きっく` | Owned admitted activity controls map to `LeaveRoom`/`StartGame`/`KickMember`, retaining leave/start/kick POST routes. Selection/location cannot block leave or ongoing play. Mutation connection and progression-on-leave reconciliation remain #949. |
+| `lib/_casino.cgi:10–32,124–145`: `すくしょ`, `さそう` | No Casino service/route replacements. Screenshot is presentation and invitation is social reconciliation; explicitly deferred to #949/#140. |
+| `lib/casino_indian.cgi:10–33`: `つづける`, `しょうぶ`, `おりる` and forehead masking | `call`/`showdown`/`fold` candidates and authorized masked `GetRoomView`; retained room action POST → `PlayRoomAction` → Indian service. Gateway adapter remains #949. |
+| `lib/casino_highlow.cgi:10–50`: `つづける`, `ハイ`, conditional `ロウ`, `おりる` and own-card/action masking | Current room `call`/`high`/`low`/`fold` candidates and masked view; retained room action POST → Highlow service. Legacy hides continue at maximum bet or insufficient coins; current service accepts all-in calls. That menu/service difference remains #949 reconciliation, not a formula change here. |
+| `lib/casino_doppel.cgi:10–99`: generated marks and own-mark masking | Participant-count mark choices and masked view; retained room action POST → Doppel service. Legacy clears declarations on start and stores mark changes in the card field, permitting reselection before all cards are selected. Go stores marks in Action too, so its viewer masks other mark actions. Waiting entrants' eligibility remains existing service behavior for #949 reconciliation. |
+| `lib/casino.cgi:118–190`, game `member_html`, `_casino.cgi:48–97` | Lobby/selected summary and authorized activity detail replace observation through context, without advancing or settling. Idle expiry remains feature-owned; its legacy sleep penalty is deferred to #949. |
+
+The former OpenAPI singles-play Highlow/Doppel POST paths had no registered
+handlers and are removed along with their fictional solo catalog entries.
+Both games use explicit room creation/start/action commands. No new handler is
+invented; Chapel blessing remains Chapel's responsibility.
 
 ### Writer-side persistence and partial failure boundary
 
@@ -182,7 +218,9 @@ Because Valkey operations are not cross-key transactional here:
 - **Wager & Selection**:
   - Bet rate is fixed (minimum 10 coins).
   - Coin deduction occurs on a player's **first** mark selection in the round.
-  - Players may freely change their selected mark during the round without additional coin deductions.
+  - Active players may change their selected mark before the other players
+    finish selecting, without another coin deduction. Legacy clears declarations
+    at start and changes only the card field (`lib/casino_doppel.cgi:41–99`).
 - **Showdown Resolution**:
   - Triggers immediately when all active participants have chosen a mark.
   - The room leader is the "親" (dealer / target).

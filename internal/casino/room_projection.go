@@ -3,6 +3,8 @@ package casino
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -100,6 +102,7 @@ func (s *Service) GetRoomView(ctx context.Context, roomID, playerID, characterID
 		for _, m := range detail.Members {
 			view.Members = append(view.Members, MemberObservation{CharacterID: m.CharacterID, CharacterName: m.CharacterName, IsSpectator: m.IsSpectator, Action: m.Action, Card: m.Card, CardDisplay: m.CardDisplay})
 		}
+		slices.SortFunc(view.Members, func(a, b MemberObservation) int { return strings.Compare(a.CharacterID, b.CharacterID) })
 		return nil
 	})
 	return view, err

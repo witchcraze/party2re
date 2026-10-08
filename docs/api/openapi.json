@@ -82,6 +82,9 @@
             },
             "minItems": 1,
             "type": "array"
+          },
+          "casino": {
+            "$ref": "#/components/schemas/CasinoRoomSceneData"
           }
         },
         "required": [
@@ -818,6 +821,114 @@
         ],
         "type": "object"
       },
+      "CasinoLobbyRoom": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_spectators": {
+            "type": "boolean"
+          },
+          "game_type": {
+            "enum": [
+              "indian",
+              "highlow",
+              "doppel"
+            ],
+            "type": "string"
+          },
+          "has_password": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "max_players": {
+            "maximum": 8,
+            "minimum": 2,
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 50,
+            "type": "string"
+          },
+          "participant_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "rate": {
+            "type": "integer"
+          },
+          "select_params": {
+            "$ref": "#/components/schemas/SelectedSceneSubject"
+          },
+          "spectator_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "speed": {
+            "enum": [
+              12,
+              18,
+              28
+            ],
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "waiting",
+              "in_progress",
+              "disbanded"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "game_type",
+          "speed",
+          "max_players",
+          "rate",
+          "has_password",
+          "allow_spectators",
+          "status",
+          "participant_count",
+          "spectator_count",
+          "select_params"
+        ],
+        "type": "object"
+      },
+      "CasinoLobbySceneData": {
+        "additionalProperties": false,
+        "description": "Offset pages within the existing public window of at most 100 active rooms, sorted by ID. No snapshot or discovery beyond that window is promised. Reading does not admit the actor; service-owned idle expiry and its errors still apply.",
+        "properties": {
+          "menu": {
+            "$ref": "#/components/schemas/CasinoMenu"
+          },
+          "page": {
+            "$ref": "#/components/schemas/ScenePage"
+          },
+          "parent": {
+            "const": "town"
+          },
+          "rooms": {
+            "items": {
+              "$ref": "#/components/schemas/CasinoLobbyRoom"
+            },
+            "type": "array"
+          },
+          "window_limit": {
+            "const": 100
+          }
+        },
+        "required": [
+          "parent",
+          "menu",
+          "rooms",
+          "page",
+          "window_limit"
+        ],
+        "type": "object"
+      },
       "CasinoMemberObservation": {
         "additionalProperties": false,
         "properties": {
@@ -850,6 +961,110 @@
           "is_spectator",
           "action",
           "card"
+        ],
+        "type": "object"
+      },
+      "CasinoMenu": {
+        "additionalProperties": false,
+        "properties": {
+          "coins": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "gold_per_coin": {
+            "const": 20
+          },
+          "prizes": {
+            "items": {
+              "$ref": "#/components/schemas/CasinoPrize"
+            },
+            "type": "array"
+          },
+          "slot_bet_rates": {
+            "items": {
+              "enum": [
+                1,
+                10,
+                50,
+                100,
+                200
+              ],
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "coins",
+          "gold_per_coin",
+          "slot_bet_rates",
+          "prizes"
+        ],
+        "type": "object"
+      },
+      "CasinoPrize": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "enum": [
+              1,
+              2,
+              3
+            ],
+            "type": "integer"
+          },
+          "cost_coins": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "item_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cost_coins",
+          "item_id",
+          "item_name",
+          "category"
+        ],
+        "type": "object"
+      },
+      "CasinoRoomControls": {
+        "additionalProperties": false,
+        "description": "Service-owned role/phase candidates. Actions are room-game action values (Doppel marks included); actual commands revalidate all prerequisites. Spectators have no playable actions; conflict and sleep suppress play/start/kick.",
+        "properties": {
+          "actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "can_start": {
+            "type": "boolean"
+          },
+          "kick_targets": {
+            "items": {
+              "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "role": {
+            "enum": [
+              "leader",
+              "member",
+              "spectator"
+            ]
+          }
+        },
+        "required": [
+          "role",
+          "can_start",
+          "actions",
+          "kick_targets"
         ],
         "type": "object"
       },
@@ -948,6 +1163,40 @@
         ],
         "type": "object"
       },
+      "CasinoRoomParams": {
+        "additionalProperties": false,
+        "properties": {
+          "room_id": {
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "room_id"
+        ],
+        "type": "object"
+      },
+      "CasinoRoomSceneData": {
+        "additionalProperties": false,
+        "properties": {
+          "coins": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "controls": {
+            "$ref": "#/components/schemas/CasinoRoomControls"
+          },
+          "view": {
+            "$ref": "#/components/schemas/CasinoRoomView"
+          }
+        },
+        "required": [
+          "view",
+          "controls",
+          "coins"
+        ],
+        "type": "object"
+      },
       "CasinoRoomSummary": {
         "additionalProperties": false,
         "properties": {
@@ -1036,6 +1285,42 @@
         "required": [
           "room",
           "members"
+        ],
+        "type": "object"
+      },
+      "CasinoSelectedSceneData": {
+        "additionalProperties": false,
+        "description": "Public room summary; selecting is not joining or spectating. No admitted/private detail is exposed. Password and spectator allowance are enforced on explicit commands.",
+        "properties": {
+          "join_params": {
+            "$ref": "#/components/schemas/CasinoRoomParams"
+          },
+          "menu": {
+            "$ref": "#/components/schemas/CasinoMenu"
+          },
+          "parent": {
+            "const": "town"
+          },
+          "room": {
+            "$ref": "#/components/schemas/CasinoRoomSummary"
+          },
+          "spectate_params": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CasinoRoomParams"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "parent",
+          "menu",
+          "room",
+          "join_params",
+          "spectate_params"
         ],
         "type": "object"
       },
@@ -1434,7 +1719,8 @@
                         "shop_item",
                         "shop_accessory",
                         "home_inbox",
-                        "home_outbox"
+                        "home_outbox",
+                        "casino"
                       ],
                       "type": "string"
                     }
@@ -1469,14 +1755,15 @@
                   "additionalProperties": false,
                   "properties": {
                     "target_id": {
-                      "description": "A public Home character ID or item ID available in the owned actor shop catalog, validated by the selected adapter.",
+                      "description": "Public Home, available shop item or Casino room ID, validated by the selected adapter. Room selection never grants admission.",
                       "pattern": "^[a-zA-Z0-9_-]{1,128}$",
                       "type": "string"
                     },
                     "target_kind": {
                       "enum": [
                         "item",
-                        "home"
+                        "home",
+                        "room"
                       ],
                       "type": "string"
                     }
@@ -1549,7 +1836,8 @@
                         "shop_item",
                         "shop_accessory",
                         "home_inbox",
-                        "home_outbox"
+                        "home_outbox",
+                        "casino"
                       ],
                       "type": "string"
                     },
@@ -2132,6 +2420,264 @@
                   "required": [
                     "room_id",
                     "action"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "casino_exchange"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "coins": {
+                      "format": "int64",
+                      "maximum": 9223372036854775807,
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "coins"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "casino_prize_exchange"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "cost_coins": {
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "count": {
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "cost_coins",
+                    "count"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "casino_room_join"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "password": {
+                      "type": "string"
+                    },
+                    "room_id": {
+                      "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "room_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "casino_room_spectate"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "password": {
+                      "type": "string"
+                    },
+                    "room_id": {
+                      "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "room_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "casino_room_create"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "allow_spectators": {
+                      "type": "boolean"
+                    },
+                    "game_type": {
+                      "enum": [
+                        "indian",
+                        "highlow",
+                        "doppel"
+                      ]
+                    },
+                    "max_players": {
+                      "maximum": 8,
+                      "minimum": 2,
+                      "type": "integer"
+                    },
+                    "name": {
+                      "maxLength": 50,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "password": {
+                      "type": "string"
+                    },
+                    "rate": {
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "speed": {
+                      "enum": [
+                        12,
+                        18,
+                        28
+                      ],
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "game_type",
+                    "speed",
+                    "max_players",
+                    "rate",
+                    "allow_spectators"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "casino_room_kick"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "room_id": {
+                      "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+                      "type": "string"
+                    },
+                    "target_character_id": {
+                      "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "room_id",
+                    "target_character_id"
                   ],
                   "type": "object"
                 }
@@ -4415,6 +4961,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/ShopCatalogSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CasinoLobbySceneData"
                     }
                   ]
                 }
@@ -4447,6 +4996,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/ShopProductSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CasinoSelectedSceneData"
                     }
                   ]
                 }
@@ -4620,6 +5172,91 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/ActivitySceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "casino"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/CasinoLobbySceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "subject"
+                },
+                "location_id": {
+                  "const": "casino"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/CasinoSelectedSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "activity"
+                },
+                "location_id": {
+                  "const": "casino"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "required": [
+                    "casino"
+                  ]
                 }
               }
             }
@@ -9035,109 +9672,6 @@
         ]
       }
     },
-    "/characters/{id}/casino/doppel": {
-      "post": {
-        "operationId": "playCasinoDoppel",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "bet": {
-                    "type": "integer"
-                  },
-                  "player_mark": {
-                    "type": "string"
-                  },
-                  "pool_size": {
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "bet",
-                  "pool_size",
-                  "player_mark"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Doppelganger game result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Play casino Doppelganger guessing game",
-        "tags": [
-          "Casino"
-        ]
-      }
-    },
     "/characters/{id}/casino/exchange": {
       "post": {
         "operationId": "exchangeCasinoCoins",
@@ -9246,105 +9780,6 @@
           }
         ],
         "summary": "Exchange gold to casino coins (one-way)",
-        "tags": [
-          "Casino"
-        ]
-      }
-    },
-    "/characters/{id}/casino/highlow": {
-      "post": {
-        "operationId": "playCasinoHighLow",
-        "parameters": [
-          {
-            "description": "Character ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "bet": {
-                    "type": "integer"
-                  },
-                  "guess": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "bet",
-                  "guess"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "High \u0026 Low game result"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad request - invalid input or JSON syntax"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized - missing or invalid session token"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden - player does not own requested character or lacks permission"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Play casino High \u0026 Low game",
         "tags": [
           "Casino"
         ]

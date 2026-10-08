@@ -354,9 +354,15 @@ character ownership; the `character_id` query selects an owned character rather
 than supplying a trusted viewer identity. Anonymous detail is 401 and nonmember
 detail is 403. Projections whitelist fields and follow the
 [game-specific visibility contract](../design/casino.md#observation-and-visibility).
-The existing REST lobby is a window of at most 100 rooms; Gateway selection,
-paging and active-scene composition still require adapters. These primitives
-do not retire routes or connect Casino Gateway commands.
+The lobby adapter presents offset pages within the existing public window of
+at most 100 rooms, ordered by ID, with explicit selection and next-page params.
+Selected nonmember rooms expose lobby summaries only. Actual admitted activity
+adds masked room/member facts, the actor's coins and role/phase game choices;
+conflicts preserve these facts while suppressing start/kick/play. Required read
+errors or changed admission/phase/turn eligibility fail the whole observation
+and use the shared GET-only refresh recovery contract. GET does not renew
+navigation or room lifetime; lobby reads retain Casino-owned idle expiry with
+propagated errors. No operational Casino route is retired or mutation connected.
 
 Select one primary pageable collection per scene. Reuse limit 20 by default and
 maximum 100, with keyset cursors where the owning service supports them and
@@ -415,8 +421,8 @@ authority; it makes no combat, wager or settlement formula parity claim.
 | `lib/quest.cgi:189–199,1047–1075`: `つくる`, `さんか`, `けんがく`; `パーティー`, `とうぎじょう`, `ギルドバトル`, `ダンジョン`, `チャレンジ` selectors | Existing Party.CreateParty/JoinParty, PvP/GvG.CreateRoom/JoinRoom, Dungeon.StartPartyExpedition and Challenge.StartPartySession remain behind registered REST routes. Observation reads existing membership/run services. Full entry, spectator and category selection migrations belong to #948; selection alone grants no admission. |
 | Party preparation / departure | Public Party.GetActiveParty supplies verified membership. Candidate `party_ready`/`party_start`/`party_leave` correspond to SetReady/StartPartyAdventure/LeaveParty and retained `/parties/{id}` ready/start/leave routes; mutation connection remains #948. |
 | `lib/vs_player.cgi:32–41`, `vs_guild.cgi:31–38`: `かいし`, pre-round `しらべる` and PvP `ぱーてぃー` | GetCharacterRoom verifies actor membership; leader start/advance and phase-legal leave/team candidates correspond to existing PvP/GvG services and retained character room routes. Detail/party inspection and full mutation migration remain #948. |
-| `lib/_casino.cgi:10–32,100–111`: `にげる`, `すくしょ`, `かいし`, `さそう`, leader `きっく`; delegated game actions | Casino.GetCharacterRoomView reuses owned admitted GetRoomView. Leave/start/turn candidates refer to LeaveRoom/StartGame/PlayRoomAction and retained character room routes. Kick/admission/full detail composition remain #1055/#949; invitation/screenshot have no Casino service replacements and remain explicit #949 reconciliation. |
-| `lib/casino_indian.cgi:10–16`: `つづける`, `しょうぶ`, `おりる`; `casino_highlow.cgi:10–27`: `つづける`, `ハイ`, conditional `ロウ`, `おりる`; `casino_doppel.cgi:10–15`: generated marks | Existing PlayRoomAction delegates to each game service. Activity exposes turn eligibility only; game-specific parameter choices and Gateway mutation connection remain #1055/#949. Existing REST action route stays available. |
+| `lib/_casino.cgi:10–32,100–111`: `にげる`, `すくしょ`, `かいし`, `さそう`, leader `きっく`; delegated game actions | Casino.GetCharacterRoomView reuses owned admitted GetRoomView; context composes masked detail and role/phase choices. Leave/start/kick/turn candidates refer to retained service operations; mutation connection remains #949. Invitation/screenshot have no Casino service replacements and remain explicit #949/#140 reconciliation. |
+| `lib/casino_indian.cgi:10–16`: `つづける`, `しょうぶ`, `おりる`; `casino_highlow.cgi:10–27`: `つづける`, `ハイ`, conditional `ロウ`, `おりる`; `casino_doppel.cgi:10–15`: generated marks | Existing PlayRoomAction delegates to each game service. Context supplies service-owned game choices and visibility; legacy/current menu differences are recorded in the [scoped Casino mapping](../design/casino.md#scoped-legacy-dispatch-reconciliation). Gateway mutation connection remains #949; existing REST action route stays available. |
 | `lib/vs_dungeon.cgi:33–48`: leader initial `すすむ`, `にし`, `きた`, `みなみ`, `ひがし`, `ちず`, treasure `しらべる` | Owned GetActiveExpedition supplies phase/floor; Move and Escape remain existing REST operations and unconnected continuation candidates. Current StartPartyExpedition/Move bundle initialization/tile resolution; separate initial advance/treasure observation is not a verified replacement. Map, treasure and per-turn battle/action reconciliation remain #948. |
 | `lib/vs_challenge.cgi:20–46`: treasure `しらべる`, phase-dependent `すすむ` | Owned GetActiveSession supplies phase/round; AdvanceRound remains the retained character challenge advance operation and unconnected candidate. Treasure/battle/party detail reconciliation remains #948. |
 | Inherited `lib/_skill.cgi:22–29,78–79,282–317`: spectator `ささやき`/`にげる`/`すくしょ`, generated job/custom skills and `すとっく`, then `add_battle_action` | Shared member/spectator dispatch is inspected only to establish activity authority. No generated skill menu or per-turn battle command is replaced here; skill/stock/combat and battle spectator reconciliation remain #948, screenshot/social presentation #949/#140. Existing feature and battle operations stay registered. |

@@ -21,6 +21,18 @@ func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, 
 		}},
 		{ID: "home_inbox", Parent: "home", Pageable: true, CursorPageable: true},
 		{ID: "home_outbox", Parent: "home", Pageable: true, CursorPageable: true},
+		{ID: "casino", Parent: "town", SubjectKind: "room", Pageable: true, SubjectAvailable: func(ctx context.Context, _, target string) (bool, error) {
+			rooms, err := misc.casino.ListRooms(ctx)
+			if err != nil {
+				return false, err
+			}
+			for _, room := range rooms {
+				if room.ID == target {
+					return true, nil
+				}
+			}
+			return false, nil
+		}},
 	}
 	for _, kind := range []shop.ShopType{shop.ShopTypeWeapon, shop.ShopTypeArmor, shop.ShopTypeItem, shop.ShopTypeAccessory} {
 		scenes = append(scenes, playercontext.SceneDefinition{
