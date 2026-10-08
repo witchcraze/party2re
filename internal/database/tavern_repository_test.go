@@ -62,7 +62,41 @@ func TestTavernRepository_Database(t *testing.T) {
 		t.Errorf("unexpected fetched status: %+v", fetchedStatus)
 	}
 
-	// 3. Delivery reservation operations
+	// 3. Reset fullness on existing status: preserves meals, gold spent, and last eaten timestamp
+	if err := repo.ResetFullness(ctx, char.ID); err != nil {
+		t.Fatalf("ResetFullness failed: %v", err)
+	}
+	afterResetStatus, err := repo.GetCharacterStatus(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetCharacterStatus after reset failed: %v", err)
+	}
+	if afterResetStatus.IsFull {
+		t.Errorf("expected is_full to be false after ResetFullness")
+	}
+	if afterResetStatus.TotalMealsEaten != 1 || afterResetStatus.TotalGoldSpent != 400 {
+		t.Errorf("expected history preserved (1 meal, 400 gold), got: %+v", afterResetStatus)
+	}
+	if afterResetStatus.LastEatenAt == nil || !afterResetStatus.LastEatenAt.Equal(now) {
+		t.Errorf("expected last_eaten_at preserved (%v), got: %v", now, afterResetStatus.LastEatenAt)
+	}
+
+	// 4. Reset fullness on missing status: creates record with is_full=false and zero counters
+	char2, err := database.CreateTestCharacter(ctx, db, "TavernTester2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.ResetFullness(ctx, char2.ID); err != nil {
+		t.Fatalf("ResetFullness on missing status failed: %v", err)
+	}
+	char2Status, err := repo.GetCharacterStatus(ctx, char2.ID)
+	if err != nil {
+		t.Fatalf("GetCharacterStatus for char2 failed: %v", err)
+	}
+	if char2Status.IsFull || char2Status.TotalMealsEaten != 0 || char2Status.TotalGoldSpent != 0 || char2Status.LastEatenAt != nil {
+		t.Errorf("unexpected initialized status for char2: %+v", char2Status)
+	}
+
+	// 5. Delivery reservation operations
 	deliv := tavern.DeliveryReservation{
 		CharacterID: char.ID,
 		ItemID:      "tavern_omelet_rice",

@@ -92,6 +92,19 @@ func (r *TavernRepository) UpsertCharacterStatus(ctx context.Context, status tav
 	return err
 }
 
+func (r *TavernRepository) ResetFullness(ctx context.Context, characterID string) error {
+	now := time.Now().UTC()
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
+		INSERT INTO tavern_character_status (
+			character_id, is_full, last_eaten_at, total_meals_eaten, total_gold_spent, updated_at
+		) VALUES (?, false, NULL, 0, 0, ?)
+		ON DUPLICATE KEY UPDATE
+			is_full = false,
+			updated_at = VALUES(updated_at)
+	`, characterID, now)
+	return err
+}
+
 func (r *TavernRepository) GetDelivery(ctx context.Context, characterID string) (tavern.DeliveryReservation, error) {
 	var (
 		charID    string

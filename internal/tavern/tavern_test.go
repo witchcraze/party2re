@@ -41,7 +41,9 @@ type mockTavernRepo struct {
 	statuses          map[string]tavern.TavernCharacterStatus
 	deliveries        map[string]tavern.DeliveryReservation
 	getStatusErr      error
+	resetFullnessErr  error
 	upsertStatusCalls int
+	resetStatusCalls  int
 }
 
 func newMockTavernRepo() *mockTavernRepo {
@@ -71,6 +73,28 @@ func (m *mockTavernRepo) UpsertCharacterStatus(ctx context.Context, status taver
 		return err
 	}
 	m.statuses[status.CharacterID] = status
+	return nil
+}
+
+func (m *mockTavernRepo) ResetFullness(ctx context.Context, characterID string) error {
+	m.resetStatusCalls++
+	if m.resetFullnessErr != nil {
+		return m.resetFullnessErr
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s, ok := m.statuses[characterID]
+	if !ok {
+		s = tavern.TavernCharacterStatus{
+			CharacterID: characterID,
+			IsFull:      false,
+		}
+	} else {
+		s.IsFull = false
+	}
+	s.UpdatedAt = time.Now().UTC()
+	m.statuses[characterID] = s
 	return nil
 }
 
@@ -515,17 +539,17 @@ func TestService_ResetFullness(t *testing.T) {
 		t.Errorf("expected counters preserved, got meals=%d gold=%d", st.TotalMealsEaten, st.TotalGoldSpent)
 	}
 
-	// 3. Storage error: must propagate error without UPSERT or overwriting history
+	// 3. Storage error: must propagate error without mutating status or overwriting history
 	sentinelErr := errors.New("sentinel storage error")
-	tavernRepo.getStatusErr = sentinelErr
-	callsBefore := tavernRepo.upsertStatusCalls
+	tavernRepo.resetFullnessErr = sentinelErr
+	callsBefore := tavernRepo.resetStatusCalls
 	if err := svc.ResetFullness(ctx, charID); !errors.Is(err, sentinelErr) {
 		t.Fatalf("expected sentinelErr, got %v", err)
 	}
-	if tavernRepo.upsertStatusCalls != callsBefore {
-		t.Errorf("expected no UpsertCharacterStatus call on error, got %d calls", tavernRepo.upsertStatusCalls-callsBefore)
+	if tavernRepo.resetStatusCalls != callsBefore+1 {
+		t.Errorf("expected ResetFullness called once on error, got %d", tavernRepo.resetStatusCalls-callsBefore)
 	}
-	tavernRepo.getStatusErr = nil
+	tavernRepo.resetFullnessErr = nil
 
 	// Verify history remained intact
 	st, err = tavernRepo.GetCharacterStatus(ctx, charID)
@@ -536,15 +560,15 @@ func TestService_ResetFullness(t *testing.T) {
 		t.Errorf("expected historical fields intact, got meals=%d gold=%d", st.TotalMealsEaten, st.TotalGoldSpent)
 	}
 
-	// 4. Canceled context: must propagate without UPSERT
+	// 4. Canceled context: must propagate without mutating status
 	canceledCtx, cancel := context.WithCancel(ctx)
 	cancel()
-	callsBefore = tavernRepo.upsertStatusCalls
+	callsBefore = tavernRepo.resetStatusCalls
 	if err := svc.ResetFullness(canceledCtx, charID); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}
-	if tavernRepo.upsertStatusCalls != callsBefore {
-		t.Errorf("expected no UpsertCharacterStatus call on cancel, got %d calls", tavernRepo.upsertStatusCalls-callsBefore)
+	if tavernRepo.resetStatusCalls != callsBefore+1 {
+		t.Errorf("expected ResetFullness called once on cancel, got %d", tavernRepo.resetStatusCalls-callsBefore)
 	}
 
 	// 5. Missing status default: nonexistent record initializes with IsFull=false
