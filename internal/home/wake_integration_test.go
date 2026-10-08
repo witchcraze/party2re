@@ -57,6 +57,13 @@ func (r *failingTavernStatusReader) GetCharacterStatus(ctx context.Context, id s
 	return r.TavernRepository.GetCharacterStatus(ctx, id)
 }
 
+func (r *failingTavernStatusReader) ResetFullness(ctx context.Context, id string) error {
+	if r.getErr != nil {
+		return r.getErr
+	}
+	return r.TavernRepository.ResetFullness(ctx, id)
+}
+
 func TestWake_SQLRecovery(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" || os.Getenv("PARTY2_VALKEY_ADDR") == "" {
 		t.Skip("SQL and Valkey integration environment is not configured")

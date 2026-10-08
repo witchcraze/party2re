@@ -89,6 +89,7 @@ type OrderResult struct {
 type Repository interface {
 	GetCharacterStatus(ctx context.Context, characterID string) (TavernCharacterStatus, error)
 	UpsertCharacterStatus(ctx context.Context, status TavernCharacterStatus) error
+	ResetFullness(ctx context.Context, characterID string) error
 	GetDelivery(ctx context.Context, characterID string) (DeliveryReservation, error)
 	SaveDelivery(ctx context.Context, delivery DeliveryReservation) error
 	DeleteDelivery(ctx context.Context, characterID string) error
@@ -207,11 +208,5 @@ func (s *Service) ResetFullness(ctx context.Context, characterID string) error {
 		return ErrInvalidCharacterID
 	}
 
-	status, err := s.repo.GetCharacterStatus(ctx, charID)
-	if err != nil {
-		return err
-	}
-	status.IsFull = false
-	status.UpdatedAt = time.Now().UTC()
-	return s.repo.UpsertCharacterStatus(ctx, status)
+	return s.repo.ResetFullness(ctx, charID)
 }
