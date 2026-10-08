@@ -3791,6 +3791,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/HomeMailboxSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ShopCatalogSceneData"
                     }
                   ]
                 }
@@ -3820,6 +3823,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/HomeMailboxSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ShopProductSceneData"
                     }
                   ]
                 }
@@ -3899,9 +3905,79 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "enum": [
+                    "shop_weapon",
+                    "shop_armor",
+                    "shop_item",
+                    "shop_accessory"
+                  ]
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/ShopCatalogSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "subject"
+                },
+                "location_id": {
+                  "enum": [
+                    "shop_weapon",
+                    "shop_armor",
+                    "shop_item",
+                    "shop_accessory"
+                  ]
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/ShopProductSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
           }
         ],
-        "description": "Registered selected scene. Home details use public/owned projections; other initial facilities expose controls. GET never writes or renews selection.",
+        "description": "Registered selected scene. Home and Shop use typed details; Bank exposes controls. GET never writes or renews selection.",
         "properties": {
           "bgimg": {
             "maxLength": 128,
@@ -4112,6 +4188,280 @@
         "required": [
           "character_id",
           "ready"
+        ],
+        "type": "object"
+      },
+      "ShopCatalogSceneData": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ShopProduct"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "npc": {
+            "$ref": "#/components/schemas/ShopNPCObservation"
+          },
+          "page": {
+            "$ref": "#/components/schemas/ShopScenePage"
+          },
+          "parent": {
+            "const": "town"
+          },
+          "quantity": {
+            "$ref": "#/components/schemas/ShopQuantityBounds"
+          },
+          "shop_type": {
+            "enum": [
+              "weapon",
+              "armor",
+              "item",
+              "accessory"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 128,
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent",
+          "title",
+          "shop_type",
+          "npc",
+          "quantity",
+          "items",
+          "page"
+        ],
+        "type": "object"
+      },
+      "ShopNPCObservation": {
+        "additionalProperties": false,
+        "properties": {
+          "dialogue": {
+            "maxLength": 1024,
+            "type": "string"
+          },
+          "npc_name": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "secret_shop_hint": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "shop_type": {
+            "enum": [
+              "weapon",
+              "armor",
+              "item",
+              "accessory"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "shop_type",
+          "npc_name",
+          "dialogue"
+        ],
+        "type": "object"
+      },
+      "ShopProduct": {
+        "additionalProperties": false,
+        "description": "Exact GetCatalog facts. Purchase ID is explicit, independent of mutable navigation; quantity must be supplied separately. Presence means current catalog membership, not a funds/capacity guarantee.",
+        "properties": {
+          "base_price": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "id": {
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "purchase_params": {
+            "$ref": "#/components/schemas/ShopPurchaseParams"
+          },
+          "retail_price": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "select_params": {
+            "additionalProperties": false,
+            "properties": {
+              "target_id": {
+                "maxLength": 128,
+                "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+                "type": "string"
+              },
+              "target_kind": {
+                "const": "item"
+              }
+            },
+            "required": [
+              "target_kind",
+              "target_id"
+            ],
+            "type": "object"
+          },
+          "slot": {
+            "enum": [
+              "main-hand",
+              "off-hand",
+              "body",
+              "accessory"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "base_price",
+          "retail_price",
+          "select_params",
+          "purchase_params"
+        ],
+        "type": "object"
+      },
+      "ShopProductSceneData": {
+        "additionalProperties": false,
+        "properties": {
+          "npc": {
+            "$ref": "#/components/schemas/ShopNPCObservation"
+          },
+          "parent": {
+            "const": "town"
+          },
+          "product": {
+            "$ref": "#/components/schemas/ShopProduct"
+          },
+          "quantity": {
+            "$ref": "#/components/schemas/ShopQuantityBounds"
+          },
+          "shop_type": {
+            "enum": [
+              "weapon",
+              "armor",
+              "item",
+              "accessory"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 128,
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent",
+          "title",
+          "shop_type",
+          "npc",
+          "quantity",
+          "product"
+        ],
+        "type": "object"
+      },
+      "ShopPurchaseParams": {
+        "additionalProperties": false,
+        "properties": {
+          "item_definition_id": {
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_definition_id"
+        ],
+        "type": "object"
+      },
+      "ShopQuantityBounds": {
+        "additionalProperties": false,
+        "properties": {
+          "maximum": {
+            "const": 9999,
+            "type": "integer"
+          },
+          "minimum": {
+            "const": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minimum",
+          "maximum"
+        ],
+        "type": "object"
+      },
+      "ShopScenePage": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "mode": {
+            "const": "offset"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "destination": {
+                    "enum": [
+                      "shop_weapon",
+                      "shop_armor",
+                      "shop_item",
+                      "shop_accessory"
+                    ],
+                    "type": "string"
+                  },
+                  "limit": {
+                    "maximum": 100,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "offset": {
+                    "maximum": 1000000,
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "destination",
+                  "offset",
+                  "limit"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "offset": {
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode",
+          "offset",
+          "limit",
+          "next"
         ],
         "type": "object"
       },
@@ -4938,7 +5288,7 @@
     },
     "/api/v1/characters/{id}/actions": {
       "post": {
-        "description": "Authenticated dispatch with strict parameters and uncached entry/sleep checks. Connected commands: bank_deposit/bank_withdraw with required signed 64-bit integer amount call Deposit/Withdraw; adventure_start with required string stage_id calls StartStage; rescue_request with required string reason calls EmergencyRescue, including during sleep/cooldown and unfinished work; home_sleep with optional target_home_id calls Sleep; home_wake with no inputs calls Wake. Home sleep is free and accepts dead/fatigued actors under existing service rules; omitted/empty target_home_id retains the actor's own-home default, while a different target is a destination only. Ordinary commands remain blocked during sleep and pending recovery. Early Wake reaches the service and returns HOME_STILL_SLEEPING without recovering; elapsed duration still requires explicit Wake to run recovery hooks, restore HP/MP/fatigue and clear recovery. If a mandatory recovery hook or timer cleanup fails, Wake returns EXECUTION_FAILED without clearing pending recovery. GET offers Wake only when ready; awake Wake remains ACTION_UNAVAILABLE. Empty stage_id retains the starter-stage default; empty/blank reason is rejected by Rescue. Other catalog IDs return 501 until connected. Known success/rejection refreshes the shared context; unexpected execution failure returns no context and does not guarantee rollback or safe replay. No idempotency guarantee. Never automatically replay POST to recover a failed observation. Navigation commands scene_enter/scene_select/scene_page/scene_back replace one owned selection record with a seven-day TTL, without gameplay effects. Back clears a subject first, otherwise selects the registered parent. Missing/expired selection defaults to town. Selected product availability uses the existing Shop catalog. Facility rendering retains the initial town contract until the scene composer is delivered.",
+        "description": "Authenticated dispatch with strict parameters and uncached entry/sleep checks. Connected commands: bank_deposit/bank_withdraw with required signed 64-bit integer amount call Deposit/Withdraw; adventure_start with required string stage_id calls StartStage; rescue_request with required string reason calls EmergencyRescue, including during sleep/cooldown and unfinished work; home_sleep with optional target_home_id calls Sleep; home_wake with no inputs calls Wake. Home sleep is free and accepts dead/fatigued actors under existing service rules; omitted/empty target_home_id retains the actor's own-home default, while a different target is a destination only. Ordinary commands remain blocked during sleep and pending recovery. Early Wake reaches the service and returns HOME_STILL_SLEEPING without recovering; elapsed duration still requires explicit Wake to run recovery hooks, restore HP/MP/fatigue and clear recovery. If a mandatory recovery hook or timer cleanup fails, Wake returns EXECUTION_FAILED without clearing pending recovery. GET offers Wake only when ready; awake Wake remains ACTION_UNAVAILABLE. Empty stage_id retains the starter-stage default; empty/blank reason is rejected by Rescue. Other catalog IDs return 501 until connected. Known success/rejection refreshes the shared context; unexpected execution failure returns no context and does not guarantee rollback or safe replay. No idempotency guarantee. Never automatically replay POST to recover a failed observation. Navigation commands scene_enter/scene_select/scene_page/scene_back replace one owned selection record with a seven-day TTL, without gameplay effects. Back clears a subject first, otherwise selects the registered parent. Missing/expired selection defaults to town. Selected product availability uses the existing Shop catalog. Refresh uses the same typed selected-scene composer as GET, including Home and Shop details; Shop mutations remain unconnected.",
         "operationId": "executeCharacterAction",
         "parameters": [
           {
@@ -4959,7 +5309,7 @@
               }
             }
           },
-          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only required non-null string stage_id; rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it. bank_deposit/bank_withdraw accept only required non-null integer amount (int64); missing/null/wrong-type/out-of-range inputs are rejected before execution, while typed nonpositive or excessive values reach Bank service validation. Navigation params are strict: scene_enter requires destination from town/bank/home/shop_weapon/shop_armor/shop_item/shop_accessory; scene_select requires target_kind item and an available catalog target_id; scene_page requires matching destination and offset 0..1000000, with optional limit 1..100 (default 20), only on shop lists with no selected subject. scene_back accepts omitted params or an empty object. Null fields and arbitrary targets are rejected.",
+          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only required non-null string stage_id; rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it. bank_deposit/bank_withdraw accept only required non-null integer amount (int64); missing/null/wrong-type/out-of-range inputs are rejected before execution, while typed nonpositive or excessive values reach Bank service validation. Navigation params are strict: scene_enter requires a registered destination; scene_select requires the registered target_kind and an available target_id. scene_page requires matching destination and exactly one of offset 0..1000000 or cursor, with optional limit 1..100 (default 20), only on a pageable list with no selected subject. Only Home inbox/outbox accept cursors; Town and Shops are offset-only. scene_back accepts omitted params or an empty object. Null fields and arbitrary targets are rejected.",
           "required": true
         },
         "responses": {
@@ -4971,7 +5321,7 @@
                 }
               }
             },
-            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed scene.navigation reports unavailable without substituting a fallback."
+            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback."
           },
           "400": {
             "content": {
@@ -5111,7 +5461,7 @@
     },
     "/api/v1/characters/{id}/context": {
       "get": {
-        "description": "Shares selected-scene composition with post-command refresh. Observes ordinary navigation without writes or TTL renewal. Expired selection is town; disappeared subjects use selection_unavailable. Initial facility and subject payloads provide controls only; facility read replacements are separate. Offered commands include strict params_schema and explicit params_template values.",
+        "description": "Shares selected-scene composition with post-command refresh. Observes ordinary navigation without writes or TTL renewal. Expired selection is town; disappeared subjects use selection_unavailable. Home and the four ordinary Shops provide typed details; Bank provides controls. Shop catalogs use existing GetCatalog eligibility/prices and offset-only pages (default 20, max 100); product detail supplies explicit purchase IDs and quantity bounds 1..9999. Observation/selection never purchases or invokes random talk. Shop purchase commands remain unconnected. Required adapter/catalog/helper/inspect reads and price errors fail the whole observation. Offered connected commands include strict params_schema and explicit params_template values.",
         "operationId": "getCharacterContext",
         "parameters": [
           {

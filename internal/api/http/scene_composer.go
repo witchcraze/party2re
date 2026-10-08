@@ -79,6 +79,11 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 			adapter.read = h.homeMailboxSceneData
 		case "shop_weapon", "shop_armor", "shop_item", "shop_accessory":
 			adapter.title = map[string]string{"shop_weapon": "武器店", "shop_armor": "防具店", "shop_item": "道具店", "shop_accessory": "装飾品店"}[definition.ID]
+			adapter.commands = []string{"shop_purchase"}
+			if definition.ID == "shop_accessory" {
+				adapter.commands = []string{"shop_accessory_buy"}
+			}
+			adapter.read = h.shopSceneData
 		default:
 			// Navigation registration does not manufacture observation support.
 			h.sceneAdapters[definition.ID] = adapter
@@ -145,6 +150,16 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 	}
 	choices := append([]string{}, adapter.commands...)
 	templates := make(map[string]map[string]any)
+	var data any
+	if !unavailable {
+		var err error
+		data, err = adapter.read(ctx, result)
+		if errors.Is(err, playercontext.ErrSelectionNotFound) {
+			unavailable = true
+		} else if err != nil {
+			return err
+		}
+	}
 	if unavailable {
 		scene.Kind, scene.Title, scene.Dialogue, scene.Speaker = "selection_unavailable", "選択した対象は利用できません", "戻って対象を選び直してください。", nil
 		scene.Data = SelectionSceneData{Parent: adapter.definition.Parent}
@@ -159,12 +174,18 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 		} else {
 			scene.Dialogue = "操作を選んでください。"
 		}
-		data, err := adapter.read(ctx, result)
-		if err != nil {
-			return err
-		}
 		scene.Data = data
 		switch data := data.(type) {
+		case ShopCatalogSceneData:
+			scene.Support.Observation, scene.Title = "details", data.Title
+			if data.Page.Next != nil {
+				choices = append(choices, "scene_page")
+				p := data.Page.Next
+				templates["scene_page"] = map[string]any{"destination": p.Destination, "offset": p.Offset, "limit": p.Limit}
+			}
+		case ShopProductSceneData:
+			scene.Support.Observation, scene.Title = "details", data.Title
+			templates[adapter.commands[0]] = map[string]any{"item_definition_id": data.Product.PurchaseParams.ItemDefinitionID}
 		case HomeSceneData:
 			scene.Support.Observation = "details"
 			scene.Title = data.View.Owner.Name + "の家"

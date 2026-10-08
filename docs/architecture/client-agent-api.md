@@ -178,9 +178,11 @@ GET and command refresh share the HTTP selected-scene composer, replacing interi
 `scene.navigation` metadata with `town`, `facility`, `subject`, or
 `selection_unavailable` variants. Home facility/subject data contains a whitelisted `view`, parent and own-only
 mailbox destinations; its mailbox scenes contain bounded letters and next-page
-inputs. These report `support.observation:details`. Other initial facility/subject
-data contains only the registered `parent`, with `support.observation:controls`;
-these adapters do not replace their facility readers.
+inputs. The four ordinary Shops expose one ID-ordered, offset-paged `items`
+collection, or one selected `product`, with exact GetCatalog prices/slot,
+explicit select/purchase inputs, NPC inspect facts and service quantity bounds.
+Home and Shop report `support.observation:details`. Bank data contains only the
+registered `parent`, with `support.observation:controls`.
 
 Town's primary collection is `data.destinations`, ordered by destination ID,
 with explicit `enter_params`, observation support and offset page/next inputs.
@@ -227,6 +229,10 @@ The full scoped Home action/call-path reconciliation and retained REST ownership
 are maintained in [Home design](../design/home.md#observation-visibility-and-navigation).
 This includes public/own dispatch, private mailbox paging, explicit Wake and
 render-time notice acknowledgment departures; it is not a formula parity claim.
+The [Shop reconciliation](../design/shops.md#scoped-legacy-actioncall-path-reconciliation)
+maps every registered Shop action and its read/mutation branches, retained routes
+and deferred differences. Shop observations do not connect purchase, sale, batch,
+secret discovery, dialogue or synthesis mutations.
 
 Subject selection and paging are the approved typed Gateway controls, not claims
 of new gameplay or formula parity. No legacy source or assets are reused.
@@ -245,22 +251,32 @@ list, detail, room and run variants have their own schemas. Include only the
 selected facility's information, alongside the shared actor/recovery facts.
 Presentation fields remain HTTP-owned; domain services supply structured facts.
 
-For example, the proposed selected-product response has the following `scene`
+For example, the selected-product response has the following `scene`
 fragment, alongside the existing character and the two non-null action arrays.
 The selected ID is a catalog ID, not an inventory instance or authorization:
 
 ```json
 {
   "location_id": "shop_weapon",
-  "kind": "shop_item",
+  "kind": "subject",
   "subject": {"target_kind": "item", "target_id": "weapon-01"},
-  "data": {"item_definition_id": "weapon-01"}
+  "data": {
+    "product": {
+      "id": "weapon-01",
+      "purchase_params": {"item_definition_id": "weapon-01"}
+    },
+    "quantity": {"minimum": 1, "maximum": 9999}
+  }
 }
 ```
 
-Each facility schema adds its verified detail fields, such as the displayed
-price, availability and service-defined quantity bounds; this fragment is not a
-complete catalog DTO. Common presentation fields retain their existing contract.
+The fragment omits other required fields; [OpenAPI](../api/openapi.json) owns the
+complete ShopCatalogSceneData/ShopProductSceneData schemas. Catalog membership
+means current sale eligibility, without inventing a wallet/capacity guarantee.
+GET and refresh never call purchase or random NPC talk. Common presentation
+fields retain their existing contract. A required catalog/helper/inspect/price
+read failure fails the whole observation; a disappeared product is explicit and
+does not rewrite selection.
 
 `available_actions` narrows to applicable facility operations, selection controls,
 continuations and recovery choices. Static catalog membership alone does not
@@ -269,7 +285,9 @@ eligibility, and do not offer an unconnected command as executable. Each offered
 action supplies its strict `params_schema` and, where useful, `params_template`;
 `required_params` still lists the complete command's required fields. Previously
 selected values appear as constants/templates, so a client asks only for remaining
-inputs without guessing IDs or parameter types. For example:
+inputs without guessing IDs or parameter types. The following purchase-action
+schema illustrates the planned mutation adapter contract; Shop purchases remain
+unconnected and are not offered in `available_actions` by observation:
 
 ```json
 {

@@ -2,7 +2,10 @@
 
 ## Purpose
 
-This document describes the behavior, economic formulas, catalog progression, depot transfer routing, and NPC interaction rules governing the three standard town shops (Weapon Shop, Armor Shop, Item Shop) in Party2, maintaining 1:1 parity with the legacy Perl CGI implementation (`weapon.cgi`, `armor.cgi`, `item.cgi`).
+This document records the legacy rules and current implementation boundaries for
+the three standard town shops (Weapon Shop, Armor Shop, Item Shop). It is not a
+certification of complete parity; the observation and deferred differences below
+remain distinct from the original CGI specification.
 
 ---
 
@@ -35,21 +38,17 @@ $$\text{SellPrice} = \lfloor \text{BasePrice} \times 0.5 \rfloor$$
 
 ## 3. Catalog Progression by Job Level (`job_lv`)
 
-Available items in each shop expand according to the character's `job_lv` (the current job's level):
+Available items use `job_lv` (job-change count), represented by `Character.JobLevel`.
 
 ### 3.1. Weapon Shop (`weapon.cgi`)
 - **`job_lv <= 11`**:
-  `weapon-01` .. `weapon-05`, `weapon-43` (Club, Knife, Copper Sword, Bronze Sword, Iron Sword, Blowgun)
+  `weapon-01` .. `weapon-05`, `weapon-43`, and exactly `weapon-(06 + job_lv)`.
 - **`job_lv > 11`**:
-  Adds `weapon-06` .. `weapon-16` (Silver Sword, Rapier, Iron Axe, Steel Sword, Broad Sword, Battle Axe, Silver Axe, Morning Star, Scythe, Warhammer, War Axe)
+  `weapon-01` .. `weapon-05`, `weapon-43`, and `weapon-06` .. `weapon-16`.
 
 ### 3.2. Armor Shop (`armor.cgi`)
-- **`job_lv <= 4`**:
-  `armor-01` .. `armor-05` (Plain Clothes, Leather Armor, Chain Mail, Bronze Armor, Iron Armor)
-- **`5 <= job_lv <= 10`**:
-  Adds `armor-06` .. `armor-11` (Steel Armor, Silver Armor, Plate Mail, Knight Armor, Heavy Armor, Dragon Armor)
-- **`job_lv >= 11`**:
-  Adds `armor-12` .. `armor-16` (Magic Armor, Dark Armor, Holy Armor, Battle Suit, Master Armor)
+- **`job_lv <= 11`**: `armor-01` .. `armor-(05 + job_lv)`.
+- **`job_lv > 11`**: `armor-01` .. `armor-16`.
 
 ### 3.3. Item Shop (`item.cgi`)
 - **`job_lv == 0`** (Base):
@@ -67,7 +66,12 @@ Available items in each shop expand according to the character's `job_lv` (the c
 
 ## 4. Helper Quest Exclusion
 
-When a character has an active helper quest (`helper_quests` state), any item that is the objective of the quest is filtered out of the catalog (`GetCatalog`) and forbidden from being purchased (`Purchase`). This enforces the legacy game mechanic where players must source quest items from adventures or flea markets rather than simply buying them from town shops.
+Items requested by helper quests are excluded from sale. Legacy
+`system.cgi:1424–1438` reads the shared quest file and filters by item kind;
+current `GetCatalog` uses the helper service's active definition IDs, across
+characters. Required helper/catalog reads and price calculation errors fail the
+whole catalog. Purchase validation has a separate error-handling gap described
+below; a readable catalog is not an execution guarantee.
 
 ---
 
@@ -182,3 +186,76 @@ All financial and inventory operations execute in strict lock hierarchy:
 
 Transactions guarantee that concurrent purchases never cause negative wallet balances, never exceed depot limits, and never drop items.
 
+## 10. Selected Shop observation and migration boundary
+
+The shared [navigation contract](../architecture/client-agent-api.md#selection-commands-and-typed-discovery)
+maps `shop_weapon`, `shop_armor`, `shop_item`, and `shop_accessory` directly to
+existing `ShopType` values. Accessory products remain `item-NNN` catalog entries,
+including their existing slot classification; no new accessory catalog is created.
+Authenticated context GET and post-command refresh use the same HTTP adapter.
+
+Facility data has one primary collection, `items`, sorted by definition ID and
+paged with offsets (default 20, maximum 100). Each row preserves GetCatalog's
+ID, name, base/retail price and optional slot, supplies `select_params`, and
+supplies an explicit `purchase_params.item_definition_id`. Subject data contains
+only that selected `product`, alongside common shop/NPC facts and quantity
+bounds 1–9999 from the existing service. These are current Go quantity bounds;
+legacy single purchase bought one item, while batch input named multiple items.
+Catalog membership does not promise sufficient funds or inventory/depot capacity.
+
+Observations include structured InspectNPC facts and reuse HTTP inspect dialogue.
+They never invoke random TalkNPC, secret discovery, purchase, sell or synthesis.
+Missing or newly excluded products become `selection_unavailable` without a
+saved fallback. Required reads yield no partial observation; known navigation
+outcomes survive refresh failure and recover with GET alone. No keys, tables,
+wallet gates, gameplay formulas or mutation adapters are added. Purchase commands
+remain disclosed as unconnected support, never executable choices.
+
+### Scoped legacy action/call-path reconciliation
+
+Paths below are relative to the original `party2` distribution. Shop files are
+loaded through `party.cgi:14–30`; `system.cgi:9–24` registers shared controls and
+`system.cgi:639–655` dispatches action/target input with the action-time guard.
+The complete shop additions and read/mutation branches reconcile as follows:
+
+| Legacy dispatch / call path | Current representation and remaining owner |
+|---|---|
+| Weapon `かう` → `kau` (`weapon.cgi:45–85`), Armor (`armor.cgi:41–85`), Item (`item.cgi:53–107`), Accessory (`accessory.cgi:98–147`) | No-target sales tables → GetCatalog and selected Shop catalog/product adapter. Explicit-target purchase → Purchase/PurchaseInShop and retained REST, Gateway mutation migration #947. |
+| Weapon/Armor/Item `うる` → `uru` (`weapon.cgi:91–110`, `armor.cgi:89–110`, `item.cgi:112–132`); Accessory (`accessory.cgi:151–170`) | Held-slot preview/sale → Sell and retained REST. Owned sale-choice projections and Gateway commands remain #947. |
+| Weapon/Armor/Item `まとめてかう` → `matomete_kau` (`weapon.cgi:116–173`, `armor.cgi:115–178`, `item.cgi:137–197`) | No-target catalog → the same selected observation. Multi-name purchase/depot delivery → BatchPurchase; Gateway migration #947. Not registered for Accessory. |
+| Item hidden `ひみつのみせ` → `himitsunomise` (`item.cgi:57–69`) | Inspect hint is observed. DiscoverSecretShop reports JobLevel ≥7; legacy also changes location to `secret`. Secret entry/command coverage remains #947. |
+| Accessory `ごうせい` → `acce`, `check_depot`, `get_item_no` (`accessory.cgi:100–101,172–292`) | Recipe preview → AllSynthesisRecipes/REST; Synthesize handles material consumption/output. Recipe scene and mutation migration remain #947; held-elixir gap remains in [Accessory design](accessory-shop.md). `get_depot` is an uncalled utility, not an omitted action. |
+| Shared `しらべる` → `shiraberu` → `shiraberu_npc` (`system.cgi:322–329,413`; `weapon.cgi:38–40`, `armor.cgi:34–36`, `item.cgi:45–48`) | InspectNPC structured facts + HTTP presentation observed. Accessory inherits the default “nothing found” in legacy, while Go supplies its own custom line; this existing difference remains #947. Non-NPC inspection remains social migration #949. |
+| Shared `はなす` → `hanasu` (`system.cgi:240–263`) using facility `@words` | TalkNPC/REST retain random dialogue. Go's abbreviated static lines omit legacy dynamic recommendations/status and contain wording differences; no exact-dialogue parity claim. Gateway talk/log/presence migration remains #947/#949. |
+| Shared `br`, `いどう`, `まち`, `ほーむ`, conditional `ぎるど`, `ささやき`, `ろぐあうと`, `すくしょ` (`system.cgi:9–24`) | Full mapping and deferred ownership are in the [shared reconciliation](../architecture/client-agent-api.md#scoped-legacy-navigation-reconciliation). Separator/auth redirects are superseded; movement uses scene controls; remaining social/presence/photo work belongs to #949. |
+| Purchase delivery → `send_item` (`system.cgi:818–837`) / `_add_collection.cgi`; helper filter → `get_helper_item` (`system.cgi:1424–1438`) | Existing inventory/depot/collection services and helper read port. Observation calls no delivery or collection write. Mutation reconciliation remains #947. |
+
+Legacy weapon/armor sales also display nominal strength and weight. GetCatalog
+currently projects prices and slot only; extending item facts remains #947.
+Standard Purchase/PurchaseInShop does not enforce sales-tier membership as batch
+and accessory purchase do, and `isItemInActiveHelper` treats helper-read failure
+as no exclusion. These are existing mutation gaps owned by #947, not behavior
+introduced or certified by this observation slice. Full formula/asset parity and
+final handler retirement remain outside this scope.
+Legacy armor batch uses helper kind 1 (`armor.cgi:120`) while single armor
+purchase uses kind 2 (`armor.cgi:52`). Go consistently filters armor definition
+IDs; this legacy inconsistency requires separate reconciliation under #947.
+
+### Retained routes
+
+All routes below retain their resolver/catalog references. A replacement read
+alone does not establish per-command schema independence or authorize retirement.
+
+| Method / path | Reason retained (owner #947) |
+|---|---|
+| GET `/characters/{id}/shop/{type}` | Unpaged REST catalog readers still have resolver clients; reader/resolver cleanup requires verified migration. |
+| POST `/shop/purchase` | Existing standard purchase; no Gateway mutation adapter/schema replacement. |
+| POST `/shop/sell` | Existing sale; held-item preview and Gateway replacement remain. |
+| POST `/characters/{id}/shop/batch-purchase` | Existing atomic batch/depot operation; no Gateway replacement. |
+| POST `/characters/{id}/shop/{type}/inspect` | Typed scene reuses facts, but direct inspect/resolver migration remains. |
+| POST `/characters/{id}/shop/{type}/talk` | Random NPC interaction/log reconciliation is not performed by observation. |
+| POST `/characters/{id}/shop/discover-secret` | Secret discovery/entry replacement remains. |
+| POST `/characters/{id}/shop/accessory/buy` | Accessory pricing/tier mutation has no Gateway replacement. |
+| POST `/characters/{id}/shop/accessory/sell` | Accessory sale has no Gateway replacement. |
+| POST `/characters/{id}/shop/accessory/synthesize` | Material/elixir/output mutation has no Gateway replacement. |
+| GET `/characters/{id}/shop/accessory/recipes` | Recipe primary collection is not part of the selected product scene. |
