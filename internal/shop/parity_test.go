@@ -37,8 +37,11 @@ func setupParityTest(t *testing.T) (*shop.Service, *characterRepoStub, *inventor
 	a1, _ := item.NewEquipmentDefinition("armor-01", "Plain Clothes", 30, item.SlotBody)
 	i1, _ := item.NewDefinition("item-001", "Herb", 10)
 	i2, _ := item.NewDefinition("item-007", "Antidote", 15)
+	i3, _ := item.NewDefinition("item-008", "Moon Herb", 20)
+	i4, _ := item.NewDefinition("item-009", "Angel Bell", 30)
+	i5, _ := item.NewDefinition("item-127", "Memory Bell", 40)
 
-	catalog, err := item.NewCatalog([]item.Definition{w1, w2, w7, a1, i1, i2})
+	catalog, err := item.NewCatalog([]item.Definition{w1, w2, w7, a1, i1, i2, i3, i4, i5})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +250,9 @@ func TestGetCatalog_JobLevelProgression_And_HelperExclusion(t *testing.T) {
 
 	// For job_lv 0, item shop sells: item-001, item-007, item-008, item-009, item-127
 	// But item-001 is excluded by helper!
-	// And only item-007 exists in our test definition provider.
+	if len(catalog.Items) != 4 {
+		t.Fatalf("catalog omitted valid entries: %+v", catalog.Items)
+	}
 	for _, it := range catalog.Items {
 		if it.ID == "item-001" {
 			t.Errorf("item-001 should have been excluded by active helper quest")

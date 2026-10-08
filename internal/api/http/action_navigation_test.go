@@ -12,6 +12,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/playercontext"
+	"github.com/witchcraze/party2re/internal/shop"
 )
 
 type gatewayNavigationStore struct {
@@ -46,6 +47,16 @@ func (s *gatewayNavigationStore) Save(ctx context.Context, actor string, n playe
 	return nil
 }
 
+type navigationShopService struct{ ShopService }
+
+func (navigationShopService) GetCatalog(context.Context, shop.ShopType, string) (shop.ShopCatalog, error) {
+	return shop.ShopCatalog{ShopType: shop.ShopTypeWeapon, Title: "武器屋", Items: []shop.CatalogItem{{ID: "weapon-01", Name: "武器"}}}, nil
+}
+
+func (navigationShopService) InspectNPC(context.Context, shop.ShopType, string) (shop.NPCInspectResult, error) {
+	return shop.NPCInspectResult{ShopType: shop.ShopTypeWeapon}, nil
+}
+
 func navigationRouter(t *testing.T, f *gatewayFixture, store *gatewayNavigationStore, available *bool, readErr *error) http.Handler {
 	t.Helper()
 	service := playercontext.NewService(f, f, timer.NewService(nil), playercontext.WithNavigation(store,
@@ -60,7 +71,7 @@ func navigationRouter(t *testing.T, f *gatewayFixture, store *gatewayNavigationS
 				return *available && target == "weapon-01", *readErr
 			}},
 	))
-	h, err := NewHandler(f, f, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithPlayerContext(service), func(h *Handler) { h.homes = f })
+	h, err := NewHandler(f, f, &struct{ AdventureService }{}, navigationShopService{}, WithPlayerContext(service), func(h *Handler) { h.homes = f })
 	if err != nil {
 		t.Fatal(err)
 	}

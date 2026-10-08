@@ -18,6 +18,12 @@ condition; unmigrated entries remain linked to their REST operation. The
 owns schema selection and drift validation. Gates and required parameter names
 are independent of this transport mapping.
 
+Shop selection observes the existing catalog without a funds gate and supplies
+explicit product IDs and service quantity bounds. The evaluator's current
+currency gate remains separate from catalog membership. Shop purchase support
+is unconnected; no executable purchase or new required-parameter contract is
+added by observation. See [Shop observation and retained routes](shops.md#10-selected-shop-observation-and-migration-boundary).
+
 ---
 
 ## 2. Current evaluator gates and legacy review

@@ -3,6 +3,7 @@ package shop
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -197,7 +198,7 @@ func (s *Service) findInventory(ctx context.Context, characterID string) (corein
 	return s.inventories.FindByCharacterID(ctx, characterID)
 }
 
-// GetCatalog returns the shop title, NPC name, and the available items with 2x retail pricing,
+// GetCatalog returns the shop title, NPC name, and the available items with shop-specific retail pricing,
 // filtering out items requested in active helper quests.
 func (s *Service) GetCatalog(ctx context.Context, shopType ShopType, characterID string) (ShopCatalog, error) {
 	if !ValidateShopType(shopType) {
@@ -240,11 +241,11 @@ func (s *Service) GetCatalog(ctx context.Context, shopType ShopType, characterID
 		}
 		def, err := s.catalog.FindByID(id)
 		if err != nil {
-			continue
+			return ShopCatalog{}, fmt.Errorf("read catalog item %s: %w", id, err)
 		}
 		retailPrice, err := s.CalculateRetailPrice(shopType, def.ID, def.Price)
 		if err != nil {
-			continue
+			return ShopCatalog{}, fmt.Errorf("price catalog item %s: %w", id, err)
 		}
 		items = append(items, CatalogItem{
 			ID:          def.ID,

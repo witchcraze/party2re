@@ -2931,7 +2931,7 @@
           "support"
         ],
         "additionalProperties": false,
-        "description": "Registered selected scene. Home details use public/owned projections; other initial facilities expose controls. GET never writes or renews selection.",
+        "description": "Registered selected scene. Home and Shop use typed details; Bank exposes controls. GET never writes or renews selection.",
         "allOf": [
           {
             "if": {
@@ -2983,6 +2983,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/HomeMailboxSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ShopCatalogSceneData"
                     }
                   ]
                 }
@@ -3017,6 +3020,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/HomeMailboxSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ShopProductSceneData"
                     }
                   ]
                 }
@@ -3093,6 +3099,76 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/HomeMailboxSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "enum": [
+                    "shop_weapon",
+                    "shop_armor",
+                    "shop_item",
+                    "shop_accessory"
+                  ]
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/ShopCatalogSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "enum": [
+                    "shop_weapon",
+                    "shop_armor",
+                    "shop_item",
+                    "shop_accessory"
+                  ]
+                },
+                "kind": {
+                  "const": "subject"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/ShopProductSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
                 }
               }
             }
@@ -4484,6 +4560,280 @@
           "parent",
           "letters",
           "page"
+        ]
+      },
+      "ShopQuantityBounds": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "minimum": {
+            "type": "integer",
+            "const": 1
+          },
+          "maximum": {
+            "type": "integer",
+            "const": 9999
+          }
+        },
+        "required": [
+          "minimum",
+          "maximum"
+        ]
+      },
+      "ShopPurchaseParams": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "item_definition_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "item_definition_id"
+        ]
+      },
+      "ShopProduct": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "maxLength": 128
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "base_price": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "retail_price": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "slot": {
+            "type": "string",
+            "enum": [
+              "main-hand",
+              "off-hand",
+              "body",
+              "accessory"
+            ]
+          },
+          "select_params": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "target_kind": {
+                "const": "item"
+              },
+              "target_id": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "target_kind",
+              "target_id"
+            ]
+          },
+          "purchase_params": {
+            "$ref": "#/components/schemas/ShopPurchaseParams"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "base_price",
+          "retail_price",
+          "select_params",
+          "purchase_params"
+        ],
+        "description": "Exact GetCatalog facts. Purchase ID is explicit, independent of mutable navigation; quantity must be supplied separately. Presence means current catalog membership, not a funds/capacity guarantee."
+      },
+      "ShopNPCObservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "shop_type": {
+            "type": "string",
+            "enum": [
+              "weapon",
+              "armor",
+              "item",
+              "accessory"
+            ]
+          },
+          "npc_name": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "secret_shop_hint": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "dialogue": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "shop_type",
+          "npc_name",
+          "dialogue"
+        ]
+      },
+      "ShopCatalogSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "parent": {
+            "const": "town"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "shop_type": {
+            "type": "string",
+            "enum": [
+              "weapon",
+              "armor",
+              "item",
+              "accessory"
+            ]
+          },
+          "npc": {
+            "$ref": "#/components/schemas/ShopNPCObservation"
+          },
+          "quantity": {
+            "$ref": "#/components/schemas/ShopQuantityBounds"
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ShopProduct"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/ShopScenePage"
+          }
+        },
+        "required": [
+          "parent",
+          "title",
+          "shop_type",
+          "npc",
+          "quantity",
+          "items",
+          "page"
+        ]
+      },
+      "ShopProductSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "parent": {
+            "const": "town"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "shop_type": {
+            "type": "string",
+            "enum": [
+              "weapon",
+              "armor",
+              "item",
+              "accessory"
+            ]
+          },
+          "npc": {
+            "$ref": "#/components/schemas/ShopNPCObservation"
+          },
+          "quantity": {
+            "$ref": "#/components/schemas/ShopQuantityBounds"
+          },
+          "product": {
+            "$ref": "#/components/schemas/ShopProduct"
+          }
+        },
+        "required": [
+          "parent",
+          "title",
+          "shop_type",
+          "npc",
+          "quantity",
+          "product"
+        ]
+      },
+      "ShopScenePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "const": "offset"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "next": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "destination": {
+                    "type": "string",
+                    "enum": [
+                      "shop_weapon",
+                      "shop_armor",
+                      "shop_item",
+                      "shop_accessory"
+                    ]
+                  },
+                  "offset": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  }
+                },
+                "required": [
+                  "destination",
+                  "offset",
+                  "limit"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "mode",
+          "offset",
+          "limit",
+          "next"
         ]
       }
     },
