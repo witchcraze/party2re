@@ -15,7 +15,7 @@ import (
 
 // HomeEstateService defines estate, item, and color operations.
 type HomeEstateService interface {
-	GetHomeView(ctx context.Context, homeCharacterID, visitorCharacterID string) (home.HomeView, error)
+	GetHomeView(ctx context.Context, homeCharacterID, visitorCharacterID, playerID string) (home.HomeView, error)
 	UpdateHome(ctx context.Context, characterID, companionName string) (home.CharacterHome, error)
 	BuildHouse(ctx context.Context, characterID, townID, houseStyle string) (*home.HomeCheckResult, error)
 	CheckHouse(ctx context.Context, targetNameOrID string) (*home.HomeCheckResult, error)
@@ -98,17 +98,30 @@ func (h *Handler) handleGetHomeView(w http.ResponseWriter, r *http.Request) {
 	homeCharID := r.PathValue("id")
 	visitorCharID := r.URL.Query().Get("visitor_id")
 
-	view, err := h.homes.GetHomeView(r.Context(), homeCharID, visitorCharID)
-	if err != nil {
-		if errors.Is(err, home.ErrCharacterNotFound) {
-			writeError(w, http.StatusNotFound, err)
+	read := func(visitor, player string) {
+		view, err := h.homes.GetHomeView(r.Context(), homeCharID, visitor, player)
+		if err != nil {
+			if errors.Is(err, home.ErrForbidden) {
+				writeError(w, http.StatusForbidden, err)
+				return
+			}
+			if errors.Is(err, home.ErrCharacterNotFound) || errors.Is(err, corecharacter.ErrNotFound) {
+				writeError(w, http.StatusNotFound, err)
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
+
+		writeJSON(w, http.StatusOK, view)
+	}
+	if visitorCharID == "" {
+		read("", "")
 		return
 	}
-
-	writeJSON(w, http.StatusOK, view)
+	h.withAuthenticatedCharacter(w, r, visitorCharID, func(player coreplayer.Player, visitor corecharacter.Character) {
+		read(visitor.ID, player.ID)
+	})
 }
 
 func (h *Handler) handleUpdateHomeSettings(w http.ResponseWriter, r *http.Request) {

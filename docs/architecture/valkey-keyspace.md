@@ -34,7 +34,7 @@ readiness. Introducing Cluster requires resolving those multi-key placements.
 
 | Key Pattern / Template | Storage Tier | Data Type | Expiration Policy (TTL) | Value / Serialization Format | Owner Module | Mutating Operations & Invalidation Hooks |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `party2:playercontext:navigation:<character_id>` | Valkey Master | `String` | 7 days (`604800s`), renewed only by successful navigation writes | JSON (`Selection`: registered destination, typed subject, bounded offset/limit); no actor override or feature activity | `internal/playercontext` | `Load` (GET only), `Save` (one atomic SET EX 604800). Missing/expired selection defaults to town without writing. |
+| `party2:playercontext:navigation:<character_id>` | Valkey Master | `String` | 7 days (`604800s`), renewed only by successful navigation writes | JSON (`Selection`: registered destination, typed subject, bounded offset/limit or Home mailbox cursor); no actor override or feature activity | `internal/playercontext` | `Load` (GET only), `Save` (one atomic SET EX 604800). Missing/expired selection defaults to town without writing. |
 | `party2:session:<token>` | Valkey Master | `String` | 7 days (`604800s`), sliding or fixed | JSON (`PlayerSession`: `token`, `player_id`, `created_at`, `expires_at`) | `internal/player` | `CreateSession` (SET EX), `GetSession` (GET), `DeleteSession` (DEL), `DeleteSessionsByPlayerID` (bulk DEL). |
 | `party2:player:sessions:<player_id>` | Valkey Master | `Sorted Set (ZSet)` | 7 days (`604800s`), refreshed on login | Member: session token, Score: `ExpiresAt.Unix()` (`float64`) | `internal/player` | `Save` (ZADD + EXPIRE + lazy ZREMRANGEBYSCORE), `FindByID` (lazy ZREMRANGEBYSCORE), `Revoke` (ZREM + lazy ZREMRANGEBYSCORE), `DeleteByPlayerID` (ZRANGE -> DEL tokens + DEL key). Automatic expiration score tracking eliminates stale token accumulation. |
 | `party2:maintenance:status` | SQL-backed projection | `String` | None (Persistent / Admin managed) | JSON (`SystemMaintenance`: `enabled`, `message`, `starts_at`, `ends_at`, `updated_at`) | `internal/maintenance` | `SetStatus` (SET without TTL), `GetStatus` (GET with in-memory sync), admin endpoints (`POST/PUT /admin/maintenance`). Backed by `system_maintenance` MariaDB table. |
@@ -118,6 +118,8 @@ subject and page selection. The repository is composed with the production
 Valkey client and registered in the key inventory above. Saved identifiers are
 at most 128 ASCII letters/digits/underscore/hyphen; the fixed record has one
 subject and one page, with offset at most 1,000,000 and limit at most 100.
+Home mailbox pages alternatively store a URL-safe base64 cursor (at most 512
+characters, including the empty first-page token). No mailbox contents are stored.
 The reader rejects malformed/unknown fields and records exceeding 2 KiB.
 
 Use `party2:playercontext:navigation:<character_id>` as one bounded String record,

@@ -40,10 +40,17 @@ func navigationCommand[P any](h *Handler, id string, execute func(context.Contex
 					return nil, err
 				}
 				for name, value := range fields {
-					if !slices.Contains(def.RequiredParams, name) && !(id == "scene_page" && name == "limit") {
+					if !slices.Contains(def.RequiredParams, name) && !(id == "scene_page" && slices.Contains([]string{"limit", "offset", "cursor"}, name)) {
 						return nil, playercontext.ErrInvalidSelection
 					}
 					if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+						return nil, playercontext.ErrInvalidSelection
+					}
+				}
+				if id == "scene_page" {
+					_, offset := fields["offset"]
+					_, cursor := fields["cursor"]
+					if offset == cursor {
 						return nil, playercontext.ErrInvalidSelection
 					}
 				}

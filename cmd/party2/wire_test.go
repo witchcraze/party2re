@@ -673,7 +673,7 @@ func TestHomePetAdapter_HeavenWishCompanionIntegration(t *testing.T) {
 	}
 
 	// 1. Verify GetHomeView exposes Ortega in ResidentPets
-	view, err := homeSvc.GetHomeView(ctx, c.ID, c.ID)
+	view, err := homeSvc.GetHomeView(ctx, c.ID, c.ID, c.PlayerID)
 	if err != nil {
 		t.Fatalf("GetHomeView failed: %v", err)
 	}

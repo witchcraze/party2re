@@ -60,8 +60,9 @@ The four top-level fields are:
   The asset ID remains empty until production mappings are specified.
 - `scene`: registered `kind`, selected `location_id`, optional `subject`, typed
   `data`, connection/eligibility `support`, and HTTP-owned presentation fields.
-  Town uses a self-authored SVG placeholder; initial facility/subject scenes
-  contain controls only. Production art and feature-owned active scenes remain
+  Town uses a self-authored SVG placeholder; Home uses typed public/owned details
+  and mailbox pages. Other initial facility/subject scenes contain controls only.
+  Production art and feature-owned active scenes remain
   separate work.
 - `ongoing_actions`: every unfinished scheduled action, plus an observed
   sleep/wake recovery timer when present. Empty observations return `[]`.
@@ -153,25 +154,33 @@ The initial registry accepts `town`, `bank`, `home` and the four ordinary shops
 (`shop_weapon`, `shop_armor`, `shop_item`, `shop_accessory`), with town as each
 facility's parent. Shop subjects use `target_kind:item` and IDs validated by
 the owned actor's existing Shop catalog, including its eligibility filters.
-Other subject kinds/public-home targets are registered by their owning adapters;
-merely entering `home` does not choose another character or grant private access.
+Home registers `target_kind:home` with a character ID validated by the public
+Home service. Entering `home` observes the actor; selecting another ID observes
+that target without changing the actor/viewer. `home_inbox` and `home_outbox` have
+`home` as their parent and always read the owned actor, without a target input.
+Public Home detail never offers owner mailbox destinations. Other subject kinds
+remain adapter-owned.
 `scene_back` clears a selected subject to its facility list; otherwise it selects
 the registered parent. Enter/select reset subject/page descendants.
 
-The initial offset page input requires `destination` and `offset` (0–1,000,000),
-with optional `limit` (default 20, maximum 100). It applies only to a registered
-pageable list (town destinations or a Shop list) without a selected subject and
-must match the saved destination.
-Cursor/mixed/unknown fields and null values are rejected. Keyset paging is added
-alongside adapters whose existing service supports it; no cursor is invented
-for these static Shop lists. Back never accepts a caller-supplied parent.
+Page input requires `destination` and exactly one of `offset` (0–1,000,000) or
+`cursor`, with optional `limit` (default 20, maximum 100). It applies only to a
+registered pageable list without a selected subject and must match the saved
+destination. Only Home inbox/outbox accept cursors: an empty string starts their
+existing keyset reader, while later pages reuse its timestamp/ID tokens. Tokens
+are URL-safe base64 strings bounded to 512 characters; existing service cursor
+decoding and ordering are retained. Offset pages retain totals; cursor pages
+return the service next token without inventing a total or a cross-page snapshot.
+Mixed/unknown fields and null values are rejected. Town and static Shop lists
+remain offset-only. Back never accepts a caller-supplied parent.
 
 GET and command refresh share the HTTP selected-scene composer, replacing interim
 `scene.navigation` metadata with `town`, `facility`, `subject`, or
-`selection_unavailable` variants. Initial facility/subject data contains only
-the registered `parent`; `support.observation:controls` discloses that limited
-observation. It does not replace Shop catalogs, Home views or other facility
-readers; their adapters add verified typed data in the owning issues.
+`selection_unavailable` variants. Home facility/subject data contains a whitelisted `view`, parent and own-only
+mailbox destinations; its mailbox scenes contain bounded letters and next-page
+inputs. These report `support.observation:details`. Other initial facility/subject
+data contains only the registered `parent`, with `support.observation:controls`;
+these adapters do not replace their facility readers.
 
 Town's primary collection is `data.destinations`, ordered by destination ID,
 with explicit `enter_params`, observation support and offset page/next inputs.
@@ -183,7 +192,8 @@ separates `connected` from `entry_eligible`; execution still revalidates.
 The composer uses registered facility command IDs, subjects and parents rather
 than catalog categories. Offered actions copy their embedded OpenAPI command
 schema, with selected constants and explicit templates. Home controls template
-the owned actor's `target_home_id`. Without a configured navigation store,
+the observed home's `target_home_id`, while the authenticated actor remains the
+sleeping character. Owner-private fields are never inferred from a target ID. Without a configured navigation store,
 connected entry discovery remains usable. Dispatcher entry evaluation is
 separate: a full explicit command never binds its target to the displayed scene.
 Feature-owned active scenes and continuation gates remain #1050 work.
@@ -205,7 +215,7 @@ reconcile as follows; facility-specific gameplay/actions retain their owners.
 | --- | --- |
 | `いどう` → `idou`, registered `@places` → saved `$m{lib}` | Gateway `scene_enter` → `playercontext.Service.Enter`; the initial closed registry covers the destinations above. Remaining facilities belong to #947–#949. |
 | `まち` → `machi`, registered `@towns` → saved `$m{lib}` | Default town selection through `scene_enter` / `scene_back`; estate/town-specific projections remain #949 work. |
-| `ほーむ` → `homu`, `$m{home}` target/fallback | Own `home` destination through `scene_enter`; typed public-home target validation/projection remains #1053. An unavailable target is explicitly retained instead of adopting the legacy fallback. |
+| `ほーむ` → `homu`, `$m{home}` target/fallback | Own `home` through `scene_enter` and public Home targets through `scene_select` → Home.GetHomeView. Query authenticates the actor; unavailable targets remain explicit. An unavailable target is explicitly retained instead of adopting the legacy fallback. |
 | Reload dispatch: sleep before `$m{lib}`, default `park` | Shared GET/refresh composer renders saved ordinary selection with explicit sleep/Wake/Rescue; feature-owned active scenes remain #1050. The selector never ends an activity. |
 | `ぎるど` → `girudo` | Guild observation/management remains #949; no membership change through navigation. |
 | `ささやき` → `sasayaki`, `はなす` → `hanasu`, `しらべる` → `shiraberu` | Facility/social dialogue and presence reconciliation remains #947–#949; existing REST readers/operations are retained. |
@@ -213,16 +223,10 @@ reconcile as follows; facility-specific gameplay/actions retain their owners.
 | `すくしょ` → `sukusho` (`system.cgi:165–196`); `br` separator | Stored photo acquisition/Contest reconciliation remains #949; client rendering belongs to #140. Separator superseded by structured actions. |
 | Movement → `leave_member`, reload/log/presence | Deliberately excluded from selector writes; facility reconciliation belongs to #947–#949. No room join/leave, cooldown, recovery or settlement is introduced here. |
 
-The inspected Home dispatch (`lib/home.cgi:26–39,73–105,138–201,237–265,
-379–435,443–507,591–604`) retains these independent owners:
-
-| Home action / call path | Replacement or deferred owner |
-| --- | --- |
-| Public/own `ねる` → `neru` | Connected `home_sleep` → Home.Sleep; own-home controls use an explicit actor template. Public-home selection/projection is #1053. Explicit submitted targets remain service-validated; `home_wake` is the approved departure from implicit GET recovery. |
-| `あいてむずかん`, `もんすたーぶっく`, `じょぶますたー`, `ぷろふぃーる`, `ぼうけんのきろく` → reference dispatch | Existing Collection/Monster/Job/Character/Adventure REST references remain; #1053 owns Home observation and #948/#949 remaining retirement. |
-| Own-only `つかう`, `てがみをかく`, `てがみをよむ`, `からー`, `ことばをおしえる`, `ことばをわすれさせる` | Existing Home item/mail/color/companion service and REST operations remain; private/public projection is #1053, mutation migration #949. |
-| `かすたむすきる`, conditional `いめーじ` | Existing custom-skill/profile/avatar routes remain; #949 owns gameplay migration, #654/#729 asset mapping. Commented-out avatar/upload actions are not registered behavior. |
-| `br`, own-home letter/money notice acknowledgment on render | Separator becomes structured controls; GET never acknowledges notices. Home read/notice reconciliation remains #1053/#949. |
+The full scoped Home action/call-path reconciliation and retained REST ownership
+are maintained in [Home design](../design/home.md#observation-visibility-and-navigation).
+This includes public/own dispatch, private mailbox paging, explicit Wake and
+render-time notice acknowledgment departures; it is not a formula parity claim.
 
 Subject selection and paging are the approved typed Gateway controls, not claims
 of new gameplay or formula parity. No legacy source or assets are reused.

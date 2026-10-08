@@ -118,15 +118,26 @@ type DeliveryNotice struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// HomeView represents the full aggregated presentation view for a character's home.
+// HomeOwner is the public identity whitelist; never expose the raw Character.
+type HomeOwner struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
+type OwnedHomeDetails struct {
+	UnreadLetterCount    int `json:"unread_letter_count"`
+	CompanionPhraseCount int `json:"companion_phrase_count"`
+	RecentDeliveryCount  int `json:"recent_delivery_count"`
+}
+
+// HomeView separates public facts from authenticated owner-only enrichment.
 type HomeView struct {
-	Owner                corecharacter.Character `json:"owner"`
-	Home                 CharacterHome           `json:"home"`
-	UnreadLetterCount    int                     `json:"unread_letter_count"`
-	CompanionPhraseCount int                     `json:"companion_phrase_count"`
-	RecentDeliveryCount  int                     `json:"recent_delivery_count"`
-	IsOwner              bool                    `json:"is_owner"`
-	ResidentPets         []HomePet               `json:"resident_pets,omitempty"`
+	Owner        HomeOwner         `json:"owner"`
+	Home         CharacterHome     `json:"home"`
+	Private      *OwnedHomeDetails `json:"private,omitempty"`
+	IsOwner      bool              `json:"is_owner"`
+	ResidentPets []HomePet         `json:"resident_pets,omitempty"`
 }
 
 // HomeCheckResult represents the response for the legacy "chekku" action.

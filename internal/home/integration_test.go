@@ -73,7 +73,7 @@ func TestHomeServiceIntegration(t *testing.T) {
 	})
 
 	// 1. Visit & View
-	view, err := svc.GetHomeView(ctx, char1.ID, char2.ID)
+	view, err := svc.GetHomeView(ctx, char1.ID, char2.ID, char2.PlayerID)
 	if err != nil {
 		t.Fatalf("GetHomeView failed: %v", err)
 	}

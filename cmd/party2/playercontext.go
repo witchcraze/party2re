@@ -2,14 +2,25 @@ package main
 
 import (
 	"context"
+	"errors"
 
+	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/shop"
 )
 
 func newPlayerContext(core *coreServices, soc *socServices, econ *econServices) *playercontext.Service {
 	scenes := []playercontext.SceneDefinition{
-		{ID: "town", Pageable: true}, {ID: "bank", Parent: "town"}, {ID: "home", Parent: "town"},
+		{ID: "town", Pageable: true}, {ID: "bank", Parent: "town"},
+		{ID: "home", Parent: "town", SubjectKind: "home", SubjectAvailable: func(ctx context.Context, _, target string) (bool, error) {
+			_, err := soc.home.GetHomeView(ctx, target, "", "")
+			if errors.Is(err, home.ErrCharacterNotFound) {
+				return false, nil
+			}
+			return err == nil, err
+		}},
+		{ID: "home_inbox", Parent: "home", Pageable: true, CursorPageable: true},
+		{ID: "home_outbox", Parent: "home", Pageable: true, CursorPageable: true},
 	}
 	for _, kind := range []shop.ShopType{shop.ShopTypeWeapon, shop.ShopTypeArmor, shop.ShopTypeItem, shop.ShopTypeAccessory} {
 		scenes = append(scenes, playercontext.SceneDefinition{

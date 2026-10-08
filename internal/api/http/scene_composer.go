@@ -73,6 +73,10 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 			adapter.title, adapter.commands = "銀行", []string{"bank_deposit", "bank_withdraw"}
 		case "home":
 			adapter.title, adapter.commands = "自宅", []string{"home_sleep"}
+			adapter.read = h.homeSceneData
+		case "home_inbox", "home_outbox":
+			adapter.title = map[string]string{"home_inbox": "受信箱", "home_outbox": "送信箱"}[definition.ID]
+			adapter.read = h.homeMailboxSceneData
 		case "shop_weapon", "shop_armor", "shop_item", "shop_accessory":
 			adapter.title = map[string]string{"shop_weapon": "武器店", "shop_armor": "防具店", "shop_item": "道具店", "shop_accessory": "装飾品店"}[definition.ID]
 		default:
@@ -160,6 +164,27 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 			return err
 		}
 		scene.Data = data
+		switch data := data.(type) {
+		case HomeSceneData:
+			scene.Support.Observation = "details"
+			scene.Title = data.View.Owner.Name + "の家"
+			if data.View.IsOwner {
+				choices = append(choices, "scene_enter")
+			}
+			templates["home_sleep"] = map[string]any{"target_home_id": data.View.Owner.ID}
+		case HomeMailboxSceneData:
+			scene.Support.Observation = "details"
+			if data.Page.Next != nil {
+				choices = append(choices, "scene_page")
+				p := data.Page.Next
+				templates["scene_page"] = map[string]any{"destination": p.Destination, "limit": p.Limit}
+				if p.Cursor != nil {
+					templates["scene_page"]["cursor"] = *p.Cursor
+				} else {
+					templates["scene_page"]["offset"] = p.Offset
+				}
+			}
+		}
 		if result.Navigation == nil {
 			// Without a selector, preserve entry discovery for configured commands.
 			choices = append([]string{}, result.AvailableActions...)
@@ -175,9 +200,6 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 				choices = append(choices, "scene_select")
 				templates["scene_select"] = map[string]any{"target_kind": adapter.definition.SubjectKind}
 			}
-		}
-		if n.Destination == "home" {
-			templates["home_sleep"] = map[string]any{"target_home_id": result.Snapshot.Character.ID}
 		}
 	}
 	choices = append(choices, "home_wake", "rescue_request")

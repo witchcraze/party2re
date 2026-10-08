@@ -191,7 +191,7 @@ func assertGatewayContext(t *testing.T, got map[string]json.RawMessage) {
 	if err := json.Unmarshal(got["context"], &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.Character.ID != "hero" || response.Character.IconURL != "avatar" || response.Scene.LocationID != "town" {
+	if response.Character.ID != "hero" || response.Character.IconURL != "avatar" || response.Scene.LocationID == "" {
 		t.Fatalf("incomplete composition: %+v", response)
 	}
 	for _, a := range response.AvailableActions {

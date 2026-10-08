@@ -359,7 +359,7 @@ func TestHomeService(t *testing.T) {
 
 	t.Run("visit home and update companion name", func(t *testing.T) {
 		// Owner visit
-		view, err := service.GetHomeView(ctx, "char-1", "char-1")
+		view, err := service.GetHomeView(ctx, "char-1", "char-1", "player-1")
 		if err != nil {
 			t.Fatalf("GetHomeView failed: %v", err)
 		}
@@ -368,7 +368,7 @@ func TestHomeService(t *testing.T) {
 		}
 
 		// Visitor visit
-		view, err = service.GetHomeView(ctx, "char-1", "char-2")
+		view, err = service.GetHomeView(ctx, "char-1", "char-2", "player-2")
 		if err != nil {
 			t.Fatalf("GetHomeView failed: %v", err)
 		}
@@ -685,7 +685,7 @@ func TestHomeService(t *testing.T) {
 		}
 
 		// GetHomeView returns ResidentPets
-		view, err := service.GetHomeView(ctx, "char-2", "char-2")
+		view, err := service.GetHomeView(ctx, "char-2", "char-2", "player-2")
 		if err != nil {
 			t.Fatalf("GetHomeView failed: %v", err)
 		}

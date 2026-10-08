@@ -18,6 +18,7 @@ var (
 	ErrNavigationUnavailable   = errors.New("navigation is unavailable during recovery or unfinished work")
 	ErrNavigationNotConfigured = errors.New("navigation is not configured")
 	navigationID               = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
+	navigationCursor           = regexp.MustCompile(`^[a-zA-Z0-9_=-]{0,512}$`)
 )
 
 // Subject identifiers are validated by the selected facility's public read port.
@@ -32,6 +33,7 @@ type Selection struct {
 	Subject     Subject `json:"subject"`
 	Offset      int     `json:"offset"`
 	Limit       int     `json:"limit"`
+	Cursor      *string `json:"cursor,omitempty"`
 }
 
 type NavigationObservation struct {
@@ -50,13 +52,15 @@ type NavigationRepository interface {
 type SceneDefinition struct {
 	ID, Parent, SubjectKind string
 	Pageable                bool
+	CursorPageable          bool
 	SubjectAvailable        func(ctx context.Context, actorID, targetID string) (bool, error)
 }
 
 type PageParams struct {
-	Destination string `json:"destination"`
-	Offset      int    `json:"offset"`
-	Limit       int    `json:"limit"`
+	Destination string  `json:"destination"`
+	Offset      int     `json:"offset,omitempty"`
+	Limit       int     `json:"limit"`
+	Cursor      *string `json:"cursor,omitempty"`
 }
 
 func (s *Service) NavigationConfigured() bool { return s.navigation != nil }
@@ -105,7 +109,7 @@ func WithNavigation(store NavigationRepository, definitions ...SceneDefinition) 
 func validSelection(n Selection) bool {
 	return navigationID.MatchString(n.Destination) && n.Offset >= 0 && n.Offset <= 1000000 && n.Limit >= 0 && n.Limit <= 100 &&
 		(n.Subject == (Subject{}) || (navigationID.MatchString(n.Subject.Kind) && navigationID.MatchString(n.Subject.ID))) &&
-		(n.Offset == 0 || n.Limit > 0)
+		(n.Offset == 0 || n.Limit > 0) && (n.Cursor == nil || (navigationCursor.MatchString(*n.Cursor) && n.Offset == 0 && n.Subject == (Subject{})))
 }
 
 func (s *Service) selection(ctx context.Context, actorID string) (Selection, error) {
@@ -132,6 +136,9 @@ func (s *Service) observeNavigation(ctx context.Context, actorID string) (*Navig
 	}
 	d, ok := s.scenes[n.Destination]
 	observation := &NavigationObservation{Selection: n, Unavailable: !ok}
+	if n.Cursor != nil && !d.CursorPageable {
+		observation.Unavailable = true
+	}
 	if n.Subject != (Subject{}) {
 		if !ok || d.SubjectKind != n.Subject.Kind || d.SubjectAvailable == nil {
 			observation.Unavailable = true
@@ -209,13 +216,14 @@ func (s *Service) Select(ctx context.Context, playerID, actorID string, subject 
 func (s *Service) Page(ctx context.Context, playerID, actorID string, p PageParams) (Selection, error) {
 	return s.navigate(ctx, playerID, actorID, func(n Selection) (Selection, error) {
 		d, ok := s.scenes[n.Destination]
-		if !ok || !d.Pageable || p.Destination != n.Destination || n.Subject != (Subject{}) {
+		if !ok || !d.Pageable || p.Destination != n.Destination || n.Subject != (Subject{}) || (p.Cursor != nil && !d.CursorPageable) {
 			return Selection{}, ErrInvalidSelection
 		}
 		if p.Limit == 0 {
 			p.Limit = 20
 		}
 		n.Offset, n.Limit = p.Offset, p.Limit
+		n.Cursor = p.Cursor
 		return n, nil
 	})
 }
