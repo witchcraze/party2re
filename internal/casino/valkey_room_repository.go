@@ -91,12 +91,15 @@ func (v *ValkeyRoomRepository) CreateRoom(ctx context.Context, room Room, leader
 	zaddCmd := v.client.B().Zadd().Key(DefaultRoomsActiveIndexKey).ScoreMember().
 		ScoreMember(float64(room.UpdatedAt.Unix()), room.ID).Build()
 	if err := v.client.Do(ctx, zaddCmd).Error(); err != nil {
-		return err
+		return &SecondarySyncError{Err: err}
 	}
 
 	charKey := DefaultCharacterKeyPrefix + leaderMember.CharacterID
 	charCmd := v.client.B().Set().Key(charKey).Value(room.ID).Ex(DefaultLobbyTTL).Build()
-	return v.client.Do(ctx, charCmd).Error()
+	if err := v.client.Do(ctx, charCmd).Error(); err != nil {
+		return &SecondarySyncError{Err: err}
+	}
+	return nil
 }
 
 func (v *ValkeyRoomRepository) getRoomDetail(ctx context.Context, roomID string) (*valkeyRoomDetailDTO, error) {
@@ -149,19 +152,19 @@ func (v *ValkeyRoomRepository) saveRoomDetail(ctx context.Context, dto *valkeyRo
 	if dto.Room.Status == RoomStatusDisbanded {
 		zremCmd := v.client.B().Zrem().Key(DefaultRoomsActiveIndexKey).Member(dto.Room.ID).Build()
 		if err := v.client.Do(ctx, zremCmd).Error(); err != nil {
-			return err
+			return &SecondarySyncError{Err: err}
 		}
 		for _, m := range dto.Members {
 			charKey := DefaultCharacterKeyPrefix + m.CharacterID
 			if err := v.client.Do(ctx, v.client.B().Del().Key(charKey).Build()).Error(); err != nil {
-				return err
+				return &SecondarySyncError{Err: err}
 			}
 		}
 	} else {
 		zaddCmd := v.client.B().Zadd().Key(DefaultRoomsActiveIndexKey).ScoreMember().
 			ScoreMember(float64(dto.Room.UpdatedAt.Unix()), dto.Room.ID).Build()
 		if err := v.client.Do(ctx, zaddCmd).Error(); err != nil {
-			return err
+			return &SecondarySyncError{Err: err}
 		}
 	}
 	return nil
@@ -263,7 +266,10 @@ func (v *ValkeyRoomRepository) AddMember(ctx context.Context, member RoomMember)
 
 		charKey := DefaultCharacterKeyPrefix + member.CharacterID
 		charCmd := v.client.B().Set().Key(charKey).Value(member.RoomID).Ex(DefaultLobbyTTL).Build()
-		return v.client.Do(lockedCtx, charCmd).Error()
+		if err := v.client.Do(lockedCtx, charCmd).Error(); err != nil {
+			return &SecondarySyncError{Err: err}
+		}
+		return nil
 	})
 }
 
@@ -357,7 +363,10 @@ func (v *ValkeyRoomRepository) RemoveMember(ctx context.Context, roomID string, 
 			}
 		}
 		charKey := DefaultCharacterKeyPrefix + characterID
-		return v.client.Do(lockedCtx, v.client.B().Del().Key(charKey).Build()).Error()
+		if err := v.client.Do(lockedCtx, v.client.B().Del().Key(charKey).Build()).Error(); err != nil {
+			return &SecondarySyncError{Err: err}
+		}
+		return nil
 	})
 }
 

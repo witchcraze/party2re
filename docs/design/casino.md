@@ -265,9 +265,16 @@ Rank 8: casino_accounts (Secondary Feature Records)
 ```
 In `ExchangePrize`, Depot lock (Rank 5) is acquired before Casino account lock (Rank 8), preventing deadlocks with concurrent transactions.
 
-### Showdown Settlement Atomicity & Error Propagation
+### Showdown Settlement Atomicity & Error Boundary
 
-During multiplayer showdown resolution (`highlow`, `doppel`, `indian_poker`), member state updates (`s.roomRepo.UpdateMember`), eliminated member ejections (`s.roomRepo.RemoveMember`), and balance checks (`s.repo.GetAccount`) are executed within an atomic transaction (`RunInTx`). If any member update or balance inquiry fails, the error is propagated and the entire settlement transaction rolls back cleanly, preventing participant desynchronization or corrupted room state.
+During multiplayer game actions and showdown resolution (`highlow`, `doppel`, `indian_poker`), financial updates (coin deductions, payouts, casino wins) in MariaDB and transient room/member updates in Valkey operate under a strict settlement failure boundary:
+
+- **Pre-Payload Failures (Authoritative Write Failure)**:
+  If balance checks (`s.repo.GetAccount`), coin deductions/payouts, or the Valkey room/member payload `SET` fails, the error is propagated immediately and the entire MariaDB transaction rolls back cleanly. Unsettled coins remain in players' balances, and room state is not advanced.
+- **Post-Payload Secondary Index Failures (`SecondarySyncError`)**:
+  Once the Valkey room payload `SET` succeeds (e.g. pot is committed as settled and room status transitions to waiting/round 0), any failure in secondary indices (active room index `ZADD`/`ZREM` or member mapping `SET`/`DEL`) is wrapped as `ErrSecondarySync`. Because the game state has already transitioned authoritatively in Valkey, rolling back SQL would destroy the pot and leave balances short. The service therefore allows the durable SQL transaction to commit (awarding coins and casino wins to the rightful winner), while returning `ErrSecondarySync` to the caller.
+- **Coin Conservation & Replay Rejection**:
+  Total coins across all participants are strictly conserved in both healthy settlements and secondary synchronization failure scenarios. Replaying the action after a secondary sync failure is rejected with `ErrGameNotInRound` or `ErrAlreadyActed`, preventing duplicate payouts or lost wagers.
 
 ---
 

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -86,7 +87,26 @@ var (
 	ErrGameInProgress           = errors.New("cannot perform action while game is in progress")
 	ErrMemberNotFound           = errors.New("character is not a member of this room")
 	ErrNotEnoughPlayers         = errors.New("at least 2 participants required to start game")
+	ErrSecondarySync            = errors.New("secondary synchronization failed")
 )
+
+// SecondarySyncError indicates that an authoritative room payload write succeeded,
+// but a subsequent secondary synchronization (active room index or member key mapping) failed.
+type SecondarySyncError struct {
+	Err error
+}
+
+func (e *SecondarySyncError) Error() string {
+	return fmt.Sprintf("secondary sync failed: %v", e.Err)
+}
+
+func (e *SecondarySyncError) Unwrap() error {
+	return e.Err
+}
+
+func (e *SecondarySyncError) Is(target error) bool {
+	return target == ErrSecondarySync
+}
 
 var illegalNameChars = regexp.MustCompile(`[,;\"\'&<>\\\/@]`)
 

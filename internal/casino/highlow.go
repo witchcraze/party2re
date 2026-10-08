@@ -142,9 +142,10 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 	}
 
 	var showdownWinners []string
+	var secondarySyncErr error
 
 	err := s.withRoomLock(ctx, roomID, func(lockedCtx context.Context) error {
-		return s.runInTx(lockedCtx, func(txCtx context.Context) error {
+		txErr := s.runInTx(lockedCtx, func(txCtx context.Context) error {
 			room, err := s.roomRepo.GetRoomForUpdate(txCtx, roomID)
 			if err != nil {
 				return err
@@ -205,7 +206,11 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 			member.Action = string(action)
 			member.UpdatedAt = time.Now().UTC()
 			if err := s.roomRepo.UpdateMember(txCtx, *member); err != nil {
-				return err
+				if errors.Is(err, ErrSecondarySync) {
+					secondarySyncErr = err
+				} else {
+					return err
+				}
 			}
 
 			// Re-count actions of all participants
@@ -264,7 +269,11 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 							m.Action = ""
 							m.UpdatedAt = time.Now().UTC()
 							if err := s.roomRepo.UpdateMember(txCtx, m); err != nil {
-								return err
+								if errors.Is(err, ErrSecondarySync) {
+									secondarySyncErr = err
+								} else {
+									return err
+								}
 							}
 						}
 					}
@@ -368,7 +377,11 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 					}
 					if pAcc.Coins <= 0 {
 						if err := s.roomRepo.RemoveMember(txCtx, roomID, m.CharacterID); err != nil {
-							return fmt.Errorf("removing eliminated member %s: %w", m.CharacterID, err)
+							if errors.Is(err, ErrSecondarySync) {
+								secondarySyncErr = err
+							} else {
+								return fmt.Errorf("removing eliminated member %s: %w", m.CharacterID, err)
+							}
 						}
 						if room.LeaderCharacterID == m.CharacterID && primaryWinner != "" {
 							room.LeaderCharacterID = primaryWinner
@@ -377,15 +390,33 @@ func (s *Service) PlayHighLowAction(ctx context.Context, roomID string, characte
 						m.Action = "待機中"
 						m.UpdatedAt = time.Now().UTC()
 						if err := s.roomRepo.UpdateMember(txCtx, m); err != nil {
-							return fmt.Errorf("updating member %s status: %w", m.CharacterID, err)
+							if errors.Is(err, ErrSecondarySync) {
+								secondarySyncErr = err
+							} else {
+								return fmt.Errorf("updating member %s status: %w", m.CharacterID, err)
+							}
 						}
 					}
 				}
 			}
 
 			room.UpdatedAt = time.Now().UTC()
-			return s.roomRepo.UpdateRoom(txCtx, *room)
+			if err := s.roomRepo.UpdateRoom(txCtx, *room); err != nil {
+				if errors.Is(err, ErrSecondarySync) {
+					secondarySyncErr = err
+				} else {
+					return err
+				}
+			}
+			return nil
 		})
+		if txErr != nil {
+			return txErr
+		}
+		if secondarySyncErr != nil {
+			return secondarySyncErr
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
