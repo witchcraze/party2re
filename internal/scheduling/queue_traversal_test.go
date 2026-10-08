@@ -371,11 +371,22 @@ func TestWorker_QueueTraversal_MixedStatesAndTerminalCleanup(t *testing.T) {
 		}
 	}
 
-	// Verify the 10 blocked actions remain in Processing
+	// Verify the 10 blocked actions remain in Processing in storage, but separated from execution queue
 	for _, aID := range blockedIDs {
+		data, err := client.Do(ctx, client.B().Get().Key("party2:scheduled:action:"+aID).Build()).ToString()
+		if err != nil {
+			t.Fatalf("get blocked action %s: %v", aID, err)
+		}
+		var stored core.ScheduledAction
+		if err := json.Unmarshal([]byte(data), &stored); err != nil {
+			t.Fatal(err)
+		}
+		if stored.State != core.StateProcessing {
+			t.Fatalf("expected action %s to remain Processing, got %s", aID, stored.State)
+		}
 		score, err := client.Do(ctx, client.B().Zscore().Key("party2:scheduled:pending").Member(aID).Build()).ToString()
-		if err != nil || score == "" {
-			t.Fatalf("expected blocked %s to remain queued", aID)
+		if !valkey.IsValkeyNil(err) {
+			t.Fatalf("expected blocked %s to be separated from pending queue, score=%s, err=%v", aID, score, err)
 		}
 	}
 }
@@ -421,5 +432,181 @@ func TestWorker_QueueTraversal_TransientErrorPropagation(t *testing.T) {
 		if err != nil || score == "" {
 			t.Fatalf("expected %s to remain queued after transient error", aID)
 		}
+	}
+}
+
+func TestWorker_QueueTraversal_ScanBudgetProgressAcrossTicks(t *testing.T) {
+	client := openValkeyClient(t)
+	t.Cleanup(client.Close)
+
+	ctx := context.Background()
+	actorID := id.New()
+	t.Cleanup(func() {
+		client.Do(ctx, client.B().Del().Key("party2:scheduled:actor:"+actorID).Build())
+	})
+
+	repo := scheduling.NewValkeyRepository(client)
+	handler := &terminalCountingHandler{}
+	worker := scheduling.NewWorker(repo, time.Minute, logging.NewJSON(io.Discard))
+	worker.RegisterHandler("test:action", handler)
+
+	// Step 1: Schedule 1000 distinct valid test:action records in StateProcessing with ExecuteAt=now-1h,
+	// all sharing the exact same score (equal scores) and one unique test actor.
+	const numBlocked = 1000
+	blockedIDs := make([]string, numBlocked)
+	baseTime := time.Now().Add(-time.Hour).Truncate(time.Second)
+	for i := 0; i < numBlocked; i++ {
+		actionID := fmt.Sprintf("budget-blocked-%04d-%s", i, id.New())
+		blockedIDs[i] = actionID
+		action := validTestAction(actionID, baseTime)
+		action.State = core.StateProcessing
+		action.ActorID = actorID
+		if err := repo.Schedule(ctx, action); err != nil {
+			t.Fatalf("Schedule %d: %v", i, err)
+		}
+	}
+	t.Cleanup(func() {
+		cleanupKeys(t, client, blockedIDs...)
+	})
+
+	// Step 2: Add 5 mixed stale entries into pending queue (absent payload in actionKey).
+	staleIDs := make([]string, 5)
+	for i := 0; i < 5; i++ {
+		staleID := fmt.Sprintf("budget-stale-%d-%s", i, id.New())
+		staleIDs[i] = staleID
+		if err := client.Do(ctx, client.B().Zadd().Key("party2:scheduled:pending").ScoreMember().ScoreMember(float64(baseTime.Unix()), staleID).Build()).Error(); err != nil {
+			t.Fatalf("Zadd stale %d: %v", i, err)
+		}
+	}
+	t.Cleanup(func() {
+		for _, sID := range staleIDs {
+			client.Do(ctx, client.B().Zrem().Key("party2:scheduled:pending").Member(sID).Build())
+		}
+	})
+
+	// Step 3: Add 1 terminal Completed record behind the prefix with future RetainUntil (simulating failed ZREM during terminal Save).
+	terminalID := fmt.Sprintf("budget-terminal-%s", id.New())
+	terminalAction := validTestAction(terminalID, baseTime.Add(30*time.Second))
+	terminalAction.State = core.StateCompleted
+	terminalAction.RetainUntil = time.Now().Add(24 * time.Hour)
+	if err := repo.Schedule(ctx, terminalAction); err != nil {
+		t.Fatalf("Schedule terminal: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupKeys(t, client, terminalID)
+	})
+
+	// Step 4: Schedule 1 valid Pending action for the same actor with ExecuteAt=now-59m.
+	healthyID := fmt.Sprintf("budget-healthy-%s", id.New())
+	healthyAction := validTestAction(healthyID, baseTime.Add(time.Minute))
+	healthyAction.ActorID = actorID
+	if err := repo.Schedule(ctx, healthyAction); err != nil {
+		t.Fatalf("Schedule healthy: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupKeys(t, client, healthyID)
+	})
+
+	// Verify actor discovery sees all 1001 unfinished records before worker run (1000 Processing + 1 Pending; terminal is omitted)
+	unfinished, err := repo.FindPendingByActorID(ctx, actorID)
+	if err != nil {
+		t.Fatalf("FindPendingByActorID: %v", err)
+	}
+	if len(unfinished) != 1001 {
+		t.Fatalf("expected 1001 unfinished records, got %d", len(unfinished))
+	}
+
+	// Step 5: Controlled concurrent insert & removal during traversal.
+	concurrentInsertID := fmt.Sprintf("budget-concurrent-%s", id.New())
+	concurrentAction := validTestAction(concurrentInsertID, baseTime.Add(2*time.Minute))
+	concurrentAction.ActorID = actorID
+	if err := repo.Schedule(ctx, concurrentAction); err != nil {
+		t.Fatalf("Schedule concurrent: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupKeys(t, client, concurrentInsertID)
+	})
+
+	// Repeat FetchDue(now, 50) and Worker.ProcessAction across ticks.
+	// Production limit is 50.
+	var executedHealthy bool
+	var executedConcurrent bool
+	for tick := 0; tick < 10; tick++ {
+		due, err := repo.FetchDue(ctx, time.Now(), 50)
+		if err != nil {
+			t.Fatalf("FetchDue tick %d: %v", tick, err)
+		}
+		if len(due) > 50 {
+			t.Fatalf("tick %d returned %d actions, exceeding production limit 50", tick, len(due))
+		}
+		for _, a := range due {
+			worker.ProcessAction(ctx, a)
+			if a.ID == healthyID {
+				executedHealthy = true
+			}
+			if a.ID == concurrentInsertID {
+				executedConcurrent = true
+			}
+		}
+		if executedHealthy && executedConcurrent {
+			break
+		}
+	}
+
+	if !executedHealthy {
+		t.Fatalf("expected healthy action to be executed across repeated production-limit ticks, but was never fetched")
+	}
+	if !executedConcurrent {
+		t.Fatalf("expected concurrent action to be executed across repeated production-limit ticks")
+	}
+	// Exactly 2 handler calls (healthyAction and concurrentAction; 1000 Processing and 1 Completed NEVER replayed)
+	if handler.calls != 2 {
+		t.Fatalf("expected exactly 2 handler calls, got %d", handler.calls)
+	}
+
+	// Verify terminal action was cleaned up from pending queue (metadata-only finalization)
+	termScore, err := client.Do(ctx, client.B().Zscore().Key("party2:scheduled:pending").Member(terminalID).Build()).ToString()
+	if !valkey.IsValkeyNil(err) {
+		t.Fatalf("expected terminal action %s to be cleaned from queue, score=%s, err=%v", terminalID, termScore, err)
+	}
+
+	// Verify all stale IDs were removed from pending queue
+	for _, sID := range staleIDs {
+		score, err := client.Do(ctx, client.B().Zscore().Key("party2:scheduled:pending").Member(sID).Build()).ToString()
+		if !valkey.IsValkeyNil(err) {
+			t.Fatalf("expected stale %s to be cleaned from queue, score=%s, err=%v", sID, score, err)
+		}
+	}
+
+	// Verify all 1000 blocked records remain discoverable and in StateProcessing
+	unfinishedAfter, err := repo.FindPendingByActorID(ctx, actorID)
+	if err != nil {
+		t.Fatalf("FindPendingByActorID after: %v", err)
+	}
+	if len(unfinishedAfter) != 1000 {
+		t.Fatalf("expected 1000 unfinished records remaining, got %d", len(unfinishedAfter))
+	}
+
+	// Step 6: Healthy diagnostic contrast: scheduling a fresh due action immediately fetches and executes in 1 tick
+	contrastID := fmt.Sprintf("budget-contrast-%s", id.New())
+	contrastAction := validTestAction(contrastID, baseTime.Add(3*time.Minute))
+	contrastAction.ActorID = actorID
+	if err := repo.Schedule(ctx, contrastAction); err != nil {
+		t.Fatalf("Schedule contrast: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupKeys(t, client, contrastID)
+	})
+
+	dueContrast, err := repo.FetchDue(ctx, time.Now(), 50)
+	if err != nil {
+		t.Fatalf("FetchDue contrast: %v", err)
+	}
+	if len(dueContrast) != 1 || dueContrast[0].ID != contrastID {
+		t.Fatalf("expected contrast action %s returned immediately, got %+v", contrastID, dueContrast)
+	}
+	worker.ProcessAction(ctx, dueContrast[0])
+	if handler.calls != 3 {
+		t.Fatalf("expected 3 handler calls after contrast, got %d", handler.calls)
 	}
 }

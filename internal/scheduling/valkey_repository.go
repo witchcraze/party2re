@@ -67,9 +67,9 @@ func (r *ValkeyRepository) Schedule(ctx context.Context, action core_scheduling.
 }
 
 // FetchDue queries actions due up to upTo from the pending queue sorted set.
-// It traverses the queue in bounded batches, excluding preserved Processing
-// records from execution candidates while leaving their authoritative storage and
-// actor discovery intact.
+// It traverses the queue in bounded batches, separating preserved Processing
+// records from execution candidates by removing them from the pending queue
+// while leaving their authoritative storage, lock, and actor discovery intact.
 // If an action key is genuinely missing (valkey.IsValkeyNil), the stale entry
 // is removed from the pending queue. If reading the payload fails due to a
 // transient storage error or context cancellation, the queued entry is preserved
@@ -156,13 +156,17 @@ func (r *ValkeyRepository) FetchDue(ctx context.Context, upTo time.Time, limit i
 				continue
 			}
 
-			retainedInBatch++
-
 			// Processing records represent uncertain outcomes that must not be replayed.
-			// They are preserved in the queue and actor index, but excluded from execution candidates.
+			// They are separated from execution candidates by removing them from the
+			// pending queue while preserving their authoritative payload, lock, and actor discovery.
 			if action.State == core_scheduling.StateProcessing {
+				if remErr := r.client.Do(ctx, r.client.B().Zrem().Key(pendingQueueKey).Member(id).Build()).Error(); remErr != nil && !valkey.IsValkeyNil(remErr) {
+					return nil, remErr
+				}
 				continue
 			}
+
+			retainedInBatch++
 
 			actions = append(actions, action)
 			if len(actions) == limit {
