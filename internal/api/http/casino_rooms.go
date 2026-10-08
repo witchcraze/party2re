@@ -312,6 +312,18 @@ func (h *Handler) handleStartCasinoRoomGame(w http.ResponseWriter, r *http.Reque
 	})
 }
 
+// handlePlayCasinoRoomAction handles POST /characters/{id}/casino/rooms/{roomId}/action.
+//
+// Error mapping and settlement boundary:
+//   - 400 Bad Request: Invalid action or parameters (e.g. ErrInvalidAction, ErrLowNotAllowedTwo)
+//   - 403 Forbidden: Action already submitted (ErrAlreadyActed) or spectator attempting play
+//   - 404 Not Found: Room or member not found
+//   - 409 Conflict: Game is not in an active round (ErrGameNotInRound)
+//   - 422 Unprocessable Entity: Insufficient casino coins to call/wager
+//   - 500 Internal Server Error: Authoritative write failure (SQL rolled back) or post-payload
+//     secondary synchronization error (ErrSecondarySync). On ErrSecondarySync, durable financial
+//     settlement (wagers, payouts, casino wins) and Valkey room payload are already committed;
+//     clients must not blindly replay the action, as replays will be rejected with 409 or 403.
 func (h *Handler) handlePlayCasinoRoomAction(w http.ResponseWriter, r *http.Request) {
 	if h.casino == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("casino service not configured"))
