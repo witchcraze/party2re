@@ -114,10 +114,11 @@ func TestValkeyNavigationLifetimeAndSharedClients(t *testing.T) {
 	if ttl, err := client.Do(ctx, client.B().Ttl().Key(key).Build()).ToInt64(); err != nil || ttl > 60 || ttl <= 0 {
 		t.Fatalf("GET renewed TTL: %d %v", ttl, err)
 	}
-	if err := second.Save(ctx, actorID, Selection{Destination: "home"}); err != nil {
+	cursor := ""
+	if err := second.Save(ctx, actorID, Selection{Destination: "home_inbox", Cursor: &cursor}); err != nil {
 		t.Fatal(err)
 	}
-	if n, err := r.Load(ctx, actorID); err != nil || n.Destination != "home" {
+	if n, err := r.Load(ctx, actorID); err != nil || n.Destination != "home_inbox" || n.Cursor == nil || *n.Cursor != "" {
 		t.Fatalf("last write %+v %v", n, err)
 	}
 	if ttl, err := client.Do(ctx, client.B().Ttl().Key(key).Build()).ToInt64(); err != nil || ttl < 604795 || ttl > 604800 {

@@ -2931,7 +2931,7 @@
           "support"
         ],
         "additionalProperties": false,
-        "description": "Registered selected scene. Initial facility/subject variants expose navigation controls only, not replacement facility details. No GET writes, TTL renewal or gameplay mutation.",
+        "description": "Registered selected scene. Home details use public/owned projections; other initial facilities expose controls. GET never writes or renews selection.",
         "allOf": [
           {
             "if": {
@@ -2974,7 +2974,17 @@
             "then": {
               "properties": {
                 "data": {
-                  "$ref": "#/components/schemas/SelectionSceneData"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/SelectionSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeMailboxSceneData"
+                    }
+                  ]
                 }
               },
               "not": {
@@ -2998,7 +3008,17 @@
             "then": {
               "properties": {
                 "data": {
-                  "$ref": "#/components/schemas/SelectionSceneData"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/SelectionSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HomeMailboxSceneData"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -3021,6 +3041,58 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/SelectionSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "home"
+                },
+                "kind": {
+                  "enum": [
+                    "facility",
+                    "subject"
+                  ]
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "enum": [
+                    "home_inbox",
+                    "home_outbox"
+                  ]
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/HomeMailboxSceneData"
                 }
               }
             }
@@ -3422,7 +3494,9 @@
                         "shop_weapon",
                         "shop_armor",
                         "shop_item",
-                        "shop_accessory"
+                        "shop_accessory",
+                        "home_inbox",
+                        "home_outbox"
                       ]
                     }
                   },
@@ -3458,13 +3532,14 @@
                     "target_kind": {
                       "type": "string",
                       "enum": [
-                        "item"
+                        "item",
+                        "home"
                       ]
                     },
                     "target_id": {
                       "type": "string",
                       "pattern": "^[a-zA-Z0-9_-]{1,128}$",
-                      "description": "An item ID available in the selected shop catalog for the owned actor."
+                      "description": "A public Home character ID or item ID available in the owned actor shop catalog, validated by the selected adapter."
                     }
                   },
                   "required": [
@@ -3506,7 +3581,9 @@
                         "shop_weapon",
                         "shop_armor",
                         "shop_item",
-                        "shop_accessory"
+                        "shop_accessory",
+                        "home_inbox",
+                        "home_outbox"
                       ]
                     },
                     "offset": {
@@ -3519,13 +3596,40 @@
                       "minimum": 1,
                       "maximum": 100,
                       "default": 20
+                    },
+                    "cursor": {
+                      "type": "string",
+                      "maxLength": 512,
+                      "pattern": "^[a-zA-Z0-9_=-]{0,512}$"
                     }
                   },
                   "required": [
-                    "destination",
-                    "offset"
+                    "destination"
                   ],
-                  "additionalProperties": false
+                  "additionalProperties": false,
+                  "oneOf": [
+                    {
+                      "required": [
+                        "offset"
+                      ],
+                      "not": {
+                        "required": [
+                          "cursor"
+                        ]
+                      }
+                    },
+                    {
+                      "required": [
+                        "cursor"
+                      ],
+                      "not": {
+                        "required": [
+                          "offset"
+                        ]
+                      }
+                    }
+                  ],
+                  "description": "Exactly one of offset or cursor. Cursor is accepted only for Home inbox/outbox; empty cursor starts the existing keyset reader."
                 }
               },
               "required": [
@@ -3894,6 +3998,11 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 100
+          },
+          "cursor": {
+            "type": "string",
+            "maxLength": 512,
+            "pattern": "^[a-zA-Z0-9_=-]{0,512}$"
           }
         },
         "required": [
@@ -3918,7 +4027,9 @@
               "shop_weapon",
               "shop_armor",
               "shop_item",
-              "shop_accessory"
+              "shop_accessory",
+              "home_inbox",
+              "home_outbox"
             ]
           },
           "offset": {
@@ -3930,20 +4041,50 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 100
+          },
+          "cursor": {
+            "type": "string",
+            "maxLength": 512,
+            "pattern": "^[a-zA-Z0-9_=-]{0,512}$"
           }
         },
         "required": [
           "destination",
-          "offset",
           "limit"
-        ]
+        ],
+        "oneOf": [
+          {
+            "required": [
+              "offset"
+            ],
+            "not": {
+              "required": [
+                "cursor"
+              ]
+            }
+          },
+          {
+            "required": [
+              "cursor"
+            ],
+            "not": {
+              "required": [
+                "offset"
+              ]
+            }
+          }
+        ],
+        "description": "Exactly one of offset or cursor. Cursor is accepted only for Home inbox/outbox; empty cursor starts the existing keyset reader."
       },
       "ScenePage": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "mode": {
-            "const": "offset"
+            "enum": [
+              "offset",
+              "cursor"
+            ]
           },
           "offset": {
             "type": "integer",
@@ -4002,7 +4143,9 @@
                   "shop_weapon",
                   "shop_armor",
                   "shop_item",
-                  "shop_accessory"
+                  "shop_accessory",
+                  "home_inbox",
+                  "home_outbox"
                 ]
               }
             },
@@ -4098,7 +4241,10 @@
         "additionalProperties": false,
         "properties": {
           "observation": {
-            "const": "controls"
+            "enum": [
+              "controls",
+              "details"
+            ]
           },
           "actions": {
             "type": "array",
@@ -4112,7 +4258,233 @@
           "observation",
           "actions"
         ],
-        "description": "Controls-only scene support. Connection is separate from entry eligibility; service execution still revalidates. Facility detail adapters add their own typed observation variants."
+        "description": "Details are typed by the facility adapter. Connection and entry eligibility remain separate."
+      },
+      "HomeOwner": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "color": {
+            "type": "string",
+            "maxLength": 7
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "color"
+        ]
+      },
+      "HomeSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "character_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "town_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "house_style": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "companion_name": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "bgimg": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "character_id",
+          "town_id",
+          "house_style",
+          "companion_name",
+          "updated_at"
+        ]
+      },
+      "HomePet": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "custom_name": {
+            "type": "string"
+          },
+          "monster_id": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "id",
+          "custom_name"
+        ]
+      },
+      "OwnedHomeDetails": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "unread_letter_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "companion_phrase_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "recent_delivery_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "unread_letter_count",
+          "companion_phrase_count",
+          "recent_delivery_count"
+        ]
+      },
+      "HomeView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "owner": {
+            "$ref": "#/components/schemas/HomeOwner"
+          },
+          "home": {
+            "$ref": "#/components/schemas/HomeSettings"
+          },
+          "private": {
+            "$ref": "#/components/schemas/OwnedHomeDetails"
+          },
+          "is_owner": {
+            "type": "boolean"
+          },
+          "resident_pets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HomePet"
+            }
+          }
+        },
+        "required": [
+          "owner",
+          "home",
+          "is_owner"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "is_owner": {
+                  "const": false
+                }
+              },
+              "required": [
+                "is_owner"
+              ]
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "private"
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "is_owner": {
+                  "const": true
+                }
+              },
+              "required": [
+                "is_owner"
+              ]
+            },
+            "then": {
+              "required": [
+                "private"
+              ]
+            }
+          }
+        ]
+      },
+      "HomeSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "parent": {
+            "const": "town"
+          },
+          "view": {
+            "$ref": "#/components/schemas/HomeView"
+          },
+          "destinations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SceneDestination"
+            },
+            "maxItems": 2
+          }
+        },
+        "required": [
+          "parent",
+          "view",
+          "destinations"
+        ]
+      },
+      "HomeMailboxSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "parent": {
+            "const": "home"
+          },
+          "letters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Letter"
+            },
+            "maxItems": 100
+          },
+          "page": {
+            "$ref": "#/components/schemas/ScenePage"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "parent",
+          "letters",
+          "page"
+        ]
       }
     },
     "securitySchemes": {

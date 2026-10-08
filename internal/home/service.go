@@ -77,8 +77,18 @@ func NewService(repo Repository, charReader CharacterReader, opts ...ServiceOpti
 	return s, nil
 }
 
-// GetHomeView retrieves the aggregated home view for a character.
-func (s *Service) GetHomeView(ctx context.Context, homeCharacterID, visitorCharacterID string) (HomeView, error) {
+// GetHomeView verifies the viewer's account before fetching owner-only facts.
+// An empty viewer requests the public projection, without private reads.
+func (s *Service) GetHomeView(ctx context.Context, homeCharacterID, visitorCharacterID, playerID string) (HomeView, error) {
+	if visitorCharacterID != "" {
+		viewer, err := s.charReader.FindByID(ctx, visitorCharacterID)
+		if err != nil {
+			return HomeView{}, err
+		}
+		if playerID == "" || viewer.PlayerID != playerID || viewer.ID != visitorCharacterID {
+			return HomeView{}, ErrForbidden
+		}
+	}
 	homeChar, err := s.charReader.FindByID(ctx, homeCharacterID)
 	if err != nil {
 		if errors.Is(err, corecharacter.ErrNotFound) {
@@ -94,37 +104,32 @@ func (s *Service) GetHomeView(ctx context.Context, homeCharacterID, visitorChara
 		return HomeView{}, err
 	}
 
-	unreadCount, err := s.repo.GetUnreadLetterCount(ctx, homeCharacterID)
-	if err != nil {
-		return HomeView{}, fmt.Errorf("getting unread letter count: %w", err)
-	}
-	phrases, err := s.repo.ListCompanionPhrases(ctx, homeCharacterID)
-	if err != nil {
-		return HomeView{}, fmt.Errorf("listing companion phrases: %w", err)
-	}
-	notices, err := s.repo.ListDeliveryNotices(ctx, homeCharacterID, true)
-	if err != nil {
-		return HomeView{}, fmt.Errorf("listing delivery notices: %w", err)
+	view := HomeView{Owner: HomeOwner{ID: homeChar.ID, Name: homeChar.Name, Color: homeChar.Color}, Home: h, IsOwner: isOwner, ResidentPets: []HomePet{}}
+	if isOwner {
+		unreadCount, err := s.repo.GetUnreadLetterCount(ctx, homeCharacterID)
+		if err != nil {
+			return HomeView{}, fmt.Errorf("getting unread letter count: %w", err)
+		}
+		phrases, err := s.repo.ListCompanionPhrases(ctx, homeCharacterID)
+		if err != nil {
+			return HomeView{}, fmt.Errorf("listing companion phrases: %w", err)
+		}
+		notices, err := s.repo.ListDeliveryNotices(ctx, homeCharacterID, true)
+		if err != nil {
+			return HomeView{}, fmt.Errorf("listing delivery notices: %w", err)
+		}
+		view.Private = &OwnedHomeDetails{UnreadLetterCount: unreadCount, CompanionPhraseCount: len(phrases), RecentDeliveryCount: len(notices)}
 	}
 
-	var residentPets []HomePet
 	if s.petReader != nil {
 		pets, err := s.petReader.ListHomePets(ctx, homeCharacterID)
 		if err != nil {
 			return HomeView{}, fmt.Errorf("listing home pets: %w", err)
 		}
-		residentPets = pets
+		view.ResidentPets = append(view.ResidentPets, pets...)
 	}
 
-	return HomeView{
-		Owner:                homeChar,
-		Home:                 h,
-		UnreadLetterCount:    unreadCount,
-		CompanionPhraseCount: len(phrases),
-		RecentDeliveryCount:  len(notices),
-		IsOwner:              isOwner,
-		ResidentPets:         residentPets,
-	}, nil
+	return view, nil
 }
 
 // UpdateHome updates private home custom settings (companion_name).

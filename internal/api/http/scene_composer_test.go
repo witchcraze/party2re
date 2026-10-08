@@ -177,16 +177,8 @@ func TestSceneAdapterFailureAndMissingConnection(t *testing.T) {
 }
 
 func TestHomeTemplateUsesExplicitActorAndDoesNotBindNavigation(t *testing.T) {
-	f := newHomeGatewayFixture(t)
-	f.expectedContext = nil
-	store := &gatewayNavigationStore{selection: playercontext.Selection{Destination: "home"}}
-	service := playercontext.NewService(f.gatewayFixture, f.gatewayFixture, f.timers, playercontext.WithNavigation(store,
-		playercontext.SceneDefinition{ID: "town"}, playercontext.SceneDefinition{ID: "home", Parent: "town"}))
-	h, err := NewHandler(f.gatewayFixture, f.gatewayFixture, &struct{ AdventureService }{}, &struct{ ShopService }{}, WithHome(f), WithPlayerContext(service))
-	if err != nil {
-		t.Fatal(err)
-	}
-	status, observed := navigationGET(t, h.Router())
+	f, store, router := homeSceneRouter(t)
+	status, observed := navigationGET(t, router)
 	if status != 200 {
 		t.Fatalf("status: %d", status)
 	}
@@ -195,7 +187,7 @@ func TestHomeTemplateUsesExplicitActorAndDoesNotBindNavigation(t *testing.T) {
 		t.Fatalf("full Home contract: %+v", action)
 	}
 	store.selection.Destination = "town"
-	status, raw := gatewayRequest(t, h.Router(), "hero", "session", "application/json", `{"action":"home_sleep","params":{"target_home_id":"other"}}`, nil)
+	status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"home_sleep","params":{"target_home_id":"other"}}`, nil)
 	if status != 200 || string(raw["success"]) != "true" || f.target != "other" || f.executions != 1 || store.writes != 0 {
 		t.Fatalf("explicit target was redirected: %d %s", status, raw)
 	}
@@ -218,7 +210,7 @@ func TestOfferedParamsReuseGatewaySchemaAndKeepCompleteInputs(t *testing.T) {
 	if err := json.Unmarshal(a.ParamsSchema, &schema); err != nil {
 		t.Fatal(err)
 	}
-	if schema.Type != "object" || schema.AdditionalProperties || !slices.Equal(a.RequiredParams, []string{"destination", "offset"}) || !slices.Equal(schema.Required, a.RequiredParams) || schema.Properties["destination"].Const != "shop_weapon" {
+	if schema.Type != "object" || schema.AdditionalProperties || !slices.Equal(a.RequiredParams, []string{"destination"}) || !slices.Equal(schema.Required, a.RequiredParams) || schema.Properties["destination"].Const != "shop_weapon" {
 		t.Fatalf("schema/template: %+v / %+v", a, schema)
 	}
 }

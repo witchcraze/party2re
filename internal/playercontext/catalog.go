@@ -49,7 +49,7 @@ type ActionDefinition struct {
 var DefaultCatalog = []ActionDefinition{
 	{ID: "scene_enter", Label: "施設を選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"destination"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "scene_select", Label: "対象を選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"target_kind", "target_id"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
-	{ID: "scene_page", Label: "ページを選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"destination", "offset"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
+	{ID: "scene_page", Label: "ページを選ぶ", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{"destination"}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	{ID: "scene_back", Label: "戻る", Category: "navigation", OperationID: "executeCharacterAction", RequiredParams: []string{}, RequiredGates: GateSleepCheck | GateCooldownCheck | GateLocationCheck},
 	// =========================================================================
 	// Category: adventure (Combat & Expeditions)

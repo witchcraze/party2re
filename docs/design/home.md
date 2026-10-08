@@ -6,6 +6,81 @@ The Player Private Home Feature Module (`internal/home`) manages character priva
 
 ---
 
+## Observation, visibility and navigation
+
+`home` observes the owned actor by default. `scene_select` with
+`target_kind:home` and `target_id` observes another character's home; the path
+character remains the authenticated viewer and mutation actor. The Home service
+checks the viewer's account before private enrichment, including direct service
+calls. Public owner identity is limited to ID, name and color; it never returns
+the raw Character, wallet, account ID or private notices.
+
+Public facts contain existing home settings and resident pets. Only an exact
+actor/target match adds `private` unread-letter, phrase and delivery counts.
+Public reads do not fetch any of those private collections. Required home, pet
+or owned enrichment failures fail the observation, without a partial response.
+The existing settings reader returns defaults for a character without a home
+row; observation never creates that row. Viewing settings is distinct from the
+active lease required by the existing other-home Sleep service. Lease/formula
+parity is outside this observation slice.
+
+Own Home offers `home_inbox` and `home_outbox`, both parented to `home`. They
+always read the owned actor's mailbox, even when entered explicitly after a
+public Home selection. Each uses the existing offset or timestamp/ID keyset
+service, bounded to 100 letters, with explicit next-page inputs. Neither
+selecting nor observing reads/clears a letter, acknowledges a notice, or wakes
+the character. GET does not save selection or renew its TTL; expired selection
+returns town, and a disappeared selected target remains explicitly unavailable.
+Home Sleep templates carry the observed target ID; a submitted command retains
+that explicit ID even if another client changes selection before submission.
+Wake and Rescue retain their existing lifecycle and refresh-recovery contracts.
+
+### Scoped legacy action reconciliation
+
+Paths below are relative to the original `party2/` distribution. This is the
+complete active registration in `lib/home.cgi:26–39,73–105`, with call paths
+inspected at `138–201,237–265,379–507,591–604`; formulas/assets are not certified.
+
+| Legacy action / call path | Current replacement or deferred owner |
+| --- | --- |
+| `system.cgi:418–435` `ほーむ` → `homu`, `$m{home}` | `scene_enter:home` / `scene_select:home` → public Home.GetHomeView. Unavailable selection stays explicit instead of silently falling back. |
+| Public/own `ねる` → `neru` | Existing `home_sleep` → Home.Sleep, actor separate from explicit target. `home_wake` → Home.Wake replaces implicit `sleep.cgi:18–42` GET recovery, approved in #646/#1012. Sleep formulas unchanged. |
+| `あいてむずかん` → `aitemuzukan` | Collection.GetItemCollection / `GET /characters/{id}/collections/items`; selected-owner reference detail remains #949. |
+| `もんすたーぶっく` → `monster_book` | Collection.GetMonsterBook / `GET /characters/{id}/collections/monsters`; Home reference navigation remains #949. |
+| `じょぶますたー` → `job_master` | Job.GetJobMastery / existing job mastery REST; selected-owner reference visibility remains #949. |
+| `ぷろふぃーる` → `profile` | Character.GetProfile / existing profile REST; Home reference navigation remains #949. |
+| `ぼうけんのきろく` → `bokennokiroku` | Adventure.GetChronicle / existing adventure chronicle REST; Home reference navigation remains #948/#949. |
+| Own-only `つかう` → `thukau` | Home.ListHomeItems / UseHomeItem; item detail selection and mutation migration remain #949. |
+| Own-only `てがみをかく` → `tegamiwokaku`, sent log | Home.ListOutbox / ListOutboxByCursor through `home_outbox`; SendLetter remains REST, mutation migration #949. |
+| Own-only `てがみをよむ` → `tegamiwoyomu` | Home.ListInbox / ListInboxByCursor through `home_inbox`; ReadLetter / DeleteLetter remain explicit REST, mutation migration #949. |
+| Own-only `からー` → `color` | Home.SetCharacterColor / existing color/settings REST; migration #949. |
+| Own-only `ことばをおしえる` → `kotobawooshieru` | Home.ListCompanionPhrases / TeachCompanionPhrase; phrase details/mutations remain #949. |
+| Own-only `ことばをわすれさせる` → `kotobawowasureru` | Home.ListCompanionPhrases / ForgetCompanionPhrase; phrase details/mutations remain #949. |
+| Own-only `かすたむすきる` → `custom_skill` | Existing custom-skill REST; selection/mutation migration #949. |
+| Conditional own `いめーじ` → `custom_image` | Existing profile/avatar presentation; Gateway migration #949, production asset mapping #654/#729. |
+| `br`; commented avatar/upload registrations | Separator superseded by structured controls; commented actions are not active dispatch. |
+| Home `hanasu` (`419–435`), shared system dialogue dispatch | Home.TalkToCompanion REST remains; scene dialogue/presence belongs to #949. Selection never introduces presence or log writes. |
+| Own render letter/money/item notices (`45–67`) | Private counts are read-only; explicit ReadLetter / ClearDeliveryNotices remain. Unlike legacy rendering, observation never clears notices, as required by the Gateway read contract. |
+
+### Retained REST and deferred detail ownership
+
+No Home/Estate route is retired by this slice. #949 owns remaining Home command
+and collection migration; #950 may remove only individually verified replacements.
+
+| Retained route(s) | Reason / remaining owner |
+| --- | --- |
+| `GET /homes/{id}` | Public projection or authenticated `visitor_id` projection uses the same Home service. Existing clients must use the whitelisted owner and `private` counters. Full retirement remains #949/#950. |
+| `POST /homes/{id}/settings`, `POST /characters/{id}/color` | Companion-name/color mutations are not migrated; #949. |
+| `GET/POST /homes/{id}/companion/phrases`, `DELETE /homes/{id}/companion/phrases/{phrase_id}` | Owner-only phrase details/teaching/removal remain REST; #949. |
+| `GET /homes/{id}/companion/talk` | Public random dialogue reader is retained; deterministic Home observation does not invoke it; #949. |
+| `GET /homes/{id}/notices`, `POST /homes/{id}/notices/clear` | Owner-only full delivery notice ledger/acknowledgment remains REST; Home scene supplies counts only; #949. |
+| `POST/GET /towns/{town_id}/houses`, `GET /houses/check` | Estate construction, public town listing and lease check are distinct from Home detail; #949. |
+| `GET /characters/{id}/home/items`, `POST /characters/{id}/home/items/use` | Owner-only inventory/depot/equipment item detail and use are deferred; #949. |
+| `POST /letters`, `GET /letters/inbox`, `GET /letters/outbox`, `GET /letters/unread-count`, `POST /letters/{id}/read`, `DELETE /letters/{id}` | Existing mailbox offset/keyset compatibility, send/read/delete and standalone count readers remain; #949/#950. |
+| `POST/GET /characters/{id}/home/sleep`, `POST /characters/{id}/home/wake` | Existing sleep-status transport and connected Sleep/Wake commands remain; broader route retirement is #949/#950. |
+
+---
+
 ## Domain Rules & Features
 
 ### 1. Town House Estate & Customization (`character_homes`)
@@ -85,7 +160,8 @@ Adventurers can inspect equipment and consume location-2 items directly from the
 
 Persistent ledger for incoming transfer events:
 - Logs item deliveries, bank remittances, and gift notifications.
-- Supports retrieval of uncleared notices and bulk clearing upon viewing.
+- Supports retrieval of uncleared notices and explicit bulk acknowledgment.
+  Viewing never clears the ledger.
 
 ### 6. Resting & Sleeping (`sleep.cgi`, `home.cgi`)
 
@@ -124,15 +200,13 @@ True Party2 character recovery is conducted at Home (either one's own or a visit
 | `GET` | `/characters/{id}/home/sleep` | Owner Session | Check current sleep timer and status |
 | `GET` | `/characters/{id}/home/items` | Owner Session | List inspectable and usable items in inventory & depot |
 | `POST` | `/characters/{id}/home/items/use` | Owner Session | Inspect equipment or consume seeds/medals/fatigue items from home |
-| `GET` | `/homes/{id}` | Optional | Get aggregated home view for character `id` (with optional `?visitor_id=...`) |
+| `GET` | `/homes/{id}` | Public / Viewer Session | Get public projection; `?visitor_id=...` requires its owner session and service verification |
 | `POST` | `/homes/{id}/settings` | Owner Action Session | Update home settings (companion name) |
 | `POST` | `/homes/{id}/companion/phrases` | Owner Action Session | Teach a new greeting phrase to the home companion (max 120 chars) |
 | `DELETE` | `/homes/{id}/companion/phrases/{phrase_id}` | Owner Action Session | Forget a taught companion phrase |
 | `GET` | `/homes/{id}/companion/talk` | Public | Talk to the home companion to hear a random greeting |
 | `GET` | `/homes/{id}/notices` | Owner Session | List delivery notices for character |
 | `POST` | `/homes/{id}/notices/clear` | Owner Action Session | Clear/acknowledge all delivery notices |
-| `POST` | `/characters/{id}/home/sleep` | Owner Session | Start sleeping at home (or target player's home) |
-| `GET` | `/characters/{id}/home/sleep` | Owner Session | Check current sleep timer and status |
 | `POST` | `/characters/{id}/home/wake` | Owner Session | Wake up with full HP/MP/tired recovery and reset hooks |
 | `POST` | `/letters` | Sender Action Session | Send a new letter to a recipient character |
 | `GET` | `/letters/inbox` | Recipient Session | List received letters (`?character_id=...&limit=...&offset=...`) |

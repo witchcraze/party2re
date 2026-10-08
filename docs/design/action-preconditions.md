@@ -53,11 +53,16 @@ The gate descriptions below summarize the current implementation:
 
 [The shared navigation contract](../architecture/client-agent-api.md#approved-navigation-and-progressive-observation-contract)
 was approved through #1047 on 2026-10-06. Ordinary selection and the shared
-controls composer are implemented; verified facility observations remain separate.
+controls composer are implemented; Home also provides verified public/owned
+projections and actor-owned mailbox pages. Other facility observations remain separate.
 Current place and previous selections narrow the next choices:
 town destinations, facility subjects, then applicable operations with the
 selected target prefilled. Selected values are still explicit command inputs;
-browsing never authorizes a mutation or silently changes its target.
+browsing never authorizes a mutation or silently changes its target. Home targets
+select the observed house, while sleep and mailbox actions retain the owned actor.
+Public Home omits owner-private counters and mailbox choices; the service verifies
+the viewer account before private enrichment. [Home visibility](home.md#observation-visibility-and-navigation)
+records remaining collection/mutation owners.
 
 The navigation commands use owned actor authorization and existing sleep/pending
 recovery/unfinished-work guards. They do not require living HP, wallet gold or

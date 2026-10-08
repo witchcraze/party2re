@@ -293,6 +293,7 @@
   },
   "/homes/{id}": {
     "get": {
+      "description": "Without visitor_id, returns only whitelisted public fields. A supplied visitor_id requires its owner session and is verified again by Home; it cannot authorize private fields by itself.",
       "operationId": "getHomeView",
       "parameters": [
         {
@@ -303,6 +304,16 @@
           "schema": {
             "type": "string"
           }
+        },
+        {
+          "description": "Authenticated viewer character. Omit for anonymous public projection.",
+          "in": "query",
+          "name": "visitor_id",
+          "required": false,
+          "schema": {
+            "maxLength": 128,
+            "type": "string"
+          }
         }
       ],
       "responses": {
@@ -310,7 +321,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/HomeView"
               }
             }
           },
@@ -326,6 +337,36 @@
           },
           "description": "Bad request - invalid input or JSON syntax"
         },
+        "401": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Viewer session required"
+        },
+        "403": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Viewer is not owned"
+        },
+        "404": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          },
+          "description": "Home character not found"
+        },
         "500": {
           "content": {
             "application/json": {
@@ -337,7 +378,13 @@
           "description": "Internal server error"
         }
       },
-      "summary": "Get private home view",
+      "security": [
+        {},
+        {
+          "BearerAuth": []
+        }
+      ],
+      "summary": "Get public or authenticated owned home view",
       "tags": [
         "Homes"
       ]

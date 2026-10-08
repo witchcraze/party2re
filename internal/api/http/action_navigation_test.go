@@ -142,6 +142,8 @@ func TestNavigationGatewayRejectsSpoofedAndMalformedInput(t *testing.T) {
 		{`{"action":"scene_page","params":{"destination":"shop_weapon","offset":0,"limit":null}}`, "hero", "session", 400},
 		{`{"action":"scene_page","params":{"destination":"shop_weapon","offset":0,"limit":101}}`, "hero", "session", 400},
 		{`{"action":"scene_page","params":{"destination":"shop_weapon","offset":0,"cursor":"other-scene"}}`, "hero", "session", 400},
+		{`{"action":"scene_page","params":{"destination":"shop_weapon","cursor":""}}`, "hero", "session", 400},
+		{`{"action":"scene_page","params":{"destination":"shop_weapon"}}`, "hero", "session", 400},
 		{`{"action":"scene_back","params":{"player_id":"other"}}`, "hero", "session", 400},
 	} {
 		t.Run(tc.body+tc.actor+tc.token, func(t *testing.T) {

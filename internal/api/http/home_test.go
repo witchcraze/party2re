@@ -20,7 +20,7 @@ import (
 )
 
 type mockHomeService struct {
-	getHomeViewFn           func(ctx context.Context, homeCharacterID, visitorCharacterID string) (home.HomeView, error)
+	getHomeViewFn           func(ctx context.Context, homeCharacterID, visitorCharacterID, playerID string) (home.HomeView, error)
 	updateHomeFn            func(ctx context.Context, characterID, companionName string) (home.CharacterHome, error)
 	buildHouseFn            func(ctx context.Context, characterID, townID, houseStyle string) (*home.HomeCheckResult, error)
 	checkHouseFn            func(ctx context.Context, targetNameOrID string) (*home.HomeCheckResult, error)
@@ -47,15 +47,15 @@ type mockHomeService struct {
 	wakeFn                  func(ctx context.Context, characterID string) (home.WakeResult, error)
 }
 
-func (m *mockHomeService) GetHomeView(ctx context.Context, homeCharacterID, visitorCharacterID string) (home.HomeView, error) {
+func (m *mockHomeService) GetHomeView(ctx context.Context, homeCharacterID, visitorCharacterID, playerID string) (home.HomeView, error) {
 	if m.getHomeViewFn != nil {
-		return m.getHomeViewFn(ctx, homeCharacterID, visitorCharacterID)
+		return m.getHomeViewFn(ctx, homeCharacterID, visitorCharacterID, playerID)
 	}
 	if homeCharacterID == "char-not-found" {
 		return home.HomeView{}, home.ErrCharacterNotFound
 	}
 	return home.HomeView{
-		Owner: corecharacter.Character{ID: homeCharacterID, Name: "Hero"},
+		Owner: home.HomeOwner{ID: homeCharacterID, Name: "Hero"},
 		Home: home.CharacterHome{
 			CharacterID:   homeCharacterID,
 			CompanionName: "ペット",
@@ -292,7 +292,7 @@ func TestHomeEndpoints(t *testing.T) {
 	router := handler.Router()
 
 	t.Run("GET /homes/{id} - success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/homes/char-1?visitor_id=char-2", nil)
+		req := httptest.NewRequest(http.MethodGet, "/homes/char-1", nil)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 

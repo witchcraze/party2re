@@ -16,7 +16,7 @@ func loadContextParamsSchemas() map[string]json.RawMessage {
 			Schemas map[string]struct {
 				AllOf []struct {
 					If struct {
-						Properties map[string]struct{ Const string }
+						Properties map[string]struct{ Const json.RawMessage }
 					}
 					Then struct{ Properties map[string]json.RawMessage }
 				}
@@ -28,7 +28,10 @@ func loadContextParamsSchemas() map[string]json.RawMessage {
 	}
 	schemas := make(map[string]json.RawMessage)
 	for _, condition := range spec.Components.Schemas["CharacterActionRequest"].AllOf {
-		id := condition.If.Properties["action"].Const
+		var id string
+		if err := json.Unmarshal(condition.If.Properties["action"].Const, &id); err != nil {
+			panic(err)
+		}
 		if _, exists := schemas[id]; exists {
 			panic("duplicate command schema: " + id)
 		}
