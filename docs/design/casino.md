@@ -136,7 +136,7 @@ All operational REST routes remain until their mutation replacements are verifie
 | `lib/_casino.cgi:10–32,124–145`: `すくしょ`, `さそう` | No Casino service/route replacements. Screenshot is presentation and invitation is social reconciliation; explicitly deferred to #949/#140. |
 | `lib/casino_indian.cgi:10–33`: `つづける`, `しょうぶ`, `おりる` and forehead masking | `call`/`showdown`/`fold` candidates and authorized masked `GetRoomView`; retained room action POST → `PlayRoomAction` → Indian service. Gateway adapter remains #949. |
 | `lib/casino_highlow.cgi:10–50`: `つづける`, `ハイ`, conditional `ロウ`, `おりる` and own-card/action masking | Current room `call`/`high`/`low`/`fold` candidates and masked view; retained room action POST → Highlow service. Legacy hides continue at maximum bet or insufficient coins; current service accepts all-in calls. That menu/service difference remains #949 reconciliation, not a formula change here. |
-| `lib/casino_doppel.cgi:10–53`: generated marks and own-mark masking | Current participant-count mark choices and masked view; retained room action POST → Doppel service. Current Go permits mark reselection while legacy dispatch/`mark` returns when a declaration exists. This existing difference remains #949 reconciliation. |
+| `lib/casino_doppel.cgi:10–99`: generated marks and own-mark masking | Participant-count mark choices and masked view; retained room action POST → Doppel service. Legacy clears declarations on start and stores mark changes in the card field, permitting reselection before all cards are selected. Go stores marks in Action too, so its viewer masks other mark actions. Waiting entrants' eligibility remains existing service behavior for #949 reconciliation. |
 | `lib/casino.cgi:118–190`, game `member_html`, `_casino.cgi:48–97` | Lobby/selected summary and authorized activity detail replace observation through context, without advancing or settling. Idle expiry remains feature-owned; its legacy sleep penalty is deferred to #949. |
 
 The former OpenAPI singles-play Highlow/Doppel POST paths had no registered
@@ -218,9 +218,9 @@ Because Valkey operations are not cross-key transactional here:
 - **Wager & Selection**:
   - Bet rate is fixed (minimum 10 coins).
   - Coin deduction occurs on a player's **first** mark selection in the round.
-  - Current Go permits mark reselection during the round without another coin
-    deduction. Legacy `add_casino_action`/`mark` returns when a declaration already
-    exists (`lib/casino_doppel.cgi:12,42`); this difference remains #949 reconciliation.
+  - Active players may change their selected mark before the other players
+    finish selecting, without another coin deduction. Legacy clears declarations
+    at start and changes only the card field (`lib/casino_doppel.cgi:41–99`).
 - **Showdown Resolution**:
   - Triggers immediately when all active participants have chosen a mark.
   - The room leader is the "親" (dealer / target).
