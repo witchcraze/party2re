@@ -29,8 +29,8 @@ func (s *Service) RestoreActiveJob(ctx context.Context, characterID, jobID strin
 	return s.repository.Save(ctx, state)
 }
 
-// ExchangeJob swaps a character's current and old job classes using item-168.
-func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, targetOldJobID string) (corecharacter.Character, corejob.CharacterJob, error) {
+// ExchangeJob swaps a character's current and old job classes using item-168 (persistent) or item-243 (temporary).
+func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, targetOldJobID string, itemDefinitionID ...string) (corecharacter.Character, corejob.CharacterJob, error) {
 	if s.characters == nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, errors.New("character repository not configured")
 	}
@@ -45,12 +45,21 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
 	}
 	if char.JobMemory != nil {
+		if len(itemDefinitionID) > 0 && itemDefinitionID[0] != "" {
+			// Overlapping start with an item is rejected while either memory kind is active.
+			return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
+		}
+		if char.JobMemory.IsTemporary() {
+			// Temporary job memory (item-243) cannot be manually restored via exchange.
+			// It only reverts upon resting at home (legacy home.cgi:195, job_change.cgi:121).
+			return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
+		}
 		req := economy.TransactionRequest{CharacterID: characterID}
 		var restored corecharacter.Character
 		var restoredState corejob.CharacterJob
 		_, err := s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-			if tc.Character.JobMemory == nil {
-				return errors.New("no job memory to restore")
+			if tc.Character.JobMemory == nil || tc.Character.JobMemory.IsTemporary() {
+				return corejob.ErrJobUnavailable
 			}
 			memory := *tc.Character.JobMemory
 			if err := tc.Character.ApplyJobMemory(memory.JobID, memory.SP, memory.OldJobID, memory.OldSP); err != nil {
@@ -105,23 +114,37 @@ func (s *Service) ExchangeJob(ctx context.Context, characterID, targetJobID, tar
 	if !ok {
 		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
 	}
+
+	reqItem := "item-168"
+	if len(itemDefinitionID) > 0 && itemDefinitionID[0] != "" {
+		reqItem = itemDefinitionID[0]
+	}
+	if reqItem != "item-168" && reqItem != "item-243" {
+		return corecharacter.Character{}, corejob.CharacterJob{}, corejob.ErrJobUnavailable
+	}
+	kind := corecharacter.JobMemoryKindPersistent
+	if reqItem == "item-243" {
+		kind = corecharacter.JobMemoryKindTemporary
+	}
+
 	req := economy.TransactionRequest{
 		CharacterID:   characterID,
 		LockInventory: true,
 		Cost: economy.ResourceCost{
-			ItemDefinitionID:  "item-168",
+			ItemDefinitionID:  reqItem,
 			ItemDefinitionQty: 1,
 		},
 	}
 	var updated corecharacter.Character
 	var updatedState corejob.CharacterJob
 	_, err = s.economy.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-		if tc.Character.OverLevel ||
+		if tc.Character.OverLevel || tc.Character.JobMemory != nil ||
 			(targetDef.RequiredGender != "" && targetDef.RequiredGender != tc.Character.Gender) ||
 			(targetOldDef.RequiredGender != "" && targetOldDef.RequiredGender != tc.Character.Gender) {
 			return corejob.ErrJobUnavailable
 		}
 		tc.Character.JobMemory = &corecharacter.JobMemory{
+			Kind:     kind,
 			JobID:    tc.Character.JobID,
 			SP:       tc.Character.SP,
 			OldJobID: tc.Character.OldJobID,

@@ -108,11 +108,22 @@ func TestCharacter_ApplySPExchange_Errors(t *testing.T) {
 		t.Errorf("expected ErrOverLevelRestricted, got %v", err)
 	}
 
-	// 5. JobMemory active cannot exchange SP
+	// 5. JobMemory persistent cannot exchange SP
 	charMemory := char
 	charMemory.JobMemory = &corecharacter.JobMemory{JobID: "job-01", SP: 10}
 	if _, err := charMemory.ApplySPExchange(corecharacter.SPExchangeMaxHP, 1); err != corecharacter.ErrJobMemoryActive {
 		t.Errorf("expected ErrJobMemoryActive, got %v", err)
+	}
+
+	// 5b. Temporary JobMemory allows SP exchange (sp_change.cgi:74 checks only job_memory.cgi)
+	charTempMemory := char
+	charTempMemory.JobMemory = &corecharacter.JobMemory{
+		Kind:  corecharacter.JobMemoryKindTemporary,
+		JobID: "job-01",
+		SP:    10,
+	}
+	if _, err := charTempMemory.ApplySPExchange(corecharacter.SPExchangeMaxHP, 1); err != nil {
+		t.Errorf("expected temporary JobMemory to allow SP exchange, got %v", err)
 	}
 
 	// 6. Invalid stat

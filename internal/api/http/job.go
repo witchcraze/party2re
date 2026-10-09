@@ -15,7 +15,7 @@ import (
 type JobService interface {
 	ListDefinitions() []corejob.Definition
 	ChangeJob(ctx context.Context, characterID string, targetJobID string) (corecharacter.Character, corejob.CharacterJob, error)
-	ExchangeJob(ctx context.Context, characterID string, targetJobID, targetOldJobID string) (corecharacter.Character, corejob.CharacterJob, error)
+	ExchangeJob(ctx context.Context, characterID string, targetJobID, targetOldJobID string, itemDefinitionID ...string) (corecharacter.Character, corejob.CharacterJob, error)
 	SaveFutureMemory(ctx context.Context, characterID string) (corecharacter.FutureMemory, error)
 	RecallFutureMemory(ctx context.Context, characterID, memoryID string) (corecharacter.Character, corejob.CharacterJob, error)
 	ListFutureMemories(ctx context.Context, characterID string) ([]corecharacter.FutureMemory, error)
@@ -34,8 +34,9 @@ type changeJobRequest struct {
 }
 
 type exchangeJobRequest struct {
-	JobID    string `json:"job_id"`
-	OldJobID string `json:"old_job_id"`
+	JobID            string `json:"job_id"`
+	OldJobID         string `json:"old_job_id"`
+	ItemDefinitionID string `json:"item_definition_id,omitempty"`
 }
 
 type recallFutureMemoryRequest struct {
@@ -104,7 +105,7 @@ func (h *Handler) handleExchangeJob(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		updatedChar, updatedJob, err := h.jobs.ExchangeJob(r.Context(), char.ID, req.JobID, req.OldJobID)
+		updatedChar, updatedJob, err := h.jobs.ExchangeJob(r.Context(), char.ID, req.JobID, req.OldJobID, req.ItemDefinitionID)
 		if err != nil {
 			if errors.Is(err, corejob.ErrJobUnavailable) || errors.Is(err, corejob.ErrDefinitionNotFound) ||
 				errors.Is(err, jobapp.ErrRequiredItem) {

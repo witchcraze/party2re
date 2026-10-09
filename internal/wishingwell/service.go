@@ -44,7 +44,7 @@ func (s *Service) GetStatus(ctx context.Context, characterID string) (WishingWel
 		return WishingWellStatus{}, err
 	}
 
-	jobMemoryActive := char.JobMemory != nil
+	jobMemoryActive := char.JobMemory != nil && char.JobMemory.IsPersistent()
 	overLevel := char.OverLevel
 	canExchange := !jobMemoryActive && !overLevel
 

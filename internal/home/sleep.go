@@ -168,7 +168,7 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 		req := economy.TransactionRequest{CharacterID: characterID}
 		_, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
 			tc.Character.PendingWake = true
-			if tc.Character.JobMemory != nil {
+			if tc.Character.JobMemory != nil && tc.Character.JobMemory.IsTemporary() {
 				memoryJobID := tc.Character.JobMemory.JobID
 				tc.Character.RevertJobMemory()
 				if s.jobRestorer != nil {
@@ -192,7 +192,7 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 			return SleepResult{}, err
 		}
 		c.PendingWake = true
-		if c.JobMemory != nil {
+		if c.JobMemory != nil && c.JobMemory.IsTemporary() {
 			memoryJobID := c.JobMemory.JobID
 			c.RevertJobMemory()
 			if s.jobRestorer != nil {

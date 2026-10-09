@@ -9,7 +9,7 @@ import (
 )
 
 // characterColumns lists all standard columns of the characters table in canonical order.
-const characterColumns = "id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, job_level, old_job_id, old_sp, job_memory_job_id, job_memory_sp, job_memory_old_job_id, job_memory_old_sp, small_medals, help_count, hero_count, pvp_wins, casino_wins, monster_kills, mao_count, orb, tired, over_level, over_depot, over_monster, over_future, over_flea, over_store, color, deposit, crystal, wea_seal, wea_name, arm_name, pending_wake"
+const characterColumns = "id, player_id, name, job_id, gender, max_hp, max_mp, hp, mp, attack, defense, agility, money, level, experience, sp, job_level, old_job_id, old_sp, job_memory_job_id, job_memory_sp, job_memory_old_job_id, job_memory_old_sp, job_memory_kind, small_medals, help_count, hero_count, pvp_wins, casino_wins, monster_kills, mao_count, orb, tired, over_level, over_depot, over_monster, over_future, over_flea, over_store, color, deposit, crystal, wea_seal, wea_name, arm_name, pending_wake"
 
 // rowScanner abstracts *sql.Row, *sql.Rows, or any scanner implementation.
 type rowScanner interface {
@@ -21,6 +21,7 @@ func scanCharacterRow(scanner rowScanner) (corecharacter.Character, error) {
 	var value corecharacter.Character
 	var memoryJobID, memoryOldJobID string
 	var memorySP, memoryOldSP int
+	var memoryKind string
 	err := scanner.Scan(
 		&value.ID,
 		&value.PlayerID,
@@ -45,6 +46,7 @@ func scanCharacterRow(scanner rowScanner) (corecharacter.Character, error) {
 		&memorySP,
 		&memoryOldJobID,
 		&memoryOldSP,
+		&memoryKind,
 		&value.SmallMedals,
 		&value.HelpCount,
 		&value.HeroCount,
@@ -78,8 +80,16 @@ func scanCharacterRow(scanner rowScanner) (corecharacter.Character, error) {
 		value.Color = corecharacter.DefaultColor
 	}
 	if memoryJobID != "" {
+		kind := corecharacter.JobMemoryKindPersistent
+		if memoryKind == string(corecharacter.JobMemoryKindTemporary) {
+			kind = corecharacter.JobMemoryKindTemporary
+		}
 		value.JobMemory = &corecharacter.JobMemory{
-			JobID: memoryJobID, SP: memorySP, OldJobID: memoryOldJobID, OldSP: memoryOldSP,
+			Kind:     kind,
+			JobID:    memoryJobID,
+			SP:       memorySP,
+			OldJobID: memoryOldJobID,
+			OldSP:    memoryOldSP,
 		}
 	}
 	return value, nil
@@ -105,9 +115,13 @@ func scanCharacterRows(rows *sql.Rows) ([]corecharacter.Character, error) {
 func executeCharacterUpdate(ctx context.Context, executor sqlContextExecutor, value corecharacter.Character) (int64, error) {
 	memoryJobID, memoryOldJobID := "", ""
 	memorySP, memoryOldSP := 0, 0
+	memoryKind := string(corecharacter.JobMemoryKindPersistent)
 	if value.JobMemory != nil {
 		memoryJobID, memorySP = value.JobMemory.JobID, value.JobMemory.SP
 		memoryOldJobID, memoryOldSP = value.JobMemory.OldJobID, value.JobMemory.OldSP
+		if value.JobMemory.Kind != "" {
+			memoryKind = string(value.JobMemory.Kind)
+		}
 	}
 	color := value.Color
 	if color == "" {
@@ -117,14 +131,14 @@ func executeCharacterUpdate(ctx context.Context, executor sqlContextExecutor, va
 		UPDATE characters
 		SET name = ?, job_id = ?, gender = ?, max_hp = ?, max_mp = ?, hp = ?, mp = ?,
 			attack = ?, defense = ?, agility = ?, money = ?, level = ?, experience = ?, sp = ?, job_level = ?, old_job_id = ?, old_sp = ?,
-			job_memory_job_id = ?, job_memory_sp = ?, job_memory_old_job_id = ?, job_memory_old_sp = ?, small_medals = ?, help_count = ?, hero_count = ?, pvp_wins = ?, casino_wins = ?, monster_kills = ?, mao_count = ?,
+			job_memory_job_id = ?, job_memory_sp = ?, job_memory_old_job_id = ?, job_memory_old_sp = ?, job_memory_kind = ?, small_medals = ?, help_count = ?, hero_count = ?, pvp_wins = ?, casino_wins = ?, monster_kills = ?, mao_count = ?,
 			orb = ?, tired = ?, over_level = ?, over_depot = ?, over_monster = ?, over_future = ?, over_flea = ?, over_store = ?, color = ?,
 			deposit = ?, crystal = ?, wea_seal = ?, wea_name = ?, arm_name = ?, pending_wake = ?
 		WHERE id = ?
 	`, value.Name, value.JobID, value.Gender, value.Stats.MaxHP, value.Stats.MaxMP, value.Stats.HP,
 		value.Stats.MP, value.Stats.Attack, value.Stats.Defense, value.Stats.Agility, value.Money,
 		value.Level, value.Experience, value.SP, value.JobLevel, value.OldJobID, value.OldSP,
-		memoryJobID, memorySP, memoryOldJobID, memoryOldSP, value.SmallMedals, value.HelpCount, value.HeroCount, value.PvPWins, value.CasinoWins, value.MonsterKills, value.MaoCount,
+		memoryJobID, memorySP, memoryOldJobID, memoryOldSP, memoryKind, value.SmallMedals, value.HelpCount, value.HeroCount, value.PvPWins, value.CasinoWins, value.MonsterKills, value.MaoCount,
 		value.Orb, value.Tired, value.OverLevel, value.OverDepot, value.OverMonster, value.OverFuture, value.OverFlea, value.OverStore, color,
 		value.Deposit, value.Crystal, value.WeaponSeal, value.WeaponCustomName, value.ArmorCustomName, value.PendingWake, value.ID)
 	if err != nil {

@@ -76,17 +76,30 @@ cmp = int(min(level, 99) * (tier_rates[current_job_tier] + tier_rates[old_job_ti
   character's job record.
 
 ### Job Memory Exchange (おもいだす)
-- With item `item-168` (Memory Fragment), a character may temporarily replace
-  the current/previous pair with two mastered jobs and their retained SP.
-- The original pair is stored as job memory and restored by the next exchange.
-  Memory exchange does not apply the normal level/stat penalty or increment
-  the job-change count.
-- Characters with celestial OverLevel status (`OverLevel == true`) are prohibited
-  from recalling or swapping job memories (`ErrJobUnavailable`, `party2/lib/job_change.cgi:361-364`).
-- Both target jobs (`targetJobID` and `targetOldJobID`) must satisfy gender compatibility
-  with the character's gender (`RequiredGender`, `party2/lib/job_change.cgi:388-395`).
-- All state mutations for job exchange and memory restoration execute strictly under transactional row locks via economy.ExecuteTransaction (party2/lib/job_change.cgi:361-400, 525-549).
-- Active job synchronization invariant: `CharacterJob.CurrentJobID` (`character_jobs.current_job_id`) is strictly synchronized with `Character.JobID` (`characters.job_id`) across temporary job exchange, manual memory reversal, and home sleep job memory restoration (`home.Sleep`).
+- Characters may recall memories of two mastered jobs to temporarily replace their current and previous jobs without applying normal level/stat penalties or incrementing job-change counts.
+- **Two Memory Lifecycles**:
+  - **Persistent Job Memory (`JobMemoryKindPersistent = "persistent"`)**:
+    - Started by consuming 1x `item-168` (記憶のカケラ / Memory Fragment).
+    - Retained across home rest and sleep (`home.Sleep`).
+    - Cleared only via manual revert (`ExchangeJob` / `POST /characters/{id}/exchange-job` without item), which restores the remembered current/old jobs and SP without consuming items.
+  - **Temporary Job Memory (`JobMemoryKindTemporary = "temporary"`)**:
+    - Started by consuming 1x `item-243` (陽炎の追憶記 / Haze Memoir).
+    - Automatically reverted upon resting at home (`home.Sleep`), restoring the remembered current/old jobs and SP.
+    - Manual revert via `ExchangeJob` is prohibited (`ErrJobUnavailable`, legacy `job_change.cgi:121`).
+- **Facility Guard Matrix**:
+  - **Normal Job Change (`ChangeJob`)**: Prohibited while either persistent or temporary memory is active (`ErrJobUnavailable`, legacy `job_change.cgi:151`).
+  - **Future Memory (`SaveFutureMemory` / `RecallFutureMemory`)**: Prohibited while either persistent or temporary memory is active (legacy `_data.cgi:1843`, `job_change.cgi:564`).
+  - **Overlapping Start**: Starting another job memory while either memory kind is active is prohibited (`ErrJobUnavailable`).
+  - **Wishing Well SP Exchange**: Prohibited only when persistent job memory is active (`party2/lib/sp_change.cgi:74`); allowed during temporary job memory.
+  - **God Lv99 Limit Break ("もっと強くなりたい")**: Prohibited only when temporary job memory is active (`party2/lib/god.cgi:121`); allowed during persistent job memory.
+- **Invariants & Safety**:
+  - Characters with celestial OverLevel status (`OverLevel == true`) are prohibited from recalling or swapping job memories (`ErrJobUnavailable`, `party2/lib/job_change.cgi:361-364`).
+  - Both target jobs (`targetJobID` and `targetOldJobID`) must satisfy gender compatibility with the character's gender (`RequiredGender`, `party2/lib/job_change.cgi:388-395`).
+  - All state mutations for job exchange and memory restoration execute strictly under transactional row locks via `economy.ExecuteTransaction` (`party2/lib/job_change.cgi:361-400, 525-549`).
+  - Active job synchronization invariant: `CharacterJob.CurrentJobID` (`character_jobs.current_job_id`) is strictly synchronized with `Character.JobID` (`characters.job_id`) across job exchange, manual memory reversal, and home sleep job memory restoration (`home.Sleep`).
+- **Database Schema & Legacy Migration**:
+  - `characters` table includes `job_memory_kind VARCHAR(32) NOT NULL DEFAULT 'persistent'`.
+  - Existing database rows default to `persistent`, guaranteeing legacy data is never silently misclassified as sleep-scoped temporary memory.
 
 
 ### Future Memory & Recall (よびおこす)
@@ -132,7 +145,7 @@ cmp = int(min(level, 99) * (tier_rates[current_job_tier] + tier_rates[old_job_ti
 | Legacy action | Reconstruction contract | Notes |
 | --- | --- | --- |
 | `てんしょく` | `POST /characters/{id}/change-job` / `Service.ChangeJob` | JSON transport replaces the text command. |
-| `おもいだす` | `POST /characters/{id}/exchange-job` / `Service.ExchangeJob` | Uses `item-168`, two mastered jobs, and a persisted temporary snapshot. |
+| `おもいだす` | `POST /characters/{id}/exchange-job` / `Service.ExchangeJob` | Uses `item-168` (persistent) or `item-243` (temporary), two mastered jobs, and a persisted job memory snapshot. |
 | `よびおこす` | `POST /characters/{id}/recall-future`, `POST /characters/{id}/future-memories` / `Service.RecallFutureMemory`, `Service.SaveFutureMemory` | Uses `item-207`, slot capacity governed by `over_future` (revalidated under character lock within economy transaction boundary), restores status snapshot and consumes slot. |
 | `じょぶますたー` | `GET /characters/{id}/job-mastery` / `Service.GetJobMastery` | Public inspection of 87-job catalog progress, mastery percentage, and 72-job completion flag. |
 
