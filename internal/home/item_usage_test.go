@@ -252,6 +252,7 @@ func TestItemUsage(t *testing.T) {
 
 	t.Run("consume seeds and medals", func(t *testing.T) {
 		oldMaxHP := chars["char-1"].Stats.MaxHP
+		oldHP := chars["char-1"].Stats.HP
 		resSeed, err := svc.UseHomeItem(ctx, "char-1", "inst-seed1", "inventory")
 		if err != nil {
 			t.Fatalf("UseHomeItem seed failed: %v", err)
@@ -261,6 +262,26 @@ func TestItemUsage(t *testing.T) {
 		}
 		if chars["char-1"].Stats.MaxHP <= oldMaxHP {
 			t.Errorf("expected MaxHP to increase from %d, got %d", oldMaxHP, chars["char-1"].Stats.MaxHP)
+		}
+		if chars["char-1"].Stats.HP != oldHP {
+			t.Errorf("expected HP to remain unchanged at %d, got %d", oldHP, chars["char-1"].Stats.HP)
+		}
+
+		// Consume 不思議な木の実 from depot
+		oldMaxMP := chars["char-1"].Stats.MaxMP
+		oldMP := chars["char-1"].Stats.MP
+		resMPSeed, err := svc.UseHomeItem(ctx, "char-1", "inst-seed2", "depot")
+		if err != nil {
+			t.Fatalf("UseHomeItem seed2 failed: %v", err)
+		}
+		if resMPSeed.Action != "consumed" || !resMPSeed.Consumed {
+			t.Errorf("expected consumed, got %+v", resMPSeed)
+		}
+		if chars["char-1"].Stats.MaxMP <= oldMaxMP {
+			t.Errorf("expected MaxMP to increase from %d, got %d", oldMaxMP, chars["char-1"].Stats.MaxMP)
+		}
+		if chars["char-1"].Stats.MP != oldMP {
+			t.Errorf("expected MP to remain unchanged at %d, got %d", oldMP, chars["char-1"].Stats.MP)
 		}
 
 		// Consume small medal from depot
@@ -1204,6 +1225,264 @@ func TestItemUsage_AuthenticEquipmentAppraisal(t *testing.T) {
 			}
 			if tt.disallowed != "" && strings.Contains(res.Message, tt.disallowed) {
 				t.Errorf("Message contains obsolete Price/10 calculation %q: %s", tt.disallowed, res.Message)
+			}
+		})
+	}
+}
+
+type fixedDeterministicRNG struct {
+	val int
+}
+
+func (f *fixedDeterministicRNG) Intn(n int) int   { return f.val }
+func (f *fixedDeterministicRNG) IntN(n int) int   { return f.val }
+func (f *fixedDeterministicRNG) Float64() float64 { return float64(f.val) }
+
+func TestUseHomeItem_Seeds_ParityAndVitality(t *testing.T) {
+	ctx := context.Background()
+	cat, err := coreitem.InitialCatalog()
+	if err != nil {
+		t.Fatalf("InitialCatalog failed: %v", err)
+	}
+
+	testCases := []struct {
+		name          string
+		defID         string
+		source        string
+		roll          int // 0 -> +3, 3 -> +6
+		expectedGain  int
+		overLevel     bool
+		initialMaxHP  int
+		initialHP     int
+		initialMaxMP  int
+		initialMP     int
+		expectedMaxHP int
+		expectedHP    int
+		expectedMaxMP int
+		expectedMP    int
+		expectedMsg   string
+	}{
+		{
+			name:          "命の木の実 inventory min roll (3) increases MaxHP only",
+			defID:         "item-016",
+			source:        "inventory",
+			roll:          0,
+			expectedGain:  3,
+			initialMaxHP:  100,
+			initialHP:     50,
+			initialMaxMP:  50,
+			initialMP:     20,
+			expectedMaxHP: 103,
+			expectedHP:    50,
+			expectedMaxMP: 50,
+			expectedMP:    20,
+			expectedMsg:   "TesterのHPが 3 あがった！",
+		},
+		{
+			name:          "命の木の実 depot max roll (6) increases MaxHP only",
+			defID:         "item-016",
+			source:        "depot",
+			roll:          3,
+			expectedGain:  6,
+			initialMaxHP:  100,
+			initialHP:     50,
+			initialMaxMP:  50,
+			initialMP:     20,
+			expectedMaxHP: 106,
+			expectedHP:    50,
+			expectedMaxMP: 50,
+			expectedMP:    20,
+			expectedMsg:   "TesterのHPが 6 あがった！",
+		},
+		{
+			name:          "命の木の実 OverLevel clamp gives 0 increase and preserves vitality",
+			defID:         "item-016",
+			source:        "inventory",
+			roll:          3,
+			expectedGain:  0,
+			overLevel:     true,
+			initialMaxHP:  500,
+			initialHP:     200,
+			initialMaxMP:  300,
+			initialMP:     100,
+			expectedMaxHP: 500,
+			expectedHP:    200,
+			expectedMaxMP: 300,
+			expectedMP:    100,
+			expectedMsg:   "TesterのHPが 0 あがった！",
+		},
+		{
+			name:          "命の木の実 ceiling clamp at 999 preserves vitality",
+			defID:         "item-016",
+			source:        "inventory",
+			roll:          3, // +6, 998 + 6 = 1004 -> clamped to 999
+			expectedGain:  6,
+			initialMaxHP:  998,
+			initialHP:     500,
+			initialMaxMP:  50,
+			initialMP:     20,
+			expectedMaxHP: 999,
+			expectedHP:    500,
+			expectedMaxMP: 50,
+			expectedMP:    20,
+			expectedMsg:   "TesterのHPが 6 あがった！",
+		},
+		{
+			name:          "不思議な木の実 inventory min roll (3) increases MaxMP only",
+			defID:         "item-017",
+			source:        "inventory",
+			roll:          0,
+			expectedGain:  3,
+			initialMaxHP:  100,
+			initialHP:     50,
+			initialMaxMP:  50,
+			initialMP:     20,
+			expectedMaxHP: 100,
+			expectedHP:    50,
+			expectedMaxMP: 53,
+			expectedMP:    20,
+			expectedMsg:   "TesterのMPが 3 あがった！",
+		},
+		{
+			name:          "不思議な木の実 depot max roll (6) increases MaxMP only",
+			defID:         "item-017",
+			source:        "depot",
+			roll:          3,
+			expectedGain:  6,
+			initialMaxHP:  100,
+			initialHP:     50,
+			initialMaxMP:  50,
+			initialMP:     20,
+			expectedMaxHP: 100,
+			expectedHP:    50,
+			expectedMaxMP: 56,
+			expectedMP:    20,
+			expectedMsg:   "TesterのMPが 6 あがった！",
+		},
+		{
+			name:          "不思議な木の実 OverLevel clamp gives 0 increase and preserves vitality",
+			defID:         "item-017",
+			source:        "inventory",
+			roll:          3,
+			expectedGain:  0,
+			overLevel:     true,
+			initialMaxHP:  500,
+			initialHP:     200,
+			initialMaxMP:  300,
+			initialMP:     100,
+			expectedMaxHP: 500,
+			expectedHP:    200,
+			expectedMaxMP: 300,
+			expectedMP:    100,
+			expectedMsg:   "TesterのMPが 0 あがった！",
+		},
+		{
+			name:          "不思議な木の実 ceiling clamp at 999 preserves vitality",
+			defID:         "item-017",
+			source:        "depot",
+			roll:          3, // +6, 998 + 6 = 1004 -> clamped to 999
+			expectedGain:  6,
+			initialMaxHP:  100,
+			initialHP:     50,
+			initialMaxMP:  998,
+			initialMP:     300,
+			expectedMaxHP: 100,
+			expectedHP:    50,
+			expectedMaxMP: 999,
+			expectedMP:    300,
+			expectedMsg:   "TesterのMPが 6 あがった！",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			charID := "char-parity-test"
+			char := corecharacter.Character{
+				ID:        charID,
+				Name:      "Tester",
+				Level:     10,
+				OverLevel: tc.overLevel,
+				Stats: corecharacter.Stats{
+					MaxHP: tc.initialMaxHP,
+					HP:    tc.initialHP,
+					MaxMP: tc.initialMaxMP,
+					MP:    tc.initialMP,
+				},
+			}
+			chars := map[string]corecharacter.Character{charID: char}
+
+			inv, _ := coreinventory.New(charID)
+			dp, _ := depot.NewDepot(charID)
+
+			instID := "inst-seed-test"
+			if tc.source == "inventory" {
+				_ = inv.Add(coreitem.Instance{ID: instID, DefinitionID: tc.defID, Quantity: 1})
+			} else {
+				dp.Items = append(dp.Items, coreitem.Instance{ID: instID, DefinitionID: tc.defID, Quantity: 1})
+			}
+
+			invs := map[string]coreinventory.Inventory{charID: inv}
+			depots := map[string]depot.Depot{charID: dp}
+
+			runner := &mockTransactionRunner{chars: chars, invs: invs}
+			invMgr := &mockInventoryManager{invs: invs}
+			depotMgr := &transactionalMockDepotManager{depots: depots}
+			charReader := &mockCharReader{chars: chars}
+			repo := newMockHomeRepo(chars)
+
+			rng := &fixedDeterministicRNG{val: tc.roll}
+
+			svc, err := NewService(
+				repo,
+				charReader,
+				WithInventoryManager(invMgr),
+				WithDepotManager(depotMgr),
+				WithItemCatalog(cat),
+				WithTransactionRunner(runner),
+				WithRNG(rng),
+			)
+			if err != nil {
+				t.Fatalf("NewService failed: %v", err)
+			}
+
+			res, err := svc.UseHomeItem(ctx, charID, instID, tc.source)
+			if err != nil {
+				t.Fatalf("UseHomeItem failed: %v", err)
+			}
+			if !res.Consumed || res.Action != "consumed" {
+				t.Fatalf("expected consumed action, got %+v", res)
+			}
+			if res.Message != tc.expectedMsg {
+				t.Errorf("expected message %q, got %q", tc.expectedMsg, res.Message)
+			}
+
+			// Verify character stats
+			updatedChar := runner.chars[charID]
+			if updatedChar.Stats.MaxHP != tc.expectedMaxHP {
+				t.Errorf("MaxHP = %d, want %d", updatedChar.Stats.MaxHP, tc.expectedMaxHP)
+			}
+			if updatedChar.Stats.HP != tc.expectedHP {
+				t.Errorf("HP = %d, want %d (vitality changed!)", updatedChar.Stats.HP, tc.expectedHP)
+			}
+			if updatedChar.Stats.MaxMP != tc.expectedMaxMP {
+				t.Errorf("MaxMP = %d, want %d", updatedChar.Stats.MaxMP, tc.expectedMaxMP)
+			}
+			if updatedChar.Stats.MP != tc.expectedMP {
+				t.Errorf("MP = %d, want %d (vitality changed!)", updatedChar.Stats.MP, tc.expectedMP)
+			}
+
+			// Verify 1 item consumed
+			if tc.source == "inventory" {
+				currentInv := runner.invs[charID]
+				if _, found := currentInv.Find(instID); found {
+					t.Errorf("expected item %s to be consumed from inventory", instID)
+				}
+			} else {
+				currentDepot := depotMgr.depots[charID]
+				if len(currentDepot.Items) != 0 {
+					t.Errorf("expected item %s to be consumed from depot", instID)
+				}
 			}
 		})
 	}
