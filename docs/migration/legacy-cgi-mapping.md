@@ -2,7 +2,7 @@
 
 This catalog maps selected legacy CGI clusters to Go modules, transport, migration history, and design documents. Paths in the Legacy Script column are relative to the original Party2 root. It is a navigation inventory, not an exhaustive CGI coverage or behavioral-parity certificate.
 
-It is structured into **7 Domain Clusters (CL-01 to CL-07)** for targeted review. Closed remediation issues are history, not evidence that every behavior is equivalent; see [the documentation audit](documentation-audit.md).
+It is structured into **7 Domain Clusters (CL-01 to CL-07)** for navigation. CL-02 has five individually selectable audit units, **CL-02A to CL-02E**, scoped by actions and state transitions rather than whole CGI files. Closed remediation issues are history, not evidence that every behavior is equivalent; see [the documentation audit](documentation-audit.md).
 
 ---
 
@@ -46,17 +46,73 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** for targeted review
 
 ### CL-02: Living, Housing & Towns (生活・拠点・預かり所)
 - **Cluster Summary**: プレイヤーの生活拠点（自宅、睡眠）、手紙、町の探索、公園、預かり所（Depot）
-- **Shared Dependencies**: `party2/lib/_npc_action.cgi`, `party2/lib/system.cgi`
-- **Primary Domain Packages**: `internal/home/`, `internal/depot/`, `internal/park/`
+- **Shared Dependencies**: `party2/lib/_npc_action.cgi`, `party2/lib/system.cgi`, `party2/lib/_data.cgi` (Homeで使うアイテム効果)
+- **Primary Domain Packages**: `internal/home/`, `internal/depot/`, `internal/park/`, `internal/town/`, `internal/store/` (建設部分)
 - **Key Testing / Linter Focus**: 有料宿屋の排除、Depotの排他制御・保管上限、日次フラグリセット
+
+`CL-02A`〜`CL-02E`を個別の監査対象として指定する。親の`CL-02`を指定した場合は全5単位を順に調べ、各単位の結果を共有した後、下記の連動確認を行う。一部の監査だけで親全体をCompliantと判定しない。
+
+同じ`lib/home.cgi`が複数単位に登場するのは、表示・睡眠・アイテム使用で操作と状態変化が異なるため。以下は監査範囲と参照先であり、ゲーム仕様の正本や実装済み証明ではない。外部スキルの`references/clusters.json`は候補キャッシュとして、このmappingに照合する。
+
+#### CL-02A: Home, Mail & Park
+
+- **Scope / Legacy**: `lib/home.cgi`の公開/本人表示、Home設定、`てがみをかく` / `てがみをよむ`、`からー`、`ことばをおしえる` / `ことばをわすれさせる`、ペット表示/会話、配送通知。`lib/park.cgi`の`うらない`、NPC会話・共通チャット。共有`lib/system.cgi`の手紙・ログ処理まで追う。
+- **Go / HTTP**: `internal/home/service.go`、`internal/home/estate.go`の色設定、`internal/park/`、`internal/api/http/home.go`、`internal/api/http/home_estate.go`の設定/色関連、`internal/api/http/park.go`。
+- **Contracts**: `docs/design/home.md`、`docs/design/town_park.md`、`docs/api/paths/home.json`、`docs/api/paths/letter.json`、`docs/api/paths/park.json`、`docs/api/paths/character.json` (色設定)。
+- **Open follow-ups**: [#1094](https://github.com/witchcraze/party2re/issues/1094) (mailbox所有)、[#1110](https://github.com/witchcraze/party2re/issues/1110) (配送通知)、[#1115](https://github.com/witchcraze/party2re/issues/1115) (設定更新)、[#1116](https://github.com/witchcraze/party2re/issues/1116) (色更新)、[#1125](https://github.com/witchcraze/party2re/issues/1125) (ことば保持)、[#1126](https://github.com/witchcraze/party2re/issues/1126) (mail/park設定)。
+- **Boundary**: Homeからの図鑑・ジョブマスター・プロフィール・冒険記録・特技設定・画像設定は遷移先と対象identityを確認する。遷移先の全仕様はCL-01/04/06/07の担当範囲。壁紙等の表示はここ、使用による変更はCL-02E。
+
+#### CL-02B: Sleep & Recovery
+
+- **Scope / Legacy**: `lib/home.cgi`の`ねる`、`lib/sleep.cgi`、共有dispatchの睡眠中操作制限。睡眠時間、訪問先の前提、起床回復、各機能のreset/完了と長期不在・再試行を追う。
+- **Go / HTTP**: `internal/home/sleep.go`、`internal/core/timer/`、`internal/api/http/home_sleep.go`、`internal/api/http/action_home.go`、`internal/api/http/auth_helper.go`、`cmd/party2/wire.go`の回復連動配線。
+- **Contracts**: `docs/design/home.md`、`docs/design/action-preconditions.md`、`docs/api/paths/home.json`。
+- **Open follow-ups**: [#1117](https://github.com/witchcraze/party2re/issues/1117) (更新guard)、[#1118](https://github.com/witchcraze/party2re/issues/1118) (起床義務の寿命)、[#1119](https://github.com/witchcraze/party2re/issues/1119) (私有Home条件)、[#1123](https://github.com/witchcraze/party2re/issues/1123) (時間/人数consumer)。人数のidentity・時間窓はCL-01の[#1104](https://github.com/witchcraze/party2re/issues/1104)を参照する。
+- **Boundary**: 満腹・祝福・錬金等は睡眠からの呼出し/失敗時整合を確認し、各機能全体の監査へ広げない。explicit Wakeとread-only GETの承認済み契約を維持する。
+
+#### CL-02C: Depot & Transfers
+
+- **Scope / Legacy**: `lib/depot.cgi`の`うる` / `まとめてうる`、`あずける` / `ひきだす`、`せいとん`、`おくる` (品/金)、`かくちょう`。共有`lib/system.cgi`の配送・未受取送金を含む。
+- **Go / HTTP**: `internal/depot/`、`internal/database/depot_repository.go`、inventory/equipment保存境界、`internal/api/http/depot.go`。
+- **Contracts**: `docs/design/depot.md`、`docs/design/items-and-equipment.md`、`docs/api/paths/depot.json`。
+- **Open follow-ups**: [#1109](https://github.com/witchcraze/party2re/issues/1109) (未受取送金/金額保存)、[#1111](https://github.com/witchcraze/party2re/issues/1111) (整頓順)、[#1112](https://github.com/witchcraze/party2re/issues/1112) (装備品移動)、[#1127](https://github.com/witchcraze/party2re/issues/1127) (引出し/装備交換)。通知の受取側はCL-02Aの#1110と合わせて確認する。
+- **Boundary**: 他機能からのDepot直送は入庫/容量/失敗時の契約を確認する。売買・景品・生産など送信元機能の全仕様は各クラスタが所有する。HomeでのDepot品消費はCL-02E。
+
+#### CL-02D: Towns & Construction
+
+- **Scope / Legacy**: `lib/town1.cgi`〜`lib/town4.cgi`、`lib/_town.cgi`の`たてる` / `ちぇっく` / `みせ` / `はいる`。町の探索、住宅/商店の建設、容量、価格、所有期限、GP連動、所有者への遷移を確認する。
+- **Go / HTTP**: `internal/town/`、`internal/home/estate.go`の住宅建設/期限確認、`internal/store/service.go`の商店建設、`internal/api/http/home_estate.go`、`internal/api/http/store.go`。
+- **Contracts**: `docs/design/home.md`、`docs/design/store.md`、`docs/api/paths/towns.json`、`docs/api/paths/houses.json`、`docs/api/paths/stores.json`。
+- **Open follow-ups**: [#1113](https://github.com/witchcraze/party2re/issues/1113) (住宅上限)、[#1114](https://github.com/witchcraze/party2re/issues/1114) (商店上限)、[#1122](https://github.com/witchcraze/party2re/issues/1122) (住宅GP)。
+- **Boundary**: 商店の建設・入店までが本単位で、出品/購入/内装販売はCL-03。私有Homeへの訪問・睡眠と有料の町住宅契約を同一条件にしない。
+
+#### CL-02E: Home Item Use
+
+- **Scope / Legacy**: `lib/home.cgi`の`つかう`と到達する`lib/_data.cgi`の効果。手持ち/Depotの両source、装備inspect、usage category、効果・前提・乱数・消費順・容量不足/失敗時をアイテムごとに確認する。
+- **Go / HTTP**: `internal/home/item_usage.go`、`internal/home/recipe_usage.go`、`internal/home/costume_usage.go`、`internal/api/http/home_estate.go`のitem一覧/使用。
+- **Contracts**: `docs/design/home.md`、`docs/design/blacksmith.md`、`docs/api/paths/character.json` (Home item一覧/使用)。
+- **Open follow-ups**: [#1120](https://github.com/witchcraze/party2re/issues/1120) (木の実の現在値)、[#1121](https://github.com/witchcraze/party2re/issues/1121) (無刻印時の消費)、[#1124](https://github.com/witchcraze/party2re/issues/1124) (未対応dispatch/不明callback)。
+- **Boundary**: 名前がrecipe poolにあるだけで対応済みとは数えない。レシピ・衣装・祭壇等への呼出しは効果/消費の境界まで追い、CL-03/04/05の全機能監査と分ける。未確定callbackや稼働config不在を仕様推測で埋めない。
+
+#### Cross-unit checks
+
+| Contract | Audit ownership / integration check |
+| --- | --- |
+| 品/金の送付 → Home通知 | CL-02Cの送付・commitとCL-02Aの通知生成/本人表示を一緒に確認する。#1110は#1109の後続。 |
+| 睡眠 → 各更新APIのguard | CL-02Bが制限状態を所有し、CL-02Aの色設定、CL-02Dの建設、CL-02Eの使用入口まで確認する (#1117)。 |
+| Home設定 → 有料住宅契約 | CL-02Aの設定更新がCL-02Dの契約・期限を上書きしないことを確認する (#1115)。 |
+| 品の移動 → 装備/消費 | CL-02Cの所有移動・FK・交換とCL-02Eの使用/消費を区別し、同時操作・失敗時の品と装備状態を確認する (#1112/#1127)。 |
+| 商店建設 → 売買 | CL-02DからCL-03へstore identity・入店条件を引き継ぐ。建設監査だけで商店売買全体のparityを認定しない。 |
+
+The script-level pointers below remain navigation for the parent cluster. **Reconciling** means linked gaps or specifications remain; a closed historical fix does not certify its audit unit or CL-02 as a whole.
 
 | Legacy Script | Authentic Role / Action | Go Domain Implementation | HTTP Handler & Migrations | Design Doc & OpenAPI | Status | Pitfalls / Parity Traps |
 | :--- | :--- | :--- | :--- | :--- | :---: | :--- |
-| `lib/home.cgi` | 自宅拠点 (@自宅ペット) | `internal/home/` | `internal/api/http/home.go`<br/>`internal/api/http/home_estate.go`<br/>`internal/api/http/home_sleep.go`<br/>`migrations/034_player_home_and_mailbox.sql`<br/>`migrations/036_player_mailbox_independent_deletion.sql`<br/>`migrations/061_home_members_and_god_parity.sql`<br/>`migrations/063_home_estate_parity.sql` | `docs/design/home.md`<br/>`docs/api/paths/home.json` | Fix closed; parity not certified (#777, #778) | 対応履歴: #777, #778。現在の仕様・残差はDesign Docおよび棚卸し記録を参照。 |
-| `lib/sleep.cgi` | 睡眠 (無料全快・日次リセット) | `internal/home/` | `internal/api/http/home_sleep.go` | `docs/design/home.md`<br/>`docs/api/paths/home.json` | Compliant (#459) | 🚨 有料の「宿屋 (`internal/inn`)」は架空として完全撤廃。自宅・他人の家で寝て無料回復＆日次リセット |
-| `lib/park.cgi` | 交流広場 (@町娘) | `internal/park/` | `internal/api/http/park.go`<br/>`migrations/032_town_park.sql` | `docs/design/town_park.md`<br/>`docs/api/paths/park.json` | Compliant | おみくじ占い（22種・27色）、NPC会話、チャット掲示板（10G回復は架空仕様のため非存在） |
-| `lib/depot.cgi` | 預かり所 (@ニキータ) | `internal/depot/` | `internal/api/http/depot.go`<br/>`migrations/011_depot.sql`<br/>`migrations/055_depot_parity.sql` | `docs/design/depot.md`<br/>`docs/api/paths/depot.json` | Compliant (#460) | 動的容量計算（5〜500枠）、段階拡張（最大20回）、倉庫内半額売却（単体・一括）、整頓、郵送、引出時コレクション登録。他機能のハブ保管庫 |
-| `lib/town1.cgi` .. `town4.cgi`, `lib/_town.cgi` | 町1〜町4の探索・建設 | `internal/home/` (建設)<br/>`internal/town/`<br/>Client Presentation | `internal/api/http/home_estate.go`<br/>`migrations/063_home_estate_parity.sql` | `docs/design/home.md`<br/>`docs/api/paths/towns.json`<br/>`docs/api/paths/houses.json` | Compliant (#461, #466) | 町1〜4の自宅建設（500G〜5000G、5〜20日所有、各町上限10軒）、所有期限確認（ちぇっく）、個人商店建設（50,000G/90日） |
+| `lib/home.cgi` | 自宅拠点 (@自宅ペット) | `internal/home/` | `internal/api/http/home.go`<br/>`internal/api/http/home_estate.go`<br/>`internal/api/http/home_sleep.go`<br/>`migrations/034_player_home_and_mailbox.sql`<br/>`migrations/036_player_mailbox_independent_deletion.sql`<br/>`migrations/061_home_members_and_god_parity.sql`<br/>`migrations/063_home_estate_parity.sql` | `docs/design/home.md`<br/>`docs/api/paths/home.json`<br/>`docs/api/paths/letter.json` | Reconciling | CL-02A/B/E。対応履歴: #777, #778。未解決の所有・更新・睡眠・使用差分は各単位のfollow-upを参照。 |
+| `lib/sleep.cgi` | 睡眠 (無料全快・日次リセット) | `internal/home/` | `internal/api/http/home_sleep.go` | `docs/design/home.md`<br/>`docs/api/paths/home.json` | Reconciling | CL-02B (#1117〜#1119, #1123)。#459は対応履歴。有料宿屋は非存在。時間/人数・起床義務・訪問条件に未解決事項あり。 |
+| `lib/park.cgi` | 交流広場 (@町娘) | `internal/park/` | `internal/api/http/park.go`<br/>`migrations/032_town_park.sql` | `docs/design/town_park.md`<br/>`docs/api/paths/park.json` | Reconciling | CL-02A (#1126)。占い（22entry・27色）、NPC会話、チャット。文字数/log契約は未確定。10G回復は非存在。 |
+| `lib/depot.cgi` | 預かり所 (@ニキータ) | `internal/depot/` | `internal/api/http/depot.go`<br/>`migrations/011_depot.sql`<br/>`migrations/055_depot_parity.sql` | `docs/design/depot.md`<br/>`docs/api/paths/depot.json` | Reconciling | CL-02C (#1109, #1111, #1112, #1127) と通知連動#1110。#460は対応履歴。容量・拡張・売却・整頓・配送・引出しを操作ごとに監査する。 |
+| `lib/town1.cgi` .. `town4.cgi`, `lib/_town.cgi` | 町1〜町4の探索・建設 | `internal/home/` (住宅建設)<br/>`internal/town/`<br/>`internal/store/` (商店建設)<br/>Client Presentation | `internal/api/http/home_estate.go`<br/>`internal/api/http/store.go`<br/>`migrations/063_home_estate_parity.sql`<br/>`migrations/067_player_stores.sql` | `docs/design/home.md`<br/>`docs/design/store.md`<br/>`docs/api/paths/towns.json`<br/>`docs/api/paths/houses.json`<br/>`docs/api/paths/stores.json` | Reconciling | CL-02D (#1113, #1114, #1122)。#461, #466は対応履歴。町別上限・GP配線に未解決差分があり、設定/guardはCL-02A/Bと連動確認する。 |
 
 
 ---
