@@ -122,19 +122,13 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 	if targetHomeID == "" {
 		targetHomeID = characterID
 	} else if targetHomeID != characterID {
+		// Only verify the target character exists; a private home is always available
+		// regardless of whether the host has an active town lease.
+		// Legacy parity: lib/home.cgi:1-7 checks user directory existence (created at registration),
+		// not a paid town lease. lib/system.cgi:418-435 checks for the private home.cgi file,
+		// which is created when the character is registered.
 		if _, err := s.charReader.FindByID(ctx, targetHomeID); err != nil {
 			return SleepResult{}, ErrCharacterNotFound
-		}
-		targetHome, err := s.repo.GetHome(ctx, targetHomeID)
-		if err != nil {
-			return SleepResult{}, err
-		}
-		now := s.nowFunc()
-		if now.IsZero() {
-			now = time.Now()
-		}
-		if !targetHome.IsActive(now.UTC()) {
-			return SleepResult{}, ErrHouseNotFound
 		}
 	}
 

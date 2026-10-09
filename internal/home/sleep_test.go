@@ -314,7 +314,7 @@ func TestSleep_JobMemoryReversal(t *testing.T) {
 	}
 }
 
-func TestSleep_VisitingHomelessOrExpiredHouse(t *testing.T) {
+func TestSleep_VisitingPrivateHome(t *testing.T) {
 	ctx := context.Background()
 	charRepo := &mockCharRepo{
 		chars: map[string]corecharacter.Character{
@@ -352,21 +352,34 @@ func TestSleep_VisitingHomelessOrExpiredHouse(t *testing.T) {
 		t.Fatalf("failed to create service: %v", err)
 	}
 
-	t.Run("visiting homeless player returns ErrHouseNotFound", func(t *testing.T) {
-		_, err := svc.Sleep(ctx, "c1", "c2_homeless")
-		if !errors.Is(err, ErrHouseNotFound) {
-			t.Fatalf("expected ErrHouseNotFound, got %v", err)
+	// Legacy parity: lib/home.cgi:1-7 checks user directory existence (created at registration),
+	// not a paid town lease. Any existing character's private home is always visitable.
+	t.Run("visiting player without town lease record succeeds", func(t *testing.T) {
+		res, err := svc.Sleep(ctx, "c1", "c2_homeless")
+		if err != nil {
+			t.Fatalf("expected success, got %v", err)
 		}
+		if !res.Sleeping || res.HomeCharacterID != "c2_homeless" {
+			t.Fatalf("unexpected result: %+v", res)
+		}
+		// clear lock for subsequent sub-tests
+		_, _ = svc.Wake(ctx, "c1")
 	})
 
-	t.Run("visiting expired house returns ErrHouseNotFound", func(t *testing.T) {
-		_, err := svc.Sleep(ctx, "c1", "c3_expired")
-		if !errors.Is(err, ErrHouseNotFound) {
-			t.Fatalf("expected ErrHouseNotFound, got %v", err)
+	t.Run("visiting player with expired town lease succeeds", func(t *testing.T) {
+		time.Sleep(15 * time.Millisecond) // wait for sleep lock to clear
+		res, err := svc.Sleep(ctx, "c1", "c3_expired")
+		if err != nil {
+			t.Fatalf("expected success, got %v", err)
 		}
+		if !res.Sleeping || res.HomeCharacterID != "c3_expired" {
+			t.Fatalf("unexpected result: %+v", res)
+		}
+		_, _ = svc.Wake(ctx, "c1")
 	})
 
 	t.Run("visiting non-existent character returns ErrCharacterNotFound", func(t *testing.T) {
+		time.Sleep(15 * time.Millisecond) // wait for sleep lock to clear
 		_, err := svc.Sleep(ctx, "c1", "nonexistent")
 		if !errors.Is(err, ErrCharacterNotFound) {
 			t.Fatalf("expected ErrCharacterNotFound, got %v", err)
