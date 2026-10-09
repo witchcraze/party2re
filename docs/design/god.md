@@ -41,7 +41,7 @@ The Heaven catalog comprises 18 standard wishes plus 1 conditional level-cap wis
 | `wish_guild_rank` | ギルドランクをあげたい | 1000 ポイント | Must belong to a guild | Guild EXP $+ 1,000$ (recalculates guild level) |
 | `wish_guild_gorgeous` | ギルドをゴージャスにしたい | ギルドが… | Must belong to a guild | Guild `bgimg` set to `"god.gif"` |
 | `wish_refresh` / `wish_full_recovery` | 元気いっぱいになりたい | 疲労度 -150 % (HP・MP完全回復) | None | $\text{Tired} = \text{Tired} - 150, \text{HP} = \text{MaxHP}, \text{MP} = \text{MaxMP}$ |
-| `wish_all_orbs` | 新しい冒険場所に行きたい | 全オーブ | None | Adds all 6 standard orbs (`byrpgs` / `ValidOrbRunes`) |
+| `wish_all_orbs` | 新しい冒険場所に行きたい | 全オーブ | None | Replaces orb state with all 6 standard orbs (`byrpgs` / `ValidOrbRunes`), overwriting any prior orbs or awakened 'G' state |
 | `wish_celestial_dragon` | 天竜人になりたい | 転職 (空竜の民) | `JobID != "job-70" && OldJobID != "job-70"` | Job changed to `"job-70"` (Job reset & base stats applied) |
 | `wish_god_of_new_world` | 新世界の神になりたい | 自分の家が… | None | Avatar set to `"chr/052.gif"`, home `bgimg` set to `"god.gif"` |
 | `wish_ortega` | オルテガを生き返らして | 自分の家に… | None | Adds NPC companion "オルテガ" (`chr/029.gif`) to `home_members` |
@@ -73,6 +73,16 @@ In legacy Party2 (`party2/lib/god.cgi:57`):
 ```
 - In Party2Re, `wish_refresh` (`wish_full_recovery`) deducts 150 from `Character.Tired` (`char.ReduceTired(150)`), fully matching the legacy behavior where fatigue can drop below 0 to provide a buffer against subsequent combat fatigue.
 - In addition to fatigue reduction, HP and MP are fully restored to their respective maximum values (`MaxHP` and `MaxMP`).
+
+### 3.4 All Orbs Grant (全オーブ付与) Parity
+
+In legacy Party2 (`party2/lib/god.cgi:58`):
+```perl
+[ '新しい冒険場所に行きたい', '全オーブ', sub { $m{orb} = 'byrpgs'; } ]
+```
+- In Party2Re, `wish_all_orbs` replaces the character's orb collection with all 6 standard elemental orbs via `char.SetAllOrbs()` (`characters.orb = "srbgyp"`).
+- Any pre-existing orb state (empty, partial, or Ramia awakened `"G"`) is overwritten rather than appended.
+- Consequently, Ramia is not awakened (`IsRamiaAwakened() == false`) immediately after the wish, and the character qualifies for sacred prayer at the Altar of Rebirth (`@いのる` / `POST /characters/{id}/altar/pray`), while secret otherworld travel item wishes (`@ねがう` / `POST /characters/{id}/altar/wish`) remain locked until prayer is offered.
 
 ---
 

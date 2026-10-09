@@ -498,3 +498,78 @@ func TestOfferOrbRequiresMatchingInventoryItem(t *testing.T) {
 		t.Fatalf("missing orb item must not mutate character state")
 	}
 }
+
+func TestAltarEligibilityAfterOrbReplacement(t *testing.T) {
+	svc, charRepo, _, _, _, _ := setupTestService(t)
+	ctx := context.Background()
+
+	// Initial: character had already awakened Ramia (Orb = "G")
+	c, _ := corecharacter.New("Hero")
+	c.ID = "char-1"
+	c.Orb = "G"
+	charRepo.chars[c.ID] = c
+
+	// With "G", character cannot pray (not standard 6 orbs)
+	_, err := svc.Pray(ctx, "char-1")
+	if !errors.Is(err, ErrInsufficientOrbs) {
+		t.Fatalf("expected ErrInsufficientOrbs before wish, got %v", err)
+	}
+
+	// Receive 6 orbs via SetAllOrbs (replaces existing state, clearing G)
+	c.SetAllOrbs()
+	charRepo.chars[c.ID] = c
+
+	// 1. Post-replacement status check
+	status, err := svc.GetStatus(ctx, "char-1")
+	if err != nil {
+		t.Fatalf("unexpected status error: %v", err)
+	}
+	if !status.HasAllOrbs || status.OrbCount != 6 || status.RamiaAwakened {
+		t.Fatalf("expected 6 orbs, not awakened, got %+v", status)
+	}
+	if status.MikoDialogue != MsgMikoReadyToPray {
+		t.Fatalf("expected ready to pray dialogue, got %q", status.MikoDialogue)
+	}
+
+	// 2. Travel item wish is NOT eligible yet (Ramia not awakened)
+	_, err = svc.Wish(ctx, "char-1", ItemMirrorOfTruth)
+	if !errors.Is(err, ErrRamiaNotAwakened) {
+		t.Fatalf("expected ErrRamiaNotAwakened, got %v", err)
+	}
+
+	// 3. Pray is eligible and succeeds
+	prayRes, err := svc.Pray(ctx, "char-1")
+	if err != nil {
+		t.Fatalf("unexpected pray error: %v", err)
+	}
+	if !prayRes.RamiaAwakened || prayRes.Message != MsgRamiaAwakening {
+		t.Fatalf("unexpected pray result: %+v", prayRes)
+	}
+
+	// 4. After prayer, character now has "G"
+	updatedChar := charRepo.chars["char-1"]
+	if updatedChar.Orb != "G" || !updatedChar.IsRamiaAwakened() {
+		t.Fatalf("expected Orb to be 'G', got %q", updatedChar.Orb)
+	}
+
+	// 5. Pray again should now fail (orb is "G", not 6 standard orbs)
+	_, err = svc.Pray(ctx, "char-1")
+	if !errors.Is(err, ErrInsufficientOrbs) {
+		t.Fatalf("expected ErrInsufficientOrbs after pray, got %v", err)
+	}
+
+	// 6. Travel item wish is now eligible and succeeds
+	wishRes, err := svc.Wish(ctx, "char-1", ItemMirrorOfTruth)
+	if err != nil {
+		t.Fatalf("unexpected wish error: %v", err)
+	}
+	if wishRes.DeliveredTo != "inventory" || wishRes.ItemID != ItemMirrorOfTruth {
+		t.Fatalf("unexpected wish result: %+v", wishRes)
+	}
+
+	// 7. After wish, orbs are cleared
+	clearedChar := charRepo.chars["char-1"]
+	if clearedChar.Orb != "" || clearedChar.OrbCount() != 0 || clearedChar.IsRamiaAwakened() {
+		t.Fatalf("expected cleared orb, got %q", clearedChar.Orb)
+	}
+}

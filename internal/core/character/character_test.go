@@ -247,6 +247,44 @@ func TestCharacterOrbEncapsulation(t *testing.T) {
 	}
 }
 
+func TestCharacterSetAllOrbs(t *testing.T) {
+	cases := []struct {
+		name       string
+		initialOrb string
+	}{
+		{name: "empty", initialOrb: ""},
+		{name: "partial", initialOrb: "sb"},
+		{name: "all standard", initialOrb: "srbgyp"},
+		{name: "awakened Ramia", initialOrb: "G"},
+		{name: "hybrid corrupted state", initialOrb: "Gsrbgyp"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := Character{Orb: tc.initialOrb}
+			c.SetAllOrbs()
+
+			if c.Orb != "srbgyp" {
+				t.Fatalf("expected Orb to be %q, got %q", "srbgyp", c.Orb)
+			}
+			if c.OrbCount() != 6 {
+				t.Fatalf("expected OrbCount to be 6, got %d", c.OrbCount())
+			}
+			if !c.HasAllOrbs() {
+				t.Fatal("expected HasAllOrbs to be true")
+			}
+			if c.IsRamiaAwakened() {
+				t.Fatal("expected IsRamiaAwakened to be false")
+			}
+			for _, r := range ValidOrbRunes {
+				if !c.HasOrb(r) {
+					t.Fatalf("expected HasOrb(%c) to be true", r)
+				}
+			}
+		})
+	}
+}
+
 func TestApplyJobChangeHalvesStatsAndResetsProgression(t *testing.T) {
 	value := Character{
 		JobID: "job-old", Level: 42, Experience: 1234, SP: 7, JobLevel: 2, OverLevel: true,
