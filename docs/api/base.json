@@ -1285,6 +1285,10 @@
       },
       "ExchangeJobRequest": {
         "properties": {
+          "item_definition_id": {
+            "description": "Optional item definition ID (e.g. 'item-168' for persistent, 'item-243' for temporary). Defaults to 'item-168'.",
+            "type": "string"
+          },
           "job_id": {
             "description": "ID of the target job class to switch to",
             "type": "string"

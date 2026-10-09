@@ -77,7 +77,7 @@ func TestWishingWell_GetStatus(t *testing.T) {
 		t.Errorf("got %d dialogues, want 8", len(status.Dialogues))
 	}
 
-	// Test JobMemory active
+	// Test JobMemory persistent active
 	char.JobMemory = &corecharacter.JobMemory{JobID: "job-02", SP: 5}
 	repo.chars[char.ID] = char
 	status, err = svc.GetStatus(context.Background(), char.ID)
@@ -85,7 +85,22 @@ func TestWishingWell_GetStatus(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if status.CanExchange {
-		t.Errorf("expected CanExchange to be false when JobMemory is active")
+		t.Errorf("expected CanExchange to be false when persistent JobMemory is active")
+	}
+
+	// Test JobMemory temporary active allows exchange (sp_change.cgi:74 checks only job_memory.cgi)
+	char.JobMemory = &corecharacter.JobMemory{
+		Kind:  corecharacter.JobMemoryKindTemporary,
+		JobID: "job-02",
+		SP:    5,
+	}
+	repo.chars[char.ID] = char
+	status, err = svc.GetStatus(context.Background(), char.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !status.CanExchange {
+		t.Errorf("expected CanExchange to be true when temporary JobMemory is active")
 	}
 
 	// Test OverLevel active
@@ -199,7 +214,7 @@ func TestWishingWell_Exchange_Errors(t *testing.T) {
 		t.Errorf("expected ErrInsufficientSP, got %v", err)
 	}
 
-	// 3. JobMemory active
+	// 3. JobMemory persistent active
 	charMemory := char
 	charMemory.ID = "char-mem"
 	charMemory.JobMemory = &corecharacter.JobMemory{JobID: "job-01", SP: 10}
@@ -211,6 +226,27 @@ func TestWishingWell_Exchange_Errors(t *testing.T) {
 	})
 	if !errors.Is(err, wishingwell.ErrJobMemoryActive) {
 		t.Errorf("expected ErrJobMemoryActive, got %v", err)
+	}
+
+	// 3b. JobMemory temporary active allows exchange
+	charTempMem := char
+	charTempMem.ID = "char-temp-mem"
+	charTempMem.JobMemory = &corecharacter.JobMemory{
+		Kind:  corecharacter.JobMemoryKindTemporary,
+		JobID: "job-01",
+		SP:    10,
+	}
+	repo.chars[charTempMem.ID] = charTempMem
+	res, err := svc.Exchange(context.Background(), wishingwell.ExchangeRequest{
+		CharacterID: charTempMem.ID,
+		Stat:        "mhp",
+		SP:          2,
+	})
+	if err != nil {
+		t.Errorf("expected temporary JobMemory to allow exchange, got %v", err)
+	}
+	if res.SPConsumed != 2 {
+		t.Errorf("expected 2 SP consumed, got %d", res.SPConsumed)
 	}
 
 	// 4. OverLevel active

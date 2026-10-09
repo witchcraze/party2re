@@ -37,8 +37,9 @@ Characters may sacrifice available SP to increase their stats according to authe
 1. **Minimum Offering**: SP to sacrifice must be at least 1 (`sp >= 1`).
 2. **Affordability**: SP to sacrifice cannot exceed the character's available SP (`sp <= char.SP`).
 3. **Job Memory Constraint**:
-   If the character currently has an active `JobMemory` (`job_memory.cgi`), SP exchange is prohibited:
+   If the character currently has an active persistent `JobMemory` (`item-168`, `job_memory.cgi`), SP exchange is prohibited:
    - Dialogue / Error: `"思いだした職業のSPは使えません"`
+   - Note: Temporary job memory (`item-243`, `tmp_job_memory.cgi`) does not block SP exchange (`party2/lib/sp_change.cgi:74`).
 4. **OverLevel Constraint**:
    If the character is in `OverLevel` state (`over_lv == 1`), SP exchange is permanently disabled:
    - Dialogue / Error: `"特別な強さを持った人はSPをささげてもステータスを上げられません"`

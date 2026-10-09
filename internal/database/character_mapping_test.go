@@ -48,8 +48,8 @@ func TestScanCharacterRow_CustomError(t *testing.T) {
 func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 	scanner := &mockScanner{
 		scanFn: func(dest ...any) error {
-			if len(dest) != 45 {
-				t.Fatalf("expected 45 scan destinations, got %d", len(dest))
+			if len(dest) != 46 {
+				t.Fatalf("expected 46 scan destinations, got %d", len(dest))
 			}
 			*dest[0].(*string) = "char-1"
 			*dest[1].(*string) = "player-1"
@@ -74,28 +74,29 @@ func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 			*dest[20].(*int) = 12
 			*dest[21].(*string) = "memory-old"
 			*dest[22].(*int) = 8
-			*dest[23].(*int) = 5
-			*dest[24].(*int) = 8
-			*dest[25].(*int) = 12
-			*dest[26].(*int) = 7
-			*dest[27].(*int) = 9
-			*dest[28].(*int) = 250
-			*dest[29].(*int) = 3
-			*dest[30].(*string) = "srbgyp"
-			*dest[31].(*int) = 25
-			*dest[32].(*bool) = true
-			*dest[33].(*int) = 1
-			*dest[34].(*int) = 2
-			*dest[35].(*int) = 3
-			*dest[36].(*int) = 4
-			*dest[37].(*int) = 5
-			*dest[38].(*string) = "#123456"
-			*dest[39].(*int64) = 123456789
-			*dest[40].(*int) = 450
-			*dest[41].(*int) = 7
-			*dest[42].(*string) = "Legendary Sword"
-			*dest[43].(*string) = "Dragon Armor"
-			*dest[44].(*bool) = true
+			*dest[23].(*string) = "temporary"
+			*dest[24].(*int) = 5
+			*dest[25].(*int) = 8
+			*dest[26].(*int) = 12
+			*dest[27].(*int) = 7
+			*dest[28].(*int) = 9
+			*dest[29].(*int) = 250
+			*dest[30].(*int) = 3
+			*dest[31].(*string) = "srbgyp"
+			*dest[32].(*int) = 25
+			*dest[33].(*bool) = true
+			*dest[34].(*int) = 1
+			*dest[35].(*int) = 2
+			*dest[36].(*int) = 3
+			*dest[37].(*int) = 4
+			*dest[38].(*int) = 5
+			*dest[39].(*string) = "#123456"
+			*dest[40].(*int64) = 123456789
+			*dest[41].(*int) = 450
+			*dest[42].(*int) = 7
+			*dest[43].(*string) = "Legendary Sword"
+			*dest[44].(*string) = "Dragon Armor"
+			*dest[45].(*bool) = true
 			return nil
 		},
 	}
@@ -139,6 +140,11 @@ func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 	}
 	if !char.PendingWake {
 		t.Errorf("expected PendingWake = true")
+	}
+	if char.JobMemory == nil || char.JobMemory.Kind != corecharacter.JobMemoryKindTemporary ||
+		char.JobMemory.JobID != "memory-job" || char.JobMemory.SP != 12 ||
+		char.JobMemory.OldJobID != "memory-old" || char.JobMemory.OldSP != 8 {
+		t.Errorf("unexpected JobMemory: %+v", char.JobMemory)
 	}
 }
 

@@ -38,7 +38,7 @@ func (s *stubJobService) ChangeJob(ctx context.Context, characterID, targetJobID
 	return corecharacter.Character{}, corejob.CharacterJob{}, nil
 }
 
-func (s *stubJobService) ExchangeJob(ctx context.Context, characterID, targetJobID, targetOldJobID string) (corecharacter.Character, corejob.CharacterJob, error) {
+func (s *stubJobService) ExchangeJob(ctx context.Context, characterID, targetJobID, targetOldJobID string, itemDefinitionID ...string) (corecharacter.Character, corejob.CharacterJob, error) {
 	if s.exchangeJobFn != nil {
 		return s.exchangeJobFn(ctx, characterID, targetJobID, targetOldJobID)
 	}

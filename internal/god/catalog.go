@@ -135,7 +135,7 @@ func buildHeavenWishes(char corecharacter.Character, inGuild bool, hasMaid bool)
 		},
 	}
 
-	if char.Level >= 99 && !char.OverLevel {
+	if char.Level >= 99 && !char.OverLevel && !char.JobMemory.IsTemporary() {
 		wishes = append(wishes, Wish{
 			ID:          WishLimitBreakLevel,
 			Name:        "もっと強くなりたい",

@@ -93,7 +93,7 @@ func (c *Character) ApplySPExchange(stat SPExchangeStat, sp int) (int, error) {
 	if sp > c.SP {
 		return 0, ErrInsufficientSP
 	}
-	if c.JobMemory != nil {
+	if c.JobMemory != nil && c.JobMemory.IsPersistent() {
 		return 0, ErrJobMemoryActive
 	}
 	if c.OverLevel {

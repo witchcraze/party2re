@@ -50,7 +50,7 @@ The Heaven catalog comprises 18 standard wishes plus 1 conditional level-cap wis
 | `wish_erotic_book` | エッチな本がほしい | アイテム (預かり所へ送致) | Depot available | Delivers `item-058` to player Depot (`character_depots`) |
 | `wish_alchemy_recipe` | 錬金レシピがほしい | アイテム (預かり所へ送致) | Depot available | Delivers `item-128` or `item-129` (50% random) to player Depot |
 | `wish_lover` | 素敵な恋人がほしい | 恋人が…？ | None | Rejection joke message ("それは無理な願いだ…。アドバイスとしては積極的にアピールするのだ…"); no mutation, no teleport |
-| `wish_limit_break_level` | もっと強くなりたい | Lv上限を上げる | $\text{Level} \ge 99 \land \lnot\text{OverLevel}$ | $\text{OverLevel} = \text{true}$ (raises max level from 99 to 150) |
+| `wish_limit_break_level` | もっと強くなりたい | Lv上限を上げる | $\text{Level} \ge 99 \land \lnot\text{OverLevel} \land \lnot\text{JobMemory.IsTemporary()}$ | $\text{OverLevel} = \text{true}$ (raises max level from 99 to 150) |
 | `wish_restore_level_limit` | もとの強さに戻りたい | Lv上限を元に戻す | $\text{OverLevel} = \text{true}$ | $\text{OverLevel} = \text{false}$ (restores level cap to 99) |
 
 ### 3.2 Underworld Wishes (裏天界の願い事)
@@ -83,6 +83,15 @@ In legacy Party2 (`party2/lib/god.cgi:58`):
 - In Party2Re, `wish_all_orbs` replaces the character's orb collection with all 6 standard elemental orbs via `char.SetAllOrbs()` (`characters.orb = "srbgyp"`).
 - Any pre-existing orb state (empty, partial, or Ramia awakened `"G"`) is overwritten rather than appended.
 - Consequently, Ramia is not awakened (`IsRamiaAwakened() == false`) immediately after the wish, and the character qualifies for sacred prayer at the Altar of Rebirth (`@いのる` / `POST /characters/{id}/altar/pray`), while secret otherworld travel item wishes (`@ねがう` / `POST /characters/{id}/altar/wish`) remain locked until prayer is offered.
+
+### 3.5 Level Limit Break Guard (もっと強くなりたい) Parity
+
+In legacy Party2 (`party2/lib/god.cgi:121`):
+```perl
+if ( $m{lv} == 99 && !$m{over_lv} && !( -e "$userdir/$id/tmp_job_memory.cgi" ) )
+```
+- In Party2Re, `wish_limit_break_level` requires `char.Level >= 99`, `!char.OverLevel`, and absence of active temporary job memory (`char.JobMemory == nil || !char.JobMemory.IsTemporary()`).
+- Persistent job memory (`item-168`, `job_memory.cgi`) does not block level limit break. Only temporary job memory (`item-243`, `tmp_job_memory.cgi`) prohibits the wish.
 
 ---
 

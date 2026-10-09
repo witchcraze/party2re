@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -75,35 +74,6 @@ type Character struct {
 	WeaponCustomName string // Weapon custom name (wea_name): up to 20 runes.
 	ArmorCustomName  string // Armor custom name (arm_name): up to 20 runes.
 	PendingWake      bool   // Pending wake recovery flag (Issue #1118): persisted in SQL so long absence never skips recovery.
-}
-
-// JobMemory is the temporary pair of job states used by the job exchange
-// operation. It is intentionally part of character state so the exchange can
-// be resumed safely after a process restart.
-type JobMemory struct {
-	JobID    string
-	SP       int
-	OldJobID string
-	OldSP    int
-}
-
-// FutureMemory represents a saved snapshot of a character's state created via
-// item-207 (未来のカケラ) and restored through the legacy "よびおこす" action.
-type FutureMemory struct {
-	ID          string    `json:"id"`
-	CharacterID string    `json:"character_id"`
-	JobID       string    `json:"job_id"`
-	OldJobID    string    `json:"old_job_id"`
-	Level       int       `json:"level"`
-	Experience  int       `json:"experience"`
-	MaxHP       int       `json:"max_hp"`
-	MaxMP       int       `json:"max_mp"`
-	Attack      int       `json:"attack"`
-	Defense     int       `json:"defense"`
-	Agility     int       `json:"agility"`
-	Gender      string    `json:"gender"`
-	OverLevel   bool      `json:"over_level"`
-	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Stats struct {
@@ -384,86 +354,6 @@ func (c *Character) ApplyJobChange(targetJobID string, targetSP int) error {
 	c.Experience = 0
 	c.JobLevel++
 	return nil
-}
-
-// ApplyJobMemory switches to a remembered job pair without applying the
-// level/stat penalty used by a normal job change.
-func (c *Character) ApplyJobMemory(jobID string, sp int, oldJobID string, oldSP int) error {
-	if c == nil || strings.TrimSpace(jobID) == "" || strings.TrimSpace(oldJobID) == "" ||
-		sp < 0 || oldSP < 0 {
-		return errors.New("job memory is invalid")
-	}
-	c.JobID, c.SP = strings.TrimSpace(jobID), sp
-	c.OldJobID, c.OldSP = strings.TrimSpace(oldJobID), oldSP
-	return nil
-}
-
-// CanSaveFutureMemory checks whether a future memory snapshot can be saved.
-// It requires that no temporary job exchange is active, and that existing snapshots
-// do not exceed the OverFuture capacity limit (0 allows 1 snapshot).
-func (c *Character) CanSaveFutureMemory(currentSnapshotCount int) bool {
-	if c == nil || c.JobMemory != nil {
-		return false
-	}
-	return currentSnapshotCount <= c.OverFuture
-}
-
-// CreateFutureMemory builds a future memory snapshot from current character state.
-func (c *Character) CreateFutureMemory(id string, createdAt time.Time) FutureMemory {
-	return FutureMemory{
-		ID:          id,
-		CharacterID: c.ID,
-		JobID:       c.JobID,
-		OldJobID:    c.OldJobID,
-		Level:       c.Level,
-		Experience:  c.Experience,
-		MaxHP:       c.Stats.MaxHP,
-		MaxMP:       c.Stats.MaxMP,
-		Attack:      c.Stats.Attack,
-		Defense:     c.Stats.Defense,
-		Agility:     c.Stats.Agility,
-		Gender:      c.Gender,
-		OverLevel:   c.OverLevel,
-		CreatedAt:   createdAt,
-	}
-}
-
-// ApplyFutureMemory restores the character's state from a future memory snapshot
-// and resets current HP/MP to their restored maxima, setting SP and OldSP from mastery data.
-func (c *Character) ApplyFutureMemory(memory FutureMemory, currentSP, oldSP int) error {
-	if c == nil || strings.TrimSpace(memory.JobID) == "" {
-		return errors.New("future memory is invalid")
-	}
-	if currentSP < 0 || oldSP < 0 {
-		return ErrInvalidAmount
-	}
-	c.JobID = memory.JobID
-	c.OldJobID = memory.OldJobID
-	c.Level = memory.Level
-	c.Experience = memory.Experience
-	c.Stats.MaxHP = memory.MaxHP
-	c.Stats.HP = memory.MaxHP
-	c.Stats.MaxMP = memory.MaxMP
-	c.Stats.MP = memory.MaxMP
-	c.Stats.Attack = memory.Attack
-	c.Stats.Defense = memory.Defense
-	c.Stats.Agility = memory.Agility
-	c.Gender = memory.Gender
-	c.OverLevel = memory.OverLevel
-	c.SP = currentSP
-	c.OldSP = oldSP
-	return nil
-}
-
-// RevertJobMemory restores character's original job and SP from temporary JobMemory if present.
-func (c *Character) RevertJobMemory() bool {
-	if c == nil || c.JobMemory == nil {
-		return false
-	}
-	memory := *c.JobMemory
-	_ = c.ApplyJobMemory(memory.JobID, memory.SP, memory.OldJobID, memory.OldSP)
-	c.JobMemory = nil
-	return true
 }
 
 // IsValidColor checks if a string is a valid #RRGGBB hex color code.

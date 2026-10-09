@@ -289,7 +289,7 @@ func (s *Service) executeHeavenWish(
 		return nil
 
 	case WishLimitBreakLevel:
-		if char.Level < 99 || char.OverLevel {
+		if char.Level < 99 || char.OverLevel || char.JobMemory.IsTemporary() {
 			return fmt.Errorf("%w: Lv99に到達している必要があります", ErrWishRequirement)
 		}
 		wishName = "もっと強くなりたい"

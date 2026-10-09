@@ -261,6 +261,7 @@ func TestSleep_JobMemoryReversal(t *testing.T) {
 				OldJobID: "novice",
 				OldSP:    5,
 				JobMemory: &corecharacter.JobMemory{
+					Kind:     corecharacter.JobMemoryKindTemporary,
 					JobID:    "mage",
 					SP:       20,
 					OldJobID: "apprentice",
@@ -291,7 +292,7 @@ func TestSleep_JobMemoryReversal(t *testing.T) {
 		t.Fatalf("failed to create service: %v", err)
 	}
 
-	// Going to sleep restores original job memory and synchronizes CharacterJob.CurrentJobID
+	// Going to sleep restores temporary job memory and synchronizes CharacterJob.CurrentJobID
 	_, err = svc.Sleep(ctx, "c1", "c1")
 	if err != nil {
 		t.Fatalf("failed to sleep: %v", err)
@@ -311,6 +312,72 @@ func TestSleep_JobMemoryReversal(t *testing.T) {
 	}
 	if savedJobState.CurrentJobID != "mage" {
 		t.Fatalf("expected CharacterJob.CurrentJobID to be restored to mage, got %s", savedJobState.CurrentJobID)
+	}
+}
+
+func TestSleep_PersistentJobMemoryRetained(t *testing.T) {
+	ctx := context.Background()
+	charRepo := &mockCharRepo{
+		chars: map[string]corecharacter.Character{
+			"c1": {
+				ID:       "c1",
+				Name:     "Hero",
+				JobID:    "warrior",
+				SP:       10,
+				OldJobID: "novice",
+				OldSP:    5,
+				JobMemory: &corecharacter.JobMemory{
+					Kind:     corecharacter.JobMemoryKindPersistent,
+					JobID:    "mage",
+					SP:       20,
+					OldJobID: "apprentice",
+					OldSP:    15,
+				},
+			},
+		},
+	}
+
+	timerSvc := timer.NewService(nil)
+	mockHomeRepo := newMockHomeRepo()
+	initialJobState, _ := corejob.NewCharacterJob("c1", "warrior")
+	jobRepo := &mockJobRepo{state: initialJobState}
+	jobSvc, err := job.NewService(jobRepo)
+	if err != nil {
+		t.Fatalf("failed to create job service: %v", err)
+	}
+
+	svc, err := NewService(
+		mockHomeRepo,
+		charRepo,
+		WithTimer(timerSvc),
+		WithCharacterUpdater(charRepo),
+		WithJobStateRestorer(jobSvc),
+		WithBaseSleepDuration(10*time.Millisecond),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	// Persistent job memory (item-168) is retained across sleep
+	_, err = svc.Sleep(ctx, "c1", "c1")
+	if err != nil {
+		t.Fatalf("failed to sleep: %v", err)
+	}
+
+	updated := charRepo.chars["c1"]
+	if updated.JobMemory == nil {
+		t.Fatal("expected persistent JobMemory to be retained, got nil")
+	}
+	if updated.JobID != "warrior" || updated.SP != 10 {
+		t.Fatalf("expected Character.JobID to remain warrior, got JobID=%s, SP=%d", updated.JobID, updated.SP)
+	}
+
+	savedJobState, err := jobRepo.FindByCharacterID(ctx, "c1")
+	if err != nil {
+		t.Fatalf("failed to find job state: %v", err)
+	}
+	if savedJobState.CurrentJobID != "warrior" {
+		t.Fatalf("expected CharacterJob.CurrentJobID to remain warrior, got %s", savedJobState.CurrentJobID)
 	}
 }
 
@@ -467,6 +534,7 @@ func TestSleep_JobStateRestorerErrorPropagates(t *testing.T) {
 				ID:   "c1",
 				Name: "Hero",
 				JobMemory: &corecharacter.JobMemory{
+					Kind:  corecharacter.JobMemoryKindTemporary,
 					JobID: "job-temp",
 					SP:    10,
 				},
@@ -521,6 +589,7 @@ func TestSleep_TransactionalJobMemoryReversal(t *testing.T) {
 		OldJobID: "novice",
 		OldSP:    5,
 		JobMemory: &corecharacter.JobMemory{
+			Kind:     corecharacter.JobMemoryKindTemporary,
 			JobID:    "mage",
 			SP:       20,
 			OldJobID: "apprentice",
@@ -583,6 +652,7 @@ func TestSleep_TransactionalJobStateRestorerFailureRollback(t *testing.T) {
 		Name:  "Hero",
 		JobID: "warrior",
 		JobMemory: &corecharacter.JobMemory{
+			Kind:  corecharacter.JobMemoryKindTemporary,
 			JobID: "mage",
 			SP:    20,
 		},

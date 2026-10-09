@@ -127,6 +127,52 @@ func TestGod_GetWishes_Heaven(t *testing.T) {
 		t.Error("Lv99 character should see wish_limit_break_level")
 	}
 
+	// 2b. Lv99 with temporary JobMemory does NOT see wish_limit_break_level (god.cgi:121)
+	charTempMem := corecharacter.Character{
+		ID:    "char_temp_mem",
+		Name:  "TempMem",
+		Level: 99,
+		JobMemory: &corecharacter.JobMemory{
+			Kind:  corecharacter.JobMemoryKindTemporary,
+			JobID: "job-01",
+		},
+	}
+	repo.characters[charTempMem.ID] = charTempMem
+	wishesTemp, err := svc.GetWishes(ctx, "char_temp_mem", god.RealmHeaven)
+	if err != nil {
+		t.Fatalf("GetWishes failed: %v", err)
+	}
+	for _, w := range wishesTemp {
+		if w.ID == "wish_limit_break_level" {
+			t.Error("Lv99 character with temporary JobMemory should NOT see wish_limit_break_level")
+		}
+	}
+
+	// 2c. Lv99 with persistent JobMemory DOES see wish_limit_break_level (god.cgi:121 checks only tmp_job_memory)
+	charPersistMem := corecharacter.Character{
+		ID:    "char_persist_mem",
+		Name:  "PersistMem",
+		Level: 99,
+		JobMemory: &corecharacter.JobMemory{
+			Kind:  corecharacter.JobMemoryKindPersistent,
+			JobID: "job-01",
+		},
+	}
+	repo.characters[charPersistMem.ID] = charPersistMem
+	wishesPersist, err := svc.GetWishes(ctx, "char_persist_mem", god.RealmHeaven)
+	if err != nil {
+		t.Fatalf("GetWishes failed: %v", err)
+	}
+	hasLimitBreak = false
+	for _, w := range wishesPersist {
+		if w.ID == "wish_limit_break_level" {
+			hasLimitBreak = true
+		}
+	}
+	if !hasLimitBreak {
+		t.Error("Lv99 character with persistent JobMemory SHOULD see wish_limit_break_level")
+	}
+
 	// 3. OverLevel character
 	charOver := corecharacter.Character{ID: "char_over", Name: "Transcended", Level: 120, OverLevel: true}
 	repo.characters[charOver.ID] = charOver
@@ -248,12 +294,27 @@ func TestGod_GrantWish_Heaven(t *testing.T) {
 		t.Errorf("expected ErrWishRequirement for Lv50 char, got %v", err)
 	}
 
-	// Make Lv99
+	// Make Lv99 with temporary JobMemory -> fails limit break (god.cgi:121)
 	char.Level = 99
+	char.JobMemory = &corecharacter.JobMemory{
+		Kind:  corecharacter.JobMemoryKindTemporary,
+		JobID: "job-01",
+	}
+	repo.characters[char.ID] = char
+	_, err = svc.GrantWish(ctx, "char_hero", "wish_limit_break_level", god.RealmHeaven)
+	if !errors.Is(err, god.ErrWishRequirement) {
+		t.Errorf("expected ErrWishRequirement for temporary JobMemory, got %v", err)
+	}
+
+	// Persistent JobMemory allows limit break (god.cgi:121 checks only tmp_job_memory)
+	char.JobMemory = &corecharacter.JobMemory{
+		Kind:  corecharacter.JobMemoryKindPersistent,
+		JobID: "job-01",
+	}
 	repo.characters[char.ID] = char
 	resLimit, err := svc.GrantWish(ctx, "char_hero", "wish_limit_break_level", god.RealmHeaven)
 	if err != nil {
-		t.Fatalf("GrantWish limit break failed for Lv99: %v", err)
+		t.Fatalf("GrantWish limit break failed for Lv99 with persistent JobMemory: %v", err)
 	}
 	if !resLimit.Character.OverLevel {
 		t.Error("expected OverLevel to be true")
