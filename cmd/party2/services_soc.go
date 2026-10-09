@@ -137,7 +137,7 @@ func newSocServices(
 	if econ != nil && econ.depotRepo != nil {
 		depotMgr = &depotManagerAdapter{repo: econ.depotRepo}
 	}
-	homeService, _ := home.NewService(
+	homeService, err := home.NewService(
 		homeRepo,
 		core.charRepo,
 		home.WithTimer(timerService),
@@ -146,7 +146,11 @@ func newSocServices(
 		home.WithDepotManager(depotMgr),
 		home.WithItemCatalog(core.itemCatalog),
 		home.WithEconomy(core.economy),
+		home.WithGuildPoints(guildRepo),
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	guildService, err := guild.NewService(
 		guildRepo,

@@ -221,17 +221,70 @@ func TestBuildHouse_Transactional(t *testing.T) {
 		}
 	})
 
-	t.Run("insufficient funds aborts before save", func(t *testing.T) {
+	t.Run("4 towns award cycle_days * 10 guild points", func(t *testing.T) {
+		townTests := []struct {
+			townID     string
+			style      string
+			price      int
+			wantPoints int
+		}{
+			{"town1", "001", 500, 50},
+			{"town2", "005", 1500, 100},
+			{"town3", "013", 3000, 150},
+			{"town4", "021", 5000, 200},
+		}
+
+		for _, tt := range townTests {
+			t.Run(tt.townID, func(t *testing.T) {
+				charID := "tx-" + tt.townID
+				chars := map[string]corecharacter.Character{
+					charID: {ID: charID, PlayerID: "p-" + tt.townID, Name: "Builder", Money: 10000},
+				}
+				repo := newMockHomeRepo(chars)
+				gp := &mockGuildPoints{}
+				runner := &mockTransactionRunner{chars: chars}
+
+				svc, err := NewService(
+					repo,
+					&mockCharReader{chars: chars},
+					WithNowFunc(func() time.Time { return fixedTime }),
+					WithGuildPoints(gp),
+					WithTransactionRunner(runner),
+				)
+				if err != nil {
+					t.Fatalf("NewService failed: %v", err)
+				}
+
+				res, err := svc.BuildHouse(ctx, charID, tt.townID, tt.style)
+				if err != nil {
+					t.Fatalf("BuildHouse %s failed: %v", tt.townID, err)
+				}
+				if res.TownID != tt.townID {
+					t.Errorf("expected town %s, got %s", tt.townID, res.TownID)
+				}
+				if gp.points[charID] != tt.wantPoints {
+					t.Errorf("expected %d guild points for %s, got %d", tt.wantPoints, tt.townID, gp.points[charID])
+				}
+				if chars[charID].Money != 10000-tt.price {
+					t.Errorf("expected %d gold remaining, got %d", 10000-tt.price, chars[charID].Money)
+				}
+			})
+		}
+	})
+
+	t.Run("insufficient funds aborts before save without awarding guild points", func(t *testing.T) {
 		chars := map[string]corecharacter.Character{
 			"tx-poor": {ID: "tx-poor", PlayerID: "p1", Name: "Poor", Money: 400},
 		}
 		repo := newMockHomeRepo(chars)
+		gp := &mockGuildPoints{}
 		runner := &mockTransactionRunner{chars: chars}
 
 		svc, err := NewService(
 			repo,
 			&mockCharReader{chars: chars},
 			WithNowFunc(func() time.Time { return fixedTime }),
+			WithGuildPoints(gp),
 			WithTransactionRunner(runner),
 		)
 		if err != nil {
@@ -245,13 +298,103 @@ func TestBuildHouse_Transactional(t *testing.T) {
 		if chars["tx-poor"].Money != 400 {
 			t.Errorf("expected money to remain 400, got %d", chars["tx-poor"].Money)
 		}
+		if gp.points["tx-poor"] != 0 {
+			t.Errorf("expected 0 guild points on failure, got %d", gp.points["tx-poor"])
+		}
 	})
 
-	t.Run("town max houses aborts transaction without gold loss", func(t *testing.T) {
+	t.Run("retry after funding succeeds and awards guild points", func(t *testing.T) {
+		chars := map[string]corecharacter.Character{
+			"tx-retry": {ID: "tx-retry", PlayerID: "p1", Name: "Retrier", Money: 100},
+		}
+		repo := newMockHomeRepo(chars)
+		gp := &mockGuildPoints{}
+		runner := &mockTransactionRunner{chars: chars}
+
+		svc, err := NewService(
+			repo,
+			&mockCharReader{chars: chars},
+			WithNowFunc(func() time.Time { return fixedTime }),
+			WithGuildPoints(gp),
+			WithTransactionRunner(runner),
+		)
+		if err != nil {
+			t.Fatalf("NewService failed: %v", err)
+		}
+
+		// First attempt fails
+		_, err = svc.BuildHouse(ctx, "tx-retry", "town1", "001")
+		if !errors.Is(err, ErrInsufficientFunds) {
+			t.Fatalf("expected ErrInsufficientFunds, got %v", err)
+		}
+		if gp.points["tx-retry"] != 0 {
+			t.Errorf("expected 0 guild points on initial failure, got %d", gp.points["tx-retry"])
+		}
+
+		// Provide funds and retry
+		c := chars["tx-retry"]
+		c.Money = 1000
+		chars["tx-retry"] = c
+
+		res, err := svc.BuildHouse(ctx, "tx-retry", "town1", "001")
+		if err != nil {
+			t.Fatalf("retry BuildHouse failed: %v", err)
+		}
+		if res.TownID != "town1" {
+			t.Errorf("expected town1, got %s", res.TownID)
+		}
+		if gp.points["tx-retry"] != 50 {
+			t.Errorf("expected 50 guild points after successful retry, got %d", gp.points["tx-retry"])
+		}
+		if chars["tx-retry"].Money != 500 {
+			t.Errorf("expected 500 gold remaining, got %d", chars["tx-retry"].Money)
+		}
+	})
+
+	t.Run("already owns house aborts and awards no additional guild points", func(t *testing.T) {
+		chars := map[string]corecharacter.Character{
+			"tx-owner": {ID: "tx-owner", PlayerID: "p1", Name: "Owner", Money: 10000},
+		}
+		repo := newMockHomeRepo(chars)
+		gp := &mockGuildPoints{}
+		runner := &mockTransactionRunner{chars: chars}
+
+		svc, err := NewService(
+			repo,
+			&mockCharReader{chars: chars},
+			WithNowFunc(func() time.Time { return fixedTime }),
+			WithGuildPoints(gp),
+			WithTransactionRunner(runner),
+		)
+		if err != nil {
+			t.Fatalf("NewService failed: %v", err)
+		}
+
+		// First build succeeds
+		_, err = svc.BuildHouse(ctx, "tx-owner", "town1", "001")
+		if err != nil {
+			t.Fatalf("first BuildHouse failed: %v", err)
+		}
+		if gp.points["tx-owner"] != 50 {
+			t.Fatalf("expected 50 guild points, got %d", gp.points["tx-owner"])
+		}
+
+		// Second build fails
+		_, err = svc.BuildHouse(ctx, "tx-owner", "town2", "005")
+		if !errors.Is(err, ErrAlreadyOwnsHouse) {
+			t.Errorf("expected ErrAlreadyOwnsHouse, got %v", err)
+		}
+		if gp.points["tx-owner"] != 50 {
+			t.Errorf("expected guild points to remain 50, got %d", gp.points["tx-owner"])
+		}
+	})
+
+	t.Run("town max houses aborts transaction without gold loss or guild points", func(t *testing.T) {
 		chars := map[string]corecharacter.Character{
 			"tx-char-2": {ID: "tx-char-2", PlayerID: "p2", Name: "Mage", Money: 10000},
 		}
 		repo := newMockHomeRepo(chars)
+		gp := &mockGuildPoints{}
 		// Populate town1 with 10 houses
 		for i := 10; i < 20; i++ {
 			cid := string(rune('a' + i))
@@ -270,6 +413,7 @@ func TestBuildHouse_Transactional(t *testing.T) {
 			repo,
 			&mockCharReader{chars: chars},
 			WithNowFunc(func() time.Time { return fixedTime }),
+			WithGuildPoints(gp),
 			WithTransactionRunner(runner),
 		)
 		if err != nil {
@@ -285,6 +429,9 @@ func TestBuildHouse_Transactional(t *testing.T) {
 		}
 		if _, exists := repo.homes["tx-char-2"]; exists {
 			t.Error("expected house not to be saved in repository")
+		}
+		if gp.points["tx-char-2"] != 0 {
+			t.Errorf("expected 0 guild points, got %d", gp.points["tx-char-2"])
 		}
 	})
 }
