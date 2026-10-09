@@ -8,6 +8,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	corejob "github.com/witchcraze/party2re/internal/core/job"
 )
 
 type mockRepository struct {
@@ -309,7 +310,7 @@ func TestService_ChangeGender(t *testing.T) {
 	char.Money = 20000
 	_ = repo.Update(context.Background(), char)
 
-	// 1. Successful change to female
+	// 1. Successful change to female on gender-free job (job-01)
 	updated, err := service.ChangeGender(context.Background(), char.ID, "f")
 	if err != nil {
 		t.Fatalf("ChangeGender() failed: %v", err)
@@ -321,9 +322,14 @@ func TestService_ChangeGender(t *testing.T) {
 		t.Fatalf("expected money 10000, got %d", updated.Money)
 	}
 
-	// 2. Same gender rejection
+	// 2. Same gender rejection (f -> f)
 	if _, err := service.ChangeGender(context.Background(), char.ID, "female"); !errors.Is(err, ErrSameGender) {
 		t.Fatalf("expected ErrSameGender, got %v", err)
+	}
+	// Check money unchanged
+	current, _ := repo.FindByID(context.Background(), char.ID)
+	if current.Money != 10000 {
+		t.Fatalf("expected money 10000 after ErrSameGender, got %d", current.Money)
 	}
 
 	// 3. Insufficient gold (< 10,000 G)
@@ -332,12 +338,132 @@ func TestService_ChangeGender(t *testing.T) {
 	if _, err := service.ChangeGender(context.Background(), char.ID, "m"); !errors.Is(err, ErrInsufficientGold) {
 		t.Fatalf("expected ErrInsufficientGold, got %v", err)
 	}
+	current, _ = repo.FindByID(context.Background(), char.ID)
+	if current.Money != 9999 || current.Gender != "f" {
+		t.Fatalf("expected money 9999 and gender f after ErrInsufficientGold, got money=%d gender=%s", current.Money, current.Gender)
+	}
 
 	// 4. Invalid gender
 	updated.Money = 20000
 	_ = repo.Update(context.Background(), updated)
 	if _, err := service.ChangeGender(context.Background(), char.ID, "invalid-gender"); !errors.Is(err, ErrInvalidGender) {
 		t.Fatalf("expected ErrInvalidGender, got %v", err)
+	}
+	current, _ = repo.FindByID(context.Background(), char.ID)
+	if current.Money != 20000 || current.Gender != "f" {
+		t.Fatalf("expected money 20000 and gender f after ErrInvalidGender, got money=%d gender=%s", current.Money, current.Gender)
+	}
+
+	// 5. Job gender restrictions: job-13 (吟遊詩人, male-only)
+	job13Char, err := service.Create(context.Background(), "player-1", "Bard")
+	if err != nil {
+		t.Fatalf("failed to create Bard: %v", err)
+	}
+	job13Char.JobID = "job-13"
+	job13Char.Gender = "m"
+	job13Char.Money = 30000
+	_ = repo.Update(context.Background(), job13Char)
+
+	if _, err := service.ChangeGender(context.Background(), job13Char.ID, "f"); !errors.Is(err, ErrGenderIncompatibleWithJob) {
+		t.Fatalf("expected ErrGenderIncompatibleWithJob for job-13 to f, got %v", err)
+	}
+	saved13, _ := repo.FindByID(context.Background(), job13Char.ID)
+	if saved13.Money != 30000 || saved13.Gender != "m" {
+		t.Fatalf("expected money 30000 and gender m preserved for job-13, got money=%d gender=%s", saved13.Money, saved13.Gender)
+	}
+
+	// 6. Job gender restrictions: job-14 (踊り子, female-only)
+	job14Char, err := service.Create(context.Background(), "player-1", "Dancer")
+	if err != nil {
+		t.Fatalf("failed to create Dancer: %v", err)
+	}
+	job14Char.JobID = "job-14"
+	job14Char.Gender = "f"
+	job14Char.Money = 30000
+	_ = repo.Update(context.Background(), job14Char)
+
+	if _, err := service.ChangeGender(context.Background(), job14Char.ID, "m"); !errors.Is(err, ErrGenderIncompatibleWithJob) {
+		t.Fatalf("expected ErrGenderIncompatibleWithJob for job-14 to m, got %v", err)
+	}
+	saved14, _ := repo.FindByID(context.Background(), job14Char.ID)
+	if saved14.Money != 30000 || saved14.Gender != "f" {
+		t.Fatalf("expected money 30000 and gender f preserved for job-14, got money=%d gender=%s", saved14.Money, saved14.Gender)
+	}
+
+	// 7. Job gender restrictions: job-15 (黒魔術師, male-only)
+	job15Char, err := service.Create(context.Background(), "player-1", "BlackMage")
+	if err != nil {
+		t.Fatalf("failed to create BlackMage: %v", err)
+	}
+	job15Char.JobID = "job-15"
+	job15Char.Gender = "m"
+	job15Char.Money = 30000
+	_ = repo.Update(context.Background(), job15Char)
+
+	if _, err := service.ChangeGender(context.Background(), job15Char.ID, "f"); !errors.Is(err, ErrGenderIncompatibleWithJob) {
+		t.Fatalf("expected ErrGenderIncompatibleWithJob for job-15 to f, got %v", err)
+	}
+	saved15, _ := repo.FindByID(context.Background(), job15Char.ID)
+	if saved15.Money != 30000 || saved15.Gender != "m" {
+		t.Fatalf("expected money 30000 and gender m preserved for job-15, got money=%d gender=%s", saved15.Money, saved15.Gender)
+	}
+
+	// 8. Job gender restrictions: job-16 (白魔術師, female-only)
+	job16Char, err := service.Create(context.Background(), "player-1", "WhiteMage")
+	if err != nil {
+		t.Fatalf("failed to create WhiteMage: %v", err)
+	}
+	job16Char.JobID = "job-16"
+	job16Char.Gender = "f"
+	job16Char.Money = 30000
+	_ = repo.Update(context.Background(), job16Char)
+
+	if _, err := service.ChangeGender(context.Background(), job16Char.ID, "m"); !errors.Is(err, ErrGenderIncompatibleWithJob) {
+		t.Fatalf("expected ErrGenderIncompatibleWithJob for job-16 to m, got %v", err)
+	}
+	saved16, _ := repo.FindByID(context.Background(), job16Char.ID)
+	if saved16.Money != 30000 || saved16.Gender != "f" {
+		t.Fatalf("expected money 30000 and gender f preserved for job-16, got money=%d gender=%s", saved16.Money, saved16.Gender)
+	}
+
+	// 9. Job-14 same gender rejection occurs before job check
+	if _, err := service.ChangeGender(context.Background(), job14Char.ID, "f"); !errors.Is(err, ErrSameGender) {
+		t.Fatalf("expected ErrSameGender for job-14 to f, got %v", err)
+	}
+
+	// 10. Job-14 insufficient gold rejection occurs before job check
+	job14Char.Money = 5000
+	_ = repo.Update(context.Background(), job14Char)
+	if _, err := service.ChangeGender(context.Background(), job14Char.ID, "m"); !errors.Is(err, ErrInsufficientGold) {
+		t.Fatalf("expected ErrInsufficientGold for job-14 with 5000G to m, got %v", err)
+	}
+
+	// 11. Custom WithJobDefinitionProvider option test
+	customCatalog, _ := corejob.NewCatalog([]corejob.Definition{
+		{ID: "custom-job", Name: "CustomJob", RequiredGender: "f"},
+	})
+	customService, _ := NewService(repo, WithJobDefinitionProvider(customCatalog))
+	customChar, _ := customService.Create(context.Background(), "player-1", "CustomChar")
+	customChar.JobID = "custom-job"
+	customChar.Gender = "f"
+	customChar.Money = 30000
+	_ = repo.Update(context.Background(), customChar)
+
+	if _, err := customService.ChangeGender(context.Background(), customChar.ID, "m"); !errors.Is(err, ErrGenderIncompatibleWithJob) {
+		t.Fatalf("expected ErrGenderIncompatibleWithJob from custom job provider, got %v", err)
+	}
+
+	// 12. Repository / transaction update failure
+	repo.err = errors.New("database update error")
+	if _, err := service.ChangeGender(context.Background(), char.ID, "m"); err == nil {
+		t.Fatal("expected error on repo failure, got nil")
+	}
+	repo.err = nil
+
+	// Verify state unchanged after failed transaction
+	afterTxFail, _ := repo.FindByID(context.Background(), char.ID)
+	if afterTxFail.Money != 20000 || afterTxFail.Gender != "f" {
+		t.Fatalf("expected money 20000 and gender f preserved after tx failure, got money=%d gender=%s", afterTxFail.Money, afterTxFail.Gender)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	corejob "github.com/witchcraze/party2re/internal/core/job"
 )
 
 var (
@@ -80,6 +81,13 @@ func WithCleanupHook(hook CleanupHook) Option {
 	}
 }
 
+// WithJobDefinitionProvider sets the job definition provider.
+func WithJobDefinitionProvider(provider corejob.DefinitionProvider) Option {
+	return func(s *Service) {
+		s.jobProvider = provider
+	}
+}
+
 type Service struct {
 	repository   Repository
 	txProvider   TransactionProvider
@@ -88,6 +96,7 @@ type Service struct {
 	fleaChecker  FleaMarketChecker
 	profileRepo  ProfileRepository
 	cleanupHooks []CleanupHook
+	jobProvider  corejob.DefinitionProvider
 }
 
 type CreationOptions struct {
@@ -107,6 +116,11 @@ func NewService(repository Repository, opts ...Option) (*Service, error) {
 	for _, opt := range opts {
 		if opt != nil {
 			opt(s)
+		}
+	}
+	if s.jobProvider == nil {
+		if cat, err := corejob.InitialCatalog(); err == nil {
+			s.jobProvider = cat
 		}
 	}
 	return s, nil
@@ -275,6 +289,16 @@ func (s *Service) ChangeGender(ctx context.Context, characterID, newGender strin
 
 		if char.Money < GenderChangeCost {
 			return ErrInsufficientGold
+		}
+
+		if s.jobProvider != nil && char.JobID != "" {
+			jobDef, err := s.jobProvider.FindByID(char.JobID)
+			if err != nil && !errors.Is(err, corejob.ErrDefinitionNotFound) {
+				return err
+			}
+			if err == nil && jobDef.RequiredGender != "" && jobDef.RequiredGender != validatedGender {
+				return ErrGenderIncompatibleWithJob
+			}
 		}
 
 		if err := char.DeductMoney(GenderChangeCost); err != nil {

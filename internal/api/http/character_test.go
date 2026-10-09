@@ -202,6 +202,27 @@ func TestCharacterCustomizationHTTP(t *testing.T) {
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK for gender change, got %d (err: %v)", resp.StatusCode, err)
 	}
+	resp.Body.Close()
+
+	// 5b. POST /characters/{id}/gender - Incompatible with job -> 400 Bad Request
+	charSvc.changeGenderFn = func(ctx context.Context, characterID, newGender string) (corecharacter.Character, error) {
+		return corecharacter.Character{}, character.ErrGenderIncompatibleWithJob
+	}
+	genderBody, _ = json.Marshal(map[string]string{"gender": "m"})
+	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/gender", bytes.NewReader(genderBody))
+	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for incompatible gender, got %d (err: %v)", resp.StatusCode, err)
+	}
+	var errResp map[string]string
+	_ = json.NewDecoder(resp.Body).Decode(&errResp)
+	resp.Body.Close()
+	if errResp["error"] != character.ErrGenderIncompatibleWithJob.Error() {
+		t.Fatalf("expected error message %q, got %q", character.ErrGenderIncompatibleWithJob.Error(), errResp["error"])
+	}
+	charSvc.changeGenderFn = nil
 
 	// 6. PUT /characters/{id}/profile - Authenticated -> 200 OK
 	profBody, _ := json.Marshal(map[string]interface{}{

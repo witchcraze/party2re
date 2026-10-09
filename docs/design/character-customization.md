@@ -38,8 +38,14 @@ The Character Customization & Naming Hall system (`internal/character`, legacy `
 ## 4. Gender & Appearance Change Rules (`ChangeGender`)
 
 - **Fee**: 10,000 Gold (`GenderChangeCost = 10000`).
-- **Allowed Values**: `m` (male), `f` (female), `unspecified` (other).
-- **Rule**: Target gender must differ from current character gender, and character must have at least 10,000 Gold.
+- **Allowed Values**: `m` (male), `f` (female).
+- **Preconditions**:
+  1. **Gender Difference**: Target gender must differ from current character gender (`char.Gender != newGender`, otherwise `ErrSameGender`).
+  2. **Funds**: Character must possess at least 10,000 Gold (`char.Money >= GenderChangeCost`, otherwise `ErrInsufficientGold`).
+  3. **Current Job Compatibility**: The character's current job must allow the target gender. If the job definition specifies a `required_gender` (e.g. `job-13` 吟遊詩人 / `job-15` 黒魔術師 requiring `m`, `job-14` 踊り子 / `job-16` 白魔術師 requiring `f`), changing to an incompatible gender is rejected with `ErrGenderIncompatibleWithJob`.
+- **Rejection Guarantee**: On rejection (incompatible job, same gender, insufficient funds, or invalid gender), no fee is deducted; character gold and gender remain intact.
+- **Legacy Parity & Translation**: Translates legacy `name_change.cgi` sprite-existence check (`$icondir/job/$job_$gender.gif`) into the Go job catalog's `RequiredGender` constraint, avoiding asset copying or runtime filesystem checks.
+- **Concurrency & Locking**: Validation is performed on the row-locked character record (`findForUpdate`) within the Unit of Work database transaction (`runInTx`), ensuring deterministic serialization with concurrent job changes (`ChangeJob`).
 
 ---
 

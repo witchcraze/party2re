@@ -1154,7 +1154,7 @@
           "description": "Character gender updated successfully"
         },
         "400": {
-          "description": "Invalid gender, same gender, or insufficient funds"
+          "description": "Invalid gender, same gender, insufficient funds, or incompatible with current job"
         },
         "401": {
           "description": "Unauthorized"

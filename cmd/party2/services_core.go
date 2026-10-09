@@ -123,6 +123,7 @@ func (c *coreServices) initPlayerAndChar(
 			}
 			return count > 0, nil
 		})),
+		character.WithJobDefinitionProvider(c.jobCatalog),
 	)
 
 	if guildService != nil {

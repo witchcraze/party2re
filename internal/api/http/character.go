@@ -81,7 +81,8 @@ func (h *Handler) handleChangeCharacterGender(w http.ResponseWriter, r *http.Req
 			switch {
 			case errors.Is(err, character.ErrInvalidGender),
 				errors.Is(err, character.ErrSameGender),
-				errors.Is(err, character.ErrInsufficientGold):
+				errors.Is(err, character.ErrInsufficientGold),
+				errors.Is(err, character.ErrGenderIncompatibleWithJob):
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			case errors.Is(err, corecharacter.ErrNotFound):
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "character not found"})
