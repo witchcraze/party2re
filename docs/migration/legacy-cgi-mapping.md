@@ -58,7 +58,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** for navigation. CL-
 
 - **Scope / Legacy**: `lib/home.cgi`の公開/本人表示、Home設定、`てがみをかく` / `てがみをよむ`、`からー`、`ことばをおしえる` / `ことばをわすれさせる`、ペット表示/会話、配送通知。`lib/park.cgi`の`うらない`、NPC会話・共通チャット。共有`lib/system.cgi`の手紙・ログ処理まで追う。
 - **Go / HTTP**: `internal/home/service.go`、`internal/home/estate.go`の色設定、`internal/park/`、`internal/api/http/home.go`、`internal/api/http/home_estate.go`の設定/色関連、`internal/api/http/park.go`。
-- **Contracts**: `docs/design/home.md`、`docs/design/town_park.md`、`docs/api/paths/home.json`、`docs/api/paths/letter.json`、`docs/api/paths/park.json`。
+- **Contracts**: `docs/design/home.md`、`docs/design/town_park.md`、`docs/api/paths/home.json`、`docs/api/paths/letter.json`、`docs/api/paths/park.json`、`docs/api/paths/character.json` (色設定)。
 - **Open follow-ups**: [#1094](https://github.com/witchcraze/party2re/issues/1094) (mailbox所有)、[#1110](https://github.com/witchcraze/party2re/issues/1110) (配送通知)、[#1115](https://github.com/witchcraze/party2re/issues/1115) (設定更新)、[#1116](https://github.com/witchcraze/party2re/issues/1116) (色更新)、[#1125](https://github.com/witchcraze/party2re/issues/1125) (ことば保持)、[#1126](https://github.com/witchcraze/party2re/issues/1126) (mail/park設定)。
 - **Boundary**: Homeからの図鑑・ジョブマスター・プロフィール・冒険記録・特技設定・画像設定は遷移先と対象identityを確認する。遷移先の全仕様はCL-01/04/06/07の担当範囲。壁紙等の表示はここ、使用による変更はCL-02E。
 
@@ -90,7 +90,7 @@ It is structured into **7 Domain Clusters (CL-01 to CL-07)** for navigation. CL-
 
 - **Scope / Legacy**: `lib/home.cgi`の`つかう`と到達する`lib/_data.cgi`の効果。手持ち/Depotの両source、装備inspect、usage category、効果・前提・乱数・消費順・容量不足/失敗時をアイテムごとに確認する。
 - **Go / HTTP**: `internal/home/item_usage.go`、`internal/home/recipe_usage.go`、`internal/home/costume_usage.go`、`internal/api/http/home_estate.go`のitem一覧/使用。
-- **Contracts**: `docs/design/home.md`、`docs/design/blacksmith.md`、`docs/api/paths/home.json`。
+- **Contracts**: `docs/design/home.md`、`docs/design/blacksmith.md`、`docs/api/paths/character.json` (Home item一覧/使用)。
 - **Open follow-ups**: [#1120](https://github.com/witchcraze/party2re/issues/1120) (木の実の現在値)、[#1121](https://github.com/witchcraze/party2re/issues/1121) (無刻印時の消費)、[#1124](https://github.com/witchcraze/party2re/issues/1124) (未対応dispatch/不明callback)。
 - **Boundary**: 名前がrecipe poolにあるだけで対応済みとは数えない。レシピ・衣装・祭壇等への呼出しは効果/消費の境界まで追い、CL-03/04/05の全機能監査と分ける。未確定callbackや稼働config不在を仕様推測で埋めない。
 
