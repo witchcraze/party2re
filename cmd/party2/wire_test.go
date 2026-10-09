@@ -20,6 +20,7 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/eventplaza"
 	"github.com/witchcraze/party2re/internal/god"
+	"github.com/witchcraze/party2re/internal/guild"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/ranking"
@@ -838,5 +839,196 @@ func TestWireHomeRecoveryHooks_WiringAndErrorPropagation(t *testing.T) {
 	asleep, _ = timerSvc.IsLocked(ctx, timer.CategoryAsleep, "char-wire")
 	if !asleep {
 		t.Errorf("expected CategoryAsleep to remain locked when hook fails")
+	}
+}
+
+func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
+	dsn := os.Getenv("PARTY2_DB_DSN")
+	if dsn == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatalf("OpenFromEnvironment failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+
+	// Instantiate production wiring
+	core, err := newCoreServices(db, nil)
+	if err != nil {
+		t.Fatalf("newCoreServices failed: %v", err)
+	}
+	econ, err := newEconServices(db, core)
+	if err != nil {
+		t.Fatalf("newEconServices failed: %v", err)
+	}
+	soc, err := newSocServices(db, core, econ, nil, logging.Nop())
+	if err != nil {
+		t.Fatalf("newSocServices failed: %v", err)
+	}
+
+	// 1. Create a test guild with leader character
+	runID := fmt.Sprintf("%06x", time.Now().UnixNano()%0x1000000)
+	testGuild, leader, err := database.CreateTestGuildWithLeader(ctx, db, fmt.Sprintf("WGP_%s", runID), 50000)
+	if err != nil {
+		t.Fatalf("CreateTestGuildWithLeader failed: %v", err)
+	}
+
+	guildRepo := soc.guildRepo
+
+	// Verify initial guild points = 0
+	g, _, err := guildRepo.GetGuild(ctx, testGuild.ID)
+	if err != nil {
+		t.Fatalf("GetGuild failed: %v", err)
+	}
+	if g.Points != 0 {
+		t.Fatalf("expected initial guild points 0, got %d", g.Points)
+	}
+
+	// 2. Test 4 towns: cycle_days * 10 GP awarded to guild
+	// town1 (5d -> 50GP), town2 (10d -> 100GP), town3 (15d -> 150GP), town4 (20d -> 200GP)
+	townCases := []struct {
+		townID    string
+		style     string
+		price     int
+		cycleDays int
+		wantGP    int
+	}{
+		{"town1", "001", 500, 5, 50},
+		{"town2", "005", 1500, 10, 100},
+		{"town3", "013", 3000, 15, 150},
+		{"town4", "021", 5000, 20, 200},
+	}
+
+	expectedTotalGP := 0
+
+	for i, tc := range townCases {
+		var memberChar corecharacter.Character
+		if i == 0 {
+			// Leader builds in town1
+			memberChar = leader
+		} else {
+			// Create additional guild members for town2..town4 (due to 1-house per character rule)
+			memberChar, err = database.CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("W%s_M%d", runID, i), 50000)
+			if err != nil {
+				t.Fatalf("CreateTestCharacterWithFunds failed: %v", err)
+			}
+			m := guild.Member{
+				GuildID:     testGuild.ID,
+				CharacterID: memberChar.ID,
+				Role:        guild.RoleMember,
+				Title:       "Member",
+				IsPending:   false,
+				JoinedAt:    time.Now().UTC(),
+			}
+			if _, err := guildRepo.AddMember(ctx, m); err != nil {
+				t.Fatalf("AddMember failed: %v", err)
+			}
+		}
+
+		res, err := soc.home.BuildHouse(ctx, memberChar.ID, tc.townID, tc.style)
+		if err != nil {
+			t.Fatalf("BuildHouse in %s failed: %v", tc.townID, err)
+		}
+		if res.TownID != tc.townID {
+			t.Errorf("expected town %s, got %s", tc.townID, res.TownID)
+		}
+
+		expectedTotalGP += tc.wantGP
+		g, _, err = guildRepo.GetGuild(ctx, testGuild.ID)
+		if err != nil {
+			t.Fatalf("GetGuild failed: %v", err)
+		}
+		if g.Points != int64(expectedTotalGP) {
+			t.Errorf("after building in %s: expected %d total guild points, got %d", tc.townID, expectedTotalGP, g.Points)
+		}
+	}
+
+	// 3. Unaffiliated character can build a house successfully without error, and does NOT award GP to any guild
+	soloChar, err := database.CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("W%s_Sol", runID), 50000)
+	if err != nil {
+		t.Fatalf("CreateTestCharacterWithFunds failed: %v", err)
+	}
+	soloRes, err := soc.home.BuildHouse(ctx, soloChar.ID, "town1", "002")
+	if err != nil {
+		t.Fatalf("BuildHouse for unaffiliated character failed: %v", err)
+	}
+	if soloRes.TownID != "town1" {
+		t.Errorf("expected town1, got %s", soloRes.TownID)
+	}
+	// Guild points must remain unchanged
+	g, _, err = guildRepo.GetGuild(ctx, testGuild.ID)
+	if err != nil {
+		t.Fatalf("GetGuild failed: %v", err)
+	}
+	if g.Points != int64(expectedTotalGP) {
+		t.Errorf("guild points should not change when unaffiliated builds house: expected %d, got %d", expectedTotalGP, g.Points)
+	}
+
+	// 4. Insufficient funds: construction fails, guild points unchanged
+	poorChar, err := database.CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("W%s_Por", runID), 100)
+	if err != nil {
+		t.Fatalf("CreateTestCharacterWithFunds failed: %v", err)
+	}
+	mPoor := guild.Member{
+		GuildID:     testGuild.ID,
+		CharacterID: poorChar.ID,
+		Role:        guild.RoleMember,
+		Title:       "Member",
+		IsPending:   false,
+		JoinedAt:    time.Now().UTC(),
+	}
+	if _, err := guildRepo.AddMember(ctx, mPoor); err != nil {
+		t.Fatalf("AddMember failed: %v", err)
+	}
+
+	_, err = soc.home.BuildHouse(ctx, poorChar.ID, "town1", "003")
+	if !errors.Is(err, home.ErrInsufficientFunds) {
+		t.Errorf("expected ErrInsufficientFunds, got %v", err)
+	}
+	// Guild points unchanged
+	g, _, err = guildRepo.GetGuild(ctx, testGuild.ID)
+	if err != nil {
+		t.Fatalf("GetGuild failed: %v", err)
+	}
+	if g.Points != int64(expectedTotalGP) {
+		t.Errorf("guild points should not change on insufficient funds failure: expected %d, got %d", expectedTotalGP, g.Points)
+	}
+
+	// 5. Retry after failure: give character funds and retry -> succeeds, awards GP exactly once
+	poorChar.Money = 5000
+	if err := core.charRepo.Update(ctx, poorChar); err != nil {
+		t.Fatalf("Update poorChar failed: %v", err)
+	}
+	retryRes, err := soc.home.BuildHouse(ctx, poorChar.ID, "town1", "003")
+	if err != nil {
+		t.Fatalf("retry BuildHouse failed: %v", err)
+	}
+	if retryRes.TownID != "town1" {
+		t.Errorf("expected town1, got %s", retryRes.TownID)
+	}
+	expectedTotalGP += 50
+	g, _, err = guildRepo.GetGuild(ctx, testGuild.ID)
+	if err != nil {
+		t.Fatalf("GetGuild failed: %v", err)
+	}
+	if g.Points != int64(expectedTotalGP) {
+		t.Errorf("after successful retry: expected %d total guild points, got %d", expectedTotalGP, g.Points)
+	}
+
+	// 6. Already owns house: second build fails, guild points unchanged
+	_, err = soc.home.BuildHouse(ctx, poorChar.ID, "town2", "005")
+	if !errors.Is(err, home.ErrAlreadyOwnsHouse) {
+		t.Errorf("expected ErrAlreadyOwnsHouse, got %v", err)
+	}
+	g, _, err = guildRepo.GetGuild(ctx, testGuild.ID)
+	if err != nil {
+		t.Fatalf("GetGuild failed: %v", err)
+	}
+	if g.Points != int64(expectedTotalGP) {
+		t.Errorf("guild points should not change on ErrAlreadyOwnsHouse: expected %d, got %d", expectedTotalGP, g.Points)
 	}
 }
