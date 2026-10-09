@@ -14,8 +14,10 @@ const (
 	PrefixTimer = "party2:timer:"
 	PrefixDaily = "party2:daily:"
 
-	CategorySleep       = "sleep"
-	CategoryAsleep      = "asleep"
+	CategorySleep  = "sleep"
+	CategoryAsleep = "asleep"
+	// CategoryWaking is a short-lived claim held while one Wake runs recovery.
+	CategoryWaking      = "waking"
 	CategoryHouse       = "house"
 	CategoryStore       = "store"
 	CategoryDungeonOnce = "dungeon_once"
@@ -41,6 +43,8 @@ func NextMidnightJST(now time.Time) time.Time {
 type Service interface {
 	// Tier 1 Ephemeral Timers
 	SetLock(ctx context.Context, category, targetID string, duration time.Duration) error
+	// TryLock sets the lock only if absent and reports whether it was acquired.
+	TryLock(ctx context.Context, category, targetID string, duration time.Duration) (bool, error)
 	IsLocked(ctx context.Context, category, targetID string) (bool, error)
 	GetRemainingLock(ctx context.Context, category, targetID string) (time.Duration, error)
 	ReleaseLock(ctx context.Context, category, targetID string) error
@@ -108,6 +112,36 @@ func (s *service) SetLock(ctx context.Context, category, targetID string, durati
 	s.memory[k] = time.Now().Add(duration)
 	s.memMu.Unlock()
 	return nil
+}
+
+func (s *service) TryLock(ctx context.Context, category, targetID string, duration time.Duration) (bool, error) {
+	k, err := timerKey(category, targetID)
+	if err != nil {
+		return false, err
+	}
+	if s.client != nil {
+		secs := int64(duration.Seconds())
+		if secs < 1 {
+			secs = 1
+		}
+		cmd := s.client.B().Set().Key(k).Value("1").Nx().ExSeconds(secs).Build()
+		err := s.client.Do(ctx, cmd).Error()
+		if valkey.IsValkeyNil(err) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+
+	s.memMu.Lock()
+	defer s.memMu.Unlock()
+	if exp, exists := s.memory[k]; exists && time.Now().Before(exp) {
+		return false, nil
+	}
+	s.memory[k] = time.Now().Add(duration)
+	return true, nil
 }
 
 func (s *service) IsLocked(ctx context.Context, category, targetID string) (bool, error) {

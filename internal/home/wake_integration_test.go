@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -121,6 +122,7 @@ func TestWake_SQLRecovery(t *testing.T) {
 			})
 			char.Money, char.Deposit, char.Experience = 20000, 100, 10
 			char.Stats.HP, char.Stats.MP, char.Tired = 1, 0, 80
+			char.PendingWake = true
 			if err := charRepo.Update(ctx, char); err != nil {
 				t.Fatal(err)
 			}
@@ -177,17 +179,21 @@ func TestWake_SQLRecovery(t *testing.T) {
 			case "credit_during_wake":
 				read := make(chan struct{})
 				started := make(chan struct{})
+				var lockOnce sync.Once
 				locked.afterLock = func(txCtx context.Context) error {
 					if database.TxFromContext(txCtx) == nil {
 						return errors.New("Wake recovery read has no SQL transaction")
 					}
-					close(read)
-					select {
-					case <-started:
-						return nil
-					case <-ctx.Done():
-						return ctx.Err()
-					}
+					var err error
+					lockOnce.Do(func() {
+						close(read)
+						select {
+						case <-started:
+						case <-ctx.Done():
+							err = ctx.Err()
+						}
+					})
+					return err
 				}
 				a, b := testutil.RunRace2(wake, func() error {
 					select {
@@ -220,7 +226,11 @@ func TestWake_SQLRecovery(t *testing.T) {
 				credits = cfg.Workers / 2 * cfg.OpsPerWorker
 				res := testutil.RunConcurrentStressTest(t, cfg, func(worker, op int) error {
 					if worker%2 == 0 {
-						return wake()
+						err := wake()
+						if errors.Is(err, home.ErrWakeInProgress) {
+							return nil
+						}
+						return err
 					}
 					return addAssets()
 				})
@@ -248,6 +258,9 @@ func TestWake_SQLRecovery(t *testing.T) {
 			}
 			if asleep != (mode == "hook_failure" || mode == "recovery_write_failure") {
 				t.Fatalf("pending recovery = %v in %s", asleep, mode)
+			}
+			if final.PendingWake != (mode == "hook_failure" || mode == "recovery_write_failure") {
+				t.Fatalf("pending wake = %v in %s", final.PendingWake, mode)
 			}
 			if mode == "hook_failure" {
 				svc.SetFullnessResetter(nil)

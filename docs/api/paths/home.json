@@ -267,7 +267,7 @@
               }
             }
           },
-          "description": "Conflict - character is still sleeping"
+          "description": "Conflict - character is still sleeping or wake is already in progress"
         },
         "500": {
           "content": {

@@ -201,7 +201,9 @@ func TestActionGatewayCommandLoop(t *testing.T) {
 			if err := json.Unmarshal(got["result"], &sleep); err != nil {
 				t.Fatal(err)
 			}
-			if !sleep.Sleeping || sleep.DurationSeconds != 60 || sleep.HomeCharacterID != "hero" || f.char != before {
+			sleepChar := before
+			sleepChar.PendingWake = true
+			if !sleep.Sleeping || sleep.DurationSeconds != 60 || sleep.HomeCharacterID != "hero" || f.char != sleepChar {
 				t.Fatalf("sleep lost service result or recovered early: %+v", sleep)
 			}
 			assertLoopRecovery(t, f.observation(got), true, false)
@@ -219,7 +221,7 @@ func TestActionGatewayCommandLoop(t *testing.T) {
 				got = f.command("adventure_start", `{"stage_id":"stage-01"}`, http.StatusConflict)
 				assertGatewayError(t, got, "ACTION_UNAVAILABLE")
 				assertLoopRecovery(t, f.observation(got), true, elapsed)
-				if f.executions != executions || f.adventure.saves != 0 || f.updates != 0 || f.char != before {
+				if f.executions != executions || f.adventure.saves != 0 || f.updates != 1 || f.char != sleepChar {
 					t.Fatal("sleep/pending wake executed adventure or recovered vitality")
 				}
 			}
@@ -228,7 +230,7 @@ func TestActionGatewayCommandLoop(t *testing.T) {
 			if err := json.Unmarshal(got["result"], &wake); err != nil {
 				t.Fatal(err)
 			}
-			if !wake.Success || wake.Character != toCharacterResponse(f.char) || f.updates != 1 ||
+			if !wake.Success || wake.Character != toCharacterResponse(f.char) || f.updates != 3 ||
 				f.char.Stats.HP != initial.Stats.MaxHP || f.char.Stats.MP != initial.Stats.MaxMP || f.char.Tired != 0 ||
 				f.char.Money != 60 || f.char.Deposit != 1040 {
 				t.Fatalf("wake failed to restore vitality/preserve assets: %+v", wake)

@@ -163,7 +163,7 @@ func TestHomeGatewaySleepWakeLifecycle(t *testing.T) {
 		return f.execute(ctx, id, p.Amount)
 	}, gatewayRejection))
 	status, got := f.request(router, "home_sleep", "")
-	if status != 200 || f.executions != 1 || f.updates != 0 {
+	if status != 200 || f.executions != 1 || f.updates != 1 {
 		t.Fatalf("sleep status=%d calls=%d: %s", status, f.executions, got)
 	}
 	var result sleepResponse
@@ -194,7 +194,7 @@ func TestHomeGatewaySleepWakeLifecycle(t *testing.T) {
 				params = `,"params":{"stage_id":"stage-00"}`
 			}
 			status, got = f.request(router, action, params)
-			if status != 409 || f.executions != before || f.updates != 0 || f.char.Stats.HP != 10 || f.char.Stats.MP != 5 || f.char.Tired != 80 {
+			if status != 409 || f.executions != before || f.updates != 1 || f.char.Stats.HP != 10 || f.char.Stats.MP != 5 || f.char.Tired != 80 {
 				t.Fatalf("recovered/executed before wake: %d %s", status, got)
 			}
 			assertGatewayError(t, got, "ACTION_UNAVAILABLE")
@@ -205,7 +205,7 @@ func TestHomeGatewaySleepWakeLifecycle(t *testing.T) {
 		}
 		if !elapsed {
 			status, got = f.request(router, "home_wake", "")
-			if status != 409 || f.executions != before+1 || f.updates != 0 || f.char.Stats.HP != 10 || f.char.Stats.MP != 5 || f.char.Tired != 80 {
+			if status != 409 || f.executions != before+1 || f.updates != 1 || f.char.Stats.HP != 10 || f.char.Stats.MP != 5 || f.char.Tired != 80 {
 				t.Fatalf("early wake recovered/bypassed service: %d %s", status, got)
 			}
 			assertGatewayError(t, got, "HOME_STILL_SLEEPING")
@@ -213,7 +213,7 @@ func TestHomeGatewaySleepWakeLifecycle(t *testing.T) {
 		}
 	}
 	status, got = f.request(router, "home_wake", "")
-	if status != 200 || f.updates != 1 || f.char.Stats.HP != 100 || f.char.Stats.MP != 50 || f.char.Tired != 0 {
+	if status != 200 || f.updates != 3 || f.char.Stats.HP != 100 || f.char.Stats.MP != 50 || f.char.Tired != 0 {
 		t.Fatalf("wake did not recover: %d %s", status, got)
 	}
 	var wake wakeResponse
@@ -246,7 +246,7 @@ func TestHomeGatewaySleepDefaultsTargetsAndVitality(t *testing.T) {
 				}
 				before := f.char
 				status, got := f.request(f.router(f.timers), "home_sleep", params)
-				if status != 200 || f.executions != 1 || f.updates != 0 || f.char.Money != before.Money || f.char.Stats != before.Stats || f.char.Tired != before.Tired {
+				if status != 200 || f.executions != 1 || f.updates != 1 || f.char.Money != before.Money || f.char.Stats != before.Stats || f.char.Tired != before.Tired {
 					t.Fatalf("sleep changed vitality/charged/blocked: %d %s", status, got)
 				}
 				expectedTarget := "hero"

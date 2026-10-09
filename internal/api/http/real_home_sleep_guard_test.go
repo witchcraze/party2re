@@ -42,6 +42,14 @@ func (t *inMemoryRealTimer) SetLock(ctx context.Context, category, targetID stri
 	return nil
 }
 
+func (t *inMemoryRealTimer) TryLock(ctx context.Context, category, targetID string, duration time.Duration) (bool, error) {
+	key := category + ":" + targetID
+	if t.locks[key] {
+		return false, nil
+	}
+	return true, t.SetLock(ctx, category, targetID, duration)
+}
+
 func (t *inMemoryRealTimer) IsLocked(ctx context.Context, category, targetID string) (bool, error) {
 	key := category + ":" + targetID
 	if err, ok := t.isLockedErrs[key]; ok && err != nil {

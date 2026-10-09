@@ -162,6 +162,7 @@ func TestHomeGatewayServiceRejectionsAndUnknownFailure(t *testing.T) {
 		{"home_sleep", "HOME_HOUSE_EXPIRED", home.ErrHouseExpired, 404},
 		{"home_wake", "HOME_STILL_SLEEPING", home.ErrStillSleeping, 409},
 		{"home_wake", "HOME_NOT_SLEEPING", home.ErrNotSleeping, 409},
+		{"home_wake", "HOME_WAKE_IN_PROGRESS", home.ErrWakeInProgress, 409},
 		{"home_wake", "CHARACTER_NOT_FOUND", corecharacter.ErrNotFound, 404},
 		{"home_sleep", "EXECUTION_FAILED", errors.New("secret timer write"), 500},
 		{"home_wake", "EXECUTION_FAILED", errors.New("secret recovery write"), 500},

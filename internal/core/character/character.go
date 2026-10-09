@@ -74,6 +74,7 @@ type Character struct {
 	WeaponSeal       int    // Weapon seal ID (wea_seal): 0..12.
 	WeaponCustomName string // Weapon custom name (wea_name): up to 20 runes.
 	ArmorCustomName  string // Armor custom name (arm_name): up to 20 runes.
+	PendingWake      bool   // Pending wake recovery flag (Issue #1118): persisted in SQL so long absence never skips recovery.
 }
 
 // JobMemory is the temporary pair of job states used by the job exchange

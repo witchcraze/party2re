@@ -48,8 +48,8 @@ func TestScanCharacterRow_CustomError(t *testing.T) {
 func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 	scanner := &mockScanner{
 		scanFn: func(dest ...any) error {
-			if len(dest) != 44 {
-				t.Fatalf("expected 44 scan destinations, got %d", len(dest))
+			if len(dest) != 45 {
+				t.Fatalf("expected 45 scan destinations, got %d", len(dest))
 			}
 			*dest[0].(*string) = "char-1"
 			*dest[1].(*string) = "player-1"
@@ -95,6 +95,7 @@ func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 			*dest[41].(*int) = 7
 			*dest[42].(*string) = "Legendary Sword"
 			*dest[43].(*string) = "Dragon Armor"
+			*dest[44].(*bool) = true
 			return nil
 		},
 	}
@@ -135,6 +136,9 @@ func TestScanCharacterRow_SuccessfulScan(t *testing.T) {
 	if char.Crystal != 450 || char.WeaponSeal != 7 || char.WeaponCustomName != "Legendary Sword" || char.ArmorCustomName != "Dragon Armor" {
 		t.Errorf("unexpected blacksmith fields: Crystal %d, Seal %d, WeaName %q, ArmName %q",
 			char.Crystal, char.WeaponSeal, char.WeaponCustomName, char.ArmorCustomName)
+	}
+	if !char.PendingWake {
+		t.Errorf("expected PendingWake = true")
 	}
 }
 
