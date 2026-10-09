@@ -204,6 +204,73 @@ func TestServiceListAndChangeJob(t *testing.T) {
 	}
 }
 
+func TestServiceChangeJob_SameJobPreservesOverLevel(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("same job preserves OverLevel true", func(t *testing.T) {
+		state, _ := corejob.NewCharacterJob("char-same-job", "job-01")
+		repo := &repositoryStub{value: state}
+		char := corecharacter.Character{
+			ID:        "char-same-job",
+			JobID:     "job-01",
+			Level:     30,
+			Gender:    "male",
+			OverLevel: true,
+			Stats:     corecharacter.Stats{MaxHP: 200, MaxMP: 100, HP: 50, MP: 50, Attack: 60, Defense: 40, Agility: 40},
+		}
+		charRepo := &charRepoStub{char: char}
+		svc, err := NewService(repo, WithCharacterRepository(charRepo), WithInventoryRepository(&inventoryRepoStub{}))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		updatedChar, updatedJob, err := svc.ChangeJob(ctx, char.ID, "job-01")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if updatedChar.JobID != "job-01" || updatedJob.CurrentJobID != "job-01" {
+			t.Fatalf("expected job job-01, got char=%s, job=%s", updatedChar.JobID, updatedJob.CurrentJobID)
+		}
+		if !updatedChar.OverLevel {
+			t.Fatalf("expected OverLevel true to be preserved on same job change, got %v", updatedChar.OverLevel)
+		}
+		if updatedChar.Level != 1 {
+			t.Fatalf("expected level 1, got %d", updatedChar.Level)
+		}
+		if updatedChar.Experience != 0 {
+			t.Fatalf("expected exp 0, got %d", updatedChar.Experience)
+		}
+		if updatedChar.Stats.MaxHP != 100 {
+			t.Fatalf("expected MaxHP 100, got %d", updatedChar.Stats.MaxHP)
+		}
+	})
+
+	t.Run("same job preserves OverLevel false", func(t *testing.T) {
+		state, _ := corejob.NewCharacterJob("char-same-job-false", "job-01")
+		repo := &repositoryStub{value: state}
+		char := corecharacter.Character{
+			ID:        "char-same-job-false",
+			JobID:     "job-01",
+			Level:     30,
+			Gender:    "male",
+			OverLevel: false,
+		}
+		charRepo := &charRepoStub{char: char}
+		svc, err := NewService(repo, WithCharacterRepository(charRepo), WithInventoryRepository(&inventoryRepoStub{}))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		updatedChar, _, err := svc.ChangeJob(ctx, char.ID, "job-01")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if updatedChar.OverLevel {
+			t.Fatalf("expected OverLevel false on same job change, got %v", updatedChar.OverLevel)
+		}
+	})
+}
+
 func TestServiceChangeJobAwardsGuildPoints(t *testing.T) {
 	state, _ := corejob.NewCharacterJob("character-1", "starter")
 	repo := &repositoryStub{value: state}

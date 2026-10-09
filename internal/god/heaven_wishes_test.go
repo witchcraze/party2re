@@ -377,6 +377,9 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		if res.Character.JobID != "job-70" {
 			t.Errorf("expected job-70, got %s", res.Character.JobID)
 		}
+		if res.Character.OverLevel != false {
+			t.Errorf("expected OverLevel false, got %v", res.Character.OverLevel)
+		}
 		if res.NextLocation != "home" {
 			t.Errorf("expected NextLocation home, got %s", res.NextLocation)
 		}
@@ -385,6 +388,39 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		_, err = svc.GrantWish(ctx, char.ID, god.WishCelestialDragon, god.RealmHeaven)
 		if !errors.Is(err, god.ErrWishRequirement) {
 			t.Errorf("expected ErrWishRequirement for existing job-70, got %v", err)
+		}
+	})
+
+	t.Run("wish_celestial_dragon preserves OverLevel true", func(t *testing.T) {
+		svc, charRepo, _, _, _, _, _, _, _ := setupHeavenService()
+		char := corecharacter.Character{
+			ID:        "char-celestial-overlevel",
+			Name:      "AscendedHero",
+			JobID:     "job-01",
+			Level:     99,
+			OverLevel: true,
+			Stats:     corecharacter.Stats{MaxHP: 500, MaxMP: 300, HP: 500, MP: 300, Attack: 200, Defense: 150, Agility: 180},
+		}
+		charRepo.characters[char.ID] = char
+
+		res, err := svc.GrantWish(ctx, char.ID, god.WishCelestialDragon, god.RealmHeaven)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.Character.JobID != "job-70" {
+			t.Errorf("expected job-70, got %s", res.Character.JobID)
+		}
+		if !res.Character.OverLevel {
+			t.Errorf("expected OverLevel true to be preserved, got %v", res.Character.OverLevel)
+		}
+		if res.Character.Level != 1 {
+			t.Errorf("expected Level 1, got %d", res.Character.Level)
+		}
+		if res.Character.Experience != 0 {
+			t.Errorf("expected Experience 0, got %d", res.Character.Experience)
+		}
+		if res.Character.Stats.MaxHP != 250 {
+			t.Errorf("expected MaxHP 250, got %d", res.Character.Stats.MaxHP)
 		}
 	})
 

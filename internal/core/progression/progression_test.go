@@ -316,6 +316,99 @@ func TestApplyExperience_OverLevel_GrowthTo150(t *testing.T) {
 	}
 }
 
+func TestApplyExperience_AfterJobChange_OverLevelReGrowth(t *testing.T) {
+	def := job.Definition{
+		ID:            "hero",
+		Name:          "Hero",
+		HPGrowth:      5,
+		MPGrowth:      3,
+		AttackGrowth:  2,
+		DefenseGrowth: 2,
+		AgilityGrowth: 1,
+	}
+	random := zeroRandomSource{}
+
+	t.Run("same job change preserves OverLevel and allows re-growth to 150", func(t *testing.T) {
+		char, err := character.New("RebornLegend")
+		if err != nil {
+			t.Fatal(err)
+		}
+		char.JobID = "hero"
+		char.Level = 99
+		char.Experience = 99 * 99 * 10
+		char.OverLevel = true
+
+		// Apply same-job change
+		if err := char.ApplyJobChange("hero", 0); err != nil {
+			t.Fatal(err)
+		}
+		if char.Level != 1 || char.Experience != 0 || !char.OverLevel {
+			t.Fatalf("expected Lv 1, Exp 0, OverLevel true, got Lv %d, Exp %d, OverLevel %v",
+				char.Level, char.Experience, char.OverLevel)
+		}
+
+		// Re-grow to Lv 99
+		expFor99 := 98 * 98 * 10
+		if _, err := ApplyExperienceWithJob(&char, expFor99, def, random, false, nil); err != nil {
+			t.Fatal(err)
+		}
+		if char.Level != 99 {
+			t.Fatalf("expected Lv 99, got Lv %d", char.Level)
+		}
+
+		// Advance past 99 to Lv 100
+		needed100, err := ExperienceForNextLevelWithMax(99, OverMaxLevel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := ApplyExperienceWithJob(&char, needed100-char.Experience, def, random, false, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.LevelsGained != 1 || char.Level != 100 {
+			t.Fatalf("expected Lv 100, got Lv %d with %d gained", char.Level, res.LevelsGained)
+		}
+	})
+
+	t.Run("different job change resets OverLevel and caps at Lv 99", func(t *testing.T) {
+		char, err := character.New("FormerLegend")
+		if err != nil {
+			t.Fatal(err)
+		}
+		char.JobID = "hero"
+		char.Level = 99
+		char.Experience = 98 * 98 * 10
+		char.OverLevel = true
+
+		// Apply different-job change
+		if err := char.ApplyJobChange("warrior", 0); err != nil {
+			t.Fatal(err)
+		}
+		if char.Level != 1 || char.Experience != 0 || char.OverLevel {
+			t.Fatalf("expected Lv 1, Exp 0, OverLevel false, got Lv %d, Exp %d, OverLevel %v",
+				char.Level, char.Experience, char.OverLevel)
+		}
+
+		// Re-grow to Lv 99
+		expFor99 := 98 * 98 * 10
+		if _, err := ApplyExperienceWithJob(&char, expFor99, def, random, false, nil); err != nil {
+			t.Fatal(err)
+		}
+		if char.Level != 99 {
+			t.Fatalf("expected Lv 99, got Lv %d", char.Level)
+		}
+
+		// Cannot advance past 99
+		res, err := ApplyExperienceWithJob(&char, 100000, def, random, false, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.LevelsGained != 0 || char.Level != 99 {
+			t.Fatalf("expected Lv 99 (capped), got Lv %d with %d gained", char.Level, res.LevelsGained)
+		}
+	})
+}
+
 // ---------------------------------------------------------------------------
 // SP gain tests (旧CGI仕様)
 // ---------------------------------------------------------------------------
