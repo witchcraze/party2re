@@ -65,6 +65,12 @@ func (c *Character) AddOrb(orb rune) (bool, error) {
 	return true, nil
 }
 
+// SetAllOrbs replaces character's orb status with all six standard orbs.
+// Any previous orb state (including partial orbs or awakened 'G') is overwritten.
+func (c *Character) SetAllOrbs() {
+	c.Orb = string(ValidOrbRunes)
+}
+
 // SetRamiaAwakened sets orb state to 'G', indicating Ramia is revived.
 func (c *Character) SetRamiaAwakened() {
 	c.Orb = string(OrbGold)

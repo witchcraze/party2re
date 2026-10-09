@@ -120,9 +120,7 @@ func (s *Service) executeHeavenWish(
 	case WishAllOrbs:
 		wishName = "新しい冒険場所に行きたい"
 		desc = "全オーブ"
-		for _, r := range corecharacter.ValidOrbRunes {
-			char.AddOrb(r)
-		}
+		char.SetAllOrbs()
 		msg = "すべてのオーブを獲得しました！"
 
 	case WishCelestialDragon:

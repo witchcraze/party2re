@@ -325,20 +325,40 @@ func TestGod_HeavenWishes_AllCatalog(t *testing.T) {
 		}
 	})
 
-	t.Run("wish_all_orbs gives all 6 standard orbs", func(t *testing.T) {
-		svc, charRepo, _, _, _, _, _, _, _ := setupHeavenService()
-		char := corecharacter.Character{ID: "char-orbs", Name: "OrbHunter", Orb: ""}
-		charRepo.characters[char.ID] = char
+	t.Run("wish_all_orbs gives all 6 standard orbs and replaces existing state", func(t *testing.T) {
+		cases := []struct {
+			name       string
+			initialOrb string
+		}{
+			{name: "empty initial", initialOrb: ""},
+			{name: "partial initial", initialOrb: "sb"},
+			{name: "all orbs initial", initialOrb: "srbgyp"},
+			{name: "awakened Ramia initial", initialOrb: "G"},
+		}
 
-		res, err := svc.GrantWish(ctx, char.ID, god.WishAllOrbs, god.RealmHeaven)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if !res.Character.HasAllOrbs() {
-			t.Errorf("expected character to have all orbs, got %s", res.Character.Orb)
-		}
-		if res.NextLocation != "home" {
-			t.Errorf("expected NextLocation home, got %s", res.NextLocation)
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				svc, charRepo, _, _, _, _, _, _, _ := setupHeavenService()
+				char := corecharacter.Character{ID: "char-orbs", Name: "OrbHunter", Orb: tc.initialOrb}
+				charRepo.characters[char.ID] = char
+
+				res, err := svc.GrantWish(ctx, char.ID, god.WishAllOrbs, god.RealmHeaven)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if !res.Character.HasAllOrbs() {
+					t.Errorf("expected character to have all orbs, got %s", res.Character.Orb)
+				}
+				if res.Character.IsRamiaAwakened() {
+					t.Errorf("expected character not to be awakened, got %s", res.Character.Orb)
+				}
+				if res.Character.Orb != "srbgyp" {
+					t.Errorf("expected orb to be %q, got %q", "srbgyp", res.Character.Orb)
+				}
+				if res.NextLocation != "home" {
+					t.Errorf("expected NextLocation home, got %s", res.NextLocation)
+				}
+			})
 		}
 	})
 
