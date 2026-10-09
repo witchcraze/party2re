@@ -48,7 +48,7 @@ Seals cannot be applied if:
 - **Item 257 (水晶の原石)**:
   - Consumable item usable out-of-combat from Home.
   - If the character has a weapon seal (`char.wea_seal > 0`), the seal is stripped (`char.wea_seal = 0`), and 50% of the crystal cost is refunded to `char.crystal` (capped at 999,999).
-  - If no seal is engraved, the item is consumed with message `「しかし、何も起こらなかった…」`.
+  - If no seal is engraved, **the item is NOT consumed**; only the failure message `「しかし、何も起こらなかった…」` is shown (fixed by #1121).
 
 ---
 

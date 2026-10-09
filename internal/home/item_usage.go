@@ -15,6 +15,10 @@ import (
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
+// errNoEffect is a sentinel returned by applyConsumableEffect when the item
+// has no effect and must not be consumed (e.g. raw crystal with no weapon seal).
+var errNoEffect = errors.New("item had no effect")
+
 type DepotManager interface {
 	FindByCharacterID(ctx context.Context, characterID string) (depot.Depot, error)
 	Consume(ctx context.Context, characterID, itemInstanceID string, quantity int) error
@@ -265,13 +269,24 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 			}
 			txRes, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
 				msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def)
+				resMsg = msg // capture even when err != nil (e.g. errNoEffect carries the message)
 				if err != nil {
 					return err
 				}
-				resMsg = msg
 				return nil
 			})
 			if err != nil {
+				if errors.Is(err, errNoEffect) {
+					// Item had no effect; transaction was rolled back, nothing consumed.
+					return &UseHomeItemResult{
+						Action:    "no_effect",
+						Message:   resMsg,
+						ItemName:  def.Name,
+						Kind:      3,
+						Consumed:  false,
+						Character: &char,
+					}, nil
+				}
 				if errors.Is(err, economy.ErrItemNotFound) || errors.Is(err, economy.ErrInsufficientItemQuantity) {
 					return nil, ErrItemNotFound
 				}
@@ -299,20 +314,34 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 			if s.depotMgr == nil {
 				return ErrItemNotFound
 			}
+			// Apply effect before consuming so that a no-effect sentinel aborts
+			// the transaction without touching the depot.
+			msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def)
+			resMsg = msg // capture even when err != nil (e.g. errNoEffect carries the message)
+			if err != nil {
+				return err
+			}
 			if err := s.depotMgr.ConsumeOne(tc.Context, characterID, instanceID); err != nil {
 				if errors.Is(err, depot.ErrItemNotFound) || errors.Is(err, depot.ErrNotFound) {
 					return ErrItemNotFound
 				}
 				return err
 			}
-			msg, err := s.applyConsumableEffect(tc.Context, &tc.Character, def)
-			if err != nil {
-				return err
-			}
 			resMsg = msg
 			return nil
 		})
 		if err != nil {
+			if errors.Is(err, errNoEffect) {
+				// Item had no effect; transaction was rolled back, nothing consumed.
+				return &UseHomeItemResult{
+					Action:    "no_effect",
+					Message:   resMsg,
+					ItemName:  def.Name,
+					Kind:      3,
+					Consumed:  false,
+					Character: &char,
+				}, nil
+			}
 			if errors.Is(err, economy.ErrItemNotFound) || errors.Is(err, ErrItemNotFound) {
 				return nil, ErrItemNotFound
 			}
@@ -334,6 +363,17 @@ func (s *Service) UseHomeItem(ctx context.Context, characterID, instanceID, sour
 	// Fallback path for unit test mocks without runner configured
 	msg, err := s.applyConsumableEffect(ctx, &char, def)
 	if err != nil {
+		if errors.Is(err, errNoEffect) {
+			// Item had no effect; skip consumption and return early.
+			return &UseHomeItemResult{
+				Action:    "no_effect",
+				Message:   msg,
+				ItemName:  def.Name,
+				Kind:      3,
+				Consumed:  false,
+				Character: &char,
+			}, nil
+		}
 		return nil, err
 	}
 
@@ -439,7 +479,9 @@ func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter
 		msg = "メダル王にメダルを１枚献上しました"
 	case "水晶の原石":
 		if char.WeaponSeal <= 0 {
-			msg = "しかし、何も起こらなかった…"
+			// No seal to remove: return the no-effect sentinel so the caller
+			// knows to skip consumption and rollback the transaction.
+			return "しかし、何も起こらなかった…", errNoEffect
 		} else {
 			refund := sealRefundCrystals(char.WeaponSeal)
 			char.WeaponSeal = 0
@@ -453,19 +495,4 @@ func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter
 	}
 
 	return msg, nil
-}
-
-func sealRefundCrystals(sealID int) int {
-	switch sealID {
-	case 1, 4:
-		return 25
-	case 2, 5:
-		return 250
-	case 3, 6:
-		return 2500
-	case 7, 8, 9, 10, 11, 12:
-		return 50
-	default:
-		return 0
-	}
 }
