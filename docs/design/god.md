@@ -42,7 +42,7 @@ The Heaven catalog comprises 18 standard wishes plus 1 conditional level-cap wis
 | `wish_guild_gorgeous` | ギルドをゴージャスにしたい | ギルドが… | Must belong to a guild | Guild `bgimg` set to `"god.gif"` |
 | `wish_refresh` / `wish_full_recovery` | 元気いっぱいになりたい | 疲労度 -150 % (HP・MP完全回復) | None | $\text{Tired} = \text{Tired} - 150, \text{HP} = \text{MaxHP}, \text{MP} = \text{MaxMP}$ |
 | `wish_all_orbs` | 新しい冒険場所に行きたい | 全オーブ | None | Replaces orb state with all 6 standard orbs (`byrpgs` / `ValidOrbRunes`), overwriting any prior orbs or awakened 'G' state |
-| `wish_celestial_dragon` | 天竜人になりたい | 転職 (空竜の民) | `JobID != "job-70" && OldJobID != "job-70"` | Job changed to `"job-70"` (Job reset & base stats applied) |
+| `wish_celestial_dragon` | 天竜人になりたい | 転職 (空竜の民) | `JobID != "job-70" && OldJobID != "job-70"` | Job changed to `"job-70"` (Job reset & base stats applied; `OverLevel` flag preserved) |
 | `wish_god_of_new_world` | 新世界の神になりたい | 自分の家が… | None | Avatar set to `"chr/052.gif"`, home `bgimg` set to `"god.gif"` |
 | `wish_ortega` | オルテガを生き返らして | 自分の家に… | None | Adds NPC companion "オルテガ" (`chr/029.gif`) to `home_members` |
 | `wish_cat` | 猫を飼いたい | 自分の家に… | None | Adds NPC companion "白猫" (`chr/030.gif`) or "黒猫" (`chr/031.gif`) (50% random) |

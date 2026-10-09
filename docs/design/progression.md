@@ -90,5 +90,5 @@ and the character is above level 99, those ceilings are doubled.
 
 OverLevel allows characters that have reached the celestial realm to progress beyond the standard Lv99 cap:
 - **Maximum Level**: Extends from Lv99 to Lv150.
-- **Job Change Reset**: Changing jobs resets the `OverLevel` flag to `false`, requiring re-ascension.
+- **Job Change Reset & Preservation**: Normal cross-job transitions (`targetJobID != currentJobID`) reset the `OverLevel` flag to `false`, requiring re-ascension. Re-changing to the same job (`targetJobID == currentJobID`) and celestial Dragon Noble changes (`WishCelestialDragon` / 天竜人) preserve `OverLevel` status (legacy `party2/lib/job_change.cgi:214-226` and `party2/lib/god.cgi:196-218`).
 - **Fictional Rebirth Eliminated**: The original Party2 CGI contains no reincarnation/rebirth loop. The clicker-style `RebirthCount` and rebirth stat multipliers are completely eliminated in favor of celestial OverLevel.

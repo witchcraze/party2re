@@ -371,6 +371,7 @@ func (c *Character) ApplyJobChange(targetJobID string, targetSP int) error {
 		c.OldSP = c.SP
 		c.JobID = strings.TrimSpace(targetJobID)
 		c.SP = targetSP
+		c.OverLevel = false
 	}
 	for _, value := range []*int{&c.Stats.MaxHP, &c.Stats.MaxMP, &c.Stats.Attack, &c.Stats.Defense, &c.Stats.Agility} {
 		*value /= 2
@@ -382,7 +383,6 @@ func (c *Character) ApplyJobChange(targetJobID string, targetSP int) error {
 	c.Level = InitialLevel
 	c.Experience = 0
 	c.JobLevel++
-	c.OverLevel = false
 	return nil
 }
 

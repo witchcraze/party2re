@@ -306,6 +306,71 @@ func TestApplyJobChangeHalvesStatsAndResetsProgression(t *testing.T) {
 	}
 }
 
+func TestApplyJobChange_OverLevelPreservation(t *testing.T) {
+	tests := []struct {
+		name          string
+		initialJob    string
+		targetJob     string
+		initOverLevel bool
+		wantOverLevel bool
+	}{
+		{
+			name:          "same job preserves OverLevel true",
+			initialJob:    "job-01",
+			targetJob:     "job-01",
+			initOverLevel: true,
+			wantOverLevel: true,
+		},
+		{
+			name:          "same job preserves OverLevel false",
+			initialJob:    "job-01",
+			targetJob:     "job-01",
+			initOverLevel: false,
+			wantOverLevel: false,
+		},
+		{
+			name:          "different job resets OverLevel true to false",
+			initialJob:    "job-01",
+			targetJob:     "job-02",
+			initOverLevel: true,
+			wantOverLevel: false,
+		},
+		{
+			name:          "different job keeps OverLevel false",
+			initialJob:    "job-01",
+			targetJob:     "job-02",
+			initOverLevel: false,
+			wantOverLevel: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			c := Character{
+				JobID:     tc.initialJob,
+				Level:     50,
+				OverLevel: tc.initOverLevel,
+				Stats:     Stats{MaxHP: 100, MaxMP: 50, HP: 10, MP: 10, Attack: 30, Defense: 20, Agility: 20},
+			}
+			if err := c.ApplyJobChange(tc.targetJob, 10); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if c.OverLevel != tc.wantOverLevel {
+				t.Errorf("OverLevel = %v, want %v", c.OverLevel, tc.wantOverLevel)
+			}
+			if c.Level != 1 {
+				t.Errorf("Level = %d, want 1", c.Level)
+			}
+			if c.Experience != 0 {
+				t.Errorf("Experience = %d, want 0", c.Experience)
+			}
+			if c.Stats.MaxHP != 50 || c.Stats.HP != 50 {
+				t.Errorf("MaxHP = %d, HP = %d, want 50", c.Stats.MaxHP, c.Stats.HP)
+			}
+		})
+	}
+}
+
 func TestFutureMemorySnapshotAndRestoration(t *testing.T) {
 	c := Character{
 		ID:         "char-1",

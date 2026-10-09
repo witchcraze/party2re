@@ -129,9 +129,11 @@ func (s *Service) executeHeavenWish(
 		if char.JobID == "job-70" || char.OldJobID == "job-70" || char.JobID == "70" || char.OldJobID == "70" {
 			return fmt.Errorf("%w: すでに天竜人です", ErrWishRequirement)
 		}
+		wasOverLevel := char.OverLevel
 		if err := char.ApplyJobChange("job-70", 0); err != nil {
 			return err
 		}
+		char.OverLevel = wasOverLevel
 		msg = "空竜の民 (天竜人) へ転職しました！"
 
 	case WishGodOfNewWorld:

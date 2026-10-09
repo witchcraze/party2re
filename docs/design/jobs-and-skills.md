@@ -56,6 +56,12 @@ cmp = int(min(level, 99) * (tier_rates[current_job_tier] + tier_rates[old_job_ti
   truncation, clamping each result to 10. Current HP/MP are restored to the
   new maxima, level becomes 1, experience becomes 0, and the job-change count
   increases by one.
+- **OverLevel Flag Handling**: Normal cross-job transitions (`targetJobID != currentJobID`) reset
+  the celestial limit break flag (`OverLevel = false`), requiring re-ascension in Heaven
+  (`party2/lib/job_change.cgi:225`). However, same-job re-selection (`targetJobID == currentJobID`)
+  preserves `OverLevel` status while still applying the Lv 1 reset and stat halving
+  (`party2/lib/job_change.cgi:214-226`). Similarly, the celestial Dragon Noble wish
+  (`WishCelestialDragon` in Heaven, `party2/lib/god.cgi:196-218`) preserves `OverLevel`.
 - The current job and SP are retained as the previous job and previous SP.
   Returning to that previous job restores its previous SP; a mastered job
   restores the SP retained in its mastery record; an unvisited job starts at
