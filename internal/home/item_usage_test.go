@@ -1030,13 +1030,13 @@ func TestUseHomeItem_CrystalOre(t *testing.T) {
 		t.Errorf("expected Crystal clamped to 999999, got %d", chars["char-seal3"].Crystal)
 	}
 
-	// Case 3: WeaponSeal == 0 -> nothing happened message
+	// Case 3: WeaponSeal == 0 -> nothing happened message, item NOT consumed
 	res3, err := svc.UseHomeItem(ctx, "char-noseal", "inst-char-noseal", "inventory")
 	if err != nil {
 		t.Fatalf("UseHomeItem for char-noseal failed: %v", err)
 	}
-	if !res3.Consumed {
-		t.Errorf("expected item to be consumed")
+	if res3.Consumed {
+		t.Errorf("expected item NOT to be consumed when no seal is engraved")
 	}
 	if res3.Message != "しかし、何も起こらなかった…" {
 		t.Errorf("expected 'しかし、何も起こらなかった…', got %s", res3.Message)
