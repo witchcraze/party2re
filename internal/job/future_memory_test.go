@@ -336,3 +336,163 @@ func TestFutureMemory_ValidationAndErrors(t *testing.T) {
 		t.Fatalf("expected ErrJobUnavailable in economy recall, got %v", err)
 	}
 }
+
+type stalePreflightCharRepo struct {
+	preflightChar corecharacter.Character
+	lockedChar    corecharacter.Character
+}
+
+func (c *stalePreflightCharRepo) FindByID(_ context.Context, _ string) (corecharacter.Character, error) {
+	return c.preflightChar, nil
+}
+
+func (c *stalePreflightCharRepo) FindByIDForUpdate(_ context.Context, _ string) (corecharacter.Character, error) {
+	return c.lockedChar, nil
+}
+
+func (c *stalePreflightCharRepo) Update(_ context.Context, _ corecharacter.Character) error {
+	return nil
+}
+
+type stalePreflightFutureRepo struct {
+	preflightMemories []corecharacter.FutureMemory
+	lockedMemories    []corecharacter.FutureMemory
+	savedMemories     []corecharacter.FutureMemory
+	callCount         int
+}
+
+func (f *stalePreflightFutureRepo) Save(_ context.Context, m corecharacter.FutureMemory) error {
+	f.savedMemories = append(f.savedMemories, m)
+	return nil
+}
+
+func (f *stalePreflightFutureRepo) FindByCharacterID(_ context.Context, _ string) ([]corecharacter.FutureMemory, error) {
+	f.callCount++
+	if f.callCount == 1 {
+		return f.preflightMemories, nil
+	}
+	return f.lockedMemories, nil
+}
+
+func (f *stalePreflightFutureRepo) Delete(_ context.Context, _, _ string) error {
+	return nil
+}
+
+func TestFutureMemory_StalePreflightRevalidation(t *testing.T) {
+	ctx := context.Background()
+	baseChar := corecharacter.Character{
+		ID:         "char-stale-1",
+		Name:       "StaleHero",
+		JobID:      "job-05",
+		OldJobID:   "job-01",
+		Level:      50,
+		Experience: 12000,
+		SP:         80,
+		OldSP:      40,
+		Gender:     "female",
+		OverLevel:  false,
+		OverFuture: 0,
+		Stats: corecharacter.Stats{
+			MaxHP:   600,
+			MaxMP:   300,
+			HP:      200,
+			MP:      100,
+			Attack:  150,
+			Defense: 110,
+			Agility: 90,
+		},
+	}
+	state, _ := corejob.NewCharacterJob(baseChar.ID, baseChar.JobID)
+	jobRepo := &testJobRepo{value: state}
+
+	t.Run("RevalidatesSlotCapacityUnderLock", func(t *testing.T) {
+		// Preflight sees 0 memories (allowed for OverFuture=0).
+		// Under lock, another memory was committed (len=1, reaching capacity).
+		inv, _ := coreinventory.New(baseChar.ID)
+		frag, _ := item.NewInstance("item-207", 1)
+		_ = inv.Add(frag)
+		invRepo := &testInventoryRepo{inventory: inv}
+
+		charRepo := &testCharRepo{char: baseChar}
+		futureRepo := &stalePreflightFutureRepo{
+			preflightMemories: nil,
+			lockedMemories: []corecharacter.FutureMemory{
+				{ID: "mem-already-saved", CharacterID: baseChar.ID, JobID: "job-01"},
+			},
+		}
+
+		ecoSvc, err := economy.NewService(charRepo, invRepo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		svc, err := job.NewService(
+			jobRepo,
+			job.WithCharacterRepository(charRepo),
+			job.WithInventoryRepository(invRepo),
+			job.WithEconomy(ecoSvc),
+			job.WithFutureMemoryRepository(futureRepo),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = svc.SaveFutureMemory(ctx, baseChar.ID)
+		if !errors.Is(err, job.ErrFutureMemorySlotLimit) {
+			t.Fatalf("expected ErrFutureMemorySlotLimit, got %v", err)
+		}
+		// Verify item-207 was NOT consumed (rollback)
+		if invRepo.inventory.Quantity("item-207") != 1 {
+			t.Fatalf("expected item-207 quantity 1 preserved, got %d", invRepo.inventory.Quantity("item-207"))
+		}
+		// Verify no snapshot was saved
+		if len(futureRepo.savedMemories) != 0 {
+			t.Fatalf("expected 0 saved memories, got %d", len(futureRepo.savedMemories))
+		}
+	})
+
+	t.Run("RevalidatesJobMemoryUnderLock", func(t *testing.T) {
+		// Preflight sees JobMemory=nil.
+		// Under lock, JobMemory is active (&corecharacter.JobMemory{...}).
+		inv, _ := coreinventory.New(baseChar.ID)
+		frag, _ := item.NewInstance("item-207", 1)
+		_ = inv.Add(frag)
+		invRepo := &testInventoryRepo{inventory: inv}
+
+		lockedChar := baseChar
+		lockedChar.JobMemory = &corecharacter.JobMemory{JobID: "job-02", SP: 10}
+
+		charRepo := &stalePreflightCharRepo{
+			preflightChar: baseChar,
+			lockedChar:    lockedChar,
+		}
+		futureRepo := &stalePreflightFutureRepo{}
+
+		ecoSvc, err := economy.NewService(charRepo, invRepo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		svc, err := job.NewService(
+			jobRepo,
+			job.WithCharacterRepository(charRepo),
+			job.WithInventoryRepository(invRepo),
+			job.WithEconomy(ecoSvc),
+			job.WithFutureMemoryRepository(futureRepo),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = svc.SaveFutureMemory(ctx, baseChar.ID)
+		if !errors.Is(err, corejob.ErrJobUnavailable) {
+			t.Fatalf("expected ErrJobUnavailable, got %v", err)
+		}
+		// Verify item-207 was NOT consumed (rollback)
+		if invRepo.inventory.Quantity("item-207") != 1 {
+			t.Fatalf("expected item-207 quantity 1 preserved, got %d", invRepo.inventory.Quantity("item-207"))
+		}
+		// Verify no snapshot was saved
+		if len(futureRepo.savedMemories) != 0 {
+			t.Fatalf("expected 0 saved memories, got %d", len(futureRepo.savedMemories))
+		}
+	})
+}

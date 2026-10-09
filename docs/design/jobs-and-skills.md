@@ -95,6 +95,12 @@ cmp = int(min(level, 99) * (tier_rates[current_job_tier] + tier_rates[old_job_ti
   gender, and over-level flag into a persistent future memory slot.
 - Slot limit is determined by `OverFuture` (`savedCount <= OverFuture`, default allows 1 saved slot).
 - Characters currently using temporary job memory (`JobMemory != nil`) cannot save future memories.
+- Capacity limit and absence of active temporary job memory are checked during preflight and
+  strictly revalidated under the character row lock within the economy transaction callback
+  (`internal/job/future_memory.go`). If revalidation fails under lock, the transaction aborts
+  and rolls back completely: `item-207` is not consumed, and no future memory snapshot is created.
+- Deterministic locking order (Character Rank 2 -> Inventory Rank 3) coordinates safely with
+  future memory deletion on recall and capacity expansions (`WishExpandJobMemory`).
 - Recalling a future memory restores the character's level, experience, stats, and jobs,
   restores the SP for both jobs from their mastered SP records, recovers HP/MP to full,
   and consumes/deletes the future memory snapshot.
@@ -127,7 +133,7 @@ cmp = int(min(level, 99) * (tier_rates[current_job_tier] + tier_rates[old_job_ti
 | --- | --- | --- |
 | `てんしょく` | `POST /characters/{id}/change-job` / `Service.ChangeJob` | JSON transport replaces the text command. |
 | `おもいだす` | `POST /characters/{id}/exchange-job` / `Service.ExchangeJob` | Uses `item-168`, two mastered jobs, and a persisted temporary snapshot. |
-| `よびおこす` | `POST /characters/{id}/recall-future`, `POST /characters/{id}/future-memories` / `Service.RecallFutureMemory`, `Service.SaveFutureMemory` | Uses `item-207`, slot capacity governed by `over_future`, restores status snapshot and consumes slot. |
+| `よびおこす` | `POST /characters/{id}/recall-future`, `POST /characters/{id}/future-memories` / `Service.RecallFutureMemory`, `Service.SaveFutureMemory` | Uses `item-207`, slot capacity governed by `over_future` (revalidated under character lock within economy transaction boundary), restores status snapshot and consumes slot. |
 | `じょぶますたー` | `GET /characters/{id}/job-mastery` / `Service.GetJobMastery` | Public inspection of 87-job catalog progress, mastery percentage, and 72-job completion flag. |
 
 ### Clean-Room Naming & IP Compliance
