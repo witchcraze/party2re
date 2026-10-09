@@ -151,8 +151,9 @@ Adventurers can inspect equipment and consume location-2 items directly from the
   - Stats are resolved directly from the item definition or authentic catalog nominal stats (deprecating obsolete `price / 20 + 1` and `price / 10 + 1` placeholders).
 - **Consumable Usage**:
   - Stat-boosting seeds:
-    - `命の木の実`, `不思議な木の実`, `力の種`, `守りの種`, `素早さの種`: Increase respective stats by 1–3 (or HP 3–5). If character has `OverLevel == true`, the stat gain is clamped to 0.
-    - `スキルの種`: Increases SP by 1 (not clamped by OverLevel).
+    - `命の木の実`, `不思議な木の実`: Increase MaxHP / MaxMP by 3–6 without restoring current HP / MP. If character has `OverLevel == true`, the stat gain is clamped to 0.
+    - `力の種`, `守りの種`, `素早さの種`: Increase respective stats by 1–6. If character has `OverLevel == true`, the stat gain is clamped to 0.
+    - `スキルの種`: Increases SP by 1–3 (not clamped by OverLevel).
     - `小さなメダル`: Consumed and increases `SmallMedals` counter by 1.
     - `幸せの種`: Sets experience to `Level * Level * 10` (triggers level up on next adventure: `"次のクエスト時にレベルアップ！"`).
   - Combat recovery items and combat-only items (`UsageCategory == 1`, e.g. `薬草`, `上薬草`, `特薬草`, `霊樹のしずく`, `魔法の聖水`) cannot be consumed at Home and return `ErrCannotUseHere` with authentic message `"%sは戦闘中でしか使えません"` (HTTP `400 Bad Request`). Non-usable/passive items (`UsageCategory == 0` or `3`) return `ErrCannotUseHere` with `"%sはここでは使えません"`. Recovery at home is performed exclusively via Resting & Sleeping (`＠やすむ`).

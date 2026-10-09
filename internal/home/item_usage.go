@@ -422,7 +422,6 @@ func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter
 			v = 0
 		}
 		char.Stats.MaxHP += v
-		char.Stats.HP += v
 		char.Stats.Clamp(char.OverLevel, char.Level)
 		msg = fmt.Sprintf("%sのHPが %d あがった！", char.Name, v)
 	case "不思議な木の実":
@@ -431,7 +430,6 @@ func (s *Service) applyConsumableEffect(ctx context.Context, char *corecharacter
 			v = 0
 		}
 		char.Stats.MaxMP += v
-		char.Stats.MP += v
 		char.Stats.Clamp(char.OverLevel, char.Level)
 		msg = fmt.Sprintf("%sのMPが %d あがった！", char.Name, v)
 	case "力の種":
