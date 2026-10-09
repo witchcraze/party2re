@@ -2,7 +2,6 @@ package chapel
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
@@ -34,53 +33,24 @@ func DailyResetActionID(targetTime time.Time) string {
 // ResetOption configures a ResetHandler.
 type ResetOption func(*ResetHandler)
 
-// WithScheduler configures the scheduler used to re-enqueue daily recurring resets.
+// WithScheduler configures the scheduler for a ResetHandler (retained for backward compatibility).
 func WithScheduler(scheduler Scheduler) ResetOption {
 	return func(h *ResetHandler) {
-		h.scheduler = scheduler
 	}
 }
 
-// ResetHandler implements scheduling.ActionHandler to reset character blessings.
-type ResetHandler struct {
-	service   *Service
-	scheduler Scheduler
-}
+// ResetHandler implements scheduling.ActionHandler for residual chapel_reset actions.
+// Under Issue #1163, daily midnight reset of blessings has been eliminated in favor
+// of sleep-based lifecycle clearing. Any residual scheduled action dispatched here
+// is handled as a no-op migration without clearing blessings or re-enqueuing.
+type ResetHandler struct{}
 
 // NewResetHandler creates a new ResetHandler.
-func NewResetHandler(service *Service, opts ...ResetOption) *ResetHandler {
-	h := &ResetHandler{
-		service: service,
-	}
-	for _, opt := range opts {
-		opt(h)
-	}
-	return h
+func NewResetHandler(_ *Service, _ ...ResetOption) *ResetHandler {
+	return &ResetHandler{}
 }
 
-// Handle executes the blessing reset logic.
+// Handle executes residual scheduled actions safely without modifying blessings or re-enqueuing.
 func (h *ResetHandler) Handle(ctx context.Context, action core_scheduling.ScheduledAction) error {
-	characterID := strings.TrimSpace(action.Params["character_id"])
-	if characterID == "" && action.ActorID != "" && !strings.EqualFold(action.ActorID, "system") && !strings.EqualFold(action.ActorID, "all") {
-		characterID = strings.TrimSpace(action.ActorID)
-	}
-
-	var resetErr error
-	if characterID != "" && !strings.EqualFold(characterID, "all") && !strings.EqualFold(characterID, "system") {
-		resetErr = h.service.ClearBlessing(ctx, characterID)
-	} else {
-		resetErr = h.service.ClearAllBlessings(ctx)
-	}
-
-	if resetErr != nil {
-		return resetErr
-	}
-
-	// When scheduler is present and it is a system-wide reset, schedule the next day's reset.
-	if h.scheduler != nil && (characterID == "" || strings.EqualFold(characterID, "all") || strings.EqualFold(characterID, "system")) {
-		next := NextMidnightJST(time.Now())
-		_ = h.scheduler.ScheduleWithID(ctx, DailyResetActionID(next), ActionTypeChapelReset, "system", nil, next)
-	}
-
 	return nil
 }

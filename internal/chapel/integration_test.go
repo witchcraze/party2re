@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/chapel"
 	"github.com/witchcraze/party2re/internal/database"
@@ -21,20 +22,23 @@ func TestChapelServiceDatabaseIntegration(t *testing.T) {
 	}
 	defer db.Close()
 
-	chapelRepo, err := database.NewChapelRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	svc, err := chapel.NewService(chapelRepo)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	ctx := context.Background()
 
 	// 1. Create character
 	char, err := database.CreateTestCharacter(ctx, db, "ChapelDevotee")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	currentTime := time.Date(2026, 10, 9, 10, 0, 0, 0, chapel.JST)
+	nowFunc := func() time.Time { return currentTime }
+
+	chapelRepo, err := database.NewChapelRepository(db, database.WithChapelNowFunc(nowFunc))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	svc, err := chapel.NewService(chapelRepo, chapel.WithNowFunc(nowFunc))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,6 +50,9 @@ func TestChapelServiceDatabaseIntegration(t *testing.T) {
 	}
 	if status.HasActiveBlessing {
 		t.Errorf("expected no active blessing initially")
+	}
+	if status.PrayedAt != nil {
+		t.Errorf("expected nil PrayedAt initially, got %v", status.PrayedAt)
 	}
 
 	// 3. Select Blessing (Drop)
@@ -63,36 +70,50 @@ func TestChapelServiceDatabaseIntegration(t *testing.T) {
 		t.Fatalf("expected ErrAlreadyPrayed, got %v", err)
 	}
 
-	// 5. Clear blessing and select Monster blessing
+	// 5. Sleep on same day: clears active blessing effect, retains prayer quota record
+	currentTime = time.Date(2026, 10, 9, 14, 0, 0, 0, chapel.JST)
 	if err := svc.ClearBlessing(ctx, char.ID); err != nil {
 		t.Fatalf("ClearBlessing failed: %v", err)
 	}
-	b, err = svc.Pray(ctx, char.ID, chapel.BlessingMonster)
-	if err != nil {
-		t.Fatalf("Pray failed: %v", err)
-	}
-	if b.ActiveBlessing != chapel.BlessingMonster {
-		t.Errorf("expected BlessingMonster, got %v", b.ActiveBlessing)
-	}
 
-	// 6. Retrieve
 	b, err = svc.GetBlessing(ctx, char.ID)
 	if err != nil {
 		t.Fatalf("GetBlessing failed: %v", err)
 	}
-	if b.ActiveBlessing != chapel.BlessingMonster {
-		t.Errorf("got blessing %+v, want MONSTER", b.ActiveBlessing)
+	if b.ActiveBlessing != chapel.BlessingNone {
+		t.Errorf("expected BlessingNone after sleep, got %v", b.ActiveBlessing)
+	}
+	if b.PrayedAt.IsZero() {
+		t.Errorf("expected non-zero PrayedAt retained after same-day sleep")
 	}
 
-	// 7. Clear all blessings
-	if err := svc.ClearAllBlessings(ctx); err != nil {
-		t.Fatalf("ClearAllBlessings failed: %v", err)
+	// Re-prayer on same day after sleep must be REJECTED
+	currentTime = time.Date(2026, 10, 9, 15, 0, 0, 0, chapel.JST)
+	_, err = svc.Pray(ctx, char.ID, chapel.BlessingMonster)
+	if !errors.Is(err, chapel.ErrAlreadyPrayed) {
+		t.Fatalf("expected ErrAlreadyPrayed on same day after sleep, got %v", err)
 	}
-	b, err = svc.GetBlessing(ctx, char.ID)
+
+	// 6. Midnight passes to next day without sleep: prayer still rejected
+	currentTime = time.Date(2026, 10, 10, 8, 0, 0, 0, chapel.JST)
+	_, err = svc.Pray(ctx, char.ID, chapel.BlessingMonster)
+	if !errors.Is(err, chapel.ErrAlreadyPrayed) {
+		t.Fatalf("expected ErrAlreadyPrayed on Day 2 before sleep, got %v", err)
+	}
+
+	// 7. Sleep on Day 2: clears yesterday's prayer record
+	currentTime = time.Date(2026, 10, 10, 8, 30, 0, 0, chapel.JST)
+	if err := svc.ClearBlessing(ctx, char.ID); err != nil {
+		t.Fatalf("ClearBlessing on Day 2 failed: %v", err)
+	}
+
+	// 8. Re-prayer on Day 2 after sleep succeeds!
+	currentTime = time.Date(2026, 10, 10, 9, 0, 0, 0, chapel.JST)
+	b, err = svc.Pray(ctx, char.ID, chapel.BlessingMonster)
 	if err != nil {
-		t.Fatalf("GetBlessing after ClearAllBlessings failed: %v", err)
+		t.Fatalf("Pray on Day 2 failed: %v", err)
 	}
-	if b.ActiveBlessing != chapel.BlessingNone {
-		t.Errorf("expected BlessingNone after ClearAllBlessings, got %v", b.ActiveBlessing)
+	if b.ActiveBlessing != chapel.BlessingMonster {
+		t.Errorf("expected BlessingMonster on Day 2, got %v", b.ActiveBlessing)
 	}
 }
