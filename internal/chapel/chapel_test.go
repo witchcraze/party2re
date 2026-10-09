@@ -11,6 +11,14 @@ import (
 
 type mockChapelRepo struct {
 	blessing chapel.CharacterBlessing
+	nowFunc  func() time.Time
+}
+
+func (m *mockChapelRepo) now() time.Time {
+	if m.nowFunc != nil {
+		return m.nowFunc()
+	}
+	return time.Now()
 }
 
 func (m *mockChapelRepo) GetBlessing(_ context.Context, charID string) (chapel.CharacterBlessing, error) {
@@ -18,29 +26,29 @@ func (m *mockChapelRepo) GetBlessing(_ context.Context, charID string) (chapel.C
 		return chapel.CharacterBlessing{
 			CharacterID:    charID,
 			ActiveBlessing: chapel.BlessingNone,
-			PrayedAt:       time.Now().UTC(),
+			PrayedAt:       time.Time{},
 		}, nil
 	}
 	return m.blessing, nil
 }
 
 func (m *mockChapelRepo) SelectBlessing(_ context.Context, charID string, b chapel.BlessingType) (chapel.CharacterBlessing, error) {
-	if m.blessing.ActiveBlessing != chapel.BlessingNone && m.blessing.ActiveBlessing != "" {
+	if (m.blessing.ActiveBlessing != chapel.BlessingNone && m.blessing.ActiveBlessing != "") || !m.blessing.PrayedAt.IsZero() {
 		return chapel.CharacterBlessing{}, chapel.ErrAlreadyPrayed
 	}
 	m.blessing.CharacterID = charID
 	m.blessing.ActiveBlessing = b
-	m.blessing.PrayedAt = time.Now().UTC()
+	m.blessing.PrayedAt = m.now().UTC()
 	return m.blessing, nil
 }
 
 func (m *mockChapelRepo) ClearBlessing(_ context.Context, _ string) error {
+	now := m.now().UTC()
 	m.blessing.ActiveBlessing = chapel.BlessingNone
-	return nil
-}
-
-func (m *mockChapelRepo) ClearAllBlessings(_ context.Context) error {
-	m.blessing.ActiveBlessing = chapel.BlessingNone
+	if !m.blessing.PrayedAt.IsZero() && !chapel.IsSameJSTDay(m.blessing.PrayedAt, now) {
+		m.blessing.PrayedAt = time.Time{}
+		m.blessing.CharacterID = ""
+	}
 	return nil
 }
 
@@ -173,19 +181,7 @@ func TestChapelService(t *testing.T) {
 		t.Errorf("unexpected active blessing in status: %+v", status)
 	}
 
-	// 5. Clear blessing -> allows new prayer
-	if err := svc.ClearBlessing(ctx, "char1"); err != nil {
-		t.Fatalf("ClearBlessing failed: %v", err)
-	}
-	b, err = svc.Pray(ctx, "char1", chapel.BlessingGold)
-	if err != nil {
-		t.Fatalf("Pray after clear failed: %v", err)
-	}
-	if b.ActiveBlessing != chapel.BlessingGold {
-		t.Errorf("active blessing = %v, want GOLD", b.ActiveBlessing)
-	}
-
-	// 6. Validation errors
+	// 5. Validation errors
 	if _, err := svc.SelectBlessing(ctx, "", chapel.BlessingExp); !errors.Is(err, chapel.ErrInvalidCharacterID) {
 		t.Errorf("expected ErrInvalidCharacterID, got %v", err)
 	}
@@ -197,29 +193,180 @@ func TestChapelService(t *testing.T) {
 	}
 }
 
-func TestService_ClearAllBlessings(t *testing.T) {
+func TestService_SameDaySleep_RejectsRePrayer(t *testing.T) {
 	ctx := context.Background()
-	repo := &mockChapelRepo{
-		blessing: chapel.CharacterBlessing{
-			CharacterID:    "char1",
-			ActiveBlessing: chapel.BlessingExp,
-			PrayedAt:       time.Now().UTC(),
-		},
+	currentTime := time.Date(2026, 10, 9, 10, 0, 0, 0, chapel.JST)
+	nowFunc := func() time.Time { return currentTime }
+
+	repo := &mockChapelRepo{nowFunc: nowFunc}
+	svc, err := chapel.NewService(repo, chapel.WithNowFunc(nowFunc))
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
 	}
+
+	// 1. Pray at 10:00 JST
+	b, err := svc.SelectBlessing(ctx, "char1", chapel.BlessingGold)
+	if err != nil {
+		t.Fatalf("SelectBlessing failed: %v", err)
+	}
+	if b.ActiveBlessing != chapel.BlessingGold {
+		t.Fatalf("expected BlessingGold, got %v", b.ActiveBlessing)
+	}
+
+	// 2. Sleep at 14:00 JST (same day)
+	currentTime = time.Date(2026, 10, 9, 14, 0, 0, 0, chapel.JST)
+	if err := svc.ClearBlessing(ctx, "char1"); err != nil {
+		t.Fatalf("ClearBlessing failed: %v", err)
+	}
+
+	// Active blessing must be cleared (NONE), but prayer quota record remains
+	status, err := svc.GetStatus(ctx, "char1", "アルス")
+	if err != nil {
+		t.Fatalf("GetStatus failed: %v", err)
+	}
+	if status.HasActiveBlessing {
+		t.Errorf("expected HasActiveBlessing = false after sleep, got true")
+	}
+	if status.PrayedAt == nil {
+		t.Errorf("expected PrayedAt to be retained after same-day sleep")
+	}
+
+	// 3. Attempt re-prayer at 15:00 JST (same day) -> must be REJECTED
+	currentTime = time.Date(2026, 10, 9, 15, 0, 0, 0, chapel.JST)
+	_, err = svc.SelectBlessing(ctx, "char1", chapel.BlessingExp)
+	if !errors.Is(err, chapel.ErrAlreadyPrayed) {
+		t.Fatalf("expected ErrAlreadyPrayed on same-day re-prayer after sleep, got %v", err)
+	}
+}
+
+func TestService_MidnightRolloverWithoutSleep_PreservesBlessingAndBlocksRePrayer(t *testing.T) {
+	ctx := context.Background()
+	// Day 1 20:00 JST
+	currentTime := time.Date(2026, 10, 9, 20, 0, 0, 0, chapel.JST)
+	nowFunc := func() time.Time { return currentTime }
+
+	repo := &mockChapelRepo{nowFunc: nowFunc}
+	svc, err := chapel.NewService(repo, chapel.WithNowFunc(nowFunc))
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	// 1. Pray on Day 1
+	b, err := svc.SelectBlessing(ctx, "char1", chapel.BlessingExp)
+	if err != nil {
+		t.Fatalf("SelectBlessing failed: %v", err)
+	}
+	if b.ActiveBlessing != chapel.BlessingExp {
+		t.Fatalf("expected BlessingExp, got %v", b.ActiveBlessing)
+	}
+
+	// 2. Midnight passes to Day 2 01:00 JST without sleep
+	currentTime = time.Date(2026, 10, 10, 1, 0, 0, 0, chapel.JST)
+
+	// Blessing must REMAIN active! Date rollover does not wipe active blessing without sleep.
+	status, err := svc.GetStatus(ctx, "char1", "アルス")
+	if err != nil {
+		t.Fatalf("GetStatus failed: %v", err)
+	}
+	if !status.HasActiveBlessing || status.ActiveBlessing != chapel.BlessingExp {
+		t.Errorf("expected blessing to remain active across midnight, got %+v", status)
+	}
+
+	// Cannot re-pray without having slept
+	_, err = svc.SelectBlessing(ctx, "char1", chapel.BlessingGold)
+	if !errors.Is(err, chapel.ErrAlreadyPrayed) {
+		t.Fatalf("expected ErrAlreadyPrayed without sleep on next day, got %v", err)
+	}
+}
+
+func TestService_MidnightRolloverWithSleep_ClearsBlessingAndAllowsRePrayer(t *testing.T) {
+	ctx := context.Background()
+	// Day 1 20:00 JST
+	currentTime := time.Date(2026, 10, 9, 20, 0, 0, 0, chapel.JST)
+	nowFunc := func() time.Time { return currentTime }
+
+	repo := &mockChapelRepo{nowFunc: nowFunc}
+	svc, err := chapel.NewService(repo, chapel.WithNowFunc(nowFunc))
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	// 1. Pray on Day 1
+	_, err = svc.SelectBlessing(ctx, "char1", chapel.BlessingDrop)
+	if err != nil {
+		t.Fatalf("SelectBlessing failed: %v", err)
+	}
+
+	// 2. Midnight passes to Day 2 08:00 JST, then sleeps
+	currentTime = time.Date(2026, 10, 10, 8, 0, 0, 0, chapel.JST)
+	if err := svc.ClearBlessing(ctx, "char1"); err != nil {
+		t.Fatalf("ClearBlessing failed: %v", err)
+	}
+
+	// Both active blessing and quota record must be cleared
+	status, err := svc.GetStatus(ctx, "char1", "アルス")
+	if err != nil {
+		t.Fatalf("GetStatus failed: %v", err)
+	}
+	if status.HasActiveBlessing {
+		t.Errorf("expected no active blessing after next-day sleep")
+	}
+	if status.PrayedAt != nil {
+		t.Errorf("expected PrayedAt to be cleared after next-day sleep, got %v", status.PrayedAt)
+	}
+
+	// 3. Re-prayer at 09:00 JST on Day 2 succeeds!
+	currentTime = time.Date(2026, 10, 10, 9, 0, 0, 0, chapel.JST)
+	b, err := svc.SelectBlessing(ctx, "char1", chapel.BlessingCasino)
+	if err != nil {
+		t.Fatalf("SelectBlessing on Day 2 after sleep failed: %v", err)
+	}
+	if b.ActiveBlessing != chapel.BlessingCasino {
+		t.Errorf("expected BlessingCasino on Day 2, got %v", b.ActiveBlessing)
+	}
+}
+
+func TestService_NeverPrayed_CanPray(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockChapelRepo{}
 	svc, err := chapel.NewService(repo)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
 	}
 
-	if err := svc.ClearAllBlessings(ctx); err != nil {
-		t.Fatalf("ClearAllBlessings failed: %v", err)
+	status, err := svc.GetStatus(ctx, "char-new", "新人")
+	if err != nil {
+		t.Fatalf("GetStatus failed: %v", err)
+	}
+	if status.HasActiveBlessing {
+		t.Errorf("expected HasActiveBlessing = false for unprayed character")
+	}
+	if status.PrayedAt != nil {
+		t.Errorf("expected PrayedAt = nil for unprayed character, got %v", status.PrayedAt)
 	}
 
-	b, err := svc.GetBlessing(ctx, "char1")
+	b, err := svc.SelectBlessing(ctx, "char-new", chapel.BlessingExp)
 	if err != nil {
-		t.Fatalf("GetBlessing failed: %v", err)
+		t.Fatalf("SelectBlessing failed for new character: %v", err)
 	}
-	if b.ActiveBlessing != chapel.BlessingNone {
-		t.Errorf("expected BlessingNone, got %v", b.ActiveBlessing)
+	if b.ActiveBlessing != chapel.BlessingExp {
+		t.Errorf("expected BlessingExp, got %v", b.ActiveBlessing)
+	}
+}
+
+func TestIsSameJSTDay(t *testing.T) {
+	jst := chapel.JST
+	t1 := time.Date(2026, 10, 9, 23, 59, 59, 0, jst)
+	t2 := time.Date(2026, 10, 9, 0, 0, 1, 0, jst)
+	t3 := time.Date(2026, 10, 10, 0, 0, 1, 0, jst)
+
+	if !chapel.IsSameJSTDay(t1, t2) {
+		t.Errorf("expected t1 and t2 to be same JST day")
+	}
+	if chapel.IsSameJSTDay(t1, t3) {
+		t.Errorf("expected t1 and t3 to NOT be same JST day")
+	}
+	if chapel.IsSameJSTDay(time.Time{}, t1) {
+		t.Errorf("expected zero time to return false")
 	}
 }

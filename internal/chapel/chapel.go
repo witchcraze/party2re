@@ -141,22 +141,61 @@ func ComputeRewardModifiers(blessing BlessingType, roll float64) RewardModifiers
 	return mods
 }
 
+// JST is Japan Standard Time (UTC+9), used for daily rollover in Party2.
+var JST = time.FixedZone("JST", 9*60*60)
+
+// IsSameJSTDay reports whether t1 and t2 fall on the same calendar date in Japan Standard Time (UTC+9).
+func IsSameJSTDay(t1, t2 time.Time) bool {
+	if t1.IsZero() || t2.IsZero() {
+		return false
+	}
+	t1JST := t1.In(JST)
+	t2JST := t2.In(JST)
+	return t1JST.Year() == t2JST.Year() &&
+		t1JST.Month() == t2JST.Month() &&
+		t1JST.Day() == t2JST.Day()
+}
+
 type Repository interface {
 	GetBlessing(ctx context.Context, characterID string) (CharacterBlessing, error)
 	SelectBlessing(ctx context.Context, characterID string, blessing BlessingType) (CharacterBlessing, error)
 	ClearBlessing(ctx context.Context, characterID string) error
-	ClearAllBlessings(ctx context.Context) error
+}
+
+// Option configures a chapel Service.
+type Option func(*Service)
+
+// WithNowFunc configures a custom time generator.
+func WithNowFunc(fn func() time.Time) Option {
+	return func(s *Service) {
+		s.nowFunc = fn
+	}
 }
 
 type Service struct {
-	repo Repository
+	repo    Repository
+	nowFunc func() time.Time
 }
 
-func NewService(repo Repository) (*Service, error) {
+func (s *Service) now() time.Time {
+	if s.nowFunc != nil {
+		return s.nowFunc()
+	}
+	return time.Now()
+}
+
+func NewService(repo Repository, opts ...Option) (*Service, error) {
 	if repo == nil {
 		return nil, errors.New("repository is required")
 	}
-	return &Service{repo: repo}, nil
+	s := &Service{
+		repo:    repo,
+		nowFunc: time.Now,
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s, nil
 }
 
 func (s *Service) GetBlessing(ctx context.Context, characterID string) (CharacterBlessing, error) {
@@ -219,12 +258,13 @@ func (s *Service) SelectBlessing(ctx context.Context, characterID string, blessi
 		return CharacterBlessing{}, ErrInvalidBlessing
 	}
 
-	// Enforce single active wish constraint
+	// Enforce single active wish constraint and daily prayer quota:
+	// Cannot pray if active blessing is present OR prayer record has not been cleared by sleep.
 	current, err := s.repo.GetBlessing(ctx, characterID)
 	if err != nil {
 		return CharacterBlessing{}, err
 	}
-	if current.ActiveBlessing != BlessingNone && current.ActiveBlessing != "" {
+	if (current.ActiveBlessing != BlessingNone && current.ActiveBlessing != "") || !current.PrayedAt.IsZero() {
 		return CharacterBlessing{}, ErrAlreadyPrayed
 	}
 
@@ -240,8 +280,4 @@ func (s *Service) ClearBlessing(ctx context.Context, characterID string) error {
 		return ErrInvalidCharacterID
 	}
 	return s.repo.ClearBlessing(ctx, characterID)
-}
-
-func (s *Service) ClearAllBlessings(ctx context.Context) error {
-	return s.repo.ClearAllBlessings(ctx)
 }

@@ -185,7 +185,7 @@ True Party2 character recovery is conducted at Home (either one's own or a visit
   - **SQL Recovery Boundary**: Production Wake uses the existing Economy transaction runner to read the current Character under its row lock, restore HP/MP/tiredness, and persist it in an initial SQL transaction. Currency, bank deposits, progression and other unrelated fields are retained from that locked state, so concurrent committed updates are not overwritten. This transaction commits before the required recovery hooks and Valkey cleanup; those phases retain the partial-outcome contract below.
   - Temporary Job Memory reverted.
   - Tavern fullness state reset (`tavern.ResetFullness`; unreadable fullness state halts Wake and propagates the error without overwriting counters with defaults).
-  - Chapel prayers and active blessings cleared (`chapel.ClearBlessing`).
+  - Chapel active blessings cleared and prayer quota reset (`chapel.ClearBlessing`; resets active blessing to NONE, and purges the daily prayer quota record if the prayer occurred on an earlier calendar day, restoring prayer eligibility under #1163).
   - Ongoing alchemy synthesis completed (`alchemy.CompleteOngoingSynthesis`).
   - Costume rental reset (`store.ResetCostume`).
   - Daily once-dungeon timer lock (`timer.CategoryDungeonOnce`) released and daily quota (`dungeon_once`) reset.

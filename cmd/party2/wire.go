@@ -235,9 +235,6 @@ func wireHooks(
 
 	soc.registerWorkerHandlers(misc.activity, misc.chapel, misc.lottery, misc.contest)
 
-	if soc.sched != nil && misc.chapel != nil {
-		wireChapelDailyReset(soc.sched)
-	}
 	if soc.sched != nil && misc.lottery != nil {
 		wireTakarakujiDrawing(soc.sched)
 	}
@@ -283,13 +280,6 @@ func wireGuildPointDecay(sched *scheduling.Service) {
 	ctx := context.Background()
 	next := guild.NextMidnightJST(time.Now())
 	_ = sched.ScheduleWithID(ctx, guild.DailyPointDecayActionID(next), guild.ActionTypeGuildPointDecay, "system", nil, next)
-}
-
-// wireChapelDailyReset enqueues the daily JST midnight reset action if not already scheduled.
-func wireChapelDailyReset(sched *scheduling.Service) {
-	ctx := context.Background()
-	next := chapel.NextMidnightJST(time.Now())
-	_ = sched.ScheduleWithID(ctx, chapel.DailyResetActionID(next), chapel.ActionTypeChapelReset, "system", nil, next)
 }
 
 // wireTakarakujiDrawing enqueues the recurring Takarakuji drawing action if not already scheduled.

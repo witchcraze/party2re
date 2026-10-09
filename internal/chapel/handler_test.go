@@ -36,7 +36,7 @@ func (m *mockScheduler) ScheduleWithID(_ context.Context, id, actionType, actorI
 	return nil
 }
 
-func TestResetHandler_HandleAll(t *testing.T) {
+func TestResetHandler_HandleResidualAction_PreservesBlessings(t *testing.T) {
 	ctx := context.Background()
 	repo := &mockChapelRepo{
 		blessing: chapel.CharacterBlessing{
@@ -50,7 +50,8 @@ func TestResetHandler_HandleAll(t *testing.T) {
 		t.Fatalf("NewService failed: %v", err)
 	}
 
-	handler := chapel.NewResetHandler(svc)
+	sched := &mockScheduler{}
+	handler := chapel.NewResetHandler(svc, chapel.WithScheduler(sched))
 
 	action := core_scheduling.ScheduledAction{
 		ID:         "act-reset-all",
@@ -63,16 +64,22 @@ func TestResetHandler_HandleAll(t *testing.T) {
 		t.Fatalf("Handle failed: %v", err)
 	}
 
+	// Residual action must be a no-op: blessing is preserved
 	b, err := svc.GetBlessing(ctx, "char1")
 	if err != nil {
 		t.Fatalf("GetBlessing failed: %v", err)
 	}
-	if b.ActiveBlessing != chapel.BlessingNone {
-		t.Errorf("expected BlessingNone, got %v", b.ActiveBlessing)
+	if b.ActiveBlessing != chapel.BlessingExp {
+		t.Errorf("expected blessing to be preserved as BlessingExp, got %v", b.ActiveBlessing)
+	}
+
+	// No rescheduled action enqueued
+	if len(sched.scheduledActions) != 0 {
+		t.Errorf("expected 0 rescheduled actions, got %d", len(sched.scheduledActions))
 	}
 }
 
-func TestResetHandler_HandleSingle(t *testing.T) {
+func TestResetHandler_HandleResidualSingle_PreservesBlessings(t *testing.T) {
 	ctx := context.Background()
 	repo := &mockChapelRepo{
 		blessing: chapel.CharacterBlessing{
@@ -88,7 +95,6 @@ func TestResetHandler_HandleSingle(t *testing.T) {
 
 	handler := chapel.NewResetHandler(svc)
 
-	// Single character reset via ActorID
 	action := core_scheduling.ScheduledAction{
 		ID:         "act-reset-single",
 		ActionType: chapel.ActionTypeChapelReset,
@@ -103,47 +109,8 @@ func TestResetHandler_HandleSingle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetBlessing failed: %v", err)
 	}
-	if b.ActiveBlessing != chapel.BlessingNone {
-		t.Errorf("expected BlessingNone, got %v", b.ActiveBlessing)
-	}
-}
-
-func TestResetHandler_AutoReschedule(t *testing.T) {
-	ctx := context.Background()
-	repo := &mockChapelRepo{
-		blessing: chapel.CharacterBlessing{
-			CharacterID:    "char1",
-			ActiveBlessing: chapel.BlessingMonster,
-		},
-	}
-	svc, err := chapel.NewService(repo)
-	if err != nil {
-		t.Fatalf("NewService failed: %v", err)
-	}
-
-	sched := &mockScheduler{}
-	handler := chapel.NewResetHandler(svc, chapel.WithScheduler(sched))
-
-	action := core_scheduling.ScheduledAction{
-		ID:         "chapel_reset:2026-09-09",
-		ActionType: chapel.ActionTypeChapelReset,
-		ActorID:    "system",
-	}
-
-	if err := handler.Handle(ctx, action); err != nil {
-		t.Fatalf("Handle failed: %v", err)
-	}
-
-	if len(sched.scheduledActions) != 1 {
-		t.Fatalf("expected 1 rescheduled action, got %d", len(sched.scheduledActions))
-	}
-
-	rescheduled := sched.scheduledActions[0]
-	if rescheduled.actionType != chapel.ActionTypeChapelReset {
-		t.Errorf("expected actionType %s, got %s", chapel.ActionTypeChapelReset, rescheduled.actionType)
-	}
-	if rescheduled.actorID != "system" {
-		t.Errorf("expected actorID system, got %s", rescheduled.actorID)
+	if b.ActiveBlessing != chapel.BlessingGold {
+		t.Errorf("expected blessing to be preserved as BlessingGold, got %v", b.ActiveBlessing)
 	}
 }
 

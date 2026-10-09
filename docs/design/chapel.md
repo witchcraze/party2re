@@ -24,13 +24,14 @@ In accordance with `party2/lib/chapel.cgi`, characters can select from exactly f
 
 ---
 
-## Single Active Wish Constraint (単一の祈り制約)
+## Single Active Wish Constraint & Daily Quota (単一の祈り制約と祈願日次枠)
 
-In original Party2 (`party2/lib/chapel.cgi`), if a character already has an active wish (`&checkWished || -e $filePath`):
+In original Party2 (`party2/lib/chapel.cgi`), if a character already has an active wish or has already prayed on the current day (`&checkWished || -e $filePath`):
 - Any subsequent attempt to pray is rejected with the authentic Sister response:
   > **「祈りに大事なのは、数でなく気持ちなのです」**
-- In Party2Re, this is strictly enforced via database pessimistic locking (`FOR UPDATE`) returning `chapel.ErrAlreadyPrayed` and HTTP status `409 Conflict`.
-- When an active wish is consumed or reset at the daily date change (`chapel_clean`), the character may pray again.
+- In Party2re, this is enforced by separating the active blessing effect (`active_blessing`, corresponding to `$m{wish}`) from the prayer record (`prayed_at`, corresponding to `wish.cgi`).
+- Database pessimistic locking (`FOR UPDATE` on `characters` at Rank 2 and `character_blessings`) serializes concurrent prayer attempts, returning `chapel.ErrAlreadyPrayed` and HTTP status `409 Conflict`.
+- Sleeping at home resets the active blessing to `NONE`. However, if the prayer occurred on the same JST calendar day, the prayer record is retained, preventing same-day re-prayer. Re-prayer becomes eligible only after waking from a sleep taken on a subsequent calendar day.
 
 ---
 
@@ -68,14 +69,16 @@ The fictional donation feature (`POST /characters/{id}/chapel/donate`, `donation
 
 ---
 
-## Daily Blessing Reset (chapel_clean)
+## Resting Recovery & Blessing Lifecycle Reset (chapel_clean)
 
-In original Party2 (`party2/lib/home.cgi: &chapel_clean`), active prayers (`$m{wish}` and `$userdir/$id/wish.cgi`) are wiped clean upon daily date change (00:00 JST).
+In original Party2 (`party2/lib/home.cgi: &chapel_clean`), active prayers are managed through resting at home (`&neru`):
+1. **Sleep Clears Active Effect**: Upon sleeping, the active blessing (`$m{wish}`) is cleared to 0.
+2. **Quota Reset on Next-Day Sleep**: The prayer record file (`wish.cgi`) is checked against the current date. If `wish.cgi`'s timestamp is on a previous calendar day (`$wishedDay ne $day || $wishedMon ne $mon || $wishedYear ne $year`), `wish.cgi` is deleted. If sleep occurs on the same calendar day as the prayer, `wish.cgi` remains, blocking re-prayer.
+3. **No Automatic Midnight Wipe**: Midnight rollover alone does NOT clear active blessings or restore prayer eligibility. A character who stays awake across midnight retains their active blessing until they sleep.
 
-In Party2Re:
-- **Scheduled Worker Integration**: The scheduled worker (`internal/scheduling.Worker`) registers the handler for `ActionType: "chapel_reset"` (`chapel.ActionTypeChapelReset`).
-- **Distributed Daily Execution**: A deterministic scheduled task (`chapel_reset:YYYY-MM-DD`) is enqueued into Valkey pending sorted set (`party2:scheduled:pending`) targeted at 00:00:00 JST (`chapel.NextMidnightJST`).
-- **Reset Mechanism**: When triggered, `chapel.Service.ClearAllBlessings(ctx)` executes `UPDATE character_blessings SET active_blessing = 'NONE', updated_at = ? WHERE active_blessing != 'NONE'`, resetting all characters with active blessings to unblessed state so they can pray again on the new day.
-- **Auto-Rescheduling**: Upon executing the daily reset, the handler automatically schedules the next day's 00:00:00 JST action, ensuring continuous unattended daily cycles.
-- **Home Wakeup Reset**: Sleeping at home (`home.cgi: &neru`, `internal/home`) also invokes `ClearBlessing(ctx, characterID)` upon waking up, in accordance with authentic resting recovery.
+In Party2re (Issue #1163):
+- **Elimination of Midnight Reset Worker**: The fictional daily midnight reset scheduled action (`chapel_reset`) has been eliminated. No cron or worker scans characters at midnight. Residual `chapel_reset` actions in Valkey are handled as safe no-ops without modifying blessings or re-enqueuing.
+- **Home Wakeup Reset**: Resting recovery (`internal/home: Wake`) invokes `chapel.Service.ClearBlessing(ctx, characterID)`.
+  - If the prayer was made on the same JST calendar day: `active_blessing` is updated to `'NONE'`, while `prayed_at` is preserved. Same-day re-prayer remains blocked (`ErrAlreadyPrayed`).
+  - If the prayer was made on an earlier calendar day: both the active blessing and the prayer record are deleted (`DELETE FROM character_blessings`), permitting the character to pray again on the new day.
 
