@@ -602,30 +602,34 @@ omitting or passing an empty string targets the actor's own home. Home sleep is 
 and accepts dead or fatigued actors. Duration scales with online player count.
 `result` reuses the REST fields: `sleeping`, `duration_seconds`, `remaining_seconds`,
 `home_character_id` and `message`. Sleep sets `timer.CategorySleep` and the pending
-recovery flag `timer.CategoryAsleep`.
+recovery flag `timer.CategoryAsleep`, and persists `pending_wake = 1` in MariaDB `characters` (Issue #1118).
 
 `home_wake` accepts no parameters (`{}` or omitted). It is an explicit exception
 to the ordinary sleep action guard:
 - While sleep duration has not elapsed (`timer.CategorySleep` active), the request
   returns `409 HOME_STILL_SLEEPING` without altering vitality or state.
-- When sleep duration has elapsed and `timer.CategoryAsleep` is active, Wake restores
-  full HP, MP and resets fatigue to 0, then executes configured mandatory recovery hooks
-  (tavern fullness reset, chapel blessing clear, alchemy synthesis completion, costume reset)
+- Concurrent Wake executions for the same character are serialized via Valkey `timer.CategoryWaking`
+  (`TryLock` with a 30s safety lease). Concurrent attempts while Wake is running return `409 HOME_WAKE_IN_PROGRESS`.
+- When sleep duration has elapsed and pending recovery is active (`characters.pending_wake = 1` in SQL or
+  `timer.CategoryAsleep` in Valkey), Wake restores full HP, MP and resets fatigue to 0, then executes configured
+  mandatory recovery hooks (tavern fullness reset, chapel blessing clear, alchemy synthesis completion, costume reset)
   and timer cleanup (`timer.CategoryDungeonOnce` lock and `dungeon_once` daily quota).
-  Upon successful completion of all required steps, `timer.CategoryAsleep` is released.
+  Upon successful completion of all required steps, `characters.pending_wake` is set to 0 in SQL and `timer.CategoryAsleep`
+  is released in Valkey.
 - **Hook failure and partial outcome**: If any mandatory recovery hook or timer cleanup
-  fails, Wake aborts and returns `500 EXECUTION_FAILED`. `timer.CategoryAsleep` remains
-  locked (pending recovery is not finalized, keeping ordinary actions blocked). Any effects
+  fails, Wake aborts and returns `500 EXECUTION_FAILED`. `characters.pending_wake` remains 1 and `timer.CategoryAsleep`
+  remains locked (pending recovery is not finalized, keeping ordinary actions blocked). Any effects
   applied before the failure (such as restored vitality or earlier hook actions) persist
   without cross-store rollback. Clients observe this honestly via `GET /context` and must
   not automatically replay the action. A subsequent explicit Wake can complete remaining
   hooks and finalize recovery once transient errors resolve.
-- If Wake is called when the character is already awake (`timer.CategoryAsleep` not active),
+- If Wake is called when the character is already awake (`characters.pending_wake = 0` and `timer.CategoryAsleep` not active),
   it returns `200` with an "already awake" message and the current character state.
 
 | Service rejection | HTTP | Stable code |
 |---|---|---|
 | Still sleeping (duration not elapsed) | 409 | `HOME_STILL_SLEEPING` |
+| Wake already in progress | 409 | `HOME_WAKE_IN_PROGRESS` |
 | Already sleeping | 409 | `HOME_ALREADY_SLEEPING` |
 | Not sleeping | 409 | `HOME_NOT_SLEEPING` |
 | Character not found | 404 | `CHARACTER_NOT_FOUND` |

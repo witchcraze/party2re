@@ -82,9 +82,13 @@ func (s *Service) query(ctx context.Context, charID, ownerID string) (Result, er
 	if err != nil {
 		return Result{}, fmt.Errorf("load context sleep timer: %w", err)
 	}
-	asleep, err := s.timers.IsLocked(ctx, timer.CategoryAsleep, charID)
-	if err != nil {
-		return Result{}, fmt.Errorf("load context wake recovery: %w", err)
+	asleep := char.PendingWake
+	if !asleep && s.timers != nil {
+		locked, err := s.timers.IsLocked(ctx, timer.CategoryAsleep, charID)
+		if err != nil {
+			return Result{}, fmt.Errorf("load context wake recovery: %w", err)
+		}
+		asleep = locked
 	}
 	snapshot := Snapshot{
 		Character:      char,

@@ -52,6 +52,8 @@ func homeActionRejection(err error) (int, ErrorDetail) {
 		return http.StatusConflict, ErrorDetail{Code: "HOME_STILL_SLEEPING", Message: "Sleep duration has not elapsed; recovery is not ready."}
 	case errors.Is(err, home.ErrNotSleeping):
 		return http.StatusConflict, ErrorDetail{Code: "HOME_NOT_SLEEPING", Message: "Character is not sleeping."}
+	case errors.Is(err, home.ErrWakeInProgress):
+		return http.StatusConflict, ErrorDetail{Code: "HOME_WAKE_IN_PROGRESS", Message: "Wake recovery is already in progress."}
 	case errors.Is(err, home.ErrCharacterNotFound), errors.Is(err, corecharacter.ErrNotFound):
 		return http.StatusNotFound, ErrorDetail{Code: "CHARACTER_NOT_FOUND", Message: "Character not found."}
 	case errors.Is(err, home.ErrHouseNotFound):

@@ -116,7 +116,7 @@ func (h *Handler) handleHomeWake(w http.ResponseWriter, r *http.Request) {
 	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		res, err := h.homes.Wake(r.Context(), char.ID)
 		if err != nil {
-			if errors.Is(err, home.ErrStillSleeping) {
+			if errors.Is(err, home.ErrStillSleeping) || errors.Is(err, home.ErrWakeInProgress) {
 				writeError(w, http.StatusConflict, err)
 				return
 			}

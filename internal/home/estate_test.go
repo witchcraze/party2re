@@ -29,6 +29,7 @@ type mockTimer struct {
 	getRemainingLockErr error
 	releaseLockErrs     map[string]error
 	resetQuotaErrs      map[string]error
+	tryLockErr          error
 }
 
 func (m *mockTimer) SetLock(ctx context.Context, category, targetID string, duration time.Duration) error {
@@ -40,6 +41,16 @@ func (m *mockTimer) SetLock(ctx context.Context, category, targetID string, dura
 	}
 	m.locks[category+":"+targetID] = duration
 	return nil
+}
+
+func (m *mockTimer) TryLock(ctx context.Context, category, targetID string, duration time.Duration) (bool, error) {
+	if m.tryLockErr != nil {
+		return false, m.tryLockErr
+	}
+	if _, held := m.locks[category+":"+targetID]; held {
+		return false, nil
+	}
+	return true, m.SetLock(ctx, category, targetID, duration)
 }
 
 func (m *mockTimer) IsLocked(ctx context.Context, category, targetID string) (bool, error) {

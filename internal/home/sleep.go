@@ -15,10 +15,14 @@ var (
 	ErrAlreadySleeping = errors.New("character is already sleeping")
 	ErrStillSleeping   = errors.New("character is still sleeping")
 	ErrNotSleeping     = errors.New("character is not sleeping")
+	ErrWakeInProgress  = errors.New("wake is already in progress")
 )
 
 const (
 	DefaultBaseSleepDuration = 60 * time.Second
+
+	// wakeClaimTTL bounds the per-character Wake claim if the process dies mid-Wake.
+	wakeClaimTTL = 30 * time.Second
 )
 
 // CharacterUpdater abstracts updating full character state.
@@ -30,6 +34,7 @@ type CharacterUpdater interface {
 // TimerService manages sleep timers and daily quotas.
 type TimerService interface {
 	SetLock(ctx context.Context, category, targetID string, duration time.Duration) error
+	TryLock(ctx context.Context, category, targetID string, duration time.Duration) (bool, error)
 	IsLocked(ctx context.Context, category, targetID string) (bool, error)
 	GetRemainingLock(ctx context.Context, category, targetID string) (time.Duration, error)
 	ReleaseLock(ctx context.Context, category, targetID string) error
@@ -152,20 +157,18 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 	if err := s.timer.SetLock(ctx, timer.CategorySleep, characterID, duration); err != nil {
 		return SleepResult{}, err
 	}
-	// Ephemeral pending wake flag valid up to 24 hours
-	if err := s.timer.SetLock(ctx, timer.CategoryAsleep, characterID, 24*time.Hour); err != nil {
+	// Ephemeral pending wake flag valid up to 365 days (retained for backward-compatibility with ephemeral query observers)
+	if err := s.timer.SetLock(ctx, timer.CategoryAsleep, characterID, 365*24*time.Hour); err != nil {
 		_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
 		return SleepResult{}, err
 	}
 
-	// Legacy parity: Revert temporary job memory if active upon going to sleep
-	if char.JobMemory != nil {
-		if s.runner != nil {
-			req := economy.TransactionRequest{CharacterID: characterID}
-			_, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-				if tc.Character.JobMemory == nil {
-					return nil
-				}
+	// Persist durable pending_wake obligation in SQL, and revert temporary job memory if active
+	if s.runner != nil {
+		req := economy.TransactionRequest{CharacterID: characterID}
+		_, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
+			tc.Character.PendingWake = true
+			if tc.Character.JobMemory != nil {
 				memoryJobID := tc.Character.JobMemory.JobID
 				tc.Character.RevertJobMemory()
 				if s.jobRestorer != nil {
@@ -173,15 +176,25 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 						return err
 					}
 				}
-				return nil
-			})
-			if err != nil {
-				_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
-				_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
-				return SleepResult{}, err
 			}
-		} else {
-			memoryJobID := char.JobMemory.JobID
+			return nil
+		})
+		if err != nil {
+			_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
+			_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
+			return SleepResult{}, err
+		}
+	} else if s.charUpdater != nil {
+		c, err := s.charUpdater.FindByIDForUpdate(ctx, characterID)
+		if err != nil {
+			_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
+			_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
+			return SleepResult{}, err
+		}
+		c.PendingWake = true
+		if c.JobMemory != nil {
+			memoryJobID := c.JobMemory.JobID
+			c.RevertJobMemory()
 			if s.jobRestorer != nil {
 				if err := s.jobRestorer.RestoreActiveJob(ctx, characterID, memoryJobID); err != nil {
 					_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
@@ -189,14 +202,11 @@ func (s *Service) Sleep(ctx context.Context, characterID, targetHomeID string) (
 					return SleepResult{}, err
 				}
 			}
-			char.RevertJobMemory()
-			if s.charUpdater != nil {
-				if err := s.charUpdater.Update(ctx, char); err != nil {
-					_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
-					_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
-					return SleepResult{}, err
-				}
-			}
+		}
+		if err := s.charUpdater.Update(ctx, c); err != nil {
+			_ = s.timer.ReleaseLock(ctx, timer.CategorySleep, characterID)
+			_ = s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID)
+			return SleepResult{}, err
 		}
 	}
 
@@ -231,11 +241,22 @@ func (s *Service) GetSleepStatus(ctx context.Context, characterID string) (Sleep
 		}, nil
 	}
 
-	asleep, err := s.timer.IsLocked(ctx, timer.CategoryAsleep, characterID)
-	if err != nil {
-		return SleepStatus{}, err
+	var isPendingWake bool
+	if s.charReader != nil {
+		if c, err := s.charReader.FindByID(ctx, characterID); err == nil && c.PendingWake {
+			isPendingWake = true
+		}
 	}
-	if asleep {
+	if !isPendingWake {
+		asleep, err := s.timer.IsLocked(ctx, timer.CategoryAsleep, characterID)
+		if err != nil {
+			return SleepStatus{}, err
+		}
+		if asleep {
+			isPendingWake = true
+		}
+	}
+	if isPendingWake {
 		return SleepStatus{
 			Sleeping:         false,
 			RemainingSeconds: 0,
@@ -268,15 +289,22 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 		return WakeResult{}, fmt.Errorf("%w: お休み中「Zzz...」 目覚めるまで %d分%02d秒", ErrStillSleeping, mins, secs)
 	}
 
-	asleep, err := s.timer.IsLocked(ctx, timer.CategoryAsleep, characterID)
+	char, err := s.charReader.FindByID(ctx, characterID)
 	if err != nil {
 		return WakeResult{}, err
 	}
-	if !asleep {
-		char, err := s.charReader.FindByID(ctx, characterID)
+
+	isPendingWake := char.PendingWake
+	if !isPendingWake && s.timer != nil {
+		asleep, err := s.timer.IsLocked(ctx, timer.CategoryAsleep, characterID)
 		if err != nil {
 			return WakeResult{}, err
 		}
+		if asleep {
+			isPendingWake = true
+		}
+	}
+	if !isPendingWake {
 		return WakeResult{
 			Success:   true,
 			Message:   fmt.Sprintf("%sはすでに目覚めています", char.Name),
@@ -284,7 +312,34 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 		}, nil
 	}
 
-	var char corecharacter.Character
+	// Serialize recovery per character: a concurrent Wake must not repeat side effects
+	// (e.g. the dungeon_once reset) after another Wake has completed and play resumed.
+	claimed, err := s.timer.TryLock(ctx, timer.CategoryWaking, characterID, wakeClaimTTL)
+	if err != nil {
+		return WakeResult{}, err
+	}
+	if !claimed {
+		return WakeResult{}, ErrWakeInProgress
+	}
+	defer func() {
+		//lint:ignore error-swallow best-effort claim release; the claim also expires by TTL
+		_ = s.timer.ReleaseLock(ctx, timer.CategoryWaking, characterID)
+	}()
+
+	// Re-verify after claim in case another Wake finished concurrently
+	if s.charReader != nil {
+		if c, err := s.charReader.FindByID(ctx, characterID); err == nil && !c.PendingWake {
+			asleep, _ := s.timer.IsLocked(ctx, timer.CategoryAsleep, characterID)
+			if !asleep {
+				return WakeResult{
+					Success:   true,
+					Message:   fmt.Sprintf("%sはすでに目覚めています", c.Name),
+					Character: c,
+				}, nil
+			}
+		}
+	}
+
 	if s.runner != nil {
 		// Commit vitality recovery before mandatory hooks and Valkey cleanup.
 		// Mutate the runner's current locked state, preserving unrelated assets.
@@ -309,11 +364,6 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 			return WakeResult{}, err
 		}
 	} else {
-		c, err := s.charReader.FindByID(ctx, characterID)
-		if err != nil {
-			return WakeResult{}, err
-		}
-		char = c
 		char.RecoverVitality()
 		char.ResetTired()
 	}
@@ -345,6 +395,33 @@ func (s *Service) Wake(ctx context.Context, characterID string) (WakeResult, err
 	if err := s.timer.ResetDailyQuota(ctx, "dungeon_once", characterID); err != nil {
 		return WakeResult{}, err
 	}
+
+	// Finalize durable pending_wake obligation in SQL after all hooks succeed
+	if char.PendingWake {
+		if s.runner != nil {
+			res, err := s.runner.ExecuteTransaction(ctx, economy.TransactionRequest{CharacterID: characterID}, func(tc *economy.TxContext) error {
+				tc.Character.PendingWake = false
+				return nil
+			})
+			if err != nil {
+				return WakeResult{}, err
+			}
+			char = res.Character
+		} else if s.charUpdater != nil {
+			c, err := s.charUpdater.FindByIDForUpdate(ctx, characterID)
+			if err != nil {
+				return WakeResult{}, err
+			}
+			c.PendingWake = false
+			if err := s.charUpdater.Update(ctx, c); err != nil {
+				return WakeResult{}, err
+			}
+			char = c
+		} else {
+			char.PendingWake = false
+		}
+	}
+
 	if err := s.timer.ReleaseLock(ctx, timer.CategoryAsleep, characterID); err != nil {
 		return WakeResult{}, err
 	}
