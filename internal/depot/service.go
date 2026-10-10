@@ -172,44 +172,18 @@ func (s *Service) WithdrawItem(ctx context.Context, characterID string, itemInst
 }
 
 // SellItem sells a single item from the depot for 50% of its base catalog price.
+// Transaction: delegates to SellItems (ExecuteTransaction).
+// Lock Order: characters(2) -> character_depots/depot_items(5).
 func (s *Service) SellItem(ctx context.Context, characterID string, itemInstanceID string) (Depot, int, error) {
 	if err := validateItemOp(characterID, itemInstanceID); err != nil {
 		return Depot{}, 0, err
 	}
-	var resultDepot Depot
-	var goldEarned int
-	req := economy.TransactionRequest{CharacterID: characterID}
-	_, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-		dep, err := s.findOrCreateDepot(tc.Context, characterID, tc.Character)
-		if err != nil {
-			return err
-		}
-		itemInstance, err := dep.PurgeSlot(itemInstanceID)
-		if err != nil {
-			return err
-		}
-		unitPrice := 0
-		if s.itemDefs != nil {
-			if def, defErr := s.itemDefs.FindByID(itemInstance.DefinitionID); defErr == nil {
-				unitPrice = def.Price
-			}
-		}
-		sellPricePerUnit := int(float64(unitPrice) * 0.5)
-		goldEarned = sellPricePerUnit * itemInstance.Quantity
-		tc.AddGrant(economy.ResourceGrant{Gold: goldEarned})
-		if err := s.saveDepot(tc.Context, dep); err != nil {
-			return err
-		}
-		resultDepot = dep
-		return nil
-	})
-	if err != nil {
-		return Depot{}, 0, mapEconomyError(err)
-	}
-	return resultDepot, goldEarned, nil
+	return s.SellItems(ctx, characterID, []string{itemInstanceID})
 }
 
 // SellItems sells multiple items from the depot in an atomic batch.
+// Transaction: ExecuteTransaction.
+// Lock Order: characters(2) -> character_depots/depot_items(5).
 func (s *Service) SellItems(ctx context.Context, characterID string, itemInstanceIDs []string) (Depot, int, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return Depot{}, 0, ErrInvalidCharacterID
@@ -225,11 +199,37 @@ func (s *Service) SellItems(ctx context.Context, characterID string, itemInstanc
 		if err != nil {
 			return err
 		}
-		// Verify all items exist first before mutating
+		// Validate every target and its valuation before deleting any assets.
+		seen := make(map[string]bool, len(itemInstanceIDs))
 		for _, targetID := range itemInstanceIDs {
+			if seen[targetID] {
+				return ErrItemNotFound
+			}
+			seen[targetID] = true
 			found := false
 			for _, existing := range dep.Items {
 				if existing.ID == targetID {
+					if s.itemDefs == nil {
+						return fmt.Errorf("depot sale requires item definitions")
+					}
+					def, err := s.itemDefs.FindByID(existing.DefinitionID)
+					if err != nil {
+						return fmt.Errorf("value depot item %s: %w", existing.DefinitionID, err)
+					}
+					if def.Price < 0 {
+						return ErrInvalidAmount
+					}
+					if existing.Quantity <= 0 {
+						return ErrInvalidQuantity
+					}
+					price, err := economy.SafeMultiply(def.Price/2, existing.Quantity)
+					if err != nil {
+						return err
+					}
+					totalGoldEarned, err = economy.SafeAdd(totalGoldEarned, price)
+					if err != nil {
+						return err
+					}
 					found = true
 					break
 				}
@@ -240,15 +240,9 @@ func (s *Service) SellItems(ctx context.Context, characterID string, itemInstanc
 		}
 
 		for _, targetID := range itemInstanceIDs {
-			itemInstance, _ := dep.PurgeSlot(targetID)
-			unitPrice := 0
-			if s.itemDefs != nil {
-				if def, defErr := s.itemDefs.FindByID(itemInstance.DefinitionID); defErr == nil {
-					unitPrice = def.Price
-				}
+			if _, err := dep.PurgeSlot(targetID); err != nil {
+				return err
 			}
-			sellPricePerUnit := int(float64(unitPrice) * 0.5)
-			totalGoldEarned += sellPricePerUnit * itemInstance.Quantity
 		}
 
 		tc.AddGrant(economy.ResourceGrant{Gold: totalGoldEarned})
