@@ -108,7 +108,7 @@ func (s *Service) query(ctx context.Context, charID, ownerID string) (Result, er
 		snapshot.LocationID = location
 		return Result{Snapshot: snapshot, AvailableActions: Evaluate(snapshot)}, nil
 	}
-	navigation, err := s.observeNavigation(ctx, charID)
+	navigation, err := s.observeNavigation(ctx, char)
 	if err != nil {
 		return Result{}, err
 	}

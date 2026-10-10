@@ -166,17 +166,25 @@ HTTP-owned response/dialogue composition. It requires explicit `item_id` and
 `quantity`; [the command contract](../architecture/client-agent-api.md#secretshop-purchase-command-contract)
 defines strict input, rejection and refresh recovery behavior. All five REST
 routes remain registered: status GET and talk, inspect, puff-puff and purchase
-POSTs. Their defaults and behavior remain unchanged. Selected SecretShop
-observations/navigation and route retirement remain separate work under #947;
-the production town scene does not advertise purchase merely because its adapter
-is installed.
+POSTs. Their defaults and behavior remain unchanged; retirement remains under #947.
+Qualified town navigation now exposes `secretshop`: JobLevel ≥7 is checked without
+catalog reads for town discovery and again before entry/select/page writes.
+Saved selections whose qualification or product availability disappears become
+unavailable with safe back navigation. The selected catalog/product observation
+reuses `GetShopStatus`, including required HelperQuest filtering, exact item
+facts and prices, ID-ordered offset pages, NPC name and quantity bounds 1..99.
+Selected products provide explicit `item_id` purchase templates; quantity stays
+required and editable. The [navigation contract](../architecture/client-agent-api.md#selection-commands-and-typed-discovery)
+owns the typed schemas, qualification/error and refresh behavior. GET invokes no
+NPC action, purchase, delivery or collection write.
 
 Legacy `secret.cgi:34–82` dispatches `かう` to `kau` and `ぱふぱふ` to `pafupafu`.
 The former maps to `PurchaseItem` through the Gateway or retained purchase REST
-route; the latter remains the puff-puff REST operation. Shared talk/inspect and
-`item.cgi:57–69` secret entry transition remain pending their own reconciliation
-and replacements. Legacy `kau` buys one item; current Go permits 1..99 and routes
-bulk quantities to depot. That existing implementation difference is not an
+route; the latter remains the puff-puff REST operation. `item.cgi:57–69` entry
+now maps to qualified ordinary scene navigation under #1047; CGI presence/log
+effects remain separate reconciliation. Shared talk/inspect and puff-puff effects
+and their route replacements remain pending. Legacy `kau` buys one item; current
+Go permits 1..99 and routes bulk quantities to depot. That existing implementation difference is not an
 approved replacement for the legacy single-purchase rule or changed by this
 transport adapter. Depot overflow behavior remains an independent specification
 gap in #1139.
@@ -245,7 +253,7 @@ The complete shop additions and read/mutation branches reconcile as follows:
 | Weapon `かう` → `kau` (`weapon.cgi:45–85`), Armor (`armor.cgi:41–85`), Item (`item.cgi:53–107`), Accessory (`accessory.cgi:98–147`) | No-target sales tables → GetCatalog and selected Shop catalog/product adapter. Explicit-target purchase → Purchase/PurchaseInShop and retained REST, Gateway mutation migration #947. |
 | Weapon/Armor/Item `うる` → `uru` (`weapon.cgi:91–110`, `armor.cgi:89–110`, `item.cgi:112–132`); Accessory (`accessory.cgi:151–170`) | Held-slot preview/sale → Sell and retained REST. Owned sale-choice projections and Gateway commands remain #947. |
 | Weapon/Armor/Item `まとめてかう` → `matomete_kau` (`weapon.cgi:116–173`, `armor.cgi:115–178`, `item.cgi:137–197`) | No-target catalog → the same selected observation. Multi-name purchase/depot delivery → BatchPurchase; Gateway migration #947. Not registered for Accessory. |
-| Item hidden `ひみつのみせ` → `himitsunomise` (`item.cgi:57–69`) | Inspect hint is observed. DiscoverSecretShop reports JobLevel ≥7; legacy also changes location to `secret`. Secret entry/command coverage remains #947. |
+| Item hidden `ひみつのみせ` → `himitsunomise` (`item.cgi:57–69`) | Inspect hint is observed. Qualified `scene_enter` selects `secretshop` through the approved ordinary-navigation contract; SecretShop catalog/product data and explicit purchase command are connected. DiscoverSecretShop REST and legacy presence/log reconciliation remain #947. |
 | Accessory `ごうせい` → `acce`, `check_depot`, `get_item_no` (`accessory.cgi:100–101,172–292`) | Recipe preview → AllSynthesisRecipes/REST; Synthesize handles material consumption/output. Recipe scene and mutation migration remain #947; held-elixir gap remains in [Accessory design](accessory-shop.md). `get_depot` is an uncalled utility, not an omitted action. |
 | Shared `しらべる` → `shiraberu` → `shiraberu_npc` (`system.cgi:322–329,413`; `weapon.cgi:38–40`, `armor.cgi:34–36`, `item.cgi:45–48`) | InspectNPC structured facts + HTTP presentation observed. Accessory inherits the default “nothing found” in legacy, while Go supplies its own custom line; this existing difference remains #947. Non-NPC inspection remains social migration #949. |
 | Shared `はなす` → `hanasu` (`system.cgi:240–263`) using facility `@words` | TalkNPC/REST retain random dialogue. Go's abbreviated static lines omit legacy dynamic recommendations/status and contain wording differences; no exact-dialogue parity claim. Gateway talk/log/presence migration remains #947/#949. |

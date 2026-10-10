@@ -2998,6 +2998,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/CasinoLobbySceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SecretShopCatalogSceneData"
                     }
                   ]
                 }
@@ -3038,6 +3041,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/CasinoSelectedSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SecretShopProductSceneData"
                     }
                   ]
                 }
@@ -3326,6 +3332,66 @@
                   "required": [
                     "casino"
                   ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "secretshop"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/SecretShopCatalogSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "secretshop"
+                },
+                "kind": {
+                  "const": "subject"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/SecretShopProductSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
                 }
               }
             }
@@ -5858,7 +5924,8 @@
                       "shop_weapon",
                       "shop_armor",
                       "shop_item",
-                      "shop_accessory"
+                      "shop_accessory",
+                      "secretshop"
                     ]
                   },
                   "offset": {
@@ -6247,6 +6314,195 @@
           "controls",
           "coins"
         ]
+      },
+      "SecretShopPurchaseParams": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "item_id"
+        ],
+        "description": "Explicit catalog target template; the purchase command additionally requires editable quantity."
+      },
+      "SecretShopProduct": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "item_definition_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "price": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "select_params": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "target_kind": {
+                "const": "item"
+              },
+              "target_id": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "target_kind",
+              "target_id"
+            ]
+          },
+          "purchase_params": {
+            "$ref": "#/components/schemas/SecretShopPurchaseParams"
+          }
+        },
+        "required": [
+          "id",
+          "item_definition_id",
+          "name",
+          "category",
+          "price",
+          "description",
+          "select_params",
+          "purchase_params"
+        ],
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Exact SecretShop status item facts after required HelperQuest filtering. Selection and purchase use the catalog ID, never an inventory instance or implicit saved target."
+      },
+      "SecretShopCatalogSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "npc_name": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "is_eligible": {
+            "const": true,
+            "type": "boolean"
+          },
+          "quantity": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "minimum": {
+                "const": 1,
+                "type": "integer"
+              },
+              "maximum": {
+                "const": 99,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "minimum",
+              "maximum"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/SecretShopProduct"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/ShopScenePage"
+          }
+        },
+        "required": [
+          "parent",
+          "title",
+          "npc_name",
+          "is_eligible",
+          "quantity",
+          "items",
+          "page"
+        ],
+        "description": "Qualified read-only SecretShop observation. GET does not invoke NPC actions or purchase. Existing REST operations remain registered pending retirement verification."
+      },
+      "SecretShopProductSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "npc_name": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "is_eligible": {
+            "const": true,
+            "type": "boolean"
+          },
+          "quantity": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "minimum": {
+                "const": 1,
+                "type": "integer"
+              },
+              "maximum": {
+                "const": 99,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "minimum",
+              "maximum"
+            ]
+          },
+          "product": {
+            "$ref": "#/components/schemas/SecretShopProduct"
+          }
+        },
+        "required": [
+          "parent",
+          "title",
+          "npc_name",
+          "is_eligible",
+          "quantity",
+          "product"
+        ],
+        "description": "Qualified read-only SecretShop observation. GET does not invoke NPC actions or purchase. Existing REST operations remain registered pending retirement verification."
       }
     },
     "securitySchemes": {

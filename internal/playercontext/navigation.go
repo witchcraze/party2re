@@ -7,11 +7,14 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/witchcraze/party2re/internal/core/character"
 )
 
 var (
 	ErrInvalidSelection        = errors.New("invalid navigation selection")
 	ErrSelectionNotFound       = errors.New("navigation subject not found")
+	ErrSceneAccessDenied       = errors.New("character does not qualify for the selected scene")
 	ErrNavigationForbidden     = errors.New("navigation actor is not owned")
 	ErrNavigationUnavailable   = errors.New("navigation is unavailable during recovery or unfinished work")
 	ErrNavigationNotConfigured = errors.New("navigation is not configured")
@@ -51,7 +54,9 @@ type SceneDefinition struct {
 	ID, Parent, SubjectKind string
 	Pageable                bool
 	CursorPageable          bool
-	SubjectAvailable        func(ctx context.Context, actorID, targetID string) (bool, error)
+	// CanEnter is a pure character qualification check; nil permits entry.
+	CanEnter         func(character.Character) bool
+	SubjectAvailable func(ctx context.Context, actorID, targetID string) (bool, error)
 }
 
 type PageParams struct {
@@ -124,16 +129,20 @@ func (s *Service) selection(ctx context.Context, actorID string) (Selection, err
 	return n, nil
 }
 
-func (s *Service) observeNavigation(ctx context.Context, actorID string) (*NavigationObservation, error) {
+func (s *Service) observeNavigation(ctx context.Context, actor character.Character) (*NavigationObservation, error) {
 	if s.navigation == nil {
 		return nil, nil
 	}
-	n, err := s.selection(ctx, actorID)
+	n, err := s.selection(ctx, actor.ID)
 	if err != nil {
 		return nil, err
 	}
 	d, ok := s.scenes[n.Destination]
 	observation := &NavigationObservation{Selection: n, Unavailable: !ok}
+	if d.CanEnter != nil && !d.CanEnter(actor) {
+		observation.Unavailable = true
+		return observation, nil
+	}
 	if n.Cursor != nil && !d.CursorPageable {
 		observation.Unavailable = true
 	}
@@ -141,7 +150,7 @@ func (s *Service) observeNavigation(ctx context.Context, actorID string) (*Navig
 		if !ok || d.SubjectKind != n.Subject.Kind || d.SubjectAvailable == nil {
 			observation.Unavailable = true
 		} else {
-			available, err := d.SubjectAvailable(ctx, actorID, n.Subject.ID)
+			available, err := d.SubjectAvailable(ctx, actor.ID, n.Subject.ID)
 			if err != nil {
 				return nil, fmt.Errorf("read selected subject: %w", err)
 			}
@@ -153,7 +162,7 @@ func (s *Service) observeNavigation(ctx context.Context, actorID string) (*Navig
 
 // navigate rechecks owned actor and recovery/work guards at the service boundary.
 // One SET replaces the whole record; concurrent clients use the last SET.
-func (s *Service) navigate(ctx context.Context, playerID, actorID string, transition func(Selection) (Selection, error)) (Selection, error) {
+func (s *Service) navigate(ctx context.Context, playerID, actorID string, transition func(Result) (Selection, error)) (Selection, error) {
 	if err := ctx.Err(); err != nil {
 		return Selection{}, err
 	}
@@ -170,7 +179,7 @@ func (s *Service) navigate(ctx context.Context, playerID, actorID string, transi
 	if len(r.Snapshot.ActiveActivities()) > 0 {
 		return Selection{}, ErrNavigationUnavailable
 	}
-	n, err := transition(r.Navigation.Selection)
+	n, err := transition(r)
 	if err != nil {
 		return Selection{}, err
 	}
@@ -184,17 +193,25 @@ func (s *Service) navigate(ctx context.Context, playerID, actorID string, transi
 }
 
 func (s *Service) Enter(ctx context.Context, playerID, actorID, destination string) (Selection, error) {
-	return s.navigate(ctx, playerID, actorID, func(Selection) (Selection, error) {
-		if _, ok := s.scenes[destination]; !ok {
+	return s.navigate(ctx, playerID, actorID, func(r Result) (Selection, error) {
+		d, ok := s.scenes[destination]
+		if !ok {
 			return Selection{}, ErrInvalidSelection
+		}
+		if d.CanEnter != nil && !d.CanEnter(r.Snapshot.Character) {
+			return Selection{}, ErrSceneAccessDenied
 		}
 		return Selection{Destination: destination}, nil
 	})
 }
 
 func (s *Service) Select(ctx context.Context, playerID, actorID string, subject Subject) (Selection, error) {
-	return s.navigate(ctx, playerID, actorID, func(n Selection) (Selection, error) {
+	return s.navigate(ctx, playerID, actorID, func(r Result) (Selection, error) {
+		n := r.Navigation.Selection
 		d, ok := s.scenes[n.Destination]
+		if d.CanEnter != nil && !d.CanEnter(r.Snapshot.Character) {
+			return Selection{}, ErrSceneAccessDenied
+		}
 		if !ok || d.SubjectAvailable == nil || d.SubjectKind != subject.Kind || !navigationID.MatchString(subject.ID) {
 			return Selection{}, ErrInvalidSelection
 		}
@@ -210,8 +227,12 @@ func (s *Service) Select(ctx context.Context, playerID, actorID string, subject 
 }
 
 func (s *Service) Page(ctx context.Context, playerID, actorID string, p PageParams) (Selection, error) {
-	return s.navigate(ctx, playerID, actorID, func(n Selection) (Selection, error) {
+	return s.navigate(ctx, playerID, actorID, func(r Result) (Selection, error) {
+		n := r.Navigation.Selection
 		d, ok := s.scenes[n.Destination]
+		if d.CanEnter != nil && !d.CanEnter(r.Snapshot.Character) {
+			return Selection{}, ErrSceneAccessDenied
+		}
 		if !ok || !d.Pageable || p.Destination != n.Destination || n.Subject != (Subject{}) || (p.Cursor != nil && !d.CursorPageable) {
 			return Selection{}, ErrInvalidSelection
 		}
@@ -225,7 +246,8 @@ func (s *Service) Page(ctx context.Context, playerID, actorID string, p PagePara
 }
 
 func (s *Service) Back(ctx context.Context, playerID, actorID string) (Selection, error) {
-	return s.navigate(ctx, playerID, actorID, func(n Selection) (Selection, error) {
+	return s.navigate(ctx, playerID, actorID, func(r Result) (Selection, error) {
+		n := r.Navigation.Selection
 		if n.Subject != (Subject{}) {
 			return Selection{Destination: n.Destination}, nil
 		}

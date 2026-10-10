@@ -162,7 +162,7 @@ The table below documents the entry, navigation and recovery controls in `intern
 | `shop_sell` | 店にアイテム売却 | `shop` | `shopSell` | `["item_instance_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `shop_accessory_buy` | 装飾品購入 | `shop` | `shopAccessoryBuy` | `["item_definition_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
 | `gemstore_buy` | 宝石購入 | `shop` | `buyGem` | `["gem_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
-| `secretshop_purchase` | ヒミツの店で購入 | `shop` | `purchaseSecretShopItem` | `["item_id"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
+| `secretshop_purchase` | ヒミツの店で購入 | `shop` | `executeCharacterAction` | `["item_id", "quantity"]` | ❌ | ❌ | ✅ | ✅ | ✅ |
 | `blackmarket_trade` | 闇市景品交換 | `shop` | `tradeBlackMarketPrize` | `["prize_id"]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `blacksmith_seal` | 鍛冶屋で刻印強化 | `crafting` | `postCharactersIdBlacksmithSeal` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
 | `alchemy_synthesize` | 錬金調合 | `crafting` | `postCharactersIdAlchemySynthesize` | `[]` | ❌ | ❌ | ✅ | ✅ | ❌ |
@@ -194,6 +194,11 @@ The table below documents the entry, navigation and recovery controls in `intern
 `home_wake` also requires wakeable lifecycle state even though it has no Sleep flag. An already-awake character is not offered a redundant wake action. Dead awake characters retain noncombat entries; sleeping characters have only rescue; characters awaiting wake recovery have wake and rescue, in catalog order. Entry counts follow the current catalog, while exposed controls also require scene eligibility and a connected adapter.
 
 ### Evaluation and read contract
+
+SecretShop destination discovery and entry also apply its existing JobLevel ≥7
+qualification through the [scene navigation contract](../architecture/client-agent-api.md#selection-commands-and-typed-discovery).
+Purchase revalidates qualification, item availability, exact funds and quantity
+in its service; the catalog gates alone do not establish these guarantees.
 
 The pipeline evaluates Dead → Fatigue → Sleep → Cooldown → Currency → Location, stopping at the first rejecting gate for each action. Each gate honors its RequiredGates exemptions; wake eligibility is an explicit recovery rule. Gate evaluation is pure and changes no state.
 
