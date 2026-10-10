@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/economy"
 )
 
@@ -52,15 +53,31 @@ func mapEconomyError(err error) error {
 	return err
 }
 
-func (s *Service) itemKind(defID string) int {
-	if s.itemDefs == nil {
-		return 3
+type legacySortItem struct {
+	instance item.Instance
+	kind, no int
+}
+
+// withLegacySortKeys resolves each instance's stored kind/number through the
+// item catalog. Missing definitions or non-canonical identities are errors
+// rather than guessed classifications.
+func (s *Service) withLegacySortKeys(items []item.Instance) ([]legacySortItem, error) {
+	keyed := make([]legacySortItem, len(items))
+	for i, inst := range items {
+		if s.itemDefs == nil {
+			return nil, fmt.Errorf("depot sort requires item definitions")
+		}
+		def, err := s.itemDefs.FindByID(inst.DefinitionID)
+		if err != nil {
+			return nil, fmt.Errorf("sort depot item %s: %w", inst.DefinitionID, err)
+		}
+		kind, no, err := def.LegacyStorageKey()
+		if err != nil {
+			return nil, fmt.Errorf("sort depot item %s: %w", inst.DefinitionID, err)
+		}
+		keyed[i] = legacySortItem{instance: inst, kind: kind, no: no}
 	}
-	def, err := s.itemDefs.FindByID(defID)
-	if err != nil {
-		return 3
-	}
-	return def.Kind()
+	return keyed, nil
 }
 
 // GetDepot returns the current depot state for the given character, computing dynamic capacity.
@@ -263,11 +280,10 @@ func (s *Service) SellItems(ctx context.Context, characterID string, itemInstanc
 	return resultDepot, totalGoldEarned, nil
 }
 
-// SortItems sorts depot items by legacy kind order:
-// Kind 1: Weapon (main-hand)
-// Kind 2: Armor / Shield / Accessory (off-hand, body, accessory)
-// Kind 3: Items / Consumables / Materials (none)
-// Tie-breaker: DefinitionID ascending.
+// SortItems orders depot items by the original stored kind (1 weapon, 2 armor,
+// 3 item-catalog entry including shields and accessories) and then by numeric
+// item number (depot.cgi seiton). Equal keys keep their existing order.
+// A definition without a resolvable key fails the sort and leaves the depot unchanged.
 func (s *Service) SortItems(ctx context.Context, characterID string) (Depot, error) {
 	if strings.TrimSpace(characterID) == "" {
 		return Depot{}, ErrInvalidCharacterID
@@ -279,14 +295,19 @@ func (s *Service) SortItems(ctx context.Context, characterID string) (Depot, err
 		if err != nil {
 			return err
 		}
-		sort.SliceStable(dep.Items, func(i, j int) bool {
-			kindI := s.itemKind(dep.Items[i].DefinitionID)
-			kindJ := s.itemKind(dep.Items[j].DefinitionID)
-			if kindI != kindJ {
-				return kindI < kindJ
+		keyed, err := s.withLegacySortKeys(dep.Items)
+		if err != nil {
+			return err
+		}
+		sort.SliceStable(keyed, func(i, j int) bool {
+			if keyed[i].kind != keyed[j].kind {
+				return keyed[i].kind < keyed[j].kind
 			}
-			return dep.Items[i].DefinitionID < dep.Items[j].DefinitionID
+			return keyed[i].no < keyed[j].no
 		})
+		for i := range keyed {
+			dep.Items[i] = keyed[i].instance
+		}
 		if err := s.saveDepot(tc.Context, dep); err != nil {
 			return err
 		}

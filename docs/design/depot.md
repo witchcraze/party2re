@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Item Depot (預かり所 / 倉庫) provides characters with persistent storage for item instances outside of their active inventory. The reconstruction models dynamic capacity, storage expansion, item sorting, direct item selling, inter-character mailing and collection discovery from `system.cgi:get_depot_c` and `depot.cgi`. Known withdrawal and sort-classification differences remain documented below. Gold is kept in character purses and the bank.
+The Item Depot (預かり所 / 倉庫) provides characters with persistent storage for item instances outside of their active inventory. The reconstruction models dynamic capacity, storage expansion, item sorting, direct item selling, inter-character mailing and collection discovery from `system.cgi:get_depot_c` and `depot.cgi`. Known withdrawal differences remain documented below. Gold is kept in character purses and the bank.
 
 ## Domain Model
 
@@ -94,20 +94,23 @@ storage or a later save error, rolls back equipment, customization and ownership
   original error for callers rather than becoming successful zero-price sales.
 
 ### 4. Depot Sorting (`せいとん`)
-- The current Go comparator orders items deterministically using the equipment-slot kind:
-  1. **Kind 1 (Weapons)**: Items equipped in `SlotMainHand`.
-  2. **Kind 2 (Armors)**: Items equipped in `SlotOffHand`, `SlotBody`, or `SlotAccessory`.
-  3. **Kind 3 (Consumables & Misc)**: Items with `SlotNone`.
-- Items within the same kind are ordered ascending by `DefinitionID`.
+- Legacy `depot.cgi:313–332` sorts each stored row by its kind, then by its numeric
+  item number. `azukeru` (`167–207`) stores weapons as kind 1, armor as kind 2 and
+  every entry of the item catalog as kind 3, so shields and accessories sort with
+  consumables by catalog number, not with armor.
+- Go derives the same key from canonical catalog identity
+  (`item.Definition.LegacyStorageKey`): `weapon-NN` → (1, NN), `armor-NN` → (2, NN),
+  `item-NNN` → (3, NNN). This is independent of `Slot.Kind()`'s slot grouping.
+  Instances with equal keys keep their existing relative order.
+- Legacy rows always carry a kind and number, so a definition that is missing from
+  the catalog, is not a canonical identity, or has no configured definition provider
+  has no legacy behavior. By approved decision (#1288) the sort then fails with the
+  wrapped catalog error and the transaction leaves the depot unchanged; no
+  classification is guessed.
 - Explicit sorting persists the resulting instance order. Ordinary saves preserve
   slice order, including appended items; reads never implicitly sort by definition.
   Both normal and locked reads use stored position with instance ID as a tie-breaker.
   Rows predating the position migration retain their former ID order until saved.
-- Legacy `depot.cgi:313–332` sorts stored kind and numeric item number before
-  saving. Its `azukeru` (`167–207`) stores weapons as kind 1, armor as kind 2 and
-  entries from the item catalog as kind 3. The current slot-based comparator groups
-  shields/accessories with armor instead; exact catalog-key reconciliation remains
-  #1288 work under #947. Persisting the existing comparator's output does not claim full parity.
 
 ### 5. Mailing Items and Money (`おくる`)
 - **Send Money (`SendMoney`)**: Transits gold directly from the sender's purse to the recipient's purse.
@@ -193,9 +196,9 @@ maps to the existing services as follows:
 
 This mapping records transport coverage, not full legacy parity. Legacy
 `seiton` (`depot.cgi:313–332`) persists kind/item-number ordering. SortItems results
-now survive repository reload, and context pages preserve that order. The remaining
-slot/catalog classification difference described above belongs to the feature
-comparator; HTTP adds no separate sorting rule.
+now survive repository reload, and context pages preserve that order. The stored
+kind/number comparator described above belongs to the feature; HTTP adds no separate
+sorting rule.
 Legacy `hikidasu` (`depot.cgi:208–288`) swaps held equipment/items back into
 storage, while current WithdrawItem moves into inventory and rejects a full
 slot; the equivalent atomic swap contract remains undecided in #1127. Equipped
