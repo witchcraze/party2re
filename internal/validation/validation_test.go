@@ -434,10 +434,16 @@ func TestValidateGuildName(t *testing.T) {
 			wantOutput: "勇者のギルド",
 		},
 		{
-			name:       "valid 32-character name",
-			input:      strings.Repeat("あ", 32),
+			name:       "valid 16-character ascii name",
+			input:      strings.Repeat("A", 16),
 			wantErr:    nil,
-			wantOutput: strings.Repeat("あ", 32),
+			wantOutput: strings.Repeat("A", 16),
+		},
+		{
+			name:       "valid 16-character multibyte name",
+			input:      strings.Repeat("あ", 16),
+			wantErr:    nil,
+			wantOutput: strings.Repeat("あ", 16),
 		},
 		{
 			name:       "nfc normalization converts decomposed characters",
@@ -446,8 +452,14 @@ func TestValidateGuildName(t *testing.T) {
 			wantOutput: "Ká",
 		},
 		{
-			name:       "33-character name exceeds limit",
-			input:      strings.Repeat("あ", 33),
+			name:       "17-character ascii name exceeds limit",
+			input:      strings.Repeat("A", 17),
+			wantErr:    validation.ErrTooLong,
+			wantOutput: "",
+		},
+		{
+			name:       "17-character multibyte name exceeds limit",
+			input:      strings.Repeat("あ", 17),
 			wantErr:    validation.ErrTooLong,
 			wantOutput: "",
 		},

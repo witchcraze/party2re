@@ -153,7 +153,7 @@ func ValidateCharacterName(name string) (string, error) {
 }
 
 // ValidateGuildName validates guild names according to legacy Party2 rules and modern safety checks:
-// - Max 32 runes
+// - Max 16 runes
 // - No ASCII whitespace (\s) or Japanese fullwidth spaces (\u3000) (internal or surrounding)
 // - No prohibited symbols ([,;\"\'&<>\\\/@＠])
 // - No control characters, zero-width characters, bidi overrides, or Zalgo marks
@@ -166,7 +166,7 @@ func ValidateGuildName(name string) (string, error) {
 	if normalized == "" {
 		return "", ErrEmpty
 	}
-	if utf8.RuneCountInString(normalized) > 32 {
+	if utf8.RuneCountInString(normalized) > 16 {
 		return "", ErrTooLong
 	}
 	if prohibitedNameChars.MatchString(normalized) {
