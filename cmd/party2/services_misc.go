@@ -101,22 +101,6 @@ func newMiscServices(
 		return nil, err
 	}
 
-	secretshopCatalog, err := secretshop.LoadDefaultCatalog()
-	if err != nil {
-		return nil, err
-	}
-	secretshopService, err := secretshop.NewService(
-		core.charRepo,
-		core.invRepo,
-		secretshopCatalog,
-		secretshop.WithTransactionProvider(core.txProvider),
-		secretshop.WithDepotRepository(econ.depotRepo),
-		secretshop.WithItemDefinitionProvider(core.itemCatalog),
-	)
-	if err != nil {
-		return nil, err
-	}
-
 	rescueRepo, err := database.NewRescueRepository(db)
 	if err != nil {
 		return nil, err
@@ -145,6 +129,23 @@ func newMiscServices(
 		helperquest.WithDepotRepository(econ.depotRepo),
 		helperquest.WithFarmRepository(&helperFarmAdapter{repo: monsterRepo}),
 	)
+
+	secretshopCatalog, err := secretshop.LoadDefaultCatalog()
+	if err != nil {
+		return nil, err
+	}
+	secretshopService, err := secretshop.NewService(
+		core.charRepo,
+		core.invRepo,
+		secretshopCatalog,
+		secretshop.WithTransactionProvider(core.txProvider),
+		secretshop.WithDepotRepository(econ.depotRepo),
+		secretshop.WithItemDefinitionProvider(core.itemCatalog),
+		secretshop.WithHelperFilter(secretShopHelperAdapter{helper: helperService}),
+	)
+	if err != nil {
+		return nil, err
+	}
 
 	futureMemoryRepo, err := database.NewFutureMemoryRepository(db)
 	if err != nil {
@@ -405,6 +406,14 @@ func newMiscServices(
 		altar:          altarService,
 		wishingwell:    wishingwellService,
 	}, nil
+}
+
+type secretShopHelperAdapter struct {
+	helper *helperquest.Service
+}
+
+func (a secretShopHelperAdapter) GetActiveHelperItemIDs(ctx context.Context) ([]string, error) {
+	return a.helper.GetActiveHelperItemIDs(ctx, time.Now().UTC())
 }
 
 type helperFarmAdapter struct {
