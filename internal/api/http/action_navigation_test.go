@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/witchcraze/party2re/internal/bank"
 	"github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/playercontext"
@@ -71,7 +72,11 @@ func navigationRouter(t *testing.T, f *gatewayFixture, store *gatewayNavigationS
 				return *available && target == "weapon-01", *readErr
 			}},
 	))
-	h, err := NewHandler(f, f, &struct{ AdventureService }{}, navigationShopService{}, WithPlayerContext(service), func(h *Handler) { h.homes = f })
+	bankService, err := bank.NewService(bankGatewayRepository{&bankGatewayFixture{gatewayFixture: f}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := NewHandler(f, f, &struct{ AdventureService }{}, navigationShopService{}, WithPlayerContext(service), func(h *Handler) { h.homes, h.bank = f, bankService })
 	if err != nil {
 		t.Fatal(err)
 	}

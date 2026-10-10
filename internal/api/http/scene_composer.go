@@ -72,6 +72,7 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 			adapter.read = func(_ context.Context, r playercontext.Result) (any, error) { return h.townSceneData(r), nil }
 		case "bank":
 			adapter.title, adapter.commands = "銀行", []string{"bank_deposit", "bank_withdraw"}
+			adapter.read = h.bankSceneData
 		case "home":
 			adapter.title, adapter.commands = "自宅", []string{"home_sleep"}
 			adapter.read = h.homeSceneData
@@ -183,6 +184,8 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 		}
 		scene.Data = data
 		switch data := data.(type) {
+		case BankSceneData:
+			scene.Support.Observation = "details"
 		case CasinoLobbySceneData:
 			scene.Support.Observation = "details"
 			if data.Page.Next != nil {

@@ -2985,6 +2985,9 @@
                       "$ref": "#/components/schemas/SelectionSceneData"
                     },
                     {
+                      "$ref": "#/components/schemas/BankSceneData"
+                    },
+                    {
                       "$ref": "#/components/schemas/HomeSceneData"
                     },
                     {
@@ -3059,6 +3062,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/SelectionSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "bank"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/BankSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
                 }
               }
             }
@@ -5194,6 +5227,52 @@
         },
         "required": [
           "parent"
+        ]
+      },
+      "BankSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Owned Bank state from GetState; observation never executes NPC talk, navigates or mutates savings. All Bank REST routes remain until independently verified retirement.",
+        "properties": {
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "character_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "money": {
+            "type": "integer"
+          },
+          "deposit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "max_deposit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "npc_name": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "dialogues": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 1024
+            }
+          }
+        },
+        "required": [
+          "parent",
+          "character_id",
+          "money",
+          "deposit",
+          "max_deposit",
+          "npc_name",
+          "dialogues"
         ]
       },
       "SelectedSceneSubject": {

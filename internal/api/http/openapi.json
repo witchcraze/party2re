@@ -328,6 +328,52 @@
         ],
         "type": "object"
       },
+      "BankSceneData": {
+        "additionalProperties": false,
+        "description": "Owned Bank state from GetState; observation never executes NPC talk, navigates or mutates savings. All Bank REST routes remain until independently verified retirement.",
+        "properties": {
+          "character_id": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "deposit": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "dialogues": {
+            "items": {
+              "maxLength": 1024,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "max_deposit": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "money": {
+            "type": "integer"
+          },
+          "npc_name": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent",
+          "character_id",
+          "money",
+          "deposit",
+          "max_deposit",
+          "npc_name",
+          "dialogues"
+        ],
+        "type": "object"
+      },
       "BanquetToastResult": {
         "properties": {
           "banquet_id": {
@@ -4958,6 +5004,9 @@
                       "$ref": "#/components/schemas/SelectionSceneData"
                     },
                     {
+                      "$ref": "#/components/schemas/BankSceneData"
+                    },
+                    {
                       "$ref": "#/components/schemas/HomeSceneData"
                     },
                     {
@@ -5027,6 +5076,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/SelectionSceneData"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "bank"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/BankSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
                 }
               }
             }

@@ -56,3 +56,28 @@ Savings are stored per character (`Character.Deposit int64`) rather than at the 
 - Deposits and withdrawals operate strictly within the `characters` table using Rank 2 row locking (`SELECT ... FOR UPDATE`).
 - Each standalone bank operation locks one character row. Composite operations must still follow the global lock hierarchy; a single-row repository does not certify deadlock freedom for an arbitrary caller.
 - Character bank deposits are included in wealth rankings (`characters.money + characters.deposit`).
+
+## Observation and retained routes
+
+Selecting `bank` exposes the owned character's wallet, savings, savings limit,
+NPC name and complete dialogue list through character context. GET and command
+refresh use the same existing `GetState` reader; observation never deposits,
+withdraws, chooses a random dialogue or updates navigation. Required read failure
+prevents partial observation. See the [context and recovery contract](../architecture/client-agent-api.md).
+
+All five Bank REST operations remain: state GET and deposit, withdraw, inspect
+and talk POSTs. Deposit/withdraw commands already use the Gateway; observation
+coverage alone does not authorize retirement of any route. Dialogue commands
+still require legacy cooldown, presence and log reconciliation under #947.
+
+The local behavioral reference is `party2/party2/lib/bank.cgi`: header display
+(lines 39–42) maps to wallet/savings observation; the only facility-specific
+actions `あずける` and `ひきだす` (lines 30–33) map to the existing Deposit/Withdraw
+services and Gateway commands. NPC name, limit and words come from lines 8–24.
+`party.cgi:13–30` loads the current facility and shared action/request lifecycle.
+Shared `はなす` uses a random word (`lib/system.cgi:240–246`); NPC `しらべる`
+uses the default nothing-found response (`322–328,413`), while the current Go
+inspect returns NPC metadata. The observation exposes existing service facts;
+it does not claim parity for these commands or reproduce their side effects.
+Shared navigation uses the approved ordinary selector; presence effects remain
+separate. Whisper, logout and screenshot are outside Bank's responsibility.

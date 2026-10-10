@@ -181,8 +181,17 @@ mailbox destinations; its mailbox scenes contain bounded letters and next-page
 inputs. The four ordinary Shops expose one ID-ordered, offset-paged `items`
 collection, or one selected `product`, with exact GetCatalog prices/slot,
 explicit select/purchase inputs, NPC inspect facts and service quantity bounds.
-Home and Shop report `support.observation:details`. Bank data contains only the
-registered `parent`, with `support.observation:controls`.
+Home, Shop and Bank report `support.observation:details`. Bank facility data
+contains `parent` and the owned `GetState` facts: `character_id`, wallet `money`,
+int64 `deposit` and `max_deposit`, `npc_name` and the complete `dialogues` array.
+The reader passes the incoming context and owned actor to the existing Bank
+service. It does not invoke random NPC talk or change selection or savings.
+Required Bank read failures fail the whole observation; missing configuration
+returns 501. Actual activity overrides saved Bank selection before this reader
+runs. Deposit/withdraw refresh uses this same projection, with known outcomes
+preserved if the read fails and GET-only recovery after the source recovers.
+Bank talk/inspect action effects and all five REST routes still require their
+independent replacement/retirement verification under #947.
 
 Town's primary collection is `data.destinations`, ordered by destination ID,
 with explicit `enter_params`, observation support and offset page/next inputs.
