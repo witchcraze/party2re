@@ -185,7 +185,7 @@ func TestGuildService_PendingSuccessionIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	guildName := fmt.Sprintf("IntegSucc_%s", leaderChar.ID[:8])
+	guildName := fmt.Sprintf("IntgS_%s", leaderChar.ID[:8])
 
 	// 1. Create Guild
 	g, _, _, err := service.Create(ctx, leaderChar.ID, guildName)

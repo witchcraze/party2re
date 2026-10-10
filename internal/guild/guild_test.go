@@ -328,7 +328,8 @@ func TestService_Create_Validation(t *testing.T) {
 			{"japanese fullwidth space", "騎士団　本部"},
 			{"tab character", "Knights\tRound"},
 			{"newline character", "Knights\nRound"},
-			{"too long name (33 runes)", strings.Repeat("A", 33)},
+			{"too long name (17 runes ascii)", strings.Repeat("A", 17)},
+			{"too long name (17 runes japanese)", strings.Repeat("あ", 17)},
 			{"prohibited comma", "Knights,Round"},
 			{"prohibited semicolon", "Knights;Round"},
 			{"prohibited double quote", `"Knights"`},
@@ -426,6 +427,81 @@ func TestService_Create_Validation(t *testing.T) {
 			t.Errorf("expected Points 0, Color #FFFFFF, got %+v", g)
 		}
 	})
+
+	t.Run("Success with 16 ascii characters", func(t *testing.T) {
+		name16 := strings.Repeat("A", 16)
+		repo := &mockGuildRepo{
+			createGuildFn: func(_ context.Context, g guild.Guild, m guild.Member, fee int) (guild.Guild, guild.Member, corecharacter.Character, error) {
+				return g, m, corecharacter.Character{ID: m.CharacterID, Money: 5000}, nil
+			},
+		}
+		svc, _ := guild.NewService(repo)
+		g, _, _, err := svc.Create(ctx, "char1", name16)
+		if err != nil {
+			t.Fatalf("Create() unexpected error for 16 ascii chars: %v", err)
+		}
+		if g.Name != name16 {
+			t.Errorf("got name %q, want %q", g.Name, name16)
+		}
+	})
+
+	t.Run("Success with 16 multibyte characters", func(t *testing.T) {
+		name16 := strings.Repeat("あ", 16)
+		repo := &mockGuildRepo{
+			createGuildFn: func(_ context.Context, g guild.Guild, m guild.Member, fee int) (guild.Guild, guild.Member, corecharacter.Character, error) {
+				return g, m, corecharacter.Character{ID: m.CharacterID, Money: 5000}, nil
+			},
+		}
+		svc, _ := guild.NewService(repo)
+		g, _, _, err := svc.Create(ctx, "char1", name16)
+		if err != nil {
+			t.Fatalf("Create() unexpected error for 16 multibyte chars: %v", err)
+		}
+		if g.Name != name16 {
+			t.Errorf("got name %q, want %q", g.Name, name16)
+		}
+	})
+}
+
+func TestService_ExistingLongGuildNamePreserved(t *testing.T) {
+	ctx := context.Background()
+	longName := strings.Repeat("あ", 32)
+	repo := &mockGuildRepo{
+		getGuildFn: func(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
+			return guild.Guild{ID: guildID, Name: longName}, []guild.Member{{CharacterID: "c1", Role: guild.RoleLeader}}, nil
+		},
+		getGuildByCharFn: func(_ context.Context, characterID string) (guild.Guild, guild.Member, error) {
+			return guild.Guild{ID: "g1", Name: longName}, guild.Member{GuildID: "g1", CharacterID: characterID, Role: guild.RoleLeader}, nil
+		},
+		listGuildsFn: func(_ context.Context, offset, limit int) ([]guild.Guild, error) {
+			return []guild.Guild{{ID: "g1", Name: longName}}, nil
+		},
+	}
+	svc, _ := guild.NewService(repo)
+
+	detail, err := svc.Get(ctx, "g1")
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if detail.Guild.Name != longName {
+		t.Errorf("Get() detail.Guild.Name = %q, want %q", detail.Guild.Name, longName)
+	}
+
+	g, _, err := svc.GetByCharacter(ctx, "c1")
+	if err != nil {
+		t.Fatalf("GetByCharacter() unexpected error: %v", err)
+	}
+	if g.Name != longName {
+		t.Errorf("GetByCharacter() g.Name = %q, want %q", g.Name, longName)
+	}
+
+	list, err := svc.List(ctx, 0, 10)
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(list) != 1 || list[0].Name != longName {
+		t.Errorf("List() list[0].Name = %q, want %q", list[0].Name, longName)
+	}
 }
 
 func TestService_Join(t *testing.T) {
@@ -1047,10 +1123,11 @@ func TestValidateGuildName(t *testing.T) {
 		wantOutput string
 	}{
 		{"valid ascii name", "Knights", nil, "Knights"},
-		{"valid japanese name", "勇者のギルド", nil, "勇者のギルド"},
-		{"valid max 32 runes", strings.Repeat("あ", 32), nil, strings.Repeat("あ", 32)},
+		{"valid max 16 runes ascii", strings.Repeat("a", 16), nil, strings.Repeat("a", 16)},
+		{"valid max 16 runes japanese", strings.Repeat("あ", 16), nil, strings.Repeat("あ", 16)},
 		{"nfc normalized", "Ka\u0301", nil, "Ká"},
-		{"exceeds 32 runes", strings.Repeat("あ", 33), guild.ErrInvalidGuildName, ""},
+		{"exceeds 16 runes ascii", strings.Repeat("a", 17), guild.ErrInvalidGuildName, ""},
+		{"exceeds 16 runes japanese", strings.Repeat("あ", 17), guild.ErrInvalidGuildName, ""},
 		{"empty name", "", guild.ErrInvalidGuildName, ""},
 		{"whitespace only", "   ", guild.ErrInvalidGuildName, ""},
 		{"leading space", " Knights", guild.ErrInvalidGuildName, ""},

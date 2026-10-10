@@ -873,7 +873,7 @@ func TestConcurrencyStressGuildConcurrentDepartures(t *testing.T) {
 	now := time.Now().UTC()
 
 	for gIdx := 0; gIdx < numGuilds; gIdx++ {
-		gName := fmt.Sprintf("StressDep_%s_%d", suffix, gIdx)
+		gName := fmt.Sprintf("SD%d_%s", gIdx, suffix)
 		createdG, leaderChar, err := CreateTestGuildWithLeader(ctx, db, gName, 50000)
 		if err != nil {
 			t.Fatalf("failed to create test guild %d: %v", gIdx, err)

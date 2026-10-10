@@ -13,7 +13,7 @@ Guild creation adheres strictly to authentic legacy constraints and shared valid
 - **Creation Fee**: 5,000 Gold (`CreationFee`) deducted atomically from the creator's wallet.
 - **Pre-condition**: Creator must not currently belong to or lead any guild.
 - **Name Constraints**:
-  - Length: 1 to 32 runes (`MaxNameLength = 32`).
+  - Length: 1 to 16 runes (`MaxNameLength = 16`, `join_guild.cgi:26`).
   - Whitespace: ASCII whitespace (`\s`) and Japanese fullwidth spaces (`\u3000`) are rejected (both surrounding and internal).
   - Prohibited Characters: `[,;\"\'&<>\\\/@＠]` are rejected.
   - Unicode Security: Normalized via Unicode NFC; C0/C1 control characters, zero-width characters, bidirectional overrides, and Zalgo text (>2 consecutive combining marks) are rejected.

@@ -27,7 +27,7 @@ func (r Role) Valid() bool {
 
 const (
 	CreationFee               = 5000 // Gold required to create a guild (5,000G in join_guild.cgi)
-	MaxNameLength             = 32   // Maximum characters for guild name
+	MaxNameLength             = 16   // Maximum characters for guild name (join_guild.cgi:26 $max_guild_name = 16)
 	MaxNoticeLength           = 200  // Maximum characters for guild notice (200 in guild.cgi)
 	MaxRoleTitleWidth         = 12   // Maximum visual width for custom role title (6 full-width / 12 half-width characters)
 	DefaultTitleLeader        = "ギルマス"
@@ -42,7 +42,7 @@ const (
 
 var (
 	ErrInvalidGuildID            = errors.New("invalid guild ID")
-	ErrInvalidGuildName          = errors.New("guild name must be between 1 and 32 characters")
+	ErrInvalidGuildName          = errors.New("guild name must be between 1 and 16 characters")
 	ErrNoticeTooLong             = errors.New("guild notice exceeds maximum allowed length")
 	ErrGuildNotFound             = errors.New("guild not found")
 	ErrGuildNameTaken            = errors.New("guild name is already taken")
@@ -87,7 +87,7 @@ func CalculateTitleWidth(s string) int {
 }
 
 // ValidateGuildName validates guild name constraints according to legacy specifications (join_guild.cgi:246-250)
-// and shared validation security standards (Unicode NFC, max 32 runes, no whitespace, no prohibited symbols, no control/bidi/zalgo).
+// and shared validation security standards (Unicode NFC, max 16 runes, no whitespace, no prohibited symbols, no control/bidi/zalgo).
 func ValidateGuildName(name string) (string, error) {
 	normName, err := validation.ValidateGuildName(name)
 	if err != nil {
