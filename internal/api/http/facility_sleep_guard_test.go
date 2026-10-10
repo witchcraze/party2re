@@ -112,8 +112,8 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		// Depot
 		{"depot_deposit", http.MethodPost, "/characters/char-1/depot/deposit", `{"item_id":"item-1"}`},
 		{"depot_withdraw", http.MethodPost, "/characters/char-1/depot/withdraw", `{"item_id":"item-1"}`},
-		{"depot_sell", http.MethodPost, "/characters/char-1/depot/sell", `{"item_id":"item-1"}`},
-		{"depot_sell_batch", http.MethodPost, "/characters/char-1/depot/sell-batch", `{"item_ids":["item-1"]}`},
+		{"depot_sell", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_sell","params":{"item_id":"item-1"}}`},
+		{"depot_sell_batch", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_sell_batch","params":{"item_ids":["item-1"]}}`},
 		{"depot_sort", http.MethodPost, "/characters/char-1/depot/sort", `{}`},
 		{"depot_expand", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_expand"}`},
 		{"depot_send_money", http.MethodPost, "/characters/char-1/depot/send-money", `{"recipient_character_id":"char-2","amount":100}`},

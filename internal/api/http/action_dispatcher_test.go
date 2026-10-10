@@ -25,6 +25,7 @@ type gatewayFixture struct {
 	HomeService
 	char                                             corecharacter.Character
 	queryCalls, profileCalls, executions, sleepCalls int
+	characterCalls                                   int
 	queryErr, profileErr, executionErr, sleepErr     error
 	queryOwner                                       string
 	profileOwner                                     string
@@ -57,6 +58,7 @@ func (f *gatewayFixture) Authenticate(ctx context.Context, token string) (corepl
 
 func (f *gatewayFixture) Get(ctx context.Context, id string) (corecharacter.Character, error) {
 	f.checkContext(ctx)
+	f.characterCalls++
 	if id == "missing" {
 		return corecharacter.Character{}, corecharacter.ErrNotFound
 	}

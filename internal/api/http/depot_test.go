@@ -17,8 +17,6 @@ import (
 type stubDepotService struct {
 	depositItemFn  func(ctx context.Context, characterID, itemID string) (depot.Depot, error)
 	withdrawItemFn func(ctx context.Context, characterID, itemID string) (depot.Depot, error)
-	sellItemFn     func(ctx context.Context, characterID, itemID string) (depot.Depot, int, error)
-	sellItemsFn    func(ctx context.Context, characterID string, itemIDs []string) (depot.Depot, int, error)
 	sortItemsFn    func(ctx context.Context, characterID string) (depot.Depot, error)
 	sendMoneyFn    func(ctx context.Context, fromID, toID string, amount int) (depot.Depot, error)
 	sendItemFn     func(ctx context.Context, fromID, toID, itemID string) (depot.Depot, error)
@@ -43,16 +41,10 @@ func (s *stubDepotService) WithdrawItem(ctx context.Context, characterID, itemID
 }
 
 func (s *stubDepotService) SellItem(ctx context.Context, characterID, itemID string) (depot.Depot, int, error) {
-	if s.sellItemFn != nil {
-		return s.sellItemFn(ctx, characterID, itemID)
-	}
 	return depot.Depot{CharacterID: characterID, Capacity: 50}, 250, nil
 }
 
 func (s *stubDepotService) SellItems(ctx context.Context, characterID string, itemIDs []string) (depot.Depot, int, error) {
-	if s.sellItemsFn != nil {
-		return s.sellItemsFn(ctx, characterID, itemIDs)
-	}
 	return depot.Depot{CharacterID: characterID, Capacity: 50}, 500, nil
 }
 
@@ -138,39 +130,6 @@ func TestDepotEndpoints(t *testing.T) {
 	t.Run("POST /characters/{id}/depot/withdraw success", func(t *testing.T) {
 		body, _ := json.Marshal(map[string]string{"item_id": "item-1"})
 		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/withdraw", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer dummy-token")
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("POST /characters/{id}/depot/sell success", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]string{"item_id": "item-1"})
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/sell", bytes.NewReader(body))
-		req.Header.Set("Authorization", "Bearer dummy-token")
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
-		}
-		var resp map[string]any
-		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		if int(resp["gold_earned"].(float64)) != 250 {
-			t.Errorf("expected 250 gold_earned, got %v", resp["gold_earned"])
-		}
-	})
-
-	t.Run("POST /characters/{id}/depot/sell-batch success", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]any{"item_ids": []string{"item-1", "item-2"}})
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/sell-batch", bytes.NewReader(body))
 		req.Header.Set("Authorization", "Bearer dummy-token")
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()

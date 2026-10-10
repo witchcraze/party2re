@@ -223,9 +223,10 @@ The quote uses the public expansion price reader and is null at the purchased
 expansion cap. It grants no reservation: execution charges the current tier
 inside the existing service transaction. Clients explicitly enter Depot and
 read GET context for status, and submit `depot_expand` to the Gateway to purchase;
-the former Depot status GET and expansion POST return 404. Seven inventory/transfer
-REST operations remain: sales have Gateway replacements pending separate route
-retirement, while deposit/withdraw/send/sort still need command adapters;
+the former Depot status GET, expansion POST and single/batch sale POST routes
+return 404. Sales use `depot_sell` and `depot_sell_batch` through the Gateway.
+Five inventory/transfer REST operations remain: deposit/withdraw/send/sort still
+need command adapters and verified retirement;
 [Depot design](../design/depot.md#gateway-observation-and-retained-operations)
 records those operations and the remaining order/equipment/withdrawal gaps.
 
