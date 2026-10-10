@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -264,14 +263,11 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 					if ce.Category == "takarakuji" {
 						t.Errorf("winner %s prize %s recorded with invalid category takarakuji", w.CharacterID, w.ItemID)
 					}
-					if strings.HasPrefix(w.ItemID, "weapon") && ce.Category != "weapon" {
-						t.Errorf("winner %s weapon prize %s recorded with wrong category %s; want weapon", w.CharacterID, w.ItemID, ce.Category)
-					}
-					if strings.HasPrefix(w.ItemID, "armor") && ce.Category != "armor" {
-						t.Errorf("winner %s armor prize %s recorded with wrong category %s; want armor", w.CharacterID, w.ItemID, ce.Category)
-					}
-					if strings.HasPrefix(w.ItemID, "item") && ce.Category != "item" {
-						t.Errorf("winner %s item prize %s recorded with wrong category %s; want item", w.CharacterID, w.ItemID, ce.Category)
+					def, err := itemCatalog.FindByID(w.ItemID)
+					if err == nil {
+						if ce.Category != def.Category() {
+							t.Errorf("winner %s prize %s recorded with wrong category %s; want %s", w.CharacterID, w.ItemID, ce.Category, def.Category())
+						}
 					}
 				}
 			}

@@ -83,6 +83,42 @@ Faithfully reproduces legacy Party2 (`lib/_add_monster_book.cgi`, `lib/collectio
   - Upon reaching 71 weapons: publishes news `"{CharacterName}が武器図鑑をコンプリートしました！"` and inducts into Hall of Fame under `comp_wea` (ウェポンキラー).
   - Upon reaching 55 armors: publishes news `"{CharacterName}が防具図鑑をコンプリートしました！"` and inducts into Hall of Fame under `comp_arm` (アーマーキング).
   - Upon reaching 141 items: publishes news `"{CharacterName}がアイテム図鑑をコンプリートしました！"` and inducts into Hall of Fame under `comp_ite` (アイテムニスト).
+- **Completion Induction Finalization Boundary & Recoverability (#1238)**:
+  - **Mandatory Induction vs. Informational Broadcast**: Hall of Fame induction (`RecordLegend`) is a mandatory persistent milestone. It must succeed before marking the completion milestone in `character_collection_completions`. If `RecordLegend` fails, completion is not marked and the error is returned to the caller, preventing legend failures from being masked as success.
+  - **Best-Effort News**: Server news broadcasting (`PublishNews`) is informational best-effort; failures do not abort completion and news is only broadcast upon initial completion.
+  - **Reprocessing Recovery**: If a transient persistence failure interrupts legend induction, `character_collection_completions` remains unrecorded. Subsequent defeats or discoveries re-evaluate the threshold, retry legend induction, and successfully finalize completion once without duplicates.
+  - **Existing Data Recovery Procedure**: For characters that were completed prior to this consistency fix and lost Hall of Fame induction, `collection.Service.RecoverMissingLegends(ctx, characterID)` inspects all completed milestones and idempotently writes missing `legend_records`. For database-wide batch administrative repair:
+    ```sql
+    INSERT IGNORE INTO legend_records (category, character_id, character_name, guild_name, color, icon, message, inducted_at)
+    SELECT 
+        CASE ccc.kind
+            WHEN 'monster_book' THEN 'comp_mon'
+            WHEN 'weapon' THEN 'comp_wea'
+            WHEN 'armor' THEN 'comp_arm'
+            WHEN 'item' THEN 'comp_ite'
+        END AS category,
+        c.id AS character_id,
+        c.name AS character_name,
+        COALESCE(g.name, '') AS guild_name,
+        COALESCE(c.color, '#ffffff') AS color,
+        COALESCE(cp.avatar_url, '') AS icon,
+        COALESCE(cp.comment, '') AS message,
+        ccc.completed_at AS inducted_at
+    FROM character_collection_completions ccc
+    JOIN characters c ON ccc.character_id = c.id
+    LEFT JOIN character_profiles cp ON c.id = cp.character_id
+    LEFT JOIN guild_members gm ON c.id = gm.character_id AND gm.is_pending = FALSE
+    LEFT JOIN guilds g ON gm.guild_id = g.id
+    LEFT JOIN legend_records lr ON lr.character_id = ccc.character_id AND lr.category = (
+        CASE ccc.kind
+            WHEN 'monster_book' THEN 'comp_mon'
+            WHEN 'weapon' THEN 'comp_wea'
+            WHEN 'armor' THEN 'comp_arm'
+            WHEN 'item' THEN 'comp_ite'
+        END
+    )
+    WHERE lr.id IS NULL;
+    ```
   - Milestone recordings are persisted idempotently in `character_collection_completions` (`PRIMARY KEY (character_id, kind)`) so subsequent defeats or discoveries never trigger duplicate news notifications or duplicate legend inductions.
 
 ---

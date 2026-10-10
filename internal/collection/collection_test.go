@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,12 +13,23 @@ import (
 )
 
 type mockCollectionRepo struct {
-	monsters    map[string]collection.MonsterBookEntry
-	items       map[string]collection.ItemCollectionEntry
-	completions map[string]bool // key: charID + ":" + kind
+	mu                   sync.Mutex
+	monsters             map[string]collection.MonsterBookEntry
+	items                map[string]collection.ItemCollectionEntry
+	completions          map[string]bool // key: charID + ":" + kind
+	getMonsterCountErr   error
+	getItemCountErr      error
+	getItemCollectionErr error
+	markCompletedErr     error
+	isCompletedErr       error
 }
 
 func (m *mockCollectionRepo) RecordMonsterDefeat(_ context.Context, charID string, record collection.DefeatedMonsterRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.monsters == nil {
+		m.monsters = make(map[string]collection.MonsterBookEntry)
+	}
 	e, ok := m.monsters[record.MonsterID]
 	if !ok {
 		e = collection.MonsterBookEntry{
@@ -47,6 +59,8 @@ func (m *mockCollectionRepo) RecordMonsterDefeat(_ context.Context, charID strin
 }
 
 func (m *mockCollectionRepo) GetMonsterBook(_ context.Context, _ string) ([]collection.MonsterBookEntry, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	var list []collection.MonsterBookEntry
 	for _, v := range m.monsters {
 		list = append(list, v)
@@ -55,10 +69,20 @@ func (m *mockCollectionRepo) GetMonsterBook(_ context.Context, _ string) ([]coll
 }
 
 func (m *mockCollectionRepo) GetMonsterBookCount(_ context.Context, _ string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.getMonsterCountErr != nil {
+		return 0, m.getMonsterCountErr
+	}
 	return len(m.monsters), nil
 }
 
 func (m *mockCollectionRepo) RecordItemDiscovered(_ context.Context, charID, itemID, itemName, category string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.items == nil {
+		m.items = make(map[string]collection.ItemCollectionEntry)
+	}
 	if _, ok := m.items[itemID]; !ok {
 		m.items[itemID] = collection.ItemCollectionEntry{
 			CharacterID:  charID,
@@ -72,6 +96,11 @@ func (m *mockCollectionRepo) RecordItemDiscovered(_ context.Context, charID, ite
 }
 
 func (m *mockCollectionRepo) GetItemCollection(_ context.Context, _, category string) ([]collection.ItemCollectionEntry, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.getItemCollectionErr != nil {
+		return nil, m.getItemCollectionErr
+	}
 	var list []collection.ItemCollectionEntry
 	for _, v := range m.items {
 		if category == "" || strings.EqualFold(v.Category, category) {
@@ -82,6 +111,11 @@ func (m *mockCollectionRepo) GetItemCollection(_ context.Context, _, category st
 }
 
 func (m *mockCollectionRepo) GetItemCollectionCount(_ context.Context, _, category string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.getItemCountErr != nil {
+		return 0, m.getItemCountErr
+	}
 	if category == "" {
 		return len(m.items), nil
 	}
@@ -95,6 +129,14 @@ func (m *mockCollectionRepo) GetItemCollectionCount(_ context.Context, _, catego
 }
 
 func (m *mockCollectionRepo) MarkCompleted(_ context.Context, charID, kind string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.markCompletedErr != nil {
+		return false, m.markCompletedErr
+	}
+	if m.completions == nil {
+		m.completions = make(map[string]bool)
+	}
 	key := charID + ":" + kind
 	if m.completions[key] {
 		return false, nil
@@ -104,10 +146,19 @@ func (m *mockCollectionRepo) MarkCompleted(_ context.Context, charID, kind strin
 }
 
 func (m *mockCollectionRepo) IsCompleted(_ context.Context, charID, kind string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.isCompletedErr != nil {
+		return false, m.isCompletedErr
+	}
+	if m.completions == nil {
+		return false, nil
+	}
 	return m.completions[charID+":"+kind], nil
 }
 
 type mockNewsPublisher struct {
+	mu       sync.Mutex
 	articles []newsArticle
 }
 
@@ -120,6 +171,8 @@ type newsArticle struct {
 }
 
 func (p *mockNewsPublisher) PublishNews(_ context.Context, category, title, content, author string, publishedAt time.Time) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.articles = append(p.articles, newsArticle{
 		Category:    category,
 		Title:       title,
@@ -128,6 +181,14 @@ func (p *mockNewsPublisher) PublishNews(_ context.Context, category, title, cont
 		PublishedAt: publishedAt,
 	})
 	return nil
+}
+
+func (p *mockNewsPublisher) getArticles() []newsArticle {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	copied := make([]newsArticle, len(p.articles))
+	copy(copied, p.articles)
+	return copied
 }
 
 type mockCharRepo struct {
@@ -142,7 +203,11 @@ func (r *mockCharRepo) FindByID(_ context.Context, id string) (corecharacter.Cha
 }
 
 type mockLegendInductor struct {
-	inductions []legendCall
+	mu            sync.Mutex
+	inductions    []legendCall
+	recordErr     error
+	failCountdown int
+	hasCountdown  bool
 }
 
 type legendCall struct {
@@ -151,8 +216,26 @@ type legendCall struct {
 }
 
 func (m *mockLegendInductor) RecordLegend(_ context.Context, category, characterID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.hasCountdown {
+		if m.failCountdown > 0 {
+			m.failCountdown--
+			return m.recordErr
+		}
+	} else if m.recordErr != nil {
+		return m.recordErr
+	}
 	m.inductions = append(m.inductions, legendCall{Category: category, CharacterID: characterID})
 	return nil
+}
+
+func (m *mockLegendInductor) getInductions() []legendCall {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	copied := make([]legendCall, len(m.inductions))
+	copy(copied, m.inductions)
+	return copied
 }
 
 func TestCollectionService_Defaults(t *testing.T) {
