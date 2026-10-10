@@ -15,21 +15,16 @@ import (
 )
 
 type stubDepotService struct {
-	getDepotFn     func(ctx context.Context, characterID string) (depot.Depot, error)
 	depositItemFn  func(ctx context.Context, characterID, itemID string) (depot.Depot, error)
 	withdrawItemFn func(ctx context.Context, characterID, itemID string) (depot.Depot, error)
 	sellItemFn     func(ctx context.Context, characterID, itemID string) (depot.Depot, int, error)
 	sellItemsFn    func(ctx context.Context, characterID string, itemIDs []string) (depot.Depot, int, error)
 	sortItemsFn    func(ctx context.Context, characterID string) (depot.Depot, error)
-	expandFn       func(ctx context.Context, characterID string) (depot.Depot, error)
 	sendMoneyFn    func(ctx context.Context, fromID, toID string, amount int) (depot.Depot, error)
 	sendItemFn     func(ctx context.Context, fromID, toID, itemID string) (depot.Depot, error)
 }
 
 func (s *stubDepotService) GetDepot(ctx context.Context, characterID string) (depot.Depot, error) {
-	if s.getDepotFn != nil {
-		return s.getDepotFn(ctx, characterID)
-	}
 	return depot.Depot{CharacterID: characterID, Capacity: 50}, nil
 }
 
@@ -69,9 +64,6 @@ func (s *stubDepotService) SortItems(ctx context.Context, characterID string) (d
 }
 
 func (s *stubDepotService) Expand(ctx context.Context, characterID string) (depot.Depot, error) {
-	if s.expandFn != nil {
-		return s.expandFn(ctx, characterID)
-	}
 	return depot.Depot{CharacterID: characterID, Capacity: 55, ExDepot: 1}, nil
 }
 
@@ -111,24 +103,6 @@ func TestDepotEndpoints(t *testing.T) {
 		t.Fatalf("failed to create handler: %v", err)
 	}
 	router := h.Router()
-
-	t.Run("GET /characters/{id}/depot success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/characters/c1/depot", nil)
-		req.Header.Set("Authorization", "Bearer dummy-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
-		}
-		var resp map[string]any
-		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		if resp["character_id"] != "c1" {
-			t.Errorf("expected character_id c1, got %v", resp["character_id"])
-		}
-	})
 
 	t.Run("POST /characters/{id}/depot/deposit success", func(t *testing.T) {
 		body, _ := json.Marshal(map[string]string{"item_id": "item-1"})
@@ -218,24 +192,6 @@ func TestDepotEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /characters/{id}/depot/expand success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/expand", nil)
-		req.Header.Set("Authorization", "Bearer dummy-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
-		}
-		var resp map[string]any
-		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		if int(resp["capacity"].(float64)) != 55 {
-			t.Errorf("expected 55 capacity, got %v", resp["capacity"])
-		}
-	})
-
 	t.Run("POST /characters/{id}/depot/send-money success", func(t *testing.T) {
 		body, _ := json.Marshal(map[string]any{"recipient_character_id": "c2", "amount": 1000})
 		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/send-money", bytes.NewReader(body))
@@ -263,7 +219,7 @@ func TestDepotEndpoints(t *testing.T) {
 	})
 
 	t.Run("Unauthenticated returns 401", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/characters/c1/depot", nil)
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/deposit", bytes.NewReader([]byte(`{"item_id":"item-1"}`)))
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
@@ -277,7 +233,7 @@ func TestDepotEndpoints(t *testing.T) {
 			authenticateFn: alwaysAuthPlayer(coreplayer.Player{ID: "p-other", Username: "other"}),
 		}
 		hOther, _ := apihttp.NewHandler(pServiceOther, cService, &stubAdventureService{}, &stubShopService{}, apihttp.WithDepot(depotSvc))
-		req := httptest.NewRequest(http.MethodGet, "/characters/c1/depot", nil)
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/deposit", bytes.NewReader([]byte(`{"item_id":"item-1"}`)))
 		req.Header.Set("Authorization", "Bearer dummy-token")
 		rec := httptest.NewRecorder()
 		hOther.Router().ServeHTTP(rec, req)

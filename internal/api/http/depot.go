@@ -113,30 +113,12 @@ func mapDepotHTTPError(w http.ResponseWriter, err error) {
 		errors.Is(err, depot.ErrInvalidAmount) ||
 		errors.Is(err, depot.ErrInvalidCharacterID) ||
 		errors.Is(err, depot.ErrInvalidItemInstanceID) ||
-		errors.Is(err, depot.ErrDepotMaxExpanded) ||
 		errors.Is(err, depot.ErrSelfTransferNotAllowed) ||
 		errors.Is(err, depot.ErrEmptyItemList) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	writeError(w, http.StatusInternalServerError, err)
-}
-
-func (h *Handler) handleGetDepot(w http.ResponseWriter, r *http.Request) {
-	if h.depot == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("depot service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		dep, err := h.depot.GetDepot(r.Context(), char.ID)
-		if err != nil {
-			mapDepotHTTPError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, toDepotResponse(dep))
-	})
 }
 
 func (h *Handler) handleDepositDepotItem(w http.ResponseWriter, r *http.Request) {
@@ -242,23 +224,6 @@ func (h *Handler) handleSortDepot(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
 	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		dep, err := h.depot.SortItems(r.Context(), char.ID)
-		if err != nil {
-			mapDepotHTTPError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, toDepotResponse(dep))
-	})
-}
-
-func (h *Handler) handleExpandDepot(w http.ResponseWriter, r *http.Request) {
-	if h.depot == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("depot service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		dep, err := h.depot.Expand(r.Context(), char.ID)
 		if err != nil {
 			mapDepotHTTPError(w, err)
 			return

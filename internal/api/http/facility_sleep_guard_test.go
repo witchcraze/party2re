@@ -115,7 +115,7 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		{"depot_sell", http.MethodPost, "/characters/char-1/depot/sell", `{"item_id":"item-1"}`},
 		{"depot_sell_batch", http.MethodPost, "/characters/char-1/depot/sell-batch", `{"item_ids":["item-1"]}`},
 		{"depot_sort", http.MethodPost, "/characters/char-1/depot/sort", `{}`},
-		{"depot_expand", http.MethodPost, "/characters/char-1/depot/expand", `{}`},
+		{"depot_expand", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"depot_expand"}`},
 		{"depot_send_money", http.MethodPost, "/characters/char-1/depot/send-money", `{"recipient_character_id":"char-2","amount":100}`},
 		{"depot_send_item", http.MethodPost, "/characters/char-1/depot/send-item", `{"recipient_character_id":"char-2","item_id":"item-1"}`},
 		// Plantation

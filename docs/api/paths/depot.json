@@ -1,41 +1,4 @@
 {
-  "/characters/{id}/depot": {
-    "get": {
-      "operationId": "getCharactersIdDepot",
-      "parameters": [
-        {
-          "description": "id parameter",
-          "in": "path",
-          "name": "id",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "responses": {
-        "200": {
-          "description": "Successful operation"
-        },
-        "400": {
-          "description": "Bad request"
-        },
-        "401": {
-          "description": "Unauthorized"
-        },
-        "403": {
-          "description": "Forbidden"
-        },
-        "500": {
-          "description": "Internal server error"
-        }
-      },
-      "summary": "GET /characters/{id}/depot endpoint",
-      "tags": [
-        "Depot"
-      ]
-    }
-  },
   "/characters/{id}/depot/deposit": {
     "post": {
       "operationId": "postCharactersIdDepotDeposit",
@@ -87,43 +50,6 @@
         }
       },
       "summary": "POST /characters/{id}/depot/deposit endpoint",
-      "tags": [
-        "Depot"
-      ]
-    }
-  },
-  "/characters/{id}/depot/expand": {
-    "post": {
-      "operationId": "postCharactersIdDepotExpand",
-      "parameters": [
-        {
-          "description": "id parameter",
-          "in": "path",
-          "name": "id",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "responses": {
-        "200": {
-          "description": "Successful operation"
-        },
-        "400": {
-          "description": "Bad request"
-        },
-        "401": {
-          "description": "Unauthorized"
-        },
-        "403": {
-          "description": "Forbidden"
-        },
-        "500": {
-          "description": "Internal server error"
-        }
-      },
-      "summary": "POST /characters/{id}/depot/expand endpoint",
       "tags": [
         "Depot"
       ]

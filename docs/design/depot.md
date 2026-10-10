@@ -120,24 +120,27 @@ activities/conflicts take priority over ordinary selection. The
 [navigation contract](../architecture/client-agent-api.md#selection-commands-and-typed-discovery)
 owns input, ownership and GET-only refresh recovery behavior.
 
-All nine Depot REST operations remain registered pending their own verified
-retirement. The `depot_expand` Gateway command delegates to `Expand`; owned
-context supplies the read-only quote and the shared
+Owned status uses explicit `scene_enter` for Depot followed by GET context;
+the old GET `/characters/{id}/depot` route is retired. The `depot_expand`
+Gateway command delegates to `Expand` and replaces POST
+`/characters/{id}/depot/expand`; owned context supplies the read-only quote.
+The seven remaining inventory/transfer REST operations await their own verified
+replacements. The shared
 [command contract](../architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions)
 owns explicit intent, guards and outcome recovery. Observation does not execute
 NPC, delivery, collection or scheduling effects. Legacy `depot.cgi:68–81` dispatch
 maps to the existing services as follows:
 
-| Legacy routine | Existing service | Retained operation |
+| Legacy routine | Existing service | Transport |
 | --- | --- | --- |
-| Listing/header, `get_depot_c` | GetDepot | GET `/characters/{id}/depot` |
+| Listing/header, `get_depot_c` | GetDepot | Selected Depot GET context; whole-list REST retired |
 | `azukeru` | DepositItem | POST `/characters/{id}/depot/deposit` |
 | `hikidasu` | WithdrawItem | POST `/characters/{id}/depot/withdraw` |
 | `uru` | SellItem | POST `/characters/{id}/depot/sell` |
 | `matomete_uru` | SellItems | POST `/characters/{id}/depot/sell-batch` |
 | `seiton` | SortItems | POST `/characters/{id}/depot/sort` |
 | `okuru` | SendMoney, SendItem | POST `/characters/{id}/depot/send-money`, `/characters/{id}/depot/send-item` |
-| `expansion_depot` | Expand, also through Gateway `depot_expand` | POST `/characters/{id}/depot/expand` |
+| `expansion_depot` | Expand | Gateway `depot_expand`; expansion REST retired |
 
 This mapping records transport coverage, not full legacy parity. Legacy
 `seiton` (`depot.cgi:313–332`) persists kind/item-number ordering; current
