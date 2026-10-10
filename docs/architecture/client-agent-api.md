@@ -565,6 +565,47 @@ clients use `POST /api/v1/characters/{id}/actions` with the explicit ActionID an
 amount. `bank_deposit`/`bank_withdraw` resolver links use that same Gateway URL.
 Only Bank talk/inspect REST operations remain pending their own reconciliation.
 
+### SecretShop purchase command contract
+
+`secretshop_purchase` accepts only explicit parameters such as
+`{ "item_id": "secret_item_herbal_root", "quantity": 1 }`. Both fields are
+required and non-null: a catalog ID string and a signed 64-bit integer. The
+existing service validates current item availability, job qualification, exact
+funds, quantities 1..99, price overflow and delivery capacity. The Gateway does
+not apply the retained REST route's omitted/nonpositive quantity default.
+
+The owned path supplies the actor. The adapter reads the presentation name before
+calling `PurchaseItem` once with the request context, then shares the REST
+purchase formatter. `result` retains `character_id`, `item`, `quantity`,
+`total_price`, `remaining_gold`, `inventory_instance_id`, `transferred_to_depot`
+and `npc_message`; inventory and depot acknowledgements retain their respective
+wording. It neither duplicates the service transaction nor reads presentation
+inputs after a successful mutation.
+
+| Service rejection | HTTP | Stable code |
+|---|---|---|
+| Job qualification denied | 403 | `SECRETSHOP_ACCESS_DENIED` |
+| Character no longer exists | 404 | `SECRETSHOP_CHARACTER_NOT_FOUND` |
+| Item absent from catalog | 404 | `SECRETSHOP_ITEM_NOT_FOUND` |
+| Active HelperQuest target | 409 | `SECRETSHOP_ITEM_UNAVAILABLE` |
+| Quantity outside 1..99 | 400 | `SECRETSHOP_INVALID_QUANTITY` |
+| Insufficient wallet funds | 400 | `SECRETSHOP_INSUFFICIENT_FUNDS` |
+| Total price overflow | 400 | `SECRETSHOP_PRICE_OVERFLOW` |
+| Depot full | 400 | `SECRETSHOP_DEPOT_FULL` |
+
+Required HelperQuest/store failures and an unconfigured depot are unexpected
+execution failures, not known rejections. Shared entry/Sleep/CanWake/work guards
+and the outcome/refresh contract apply unchanged. A failed name read stops before
+purchase; a failed post-command query/profile read preserves the known result or
+rejection with GET-only recovery. Nil SecretShop service remains 501.
+
+The ActionID-specific schema and resolver URL point to the Gateway independently
+of the retained purchase REST operation. Selected SecretShop observations and
+navigation are a separate migration unit: connection alone does not offer the
+purchase in the production town scene. All five SecretShop REST routes remain
+operational pending verified replacements; see [SecretShop design](../design/shops.md#74-purchase-transport-and-remaining-migration)
+for legacy differences and action reconciliation.
+
 ### Stage adventure command contract
 
 `adventure_start` accepts only `{ "stage_id": "stage-00" }`. A supplied non-null

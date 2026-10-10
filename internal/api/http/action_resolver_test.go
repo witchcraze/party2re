@@ -34,6 +34,14 @@ func TestActionURLResolver(t *testing.T) {
 			wantURL:    "/api/v1/characters/char-999/actions",
 		},
 		{
+			name:       "secret shop purchase action",
+			actionID:   "secretshop_purchase",
+			label:      "ヒミツの店で購入",
+			category:   "shop",
+			wantMethod: http.MethodPost,
+			wantURL:    "/api/v1/characters/char-999/actions",
+		},
+		{
 			name:       "shop weapon action",
 			actionID:   "shop_weapon",
 			label:      "武器屋を見る",

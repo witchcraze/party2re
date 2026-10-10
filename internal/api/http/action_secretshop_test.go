@@ -28,6 +28,7 @@ type secretShopGatewayFixture struct {
 	getCalls, requestedQuantity int
 	requestedItem               string
 	nameErr                     error
+	requestContext              context.Context
 }
 
 type secretShopGatewayDepot struct{ f *secretShopGatewayFixture }
@@ -84,6 +85,9 @@ func (f *secretShopGatewayFixture) Get(ctx context.Context, id string) (corechar
 
 func (f *secretShopGatewayFixture) PurchaseItem(ctx context.Context, id, itemID string, quantity int) (*secretshop.PurchaseResult, error) {
 	f.checkContext(ctx)
+	if f.requestContext != nil && ctx != f.requestContext {
+		f.t.Fatal("purchase lost request context")
+	}
 	if id != "hero" {
 		f.t.Fatal("wrong purchase actor")
 	}
@@ -114,7 +118,7 @@ func (f *secretShopGatewayFixture) request(router http.Handler, params string) (
 	if params != "" {
 		body += `,"params":` + params
 	}
-	return gatewayRequest(f.t, router, "hero", "session", "application/json", body+`}`, f.expectedContext)
+	return gatewayRequest(f.t, router, "hero", "session", "application/json", body+`}`, f.requestContext)
 }
 
 func TestSecretShopGatewayPurchaseAndGETRecovery(t *testing.T) {
@@ -122,7 +126,7 @@ func TestSecretShopGatewayPurchaseAndGETRecovery(t *testing.T) {
 		for _, failure := range []string{"", "query", "profile"} {
 			t.Run(fmt.Sprintf("%d/%s", quantity, failure), func(t *testing.T) {
 				f := newSecretShopGatewayFixture(t)
-				f.expectedContext = context.WithValue(context.Background(), struct{}{}, "secret shop request")
+				f.requestContext = context.WithValue(context.Background(), struct{}{}, "secret shop request")
 				f.afterExecute = func() {
 					if failure == "query" {
 						f.queryErr = errors.New("private query failure")
@@ -161,7 +165,7 @@ func TestSecretShopGatewayPurchaseAndGETRecovery(t *testing.T) {
 				} else if string(got["context"]) != "null" || !strings.Contains(string(got["context_error"]), "CONTEXT_REFRESH_FAILED") {
 					t.Fatalf("lost refresh failure: %s", got)
 				}
-				f.queryErr, f.profileErr, f.expectedContext = nil, nil, nil
+				f.queryErr, f.profileErr, f.requestContext = nil, nil, nil
 				if status, observation := navigationGET(t, router); status != 200 || observation.Character.Gold != result.RemainingGold || f.executions != 1 {
 					t.Fatalf("GET recovery replayed or lost purchase: %d %+v", status, observation)
 				}
