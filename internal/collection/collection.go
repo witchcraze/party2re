@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -158,6 +160,7 @@ type Service struct {
 	newsPub       NewsPublisher
 	charRepo      CharacterRepository
 	legend        LegendInductor
+	milestoneMu   sync.Mutex
 }
 
 func NewService(repo Repository, totalMonsters, totalItems int, opts ...Option) (*Service, error) {
@@ -286,6 +289,43 @@ func (s *Service) RecordItemDiscovered(ctx context.Context, characterID, itemID,
 	}
 }
 
+func parseItemNumber(itemID string) (int, bool) {
+	s := strings.ToLower(strings.TrimSpace(itemID))
+	var numStr string
+	switch {
+	case strings.HasPrefix(s, "item-"):
+		numStr = strings.TrimPrefix(s, "item-")
+	case strings.HasPrefix(s, "ite-"):
+		numStr = strings.TrimPrefix(s, "ite-")
+	case strings.HasPrefix(s, "item_"):
+		numStr = strings.TrimPrefix(s, "item_")
+	case strings.HasPrefix(s, "i") && len(s) > 1 && s[1] >= '0' && s[1] <= '9':
+		numStr = strings.TrimPrefix(s, "i")
+	default:
+		numStr = s
+	}
+	n, err := strconv.Atoi(numStr)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+// IsBasicItem reports whether itemID belongs to the basic catalog (1..maxBasicItemNo).
+// In legacy Party2 (lib/collection.cgi:45–49, 81–87), items up to No. 141 (DefaultTotalItems)
+// count towards completion progress, completion marker, and Hall of Fame induction.
+// Additional items (No. > 141) are viewable in the collection list, but do not count towards completion.
+func IsBasicItem(itemID string, maxBasicItemNo int) bool {
+	if maxBasicItemNo <= 0 {
+		maxBasicItemNo = DefaultTotalItems
+	}
+	n, ok := parseItemNumber(itemID)
+	if !ok {
+		return true
+	}
+	return n >= 1 && n <= maxBasicItemNo
+}
+
 func (s *Service) GetItemCollection(ctx context.Context, characterID, category string) ([]ItemCollectionEntry, CompletionProgress, error) {
 	if characterID == "" {
 		return nil, CompletionProgress{}, ErrInvalidCharacterID
@@ -297,23 +337,39 @@ func (s *Service) GetItemCollection(ctx context.Context, characterID, category s
 	if err != nil {
 		return nil, CompletionProgress{}, err
 	}
-	totalDiscovered, err := s.repo.GetItemCollectionCount(ctx, characterID, category)
-	if err != nil {
+	if _, err := s.repo.GetItemCollectionCount(ctx, characterID, category); err != nil {
 		return nil, CompletionProgress{}, err
 	}
+
+	seen := make(map[string]struct{}, len(entries))
+	discoveredCount := 0
+	for _, e := range entries {
+		if _, exists := seen[e.ItemID]; exists {
+			continue
+		}
+		seen[e.ItemID] = struct{}{}
+		if strings.EqualFold(e.Category, "item") {
+			if IsBasicItem(e.ItemID, DefaultTotalItems) {
+				discoveredCount++
+			}
+		} else {
+			discoveredCount++
+		}
+	}
+
 	percentage := 0.0
 	if s.totalItems > 0 {
-		percentage = (float64(totalDiscovered) / float64(s.totalItems)) * 100.0
+		percentage = (float64(discoveredCount) / float64(s.totalItems)) * 100.0
 		if percentage > 100.0 {
 			percentage = 100.0
 		}
 	}
 
 	progress := CompletionProgress{
-		DiscoveredCount:      totalDiscovered,
+		DiscoveredCount:      discoveredCount,
 		TotalCatalogCount:    s.totalItems,
 		CompletionPercentage: percentage,
-		IsCompleted:          s.totalItems > 0 && totalDiscovered >= s.totalItems,
+		IsCompleted:          s.totalItems > 0 && discoveredCount >= s.totalItems,
 	}
 	return entries, progress, nil
 }

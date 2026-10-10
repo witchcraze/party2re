@@ -116,13 +116,16 @@ func (m *mockCollectionRepo) GetItemCollectionCount(_ context.Context, _, catego
 	if m.getItemCountErr != nil {
 		return 0, m.getItemCountErr
 	}
-	if category == "" {
-		return len(m.items), nil
-	}
 	count := 0
 	for _, v := range m.items {
-		if strings.EqualFold(v.Category, category) {
-			count++
+		if category == "" || strings.EqualFold(v.Category, category) {
+			if strings.EqualFold(v.Category, "item") {
+				if collection.IsBasicItem(v.ItemID, collection.DefaultTotalItems) {
+					count++
+				}
+			} else {
+				count++
+			}
 		}
 	}
 	return count, nil

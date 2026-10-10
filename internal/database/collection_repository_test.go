@@ -163,6 +163,30 @@ func TestCollectionRepository_Integration(t *testing.T) {
 		t.Errorf("total non-existent = %d, want 0", totalNonExistent)
 	}
 
+	// Verify items above No. 141 are excluded from GetItemCollectionCount but viewable in GetItemCollection
+	if err := repo.RecordItemDiscovered(ctx, char.ID, "item-141", "Basic 141", "ITEM"); err != nil {
+		t.Fatalf("RecordItemDiscovered item-141 failed: %v", err)
+	}
+	if err := repo.RecordItemDiscovered(ctx, char.ID, "item-142", "Extra 142", "ITEM"); err != nil {
+		t.Fatalf("RecordItemDiscovered item-142 failed: %v", err)
+	}
+	totalItemsAfter, err := repo.GetItemCollectionCount(ctx, char.ID, "ITEM")
+	if err != nil {
+		t.Fatalf("GetItemCollectionCount (ITEM) after extra item failed: %v", err)
+	}
+	// itm_herb (1) + item-141 (1) = 2. item-142 is > 141 so it is excluded from completion count.
+	if totalItemsAfter != 2 {
+		t.Errorf("total items after adding item-141 and item-142 = %d, want 2", totalItemsAfter)
+	}
+	allItemEntries, err := repo.GetItemCollection(ctx, char.ID, "ITEM")
+	if err != nil {
+		t.Fatalf("GetItemCollection failed: %v", err)
+	}
+	// Public entries list must preserve all items including item-142
+	if len(allItemEntries) != 3 {
+		t.Errorf("total item entries in list = %d, want 3", len(allItemEntries))
+	}
+
 	// 6. Test MarkCompleted and IsCompleted
 	isComp, err := repo.IsCompleted(ctx, char.ID, "monster_book")
 	if err != nil {
