@@ -225,8 +225,9 @@ inside the existing service transaction. Clients explicitly enter Depot and
 read GET context for status, and submit `depot_expand` to the Gateway to purchase;
 the former Depot status GET, expansion POST and single/batch sale POST routes
 return 404. Sales use `depot_sell` and `depot_sell_batch` through the Gateway.
-Five inventory/transfer REST operations remain: deposit/withdraw/send/sort still
-need command adapters and verified retirement;
+Explicit sorting uses `depot_sort` through the Gateway. Five inventory/transfer
+REST operations remain: sort awaits verified retirement; deposit/withdraw/send
+still need command adapters and verified retirement;
 [Depot design](../design/depot.md#gateway-observation-and-retained-operations)
 records those operations and the remaining order/equipment/withdrawal gaps.
 
@@ -598,7 +599,18 @@ or `DEPOT_INVALID_QUANTITY` (400); missing owned targets/storage or character us
 Provider/catalog/persistence/cancellation/overflow failures keep the shared
 sanitized `EXECUTION_FAILED` 500 without context or a replay guarantee. Known
 success/rejection survives observation refresh failure and recovers via GET.
-Sale REST operations remain registered until their own verified retirement.
+The former sale REST operations are retired; their shared result composition
+remains independent of those routes.
+
+`depot_sort` accepts omitted params or an empty object, with no actor, item
+selection or ordering overrides. It invokes `SortItems` once for the owned
+eligible actor and returns the existing Depot response (IDs, definitions,
+quantities, capacity and expansion count). Enhancement remains in the refreshed
+context projection and persisted state.
+Shared guards, sanitized unknown execution errors and known outcome/GET-only
+refresh recovery apply. Persistence preserves the feature's explicit order;
+the [known comparator-key difference](../design/depot.md#4-depot-sorting-せいとん)
+remains feature work. Its existing REST route awaits separate verified retirement.
 
 ### Command outcome and context refresh
 

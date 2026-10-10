@@ -65,6 +65,10 @@ func (r *ActionURLResolver) Resolve(characterID, actionID, label, category strin
 // defaultActionEndpoints registers the canonical endpoints for Party2 character actions.
 func defaultActionEndpoints() map[string]ActionEndpoint {
 	return map[string]ActionEndpoint{
+		"depot_sort": {
+			Method:      http.MethodPost,
+			PathPattern: "/api/v1/characters/%s/actions",
+		},
 		"depot_sell": {
 			Method:      http.MethodPost,
 			PathPattern: "/api/v1/characters/%s/actions",

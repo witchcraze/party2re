@@ -2784,6 +2784,31 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "depot_sort",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "depot_expand",
                   "type": "string"
                 }

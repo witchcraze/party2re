@@ -33,6 +33,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 		{"home_sleep", "target_home_id", "string", false},
 		{"home_wake", "", "", false},
 		{"depot_expand", "", "", false},
+		{"depot_sort", "", "", false},
 		{"depot_sell", "item_id", "string", true},
 		{"depot_sell_batch", "item_ids", "array", true},
 	}
