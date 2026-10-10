@@ -1,0 +1,74 @@
+{
+  "module": "depot",
+  "tier": 2,
+  "description": "Owned storage and sale transactions (C1/C2), with direct P2P transfers (C3). Production injects a transaction provider into the economy runner; test adapters may omit it.",
+  "package": "internal/depot",
+  "implementation_package": "internal/depot",
+  "dependencies": [
+    { "name": "depot_repository", "target_module": "database", "relation_type": "consumer_interface", "source_ref": "internal/depot/depot.go#Repository" },
+    { "name": "character_repository", "target_module": "core/character", "relation_type": "consumer_interface", "source_ref": "internal/depot/depot.go#CharacterRepository" },
+    { "name": "inventory_repository", "target_module": "core/inventory", "relation_type": "consumer_interface", "source_ref": "internal/depot/depot.go#InventoryRepository" },
+    { "name": "transaction_runner", "target_module": "economy", "relation_type": "consumer_interface", "source_ref": "internal/depot/depot.go#TransactionRunner" },
+    { "name": "transaction_provider", "target_module": "database", "relation_type": "consumer_interface", "source_ref": "internal/depot/depot.go#TransactionProvider" },
+    { "name": "item_definitions", "target_module": "core/item", "relation_type": "consumer_interface", "source_ref": "internal/depot/depot.go#ItemDefinitionProvider" },
+    { "name": "collection_recorder", "target_module": "collection", "relation_type": "consumer_interface", "source_ref": "internal/depot/depot.go#CollectionRecorder" }
+  ],
+  "transaction_boundaries": [
+    {
+      "method": "DepositItem", "source_ref": "internal/depot/service.go#Service.DepositItem", "transaction_type": "ExecuteTransaction",
+      "lock_sequence": [
+        { "table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE" },
+        { "table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE" },
+        { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE", "note": "FindOrCreate refreshes capacity before adding the instance." }
+      ]
+    },
+    {
+      "method": "WithdrawItem", "source_ref": "internal/depot/service.go#Service.WithdrawItem", "transaction_type": "ExecuteTransaction",
+      "lock_sequence": [
+        { "table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE" },
+        { "table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE" },
+        { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE", "note": "Reads existing Depot; collection discovery after persistence is best-effort." }
+      ]
+    },
+    {
+      "method": "SellItem", "source_ref": "internal/depot/service.go#Service.SellItem", "transaction_type": "Delegated",
+      "lock_sequence": [], "note": "Validates IDs, then delegates the entire sale to SellItems, including its transaction and locks."
+    },
+    {
+      "method": "SellItems", "source_ref": "internal/depot/service.go#Service.SellItems", "transaction_type": "ExecuteTransaction",
+      "lock_sequence": [
+        { "table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE" },
+        { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE", "note": "All targets and checked catalog valuations precede purge/save; runner credits wallet within the same transaction." }
+      ]
+    },
+    {
+      "method": "SortItems", "source_ref": "internal/depot/service.go#Service.SortItems", "transaction_type": "ExecuteTransaction",
+      "lock_sequence": [
+        { "table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE" },
+        { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE", "note": "Repository reload reads ID order; persisted kind order remains a known gap (#1111)." }
+      ]
+    },
+    {
+      "method": "Expand", "source_ref": "internal/depot/service.go#Service.Expand", "transaction_type": "ExecuteTransaction",
+      "lock_sequence": [
+        { "table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE" },
+        { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE", "note": "Current expansion tier is checked and paid with the count update." }
+      ]
+    },
+    {
+      "method": "SendMoney", "source_ref": "internal/depot/transfer.go#Service.SendMoney", "transaction_type": "RunInTx",
+      "lock_sequence": [
+        { "table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE (ascending ID order)", "note": "Sender and recipient wallet locks." },
+        { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE", "note": "Sender Depot is read/refreshed for the result after wallet updates." }
+      ]
+    },
+    {
+      "method": "SendItem", "source_ref": "internal/depot/transfer.go#Service.SendItem", "transaction_type": "RunInTx",
+      "lock_sequence": [
+        { "table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE (ascending ID order)" },
+        { "table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE", "note": "Sender inventory." },
+        { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE", "note": "Recipient Depot, then sender Depot for the result. Characters are already locked in ascending order." }
+      ]
+    }
+  ]
+}

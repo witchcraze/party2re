@@ -69,6 +69,19 @@ To eliminate uninitialized depot records and stale capacity errors, a two-layer 
 - Stored items can be sold directly from the depot without withdrawing them first.
 - Sale price is 50% of the item definition base price per unit: $\lfloor \text{Price} \times 0.5 \rfloor \times \text{Quantity}$.
 - Supports atomic batch selling (`SellItems`) for multiple selected depot item instances.
+- `SellItem` delegates to the same batch implementation. Before removing any
+  instance, every selected ID must exist exactly once in the request, its catalog
+  lookup must succeed, its base price must be nonnegative and its quantity positive.
+  A missing catalog provider or failed lookup aborts the sale; a successfully read
+  0G definition remains sellable. Integer division computes the per-unit half-price;
+  shared checked multiplication/addition reject overflow before mutation.
+- Sales remove whole selected instances, including all units in a stack, and ignore
+  enhancement when valuing the base price. Existing wallet saturation at `MaxMoney`
+  remains in force. This stack representation is the reconstruction contract;
+  legacy `depot.cgi:105–164,420–519` operates on individual stored rows.
+- Missing/repeated IDs, invalid valuation and persistence failures leave the wallet
+  and Depot unchanged in the production transaction. Catalog failures retain their
+  original error for callers rather than becoming successful zero-price sales.
 
 ### 4. Depot Sorting (`せいとん`)
 - Re-orders items in the depot deterministically according to the legacy item kind hierarchy:
@@ -94,10 +107,21 @@ To eliminate uninitialized depot records and stale capacity errors, a two-layer 
 
 ## Atomicity, Concurrency & Lock Hierarchy
 
-All depot transactions execute inside an explicit database transaction (`*sql.Tx`). Cross-character transfers (`SendMoney`, `SendItem`) enforce global lock hierarchy ordering:
+Production single-character mutations use `economy.TransactionRunner`: character
+locks (Rank 2), inventory locks when needed (Rank 3), then Depot root/item locks
+(Rank 5). Sales lock no inventory. The runner credits the wallet after the Depot
+save in the same transaction; a later character-save failure rolls both back.
+Concurrent single/batch sales of an overlapping instance can settle only once.
+Cross-character transfers (`SendMoney`, `SendItem`) use the injected transaction
+provider and enforce global lock hierarchy ordering:
 1. **Rank 2 (`characters`)**: Both sender and recipient row locks acquired via `id.Sort2(fromID, toID)` in ascending lexicographical order to prevent deadlocks.
 2. **Rank 3 (`inventory_items`)**: Sender inventory items locked.
 3. **Rank 5 (`character_depots`)**: Target depot locked with `FOR UPDATE`.
+
+The [Depot navigation index](../../.arch/modules/depot.json) records the verified
+boundaries, including SendItem's subsequent sender-Depot read under lock. Tests
+may explicitly inject adapters without a database transaction; that configuration
+does not provide production rollback guarantees.
 
 ## Gateway Observation and Retained Operations
 

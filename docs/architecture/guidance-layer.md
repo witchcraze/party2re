@@ -40,6 +40,7 @@ not SQL lock ranks.
 | [auction](../../.arch/modules/auction.json) | Direct transfer, ascending character locks; no bidding |
 | [blackmarket](../../.arch/modules/blackmarket.json) | Dual-source consumption and rare points |
 | [blacksmith](../../.arch/modules/blacksmith.json) | Crystal seals and weapon storage |
+| [depot](../../.arch/modules/depot.json) | Character/storage sales and ascending-character direct transfers |
 | [fleamarket](../../.arch/modules/fleamarket.json) | Shared listing then characters and depot |
 | [gemstore](../../.arch/modules/gemstore.json) | Gem box and dual-source item operations |
 | [guild](../../.arch/modules/guild.json) | Membership and GP; no donation leveling |
