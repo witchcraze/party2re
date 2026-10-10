@@ -36,24 +36,6 @@ type secretShopDialogueResponse struct {
 	Message     string `json:"message"`
 }
 
-func (h *Handler) handleGetSecretShop(w http.ResponseWriter, r *http.Request) {
-	if h.secretshop == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("secret shop service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		status, err := h.secretshop.GetShopStatus(r.Context(), char.ID)
-		if err != nil {
-			h.writeSecretShopError(w, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, status)
-	})
-}
-
 func (h *Handler) handleSecretShopTalk(w http.ResponseWriter, r *http.Request) {
 	if h.secretshop == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("secret shop service not configured"))
@@ -113,33 +95,6 @@ func (h *Handler) handleSecretShopPuffPuff(w http.ResponseWriter, r *http.Reques
 		}
 
 		writeJSON(w, http.StatusOK, result)
-	})
-}
-
-func (h *Handler) handleSecretShopPurchase(w http.ResponseWriter, r *http.Request) {
-	if h.secretshop == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("secret shop service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req secretShopPurchaseRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		if req.Quantity <= 0 {
-			req.Quantity = 1
-		}
-
-		result, err := h.secretshop.PurchaseItem(r.Context(), char.ID, req.ItemID, req.Quantity)
-		if err != nil {
-			h.writeSecretShopError(w, err)
-			return
-		}
-
-		writeJSON(w, http.StatusOK, toSecretShopPurchaseResponse(result, char.Name))
 	})
 }
 

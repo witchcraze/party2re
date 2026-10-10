@@ -479,11 +479,9 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/wishing-well/exchange", h.handleWishingWellExchange)
 
 	// Secret Shop
-	mux.HandleFunc("GET /characters/{id}/secretshop", h.handleGetSecretShop)
 	mux.HandleFunc("POST /characters/{id}/secretshop/talk", h.handleSecretShopTalk)
 	mux.HandleFunc("POST /characters/{id}/secretshop/inspect", h.handleSecretShopInspect)
 	mux.HandleFunc("POST /characters/{id}/secretshop/puffpuff", h.handleSecretShopPuffPuff)
-	mux.HandleFunc("POST /characters/{id}/secretshop/purchase", h.handleSecretShopPurchase)
 
 	// Tavern
 	mux.HandleFunc("GET /tavern/menu", h.handleGetTavernMenu)
