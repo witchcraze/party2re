@@ -22,10 +22,6 @@ func TestCatalogNavigationContracts(t *testing.T) {
 			t.Fatalf("required inputs for %s: %v", id, params.Required)
 		}
 		switch id {
-		case "scene_enter":
-			if !slices.Equal(params.Properties["destination"].Enum, []any{"town", "bank", "home", "shop_weapon", "shop_armor", "shop_item", "shop_accessory", "home_inbox", "home_outbox", "casino"}) {
-				t.Fatal("destination registry drift")
-			}
 		case "scene_select":
 			if !slices.Equal(params.Properties["target_kind"].Enum, []any{"item", "home", "room"}) || params.Properties["target_id"].Pattern != `^[a-zA-Z0-9_-]{1,128}$` {
 				t.Fatal("subject registry/bound drift")

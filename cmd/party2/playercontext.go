@@ -14,6 +14,7 @@ import (
 func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, cmbt *cmbtServices, misc *miscServices) *playercontext.Service {
 	scenes := []playercontext.SceneDefinition{
 		{ID: "town", Pageable: true}, {ID: "bank", Parent: "town"},
+		{ID: "depot", Parent: "town", Pageable: true},
 		{ID: "secretshop", Parent: "town", SubjectKind: "item", Pageable: true, CanEnter: secretshop.CheckEligibility,
 			SubjectAvailable: func(ctx context.Context, actorID, targetID string) (bool, error) {
 				status, err := misc.secretshop.GetShopStatus(ctx, actorID)

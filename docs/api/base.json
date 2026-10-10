@@ -3001,6 +3001,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/SecretShopCatalogSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DepotSceneData"
                     }
                   ]
                 }
@@ -3385,6 +3388,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/SecretShopProductSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "location_id": {
+                  "const": "depot"
+                },
+                "kind": {
+                  "const": "facility"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/DepotSceneData"
                 },
                 "support": {
                   "properties": {
@@ -3831,6 +3864,7 @@
                       "enum": [
                         "town",
                         "bank",
+                        "depot",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -3838,7 +3872,8 @@
                         "shop_accessory",
                         "home_inbox",
                         "home_outbox",
-                        "casino"
+                        "casino",
+                        "secretshop"
                       ]
                     }
                   },
@@ -3920,6 +3955,7 @@
                       "enum": [
                         "town",
                         "bank",
+                        "depot",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -3927,7 +3963,8 @@
                         "shop_accessory",
                         "home_inbox",
                         "home_outbox",
-                        "casino"
+                        "casino",
+                        "secretshop"
                       ]
                     },
                     "offset": {
@@ -5166,13 +5203,16 @@
             "enum": [
               "town",
               "bank",
+              "depot",
               "home",
               "shop_weapon",
               "shop_armor",
               "shop_item",
               "shop_accessory",
               "home_inbox",
-              "home_outbox"
+              "home_outbox",
+              "casino",
+              "secretshop"
             ]
           },
           "offset": {
@@ -5282,13 +5322,16 @@
                 "enum": [
                   "town",
                   "bank",
+                  "depot",
                   "home",
                   "shop_weapon",
                   "shop_armor",
                   "shop_item",
                   "shop_accessory",
                   "home_inbox",
-                  "home_outbox"
+                  "home_outbox",
+                  "casino",
+                  "secretshop"
                 ]
               }
             },
@@ -6503,6 +6546,84 @@
           "product"
         ],
         "description": "Qualified read-only SecretShop observation. GET does not invoke NPC actions or purchase. Status and purchase REST operations are retired; NPC interaction REST operations remain registered."
+      },
+      "DepotSceneItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "definition_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "enhancement_level": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "definition_id",
+          "quantity",
+          "enhancement_level"
+        ],
+        "description": "Owned storage instance facts; quantity is not the number of occupied depot slots."
+      },
+      "DepotSceneData": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "parent": {
+            "type": "string",
+            "const": "town"
+          },
+          "character_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "capacity": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 500
+          },
+          "ex_depot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20
+          },
+          "item_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Total occupied slots across the depot, before paging; not summed item quantities."
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/DepotSceneItem"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/ScenePage"
+          }
+        },
+        "required": [
+          "parent",
+          "character_id",
+          "capacity",
+          "ex_depot",
+          "item_count",
+          "items",
+          "page"
+        ],
+        "description": "Owned read-only Depot inventory/capacity. Offset pages preserve GetDepot order (currently instance ID ascending in persistence); no cross-page snapshot is promised. Missing depots remain empty in-memory projections. GET never creates, sorts or saves storage. REST operations remain registered pending verified mutation replacements."
       }
     },
     "securitySchemes": {

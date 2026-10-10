@@ -73,6 +73,9 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 		case "bank":
 			adapter.title, adapter.commands = "銀行", []string{"bank_deposit", "bank_withdraw"}
 			adapter.read = h.bankSceneData
+		case "depot":
+			adapter.title, adapter.commands = "預かり所", []string{"depot_deposit", "depot_withdraw"}
+			adapter.read = h.depotSceneData
 		case "secretshop":
 			adapter.title, adapter.commands = "秘密の店", []string{"secretshop_purchase"}
 			adapter.read = h.secretShopSceneData
@@ -192,6 +195,12 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 		switch data := data.(type) {
 		case BankSceneData:
 			scene.Support.Observation = "details"
+		case DepotSceneData:
+			scene.Support.Observation = "details"
+			if p := data.Page.Next; p != nil {
+				choices = append(choices, "scene_page")
+				templates["scene_page"] = map[string]any{"destination": p.Destination, "offset": p.Offset, "limit": p.Limit}
+			}
 		case CasinoLobbySceneData:
 			scene.Support.Observation = "details"
 			if data.Page.Next != nil {
