@@ -8,6 +8,7 @@
     { "name": "depot_repository", "target_module": "database", "relation_type": "consumer_interface", "source_ref": "internal/depot/depot.go#Repository" },
     { "name": "character_repository", "target_module": "core/character", "relation_type": "consumer_interface", "source_ref": "internal/depot/depot.go#CharacterRepository" },
     { "name": "inventory_repository", "target_module": "core/inventory", "relation_type": "consumer_interface", "source_ref": "internal/depot/depot.go#InventoryRepository" },
+    { "name": "equipment_repository", "target_module": "core/equipment", "relation_type": "consumer_interface", "source_ref": "internal/depot/equipment.go#EquipmentRepository" },
     { "name": "transaction_runner", "target_module": "economy", "relation_type": "consumer_interface", "source_ref": "internal/depot/depot.go#TransactionRunner" },
     { "name": "transaction_provider", "target_module": "database", "relation_type": "consumer_interface", "source_ref": "internal/depot/depot.go#TransactionProvider" },
     { "name": "item_definitions", "target_module": "core/item", "relation_type": "consumer_interface", "source_ref": "internal/depot/depot.go#ItemDefinitionProvider" },
@@ -19,6 +20,7 @@
       "lock_sequence": [
         { "table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE" },
         { "table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE" },
+        { "table": "equipment_slots", "tier": 3, "mode": "SELECT ... FOR UPDATE", "note": "detachEquipment unlinks the moved instance before inventory deletion; the runner saves character customization atomically." },
         { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE", "note": "FindOrCreate refreshes capacity before adding the instance." }
       ]
     },
@@ -67,6 +69,7 @@
       "lock_sequence": [
         { "table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE (ascending ID order)" },
         { "table": "inventory_items", "tier": 3, "mode": "SELECT ... FOR UPDATE", "note": "Sender inventory." },
+        { "table": "equipment_slots", "tier": 3, "mode": "SELECT ... FOR UPDATE", "note": "detachEquipment unlinks the moved instance; sender customization is saved in the same transaction." },
         { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE", "note": "Recipient Depot, then sender Depot for the result. Characters are already locked in ascending order." }
       ]
     }

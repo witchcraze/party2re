@@ -50,6 +50,10 @@ The exported slot enum has four equipment categories; no `SlotAccessory1` or `Sl
 2. **Slot Compatibility**: An item definition's `Slot` must match the target equipment slot (`SlotNone` items like potions/materials cannot be equipped).
 3. **Equip Operation**: Equipping an item into an occupied slot returns the previously equipped instance ID so it can be returned/swapped in inventory.
 4. **Unequip Operation**: Removing equipment unlinks the instance from the slot and requires the slot to currently hold an item.
+   Depot deposit/send removes links to the moved instance before deleting its
+   inventory row, within the same transaction as ownership and character
+   customization changes. See [Depot movement invariants](depot.md#1-item-deposit--withdrawal)
+   for metadata clearing and failure rollback; this does not define withdrawal swaps.
 5. **Stackability Domain Invariants**:
    - **Stackable Definitions (`Definition.IsStackable() == true`)**: Items with `Slot == SlotNone` (consumables, craft materials) are stackable (`Quantity >= 1`).
    - **Non-Stackable Definitions (`Definition.IsStackable() == false`)**: Equipment items (`Slot != SlotNone`: weapons, armor, shields, accessories) represent discrete gear. Each equipment piece must have `Quantity == 1` and occupy its own distinct storage slot.

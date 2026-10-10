@@ -326,6 +326,7 @@ type Service struct {
 	runner     TransactionRunner
 	itemDefs   ItemDefinitionProvider
 	collector  CollectionRecorder
+	equipment  EquipmentRepository
 }
 
 func NewService(depotRepo Repository, charRepo CharacterRepository, invRepo InventoryRepository, opts ...Option) (*Service, error) {

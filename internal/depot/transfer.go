@@ -81,7 +81,8 @@ func (s *Service) SendMoney(ctx context.Context, fromCharacterID, toCharacterID 
 }
 
 // SendItem transfers an item from sender's inventory to recipient's depot using strict lock hierarchy:
-// Rank 2 (characters asc) -> Rank 3 (sender inventory) -> Rank 5 (recipient depot).
+// Transaction: RunInTx.
+// Lock Order: characters(2, ascending IDs) -> sender inventory/equipment(3) -> recipient/sender Depot(5).
 func (s *Service) SendItem(ctx context.Context, fromCharacterID, toCharacterID, itemInstanceID string) (Depot, error) {
 	fromCharacterID = strings.TrimSpace(fromCharacterID)
 	toCharacterID = strings.TrimSpace(toCharacterID)
@@ -134,6 +135,10 @@ func (s *Service) SendItem(ctx context.Context, fromCharacterID, toCharacterID, 
 		if !found {
 			return ErrItemNotFound
 		}
+		detached, err := s.detachEquipment(txCtx, &sender, itemInstanceID)
+		if err != nil {
+			return err
+		}
 
 		// Rank 5: Recipient depot
 		recDepot, err := s.findOrCreateDepot(txCtx, toCharacterID, recipient)
@@ -146,6 +151,11 @@ func (s *Service) SendItem(ctx context.Context, fromCharacterID, toCharacterID, 
 
 		if err := senderInv.Consume(itemInstanceID, itemInst.Quantity); err != nil {
 			return err
+		}
+		if detached {
+			if err := s.charRepo.Update(txCtx, sender); err != nil {
+				return err
+			}
 		}
 		if err := s.invRepo.Save(txCtx, senderInv); err != nil {
 			return err
