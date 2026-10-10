@@ -112,7 +112,13 @@ func (r *CollectionRepository) GetItemCollection(ctx context.Context, characterI
 func (r *CollectionRepository) GetItemCollectionCount(ctx context.Context, characterID, category string) (int, error) {
 	var count int
 	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM character_item_collection WHERE character_id = ? AND (? = '' OR category = ?)
+		SELECT COUNT(*) FROM character_item_collection
+		WHERE character_id = ?
+		  AND (? = '' OR category = ?)
+		  AND (LOWER(category) != 'item' OR (
+		      NOT (item_id REGEXP '^(item|ite)-[0-9]+$')
+		      OR CAST(REGEXP_SUBSTR(item_id, '[0-9]+$') AS UNSIGNED) <= 141
+		  ))
 	`, characterID, category, category).Scan(&count)
 	return count, err
 }

@@ -54,7 +54,11 @@ The Collection and Monster Book Feature Module (`internal/collection`) provides 
   - `Category`: Item category (`weapon`, `armor`, `item`).
   - `DiscoveredAt`: Initial registration timestamp.
 - **Completion Progress**:
-  $$\text{Completion Percentage} = \min\left(100.0, \frac{\text{Unique Items Discovered}}{\text{Total Item Catalog Count (141)}} \times 100\right)$$
+  $$\text{Completion Percentage} = \min\left(100.0, \frac{\text{Unique Basic Items Discovered (No. } \le 141\text{)}}{\text{Total Item Catalog Count (141)}} \times 100\right)$$
+- **Basic Item Invariant vs. Public Catalog (#1237)**:
+  Only canonical basic items up to No. 141 (`DefaultTotalItems = 141`, `$default_ites`) count towards completion progress, completion marker persistence (`character_collection_completions`), and Hall of Fame induction (`comp_ite`). Additional items above No. 141 (e.g. synthesis or expansion items such as `item-142`, `item-154`, `item-257`) remain in the public collection list for viewing, but do not contribute to completion progress or compensate for unacquired basic items (`lib/collection.cgi:45–49, 81–87`).
+- **Condition Parity**:
+  Display progress (`GetItemCollection`), completion marker persistence (`character_collection_completions`), and Hall of Fame induction (`comp_ite`) reference the exact same completion target set condition (`progress.IsCompleted`). Historical Hall of Fame inductions (`legend_records`) remain immutable, irreversible career records.
 - **Category Isolation**:
   Completion count, progress evaluation, and entry queries for the item compendium are strictly filtered by category (`"item"`). `GetItemCollection` and the `GET /characters/{id}/collections/items` endpoint default an empty or omitted category to `"item"`, ensuring discovering weapons or armors stored in the shared collection table does not cross-contaminate the item compendium, increase the item discovery count, or trigger false `comp_ite` completion.
 

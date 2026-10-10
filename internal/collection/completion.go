@@ -12,6 +12,9 @@ import (
 // is returned to the caller so the failure is never masked as success.
 // News publishing is an informational broadcast (best-effort) and only fires when newly completed.
 func (s *Service) completeMilestone(ctx context.Context, characterID, kind, legendCategory, formatMsg string) error {
+	s.milestoneMu.Lock()
+	defer s.milestoneMu.Unlock()
+
 	completed, err := s.repo.IsCompleted(ctx, characterID, kind)
 	if err != nil {
 		return fmt.Errorf("check %s completion: %w", kind, err)
@@ -82,11 +85,11 @@ func (s *Service) checkItemCollectionCompletion(ctx context.Context, characterID
 	if s.totalItems <= 0 {
 		return nil
 	}
-	count, err := s.repo.GetItemCollectionCount(ctx, characterID, "item")
+	_, progress, err := s.GetItemCollection(ctx, characterID, "item")
 	if err != nil {
 		return err
 	}
-	if count < s.totalItems {
+	if !progress.IsCompleted {
 		return nil
 	}
 	return s.completeMilestone(ctx, characterID, "item", "comp_ite", "%sがアイテム図鑑をコンプリートしました！")
