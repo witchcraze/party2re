@@ -3,6 +3,8 @@ package database
 import (
 	"context"
 	"os"
+	"reflect"
+	"slices"
 	"testing"
 
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
@@ -14,6 +16,84 @@ func TestDepotRepositoryNilDB(t *testing.T) {
 	if _, err := NewDepotRepository(nil); err == nil {
 		t.Fatal("NewDepotRepository(nil) expected error, got nil")
 	}
+}
+
+func TestDepotRepositoryPreservesItemOrder(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	ctx := context.Background()
+	actor, err := CreateTestCharacter(ctx, db, "Depot order")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := []item.Instance{
+		{ID: actor.ID[:30] + "ff", DefinitionID: "weapon-01", Quantity: 1, EnhancementLevel: 6},
+		{ID: actor.ID[:30] + "bb", DefinitionID: "armor-02", Quantity: 1},
+		{ID: actor.ID[:30] + "aa", DefinitionID: "item-001", Quantity: 8},
+	}
+	dep, err := CreateTestDepot(ctx, db, actor.ID, 0, items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertOrder := func(want []item.Instance) {
+		t.Helper()
+		got, err := repo.FindByCharacterID(ctx, actor.ID)
+		if err != nil || !reflect.DeepEqual(got.Items, want) {
+			t.Fatalf("public reload: %+v, error=%v, want=%+v", got.Items, err, want)
+		}
+		if err := repo.RunInTx(ctx, func(txCtx context.Context) error {
+			got, err := repo.FindByCharacterIDForUpdate(txCtx, actor.ID)
+			if err != nil {
+				return err
+			}
+			if !reflect.DeepEqual(got.Items, want) {
+				t.Errorf("locked reload: %+v, want=%+v", got.Items, want)
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertOrder(items)
+	slices.Reverse(dep.Items)
+	if err := repo.Save(ctx, dep); err != nil {
+		t.Fatal(err)
+	}
+	assertOrder(dep.Items)
+	before := slices.Clone(dep.Items)
+	dep.Items = append(dep.Items, dep.Items[0])
+	if err := repo.Save(ctx, dep); err == nil {
+		t.Fatal("duplicate instance must fail")
+	}
+	assertOrder(before)
+	// Rows created before the migration share position zero and retain ID ordering.
+	if _, err := db.ExecContext(ctx, "UPDATE depot_items SET sort_position = 0 WHERE character_id = ?", actor.ID); err != nil {
+		t.Fatal(err)
+	}
+	slices.SortFunc(before, func(a, b item.Instance) int {
+		if a.ID < b.ID {
+			return -1
+		}
+		if a.ID > b.ID {
+			return 1
+		}
+		return 0
+	})
+	assertOrder(before)
 }
 
 func TestDepotRepositorySaveAndFind(t *testing.T) {

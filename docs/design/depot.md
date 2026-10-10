@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Item Depot (預かり所 / 倉庫) provides characters with persistent storage for item instances outside of their active inventory. The reconstruction models dynamic capacity, storage expansion, item sorting, direct item selling, inter-character mailing and collection discovery from `system.cgi:get_depot_c` and `depot.cgi`. Known withdrawal and persisted-order differences remain documented below. Gold is kept in character purses and the bank.
+The Item Depot (預かり所 / 倉庫) provides characters with persistent storage for item instances outside of their active inventory. The reconstruction models dynamic capacity, storage expansion, item sorting, direct item selling, inter-character mailing and collection discovery from `system.cgi:get_depot_c` and `depot.cgi`. Known withdrawal and sort-classification differences remain documented below. Gold is kept in character purses and the bank.
 
 ## Domain Model
 
@@ -84,11 +84,20 @@ To eliminate uninitialized depot records and stale capacity errors, a two-layer 
   original error for callers rather than becoming successful zero-price sales.
 
 ### 4. Depot Sorting (`せいとん`)
-- Re-orders items in the depot deterministically according to the legacy item kind hierarchy:
+- The current Go comparator orders items deterministically using the equipment-slot kind:
   1. **Kind 1 (Weapons)**: Items equipped in `SlotMainHand`.
   2. **Kind 2 (Armors)**: Items equipped in `SlotOffHand`, `SlotBody`, or `SlotAccessory`.
   3. **Kind 3 (Consumables & Misc)**: Items with `SlotNone`.
 - Items within the same kind are ordered ascending by `DefinitionID`.
+- Explicit sorting persists the resulting instance order. Ordinary saves preserve
+  slice order, including appended items; reads never implicitly sort by definition.
+  Both normal and locked reads use stored position with instance ID as a tie-breaker.
+  Rows predating the position migration retain their former ID order until saved.
+- Legacy `depot.cgi:313–332` sorts stored kind and numeric item number before
+  saving. Its `azukeru` (`167–207`) stores weapons as kind 1, armor as kind 2 and
+  entries from the item catalog as kind 3. The current slot-based comparator groups
+  shields/accessories with armor instead; exact catalog-key reconciliation remains
+  #1288 work under #947. Persisting the existing comparator's output does not claim full parity.
 
 ### 5. Mailing Items and Money (`おくる`)
 - **Send Money (`SendMoney`)**: Transits gold directly from the sender's purse to the recipient's purse.
@@ -135,7 +144,7 @@ Legacy `depot.cgi:49–99` reports owned count/capacity/expansions, and
 `system.cgi:1267–1288` supplies the capacity and occupied-row rule.
 
 Offset pages use the shared default20/max100 bounds and preserve the public
-reader's order; current persistence reads instance ID ascending. They do not
+reader's persisted instance order, with ID breaking position ties. They do not
 promise a snapshot across concurrent changes. The adapter does not call
 `SortItems` or add a separate ordering rule. Missing storage produces an empty
 in-memory view with calculated capacity; GET never persists that view or creates
@@ -171,9 +180,10 @@ maps to the existing services as follows:
 | `expansion_depot` | Expand | Gateway `depot_expand`; expansion REST retired |
 
 This mapping records transport coverage, not full legacy parity. Legacy
-`seiton` (`depot.cgi:313–332`) persists kind/item-number ordering; current
-SortItems results lose that order on repository reload (#1111). The context
-adapter preserves reader order so a repair belongs to that owning boundary.
+`seiton` (`depot.cgi:313–332`) persists kind/item-number ordering. SortItems results
+now survive repository reload, and context pages preserve that order. The remaining
+slot/catalog classification difference described above belongs to the feature
+comparator; HTTP adds no separate sorting rule.
 Legacy `hikidasu` (`depot.cgi:208–288`) swaps held equipment/items back into
 storage, while current WithdrawItem moves into inventory and rejects a full
 slot; the equivalent atomic swap contract remains undecided in #1127. Equipped

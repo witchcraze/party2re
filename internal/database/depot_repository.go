@@ -38,7 +38,7 @@ func (r *DepotRepository) FindByCharacterID(ctx context.Context, characterID str
 		SELECT id, definition_id, quantity, enhancement_level
 		FROM depot_items
 		WHERE character_id = ?
-		ORDER BY id
+		ORDER BY sort_position, id
 	`, characterID)
 	if err != nil {
 		return depot.Depot{}, err
@@ -79,7 +79,7 @@ func (r *DepotRepository) FindByCharacterIDForUpdate(ctx context.Context, charac
 		SELECT id, definition_id, quantity, enhancement_level
 		FROM depot_items
 		WHERE character_id = ?
-		ORDER BY id FOR UPDATE
+		ORDER BY sort_position, id FOR UPDATE
 	`, characterID)
 	if err != nil {
 		return depot.Depot{}, err
@@ -124,11 +124,11 @@ func saveDepotTx(ctx context.Context, executor sqlContextExecutor, value depot.D
 		return err
 	}
 
-	for _, instance := range value.Items {
+	for position, instance := range value.Items {
 		if _, err := executor.ExecContext(ctx, `
-			INSERT INTO depot_items (id, character_id, definition_id, quantity, enhancement_level)
-			VALUES (?, ?, ?, ?, ?)
-		`, instance.ID, value.CharacterID, instance.DefinitionID, instance.Quantity, instance.EnhancementLevel); err != nil {
+			INSERT INTO depot_items (id, character_id, definition_id, quantity, enhancement_level, sort_position)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, instance.ID, value.CharacterID, instance.DefinitionID, instance.Quantity, instance.EnhancementLevel, position); err != nil {
 			return err
 		}
 	}

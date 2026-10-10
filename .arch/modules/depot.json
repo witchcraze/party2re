@@ -45,7 +45,7 @@
       "method": "SortItems", "source_ref": "internal/depot/service.go#Service.SortItems", "transaction_type": "ExecuteTransaction",
       "lock_sequence": [
         { "table": "characters", "tier": 2, "mode": "SELECT ... FOR UPDATE" },
-        { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE", "note": "Repository reload reads ID order; persisted kind order remains a known gap (#1111)." }
+        { "table": "character_depots / depot_items", "tier": 5, "mode": "SELECT ... FOR UPDATE", "note": "Save persists slice positions; normal and locked readers preserve them with ID as tie-breaker. Sort classification remains feature-owned." }
       ]
     },
     {

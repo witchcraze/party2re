@@ -41,7 +41,7 @@ func (saleGatewayFailingCharacterSave) Update(context.Context, corecharacter.Cha
 	return errors.New("private character save failure")
 }
 
-func depotSaleDBRouter(t *testing.T, failure string, price int) (http.Handler, corecharacter.Character, *database.CharacterRepository, *database.DepotRepository, *gatewayNavigationStore, []item.Instance) {
+func depotSaleDBRouter(t *testing.T, failure string, price int, extra ...depot.Option) (http.Handler, corecharacter.Character, *database.CharacterRepository, *database.DepotRepository, *gatewayNavigationStore, []item.Instance) {
 	t.Helper()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
@@ -90,6 +90,7 @@ func depotSaleDBRouter(t *testing.T, failure string, price int) (http.Handler, c
 	if failure != "provider" {
 		options = append(options, depot.WithItemDefinitionProvider(saleGatewayCatalog{price, failure == "catalog"}))
 	}
+	options = append(options, extra...)
 	svc, err := depot.NewServiceWithTransaction(depots, characters, inventories, depots, options...)
 	if err != nil {
 		t.Fatal(err)

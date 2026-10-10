@@ -211,8 +211,8 @@ total occupied slots `item_count`,
 non-null offset-paged `items` and existing page/next inputs. Rows whitelist
 instance `id`, `definition_id`, `quantity` and `enhancement_level`; occupied
 slots count instances, not their summed quantities. The adapter preserves
-`GetDepot` order (currently instance ID ascending in persistence) so a future
-feature-owned sort repair is not overridden by transport. No cross-page snapshot
+`GetDepot` persisted instance order (ID breaks stored-position ties), including
+explicit sorts and subsequent appends. Transport adds no sort. No cross-page snapshot
 is promised. Required character/depot read errors fail the whole observation;
 missing depots yield an empty in-memory projection with dynamic capacity and
 no save. Missing configuration returns 501. Actual activities/conflicts skip
