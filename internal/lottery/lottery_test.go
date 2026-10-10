@@ -1145,3 +1145,135 @@ func TestPlayRaffle(t *testing.T) {
 		}
 	})
 }
+
+type mockCollectionRecord struct {
+	characterID string
+	itemID      string
+	itemName    string
+	category    string
+}
+
+type mockCollectionRecorder struct {
+	records []mockCollectionRecord
+}
+
+func (m *mockCollectionRecorder) RecordItemDiscovered(ctx context.Context, characterID, itemID, itemName, category string) error {
+	m.records = append(m.records, mockCollectionRecord{
+		characterID: characterID,
+		itemID:      itemID,
+		itemName:    itemName,
+		category:    category,
+	})
+	return nil
+}
+
+func TestDrawTakarakuji_CollectionCategories(t *testing.T) {
+	jst := time.FixedZone("JST", 9*60*60)
+	drawTime := time.Date(2026, 9, 11, 0, 0, 0, 0, jst)
+
+	activeRound := lottery.TakarakujiRound{
+		RoundID:      1,
+		DrawDate:     drawTime,
+		IsDrawn:      false,
+		Prize1ItemID: "item-129",
+		Prize1Amount: 1,
+		Prize2ItemID: "weapon-40",
+		Prize2Amount: 1,
+		Prize3ItemID: "armor-40",
+		Prize3Amount: 1,
+	}
+
+	tickets := make([]lottery.TakarakujiTicket, 20)
+	for i := 0; i < 20; i++ {
+		tickets[i] = lottery.TakarakujiTicket{
+			ID:          fmt.Sprintf("t-%d", i+1),
+			RoundID:     1,
+			CharacterID: fmt.Sprintf("char-%d", i+1),
+		}
+	}
+
+	repo := &mockLotteryRepo{
+		getActiveTakarakujiRoundFn: func(ctx context.Context) (lottery.TakarakujiRound, error) {
+			return activeRound, nil
+		},
+		listRoundTakarakujiTicketsFn: func(ctx context.Context, roundID int) ([]lottery.TakarakujiTicket, error) {
+			return tickets, nil
+		},
+		settleTakarakujiRoundFn: func(ctx context.Context, roundID int, drawnAt time.Time, winningTickets []lottery.TakarakujiTicket) error {
+			return nil
+		},
+		createTakarakujiRoundFn: func(ctx context.Context, round lottery.TakarakujiRound) (lottery.TakarakujiRound, error) {
+			round.RoundID = 2
+			return round, nil
+		},
+	}
+
+	depotRepo := &mockDepotRepo{depot: make(map[string]depot.Depot)}
+	recorder := &mockCollectionRecorder{}
+
+	itemDefs := &mockItemDefProvider{
+		names: map[string]string{
+			"item-129":  "神の錬金レシピ",
+			"weapon-40": "流銀の剣",
+			"armor-40":  "流銀の鎧",
+		},
+	}
+
+	svc, err := lottery.NewService(repo,
+		lottery.WithDepotRepository(depotRepo),
+		lottery.WithItemDefinitionProvider(itemDefs),
+		lottery.WithCollectionRecorder(recorder),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := svc.DrawTakarakuji(context.Background(), drawTime)
+	if err != nil {
+		t.Fatalf("DrawTakarakuji failed: %v", err)
+	}
+
+	if len(result.Winners) != 3 {
+		t.Fatalf("expected 3 winners, got %d", len(result.Winners))
+	}
+
+	// Verify recorder captured real winners with appropriate categories
+	if len(recorder.records) == 0 {
+		t.Fatal("expected at least one collection recording for real winners")
+	}
+
+	catCounts := make(map[string]int)
+	for _, rec := range recorder.records {
+		catCounts[rec.category]++
+		if rec.category == "takarakuji" {
+			t.Errorf("item %s was recorded with invalid category %q (must be weapon, armor, or item)", rec.itemID, rec.category)
+		}
+		switch rec.itemID {
+		case "weapon-40":
+			if rec.category != "weapon" {
+				t.Errorf("weapon-40 category = %q; want weapon", rec.category)
+			}
+		case "armor-40":
+			if rec.category != "armor" {
+				t.Errorf("armor-40 category = %q; want armor", rec.category)
+			}
+		case "item-129":
+			if rec.category != "item" {
+				t.Errorf("item-129 category = %q; want item", rec.category)
+			}
+		}
+	}
+
+	if catCounts["weapon"] != 1 {
+		t.Errorf("expected 1 weapon recording, got %d", catCounts["weapon"])
+	}
+	if catCounts["armor"] != 1 {
+		t.Errorf("expected 1 armor recording, got %d", catCounts["armor"])
+	}
+	if catCounts["item"] != 1 {
+		t.Errorf("expected 1 item recording, got %d", catCounts["item"])
+	}
+	if catCounts["takarakuji"] != 0 {
+		t.Errorf("expected 0 takarakuji recordings, got %d", catCounts["takarakuji"])
+	}
+}
