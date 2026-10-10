@@ -16,7 +16,7 @@ import (
 
 type stubLotteryService struct {
 	getRaffleTicketsFn             func(ctx context.Context, characterID string) (int, error)
-	playRaffleFn                   func(ctx context.Context, characterID string, raffleType lottery.RaffleType) (lottery.RaffleResult, int, corecharacter.Character, error)
+	playRaffleFn                   func(ctx context.Context, characterID string) (lottery.RaffleResult, int, corecharacter.Character, error)
 	getTakarakujiStatusFn          func(ctx context.Context) (lottery.TakarakujiStatus, error)
 	buyTakarakujiTicketFn          func(ctx context.Context, characterID string) (lottery.TakarakujiPurchaseResult, error)
 	getCharacterTakarakujiTicketFn func(ctx context.Context, characterID string) (*lottery.TakarakujiTicket, []lottery.TakarakujiTicket, error)
@@ -29,9 +29,9 @@ func (s *stubLotteryService) GetRaffleTickets(ctx context.Context, characterID s
 	return 0, nil
 }
 
-func (s *stubLotteryService) PlayRaffle(ctx context.Context, characterID string, raffleType lottery.RaffleType) (lottery.RaffleResult, int, corecharacter.Character, error) {
+func (s *stubLotteryService) PlayRaffle(ctx context.Context, characterID string) (lottery.RaffleResult, int, corecharacter.Character, error) {
 	if s.playRaffleFn != nil {
-		return s.playRaffleFn(ctx, characterID, raffleType)
+		return s.playRaffleFn(ctx, characterID)
 	}
 	return lottery.RaffleResult{Prize: lottery.RafflePrize{Tier: lottery.PrizeTierMiss, Name: "Pocket Tissue"}}, 0, corecharacter.Character{ID: characterID}, nil
 }
@@ -233,8 +233,19 @@ func TestLotteryEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /characters/{id}/lottery/raffle - success", func(t *testing.T) {
+	t.Run("POST /characters/{id}/lottery/raffle - success with body", func(t *testing.T) {
 		req := jsonRequest(t, http.MethodPost, "/characters/c1/lottery/raffle", `{"raffle_type":"STANDARD"}`)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("POST /characters/{id}/lottery/raffle - success without body", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/characters/c1/lottery/raffle", nil)
 		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)

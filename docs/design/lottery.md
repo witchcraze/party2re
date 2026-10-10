@@ -18,6 +18,13 @@ The Lottery and Raffle Feature Module (`internal/lottery`) implements the authen
   - If the character's consumable item hand slot is empty: delivered directly to the character's Inventory (`transferred_to_depot = false`).
   - If the character's consumable item hand slot is occupied: automatically forwarded to Depot storage (`character_depots` / `depot_items`) (`transferred_to_depot = true`).
   - If Depot storage is full: returns `depot.ErrDepotFull` (HTTP 409 Conflict), rolling back ticket consumption to protect player assets.
+- **Automatic Mode Selection & Transactional Boundary**:
+  - In parity with legacy Party2 (`party2/lib/lot.cgi`), players execute a single raffle draw action without selecting a tier.
+  - Mode selection and ticket consumption occur atomically inside the transaction under Character pessimistic locking (Rank 2):
+    - Characters holding **300 or more coupons** (`>= SpecialRaffleCost`): automatically play Special Raffle (裏・特別福引) consuming 300 coupons.
+    - Characters holding **fewer than 300 coupons** (`< SpecialRaffleCost`): automatically play Standard Raffle (通常福引) consuming 3 coupons (or reject with `ErrInsufficientTickets` if `< StandardRaffleCost`).
+  - Serializing within the Rank 2 Character transaction boundary ensures that concurrent requests evaluate and deduct based on the same committed balance, preventing stale balance mode evaluation, overspending, or double-spending.
+  - On the HTTP endpoint (`POST /characters/{id}/lottery/raffle`), the request body is optional; `raffle_type` is deprecated and ignored for mode determination.
 
 ### 2. Standard Raffle (通常福引)
 - **Cost**: 3 coupons (`StandardRaffleCost = 3`)
@@ -144,4 +151,4 @@ When a drawing occurs (via background scheduler `takarakuji_draw` or scheduled h
 | `POST` | `/characters/{id}/lottery/takarakuji/buy` | Purchase Takarakuji ticket (30,000G, 1 per character per round, 20 max) | Character Auth |
 | `GET` | `/characters/{id}/lottery/takarakuji/ticket` | Get character's current round ticket and past participation history | Character Auth |
 | `GET` | `/characters/{id}/lottery/tickets` | Get character tavern raffle ticket count | Character Auth |
-| `POST` | `/characters/{id}/lottery/raffle` | Play raffle drawing mini-game (Standard: 3 tickets, Special: 300 tickets) | Character Auth |
+| `POST` | `/characters/{id}/lottery/raffle` | Play raffle drawing mini-game (automatic mode: Special if >= 300 tickets [300 consumed], Standard if < 300 [3 consumed]) | Character Auth |

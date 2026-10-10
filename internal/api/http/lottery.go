@@ -16,7 +16,7 @@ import (
 // LotteryService defines the raffle and lottery operations exposed over HTTP.
 type LotteryService interface {
 	GetRaffleTickets(ctx context.Context, characterID string) (int, error)
-	PlayRaffle(ctx context.Context, characterID string, raffleType lottery.RaffleType) (lottery.RaffleResult, int, corecharacter.Character, error)
+	PlayRaffle(ctx context.Context, characterID string) (lottery.RaffleResult, int, corecharacter.Character, error)
 
 	GetTakarakujiStatus(ctx context.Context) (lottery.TakarakujiStatus, error)
 	BuyTakarakujiTicket(ctx context.Context, characterID string) (lottery.TakarakujiPurchaseResult, error)
@@ -35,7 +35,7 @@ type getLotteryTicketsResponse struct {
 }
 
 type playRaffleRequest struct {
-	RaffleType string `json:"raffle_type"` // "STANDARD" or "SPECIAL"
+	RaffleType string `json:"raffle_type,omitempty"` // Deprecated: mode is determined by locked ticket balance. Maintained for backward compatibility.
 }
 
 type playRaffleResponse struct {
@@ -78,16 +78,11 @@ func (h *Handler) handlePlayRaffle(w http.ResponseWriter, r *http.Request) {
 	charID := r.PathValue("id")
 	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
 		var req playRaffleRequest
-		if !decodeJSON(w, r, &req) {
+		if !decodeOptionalJSON(w, r, &req) {
 			return
 		}
 
-		raffleType := lottery.RaffleType(req.RaffleType)
-		if raffleType != lottery.RaffleStandard && raffleType != lottery.RaffleSpecial {
-			raffleType = lottery.RaffleStandard
-		}
-
-		res, remaining, updatedChar, err := h.lottery.PlayRaffle(r.Context(), char.ID, raffleType)
+		res, remaining, updatedChar, err := h.lottery.PlayRaffle(r.Context(), char.ID)
 		if err != nil {
 			if errors.Is(err, lottery.ErrInsufficientTickets) {
 				writeError(w, http.StatusUnprocessableEntity, err)

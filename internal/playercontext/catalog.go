@@ -324,7 +324,7 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		Label:          "福引を引く",
 		Category:       "entertainment",
 		OperationID:    "playRaffle",
-		RequiredParams: []string{"raffle_type"},
+		RequiredParams: []string{},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
