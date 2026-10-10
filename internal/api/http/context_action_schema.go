@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+
+	"github.com/witchcraze/party2re/internal/core/character"
 )
 
 // Keep discovery tied to the same ActionID-specific contract as execution and
@@ -40,7 +42,7 @@ func loadContextParamsSchemas() map[string]json.RawMessage {
 	return schemas
 }
 
-func (h *Handler) contextAction(id string, template map[string]any) (ContextAction, error) {
+func (h *Handler) contextAction(id string, template map[string]any, actor character.Character) (ContextAction, error) {
 	def, ok := actionDefinition(id)
 	if !ok {
 		return ContextAction{}, fmt.Errorf("unknown offered command: %s", id)
@@ -60,7 +62,7 @@ func (h *Handler) contextAction(id string, template map[string]any) (ContextActi
 	if id == "scene_enter" {
 		values := make([]string, 0, len(h.sceneAdapters))
 		for destination, adapter := range h.sceneAdapters {
-			if adapter.read != nil {
+			if adapter.read != nil && (adapter.definition.CanEnter == nil || adapter.definition.CanEnter(actor)) {
 				values = append(values, destination)
 			}
 		}

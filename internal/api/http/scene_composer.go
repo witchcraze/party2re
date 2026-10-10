@@ -73,6 +73,9 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 		case "bank":
 			adapter.title, adapter.commands = "銀行", []string{"bank_deposit", "bank_withdraw"}
 			adapter.read = h.bankSceneData
+		case "secretshop":
+			adapter.title, adapter.commands = "秘密の店", []string{"secretshop_purchase"}
+			adapter.read = h.secretShopSceneData
 		case "home":
 			adapter.title, adapter.commands = "自宅", []string{"home_sleep"}
 			adapter.read = h.homeSceneData
@@ -107,6 +110,9 @@ func (h *Handler) townSceneData(result playercontext.Result) TownSceneData {
 	rows := make([]SceneDestination, 0, len(h.sceneAdapters))
 	for id, adapter := range h.sceneAdapters {
 		if adapter.definition.Parent != "town" {
+			continue
+		}
+		if canEnter := adapter.definition.CanEnter; canEnter != nil && !canEnter(result.Snapshot.Character) {
 			continue
 		}
 		rows = append(rows, SceneDestination{ID: id, Title: adapter.title, Supported: adapter.read != nil, EnterParams: sceneEnterParams{Destination: id}})
@@ -211,6 +217,15 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 		case ShopProductSceneData:
 			scene.Support.Observation, scene.Title = "details", data.Title
 			templates[adapter.commands[0]] = map[string]any{"item_definition_id": data.Product.PurchaseParams.ItemDefinitionID}
+		case SecretShopCatalogSceneData:
+			scene.Support.Observation, scene.Title = "details", data.Title
+			if p := data.Page.Next; p != nil {
+				choices = append(choices, "scene_page")
+				templates["scene_page"] = map[string]any{"destination": p.Destination, "offset": p.Offset, "limit": p.Limit}
+			}
+		case SecretShopProductSceneData:
+			scene.Support.Observation, scene.Title = "details", data.Title
+			templates["secretshop_purchase"] = map[string]any{"item_id": data.Product.PurchaseParams.ItemID}
 		case HomeSceneData:
 			scene.Support.Observation = "details"
 			scene.Title = data.View.Owner.Name + "の家"
@@ -259,7 +274,7 @@ func (h *Handler) composeSelectedScene(ctx context.Context, result playercontext
 		if !connected || !eligible {
 			continue
 		}
-		action, err := h.contextAction(def.ID, templates[def.ID])
+		action, err := h.contextAction(def.ID, templates[def.ID], result.Snapshot.Character)
 		if err != nil {
 			return err
 		}

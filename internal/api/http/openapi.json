@@ -5059,6 +5059,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/CasinoLobbySceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SecretShopCatalogSceneData"
                     }
                   ]
                 }
@@ -5094,6 +5097,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/CasinoSelectedSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SecretShopProductSceneData"
                     }
                   ]
                 }
@@ -5385,6 +5391,66 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "secretshop"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/SecretShopCatalogSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "subject"
+                },
+                "location_id": {
+                  "const": "secretshop"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/SecretShopProductSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
           }
         ],
         "description": "Registered selected or feature-owned activity scene. Actual sleep, unfinished work, membership and runs override ordinary selection; conflicting exclusive facts are preserved. GET never joins, advances, settles or recovers gameplay.",
@@ -5486,6 +5552,66 @@
         ],
         "type": "object"
       },
+      "SecretShopCatalogSceneData": {
+        "additionalProperties": false,
+        "description": "Qualified read-only SecretShop observation. GET does not invoke NPC actions or purchase. Existing REST operations remain registered pending retirement verification.",
+        "properties": {
+          "is_eligible": {
+            "const": true,
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SecretShopProduct"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "npc_name": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "page": {
+            "$ref": "#/components/schemas/ShopScenePage"
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "quantity": {
+            "additionalProperties": false,
+            "properties": {
+              "maximum": {
+                "const": 99,
+                "type": "integer"
+              },
+              "minimum": {
+                "const": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "minimum",
+              "maximum"
+            ],
+            "type": "object"
+          },
+          "title": {
+            "maxLength": 128,
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent",
+          "title",
+          "npc_name",
+          "is_eligible",
+          "quantity",
+          "items",
+          "page"
+        ],
+        "type": "object"
+      },
       "SecretShopItem": {
         "properties": {
           "category": {
@@ -5514,6 +5640,135 @@
           "category",
           "price",
           "description"
+        ],
+        "type": "object"
+      },
+      "SecretShopProduct": {
+        "additionalProperties": false,
+        "description": "Exact SecretShop status item facts after required HelperQuest filtering. Selection and purchase use the catalog ID, never an inventory instance or implicit saved target.",
+        "properties": {
+          "category": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 1024,
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "item_definition_id": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "price": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "purchase_params": {
+            "$ref": "#/components/schemas/SecretShopPurchaseParams"
+          },
+          "select_params": {
+            "additionalProperties": false,
+            "properties": {
+              "target_id": {
+                "maxLength": 128,
+                "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+                "type": "string"
+              },
+              "target_kind": {
+                "const": "item"
+              }
+            },
+            "required": [
+              "target_kind",
+              "target_id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "item_definition_id",
+          "name",
+          "category",
+          "price",
+          "description",
+          "select_params",
+          "purchase_params"
+        ],
+        "type": "object"
+      },
+      "SecretShopProductSceneData": {
+        "additionalProperties": false,
+        "description": "Qualified read-only SecretShop observation. GET does not invoke NPC actions or purchase. Existing REST operations remain registered pending retirement verification.",
+        "properties": {
+          "is_eligible": {
+            "const": true,
+            "type": "boolean"
+          },
+          "npc_name": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          },
+          "product": {
+            "$ref": "#/components/schemas/SecretShopProduct"
+          },
+          "quantity": {
+            "additionalProperties": false,
+            "properties": {
+              "maximum": {
+                "const": 99,
+                "type": "integer"
+              },
+              "minimum": {
+                "const": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "minimum",
+              "maximum"
+            ],
+            "type": "object"
+          },
+          "title": {
+            "maxLength": 128,
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent",
+          "title",
+          "npc_name",
+          "is_eligible",
+          "quantity",
+          "product"
+        ],
+        "type": "object"
+      },
+      "SecretShopPurchaseParams": {
+        "additionalProperties": false,
+        "description": "Explicit catalog target template; the purchase command additionally requires editable quantity.",
+        "properties": {
+          "item_id": {
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id"
         ],
         "type": "object"
       },
@@ -5836,7 +6091,8 @@
                       "shop_weapon",
                       "shop_armor",
                       "shop_item",
-                      "shop_accessory"
+                      "shop_accessory",
+                      "secretshop"
                     ],
                     "type": "string"
                   },

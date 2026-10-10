@@ -3,15 +3,28 @@ package main
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/playercontext"
+	"github.com/witchcraze/party2re/internal/secretshop"
 	"github.com/witchcraze/party2re/internal/shop"
 )
 
 func newPlayerContext(core *coreServices, soc *socServices, econ *econServices, cmbt *cmbtServices, misc *miscServices) *playercontext.Service {
 	scenes := []playercontext.SceneDefinition{
 		{ID: "town", Pageable: true}, {ID: "bank", Parent: "town"},
+		{ID: "secretshop", Parent: "town", SubjectKind: "item", Pageable: true, CanEnter: secretshop.CheckEligibility,
+			SubjectAvailable: func(ctx context.Context, actorID, targetID string) (bool, error) {
+				status, err := misc.secretshop.GetShopStatus(ctx, actorID)
+				if errors.Is(err, secretshop.ErrAccessDenied) {
+					return false, nil
+				}
+				if err != nil {
+					return false, err
+				}
+				return slices.ContainsFunc(status.Items, func(p secretshop.Item) bool { return p.ID == targetID }), nil
+			}},
 		{ID: "home", Parent: "town", SubjectKind: "home", SubjectAvailable: func(ctx context.Context, _, target string) (bool, error) {
 			_, err := soc.home.GetHomeView(ctx, target, "", "")
 			if errors.Is(err, home.ErrCharacterNotFound) {

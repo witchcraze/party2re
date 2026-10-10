@@ -9,6 +9,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
@@ -198,7 +199,7 @@ func TestHomeTemplateUsesExplicitActorAndDoesNotBindNavigation(t *testing.T) {
 
 func TestOfferedParamsReuseGatewaySchemaAndKeepCompleteInputs(t *testing.T) {
 	h := &Handler{}
-	a, err := h.contextAction("scene_page", map[string]any{"destination": "shop_weapon", "offset": 20, "limit": 20})
+	a, err := h.contextAction("scene_page", map[string]any{"destination": "shop_weapon", "offset": 20, "limit": 20}, character.Character{})
 	if err != nil {
 		t.Fatal(err)
 	}

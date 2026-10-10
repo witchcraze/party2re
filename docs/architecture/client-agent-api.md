@@ -150,7 +150,7 @@ selection and paging. Navigation commands have no price, fatigue, scheduled
 cooldown or implicit feature mutation. Recovery and active-session restrictions
 still apply: browsing cannot bypass sleep or abandon a run.
 
-The initial registry accepts `town`, `bank`, `home` and the four ordinary shops
+The registry accepts `town`, `bank`, `home`, `secretshop` and the four ordinary shops
 (`shop_weapon`, `shop_armor`, `shop_item`, `shop_accessory`), with town as each
 facility's parent. Shop subjects use `target_kind:item` and IDs validated by
 the owned actor's existing Shop catalog, including its eligibility filters.
@@ -160,6 +160,15 @@ that target without changing the actor/viewer. `home_inbox` and `home_outbox` ha
 `home` as their parent and always read the owned actor, without a target input.
 Public Home detail never offers owner mailbox destinations. Other subject kinds
 remain adapter-owned.
+SecretShop registers `target_kind:item` with its public status catalog IDs.
+Its existing JobLevel ≥7 qualification is wired at composition through the pure
+`SceneDefinition.CanEnter` character predicate. Town and the `scene_enter` input
+schema omit disallowed destinations without reading their catalogs.
+Enter/select/page recheck qualification against the owned query snapshot and
+return `403 SCENE_ACCESS_DENIED` before a navigation
+write. A saved disallowed selection becomes `selection_unavailable` without a
+facility/subject read; back and entry to another permitted destination remain
+available. Feature execution still rechecks qualification independently.
 `scene_back` clears a selected subject to its facility list; otherwise it selects
 the registered parent. Enter/select reset subject/page descendants.
 
@@ -171,8 +180,8 @@ existing keyset reader, while later pages reuse its timestamp/ID tokens. Tokens
 are URL-safe base64 strings bounded to 512 characters; existing service cursor
 decoding and ordering are retained. Offset pages retain totals; cursor pages
 return the service next token without inventing a total or a cross-page snapshot.
-Mixed/unknown fields and null values are rejected. Town and static Shop lists
-remain offset-only. Back never accepts a caller-supplied parent.
+Mixed/unknown fields and null values are rejected. Town, ordinary Shop and
+SecretShop lists remain offset-only. Back never accepts a caller-supplied parent.
 
 GET and command refresh share the HTTP selected-scene composer, replacing interim
 `scene.navigation` metadata with `town`, `facility`, `subject`, or
@@ -194,6 +203,18 @@ Bank talk/inspect REST routes still require their independent action-effect
 reconciliation and replacement/retirement verification under #947. The old Bank
 state GET is retired: enter Bank with `scene_enter`, then GET character context.
 GET never changes selection; actual activity can override the Bank scene.
+
+SecretShop facility/subject data reports `support.observation:details` with a
+typed `SecretShopCatalogSceneData` or `SecretShopProductSceneData`. Both contain
+`parent`, `title`, `npc_name`, `is_eligible:true` and quantity bounds 1..99. The
+catalog uses ID-ordered offset pages with non-null `items`; product facts come
+from `GetShopStatus` after required HelperQuest filtering. Each product supplies
+explicit select/purchase IDs. Selected products template `secretshop_purchase`'s
+`item_id`, while `quantity` remains required and editable. A removed/filtered
+product is unavailable; required source errors fail the whole observation.
+GET and refresh invoke no Talk/Inspect/PuffPuff action or purchase. Actual activity
+overrides selection before SecretShop reads. Known purchase/navigation outcomes
+survive a failed scene refresh, with GET-only recovery after the source recovers.
 
 Town's primary collection is `data.destinations`, ordered by destination ID,
 with explicit `enter_params`, observation support and offset page/next inputs.
@@ -600,10 +621,11 @@ purchase; a failed post-command query/profile read preserves the known result or
 rejection with GET-only recovery. Nil SecretShop service remains 501.
 
 The ActionID-specific schema and resolver URL point to the Gateway independently
-of the retained purchase REST operation. Selected SecretShop observations and
-navigation are a separate migration unit: connection alone does not offer the
-purchase in the production town scene. All five SecretShop REST routes remain
-operational pending verified replacements; see [SecretShop design](../design/shops.md#74-purchase-transport-and-remaining-migration)
+of the retained purchase REST operation. Qualified town destinations lead to the
+selected SecretShop catalog/product observations described above, where the
+purchase is discoverable with explicit parameters. All five SecretShop REST
+routes remain operational pending verified replacements; see
+[SecretShop design](../design/shops.md#74-purchase-transport-and-remaining-migration)
 for legacy differences and action reconciliation.
 
 ### Stage adventure command contract

@@ -64,7 +64,7 @@ func (h *Handler) composeActivityScene(ctx context.Context, result playercontext
 				}
 			}
 		}
-		action, err := h.contextAction(def.ID, template)
+		action, err := h.contextAction(def.ID, template, result.Snapshot.Character)
 		if err != nil {
 			return true, err
 		}

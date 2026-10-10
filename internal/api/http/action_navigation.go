@@ -88,6 +88,8 @@ func navigationRejection(err error) (int, ErrorDetail) {
 		return http.StatusBadRequest, ErrorDetail{Code: "INVALID_SELECTION", Message: "Invalid scene, subject or page."}
 	case errors.Is(err, playercontext.ErrSelectionNotFound):
 		return http.StatusNotFound, ErrorDetail{Code: "SELECTION_NOT_FOUND", Message: "Selected subject is unavailable."}
+	case errors.Is(err, playercontext.ErrSceneAccessDenied):
+		return http.StatusForbidden, ErrorDetail{Code: "SCENE_ACCESS_DENIED", Message: "Character does not qualify for the selected scene."}
 	case errors.Is(err, playercontext.ErrNavigationForbidden):
 		return http.StatusForbidden, ErrorDetail{Code: "NAVIGATION_FORBIDDEN", Message: "Character is not owned."}
 	case errors.Is(err, playercontext.ErrNavigationUnavailable):
