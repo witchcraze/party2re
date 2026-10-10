@@ -42,6 +42,8 @@ func depotOrderDBRouter(t *testing.T, failure string) (http.Handler, corecharact
 		{ID: actor.ID[:30] + "dd", DefinitionID: "armor-01", Quantity: 1, EnhancementLevel: 2},
 		{ID: actor.ID[:30] + "cc", DefinitionID: "armor-02", Quantity: 1},
 		{ID: actor.ID[:30] + "bb", DefinitionID: "item-001", Quantity: 8},
+		// Shield from the item catalog: legacy stores it as kind 3, so it sorts after item-001.
+		{ID: actor.ID[:30] + "aa", DefinitionID: "item-071", Quantity: 1},
 	}
 	unsorted := slices.Clone(items)
 	slices.Reverse(unsorted)
@@ -169,7 +171,7 @@ func TestDepotSortAndSaleConcurrency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(storage.Items, items[:4]) || wallet.Money != actor.Money+120 || store.writes != 0 {
+	if !reflect.DeepEqual(storage.Items, slices.Delete(slices.Clone(items), 4, 5)) || wallet.Money != actor.Money+120 || store.writes != 0 {
 		t.Fatalf("assets/order changed: %+v money=%d writes=%d", storage.Items, wallet.Money, store.writes)
 	}
 }

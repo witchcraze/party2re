@@ -619,47 +619,6 @@ func TestSellItemAndBatch(t *testing.T) {
 	}
 }
 
-func TestSortItems(t *testing.T) {
-	ctx := context.Background()
-	depotRepo := newMemoryDepotRepo()
-	charRepo := newMemoryCharRepo()
-	invRepo := newMemoryInvRepo()
-	catalog := newMemoryItemCatalog()
-
-	char, _ := corecharacter.New("Sorter")
-	charRepo.characters[char.ID] = char
-
-	service, _ := NewService(depotRepo, charRepo, invRepo, WithItemDefinitionProvider(catalog))
-
-	dep, _ := NewDepot(char.ID)
-	potion, _ := item.NewInstance("item-001", 1) // Kind 3
-	shield, _ := item.NewInstance("arm-01", 1)   // Kind 2
-	sword, _ := item.NewInstance("wea-01", 1)    // Kind 1
-	// Add in reverse order
-	_ = dep.AddItem(potion)
-	_ = dep.AddItem(shield)
-	_ = dep.AddItem(sword)
-	_ = depotRepo.Save(ctx, dep)
-
-	sortedDep, err := service.SortItems(ctx, char.ID)
-	if err != nil {
-		t.Fatalf("SortItems error: %v", err)
-	}
-	if len(sortedDep.Items) != 3 {
-		t.Fatalf("expected 3 items, got %d", len(sortedDep.Items))
-	}
-	// Kind 1 (weapon) -> Kind 2 (armor) -> Kind 3 (item)
-	if sortedDep.Items[0].DefinitionID != "wea-01" {
-		t.Errorf("expected first item wea-01, got %s", sortedDep.Items[0].DefinitionID)
-	}
-	if sortedDep.Items[1].DefinitionID != "arm-01" {
-		t.Errorf("expected second item arm-01, got %s", sortedDep.Items[1].DefinitionID)
-	}
-	if sortedDep.Items[2].DefinitionID != "item-001" {
-		t.Errorf("expected third item item-001, got %s", sortedDep.Items[2].DefinitionID)
-	}
-}
-
 func TestExpand(t *testing.T) {
 	ctx := context.Background()
 	depotRepo := newMemoryDepotRepo()

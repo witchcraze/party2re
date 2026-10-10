@@ -608,9 +608,10 @@ eligible actor and returns the existing Depot response (IDs, definitions,
 quantities, capacity and expansion count). Enhancement remains in the refreshed
 context projection and persisted state.
 Shared guards, sanitized unknown execution errors and known outcome/GET-only
-refresh recovery apply. Persistence preserves the feature's explicit order;
-the [known comparator-key difference](../design/depot.md#4-depot-sorting-せいとん)
-remains feature work. The former sort REST route returns 404; clients use the
+refresh recovery apply. Persistence preserves the feature's explicit order, whose
+[stored kind/number comparator](../design/depot.md#4-depot-sorting-せいとん) is
+feature-owned; an item whose catalog key cannot be resolved fails the command as an
+unknown execution error. The former sort REST route returns 404; clients use the
 Gateway command after explicit Depot selection.
 
 ### Command outcome and context refresh
