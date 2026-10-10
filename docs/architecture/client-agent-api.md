@@ -604,7 +604,9 @@ remains independent of those routes.
 
 `depot_sort` accepts omitted params or an empty object, with no actor, item
 selection or ordering overrides. It invokes `SortItems` once for the owned
-eligible actor and returns the existing Depot response, including enhancement.
+eligible actor and returns the existing Depot response (IDs, definitions,
+quantities, capacity and expansion count). Enhancement remains in the refreshed
+context projection and persisted state.
 Shared guards, sanitized unknown execution errors and known outcome/GET-only
 refresh recovery apply. Persistence preserves the feature's explicit order;
 the [known comparator-key difference](../design/depot.md#4-depot-sorting-せいとん)

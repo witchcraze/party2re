@@ -97,6 +97,10 @@ func testDepotSortReloadAndContextPages(t *testing.T, gateway bool) {
 		if !outcome.Success || outcome.Context.Character.ID != actor.ID || outcome.Context.Scene.LocationID != "depot" {
 			t.Fatalf("Gateway sort outcome: %d %s", w.Code, raw)
 		}
+		data := decodeShopScene[DepotSceneData](t, outcome.Context)
+		if len(data.Items) != len(items) || data.Items[0].ID != items[0].ID || data.Items[0].EnhancementLevel != items[0].EnhancementLevel {
+			t.Fatalf("Gateway sort lost context facts: %+v", data)
+		}
 		raw = outcome.Result
 	}
 	var result depotResponse
