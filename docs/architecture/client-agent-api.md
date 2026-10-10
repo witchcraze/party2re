@@ -221,9 +221,12 @@ and recovers through GET without another selection write. GET never creates,
 sorts or saves storage, moves items, records collection or schedules work.
 The quote uses the public expansion price reader and is null at the purchased
 expansion cap. It grants no reservation: execution charges the current tier
-inside the existing service transaction. Depot's nine REST operations remain
-registered; [Depot design](../design/depot.md#gateway-observation-and-retained-operations)
-records retained operations and the remaining order/equipment/withdrawal gaps.
+inside the existing service transaction. Clients explicitly enter Depot and
+read GET context for status, and submit `depot_expand` to the Gateway to purchase;
+the former Depot status GET and expansion POST return 404. Seven inventory/transfer
+REST operations remain pending verified replacements;
+[Depot design](../design/depot.md#gateway-observation-and-retained-operations)
+records those operations and the remaining order/equipment/withdrawal gaps.
 
 SecretShop facility/subject data reports `support.observation:details` with a
 typed `SecretShopCatalogSceneData` or `SecretShopProductSceneData`. Both contain

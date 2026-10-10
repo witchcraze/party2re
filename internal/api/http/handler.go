@@ -359,13 +359,11 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/shop/accessory/synthesize", h.handleAccessorySynthesize)
 	mux.HandleFunc("GET /characters/{id}/shop/accessory/recipes", h.handleAccessoryRecipes)
 
-	mux.HandleFunc("GET /characters/{id}/depot", h.handleGetDepot)
 	mux.HandleFunc("POST /characters/{id}/depot/deposit", h.handleDepositDepotItem)
 	mux.HandleFunc("POST /characters/{id}/depot/withdraw", h.handleWithdrawDepotItem)
 	mux.HandleFunc("POST /characters/{id}/depot/sell", h.handleSellDepotItem)
 	mux.HandleFunc("POST /characters/{id}/depot/sell-batch", h.handleSellDepotBatch)
 	mux.HandleFunc("POST /characters/{id}/depot/sort", h.handleSortDepot)
-	mux.HandleFunc("POST /characters/{id}/depot/expand", h.handleExpandDepot)
 	mux.HandleFunc("POST /characters/{id}/depot/send-money", h.handleDepotSendMoney)
 	mux.HandleFunc("POST /characters/{id}/depot/send-item", h.handleDepotSendItem)
 
