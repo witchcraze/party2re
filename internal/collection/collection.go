@@ -209,8 +209,7 @@ func (s *Service) RecordMonsterDefeat(ctx context.Context, characterID string, r
 	if err := s.repo.RecordMonsterDefeat(ctx, characterID, record); err != nil {
 		return err
 	}
-	s.checkMonsterBookCompletion(ctx, characterID)
-	return nil
+	return s.checkMonsterBookCompletion(ctx, characterID)
 }
 
 // CalculateStrong calculates combat strength metric matching legacy Perl CGI (party2/lib/_battle.cgi:1380-1383):
@@ -227,28 +226,6 @@ func deriveMonsterIcon(monsterID string) string {
 		return fmt.Sprintf("mon/%s.gif", strings.TrimPrefix(monsterID, "mon_"))
 	}
 	return monsterID
-}
-
-func (s *Service) checkMonsterBookCompletion(ctx context.Context, characterID string) {
-	if s.totalMonsters <= 0 {
-		return
-	}
-	count, err := s.repo.GetMonsterBookCount(ctx, characterID)
-	if err != nil || count < s.totalMonsters {
-		return
-	}
-	newlyCompleted, err := s.repo.MarkCompleted(ctx, characterID, "monster_book")
-	if err != nil || !newlyCompleted {
-		return
-	}
-	if s.newsPub != nil {
-		charName := s.resolveCharacterName(ctx, characterID)
-		msg := fmt.Sprintf("%sがモンスターブックをコンプリートしました！", charName)
-		_ = s.newsPub.PublishNews(ctx, "collection", msg, msg, "System", time.Now().UTC())
-	}
-	if s.legend != nil {
-		_ = s.legend.RecordLegend(ctx, "comp_mon", characterID)
-	}
 }
 
 func (s *Service) GetMonsterBook(ctx context.Context, characterID string) ([]MonsterBookEntry, CompletionProgress, error) {
@@ -301,78 +278,11 @@ func (s *Service) RecordItemDiscovered(ctx context.Context, characterID, itemID,
 	}
 	switch normCat {
 	case "weapon":
-		s.checkWeaponCollectionCompletion(ctx, characterID)
+		return s.checkWeaponCollectionCompletion(ctx, characterID)
 	case "armor":
-		s.checkArmorCollectionCompletion(ctx, characterID)
+		return s.checkArmorCollectionCompletion(ctx, characterID)
 	default:
-		s.checkItemCollectionCompletion(ctx, characterID)
-	}
-	return nil
-}
-
-func (s *Service) checkWeaponCollectionCompletion(ctx context.Context, characterID string) {
-	if s.totalWeapons <= 0 {
-		return
-	}
-	_, progress, err := s.GetWeaponCollection(ctx, characterID)
-	if err != nil || !progress.IsCompleted {
-		return
-	}
-	newlyCompleted, err := s.repo.MarkCompleted(ctx, characterID, "weapon")
-	if err != nil || !newlyCompleted {
-		return
-	}
-	if s.newsPub != nil {
-		charName := s.resolveCharacterName(ctx, characterID)
-		msg := fmt.Sprintf("%sが武器図鑑をコンプリートしました！", charName)
-		_ = s.newsPub.PublishNews(ctx, "collection", msg, msg, "System", time.Now().UTC())
-	}
-	if s.legend != nil {
-		_ = s.legend.RecordLegend(ctx, "comp_wea", characterID)
-	}
-}
-
-func (s *Service) checkArmorCollectionCompletion(ctx context.Context, characterID string) {
-	if s.totalArmors <= 0 {
-		return
-	}
-	_, progress, err := s.GetArmorCollection(ctx, characterID)
-	if err != nil || !progress.IsCompleted {
-		return
-	}
-	newlyCompleted, err := s.repo.MarkCompleted(ctx, characterID, "armor")
-	if err != nil || !newlyCompleted {
-		return
-	}
-	if s.newsPub != nil {
-		charName := s.resolveCharacterName(ctx, characterID)
-		msg := fmt.Sprintf("%sが防具図鑑をコンプリートしました！", charName)
-		_ = s.newsPub.PublishNews(ctx, "collection", msg, msg, "System", time.Now().UTC())
-	}
-	if s.legend != nil {
-		_ = s.legend.RecordLegend(ctx, "comp_arm", characterID)
-	}
-}
-
-func (s *Service) checkItemCollectionCompletion(ctx context.Context, characterID string) {
-	if s.totalItems <= 0 {
-		return
-	}
-	count, err := s.repo.GetItemCollectionCount(ctx, characterID, "item")
-	if err != nil || count < s.totalItems {
-		return
-	}
-	newlyCompleted, err := s.repo.MarkCompleted(ctx, characterID, "item")
-	if err != nil || !newlyCompleted {
-		return
-	}
-	if s.newsPub != nil {
-		charName := s.resolveCharacterName(ctx, characterID)
-		msg := fmt.Sprintf("%sがアイテム図鑑をコンプリートしました！", charName)
-		_ = s.newsPub.PublishNews(ctx, "collection", msg, msg, "System", time.Now().UTC())
-	}
-	if s.legend != nil {
-		_ = s.legend.RecordLegend(ctx, "comp_ite", characterID)
+		return s.checkItemCollectionCompletion(ctx, characterID)
 	}
 }
 
