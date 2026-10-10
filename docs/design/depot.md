@@ -148,8 +148,12 @@ Owned status uses explicit `scene_enter` for Depot followed by GET context;
 the old GET `/characters/{id}/depot` route is retired. The `depot_expand`
 Gateway command delegates to `Expand` and replaces POST
 `/characters/{id}/depot/expand`; owned context supplies the read-only quote.
-The seven remaining inventory/transfer REST operations await their own verified
-replacements. The shared
+The `depot_sell` and `depot_sell_batch` commands delegate explicit instance
+selection to `SellItem` and `SellItems` and return the existing Depot/gold-earned
+result. Discovery never chooses all visible instances for a batch. Seven
+inventory/transfer REST operations remain pending verified retirement; sale
+commands are connected, while deposit/withdraw/send/sort adapters remain pending.
+The shared
 [command contract](../architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions)
 owns explicit intent, guards and outcome recovery. Observation does not execute
 NPC, delivery, collection or scheduling effects. Legacy `depot.cgi:68–81` dispatch
@@ -160,8 +164,8 @@ maps to the existing services as follows:
 | Listing/header, `get_depot_c` | GetDepot | Selected Depot GET context; whole-list REST retired |
 | `azukeru` | DepositItem | POST `/characters/{id}/depot/deposit` |
 | `hikidasu` | WithdrawItem | POST `/characters/{id}/depot/withdraw` |
-| `uru` | SellItem | POST `/characters/{id}/depot/sell` |
-| `matomete_uru` | SellItems | POST `/characters/{id}/depot/sell-batch` |
+| `uru` | SellItem | Gateway `depot_sell`; POST `/characters/{id}/depot/sell` retained |
+| `matomete_uru` | SellItems | Gateway `depot_sell_batch`; POST `/characters/{id}/depot/sell-batch` retained |
 | `seiton` | SortItems | POST `/characters/{id}/depot/sort` |
 | `okuru` | SendMoney, SendItem | POST `/characters/{id}/depot/send-money`, `/characters/{id}/depot/send-item` |
 | `expansion_depot` | Expand | Gateway `depot_expand`; expansion REST retired |

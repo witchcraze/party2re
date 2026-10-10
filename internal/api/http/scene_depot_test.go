@@ -100,7 +100,7 @@ func TestDepotSceneOwnedFactsAndReadOnlyNavigation(t *testing.T) {
 				t.Fatalf("lost facts or changed reader order: %+v", data)
 			}
 			for _, action := range observation.AvailableActions {
-				if action.Action != "scene_back" && action.Action != "depot_expand" {
+				if !slices.Contains([]string{"scene_back", "depot_expand", "depot_sell", "depot_sell_batch"}, action.Action) {
 					t.Fatalf("unconnected mutation offered: %+v", action)
 				}
 			}

@@ -224,7 +224,8 @@ expansion cap. It grants no reservation: execution charges the current tier
 inside the existing service transaction. Clients explicitly enter Depot and
 read GET context for status, and submit `depot_expand` to the Gateway to purchase;
 the former Depot status GET and expansion POST return 404. Seven inventory/transfer
-REST operations remain pending verified replacements;
+REST operations remain: sales have Gateway replacements pending separate route
+retirement, while deposit/withdraw/send/sort still need command adapters;
 [Depot design](../design/depot.md#gateway-observation-and-retained-operations)
 records those operations and the remaining order/equipment/withdrawal gaps.
 
@@ -578,6 +579,25 @@ their explicit 4xx statuses. Unknown execution errors retain the common sanitize
 (character, capacity, expansion count, occupied slots and item ID/definition/quantity);
 enhancement facts remain in the context projection. Shared guards and known
 outcome/GET-only refresh recovery apply unchanged.
+
+`depot_sell` requires one non-null string `item_id`; `depot_sell_batch` requires
+`item_ids`, an array of non-null strings. These are owned instance IDs from Depot
+observation. Unknown fields and actor/price/quantity overrides fail typed decoding;
+empty strings/arrays, duplicate IDs and absent targets remain service validations.
+Discovery exposes the strict schemas with empty templates: callers explicitly
+choose targets, including for a batch; observing a page never selects or sells it.
+The adapters call `SellItem` / `SellItems` once and return the existing
+`{depot,gold_earned}` result. Catalog reads, exact base half-price, stack removal,
+safe arithmetic and wallet saturation remain the [Depot service contract](../design/depot.md#3-depot-item-sales-うる--まとめてうる).
+
+Known sale errors map to `DEPOT_INVALID_CHARACTER_ID`,
+`DEPOT_INVALID_ITEM_INSTANCE_ID`, `DEPOT_EMPTY_ITEM_LIST`, `DEPOT_INVALID_AMOUNT`
+or `DEPOT_INVALID_QUANTITY` (400); missing owned targets/storage or character use
+`DEPOT_ITEM_NOT_FOUND`, `DEPOT_NOT_FOUND` or `CHARACTER_NOT_FOUND` (404).
+Provider/catalog/persistence/cancellation/overflow failures keep the shared
+sanitized `EXECUTION_FAILED` 500 without context or a replay guarantee. Known
+success/rejection survives observation refresh failure and recovers via GET.
+Sale REST operations remain registered until their own verified retirement.
 
 ### Command outcome and context refresh
 
