@@ -124,6 +124,8 @@ func TestContestRepository_Database(t *testing.T) {
 		Round:         roundNum,
 		CharacterID:   char.ID,
 		CharacterName: char.Name,
+		GuildID:       "guild-db-test",
+		GuildName:     "DBTestGuild",
 		Title:         "Epic Sunrise Over Peaks",
 		PhotoID:       photoID,
 		ImageURL:      photo.ImageURL,
@@ -144,6 +146,12 @@ func TestContestRepository_Database(t *testing.T) {
 	if foundEntry.Title != entry.Title {
 		t.Errorf("unexpected foundEntry: %+v", foundEntry)
 	}
+	if foundEntry.GuildID != entry.GuildID {
+		t.Errorf("expected GuildID %q, got %q", entry.GuildID, foundEntry.GuildID)
+	}
+	if foundEntry.GuildName != entry.GuildName {
+		t.Errorf("expected GuildName %q, got %q", entry.GuildName, foundEntry.GuildName)
+	}
 
 	byChar, err := repo.FindEntryByRoundAndCharacter(ctx, roundNum, char.ID)
 	if err != nil || byChar.ID != entryID {
@@ -158,6 +166,9 @@ func TestContestRepository_Database(t *testing.T) {
 	entries, err := repo.ListEntriesByRound(ctx, roundNum)
 	if err != nil || len(entries) != 1 {
 		t.Fatalf("ListEntriesByRound failed: %v", err)
+	}
+	if entries[0].GuildID != entry.GuildID || entries[0].GuildName != entry.GuildName {
+		t.Errorf("ListEntriesByRound unexpected guild info: %+v", entries[0])
 	}
 
 	entryCount, err := repo.CountEntriesByRound(ctx, roundNum)

@@ -85,6 +85,7 @@ type ContestEntry struct {
 	Round         int       `json:"round"`
 	CharacterID   string    `json:"character_id"`
 	CharacterName string    `json:"character_name"`
+	GuildID       string    `json:"-"` // guild captured at entry; GP at settlement go to this ID
 	GuildName     string    `json:"guild_name,omitempty"`
 	Title         string    `json:"title"`
 	PhotoID       string    `json:"photo_id"`
@@ -181,9 +182,20 @@ type CharacterRepository interface {
 	Update(ctx context.Context, char corecharacter.Character) error
 }
 
-// GuildService defines guild operations for awarding guild points.
+// GuildRef identifies the guild a character belonged to at a point in time.
+type GuildRef struct {
+	ID   string
+	Name string
+}
+
+// GuildService defines guild operations used to snapshot a character's guild at
+// entry time and to award guild points to that snapshotted guild at settlement.
 type GuildService interface {
-	AddGuildPoints(ctx context.Context, characterID string, points int) error
+	// GuildOf returns the character's current guild; ok is false when the character has none.
+	GuildOf(ctx context.Context, characterID string) (ref GuildRef, ok bool, err error)
+	// AddPoints awards points to the guild with the given ID. It must be a no-op
+	// when that guild no longer exists.
+	AddPoints(ctx context.Context, guildID string, points int64) error
 }
 
 // NewsPublisher defines interface for publishing announcements.

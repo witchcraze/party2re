@@ -330,7 +330,7 @@ func newMiscServices(
 		core.charRepo,
 		contestRepo,
 		contest.WithTransactionProvider(core.txProvider),
-		contest.WithGuildService(soc.guild),
+		contest.WithGuildService(contestGuildAdapter{guild: soc.guild}),
 		contest.WithNewsPublisher(contest.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
 			_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)
 			return err

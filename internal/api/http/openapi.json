@@ -3236,6 +3236,9 @@
           "character_name": {
             "type": "string"
           },
+          "guild_name": {
+            "type": "string"
+          },
           "image_url": {
             "type": "string"
           },

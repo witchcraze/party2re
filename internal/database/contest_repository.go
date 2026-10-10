@@ -247,10 +247,11 @@ func (r *ContestRepository) SaveEntry(ctx context.Context, e contest.ContestEntr
 	}
 
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
-		INSERT INTO contest_entries (id, round, character_id, character_name, guild_name, title, photo_id, image_url, caption, votes, ranking, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO contest_entries (id, round, character_id, character_name, guild_id, guild_name, title, photo_id, image_url, caption, votes, ranking, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			character_name = VALUES(character_name),
+			guild_id = VALUES(guild_id),
 			guild_name = VALUES(guild_name),
 			title = VALUES(title),
 			photo_id = VALUES(photo_id),
@@ -259,13 +260,13 @@ func (r *ContestRepository) SaveEntry(ctx context.Context, e contest.ContestEntr
 			votes = VALUES(votes),
 			ranking = VALUES(ranking),
 			updated_at = VALUES(updated_at)
-	`, e.ID, e.Round, e.CharacterID, e.CharacterName, e.GuildName, e.Title, e.PhotoID, e.ImageURL, e.Caption, e.Votes, e.Ranking, e.CreatedAt, e.UpdatedAt)
+	`, e.ID, e.Round, e.CharacterID, e.CharacterName, e.GuildID, e.GuildName, e.Title, e.PhotoID, e.ImageURL, e.Caption, e.Votes, e.Ranking, e.CreatedAt, e.UpdatedAt)
 	return err
 }
 
 func (r *ContestRepository) FindEntryByID(ctx context.Context, id string) (contest.ContestEntry, error) {
 	row := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT id, round, character_id, character_name, guild_name, title, photo_id, image_url, caption, votes, ranking, created_at, updated_at
+		SELECT id, round, character_id, character_name, guild_id, guild_name, title, photo_id, image_url, caption, votes, ranking, created_at, updated_at
 		FROM contest_entries
 		WHERE id = ?
 	`, id)
@@ -274,7 +275,7 @@ func (r *ContestRepository) FindEntryByID(ctx context.Context, id string) (conte
 
 func (r *ContestRepository) FindEntryByIDForUpdate(ctx context.Context, id string) (contest.ContestEntry, error) {
 	row := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT id, round, character_id, character_name, guild_name, title, photo_id, image_url, caption, votes, ranking, created_at, updated_at
+		SELECT id, round, character_id, character_name, guild_id, guild_name, title, photo_id, image_url, caption, votes, ranking, created_at, updated_at
 		FROM contest_entries
 		WHERE id = ?
 		FOR UPDATE
@@ -284,7 +285,7 @@ func (r *ContestRepository) FindEntryByIDForUpdate(ctx context.Context, id strin
 
 func (r *ContestRepository) FindEntryByRoundAndCharacter(ctx context.Context, round int, characterID string) (contest.ContestEntry, error) {
 	row := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT id, round, character_id, character_name, guild_name, title, photo_id, image_url, caption, votes, ranking, created_at, updated_at
+		SELECT id, round, character_id, character_name, guild_id, guild_name, title, photo_id, image_url, caption, votes, ranking, created_at, updated_at
 		FROM contest_entries
 		WHERE round = ? AND character_id = ?
 	`, round, characterID)
@@ -293,7 +294,7 @@ func (r *ContestRepository) FindEntryByRoundAndCharacter(ctx context.Context, ro
 
 func (r *ContestRepository) FindEntryByRoundAndTitle(ctx context.Context, round int, title string) (contest.ContestEntry, error) {
 	row := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
-		SELECT id, round, character_id, character_name, guild_name, title, photo_id, image_url, caption, votes, ranking, created_at, updated_at
+		SELECT id, round, character_id, character_name, guild_id, guild_name, title, photo_id, image_url, caption, votes, ranking, created_at, updated_at
 		FROM contest_entries
 		WHERE round = ? AND title = ?
 	`, round, title)
@@ -302,7 +303,7 @@ func (r *ContestRepository) FindEntryByRoundAndTitle(ctx context.Context, round 
 
 func (r *ContestRepository) ListEntriesByRound(ctx context.Context, round int) ([]contest.ContestEntry, error) {
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
-		SELECT id, round, character_id, character_name, guild_name, title, photo_id, image_url, caption, votes, ranking, created_at, updated_at
+		SELECT id, round, character_id, character_name, guild_id, guild_name, title, photo_id, image_url, caption, votes, ranking, created_at, updated_at
 		FROM contest_entries
 		WHERE round = ?
 		ORDER BY votes DESC, created_at ASC, id ASC
@@ -315,7 +316,7 @@ func (r *ContestRepository) ListEntriesByRound(ctx context.Context, round int) (
 	var entries []contest.ContestEntry
 	for rows.Next() {
 		var e contest.ContestEntry
-		if err := rows.Scan(&e.ID, &e.Round, &e.CharacterID, &e.CharacterName, &e.GuildName, &e.Title, &e.PhotoID, &e.ImageURL, &e.Caption, &e.Votes, &e.Ranking, &e.CreatedAt, &e.UpdatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.Round, &e.CharacterID, &e.CharacterName, &e.GuildID, &e.GuildName, &e.Title, &e.PhotoID, &e.ImageURL, &e.Caption, &e.Votes, &e.Ranking, &e.CreatedAt, &e.UpdatedAt); err != nil {
 			return nil, err
 		}
 		entries = append(entries, e)
@@ -335,7 +336,7 @@ func (r *ContestRepository) CountEntriesByRound(ctx context.Context, round int) 
 
 func (r *ContestRepository) scanEntry(row interface{ Scan(...any) error }) (contest.ContestEntry, error) {
 	var e contest.ContestEntry
-	err := row.Scan(&e.ID, &e.Round, &e.CharacterID, &e.CharacterName, &e.GuildName, &e.Title, &e.PhotoID, &e.ImageURL, &e.Caption, &e.Votes, &e.Ranking, &e.CreatedAt, &e.UpdatedAt)
+	err := row.Scan(&e.ID, &e.Round, &e.CharacterID, &e.CharacterName, &e.GuildID, &e.GuildName, &e.Title, &e.PhotoID, &e.ImageURL, &e.Caption, &e.Votes, &e.Ranking, &e.CreatedAt, &e.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return contest.ContestEntry{}, contest.ErrEntryNotFound
