@@ -621,10 +621,17 @@ purchase; a failed post-command query/profile read preserves the known result or
 rejection with GET-only recovery. Nil SecretShop service remains 501.
 
 The ActionID-specific schema and resolver URL point to the Gateway independently
-of the retained purchase REST operation. Qualified town destinations lead to the
-selected SecretShop catalog/product observations described above, where the
-purchase is discoverable with explicit parameters. All five SecretShop REST
-routes remain operational pending verified replacements; see
+of REST operations. `GET /characters/{id}/secretshop` and
+`POST /characters/{id}/secretshop/purchase` are retired and return 404. Enter
+SecretShop with `scene_enter` (`destination:secretshop`), then GET character
+context for the catalog/product observations described above. The context's
+character slot identifies the actor; scene `info.title` supplies the former
+`location_name`, and `info.npc_name`/`info.is_eligible` supply the facility facts.
+Products provide explicit purchase templates. Execute `secretshop_purchase`
+with both `item_id` and `quantity`; clients migrating the retired REST default
+must send `quantity:1` explicitly. Missing quantity is invalid, and nonpositive
+quantity is rejected rather than defaulted. Talk, inspect and puff-puff REST
+operations remain registered pending their own replacements; see
 [SecretShop design](../design/shops.md#74-purchase-transport-and-remaining-migration)
 for legacy differences and action reconciliation.
 

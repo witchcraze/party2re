@@ -6450,7 +6450,7 @@
           "items",
           "page"
         ],
-        "description": "Qualified read-only SecretShop observation. GET does not invoke NPC actions or purchase. Existing REST operations remain registered pending retirement verification."
+        "description": "Qualified read-only SecretShop observation. GET does not invoke NPC actions or purchase. Status and purchase REST operations are retired; NPC interaction REST operations remain registered."
       },
       "SecretShopProductSceneData": {
         "type": "object",
@@ -6502,7 +6502,7 @@
           "quantity",
           "product"
         ],
-        "description": "Qualified read-only SecretShop observation. GET does not invoke NPC actions or purchase. Existing REST operations remain registered pending retirement verification."
+        "description": "Qualified read-only SecretShop observation. GET does not invoke NPC actions or purchase. Status and purchase REST operations are retired; NPC interaction REST operations remain registered."
       }
     },
     "securitySchemes": {

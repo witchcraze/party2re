@@ -164,9 +164,13 @@ The secret shop stocks the 8 authentic rare items specified in legacy `secret.cg
 The `secretshop_purchase` Gateway command uses the existing purchase service and
 HTTP-owned response/dialogue composition. It requires explicit `item_id` and
 `quantity`; [the command contract](../architecture/client-agent-api.md#secretshop-purchase-command-contract)
-defines strict input, rejection and refresh recovery behavior. All five REST
-routes remain registered: status GET and talk, inspect, puff-puff and purchase
-POSTs. Their defaults and behavior remain unchanged; retirement remains under #947.
+defines strict input, rejection and refresh recovery behavior. Status GET and
+purchase POST are retired. Clients enter SecretShop with `scene_enter`, GET
+character context for catalog/product observations, and purchase through the
+Gateway with explicit item/quantity (send `quantity:1` for a single item; the
+retired REST quantity default does not apply). Talk, inspect and puff-puff POSTs
+remain registered pending their own replacement and action-effect reconciliation
+under #947.
 Qualified town navigation now exposes `secretshop`: JobLevel ≥7 is checked without
 catalog reads for town discovery and again before entry/select/page writes.
 Saved selections whose qualification or product availability disappears become
@@ -179,8 +183,8 @@ owns the typed schemas, qualification/error and refresh behavior. GET invokes no
 NPC action, purchase, delivery or collection write.
 
 Legacy `secret.cgi:34–82` dispatches `かう` to `kau` and `ぱふぱふ` to `pafupafu`.
-The former maps to `PurchaseItem` through the Gateway or retained purchase REST
-route; the latter remains the puff-puff REST operation. `item.cgi:57–69` entry
+The former maps to `PurchaseItem` through the Gateway; the latter remains the
+puff-puff REST operation. `item.cgi:57–69` entry
 now maps to qualified ordinary scene navigation under #1047; CGI presence/log
 effects remain separate reconciliation. Shared talk/inspect and puff-puff effects
 and their route replacements remain pending. Legacy `kau` buys one item; current
