@@ -2,6 +2,7 @@ package ranking_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -110,5 +111,135 @@ func TestNextSundayMidnightJST(t *testing.T) {
 	expectedSun3 := time.Date(2026, 9, 27, 0, 0, 0, 0, jst).UTC()
 	if !nextSun3.Equal(expectedSun3) {
 		t.Fatalf("expected %v, got %v", expectedSun3, nextSun3)
+	}
+}
+
+func TestService_WeeklyJobChange_ReRotationDoesNotOverwriteFinalizedSnapshot(t *testing.T) {
+	repo := newMockRepo()
+	fixedTime := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
+	if err != nil {
+		t.Fatalf("failed to create ranking service: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Initial rotation with 2 active entries
+	if err := svc.RecordJobChange(ctx, "char-1"); err != nil {
+		t.Fatalf("RecordJobChange failed: %v", err)
+	}
+	repo.weeklyJobChangeRankings = []ranking.CharacterRankingEntry{
+		{Rank: 1, CharacterID: "char-1", CharacterName: "JobMaster", Score: 1},
+	}
+	repo.weeklyJobChangeTotal = 1
+
+	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+		t.Fatalf("RotateWeeklyJobChangeRanking failed: %v", err)
+	}
+
+	snapBefore, err := svc.GetSnapshot(ctx, ranking.RankingTypeWeeklyJobChange)
+	if err != nil {
+		t.Fatalf("GetSnapshot failed: %v", err)
+	}
+	if snapBefore.TotalCount != 1 {
+		t.Fatalf("expected snapshot total count 1, got %d", snapBefore.TotalCount)
+	}
+
+	// 2. Simulate re-running rotation when active weekly changes are now empty (0 entries)
+	repo.weeklyJobChangeRankings = nil
+	repo.weeklyJobChangeTotal = 0
+
+	// Advance time by 10 seconds (immediate retry/re-execution)
+	svc, _ = ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime.Add(10 * time.Second) }))
+	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+		t.Fatalf("re-running RotateWeeklyJobChangeRanking failed: %v", err)
+	}
+
+	// Acceptance criteria: rotation再実行で確定済み前週snapshotを空内容へ上書きしない
+	snapAfter, err := svc.GetSnapshot(ctx, ranking.RankingTypeWeeklyJobChange)
+	if err != nil {
+		t.Fatalf("GetSnapshot failed: %v", err)
+	}
+	if snapAfter.TotalCount != 1 {
+		t.Fatalf("expected finalized snapshot to be preserved with total count 1, got %d", snapAfter.TotalCount)
+	}
+	if snapAfter.CalculatedAt != snapBefore.CalculatedAt {
+		t.Fatalf("expected finalized snapshot CalculatedAt %v, got %v", snapBefore.CalculatedAt, snapAfter.CalculatedAt)
+	}
+}
+
+func TestService_WeeklyJobChange_RollbackOnResetFailure(t *testing.T) {
+	repo := newMockRepo()
+	fixedTime := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
+	if err != nil {
+		t.Fatalf("failed to create ranking service: %v", err)
+	}
+
+	ctx := context.Background()
+
+	if err := svc.RecordJobChange(ctx, "char-1"); err != nil {
+		t.Fatalf("RecordJobChange failed: %v", err)
+	}
+	repo.weeklyJobChangeRankings = []ranking.CharacterRankingEntry{
+		{Rank: 1, CharacterID: "char-1", CharacterName: "JobMaster", Score: 1},
+	}
+	repo.weeklyJobChangeTotal = 1
+
+	// Inject reset failure
+	repo.resetWeeklyJobChangesErr = errors.New("simulated DB reset failure")
+
+	err = svc.RotateWeeklyJobChangeRanking(ctx)
+	if err == nil {
+		t.Fatal("expected RotateWeeklyJobChangeRanking to fail on reset error, got nil")
+	}
+
+	// Acceptance criteria: snapshot保存・reset失敗で一貫したrollbackになる
+	// 1. Active weekly job changes should NOT be reset (rolled back)
+	if repo.activeWeeklyJobChanges["char-1"] != 1 {
+		t.Fatalf("expected active weekly job changes to be rolled back to 1, got %d", repo.activeWeeklyJobChanges["char-1"])
+	}
+
+	// 2. Snapshot should NOT be committed in repo
+	if _, ok := repo.snapshots[ranking.RankingTypeWeeklyJobChange]; ok {
+		t.Fatal("expected snapshot to not be persisted after reset failure")
+	}
+
+	// 3. Cache should NOT be published
+	cachedPage, err := svc.GetWeeklyJobChangeRanking(ctx, 10, 0, true)
+	if err == nil && cachedPage.IsSnapshot && cachedPage.Total > 0 {
+		t.Fatal("expected cache to not be populated after failed rotation")
+	}
+}
+
+func TestService_WeeklyJobChange_RollbackOnSaveSnapshotFailure(t *testing.T) {
+	repo := newMockRepo()
+	fixedTime := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
+	if err != nil {
+		t.Fatalf("failed to create ranking service: %v", err)
+	}
+
+	ctx := context.Background()
+
+	if err := svc.RecordJobChange(ctx, "char-1"); err != nil {
+		t.Fatalf("RecordJobChange failed: %v", err)
+	}
+	repo.weeklyJobChangeRankings = []ranking.CharacterRankingEntry{
+		{Rank: 1, CharacterID: "char-1", CharacterName: "JobMaster", Score: 1},
+	}
+	repo.weeklyJobChangeTotal = 1
+
+	// Inject save snapshot failure
+	repo.saveSnapshotErr = errors.New("simulated save snapshot failure")
+
+	err = svc.RotateWeeklyJobChangeRanking(ctx)
+	if err == nil {
+		t.Fatal("expected RotateWeeklyJobChangeRanking to fail on save snapshot error, got nil")
+	}
+
+	// Acceptance criteria: snapshot保存・reset失敗で一貫したrollbackになる
+	if repo.activeWeeklyJobChanges["char-1"] != 1 {
+		t.Fatalf("expected active weekly job changes to be preserved, got %d", repo.activeWeeklyJobChanges["char-1"])
 	}
 }

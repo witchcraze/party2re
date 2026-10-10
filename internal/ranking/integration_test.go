@@ -2,8 +2,12 @@ package ranking_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/ranking"
@@ -181,5 +185,300 @@ func TestRankingServiceIntegration(t *testing.T) {
 	warmLvlPage, err := warmupSvc.GetLevelRanking(ctx, 10, 0, true)
 	if err != nil || !warmLvlPage.IsSnapshot {
 		t.Fatalf("expected cached ranking after warmup: %v, %+v", err, warmLvlPage)
+	}
+}
+
+type interceptingRankingRepo struct {
+	ranking.Repository
+	onAfterGetActiveWeekly func()
+}
+
+func (r *interceptingRankingRepo) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	if tp, ok := r.Repository.(ranking.TransactionProvider); ok {
+		return tp.RunInTx(ctx, fn)
+	}
+	return fn(ctx)
+}
+
+func (r *interceptingRankingRepo) GetActiveWeeklyJobChangeRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
+	entries, total, err := r.Repository.GetActiveWeeklyJobChangeRanking(ctx, limit, offset)
+	if err == nil && r.onAfterGetActiveWeekly != nil {
+		r.onAfterGetActiveWeekly()
+	}
+	return entries, total, err
+}
+
+func TestWeeklyJobChange_DeterministicInterleaving_RealDB(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+
+	// Clean up weekly job changes before test
+	if _, err := db.ExecContext(ctx, "DELETE FROM weekly_job_changes"); err != nil {
+		t.Fatal(err)
+	}
+
+	rankingRepo, err := database.NewRankingRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create two test characters
+	charA, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("WJCA_%d", time.Now().UnixNano()%100000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	charB, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("WJCB_%d", time.Now().UnixNano()%100000))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Record 2 initial job changes for charA before rotation starts
+	baseSvc, err := ranking.NewService(rankingRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := baseSvc.RecordJobChange(ctx, charA.ID); err != nil {
+		t.Fatalf("RecordJobChange charA 1 failed: %v", err)
+	}
+	if err := baseSvc.RecordJobChange(ctx, charA.ID); err != nil {
+		t.Fatalf("RecordJobChange charA 2 failed: %v", err)
+	}
+
+	readDone := make(chan struct{})
+	resumeReset := make(chan struct{})
+	var intercepted atomic.Bool
+
+	interceptedRepo := &interceptingRankingRepo{
+		Repository: rankingRepo,
+		onAfterGetActiveWeekly: func() {
+			if intercepted.CompareAndSwap(false, true) {
+				close(readDone)
+				<-resumeReset
+			}
+		},
+	}
+
+	rotSvc, err := ranking.NewService(interceptedRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Run RotateWeeklyJobChangeRanking in background goroutine.
+	// It acquires LockWeeklyJobChangesForUpdate, reads active changes, and pauses on readDone.
+	rotErr := make(chan error, 1)
+	go func() {
+		rotErr <- rotSvc.RotateWeeklyJobChangeRanking(ctx)
+	}()
+
+	select {
+	case <-readDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for active ranking read")
+	}
+
+	// 2. Concurrently record a job change for charB while rotation is paused between read and reset.
+	// Because rotation holds LockWeeklyJobChangesForUpdate under its transaction,
+	// this call MUST wait on the row lock and not finish until rotation commits!
+	writerDone := make(chan error, 1)
+	go func() {
+		writerDone <- rotSvc.RecordJobChange(ctx, charB.ID)
+	}()
+
+	// Verify that writer is blocked while rotation transaction holds the lock
+	select {
+	case err := <-writerDone:
+		t.Fatalf("RecordJobChange completed prematurely while rotation held lock: %v", err)
+	case <-time.After(150 * time.Millisecond):
+		// Expected: writer is waiting for rotation lock to be released
+	}
+
+	// 3. Resume rotation: saves snapshot and executes ResetWeeklyJobChanges, then commits.
+	close(resumeReset)
+
+	select {
+	case err := <-rotErr:
+		if err != nil {
+			t.Fatalf("RotateWeeklyJobChangeRanking failed: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for rotation to complete")
+	}
+
+	// 4. Now writer must unblock, write its increment into the new week, and complete successfully.
+	select {
+	case err := <-writerDone:
+		if err != nil {
+			t.Fatalf("RecordJobChange failed: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for RecordJobChange to complete after rotation")
+	}
+
+	// 5. Verify Invariants:
+	// - Snapshot contains charA with count 2, and charB is NOT in snapshot.
+	snap, err := rotSvc.GetSnapshot(ctx, ranking.RankingTypeWeeklyJobChange)
+	if err != nil {
+		t.Fatalf("GetSnapshot failed: %v", err)
+	}
+	var snapEntries []ranking.CharacterRankingEntry
+	if err := json.Unmarshal([]byte(snap.SnapshotData), &snapEntries); err != nil {
+		t.Fatalf("unmarshal snapshot failed: %v", err)
+	}
+
+	var foundCharA, foundCharB bool
+	for _, entry := range snapEntries {
+		if entry.CharacterID == charA.ID {
+			foundCharA = true
+			if entry.Score != 2 {
+				t.Fatalf("expected charA score 2 in snapshot, got %d", entry.Score)
+			}
+		}
+		if entry.CharacterID == charB.ID {
+			foundCharB = true
+		}
+	}
+	if !foundCharA {
+		t.Fatal("expected charA in frozen previous-week snapshot")
+	}
+	if foundCharB {
+		t.Fatal("charB should NOT be in previous-week snapshot")
+	}
+
+	// - Active weekly job changes contains charB with count 1, and charA has 0 rows (reset).
+	activeEntries, total, err := rankingRepo.GetActiveWeeklyJobChangeRanking(ctx, 10, 0)
+	if err != nil {
+		t.Fatalf("GetActiveWeeklyJobChangeRanking failed: %v", err)
+	}
+	if total != 1 || len(activeEntries) != 1 {
+		t.Fatalf("expected exactly 1 active weekly entry for charB in new week, got total=%d, entries=%d", total, len(activeEntries))
+	}
+	if activeEntries[0].CharacterID != charB.ID || activeEntries[0].Score != 1 {
+		t.Fatalf("unexpected active entry in new week: %+v", activeEntries[0])
+	}
+}
+
+func TestWeeklyJobChange_ConcurrentRace_RealDB(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+
+	rankingRepo, err := database.NewRankingRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	svc, err := ranking.NewService(rankingRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for iter := 0; iter < 5; iter++ {
+		char, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("RaceWJC_%d_%d", iter, time.Now().UnixNano()%10000))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err1, err2 := database.RunRace2(
+			func() error {
+				return svc.RotateWeeklyJobChangeRanking(ctx)
+			},
+			func() error {
+				return svc.RecordJobChange(ctx, char.ID)
+			},
+		)
+
+		if database.IsDeadlockError(err1) || database.IsDeadlockError(err2) {
+			t.Fatalf("iter %d: DEADLOCK detected! err1=%v, err2=%v", iter, err1, err2)
+		}
+		if err1 != nil {
+			t.Fatalf("iter %d: RotateWeeklyJobChangeRanking error: %v", iter, err1)
+		}
+		if err2 != nil {
+			t.Fatalf("iter %d: RecordJobChange error: %v", iter, err2)
+		}
+	}
+}
+
+func TestWeeklyJobChange_ReRotationDoesNotOverwriteFinalizedSnapshot_RealDB(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+
+	if _, err := db.ExecContext(ctx, "DELETE FROM weekly_job_changes"); err != nil {
+		t.Fatal(err)
+	}
+
+	rankingRepo, err := database.NewRankingRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("ReRotWJC_%d", time.Now().UnixNano()%100000))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	svc, err := ranking.NewService(rankingRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.RecordJobChange(ctx, char.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Initial rotation freezes 1 entry
+	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+		t.Fatalf("first RotateWeeklyJobChangeRanking failed: %v", err)
+	}
+
+	snap1, err := svc.GetSnapshot(ctx, ranking.RankingTypeWeeklyJobChange)
+	if err != nil {
+		t.Fatalf("GetSnapshot failed: %v", err)
+	}
+	if snap1.TotalCount < 1 {
+		t.Fatalf("expected snapshot total count >= 1, got %d", snap1.TotalCount)
+	}
+
+	// 2. Immediate re-rotation when active table is now empty
+	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+		t.Fatalf("second RotateWeeklyJobChangeRanking failed: %v", err)
+	}
+
+	// Acceptance criteria: rotation再実行で確定済み前週snapshotを空内容へ上書きしない
+	snap2, err := svc.GetSnapshot(ctx, ranking.RankingTypeWeeklyJobChange)
+	if err != nil {
+		t.Fatalf("GetSnapshot after re-rotation failed: %v", err)
+	}
+	if snap2.TotalCount != snap1.TotalCount {
+		t.Fatalf("expected snapshot count preserved (%d), got %d", snap1.TotalCount, snap2.TotalCount)
+	}
+	if snap2.CalculatedAt != snap1.CalculatedAt {
+		t.Fatalf("expected snapshot CalculatedAt preserved (%v), got %v", snap1.CalculatedAt, snap2.CalculatedAt)
 	}
 }

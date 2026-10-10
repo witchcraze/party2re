@@ -137,36 +137,71 @@ func (s *Service) RecordJobChange(ctx context.Context, characterID string) error
 // RotateWeeklyJobChangeRanking freezes the active weekly job change leaderboards into a snapshot and resets counters.
 func (s *Service) RotateWeeklyJobChangeRanking(ctx context.Context) error {
 	now := s.nowFunc().UTC()
-	entries, totalCount, err := s.repo.GetActiveWeeklyJobChangeRanking(ctx, 100, 0)
+
+	var (
+		snapshot   RankingSnapshot
+		entries    []CharacterRankingEntry
+		totalCount int
+		rotated    bool
+	)
+
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		if err := s.repo.LockWeeklyJobChangesForUpdate(txCtx); err != nil {
+			return fmt.Errorf("lock weekly job changes for rotation: %w", err)
+		}
+
+		activeEntries, total, err := s.repo.GetActiveWeeklyJobChangeRanking(txCtx, 100, 0)
+		if err != nil {
+			return fmt.Errorf("query active weekly job changes for rotation: %w", err)
+		}
+
+		if total == 0 {
+			// Acceptance criteria: rotation再実行で確定済み前週snapshotを空内容へ上書きしない
+			// If active counts are empty, check if a finalized snapshot already exists.
+			existing, err := s.repo.GetSnapshot(txCtx, RankingTypeWeeklyJobChange)
+			if err == nil && (existing.TotalCount > 0 || (existing.SnapshotData != "" && existing.SnapshotData != "[]")) {
+				return nil
+			}
+		}
+
+		rawJSON, err := json.Marshal(activeEntries)
+		if err != nil {
+			return fmt.Errorf("marshal weekly job change snapshot: %w", err)
+		}
+
+		snap := RankingSnapshot{
+			RankingType:  RankingTypeWeeklyJobChange,
+			SnapshotData: string(rawJSON),
+			TotalCount:   total,
+			CalculatedAt: now,
+			UpdatedAt:    now,
+		}
+
+		if err := s.repo.SaveSnapshot(txCtx, snap); err != nil {
+			return fmt.Errorf("save weekly job change snapshot: %w", err)
+		}
+
+		if err := s.repo.ResetWeeklyJobChanges(txCtx); err != nil {
+			return fmt.Errorf("reset weekly job changes: %w", err)
+		}
+
+		snapshot = snap
+		entries = activeEntries
+		totalCount = total
+		rotated = true
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("query active weekly job changes for rotation: %w", err)
+		return err
 	}
 
-	rawJSON, err := json.Marshal(entries)
-	if err != nil {
-		return fmt.Errorf("marshal weekly job change snapshot: %w", err)
-	}
-
-	snapshot := RankingSnapshot{
-		RankingType:  RankingTypeWeeklyJobChange,
-		SnapshotData: string(rawJSON),
-		TotalCount:   totalCount,
-		CalculatedAt: now,
-		UpdatedAt:    now,
-	}
-
-	if err := s.repo.SaveSnapshot(ctx, snapshot); err != nil {
-		return fmt.Errorf("save weekly job change snapshot: %w", err)
-	}
-
-	if s.valkeyCache != nil {
-		_ = s.valkeyCache.Set(ctx, RankingTypeWeeklyJobChange, snapshot, s.cacheTTL)
-	}
-
-	s.storeCache(RankingTypeWeeklyJobChange, entries, totalCount, now)
-
-	if err := s.repo.ResetWeeklyJobChanges(ctx); err != nil {
-		return fmt.Errorf("reset weekly job changes: %w", err)
+	// Acceptance criteria: commit前の値をcacheに公開しない
+	// Cache is updated strictly post-commit.
+	if rotated {
+		if s.valkeyCache != nil {
+			_ = s.valkeyCache.Set(ctx, RankingTypeWeeklyJobChange, snapshot, s.cacheTTL)
+		}
+		s.storeCache(RankingTypeWeeklyJobChange, entries, totalCount, now)
 	}
 
 	return nil
