@@ -50,6 +50,16 @@ To eliminate uninitialized depot records and stale capacity errors, a two-layer 
   - Invariant: Character inventory has available space ($\text{len}(Inventory.Items) < Inventory.Capacity$).
   - Side effect: Automatically registers the item in the character's Collection book upon withdrawal if configured.
 
+Depositing or sending an equipped instance unlinks its equipment slots before
+removing it from inventory. Removing main-hand equipment clears the sender's
+weapon name and seal; removing body armor clears the armor name. Other slots and
+unequipped instances leave those character fields unchanged. Instance ID,
+definition, quantity and enhancement are preserved; customization is not mailed
+or stored on the Depot instance. Legacy `depot.cgi:167–207,334–405` removes the
+held item, and `party.cgi:22–29` then calls `system.cgi:write_user` (`80–87`) to
+clear customization for empty weapon/armor fields. Failure, including full
+storage or a later save error, rolls back equipment, customization and ownership.
+
 ### 2. Depot Expansion (`かくちょう`)
 - Characters can purchase up to 20 expansions (`MaxExDepot = 20`), each granting +5 capacity slots.
 - Tiered expansion cost table:
@@ -117,14 +127,14 @@ To eliminate uninitialized depot records and stale capacity errors, a two-layer 
 ## Atomicity, Concurrency & Lock Hierarchy
 
 Production single-character mutations use `economy.TransactionRunner`: character
-locks (Rank 2), inventory locks when needed (Rank 3), then Depot root/item locks
+locks (Rank 2), inventory/equipment locks when needed (Rank 3), then Depot root/item locks
 (Rank 5). Sales lock no inventory. The runner credits the wallet after the Depot
 save in the same transaction; a later character-save failure rolls both back.
 Concurrent single/batch sales of an overlapping instance can settle only once.
 Cross-character transfers (`SendMoney`, `SendItem`) use the injected transaction
 provider and enforce global lock hierarchy ordering:
 1. **Rank 2 (`characters`)**: Both sender and recipient row locks acquired via `id.Sort2(fromID, toID)` in ascending lexicographical order to prevent deadlocks.
-2. **Rank 3 (`inventory_items`)**: Sender inventory items locked.
+2. **Rank 3 (`inventory_items`, `equipment_slots`)**: Sender inventory, then equipment locked for item transfers. Equipment references are saved before inventory deletion.
 3. **Rank 5 (`character_depots`)**: Target depot locked with `FOR UPDATE`.
 
 The [Depot navigation index](../../.arch/modules/depot.json) records the verified
@@ -189,5 +199,5 @@ comparator; HTTP adds no separate sorting rule.
 Legacy `hikidasu` (`depot.cgi:208–288`) swaps held equipment/items back into
 storage, while current WithdrawItem moves into inventory and rejects a full
 slot; the equivalent atomic swap contract remains undecided in #1127. Equipped
-item deposit/send also retains a known foreign-key failure (#1112). Shared
+item deposit/send uses the atomic equipment-detachment contract above. Shared
 NPC/presence/log effects and remaining command/route migration stay under #947.

@@ -90,6 +90,8 @@ func (s *Service) GetDepot(ctx context.Context, characterID string) (Depot, erro
 }
 
 // DepositItem deposits an item from character inventory into the depot.
+// Transaction: ExecuteTransaction.
+// Lock Order: characters(2) -> inventory_items/equipment_slots(3) -> character_depots/depot_items(5).
 func (s *Service) DepositItem(ctx context.Context, characterID string, itemInstanceID string) (Depot, error) {
 	if err := validateItemOp(characterID, itemInstanceID); err != nil {
 		return Depot{}, err
@@ -97,13 +99,16 @@ func (s *Service) DepositItem(ctx context.Context, characterID string, itemInsta
 	var resultDepot Depot
 	req := economy.TransactionRequest{CharacterID: characterID, LockInventory: true}
 	_, err := s.runner.ExecuteTransaction(ctx, req, func(tc *economy.TxContext) error {
-		dep, err := s.findOrCreateDepot(tc.Context, characterID, tc.Character)
-		if err != nil {
-			return err
-		}
 		itemInstance, found := tc.Inventory.Find(itemInstanceID)
 		if !found {
 			return ErrItemNotFound
+		}
+		if _, err := s.detachEquipment(tc.Context, &tc.Character, itemInstanceID); err != nil {
+			return err
+		}
+		dep, err := s.findOrCreateDepot(tc.Context, characterID, tc.Character)
+		if err != nil {
+			return err
 		}
 		if err := dep.AddItem(itemInstance); err != nil {
 			return err
