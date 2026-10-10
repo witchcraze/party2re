@@ -68,6 +68,11 @@ type JobChangeTracker interface {
 	RecordJobChange(ctx context.Context, characterID string) error
 }
 
+// JobPopularityTracker records cumulative job popularity points from job changes (job_ranking.cgi).
+type JobPopularityTracker interface {
+	RecordJobPopularity(ctx context.Context, jobID string, gender string, points int) error
+}
+
 // LegendInductor defines permanent Hall of Fame induction contract (legend.cgi).
 type LegendInductor interface {
 	RecordLegend(ctx context.Context, category, characterID string) error
@@ -91,6 +96,7 @@ type Service struct {
 	guildPoints    GuildPointAwarder
 	costume        CostumeResetter
 	jobTracker     JobChangeTracker
+	jobPopularity  JobPopularityTracker
 	equipment      EquipmentRepository
 	legend         LegendInductor
 }
@@ -106,6 +112,13 @@ func WithCatalog(catalog *corejob.Catalog) Option {
 func WithJobChangeTracker(tracker JobChangeTracker) Option {
 	return func(s *Service) {
 		s.jobTracker = tracker
+	}
+}
+
+// WithJobPopularityTracker sets the optional job popularity tracker (job_ranking.cgi).
+func WithJobPopularityTracker(tracker JobPopularityTracker) Option {
+	return func(s *Service) {
+		s.jobPopularity = tracker
 	}
 }
 
@@ -193,6 +206,11 @@ func (s *Service) SetCostumeResetter(c CostumeResetter) {
 // SetJobChangeTracker registers the weekly job change tracker called upon job change.
 func (s *Service) SetJobChangeTracker(tracker JobChangeTracker) {
 	s.jobTracker = tracker
+}
+
+// SetJobPopularityTracker registers the job popularity tracker called upon job change.
+func (s *Service) SetJobPopularityTracker(tracker JobPopularityTracker) {
+	s.jobPopularity = tracker
 }
 
 // SetLegendInductor registers the Hall of Fame legend inductor called upon all job mastery.

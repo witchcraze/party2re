@@ -68,6 +68,7 @@ func TestChangeJob_TransactionFailure_DoesNotTriggerSideEffects(t *testing.T) {
 		return nil
 	})
 	news := &mockNewsPublisher{}
+	popTracker := &jobPopularityStub{}
 
 	dummyRepo := &repositoryStub{}
 	svc, err := NewService(
@@ -78,6 +79,7 @@ func TestChangeJob_TransactionFailure_DoesNotTriggerSideEffects(t *testing.T) {
 		WithEconomy(ecoSvc),
 		WithLegendInductor(legend),
 		WithNewsPublisher(news),
+		WithJobPopularityTracker(popTracker),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -97,6 +99,9 @@ func TestChangeJob_TransactionFailure_DoesNotTriggerSideEffects(t *testing.T) {
 	}
 	if len(legendCalls) != 0 {
 		t.Fatalf("expected 0 legend calls on transaction failure, got %d: %v", len(legendCalls), legendCalls)
+	}
+	if len(popTracker.records) != 0 {
+		t.Fatalf("expected 0 popularity records on transaction failure, got %d", len(popTracker.records))
 	}
 }
 
@@ -129,6 +134,7 @@ func TestChangeJob_TransactionSuccess_TriggersSideEffectsExactlyOnce(t *testing.
 		return nil
 	})
 	news := &mockNewsPublisher{}
+	popTracker := &jobPopularityStub{}
 
 	dummyRepo := &repositoryStub{}
 	svc, err := NewService(
@@ -138,6 +144,7 @@ func TestChangeJob_TransactionSuccess_TriggersSideEffectsExactlyOnce(t *testing.
 		WithEconomy(ecoSvc),
 		WithLegendInductor(legend),
 		WithNewsPublisher(news),
+		WithJobPopularityTracker(popTracker),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -157,6 +164,12 @@ func TestChangeJob_TransactionSuccess_TriggersSideEffectsExactlyOnce(t *testing.
 	}
 	if len(legendCalls) != 1 {
 		t.Fatalf("expected exactly 1 legend call on transaction success, got %d: %v", len(legendCalls), legendCalls)
+	}
+	if len(popTracker.records) != 1 {
+		t.Fatalf("expected exactly 1 popularity record on transaction success, got %d", len(popTracker.records))
+	}
+	if popTracker.records[0].jobID != "job-01" || popTracker.records[0].points != 25 {
+		t.Fatalf("expected job-01 with 25 points, got %v", popTracker.records[0])
 	}
 }
 

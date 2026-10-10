@@ -104,6 +104,15 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 			return err
 		}
 		targetSPValue := targetSP(currentState, tc.Character, targetJobID)
+		oldJobID := tc.Character.JobID
+		oldLevel := tc.Character.Level
+		gender := tc.Character.Gender
+		if s.jobPopularity != nil {
+			points := oldLevel / 2
+			if err := s.jobPopularity.RecordJobPopularity(tc.Context, oldJobID, gender, points); err != nil {
+				return err
+			}
+		}
 		if err := tc.Character.ApplyJobChange(targetJobID, targetSPValue); err != nil {
 			return err
 		}

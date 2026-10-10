@@ -24,7 +24,7 @@ The ranking engine calculates standings across 14 distinct game metrics:
 | **World Boss Defeat Ranking** | `boss_defeat` | `boss_defeats DESC, highest_tier DESC, level DESC, id ASC` | Characters |
 | **Adventure Victory Ranking** | `adventure_victory` | `adventure_wins DESC, level DESC, id ASC` | Characters |
 | **Job Mastery Ranking** | `job_mastery` | `count(mastered_jobs) DESC, level DESC, id ASC` | Characters |
-| **Job Popularity Ranking** | `job_popularity` | `total_count DESC, job_id ASC` (with male/female distribution) | Job Classes |
+| **Job Popularity Ranking** | `job_popularity` | `total_points DESC, job_id ASC` (cumulative points from job changes with male/female breakdown) | Job Classes |
 | **Helper Quests Ranking** | `helper` | `help_count DESC, level DESC, id ASC` | Characters |
 | **Small Medals Ranking** | `small_medals` | `small_medals DESC, level DESC, id ASC` | Characters |
 | **Casino Wins Ranking (`cas_c`)** | `casino_wins` | `casino_wins DESC, level DESC, id ASC` | Characters |
@@ -64,7 +64,24 @@ The permanent Hall of Fame honors all players who have achieved complete 100% ma
   4. **Post-Commit Cache Update**: Only after transaction commit succeeds are memory and Valkey caches invalidated/published. If the transaction rolls back, active counters and the previous snapshot remain intact.
 - **Concurrent Writer Isolation**: Job changes attempting to commit while rotation is in flight wait on the shared lock, then proceed to write into the newly reset counter table for the new week, guaranteeing zero lost updates and zero duplicate counting.
 
-### 4. Deterministic Tie-Breaking & Pagination
+### 4. Job Popularity Ranking (`job_ranking.cgi`)
+
+- **Cumulative Points from Job Changes**:
+  Upon each job change (`ChangeJob`), popularity points are credited to the character's *former* (pre-change) job class and gender:
+  `points = floor(old_level * 0.5)` (`lib/job_change.cgi:319`).
+  These points are permanently accumulated into `job_popularity_stats(job_id, male_points, female_points, total_points)`:
+  - If male (`'m'`, `'male'`, `'男'`), `male_points += points` and `total_points += points`.
+  - If female (`'f'`, `'female'`, `'女'`), `female_points += points` and `total_points += points`.
+  - The invariant `male_points + female_points == total_points` is strictly maintained.
+- **Atomic Transaction Integration**:
+  Point recording executes within the existing job-change transaction (`ExecuteTransaction`). If the job change transaction rolls back (e.g. inventory/equipment/persistence failure), no popularity points are credited.
+- **Ranking Order & Distribution**:
+  Standings are ordered by `total_points DESC, job_id ASC`.
+  The popularity percentage of each job is `float64(job.total_points) / float64(sum(all_jobs.total_points)) * 100.0` (or `0.0` if no points have been accumulated yet).
+- **Existing Environment Initialization Policy**:
+  Because past job changes (pre-change levels and jobs) were not tracked historically prior to the introduction of `job_popularity_stats`, exact past job-change points cannot be retroactively reconstructed. Therefore, `job_popularity_stats` starts fresh at 0 points (empty table), and cumulative points accumulate strictly from subsequent job changes performed after migration application (`migrations/097_job_popularity_stats.sql`).
+
+### 5. Deterministic Tie-Breaking & Pagination
 
 - Tie-breaks are predictably resolved using secondary progression metrics (`level`, `experience`, `rating`) followed by deterministic primary keys (`id ASC`).
 - All leaderboard queries support standard pagination parameters:
@@ -72,7 +89,7 @@ The permanent Hall of Fame honors all players who have achieved complete 100% ma
   - `offset`: Starting index (0-indexed).
   - Responses include `total` count for total pagination calculations.
 
-### 5. Caching & Snapshot Strategy
+### 6. Caching & Snapshot Strategy
 
 - **In-Memory Cache (TTL)**: Ranking queries default to checking in-memory cached results with configurable TTL (default: 5 minutes).
 - **Persistent Snapshots (`ranking_snapshots`)**: Snapshots can be pre-calculated, persisted to MariaDB, and refreshed on demand or on a scheduled basis (`POST /rankings/refresh`).

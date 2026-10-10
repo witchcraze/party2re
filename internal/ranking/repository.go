@@ -10,6 +10,7 @@ type ProgressionRankingRepository interface {
 	GetCharacterWealthRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	GetJobMasteryRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	GetJobPopularityRanking(ctx context.Context) ([]JobPopularityEntry, error)
+	RecordJobPopularity(ctx context.Context, jobID string, gender string, points int) error
 }
 
 // CombatRankingRepository defines queries for battle, PvP, boss, and adventure leaderboards.

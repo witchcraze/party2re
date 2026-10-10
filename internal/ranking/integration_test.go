@@ -77,12 +77,34 @@ func TestRankingServiceIntegration(t *testing.T) {
 		t.Errorf("expected hero_count ranking type, got %s", heroPage.RankingType)
 	}
 
+	if err := svc.RecordJobPopularity(ctx, "job-01", "m", 15); err != nil {
+		t.Fatalf("RecordJobPopularity male failed: %v", err)
+	}
+	if err := svc.RecordJobPopularity(ctx, "job-01", "f", 5); err != nil {
+		t.Fatalf("RecordJobPopularity female failed: %v", err)
+	}
+
 	jobPopPage, err := svc.GetJobPopularityRanking(ctx, false)
 	if err != nil {
 		t.Fatalf("GetJobPopularityRanking failed: %v", err)
 	}
 	if jobPopPage.RankingType != ranking.RankingTypeJobPopularity {
 		t.Errorf("expected job_popularity ranking type, got %s", jobPopPage.RankingType)
+	}
+	if len(jobPopPage.Entries) == 0 {
+		t.Errorf("expected at least 1 job popularity entry")
+	}
+	var foundJob01 bool
+	for _, e := range jobPopPage.Entries {
+		if e.JobID == "job-01" {
+			foundJob01 = true
+			if e.TotalCount < 20 || e.MaleCount < 15 || e.FemaleCount < 5 {
+				t.Errorf("expected job-01 counts >= (total 20, male 15, female 5), got total %d, male %d, female %d", e.TotalCount, e.MaleCount, e.FemaleCount)
+			}
+		}
+	}
+	if !foundJob01 {
+		t.Errorf("expected job-01 in job popularity entries")
 	}
 
 	// 2. Snapshot refresh and cached queries
