@@ -59,6 +59,11 @@ To eliminate uninitialized depot records and stale capacity errors, a two-layer 
   - Expansions 6, 7: 800,000 gold each
   - Expansions 8..19: 999,999 gold each
 - Invariant: `ExDepot < 20` and `Character.Money >= cost`.
+- Legacy evidence: `depot.cgi:23–46,521–542` quotes the current tier before an
+  explicit affirmative purchase. Observation never purchases; the explicit
+  command requests one expansion, charging the service's current tier atomically
+  with incrementing the purchased count. A displayed quote is not a reservation.
+  Insufficient funds or the maximum count leaves both funds and count unchanged.
 
 ### 3. Depot Item Sales (`うる` / `まとめてうる`)
 - Stored items can be sold directly from the depot without withdrawing them first.
@@ -98,7 +103,8 @@ All depot transactions execute inside an explicit database transaction (`*sql.Tx
 
 The owned `depot` facility is a pageable town destination. Its typed context
 projection reads the existing `GetDepot` service and returns dynamic capacity,
-purchased expansion count, total occupied slots and a bounded page of item
+purchased expansion count, the next expansion's gold cost (null at the cap),
+total occupied slots and a bounded page of item
 instances (ID, definition ID, quantity, enhancement level). Slot count refers
 to all stored instances before paging; a stack still occupies one slot.
 Legacy `depot.cgi:49–99` reports owned count/capacity/expansions, and
@@ -114,9 +120,12 @@ activities/conflicts take priority over ordinary selection. The
 [navigation contract](../architecture/client-agent-api.md#selection-commands-and-typed-discovery)
 owns input, ownership and GET-only refresh recovery behavior.
 
-All nine Depot REST operations remain registered until verified command/read
-replacements exist. Observation does not connect mutations or execute NPC,
-delivery, collection or scheduling effects. Legacy `depot.cgi:68–81` dispatch
+All nine Depot REST operations remain registered pending their own verified
+retirement. The `depot_expand` Gateway command delegates to `Expand`; owned
+context supplies the read-only quote and the shared
+[command contract](../architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions)
+owns explicit intent, guards and outcome recovery. Observation does not execute
+NPC, delivery, collection or scheduling effects. Legacy `depot.cgi:68–81` dispatch
 maps to the existing services as follows:
 
 | Legacy routine | Existing service | Retained operation |
@@ -128,7 +137,7 @@ maps to the existing services as follows:
 | `matomete_uru` | SellItems | POST `/characters/{id}/depot/sell-batch` |
 | `seiton` | SortItems | POST `/characters/{id}/depot/sort` |
 | `okuru` | SendMoney, SendItem | POST `/characters/{id}/depot/send-money`, `/characters/{id}/depot/send-item` |
-| `expansion_depot` | Expand | POST `/characters/{id}/depot/expand` |
+| `expansion_depot` | Expand, also through Gateway `depot_expand` | POST `/characters/{id}/depot/expand` |
 
 This mapping records transport coverage, not full legacy parity. Legacy
 `seiton` (`depot.cgi:313–332`) persists kind/item-number ordering; current
@@ -136,5 +145,6 @@ SortItems results lose that order on repository reload (#1111). The context
 adapter preserves reader order so a repair belongs to that owning boundary.
 Legacy `hikidasu` (`depot.cgi:208–288`) swaps held equipment/items back into
 storage, while current WithdrawItem moves into inventory and rejects a full
-slot; the equivalent atomic swap contract remains undecided in #1127. Shared
+slot; the equivalent atomic swap contract remains undecided in #1127. Equipped
+item deposit/send also retains a known foreign-key failure (#1112). Shared
 NPC/presence/log effects and remaining command/route migration stay under #947.

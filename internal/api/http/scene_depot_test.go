@@ -100,7 +100,7 @@ func TestDepotSceneOwnedFactsAndReadOnlyNavigation(t *testing.T) {
 				t.Fatalf("lost facts or changed reader order: %+v", data)
 			}
 			for _, action := range observation.AvailableActions {
-				if action.Action != "scene_back" {
+				if action.Action != "scene_back" && action.Action != "depot_expand" {
 					t.Fatalf("unconnected mutation offered: %+v", action)
 				}
 			}
@@ -247,6 +247,9 @@ func TestDepotSceneActualActivitySkipsDepotReads(t *testing.T) {
 			}
 			if status, _ := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"scene_enter","params":{"destination":"depot"}}`, nil); status != 409 || store.writes != 0 || f.reads != 0 {
 				t.Fatalf("active entry: %d", status)
+			}
+			if status, raw := gatewayRequest(t, router, "hero", "session", "application/json", `{"action":"depot_expand"}`, nil); status != 409 || f.reads != 0 || store.writes != 0 || f.writes != 0 {
+				t.Fatalf("active expansion: %d %s", status, raw)
 			}
 		})
 	}

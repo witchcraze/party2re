@@ -76,7 +76,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		{"dead", func(s *Snapshot) { s.Character.Stats.HP = 0 }, []string{
 			"scene_enter", "scene_select", "scene_page", "scene_back",
 			"home_sleep", "chapel_pray",
-			"bank_deposit", "bank_withdraw", "depot_deposit", "depot_withdraw", "auction_send", "fleamarket_list", "fleamarket_purchase",
+			"bank_deposit", "bank_withdraw", "depot_expand", "depot_deposit", "depot_withdraw", "auction_send", "fleamarket_list", "fleamarket_purchase",
 			"shop_purchase", "shop_sell", "shop_accessory_buy", "gemstore_buy", "secretshop_purchase", "blackmarket_trade",
 			"blacksmith_seal", "alchemy_synthesize", "custom_skill_set", "plantation_sow", "plantation_harvest",
 			"casino_slot", "lottery_raffle", "lottery_takarakuji_buy", "tavern_order", "contest_enter",
@@ -87,7 +87,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		{"dead without money", func(s *Snapshot) { s.Character.Stats.HP = 0; s.Character.Money = 0 }, []string{
 			"scene_enter", "scene_select", "scene_page", "scene_back",
 			"home_sleep", "chapel_pray",
-			"bank_withdraw", "depot_deposit", "depot_withdraw", "auction_send", "fleamarket_list",
+			"bank_withdraw", "depot_expand", "depot_deposit", "depot_withdraw", "auction_send", "fleamarket_list",
 			"shop_sell", "blackmarket_trade",
 			"blacksmith_seal", "alchemy_synthesize", "custom_skill_set", "plantation_sow", "plantation_harvest",
 			"casino_slot", "lottery_raffle", "contest_enter",
@@ -122,7 +122,7 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 		})
 	}
 	healthy := Evaluate(healthySnapshot())
-	if len(healthy) != 48 || slices.Contains(healthy, "home_wake") {
+	if len(healthy) != 49 || slices.Contains(healthy, "home_wake") {
 		t.Fatalf("healthy catalog: %v", healthy)
 	}
 	zeroGold := healthySnapshot()
@@ -142,8 +142,8 @@ func TestEvaluate_RecoveryAndCatalogOrder(t *testing.T) {
 	exhausted := healthySnapshot()
 	exhausted.Character.Tired = 100
 	got := Evaluate(exhausted)
-	if len(got) != 41 {
-		t.Fatalf("exhausted action count = %d, want 41", len(got))
+	if len(got) != 42 {
+		t.Fatalf("exhausted action count = %d, want 42", len(got))
 	}
 	for _, action := range []string{"home_sleep", "bank_deposit", "shop_purchase", "tavern_order", "rescue_request"} {
 		if !slices.Contains(got, action) {

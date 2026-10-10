@@ -74,7 +74,7 @@ func (h *Handler) registerScenes(service *playercontext.Service) {
 			adapter.title, adapter.commands = "銀行", []string{"bank_deposit", "bank_withdraw"}
 			adapter.read = h.bankSceneData
 		case "depot":
-			adapter.title, adapter.commands = "預かり所", []string{"depot_deposit", "depot_withdraw"}
+			adapter.title, adapter.commands = "預かり所", []string{"depot_deposit", "depot_withdraw", "depot_expand"}
 			adapter.read = h.depotSceneData
 		case "secretshop":
 			adapter.title, adapter.commands = "秘密の店", []string{"secretshop_purchase"}

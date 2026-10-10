@@ -32,6 +32,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 		{"rescue_request", "reason", "string", true},
 		{"home_sleep", "target_home_id", "string", false},
 		{"home_wake", "", "", false},
+		{"depot_expand", "", "", false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.id, func(t *testing.T) {
@@ -45,7 +46,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 			}
 			if tc.field == "" {
 				if len(params.Properties) != 0 || len(params.Required) != 0 {
-					t.Fatal("Wake must accept only empty params")
+					t.Fatal("command must accept only empty params")
 				}
 				return
 			}

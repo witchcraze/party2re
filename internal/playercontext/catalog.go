@@ -148,6 +148,14 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
+		ID:             "depot_expand",
+		Label:          "預かり所を拡張する",
+		Category:       "economy",
+		OperationID:    "executeCharacterAction",
+		RequiredParams: []string{},
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+	},
+	{
 		ID:             "depot_deposit",
 		Label:          "預かり所にアイテムを預ける",
 		Category:       "economy",

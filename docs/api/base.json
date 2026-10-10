@@ -4840,6 +4840,31 @@
                 "params"
               ]
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "depot_expand",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false,
+                  "required": []
+                }
+              },
+              "type": "object"
+            }
           }
         ]
       },
@@ -6612,6 +6637,18 @@
           },
           "page": {
             "$ref": "#/components/schemas/ScenePage"
+          },
+          "next_expansion_cost": {
+            "description": "Gold cost for the next expansion at observation time, or null at the purchased expansion cap. Execution charges the current service-owned tier.",
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -6621,7 +6658,8 @@
           "ex_depot",
           "item_count",
           "items",
-          "page"
+          "page",
+          "next_expansion_cost"
         ],
         "description": "Owned read-only Depot inventory/capacity. Offset pages preserve GetDepot order (currently instance ID ascending in persistence); no cross-page snapshot is promised. Missing depots remain empty in-memory projections. GET never creates, sorts or saves storage. REST operations remain registered pending verified mutation replacements."
       }

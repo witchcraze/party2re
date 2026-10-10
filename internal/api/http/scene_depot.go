@@ -2,7 +2,9 @@ package http
 
 import (
 	"context"
+	"errors"
 
+	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
@@ -14,13 +16,14 @@ type DepotSceneItem struct {
 }
 
 type DepotSceneData struct {
-	Parent      string           `json:"parent"`
-	CharacterID string           `json:"character_id"`
-	Capacity    int              `json:"capacity"`
-	ExDepot     int              `json:"ex_depot"`
-	ItemCount   int              `json:"item_count"`
-	Items       []DepotSceneItem `json:"items"`
-	Page        ScenePage        `json:"page"`
+	Parent            string           `json:"parent"`
+	CharacterID       string           `json:"character_id"`
+	Capacity          int              `json:"capacity"`
+	ExDepot           int              `json:"ex_depot"`
+	NextExpansionCost *int             `json:"next_expansion_cost"`
+	ItemCount         int              `json:"item_count"`
+	Items             []DepotSceneItem `json:"items"`
+	Page              ScenePage        `json:"page"`
 }
 
 func (h *Handler) depotSceneData(ctx context.Context, r playercontext.Result) (any, error) {
@@ -29,6 +32,12 @@ func (h *Handler) depotSceneData(ctx context.Context, r playercontext.Result) (a
 	}
 	dep, err := h.depot.GetDepot(ctx, r.Snapshot.Character.ID)
 	if err != nil {
+		return nil, err
+	}
+	var nextCost *int
+	if cost, err := depot.ExpansionCost(dep.ExDepot); err == nil {
+		nextCost = &cost
+	} else if !errors.Is(err, depot.ErrDepotMaxExpanded) {
 		return nil, err
 	}
 	n := r.Navigation.Selection
@@ -47,5 +56,5 @@ func (h *Handler) depotSceneData(ctx context.Context, r playercontext.Result) (a
 		page.Next = &playercontext.PageParams{Destination: n.Destination, Offset: end, Limit: limit}
 	}
 	return DepotSceneData{Parent: "town", CharacterID: dep.CharacterID, Capacity: dep.Capacity, ExDepot: dep.ExDepot,
-		ItemCount: len(dep.Items), Items: items, Page: page}, nil
+		NextExpansionCost: nextCost, ItemCount: len(dep.Items), Items: items, Page: page}, nil
 }
