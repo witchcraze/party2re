@@ -61,13 +61,6 @@ func depotOrderRequest(router http.Handler, path, body string) *httptest.Respons
 }
 
 func TestDepotSortReloadAndContextPages(t *testing.T) {
-	for _, transport := range []string{"REST", "Gateway"} {
-		t.Run(transport, func(t *testing.T) { testDepotSortReloadAndContextPages(t, transport == "Gateway") })
-	}
-}
-
-func testDepotSortReloadAndContextPages(t *testing.T, gateway bool) {
-	t.Helper()
 	router, actor, _, depots, store, items := depotOrderDBRouter(t, "")
 	ctx := context.Background()
 	before, err := depots.FindByCharacterID(ctx, actor.ID)
@@ -79,30 +72,25 @@ func testDepotSortReloadAndContextPages(t *testing.T, gateway bool) {
 	if !reflect.DeepEqual(before.Items, unsorted) {
 		t.Fatal("Save must not implicitly sort")
 	}
-	path, body := "/characters/"+actor.ID+"/depot/sort", `{}`
-	if gateway {
-		path, body = "/api/v1/characters/"+actor.ID+"/actions", `{"action":"depot_sort","params":{}}`
-	}
+	path, body := "/api/v1/characters/"+actor.ID+"/actions", `{"action":"depot_sort","params":{}}`
 	w := depotOrderRequest(router, path, body)
 	raw := w.Body.Bytes()
-	if gateway {
-		var outcome struct {
-			Success bool
-			Result  json.RawMessage
-			Context PlayerContextResponse
-		}
-		if err := json.Unmarshal(raw, &outcome); err != nil {
-			t.Fatal(err)
-		}
-		if !outcome.Success || outcome.Context.Character.ID != actor.ID || outcome.Context.Scene.LocationID != "depot" {
-			t.Fatalf("Gateway sort outcome: %d %s", w.Code, raw)
-		}
-		data := decodeShopScene[DepotSceneData](t, outcome.Context)
-		if len(data.Items) != len(items) || data.Items[0].ID != items[0].ID || data.Items[0].EnhancementLevel != items[0].EnhancementLevel {
-			t.Fatalf("Gateway sort lost context facts: %+v", data)
-		}
-		raw = outcome.Result
+	var outcome struct {
+		Success bool
+		Result  json.RawMessage
+		Context PlayerContextResponse
 	}
+	if err := json.Unmarshal(raw, &outcome); err != nil {
+		t.Fatal(err)
+	}
+	if !outcome.Success || outcome.Context.Character.ID != actor.ID || outcome.Context.Scene.LocationID != "depot" {
+		t.Fatalf("Gateway sort outcome: %d %s", w.Code, raw)
+	}
+	data := decodeShopScene[DepotSceneData](t, outcome.Context)
+	if len(data.Items) != len(items) || data.Items[0].ID != items[0].ID || data.Items[0].EnhancementLevel != items[0].EnhancementLevel {
+		t.Fatalf("Gateway sort lost context facts: %+v", data)
+	}
+	raw = outcome.Result
 	var result depotResponse
 	if err := json.Unmarshal(raw, &result); err != nil {
 		t.Fatal(err)

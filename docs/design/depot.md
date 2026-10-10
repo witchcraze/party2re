@@ -160,10 +160,10 @@ Gateway command delegates to `Expand` and replaces POST
 The `depot_sell` and `depot_sell_batch` commands delegate explicit instance
 selection to `SellItem` and `SellItems` and return the existing Depot/gold-earned
 result, replacing the former single/batch sale POST routes. Discovery never
-chooses all visible instances for a batch. Five inventory/transfer REST operations
+chooses all visible instances for a batch. Four inventory/transfer REST operations
 remain. Explicit `depot_sort` accepts omitted params or an empty object, delegates
-to `SortItems` and returns the existing Depot result. Its REST route awaits
-separate verified retirement; deposit/withdraw/send command adapters are pending.
+to `SortItems` and returns the existing Depot result, replacing POST
+`/characters/{id}/depot/sort`. Deposit/withdraw/send command adapters are pending.
 The shared
 [command contract](../architecture/client-agent-api.md#3-command-pillar-post-apiv1charactersidactions)
 owns explicit intent, guards and outcome recovery. Observation does not execute
@@ -177,7 +177,7 @@ maps to the existing services as follows:
 | `hikidasu` | WithdrawItem | POST `/characters/{id}/depot/withdraw` |
 | `uru` | SellItem | Gateway `depot_sell`; sale REST retired |
 | `matomete_uru` | SellItems | Gateway `depot_sell_batch`; batch-sale REST retired |
-| `seiton` | SortItems | Gateway `depot_sort`; POST `/characters/{id}/depot/sort` retained |
+| `seiton` | SortItems | Gateway `depot_sort`; sort REST retired |
 | `okuru` | SendMoney, SendItem | POST `/characters/{id}/depot/send-money`, `/characters/{id}/depot/send-item` |
 | `expansion_depot` | Expand | Gateway `depot_expand`; expansion REST retired |
 

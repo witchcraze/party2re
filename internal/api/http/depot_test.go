@@ -17,7 +17,6 @@ import (
 type stubDepotService struct {
 	depositItemFn  func(ctx context.Context, characterID, itemID string) (depot.Depot, error)
 	withdrawItemFn func(ctx context.Context, characterID, itemID string) (depot.Depot, error)
-	sortItemsFn    func(ctx context.Context, characterID string) (depot.Depot, error)
 	sendMoneyFn    func(ctx context.Context, fromID, toID string, amount int) (depot.Depot, error)
 	sendItemFn     func(ctx context.Context, fromID, toID, itemID string) (depot.Depot, error)
 }
@@ -49,9 +48,6 @@ func (s *stubDepotService) SellItems(ctx context.Context, characterID string, it
 }
 
 func (s *stubDepotService) SortItems(ctx context.Context, characterID string) (depot.Depot, error) {
-	if s.sortItemsFn != nil {
-		return s.sortItemsFn(ctx, characterID)
-	}
 	return depot.Depot{CharacterID: characterID, Capacity: 50}, nil
 }
 
@@ -132,17 +128,6 @@ func TestDepotEndpoints(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/withdraw", bytes.NewReader(body))
 		req.Header.Set("Authorization", "Bearer dummy-token")
 		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("POST /characters/{id}/depot/sort success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/depot/sort", nil)
-		req.Header.Set("Authorization", "Bearer dummy-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 

@@ -361,7 +361,6 @@ func (h *Handler) Router() http.Handler {
 
 	mux.HandleFunc("POST /characters/{id}/depot/deposit", h.handleDepositDepotItem)
 	mux.HandleFunc("POST /characters/{id}/depot/withdraw", h.handleWithdrawDepotItem)
-	mux.HandleFunc("POST /characters/{id}/depot/sort", h.handleSortDepot)
 	mux.HandleFunc("POST /characters/{id}/depot/send-money", h.handleDepotSendMoney)
 	mux.HandleFunc("POST /characters/{id}/depot/send-item", h.handleDepotSendItem)
 
