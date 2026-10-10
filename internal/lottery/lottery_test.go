@@ -955,7 +955,7 @@ func TestPlayRaffle(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		res, remaining, _, err := svc.PlayRaffle(ctx, "char-1", lottery.RaffleStandard)
+		res, remaining, _, err := svc.PlayRaffle(ctx, "char-1")
 		if err != nil {
 			t.Fatalf("PlayRaffle failed: %v", err)
 		}
@@ -1021,7 +1021,7 @@ func TestPlayRaffle(t *testing.T) {
 		// Keep rolling until we hit an item win (<= 75/1000 chance) to verify depot delivery
 		hitItem := false
 		for i := 0; i < 200; i++ {
-			res, _, _, err := svc.PlayRaffle(ctx, "char-1", lottery.RaffleStandard)
+			res, _, _, err := svc.PlayRaffle(ctx, "char-1")
 			if err != nil {
 				t.Fatalf("PlayRaffle failed: %v", err)
 			}
@@ -1052,7 +1052,7 @@ func TestPlayRaffle(t *testing.T) {
 		}
 	})
 
-	t.Run("Standard Raffle - Insufficient Tickets", func(t *testing.T) {
+	t.Run("Raffle - Insufficient Tickets", func(t *testing.T) {
 		repo := &mockLotteryRepo{
 			getRaffleTicketsFn: func(ctx context.Context, charID string) (int, error) {
 				return 2, nil
@@ -1062,28 +1062,86 @@ func TestPlayRaffle(t *testing.T) {
 			},
 		}
 		svc, _ := lottery.NewService(repo)
-		_, _, _, err := svc.PlayRaffle(ctx, "char-1", lottery.RaffleStandard)
+		_, _, _, err := svc.PlayRaffle(ctx, "char-1")
 		if !errors.Is(err, lottery.ErrInsufficientTickets) {
 			t.Errorf("expected ErrInsufficientTickets, got %v", err)
 		}
 	})
 
-	t.Run("Special Raffle - Insufficient Tickets for 300 requirement", func(t *testing.T) {
-		repo := &mockLotteryRepo{
-			getRaffleTicketsFn: func(ctx context.Context, charID string) (int, error) {
-				return 100, nil
+	t.Run("Boundary 299/300/301 Tickets - Automatic Mode & Consumption", func(t *testing.T) {
+		cases := []struct {
+			name           string
+			initialTickets int
+			wantType       lottery.RaffleType
+			wantCost       int
+			wantRemaining  int
+		}{
+			{
+				name:           "299 tickets -> Standard Raffle (3 tickets)",
+				initialTickets: 299,
+				wantType:       lottery.RaffleStandard,
+				wantCost:       3,
+				wantRemaining:  296,
 			},
-			useRaffleTicketsFn: func(ctx context.Context, charID string, count int) (int, error) {
-				if count != 300 {
-					t.Errorf("expected count 300, got %d", count)
-				}
-				return 0, lottery.ErrInsufficientTickets
+			{
+				name:           "300 tickets -> Special Raffle (300 tickets)",
+				initialTickets: 300,
+				wantType:       lottery.RaffleSpecial,
+				wantCost:       300,
+				wantRemaining:  0,
+			},
+			{
+				name:           "301 tickets -> Special Raffle (300 tickets)",
+				initialTickets: 301,
+				wantType:       lottery.RaffleSpecial,
+				wantCost:       300,
+				wantRemaining:  1,
 			},
 		}
-		svc, _ := lottery.NewService(repo)
-		_, _, _, err := svc.PlayRaffle(ctx, "char-1", lottery.RaffleSpecial)
-		if !errors.Is(err, lottery.ErrInsufficientTickets) {
-			t.Errorf("expected ErrInsufficientTickets, got %v", err)
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				usedCount := 0
+				repo := &mockLotteryRepo{
+					getRaffleTicketsFn: func(ctx context.Context, charID string) (int, error) {
+						return tc.initialTickets, nil
+					},
+					useRaffleTicketsFn: func(ctx context.Context, charID string, count int) (int, error) {
+						usedCount = count
+						return tc.initialTickets - count, nil
+					},
+				}
+				invRepo := &mockInventoryRepo{}
+				charRepo := &mockCharacterRepo{
+					characters: map[string]corecharacter.Character{
+						"char-1": {ID: "char-1", JobLevel: 5},
+					},
+				}
+				svc, err := lottery.NewService(repo,
+					lottery.WithInventoryRepository(invRepo),
+					lottery.WithCharacterRepository(charRepo),
+				)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				res, remaining, _, err := svc.PlayRaffle(ctx, "char-1")
+				if err != nil {
+					t.Fatalf("PlayRaffle failed: %v", err)
+				}
+				if res.RaffleType != tc.wantType {
+					t.Errorf("RaffleType = %s; want %s", res.RaffleType, tc.wantType)
+				}
+				if res.TicketsUsed != tc.wantCost {
+					t.Errorf("TicketsUsed = %d; want %d", res.TicketsUsed, tc.wantCost)
+				}
+				if usedCount != tc.wantCost {
+					t.Errorf("usedCount in repo = %d; want %d", usedCount, tc.wantCost)
+				}
+				if remaining != tc.wantRemaining {
+					t.Errorf("remaining = %d; want %d", remaining, tc.wantRemaining)
+				}
+			})
 		}
 	})
 }

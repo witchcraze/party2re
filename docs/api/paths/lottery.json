@@ -19,17 +19,15 @@
             "schema": {
               "properties": {
                 "raffle_type": {
+                  "description": "Deprecated: raffle mode is automatically selected based on locked coupon balance (\u003e= 300: SPECIAL, \u003c 300: STANDARD). Maintained for backward compatibility.",
                   "type": "string"
                 }
               },
-              "required": [
-                "raffle_type"
-              ],
               "type": "object"
             }
           }
         },
-        "required": true
+        "required": false
       },
       "responses": {
         "200": {

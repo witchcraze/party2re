@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/lottery"
 )
@@ -236,4 +237,270 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestRaffleDatabaseIntegration(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	lotteryRepo, err := database.NewLotteryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invRepo, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depotRepo, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	itemCatalog, err := coreitem.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	txProvider := database.NewTransactionProvider(db)
+
+	svc, err := lottery.NewService(lotteryRepo,
+		lottery.WithCharacterRepository(charRepo),
+		lottery.WithInventoryRepository(invRepo),
+		lottery.WithDepotRepository(depotRepo),
+		lottery.WithItemDefinitionProvider(itemCatalog),
+		lottery.WithTransactionProvider(txProvider),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	t.Run("Boundary 299/300/301 Tickets on Real DB", func(t *testing.T) {
+		// 299 tickets -> Standard Raffle (3 tickets consumed, 296 left)
+		char299, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("Raffle299_%d", time.Now().UnixNano()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := lotteryRepo.AddRaffleTickets(ctx, char299.ID, 299); err != nil {
+			t.Fatal(err)
+		}
+
+		res299, remaining299, _, err := svc.PlayRaffle(ctx, char299.ID)
+		if err != nil {
+			t.Fatalf("PlayRaffle 299 failed: %v", err)
+		}
+		if res299.RaffleType != lottery.RaffleStandard {
+			t.Errorf("expected RaffleStandard for 299 tickets, got %s", res299.RaffleType)
+		}
+		if res299.TicketsUsed != 3 {
+			t.Errorf("expected 3 tickets used, got %d", res299.TicketsUsed)
+		}
+		if remaining299 != 296 {
+			t.Errorf("expected 296 remaining tickets, got %d", remaining299)
+		}
+		dbTickets299, err := lotteryRepo.GetRaffleTickets(ctx, char299.ID)
+		if err != nil || dbTickets299 != 296 {
+			t.Errorf("DB tickets = %d; want 296 (err=%v)", dbTickets299, err)
+		}
+
+		// 300 tickets -> Special Raffle (300 tickets consumed, 0 left)
+		char300, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("Raffle300_%d", time.Now().UnixNano()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := lotteryRepo.AddRaffleTickets(ctx, char300.ID, 300); err != nil {
+			t.Fatal(err)
+		}
+
+		res300, remaining300, _, err := svc.PlayRaffle(ctx, char300.ID)
+		if err != nil {
+			t.Fatalf("PlayRaffle 300 failed: %v", err)
+		}
+		if res300.RaffleType != lottery.RaffleSpecial {
+			t.Errorf("expected RaffleSpecial for 300 tickets, got %s", res300.RaffleType)
+		}
+		if res300.TicketsUsed != 300 {
+			t.Errorf("expected 300 tickets used, got %d", res300.TicketsUsed)
+		}
+		if remaining300 != 0 {
+			t.Errorf("expected 0 remaining tickets, got %d", remaining300)
+		}
+		dbTickets300, err := lotteryRepo.GetRaffleTickets(ctx, char300.ID)
+		if err != nil || dbTickets300 != 0 {
+			t.Errorf("DB tickets = %d; want 0 (err=%v)", dbTickets300, err)
+		}
+
+		// 301 tickets -> Special Raffle (300 tickets consumed, 1 left)
+		char301, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("Raffle301_%d", time.Now().UnixNano()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := lotteryRepo.AddRaffleTickets(ctx, char301.ID, 301); err != nil {
+			t.Fatal(err)
+		}
+
+		res301, remaining301, _, err := svc.PlayRaffle(ctx, char301.ID)
+		if err != nil {
+			t.Fatalf("PlayRaffle 301 failed: %v", err)
+		}
+		if res301.RaffleType != lottery.RaffleSpecial {
+			t.Errorf("expected RaffleSpecial for 301 tickets, got %s", res301.RaffleType)
+		}
+		if res301.TicketsUsed != 300 {
+			t.Errorf("expected 300 tickets used, got %d", res301.TicketsUsed)
+		}
+		if remaining301 != 1 {
+			t.Errorf("expected 1 remaining tickets, got %d", remaining301)
+		}
+		dbTickets301, err := lotteryRepo.GetRaffleTickets(ctx, char301.ID)
+		if err != nil || dbTickets301 != 1 {
+			t.Errorf("DB tickets = %d; want 1 (err=%v)", dbTickets301, err)
+		}
+	})
+
+	t.Run("Concurrent Draws with 300 Tickets - Strictly 1 Special Draw and Zero Stale Mode", func(t *testing.T) {
+		char, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("RaffleRace300_%d", time.Now().UnixNano()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := lotteryRepo.AddRaffleTickets(ctx, char.ID, 300); err != nil {
+			t.Fatal(err)
+		}
+
+		const workers = 10
+		var wg sync.WaitGroup
+		startBarrier := make(chan struct{})
+		results := make(chan error, workers)
+		types := make(chan lottery.RaffleType, workers)
+
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-startBarrier
+				res, _, _, pErr := svc.PlayRaffle(ctx, char.ID)
+				if pErr == nil {
+					types <- res.RaffleType
+				}
+				results <- pErr
+			}()
+		}
+
+		close(startBarrier)
+		wg.Wait()
+		close(results)
+		close(types)
+
+		successCount := 0
+		insufficientCount := 0
+		for pErr := range results {
+			if pErr == nil {
+				successCount++
+			} else if errors.Is(pErr, lottery.ErrInsufficientTickets) {
+				insufficientCount++
+			} else {
+				t.Errorf("unexpected error in concurrent draw: %v", pErr)
+			}
+		}
+
+		if successCount != 1 {
+			t.Fatalf("expected exactly 1 successful draw, got %d", successCount)
+		}
+		if insufficientCount != workers-1 {
+			t.Fatalf("expected %d insufficient ticket errors, got %d", workers-1, insufficientCount)
+		}
+
+		for rType := range types {
+			if rType != lottery.RaffleSpecial {
+				t.Errorf("expected winning draw to be RaffleSpecial, got %s", rType)
+			}
+		}
+
+		remaining, err := lotteryRepo.GetRaffleTickets(ctx, char.ID)
+		if err != nil || remaining != 0 {
+			t.Errorf("DB remaining tickets = %d; want 0 (err=%v)", remaining, err)
+		}
+	})
+
+	t.Run("Concurrent Draws with 303 Tickets - Exactly 1 Special and 1 Standard Draw", func(t *testing.T) {
+		char, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("RaffleRace303_%d", time.Now().UnixNano()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := lotteryRepo.AddRaffleTickets(ctx, char.ID, 303); err != nil {
+			t.Fatal(err)
+		}
+
+		const workers = 10
+		var wg sync.WaitGroup
+		startBarrier := make(chan struct{})
+		results := make(chan error, workers)
+		types := make(chan lottery.RaffleType, workers)
+
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-startBarrier
+				res, _, _, pErr := svc.PlayRaffle(ctx, char.ID)
+				if pErr == nil {
+					types <- res.RaffleType
+				}
+				results <- pErr
+			}()
+		}
+
+		close(startBarrier)
+		wg.Wait()
+		close(results)
+		close(types)
+
+		successCount := 0
+		insufficientCount := 0
+		for pErr := range results {
+			if pErr == nil {
+				successCount++
+			} else if errors.Is(pErr, lottery.ErrInsufficientTickets) {
+				insufficientCount++
+			} else {
+				t.Errorf("unexpected error in concurrent draw: %v", pErr)
+			}
+		}
+
+		if successCount != 2 {
+			t.Fatalf("expected exactly 2 successful draws, got %d", successCount)
+		}
+		if insufficientCount != workers-2 {
+			t.Fatalf("expected %d insufficient ticket errors, got %d", workers-2, insufficientCount)
+		}
+
+		var specialCount, standardCount int
+		for rType := range types {
+			if rType == lottery.RaffleSpecial {
+				specialCount++
+			} else if rType == lottery.RaffleStandard {
+				standardCount++
+			}
+		}
+
+		if specialCount != 1 || standardCount != 1 {
+			t.Errorf("expected 1 Special and 1 Standard, got %d Special and %d Standard", specialCount, standardCount)
+		}
+
+		remaining, err := lotteryRepo.GetRaffleTickets(ctx, char.ID)
+		if err != nil || remaining != 0 {
+			t.Errorf("DB remaining tickets = %d; want 0 (err=%v)", remaining, err)
+		}
+	})
 }

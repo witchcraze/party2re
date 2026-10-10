@@ -166,51 +166,22 @@ func (s *Service) GetRaffleTickets(ctx context.Context, characterID string) (int
 	return s.repo.GetRaffleTickets(ctx, characterID)
 }
 
-func (s *Service) PlayRaffle(ctx context.Context, characterID string, raffleType RaffleType) (RaffleResult, int, corecharacter.Character, error) {
+func (s *Service) PlayRaffle(ctx context.Context, characterID string) (RaffleResult, int, corecharacter.Character, error) {
 	if characterID == "" {
 		return RaffleResult{}, 0, corecharacter.Character{}, corecharacter.ErrNotFound
 	}
 
-	cost := StandardRaffleCost
-	maxRoll := int64(1000)
-	if raffleType == RaffleSpecial {
-		cost = SpecialRaffleCost
-		maxRoll = 100
-	}
-
-	tickets, err := s.repo.GetRaffleTickets(ctx, characterID)
-	if err != nil {
-		return RaffleResult{}, 0, corecharacter.Character{}, err
-	}
-	if tickets < cost {
-		return RaffleResult{}, tickets, corecharacter.Character{}, ErrInsufficientTickets
-	}
-
-	rollBig, err := rand.Int(rand.Reader, big.NewInt(maxRoll))
-	if err != nil {
-		return RaffleResult{}, tickets, corecharacter.Character{}, fmt.Errorf("failed rolling raffle: %w", err)
-	}
-	roll := int(rollBig.Int64())
-
-	subRollBig, err := rand.Int(rand.Reader, big.NewInt(int64(len(SpecialGrandPrizeItems))))
-	if err != nil {
-		return RaffleResult{}, tickets, corecharacter.Character{}, fmt.Errorf("failed rolling special prize: %w", err)
-	}
-	subRoll := int(subRollBig.Int64())
-
-	now := s.now()
-	jst := time.FixedZone("JST", 9*60*60)
-	wday := int(now.In(jst).Weekday())
-
-	prize := EvaluateRaffleRoll(raffleType, roll, wday, subRoll)
-
 	var (
+		raffleType         RaffleType
+		cost               int
+		roll               int
+		prize              RafflePrize
 		remainingTickets   int
 		updatedChar        corecharacter.Character
 		transferredToDepot bool
 	)
 
-	err = s.runInTx(ctx, func(txCtx context.Context) error {
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		// 1. Lock Character (Rank 2)
 		if s.charRepo != nil {
 			var charErr error
@@ -220,7 +191,46 @@ func (s *Service) PlayRaffle(ctx context.Context, characterID string, raffleType
 			}
 		}
 
-		// 2. Lock Inventory (Rank 3) if prize grants an item
+		// 2. Determine raffle mode from locked ticket balance (Rank 8 record read)
+		tickets, err := s.repo.GetRaffleTickets(txCtx, characterID)
+		if err != nil {
+			return err
+		}
+		if tickets < StandardRaffleCost {
+			return ErrInsufficientTickets
+		}
+
+		var maxRoll int64
+		if tickets >= SpecialRaffleCost {
+			raffleType = RaffleSpecial
+			cost = SpecialRaffleCost
+			maxRoll = 100
+		} else {
+			raffleType = RaffleStandard
+			cost = StandardRaffleCost
+			maxRoll = 1000
+		}
+
+		// 3. Roll raffle prize
+		rollBig, err := rand.Int(rand.Reader, big.NewInt(maxRoll))
+		if err != nil {
+			return fmt.Errorf("failed rolling raffle: %w", err)
+		}
+		roll = int(rollBig.Int64())
+
+		subRollBig, err := rand.Int(rand.Reader, big.NewInt(int64(len(SpecialGrandPrizeItems))))
+		if err != nil {
+			return fmt.Errorf("failed rolling special prize: %w", err)
+		}
+		subRoll := int(subRollBig.Int64())
+
+		now := s.now()
+		jst := time.FixedZone("JST", 9*60*60)
+		wday := int(now.In(jst).Weekday())
+
+		prize = EvaluateRaffleRoll(raffleType, roll, wday, subRoll)
+
+		// 4. Lock Inventory (Rank 3) if prize grants an item
 		var inv coreinventory.Inventory
 		occupied := false
 		if prize.ItemDefinitionID != "" {
@@ -249,7 +259,7 @@ func (s *Service) PlayRaffle(ctx context.Context, characterID string, raffleType
 			}
 		}
 
-		// 3. Lock Depot (Rank 5) if item must go to depot
+		// 5. Lock Depot (Rank 5) if item must go to depot
 		var dep depot.Depot
 		if prize.ItemDefinitionID != "" && occupied {
 			if s.depotRepo == nil {
@@ -269,14 +279,14 @@ func (s *Service) PlayRaffle(ctx context.Context, characterID string, raffleType
 			dep.RefreshCapacity(updatedChar.JobLevel, updatedChar.OverDepot)
 		}
 
-		// 4. Consume raffle tickets (Rank 8 / Secondary record)
+		// 6. Consume raffle tickets (Rank 8 / Secondary record)
 		var ticketErr error
 		remainingTickets, ticketErr = s.repo.UseRaffleTickets(txCtx, characterID, cost)
 		if ticketErr != nil {
 			return ticketErr
 		}
 
-		// 5. Deliver item if won
+		// 7. Deliver item if won
 		if prize.ItemDefinitionID != "" {
 			inst, err := coreitem.NewInstance(prize.ItemDefinitionID, 1)
 			if err != nil {
@@ -310,7 +320,7 @@ func (s *Service) PlayRaffle(ctx context.Context, characterID string, raffleType
 		return nil
 	})
 	if err != nil {
-		return RaffleResult{}, tickets, corecharacter.Character{}, err
+		return RaffleResult{}, 0, corecharacter.Character{}, err
 	}
 
 	remainingAttempts := remainingTickets / cost
