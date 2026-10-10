@@ -142,6 +142,11 @@ func TestSceneAdapterFailureAndMissingConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	status, response := navigationGET(t, h.Router())
+	if status != http.StatusNotImplemented {
+		t.Fatalf("missing Bank service: %d %+v", status, response)
+	}
+	h.bank = newBankGatewayFixture(t).service
+	status, response = navigationGET(t, h.Router())
 	if status != 200 || len(response.AvailableActions) != 1 || response.AvailableActions[0].Action != "scene_back" {
 		t.Fatalf("bank: %d %+v", status, response)
 	}
@@ -167,9 +172,7 @@ func TestSceneAdapterFailureAndMissingConnection(t *testing.T) {
 	if status != 200 || string(raw["success"]) != "true" || string(raw["context"]) != "null" || store.writes != 1 {
 		t.Fatalf("known result: %d %s", status, raw)
 	}
-	adapter.read = func(context.Context, playercontext.Result) (any, error) {
-		return SelectionSceneData{Parent: "town"}, nil
-	}
+	adapter.read = h.bankSceneData
 	h.sceneAdapters["bank"] = adapter
 	if status, response := navigationGET(t, h.Router()); status != 200 || response.Scene.Kind != "facility" || store.writes != 1 {
 		t.Fatalf("GET recovery: %d %+v", status, response)
