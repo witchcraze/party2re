@@ -814,7 +814,7 @@ func TestService_UpdateColor(t *testing.T) {
 	}
 	repo := &mockGuildRepo{
 		getGuildFn: func(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
-			return guild.Guild{ID: guildID, Color: "#FFFFFF"}, members, nil
+			return guild.Guild{ID: guildID, LeaderCharacterID: "leader1", Color: "#FFFFFF"}, members, nil
 		},
 	}
 	svc, _ := guild.NewService(repo)
@@ -957,15 +957,14 @@ func TestService_Disband(t *testing.T) {
 
 	var disbandedID string
 	repo := &mockGuildRepo{
-		getGuildByCharFn: func(_ context.Context, charID string) (guild.Guild, guild.Member, error) {
-			switch charID {
-			case "leader":
-				return guild.Guild{ID: "g1", Name: "解散ギルド"}, guild.Member{GuildID: "g1", CharacterID: "leader", Role: guild.RoleLeader}, nil
-			case "member":
-				return guild.Guild{ID: "g1", Name: "解散ギルド"}, guild.Member{GuildID: "g1", CharacterID: "member", Role: guild.RoleMember}, nil
-			default:
-				return guild.Guild{}, guild.Member{}, guild.ErrCharacterNotInGuild
+		getGuildFn: func(_ context.Context, guildID string) (guild.Guild, []guild.Member, error) {
+			if guildID == "g1" {
+				return guild.Guild{ID: "g1", Name: "解散ギルド", LeaderCharacterID: "leader"}, []guild.Member{
+					{GuildID: "g1", CharacterID: "leader", Role: guild.RoleLeader},
+					{GuildID: "g1", CharacterID: "member", Role: guild.RoleMember},
+				}, nil
 			}
+			return guild.Guild{}, nil, guild.ErrGuildNotFound
 		},
 		disbandGuildFn: func(_ context.Context, guildID string) error {
 			disbandedID = guildID

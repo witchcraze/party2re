@@ -225,6 +225,8 @@ func (s *Service) BroadcastCallout(ctx context.Context, guildID string, senderID
 }
 
 // ChangeMark changes the guild's icon mark for a 3,000G fee paid by the guild master (join_guild.cgi:mark).
+// Transaction: RunInTx (authorization under Rank-7 lock and wallet deduction; rollback on stale leader).
+// Lock Order: guilds(7) -> guild_members(7).
 func (s *Service) ChangeMark(ctx context.Context, guildID string, leaderID string, mark string) (corecharacter.Character, error) {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -239,18 +241,33 @@ func (s *Service) ChangeMark(ctx context.Context, guildID string, leaderID strin
 		return corecharacter.Character{}, ErrInvalidMark
 	}
 
-	g, _, err := s.repo.GetGuild(ctx, guildID)
+	var updatedChar corecharacter.Character
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		lockedGuild, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
+		if err != nil {
+			return err
+		}
+
+		if err := authorizeCurrentLeader(lockedGuild, members, leaderID); err != nil {
+			return err
+		}
+
+		updatedChar, err = s.repo.UpdateMark(txCtx, guildID, trimmedMark, MarkChangeFee, leaderID)
+		if err != nil {
+			return err
+		}
+		s.touchActive(txCtx, guildID)
+		return nil
+	})
 	if err != nil {
 		return corecharacter.Character{}, err
 	}
-	if g.LeaderCharacterID != leaderID {
-		return corecharacter.Character{}, ErrUnauthorized
-	}
-
-	return s.repo.UpdateMark(ctx, guildID, trimmedMark, MarkChangeFee, leaderID)
+	return updatedChar, nil
 }
 
 // ChangeWallpaper changes the guild's background wallpaper for the catalog price paid by the guild master (join_guild.cgi:kabegami).
+// Transaction: RunInTx (authorization under Rank-7 lock and wallet deduction; rollback on stale leader).
+// Lock Order: guilds(7) -> guild_members(7).
 func (s *Service) ChangeWallpaper(ctx context.Context, guildID string, leaderID string, wallpaper string) (corecharacter.Character, error) {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -266,15 +283,28 @@ func (s *Service) ChangeWallpaper(ctx context.Context, guildID string, leaderID 
 		return corecharacter.Character{}, err
 	}
 
-	g, _, err := s.repo.GetGuild(ctx, guildID)
+	var updatedChar corecharacter.Character
+	err = s.runInTx(ctx, func(txCtx context.Context) error {
+		lockedGuild, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
+		if err != nil {
+			return err
+		}
+
+		if err := authorizeCurrentLeader(lockedGuild, members, leaderID); err != nil {
+			return err
+		}
+
+		updatedChar, err = s.repo.UpdateWallpaper(txCtx, guildID, normalized, price, leaderID)
+		if err != nil {
+			return err
+		}
+		s.touchActive(txCtx, guildID)
+		return nil
+	})
 	if err != nil {
 		return corecharacter.Character{}, err
 	}
-	if g.LeaderCharacterID != leaderID {
-		return corecharacter.Character{}, ErrUnauthorized
-	}
-
-	return s.repo.UpdateWallpaper(ctx, guildID, normalized, price, leaderID)
+	return updatedChar, nil
 }
 
 func (s *Service) removeMemberInternal(ctx context.Context, g Guild, members []Member, characterID string, role Role) (bool, error) {

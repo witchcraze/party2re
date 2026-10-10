@@ -267,25 +267,19 @@ func (r *GuildRepository) TouchActive(ctx context.Context, guildID string) error
 	return err
 }
 
-func (r *GuildRepository) AddPoints(ctx context.Context, guildID string, points int64) error {
-	now := time.Now().UTC()
-	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
-		UPDATE guilds
-		SET points = points + ?, updated_at = ?
-		WHERE id = ?
-	`, points, now, guildID)
-	return err
-}
-
-func (r *GuildRepository) AddGuildPoints(ctx context.Context, characterID string, points int) error {
-	g, _, err := r.GetGuildByCharacter(ctx, characterID)
+func checkGuildLeaderUpdateResult(ctx context.Context, executor sqlContextExecutor, guildID string, rows int64) error {
+	if rows > 0 {
+		return nil
+	}
+	var count int
+	err := executor.QueryRowContext(ctx, `SELECT COUNT(*) FROM guilds WHERE id = ?`, guildID).Scan(&count)
 	if err != nil {
-		if errors.Is(err, guild.ErrCharacterNotInGuild) {
-			return nil
-		}
 		return err
 	}
-	return r.AddPoints(ctx, g.ID, int64(points))
+	if count == 0 {
+		return guild.ErrGuildNotFound
+	}
+	return guild.ErrUnauthorized
 }
 
 func (r *GuildRepository) TransferLeadership(ctx context.Context, guildID string, oldLeaderID, newLeaderID string) error {
@@ -309,16 +303,8 @@ func (r *GuildRepository) TransferLeadership(ctx context.Context, guildID string
 		if err != nil {
 			return err
 		}
-		if rows == 0 {
-			var count int
-			err := executor.QueryRowContext(txCtx, `SELECT COUNT(*) FROM guilds WHERE id = ?`, guildID).Scan(&count)
-			if err != nil {
-				return err
-			}
-			if count == 0 {
-				return guild.ErrGuildNotFound
-			}
-			return guild.ErrUnauthorized
+		if err := checkGuildLeaderUpdateResult(txCtx, executor, guildID, rows); err != nil {
+			return err
 		}
 
 		// 2. Demote old leader in guild_members
@@ -384,13 +370,13 @@ func (r *GuildRepository) UpdateMark(ctx context.Context, guildID string, mark s
 			}
 		}
 
-		// 2. Update guild mark (Rank 7)
+		// 2. Update guild mark (Rank 7) guarded by current leader
 		now := time.Now().UTC()
 		res, err := executor.ExecContext(txCtx, `
 			UPDATE guilds
 			SET mark = ?, last_active_at = ?, updated_at = ?
-			WHERE id = ?
-		`, mark, now, now, guildID)
+			WHERE id = ? AND leader_character_id = ?
+		`, mark, now, now, guildID, leaderID)
 		if err != nil {
 			return err
 		}
@@ -398,8 +384,8 @@ func (r *GuildRepository) UpdateMark(ctx context.Context, guildID string, mark s
 		if err != nil {
 			return err
 		}
-		if rows == 0 {
-			return guild.ErrGuildNotFound
+		if err := checkGuildLeaderUpdateResult(txCtx, executor, guildID, rows); err != nil {
+			return err
 		}
 
 		// 3. Scan updated character
@@ -455,13 +441,13 @@ func (r *GuildRepository) UpdateWallpaper(ctx context.Context, guildID string, w
 			}
 		}
 
-		// 2. Update guild wallpaper (Rank 7)
+		// 2. Update guild wallpaper (Rank 7) guarded by current leader
 		now := time.Now().UTC()
 		res, err := executor.ExecContext(txCtx, `
 			UPDATE guilds
 			SET bgimg = ?, last_active_at = ?, updated_at = ?
-			WHERE id = ?
-		`, wallpaper, now, now, guildID)
+			WHERE id = ? AND leader_character_id = ?
+		`, wallpaper, now, now, guildID, leaderID)
 		if err != nil {
 			return err
 		}
@@ -469,8 +455,8 @@ func (r *GuildRepository) UpdateWallpaper(ctx context.Context, guildID string, w
 		if err != nil {
 			return err
 		}
-		if rows == 0 {
-			return guild.ErrGuildNotFound
+		if err := checkGuildLeaderUpdateResult(txCtx, executor, guildID, rows); err != nil {
+			return err
 		}
 
 		// 3. Scan updated character
