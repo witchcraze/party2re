@@ -110,6 +110,11 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		if err := s.repository.Save(tc.Context, currentState); err != nil {
 			return err
 		}
+		if s.jobTracker != nil {
+			if err := s.jobTracker.RecordJobChange(tc.Context, characterID); err != nil {
+				return err
+			}
+		}
 		updated, updatedState = tc.Character, currentState
 		return nil
 	})
@@ -126,10 +131,6 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 	if s.costume != nil {
 		//lint:ignore error-swallow best-effort costume rental return on job change
 		_ = s.costume.ResetCostume(ctx, characterID)
-	}
-	if s.jobTracker != nil {
-		//lint:ignore error-swallow best-effort weekly job change tracking
-		_ = s.jobTracker.RecordJobChange(ctx, characterID)
 	}
 	return updated, updatedState, nil
 }

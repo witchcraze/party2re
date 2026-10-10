@@ -56,10 +56,13 @@ The permanent Hall of Fame honors all players who have achieved complete 100% ma
 ### 3. Weekly Job Change Ranking (`week_ranking.cgi`)
 
 - **Active Tracking**: Character job changes (`ChangeJob`) automatically increment active counters in `weekly_job_changes(character_id, change_count)`.
-- **Sunday Midnight Rotation**: Every Sunday at 00:00:00 JST, a scheduled background action (`ranking.rotate_weekly`) executes:
-  1. Queries the top active job changers and persists a frozen snapshot into `ranking_snapshots` (with category `weekly_job_change`).
-  2. Updates memory and Valkey caches.
-  3. Resets all active counters in `weekly_job_changes` (`DELETE FROM weekly_job_changes`).
+  - Mutating writers execute within an ambient or dedicated transaction acquiring `LOCK IN SHARE MODE` on the `ranking_snapshots` record for `weekly_job_change`. Multiple concurrent job changes can acquire shared locks simultaneously without blocking one another.
+- **Sunday Midnight Rotation & Atomic Reset**: Every Sunday at 00:00:00 JST, a scheduled background action (`ranking.rotate_weekly`) executes within a single database transaction (`RunInTx`):
+  1. **Lock Mediation**: Acquires an exclusive `FOR UPDATE` lock on the `ranking_snapshots` row (`weekly_job_change`), draining ongoing job changes and serializing incoming ones.
+  2. **Snapshot Calculation & Re-rotation Guard**: Reads active job changer counters. If active counters are zero, the existing snapshot is inspected; if an existing finalized snapshot contains records, re-rotation preserves the finalized snapshot and avoids overwriting it with empty data. Otherwise, a frozen snapshot is persisted to `ranking_snapshots`.
+  3. **Counter Reset**: Deletes active counter rows (`DELETE FROM weekly_job_changes`).
+  4. **Post-Commit Cache Update**: Only after transaction commit succeeds are memory and Valkey caches invalidated/published. If the transaction rolls back, active counters and the previous snapshot remain intact.
+- **Concurrent Writer Isolation**: Job changes attempting to commit while rotation is in flight wait on the shared lock, then proceed to write into the newly reset counter table for the new week, guaranteeing zero lost updates and zero duplicate counting.
 
 ### 4. Deterministic Tie-Breaking & Pagination
 

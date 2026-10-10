@@ -67,13 +67,26 @@ func (r *RankingRepository) GetAlchemyRanking(ctx context.Context, limit, offset
 
 // IncrementJobChangeCount increments the active weekly job change count for a character.
 func (r *RankingRepository) IncrementJobChangeCount(ctx context.Context, characterID string) error {
-	query := `
-		INSERT INTO weekly_job_changes (character_id, change_count)
-		VALUES (?, 1)
-		ON DUPLICATE KEY UPDATE change_count = change_count + 1
-	`
-	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, query, characterID)
-	return err
+	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
+		if err := r.ensureWeeklyJobChangeSnapshotRow(txCtx); err != nil {
+			return err
+		}
+		// Acquire shared lock on weekly_job_change snapshot row to coordinate with rotation.
+		// Concurrent job changes do not block each other, but will wait if rotation is currently in progress.
+		lockQuery := `SELECT ranking_type FROM ranking_snapshots WHERE ranking_type = 'weekly_job_change' LOCK IN SHARE MODE`
+		var typ string
+		if err := ExecutorFromContext(txCtx, r.db).QueryRowContext(txCtx, lockQuery).Scan(&typ); err != nil {
+			return err
+		}
+
+		query := `
+			INSERT INTO weekly_job_changes (character_id, change_count)
+			VALUES (?, 1)
+			ON DUPLICATE KEY UPDATE change_count = change_count + 1
+		`
+		_, err := ExecutorFromContext(txCtx, r.db).ExecContext(txCtx, query, characterID)
+		return err
+	})
 }
 
 // GetActiveWeeklyJobChangeRanking retrieves the current week's active job change leaderboard.
@@ -115,6 +128,30 @@ func (r *RankingRepository) GetWeeklyJobChangeRanking(ctx context.Context, limit
 func (r *RankingRepository) ResetWeeklyJobChanges(ctx context.Context) error {
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, "DELETE FROM weekly_job_changes")
 	return err
+}
+
+func (r *RankingRepository) ensureWeeklyJobChangeSnapshotRow(ctx context.Context) error {
+	query := `
+		INSERT IGNORE INTO ranking_snapshots (ranking_type, snapshot_data, total_count, calculated_at, updated_at)
+		VALUES ('weekly_job_change', '[]', 0, NOW(), NOW())
+	`
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, query)
+	return err
+}
+
+// LockWeeklyJobChangesForUpdate acquires an exclusive lock on weekly job change records to serialize concurrent rotations and writers.
+func (r *RankingRepository) LockWeeklyJobChangesForUpdate(ctx context.Context) error {
+	if err := r.ensureWeeklyJobChangeSnapshotRow(ctx); err != nil {
+		return err
+	}
+	query := `SELECT ranking_type FROM ranking_snapshots WHERE ranking_type = 'weekly_job_change' FOR UPDATE`
+	var typ string
+	return ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query).Scan(&typ)
+}
+
+// RunInTx executes the function within a database transaction.
+func (r *RankingRepository) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	return RunInTx(ctx, r.db, fn)
 }
 
 // RecordLegend records a character's completion in the permanent Hall of Fame.

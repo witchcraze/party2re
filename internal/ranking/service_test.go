@@ -9,41 +9,44 @@ import (
 )
 
 type mockRankingRepository struct {
-	levelRankings           []ranking.CharacterRankingEntry
-	levelTotal              int
-	playerWealthRankings    []ranking.PlayerWealthRankingEntry
-	playerWealthTotal       int
-	characterWealthRankings []ranking.CharacterRankingEntry
-	characterWealthTotal    int
-	monsterKillsRankings    []ranking.CharacterRankingEntry
-	monsterKillsTotal       int
-	maoCountRankings        []ranking.CharacterRankingEntry
-	maoCountTotal           int
-	heroCountRankings       []ranking.CharacterRankingEntry
-	heroCountTotal          int
-	pvpRankings             []ranking.CharacterRankingEntry
-	pvpTotal                int
-	bossRankings            []ranking.CharacterRankingEntry
-	bossTotal               int
-	advRankings             []ranking.CharacterRankingEntry
-	advTotal                int
-	jobMasteryRankings      []ranking.CharacterRankingEntry
-	jobMasteryTotal         int
-	jobPopularityRankings   []ranking.JobPopularityEntry
-	helperRankings          []ranking.CharacterRankingEntry
-	helperTotal             int
-	smallMedalRankings      []ranking.CharacterRankingEntry
-	smallMedalTotal         int
-	casinoWinsRankings      []ranking.CharacterRankingEntry
-	casinoWinsTotal         int
-	alchemyRankings         []ranking.CharacterRankingEntry
-	alchemyTotal            int
-	weeklyJobChangeRankings []ranking.CharacterRankingEntry
-	weeklyJobChangeTotal    int
-	activeWeeklyJobChanges  map[string]int
-	legends                 map[ranking.LegendCategory][]ranking.LegendEntry
-	snapshots               map[ranking.RankingType]ranking.RankingSnapshot
-	err                     error
+	levelRankings            []ranking.CharacterRankingEntry
+	levelTotal               int
+	playerWealthRankings     []ranking.PlayerWealthRankingEntry
+	playerWealthTotal        int
+	characterWealthRankings  []ranking.CharacterRankingEntry
+	characterWealthTotal     int
+	monsterKillsRankings     []ranking.CharacterRankingEntry
+	monsterKillsTotal        int
+	maoCountRankings         []ranking.CharacterRankingEntry
+	maoCountTotal            int
+	heroCountRankings        []ranking.CharacterRankingEntry
+	heroCountTotal           int
+	pvpRankings              []ranking.CharacterRankingEntry
+	pvpTotal                 int
+	bossRankings             []ranking.CharacterRankingEntry
+	bossTotal                int
+	advRankings              []ranking.CharacterRankingEntry
+	advTotal                 int
+	jobMasteryRankings       []ranking.CharacterRankingEntry
+	jobMasteryTotal          int
+	jobPopularityRankings    []ranking.JobPopularityEntry
+	helperRankings           []ranking.CharacterRankingEntry
+	helperTotal              int
+	smallMedalRankings       []ranking.CharacterRankingEntry
+	smallMedalTotal          int
+	casinoWinsRankings       []ranking.CharacterRankingEntry
+	casinoWinsTotal          int
+	alchemyRankings          []ranking.CharacterRankingEntry
+	alchemyTotal             int
+	weeklyJobChangeRankings  []ranking.CharacterRankingEntry
+	weeklyJobChangeTotal     int
+	activeWeeklyJobChanges   map[string]int
+	legends                  map[ranking.LegendCategory][]ranking.LegendEntry
+	snapshots                map[ranking.RankingType]ranking.RankingSnapshot
+	err                      error
+	saveSnapshotErr          error
+	resetWeeklyJobChangesErr error
+	lockWeeklyJobChangesErr  error
 }
 
 func newMockRepo() *mockRankingRepository {
@@ -52,6 +55,24 @@ func newMockRepo() *mockRankingRepository {
 		activeWeeklyJobChanges: make(map[string]int),
 		legends:                make(map[ranking.LegendCategory][]ranking.LegendEntry),
 	}
+}
+
+func (m *mockRankingRepository) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	savedSnapshots := make(map[ranking.RankingType]ranking.RankingSnapshot)
+	for k, v := range m.snapshots {
+		savedSnapshots[k] = v
+	}
+	savedActive := make(map[string]int)
+	for k, v := range m.activeWeeklyJobChanges {
+		savedActive[k] = v
+	}
+
+	if err := fn(ctx); err != nil {
+		m.snapshots = savedSnapshots
+		m.activeWeeklyJobChanges = savedActive
+		return err
+	}
+	return nil
 }
 
 func (m *mockRankingRepository) GetLevelRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
@@ -146,6 +167,9 @@ func (m *mockRankingRepository) GetSmallMedalRanking(ctx context.Context, limit,
 }
 
 func (m *mockRankingRepository) SaveSnapshot(ctx context.Context, snapshot ranking.RankingSnapshot) error {
+	if m.saveSnapshotErr != nil {
+		return m.saveSnapshotErr
+	}
 	if m.err != nil {
 		return m.err
 	}
@@ -208,10 +232,23 @@ func (m *mockRankingRepository) GetActiveWeeklyJobChangeRanking(ctx context.Cont
 }
 
 func (m *mockRankingRepository) ResetWeeklyJobChanges(ctx context.Context) error {
+	if m.resetWeeklyJobChangesErr != nil {
+		return m.resetWeeklyJobChangesErr
+	}
 	if m.err != nil {
 		return m.err
 	}
 	m.activeWeeklyJobChanges = make(map[string]int)
+	return nil
+}
+
+func (m *mockRankingRepository) LockWeeklyJobChangesForUpdate(ctx context.Context) error {
+	if m.lockWeeklyJobChangesErr != nil {
+		return m.lockWeeklyJobChangesErr
+	}
+	if m.err != nil {
+		return m.err
+	}
 	return nil
 }
 

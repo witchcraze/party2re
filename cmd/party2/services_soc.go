@@ -118,14 +118,15 @@ func newSocServices(
 		rankingService *ranking.Service
 	)
 
+	txProvider := database.NewTransactionProvider(db)
 	if valkeyClient == nil {
-		rankingService, _ = ranking.NewService(rankingRepo)
+		rankingService, _ = ranking.NewService(rankingRepo, ranking.WithTransactionProvider(txProvider))
 	} else {
 		limiter = ratelimit.NewValkeyLimiter(valkeyClient)
 		rankingCache := ranking.NewValkeySnapshotCache(valkeyClient)
 		schedRepo = scheduling.NewValkeyRepository(valkeyClient)
 		schedService = scheduling.NewService(schedRepo)
-		rankingService, _ = ranking.NewService(rankingRepo, ranking.WithSnapshotCache(rankingCache))
+		rankingService, _ = ranking.NewService(rankingRepo, ranking.WithSnapshotCache(rankingCache), ranking.WithTransactionProvider(txProvider))
 		worker = scheduling.NewWorker(schedRepo, 5*time.Second, logger)
 	}
 

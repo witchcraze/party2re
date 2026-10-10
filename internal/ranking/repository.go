@@ -68,6 +68,7 @@ type WeeklyJobChangeRepository interface {
 	IncrementJobChangeCount(ctx context.Context, characterID string) error
 	GetActiveWeeklyJobChangeRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	ResetWeeklyJobChanges(ctx context.Context) error
+	LockWeeklyJobChangesForUpdate(ctx context.Context) error
 }
 
 // Repository composes leaderboard queries, snapshot persistence, and hall of fame operations.

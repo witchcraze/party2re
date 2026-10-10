@@ -659,11 +659,12 @@ func TestChangeJob_ResetsCostume(t *testing.T) {
 
 type jobTrackerStub struct {
 	calledFor string
+	err       error
 }
 
 func (s *jobTrackerStub) RecordJobChange(ctx context.Context, characterID string) error {
 	s.calledFor = characterID
-	return nil
+	return s.err
 }
 
 func TestServiceChangeJobRecordsWeeklyJobChange(t *testing.T) {
@@ -696,6 +697,35 @@ func TestServiceChangeJobRecordsWeeklyJobChange(t *testing.T) {
 
 	if tracker.calledFor != "character-1" {
 		t.Fatalf("expected job tracker called for character-1, got %q", tracker.calledFor)
+	}
+}
+
+func TestServiceChangeJob_JobTrackerErrorPropagates(t *testing.T) {
+	state, _ := corejob.NewCharacterJob("character-1", "starter")
+	repo := &repositoryStub{value: state}
+	char := corecharacter.Character{
+		ID:        "character-1",
+		JobID:     "starter",
+		Level:     20,
+		Gender:    "male",
+		OverLevel: false,
+	}
+	charRepo := &charRepoStub{char: char}
+	tracker := &jobTrackerStub{err: errors.New("tracking failed")}
+
+	svc, err := NewService(
+		repo,
+		WithCharacterRepository(charRepo),
+		WithInventoryRepository(&inventoryRepoStub{}),
+		WithJobChangeTracker(tracker),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = svc.ChangeJob(context.Background(), "character-1", "job-01")
+	if err == nil {
+		t.Fatal("expected ChangeJob to fail when job tracker returns error, got nil")
 	}
 }
 

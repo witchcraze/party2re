@@ -19,6 +19,11 @@ type cacheEntry struct {
 	updatedAt time.Time
 }
 
+// TransactionProvider defines ambient transaction runner contract.
+type TransactionProvider interface {
+	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
 // Service provides high-level ranking and leaderboard operations.
 type Service struct {
 	repo        Repository
@@ -28,6 +33,7 @@ type Service struct {
 	cacheTTL    time.Duration
 	mu          sync.RWMutex
 	cache       map[RankingType]cacheEntry
+	txProvider  TransactionProvider
 }
 
 // ServiceOption configures optional parameters for Service.
@@ -52,6 +58,23 @@ func WithSnapshotCache(cache SnapshotCache) ServiceOption {
 	return func(s *Service) {
 		s.valkeyCache = cache
 	}
+}
+
+// WithTransactionProvider configures a transaction provider for atomic ranking operations.
+func WithTransactionProvider(txProvider TransactionProvider) ServiceOption {
+	return func(s *Service) {
+		s.txProvider = txProvider
+	}
+}
+
+func (s *Service) runInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	if s.txProvider != nil {
+		return s.txProvider.RunInTx(ctx, fn)
+	}
+	if tp, ok := s.repo.(TransactionProvider); ok {
+		return tp.RunInTx(ctx, fn)
+	}
+	return fn(ctx)
 }
 
 // NewService creates a new ranking Service instance.
