@@ -152,6 +152,36 @@ func (m *mockRankingRepository) GetJobPopularityRanking(ctx context.Context) ([]
 	return m.jobPopularityRankings, nil
 }
 
+func (m *mockRankingRepository) RecordJobPopularity(ctx context.Context, jobID string, gender string, points int) error {
+	if m.err != nil {
+		return m.err
+	}
+	for i := range m.jobPopularityRankings {
+		if m.jobPopularityRankings[i].JobID == jobID {
+			if gender == "m" || gender == "male" {
+				m.jobPopularityRankings[i].MaleCount += points
+			} else {
+				m.jobPopularityRankings[i].FemaleCount += points
+			}
+			m.jobPopularityRankings[i].TotalCount += points
+			return nil
+		}
+	}
+	var maleCount, femaleCount int
+	if gender == "m" || gender == "male" {
+		maleCount = points
+	} else {
+		femaleCount = points
+	}
+	m.jobPopularityRankings = append(m.jobPopularityRankings, ranking.JobPopularityEntry{
+		JobID:       jobID,
+		TotalCount:  points,
+		MaleCount:   maleCount,
+		FemaleCount: femaleCount,
+	})
+	return nil
+}
+
 func (m *mockRankingRepository) GetHelperRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {
 	if m.err != nil {
 		return nil, 0, m.err
@@ -669,5 +699,56 @@ func TestService_WarmupCache(t *testing.T) {
 	pop, err := svc.GetJobPopularityRanking(ctx, true)
 	if err != nil || !pop.IsSnapshot || pop.Total != 1 {
 		t.Fatalf("expected job popularity ranking from prewarmed cache, got %+v (err: %v)", pop, err)
+	}
+}
+
+func TestService_RecordJobPopularity(t *testing.T) {
+	repo := newMockRepo()
+	svc, err := ranking.NewService(repo)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Empty job ID should fail
+	if err := svc.RecordJobPopularity(ctx, "", "m", 10); err == nil {
+		t.Error("expected error for empty job ID")
+	}
+
+	// Negative points clamped to 0
+	if err := svc.RecordJobPopularity(ctx, "job-01", "m", -5); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Valid male record
+	if err := svc.RecordJobPopularity(ctx, "job-01", "m", 10); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Valid female record
+	if err := svc.RecordJobPopularity(ctx, "job-01", "f", 15); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify repo
+	entries, err := repo.GetJobPopularityRanking(ctx)
+	if err != nil {
+		t.Fatalf("failed to get rankings: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].JobID != "job-01" {
+		t.Errorf("expected job-01, got %s", entries[0].JobID)
+	}
+	if entries[0].TotalCount != 25 {
+		t.Errorf("expected total 25, got %d", entries[0].TotalCount)
+	}
+	if entries[0].MaleCount != 10 {
+		t.Errorf("expected male 10, got %d", entries[0].MaleCount)
+	}
+	if entries[0].FemaleCount != 15 {
+		t.Errorf("expected female 15, got %d", entries[0].FemaleCount)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 
 	"github.com/witchcraze/party2re/internal/ranking"
 )
@@ -261,19 +262,10 @@ func (r *RankingRepository) GetJobMasteryRanking(ctx context.Context, limit, off
 }
 
 func (r *RankingRepository) GetJobPopularityRanking(ctx context.Context) ([]ranking.JobPopularityEntry, error) {
-	total, err := r.countCharacters(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	query := `
-		SELECT c.job_id,
-		       COUNT(*) AS total_count,
-		       SUM(CASE WHEN c.gender IN ('m', 'male') THEN 1 ELSE 0 END) AS male_count,
-		       SUM(CASE WHEN c.gender IN ('f', 'female') THEN 1 ELSE 0 END) AS female_count
-		FROM characters c
-		GROUP BY c.job_id
-		ORDER BY total_count DESC, c.job_id ASC
+		SELECT job_id, total_points, male_points, female_points
+		FROM job_popularity_stats
+		ORDER BY total_points DESC, job_id ASC
 	`
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, query)
 	if err != nil {
@@ -282,6 +274,7 @@ func (r *RankingRepository) GetJobPopularityRanking(ctx context.Context) ([]rank
 	defer rows.Close()
 
 	var entries []ranking.JobPopularityEntry
+	var totalPoints int
 	idx := 0
 	for rows.Next() {
 		var e ranking.JobPopularityEntry
@@ -290,15 +283,49 @@ func (r *RankingRepository) GetJobPopularityRanking(ctx context.Context) ([]rank
 		}
 		e.Rank = idx + 1
 		idx++
-		if total > 0 {
-			e.Percentage = float64(e.TotalCount) / float64(total) * 100.0
-		}
+		totalPoints += e.TotalCount
 		entries = append(entries, e)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if entries == nil {
+		entries = []ranking.JobPopularityEntry{}
+	}
+	if totalPoints > 0 {
+		for i := range entries {
+			entries[i].Percentage = float64(entries[i].TotalCount) / float64(totalPoints) * 100.0
+		}
+	}
 	return entries, nil
+}
+
+func (r *RankingRepository) RecordJobPopularity(ctx context.Context, jobID string, gender string, points int) error {
+	if jobID == "" {
+		return errors.New("job ID required")
+	}
+	if points < 0 {
+		points = 0
+	}
+
+	normGender := strings.ToLower(strings.TrimSpace(gender))
+	var malePoints, femalePoints int
+	if normGender == "m" || normGender == "male" || normGender == "男" {
+		malePoints = points
+	} else {
+		femalePoints = points
+	}
+
+	query := `
+		INSERT INTO job_popularity_stats (job_id, male_points, female_points, total_points)
+		VALUES (?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			male_points = male_points + VALUES(male_points),
+			female_points = female_points + VALUES(female_points),
+			total_points = total_points + VALUES(total_points)
+	`
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, query, jobID, malePoints, femalePoints, points)
+	return err
 }
 
 func (r *RankingRepository) GetHelperRanking(ctx context.Context, limit, offset int) ([]ranking.CharacterRankingEntry, int, error) {

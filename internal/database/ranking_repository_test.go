@@ -263,12 +263,45 @@ func TestRankingRepository_Integration(t *testing.T) {
 	}
 
 	// === Test Job Popularity Ranking ===
+	popJobA := fmt.Sprintf("%s_job_a", prefix)
+	popJobB := fmt.Sprintf("%s_job_b", prefix)
+	if err := rankingRepo.RecordJobPopularity(ctx, popJobA, "m", 10); err != nil {
+		t.Fatalf("RecordJobPopularity male failed: %v", err)
+	}
+	if err := rankingRepo.RecordJobPopularity(ctx, popJobA, "f", 10); err != nil {
+		t.Fatalf("RecordJobPopularity female failed: %v", err)
+	}
+	if err := rankingRepo.RecordJobPopularity(ctx, popJobB, "f", 30); err != nil {
+		t.Fatalf("RecordJobPopularity popJobB failed: %v", err)
+	}
+
 	popRankings, err := rankingRepo.GetJobPopularityRanking(ctx)
 	if err != nil {
 		t.Fatalf("GetJobPopularityRanking failed: %v", err)
 	}
-	if len(popRankings) == 0 {
-		t.Fatalf("expected job popularity entries")
+	if len(popRankings) < 2 {
+		t.Fatalf("expected at least 2 job popularity entries, got %d", len(popRankings))
+	}
+	var foundA, foundB *ranking.JobPopularityEntry
+	for i := range popRankings {
+		if popRankings[i].JobID == popJobA {
+			foundA = &popRankings[i]
+		}
+		if popRankings[i].JobID == popJobB {
+			foundB = &popRankings[i]
+		}
+	}
+	if foundA == nil || foundB == nil {
+		t.Fatalf("expected to find both %s and %s in rankings", popJobA, popJobB)
+	}
+	if foundA.TotalCount != 20 || foundA.MaleCount != 10 || foundA.FemaleCount != 10 {
+		t.Errorf("jobA: expected total 20, male 10, female 10; got total %d, male %d, female %d", foundA.TotalCount, foundA.MaleCount, foundA.FemaleCount)
+	}
+	if foundB.TotalCount != 30 || foundB.MaleCount != 0 || foundB.FemaleCount != 30 {
+		t.Errorf("jobB: expected total 30, male 0, female 30; got total %d, male %d, female %d", foundB.TotalCount, foundB.MaleCount, foundB.FemaleCount)
+	}
+	if foundB.Rank >= foundA.Rank {
+		t.Errorf("expected jobB (30 pts) to outrank jobA (20 pts): rankB=%d, rankA=%d", foundB.Rank, foundA.Rank)
 	}
 
 	// === Test Helper Ranking ===

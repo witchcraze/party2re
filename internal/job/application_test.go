@@ -729,6 +729,184 @@ func TestServiceChangeJob_JobTrackerErrorPropagates(t *testing.T) {
 	}
 }
 
+type jobPopularityRecord struct {
+	jobID  string
+	gender string
+	points int
+}
+
+type jobPopularityStub struct {
+	records []jobPopularityRecord
+	err     error
+}
+
+func (s *jobPopularityStub) RecordJobPopularity(ctx context.Context, jobID string, gender string, points int) error {
+	if s.err != nil {
+		return s.err
+	}
+	s.records = append(s.records, jobPopularityRecord{
+		jobID:  jobID,
+		gender: gender,
+		points: points,
+	})
+	return nil
+}
+
+func TestServiceChangeJobRecordsJobPopularityPoints(t *testing.T) {
+	state, _ := corejob.NewCharacterJob("character-1", "starter")
+	repo := &repositoryStub{value: state}
+	char := corecharacter.Character{
+		ID:        "character-1",
+		JobID:     "starter",
+		Level:     20,
+		Gender:    "male",
+		OverLevel: false,
+	}
+	charRepo := &charRepoStub{char: char}
+	tracker := &jobPopularityStub{}
+
+	svc, err := NewService(
+		repo,
+		WithCharacterRepository(charRepo),
+		WithInventoryRepository(&inventoryRepoStub{}),
+		WithJobPopularityTracker(tracker),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = svc.ChangeJob(context.Background(), "character-1", "job-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(tracker.records) != 1 {
+		t.Fatalf("expected 1 popularity record, got %d", len(tracker.records))
+	}
+	rec := tracker.records[0]
+	if rec.jobID != "starter" {
+		t.Errorf("expected old job starter, got %s", rec.jobID)
+	}
+	if rec.gender != "male" {
+		t.Errorf("expected gender male, got %s", rec.gender)
+	}
+	if rec.points != 10 {
+		t.Errorf("expected 10 points (floor(20/2)), got %d", rec.points)
+	}
+}
+
+func TestServiceChangeJob_JobPopularityOddLevelFloorHalving(t *testing.T) {
+	tests := []struct {
+		level int
+		want  int
+	}{
+		{level: 21, want: 10},
+		{level: 25, want: 12},
+		{level: 51, want: 25},
+	}
+
+	for _, tt := range tests {
+		state, _ := corejob.NewCharacterJob("character-1", "starter")
+		repo := &repositoryStub{value: state}
+		char := corecharacter.Character{
+			ID:        "character-1",
+			JobID:     "starter",
+			Level:     tt.level,
+			Gender:    "f",
+			OverLevel: false,
+		}
+		charRepo := &charRepoStub{char: char}
+		tracker := &jobPopularityStub{}
+
+		svc, err := NewService(
+			repo,
+			WithCharacterRepository(charRepo),
+			WithInventoryRepository(&inventoryRepoStub{}),
+			WithJobPopularityTracker(tracker),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, _, err = svc.ChangeJob(context.Background(), "character-1", "job-01")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(tracker.records) != 1 {
+			t.Fatalf("expected 1 popularity record, got %d", len(tracker.records))
+		}
+		if tracker.records[0].points != tt.want {
+			t.Errorf("level %d: expected %d points, got %d", tt.level, tt.want, tracker.records[0].points)
+		}
+	}
+}
+
+func TestServiceChangeJob_JobPopularityErrorPropagates(t *testing.T) {
+	state, _ := corejob.NewCharacterJob("character-1", "starter")
+	repo := &repositoryStub{value: state}
+	char := corecharacter.Character{
+		ID:        "character-1",
+		JobID:     "starter",
+		Level:     20,
+		Gender:    "male",
+		OverLevel: false,
+	}
+	charRepo := &charRepoStub{char: char}
+	tracker := &jobPopularityStub{err: errors.New("popularity tracking failed")}
+
+	svc, err := NewService(
+		repo,
+		WithCharacterRepository(charRepo),
+		WithInventoryRepository(&inventoryRepoStub{}),
+		WithJobPopularityTracker(tracker),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = svc.ChangeJob(context.Background(), "character-1", "job-01")
+	if err == nil {
+		t.Fatal("expected ChangeJob to fail when job popularity tracker returns error, got nil")
+	}
+}
+
+func TestServiceChangeJob_SameJobRecordsPoints(t *testing.T) {
+	state, _ := corejob.NewCharacterJob("character-1", "job-01")
+	repo := &repositoryStub{value: state}
+	char := corecharacter.Character{
+		ID:        "character-1",
+		JobID:     "job-01",
+		Level:     40,
+		Gender:    "male",
+		OverLevel: false,
+	}
+	charRepo := &charRepoStub{char: char}
+	tracker := &jobPopularityStub{}
+
+	svc, err := NewService(
+		repo,
+		WithCharacterRepository(charRepo),
+		WithInventoryRepository(&inventoryRepoStub{}),
+		WithJobPopularityTracker(tracker),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = svc.ChangeJob(context.Background(), "character-1", "job-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(tracker.records) != 1 {
+		t.Fatalf("expected 1 record on same job change, got %d", len(tracker.records))
+	}
+	if tracker.records[0].jobID != "job-01" || tracker.records[0].points != 20 {
+		t.Errorf("expected job-01 with 20 points, got %v", tracker.records[0])
+	}
+}
+
 func TestChangeJob_FireFighter_RequiresEquippedArmor_PreValidation(t *testing.T) {
 	ctx := context.Background()
 
