@@ -558,10 +558,19 @@ func TestVotingRules(t *testing.T) {
 	round.Status = contest.StatusActive
 	contestRepo.SaveRound(ctx, round)
 
-	// 3. Self-voting disallowed
-	_, err = svc.Vote(ctx, author.ID, entry.ID, "I vote for me")
-	if !errors.Is(err, contest.ErrSelfVoteDisallowed) {
-		t.Errorf("expected ErrSelfVoteDisallowed, got %v", err)
+	// 3. Self-voting allowed for author on first attempt
+	voteAuthor, err := svc.Vote(ctx, author.ID, entry.ID, "I vote for me")
+	if err != nil {
+		t.Fatalf("Author self-vote failed: %v", err)
+	}
+	if voteAuthor.VoterCharacterID != author.ID || voteAuthor.EntryID != entry.ID {
+		t.Errorf("unexpected author vote: %+v", voteAuthor)
+	}
+
+	// 3b. Author cannot vote again in same round
+	_, err = svc.Vote(ctx, author.ID, entry.ID, "Vote again")
+	if !errors.Is(err, contest.ErrAlreadyVoted) {
+		t.Errorf("expected ErrAlreadyVoted on duplicate author vote, got %v", err)
 	}
 
 	// 4. Voter 1 votes successfully
@@ -588,10 +597,82 @@ func TestVotingRules(t *testing.T) {
 		t.Errorf("unexpected vote2: %+v", vote2)
 	}
 
-	// Check entry votes counter
+	// Check entry votes counter (author + voter1 + voter2 = 3)
 	updatedEntry, _ := contestRepo.FindEntryByID(ctx, entry.ID)
-	if updatedEntry.Votes != 2 {
-		t.Errorf("expected 2 votes, got %d", updatedEntry.Votes)
+	if updatedEntry.Votes != 3 {
+		t.Errorf("expected 3 votes, got %d", updatedEntry.Votes)
+	}
+}
+
+func TestVoting_AuthorVotingPermitted(t *testing.T) {
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+
+	author1 := corecharacter.Character{ID: "author-1", Name: "Author One", Money: 1000}
+	author2 := corecharacter.Character{ID: "author-2", Name: "Author Two", Money: 1000}
+	charRepo.Update(context.Background(), author1)
+	charRepo.Update(context.Background(), author2)
+
+	svc, err := contest.NewService(charRepo, contestRepo)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	ctx := context.Background()
+
+	p1, _ := svc.SavePhoto(ctx, author1.ID, "Photo 1", "Forest", "url1", "", "")
+	e1, _ := svc.EnterContest(ctx, author1.ID, p1.ID, "Forest Shot")
+
+	p2, _ := svc.SavePhoto(ctx, author2.ID, "Photo 2", "Cave", "url2", "", "")
+	e2, _ := svc.EnterContest(ctx, author2.ID, p2.ID, "Cave Shot")
+
+	// Activate contest
+	round, _ := contestRepo.GetRoundByNumber(ctx, 1)
+	round.Status = contest.StatusActive
+	contestRepo.SaveRound(ctx, round)
+
+	// 1. Author 1 casts self-vote for entry 1 (saved as 1 vote)
+	vote1, err := svc.Vote(ctx, author1.ID, e1.ID, "My own entry")
+	if err != nil {
+		t.Fatalf("Author 1 self-vote failed: %v", err)
+	}
+	if vote1.VoterCharacterID != author1.ID || vote1.EntryID != e1.ID {
+		t.Errorf("unexpected vote1: %+v", vote1)
+	}
+
+	// 2. Author 1 cannot vote a second time in same round (neither for e1 nor e2)
+	_, err = svc.Vote(ctx, author1.ID, e1.ID, "Self vote again")
+	if !errors.Is(err, contest.ErrAlreadyVoted) {
+		t.Errorf("expected ErrAlreadyVoted on duplicate self-vote, got %v", err)
+	}
+	_, err = svc.Vote(ctx, author1.ID, e2.ID, "Vote for e2 after self-vote")
+	if !errors.Is(err, contest.ErrAlreadyVoted) {
+		t.Errorf("expected ErrAlreadyVoted on second vote, got %v", err)
+	}
+
+	// 3. Author 2 votes for entry 1 (cross-entrant vote)
+	vote2, err := svc.Vote(ctx, author2.ID, e1.ID, "Nice forest shot")
+	if err != nil {
+		t.Fatalf("Author 2 cross-vote failed: %v", err)
+	}
+	if vote2.VoterCharacterID != author2.ID || vote2.EntryID != e1.ID {
+		t.Errorf("unexpected vote2: %+v", vote2)
+	}
+
+	// 4. Author 2 cannot vote a second time for their own entry e2
+	_, err = svc.Vote(ctx, author2.ID, e2.ID, "Self vote after voting for e1")
+	if !errors.Is(err, contest.ErrAlreadyVoted) {
+		t.Errorf("expected ErrAlreadyVoted for author 2 second vote, got %v", err)
+	}
+
+	// 5. Verify final vote counts: e1 has 2 votes, e2 has 0 votes
+	updatedE1, _ := contestRepo.FindEntryByID(ctx, e1.ID)
+	if updatedE1.Votes != 2 {
+		t.Errorf("expected 2 votes for e1, got %d", updatedE1.Votes)
+	}
+	updatedE2, _ := contestRepo.FindEntryByID(ctx, e2.ID)
+	if updatedE2.Votes != 0 {
+		t.Errorf("expected 0 votes for e2, got %d", updatedE2.Votes)
 	}
 }
 

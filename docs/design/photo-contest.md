@@ -41,7 +41,7 @@ The Photo Contest and Gallery system (`internal/contest`, legacy `photo.cgi` / `
 ### 4.3 Voting Rules (`とうひょう`)
 1. **Active Round Only**: Voting is only allowed while a contest round is in `active` status.
 2. **1 Vote per Character**: A character may cast at most 1 vote per contest round (enforced via database unique constraint on `(round, voter_character_id)`).
-3. **No Self-Voting**: A character cannot vote for their own entry.
+3. **Self-Voting Permitted**: Entrants may vote for their own entry (subject to the standard 1 vote per round limit, matching legacy `lib/photo.cgi:touhyou`).
 4. **Optional Comment**: Voters can include an encouraging comment (up to 100 characters).
 
 ### 4.4 Prize Structure & Rewards

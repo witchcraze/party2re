@@ -11904,7 +11904,7 @@
             "description": "Vote cast successfully"
           },
           "400": {
-            "description": "Invalid vote (contest not active, already voted, self-voting disallowed, or comment too long)"
+            "description": "Invalid vote (contest not active, already voted, or comment too long)"
           },
           "401": {
             "description": "Unauthorized"

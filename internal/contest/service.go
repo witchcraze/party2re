@@ -374,9 +374,6 @@ func (s *Service) Vote(
 		if entry.Round != activeRound.Round {
 			return ErrEntryNotFound
 		}
-		if entry.CharacterID == voterCharacterID {
-			return ErrSelfVoteDisallowed
-		}
 
 		now := s.nowFunc()
 		vote = ContestVote{

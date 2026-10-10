@@ -19,7 +19,6 @@ var (
 	ErrAlreadyEntered             = errors.New("character already has an entry in this contest round")
 	ErrDuplicateTitle             = errors.New("an entry with the same title already exists in this contest round")
 	ErrAlreadyVoted               = errors.New("character has already voted in this contest round")
-	ErrSelfVoteDisallowed         = errors.New("cannot vote for your own contest entry")
 	ErrContestNotActive           = errors.New("contest is not currently active for voting")
 	ErrContestNotFound            = errors.New("contest round not found")
 	ErrEntryNotFound              = errors.New("contest entry not found")
