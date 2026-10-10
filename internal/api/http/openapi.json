@@ -2804,6 +2804,77 @@
               },
               "type": "object"
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "depot_sell",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "item_id"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "depot_sell_batch",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_ids": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "item_ids"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
           }
         ],
         "properties": {
@@ -7115,7 +7186,7 @@
     },
     "/api/v1/characters/{id}/actions": {
       "post": {
-        "description": "Authenticated dispatch with strict parameters and uncached entry/activity/sleep checks. Connected commands: bank_deposit/bank_withdraw with required signed 64-bit integer amount call Deposit/Withdraw; adventure_start with required string stage_id calls StartStage; rescue_request with required string reason calls EmergencyRescue, including during sleep/cooldown and unfinished work; home_sleep with optional target_home_id calls Sleep; home_wake with no inputs calls Wake. Home sleep is free and accepts dead/fatigued actors under existing service rules; omitted/empty target_home_id retains the actor's own-home default, while a different target is a destination only. Ordinary entry/navigation commands are blocked by actual activity, sleep and pending recovery. Continuation eligibility uses verified activity kind, role and phase; verified leave/recovery may remain eligible in conflict without generic entry gates. Early Wake reaches the service and returns HOME_STILL_SLEEPING without recovering; concurrent Wake returns HOME_WAKE_IN_PROGRESS; elapsed duration still requires explicit Wake to run recovery hooks, restore HP/MP/fatigue and clear recovery. If a mandatory recovery hook or timer cleanup fails, Wake returns EXECUTION_FAILED without clearing pending recovery. GET offers Wake only when ready; awake Wake remains ACTION_UNAVAILABLE. Empty stage_id retains the starter-stage default; empty/blank reason is rejected by Rescue. Other catalog IDs return 501 until connected. Known success/rejection refreshes the shared context; unexpected execution failure returns no context and does not guarantee rollback or safe replay. No idempotency guarantee. Never automatically replay POST to recover a failed observation. Navigation commands scene_enter/scene_select/scene_page/scene_back replace one owned selection record with a seven-day TTL, without gameplay effects. Back clears a subject first, otherwise selects the registered parent. Missing/expired selection defaults to town. Selected product availability uses the existing Shop catalog. Refresh uses the same typed scene composer as GET: actual activity/conflict overrides saved selection, otherwise Home and Shop details use ordinary selection. Required activity-read failures preserve an already known command outcome with CONTEXT_REFRESH_FAILED. Party/PvP/GvG/Dungeon/Challenge/Casino continuation commands and Shop mutations remain unconnected. Depot expansion command depot_expand calls the existing Expand service once with the owned actor and request context. Selected Depot context quotes the next expansion cost or null at the purchased cap; quotes do not reserve a tier. Service-owned funds/cap validation returns DEPOT_INSUFFICIENT_FUNDS or DEPOT_MAX_EXPANDED (400); invalid actor IDs return DEPOT_INVALID_CHARACTER_ID (400), and character absence returns CHARACTER_NOT_FOUND (404). Success reuses the Depot response; known success/rejection survives refresh failure with GET-only recovery. All nine Depot REST operations remain registered.",
+        "description": "Authenticated dispatch with strict parameters and uncached entry/activity/sleep checks. Connected commands: bank_deposit/bank_withdraw with required signed 64-bit integer amount call Deposit/Withdraw; adventure_start with required string stage_id calls StartStage; rescue_request with required string reason calls EmergencyRescue, including during sleep/cooldown and unfinished work; home_sleep with optional target_home_id calls Sleep; home_wake with no inputs calls Wake. Home sleep is free and accepts dead/fatigued actors under existing service rules; omitted/empty target_home_id retains the actor's own-home default, while a different target is a destination only. Ordinary entry/navigation commands are blocked by actual activity, sleep and pending recovery. Continuation eligibility uses verified activity kind, role and phase; verified leave/recovery may remain eligible in conflict without generic entry gates. Early Wake reaches the service and returns HOME_STILL_SLEEPING without recovering; concurrent Wake returns HOME_WAKE_IN_PROGRESS; elapsed duration still requires explicit Wake to run recovery hooks, restore HP/MP/fatigue and clear recovery. If a mandatory recovery hook or timer cleanup fails, Wake returns EXECUTION_FAILED without clearing pending recovery. GET offers Wake only when ready; awake Wake remains ACTION_UNAVAILABLE. Empty stage_id retains the starter-stage default; empty/blank reason is rejected by Rescue. Other catalog IDs return 501 until connected. Known success/rejection refreshes the shared context; unexpected execution failure returns no context and does not guarantee rollback or safe replay. No idempotency guarantee. Never automatically replay POST to recover a failed observation. Navigation commands scene_enter/scene_select/scene_page/scene_back replace one owned selection record with a seven-day TTL, without gameplay effects. Back clears a subject first, otherwise selects the registered parent. Missing/expired selection defaults to town. Selected product availability uses the existing Shop catalog. Refresh uses the same typed scene composer as GET: actual activity/conflict overrides saved selection, otherwise Home and Shop details use ordinary selection. Required activity-read failures preserve an already known command outcome with CONTEXT_REFRESH_FAILED. Party/PvP/GvG/Dungeon/Challenge/Casino continuation commands and Shop mutations remain unconnected. Depot expansion command depot_expand calls the existing Expand service once with the owned actor and request context. Selected Depot context quotes the next expansion cost or null at the purchased cap; quotes do not reserve a tier. Service-owned funds/cap validation returns DEPOT_INSUFFICIENT_FUNDS or DEPOT_MAX_EXPANDED (400); invalid actor IDs return DEPOT_INVALID_CHARACTER_ID (400), and character absence returns CHARACTER_NOT_FOUND (404). Success reuses the Depot response; known success/rejection survives refresh failure with GET-only recovery. Depot sale commands depot_sell/depot_sell_batch delegate once to SellItem/SellItems with explicit owned instance IDs and the request context. They return the existing depot/gold_earned result. Missing targets/storage or character use DEPOT_ITEM_NOT_FOUND/DEPOT_NOT_FOUND/CHARACTER_NOT_FOUND (404); invalid character/instance IDs, empty lists and invalid amount/quantity use explicit DEPOT-prefixed 400 rejections. Catalog/provider/repository/cancellation/overflow failures use sanitized EXECUTION_FAILED (500) without context or safe replay. Seven inventory/transfer Depot REST operations remain registered; status/expansion REST are retired.",
         "operationId": "executeCharacterAction",
         "parameters": [
           {
@@ -7136,7 +7207,7 @@
               }
             }
           },
-          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only required non-null string stage_id; rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it. bank_deposit/bank_withdraw accept only required non-null integer amount (int64); missing/null/wrong-type/out-of-range inputs are rejected before execution, while typed nonpositive or excessive values reach Bank service validation. Navigation params are strict: scene_enter requires a registered destination; scene_select requires the registered target_kind and an available target_id. scene_page requires matching destination and exactly one of offset 0..1000000 or cursor, with optional limit 1..100 (default 20), only on a pageable list with no selected subject. Only Home inbox/outbox accept cursors; Town and Shops are offset-only. scene_back accepts omitted params or an empty object. Null fields and arbitrary targets are rejected. depot_expand accepts omitted params or an empty object only: no actor, target, count or cost fields. Shared strict decoding and entry/activity/recovery guards apply.",
+          "description": "One JSON document, at most 64 KiB; Content-Type must be application/json. adventure_start params accepts only required non-null string stage_id; rescue_request accepts only required non-null string reason. home_sleep accepts only optional string target_home_id; home_wake accepts no fields. Home commands accept omitted params or an empty object. Actor identity comes from the owned path; target_home_id never overrides it. bank_deposit/bank_withdraw accept only required non-null integer amount (int64); missing/null/wrong-type/out-of-range inputs are rejected before execution, while typed nonpositive or excessive values reach Bank service validation. Navigation params are strict: scene_enter requires a registered destination; scene_select requires the registered target_kind and an available target_id. scene_page requires matching destination and exactly one of offset 0..1000000 or cursor, with optional limit 1..100 (default 20), only on a pageable list with no selected subject. Only Home inbox/outbox accept cursors; Town and Shops are offset-only. scene_back accepts omitted params or an empty object. Null fields and arbitrary targets are rejected. depot_expand accepts omitted params or an empty object only: no actor, target, count or cost fields. Shared strict decoding and entry/activity/recovery guards apply. depot_sell requires non-null string item_id; depot_sell_batch requires non-null item_ids, an array of non-null strings. Both reject unknown fields, actor, price and quantity overrides. Empty strings/arrays, duplicate or absent owned IDs reach service validation; no automatic selection or transport batch-size limit is imposed.",
           "required": true
         },
         "responses": {
@@ -7148,7 +7219,7 @@
                 }
               }
             },
-            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback."
+            "description": "Known command success; adventure_start result contains id, character_id, stage_id, started_at, floors_cleared, is_cleared, party_size, resolved and experience_reward, as on POST /adventures. rescue_request returns the existing RescueRecord: id, character_id, reason, penalty_seconds, created_at, including idle/no-op results. home_sleep result reuses the REST sleep response: sleeping, duration_seconds, remaining_seconds, home_character_id, message. home_wake result reuses the REST wake response: success, message, character. Refresh failure preserves success/result with null context and CONTEXT_REFRESH_FAILED. Bank results preserve character_id, money, deposit, amount and message as on REST; withdrawal also returns actual_withdrawn and refunded for wallet overflow returned to savings. Navigation result uses NavigationSelection; refreshed typed scene reports selection_unavailable without substituting a fallback. Depot sales return depot (character_id, capacity, ex_depot, item_count, items with ID/definition/quantity) and gold_earned; enhancement facts remain in refreshed context."
           },
           "400": {
             "content": {
@@ -7168,7 +7239,7 @@
                 }
               }
             },
-            "description": "Malformed outer JSON uses the existing transport error. Invalid typed params return INVALID_ACTION_PARAMS without execution/context. Rescue service invalid actor ID returns RESCUE_INVALID_CHARACTER_ID with refreshed context when possible. Bank service rejections use BANK_INVALID_CHARACTER_ID, BANK_INVALID_AMOUNT, BANK_INSUFFICIENT_FUNDS, BANK_INSUFFICIENT_BALANCE and BANK_DEPOSIT_LIMIT_EXCEEDED; known rejections retain their code if refresh fails. Invalid navigation scene/subject/page returns INVALID_SELECTION with refresh; malformed typed inputs return INVALID_ACTION_PARAMS."
+            "description": "Malformed outer JSON uses the existing transport error. Invalid typed params return INVALID_ACTION_PARAMS without execution/context. Rescue service invalid actor ID returns RESCUE_INVALID_CHARACTER_ID with refreshed context when possible. Bank service rejections use BANK_INVALID_CHARACTER_ID, BANK_INVALID_AMOUNT, BANK_INSUFFICIENT_FUNDS, BANK_INSUFFICIENT_BALANCE and BANK_DEPOSIT_LIMIT_EXCEEDED; known rejections retain their code if refresh fails. Invalid navigation scene/subject/page returns INVALID_SELECTION with refresh; malformed typed inputs return INVALID_ACTION_PARAMS. Depot sale rejections use DEPOT_INVALID_CHARACTER_ID, DEPOT_INVALID_ITEM_INSTANCE_ID, DEPOT_EMPTY_ITEM_LIST, DEPOT_INVALID_AMOUNT and DEPOT_INVALID_QUANTITY."
           },
           "401": {
             "content": {
@@ -7215,7 +7286,7 @@
                 }
               }
             },
-            "description": "Unknown ActionID: ACTION_NOT_FOUND. Missing character uses transport error; Adventure/Rescue/Home/Bank service character-not-found returns CHARACTER_NOT_FOUND. Home rejects missing/expired destination houses with HOME_HOUSE_NOT_FOUND / HOME_HOUSE_EXPIRED. Known service rejections refresh context when possible. An absent or unavailable product returns SELECTION_NOT_FOUND."
+            "description": "Unknown ActionID: ACTION_NOT_FOUND. Missing character uses transport error; Adventure/Rescue/Home/Bank service character-not-found returns CHARACTER_NOT_FOUND. Home rejects missing/expired destination houses with HOME_HOUSE_NOT_FOUND / HOME_HOUSE_EXPIRED. Known service rejections refresh context when possible. An absent or unavailable product returns SELECTION_NOT_FOUND. Depot sale missing targets/storage or character return DEPOT_ITEM_NOT_FOUND, DEPOT_NOT_FOUND or CHARACTER_NOT_FOUND with refreshed context when possible."
           },
           "409": {
             "content": {

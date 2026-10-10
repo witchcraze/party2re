@@ -33,6 +33,8 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 		{"home_sleep", "target_home_id", "string", false},
 		{"home_wake", "", "", false},
 		{"depot_expand", "", "", false},
+		{"depot_sell", "item_id", "string", true},
+		{"depot_sell_batch", "item_ids", "array", true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.id, func(t *testing.T) {
@@ -57,13 +59,16 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 			if tc.kind == "integer" && (field.Format != "int64" || field.Minimum.String() != "-9223372036854775808" || field.Maximum.String() != "9223372036854775807") {
 				t.Fatalf("amount must cover precisely signed int64: %+v", field)
 			}
+			if tc.kind == "array" && (field.Items == nil || field.Items.Type != "string") {
+				t.Fatalf("sale IDs must be non-null strings: %+v", field)
+			}
 		})
 	}
 }
 
 func TestCatalog_GatewayRetirementIndependent(t *testing.T) {
 	spec := loadOpenAPISpec(t)
-	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem"}
+	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem", "postCharactersIdDepotSell", "postCharactersIdDepotSellBatch"}
 	for _, methods := range spec.Paths {
 		for method, op := range methods {
 			if slices.Contains(retired, op.OperationID) {

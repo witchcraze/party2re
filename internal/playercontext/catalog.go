@@ -156,6 +156,22 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
 	},
 	{
+		ID:             "depot_sell",
+		Label:          "預かり所のアイテムを売る",
+		Category:       "economy",
+		OperationID:    "executeCharacterAction",
+		RequiredParams: []string{"item_id"},
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+	},
+	{
+		ID:             "depot_sell_batch",
+		Label:          "預かり所のアイテムをまとめて売る",
+		Category:       "economy",
+		OperationID:    "executeCharacterAction",
+		RequiredParams: []string{"item_ids"},
+		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateLocationCheck,
+	},
+	{
 		ID:             "depot_deposit",
 		Label:          "預かり所にアイテムを預ける",
 		Category:       "economy",
