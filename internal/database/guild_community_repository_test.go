@@ -333,3 +333,162 @@ func TestGuildRepository_InactivityScanAndDisband(t *testing.T) {
 		t.Errorf("expected ErrGuildNotFound after DisbandGuild, got %v", err)
 	}
 }
+
+func TestGuildRepository_MultiplePendingApplicationsAndAffiliation(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	guildRepo, err := NewGuildRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Setup two guilds
+	leader1, err := CreateTestCharacter(ctx, db, "L1_MultiApp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	leader2, err := CreateTestCharacter(ctx, db, "L2_MultiApp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	applicant, err := CreateTestCharacter(ctx, db, "Applicant_Multi")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	g1ID := id.New()
+	g1, _, _, err := guildRepo.CreateGuild(ctx, guild.Guild{
+		ID:                g1ID,
+		Name:              fmt.Sprintf("G1_%s", g1ID[:8]),
+		LeaderCharacterID: leader1.ID,
+		Points:            0,
+		Notice:            "Guild 1",
+		Color:             "#111111",
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
+	}, guild.Member{
+		GuildID:     g1ID,
+		CharacterID: leader1.ID,
+		Role:        guild.RoleLeader,
+		Title:       guild.DefaultTitleLeader,
+		JoinedAt:    time.Now().UTC(),
+	}, 0)
+	if err != nil {
+		t.Fatalf("CreateGuild 1 failed: %v", err)
+	}
+
+	g2ID := id.New()
+	g2, _, _, err := guildRepo.CreateGuild(ctx, guild.Guild{
+		ID:                g2ID,
+		Name:              fmt.Sprintf("G2_%s", g2ID[:8]),
+		LeaderCharacterID: leader2.ID,
+		Points:            0,
+		Notice:            "Guild 2",
+		Color:             "#222222",
+		CreatedAt:         time.Now().UTC(),
+		UpdatedAt:         time.Now().UTC(),
+	}, guild.Member{
+		GuildID:     g2ID,
+		CharacterID: leader2.ID,
+		Role:        guild.RoleLeader,
+		Title:       guild.DefaultTitleLeader,
+		JoinedAt:    time.Now().UTC(),
+	}, 0)
+	if err != nil {
+		t.Fatalf("CreateGuild 2 failed: %v", err)
+	}
+
+	// 2. Applicant can apply to Guild 1 and Guild 2
+	_, err = guildRepo.AddMember(ctx, guild.Member{
+		GuildID:     g1.ID,
+		CharacterID: applicant.ID,
+		Role:        guild.RoleMember,
+		Title:       guild.DefaultTitlePending,
+		IsPending:   true,
+		JoinedAt:    time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("applying to G1 failed: %v", err)
+	}
+
+	_, err = guildRepo.AddMember(ctx, guild.Member{
+		GuildID:     g2.ID,
+		CharacterID: applicant.ID,
+		Role:        guild.RoleMember,
+		Title:       guild.DefaultTitlePending,
+		IsPending:   true,
+		JoinedAt:    time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("applying to G2 failed: %v", err)
+	}
+
+	// Duplicate application to Guild 1 fails with ErrApplicationAlreadyPending
+	_, err = guildRepo.AddMember(ctx, guild.Member{
+		GuildID:     g1.ID,
+		CharacterID: applicant.ID,
+		Role:        guild.RoleMember,
+		Title:       guild.DefaultTitlePending,
+		IsPending:   true,
+		JoinedAt:    time.Now().UTC(),
+	})
+	if !errors.Is(err, guild.ErrApplicationAlreadyPending) {
+		t.Fatalf("duplicate application to G1 expected ErrApplicationAlreadyPending, got: %v", err)
+	}
+
+	// 3. GetGuildByCharacter returns ErrCharacterNotInGuild for pending applicant
+	_, _, err = guildRepo.GetGuildByCharacter(ctx, applicant.ID)
+	if !errors.Is(err, guild.ErrCharacterNotInGuild) {
+		t.Fatalf("expected ErrCharacterNotInGuild for pending applicant, got: %v", err)
+	}
+
+	// 4. AddGuildPoints for pending applicant does not grant points to unapproved guilds
+	if err := guildRepo.AddGuildPoints(ctx, applicant.ID, 100); err != nil {
+		t.Fatalf("AddGuildPoints returned error: %v", err)
+	}
+	fetchedG1, _, err := guildRepo.GetGuild(ctx, g1.ID)
+	if err != nil || fetchedG1.Points != 0 {
+		t.Fatalf("expected G1 points 0, got %d (err: %v)", fetchedG1.Points, err)
+	}
+	fetchedG2, _, err := guildRepo.GetGuild(ctx, g2.ID)
+	if err != nil || fetchedG2.Points != 0 {
+		t.Fatalf("expected G2 points 0, got %d (err: %v)", fetchedG2.Points, err)
+	}
+
+	// 5. Leader 2 approves applicant into Guild 2
+	err = guildRepo.ApproveMember(ctx, g2.ID, applicant.ID, "副隊長")
+	if err != nil {
+		t.Fatalf("ApproveMember in G2 failed: %v", err)
+	}
+
+	// Applicant is now active member of G2
+	activeG, activeM, err := guildRepo.GetGuildByCharacter(ctx, applicant.ID)
+	if err != nil || activeG.ID != g2.ID || activeM.IsPending {
+		t.Fatalf("expected active membership in G2, got guild: %+v, member: %+v, err: %v", activeG, activeM, err)
+	}
+
+	// 6. Leader 1 tries to approve applicant into Guild 1 -> fails with ErrCharacterAlreadyInGuild
+	err = guildRepo.ApproveMember(ctx, g1.ID, applicant.ID, "隊員")
+	if !errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
+		t.Fatalf("expected ErrCharacterAlreadyInGuild when approving already-affiliated member, got: %v", err)
+	}
+
+	// 7. AddGuildPoints now awards points to G2
+	if err := guildRepo.AddGuildPoints(ctx, applicant.ID, 50); err != nil {
+		t.Fatalf("AddGuildPoints for active member failed: %v", err)
+	}
+	fetchedG2, _, _ = guildRepo.GetGuild(ctx, g2.ID)
+	if fetchedG2.Points != 50 {
+		t.Fatalf("expected G2 points 50, got %d", fetchedG2.Points)
+	}
+}

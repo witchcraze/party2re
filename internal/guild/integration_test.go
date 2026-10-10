@@ -475,3 +475,131 @@ func TestGuildService_DeterministicDepartureInterleaving(t *testing.T) {
 		t.Fatalf("INVARIANT VIOLATION: expected 0 rows in guilds table, got %d (orphan guild exists!)", guildCount)
 	}
 }
+
+func TestGuildService_MultiApplicationAndAffiliationIntegration(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	guildRepo, err := database.NewGuildRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	service, err := guild.NewService(guildRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Create leaders and applicant
+	leaderA, err := database.CreateTestCharacter(ctx, db, "SvcLdrA")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = db.ExecContext(ctx, "UPDATE characters SET money = 20000 WHERE id = ?", leaderA.ID)
+
+	leaderB, err := database.CreateTestCharacter(ctx, db, "SvcLdrB")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = db.ExecContext(ctx, "UPDATE characters SET money = 20000 WHERE id = ?", leaderB.ID)
+
+	applicant, err := database.CreateTestCharacter(ctx, db, "SvcAppMulti")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = db.ExecContext(ctx, "UPDATE characters SET money = 20000 WHERE id = ?", applicant.ID)
+
+	guildNameA := fmt.Sprintf("MultiA_%s", leaderA.ID[:8])
+	gA, _, _, err := service.Create(ctx, leaderA.ID, guildNameA)
+	if err != nil {
+		t.Fatalf("service.Create guild A failed: %v", err)
+	}
+
+	guildNameB := fmt.Sprintf("MultiB_%s", leaderB.ID[:8])
+	gB, _, _, err := service.Create(ctx, leaderB.ID, guildNameB)
+	if err != nil {
+		t.Fatalf("service.Create guild B failed: %v", err)
+	}
+
+	// 2. Applicant applies to Guild A and Guild B
+	if err := service.ApplyToJoin(ctx, gA.ID, applicant.ID); err != nil {
+		t.Fatalf("ApplyToJoin A failed: %v", err)
+	}
+	if err := service.ApplyToJoin(ctx, gB.ID, applicant.ID); err != nil {
+		t.Fatalf("ApplyToJoin B failed: %v", err)
+	}
+
+	// Duplicate application to Guild A fails with ErrApplicationAlreadyPending
+	if err := service.ApplyToJoin(ctx, gA.ID, applicant.ID); !errors.Is(err, guild.ErrApplicationAlreadyPending) {
+		t.Fatalf("expected ErrApplicationAlreadyPending for duplicate application to A, got %v", err)
+	}
+
+	// 3. Pending applicant is not in an active guild
+	if _, _, err := service.GetByCharacter(ctx, applicant.ID); !errors.Is(err, guild.ErrCharacterNotInGuild) {
+		t.Fatalf("expected ErrCharacterNotInGuild from GetByCharacter, got %v", err)
+	}
+
+	// 4. AddGuildPoints for pending applicant does not award points
+	if err := service.AddGuildPoints(ctx, applicant.ID, 100); err != nil {
+		t.Fatalf("AddGuildPoints error: %v", err)
+	}
+	detA, _ := service.Get(ctx, gA.ID)
+	detB, _ := service.Get(ctx, gB.ID)
+	if detA.Guild.Points != 0 || detB.Guild.Points != 0 {
+		t.Fatalf("expected points 0, got A=%d, B=%d", detA.Guild.Points, detB.Guild.Points)
+	}
+
+	// 5. Another applicant can create a guild despite having pending applications
+	applicant2, err := database.CreateTestCharacter(ctx, db, "SvcApp2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = db.ExecContext(ctx, "UPDATE characters SET money = 20000 WHERE id = ?", applicant2.ID)
+	if err := service.ApplyToJoin(ctx, gA.ID, applicant2.ID); err != nil {
+		t.Fatalf("ApplyToJoin A for applicant2 failed: %v", err)
+	}
+	guildNameC := fmt.Sprintf("MultiC_%s", applicant2.ID[:8])
+	gC, _, _, err := service.Create(ctx, applicant2.ID, guildNameC)
+	if err != nil {
+		t.Fatalf("Create guild C by applicant2 failed: %v", err)
+	}
+	// Once affiliated as leader of C, applicant2 cannot apply to Guild B
+	if err := service.ApplyToJoin(ctx, gB.ID, applicant2.ID); !errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
+		t.Fatalf("expected ErrCharacterAlreadyInGuild for affiliated character applying to B, got %v", err)
+	}
+	_ = gC
+
+	// 6. Leader B approves applicant into Guild B
+	if err := service.ApproveApplication(ctx, gB.ID, leaderB.ID, applicant.ID, "斥候"); err != nil {
+		t.Fatalf("ApproveApplication in B failed: %v", err)
+	}
+
+	// Now applicant is active member of Guild B
+	charGuild, charMember, err := service.GetByCharacter(ctx, applicant.ID)
+	if err != nil || charGuild.ID != gB.ID || charMember.IsPending {
+		t.Fatalf("expected active membership in Guild B, got guild=%+v, member=%+v, err=%v", charGuild, charMember, err)
+	}
+
+	// 7. Leader A tries to approve applicant into Guild A -> fails with ErrCharacterAlreadyInGuild
+	if err := service.ApproveApplication(ctx, gA.ID, leaderA.ID, applicant.ID, "親衛隊"); !errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
+		t.Fatalf("expected ErrCharacterAlreadyInGuild when approving already-affiliated member in A, got %v", err)
+	}
+
+	// 8. AddGuildPoints now awards points to Guild B
+	if err := service.AddGuildPoints(ctx, applicant.ID, 30); err != nil {
+		t.Fatalf("AddGuildPoints for active member failed: %v", err)
+	}
+	detB, _ = service.Get(ctx, gB.ID)
+	if detB.Guild.Points != 30 {
+		t.Fatalf("expected B points 30, got %d", detB.Guild.Points)
+	}
+}

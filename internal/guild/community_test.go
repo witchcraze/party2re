@@ -169,16 +169,44 @@ func TestService_ApplyToJoin(t *testing.T) {
 		}
 	})
 
-	t.Run("fails if application is already pending", func(t *testing.T) {
+	t.Run("fails if application is already pending in target guild", func(t *testing.T) {
 		repo := &mockGuildRepo{
-			getGuildByCharFn: func(ctx context.Context, characterID string) (guild.Guild, guild.Member, error) {
-				return guild.Guild{ID: guildID}, guild.Member{GuildID: guildID, IsPending: true}, nil
+			getGuildFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
+				return guild.Guild{ID: guildID}, []guild.Member{
+					{GuildID: guildID, CharacterID: applicantID, IsPending: true},
+				}, nil
 			},
 		}
 		svc, _ := guild.NewService(repo)
 		err := svc.ApplyToJoin(ctx, guildID, applicantID)
 		if !errors.Is(err, guild.ErrApplicationAlreadyPending) {
 			t.Errorf("expected ErrApplicationAlreadyPending, got %v", err)
+		}
+	})
+
+	t.Run("succeeds if applicant has pending application in another guild", func(t *testing.T) {
+		var addedMember guild.Member
+		repo := &mockGuildRepo{
+			getGuildFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
+				return guild.Guild{ID: guildID, LeaderCharacterID: leaderID}, []guild.Member{
+					{GuildID: guildID, CharacterID: leaderID, Role: guild.RoleLeader, IsPending: false},
+				}, nil
+			},
+			addMemberFn: func(ctx context.Context, member guild.Member) (guild.Member, error) {
+				addedMember = member
+				return member, nil
+			},
+			touchActiveFn: func(ctx context.Context, gID string) error {
+				return nil
+			},
+		}
+		svc, _ := guild.NewService(repo)
+		err := svc.ApplyToJoin(ctx, guildID, applicantID)
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if !addedMember.IsPending {
+			t.Errorf("expected added member to be pending")
 		}
 	})
 }
@@ -275,6 +303,28 @@ func TestService_ApproveApplication(t *testing.T) {
 		err := svc.ApproveApplication(ctx, guildID, leaderID, applicantID, "隊長")
 		if !errors.Is(err, guild.ErrMemberNotPending) {
 			t.Errorf("expected ErrMemberNotPending, got %v", err)
+		}
+	})
+
+	t.Run("fails when applicant already joined another guild in the meantime", func(t *testing.T) {
+		repo := &mockGuildRepo{
+			getGuildFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
+				return guild.Guild{ID: guildID, LeaderCharacterID: leaderID}, []guild.Member{
+					{GuildID: guildID, CharacterID: leaderID, Role: guild.RoleLeader, IsPending: false},
+					{GuildID: guildID, CharacterID: applicantID, Role: guild.RoleMember, IsPending: true},
+				}, nil
+			},
+			getGuildByCharFn: func(ctx context.Context, charID string) (guild.Guild, guild.Member, error) {
+				if charID == applicantID {
+					return guild.Guild{ID: "other-guild"}, guild.Member{GuildID: "other-guild", CharacterID: applicantID, IsPending: false}, nil
+				}
+				return guild.Guild{}, guild.Member{}, guild.ErrCharacterNotInGuild
+			},
+		}
+		svc, _ := guild.NewService(repo)
+		err := svc.ApproveApplication(ctx, guildID, leaderID, applicantID, "隊長")
+		if !errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
+			t.Errorf("expected ErrCharacterAlreadyInGuild, got %v", err)
 		}
 	})
 

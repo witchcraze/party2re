@@ -378,13 +378,29 @@ func TestService_Create_Validation(t *testing.T) {
 	t.Run("Character already in a guild", func(t *testing.T) {
 		repo := &mockGuildRepo{
 			getGuildByCharFn: func(_ context.Context, charID string) (guild.Guild, guild.Member, error) {
-				return guild.Guild{ID: "g1"}, guild.Member{GuildID: "g1", CharacterID: charID}, nil
+				return guild.Guild{ID: "g1"}, guild.Member{GuildID: "g1", CharacterID: charID, IsPending: false}, nil
 			},
 		}
 		svc, _ := guild.NewService(repo)
 		_, _, _, err := svc.Create(ctx, "char1", "Knights")
 		if !errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
 			t.Errorf("err = %v, want %v", err, guild.ErrCharacterAlreadyInGuild)
+		}
+	})
+
+	t.Run("Character with pending applications can create guild", func(t *testing.T) {
+		repo := &mockGuildRepo{
+			getGuildByCharFn: func(_ context.Context, charID string) (guild.Guild, guild.Member, error) {
+				return guild.Guild{}, guild.Member{}, guild.ErrCharacterNotInGuild
+			},
+			createGuildFn: func(_ context.Context, g guild.Guild, m guild.Member, fee int) (guild.Guild, guild.Member, corecharacter.Character, error) {
+				return g, m, corecharacter.Character{ID: m.CharacterID, Money: 5000}, nil
+			},
+		}
+		svc, _ := guild.NewService(repo)
+		_, _, _, err := svc.Create(ctx, "char1", "Knights")
+		if err != nil {
+			t.Errorf("unexpected error when creating guild with pending applications: %v", err)
 		}
 	})
 

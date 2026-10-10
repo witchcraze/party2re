@@ -21,17 +21,24 @@ func (s *Service) ApplyToJoin(ctx context.Context, guildID string, applicantID s
 		return ErrCharacterNotFound
 	}
 
-	// Verify applicant is not already in a guild or has an existing pending application
-	if _, existingMember, err := s.repo.GetGuildByCharacter(ctx, applicantID); err == nil {
-		if existingMember.IsPending {
-			return ErrApplicationAlreadyPending
-		}
+	// Verify applicant is not already in an active guild (join_guild.cgi:sanka)
+	if _, _, err := s.repo.GetGuildByCharacter(ctx, applicantID); err == nil {
 		return ErrCharacterAlreadyInGuild
 	}
 
-	g, _, err := s.repo.GetGuild(ctx, guildID)
+	g, members, err := s.repo.GetGuild(ctx, guildID)
 	if err != nil {
 		return err
+	}
+
+	// Verify applicant does not already have a pending application or membership in this guild (join_guild.cgi:sanka)
+	for i := range members {
+		if members[i].CharacterID == applicantID {
+			if members[i].IsPending {
+				return ErrApplicationAlreadyPending
+			}
+			return ErrCharacterAlreadyInGuild
+		}
 	}
 
 	m := Member{
@@ -105,6 +112,14 @@ func (s *Service) ApproveApplication(ctx context.Context, guildID string, leader
 			return ErrTargetNotMember
 		}
 		if !target.IsPending {
+			return ErrMemberNotPending
+		}
+
+		// Re-verify that the applicant is not already an active member of another guild (guild.cgi:ataeru)
+		if activeGuild, _, err := s.repo.GetGuildByCharacter(txCtx, applicantID); err == nil {
+			if activeGuild.ID != guildID {
+				return ErrCharacterAlreadyInGuild
+			}
 			return ErrMemberNotPending
 		}
 
