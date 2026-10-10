@@ -218,8 +218,8 @@ func TestContestCharacterEndpoints(t *testing.T) {
 			return contest.ContestEntry{ID: "e-new", CharacterID: characterID, Title: title}, nil
 		},
 		voteFn: func(ctx context.Context, voterCharacterID, entryID, comment string) (contest.ContestVote, error) {
-			if entryID == "own-entry" {
-				return contest.ContestVote{}, contest.ErrSelfVoteDisallowed
+			if entryID == "already-voted" {
+				return contest.ContestVote{}, contest.ErrAlreadyVoted
 			}
 			return contest.ContestVote{ID: "v-new", EntryID: entryID, VoterCharacterID: voterCharacterID}, nil
 		},
@@ -296,6 +296,19 @@ func TestContestCharacterEndpoints(t *testing.T) {
 	resp, err = client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK, got %d", resp.StatusCode)
+	}
+
+	// 6b. POST /characters/{id}/contest/vote - Duplicate vote rejected with 400
+	dupVoteBody, _ := json.Marshal(map[string]string{
+		"entry_id": "already-voted",
+		"comment":  "Vote again",
+	})
+	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/contest/vote", bytes.NewReader(dupVoteBody))
+	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for duplicate vote, got %d", resp.StatusCode)
 	}
 
 	// 7. POST /contest/settle - Admin Auth Required

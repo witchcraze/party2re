@@ -331,7 +331,6 @@ func (h *Handler) handleVoteContest(w http.ResponseWriter, r *http.Request) {
 			switch {
 			case errors.Is(err, contest.ErrContestNotActive),
 				errors.Is(err, contest.ErrAlreadyVoted),
-				errors.Is(err, contest.ErrSelfVoteDisallowed),
 				errors.Is(err, contest.ErrCommentTooLong):
 				writeError(w, http.StatusBadRequest, err)
 			case errors.Is(err, contest.ErrEntryNotFound),
