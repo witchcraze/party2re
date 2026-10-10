@@ -389,7 +389,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 		// Depot
 		"handleDepositDepotItem":  "depot.go",
 		"handleWithdrawDepotItem": "depot.go",
-		"handleSortDepot":         "depot.go",
 		"handleDepotSendMoney":    "depot.go",
 		"handleDepotSendItem":     "depot.go",
 		// Plantation

@@ -161,23 +161,6 @@ func (h *Handler) handleWithdrawDepotItem(w http.ResponseWriter, r *http.Request
 	})
 }
 
-func (h *Handler) handleSortDepot(w http.ResponseWriter, r *http.Request) {
-	if h.depot == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("depot service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		dep, err := h.depot.SortItems(r.Context(), char.ID)
-		if err != nil {
-			mapDepotHTTPError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, toDepotResponse(dep))
-	})
-}
-
 func (h *Handler) handleDepotSendMoney(w http.ResponseWriter, r *http.Request) {
 	if h.depot == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("depot service not configured"))

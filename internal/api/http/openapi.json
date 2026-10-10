@@ -12180,43 +12180,6 @@
         ]
       }
     },
-    "/characters/{id}/depot/sort": {
-      "post": {
-        "operationId": "postCharactersIdDepotSort",
-        "parameters": [
-          {
-            "description": "id parameter",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        },
-        "summary": "POST /characters/{id}/depot/sort endpoint",
-        "tags": [
-          "Depot"
-        ]
-      }
-    },
     "/characters/{id}/depot/withdraw": {
       "post": {
         "operationId": "postCharactersIdDepotWithdraw",

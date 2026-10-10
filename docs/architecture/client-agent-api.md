@@ -223,10 +223,10 @@ The quote uses the public expansion price reader and is null at the purchased
 expansion cap. It grants no reservation: execution charges the current tier
 inside the existing service transaction. Clients explicitly enter Depot and
 read GET context for status, and submit `depot_expand` to the Gateway to purchase;
-the former Depot status GET, expansion POST and single/batch sale POST routes
+the former Depot status GET, expansion POST, single/batch sale POST and sort POST routes
 return 404. Sales use `depot_sell` and `depot_sell_batch` through the Gateway.
-Explicit sorting uses `depot_sort` through the Gateway. Five inventory/transfer
-REST operations remain: sort awaits verified retirement; deposit/withdraw/send
+Explicit sorting uses `depot_sort` through the Gateway. Four inventory/transfer
+REST operations remain: deposit/withdraw/send
 still need command adapters and verified retirement;
 [Depot design](../design/depot.md#gateway-observation-and-retained-operations)
 records those operations and the remaining order/equipment/withdrawal gaps.
@@ -610,7 +610,8 @@ context projection and persisted state.
 Shared guards, sanitized unknown execution errors and known outcome/GET-only
 refresh recovery apply. Persistence preserves the feature's explicit order;
 the [known comparator-key difference](../design/depot.md#4-depot-sorting-せいとん)
-remains feature work. Its existing REST route awaits separate verified retirement.
+remains feature work. The former sort REST route returns 404; clients use the
+Gateway command after explicit Depot selection.
 
 ### Command outcome and context refresh
 
