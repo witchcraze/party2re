@@ -16,6 +16,8 @@ func (s *Service) publishDissolutionNews(ctx context.Context, guildName string, 
 }
 
 // Disband allows the guild master to disband the guild (join_guild.cgi:kaisan).
+// Transaction: RunInTx (authorization under Rank-7 lock and dissolution; news follows success).
+// Lock Order: guilds(7) -> guild_members(7).
 func (s *Service) Disband(ctx context.Context, guildID string, leaderCharID string) error {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -28,18 +30,19 @@ func (s *Service) Disband(ctx context.Context, guildID string, leaderCharID stri
 
 	var disbandedGuildName string
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		g, member, err := s.repo.GetGuildByCharacter(txCtx, leaderCharID)
+		lockedGuild, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
 		if err != nil {
 			return err
 		}
-		if g.ID != guildID || member.Role != RoleLeader {
-			return ErrUnauthorized
+
+		if err := authorizeCurrentLeader(lockedGuild, members, leaderCharID); err != nil {
+			return err
 		}
 
 		if err := s.repo.DisbandGuild(txCtx, guildID); err != nil {
 			return err
 		}
-		disbandedGuildName = g.Name
+		disbandedGuildName = lockedGuild.Name
 		return nil
 	})
 	if err != nil {

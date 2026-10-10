@@ -334,9 +334,26 @@ func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requeste
 	})
 }
 
+func authorizeCurrentLeader(g Guild, members []Member, charID string) error {
+	if g.LeaderCharacterID != charID {
+		return ErrUnauthorized
+	}
+	for i := range members {
+		if members[i].CharacterID == charID {
+			if members[i].Role != RoleLeader || members[i].IsPending {
+				return ErrUnauthorized
+			}
+			return nil
+		}
+	}
+	return ErrUnauthorized
+}
+
 // UpdateColor changes the guild's hex color (guild.cgi:color).
 // Only the guild leader can change color.
 // Validates hex format, NPC color prohibition, and server-wide uniqueness.
+// Transaction: RunInTx (authorization under Rank-7 lock and color uniqueness/update).
+// Lock Order: guilds(7) -> guild_members(7).
 func (s *Service) UpdateColor(ctx context.Context, guildID string, requesterCharID string, color string) error {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -352,45 +369,44 @@ func (s *Service) UpdateColor(ctx context.Context, guildID string, requesterChar
 		return err
 	}
 
-	g, members, err := s.repo.GetGuild(ctx, guildID)
-	if err != nil {
-		return err
-	}
-
-	var requester *Member
-	for i := range members {
-		if members[i].CharacterID == requesterCharID {
-			requester = &members[i]
-			break
-		}
-	}
-	if requester == nil || requester.Role != RoleLeader {
-		return ErrUnauthorized
-	}
-
 	// Legacy rule: White (#FFFFFF) is allowed and can be shared, but non-white colors must be unique.
 	// NPC color (#FF69B4) is reserved and cannot be selected.
 	if normalizedColor == NPCColor {
 		return ErrColorTaken
 	}
 
-	if normalizedColor != DefaultColor {
-		taken, err := s.repo.IsColorTaken(ctx, normalizedColor, g.ID)
+	return s.runInTx(ctx, func(txCtx context.Context) error {
+		lockedGuild, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
 		if err != nil {
 			return err
 		}
-		if taken {
-			return ErrColorTaken
-		}
-	}
 
-	if err := s.repo.UpdateColor(ctx, guildID, normalizedColor); err != nil {
-		return err
-	}
-	s.touchActive(ctx, guildID)
-	return nil
+		if err := authorizeCurrentLeader(lockedGuild, members, requesterCharID); err != nil {
+			return err
+		}
+
+		if normalizedColor != DefaultColor {
+			taken, err := s.repo.IsColorTaken(txCtx, normalizedColor, lockedGuild.ID)
+			if err != nil {
+				return err
+			}
+			if taken {
+				return ErrColorTaken
+			}
+		}
+
+		if err := s.repo.UpdateColor(txCtx, guildID, normalizedColor); err != nil {
+			return err
+		}
+		s.touchActive(txCtx, guildID)
+		return nil
+	})
 }
 
+// UpdateNotice changes the guild's notice message (guild.cgi:message).
+// Only the guild leader can update notice.
+// Transaction: RunInTx (authorization under Rank-7 lock and notice update).
+// Lock Order: guilds(7) -> guild_members(7).
 func (s *Service) UpdateNotice(ctx context.Context, guildID string, requesterCharID string, notice string) error {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -404,19 +420,22 @@ func (s *Service) UpdateNotice(ctx context.Context, guildID string, requesterCha
 		return ErrNoticeTooLong
 	}
 
-	_, member, err := s.repo.GetGuildByCharacter(ctx, requesterCharID)
-	if err != nil {
-		return err
-	}
-	if member.GuildID != guildID || member.Role != RoleLeader {
-		return ErrUnauthorized
-	}
+	return s.runInTx(ctx, func(txCtx context.Context) error {
+		lockedGuild, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
+		if err != nil {
+			return err
+		}
 
-	if err := s.repo.UpdateNotice(ctx, guildID, notice); err != nil {
-		return err
-	}
-	s.touchActive(ctx, guildID)
-	return nil
+		if err := authorizeCurrentLeader(lockedGuild, members, requesterCharID); err != nil {
+			return err
+		}
+
+		if err := s.repo.UpdateNotice(txCtx, guildID, notice); err != nil {
+			return err
+		}
+		s.touchActive(txCtx, guildID)
+		return nil
+	})
 }
 
 // AddPoints increments guild points directly by guild ID.

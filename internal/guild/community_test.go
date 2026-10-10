@@ -723,7 +723,9 @@ func TestService_Customization_MarkAndWallpaper(t *testing.T) {
 		feePaid := 0
 		repo := &mockGuildRepo{
 			getGuildFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
-				return guild.Guild{ID: guildID, LeaderCharacterID: leaderID}, nil, nil
+				return guild.Guild{ID: guildID, LeaderCharacterID: leaderID}, []guild.Member{
+					{GuildID: guildID, CharacterID: leaderID, Role: guild.RoleLeader, IsPending: false},
+				}, nil
 			},
 			updateMarkFn: func(ctx context.Context, gID string, mark string, fee int, lID string) (corecharacter.Character, error) {
 				markUpdated = mark
@@ -753,7 +755,9 @@ func TestService_Customization_MarkAndWallpaper(t *testing.T) {
 		feePaid := 0
 		repo := &mockGuildRepo{
 			getGuildFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
-				return guild.Guild{ID: guildID, LeaderCharacterID: leaderID}, nil, nil
+				return guild.Guild{ID: guildID, LeaderCharacterID: leaderID}, []guild.Member{
+					{GuildID: guildID, CharacterID: leaderID, Role: guild.RoleLeader, IsPending: false},
+				}, nil
 			},
 			updateWallpaperFn: func(ctx context.Context, gID string, bgimg string, fee int, lID string) (corecharacter.Character, error) {
 				bgimgUpdated = bgimg
