@@ -143,7 +143,7 @@ func TestDepotSaleGatewayPersistence(t *testing.T) {
 			if tc.action == "depot_sell" {
 				params = sellDepotItemRequest{ItemID: ids[0]}
 			} else {
-				params = sellDepotBatchRequest{ItemIDs: ids}
+				params = depotSaleBatchRequest{ItemIDs: ids}
 			}
 			encoded, err := json.Marshal(params)
 			if err != nil {
@@ -234,7 +234,7 @@ func TestDepotSaleGatewayConcurrentSales(t *testing.T) {
 		action := "depot_sell"
 		var params any = sellDepotItemRequest{ItemID: items[0].ID}
 		if (worker+op)%2 == 1 {
-			action, params = "depot_sell_batch", sellDepotBatchRequest{ItemIDs: []string{items[0].ID, items[1].ID}}
+			action, params = "depot_sell_batch", depotSaleBatchRequest{ItemIDs: []string{items[0].ID, items[1].ID}}
 		}
 		encoded, err := json.Marshal(params)
 		if err != nil {

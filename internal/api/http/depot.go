@@ -36,10 +36,6 @@ type sellDepotItemRequest struct {
 	ItemID string `json:"item_id"`
 }
 
-type sellDepotBatchRequest struct {
-	ItemIDs []string `json:"item_ids"`
-}
-
 type sendMoneyRequest struct {
 	RecipientCharacterID string `json:"recipient_character_id"`
 	Amount               int    `json:"amount"`
@@ -162,56 +158,6 @@ func (h *Handler) handleWithdrawDepotItem(w http.ResponseWriter, r *http.Request
 			return
 		}
 		writeJSON(w, http.StatusOK, toDepotResponse(dep))
-	})
-}
-
-func (h *Handler) handleSellDepotItem(w http.ResponseWriter, r *http.Request) {
-	if h.depot == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("depot service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req sellDepotItemRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		dep, goldEarned, err := h.depot.SellItem(r.Context(), char.ID, req.ItemID)
-		if err != nil {
-			mapDepotHTTPError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, sellDepotResponse{
-			Depot:      toDepotResponse(dep),
-			GoldEarned: goldEarned,
-		})
-	})
-}
-
-func (h *Handler) handleSellDepotBatch(w http.ResponseWriter, r *http.Request) {
-	if h.depot == nil {
-		writeError(w, http.StatusNotImplemented, errors.New("depot service not configured"))
-		return
-	}
-
-	charID := r.PathValue("id")
-	h.withAuthenticatedActionCharacter(w, r, charID, func(_ coreplayer.Player, char corecharacter.Character) {
-		var req sellDepotBatchRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-
-		dep, goldEarned, err := h.depot.SellItems(r.Context(), char.ID, req.ItemIDs)
-		if err != nil {
-			mapDepotHTTPError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, sellDepotResponse{
-			Depot:      toDepotResponse(dep),
-			GoldEarned: goldEarned,
-		})
 	})
 }
 
