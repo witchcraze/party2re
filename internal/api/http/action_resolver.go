@@ -19,7 +19,7 @@ type ResolvedAction struct {
 // ActionEndpoint defines the HTTP method and path pattern for an action.
 type ActionEndpoint struct {
 	Method      string
-	PathPattern string // e.g. "/characters/%s/bank/deposit"
+	PathPattern string // e.g. "/api/v1/characters/%s/actions"
 }
 
 // ActionURLResolver translates domain-level ActionIDs into concrete HTTP endpoints.
@@ -65,17 +65,13 @@ func (r *ActionURLResolver) Resolve(characterID, actionID, label, category strin
 // defaultActionEndpoints registers the canonical endpoints for Party2 character actions.
 func defaultActionEndpoints() map[string]ActionEndpoint {
 	return map[string]ActionEndpoint{
-		"bank_state": {
-			Method:      http.MethodGet,
-			PathPattern: "/characters/%s/bank",
-		},
 		"bank_deposit": {
 			Method:      http.MethodPost,
-			PathPattern: "/characters/%s/bank/deposit",
+			PathPattern: "/api/v1/characters/%s/actions",
 		},
 		"bank_withdraw": {
 			Method:      http.MethodPost,
-			PathPattern: "/characters/%s/bank/withdraw",
+			PathPattern: "/api/v1/characters/%s/actions",
 		},
 		"shop_weapon": {
 			Method:      http.MethodGet,

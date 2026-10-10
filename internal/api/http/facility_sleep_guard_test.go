@@ -11,7 +11,9 @@ import (
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/shop"
 )
 
@@ -23,7 +25,7 @@ func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepSt
 	t.Helper()
 
 	player := coreplayer.Player{ID: "player-1", Username: "hero"}
-	char := corecharacter.Character{ID: "char-1", PlayerID: "player-1", Name: "Hero"}
+	char := corecharacter.Character{ID: "char-1", PlayerID: "player-1", Name: "Hero", Money: 5000, Deposit: 10000}
 
 	players := &stubPlayerService{
 		authenticateFn: func(ctx context.Context, sessionID string) (coreplayer.Player, error) {
@@ -52,6 +54,7 @@ func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepSt
 		},
 	}
 
+	readers := &contextReaders{char: char}
 	h, err := apihttp.NewHandler(
 		players,
 		chars,
@@ -59,6 +62,7 @@ func setupFacilitySleepGuardTestWithError(t *testing.T, sleepStatus home.SleepSt
 		&stubShopService{},
 		apihttp.WithHome(mockHome),
 		apihttp.WithBank(&stubBankService{}),
+		apihttp.WithPlayerContext(playercontext.NewService(readers, readers, timer.NewService(nil))),
 		apihttp.WithJob(&stubJobService{}),
 		apihttp.WithDepot(&stubDepotService{}),
 		apihttp.WithPlantation(&stubPlantationService{}),
@@ -98,8 +102,8 @@ func TestTownFacilitiesGuardSleepingCharacter(t *testing.T) {
 		// Adventure
 		{"adventure_start", http.MethodPost, "/adventures", `{"character_id":"char-1","stage_id":"stage-1"}`},
 		// Bank
-		{"bank_deposit", http.MethodPost, "/characters/char-1/bank/deposit", `{"amount":100}`},
-		{"bank_withdraw", http.MethodPost, "/characters/char-1/bank/withdraw", `{"amount":100}`},
+		{"bank_deposit", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"bank_deposit","params":{"amount":100}}`},
+		{"bank_withdraw", http.MethodPost, "/api/v1/characters/char-1/actions", `{"action":"bank_withdraw","params":{"amount":100}}`},
 		// Job
 		{"job_change", http.MethodPost, "/characters/char-1/change-job", `{"job_id":"warrior"}`},
 		{"job_exchange", http.MethodPost, "/characters/char-1/exchange-job", `{"job_id":"mage","old_job_id":"warrior"}`},

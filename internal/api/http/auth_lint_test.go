@@ -381,9 +381,6 @@ func verifyTownFacilityActionGuards(t *testing.T, handlers map[string]*ast.FuncD
 	t.Helper()
 
 	requiredActionGuardHandlers := map[string]string{
-		// Bank
-		"handleBankDeposit":  "bank.go",
-		"handleBankWithdraw": "bank.go",
 		// Job
 		"handleChangeJob":          "job.go",
 		"handleExchangeJob":        "job.go",

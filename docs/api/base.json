@@ -5232,7 +5232,7 @@
       "BankSceneData": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Owned Bank state from GetState; observation never executes NPC talk, navigates or mutates savings. All Bank REST routes remain until independently verified retirement.",
+        "description": "Owned Bank state from GetState; observation never executes NPC talk, navigates or mutates savings. Bank talk/inspect REST routes remain for independent reconciliation and retirement.",
         "properties": {
           "parent": {
             "const": "town",

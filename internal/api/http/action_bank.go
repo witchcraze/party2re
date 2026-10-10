@@ -9,6 +9,14 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
+type bankDepositRequest struct {
+	Amount int64 `json:"amount"`
+}
+
+type bankWithdrawRequest struct {
+	Amount int64 `json:"amount"`
+}
+
 // WithBank configures the BankService and its deposit/withdraw Gateway commands.
 func WithBank(service BankService) Option {
 	return func(h *Handler) {

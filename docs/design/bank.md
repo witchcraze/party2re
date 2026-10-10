@@ -65,10 +65,24 @@ refresh use the same existing `GetState` reader; observation never deposits,
 withdraws, chooses a random dialogue or updates navigation. Required read failure
 prevents partial observation. See the [context and recovery contract](../architecture/client-agent-api.md).
 
-All five Bank REST operations remain: state GET and deposit, withdraw, inspect
-and talk POSTs. Deposit/withdraw commands already use the Gateway; observation
-coverage alone does not authorize retirement of any route. Dialogue commands
-still require legacy cooldown, presence and log reconciliation under #947.
+Bank state GET and deposit/withdraw REST operations are retired after verified
+Gateway/context replacement. Bank inspect and talk POSTs remain; these dialogue
+commands still require legacy cooldown, presence and log reconciliation under
+#947.
+
+| Former or retained REST operation | Supported replacement / disposition |
+| --- | --- |
+| GET `/characters/{id}/bank` (retired) | POST `scene_enter` with `destination:bank`, then GET `/api/v1/characters/{id}/context`; GET observes without navigating and actual activity takes precedence |
+| POST `/characters/{id}/bank/deposit` (retired) | POST `/api/v1/characters/{id}/actions`, `action:bank_deposit`, explicit `params.amount` |
+| POST `/characters/{id}/bank/withdraw` (retired) | Same Gateway, `action:bank_withdraw`, explicit `params.amount`; result keeps actual withdrawal/refund facts |
+| POST `/characters/{id}/bank/inspect` (retained) | Existing NPC metadata; action effects/parity remain unresolved |
+| POST `/characters/{id}/bank/talk` (retained) | Existing random dialogue; action effects remain unresolved |
+
+Requests to retired routes return 404. Gateway commands retain owned-actor,
+sleep/pending-Wake and unfinished-work guards, strict amount inputs and known
+outcome preservation with GET-only refresh recovery. Resolver links for the two
+commands target the Gateway. The unused `bank_state` alias is removed; it does
+not imply that a context GET selects Bank.
 
 The local behavioral reference is `party2/party2/lib/bank.cgi`: header display
 (lines 39–42) maps to wallet/savings observation; the only facility-specific
