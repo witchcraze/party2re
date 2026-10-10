@@ -17,23 +17,32 @@ type mockCollectionRepo struct {
 	completions map[string]bool // key: charID + ":" + kind
 }
 
-func (m *mockCollectionRepo) RecordMonsterDefeat(_ context.Context, charID, mID, mName, habitat string) error {
-	e, ok := m.monsters[mID]
+func (m *mockCollectionRepo) RecordMonsterDefeat(_ context.Context, charID string, record collection.DefeatedMonsterRecord) error {
+	e, ok := m.monsters[record.MonsterID]
 	if !ok {
 		e = collection.MonsterBookEntry{
-			CharacterID:     charID,
-			MonsterID:       mID,
-			MonsterName:     mName,
-			Habitat:         habitat,
-			DefeatedCount:   1,
-			FirstDefeatedAt: time.Now().UTC(),
-			LastDefeatedAt:  time.Now().UTC(),
+			CharacterID:      charID,
+			MonsterID:        record.MonsterID,
+			MonsterName:      record.MonsterName,
+			Habitat:          record.Habitat,
+			DefeatedCount:    1,
+			FirstDefeatedAt:  time.Now().UTC(),
+			LastDefeatedAt:   time.Now().UTC(),
+			Icon:             record.Icon,
+			Strong:           record.Strong,
+			HP:               record.HP,
+			MP:               record.MP,
+			Attack:           record.Attack,
+			Defense:          record.Defense,
+			Agility:          record.Agility,
+			ExperienceReward: record.ExperienceReward,
+			GoldReward:       record.GoldReward,
 		}
 	} else {
 		e.DefeatedCount++
 		e.LastDefeatedAt = time.Now().UTC()
 	}
-	m.monsters[mID] = e
+	m.monsters[record.MonsterID] = e
 	return nil
 }
 
@@ -190,12 +199,28 @@ func TestCollectionService_MonsterBook(t *testing.T) {
 	}
 
 	// 1. Record Slime defeat
-	if err := svc.RecordMonsterDefeat(ctx, "char1", "mon_slime", "Slime", "Plain"); err != nil {
+	if err := svc.RecordMonsterDefeat(ctx, "char1", collection.DefeatedMonsterRecord{
+		MonsterID:   "mon_slime",
+		MonsterName: "Slime",
+		Habitat:     "Plain",
+		HP:          10,
+		Attack:      5,
+		Defense:     3,
+		Agility:     4,
+	}); err != nil {
 		t.Fatalf("RecordMonsterDefeat failed: %v", err)
 	}
 
 	// 2. Record second Slime defeat
-	if err := svc.RecordMonsterDefeat(ctx, "char1", "mon_slime", "Slime", "Plain"); err != nil {
+	if err := svc.RecordMonsterDefeat(ctx, "char1", collection.DefeatedMonsterRecord{
+		MonsterID:   "mon_slime",
+		MonsterName: "Slime",
+		Habitat:     "Plain",
+		HP:          10,
+		Attack:      5,
+		Defense:     3,
+		Agility:     4,
+	}); err != nil {
 		t.Fatalf("RecordMonsterDefeat failed: %v", err)
 	}
 
@@ -249,7 +274,11 @@ func TestCollectionService_MonsterBookCompletionNews(t *testing.T) {
 	}
 
 	// 1st monster
-	if err := svc.RecordMonsterDefeat(ctx, "char-hero", "mon-001", "スライム", "平原"); err != nil {
+	if err := svc.RecordMonsterDefeat(ctx, "char-hero", collection.DefeatedMonsterRecord{
+		MonsterID:   "mon-001",
+		MonsterName: "スライム",
+		Habitat:     "平原",
+	}); err != nil {
 		t.Fatalf("defeat 1 failed: %v", err)
 	}
 	if len(pub.articles) != 0 {
@@ -260,7 +289,11 @@ func TestCollectionService_MonsterBookCompletionNews(t *testing.T) {
 	}
 
 	// 2nd monster -> hits 100%!
-	if err := svc.RecordMonsterDefeat(ctx, "char-hero", "mon-002", "ドラキー", "洞窟"); err != nil {
+	if err := svc.RecordMonsterDefeat(ctx, "char-hero", collection.DefeatedMonsterRecord{
+		MonsterID:   "mon-002",
+		MonsterName: "ドラキー",
+		Habitat:     "洞窟",
+	}); err != nil {
 		t.Fatalf("defeat 2 failed: %v", err)
 	}
 	if len(pub.articles) != 1 {
@@ -281,7 +314,11 @@ func TestCollectionService_MonsterBookCompletionNews(t *testing.T) {
 	}
 
 	// 3rd monster -> already completed, idempotent (no duplicate news or induction)
-	if err := svc.RecordMonsterDefeat(ctx, "char-hero", "mon-003", "ゴーレム", "砂漠"); err != nil {
+	if err := svc.RecordMonsterDefeat(ctx, "char-hero", collection.DefeatedMonsterRecord{
+		MonsterID:   "mon-003",
+		MonsterName: "ゴーレム",
+		Habitat:     "砂漠",
+	}); err != nil {
 		t.Fatalf("defeat 3 failed: %v", err)
 	}
 	if len(pub.articles) != 1 {
@@ -754,5 +791,55 @@ func TestCollectionService_GetItemCollection_DefaultsToItemCategory(t *testing.T
 				t.Errorf("expected IsCompleted false, got true")
 			}
 		})
+	}
+}
+
+func TestCalculateStrong(t *testing.T) {
+	// formula: int(hp + mp + at + df*0.5 + ag)
+	got := collection.CalculateStrong(100, 50, 30, 25, 40)
+	// 100 + 50 + 30 + 12.5 + 40 = 232.5 -> int(232.5) == 232
+	want := 232
+	if got != want {
+		t.Errorf("CalculateStrong(100, 50, 30, 25, 40) = %d, want %d", got, want)
+	}
+}
+
+func TestCollectionService_RecordMonsterDefeat_CalculatesStrongAndDerivesIcon(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockCollectionRepo{
+		monsters:    make(map[string]collection.MonsterBookEntry),
+		completions: make(map[string]bool),
+	}
+	svc, err := collection.NewService(repo, 180, 10)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	record := collection.DefeatedMonsterRecord{
+		MonsterID:   "monster-042",
+		MonsterName: "ゴブリン",
+		Habitat:     "草原",
+		HP:          50,
+		MP:          10,
+		Attack:      20,
+		Defense:     15,
+		Agility:     18,
+		// Strong is 0, Icon is empty -> should be auto-derived
+	}
+
+	if err := svc.RecordMonsterDefeat(ctx, "char-1", record); err != nil {
+		t.Fatalf("RecordMonsterDefeat failed: %v", err)
+	}
+
+	entry, ok := repo.monsters["monster-042"]
+	if !ok {
+		t.Fatalf("entry not found in repo")
+	}
+	if entry.Icon != "mon/042.gif" {
+		t.Errorf("expected Icon mon/042.gif, got %q", entry.Icon)
+	}
+	expectedStrong := collection.CalculateStrong(50, 10, 20, 15, 18)
+	if entry.Strong != expectedStrong {
+		t.Errorf("expected Strong %d, got %d", expectedStrong, entry.Strong)
 	}
 }

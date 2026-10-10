@@ -19,23 +19,25 @@ func NewCollectionRepository(db *sql.DB) (*CollectionRepository, error) {
 	return &CollectionRepository{db: db}, nil
 }
 
-func (r *CollectionRepository) RecordMonsterDefeat(ctx context.Context, characterID, monsterID, monsterName, habitat string) error {
+func (r *CollectionRepository) RecordMonsterDefeat(ctx context.Context, characterID string, record collection.DefeatedMonsterRecord) error {
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, `
 		INSERT INTO character_monster_book (
-			character_id, monster_id, monster_name, habitat, defeated_count, first_defeated_at, last_defeated_at
-		) VALUES (?, ?, ?, ?, 1, UTC_TIMESTAMP(), UTC_TIMESTAMP())
+			character_id, monster_id, monster_name, habitat,
+			defeated_count, first_defeated_at, last_defeated_at,
+			icon, strong, hp, mp, attack, defense, agility, exp_reward, gold_reward
+		) VALUES (?, ?, ?, ?, 1, UTC_TIMESTAMP(), UTC_TIMESTAMP(), ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			defeated_count = defeated_count + 1,
-			monster_name = VALUES(monster_name),
-			habitat = VALUES(habitat),
 			last_defeated_at = UTC_TIMESTAMP()
-	`, characterID, monsterID, monsterName, habitat)
+	`, characterID, record.MonsterID, record.MonsterName, record.Habitat,
+		record.Icon, record.Strong, record.HP, record.MP, record.Attack, record.Defense, record.Agility, record.ExperienceReward, record.GoldReward)
 	return err
 }
 
 func (r *CollectionRepository) GetMonsterBook(ctx context.Context, characterID string) ([]collection.MonsterBookEntry, error) {
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
-		SELECT character_id, monster_id, monster_name, habitat, defeated_count, first_defeated_at, last_defeated_at
+		SELECT character_id, monster_id, monster_name, habitat, defeated_count, first_defeated_at, last_defeated_at,
+		       icon, strong, hp, mp, attack, defense, agility, exp_reward, gold_reward
 		FROM character_monster_book
 		WHERE character_id = ?
 		ORDER BY first_defeated_at ASC
@@ -48,7 +50,11 @@ func (r *CollectionRepository) GetMonsterBook(ctx context.Context, characterID s
 	var entries []collection.MonsterBookEntry
 	for rows.Next() {
 		var e collection.MonsterBookEntry
-		if err := rows.Scan(&e.CharacterID, &e.MonsterID, &e.MonsterName, &e.Habitat, &e.DefeatedCount, &e.FirstDefeatedAt, &e.LastDefeatedAt); err != nil {
+		if err := rows.Scan(
+			&e.CharacterID, &e.MonsterID, &e.MonsterName, &e.Habitat,
+			&e.DefeatedCount, &e.FirstDefeatedAt, &e.LastDefeatedAt,
+			&e.Icon, &e.Strong, &e.HP, &e.MP, &e.Attack, &e.Defense, &e.Agility, &e.ExperienceReward, &e.GoldReward,
+		); err != nil {
 			return nil, err
 		}
 		entries = append(entries, e)

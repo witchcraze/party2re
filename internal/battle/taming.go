@@ -35,9 +35,25 @@ type BlessingProvider interface {
 	GetActiveBlessing(ctx context.Context, characterID string) (string, error)
 }
 
+// DefeatedMonsterRecord contains snapshot data of a defeated monster for the monster book.
+type DefeatedMonsterRecord struct {
+	MonsterID        string
+	MonsterName      string
+	Habitat          string
+	Icon             string
+	Strong           int
+	HP               int
+	MP               int
+	Attack           int
+	Defense          int
+	Agility          int
+	ExperienceReward int
+	GoldReward       int
+}
+
 // MonsterDefeatRecorder registers defeated monsters into the monster book.
 type MonsterDefeatRecorder interface {
-	RecordMonsterDefeat(ctx context.Context, characterID, monsterID, monsterName, habitat string) error
+	RecordMonsterDefeat(ctx context.Context, characterID string, record DefeatedMonsterRecord) error
 }
 
 // Strong calculates combat strength metric matching legacy Perl CGI (party2/lib/_battle.cgi:1380-1383):

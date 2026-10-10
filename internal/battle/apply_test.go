@@ -512,7 +512,20 @@ func TestApplyPostBattleResult_RecordMonsterDefeat(t *testing.T) {
 
 	// Defeated enemies: 1 PvE slime, 1 PvP human opponent (char-enemy)
 	defeatedEnemies := []corebattle.Participant{
-		{ID: "monster-002-f1-1", Name: "スライムA"},
+		{
+			ID:               "monster-002-f1-1",
+			Name:             "スライムA",
+			HP:               15,
+			MaxHP:            15,
+			MP:               5,
+			MaxMP:            5,
+			Attack:           12,
+			Defense:          8,
+			Agility:          6,
+			Icon:             "mon/002.gif",
+			ExperienceReward: 10,
+			GoldReward:       7,
+		},
 		{ID: "char-enemy-01", Name: "対戦相手"},
 	}
 
@@ -544,9 +557,19 @@ func TestApplyPostBattleResult_RecordMonsterDefeat(t *testing.T) {
 	if recorder.calls[1] != expectedCall2 {
 		t.Errorf("call 1: want %q, got %q", expectedCall2, recorder.calls[1])
 	}
+	if len(recorder.records) != 2 {
+		t.Fatalf("expected 2 records, got %d", len(recorder.records))
+	}
+	r0 := recorder.records[0]
+	if r0.MonsterID != "monster-002" || r0.MonsterName != "スライム" || r0.Habitat != "迷いの森" ||
+		r0.Icon != "mon/002.gif" || r0.HP != 15 || r0.MP != 5 || r0.Attack != 12 || r0.Defense != 8 || r0.Agility != 6 ||
+		r0.Strong != battle.Strong(15, 5, 12, 8, 6) || r0.ExperienceReward != 10 || r0.GoldReward != 7 {
+		t.Errorf("unexpected record snapshot: %+v", r0)
+	}
 
 	// 2. Defeat outcome -> no defeat recording
 	recorder.calls = nil
+	recorder.records = nil
 	reqLose := battle.ApplyPostBattleRequest{
 		CharacterIDs: []string{"char-p1"},
 		BattleResult: corebattle.PartyBattleResult{

@@ -18,6 +18,10 @@ The Collection and Monster Book Feature Module (`internal/collection`) provides 
   - `DefeatedCount`: Total number of times this character has slain this monster type.
   - `FirstDefeatedAt`: Initial discovery timestamp.
   - `LastDefeatedAt`: Most recent victory timestamp.
+  - `Icon`: Monster sprite graphic identifier (e.g., `mon/001.gif`).
+  - `Strong`: Monster combat strength metric ($\text{int}(HP + MP + Attack + 0.5 \times Defense + Agility)$).
+  - `HP`, `MP`, `Attack`, `Defense`, `Agility`: Monster combat attributes captured upon first defeat.
+  - `ExperienceReward`, `GoldReward`: Combat experience and gold reward yields captured upon first defeat.
 - **Completion Progress**:
   $$\text{Completion Percentage} = \min\left(100.0, \frac{\text{Unique Monsters Defeated}}{\text{Total Monster Catalog Count}} \times 100\right)$$
 
@@ -58,7 +62,9 @@ The Collection and Monster Book Feature Module (`internal/collection`) provides 
 
 ## Persistence & Idempotency
 
-- Duplicate defeats increment `defeated_count` without creating redundant records (`PRIMARY KEY (character_id, monster_id)`).
+- Duplicate defeats increment `defeated_count` and update `last_defeated_at` without creating redundant records (`PRIMARY KEY (character_id, monster_id)`).
+- **First-Encounter Snapshot Invariant**: Initial combat metrics (`icon`, `strong`, `hp`, `mp`, `attack`, `defense`, `agility`, `exp_reward`, `gold_reward`, `habitat`) represent an immutable snapshot of the character's first encounter with that monster. In MariaDB, this is enforced by `ON DUPLICATE KEY UPDATE defeated_count = defeated_count + 1, last_defeated_at = UTC_TIMESTAMP()`, which never overwrites initial encounter statistics upon subsequent victories.
+- **Legacy Record Compatibility**: Existing database records populated prior to migration 095 have NULL/empty snapshot values. In accordance with zero-fabrication rules, they return zero/empty without synthesizing fake combat stats.
 - Duplicate item discoveries are safely ignored (`INSERT IGNORE` with `PRIMARY KEY (character_id, item_id)`).
 
 ---

@@ -213,9 +213,25 @@ func WithParticipantBuilder(builder ParticipantBuilder) ServiceOption {
 	}
 }
 
+// DefeatedMonsterRecord contains snapshot data of a defeated monster for the monster book.
+type DefeatedMonsterRecord struct {
+	MonsterID        string
+	MonsterName      string
+	Habitat          string
+	Icon             string
+	Strong           int
+	HP               int
+	MP               int
+	Attack           int
+	Defense          int
+	Agility          int
+	ExperienceReward int
+	GoldReward       int
+}
+
 // MonsterDefeatRecorder registers defeated monsters into the player's Monster Book.
 type MonsterDefeatRecorder interface {
-	RecordMonsterDefeat(ctx context.Context, characterID, monsterID, monsterName, habitat string) error
+	RecordMonsterDefeat(ctx context.Context, characterID string, record DefeatedMonsterRecord) error
 }
 
 // WithMonsterDefeatRecorder configures the MonsterDefeatRecorder.

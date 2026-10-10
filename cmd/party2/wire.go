@@ -161,9 +161,9 @@ func wireHooks(
 			}
 		}
 		if misc.collection != nil {
-			cmbt.battle.SetMonsterDefeatRecorder(misc.collection)
+			cmbt.battle.SetMonsterDefeatRecorder(battleMonsterDefeatAdapter{svc: misc.collection})
 			if cmbt.boss != nil {
-				cmbt.boss.SetMonsterDefeatRecorder(misc.collection)
+				cmbt.boss.SetMonsterDefeatRecorder(bossMonsterDefeatAdapter{svc: misc.collection})
 			}
 		}
 	}

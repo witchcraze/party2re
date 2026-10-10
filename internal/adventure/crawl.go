@@ -230,6 +230,8 @@ func (s *CrawlSession) AdvanceFloor(
 			p.MaxHP = m.HP
 			p.MP = m.MP
 			p.MaxMP = m.MP
+			p.ExperienceReward = m.ExperienceReward
+			p.GoldReward = m.GoldReward
 			floorEXP += m.ExperienceReward
 			floorGold += m.GoldReward
 			enemies = append(enemies, p)
@@ -251,6 +253,8 @@ func (s *CrawlSession) AdvanceFloor(
 			p.MaxHP = m.HP
 			p.MP = m.MP
 			p.MaxMP = m.MP
+			p.ExperienceReward = m.ExperienceReward
+			p.GoldReward = m.GoldReward
 			floorEXP += m.ExperienceReward
 			floorGold += m.GoldReward
 			enemies = append(enemies, p)

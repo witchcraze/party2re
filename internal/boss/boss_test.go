@@ -990,11 +990,13 @@ func TestStartSealingBattle_ClearTimeCrystals(t *testing.T) {
 }
 
 type mockBossMonsterDefeatRecorder struct {
-	calls []string
+	calls   []string
+	records []boss.DefeatedMonsterRecord
 }
 
-func (m *mockBossMonsterDefeatRecorder) RecordMonsterDefeat(_ context.Context, charID, mID, mName, habitat string) error {
-	m.calls = append(m.calls, charID+":"+mID+":"+mName+":"+habitat)
+func (m *mockBossMonsterDefeatRecorder) RecordMonsterDefeat(_ context.Context, charID string, record boss.DefeatedMonsterRecord) error {
+	m.calls = append(m.calls, charID+":"+record.MonsterID+":"+record.MonsterName+":"+record.Habitat)
+	m.records = append(m.records, record)
 	return nil
 }
 
@@ -1047,6 +1049,15 @@ func TestStartSealingBattle_RecordMonsterDefeat(t *testing.T) {
 	if recorder.calls[0] != expectedFirst {
 		t.Errorf("expected call 0 = %q, got %q", expectedFirst, recorder.calls[0])
 	}
+	if len(recorder.records) != 14 {
+		t.Fatalf("expected 14 records, got %d", len(recorder.records))
+	}
+	r0 := recorder.records[0]
+	if r0.MonsterID != "monster-190" || r0.MonsterName != "レッドストーン" || r0.Habitat != "封印戦" ||
+		r0.Icon != "mon/190.gif" || r0.HP != 50 || r0.MP != 999 || r0.Attack != 400 || r0.Defense != 9000 || r0.Agility != 3000 ||
+		r0.ExperienceReward != 1000 || r0.GoldReward != 2000 {
+		t.Errorf("unexpected boss record snapshot: %+v", r0)
+	}
 }
 
 func TestChallengeBoss_RecordMonsterDefeat(t *testing.T) {
@@ -1077,6 +1088,14 @@ func TestChallengeBoss_RecordMonsterDefeat(t *testing.T) {
 	expected := "hero-solo:king99-clone:影:封印戦"
 	if recorder.calls[0] != expected {
 		t.Errorf("expected %q, got %q", expected, recorder.calls[0])
+	}
+	if len(recorder.records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(recorder.records))
+	}
+	r0 := recorder.records[0]
+	if r0.MonsterID != "king99-clone" || r0.MonsterName != "影" || r0.Habitat != "封印戦" ||
+		r0.Icon != "king99-clone" || r0.HP != 600*50 || r0.Attack != 300*2 || r0.Defense != 200*2 {
+		t.Errorf("unexpected king99 record snapshot: %+v", r0)
 	}
 }
 

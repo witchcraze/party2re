@@ -35,6 +35,9 @@ type Participant struct {
 	Defending         bool
 	Status            string
 	ItemDefinitionIDs []string
+	Icon              string
+	ExperienceReward  int
+	GoldReward        int
 }
 
 type Request struct {

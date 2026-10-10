@@ -296,8 +296,31 @@ func (s *Service) recordDefeatedMonsters(ctx context.Context, charIDs []string, 
 		}
 		monsterID := ParseDefeatedMonsterID(enemy.ID)
 		baseName := CleanMonsterName(enemy.Name)
+		hp := enemy.MaxHP
+		if hp <= 0 {
+			hp = enemy.HP
+		}
+		mp := enemy.MaxMP
+		if mp <= 0 {
+			mp = enemy.MP
+		}
+		strong := Strong(hp, mp, enemy.Attack, enemy.Defense, enemy.Agility)
+		rec := DefeatedMonsterRecord{
+			MonsterID:        monsterID,
+			MonsterName:      baseName,
+			Habitat:          habitat,
+			Icon:             enemy.Icon,
+			Strong:           strong,
+			HP:               hp,
+			MP:               mp,
+			Attack:           enemy.Attack,
+			Defense:          enemy.Defense,
+			Agility:          enemy.Agility,
+			ExperienceReward: enemy.ExperienceReward,
+			GoldReward:       enemy.GoldReward,
+		}
 		for _, cID := range charIDs {
-			_ = s.monsterRecorder.RecordMonsterDefeat(ctx, cID, monsterID, baseName, habitat)
+			_ = s.monsterRecorder.RecordMonsterDefeat(ctx, cID, rec)
 		}
 	}
 }

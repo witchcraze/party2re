@@ -11012,6 +11012,69 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "properties": {
+                    "entries": {
+                      "items": {
+                        "properties": {
+                          "agility": {
+                            "type": "integer"
+                          },
+                          "attack": {
+                            "type": "integer"
+                          },
+                          "character_id": {
+                            "type": "string"
+                          },
+                          "defeated_count": {
+                            "type": "integer"
+                          },
+                          "defense": {
+                            "type": "integer"
+                          },
+                          "exp_reward": {
+                            "type": "integer"
+                          },
+                          "first_defeated_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "gold_reward": {
+                            "type": "integer"
+                          },
+                          "habitat": {
+                            "type": "string"
+                          },
+                          "hp": {
+                            "type": "integer"
+                          },
+                          "icon": {
+                            "type": "string"
+                          },
+                          "last_defeated_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "monster_id": {
+                            "type": "string"
+                          },
+                          "monster_name": {
+                            "type": "string"
+                          },
+                          "mp": {
+                            "type": "integer"
+                          },
+                          "strong": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "progress": {
+                      "type": "object"
+                    }
+                  },
                   "type": "object"
                 }
               }
