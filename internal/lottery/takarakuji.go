@@ -189,14 +189,35 @@ func RollNewRoundPrizes() (prize1 string, amount1 int, prize2 string, amount2 in
 	return prize1, amount1, prize2, amount2, prize3, amount3, nil
 }
 
-func (s *Service) resolveItemName(itemID string) string {
+func (s *Service) resolveItemInfo(itemID string) (string, string) {
+	name := itemID
+	category := "item"
+	if strings.HasPrefix(itemID, "weapon") || strings.HasPrefix(itemID, "wea") {
+		category = "weapon"
+	} else if strings.HasPrefix(itemID, "armor") || strings.HasPrefix(itemID, "arm") {
+		category = "armor"
+	}
 	if s.itemDefProvider != nil {
-		def, err := s.itemDefProvider.FindByID(itemID)
-		if err == nil && def.Name != "" {
-			return def.Name
+		if def, err := s.itemDefProvider.FindByID(itemID); err == nil {
+			if def.Name != "" {
+				name = def.Name
+			}
+			if def.Slot != "" {
+				category = def.Category()
+			}
 		}
 	}
-	return itemID
+	return name, category
+}
+
+func (s *Service) resolveItemName(itemID string) string {
+	name, _ := s.resolveItemInfo(itemID)
+	return name
+}
+
+func (s *Service) resolveItemCategory(itemID string) string {
+	_, category := s.resolveItemInfo(itemID)
+	return category
 }
 
 func (s *Service) getOrCreateActiveRound(ctx context.Context, now time.Time) (TakarakujiRound, error) {

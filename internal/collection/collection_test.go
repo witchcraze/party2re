@@ -843,3 +843,87 @@ func TestCollectionService_RecordMonsterDefeat_CalculatesStrongAndDerivesIcon(t 
 		t.Errorf("expected Strong %d, got %d", expectedStrong, entry.Strong)
 	}
 }
+
+func TestCollectionService_CategorySeparation(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockCollectionRepo{
+		items:       make(map[string]collection.ItemCollectionEntry),
+		completions: make(map[string]bool),
+	}
+
+	svc, err := collection.NewService(
+		repo,
+		10, // totalMonsters
+		10, // totalItems
+		collection.WithTotalWeapons(10),
+		collection.WithTotalArmors(10),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	charID := "char-test-sep"
+
+	// 1. Record weapon
+	if err := svc.RecordItemDiscovered(ctx, charID, "weapon-40", "流銀の剣", "weapon"); err != nil {
+		t.Fatalf("recording weapon failed: %v", err)
+	}
+
+	weapEntries, weapProg, err := svc.GetWeaponCollection(ctx, charID)
+	if err != nil {
+		t.Fatalf("GetWeaponCollection failed: %v", err)
+	}
+	if len(weapEntries) != 1 || weapProg.DiscoveredCount != 1 {
+		t.Errorf("weapon collection expected 1 entry, got entries=%d count=%d", len(weapEntries), weapProg.DiscoveredCount)
+	}
+
+	armEntries, armProg, err := svc.GetArmorCollection(ctx, charID)
+	if err != nil {
+		t.Fatalf("GetArmorCollection failed: %v", err)
+	}
+	if len(armEntries) != 0 || armProg.DiscoveredCount != 0 {
+		t.Errorf("armor collection expected 0 entries, got entries=%d count=%d", len(armEntries), armProg.DiscoveredCount)
+	}
+
+	itemEntries, itemProg, err := svc.GetItemCollection(ctx, charID, "item")
+	if err != nil {
+		t.Fatalf("GetItemCollection failed: %v", err)
+	}
+	if len(itemEntries) != 0 || itemProg.DiscoveredCount != 0 {
+		t.Errorf("item collection expected 0 entries after weapon discovery, got entries=%d count=%d", len(itemEntries), itemProg.DiscoveredCount)
+	}
+
+	// 2. Record armor
+	if err := svc.RecordItemDiscovered(ctx, charID, "armor-40", "流銀の鎧", "armor"); err != nil {
+		t.Fatalf("recording armor failed: %v", err)
+	}
+
+	armEntries, armProg, err = svc.GetArmorCollection(ctx, charID)
+	if err != nil {
+		t.Fatalf("GetArmorCollection failed: %v", err)
+	}
+	if len(armEntries) != 1 || armProg.DiscoveredCount != 1 {
+		t.Errorf("armor collection expected 1 entry, got entries=%d count=%d", len(armEntries), armProg.DiscoveredCount)
+	}
+
+	itemEntries, itemProg, err = svc.GetItemCollection(ctx, charID, "item")
+	if err != nil {
+		t.Fatalf("GetItemCollection failed: %v", err)
+	}
+	if len(itemEntries) != 0 || itemProg.DiscoveredCount != 0 {
+		t.Errorf("item collection expected 0 entries after armor discovery, got entries=%d count=%d", len(itemEntries), itemProg.DiscoveredCount)
+	}
+
+	// 3. Record item
+	if err := svc.RecordItemDiscovered(ctx, charID, "item-129", "神の錬金レシピ", "item"); err != nil {
+		t.Fatalf("recording item failed: %v", err)
+	}
+
+	itemEntries, itemProg, err = svc.GetItemCollection(ctx, charID, "item")
+	if err != nil {
+		t.Fatalf("GetItemCollection failed: %v", err)
+	}
+	if len(itemEntries) != 1 || itemProg.DiscoveredCount != 1 {
+		t.Errorf("item collection expected 1 entry after item discovery, got entries=%d count=%d", len(itemEntries), itemProg.DiscoveredCount)
+	}
+}

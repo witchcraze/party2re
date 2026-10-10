@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/witchcraze/party2re/internal/collection"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/lottery"
@@ -39,10 +41,24 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 	}
 
 	txProvider := database.NewTransactionProvider(db)
+	itemCatalog, err := coreitem.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	colRepo, err := database.NewCollectionRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	colSvc, err := collection.NewService(colRepo, 286, 150)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	svc, err := lottery.NewService(lotteryRepo,
 		lottery.WithCharacterRepository(charRepo),
 		lottery.WithDepotRepository(depotRepo),
+		lottery.WithItemDefinitionProvider(itemCatalog),
+		lottery.WithCollectionRecorder(colSvc),
 		lottery.WithTransactionProvider(txProvider),
 	)
 	if err != nil {
@@ -218,7 +234,7 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 		t.Errorf("expected new round created, got: %+v", drawResult.NextRound)
 	}
 
-	// 9. Check winners and verify prize delivery to Depot
+	// 9. Check winners and verify prize delivery to Depot and proper collection category recording
 	for _, w := range drawResult.Winners {
 		if !w.IsDummy {
 			dp, err := depotRepo.FindByCharacterID(ctx, w.CharacterID)
@@ -234,6 +250,33 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 			}
 			if !found {
 				t.Errorf("winner %s depot does not contain won prize %s", w.CharacterID, w.ItemID)
+			}
+
+			// Verify collection recording category
+			colEntries, err := colRepo.GetItemCollection(ctx, w.CharacterID, "")
+			if err != nil {
+				t.Errorf("failed getting collection for winner %s: %v", w.CharacterID, err)
+			}
+			foundCol := false
+			for _, ce := range colEntries {
+				if ce.ItemID == w.ItemID {
+					foundCol = true
+					if ce.Category == "takarakuji" {
+						t.Errorf("winner %s prize %s recorded with invalid category takarakuji", w.CharacterID, w.ItemID)
+					}
+					if strings.HasPrefix(w.ItemID, "weapon") && ce.Category != "weapon" {
+						t.Errorf("winner %s weapon prize %s recorded with wrong category %s; want weapon", w.CharacterID, w.ItemID, ce.Category)
+					}
+					if strings.HasPrefix(w.ItemID, "armor") && ce.Category != "armor" {
+						t.Errorf("winner %s armor prize %s recorded with wrong category %s; want armor", w.CharacterID, w.ItemID, ce.Category)
+					}
+					if strings.HasPrefix(w.ItemID, "item") && ce.Category != "item" {
+						t.Errorf("winner %s item prize %s recorded with wrong category %s; want item", w.CharacterID, w.ItemID, ce.Category)
+					}
+				}
+			}
+			if !foundCol {
+				t.Errorf("winner %s depot prize %s was not found in collection", w.CharacterID, w.ItemID)
 			}
 		}
 	}

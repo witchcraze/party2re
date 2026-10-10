@@ -119,6 +119,7 @@ When a drawing occurs (via background scheduler `takarakuji_draw` or scheduled h
 4. **Depot-Direct Delivery (`send_item`) & Asset Protection**:
    - Deliveries to real winners are sorted in ascending order of `winnerID` to guarantee deterministic Rank 5 lock ordering and prevent deadlocks.
    - Prize items are instantiated (`coreitem.NewInstance`) and delivered directly into the character's Depot (`character_depots` / `depot_items`).
+   - Delivered prizes are recorded into the winner's collection (`CollectionRecorder.RecordItemDiscovered`) categorized by their equipment slot (`weapon` for weapons such as `weapon-40`, `armor` for armors such as `armor-40`, and `item` for standard consumables), ensuring equipment prizes do not count toward item collection completions.
    - If any winner's Depot is at capacity (`depot.ErrDepotFull`), the entire drawing transaction rolls back immediately: no tickets are marked won, the round remains unsettled, and rare items are never dropped or silently lost.
 5. **Round Renewal**:
    - Upon successful delivery, the completed round is marked as drawn (`is_drawn = TRUE`, `drawn_at = now`) and tickets are settled with winning ranks and item IDs.
@@ -135,11 +136,12 @@ When a drawing occurs (via background scheduler `takarakuji_draw` or scheduled h
 
 ## Database Persistence
 
-### Schema Migrations (`migrations/018_lottery.sql`, `migrations/081_takarakuji.sql`)
+### Schema Migrations (`migrations/018_lottery.sql`, `migrations/081_takarakuji.sql`, `migrations/098_correct_lottery_equipment_collection.sql`)
 
 - `character_lottery`: Tracks character tavern raffle coupons (`raffle_tickets >= 0`).
 - `takarakuji_rounds`: Tracks 10-day Takarakuji lottery rounds, prize candidate items, and drawn status.
 - `takarakuji_tickets`: Tracks character ticket purchases (1 per round, max 20 per round).
+- `migrations/098_correct_lottery_equipment_collection.sql`: Corrects legacy equipment items mistakenly recorded with category `'item'` in `character_item_collection` (Issue #1239).
 
 ---
 
