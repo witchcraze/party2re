@@ -24,13 +24,6 @@ type DepotService interface {
 	SendItem(ctx context.Context, fromCharacterID, toCharacterID, itemInstanceID string) (depot.Depot, error)
 }
 
-// WithDepot configures the depot service for the Handler.
-func WithDepot(d DepotService) Option {
-	return func(h *Handler) {
-		h.depot = d
-	}
-}
-
 type depositItemRequest struct {
 	ItemID string `json:"item_id"`
 }

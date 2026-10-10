@@ -206,7 +206,8 @@ GET never changes selection; actual activity can override the Bank scene.
 
 Depot facility data reports `support.observation:details` with typed
 `DepotSceneData`: `parent:town`, owned `character_id`, dynamic `capacity`,
-purchased expansion count `ex_depot`, total occupied slots `item_count`,
+purchased expansion count `ex_depot`, nullable `next_expansion_cost` in gold,
+total occupied slots `item_count`,
 non-null offset-paged `items` and existing page/next inputs. Rows whitelist
 instance `id`, `definition_id`, `quantity` and `enhancement_level`; occupied
 slots count instances, not their summed quantities. The adapter preserves
@@ -218,9 +219,11 @@ no save. Missing configuration returns 501. Actual activities/conflicts skip
 ordinary Depot reads. Successful/rejected navigation survives failed enrichment
 and recovers through GET without another selection write. GET never creates,
 sorts or saves storage, moves items, records collection or schedules work.
-Depot mutation candidates remain unconnected, and its nine REST operations
-remain registered; [Depot design](../design/depot.md#gateway-observation-and-retained-operations)
-records the remaining order/withdrawal reconciliation.
+The quote uses the public expansion price reader and is null at the purchased
+expansion cap. It grants no reservation: execution charges the current tier
+inside the existing service transaction. Depot's nine REST operations remain
+registered; [Depot design](../design/depot.md#gateway-observation-and-retained-operations)
+records retained operations and the remaining order/equipment/withdrawal gaps.
 
 SecretShop facility/subject data reports `support.observation:details` with a
 typed `SecretShopCatalogSceneData` or `SecretShopProductSceneData`. Both contain
@@ -537,7 +540,8 @@ Catalog entries migrated to `executeCharacterAction` validate against their own
 exactly one condition whose `then.properties.params` resolves to a strict object
 schema without actor identity inputs. Its required fields must match the catalog;
 `then` requires the params envelope exactly when those fields are nonempty.
-Home sleep permits optional `target_home_id`; Home wake permits only empty params.
+Home sleep permits optional `target_home_id`; Home wake and Depot expansion
+permit only omitted params or an empty object.
 Bank amounts span signed int64, and command strings permit empty values for
 service-owned validation/defaults. The catalog drift check rejects missing,
 duplicate, malformed or unresolved contracts even for no-input commands.
@@ -558,6 +562,19 @@ ordinary commands blocked until explicit Wake clears pending recovery.
 Domain services still validate exact amounts, currencies,
 items and state. Adapters call services directly and reuse HTTP result composition;
 they do not invoke REST handlers through internal HTTP requests or copy game rules.
+
+`depot_expand` is explicit purchase intent for one expansion of the owned actor's
+storage. It accepts no price, count, target or actor fields and calls the existing
+`Expand` service once with the request context. Inspect the selected Depot quote
+before requesting it. Affordability and the purchased expansion cap remain service
+checks, separate from catalog entry eligibility; a zero wallet or a null quote
+does not authorize bypassing them. Known failures use `DEPOT_INSUFFICIENT_FUNDS`,
+`DEPOT_MAX_EXPANDED`, `DEPOT_INVALID_CHARACTER_ID` or `CHARACTER_NOT_FOUND` with
+their explicit 4xx statuses. Unknown execution errors retain the common sanitized
+500 and no replay guarantee. Successful results reuse the existing Depot response
+(character, capacity, expansion count, occupied slots and item ID/definition/quantity);
+enhancement facts remain in the context projection. Shared guards and known
+outcome/GET-only refresh recovery apply unchanged.
 
 ### Command outcome and context refresh
 
