@@ -13,10 +13,11 @@ import (
 	"github.com/witchcraze/party2re/internal/bank"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreplayer "github.com/witchcraze/party2re/internal/core/player"
+	"github.com/witchcraze/party2re/internal/core/timer"
+	"github.com/witchcraze/party2re/internal/playercontext"
 )
 
 type stubBankService struct {
-	getStateFn func(ctx context.Context, characterID string) (bank.State, error)
 	depositFn  func(ctx context.Context, characterID string, amount int64) (bank.DepositResult, error)
 	withdrawFn func(ctx context.Context, characterID string, amount int64) (bank.WithdrawResult, error)
 	inspectFn  func() bank.NPCInfo
@@ -24,9 +25,6 @@ type stubBankService struct {
 }
 
 func (s *stubBankService) GetState(ctx context.Context, characterID string) (bank.State, error) {
-	if s.getStateFn != nil {
-		return s.getStateFn(ctx, characterID)
-	}
 	return bank.State{
 		CharacterID: characterID,
 		Money:       5000,
@@ -109,33 +107,16 @@ func TestBankHTTPHandlers(t *testing.T) {
 	}
 	bankSvc := &stubBankService{}
 
-	h, err := apihttp.NewHandler(pService, cService, &stubAdventureService{}, &stubShopService{}, apihttp.WithBank(bankSvc))
+	readers := &contextReaders{char: char}
+	h, err := apihttp.NewHandler(pService, cService, &stubAdventureService{}, &stubShopService{}, apihttp.WithBank(bankSvc),
+		apihttp.WithPlayerContext(playercontext.NewService(readers, readers, timer.NewService(nil))))
 	if err != nil {
 		t.Fatalf("failed to create handler: %v", err)
 	}
 	router := h.Router()
 
-	t.Run("GET /characters/{id}/bank success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/characters/c1/bank", nil)
-		req.Header.Set("Authorization", "Bearer dummy-token")
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
-		}
-		var state bank.State
-		if err := json.NewDecoder(rec.Body).Decode(&state); err != nil {
-			t.Fatalf("decode state failed: %v", err)
-		}
-		if state.CharacterID != "c1" || state.Money != 5000 || state.Deposit != 10000 {
-			t.Errorf("unexpected state: %+v", state)
-		}
-	})
-
-	t.Run("POST /characters/{id}/bank/deposit success", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]int64{"amount": 3000})
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/bank/deposit", bytes.NewReader(body))
+	t.Run("Gateway bank_deposit success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/characters/c1/actions", bytes.NewBufferString(`{"action":"bank_deposit","params":{"amount":3000}}`))
 		req.Header.Set("Authorization", "Bearer dummy-token")
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -144,23 +125,25 @@ func TestBankHTTPHandlers(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
 		}
-		var res bank.DepositResult
-		if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
+		var response struct {
+			Success bool               `json:"success"`
+			Result  bank.DepositResult `json:"result"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
 			t.Fatalf("decode failed: %v", err)
 		}
-		if res.Amount != 3000 || res.Money != 2000 {
-			t.Errorf("unexpected deposit result: %+v", res)
+		if !response.Success || response.Result.Amount != 3000 || response.Result.Money != 2000 {
+			t.Errorf("unexpected deposit result: %+v", response)
 		}
 	})
 
-	t.Run("POST /characters/{id}/bank/deposit insufficient funds", func(t *testing.T) {
+	t.Run("Gateway bank_deposit insufficient funds", func(t *testing.T) {
 		bankSvc.depositFn = func(ctx context.Context, characterID string, amount int64) (bank.DepositResult, error) {
 			return bank.DepositResult{}, bank.ErrInsufficientFunds
 		}
 		defer func() { bankSvc.depositFn = nil }()
 
-		body, _ := json.Marshal(map[string]int64{"amount": 999999})
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/bank/deposit", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/characters/c1/actions", bytes.NewBufferString(`{"action":"bank_deposit","params":{"amount":999999}}`))
 		req.Header.Set("Authorization", "Bearer dummy-token")
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -171,9 +154,8 @@ func TestBankHTTPHandlers(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /characters/{id}/bank/withdraw success", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]int64{"amount": 3000})
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/bank/withdraw", bytes.NewReader(body))
+	t.Run("Gateway bank_withdraw success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/characters/c1/actions", bytes.NewBufferString(`{"action":"bank_withdraw","params":{"amount":3000}}`))
 		req.Header.Set("Authorization", "Bearer dummy-token")
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -182,23 +164,25 @@ func TestBankHTTPHandlers(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
 		}
-		var res bank.WithdrawResult
-		if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
+		var response struct {
+			Success bool                `json:"success"`
+			Result  bank.WithdrawResult `json:"result"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
 			t.Fatalf("decode failed: %v", err)
 		}
-		if res.Amount != 3000 || res.Money != 8000 {
-			t.Errorf("unexpected withdraw result: %+v", res)
+		if !response.Success || response.Result.Amount != 3000 || response.Result.Money != 8000 {
+			t.Errorf("unexpected withdraw result: %+v", response)
 		}
 	})
 
-	t.Run("POST /characters/{id}/bank/withdraw insufficient balance", func(t *testing.T) {
+	t.Run("Gateway bank_withdraw insufficient balance", func(t *testing.T) {
 		bankSvc.withdrawFn = func(ctx context.Context, characterID string, amount int64) (bank.WithdrawResult, error) {
 			return bank.WithdrawResult{}, bank.ErrInsufficientBalance
 		}
 		defer func() { bankSvc.withdrawFn = nil }()
 
-		body, _ := json.Marshal(map[string]int64{"amount": 50000})
-		req := httptest.NewRequest(http.MethodPost, "/characters/c1/bank/withdraw", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/characters/c1/actions", bytes.NewBufferString(`{"action":"bank_withdraw","params":{"amount":50000}}`))
 		req.Header.Set("Authorization", "Bearer dummy-token")
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -246,7 +230,7 @@ func TestBankHTTPHandlers(t *testing.T) {
 	})
 
 	t.Run("unauthenticated request returns 401", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/characters/c1/bank", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/characters/c1/context", nil)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 

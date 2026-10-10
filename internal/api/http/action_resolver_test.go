@@ -23,7 +23,7 @@ func TestActionURLResolver(t *testing.T) {
 			label:      "預金する",
 			category:   "bank",
 			wantMethod: http.MethodPost,
-			wantURL:    "/characters/char-999/bank/deposit",
+			wantURL:    "/api/v1/characters/char-999/actions",
 		},
 		{
 			name:       "bank withdraw action",
@@ -31,15 +31,7 @@ func TestActionURLResolver(t *testing.T) {
 			label:      "引き出す",
 			category:   "bank",
 			wantMethod: http.MethodPost,
-			wantURL:    "/characters/char-999/bank/withdraw",
-		},
-		{
-			name:       "bank state action",
-			actionID:   "bank_state",
-			label:      "口座情報",
-			category:   "bank",
-			wantMethod: http.MethodGet,
-			wantURL:    "/characters/char-999/bank",
+			wantURL:    "/api/v1/characters/char-999/actions",
 		},
 		{
 			name:       "shop weapon action",

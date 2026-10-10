@@ -370,9 +370,6 @@ func (h *Handler) Router() http.Handler {
 	mux.HandleFunc("POST /characters/{id}/depot/send-item", h.handleDepotSendItem)
 
 	if h.bank != nil {
-		mux.HandleFunc("GET /characters/{id}/bank", h.handleGetBankState)
-		mux.HandleFunc("POST /characters/{id}/bank/deposit", h.handleBankDeposit)
-		mux.HandleFunc("POST /characters/{id}/bank/withdraw", h.handleBankWithdraw)
 		mux.HandleFunc("POST /characters/{id}/bank/inspect", h.handleBankInspectNPC)
 		mux.HandleFunc("POST /characters/{id}/bank/talk", h.handleBankTalkNPC)
 	}

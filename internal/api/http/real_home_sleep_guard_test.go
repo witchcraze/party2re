@@ -17,6 +17,7 @@ import (
 	"github.com/witchcraze/party2re/internal/core/timer"
 	"github.com/witchcraze/party2re/internal/home"
 	"github.com/witchcraze/party2re/internal/park"
+	"github.com/witchcraze/party2re/internal/playercontext"
 	"github.com/witchcraze/party2re/internal/store"
 )
 
@@ -176,6 +177,8 @@ func setupRealHomeGuardTest(
 		},
 	}
 
+	// Keep snapshot timers awake to exercise the real Home service's shared guard.
+	readers := &contextReaders{char: bankRepo.char}
 	h, err := apihttp.NewHandler(
 		players,
 		chars,
@@ -183,6 +186,7 @@ func setupRealHomeGuardTest(
 		&stubShopService{},
 		apihttp.WithHome(homeSvc),
 		apihttp.WithBank(bankSvc),
+		apihttp.WithPlayerContext(playercontext.NewService(readers, readers, timer.NewService(nil))),
 		apihttp.WithPark(parkSvc),
 		apihttp.WithStore(storeSvc),
 	)
@@ -239,7 +243,7 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 		// 1. Bank deposit fails with 500 and does NOT mutate wallet or deposit
 		{
 			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/characters/hero/bank/deposit", bytes.NewReader([]byte(`{"amount":10}`)))
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/characters/hero/actions", bytes.NewBufferString(`{"action":"bank_deposit","params":{"amount":10}}`))
 			req.Header.Set("Authorization", "Bearer valid-session")
 			req.Header.Set("Content-Type", "application/json")
 			router.ServeHTTP(rec, req)
@@ -349,7 +353,7 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 		// Bank deposit returns 409 Conflict
 		{
 			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/characters/hero/bank/deposit", bytes.NewReader([]byte(`{"amount":10}`)))
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/characters/hero/actions", bytes.NewBufferString(`{"action":"bank_deposit","params":{"amount":10}}`))
 			req.Header.Set("Authorization", "Bearer valid-session")
 			req.Header.Set("Content-Type", "application/json")
 			router.ServeHTTP(rec, req)
@@ -431,7 +435,7 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 		router, _ := setupRealHomeGuardTest(t, timerSvc, bankRepo, charRepo, mockPark, nil)
 
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/characters/hero/bank/deposit", bytes.NewReader([]byte(`{"amount":10}`)))
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/characters/hero/actions", bytes.NewBufferString(`{"action":"bank_deposit","params":{"amount":10}}`))
 		req.Header.Set("Authorization", "Bearer valid-session")
 		req.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(rec, req)
@@ -482,7 +486,7 @@ func TestAuditRealHomeSleepGuard(t *testing.T) {
 		// Bank deposit succeeds with 200 and mutates wallet=90, deposit=1010
 		{
 			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/characters/hero/bank/deposit", bytes.NewReader([]byte(`{"amount":10}`)))
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/characters/hero/actions", bytes.NewBufferString(`{"action":"bank_deposit","params":{"amount":10}}`))
 			req.Header.Set("Authorization", "Bearer valid-session")
 			req.Header.Set("Content-Type", "application/json")
 			router.ServeHTTP(rec, req)

@@ -190,8 +190,10 @@ Required Bank read failures fail the whole observation; missing configuration
 returns 501. Actual activity overrides saved Bank selection before this reader
 runs. Deposit/withdraw refresh uses this same projection, with known outcomes
 preserved if the read fails and GET-only recovery after the source recovers.
-Bank talk/inspect action effects and all five REST routes still require their
-independent replacement/retirement verification under #947.
+Bank talk/inspect REST routes still require their independent action-effect
+reconciliation and replacement/retirement verification under #947. The old Bank
+state GET is retired: enter Bank with `scene_enter`, then GET character context.
+GET never changes selection; actual activity can override the Bank scene.
 
 Town's primary collection is `data.destinations`, ordered by destination ID,
 with explicit `enter_params`, observation support and offset page/next inputs.
@@ -557,8 +559,11 @@ Both results preserve the REST fields `character_id`, `money`, `deposit`,
 
 Entry exclusions and sleep/pending wake guards prevent service execution under
 the shared boundary. Known results/rejections use the refresh contract below;
-unknown service/store failures remain `500 EXECUTION_FAILED`. Bank REST routes
-remain available until their tracked retirement.
+unknown service/store failures remain `500 EXECUTION_FAILED`. The old
+`POST /characters/{id}/bank/deposit` and `/bank/withdraw` routes are retired;
+clients use `POST /api/v1/characters/{id}/actions` with the explicit ActionID and
+amount. `bank_deposit`/`bank_withdraw` resolver links use that same Gateway URL.
+Only Bank talk/inspect REST operations remain pending their own reconciliation.
 
 ### Stage adventure command contract
 
