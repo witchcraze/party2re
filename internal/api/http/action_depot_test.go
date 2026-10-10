@@ -26,6 +26,12 @@ type depotExpansionFixture struct {
 	dep     depot.Depot
 	readErr error
 	reads   int
+	sorts   int
+}
+
+func (f *depotExpansionFixture) SortItems(ctx context.Context, actor string) (depot.Depot, error) {
+	f.sorts++
+	return f.Expand(ctx, actor)
 }
 
 func (f *depotExpansionFixture) GetDepot(ctx context.Context, actor string) (depot.Depot, error) {

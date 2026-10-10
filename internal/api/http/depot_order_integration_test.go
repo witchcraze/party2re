@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -19,13 +20,22 @@ import (
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-func depotOrderDBRouter(t *testing.T) (http.Handler, corecharacter.Character, *database.CharacterRepository, *database.DepotRepository, *gatewayNavigationStore, []item.Instance) {
+type sortGatewayFailingSave struct{ *database.DepotRepository }
+
+func (r sortGatewayFailingSave) Save(ctx context.Context, value depot.Depot) error {
+	if err := r.DepotRepository.Save(ctx, value); err != nil {
+		return err
+	}
+	return errors.New("private post-save failure")
+}
+
+func depotOrderDBRouter(t *testing.T, failure string) (http.Handler, corecharacter.Character, *database.CharacterRepository, *database.DepotRepository, *gatewayNavigationStore, []item.Instance) {
 	t.Helper()
 	catalog, err := item.DefaultCatalog()
 	if err != nil {
 		t.Fatal(err)
 	}
-	router, actor, chars, depots, store, _ := depotSaleDBRouter(t, "", 0, depot.WithItemDefinitionProvider(catalog))
+	router, actor, chars, depots, store, _ := depotSaleDBRouter(t, failure, 0, depot.WithItemDefinitionProvider(catalog))
 	items := []item.Instance{
 		{ID: actor.ID[:30] + "ff", DefinitionID: "weapon-01", Quantity: 1, EnhancementLevel: 6},
 		{ID: actor.ID[:30] + "ee", DefinitionID: "weapon-02", Quantity: 1},
@@ -51,7 +61,14 @@ func depotOrderRequest(router http.Handler, path, body string) *httptest.Respons
 }
 
 func TestDepotSortReloadAndContextPages(t *testing.T) {
-	router, actor, _, depots, store, items := depotOrderDBRouter(t)
+	for _, transport := range []string{"REST", "Gateway"} {
+		t.Run(transport, func(t *testing.T) { testDepotSortReloadAndContextPages(t, transport == "Gateway") })
+	}
+}
+
+func testDepotSortReloadAndContextPages(t *testing.T, gateway bool) {
+	t.Helper()
+	router, actor, _, depots, store, items := depotOrderDBRouter(t, "")
 	ctx := context.Background()
 	before, err := depots.FindByCharacterID(ctx, actor.ID)
 	if err != nil {
@@ -62,9 +79,28 @@ func TestDepotSortReloadAndContextPages(t *testing.T) {
 	if !reflect.DeepEqual(before.Items, unsorted) {
 		t.Fatal("Save must not implicitly sort")
 	}
-	w := depotOrderRequest(router, "/characters/"+actor.ID+"/depot/sort", `{}`)
+	path, body := "/characters/"+actor.ID+"/depot/sort", `{}`
+	if gateway {
+		path, body = "/api/v1/characters/"+actor.ID+"/actions", `{"action":"depot_sort","params":{}}`
+	}
+	w := depotOrderRequest(router, path, body)
+	raw := w.Body.Bytes()
+	if gateway {
+		var outcome struct {
+			Success bool
+			Result  json.RawMessage
+			Context PlayerContextResponse
+		}
+		if err := json.Unmarshal(raw, &outcome); err != nil {
+			t.Fatal(err)
+		}
+		if !outcome.Success || outcome.Context.Character.ID != actor.ID || outcome.Context.Scene.LocationID != "depot" {
+			t.Fatalf("Gateway sort outcome: %d %s", w.Code, raw)
+		}
+		raw = outcome.Result
+	}
 	var result depotResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+	if err := json.Unmarshal(raw, &result); err != nil {
 		t.Fatal(err)
 	}
 	if w.Code != 200 || !reflect.DeepEqual(result, toDepotResponse(depot.Depot{CharacterID: actor.ID, Capacity: 5, Items: items})) {
@@ -98,20 +134,15 @@ func TestDepotSortReloadAndContextPages(t *testing.T) {
 }
 
 func TestDepotSortAndSaleConcurrency(t *testing.T) {
-	router, actor, chars, depots, store, items := depotOrderDBRouter(t)
+	router, actor, chars, depots, store, items := depotOrderDBRouter(t, "")
 	var sales atomic.Int64
 	result := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
-		path, body := "/characters/"+actor.ID+"/depot/sort", `{}`
-		if (worker+op)%2 != 0 {
-			path, body = "/api/v1/characters/"+actor.ID+"/actions", saleGatewayBody("depot_sell", `{"item_id":"`+items[4].ID+`"}`)
+		path, body := "/api/v1/characters/"+actor.ID+"/actions", `{"action":"depot_sort"}`
+		sale := (worker+op)%2 != 0
+		if sale {
+			body = saleGatewayBody("depot_sell", `{"item_id":"`+items[4].ID+`"}`)
 		}
 		w := depotOrderRequest(router, path, body)
-		if strings.HasSuffix(path, "/sort") {
-			if w.Code != 200 {
-				return fmt.Errorf("sort (including lock failure): %d %s", w.Code, w.Body.String())
-			}
-			return nil
-		}
 		var response struct {
 			Success bool
 			Error   ErrorDetail
@@ -119,6 +150,12 @@ func TestDepotSortAndSaleConcurrency(t *testing.T) {
 		}
 		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 			return err
+		}
+		if !sale {
+			if w.Code != 200 || !response.Success {
+				return fmt.Errorf("sort (including lock failure): %d %s", w.Code, w.Body.String())
+			}
+			return nil
 		}
 		if w.Code == 200 && response.Success && response.Result.GoldEarned == 120 {
 			sales.Add(1)
@@ -142,5 +179,53 @@ func TestDepotSortAndSaleConcurrency(t *testing.T) {
 	}
 	if !reflect.DeepEqual(storage.Items, items[:4]) || wallet.Money != actor.Money+120 || store.writes != 0 {
 		t.Fatalf("assets/order changed: %+v money=%d writes=%d", storage.Items, wallet.Money, store.writes)
+	}
+}
+
+func TestDepotSortGatewayRollbackAndEmptyStorage(t *testing.T) {
+	for _, failure := range []string{"depot-save", ""} {
+		t.Run(failure, func(t *testing.T) {
+			router, actor, chars, depots, store, _ := depotOrderDBRouter(t, failure)
+			ctx := context.Background()
+			before, err := depots.FindByCharacterID(ctx, actor.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if failure == "" {
+				before.Items = []item.Instance{}
+				if err := depots.Save(ctx, before); err != nil {
+					t.Fatal(err)
+				}
+			}
+			status, got := gatewayRequest(t, router, actor.ID, "session", "application/json", `{"action":"depot_sort"}`, nil)
+			if failure != "" {
+				if status != 500 || strings.Contains(fmt.Sprint(got), "private") {
+					t.Fatalf("save failure: %d %s", status, got)
+				}
+				assertGatewayError(t, got, "EXECUTION_FAILED")
+				if _, exists := got["context"]; exists {
+					t.Fatal("unknown failure refreshed")
+				}
+			} else {
+				var result depotResponse
+				if err := json.Unmarshal(got["result"], &result); err != nil {
+					t.Fatal(err)
+				}
+				if status != 200 || result.Items == nil || result.ItemCount != 0 {
+					t.Fatalf("empty sort: %d %s", status, got)
+				}
+			}
+			after, err := depots.FindByCharacterID(ctx, actor.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wallet, err := chars.FindByID(ctx, actor.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(after, before) || wallet.Money != actor.Money || store.writes != 0 {
+				t.Fatalf("sort rollback/empty changed assets: %+v -> %+v money=%d writes=%d", before, after, wallet.Money, store.writes)
+			}
+		})
 	}
 }

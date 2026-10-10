@@ -91,7 +91,11 @@ func depotSaleDBRouter(t *testing.T, failure string, price int, extra ...depot.O
 		options = append(options, depot.WithItemDefinitionProvider(saleGatewayCatalog{price, failure == "catalog"}))
 	}
 	options = append(options, extra...)
-	svc, err := depot.NewServiceWithTransaction(depots, characters, inventories, depots, options...)
+	var storage depot.Repository = depots
+	if failure == "depot-save" {
+		storage = sortGatewayFailingSave{depots}
+	}
+	svc, err := depot.NewServiceWithTransaction(storage, characters, inventories, depots, options...)
 	if err != nil {
 		t.Fatal(err)
 	}

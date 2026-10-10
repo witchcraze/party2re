@@ -38,11 +38,19 @@ func WithDepot(service DepotService) Option {
 	return func(h *Handler) {
 		h.depot = service
 		if service == nil {
+			withActionCommand[struct{}]("depot_sort", nil, nil)(h)
 			withActionCommand[struct{}]("depot_expand", nil, nil)(h)
 			withActionCommand[sellDepotItemRequest]("depot_sell", nil, nil)(h)
 			withActionCommand[depotSaleBatchRequest]("depot_sell_batch", nil, nil)(h)
 			return
 		}
+		withActionCommand("depot_sort", func(ctx context.Context, actorID string, _ struct{}) (any, error) {
+			value, err := service.SortItems(ctx, actorID)
+			if err != nil {
+				return nil, err
+			}
+			return toDepotResponse(value), nil
+		}, depotActionRejection)(h)
 		withActionCommand("depot_expand", func(ctx context.Context, actorID string, _ struct{}) (any, error) {
 			value, err := service.Expand(ctx, actorID)
 			if err != nil {
