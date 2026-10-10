@@ -20909,7 +20909,32 @@
         ]
       },
       "post": {
+        "description": "Creates a new guild with 1-16 runes name for 5,000 G. Requires character ownership and validates guild name constraints.",
         "operationId": "postGuilds",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "character_id": {
+                    "description": "Founding character ID",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Guild name (1..16 runes)",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "character_id",
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful operation"

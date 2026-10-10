@@ -58,7 +58,7 @@ func TestGuildService_DisbandInactiveGuilds_ReactivatedGuildPreserved_RealDB(t *
 		t.Fatal(err)
 	}
 
-	guildName := fmt.Sprintf("InactiveG_%s", leaderChar.ID[:8])
+	guildName := fmt.Sprintf("InactG_%s", leaderChar.ID[:8])
 	g, _, _, err := service.Create(ctx, leaderChar.ID, guildName)
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
@@ -163,7 +163,7 @@ func TestGuildService_DisbandInactiveGuilds_DeterministicInterleaving_RealDB(t *
 		t.Fatal(err)
 	}
 
-	guildName := fmt.Sprintf("DetInactG_%s", leaderChar.ID[:8])
+	guildName := fmt.Sprintf("DetIn_%s", leaderChar.ID[:8])
 	g, _, _, err := service.Create(ctx, leaderChar.ID, guildName)
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
@@ -265,7 +265,7 @@ func TestGuildService_DisbandInactiveGuilds_ConcurrentRace_RealDB(t *testing.T) 
 			t.Fatal(err)
 		}
 
-		guildName := fmt.Sprintf("RaceInactG_%s_%d", leaderChar.ID[:6], iter)
+		guildName := fmt.Sprintf("RcIn_%d_%s", iter, leaderChar.ID[:6])
 		g, _, _, err := service.Create(ctx, leaderChar.ID, guildName)
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)
