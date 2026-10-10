@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Item Depot (預かり所 / 倉庫) provides characters with persistent storage for item instances outside of their active inventory. It faithfully reproduces the original Party2 Perl CGI specification (`system.cgi:get_depot_c`, `town.cgi` depot routines), featuring dynamic capacity scaling, storage expansion, item sorting, direct item selling, inter-character mailing (money and items), and collection book synchronization. Gold is kept strictly in player/character purses and the bank—fictional gold deposits in the depot are eliminated.
+The Item Depot (預かり所 / 倉庫) provides characters with persistent storage for item instances outside of their active inventory. The reconstruction models dynamic capacity, storage expansion, item sorting, direct item selling, inter-character mailing and collection discovery from `system.cgi:get_depot_c` and `depot.cgi`. Known withdrawal and persisted-order differences remain documented below. Gold is kept in character purses and the bank.
 
 ## Domain Model
 
@@ -93,3 +93,48 @@ All depot transactions execute inside an explicit database transaction (`*sql.Tx
 1. **Rank 2 (`characters`)**: Both sender and recipient row locks acquired via `id.Sort2(fromID, toID)` in ascending lexicographical order to prevent deadlocks.
 2. **Rank 3 (`inventory_items`)**: Sender inventory items locked.
 3. **Rank 5 (`character_depots`)**: Target depot locked with `FOR UPDATE`.
+
+## Gateway Observation and Retained Operations
+
+The owned `depot` facility is a pageable town destination. Its typed context
+projection reads the existing `GetDepot` service and returns dynamic capacity,
+purchased expansion count, total occupied slots and a bounded page of item
+instances (ID, definition ID, quantity, enhancement level). Slot count refers
+to all stored instances before paging; a stack still occupies one slot.
+Legacy `depot.cgi:49–99` reports owned count/capacity/expansions, and
+`system.cgi:1267–1288` supplies the capacity and occupied-row rule.
+
+Offset pages use the shared default20/max100 bounds and preserve the public
+reader's order; current persistence reads instance ID ascending. They do not
+promise a snapshot across concurrent changes. The adapter does not call
+`SortItems` or add a separate ordering rule. Missing storage produces an empty
+in-memory view with calculated capacity; GET never persists that view or creates
+a depot. Required character/storage errors fail observation, and actual
+activities/conflicts take priority over ordinary selection. The
+[navigation contract](../architecture/client-agent-api.md#selection-commands-and-typed-discovery)
+owns input, ownership and GET-only refresh recovery behavior.
+
+All nine Depot REST operations remain registered until verified command/read
+replacements exist. Observation does not connect mutations or execute NPC,
+delivery, collection or scheduling effects. Legacy `depot.cgi:68–81` dispatch
+maps to the existing services as follows:
+
+| Legacy routine | Existing service | Retained operation |
+| --- | --- | --- |
+| Listing/header, `get_depot_c` | GetDepot | GET `/characters/{id}/depot` |
+| `azukeru` | DepositItem | POST `/characters/{id}/depot/deposit` |
+| `hikidasu` | WithdrawItem | POST `/characters/{id}/depot/withdraw` |
+| `uru` | SellItem | POST `/characters/{id}/depot/sell` |
+| `matomete_uru` | SellItems | POST `/characters/{id}/depot/sell-batch` |
+| `seiton` | SortItems | POST `/characters/{id}/depot/sort` |
+| `okuru` | SendMoney, SendItem | POST `/characters/{id}/depot/send-money`, `/characters/{id}/depot/send-item` |
+| `expansion_depot` | Expand | POST `/characters/{id}/depot/expand` |
+
+This mapping records transport coverage, not full legacy parity. Legacy
+`seiton` (`depot.cgi:313–332`) persists kind/item-number ordering; current
+SortItems results lose that order on repository reload (#1111). The context
+adapter preserves reader order so a repair belongs to that owning boundary.
+Legacy `hikidasu` (`depot.cgi:208–288`) swaps held equipment/items back into
+storage, while current WithdrawItem moves into inventory and rejects a full
+slot; the equivalent atomic swap contract remains undecided in #1127. Shared
+NPC/presence/log effects and remaining command/route migration stay under #947.

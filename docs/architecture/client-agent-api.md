@@ -150,7 +150,7 @@ selection and paging. Navigation commands have no price, fatigue, scheduled
 cooldown or implicit feature mutation. Recovery and active-session restrictions
 still apply: browsing cannot bypass sleep or abandon a run.
 
-The registry accepts `town`, `bank`, `home`, `secretshop` and the four ordinary shops
+The registry accepts `town`, `bank`, `depot`, `home`, `secretshop` and the four ordinary shops
 (`shop_weapon`, `shop_armor`, `shop_item`, `shop_accessory`), with town as each
 facility's parent. Shop subjects use `target_kind:item` and IDs validated by
 the owned actor's existing Shop catalog, including its eligibility filters.
@@ -180,7 +180,7 @@ existing keyset reader, while later pages reuse its timestamp/ID tokens. Tokens
 are URL-safe base64 strings bounded to 512 characters; existing service cursor
 decoding and ordering are retained. Offset pages retain totals; cursor pages
 return the service next token without inventing a total or a cross-page snapshot.
-Mixed/unknown fields and null values are rejected. Town, ordinary Shop and
+Mixed/unknown fields and null values are rejected. Town, Depot, ordinary Shop and
 SecretShop lists remain offset-only. Back never accepts a caller-supplied parent.
 
 GET and command refresh share the HTTP selected-scene composer, replacing interim
@@ -203,6 +203,24 @@ Bank talk/inspect REST routes still require their independent action-effect
 reconciliation and replacement/retirement verification under #947. The old Bank
 state GET is retired: enter Bank with `scene_enter`, then GET character context.
 GET never changes selection; actual activity can override the Bank scene.
+
+Depot facility data reports `support.observation:details` with typed
+`DepotSceneData`: `parent:town`, owned `character_id`, dynamic `capacity`,
+purchased expansion count `ex_depot`, total occupied slots `item_count`,
+non-null offset-paged `items` and existing page/next inputs. Rows whitelist
+instance `id`, `definition_id`, `quantity` and `enhancement_level`; occupied
+slots count instances, not their summed quantities. The adapter preserves
+`GetDepot` order (currently instance ID ascending in persistence) so a future
+feature-owned sort repair is not overridden by transport. No cross-page snapshot
+is promised. Required character/depot read errors fail the whole observation;
+missing depots yield an empty in-memory projection with dynamic capacity and
+no save. Missing configuration returns 501. Actual activities/conflicts skip
+ordinary Depot reads. Successful/rejected navigation survives failed enrichment
+and recovers through GET without another selection write. GET never creates,
+sorts or saves storage, moves items, records collection or schedules work.
+Depot mutation candidates remain unconnected, and its nine REST operations
+remain registered; [Depot design](../design/depot.md#gateway-observation-and-retained-operations)
+records the remaining order/withdrawal reconciliation.
 
 SecretShop facility/subject data reports `support.observation:details` with a
 typed `SecretShopCatalogSceneData` or `SecretShopProductSceneData`. Both contain

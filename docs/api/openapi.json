@@ -1801,6 +1801,7 @@
                       "enum": [
                         "town",
                         "bank",
+                        "depot",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -1808,7 +1809,8 @@
                         "shop_accessory",
                         "home_inbox",
                         "home_outbox",
-                        "casino"
+                        "casino",
+                        "secretshop"
                       ],
                       "type": "string"
                     }
@@ -1918,6 +1920,7 @@
                       "enum": [
                         "town",
                         "bank",
+                        "depot",
                         "home",
                         "shop_weapon",
                         "shop_armor",
@@ -1925,7 +1928,8 @@
                         "shop_accessory",
                         "home_inbox",
                         "home_outbox",
-                        "casino"
+                        "casino",
+                        "secretshop"
                       ],
                       "type": "string"
                     },
@@ -3318,6 +3322,84 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "DepotSceneData": {
+        "additionalProperties": false,
+        "description": "Owned read-only Depot inventory/capacity. Offset pages preserve GetDepot order (currently instance ID ascending in persistence); no cross-page snapshot is promised. Missing depots remain empty in-memory projections. GET never creates, sorts or saves storage. REST operations remain registered pending verified mutation replacements.",
+        "properties": {
+          "capacity": {
+            "maximum": 500,
+            "minimum": 5,
+            "type": "integer"
+          },
+          "character_id": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "ex_depot": {
+            "maximum": 20,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "item_count": {
+            "description": "Total occupied slots across the depot, before paging; not summed item quantities.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DepotSceneItem"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/ScenePage"
+          },
+          "parent": {
+            "const": "town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent",
+          "character_id",
+          "capacity",
+          "ex_depot",
+          "item_count",
+          "items",
+          "page"
+        ],
+        "type": "object"
+      },
+      "DepotSceneItem": {
+        "additionalProperties": false,
+        "description": "Owned storage instance facts; quantity is not the number of occupied depot slots.",
+        "properties": {
+          "definition_id": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "enhancement_level": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "id": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "quantity": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "definition_id",
+          "quantity",
+          "enhancement_level"
+        ],
         "type": "object"
       },
       "ErrorResponse": {
@@ -4832,13 +4914,16 @@
                 "enum": [
                   "town",
                   "bank",
+                  "depot",
                   "home",
                   "shop_weapon",
                   "shop_armor",
                   "shop_item",
                   "shop_accessory",
                   "home_inbox",
-                  "home_outbox"
+                  "home_outbox",
+                  "casino",
+                  "secretshop"
                 ],
                 "type": "string"
               }
@@ -4965,13 +5050,16 @@
             "enum": [
               "town",
               "bank",
+              "depot",
               "home",
               "shop_weapon",
               "shop_armor",
               "shop_item",
               "shop_accessory",
               "home_inbox",
-              "home_outbox"
+              "home_outbox",
+              "casino",
+              "secretshop"
             ],
             "type": "string"
           },
@@ -5062,6 +5150,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/SecretShopCatalogSceneData"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DepotSceneData"
                     }
                   ]
                 }
@@ -5441,6 +5532,36 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/SecretShopProductSceneData"
+                },
+                "support": {
+                  "properties": {
+                    "observation": {
+                      "const": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "facility"
+                },
+                "location_id": {
+                  "const": "depot"
+                }
+              },
+              "required": [
+                "location_id",
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/DepotSceneData"
                 },
                 "support": {
                   "properties": {
