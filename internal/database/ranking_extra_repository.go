@@ -125,7 +125,7 @@ func (r *RankingRepository) RecordLegend(ctx context.Context, entry ranking.Lege
 			SELECT c.name, c.color, COALESCE(g.name, ''), COALESCE(cp.avatar_url, ''), COALESCE(cp.comment, '')
 			FROM characters c
 			LEFT JOIN character_profiles cp ON c.id = cp.character_id
-			LEFT JOIN guild_members gm ON c.id = gm.character_id
+			LEFT JOIN guild_members gm ON c.id = gm.character_id AND gm.is_pending = FALSE
 			LEFT JOIN guilds g ON gm.guild_id = g.id
 			WHERE c.id = ?
 		`

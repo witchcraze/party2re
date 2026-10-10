@@ -167,33 +167,6 @@ func (r *GuildRepository) GetGuild(ctx context.Context, guildID string) (guild.G
 	return g, members, nil
 }
 
-func (r *GuildRepository) GetGuildByCharacter(ctx context.Context, characterID string) (guild.Guild, guild.Member, error) {
-	var g guild.Guild
-	var m guild.Member
-	var roleStr string
-
-	executor := ExecutorFromContext(ctx, r.db)
-	err := executor.QueryRowContext(ctx, `
-		SELECT g.id, g.name, g.leader_character_id, g.points, g.notice, g.color, g.mark, COALESCE(g.bgimg, ''), g.last_active_at, g.created_at, g.updated_at,
-		       gm.guild_id, gm.character_id, gm.role, gm.title, gm.is_pending, gm.joined_at
-		FROM guild_members gm
-		JOIN guilds g ON gm.guild_id = g.id
-		WHERE gm.character_id = ?
-	`, characterID).Scan(
-		&g.ID, &g.Name, &g.LeaderCharacterID, &g.Points, &g.Notice, &g.Color, &g.Mark, &g.Bgimg, &g.LastActiveAt, &g.CreatedAt, &g.UpdatedAt,
-		&m.GuildID, &m.CharacterID, &roleStr, &m.Title, &m.IsPending, &m.JoinedAt,
-	)
-	if errors.Is(err, sql.ErrNoRows) {
-		return guild.Guild{}, guild.Member{}, guild.ErrCharacterNotInGuild
-	}
-	if err != nil {
-		return guild.Guild{}, guild.Member{}, err
-	}
-	m.Role = guild.Role(roleStr)
-
-	return g, m, nil
-}
-
 func (r *GuildRepository) ListGuilds(ctx context.Context, offset, limit int) ([]guild.Guild, error) {
 	rows, err := ExecutorFromContext(ctx, r.db).QueryContext(ctx, `
 		SELECT id, name, leader_character_id, points, notice, color, mark, COALESCE(bgimg, ''), last_active_at, created_at, updated_at

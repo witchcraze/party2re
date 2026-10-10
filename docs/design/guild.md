@@ -65,15 +65,18 @@ The guild leader can assign arbitrary custom role titles to any non-leader membe
 
 ### Membership Application & Approval Workflow (`参加申請中`)
 
-In legacy Party2, players join guilds via a formal application and approval gating process:
+In legacy Party2, players join guilds via a formal application and approval gating process (`lib/join_guild.cgi:182–219`, `lib/guild.cgi:209–239`):
 
 1. **Application (`さんか`)**:
-   - A player without an existing guild membership or pending application calls `ApplyToJoin`.
-   - The player is registered in `guild_members` with `is_pending = true` and title `参加申請中`.
+   - An unaffiliated player calls `ApplyToJoin`. A player can submit pending applications to multiple guilds simultaneously; only duplicate applications to the same guild are rejected (`ErrApplicationAlreadyPending`).
+   - If the player is already an active member of any guild (`!is_pending`), new applications and guild creation are prohibited (`ErrCharacterAlreadyInGuild`).
+   - The applicant is registered on the target guild's roster in `guild_members` with `is_pending = true` and title `参加申請中`. Pending applications are guild applicant rosters, not personal affiliations.
+   - Action-based Guild Points are awarded only to active affiliations (`!is_pending`); pending applications receive no GP (`lib/guild.cgi:63`).
+   - An unaffiliated player can create a new guild even with existing pending applications; upon creation they become leader of the new guild.
    - A notification letter is sent to the guild master:
      `【＋参加申請＋】<GuildName> 入団希望者 <ApplicantName>`
 2. **Leader Review**:
-   - **Approval (`あたえる`)**: The leader assigns a valid role title via `ApproveApplication` (or `AssignCustomRole`). This clears `is_pending = false`, applies the title, and sends an acceptance letter:
+   - **Approval (`あたえる`)**: The leader assigns a valid role title via `ApproveApplication`. The system re-verifies whether the applicant has already joined another guild in the meantime (`lib/guild.cgi:220–224`); if already affiliated, approval is rejected (`ErrCharacterAlreadyInGuild`). Otherwise, this clears `is_pending = false`, applies the title, and sends an acceptance letter:
      `【＋参加許可証＋】<GuildName> (ギルマス <LeaderName>) から参加許可をもらいました`
    - **Rejection (`追放`)**: The leader rejects the applicant via `RejectApplication` (or `KickMember`). The record is removed and a rejection letter is sent:
      `【＋不合格＋】残念ながら <GuildName> (ギルマス <LeaderName>) から参加を拒否されました`
