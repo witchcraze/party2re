@@ -39,8 +39,30 @@ func TestCollectionServiceDatabaseIntegration(t *testing.T) {
 	}
 
 	// 2. Record monster defeats
-	_ = svc.RecordMonsterDefeat(ctx, char.ID, "mon_dragon", "Red Dragon", "Volcano")
-	_ = svc.RecordMonsterDefeat(ctx, char.ID, "mon_phoenix", "Phoenix", "Peak")
+	_ = svc.RecordMonsterDefeat(ctx, char.ID, collection.DefeatedMonsterRecord{
+		MonsterID:        "mon_dragon",
+		MonsterName:      "Red Dragon",
+		Habitat:          "Volcano",
+		Icon:             "mon/100.gif",
+		HP:               200,
+		Attack:           150,
+		Defense:          100,
+		Agility:          80,
+		ExperienceReward: 500,
+		GoldReward:       300,
+	})
+	_ = svc.RecordMonsterDefeat(ctx, char.ID, collection.DefeatedMonsterRecord{
+		MonsterID:        "mon_phoenix",
+		MonsterName:      "Phoenix",
+		Habitat:          "Peak",
+		Icon:             "mon/101.gif",
+		HP:               180,
+		Attack:           140,
+		Defense:          90,
+		Agility:          120,
+		ExperienceReward: 600,
+		GoldReward:       350,
+	})
 
 	// 3. Get Monster Book
 	book, progress, err := svc.GetMonsterBook(ctx, char.ID)

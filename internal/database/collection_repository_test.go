@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/witchcraze/party2re/internal/collection"
 	"github.com/witchcraze/party2re/internal/database"
 )
 
@@ -33,10 +34,40 @@ func TestCollectionRepository_Integration(t *testing.T) {
 	}
 
 	// 2. Record monster defeats
-	if err := repo.RecordMonsterDefeat(ctx, char.ID, "mon_goblin", "Goblin", "Forest"); err != nil {
+	initialRec := collection.DefeatedMonsterRecord{
+		MonsterID:        "mon_goblin",
+		MonsterName:      "Goblin",
+		Habitat:          "Forest",
+		Icon:             "mon/005.gif",
+		Strong:           120,
+		HP:               50,
+		MP:               10,
+		Attack:           30,
+		Defense:          20,
+		Agility:          15,
+		ExperienceReward: 25,
+		GoldReward:       15,
+	}
+	if err := repo.RecordMonsterDefeat(ctx, char.ID, initialRec); err != nil {
 		t.Fatalf("RecordMonsterDefeat 1 failed: %v", err)
 	}
-	if err := repo.RecordMonsterDefeat(ctx, char.ID, "mon_goblin", "Goblin", "Forest"); err != nil {
+
+	// Second encounter with different stats/icon - must NOT overwrite initial encounter stats
+	secondRec := collection.DefeatedMonsterRecord{
+		MonsterID:        "mon_goblin",
+		MonsterName:      "Goblin+",
+		Habitat:          "Deep Forest",
+		Icon:             "mon/999.gif",
+		Strong:           999,
+		HP:               500,
+		MP:               100,
+		Attack:           300,
+		Defense:          200,
+		Agility:          150,
+		ExperienceReward: 250,
+		GoldReward:       150,
+	}
+	if err := repo.RecordMonsterDefeat(ctx, char.ID, secondRec); err != nil {
 		t.Fatalf("RecordMonsterDefeat 2 failed: %v", err)
 	}
 
@@ -47,6 +78,11 @@ func TestCollectionRepository_Integration(t *testing.T) {
 	}
 	if len(monsters) != 1 || monsters[0].DefeatedCount != 2 || monsters[0].MonsterName != "Goblin" {
 		t.Errorf("monsters: %+v", monsters)
+	}
+	m0 := monsters[0]
+	if m0.Icon != "mon/005.gif" || m0.Habitat != "Forest" || m0.Strong != 120 || m0.HP != 50 || m0.MP != 10 ||
+		m0.Attack != 30 || m0.Defense != 20 || m0.Agility != 15 || m0.ExperienceReward != 25 || m0.GoldReward != 15 {
+		t.Errorf("expected initial encounter stats preserved, got %+v", m0)
 	}
 
 	bookCount, err := repo.GetMonsterBookCount(ctx, char.ID)

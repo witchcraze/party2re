@@ -35,11 +35,13 @@ func (m *mockBlessingProvider) GetActiveBlessing(ctx context.Context, characterI
 }
 
 type mockMonsterDefeatRecorder struct {
-	calls []string
+	calls   []string
+	records []battle.DefeatedMonsterRecord
 }
 
-func (m *mockMonsterDefeatRecorder) RecordMonsterDefeat(ctx context.Context, characterID, monsterID, monsterName, habitat string) error {
-	m.calls = append(m.calls, characterID+":"+monsterID+":"+monsterName+":"+habitat)
+func (m *mockMonsterDefeatRecorder) RecordMonsterDefeat(ctx context.Context, characterID string, record battle.DefeatedMonsterRecord) error {
+	m.calls = append(m.calls, characterID+":"+record.MonsterID+":"+record.MonsterName+":"+record.Habitat)
+	m.records = append(m.records, record)
 	return nil
 }
 

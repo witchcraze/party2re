@@ -28,13 +28,38 @@ var (
 )
 
 type MonsterBookEntry struct {
-	CharacterID     string    `json:"character_id"`
-	MonsterID       string    `json:"monster_id"`
-	MonsterName     string    `json:"monster_name"`
-	Habitat         string    `json:"habitat"`
-	DefeatedCount   int       `json:"defeated_count"`
-	FirstDefeatedAt time.Time `json:"first_defeated_at"`
-	LastDefeatedAt  time.Time `json:"last_defeated_at"`
+	CharacterID      string    `json:"character_id"`
+	MonsterID        string    `json:"monster_id"`
+	MonsterName      string    `json:"monster_name"`
+	Habitat          string    `json:"habitat"`
+	DefeatedCount    int       `json:"defeated_count"`
+	FirstDefeatedAt  time.Time `json:"first_defeated_at"`
+	LastDefeatedAt   time.Time `json:"last_defeated_at"`
+	Icon             string    `json:"icon"`
+	Strong           int       `json:"strong"`
+	HP               int       `json:"hp"`
+	MP               int       `json:"mp"`
+	Attack           int       `json:"attack"`
+	Defense          int       `json:"defense"`
+	Agility          int       `json:"agility"`
+	ExperienceReward int       `json:"exp_reward"`
+	GoldReward       int       `json:"gold_reward"`
+}
+
+// DefeatedMonsterRecord contains combat and reward snapshot data for recording monster defeat.
+type DefeatedMonsterRecord struct {
+	MonsterID        string
+	MonsterName      string
+	Habitat          string
+	Icon             string
+	Strong           int
+	HP               int
+	MP               int
+	Attack           int
+	Defense          int
+	Agility          int
+	ExperienceReward int
+	GoldReward       int
 }
 
 type ItemCollectionEntry struct {
@@ -53,7 +78,7 @@ type CompletionProgress struct {
 }
 
 type Repository interface {
-	RecordMonsterDefeat(ctx context.Context, characterID, monsterID, monsterName, habitat string) error
+	RecordMonsterDefeat(ctx context.Context, characterID string, record DefeatedMonsterRecord) error
 	GetMonsterBook(ctx context.Context, characterID string) ([]MonsterBookEntry, error)
 	GetMonsterBookCount(ctx context.Context, characterID string) (int, error)
 
@@ -168,18 +193,40 @@ func (s *Service) SetLegendInductor(inductor LegendInductor) {
 	s.legend = inductor
 }
 
-func (s *Service) RecordMonsterDefeat(ctx context.Context, characterID, monsterID, monsterName, habitat string) error {
+func (s *Service) RecordMonsterDefeat(ctx context.Context, characterID string, record DefeatedMonsterRecord) error {
 	if characterID == "" {
 		return ErrInvalidCharacterID
 	}
-	if monsterID == "" {
+	if record.MonsterID == "" {
 		return ErrInvalidMonsterID
 	}
-	if err := s.repo.RecordMonsterDefeat(ctx, characterID, monsterID, monsterName, habitat); err != nil {
+	if record.Strong == 0 && (record.HP > 0 || record.Attack > 0 || record.Defense > 0 || record.Agility > 0) {
+		record.Strong = CalculateStrong(record.HP, record.MP, record.Attack, record.Defense, record.Agility)
+	}
+	if record.Icon == "" {
+		record.Icon = deriveMonsterIcon(record.MonsterID)
+	}
+	if err := s.repo.RecordMonsterDefeat(ctx, characterID, record); err != nil {
 		return err
 	}
 	s.checkMonsterBookCompletion(ctx, characterID)
 	return nil
+}
+
+// CalculateStrong calculates combat strength metric matching legacy Perl CGI (party2/lib/_battle.cgi:1380-1383):
+// int(mhp + mmp + at + df * 0.5 + ag)
+func CalculateStrong(hp, mp, at, df, ag int) int {
+	return int(float64(hp) + float64(mp) + float64(at) + float64(df)*0.5 + float64(ag))
+}
+
+func deriveMonsterIcon(monsterID string) string {
+	if strings.HasPrefix(monsterID, "monster-") {
+		return fmt.Sprintf("mon/%s.gif", strings.TrimPrefix(monsterID, "monster-"))
+	}
+	if strings.HasPrefix(monsterID, "mon_") {
+		return fmt.Sprintf("mon/%s.gif", strings.TrimPrefix(monsterID, "mon_"))
+	}
+	return monsterID
 }
 
 func (s *Service) checkMonsterBookCompletion(ctx context.Context, characterID string) {

@@ -211,11 +211,63 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 			if s.monsterRecorder != nil {
 				for _, m := range members {
 					if stage.ID == "king99" {
-						_ = s.monsterRecorder.RecordMonsterDefeat(txCtx, m.CharacterID, "king99-clone", "影", "封印戦")
+						c := chars[m.CharacterID]
+						hp := c.Stats.MaxHP * 50
+						if hp <= 0 {
+							hp = 5000
+						}
+						mp := c.Stats.MaxMP * 50
+						if mp <= 0 {
+							mp = 500
+						}
+						at := c.Stats.Attack * 2
+						df := c.Stats.Defense * 2
+						ag := c.Stats.Agility * 2
+						strong := int(float64(hp) + float64(mp) + float64(at) + float64(df)*0.5 + float64(ag))
+						exp := (c.Level + c.JobLevel) * 30
+						gold := int(float64(c.Level)*0.5) * 30
+						rec := DefeatedMonsterRecord{
+							MonsterID:        "king99-clone",
+							MonsterName:      "影",
+							Habitat:          "封印戦",
+							Icon:             "king99-clone",
+							Strong:           strong,
+							HP:               hp,
+							MP:               mp,
+							Attack:           at,
+							Defense:          df,
+							Agility:          ag,
+							ExperienceReward: exp,
+							GoldReward:       gold,
+						}
+						_ = s.monsterRecorder.RecordMonsterDefeat(txCtx, m.CharacterID, rec)
 					} else {
 						for i, b := range stage.Bosses {
 							monID := parseBossMonsterID(b.Icon, fmt.Sprintf("%s-boss-%d", stage.ID, i))
-							_ = s.monsterRecorder.RecordMonsterDefeat(txCtx, m.CharacterID, monID, b.Name, "封印戦")
+							hp := b.MaxHP
+							if hp <= 0 {
+								hp = b.HP
+							}
+							mp := b.MaxMP
+							if mp <= 0 {
+								mp = b.MP
+							}
+							strong := int(float64(hp) + float64(mp) + float64(b.Attack) + float64(b.Defense)*0.5 + float64(b.Agility))
+							rec := DefeatedMonsterRecord{
+								MonsterID:        monID,
+								MonsterName:      b.Name,
+								Habitat:          "封印戦",
+								Icon:             b.Icon,
+								Strong:           strong,
+								HP:               hp,
+								MP:               mp,
+								Attack:           b.Attack,
+								Defense:          b.Defense,
+								Agility:          b.Agility,
+								ExperienceReward: b.GetExp,
+								GoldReward:       b.GetMoney,
+							}
+							_ = s.monsterRecorder.RecordMonsterDefeat(txCtx, m.CharacterID, rec)
 						}
 					}
 				}
