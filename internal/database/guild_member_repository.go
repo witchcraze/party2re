@@ -197,8 +197,16 @@ func (r *GuildRepository) DisbandGuild(ctx context.Context, guildID string) erro
 		if _, err := executor.ExecContext(txCtx, `DELETE FROM guild_members WHERE guild_id = ?`, guildID); err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(txCtx, `DELETE FROM guilds WHERE id = ?`, guildID); err != nil {
+		res, err := executor.ExecContext(txCtx, `DELETE FROM guilds WHERE id = ?`, guildID)
+		if err != nil {
 			return err
+		}
+		rows, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return guild.ErrGuildNotFound
 		}
 		return nil
 	})

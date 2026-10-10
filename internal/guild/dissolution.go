@@ -2,6 +2,7 @@ package guild
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 )
@@ -57,10 +58,42 @@ func (s *Service) DisbandInactiveGuilds(ctx context.Context, now time.Time, limi
 	}
 
 	var disbanded []string
-	for _, g := range inactive {
-		if err := s.repo.DisbandGuild(ctx, g.ID); err == nil {
-			disbanded = append(disbanded, g.ID)
-			s.publishDissolutionNews(ctx, g.Name, now)
+	for _, candidate := range inactive {
+		var disbandedName string
+		disbandedThis := false
+		err := s.runInTx(ctx, func(txCtx context.Context) error {
+			g, _, err := s.repo.GetGuildForUpdate(txCtx, candidate.ID)
+			if err != nil {
+				if errors.Is(err, ErrGuildNotFound) {
+					// Guild was already deleted or disbanded concurrently.
+					return nil
+				}
+				return err
+			}
+
+			// Recheck inactivity under Rank-7 lock. If the guild was touched
+			// or updated at or after cutoff, it has reactivated and must be kept.
+			if !g.LastActiveAt.Before(cutoff) {
+				return nil
+			}
+
+			if err := s.repo.DisbandGuild(txCtx, candidate.ID); err != nil {
+				if errors.Is(err, ErrGuildNotFound) {
+					// Guild was already deleted or disbanded concurrently.
+					return nil
+				}
+				return err
+			}
+			disbandedThis = true
+			disbandedName = g.Name
+			return nil
+		})
+		if err != nil {
+			return len(disbanded), disbanded, err
+		}
+		if disbandedThis {
+			disbanded = append(disbanded, candidate.ID)
+			s.publishDissolutionNews(ctx, disbandedName, now)
 		}
 	}
 

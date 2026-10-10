@@ -1359,6 +1359,15 @@ func TestService_DisbandInactiveGuilds(t *testing.T) {
 				{ID: "dead-guild-2", Name: "GhostGuild2"},
 			}, nil
 		},
+		getGuildForUpdateFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
+			if gID == "dead-guild-1" {
+				return guild.Guild{ID: "dead-guild-1", Name: "GhostGuild1", LastActiveAt: now.Add(-guild.InactivityDisbandDuration - time.Hour)}, nil, nil
+			}
+			if gID == "dead-guild-2" {
+				return guild.Guild{ID: "dead-guild-2", Name: "GhostGuild2", LastActiveAt: now.Add(-guild.InactivityDisbandDuration - 2*time.Hour)}, nil, nil
+			}
+			return guild.Guild{}, nil, guild.ErrGuildNotFound
+		},
 		disbandGuildFn: func(ctx context.Context, gID string) error {
 			disbandedIDs = append(disbandedIDs, gID)
 			return nil
@@ -1390,5 +1399,118 @@ func TestService_DisbandInactiveGuilds(t *testing.T) {
 	}
 	if !news.calls[0].PublishedAt.Equal(now) || !news.calls[1].PublishedAt.Equal(now) {
 		t.Errorf("news PublishedAt expected %v", now)
+	}
+}
+
+func TestService_DisbandInactiveGuilds_ReactivatedGuildPreserved(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
+
+	disbandedIDs := []string{}
+	repo := &mockGuildRepo{
+		listInactiveGuildsFn: func(ctx context.Context, cutoff time.Time, limit int) ([]guild.Guild, error) {
+			// Candidate extracted because it was inactive when scanned
+			return []guild.Guild{
+				{ID: "reactivated-guild-1", Name: "AliveGuild"},
+			}, nil
+		},
+		getGuildForUpdateFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
+			// But rechecked under lock, guild was touched and is now active!
+			return guild.Guild{
+				ID:           "reactivated-guild-1",
+				Name:         "AliveGuild",
+				LastActiveAt: now, // recent activity >= cutoff
+			}, nil, nil
+		},
+		disbandGuildFn: func(ctx context.Context, gID string) error {
+			disbandedIDs = append(disbandedIDs, gID)
+			return nil
+		},
+	}
+
+	news := &mockNewsPublisher{}
+	svc, _ := guild.NewService(repo, guild.WithNewsPublisher(news))
+	count, list, err := svc.DisbandInactiveGuilds(ctx, now, 50)
+	if err != nil {
+		t.Fatalf("DisbandInactiveGuilds error: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected count 0 for reactivated guild, got %d", count)
+	}
+	if len(list) != 0 {
+		t.Errorf("expected empty disbanded list, got %v", list)
+	}
+	if len(disbandedIDs) != 0 {
+		t.Errorf("expected 0 DisbandGuild calls for reactivated guild, got %d", len(disbandedIDs))
+	}
+	if len(news.calls) != 0 {
+		t.Errorf("expected 0 news publications for reactivated guild, got %d", len(news.calls))
+	}
+}
+
+func TestService_DisbandInactiveGuilds_ConcurrentNotFound(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
+
+	disbandedIDs := []string{}
+	repo := &mockGuildRepo{
+		listInactiveGuildsFn: func(ctx context.Context, cutoff time.Time, limit int) ([]guild.Guild, error) {
+			return []guild.Guild{
+				{ID: "already-deleted-guild", Name: "GhostGuild"},
+			}, nil
+		},
+		getGuildForUpdateFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
+			// Already deleted concurrently
+			return guild.Guild{}, nil, guild.ErrGuildNotFound
+		},
+		disbandGuildFn: func(ctx context.Context, gID string) error {
+			disbandedIDs = append(disbandedIDs, gID)
+			return nil
+		},
+	}
+
+	news := &mockNewsPublisher{}
+	svc, _ := guild.NewService(repo, guild.WithNewsPublisher(news))
+	count, list, err := svc.DisbandInactiveGuilds(ctx, now, 50)
+	if err != nil {
+		t.Fatalf("DisbandInactiveGuilds error: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected count 0 for already deleted guild, got %d", count)
+	}
+	if len(list) != 0 {
+		t.Errorf("expected empty disbanded list, got %v", list)
+	}
+	if len(disbandedIDs) != 0 {
+		t.Errorf("expected 0 DisbandGuild calls, got %d", len(disbandedIDs))
+	}
+	if len(news.calls) != 0 {
+		t.Errorf("expected 0 news publications, got %d", len(news.calls))
+	}
+}
+
+func TestService_DisbandInactiveGuilds_DisbandErrorPropagated(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
+
+	expectedErr := errors.New("db disk failure")
+	repo := &mockGuildRepo{
+		listInactiveGuildsFn: func(ctx context.Context, cutoff time.Time, limit int) ([]guild.Guild, error) {
+			return []guild.Guild{
+				{ID: "dead-guild-1", Name: "GhostGuild1"},
+			}, nil
+		},
+		getGuildForUpdateFn: func(ctx context.Context, gID string) (guild.Guild, []guild.Member, error) {
+			return guild.Guild{ID: "dead-guild-1", Name: "GhostGuild1", LastActiveAt: now.Add(-guild.InactivityDisbandDuration - time.Hour)}, nil, nil
+		},
+		disbandGuildFn: func(ctx context.Context, gID string) error {
+			return expectedErr
+		},
+	}
+
+	svc, _ := guild.NewService(repo)
+	_, _, err := svc.DisbandInactiveGuilds(ctx, now, 50)
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected error %v, got %v", expectedErr, err)
 	}
 }

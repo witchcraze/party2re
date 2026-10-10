@@ -181,6 +181,7 @@ Guilds that have had no member activity for 20 consecutive days are automaticall
 - Each guild tracks `last_active_at TIMESTAMP`.
 - Any guild activity (creation, member join/apply, approval, role title assignment, callout, mark/wallpaper update, notice/color update) touches `last_active_at = NOW()`.
 - A daily scheduled worker (`guild_inactivity_check`, `scheduling.ActionHandler`) inspects guilds where `last_active_at < NOW() - 20 days` and cleanly disbands them, publishing the dissolution news announcement post-commit.
+- **Inactivity Recheck Under Rank-7 Lock & Error Propagation**: During `DisbandInactiveGuilds`, each candidate guild is locked under Rank-7 row locks (`GetGuildForUpdate`), and its latest `last_active_at` is rechecked against the cutoff before deletion. If a guild was touched or reactivated concurrently (or between candidate extraction and deletion), it is preserved and left untouched. If the guild is still inactive, `DisbandGuild` removes member and guild records in a single transaction (`RowsAffected` verified); any deletion failure triggers a complete transaction rollback and propagates the error to the caller/scheduler rather than being swallowed.
 
 ### Daily 20% Guild Point Decay (`login.cgi:448`)
 
@@ -199,7 +200,7 @@ $gpoint = int( $gpoint * 0.8 );
 - Guild operations obey the deterministic lock acquisition hierarchy (Rank 0 -> 8):
   - Character wallet deduction (Rank 2: `characters`) occurs before guild records (Rank 7: `guilds`, `guild_members`).
 - **Membership Administration, Removal & Succession Serialization (Unit of Work)**:
-  - Member departure (`Leave`), character-cleanup departure (`RemoveCharacterFromGuild`), leadership transfer (`TransferLeadership`), expulsion (`Kick`), applicant rejection (`RejectApplication`), role title assignment (`AssignCustomRole`), applicant approval (`ApproveApplication`), and manual disbandment (`Disband`) use ambient transaction propagation (`s.runInTx`).
+  - Member departure (`Leave`), character-cleanup departure (`RemoveCharacterFromGuild`), leadership transfer (`TransferLeadership`), expulsion (`Kick`), applicant rejection (`RejectApplication`), role title assignment (`AssignCustomRole`), applicant approval (`ApproveApplication`), manual disbandment (`Disband`), and inactive guild cleanup (`DisbandInactiveGuilds`) use ambient transaction propagation (`s.runInTx`).
   - Pessimistic locking (Rank 7): `GetGuildForUpdate` acquires exclusive locks (`SELECT ... FOR UPDATE`) on the guild record in `guilds` and all its member rows in `guild_members` ordered deterministically by `joined_at ASC, character_id ASC`.
   - Atomicity of administrative mutations: Current guild leadership, requester role, target membership/role and pending state are verified under the same exclusive row lock as the mutation, preventing former-leader bypasses from interleaved leadership transfers.
   - Role title assignment (`AssignCustomRole`) validates requester leadership, target membership, and non-leader target role before updating member title. When targeting a pending applicant (`is_pending = true`), it delegates to applicant approval within the same transaction boundary.

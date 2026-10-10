@@ -42,6 +42,9 @@ func TestInactivityCheckHandler(t *testing.T) {
 				{ID: "dead-2"},
 			}, nil
 		},
+		getGuildForUpdateFn: func(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
+			return guild.Guild{ID: guildID, LastActiveAt: now.Add(-guild.InactivityDisbandDuration - time.Hour)}, nil, nil
+		},
 		disbandGuildFn: func(ctx context.Context, guildID string) error {
 			disbandedCount++
 			return nil
