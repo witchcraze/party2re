@@ -36,6 +36,7 @@ The Photo Contest and Gallery system (`internal/contest`, legacy `photo.cgi` / `
    - Length: $1 \le \text{Length} \le 40$ (UTF-8 character count).
    - Prohibited Characters: Whitespace (`\s`, `\u3000`), punctuation/symbols `,`, `;`, `"`, `'`, `&`, `<`, `>`, `@`, `＠`.
 4. **Duplicate Title Prevention**: No two entries within the same round may have the exact same title.
+5. **Guild Snapshot at Entry**: When submitting an entry, the character's current guild (stable identifier `guild_id` and display name `guild_name`) is permanently captured in the entry snapshot. If the character is unaffiliated at entry time, the guild fields remain empty.
 
 ### 4.3 Voting Rules (`とうひょう`)
 1. **Active Round Only**: Voting is only allowed while a contest round is in `active` status.
@@ -48,6 +49,8 @@ When a contest is settled:
 - **1st Place**: 15,000 Gold + 10 Small Medals + 700 Guild Points (EXP).
 - **2nd Place**: 7,000 Gold + 6 Small Medals + 300 Guild Points (EXP).
 - **3rd Place**: 3,000 Gold + 3 Small Medals + 100 Guild Points (EXP).
+- **Guild Points Attribution**: Guild Points are awarded strictly to the guild captured in the entry snapshot (`guild_id`). If the entrant was unaffiliated at entry time, joining a guild later does not grant GP. If the captured guild was disbanded prior to settlement, no GP is awarded, and points are never misdelivered to other guilds with the same name.
+- **Results & Hall of Fame Display**: Contest results and Hall of Fame (`contest_legends`) permanently display the entry-time guild name.
 - **Voter Bonus**: Every voter who voted for the 1st place winner receives 1 Small Medal.
 - **Hall of Fame (殿堂入り)**: The 1st place entry is permanently archived into `contest_legends`.
 - **System Announcement**: Broadcasts news announcements for top 3 winners.

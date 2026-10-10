@@ -320,18 +320,34 @@ func (m *mockContestRepo) ListLegends(ctx context.Context, limit, offset int) ([
 }
 
 type mockGuildService struct {
-	mu     sync.Mutex
-	points map[string]int64
+	mu         sync.Mutex
+	charGuilds map[string]contest.GuildRef
+	points     map[string]int64
+	disbanded  map[string]bool
 }
 
 func newMockGuildService() *mockGuildService {
-	return &mockGuildService{points: make(map[string]int64)}
+	return &mockGuildService{
+		charGuilds: make(map[string]contest.GuildRef),
+		points:     make(map[string]int64),
+		disbanded:  make(map[string]bool),
+	}
 }
 
-func (m *mockGuildService) AddGuildPoints(ctx context.Context, characterID string, points int) error {
+func (m *mockGuildService) GuildOf(ctx context.Context, characterID string) (contest.GuildRef, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.points[characterID] += int64(points)
+	ref, ok := m.charGuilds[characterID]
+	return ref, ok, nil
+}
+
+func (m *mockGuildService) AddPoints(ctx context.Context, guildID string, points int64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.disbanded[guildID] {
+		return nil
+	}
+	m.points[guildID] += points
 	return nil
 }
 
@@ -679,6 +695,8 @@ func TestSettlementAndPrizeDistribution(t *testing.T) {
 			Round:         1,
 			CharacterID:   chars[i].ID,
 			CharacterName: chars[i].Name,
+			GuildID:       fmt.Sprintf("guild-%d", i+1),
+			GuildName:     fmt.Sprintf("Guild%d", i+1),
 			Title:         fmt.Sprintf("Masterpiece %d", i+1),
 			Votes:         voteCounts[i],
 			CreatedAt:     now.Add(time.Duration(-i) * time.Hour),
@@ -728,8 +746,8 @@ func TestSettlementAndPrizeDistribution(t *testing.T) {
 	if firstChar.SmallMedals != 5+10 {
 		t.Errorf("expected 15 medals, got %d", firstChar.SmallMedals)
 	}
-	if guildSvc.points[chars[0].ID] != 700 {
-		t.Errorf("expected 700 guild points, got %d", guildSvc.points[chars[0].ID])
+	if guildSvc.points["guild-1"] != 700 {
+		t.Errorf("expected 700 guild points for guild-1, got %d", guildSvc.points["guild-1"])
 	}
 
 	// Verify 2nd place prizes: +7000 G, +6 Medals, +300 GP
@@ -740,6 +758,9 @@ func TestSettlementAndPrizeDistribution(t *testing.T) {
 	if secondChar.SmallMedals != 5+6 {
 		t.Errorf("expected 11 medals, got %d", secondChar.SmallMedals)
 	}
+	if guildSvc.points["guild-2"] != 300 {
+		t.Errorf("expected 300 guild points for guild-2, got %d", guildSvc.points["guild-2"])
+	}
 
 	// Verify 3rd place prizes: +3000 G, +3 Medals, +100 GP
 	thirdChar, _ := charRepo.FindByID(ctx, chars[2].ID)
@@ -748,6 +769,9 @@ func TestSettlementAndPrizeDistribution(t *testing.T) {
 	}
 	if thirdChar.SmallMedals != 5+3 {
 		t.Errorf("expected 8 medals, got %d", thirdChar.SmallMedals)
+	}
+	if guildSvc.points["guild-3"] != 100 {
+		t.Errorf("expected 100 guild points for guild-3, got %d", guildSvc.points["guild-3"])
 	}
 
 	// Verify voters received 1 medal each
@@ -758,12 +782,12 @@ func TestSettlementAndPrizeDistribution(t *testing.T) {
 		}
 	}
 
-	// Verify Hall of Fame legend recorded
+	// Verify Hall of Fame legend recorded with GuildName
 	legends, err := svc.GetLegends(ctx, 10, 0)
 	if err != nil || len(legends.Items) != 1 || legends.Total != 1 {
 		t.Fatalf("expected 1 legend, got %d (err: %v)", len(legends.Items), err)
 	}
-	if legends.Items[0].Round != 1 || legends.Items[0].Title != entries[0].Title {
+	if legends.Items[0].Round != 1 || legends.Items[0].Title != entries[0].Title || legends.Items[0].GuildName != "Guild1" {
 		t.Errorf("unexpected legend: %+v", legends.Items[0])
 	}
 
@@ -823,5 +847,303 @@ func TestMockContestRepository_AdditionalMethods(t *testing.T) {
 	votes, err := repo.ListVotesByRound(ctx, 10)
 	if err != nil || len(votes) != 1 {
 		t.Fatalf("ListVotesByRound failed: %v, len=%d", err, len(votes))
+	}
+}
+
+func TestContestEntry_CapturesGuildSnapshot(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+	guildSvc := newMockGuildService()
+
+	charAffiliated := corecharacter.Character{ID: "char-aff", Name: "AffiliatedHero"}
+	charUnaffiliated := corecharacter.Character{ID: "char-unaff", Name: "LoneHero"}
+	_ = charRepo.Update(ctx, charAffiliated)
+	_ = charRepo.Update(ctx, charUnaffiliated)
+
+	guildSvc.charGuilds[charAffiliated.ID] = contest.GuildRef{
+		ID:   "guild-alpha",
+		Name: "AlphaKnights",
+	}
+
+	svc, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithGuildService(guildSvc),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	photo1, _ := svc.SavePhoto(ctx, charAffiliated.ID, "Photo 1", "Town", "url1", "cap1", "")
+	photo2, _ := svc.SavePhoto(ctx, charUnaffiliated.ID, "Photo 2", "Town", "url2", "cap2", "")
+
+	// 1. Entry by affiliated character captures guild ID and name
+	entryAff, err := svc.EnterContest(ctx, charAffiliated.ID, photo1.ID, "Affiliated Entry")
+	if err != nil {
+		t.Fatalf("EnterContest failed: %v", err)
+	}
+	if entryAff.GuildID != "guild-alpha" {
+		t.Errorf("expected GuildID guild-alpha, got %q", entryAff.GuildID)
+	}
+	if entryAff.GuildName != "AlphaKnights" {
+		t.Errorf("expected GuildName AlphaKnights, got %q", entryAff.GuildName)
+	}
+
+	// 2. Entry by unaffiliated character has empty guild ID and name
+	entryUnaff, err := svc.EnterContest(ctx, charUnaffiliated.ID, photo2.ID, "Lone Entry")
+	if err != nil {
+		t.Fatalf("EnterContest failed: %v", err)
+	}
+	if entryUnaff.GuildID != "" {
+		t.Errorf("expected empty GuildID for unaffiliated character, got %q", entryUnaff.GuildID)
+	}
+	if entryUnaff.GuildName != "" {
+		t.Errorf("expected empty GuildName for unaffiliated character, got %q", entryUnaff.GuildName)
+	}
+}
+
+func TestSettlement_GuildPointAttribution_TransferredMember(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+	guildSvc := newMockGuildService()
+
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	svc, _ := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithGuildService(guildSvc),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+
+	// Round 1 active and expired
+	activeRound := contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusActive,
+		StartTime: now.Add(-11 * 24 * time.Hour),
+		EndTime:   now.Add(-1 * time.Hour),
+	}
+	_ = contestRepo.SaveRound(ctx, activeRound)
+
+	// Entrant character was in Guild A when entering
+	winner := corecharacter.Character{ID: "char-transferred", Name: "TransferredHero", Money: 1000}
+	_ = charRepo.Update(ctx, winner)
+
+	entries := make([]contest.ContestEntry, 5)
+	entries[0] = contest.ContestEntry{
+		ID:            "entry-winner",
+		Round:         1,
+		CharacterID:   winner.ID,
+		CharacterName: winner.Name,
+		GuildID:       "guild-A",
+		GuildName:     "Guild A",
+		Title:         "Winning Piece",
+		Votes:         100,
+		CreatedAt:     now.Add(-10 * time.Hour),
+	}
+	_ = contestRepo.SaveEntry(ctx, entries[0])
+
+	for i := 1; i < 5; i++ {
+		c := corecharacter.Character{ID: fmt.Sprintf("filler-%d", i), Name: fmt.Sprintf("Filler%d", i)}
+		_ = charRepo.Update(ctx, c)
+		entries[i] = contest.ContestEntry{
+			ID:            fmt.Sprintf("entry-filler-%d", i),
+			Round:         1,
+			CharacterID:   c.ID,
+			CharacterName: c.Name,
+			GuildID:       fmt.Sprintf("guild-filler-%d", i),
+			GuildName:     fmt.Sprintf("FillerGuild%d", i),
+			Title:         fmt.Sprintf("Filler %d", i),
+			Votes:         10 - i,
+			CreatedAt:     now.Add(time.Duration(-i) * time.Hour),
+		}
+		_ = contestRepo.SaveEntry(ctx, entries[i])
+	}
+
+	// Between entry and settlement, character transferred to Guild B!
+	guildSvc.charGuilds[winner.ID] = contest.GuildRef{
+		ID:   "guild-B",
+		Name: "Guild B",
+	}
+
+	res, err := svc.SettleContest(ctx, false)
+	if err != nil {
+		t.Fatalf("SettleContest failed: %v", err)
+	}
+	if !res.PrizesDistributed {
+		t.Fatalf("expected prizes distributed")
+	}
+
+	// Acceptance Criterion: 応募時A→決済時BでAが受賞GPを得る
+	if guildSvc.points["guild-A"] != 700 {
+		t.Errorf("expected 700 GP awarded to guild-A (entry-time affiliation), got %d", guildSvc.points["guild-A"])
+	}
+	if guildSvc.points["guild-B"] != 0 {
+		t.Errorf("expected 0 GP awarded to guild-B (post-transfer affiliation), got %d", guildSvc.points["guild-B"])
+	}
+
+	// Acceptance Criterion: 結果・殿堂に応募時ギルド名を表示する
+	if res.WinnerLegend == nil || res.WinnerLegend.GuildName != "Guild A" {
+		t.Errorf("expected legend GuildName to be entry-time 'Guild A', got %+v", res.WinnerLegend)
+	}
+}
+
+func TestSettlement_GuildPointAttribution_UnaffiliatedMemberJoinedLater(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+	guildSvc := newMockGuildService()
+
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	svc, _ := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithGuildService(guildSvc),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+
+	activeRound := contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusActive,
+		StartTime: now.Add(-11 * 24 * time.Hour),
+		EndTime:   now.Add(-1 * time.Hour),
+	}
+	_ = contestRepo.SaveRound(ctx, activeRound)
+
+	// Entrant character was unaffiliated when entering
+	winner := corecharacter.Character{ID: "char-lone", Name: "LoneHero", Money: 1000}
+	_ = charRepo.Update(ctx, winner)
+
+	entries := make([]contest.ContestEntry, 5)
+	entries[0] = contest.ContestEntry{
+		ID:            "entry-lone-winner",
+		Round:         1,
+		CharacterID:   winner.ID,
+		CharacterName: winner.Name,
+		GuildID:       "", // Unaffiliated at entry
+		GuildName:     "",
+		Title:         "Lone Masterpiece",
+		Votes:         100,
+		CreatedAt:     now.Add(-10 * time.Hour),
+	}
+	_ = contestRepo.SaveEntry(ctx, entries[0])
+
+	for i := 1; i < 5; i++ {
+		c := corecharacter.Character{ID: fmt.Sprintf("filler-unaff-%d", i), Name: fmt.Sprintf("Filler%d", i)}
+		_ = charRepo.Update(ctx, c)
+		entries[i] = contest.ContestEntry{
+			ID:            fmt.Sprintf("entry-filler-unaff-%d", i),
+			Round:         1,
+			CharacterID:   c.ID,
+			CharacterName: c.Name,
+			Title:         fmt.Sprintf("Filler %d", i),
+			Votes:         10 - i,
+			CreatedAt:     now.Add(time.Duration(-i) * time.Hour),
+		}
+		_ = contestRepo.SaveEntry(ctx, entries[i])
+	}
+
+	// Between entry and settlement, character joined Guild C!
+	guildSvc.charGuilds[winner.ID] = contest.GuildRef{
+		ID:   "guild-C",
+		Name: "Guild C",
+	}
+
+	res, err := svc.SettleContest(ctx, false)
+	if err != nil {
+		t.Fatalf("SettleContest failed: %v", err)
+	}
+	if !res.PrizesDistributed {
+		t.Fatalf("expected prizes distributed")
+	}
+
+	// Acceptance Criterion: 応募時無所属→決済時加入でGPを誤付与しない
+	if guildSvc.points["guild-C"] != 0 {
+		t.Errorf("expected 0 GP awarded to guild-C, got %d", guildSvc.points["guild-C"])
+	}
+	if res.WinnerLegend == nil || res.WinnerLegend.GuildName != "" {
+		t.Errorf("expected empty GuildName in legend for unaffiliated entrant, got %+v", res.WinnerLegend)
+	}
+}
+
+func TestSettlement_GuildPointAttribution_DisbandedGuildNotMisdelivered(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+	guildSvc := newMockGuildService()
+
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	svc, _ := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithGuildService(guildSvc),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+
+	activeRound := contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusActive,
+		StartTime: now.Add(-11 * 24 * time.Hour),
+		EndTime:   now.Add(-1 * time.Hour),
+	}
+	_ = contestRepo.SaveRound(ctx, activeRound)
+
+	winner := corecharacter.Character{ID: "char-disbanded", Name: "DisbandedHero", Money: 1000}
+	_ = charRepo.Update(ctx, winner)
+
+	entries := make([]contest.ContestEntry, 5)
+	entries[0] = contest.ContestEntry{
+		ID:            "entry-disbanded-winner",
+		Round:         1,
+		CharacterID:   winner.ID,
+		CharacterName: winner.Name,
+		GuildID:       "guild-old-1",
+		GuildName:     "Phoenix",
+		Title:         "Phoenix Reborn",
+		Votes:         100,
+		CreatedAt:     now.Add(-10 * time.Hour),
+	}
+	_ = contestRepo.SaveEntry(ctx, entries[0])
+
+	for i := 1; i < 5; i++ {
+		c := corecharacter.Character{ID: fmt.Sprintf("filler-dis-%d", i), Name: fmt.Sprintf("Filler%d", i)}
+		_ = charRepo.Update(ctx, c)
+		entries[i] = contest.ContestEntry{
+			ID:            fmt.Sprintf("entry-filler-dis-%d", i),
+			Round:         1,
+			CharacterID:   c.ID,
+			CharacterName: c.Name,
+			Title:         fmt.Sprintf("Filler %d", i),
+			Votes:         10 - i,
+			CreatedAt:     now.Add(time.Duration(-i) * time.Hour),
+		}
+		_ = contestRepo.SaveEntry(ctx, entries[i])
+	}
+
+	// Guild old-1 is disbanded before settlement
+	guildSvc.disbanded["guild-old-1"] = true
+
+	// Later, another guild with the SAME NAME ("Phoenix") is created under a new ID "guild-new-2"
+	// (guildSvc tracks points by ID)
+
+	res, err := svc.SettleContest(ctx, false)
+	if err != nil {
+		t.Fatalf("SettleContest failed: %v", err)
+	}
+	if !res.PrizesDistributed {
+		t.Fatalf("expected prizes distributed")
+	}
+
+	// Acceptance Criterion: 削除済み対象を別の同名ギルドへ誤配送しない
+	if guildSvc.points["guild-old-1"] != 0 {
+		t.Errorf("expected 0 points recorded for disbanded guild-old-1, got %d", guildSvc.points["guild-old-1"])
+	}
+	if guildSvc.points["guild-new-2"] != 0 {
+		t.Errorf("expected 0 points misdelivered to new guild-new-2, got %d", guildSvc.points["guild-new-2"])
+	}
+	// Result still retains entry-time GuildName
+	if res.WinnerLegend == nil || res.WinnerLegend.GuildName != "Phoenix" {
+		t.Errorf("expected legend GuildName to remain 'Phoenix', got %+v", res.WinnerLegend)
 	}
 }

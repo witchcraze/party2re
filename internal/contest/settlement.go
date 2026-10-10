@@ -89,8 +89,8 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 					return err
 				}
 
-				if s.guilds != nil {
-					if err := s.guilds.AddGuildPoints(txCtx, entries[i].CharacterID, prize.GuildPoints); err != nil {
+				if s.guilds != nil && entries[i].GuildID != "" {
+					if err := s.guilds.AddPoints(txCtx, entries[i].GuildID, int64(prize.GuildPoints)); err != nil {
 						return err
 					}
 				}

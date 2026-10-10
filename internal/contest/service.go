@@ -279,12 +279,25 @@ func (s *Service) EnterContest(
 			return ErrDuplicateTitle
 		}
 
+		var guildRef GuildRef
+		if s.guilds != nil {
+			ref, ok, err := s.guilds.GuildOf(txCtx, characterID)
+			if err != nil {
+				return err
+			}
+			if ok {
+				guildRef = ref
+			}
+		}
+
 		now := s.nowFunc()
 		entry = ContestEntry{
 			ID:            id.New(),
 			Round:         prepRound.Round,
 			CharacterID:   char.ID,
 			CharacterName: char.Name,
+			GuildID:       guildRef.ID,
+			GuildName:     guildRef.Name,
 			Title:         title,
 			PhotoID:       photo.ID,
 			ImageURL:      photo.ImageURL,
