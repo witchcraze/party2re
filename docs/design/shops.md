@@ -159,6 +159,28 @@ The secret shop stocks the 8 authentic rare items specified in legacy `secret.cg
 - **Inspect (`POST /characters/{id}/secretshop/inspect`)**: Lore background of Himitsuji.
 - **Puff-Puff (`POST /characters/{id}/secretshop/puffpuff`)**: Authentic humorous interaction (*"パフパフ♥ パフパフ♥ パフパフ♥"*). No HP/MP healing or stat changes.
 
+### 7.4. Purchase Transport and Remaining Migration
+
+The `secretshop_purchase` Gateway command uses the existing purchase service and
+HTTP-owned response/dialogue composition. It requires explicit `item_id` and
+`quantity`; [the command contract](../architecture/client-agent-api.md#secretshop-purchase-command-contract)
+defines strict input, rejection and refresh recovery behavior. All five REST
+routes remain registered: status GET and talk, inspect, puff-puff and purchase
+POSTs. Their defaults and behavior remain unchanged. Selected SecretShop
+observations/navigation and route retirement remain separate work under #947;
+the production town scene does not advertise purchase merely because its adapter
+is installed.
+
+Legacy `secret.cgi:34–82` dispatches `かう` to `kau` and `ぱふぱふ` to `pafupafu`.
+The former maps to `PurchaseItem` through the Gateway or retained purchase REST
+route; the latter remains the puff-puff REST operation. Shared talk/inspect and
+`item.cgi:57–69` secret entry transition remain pending their own reconciliation
+and replacements. Legacy `kau` buys one item; current Go permits 1..99 and routes
+bulk quantities to depot. That existing implementation difference is not an
+approved replacement for the legacy single-purchase rule or changed by this
+transport adapter. Depot overflow behavior remains an independent specification
+gap in #1139.
+
 ---
 
 ## 8. Commerce & Trading System Boundaries

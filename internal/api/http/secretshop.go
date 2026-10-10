@@ -20,13 +20,6 @@ type SecretShopService interface {
 	PurchaseItem(ctx context.Context, characterID string, itemID string, quantity int) (*secretshop.PurchaseResult, error)
 }
 
-// WithSecretShop configures the SecretShopService for the HTTP handler.
-func WithSecretShop(service SecretShopService) Option {
-	return func(h *Handler) {
-		h.secretshop = service
-	}
-}
-
 type secretShopPurchaseRequest struct {
 	ItemID   string `json:"item_id"`
 	Quantity int    `json:"quantity"`
@@ -146,15 +139,16 @@ func (h *Handler) handleSecretShopPurchase(w http.ResponseWriter, r *http.Reques
 			return
 		}
 
-		message := fmt.Sprintf("%sメェ〜。持ってけメェ〜", result.Item.Name)
-		if result.TransferredToDepot {
-			message = fmt.Sprintf("%sは%sメェ〜の預かり所の方に投げましたメェ〜", result.Item.Name, char.Name)
-		}
-		writeJSON(w, http.StatusOK, secretShopPurchaseResponse{
-			PurchaseResult: result,
-			NPCMessage:     message,
-		})
+		writeJSON(w, http.StatusOK, toSecretShopPurchaseResponse(result, char.Name))
 	})
+}
+
+func toSecretShopPurchaseResponse(result *secretshop.PurchaseResult, charName string) secretShopPurchaseResponse {
+	message := fmt.Sprintf("%sメェ〜。持ってけメェ〜", result.Item.Name)
+	if result.TransferredToDepot {
+		message = fmt.Sprintf("%sは%sメェ〜の預かり所の方に投げましたメェ〜", result.Item.Name, charName)
+	}
+	return secretShopPurchaseResponse{PurchaseResult: result, NPCMessage: message}
 }
 
 func (h *Handler) writeSecretShopError(w http.ResponseWriter, err error) {

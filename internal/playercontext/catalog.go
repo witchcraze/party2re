@@ -227,8 +227,8 @@ var DefaultCatalog = append(append([]ActionDefinition{
 		ID:             "secretshop_purchase",
 		Label:          "ヒミツの店で購入",
 		Category:       "shop",
-		OperationID:    "purchaseSecretShopItem",
-		RequiredParams: []string{"item_id"},
+		OperationID:    "executeCharacterAction",
+		RequiredParams: []string{"item_id", "quantity"},
 		RequiredGates:  GateSleepCheck | GateCooldownCheck | GateCurrencyCheck | GateLocationCheck,
 	},
 	{
