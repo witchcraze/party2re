@@ -62,7 +62,7 @@ func TestCatalog_GatewayContracts(t *testing.T) {
 
 func TestCatalog_GatewayRetirementIndependent(t *testing.T) {
 	spec := loadOpenAPISpec(t)
-	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw"}
+	retired := []string{"startAdventure", "requestEmergencyRescue", "homeSleep", "homeWake", "postCharactersIdBankDeposit", "postCharactersIdBankWithdraw", "purchaseSecretShopItem"}
 	for _, methods := range spec.Paths {
 		for method, op := range methods {
 			if slices.Contains(retired, op.OperationID) {
@@ -87,6 +87,18 @@ func TestCatalog_GatewayRetirementIndependent(t *testing.T) {
 				t.Errorf("unmigrated %s escaped operation validation", act.ID)
 			}
 		}
+	}
+}
+
+func TestCatalog_SecretShopGatewayContract(t *testing.T) {
+	act, ok := playercontext.GetAction("secretshop_purchase")
+	if !ok || act.OperationID != "executeCharacterAction" || !slices.Equal(act.RequiredParams, []string{"item_id", "quantity"}) {
+		t.Fatalf("purchase not bound to explicit Gateway inputs: %+v", act)
+	}
+	then, params := gatewayContract(t, loadOpenAPISpec(t), act.ID)
+	quantity := params.Properties["quantity"]
+	if params.Type != "object" || string(params.AdditionalProperties) != "false" || !slices.Equal(then.Required, []string{"params"}) || !slices.Equal(params.Required, act.RequiredParams) || len(params.Properties) != 2 || params.Properties["item_id"].Type != "string" || quantity.Type != "integer" || quantity.Format != "int64" || quantity.Minimum.String() != "-9223372036854775808" || quantity.Maximum.String() != "9223372036854775807" {
+		t.Fatalf("incorrect purchase contract: %+v / %+v", then, params)
 	}
 }
 

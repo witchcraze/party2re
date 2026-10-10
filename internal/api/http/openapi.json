@@ -1624,6 +1624,48 @@
             "if": {
               "properties": {
                 "action": {
+                  "const": "secretshop_purchase"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "type": "object"
+            },
+            "then": {
+              "properties": {
+                "params": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "item_id": {
+                      "description": "Explicit SecretShop catalog item ID; the service validates current availability.",
+                      "type": "string"
+                    },
+                    "quantity": {
+                      "description": "Explicit quantity; the existing service accepts 1..99 and rejects other integers. No REST quantity default is applied.",
+                      "format": "int64",
+                      "maximum": 9223372036854775807,
+                      "minimum": -9223372036854775808,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "item_id",
+                    "quantity"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "params"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "const": "adventure_start"
                 }
               },
