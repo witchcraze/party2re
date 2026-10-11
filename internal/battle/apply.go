@@ -121,6 +121,12 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 
 			s.applyMonsterKills(&tc.Character, tc.Inventory, equip, req.BattleResult, req.DefeatedEnemies)
 			s.applyMaoCount(&tc.Character, req)
+
+			if s.monsterRecorder != nil && len(req.DefeatedEnemies) > 0 {
+				if err := s.recordDefeatedMonsters(tc.Context, []string{charID}, req.DefeatedEnemies, req.Habitat); err != nil {
+					return err
+				}
+			}
 		}
 
 		resp.UpdatedCharacters[charID] = tc.Character
@@ -134,9 +140,6 @@ func (s *Service) applySingleCharacterWithRunner(ctx context.Context, charID str
 	}
 
 	if req.BattleResult.Outcome == corebattle.OutcomeWin && len(req.DefeatedEnemies) > 0 {
-		if s.monsterRecorder != nil {
-			s.recordDefeatedMonsters(ctx, []string{charID}, req.DefeatedEnemies, req.Habitat)
-		}
 		if tames := s.processMonsterTaming(ctx, finalChar, finalInv, finalEquip, req.DefeatedEnemies); len(tames) > 0 {
 			resp.MonsterTames[charID] = tames
 		}
@@ -260,6 +263,15 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 			}
 		}
 
+		// Phase 6: Record defeated monsters (Rank 8) if won
+		if req.BattleResult.Outcome == corebattle.OutcomeWin && len(req.DefeatedEnemies) > 0 {
+			if s.monsterRecorder != nil {
+				if err := s.recordDefeatedMonsters(txCtx, sortedIDs, req.DefeatedEnemies, req.Habitat); err != nil {
+					return err
+				}
+			}
+		}
+
 		finalChars = chars
 		finalInvs = invs
 		finalEquips = equips
@@ -270,9 +282,6 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 	}
 
 	if req.BattleResult.Outcome == corebattle.OutcomeWin && len(req.DefeatedEnemies) > 0 {
-		if s.monsterRecorder != nil {
-			s.recordDefeatedMonsters(ctx, sortedIDs, req.DefeatedEnemies, req.Habitat)
-		}
 		recipientID := req.RecipientCharacterID
 		if recipientID == "" && len(sortedIDs) > 0 {
 			recipientID = sortedIDs[0]
@@ -289,7 +298,7 @@ func (s *Service) applyMultiCharacterWithProvider(ctx context.Context, sortedIDs
 	return resp, nil
 }
 
-func (s *Service) recordDefeatedMonsters(ctx context.Context, charIDs []string, defeatedEnemies []corebattle.Participant, habitat string) {
+func (s *Service) recordDefeatedMonsters(ctx context.Context, charIDs []string, defeatedEnemies []corebattle.Participant, habitat string) error {
 	for _, enemy := range defeatedEnemies {
 		if strings.HasPrefix(enemy.ID, "char-") || strings.HasPrefix(enemy.ID, "user-") {
 			continue
@@ -320,9 +329,12 @@ func (s *Service) recordDefeatedMonsters(ctx context.Context, charIDs []string, 
 			GoldReward:       enemy.GoldReward,
 		}
 		for _, cID := range charIDs {
-			_ = s.monsterRecorder.RecordMonsterDefeat(ctx, cID, rec)
+			if err := s.monsterRecorder.RecordMonsterDefeat(ctx, cID, rec); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 func (s *Service) applyResourceUpdates(char *corecharacter.Character, charID string, res corebattle.PartyBattleResult) {

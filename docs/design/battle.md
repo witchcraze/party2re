@@ -181,13 +181,15 @@ The application-layer bridge (`internal/battle`) standardizes combat participant
   1. **Rank 2 (Character)**: Multiple participating characters are locked in ascending lexicographical order (`sort.Strings`).
   2. **Rank 3 (Inventory & Equipment)**: Inventories are locked in ascending character order; equipment slots are loaded.
   3. **Rank 5 (Depot)**: When item drops exceed inventory capacity, depots are locked in ascending character order.
+  4. **Rank 8 (Monster Book & Collection Completion)**: Upon victory, defeated PvE monsters are recorded into `character_monster_book` and milestone Hall of Fame induction (`comp_mon`) is finalized within the reward settlement transaction boundary before commit.
 - **Resource Mutation**: Updates current HP, MP, and fatigue (`Tired`). Fallen members survive with HP = 1. Transient combat status effects (`RemainingStatus`) are preserved and propagated in the response.
 - **Consumed Item Persistence**: Items used during combat (`ConsumedItems`) are decremented from character inventory. If an equipped item was consumed or broken (e.g. 祈りの指輪), its equipment slot is automatically unequipped (`equip.Unequip`) simultaneously.
 - **Reward Distribution**: Adds gold, calculates experience growth via `progression.ApplyExperienceWithJobFull` (strictly propagating errors to abort the transaction if character progression calculation fails), awards monster crystal drops (`character.Crystal` clamped to 999,999), and routes item drops to designated recipients (`RecipientDrops`, `RecipientCharacterID`, or primary character default) preventing drop duplication in multi-character parties. If inventory is full, overflow drops are routed to character depot (`DepotDeliveries`). If the depot is at capacity (`ErrDepotFull`) or unconfigured, undeposited items are strictly tracked in `LostDrops` without fabricating phantom deliveries.
-- **Milestone Counters**:
+- **Milestone Counters & Monster Book Settlement**:
   - `MonsterKills` (`kill_m` / 撃退数): Upon victory, surviving characters (`RemainingHP > 0`) evaluate each defeated non-player enemy with `IsStrongEnemy(enemyStrong, playerStrong)` (`_battle.cgi:230-235`). Increments `char.MonsterKills` for each defeated strong enemy.
   - `MaoCount` (`mao_c` / 魔王カウント): Upon completing the Stage EX demon king unseal event (`UnsealDemonKing = true` or clearing 封印の地 / `stage-20`), increments `char.MaoCount` for all participating non-NPC characters (`vs_monster.cgi:218`).
-- **Single vs Multi-Character Transactions**: Single-character battles route through `economy.TransactionRunner` (`ExecuteTransaction`). Multi-character party battles route through `TransactionProvider` (`RunInTx`).
+  - `MonsterDefeatRecorder` (Monster Book & Legend Induction): Defeated PvE monsters are recorded into `character_monster_book`. When the defeat triggers the 100% completion milestone, mandatory Hall of Fame induction (`RecordLegend`) is executed within the same ambient transaction. Any persistence failure or induction error rolls back all rewards (HP/MP, EXP, Gold, item drops, depot transfers) atomically, preventing desynchronized partial commits. Optional monster taming is resolved outside the transaction without altering the settlement outcome.
+- **Single vs Multi-Character Transactions**: Single-character battles route through `economy.TransactionRunner` (`ExecuteTransaction`). Multi-character party battles route through `TransactionProvider` (`RunInTx`). Ambient transactions propagate to all repositories (`ExecutorFromContext`).
 
 ## Boundaries & Invariants
 

@@ -2,6 +2,7 @@ package battle_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -586,6 +587,120 @@ func TestApplyPostBattleResult_RecordMonsterDefeat(t *testing.T) {
 	}
 	if len(recorder.calls) != 0 {
 		t.Errorf("expected 0 recorder calls on defeat, got %d", len(recorder.calls))
+	}
+}
+
+func TestApplyPostBattleResult_RecordMonsterDefeat_Single_ErrorPropagated(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	invRepo := newMockInvRepo()
+	equipRepo := newMockEquipRepo()
+	txProv := &mockTxProvider{}
+	txRunner, _ := economy.NewService(charRepo, invRepo, economy.WithTransactionProvider(txProv))
+
+	char := corecharacter.Character{
+		ID:    "char-single-err",
+		Name:  "勇者",
+		Level: 1,
+		Money: 100,
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100, MP: 50, MaxMP: 50},
+	}
+	_ = charRepo.Update(ctx, char)
+	inv, _ := coreinventory.New("char-single-err")
+	_ = invRepo.Save(ctx, inv)
+
+	expectedErr := errors.New("monster book legend induction failed")
+	recorder := &mockMonsterDefeatRecorder{err: expectedErr}
+
+	svc := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithEquipmentRepository(equipRepo),
+		battle.WithTransactionProvider(txProv),
+		battle.WithTransactionRunner(txRunner),
+		battle.WithMonsterDefeatRecorder(recorder),
+	)
+
+	req := battle.ApplyPostBattleRequest{
+		CharacterIDs: []string{"char-single-err"},
+		BattleResult: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeWin,
+			RemainingHP: map[string]int{"char-single-err": 90},
+			TotalReward: corebattle.Reward{Currency: 50, Experience: 30},
+		},
+		DefeatedEnemies: []corebattle.Participant{
+			{ID: "monster-001", Name: "スライム", HP: 10, MaxHP: 10},
+		},
+		Habitat: "平原",
+	}
+
+	_, err := svc.ApplyPostBattleResult(ctx, req)
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected error %v, got %v", expectedErr, err)
+	}
+
+	// Verify rollback: character money was not updated
+	c, _ := charRepo.FindByID(ctx, "char-single-err")
+	if c.Money != 100 {
+		t.Errorf("expected money to remain 100, got %d", c.Money)
+	}
+}
+
+func TestApplyPostBattleResult_RecordMonsterDefeat_Multi_ErrorPropagated(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	invRepo := newMockInvRepo()
+	equipRepo := newMockEquipRepo()
+	txProv := &mockTxProvider{}
+
+	char1 := corecharacter.Character{
+		ID:    "char-m1",
+		Name:  "勇者1",
+		Level: 1,
+		Money: 100,
+		Stats: corecharacter.Stats{HP: 100, MaxHP: 100},
+	}
+	char2 := corecharacter.Character{
+		ID:    "char-m2",
+		Name:  "勇者2",
+		Level: 1,
+		Money: 200,
+		Stats: corecharacter.Stats{HP: 80, MaxHP: 80},
+	}
+	_ = charRepo.Update(ctx, char1)
+	_ = charRepo.Update(ctx, char2)
+	inv1, _ := coreinventory.New("char-m1")
+	inv2, _ := coreinventory.New("char-m2")
+	_ = invRepo.Save(ctx, inv1)
+	_ = invRepo.Save(ctx, inv2)
+
+	expectedErr := errors.New("multi monster record failed")
+	recorder := &mockMonsterDefeatRecorder{err: expectedErr}
+
+	svc := battle.NewService(
+		battle.WithCharacterRepository(charRepo),
+		battle.WithInventoryRepository(invRepo),
+		battle.WithEquipmentRepository(equipRepo),
+		battle.WithTransactionProvider(txProv),
+		battle.WithMonsterDefeatRecorder(recorder),
+	)
+
+	req := battle.ApplyPostBattleRequest{
+		CharacterIDs: []string{"char-m1", "char-m2"},
+		BattleResult: corebattle.PartyBattleResult{
+			Outcome:     corebattle.OutcomeWin,
+			RemainingHP: map[string]int{"char-m1": 90, "char-m2": 70},
+			TotalReward: corebattle.Reward{Currency: 100, Experience: 50},
+		},
+		DefeatedEnemies: []corebattle.Participant{
+			{ID: "monster-001", Name: "スライム", HP: 10, MaxHP: 10},
+		},
+		Habitat: "平原",
+	}
+
+	_, err := svc.ApplyPostBattleResult(ctx, req)
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected error %v, got %v", expectedErr, err)
 	}
 }
 

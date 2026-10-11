@@ -130,7 +130,7 @@ Faithfully reproduces legacy Party2 (`lib/_add_monster_book.cgi`, `lib/collectio
 ## Combat & Boss Raid Integration
 
 - **PvE Combat & Adventure Crawl**:
-  - Upon winning battles in single-character or multi-character adventures (`ApplyPostBattleResult`), defeated PvE participants are recorded for all party members with the stage habitat name (`internal/adventure/settlement.go`).
+  - Upon winning battles in single-character or multi-character adventures (`ApplyPostBattleResult`), defeated PvE participants are recorded for all party members with the stage habitat name within the reward settlement transaction (`economy.TransactionRunner` / `TransactionProvider`). If monster collection recording or required Hall of Fame induction fails, the entire battle settlement rolls back atomically to prevent desynchronized rewards or duplicate retries.
   - Opponents prefixed with `char-` or `user-` (PvP/arena battles) are excluded from the Monster Book.
 - **King Sealing Boss Battles**:
   - Multi-member party sealing battles (`StartSealingBattle`) and solo boss challenges (`ChallengeBoss`) register all defeated boss monsters with habitat `"封印戦"`.
