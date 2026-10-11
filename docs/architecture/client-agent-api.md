@@ -765,9 +765,13 @@ deadlines. Storage errors remain errors, never false absence of an active run.
 Retain the shared success/rejection and refresh-failure envelopes. Add owned
 command-receipt observation so a lost response/commit-unknown can be resolved
 even after personal exit; GET context alone is not proof of whether a specific
-command committed. Receipt lookup verifies actor ownership before payload
-access. Explicit same-identity retry, once implemented, returns the original
-domain result; clients never automatically replay POST or mint a new identity
+command committed. Receipt lookup authenticates the viewer and verifies ownership
+of the recorded executing actor before payload access, without requiring current
+membership or a live Run. Receipts remain queryable after Run deletion. Explicit
+same-identity/same-input retry, once implemented, returns the original domain
+result even after exit; foreign receipts and changed input for that identity are
+rejected. Only a new command validates current membership, state and version.
+Clients never automatically replay POST or mint a new identity
 to retry an unknown outcome. Version conflicts request fresh observation.
 Unfinished mandatory effects keep entry blocked and expose explicit recovery;
 optional Replay/cleanup failures do not change a committed settlement result.

@@ -150,18 +150,24 @@ rely only on a PlayerContext menu hiding their entry controls.
 ### One command, one bounded SQL transaction
 
 1. Authenticate the owned actor at both transport and service boundaries. Scope
-   lookup by run and actor, including that actor's historical exit receipts.
-2. Lock the shared run as Rank 0, then every affected Character at Rank 2 in
-   ascending ID order. Acquire all required inventory/equipment (Rank 3), jobs
+   receipt lookup by immutable run/command identity and recorded executing actor;
+   verify that actor belongs to the authenticated player before exposing results.
+2. Check canonical input against the actor-owned durable receipt before requiring
+   a live run, current membership or version. A committed duplicate returns its
+   original result even after exit or run deletion; different input with the same
+   identity conflicts. Reject another actor's receipt access. Receipt identity,
+   input and ownership evidence survive run deletion without a live-run join or
+   cascading deletion.
+3. Only for a new command, lock the shared run as Rank 0, then every affected
+   Character at Rank 2 in ascending ID order. Acquire all required inventory/equipment (Rank 3), jobs
    (Rank 4), depots (Rank 5) and secondary records (Rank 8) in the existing
    hierarchy, sorting same-rank owners. Declare the complete affected set before
    invoking adapters; never settle A through Rank 8 then start locking B at
    Rank 2. Do not acquire a run lock from a character-locked callback. Register
    the new repository methods with the lock linter during implementation.
-3. Check an actor-scoped command identity and canonical input against a durable
-   receipt. A committed duplicate returns its recorded result without executing
-   effects; reuse with different input conflicts. Check duplicates before stale
-   version rejection, but never bypass present authentication/receipt ownership.
+   Recheck the receipt after serialization to catch a concurrent commit before
+   validating new-command preconditions. If the run disappeared during lookup,
+   resolve the retained receipt first; never recreate a run to retry a command.
 4. For a new command validate current membership/role under lock, expected
    version, phase, action/target/resources and server-clock eligibility.
    Apply the bounded player action and applicable
@@ -212,8 +218,9 @@ physical active-state cleanup so old retries cannot create another payout.
 | Idle deadline passed | Owner command performs the verified idle transition under the same locks; GET only reports due/pending recovery |
 
 An absent receipt is only definitive after the potentially committing
-transaction has resolved; reconciliation/retry must serialize on the same run
-and unique command identity. Clients still use GET-only recovery, without
+transaction has resolved. New-command execution serializes on the live run and
+unique command identity; finalized receipt lookup/deduplication remains possible
+without the run. Clients still use GET-only recovery, without
 automatic POST replay; an explicit retry with the same identity can be safe
 only once the new receipt contract is actually implemented.
 
