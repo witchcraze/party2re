@@ -20,9 +20,7 @@ During Version 1.0 reconstruction, the original Party2 project defines game beha
 
 `api/openapi.json` and `internal/api/http/openapi.json` are generated bundles. Keep both because one is distributed as documentation and the other is embedded in the server; edit their modular sources.
 
-Maintain documents when a change makes their explanations outdated. A routine implementation change does not require edits to every design/status document or an entry in the frozen inventory. Permanent documents explain contracts and decisions; detailed completion history is available in GitHub/Git. Evidence links for meaningful decisions remain with the owning explanation.
-
-Current missing coverage and major limitations belong in STATUS or linked open Issues. Preserve known differences and unverified areas in their responsible design/audit documents; a frozen inventory is not current coverage certification.
+Use the [documentation maintenance rule](../.agents/rules/02-documentation-sync.md) for updates, additions and scoped consolidation. Permanent documents explain contracts and decisions; Issues/PRs and Git preserve detailed work history. Keep meaningful evidence and unresolved gaps with their owning explanation or linked Issue. A frozen inventory is not current coverage certification.
 
 When auditing documents, inventory files and references first, then compare statements with the appropriate authority above. Preserve correct legacy rules when Go differs and record the implementation gap with its source evidence. Label proposed contracts as planned, and obsolete designs as historical. Consolidate duplicate API tables and implementation inventories into their existing source of truth rather than maintaining multiple independent copies.
 
