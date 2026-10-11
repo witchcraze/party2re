@@ -92,7 +92,7 @@ graph TD
 - [`party-system.md`](party-system.md) — 1–4 player co-op adventure lobbies, speed configuration, `need_join` condition gates, and synergy bonuses.
 - [`pvp.md`](pvp.md) — Colosseum real-time 2..8 player Bet & Split arena, 9 team colors, and multi-round combat resolution.
 - [`gvg.md`](gvg.md) — Guild vs Guild 2..8 player live matches, GP prize pools, target wins, and 7-tier championship medals.
-- [`replay.md`](replay.md) — Combat turn log recording, step-by-step playback, and match history queries.
+- [`replay.md`](replay.md) — Original adventure scenes, personal archive ownership, public-read boundary, and current turn-log gaps.
 
 ### 4. Commerce, Storage & Economy
 - [`depot.md`](depot.md) — Central storage hub (up to 500 slots), tiered expansion, direct item delivery, and dual-source consumption.
