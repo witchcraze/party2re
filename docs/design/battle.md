@@ -218,14 +218,135 @@ and counter decrement separately. Generic arbitrary extra turns are unsupported.
 | Summons, transformed jobs, ordinary boss payloads | `_add_party:9793–9828` creates ordered allies with rolled stats; `add_boss:600–633` initializes full supplied attributes and gem cost. NPC curse and specter/absorber hooks (`116–135,471–491`) change state/roster/resources | #1333 certifies behavior and registers missing implementations; #1329 round-trips identities, order, helper ownership and consumed payloads without rerolling |
 | End-processing and rewards | ActionCounter records damage/heal/status/attribute facts, not merely elapsed turns. TurnEndProcessor queues work flushed at player `1164` and NPC `139`; death-mark follow-up runs at player `1155–1161` | Finish effects before commit; no persisted closures. #1329 saves resulting facts/receipts; #1197/#1198/#1225 own consumption/earnings corrections |
 
-Production adoption is gated by [#1332](https://github.com/witchcraze/party2re/issues/1332)
-(resumable lifetime state) and [#1333](https://github.com/witchcraze/party2re/issues/1333)
-(dynamic catalog/ordinary boss certification and bounded native follow-ups),
-alongside #1188 supply. The latter explicitly includes untraced item/book/gem,
-random-call, summon and special-field callbacks; these rows do not certify their
-formulas. #1329 must test uninterrupted versus serialized/reloaded continuation
-at each supported boundary, keeping batch producers unchanged. #1330 cannot
-advertise a callback whose direct or transitive effect lacks native coverage.
+### Dynamic effects and catalog admission
+
+An action is available only when its **whole reachable effect** has an evidenced
+native implementation. Admission covers callback-specific targets, resource
+changes, resets, death/revival, roster mutations and durable side effects, not
+just its first damage/heal instruction. A gem's shop/synthesis availability is
+not certification of its battle effect. Unknown effect kinds must not become
+ordinary attacks, and an empty effect list must not spend CMP as a successful
+custom skill. This gate applies equally to player, helper and ordinary enemy
+actions, including random or delegated invocation. It does not authorize
+permanent omission of original choices: the missing behavior remains a cutover
+prerequisite. Preserve original order, repeated draws and accepted no-effect
+outcomes once the entry is supported.
+
+Evidence below uses `party2/lib/` at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`. Numeric item/gem/job references are
+provenance identifiers, not authorization to reuse distinctive display names.
+The complete finite entry reconciliation and named unresolved helper branches
+are recorded in [#1333](https://github.com/witchcraze/party2re/issues/1333).
+
+| Dispatch | Enduring behavior / effect boundary | Evidence |
+| --- | --- | --- |
+| Equipped extensions | Ten entries require the designated held item. Effects include helper-stat combination, agility burst/reset, reflection sharing with party healing, interception, summoning, incense, job-dependent projectile/poison, healing with regeneration, extended combat state, and full revival with curse. Their costs are respectively 30,30,12,5,30,5,2,37,10,0 MP. Admission uses the previous-job loop even though these are equipment entries | `_skill.cgi:124–145,260–283,321–477` |
+| Books | 27 callbacks: healing, revival, reflection, proportional defense/agility/attack buffs, cures, damage/status, copying another participant and full party healing. Selected heal/buff/damage base values receive ×1.5 in the library field; this is not a universal book multiplier. Full single revival and full party healing seal the caster's magic outside that field | `_skill.cgi:479–736` |
+| Weapon seals | Active seals 7/8/9 require previous-job SP ≥90 and respectively 40/27/40 MP, with all-enemy base damage 180 breath /160 magic /180 magic. These categories are not evidence of elemental fire/water/light. Seal 10 invokes ordinary attack twice; passive seals 11/12 follow their attack hooks | `_data.cgi:2209–2230`; `_skill.cgi:106–112,219–224,260–283` |
+| Combat tools | Only usage-category 1 supplies the tool command, including outside an encounter. Dispatch defaults a missing argument to self, then the particular callback interprets it as participant, job, destination or floor. Clear the held tool only when the callback returns without an error; accepted no-effect results can consume it. MP restoration, revival, temporary effects, summoning, random skills, reset, copying, capture and travel are distinct effects | `_skill.cgi:150–151,758–764`; `_data.cgi:619–2083` |
+| Custom gems | Run gem slots in order and stop when the actor dies. A slot can change HP/MP/CMP, tension/hit, status/temporary/extended state, roster or appearance, invoke another callback, or enqueue end processing. CMP cost belongs to the custom action; do not substitute each gem's catalog cost as an ordinary MP charge | `_skill.cgi:288–309`; `_data.cgi:2087–2198`; `_battle.cgi:787–789` |
+| Random skills | The general random helper draws a job from 1 through the last indexed player job, then redraws extended entries until a non-extended callback is selected; an empty job yields no effect. Tool 84 instead draws **any** current-job entry, including extended entries. Both restore MP only when the callback lowered it, preserving MP increases and other side effects. Neither applies ordinary SP/admission/MP charging for the selected callback | `_skill.cgi:9773–9787`; `_data.cgi:1255–1267,2171` |
+| Delegated gems | Gem 86 tries the current job's last extended callback before the previous job. Finding an extended callback returns “handled” even when SP/MP prevents execution, so it does not fall back in that case; job 73 has a separate 1-MP stat increase. Gems 87–92 prefer a calling previous job, otherwise current job, and invoke its named command/first non-command non-extended callback without normal SP or listed MP charging | `_data.cgi:2174–2180`; `_skill.cgi:10841–10918` |
+| Two-target book use | Validate both encounter participants, allow the same target twice, require MP ≥floor(book cost×1.5), execute first then second. Actor death after the first stops the second **and** skips the later MP charge/book return. If the actor survives, subtract the internal cost and return the book to storage after the second. Ordinary one-target book invocation does not return it | `_skill.cgi:6868–6897,10538–10557`; native ID authorization remains mandatory |
+
+#### Resources, revival and roster changes
+
+HP recovery and MP recovery are separate operations. `_mp_h:9150–9187`
+requires a living resolved ally, applies effect modifiers, random variation and
+tension, clears rage, enforces the maximum and special-item exclusions, and has
+a sanctuary overflow penalty. MP drain uses `_st_down:9252–9290`, with its own
+immunity/floor/cap rules; it is not damage against HP. Immediate values become
+committed state; no reload may draw their random result again.
+
+Revival requires its own callback predicate. Tool 6 restores full MaxHP;
+book 173 succeeds with probability 1/2 at floor(MaxHP×0.5); book 196 restores
+full MaxHP and may seal its caster. Gems 63/64 restore half/full MaxHP, gem 65
+draws independently for each fallen ally, and gem 66 restores every other ally
+before invoking the actor's defeat handling and setting actor MP to zero.
+Extension item 261 revives fallen, not-yet-cursed allies to full HP and adds
+curse. These are not ordinary healing of living allies. The helper-dependent
+fallen-self action retains the separate rules in the action-family matrix:
+living helper required, fallen self at half MaxHP, otherwise fallen ally at
+1 HP with actor MP **strictly greater than 40**, helper HP halved, immobilization
+and a three-operation ban (`_skill.cgi:4910–4930`). Death-triggered revival and
+reset/reward ordering remain part of `_battle.cgi:defeat:28–142`, not a blanket
+post-battle “keep 1 HP” correction.
+
+Summoned allies append to the ordered roster with the actor's team, hit 95 and
+tension 1; their five stat pairs are independently rolled from supplied bases
+using floor(base×(0.9+rand(0.3))), then ×1.2/floor when the summoner holds item
+165 (`_add_party:9793–9828`). Caller-specific duplicate checks remain distinct.
+Dismissal marks the helper dead and changes its team; member persistence removes
+dead NPC/helpers but keeps fallen players (`_battle.cgi:453–493,518–529`). This
+means a later command can call again after removal. Do not replace helper death
+with permanent character deletion or discard a fallen player who can self-revive.
+Enemy summoning uses the current stage's appearance pool, hard/party scaling,
+full supplied payload and custom gem cost; it refuses once the member count is
+at least ten (`_skill.cgi:9834–9931`). An NPC caster appends it to its own side;
+a player caster appends it to opponents. Gem 82 adds an at-most-one-enemy gate.
+
+Transformation has three separate meanings. Between-encounter form switching
+changes current job first, otherwise previous job (82↔300, forward 10 MP,
+reverse zero). Book 211 copies current/maximum HP/MP/stats, job/SP pairs and
+appearance from an eligible participant, floors copied MP at 50, immobilizes
+the actor and permanently bans repeat use for that battle state. Tool 214
+chooses another participant randomly and copies the same data without those
+book-only additions. Tool 168 restores the previous job and its earned SP from
+the actor's job history. Gem 100 changes appearance only. None is permission to
+overwrite the persistent character's underlying job/stat history indiscriminately
+(`_skill.cgi:173–217,700–724`; `_data.cgi:1716–1748,1888–1912,2188–2193`).
+
+#### Ordinary NPC and stage-boss state
+
+Ordinary bosses retain current/previous job and their independent SP, equipment,
+HP/MP/CMP and supplied maxima, hit/tension, temporary/extended state, abilities,
+custom skill and ordered gem slots. Preserve multiple bosses and branch-selected
+rosters, not just the last monster in a stage catalog. `add_boss:600–633` rolls
+HP/MP/attack/defense/agility/CMP with
+floor(value×(0.9+rand(0.3)+(party size−2)×0.1)); explicitly supplied maxima win.
+Custom CMP cost is floor(sum(slot costs)×rate), with rate 1/1.1/1.2 for one/two/three
+occupied slots, counting duplicates. Freeze roster selection and rolls once.
+
+The ordinary stage sources are `stage/0.cgi` through `stage/27.cgi`; stage 15
+copies the current party into bosses, stage 25 randomly selects one of three
+ordinary rosters, and stage 26 selects its seasonal ordinary roster. Read the
+ordinary `@bosses` branch separately from `@ex_bosses`/`@exx_bosses` and `king*.cgi`.
+Stage 24's **ordinary floor 10** invokes `createExBossField` despite its name
+(`vs_monster.cgi:143–151`): party base maxima are capped at HP/MP 999 and stats
+255, doubled for over-level participants, then reset. The default named field
+in `add_ex_boss:722` belongs to the later EX branch; do not apply it to ordinary
+boss initialization merely because `stage/24.cgi` declares `$ex_field`.
+
+NPC action selection (`_npc_action.cgi:158–322`) builds current/previous-job
+lists with independent gates and custom gems, then randomly selects an admitted
+entry. It does not reuse the player's preferred-action policy or equipment
+extension list. NPC confusion cure is 1/3 versus the player's 1/5; paralysis and
+sleep cures skip action on that operation. The special boss-field and named
+field extra cure draws are separate branches. NPC poison/regeneration/rage run
+inside the normal-action block (`324–361`); item/field/ability tails outside it
+(`364–495`) can still run after an incapacitated action. Burn is nonlethal,
+capped at 200, and clears temporary/status/extended state; a grave-field helper
+can be restored or recreated. These tails cannot be represented by one generic
+“end turn” hook with the same eligibility for every actor.
+
+The shared NPC curse hook releases its stored count of 400-base all-enemy
+attacks **before** action selection, clears the payload and rebuilds living
+opponents (`116–135`); damage can reduce that count (`_skill.cgi:8896–8902`).
+Specter absorption is a distinct tail (`471–491`). Neither hook's existence
+proves ordinary-stage reachability: the numeric stage files do not directly
+initialize these payloads, and the producer `skill_505` is outside the ordinary
+player-job draw. Keep raid producers outside this scope; any future catalog
+entry reaching a shared hook must certify its producer and consumer together.
+
+Production adoption still requires #1188 supply, #1332 resumable lifetimes,
+#1337 MP resources, #1338 revival, #1339 summons, #1340 transformation and #1342
+ordinary NPC payloads. Named specification gates remain #1341 book/purchase
+transactions, #1343 shared modifiers/special fields, #1344 transitive job
+callbacks and #1345 travel transitions; their untraced branches are not certified
+by the finite entry list. #1346 implements the shared support/admission gate.
+#1329 must compare uninterrupted with serialized/reloaded continuation at each
+supported boundary. #1330 cannot advertise a direct or indirect effect until
+those gates are met.
 
 ### 2. Elemental Field Multipliers (`field.go`)
 - **Matching Element**: $+30\%$ bonus damage (multiplier $1.30$).

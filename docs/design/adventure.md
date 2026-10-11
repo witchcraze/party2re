@@ -238,15 +238,31 @@ its other lifecycle work does not wait for transport implementation.
 
 ### Remaining reconciliation gates
 
+Tool arguments are not universally combat targets. Original category-1 tools
+include destinations, numeric floors, recorded jobs, participants and
+parameter-free commands (`lib/_data.cgi:1055–1361,1614–1789,1879–1924`).
+Stage-changing tools assign a destination and floor 1; tool 83 increments the
+floor only below 9, tool 107 assigns floor 10, and tool 150 explicitly resets
+and rebuilds the encounter at a selected floor 1–10. The first two kinds do not
+themselves call encounter replacement. Their remaining dispatch/next-operation
+interaction is the named gate [#1345](https://github.com/witchcraze/party2re/issues/1345),
+not permission to invent immediate teleport or silently discard old enemies.
+Tool 107 is distinct from per-person chest allowance item 215 (#1196).
+Original accepted no-effect consumption and selection errors must remain
+distinct from native typed-ID authorization failures (#1197/#1329).
+
 The operation matrix establishes the family boundary. Production cutover still
-requires #1188 job supply, [#1332](https://github.com/witchcraze/party2re/issues/1332)
-effect lifetimes and [#1333](https://github.com/witchcraze/party2re/issues/1333)
-dynamic callback/ordinary boss certification and its bounded implementation
-follow-ups. #1198 implements Try success/exit disposition and #1196/#1197 item rules.
-The boundary evidence is not full skill/formula parity; unknown facts cannot
-be filled with the batch resolver's automatic choices. Shared requirements are
-owned by [Battle](battle.md#explicit-action-resumption-requirements); commands
-and owned observations by
+requires #1188 job supply, #1332 effect lifetimes and the effects/transactions
+decomposed by [#1333](https://github.com/witchcraze/party2re/issues/1333) into
+#1337–#1346. #1342 preserves full ordinary NPC/boss payloads, multiple/conditional
+rosters and stage 24's ordinary-floor special field; #1346 enforces support for
+the whole reachable effect in both discovery and execution. Indirect invocation
+must not bypass that gate or narrow the original random pool to implemented
+effects. Missing original choices remain cutover blockers. #1198 implements
+Try success/exit disposition and #1196/#1197 item rules.
+Shared [dynamic-effect rules](battle.md#dynamic-effects-and-catalog-admission)
+and [resumption requirements](battle.md#explicit-action-resumption-requirements)
+are owned by Battle; commands and owned observations by
 [Client/Agent API](../architecture/client-agent-api.md#planned-normal-adventure-commands-and-recovery).
 
 The following sections describe the **current batch crawl** and existing models.
