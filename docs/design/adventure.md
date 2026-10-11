@@ -2,9 +2,103 @@
 
 ## Overview
 
-The Adventure system clean-room reconstructs the authentic adventure exploration and dungeon crawl mechanics from legacy Party2 (`quest.cgi`, `vs_monster.cgi`, `_npc_action.cgi`).
+The Adventure system targets a clean-room reconstruction of the operation-driven
+adventure in legacy Party2 (`quest.cgi`, `vs_monster.cgi`, `_battle.cgi`).
 
-In early Go reconstructions, a fictional "1-hour expedition timer" (`AdventureDuration = time.Hour`) was introduced, turning adventures into an idle-game waiting mechanic. Per Issue #478, this fictional timer and all scheduled action delays have been completely eliminated. Adventures now execute and resolve immediately as multi-participant, 10-floor dungeon crawls with authentic Floor 11 Treasure Rooms.
+The fictional one-hour expedition timer was removed by #478 / PR #583. The
+replacement currently resolves all battles, floor advances and treasure
+inspections in one start request. This is an implementation gap, not equivalent
+to the original adventure or approval to omit player actions. #478 requested
+strategy selection, explicit advance and exit; #1014 / PR #1020 connected the
+existing service to the Gateway without deciding new domain rules. The user
+directed restoration of player-command progression in
+[#1323](https://github.com/witchcraze/party2re/issues/1323). Removing an invented
+one-hour wait does not remove the original per-actor action interval.
+
+## Original interaction contract and reconstruction target
+
+References in this section use `party2/` at legacy revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`. These are source-inspected requirements,
+not a claim of full CGI execution or complete skill/formula parity.
+
+- **Admission and progress are separate.** A normal quest is created at floor 0
+  (`lib/quest.cgi:579–586`). The first `すすむ` requires the leader; subsequent
+  advances are not universally leader-only. Living enemies prevent advancing
+  (`lib/vs_monster.cgi:35–82`). Advancing creates the next encounter; it does not
+  resolve the entire battle or automatically continue to another floor.
+- **Players choose actions.** `lib/_skill.cgi:set_action` derives available
+  actions from the actor's job, learned skills, resources and current situation.
+  `lib/_battle.cgi:561–659` parses an action and target and checks actor state.
+  A server-selected skill/lowest-HP target for every ally is not a replacement
+  for this choice. Some skills have additional-action behavior; this contract
+  does not reduce every command to exactly one hit.
+- **Actions have an interval.** `read_member` assigns the room's speed to
+  `act_time` (`lib/_battle.cgi:450–468`); a registered action is rejected when
+  elapsed time since that actor's previous action is below that interval
+  (`641–644`). The accepted action path updates actor timing and persists the
+  shared state (`1169–1178`). This is not a round barrier waiting for all players
+  and not an animation-only delay. A clock deadline becoming due does not by
+  itself execute an action.
+- **NPC responses are bounded by the submitted operation.** The eligible action
+  path invokes `npc_turn` unless suppressed (`lib/_battle.cgi:1169–1171`).
+  `lib/_npc_action.cgi:89–155` selects at most one living, interval-ready enemy
+  for its action and rotates its order. Advancing and treasure-room operations
+  disable this response (`lib/vs_monster.cgi:37–53`). Repeated GETs do not execute
+  combat; no background auto-combat or full agility-sorted party round is implied.
+- **Treasure and exit remain individual operations.** `しらべる` selects a chest
+  and checks the actor's allowance/item rules (`lib/_npc_action.cgi:5–85`);
+  entry to the treasure room does not auto-open everyone's chest. `にげる`
+  distinguishes an actual participant from a spectator, removes that actor and
+  applies participant exit effects (`lib/_battle.cgi:1184–1278`). Different
+  participants can leave at different times; one exit is not a party-wide finish.
+- **Scene capture follows actual submissions.** `party.cgi:20–27` records an
+  eligible operation, including submitted commentary, using the pre-operation
+  normal-adventure location. Rejected operations and refreshes do not record.
+  Personal copying precedes possible capture from the exit operation. Content,
+  visibility and copy rules belong to [Replay](replay.md).
+
+The dispatch reconciliation for this interaction boundary is:
+
+| Original operation | Current native path | Reconstruction responsibility |
+| --- | --- | --- |
+| `つくる` / `さんか` (`quest.cgi:189–199`) | Party `CreateParty` / `JoinParty`; solo `StartStage` immediately executes | Keep admission separate from combat and preserve actor/roster validation |
+| `けんがく` | Party detail reads exist; no equivalent active normal-adventure view is established | Reconcile admission and actor-dependent observation under #948; spectators are not combatants or archive recipients |
+| `すすむ` | `CrawlSession.AdvanceFloor`, called in an automatic loop | Separate encounter creation from action resolution; persist progress between requests |
+| Registered battle action and target (`_skill.cgi:set_action`) | `ResolvePartyBattle` automatically selects all combatants' actions until termination | Add resumable explicit-action processing, reusing battle effects and the participant adapter |
+| `しらべる` | `ExamineTreasure`, automatically invoked for each participant | Expose actor-selected inspection; reuse #1196 for allowance/key correctness |
+| `にげる` | Whole-crawl settlement; Party lobby `LeaveParty` is not an equivalent active-combat exit | Restore individual exit/settlement while remaining participants can continue |
+| Submitted comments / `ささやき` / `すくしょ` | No equivalent normal-adventure command contract established | Reconcile separately under #948; private whispers and manual screenshots are not automatic Replay payloads |
+| Refresh | Current reads and Gateway context | Observe without advancing, granting rewards, recording a scene or renewing game deadlines |
+
+The reconstruction must retain enough authoritative state between operations
+to resume the same encounter: roster and roles, living/fallen participants,
+resources, statuses/effects and their lifetimes, chosen encounter, field state,
+consumed items, actor/NPC timing, progression and earned-reward/exit facts.
+Persisting only HP/MP and restarting the batch resolver loses these facts.
+Current `CrawlSession` is request-local; it is not a production run store.
+
+Native storage and recovery must be established before replacing production
+starts; [#1325](https://github.com/witchcraze/party2re/issues/1325) owns that
+decision and the resulting bounded runtime implementation scopes. Existing
+Party Valkey lobbies and SQL audit rows are not a resumable
+normal-adventure session. Durable assets, consumption and settlement/history
+require SQL transaction and retry protection; the current lobby lock is not
+cross-store atomicity. In solo, settlement currently commits before adventure
+history writes (#1224). In Party, SQL settlement/logging is inside `runInTx`,
+but Valkey status/readiness mutations are outside SQL rollback. Neither path
+proves durable command-by-command recovery.
+
+Restore shared action processing, resumable adventure/individual settlement,
+then verified Gateway commands and owned observations as bounded implementation
+units under #1323. Keep unrelated combat modes unchanged and retain current REST
+routes until #948 verifies replacements. EX progression (#1191), inspection
+allowances (#1196), consumed-item carry (#1197), earned-reward handling (#1198),
+exit fatigue (#1221), chronicle records (#1222) and transaction repair (#1224)
+remain separately owned; no full parity for these is certified here.
+
+The following sections describe the **current batch crawl** and existing models.
+They are not authorization to preserve automatic battles, advance, inspection
+or exit in the reconstructed interactive adventure.
 
 ---
 
@@ -99,7 +193,7 @@ Multiplayer co-op quest rooms allow up to 4 adventurers to form an expedition lo
 
 ### Room Settings
 - **Capacity**: 1 to 4 characters (`max_members`).
-- **Speed Settings**: Configures animation and action log pacing:
+- **Speed Settings**: Original per-actor action interval in seconds (not only animation/log pacing); currently stored by Party but not enforced by the batch crawl:
   - `3`: さくさく (Fast)
   - `18`: まったり (Relaxed) — **Default** ($def\_spd = 18$)
   - `25`: じっくり (Deliberate)

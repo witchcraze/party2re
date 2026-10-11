@@ -45,7 +45,13 @@ A participant in combat possesses combat attributes:
 ## Resolution Algorithms & Formulas
 
 ### 1. Multi-Turn Party Battle Loop (`ResolvePartyBattle`)
-Replicating the original Party2 CGI combat engine (`_battle.cgi`, `_skill.cgi`):
+The current Go batch resolver runs the following automatic algorithm. It is not
+equivalent to the original player's command-by-command normal-adventure combat
+(`_battle.cgi`, `_skill.cgi`); that missing interaction is tracked by
+[#1323](https://github.com/witchcraze/party2re/issues/1323) and specified in
+[Adventure](adventure.md#original-interaction-contract-and-reconstruction-target).
+Reconstruction should reuse combat effects without treating the batch action
+selection, agility round order or automatic termination as the interaction rule.
 
 1. **Round Initialization (up to 100 turns)**:
    - Collect all living combatants across all teams.

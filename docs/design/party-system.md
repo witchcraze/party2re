@@ -4,6 +4,15 @@
 
 The Party system (`冒険中のパーティー`, `quest.cgi`, `party.cgi`) is one of the foundational multiplayer mechanics in Party2. It allows up to 4 players to form a cooperative adventuring party to tackle stages and dungeons together, sharing experience, gold, and item drops, enhanced by cooperative synergy bonuses.
 
+The following lifecycle/combat descriptions reflect the current Go batch
+implementation, not full legacy parity. Starting currently resolves every floor
+and automatically inspects treasure. Restoration of player-selected actions,
+per-actor intervals, explicit advances/inspections and individual exits is owned
+by [Adventure's interaction contract](adventure.md#original-interaction-contract-and-reconstruction-target)
+and [#1323](https://github.com/witchcraze/party2re/issues/1323). A lobby leave is
+not the original active-combat exit, and a lobby roster/readiness record is not
+a resumable battle state.
+
 ---
 
 ## Game Rules & Domain Concepts
@@ -12,7 +21,7 @@ The Party system (`冒険中のパーティー`, `quest.cgi`, `party.cgi`) is on
 - **Party Leader**: The creator of the party is designated as leader.
 - **Name / Title**: 1 to 50 runes, descriptive of the expedition.
 - **Capacity**: 1 to 4 characters (`max_members`).
-- **Speed**: Configurable animation/log pacing (`quest.cgi`):
+- **Speed**: Original per-actor action interval in seconds (`_battle.cgi:468,641–644`), currently stored but not enforced by the batch crawl:
   - `3`: さくさく (Fast)
   - `18`: まったり (Relaxed) [Default]
   - `25`: じっくり (Deliberate)
@@ -101,9 +110,9 @@ The Party architecture implements a two-tier storage boundary (RFC #356, Issue #
    - Co-op battle simulation is executed in memory.
    - Character progression updates (EXP, level-ups, OverLevel), remaining HP, Gold, and inventory item rewards are atomically committed in MariaDB.
    - Durable audit records are persisted in `party_adventure_logs` (retained permanently for expedition history and audit trails).
-   - Upon successful database commit, the ephemeral Valkey lobby is disbanded and cleaned up.
+   - Current execution resets the Valkey lobby to `recruiting` and clears readiness inside the transaction callback, before SQL commit. It does not disband the lobby or persist an interactive battle session.
 
 3. **Settlement Reward & Lifecycle Error Propagation**:
    - Currency and reward applications in `settlePostBattle` and `settleFallback` validate all rewards (guarding against invalid negative gold or crystal amounts).
-   - Any failure during post-battle character reward persistence, adventure log saving, party status reset, or member ready-state cleanup immediately propagates an error and triggers clean transaction rollback, preventing partial reward allocation or desynchronized party state.
-   - If an adventure transaction aborts prior to commit, a compensatory rollback in `defer` reverts the party status back to `recruiting`.
+   - Failures during post-battle persistence, log saving or lobby/readiness mutations propagate from the transaction callback. SQL rollback protects SQL writes; it does not roll back preceding Valkey mutations or guarantee synchronized lobby state.
+   - The compensatory `defer` attempts to reset status only while `result.Outcome` is empty. It is best-effort and cannot guarantee recovery after every failure or SQL commit error.

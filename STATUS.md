@@ -31,6 +31,13 @@ The Go project contains the foundational systems, core combat, the main game fea
 
 See [`ROADMAP.md`](ROADMAP.md) for remaining milestones and [open Issues](https://github.com/witchcraze/party2re/issues) for detailed scope/dependencies.
 
+**Critical Adventure gap:** Solo and Party starts currently auto-resolve all
+battles/floors and treasure inspection in one request. Player-selected combat,
+the original action intervals and individual exits are missing. Restore these
+under [#1323](https://github.com/witchcraze/party2re/issues/1323) before adapting
+Replay (#1320); the connected Gateway start and passing batch tests do not prove
+interactive gameplay parity. See [the required interaction](docs/design/adventure.md#original-interaction-contract-and-reconstruction-target).
+
 1. **Client/Agent Gateway**: Finish command coverage and retire REST routes after verified replacements exist (#947–#950). The initial Deposit → Sleep → explicit Wake → Adventure loop is covered by stateful HTTP integration tests, including GET-only recovery after context refresh failures; the broader E2E framework remains separate.
 2. **Headless E2E Gameplay Simulation**: Deterministic multi-turn gameplay loop verification (Issue #650).
 3. **Client Presentation & Web UI**: Browser client and Server-Driven UI (Issue #140).

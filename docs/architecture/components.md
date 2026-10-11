@@ -97,6 +97,16 @@ Battle engine operates independently of callers (adventures, arena, GvG, bosses,
 
 **Responsibility:** Define and execute adventure-oriented game flows, dungeon crawl loops, encounter progressions, and stage reward distributions.
 
+Current solo and cooperative starts resolve an entire crawl in one request;
+`CrawlSession` has no production persistence between player operations. This
+omits the original command/action-interval/individual-exit boundary and is a
+reconstruction defect tracked by
+[#1323](https://github.com/witchcraze/party2re/issues/1323), not an approved
+substitute for interactive combat. The required behavior and actual settlement
+limitations are owned by [Adventure](../design/adventure.md#original-interaction-contract-and-reconstruction-target).
+The existing battle adapter, SQL settlement and Party lobby are reusable pieces,
+not proof of a resumable run or cross-store atomicity.
+
 ### Common Foundation Packages
 
 - **ID Generation (`internal/id`)**: Centralized 16-byte (32 hex characters) cryptographically secure identifiers (`id.New()`, `id.Sort2(a, b)`).

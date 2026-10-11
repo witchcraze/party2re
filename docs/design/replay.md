@@ -181,9 +181,14 @@ not evidence of an active automatic retention policy or a legacy rule.
 
 The [current OpenAPI sources](../api/paths/replays.json) describe guarded replay
 detail and the empty recent feed; owned recipient history is in
-[`character.json`](../api/paths/character.json). The adventure scene/lifecycle
-adaptation remains tracked by
-[#1320](https://github.com/witchcraze/party2re/issues/1320).
-The latter must reconcile the already approved immediate solo/party execution
-with operation-driven recording; it must not silently fabricate historical
-commands, chat scenes, exit times or an all-modes replay producer.
+[`character.json`](../api/paths/character.json). Operation-driven capture and
+personal latest-slot publication remain tracked by
+[#1320](https://github.com/witchcraze/party2re/issues/1320), with interactive
+normal-adventure restoration owned by
+[#1323](https://github.com/witchcraze/party2re/issues/1323).
+The current immediate solo/party crawl omits player operations and distinct exit
+times; it is an implementation gap, not approval to replace the original Replay
+with a floor/battle-result digest. Restore real submissions and actor exit facts
+under the [Adventure interaction contract](adventure.md#original-interaction-contract-and-reconstruction-target)
+before enabling those producers. Keep the current guarded reads in place. Do not
+fabricate historical commands, chat, exit times or an all-modes replay producer.
