@@ -201,7 +201,23 @@ $gpoint = int( $gpoint * 0.8 );
 ## Persistence & Transaction Ordering
 
 - Guild operations obey the deterministic lock acquisition hierarchy (Rank 0 -> 8):
-  - Character wallet deduction (Rank 2: `characters`) occurs before guild records (Rank 7: `guilds`, `guild_members`).
+  - Character row lock & wallet deduction (Rank 2: `characters`) occurs before guild records (Rank 7: `guilds`, `guild_members`).
+- **Active Affiliation Serialization Across Concurrent Creation, Join & Approval (Issue #1298)**:
+  - While characters may have multiple concurrent pending applications (`is_pending = true`), each character can hold **at most one active affiliation** (`is_pending = false`).
+  - All operations establishing active affiliation (`Create`, `Join`, `ApproveApplication`, and pending promotion via `TransferLeadership`) execute within ambient transactions (`s.runInTx`) and acquire a Rank-2 row lock on the affected character (`LockCharacterForUpdate`) **before** acquiring Rank-7 locks on the guild (`GetGuildForUpdate`), strictly preserving the deterministic lock acquisition hierarchy (Rank 2 -> Rank 7) and eliminating deadlocks.
+  - Active affiliation is verified under the exclusive lock (`SELECT guild_id FROM guild_members WHERE character_id = ? AND is_pending = FALSE`). Storage errors from repository reads are never swallowed or converted to "unaffiliated", but propagated immediately to the caller.
+  - Interleaved concurrent requests for the same character (concurrent `Create`, concurrent `ApproveApplication` across different guilds, `Create` vs `ApproveApplication`, or `Join` vs `Create`) are serialized: exactly one succeeds and the competitor rolls back cleanly with `ErrCharacterAlreadyInGuild`, leaving zero duplicate rows and zero duplicate fees.
+  - On leader departure (`Leave`), if a successor candidate is pending but has already become an active member of another guild in the meantime, they are disqualified from succession; subsequent candidates are evaluated, and if no valid candidates remain, the guild is disbanded cleanly (`DisbandGuild`).
+- **Existing Multi-Affiliation Data Detection & Repair Policy**:
+  - Anomaly Detection Query:
+    ```sql
+    SELECT character_id, COUNT(*) AS active_count
+    FROM guild_members
+    WHERE is_pending = FALSE
+    GROUP BY character_id
+    HAVING COUNT(*) > 1;
+    ```
+  - Operator Repair Policy: In the event historical concurrency bugs produced multiple active affiliations for a character, operators must manually investigate the true affiliation (e.g. earliest `joined_at` or active leadership role). The invalid active affiliation must be demoted to pending (`is_pending = TRUE`) or removed from `guild_members`. Automatic deletion of guilds or confiscation of character/guild points and assets is strictly prohibited.
 - **Membership Administration, Customization, Removal & Succession Serialization (Unit of Work)**:
   - Member departure (`Leave`), character-cleanup departure (`RemoveCharacterFromGuild`), leadership transfer (`TransferLeadership`), expulsion (`Kick`), applicant rejection (`RejectApplication`), role title assignment (`AssignCustomRole`), applicant approval (`ApproveApplication`), manual disbandment (`Disband`), guild customization (`UpdateColor`, `UpdateNotice`, `ChangeMark`, `ChangeWallpaper`), and inactive guild cleanup (`DisbandInactiveGuilds`) use ambient transaction propagation (`s.runInTx`).
   - Pessimistic locking (Rank 7): `GetGuildForUpdate` acquires exclusive locks (`SELECT ... FOR UPDATE`) on the guild record in `guilds` and all its member rows in `guild_members` ordered deterministically by `joined_at ASC, character_id ASC`.
