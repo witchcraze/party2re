@@ -52,7 +52,8 @@ Closes #
 <!-- Assess which explanations this change makes outdated under
      .agents/rules/02-documentation-sync.md. List affected owner documents,
      or briefly explain why no update is needed. The frozen inventory is
-     historical reference; do not append per-Issue/PR completion records. -->
+     historical reference; do not append per-Issue/PR completion records.
+     Briefly explain meaningful consolidation or necessary growth and its owner. -->
 
 - [ ] Documentation impact assessed
 - [ ] Affected explanations/contracts updated in this PR, or no update needed (explain below)

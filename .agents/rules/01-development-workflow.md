@@ -59,8 +59,7 @@ Keep `main` as the sole integration branch. Feature branches must be short-lived
   - If prerequisites are missing, explicitly document them in the Issue body along with concrete architectural options (e.g. Option A, Option B) and note that specification alignment is required before implementation.
 - **Study Existing Implementations:** Before generating new logic from scratch, actively search the codebase (using `fd`, `grep`, or IDE tools) for existing features that solve similar problems. Adopt the same architectural patterns, variable naming conventions, and file structures.
 - **Transparent Tool Usage:** When analyzing codebases, prefer native tools (`view_file`, `grep_search`). Do NOT execute complex or opaque bash scripts (like `sed`, `awk`, or `perl` one-liners) to parse code without explicitly explaining your intent to the user first. Ensure transparency in your actions.
-- **Mandatory Auth Wrappers**: All HTTP handlers exposing character actions or mutating gameplay entities must use standard auth wrappers (`withAuthenticatedCharacter`, `withAuthenticatedCharacterAndJSON`). Never decode `req.CharacterID` directly without verifying player ownership. The mechanical AST linter (`internal/api/http/auth_lint_test.go`) enforces this check.
-- **Legacy `@actions` Reconciliation**: When migrating or reviewing a feature originating from a legacy CGI script (`/home/witchcraze/dev/party2`), extract the full list of actions/subroutines and verify 1:1 mapping against new Go domain methods & HTTP endpoints. Any omitted or superseded action must have documented rationale.
+- **HTTP Authorization / Legacy Reconciliation**: For affected work, MUST apply the [auth wrapper rules](06-security.md#3-mandatory-auth-helper-and-common-wrapper-anti-bypass-rule) and [legacy dispatch reconciliation](00-migration-constraints.md#4-legacy-cgi-actions-array--subroutine-reconciliation); those files own the requirements.
 - **Pre-Commit Active Issue Re-Check (対応漏れ再確認)**:
   - Before committing changes and opening a PR upon task completion, agents and developers MUST re-inspect the active issue (`gh issue view <issue-number>`).
   - Cross-check every item in Acceptance Criteria, Scope, and specific requirements against the implemented code, tests, and documentation to verify zero omissions.
@@ -86,14 +85,14 @@ For non-trivial behavior:
 ## 4. Definition of Done
 A ticket is complete only when applicable:
 - Acceptance criteria are satisfied.
-- Active issue is re-checked prior to commit and all requirements/acceptance criteria are verified with zero omissions.
+- Active issue re-check above is complete.
 - Behavior is covered by tests.
 - For features touching P2P or shared-resource state mutations (Bank, Auction, Flea Market, Delivery, Guild, Boss), a paired concurrency stress test using the standardized test harness (`testutil.RunConcurrentStressTest` or `testutil.RunRace`) is implemented and passes with zero deadlocks and conserved assets.
 - Unified local checks (`make check`) pass completely.
 - Architecture remains valid and no unrelated changes were introduced.
 - Dead Code and Orphaned Definitions Elimination: When replacing, refactoring, or superseding domain methods, repository interfaces, constants, or DTOs, all unused precursors MUST be eliminated. Leaving obsolete or zero-caller methods, unused top-level constants, or dead DTO fields behind is prohibited. Mechanically enforced by Go AST linters (`internal/architecture/deadcode_lint_test.go`, `internal/architecture/unused_definitions_lint_test.go`). Intentional schema/OpenAPI compatibility fields and enum sets must be annotated with `//lint:ignore <reason>`.
 - Silent Error Suppression Prohibition: Database repository, persistent store, container mutation, and currency mutation calls must never discard errors via blank identifiers (`_ =`, `_, _ =`, `val, _ :=`) or unassigned expression statements. All errors must be propagated to the caller or handled within transactional rollback boundaries. If a call is strictly best-effort or compensatory (e.g., defer rollback, post-commit cache eviction), it must be annotated with `//lint:ignore error-swallow <reason>`. Mechanically enforced by Go AST linter (`internal/architecture/error_swallow_lint_test.go`; see [`docs/development/ast-linters.md`](../../docs/development/ast-linters.md)).
-- Owning documentation is updated when the change makes its explanations outdated, under `02-documentation-sync.md`; no per-ticket history or frozen-inventory append is required.
+- Owning documentation is current and affected explanations are consolidated under [`02-documentation-sync.md`](02-documentation-sync.md).
 - PR template requirements are satisfied.
 
 ## 5. Token-Budget Strategy

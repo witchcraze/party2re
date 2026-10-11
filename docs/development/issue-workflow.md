@@ -8,25 +8,11 @@ Use the repository's Issue template. Do not create ad-hoc tickets.
 
 The template captures the work itself: goal, scope, acceptance criteria, tests, and relevant architectural/dependency considerations. Repository-wide rules belong in `AGENTS.md` and should not be duplicated unnecessarily in every ticket.
 
-The Issue should contain:
-
-- problem or goal;
-- scope;
-- acceptance criteria;
-- test requirements;
-- architecture considerations;
-- out-of-scope items;
-- dependencies.
-
 Issue bodies describe the work and its acceptance criteria; implementation tools and providers are not ticket requirements. Size labels indicate complexity without selecting an executor.
 
 ## Documentation follows changed explanations
 
-The Issue captures the goal, observable requirements and acceptance criteria. Permanent documents explain enduring rules, contracts and decisions; detailed work history belongs in GitHub/Git.
-
-During implementation, assess which explanations the change makes outdated and update their owning documents in the same PR, using the [documentation rule](../../.agents/rules/02-documentation-sync.md#3-update-affected-explanations-within-pr) and [documentation map](../README.md). Game-rule changes affect design documents, responsibility/contract changes affect architecture documents, and procedure changes affect developer documentation. STATUS and ROADMAP change when their major capabilities, gaps or remaining milestones change.
-
-A routine implementation change can leave these explanations accurate. In that case, briefly state that no documentation update is needed. The frozen reconstruction inventory is historical reference, not a completion log to append to each PR. Preserve specification/decision evidence links where they support an explanation, and keep missing coverage and unverified behavior discoverable.
+Use the [documentation rule](../../.agents/rules/02-documentation-sync.md) and [documentation map](../README.md) to update owning explanations and consolidate affected duplicates in the same PR. The PR's documentation assessment records meaningful consolidation, necessary growth or why no update is needed; no separate maintenance report is required.
 
 Before committing, re-inspect the active Issue (`gh issue view <issue-number>`) and cross-check each acceptance criterion against the implementation, validation and any affected documentation.
 
@@ -36,16 +22,7 @@ All code changes go through a PR.
 
 Use the repository's PR template without replacing or bypassing required sections.
 
-The PR template records the change, its verification, and documentation checklist. Mandatory agent rules remain defined by `AGENTS.md`.
-
-A PR should:
-
-- reference its Issue;
-- explain the behavior change;
-- identify tests;
-- assess documentation impact and update affected explanations/contracts, or explain why none needs updating;
-- remain within the Issue scope.
-
+Fill the template with the issue-scoped change, validation and documentation assessment. Mandatory agent rules remain defined by `AGENTS.md`.
 
 ## Dependent PRs and merge verification
 
