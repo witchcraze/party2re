@@ -171,11 +171,12 @@ Roster priority uses the existing repository order (`joined_at ASC`, then
 3. **Database Cascade Invariant**:
    - Character deletion (`character_repository.Delete`) no longer runs raw `UPDATE guilds SET leader_character_id = NULL`. Guild leadership and dissolution are handled strictly through the domain cleanup hook prior to physical character deletion, preserving the invariant that every existing guild has a valid leader.
 
-**Implementation status**: Implemented in #1006 and hardened in #1036. `removeMemberInternal` evaluates
-the entire remaining roster for both succession and dissolution without a pending filter.
-Roster selection and departure mutations are fully serialized under Rank-7 row locks (`GetGuildForUpdate`),
-preventing concurrent departure races that could leave orphan guilds. Unselected applicants remain pending;
-sole-member departure disbands the guild and publishes server news post-commit.
+**Implementation status**: Implemented in #1006 and hardened in #1036 and #1298. Succession evaluates
+the remaining roster for candidate successors in rank order (title containing "ギルマス" first, then roster order).
+For each candidate, a Rank-2 lock on candidate character (`LockCharacterForUpdate`) is acquired before Rank-7 guild lock (`GetGuildForUpdate`),
+re-verifying active affiliation to prevent concurrent duplicate affiliations. If a candidate is disqualified,
+subsequent candidates are evaluated; if no eligible candidates remain or on sole-member departure, the guild is cleanly disbanded
+and publishes server news post-commit.
 
 ### 20-Day Inactivity Automatic Disbandment (`auto_delete_guild_day = 20`)
 
@@ -201,13 +202,29 @@ $gpoint = int( $gpoint * 0.8 );
 ## Persistence & Transaction Ordering
 
 - Guild operations obey the deterministic lock acquisition hierarchy (Rank 0 -> 8):
-  - Character wallet deduction (Rank 2: `characters`) occurs before guild records (Rank 7: `guilds`, `guild_members`).
+  - Character row lock & wallet deduction (Rank 2: `characters`) occurs before guild records (Rank 7: `guilds`, `guild_members`).
+- **Active Affiliation Serialization Across Concurrent Creation, Join & Approval (Issue #1298)**:
+  - While characters may have multiple concurrent pending applications (`is_pending = true`), each character can hold **at most one active affiliation** (`is_pending = false`).
+  - All operations establishing active affiliation (`Create`, `Join`, `ApproveApplication`, `AssignCustomRole` on pending applicants, and successor promotion via `Leave`/`RemoveCharacterFromGuild`) execute within ambient transactions (`s.runInTx`) and acquire a Rank-2 row lock on the affected character (`LockCharacterForUpdate`) **before** acquiring Rank-7 locks on the guild (`GetGuildForUpdate`), strictly preserving the deterministic lock acquisition hierarchy (Rank 2 -> Rank 7) and eliminating deadlocks.
+  - Active affiliation is verified under the exclusive lock (`SELECT guild_id FROM guild_members WHERE character_id = ? AND is_pending = FALSE`). Storage errors from repository reads are never swallowed or converted to "unaffiliated", but propagated immediately to the caller.
+  - Interleaved concurrent requests for the same character (concurrent `Create`, concurrent `ApproveApplication` or `AssignCustomRole` across different guilds, `Create` vs `ApproveApplication`, or `Join` vs `Create`) are serialized: exactly one succeeds and the competitor rolls back cleanly with `ErrCharacterAlreadyInGuild`, leaving zero duplicate rows and zero duplicate fees.
+  - On leader departure (`Leave`, `RemoveCharacterFromGuild`), candidate successors are evaluated under Rank 2 (`LockCharacterForUpdate`) -> Rank 7 (`GetGuildForUpdate`) lock order. If a candidate is pending but has already become an active member of another guild, they are disqualified from succession; subsequent candidates are evaluated, and if no valid candidates remain, the guild is disbanded cleanly (`DisbandGuild`). Roster membership, roles, and candidate eligibility are re-validated inside locked transactions to eliminate TOCTOU races: concurrent joins during sole-leader departure abort dissolution and retry candidate succession so new members are never mistakenly disbanded or orphaned.
+- **Existing Multi-Affiliation Data Detection & Repair Policy**:
+  - Anomaly Detection Query:
+    ```sql
+    SELECT character_id, COUNT(*) AS active_count
+    FROM guild_members
+    WHERE is_pending = FALSE
+    GROUP BY character_id
+    HAVING COUNT(*) > 1;
+    ```
+  - Operator Repair Policy: In the event historical concurrency bugs produced multiple active affiliations for a character, operators must manually investigate the true affiliation (e.g. earliest `joined_at` or active leadership role). The invalid active affiliation must be demoted to pending (`is_pending = TRUE`) or removed from `guild_members`. Automatic deletion of guilds or confiscation of character/guild points and assets is strictly prohibited.
 - **Membership Administration, Customization, Removal & Succession Serialization (Unit of Work)**:
   - Member departure (`Leave`), character-cleanup departure (`RemoveCharacterFromGuild`), leadership transfer (`TransferLeadership`), expulsion (`Kick`), applicant rejection (`RejectApplication`), role title assignment (`AssignCustomRole`), applicant approval (`ApproveApplication`), manual disbandment (`Disband`), guild customization (`UpdateColor`, `UpdateNotice`, `ChangeMark`, `ChangeWallpaper`), and inactive guild cleanup (`DisbandInactiveGuilds`) use ambient transaction propagation (`s.runInTx`).
   - Pessimistic locking (Rank 7): `GetGuildForUpdate` acquires exclusive locks (`SELECT ... FOR UPDATE`) on the guild record in `guilds` and all its member rows in `guild_members` ordered deterministically by `joined_at ASC, character_id ASC`.
   - Atomicity of administrative mutations: Current guild leadership, requester role, target membership/role and pending state are verified under the same exclusive row lock as the mutation, preventing former-leader bypasses from interleaved leadership transfers.
   - Guild customization (`UpdateColor`, `UpdateNotice`, `ChangeMark`, `ChangeWallpaper`) and manual dissolution (`Disband`) re-verify current leadership under `GetGuildForUpdate`. For paid operations (`ChangeMark`, `ChangeWallpaper`), the transaction acquires a Rank-2 lock on the fee-paying leader character (`LockCharacterForUpdate`) before acquiring the Rank-7 guild lock (`GetGuildForUpdate`), preserving the global deterministic lock acquisition hierarchy (Rank 2 -> Rank 7) and preventing deadlock cycles with concurrent character-to-guild actions. The transaction bounds both the character fee deduction and the guild update (`leader_character_id` guarded); if leadership transferred concurrently, the transaction rolls back with `ErrUnauthorized` and zero gold is deducted.
-  - Role title assignment (`AssignCustomRole`) validates requester leadership, target membership, and non-leader target role before updating member title. When targeting a pending applicant (`is_pending = true`), it delegates to applicant approval within the same transaction boundary.
+  - Role title assignment (`AssignCustomRole`) validates requester leadership, target membership, and non-leader target role before updating member title. When targeting a pending applicant (`is_pending = true`), it acquires a Rank-2 lock on the target character (`LockCharacterForUpdate`) before the Rank-7 guild lock (`GetGuildForUpdate`), re-verifies active affiliation under lock, approves the member, and sends the acceptance letter post-commit, preserving the global Rank 2 -> Rank 7 lock hierarchy and preventing lock inversion with `ApproveApplication`.
   - Applicant approval (`ApproveApplication`) validates current leadership and applicant pending state (`is_pending = true`) before clearing the pending flag and assigning the role title. Attempting to approve an active member returns `ErrMemberNotPending`. Acceptance letters (`【＋参加許可証＋】`) are attempted after successful approval, propagating ambient context so rollback leaves no orphan letter.
   - Expulsion and applicant rejection share a locked removal workflow. Current guild leadership, requester membership/role, target membership/role and pending state are checked against the locked roster before deletion. A former leader cannot remove a promoted successor. `Kick` selects expulsion versus rejection from the locked target state; `RejectApplication` rejects an already approved member with `ErrMemberNotPending`.
   - Expulsion/rejection letters retain their existing content and best-effort delivery. They are attempted only after the removal transaction succeeds. With an incoming outer SQL transaction, letter persistence joins that transaction and is rolled back with membership removal; notification visibility then waits for the outer commit. A failed removal sends no success letter.

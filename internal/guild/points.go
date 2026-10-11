@@ -30,3 +30,19 @@ func (s *Service) DecayGuildPoints(ctx context.Context, factor float64) error {
 	}
 	return s.repo.DecayGuildPoints(ctx, factor)
 }
+
+// AddPoints increments guild points directly by guild ID.
+func (s *Service) AddPoints(ctx context.Context, guildID string, points int64) error {
+	if guildID == "" || points <= 0 {
+		return nil
+	}
+	return s.repo.AddPoints(ctx, guildID, points)
+}
+
+// AddGuildPoints awards guild points if the character is in a guild.
+func (s *Service) AddGuildPoints(ctx context.Context, characterID string, points int) error {
+	if characterID == "" || points <= 0 {
+		return nil
+	}
+	return s.repo.AddGuildPoints(ctx, characterID, points)
+}

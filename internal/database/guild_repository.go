@@ -58,6 +58,19 @@ func (r *GuildRepository) CreateGuild(ctx context.Context, g guild.Guild, creato
 			}
 		}
 
+		// Re-verify creator does not already have an active affiliation
+		var activeGuildID string
+		err := executor.QueryRowContext(txCtx, `
+			SELECT guild_id FROM guild_members
+			WHERE character_id = ? AND is_pending = FALSE
+		`, creator.CharacterID).Scan(&activeGuildID)
+		if err == nil {
+			return guild.ErrCharacterAlreadyInGuild
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+
 		// 2. Insert guild record
 		guildColor := g.Color
 		if guildColor == "" {
@@ -71,7 +84,7 @@ func (r *GuildRepository) CreateGuild(ctx context.Context, g guild.Guild, creato
 		if lastActive.IsZero() {
 			lastActive = g.CreatedAt
 		}
-		_, err := executor.ExecContext(txCtx, `
+		_, err = executor.ExecContext(txCtx, `
 			INSERT INTO guilds (id, name, leader_character_id, points, notice, color, mark, bgimg, last_active_at, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, g.ID, g.Name, g.LeaderCharacterID, g.Points, g.Notice, guildColor, mark, g.Bgimg, lastActive, g.CreatedAt, g.UpdatedAt)
@@ -262,6 +275,19 @@ func (r *GuildRepository) TransferLeadership(ctx context.Context, guildID string
 	return RunInTx(ctx, r.db, func(txCtx context.Context) error {
 		executor := ExecutorFromContext(txCtx, r.db)
 		now := time.Now().UTC()
+
+		// Verify new leader is not already an active member of another guild
+		var otherGuildID string
+		err := executor.QueryRowContext(txCtx, `
+			SELECT guild_id FROM guild_members
+			WHERE character_id = ? AND is_pending = FALSE AND guild_id != ?
+		`, newLeaderID, guildID).Scan(&otherGuildID)
+		if err == nil {
+			return guild.ErrCharacterAlreadyInGuild
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
 
 		// 1. Guard guilds row against stale current leader (and non-existent guild)
 		res, err := executor.ExecContext(txCtx, `

@@ -10,61 +10,6 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 )
 
-type CharacterReader interface {
-	FindByID(ctx context.Context, id string) (corecharacter.Character, error)
-}
-
-type LetterSender interface {
-	SendLetter(ctx context.Context, senderID, senderName, recipientID, recipientName, content, color string) error
-}
-
-type NewsPublisher interface {
-	PublishNews(ctx context.Context, category, title, content, author string, publishedAt time.Time) error
-}
-
-type NewsPublisherFunc func(ctx context.Context, category, title, content, author string, publishedAt time.Time) error
-
-func (f NewsPublisherFunc) PublishNews(ctx context.Context, category, title, content, author string, publishedAt time.Time) error {
-	return f(ctx, category, title, content, author, publishedAt)
-}
-
-// TransactionProvider executes functions within atomic database transactions.
-type TransactionProvider interface {
-	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
-}
-
-type ServiceOption func(*Service)
-
-func WithCharacterReader(cr CharacterReader) ServiceOption {
-	return func(s *Service) {
-		s.charReader = cr
-	}
-}
-
-func WithLetterSender(ls LetterSender) ServiceOption {
-	return func(s *Service) {
-		s.letterSender = ls
-	}
-}
-
-func WithNewsPublisher(np NewsPublisher) ServiceOption {
-	return func(s *Service) {
-		s.newsPub = np
-	}
-}
-
-func WithTransactionProvider(tx TransactionProvider) ServiceOption {
-	return func(s *Service) {
-		s.txProvider = tx
-	}
-}
-
-func WithClock(clock func() time.Time) ServiceOption {
-	return func(s *Service) {
-		s.nowFunc = clock
-	}
-}
-
 type Service struct {
 	repo         Repository
 	charReader   CharacterReader
@@ -116,6 +61,8 @@ func (s *Service) Create(ctx context.Context, creatorCharID string, name string)
 	// Verify creator is not currently in any guild
 	if _, _, err := s.repo.GetGuildByCharacter(ctx, creatorCharID); err == nil {
 		return Guild{}, Member{}, corecharacter.Character{}, ErrCharacterAlreadyInGuild
+	} else if !errors.Is(err, ErrCharacterNotInGuild) {
+		return Guild{}, Member{}, corecharacter.Character{}, err
 	}
 
 	guildID := id.New()
@@ -141,7 +88,28 @@ func (s *Service) Create(ctx context.Context, creatorCharID string, name string)
 		JoinedAt:    now,
 	}
 
-	return s.repo.CreateGuild(ctx, g, m, CreationFee)
+	var (
+		createdGuild  Guild
+		createdMember Member
+		updatedChar   corecharacter.Character
+	)
+	err = s.runInTx(ctx, func(txCtx context.Context) error {
+		if err := s.repo.LockCharacterForUpdate(txCtx, creatorCharID); err != nil {
+			return err
+		}
+		if _, _, err := s.repo.GetGuildByCharacter(txCtx, creatorCharID); err == nil {
+			return ErrCharacterAlreadyInGuild
+		} else if !errors.Is(err, ErrCharacterNotInGuild) {
+			return err
+		}
+		var cErr error
+		createdGuild, createdMember, updatedChar, cErr = s.repo.CreateGuild(txCtx, g, m, CreationFee)
+		return cErr
+	})
+	if err != nil {
+		return Guild{}, Member{}, corecharacter.Character{}, err
+	}
+	return createdGuild, createdMember, updatedChar, nil
 }
 
 func (s *Service) Get(ctx context.Context, guildID string) (Detail, error) {
@@ -187,27 +155,46 @@ func (s *Service) Join(ctx context.Context, guildID string, characterID string) 
 	// Verify character is not already in a guild
 	if _, _, err := s.repo.GetGuildByCharacter(ctx, characterID); err == nil {
 		return Member{}, ErrCharacterAlreadyInGuild
-	}
-
-	_, _, err := s.repo.GetGuild(ctx, guildID)
-	if err != nil {
+	} else if !errors.Is(err, ErrCharacterNotInGuild) {
 		return Member{}, err
 	}
 
-	m := Member{
-		GuildID:     guildID,
-		CharacterID: characterID,
-		Role:        RoleMember,
-		Title:       "",
-		IsPending:   false,
-		JoinedAt:    s.nowFunc().UTC(),
-	}
+	var res Member
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		if err := s.repo.LockCharacterForUpdate(txCtx, characterID); err != nil {
+			return err
+		}
+		if _, _, err := s.repo.GetGuildForUpdate(txCtx, guildID); err != nil {
+			return err
+		}
 
-	res, err := s.repo.AddMember(ctx, m)
+		// Verify character is not already in a guild
+		if _, _, err := s.repo.GetGuildByCharacter(txCtx, characterID); err == nil {
+			return ErrCharacterAlreadyInGuild
+		} else if !errors.Is(err, ErrCharacterNotInGuild) {
+			return err
+		}
+
+		m := Member{
+			GuildID:     guildID,
+			CharacterID: characterID,
+			Role:        RoleMember,
+			Title:       "",
+			IsPending:   false,
+			JoinedAt:    s.nowFunc().UTC(),
+		}
+
+		var addErr error
+		res, addErr = s.repo.AddMember(txCtx, m)
+		if addErr != nil {
+			return addErr
+		}
+		s.touchActive(txCtx, guildID)
+		return nil
+	})
 	if err != nil {
 		return Member{}, err
 	}
-	s.touchActive(ctx, guildID)
 	return res, nil
 }
 
@@ -246,6 +233,13 @@ func (s *Service) TransferLeadership(ctx context.Context, guildID string, curren
 	}
 
 	return s.runInTx(ctx, func(txCtx context.Context) error {
+		if err := s.repo.LockCharacterForUpdate(txCtx, newLeaderCharID); err != nil {
+			if errors.Is(err, ErrCharacterNotFound) {
+				return ErrTargetNotMember
+			}
+			return err
+		}
+
 		_, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
 		if err != nil {
 			return err
@@ -267,6 +261,15 @@ func (s *Service) TransferLeadership(ctx context.Context, guildID string, curren
 		if newLeader == nil {
 			return ErrTargetNotMember
 		}
+		if newLeader.IsPending {
+			if activeGuild, _, err := s.repo.GetGuildByCharacter(txCtx, newLeaderCharID); err == nil {
+				if activeGuild.ID != guildID {
+					return ErrCharacterAlreadyInGuild
+				}
+			} else if !errors.Is(err, ErrCharacterNotInGuild) {
+				return err
+			}
+		}
 
 		if err := s.repo.TransferLeadership(txCtx, guildID, currentLeaderCharID, newLeaderCharID); err != nil {
 			return err
@@ -278,8 +281,8 @@ func (s *Service) TransferLeadership(ctx context.Context, guildID string, curren
 
 // AssignCustomRole sets a custom role title on a guild member (guild.cgi:ataeru).
 // Only the guild leader can assign role titles.
-// Transaction: RunInTx (authorization, target classification and mutation; pending delegates to ApproveApplication).
-// Lock Order: guilds(7) -> guild_members(7).
+// Transaction: RunInTx (Rank 2 target character lock, Rank 7 guild lock and title assignment; pending applicant approved atomically).
+// Lock Order: characters(2) -> guilds(7) -> guild_members(7).
 func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requesterCharID string, targetCharID string, title string) error {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -296,19 +299,32 @@ func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requeste
 		return err
 	}
 
-	return s.runInTx(ctx, func(txCtx context.Context) error {
-		lockedGuild, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
+	var (
+		g        Guild
+		approved bool
+	)
+	err = s.runInTx(ctx, func(txCtx context.Context) error {
+		// Rank 2: Acquire character lock before guild lock
+		if err := s.repo.LockCharacterForUpdate(txCtx, targetCharID); err != nil {
+			if errors.Is(err, ErrCharacterNotFound) {
+				return ErrTargetNotMember
+			}
+			return err
+		}
+
+		// Rank 7: Acquire guild lock
+		lockedGuild, lockedMembers, err := s.repo.GetGuildForUpdate(txCtx, guildID)
 		if err != nil {
 			return err
 		}
 
 		var requester, target *Member
-		for i := range members {
-			if members[i].CharacterID == requesterCharID {
-				requester = &members[i]
+		for i := range lockedMembers {
+			if lockedMembers[i].CharacterID == requesterCharID {
+				requester = &lockedMembers[i]
 			}
-			if members[i].CharacterID == targetCharID {
-				target = &members[i]
+			if lockedMembers[i].CharacterID == targetCharID {
+				target = &lockedMembers[i]
 			}
 		}
 
@@ -323,7 +339,23 @@ func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requeste
 		}
 
 		if target.IsPending {
-			return s.ApproveApplication(txCtx, guildID, requesterCharID, targetCharID, normalizedTitle)
+			// Re-verify that the applicant is not already an active member of another guild (guild.cgi:ataeru)
+			if activeGuild, _, err := s.repo.GetGuildByCharacter(txCtx, targetCharID); err == nil {
+				if activeGuild.ID != guildID {
+					return ErrCharacterAlreadyInGuild
+				}
+				return ErrMemberNotPending
+			} else if !errors.Is(err, ErrCharacterNotInGuild) {
+				return err
+			}
+
+			if err := s.repo.ApproveMember(txCtx, guildID, targetCharID, normalizedTitle); err != nil {
+				return err
+			}
+			s.touchActive(txCtx, guildID)
+			g = lockedGuild
+			approved = true
+			return nil
 		}
 
 		if err := s.repo.AssignCustomRole(txCtx, guildID, targetCharID, normalizedTitle); err != nil {
@@ -332,21 +364,22 @@ func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requeste
 		s.touchActive(txCtx, guildID)
 		return nil
 	})
-}
-
-func authorizeCurrentLeader(g Guild, members []Member, charID string) error {
-	if g.LeaderCharacterID != charID {
-		return ErrUnauthorized
+	if err != nil {
+		return err
 	}
-	for i := range members {
-		if members[i].CharacterID == charID {
-			if members[i].Role != RoleLeader || members[i].IsPending {
-				return ErrUnauthorized
-			}
-			return nil
+
+	// Send acceptance letter to applicant if pending was approved (guild.cgi:236-237)
+	if approved && s.letterSender != nil && s.charReader != nil {
+		leaderChar, errL := s.charReader.FindByID(ctx, requesterCharID)
+		applicantChar, errA := s.charReader.FindByID(ctx, targetCharID)
+		if errL == nil && errA == nil {
+			content := "【＋参加許可証＋】" + g.Name + " (ギルマス " + leaderChar.Name + ") から参加許可をもらいました"
+			//lint:ignore error-swallow existing best-effort membership notification
+			_ = s.letterSender.SendLetter(ctx, requesterCharID, leaderChar.Name, targetCharID, applicantChar.Name, content, leaderChar.Color)
 		}
 	}
-	return ErrUnauthorized
+
+	return nil
 }
 
 // UpdateColor changes the guild's hex color (guild.cgi:color).
@@ -436,20 +469,4 @@ func (s *Service) UpdateNotice(ctx context.Context, guildID string, requesterCha
 		s.touchActive(txCtx, guildID)
 		return nil
 	})
-}
-
-// AddPoints increments guild points directly by guild ID.
-func (s *Service) AddPoints(ctx context.Context, guildID string, points int64) error {
-	if guildID == "" || points <= 0 {
-		return nil
-	}
-	return s.repo.AddPoints(ctx, guildID, points)
-}
-
-// AddGuildPoints awards guild points if the character is in a guild.
-func (s *Service) AddGuildPoints(ctx context.Context, characterID string, points int) error {
-	if characterID == "" || points <= 0 {
-		return nil
-	}
-	return s.repo.AddGuildPoints(ctx, characterID, points)
 }

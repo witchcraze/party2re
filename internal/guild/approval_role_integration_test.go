@@ -195,6 +195,13 @@ func (r *approvalRoleGateRepo) GetGuild(ctx context.Context, guildID string) (gu
 	return g, members, err
 }
 
+func (r *approvalRoleGateRepo) LockCharacterForUpdate(ctx context.Context, characterID string) error {
+	if r.beforeLocked != nil {
+		r.beforeLocked(ctx)
+	}
+	return r.GuildRepository.LockCharacterForUpdate(ctx, characterID)
+}
+
 func (r *approvalRoleGateRepo) GetGuildForUpdate(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
 	if r.beforeLocked != nil {
 		r.beforeLocked(ctx)
