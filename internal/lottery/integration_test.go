@@ -686,6 +686,7 @@ func TestRaffleDatabaseIntegration(t *testing.T) {
 		testSvc, err := lottery.NewService(lotteryRepo,
 			lottery.WithCharacterRepository(charRepo),
 			lottery.WithInventoryRepository(invRepo),
+			lottery.WithClock(fixedClock{now: time.Date(2026, time.October, 11, 12, 0, 0, 0, time.UTC)}),
 			lottery.WithDepotRepository(depotRepo),
 			lottery.WithItemDefinitionProvider(itemCatalog),
 			lottery.WithTransactionProvider(txProvider),
