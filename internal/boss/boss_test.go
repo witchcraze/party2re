@@ -12,6 +12,7 @@ import (
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
+	"github.com/witchcraze/party2re/internal/core/progression"
 	"github.com/witchcraze/party2re/internal/party"
 )
 
@@ -990,13 +991,18 @@ func TestStartSealingBattle_ClearTimeCrystals(t *testing.T) {
 }
 
 type mockBossMonsterDefeatRecorder struct {
-	calls   []string
-	records []boss.DefeatedMonsterRecord
+	calls           []string
+	records         []boss.DefeatedMonsterRecord
+	recordsByCharID map[string][]boss.DefeatedMonsterRecord
 }
 
 func (m *mockBossMonsterDefeatRecorder) RecordMonsterDefeat(_ context.Context, charID string, record boss.DefeatedMonsterRecord) error {
 	m.calls = append(m.calls, charID+":"+record.MonsterID+":"+record.MonsterName+":"+record.Habitat)
 	m.records = append(m.records, record)
+	if m.recordsByCharID == nil {
+		m.recordsByCharID = make(map[string][]boss.DefeatedMonsterRecord)
+	}
+	m.recordsByCharID[charID] = append(m.recordsByCharID[charID], record)
 	return nil
 }
 
@@ -1094,7 +1100,8 @@ func TestChallengeBoss_RecordMonsterDefeat(t *testing.T) {
 	}
 	r0 := recorder.records[0]
 	if r0.MonsterID != "king99-clone" || r0.MonsterName != "影" || r0.Habitat != "封印戦" ||
-		r0.Icon != "king99-clone" || r0.HP != 600*50 || r0.Attack != 300*2 || r0.Defense != 200*2 {
+		r0.Icon != "king99-clone" || r0.HP != 600*50 || r0.Attack != 300*2 || r0.Defense != 200*2 ||
+		r0.ExperienceReward != 1500 || r0.GoldReward != 750 {
 		t.Errorf("unexpected king99 record snapshot: %+v", r0)
 	}
 }
@@ -1166,5 +1173,147 @@ func TestUnsealDemonKing_Validation(t *testing.T) {
 	err = service.UnsealDemonKing(ctx, []string{"@npc1", "@npc2"})
 	if err != nil {
 		t.Errorf("expected nil error for NPC-only list, got %v", err)
+	}
+}
+
+func TestChallengeBoss_King99_EncounterSnapshot_LevelUp(t *testing.T) {
+	ctx := context.Background()
+	bossRepo := newMockBossRepo()
+
+	// Hero starts at Level 50, HP 600, Attack 300, Defense 200, Agility 50, JobLevel 0.
+	// Set Experience such that gaining 1500 EXP triggers a level up.
+	hero := createTestChar("hero-lvlup", 50, 600, 300, 200)
+	nextExp50, err := progression.ExperienceForNextLevel(50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hero.Experience = nextExp50 - 1
+
+	chars := map[string]corecharacter.Character{
+		"hero-lvlup": hero,
+	}
+	charRepo := &mockCharRepo{chars: chars}
+
+	recorder := &mockBossMonsterDefeatRecorder{}
+	service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.Configure(boss.WithMonsterDefeatRecorder(recorder))
+
+	_, err = service.ChallengeBoss(ctx, "hero-lvlup", "king99")
+	if err != nil {
+		t.Fatalf("ChallengeBoss failed: %v", err)
+	}
+
+	// Verify hero leveled up after battle
+	savedHero := charRepo.chars["hero-lvlup"]
+	if savedHero.Level <= 50 {
+		t.Fatalf("expected hero to level up beyond 50, got level %d", savedHero.Level)
+	}
+
+	if len(recorder.records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(recorder.records))
+	}
+	r0 := recorder.records[0]
+	expectedStrong := int(float64(600*50) + 500 + float64(300*2) + float64(200*2)*0.5 + float64(50*2))
+	if r0.MonsterID != "king99-clone" || r0.MonsterName != "影" || r0.Habitat != "封印戦" ||
+		r0.HP != 600*50 || r0.Attack != 300*2 || r0.Defense != 200*2 || r0.Agility != 50*2 ||
+		r0.ExperienceReward != 1500 || r0.GoldReward != 750 || r0.Strong != expectedStrong {
+		t.Errorf("king99 record mismatch: got %+v, expected HP=%d Atk=%d Def=%d Agi=%d Exp=1500 Gold=750 Strong=%d",
+			r0, 600*50, 300*2, 200*2, 50*2, expectedStrong)
+	}
+}
+
+func TestStartSealingBattle_King99_PartyEncounterSnapshot_DifferentLevels(t *testing.T) {
+	ctx := context.Background()
+	bossRepo := newMockBossRepo()
+
+	nextExp50, err := progression.ExperienceForNextLevel(50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextExp30, err := progression.ExperienceForNextLevel(30)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c1 := createTestChar("c1", 50, 600, 300, 200)
+	c1.JobLevel = 10
+	c1.Experience = nextExp50 - 1
+
+	c2 := createTestChar("c2", 30, 400, 150, 100)
+	c2.JobLevel = 5
+	c2.Experience = nextExp30 - 1
+
+	chars := map[string]corecharacter.Character{
+		"c1": c1,
+		"c2": c2,
+	}
+	charRepo := &mockCharRepo{chars: chars}
+	partyRepo := newMockPartyRepo()
+
+	pID := "party-king99-test"
+	partyRepo.parties[pID] = party.Party{
+		ID:                pID,
+		LeaderCharacterID: "c1",
+		StageID:           "king99",
+		Status:            party.StatusRecruiting,
+		CreatedAt:         time.Now().UTC(),
+	}
+	partyRepo.members[pID] = []party.Member{
+		{PartyID: pID, CharacterID: "c1", CharacterName: "Hero_c1", ReadyState: true, IsLeader: true},
+		{PartyID: pID, CharacterID: "c2", CharacterName: "Hero_c2", ReadyState: true},
+	}
+
+	recorder := &mockBossMonsterDefeatRecorder{}
+	service, err := boss.NewService(bossRepo, charRepo, stubPartyBattleEngine{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.Configure(
+		boss.WithPartyRepository(partyRepo),
+		boss.WithMonsterDefeatRecorder(recorder),
+	)
+
+	_, err = service.StartSealingBattle(ctx, pID, "c1")
+	if err != nil {
+		t.Fatalf("StartSealingBattle failed: %v", err)
+	}
+
+	// Verify both characters leveled up
+	if charRepo.chars["c1"].Level <= 50 {
+		t.Fatalf("expected c1 to level up beyond 50, got %d", charRepo.chars["c1"].Level)
+	}
+	if charRepo.chars["c2"].Level <= 30 {
+		t.Fatalf("expected c2 to level up beyond 30, got %d", charRepo.chars["c2"].Level)
+	}
+
+	if len(recorder.calls) != 2 {
+		t.Fatalf("expected 2 recorder calls, got %d", len(recorder.calls))
+	}
+
+	c1Records := recorder.recordsByCharID["c1"]
+	if len(c1Records) != 1 {
+		t.Fatalf("expected 1 record for c1, got %d", len(c1Records))
+	}
+	r1 := c1Records[0]
+	expectedStrong1 := int(float64(600*50) + 500 + float64(300*2) + float64(200*2)*0.5 + float64(50*2))
+	if r1.MonsterID != "king99-clone" || r1.HP != 600*50 || r1.Attack != 300*2 || r1.Defense != 200*2 ||
+		r1.ExperienceReward != 1800 || r1.GoldReward != 750 || r1.Strong != expectedStrong1 {
+		t.Errorf("c1 record mismatch: got %+v, expected HP=%d Atk=%d Def=%d Exp=1800 Gold=750 Strong=%d",
+			r1, 600*50, 300*2, 200*2, expectedStrong1)
+	}
+
+	c2Records := recorder.recordsByCharID["c2"]
+	if len(c2Records) != 1 {
+		t.Fatalf("expected 1 record for c2, got %d", len(c2Records))
+	}
+	r2 := c2Records[0]
+	expectedStrong2 := int(float64(400*50) + 500 + float64(150*2) + float64(100*2)*0.5 + float64(50*2))
+	if r2.MonsterID != "king99-clone" || r2.HP != 400*50 || r2.Attack != 150*2 || r2.Defense != 100*2 ||
+		r2.ExperienceReward != 1050 || r2.GoldReward != 450 || r2.Strong != expectedStrong2 {
+		t.Errorf("c2 record mismatch: got %+v, expected HP=%d Atk=%d Def=%d Exp=1050 Gold=450 Strong=%d",
+			r2, 400*50, 150*2, 100*2, expectedStrong2)
 	}
 }
