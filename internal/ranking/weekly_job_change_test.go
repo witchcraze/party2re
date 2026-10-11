@@ -243,3 +243,128 @@ func TestService_WeeklyJobChange_RollbackOnSaveSnapshotFailure(t *testing.T) {
 		t.Fatalf("expected active weekly job changes to be preserved, got %d", repo.activeWeeklyJobChanges["char-1"])
 	}
 }
+
+func TestService_WeeklyJobChange_PrerequisiteReadFailurePreservesSnapshot(t *testing.T) {
+	repo := newMockRepo()
+	fixedTime := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
+	if err != nil {
+		t.Fatalf("failed to create ranking service: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Initial rotation with 1 entry
+	if err := svc.RecordJobChange(ctx, "char-1"); err != nil {
+		t.Fatalf("RecordJobChange failed: %v", err)
+	}
+	repo.weeklyJobChangeRankings = []ranking.CharacterRankingEntry{
+		{Rank: 1, CharacterID: "char-1", CharacterName: "JobMaster", Score: 1},
+	}
+	repo.weeklyJobChangeTotal = 1
+
+	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+		t.Fatalf("RotateWeeklyJobChangeRanking failed: %v", err)
+	}
+
+	snapBefore, err := svc.GetSnapshot(ctx, ranking.RankingTypeWeeklyJobChange)
+	if err != nil {
+		t.Fatalf("GetSnapshot failed: %v", err)
+	}
+	if snapBefore.TotalCount != 1 {
+		t.Fatalf("expected snapshot total count 1, got %d", snapBefore.TotalCount)
+	}
+
+	// Active counters are now 0
+	repo.weeklyJobChangeRankings = nil
+	repo.weeklyJobChangeTotal = 0
+
+	// Inject storage read error on GetSnapshot
+	simulatedErr := errors.New("simulated database read failure")
+	repo.getSnapshotErr = simulatedErr
+
+	err = svc.RotateWeeklyJobChangeRanking(ctx)
+	if err == nil {
+		t.Fatal("expected RotateWeeklyJobChangeRanking to fail on GetSnapshot storage error, got nil")
+	}
+	if !errors.Is(err, simulatedErr) {
+		t.Fatalf("expected error wrapping %v, got %v", simulatedErr, err)
+	}
+
+	// Clear injected read error to verify persistent repo state
+	repo.getSnapshotErr = nil
+
+	// Acceptance criteria: storage/cancellation等の読取失敗は伝播し、既存snapshot/counters/cacheを変更しない
+	snapAfter, err := svc.GetSnapshot(ctx, ranking.RankingTypeWeeklyJobChange)
+	if err != nil {
+		t.Fatalf("GetSnapshot after failed rotation failed: %v", err)
+	}
+	if snapAfter.TotalCount != 1 || snapAfter.SnapshotData != snapBefore.SnapshotData {
+		t.Fatalf("expected finalized snapshot to be preserved, got total=%d, data=%s", snapAfter.TotalCount, snapAfter.SnapshotData)
+	}
+}
+
+func TestService_WeeklyJobChange_EmptyCounters_ErrSnapshotNotFound(t *testing.T) {
+	repo := newMockRepo()
+	fixedTime := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
+	if err != nil {
+		t.Fatalf("failed to create ranking service: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Active counters are empty from the start (no job changes)
+	repo.weeklyJobChangeRankings = nil
+	repo.weeklyJobChangeTotal = 0
+
+	// Repo has no snapshot yet -> GetSnapshot returns ErrSnapshotNotFound
+	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+		t.Fatalf("expected RotateWeeklyJobChangeRanking to succeed when no snapshot exists, got %v", err)
+	}
+
+	snap, err := svc.GetSnapshot(ctx, ranking.RankingTypeWeeklyJobChange)
+	if err != nil {
+		t.Fatalf("GetSnapshot failed: %v", err)
+	}
+	if snap.TotalCount != 0 || snap.SnapshotData != "[]" {
+		t.Fatalf("expected empty snapshot (total=0, data='[]'), got total=%d, data=%s", snap.TotalCount, snap.SnapshotData)
+	}
+}
+
+func TestService_WeeklyJobChange_EmptyCounters_ExistingEmptySnapshot(t *testing.T) {
+	repo := newMockRepo()
+	fixedTime := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
+	if err != nil {
+		t.Fatalf("failed to create ranking service: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Pre-populate an existing empty snapshot
+	repo.snapshots[ranking.RankingTypeWeeklyJobChange] = ranking.RankingSnapshot{
+		RankingType:  ranking.RankingTypeWeeklyJobChange,
+		SnapshotData: "[]",
+		TotalCount:   0,
+		CalculatedAt: fixedTime.Add(-7 * 24 * time.Hour),
+		UpdatedAt:    fixedTime.Add(-7 * 24 * time.Hour),
+	}
+
+	// Active counters are empty
+	repo.weeklyJobChangeRankings = nil
+	repo.weeklyJobChangeTotal = 0
+
+	// Rotation with existing empty snapshot and empty counters should succeed
+	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+		t.Fatalf("expected RotateWeeklyJobChangeRanking to succeed with existing empty snapshot, got %v", err)
+	}
+
+	snap, err := svc.GetSnapshot(ctx, ranking.RankingTypeWeeklyJobChange)
+	if err != nil {
+		t.Fatalf("GetSnapshot failed: %v", err)
+	}
+	if snap.TotalCount != 0 {
+		t.Fatalf("expected snapshot total count 0, got %d", snap.TotalCount)
+	}
+}
