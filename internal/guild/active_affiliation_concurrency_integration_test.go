@@ -636,3 +636,206 @@ func TestGuildActiveAffiliation_LeaveSuccessionVsCreateConcurrency(t *testing.T)
 		t.Errorf("guilds led by successor = %d, want 1", guildsLed)
 	}
 }
+
+func TestGuildActiveAffiliation_SoleLeaderLeaveVsJoinConcurrency(t *testing.T) {
+	f := newActiveAffiliationFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	leader := f.createCharacter(t, "LJLead", 20000)
+	joiner := f.createCharacter(t, "LJJoiner", 5000)
+
+	g1, _, _, err := f.service.Create(ctx, leader.ID, "LJG1_"+id.New()[:8])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	errLeave, errJoin := testutil.RunRace2(
+		func() error {
+			return f.service.Leave(ctx, g1.ID, leader.ID)
+		},
+		func() error {
+			_, err := f.service.Join(ctx, g1.ID, joiner.ID)
+			return err
+		},
+	)
+
+	if errLeave != nil {
+		t.Fatalf("unexpected error from Leave: %v", errLeave)
+	}
+
+	if errJoin != nil && !errors.Is(errJoin, guild.ErrGuildNotFound) {
+		t.Fatalf("unexpected error from Join: %v", errJoin)
+	}
+
+	if errJoin == nil {
+		// Join succeeded: G1 MUST NOT be disbanded!
+		// Invariant: joiner must be active member and leader of G1!
+		if activeCount := f.countActiveAffiliations(t, joiner.ID); activeCount != 1 {
+			t.Errorf("active affiliation count for joiner = %d, want 1", activeCount)
+		}
+		g1Detail, err := f.service.Get(ctx, g1.ID)
+		if err != nil {
+			t.Fatalf("expected G1 to survive when Join succeeded, got error: %v", err)
+		}
+		if g1Detail.Guild.LeaderCharacterID != joiner.ID {
+			t.Errorf("G1 leader = %s, want %s (joiner)", g1Detail.Guild.LeaderCharacterID, joiner.ID)
+		}
+	} else {
+		// Join failed because G1 was disbanded first:
+		// G1 must be disbanded, joiner must have 0 affiliations.
+		if activeCount := f.countActiveAffiliations(t, joiner.ID); activeCount != 0 {
+			t.Errorf("active affiliation count for joiner = %d, want 0", activeCount)
+		}
+		if _, err := f.service.Get(ctx, g1.ID); !errors.Is(err, guild.ErrGuildNotFound) {
+			t.Errorf("expected G1 to be disbanded, got err: %v", err)
+		}
+	}
+
+	// Leader must have 0 active affiliations in both cases
+	if activeCount := f.countActiveAffiliations(t, leader.ID); activeCount != 0 {
+		t.Errorf("active affiliation count for leader = %d, want 0", activeCount)
+	}
+}
+
+func TestGuildActiveAffiliation_LeaderLeaveVsCandidateDepartureConcurrency(t *testing.T) {
+	f := newActiveAffiliationFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	leader := f.createCharacter(t, "LLCLead", 20000)
+	member := f.createCharacter(t, "LLCMem", 5000)
+
+	g1, _, _, err := f.service.Create(ctx, leader.ID, "LLCG1_"+id.New()[:8])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := f.service.Join(ctx, g1.ID, member.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Both leader and member attempt to leave concurrently
+	errLeave1, errLeave2 := testutil.RunRace2(
+		func() error {
+			return f.service.Leave(ctx, g1.ID, leader.ID)
+		},
+		func() error {
+			return f.service.Leave(ctx, g1.ID, member.ID)
+		},
+	)
+
+	// Both leaves must succeed without deadlock
+	if errLeave1 != nil {
+		t.Fatalf("unexpected error from leader Leave: %v", errLeave1)
+	}
+	if errLeave2 != nil {
+		t.Fatalf("unexpected error from member Leave: %v", errLeave2)
+	}
+
+	// Guild must be disbanded cleanly (since both departed)
+	if _, err := f.service.Get(ctx, g1.ID); !errors.Is(err, guild.ErrGuildNotFound) {
+		t.Errorf("expected G1 to be disbanded after all members departed, got err: %v", err)
+	}
+
+	// Both characters must have 0 active affiliations
+	if activeCount := f.countActiveAffiliations(t, leader.ID); activeCount != 0 {
+		t.Errorf("active affiliation count for leader = %d, want 0", activeCount)
+	}
+	if activeCount := f.countActiveAffiliations(t, member.ID); activeCount != 0 {
+		t.Errorf("active affiliation count for member = %d, want 0", activeCount)
+	}
+}
+
+func TestGuildActiveAffiliation_LeaderLeaveVsCandidateRosterChangesConcurrency(t *testing.T) {
+	f := newActiveAffiliationFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	leader := f.createCharacter(t, "LRCLead", 20000)
+	candidate1 := f.createCharacter(t, "LRCCand1", 5000)
+	candidate2 := f.createCharacter(t, "LRCCand2", 5000)
+
+	g1, _, _, err := f.service.Create(ctx, leader.ID, "LRCG1_"+id.New()[:8])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := f.service.Join(ctx, g1.ID, candidate1.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3 concurrent operations:
+	// 1: Leader leaves G1
+	// 2: Candidate1 leaves G1
+	// 3: Candidate2 joins G1
+	errs := testutil.RunRace(
+		func() error {
+			return f.service.Leave(ctx, g1.ID, leader.ID)
+		},
+		func() error {
+			return f.service.Leave(ctx, g1.ID, candidate1.ID)
+		},
+		func() error {
+			_, err := f.service.Join(ctx, g1.ID, candidate2.ID)
+			return err
+		},
+	)
+
+	errLeaveLeader := errs[0]
+	errLeaveCand1 := errs[1]
+	errJoinCand2 := errs[2]
+
+	if errLeaveLeader != nil {
+		t.Fatalf("unexpected error from leader Leave: %v", errLeaveLeader)
+	}
+	if errLeaveCand1 != nil {
+		t.Fatalf("unexpected error from candidate1 Leave: %v", errLeaveCand1)
+	}
+	if errJoinCand2 != nil && !errors.Is(errJoinCand2, guild.ErrGuildNotFound) {
+		t.Fatalf("unexpected error from candidate2 Join: %v", errJoinCand2)
+	}
+
+	// Invariants:
+	// Leader and Candidate1 must always have 0 affiliations
+	if c := f.countActiveAffiliations(t, leader.ID); c != 0 {
+		t.Errorf("active affiliation count for leader = %d, want 0", c)
+	}
+	if c := f.countActiveAffiliations(t, candidate1.ID); c != 0 {
+		t.Errorf("active affiliation count for candidate1 = %d, want 0", c)
+	}
+
+	// If Candidate2 joined successfully:
+	if errJoinCand2 == nil {
+		// Guild must survive and Candidate2 must be active member and leader
+		if c := f.countActiveAffiliations(t, candidate2.ID); c != 1 {
+			t.Errorf("active affiliation count for candidate2 = %d, want 1", c)
+		}
+		detail, err := f.service.Get(ctx, g1.ID)
+		if err != nil {
+			t.Fatalf("expected G1 to exist, got err: %v", err)
+		}
+		if detail.Guild.LeaderCharacterID != candidate2.ID {
+			t.Errorf("G1 leader = %s, want %s (candidate2)", detail.Guild.LeaderCharacterID, candidate2.ID)
+		}
+	} else {
+		// Candidate2 join failed because G1 was disbanded:
+		if c := f.countActiveAffiliations(t, candidate2.ID); c != 0 {
+			t.Errorf("active affiliation count for candidate2 = %d, want 0", c)
+		}
+		if _, err := f.service.Get(ctx, g1.ID); !errors.Is(err, guild.ErrGuildNotFound) {
+			t.Errorf("expected G1 to be disbanded, got err: %v", err)
+		}
+	}
+
+	// Assert no orphaned members exist for this guild
+	var orphanCount int
+	err = f.db.QueryRow("SELECT COUNT(*) FROM guild_members WHERE guild_id = ? AND character_id NOT IN (?, ?, ?)",
+		g1.ID, leader.ID, candidate1.ID, candidate2.ID).Scan(&orphanCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if orphanCount != 0 {
+		t.Errorf("found %d orphaned members in G1", orphanCount)
+	}
+}
