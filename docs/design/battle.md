@@ -115,6 +115,54 @@ selection, agility round order or automatic termination as the interaction rule.
    - Decrement `RemainingTurn` and `AntiFieldTurn` on active `FieldState`.
    - Check termination conditions. If round 30 ends without a victor, outcome is `OutcomeDraw`.
 
+### Explicit-action resumption requirements
+
+Normal Adventure needs a feature-independent explicit actor/action/target step,
+with complete resumable effect state. This is the #1325 reconstruction contract;
+it does not change the existing batch contract for other producers. Adventure
+owns storage, admission, room progress, clock eligibility and reward settlement;
+core battle owns combat validation/effects and structured resulting facts.
+Reuse the participant adapter and effect implementations where their behavior
+is verified, without exporting a request that runs another whole agility round.
+
+| Concern | Legacy evidence and required continuation state |
+| --- | --- |
+| Action eligibility | `_battle.cgi:453–468,640–644,1174–1178`: per-actor previous-action time and room speed, accepted at the exact interval boundary. No all-player barrier or automatic action when due |
+| Action/target validation | `_skill.cgi:set_action` (`22–79,85–283,286–309`) derives current/previous-job and custom choices from actor resources and situation; `_battle.cgi:561–575,640–675,761–789` dispatches the choice and charges resources. Skill-specific target helpers remain authoritative; do not use the batch lowest-HP selection as a user target |
+| NPC response | `_battle.cgi:1169–1171`, `_npc_action.cgi:89–155`: inspect living enemies in persisted order, skip actors below their interval, process at most one eligible NPC and preserve resulting order/timestamps. Suppression and additional effects belong to the submitted operation, not extra whole-party rounds |
+| Field lifetime | `_battle.cgi:636–638,913–914,1534–1557,1661–1694`: preserve temporary/default-field distinction and anti-field counters. Temporary-field decrement depends on field existence, enemies, suppression and anti-field; anti-field decrement has its own predicate. These are operation effects, not seconds elapsed or GET effects |
+| Actor status/lifetime | `_battle.cgi:678–759,792–896,1065–1104`: preserve incapacitation, poison, temporary effects and their action-specific counters. State survives requests; `vs_monster.cgi:74–76` resets applicable effects on explicit advance through `reset_status_all` (`_battle.cgi:1390–1428`), without resetting HP/MP or restoring consumed items |
+| Additional actions | `_battle.cgi:565,574–575,780–785,1084–1088` permits a specific second submitted action under an active effect, whitelist and MP predicate (strict `>` there). `ActionCounter.pm` and `TurnEndProcessor.pm` coordinate within-operation effects. Finish applicable queued end processing before committing; do not leave opaque callbacks in persisted state |
+
+Current `battleContext` (`execute_action.go`) owns HP/MP/CMP, defense, statuses,
+attack/defense/agility buffs, mutable abilities/revival availability, active and
+consumed item instances, banishment, teams, ordered participants, field and
+already-counted crystal drops. All behaviorally relevant facts must survive a
+serialize/reload continuation. The initial `Participant` or `RemainingHP` alone
+cannot reconstruct this state. Persist encounter identities and randomized
+outcomes already produced; retries read committed results rather than rerolling.
+Do not require the in-process RNG object or a Go closure to be serializable.
+
+The legacy has effects not represented by these current maps (for example
+temporary-effect counters and special fields). Implementation must establish
+the action/effect reconciliation matrix and add only state actually needed by
+supported effects. Untraced effects remain explicit blockers for production
+adoption, not a claim that serializing today's maps restores the whole game.
+The old batch turn ceiling/order remains scoped to that resolver; an interactive
+encounter cannot inherit a fictional 30/100-operation timeout from it.
+[#1327](https://github.com/witchcraze/party2re/issues/1327) owns the unresolved
+normal-adventure action/effect reconciliation; #1188 owns production job-skill
+supply. Neither SQL persistence nor a passing step test resolves those gaps.
+
+Target-helper evidence: `_skill.cgi:9615–9648,9654–9690` can substitute a random
+ally/enemy for omitted or wrong-side legacy text targets, redirect confusion,
+and distinguish revival targets. Native explicit IDs must remain scoped to the
+current encounter; the per-action reconciliation must distinguish optional
+legacy targeting from an unauthorized/stale explicit reference. Another open
+point is NPC rotation after a skipped head: `npc_turn:149–151` shifts the first
+enemy even when a later enemy was selected. Do not silently normalize this to
+"move the acting NPC to the tail" without resolving the observed behavior.
+
 ### 2. Elemental Field Multipliers (`field.go`)
 - **Matching Element**: $+30\%$ bonus damage (multiplier $1.30$).
 - **Opposing Element**: $-20\%$ damage penalty (multiplier $0.80$).

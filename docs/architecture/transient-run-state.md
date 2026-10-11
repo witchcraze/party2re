@@ -1,7 +1,7 @@
 # Transient Run and Session State (Candidates C and D)
 
-This document describes implemented storage boundaries and their limitations,
-not new game mechanics. The legacy CGI owns turn, timeout, reward, and penalty
+This document distinguishes implemented storage boundaries from the planned
+normal-adventure boundary below. The legacy CGI owns turn, timeout, reward, and penalty
 rules. The storage policy is in [the database rules](../../.agents/rules/05-database-and-caching.md).
 
 ## Candidate C: Ephemeral Turn & Session Lobby
@@ -98,3 +98,127 @@ AST tests verify selected terms, script embedding, and banned commands. They do
 not prove payload bounds, sub-millisecond latency, all service race conditions,
 or full settlement recovery. Use feature integration and conservation tests
 when changing run transitions; `make check` remains the required repository gate.
+
+## Normal Adventure: durable command boundary (#1325)
+
+**Decision status: selected in #1325, user-approved on 2026-10-11.** SQL is the
+authority for enrolled normal runs, consumption, earnings and receipts; Party
+Valkey remains waiting admission. The explicit idle cleanup and one-hour penalty
+anchor in the gameplay owner were approved in the same session. These are
+implementation targets, not an implemented store or blanket approval of
+unreconciled skill/gameplay changes. Current Adventure
+remains request-local batch execution. Candidate D's loss exposure does not
+authorize losing normal-adventure earnings. Gameplay and timeout evidence live
+in [Adventure](../design/adventure.md#resumable-normal-run-transitions);
+shared effect state lives in [Battle](../design/battle.md#explicit-action-resumption-requirements).
+
+### Authority and ownership
+
+Adventure owns one SQL-authoritative normal run for solo and cooperative play:
+immutable run identity, version, phase, ordered roster/roles, encounter state,
+actor/NPC eligibility timestamps, per-recipient earnings and exit facts.
+SQL also owns active character enrollment and durable command/settlement
+receipts. Enforce at most one unfinished normal-run enrollment per character,
+including an exit awaiting mandatory processing. Exact tables, encoding and Go
+signatures belong to implementation; old SQL lobby tables are not reused.
+
+Party retains waiting-lobby admission in Valkey. At enrollment, obtain the
+existing lobby coordination lock, validate its roster/readiness and freeze the
+admission snapshot. All roster writers must honor that handoff. In a bounded
+SQL transaction create the run and enroll characters after validating their
+current eligibility. Persist a unique lobby/admission generation mapping to the
+run so repeated starts find the same run, including after a lost response.
+The generation must survive a failed Valkey status update; a retry cannot mint
+another generation merely because the lobby still says recruiting. Resolve
+existing enrollment from SQL before accepting lobby mutations or another start.
+On SQL failure no run exists; on SQL success SQL owns the enrolled actors even
+if Valkey cleanup fails or the lobby expires. Close/remove only the matching
+admission generation after commit. Do not hold the lobby lock between requests
+or reacquire it from inside a run transaction. Any lobby replacement policy
+must preserve this one-way handoff, not infer admission from an expired key.
+
+PlayerContext queries Adventure through an injected public actor reader; it
+does not scan Party lobbies or inspect Adventure's repositories. SQL enrollment
+is the discovery source; a cache/index may accelerate reads only when it can be
+rebuilt without losing ownership. Persisted run facts prevent another activity
+from overwriting a participant's live vitality/loadout. Required reader errors
+fail closed. Other actors' public combat projections are available through the
+run, never unrestricted private Character records or inventory contents.
+Admission and conflicting mutation services must recheck that ownership, not
+rely only on a PlayerContext menu hiding their entry controls.
+
+### One command, one bounded SQL transaction
+
+1. Authenticate the owned actor at both transport and service boundaries. Scope
+   lookup by run and actor; validate current membership/role again under lock.
+2. Lock the shared run as Rank 0, then every affected Character at Rank 2 in
+   ascending ID order. Acquire all required inventory/equipment (Rank 3), jobs
+   (Rank 4), depots (Rank 5) and secondary records (Rank 8) in the existing
+   hierarchy, sorting same-rank owners. Declare the complete affected set before
+   invoking adapters; never settle A through Rank 8 then start locking B at
+   Rank 2. Do not acquire a run lock from a character-locked callback. Register
+   the new repository methods with the lock linter during implementation.
+3. Check an actor-scoped command identity and canonical input against a durable
+   receipt. A committed duplicate returns its recorded result without executing
+   effects; reuse with different input conflicts. Check duplicates before stale
+   version rejection, but never bypass present authentication/receipt ownership.
+4. For a new command validate expected version, phase, action/target/resources
+   and server-clock eligibility. Apply the bounded player action and applicable
+   NPC response. Persist the whole resulting encounter, command consumption,
+   recipient earnings/deliveries and receipt with the new version atomically.
+   Rejected input does not consume items, advance a clock or mutate the run.
+5. Commit before optional Valkey cleanup, scene refresh or Replay publication.
+   Return the recorded domain result; observation failure cannot undo success.
+
+Use injected `TransactionProvider` for the shared aggregate and ambient
+repositories; reuse `TransactionRunner` for applicable single-character asset
+work within that scope. The participant builder and settlement adapter must use
+the same transaction and already locked data. Core battle has no store, clock
+service, feature import or transaction. A shared process mutex is insufficient
+across servers. No transaction waits for a future request or action deadline.
+
+Consumption references concrete owned item instances, including equipped
+slots. Apply it in the command transaction and carry the consumed state into
+future encounters; final settlement must not debit it again (#1197).
+Chest claim, allowance/key debit and actual delivery disposition are atomic
+(#1196). Preserve the delivery rules rather than granting all chests on exit.
+Earned rewards are durable per recipient at their source operation (#1198);
+already applied assets and still-pending entitlements must be distinguishable.
+Ordinary earned assets cannot be erased by later defeat, exit or storage cleanup.
+Mode-specific conditional earnings require their verified release condition.
+Do not postpone an observable legacy grant until exit merely for convenience.
+
+### Individual settlement and recovery
+
+Use a unique settlement identity per run and enrolled recipient. Exit applies
+only outstanding recipient effects and writes that recipient's history,
+settlement receipt, roster removal/leadership change and active-enrollment
+release in the same transaction (#1221/#1222/#1224). Keep original roster order
+separate from lock order. Cooperative multipliers are calculated once at their
+verified earning boundary (#1225); the common settler must not apply them again.
+History links the immutable run/recipient identity; a failed history write rolls
+back its coupled asset effects. Room disposal waits until all mandatory
+recipient processing has a durable disposition. Keep receipts/history after
+physical active-state cleanup so old retries cannot create another payout.
+
+| Failure boundary | Required behavior |
+| --- | --- |
+| Before SQL commit, including state/asset/history write failure | Roll back the entire command; no success receipt or partial consumption |
+| Commit result unknown or response lost | Observe owned command receipt from SQL; never infer failure from missing HTTP response or reroll a committed action |
+| Restart after commit | Resume persisted encounter/version or return recorded command/exit result; no replay of effects |
+| Commit succeeded, lobby cleanup/refresh/Replay failed | Preserve SQL success; retry only idempotent optional work for the matching identity |
+| SQL unavailable or unsupported state encoding | Report recovery unavailable; do not rebuild from HP alone, fall back to memory or abandon earnings |
+| Idle deadline passed | Owner command performs the verified idle transition under the same locks; GET only reports due/pending recovery |
+
+An absent receipt is only definitive after the potentially committing
+transaction has resolved; reconciliation/retry must serialize on the same run
+and unique command identity. Clients still use GET-only recovery, without
+automatic POST replay; an explicit retry with the same identity can be safe
+only once the new receipt contract is actually implemented.
+
+Mandatory assets, history and penalties cannot rely on the in-process async
+dispatcher or existing best-effort hooks. If a mandatory effect needs another
+store, retain durable pending work and an idempotent completion identity;
+ownership remains blocked until that work finishes. Optional Replay failure
+must not rerun combat or settlement. No generic event/storage framework or
+cross-store atomicity claim is introduced by this contract.

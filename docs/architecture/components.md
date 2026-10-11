@@ -106,6 +106,11 @@ substitute for interactive combat. The required behavior and actual settlement
 limitations are owned by [Adventure](../design/adventure.md#original-interaction-contract-and-reconstruction-target).
 The existing battle adapter, SQL settlement and Party lobby are reusable pieces,
 not proof of a resumable run or cross-store atomicity.
+The selected [durable normal-run boundary](transient-run-state.md#normal-adventure-durable-command-boundary-1325)
+assigns enrolled solo/cooperative runs to Adventure and waiting admission to
+Party; its decision status is recorded in that owner. Core battle supplies
+feature-independent effects, the battle adapter supplies character binding and
+asset application, and PlayerContext consumes owned public Adventure facts.
 
 ### Common Foundation Packages
 

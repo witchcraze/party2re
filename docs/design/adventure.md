@@ -78,8 +78,8 @@ Persisting only HP/MP and restarting the batch resolver loses these facts.
 Current `CrawlSession` is request-local; it is not a production run store.
 
 Native storage and recovery must be established before replacing production
-starts; [#1325](https://github.com/witchcraze/party2re/issues/1325) owns that
-decision and the resulting bounded runtime implementation scopes. Existing
+starts; [#1325](https://github.com/witchcraze/party2re/issues/1325) records the
+selected boundary below and its bounded runtime implementation scopes. Existing
 Party Valkey lobbies and SQL audit rows are not a resumable
 normal-adventure session. Durable assets, consumption and settlement/history
 require SQL transaction and retry protection; the current lobby lock is not
@@ -95,6 +95,81 @@ routes until #948 verifies replacements. EX progression (#1191), inspection
 allowances (#1196), consumed-item carry (#1197), earned-reward handling (#1198),
 exit fatigue (#1221), chronicle records (#1222) and transaction repair (#1224)
 remain separately owned; no full parity for these is certified here.
+
+## Resumable normal-run transitions
+
+The following lifecycle is the #1325 reconstruction target. The user approved
+SQL authority and the explicit idle-cleanup timing below on 2026-10-11. Legacy
+requirements remain separate from these native decisions; the SQL boundary is in
+[Transient run state](../architecture/transient-run-state.md#normal-adventure-durable-command-boundary-1325).
+No production interactive run store exists yet.
+
+| Transition | Preconditions and resulting facts |
+| --- | --- |
+| Waiting admission | Party owns create/join/readiness; solo uses the same Adventure enrollment boundary without a lobby. Enrollment preserves ordered participants, leader, stage/mode and speed; it creates floor 0 without combat |
+| Encounter creation (`すすむ`) | Living participant, actor interval satisfied, no living enemies; floor 0 additionally requires leader. Clear applicable statuses and temporary/anti fields, advance exactly one floor and create its encounter; no NPC response or automatic allied action |
+| Battle action | Authorized current living actor (or verified fallen-actor exception), registered action and valid target/resources. Process that explicit operation, applicable effects and bounded eligible NPC response; persist all resulting state |
+| Defeat | Resolve revival and death effects within the operation. Keep fallen membership and earned facts; do not silently exit everyone, halve prior EXP or erase gold. With no living allies expose permitted exit/recovery rather than fabricating an automatic run-wide payout |
+| Ordinary boss defeat | Preserve clear/chronicle facts and allow explicit advance into treasure floor 11; do not generate/open treasure merely because the batch resolver returned victory. EX beyond the ordinary boundary remains #1191 |
+| Treasure inspection (`しらべる`) | Living actor selects a current unopened chest; validate actor allowance and any consumable key. Claim/delivery is individual and atomic; no NPC response. Remain in the room until explicit exit |
+| Individual exit (`にげる`) | Distinguish enrolled participant from spectator. Participant receives only outstanding personal effects/history, leaves roster and releases ownership after mandatory processing; preserve others' encounter/resources/timing. Spectator receives no combat rewards |
+| Leadership and room disposal | On leader exit choose the first remaining real participant in preserved roster order, not sorted lock order. Dispose room only after last real participant leaves and required settlement is durable; NPCs do not keep an empty normal room alive |
+| Idle cleanup | Separate due detection, participant recovery/penalty and physical deletion; expired storage is never proof that rewards or mandatory work were processed |
+
+Evidence: `quest.cgi:579–586`; `vs_monster.cgi:37–82,89–109`;
+`_battle.cgi:640–665,1169–1178,1184–1227,1330–1345`.
+Fallen actors are restricted, but not universally barred from operations:
+`_battle.cgi:646–665` allows whisper/screenshot before the fallen check and
+contains a specific self-revival exception. Spectators receive only
+whisper/exit/screenshot in `_skill.cgi:22–30`. These operations' transport and
+visibility reconciliation remains #948; screenshot copying is owned by Replay.
+An unsupported exception must remain an explicit cutover blocker, not silently
+disappear from discovery.
+
+### Earnings and inactivity evidence
+
+`_battle.cgi:199–274` gives ordinary defeat earnings to living allies at the
+defeat operation: directly for the acting character, and through a per-user
+`stock.cgi` for other recipients. `get_stock` (`1459–1473`) consumes that stock
+on applicable actions (`912`) and personal exit (`1208`). Try-mode stock has
+different release behavior (`1915–1939`); ordinary unconditional earnings must
+not be confused with conditional mode rewards. #1198 owns the reward correction,
+#1225 the cooperative multiplier, #1221 personal exit fatigue/flags, and #1222
+chronicle consistency. Native durable entitlements replace stock files without
+copying their architecture or claiming all reward formulas were audited here.
+
+`quest.cgi:80–91,172–183` checks **strictly more than 1800 seconds** since the
+room log modification, clears each non-NPC member's location and sets
+`sleep=3600`, then deletes the room directory. It does not call `nigeru` or
+`get_stock`, and user-owned stock is outside the deleted directory. Thus idle
+cleanup is neither ordinary personal exit nor permission to delete pending
+earnings. Participants already removed from the roster are not penalized again.
+GET must never perform this mutation or renew its deadline in the reconstruction.
+
+**User-approved native timeout contract (2026-10-11, #1325):** retain the strict 30-minute
+inactivity threshold, trigger cleanup by an explicit owner command, retain
+earned recipient assets/entitlements and apply a recoverable one-hour sleep
+penalty to remaining real participants. Anchor that hour to the committed
+cleanup instant; persist its deadline/processing identity before optional timer
+projection, and preserve explicit Wake/recovery. A failed timer write cannot
+release active ownership or extend the hour on retry. This fixes a native time
+representation rather than certifying literal CGI timing: the original writes
+a duration through `system.cgi:861–883`, while `sleep.cgi:19` later subtracts
+time since previous login. No ordinary exit fatigue/history or full recovery
+is inferred for timeout. Record a distinct timeout history disposition; any
+additional loss, reward release or penalty rule needs evidence/approval.
+
+### Remaining reconciliation gates
+
+Before production cutover, trace every exposed action to its effect and target
+rules, including current/previous-job skills, custom effects, additional actions,
+fallen exceptions, modes and ordinary boss special behavior. The boundary
+evidence above is not full skill/formula parity. Missing actions, effect lifetime
+or mode-release facts block their affected runtime acceptance; do not fill them
+with the batch resolver's automatic choices. Shared processing requirements are
+owned by [Battle](battle.md#explicit-action-resumption-requirements); commands
+and owned observations by
+[Client/Agent API](../architecture/client-agent-api.md#planned-normal-adventure-commands-and-recovery).
 
 The following sections describe the **current batch crawl** and existing models.
 They are not authorization to preserve automatic battles, advance, inspection
