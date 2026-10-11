@@ -825,9 +825,81 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenFromEnvironment failed: %v", err)
 	}
-	defer db.Close()
 
 	ctx := context.Background()
+
+	var (
+		cleanupGuildIDs  []string
+		cleanupCharIDs   []string
+		cleanupPlayerIDs []string
+	)
+
+	trackChar := func(c corecharacter.Character) {
+		cleanupCharIDs = append(cleanupCharIDs, c.ID)
+		if c.PlayerID != "" {
+			cleanupPlayerIDs = append(cleanupPlayerIDs, c.PlayerID)
+		}
+	}
+
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		for _, cid := range cleanupCharIDs {
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_homes WHERE character_id = ?", cid); err != nil {
+				t.Errorf("cleanup character_homes for %s failed: %v", cid, err)
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM guild_members WHERE character_id = ?", cid); err != nil {
+				t.Errorf("cleanup guild_members for %s failed: %v", cid, err)
+			}
+		}
+		for _, gid := range cleanupGuildIDs {
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM guild_members WHERE guild_id = ?", gid); err != nil {
+				t.Errorf("cleanup guild_members for guild %s failed: %v", gid, err)
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM guilds WHERE id = ?", gid); err != nil {
+				t.Errorf("cleanup guild %s failed: %v", gid, err)
+			}
+		}
+		for _, cid := range cleanupCharIDs {
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", cid); err != nil {
+				t.Errorf("cleanup character_depots for %s failed: %v", cid, err)
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", cid); err != nil {
+				t.Errorf("cleanup characters for %s failed: %v", cid, err)
+			}
+		}
+		for _, pid := range cleanupPlayerIDs {
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", pid); err != nil {
+				t.Errorf("cleanup players for %s failed: %v", pid, err)
+			}
+		}
+		if err := db.Close(); err != nil {
+			t.Errorf("cleanup db.Close failed: %v", err)
+		}
+	})
+
+	homeRepo, err := database.NewHomeRepository(db)
+	if err != nil {
+		t.Fatalf("NewHomeRepository failed: %v", err)
+	}
+
+	// Verify town capacity before building. If existing houses exceed capacity,
+	// fail fast with a diagnostic error rather than modifying existing data.
+	now := time.Now().UTC()
+	for _, townID := range []string{"town1", "town2", "town3", "town4"} {
+		count, err := homeRepo.CountActiveTownHouses(ctx, townID, now)
+		if err != nil {
+			t.Fatalf("CountActiveTownHouses for %s failed: %v", townID, err)
+		}
+		needed := 1
+		if townID == "town1" {
+			needed = 3
+		}
+		if count+needed > 10 {
+			t.Fatalf("town %s capacity is insufficient (%d active houses, need %d, max 10); existing data occupies town capacity", townID, count, needed)
+		}
+	}
 
 	// Instantiate production wiring
 	core, err := newCoreServices(db, nil)
@@ -849,6 +921,8 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTestGuildWithLeader failed: %v", err)
 	}
+	cleanupGuildIDs = append(cleanupGuildIDs, testGuild.ID)
+	trackChar(leader)
 
 	guildRepo := soc.guildRepo
 
@@ -889,6 +963,7 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatalf("CreateTestCharacterWithFunds failed: %v", err)
 			}
+			trackChar(memberChar)
 			m := guild.Member{
 				GuildID:     testGuild.ID,
 				CharacterID: memberChar.ID,
@@ -925,6 +1000,7 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTestCharacterWithFunds failed: %v", err)
 	}
+	trackChar(soloChar)
 	soloRes, err := soc.home.BuildHouse(ctx, soloChar.ID, "town1", "002")
 	if err != nil {
 		t.Fatalf("BuildHouse for unaffiliated character failed: %v", err)
@@ -946,6 +1022,7 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTestCharacterWithFunds failed: %v", err)
 	}
+	trackChar(poorChar)
 	mPoor := guild.Member{
 		GuildID:     testGuild.ID,
 		CharacterID: poorChar.ID,
