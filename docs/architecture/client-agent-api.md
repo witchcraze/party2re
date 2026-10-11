@@ -736,6 +736,46 @@ validation remains authoritative for exact stage requirements and state changes
 after preflight; unexpected service/store errors use `500 EXECUTION_FAILED`.
 Both known outcomes use the refresh/recovery contract below.
 
+### Planned normal-adventure commands and recovery
+
+The #1325 [selected run authority](transient-run-state.md#normal-adventure-durable-command-boundary-1325)
+is an approved implementation target, not a registered Gateway schema. #1323 owns runtime
+restoration; #948 owns coordinated transport replacement. Keep the existing
+`adventure_start` and REST paths until their verified replacement is deployed.
+Do not document proposed ActionIDs or result fields in OpenAPI as if connected.
+
+The new start result must identify an enrolled floor-0 run rather than claim a
+completed crawl. Separate strict command variants cover advance, explicit
+battle action/target, chest inspection and personal exit. Each active command
+binds immutable run identity, expected version and actor-scoped command identity;
+the owned path/session supplies actor identity. Battle/chest choices use explicit
+encounter target IDs, never another player's Character ID as permission to read
+private data. Variant schemas reject unknown/null fields and stale selections;
+action-specific multi-target/extra-action inputs follow verified effect rules.
+
+Adventure's actor reader supplies typed run/version/phase, actor role and vitality,
+public roster/encounter/field facts, permitted action/target choices, actor deadline
+and outstanding personal exit/recovery facts. Progressive action then target
+selection uses the current version and explicit command template. Spectator and
+fallen views have their own restricted choices; generic town-entry gates cannot
+block legal exit/recovery. SQL ownership survives lobby loss and unfinished exit.
+GET neither settles nor advances, claims, penalizes, captures Replay or extends
+deadlines. Storage errors remain errors, never false absence of an active run.
+
+Retain the shared success/rejection and refresh-failure envelopes. Add owned
+command-receipt observation so a lost response/commit-unknown can be resolved
+even after personal exit; GET context alone is not proof of whether a specific
+command committed. Receipt lookup authenticates the viewer and verifies ownership
+of the recorded executing actor before payload access, without requiring current
+membership or a live Run. Receipts remain queryable after Run deletion. Explicit
+same-identity/same-input retry, once implemented, returns the original domain
+result even after exit; foreign receipts and changed input for that identity are
+rejected. Only a new command validates current membership, state and version.
+Clients never automatically replay POST or mint a new identity
+to retry an unknown outcome. Version conflicts request fresh observation.
+Unfinished mandatory effects keep entry blocked and expose explicit recovery;
+optional Replay/cleanup failures do not change a committed settlement result.
+
 ### Emergency rescue command contract
 
 `rescue_request` accepts only `{ "reason": "stuck activity" }`, with a required
