@@ -126,6 +126,34 @@ visibility reconciliation remains #948; screenshot copying is owned by Replay.
 An unsupported exception must remain an explicit cutover blocker, not silently
 disappear from discovery.
 
+### Normal-run operation discovery
+
+Normal runs discover actions from current encounter facts, not the automatic
+batch resolver's priority list. Shared combat dispatch, targeting, resource and
+effect gates are owned by the [Battle action matrix](battle.md#normal-adventure-action-and-target-matrix).
+Evidence below uses legacy revision `ff97fc549932a146cc945d7edf71b44c868a840e`.
+The user requested original behavior as the default on 2026-10-12 (#1327).
+
+| Legacy operation / dispatch | Discovery, target and result | Native owner / verification |
+| --- | --- | --- |
+| `こうげき`, `ぼうぎょ`, `てんしょん`; current/previous-job, equipment/book/seal, custom and tool actions | `_skill.cgi:set_action:33–151,219–309`; current resources, job/SP, curse, equipment and encounter predicates select callbacks. Tool category 1 is also discovered outside the enemy-present skill block | #1188 supplies jobs; #1332/#1333 effect gates; #1197 consumption; #1329 command consumer; #1330 discovery. No automatic action when interval elapses |
+| `すすむ` → `susumu` | `vs_monster.cgi:37–82`: no enemies, initial leader only, explicit one-floor advance; resets effects, creates encounter, disables NPC response. Ordinary treasure entry is a further explicit advance | #1328 owns phase/encounter state, #1329 reset effects, #1330 transport. Test floor 0/nonleader, living enemies and final ordinary floor |
+| `しらべる` → `shiraberu` | Treasure floor only (`vs_monster.cgi:38–41`); chosen existing unopened NPC chest, individual allowance/key (`_npc_action.cgi:6–80`). No NPC response; inventory/depot outcome and chest state commit together | #1196 allowance/keys, #1197 consumption, #1328 individual claim, #1330 choice/observations |
+| `にげる` → `nigeru` | `_skill.cgi:157–160`, `_battle.cgi:1184–1345`: participant exits individually; spectator exits without reward. Living and fallen roles differ from combat admission. Remaining roster continues; leader follows preserved order | #1328 owns settlement/removal; #1198/#1225 earnings, #1221 fatigue, #1222 chronicle; #1330 tests survivor continuation |
+| `まえ`, `うしろ` → `mae`, `ushiro` | `_skill.cgi:152–154,894–929`: party size >1, move actor to front/back; no listed MP. Ordinary accepted-action/status/tail processing applies; no blanket noncombat NPC suppression | #1329 owns ordered formation mutation and applicable response, #1330 advertises it; test persisted order and status-blocked action |
+| `サバイバル`, `フォームチェンジ`, calling | `_skill.cgi:166–217,226–258`: no-enemy/job/SP/curse/item gates; self recovery, forward/reverse transformation and dynamic helpers; original costs in Battle matrix | #1333 owns missing native effects, #1329 executes certified entries. These cannot be omitted just because there is no enemy |
+| `すとっく` → `stock_lv_up` | `_skill.cgi:312–317`: no enemies, level/EXP gates; `_battle.cgi:358–379` performs accumulated level processing, no listed MP. Distinct from pending recipient reward stock | #1328 uses existing progression/settlement primitives, #1329 handles operation facts, #1330 discovery; test threshold, repeated command and restart |
+| `さそう`, `きっく` → `sasou`, `kick` | `_skill.cgi:161–164,769–783`: floor 0; kick leader only. Invitation dispatch redirects its log to the public quest area, not the room | Party owns waiting admission/permissions; #948/#1330 reconcile equivalent commands. Invitation is not room activity just because it was submitted from that room |
+| Plain comment / unknown command | `party.cgi:21–27`: nonempty submission invokes action and writes comment unless `$mes`; `_battle.cgi:640` returns on unknown dispatch without setting an error, so unknown command can remain a comment | #948/#1330 own explicit comment acceptance and visibility. Unknown typed Gateway actions remain schema errors; any faithful text-submission path must treat unknown text as a comment rather than silently equate the two |
+| `ささやき` → `sasayaki` | `_battle.cgi:640–649` checks dispatch/interval first, then returns before fallen/status/resource/tail processing. `system.cgi:251–262` validates named recipient, disables NPC response. No target is a public comment; private recipient may be outside encounter | #948/#1330 own allowed audience and sender/recipient-only observation (`system.cgi:622–630`); accepted writes renew room activity, not actor battle time |
+| `すくしょ` → `sukusho` | `_battle.cgi:650–652` returns before combat tail; `system.cgi:165–207` copies owned scene/public comment lines, excludes private lines, sets `$mes` on success or failure, so no room comment write | #1320 owns archives/capture and #948/#1330 permitted transport; does not renew room activity or run battle effects |
+| Spectator/fallen exceptions | `_skill.cgi:25–30`: spectator discovers whisper/exit/screenshot only. Fallen actor is blocked after whisper/screenshot dispatch except exit and the gated self-revival callback (`_battle.cgi:654–665`) | #1329/#1330 role tests; #1333 self-revival prerequisite. Discovery cannot imply spectators may fight; blanket rejection of fallen submissions loses original exceptions |
+
+These are domain mappings, not newly registered HTTP routes. #1330 must supply
+strict commands/owned observations through the existing Gateway; #948 owns
+remaining combat transport reconciliation and #1320 Replay privacy/archive
+work. Shared core does not send messages, archive screenshots or own room time.
+
 ### Earnings and inactivity evidence
 
 `_battle.cgi:199–274` gives ordinary defeat earnings to living allies at the
@@ -137,6 +165,23 @@ not be confused with conditional mode rewards. #1198 owns the reward correction,
 #1225 the cooperative multiplier, #1221 personal exit fatigue/flags, and #1222
 chronicle consistency. Native durable entitlements replace stock files without
 copying their architecture or claiming all reward formulas were audited here.
+
+Try-mode release is a normal-adventure continuation gate, not another combat
+resolver: `vs_monster.cgi:91–102` calls `success_try` only on explicit ordinary
+treasure-floor creation. `_battle.cgi:1915–1949` aggregates each real party
+recipient's pending EXP/gold/crystals, multiplies each aggregate by 1.5 with
+integer truncation, rewrites pending stock and returns room mode to normal.
+The generic action stock release at `912` excludes Try mode. #1198 owns this
+conditional entitlement disposition and #1328 the atomic transition; #1225
+owns the separate cooperative multiplier. A retry must not apply 1.5 twice,
+and ordinary unconditional earned assets must not be replaced by conditional
+Try stock. On participant exit, `nigeru:1208` calls `get_stock`; while Try is
+still active, `get_stock:1459–1473` reads and clears pending stock **without
+crediting it**. After successful treasure entry, the mode is normal and the
+converted stock can be credited once on a subsequent action or exit. Falling
+alone does not invoke that personal exit disposition. #1198/#1328 must test
+pre-success exit forfeiture separately from normal earned assets and timeout
+preservation; timeout's already-approved retention is not an ordinary exit.
 
 `quest.cgi:80–91,172–183` checks **strictly more than 1800 seconds** since the
 room log modification, clears each non-NPC member's location and sets
@@ -159,14 +204,47 @@ time since previous login. No ordinary exit fatigue/history or full recovery
 is inferred for timeout. Record a distinct timeout history disposition; any
 additional loss, reward release or penalty rule needs evidence/approval.
 
+### Room activity contract
+
+Room activity and actor battle eligibility are separate clocks. The original
+`party.cgi:21–27` writes a submitted comment only when `$mes` is unset;
+`system.cgi:660–676` rewrites `$this_file.cgi`, normally the room log
+(`_battle.cgi:19–20`). `quest.cgi:80–91` uses that file's modification time.
+Thus the rule is accepted **room-log-equivalent submission**, not merely
+successful damage or any POST. Preserve original admission/visibility and
+distinguish an accepted no-effect result from a rejected operation.
+
+| Operation / result | Update room last-activity time? | Evidence / required verification |
+| --- | --- | --- |
+| Accepted combat, including incapacitated action or accepted no-effect callback | Yes | `_battle.cgi:686–728,761–762,1174–1178`; no `$mes` → comment write. Test a status-blocked actor separately from a cooldown rejection |
+| Accepted advance, treasure claim, formation change, between-encounter recovery/transformation/call, stock-level processing | Yes | Each normal dispatch returns through `party.cgi` comment write; callback `$mes` instead means rejected. Test no-effect versus error without inferring from HP changes |
+| Accepted exit with room remaining | Yes, if its resulting log belongs to that room | `_battle.cgi:1330–1345`: last-participant disposal redirects `$this_file` to the quest area; there is then no surviving room to renew. Preserve participant/spectator distinction |
+| Accepted plain comment, unknown legacy text command, public or private whisper | Yes, including permitted spectator/fallen submissions | Unknown action returns before interval check (`640`); recognized whisper checks interval then returns before combat tail (`641–649`). `system.cgi:251–262,660–676` writes it, even if no recipient was supplied. Do not make plain comments inherit combat cooldown; do not expose whispers in public observations |
+| Banned skill silently ignored by legacy dispatch | Yes, as a comment; no actor combat timestamp update | `_battle.cgi:667–675` returns without `$mes`, so `party.cgi:25` still writes the submission. A combat effect not executing does not prove that its submission was rejected |
+| Successful floor-0 kick | Yes | `_skill.cgi:796–837` removes a member and additionally writes a quest-area notice without redirecting `$this_file`; the caller still writes its room comment |
+| Invitation or any dispatch redirected to another area's log | No | `sasou`, `_skill.cgi:772–776`, redirects `$this_file`. Posting from a room is insufficient evidence of room activity |
+| Screenshot, including successful capture | No | `system.cgi:175–191` sets `$mes`; `party.cgi:25` skips room comment write. Archive mutation is not room activity |
+| Rejected operation: cooldown, forbidden role, resource/target validation error with `$mes` | No | `$mes` prevents comment write (`party.cgi:25`). Unknown **text** or silently ignored skill accepted as a comment is different from a typed API action rejected by schema/validation |
+| GET/refresh/discovery, elapsed time or due detection | Never | Existing approved #1325 observation boundary; no synthetic log write or effect tick |
+| Same committed command retried / receipt read | No new activity instant | Existing approved #1325 receipt boundary: return committed facts, no second submission/log write. A new intentional comment with a new command identity is a new submission |
+
+#1328 persists room activity in the same SQL commit as the accepted operation;
+failed/rolled-back commands cannot renew it. #1330/#948 reconcile the actual
+comment/whisper submission path and privacy, while #1320 owns screenshot capture.
+Tests must cover accepted/rejected/no-effect text, private whispers, screenshot,
+redirected logs, GET and receipt retries, strict `>1800` seconds and the existing
+cleanup-time one-hour penalty anchor. This gate affects #1328 idle cleanup only;
+its other lifecycle work does not wait for transport implementation.
+
 ### Remaining reconciliation gates
 
-Before production cutover, trace every exposed action to its effect and target
-rules, including current/previous-job skills, custom effects, additional actions,
-fallen exceptions, modes and ordinary boss special behavior. The boundary
-evidence above is not full skill/formula parity. Missing actions, effect lifetime
-or mode-release facts block their affected runtime acceptance; do not fill them
-with the batch resolver's automatic choices. Shared processing requirements are
+The operation matrix establishes the family boundary. Production cutover still
+requires #1188 job supply, [#1332](https://github.com/witchcraze/party2re/issues/1332)
+effect lifetimes and [#1333](https://github.com/witchcraze/party2re/issues/1333)
+dynamic callback/ordinary boss certification and its bounded implementation
+follow-ups. #1198 implements Try success/exit disposition and #1196/#1197 item rules.
+The boundary evidence is not full skill/formula parity; unknown facts cannot
+be filled with the batch resolver's automatic choices. Shared requirements are
 owned by [Battle](battle.md#explicit-action-resumption-requirements); commands
 and owned observations by
 [Client/Agent API](../architecture/client-agent-api.md#planned-normal-adventure-commands-and-recovery).

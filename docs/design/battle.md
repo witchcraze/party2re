@@ -143,25 +143,89 @@ cannot reconstruct this state. Persist encounter identities and randomized
 outcomes already produced; retries read committed results rather than rerolling.
 Do not require the in-process RNG object or a Go closure to be serializable.
 
-The legacy has effects not represented by these current maps (for example
-temporary-effect counters and special fields). Implementation must establish
-the action/effect reconciliation matrix and add only state actually needed by
-supported effects. Untraced effects remain explicit blockers for production
-adoption, not a claim that serializing today's maps restores the whole game.
+The legacy has effects not represented by these current maps. The matrices below
+define the normal-adventure coverage gate; serializing today's maps does not
+restore the whole game. Untraced callbacks remain explicit production blockers.
 The old batch turn ceiling/order remains scoped to that resolver; an interactive
 encounter cannot inherit a fictional 30/100-operation timeout from it.
-[#1327](https://github.com/witchcraze/party2re/issues/1327) owns the unresolved
-normal-adventure action/effect reconciliation; #1188 owns production job-skill
-supply. Neither SQL persistence nor a passing step test resolves those gaps.
 
-Target-helper evidence: `_skill.cgi:9615–9648,9654–9690` can substitute a random
-ally/enemy for omitted or wrong-side legacy text targets, redirect confusion,
-and distinguish revival targets. Native explicit IDs must remain scoped to the
-current encounter; the per-action reconciliation must distinguish optional
-legacy targeting from an unauthorized/stale explicit reference. Another open
-point is NPC rotation after a skipped head: `npc_turn:149–151` shifts the first
-enemy even when a later enemy was selected. Do not silently normalize this to
-"move the acting NPC to the tail" without resolving the observed behavior.
+### Normal-adventure action and target matrix
+
+Evidence is the original checkout at revision
+`ff97fc549932a146cc945d7edf71b44c868a840e`; paths below are under `party2/lib/`.
+This is family-level reconciliation, not certification of every skill callback.
+The user selected preservation of original behavior in #1327 on 2026-10-12.
+Native action names must follow the migration naming rule; legacy names below
+identify evidence only. Adventure owns [discovery and operation admission](adventure.md#normal-run-operation-discovery).
+
+| Action/effect family | Dispatch and target/resource evidence | State/lifetime and native owner/test gate |
+| --- | --- | --- |
+| Normal attack | `_skill.cgi:106–113,863–884` → `kougeki` → `_damage` → `_check_enemy`. Missing/wrong-side target chooses a random enemy; seal 10 repeats the attack; equipment can add a strike | HP, MP for relevant seals, tension/hit, death/revival/drop facts; current `execute_action.go` is reusable only after explicit-target and effect verification. #1329 tests omitted/wrong-side targets and repeated hits |
+| Defend and tension | `_skill.cgi:115–122,942–978`: self, zero listed MP; tension blocked by binding, follows staged values and level/equipment conditions | Defend uses temporary state; tension is consumed by applicable helpers/reset, not a permanent attack buff. #1332 owns state/lifetime; test next action, intervening enemy hit and floor reset |
+| Current/previous-job skills | `set_action:35–104,260–283` dynamically calls `skill_<job>` then its callback. SP, extended-skill/equipment, curse and MP gates; previous-job SP is independent | #1188 owns production supply. Damage/heal/stat/status kinds alone are not complete callback coverage; #1333 traces indirect effects and registers unsupported implementations before cutover |
+| Equipment extensions, books and weapon-seal commands | `_skill.cgi:124–145,219–224`, `@extend_skill_item:321`, `@booK_skill_item:479`; equipped-item/seal predicates add callbacks to the previous-job admission loop | Callback can change temporary effects, resources, roster or inventory. Book chaining (`6874–6895`) takes two targets, checks internal MP cost, stops on actor death and returns the book to storage. #1333 owns callback coverage; #1197 owns consumption identity |
+| Custom gem skill | `set_action:288–309`: unique custom name, at least one gem, sufficient CMP, not cursed. Missing target defaults to actor before gem callbacks; each gem uses its own target helpers | Ordered gem effects stop after actor death; `_battle.cgi:787–789` charges CMP. #1333 traces `_data.cgi:@gems:2087` callbacks, #1332 owns recharge/field state, #1329 tests multi-gem order and restart |
+| Combat tool | `set_action:150–151` → `dougu:758–764` → `_data.cgi` item callback; combat usage category 1, missing target defaults to actor, callback-specific targeting | Successful callback clears held item; an error does not consume it. #1197 owns durable instances/consumption, #1333 owns missing effect coverage. Do not assume every tool is generic heal/buff/damage |
+| Between-encounter recovery, transformation and calling | `set_action:166–217,226–258`: no enemies, job/SP/curse/equipment gates; survival recovery costs 10 MP, forward transformation 10 MP, reverse 0; calling takes job callbacks | HP, transformed current/previous job, helper membership and randomized stats survive requests. #1333 owns effect/catalog certification; #1329 consumes certified choices. Generic reset is not permission to undo transformation |
+| Revival and fallen self action | `_battle.cgi:654`, `_skill.cgi:4910–4930`: discovery still requires its job/extended-skill gates and living designated helper; fallen self gains 50% MaxHP and immobilization. Living actor can revive fallen ally to 1 HP only with MP strictly >40, then spends 40 | Helper HP halves and a three-operation skill ban is set. #1333 owns effect, #1332 ban lifetime; #1329 tests fallen admission, no helper, exact 40 MP, and death-mark follow-up. A blanket living-actor guard is incorrect |
+| Additional submission and random invocation | `_battle.cgi:565,574–575,780–785,1084–1088`; `_skill.cgi:_yubiwofuru:9773–9787` dynamically selects a non-extended job callback | Second action is not another player turn/NPC round. Random callback temporarily preserves MP when its internal effect lowered it. #1332 owns second-submission lifetime, #1333 transitive random-effect coverage, #1329 step integration |
+| Ordinary enemies and stage bosses | `_npc_action.cgi:89–155,158–495,600–633`: ordered eligible NPC, current/previous-job and custom callbacks, resources and full boss attributes. Random selection among available NPC entries (`313`), not the player's batch priority | Preserve NPC-specific cures/tails, curse payload and special abilities. Curse release (`116–135`) occurs before NPC choice, clears payload, and rebuilds living opponents. #1333 owns ordinary boss catalog coverage; #1329 tests response admission/order |
+
+Player listed MP admission uses the item-249 modifier (integer half cost for
+magician skills, double otherwise); execution charges after the callback unless
+it reports `$mes` (`set_action:68–79,263–283`, `_battle.cgi:761–778`). Calling
+with item 165 overrides the charged cost to zero. Callback-internal costs remain
+separate. NPC catalog cost handling (`_npc_action.cgi:177–224,313–322`) is its
+own path. #1188/#1333 must reconcile the relevant admission/charge differences;
+no-effect callback return alone is not a resource-validation failure.
+
+Target rules are per helper, not one global living-target filter:
+
+| Target path | Original rule and reconstruction contract |
+| --- | --- |
+| Ally helper `_check_party:9615–9648` | Omitted/unknown legacy name or wrong-side reference chooses a random ally; a fallen selection becomes self except for revival. Temporary effects may redirect target/value. Revival callbacks separately require a fallen target |
+| Enemy helper `_check_enemy:9654–9715` | No enemies reports failure; omitted/unknown legacy name or same-side reference chooses a random enemy. Outside confusion, fallen selected target returns without effect. Temporary defense/cover/reflection and special phantom fields may redirect |
+| Confusion | Helper-specific selection uses `@members`, not Go's living-opponents/lowest-HP filter; actor inclusion, repeated draws and fallen handling differ between helpers. Preserve those branches; #1333 must certify special-field variants before advertising them |
+| Group/self/direct callback | Group helpers iterate preserved party/enemy order; e.g. `_damages:8807–8823` reduces successive power and stops on actor death. Self actions ignore enemy selection. Direct callback assignments and two-target books must be traced individually; helper rules cannot be assumed to apply |
+| Native ID boundary | Preserve original wrong-side fallback **within the current encounter**. Omission is an intentional input, never filled from UI navigation. A native explicit ID outside that encounter or from an obsolete encounter is rejected before resource/effect mutation; it is an invalid reference, not a legacy unresolved text name. An encounter member becoming fallen uses the action's fallen-target rule, not a blanket stale-ID rejection. #1329/#1330 test these distinctions |
+
+**NPC order decision:** preserve the original head rotation, including skipped
+heads. For enemy order `[A,B,C]`, when A is not interval-ready and B acts, the
+result is `[B,C,A]`, not `[A,C,B]`. Only B's action timestamp changes. With no
+eligible living NPC, no rotation occurs. Selection is `_npc_action.cgi:90–92`;
+rotation is `149–153`. Persist semantic order independently of SQL lock order.
+
+**Additional-submission rule:** the active extended effect permits parsing two
+submitted actions. Both must belong to the seven-entry whitelist at
+`_battle.cgi:780–781`; after first-action cost, MP must be **strictly greater**
+than the second entry's raw listed cost. Execute/charge the second once, without
+applying the first-action cost modifier again. The effect counter at
+`1084–1088` checks a nonempty whitelisted second submission while enemies remain;
+it does not check whether that submission executed. Test exact-cost rejection
+and counter decrement separately. Generic arbitrary extra turns are unsupported.
+
+### Effect lifetime and reload coverage gate
+
+| State / trigger | Required original behavior and evidence | Native responsibility / boundary test |
+| --- | --- | --- |
+| Status and poison | Player incapacitation branches (`_battle.cgi:686–728`) consume an accepted operation but bypass the normal-action block; paralysis/sleep cure branches do not execute the chosen action in that operation. Item 204 bypasses relevant checks. Player confusion cure is 1/5, ordinary NPC is 1/3 (`_npc_action.cgi:295–310`). Poison, party virulent poison and death checks use their actual post-action block (`792–857`), not every elapsed interval | #1332/#1333 reconcile existing `execute_status.go` gaps; #1329 tests accepted incapacitation vs rejected operation, player/NPC distinction and serialize/reload before poison/death |
+| Temporary effects | On normal player action, defense/reflection clears, other temporary effects may clear with 1/3 probability; mirror-sharing and item 163 exceptions apply (`748–755`). Target helpers apply cover/reflection; single-use defense clears on hit (`_skill.cgi:8838–8843`) | #1332 owns typed effect facts/reset; reload before/after expiry, reflected hit and defense consumption. Current defending/abilities maps do not establish these lifetimes |
+| Extended effects | With enemies and the enclosing tail eligible (`_battle.cgi:938–1172`), counters differ: frenzy/awakening on operation; magic sword/crown/war-god/flame on positive damage count; bow on qualifying bow action; additional submission on whitelist input. Incense ticks each holder on an ally tail with one party heal (`1055–1128`). NPC purification has its own decrement (`_npc_action.cgi:466–468`) | #1332 owns counters and operation-local action facts. Round-trip immediately before/after every decrement/zero transition; test zero damage and blocked second execution |
+| Suppression / skill history | `_skill.cgi:2518–2531` suppresses on the first qualifying cosmic-field use for a color; `6257–6273` rotates a head and suppresses; `6843–6853` suppresses after successful book retrieval. `_battle.cgi:913–914,938,1169` independently gate field ticks, tail and NPC response | #1332 owns history, #1333 callback predicates; test first/repeated use, failed retrieval, and suppressed operation. Do not equate suppression with disabling all poison/extra processing |
+| CMP and skill bans | Seal-field entry changes recharge need/progress (`636–638`); eligible tail checks threshold, recharges, resets and chooses next threshold (`1039–1053`). Skill ban file blocks named submissions (`667–675`); eligible tail decrements finite bans, retaining sentinel 999 (`1137–1149`) | #1332 persists recharge thresholds/progress and bans/history. Reload at threshold−1/threshold, ban expiry and permanent ban; a GET/retry never ticks |
+| Temporary/default/anti fields | `get_field_info:1568–1610` prefers temporary over default. Temporary decrements when present before/after operation, enemies remain, anti absent and response not suppressed (`913`). Anti decrements under its own presence/suppression predicate (`914`); creation deletes temporary field (`1661–1668`). Default is not a temporary countdown; expiry can reveal it | #1332 extends current elemental `FieldState`; reload at creation, last tick, anti expiry and default reveal. Special burn/ghost/library hooks use `check_field_exercise:1715–1720`; #1333 certifies catalog-specific effects |
+| Reset / death / advance | `reset_status:1390–1408` clears status/tmp/extended/tension/hit, recalculates stats and reapplies equipment effects. `reset_status_all:1411–1428` can revive fallen allies via item 188 before reset. `vs_monster.cgi:74–76` resets and deletes temporary/anti fields on explicit advance | #1332 tests reset reapplication and advance revival; HP/MP, consumed items and earned assets are not generically restored. #1197/#1198 remain asset owners |
+| Summons, transformed jobs, ordinary boss payloads | `_add_party:9793–9828` creates ordered allies with rolled stats; `add_boss:600–633` initializes full supplied attributes and gem cost. NPC curse and specter/absorber hooks (`116–135,471–491`) change state/roster/resources | #1333 certifies behavior and registers missing implementations; #1329 round-trips identities, order, helper ownership and consumed payloads without rerolling |
+| End-processing and rewards | ActionCounter records damage/heal/status/attribute facts, not merely elapsed turns. TurnEndProcessor queues work flushed at player `1164` and NPC `139`; death-mark follow-up runs at player `1155–1161` | Finish effects before commit; no persisted closures. #1329 saves resulting facts/receipts; #1197/#1198/#1225 own consumption/earnings corrections |
+
+Production adoption is gated by [#1332](https://github.com/witchcraze/party2re/issues/1332)
+(resumable lifetime state) and [#1333](https://github.com/witchcraze/party2re/issues/1333)
+(dynamic catalog/ordinary boss certification and bounded native follow-ups),
+alongside #1188 supply. The latter explicitly includes untraced item/book/gem,
+random-call, summon and special-field callbacks; these rows do not certify their
+formulas. #1329 must test uninterrupted versus serialized/reloaded continuation
+at each supported boundary, keeping batch producers unchanged. #1330 cannot
+advertise a callback whose direct or transitive effect lacks native coverage.
 
 ### 2. Elemental Field Multipliers (`field.go`)
 - **Matching Element**: $+30\%$ bonus damage (multiplier $1.30$).
