@@ -14,28 +14,29 @@ import (
 )
 
 type mockGuildRepo struct {
-	createGuildFn        func(ctx context.Context, g guild.Guild, creator guild.Member, fee int) (guild.Guild, guild.Member, corecharacter.Character, error)
-	getGuildFn           func(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error)
-	getGuildForUpdateFn  func(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error)
-	getGuildByCharFn     func(ctx context.Context, characterID string) (guild.Guild, guild.Member, error)
-	listGuildsFn         func(ctx context.Context, offset, limit int) ([]guild.Guild, error)
-	listInactiveGuildsFn func(ctx context.Context, cutoff time.Time, limit int) ([]guild.Guild, error)
-	addMemberFn          func(ctx context.Context, member guild.Member) (guild.Member, error)
-	removeMemberFn       func(ctx context.Context, guildID string, characterID string) error
-	transferLeadershipFn func(ctx context.Context, guildID string, oldLeaderCharID string, newLeaderCharID string) error
-	assignCustomRoleFn   func(ctx context.Context, guildID string, targetCharID string, title string) error
-	approveMemberFn      func(ctx context.Context, guildID string, characterID string, title string) error
-	updateNoticeFn       func(ctx context.Context, guildID string, notice string) error
-	updateColorFn        func(ctx context.Context, guildID string, color string) error
-	isColorTakenFn       func(ctx context.Context, color string, excludeGuildID string) (bool, error)
-	addPointsFn          func(ctx context.Context, guildID string, points int64) error
-	addGuildPointsFn     func(ctx context.Context, characterID string, points int) error
-	updateMarkFn         func(ctx context.Context, guildID string, mark string, fee int, leaderID string) (corecharacter.Character, error)
-	updateBgimgFn        func(ctx context.Context, guildID string, bgimg string) error
-	updateWallpaperFn    func(ctx context.Context, guildID string, wallpaper string, fee int, leaderID string) (corecharacter.Character, error)
-	touchActiveFn        func(ctx context.Context, guildID string) error
-	disbandGuildFn       func(ctx context.Context, guildID string) error
-	decayGuildPointsFn   func(ctx context.Context, factor float64) error
+	createGuildFn            func(ctx context.Context, g guild.Guild, creator guild.Member, fee int) (guild.Guild, guild.Member, corecharacter.Character, error)
+	getGuildFn               func(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error)
+	getGuildForUpdateFn      func(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error)
+	getGuildByCharFn         func(ctx context.Context, characterID string) (guild.Guild, guild.Member, error)
+	listGuildsFn             func(ctx context.Context, offset, limit int) ([]guild.Guild, error)
+	listInactiveGuildsFn     func(ctx context.Context, cutoff time.Time, limit int) ([]guild.Guild, error)
+	addMemberFn              func(ctx context.Context, member guild.Member) (guild.Member, error)
+	removeMemberFn           func(ctx context.Context, guildID string, characterID string) error
+	transferLeadershipFn     func(ctx context.Context, guildID string, oldLeaderCharID string, newLeaderCharID string) error
+	assignCustomRoleFn       func(ctx context.Context, guildID string, targetCharID string, title string) error
+	approveMemberFn          func(ctx context.Context, guildID string, characterID string, title string) error
+	updateNoticeFn           func(ctx context.Context, guildID string, notice string) error
+	updateColorFn            func(ctx context.Context, guildID string, color string) error
+	isColorTakenFn           func(ctx context.Context, color string, excludeGuildID string) (bool, error)
+	addPointsFn              func(ctx context.Context, guildID string, points int64) error
+	addGuildPointsFn         func(ctx context.Context, characterID string, points int) error
+	updateMarkFn             func(ctx context.Context, guildID string, mark string, fee int, leaderID string) (corecharacter.Character, error)
+	updateBgimgFn            func(ctx context.Context, guildID string, bgimg string) error
+	updateWallpaperFn        func(ctx context.Context, guildID string, wallpaper string, fee int, leaderID string) (corecharacter.Character, error)
+	touchActiveFn            func(ctx context.Context, guildID string) error
+	disbandGuildFn           func(ctx context.Context, guildID string) error
+	decayGuildPointsFn       func(ctx context.Context, factor float64) error
+	lockCharacterForUpdateFn func(ctx context.Context, characterID string) error
 }
 
 func (m *mockGuildRepo) CreateGuild(ctx context.Context, g guild.Guild, creator guild.Member, fee int) (guild.Guild, guild.Member, corecharacter.Character, error) {
@@ -50,6 +51,13 @@ func (m *mockGuildRepo) GetGuild(ctx context.Context, guildID string) (guild.Gui
 		return m.getGuildFn(ctx, guildID)
 	}
 	return guild.Guild{}, nil, guild.ErrGuildNotFound
+}
+
+func (m *mockGuildRepo) LockCharacterForUpdate(ctx context.Context, characterID string) error {
+	if m.lockCharacterForUpdateFn != nil {
+		return m.lockCharacterForUpdateFn(ctx, characterID)
+	}
+	return nil
 }
 
 func (m *mockGuildRepo) GetGuildForUpdate(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {

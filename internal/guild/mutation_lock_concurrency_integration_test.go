@@ -28,7 +28,8 @@ type mutationLockFixture struct {
 
 type mutationLockGateRepo struct {
 	*database.GuildRepository
-	beforeLocked, afterRead func(context.Context)
+	beforeLocked, afterRead           func(context.Context)
+	beforeCharLocked, afterCharLocked func(context.Context)
 }
 
 func (r *mutationLockGateRepo) GetGuild(ctx context.Context, guildID string) (guild.Guild, []guild.Member, error) {
@@ -48,6 +49,17 @@ func (r *mutationLockGateRepo) GetGuildForUpdate(ctx context.Context, guildID st
 		r.afterRead(ctx)
 	}
 	return g, members, err
+}
+
+func (r *mutationLockGateRepo) LockCharacterForUpdate(ctx context.Context, characterID string) error {
+	if r.beforeCharLocked != nil {
+		r.beforeCharLocked(ctx)
+	}
+	err := r.GuildRepository.LockCharacterForUpdate(ctx, characterID)
+	if err == nil && r.afterCharLocked != nil {
+		r.afterCharLocked(ctx)
+	}
+	return err
 }
 
 func newMutationLockFixture(t *testing.T) *mutationLockFixture {
@@ -365,6 +377,195 @@ func TestGuildMutationLock_Stress(t *testing.T) {
 			}
 			if gDetail.LeaderCharacterID != f.active.ID && gDetail.LeaderCharacterID != f.leader.ID {
 				t.Fatalf("unexpected leader: %+v", gDetail)
+			}
+		})
+	}
+}
+
+func TestGuildMutationLock_CharacterToGuildInterleaving(t *testing.T) {
+	modes := []string{"mark", "wallpaper"}
+	for _, mode := range modes {
+		t.Run(mode, func(t *testing.T) {
+			f := newMutationLockFixture(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			var charLockedOnce, opAttemptedOnce sync.Once
+			charLocked := make(chan struct{})
+			opAttempted := make(chan struct{})
+			proceedTxA := make(chan struct{})
+
+			opRepo := &mutationLockGateRepo{
+				GuildRepository: f.repo,
+				beforeCharLocked: func(context.Context) {
+					opAttemptedOnce.Do(func() { close(opAttempted) })
+				},
+			}
+			opService := f.newService(t, opRepo)
+
+			txADone := make(chan error, 1)
+			opDone := make(chan error, 1)
+
+			// Tx A: locks leader character first, then waits for Op (Tx B) to attempt locking
+			go func() {
+				txADone <- database.RunInTx(ctx, f.db, func(txCtx context.Context) error {
+					var cid string
+					exec := database.ExecutorFromContext(txCtx, f.db)
+					if err := exec.QueryRowContext(txCtx, `SELECT id FROM characters WHERE id = ? FOR UPDATE`, f.leader.ID).Scan(&cid); err != nil {
+						return err
+					}
+					charLockedOnce.Do(func() { close(charLocked) })
+					select {
+					case <-proceedTxA:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+					return f.repo.AddPoints(txCtx, f.g.ID, 100)
+				})
+			}()
+
+			awaitMutationLockSignal(t, charLocked)
+
+			// Tx B: runs ChangeMark / ChangeWallpaper, which tries to lock leader character
+			go func() {
+				opDone <- f.executeOp(ctx, opService, mode)
+			}()
+
+			awaitMutationLockSignal(t, opAttempted)
+			// Small buffer to guarantee Tx B is blocked on MariaDB character lock
+			time.Sleep(50 * time.Millisecond)
+
+			// Allow Tx A to proceed with AddPoints and commit (releases character lock)
+			close(proceedTxA)
+
+			if err := <-txADone; err != nil {
+				t.Fatalf("Tx A (AddPoints) failed: %v", err)
+			}
+			if err := <-opDone; err != nil {
+				t.Fatalf("Tx B (%s) failed: %v", mode, err)
+			}
+
+			// Verify results: points added, fee deducted, settings updated
+			gDetail, _, err := f.repo.GetGuild(context.Background(), f.g.ID)
+			if err != nil {
+				t.Fatalf("failed to get guild: %v", err)
+			}
+			if gDetail.Points != 100 {
+				t.Errorf("expected 100 points, got %d", gDetail.Points)
+			}
+			fee := guild.MarkChangeFee
+			if mode == "wallpaper" {
+				fee = 6000
+				if gDetail.Bgimg != "stage0.gif" {
+					t.Errorf("expected bgimg 'stage0.gif', got %s", gDetail.Bgimg)
+				}
+			} else {
+				if gDetail.Mark != "99" {
+					t.Errorf("expected mark '99', got %s", gDetail.Mark)
+				}
+			}
+			expectedMoney := f.initialMoney - fee
+			if currentMoney := f.getLeaderMoney(t); currentMoney != expectedMoney {
+				t.Errorf("expected leader money %d, got %d", expectedMoney, currentMoney)
+			}
+		})
+	}
+}
+
+func TestGuildMutationLock_PaidSettingsPairedConcurrency(t *testing.T) {
+	modes := []string{"mark", "wallpaper"}
+	for _, mode := range modes {
+		t.Run(mode, func(t *testing.T) {
+			f := newMutationLockFixture(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			// Ensure leader has enough funds for all iterations
+			_, err := f.db.ExecContext(ctx, "UPDATE characters SET money = 5000000 WHERE id = ?", f.leader.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			res := testutil.RunConcurrentStressTest(t, testutil.GetStressConfig(), func(worker, op int) error {
+				val := "99"
+				if op%2 == 0 {
+					val = "42"
+				}
+				wallpaperVal := "stage0"
+				if op%2 == 0 {
+					wallpaperVal = "stage1"
+				}
+
+				err1, err2 := testutil.RunRace2(
+					func() error {
+						if mode == "mark" {
+							_, err := f.service.ChangeMark(ctx, f.g.ID, f.leader.ID, val)
+							return err
+						}
+						_, err := f.service.ChangeWallpaper(ctx, f.g.ID, f.leader.ID, wallpaperVal)
+						return err
+					},
+					func() error {
+						return f.repo.AddGuildPoints(ctx, f.leader.ID, 10)
+					},
+				)
+				for _, err := range []error{err1, err2} {
+					if err != nil &&
+						!errors.Is(err, guild.ErrUnauthorized) &&
+						!errors.Is(err, guild.ErrInsufficientFunds) {
+						return err
+					}
+				}
+				return nil
+			})
+			if res.Failures != 0 {
+				t.Fatalf("unexpected stress failures: %+v", res)
+			}
+
+			gDetail, _, err := f.repo.GetGuild(context.Background(), f.g.ID)
+			if err != nil {
+				t.Fatalf("expected guild to exist: %v", err)
+			}
+			if gDetail.Points <= 0 {
+				t.Fatalf("expected points to be incremented, got %d", gDetail.Points)
+			}
+		})
+	}
+}
+
+func TestGuildMutationLock_InsufficientFundsAtomicity(t *testing.T) {
+	modes := []string{"mark", "wallpaper"}
+	for _, mode := range modes {
+		t.Run(mode, func(t *testing.T) {
+			f := newMutationLockFixture(t)
+			ctx := context.Background()
+
+			// Drain leader money to 0
+			_, err := f.db.ExecContext(ctx, "UPDATE characters SET money = 0 WHERE id = ?", f.leader.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = f.executeOp(ctx, f.service, mode)
+			if !errors.Is(err, guild.ErrInsufficientFunds) {
+				t.Fatalf("expected ErrInsufficientFunds, got %v", err)
+			}
+
+			// Verify zero change in money
+			if money := f.getLeaderMoney(t); money != 0 {
+				t.Errorf("expected 0 money, got %d", money)
+			}
+
+			// Verify settings not changed
+			gDetail, _, err := f.repo.GetGuild(ctx, f.g.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mode == "mark" && gDetail.Mark == "99" {
+				t.Error("mark was modified despite insufficient funds")
+			}
+			if mode == "wallpaper" && gDetail.Bgimg == "stage0.gif" {
+				t.Error("wallpaper was modified despite insufficient funds")
 			}
 		})
 	}

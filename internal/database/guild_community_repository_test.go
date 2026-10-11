@@ -492,3 +492,47 @@ func TestGuildRepository_MultiplePendingApplicationsAndAffiliation(t *testing.T)
 		t.Fatalf("expected G2 points 50, got %d", fetchedG2.Points)
 	}
 }
+
+func TestGuildRepository_LockCharacterForUpdate(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	guildRepo, err := NewGuildRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Non-existent character returns ErrCharacterNotFound
+	err = guildRepo.LockCharacterForUpdate(ctx, "nonexistent-char-id")
+	if !errors.Is(err, guild.ErrCharacterNotFound) {
+		t.Fatalf("expected ErrCharacterNotFound, got %v", err)
+	}
+
+	// 2. Existing character locks successfully
+	char, err := CreateTestCharacter(ctx, db, "LockChar_"+id.New()[:8])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		chars, _ := NewCharacterRepository(db)
+		players, _ := NewPlayerRepository(db)
+		_ = chars.Delete(ctx, char.ID)
+		_ = players.Delete(ctx, char.PlayerID)
+	}()
+
+	err = RunInTx(ctx, db, func(txCtx context.Context) error {
+		return guildRepo.LockCharacterForUpdate(txCtx, char.ID)
+	})
+	if err != nil {
+		t.Fatalf("LockCharacterForUpdate in tx failed: %v", err)
+	}
+}

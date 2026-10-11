@@ -240,8 +240,8 @@ func (s *Service) BroadcastCallout(ctx context.Context, guildID string, senderID
 }
 
 // ChangeMark changes the guild's icon mark for a 3,000G fee paid by the guild master (join_guild.cgi:mark).
-// Transaction: RunInTx (authorization under Rank-7 lock and wallet deduction; rollback on stale leader).
-// Lock Order: guilds(7) -> guild_members(7).
+// Transaction: RunInTx (Rank 2 paying character lock, Rank 7 guild authorization and wallet deduction; rollback on stale leader).
+// Lock Order: characters(2) -> guilds(7) -> guild_members(7).
 func (s *Service) ChangeMark(ctx context.Context, guildID string, leaderID string, mark string) (corecharacter.Character, error) {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -258,6 +258,10 @@ func (s *Service) ChangeMark(ctx context.Context, guildID string, leaderID strin
 
 	var updatedChar corecharacter.Character
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		if err := s.repo.LockCharacterForUpdate(txCtx, leaderID); err != nil {
+			return err
+		}
+
 		lockedGuild, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
 		if err != nil {
 			return err
@@ -281,8 +285,8 @@ func (s *Service) ChangeMark(ctx context.Context, guildID string, leaderID strin
 }
 
 // ChangeWallpaper changes the guild's background wallpaper for the catalog price paid by the guild master (join_guild.cgi:kabegami).
-// Transaction: RunInTx (authorization under Rank-7 lock and wallet deduction; rollback on stale leader).
-// Lock Order: guilds(7) -> guild_members(7).
+// Transaction: RunInTx (Rank 2 paying character lock, Rank 7 guild authorization and wallet deduction; rollback on stale leader).
+// Lock Order: characters(2) -> guilds(7) -> guild_members(7).
 func (s *Service) ChangeWallpaper(ctx context.Context, guildID string, leaderID string, wallpaper string) (corecharacter.Character, error) {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -300,6 +304,10 @@ func (s *Service) ChangeWallpaper(ctx context.Context, guildID string, leaderID 
 
 	var updatedChar corecharacter.Character
 	err = s.runInTx(ctx, func(txCtx context.Context) error {
+		if err := s.repo.LockCharacterForUpdate(txCtx, leaderID); err != nil {
+			return err
+		}
+
 		lockedGuild, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
 		if err != nil {
 			return err

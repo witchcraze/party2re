@@ -112,6 +112,7 @@ func classifyLockCall(recvName, methodName, relPath string) (LockRank, string, b
 
 	// Rank 2: Character
 	if strings.Contains(r, "char") || strings.Contains(r, "character") ||
+		strings.Contains(m, "lockcharacter") ||
 		(strings.Contains(normPath, "internal/character") && (m == "findforupdate" || m == "findbynameforupdate")) {
 		return RankCharacter, fmt.Sprintf("%s.%s", recvName, methodName), true
 	}
@@ -138,7 +139,7 @@ func classifyLockCall(recvName, methodName, relPath string) (LockRank, string, b
 	}
 
 	// Rank 7: Guild
-	if strings.Contains(r, "guild") {
+	if strings.Contains(r, "guild") || m == "getguildforupdate" {
 		return RankGuild, fmt.Sprintf("%s.%s", recvName, methodName), true
 	}
 
@@ -471,6 +472,37 @@ func (s *Service) ValidSacrifice(ctx context.Context, charID string) error {
 		_ = char
 		_ = inv
 		_ = pts
+		return nil
+	})
+}`,
+			expectViolations: 0,
+		},
+		{
+			name: "Inversion: Guild before Character (Issue #1299 Guild Setting Bug)",
+			code: `package testpkg
+import "context"
+func (s *Service) InvertedChangeMark(ctx context.Context, gID, cID string) error {
+	return s.runInTx(ctx, func(txCtx context.Context) error {
+		g, _ := s.repo.GetGuildForUpdate(txCtx, gID)
+		err := s.repo.LockCharacterForUpdate(txCtx, cID)
+		_ = g
+		_ = err
+		return nil
+	})
+}`,
+			expectViolations:  1,
+			expectedSubstrMsg: "Acquired repo.LockCharacterForUpdate (Rank 2 (Character))",
+		},
+		{
+			name: "Valid Sequence: Lock Character before Guild (Issue #1299 Fix)",
+			code: `package testpkg
+import "context"
+func (s *Service) ValidChangeMark(ctx context.Context, gID, cID string) error {
+	return s.runInTx(ctx, func(txCtx context.Context) error {
+		err := s.repo.LockCharacterForUpdate(txCtx, cID)
+		g, _ := s.repo.GetGuildForUpdate(txCtx, gID)
+		_ = err
+		_ = g
 		return nil
 	})
 }`,
