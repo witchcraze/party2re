@@ -33,10 +33,18 @@ func (m *mockReplayRepo) FindByID(ctx context.Context, id string) (*replay.Battl
 	return &r, nil
 }
 
+func (m *mockReplayRepo) FindPersonalRecipient(ctx context.Context, id string) (string, error) {
+	r, ok := m.replays[id]
+	if !ok || r.Provenance != replay.ProvenancePersonal || r.ArchiveRecipientID == "" {
+		return "", replay.ErrReplayNotFound
+	}
+	return r.ArchiveRecipientID, nil
+}
+
 func (m *mockReplayRepo) FindByCharacter(ctx context.Context, characterID string, combatType string, limit int) ([]replay.ReplayHeader, error) {
 	var list []replay.ReplayHeader
 	for _, r := range m.replays {
-		if r.InitiatorID == characterID || r.OpponentID == characterID {
+		if r.Provenance == replay.ProvenancePersonal && r.ArchiveRecipientID == characterID {
 			if combatType == "" || r.CombatType == combatType {
 				list = append(list, replay.ReplayHeader{
 					ID:            r.ID,
@@ -62,7 +70,7 @@ func (m *mockReplayRepo) FindByCharacter(ctx context.Context, characterID string
 func (m *mockReplayRepo) FindByCharacterByCursor(ctx context.Context, characterID string, combatType string, limit int, beforeTime time.Time, beforeID string) ([]replay.ReplayHeader, error) {
 	var list []replay.ReplayHeader
 	for _, r := range m.replays {
-		if r.InitiatorID == characterID || r.OpponentID == characterID {
+		if r.Provenance == replay.ProvenancePersonal && r.ArchiveRecipientID == characterID {
 			if combatType == "" || r.CombatType == combatType {
 				if beforeTime.IsZero() && beforeID == "" {
 					list = append(list, toReplayHeader(r))
@@ -89,43 +97,10 @@ func (m *mockReplayRepo) FindByCharacterByCursor(ctx context.Context, characterI
 }
 
 func (m *mockReplayRepo) FindRecent(ctx context.Context, combatType string, limit int) ([]replay.ReplayHeader, error) {
-	var list []replay.ReplayHeader
-	for _, r := range m.replays {
-		if combatType == "" || r.CombatType == combatType {
-			list = append(list, toReplayHeader(r))
-		}
-	}
-	if len(list) > limit {
-		list = list[:limit]
-	}
-	return list, nil
+	return nil, nil
 }
-
 func (m *mockReplayRepo) FindRecentByCursor(ctx context.Context, combatType string, limit int, beforeTime time.Time, beforeID string) ([]replay.ReplayHeader, error) {
-	var list []replay.ReplayHeader
-	for _, r := range m.replays {
-		if combatType == "" || r.CombatType == combatType {
-			if beforeTime.IsZero() && beforeID == "" {
-				list = append(list, toReplayHeader(r))
-			} else if !beforeTime.IsZero() && beforeID != "" {
-				if r.CreatedAt.Before(beforeTime) || (r.CreatedAt.Equal(beforeTime) && r.ID < beforeID) {
-					list = append(list, toReplayHeader(r))
-				}
-			} else if !beforeTime.IsZero() {
-				if r.CreatedAt.Before(beforeTime) {
-					list = append(list, toReplayHeader(r))
-				}
-			} else {
-				if r.ID < beforeID {
-					list = append(list, toReplayHeader(r))
-				}
-			}
-		}
-	}
-	if len(list) > limit {
-		list = list[:limit]
-	}
-	return list, nil
+	return nil, nil
 }
 
 func toReplayHeader(r replay.BattleReplay) replay.ReplayHeader {
@@ -157,7 +132,7 @@ func (m *mockReplayRepo) DeleteOlderThan(ctx context.Context, cutoff time.Time) 
 func TestRecordBattle_SuccessAndValidation(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockReplayRepo()
-	service, err := replay.NewService(repo)
+	service, err := replay.NewService(repo, replayIdentity{}, replayIdentity{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,6 +161,7 @@ func TestRecordBattle_SuccessAndValidation(t *testing.T) {
 
 	// 2. Success Record
 	replayID, err := service.RecordBattle(ctx, replay.SaveReplayRequest{
+		Provenance: replay.ProvenancePersonal, ArchiveRecipientID: "hero",
 		CombatType:   replay.CombatTypePvP,
 		Initiator:    replay.ParticipantSnapshot{ID: "char1", Name: "Player 1", Level: 15},
 		Opponent:     replay.ParticipantSnapshot{ID: "char2", Name: "Player 2", Level: 14},
@@ -199,7 +175,7 @@ func TestRecordBattle_SuccessAndValidation(t *testing.T) {
 	}
 
 	// 3. GetReplay
-	fetched, err := service.GetReplay(ctx, replayID)
+	fetched, err := service.GetReplay(ctx, "owner", replayID)
 	if err != nil {
 		t.Fatalf("GetReplay failed: %v", err)
 	}
@@ -214,7 +190,7 @@ func TestRecordBattle_SuccessAndValidation(t *testing.T) {
 func TestGetCharacterHistoryAndRecent(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockReplayRepo()
-	service, err := replay.NewService(repo)
+	service, err := replay.NewService(repo, replayIdentity{}, replayIdentity{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,6 +204,7 @@ func TestGetCharacterHistoryAndRecent(t *testing.T) {
 	})
 
 	_, _ = service.RecordBattle(ctx, replay.SaveReplayRequest{
+		Provenance: replay.ProvenancePersonal, ArchiveRecipientID: "hero",
 		CombatType:   replay.CombatTypeBoss,
 		Initiator:    replay.ParticipantSnapshot{ID: "hero", Name: "Hero"},
 		Opponent:     replay.ParticipantSnapshot{ID: "boss", Name: "Boss King"},
@@ -235,35 +212,36 @@ func TestGetCharacterHistoryAndRecent(t *testing.T) {
 	})
 
 	_, _ = service.RecordBattle(ctx, replay.SaveReplayRequest{
+		Provenance: replay.ProvenancePersonal, ArchiveRecipientID: "hero",
 		CombatType:   replay.CombatTypePvP,
 		Initiator:    replay.ParticipantSnapshot{ID: "other", Name: "Rival"},
 		Opponent:     replay.ParticipantSnapshot{ID: "hero", Name: "Hero"},
 		BattleResult: res,
 	})
 
-	// 1. Character History (should return both matches involving hero)
-	history, err := service.GetCharacterHistory(ctx, "hero", "", 10)
+	// 1. Character history selects explicit archive recipients
+	history, err := service.GetCharacterHistory(ctx, "owner", "hero", "", 10)
 	if err != nil || len(history) != 2 {
 		t.Fatalf("expected 2 history items, got %d (err: %v)", len(history), err)
 	}
 
 	// 2. Filtered Character History (Boss only)
-	bossHistory, err := service.GetCharacterHistory(ctx, "hero", replay.CombatTypeBoss, 10)
+	bossHistory, err := service.GetCharacterHistory(ctx, "owner", "hero", replay.CombatTypeBoss, 10)
 	if err != nil || len(bossHistory) != 1 {
 		t.Fatalf("expected 1 boss history item, got %d (err: %v)", len(bossHistory), err)
 	}
 
 	// 3. Global Recent Replays
 	recent, err := service.GetRecentReplays(ctx, "", 10)
-	if err != nil || len(recent) != 2 {
-		t.Fatalf("expected 2 recent replays, got %d", len(recent))
+	if err != nil || len(recent) != 0 {
+		t.Fatalf("expected 0 recent replays, got %d", len(recent))
 	}
 }
 
 func TestPruneOldReplays(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockReplayRepo()
-	service, err := replay.NewService(repo)
+	service, err := replay.NewService(repo, replayIdentity{}, replayIdentity{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +283,7 @@ func TestPruneOldReplays(t *testing.T) {
 func TestGetCharacterHistoryByCursor(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockReplayRepo()
-	service, err := replay.NewService(repo)
+	service, err := replay.NewService(repo, replayIdentity{}, replayIdentity{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,6 +292,7 @@ func TestGetCharacterHistoryByCursor(t *testing.T) {
 	for i := 1; i <= 5; i++ {
 		repID := "rep-" + string(rune('0'+i))
 		repo.replays[repID] = replay.BattleReplay{
+			Provenance: replay.ProvenancePersonal, ArchiveRecipientID: "char-1",
 			ID:          repID,
 			CombatType:  replay.CombatTypePvP,
 			InitiatorID: "char-1",
@@ -324,7 +303,7 @@ func TestGetCharacterHistoryByCursor(t *testing.T) {
 		}
 	}
 
-	page1, err := service.GetCharacterHistoryByCursor(ctx, "char-1", replay.CombatTypePvP, 2, "")
+	page1, err := service.GetCharacterHistoryByCursor(ctx, "owner", "char-1", replay.CombatTypePvP, 2, "")
 	if err != nil {
 		t.Fatalf("page 1 failed: %v", err)
 	}
@@ -336,7 +315,7 @@ func TestGetCharacterHistoryByCursor(t *testing.T) {
 func TestGetRecentReplaysByCursor(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockReplayRepo()
-	service, err := replay.NewService(repo)
+	service, err := replay.NewService(repo, replayIdentity{}, replayIdentity{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -345,6 +324,7 @@ func TestGetRecentReplaysByCursor(t *testing.T) {
 	for i := 1; i <= 3; i++ {
 		repID := "rep-" + string(rune('0'+i))
 		repo.replays[repID] = replay.BattleReplay{
+			Provenance: replay.ProvenancePersonal, ArchiveRecipientID: "char-1",
 			ID:          repID,
 			CombatType:  replay.CombatTypeBoss,
 			InitiatorID: "char-1",
@@ -359,7 +339,7 @@ func TestGetRecentReplaysByCursor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("page 1 failed: %v", err)
 	}
-	if len(page1.Items) != 2 || !page1.HasMore || page1.NextCursor == "" {
+	if len(page1.Items) != 0 || page1.HasMore || page1.NextCursor != "" {
 		t.Fatalf("unexpected page 1: %+v", page1)
 	}
 }

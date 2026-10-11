@@ -8,7 +8,8 @@ import (
 )
 
 // ReplayRecorder defines the standardized replay recording interface that can be used
-// by any game mode (PvP, GvG, Boss, Dungeon, Challenge, Adventure) to record battle results.
+// to store battle results. Result adapters leave provenance/recipient unclassified;
+// they do not establish personal archive capture or public publication.
 type ReplayRecorder interface {
 	RecordBattle(ctx context.Context, req SaveReplayRequest) (string, error)
 	RecordMatchFromResult(ctx context.Context, combatType string, initiator ParticipantSnapshot, opponent ParticipantSnapshot, result corebattle.Result) (string, error)

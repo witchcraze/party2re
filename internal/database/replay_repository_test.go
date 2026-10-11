@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,6 +25,15 @@ func TestReplayRepository(t *testing.T) {
 	defer db.Close()
 
 	ctx := context.Background()
+	// Pruning must only delete this test's rows, even when other packages use the same DB.
+	db.SetMaxOpenConns(1)
+	var table, ddl string
+	if err := db.QueryRowContext(ctx, "SHOW CREATE TABLE battle_replays").Scan(&table, &ddl); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, strings.Replace(ddl, "CREATE TABLE", "CREATE TEMPORARY TABLE", 1)); err != nil {
+		t.Fatal(err)
+	}
 	repo, err := database.NewReplayRepository(db)
 	if err != nil {
 		t.Fatal(err)
@@ -32,6 +42,7 @@ func TestReplayRepository(t *testing.T) {
 	now := time.Now().UTC()
 	replayID := fmt.Sprintf("rep_%016x", now.UnixNano())
 	r := replay.BattleReplay{
+		Provenance: replay.ProvenancePersonal, ArchiveRecipientID: "charA",
 		ID:            replayID,
 		CombatType:    replay.CombatTypePvP,
 		InitiatorID:   "charA",
@@ -85,7 +96,7 @@ func TestReplayRepository(t *testing.T) {
 
 	// 4. FindRecent
 	recent, err := repo.FindRecent(ctx, replay.CombatTypePvP, 10)
-	if err != nil || len(recent) == 0 {
+	if err != nil || len(recent) != 0 {
 		t.Fatalf("FindRecent failed: %v, len=%d", err, len(recent))
 	}
 

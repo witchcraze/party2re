@@ -37,8 +37,8 @@ func (r *ReplayRepository) Save(ctx context.Context, rep replay.BattleReplay) er
 		INSERT INTO battle_replays (
 			id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
 			outcome, winner_id, loser_id, total_turns, initial_participants_json,
-			turn_logs_json, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			turn_logs_json, created_at, provenance, archive_recipient_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := ExecutorFromContext(ctx, r.db).ExecContext(
 		ctx,
@@ -56,15 +56,28 @@ func (r *ReplayRepository) Save(ctx context.Context, rep replay.BattleReplay) er
 		participantsJSON,
 		turnLogsJSON,
 		rep.CreatedAt,
+		rep.Provenance,
+		rep.ArchiveRecipientID,
 	)
 	return err
+}
+
+func (r *ReplayRepository) FindPersonalRecipient(ctx context.Context, id string) (string, error) {
+	var recipient string
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx,
+		`SELECT archive_recipient_id FROM battle_replays
+		 WHERE id = ? AND BINARY provenance = 'personal_archive' AND archive_recipient_id <> ''`, id).Scan(&recipient)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", replay.ErrReplayNotFound
+	}
+	return recipient, err
 }
 
 func (r *ReplayRepository) FindByID(ctx context.Context, id string) (*replay.BattleReplay, error) {
 	query := `
 		SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
 		       outcome, winner_id, loser_id, total_turns, initial_participants_json,
-		       turn_logs_json, created_at
+		       turn_logs_json, created_at, provenance, archive_recipient_id
 		FROM battle_replays
 		WHERE id = ?
 	`
@@ -87,6 +100,8 @@ func (r *ReplayRepository) FindByID(ctx context.Context, id string) (*replay.Bat
 		&participantsJSON,
 		&turnLogsJSON,
 		&rep.CreatedAt,
+		&rep.Provenance,
+		&rep.ArchiveRecipientID,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, replay.ErrReplayNotFound
@@ -128,21 +143,21 @@ func (r *ReplayRepository) FindByCharacter(ctx context.Context, characterID stri
 			SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
 			       outcome, winner_id, total_turns, created_at
 			FROM battle_replays
-			WHERE (initiator_id = ? OR opponent_id = ?) AND combat_type = ?
-			ORDER BY created_at DESC
+			WHERE archive_recipient_id = ? AND BINARY provenance = 'personal_archive' AND combat_type = ?
+			ORDER BY created_at DESC, id DESC
 			LIMIT ?
 		`
-		rows, err = executor.QueryContext(ctx, query, characterID, characterID, combatType, limit)
+		rows, err = executor.QueryContext(ctx, query, characterID, combatType, limit)
 	} else {
 		query := `
 			SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
 			       outcome, winner_id, total_turns, created_at
 			FROM battle_replays
-			WHERE initiator_id = ? OR opponent_id = ?
-			ORDER BY created_at DESC
+			WHERE archive_recipient_id = ? AND BINARY provenance = 'personal_archive'
+			ORDER BY created_at DESC, id DESC
 			LIMIT ?
 		`
-		rows, err = executor.QueryContext(ctx, query, characterID, characterID, limit)
+		rows, err = executor.QueryContext(ctx, query, characterID, limit)
 	}
 
 	if err != nil {
@@ -159,9 +174,9 @@ func (r *ReplayRepository) FindByCharacterByCursor(ctx context.Context, characte
 
 	executor := ExecutorFromContext(ctx, r.db)
 
-	baseWhere := "(initiator_id = ? OR opponent_id = ?)"
+	baseWhere := "archive_recipient_id = ? AND BINARY provenance = 'personal_archive'"
 	var args []any
-	args = append(args, characterID, characterID)
+	args = append(args, characterID)
 
 	if combatType != "" {
 		baseWhere += " AND combat_type = ?"
@@ -220,6 +235,7 @@ func (r *ReplayRepository) FindByCharacterByCursor(ctx context.Context, characte
 	return scanReplayHeaders(rows)
 }
 
+// No global publisher/safe scene payload exists; raw battle records are never public.
 func (r *ReplayRepository) FindRecent(ctx context.Context, combatType string, limit int) ([]replay.ReplayHeader, error) {
 	var rows *sql.Rows
 	var err error
@@ -230,8 +246,8 @@ func (r *ReplayRepository) FindRecent(ctx context.Context, combatType string, li
 			SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
 			       outcome, winner_id, total_turns, created_at
 			FROM battle_replays
-			WHERE combat_type = ?
-			ORDER BY created_at DESC
+			WHERE 1=0 AND combat_type = ?
+			ORDER BY created_at DESC, id DESC
 			LIMIT ?
 		`
 		rows, err = executor.QueryContext(ctx, query, combatType, limit)
@@ -240,7 +256,8 @@ func (r *ReplayRepository) FindRecent(ctx context.Context, combatType string, li
 			SELECT id, combat_type, initiator_id, initiator_name, opponent_id, opponent_name,
 			       outcome, winner_id, total_turns, created_at
 			FROM battle_replays
-			ORDER BY created_at DESC
+			WHERE 1=0
+			ORDER BY created_at DESC, id DESC
 			LIMIT ?
 		`
 		rows, err = executor.QueryContext(ctx, query, limit)
@@ -260,11 +277,11 @@ func (r *ReplayRepository) FindRecentByCursor(ctx context.Context, combatType st
 
 	executor := ExecutorFromContext(ctx, r.db)
 
-	baseWhere := "1=1"
+	baseWhere := "1=0"
 	var args []any
 
 	if combatType != "" {
-		baseWhere = "combat_type = ?"
+		baseWhere += " AND combat_type = ?"
 		args = append(args, combatType)
 	}
 

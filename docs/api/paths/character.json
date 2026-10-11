@@ -2136,6 +2136,7 @@
   },
   "/characters/{id}/replays": {
     "get": {
+      "description": "Returns explicitly classified personal archives for the requested recipient character, with ownership verified by session at both HTTP and Replay service boundaries. Combat header appearances do not confer ownership. Filtering precedes pagination. Retained archive history is separate from the original latest-copy slot; no producer or latest-copy lifecycle is enabled here.",
       "operationId": "getCharacterReplays",
       "parameters": [
         {
@@ -2194,7 +2195,7 @@
               }
             }
           },
-          "description": "Character battle replay match history"
+          "description": "Owned recipient archive history"
         },
         "400": {
           "content": {

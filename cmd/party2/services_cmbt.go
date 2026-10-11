@@ -152,7 +152,7 @@ func newCmbtServices(
 	if err != nil {
 		return nil, err
 	}
-	replayService, err := replay.NewService(replayRepo)
+	replayService, err := replay.NewService(replayRepo, core.playerService, core.charRepo)
 	if err != nil {
 		return nil, err
 	}
