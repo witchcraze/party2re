@@ -343,6 +343,9 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if _, err := db.ExecContext(ctx, "UPDATE takarakuji_rounds SET prize_1_item_id = 'item-001', prize_2_item_id = 'item-002', prize_3_item_id = 'item-003' WHERE round_id = ?", status.RoundID); err != nil {
+			t.Fatal(err)
+		}
 
 		for i := 1; i <= 20; i++ {
 			c, err := database.CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("TkRollbackBuyer%d_%d", i, time.Now().UnixNano()), 50000)
