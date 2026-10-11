@@ -318,6 +318,22 @@ func (r *GuildRepository) TransferLeadership(ctx context.Context, guildID string
 	})
 }
 
+// LockCharacterForUpdate acquires a pessimistic Rank 2 lock on the character row (SELECT ... FOR UPDATE).
+// Used before guild mutation locks to maintain the deterministic Rank 2 -> Rank 7 lock hierarchy.
+func (r *GuildRepository) LockCharacterForUpdate(ctx context.Context, characterID string) error {
+	var id string
+	err := ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, `
+		SELECT id
+		FROM characters
+		WHERE id = ?
+		FOR UPDATE
+	`, characterID).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return guild.ErrCharacterNotFound
+	}
+	return err
+}
+
 func (r *GuildRepository) UpdateMark(ctx context.Context, guildID string, mark string, fee int, leaderID string) (corecharacter.Character, error) {
 	var updatedChar corecharacter.Character
 

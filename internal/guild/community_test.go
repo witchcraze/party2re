@@ -839,6 +839,32 @@ func TestService_Customization_MarkAndWallpaper(t *testing.T) {
 			t.Errorf("expected ErrInvalidWallpaper, got %v", err)
 		}
 	})
+
+	t.Run("ChangeMark fails on character not found", func(t *testing.T) {
+		repo := &mockGuildRepo{
+			lockCharacterForUpdateFn: func(ctx context.Context, charID string) error {
+				return guild.ErrCharacterNotFound
+			},
+		}
+		svc, _ := guild.NewService(repo)
+		_, err := svc.ChangeMark(ctx, guildID, leaderID, "42")
+		if !errors.Is(err, guild.ErrCharacterNotFound) {
+			t.Errorf("expected ErrCharacterNotFound, got %v", err)
+		}
+	})
+
+	t.Run("ChangeWallpaper fails on character not found", func(t *testing.T) {
+		repo := &mockGuildRepo{
+			lockCharacterForUpdateFn: func(ctx context.Context, charID string) error {
+				return guild.ErrCharacterNotFound
+			},
+		}
+		svc, _ := guild.NewService(repo)
+		_, err := svc.ChangeWallpaper(ctx, guildID, leaderID, "stage0")
+		if !errors.Is(err, guild.ErrCharacterNotFound) {
+			t.Errorf("expected ErrCharacterNotFound, got %v", err)
+		}
+	})
 }
 
 func TestService_RemoveCharacterFromGuild(t *testing.T) {

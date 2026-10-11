@@ -7,7 +7,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 )
 
-// GuildReader defines read operations on guilds and their memberships.
+// GuildReader defines read and pessimistic row locking operations on guilds, memberships, and fee-paying characters.
 type GuildReader interface {
 	GetGuild(ctx context.Context, guildID string) (Guild, []Member, error)
 	GetGuildForUpdate(ctx context.Context, guildID string) (Guild, []Member, error)
@@ -15,6 +15,7 @@ type GuildReader interface {
 	ListGuilds(ctx context.Context, offset, limit int) ([]Guild, error)
 	IsColorTaken(ctx context.Context, color string, excludeGuildID string) (bool, error)
 	ListInactiveGuilds(ctx context.Context, cutoff time.Time, limit int) ([]Guild, error)
+	LockCharacterForUpdate(ctx context.Context, characterID string) error
 }
 
 // GuildMemberWriter defines mutation operations on guild memberships and role titles.

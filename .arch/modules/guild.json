@@ -183,6 +183,80 @@
           "note": "Lock roster in deterministic order; validate requester leadership and target pending status before updating member row."
         }
       ]
+    },
+    {
+      "method": "ChangeMark",
+      "source_ref": "internal/guild/community.go#Service.ChangeMark",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Lock fee-paying leader character upfront (Rank 2) before acquiring guild locks."
+        },
+        {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Verify current guild leadership under exclusive lock (Rank 7)."
+        },
+        {
+          "table": "guild_members",
+          "tier": 7,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Lock roster in deterministic order (Rank 7)."
+        },
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "UPDATE",
+          "note": "Deduct guild mark change fee from leader wallet."
+        },
+        {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "UPDATE",
+          "note": "Update guild mark and last_active_at."
+        }
+      ]
+    },
+    {
+      "method": "ChangeWallpaper",
+      "source_ref": "internal/guild/community.go#Service.ChangeWallpaper",
+      "transaction_type": "RunInTx",
+      "lock_sequence": [
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Lock fee-paying leader character upfront (Rank 2) before acquiring guild locks."
+        },
+        {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Verify current guild leadership under exclusive lock (Rank 7)."
+        },
+        {
+          "table": "guild_members",
+          "tier": 7,
+          "mode": "SELECT FOR UPDATE",
+          "note": "Lock roster in deterministic order (Rank 7)."
+        },
+        {
+          "table": "characters",
+          "tier": 2,
+          "mode": "UPDATE",
+          "note": "Deduct guild wallpaper change fee from leader wallet."
+        },
+        {
+          "table": "guilds",
+          "tier": 7,
+          "mode": "UPDATE",
+          "note": "Update guild wallpaper and last_active_at."
+        }
+      ]
     }
   ]
 }
