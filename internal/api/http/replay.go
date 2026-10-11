@@ -14,9 +14,9 @@ import (
 
 // ReplayService defines battle replay operations exposed over HTTP.
 type ReplayService interface {
-	GetReplay(ctx context.Context, id string) (*replay.BattleReplay, error)
-	GetCharacterHistory(ctx context.Context, characterID string, combatType string, limit int) ([]replay.ReplayHeader, error)
-	GetCharacterHistoryByCursor(ctx context.Context, characterID string, combatType string, limit int, cursor string) (pagination.CursorPage[replay.ReplayHeader], error)
+	GetReplay(ctx context.Context, sessionID, id string) (*replay.BattleReplay, error)
+	GetCharacterHistory(ctx context.Context, sessionID, characterID string, combatType string, limit int) ([]replay.ReplayHeader, error)
+	GetCharacterHistoryByCursor(ctx context.Context, sessionID, characterID string, combatType string, limit int, cursor string) (pagination.CursorPage[replay.ReplayHeader], error)
 	GetRecentReplays(ctx context.Context, combatType string, limit int) ([]replay.ReplayHeader, error)
 	GetRecentReplaysByCursor(ctx context.Context, combatType string, limit int, cursor string) (pagination.CursorPage[replay.ReplayHeader], error)
 }
@@ -40,13 +40,14 @@ func (h *Handler) handleGetReplay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rep, err := h.replay.GetReplay(r.Context(), replayID)
-	if err != nil {
-		if errors.Is(err, replay.ErrReplayNotFound) {
-			writeError(w, http.StatusNotFound, err)
+	if _, supplied := r.Header["Authorization"]; supplied {
+		if _, ok := h.authenticatePlayer(w, r); !ok {
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
+	}
+	rep, err := h.replay.GetReplay(r.Context(), sessionIDFromRequest(r), replayID)
+	if err != nil {
+		writeReplayReadError(w, err)
 		return
 	}
 
@@ -65,9 +66,9 @@ func (h *Handler) handleGetCharacterReplays(w http.ResponseWriter, r *http.Reque
 
 		if r.URL != nil && r.URL.Query().Has("cursor") {
 			cursorParams := pagination.ParseCursorRequest(r)
-			page, err := h.replay.GetCharacterHistoryByCursor(r.Context(), char.ID, combatType, cursorParams.Limit, cursorParams.Cursor)
+			page, err := h.replay.GetCharacterHistoryByCursor(r.Context(), sessionIDFromRequest(r), char.ID, combatType, cursorParams.Limit, cursorParams.Cursor)
 			if err != nil {
-				writeError(w, http.StatusInternalServerError, err)
+				writeReplayReadError(w, err)
 				return
 			}
 			writeJSON(w, http.StatusOK, page)
@@ -75,9 +76,9 @@ func (h *Handler) handleGetCharacterReplays(w http.ResponseWriter, r *http.Reque
 		}
 
 		params := pagination.ParseRequest(r)
-		items, err := h.replay.GetCharacterHistory(r.Context(), char.ID, combatType, params.Limit)
+		items, err := h.replay.GetCharacterHistory(r.Context(), sessionIDFromRequest(r), char.ID, combatType, params.Limit)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
+			writeReplayReadError(w, err)
 			return
 		}
 		if items == nil {
@@ -85,6 +86,19 @@ func (h *Handler) handleGetCharacterReplays(w http.ResponseWriter, r *http.Reque
 		}
 		writeJSON(w, http.StatusOK, items)
 	})
+}
+
+func writeReplayReadError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, coreplayer.ErrPlayerBanned):
+		writeError(w, http.StatusForbidden, err)
+	case errors.Is(err, coreplayer.ErrAuthentication), errors.Is(err, coreplayer.ErrInvalidSession):
+		writeError(w, http.StatusUnauthorized, errors.New("invalid session"))
+	case errors.Is(err, replay.ErrReplayNotFound):
+		writeError(w, http.StatusNotFound, err)
+	default:
+		writeError(w, http.StatusInternalServerError, err)
+	}
 }
 
 func (h *Handler) handleGetRecentReplays(w http.ResponseWriter, r *http.Request) {

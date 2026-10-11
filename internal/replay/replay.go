@@ -8,6 +8,8 @@ import (
 	"time"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	coreplayer "github.com/witchcraze/party2re/internal/core/player"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/pagination"
 )
@@ -20,6 +22,9 @@ var (
 )
 
 const (
+	// ProvenancePersonal is set only by a trusted archive-copy operation, never inferred from combat headers.
+	ProvenancePersonal = "personal_archive"
+
 	CombatTypePvP       = "pvp"
 	CombatTypeGvG       = "gvg"
 	CombatTypeBoss      = "boss"
@@ -40,6 +45,8 @@ type ParticipantSnapshot struct {
 }
 
 type BattleReplay struct {
+	Provenance          string                `json:"-"`
+	ArchiveRecipientID  string                `json:"-"`
 	ID                  string                `json:"id"`
 	CombatType          string                `json:"combat_type"`
 	InitiatorID         string                `json:"initiator_id"`
@@ -69,15 +76,18 @@ type ReplayHeader struct {
 }
 
 type SaveReplayRequest struct {
-	CombatType   string
-	Initiator    ParticipantSnapshot
-	Opponent     ParticipantSnapshot
-	BattleResult corebattle.Result
+	Provenance         string
+	ArchiveRecipientID string
+	CombatType         string
+	Initiator          ParticipantSnapshot
+	Opponent           ParticipantSnapshot
+	BattleResult       corebattle.Result
 }
 
 type Repository interface {
 	Save(ctx context.Context, replay BattleReplay) error
 	FindByID(ctx context.Context, id string) (*BattleReplay, error)
+	FindPersonalRecipient(ctx context.Context, id string) (string, error)
 	FindByCharacter(ctx context.Context, characterID string, combatType string, limit int) ([]ReplayHeader, error)
 	FindByCharacterByCursor(ctx context.Context, characterID string, combatType string, limit int, beforeTime time.Time, beforeID string) ([]ReplayHeader, error)
 	FindRecent(ctx context.Context, combatType string, limit int) ([]ReplayHeader, error)
@@ -86,14 +96,24 @@ type Repository interface {
 }
 
 type Service struct {
-	repo Repository
+	repo       Repository
+	players    PlayerAuthenticator
+	characters CharacterRepository
 }
 
-func NewService(repo Repository) (*Service, error) {
-	if repo == nil {
-		return nil, errors.New("replay repository is required")
+type PlayerAuthenticator interface {
+	Authenticate(context.Context, string) (coreplayer.Player, error)
+}
+
+type CharacterRepository interface {
+	FindByID(context.Context, string) (corecharacter.Character, error)
+}
+
+func NewService(repo Repository, players PlayerAuthenticator, characters CharacterRepository) (*Service, error) {
+	if repo == nil || players == nil || characters == nil {
+		return nil, errors.New("replay repository, authentication and characters are required")
 	}
-	return &Service{repo: repo}, nil
+	return &Service{repo: repo, players: players, characters: characters}, nil
 }
 
 func (s *Service) RecordBattle(ctx context.Context, req SaveReplayRequest) (string, error) {
@@ -102,6 +122,10 @@ func (s *Service) RecordBattle(ctx context.Context, req SaveReplayRequest) (stri
 	}
 	if req.Initiator.ID == "" || req.Opponent.ID == "" {
 		return "", ErrInvalidParticipantData
+	}
+	if (req.Provenance != "" || req.ArchiveRecipientID != "") &&
+		(req.Provenance != ProvenancePersonal || strings.TrimSpace(req.ArchiveRecipientID) == "") {
+		return "", ErrInvalidReplay
 	}
 
 	replayID := id.New()
@@ -117,16 +141,18 @@ func (s *Service) RecordBattle(ctx context.Context, req SaveReplayRequest) (stri
 
 	now := time.Now().UTC()
 	replay := BattleReplay{
-		ID:            replayID,
-		CombatType:    req.CombatType,
-		InitiatorID:   req.Initiator.ID,
-		InitiatorName: initName,
-		OpponentID:    req.Opponent.ID,
-		OpponentName:  oppName,
-		Outcome:       req.BattleResult.Outcome,
-		WinnerID:      req.BattleResult.WinnerID,
-		LoserID:       req.BattleResult.LoserID,
-		TotalTurns:    req.BattleResult.Turns,
+		Provenance:         req.Provenance,
+		ArchiveRecipientID: req.ArchiveRecipientID,
+		ID:                 replayID,
+		CombatType:         req.CombatType,
+		InitiatorID:        req.Initiator.ID,
+		InitiatorName:      initName,
+		OpponentID:         req.Opponent.ID,
+		OpponentName:       oppName,
+		Outcome:            req.BattleResult.Outcome,
+		WinnerID:           req.BattleResult.WinnerID,
+		LoserID:            req.BattleResult.LoserID,
+		TotalTurns:         req.BattleResult.Turns,
 		InitialParticipants: []ParticipantSnapshot{
 			req.Initiator,
 			req.Opponent,
@@ -142,14 +168,65 @@ func (s *Service) RecordBattle(ctx context.Context, req SaveReplayRequest) (stri
 	return replayID, nil
 }
 
-func (s *Service) GetReplay(ctx context.Context, id string) (*BattleReplay, error) {
+func (s *Service) GetReplay(ctx context.Context, sessionID, id string) (*BattleReplay, error) {
+	var viewer coreplayer.Player
+	if sessionID != "" {
+		var err error
+		viewer, err = s.players.Authenticate(ctx, sessionID)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if strings.TrimSpace(id) == "" {
 		return nil, ErrReplayNotFound
 	}
-	return s.repo.FindByID(ctx, id)
+	if viewer.ID == "" {
+		return nil, ErrReplayNotFound
+	}
+	recipient, err := s.repo.FindPersonalRecipient(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.authorizeRecipient(ctx, viewer.ID, recipient); err != nil {
+		return nil, err
+	}
+	rep, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// No global publisher or safe scene payload exists yet; a public flag cannot authorize raw stats.
+	if rep.Provenance != ProvenancePersonal || rep.ArchiveRecipientID != recipient {
+		return nil, ErrReplayNotFound
+	}
+	return rep, nil
 }
 
-func (s *Service) GetCharacterHistory(ctx context.Context, characterID string, combatType string, limit int) ([]ReplayHeader, error) {
+func (s *Service) authorizeRecipient(ctx context.Context, playerID, characterID string) error {
+	char, err := s.characters.FindByID(ctx, characterID)
+	if errors.Is(err, corecharacter.ErrNotFound) {
+		return ErrReplayNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if playerID == "" || char.PlayerID != playerID {
+		return ErrReplayNotFound
+	}
+	return nil
+}
+
+func (s *Service) authorizeHistory(ctx context.Context, sessionID, characterID string) error {
+	viewer, err := s.players.Authenticate(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	return s.authorizeRecipient(ctx, viewer.ID, characterID)
+}
+
+func (s *Service) GetCharacterHistory(ctx context.Context, sessionID, characterID string, combatType string, limit int) ([]ReplayHeader, error) {
+	if err := s.authorizeHistory(ctx, sessionID, characterID); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(characterID) == "" {
 		return nil, errors.New("character id is required")
 	}
@@ -160,7 +237,10 @@ func (s *Service) GetCharacterHistory(ctx context.Context, characterID string, c
 }
 
 // GetCharacterHistoryByCursor retrieves keyset / cursor-based paginated replay history for a character.
-func (s *Service) GetCharacterHistoryByCursor(ctx context.Context, characterID string, combatType string, limit int, cursor string) (pagination.CursorPage[ReplayHeader], error) {
+func (s *Service) GetCharacterHistoryByCursor(ctx context.Context, sessionID, characterID string, combatType string, limit int, cursor string) (pagination.CursorPage[ReplayHeader], error) {
+	if err := s.authorizeHistory(ctx, sessionID, characterID); err != nil {
+		return pagination.CursorPage[ReplayHeader]{}, err
+	}
 	if strings.TrimSpace(characterID) == "" {
 		return pagination.CursorPage[ReplayHeader]{}, errors.New("character id is required")
 	}

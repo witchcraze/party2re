@@ -77,7 +77,7 @@ func TestParticipantSnapshot_Constructors(t *testing.T) {
 func TestRecordMatchFromResult_Success(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockReplayRepo()
-	service, err := replay.NewService(repo)
+	service, err := replay.NewService(repo, replayIdentity{}, replayIdentity{})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -104,9 +104,12 @@ func TestRecordMatchFromResult_Success(t *testing.T) {
 		t.Fatal("expected non-empty replay ID")
 	}
 
-	rep, err := service.GetReplay(ctx, replayID)
+	rep, err := repo.FindByID(ctx, replayID)
 	if err != nil {
 		t.Fatalf("GetReplay: %v", err)
+	}
+	if rep.Provenance != "" || rep.ArchiveRecipientID != "" {
+		t.Fatal("result adapter inferred archive provenance")
 	}
 	if rep.CombatType != replay.CombatTypeAdventure || rep.WinnerID != "hero" || rep.TotalTurns != 3 || len(rep.TurnLogs) != 3 {
 		t.Errorf("unexpected replay: %+v", rep)
@@ -116,7 +119,7 @@ func TestRecordMatchFromResult_Success(t *testing.T) {
 func TestRecordCharacterVsCharacter_Success(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockReplayRepo()
-	service, err := replay.NewService(repo)
+	service, err := replay.NewService(repo, replayIdentity{}, replayIdentity{})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -147,7 +150,7 @@ func TestRecordCharacterVsCharacter_Success(t *testing.T) {
 		t.Fatalf("RecordCharacterVsCharacter: %v", err)
 	}
 
-	rep, err := service.GetReplay(ctx, replayID)
+	rep, err := repo.FindByID(ctx, replayID)
 	if err != nil {
 		t.Fatalf("GetReplay: %v", err)
 	}
@@ -159,7 +162,7 @@ func TestRecordCharacterVsCharacter_Success(t *testing.T) {
 func TestRecordCharacterVsMonster_Success(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockReplayRepo()
-	service, err := replay.NewService(repo)
+	service, err := replay.NewService(repo, replayIdentity{}, replayIdentity{})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -183,7 +186,7 @@ func TestRecordCharacterVsMonster_Success(t *testing.T) {
 		t.Fatalf("RecordCharacterVsMonster: %v", err)
 	}
 
-	rep, err := service.GetReplay(ctx, replayID)
+	rep, err := repo.FindByID(ctx, replayID)
 	if err != nil {
 		t.Fatalf("GetReplay: %v", err)
 	}
@@ -195,7 +198,7 @@ func TestRecordCharacterVsMonster_Success(t *testing.T) {
 func TestRecordParticipantVsParticipant_Success(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockReplayRepo()
-	service, err := replay.NewService(repo)
+	service, err := replay.NewService(repo, replayIdentity{}, replayIdentity{})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
@@ -214,7 +217,7 @@ func TestRecordParticipantVsParticipant_Success(t *testing.T) {
 		t.Fatalf("RecordParticipantVsParticipant: %v", err)
 	}
 
-	rep, err := service.GetReplay(ctx, replayID)
+	rep, err := repo.FindByID(ctx, replayID)
 	if err != nil {
 		t.Fatalf("GetReplay: %v", err)
 	}
@@ -225,7 +228,7 @@ func TestRecordParticipantVsParticipant_Success(t *testing.T) {
 
 func TestReplayRecorder_InterfaceCompliance(t *testing.T) {
 	repo := newMockReplayRepo()
-	service, err := replay.NewService(repo)
+	service, err := replay.NewService(repo, replayIdentity{}, replayIdentity{})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}

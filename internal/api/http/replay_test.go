@@ -18,28 +18,28 @@ import (
 )
 
 type stubReplayService struct {
-	getReplayFn                   func(ctx context.Context, id string) (*replay.BattleReplay, error)
+	getReplayFn                   func(ctx context.Context, sessionID, id string) (*replay.BattleReplay, error)
 	getCharacterHistoryFn         func(ctx context.Context, characterID string, combatType string, limit int) ([]replay.ReplayHeader, error)
 	getCharacterHistoryByCursorFn func(ctx context.Context, characterID string, combatType string, limit int, cursor string) (pagination.CursorPage[replay.ReplayHeader], error)
 	getRecentReplaysFn            func(ctx context.Context, combatType string, limit int) ([]replay.ReplayHeader, error)
 	getRecentReplaysByCursorFn    func(ctx context.Context, combatType string, limit int, cursor string) (pagination.CursorPage[replay.ReplayHeader], error)
 }
 
-func (s *stubReplayService) GetReplay(ctx context.Context, id string) (*replay.BattleReplay, error) {
+func (s *stubReplayService) GetReplay(ctx context.Context, sessionID, id string) (*replay.BattleReplay, error) {
 	if s.getReplayFn != nil {
-		return s.getReplayFn(ctx, id)
+		return s.getReplayFn(ctx, sessionID, id)
 	}
 	return nil, replay.ErrReplayNotFound
 }
 
-func (s *stubReplayService) GetCharacterHistory(ctx context.Context, characterID string, combatType string, limit int) ([]replay.ReplayHeader, error) {
+func (s *stubReplayService) GetCharacterHistory(ctx context.Context, sessionID, characterID string, combatType string, limit int) ([]replay.ReplayHeader, error) {
 	if s.getCharacterHistoryFn != nil {
 		return s.getCharacterHistoryFn(ctx, characterID, combatType, limit)
 	}
 	return nil, nil
 }
 
-func (s *stubReplayService) GetCharacterHistoryByCursor(ctx context.Context, characterID string, combatType string, limit int, cursor string) (pagination.CursorPage[replay.ReplayHeader], error) {
+func (s *stubReplayService) GetCharacterHistoryByCursor(ctx context.Context, sessionID, characterID string, combatType string, limit int, cursor string) (pagination.CursorPage[replay.ReplayHeader], error) {
 	if s.getCharacterHistoryByCursorFn != nil {
 		return s.getCharacterHistoryByCursorFn(ctx, characterID, combatType, limit, cursor)
 	}
@@ -113,8 +113,11 @@ func TestReplayEndpoints(t *testing.T) {
 	}
 
 	rService := &stubReplayService{
-		getReplayFn: func(_ context.Context, id string) (*replay.BattleReplay, error) {
+		getReplayFn: func(_ context.Context, sessionID, id string) (*replay.BattleReplay, error) {
 			if id == "rep-123" {
+				if sessionID != "valid-token" {
+					return nil, replay.ErrReplayNotFound
+				}
 				return &testReplay, nil
 			}
 			if id == "err-500" {
@@ -135,13 +138,10 @@ func TestReplayEndpoints(t *testing.T) {
 			return pagination.NewCursorPage(testHeaders, "next-tok", cursor, limit, false), nil
 		},
 		getRecentReplaysFn: func(_ context.Context, combatType string, limit int) ([]replay.ReplayHeader, error) {
-			if combatType == "dungeon" {
-				return []replay.ReplayHeader{}, nil
-			}
-			return testHeaders, nil
+			return nil, nil
 		},
 		getRecentReplaysByCursorFn: func(_ context.Context, combatType string, limit int, cursor string) (pagination.CursorPage[replay.ReplayHeader], error) {
-			return pagination.NewCursorPage(testHeaders, "recent-next", cursor, limit, false), nil
+			return pagination.NewCursorPage([]replay.ReplayHeader{}, "", cursor, limit, false), nil
 		},
 	}
 
@@ -157,6 +157,7 @@ func TestReplayEndpoints(t *testing.T) {
 
 	t.Run("GET /replays/{id} - 200 OK", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/replays/rep-123", nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
@@ -273,7 +274,7 @@ func TestReplayEndpoints(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &headers); err != nil {
 			t.Fatalf("failed to decode response: %v", err)
 		}
-		if len(headers) != 1 || headers[0].ID != "rep-123" {
+		if len(headers) != 0 {
 			t.Errorf("unexpected headers: %+v", headers)
 		}
 	})
@@ -309,7 +310,7 @@ func TestReplayEndpoints(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
 			t.Fatalf("failed to decode response: %v", err)
 		}
-		if len(page.Items) != 1 || page.NextCursor != "recent-next" {
+		if len(page.Items) != 0 || page.NextCursor != "" {
 			t.Errorf("unexpected page: %+v", page)
 		}
 	})
@@ -326,6 +327,7 @@ func TestReplayEndpoints(t *testing.T) {
 
 		// GET /replays/{id}
 		req := httptest.NewRequest(http.MethodGet, "/replays/rep-123", nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
 		rec := httptest.NewRecorder()
 		unconfiguredRouter.ServeHTTP(rec, req)
 		if rec.Code != http.StatusNotImplemented {

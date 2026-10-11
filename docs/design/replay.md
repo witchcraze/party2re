@@ -137,12 +137,41 @@ turn count and creation time. The recorder adapters accept `pvp`, `gvg`, `boss`,
 `dungeon`, `adventure` and `challenge` names, but those names do not prove legacy
 recording coverage or production integration.
 
-The composition root wires the replay service to HTTP reads. The combat features
-do not currently call its recording adapters. Current reads expose complete
-documents anonymously by ID and unfiltered recent headers; only character history
-has HTTP ownership authentication. The service itself has no viewer/recipient
-authorization and the schema has no visibility/recipient metadata. Those are
-implementation gaps, not the approved target above.
+The composition root wires session authentication and character persistence into
+Replay. Personal detail and history verify the authenticated player's ownership
+of the persisted archive recipient at the service boundary; history retains the
+HTTP ownership wrapper as well. Detail checks metadata and ownership before
+loading the raw payload. Unauthorized personal IDs and nonexistent IDs share the
+same not-found result. Supplied invalid credentials retain authentication errors.
+Combat identities, current membership and combat type never grant archive access.
+
+`battle_replays.provenance = personal_archive` with a nonempty
+`archive_recipient_id` identifies an explicitly classified personal copy. Empty
+or unsupported provenance is unavailable. The trusted internal recording request
+can carry this pair; existing result adapters supply neither and remain
+unclassified. No production combat feature calls those adapters. Personal history
+selects only this classification and recipient, before limits and cursor creation;
+equal timestamps use descending replay ID as the tie-breaker. This retained
+archive index does not implement the original latest-only slot or approve a new
+copy/retention lifecycle.
+
+Migration `102_replay_archive_provenance.sql` adds metadata with empty defaults
+and a recipient index, preserving existing payloads without deriving ownership
+from combat headers. Deploy the additive migration first, then replace **all** old
+reader instances with guarded readers before enabling any classified producer.
+During a rolling deployment, old readers still expose data; use a maintenance
+window or disable Replay routing until all old instances have drained. Do not
+revert to the old readers as a rollback while Replay routes remain reachable.
+Historical rows remain unavailable unless independent trustworthy archive-copy
+evidence establishes their recipient; this issue supplies no reclassification or
+public import endpoint.
+
+The current raw-stat/turn-log representation has no supported global provenance
+or safe public display payload. Detail denies all non-personal records and both
+recent SQL forms reject every row before pagination, including rows manually
+marked public/global. Recent therefore returns an empty feed regardless of login.
+A verified publisher and structured scene implementation are prerequisites for
+public display support; a visibility flag alone must never enable it.
 
 The current engine turn log contains `turn`, `actor_id`, `action_name`, `target_id`,
 `damage_dealt`, `healing_done`, `is_critical`, `message` and `remaining_hp`. Recorder
@@ -150,12 +179,10 @@ adapters build snapshots from characters, monsters or engine participants and
 save completed results. `DeleteOlderThan` is an available storage operation,
 not evidence of an active automatic retention policy or a legacy rule.
 
-The [current OpenAPI sources](../api/paths/replays.json) describe running replay
-detail/recent operations; owned history is in
-[`character.json`](../api/paths/character.json). Do not change their security or
-response schemas to pretend the target is implemented. Storage/read authorization
-is tracked by [#1319](https://github.com/witchcraze/party2re/issues/1319), and the
-adventure scene/lifecycle adaptation by
+The [current OpenAPI sources](../api/paths/replays.json) describe guarded replay
+detail and the empty recent feed; owned recipient history is in
+[`character.json`](../api/paths/character.json). The adventure scene/lifecycle
+adaptation remains tracked by
 [#1320](https://github.com/witchcraze/party2re/issues/1320).
 The latter must reconcile the already approved immediate solo/party execution
 with operation-driven recording; it must not silently fabricate historical
