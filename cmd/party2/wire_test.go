@@ -846,76 +846,87 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 		defer cancel()
 
 		for _, cid := range cleanupCharIDs {
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_homes WHERE character_id = ?", cid)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM guild_members WHERE character_id = ?", cid)
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_homes WHERE character_id = ?", cid); err != nil {
+				t.Errorf("cleanup character_homes for %s failed: %v", cid, err)
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM guild_members WHERE character_id = ?", cid); err != nil {
+				t.Errorf("cleanup guild_members for %s failed: %v", cid, err)
+			}
 		}
 		for _, gid := range cleanupGuildIDs {
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM guild_members WHERE guild_id = ?", gid)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM guilds WHERE id = ?", gid)
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM guild_members WHERE guild_id = ?", gid); err != nil {
+				t.Errorf("cleanup guild_members for guild %s failed: %v", gid, err)
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM guilds WHERE id = ?", gid); err != nil {
+				t.Errorf("cleanup guild %s failed: %v", gid, err)
+			}
 		}
 		for _, cid := range cleanupCharIDs {
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", cid)
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", cid)
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", cid); err != nil {
+				t.Errorf("cleanup character_depots for %s failed: %v", cid, err)
+			}
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", cid); err != nil {
+				t.Errorf("cleanup characters for %s failed: %v", cid, err)
+			}
 		}
 		for _, pid := range cleanupPlayerIDs {
-			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", pid)
+			if _, err := db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", pid); err != nil {
+				t.Errorf("cleanup players for %s failed: %v", pid, err)
+			}
 		}
-		_ = db.Close()
+		if err := db.Close(); err != nil {
+			t.Errorf("cleanup db.Close failed: %v", err)
+		}
 	})
 
-	// Pre-cleanup leftover test fixtures from past aborted runs to isolate capacity
-	// without touching unrelated developer or other integration fixtures.
-	func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+	homeRepo, err := database.NewHomeRepository(db)
+	if err != nil {
+		t.Fatalf("NewHomeRepository failed: %v", err)
+	}
 
-		var stalePlayerIDs []string
-		rows, err := db.QueryContext(cleanupCtx, `
-			SELECT DISTINCT player_id FROM characters
-			WHERE name LIKE 'WGP_%_Ldr' OR name LIKE 'W%_M_' OR name LIKE 'W%_Sol' OR name LIKE 'W%_Por'
-		`)
-		if err == nil {
-			for rows.Next() {
-				var pid string
-				if err := rows.Scan(&pid); err == nil && pid != "" {
-					stalePlayerIDs = append(stalePlayerIDs, pid)
+	// Verify town capacity before building. If a town is already at capacity due to past uncleaned
+	// runs, safely expire only confirmed wire-test fixtures to isolate capacity without indiscriminate deletion.
+	now := time.Now().UTC()
+	for _, townID := range []string{"town1", "town2", "town3", "town4"} {
+		count, err := homeRepo.CountActiveTownHouses(ctx, townID, now)
+		if err != nil {
+			t.Fatalf("CountActiveTownHouses for %s failed: %v", townID, err)
+		}
+		needed := 1
+		if townID == "town1" {
+			needed = 3
+		}
+		if count+needed > 10 {
+			var staleCharIDs []string
+			rows, qErr := db.QueryContext(ctx, `
+				SELECT c.id
+				FROM character_homes h
+				JOIN characters c ON h.character_id = c.id
+				JOIN guild_members gm ON c.id = gm.character_id
+				JOIN guilds g ON gm.guild_id = g.id
+				WHERE h.town_id = ? AND h.expires_at > ?
+				  AND g.name LIKE 'WGP_%' AND c.name LIKE 'W%'
+			`, townID, now)
+			if qErr == nil {
+				for rows.Next() {
+					var cid string
+					if err := rows.Scan(&cid); err == nil && cid != "" {
+						staleCharIDs = append(staleCharIDs, cid)
+					}
 				}
+				_ = rows.Close()
 			}
-			_ = rows.Close()
+			if len(staleCharIDs) > 0 && count-len(staleCharIDs)+needed <= 10 {
+				for _, cid := range staleCharIDs {
+					if _, err := db.ExecContext(ctx, "UPDATE character_homes SET expires_at = '2000-01-01 00:00:00' WHERE character_id = ?", cid); err != nil {
+						t.Fatalf("expire confirmed stale house for %s failed: %v", cid, err)
+					}
+				}
+			} else {
+				t.Fatalf("town %s capacity is insufficient (%d active houses, need %d, max 10); existing data occupies town", townID, count, needed)
+			}
 		}
-
-		_, _ = db.ExecContext(cleanupCtx, `
-			DELETE FROM character_homes
-			WHERE character_id IN (
-				SELECT id FROM characters
-				WHERE name LIKE 'WGP_%_Ldr' OR name LIKE 'W%_M_' OR name LIKE 'W%_Sol' OR name LIKE 'W%_Por'
-			)
-		`)
-		_, _ = db.ExecContext(cleanupCtx, `
-			DELETE FROM guild_members
-			WHERE character_id IN (
-				SELECT id FROM characters
-				WHERE name LIKE 'WGP_%_Ldr' OR name LIKE 'W%_M_' OR name LIKE 'W%_Sol' OR name LIKE 'W%_Por'
-			) OR guild_id IN (
-				SELECT id FROM guilds WHERE name LIKE 'WGP_%'
-			)
-		`)
-		_, _ = db.ExecContext(cleanupCtx, `DELETE FROM guilds WHERE name LIKE 'WGP_%'`)
-		_, _ = db.ExecContext(cleanupCtx, `
-			DELETE FROM character_depots
-			WHERE character_id IN (
-				SELECT id FROM characters
-				WHERE name LIKE 'WGP_%_Ldr' OR name LIKE 'W%_M_' OR name LIKE 'W%_Sol' OR name LIKE 'W%_Por'
-			)
-		`)
-		_, _ = db.ExecContext(cleanupCtx, `
-			DELETE FROM characters
-			WHERE name LIKE 'WGP_%_Ldr' OR name LIKE 'W%_M_' OR name LIKE 'W%_Sol' OR name LIKE 'W%_Por'
-		`)
-		for _, pid := range stalePlayerIDs {
-			_, _ = db.ExecContext(cleanupCtx, `DELETE FROM players WHERE id = ?`, pid)
-		}
-	}()
+	}
 
 	// Instantiate production wiring
 	core, err := newCoreServices(db, nil)
