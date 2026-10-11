@@ -105,9 +105,13 @@ func (m *mockItemDefProvider) FindByID(id string) (coreitem.Definition, error) {
 
 type mockCollector struct {
 	recorded []string
+	err      error
 }
 
 func (m *mockCollector) RecordItemDiscovered(_ context.Context, characterID, itemID, itemName, category string) error {
+	if m.err != nil {
+		return m.err
+	}
 	m.recorded = append(m.recorded, itemID)
 	return nil
 }
@@ -571,5 +575,24 @@ func TestAltarEligibilityAfterOrbReplacement(t *testing.T) {
 	clearedChar := charRepo.chars["char-1"]
 	if clearedChar.Orb != "" || clearedChar.OrbCount() != 0 || clearedChar.IsRamiaAwakened() {
 		t.Fatalf("expected cleared orb, got %q", clearedChar.Orb)
+	}
+}
+
+func TestWish_PropagatesCollectionError(t *testing.T) {
+	svc, charRepo, _, _, _, collector := setupTestService(t)
+	ctx := context.Background()
+
+	colErr := errors.New("altar collection failure")
+	collector.err = colErr
+
+	charRepo.chars["char-1"] = corecharacter.Character{
+		ID:   "char-1",
+		Name: "Hero",
+		Orb:  "G",
+	}
+
+	_, err := svc.Wish(ctx, "char-1", ItemMirrorOfTruth)
+	if !errors.Is(err, colErr) {
+		t.Fatalf("expected collection error %v, got: %v", colErr, err)
 	}
 }

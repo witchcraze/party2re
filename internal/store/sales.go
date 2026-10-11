@@ -337,8 +337,9 @@ func (s *Service) BuyItem(ctx context.Context, buyerCharacterID, saleID string) 
 
 		if s.collection != nil {
 			itemName, cat := s.resolveItemInfo(sale.ItemDefinitionID, sale.ItemName)
-			//lint:ignore error-swallow best-effort collection discovery
-			_ = s.collection.RecordItemDiscovered(txCtx, buyerCharacterID, sale.ItemDefinitionID, itemName, cat)
+			if err := s.collection.RecordItemDiscovered(txCtx, buyerCharacterID, sale.ItemDefinitionID, itemName, cat); err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -461,8 +462,9 @@ func (s *Service) TradeItem(ctx context.Context, buyerCharacterID, saleID, custo
 
 		if s.collection != nil {
 			itemName, cat := s.resolveItemInfo(sale.ItemDefinitionID, sale.ItemName)
-			//lint:ignore error-swallow best-effort collection discovery
-			_ = s.collection.RecordItemDiscovered(txCtx, buyerCharacterID, sale.ItemDefinitionID, itemName, cat)
+			if err := s.collection.RecordItemDiscovered(txCtx, buyerCharacterID, sale.ItemDefinitionID, itemName, cat); err != nil {
+				return err
+			}
 		}
 
 		return nil

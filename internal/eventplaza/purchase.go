@@ -129,8 +129,9 @@ func (s *Service) PurchaseBazaarItem(
 			}
 
 			if s.recorder != nil {
-				//lint:ignore error-swallow best-effort collection discovery
-				_ = s.recorder.RecordItemDiscovered(txCtx, characterID, targetItem.ItemDefinitionID, targetItem.Name, targetItem.Category)
+				if err := s.recorder.RecordItemDiscovered(txCtx, characterID, targetItem.ItemDefinitionID, targetItem.Name, targetItem.Category); err != nil {
+					return err
+				}
 			}
 
 			_ = s.recordPresence(txCtx, characterID, s.clock.Now())
@@ -194,8 +195,9 @@ func (s *Service) PurchaseBazaarItem(
 		}
 
 		if s.recorder != nil {
-			//lint:ignore error-swallow best-effort collection discovery
-			_ = s.recorder.RecordItemDiscovered(txCtx, characterID, targetItem.ItemDefinitionID, targetItem.Name, targetItem.Category)
+			if err := s.recorder.RecordItemDiscovered(txCtx, characterID, targetItem.ItemDefinitionID, targetItem.Name, targetItem.Category); err != nil {
+				return err
+			}
 		}
 
 		_ = s.recordPresence(txCtx, characterID, s.clock.Now())

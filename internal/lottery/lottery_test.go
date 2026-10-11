@@ -1,7 +1,9 @@
 package lottery_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"strings"
@@ -1155,9 +1157,13 @@ type mockCollectionRecord struct {
 
 type mockCollectionRecorder struct {
 	records []mockCollectionRecord
+	err     error
 }
 
 func (m *mockCollectionRecorder) RecordItemDiscovered(ctx context.Context, characterID, itemID, itemName, category string) error {
+	if m.err != nil {
+		return m.err
+	}
 	m.records = append(m.records, mockCollectionRecord{
 		characterID: characterID,
 		itemID:      itemID,
@@ -1275,5 +1281,89 @@ func TestDrawTakarakuji_CollectionCategories(t *testing.T) {
 	}
 	if catCounts["takarakuji"] != 0 {
 		t.Errorf("expected 0 takarakuji recordings, got %d", catCounts["takarakuji"])
+	}
+}
+
+func TestPlayRaffle_PropagatesCollectionError(t *testing.T) {
+	ctx := context.Background()
+	origReader := rand.Reader
+	rand.Reader = bytes.NewReader(make([]byte, 1024))
+	defer func() { rand.Reader = origReader }()
+
+	repo := &mockLotteryRepo{
+		getRaffleTicketsFn: func(ctx context.Context, charID string) (int, error) {
+			return 10, nil
+		},
+		useRaffleTicketsFn: func(ctx context.Context, charID string, count int) (int, error) {
+			return 7, nil
+		},
+	}
+	charRepo := &mockCharacterRepo{
+		characters: map[string]corecharacter.Character{
+			"char-1": {ID: "char-1", JobLevel: 5},
+		},
+	}
+	invRepo := &mockInventoryRepo{}
+	depotRepo := &mockDepotRepo{depot: make(map[string]depot.Depot)}
+	colErr := errors.New("collection persistence failed")
+	recorder := &mockCollectionRecorder{err: colErr}
+
+	svc, err := lottery.NewService(repo,
+		lottery.WithCharacterRepository(charRepo),
+		lottery.WithInventoryRepository(invRepo),
+		lottery.WithDepotRepository(depotRepo),
+		lottery.WithCollectionRecorder(recorder),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, _, err = svc.PlayRaffle(ctx, "char-1")
+	if !errors.Is(err, colErr) {
+		t.Fatalf("expected collection error %v, got: %v", colErr, err)
+	}
+}
+
+func TestDrawTakarakuji_PropagatesCollectionError(t *testing.T) {
+	origReader := rand.Reader
+	rand.Reader = bytes.NewReader(make([]byte, 1024))
+	defer func() { rand.Reader = origReader }()
+
+	jst := time.FixedZone("JST", 9*60*60)
+	drawTime := time.Date(2026, 9, 11, 0, 0, 0, 0, jst)
+	activeRound := lottery.TakarakujiRound{
+		RoundID:      1,
+		DrawDate:     drawTime,
+		Prize1ItemID: "item-129",
+		Prize1Amount: 1,
+	}
+	tickets := []lottery.TakarakujiTicket{
+		{ID: "t-1", RoundID: 1, CharacterID: "char-1"},
+	}
+	repo := &mockLotteryRepo{
+		getActiveTakarakujiRoundFn: func(ctx context.Context) (lottery.TakarakujiRound, error) {
+			return activeRound, nil
+		},
+		listRoundTakarakujiTicketsFn: func(ctx context.Context, roundID int) ([]lottery.TakarakujiTicket, error) {
+			return tickets, nil
+		},
+	}
+	depotRepo := &mockDepotRepo{depot: make(map[string]depot.Depot)}
+	colErr := errors.New("takarakuji collection failed")
+	recorder := &mockCollectionRecorder{err: colErr}
+	itemDefs := &mockItemDefProvider{
+		names: map[string]string{"item-129": "神の錬金レシピ"},
+	}
+	svc, err := lottery.NewService(repo,
+		lottery.WithDepotRepository(depotRepo),
+		lottery.WithItemDefinitionProvider(itemDefs),
+		lottery.WithCollectionRecorder(recorder),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.DrawTakarakuji(context.Background(), drawTime)
+	if !errors.Is(err, colErr) {
+		t.Fatalf("expected collection error %v, got: %v", colErr, err)
 	}
 }

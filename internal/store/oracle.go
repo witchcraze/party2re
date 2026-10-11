@@ -324,7 +324,9 @@ func (s *Service) BuyCostumeItem(ctx context.Context, characterID string, itemNo
 		}
 
 		if s.collection != nil {
-			_ = s.collection.RecordItemDiscovered(txCtx, characterID, defID, selected.Name, "ITEM")
+			if err := s.collection.RecordItemDiscovered(txCtx, characterID, defID, selected.Name, "ITEM"); err != nil {
+				return err
+			}
 		}
 
 		result = &CostumeBuyResult{

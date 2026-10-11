@@ -162,8 +162,9 @@ func (s *Service) Wish(ctx context.Context, characterID string, itemID string) (
 				if cat == "" {
 					cat = "consumable"
 				}
-				//lint:ignore error-swallow best-effort collection discovery
-				_ = s.collector.RecordItemDiscovered(txCtx, char.ID, itemDef.ID, itemDef.Name, cat)
+				if err := s.collector.RecordItemDiscovered(txCtx, char.ID, itemDef.ID, itemDef.Name, cat); err != nil {
+					return err
+				}
 			}
 			mes = fmt.Sprintf(MsgWishInventoryFmt, itemDef.Name)
 		} else {

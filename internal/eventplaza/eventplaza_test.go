@@ -222,11 +222,15 @@ func (m *mockHelperProvider) GetActiveHelperItemIDs(ctx context.Context, now tim
 type mockCollectionRecorder struct {
 	mu       sync.Mutex
 	recorded []string
+	err      error
 }
 
 func (m *mockCollectionRecorder) RecordItemDiscovered(ctx context.Context, characterID, itemID, itemName, category string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.err != nil {
+		return m.err
+	}
 	m.recorded = append(m.recorded, itemID)
 	return nil
 }
@@ -585,6 +589,37 @@ func TestPurchaseBazaarItem_InventoryAndDepotRouting(t *testing.T) {
 	if !errors.Is(err, ErrDepotFull) {
 		t.Errorf("expected ErrDepotFull, got %v", err)
 	}
+
+	// 7. Collection error propagation (inventory delivery)
+	emptyCharID := id.New()
+	emptyChar, _ := corecharacter.New("EmptyHero")
+	emptyChar.ID = emptyCharID
+	emptyChar.PlayerID = "player-empty"
+	emptyChar.Money = 50000
+	charRepo.characters[emptyCharID] = emptyChar
+
+	colErr := errors.New("bazaar collection error")
+	recorderMock.err = colErr
+
+	_, err = svc.PurchaseBazaarItem(ctx, emptyCharID, "item-072", 1)
+	if !errors.Is(err, colErr) {
+		t.Errorf("expected collection error %v on inventory delivery, got %v", colErr, err)
+	}
+
+	// 8. Collection error propagation (depot delivery)
+	invOcc, _ := coreinventory.New(emptyCharID)
+	dummyItem, _ := coreitem.NewInstance("item-dummy", 1)
+	_ = invOcc.Add(dummyItem)
+	_ = invRepo.Save(ctx, invOcc)
+
+	emptyDepot, _ := depot.NewDepotWithCapacity(emptyCharID, emptyChar.JobLevel, 0, emptyChar.OverDepot)
+	_ = depotRepo.Save(ctx, emptyDepot)
+
+	_, err = svc.PurchaseBazaarItem(ctx, emptyCharID, "item-072", 1)
+	if !errors.Is(err, colErr) {
+		t.Errorf("expected collection error %v on depot delivery, got %v", colErr, err)
+	}
+	recorderMock.err = nil
 }
 
 func TestVictoryBanquetAndToast(t *testing.T) {

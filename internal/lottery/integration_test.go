@@ -2,8 +2,10 @@ package lottery_test
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 	"testing"
@@ -14,6 +16,32 @@ import (
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/lottery"
 )
+
+type testLegendInductor struct {
+	err   error
+	calls []string
+}
+
+func (l *testLegendInductor) RecordLegend(ctx context.Context, category, characterID string) error {
+	if l.err != nil {
+		return l.err
+	}
+	l.calls = append(l.calls, category+":"+characterID)
+	return nil
+}
+
+type testNewsPublisher struct {
+	err   error
+	calls []string
+}
+
+func (n *testNewsPublisher) PublishNews(ctx context.Context, category, title, content, author string, publishedAt time.Time) error {
+	if n.err != nil {
+		return n.err
+	}
+	n.calls = append(n.calls, title)
+	return nil
+}
 
 func TestTakarakujiDatabaseIntegration(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
@@ -276,6 +304,91 @@ func TestTakarakujiDatabaseIntegration(t *testing.T) {
 			}
 		}
 	}
+
+	t.Run("Mandatory Induction Failure Causes Full Takarakuji Draw Rollback", func(t *testing.T) {
+		if _, err := db.ExecContext(ctx, "DELETE FROM takarakuji_tickets"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, "DELETE FROM takarakuji_rounds"); err != nil {
+			t.Fatal(err)
+		}
+
+		inductor := &testLegendInductor{err: errors.New("takarakuji mandatory legend failure")}
+		newsPub := &testNewsPublisher{}
+
+		colRepo, err := database.NewCollectionRepository(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		colSvc, err := collection.NewService(colRepo, 180, 1,
+			collection.WithLegendInductor(inductor),
+			collection.WithNewsPublisher(newsPub),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		testSvc, err := lottery.NewService(lotteryRepo,
+			lottery.WithCharacterRepository(charRepo),
+			lottery.WithDepotRepository(depotRepo),
+			lottery.WithItemDefinitionProvider(itemCatalog),
+			lottery.WithTransactionProvider(txProvider),
+			lottery.WithCollectionRecorder(colSvc),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		status, err := testSvc.GetTakarakujiStatus(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for i := 1; i <= 20; i++ {
+			c, err := database.CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("TkRollbackBuyer%d_%d", i, time.Now().UnixNano()), 50000)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = testSvc.BuyTakarakujiTicket(ctx, c.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		drawTime := status.DrawDate
+		_, err = testSvc.DrawTakarakuji(ctx, drawTime)
+		if err == nil {
+			t.Fatal("expected DrawTakarakuji to fail when collection induction fails")
+		}
+
+		var isDrawn bool
+		err = db.QueryRowContext(ctx, "SELECT is_drawn FROM takarakuji_rounds WHERE round_id = ?", status.RoundID).Scan(&isDrawn)
+		if err != nil || isDrawn {
+			t.Errorf("round in DB is_drawn = %v; want false (err=%v)", isDrawn, err)
+		}
+		tickets, err := lotteryRepo.ListRoundTakarakujiTickets(ctx, status.RoundID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, tk := range tickets {
+			if tk.WonRank != 0 || tk.WonItemID != nil {
+				t.Errorf("ticket %s has won_rank=%d, won_item=%v; want un-won", tk.ID, tk.WonRank, tk.WonItemID)
+			}
+		}
+
+		inductor.err = nil
+		res, err := testSvc.DrawTakarakuji(ctx, drawTime)
+		if err != nil {
+			t.Fatalf("expected DrawTakarakuji to succeed after resolving inductor failure, got: %v", err)
+		}
+		if len(res.Winners) < 3 {
+			t.Errorf("expected at least 3 winners, got %d", len(res.Winners))
+		}
+		err = db.QueryRowContext(ctx, "SELECT is_drawn FROM takarakuji_rounds WHERE round_id = ?", status.RoundID).Scan(&isDrawn)
+		if err != nil || !isDrawn {
+			t.Errorf("round in DB is_drawn = %v; want true (err=%v)", isDrawn, err)
+		}
+	})
 }
 
 func TestRaffleDatabaseIntegration(t *testing.T) {
@@ -542,4 +655,126 @@ func TestRaffleDatabaseIntegration(t *testing.T) {
 			t.Errorf("DB remaining tickets = %d; want 0 (err=%v)", remaining, err)
 		}
 	})
+
+	t.Run("Mandatory Induction Failure Rollback and Recovery", func(t *testing.T) {
+		char, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("RaffleRollback_%d", time.Now().UnixNano()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := lotteryRepo.AddRaffleTickets(ctx, char.ID, 10); err != nil {
+			t.Fatal(err)
+		}
+
+		inductor := &testLegendInductor{err: errors.New("mandatory legend induction failure")}
+		newsPub := &testNewsPublisher{err: errors.New("best effort news failure")}
+
+		colRepo, err := database.NewCollectionRepository(db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		colSvc, err := collection.NewService(colRepo, 180, 1,
+			collection.WithLegendInductor(inductor),
+			collection.WithNewsPublisher(newsPub),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		testSvc, err := lottery.NewService(lotteryRepo,
+			lottery.WithCharacterRepository(charRepo),
+			lottery.WithInventoryRepository(invRepo),
+			lottery.WithDepotRepository(depotRepo),
+			lottery.WithItemDefinitionProvider(itemCatalog),
+			lottery.WithTransactionProvider(txProvider),
+			lottery.WithCollectionRecorder(colSvc),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		origReader := rand.Reader
+		rand.Reader = &zeroRollReader{orig: origReader}
+		defer func() { rand.Reader = origReader }()
+
+		_, _, _, err = testSvc.PlayRaffle(ctx, char.ID)
+		if err == nil {
+			t.Fatal("expected PlayRaffle to fail when legend induction fails")
+		}
+
+		tickets, err := lotteryRepo.GetRaffleTickets(ctx, char.ID)
+		if err != nil || tickets != 10 {
+			t.Errorf("tickets in DB = %d; want 10 (err=%v)", tickets, err)
+		}
+		inv, err := invRepo.FindByCharacterID(ctx, char.ID)
+		if err != nil || len(inv.Items) != 0 {
+			t.Errorf("inventory in DB has %d items; want 0 (err=%v)", len(inv.Items), err)
+		}
+		dep, err := depotRepo.FindByCharacterID(ctx, char.ID)
+		if err == nil && len(dep.Items) != 0 {
+			t.Errorf("depot in DB has %d items; want 0", len(dep.Items))
+		}
+		colEntries, err := colRepo.GetItemCollection(ctx, char.ID, "item")
+		if err != nil || len(colEntries) != 0 {
+			t.Errorf("collection entries in DB = %d; want 0 (err=%v)", len(colEntries), err)
+		}
+		isCompleted, err := colRepo.IsCompleted(ctx, char.ID, "item")
+		if err != nil || isCompleted {
+			t.Errorf("milestone in DB completed = %v; want false (err=%v)", isCompleted, err)
+		}
+
+		inductor.err = nil
+
+		res, remaining, _, err := testSvc.PlayRaffle(ctx, char.ID)
+		if err != nil {
+			t.Fatalf("expected PlayRaffle to succeed after resolving inductor failure, got: %v", err)
+		}
+		if res.Prize.ItemDefinitionID != "item-027" {
+			t.Errorf("expected prize item-027, got %s", res.Prize.ItemDefinitionID)
+		}
+		if remaining != 7 {
+			t.Errorf("remaining tickets = %d; want 7", remaining)
+		}
+
+		tickets, err = lotteryRepo.GetRaffleTickets(ctx, char.ID)
+		if err != nil || tickets != 7 {
+			t.Errorf("tickets in DB = %d; want 7", tickets)
+		}
+		inv, err = invRepo.FindByCharacterID(ctx, char.ID)
+		if err != nil || len(inv.Items) != 1 {
+			t.Errorf("inventory in DB has %d items; want 1", len(inv.Items))
+		}
+		colEntries, err = colRepo.GetItemCollection(ctx, char.ID, "item")
+		if err != nil || len(colEntries) != 1 {
+			t.Errorf("collection in DB has %d items; want 1", len(colEntries))
+		}
+		isCompleted, err = colRepo.IsCompleted(ctx, char.ID, "item")
+		if err != nil || !isCompleted {
+			t.Errorf("milestone in DB completed = %v; want true", isCompleted)
+		}
+		if len(inductor.calls) != 1 {
+			t.Errorf("legend inductor calls = %d; want 1", len(inductor.calls))
+		}
+
+		_, _, _, err = testSvc.PlayRaffle(ctx, char.ID)
+		if err != nil {
+			t.Fatalf("subsequent raffle failed: %v", err)
+		}
+		if len(inductor.calls) != 1 {
+			t.Errorf("legend inductor should not be called again on already completed category, calls = %d", len(inductor.calls))
+		}
+	})
+}
+
+type zeroRollReader struct {
+	orig io.Reader
+}
+
+func (r *zeroRollReader) Read(p []byte) (n int, err error) {
+	if len(p) < 16 {
+		for i := range p {
+			p[i] = 0
+		}
+		return len(p), nil
+	}
+	return r.orig.Read(p)
 }

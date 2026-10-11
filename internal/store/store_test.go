@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -770,8 +771,9 @@ func TestStoreService_CollectionRecordingOnBuyAndTrade(t *testing.T) {
 		t.Errorf("unexpected collection call after TradeItem: %+v", tradeCall)
 	}
 
-	// 3. Test Error-Swallowing: collection failure must not abort purchase or barter
-	collector.err = fmt.Errorf("database collection failure")
+	// 3. Test Error-Propagation: collection failure must abort purchase or barter
+	colErr := fmt.Errorf("database collection failure")
+	collector.err = colErr
 
 	// c1 lists another wpn_001
 	dep1, _ = depotRepo.FindByCharacterID(ctx, "c1")
@@ -783,9 +785,9 @@ func TestStoreService_CollectionRecordingOnBuyAndTrade(t *testing.T) {
 		t.Fatalf("ListGoldItem 2 failed: %v", err)
 	}
 
-	// BuyItem should succeed despite collector error
-	if err := svc.BuyItem(ctx, "c2", sale2.ID); err != nil {
-		t.Errorf("BuyItem should succeed even if collection recording fails, got: %v", err)
+	// BuyItem should fail with collector error
+	if err := svc.BuyItem(ctx, "c2", sale2.ID); !errors.Is(err, colErr) {
+		t.Errorf("BuyItem expected collection error %v, got: %v", colErr, err)
 	}
 
 	// c1 lists arm_001 for barter
@@ -802,9 +804,9 @@ func TestStoreService_CollectionRecordingOnBuyAndTrade(t *testing.T) {
 	dep2.Items = append(dep2.Items, coreitem.Instance{ID: "c2_herb2", DefinitionID: "itm_001", Quantity: 1})
 	_ = depotRepo.Save(ctx, dep2)
 
-	// TradeItem should succeed despite collector error
-	if err := svc.TradeItem(ctx, "c2", barterSale2.ID, "c2_herb2"); err != nil {
-		t.Errorf("TradeItem should succeed even if collection recording fails, got: %v", err)
+	// TradeItem should fail with collector error
+	if err := svc.TradeItem(ctx, "c2", barterSale2.ID, "c2_herb2"); !errors.Is(err, colErr) {
+		t.Errorf("TradeItem expected collection error %v, got: %v", colErr, err)
 	}
 
 	// Suppress unused charRepo warning

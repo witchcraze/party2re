@@ -159,8 +159,9 @@ func (s *Service) PurchaseInShop(ctx context.Context, characterID string, shopTy
 			}
 
 			if s.recorder != nil {
-				//lint:ignore error-swallow best-effort collection discovery
-				_ = s.recorder.RecordItemDiscovered(txCtx, characterID, definition.ID, definition.Name, definition.Category())
+				if err := s.recorder.RecordItemDiscovered(txCtx, characterID, definition.ID, definition.Name, definition.Category()); err != nil {
+					return err
+				}
 			}
 
 			result = PurchaseResult{

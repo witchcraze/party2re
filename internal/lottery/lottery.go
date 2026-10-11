@@ -313,8 +313,9 @@ func (s *Service) PlayRaffle(ctx context.Context, characterID string) (RaffleRes
 
 			if s.collectionRecorder != nil {
 				cat := s.resolveItemCategory(prize.ItemDefinitionID)
-				//lint:ignore error-swallow best-effort collection discovery
-				_ = s.collectionRecorder.RecordItemDiscovered(txCtx, characterID, prize.ItemDefinitionID, prize.Name, cat)
+				if err := s.collectionRecorder.RecordItemDiscovered(txCtx, characterID, prize.ItemDefinitionID, prize.Name, cat); err != nil {
+					return err
+				}
 			}
 		}
 
