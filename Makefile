@@ -45,7 +45,7 @@ test:
 
 test-integration:
 	@echo "Running integration tests against local container DB..."
-	@PARTY2_DB_DSN="party2:party2@tcp(127.0.0.1:3306)/party2?parseTime=true" PARTY2_VALKEY_ADDR="127.0.0.1:6379" go test -count=1 ./...
+	@PARTY2_DB_DSN="party2:party2@tcp(127.0.0.1:3306)/party2?parseTime=true" PARTY2_TEST_DB_ADMIN_DSN="root:root@tcp(127.0.0.1:3306)/?parseTime=true" PARTY2_VALKEY_ADDR="127.0.0.1:6379" go test -count=1 ./...
 
 test-docker:
 	@echo "Running tests in Docker..."

@@ -155,10 +155,15 @@ func TestRankingServiceIntegration(t *testing.T) {
 	}
 
 	// 3c. Weekly job changes and rotation
-	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+	_, weeklyRepo := weeklyRotationDB(t)
+	weeklySvc, err := ranking.NewService(weeklyRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := weeklySvc.RotateWeeklyJobChangeRanking(ctx); err != nil {
 		t.Fatalf("RotateWeeklyJobChangeRanking failed: %v", err)
 	}
-	weeklyPage, err := svc.GetWeeklyJobChangeRanking(ctx, 10, 0, true)
+	weeklyPage, err := weeklySvc.GetWeeklyJobChangeRanking(ctx, 10, 0, true)
 	if err != nil {
 		t.Fatalf("GetWeeklyJobChangeRanking failed: %v", err)
 	}
@@ -215,6 +220,18 @@ type interceptingRankingRepo struct {
 	onAfterGetActiveWeekly func()
 }
 
+func setWeeklyRotationDue(t *testing.T, repo *database.RankingRepository, due time.Time) {
+	t.Helper()
+	if err := repo.RunInTx(context.Background(), func(ctx context.Context) error {
+		if err := repo.LockWeeklyJobChangesForUpdate(ctx); err != nil {
+			return err
+		}
+		return repo.SaveWeeklyRotationDue(ctx, due)
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func (r *interceptingRankingRepo) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	if tp, ok := r.Repository.(ranking.TransactionProvider); ok {
 		return tp.RunInTx(ctx, fn)
@@ -231,27 +248,9 @@ func (r *interceptingRankingRepo) GetActiveWeeklyJobChangeRanking(ctx context.Co
 }
 
 func TestWeeklyJobChange_DeterministicInterleaving_RealDB(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
+	t.Parallel()
+	db, rankingRepo := weeklyRotationDB(t)
 	ctx := context.Background()
-
-	// Clean up weekly job changes before test
-	if _, err := db.ExecContext(ctx, "DELETE FROM weekly_job_changes"); err != nil {
-		t.Fatal(err)
-	}
-
-	rankingRepo, err := database.NewRankingRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// Create two test characters
 	charA, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("WJCA_%d", time.Now().UnixNano()%100000))
@@ -263,8 +262,10 @@ func TestWeeklyJobChange_DeterministicInterleaving_RealDB(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	setWeeklyRotationDue(t, rankingRepo, weeklyIntegrationClock().Add(-time.Hour))
+
 	// Record 2 initial job changes for charA before rotation starts
-	baseSvc, err := ranking.NewService(rankingRepo)
+	baseSvc, err := ranking.NewService(rankingRepo, ranking.WithNowFunc(weeklyIntegrationClock))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +290,7 @@ func TestWeeklyJobChange_DeterministicInterleaving_RealDB(t *testing.T) {
 		},
 	}
 
-	rotSvc, err := ranking.NewService(interceptedRepo)
+	rotSvc, err := ranking.NewService(interceptedRepo, ranking.WithNowFunc(weeklyIntegrationClock))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +299,8 @@ func TestWeeklyJobChange_DeterministicInterleaving_RealDB(t *testing.T) {
 	// It acquires LockWeeklyJobChangesForUpdate, reads active changes, and pauses on readDone.
 	rotErr := make(chan error, 1)
 	go func() {
-		rotErr <- rotSvc.RotateWeeklyJobChangeRanking(ctx)
+		_, err := rotSvc.RotateWeeklyJobChangeRanking(ctx)
+		rotErr <- err
 	}()
 
 	select {
@@ -389,29 +391,17 @@ func TestWeeklyJobChange_DeterministicInterleaving_RealDB(t *testing.T) {
 }
 
 func TestWeeklyJobChange_ConcurrentRace_RealDB(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
+	t.Parallel()
+	db, rankingRepo := weeklyRotationDB(t)
 	ctx := context.Background()
 
-	rankingRepo, err := database.NewRankingRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	svc, err := ranking.NewService(rankingRepo)
+	svc, err := ranking.NewService(rankingRepo, ranking.WithNowFunc(weeklyIntegrationClock))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for iter := 0; iter < 5; iter++ {
+		setWeeklyRotationDue(t, rankingRepo, weeklyIntegrationClock().Add(-time.Hour))
 		char, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("RaceWJC_%d_%d", iter, time.Now().UnixNano()%10000))
 		if err != nil {
 			t.Fatal(err)
@@ -419,7 +409,8 @@ func TestWeeklyJobChange_ConcurrentRace_RealDB(t *testing.T) {
 
 		err1, err2 := database.RunRace2(
 			func() error {
-				return svc.RotateWeeklyJobChangeRanking(ctx)
+				_, err := svc.RotateWeeklyJobChangeRanking(ctx)
+				return err
 			},
 			func() error {
 				return svc.RecordJobChange(ctx, char.ID)
@@ -439,33 +430,16 @@ func TestWeeklyJobChange_ConcurrentRace_RealDB(t *testing.T) {
 }
 
 func TestWeeklyJobChange_ReRotationDoesNotOverwriteFinalizedSnapshot_RealDB(t *testing.T) {
-	if os.Getenv("PARTY2_DB_DSN") == "" {
-		t.Skip("PARTY2_DB_DSN is not configured")
-	}
-
-	db, err := database.OpenFromEnvironment()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
+	t.Parallel()
+	db, rankingRepo := weeklyRotationDB(t)
 	ctx := context.Background()
-
-	if _, err := db.ExecContext(ctx, "DELETE FROM weekly_job_changes"); err != nil {
-		t.Fatal(err)
-	}
-
-	rankingRepo, err := database.NewRankingRepository(db)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	char, err := database.CreateTestCharacter(ctx, db, fmt.Sprintf("ReRotWJC_%d", time.Now().UnixNano()%100000))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	svc, err := ranking.NewService(rankingRepo)
+	svc, err := ranking.NewService(rankingRepo, ranking.WithNowFunc(weeklyIntegrationClock))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -474,8 +448,10 @@ func TestWeeklyJobChange_ReRotationDoesNotOverwriteFinalizedSnapshot_RealDB(t *t
 		t.Fatal(err)
 	}
 
+	setWeeklyRotationDue(t, rankingRepo, weeklyIntegrationClock().Add(-time.Hour))
+
 	// 1. Initial rotation freezes 1 entry
-	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+	if _, err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
 		t.Fatalf("first RotateWeeklyJobChangeRanking failed: %v", err)
 	}
 
@@ -488,7 +464,7 @@ func TestWeeklyJobChange_ReRotationDoesNotOverwriteFinalizedSnapshot_RealDB(t *t
 	}
 
 	// 2. Immediate re-rotation when active table is now empty
-	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+	if _, err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
 		t.Fatalf("second RotateWeeklyJobChangeRanking failed: %v", err)
 	}
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
 const (
@@ -16,9 +17,9 @@ const (
 	RankingActionTypeRotateWeekly = "party2:ranking:rotate_weekly"
 )
 
-// WeeklyRotateActionID generates a deterministic action ID for Sunday midnight weekly rotation.
+// WeeklyRotateActionID generates the deterministic JST date prefix for weekly wake-up IDs.
 func WeeklyRotateActionID(t time.Time) string {
-	return fmt.Sprintf("ranking:weekly_rotate:%s", t.Format("2006-01-02"))
+	return fmt.Sprintf("ranking:weekly_rotate:%s", t.In(jstLocation).Format("2006-01-02"))
 }
 
 // RefreshHandler implements scheduling.ActionHandler to execute periodic ranking refreshes.
@@ -48,17 +49,51 @@ func (h *RefreshHandler) Handle(ctx context.Context, action core_scheduling.Sche
 
 // RotateWeeklyHandler implements scheduling.ActionHandler to execute weekly job change ranking rotation.
 type RotateWeeklyHandler struct {
-	service *Service
+	service   *Service
+	scheduler WeeklyRotationScheduler
+}
+
+// WeeklyRotationScheduler manages the ranking wake-up reservation; SQL owns settlement progress.
+type WeeklyRotationScheduler interface {
+	ScheduleWithID(context.Context, string, string, string, map[string]string, time.Time) error
+	FindPendingByActorID(context.Context, string) ([]core_scheduling.ScheduledAction, error)
 }
 
 // NewRotateWeeklyHandler creates a new RotateWeeklyHandler.
-func NewRotateWeeklyHandler(service *Service) *RotateWeeklyHandler {
+func NewRotateWeeklyHandler(service *Service, scheduler WeeklyRotationScheduler) *RotateWeeklyHandler {
 	return &RotateWeeklyHandler{
-		service: service,
+		service:   service,
+		scheduler: scheduler,
 	}
 }
 
 // Handle processes the weekly job change ranking rotation action.
 func (h *RotateWeeklyHandler) Handle(ctx context.Context, action core_scheduling.ScheduledAction) error {
-	return h.service.RotateWeeklyJobChangeRanking(ctx)
+	// An action is only a wake-up: stale or uncertain deliveries defer to durable SQL progress.
+	return h.Reconcile(ctx)
+}
+
+// Reconcile settles overdue counters once, then restores the next reservation, also on startup.
+// Enqueue errors occur after SQL commit; retrying reconciliation never repeats that settlement.
+func (h *RotateWeeklyHandler) Reconcile(ctx context.Context) error {
+	next, err := h.service.RotateWeeklyJobChangeRanking(ctx)
+	if err != nil {
+		return err
+	}
+	const actorID = "ranking:weekly"
+	actions, err := h.scheduler.FindPendingByActorID(ctx, actorID)
+	if err != nil {
+		return fmt.Errorf("discover weekly rotation reservation after SQL reconciliation: %w", err)
+	}
+	for _, action := range actions {
+		if action.ActionType == RankingActionTypeRotateWeekly && action.ExecuteAt.Equal(next) && action.State == core_scheduling.StatePending {
+			return nil
+		}
+	}
+	// Discovery and enqueue are not atomic: a fresh ID cannot overwrite another worker's Processing payload.
+	actionID := WeeklyRotateActionID(next) + ":" + id.New()
+	if err := h.scheduler.ScheduleWithID(ctx, actionID, RankingActionTypeRotateWeekly, actorID, nil, next); err != nil {
+		return fmt.Errorf("enqueue weekly rotation after SQL reconciliation: %w", err)
+	}
+	return nil
 }

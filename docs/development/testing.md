@@ -72,6 +72,7 @@ make db-reset
 - **Explicit Setup over Magic**: Test helpers must not obscure what is being tested. Explicit setup is preferred over implicit abstraction.
 - **Reproducible Outcomes**: For exact outcome assertions, inject controlled RNG and clock inputs. Randomized tests should report their seed for replay.
 - **Shared Factories**: Use centralized test factories (`CreateTestPlayer`, `CreateTestCharacterWithFunds`, `CreateTestGuildWithLeader`) for integration tests to ensure unique IDs and valid name lengths.
+- **Weekly ranking rotations**: Tests that commit global weekly resets use a unique database per test, copying only the required table definitions (including foreign keys) from `PARTY2_DB_DSN`. Workers retain separate connections and transactions. `PARTY2_TEST_DB_ADMIN_DSN` must allow creating/dropping these databases; it is supplied by `make test-integration`, `make check`, and the development Compose test runner. For direct host runs with the local Compose services, set it to `root:root@tcp(127.0.0.1:3306)/?parseTime=true`. Missing admin configuration fails DB-enabled weekly tests rather than falling back to the shared database. Cleanup drops only the database created by that test; shared ranking rows are never cleared or restored by these fixtures. This administrator connection is for tests only.
 
 ---
 

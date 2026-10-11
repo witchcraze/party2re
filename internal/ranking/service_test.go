@@ -48,6 +48,9 @@ type mockRankingRepository struct {
 	saveSnapshotErr          error
 	resetWeeklyJobChangesErr error
 	lockWeeklyJobChangesErr  error
+	weeklyRotationDue        time.Time
+	getWeeklyRotationDueErr  error
+	saveWeeklyRotationDueErr error
 }
 
 func newMockRepo() *mockRankingRepository {
@@ -59,6 +62,7 @@ func newMockRepo() *mockRankingRepository {
 }
 
 func (m *mockRankingRepository) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	savedDue := m.weeklyRotationDue
 	savedSnapshots := make(map[ranking.RankingType]ranking.RankingSnapshot)
 	for k, v := range m.snapshots {
 		savedSnapshots[k] = v
@@ -69,6 +73,7 @@ func (m *mockRankingRepository) RunInTx(ctx context.Context, fn func(ctx context
 	}
 
 	if err := fn(ctx); err != nil {
+		m.weeklyRotationDue = savedDue
 		m.snapshots = savedSnapshots
 		m.activeWeeklyJobChanges = savedActive
 		return err
@@ -283,6 +288,18 @@ func (m *mockRankingRepository) LockWeeklyJobChangesForUpdate(ctx context.Contex
 	if m.err != nil {
 		return m.err
 	}
+	return nil
+}
+
+func (m *mockRankingRepository) GetWeeklyRotationDue(ctx context.Context) (time.Time, error) {
+	return m.weeklyRotationDue, m.getWeeklyRotationDueErr
+}
+
+func (m *mockRankingRepository) SaveWeeklyRotationDue(ctx context.Context, due time.Time) error {
+	if m.saveWeeklyRotationDueErr != nil {
+		return m.saveWeeklyRotationDueErr
+	}
+	m.weeklyRotationDue = due
 	return nil
 }
 

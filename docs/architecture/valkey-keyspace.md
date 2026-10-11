@@ -111,6 +111,15 @@ cancellation, not automatic replay. Worker logs persistence/cleanup errors; Save
 returns them to direct callers. These guarantees concern scheduling metadata,
 not exactly-once feature execution or lossless SQL/Valkey settlement across a crash.
 
+Weekly ranking wake-ups use actor `ranking:weekly` and IDs with a JST-date prefix
+and fresh enqueue-attempt suffix within these existing scheduled keys. Their durable next boundary is owned by MariaDB
+`ranking_snapshots.weekly_rotation_due`, advanced atomically with counter settlement.
+Startup reconciles SQL directly and restores a missing future reservation, rather
+than replaying uncertain Processing actions. Queue discovery/enqueue errors are
+reported after SQL reconciliation; restarting or explicitly retrying that feature
+reconciliation repairs recurrence without repeating a committed settlement. See
+[ranking design](../design/ranking.md#durable-progress-and-scheduling-recovery).
+
 ## Approved navigation storage boundary
 
 The [progressive observation/navigation contract](client-agent-api.md#approved-navigation-and-progressive-observation-contract)

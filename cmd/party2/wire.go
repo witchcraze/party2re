@@ -246,16 +246,6 @@ func wireHooks(
 	if soc.sched != nil && misc.contest != nil {
 		wireContestSettlement(soc.sched, misc.contest)
 	}
-	if soc.sched != nil && soc.ranking != nil {
-		wireRankingWeeklyRotation(soc.sched)
-	}
-}
-
-// wireRankingWeeklyRotation enqueues the weekly Sunday midnight job change ranking rotation if not already scheduled.
-func wireRankingWeeklyRotation(sched *scheduling.Service) {
-	ctx := context.Background()
-	next := ranking.NextSundayMidnightJST(time.Now())
-	_ = sched.ScheduleWithID(ctx, ranking.WeeklyRotateActionID(next), ranking.RankingActionTypeRotateWeekly, "system", nil, next)
 }
 
 // wireContestSettlement enqueues the contest settlement action if not already scheduled.
