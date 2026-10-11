@@ -2,6 +2,7 @@ package http_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
 	"github.com/witchcraze/party2re/internal/character"
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -24,12 +26,50 @@ import (
 	"github.com/witchcraze/party2re/internal/replay"
 )
 
-func TestReplayArchiveAuthorizationMariaDB(t *testing.T) {
+func replayArchiveDB(t *testing.T) *sql.DB {
+	t.Helper()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
 	ctx := context.Background()
-	db, err := database.OpenFromEnvironment()
+	source, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := source.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
+	if adminDSN == "" {
+		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated replay archive tests")
+	}
+	cfg, err := mysql.ParseDSN(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := database.Open(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := admin.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	// Follow weeklyRotationDB: own the whole schema, including partially created and reassigned fixtures.
+	name := "party2_replay_test_" + id.New()
+	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
+			t.Error(err)
+		}
+	})
+	cfg.DBName = name
+	db, err := database.Open(cfg.FormatDSN())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,6 +78,22 @@ func TestReplayArchiveAuthorizationMariaDB(t *testing.T) {
 			t.Error(err)
 		}
 	})
+	// Preserve foreign keys by copying definitions in dependency order, without shared data.
+	for _, table := range []string{"players", "characters", "character_depots", "guilds", "guild_members", "battle_replays"} {
+		var tableName, ddl string
+		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, ddl); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return db
+}
+
+func TestReplayArchiveAuthorizationMariaDB(t *testing.T) {
+	ctx := context.Background()
+	db := replayArchiveDB(t)
 	chars, err := database.NewCharacterRepository(db)
 	if err != nil {
 		t.Fatal(err)
