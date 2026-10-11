@@ -452,3 +452,187 @@ func TestGuildActiveAffiliation_PendingSuccessionFallback(t *testing.T) {
 		t.Errorf("appEligible active count = %d, want 1", count)
 	}
 }
+
+func TestGuildActiveAffiliation_AssignCustomRoleConcurrency(t *testing.T) {
+	f := newActiveAffiliationFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	leader1 := f.createCharacter(t, "ARLead1", 20000)
+	leader2 := f.createCharacter(t, "ARLead2", 20000)
+	applicant := f.createCharacter(t, "ARTarget", 5000)
+
+	g1, _, _, err := f.service.Create(ctx, leader1.ID, "ARG1_"+id.New()[:8])
+	if err != nil {
+		t.Fatal(err)
+	}
+	g2, _, _, err := f.service.Create(ctx, leader2.ID, "ARG2_"+id.New()[:8])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Applicant submits pending applications to both guilds
+	if err := f.service.ApplyToJoin(ctx, g1.ID, applicant.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.service.ApplyToJoin(ctx, g2.ID, applicant.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Concurrent AssignCustomRole on pending applicant vs ApproveApplication (or AssignCustomRole on other guild)
+	err1, err2 := testutil.RunRace2(
+		func() error {
+			return f.service.AssignCustomRole(ctx, g1.ID, leader1.ID, applicant.ID, "親衛隊長")
+		},
+		func() error {
+			return f.service.AssignCustomRole(ctx, g2.ID, leader2.ID, applicant.ID, "魔導将軍")
+		},
+	)
+
+	var successCount, alreadyInGuildCount int
+	for _, err := range []error{err1, err2} {
+		if err == nil {
+			successCount++
+		} else if errors.Is(err, guild.ErrCharacterAlreadyInGuild) {
+			alreadyInGuildCount++
+		} else {
+			t.Errorf("unexpected error from AssignCustomRole: %v", err)
+		}
+	}
+	if successCount != 1 || alreadyInGuildCount != 1 {
+		t.Fatalf("expected 1 success and 1 ErrCharacterAlreadyInGuild, got %d successes and %d alreadyInGuild (err1=%v, err2=%v)",
+			successCount, alreadyInGuildCount, err1, err2)
+	}
+
+	// Invariant: active affiliations must be exactly 1
+	if activeCount := f.countActiveAffiliations(t, applicant.ID); activeCount != 1 {
+		t.Errorf("active affiliation count = %d, want 1", activeCount)
+	}
+}
+
+func TestGuildActiveAffiliation_LeaveSuccessionVsApprovalConcurrency(t *testing.T) {
+	f := newActiveAffiliationFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	leader1 := f.createCharacter(t, "LSLead1", 20000)
+	leader2 := f.createCharacter(t, "LSLead2", 20000)
+	applicant := f.createCharacter(t, "LSTarget", 5000)
+
+	g1, _, _, err := f.service.Create(ctx, leader1.ID, "LSG1_"+id.New()[:8])
+	if err != nil {
+		t.Fatal(err)
+	}
+	g2, _, _, err := f.service.Create(ctx, leader2.ID, "LSG2_"+id.New()[:8])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Applicant submits pending applications to both guilds
+	if err := f.service.ApplyToJoin(ctx, g1.ID, applicant.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.service.ApplyToJoin(ctx, g2.ID, applicant.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Leader1 leaves G1 (attempting to promote applicant as sole remaining member)
+	// while Leader2 concurrently approves applicant in G2!
+	errLeave, errApprove := testutil.RunRace2(
+		func() error {
+			return f.service.Leave(ctx, g1.ID, leader1.ID)
+		},
+		func() error {
+			return f.service.ApproveApplication(ctx, g2.ID, leader2.ID, applicant.ID, "精鋭")
+		},
+	)
+
+	// Leave should always succeed (either promoting applicant to leader, or disbanding G1 if applicant is in G2).
+	if errLeave != nil {
+		t.Fatalf("unexpected error from Leave: %v", errLeave)
+	}
+
+	// ApproveApplication either succeeds (if it won race), or fails with ErrCharacterAlreadyInGuild (if Leave promoted applicant first).
+	if errApprove != nil && !errors.Is(errApprove, guild.ErrCharacterAlreadyInGuild) {
+		t.Fatalf("unexpected error from ApproveApplication: %v", errApprove)
+	}
+
+	// Invariant: active affiliations for applicant must be exactly 1 under all race outcomes
+	if activeCount := f.countActiveAffiliations(t, applicant.ID); activeCount != 1 {
+		t.Errorf("active affiliation count for applicant = %d, want 1", activeCount)
+	}
+
+	// If ApproveApplication won, applicant is in G2 and G1 is disbanded.
+	// If Leave won, applicant is leader of G1 and ApproveApplication failed.
+	if errApprove == nil {
+		// Approve won: G2 active, G1 disbanded
+		activeG, _, err := f.service.GetByCharacter(ctx, applicant.ID)
+		if err != nil {
+			t.Fatalf("GetByCharacter failed: %v", err)
+		}
+		if activeG.ID != g2.ID {
+			t.Errorf("applicant active guild = %s, want %s (G2)", activeG.ID, g2.ID)
+		}
+		if _, err := f.service.Get(ctx, g1.ID); !errors.Is(err, guild.ErrGuildNotFound) {
+			t.Errorf("expected G1 to be disbanded, got err: %v", err)
+		}
+	} else {
+		// Leave won: applicant is leader of G1
+		g1Detail, err := f.service.Get(ctx, g1.ID)
+		if err != nil {
+			t.Fatalf("expected G1 to survive: %v", err)
+		}
+		if g1Detail.Guild.LeaderCharacterID != applicant.ID {
+			t.Errorf("G1 leader = %s, want %s", g1Detail.Guild.LeaderCharacterID, applicant.ID)
+		}
+	}
+}
+
+func TestGuildActiveAffiliation_LeaveSuccessionVsCreateConcurrency(t *testing.T) {
+	f := newActiveAffiliationFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	leader1 := f.createCharacter(t, "LCLead1", 20000)
+	successor := f.createCharacter(t, "LCTarget", 20000)
+
+	g1, _, _, err := f.service.Create(ctx, leader1.ID, "LCG1_"+id.New()[:8])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Successor submits pending application to G1
+	if err := f.service.ApplyToJoin(ctx, g1.ID, successor.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	newGuildName := "LCNew_" + id.New()[:8]
+
+	// Leader1 leaves G1 (attempting to promote successor) while successor concurrently calls Create!
+	errLeave, errCreate := testutil.RunRace2(
+		func() error {
+			return f.service.Leave(ctx, g1.ID, leader1.ID)
+		},
+		func() error {
+			_, _, _, err := f.service.Create(ctx, successor.ID, newGuildName)
+			return err
+		},
+	)
+
+	if errLeave != nil {
+		t.Fatalf("unexpected error from Leave: %v", errLeave)
+	}
+	if errCreate != nil && !errors.Is(errCreate, guild.ErrCharacterAlreadyInGuild) {
+		t.Fatalf("unexpected error from Create: %v", errCreate)
+	}
+
+	// Invariant: active affiliations for successor must be exactly 1 under all race outcomes
+	if activeCount := f.countActiveAffiliations(t, successor.ID); activeCount != 1 {
+		t.Errorf("active affiliation count for successor = %d, want 1", activeCount)
+	}
+
+	// Exactly 1 guild is led by successor
+	if guildsLed := f.countGuildsLed(t, successor.ID); guildsLed != 1 {
+		t.Errorf("guilds led by successor = %d, want 1", guildsLed)
+	}
+}

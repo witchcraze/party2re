@@ -61,3 +61,18 @@ func WithClock(clock func() time.Time) ServiceOption {
 		s.nowFunc = clock
 	}
 }
+
+func authorizeCurrentLeader(g Guild, members []Member, charID string) error {
+	if g.LeaderCharacterID != charID {
+		return ErrUnauthorized
+	}
+	for i := range members {
+		if members[i].CharacterID == charID {
+			if members[i].Role != RoleLeader || members[i].IsPending {
+				return ErrUnauthorized
+			}
+			return nil
+		}
+	}
+	return ErrUnauthorized
+}

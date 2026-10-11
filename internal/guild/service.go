@@ -281,8 +281,8 @@ func (s *Service) TransferLeadership(ctx context.Context, guildID string, curren
 
 // AssignCustomRole sets a custom role title on a guild member (guild.cgi:ataeru).
 // Only the guild leader can assign role titles.
-// Transaction: RunInTx (authorization, target classification and mutation; pending delegates to ApproveApplication).
-// Lock Order: guilds(7) -> guild_members(7).
+// Transaction: RunInTx (Rank 2 target character lock, Rank 7 guild lock and title assignment; pending applicant approved atomically).
+// Lock Order: characters(2) -> guilds(7) -> guild_members(7).
 func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requesterCharID string, targetCharID string, title string) error {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -299,19 +299,32 @@ func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requeste
 		return err
 	}
 
-	return s.runInTx(ctx, func(txCtx context.Context) error {
-		lockedGuild, members, err := s.repo.GetGuildForUpdate(txCtx, guildID)
+	var (
+		g        Guild
+		approved bool
+	)
+	err = s.runInTx(ctx, func(txCtx context.Context) error {
+		// Rank 2: Acquire character lock before guild lock
+		if err := s.repo.LockCharacterForUpdate(txCtx, targetCharID); err != nil {
+			if errors.Is(err, ErrCharacterNotFound) {
+				return ErrTargetNotMember
+			}
+			return err
+		}
+
+		// Rank 7: Acquire guild lock
+		lockedGuild, lockedMembers, err := s.repo.GetGuildForUpdate(txCtx, guildID)
 		if err != nil {
 			return err
 		}
 
 		var requester, target *Member
-		for i := range members {
-			if members[i].CharacterID == requesterCharID {
-				requester = &members[i]
+		for i := range lockedMembers {
+			if lockedMembers[i].CharacterID == requesterCharID {
+				requester = &lockedMembers[i]
 			}
-			if members[i].CharacterID == targetCharID {
-				target = &members[i]
+			if lockedMembers[i].CharacterID == targetCharID {
+				target = &lockedMembers[i]
 			}
 		}
 
@@ -326,7 +339,23 @@ func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requeste
 		}
 
 		if target.IsPending {
-			return s.ApproveApplication(txCtx, guildID, requesterCharID, targetCharID, normalizedTitle)
+			// Re-verify that the applicant is not already an active member of another guild (guild.cgi:ataeru)
+			if activeGuild, _, err := s.repo.GetGuildByCharacter(txCtx, targetCharID); err == nil {
+				if activeGuild.ID != guildID {
+					return ErrCharacterAlreadyInGuild
+				}
+				return ErrMemberNotPending
+			} else if !errors.Is(err, ErrCharacterNotInGuild) {
+				return err
+			}
+
+			if err := s.repo.ApproveMember(txCtx, guildID, targetCharID, normalizedTitle); err != nil {
+				return err
+			}
+			s.touchActive(txCtx, guildID)
+			g = lockedGuild
+			approved = true
+			return nil
 		}
 
 		if err := s.repo.AssignCustomRole(txCtx, guildID, targetCharID, normalizedTitle); err != nil {
@@ -335,21 +364,22 @@ func (s *Service) AssignCustomRole(ctx context.Context, guildID string, requeste
 		s.touchActive(txCtx, guildID)
 		return nil
 	})
-}
-
-func authorizeCurrentLeader(g Guild, members []Member, charID string) error {
-	if g.LeaderCharacterID != charID {
-		return ErrUnauthorized
+	if err != nil {
+		return err
 	}
-	for i := range members {
-		if members[i].CharacterID == charID {
-			if members[i].Role != RoleLeader || members[i].IsPending {
-				return ErrUnauthorized
-			}
-			return nil
+
+	// Send acceptance letter to applicant if pending was approved (guild.cgi:236-237)
+	if approved && s.letterSender != nil && s.charReader != nil {
+		leaderChar, errL := s.charReader.FindByID(ctx, requesterCharID)
+		applicantChar, errA := s.charReader.FindByID(ctx, targetCharID)
+		if errL == nil && errA == nil {
+			content := "【＋参加許可証＋】" + g.Name + " (ギルマス " + leaderChar.Name + ") から参加許可をもらいました"
+			//lint:ignore error-swallow existing best-effort membership notification
+			_ = s.letterSender.SendLetter(ctx, requesterCharID, leaderChar.Name, targetCharID, applicantChar.Name, content, leaderChar.Color)
 		}
 	}
-	return ErrUnauthorized
+
+	return nil
 }
 
 // UpdateColor changes the guild's hex color (guild.cgi:color).
@@ -439,20 +469,4 @@ func (s *Service) UpdateNotice(ctx context.Context, guildID string, requesterCha
 		s.touchActive(txCtx, guildID)
 		return nil
 	})
-}
-
-// AddPoints increments guild points directly by guild ID.
-func (s *Service) AddPoints(ctx context.Context, guildID string, points int64) error {
-	if guildID == "" || points <= 0 {
-		return nil
-	}
-	return s.repo.AddPoints(ctx, guildID, points)
-}
-
-// AddGuildPoints awards guild points if the character is in a guild.
-func (s *Service) AddGuildPoints(ctx context.Context, characterID string, points int) error {
-	if characterID == "" || points <= 0 {
-		return nil
-	}
-	return s.repo.AddGuildPoints(ctx, characterID, points)
 }
