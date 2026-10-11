@@ -78,6 +78,7 @@ echo "==> [5/7] Ensuring database migrations are applied..."
 echo "==> [6/7] Running full test suite..."
 if command -v go >/dev/null 2>&1; then
     PARTY2_DB_DSN="party2:party2@tcp(127.0.0.1:3306)/party2?parseTime=true" \
+    PARTY2_TEST_DB_ADMIN_DSN="root:root@tcp(127.0.0.1:3306)/?parseTime=true" \
     PARTY2_VALKEY_ADDR="127.0.0.1:6379" \
     go test -count=1 ./...
 else

@@ -9,13 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/ranking"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-// Use a future clock so concurrently running production-wiring tests cannot settle these deadlines.
+// Keep the clock deterministic; database isolation is provided by weeklyRotationDB.
 func weeklyIntegrationClock() time.Time {
 	return ranking.NextSundayMidnightJST(time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC))
 }
@@ -25,7 +26,45 @@ func weeklyRotationDB(t *testing.T) (*sql.DB, *database.RankingRepository) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
-	db, err := database.OpenFromEnvironment()
+	source, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := source.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
+	if adminDSN == "" {
+		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated weekly rotation tests")
+	}
+	cfg, err := mysql.ParseDSN(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := database.Open(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := admin.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	// Each test owns a fresh schema. All workers use real, independent transactions;
+	// cleanup only drops this schema and never restores over another test's writes.
+	name := "party2_weekly_test_" + id.New()
+	if _, err := admin.ExecContext(context.Background(), "CREATE DATABASE `"+name+"`"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.ExecContext(context.Background(), "DROP DATABASE `"+name+"`"); err != nil {
+			t.Error(err)
+		}
+	})
+	cfg.DBName = name
+	db, err := database.Open(cfg.FormatDSN())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,11 +73,18 @@ func weeklyRotationDB(t *testing.T) (*sql.DB, *database.RankingRepository) {
 			t.Error(err)
 		}
 	})
+	// Copy definitions, including foreign keys, in dependency order; copy no data.
+	for _, table := range []string{"players", "characters", "character_depots", "ranking_snapshots", "weekly_job_changes"} {
+		var tableName, ddl string
+		if err := source.QueryRowContext(context.Background(), "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(context.Background(), ddl); err != nil {
+			t.Fatal(err)
+		}
+	}
 	repo, err := database.NewRankingRepository(db)
 	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.ExecContext(context.Background(), "DELETE FROM weekly_job_changes"); err != nil {
 		t.Fatal(err)
 	}
 	return db, repo
@@ -48,11 +94,75 @@ type failingWeeklyResetRepo struct {
 	*interceptingRankingRepo
 }
 
+func TestWeeklyRotation_DatabaseIsolation_RealDB(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbA, repoA := weeklyRotationDB(t)
+	dbB, repoB := weeklyRotationDB(t)
+	var nameA, nameB string
+	if err := dbA.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&nameA); err != nil {
+		t.Fatal(err)
+	}
+	if err := dbB.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&nameB); err != nil {
+		t.Fatal(err)
+	}
+	if nameA == nameB {
+		t.Fatal("weekly fixtures share a database")
+	}
+	charA, err := database.CreateTestCharacter(ctx, dbA, "IsolationA")
+	if err != nil {
+		t.Fatal(err)
+	}
+	charB, err := database.CreateTestCharacter(ctx, dbB, "IsolationB")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := weeklyIntegrationClock()
+	setWeeklyRotationDue(t, repoA, now)
+	setWeeklyRotationDue(t, repoB, now.AddDate(0, 0, 7))
+	if err := repoB.IncrementJobChangeCount(ctx, charB.ID); err != nil {
+		t.Fatal(err)
+	}
+	before, err := repoB.GetSnapshot(ctx, ranking.RankingTypeWeeklyJobChange)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svcA, err := ranking.NewService(repoA, ranking.WithNowFunc(weeklyIntegrationClock))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svcA.RecordJobChange(ctx, charA.ID); err != nil {
+		t.Fatal(err)
+	}
+	rotateErr, writeErr := database.RunRace2(func() error {
+		_, err := svcA.RotateWeeklyJobChangeRanking(ctx)
+		return err
+	}, func() error {
+		return repoB.IncrementJobChangeCount(ctx, charB.ID)
+	})
+	if rotateErr != nil || writeErr != nil {
+		t.Fatalf("isolated rotation/write: %v / %v", rotateErr, writeErr)
+	}
+	after, err := repoB.GetSnapshot(ctx, ranking.RankingTypeWeeklyJobChange)
+	if err != nil || after != before {
+		t.Fatalf("rotation changed another database's snapshot: %v", err)
+	}
+	due, err := repoB.GetWeeklyRotationDue(ctx)
+	if err != nil || !due.Equal(now.AddDate(0, 0, 7)) {
+		t.Fatalf("rotation changed another database's deadline: %v / %v", due, err)
+	}
+	active, total, err := repoB.GetActiveWeeklyJobChangeRanking(ctx, 10, 0)
+	if err != nil || total != 1 || len(active) != 1 || active[0].CharacterID != charB.ID || active[0].Score != 2 {
+		t.Fatalf("rotation lost another database's counters or concurrent write: %+v / %v", active, err)
+	}
+}
+
 func (r *failingWeeklyResetRepo) ResetWeeklyJobChanges(context.Context) error {
 	return errors.New("injected reset failure")
 }
 
 func TestWeeklyRotation_DurableProgress_RealDB(t *testing.T) {
+	t.Parallel()
 	db, repo := weeklyRotationDB(t)
 	ctx := context.Background()
 	char, err := database.CreateTestCharacter(ctx, db, "Weekly_"+id.New()[:8])
@@ -131,6 +241,7 @@ func TestWeeklyRotation_DurableProgress_RealDB(t *testing.T) {
 }
 
 func TestWeeklyRotation_ConcurrentReconciliationConservesCounters_RealDB(t *testing.T) {
+	t.Parallel()
 	db, repo := weeklyRotationDB(t)
 	ctx := context.Background()
 	char, err := database.CreateTestCharacter(ctx, db, "WeeklyRace_"+id.New()[:8])
