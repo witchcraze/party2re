@@ -150,7 +150,7 @@ rely only on a PlayerContext menu hiding their entry controls.
 ### One command, one bounded SQL transaction
 
 1. Authenticate the owned actor at both transport and service boundaries. Scope
-   lookup by run and actor; validate current membership/role again under lock.
+   lookup by run and actor, including that actor's historical exit receipts.
 2. Lock the shared run as Rank 0, then every affected Character at Rank 2 in
    ascending ID order. Acquire all required inventory/equipment (Rank 3), jobs
    (Rank 4), depots (Rank 5) and secondary records (Rank 8) in the existing
@@ -162,8 +162,9 @@ rely only on a PlayerContext menu hiding their entry controls.
    receipt. A committed duplicate returns its recorded result without executing
    effects; reuse with different input conflicts. Check duplicates before stale
    version rejection, but never bypass present authentication/receipt ownership.
-4. For a new command validate expected version, phase, action/target/resources
-   and server-clock eligibility. Apply the bounded player action and applicable
+4. For a new command validate current membership/role under lock, expected
+   version, phase, action/target/resources and server-clock eligibility.
+   Apply the bounded player action and applicable
    NPC response. Persist the whole resulting encounter, command consumption,
    recipient earnings/deliveries and receipt with the new version atomically.
    Rejected input does not consume items, advance a clock or mutate the run.
