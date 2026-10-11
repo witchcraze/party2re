@@ -10,18 +10,50 @@ import (
 	"github.com/witchcraze/party2re/internal/core/random"
 )
 
+func buildKing99CloneRecord(a corecharacter.Character) DefeatedMonsterRecord {
+	hp := a.Stats.MaxHP * 50
+	if hp <= 0 {
+		hp = 5000
+	}
+	mp := a.Stats.MaxMP * 50
+	if mp <= 0 {
+		mp = 500
+	}
+	at := a.Stats.Attack * 2
+	df := a.Stats.Defense * 2
+	ag := a.Stats.Agility * 2
+	strong := int(float64(hp) + float64(mp) + float64(at) + float64(df)*0.5 + float64(ag))
+	exp := (a.Level + a.JobLevel) * 30
+	gold := int(float64(a.Level)*0.5) * 30
+	return DefeatedMonsterRecord{
+		MonsterID:        "king99-clone",
+		MonsterName:      "影",
+		Habitat:          "封印戦",
+		Icon:             "king99-clone",
+		Strong:           strong,
+		HP:               hp,
+		MP:               mp,
+		Attack:           at,
+		Defense:          df,
+		Agility:          ag,
+		ExperienceReward: exp,
+		GoldReward:       gold,
+	}
+}
+
+func buildKing99CloneRecords(allies []corecharacter.Character) map[string]DefeatedMonsterRecord {
+	records := make(map[string]DefeatedMonsterRecord, len(allies))
+	for _, a := range allies {
+		records[a.ID] = buildKing99CloneRecord(a)
+	}
+	return records
+}
+
 func (s *Service) buildBossParticipants(stage BossStage, allies []corecharacter.Character) []corebattle.Participant {
 	if stage.ID == "king99" {
 		participants := make([]corebattle.Participant, 0, len(allies))
 		for i, a := range allies {
-			hp := a.Stats.MaxHP * 50
-			if hp <= 0 {
-				hp = 5000
-			}
-			mp := a.Stats.MaxMP * 50
-			if mp <= 0 {
-				mp = 500
-			}
+			rec := buildKing99CloneRecord(a)
 
 			skills := []corebattle.ActionSkill{
 				{
@@ -39,13 +71,13 @@ func (s *Service) buildBossParticipants(stage BossStage, allies []corecharacter.
 			p := corebattle.Participant{
 				ID:        fmt.Sprintf("king99-clone-%d", i),
 				Name:      "@" + a.Name,
-				HP:        hp,
-				MaxHP:     hp,
-				MP:        mp,
-				MaxMP:     mp,
-				Attack:    a.Stats.Attack * 2,
-				Defense:   a.Stats.Defense * 2,
-				Agility:   a.Stats.Agility * 2,
+				HP:        rec.HP,
+				MaxHP:     rec.HP,
+				MP:        rec.MP,
+				MaxMP:     rec.MP,
+				Attack:    rec.Attack,
+				Defense:   rec.Defense,
+				Agility:   rec.Agility,
 				Abilities: []string{"大防御"},
 				Skills:    skills,
 			}
@@ -118,7 +150,7 @@ func (s *Service) calculateTotalExp(stage BossStage, allies []corecharacter.Char
 	if stage.ID == "king99" {
 		total := 0
 		for _, a := range allies {
-			total += (a.Level + a.JobLevel) * 30
+			total += buildKing99CloneRecord(a).ExperienceReward
 		}
 		return total
 	}
@@ -133,7 +165,7 @@ func (s *Service) calculateTotalGold(stage BossStage, allies []corecharacter.Cha
 	if stage.ID == "king99" {
 		total := 0
 		for _, a := range allies {
-			total += int(float64(a.Level)*0.5) * 30
+			total += buildKing99CloneRecord(a).GoldReward
 		}
 		return total
 	}

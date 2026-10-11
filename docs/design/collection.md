@@ -134,7 +134,7 @@ Faithfully reproduces legacy Party2 (`lib/_add_monster_book.cgi`, `lib/collectio
   - Opponents prefixed with `char-` or `user-` (PvP/arena battles) are excluded from the Monster Book.
 - **King Sealing Boss Battles**:
   - Multi-member party sealing battles (`StartSealingBattle`) and solo boss challenges (`ChallengeBoss`) register all defeated boss monsters with habitat `"封印戦"`.
-  - King 99 clone battles record defeat under `"king99-clone"` / `"影"` with habitat `"封印戦"`.
+  - King 99 clone battles record defeat under `"king99-clone"` / `"影"` with habitat `"封印戦"`, preserving the encounter-time stats and reward snapshot before victory progression settlement (#1300).
 
 ---
 

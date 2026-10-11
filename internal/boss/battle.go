@@ -109,6 +109,10 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 
 		// 7. Build boss participants
 		bossParticipants := s.buildBossParticipants(stage, orderedChars)
+		var cloneRecords map[string]DefeatedMonsterRecord
+		if stage.ID == "king99" {
+			cloneRecords = buildKing99CloneRecords(orderedChars)
+		}
 
 		// 8. Resolve Battle
 		req := corebattle.PartyBattleRequest{
@@ -211,36 +215,9 @@ func (s *Service) StartSealingBattle(ctx context.Context, partyID, leaderCharID 
 			if s.monsterRecorder != nil {
 				for _, m := range members {
 					if stage.ID == "king99" {
-						c := chars[m.CharacterID]
-						hp := c.Stats.MaxHP * 50
-						if hp <= 0 {
-							hp = 5000
+						if rec, ok := cloneRecords[m.CharacterID]; ok {
+							_ = s.monsterRecorder.RecordMonsterDefeat(txCtx, m.CharacterID, rec)
 						}
-						mp := c.Stats.MaxMP * 50
-						if mp <= 0 {
-							mp = 500
-						}
-						at := c.Stats.Attack * 2
-						df := c.Stats.Defense * 2
-						ag := c.Stats.Agility * 2
-						strong := int(float64(hp) + float64(mp) + float64(at) + float64(df)*0.5 + float64(ag))
-						exp := (c.Level + c.JobLevel) * 30
-						gold := int(float64(c.Level)*0.5) * 30
-						rec := DefeatedMonsterRecord{
-							MonsterID:        "king99-clone",
-							MonsterName:      "影",
-							Habitat:          "封印戦",
-							Icon:             "king99-clone",
-							Strong:           strong,
-							HP:               hp,
-							MP:               mp,
-							Attack:           at,
-							Defense:          df,
-							Agility:          ag,
-							ExperienceReward: exp,
-							GoldReward:       gold,
-						}
-						_ = s.monsterRecorder.RecordMonsterDefeat(txCtx, m.CharacterID, rec)
 					} else {
 						for i, b := range stage.Bosses {
 							monID := parseBossMonsterID(b.Icon, fmt.Sprintf("%s-boss-%d", stage.ID, i))

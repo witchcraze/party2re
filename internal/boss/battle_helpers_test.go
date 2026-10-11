@@ -150,6 +150,70 @@ func TestBuildBossParticipants_King99Clones(t *testing.T) {
 	}
 }
 
+func TestBuildKing99CloneRecord(t *testing.T) {
+	// Normal character
+	hero := corecharacter.Character{
+		ID:       "c1",
+		Name:     "Hero",
+		Level:    50,
+		JobLevel: 10,
+		Stats: corecharacter.Stats{
+			MaxHP:   600,
+			MaxMP:   100,
+			Attack:  300,
+			Defense: 200,
+			Agility: 50,
+		},
+	}
+	rec := buildKing99CloneRecord(hero)
+	if rec.MonsterID != "king99-clone" || rec.MonsterName != "影" || rec.Habitat != "封印戦" || rec.Icon != "king99-clone" {
+		t.Errorf("unexpected metadata: %+v", rec)
+	}
+	if rec.HP != 600*50 || rec.MP != 100*50 || rec.Attack != 300*2 || rec.Defense != 200*2 || rec.Agility != 50*2 {
+		t.Errorf("unexpected combat stats: HP=%d MP=%d Atk=%d Def=%d Agi=%d", rec.HP, rec.MP, rec.Attack, rec.Defense, rec.Agility)
+	}
+	expectedStrong := int(float64(600*50) + float64(100*50) + float64(300*2) + float64(200*2)*0.5 + float64(50*2))
+	if rec.Strong != expectedStrong {
+		t.Errorf("expected Strong %d, got %d", expectedStrong, rec.Strong)
+	}
+	if rec.ExperienceReward != (50+10)*30 {
+		t.Errorf("expected ExperienceReward %d, got %d", (50+10)*30, rec.ExperienceReward)
+	}
+	if rec.GoldReward != int(50*0.5)*30 {
+		t.Errorf("expected GoldReward %d, got %d", int(50*0.5)*30, rec.GoldReward)
+	}
+
+	// Zero/negative HP/MP fallback
+	zeroHero := corecharacter.Character{
+		ID:    "zero",
+		Level: 1,
+	}
+	zeroRec := buildKing99CloneRecord(zeroHero)
+	if zeroRec.HP != 5000 {
+		t.Errorf("expected fallback HP 5000, got %d", zeroRec.HP)
+	}
+	if zeroRec.MP != 500 {
+		t.Errorf("expected fallback MP 500, got %d", zeroRec.MP)
+	}
+}
+
+func TestBuildKing99CloneRecords(t *testing.T) {
+	allies := []corecharacter.Character{
+		{ID: "c1", Level: 50, JobLevel: 10},
+		{ID: "c2", Level: 30, JobLevel: 5},
+	}
+	records := buildKing99CloneRecords(allies)
+	if len(records) != 2 {
+		t.Fatalf("expected 2 records, got %d", len(records))
+	}
+	if records["c1"].ExperienceReward != (50+10)*30 {
+		t.Errorf("expected c1 exp %d, got %d", (50+10)*30, records["c1"].ExperienceReward)
+	}
+	if records["c2"].ExperienceReward != (30+5)*30 {
+		t.Errorf("expected c2 exp %d, got %d", (30+5)*30, records["c2"].ExperienceReward)
+	}
+}
+
 func TestCalculateTotalExpAndGold_King99(t *testing.T) {
 	svc := &Service{}
 	stage := stageByID("king99")
