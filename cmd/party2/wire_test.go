@@ -825,9 +825,97 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenFromEnvironment failed: %v", err)
 	}
-	defer db.Close()
 
 	ctx := context.Background()
+
+	var (
+		cleanupGuildIDs  []string
+		cleanupCharIDs   []string
+		cleanupPlayerIDs []string
+	)
+
+	trackChar := func(c corecharacter.Character) {
+		cleanupCharIDs = append(cleanupCharIDs, c.ID)
+		if c.PlayerID != "" {
+			cleanupPlayerIDs = append(cleanupPlayerIDs, c.PlayerID)
+		}
+	}
+
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		for _, cid := range cleanupCharIDs {
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_homes WHERE character_id = ?", cid)
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM guild_members WHERE character_id = ?", cid)
+		}
+		for _, gid := range cleanupGuildIDs {
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM guild_members WHERE guild_id = ?", gid)
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM guilds WHERE id = ?", gid)
+		}
+		for _, cid := range cleanupCharIDs {
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM character_depots WHERE character_id = ?", cid)
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM characters WHERE id = ?", cid)
+		}
+		for _, pid := range cleanupPlayerIDs {
+			_, _ = db.ExecContext(cleanupCtx, "DELETE FROM players WHERE id = ?", pid)
+		}
+		_ = db.Close()
+	})
+
+	// Pre-cleanup leftover test fixtures from past aborted runs to isolate capacity
+	// without touching unrelated developer or other integration fixtures.
+	func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		var stalePlayerIDs []string
+		rows, err := db.QueryContext(cleanupCtx, `
+			SELECT DISTINCT player_id FROM characters
+			WHERE name LIKE 'WGP_%_Ldr' OR name LIKE 'W%_M_' OR name LIKE 'W%_Sol' OR name LIKE 'W%_Por'
+		`)
+		if err == nil {
+			for rows.Next() {
+				var pid string
+				if err := rows.Scan(&pid); err == nil && pid != "" {
+					stalePlayerIDs = append(stalePlayerIDs, pid)
+				}
+			}
+			_ = rows.Close()
+		}
+
+		_, _ = db.ExecContext(cleanupCtx, `
+			DELETE FROM character_homes
+			WHERE character_id IN (
+				SELECT id FROM characters
+				WHERE name LIKE 'WGP_%_Ldr' OR name LIKE 'W%_M_' OR name LIKE 'W%_Sol' OR name LIKE 'W%_Por'
+			)
+		`)
+		_, _ = db.ExecContext(cleanupCtx, `
+			DELETE FROM guild_members
+			WHERE character_id IN (
+				SELECT id FROM characters
+				WHERE name LIKE 'WGP_%_Ldr' OR name LIKE 'W%_M_' OR name LIKE 'W%_Sol' OR name LIKE 'W%_Por'
+			) OR guild_id IN (
+				SELECT id FROM guilds WHERE name LIKE 'WGP_%'
+			)
+		`)
+		_, _ = db.ExecContext(cleanupCtx, `DELETE FROM guilds WHERE name LIKE 'WGP_%'`)
+		_, _ = db.ExecContext(cleanupCtx, `
+			DELETE FROM character_depots
+			WHERE character_id IN (
+				SELECT id FROM characters
+				WHERE name LIKE 'WGP_%_Ldr' OR name LIKE 'W%_M_' OR name LIKE 'W%_Sol' OR name LIKE 'W%_Por'
+			)
+		`)
+		_, _ = db.ExecContext(cleanupCtx, `
+			DELETE FROM characters
+			WHERE name LIKE 'WGP_%_Ldr' OR name LIKE 'W%_M_' OR name LIKE 'W%_Sol' OR name LIKE 'W%_Por'
+		`)
+		for _, pid := range stalePlayerIDs {
+			_, _ = db.ExecContext(cleanupCtx, `DELETE FROM players WHERE id = ?`, pid)
+		}
+	}()
 
 	// Instantiate production wiring
 	core, err := newCoreServices(db, nil)
@@ -849,6 +937,8 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTestGuildWithLeader failed: %v", err)
 	}
+	cleanupGuildIDs = append(cleanupGuildIDs, testGuild.ID)
+	trackChar(leader)
 
 	guildRepo := soc.guildRepo
 
@@ -889,6 +979,7 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatalf("CreateTestCharacterWithFunds failed: %v", err)
 			}
+			trackChar(memberChar)
 			m := guild.Member{
 				GuildID:     testGuild.ID,
 				CharacterID: memberChar.ID,
@@ -925,6 +1016,7 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTestCharacterWithFunds failed: %v", err)
 	}
+	trackChar(soloChar)
 	soloRes, err := soc.home.BuildHouse(ctx, soloChar.ID, "town1", "002")
 	if err != nil {
 		t.Fatalf("BuildHouse for unaffiliated character failed: %v", err)
@@ -946,6 +1038,7 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTestCharacterWithFunds failed: %v", err)
 	}
+	trackChar(poorChar)
 	mPoor := guild.Member{
 		GuildID:     testGuild.ID,
 		CharacterID: poorChar.ID,
