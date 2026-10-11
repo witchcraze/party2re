@@ -44,6 +44,7 @@ type mockRankingRepository struct {
 	legends                  map[ranking.LegendCategory][]ranking.LegendEntry
 	snapshots                map[ranking.RankingType]ranking.RankingSnapshot
 	err                      error
+	getSnapshotErr           error
 	saveSnapshotErr          error
 	resetWeeklyJobChangesErr error
 	lockWeeklyJobChangesErr  error
@@ -208,6 +209,9 @@ func (m *mockRankingRepository) SaveSnapshot(ctx context.Context, snapshot ranki
 }
 
 func (m *mockRankingRepository) GetSnapshot(ctx context.Context, rankingType ranking.RankingType) (ranking.RankingSnapshot, error) {
+	if m.getSnapshotErr != nil {
+		return ranking.RankingSnapshot{}, m.getSnapshotErr
+	}
 	if m.err != nil {
 		return ranking.RankingSnapshot{}, m.err
 	}

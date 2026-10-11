@@ -159,7 +159,11 @@ func (s *Service) RotateWeeklyJobChangeRanking(ctx context.Context) error {
 			// Acceptance criteria: rotation再実行で確定済み前週snapshotを空内容へ上書きしない
 			// If active counts are empty, check if a finalized snapshot already exists.
 			existing, err := s.repo.GetSnapshot(txCtx, RankingTypeWeeklyJobChange)
-			if err == nil && (existing.TotalCount > 0 || (existing.SnapshotData != "" && existing.SnapshotData != "[]")) {
+			if err != nil {
+				if !errors.Is(err, ErrSnapshotNotFound) {
+					return fmt.Errorf("check existing weekly job change snapshot: %w", err)
+				}
+			} else if existing.TotalCount > 0 || (existing.SnapshotData != "" && existing.SnapshotData != "[]") {
 				return nil
 			}
 		}
