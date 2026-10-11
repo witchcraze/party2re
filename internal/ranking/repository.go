@@ -2,6 +2,7 @@ package ranking
 
 import (
 	"context"
+	"time"
 )
 
 // ProgressionRankingRepository defines queries for level, wealth, and job progression leaderboards.
@@ -70,6 +71,8 @@ type WeeklyJobChangeRepository interface {
 	GetActiveWeeklyJobChangeRanking(ctx context.Context, limit, offset int) ([]CharacterRankingEntry, int, error)
 	ResetWeeklyJobChanges(ctx context.Context) error
 	LockWeeklyJobChangesForUpdate(ctx context.Context) error
+	GetWeeklyRotationDue(ctx context.Context) (time.Time, error)
+	SaveWeeklyRotationDue(ctx context.Context, due time.Time) error
 }
 
 // Repository composes leaderboard queries, snapshot persistence, and hall of fame operations.

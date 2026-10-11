@@ -134,11 +134,13 @@ func (s *Service) RecordJobChange(ctx context.Context, characterID string) error
 	return s.repo.IncrementJobChangeCount(ctx, characterID)
 }
 
-// RotateWeeklyJobChangeRanking freezes the active weekly job change leaderboards into a snapshot and resets counters.
-func (s *Service) RotateWeeklyJobChangeRanking(ctx context.Context) error {
-	now := s.nowFunc().UTC()
-
+// RotateWeeklyJobChangeRanking initializes or settles the durable weekly deadline and returns the next one.
+// Transaction: RunInTx; ranking_snapshots exclusive lock mediates all weekly counter writers.
+// The deadline advances atomically with snapshot/reset, so retries cannot consume new counters.
+func (s *Service) RotateWeeklyJobChangeRanking(ctx context.Context) (time.Time, error) {
 	var (
+		now        time.Time
+		nextDue    time.Time
 		snapshot   RankingSnapshot
 		entries    []CharacterRankingEntry
 		totalCount int
@@ -148,6 +150,22 @@ func (s *Service) RotateWeeklyJobChangeRanking(ctx context.Context) error {
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		if err := s.repo.LockWeeklyJobChangesForUpdate(txCtx); err != nil {
 			return fmt.Errorf("lock weekly job changes for rotation: %w", err)
+		}
+		now = s.nowFunc().UTC()
+		due, err := s.repo.GetWeeklyRotationDue(txCtx)
+		if err != nil {
+			return fmt.Errorf("read weekly rotation deadline: %w", err)
+		}
+		nextDue = due
+		if due.After(now) {
+			return nil
+		}
+		nextDue = NextSundayMidnightJST(now)
+		if err := s.repo.SaveWeeklyRotationDue(txCtx, nextDue); err != nil {
+			return fmt.Errorf("advance weekly rotation deadline: %w", err)
+		}
+		if due.IsZero() {
+			return nil // First adoption preserves accumulated counters until the first future Sunday.
 		}
 
 		activeEntries, total, err := s.repo.GetActiveWeeklyJobChangeRanking(txCtx, 100, 0)
@@ -196,7 +214,7 @@ func (s *Service) RotateWeeklyJobChangeRanking(ctx context.Context) error {
 		return nil
 	})
 	if err != nil {
-		return err
+		return time.Time{}, err
 	}
 
 	// Acceptance criteria: commit前の値をcacheに公開しない
@@ -208,7 +226,7 @@ func (s *Service) RotateWeeklyJobChangeRanking(ctx context.Context) error {
 		s.storeCache(RankingTypeWeeklyJobChange, entries, totalCount, now)
 	}
 
-	return nil
+	return nextDue, nil
 }
 
 // GetLegends returns all Hall of Fame categories with their entry counts.

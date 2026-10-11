@@ -12,6 +12,7 @@ import (
 func TestService_WeeklyJobChange(t *testing.T) {
 	repo := newMockRepo()
 	fixedTime := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC) // Sunday
+	repo.weeklyRotationDue = fixedTime.Add(-7 * 24 * time.Hour)
 	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
 	if err != nil {
 		t.Fatalf("failed to create ranking service: %v", err)
@@ -57,7 +58,7 @@ func TestService_WeeklyJobChange(t *testing.T) {
 	}
 
 	// 3. Weekly rotation: freezes active into snapshot and resets active counts
-	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+	if _, err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
 		t.Fatalf("RotateWeeklyJobChangeRanking failed: %v", err)
 	}
 
@@ -117,6 +118,7 @@ func TestNextSundayMidnightJST(t *testing.T) {
 func TestService_WeeklyJobChange_ReRotationDoesNotOverwriteFinalizedSnapshot(t *testing.T) {
 	repo := newMockRepo()
 	fixedTime := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	repo.weeklyRotationDue = fixedTime.Add(-7 * 24 * time.Hour)
 	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
 	if err != nil {
 		t.Fatalf("failed to create ranking service: %v", err)
@@ -133,7 +135,7 @@ func TestService_WeeklyJobChange_ReRotationDoesNotOverwriteFinalizedSnapshot(t *
 	}
 	repo.weeklyJobChangeTotal = 1
 
-	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+	if _, err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
 		t.Fatalf("RotateWeeklyJobChangeRanking failed: %v", err)
 	}
 
@@ -151,7 +153,7 @@ func TestService_WeeklyJobChange_ReRotationDoesNotOverwriteFinalizedSnapshot(t *
 
 	// Advance time by 10 seconds (immediate retry/re-execution)
 	svc, _ = ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime.Add(10 * time.Second) }))
-	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+	if _, err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
 		t.Fatalf("re-running RotateWeeklyJobChangeRanking failed: %v", err)
 	}
 
@@ -171,6 +173,7 @@ func TestService_WeeklyJobChange_ReRotationDoesNotOverwriteFinalizedSnapshot(t *
 func TestService_WeeklyJobChange_RollbackOnResetFailure(t *testing.T) {
 	repo := newMockRepo()
 	fixedTime := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	repo.weeklyRotationDue = fixedTime.Add(-7 * 24 * time.Hour)
 	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
 	if err != nil {
 		t.Fatalf("failed to create ranking service: %v", err)
@@ -189,7 +192,7 @@ func TestService_WeeklyJobChange_RollbackOnResetFailure(t *testing.T) {
 	// Inject reset failure
 	repo.resetWeeklyJobChangesErr = errors.New("simulated DB reset failure")
 
-	err = svc.RotateWeeklyJobChangeRanking(ctx)
+	_, err = svc.RotateWeeklyJobChangeRanking(ctx)
 	if err == nil {
 		t.Fatal("expected RotateWeeklyJobChangeRanking to fail on reset error, got nil")
 	}
@@ -215,6 +218,7 @@ func TestService_WeeklyJobChange_RollbackOnResetFailure(t *testing.T) {
 func TestService_WeeklyJobChange_RollbackOnSaveSnapshotFailure(t *testing.T) {
 	repo := newMockRepo()
 	fixedTime := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	repo.weeklyRotationDue = fixedTime.Add(-7 * 24 * time.Hour)
 	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
 	if err != nil {
 		t.Fatalf("failed to create ranking service: %v", err)
@@ -233,7 +237,7 @@ func TestService_WeeklyJobChange_RollbackOnSaveSnapshotFailure(t *testing.T) {
 	// Inject save snapshot failure
 	repo.saveSnapshotErr = errors.New("simulated save snapshot failure")
 
-	err = svc.RotateWeeklyJobChangeRanking(ctx)
+	_, err = svc.RotateWeeklyJobChangeRanking(ctx)
 	if err == nil {
 		t.Fatal("expected RotateWeeklyJobChangeRanking to fail on save snapshot error, got nil")
 	}
@@ -247,6 +251,7 @@ func TestService_WeeklyJobChange_RollbackOnSaveSnapshotFailure(t *testing.T) {
 func TestService_WeeklyJobChange_PrerequisiteReadFailurePreservesSnapshot(t *testing.T) {
 	repo := newMockRepo()
 	fixedTime := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	repo.weeklyRotationDue = fixedTime.Add(-7 * 24 * time.Hour)
 	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
 	if err != nil {
 		t.Fatalf("failed to create ranking service: %v", err)
@@ -263,7 +268,7 @@ func TestService_WeeklyJobChange_PrerequisiteReadFailurePreservesSnapshot(t *tes
 	}
 	repo.weeklyJobChangeTotal = 1
 
-	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+	if _, err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
 		t.Fatalf("RotateWeeklyJobChangeRanking failed: %v", err)
 	}
 
@@ -279,11 +284,13 @@ func TestService_WeeklyJobChange_PrerequisiteReadFailurePreservesSnapshot(t *tes
 	repo.weeklyJobChangeRankings = nil
 	repo.weeklyJobChangeTotal = 0
 
+	fixedTime = fixedTime.Add(7 * 24 * time.Hour)
+
 	// Inject storage read error on GetSnapshot
 	simulatedErr := errors.New("simulated database read failure")
 	repo.getSnapshotErr = simulatedErr
 
-	err = svc.RotateWeeklyJobChangeRanking(ctx)
+	_, err = svc.RotateWeeklyJobChangeRanking(ctx)
 	if err == nil {
 		t.Fatal("expected RotateWeeklyJobChangeRanking to fail on GetSnapshot storage error, got nil")
 	}
@@ -307,6 +314,7 @@ func TestService_WeeklyJobChange_PrerequisiteReadFailurePreservesSnapshot(t *tes
 func TestService_WeeklyJobChange_EmptyCounters_ErrSnapshotNotFound(t *testing.T) {
 	repo := newMockRepo()
 	fixedTime := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	repo.weeklyRotationDue = fixedTime.Add(-7 * 24 * time.Hour)
 	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
 	if err != nil {
 		t.Fatalf("failed to create ranking service: %v", err)
@@ -319,7 +327,7 @@ func TestService_WeeklyJobChange_EmptyCounters_ErrSnapshotNotFound(t *testing.T)
 	repo.weeklyJobChangeTotal = 0
 
 	// Repo has no snapshot yet -> GetSnapshot returns ErrSnapshotNotFound
-	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+	if _, err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
 		t.Fatalf("expected RotateWeeklyJobChangeRanking to succeed when no snapshot exists, got %v", err)
 	}
 
@@ -335,6 +343,7 @@ func TestService_WeeklyJobChange_EmptyCounters_ErrSnapshotNotFound(t *testing.T)
 func TestService_WeeklyJobChange_EmptyCounters_ExistingEmptySnapshot(t *testing.T) {
 	repo := newMockRepo()
 	fixedTime := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	repo.weeklyRotationDue = fixedTime.Add(-7 * 24 * time.Hour)
 	svc, err := ranking.NewService(repo, ranking.WithNowFunc(func() time.Time { return fixedTime }))
 	if err != nil {
 		t.Fatalf("failed to create ranking service: %v", err)
@@ -356,7 +365,7 @@ func TestService_WeeklyJobChange_EmptyCounters_ExistingEmptySnapshot(t *testing.
 	repo.weeklyJobChangeTotal = 0
 
 	// Rotation with existing empty snapshot and empty counters should succeed
-	if err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
+	if _, err := svc.RotateWeeklyJobChangeRanking(ctx); err != nil {
 		t.Fatalf("expected RotateWeeklyJobChangeRanking to succeed with existing empty snapshot, got %v", err)
 	}
 

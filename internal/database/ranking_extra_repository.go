@@ -141,12 +141,14 @@ func (r *RankingRepository) ensureWeeklyJobChangeSnapshotRow(ctx context.Context
 
 // LockWeeklyJobChangesForUpdate acquires an exclusive lock on weekly job change records to serialize concurrent rotations and writers.
 func (r *RankingRepository) LockWeeklyJobChangesForUpdate(ctx context.Context) error {
-	if err := r.ensureWeeklyJobChangeSnapshotRow(ctx); err != nil {
-		return err
-	}
-	query := `SELECT ranking_type FROM ranking_snapshots WHERE ranking_type = 'weekly_job_change' FOR UPDATE`
-	var typ string
-	return ExecutorFromContext(ctx, r.db).QueryRowContext(ctx, query).Scan(&typ)
+	// INSERT IGNORE then FOR UPDATE can deadlock when concurrent rotations upgrade shared locks.
+	query := `
+		INSERT INTO ranking_snapshots (ranking_type, snapshot_data, total_count, calculated_at, updated_at)
+		VALUES ('weekly_job_change', '[]', 0, NOW(), NOW())
+		ON DUPLICATE KEY UPDATE ranking_type = VALUES(ranking_type)
+	`
+	_, err := ExecutorFromContext(ctx, r.db).ExecContext(ctx, query)
+	return err
 }
 
 // RunInTx executes the function within a database transaction.
