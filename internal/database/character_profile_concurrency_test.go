@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -82,14 +83,21 @@ func TestCharacterService_ConcurrentProfilePatch_DisjointFields(t *testing.T) {
 	// Channels to coordinate interleaving
 	svc1ReadDone := make(chan struct{})
 	svc1Resume := make(chan struct{})
+	var readOnce sync.Once
+	var resumeOnce sync.Once
+	closeResume := func() {
+		resumeOnce.Do(func() {
+			close(svc1Resume)
+		})
+	}
+	t.Cleanup(closeResume)
 
 	interceptingRepo := &interceptingProfileRepo{
 		ProfileRepository: charRepo,
 		afterGetProfile: func(ctx context.Context, charID string) {
-			select {
-			case svc1ReadDone <- struct{}{}:
-			default:
-			}
+			readOnce.Do(func() {
+				close(svc1ReadDone)
+			})
 			<-svc1Resume
 		},
 	}
@@ -145,7 +153,7 @@ func TestCharacterService_ConcurrentProfilePatch_DisjointFields(t *testing.T) {
 	}
 
 	// Resume svc1 so it can save and commit its transaction
-	close(svc1Resume)
+	closeResume()
 
 	// Wait for svc1 to finish
 	select {
@@ -225,14 +233,21 @@ func TestCharacterService_ConcurrentFirstProfileCreation(t *testing.T) {
 
 	svc1ReadDone := make(chan struct{})
 	svc1Resume := make(chan struct{})
+	var readOnce sync.Once
+	var resumeOnce sync.Once
+	closeResume := func() {
+		resumeOnce.Do(func() {
+			close(svc1Resume)
+		})
+	}
+	t.Cleanup(closeResume)
 
 	interceptingRepo := &interceptingProfileRepo{
 		ProfileRepository: charRepo,
 		afterGetProfile: func(ctx context.Context, charID string) {
-			select {
-			case svc1ReadDone <- struct{}{}:
-			default:
-			}
+			readOnce.Do(func() {
+				close(svc1ReadDone)
+			})
 			<-svc1Resume
 		},
 	}
@@ -284,7 +299,7 @@ func TestCharacterService_ConcurrentFirstProfileCreation(t *testing.T) {
 		// Expected: svc2 is blocked on characters row lock
 	}
 
-	close(svc1Resume)
+	closeResume()
 
 	select {
 	case err := <-svc1ErrChan:
@@ -347,14 +362,21 @@ func TestCharacterService_ConcurrentAllOptionalFields(t *testing.T) {
 
 	svc1ReadDone := make(chan struct{})
 	svc1Resume := make(chan struct{})
+	var readOnce sync.Once
+	var resumeOnce sync.Once
+	closeResume := func() {
+		resumeOnce.Do(func() {
+			close(svc1Resume)
+		})
+	}
+	t.Cleanup(closeResume)
 
 	interceptingRepo := &interceptingProfileRepo{
 		ProfileRepository: charRepo,
 		afterGetProfile: func(ctx context.Context, charID string) {
-			select {
-			case svc1ReadDone <- struct{}{}:
-			default:
-			}
+			readOnce.Do(func() {
+				close(svc1ReadDone)
+			})
 			<-svc1Resume
 		},
 	}
@@ -412,7 +434,7 @@ func TestCharacterService_ConcurrentAllOptionalFields(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 	}
 
-	close(svc1Resume)
+	closeResume()
 
 	if err := <-svc1ErrChan; err != nil {
 		t.Fatalf("svc1 failed: %v", err)
