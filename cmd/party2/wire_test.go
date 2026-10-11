@@ -884,8 +884,8 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 		t.Fatalf("NewHomeRepository failed: %v", err)
 	}
 
-	// Verify town capacity before building. If a town is already at capacity due to past uncleaned
-	// runs, safely expire only confirmed wire-test fixtures to isolate capacity without indiscriminate deletion.
+	// Verify town capacity before building. If existing houses exceed capacity,
+	// fail fast with a diagnostic error rather than modifying existing data.
 	now := time.Now().UTC()
 	for _, townID := range []string{"town1", "town2", "town3", "town4"} {
 		count, err := homeRepo.CountActiveTownHouses(ctx, townID, now)
@@ -897,34 +897,7 @@ func TestWireHomeGuildPoints_BuildHouseIntegration(t *testing.T) {
 			needed = 3
 		}
 		if count+needed > 10 {
-			var staleCharIDs []string
-			rows, qErr := db.QueryContext(ctx, `
-				SELECT c.id
-				FROM character_homes h
-				JOIN characters c ON h.character_id = c.id
-				JOIN guild_members gm ON c.id = gm.character_id
-				JOIN guilds g ON gm.guild_id = g.id
-				WHERE h.town_id = ? AND h.expires_at > ?
-				  AND g.name LIKE 'WGP_%' AND c.name LIKE 'W%'
-			`, townID, now)
-			if qErr == nil {
-				for rows.Next() {
-					var cid string
-					if err := rows.Scan(&cid); err == nil && cid != "" {
-						staleCharIDs = append(staleCharIDs, cid)
-					}
-				}
-				_ = rows.Close()
-			}
-			if len(staleCharIDs) > 0 && count-len(staleCharIDs)+needed <= 10 {
-				for _, cid := range staleCharIDs {
-					if _, err := db.ExecContext(ctx, "UPDATE character_homes SET expires_at = '2000-01-01 00:00:00' WHERE character_id = ?", cid); err != nil {
-						t.Fatalf("expire confirmed stale house for %s failed: %v", cid, err)
-					}
-				}
-			} else {
-				t.Fatalf("town %s capacity is insufficient (%d active houses, need %d, max 10); existing data occupies town", townID, count, needed)
-			}
+			t.Fatalf("town %s capacity is insufficient (%d active houses, need %d, max 10); existing data occupies town capacity", townID, count, needed)
 		}
 	}
 
