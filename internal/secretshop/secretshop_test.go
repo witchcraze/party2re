@@ -629,9 +629,10 @@ func TestPurchaseItem_DepotTransferDoesNotRecordCollection(t *testing.T) {
 	}
 }
 
-func TestPurchaseItem_CollectionRecorderErrorSwallowed(t *testing.T) {
+func TestPurchaseItem_CollectionRecorderErrorPropagated(t *testing.T) {
+	colErr := errors.New("collection repository failure")
 	recorder := &mockCollectionRecorder{
-		err: errors.New("collection repository failure"),
+		err: colErr,
 	}
 	depotRepo := newMockDepotRepo()
 	svc, charRepo, _, _ := setupTest(t,
@@ -643,13 +644,10 @@ func TestPurchaseItem_CollectionRecorderErrorSwallowed(t *testing.T) {
 	eligible := createTestCharacter("char-high", "Veteran", 20, 7, 100000)
 	_ = charRepo.Update(ctx, eligible)
 
-	// Best-effort collection discovery: purchase must succeed even if collection recording returns an error
-	res, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root", 1)
-	if err != nil {
-		t.Fatalf("expected purchase to succeed despite collection error, got %v", err)
-	}
-	if res.TransferredToDepot {
-		t.Fatal("expected item to be in inventory")
+	// Mandatory collection discovery: purchase must fail and propagate collection error
+	_, err := svc.PurchaseItem(ctx, "char-high", "secret_item_herbal_root", 1)
+	if !errors.Is(err, colErr) {
+		t.Fatalf("expected purchase to fail with collection error, got %v", err)
 	}
 }
 

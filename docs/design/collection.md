@@ -136,3 +136,33 @@ Faithfully reproduces legacy Party2 (`lib/_add_monster_book.cgi`, `lib/collectio
   - Multi-member party sealing battles (`StartSealingBattle`) and solo boss challenges (`ChallengeBoss`) register all defeated boss monsters with habitat `"封印戦"`.
   - King 99 clone battles record defeat under `"king99-clone"` / `"影"` with habitat `"封印戦"`.
 
+---
+
+## Transactional Discovery Callers & Error Propagation Boundary (#1302)
+
+Item discovery (`RecordItemDiscovered`) and monster discovery (`RecordMonsterDefeated`) can trigger mandatory Hall of Fame induction milestones (`RecordLegend`). Because Hall of Fame inductions are permanent career achievements, failures must never be ignored or swallowed by discovery callers.
+
+### Direct Transactional Discovery Callers
+
+All transactional callers execute within database transactions and MUST propagate discovery errors out of the transaction callback to trigger an atomic rollback:
+
+| Domain Module | Function / Path | Discovery Trigger | Transaction Boundary | Rollback Invariant |
+|---|---|---|---|---|
+| **福引 (Lottery)** | `internal/lottery/lottery.go:PlayRaffle` | Item prize won | `s.txRunner.RunInTx` | Tickets, inventory/depot items, collection records, and milestone inductions roll back atomically. |
+| **宝くじ (Takarakuji)** | `internal/lottery/takarakuji_draw.go:deliverPrizeToDepot` | Round prize delivered | `s.txRunner.RunInTx` (`SettleTakarakujiRound`) | Round settlement, winning ticket statuses, depot items, collection entries, and milestone inductions roll back atomically. |
+| **秘密の店 (Secret Shop)** | `internal/secretshop/purchase.go:Purchase` | Item purchased | `s.txRunner.RunInTx` | Currency, inventory items, collection records, and milestone inductions roll back atomically. |
+| **通常店 (Shop)** | `internal/shop/purchase.go:Purchase` | Item purchased | `s.txRunner.RunInTx` | Currency, inventory items, collection records, and milestone inductions roll back atomically. |
+| **預かり所 (Depot)** | `internal/depot/service.go:WithdrawItem` | Item withdrawn to inventory | `s.txRunner.RunInTx` | Depot contents, inventory items, collection records, and milestone inductions roll back atomically. |
+| **神殿 (Altar)** | `internal/altar/service.go:Wish` | Item granted by wish | `s.txRunner.RunInTx` | Offering costs, inventory items, collection records, and milestone inductions roll back atomically. |
+| **オラクル (Oracle)** | `internal/store/oracle.go:BuyCostume` | Costume item purchased | `s.txRunner.RunInTx` | Currency, inventory items, collection records, and milestone inductions roll back atomically. |
+| **よろず屋 (Store)** | `internal/store/sales.go:BuyItem`, `TradeItem` | Item bought or traded | `s.txRunner.RunInTx` | Currency, inventory items, collection records, and milestone inductions roll back atomically. |
+| **イベント広場 (Event Plaza)** | `internal/eventplaza/purchase.go:PurchaseBazaarItem` | Bazaar item bought (inventory/depot) | `s.txRunner.RunInTx` | Currency, bazaar listing stock, inventory/depot items, collection records, and milestone inductions roll back atomically. |
+| **フリーマーケット (Flea Market)** | `internal/fleamarket/fleamarket.go:CreateListing` | Listing created with unrecorded item | `s.txRunner.RunInTx` | Inventory items, listing creation, collection records, and milestone inductions roll back atomically. |
+
+### Intentional Boundary Exceptions
+
+- **Server News Broadcast (`PublishNews`)**: Informational and strictly best-effort. Failure to publish news (e.g. redis/queue outage) does NOT abort or roll back the transaction.
+- **Boss Sealing Battle Atomicity**: Tracked independently in #1200; boss battle completion atomicity follows boss raid lifecycle rules.
+- **Battle Post-Commit Recording**: Adventure and PvE combat settlement incorporates monster discovery within the post-battle settlement transaction boundary (`ApplyPostBattleResult`).
+
+

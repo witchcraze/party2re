@@ -120,8 +120,9 @@ func (s *Service) PurchaseItem(
 						category = def.Category()
 					}
 				}
-				//lint:ignore error-swallow best-effort collection discovery
-				_ = s.collectionRecorder.RecordItemDiscovered(txCtx, characterID, shopItem.ItemDefinitionID, shopItem.Name, category)
+				if err := s.collectionRecorder.RecordItemDiscovered(txCtx, characterID, shopItem.ItemDefinitionID, shopItem.Name, category); err != nil {
+					return err
+				}
 			}
 
 			result = &PurchaseResult{

@@ -259,12 +259,15 @@ func (s *Service) CreateListing(
 			CreatedAt:         now,
 		}
 
-		err = s.repo.CreateListing(txCtx, created)
-		if err == nil && s.collectionRecorder != nil {
-			//lint:ignore error-swallow best-effort collection discovery
-			_ = s.collectionRecorder.RecordItemDiscovered(txCtx, seller.ID, consumedItem.DefinitionID, itemName, itemCategory)
+		if err := s.repo.CreateListing(txCtx, created); err != nil {
+			return err
 		}
-		return err
+		if s.collectionRecorder != nil {
+			if err := s.collectionRecorder.RecordItemDiscovered(txCtx, seller.ID, consumedItem.DefinitionID, itemName, itemCategory); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 
 	if err != nil {

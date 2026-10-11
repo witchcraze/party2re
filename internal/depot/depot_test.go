@@ -134,11 +134,15 @@ func (c *memoryItemCatalog) FindByID(id string) (item.Definition, error) {
 type memoryCollectionRecorder struct {
 	mu       sync.Mutex
 	recorded []string
+	err      error
 }
 
 func (m *memoryCollectionRecorder) RecordItemDiscovered(_ context.Context, _, itemID, _, _ string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.err != nil {
+		return m.err
+	}
 	m.recorded = append(m.recorded, itemID)
 	return nil
 }
@@ -459,6 +463,38 @@ func TestDepositAndWithdrawItem(t *testing.T) {
 	// Verify collection was recorded on withdrawal
 	if len(collector.recorded) != 1 || collector.recorded[0] != "item-001" {
 		t.Errorf("expected item-001 recorded in collection, got %v", collector.recorded)
+	}
+}
+
+func TestWithdrawItem_PropagatesCollectionError(t *testing.T) {
+	ctx := context.Background()
+	depotRepo := newMemoryDepotRepo()
+	charRepo := newMemoryCharRepo()
+	invRepo := newMemoryInvRepo()
+	catalog := newMemoryItemCatalog()
+	colErr := errors.New("depot collection failure")
+	collector := &memoryCollectionRecorder{err: colErr}
+
+	char, _ := corecharacter.New("Item Collector")
+	charRepo.characters[char.ID] = char
+
+	dep, _ := NewDepot(char.ID)
+	potion, _ := item.NewInstance("item-001", 3)
+	_ = dep.AddItem(potion)
+	_ = depotRepo.Save(ctx, dep)
+
+	inv, _ := coreinventory.New(char.ID)
+	invRepo.inventories[char.ID] = inv
+
+	service, _ := NewService(
+		depotRepo, charRepo, invRepo,
+		WithItemDefinitionProvider(catalog),
+		WithCollectionRecorder(collector),
+	)
+
+	_, err := service.WithdrawItem(ctx, char.ID, potion.ID)
+	if !errors.Is(err, colErr) {
+		t.Fatalf("expected collection error %v, got: %v", colErr, err)
 	}
 }
 

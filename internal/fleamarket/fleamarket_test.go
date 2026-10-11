@@ -155,9 +155,13 @@ type mockCollectionRecorder struct {
 		itemName string
 		category string
 	}
+	err error
 }
 
 func (m *mockCollectionRecorder) RecordItemDiscovered(ctx context.Context, characterID, itemID, itemName, category string) error {
+	if m.err != nil {
+		return m.err
+	}
 	m.calls = append(m.calls, struct {
 		charID   string
 		itemID   string
@@ -326,6 +330,19 @@ func TestFleaMarketService_CreateListing_CollectionDiscovery(t *testing.T) {
 	_, err = svcNilRecorder.CreateListing(ctx, sellerID, "item-herb", 50, now)
 	if err != nil {
 		t.Fatalf("CreateListing with nil recorder failed: %v", err)
+	}
+
+	// 3. Verify collection recorder error is propagated
+	colErr := errors.New("fleamarket collection failure")
+	recorder.err = colErr
+
+	inst3, _ := coreitem.NewInstance("wea-sword", 1)
+	_ = sellerDepot.AddItem(inst3)
+	_ = depotRepo.Save(ctx, sellerDepot)
+
+	_, err = svc.CreateListing(ctx, sellerID, "wea-sword", 300, now)
+	if !errors.Is(err, colErr) {
+		t.Fatalf("expected collection error %v, got %v", colErr, err)
 	}
 }
 

@@ -2,11 +2,13 @@ package shop_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"sync"
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/character"
+	"github.com/witchcraze/party2re/internal/collection"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/shop"
@@ -314,5 +316,146 @@ func TestShopIntegration_BulkPurchaseBounds(t *testing.T) {
 	_, err = shopService.Purchase(ctx, char.ID, "bulk_potion", shop.MaxTransactionQuantity+1)
 	if err == nil {
 		t.Fatalf("expected error for quantity > MaxTransactionQuantity, got nil")
+	}
+}
+
+type shopLegendInductor struct {
+	err   error
+	calls []string
+}
+
+func (l *shopLegendInductor) RecordLegend(_ context.Context, category, characterID string) error {
+	if l.err != nil {
+		return l.err
+	}
+	l.calls = append(l.calls, category+":"+characterID)
+	return nil
+}
+
+func TestShopIntegration_MandatoryInductionRollback(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invRepo, err := database.NewInventoryRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depotRepo, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	colRepo, err := database.NewCollectionRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := item.InitialCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+
+	inductor := &shopLegendInductor{err: errors.New("mandatory shop legend failure")}
+	colSvc, err := collection.NewService(colRepo, 180, 141,
+		collection.WithTotalWeapons(1),
+		collection.WithLegendInductor(inductor),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	shopService, err := shop.NewService(charRepo, invRepo, catalog,
+		shop.WithTransactionProvider(txProvider),
+		shop.WithDepotRepository(depotRepo),
+		shop.WithCollectionRecorder(colSvc),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	char, err := database.CreateTestCharacterWithFunds(ctx, db, "ShopRollbackTester", 50000)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Initial purchase attempt fails because legend induction fails
+	_, err = shopService.Purchase(ctx, char.ID, "weapon-01", 1)
+	if err == nil {
+		t.Fatal("expected Purchase to fail when collection legend induction fails")
+	}
+
+	// 2. Assert full database rollback: money, inventory, collection, milestone
+	restoredChar, err := charRepo.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restoredChar.Money != 50000 {
+		t.Errorf("character money = %d; want 50000 (unspent)", restoredChar.Money)
+	}
+	inv, err := invRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil || len(inv.Items) != 0 {
+		t.Errorf("inventory item count = %d; want 0", len(inv.Items))
+	}
+	colEntries, err := colRepo.GetItemCollection(ctx, char.ID, "weapon")
+	if err != nil || len(colEntries) != 0 {
+		t.Errorf("collection weapon count = %d; want 0", len(colEntries))
+	}
+	isCompleted, err := colRepo.IsCompleted(ctx, char.ID, "weapon")
+	if err != nil || isCompleted {
+		t.Errorf("weapon milestone completed = %v; want false", isCompleted)
+	}
+
+	// 3. Resolve failure and retry purchase
+	inductor.err = nil
+	res, err := shopService.Purchase(ctx, char.ID, "weapon-01", 1)
+	if err != nil {
+		t.Fatalf("expected Purchase to succeed after resolving inductor failure: %v", err)
+	}
+	if res.Character.Money >= 50000 {
+		t.Errorf("expected money deducted, got %d", res.Character.Money)
+	}
+
+	// 4. Assert DB state after successful retry
+	restoredChar, err = charRepo.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restoredChar.Money != res.Character.Money {
+		t.Errorf("persisted char money = %d; want %d", restoredChar.Money, res.Character.Money)
+	}
+	inv, err = invRepo.FindByCharacterID(ctx, char.ID)
+	if err != nil || len(inv.Items) != 1 {
+		t.Errorf("persisted inventory items = %d; want 1", len(inv.Items))
+	}
+	colEntries, err = colRepo.GetItemCollection(ctx, char.ID, "weapon")
+	if err != nil || len(colEntries) != 1 {
+		t.Errorf("persisted collection items = %d; want 1", len(colEntries))
+	}
+	isCompleted, err = colRepo.IsCompleted(ctx, char.ID, "weapon")
+	if err != nil || !isCompleted {
+		t.Errorf("weapon milestone completed = %v; want true", isCompleted)
+	}
+	if len(inductor.calls) != 1 {
+		t.Errorf("inductor calls = %d; want 1", len(inductor.calls))
+	}
+
+	// 5. Subsequent duplicate purchase succeeds without redundant induction
+	_, err = shopService.Purchase(ctx, char.ID, "weapon-01", 1)
+	if err != nil {
+		t.Fatalf("subsequent purchase failed: %v", err)
+	}
+	if len(inductor.calls) != 1 {
+		t.Errorf("inductor calls after repeat purchase = %d; want 1", len(inductor.calls))
 	}
 }

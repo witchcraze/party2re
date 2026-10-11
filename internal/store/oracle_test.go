@@ -399,6 +399,15 @@ func TestOracleService_BuyCostumeItem(t *testing.T) {
 	if resOverflow.DeliveredTo != "depot" {
 		t.Errorf("expected delivered to depot, got %s", resOverflow.DeliveredTo)
 	}
+
+	// 6. Collection error propagates
+	colErr := errors.New("oracle collection failure")
+	collector.err = colErr
+	_, err = svc.BuyCostumeItem(ctx, "char-1", 44)
+	if !errors.Is(err, colErr) {
+		t.Fatalf("expected collection error %v, got %v", colErr, err)
+	}
+	collector.err = nil
 }
 
 func TestOracleService_BuyHomeWallpaper(t *testing.T) {
