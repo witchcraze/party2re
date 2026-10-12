@@ -369,9 +369,16 @@ also gates direct entries: helper invocation/returned target does not prove an
 effect applied, and callback category differs from elemental names. Preserve
 accepted no-effect versus rejection, actor/target context and suppressed tails.
 The #1343 decomposition separates native target, damage, recovery/stat, status/reset
-and field/composite work from unresolved source-context decisions; those blockers
-remain prerequisites to production coverage, including gems101/102's malformed
-deferred recoil and calling80's distributed-AT cap (6436–6465).
+and field/composite work. The #1367
+[callback context contract](battle.md#callback-context-and-failure-admission)
+distinguishes the requesting player, temporary actor, package target cursor,
+category and operation-entry field snapshot. Preserve those explicit contexts;
+missing native representation remains a whole-command gate. Gems101/102 have no
+successful execution through the original queue consumers and remain unavailable;
+do not repair or skip them, narrow a random pool, or execute an earlier custom
+slot before rejecting the command. Item110's recursive roster/reset failure also
+remains rejected. Specification resolution does not certify native coverage or
+remove #1329/#1330's remaining implementation blockers.
 Shared [dynamic-effect rules](battle.md#dynamic-effects-and-catalog-admission)
 and [resumption requirements](battle.md#explicit-action-resumption-requirements)
 are owned by Battle; commands and owned observations by

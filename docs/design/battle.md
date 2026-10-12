@@ -428,9 +428,13 @@ Immediate recoil and deferred darkness debit are different operations. `_risk`
 counts, rounds value+1, and item160 can turn it into recovery/cure/AT; `__risk`
 only debits a living actor nonlethally. Darkness queues the first hit's half-damage
 capped at 500; a prior immediate recoil removes that queued entry before execution.
-Gems101/102 register a callback in a queue whose consumers expect hash fields;
-successful deferred recoil is **unproven**, and repairing that original mismatch
-requires a recorded decision. Do not certify these slots from their nominal effect.
+Gems101/102 register bare code references, but every reachable queue lookup or
+execution dereferences hash fields and fails on that entry. No successful recoil
+execution exists through these consumers at the reference revision. Registration
+alone succeeds; failure can occur later, after other effects. Native admission
+rejects the entire invoking entry before effects/costs instead of reproducing
+partial CGI failure. Repairing the representation requires an explicit gameplay
+decision; these gems remain unavailable.
 
 Finite random composites retain branch-specific writes: `_parupunte` probabilities
 1/2 temporary state, 1/4 abnormal state, 1/8 full HP, then 1/24 each agility 0,
@@ -440,17 +444,58 @@ states are shared draws, and fullHP/agility branches can include fallen members.
 negative HP, revival restores fallen, and other branches compose the ordinary
 heal/stat/cure/MP helpers in source order. They are not random damage payloads.
 
-Unresolved bindings stay gated: extension201's ambient target; job78's prebinding
-target at6145–6174; calling80 distributed AT's cap at**6436–6465** (not its
-6381–6419 special attack); duplicate enemy-confusion draws; item110 roster swaps;
-tool damage category, fortress field and weapon-revision level/awakening context;
-and the malformed deferred queue. No generic self/current-target/current-field
-replacement or implicit bug repair is approved.
-[#1367](https://github.com/witchcraze/party2re/issues/1367) owns these binding decisions;
-#1362–#1366 own target, damage, recovery/stat, status/reset and field/composite
-implementations respectively. The detailed #1343 issue ledger supplies evidence;
-unsupported closure rejects the entire outer command through the existing
-admission boundary.
+The [callback context contract](#callback-context-and-failure-admission) resolves
+the named binding gates. #1362–#1366 own target, damage, recovery/stat, status/reset
+and field/composite implementations respectively. The detailed #1343 modifier
+and #1367 binding ledgers supply evidence; unsupported closure rejects the entire
+outer command through the existing admission boundary.
+
+#### Callback context and failure admission
+
+Reference revision remains `ff97fc549932a146cc945d7edf71b44c868a840e`.
+[#1367](https://github.com/witchcraze/party2re/issues/1367) owns detailed dispatch,
+scope evidence and boundary vectors. The decision is to preserve evidenced
+bindings and reject broken or unrepresented contexts; no gameplay repair is
+approved. This specification does not register native production effects.
+
+Keep the requesting player's data, current effect actor, submitted target,
+resolved target, callback category and operation-entry field snapshot distinct.
+An NPC/helper can temporarily become actor without changing the requesting
+player. A caller's lexical variable is not inherited by a separately declared
+callback. A loop-local variable does not become an ambient value after the loop.
+Native state should express only the evidenced context, not emulate CGI globals.
+
+| Gate and evidence under `party2/lib/` | Preserved rule and bounded native owner |
+| --- | --- |
+| Extension201, `_skill.cgi:343–358` | Damage uses the submitted target. Afterwards agility is written through the then-current package target cursor, independently of the returned damage target, followed by actor agility reset. Item159 reset can change that cursor during damage. Missing cursor addresses an empty-key record in Perl, not self. #1363 owns composition with #1365 reset; reject any invocation whose cursor provenance/state is unrepresented, including indirect closures |
+| Job78 ordering, `_skill.cgi:6145–6174` | The initializer reads the package cursor before declaring its local returned target; submitted target is ignored. Misfire draws first (1/6), immobilizes actor and sets tension1 without damage. Otherwise breath50 direct uses the cursor and ordinary resolution. Returned ally/fallen/breath-reflector suppresses reorder; otherwise move that enemy to the end. #1360 composes #1362/#1363; missing cursor follows missing-target resolution, not an invented submitted target |
+| Calling80 distributed AT, `_skill.cgi:6436–6465` | Maximum search includes fallen and keeps the first strict maximum. The cap999/1998 reads the package cursor's over-level flag, not the loop variable, summoner, helper or maximum holder. Raise only living nonholders below cap, then independently draw four 1/4 tails in AT/DF/AG/heal order. #1339 composes #1364; missing cursor selects cap999. Unrepresented cursor remains a whole-entry gate |
+| Enemy confusion, `_skill.cgi:9654–9715` | After item195 activation, category conversion, empty-enemy and category checks, draw a member unless current target is actor. Then repeat that test against the replacement. In the special boss field only, a self target draws range0..3 and is kept when draw>1; otherwise draw another member. Both replacements use all ordered members, including fallen/self. Confusion bypasses the ordinary fallen-target rejection; later temporary/phantom resolution still runs. #1362 preserves both blocks and their short-circuit draw order |
+| Item110 fallen reset, `_data.cgi:1366–1384`; `_battle.cgi:1390–1408` | Living target returns. For fallen target, party is overwritten with enemy then immediately restored; area instant death therefore sees the original sides. Only after it returns does persistent item removal run, followed by swapping the sides. Actor and submitted target are not swapped; members are not rebuilt. Nested resets share scratch rosters and can recur before consumption. #1365/#1339 retain whole-entry rejection for this broken callback; #1197 owns any eventual approved consumption contract |
+| Tool damage, `_skill.cgi:10588–10624` | Item162's direct override reads package category, not the lexical category in a calling damage helper. Checked battle producers leave it absent or set a numeric saved AT (job77 at5931), never physical. Thus physical interception does not itself enable this override; item162's larger defense term and baseDF>999 rule still apply. #1363 owns tool/interception, #1365 item212, #1366 cosmic descendants; reject unknown category provenance rather than assign physical to all tools |
+| Fortress defeat, `_battle.cgi:21,28–303,1568–1610,1715–1723` | The field name is a file-lexical snapshot taken when battle code loads, before member/action processing. A new or removed field does not replace that snapshot in the same request; anti-field is checked at the hook. Revival, NPC-actor and self-defeat returns skip it; reward-loop skips alone do not. Heal living members of fallen participant's side with tool20%MaxHP only if the hook is reached. #1366 composes #1365; map15 producers are separate from ordinary stage support |
+| Weapon revisions, `_battle.cgi:1726–1759`; `system.cgi:1705–1708` | Weapons69/70 add floor(original player level×1.5/2), where original level caps at99. Weapon71 uses that player's raw level thresholds50/75 even when resetting an NPC/helper/other target; its item158-equivalent check uses current actor awakening or queried target's actual158/240/241/242. #1365 preserves these independent contexts; missing required player/actor context rejects admission |
+| Deferred gems, `_data.cgi:2194–2195`; `TurnEndProcessor.pm:28–47`; `_battle.cgi:1855–1873` | Registration succeeds without recoil. Darkness lookup, immediate-risk prefilter lookup, or execution fails when it reaches a bare code entry. Actor death does not make hash dereference safe. #1363 retains native rejection for101/102; #1332/#1366 own valid typed darkness work and ordering. Neither skipping nor wrapping the malformed entry is approved |
+
+The fortress producer is a persisted default-field write in
+`party2/map/15/__1.cgi:28` and `_2.cgi:30`, reached through dungeon map dispatch
+(`lib/vs_dungeon.cgi:23–24,74–101`). A later request can load that default into
+the snapshot. Its existence does not certify an ordinary numeric-stage producer.
+Likewise the package target cursor has concrete setters in item150/tool dispatch
+and item159/reset (`_data.cgi:1619,1682`), but is not a durable participant target
+carried automatically between CGI requests. Do not infer its value from a caller's
+local variable or serialize arbitrary global state to make these entries pass.
+
+For valid darkness entries, immediate recoil count is checked **before** queued
+execution and deletes darkness work then; it cannot be incremented retroactively
+by queued work to change that prefilter. A malformed gem before a damage slot
+can fail in darkness lookup; after a valid darkness entry it can fail in prefilter
+lookup or execution. Earlier valid queued work can execute before execution reaches
+the malformed entry; later work cannot. These are source failures, not successful
+20%MaxHP recoil or accepted no-effect. Discovery and submission must reject a custom
+or delegated closure containing such an entry before any slot runs, even when
+another slot might kill the actor before it is reached. Closing a specification
+gate does not close #1329/#1330's native effect prerequisites.
 
 #### Resources, revival and roster changes
 
@@ -545,7 +590,7 @@ Production adoption still requires #1188 supply, #1332 resumable lifetimes,
 #1337 MP resources, #1338 revival, #1339 summons, #1340 transformation and #1342
 ordinary NPC payloads. Named specification gates remain #1341 book/purchase
 transactions and the [shared modifier follow-ups](#shared-modifiers-and-callback-outcomes)
-from #1343, including unresolved source-context decisions. The transitive job
+from #1343, including #1367's context and failure-admission contract. The transitive job
 reconciliation in #1344 also requires #1357 invocation execution, #1358
 arithmetic selectors, #1359 wallet/held-tool effects and #1360 job-driven room
 transitions; each remains subject to complete per-entry certification.
