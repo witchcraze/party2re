@@ -32,7 +32,10 @@ The Photo Contest and Gallery system (`internal/contest`, legacy `photo.cgi` / `
   - If a check occurs with fewer than 5 entries, submissions are retained in the preparing round and the deadline is extended by 10 days without prize distribution.
   - When an active round concludes:
     - If the active round satisfied quorum (5+ entries), prizes and voter bonuses are distributed, the winner is archived into `contest_legends`, and the round is marked settled. If the next preparing round has 5+ entries, it is promoted to active; otherwise it remains preparing with entries retained and its deadline extended by 10 days.
-    - If an active round had 0 entries (empty active round), it is concluded without rewards, and the preparing round is promoted to active if it satisfies quorum (5+ entries).
+    - If an active round had 0 entries (empty active round), it is concluded without rewards, and the preparing round is promoted to active if it satisfies quorum (5+ entries); otherwise both rounds are postponed and extended by 10 days.
+    - If an active round has fewer than quorum entries (1–4 entries):
+      - If the preparing round also has fewer than 5 entries (or is absent), both rounds are postponed and extended by 10 days without prize distribution, retaining submissions in both rounds.
+      - If the preparing round has reached quorum (5+ entries), the active round concludes with prize and voter bonus distribution to its entrants based on votes (preserving submissions and avoiding infinite postponement, as new submissions only enter preparing), Hall of Fame archiving is omitted because quorum was not reached (matching legacy `contest.cgi:186`), and the preparing round is promoted to active.
 
 ### 4.2 Entry Submission Rules (`えんとりー`)
 1. **Single Entry per Round**: A character may submit at most 1 entry per contest round.

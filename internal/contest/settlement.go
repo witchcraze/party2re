@@ -177,26 +177,34 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 
 		// Case 2b: Active round has 1 to 4 submissions (under quorum)
 		if len(entries) < MinEntriesForContest {
-			// Retain existing active submissions without premature conclusion or prizes; postpone and extend
-			activeRound.EndTime = activeRound.EndTime.Add(ContestCycleDays * 24 * time.Hour)
-			activeRound.UpdatedAt = now
-			if err := s.contests.SaveRound(txCtx, activeRound); err != nil {
-				return err
-			}
-			if prepErr == nil {
-				prepRound.EndTime = activeRound.EndTime
-				prepRound.UpdatedAt = now
-				if err := s.contests.SaveRound(txCtx, prepRound); err != nil {
+			// If preparing round also under quorum or absent:
+			// Postpone and extend active round and preparing round, retaining submissions.
+			if prepErr != nil || len(prepEntries) < MinEntriesForContest {
+				activeRound.EndTime = activeRound.EndTime.Add(ContestCycleDays * 24 * time.Hour)
+				activeRound.UpdatedAt = now
+				if err := s.contests.SaveRound(txCtx, activeRound); err != nil {
 					return err
 				}
+				if prepErr == nil {
+					prepRound.EndTime = activeRound.EndTime
+					prepRound.UpdatedAt = now
+					if err := s.contests.SaveRound(txCtx, prepRound); err != nil {
+						return err
+					}
+				}
+
+				result.Postponed = true
+				result.ExtendedUntil = activeRound.EndTime
+				result.NextRound = activeRound.Round
+				result.NextRoundEndTime = activeRound.EndTime
+				result.Message = "Contest postponed and extended due to insufficient entries"
+				return nil
 			}
 
-			result.Postponed = true
-			result.ExtendedUntil = activeRound.EndTime
-			result.NextRound = activeRound.Round
-			result.NextRoundEndTime = activeRound.EndTime
-			result.Message = "Contest postponed and extended due to insufficient entries"
-			return nil
+			// Preparing round reached quorum (5+ entries):
+			// Conclude active round with prize distribution to preserve existing submissions and avoid infinite
+			// postponement (submissions enter preparing, so active cannot grow). Hall of Fame archiving is omitted
+			// because active entries < 5 (matching legacy contest.cgi:186), and preparing round advances to active.
 		}
 
 		// Sort entries descending by Votes, then ascending by CreatedAt
@@ -249,8 +257,8 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 			}
 		}
 
-		// Archive 1st place winner to Hall of Fame / Legend
-		if len(entries) > 0 {
+		// Archive 1st place winner to Hall of Fame / Legend (requires quorum 5+ entries, matching legacy contest.cgi:186)
+		if len(entries) >= MinEntriesForContest {
 			winner := entries[0]
 			legend := ContestLegend{
 				Round:         activeRound.Round,
@@ -268,8 +276,11 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 				return err
 			}
 			result.WinnerLegend = &legend
+		}
 
-			// Distribute voter bonus medals to characters who voted for 1st place
+		// Distribute voter bonus medals to characters who voted for 1st place
+		if len(entries) > 0 {
+			winner := entries[0]
 			votes, err := s.contests.ListVotesByEntryID(txCtx, winner.ID)
 			if err != nil {
 				return err

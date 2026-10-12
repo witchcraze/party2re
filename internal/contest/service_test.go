@@ -613,7 +613,7 @@ func TestSchedulerRegisteredOnEnterContest(t *testing.T) {
 	}
 }
 
-func TestSettlement_ActiveUnderQuorumWithPreparingQuorum_DoesNotPrematurelyConclude(t *testing.T) {
+func TestSettlement_ActiveUnderQuorumWithPreparingQuorum_AdvancesWithPrizesAndPromotesPreparing(t *testing.T) {
 	charRepo := newMockCharRepo()
 	contestRepo := newMockContestRepo()
 
@@ -638,12 +638,13 @@ func TestSettlement_ActiveUnderQuorumWithPreparingQuorum_DoesNotPrematurelyConcl
 	})
 	for i := 1; i <= 3; i++ {
 		charID := fmt.Sprintf("char-active-%d", i)
-		charRepo.Update(ctx, corecharacter.Character{ID: charID, Name: fmt.Sprintf("ActivePlayer%d", i)})
+		charRepo.Update(ctx, corecharacter.Character{ID: charID, Name: fmt.Sprintf("ActivePlayer%d", i), Money: 1000})
 		contestRepo.SaveEntry(ctx, contest.ContestEntry{
 			ID:          fmt.Sprintf("entry-active-%d", i),
 			Round:       1,
 			CharacterID: charID,
 			Title:       fmt.Sprintf("Active Title %d", i),
+			Votes:       10 - i, // 1st place has 9 votes, 2nd has 8, 3rd has 7
 		})
 	}
 
@@ -665,27 +666,37 @@ func TestSettlement_ActiveUnderQuorumWithPreparingQuorum_DoesNotPrematurelyConcl
 		})
 	}
 
-	// SettleContest(force=true) must NOT conclude Round 1 or discard its 3 entries.
-	// It must postpone and extend Round 1.
+	// SettleContest: because preparing has 5 entries, Round 1 concludes with prizes
+	// and Round 2 advances to active, preventing infinite postponement.
 	res, err := svc.SettleContest(ctx, true)
 	if err != nil {
 		t.Fatalf("SettleContest failed: %v", err)
 	}
 
-	if !res.Postponed {
-		t.Errorf("expected contest to be postponed, got %+v", res)
+	if res.Postponed {
+		t.Errorf("expected contest not to be postponed when preparing has quorum, got %+v", res)
 	}
-	if res.PrizesDistributed {
-		t.Error("expected prizes NOT to be distributed")
+	if !res.PrizesDistributed {
+		t.Error("expected prizes to be distributed to Round 1 entrants")
+	}
+	if res.NextRound != 2 {
+		t.Errorf("expected NextRound 2, got %d", res.NextRound)
+	}
+	// Hall of Fame / Legend is omitted because active round had < 5 entries (matching legacy contest.cgi:186)
+	if res.WinnerLegend != nil {
+		t.Errorf("expected WinnerLegend to be nil when entries < 5, got %+v", res.WinnerLegend)
 	}
 
-	// Round 1 must remain active and extended
+	// Round 1 must be settled
 	r1, _ := contestRepo.GetRoundByNumber(ctx, 1)
-	if r1.Status != contest.StatusActive {
-		t.Errorf("expected round 1 to remain active, got %s", r1.Status)
+	if r1.Status != contest.StatusSettled {
+		t.Errorf("expected round 1 settled, got %s", r1.Status)
 	}
-	if !r1.EndTime.After(now) {
-		t.Errorf("expected round 1 end time to be extended, got %v", r1.EndTime)
+
+	// Entrants in Round 1 must have received their prizes
+	winnerChar, _ := charRepo.FindByID(ctx, "char-active-1")
+	if winnerChar.Money != 1000+15000 {
+		t.Errorf("expected 1st place winner to receive 15000 gold, got %d", winnerChar.Money)
 	}
 
 	// Active round entries must be preserved (3 entries)
@@ -694,16 +705,118 @@ func TestSettlement_ActiveUnderQuorumWithPreparingQuorum_DoesNotPrematurelyConcl
 		t.Errorf("expected 3 active entries preserved, got %d", len(r1Entries))
 	}
 
-	// Round 2 must remain preparing (NOT promoted to active)
+	// Round 2 must be promoted to active
+	r2, _ := contestRepo.GetRoundByNumber(ctx, 2)
+	if r2.Status != contest.StatusActive {
+		t.Errorf("expected round 2 active, got %s", r2.Status)
+	}
+
+	// Round 3 must be created as preparing
+	r3, _ := contestRepo.GetRoundByNumber(ctx, 3)
+	if r3.Status != contest.StatusPreparing {
+		t.Errorf("expected round 3 preparing, got %s", r3.Status)
+	}
+
+	// Preparing round entries must be preserved in Round 2 (5 entries)
+	r2Entries, _ := contestRepo.ListEntriesByRound(ctx, 2)
+	if len(r2Entries) != 5 {
+		t.Errorf("expected 5 preparing entries preserved in round 2, got %d", len(r2Entries))
+	}
+}
+
+func TestSettlement_ActiveUnderQuorumWithPreparingUnderQuorum_PostponesAndRetainsEntries(t *testing.T) {
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	svc, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("failed to create contest service: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Round 1 is active with 3 entries (< 5 entries, under quorum)
+	contestRepo.SaveRound(ctx, contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusActive,
+		StartTime: now.Add(-11 * 24 * time.Hour),
+		EndTime:   now.Add(-1 * time.Hour),
+	})
+	for i := 1; i <= 3; i++ {
+		charID := fmt.Sprintf("char-active-%d", i)
+		charRepo.Update(ctx, corecharacter.Character{ID: charID, Name: fmt.Sprintf("ActivePlayer%d", i), Money: 1000})
+		contestRepo.SaveEntry(ctx, contest.ContestEntry{
+			ID:          fmt.Sprintf("entry-active-%d", i),
+			Round:       1,
+			CharacterID: charID,
+			Title:       fmt.Sprintf("Active Title %d", i),
+		})
+	}
+
+	// Round 2 is preparing with 4 entries (< 5 entries, under quorum)
+	contestRepo.SaveRound(ctx, contest.ContestRound{
+		Round:     2,
+		Status:    contest.StatusPreparing,
+		StartTime: now.Add(-1 * time.Hour),
+		EndTime:   now.Add(9 * 24 * time.Hour),
+	})
+	for i := 1; i <= 4; i++ {
+		charID := fmt.Sprintf("char-prep-%d", i)
+		charRepo.Update(ctx, corecharacter.Character{ID: charID, Name: fmt.Sprintf("PrepPlayer%d", i)})
+		contestRepo.SaveEntry(ctx, contest.ContestEntry{
+			ID:          fmt.Sprintf("entry-prep-%d", i),
+			Round:       2,
+			CharacterID: charID,
+			Title:       fmt.Sprintf("Prep Title %d", i),
+		})
+	}
+
+	// SettleContest: both rounds under quorum -> postpone and retain submissions in both rounds
+	res, err := svc.SettleContest(ctx, true)
+	if err != nil {
+		t.Fatalf("SettleContest failed: %v", err)
+	}
+
+	if !res.Postponed {
+		t.Errorf("expected contest to be postponed when both active and preparing are under quorum, got %+v", res)
+	}
+	if res.PrizesDistributed {
+		t.Error("expected prizes NOT to be distributed on postponement")
+	}
+
+	// Round 1 must remain active and extended
+	r1, _ := contestRepo.GetRoundByNumber(ctx, 1)
+	if r1.Status != contest.StatusActive {
+		t.Errorf("expected round 1 to remain active, got %s", r1.Status)
+	}
+	if !r1.EndTime.After(now) {
+		t.Errorf("expected round 1 end time extended, got %v", r1.EndTime)
+	}
+
+	// Round 1 entries preserved
+	r1Entries, _ := contestRepo.ListEntriesByRound(ctx, 1)
+	if len(r1Entries) != 3 {
+		t.Errorf("expected 3 entries preserved in round 1, got %d", len(r1Entries))
+	}
+
+	// Round 2 must remain preparing and extended
 	r2, _ := contestRepo.GetRoundByNumber(ctx, 2)
 	if r2.Status != contest.StatusPreparing {
 		t.Errorf("expected round 2 to remain preparing, got %s", r2.Status)
 	}
+	if !r2.EndTime.Equal(r1.EndTime) {
+		t.Errorf("expected round 2 end time synced to round 1 end time, got %v, want %v", r2.EndTime, r1.EndTime)
+	}
 
-	// Preparing round entries must be preserved (5 entries)
+	// Round 2 entries preserved
 	r2Entries, _ := contestRepo.ListEntriesByRound(ctx, 2)
-	if len(r2Entries) != 5 {
-		t.Errorf("expected 5 preparing entries preserved, got %d", len(r2Entries))
+	if len(r2Entries) != 4 {
+		t.Errorf("expected 4 entries preserved in round 2, got %d", len(r2Entries))
 	}
 }
 
@@ -950,5 +1063,163 @@ func TestSettlement_HappyPathAndDuplicateExecution(t *testing.T) {
 	_, err = svc.SettleContest(context.Background(), false)
 	if !errors.Is(err, contest.ErrContestNotReadyToSettle) {
 		t.Errorf("expected ErrContestNotReadyToSettle on duplicate run, got: %v", err)
+	}
+}
+
+func TestSettlement_MultipleConsecutiveCyclesAdvanceWithoutStallingOrDuplicateRewards(t *testing.T) {
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+
+	currentTime := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	svc, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithNowFunc(func() time.Time { return currentTime }),
+	)
+	if err != nil {
+		t.Fatalf("failed to create contest service: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Initial State:
+	// Round 1 active with 3 entries (under quorum)
+	contestRepo.SaveRound(ctx, contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusActive,
+		StartTime: currentTime.Add(-11 * 24 * time.Hour),
+		EndTime:   currentTime.Add(-1 * time.Hour),
+	})
+	for i := 1; i <= 3; i++ {
+		charID := fmt.Sprintf("char-r1-%d", i)
+		charRepo.Update(ctx, corecharacter.Character{ID: charID, Name: fmt.Sprintf("PlayerR1_%d", i), Money: 1000})
+		contestRepo.SaveEntry(ctx, contest.ContestEntry{
+			ID:          fmt.Sprintf("entry-r1-%d", i),
+			Round:       1,
+			CharacterID: charID,
+			Title:       fmt.Sprintf("Title R1 %d", i),
+			Votes:       10 - i,
+		})
+	}
+
+	// Round 2 preparing with 5 entries (quorum met)
+	contestRepo.SaveRound(ctx, contest.ContestRound{
+		Round:     2,
+		Status:    contest.StatusPreparing,
+		StartTime: currentTime.Add(-1 * time.Hour),
+		EndTime:   currentTime.Add(9 * 24 * time.Hour),
+	})
+	for i := 1; i <= 5; i++ {
+		charID := fmt.Sprintf("char-r2-%d", i)
+		charRepo.Update(ctx, corecharacter.Character{ID: charID, Name: fmt.Sprintf("PlayerR2_%d", i), Money: 2000})
+		contestRepo.SaveEntry(ctx, contest.ContestEntry{
+			ID:          fmt.Sprintf("entry-r2-%d", i),
+			Round:       2,
+			CharacterID: charID,
+			Title:       fmt.Sprintf("Title R2 %d", i),
+			Votes:       15 - i,
+		})
+	}
+
+	// --- CYCLE 1 SETTLEMENT ---
+	res1, err := svc.SettleContest(ctx, false)
+	if err != nil {
+		t.Fatalf("Cycle 1 settlement failed: %v", err)
+	}
+	if res1.Postponed {
+		t.Fatal("expected cycle 1 not to be postponed")
+	}
+	if !res1.PrizesDistributed {
+		t.Fatal("expected cycle 1 prizes to be distributed")
+	}
+	if res1.Round != 1 || res1.NextRound != 2 {
+		t.Fatalf("expected cycle 1 settled round 1, next round 2; got round %d, next %d", res1.Round, res1.NextRound)
+	}
+
+	// Verify Round 1 winner received prize
+	w1, _ := charRepo.FindByID(ctx, "char-r1-1")
+	if w1.Money != 1000+15000 {
+		t.Errorf("expected R1 winner to have 16000 money, got %d", w1.Money)
+	}
+
+	// Verify Round 1 is settled, Round 2 is active
+	r1, _ := contestRepo.GetRoundByNumber(ctx, 1)
+	if r1.Status != contest.StatusSettled {
+		t.Errorf("expected round 1 settled, got %s", r1.Status)
+	}
+	r2, _ := contestRepo.GetRoundByNumber(ctx, 2)
+	if r2.Status != contest.StatusActive {
+		t.Errorf("expected round 2 active, got %s", r2.Status)
+	}
+	r3, _ := contestRepo.GetRoundByNumber(ctx, 3)
+	if r3.Status != contest.StatusPreparing {
+		t.Errorf("expected round 3 preparing, got %s", r3.Status)
+	}
+
+	// --- INTERMEDIATE DUPLICATE CHECK ---
+	// Calling SettleContest before Round 2 end time must return ErrContestNotReadyToSettle
+	_, err = svc.SettleContest(ctx, false)
+	if !errors.Is(err, contest.ErrContestNotReadyToSettle) {
+		t.Fatalf("expected ErrContestNotReadyToSettle on immediate duplicate call, got %v", err)
+	}
+
+	// Add 5 entries to preparing Round 3 during the active voting of Round 2
+	for i := 1; i <= 5; i++ {
+		charID := fmt.Sprintf("char-r3-%d", i)
+		charRepo.Update(ctx, corecharacter.Character{ID: charID, Name: fmt.Sprintf("PlayerR3_%d", i), Money: 3000})
+		contestRepo.SaveEntry(ctx, contest.ContestEntry{
+			ID:          fmt.Sprintf("entry-r3-%d", i),
+			Round:       3,
+			CharacterID: charID,
+			Title:       fmt.Sprintf("Title R3 %d", i),
+			Votes:       20 - i,
+		})
+	}
+
+	// --- CYCLE 2 SETTLEMENT (Advance time by 10 days to Round 2 deadline) ---
+	currentTime = r2.EndTime.Add(1 * time.Minute)
+	res2, err := svc.SettleContest(ctx, false)
+	if err != nil {
+		t.Fatalf("Cycle 2 settlement failed: %v", err)
+	}
+	if res2.Postponed {
+		t.Fatal("expected cycle 2 not to be postponed")
+	}
+	if !res2.PrizesDistributed {
+		t.Fatal("expected cycle 2 prizes distributed")
+	}
+	if res2.Round != 2 || res2.NextRound != 3 {
+		t.Fatalf("expected cycle 2 settled round 2, next round 3; got round %d, next %d", res2.Round, res2.NextRound)
+	}
+
+	// Verify Round 2 winner received prize once (2000 + 15000 = 17000)
+	w2, _ := charRepo.FindByID(ctx, "char-r2-1")
+	if w2.Money != 2000+15000 {
+		t.Errorf("expected R2 winner to have 17000 money, got %d", w2.Money)
+	}
+
+	// Verify Round 1 winner did NOT receive duplicate prizes (still 16000)
+	w1AfterCycle2, _ := charRepo.FindByID(ctx, "char-r1-1")
+	if w1AfterCycle2.Money != 1000+15000 {
+		t.Errorf("expected R1 winner money unchanged after cycle 2, got %d", w1AfterCycle2.Money)
+	}
+
+	// Verify Round 2 winner was archived to Legend because Round 2 had 5 entries
+	if res2.WinnerLegend == nil {
+		t.Error("expected Round 2 winner to be archived to WinnerLegend")
+	}
+
+	// Verify Round 2 is settled, Round 3 is active, Round 4 is preparing
+	r2Updated, _ := contestRepo.GetRoundByNumber(ctx, 2)
+	if r2Updated.Status != contest.StatusSettled {
+		t.Errorf("expected round 2 settled, got %s", r2Updated.Status)
+	}
+	r3Updated, _ := contestRepo.GetRoundByNumber(ctx, 3)
+	if r3Updated.Status != contest.StatusActive {
+		t.Errorf("expected round 3 active, got %s", r3Updated.Status)
+	}
+	r4, _ := contestRepo.GetRoundByNumber(ctx, 4)
+	if r4.Status != contest.StatusPreparing {
+		t.Errorf("expected round 4 preparing, got %s", r4.Status)
 	}
 }
