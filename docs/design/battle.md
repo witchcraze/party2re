@@ -492,17 +492,63 @@ Callback category (physical, magic, breath, dance, song or untyped) is independe
 of an elemental name and of direct/normal-attack flags. Category seals check only
 magic/dance/physical, each with a fresh 1/4 cure attempt. Enemy-side category
 conversion precedes that check: item166, eligible noncustom magic-sword commands,
-then seal12 with its 3 MP charge. An elemental multiplier cannot replace these rules.
+then seal12 with its 3 MP charge. The magic-sword multiplier and replacement of
+trailing arguments with direct1 apply to every category on that whitelist; only
+its physical-to-magic conversion is category-dependent (`10171–10184`). Thus
+item166's untyped result still receives that multiplier. An elemental multiplier
+cannot replace these rules.
 
 Resolve the target before applying its temporary effect once. Cover selects the
 first same-side covering member, without a living filter. Defense/reduction/double
 can modify numeric healing or buff coefficients as well as damage; symbolic
 payloads bypass numeric multipliers. Matching reflection redirects to the actor
-(item163 can double payload), nullification sets zero, and deflection/phantom
+(item163 doubles nonzero numeric payloads), nullification sets zero, and deflection/phantom
 use their own ordered draws. Magic absorption adds capped MP but does **not**
 cancel the incoming effect. Ordinary ally resolution redirects fallen to actor
 except revival; confusion has different member-selection predicates. Preserve
 source-context gates instead of replacing them with living-only or lowest-HP rules.
+
+Explicit spell operations use `LifetimeState.ResolvePartyTarget` and
+`ResolveEnemyTarget`, with ordered side rosters and caller context independent of
+element. `CallbackPayload` preserves numeric fractions and symbolic payloads;
+`TargetResolution.Resolved` means the target helper returned a continuation, not
+that damage/healing/status was applied. Ordinary fallen enemy or sealed-category
+helper rejection returns an unresolved result; a resolved zero payload remains
+zero for the consuming helper's early return, without a new minimum damage floor.
+Category cures and item195 activation remain observable even on later helper
+rejection. The two enemy-confusion replacements use the full saved member order,
+including fallen/self, and retain the special boss marker's continuous >1 gate.
+
+`ResolveTemporary` exposes optional target/payload replacements. Spell helpers
+retain incoming values when a replacement is absent. Optional tool HP/MP hooks
+instead use tuple assignment and can observe an absent payload after cover or an
+absent pair after an unknown temporary; disabling the hook skips it altogether
+(`10559–10584`). Tools do not acquire spell category checks or fallback rules.
+MP debit and absorption requests are returned explicitly for the resource owner
+to apply in source order: seal12 subtracts3 with a zero floor before subsequent
+helper gates, absorption adds to the resolved target with a MaxMP clamp before
+the incoming effect continues. These shared operations do not themselves write
+MP or certify a resource callback. Phantom-field identities must be supplied by
+the certified roster owner, including its matching-copy existence predicate and
+ordered candidate list; display names never substitute for encounter identities.
+
+`ApplyTemporaryGem` implements the finite source producers34–53
+(`_data.cgi:2122–2141`): unconditional self defense34/37, category-checked
+self/party effects, targeted symbolic effects and paired cover52. Party effects
+skip fallen; applying revival temporary51 still uses ordinary fallen-ally
+fallback, unlike an actual revival payload. Source41/42/45 omit the returned
+target guard and can mutate an empty record after category rejection; their sealed
+variants remain wholly unsupported. Regeneration50, automatic revival51 and
+absorption53 produce state but do not certify their later HP/MP/lifetime consumers.
+
+Shared target/producer operations certify no additional production catalog entry
+by themselves. Full slots, complete damage/recovery/status formulas and indirect
+closures still need their callback-specific guards and tails through
+`skill.BattleDefinitions` and whole-action admission. Unsupported
+contexts must be rejected before costs, state or RNG, including an absent target
+that boss-field confusion can retain and deflection into an unrepresented empty
+side. The existing batch resolver retains its separate contract; these operations
+do not certify its lowest-HP/living-only targeting as normal-adventure parity.
 
 Distinguish helper rejection, accepted no-effect, actual application and failure.
 Legacy returned tuples and invocation counters do not establish applied success:

@@ -15,6 +15,16 @@ const (
 	TemporaryCover         TemporaryEffect = "cover"
 	TemporaryCovering      TemporaryEffect = "covering"
 	TemporaryRevival       TemporaryEffect = "revival"
+	TemporaryRegeneration  TemporaryEffect = "regeneration"
+	TemporaryReduceAttack  TemporaryEffect = "reduce_attack"
+	TemporaryReduceMagic   TemporaryEffect = "reduce_magic"
+	TemporaryReduceBreath  TemporaryEffect = "reduce_breath"
+	TemporaryDouble        TemporaryEffect = "double"
+	TemporaryDeflect       TemporaryEffect = "deflect"
+	TemporaryAbsorbMagic   TemporaryEffect = "absorb_magic"
+	TemporaryNullAttack    TemporaryEffect = "null_attack"
+	TemporaryNullMagic     TemporaryEffect = "null_magic"
+	TemporaryPhantom       TemporaryEffect = "phantom"
 )
 
 func (e TemporaryEffect) reflection() bool {
@@ -53,38 +63,6 @@ func (a *LifetimeActor) ConsumeOneHitDefense() bool {
 	}
 	a.Temporary = ""
 	return true
-}
-
-// TemporaryTarget resolves only cover/reflection identity. Category-specific
-// coefficients and later target-helper effects belong to certified modifiers.
-func (s *LifetimeState) TemporaryTarget(actorID, targetID, category string) (string, error) {
-	var target *LifetimeActor
-	actorFound := false
-	for i := range s.Actors {
-		if s.Actors[i].ID == actorID {
-			actorFound = true
-		}
-		if s.Actors[i].ID == targetID {
-			target = &s.Actors[i]
-		}
-	}
-	if !actorFound || target == nil {
-		return "", ErrInvalidParticipant
-	}
-	if target.Temporary == TemporaryCover {
-		for _, a := range s.Actors {
-			if a.TeamID == target.TeamID && a.Temporary == TemporaryCovering {
-				return a.ID, nil
-			}
-		}
-	}
-	if (target.Temporary == TemporaryReflectAttack && category == "physical") ||
-		(target.Temporary == TemporaryReflectMagic && category == "magic") ||
-		(target.Temporary == TemporaryReflectBreath && category == "breath") ||
-		(target.Temporary == TemporaryReflectDance && category == "dance") {
-		return actorID, nil
-	}
-	return targetID, nil
 }
 
 // ResetEffects restores lifetime baselines and the supplied, freshly evaluated

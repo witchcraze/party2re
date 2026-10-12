@@ -98,15 +98,17 @@ func TestLifetimeTemporaryResetAndAdvance(t *testing.T) {
 		{Participant: Participant{ID: "c", TeamID: "enemy"}, Temporary: TemporaryCovering},
 	}, Fields: LifetimeFields{Temporary: "temp", Turns: 3, AntiTurns: 1, Default: "default"}}
 	s = reloadLifetime(t, s)
-	target, err := s.TemporaryTarget("a", "b", "magic")
-	if err != nil || target != "a" || s.Actors[1].Temporary != TemporaryReflectMagic {
+	c := TargetContext{ActorID: "a", PartyIDs: []string{"a"}, EnemyIDs: []string{"b", "c"}}
+	e := TargetEffect{TargetID: "b", Category: CategoryMagic}
+	target, err := s.ResolveTemporary(c, e, fixedFloatRNG{val: 0.9})
+	if err != nil || target.TargetID == nil || *target.TargetID != "a" || s.Actors[1].Temporary != TemporaryReflectMagic {
 		t.Fatal(target, err)
 	}
 	s = reloadLifetime(t, s)
 	s.Actors[1].Temporary = TemporaryCover
 	s = reloadLifetime(t, s)
-	target, err = s.TemporaryTarget("a", "b", "magic")
-	if err != nil || target != "c" {
+	target, err = s.ResolveTemporary(c, e, fixedFloatRNG{val: 0.9})
+	if err != nil || target.TargetID == nil || *target.TargetID != "c" {
 		t.Fatal(target, err)
 	}
 	s = reloadLifetime(t, s)
