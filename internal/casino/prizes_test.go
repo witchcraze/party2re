@@ -3,6 +3,7 @@ package casino_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -31,6 +32,13 @@ func (m *mockDepotRepo) FindByCharacterIDForUpdate(ctx context.Context, characte
 func (m *mockDepotRepo) Save(ctx context.Context, dep depot.Depot) error {
 	if m.saveErr != nil {
 		return m.saveErr
+	}
+	seen := make(map[string]bool)
+	for _, inst := range dep.Items {
+		if seen[inst.ID] {
+			return fmt.Errorf("duplicate depot_items id: %s", inst.ID)
+		}
+		seen[inst.ID] = true
 	}
 	m.depots[dep.CharacterID] = dep
 	return nil
@@ -208,5 +216,106 @@ func TestExchangePrize_DepotFull(t *testing.T) {
 	acc, _ := repo.GetAccount(context.Background(), charID)
 	if acc.Coins != 5000 {
 		t.Errorf("expected coins preserved at 5000, got %d", acc.Coins)
+	}
+}
+
+func TestExchangePrize_BulkEquipmentDistinctIDs(t *testing.T) {
+	repo := newMockPrizeCasinoRepo()
+	depotMock := newMockDepotRepo()
+
+	svc, err := casino.NewService(repo, casino.WithDepotRepository(depotMock))
+	if err != nil {
+		t.Fatalf("failed to create casino service: %v", err)
+	}
+
+	charID := "char-bulk"
+	repo.accounts[charID] = casino.Account{CharacterID: charID, Coins: 100000}
+
+	// 1. Exchange 2 units of 30,000 coin weapon (weapon-31: 必殺のピアス)
+	res, err := svc.ExchangePrize(context.Background(), charID, 30000, 2)
+	if err != nil {
+		t.Fatalf("ExchangePrize bulk weapon error: %v", err)
+	}
+	if res.TotalCostCoins != 60000 {
+		t.Errorf("expected total cost 60000, got %d", res.TotalCostCoins)
+	}
+	if res.RemainingCoins != 40000 {
+		t.Errorf("expected remaining coins 40000, got %d", res.RemainingCoins)
+	}
+
+	savedDepot := depotMock.depots[charID]
+	if len(savedDepot.Items) != 2 {
+		t.Fatalf("expected 2 weapon instances in depot, got %d", len(savedDepot.Items))
+	}
+	if savedDepot.Items[0].ID == savedDepot.Items[1].ID {
+		t.Errorf("expected distinct instance IDs for bulk weapons, got duplicate ID %s", savedDepot.Items[0].ID)
+	}
+	if savedDepot.Items[0].DefinitionID != "weapon-31" || savedDepot.Items[1].DefinitionID != "weapon-31" {
+		t.Errorf("expected both items to be weapon-31, got %+v", savedDepot.Items)
+	}
+	if savedDepot.Items[0].Quantity != 1 || savedDepot.Items[1].Quantity != 1 {
+		t.Errorf("expected quantity 1 for each equipment instance, got %+v", savedDepot.Items)
+	}
+
+	// 2. Exchange 2 units of 8,000 coin armor (armor-34: 危ない水着)
+	resArmor, err := svc.ExchangePrize(context.Background(), charID, 8000, 2)
+	if err != nil {
+		t.Fatalf("ExchangePrize bulk armor error: %v", err)
+	}
+	if resArmor.TotalCostCoins != 16000 {
+		t.Errorf("expected total cost 16000, got %d", resArmor.TotalCostCoins)
+	}
+	if resArmor.RemainingCoins != 24000 {
+		t.Errorf("expected remaining coins 24000, got %d", resArmor.RemainingCoins)
+	}
+
+	savedDepot = depotMock.depots[charID]
+	if len(savedDepot.Items) != 4 {
+		t.Fatalf("expected 4 equipment instances in depot, got %d", len(savedDepot.Items))
+	}
+	ids := make(map[string]bool)
+	for _, it := range savedDepot.Items {
+		if ids[it.ID] {
+			t.Errorf("duplicate ID %s found in depot items", it.ID)
+		}
+		ids[it.ID] = true
+	}
+}
+
+func TestExchangePrize_DepotCapacityRollbackForBulkEquipment(t *testing.T) {
+	repo := newMockPrizeCasinoRepo()
+	depotMock := newMockDepotRepo()
+
+	svc, err := casino.NewService(repo, casino.WithDepotRepository(depotMock))
+	if err != nil {
+		t.Fatalf("failed to create casino service: %v", err)
+	}
+
+	charID := "char-cap-rollback"
+	repo.accounts[charID] = casino.Account{CharacterID: charID, Coins: 100000}
+
+	// Depot capacity is 5. Pre-fill with 4 items so only 1 slot is left.
+	d, _ := depot.NewDepot(charID)
+	for i := 0; i < 4; i++ {
+		_ = d.AddItem(item.Instance{ID: fmt.Sprintf("pre-%d", i), DefinitionID: "weapon-31", Quantity: 1})
+	}
+	depotMock.depots[charID] = d
+
+	// Attempt to exchange 2 weapons (needs 2 slots, only 1 available)
+	_, err = svc.ExchangePrize(context.Background(), charID, 30000, 2)
+	if !errors.Is(err, depot.ErrDepotFull) {
+		t.Errorf("expected depot.ErrDepotFull, got %v", err)
+	}
+
+	// Verify coins preserved at 100,000
+	acc, _ := repo.GetAccount(context.Background(), charID)
+	if acc.Coins != 100000 {
+		t.Errorf("expected coins preserved at 100000, got %d", acc.Coins)
+	}
+
+	// Verify depot items preserved at 4
+	savedDepot := depotMock.depots[charID]
+	if len(savedDepot.Items) != 4 {
+		t.Errorf("expected depot items preserved at 4, got %d", len(savedDepot.Items))
 	}
 }

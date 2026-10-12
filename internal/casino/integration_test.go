@@ -496,3 +496,126 @@ func TestCasinoIndianPoker_ConcurrencyExploitPrevented(t *testing.T) {
 		t.Fatalf("balance became negative: %d", dbAcc.Coins)
 	}
 }
+
+func TestCasinoBulkEquipmentPrizeDepotDatabaseIntegration(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	casinoRepo, err := database.NewCasinoRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	depotRepo, err := database.NewDepotRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+
+	svc, err := casino.NewService(
+		casinoRepo,
+		casino.WithTransactionProvider(txProvider),
+		casino.WithDepotRepository(depotRepo),
+		casino.WithCharacterRepository(charRepo),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Create test character with sufficient funds
+	char, err := database.CreateTestCharacterWithFunds(ctx, db, "BulkEquipBuyer", 3000000)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Buy 100,000 casino coins (costs 2,000,000 gold)
+	acc, _, err := svc.ExchangeGoldToCoins(ctx, char.ID, 100000)
+	if err != nil {
+		t.Fatalf("ExchangeGoldToCoins failed: %v", err)
+	}
+	if acc.Coins != 100000 {
+		t.Fatalf("expected 100000 coins, got %d", acc.Coins)
+	}
+
+	// 3. Exchange 2 weapon-31 (30,000 coins each = 60,000 coins)
+	res, err := svc.ExchangePrize(ctx, char.ID, 30000, 2)
+	if err != nil {
+		t.Fatalf("ExchangePrize 2 weapon-31 failed in real DB: %v", err)
+	}
+	if res.RemainingCoins != 40000 || !res.TransferredToDepot {
+		t.Fatalf("unexpected result: %+v", res)
+	}
+
+	// 4. Exchange 2 armor-34 (8,000 coins each = 16,000 coins)
+	resArmor, err := svc.ExchangePrize(ctx, char.ID, 8000, 2)
+	if err != nil {
+		t.Fatalf("ExchangePrize 2 armor-34 failed in real DB: %v", err)
+	}
+	if resArmor.RemainingCoins != 24000 || !resArmor.TransferredToDepot {
+		t.Fatalf("unexpected result: %+v", resArmor)
+	}
+
+	// 5. Exchange 2 stackable consumables (item-004, 100 coins each = 200 coins)
+	resItem, err := svc.ExchangePrize(ctx, char.ID, 100, 2)
+	if err != nil {
+		t.Fatalf("ExchangePrize 2 item-004 failed in real DB: %v", err)
+	}
+	if resItem.RemainingCoins != 23800 || !resItem.TransferredToDepot {
+		t.Fatalf("unexpected result: %+v", resItem)
+	}
+
+	// 6. Verify depot contents reloaded from real DB
+	dep, err := depotRepo.FindByCharacterIDForUpdate(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("depot not found: %v", err)
+	}
+	// Expected: 2 weapon-31 + 2 armor-34 + 1 stacked item-004 = 5 slots
+	if len(dep.Items) != 5 {
+		t.Fatalf("expected 5 depot items (2 weapons, 2 armors, 1 stacked consumable), got %d: %+v", len(dep.Items), dep.Items)
+	}
+
+	// All 5 item IDs must be distinct
+	seenIDs := make(map[string]bool)
+	var weaponCount, armorCount int
+	for _, it := range dep.Items {
+		if seenIDs[it.ID] {
+			t.Fatalf("duplicate depot item ID detected in real DB: %s", it.ID)
+		}
+		seenIDs[it.ID] = true
+
+		switch it.DefinitionID {
+		case "weapon-31":
+			weaponCount++
+			if it.Quantity != 1 {
+				t.Errorf("weapon-31 expected quantity 1, got %d", it.Quantity)
+			}
+		case "armor-34":
+			armorCount++
+			if it.Quantity != 1 {
+				t.Errorf("armor-34 expected quantity 1, got %d", it.Quantity)
+			}
+		case "item-004":
+			if it.Quantity != 2 {
+				t.Errorf("item-004 expected stacked quantity 2, got %d", it.Quantity)
+			}
+		}
+	}
+	if weaponCount != 2 {
+		t.Errorf("expected 2 weapon-31 items, got %d", weaponCount)
+	}
+	if armorCount != 2 {
+		t.Errorf("expected 2 armor-34 items, got %d", armorCount)
+	}
+}
