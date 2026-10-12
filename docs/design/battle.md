@@ -272,7 +272,83 @@ are recorded in [#1333](https://github.com/witchcraze/party2re/issues/1333).
 | Custom gems | Run gem slots in order and stop when the actor dies. A slot can change HP/MP/CMP, tension/hit, status/temporary/extended state, roster or appearance, invoke another callback, or enqueue end processing. CMP cost belongs to the custom action; do not substitute each gem's catalog cost as an ordinary MP charge | `_skill.cgi:288–309`; `_data.cgi:2087–2198`; `_battle.cgi:787–789` |
 | Random skills | The general random helper draws a job from 1 through the last indexed player job, then redraws extended entries until a non-extended callback is selected; an empty job yields no effect. Tool 84 instead draws **any** current-job entry, including extended entries. Both restore MP only when the callback lowered it, preserving MP increases and other side effects. Neither applies ordinary SP/admission/MP charging for the selected callback | `_skill.cgi:9773–9787`; `_data.cgi:1255–1267,2171` |
 | Delegated gems | Gem 86 tries the current job's last extended callback before the previous job. Finding an extended callback returns “handled” even when SP/MP prevents execution, so it does not fall back in that case; job 73 has a separate 1-MP stat increase. Gems 87–92 prefer a calling previous job, otherwise current job, and invoke its named command/first non-command non-extended callback without normal SP or listed MP charging | `_data.cgi:2174–2180`; `_skill.cgi:10841–10918` |
-| Two-target book use | Validate both encounter participants, allow the same target twice, require MP ≥floor(book cost×1.5), execute first then second. Actor death after the first stops the second **and** skips the later MP charge/book return. If the actor survives, subtract the internal cost and return the book to storage after the second. Ordinary one-target book invocation does not return it | `_skill.cgi:6868–6897,10538–10557`; native ID authorization remains mandatory |
+| Two-target book use | Allow the same encounter participant twice and require MP ≥floor(book cost×1.5). Death after the first callback skips the second, internal charge and return. After a normally returning second callback, charge and return even if the actor died during it. Ordinary one-target use does not return the book. Parsing and asset context follow the contract below | `_skill.cgi:6868–6897,10538–10557`; native ID authorization remains mandatory |
+
+#### Combat books, stored tools and purchases
+
+The requesting player, temporary combat actor, durable held-tool projection and
+combat held tool are separate identities/state. NPC dispatch changes the actor
+and sides, but does not replace the requesting player's wallet or user ID
+(`party.cgi:8–31`; `_npc_action.cgi:89–145`). Jobs7/8 read that wallet,
+job7/81 credit it, job28 debits it and job78 purchases debit it even when the
+actor is an NPC. A commanded or random child does not acquire its actor's own
+wallet. Preserve this ownership explicitly; reject the whole invoking entry
+before mutation when the native context cannot express it. Never infer the
+payer from an actor's name. Detailed source reconciliation belongs to
+[#1341](https://github.com/witchcraze/party2re/issues/1341).
+
+| Operation | Source-backed asset, effect and lifetime contract |
+| --- | --- |
+| Book exchange, job86 positions0/3 | Require a held book; position0 also permits an empty durable tool in the library field. Search requesting-player depot order for the first matching stored book. Replace that one row with the durable held tool if nonzero, then set both held projections to the selected book. Other duplicate rows retain order. No match reports selection failure, resets action interval to0 and changes no held/depot state. Position3 alone, on success, suppresses NPC response, applies15%MaxHP risk and writes the skill ban, in that order (`6802–6816,6843–6855,10489–10536`) |
+| Book return, job86 position2 | Held combat item must be a book. Attempt15%MaxMP magic restoration first; then send the **durable** held tool to the **actor-named** depot and clear both held projections. Return is not conditional on MP recovery succeeding (`6829–6840`) |
+| Double invocation, job86 position5 | First matching book callback, falling back to position0 if no item ID matches. Gate on floor(listed book MP×1.5) once before the first invocation; no ordinary cost per child. Check actor death only between children. After a normally returning second child, subtract the internal cost without a local zero clamp, send durable held item to actor-named depot, then clear both projections. A child may alter MP/items; return uses their current values, not a captured original item (`6868–6899`) |
+| Stored-tool callback, job50 extended | NPC invokes magic heal500 and returns. Player uses outer submitted command/item/remaining text, trims target whitespace and leading encoded separator, and selects first eligible matching tool in requesting-player depot. Usage-category1 invokes its actual callback with that target; retain the row on selection error, otherwise remove it. Other categories swap the row with the durable held tool, even item0, and equip selected tool in both projections. Record its definition as used **before** child invocation; all copies of that definition are excluded for the actor's color for the room-directory lifetime. Child error retains that history in source; no-match sets interval0. Do not replace this with ordinary held-tool consumption (`3612–3626,10433–10487,10949–10973`) |
+| Enhanced held-tool use, job78 position0 | Separate table of **22**, not23, IDs:1,2,3,4,5,6,9,11,12,13,14,15,18,19,20,41,42,78,80,81,84,87. Category2 items18–20 are included. A callback returning1 clears combat held tool and, only for non-NPC color, durable held tool; unsupported ID returns0 without consumption. Item6's early invalid/living-target return also skips consumption (`5988–6013,10196–10282`) |
+| Empty-hand purchase, job78 position0 | Pool positions are1×5,2,9,11,14×2,15×2,41,80×2,81,84×2. Remove exact helper-quest tool IDs before the weighted draw; insufficient money still follows a draw. Nonzero selected ID and wallet≥floor(base price×2.5) equip combat held tool and debit requester wallet; update durable held tool only for non-NPC. Empty pool produces no purchase. No capacity check or depot delivery is involved (`10284–10305`; `system.cgi:1424–1442`) |
+| Scavenging, job78 position5 | Damage and agility increase precede empty-hand1/5 draw. Its distinct pool is1×5,2×2,3,4,11×2,12,15×2,41,42,80×2,81×2,84×2. Draw first, then helper-list **substring regex** exclusion converts a matching result to0 without redraw. Update combat held tool; durable projection only for non-NPC. This exclusion differs from purchase (`6176–6196`) |
+
+Enhanced callbacks use neutral categories, not ordinary tool formulas: single
+HP120/300/750; party HP400; party HP999 plus MP100; full single revival with
+temporary revival state; each fallen ally independently1/2 half-MaxHP revival;
+single MP120/300; MP999 then reset; strong defense; direct damage equal to
+target AT; AT/DF/AG+100%; all-enemy direct400; area death40; add enemy once plus
+independent1/2 second; all-party defense including fallen; enemy temporary-state
+clear; base25%MP reduction then actor recovery of the returned amount using
+attack category; participant reset. These correspond to the
+22 IDs in order above, and retain each helper's guards, draw order and tails.
+Item84 here is MP theft, **not** ordinary item84's random job invocation.
+
+Argument binding is part of these effects. Enhanced dispatch passes only the
+numeric item ID. Reading that ID into a lexical does not consume the argument;
+the first `shift` therefore reads the ID, not the submitted participant. Item84
+checks that first value then its second `shift` is absent, so MP reduction uses
+helper fallback rather than the checked target. Item87 uses the numeric value
+if it names a participant, otherwise draws from all ordered members, including
+fallen. Do not silently pass the submitted target or consume an extra argument
+to repair these paths. Stored ordinary tools instead receive job50's submitted
+target, including job/destination/floor selectors and random/travel descendants.
+
+Double-target source splits encoded separators, keeps only the first two
+pieces and scans members with an OR predicate; it is not a general validated
+pair parser. Equal names succeed on one matching member. Distinct names normally
+require both to occur; duplicate member rows can satisfy the scan twice while
+one name is absent. Failure sets a selection message and implicitly returns
+that scalar, rather than an explicit empty pair. Native submission still
+requires encounter-scoped IDs; malformed/foreign/duplicate-roster contexts
+that cannot represent the evidenced behavior remain rejected before any child,
+cost or asset change. Normal typed pairs preserve same-target-twice behavior;
+this does not approve exposing arbitrary names (`10538–10557`).
+
+`send_item` appends without checking capacity when the actor-named depot file
+exists; absent file silently skips delivery, but the caller still clears held
+items (`system.cgi:818–837`). Exchange instead rewrites the requesting player's
+existing depot and needs no extra slot for a nonempty swap. The native depot's
+capacity-checked delivery policies do not implement capacity-unchecked return.
+[#1139](https://github.com/witchcraze/party2re/issues/1139) owns full/over-capacity
+decisions; no strict rejection, loss or new pending queue is approved here.
+Missing/mismatched recipient or held projections remain unsupported contexts,
+not permission to destroy a player's book or transfer an unrelated item.
+
+Native command receipt/state, wallet, held/depot instances and room history
+must commit together through injected transaction ports. Preserve instance
+identity via #1197 and existing storage owners; never debit or consume twice on
+retry, reroll a committed purchase or discard child travel/roster effects.
+Source file writes are not atomic across history/depot/user files; this is
+behavioral evidence, not an instruction to reproduce partial writes on faults.
+Native owners are #1370 book transactions, #1371 stored-tool execution/history
+and #1372 enhanced tools/purchase; #1359 retains other wallet/scavenging effects.
+The shared registry remains a whole-entry gate until these transactions,
+argument contexts and every reachable child are implemented and tested.
 
 #### Random and delegated job closure
 
@@ -588,8 +664,9 @@ entry reaching a shared hook must certify its producer and consumer together.
 
 Production adoption still requires #1188 supply, #1332 resumable lifetimes,
 #1337 MP resources, #1338 revival, #1339 summons, #1340 transformation and #1342
-ordinary NPC payloads. Named specification gates remain #1341 book/purchase
-transactions and the [shared modifier follow-ups](#shared-modifiers-and-callback-outcomes)
+ordinary NPC payloads. Book/purchase effects require the
+[combat asset contract](#combat-books-stored-tools-and-purchases), including
+#1139's independent capacity decision, and the [shared modifier follow-ups](#shared-modifiers-and-callback-outcomes)
 from #1343, including #1367's context and failure-admission contract. The transitive job
 reconciliation in #1344 also requires #1357 invocation execution, #1358
 arithmetic selectors, #1359 wallet/held-tool effects and #1360 job-driven room
