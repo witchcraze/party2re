@@ -322,7 +322,9 @@ SQL receipts must freeze draws/results and consumption once (#1328/#1197).
 
 Travel itself neither pays nor erases earnings; normal stock processing still
 runs (#1198). Assignment-only callbacks retain `$is_clear` and existing EX
-markers. Tool 150's encounter creation at floor 10 sets clear; ordinary
+markers. Tool 150's encounter creation at floor 10 sets clear; stage 24 also
+creates its EX marker and applies its ordinary special boss-field reset/caps
+owned by #1342. Ordinary
 treasure creation at floor 11 consumes the retained clear flag for the
 **current** stage, runs Try success if applicable and can unseal stage 19
 (`vs_monster.cgi:91–155`). It is not proof that the destination boss was beaten.
