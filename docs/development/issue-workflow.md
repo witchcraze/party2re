@@ -65,7 +65,7 @@ A ticket is complete only when its acceptance criteria are satisfied, tests pass
 
 Do not mark work complete merely because the implementation exists locally.
 
-After merging, confirm the Issue closed, synchronize local `main`, and clean up the merged branch. Update affected open Issue bodies with the resolved prerequisite and remaining scope; verify dependent Issues have no open blockers before describing them as unblocked.
+After merging, confirm the Issue closed, synchronize local `main`, and clean up the merged branch. Assess related-ticket impact under the [workflow rule](../../.agents/rules/01-development-workflow.md#2-issue-and-pr-workflow), starting with direct dependents and known references to the changed contract. Correct bodies whose requirements, code targets, prerequisites or remaining scope would mislead the next implementer. Expand discovery only for concrete impact; completion or dependency closure alone does not require a body edit. Keep dependency state in native relationships and shared specifications in their owning documents. Verify remaining native blockers before describing an Issue as unblocked, and retain independent specification questions.
 
 ## Related documents
 
