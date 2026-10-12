@@ -612,3 +612,343 @@ func TestSchedulerRegisteredOnEnterContest(t *testing.T) {
 		t.Errorf("expected ActionType %s, got %s", contest.ActionTypeContestSettlement, action.ActionType)
 	}
 }
+
+func TestSettlement_ActiveUnderQuorumWithPreparingQuorum_DoesNotPrematurelyConclude(t *testing.T) {
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	svc, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("failed to create contest service: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Round 1 is active with 3 entries (< 5 entries, under quorum)
+	contestRepo.SaveRound(ctx, contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusActive,
+		StartTime: now.Add(-11 * 24 * time.Hour),
+		EndTime:   now.Add(-1 * time.Hour),
+	})
+	for i := 1; i <= 3; i++ {
+		charID := fmt.Sprintf("char-active-%d", i)
+		charRepo.Update(ctx, corecharacter.Character{ID: charID, Name: fmt.Sprintf("ActivePlayer%d", i)})
+		contestRepo.SaveEntry(ctx, contest.ContestEntry{
+			ID:          fmt.Sprintf("entry-active-%d", i),
+			Round:       1,
+			CharacterID: charID,
+			Title:       fmt.Sprintf("Active Title %d", i),
+		})
+	}
+
+	// Round 2 is preparing with 5 entries (>= 5 entries, reaches quorum)
+	contestRepo.SaveRound(ctx, contest.ContestRound{
+		Round:     2,
+		Status:    contest.StatusPreparing,
+		StartTime: now.Add(-1 * time.Hour),
+		EndTime:   now.Add(9 * 24 * time.Hour),
+	})
+	for i := 1; i <= 5; i++ {
+		charID := fmt.Sprintf("char-prep-%d", i)
+		charRepo.Update(ctx, corecharacter.Character{ID: charID, Name: fmt.Sprintf("PrepPlayer%d", i)})
+		contestRepo.SaveEntry(ctx, contest.ContestEntry{
+			ID:          fmt.Sprintf("entry-prep-%d", i),
+			Round:       2,
+			CharacterID: charID,
+			Title:       fmt.Sprintf("Prep Title %d", i),
+		})
+	}
+
+	// SettleContest(force=true) must NOT conclude Round 1 or discard its 3 entries.
+	// It must postpone and extend Round 1.
+	res, err := svc.SettleContest(ctx, true)
+	if err != nil {
+		t.Fatalf("SettleContest failed: %v", err)
+	}
+
+	if !res.Postponed {
+		t.Errorf("expected contest to be postponed, got %+v", res)
+	}
+	if res.PrizesDistributed {
+		t.Error("expected prizes NOT to be distributed")
+	}
+
+	// Round 1 must remain active and extended
+	r1, _ := contestRepo.GetRoundByNumber(ctx, 1)
+	if r1.Status != contest.StatusActive {
+		t.Errorf("expected round 1 to remain active, got %s", r1.Status)
+	}
+	if !r1.EndTime.After(now) {
+		t.Errorf("expected round 1 end time to be extended, got %v", r1.EndTime)
+	}
+
+	// Active round entries must be preserved (3 entries)
+	r1Entries, _ := contestRepo.ListEntriesByRound(ctx, 1)
+	if len(r1Entries) != 3 {
+		t.Errorf("expected 3 active entries preserved, got %d", len(r1Entries))
+	}
+
+	// Round 2 must remain preparing (NOT promoted to active)
+	r2, _ := contestRepo.GetRoundByNumber(ctx, 2)
+	if r2.Status != contest.StatusPreparing {
+		t.Errorf("expected round 2 to remain preparing, got %s", r2.Status)
+	}
+
+	// Preparing round entries must be preserved (5 entries)
+	r2Entries, _ := contestRepo.ListEntriesByRound(ctx, 2)
+	if len(r2Entries) != 5 {
+		t.Errorf("expected 5 preparing entries preserved, got %d", len(r2Entries))
+	}
+}
+
+func TestSettlement_GetPreparingRoundDBError_AbortsWithoutMutationsOrPrizes(t *testing.T) {
+	charRepo := newInjectableCharRepo()
+	contestRepo := newMockContestRepo()
+	txProvider := &trackingTxProvider{}
+
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	setupContestForSettlement(t, charRepo, contestRepo, now)
+
+	// Round 2 is preparing
+	contestRepo.SaveRound(context.Background(), contest.ContestRound{
+		Round:     2,
+		Status:    contest.StatusPreparing,
+		StartTime: now.Add(-1 * time.Hour),
+		EndTime:   now.Add(9 * 24 * time.Hour),
+	})
+
+	initialRound1, _ := contestRepo.GetRoundByNumber(context.Background(), 1)
+	winnerCharInitial, _ := charRepo.FindByID(context.Background(), "char-1")
+
+	// Inject DB error on GetPreparingRoundForUpdate
+	injectedErr := errors.New("database connection failed during preparing round query")
+	contestRepo.getPreparingRoundForUpdateErr = injectedErr
+
+	svc, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithTransactionProvider(txProvider),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	_, err = svc.SettleContest(context.Background(), false)
+	if err == nil {
+		t.Fatal("expected error when preparing round query fails, got nil")
+	}
+	if !errors.Is(err, injectedErr) && !strings.Contains(err.Error(), injectedErr.Error()) {
+		t.Fatalf("expected injected error, got: %v", err)
+	}
+
+	if !txProvider.rollbackCalled {
+		t.Error("expected transaction rollback to be triggered")
+	}
+
+	// Active round must remain active with unchanged EndTime
+	r1, _ := contestRepo.GetRoundByNumber(context.Background(), 1)
+	if r1.Status != contest.StatusActive {
+		t.Errorf("expected round 1 to remain active, got %s", r1.Status)
+	}
+	if !r1.EndTime.Equal(initialRound1.EndTime) {
+		t.Errorf("expected round 1 end time unchanged, got %v", r1.EndTime)
+	}
+
+	// Preparing round must remain preparing
+	r2, _ := contestRepo.GetRoundByNumber(context.Background(), 2)
+	if r2.Status != contest.StatusPreparing {
+		t.Errorf("expected round 2 to remain preparing, got %s", r2.Status)
+	}
+
+	// No prizes awarded to winners
+	winnerCharAfter, _ := charRepo.FindByID(context.Background(), "char-1")
+	if winnerCharAfter.Money != winnerCharInitial.Money || winnerCharAfter.SmallMedals != winnerCharInitial.SmallMedals {
+		t.Errorf("expected winner character not to receive prizes on failure, initial money: %d, after: %d", winnerCharInitial.Money, winnerCharAfter.Money)
+	}
+}
+
+func TestSettlement_ListPreparingEntriesDBError_AbortsWithoutMutationsOrPrizes(t *testing.T) {
+	charRepo := newInjectableCharRepo()
+	contestRepo := newMockContestRepo()
+	txProvider := &trackingTxProvider{}
+
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	setupContestForSettlement(t, charRepo, contestRepo, now)
+
+	// Round 2 is preparing
+	contestRepo.SaveRound(context.Background(), contest.ContestRound{
+		Round:     2,
+		Status:    contest.StatusPreparing,
+		StartTime: now.Add(-1 * time.Hour),
+		EndTime:   now.Add(9 * 24 * time.Hour),
+	})
+
+	initialRound1, _ := contestRepo.GetRoundByNumber(context.Background(), 1)
+	winnerCharInitial, _ := charRepo.FindByID(context.Background(), "char-1")
+
+	// Inject DB error on ListEntriesByRound for round 2
+	injectedErr := errors.New("disk I/O error listing preparing round entries")
+	contestRepo.listEntriesByRoundErrByRound[2] = injectedErr
+
+	svc, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithTransactionProvider(txProvider),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	_, err = svc.SettleContest(context.Background(), false)
+	if err == nil {
+		t.Fatal("expected error when preparing entries query fails, got nil")
+	}
+	if !errors.Is(err, injectedErr) && !strings.Contains(err.Error(), injectedErr.Error()) {
+		t.Fatalf("expected injected error, got: %v", err)
+	}
+
+	if !txProvider.rollbackCalled {
+		t.Error("expected transaction rollback to be triggered")
+	}
+
+	// Active round must remain active with unchanged EndTime
+	r1, _ := contestRepo.GetRoundByNumber(context.Background(), 1)
+	if r1.Status != contest.StatusActive {
+		t.Errorf("expected round 1 to remain active, got %s", r1.Status)
+	}
+	if !r1.EndTime.Equal(initialRound1.EndTime) {
+		t.Errorf("expected round 1 end time unchanged, got %v", r1.EndTime)
+	}
+
+	// No prizes awarded to winners
+	winnerCharAfter, _ := charRepo.FindByID(context.Background(), "char-1")
+	if winnerCharAfter.Money != winnerCharInitial.Money || winnerCharAfter.SmallMedals != winnerCharInitial.SmallMedals {
+		t.Errorf("expected winner character not to receive prizes on failure, initial money: %d, after: %d", winnerCharInitial.Money, winnerCharAfter.Money)
+	}
+}
+
+func TestSettlement_EmptyActiveRound_DBErrorAbortsWithoutMutations(t *testing.T) {
+	charRepo := newInjectableCharRepo()
+	contestRepo := newMockContestRepo()
+	txProvider := &trackingTxProvider{}
+
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+
+	// Round 1 active with 0 entries
+	contestRepo.SaveRound(context.Background(), contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusActive,
+		StartTime: now.Add(-11 * 24 * time.Hour),
+		EndTime:   now.Add(-1 * time.Hour),
+	})
+	initialRound1, _ := contestRepo.GetRoundByNumber(context.Background(), 1)
+
+	injectedErr := errors.New("network timeout querying preparing round")
+	contestRepo.getPreparingRoundForUpdateErr = injectedErr
+
+	svc, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithTransactionProvider(txProvider),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	_, err = svc.SettleContest(context.Background(), true)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), injectedErr.Error()) {
+		t.Fatalf("expected injected error, got: %v", err)
+	}
+	if !txProvider.rollbackCalled {
+		t.Error("expected rollback called")
+	}
+
+	r1, _ := contestRepo.GetRoundByNumber(context.Background(), 1)
+	if r1.Status != contest.StatusActive {
+		t.Errorf("expected active round status unchanged, got %s", r1.Status)
+	}
+	if !r1.EndTime.Equal(initialRound1.EndTime) {
+		t.Errorf("expected active round end time unchanged, got %v", r1.EndTime)
+	}
+}
+
+func TestSettlement_HappyPathAndDuplicateExecution(t *testing.T) {
+	charRepo := newInjectableCharRepo()
+	contestRepo := newMockContestRepo()
+
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	setupContestForSettlement(t, charRepo, contestRepo, now)
+
+	// Round 2 is preparing with 5 entries
+	contestRepo.SaveRound(context.Background(), contest.ContestRound{
+		Round:     2,
+		Status:    contest.StatusPreparing,
+		StartTime: now.Add(-1 * time.Hour),
+		EndTime:   now.Add(9 * 24 * time.Hour),
+	})
+	for i := 1; i <= 5; i++ {
+		charID := fmt.Sprintf("char-p2-%d", i)
+		charRepo.Update(context.Background(), corecharacter.Character{ID: charID, Name: fmt.Sprintf("P2-%d", i)})
+		contestRepo.SaveEntry(context.Background(), contest.ContestEntry{
+			ID:          fmt.Sprintf("entry-p2-%d", i),
+			Round:       2,
+			CharacterID: charID,
+			Title:       fmt.Sprintf("Photo P2 %d", i),
+		})
+	}
+
+	svc, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	// 1. Happy path settlement
+	res, err := svc.SettleContest(context.Background(), false)
+	if err != nil {
+		t.Fatalf("expected happy path settlement to succeed, got %v", err)
+	}
+	if !res.PrizesDistributed {
+		t.Error("expected prizes to be distributed")
+	}
+	if res.NextRound != 2 {
+		t.Errorf("expected next round 2, got %d", res.NextRound)
+	}
+
+	r1, _ := contestRepo.GetRoundByNumber(context.Background(), 1)
+	if r1.Status != contest.StatusSettled {
+		t.Errorf("expected round 1 settled, got %s", r1.Status)
+	}
+
+	r2, _ := contestRepo.GetRoundByNumber(context.Background(), 2)
+	if r2.Status != contest.StatusActive {
+		t.Errorf("expected round 2 active, got %s", r2.Status)
+	}
+
+	r3, _ := contestRepo.GetRoundByNumber(context.Background(), 3)
+	if r3.Status != contest.StatusPreparing {
+		t.Errorf("expected round 3 preparing, got %s", r3.Status)
+	}
+
+	// 2. Immediate duplicate execution (force = false)
+	// Round 2 end time is now in the future (now + 10 days)
+	_, err = svc.SettleContest(context.Background(), false)
+	if !errors.Is(err, contest.ErrContestNotReadyToSettle) {
+		t.Errorf("expected ErrContestNotReadyToSettle on duplicate run, got: %v", err)
+	}
+}

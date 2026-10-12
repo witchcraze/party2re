@@ -51,14 +51,18 @@ type mockContestRepo struct {
 	entries map[string]contest.ContestEntry
 	votes   map[string]contest.ContestVote
 	legends []contest.ContestLegend
+
+	getPreparingRoundForUpdateErr error
+	listEntriesByRoundErrByRound  map[int]error
 }
 
 func newMockContestRepo() *mockContestRepo {
 	return &mockContestRepo{
-		photos:  make(map[string]contest.Photo),
-		rounds:  make(map[int]contest.ContestRound),
-		entries: make(map[string]contest.ContestEntry),
-		votes:   make(map[string]contest.ContestVote),
+		photos:                       make(map[string]contest.Photo),
+		rounds:                       make(map[int]contest.ContestRound),
+		entries:                      make(map[string]contest.ContestEntry),
+		votes:                        make(map[string]contest.ContestVote),
+		listEntriesByRoundErrByRound: make(map[int]error),
 	}
 }
 
@@ -155,7 +159,17 @@ func (m *mockContestRepo) GetPreparingRound(ctx context.Context) (contest.Contes
 }
 
 func (m *mockContestRepo) GetPreparingRoundForUpdate(ctx context.Context) (contest.ContestRound, error) {
-	return m.GetPreparingRound(ctx)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.getPreparingRoundForUpdateErr != nil {
+		return contest.ContestRound{}, m.getPreparingRoundForUpdateErr
+	}
+	for _, r := range m.rounds {
+		if r.Status == contest.StatusPreparing {
+			return r, nil
+		}
+	}
+	return contest.ContestRound{}, contest.ErrContestNotFound
 }
 
 func (m *mockContestRepo) GetLatestSettledRound(ctx context.Context) (contest.ContestRound, error) {
@@ -230,6 +244,11 @@ func (m *mockContestRepo) FindEntryByRoundAndTitle(ctx context.Context, round in
 func (m *mockContestRepo) ListEntriesByRound(ctx context.Context, round int) ([]contest.ContestEntry, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.listEntriesByRoundErrByRound != nil {
+		if err, ok := m.listEntriesByRoundErrByRound[round]; ok && err != nil {
+			return nil, err
+		}
+	}
 	var res []contest.ContestEntry
 	for _, e := range m.entries {
 		if e.Round == round {
