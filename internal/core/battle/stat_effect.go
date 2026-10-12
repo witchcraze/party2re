@@ -61,6 +61,9 @@ func (s *LifetimeState) ValidateStatUp(c *EffectContext, e TargetEffect, stat Ba
 		if a.baseStat(stat) < 0 {
 			return ErrInvalidParticipant
 		}
+	}
+	for _, id := range s.partyTargetCandidates(c.TargetContext, e) {
+		a := s.actor(id)
 		if stat == StatAgility && hasItem(a.ItemDefinitionIDs, "item-201") && c.Damage == nil {
 			return ErrUnsupportedEffect
 		}

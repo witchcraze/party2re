@@ -571,8 +571,14 @@ self-untyped and party healing),28–33 (self-physical or targeted-magic AT/DF/A
 doubling), and93–96 (party enemy AT/DF/AG/hit reduction), evidenced at
 `_data.cgi:2107–2111,2116–2121,2181–2184`. Stat-up preserves201's untyped/direct
 damage call with half the resulting AG before testing205's AT/tension/double
-tail. That variant requires the damage owner's fully admitted executor before
-any draws or writes;205 requires the original requester level. Neither a hook
+tail. Admission checks only targets reachable through the ally helper's fallback,
+confusion/activation and one-pass temporary redirects; unrelated equipment cannot
+block the operation. Reachable201 variants require the damage owner's fully
+admitted executor before any draws or writes;205 requires the original requester
+level. The damage executor updates the same operation's damage count after its
+target/error/zero gates (`_skill.cgi:8826–8831`), including misses; the stat helper
+does not count the call again. Subsequent239 zeroing and256 splash conditions read
+that shared count. Neither a hook
 test nor these finite producer formulas register complete outer catalog entries.
 `ApplyDistributedAttack` supplies calling80's first strict maximum (including
 fallen), cursor-owned999/1998 cap, living nonholder increases and independent

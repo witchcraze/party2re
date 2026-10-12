@@ -228,6 +228,59 @@ func (s *LifetimeState) validatePartyTarget(c TargetContext, e TargetEffect, rng
 	return nil
 }
 
+// partyTargetCandidates follows _check_party's possible target paths without
+// draws or mutations. Call only after validatePartyTarget. Temporary redirects
+// run once; the replacement target's temporary is not evaluated recursively.
+func (s *LifetimeState) partyTargetCandidates(c TargetContext, e TargetEffect) []string {
+	a := s.actor(c.ActorID)
+	ids := []string{e.TargetID}
+	if a.Status == StatusConfusion || (c.Item195Activated && (a.Status == "" || a.categorySealed(e.Category))) {
+		ids = nil
+		for _, member := range s.Actors {
+			ids = append(ids, member.ID)
+		}
+	} else {
+		if !slices.Contains(c.PartyIDs, e.TargetID) {
+			ids = slices.Clone(c.PartyIDs)
+		}
+		for i, id := range ids {
+			if s.actor(id).HP <= 0 && e.Payload.Symbol != "revival" {
+				ids[i] = c.ActorID
+			}
+		}
+	}
+	var targets []string
+	for _, id := range ids {
+		t := s.actor(id)
+		switch t.Temporary {
+		case TemporaryCover:
+			for _, member := range s.Actors {
+				if member.TeamID == t.TeamID && member.Temporary == TemporaryCovering {
+					id = member.ID
+					break
+				}
+			}
+		case TemporaryReflectAttack, TemporaryReflectMagic, TemporaryReflectBreath, TemporaryReflectDance:
+			if (t.Temporary == TemporaryReflectAttack && e.Category == CategoryPhysical) ||
+				(t.Temporary == TemporaryReflectMagic && e.Category == CategoryMagic) ||
+				(t.Temporary == TemporaryReflectBreath && e.Category == CategoryBreath) ||
+				(t.Temporary == TemporaryReflectDance && e.Category == CategoryDance) {
+				id = c.ActorID
+			}
+		case TemporaryDeflect:
+			if e.Category == CategoryPhysical {
+				targets = append(targets, c.PartyIDs...)
+				targets = append(targets, c.EnemyIDs...)
+				continue
+			}
+		case TemporaryPhantom:
+			targets = append(targets, c.PartyIDs...)
+		}
+		targets = append(targets, id)
+	}
+	return targets
+}
+
 // ResolvePartyTarget implements the spell ally helper, including revival's
 // fallen-target exception. Tool helpers must use their own guards and the
 // optional temporary hook rather than acquiring spell fallback/seal behavior.

@@ -15,7 +15,9 @@ type EffectContext struct {
 	Item185Activated, BowEffect          bool
 	AdditionalEffect, ActorNPC           bool
 	RequesterLevel                       *int
-	Damage                               func(TargetContext, TargetEffect, random.Generator) error
+	// Damage's owner updates this context's DamageCalls after target/zero gates
+	// (_damage:8826–8831), including misses. The caller must not count again.
+	Damage func(TargetContext, TargetEffect, random.Generator) error
 }
 
 type ModifierKind string
