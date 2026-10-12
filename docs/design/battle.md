@@ -577,8 +577,12 @@ block the operation. Fallen resolved targets, the 2.5×/self3× cap, binding and
 zero-power/rounded-zero paths return without201/205 tails and require neither tail's execution
 context. Admission checks these guards without consuming draws or changing state;
 execution still preserves target hooks, no-effect tuples and186 healing before239
-zeroing. Ordered party/distribution admission also accounts for earlier205 tails
-changing tension or temporary effects before treating a later rounded zero as safe.
+zeroing. Ordered party/distribution admission also accounts for earlier reachable205
+tails changing tension or replacing a temporary with double. Later cover lookup
+includes the next covering member or the uncovered target when preceding coverers
+can lose their covering state; a remaining stable coverer still blocks that target.
+Cap, binding and zero-power guards prevent inactive205 tails from expanding these
+candidates. A later rounded-zero projection alone is insufficient after a205 tail.
 Reachable201 tails require the damage owner's fully admitted executor
 before any draws or writes;205 requires the original requester level. The damage
 executor updates the same operation's damage count after its

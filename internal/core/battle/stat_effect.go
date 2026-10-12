@@ -68,26 +68,35 @@ func (s *LifetimeState) statUpTailPossible(c *EffectContext, e TargetEffect, sta
 	return v != 0 && (powerMayChange || t.statUpAmount(a, e.Category, stat, v) != 0)
 }
 
-func (s *LifetimeState) statUpMayChangePower(c *EffectContext, e TargetEffect, stat BattleStat) bool {
+type statUpAdmission struct {
+	powerMayChange bool
+	mayDouble      map[string]bool
+}
+
+func (s *LifetimeState) recordStatUp205(c *EffectContext, e TargetEffect, stat BattleStat, admission *statUpAdmission) {
 	if stat == StatAttack || c.RequesterLevel == nil || *c.RequesterLevel < 0 {
-		return false
+		return
 	}
-	for _, candidate := range s.partyTargetCandidates(c.TargetContext, e) {
-		if hasItem(s.actor(candidate.TargetID).ItemDefinitionIDs, "item-205") && s.statUpTailPossible(c, candidate, stat, false) {
-			return true
+	var changed []string
+	for _, candidate := range s.partyTargetCandidates(c.TargetContext, e, admission.mayDouble) {
+		if hasItem(s.actor(candidate.TargetID).ItemDefinitionIDs, "item-205") && s.statUpTailPossible(c, candidate, stat, admission.powerMayChange) {
+			changed = append(changed, candidate.TargetID)
 		}
 	}
-	return false
+	for _, id := range changed {
+		admission.mayDouble[id] = true
+		admission.powerMayChange = true
+	}
 }
 
 // ValidateStatUp admits possible equipment tails after the source's no-effect
 // guards, before any cure/draw or mutation. The damage owner supplies a certified
 // item201 executor; item205 uses requester level, never target level.
 func (s *LifetimeState) ValidateStatUp(c *EffectContext, e TargetEffect, stat BattleStat, rng random.Generator) error {
-	return s.validateStatUp(c, e, stat, rng, false)
+	return s.validateStatUp(c, e, stat, rng, statUpAdmission{})
 }
 
-func (s *LifetimeState) validateStatUp(c *EffectContext, e TargetEffect, stat BattleStat, rng random.Generator, powerMayChange bool) error {
+func (s *LifetimeState) validateStatUp(c *EffectContext, e TargetEffect, stat BattleStat, rng random.Generator, admission statUpAdmission) error {
 	if err := s.validateRecovery(c, e, rng); err != nil {
 		return err
 	}
@@ -105,9 +114,9 @@ func (s *LifetimeState) validateStatUp(c *EffectContext, e TargetEffect, stat Ba
 	if e.Payload.Number == 0 {
 		return nil
 	}
-	for _, candidate := range s.partyTargetCandidates(c.TargetContext, e) {
+	for _, candidate := range s.partyTargetCandidates(c.TargetContext, e, admission.mayDouble) {
 		a := s.actor(candidate.TargetID)
-		if !s.statUpTailPossible(c, candidate, stat, powerMayChange) {
+		if !s.statUpTailPossible(c, candidate, stat, admission.powerMayChange) {
 			continue
 		}
 		if stat == StatAgility && hasItem(a.ItemDefinitionIDs, "item-201") && c.Damage == nil {
@@ -256,13 +265,13 @@ func (s *LifetimeState) ApplyPartyStat(c *EffectContext, coefficient float64, ca
 			return nil, ErrUnsupportedEffect
 		}
 	} else {
-		powerMayChange := false
+		admission := statUpAdmission{mayDouble: make(map[string]bool)}
 		for _, id := range c.PartyIDs {
 			e.TargetID = id
-			if err := s.validateStatUp(c, e, stat, rng, powerMayChange); err != nil {
+			if err := s.validateStatUp(c, e, stat, rng, admission); err != nil {
 				return nil, err
 			}
-			powerMayChange = powerMayChange || s.statUpMayChangePower(c, e, stat)
+			s.recordStatUp205(c, e, stat, &admission)
 		}
 	}
 	allowed, err := s.actor(c.ActorID).CheckCategorySeal(category, rng)

@@ -231,7 +231,8 @@ func (s *LifetimeState) validatePartyTarget(c TargetContext, e TargetEffect, rng
 // partyTargetCandidates follows _check_party's possible target paths without
 // draws or mutations. Call only after validatePartyTarget. Temporary redirects
 // run once; the replacement target's temporary is not evaluated recursively.
-func (s *LifetimeState) partyTargetCandidates(c TargetContext, e TargetEffect) []TargetEffect {
+// mayDouble contains only earlier reachable205 tails in the same operation.
+func (s *LifetimeState) partyTargetCandidates(c TargetContext, e TargetEffect, mayDouble map[string]bool) []TargetEffect {
 	a := s.actor(c.ActorID)
 	ids := []string{e.TargetID}
 	if a.Status == StatusConfusion || (c.Item195Activated && (a.Status == "" || a.categorySealed(e.Category))) {
@@ -252,6 +253,14 @@ func (s *LifetimeState) partyTargetCandidates(c TargetContext, e TargetEffect) [
 	var targets []TargetEffect
 	for _, id := range ids {
 		t := s.actor(id)
+		if mayDouble[id] && t.Temporary != TemporaryDouble {
+			doubled := e
+			doubled.TargetID = id
+			if doubled.Payload.Symbol == "" {
+				doubled.Payload.Number *= 2
+			}
+			targets = append(targets, doubled)
+		}
 		candidate := e
 		appendTarget := func(targetID string) {
 			candidate.TargetID = targetID
@@ -264,11 +273,18 @@ func (s *LifetimeState) partyTargetCandidates(c TargetContext, e TargetEffect) [
 		}
 		switch t.Temporary {
 		case TemporaryCover:
+			covered := false
 			for _, member := range s.Actors {
 				if member.TeamID == t.TeamID && member.Temporary == TemporaryCovering {
-					id = member.ID
-					break
+					appendTarget(member.ID)
+					if !mayDouble[member.ID] {
+						covered = true
+						break
+					}
 				}
+			}
+			if covered {
+				continue
 			}
 		case TemporaryStrongDefense:
 			scale(.1)
