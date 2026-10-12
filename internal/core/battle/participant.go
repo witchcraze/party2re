@@ -39,15 +39,17 @@ func NewParticipantFromCharacter(char corecharacter.Character) Participant {
 		hp = char.Stats.MaxHP
 	}
 	return Participant{
-		ID:      char.ID,
-		Name:    char.Name,
-		HP:      hp,
-		MaxHP:   char.Stats.MaxHP,
-		MP:      char.Stats.MP,
-		MaxMP:   char.Stats.MaxMP,
-		Attack:  char.Stats.Attack,
-		Defense: char.Stats.Defense,
-		Agility: char.Stats.Agility,
+		ID:        char.ID,
+		Name:      char.Name,
+		HP:        hp,
+		MaxHP:     char.Stats.MaxHP,
+		MP:        char.Stats.MP,
+		MaxMP:     char.Stats.MaxMP,
+		Attack:    char.Stats.Attack,
+		Defense:   char.Stats.Defense,
+		Agility:   char.Stats.Agility,
+		BaseStats: BattleBaseStats{Attack: char.Stats.Attack, Defense: char.Stats.Defense, Agility: char.Stats.Agility},
+		OverLevel: char.OverLevel,
 	}
 }
 
@@ -61,15 +63,17 @@ func NewParticipantFromCharacterWithHP(char corecharacter.Character, currentHP i
 		}
 	}
 	return Participant{
-		ID:      char.ID,
-		Name:    char.Name,
-		HP:      hp,
-		MaxHP:   char.Stats.MaxHP,
-		MP:      char.Stats.MP,
-		MaxMP:   char.Stats.MaxMP,
-		Attack:  char.Stats.Attack,
-		Defense: char.Stats.Defense,
-		Agility: char.Stats.Agility,
+		ID:        char.ID,
+		Name:      char.Name,
+		HP:        hp,
+		MaxHP:     char.Stats.MaxHP,
+		MP:        char.Stats.MP,
+		MaxMP:     char.Stats.MaxMP,
+		Attack:    char.Stats.Attack,
+		Defense:   char.Stats.Defense,
+		Agility:   char.Stats.Agility,
+		BaseStats: BattleBaseStats{Attack: char.Stats.Attack, Defense: char.Stats.Defense, Agility: char.Stats.Agility},
+		OverLevel: char.OverLevel,
 	}
 }
 
@@ -87,6 +91,8 @@ type ParticipantBuilder struct {
 	attack       int
 	defense      int
 	agility      int
+	baseStats    BattleBaseStats
+	overLevel    bool
 	abilities    []string
 	skills       []ActionSkill
 	customSkills []ActionCustomSkill
@@ -116,6 +122,8 @@ func (b *ParticipantBuilder) FromCharacter(char corecharacter.Character) *Partic
 	b.attack = char.Stats.Attack
 	b.defense = char.Stats.Defense
 	b.agility = char.Stats.Agility
+	b.baseStats = BattleBaseStats{Attack: char.Stats.Attack, Defense: char.Stats.Defense, Agility: char.Stats.Agility}
+	b.overLevel = char.OverLevel
 	return b
 }
 
@@ -238,6 +246,7 @@ func (b *ParticipantBuilder) Build() (Participant, error) {
 	p.CMP = b.cmp
 	p.MaxCMP = b.maxCMP
 	p.Agility = b.agility
+	p.BaseStats, p.OverLevel = b.baseStats, b.overLevel
 	p.Abilities = b.abilities
 	p.Skills = b.skills
 	p.CustomSkills = b.customSkills

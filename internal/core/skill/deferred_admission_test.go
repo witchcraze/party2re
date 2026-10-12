@@ -2,6 +2,7 @@ package skill
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -19,6 +20,21 @@ func TestDeferredGemsRejectWholeCustomEntry(t *testing.T) {
 			action, err := definitions.CustomAction("custom", "Custom", "", 5, slots)
 			if !errors.Is(err, corebattle.ErrUnsupportedEffect) || !reflect.DeepEqual(action, corebattle.ActionCustomSkill{}) {
 				t.Fatalf("%v: %+v %v", slots, action, err)
+			}
+		}
+	}
+}
+
+func TestRecoveryHelpersDoNotCertifyOuterCatalogEntries(t *testing.T) {
+	definitions := BattleDefinitions{Gems: map[string]corebattle.GemEffect{
+		"supported": {Kind: corebattle.ActionKindAttack, Power: 10},
+	}}
+	for _, sourceID := range []int{19, 20, 21, 22, 23, 28, 29, 30, 31, 32, 33, 93, 94, 95, 96} {
+		id := fmt.Sprintf("gem-%03d", sourceID)
+		for _, slots := range [][3]string{{"supported", id, ""}, {id, "supported", ""}} {
+			action, err := definitions.CustomAction("custom", "Recovery", "", 5, slots)
+			if !errors.Is(err, corebattle.ErrUnsupportedEffect) || !reflect.DeepEqual(action, corebattle.ActionCustomSkill{}) {
+				t.Fatal(sourceID, slots, action, err)
 			}
 		}
 	}

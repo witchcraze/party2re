@@ -349,8 +349,9 @@ func TestBuildParticipant_EquipmentStats(t *testing.T) {
 	equipRepo := newMockEquipRepo()
 
 	char := corecharacter.Character{
-		ID:   "char-warrior",
-		Name: "戦士ライアン",
+		ID:        "char-warrior",
+		Name:      "戦士ライアン",
+		OverLevel: true,
 		Stats: corecharacter.Stats{
 			HP:      100,
 			MaxHP:   100,
@@ -402,6 +403,9 @@ func TestBuildParticipant_EquipmentStats(t *testing.T) {
 	}
 	if part.Agility != 8 {
 		t.Errorf("part.Agility = %d, want 8", part.Agility)
+	}
+	if part.BaseStats != (corebattle.BattleBaseStats{Attack: 30, Defense: 20, Agility: 25}) || !part.OverLevel {
+		t.Fatalf("equipment replaced immutable battle baselines: %+v", part)
 	}
 }
 

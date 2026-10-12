@@ -385,7 +385,11 @@ also gates direct entries: helper invocation/returned target does not prove an
 effect applied, and callback category differs from elemental names. Preserve
 accepted no-effect versus rejection, actor/target context and suppressed tails.
 The #1343 decomposition separates native target, damage, recovery/stat, status/reset
-and field/composite work. The #1367
+and field/composite work. Explicit recovery/stat operations preserve base/current
+stats, helper outcomes and ordered incidental effects as described in the shared
+contract; their finite producer formulas do not admit outer custom/random/calling
+closures. The consumer must preflight all descendants and required damage,
+requester and cursor context before costs or committed RNG. The #1367
 [callback context contract](battle.md#callback-context-and-failure-admission)
 distinguishes the requesting player, temporary actor, package target cursor,
 category and operation-entry field snapshot. Preserve those explicit contexts;

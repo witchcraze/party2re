@@ -204,31 +204,143 @@ func randomRoster(ids []string, rng random.Generator) string {
 	return ids[int(rng.Float64()*float64(len(ids)))]
 }
 
-// ResolvePartyTarget implements the spell ally helper, including revival's
-// fallen-target exception. Tool helpers must use their own guards and the
-// optional temporary hook rather than acquiring spell fallback/seal behavior.
-func (s *LifetimeState) ResolvePartyTarget(c TargetContext, e TargetEffect, rng random.Generator) (TargetResolution, error) {
-	r := TargetResolution{TargetEffect: e}
+func (s *LifetimeState) validatePartyTarget(c TargetContext, e TargetEffect, rng random.Generator) error {
 	if err := s.validateTargetContext(c, rng); err != nil {
-		return r, err
+		return err
 	}
 	if err := e.validate(); err != nil {
-		return r, err
+		return err
 	}
 	a := s.actor(c.ActorID)
 	// Reject an unrepresented possible branch before cure/activation/selection
 	// draws. Whole-action admission must include these context predicates.
 	if s.SpecialBossField && s.actor(e.TargetID) == nil &&
 		(a.Status == StatusConfusion || (c.Item195Activated && (a.Status == "" || a.categorySealed(e.Category)))) {
-		return r, ErrUnsupportedEffect
+		return ErrUnsupportedEffect
 	}
 	if e.Category == CategoryPhysical && len(c.EnemyIDs) == 0 {
 		for _, target := range s.Actors {
 			if target.Temporary == TemporaryDeflect {
-				return r, ErrUnsupportedEffect
+				return ErrUnsupportedEffect
 			}
 		}
 	}
+	return nil
+}
+
+// partyTargetCandidates follows _check_party's possible target paths without
+// draws or mutations. Call only after validatePartyTarget. Temporary redirects
+// run once; the replacement target's temporary is not evaluated recursively.
+// mayDouble contains only earlier reachable205 tails in the same operation.
+func (s *LifetimeState) partyTargetCandidates(c TargetContext, e TargetEffect, mayDouble map[string]bool) []TargetEffect {
+	a := s.actor(c.ActorID)
+	ids := []string{e.TargetID}
+	if a.Status == StatusConfusion || (c.Item195Activated && (a.Status == "" || a.categorySealed(e.Category))) {
+		ids = nil
+		for _, member := range s.Actors {
+			ids = append(ids, member.ID)
+		}
+	} else {
+		if !slices.Contains(c.PartyIDs, e.TargetID) {
+			ids = slices.Clone(c.PartyIDs)
+		}
+		for i, id := range ids {
+			if s.actor(id).HP <= 0 && e.Payload.Symbol != "revival" {
+				ids[i] = c.ActorID
+			}
+		}
+	}
+	var targets []TargetEffect
+	for _, id := range ids {
+		t := s.actor(id)
+		if mayDouble[id] && t.Temporary != TemporaryDouble {
+			doubled := e
+			doubled.TargetID = id
+			if doubled.Payload.Symbol == "" {
+				doubled.Payload.Number *= 2
+			}
+			targets = append(targets, doubled)
+		}
+		candidate := e
+		appendTarget := func(targetID string) {
+			candidate.TargetID = targetID
+			targets = append(targets, candidate)
+		}
+		scale := func(multiplier float64) {
+			if candidate.Payload.Symbol == "" {
+				candidate.Payload.Number *= multiplier
+			}
+		}
+		switch t.Temporary {
+		case TemporaryCover:
+			covered := false
+			for _, member := range s.Actors {
+				if member.TeamID == t.TeamID && member.Temporary == TemporaryCovering {
+					appendTarget(member.ID)
+					if !mayDouble[member.ID] {
+						covered = true
+						break
+					}
+				}
+			}
+			if covered {
+				continue
+			}
+		case TemporaryStrongDefense:
+			scale(.1)
+		case TemporaryDefense:
+			scale(.5)
+		case TemporaryReduceAttack, TemporaryReduceMagic, TemporaryReduceBreath:
+			if (t.Temporary == TemporaryReduceAttack && e.Category == CategoryPhysical) ||
+				(t.Temporary == TemporaryReduceMagic && e.Category == CategoryMagic) ||
+				(t.Temporary == TemporaryReduceBreath && e.Category == CategoryBreath) {
+				scale(.25)
+			}
+		case TemporaryDouble:
+			scale(2)
+		case TemporaryReflectAttack, TemporaryReflectMagic, TemporaryReflectBreath, TemporaryReflectDance:
+			if (t.Temporary == TemporaryReflectAttack && e.Category == CategoryPhysical) ||
+				(t.Temporary == TemporaryReflectMagic && e.Category == CategoryMagic) ||
+				(t.Temporary == TemporaryReflectBreath && e.Category == CategoryBreath) ||
+				(t.Temporary == TemporaryReflectDance && e.Category == CategoryDance) {
+				if hasItem(t.ItemDefinitionIDs, "item-163") {
+					scale(2)
+				}
+				id = c.ActorID
+			}
+		case TemporaryDeflect:
+			if e.Category == CategoryPhysical {
+				for _, roster := range [][]string{c.PartyIDs, c.EnemyIDs} {
+					for _, targetID := range roster {
+						appendTarget(targetID)
+					}
+				}
+				continue
+			}
+		case TemporaryNullAttack, TemporaryNullMagic:
+			if (t.Temporary == TemporaryNullAttack && e.Category == CategoryPhysical) ||
+				(t.Temporary == TemporaryNullMagic && e.Category == CategoryMagic) {
+				candidate.Payload = CallbackPayload{}
+			}
+		case TemporaryPhantom:
+			for _, targetID := range c.PartyIDs {
+				appendTarget(targetID)
+			}
+		}
+		appendTarget(id)
+	}
+	return targets
+}
+
+// ResolvePartyTarget implements the spell ally helper, including revival's
+// fallen-target exception. Tool helpers must use their own guards and the
+// optional temporary hook rather than acquiring spell fallback/seal behavior.
+func (s *LifetimeState) ResolvePartyTarget(c TargetContext, e TargetEffect, rng random.Generator) (TargetResolution, error) {
+	r := TargetResolution{TargetEffect: e}
+	if err := s.validatePartyTarget(c, e, rng); err != nil {
+		return r, err
+	}
+	a := s.actor(c.ActorID)
 	allowed, err := a.CheckCategorySeal(e.Category, rng)
 	if err != nil || !allowed {
 		return r, err

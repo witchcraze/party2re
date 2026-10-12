@@ -541,6 +541,61 @@ target guard and can mutate an empty record after category rejection; their seal
 variants remain wholly unsupported. Regeneration50, automatic revival51 and
 absorption53 produce state but do not certify their later HP/MP/lifetime consumers.
 
+Explicit HP recovery uses `ApplyHealing`/`ApplyPartyHealing`; proportional
+AT/DF/AG changes use `ApplyStatUp`/`ApplyStatDown`/`ApplyPartyStat` (down also
+supports HP and hit). `Participant.BaseStats` retains equipment-free AT/DF/AG
+from the adapter, independently of current stats. Up uses base stats and a
+2.5× cap (self164, or self183 AG: 3×); down uses current stats with the source
+immunities, 20% base floors and hit50. Returned cap/binding tuples are explicitly
+unapplied. `EffectApplication` separates the requested amount from actual delta,
+and carries target-resource facts and incidental healing even on no main change.
+`EffectContext` counters/activation flags belong to one submitted operation and
+restart for the next operation; persistent resources, tension, temporary effects
+and base stats remain in `LifetimeState` across reloads.
+
+Healing preserves target resolution, ordered146/256/148 modifiers, the independent
+special-boss marker exception, shared modifiers, rage removal, random variation,
+tension consumption, cap, single-only256 splash and sanctuary overflow in that
+order. A full target still consumes tension; a modifier-zero return does not.
+`ApplyToolHealing` has its separate living precheck and optional untyped tuple
+hook, then randomness and cap; no tension/shared modifier/overflow pipeline.
+An optional cover hook may return only a target (zero power); a registered hook
+returning no target addresses an unrepresented empty record and remains rejected.
+Unknown temporaries have no registered hook and preserve tool input values.
+`ModifyEffect` owns only the shared nondamage modifier segment, including186's
+tool heal before144/239 and the bound/poison recovery modifiers. MP owners reuse
+that segment without adopting HP writes; MP drain/exclusions remain separate.
+
+Concrete producer formulas in `ApplyRecoveryStatGem` are source19–23 (single,
+self-untyped and party healing),28–33 (self-physical or targeted-magic AT/DF/AG
+doubling), and93–96 (party enemy AT/DF/AG/hit reduction), evidenced at
+`_data.cgi:2107–2111,2116–2121,2181–2184`. Stat-up preserves201's untyped/direct
+damage call with half the resulting AG before testing205's AT/tension/double
+tail. Admission checks only targets reachable through the ally helper's fallback,
+confusion/activation and one-pass temporary redirects; unrelated equipment cannot
+block the operation. Fallen resolved targets, the 2.5×/self3× cap, binding and
+zero-power/rounded-zero paths return without201/205 tails and require neither tail's execution
+context. Admission checks these guards without consuming draws or changing state;
+execution still preserves target hooks, no-effect tuples and186 healing before239
+zeroing. Ordered party/distribution admission also accounts for earlier reachable205
+tails changing tension or replacing a temporary with double. Later cover lookup
+includes the next covering member or the uncovered target when preceding coverers
+can lose their covering state; a remaining stable coverer still blocks that target.
+Cap, binding and zero-power guards prevent inactive205 tails from expanding these
+candidates. A later rounded-zero projection alone is insufficient after a205 tail.
+Reachable201 tails require the damage owner's fully admitted executor
+before any draws or writes;205 requires the original requester level. The damage
+executor updates the same operation's damage count after its
+target/error/zero gates (`_skill.cgi:8826–8831`), including misses; the stat helper
+does not count the call again. Subsequent239 zeroing and256 splash conditions read
+that shared count. Neither a hook
+test nor these finite producer formulas register complete outer catalog entries.
+`ApplyDistributedAttack` supplies calling80's first strict maximum (including
+fallen), cursor-owned999/1998 cap, living nonholder increases and independent
+AT/DF/AG/heal tails. Its caller must supply the roster owner's named/fallback
+helper and explicit missing/item150/item159 cursor provenance. Summoning and
+complete calling80 composition remain the roster owner's responsibility.
+
 Shared target/producer operations certify no additional production catalog entry
 by themselves. Full slots, complete damage/recovery/status formulas and indirect
 closures still need their callback-specific guards and tails through
@@ -557,16 +612,6 @@ and damage counts before one-hit defense/miss. Zero modifier returns can suppres
 tension use and all later damage tails. Area damage's initial modifier evaluation,
 roster order, actor-death break and conditional item144 decay threshold (<=300)
 must remain distinct from independent repeated single hits.
-
-HP healing uses target hooks, ordered equipment/effect modifiers, random variation
-and actor tension, then caps; sanctuary magic overflow subtracts excess from the
-capped value, with floor 1. Party healing consumes tension in helper order.
-Tool recovery follows its separate random/optional-target-hook path. Stat-up
-adds a proportion of **base** stat, normally capped at 2.5 times base (qualified
-self buffs at 3 times base); stat-down subtracts a proportion of **current** stat
-with a 20% base floor and hit floor 50.
-Item201/205/186 can cause incidental damage, tension/state or recovery, including
-an item186 heal before a later zero-result check. MP operations remain separate.
 
 Instant death uses currentHP>999 or baseDF>999 immunity and probability>=draw;
 status uses NPC **MaxHP**>999 versus player **currentHP**>999, baseDF>999,
