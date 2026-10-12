@@ -119,12 +119,11 @@ func (s *Service) ExchangePrize(ctx context.Context, characterID string, costCoi
 			return ErrInsufficientCoins
 		}
 
-		itemInst, err := item.NewInstance(prize.ItemID, 1)
-		if err != nil {
-			return fmt.Errorf("failed to create prize item instance %s: %w", prize.ItemID, err)
-		}
-
 		for i := 0; i < count; i++ {
+			itemInst, err := item.NewInstance(prize.ItemID, 1)
+			if err != nil {
+				return fmt.Errorf("failed to create prize item instance %s: %w", prize.ItemID, err)
+			}
 			if err := dep.AddItem(itemInst); err != nil {
 				return err
 			}

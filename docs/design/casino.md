@@ -297,6 +297,7 @@ The Slot Machine (スロットマシン) is a single-player casino wagering game
 ### Atomic Depot Storage Routing
 - Items are deposited directly into character depot storage (`character_depots`, `depot_items`).
 - If depot is full, `depot.ErrDepotFull` is returned and zero coins are deducted.
+- Non-stackable equipment items receive distinct instance IDs per unit and occupy separate depot slots.
 - Stackable items are automatically merged with existing inventory slots.
 
 ---
