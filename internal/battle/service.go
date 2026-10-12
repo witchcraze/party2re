@@ -80,21 +80,22 @@ type BattleEngine interface {
 
 // Service orchestrates battle participation mapping and post-battle state application.
 type Service struct {
-	charRepo         CharacterRepository
-	invRepo          InventoryRepository
-	equipRepo        EquipmentRepository
-	depotRepo        DepotRepository
-	jobProvider      job.DefinitionProvider
-	skillProvider    SkillProvider
-	customSkills     CustomSkillRepository
-	txRunner         economy.TransactionRunner
-	txProvider       TransactionProvider
-	engine           BattleEngine
-	rng              corecharacter.RandomSource
-	maxInvCap        int
-	monsterTamer     MonsterTamer
-	blessingProvider BlessingProvider
-	monsterRecorder  MonsterDefeatRecorder
+	charRepo          CharacterRepository
+	invRepo           InventoryRepository
+	equipRepo         EquipmentRepository
+	depotRepo         DepotRepository
+	jobProvider       job.DefinitionProvider
+	skillProvider     SkillProvider
+	battleDefinitions skill.BattleDefinitions
+	customSkills      CustomSkillRepository
+	txRunner          economy.TransactionRunner
+	txProvider        TransactionProvider
+	engine            BattleEngine
+	rng               corecharacter.RandomSource
+	maxInvCap         int
+	monsterTamer      MonsterTamer
+	blessingProvider  BlessingProvider
+	monsterRecorder   MonsterDefeatRecorder
 }
 
 // Option configures Service dependencies.
@@ -140,6 +141,11 @@ func WithSkillProvider(provider SkillProvider) Option {
 	return func(s *Service) {
 		s.skillProvider = provider
 	}
+}
+
+// WithBattleDefinitions supplies entries certified independently of catalog eligibility.
+func WithBattleDefinitions(definitions skill.BattleDefinitions) Option {
+	return func(s *Service) { s.battleDefinitions = definitions }
 }
 
 // WithCustomSkillRepository sets the custom skill repository.

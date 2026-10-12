@@ -68,7 +68,7 @@ func (s *Service) BuildParticipant(ctx context.Context, characterID string) (cor
 		}
 	}
 
-	return BuildParticipantFromDataWithRNG(char, inv, equip, skills, cs, s.rng)
+	return BuildParticipantFromDataWithRNG(char, inv, equip, skills, cs, s.rng, s.battleDefinitions)
 }
 
 // BuildParticipantWithCurrentHP loads a character and constructs a Participant with current HP overridden.
@@ -90,8 +90,9 @@ func BuildParticipantFromData(
 	equip coreequipment.Equipment,
 	skills []skill.Definition,
 	cs *customskill.CustomSkill,
+	definitions skill.BattleDefinitions,
 ) (corebattle.Participant, error) {
-	return BuildParticipantFromDataWithRNG(char, inv, equip, skills, cs, nil)
+	return BuildParticipantFromDataWithRNG(char, inv, equip, skills, cs, nil, definitions)
 }
 
 // BuildParticipantFromDataWithRNG constructs a Participant directly from domain structs with custom RNG.
@@ -102,6 +103,7 @@ func BuildParticipantFromDataWithRNG(
 	skills []skill.Definition,
 	cs *customskill.CustomSkill,
 	rng corecharacter.RandomSource,
+	native skill.BattleDefinitions,
 ) (corebattle.Participant, error) {
 	builder := corebattle.NewParticipantBuilder(char.ID).
 		WithName(char.Name).
@@ -243,25 +245,17 @@ func BuildParticipantFromDataWithRNG(
 	// Bind job skills unlocked by SP threshold
 	for _, sk := range skills {
 		if char.SP >= sk.RequiredSP {
-			builder.WithSkills(corebattle.ActionSkill{
-				ID:          sk.ID,
-				Name:        sk.Name,
-				MPCost:      sk.MPCost,
-				Power:       sk.Effect.Power,
-				Kind:        actionKindFromEffect(sk.Effect.Kind),
-				TargetScope: corebattle.TargetScopeSingleEnemy,
-			})
+			if action, err := native.JobAction(sk); err == nil {
+				builder.WithSkills(action)
+			}
 		}
 	}
 
 	// Bind custom skill if available
 	if cs != nil && cs.Name != "" {
-		builder.WithCustomSkills(corebattle.ActionCustomSkill{
-			ID:          "custom-skill-" + char.ID,
-			Name:        cs.Name,
-			Incantation: cs.Comment,
-			CMPCost:     cs.CMP,
-		})
+		if action, err := native.CustomAction("custom-skill-"+char.ID, cs.Name, cs.Comment, cs.CMP, cs.Gems); err == nil {
+			builder.WithCustomSkills(action)
+		}
 	}
 
 	builder.WithItems(itemDefIDs...)
@@ -319,21 +313,6 @@ func isEquipped(equip coreequipment.Equipment, instanceID string) bool {
 		}
 	}
 	return false
-}
-
-func actionKindFromEffect(kind string) string {
-	switch kind {
-	case "heal":
-		return corebattle.ActionKindHeal
-	case "buff":
-		return corebattle.ActionKindBuff
-	case "status":
-		return corebattle.ActionKindStatus
-	case "defend":
-		return corebattle.ActionKindDefend
-	default:
-		return corebattle.ActionKindAttack
-	}
 }
 
 // actionItemFromDefinition maps known combat consumables to ActionItem.

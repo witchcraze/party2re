@@ -281,11 +281,17 @@ func (Engine) ResolvePartyBattle(req PartyBattleRequest) (PartyBattleResult, err
 			}
 
 			if usedCustom != nil {
-				ctx.executeCustomSkill(actor, usedCustom, allyParty, opponents)
+				if err := ctx.executeCustomSkill(actor, usedCustom, allyParty, opponents); err != nil {
+					return PartyBattleResult{}, err
+				}
 			} else if usedSkill != nil {
-				ctx.executeJobSkill(actor, usedSkill, allyParty, opponents, fullOpponents)
+				if err := ctx.executeJobSkill(actor, usedSkill, allyParty, opponents, fullOpponents); err != nil {
+					return PartyBattleResult{}, err
+				}
 			} else if usedItem != nil {
-				_ = ctx.executeItem(actor, usedItem, allyParty, opponents)
+				if err := ctx.executeItem(actor, usedItem, allyParty, opponents); err != nil {
+					return PartyBattleResult{}, err
+				}
 			} else if actor.Defending {
 				ctx.executeDefend(actor)
 			} else {
