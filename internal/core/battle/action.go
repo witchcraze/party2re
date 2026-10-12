@@ -42,7 +42,10 @@ func ValidateItemAction(it ActionItem) error {
 	if !it.UsageCategory.IsUsableInCombatCommand() {
 		return ErrCannotUseInCombat
 	}
-	return nil
+	if it.Kind == ActionKindDefend || it.Kind == ActionKindDejon || it.Power < 0 {
+		return ErrUnsupportedEffect
+	}
+	return validateEffect(it.Kind, it.TargetScope, it.BuffStat, it.Status)
 }
 
 // StatusEffect represents a status ailment affliction during combat resolution.

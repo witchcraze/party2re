@@ -232,6 +232,31 @@ permanent omission of original choices: the missing behavior remains a cutover
 prerequisite. Preserve original order, repeated draws and accepted no-effect
 outcomes once the entry is supported.
 
+Native admission has two boundaries. `skill.BattleDefinitions` explicitly maps
+individual job/gem IDs to complete native payloads; learning or commerce
+definitions cannot create these entries by matching an effect-kind string.
+The participant adapter omits a job entry without a validated native definition,
+and hydrates occupied custom slots in their original order (including duplicates)
+only when every slot passes. Missing definitions or an empty custom action omit
+the whole custom choice. The zero-value registry admits no catalog entries;
+no production legacy job/gem entry is certified by this admission work alone.
+Each future entry needs legacy evidence and whole-effect tests, including all
+descendants, before registration. Existing direct batch payloads remain the
+responsibility of their producers; primitive validation does not certify their
+legacy parity.
+
+The core returns `ErrUnsupportedEffect` for unsupported kinds or incomplete
+payloads. It preflights every participant's job/custom/item actions before batch
+execution and validates the selected complete action again before MP/CMP/item
+mutation. A later unsupported slot therefore cannot leave partial effects.
+Consumers must derive discovery and submission from the same server-owned
+definitions and propagate rejection, rather than trusting submitted payloads.
+The explicit Adventure/HTTP consumers remain #1329/#1330. Random/delegated
+invocation has no native executor and is rejected in its entirety, even if some
+possible descendants have primitive implementations; no supported-only draw
+pool is substituted. A supported operation with no eligible effect target is
+still accepted and charged according to its existing resource contract.
+
 Evidence below uses `party2/lib/` at revision
 `ff97fc549932a146cc945d7edf71b44c868a840e`. Numeric item/gem/job references are
 provenance identifiers, not authorization to reuse distinctive display names.

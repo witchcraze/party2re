@@ -152,7 +152,7 @@ func (ctx *battleContext) executeItem(actor Participant, it *ActionItem, allyPar
 			})
 		}
 
-	default: // ActionKindAttack
+	case ActionKindAttack:
 		var targetList []Participant
 		if it.TargetScope == TargetScopeAllEnemies {
 			targetList = opponents

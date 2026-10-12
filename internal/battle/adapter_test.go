@@ -265,6 +265,7 @@ func TestBuildParticipant(t *testing.T) {
 			Name:        "真・奥義天翔",
 			Comment:     "燃え盛れ我が闘気！",
 			CMP:         25,
+			Gems:        [3]string{"fixture-attack"},
 		},
 	}
 
@@ -273,6 +274,10 @@ func TestBuildParticipant(t *testing.T) {
 		battle.WithInventoryRepository(invRepo),
 		battle.WithEquipmentRepository(equipRepo),
 		battle.WithSkillProvider(skillProv),
+		battle.WithBattleDefinitions(skill.BattleDefinitions{
+			JobSkills: map[string]corebattle.ActionSkill{"sk-01": {Kind: corebattle.ActionKindAttack, Power: 80}},
+			Gems:      map[string]corebattle.GemEffect{"fixture-attack": {Kind: corebattle.ActionKindAttack, Power: 20}},
+		}),
 		battle.WithCustomSkillRepository(csRepo),
 	)
 

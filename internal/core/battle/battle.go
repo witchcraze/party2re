@@ -229,6 +229,16 @@ func validateParticipant(value Participant) error {
 			return err
 		}
 	}
+	for _, sk := range value.Skills {
+		if err := ValidateSkillAction(sk); err != nil {
+			return err
+		}
+	}
+	for _, cs := range value.CustomSkills {
+		if err := ValidateCustomSkillAction(cs); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

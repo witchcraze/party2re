@@ -2,7 +2,10 @@ package battle
 
 import "fmt"
 
-func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill, allyParty []Participant, opponents []Participant, fullOpponents []Participant) {
+func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill, allyParty []Participant, opponents []Participant, fullOpponents []Participant) error {
+	if err := ValidateSkillAction(*skill); err != nil {
+		return err
+	}
 	ctx.mpMap[actor.ID] -= skill.MPCost
 
 	switch skill.Kind {
@@ -141,7 +144,7 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 			})
 		}
 
-	default: // ActionKindAttack
+	case ActionKindAttack:
 		var targetList []Participant
 		if skill.TargetScope == TargetScopeAllEnemies {
 			targetList = opponents
@@ -169,9 +172,13 @@ func (ctx *battleContext) executeJobSkill(actor Participant, skill *ActionSkill,
 			}
 		}
 	}
+	return nil
 }
 
-func (ctx *battleContext) executeCustomSkill(actor Participant, cs *ActionCustomSkill, allyParty []Participant, opponents []Participant) {
+func (ctx *battleContext) executeCustomSkill(actor Participant, cs *ActionCustomSkill, allyParty []Participant, opponents []Participant) error {
+	if err := ValidateCustomSkillAction(*cs); err != nil {
+		return err
+	}
 	ctx.cmpMap[actor.ID] -= cs.CMPCost
 	for _, gem := range cs.Gems {
 		switch gem.Kind {
@@ -275,7 +282,7 @@ func (ctx *battleContext) executeCustomSkill(actor Participant, cs *ActionCustom
 					RemainingHP: copyHPMap(ctx.hpMap),
 				})
 			}
-		default: // ActionKindAttack
+		case ActionKindAttack:
 			var targetList []Participant
 			if gem.TargetScope == TargetScopeAllEnemies {
 				targetList = opponents
@@ -303,5 +310,9 @@ func (ctx *battleContext) executeCustomSkill(actor Participant, cs *ActionCustom
 				}
 			}
 		}
+		if ctx.hpMap[actor.ID] <= 0 {
+			break
+		}
 	}
+	return nil
 }
