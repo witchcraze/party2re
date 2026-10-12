@@ -9,9 +9,10 @@ import (
 )
 
 func TestUnsupportedExecutionDoesNotMutate(t *testing.T) {
-	for _, kind := range []string{"unknown", "random", "delegated", ""} {
+	for _, kind := range []string{"unknown", "random", "delegated", "temporary", ""} {
 		t.Run(kind, func(t *testing.T) {
 			ctx := &battleContext{hpMap: map[string]int{"a": 50}, mpMap: map[string]int{"a": 20}, cmpMap: map[string]int{"a": 20}, itemsMap: map[string][]ActionItem{"a": {{ID: "tool"}}}}
+			ctx.rng = &targetRNG{t: t}
 			beforeHP, beforeMP, beforeCMP := copyHPMap(ctx.hpMap), copyHPMap(ctx.mpMap), copyHPMap(ctx.cmpMap)
 			actor := Participant{ID: "a"}
 			if err := ctx.executeJobSkill(actor, &ActionSkill{Kind: kind, MPCost: 5}, nil, nil, nil); !errors.Is(err, ErrUnsupportedEffect) {
