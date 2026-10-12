@@ -16,12 +16,80 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 	var result SettlementResult
 
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		activeRound, err := s.contests.GetActiveRoundForUpdate(txCtx)
-		if err != nil {
-			return err
+		now := s.nowFunc()
+		activeRound, activeErr := s.contests.GetActiveRoundForUpdate(txCtx)
+		if activeErr != nil && !errors.Is(activeErr, ErrContestNotFound) {
+			return activeErr
 		}
 
-		now := s.nowFunc()
+		// Case 1: No active round currently exists (e.g. initial round is preparing)
+		if errors.Is(activeErr, ErrContestNotFound) {
+			prepRound, prepErr := s.contests.GetPreparingRoundForUpdate(txCtx)
+			if prepErr != nil {
+				if errors.Is(prepErr, ErrContestNotFound) {
+					p, err := s.ensurePreparingRoundInTx(txCtx)
+					if err != nil {
+						return err
+					}
+					prepRound = p
+				} else {
+					return prepErr
+				}
+			}
+
+			if !force && now.Before(prepRound.EndTime) {
+				return ErrContestNotReadyToSettle
+			}
+
+			entries, err := s.contests.ListEntriesByRound(txCtx, prepRound.Round)
+			if err != nil {
+				return err
+			}
+
+			result.Round = prepRound.Round
+			if len(entries) < MinEntriesForContest {
+				prepRound.EndTime = prepRound.EndTime.Add(ContestCycleDays * 24 * time.Hour)
+				prepRound.UpdatedAt = now
+				if err := s.contests.SaveRound(txCtx, prepRound); err != nil {
+					return err
+				}
+
+				result.Postponed = true
+				result.ExtendedUntil = prepRound.EndTime
+				result.NextRound = prepRound.Round
+				result.NextRoundEndTime = prepRound.EndTime
+				result.Message = "Contest postponed and extended due to insufficient entries"
+				return nil
+			}
+
+			// Preparing round reached quorum (5+ entries): promote to active
+			prepRound.Status = StatusActive
+			prepRound.StartTime = now
+			prepRound.EndTime = now.Add(ContestCycleDays * 24 * time.Hour)
+			prepRound.UpdatedAt = now
+			if err := s.contests.SaveRound(txCtx, prepRound); err != nil {
+				return err
+			}
+
+			nextPrep := ContestRound{
+				Round:     prepRound.Round + 1,
+				Status:    StatusPreparing,
+				StartTime: prepRound.EndTime,
+				EndTime:   prepRound.EndTime.Add(ContestCycleDays * 24 * time.Hour),
+				CreatedAt: now,
+				UpdatedAt: now,
+			}
+			if err := s.contests.SaveRound(txCtx, nextPrep); err != nil {
+				return err
+			}
+
+			result.NextRound = prepRound.Round
+			result.NextRoundEndTime = prepRound.EndTime
+			result.Message = fmt.Sprintf("Contest round %d successfully started with %d entries", prepRound.Round, len(entries))
+			return nil
+		}
+
+		// Case 2: Active round exists
 		if !force && now.Before(activeRound.EndTime) {
 			return ErrContestNotReadyToSettle
 		}
@@ -33,12 +101,60 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 
 		result.Round = activeRound.Round
 
-		// If minimum entries not reached, postpone and extend duration
+		// If active round has fewer than quorum entries (e.g. empty active or < 5 entries)
 		if len(entries) < MinEntriesForContest {
+			prepRound, prepErr := s.contests.GetPreparingRoundForUpdate(txCtx)
+			if prepErr == nil {
+				prepEntries, prepListErr := s.contests.ListEntriesByRound(txCtx, prepRound.Round)
+				if prepListErr == nil && len(prepEntries) >= MinEntriesForContest {
+					// Recover from empty/insufficient active round:
+					// Settle active round without prizes.
+					activeRound.Status = StatusSettled
+					activeRound.UpdatedAt = now
+					if err := s.contests.SaveRound(txCtx, activeRound); err != nil {
+						return err
+					}
+
+					// Promote preparing round to active
+					prepRound.Status = StatusActive
+					prepRound.StartTime = now
+					prepRound.EndTime = now.Add(ContestCycleDays * 24 * time.Hour)
+					prepRound.UpdatedAt = now
+					if err := s.contests.SaveRound(txCtx, prepRound); err != nil {
+						return err
+					}
+
+					nextPrep := ContestRound{
+						Round:     prepRound.Round + 1,
+						Status:    StatusPreparing,
+						StartTime: prepRound.EndTime,
+						EndTime:   prepRound.EndTime.Add(ContestCycleDays * 24 * time.Hour),
+						CreatedAt: now,
+						UpdatedAt: now,
+					}
+					if err := s.contests.SaveRound(txCtx, nextPrep); err != nil {
+						return err
+					}
+
+					result.NextRound = prepRound.Round
+					result.NextRoundEndTime = prepRound.EndTime
+					result.Message = fmt.Sprintf("Contest round %d successfully started from preparing entries with %d entries", prepRound.Round, len(prepEntries))
+					return nil
+				}
+			}
+
+			// Preparing round also under quorum or absent: postpone and extend duration, retaining submissions
 			activeRound.EndTime = activeRound.EndTime.Add(ContestCycleDays * 24 * time.Hour)
 			activeRound.UpdatedAt = now
 			if err := s.contests.SaveRound(txCtx, activeRound); err != nil {
 				return err
+			}
+			if prepErr == nil {
+				prepRound.EndTime = activeRound.EndTime
+				prepRound.UpdatedAt = now
+				if err := s.contests.SaveRound(txCtx, prepRound); err != nil {
+					return err
+				}
 			}
 
 			result.Postponed = true
@@ -154,58 +270,60 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 			return err
 		}
 
-		// Promote preparing round to active round and create next preparing round
+		// Next round handling: check if preparing round reached quorum
 		if prepErr == nil {
-			prepRound.Status = StatusActive
-			prepRound.StartTime = now
-			prepRound.EndTime = now.Add(ContestCycleDays * 24 * time.Hour)
-			prepRound.UpdatedAt = now
-			if err := s.contests.SaveRound(txCtx, prepRound); err != nil {
-				return err
-			}
+			prepEntries, prepListErr := s.contests.ListEntriesByRound(txCtx, prepRound.Round)
+			if prepListErr == nil && len(prepEntries) >= MinEntriesForContest {
+				// Promote preparing round to active round and create next preparing round
+				prepRound.Status = StatusActive
+				prepRound.StartTime = now
+				prepRound.EndTime = now.Add(ContestCycleDays * 24 * time.Hour)
+				prepRound.UpdatedAt = now
+				if err := s.contests.SaveRound(txCtx, prepRound); err != nil {
+					return err
+				}
 
-			nextPrep := ContestRound{
-				Round:     prepRound.Round + 1,
-				Status:    StatusPreparing,
-				StartTime: prepRound.EndTime,
-				EndTime:   prepRound.EndTime.Add(ContestCycleDays * 24 * time.Hour),
-				CreatedAt: now,
-				UpdatedAt: now,
-			}
-			if err := s.contests.SaveRound(txCtx, nextPrep); err != nil {
-				return err
-			}
+				nextPrep := ContestRound{
+					Round:     prepRound.Round + 1,
+					Status:    StatusPreparing,
+					StartTime: prepRound.EndTime,
+					EndTime:   prepRound.EndTime.Add(ContestCycleDays * 24 * time.Hour),
+					CreatedAt: now,
+					UpdatedAt: now,
+				}
+				if err := s.contests.SaveRound(txCtx, nextPrep); err != nil {
+					return err
+				}
 
-			result.NextRound = prepRound.Round
-			result.NextRoundEndTime = prepRound.EndTime
+				result.NextRound = prepRound.Round
+				result.NextRoundEndTime = prepRound.EndTime
+			} else {
+				// Less than quorum in preparing round: retain entries and extend deadline
+				prepRound.EndTime = now.Add(ContestCycleDays * 24 * time.Hour)
+				prepRound.UpdatedAt = now
+				if err := s.contests.SaveRound(txCtx, prepRound); err != nil {
+					return err
+				}
+
+				result.NextRound = prepRound.Round
+				result.NextRoundEndTime = prepRound.EndTime
+			}
 		} else {
-			// If no preparing round existed, create next active and preparing rounds
-			nextActive := ContestRound{
+			// If no preparing round existed, create next preparing round
+			nextPrep := ContestRound{
 				Round:     activeRound.Round + 1,
-				Status:    StatusActive,
+				Status:    StatusPreparing,
 				StartTime: now,
 				EndTime:   now.Add(ContestCycleDays * 24 * time.Hour),
 				CreatedAt: now,
 				UpdatedAt: now,
 			}
-			if err := s.contests.SaveRound(txCtx, nextActive); err != nil {
-				return err
-			}
-
-			nextPrep := ContestRound{
-				Round:     activeRound.Round + 2,
-				Status:    StatusPreparing,
-				StartTime: nextActive.EndTime,
-				EndTime:   nextActive.EndTime.Add(ContestCycleDays * 24 * time.Hour),
-				CreatedAt: now,
-				UpdatedAt: now,
-			}
 			if err := s.contests.SaveRound(txCtx, nextPrep); err != nil {
 				return err
 			}
 
-			result.NextRound = nextActive.Round
-			result.NextRoundEndTime = nextActive.EndTime
+			result.NextRound = nextPrep.Round
+			result.NextRoundEndTime = nextPrep.EndTime
 		}
 
 		result.Rankings = entries
@@ -218,4 +336,63 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 	}
 
 	return result, nil
+}
+
+// EnsurePreparingRound ensures a preparing round exists and returns it.
+func (s *Service) EnsurePreparingRound(ctx context.Context) (ContestRound, error) {
+	var prepRound ContestRound
+	err := s.runInTx(ctx, func(txCtx context.Context) error {
+		p, err := s.ensurePreparingRoundInTx(txCtx)
+		if err != nil {
+			return err
+		}
+		prepRound = p
+		return nil
+	})
+	if err != nil {
+		return ContestRound{}, err
+	}
+	return prepRound, nil
+}
+
+func (s *Service) ensurePreparingRoundInTx(txCtx context.Context) (ContestRound, error) {
+	p, err := s.contests.GetPreparingRoundForUpdate(txCtx)
+	if err == nil {
+		return p, nil
+	}
+	if !errors.Is(err, ErrContestNotFound) {
+		return ContestRound{}, err
+	}
+
+	now := s.nowFunc()
+	nextRoundNum := 1
+	startTime := now
+
+	activeRound, activeErr := s.contests.GetActiveRoundForUpdate(txCtx)
+	if activeErr == nil {
+		nextRoundNum = activeRound.Round + 1
+		startTime = activeRound.EndTime
+	} else if !errors.Is(activeErr, ErrContestNotFound) {
+		return ContestRound{}, activeErr
+	} else {
+		settled, settledErr := s.contests.GetLatestSettledRound(txCtx)
+		if settledErr == nil {
+			nextRoundNum = settled.Round + 1
+		} else if !errors.Is(settledErr, ErrContestNotFound) {
+			return ContestRound{}, settledErr
+		}
+	}
+
+	prepRound := ContestRound{
+		Round:     nextRoundNum,
+		Status:    StatusPreparing,
+		StartTime: startTime,
+		EndTime:   startTime.Add(ContestCycleDays * 24 * time.Hour),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := s.contests.SaveRound(txCtx, prepRound); err != nil {
+		return ContestRound{}, err
+	}
+	return prepRound, nil
 }

@@ -758,6 +758,16 @@ func TestSettlementAndPrizeDistribution(t *testing.T) {
 	}
 	contestRepo.SaveRound(ctx, prepRound)
 
+	for i := 1; i <= 5; i++ {
+		entryR2 := contest.ContestEntry{
+			ID:          fmt.Sprintf("entry-r2-%d", i),
+			Round:       2,
+			CharacterID: fmt.Sprintf("char-r2-%d", i),
+			Title:       fmt.Sprintf("Next Photo %d", i),
+		}
+		contestRepo.SaveEntry(ctx, entryR2)
+	}
+
 	chars := make([]corecharacter.Character, 5)
 	entries := make([]contest.ContestEntry, 5)
 	voteCounts := []int{25, 18, 12, 5, 2} // 1st, 2nd, 3rd, 4th, 5th

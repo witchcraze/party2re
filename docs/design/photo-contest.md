@@ -27,7 +27,12 @@ The Photo Contest and Gallery system (`internal/contest`, legacy `photo.cgi` / `
 ### 4.1 Rounds & Cycles
 - **Contest Cycle Duration**: 10 days (`ContestCycleDays = 10`).
 - **Minimum Entry Quorum**: 5 entries (`MinEntriesForContest = 5`).
-  - If a round ends with fewer than 5 entries, the round is postponed and its duration is extended by 10 days without prize distribution.
+  - Submissions are accepted into the preparing round (`status = "preparing"`).
+  - A preparing round transitions to active voting (`status = "active"`) when quorum (5+ entries) is reached at cycle settlement time.
+  - If a check occurs with fewer than 5 entries, submissions are retained in the preparing round and the deadline is extended by 10 days without prize distribution.
+  - When an active round concludes:
+    - If the active round satisfied quorum (5+ entries), prizes and voter bonuses are distributed, the winner is archived into `contest_legends`, and the round is marked settled. If the next preparing round has 5+ entries, it is promoted to active; otherwise it remains preparing with entries retained and its deadline extended by 10 days.
+    - If an active round had 0 entries (empty active round), it is concluded without rewards, and the preparing round is promoted to active if it satisfies quorum (5+ entries).
 
 ### 4.2 Entry Submission Rules (`えんとりー`)
 1. **Single Entry per Round**: A character may submit at most 1 entry per contest round.
@@ -57,10 +62,11 @@ When a contest is settled:
 
 ### 4.5 Automated Scheduling & Settlement (`ContestSettlementHandler`)
 - Contest settlements are automatically scheduled as recurring actions (`ActionTypeContestSettlement = "contest_settlement"`) managed by `scheduling.Service`.
-- On server startup, `wireContestSettlement` registers the settlement check for the current active round's `EndTime` using deterministic action ID `contest_settlement:<round>:<timestamp>`.
+- On server startup, `wireContestSettlement` registers the settlement check for the current active round's `EndTime` (or the preparing round's `EndTime` if no active round is running), ensuring an initial valid schedule exists.
+- On entry submission (`EnterContest`), the settlement check for the preparing round is also registered if not already scheduled.
 - When triggered by `scheduling.Worker`:
-  - If quorum (5+ entries) is satisfied, prizes and voter bonuses are distributed, the champion is archived into `contest_legends`, the next preparing round is promoted to active, and the next settlement action is scheduled.
-  - If quorum is not satisfied, the round is postponed and extended by 10 days without prize distribution, and the next check is scheduled for the extended deadline.
+  - If quorum (5+ entries) is satisfied, prizes and voter bonuses are distributed for the active round, the champion is archived into `contest_legends`, the next preparing round is promoted to active if it reached quorum (or retained in preparing if under quorum), and the next settlement action is scheduled.
+  - If quorum is not satisfied, the round is postponed and extended by 10 days without prize distribution, entries are retained, and the next check is scheduled for the extended deadline.
 
 ---
 

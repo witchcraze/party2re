@@ -17,6 +17,7 @@ type Service struct {
 	contests   ContestRepository
 	guilds     GuildService
 	news       NewsPublisher
+	scheduler  Scheduler
 	txProvider TransactionProvider
 	nowFunc    func() time.Time
 }
@@ -26,6 +27,12 @@ type Option func(*Service)
 func WithTransactionProvider(tp TransactionProvider) Option {
 	return func(s *Service) {
 		s.txProvider = tp
+	}
+}
+
+func WithServiceScheduler(scheduler Scheduler) Option {
+	return func(s *Service) {
+		s.scheduler = scheduler
 	}
 }
 
@@ -221,6 +228,7 @@ func (s *Service) EnterContest(
 	}
 
 	var entry ContestEntry
+	var prepRoundEndTime time.Time
 	err := s.runInTx(ctx, func(txCtx context.Context) error {
 		char, err := s.characters.FindByID(txCtx, characterID)
 		if err != nil {
@@ -248,26 +256,11 @@ func (s *Service) EnterContest(
 		}
 
 		// Ensure preparing round exists
-		prepRound, err := s.contests.GetPreparingRoundForUpdate(txCtx)
+		prepRound, err := s.ensurePreparingRoundInTx(txCtx)
 		if err != nil {
-			if errors.Is(err, ErrContestNotFound) {
-				// Initialize first round if none exists
-				now := s.nowFunc()
-				prepRound = ContestRound{
-					Round:     1,
-					Status:    StatusPreparing,
-					StartTime: now,
-					EndTime:   now.Add(ContestCycleDays * 24 * time.Hour),
-					CreatedAt: now,
-					UpdatedAt: now,
-				}
-				if err := s.contests.SaveRound(txCtx, prepRound); err != nil {
-					return err
-				}
-			} else {
-				return err
-			}
+			return err
 		}
+		prepRoundEndTime = prepRound.EndTime
 
 		// Check if character already entered this preparing round
 		if _, err := s.contests.FindEntryByRoundAndCharacter(txCtx, prepRound.Round, characterID); err == nil {
@@ -312,6 +305,11 @@ func (s *Service) EnterContest(
 	})
 	if err != nil {
 		return ContestEntry{}, err
+	}
+
+	if s.scheduler != nil && !prepRoundEndTime.IsZero() {
+		nextID := SettlementActionID(entry.Round, prepRoundEndTime)
+		_ = s.scheduler.ScheduleWithID(ctx, nextID, ActionTypeContestSettlement, "system", nil, prepRoundEndTime)
 	}
 
 	return entry, nil

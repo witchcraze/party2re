@@ -76,6 +76,20 @@ func TestContestSettlementHandler_SettleSuccess(t *testing.T) {
 		StartTime: startTime,
 		EndTime:   endTime,
 	}
+	contestRepo.rounds[2] = contest.ContestRound{
+		Round:     2,
+		Status:    contest.StatusPreparing,
+		StartTime: endTime,
+		EndTime:   endTime.Add(contest.ContestCycleDays * 24 * time.Hour),
+	}
+	for i := 1; i <= 5; i++ {
+		contestRepo.entries[fmt.Sprintf("entry-r2-%d", i)] = contest.ContestEntry{
+			ID:          fmt.Sprintf("entry-r2-%d", i),
+			Round:       2,
+			CharacterID: fmt.Sprintf("char-r2-%d", i),
+			Title:       fmt.Sprintf("Next Photo %d", i),
+		}
+	}
 
 	svc, err := contest.NewService(
 		charRepo,

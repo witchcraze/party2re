@@ -229,12 +229,18 @@ type stubContestRepo struct {
 	contest.ContestRepository
 	activeRound contest.ContestRound
 	activeErr   error
+	prepRound   contest.ContestRound
+	prepErr     error
+	settledErr  error
 	saveRoundFn func(round contest.ContestRound) error
 }
 
 func (m *stubContestRepo) GetActiveRound(_ context.Context) (contest.ContestRound, error) {
 	if m.activeErr != nil {
 		return contest.ContestRound{}, m.activeErr
+	}
+	if m.activeRound.Round == 0 {
+		return contest.ContestRound{}, contest.ErrContestNotFound
 	}
 	return m.activeRound, nil
 }
@@ -243,7 +249,37 @@ func (m *stubContestRepo) GetActiveRoundForUpdate(_ context.Context) (contest.Co
 	if m.activeErr != nil {
 		return contest.ContestRound{}, m.activeErr
 	}
+	if m.activeRound.Round == 0 {
+		return contest.ContestRound{}, contest.ErrContestNotFound
+	}
 	return m.activeRound, nil
+}
+
+func (m *stubContestRepo) GetPreparingRound(_ context.Context) (contest.ContestRound, error) {
+	if m.prepErr != nil {
+		return contest.ContestRound{}, m.prepErr
+	}
+	if m.prepRound.Round == 0 {
+		return contest.ContestRound{}, contest.ErrContestNotFound
+	}
+	return m.prepRound, nil
+}
+
+func (m *stubContestRepo) GetPreparingRoundForUpdate(_ context.Context) (contest.ContestRound, error) {
+	if m.prepErr != nil {
+		return contest.ContestRound{}, m.prepErr
+	}
+	if m.prepRound.Round == 0 {
+		return contest.ContestRound{}, contest.ErrContestNotFound
+	}
+	return m.prepRound, nil
+}
+
+func (m *stubContestRepo) GetLatestSettledRound(_ context.Context) (contest.ContestRound, error) {
+	if m.settledErr != nil {
+		return contest.ContestRound{}, m.settledErr
+	}
+	return contest.ContestRound{}, contest.ErrContestNotFound
 }
 
 func (m *stubContestRepo) ListEntriesByRound(_ context.Context, _ int) ([]contest.ContestEntry, error) {
@@ -251,6 +287,8 @@ func (m *stubContestRepo) ListEntriesByRound(_ context.Context, _ int) ([]contes
 }
 
 func (m *stubContestRepo) SaveRound(_ context.Context, round contest.ContestRound) error {
+	m.prepRound = round
+	m.prepErr = nil
 	if m.saveRoundFn != nil {
 		return m.saveRoundFn(round)
 	}
@@ -357,12 +395,19 @@ func TestWireContestSettlement(t *testing.T) {
 	}
 }
 
-func TestWireContestSettlement_NoActiveRound(t *testing.T) {
+func TestWireContestSettlement_NoActiveRound_SchedulesPreparingRound(t *testing.T) {
 	repo := &mockSchedRepo{}
 	sched := scheduling.NewService(repo)
 
+	endTime := time.Now().Add(10 * 24 * time.Hour)
 	contestRepo := &stubContestRepo{
 		activeErr: contest.ErrContestNotFound,
+		prepRound: contest.ContestRound{
+			Round:     1,
+			Status:    contest.StatusPreparing,
+			StartTime: time.Now(),
+			EndTime:   endTime,
+		},
 	}
 	contestSvc, err := contest.NewService(&stubCharRepo{}, contestRepo)
 	if err != nil {
@@ -371,8 +416,45 @@ func TestWireContestSettlement_NoActiveRound(t *testing.T) {
 
 	wireContestSettlement(sched, contestSvc)
 
-	if len(repo.actions) != 0 {
-		t.Errorf("expected 0 actions scheduled when no active round, got %d", len(repo.actions))
+	if len(repo.actions) != 1 {
+		t.Fatalf("expected 1 scheduled action, got %d", len(repo.actions))
+	}
+	action := repo.actions[0]
+	if action.ActionType != contest.ActionTypeContestSettlement {
+		t.Errorf("expected ActionType %s, got %s", contest.ActionTypeContestSettlement, action.ActionType)
+	}
+	expectedID := contest.SettlementActionID(1, endTime)
+	if action.ID != expectedID {
+		t.Errorf("expected action ID %q, got %q", expectedID, action.ID)
+	}
+}
+
+func TestWireContestSettlement_FreshRepository_InitializesAndSchedules(t *testing.T) {
+	repo := &mockSchedRepo{}
+	sched := scheduling.NewService(repo)
+
+	var saved contest.ContestRound
+	contestRepo := &stubContestRepo{
+		activeErr:  contest.ErrContestNotFound,
+		prepErr:    contest.ErrContestNotFound,
+		settledErr: contest.ErrContestNotFound,
+		saveRoundFn: func(r contest.ContestRound) error {
+			saved = r
+			return nil
+		},
+	}
+	contestSvc, err := contest.NewService(&stubCharRepo{}, contestRepo)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	wireContestSettlement(sched, contestSvc)
+
+	if len(repo.actions) != 1 {
+		t.Fatalf("expected 1 action scheduled for fresh repository, got %d", len(repo.actions))
+	}
+	if saved.Round != 1 || saved.Status != contest.StatusPreparing {
+		t.Errorf("expected round 1 preparing saved, got %+v", saved)
 	}
 }
 

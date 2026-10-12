@@ -73,4 +73,7 @@ CREATE TABLE IF NOT EXISTS contest_legends (
     INDEX idx_contest_legends_char (character_id)
 );
 
+INSERT IGNORE INTO contest_rounds (round, status, start_time, end_time, created_at, updated_at)
+VALUES (1, 'preparing', CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 10 DAY), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
 INSERT IGNORE INTO schema_migrations (version) VALUES ('046_photo_contest_and_gallery');
