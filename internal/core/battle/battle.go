@@ -28,6 +28,8 @@ type Participant struct {
 	Attack            int
 	Defense           int
 	Agility           int
+	BaseStats         BattleBaseStats
+	OverLevel         bool
 	Abilities         []string
 	Skills            []ActionSkill
 	CustomSkills      []ActionCustomSkill
@@ -38,6 +40,11 @@ type Participant struct {
 	Icon              string
 	ExperienceReward  int
 	GoldReward        int
+}
+
+// BattleBaseStats are the equipment-free stat baselines, never current buffs.
+type BattleBaseStats struct {
+	Attack, Defense, Agility int
 }
 
 type Request struct {

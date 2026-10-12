@@ -25,6 +25,7 @@ const (
 	TemporaryNullAttack    TemporaryEffect = "null_attack"
 	TemporaryNullMagic     TemporaryEffect = "null_magic"
 	TemporaryPhantom       TemporaryEffect = "phantom"
+	TemporaryRage          TemporaryEffect = "rage"
 )
 
 func (e TemporaryEffect) reflection() bool {

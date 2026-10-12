@@ -204,31 +204,39 @@ func randomRoster(ids []string, rng random.Generator) string {
 	return ids[int(rng.Float64()*float64(len(ids)))]
 }
 
-// ResolvePartyTarget implements the spell ally helper, including revival's
-// fallen-target exception. Tool helpers must use their own guards and the
-// optional temporary hook rather than acquiring spell fallback/seal behavior.
-func (s *LifetimeState) ResolvePartyTarget(c TargetContext, e TargetEffect, rng random.Generator) (TargetResolution, error) {
-	r := TargetResolution{TargetEffect: e}
+func (s *LifetimeState) validatePartyTarget(c TargetContext, e TargetEffect, rng random.Generator) error {
 	if err := s.validateTargetContext(c, rng); err != nil {
-		return r, err
+		return err
 	}
 	if err := e.validate(); err != nil {
-		return r, err
+		return err
 	}
 	a := s.actor(c.ActorID)
 	// Reject an unrepresented possible branch before cure/activation/selection
 	// draws. Whole-action admission must include these context predicates.
 	if s.SpecialBossField && s.actor(e.TargetID) == nil &&
 		(a.Status == StatusConfusion || (c.Item195Activated && (a.Status == "" || a.categorySealed(e.Category)))) {
-		return r, ErrUnsupportedEffect
+		return ErrUnsupportedEffect
 	}
 	if e.Category == CategoryPhysical && len(c.EnemyIDs) == 0 {
 		for _, target := range s.Actors {
 			if target.Temporary == TemporaryDeflect {
-				return r, ErrUnsupportedEffect
+				return ErrUnsupportedEffect
 			}
 		}
 	}
+	return nil
+}
+
+// ResolvePartyTarget implements the spell ally helper, including revival's
+// fallen-target exception. Tool helpers must use their own guards and the
+// optional temporary hook rather than acquiring spell fallback/seal behavior.
+func (s *LifetimeState) ResolvePartyTarget(c TargetContext, e TargetEffect, rng random.Generator) (TargetResolution, error) {
+	r := TargetResolution{TargetEffect: e}
+	if err := s.validatePartyTarget(c, e, rng); err != nil {
+		return r, err
+	}
+	a := s.actor(c.ActorID)
 	allowed, err := a.CheckCategorySeal(e.Category, rng)
 	if err != nil || !allowed {
 		return r, err
