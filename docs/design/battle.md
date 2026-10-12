@@ -143,9 +143,58 @@ cannot reconstruct this state. Persist encounter identities and randomized
 outcomes already produced; retries read committed results rather than rerolling.
 Do not require the in-process RNG object or a Go closure to be serializable.
 
-The legacy has effects not represented by these current maps. The matrices below
-define the normal-adventure coverage gate; serializing today's maps does not
-restore the whole game. Untraced callbacks remain explicit production blockers.
+Explicit operations use `core/battle.LifetimeState` for ordered mutable
+participants, resources, item-instance/consumption facts, banishment and crystal
+facts, temporary/extended effects, tension/hit, CMP recharge, room skill bans and
+per-side use history. Its named `LifetimeFields` separates temporary/default and
+anti-field state from the batch elemental `FieldState`. JSON round trips preserve
+these facts; timestamps, encounter authorization and receipts remain consumer
+responsibilities. Neither an RNG nor deferred executable work belongs in saved
+state.
+
+The lifetime operations implement the predicates in the matrix below. They do
+not certify the formulas or production availability of individual catalog
+entries. Consumers must retain whole-entry admission and resolve the certified
+normal-action, equipment, modifier, defeat/revival and reward effects in source
+order. `StatusDecision` reports whether the normal-action block is reached and
+whether defeat processing is required. A paralysis/sleep cure still skips that
+block. Player other-ally virulent poison precedes actor poison; ordinary NPCs
+omit that party pass. Suppression does not bypass normal-action poison.
+
+Call `CompleteOperation` only with resolved operation facts: unaccepted operations
+are inert; accepted incapacitated actions can still reach field/player tails.
+Player field ticks precede the tail and do not require a normal action or living
+actor; anti-field ticks even without enemies. The player counter/end-processing
+tail additionally requires remaining enemies, no suppression/NPC comment and no
+preceding level-up branch. NPC response has its own purification/end-processing
+tail and never ticks the player's fields/CMP/bans/incense again. Damage-call
+counts must be recorded at the original helper points, including misses and
+single-use defense, rather than inferred from HP deltas. Additional-action
+parsing captures effect eligibility before the first callback; both entries'
+whitelist membership and remaining MP strictly greater than the raw second cost
+govern execution. Its lifetime decrement independently uses whitelisted second
+input. CMP checks the saved threshold before incrementing; only a reached
+threshold needs a new resolved recharge amount/threshold.
+
+Normal-action temporary expiry preserves the player mirror-sharing/item163
+exceptions and consumes the original random draw even for empty temporary
+state. Reflection/cover redirects persist; only one-hit defense is consumed at
+its damage-helper point. Reset restores tension1/hit95 and cleared status/effects,
+then accepts freshly evaluated equipment facts through `LifetimeReset`; a cached
+encounter-start profile cannot substitute for requester/actor/target-dependent
+equipment evaluation. HP/MP/CMP, consumed items, bans and history survive this
+reset. Explicit advance performs the first living item188 holder's ally revival
+pass, resets members with current equipment, reapplies living holders' revival
+temporary effect, and clears temporary/anti fields while retaining the default.
+Equipment formulas and automatic revival stay with their separate native owners.
+
+Operation-local `EndProcessing` captures the first qualifying darkness debit
+(floor of half the damage, capped500). It filters that debit against immediate
+risk invocation facts once before flushing, skips fallen actors and leaves living
+actors at least1HP. No queued risk can retroactively change this filter: the
+original gems101/102 have no valid reachable queued execution and remain wholly
+unsupported, including their enclosing closures. No callback is serialized.
+Untraced callbacks remain explicit production blockers.
 The old batch turn ceiling/order remains scoped to that resolver; an interactive
 encounter cannot inherit a fictional 30/100-operation timeout from it.
 
