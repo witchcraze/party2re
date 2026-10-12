@@ -98,8 +98,16 @@ func (s *Service) leaveInternal(ctx context.Context, guildID string, characterID
 
 	ineligible := make(map[string]bool)
 	const maxLeaveAttempts = 50
+	retries := 0
 
-	for attempt := 0; attempt < maxLeaveAttempts; attempt++ {
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if retries >= maxLeaveAttempts {
+			return errors.New("guild leave exceeded maximum retry attempts")
+		}
+
 		_, members, err := s.repo.GetGuild(ctx, guildID)
 		if err != nil {
 			if ignoreMissing && (errors.Is(err, ErrGuildNotFound) || errors.Is(err, ErrCharacterNotInGuild)) {
@@ -178,6 +186,7 @@ func (s *Service) leaveInternal(ctx context.Context, guildID string, characterID
 				return nil
 			}
 			if errors.Is(err, errRosterChanged) {
+				retries++
 				continue
 			}
 			return err
@@ -307,6 +316,10 @@ func (s *Service) leaveInternal(ctx context.Context, guildID string, characterID
 				ineligible[candID] = true
 				continue
 			}
+			if errors.Is(tErr, errRosterChanged) {
+				retries++
+				continue
+			}
 			return tErr
 		}
 
@@ -383,12 +396,11 @@ func (s *Service) leaveInternal(ctx context.Context, guildID string, characterID
 			return nil
 		}
 		if errors.Is(err, errRosterChanged) {
+			retries++
 			continue
 		}
 		return err
 	}
-
-	return errors.New("guild leave exceeded maximum retry attempts")
 }
 
 // Leave removes a character from the guild (join_guild.cgi:dattai).
