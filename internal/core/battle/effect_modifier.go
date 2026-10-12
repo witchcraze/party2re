@@ -72,6 +72,33 @@ func (s *LifetimeState) ModifyEffect(c *EffectContext, e TargetEffect, kind Modi
 		return 0, nil, ErrUnsupportedEffect
 	}
 	a := s.actor(c.ActorID)
+	v := s.initialEffectPower(c, e, kind)
+	var heals []HealingFact
+	if hasItem(a.ItemDefinitionIDs, "item-186") && kind == ModifierStatUp {
+		r, err := s.ApplyToolHealing(c.TargetContext, e.TargetID, float64(int(float64(target.baseStat(stat))*v)), false, rng)
+		if err != nil {
+			return 0, nil, err
+		}
+		heals = append(heals, HealingFact{TargetID: e.TargetID, Amount: r.Amount, Delta: r.Delta})
+	}
+	v = s.finalEffectPower(c, v)
+	if kind == ModifierHPHealing || kind == ModifierMPHealing {
+		if a.Status == StatusSabaku {
+			v *= .7 + rng.Float64()*.2
+		}
+		if target.Status == StatusVirulentPoison {
+			v = float64(int(v * .1))
+		}
+	}
+	if kind == ModifierMPHealing && s.Fields.Current() == "den" {
+		v = float64(int(v*.025) + 1)
+	}
+	return v, heals, nil
+}
+
+// Admission reuses the pure modifiers on either side of incidental186 healing.
+func (s *LifetimeState) initialEffectPower(c *EffectContext, e TargetEffect, kind ModifierKind) float64 {
+	a := s.actor(c.ActorID)
 	v := e.Payload.Number
 	if s.Fields.Current() == "sanctuary" && e.Category == CategoryMagic && kind != ModifierStatDown {
 		v *= 1.2
@@ -88,30 +115,16 @@ func (s *LifetimeState) ModifyEffect(c *EffectContext, e TargetEffect, kind Modi
 	if hasItem(a.ItemDefinitionIDs, "item-190") && e.Category == CategoryDance && (kind == ModifierHPHealing || kind == ModifierStatUp) {
 		v *= 1.5
 	}
-	var heals []HealingFact
-	if hasItem(a.ItemDefinitionIDs, "item-186") && kind == ModifierStatUp {
-		r, err := s.ApplyToolHealing(c.TargetContext, e.TargetID, float64(int(float64(target.baseStat(stat))*v)), false, rng)
-		if err != nil {
-			return 0, nil, err
-		}
-		heals = append(heals, HealingFact{TargetID: e.TargetID, Amount: r.Amount, Delta: r.Delta})
-	}
+	return v
+}
+
+func (s *LifetimeState) finalEffectPower(c *EffectContext, v float64) float64 {
+	a := s.actor(c.ActorID)
 	if hasItem(a.ItemDefinitionIDs, "item-144") && c.AreaDamageCalls > 0 && v < 300 {
 		v *= 1.3
 	}
 	if hasItem(a.ItemDefinitionIDs, "item-239") && c.DamageCalls >= 1 {
 		v = 0
 	}
-	if kind == ModifierHPHealing || kind == ModifierMPHealing {
-		if a.Status == StatusSabaku {
-			v *= .7 + rng.Float64()*.2
-		}
-		if target.Status == StatusVirulentPoison {
-			v = float64(int(v * .1))
-		}
-	}
-	if kind == ModifierMPHealing && s.Fields.Current() == "den" {
-		v = float64(int(v*.025) + 1)
-	}
-	return v, heals, nil
+	return v
 }

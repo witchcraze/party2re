@@ -107,12 +107,16 @@ func (s *LifetimeState) ApplyDistributedAttack(c *EffectContext, helperID string
 		return r, ErrUnsupportedEffect
 	}
 	if helper != nil && helper.HP > 0 {
+		// Earlier205 tails can increase tension/replace a temporary, so a later
+		// rounded-zero projection alone cannot admit a missing damage executor.
+		powerMayChange := false
 		for _, stat := range []BattleStat{StatAttack, StatDefense, StatAgility} {
 			for _, id := range c.PartyIDs {
 				e := TargetEffect{TargetID: id, Category: CategoryDance, Payload: CallbackPayload{Number: .5}}
-				if err := s.ValidateStatUp(c, e, stat, rng); err != nil {
+				if err := s.validateStatUp(c, e, stat, rng, powerMayChange); err != nil {
 					return r, err
 				}
+				powerMayChange = powerMayChange || s.statUpMayChangePower(c, e, stat)
 			}
 		}
 	}

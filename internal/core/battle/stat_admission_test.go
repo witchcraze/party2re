@@ -175,3 +175,244 @@ func TestItem201DamageCounterControlsFollowingEffects(t *testing.T) {
 		}
 	}
 }
+
+func TestStatUpAdmissionNoEffectGuards(t *testing.T) {
+	for _, item := range []string{"item-201", "item-205"} {
+		stat := StatAgility
+		if item == "item-205" {
+			stat = StatDefense
+		}
+		for _, tc := range []struct {
+			name, target, capItem string
+			value                 int
+			bound, zero, reject   bool
+			additional            bool
+		}{
+			{name: "at 2.5 cap", target: "ally", value: 250},
+			{name: "above 2.5 cap", target: "ally", value: 251},
+			{name: "below 2.5 cap", target: "ally", value: 249, reject: true},
+			{name: "at 3 cap", target: "self", capItem: "item-164", value: 300},
+			{name: "below 3 cap", target: "self", capItem: "item-164", value: 299, reject: true},
+			{name: "2.5 is below self 3 cap", target: "self", capItem: "item-164", value: 250, reject: true},
+			{name: "cap item on actor does not raise ally cap", target: "ally", capItem: "item-164", value: 250},
+			{name: "183 at 3 cap", target: "self", capItem: "item-183", value: 300},
+			{name: "183 raises only AG cap", target: "self", capItem: "item-183", value: 299, reject: stat == StatAgility},
+			{name: "bound", target: "ally", value: 150, bound: true},
+			{name: "zero power", target: "ally", value: 150, zero: true},
+			{name: "additional effect at cap", target: "ally", value: 250, additional: true},
+		} {
+			t.Run(item+"/"+tc.name, func(t *testing.T) {
+				s, c := recoveryFixture()
+				a := s.actor(tc.target)
+				a.ItemDefinitionIDs = []string{item}
+				*s.actor(tc.target).currentStat(stat) = tc.value
+				if tc.capItem != "" {
+					s.actor("self").ItemDefinitionIDs = append(s.actor("self").ItemDefinitionIDs, tc.capItem)
+				}
+				if tc.bound {
+					a.Status = StatusSabaku
+				}
+				c.AdditionalEffect = tc.additional
+				power := .25
+				if tc.zero {
+					power = 0
+				}
+				before := reloadLifetime(t, s)
+				contextBefore := c
+				rng := &targetRNG{t: t}
+				r, err := s.ApplyStatUp(&c, TargetEffect{TargetID: tc.target, Payload: CallbackPayload{Number: power}}, stat, rng)
+				if tc.reject {
+					if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(c, contextBefore) {
+						t.Fatal(r, err, c)
+					}
+				} else if err != nil || r.Applied || r.Returned != (!tc.zero && !tc.additional) || c.StatUpCalls != map[bool]int{true: 0, false: 1}[tc.zero] {
+					t.Fatal(r, err, c)
+				}
+				if !reflect.DeepEqual(s, before) {
+					t.Fatal("no-effect/rejection changed state", r, s)
+				}
+				rng.done()
+			})
+		}
+	}
+}
+
+func TestStatUpAdmissionMixedReachableCaps(t *testing.T) {
+	for _, path := range []string{"fallback", "confusion", "activation", "reflection", "cover", "phantom"} {
+		for _, item := range []string{"item-201", "item-205"} {
+			for _, uncapped := range []bool{false, true} {
+				s, c := recoveryFixture()
+				stat := StatAgility
+				if item == "item-205" {
+					stat = StatDefense
+				}
+				for i := range s.Actors {
+					s.Actors[i].ItemDefinitionIDs = []string{item}
+					*s.Actors[i].currentStat(stat) = 250
+				}
+				e := TargetEffect{TargetID: "missing", Category: CategoryMagic, Payload: CallbackPayload{Number: .25}}
+				rng := &targetRNG{t: t}
+				switch path {
+				case "fallback":
+					rng.draws = []float64{.9}
+				case "confusion":
+					s.actor("self").Status = StatusConfusion
+					e.TargetID = "ally"
+					rng.draws = []float64{.4}
+				case "activation":
+					c.Item195Activated = true
+					s.actor("self").Status = StatusMagicSeal
+					e.TargetID = "ally"
+					rng.draws = []float64{0, 0, .4}
+				case "reflection":
+					e.TargetID = "ally"
+					s.actor("ally").Temporary = TemporaryReflectMagic
+				case "cover":
+					e.TargetID = "ally"
+					s.actor("ally").Temporary = TemporaryCover
+					s.actor("self").Temporary = TemporaryCovering
+				case "phantom":
+					e.TargetID = "ally"
+					s.actor("ally").Temporary = TemporaryPhantom
+					rng.draws = []float64{0, .9}
+				}
+				if uncapped {
+					*s.actor("self").currentStat(stat) = 249
+					rng.draws = nil
+				}
+				before := reloadLifetime(t, s)
+				contextBefore := c
+				r, err := s.ApplyStatUp(&c, e, stat, rng)
+				if uncapped {
+					if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) || !reflect.DeepEqual(c, contextBefore) {
+						t.Fatal(path, item, r, err, s, c)
+					}
+				} else if err != nil || r.Applied || !r.Returned || c.StatUpCalls != 1 {
+					t.Fatal(path, item, r, err, c)
+				}
+				rng.done()
+			}
+		}
+	}
+}
+
+func TestStatUpAdmissionZeroPathsPreserveModifierOrder(t *testing.T) {
+	for _, item := range []string{"item-201", "item-205"} {
+		for _, guard := range []string{"null magic", "darkness", "239 after 186", "fallen cover"} {
+			t.Run(item+"/"+guard, func(t *testing.T) {
+				s, c := recoveryFixture()
+				stat := StatAgility
+				if item == "item-205" {
+					stat = StatDefense
+				}
+				s.actor("ally").ItemDefinitionIDs = []string{item}
+				e := TargetEffect{TargetID: "ally", Category: CategoryMagic, Payload: CallbackPayload{Number: .25}}
+				rng := &targetRNG{t: t}
+				wantCount := 1
+				switch guard {
+				case "null magic":
+					s.actor("ally").Temporary = TemporaryNullMagic
+					wantCount = 0
+				case "darkness":
+					s.Fields.Default = "darkness"
+				case "239 after 186":
+					s.actor("self").ItemDefinitionIDs = []string{"item-186", "item-239"}
+					c.DamageCalls = 1
+					// Tool healing still runs before239 zeros the stat-up power.
+					rng.draws = []float64{0}
+				case "fallen cover":
+					s.actor("ally").Temporary = TemporaryCover
+					s.actor("fallen").Temporary = TemporaryCovering
+					s.actor("fallen").ItemDefinitionIDs = []string{item}
+					wantCount = 0
+				}
+				before := reloadLifetime(t, s)
+				r, err := s.ApplyStatUp(&c, e, stat, rng)
+				if err != nil || r.Applied || r.Returned || c.StatUpCalls != wantCount {
+					t.Fatal(r, err, c)
+				}
+				if guard == "239 after 186" {
+					if len(r.IncidentalHealing) != 1 || r.IncidentalHealing[0].Delta != 22 || s.actor("ally").HP != 122 || *s.actor("ally").currentStat(stat) != 150 {
+						t.Fatal(r, s)
+					}
+				} else if !reflect.DeepEqual(s, before) {
+					t.Fatal(r, s)
+				}
+				rng.done()
+			})
+		}
+	}
+}
+
+func TestStatUpAdmissionRoundedZero(t *testing.T) {
+	for _, item := range []string{"item-201", "item-205"} {
+		for _, doubled := range []bool{false, true} {
+			s, c := recoveryFixture()
+			stat := StatAgility
+			if item == "item-205" {
+				stat = StatDefense
+			}
+			a := s.actor("ally")
+			a.ItemDefinitionIDs = []string{item}
+			a.BaseStats = BattleBaseStats{Attack: 1, Defense: 1, Agility: 1}
+			a.Attack, a.Defense, a.Agility = 1, 1, 1
+			if doubled {
+				a.Temporary = TemporaryDouble
+			}
+			before := reloadLifetime(t, s)
+			rng := &targetRNG{t: t}
+			r, err := s.ApplyStatUp(&c, TargetEffect{TargetID: "ally", Payload: CallbackPayload{Number: .5}}, stat, rng)
+			if doubled {
+				if !errors.Is(err, ErrUnsupportedEffect) || c.StatUpCalls != 0 {
+					t.Fatal(r, err, c)
+				}
+			} else if err != nil || r.Returned || r.Applied || c.StatUpCalls != 1 {
+				t.Fatal(r, err, c)
+			}
+			if !reflect.DeepEqual(s, before) {
+				t.Fatal(r, s)
+			}
+			rng.done()
+		}
+	}
+}
+
+func TestCompositeStatAdmissionAccountsForEarlier205(t *testing.T) {
+	for _, distributed := range []bool{false, true} {
+		for _, prefix205 := range []bool{false, true} {
+			s, c := recoveryFixture()
+			level := 99
+			c.RequesterLevel = &level
+			s.actor("ally").BaseStats.Agility, s.actor("ally").Agility = 1, 1
+			s.actor("ally").ItemDefinitionIDs = []string{"item-201"}
+			if distributed && prefix205 {
+				s.actor("ally").ItemDefinitionIDs = append(s.actor("ally").ItemDefinitionIDs, "item-205")
+			} else if prefix205 {
+				s.actor("self").ItemDefinitionIDs = []string{"item-205"}
+			}
+			if distributed {
+				s.actor("ally").Temporary = TemporaryStrongDefense
+			}
+			before := reloadLifetime(t, s)
+			contextBefore := c
+			rng := &targetRNG{t: t}
+			if distributed && !prefix205 {
+				rng.draws = []float64{.9, 0, 0, .9}
+			}
+			var err error
+			if distributed {
+				_, err = s.ApplyDistributedAttack(&c, "ally", TargetCursor{}, rng)
+			} else {
+				_, err = s.ApplyPartyStat(&c, .75, CategoryMagic, StatAgility, false, rng)
+			}
+			if prefix205 {
+				if !errors.Is(err, ErrUnsupportedEffect) || !reflect.DeepEqual(s, before) || !reflect.DeepEqual(c, contextBefore) {
+					t.Fatal(distributed, err, s, c)
+				}
+			} else if err != nil || s.actor("ally").Agility != 1 {
+				t.Fatal(distributed, err, s, c)
+			}
+			rng.done()
+		}
+	}
+}

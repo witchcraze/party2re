@@ -573,9 +573,15 @@ doubling), and93–96 (party enemy AT/DF/AG/hit reduction), evidenced at
 damage call with half the resulting AG before testing205's AT/tension/double
 tail. Admission checks only targets reachable through the ally helper's fallback,
 confusion/activation and one-pass temporary redirects; unrelated equipment cannot
-block the operation. Reachable201 variants require the damage owner's fully
-admitted executor before any draws or writes;205 requires the original requester
-level. The damage executor updates the same operation's damage count after its
+block the operation. Fallen resolved targets, the 2.5×/self3× cap, binding and
+zero-power/rounded-zero paths return without201/205 tails and require neither tail's execution
+context. Admission checks these guards without consuming draws or changing state;
+execution still preserves target hooks, no-effect tuples and186 healing before239
+zeroing. Ordered party/distribution admission also accounts for earlier205 tails
+changing tension or temporary effects before treating a later rounded zero as safe.
+Reachable201 tails require the damage owner's fully admitted executor
+before any draws or writes;205 requires the original requester level. The damage
+executor updates the same operation's damage count after its
 target/error/zero gates (`_skill.cgi:8826–8831`), including misses; the stat helper
 does not count the call again. Subsequent239 zeroing and256 splash conditions read
 that shared count. Neither a hook

@@ -231,7 +231,7 @@ func (s *LifetimeState) validatePartyTarget(c TargetContext, e TargetEffect, rng
 // partyTargetCandidates follows _check_party's possible target paths without
 // draws or mutations. Call only after validatePartyTarget. Temporary redirects
 // run once; the replacement target's temporary is not evaluated recursively.
-func (s *LifetimeState) partyTargetCandidates(c TargetContext, e TargetEffect) []string {
+func (s *LifetimeState) partyTargetCandidates(c TargetContext, e TargetEffect) []TargetEffect {
 	a := s.actor(c.ActorID)
 	ids := []string{e.TargetID}
 	if a.Status == StatusConfusion || (c.Item195Activated && (a.Status == "" || a.categorySealed(e.Category))) {
@@ -249,9 +249,19 @@ func (s *LifetimeState) partyTargetCandidates(c TargetContext, e TargetEffect) [
 			}
 		}
 	}
-	var targets []string
+	var targets []TargetEffect
 	for _, id := range ids {
 		t := s.actor(id)
+		candidate := e
+		appendTarget := func(targetID string) {
+			candidate.TargetID = targetID
+			targets = append(targets, candidate)
+		}
+		scale := func(multiplier float64) {
+			if candidate.Payload.Symbol == "" {
+				candidate.Payload.Number *= multiplier
+			}
+		}
 		switch t.Temporary {
 		case TemporaryCover:
 			for _, member := range s.Actors {
@@ -260,23 +270,48 @@ func (s *LifetimeState) partyTargetCandidates(c TargetContext, e TargetEffect) [
 					break
 				}
 			}
+		case TemporaryStrongDefense:
+			scale(.1)
+		case TemporaryDefense:
+			scale(.5)
+		case TemporaryReduceAttack, TemporaryReduceMagic, TemporaryReduceBreath:
+			if (t.Temporary == TemporaryReduceAttack && e.Category == CategoryPhysical) ||
+				(t.Temporary == TemporaryReduceMagic && e.Category == CategoryMagic) ||
+				(t.Temporary == TemporaryReduceBreath && e.Category == CategoryBreath) {
+				scale(.25)
+			}
+		case TemporaryDouble:
+			scale(2)
 		case TemporaryReflectAttack, TemporaryReflectMagic, TemporaryReflectBreath, TemporaryReflectDance:
 			if (t.Temporary == TemporaryReflectAttack && e.Category == CategoryPhysical) ||
 				(t.Temporary == TemporaryReflectMagic && e.Category == CategoryMagic) ||
 				(t.Temporary == TemporaryReflectBreath && e.Category == CategoryBreath) ||
 				(t.Temporary == TemporaryReflectDance && e.Category == CategoryDance) {
+				if hasItem(t.ItemDefinitionIDs, "item-163") {
+					scale(2)
+				}
 				id = c.ActorID
 			}
 		case TemporaryDeflect:
 			if e.Category == CategoryPhysical {
-				targets = append(targets, c.PartyIDs...)
-				targets = append(targets, c.EnemyIDs...)
+				for _, roster := range [][]string{c.PartyIDs, c.EnemyIDs} {
+					for _, targetID := range roster {
+						appendTarget(targetID)
+					}
+				}
 				continue
 			}
+		case TemporaryNullAttack, TemporaryNullMagic:
+			if (t.Temporary == TemporaryNullAttack && e.Category == CategoryPhysical) ||
+				(t.Temporary == TemporaryNullMagic && e.Category == CategoryMagic) {
+				candidate.Payload = CallbackPayload{}
+			}
 		case TemporaryPhantom:
-			targets = append(targets, c.PartyIDs...)
+			for _, targetID := range c.PartyIDs {
+				appendTarget(targetID)
+			}
 		}
-		targets = append(targets, id)
+		appendTarget(id)
 	}
 	return targets
 }

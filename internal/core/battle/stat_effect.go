@@ -44,10 +44,50 @@ func (a LifetimeActor) baseStat(k BattleStat) int {
 	return 0 // Original mhit is absent; hit has its independent floor50.
 }
 
-// ValidateStatUp admits all possible redirected targets before any cure/draw
-// or mutation. The damage owner supplies a certified item201 executor. Source
-// requester level is required for item205's tension tail, never target level.
+func (t *LifetimeActor) statUpCap(a *LifetimeActor, stat BattleStat) float64 {
+	multiplier := 2.5
+	if t.ID == a.ID && (hasItem(a.ItemDefinitionIDs, "item-164") || (stat == StatAgility && hasItem(a.ItemDefinitionIDs, "item-183"))) {
+		multiplier = 3
+	}
+	return float64(t.baseStat(stat)) * multiplier
+}
+
+func (t *LifetimeActor) statUpAmount(a *LifetimeActor, category CallbackCategory, stat BattleStat, v float64) int {
+	if (hasItem(a.ItemDefinitionIDs, "item-148") && category == CategorySong) || hasItem(a.ItemDefinitionIDs, "item-159") {
+		v *= 1.2
+	}
+	return int(float64(t.baseStat(stat)) * v * a.Tension)
+}
+
+func (s *LifetimeState) statUpTailPossible(c *EffectContext, e TargetEffect, stat BattleStat, powerMayChange bool) bool {
+	a, t := s.actor(c.ActorID), s.actor(e.TargetID)
+	if e.Payload.Number <= 0 || t.HP <= 0 || t.Status == StatusSabaku || float64(*t.currentStat(stat)) >= t.statUpCap(a, stat) {
+		return false
+	}
+	v := s.finalEffectPower(c, s.initialEffectPower(c, e, ModifierStatUp))
+	return v != 0 && (powerMayChange || t.statUpAmount(a, e.Category, stat, v) != 0)
+}
+
+func (s *LifetimeState) statUpMayChangePower(c *EffectContext, e TargetEffect, stat BattleStat) bool {
+	if stat == StatAttack || c.RequesterLevel == nil || *c.RequesterLevel < 0 {
+		return false
+	}
+	for _, candidate := range s.partyTargetCandidates(c.TargetContext, e) {
+		if hasItem(s.actor(candidate.TargetID).ItemDefinitionIDs, "item-205") && s.statUpTailPossible(c, candidate, stat, false) {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidateStatUp admits possible equipment tails after the source's no-effect
+// guards, before any cure/draw or mutation. The damage owner supplies a certified
+// item201 executor; item205 uses requester level, never target level.
 func (s *LifetimeState) ValidateStatUp(c *EffectContext, e TargetEffect, stat BattleStat, rng random.Generator) error {
+	return s.validateStatUp(c, e, stat, rng, false)
+}
+
+func (s *LifetimeState) validateStatUp(c *EffectContext, e TargetEffect, stat BattleStat, rng random.Generator, powerMayChange bool) error {
 	if err := s.validateRecovery(c, e, rng); err != nil {
 		return err
 	}
@@ -62,8 +102,14 @@ func (s *LifetimeState) ValidateStatUp(c *EffectContext, e TargetEffect, stat Ba
 			return ErrInvalidParticipant
 		}
 	}
-	for _, id := range s.partyTargetCandidates(c.TargetContext, e) {
-		a := s.actor(id)
+	if e.Payload.Number == 0 {
+		return nil
+	}
+	for _, candidate := range s.partyTargetCandidates(c.TargetContext, e) {
+		a := s.actor(candidate.TargetID)
+		if !s.statUpTailPossible(c, candidate, stat, powerMayChange) {
+			continue
+		}
 		if stat == StatAgility && hasItem(a.ItemDefinitionIDs, "item-201") && c.Damage == nil {
 			return ErrUnsupportedEffect
 		}
@@ -92,11 +138,7 @@ func (s *LifetimeState) ApplyStatUp(c *EffectContext, e TargetEffect, stat Battl
 		return r, nil
 	}
 	c.StatUpCalls++
-	capMultiplier := 2.5
-	if t.ID == a.ID && (hasItem(a.ItemDefinitionIDs, "item-164") || (stat == StatAgility && hasItem(a.ItemDefinitionIDs, "item-183"))) {
-		capMultiplier = 3
-	}
-	cap := float64(t.baseStat(stat)) * capMultiplier
+	cap := t.statUpCap(a, stat)
 	value := t.currentStat(stat)
 	if float64(*value) >= cap {
 		r.Returned = !c.AdditionalEffect
@@ -110,10 +152,7 @@ func (s *LifetimeState) ApplyStatUp(c *EffectContext, e TargetEffect, stat Battl
 	if err != nil {
 		return r, err
 	}
-	if (hasItem(a.ItemDefinitionIDs, "item-148") && target.Category == CategorySong) || hasItem(a.ItemDefinitionIDs, "item-159") {
-		v *= 1.2
-	}
-	r.Amount = int(float64(t.baseStat(stat)) * v * a.Tension)
+	r.Amount = t.statUpAmount(a, target.Category, stat, v)
 	if r.Amount == 0 {
 		return r, nil
 	}
@@ -217,11 +256,13 @@ func (s *LifetimeState) ApplyPartyStat(c *EffectContext, coefficient float64, ca
 			return nil, ErrUnsupportedEffect
 		}
 	} else {
+		powerMayChange := false
 		for _, id := range c.PartyIDs {
 			e.TargetID = id
-			if err := s.ValidateStatUp(c, e, stat, rng); err != nil {
+			if err := s.validateStatUp(c, e, stat, rng, powerMayChange); err != nil {
 				return nil, err
 			}
+			powerMayChange = powerMayChange || s.statUpMayChangePower(c, e, stat)
 		}
 	}
 	allowed, err := s.actor(c.ActorID).CheckCategorySeal(category, rng)
