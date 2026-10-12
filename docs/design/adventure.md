@@ -236,20 +236,113 @@ redirected logs, GET and receipt retries, strict `>1800` seconds and the existin
 cleanup-time one-hour penalty anchor. This gate affects #1328 idle cleanup only;
 its other lifecycle work does not wait for transport implementation.
 
+### Combat travel and encounter replacement
+
+This contract traces category-1 travel tools through discovery, callback,
+action tail, persistence and the next operation at the revision above. These
+are source-inspected requirements, not executed CGI parity or native coverage.
+The user explicitly retained tool 150's old-enemy response/reappearance on
+2026-10-12 (#1345); it must not be silently repaired during reconstruction.
+
+All entries use `どうぐ` → `dougu` → the held item's callback, with listed MP
+cost zero (`_skill.cgi:150–151,758–764`). A living enrolled participant may use
+them with enemies, between encounters, at floor 0 or in the treasure room;
+there is no travel-specific leader gate. Spectators cannot discover the tool,
+and fallen actors cannot execute it (`_skill.cgi:25–30`;
+`_battle.cgi:640–665`). The ordinary interval, ban and incapacitation gates
+still apply. Incapacitation can skip the callback and consumption while
+completing the applicable action tail; it is not a selection error.
+
+| Tool / callback evidence (`lib/_data.cgi`) | Argument, condition and callback result |
+| --- | --- |
+| 66 / 1055–1067; 67 / 1069–1080; 68 / 1082–1093; 69 / 1095–1107; 70 / 1109–1120 | No participant target; normal adventure only. Assign stage 15/16/17/18/19 respectively and floor 1 |
+| 71 / 1122–1137 | No participant target; normal adventure and actor's weapon 35 plus armor 37 (original names checked, catalog identities at `_data.cgi:452,582`). Assign stage 20/floor 1; missing set rejects without consumption |
+| 104 / 1335–1346 | No participant target; normal adventure only. Assign stage 21/floor 1 |
+| 184 / 1765–1789 | Explicit destination matching stage 23 or 25; assign that stage/floor 1. Missing/other destination returns selection error without consumption |
+| 83 / 1243–1253 | No participant target; increment floor only in normal adventure with floor <9 (including floor 0). Otherwise accepted no-effect: consume, retain coordinates and process the normal tail |
+| 107 / 1350–1361 | No participant target; normal adventure only. Assign floor 10; unchanged floor 10 is still accepted and consumed. Does not create chests or set clear. Distinct from chest allowance item 215 (#1196) |
+| 150 / 1614–1639 | Explicit floor: reset all participants' status, assign floor, call `set_monster`, request reload. Missing/invalid floor or wrong mode rejects without consumption |
+
+Other than tool 83's accepted no-effect branch, wrong-mode callbacks set an
+error and retain the tool. `dougu` defaults a missing/falsy argument to the
+actor, but floor/destination arguments are not participant IDs. Native input
+uses an integer floor 1–10 or a destination stage ID restricted to 23/25;
+parameter-free entries need no target. Reject null, strings, fractions,
+out-of-range floors and foreign destinations before mutation. The original
+150 predicate is an unanchored digit match plus Perl numeric comparisons
+(`!=0`, `<=10`), not strict integer parsing; its malformed-string, fractional
+and negative-number coercions are not native validation rules. This typed
+boundary is required by #1345, not permission to change valid travel behavior.
+
+**Coordinate assignment preserves the encounter.** Tools 66–71, 83, 104, 107
+and 184 do not reset statuses/fields, call `set_monster`, clear enemies or
+reload. Their accepted callbacks clear the held tool and continue the ordinary
+player effects, stock/level processing, field counters and eligible bounded
+NPC response, then update actor time/turn count and write room state
+(`_battle.cgi:761–1178`; `_npc_action.cgi:89–155`). Thus old living enemies can
+respond and survive under new coordinates. With no enemies, no encounter is
+created by the tool. On the next request `read_member` rebuilds sides from the
+persisted members (`453–493`). Only explicit `すすむ`, after the no-enemy and
+end/EX gates, resets statuses, deletes temporary/anti fields, increments the
+assigned floor once and creates an encounter (`vs_monster.cgi:37–82`). A
+stage-changing tool therefore next creates destination floor 2, not floor 1;
+83 at floor 8 next creates floor 10; 107 next creates floor 11 without fighting
+a newly generated boss. A nonleader using travel at floor 0 can bypass the
+initial-advance leader restriction by assigning a positive floor. Do not add a
+leader-only travel restriction or auto-complete the bypassed encounters.
+
+**Tool 150 continues after reload.** `reset_status_all` includes its accessory
+revival/reset hooks (`_battle.cgi:1390–1430`); it is not HP/MP restoration.
+Unlike `susumu`, the callback does not delete temporary/anti fields or disable
+NPC response. `set_monster` replaces `@members` with allies and adds new NPCs
+but leaves `@enemys` and old `%ms` entries intact (`vs_monster.cgi:85–155`;
+`_npc_action.cgi:600–681`). `auto_reload` only emits navigation and sets waiting
+time; it does not exit the callback/action (`system.cgi:456–470`). Consequently
+the tool is consumed and the normal action tail still runs. If an old living
+interval-ready enemy responds, `npc_turn` uses the old enemy list and rebuilds
+members from it, potentially restoring old enemies and dropping newly created
+ones; a generated NPC with the same legacy name overwrites that old payload.
+If none responds, this NPC path does not replace the generated members. With
+no old enemies, the new encounter gets no immediate response. Native encounter IDs
+must preserve this observable distinction without making user-supplied names
+authoritative. Test both branches, name collision and reload after each result.
+Treasure-floor discovery suppresses NPC response before the tool callback
+(`vs_monster.cgi:38–41`), so travelling out of that room retains suppression
+for the submitted operation. New discovery is computed on the next request.
+
+**Room facts survive travel.** The room ID/log destination, ordered allies,
+leader, mode, record header and earned recipient facts are not reinitialized.
+Member persistence writes changed stage/floor but preserves `$r_stage` and
+records (`_battle.cgi:464–468,496–554`); the record header is not a travel stage
+mirror (`quest.cgi:1287–1296`). Accepted travel writes the same room log;
+Replay's title was selected before action, while captured members reflect its
+result (`party.cgi:20–27`; `_skill.cgi:23`; `system.cgi:660–677,1499–1519`).
+Refresh observes the committed result without running another action. Native
+SQL receipts must freeze draws/results and consumption once (#1328/#1197).
+
+Travel itself neither pays nor erases earnings; normal stock processing still
+runs (#1198). Assignment-only callbacks retain `$is_clear` and existing EX
+markers. Tool 150's encounter creation at floor 10 sets clear; ordinary
+treasure creation at floor 11 consumes the retained clear flag for the
+**current** stage, runs Try success if applicable and can unseal stage 19
+(`vs_monster.cgi:91–155`). It is not proof that the destination boss was beaten.
+Next advance from assigned floor 10 still executes the destination's EX flag
+path before creating floor 11 (`52–80,227–249`); existing EX files are not
+deleted by travel. Try mode is retained until treasure creation invokes
+`success_try`, multiplies pending stock by 1.5/floors it and changes mode to
+normal (`_battle.cgi:1915–1949`). Preserve these transition hooks under the
+existing #1191/#1198 owners, including their ordering before any old-enemy
+response; do not replay rewards or infer clear solely from coordinates. Exit
+uses the changed floor for fatigue/other floor-dependent effects (#1221), not
+the number of encounters actually fought (`_battle.cgi:1208–1222`).
+
 ### Remaining reconciliation gates
 
-Tool arguments are not universally combat targets. Original category-1 tools
-include destinations, numeric floors, recorded jobs, participants and
-parameter-free commands (`lib/_data.cgi:1055–1361,1614–1789,1879–1924`).
-Stage-changing tools assign a destination and floor 1; tool 83 increments the
-floor only below 9, tool 107 assigns floor 10, and tool 150 explicitly resets
-and rebuilds the encounter at a selected floor 1–10. The first two kinds do not
-themselves call encounter replacement. Their remaining dispatch/next-operation
-interaction is the named gate [#1345](https://github.com/witchcraze/party2re/issues/1345),
-not permission to invent immediate teleport or silently discard old enemies.
-Tool 107 is distinct from per-person chest allowance item 215 (#1196).
-Original accepted no-effect consumption and selection errors must remain
-distinct from native typed-ID authorization failures (#1197/#1329).
+Native travel transitions remain owned by
+[#1353](https://github.com/witchcraze/party2re/issues/1353), with the full action
+tail consumed by #1329 and typed discovery/submission by #1330. Other tool
+arguments also include recorded jobs and participants; this travel contract
+does not certify those callbacks (`lib/_data.cgi:1879–1924`).
 
 The operation matrix establishes the family boundary. Production cutover still
 requires #1188 job supply, #1332 effect lifetimes and the effects/transactions
