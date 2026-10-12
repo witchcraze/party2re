@@ -326,15 +326,21 @@ func newMiscServices(
 	if err != nil {
 		return nil, err
 	}
-	contestService, err := contest.NewService(
-		core.charRepo,
-		contestRepo,
+	contestOpts := []contest.Option{
 		contest.WithTransactionProvider(core.txProvider),
 		contest.WithGuildService(contestGuildAdapter{guild: soc.guild}),
 		contest.WithNewsPublisher(contest.NewsPublisherFunc(func(ctx context.Context, cat, title, content, author string, pubAt time.Time) error {
 			_, err := soc.notification.PublishNews(ctx, cat, title, content, author, pubAt)
 			return err
 		})),
+	}
+	if soc.sched != nil {
+		contestOpts = append(contestOpts, contest.WithServiceScheduler(soc.sched))
+	}
+	contestService, err := contest.NewService(
+		core.charRepo,
+		contestRepo,
+		contestOpts...,
 	)
 	if err != nil {
 		return nil, err
