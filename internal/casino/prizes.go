@@ -8,6 +8,7 @@ import (
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
+	"github.com/witchcraze/party2re/internal/economy"
 )
 
 var (
@@ -91,7 +92,11 @@ func (s *Service) ExchangePrize(ctx context.Context, characterID string, costCoi
 		return PrizeExchangeResult{}, errors.New("depot repository is required for prize exchange")
 	}
 
-	totalCost := prize.CostCoins * int64(count)
+	totalCostInt, err := economy.SafeMultiply(int(prize.CostCoins), count)
+	if err != nil {
+		return PrizeExchangeResult{}, ErrCoinOverflow
+	}
+	totalCost := int64(totalCostInt)
 	var remainingCoins int64
 
 	err = s.runInTx(ctx, func(txCtx context.Context) error {

@@ -121,6 +121,10 @@ func (h *Handler) handleCasinoExchange(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, casino.ErrInvalidAmount)
 			return
 		}
+		if req.Coins > casino.MaxExchangeCoins {
+			writeError(w, http.StatusBadRequest, casino.ErrCoinOverflow)
+			return
+		}
 
 		account, updatedChar, err := h.casino.ExchangeGoldToCoins(r.Context(), char.ID, req.Coins)
 		if err != nil {
@@ -128,7 +132,7 @@ func (h *Handler) handleCasinoExchange(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
-			if errors.Is(err, casino.ErrInvalidAmount) {
+			if errors.Is(err, casino.ErrInvalidAmount) || errors.Is(err, casino.ErrCoinOverflow) {
 				writeError(w, http.StatusBadRequest, err)
 				return
 			}
@@ -209,7 +213,7 @@ func (h *Handler) handleCasinoExchangePrize(w http.ResponseWriter, r *http.Reque
 				writeError(w, http.StatusUnprocessableEntity, err)
 				return
 			}
-			if errors.Is(err, casino.ErrPrizeNotFound) || errors.Is(err, casino.ErrInvalidCount) {
+			if errors.Is(err, casino.ErrPrizeNotFound) || errors.Is(err, casino.ErrInvalidCount) || errors.Is(err, casino.ErrCoinOverflow) {
 				writeError(w, http.StatusBadRequest, err)
 				return
 			}

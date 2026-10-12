@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"math"
 	"math/big"
 	"slices"
 	"time"
@@ -14,7 +15,8 @@ import (
 )
 
 const (
-	GoldPerCoin = 20 // 1 Casino Coin = 20 Gold
+	GoldPerCoin      = 20 // 1 Casino Coin = 20 Gold
+	MaxExchangeCoins = math.MaxInt / GoldPerCoin
 )
 
 var (
@@ -22,6 +24,7 @@ var (
 	ErrInsufficientGold   = errors.New("insufficient character gold for coin exchange")
 	ErrInsufficientCoins  = errors.New("insufficient casino coins")
 	ErrInvalidCharacterID = errors.New("character ID cannot be empty")
+	ErrCoinOverflow       = economy.ErrGoldOverflow
 )
 
 type Account struct {
@@ -217,10 +220,16 @@ func (s *Service) ExchangeGoldToCoins(ctx context.Context, characterID string, c
 	if coins <= 0 {
 		return Account{}, corecharacter.Character{}, ErrInvalidAmount
 	}
+	if coins > MaxExchangeCoins {
+		return Account{}, corecharacter.Character{}, ErrCoinOverflow
+	}
 	if s.runner == nil {
 		return Account{}, corecharacter.Character{}, errors.New("transaction runner is required for coin exchange")
 	}
-	goldCost := int(coins * GoldPerCoin)
+	goldCost, err := economy.SafeMultiply(int(coins), GoldPerCoin)
+	if err != nil {
+		return Account{}, corecharacter.Character{}, ErrCoinOverflow
+	}
 
 	req := economy.TransactionRequest{
 		CharacterID: characterID,

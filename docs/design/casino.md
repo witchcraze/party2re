@@ -19,6 +19,9 @@ It provides:
 ## 1. Currency & Account Invariants
 
 - **Exchange Rate**: `1 Casino Coin = 20 Gold`.
+- **Exchange Bounds & Overflow Protection**:
+  - Exchanging coins (`ExchangeGoldToCoins` / `@りょうがえ`) requires positive coin amounts (`coins > 0`) within representable bounds (`coins <= math.MaxInt / 20`, `MaxExchangeCoins`). Calculations exceeding representable bounds (e.g. `2^62`, `MaxInt64`) are rejected with `ErrCoinOverflow` (HTTP 400 Bad Request) without mutating character wallet gold or casino coin balance (`party2/lib/casino.cgi:651–665`).
+  - Prize exchange costs (`prize.CostCoins * count` / `@こうかん`) guard against integer overflow using safe arithmetic (`economy.SafeMultiply`), rejecting unrepresentable counts without coin deduction.
 - **Wallet vs. Bank Balance**:
   - Buying coins deducts from character wallet gold (`characters.money`).
   - Selling coins is strictly prohibited per legacy clean-room specification (one-way exchange only, purged in #630).
