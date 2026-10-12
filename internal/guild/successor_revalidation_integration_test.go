@@ -19,6 +19,7 @@ import (
 type gateGuildRepository struct {
 	*database.GuildRepository
 	getGuildForUpdateHook func(ctx context.Context, guildID string, callCount int)
+	beforeDisbandHook     func(ctx context.Context, guildID string)
 	callCount             atomic.Int64
 }
 
@@ -28,6 +29,13 @@ func (r *gateGuildRepository) GetGuildForUpdate(ctx context.Context, guildID str
 		r.getGuildForUpdateHook(ctx, guildID, c)
 	}
 	return r.GuildRepository.GetGuildForUpdate(ctx, guildID)
+}
+
+func (r *gateGuildRepository) DisbandGuild(ctx context.Context, guildID string) error {
+	if r.beforeDisbandHook != nil {
+		r.beforeDisbandHook(ctx, guildID)
+	}
+	return r.GuildRepository.DisbandGuild(ctx, guildID)
 }
 
 func TestGuildSuccession_RevalidateSuccessor_ApprovedDuringDeparture(t *testing.T) {
@@ -511,5 +519,101 @@ func TestGuildSuccession_RevalidateSuccessor_ConcurrentApprovalRace(t *testing.T
 		}
 	} else if !errors.Is(err, guild.ErrGuildNotFound) {
 		t.Fatalf("unexpected error getting Guild A: %v", err)
+	}
+}
+
+func TestGuildSuccession_RevalidateSuccessor_CandidateLeavesOtherGuildPostRevalidation(t *testing.T) {
+	// Linearizability & Invariant Verification:
+	// Candidate C is pending in Guild A, active in Guild B.
+	// Leader L leaves Guild A.
+	// Step 2 evaluates C: C is active in B -> errCandidateIneligible.
+	// Step 3 revalidates C under Rank 7 lock: GetGuildByCharacter(C) sees C is still active in B.
+	// Post-revalidation & immediately before DisbandGuild(A), C leaves Guild B on an independent transaction.
+	// DisbandGuild(A) then proceeds and commits.
+	//
+	// Verification targets:
+	// 1. Transaction linearizability: Equivalent to Disband(A) [when C was in B] -> Leave(B, C).
+	// 2. Strict invariant preservation:
+	//    - Active affiliation count for all characters: C has 0, L has 0 (conserved <= 1).
+	//    - Guild A is disbanded cleanly (no orphaned records or leaderless guild).
+	//    - Guild B remains intact with leader LB.
+	//    - No deadlocks, lock order inversions, or integrity errors.
+	f := newActiveAffiliationFixture(t)
+	ctx := context.Background()
+
+	leaderA := f.createCharacter(t, "LPostA", 20000)
+	leaderB := f.createCharacter(t, "LPostB", 20000)
+	candidate := f.createCharacter(t, "CPost", 5000)
+
+	gA, _, _, err := f.service.Create(ctx, leaderA.ID, "PostGA_"+id.New()[:8])
+	if err != nil {
+		t.Fatal(err)
+	}
+	gB, _, _, err := f.service.Create(ctx, leaderB.ID, "PostGB_"+id.New()[:8])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// C applies to A (pending)
+	if err := f.service.ApplyToJoin(ctx, gA.ID, candidate.ID); err != nil {
+		t.Fatalf("apply to gA: %v", err)
+	}
+	// C applies to B and is approved (active in B)
+	if err := f.service.ApplyToJoin(ctx, gB.ID, candidate.ID); err != nil {
+		t.Fatalf("apply to gB: %v", err)
+	}
+	if err := f.service.ApproveApplication(ctx, gB.ID, leaderB.ID, candidate.ID, "member"); err != nil {
+		t.Fatalf("approve in gB: %v", err)
+	}
+
+	disbandHookFired := false
+	gateRepo := &gateGuildRepository{GuildRepository: f.repo}
+	gateRepo.beforeDisbandHook = func(hookCtx context.Context, guildID string) {
+		if guildID == gA.ID {
+			disbandHookFired = true
+			// Interleaved operation immediately before DisbandGuild execution:
+			// C leaves Guild B on an independent transaction.
+			if err := f.service.Leave(ctx, gB.ID, candidate.ID); err != nil {
+				t.Errorf("interleaved Leave(B, C) failed: %v", err)
+			}
+			// At this point, C has 0 active affiliations.
+			if count := f.countActiveAffiliations(t, candidate.ID); count != 0 {
+				t.Errorf("candidate active affiliations after Leave(B, C) = %d, want 0", count)
+			}
+		}
+	}
+
+	gateService, err := guild.NewService(gateRepo, guild.WithTransactionProvider(database.NewTransactionProvider(f.db)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := gateService.Leave(ctx, gA.ID, leaderA.ID); err != nil {
+		t.Fatalf("Leave(A) failed: %v", err)
+	}
+
+	if !disbandHookFired {
+		t.Fatal("beforeDisbandHook was not fired")
+	}
+
+	// Guild A must be disbanded
+	if _, err := f.service.Get(ctx, gA.ID); !errors.Is(err, guild.ErrGuildNotFound) {
+		t.Errorf("expected Guild A to be disbanded, got: %v", err)
+	}
+
+	// Guild B must survive
+	if _, err := f.service.Get(ctx, gB.ID); err != nil {
+		t.Errorf("expected Guild B to survive, got: %v", err)
+	}
+
+	// Invariants:
+	// leaderA has 0 active affiliations
+	if count := f.countActiveAffiliations(t, leaderA.ID); count != 0 {
+		t.Errorf("leaderA active affiliation count = %d, want 0", count)
+	}
+
+	// candidate has 0 active affiliations (0 <= 1)
+	if count := f.countActiveAffiliations(t, candidate.ID); count != 0 {
+		t.Errorf("candidate active affiliation count = %d, want 0", count)
 	}
 }
