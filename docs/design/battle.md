@@ -367,8 +367,10 @@ Production adoption still requires #1188 supply, #1332 resumable lifetimes,
 #1337 MP resources, #1338 revival, #1339 summons, #1340 transformation and #1342
 ordinary NPC payloads. Named specification gates remain #1341 book/purchase
 transactions, #1343 shared modifiers/special fields, #1344 transitive job
-callbacks and #1345 travel transitions; their untraced branches are not certified
-by the finite entry list. #1346 implements the shared support/admission gate.
+callbacks. Travel's dispatch/tail/next-operation rules are owned by
+[Adventure](adventure.md#combat-travel-and-encounter-replacement), including
+tool 150's retained old-enemy response/reappearance; source certification is
+not native travel support. #1346 implements the shared support/admission gate.
 #1329 must compare uninterrupted with serialized/reloaded continuation at each
 supported boundary. #1330 cannot advertise a direct or indirect effect until
 those gates are met.
