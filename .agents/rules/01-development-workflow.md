@@ -80,6 +80,16 @@ For non-trivial behavior:
 4. **Inner Loop:** Run fast host tests continuously using `make test` (or `make test-integration`).
 5. **Outer Loop:** Auto-format code with `make fmt`, then run unified local verification with `make check` (runs format check, `go vet`, host test suite, and fast smoke build).
 
+### Whole-Action Admission Regression Coverage
+
+Changes to whole-action admission MUST cover representative cases relevant to the affected behavior:
+
+- **Rejection:** Reachable unsupported paths MUST reject before execution, with state, counters and RNG consumption unchanged.
+- **Accepted No-Effect:** When the contract permits a no-effect outcome (e.g., caps or zero power), admission MUST NOT require context used only by skipped or unreachable side effects.
+- **Ordered Composition:** When earlier side effects can change later target resolution or eligibility, tests MUST include such a sequence at the enclosing operation boundary.
+
+These criteria MUST NOT be interpreted as requiring an exhaustive combination matrix or tests for unrelated behavior.
+
 ### Unit & Integration Test Time Budget Policy vs. Benchmarking
 - **No Sub-Second Assertions in Unit/Integration Tests:** Functional tests (`go test`) MUST NOT enforce sub-second wall-clock thresholds (fragile in CI/virtualized environments). Use liberal dead-man bounds (2.0s–5.0s) strictly to catch deadlocks/hanging goroutines. Emit informational timing via `t.Logf`.
 - **Dedicated Benchmarks for Performance:** Verify throughput and latency regressions via Go benchmarks (`testing.B`) using `scripts/benchmark.sh` / `make bench`. SSOT: [`docs/development/benchmarking.md`](../../docs/development/benchmarking.md).
