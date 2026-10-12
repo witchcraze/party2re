@@ -364,6 +364,14 @@ reorders enemies. Discovery must retain current/previous-job and caller context
 when applying the shared whole-effect gate; a supported direct child is
 insufficient when any hidden descendant is unsupported. The whole submitted
 operation must reject before consumption or durable mutation in that case.
+The [shared modifier contract](battle.md#shared-modifiers-and-callback-outcomes)
+also gates direct entries: helper invocation/returned target does not prove an
+effect applied, and callback category differs from elemental names. Preserve
+accepted no-effect versus rejection, actor/target context and suppressed tails.
+The #1343 decomposition separates native target, damage, recovery/stat, status/reset
+and field/composite work from unresolved source-context decisions; those blockers
+remain prerequisites to production coverage, including gems101/102's malformed
+deferred recoil and calling80's distributed-AT cap (6436–6465).
 Shared [dynamic-effect rules](battle.md#dynamic-effects-and-catalog-admission)
 and [resumption requirements](battle.md#explicit-action-resumption-requirements)
 are owned by Battle; commands and owned observations by
