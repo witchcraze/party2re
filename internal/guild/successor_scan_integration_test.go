@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/guild"
@@ -104,6 +105,45 @@ func TestGuildSuccession_ExceedsLeaveRetryBudget_Succession(t *testing.T) {
 	// Eligible candidate applies to gA only (has no other guild affiliation)
 	if err := f.service.ApplyToJoin(ctx, gA.ID, eligibleCandidate.ID); err != nil {
 		t.Fatalf("apply eligible candidate: %v", err)
+	}
+
+	// Explicitly assign sequential joined_at timestamps to guarantee the 50 ineligible candidates
+	// are evaluated strictly before eligibleCandidate under ORDER BY joined_at ASC, character_id ASC.
+	baseTime := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	if _, err := f.db.ExecContext(ctx, "UPDATE guild_members SET joined_at = ? WHERE guild_id = ? AND character_id = ?", baseTime, gA.ID, leaderA.ID); err != nil {
+		t.Fatalf("update joined_at for leaderA: %v", err)
+	}
+	for i, charID := range ineligibleChars {
+		jt := baseTime.Add(time.Duration(i+1) * time.Minute)
+		if _, err := f.db.ExecContext(ctx, "UPDATE guild_members SET joined_at = ? WHERE guild_id = ? AND character_id = ?", jt, gA.ID, charID); err != nil {
+			t.Fatalf("update joined_at for ineligible char [%d]: %v", i, err)
+		}
+	}
+	eligibleJoinedAt := baseTime.Add(time.Duration(ineligibleCount+1) * time.Minute)
+	if _, err := f.db.ExecContext(ctx, "UPDATE guild_members SET joined_at = ? WHERE guild_id = ? AND character_id = ?", eligibleJoinedAt, gA.ID, eligibleCandidate.ID); err != nil {
+		t.Fatalf("update joined_at for eligibleCandidate: %v", err)
+	}
+
+	// Assert the actual roster order to guarantee the precondition:
+	// leaderA is index 0, the 50 ineligible candidates occupy indices 1..50 in order,
+	// and eligibleCandidate is strictly at index 51.
+	detailBefore, err := f.service.Get(ctx, gA.ID)
+	if err != nil {
+		t.Fatalf("get guild before leave: %v", err)
+	}
+	if len(detailBefore.Members) != ineligibleCount+2 {
+		t.Fatalf("expected %d members, got %d", ineligibleCount+2, len(detailBefore.Members))
+	}
+	if detailBefore.Members[0].CharacterID != leaderA.ID {
+		t.Fatalf("roster leader = %s, want %s", detailBefore.Members[0].CharacterID, leaderA.ID)
+	}
+	for i, charID := range ineligibleChars {
+		if detailBefore.Members[i+1].CharacterID != charID {
+			t.Fatalf("roster candidate [%d] = %s, want ineligible candidate %s", i, detailBefore.Members[i+1].CharacterID, charID)
+		}
+	}
+	if detailBefore.Members[ineligibleCount+1].CharacterID != eligibleCandidate.ID {
+		t.Fatalf("roster 51st candidate = %s, want eligible candidate %s", detailBefore.Members[ineligibleCount+1].CharacterID, eligibleCandidate.ID)
 	}
 
 	// Leader leaves gA. Should scan through 50 ineligible candidates and promote eligible candidate.
