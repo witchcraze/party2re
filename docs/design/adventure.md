@@ -364,6 +364,22 @@ reorders enemies. Discovery must retain current/previous-job and caller context
 when applying the shared whole-effect gate; a supported direct child is
 insufficient when any hidden descendant is unsupported. The whole submitted
 operation must reject before consumption or durable mutation in that case.
+The [combat asset contract](battle.md#combat-books-stored-tools-and-purchases)
+also applies to discovery and nested submission: distinguish requester/payer,
+temporary actor, ordered depot selection and held-item instances. Job50 binds
+the outer submitted command/item/target, even through indirect invocation;
+its used-definition history is scoped by room and actor color, not by inventory
+instance or individual player. Book exchange selects the first matching stored
+instance; typed book targets allow the same encounter participant twice.
+Enhanced tools use their own 22-entry table and evidenced numeric-argument
+binding; ordinary tool84 and enhanced84 are different effects. Return after
+second-child death and requester-wallet debit during NPC purchase must survive
+reload. Missing native context or capacity policy rejects the whole entry;
+native storage and callback implementation prerequisites remain cutover gates.
+Persist nested effects, histories, debit, item transfer and command receipt in
+one transaction. A committed retry observes its prior draw/result; GET cannot
+execute a purchase, mark a stored tool used or return a book. #1139 owns the
+unresolved capacity-unchecked return policy, and #1197 owns consumed instances.
 The [shared modifier contract](battle.md#shared-modifiers-and-callback-outcomes)
 also gates direct entries: helper invocation/returned target does not prove an
 effect applied, and callback category differs from elemental names. Preserve
