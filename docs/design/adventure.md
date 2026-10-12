@@ -355,6 +355,15 @@ the whole reachable effect in both discovery and execution. Indirect invocation
 must not bypass that gate or narrow the original random pool to implemented
 effects. Missing original choices remain cutover blockers. #1198 implements
 Try success/exit disposition and #1196/#1197 item rules.
+Random/delegated discovery and submission also depend on the
+[transitive job closure](battle.md#random-and-delegated-job-closure): #1357 owns
+the invoking executor, #1358 arithmetic selectors, #1359 job wallet/held-tool
+mutations and #1360 job-driven room transitions. Tool-only travel coverage does
+not certify a job callback that replaces an encounter, changes job SP or
+reorders enemies. Discovery must retain current/previous-job and caller context
+when applying the shared whole-effect gate; a supported direct child is
+insufficient when any hidden descendant is unsupported. The whole submitted
+operation must reject before consumption or durable mutation in that case.
 Shared [dynamic-effect rules](battle.md#dynamic-effects-and-catalog-admission)
 and [resumption requirements](battle.md#explicit-action-resumption-requirements)
 are owned by Battle; commands and owned observations by

@@ -274,6 +274,87 @@ are recorded in [#1333](https://github.com/witchcraze/party2re/issues/1333).
 | Delegated gems | Gem 86 tries the current job's last extended callback before the previous job. Finding an extended callback returns “handled” even when SP/MP prevents execution, so it does not fall back in that case; job 73 has a separate 1-MP stat increase. Gems 87–92 prefer a calling previous job, otherwise current job, and invoke its named command/first non-command non-extended callback without normal SP or listed MP charging | `_data.cgi:2174–2180`; `_skill.cgi:10841–10918` |
 | Two-target book use | Validate both encounter participants, allow the same target twice, require MP ≥floor(book cost×1.5), execute first then second. Actor death after the first stops the second **and** skips the later MP charge/book return. If the actor survives, subtract the internal cost and return the book to storage after the second. Ordinary one-target book invocation does not return it | `_skill.cgi:6868–6897,10538–10557`; native ID authorization remains mandatory |
 
+#### Random and delegated job closure
+
+The draw is over **job tables and ordered callback positions**, not distinct
+names, learned skills or native definitions. At the pinned revision the player
+table ends at job87 (`_data.cgi:12–301`). The 86 concrete tables in jobs1..87
+contain 599 entries: 548 ordinary and 51 extended. Job73 supplies a generated
+view of another table, rather than a further independent callback catalog.
+Commented entries at `_skill.cgi:3241,3689` are excluded. The per-callback source
+and unresolved effect-owner reconciliation belongs to
+[#1344](https://github.com/witchcraze/party2re/issues/1344); these counts establish
+the evidence boundary, not native certification.
+
+General random invocation first draws each job1..87 with equal probability,
+then draws positions in that job's table. Extended positions are redrawn within
+the same table; repeated names remain separate positions. This gives callbacks
+in differently sized tables different probabilities. No concrete table or
+job73 proxy is empty or all-extended at this revision. The helper nevertheless
+has an accepted empty-table no-effect branch; an all-extended table would never
+finish selection. A future such table needs an explicit decision before
+admission, not a silent retry limit or supported-only pool. Tool84 has no empty
+table guard and no extended-entry exclusion (`_data.cgi:1260–1264`).
+
+| Indirect edge | Required context, target and resource behavior | Evidence / owner |
+| --- | --- | --- |
+| Job73 table proxy | Use `(AT+DF+AG)%73`, replacing zero with job8. Retain the actual actor's jobs, stats, held items and role when constructing/executing the selected table; selecting a table does not change the actor's job | `_skill.cgi:5583–5588`; #1357 |
+| Job82 generated entry | Select table `(AT+DF+AG+member count)%87`, replacing zero,73,82 with8; select its position by the same sum modulo that table's size. Extended entries are included. The generated callback checks its child's listed MP internally, even under random invocation; it does not itself subtract that cost | `_skill.cgi:6537–6550`; #1357 |
+| Recursive random | Job55 and56 callbacks and a branch of calling-job80's special command reach the general random helper. Job79's NPC callback draws again if alive after the first draw. Coverage is a transitive graph, including cycles, not a fixed one-level list | `_skill.cgi:3860,3886,6257–6262,6381–6419`; #1357, #1339, #1360 |
+| Extended gem86 | Inspect only the current table's last position. A last extended entry returns handled even when its SP/MP check prevents execution; only unhandled falls back to previous job. On execution subtract listed MP **after** the callback, clamped at zero. Job73 always reports handled: at MP>0 increase AT by party count when AT<999, then subtract1 MP; MP0 blocks fallback too. No ordinary equipment gate is applied | `_skill.cgi:10841–10877`; #1357 |
+| Calling gems87–92 | Prefer a calling previous job, otherwise current job, even if the preferred callback has no usable helper. Named commands choose the first matching table entry. Gem92 chooses the first ordinary entry excluding the five command names. The selected child has no ordinary SP or listed-MP charge; its internal gates and side effects still apply | `_skill.cgi:738–753,10879–10918`; `_data.cgi:2175–2180`; #1339, #1357 |
+| Arithmetic and discovered-command delegation | Job72 uses the discovered action map and submitted command context to select a divisor-dependent effect. Job31 also has MP-divisibility and HP digit-reversal effects; these can affect both sides and fallen participants. Direct random selection of a divisor-dependent callback without a divisor fails to cast | `_skill.cgi:2653–2713,5450–5581`; #1358 |
+| Book/tool descendants | Job50's extended callback can invoke a depot tool; job78 can use an enhanced tool or buy one; job86 can exchange/return a book or invoke it twice. These reach the finite non-job tables and their descendants, including random invocation and travel. An NPC branch is not interchangeable with a player asset operation | `_skill.cgi:3612–3626,5988–6013,6802–6899,10196–10305,10433–10557`; #1341, #1197 |
+| Transformed tables | Copying job pairs and job82's form change affect subsequent table construction. Temporary job300 has four ordinary entries although it is outside the initial general-random job draw. Tool84 can select its current-job table; do not extend the general pool to300 or infer job88 reachability merely from a declared routine | `_skill.cgi:2944–2964,6593–6610,7465–7532`; #1340 |
+
+Bare Perl callback invocation forwards the caller's remaining arguments.
+Consequently random invocation does not universally discard its target:
+tool84/85 receive the tool argument (default self), gem83 receives the resolved
+custom target, and nested callbacks may already have consumed an argument.
+Gem86 and calling helpers pass an explicit target. Current/previous discovery
+instead assigns a name-keyed action map in order; a later admitted same-name
+entry overwrites that map value. Random positional selection and delegated
+first-match selection must not be replaced with this last-write lookup.
+Evidence: `_skill.cgi:35–104,260–309,758–764,9773–9787,10887–10918`;
+`_data.cgi:1260–1264,2171,2174–2180`.
+
+Calling jobs are exactly59–69,71,80,87. Summon and dismiss address their named
+helper; attack commands temporarily change the acting participant, while many
+special commands use helper stats with the summoner still acting. A missing
+named helper can fall back to the first matching **appearance** in party order;
+`_search_job` excludes self and mixed forms and does not search job IDs. A
+present but fallen named helper does not fall back. Summon branches, merge,
+duplication, growth, helper defense and cross-actor restoration remain #1339;
+the shared attack/target/modifier descendants remain #1343. Legacy appearance
+paths identify branch evidence only; native assets must be newly authored.
+Evidence: `_skill.cgi:4029–5447,6307–6467,6904–7038,9793–9828,9935–9942,10627–10650`.
+
+The random wrapper restores only the invoking actor's MP decrease after a
+normally returning callback. It preserves increases, other actors' MP changes,
+actor death, HP, statuses, field state, ordered roster, held items, money and
+room transitions. Internal MP checks, including job82's generated entry and
+job86's two-target book use, are not waived by absence of ordinary child costs.
+Job callbacks that read or change wallet/held tools are owned by #1359;
+job78/79 encounter replacement, SP reduction and enemy ordering by #1360.
+These operations require the same receipt/transaction boundary as their outer
+command. Refresh/retry must not reroll or replay a nested mutation.
+
+The shared helper gate #1343 includes callback category checks and ambient
+context. `is_bad_state` checks only magic, dance and physical categories
+(`_skill.cgi:9575–9609`); job81's song category always passes that predicate.
+Other ambient-context branches remain named gates in #1344's reconciliation
+until their owning audit resolves them.
+
+Required executor/consumer vectors (#1357, #1329, #1330) include an unlearned
+high-cost child, extended exclusion versus tool inclusion, unusable-but-handled
+current gem86 entry, old calling-job preference, MP decrease restoration versus
+increase retention, actor death before later gems, helper/held-item/room changes,
+and a hidden unsupported descendant after a supported custom slot. The last
+case rejects the **whole** outer action without spending MP/CMP/items or
+changing any state. Compare uninterrupted and serialized/reloaded results,
+including draws, ordering and asset receipts. Neither this source audit nor
+an executor tested against a synthetic catalog certifies production entries.
+
 #### Resources, revival and roster changes
 
 HP recovery and MP recovery are separate operations. `_mp_h:9150–9187`
@@ -366,8 +447,11 @@ entry reaching a shared hook must certify its producer and consumer together.
 Production adoption still requires #1188 supply, #1332 resumable lifetimes,
 #1337 MP resources, #1338 revival, #1339 summons, #1340 transformation and #1342
 ordinary NPC payloads. Named specification gates remain #1341 book/purchase
-transactions, #1343 shared modifiers/special fields, #1344 transitive job
-callbacks. Travel's dispatch/tail/next-operation rules are owned by
+transactions and #1343 shared modifiers/special fields. The transitive job
+reconciliation in #1344 also requires #1357 invocation execution, #1358
+arithmetic selectors, #1359 wallet/held-tool effects and #1360 job-driven room
+transitions; each remains subject to complete per-entry certification.
+Travel's dispatch/tail/next-operation rules are owned by
 [Adventure](adventure.md#combat-travel-and-encounter-replacement), including
 tool 150's retained old-enemy response/reappearance; source certification is
 not native travel support. #1346 implements the shared support/admission gate.
