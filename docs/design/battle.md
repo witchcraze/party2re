@@ -210,7 +210,7 @@ and counter decrement separately. Generic arbitrary extra turns are unsupported.
 | --- | --- | --- |
 | Status and poison | Player incapacitation branches (`_battle.cgi:686–728`) consume an accepted operation but bypass the normal-action block; paralysis/sleep cure branches do not execute the chosen action in that operation. Item 204 bypasses relevant checks. Player confusion cure is 1/5, ordinary NPC is 1/3 (`_npc_action.cgi:295–310`). Poison, party virulent poison and death checks use their actual post-action block (`792–857`), not every elapsed interval | #1332/#1333 reconcile existing `execute_status.go` gaps; #1329 tests accepted incapacitation vs rejected operation, player/NPC distinction and serialize/reload before poison/death |
 | Temporary effects | On normal player action, defense/reflection clears, other temporary effects may clear with 1/3 probability; mirror-sharing and item 163 exceptions apply (`748–755`). Target helpers apply cover/reflection; single-use defense clears on hit (`_skill.cgi:8838–8843`) | #1332 owns typed effect facts/reset; reload before/after expiry, reflected hit and defense consumption. Current defending/abilities maps do not establish these lifetimes |
-| Extended effects | With enemies and the enclosing tail eligible (`_battle.cgi:938–1172`), counters differ: frenzy/awakening on operation; magic sword/crown/war-god/flame on positive damage count; bow on qualifying bow action; additional submission on whitelist input. Incense ticks each holder on an ally tail with one party heal (`1055–1128`). NPC purification has its own decrement (`_npc_action.cgi:466–468`) | #1332 owns counters and operation-local action facts. Round-trip immediately before/after every decrement/zero transition; test zero damage and blocked second execution |
+| Extended effects | With enemies and the enclosing tail eligible (`_battle.cgi:938–1172`), counters differ: frenzy/awakening on operation; magic sword/crown/war-god/flame on nonzero damage-helper invocation count (which can include misses/blocked hits); bow on qualifying bow action; additional submission on whitelist input. Incense ticks each holder on an ally tail with one party heal (`1055–1128`). NPC purification has its own decrement (`_npc_action.cgi:466–468`) | #1332 owns counters and operation-local action facts. Round-trip immediately before/after every decrement/zero transition; test zero damage and blocked second execution |
 | Suppression / skill history | `_skill.cgi:2518–2531` suppresses on the first qualifying cosmic-field use for a color; `6257–6273` rotates a head and suppresses; `6843–6853` suppresses after successful book retrieval. `_battle.cgi:913–914,938,1169` independently gate field ticks, tail and NPC response | #1332 owns history, #1333 callback predicates; test first/repeated use, failed retrieval, and suppressed operation. Do not equate suppression with disabling all poison/extra processing |
 | CMP and skill bans | Seal-field entry changes recharge need/progress (`636–638`); eligible tail checks threshold, recharges, resets and chooses next threshold (`1039–1053`). Skill ban file blocks named submissions (`667–675`); eligible tail decrements finite bans, retaining sentinel 999 (`1137–1149`) | #1332 persists recharge thresholds/progress and bans/history. Reload at threshold−1/threshold, ban expiry and permanent ban; a GET/retry never ticks |
 | Temporary/default/anti fields | `get_field_info:1568–1610` prefers temporary over default. Temporary decrements when present before/after operation, enemies remain, anti absent and response not suppressed (`913`). Anti decrements under its own presence/suppression predicate (`914`); creation deletes temporary field (`1661–1668`). Default is not a temporary countdown; expiry can reveal it | #1332 extends current elemental `FieldState`; reload at creation, last tick, anti expiry and default reveal. Special burn/ghost/library hooks use `check_field_exercise:1715–1720`; #1333 certifies catalog-specific effects |
@@ -339,11 +339,10 @@ job78/79 encounter replacement, SP reduction and enemy ordering by #1360.
 These operations require the same receipt/transaction boundary as their outer
 command. Refresh/retry must not reroll or replay a nested mutation.
 
-The shared helper gate #1343 includes callback category checks and ambient
-context. `is_bad_state` checks only magic, dance and physical categories
-(`_skill.cgi:9575–9609`); job81's song category always passes that predicate.
-Other ambient-context branches remain named gates in #1344's reconciliation
-until their owning audit resolves them.
+The [shared modifier contract](#shared-modifiers-and-callback-outcomes) separates
+callback categories, target resolution and source-context gates. Job81's song
+category always passes `is_bad_state`; the apparent rejection at6525 is
+unreachable. #1344's helper edges do not certify caller formulas or context.
 
 Required executor/consumer vectors (#1357, #1329, #1330) include an unlearned
 high-cost child, extended exclusion versus tool inclusion, unusable-but-handled
@@ -354,6 +353,104 @@ case rejects the **whole** outer action without spending MP/CMP/items or
 changing any state. Compare uninterrupted and serialized/reloaded results,
 including draws, ordering and asset receipts. Neither this source audit nor
 an executor tested against a synthetic catalog certifies production entries.
+
+#### Shared modifiers and callback outcomes
+
+Behavioral evidence: `_skill.cgi:8807–9770,9948–10194,10384–10430,10559–10624,
+11035–11104`; `_battle.cgi:28–142,748–1178,1390–1428,1715–1759,1855–1873`;
+revision and detailed reconciliation in
+[#1343](https://github.com/witchcraze/party2re/issues/1343).
+This contract does not certify native production formulas. Callback guards,
+coefficients and tails remain part of each entry's complete support boundary.
+
+Callback category (physical, magic, breath, dance, song or untyped) is independent
+of an elemental name and of direct/normal-attack flags. Category seals check only
+magic/dance/physical, each with a fresh 1/4 cure attempt. Enemy-side category
+conversion precedes that check: item166, eligible noncustom magic-sword commands,
+then seal12 with its 3 MP charge. An elemental multiplier cannot replace these rules.
+
+Resolve the target before applying its temporary effect once. Cover selects the
+first same-side covering member, without a living filter. Defense/reduction/double
+can modify numeric healing or buff coefficients as well as damage; symbolic
+payloads bypass numeric multipliers. Matching reflection redirects to the actor
+(item163 can double payload), nullification sets zero, and deflection/phantom
+use their own ordered draws. Magic absorption adds capped MP but does **not**
+cancel the incoming effect. Ordinary ally resolution redirects fallen to actor
+except revival; confusion has different member-selection predicates. Preserve
+source-context gates instead of replacing them with living-only or lowest-HP rules.
+
+Distinguish helper rejection, accepted no-effect, actual application and failure.
+Legacy returned tuples and invocation counters do not establish applied success:
+stat-up at cap/bound target returns a tuple, failed status can return a tuple,
+and damage counts before one-hit defense/miss. Zero modifier returns can suppress
+tension use and all later damage tails. Area damage's initial modifier evaluation,
+roster order, actor-death break and conditional item144 decay threshold (<=300)
+must remain distinct from independent repeated single hits.
+
+HP healing uses target hooks, ordered equipment/effect modifiers, random variation
+and actor tension, then caps; sanctuary magic overflow subtracts excess from the
+capped value, with floor 1. Party healing consumes tension in helper order.
+Tool recovery follows its separate random/optional-target-hook path. Stat-up
+adds a proportion of **base** stat, normally capped at 2.5 times base (qualified
+self buffs at 3 times base); stat-down subtracts a proportion of **current** stat
+with a 20% base floor and hit floor 50.
+Item201/205/186 can cause incidental damage, tension/state or recovery, including
+an item186 heal before a later zero-result check. MP operations remain separate.
+
+Instant death uses currentHP>999 or baseDF>999 immunity and probability>=draw;
+status uses NPC **MaxHP**>999 versus player **currentHP**>999, baseDF>999,
+and probability>draw. Den's bypass applies only to the player threshold branch.
+Item161 tension>=5 and weapon68+armor53 supply separate gates. Cure requires a
+living resolved target and matching status; deadly-poison cure also clears
+ordinary/virulent poison. Ability cure runs before incapacitation: matching
+specific ability 1/2, then general ability 1/5 only if status remains. A hook's
+existence alone does not import its map17-only producers into ordinary stages.
+
+Reset clears transient state, rebuilds equipped stats, **reapplies type3 accessory,
+weapon revision and seal effects**, then floors agility. It does not generically
+restore HP/MP, but an accessory can explicitly do so. Revival precedence, item
+consumption and post-reset death attacks must use the same defeat/reset path.
+Dispel therefore need not leave empty state or unequipped stats. #1332 owns
+reset/lifetime state, #1338 revival, #1337 MP and #1339 roster operations.
+
+Named-field reads and eligible field tails have different predicates. The latter
+check before **or** after field name, response eligibility, no anti-field and no
+suppression; helper modifiers often read the name without an anti check. Burn
+is nonlethal and clears transient states; grave restores/recreates the snapshotted
+helper, with existing-helper MP restored on player tail but not NPC tail. Library
+has selected book modifiers and a player-only random-member MP tail; fallen picks
+have no effect. Cosmic distinguishes repeated single hits from area count;
+antlion draws immobilization and defense reduction independently. Sanctuary,
+seal, den, phantom and fortress require certified producers as well as consumers.
+Snow has no evidenced shared numeric modifier; stage23's declared default is EX-only.
+
+Immediate recoil and deferred darkness debit are different operations. `_risk`
+counts, rounds value+1, and item160 can turn it into recovery/cure/AT; `__risk`
+only debits a living actor nonlethally. Darkness queues the first hit's half-damage
+capped at 500; a prior immediate recoil removes that queued entry before execution.
+Gems101/102 register a callback in a queue whose consumers expect hash fields;
+successful deferred recoil is **unproven**, and repairing that original mismatch
+requires a recorded decision. Do not certify these slots from their nominal effect.
+
+Finite random composites retain branch-specific writes: `_parupunte` probabilities
+1/2 temporary state, 1/4 abnormal state, 1/8 full HP, then 1/24 each agility 0,
+HP 1 and no effect;
+states are shared draws, and fullHP/agility branches can include fallen members.
+`_rainbow` selects seven outcomes uniformly; revival tmp includes HP0 but excludes
+negative HP, revival restores fallen, and other branches compose the ordinary
+heal/stat/cure/MP helpers in source order. They are not random damage payloads.
+
+Unresolved bindings stay gated: extension201's ambient target; job78's prebinding
+target at6145–6174; calling80 distributed AT's cap at**6436–6465** (not its
+6381–6419 special attack); duplicate enemy-confusion draws; item110 roster swaps;
+tool damage category, fortress field and weapon-revision level/awakening context;
+and the malformed deferred queue. No generic self/current-target/current-field
+replacement or implicit bug repair is approved.
+[#1367](https://github.com/witchcraze/party2re/issues/1367) owns these binding decisions;
+#1362–#1366 own target, damage, recovery/stat, status/reset and field/composite
+implementations respectively. The detailed #1343 issue ledger supplies evidence;
+unsupported closure rejects the entire outer command through the existing
+admission boundary.
 
 #### Resources, revival and roster changes
 
@@ -447,7 +544,8 @@ entry reaching a shared hook must certify its producer and consumer together.
 Production adoption still requires #1188 supply, #1332 resumable lifetimes,
 #1337 MP resources, #1338 revival, #1339 summons, #1340 transformation and #1342
 ordinary NPC payloads. Named specification gates remain #1341 book/purchase
-transactions and #1343 shared modifiers/special fields. The transitive job
+transactions and the [shared modifier follow-ups](#shared-modifiers-and-callback-outcomes)
+from #1343, including unresolved source-context decisions. The transitive job
 reconciliation in #1344 also requires #1357 invocation execution, #1358
 arithmetic selectors, #1359 wallet/held-tool effects and #1360 job-driven room
 transitions; each remains subject to complete per-entry certification.
