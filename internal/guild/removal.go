@@ -187,6 +187,7 @@ func (s *Service) leaveInternal(ctx context.Context, guildID string, characterID
 			}
 			if errors.Is(err, errRosterChanged) {
 				retries++
+				clear(ineligible)
 				continue
 			}
 			return err
@@ -318,6 +319,7 @@ func (s *Service) leaveInternal(ctx context.Context, guildID string, characterID
 			}
 			if errors.Is(tErr, errRosterChanged) {
 				retries++
+				clear(ineligible)
 				continue
 			}
 			return tErr
@@ -374,9 +376,34 @@ func (s *Service) leaveInternal(ctx context.Context, guildID string, characterID
 				return ErrUnauthorized
 			}
 
-			// Verify if any remaining member in lockedMembers is NOT in ineligible map!
+			if remainingLocked == 0 {
+				if err := s.repo.DisbandGuild(txCtx, guildID); err != nil {
+					return err
+				}
+				disbanded = true
+				disbandedGuildName = lockedGuild.Name
+				return nil
+			}
+
+			// Revalidate candidate eligibility under the Rank 7 guild lock before disbanding.
+			// If any remaining member is currently eligible (a formal member, or a pending
+			// applicant with no other active guild affiliation), abort disbandment and retry
+			// candidate succession under Rank 2 -> Rank 7 locks.
 			for _, lm := range lockedMembers {
-				if lm.CharacterID != characterID && !ineligible[lm.CharacterID] {
+				if lm.CharacterID == characterID {
+					continue
+				}
+				if !lm.IsPending {
+					return errRosterChanged
+				}
+				activeGuild, _, err := s.repo.GetGuildByCharacter(txCtx, lm.CharacterID)
+				if err != nil {
+					if errors.Is(err, ErrCharacterNotInGuild) {
+						return errRosterChanged
+					}
+					return err
+				}
+				if activeGuild.ID == guildID {
 					return errRosterChanged
 				}
 			}
@@ -397,6 +424,7 @@ func (s *Service) leaveInternal(ctx context.Context, guildID string, characterID
 		}
 		if errors.Is(err, errRosterChanged) {
 			retries++
+			clear(ineligible)
 			continue
 		}
 		return err

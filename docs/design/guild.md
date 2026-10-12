@@ -171,12 +171,14 @@ Roster priority uses the existing repository order (`joined_at ASC`, then
 3. **Database Cascade Invariant**:
    - Character deletion (`character_repository.Delete`) no longer runs raw `UPDATE guilds SET leader_character_id = NULL`. Guild leadership and dissolution are handled strictly through the domain cleanup hook prior to physical character deletion, preserving the invariant that every existing guild has a valid leader.
 
-**Implementation status**: Implemented in #1006 and hardened in #1036 and #1298. Succession evaluates
+**Implementation status**: Implemented in #1006 and hardened in #1036, #1298, and #1348. Succession evaluates
 the remaining roster for candidate successors in rank order (title containing "ギルマス" first, then roster order).
 For each candidate, a Rank-2 lock on candidate character (`LockCharacterForUpdate`) is acquired before Rank-7 guild lock (`GetGuildForUpdate`),
 re-verifying active affiliation to prevent concurrent duplicate affiliations. If a candidate is disqualified,
-subsequent candidates are evaluated; if no eligible candidates remain or on sole-member departure, the guild is cleanly disbanded
-and publishes server news post-commit.
+subsequent candidates are evaluated. Before disbandment, remaining candidate eligibility is revalidated under the locked guild roster:
+any candidate who became eligible (such as being approved as a formal member or leaving another guild during departure) aborts disbandment
+and retries succession under Rank-2 -> Rank-7 locks (#1348). If no eligible candidates remain or on sole-member departure,
+the guild is cleanly disbanded and publishes server news post-commit.
 
 ### 20-Day Inactivity Automatic Disbandment (`auto_delete_guild_day = 20`)
 
