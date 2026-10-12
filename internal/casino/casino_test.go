@@ -3,6 +3,7 @@ package casino_test
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -74,8 +75,56 @@ func TestCasinoService_Exchanges(t *testing.T) {
 
 	t.Run("Invalid amount returns error", func(t *testing.T) {
 		_, _, err := svc.ExchangeGoldToCoins(ctx, "char1", 0)
-		if err != casino.ErrInvalidAmount {
+		if !errors.Is(err, casino.ErrInvalidAmount) {
 			t.Errorf("got %v, want ErrInvalidAmount", err)
+		}
+		_, _, err = svc.ExchangeGoldToCoins(ctx, "char1", -1)
+		if !errors.Is(err, casino.ErrInvalidAmount) {
+			t.Errorf("got %v, want ErrInvalidAmount", err)
+		}
+		_, _, err = svc.ExchangeGoldToCoins(ctx, "char1", -100)
+		if !errors.Is(err, casino.ErrInvalidAmount) {
+			t.Errorf("got %v, want ErrInvalidAmount", err)
+		}
+	})
+
+	t.Run("Overflow amount (2^62, MaxInt64, near MaxInt64) rejected without side-effects", func(t *testing.T) {
+		// 2^62 = 4611686018427387904, where 2^62 * 20 wrapped to 0 in int64
+		const overflow2To62 = int64(1) << 62
+		runner.called = false
+		currentCoins = 50
+		runner.money = 0 // Zero gold balance: must not get free coins!
+
+		_, _, err := svc.ExchangeGoldToCoins(ctx, "char1", overflow2To62)
+		if !errors.Is(err, casino.ErrCoinOverflow) {
+			t.Fatalf("expected ErrCoinOverflow for 2^62 coins, got %v", err)
+		}
+		if currentCoins != 50 {
+			t.Errorf("coins modified on 2^62 overflow: got %d, want 50", currentCoins)
+		}
+		if runner.money != 0 {
+			t.Errorf("runner money modified: got %d, want 0", runner.money)
+		}
+
+		// math.MaxInt64
+		_, _, err = svc.ExchangeGoldToCoins(ctx, "char1", math.MaxInt64)
+		if !errors.Is(err, casino.ErrCoinOverflow) {
+			t.Fatalf("expected ErrCoinOverflow for MaxInt64, got %v", err)
+		}
+		if currentCoins != 50 {
+			t.Errorf("coins modified on MaxInt64 overflow: got %d, want 50", currentCoins)
+		}
+
+		// math.MaxInt64 - 1
+		_, _, err = svc.ExchangeGoldToCoins(ctx, "char1", math.MaxInt64-1)
+		if !errors.Is(err, casino.ErrCoinOverflow) {
+			t.Fatalf("expected ErrCoinOverflow for MaxInt64 - 1, got %v", err)
+		}
+
+		// MaxExchangeCoins + 1
+		_, _, err = svc.ExchangeGoldToCoins(ctx, "char1", int64(casino.MaxExchangeCoins)+1)
+		if !errors.Is(err, casino.ErrCoinOverflow) {
+			t.Fatalf("expected ErrCoinOverflow for MaxExchangeCoins + 1, got %v", err)
 		}
 	})
 

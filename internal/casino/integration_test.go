@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -617,5 +618,128 @@ func TestCasinoBulkEquipmentPrizeDepotDatabaseIntegration(t *testing.T) {
 	}
 	if armorCount != 2 {
 		t.Errorf("expected 2 armor-34 items, got %d", armorCount)
+	}
+}
+
+func TestExchangeGoldToCoins_RealDB_OverflowAndBoundary(t *testing.T) {
+	if os.Getenv("PARTY2_DB_DSN") == "" {
+		t.Skip("PARTY2_DB_DSN is not configured")
+	}
+
+	db, err := database.OpenFromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	casinoRepo, err := database.NewCasinoRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txProvider := database.NewTransactionProvider(db)
+	svc, err := casino.NewService(
+		casinoRepo,
+		casino.WithTransactionProvider(txProvider),
+		casino.WithCharacterRepository(charRepo),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Create a character with 0 initial gold
+	char, err := database.CreateTestCharacterWithFunds(ctx, db, "ZeroGoldGambler", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Initial casino account must have 0 coins
+	initialAcc, err := casinoRepo.GetAccount(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetAccount failed: %v", err)
+	}
+	if initialAcc.Coins != 0 {
+		t.Fatalf("initial coins = %d, want 0", initialAcc.Coins)
+	}
+
+	// 3. Attempt 2^62 coins exchange: MUST fail with ErrCoinOverflow, no coins credited to DB
+	const overflowCoins = int64(1) << 62
+	_, _, err = svc.ExchangeGoldToCoins(ctx, char.ID, overflowCoins)
+	if !errors.Is(err, casino.ErrCoinOverflow) {
+		t.Fatalf("expected ErrCoinOverflow for 2^62, got %v", err)
+	}
+
+	accAfter2To62, err := casinoRepo.GetAccount(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetAccount after 2^62 failed: %v", err)
+	}
+	if accAfter2To62.Coins != 0 {
+		t.Fatalf("free coins credited to real DB! got %d, want 0", accAfter2To62.Coins)
+	}
+
+	// 4. Attempt MaxInt64 coins exchange: MUST fail with ErrCoinOverflow
+	_, _, err = svc.ExchangeGoldToCoins(ctx, char.ID, math.MaxInt64)
+	if !errors.Is(err, casino.ErrCoinOverflow) {
+		t.Fatalf("expected ErrCoinOverflow for MaxInt64, got %v", err)
+	}
+
+	accAfterMax, err := casinoRepo.GetAccount(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetAccount after MaxInt64 failed: %v", err)
+	}
+	if accAfterMax.Coins != 0 {
+		t.Fatalf("free coins credited to real DB! got %d, want 0", accAfterMax.Coins)
+	}
+
+	// 5. Attempt 0 and negative: MUST fail with ErrInvalidAmount
+	for _, badCoins := range []int64{0, -1, -50} {
+		_, _, err = svc.ExchangeGoldToCoins(ctx, char.ID, badCoins)
+		if !errors.Is(err, casino.ErrInvalidAmount) {
+			t.Fatalf("expected ErrInvalidAmount for %d, got %v", badCoins, err)
+		}
+	}
+	accAfterBad, err := casinoRepo.GetAccount(ctx, char.ID)
+	if err != nil {
+		t.Fatalf("GetAccount after bad coins failed: %v", err)
+	}
+	if accAfterBad.Coins != 0 {
+		t.Fatalf("coins modified in DB! got %d, want 0", accAfterBad.Coins)
+	}
+
+	// 6. Give character 200 gold and do a legitimate exchange of 10 coins (200 gold cost)
+	if _, err := db.ExecContext(ctx, "UPDATE characters SET money = ? WHERE id = ?", 200, char.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	legitAcc, updatedChar, err := svc.ExchangeGoldToCoins(ctx, char.ID, 10)
+	if err != nil {
+		t.Fatalf("legitimate exchange failed: %v", err)
+	}
+	if legitAcc.Coins != 10 {
+		t.Errorf("expected 10 coins, got %d", legitAcc.Coins)
+	}
+	if updatedChar.Money != 0 {
+		t.Errorf("expected 0 gold remaining, got %d", updatedChar.Money)
+	}
+
+	// Verify real DB state
+	dbAcc, err := casinoRepo.GetAccount(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dbAcc.Coins != 10 {
+		t.Errorf("real DB coins = %d, want 10", dbAcc.Coins)
+	}
+	dbChar, err := charRepo.FindByID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dbChar.Money != 0 {
+		t.Errorf("real DB gold = %d, want 0", dbChar.Money)
 	}
 }

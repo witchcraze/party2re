@@ -204,6 +204,34 @@ func TestCasinoEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("POST /characters/{id}/casino/exchange - zero and negative coins rejected", func(t *testing.T) {
+		for _, invalidCoins := range []string{`0`, `-1`, `-100`} {
+			req := jsonRequest(t, http.MethodPost, "/characters/c1/casino/exchange", `{"direction":"gold_to_coins","coins":`+invalidCoins+`}`)
+			req.Header.Set("Authorization", "Bearer valid-token")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("coins=%s: expected 400 Bad Request, got %d: %s", invalidCoins, rec.Code, rec.Body.String())
+			}
+		}
+	})
+
+	t.Run("POST /characters/{id}/casino/exchange - overflowing coins rejected (2^62, MaxInt64)", func(t *testing.T) {
+		// 2^62 = 4611686018427387904
+		// 2^63 - 1 = 9223372036854775807
+		for _, overflowCoins := range []string{`4611686018427387904`, `9223372036854775807`} {
+			req := jsonRequest(t, http.MethodPost, "/characters/c1/casino/exchange", `{"direction":"gold_to_coins","coins":`+overflowCoins+`}`)
+			req.Header.Set("Authorization", "Bearer valid-token")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("coins=%s: expected 400 Bad Request, got %d: %s", overflowCoins, rec.Code, rec.Body.String())
+			}
+		}
+	})
+
 	t.Run("POST /characters/{id}/casino/slot - success", func(t *testing.T) {
 		req := jsonRequest(t, http.MethodPost, "/characters/c1/casino/slot", `{"bet":10}`)
 		req.Header.Set("Authorization", "Bearer valid-token")

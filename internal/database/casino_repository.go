@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/witchcraze/party2re/internal/casino"
@@ -173,6 +174,9 @@ func (r *CasinoRepository) DeductBetAndCreditPayout(ctx context.Context, charact
 
 func (r *CasinoRepository) AdjustCoins(ctx context.Context, characterID string, delta int64) (casino.Account, error) {
 	if delta < 0 {
+		if delta == math.MinInt64 {
+			return casino.Account{}, errors.New("delta out of range")
+		}
 		return r.DeductBetAndCreditPayout(ctx, characterID, -delta, 0)
 	}
 	return r.DeductBetAndCreditPayout(ctx, characterID, 0, delta)

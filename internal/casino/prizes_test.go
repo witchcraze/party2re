@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"testing"
 
@@ -317,5 +318,30 @@ func TestExchangePrize_DepotCapacityRollbackForBulkEquipment(t *testing.T) {
 	savedDepot := depotMock.depots[charID]
 	if len(savedDepot.Items) != 4 {
 		t.Errorf("expected depot items preserved at 4, got %d", len(savedDepot.Items))
+	}
+}
+
+func TestExchangePrize_OverflowRejected(t *testing.T) {
+	repo := newMockPrizeCasinoRepo()
+	depotMock := newMockDepotRepo()
+
+	svc, err := casino.NewService(repo, casino.WithDepotRepository(depotMock))
+	if err != nil {
+		t.Fatalf("failed to create casino service: %v", err)
+	}
+
+	charID := "char-overflow"
+	repo.accounts[charID] = casino.Account{CharacterID: charID, Coins: 100000}
+
+	// Attempt to exchange with count = math.MaxInt (overflows SafeMultiply)
+	_, err = svc.ExchangePrize(context.Background(), charID, 100, math.MaxInt)
+	if !errors.Is(err, casino.ErrCoinOverflow) {
+		t.Fatalf("expected ErrCoinOverflow, got %v", err)
+	}
+
+	// Verify coins preserved
+	acc, _ := repo.GetAccount(context.Background(), charID)
+	if acc.Coins != 100000 {
+		t.Errorf("expected coins preserved at 100000, got %d", acc.Coins)
 	}
 }
