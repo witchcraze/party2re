@@ -204,12 +204,12 @@ func TestContestSettlementHandler_Postponed(t *testing.T) {
 		t.Fatalf("expected handler to succeed, got: %v", err)
 	}
 
-	// Verify round 1 remains active and is extended by 10 days
+	// Verify round 1 remains active and is extended by 10 days from current check time
 	r1 := contestRepo.rounds[1]
 	if r1.Status != contest.StatusActive {
 		t.Errorf("expected round 1 to remain active, got %s", r1.Status)
 	}
-	expectedEnd := endTime.Add(contest.ContestCycleDays * 24 * time.Hour)
+	expectedEnd := now.Add(contest.ContestCycleDays * 24 * time.Hour)
 	if !r1.EndTime.Equal(expectedEnd) {
 		t.Errorf("expected extended end time %v, got %v", expectedEnd, r1.EndTime)
 	}
@@ -225,6 +225,86 @@ func TestContestSettlementHandler_Postponed(t *testing.T) {
 	}
 	if !scheduled.ExecuteAt.Equal(expectedEnd) {
 		t.Errorf("expected executeAt %v, got %v", expectedEnd, scheduled.ExecuteAt)
+	}
+}
+
+func TestContestSettlementHandler_Postponed_DelayedExecution(t *testing.T) {
+	ctx := context.Background()
+	startTime := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	endTime := startTime.Add(contest.ContestCycleDays * 24 * time.Hour) // 2026-09-11
+	now := endTime.Add(25 * 24 * time.Hour)                             // 2026-10-06 (25 days delayed)
+	expectedEnd := now.Add(contest.ContestCycleDays * 24 * time.Hour)   // 2026-10-16 (future!)
+
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+
+	for i := 1; i <= 2; i++ {
+		charID := fmt.Sprintf("char-%d", i)
+		charRepo.characters[charID] = corecharacter.Character{
+			ID:   charID,
+			Name: fmt.Sprintf("Player%d", i),
+		}
+		contestRepo.entries[fmt.Sprintf("entry-%d", i)] = contest.ContestEntry{
+			ID:            fmt.Sprintf("entry-%d", i),
+			Round:         1,
+			CharacterID:   charID,
+			CharacterName: fmt.Sprintf("Player%d", i),
+			Title:         fmt.Sprintf("Photo Title %d", i),
+			PhotoID:       fmt.Sprintf("photo-%d", i),
+			CreatedAt:     startTime.Add(time.Duration(i) * time.Hour),
+		}
+	}
+
+	contestRepo.rounds[1] = contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusActive,
+		StartTime: startTime,
+		EndTime:   endTime,
+	}
+
+	svc, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("failed to create contest service: %v", err)
+	}
+
+	sched := &mockScheduler{}
+	handler := contest.NewContestSettlementHandler(svc, contest.WithScheduler(sched))
+
+	action := core_scheduling.ScheduledAction{
+		ID:          contest.SettlementActionID(1, endTime),
+		ActionType:  contest.ActionTypeContestSettlement,
+		ActorID:     "system",
+		ScheduledAt: startTime,
+		ExecuteAt:   endTime,
+		State:       core_scheduling.StatePending,
+	}
+
+	if err := handler.Handle(ctx, action); err != nil {
+		t.Fatalf("expected handler to succeed, got: %v", err)
+	}
+
+	r1 := contestRepo.rounds[1]
+	if !r1.EndTime.Equal(expectedEnd) {
+		t.Errorf("expected extended end time %v, got %v", expectedEnd, r1.EndTime)
+	}
+
+	if len(sched.scheduledActions) != 1 {
+		t.Fatalf("expected 1 scheduled action, got %d", len(sched.scheduledActions))
+	}
+	scheduled := sched.scheduledActions[0]
+	expectedID := contest.SettlementActionID(1, expectedEnd)
+	if scheduled.ID != expectedID {
+		t.Errorf("expected action ID %q, got %q", expectedID, scheduled.ID)
+	}
+	if !scheduled.ExecuteAt.Equal(expectedEnd) {
+		t.Errorf("expected executeAt %v, got %v", expectedEnd, scheduled.ExecuteAt)
+	}
+	if !scheduled.ExecuteAt.After(now) {
+		t.Errorf("expected executeAt %v to be strictly in the future after check time %v", scheduled.ExecuteAt, now)
 	}
 }
 

@@ -29,13 +29,17 @@ The Photo Contest and Gallery system (`internal/contest`, legacy `photo.cgi` / `
 - **Minimum Entry Quorum**: 5 entries (`MinEntriesForContest = 5`).
   - Submissions are accepted into the preparing round (`status = "preparing"`).
   - A preparing round transitions to active voting (`status = "active"`) when quorum (5+ entries) is reached at cycle settlement time.
-  - If a check occurs with fewer than 5 entries, submissions are retained in the preparing round and the deadline is extended by 10 days without prize distribution.
+  - If a check occurs with fewer than 5 entries, submissions are retained in the preparing round and the deadline is extended by 10 days from the current check time (`now + ContestCycleDays`) without prize distribution.
   - When an active round concludes:
-    - If the active round satisfied quorum (5+ entries), prizes and voter bonuses are distributed, the winner is archived into `contest_legends`, and the round is marked settled. If the next preparing round has 5+ entries, it is promoted to active; otherwise it remains preparing with entries retained and its deadline extended by 10 days.
-    - If an active round had 0 entries (empty active round), it is concluded without rewards, and the preparing round is promoted to active if it satisfies quorum (5+ entries); otherwise both rounds are postponed and extended by 10 days.
+    - If the active round satisfied quorum (5+ entries), prizes and voter bonuses are distributed, the winner is archived into `contest_legends`, and the round is marked settled. If the next preparing round has 5+ entries, it is promoted to active; otherwise it remains preparing with entries retained and its deadline extended by 10 days from the check time (`now + ContestCycleDays`).
+    - If an active round had 0 entries (empty active round), it is concluded without rewards, and the preparing round is promoted to active if it satisfies quorum (5+ entries); otherwise both rounds are postponed and extended by 10 days from the current check time (`now + ContestCycleDays`).
     - If an active round has fewer than quorum entries (1–4 entries):
-      - If the preparing round also has fewer than 5 entries (or is absent), both rounds are postponed and extended by 10 days without prize distribution, retaining submissions in both rounds.
+      - If the preparing round also has fewer than 5 entries (or is absent), both rounds are postponed and extended by 10 days from the current check time (`now + ContestCycleDays`) without prize distribution, retaining submissions in both rounds.
       - If the preparing round has reached quorum (5+ entries), the active round concludes with prize and voter bonus distribution to its entrants based on votes (preserving submissions and avoiding infinite postponement, as new submissions only enter preparing), Hall of Fame archiving is omitted because quorum was not reached (matching legacy `contest.cgi:186`), and the preparing round is promoted to active.
+- **Postponement Deadline Origin (延期起点の規定)**:
+  - Whenever a round is postponed due to insufficient entries (preparing round under quorum, empty active round, or active round under quorum), the new deadline is calculated strictly from the **current settlement check time** (`now + ContestCycleDays * 24 * time.Hour`), never from the past `EndTime`.
+  - **Legacy Reference**: In legacy `party2/contest.cgi:255–264, 294–300` (`_start_contest`), the postponed deadline is computed as `$end_time = $time + 24*60*60*$contest_cycle_day` using the script execution timestamp `$time`.
+  - **Native Operational Guarantee**: If settlement execution is delayed (e.g. maintenance downtime or recovery), adding cycle duration to the old `EndTime` could leave the new deadline in the past, causing recurring scheduler jobs to immediately re-trigger in a catch-up cascade. Using `now + ContestCycleDays` preserves the legacy behavior while ensuring every postponement schedules a valid future execution time 10 days out and grants players a full 10-day submission window.
 
 ### 4.2 Entry Submission Rules (`えんとりー`)
 1. **Single Entry per Round**: A character may submit at most 1 entry per contest round.
@@ -69,7 +73,7 @@ When a contest is settled:
 - On entry submission (`EnterContest`), the settlement check for the preparing round is also registered if not already scheduled.
 - When triggered by `scheduling.Worker`:
   - If quorum (5+ entries) is satisfied, prizes and voter bonuses are distributed for the active round, the champion is archived into `contest_legends`, the next preparing round is promoted to active if it reached quorum (or retained in preparing if under quorum), and the next settlement action is scheduled.
-  - If quorum is not satisfied, the round is postponed and extended by 10 days without prize distribution, entries are retained, and the next check is scheduled for the extended deadline.
+  - If quorum is not satisfied, the round is postponed and extended by 10 days from the current check time (`now + ContestCycleDays`) without prize distribution, entries are retained, and the next check is scheduled for the extended future deadline.
 
 ---
 
