@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/contest"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/id"
@@ -480,38 +482,65 @@ func TestContestSettlement_SchedulingFailureAndReconciliation_DatabaseIntegratio
 	}
 }
 
-const contestTestValkeyDB = 11
-
-func openIsolatedContestTestValkey(t *testing.T, dbIndex int) valkey.Client {
+func openContestTestValkey(t *testing.T) valkey.Client {
 	t.Helper()
 	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
 		t.Skip("PARTY2_VALKEY_ADDR is not configured")
 	}
 
-	cfg := vk.ConfigFromEnvironment()
-	cfg.DB = dbIndex
-	client, err := vk.NewClientWithConfig(cfg)
+	client, err := vk.NewClient()
 	if err != nil {
-		t.Fatalf("open isolated valkey client (DB %d): %v", dbIndex, err)
+		t.Fatalf("open valkey client: %v", err)
 	}
 	return client
 }
 
-func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integration(t *testing.T) {
-	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
-		t.Skip("PARTY2_VALKEY_ADDR is not configured")
+func cleanupValkeyAction(ctx context.Context, client valkey.Client, actorID, actionID string) {
+	_ = client.Do(ctx, client.B().Del().Key("party2:scheduled:action:"+actionID).Build())
+	_ = client.Do(ctx, client.B().Del().Key("party2:scheduled:lock:"+actionID).Build())
+	_ = client.Do(ctx, client.B().Zrem().Key("party2:scheduled:pending").Member(actionID).Build())
+	if actorID != "" {
+		_ = client.Do(ctx, client.B().Srem().Key("party2:scheduled:actor:"+actorID).Member(actionID).Build())
 	}
+}
+
+func cleanupValkeyActor(ctx context.Context, client valkey.Client, actorID string, extraActionIDs ...string) {
+	members, err := client.Do(ctx, client.B().Smembers().Key("party2:scheduled:actor:"+actorID).Build()).AsStrSlice()
+	if err == nil {
+		for _, m := range members {
+			cleanupValkeyAction(ctx, client, actorID, m)
+		}
+	}
+	for _, actID := range extraActionIDs {
+		if actID != "" {
+			cleanupValkeyAction(ctx, client, actorID, actID)
+		}
+	}
+	_ = client.Do(ctx, client.B().Del().Key("party2:scheduled:actor:"+actorID).Build())
+}
+
+func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integration(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	_, contestRepo, charRepo, txProvider := contestIntegrationDB(t)
 
-	vkClient := openIsolatedContestTestValkey(t, contestTestValkeyDB)
+	vkClient := openContestTestValkey(t)
 	t.Cleanup(vkClient.Close)
 
-	// Clean up ONLY the isolated test DB 11 at start and cleanup
-	_ = vkClient.Do(ctx, vkClient.B().Flushdb().Build())
+	testActorID := fmt.Sprintf("contest:test:%s", id.New())
+	var trackedActions []string
+	var trackMu sync.Mutex
+	trackAction := func(actionID string) {
+		trackMu.Lock()
+		defer trackMu.Unlock()
+		trackedActions = append(trackedActions, actionID)
+	}
 	t.Cleanup(func() {
 		cleanupCtx := context.Background()
-		_ = vkClient.Do(cleanupCtx, vkClient.B().Flushdb().Build())
+		trackMu.Lock()
+		ids := append([]string(nil), trackedActions...)
+		trackMu.Unlock()
+		cleanupValkeyActor(cleanupCtx, vkClient, testActorID, ids...)
 	})
 
 	schedRepo := scheduling.NewValkeyRepository(vkClient)
@@ -536,6 +565,7 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 		contestRepo,
 		contest.WithTransactionProvider(txProvider),
 		contest.WithServiceScheduler(schedService),
+		contest.WithSettlementActorID(testActorID),
 		contest.WithNowFunc(func() time.Time { return now }),
 	)
 	if err != nil {
@@ -549,7 +579,7 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 		t.Fatalf("ReconcileSettlementSchedule failed: %v", err)
 	}
 
-	actions, err := schedRepo.FindPendingByActorID(ctx, contest.ContestSettlementActorID)
+	actions, err := schedRepo.FindPendingByActorID(ctx, testActorID)
 	if err != nil {
 		t.Fatalf("FindPendingByActorID failed: %v", err)
 	}
@@ -557,6 +587,7 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 		t.Fatalf("expected 1 pending action in Valkey, got %d", len(actions))
 	}
 	act1 := actions[0]
+	trackAction(act1.ID)
 	if act1.State != core_scheduling.StatePending {
 		t.Errorf("expected StatePending, got %s", act1.State)
 	}
@@ -573,7 +604,7 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
 		t.Fatalf("duplicate ReconcileSettlementSchedule failed: %v", err)
 	}
-	actions2, err := schedRepo.FindPendingByActorID(ctx, contest.ContestSettlementActorID)
+	actions2, err := schedRepo.FindPendingByActorID(ctx, testActorID)
 	if err != nil {
 		t.Fatalf("FindPendingByActorID after duplicate failed: %v", err)
 	}
@@ -604,7 +635,7 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	for err := range errCh {
 		t.Errorf("concurrent ReconcileSettlementSchedule error: %v", err)
 	}
-	actionsConcurrent, err := schedRepo.FindPendingByActorID(ctx, contest.ContestSettlementActorID)
+	actionsConcurrent, err := schedRepo.FindPendingByActorID(ctx, testActorID)
 	if err != nil {
 		t.Fatalf("FindPendingByActorID after concurrent reconcile failed: %v", err)
 	}
@@ -629,7 +660,10 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	if err := contestRepo.SaveRound(ctx, rLegacy); err != nil {
 		t.Fatalf("SaveRound legacy failed: %v", err)
 	}
-	legacyActionID := contest.SettlementActionID(2, legacyEndTime)
+	legacyActionID := fmt.Sprintf("%s:%s", contest.SettlementActionID(2, legacyEndTime), id.New())
+	t.Cleanup(func() {
+		cleanupValkeyAction(context.Background(), vkClient, "system", legacyActionID)
+	})
 	legacyAction := core_scheduling.ScheduledAction{
 		ID:          legacyActionID,
 		ActionType:  contest.ActionTypeContestSettlement,
@@ -648,24 +682,74 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	if err != nil {
 		t.Fatalf("FindPendingByActorID system failed: %v", err)
 	}
-	if len(pendingSys) != 1 || pendingSys[0].ID != legacyActionID {
-		t.Errorf("expected 1 legacy action under system, got %v", pendingSys)
+	var foundSys bool
+	for _, a := range pendingSys {
+		if a.ID == legacyActionID {
+			foundSys = true
+			break
+		}
 	}
-	pendingContest, err := schedRepo.FindPendingByActorID(ctx, contest.ContestSettlementActorID)
+	if !foundSys {
+		t.Errorf("expected legacy action %q under system, got %v", legacyActionID, pendingSys)
+	}
+	pendingContest, err := schedRepo.FindPendingByActorID(ctx, testActorID)
 	if err != nil {
 		t.Fatalf("FindPendingByActorID contest failed: %v", err)
 	}
 	for _, a := range pendingContest {
 		if a.ExecuteAt.Equal(legacyEndTime) {
-			t.Errorf("duplicate action scheduled under contest:settlement for legacy round: %s", a.ID)
+			t.Errorf("duplicate action scheduled under %s for legacy round: %s", testActorID, a.ID)
 		}
 	}
 	// Clean up legacy round so round 1 remains target
 	rLegacy.Status = contest.StatusSettled
 	_ = contestRepo.SaveRound(ctx, rLegacy)
-	_ = vkClient.Do(ctx, vkClient.B().Del().Key("party2:scheduled:action:"+legacyActionID).Build())
-	_ = vkClient.Do(ctx, vkClient.B().Del().Key("party2:scheduled:actor:system").Build())
-	_ = vkClient.Do(ctx, vkClient.B().Zrem().Key("party2:scheduled:pending").Member(legacyActionID).Build())
+	cleanupValkeyAction(ctx, vkClient, "system", legacyActionID)
+
+	// -------------------------------------------------------------
+	// 2d. Different Round with Matching EndTime Not Confused:
+	//     An existing pending action for a different round (e.g. Round 99)
+	//     with matching EndTime must NOT be mistaken for Round 1!
+	// -------------------------------------------------------------
+	otherActionID := fmt.Sprintf("%s:%s", contest.SettlementActionID(99, roundEndTime), id.New())
+	trackAction(otherActionID)
+	otherAction := core_scheduling.ScheduledAction{
+		ID:          otherActionID,
+		ActionType:  contest.ActionTypeContestSettlement,
+		ActorID:     testActorID,
+		ScheduledAt: now,
+		ExecuteAt:   roundEndTime,
+		State:       core_scheduling.StatePending,
+	}
+	if err := schedRepo.Schedule(ctx, otherAction); err != nil {
+		t.Fatalf("Schedule other round action failed: %v", err)
+	}
+	// Temporarily remove act1 from Valkey so round 1 has no reservation
+	cleanupValkeyAction(ctx, vkClient, testActorID, act1.ID)
+
+	// Reconcile must recognize Round 1 needs a reservation despite Round 99's action sharing EndTime
+	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+		t.Fatalf("ReconcileSettlementSchedule with different round action failed: %v", err)
+	}
+	actionsAfter2d, err := schedRepo.FindPendingByActorID(ctx, testActorID)
+	if err != nil {
+		t.Fatalf("FindPendingByActorID after step 2d failed: %v", err)
+	}
+	var newAct1 *core_scheduling.ScheduledAction
+	for _, a := range actionsAfter2d {
+		if strings.HasPrefix(a.ID, contest.SettlementActionID(1, roundEndTime)) {
+			temp := a
+			newAct1 = &temp
+			break
+		}
+	}
+	if newAct1 == nil {
+		t.Fatalf("expected new action scheduled for round 1, but found none (mistaken for round 99!) in %v", actionsAfter2d)
+	}
+	trackAction(newAct1.ID)
+	act1 = *newAct1
+	// Clean up Round 99 action
+	cleanupValkeyAction(ctx, vkClient, testActorID, otherActionID)
 
 	// -------------------------------------------------------------
 	// 3. Processing State Protection: action being processed is NOT overwritten
@@ -678,7 +762,7 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
 		t.Fatalf("ReconcileSettlementSchedule during processing failed: %v", err)
 	}
-	actionsProc, err := schedRepo.FindPendingByActorID(ctx, contest.ContestSettlementActorID)
+	actionsProc, err := schedRepo.FindPendingByActorID(ctx, testActorID)
 	if err != nil {
 		t.Fatalf("FindPendingByActorID during processing failed: %v", err)
 	}
@@ -717,7 +801,7 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 		t.Fatalf("ReconcileSettlementSchedule after failure failed: %v", err)
 	}
 
-	actionsAfterFail, err := schedRepo.FindPendingByActorID(ctx, contest.ContestSettlementActorID)
+	actionsAfterFail, err := schedRepo.FindPendingByActorID(ctx, testActorID)
 	if err != nil {
 		t.Fatalf("FindPendingByActorID after failure failed: %v", err)
 	}
@@ -725,6 +809,7 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 		t.Fatalf("expected 1 new pending action, got %d", len(actionsAfterFail))
 	}
 	act2 := actionsAfterFail[0]
+	trackAction(act2.ID)
 	if act2.ID == act1.ID {
 		t.Errorf("expected fresh action ID for recovery, but got same ID %q", act2.ID)
 	}
@@ -739,6 +824,265 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	}
 	if !strings.Contains(storedStrOld, string(core_scheduling.StateFailed)) {
 		t.Errorf("old act1 was corrupted/overwritten by reconciliation! Got: %s", storedStrOld)
+	}
+}
+
+func TestContestSettlement_IndependentServices_ConcurrencyAndDuplicateActionSafety_Integration(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	db, contestRepo, charRepo, txProvider := contestIntegrationDB(t)
+
+	vkClient := openContestTestValkey(t)
+	t.Cleanup(vkClient.Close)
+
+	testActorID := fmt.Sprintf("contest:test:%s", id.New())
+	var trackedActions []string
+	var trackMu sync.Mutex
+	trackAction := func(actionID string) {
+		trackMu.Lock()
+		defer trackMu.Unlock()
+		trackedActions = append(trackedActions, actionID)
+	}
+	t.Cleanup(func() {
+		cleanupCtx := context.Background()
+		trackMu.Lock()
+		ids := append([]string(nil), trackedActions...)
+		trackMu.Unlock()
+		cleanupValkeyActor(cleanupCtx, vkClient, testActorID, ids...)
+	})
+
+	schedRepo := scheduling.NewValkeyRepository(vkClient)
+	schedService := scheduling.NewService(schedRepo)
+
+	now := time.Now().UTC().Truncate(time.Second)
+	round1EndTime := now.Add(-1 * time.Hour) // Past settlement deadline
+
+	// Setup Round 1 (Active)
+	r1 := contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusActive,
+		StartTime: round1EndTime.Add(-7 * 24 * time.Hour),
+		EndTime:   round1EndTime,
+		CreatedAt: now.Add(-7 * 24 * time.Hour),
+		UpdatedAt: now.Add(-7 * 24 * time.Hour),
+	}
+	if err := contestRepo.SaveRound(ctx, r1); err != nil {
+		t.Fatalf("SaveRound 1 failed: %v", err)
+	}
+
+	// Setup Round 2 (Preparing) with quorum so round 1 concludes and round 2 promotes to active
+	round2EndTime := round1EndTime.Add(7 * 24 * time.Hour)
+	r2 := contest.ContestRound{
+		Round:     2,
+		Status:    contest.StatusPreparing,
+		StartTime: round1EndTime,
+		EndTime:   round2EndTime,
+		CreatedAt: now.Add(-7 * 24 * time.Hour),
+		UpdatedAt: now.Add(-7 * 24 * time.Hour),
+	}
+	if err := contestRepo.SaveRound(ctx, r2); err != nil {
+		t.Fatalf("SaveRound 2 failed: %v", err)
+	}
+
+	// Create 5 contestants with initial 0 funds
+	chars := make([]corecharacter.Character, 5)
+	for i := 0; i < 5; i++ {
+		c, err := database.CreateTestCharacterWithFunds(ctx, db, fmt.Sprintf("ConcHero%d_%s", i, id.New()[:6]), 0)
+		if err != nil {
+			t.Fatalf("CreateTestCharacterWithFunds %d failed: %v", i, err)
+		}
+		chars[i] = c
+
+		// Round 1 entries (descending votes: Char 0 has 10, Char 1 has 9, Char 2 has 8...)
+		entryR1 := contest.ContestEntry{
+			ID:            id.New(),
+			Round:         1,
+			CharacterID:   c.ID,
+			CharacterName: c.Name,
+			Title:         fmt.Sprintf("R1 Entry %d", i),
+			Votes:         10 - i,
+			CreatedAt:     round1EndTime.Add(-time.Duration(10-i) * time.Hour),
+			UpdatedAt:     round1EndTime.Add(-time.Duration(10-i) * time.Hour),
+		}
+		if err := contestRepo.SaveEntry(ctx, entryR1); err != nil {
+			t.Fatalf("SaveEntry round 1 %d failed: %v", i, err)
+		}
+
+		// Round 2 entries (quorum met)
+		entryR2 := contest.ContestEntry{
+			ID:            id.New(),
+			Round:         2,
+			CharacterID:   c.ID,
+			CharacterName: c.Name,
+			Title:         fmt.Sprintf("R2 Entry %d", i),
+			CreatedAt:     now,
+			UpdatedAt:     now,
+		}
+		if err := contestRepo.SaveEntry(ctx, entryR2); err != nil {
+			t.Fatalf("SaveEntry round 2 %d failed: %v", i, err)
+		}
+	}
+
+	// Create two completely INDEPENDENT Service instances sharing storage
+	svc1, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithTransactionProvider(txProvider),
+		contest.WithServiceScheduler(schedService),
+		contest.WithSettlementActorID(testActorID),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("NewService 1 failed: %v", err)
+	}
+	svc2, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithTransactionProvider(txProvider),
+		contest.WithServiceScheduler(schedService),
+		contest.WithSettlementActorID(testActorID),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("NewService 2 failed: %v", err)
+	}
+
+	// 1. Concurrent reconcile across independent services
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); _ = svc1.ReconcileSettlementSchedule(ctx) }()
+	go func() { defer wg.Done(); _ = svc2.ReconcileSettlementSchedule(ctx) }()
+	wg.Wait()
+
+	reconciled, err := schedRepo.FindPendingByActorID(ctx, testActorID)
+	if err != nil {
+		t.Fatalf("FindPendingByActorID failed: %v", err)
+	}
+	for _, a := range reconciled {
+		trackAction(a.ID)
+	}
+
+	// 2. Ensure multiple duplicate scheduled actions exist in Valkey for Round 1
+	var round1Actions []core_scheduling.ScheduledAction
+	for _, a := range reconciled {
+		if strings.HasPrefix(a.ID, contest.SettlementActionID(1, round1EndTime)) {
+			round1Actions = append(round1Actions, a)
+		}
+	}
+	for len(round1Actions) < 2 {
+		extraID := fmt.Sprintf("%s:%s", contest.SettlementActionID(1, round1EndTime), id.New())
+		trackAction(extraID)
+		extraAct := core_scheduling.ScheduledAction{
+			ID:         extraID,
+			ActionType: contest.ActionTypeContestSettlement,
+			ActorID:    testActorID,
+			ExecuteAt:  round1EndTime,
+			State:      core_scheduling.StatePending,
+		}
+		if err := schedRepo.Schedule(ctx, extraAct); err != nil {
+			t.Fatalf("Schedule extraAct failed: %v", err)
+		}
+		round1Actions = append(round1Actions, extraAct)
+	}
+
+	// 3. Concurrent execution of duplicate actions via independent workers and handlers
+	h1 := contest.NewContestSettlementHandler(svc1, contest.WithScheduler(schedService))
+	h2 := contest.NewContestSettlementHandler(svc2, contest.WithScheduler(schedService))
+	worker1 := scheduling.NewWorker(schedRepo, time.Second, logging.Nop())
+	worker1.RegisterHandler(contest.ActionTypeContestSettlement, h1)
+	worker2 := scheduling.NewWorker(schedRepo, time.Second, logging.Nop())
+	worker2.RegisterHandler(contest.ActionTypeContestSettlement, h2)
+
+	for i := 0; i < len(round1Actions); i += 2 {
+		actA := round1Actions[i]
+		hasActB := i+1 < len(round1Actions)
+		wg.Add(1)
+		go func(a core_scheduling.ScheduledAction) {
+			defer wg.Done()
+			worker1.ProcessAction(ctx, a)
+		}(actA)
+		if hasActB {
+			actB := round1Actions[i+1]
+			wg.Add(1)
+			go func(b core_scheduling.ScheduledAction) {
+				defer wg.Done()
+				worker2.ProcessAction(ctx, b)
+			}(actB)
+		}
+		wg.Wait()
+	}
+
+	// 4. Assertions on MariaDB state:
+	// Round 1 must be settled exactly once
+	r1After, err := contestRepo.GetRoundByNumber(ctx, 1)
+	if err != nil {
+		t.Fatalf("GetRoundByNumber 1 failed: %v", err)
+	}
+	if r1After.Status != contest.StatusSettled {
+		t.Errorf("round 1 status = %s, want settled", r1After.Status)
+	}
+
+	// Round 2 promoted to active
+	r2After, err := contestRepo.GetRoundByNumber(ctx, 2)
+	if err != nil {
+		t.Fatalf("GetRoundByNumber 2 failed: %v", err)
+	}
+	if r2After.Status != contest.StatusActive {
+		t.Errorf("round 2 status = %s, want active", r2After.Status)
+	}
+
+	// Exactly 1 winner legend archived for Round 1
+	legends, totalLegends, err := contestRepo.ListLegends(ctx, 10, 0)
+	if err != nil {
+		t.Fatalf("ListLegends failed: %v", err)
+	}
+	if totalLegends != 1 || len(legends) != 1 {
+		t.Fatalf("expected exactly 1 legend recorded, got total=%d len=%d", totalLegends, len(legends))
+	}
+	if legends[0].Round != 1 || legends[0].CharacterID != chars[0].ID {
+		t.Errorf("legend record mismatch: round=%d char=%s, want round=1 char=%s", legends[0].Round, legends[0].CharacterID, chars[0].ID)
+	}
+
+	// ZERO duplicate prize awards:
+	// 1st place: exactly 10,000 gold and 3 small medals
+	c0After, err := charRepo.FindByID(ctx, chars[0].ID)
+	if err != nil {
+		t.Fatalf("FindByID char 0 failed: %v", err)
+	}
+	if c0After.Money != contest.PrizeFirst.Gold {
+		t.Errorf("char 0 money = %d, want %d (DUPLICATE REWARDS DETECTED!)", c0After.Money, contest.PrizeFirst.Gold)
+	}
+	if c0After.SmallMedals != contest.PrizeFirst.SmallMedals {
+		t.Errorf("char 0 medals = %d, want %d", c0After.SmallMedals, contest.PrizeFirst.SmallMedals)
+	}
+
+	// 2nd place: exactly 5,000 gold and 2 medals
+	c1After, err := charRepo.FindByID(ctx, chars[1].ID)
+	if err != nil {
+		t.Fatalf("FindByID char 1 failed: %v", err)
+	}
+	if c1After.Money != contest.PrizeSecond.Gold {
+		t.Errorf("char 1 money = %d, want %d", c1After.Money, contest.PrizeSecond.Gold)
+	}
+
+	// 3rd place: exactly 3,000 gold and 1 medal
+	c2After, err := charRepo.FindByID(ctx, chars[2].ID)
+	if err != nil {
+		t.Fatalf("FindByID char 2 failed: %v", err)
+	}
+	if c2After.Money != contest.PrizeThird.Gold {
+		t.Errorf("char 2 money = %d, want %d", c2After.Money, contest.PrizeThird.Gold)
+	}
+
+	// Check Valkey state: no pending actions for Round 1
+	pendingActions, err := schedRepo.FindPendingByActorID(ctx, testActorID)
+	if err != nil {
+		t.Fatalf("FindPendingByActorID failed: %v", err)
+	}
+	for _, a := range pendingActions {
+		if strings.HasPrefix(a.ID, contest.SettlementActionID(1, round1EndTime)) {
+			t.Errorf("stale pending action found for round 1: %s", a.ID)
+		}
 	}
 }
 

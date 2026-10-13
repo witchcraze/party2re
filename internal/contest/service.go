@@ -15,14 +15,15 @@ import (
 )
 
 type Service struct {
-	characters  CharacterRepository
-	contests    ContestRepository
-	guilds      GuildService
-	news        NewsPublisher
-	scheduler   Scheduler
-	txProvider  TransactionProvider
-	nowFunc     func() time.Time
-	reconcileMu sync.Mutex
+	characters        CharacterRepository
+	contests          ContestRepository
+	guilds            GuildService
+	news              NewsPublisher
+	scheduler         Scheduler
+	txProvider        TransactionProvider
+	nowFunc           func() time.Time
+	settlementActorID string
+	reconcileMu       sync.Mutex
 }
 
 type Option func(*Service)
@@ -37,6 +38,20 @@ func WithServiceScheduler(scheduler Scheduler) Option {
 	return func(s *Service) {
 		s.scheduler = scheduler
 	}
+}
+
+func WithSettlementActorID(actorID string) Option {
+	return func(s *Service) {
+		s.settlementActorID = actorID
+	}
+}
+
+// SettlementActorID returns the actor ID used for contest settlement reservations.
+func (s *Service) SettlementActorID() string {
+	if s.settlementActorID != "" {
+		return s.settlementActorID
+	}
+	return ContestSettlementActorID
 }
 
 // SetScheduler sets the scheduler used by the service if not already configured.
@@ -411,12 +426,17 @@ func (s *Service) ReconcileSettlementSchedule(ctx context.Context) error {
 		return nil
 	}
 
-	activeActions, err := s.scheduler.FindPendingByActorID(ctx, ContestSettlementActorID)
+	actorID := s.SettlementActorID()
+	activeActions, err := s.scheduler.FindPendingByActorID(ctx, actorID)
 	if err != nil {
 		return fmt.Errorf("discover contest settlement reservation: %w", err)
 	}
 	// Check legacy actor ID "system" for backward compatibility with pre-upgrade actions
-	if legacyActions, err := s.scheduler.FindPendingByActorID(ctx, "system"); err == nil {
+	if actorID != "system" {
+		legacyActions, err := s.scheduler.FindPendingByActorID(ctx, "system")
+		if err != nil {
+			return fmt.Errorf("discover legacy contest settlement reservation: %w", err)
+		}
 		activeActions = append(activeActions, legacyActions...)
 	}
 
@@ -424,7 +444,11 @@ func (s *Service) ReconcileSettlementSchedule(ctx context.Context) error {
 		if action.ActionType != ActionTypeContestSettlement {
 			continue
 		}
-		if action.ExecuteAt.Equal(targetEndTime) {
+		round, targetTime, ok := ParseSettlementActionID(action.ID)
+		if !ok {
+			continue
+		}
+		if round == targetRound && action.ExecuteAt.Equal(targetEndTime) && targetTime.Equal(targetEndTime) {
 			if action.State == core_scheduling.StatePending || action.State == core_scheduling.StateProcessing {
 				return nil
 			}
@@ -432,7 +456,7 @@ func (s *Service) ReconcileSettlementSchedule(ctx context.Context) error {
 	}
 
 	actionID := fmt.Sprintf("%s:%s", SettlementActionID(targetRound, targetEndTime), id.New())
-	if err := s.scheduler.ScheduleWithID(ctx, actionID, ActionTypeContestSettlement, ContestSettlementActorID, nil, targetEndTime); err != nil {
+	if err := s.scheduler.ScheduleWithID(ctx, actionID, ActionTypeContestSettlement, actorID, nil, targetEndTime); err != nil {
 		return fmt.Errorf("%w: %v", ErrScheduleFailed, err)
 	}
 

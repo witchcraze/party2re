@@ -11,6 +11,7 @@ import (
 
 	"github.com/witchcraze/party2re/internal/contest"
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 )
 
 type injectableCharRepo struct {
@@ -1710,5 +1711,97 @@ func TestEnterContest_ContextCanceledAfterCommit_ReturnsEntryWithErrScheduleFail
 	}
 	if saved.ID != entry.ID {
 		t.Errorf("saved entry ID = %q, want %q", saved.ID, entry.ID)
+	}
+}
+
+func TestReconcileSettlementSchedule_LegacyActorStorageErrorPropagated(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	contestRepo.rounds[1] = contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusPreparing,
+		StartTime: now,
+		EndTime:   now.Add(10 * 24 * time.Hour),
+	}
+
+	storageErr := errors.New("valkey cluster timeout on legacy actor query")
+	sched := &mockScheduler{
+		findPendingErrByActor: map[string]error{
+			"system": storageErr,
+		},
+	}
+
+	svc, _ := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithServiceScheduler(sched),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+
+	err := svc.ReconcileSettlementSchedule(ctx)
+	if err == nil {
+		t.Fatal("expected error when legacy actor query fails, got nil")
+	}
+	if !errors.Is(err, storageErr) && !strings.Contains(err.Error(), storageErr.Error()) {
+		t.Fatalf("expected storageErr in output, got: %v", err)
+	}
+	if len(sched.scheduledActions) != 0 {
+		t.Errorf("scheduled actions count = %d, want 0 when legacy actor query fails", len(sched.scheduledActions))
+	}
+}
+
+func TestReconcileSettlementSchedule_DifferentRoundMatchingEndTimeNotConfused(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	sharedEndTime := now.Add(10 * 24 * time.Hour)
+
+	// Round 2 is preparing with sharedEndTime
+	contestRepo.rounds[2] = contest.ContestRound{
+		Round:     2,
+		Status:    contest.StatusPreparing,
+		StartTime: now,
+		EndTime:   sharedEndTime,
+	}
+
+	// An old pending action for round 1 exists with the exact same ExecuteAt timestamp
+	oldRound1ActionID := contest.SettlementActionID(1, sharedEndTime)
+	sched := &mockScheduler{
+		pendingActions: []core_scheduling.ScheduledAction{
+			{
+				ID:          oldRound1ActionID,
+				ActionType:  contest.ActionTypeContestSettlement,
+				ActorID:     contest.ContestSettlementActorID,
+				ScheduledAt: now.Add(-10 * 24 * time.Hour),
+				ExecuteAt:   sharedEndTime,
+				State:       core_scheduling.StatePending,
+			},
+		},
+	}
+
+	svc, _ := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithServiceScheduler(sched),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+
+	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+		t.Fatalf("ReconcileSettlementSchedule failed: %v", err)
+	}
+
+	// Must NOT confuse round 1 action with round 2: round 2 reservation MUST be scheduled!
+	if len(sched.scheduledActions) != 1 {
+		t.Fatalf("expected 1 new action scheduled for round 2, got %d", len(sched.scheduledActions))
+	}
+	newAction := sched.scheduledActions[0]
+	expectedRound2Prefix := contest.SettlementActionID(2, sharedEndTime)
+	if !strings.HasPrefix(newAction.ID, expectedRound2Prefix) {
+		t.Errorf("scheduled action ID = %q, want prefix %q", newAction.ID, expectedRound2Prefix)
 	}
 }

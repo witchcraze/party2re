@@ -108,6 +108,15 @@ func (h *ContestSettlementHandler) Handle(ctx context.Context, action core_sched
 
 	_, err := h.service.SettleContest(ctx, false)
 	if err != nil {
+		// If a concurrent duplicate action completed settlement or postponement
+		// while this action ran or waited for locks, safely reconcile and complete.
+		if round, targetTime, ok := ParseSettlementActionID(action.ID); ok && h.service != nil {
+			if r, rErr := h.service.GetRoundByNumber(ctx, round); rErr == nil {
+				if r.Status == StatusSettled || targetTime.Before(r.EndTime) {
+					return h.service.ReconcileSettlementSchedule(ctx)
+				}
+			}
+		}
 		return err
 	}
 

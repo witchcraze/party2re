@@ -21,9 +21,10 @@ type mockScheduler struct {
 		Params     map[string]string
 		ExecuteAt  time.Time
 	}
-	scheduleErr    error
-	pendingActions []core_scheduling.ScheduledAction
-	findPendingErr error
+	scheduleErr           error
+	pendingActions        []core_scheduling.ScheduledAction
+	findPendingErr        error
+	findPendingErrByActor map[string]error
 }
 
 func (m *mockScheduler) ScheduleWithID(_ context.Context, id, actionType, actorID string, params map[string]string, executeAt time.Time) error {
@@ -41,6 +42,9 @@ func (m *mockScheduler) ScheduleWithID(_ context.Context, id, actionType, actorI
 }
 
 func (m *mockScheduler) FindPendingByActorID(_ context.Context, actorID string) ([]core_scheduling.ScheduledAction, error) {
+	if m.findPendingErrByActor != nil && m.findPendingErrByActor[actorID] != nil {
+		return nil, m.findPendingErrByActor[actorID]
+	}
 	if m.findPendingErr != nil {
 		return nil, m.findPendingErr
 	}
