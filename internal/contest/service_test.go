@@ -1223,3 +1223,260 @@ func TestSettlement_MultipleConsecutiveCyclesAdvanceWithoutStallingOrDuplicateRe
 		t.Errorf("expected round 4 preparing, got %s", r4.Status)
 	}
 }
+
+func TestSettlement_Postpone_FromCheckTime(t *testing.T) {
+	ctx := context.Background()
+
+	delays := []struct {
+		name  string
+		delay time.Duration
+	}{
+		{name: "on-time", delay: 0},
+		{name: "short-delay (3h)", delay: 3 * time.Hour},
+		{name: "long-delay (25d)", delay: 25 * 24 * time.Hour},
+	}
+
+	for _, d := range delays {
+		t.Run("NoActive_PreparingUnderQuorum_"+d.name, func(t *testing.T) {
+			charRepo := newMockCharRepo()
+			contestRepo := newMockContestRepo()
+
+			initialEndTime := time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC)
+			now := initialEndTime.Add(d.delay)
+			expectedNewEndTime := now.Add(contest.ContestCycleDays * 24 * time.Hour)
+
+			// Preparing round 1 exists with 2 entries
+			contestRepo.SaveRound(ctx, contest.ContestRound{
+				Round:     1,
+				Status:    contest.StatusPreparing,
+				StartTime: initialEndTime.Add(-10 * 24 * time.Hour),
+				EndTime:   initialEndTime,
+			})
+			for i := 1; i <= 2; i++ {
+				contestRepo.SaveEntry(ctx, contest.ContestEntry{
+					ID:          fmt.Sprintf("e-prep-%d", i),
+					Round:       1,
+					CharacterID: fmt.Sprintf("char-%d", i),
+					Title:       fmt.Sprintf("Title %d", i),
+				})
+			}
+
+			svc, err := contest.NewService(
+				charRepo,
+				contestRepo,
+				contest.WithNowFunc(func() time.Time { return now }),
+			)
+			if err != nil {
+				t.Fatalf("NewService failed: %v", err)
+			}
+
+			res, err := svc.SettleContest(ctx, false)
+			if err != nil {
+				t.Fatalf("SettleContest failed: %v", err)
+			}
+
+			if !res.Postponed {
+				t.Fatalf("expected postponed result")
+			}
+			if !res.ExtendedUntil.Equal(expectedNewEndTime) {
+				t.Errorf("res.ExtendedUntil = %v, want %v", res.ExtendedUntil, expectedNewEndTime)
+			}
+			if !res.NextRoundEndTime.Equal(expectedNewEndTime) {
+				t.Errorf("res.NextRoundEndTime = %v, want %v", res.NextRoundEndTime, expectedNewEndTime)
+			}
+
+			// Verify DB state
+			r1, err := contestRepo.GetRoundByNumber(ctx, 1)
+			if err != nil {
+				t.Fatalf("GetRoundByNumber failed: %v", err)
+			}
+			if r1.Status != contest.StatusPreparing {
+				t.Errorf("r1.Status = %s, want preparing", r1.Status)
+			}
+			if !r1.EndTime.Equal(expectedNewEndTime) {
+				t.Errorf("r1.EndTime = %v, want %v", r1.EndTime, expectedNewEndTime)
+			}
+
+			// Verify entries preserved
+			entries, err := contestRepo.ListEntriesByRound(ctx, 1)
+			if err != nil || len(entries) != 2 {
+				t.Errorf("expected 2 entries preserved, got %d", len(entries))
+			}
+		})
+
+		t.Run("EmptyActive_PreparingUnderQuorum_"+d.name, func(t *testing.T) {
+			charRepo := newMockCharRepo()
+			contestRepo := newMockContestRepo()
+
+			initialEndTime := time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC)
+			now := initialEndTime.Add(d.delay)
+			expectedNewEndTime := now.Add(contest.ContestCycleDays * 24 * time.Hour)
+
+			// Active round 1 has 0 entries
+			contestRepo.SaveRound(ctx, contest.ContestRound{
+				Round:     1,
+				Status:    contest.StatusActive,
+				StartTime: initialEndTime.Add(-10 * 24 * time.Hour),
+				EndTime:   initialEndTime,
+			})
+
+			// Preparing round 2 has 2 entries
+			contestRepo.SaveRound(ctx, contest.ContestRound{
+				Round:     2,
+				Status:    contest.StatusPreparing,
+				StartTime: initialEndTime,
+				EndTime:   initialEndTime.Add(10 * 24 * time.Hour),
+			})
+			for i := 1; i <= 2; i++ {
+				contestRepo.SaveEntry(ctx, contest.ContestEntry{
+					ID:          fmt.Sprintf("e-prep2-%d", i),
+					Round:       2,
+					CharacterID: fmt.Sprintf("char-%d", i),
+					Title:       fmt.Sprintf("Title %d", i),
+				})
+			}
+
+			svc, err := contest.NewService(
+				charRepo,
+				contestRepo,
+				contest.WithNowFunc(func() time.Time { return now }),
+			)
+			if err != nil {
+				t.Fatalf("NewService failed: %v", err)
+			}
+
+			res, err := svc.SettleContest(ctx, false)
+			if err != nil {
+				t.Fatalf("SettleContest failed: %v", err)
+			}
+
+			if !res.Postponed {
+				t.Fatalf("expected postponed result")
+			}
+			if !res.ExtendedUntil.Equal(expectedNewEndTime) {
+				t.Errorf("res.ExtendedUntil = %v, want %v", res.ExtendedUntil, expectedNewEndTime)
+			}
+			if !res.NextRoundEndTime.Equal(expectedNewEndTime) {
+				t.Errorf("res.NextRoundEndTime = %v, want %v", res.NextRoundEndTime, expectedNewEndTime)
+			}
+
+			// Verify DB state
+			r1, _ := contestRepo.GetRoundByNumber(ctx, 1)
+			if r1.Status != contest.StatusActive {
+				t.Errorf("r1.Status = %s, want active", r1.Status)
+			}
+			if !r1.EndTime.Equal(expectedNewEndTime) {
+				t.Errorf("r1.EndTime = %v, want %v", r1.EndTime, expectedNewEndTime)
+			}
+
+			r2, _ := contestRepo.GetRoundByNumber(ctx, 2)
+			if r2.Status != contest.StatusPreparing {
+				t.Errorf("r2.Status = %s, want preparing", r2.Status)
+			}
+			if !r2.EndTime.Equal(expectedNewEndTime) {
+				t.Errorf("r2.EndTime = %v, want %v", r2.EndTime, expectedNewEndTime)
+			}
+
+			// Verify entries preserved in round 2
+			entries, err := contestRepo.ListEntriesByRound(ctx, 2)
+			if err != nil || len(entries) != 2 {
+				t.Errorf("expected 2 entries preserved in round 2, got %d", len(entries))
+			}
+		})
+
+		t.Run("ActiveUnderQuorum_PreparingUnderQuorum_"+d.name, func(t *testing.T) {
+			charRepo := newMockCharRepo()
+			contestRepo := newMockContestRepo()
+
+			initialEndTime := time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC)
+			now := initialEndTime.Add(d.delay)
+			expectedNewEndTime := now.Add(contest.ContestCycleDays * 24 * time.Hour)
+
+			// Active round 1 has 3 entries
+			contestRepo.SaveRound(ctx, contest.ContestRound{
+				Round:     1,
+				Status:    contest.StatusActive,
+				StartTime: initialEndTime.Add(-10 * 24 * time.Hour),
+				EndTime:   initialEndTime,
+			})
+			for i := 1; i <= 3; i++ {
+				contestRepo.SaveEntry(ctx, contest.ContestEntry{
+					ID:          fmt.Sprintf("e-act-%d", i),
+					Round:       1,
+					CharacterID: fmt.Sprintf("char-act-%d", i),
+					Title:       fmt.Sprintf("Title Act %d", i),
+				})
+			}
+
+			// Preparing round 2 has 2 entries
+			contestRepo.SaveRound(ctx, contest.ContestRound{
+				Round:     2,
+				Status:    contest.StatusPreparing,
+				StartTime: initialEndTime,
+				EndTime:   initialEndTime.Add(10 * 24 * time.Hour),
+			})
+			for i := 1; i <= 2; i++ {
+				contestRepo.SaveEntry(ctx, contest.ContestEntry{
+					ID:          fmt.Sprintf("e-prep2-%d", i),
+					Round:       2,
+					CharacterID: fmt.Sprintf("char-prep-%d", i),
+					Title:       fmt.Sprintf("Title Prep %d", i),
+				})
+			}
+
+			svc, err := contest.NewService(
+				charRepo,
+				contestRepo,
+				contest.WithNowFunc(func() time.Time { return now }),
+			)
+			if err != nil {
+				t.Fatalf("NewService failed: %v", err)
+			}
+
+			res, err := svc.SettleContest(ctx, false)
+			if err != nil {
+				t.Fatalf("SettleContest failed: %v", err)
+			}
+
+			if !res.Postponed {
+				t.Fatalf("expected postponed result")
+			}
+			if res.PrizesDistributed {
+				t.Errorf("expected no prizes distributed")
+			}
+			if !res.ExtendedUntil.Equal(expectedNewEndTime) {
+				t.Errorf("res.ExtendedUntil = %v, want %v", res.ExtendedUntil, expectedNewEndTime)
+			}
+			if !res.NextRoundEndTime.Equal(expectedNewEndTime) {
+				t.Errorf("res.NextRoundEndTime = %v, want %v", res.NextRoundEndTime, expectedNewEndTime)
+			}
+
+			// Verify DB state
+			r1, _ := contestRepo.GetRoundByNumber(ctx, 1)
+			if r1.Status != contest.StatusActive {
+				t.Errorf("r1.Status = %s, want active", r1.Status)
+			}
+			if !r1.EndTime.Equal(expectedNewEndTime) {
+				t.Errorf("r1.EndTime = %v, want %v", r1.EndTime, expectedNewEndTime)
+			}
+
+			r2, _ := contestRepo.GetRoundByNumber(ctx, 2)
+			if r2.Status != contest.StatusPreparing {
+				t.Errorf("r2.Status = %s, want preparing", r2.Status)
+			}
+			if !r2.EndTime.Equal(expectedNewEndTime) {
+				t.Errorf("r2.EndTime = %v, want %v", r2.EndTime, expectedNewEndTime)
+			}
+
+			// Verify entries preserved in both rounds
+			r1Entries, _ := contestRepo.ListEntriesByRound(ctx, 1)
+			if len(r1Entries) != 3 {
+				t.Errorf("expected 3 entries preserved in round 1, got %d", len(r1Entries))
+			}
+			r2Entries, _ := contestRepo.ListEntriesByRound(ctx, 2)
+			if len(r2Entries) != 2 {
+				t.Errorf("expected 2 entries preserved in round 2, got %d", len(r2Entries))
+			}
+		})
+	}
+}

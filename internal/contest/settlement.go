@@ -48,7 +48,7 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 
 			result.Round = prepRound.Round
 			if len(entries) < MinEntriesForContest {
-				prepRound.EndTime = prepRound.EndTime.Add(ContestCycleDays * 24 * time.Hour)
+				prepRound.EndTime = now.Add(ContestCycleDays * 24 * time.Hour)
 				prepRound.UpdatedAt = now
 				if err := s.contests.SaveRound(txCtx, prepRound); err != nil {
 					return err
@@ -154,7 +154,7 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 			}
 
 			// Preparing round also under quorum or absent: postpone and extend duration
-			activeRound.EndTime = activeRound.EndTime.Add(ContestCycleDays * 24 * time.Hour)
+			activeRound.EndTime = now.Add(ContestCycleDays * 24 * time.Hour)
 			activeRound.UpdatedAt = now
 			if err := s.contests.SaveRound(txCtx, activeRound); err != nil {
 				return err
@@ -180,7 +180,7 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 			// If preparing round also under quorum or absent:
 			// Postpone and extend active round and preparing round, retaining submissions.
 			if prepErr != nil || len(prepEntries) < MinEntriesForContest {
-				activeRound.EndTime = activeRound.EndTime.Add(ContestCycleDays * 24 * time.Hour)
+				activeRound.EndTime = now.Add(ContestCycleDays * 24 * time.Hour)
 				activeRound.UpdatedAt = now
 				if err := s.contests.SaveRound(txCtx, activeRound); err != nil {
 					return err
