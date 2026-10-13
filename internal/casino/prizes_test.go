@@ -9,9 +9,45 @@ import (
 	"testing"
 
 	"github.com/witchcraze/party2re/internal/casino"
+	corecharacter "github.com/witchcraze/party2re/internal/core/character"
 	"github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/depot"
 )
+
+type prizeCharacterLockFailure struct {
+	casino.CharacterRepository
+	err error
+}
+
+func (r prizeCharacterLockFailure) FindByIDForUpdate(context.Context, string) (corecharacter.Character, error) {
+	return corecharacter.Character{}, r.err
+}
+
+func TestExchangePrize_CharacterLockFailure(t *testing.T) {
+	repo := newMockPrizeCasinoRepo()
+	depots := newMockDepotRepo()
+	const charID = "char-lock-failure"
+	repo.accounts[charID] = casino.Account{CharacterID: charID, Coins: 100000}
+	injected := errors.New("character lock failed")
+	svc, err := casino.NewService(repo,
+		casino.WithDepotRepository(depots),
+		casino.WithCharacterRepository(prizeCharacterLockFailure{err: injected}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.ExchangePrize(context.Background(), charID, 30000, 2)
+	if !errors.Is(err, injected) {
+		t.Fatalf("ExchangePrize error = %v, want character lock failure", err)
+	}
+	acc, err := repo.GetAccount(context.Background(), charID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acc.Coins != 100000 || len(depots.depots) != 0 {
+		t.Fatalf("lock failure changed assets: account=%+v, depots=%+v", acc, depots.depots)
+	}
+}
 
 type mockDepotRepo struct {
 	depots  map[string]depot.Depot

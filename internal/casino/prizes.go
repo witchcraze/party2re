@@ -102,10 +102,11 @@ func (s *Service) ExchangePrize(ctx context.Context, characterID string, costCoi
 	err = s.runInTx(ctx, func(txCtx context.Context) error {
 		var char corecharacter.Character
 		if s.charRepo != nil {
-			c, err := s.charRepo.FindByID(txCtx, characterID)
-			if err == nil {
-				char = c
+			c, err := s.charRepo.FindByIDForUpdate(txCtx, characterID)
+			if err != nil {
+				return err
 			}
+			char = c
 		}
 		if char.ID == "" {
 			char.ID = characterID

@@ -300,6 +300,7 @@ The Slot Machine (スロットマシン) is a single-player casino wagering game
 ### Atomic Depot Storage Routing
 - Items are deposited directly into character depot storage (`character_depots`, `depot_items`).
 - If depot is full, `depot.ErrDepotFull` is returned and zero coins are deducted.
+- Depot persistence and coin deduction share one transaction; a failure after either write rolls both back, preserving existing instance IDs and quantities.
 - Non-stackable equipment items receive distinct instance IDs per unit and occupy separate depot slots.
 - Stackable items are automatically merged with existing inventory slots.
 
@@ -315,7 +316,7 @@ Rank 5: character_depots, depot_items (Depot Storage)
   ↓
 Rank 8: casino_accounts (Secondary Feature Records)
 ```
-In `ExchangePrize`, Depot lock (Rank 5) is acquired before Casino account lock (Rank 8), preventing deadlocks with concurrent transactions.
+In `ExchangePrize`, the configured character repository locks the character (Rank 2) before the Depot (Rank 5) and Casino account (Rank 8). This serializes exchanges for the same character before reading depot items. A character lock/read failure aborts the exchange before any asset mutation.
 
 ### Showdown Settlement Atomicity & Error Boundary
 
