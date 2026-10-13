@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <title>Temporary development forms — artwork will be replaced</title>
+  <view id="mechanical-m" viewBox="0 0 64 64"/>
+  <view id="mechanical-f" viewBox="64 0 64 64"/>
+  <view id="winged-m" viewBox="0 64 64 64"/>
+  <view id="winged-f" viewBox="64 64 64 64"/>
+  <defs>
+    <g id="mechanical" stroke="#263238" stroke-width="3" stroke-linejoin="round">
+      <path d="M22 10h20l9 16-6 27H19l-6-27z" fill="currentColor"/>
+      <path d="m13 26-9 9 7 13m40-22 9 9-7 13M24 53v8m16-8v8" fill="none"/>
+      <path d="M21 24h22v10H21z" fill="#fff"/>
+      <path d="M27 24v10m10-10v10M25 43h14" fill="none"/>
+    </g>
+    <g id="winged" stroke="#263238" stroke-width="2" stroke-linejoin="round">
+      <path d="M28 29 3 11l3 30 17-1m13-11 25-18-3 30-17-1" fill="currentColor"/>
+      <path d="M23 16 20 6l12 6 12-6-3 10c14 25 1 42-9 42S9 41 23 16z" fill="currentColor"/>
+      <path d="m23 24 6 3m12-3-6 3M26 38q6 7 12 0" fill="none"/>
+    </g>
+  </defs>
+  <use href="#mechanical" color="#57b8c6"/>
+  <use href="#mechanical" x="64" color="#e2ad52"/>
+  <use href="#winged" y="64" color="#9f98df"/>
+  <use href="#winged" x="64" y="64" color="#7bc998"/>
+</svg>

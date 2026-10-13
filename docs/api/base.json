@@ -929,6 +929,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "recorded_job_ids": {
+            "description": "Explicitly written job records, independently of known SP and mastery. Departure history and mastery records also establish record existence.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "recorded_job_sp": {
+            "description": "Preserved known SP by job. A value, including zero, does not by itself prove a job record exists or grant recall eligibility.",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "type": "object"
           }
         },
         "required": [

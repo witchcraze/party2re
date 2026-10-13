@@ -85,12 +85,8 @@ func (s *Service) SaveFutureMemory(ctx context.Context, characterID string) (cor
 			if err != nil {
 				return err
 			}
-			if state.MasteredJobSP == nil {
-				state.MasteredJobSP = make(map[string]int)
-			}
-			state.MasteredJobSP[tc.Character.JobID] = tc.Character.SP
-			if tc.Character.OldJobID != "" {
-				state.MasteredJobSP[tc.Character.OldJobID] = tc.Character.OldSP
+			if err := refreshFutureMemoryPoints(&state, tc.Character); err != nil {
+				return err
 			}
 			return s.repository.Save(tc.Context, state)
 		})
@@ -129,12 +125,8 @@ func (s *Service) SaveFutureMemory(ctx context.Context, characterID string) (cor
 	}
 	state, err := s.loadState(ctx, char)
 	if err == nil {
-		if state.MasteredJobSP == nil {
-			state.MasteredJobSP = make(map[string]int)
-		}
-		state.MasteredJobSP[char.JobID] = char.SP
-		if char.OldJobID != "" {
-			state.MasteredJobSP[char.OldJobID] = char.OldSP
+		if err := refreshFutureMemoryPoints(&state, char); err != nil {
+			return corecharacter.FutureMemory{}, err
 		}
 		if err := s.repository.Save(ctx, state); err != nil {
 			return corecharacter.FutureMemory{}, err
@@ -144,7 +136,7 @@ func (s *Service) SaveFutureMemory(ctx context.Context, characterID string) (cor
 }
 
 // RecallFutureMemory restores the character's state from a saved future memory snapshot
-// (legacy "よびおこす" action), restoring stats and retained mastery SP, and consumes the snapshot.
+// (legacy "よびおこす" action), restoring stats and recorded job SP, and consumes the snapshot.
 func (s *Service) RecallFutureMemory(ctx context.Context, characterID, memoryID string) (corecharacter.Character, corejob.CharacterJob, error) {
 	if s.characters == nil {
 		return corecharacter.Character{}, corejob.CharacterJob{}, errors.New("character repository is nil")
@@ -184,8 +176,7 @@ func (s *Service) RecallFutureMemory(ctx context.Context, characterID, memoryID 
 			if err != nil {
 				return err
 			}
-			jobSP, _ := state.MasteredSP(targetMemory.JobID)
-			oldJobSP, _ := state.MasteredSP(targetMemory.OldJobID)
+			jobSP, oldJobSP := futureMemoryPoints(state, tc.Character, *targetMemory)
 
 			c := tc.Character
 			if err := c.ApplyFutureMemory(*targetMemory, jobSP, oldJobSP); err != nil {
@@ -237,8 +228,7 @@ func (s *Service) RecallFutureMemory(ctx context.Context, characterID, memoryID 
 	if err != nil {
 		return char, corejob.CharacterJob{}, err
 	}
-	jobSP, _ := state.MasteredSP(targetMemory.JobID)
-	oldJobSP, _ := state.MasteredSP(targetMemory.OldJobID)
+	jobSP, oldJobSP := futureMemoryPoints(state, char, *targetMemory)
 
 	if err := char.ApplyFutureMemory(*targetMemory, jobSP, oldJobSP); err != nil {
 		return char, corejob.CharacterJob{}, err
@@ -254,6 +244,34 @@ func (s *Service) RecallFutureMemory(ctx context.Context, characterID, memoryID 
 		return char, corejob.CharacterJob{}, err
 	}
 	return char, state, nil
+}
+
+// Future save updates existing records only (_data.cgi:1854–1867).
+func refreshFutureMemoryPoints(state *corejob.CharacterJob, char corecharacter.Character) error {
+	for _, pair := range []struct {
+		id string
+		sp int
+	}{{char.JobID, char.SP}, {char.OldJobID, char.OldSP}} {
+		if pair.id != "" && state.HasRecordedJob(pair.id) {
+			if err := state.RecordJobSP(pair.id, pair.sp); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// With no matching record, recall leaves the corresponding SP unchanged
+// (job_change.cgi:648–663); it does not fabricate a zero or a snapshot value.
+func futureMemoryPoints(state corejob.CharacterJob, char corecharacter.Character, memory corecharacter.FutureMemory) (int, int) {
+	sp, oldSP := char.SP, char.OldSP
+	if saved, ok := state.SavedSP(memory.JobID); ok && state.HasRecordedJob(memory.JobID) {
+		sp = saved
+	}
+	if saved, ok := state.SavedSP(memory.OldJobID); ok && state.HasRecordedJob(memory.OldJobID) {
+		oldSP = saved
+	}
+	return sp, oldSP
 }
 
 // ListFutureMemories returns all saved future memory snapshots for a character.

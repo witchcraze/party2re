@@ -92,12 +92,28 @@
   source or legacy asset was used.
 - License status: Project-created placeholder; not a final asset.
 
-## Integration and final assets
+### IMG-005: Battle — Temporary Transformation Appearances
 
-These files are original development placeholders, not completed production
-assets. A public client and production manifest/resolver are pending #140,
-#654, and #729. The character transparency brief describes the final target;
-its present placeholder has an opaque background.
+- Status: Placeholder available; **artwork will be replaced** during future image implementation.
+- Type: Character / Monster
+- Files: `assets/images/placeholders/battle/forms.svg` (128×128 sheet, four64×64 views)
+  and `assets/images/placeholders/battle/monster-default.svg` (64×64).
+- Used by: Explicit Battle transformation appearance references; client integration remains pending.
+- Purpose: Distinguish mechanical/winged forms by requesting-player gender and
+  provide a missing-monster appearance fallback. These shapes and colors are
+  development aids, not approved final character designs.
+- Format: SVG; transparent backgrounds.
+- Provenance: Newly authored geometric drawings in this repository; no legacy
+  artwork, third-party source or generated bitmap was reused.
+- License status: Project-created placeholders, not final assets.
+- Replacement contract: Saved `Icon` values are appearance identity references,
+  not resolved display URLs. Preserve the `mechanical-m`, `mechanical-f`,
+  `winged-m`, `winged-f` fragments and existing references, or provide resolver
+  aliases when replacing the art. Changing an illustration must not change
+  job79's appearance-dependent callback or invalidate saved runs.
+- Follow-up: The image catalog/manifest/resolver (#140, #654, #729) will replace
+  this art and supply gem100's108 candidate positions. Missing positions use the
+  fallback without changing the uniform draw or rerolling persisted outcomes.
 
 ## Integration and final assets
 

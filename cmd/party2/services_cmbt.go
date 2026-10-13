@@ -68,6 +68,7 @@ func newCmbtServices(
 		battle.WithBattleEngine(battleEngine),
 		battle.WithCustomSkillRepository(customSkillRepo),
 		battle.WithJobDefinitionProvider(core.jobCatalog),
+		battle.WithJobHistoryRepository(core.charJobRepo),
 		battle.WithTransactionProvider(core.txProvider),
 		battle.WithTransactionRunner(core.economy),
 	)

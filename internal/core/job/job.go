@@ -7,9 +7,10 @@ import (
 )
 
 var (
-	ErrInvalidDefinition = errors.New("job definition is invalid")
-	ErrInvalidCharacter  = errors.New("character job state is invalid")
-	ErrJobUnavailable    = errors.New("job requirements are not met")
+	ErrInvalidDefinition    = errors.New("job definition is invalid")
+	ErrInvalidCharacter     = errors.New("character job state is invalid")
+	ErrJobUnavailable       = errors.New("job requirements are not met")
+	ErrCharacterJobNotFound = errors.New("character job not found")
 )
 
 const (
@@ -75,7 +76,54 @@ type CharacterJob struct {
 	History         []Change       `json:"history"`
 	MasteredJobs    []string       `json:"mastered_jobs"`
 	MasteredJobSP   map[string]int `json:"mastered_job_sp"`
+	RecordedJobSP   map[string]int `json:"recorded_job_sp,omitempty"` // Known SP does not prove a job record exists.
+	RecordedJobIDs  []string       `json:"recorded_job_ids,omitempty"`
 	AllJobsMastered bool           `json:"all_jobs_mastered"`
+}
+
+// RecordJobSP retains the latest departure/save value, including decreases and
+// unmastered jobs. Mastery notifications remain RecordMastery's responsibility.
+// Call only when writing an actual job record, not when preserving imported SP.
+func (c *CharacterJob) RecordJobSP(jobID string, sp int) error {
+	if c == nil || c.CharacterID == "" || strings.TrimSpace(jobID) == "" || sp < 0 {
+		return ErrInvalidCharacter
+	}
+	jobID = strings.TrimSpace(jobID)
+	if c.RecordedJobSP == nil {
+		c.RecordedJobSP = make(map[string]int)
+	}
+	c.RecordedJobSP[jobID] = sp
+	if !slices.Contains(c.RecordedJobIDs, jobID) {
+		c.RecordedJobIDs = append(c.RecordedJobIDs, jobID)
+	}
+	if c.IsMastered(jobID) {
+		if c.MasteredJobSP == nil {
+			c.MasteredJobSP = make(map[string]int)
+		}
+		c.MasteredJobSP[jobID] = sp
+	}
+	return nil
+}
+
+// SavedSP prefers the latest recorded value, retaining compatibility with
+// mastery-only snapshots created before independent learned-job storage.
+func (c CharacterJob) SavedSP(jobID string) (int, bool) {
+	if sp, ok := c.RecordedJobSP[jobID]; ok {
+		return sp, true
+	}
+	sp, ok := c.MasteredJobSP[jobID]
+	return sp, ok
+}
+
+// HasRecordedJob requires an actual record, independently of preserved SP.
+func (c CharacterJob) HasRecordedJob(jobID string) bool {
+	if jobID == "" {
+		return false
+	}
+	if slices.Contains(c.RecordedJobIDs, jobID) || c.IsMastered(jobID) {
+		return true
+	}
+	return slices.ContainsFunc(c.History, func(change Change) bool { return change.FromJobID == jobID })
 }
 
 func NewCharacterJob(characterID, currentJobID string) (CharacterJob, error) {
@@ -126,8 +174,8 @@ func (c *CharacterJob) Master(jobID string) {
 	}
 }
 
-// RecordMastery records the first SP value at which a job reaches its final
-// skill threshold. A mastered job retains that SP when recalled later.
+// RecordMastery records the first mastery and reports whether to notify.
+// RecordJobSP separately refreshes retained SP on departure or future save.
 func (c *CharacterJob) RecordMastery(jobID string, sp, masterySP int) bool {
 	if c == nil || strings.TrimSpace(jobID) == "" || sp < 0 || masterySP <= 0 || sp < masterySP {
 		return false

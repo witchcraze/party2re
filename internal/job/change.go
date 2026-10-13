@@ -99,6 +99,9 @@ func (s *Service) ChangeJob(ctx context.Context, characterID string, targetJobID
 		if currentDef, err := s.GetDefinition(currentJobID); err == nil {
 			currentState.RecordMastery(currentJobID, tc.Character.SP, s.masterySP(currentDef))
 		}
+		if err := currentState.RecordJobSP(currentJobID, tc.Character.SP); err != nil {
+			return err
+		}
 		s.checkAndNotifyCompletion(tc.Context, tc.Character.Name, &currentState)
 		if err := currentState.ChangeTo(targetDef, tc.Character.Level, tc.Character.Gender); err != nil {
 			return err
