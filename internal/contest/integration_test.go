@@ -3,7 +3,9 @@ package contest_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +14,8 @@ import (
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/id"
+	"github.com/witchcraze/party2re/internal/logging"
+	"github.com/witchcraze/party2re/internal/scheduling"
 )
 
 func contestIntegrationDB(t *testing.T) (*sql.DB, *database.ContestRepository, *database.CharacterRepository, database.TransactionProvider) {
@@ -71,7 +75,7 @@ func contestIntegrationDB(t *testing.T) (*sql.DB, *database.ContestRepository, *
 	})
 
 	// Copy table DDL in dependency order without copying shared data.
-	for _, table := range []string{"players", "characters", "character_photos", "contest_rounds", "contest_entries", "contest_votes", "contest_legends"} {
+	for _, table := range []string{"players", "characters", "character_depots", "character_photos", "contest_rounds", "contest_entries", "contest_votes", "contest_legends"} {
 		var tableName, ddl string
 		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
 			t.Fatal(err)
@@ -217,5 +221,248 @@ func TestContestSettlement_OverduePostpone_DatabaseIntegration(t *testing.T) {
 	scheduledOnTimeAction := schedOnTime.scheduledActions[0]
 	if !scheduledOnTimeAction.ExecuteAt.Equal(expectedOnTimeEnd) {
 		t.Errorf("scheduled ExecuteAt on-time = %v, want %v", scheduledOnTimeAction.ExecuteAt, expectedOnTimeEnd)
+	}
+}
+
+type statefulSchedRepo struct {
+	mu          sync.Mutex
+	actions     map[string]core_scheduling.ScheduledAction
+	locks       map[string]bool
+	failSched   bool
+	scheduleErr error
+}
+
+func newStatefulSchedRepo() *statefulSchedRepo {
+	return &statefulSchedRepo{
+		actions: make(map[string]core_scheduling.ScheduledAction),
+		locks:   make(map[string]bool),
+	}
+}
+
+func (r *statefulSchedRepo) Schedule(_ context.Context, action core_scheduling.ScheduledAction) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.failSched && r.scheduleErr != nil {
+		return r.scheduleErr
+	}
+	r.actions[action.ID] = action
+	return nil
+}
+
+func (r *statefulSchedRepo) FetchDue(_ context.Context, upTo time.Time, limit int) ([]core_scheduling.ScheduledAction, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var due []core_scheduling.ScheduledAction
+	for _, a := range r.actions {
+		if a.State == core_scheduling.StatePending && !a.ExecuteAt.After(upTo) {
+			due = append(due, a)
+			if len(due) >= limit {
+				break
+			}
+		}
+	}
+	return due, nil
+}
+
+func (r *statefulSchedRepo) FindPendingByActorID(_ context.Context, actorID string) ([]core_scheduling.ScheduledAction, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var res []core_scheduling.ScheduledAction
+	for _, a := range r.actions {
+		if a.ActorID == actorID && (a.State == core_scheduling.StatePending || a.State == core_scheduling.StateProcessing) {
+			res = append(res, a)
+		}
+	}
+	return res, nil
+}
+
+func (r *statefulSchedRepo) AcquireLock(_ context.Context, actionID string, _ time.Duration) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.locks[actionID] {
+		return false, nil
+	}
+	r.locks[actionID] = true
+	return true, nil
+}
+
+func (r *statefulSchedRepo) Save(_ context.Context, action core_scheduling.ScheduledAction) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.actions[action.ID] = action
+	return nil
+}
+
+func (r *statefulSchedRepo) CancelByActorID(_ context.Context, actorID string) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	count := 0
+	for id, a := range r.actions {
+		if a.ActorID == actorID {
+			delete(r.actions, id)
+			count++
+		}
+	}
+	return count, nil
+}
+
+func TestContestSettlement_SchedulingFailureAndReconciliation_DatabaseIntegration(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	db, contestRepo, charRepo, txProvider := contestIntegrationDB(t)
+
+	now := time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC)
+	schedRepo := newStatefulSchedRepo()
+	schedService := scheduling.NewService(schedRepo)
+
+	svc, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithTransactionProvider(txProvider),
+		contest.WithServiceScheduler(schedService),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	handler := contest.NewContestSettlementHandler(svc, contest.WithScheduler(schedService))
+	worker := scheduling.NewWorker(schedRepo, time.Second, logging.Nop())
+	worker.RegisterHandler(contest.ActionTypeContestSettlement, handler)
+
+	// Setup: insert player and character into real MariaDB
+	char, err := database.CreateTestCharacter(ctx, db, "Photographer")
+	if err != nil {
+		t.Fatalf("CreateTestCharacter failed: %v", err)
+	}
+
+	photo, err := svc.SavePhoto(ctx, char.ID, "GrandLandscape", "Forest", "http://example.com/forest.jpg", "Majestic tree", "")
+	if err != nil {
+		t.Fatalf("SavePhoto failed: %v", err)
+	}
+
+	// -------------------------------------------------------------
+	// Step 1: EnterContest with scheduler failure injected
+	// -------------------------------------------------------------
+	schedRepo.failSched = true
+	schedRepo.scheduleErr = errors.New("queue unavailable")
+
+	entry, enterErr := svc.EnterContest(ctx, char.ID, photo.ID, "GrandLandscape")
+	if enterErr == nil {
+		t.Fatal("expected ErrScheduleFailed from EnterContest when scheduler fails, got nil")
+	}
+	if !errors.Is(enterErr, contest.ErrScheduleFailed) {
+		t.Fatalf("expected ErrScheduleFailed, got: %v", enterErr)
+	}
+	if entry.ID == "" {
+		t.Fatal("expected entry to be returned non-empty, got empty entry")
+	}
+
+	// MariaDB verification: entry row exists
+	savedEntry, findErr := contestRepo.FindEntryByRoundAndCharacter(ctx, entry.Round, char.ID)
+	if findErr != nil {
+		t.Fatalf("expected entry to exist in MariaDB, got: %v", findErr)
+	}
+	if savedEntry.ID != entry.ID {
+		t.Errorf("saved entry ID = %q, want %q", savedEntry.ID, entry.ID)
+	}
+
+	// MariaDB verification: duplicate submission rejected (prevents double entry)
+	_, retryErr := svc.EnterContest(ctx, char.ID, photo.ID, "AnotherTitle")
+	if !errors.Is(retryErr, contest.ErrAlreadyEntered) {
+		t.Fatalf("expected ErrAlreadyEntered on retry, got: %v", retryErr)
+	}
+
+	// Queue verification: no action was enqueued due to failure
+	if len(schedRepo.actions) != 0 {
+		t.Fatalf("expected 0 actions in queue after failure, got %d", len(schedRepo.actions))
+	}
+
+	// -------------------------------------------------------------
+	// Step 2: Settlement check execution with scheduler failure
+	// Round 1 is preparing with 1 entry (< quorum 5), EndTime arrives (now)
+	// -------------------------------------------------------------
+	r1, err := contestRepo.GetRoundByNumber(ctx, 1)
+	if err != nil {
+		t.Fatalf("GetRoundByNumber failed: %v", err)
+	}
+	r1.EndTime = now
+	if err := contestRepo.SaveRound(ctx, r1); err != nil {
+		t.Fatalf("SaveRound failed: %v", err)
+	}
+
+	dueAction := core_scheduling.ScheduledAction{
+		ID:          contest.SettlementActionID(1, now),
+		ActionType:  contest.ActionTypeContestSettlement,
+		ActorID:     "system",
+		ScheduledAt: now.Add(-10 * 24 * time.Hour),
+		ExecuteAt:   now,
+		State:       core_scheduling.StatePending,
+	}
+	schedRepo.actions[dueAction.ID] = dueAction
+
+	// Worker processes action while next schedule fails
+	worker.ProcessAction(ctx, dueAction)
+
+	// MariaDB verification: round 1 was postponed and extended to now+10 days
+	r1Postponed, err := contestRepo.GetRoundByNumber(ctx, 1)
+	if err != nil {
+		t.Fatalf("GetRoundByNumber failed: %v", err)
+	}
+	expectedPostponedEnd := now.Add(contest.ContestCycleDays * 24 * time.Hour)
+	if !r1Postponed.EndTime.Equal(expectedPostponedEnd) {
+		t.Errorf("MariaDB round 1 EndTime = %v, want %v", r1Postponed.EndTime, expectedPostponedEnd)
+	}
+
+	// Queue verification: the processed action is marked Failed (terminal state)
+	finalProcessedAction := schedRepo.actions[dueAction.ID]
+	if finalProcessedAction.State != core_scheduling.StateFailed {
+		t.Errorf("expected due action state to be %s, got %s", core_scheduling.StateFailed, finalProcessedAction.State)
+	}
+
+	// -------------------------------------------------------------
+	// Step 3: Disaster Recovery / Reconciliation
+	// Scheduler recovers, ReconcileSettlementSchedule restores next reservation
+	// -------------------------------------------------------------
+	schedRepo.failSched = false
+	schedRepo.scheduleErr = nil
+
+	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+		t.Fatalf("ReconcileSettlementSchedule failed: %v", err)
+	}
+
+	expectedNextActionID := contest.SettlementActionID(1, expectedPostponedEnd)
+	nextAction, exists := schedRepo.actions[expectedNextActionID]
+	if !exists {
+		t.Fatalf("expected next scheduled action %q in queue, none found", expectedNextActionID)
+	}
+	if nextAction.State != core_scheduling.StatePending {
+		t.Errorf("expected next action state %s, got %s", core_scheduling.StatePending, nextAction.State)
+	}
+	if !nextAction.ExecuteAt.Equal(expectedPostponedEnd) {
+		t.Errorf("expected next action ExecuteAt = %v, want %v", nextAction.ExecuteAt, expectedPostponedEnd)
+	}
+
+	// Reconcile must NOT duplicate entries, prizes, or alter MariaDB round
+	r1AfterReconcile, _ := contestRepo.GetRoundByNumber(ctx, 1)
+	if !r1AfterReconcile.EndTime.Equal(expectedPostponedEnd) {
+		t.Errorf("round 1 EndTime changed during reconcile: %v", r1AfterReconcile.EndTime)
+	}
+	entries, _ := contestRepo.ListEntriesByRound(ctx, 1)
+	if len(entries) != 1 {
+		t.Errorf("expected 1 entry in round 1, got %d", len(entries))
+	}
+
+	// -------------------------------------------------------------
+	// Step 4: Defense against replay of stale/old actions
+	// Dispatching the old action (dueAction with now) again must NOT re-postpone
+	// -------------------------------------------------------------
+	err = handler.Handle(ctx, dueAction)
+	if err != nil {
+		t.Fatalf("expected stale action handling to return nil, got: %v", err)
+	}
+	r1AfterStale, _ := contestRepo.GetRoundByNumber(ctx, 1)
+	if !r1AfterStale.EndTime.Equal(expectedPostponedEnd) {
+		t.Errorf("stale action altered round 1 EndTime: %v, want %v", r1AfterStale.EndTime, expectedPostponedEnd)
 	}
 }

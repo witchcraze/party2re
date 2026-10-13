@@ -26,6 +26,7 @@ var (
 	ErrCharacterNotFound          = errors.New("character not found")
 	ErrContestNotReadyToSettle    = errors.New("contest round is still active and has not reached its end time")
 	ErrCommentTooLong             = errors.New("comment exceeds maximum length of 100 characters")
+	ErrScheduleFailed             = errors.New("contest settlement schedule failed")
 )
 
 const (

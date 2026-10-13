@@ -1480,3 +1480,168 @@ func TestSettlement_Postpone_FromCheckTime(t *testing.T) {
 		})
 	}
 }
+
+func TestEnterContest_SchedulingFailure_CommittedEntryReturnedWithErrScheduleFailed(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+	sched := &mockScheduler{
+		scheduleErr: errors.New("queue unavailable"),
+	}
+
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	svc, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithServiceScheduler(sched),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	charRepo.Update(ctx, corecharacter.Character{ID: "char-fail-1", Name: "PlayerFail"})
+	photo, pErr := svc.SavePhoto(ctx, "char-fail-1", "PhotoFail", "town", "http://example.com/p.jpg", "caption", "")
+	if pErr != nil {
+		t.Fatalf("SavePhoto failed: %v", pErr)
+	}
+
+	entry, err := svc.EnterContest(ctx, "char-fail-1", photo.ID, "TitleFail")
+	if err == nil {
+		t.Fatal("expected error from EnterContest when scheduler fails, got nil")
+	}
+	if !errors.Is(err, contest.ErrScheduleFailed) {
+		t.Fatalf("expected ErrScheduleFailed, got %v", err)
+	}
+	if entry.ID == "" {
+		t.Fatal("expected entry to be non-empty and committed to SQL, got empty entry")
+	}
+
+	// Verify the entry row actually exists in SQL repository
+	savedEntry, findErr := contestRepo.FindEntryByRoundAndCharacter(ctx, entry.Round, "char-fail-1")
+	if findErr != nil {
+		t.Fatalf("expected entry to be found in SQL, got: %v", findErr)
+	}
+	if savedEntry.ID != entry.ID {
+		t.Errorf("saved entry ID = %q, want %q", savedEntry.ID, entry.ID)
+	}
+
+	// Verify retry indicates entry is already registered in SQL (no double entry possible)
+	_, retryErr := svc.EnterContest(ctx, "char-fail-1", photo.ID, "AnotherTitle")
+	if !errors.Is(retryErr, contest.ErrAlreadyEntered) {
+		t.Fatalf("expected ErrAlreadyEntered on retry, got: %v", retryErr)
+	}
+
+	// Recover scheduler and verify ReconcileSettlementSchedule repairs the missing schedule
+	sched.scheduleErr = nil
+	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+		t.Fatalf("ReconcileSettlementSchedule failed: %v", err)
+	}
+	if len(sched.scheduledActions) != 1 {
+		t.Fatalf("expected 1 scheduled action after reconciliation, got %d", len(sched.scheduledActions))
+	}
+	expectedID := contest.SettlementActionID(entry.Round, contestRepo.rounds[entry.Round].EndTime)
+	if sched.scheduledActions[0].ID != expectedID {
+		t.Errorf("scheduled action ID = %q, want %q", sched.scheduledActions[0].ID, expectedID)
+	}
+}
+
+func TestReconcileSettlementSchedule_StorageErrorsPropagated(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	sched := &mockScheduler{}
+
+	// Case 1: GetActiveRound returns storage error
+	dbErr := errors.New("database connection refused")
+	contestRepo1 := newMockContestRepo()
+	contestRepo1.getActiveErr = dbErr
+
+	svc1, _ := contest.NewService(charRepo, contestRepo1, contest.WithServiceScheduler(sched))
+	err1 := svc1.ReconcileSettlementSchedule(ctx)
+	if err1 == nil {
+		t.Fatal("expected storage error from ReconcileSettlementSchedule, got nil")
+	}
+	if !strings.Contains(err1.Error(), dbErr.Error()) {
+		t.Fatalf("expected dbErr in output, got: %v", err1)
+	}
+
+	// Case 2: Active round is ErrContestNotFound, but EnsurePreparingRound hits storage error
+	contestRepo2 := newMockContestRepo()
+	contestRepo2.getPreparingErr = dbErr
+	svc2, _ := contest.NewService(charRepo, contestRepo2, contest.WithServiceScheduler(sched))
+	err2 := svc2.ReconcileSettlementSchedule(ctx)
+	if err2 == nil {
+		t.Fatal("expected storage error when preparing round read fails, got nil")
+	}
+	if !strings.Contains(err2.Error(), dbErr.Error()) {
+		t.Fatalf("expected dbErr in output, got: %v", err2)
+	}
+}
+
+func TestReconcileSettlementSchedule_Success_ActiveRound(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+	sched := &mockScheduler{}
+
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	activeEnd := now.Add(5 * 24 * time.Hour)
+	contestRepo.rounds[2] = contest.ContestRound{
+		Round:     2,
+		Status:    contest.StatusActive,
+		StartTime: now.Add(-5 * 24 * time.Hour),
+		EndTime:   activeEnd,
+	}
+
+	svc, _ := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithServiceScheduler(sched),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+
+	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+		t.Fatalf("ReconcileSettlementSchedule failed: %v", err)
+	}
+	if len(sched.scheduledActions) != 1 {
+		t.Fatalf("expected 1 scheduled action, got %d", len(sched.scheduledActions))
+	}
+	action := sched.scheduledActions[0]
+	if action.ID != contest.SettlementActionID(2, activeEnd) {
+		t.Errorf("scheduled ID = %q, want %q", action.ID, contest.SettlementActionID(2, activeEnd))
+	}
+}
+
+func TestReconcileSettlementSchedule_Success_PreparingRound(t *testing.T) {
+	ctx := context.Background()
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+	sched := &mockScheduler{}
+
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	prepEnd := now.Add(10 * 24 * time.Hour)
+	contestRepo.rounds[1] = contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusPreparing,
+		StartTime: now,
+		EndTime:   prepEnd,
+	}
+
+	svc, _ := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithServiceScheduler(sched),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+
+	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+		t.Fatalf("ReconcileSettlementSchedule failed: %v", err)
+	}
+	if len(sched.scheduledActions) != 1 {
+		t.Fatalf("expected 1 scheduled action, got %d", len(sched.scheduledActions))
+	}
+	action := sched.scheduledActions[0]
+	if action.ID != contest.SettlementActionID(1, prepEnd) {
+		t.Errorf("scheduled ID = %q, want %q", action.ID, contest.SettlementActionID(1, prepEnd))
+	}
+}

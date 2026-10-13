@@ -52,6 +52,8 @@ type mockContestRepo struct {
 	votes   map[string]contest.ContestVote
 	legends []contest.ContestLegend
 
+	getActiveErr                  error
+	getPreparingErr               error
 	getPreparingRoundForUpdateErr error
 	listEntriesByRoundErrByRound  map[int]error
 }
@@ -135,6 +137,9 @@ func (m *mockContestRepo) GetRoundByNumberForUpdate(ctx context.Context, round i
 func (m *mockContestRepo) GetActiveRound(ctx context.Context) (contest.ContestRound, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.getActiveErr != nil {
+		return contest.ContestRound{}, m.getActiveErr
+	}
 	for _, r := range m.rounds {
 		if r.Status == contest.StatusActive {
 			return r, nil
@@ -150,6 +155,9 @@ func (m *mockContestRepo) GetActiveRoundForUpdate(ctx context.Context) (contest.
 func (m *mockContestRepo) GetPreparingRound(ctx context.Context) (contest.ContestRound, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.getPreparingErr != nil {
+		return contest.ContestRound{}, m.getPreparingErr
+	}
 	for _, r := range m.rounds {
 		if r.Status == contest.StatusPreparing {
 			return r, nil
@@ -163,6 +171,9 @@ func (m *mockContestRepo) GetPreparingRoundForUpdate(ctx context.Context) (conte
 	defer m.mu.Unlock()
 	if m.getPreparingRoundForUpdateErr != nil {
 		return contest.ContestRound{}, m.getPreparingRoundForUpdateErr
+	}
+	if m.getPreparingErr != nil {
+		return contest.ContestRound{}, m.getPreparingErr
 	}
 	for _, r := range m.rounds {
 		if r.Status == contest.StatusPreparing {

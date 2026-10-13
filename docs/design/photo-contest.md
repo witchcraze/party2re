@@ -70,10 +70,16 @@ When a contest is settled:
 ### 4.5 Automated Scheduling & Settlement (`ContestSettlementHandler`)
 - Contest settlements are automatically scheduled as recurring actions (`ActionTypeContestSettlement = "contest_settlement"`) managed by `scheduling.Service`.
 - On server startup, `wireContestSettlement` registers the settlement check for the current active round's `EndTime` (or the preparing round's `EndTime` if no active round is running), ensuring an initial valid schedule exists.
+  - Startup explicitly distinguishes `ErrContestNotFound` from underlying database read errors; storage errors abort startup rather than masking failure.
 - On entry submission (`EnterContest`), the settlement check for the preparing round is also registered if not already scheduled.
 - When triggered by `scheduling.Worker`:
   - If quorum (5+ entries) is satisfied, prizes and voter bonuses are distributed for the active round, the champion is archived into `contest_legends`, the next preparing round is promoted to active if it reached quorum (or retained in preparing if under quorum), and the next settlement action is scheduled.
   - If quorum is not satisfied, the round is postponed and extended by 10 days from the current check time (`now + ContestCycleDays`) without prize distribution, entries are retained, and the next check is scheduled for the extended future deadline.
+- **Scheduling Failure & Recovery Boundary (予約失敗と再調停境界)**:
+  - **SQL Commit Precedence**: Database transactions commit durable state (entry submission, round postponement, prize awards) before Valkey scheduling is invoked.
+  - **Error Observability**: Neither startup (`wireContestSettlement`), entry submission (`EnterContest`), nor settlement execution (`ContestSettlementHandler.Handle`) discards scheduling errors. If enqueuing fails after commit, `ErrScheduleFailed` is returned alongside the committed result (e.g. `EnterContest` returns non-empty `ContestEntry` and `ErrScheduleFailed`). When `Handle` fails to schedule the next check, `scheduling.Worker` transitions the current action to terminal `StateFailed` rather than `StateCompleted`.
+  - **Schedule Reconciliation (`ReconcileSettlementSchedule` / `Reconcile`)**: Disaster recovery reads the latest durable SQL round (active round, or preparing round if no active round exists) and registers only its deterministic reservation (`SettlementActionID(round, endTime)`) via `ScheduleWithID`. It never replays committed round settlements or duplicates prizes/entries.
+  - **Stale Action Protection**: If an action referencing an already-settled round (`StatusSettled`) or an already-postponed timestamp (`targetTime.Before(round.EndTime)`) arrives, `ContestSettlementHandler.Handle` detects that durable SQL progress has already occurred, skips re-settlement, and reconciles the schedule for the current round.
 
 ---
 

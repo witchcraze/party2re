@@ -309,7 +309,9 @@ func (s *Service) EnterContest(
 
 	if s.scheduler != nil && !prepRoundEndTime.IsZero() {
 		nextID := SettlementActionID(entry.Round, prepRoundEndTime)
-		_ = s.scheduler.ScheduleWithID(ctx, nextID, ActionTypeContestSettlement, "system", nil, prepRoundEndTime)
+		if err := s.scheduler.ScheduleWithID(ctx, nextID, ActionTypeContestSettlement, "system", nil, prepRoundEndTime); err != nil {
+			return entry, fmt.Errorf("%w: %v", ErrScheduleFailed, err)
+		}
 	}
 
 	return entry, nil
@@ -454,4 +456,41 @@ func (s *Service) GetLegends(ctx context.Context, limit, offset int) (pagination
 // GetActiveRound returns the current active contest round.
 func (s *Service) GetActiveRound(ctx context.Context) (ContestRound, error) {
 	return s.contests.GetActiveRound(ctx)
+}
+
+// GetRoundByNumber retrieves a contest round by its round number.
+func (s *Service) GetRoundByNumber(ctx context.Context, round int) (ContestRound, error) {
+	return s.contests.GetRoundByNumber(ctx, round)
+}
+
+// ReconcileSettlementSchedule ensures the settlement scheduled action exists for the current contest round.
+// It inspects current SQL round state (active round, or preparing round if no active round exists),
+// and registers the deterministic settlement reservation without replaying committed round settlements.
+func (s *Service) ReconcileSettlementSchedule(ctx context.Context) error {
+	if s.scheduler == nil {
+		return nil
+	}
+
+	activeRound, err := s.contests.GetActiveRound(ctx)
+	if err == nil {
+		targetID := SettlementActionID(activeRound.Round, activeRound.EndTime)
+		if err := s.scheduler.ScheduleWithID(ctx, targetID, ActionTypeContestSettlement, "system", nil, activeRound.EndTime); err != nil {
+			return fmt.Errorf("%w: %v", ErrScheduleFailed, err)
+		}
+		return nil
+	}
+	if !errors.Is(err, ErrContestNotFound) {
+		return fmt.Errorf("read active contest round: %w", err)
+	}
+
+	prepRound, err := s.EnsurePreparingRound(ctx)
+	if err != nil {
+		return fmt.Errorf("ensure preparing contest round: %w", err)
+	}
+
+	targetID := SettlementActionID(prepRound.Round, prepRound.EndTime)
+	if err := s.scheduler.ScheduleWithID(ctx, targetID, ActionTypeContestSettlement, "system", nil, prepRound.EndTime); err != nil {
+		return fmt.Errorf("%w: %v", ErrScheduleFailed, err)
+	}
+	return nil
 }
