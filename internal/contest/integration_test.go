@@ -947,13 +947,30 @@ func TestContestSettlement_IndependentServices_ConcurrencyAndDuplicateActionSafe
 		t.Fatalf("NewService 2 failed: %v", err)
 	}
 
-	// 1. Concurrent reconcile across independent services
+	// 1. Concurrent reconcile across independent services: verify all return values
 	var wg sync.WaitGroup
+	reconcileErrs := make(chan error, 2)
 	wg.Add(2)
-	go func() { defer wg.Done(); _ = svc1.ReconcileSettlementSchedule(ctx) }()
-	go func() { defer wg.Done(); _ = svc2.ReconcileSettlementSchedule(ctx) }()
+	go func() {
+		defer wg.Done()
+		reconcileErrs <- svc1.ReconcileSettlementSchedule(ctx)
+	}()
+	go func() {
+		defer wg.Done()
+		reconcileErrs <- svc2.ReconcileSettlementSchedule(ctx)
+	}()
 	wg.Wait()
+	close(reconcileErrs)
 
+	for err := range reconcileErrs {
+		if err != nil {
+			t.Fatalf("concurrent ReconcileSettlementSchedule returned error: %v", err)
+		}
+	}
+
+	// 2. Independent verification of Reconcile Success:
+	// Verify that concurrent reconcile succeeded in scheduling at least 1 valid action for Round 1
+	// without relying on manual injection or error swallowing.
 	reconciled, err := schedRepo.FindPendingByActorID(ctx, testActorID)
 	if err != nil {
 		t.Fatalf("FindPendingByActorID failed: %v", err)
@@ -962,14 +979,29 @@ func TestContestSettlement_IndependentServices_ConcurrencyAndDuplicateActionSafe
 		trackAction(a.ID)
 	}
 
-	// 2. Ensure multiple duplicate scheduled actions exist in Valkey for Round 1
-	var round1Actions []core_scheduling.ScheduledAction
+	var round1ReconciledActions []core_scheduling.ScheduledAction
 	for _, a := range reconciled {
 		if strings.HasPrefix(a.ID, contest.SettlementActionID(1, round1EndTime)) {
-			round1Actions = append(round1Actions, a)
+			round1ReconciledActions = append(round1ReconciledActions, a)
 		}
 	}
-	for len(round1Actions) < 2 {
+	if len(round1ReconciledActions) == 0 {
+		t.Fatalf("expected concurrent reconcile to schedule at least 1 pending action for round 1, found %d (reconcile failed!)", len(round1ReconciledActions))
+	}
+	for _, a := range round1ReconciledActions {
+		if a.State != core_scheduling.StatePending {
+			t.Errorf("reconciled action state = %s, want StatePending", a.State)
+		}
+		if !a.ExecuteAt.Equal(round1EndTime) {
+			t.Errorf("reconciled action ExecuteAt = %v, want %v", a.ExecuteAt, round1EndTime)
+		}
+	}
+
+	// 3. Test duplicate action safety independently:
+	// Ensure that even when duplicate scheduled actions exist in Valkey for Round 1,
+	// concurrent worker execution processes them idempotently without double-settling or double-awarding.
+	round1ExecutionActions := append([]core_scheduling.ScheduledAction(nil), round1ReconciledActions...)
+	if len(round1ExecutionActions) < 2 {
 		extraID := fmt.Sprintf("%s:%s", contest.SettlementActionID(1, round1EndTime), id.New())
 		trackAction(extraID)
 		extraAct := core_scheduling.ScheduledAction{
@@ -982,10 +1014,9 @@ func TestContestSettlement_IndependentServices_ConcurrencyAndDuplicateActionSafe
 		if err := schedRepo.Schedule(ctx, extraAct); err != nil {
 			t.Fatalf("Schedule extraAct failed: %v", err)
 		}
-		round1Actions = append(round1Actions, extraAct)
+		round1ExecutionActions = append(round1ExecutionActions, extraAct)
 	}
 
-	// 3. Concurrent execution of duplicate actions via independent workers and handlers
 	h1 := contest.NewContestSettlementHandler(svc1, contest.WithScheduler(schedService))
 	h2 := contest.NewContestSettlementHandler(svc2, contest.WithScheduler(schedService))
 	worker1 := scheduling.NewWorker(schedRepo, time.Second, logging.Nop())
@@ -993,16 +1024,17 @@ func TestContestSettlement_IndependentServices_ConcurrencyAndDuplicateActionSafe
 	worker2 := scheduling.NewWorker(schedRepo, time.Second, logging.Nop())
 	worker2.RegisterHandler(contest.ActionTypeContestSettlement, h2)
 
-	for i := 0; i < len(round1Actions); i += 2 {
-		actA := round1Actions[i]
-		hasActB := i+1 < len(round1Actions)
+	// Execute duplicate actions concurrently through independent workers
+	for i := 0; i < len(round1ExecutionActions); i += 2 {
+		actA := round1ExecutionActions[i]
+		hasActB := i+1 < len(round1ExecutionActions)
 		wg.Add(1)
 		go func(a core_scheduling.ScheduledAction) {
 			defer wg.Done()
 			worker1.ProcessAction(ctx, a)
 		}(actA)
 		if hasActB {
-			actB := round1Actions[i+1]
+			actB := round1ExecutionActions[i+1]
 			wg.Add(1)
 			go func(b core_scheduling.ScheduledAction) {
 				defer wg.Done()
@@ -1074,7 +1106,8 @@ func TestContestSettlement_IndependentServices_ConcurrencyAndDuplicateActionSafe
 		t.Errorf("char 2 money = %d, want %d", c2After.Money, contest.PrizeThird.Gold)
 	}
 
-	// Check Valkey state: no pending actions for Round 1
+	// 5. Assertions on Valkey state:
+	// A. No pending actions remain for Round 1
 	pendingActions, err := schedRepo.FindPendingByActorID(ctx, testActorID)
 	if err != nil {
 		t.Fatalf("FindPendingByActorID failed: %v", err)
@@ -1083,6 +1116,69 @@ func TestContestSettlement_IndependentServices_ConcurrencyAndDuplicateActionSafe
 		if strings.HasPrefix(a.ID, contest.SettlementActionID(1, round1EndTime)) {
 			t.Errorf("stale pending action found for round 1: %s", a.ID)
 		}
+	}
+
+	// B. Valid pending reservation exists for Round 2, exactly matching latest SQL round state
+	var round2Reservation *core_scheduling.ScheduledAction
+	expectedRound2Prefix := contest.SettlementActionID(r2After.Round, r2After.EndTime)
+	for _, a := range pendingActions {
+		if strings.HasPrefix(a.ID, expectedRound2Prefix) {
+			temp := a
+			round2Reservation = &temp
+			trackAction(a.ID)
+			break
+		}
+	}
+	if round2Reservation == nil {
+		t.Fatalf("expected valid next reservation for round %d with EndTime %v in Valkey, but none found in %v", r2After.Round, r2After.EndTime, pendingActions)
+	}
+	if !round2Reservation.ExecuteAt.Equal(r2After.EndTime) {
+		t.Errorf("next reservation ExecuteAt = %v, want %v matching SQL EndTime", round2Reservation.ExecuteAt, r2After.EndTime)
+	}
+	if round2Reservation.State != core_scheduling.StatePending {
+		t.Errorf("next reservation State = %s, want StatePending", round2Reservation.State)
+	}
+
+	// 6. Verification: Even if an old round pending reservation survives or arrives late,
+	// executing it must not disrupt automated progress, replay settlement, or overwrite Round 2 reservation.
+	staleRound1ActionID := fmt.Sprintf("%s:%s", contest.SettlementActionID(1, round1EndTime), id.New())
+	trackAction(staleRound1ActionID)
+	staleRound1Action := core_scheduling.ScheduledAction{
+		ID:         staleRound1ActionID,
+		ActionType: contest.ActionTypeContestSettlement,
+		ActorID:    testActorID,
+		ExecuteAt:  round1EndTime,
+		State:      core_scheduling.StatePending,
+	}
+	if err := schedRepo.Schedule(ctx, staleRound1Action); err != nil {
+		t.Fatalf("Schedule stale round 1 action failed: %v", err)
+	}
+
+	worker1.ProcessAction(ctx, staleRound1Action)
+
+	// SQL state unchanged: Round 1 still settled, Char 0 funds unchanged
+	c0AfterStale, err := charRepo.FindByID(ctx, chars[0].ID)
+	if err != nil {
+		t.Fatalf("FindByID char 0 after stale action failed: %v", err)
+	}
+	if c0AfterStale.Money != contest.PrizeFirst.Gold {
+		t.Errorf("char 0 money altered by stale action = %d, want %d", c0AfterStale.Money, contest.PrizeFirst.Gold)
+	}
+
+	// Valkey state unchanged: Round 2 next reservation still present and pending
+	actionsAfterStale, err := schedRepo.FindPendingByActorID(ctx, testActorID)
+	if err != nil {
+		t.Fatalf("FindPendingByActorID after stale action failed: %v", err)
+	}
+	var round2StillPresent bool
+	for _, a := range actionsAfterStale {
+		if strings.HasPrefix(a.ID, expectedRound2Prefix) && a.State == core_scheduling.StatePending {
+			round2StillPresent = true
+			break
+		}
+	}
+	if !round2StillPresent {
+		t.Fatalf("Round 2 next reservation was disrupted or overwritten by stale round 1 action!")
 	}
 }
 
