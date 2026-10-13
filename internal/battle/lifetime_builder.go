@@ -62,13 +62,17 @@ func (s *Service) BuildLifetimeActor(ctx context.Context, characterID, icon stri
 			a.JobHistory[change.FromJobID] = nil
 		}
 	}
-	for id, sp := range history.MasteredJobSP {
-		a.JobHistory[id] = new(int)
-		*a.JobHistory[id] = sp
+	for _, ids := range [][]string{history.MasteredJobs, history.RecordedJobIDs} {
+		for _, id := range ids {
+			if id != "" {
+				a.JobHistory[id] = nil
+			}
+		}
 	}
-	for id, sp := range history.RecordedJobSP {
-		a.JobHistory[id] = new(int)
-		*a.JobHistory[id] = sp
+	for id := range a.JobHistory {
+		if sp, known := history.SavedSP(id); known {
+			a.JobHistory[id] = &sp
+		}
 	}
 	if len(a.JobHistory) == 0 {
 		a.JobHistory = nil

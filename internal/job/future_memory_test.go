@@ -118,6 +118,7 @@ func TestFutureMemory_TransactionalLifecycle(t *testing.T) {
 	}
 	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
 	state.RecordedJobSP = map[string]int{"job-05": 0, "job-01": 0}
+	state.History = []corejob.Change{{FromJobID: "job-05", ToJobID: "job-01"}, {FromJobID: "job-01", ToJobID: "job-05"}}
 	jobRepo := &testJobRepo{value: state}
 	charRepo := &testCharRepo{char: char}
 	futureRepo := &testFutureMemoryRepo{}

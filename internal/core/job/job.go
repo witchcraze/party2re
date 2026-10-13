@@ -76,12 +76,14 @@ type CharacterJob struct {
 	History         []Change       `json:"history"`
 	MasteredJobs    []string       `json:"mastered_jobs"`
 	MasteredJobSP   map[string]int `json:"mastered_job_sp"`
-	RecordedJobSP   map[string]int `json:"recorded_job_sp,omitempty"`
+	RecordedJobSP   map[string]int `json:"recorded_job_sp,omitempty"` // Known SP does not prove a job record exists.
+	RecordedJobIDs  []string       `json:"recorded_job_ids,omitempty"`
 	AllJobsMastered bool           `json:"all_jobs_mastered"`
 }
 
 // RecordJobSP retains the latest departure/save value, including decreases and
 // unmastered jobs. Mastery notifications remain RecordMastery's responsibility.
+// Call only when writing an actual job record, not when preserving imported SP.
 func (c *CharacterJob) RecordJobSP(jobID string, sp int) error {
 	if c == nil || c.CharacterID == "" || strings.TrimSpace(jobID) == "" || sp < 0 {
 		return ErrInvalidCharacter
@@ -91,6 +93,9 @@ func (c *CharacterJob) RecordJobSP(jobID string, sp int) error {
 		c.RecordedJobSP = make(map[string]int)
 	}
 	c.RecordedJobSP[jobID] = sp
+	if !slices.Contains(c.RecordedJobIDs, jobID) {
+		c.RecordedJobIDs = append(c.RecordedJobIDs, jobID)
+	}
 	if c.IsMastered(jobID) {
 		if c.MasteredJobSP == nil {
 			c.MasteredJobSP = make(map[string]int)
@@ -110,9 +115,12 @@ func (c CharacterJob) SavedSP(jobID string) (int, bool) {
 	return sp, ok
 }
 
-// HasRecordedJob distinguishes a departure record from merely entering a job.
+// HasRecordedJob requires an actual record, independently of preserved SP.
 func (c CharacterJob) HasRecordedJob(jobID string) bool {
-	if _, ok := c.SavedSP(jobID); ok || c.IsMastered(jobID) {
+	if jobID == "" {
+		return false
+	}
+	if slices.Contains(c.RecordedJobIDs, jobID) || c.IsMastered(jobID) {
 		return true
 	}
 	return slices.ContainsFunc(c.History, func(change Change) bool { return change.FromJobID == jobID })

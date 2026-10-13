@@ -265,10 +265,10 @@ func refreshFutureMemoryPoints(state *corejob.CharacterJob, char corecharacter.C
 // (job_change.cgi:648–663); it does not fabricate a zero or a snapshot value.
 func futureMemoryPoints(state corejob.CharacterJob, char corecharacter.Character, memory corecharacter.FutureMemory) (int, int) {
 	sp, oldSP := char.SP, char.OldSP
-	if saved, ok := state.SavedSP(memory.JobID); ok {
+	if saved, ok := state.SavedSP(memory.JobID); ok && state.HasRecordedJob(memory.JobID) {
 		sp = saved
 	}
-	if saved, ok := state.SavedSP(memory.OldJobID); ok {
+	if saved, ok := state.SavedSP(memory.OldJobID); ok && state.HasRecordedJob(memory.OldJobID) {
 		oldSP = saved
 	}
 	return sp, oldSP

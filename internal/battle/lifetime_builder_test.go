@@ -61,3 +61,28 @@ func TestBuildLifetimeActorHistoryIsReadOnly(t *testing.T) {
 		t.Fatal(missing, err)
 	}
 }
+
+func TestLifetimeHistoryIgnoresMigratedPointsWithoutRecords(t *testing.T) {
+	chars := newMockCharRepo()
+	char := corecharacter.Character{ID: "self", JobID: "job-82", SP: 111, OldJobID: "job-36", OldSP: 100, Stats: corecharacter.Stats{HP: 100, MaxHP: 100, Attack: 10, Defense: 10, Agility: 10}}
+	chars.characters[char.ID] = char
+	history := &historyReadStub{state: corejob.CharacterJob{CharacterID: char.ID, CurrentJobID: char.JobID, RecordedJobSP: map[string]int{"job-82": 111, "job-36": 100, "job-01": 0}, History: []corejob.Change{{FromJobID: "job-01", ToJobID: "job-82"}, {FromJobID: "job-02", ToJobID: "job-82"}}, MasteredJobs: []string{"job-03"}}}
+	svc := battle.NewService(battle.WithCharacterRepository(chars), battle.WithJobHistoryRepository(history))
+	a, err := svc.BuildLifetimeActor(context.Background(), char.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"job-82", "job-36"} {
+		if _, recorded := a.JobHistory[id]; recorded {
+			t.Fatal("migrated points became history", id, a)
+		}
+	}
+	if sp, recorded := a.JobHistory["job-01"]; !recorded || sp == nil || *sp != 0 {
+		t.Fatal("recorded zero lost", a)
+	}
+	for _, id := range []string{"job-02", "job-03"} {
+		if sp, recorded := a.JobHistory[id]; !recorded || sp != nil {
+			t.Fatal("unknown recorded SP lost", id, a)
+		}
+	}
+}

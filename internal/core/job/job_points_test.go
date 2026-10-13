@@ -26,3 +26,27 @@ func TestRecordJobSPIndependentOfMastery(t *testing.T) {
 		t.Fatal("negative SP accepted")
 	}
 }
+
+func TestRecordedJobPresenceDoesNotFollowSavedPoints(t *testing.T) {
+	c := CharacterJob{CharacterID: "character", CurrentJobID: "current", RecordedJobSP: map[string]int{"current": 111, "previous": 0}, MasteredJobSP: map[string]int{"points-only": 80}}
+	for _, id := range []string{"current", "previous", "points-only", "unknown", ""} {
+		if c.HasRecordedJob(id) {
+			t.Fatalf("SP/identity created a job record: %s", id)
+		}
+	}
+	c.History = []Change{{FromJobID: "previous", ToJobID: "current"}, {FromJobID: "missing-sp", ToJobID: "current"}}
+	if !c.HasRecordedJob("previous") || !c.HasRecordedJob("missing-sp") || c.HasRecordedJob("current") {
+		t.Fatal(c)
+	}
+	c.MasteredJobs = []string{"points-only", "master-without-sp"}
+	if !c.HasRecordedJob("points-only") || !c.HasRecordedJob("master-without-sp") {
+		t.Fatal(c)
+	}
+	// Same-job reselection records SP without a cross-job transition.
+	if err := c.RecordJobSP("current", 0); err != nil {
+		t.Fatal(err)
+	}
+	if !c.HasRecordedJob("current") {
+		t.Fatal("explicit job record lost", c)
+	}
+}

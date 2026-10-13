@@ -49,6 +49,7 @@ func TestFutureMemoryDoesNotCreateUnknownRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	state.History = []corejob.Change{{FromJobID: "job-01", ToJobID: "job-02"}}
+	state.RecordedJobSP = map[string]int{"job-02": 9}
 	char := corecharacter.Character{JobID: "job-02", SP: 50, OldJobID: "job-01", OldSP: 17}
 	if err := refreshFutureMemoryPoints(&state, char); err != nil {
 		t.Fatal(err)
@@ -56,11 +57,15 @@ func TestFutureMemoryDoesNotCreateUnknownRecords(t *testing.T) {
 	if state.RecordedJobSP["job-01"] != 17 {
 		t.Fatal(state)
 	}
-	if _, recorded := state.RecordedJobSP["job-02"]; recorded {
-		t.Fatal("first entry became a departure record", state)
+	if state.RecordedJobSP["job-02"] != 9 || state.HasRecordedJob("job-02") {
+		t.Fatal("migration-only SP was updated or became a departure record", state)
 	}
 	sp, oldSP := futureMemoryPoints(state, char, corecharacter.FutureMemory{JobID: "unknown", OldJobID: "job-01"})
 	if sp != 50 || oldSP != 17 {
 		t.Fatal(sp, oldSP)
+	}
+	sp, oldSP = futureMemoryPoints(state, char, corecharacter.FutureMemory{JobID: "job-02", OldJobID: "job-01"})
+	if sp != 50 || oldSP != 17 {
+		t.Fatal("recall used preservation-only SP", sp, oldSP)
 	}
 }

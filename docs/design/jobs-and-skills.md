@@ -77,7 +77,7 @@ cmp = int(min(level, 99) * (tier_rates[current_job_tier] + tier_rates[old_job_ti
 
 ### Recorded job SP
 
-Job experience and mastery are separate facts. Leaving a job records its latest
+Known SP, recorded job experience and mastery are separate facts. Leaving a job records its latest
 SP, including decreases and zero, even when it is not mastered
 (`job_change.cgi:243–305`). `CharacterJob.RecordedJobSP` persists through the
 existing job repository in `character_job_points`; saves upsert supplied jobs
@@ -92,7 +92,18 @@ An absent matching record leaves that SP position unchanged, as in
 
 Migration103 preserves known current/previousSP and existing masterySP, in that
 priority order. Transition history cannot reconstruct SP that was never saved;
-it is not backfilled with invented zero values. The battle adapter snapshots
+it is not backfilled with invented zero values. **A preserved SP row is not proof
+of a job record**, including the current/previous rows seeded by migration103.
+Record existence comes from a departure (`History.FromJobID`), a mastery record,
+or an explicitly written job record (`RecordedJobIDs`, persisted as
+`character_job_points.is_recorded`). Migration104 marks only rows backed by
+departure/mastery evidence and never changes their SP. Ordinary job changes
+write an explicit record, including same-job reselection where no cross-job
+transition exists (`job_change.cgi:207–212,243–305`). Presence remains true across
+SP decreases and preservation-only partial saves. Future-memory save/recall
+checks this presence independently of whether SP is known; preservation-only SP
+is retained but never grants eligibility or overwrites recalled SP.
+The battle adapter snapshots
 recorded jobs read-only for [in-adventure Tool168 memory](battle.md#temporary-transformation-and-job-memory),
 including explicit unknownSP for historical transitions without a saved value.
 Battle copies never call the job repository's save method. Permanent two-job

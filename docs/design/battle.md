@@ -795,7 +795,10 @@ invokes untyped selfAG+150%, then restores the requesting player's icon even
 when the stat helper normally returns no-effect. It does not change jobs.
 
 Tool168 reads the actor's own frozen job history, restoring only previous job/SP
-for a recorded job different from both active jobs; missing/unknown/current
+for a recorded job different from both active jobs. The adapter includes only
+jobs backed by departure/mastery evidence or an explicit persisted job record;
+SP preserved by migration alone never creates history, even after copying away
+from the original current job. Recorded0SP remains eligible; missing/unknown/current
 choices are accepted no-effect. A recorded job whose historical SP is unknown
 is unsupported before any draw or mutation, rather than guessed at zero.
 Gem100 changes only appearance, sampling108 positions uniformly; a missing
