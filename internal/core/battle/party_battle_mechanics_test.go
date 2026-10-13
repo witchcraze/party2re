@@ -1,6 +1,7 @@
 package battle_test
 
 import (
+	"strings"
 	"testing"
 
 	corebattle "github.com/witchcraze/party2re/internal/core/battle"
@@ -232,6 +233,10 @@ func TestPartyBattle_MultiGemCustomSkill(t *testing.T) {
 			{ID: "orc", Name: "Orc", HP: 20, Attack: 10, Defense: 10, Agility: 10},
 		},
 		VictoryReward: corebattle.Reward{Experience: 50},
+		RNG: customRNG{
+			float64Func: func() float64 { return 1.0 / 3.0 }, // variance 1.0
+			intnFunc:    func(n int) int { return 1 },        // no miss or crit
+		},
 	}
 
 	res, err := engine.ResolvePartyBattle(req)
@@ -239,24 +244,40 @@ func TestPartyBattle_MultiGemCustomSkill(t *testing.T) {
 		t.Fatalf("ResolvePartyBattle failed: %v", err)
 	}
 
-	// 1. Check quote in logs
 	foundIncantation := false
+	foundAttack := false
+	foundHeal := false
 	for _, l := range res.Logs {
-		if l.ActorID == "sage" && len(l.Message) > 0 && (l.Message[len("Sage 「"):] != "") {
+		if l.ActorID != "sage" || l.ActionName != "トリニティバースト" {
+			continue
+		}
+		if strings.Contains(l.Message, "「万物を照らせ！」") {
 			foundIncantation = true
-			break
+		}
+		if l.TargetID == "orc" && l.DamageDealt > 0 {
+			foundAttack = true
+		}
+		if l.TargetID == "injured_ally" && l.HealingDone > 0 {
+			foundHeal = true
+			if l.HealingDone != 30 {
+				t.Errorf("expected 30 healing done, got %d", l.HealingDone)
+			}
+			// Later attacks must not affect the healing assertion.
+			if hp := l.RemainingHP["injured_ally"]; hp != 50 {
+				t.Errorf("expected injured ally to have 50 HP immediately after healing, got %d", hp)
+			}
 		}
 	}
 	if !foundIncantation {
 		t.Errorf("expected incantation quote in log, logs: %+v", res.Logs)
 	}
-
-	// 2. Injured ally was healed
-	if res.RemainingHP["injured_ally"] < 50 {
-		t.Errorf("expected injured ally to be healed above 50, got %d", res.RemainingHP["injured_ally"])
+	if !foundAttack {
+		t.Errorf("expected custom skill to damage orc, logs: %+v", res.Logs)
+	}
+	if !foundHeal {
+		t.Errorf("expected custom skill to heal injured ally, logs: %+v", res.Logs)
 	}
 
-	// 3. Field was created
 	if res.FinalField == nil || res.FinalField.Element != corebattle.ElementFire {
 		t.Errorf("expected final field to be fire, got %+v", res.FinalField)
 	}
