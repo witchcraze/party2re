@@ -22,6 +22,7 @@ type ContestService interface {
 	GetPastResults(ctx context.Context) (*contest.ContestRound, []contest.ContestEntry, error)
 	GetLegends(ctx context.Context, limit, offset int) (pagination.Page[contest.ContestLegend], error)
 	SettleContest(ctx context.Context, force bool) (contest.SettlementResult, error)
+	ReconcileSettlementSchedule(ctx context.Context) error
 }
 
 // WithContest configures the ContestService for the Handler.
@@ -76,6 +77,11 @@ type enterContestRequest struct {
 	Title   string `json:"title"`
 }
 
+type enterContestResponse struct {
+	contest.ContestEntry
+	Warning string `json:"warning,omitempty"`
+}
+
 type voteContestRequest struct {
 	EntryID string `json:"entry_id"`
 	Comment string `json:"comment"`
@@ -85,13 +91,21 @@ type settleContestRequest struct {
 	Force bool `json:"force"`
 }
 
+type settleContestResponse struct {
+	contest.SettlementResult
+	Warning string `json:"warning,omitempty"`
+}
+
 func (h *Handler) handleGetContestVenue(w http.ResponseWriter, r *http.Request) {
 	if h.contest == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("contest service not configured"))
 		return
 	}
 
+	_ = h.contest.ReconcileSettlementSchedule(r.Context())
+
 	overview, err := h.contest.GetOverview(r.Context())
+
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -176,10 +190,19 @@ func (h *Handler) handleSettleContest(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.contest.SettleContest(r.Context(), req.Force)
 	if err != nil {
+		if errors.Is(err, contest.ErrScheduleFailed) {
+			writeJSON(w, http.StatusAccepted, settleContestResponse{
+				SettlementResult: result,
+				Warning:          "contest settled, but settlement scheduling failed: " + err.Error(),
+			})
+			return
+		}
 		switch {
 		case errors.Is(err, contest.ErrContestNotFound):
 			writeError(w, http.StatusNotFound, err)
 		case errors.Is(err, contest.ErrContestNotReadyToSettle):
+			// Opportunistically reconcile schedule for the unready round to recover missing reservations
+			_ = h.contest.ReconcileSettlementSchedule(r.Context())
 			writeError(w, http.StatusBadRequest, err)
 		default:
 			writeError(w, http.StatusInternalServerError, err)
@@ -187,7 +210,7 @@ func (h *Handler) handleSettleContest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, result)
+	writeJSON(w, http.StatusOK, settleContestResponse{SettlementResult: result})
 }
 
 func (h *Handler) handleGetCharacterPhotos(w http.ResponseWriter, r *http.Request) {
@@ -291,6 +314,13 @@ func (h *Handler) handleEnterContest(w http.ResponseWriter, r *http.Request) {
 
 		entry, err := h.contest.EnterContest(r.Context(), char.ID, req.PhotoID, req.Title)
 		if err != nil {
+			if errors.Is(err, contest.ErrScheduleFailed) {
+				writeJSON(w, http.StatusAccepted, enterContestResponse{
+					ContestEntry: entry,
+					Warning:      "entry saved, but settlement scheduling failed: " + err.Error(),
+				})
+				return
+			}
 			switch {
 			case errors.Is(err, contest.ErrInvalidTitle),
 				errors.Is(err, contest.ErrTitleTooLong),
@@ -309,7 +339,7 @@ func (h *Handler) handleEnterContest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, entry)
+		writeJSON(w, http.StatusCreated, enterContestResponse{ContestEntry: entry})
 	})
 }
 

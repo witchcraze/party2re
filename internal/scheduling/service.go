@@ -59,3 +59,9 @@ func (s *Service) ClearActiveActions(ctx context.Context, characterID string) (b
 	}
 	return count > 0, nil
 }
+
+// FindPendingByActorID returns unfinished (Pending or Processing) work for an actor,
+// delegating to the underlying scheduled action repository.
+func (s *Service) FindPendingByActorID(ctx context.Context, actorID string) ([]core_scheduling.ScheduledAction, error) {
+	return s.repo.FindPendingByActorID(ctx, actorID)
+}

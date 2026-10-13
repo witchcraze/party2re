@@ -63,7 +63,9 @@ func wireApp(
 	}
 
 	econ.initStore(core, soc.guildRepo, soc.timer, valkeyClient)
-	wireHooks(core, cmbt, econ, misc, soc)
+	if err := wireHooks(core, cmbt, econ, misc, soc); err != nil {
+		return nil, err
+	}
 
 	apiHandler, err := newHTTPHandler(cfg, core, econ, cmbt, soc, misc)
 	if err != nil {
@@ -83,7 +85,7 @@ func wireHooks(
 	econ *econServices,
 	misc *miscServices,
 	soc *socServices,
-) {
+) error {
 	cmbt.boss.SetVictoryHook(func(ctx context.Context, characterID string, bossID string, tier int) error {
 		return misc.medal.RecordProgress(ctx, characterID, medal.MetricBossesSlain, 1)
 	})
@@ -244,22 +246,22 @@ func wireHooks(
 		wireGuildPointDecay(soc.sched)
 	}
 	if soc.sched != nil && misc.contest != nil {
-		wireContestSettlement(soc.sched, misc.contest)
+		if err := wireContestSettlement(soc.sched, misc.contest); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // wireContestSettlement enqueues the contest settlement action if not already scheduled.
-func wireContestSettlement(sched *scheduling.Service, contestSvc *contest.Service) {
-	ctx := context.Background()
-	if activeRound, err := contestSvc.GetActiveRound(ctx); err == nil {
-		next := activeRound.EndTime
-		_ = sched.ScheduleWithID(ctx, contest.SettlementActionID(activeRound.Round, next), contest.ActionTypeContestSettlement, "system", nil, next)
-		return
+func wireContestSettlement(sched *scheduling.Service, contestSvc *contest.Service) error {
+	if contestSvc == nil {
+		return nil
 	}
-	if prepRound, err := contestSvc.EnsurePreparingRound(ctx); err == nil {
-		next := prepRound.EndTime
-		_ = sched.ScheduleWithID(ctx, contest.SettlementActionID(prepRound.Round, next), contest.ActionTypeContestSettlement, "system", nil, next)
+	if sched != nil {
+		contestSvc.SetScheduler(sched)
 	}
+	return contestSvc.ReconcileSettlementSchedule(context.Background())
 }
 
 // wireGuildInactivityCheck enqueues the daily JST midnight inactivity check if not already scheduled.

@@ -74,12 +74,8 @@ type socServices struct {
 	timer        timer.Service
 }
 
-type weeklyRankingScheduler struct {
-	*scheduling.Service
-	*scheduling.ValkeyRepository
-}
-
 func newSocServices(
+
 	db *sql.DB,
 	core *coreServices,
 	econ *econServices,
@@ -133,7 +129,8 @@ func newSocServices(
 		schedService = scheduling.NewService(schedRepo)
 		rankingService, _ = ranking.NewService(rankingRepo, ranking.WithSnapshotCache(rankingCache), ranking.WithTransactionProvider(txProvider))
 		worker = scheduling.NewWorker(schedRepo, 5*time.Second, logger)
-		weekly := ranking.NewRotateWeeklyHandler(rankingService, weeklyRankingScheduler{schedService, schedRepo})
+		weekly := ranking.NewRotateWeeklyHandler(rankingService, schedService)
+
 		if err := weekly.Reconcile(context.Background()); err != nil {
 			return nil, err
 		}

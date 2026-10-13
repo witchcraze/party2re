@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,10 +30,14 @@ import (
 )
 
 type mockSchedRepo struct {
-	actions []core_scheduling.ScheduledAction
+	actions     []core_scheduling.ScheduledAction
+	scheduleErr error
 }
 
 func (m *mockSchedRepo) Schedule(_ context.Context, a core_scheduling.ScheduledAction) error {
+	if m.scheduleErr != nil {
+		return m.scheduleErr
+	}
 	m.actions = append(m.actions, a)
 	return nil
 }
@@ -373,7 +378,9 @@ func TestWireContestSettlement(t *testing.T) {
 		t.Fatalf("NewService failed: %v", err)
 	}
 
-	wireContestSettlement(sched, contestSvc)
+	if err := wireContestSettlement(sched, contestSvc); err != nil {
+		t.Fatalf("wireContestSettlement failed: %v", err)
+	}
 
 	if len(repo.actions) != 1 {
 		t.Fatalf("expected 1 scheduled action, got %d", len(repo.actions))
@@ -383,12 +390,12 @@ func TestWireContestSettlement(t *testing.T) {
 	if action.ActionType != contest.ActionTypeContestSettlement {
 		t.Errorf("expected ActionType %s, got %s", contest.ActionTypeContestSettlement, action.ActionType)
 	}
-	expectedID := contest.SettlementActionID(2, endTime)
-	if action.ID != expectedID {
-		t.Errorf("expected action ID %q, got %q", expectedID, action.ID)
+	expectedPrefix := contest.SettlementActionID(2, endTime)
+	if !strings.HasPrefix(action.ID, expectedPrefix) {
+		t.Errorf("expected action ID with prefix %q, got %q", expectedPrefix, action.ID)
 	}
-	if action.ActorID != "system" {
-		t.Errorf("expected ActorID system, got %s", action.ActorID)
+	if action.ActorID != contest.ContestSettlementActorID {
+		t.Errorf("expected ActorID %s, got %s", contest.ContestSettlementActorID, action.ActorID)
 	}
 	if !action.ExecuteAt.Equal(endTime) {
 		t.Errorf("expected ExecuteAt %v, got %v", endTime, action.ExecuteAt)
@@ -414,7 +421,9 @@ func TestWireContestSettlement_NoActiveRound_SchedulesPreparingRound(t *testing.
 		t.Fatalf("NewService failed: %v", err)
 	}
 
-	wireContestSettlement(sched, contestSvc)
+	if err := wireContestSettlement(sched, contestSvc); err != nil {
+		t.Fatalf("wireContestSettlement failed: %v", err)
+	}
 
 	if len(repo.actions) != 1 {
 		t.Fatalf("expected 1 scheduled action, got %d", len(repo.actions))
@@ -423,9 +432,13 @@ func TestWireContestSettlement_NoActiveRound_SchedulesPreparingRound(t *testing.
 	if action.ActionType != contest.ActionTypeContestSettlement {
 		t.Errorf("expected ActionType %s, got %s", contest.ActionTypeContestSettlement, action.ActionType)
 	}
-	expectedID := contest.SettlementActionID(1, endTime)
-	if action.ID != expectedID {
-		t.Errorf("expected action ID %q, got %q", expectedID, action.ID)
+	expectedPrefix := contest.SettlementActionID(1, endTime)
+	if !strings.HasPrefix(action.ID, expectedPrefix) {
+
+		t.Errorf("expected action ID with prefix %q, got %q", expectedPrefix, action.ID)
+	}
+	if action.ActorID != contest.ContestSettlementActorID {
+		t.Errorf("expected ActorID %s, got %s", contest.ContestSettlementActorID, action.ActorID)
 	}
 }
 
@@ -448,13 +461,96 @@ func TestWireContestSettlement_FreshRepository_InitializesAndSchedules(t *testin
 		t.Fatalf("NewService failed: %v", err)
 	}
 
-	wireContestSettlement(sched, contestSvc)
+	if err := wireContestSettlement(sched, contestSvc); err != nil {
+		t.Fatalf("wireContestSettlement failed: %v", err)
+	}
 
 	if len(repo.actions) != 1 {
 		t.Fatalf("expected 1 action scheduled for fresh repository, got %d", len(repo.actions))
 	}
 	if saved.Round != 1 || saved.Status != contest.StatusPreparing {
 		t.Errorf("expected round 1 preparing saved, got %+v", saved)
+	}
+}
+
+func TestWireContestSettlement_ActiveRoundStorageError_PropagatesError(t *testing.T) {
+	repo := &mockSchedRepo{}
+	sched := scheduling.NewService(repo)
+
+	dbErr := errors.New("mariaDB connection timeout")
+	contestRepo := &stubContestRepo{
+		activeErr: dbErr,
+	}
+	contestSvc, err := contest.NewService(&stubCharRepo{}, contestRepo)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	err = wireContestSettlement(sched, contestSvc)
+	if err == nil {
+		t.Fatal("expected storage error, got nil")
+	}
+	if !strings.Contains(err.Error(), dbErr.Error()) {
+		t.Fatalf("expected error containing dbErr, got %v", err)
+	}
+	if len(repo.actions) != 0 {
+		t.Errorf("expected no actions scheduled on storage error, got %d", len(repo.actions))
+	}
+}
+
+func TestWireContestSettlement_PreparingRoundStorageError_PropagatesError(t *testing.T) {
+	repo := &mockSchedRepo{}
+	sched := scheduling.NewService(repo)
+
+	dbErr := errors.New("read preparing round disk I/O error")
+	contestRepo := &stubContestRepo{
+		activeErr: contest.ErrContestNotFound,
+		prepErr:   dbErr,
+	}
+	contestSvc, err := contest.NewService(&stubCharRepo{}, contestRepo)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	err = wireContestSettlement(sched, contestSvc)
+	if err == nil {
+		t.Fatal("expected storage error when preparing round read fails, got nil")
+	}
+	if !strings.Contains(err.Error(), dbErr.Error()) {
+		t.Fatalf("expected error containing dbErr, got %v", err)
+	}
+	if len(repo.actions) != 0 {
+		t.Errorf("expected no actions scheduled on storage error, got %d", len(repo.actions))
+	}
+}
+
+func TestWireContestSettlement_ScheduleError_PropagatesError(t *testing.T) {
+	queueErr := errors.New("valkey queue unavailable")
+	repo := &mockSchedRepo{
+		scheduleErr: queueErr,
+	}
+	sched := scheduling.NewService(repo)
+
+	endTime := time.Now().Add(10 * 24 * time.Hour)
+	contestRepo := &stubContestRepo{
+		activeRound: contest.ContestRound{
+			Round:     2,
+			Status:    contest.StatusActive,
+			StartTime: time.Now(),
+			EndTime:   endTime,
+		},
+	}
+	contestSvc, err := contest.NewService(&stubCharRepo{}, contestRepo)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	err = wireContestSettlement(sched, contestSvc)
+	if err == nil {
+		t.Fatal("expected scheduling error, got nil")
+	}
+	if !strings.Contains(err.Error(), queueErr.Error()) {
+		t.Fatalf("expected error containing queueErr, got %v", err)
 	}
 }
 

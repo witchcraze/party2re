@@ -376,6 +376,12 @@ func (s *Service) SettleContest(ctx context.Context, force bool) (SettlementResu
 		return SettlementResult{}, err
 	}
 
+	if s.scheduler != nil && !result.NextRoundEndTime.IsZero() {
+		if schedErr := s.ReconcileSettlementSchedule(ctx); schedErr != nil {
+			return result, fmt.Errorf("%w: %v", ErrScheduleFailed, schedErr)
+		}
+	}
+
 	return result, nil
 }
 

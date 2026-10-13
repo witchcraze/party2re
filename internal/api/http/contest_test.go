@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
@@ -26,6 +28,7 @@ type stubContestService struct {
 	getPastResultsFn    func(ctx context.Context) (*contest.ContestRound, []contest.ContestEntry, error)
 	getLegendsFn        func(ctx context.Context, limit, offset int) (pagination.Page[contest.ContestLegend], error)
 	settleContestFn     func(ctx context.Context, force bool) (contest.SettlementResult, error)
+	reconcileFn         func(ctx context.Context) error
 }
 
 func (s *stubContestService) GetOverview(ctx context.Context) (contest.ContestOverview, error) {
@@ -96,6 +99,13 @@ func (s *stubContestService) SettleContest(ctx context.Context, force bool) (con
 		return s.settleContestFn(ctx, force)
 	}
 	return contest.SettlementResult{}, nil
+}
+
+func (s *stubContestService) ReconcileSettlementSchedule(ctx context.Context) error {
+	if s.reconcileFn != nil {
+		return s.reconcileFn(ctx)
+	}
+	return nil
 }
 
 func TestContestPublicEndpoints(t *testing.T) {
@@ -215,8 +225,12 @@ func TestContestCharacterEndpoints(t *testing.T) {
 			if title == "Consecutive" {
 				return contest.ContestEntry{}, contest.ErrConsecutiveEntryDisallowed
 			}
+			if title == "QueueFailure" {
+				return contest.ContestEntry{ID: "e-partial", CharacterID: characterID, Title: title}, fmt.Errorf("%w: queue unavailable", contest.ErrScheduleFailed)
+			}
 			return contest.ContestEntry{ID: "e-new", CharacterID: characterID, Title: title}, nil
 		},
+
 		voteFn: func(ctx context.Context, voterCharacterID, entryID, comment string) (contest.ContestVote, error) {
 			if entryID == "already-voted" {
 				return contest.ContestVote{}, contest.ErrAlreadyVoted
@@ -285,7 +299,35 @@ func TestContestCharacterEndpoints(t *testing.T) {
 		t.Fatalf("expected 201 Created, got %d", resp.StatusCode)
 	}
 
+	// 5b. POST /characters/{id}/contest/enter - Enter Contest with scheduling failure returns 202 Accepted with saved entry and warning
+	entryPartialBody, _ := json.Marshal(map[string]string{
+		"photo_id": "p1",
+		"title":    "QueueFailure",
+	})
+	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/contest/enter", bytes.NewReader(entryPartialBody))
+	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("expected 202 Accepted for entry with scheduling failure, got %d", resp.StatusCode)
+	}
+	var partialRes struct {
+		ID      string `json:"id"`
+		Title   string `json:"title"`
+		Warning string `json:"warning"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&partialRes); err != nil {
+		t.Fatalf("failed to decode 202 Accepted response body: %v", err)
+	}
+	if partialRes.ID != "e-partial" {
+		t.Errorf("expected entry ID e-partial, got %s", partialRes.ID)
+	}
+	if partialRes.Warning == "" {
+		t.Errorf("expected non-empty warning in 202 Accepted response")
+	}
+
 	// 6. POST /characters/{id}/contest/vote - Vote
+
 	voteBody, _ := json.Marshal(map[string]string{
 		"entry_id": "e1",
 		"comment":  "Wonderful!",
@@ -351,5 +393,62 @@ func TestSettleContestWithAdminKey(t *testing.T) {
 	resp, err := client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK with admin key, got %d (err: %v)", resp.StatusCode, err)
+	}
+}
+
+func TestSettleContest_ScheduleFailure_Returns202WithWarning(t *testing.T) {
+	adminKey := "test-admin-secret-key"
+	stub := &stubContestService{
+		settleContestFn: func(ctx context.Context, force bool) (contest.SettlementResult, error) {
+			return contest.SettlementResult{
+				Round:             1,
+				PrizesDistributed: true,
+				Message:           "Settled",
+			}, fmt.Errorf("%w: queue unavailable", contest.ErrScheduleFailed)
+		},
+	}
+
+	handler, err := apihttp.NewHandler(&stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+		apihttp.WithAdminAPIKey(adminKey),
+		apihttp.WithContest(stub),
+	)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+	server := httptest.NewServer(handler.Router())
+	defer server.Close()
+
+	client := &http.Client{}
+	settleBody, _ := json.Marshal(map[string]bool{"force": true})
+
+	req, _ := http.NewRequest(http.MethodPost, server.URL+"/contest/settle", bytes.NewReader(settleBody))
+	req.Header.Set("X-Admin-Key", adminKey)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("expected 202 Accepted on schedule failure, got %d", resp.StatusCode)
+	}
+
+	var payload struct {
+		Round             int    `json:"round"`
+		PrizesDistributed bool   `json:"prizes_distributed"`
+		Warning           string `json:"warning"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response failed: %v", err)
+	}
+	if payload.Round != 1 {
+		t.Errorf("round = %d, want 1", payload.Round)
+	}
+	if !payload.PrizesDistributed {
+		t.Errorf("expected prizes_distributed = true")
+	}
+	if payload.Warning == "" || !strings.Contains(payload.Warning, "scheduling failed") {
+		t.Errorf("expected warning mentioning scheduling failure, got %q", payload.Warning)
 	}
 }
