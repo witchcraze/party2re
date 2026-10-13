@@ -75,8 +75,36 @@ cmp = int(min(level, 99) * (tier_rates[current_job_tier] + tier_rates[old_job_ti
 - Mastered jobs and their retained mastery SP are tracked persistently on the
   character's job record.
 
+### Recorded job SP
+
+Job experience and mastery are separate facts. Leaving a job records its latest
+SP, including decreases and zero, even when it is not mastered
+(`job_change.cgi:243–305`). `CharacterJob.RecordedJobSP` persists through the
+existing job repository in `character_job_points`; saves upsert supplied jobs
+without deleting other recorded values. Mastered departures also refresh their
+retained masterySP, without repeating a mastery notification or losing mastery
+when SP falls. Saving future memory refreshes both job/SP pairs independently of
+mastery **only when their records already exist** (`_data.cgi:1843–1867`);
+entering a job alone does not create a departure record. Recall reads the latest
+saved values, with mastery-only snapshots retained as a compatibility fallback.
+An absent matching record leaves that SP position unchanged, as in
+`job_change.cgi:648–663`; it is not reset to an invented zero.
+
+Migration103 preserves known current/previousSP and existing masterySP, in that
+priority order. Transition history cannot reconstruct SP that was never saved;
+it is not backfilled with invented zero values. The battle adapter snapshots
+recorded jobs read-only for [in-adventure Tool168 memory](battle.md#temporary-transformation-and-job-memory),
+including explicit unknownSP for historical transitions without a saved value.
+Battle copies never call the job repository's save method. Permanent two-job
+exchange still has the independently tracked learned-job eligibility gap
+[#1160](https://github.com/witchcraze/party2re/issues/1160).
+
 ### Job Memory Exchange (おもいだす)
-- Characters may recall memories of two mastered jobs to temporarily replace their current and previous jobs without applying normal level/stat penalties or incrementing job-change counts.
+- Legacy memory exchange can recall recorded jobs, including unmastered jobs;
+  the current permanent exchange implementation still requires two mastered
+  jobs (#1160). Recall replaces current/previous jobs without normal level/stat
+  penalties or incrementing job-change counts. In-adventure Tool168 is a separate
+  [previous-job-only operation](battle.md#temporary-transformation-and-job-memory).
 - **Two Memory Lifecycles**:
   - **Persistent Job Memory (`JobMemoryKindPersistent = "persistent"`)**:
     - Started by consuming 1x `item-168` (記憶のカケラ / Memory Fragment).
@@ -115,7 +143,7 @@ cmp = int(min(level, 99) * (tier_rates[current_job_tier] + tier_rates[old_job_ti
 - Deterministic locking order (Character Rank 2 -> Inventory Rank 3) coordinates safely with
   future memory deletion on recall and capacity expansions (`WishExpandJobMemory`).
 - Recalling a future memory restores the character's level, experience, stats, and jobs,
-  restores the SP for both jobs from their mastered SP records, recovers HP/MP to full,
+  restores the SP for both jobs from their saved job records, recovers HP/MP to full,
   and consumes/deletes the future memory snapshot.
 
 ### All-Job Completion & Suppin Unlock

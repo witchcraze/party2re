@@ -531,6 +531,7 @@ func TestServiceFutureMemorySaveAndRecall(t *testing.T) {
 		},
 	}
 	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
+	state.RecordedJobSP = map[string]int{"job-05": 0, "job-01": 0}
 	repo := &repositoryStub{value: state}
 	charRepo := &charRepoStub{char: char}
 	futureRepo := &futureMemoryRepoStub{}
@@ -562,8 +563,8 @@ func TestServiceFutureMemorySaveAndRecall(t *testing.T) {
 		t.Fatalf("expected 1 fragment remaining, got %d", invRepo.inventory.Quantity("item-207"))
 	}
 	// SP saved to state
-	if repo.value.MasteredJobSP["job-05"] != 80 || repo.value.MasteredJobSP["job-01"] != 40 {
-		t.Fatalf("expected SP recorded in state: %#v", repo.value.MasteredJobSP)
+	if repo.value.RecordedJobSP["job-05"] != 80 || repo.value.RecordedJobSP["job-01"] != 40 {
+		t.Fatalf("expected SP recorded in state: %#v", repo.value.RecordedJobSP)
 	}
 
 	// 2. Capacity limit check: OverFuture=0 allows only 1 slot (0 <= 0 is ok, next count 1 <= 0 is false)

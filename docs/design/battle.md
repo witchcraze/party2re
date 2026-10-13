@@ -749,16 +749,80 @@ full supplied payload and custom gem cost; it refuses once the member count is
 at least ten (`_skill.cgi:9834–9931`). An NPC caster appends it to its own side;
 a player caster appends it to opponents. Gem 82 adds an at-most-one-enemy gate.
 
-Transformation has three separate meanings. Between-encounter form switching
-changes current job first, otherwise previous job (82↔300, forward 10 MP,
-reverse zero). Book 211 copies current/maximum HP/MP/stats, job/SP pairs and
-appearance from an eligible participant, floors copied MP at 50, immobilizes
-the actor and permanently bans repeat use for that battle state. Tool 214
-chooses another participant randomly and copies the same data without those
-book-only additions. Tool 168 restores the previous job and its earned SP from
-the actor's job history. Gem 100 changes appearance only. None is permission to
-overwrite the persistent character's underlying job/stat history indiscriminately
-(`_skill.cgi:173–217,700–724`; `_data.cgi:1716–1748,1888–1912,2188–2193`).
+#### Temporary transformation and job memory
+
+Transformation separates run job identity, participant copying, previous-job
+memory and cosmetic appearance. Explicit state retains current/previous job/SP
+pairs independently of original character jobs and the actor's own recorded
+job history. Copying does not inherit the target's identity, team, equipment,
+abilities, CMP, hit, tension, status, history or original jobs.
+
+Form switching changes the current matching job first, otherwise the previous
+matching job (82↔300, forward10MP, reverse0). Between encounters it requires a
+started run, no enemies and no cursed ability; forward discovery requires111SP
+in either matching position. If both forms exist, the reverse name-keyed entry
+is registered last and wins discovery. Forward changes appearance only for a
+non-NPC actor, using the requesting player's gender; reverse leaves appearance
+unchanged. In combat the same form callbacks apply. Temporary job300 supplies
+four ordinary entries (cost30/48/99/0): two independent uniform draws among
+AG/DF/AT for untyped self50% stat-up; resolve an untyped enemy target, temporarily
+clear its temporary effect for physical/direct current-AT damage, then restore
+the saved temporary even after defeat/reset; a2–3-hit direct breath callback;
+and reverse form. The breath callback resolves the initial target before rolling
+hit count, chooses subsequent targets from the invocation's enemy roster, uses
+power500 for MaxHP>999 otherwise200, restores saved tension before each hit,
+and stops further hits when the actor falls. Its tail still sets tension1,
+immobilizes the actor and changes current300 first, otherwise previous300, to82.
+Do not add300 to the general-random initial pool1..87.
+
+Job36 and book211 check the magic category seal, then use an existing submitted
+participant or a uniform fallback over **all members**, including self/fallen.
+Eligibility is living HP and MaxHP/baseDF≤999, not current defense. They copy
+current/maxHP/MP, current/baseAT/DF/AG, both job/SP pairs and appearance, with
+copied MP floored at50 even above MaxMP. Book211 first requires current/previous
+job IDs to match the original character's IDs; on success it also immobilizes
+the actor and writes the room's named `copy` ban with sentinel999. Job36 adds
+neither book-only effect. The named ban is enforced by outer command admission;
+it does not become an invented guard inside a random child. Tool214 chooses a
+uniform **other** member before the same living/size checks; no other member is
+accepted no-effect. It has no magic seal check, MP floor, immobilization or ban.
+
+Job79 rebuilds its appearance-dependent entry from the actor's current icon and
+the requesting player's gender. The forward variant invokes all-enemy direct
+breath150, then changes appearance only if it equals the requesting player's
+original icon (this comparison applies to NPC actors too). The reverse variant
+invokes untyped selfAG+150%, then restores the requesting player's icon even
+when the stat helper normally returns no-effect. It does not change jobs.
+
+Tool168 reads the actor's own frozen job history, restoring only previous job/SP
+for a recorded job different from both active jobs; missing/unknown/current
+choices are accepted no-effect. A recorded job whose historical SP is unknown
+is unsupported before any draw or mutation, rather than guessed at zero.
+Gem100 changes only appearance, sampling108 positions uniformly; a missing
+native appearance uses the monster placeholder. Store the selected reference
+once, without rerolling on reload. Native form and fallback images are
+[temporary, replaceable development artwork](../assets/required-images.md#img-005-battle--temporary-transformation-appearances).
+Saved icon references retain identity independently of future rendering URLs;
+an asset resolver/art replacement must preserve these keys or supply compatible
+aliases, including gender/form fragments. Display URLs must not be written back
+over saved references used by appearance predicates.
+
+`LifetimeState.ApplyTransformation` and `ValidateTransformation` share explicit
+payload admission; `TransformationEntries` describes only this owner's subset,
+not a complete certified job catalog. Ordinary SP/cost/ban/asset ownership and
+complete random/delegated/custom closure remain with their invoking owners.
+Damage-dependent callbacks require the damage owner's completely admitted
+executor; absent damage/area executors, reachable stat equipment tails and
+unrepresented outer empty-target contexts reject before any RNG/cost/state
+change. No generic batch `ActionSkill`/`GemEffect` or partial transformed table
+certifies those paths. `BuildLifetimeActor` reuses the equipment-aware adapter,
+loads job history read-only and preserves fallen entryHP; reload uses saved run
+state, not the original builder. Reset/advance retains copied maxima/base stats,
+jobs, icon, history and original identity. Exit writes only eligible current
+HP/MP clamped to the permanent maxima, not temporary jobs/maxima/stats/icon or
+training; encounter/exit persistence remains the Adventure consumer's boundary.
+(`_skill.cgi:173–217,700–724,2944–2964,6240–6292,6593–6610,7465–7532`;
+`_data.cgi:1716–1748,1888–1912,2188–2193`; `_battle.cgi:1184–1218,1390–1428`).
 
 #### Ordinary NPC and stage-boss state
 

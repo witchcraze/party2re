@@ -16,6 +16,10 @@ type LifetimeState struct {
 // must come from the battle adapter, including equipment and instance identities.
 type LifetimeActor struct {
 	Participant
+	Jobs           BattleJobs      `json:"jobs"`
+	OriginalJobs   BattleJobs      `json:"original_jobs"`
+	JobHistory     map[string]*int `json:"job_history,omitempty"` // nil SP means a recorded job with irrecoverable historical SP.
+	NPC            bool            `json:"npc"`
 	Tension        float64         `json:"tension"`
 	Hit            int             `json:"hit"`
 	Temporary      TemporaryEffect `json:"temporary,omitempty"`

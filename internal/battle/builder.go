@@ -41,6 +41,11 @@ func (s *Service) BuildParticipant(ctx context.Context, characterID string) (cor
 	if err != nil {
 		return corebattle.Participant{}, ErrCharacterNotFound
 	}
+	return s.buildParticipantFromCharacter(ctx, char)
+}
+
+func (s *Service) buildParticipantFromCharacter(ctx context.Context, char corecharacter.Character) (corebattle.Participant, error) {
+	charID := char.ID
 
 	var inv coreinventory.Inventory
 	if s.invRepo != nil {

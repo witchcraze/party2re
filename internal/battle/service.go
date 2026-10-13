@@ -88,6 +88,7 @@ type Service struct {
 	skillProvider     SkillProvider
 	battleDefinitions skill.BattleDefinitions
 	customSkills      CustomSkillRepository
+	jobHistory        JobHistoryRepository
 	txRunner          economy.TransactionRunner
 	txProvider        TransactionProvider
 	engine            BattleEngine

@@ -117,6 +117,7 @@ func TestFutureMemory_TransactionalLifecycle(t *testing.T) {
 		},
 	}
 	state, _ := corejob.NewCharacterJob(char.ID, char.JobID)
+	state.RecordedJobSP = map[string]int{"job-05": 0, "job-01": 0}
 	jobRepo := &testJobRepo{value: state}
 	charRepo := &testCharRepo{char: char}
 	futureRepo := &testFutureMemoryRepo{}
@@ -155,8 +156,8 @@ func TestFutureMemory_TransactionalLifecycle(t *testing.T) {
 		t.Fatalf("expected 1 fragment remaining, got %d", invRepo.inventory.Quantity("item-207"))
 	}
 	// SP saved to state
-	if jobRepo.value.MasteredJobSP["job-05"] != 80 || jobRepo.value.MasteredJobSP["job-01"] != 40 {
-		t.Fatalf("expected SP recorded in state: %#v", jobRepo.value.MasteredJobSP)
+	if jobRepo.value.RecordedJobSP["job-05"] != 80 || jobRepo.value.RecordedJobSP["job-01"] != 40 {
+		t.Fatalf("expected SP recorded in state: %#v", jobRepo.value.RecordedJobSP)
 	}
 
 	// 2. Mutate character state (e.g. changed to a new job at level 1)

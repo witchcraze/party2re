@@ -8,7 +8,7 @@ import (
 	corejob "github.com/witchcraze/party2re/internal/core/job"
 )
 
-var ErrCharacterJobNotFound = errors.New("character job not found")
+var ErrCharacterJobNotFound = corejob.ErrCharacterJobNotFound
 
 type CharacterJobRepository struct {
 	db *sql.DB
@@ -58,7 +58,7 @@ func (r *CharacterJobRepository) Save(ctx context.Context, value corejob.Charact
 				return err
 			}
 		}
-		return nil
+		return r.saveJobPoints(txCtx, value)
 	})
 }
 
@@ -120,6 +120,9 @@ func (r *CharacterJobRepository) FindByCharacterID(ctx context.Context, characte
 		value.MasteredJobSP[jobID] = masteredSP
 	}
 	if err := masteryRows.Err(); err != nil {
+		return corejob.CharacterJob{}, err
+	}
+	if err := r.loadJobPoints(ctx, &value); err != nil {
 		return corejob.CharacterJob{}, err
 	}
 

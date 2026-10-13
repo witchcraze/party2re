@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>Temporary development monster — artwork will be replaced</title>
+  <path d="m13 23 1-15 15 10 16-9 3 15c16 22 5 35-16 35S1 45 13 23z" fill="#719e91" stroke="#263238" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="22" cy="32" r="4" fill="#fff"/>
+  <circle cx="42" cy="32" r="4" fill="#fff"/>
+  <path d="m25 44 7 4 7-4" fill="none" stroke="#263238" stroke-width="3"/>
+</svg>
