@@ -40,6 +40,9 @@
         "201": {
           "description": "Photo submitted to contest successfully"
         },
+        "202": {
+          "description": "Photo submitted to contest successfully, but settlement scheduling deferred or failed"
+        },
         "400": {
           "description": "Invalid submission (duplicate title, already entered, or consecutive entry disallowed)"
         },

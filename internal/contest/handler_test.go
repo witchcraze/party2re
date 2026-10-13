@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,7 +21,9 @@ type mockScheduler struct {
 		Params     map[string]string
 		ExecuteAt  time.Time
 	}
-	scheduleErr error
+	scheduleErr    error
+	pendingActions []core_scheduling.ScheduledAction
+	findPendingErr error
 }
 
 func (m *mockScheduler) ScheduleWithID(_ context.Context, id, actionType, actorID string, params map[string]string, executeAt time.Time) error {
@@ -35,6 +38,30 @@ func (m *mockScheduler) ScheduleWithID(_ context.Context, id, actionType, actorI
 		ExecuteAt  time.Time
 	}{id, actionType, actorID, params, executeAt})
 	return nil
+}
+
+func (m *mockScheduler) FindPendingByActorID(_ context.Context, actorID string) ([]core_scheduling.ScheduledAction, error) {
+	if m.findPendingErr != nil {
+		return nil, m.findPendingErr
+	}
+	var res []core_scheduling.ScheduledAction
+	for _, a := range m.pendingActions {
+		if a.ActorID == actorID {
+			res = append(res, a)
+		}
+	}
+	for _, a := range m.scheduledActions {
+		if a.ActorID == actorID {
+			res = append(res, core_scheduling.ScheduledAction{
+				ID:         a.ID,
+				ActionType: a.ActionType,
+				ActorID:    a.ActorID,
+				ExecuteAt:  a.ExecuteAt,
+				State:      core_scheduling.StatePending,
+			})
+		}
+	}
+	return res, nil
 }
 
 func TestSettlementActionID(t *testing.T) {
@@ -141,9 +168,10 @@ func TestContestSettlementHandler_SettleSuccess(t *testing.T) {
 		t.Errorf("expected action type %q, got %q", contest.ActionTypeContestSettlement, scheduled.ActionType)
 	}
 	expectedID := contest.SettlementActionID(2, r2.EndTime)
-	if scheduled.ID != expectedID {
-		t.Errorf("expected action ID %q, got %q", expectedID, scheduled.ID)
+	if !strings.HasPrefix(scheduled.ID, expectedID) {
+		t.Errorf("expected action ID with prefix %q, got %q", expectedID, scheduled.ID)
 	}
+
 	if !scheduled.ExecuteAt.Equal(r2.EndTime) {
 		t.Errorf("expected executeAt %v, got %v", r2.EndTime, scheduled.ExecuteAt)
 	}
@@ -224,9 +252,10 @@ func TestContestSettlementHandler_Postponed(t *testing.T) {
 	}
 	scheduled := sched.scheduledActions[0]
 	expectedID := contest.SettlementActionID(1, expectedEnd)
-	if scheduled.ID != expectedID {
-		t.Errorf("expected action ID %q, got %q", expectedID, scheduled.ID)
+	if !strings.HasPrefix(scheduled.ID, expectedID) {
+		t.Errorf("expected action ID with prefix %q, got %q", expectedID, scheduled.ID)
 	}
+
 	if !scheduled.ExecuteAt.Equal(expectedEnd) {
 		t.Errorf("expected executeAt %v, got %v", expectedEnd, scheduled.ExecuteAt)
 	}
@@ -301,9 +330,10 @@ func TestContestSettlementHandler_Postponed_DelayedExecution(t *testing.T) {
 	}
 	scheduled := sched.scheduledActions[0]
 	expectedID := contest.SettlementActionID(1, expectedEnd)
-	if scheduled.ID != expectedID {
-		t.Errorf("expected action ID %q, got %q", expectedID, scheduled.ID)
+	if !strings.HasPrefix(scheduled.ID, expectedID) {
+		t.Errorf("expected action ID with prefix %q, got %q", expectedID, scheduled.ID)
 	}
+
 	if !scheduled.ExecuteAt.Equal(expectedEnd) {
 		t.Errorf("expected executeAt %v, got %v", expectedEnd, scheduled.ExecuteAt)
 	}
@@ -523,8 +553,8 @@ func TestContestSettlementHandler_StaleSettledRound_NoDoubleSettlement(t *testin
 	if len(sched.scheduledActions) != 1 {
 		t.Fatalf("expected 1 scheduled action for round 2, got %d", len(sched.scheduledActions))
 	}
-	if sched.scheduledActions[0].ID != contest.SettlementActionID(2, r2End) {
-		t.Errorf("expected schedule ID for round 2, got %q", sched.scheduledActions[0].ID)
+	if !strings.HasPrefix(sched.scheduledActions[0].ID, contest.SettlementActionID(2, r2End)) {
+		t.Errorf("expected schedule ID for round 2 with prefix, got %q", sched.scheduledActions[0].ID)
 	}
 }
 
@@ -582,7 +612,186 @@ func TestContestSettlementHandler_AlreadyPostponedRound_NoDoublePostpone(t *test
 	if len(sched.scheduledActions) != 1 {
 		t.Fatalf("expected 1 scheduled action for round 1, got %d", len(sched.scheduledActions))
 	}
-	if sched.scheduledActions[0].ID != contest.SettlementActionID(1, newEndTime) {
-		t.Errorf("expected schedule ID for round 1 with newEndTime, got %q", sched.scheduledActions[0].ID)
+	if !strings.HasPrefix(sched.scheduledActions[0].ID, contest.SettlementActionID(1, newEndTime)) {
+		t.Errorf("expected schedule ID for round 1 with newEndTime prefix, got %q", sched.scheduledActions[0].ID)
+	}
+}
+
+func TestContestSettlementHandler_GetRoundByNumberStorageError_PropagatesError(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	dbErr := errors.New("database disk I/O failure")
+
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+	contestRepo.getRoundByNumberErr = dbErr
+
+	svc, err := contest.NewService(charRepo, contestRepo, contest.WithNowFunc(func() time.Time { return now }))
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	sched := &mockScheduler{}
+	handler := contest.NewContestSettlementHandler(svc, contest.WithScheduler(sched))
+
+	action := core_scheduling.ScheduledAction{
+		ID:          contest.SettlementActionID(1, now),
+		ActionType:  contest.ActionTypeContestSettlement,
+		ActorID:     contest.ContestSettlementActorID,
+		ScheduledAt: now.Add(-time.Hour),
+		ExecuteAt:   now,
+		State:       core_scheduling.StatePending,
+	}
+
+	err = handler.Handle(ctx, action)
+	if err == nil {
+		t.Fatal("expected error when GetRoundByNumber fails, got nil")
+	}
+	if !strings.Contains(err.Error(), dbErr.Error()) {
+		t.Fatalf("expected error containing dbErr, got %v", err)
+	}
+	if len(sched.scheduledActions) != 0 {
+		t.Fatalf("expected no scheduled actions on DB error, got %d", len(sched.scheduledActions))
+	}
+}
+
+func TestContestSettlementHandler_RoundNotFound_ReconcilesWithoutSettling(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	futureEnd := now.Add(10 * 24 * time.Hour)
+
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+	// Round 2 is currently active in SQL
+	contestRepo.rounds[2] = contest.ContestRound{
+		Round:     2,
+		Status:    contest.StatusActive,
+		StartTime: now,
+		EndTime:   futureEnd,
+	}
+
+	svc, err := contest.NewService(charRepo, contestRepo, contest.WithNowFunc(func() time.Time { return now }))
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	sched := &mockScheduler{}
+	handler := contest.NewContestSettlementHandler(svc, contest.WithScheduler(sched))
+
+	// Phantom action for round 999 which does NOT exist in SQL
+	action := core_scheduling.ScheduledAction{
+		ID:          contest.SettlementActionID(999, now),
+		ActionType:  contest.ActionTypeContestSettlement,
+		ActorID:     contest.ContestSettlementActorID,
+		ScheduledAt: now.Add(-time.Hour),
+		ExecuteAt:   now,
+		State:       core_scheduling.StatePending,
+	}
+
+	err = handler.Handle(ctx, action)
+	if err != nil {
+		t.Fatalf("expected nil error on nonexistent round reconciliation, got: %v", err)
+	}
+
+	// Active round 2 must remain active (NOT settled prematurely)
+	r2, _ := contestRepo.GetRoundByNumber(ctx, 2)
+	if r2.Status != contest.StatusActive {
+		t.Errorf("expected round 2 still active, got %s", r2.Status)
+	}
+
+	// Valid round 2 schedule must be ensured
+	if len(sched.scheduledActions) != 1 {
+		t.Fatalf("expected 1 scheduled action for active round 2, got %d", len(sched.scheduledActions))
+	}
+	if !strings.HasPrefix(sched.scheduledActions[0].ID, contest.SettlementActionID(2, futureEnd)) {
+		t.Errorf("expected schedule prefix for round 2, got %s", sched.scheduledActions[0].ID)
+	}
+}
+
+func TestContestSettlementHandler_ExistingPendingReservation_NotDuplicated(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	endTime := now.Add(10 * 24 * time.Hour)
+
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+	contestRepo.rounds[1] = contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusActive,
+		StartTime: now,
+		EndTime:   endTime,
+	}
+
+	svc, err := contest.NewService(charRepo, contestRepo, contest.WithNowFunc(func() time.Time { return now }))
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	sched := &mockScheduler{
+		pendingActions: []core_scheduling.ScheduledAction{
+			{
+				ID:         contest.SettlementActionID(1, endTime) + ":existing-nonce",
+				ActionType: contest.ActionTypeContestSettlement,
+				ActorID:    contest.ContestSettlementActorID,
+				ExecuteAt:  endTime,
+				State:      core_scheduling.StatePending,
+			},
+		},
+	}
+	svc.SetScheduler(sched)
+
+	// Calling ReconcileSettlementSchedule when an action is already pending for endTime
+	err = svc.ReconcileSettlementSchedule(ctx)
+	if err != nil {
+		t.Fatalf("ReconcileSettlementSchedule failed: %v", err)
+	}
+
+	// Must NOT add another action
+	if len(sched.scheduledActions) != 0 {
+		t.Errorf("expected 0 new scheduled actions (existing pending preserved), got %d", len(sched.scheduledActions))
+	}
+}
+
+func TestContestSettlementHandler_ProcessingReservation_NotOverwritten(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	endTime := now.Add(10 * 24 * time.Hour)
+
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+	contestRepo.rounds[1] = contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusActive,
+		StartTime: now,
+		EndTime:   endTime,
+	}
+
+	svc, err := contest.NewService(charRepo, contestRepo, contest.WithNowFunc(func() time.Time { return now }))
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	sched := &mockScheduler{
+		pendingActions: []core_scheduling.ScheduledAction{
+			{
+				ID:         contest.SettlementActionID(1, endTime) + ":processing-nonce",
+				ActionType: contest.ActionTypeContestSettlement,
+				ActorID:    contest.ContestSettlementActorID,
+				ExecuteAt:  endTime,
+				State:      core_scheduling.StateProcessing,
+			},
+		},
+	}
+	svc.SetScheduler(sched)
+
+	// Calling ReconcileSettlementSchedule while worker is processing
+	err = svc.ReconcileSettlementSchedule(ctx)
+	if err != nil {
+		t.Fatalf("ReconcileSettlementSchedule failed: %v", err)
+	}
+
+	// Must NOT overwrite or add a duplicate action
+	if len(sched.scheduledActions) != 0 {
+		t.Errorf("expected 0 new scheduled actions (processing protected), got %d", len(sched.scheduledActions))
 	}
 }

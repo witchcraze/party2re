@@ -40,6 +40,8 @@ const (
 	StatusActive    = "active"
 	StatusSettled   = "settled"
 
+	ContestSettlementActorID = "contest:settlement"
+
 	VoterBonusSmallMedals = 1
 )
 

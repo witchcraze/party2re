@@ -141,3 +141,23 @@ func TestService_ClearActiveActions(t *testing.T) {
 		t.Errorf("expected cleared == false for idle character")
 	}
 }
+
+func TestService_FindPendingByActorID(t *testing.T) {
+	repo := newMockRepository()
+	service := NewService(repo)
+	ctx := context.Background()
+
+	_, _ = service.Schedule(ctx, "contest_settlement", "contest:settlement", nil, time.Now().Add(1*time.Hour))
+	_, _ = service.Schedule(ctx, "other_action", "other:actor", nil, time.Now().Add(1*time.Hour))
+
+	actions, err := service.FindPendingByActorID(ctx, "contest:settlement")
+	if err != nil {
+		t.Fatalf("FindPendingByActorID failed: %v", err)
+	}
+	if len(actions) != 1 {
+		t.Fatalf("expected 1 action, got %d", len(actions))
+	}
+	if actions[0].ActionType != "contest_settlement" {
+		t.Errorf("expected contest_settlement, got %s", actions[0].ActionType)
+	}
+}

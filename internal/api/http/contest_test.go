@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -26,6 +27,7 @@ type stubContestService struct {
 	getPastResultsFn    func(ctx context.Context) (*contest.ContestRound, []contest.ContestEntry, error)
 	getLegendsFn        func(ctx context.Context, limit, offset int) (pagination.Page[contest.ContestLegend], error)
 	settleContestFn     func(ctx context.Context, force bool) (contest.SettlementResult, error)
+	reconcileFn         func(ctx context.Context) error
 }
 
 func (s *stubContestService) GetOverview(ctx context.Context) (contest.ContestOverview, error) {
@@ -96,6 +98,13 @@ func (s *stubContestService) SettleContest(ctx context.Context, force bool) (con
 		return s.settleContestFn(ctx, force)
 	}
 	return contest.SettlementResult{}, nil
+}
+
+func (s *stubContestService) ReconcileSettlementSchedule(ctx context.Context) error {
+	if s.reconcileFn != nil {
+		return s.reconcileFn(ctx)
+	}
+	return nil
 }
 
 func TestContestPublicEndpoints(t *testing.T) {
@@ -215,8 +224,12 @@ func TestContestCharacterEndpoints(t *testing.T) {
 			if title == "Consecutive" {
 				return contest.ContestEntry{}, contest.ErrConsecutiveEntryDisallowed
 			}
+			if title == "QueueFailure" {
+				return contest.ContestEntry{ID: "e-partial", CharacterID: characterID, Title: title}, fmt.Errorf("%w: queue unavailable", contest.ErrScheduleFailed)
+			}
 			return contest.ContestEntry{ID: "e-new", CharacterID: characterID, Title: title}, nil
 		},
+
 		voteFn: func(ctx context.Context, voterCharacterID, entryID, comment string) (contest.ContestVote, error) {
 			if entryID == "already-voted" {
 				return contest.ContestVote{}, contest.ErrAlreadyVoted
@@ -285,7 +298,35 @@ func TestContestCharacterEndpoints(t *testing.T) {
 		t.Fatalf("expected 201 Created, got %d", resp.StatusCode)
 	}
 
+	// 5b. POST /characters/{id}/contest/enter - Enter Contest with scheduling failure returns 202 Accepted with saved entry and warning
+	entryPartialBody, _ := json.Marshal(map[string]string{
+		"photo_id": "p1",
+		"title":    "QueueFailure",
+	})
+	req, _ = http.NewRequest(http.MethodPost, server.URL+"/characters/char-1/contest/enter", bytes.NewReader(entryPartialBody))
+	req.Header.Set("Authorization", "Bearer valid-session")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("expected 202 Accepted for entry with scheduling failure, got %d", resp.StatusCode)
+	}
+	var partialRes struct {
+		ID      string `json:"id"`
+		Title   string `json:"title"`
+		Warning string `json:"warning"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&partialRes); err != nil {
+		t.Fatalf("failed to decode 202 Accepted response body: %v", err)
+	}
+	if partialRes.ID != "e-partial" {
+		t.Errorf("expected entry ID e-partial, got %s", partialRes.ID)
+	}
+	if partialRes.Warning == "" {
+		t.Errorf("expected non-empty warning in 202 Accepted response")
+	}
+
 	// 6. POST /characters/{id}/contest/vote - Vote
+
 	voteBody, _ := json.Marshal(map[string]string{
 		"entry_id": "e1",
 		"comment":  "Wonderful!",

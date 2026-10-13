@@ -1541,8 +1541,8 @@ func TestEnterContest_SchedulingFailure_CommittedEntryReturnedWithErrScheduleFai
 		t.Fatalf("expected 1 scheduled action after reconciliation, got %d", len(sched.scheduledActions))
 	}
 	expectedID := contest.SettlementActionID(entry.Round, contestRepo.rounds[entry.Round].EndTime)
-	if sched.scheduledActions[0].ID != expectedID {
-		t.Errorf("scheduled action ID = %q, want %q", sched.scheduledActions[0].ID, expectedID)
+	if !strings.HasPrefix(sched.scheduledActions[0].ID, expectedID) {
+		t.Errorf("scheduled action ID = %q, want prefix %q", sched.scheduledActions[0].ID, expectedID)
 	}
 }
 
@@ -1607,8 +1607,11 @@ func TestReconcileSettlementSchedule_Success_ActiveRound(t *testing.T) {
 		t.Fatalf("expected 1 scheduled action, got %d", len(sched.scheduledActions))
 	}
 	action := sched.scheduledActions[0]
-	if action.ID != contest.SettlementActionID(2, activeEnd) {
-		t.Errorf("scheduled ID = %q, want %q", action.ID, contest.SettlementActionID(2, activeEnd))
+	if !strings.HasPrefix(action.ID, contest.SettlementActionID(2, activeEnd)) {
+		t.Errorf("scheduled ID = %q, want prefix %q", action.ID, contest.SettlementActionID(2, activeEnd))
+	}
+	if action.ActorID != contest.ContestSettlementActorID {
+		t.Errorf("actor ID = %q, want %q", action.ActorID, contest.ContestSettlementActorID)
 	}
 }
 
@@ -1641,7 +1644,71 @@ func TestReconcileSettlementSchedule_Success_PreparingRound(t *testing.T) {
 		t.Fatalf("expected 1 scheduled action, got %d", len(sched.scheduledActions))
 	}
 	action := sched.scheduledActions[0]
-	if action.ID != contest.SettlementActionID(1, prepEnd) {
-		t.Errorf("scheduled ID = %q, want %q", action.ID, contest.SettlementActionID(1, prepEnd))
+	if !strings.HasPrefix(action.ID, contest.SettlementActionID(1, prepEnd)) {
+		t.Errorf("scheduled ID = %q, want prefix %q", action.ID, contest.SettlementActionID(1, prepEnd))
+	}
+	if action.ActorID != contest.ContestSettlementActorID {
+		t.Errorf("actor ID = %q, want %q", action.ActorID, contest.ContestSettlementActorID)
+	}
+}
+
+func TestEnterContest_ContextCanceledAfterCommit_ReturnsEntryWithErrScheduleFailed(t *testing.T) {
+	charRepo := newMockCharRepo()
+	contestRepo := newMockContestRepo()
+
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	prepEnd := now.Add(10 * 24 * time.Hour)
+	contestRepo.rounds[1] = contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusPreparing,
+		StartTime: now,
+		EndTime:   prepEnd,
+	}
+
+	charRepo.characters["char-cancel"] = corecharacter.Character{
+		ID:   "char-cancel",
+		Name: "CancelHero",
+	}
+
+	photo := contest.Photo{
+		ID:          "photo-cancel",
+		CharacterID: "char-cancel",
+		Title:       "ValidTitle",
+		CreatedAt:   now,
+	}
+	contestRepo.photos[photo.ID] = photo
+
+	// Scheduler that cancels context before scheduling, simulating post-commit client disconnect
+	ctx, cancel := context.WithCancel(context.Background())
+	sched := &mockScheduler{
+		scheduleErr: context.Canceled,
+	}
+	cancel() // cancel immediately
+
+	svc, _ := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithServiceScheduler(sched),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+
+	entry, err := svc.EnterContest(ctx, "char-cancel", photo.ID, "CanceledEntry")
+	if err == nil {
+		t.Fatal("expected ErrScheduleFailed when context is canceled, got nil")
+	}
+	if !errors.Is(err, contest.ErrScheduleFailed) {
+		t.Fatalf("expected ErrScheduleFailed, got %v", err)
+	}
+	if entry.ID == "" {
+		t.Fatal("expected committed entry to be returned, got empty entry")
+	}
+
+	// Verify entry actually committed to repository
+	saved, findErr := contestRepo.FindEntryByRoundAndCharacter(context.Background(), entry.Round, "char-cancel")
+	if findErr != nil {
+		t.Fatalf("entry was not committed to SQL: %v", findErr)
+	}
+	if saved.ID != entry.ID {
+		t.Errorf("saved entry ID = %q, want %q", saved.ID, entry.ID)
 	}
 }

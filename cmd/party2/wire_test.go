@@ -390,12 +390,12 @@ func TestWireContestSettlement(t *testing.T) {
 	if action.ActionType != contest.ActionTypeContestSettlement {
 		t.Errorf("expected ActionType %s, got %s", contest.ActionTypeContestSettlement, action.ActionType)
 	}
-	expectedID := contest.SettlementActionID(2, endTime)
-	if action.ID != expectedID {
-		t.Errorf("expected action ID %q, got %q", expectedID, action.ID)
+	expectedPrefix := contest.SettlementActionID(2, endTime)
+	if !strings.HasPrefix(action.ID, expectedPrefix) {
+		t.Errorf("expected action ID with prefix %q, got %q", expectedPrefix, action.ID)
 	}
-	if action.ActorID != "system" {
-		t.Errorf("expected ActorID system, got %s", action.ActorID)
+	if action.ActorID != contest.ContestSettlementActorID {
+		t.Errorf("expected ActorID %s, got %s", contest.ContestSettlementActorID, action.ActorID)
 	}
 	if !action.ExecuteAt.Equal(endTime) {
 		t.Errorf("expected ExecuteAt %v, got %v", endTime, action.ExecuteAt)
@@ -432,9 +432,13 @@ func TestWireContestSettlement_NoActiveRound_SchedulesPreparingRound(t *testing.
 	if action.ActionType != contest.ActionTypeContestSettlement {
 		t.Errorf("expected ActionType %s, got %s", contest.ActionTypeContestSettlement, action.ActionType)
 	}
-	expectedID := contest.SettlementActionID(1, endTime)
-	if action.ID != expectedID {
-		t.Errorf("expected action ID %q, got %q", expectedID, action.ID)
+	expectedPrefix := contest.SettlementActionID(1, endTime)
+	if !strings.HasPrefix(action.ID, expectedPrefix) {
+
+		t.Errorf("expected action ID with prefix %q, got %q", expectedPrefix, action.ID)
+	}
+	if action.ActorID != contest.ContestSettlementActorID {
+		t.Errorf("expected ActorID %s, got %s", contest.ContestSettlementActorID, action.ActorID)
 	}
 }
 

@@ -55,6 +55,7 @@ type mockContestRepo struct {
 	getActiveErr                  error
 	getPreparingErr               error
 	getPreparingRoundForUpdateErr error
+	getRoundByNumberErr           error
 	listEntriesByRoundErrByRound  map[int]error
 }
 
@@ -123,6 +124,9 @@ func (m *mockContestRepo) DeletePhoto(ctx context.Context, id string) error {
 func (m *mockContestRepo) GetRoundByNumber(ctx context.Context, round int) (contest.ContestRound, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.getRoundByNumberErr != nil {
+		return contest.ContestRound{}, m.getRoundByNumberErr
+	}
 	r, ok := m.rounds[round]
 	if !ok {
 		return contest.ContestRound{}, contest.ErrContestNotFound

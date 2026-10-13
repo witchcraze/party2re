@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/logging"
 	"github.com/witchcraze/party2re/internal/scheduling"
+	vk "github.com/witchcraze/party2re/internal/valkey"
 )
 
 func contestIntegrationDB(t *testing.T) (*sql.DB, *database.ContestRepository, *database.CharacterRepository, database.TransactionProvider) {
@@ -168,9 +170,9 @@ func TestContestSettlement_OverduePostpone_DatabaseIntegration(t *testing.T) {
 	if !scheduledDelayedAction.ExecuteAt.Equal(expectedDelayedEnd) {
 		t.Errorf("scheduled ExecuteAt = %v, want %v", scheduledDelayedAction.ExecuteAt, expectedDelayedEnd)
 	}
-	expectedDelayedActionID := contest.SettlementActionID(1, expectedDelayedEnd)
-	if scheduledDelayedAction.ID != expectedDelayedActionID {
-		t.Errorf("scheduled action ID = %q, want %q", scheduledDelayedAction.ID, expectedDelayedActionID)
+	expectedDelayedActionPrefix := contest.SettlementActionID(1, expectedDelayedEnd)
+	if !strings.HasPrefix(scheduledDelayedAction.ID, expectedDelayedActionPrefix) {
+		t.Errorf("scheduled action ID = %q, want prefix %q", scheduledDelayedAction.ID, expectedDelayedActionPrefix)
 	}
 	if !scheduledDelayedAction.ExecuteAt.After(delayedCheckTime) {
 		t.Errorf("scheduled ExecuteAt %v is not strictly after check time %v (past catch-up hazard!)", scheduledDelayedAction.ExecuteAt, delayedCheckTime)
@@ -195,7 +197,7 @@ func TestContestSettlement_OverduePostpone_DatabaseIntegration(t *testing.T) {
 	handlerOnTime := contest.NewContestSettlementHandler(svcOnTime, contest.WithScheduler(schedOnTime))
 
 	actionOnTime := core_scheduling.ScheduledAction{
-		ID:          expectedDelayedActionID,
+		ID:          scheduledDelayedAction.ID,
 		ActionType:  contest.ActionTypeContestSettlement,
 		ActorID:     "system",
 		ScheduledAt: delayedCheckTime,
@@ -221,6 +223,10 @@ func TestContestSettlement_OverduePostpone_DatabaseIntegration(t *testing.T) {
 	scheduledOnTimeAction := schedOnTime.scheduledActions[0]
 	if !scheduledOnTimeAction.ExecuteAt.Equal(expectedOnTimeEnd) {
 		t.Errorf("scheduled ExecuteAt on-time = %v, want %v", scheduledOnTimeAction.ExecuteAt, expectedOnTimeEnd)
+	}
+	expectedOnTimePrefix := contest.SettlementActionID(1, expectedOnTimeEnd)
+	if !strings.HasPrefix(scheduledOnTimeAction.ID, expectedOnTimePrefix) {
+		t.Errorf("scheduled action ID = %q, want prefix %q", scheduledOnTimeAction.ID, expectedOnTimePrefix)
 	}
 }
 
@@ -431,10 +437,16 @@ func TestContestSettlement_SchedulingFailureAndReconciliation_DatabaseIntegratio
 		t.Fatalf("ReconcileSettlementSchedule failed: %v", err)
 	}
 
-	expectedNextActionID := contest.SettlementActionID(1, expectedPostponedEnd)
-	nextAction, exists := schedRepo.actions[expectedNextActionID]
-	if !exists {
-		t.Fatalf("expected next scheduled action %q in queue, none found", expectedNextActionID)
+	expectedNextActionPrefix := contest.SettlementActionID(1, expectedPostponedEnd)
+	var nextAction *core_scheduling.ScheduledAction
+	for _, a := range schedRepo.actions {
+		if strings.HasPrefix(a.ID, expectedNextActionPrefix) {
+			nextAction = &a
+			break
+		}
+	}
+	if nextAction == nil {
+		t.Fatalf("expected next scheduled action with prefix %q in queue, none found", expectedNextActionPrefix)
 	}
 	if nextAction.State != core_scheduling.StatePending {
 		t.Errorf("expected next action state %s, got %s", core_scheduling.StatePending, nextAction.State)
@@ -464,5 +476,176 @@ func TestContestSettlement_SchedulingFailureAndReconciliation_DatabaseIntegratio
 	r1AfterStale, _ := contestRepo.GetRoundByNumber(ctx, 1)
 	if !r1AfterStale.EndTime.Equal(expectedPostponedEnd) {
 		t.Errorf("stale action altered round 1 EndTime: %v, want %v", r1AfterStale.EndTime, expectedPostponedEnd)
+	}
+}
+
+func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integration(t *testing.T) {
+	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("PARTY2_VALKEY_ADDR is not configured")
+	}
+	ctx := context.Background()
+	_, contestRepo, charRepo, txProvider := contestIntegrationDB(t)
+
+	vkClient, err := vk.NewClient()
+	if err != nil {
+		t.Fatalf("vk.NewClient failed: %v", err)
+	}
+	t.Cleanup(vkClient.Close)
+
+	schedRepo := scheduling.NewValkeyRepository(vkClient)
+	schedService := scheduling.NewService(schedRepo)
+
+	cleanupValkey := func() {
+		cleanupCtx := context.Background()
+		existing, _ := schedRepo.FindPendingByActorID(cleanupCtx, contest.ContestSettlementActorID)
+		for _, a := range existing {
+			_ = vkClient.Do(cleanupCtx, vkClient.B().Del().Key("party2:scheduled:action:"+a.ID).Build())
+			_ = vkClient.Do(cleanupCtx, vkClient.B().Del().Key("party2:scheduled:lock:"+a.ID).Build())
+			_ = vkClient.Do(cleanupCtx, vkClient.B().Zrem().Key("party2:scheduled:pending").Member(a.ID).Build())
+		}
+		_ = vkClient.Do(cleanupCtx, vkClient.B().Del().Key("party2:scheduled:actor:"+contest.ContestSettlementActorID).Build())
+	}
+	cleanupValkey()
+	t.Cleanup(cleanupValkey)
+
+	now := time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC)
+	roundEndTime := now.Add(7 * 24 * time.Hour)
+	r1 := contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusPreparing,
+		StartTime: now,
+		EndTime:   roundEndTime,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := contestRepo.SaveRound(ctx, r1); err != nil {
+		t.Fatalf("SaveRound failed: %v", err)
+	}
+
+	svc, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithTransactionProvider(txProvider),
+		contest.WithServiceScheduler(schedService),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	// -------------------------------------------------------------
+	// 1. Initial Reconciliation: creates Pending action in Valkey
+	// -------------------------------------------------------------
+	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+		t.Fatalf("ReconcileSettlementSchedule failed: %v", err)
+	}
+
+	actions, err := schedRepo.FindPendingByActorID(ctx, contest.ContestSettlementActorID)
+	if err != nil {
+		t.Fatalf("FindPendingByActorID failed: %v", err)
+	}
+	if len(actions) != 1 {
+		t.Fatalf("expected 1 pending action in Valkey, got %d", len(actions))
+	}
+	act1 := actions[0]
+	if act1.State != core_scheduling.StatePending {
+		t.Errorf("expected StatePending, got %s", act1.State)
+	}
+	if !act1.ExecuteAt.Equal(roundEndTime) {
+		t.Errorf("expected ExecuteAt = %v, got %v", roundEndTime, act1.ExecuteAt)
+	}
+	if !strings.HasPrefix(act1.ID, contest.SettlementActionID(1, roundEndTime)) {
+		t.Errorf("act1 ID %q missing prefix", act1.ID)
+	}
+
+	// -------------------------------------------------------------
+	// 2. Idempotent Reconciliation: existing Pending action preserved, no duplicate
+	// -------------------------------------------------------------
+	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+		t.Fatalf("duplicate ReconcileSettlementSchedule failed: %v", err)
+	}
+	actions2, err := schedRepo.FindPendingByActorID(ctx, contest.ContestSettlementActorID)
+	if err != nil {
+		t.Fatalf("FindPendingByActorID after duplicate failed: %v", err)
+	}
+	if len(actions2) != 1 {
+		t.Fatalf("expected still 1 action, got %d", len(actions2))
+	}
+	if actions2[0].ID != act1.ID {
+		t.Errorf("action ID changed on idempotent reconcile: %q vs %q", actions2[0].ID, act1.ID)
+	}
+
+	// -------------------------------------------------------------
+	// 3. Processing State Protection: action being processed is NOT overwritten
+	// -------------------------------------------------------------
+	act1.State = core_scheduling.StateProcessing
+	if err := schedRepo.Save(ctx, act1); err != nil {
+		t.Fatalf("Save processing action failed: %v", err)
+	}
+
+	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+		t.Fatalf("ReconcileSettlementSchedule during processing failed: %v", err)
+	}
+	actionsProc, err := schedRepo.FindPendingByActorID(ctx, contest.ContestSettlementActorID)
+	if err != nil {
+		t.Fatalf("FindPendingByActorID during processing failed: %v", err)
+	}
+	if len(actionsProc) != 1 {
+		t.Fatalf("expected 1 action during processing, got %d", len(actionsProc))
+	}
+	if actionsProc[0].ID != act1.ID {
+		t.Errorf("processing action overwritten or replaced: %q vs %q", actionsProc[0].ID, act1.ID)
+	}
+	if actionsProc[0].State != core_scheduling.StateProcessing {
+		t.Errorf("expected action to remain StateProcessing, got %s", actionsProc[0].State)
+	}
+
+	// -------------------------------------------------------------
+	// 4. Completed / Failed Protection: terminal action is NOT resurrected to Pending,
+	//    and missing reservation is safely recreated with a distinct ID.
+	// -------------------------------------------------------------
+	act1.State = core_scheduling.StateFailed
+	act1.RetainUntil = now.Add(24 * time.Hour)
+	if err := schedRepo.Save(ctx, act1); err != nil {
+		t.Fatalf("Save failed action failed: %v", err)
+	}
+
+	// Valkey check: act1 key is still in StateFailed
+	storedStr, err := vkClient.Do(ctx, vkClient.B().Get().Key("party2:scheduled:action:"+act1.ID).Build()).ToString()
+	if err != nil {
+		t.Fatalf("Get act1 action failed: %v", err)
+	}
+	if !strings.Contains(storedStr, string(core_scheduling.StateFailed)) {
+		t.Fatalf("stored act1 payload should have StateFailed, got: %s", storedStr)
+	}
+
+	// Reconciliation should notice that there are no pending/processing actions,
+	// and register a NEW reservation with fresh ID without overwriting act1
+	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+		t.Fatalf("ReconcileSettlementSchedule after failure failed: %v", err)
+	}
+
+	actionsAfterFail, err := schedRepo.FindPendingByActorID(ctx, contest.ContestSettlementActorID)
+	if err != nil {
+		t.Fatalf("FindPendingByActorID after failure failed: %v", err)
+	}
+	if len(actionsAfterFail) != 1 {
+		t.Fatalf("expected 1 new pending action, got %d", len(actionsAfterFail))
+	}
+	act2 := actionsAfterFail[0]
+	if act2.ID == act1.ID {
+		t.Errorf("expected fresh action ID for recovery, but got same ID %q", act2.ID)
+	}
+	if act2.State != core_scheduling.StatePending {
+		t.Errorf("expected new action state StatePending, got %s", act2.State)
+	}
+
+	// Crucial check: old act1 was NOT resurrected back to Pending!
+	storedStrOld, err := vkClient.Do(ctx, vkClient.B().Get().Key("party2:scheduled:action:"+act1.ID).Build()).ToString()
+	if err != nil {
+		t.Fatalf("Get old act1 action failed: %v", err)
+	}
+	if !strings.Contains(storedStrOld, string(core_scheduling.StateFailed)) {
+		t.Errorf("old act1 was corrupted/overwritten by reconciliation! Got: %s", storedStrOld)
 	}
 }

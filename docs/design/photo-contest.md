@@ -78,8 +78,21 @@ When a contest is settled:
 - **Scheduling Failure & Recovery Boundary (予約失敗と再調停境界)**:
   - **SQL Commit Precedence**: Database transactions commit durable state (entry submission, round postponement, prize awards) before Valkey scheduling is invoked.
   - **Error Observability**: Neither startup (`wireContestSettlement`), entry submission (`EnterContest`), nor settlement execution (`ContestSettlementHandler.Handle`) discards scheduling errors. If enqueuing fails after commit, `ErrScheduleFailed` is returned alongside the committed result (e.g. `EnterContest` returns non-empty `ContestEntry` and `ErrScheduleFailed`). When `Handle` fails to schedule the next check, `scheduling.Worker` transitions the current action to terminal `StateFailed` rather than `StateCompleted`.
-  - **Schedule Reconciliation (`ReconcileSettlementSchedule` / `Reconcile`)**: Disaster recovery reads the latest durable SQL round (active round, or preparing round if no active round exists) and registers only its deterministic reservation (`SettlementActionID(round, endTime)`) via `ScheduleWithID`. It never replays committed round settlements or duplicates prizes/entries.
-  - **Stale Action Protection**: If an action referencing an already-settled round (`StatusSettled`) or an already-postponed timestamp (`targetTime.Before(round.EndTime)`) arrives, `ContestSettlementHandler.Handle` detects that durable SQL progress has already occurred, skips re-settlement, and reconciles the schedule for the current round.
+  - **State Machine Protection & Actor Indexing**:
+    - `ReconcileSettlementSchedule` queries active reservations via `FindPendingByActorID(ctx, "contest:settlement")`.
+    - If a reservation already exists with state `StatePending` or `StateProcessing` matching the target deadline `EndTime`, reconciliation takes no action. This prevents creating duplicate pending actions and protects in-flight processing actions from being overwritten or restarted.
+    - Terminal actions (`StateCompleted`, `StateFailed`) are preserved in Valkey and never resurrected back to `StatePending`.
+    - When a new reservation is required, it is scheduled with a unique identifier (`SettlementActionID(round, endTime) + ":" + id.New()`). Because action IDs include a unique nonce, new entries never overwrite or conflict with existing Valkey keys.
+  - **Runtime Reconciliation Pathways (稼働中の復旧契機)**:
+    - Dedicated background schedulers or polling loops are not used; instead, reconciliation self-heals opportunistically along existing system flows:
+      1. **Startup**: `wireContestSettlement` reconciles on server boot.
+      2. **Entry Submission**: `EnterContest` triggers reconciliation upon saving an entry.
+      3. **Venue Access**: `GetOverview` / `GET /contest/venue` triggers opportunistic reconciliation on player venue visits.
+      4. **Admin Settlement**: `handleSettleContest` (`POST /contest/settle`) triggers reconciliation before unready settlement checks and after settlement commits.
+      5. **Settlement Handler**: `ContestSettlementHandler.Handle` reconciles after concluding a round, when recovering from missing rounds (`ErrContestNotFound`), or after rejecting stale action replays.
+  - **Stale Action & DB Read Integrity**:
+    - In `ContestSettlementHandler.Handle`, database read errors from `GetRoundByNumber` are propagated immediately rather than masked, ensuring unverified rounds are never settled blindly.
+    - If an action references an already-settled round (`StatusSettled`) or an already-postponed timestamp (`targetTime.Before(round.EndTime)`), `Handle` detects that durable SQL progress has occurred, safely skips re-settlement, and reconciles the schedule for the current round.
 
 ---
 
@@ -87,16 +100,16 @@ When a contest is settled:
 
 | Action | Legacy Command | HTTP Endpoint | Description |
 | :--- | :--- | :--- | :--- |
-| **Venue Dialogue** | `はなす` | `GET /contest/venue` | Returns `@ワコール` dialogue and overview of contest status. |
+| **Venue Dialogue** | `はなす` | `GET /contest/venue` | Returns `@ワコール` dialogue and overview of contest status. Opportunistically reconciles settlement schedule. |
 | **Current Entries** | `みる` | `GET /contest/current` | Lists entries and vote counts for active round. |
 | **Past Results** | `past` | `GET /contest/past` | Returns results and top comments of last settled contest. |
 | **Hall of Fame** | `legend` | `GET /contest/legends` | Lists historical round champions. |
 | **List Photos** | `みる` | `GET /characters/{id}/photos` | Lists photos owned by the authenticated character. |
 | **Save Photo** | `すくしょ` | `POST /characters/{id}/photos` | Captures and saves a new character photo (max 20). |
 | **Delete Photo** | `けす` | `DELETE /characters/{id}/photos/{photoId}` | Deletes a photo owned by the character. |
-| **Enter Contest** | `えんとりー` | `POST /characters/{id}/contest/enter` | Submits a photo into the next contest round. |
+| **Enter Contest** | `えんとりー` | `POST /characters/{id}/contest/enter` | Submits a photo into the next contest round. Returns `200 OK` on full success, or `202 Accepted` with saved entry and `warning` if scheduling fails. |
 | **Vote** | `とうひょう` | `POST /characters/{id}/contest/vote` | Votes for a contest entry with optional comment. |
-| **Settle Contest** | `集計` | `POST /contest/settle` | Admin endpoint to trigger round conclusion and settlement. |
+| **Settle Contest** | `集計` | `POST /contest/settle` | Admin endpoint to trigger round conclusion and settlement. Reconciles settlement schedule. |
 
 ---
 

@@ -255,21 +255,13 @@ func wireHooks(
 
 // wireContestSettlement enqueues the contest settlement action if not already scheduled.
 func wireContestSettlement(sched *scheduling.Service, contestSvc *contest.Service) error {
-	ctx := context.Background()
-	activeRound, err := contestSvc.GetActiveRound(ctx)
-	if err == nil {
-		next := activeRound.EndTime
-		return sched.ScheduleWithID(ctx, contest.SettlementActionID(activeRound.Round, next), contest.ActionTypeContestSettlement, "system", nil, next)
+	if contestSvc == nil {
+		return nil
 	}
-	if !errors.Is(err, contest.ErrContestNotFound) {
-		return fmt.Errorf("read active contest round: %w", err)
+	if sched != nil {
+		contestSvc.SetScheduler(sched)
 	}
-	prepRound, err := contestSvc.EnsurePreparingRound(ctx)
-	if err != nil {
-		return fmt.Errorf("ensure preparing contest round: %w", err)
-	}
-	next := prepRound.EndTime
-	return sched.ScheduleWithID(ctx, contest.SettlementActionID(prepRound.Round, next), contest.ActionTypeContestSettlement, "system", nil, next)
+	return contestSvc.ReconcileSettlementSchedule(context.Background())
 }
 
 // wireGuildInactivityCheck enqueues the daily JST midnight inactivity check if not already scheduled.

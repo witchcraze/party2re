@@ -8,6 +8,7 @@ import (
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
+	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/pagination"
 )
@@ -34,6 +35,11 @@ func WithServiceScheduler(scheduler Scheduler) Option {
 	return func(s *Service) {
 		s.scheduler = scheduler
 	}
+}
+
+// SetScheduler sets the scheduler used by the service if not already configured.
+func (s *Service) SetScheduler(scheduler Scheduler) {
+	s.scheduler = scheduler
 }
 
 func WithGuildService(gs GuildService) Option {
@@ -85,7 +91,10 @@ func (s *Service) runInTx(ctx context.Context, fn func(txCtx context.Context) er
 }
 
 // GetOverview returns a summary of current contest rounds and active submissions.
+// Opportunistically reconciles the contest settlement schedule to self-heal missing reservations during runtime.
 func (s *Service) GetOverview(ctx context.Context) (ContestOverview, error) {
+	_ = s.ReconcileSettlementSchedule(ctx)
+
 	overview := ContestOverview{
 		MinEntries: MinEntriesForContest,
 	}
@@ -107,103 +116,6 @@ func (s *Service) GetOverview(ctx context.Context) (ContestOverview, error) {
 	}
 
 	return overview, nil
-}
-
-// SavePhoto stores a new captured photo/screenshot for a character.
-func (s *Service) SavePhoto(
-	ctx context.Context,
-	characterID string,
-	title string,
-	location string,
-	imageURL string,
-	caption string,
-	metadata string,
-) (Photo, error) {
-	characterID = strings.TrimSpace(characterID)
-	if characterID == "" {
-		return Photo{}, ErrCharacterNotFound
-	}
-	if err := ValidateTitle(title); err != nil {
-		return Photo{}, err
-	}
-
-	var saved Photo
-	err := s.runInTx(ctx, func(txCtx context.Context) error {
-		_, err := s.characters.FindByID(txCtx, characterID)
-		if err != nil {
-			if errors.Is(err, corecharacter.ErrNotFound) {
-				return ErrCharacterNotFound
-			}
-			return err
-		}
-
-		count, err := s.contests.CountPhotosByCharacterID(txCtx, characterID)
-		if err != nil {
-			return err
-		}
-		if count >= MaxPhotosPerCharacter {
-			return ErrMaxPhotosReached
-		}
-
-		now := s.nowFunc()
-		saved = Photo{
-			ID:          id.New(),
-			CharacterID: characterID,
-			Title:       strings.TrimSpace(title),
-			Location:    strings.TrimSpace(location),
-			ImageURL:    strings.TrimSpace(imageURL),
-			Caption:     strings.TrimSpace(caption),
-			Metadata:    metadata,
-			CreatedAt:   now,
-			UpdatedAt:   now,
-		}
-
-		return s.contests.SavePhoto(txCtx, saved)
-	})
-	if err != nil {
-		return Photo{}, err
-	}
-
-	return saved, nil
-}
-
-// ListPhotos retrieves all photos owned by a character.
-func (s *Service) ListPhotos(ctx context.Context, characterID string) ([]Photo, error) {
-	characterID = strings.TrimSpace(characterID)
-	if characterID == "" {
-		return nil, ErrCharacterNotFound
-	}
-	_, err := s.characters.FindByID(ctx, characterID)
-	if err != nil {
-		if errors.Is(err, corecharacter.ErrNotFound) {
-			return nil, ErrCharacterNotFound
-		}
-		return nil, err
-	}
-	return s.contests.ListPhotosByCharacterID(ctx, characterID)
-}
-
-// DeletePhoto removes a specific photo owned by a character.
-func (s *Service) DeletePhoto(ctx context.Context, characterID, photoID string) error {
-	characterID = strings.TrimSpace(characterID)
-	photoID = strings.TrimSpace(photoID)
-	if characterID == "" {
-		return ErrCharacterNotFound
-	}
-	if photoID == "" {
-		return ErrPhotoNotFound
-	}
-
-	return s.runInTx(ctx, func(txCtx context.Context) error {
-		photo, err := s.contests.FindPhotoByID(txCtx, photoID)
-		if err != nil {
-			return err
-		}
-		if photo.CharacterID != characterID {
-			return ErrForbidden
-		}
-		return s.contests.DeletePhoto(txCtx, photoID)
-	})
 }
 
 // EnterContest submits a photo entry for the upcoming/preparing contest round.
@@ -308,13 +220,13 @@ func (s *Service) EnterContest(
 	}
 
 	if s.scheduler != nil && !prepRoundEndTime.IsZero() {
-		nextID := SettlementActionID(entry.Round, prepRoundEndTime)
-		if err := s.scheduler.ScheduleWithID(ctx, nextID, ActionTypeContestSettlement, "system", nil, prepRoundEndTime); err != nil {
+		if err := s.ReconcileSettlementSchedule(ctx); err != nil {
 			return entry, fmt.Errorf("%w: %v", ErrScheduleFailed, err)
 		}
 	}
 
 	return entry, nil
+
 }
 
 // Vote casts a vote for an entry in the currently active contest round.
@@ -465,32 +377,55 @@ func (s *Service) GetRoundByNumber(ctx context.Context, round int) (ContestRound
 
 // ReconcileSettlementSchedule ensures the settlement scheduled action exists for the current contest round.
 // It inspects current SQL round state (active round, or preparing round if no active round exists),
-// and registers the deterministic settlement reservation without replaying committed round settlements.
+// discovers active reservations via FindPendingByActorID, avoids duplicating Pending or overwriting
+// Processing actions, and registers the deterministic settlement reservation with a safe nonce suffix.
 func (s *Service) ReconcileSettlementSchedule(ctx context.Context) error {
 	if s.scheduler == nil {
 		return nil
 	}
 
+	var targetRound int
+	var targetEndTime time.Time
+
 	activeRound, err := s.contests.GetActiveRound(ctx)
 	if err == nil {
-		targetID := SettlementActionID(activeRound.Round, activeRound.EndTime)
-		if err := s.scheduler.ScheduleWithID(ctx, targetID, ActionTypeContestSettlement, "system", nil, activeRound.EndTime); err != nil {
-			return fmt.Errorf("%w: %v", ErrScheduleFailed, err)
+		targetRound = activeRound.Round
+		targetEndTime = activeRound.EndTime
+	} else if errors.Is(err, ErrContestNotFound) {
+		prepRound, prepErr := s.EnsurePreparingRound(ctx)
+		if prepErr != nil {
+			return fmt.Errorf("ensure preparing contest round: %w", prepErr)
 		}
-		return nil
-	}
-	if !errors.Is(err, ErrContestNotFound) {
+		targetRound = prepRound.Round
+		targetEndTime = prepRound.EndTime
+	} else {
 		return fmt.Errorf("read active contest round: %w", err)
 	}
 
-	prepRound, err := s.EnsurePreparingRound(ctx)
-	if err != nil {
-		return fmt.Errorf("ensure preparing contest round: %w", err)
+	if targetEndTime.IsZero() {
+		return nil
 	}
 
-	targetID := SettlementActionID(prepRound.Round, prepRound.EndTime)
-	if err := s.scheduler.ScheduleWithID(ctx, targetID, ActionTypeContestSettlement, "system", nil, prepRound.EndTime); err != nil {
+	actions, err := s.scheduler.FindPendingByActorID(ctx, ContestSettlementActorID)
+	if err != nil {
+		return fmt.Errorf("discover contest settlement reservation: %w", err)
+	}
+
+	for _, action := range actions {
+		if action.ActionType != ActionTypeContestSettlement {
+			continue
+		}
+		if action.ExecuteAt.Equal(targetEndTime) {
+			if action.State == core_scheduling.StatePending || action.State == core_scheduling.StateProcessing {
+				return nil
+			}
+		}
+	}
+
+	actionID := fmt.Sprintf("%s:%s", SettlementActionID(targetRound, targetEndTime), id.New())
+	if err := s.scheduler.ScheduleWithID(ctx, actionID, ActionTypeContestSettlement, ContestSettlementActorID, nil, targetEndTime); err != nil {
 		return fmt.Errorf("%w: %v", ErrScheduleFailed, err)
 	}
+
 	return nil
 }
