@@ -2,52 +2,102 @@ package contest_test
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/witchcraze/party2re/internal/contest"
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/database"
+	"github.com/witchcraze/party2re/internal/id"
 )
 
-func TestContestSettlement_OverduePostpone_DatabaseIntegration(t *testing.T) {
+func contestIntegrationDB(t *testing.T) (*sql.DB, *database.ContestRepository, *database.CharacterRepository, database.TransactionProvider) {
+	t.Helper()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
-
-	db, err := database.OpenFromEnvironment()
+	ctx := context.Background()
+	source, err := database.OpenFromEnvironment()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
-
-	ctx := context.Background()
-
-	// Clean up contest tables and restore baseline on exit
-	_, _ = db.ExecContext(ctx, "DELETE FROM contest_votes")
-	_, _ = db.ExecContext(ctx, "DELETE FROM contest_entries")
-	_, _ = db.ExecContext(ctx, "DELETE FROM contest_rounds")
-
 	t.Cleanup(func() {
-		_, _ = db.ExecContext(ctx, "DELETE FROM contest_votes")
-		_, _ = db.ExecContext(ctx, "DELETE FROM contest_entries")
-		_, _ = db.ExecContext(ctx, "DELETE FROM contest_rounds")
-		_, _ = db.ExecContext(ctx, `
-			INSERT IGNORE INTO contest_rounds (round, status, start_time, end_time, created_at, updated_at)
-			VALUES (1, 'preparing', NOW(), DATE_ADD(NOW(), INTERVAL 10 DAY), NOW(), NOW())
-		`)
+		if err := source.Close(); err != nil {
+			t.Error(err)
+		}
 	})
 
-	charRepo, err := database.NewCharacterRepository(db)
+	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
+	if adminDSN == "" {
+		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated contest settlement tests")
+	}
+	cfg, err := mysql.ParseDSN(adminDSN)
 	if err != nil {
 		t.Fatal(err)
 	}
+	admin, err := database.Open(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := admin.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
+	// Create an isolated database schema for this test run.
+	name := "party2_contest_test_" + id.New()
+	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
+			t.Error(err)
+		}
+	})
+
+	cfg.DBName = name
+	db, err := database.Open(cfg.FormatDSN())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
+	// Copy table DDL in dependency order without copying shared data.
+	for _, table := range []string{"players", "characters", "character_photos", "contest_rounds", "contest_entries", "contest_votes", "contest_legends"} {
+		var tableName, ddl string
+		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, ddl); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	contestRepo, err := database.NewContestRepository(db)
 	if err != nil {
 		t.Fatal(err)
 	}
+	charRepo, err := database.NewCharacterRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 	txProvider := database.NewTransactionProvider(db)
+
+	return db, contestRepo, charRepo, txProvider
+}
+
+func TestContestSettlement_OverduePostpone_DatabaseIntegration(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	_, contestRepo, charRepo, txProvider := contestIntegrationDB(t)
 
 	// Step 1: Delayed recovery case (25 days overdue)
 	// Active round absent, round 1 preparing with EndTime 2026-09-18T00:00:00Z, 0 entries
