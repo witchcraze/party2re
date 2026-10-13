@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/valkey-io/valkey-go"
 	"github.com/witchcraze/party2re/internal/contest"
 	core_scheduling "github.com/witchcraze/party2re/internal/core/scheduling"
 	"github.com/witchcraze/party2re/internal/database"
@@ -479,6 +480,23 @@ func TestContestSettlement_SchedulingFailureAndReconciliation_DatabaseIntegratio
 	}
 }
 
+const contestTestValkeyDB = 11
+
+func openIsolatedContestTestValkey(t *testing.T, dbIndex int) valkey.Client {
+	t.Helper()
+	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
+		t.Skip("PARTY2_VALKEY_ADDR is not configured")
+	}
+
+	cfg := vk.ConfigFromEnvironment()
+	cfg.DB = dbIndex
+	client, err := vk.NewClientWithConfig(cfg)
+	if err != nil {
+		t.Fatalf("open isolated valkey client (DB %d): %v", dbIndex, err)
+	}
+	return client
+}
+
 func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integration(t *testing.T) {
 	if os.Getenv("PARTY2_VALKEY_ADDR") == "" {
 		t.Skip("PARTY2_VALKEY_ADDR is not configured")
@@ -486,29 +504,20 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	ctx := context.Background()
 	_, contestRepo, charRepo, txProvider := contestIntegrationDB(t)
 
-	vkClient, err := vk.NewClient()
-	if err != nil {
-		t.Fatalf("vk.NewClient failed: %v", err)
-	}
+	vkClient := openIsolatedContestTestValkey(t, contestTestValkeyDB)
 	t.Cleanup(vkClient.Close)
+
+	// Clean up ONLY the isolated test DB 11 at start and cleanup
+	_ = vkClient.Do(ctx, vkClient.B().Flushdb().Build())
+	t.Cleanup(func() {
+		cleanupCtx := context.Background()
+		_ = vkClient.Do(cleanupCtx, vkClient.B().Flushdb().Build())
+	})
 
 	schedRepo := scheduling.NewValkeyRepository(vkClient)
 	schedService := scheduling.NewService(schedRepo)
 
-	cleanupValkey := func() {
-		cleanupCtx := context.Background()
-		existing, _ := schedRepo.FindPendingByActorID(cleanupCtx, contest.ContestSettlementActorID)
-		for _, a := range existing {
-			_ = vkClient.Do(cleanupCtx, vkClient.B().Del().Key("party2:scheduled:action:"+a.ID).Build())
-			_ = vkClient.Do(cleanupCtx, vkClient.B().Del().Key("party2:scheduled:lock:"+a.ID).Build())
-			_ = vkClient.Do(cleanupCtx, vkClient.B().Zrem().Key("party2:scheduled:pending").Member(a.ID).Build())
-		}
-		_ = vkClient.Do(cleanupCtx, vkClient.B().Del().Key("party2:scheduled:actor:"+contest.ContestSettlementActorID).Build())
-	}
-	cleanupValkey()
-	t.Cleanup(cleanupValkey)
-
-	now := time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Truncate(time.Second)
 	roundEndTime := now.Add(7 * 24 * time.Hour)
 	r1 := contest.ContestRound{
 		Round:     1,
@@ -574,6 +583,89 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	if actions2[0].ID != act1.ID {
 		t.Errorf("action ID changed on idempotent reconcile: %q vs %q", actions2[0].ID, act1.ID)
 	}
+
+	// -------------------------------------------------------------
+	// 2b. Concurrent Reconciliation: multiple goroutines racing simultaneously
+	//     must not create duplicate actions.
+	// -------------------------------------------------------------
+	var wg sync.WaitGroup
+	errCh := make(chan error, 10)
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+				errCh <- err
+			}
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Errorf("concurrent ReconcileSettlementSchedule error: %v", err)
+	}
+	actionsConcurrent, err := schedRepo.FindPendingByActorID(ctx, contest.ContestSettlementActorID)
+	if err != nil {
+		t.Fatalf("FindPendingByActorID after concurrent reconcile failed: %v", err)
+	}
+	if len(actionsConcurrent) != 1 {
+		t.Fatalf("expected exactly 1 action after concurrent reconcile, got %d", len(actionsConcurrent))
+	}
+
+	// -------------------------------------------------------------
+	// 2c. Legacy Actor ID ("system") compatibility:
+	//     If a reservation was scheduled before upgrade under actor "system",
+	//     reconciliation must recognize it and avoid creating duplicate actions.
+	// -------------------------------------------------------------
+	legacyEndTime := roundEndTime.Add(24 * time.Hour)
+	rLegacy := contest.ContestRound{
+		Round:     2,
+		Status:    contest.StatusActive,
+		StartTime: now,
+		EndTime:   legacyEndTime,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := contestRepo.SaveRound(ctx, rLegacy); err != nil {
+		t.Fatalf("SaveRound legacy failed: %v", err)
+	}
+	legacyActionID := contest.SettlementActionID(2, legacyEndTime)
+	legacyAction := core_scheduling.ScheduledAction{
+		ID:          legacyActionID,
+		ActionType:  contest.ActionTypeContestSettlement,
+		ActorID:     "system",
+		ScheduledAt: now,
+		ExecuteAt:   legacyEndTime,
+		State:       core_scheduling.StatePending,
+	}
+	if err := schedRepo.Schedule(ctx, legacyAction); err != nil {
+		t.Fatalf("Schedule legacy action failed: %v", err)
+	}
+	if err := svc.ReconcileSettlementSchedule(ctx); err != nil {
+		t.Fatalf("ReconcileSettlementSchedule with legacy action failed: %v", err)
+	}
+	pendingSys, err := schedRepo.FindPendingByActorID(ctx, "system")
+	if err != nil {
+		t.Fatalf("FindPendingByActorID system failed: %v", err)
+	}
+	if len(pendingSys) != 1 || pendingSys[0].ID != legacyActionID {
+		t.Errorf("expected 1 legacy action under system, got %v", pendingSys)
+	}
+	pendingContest, err := schedRepo.FindPendingByActorID(ctx, contest.ContestSettlementActorID)
+	if err != nil {
+		t.Fatalf("FindPendingByActorID contest failed: %v", err)
+	}
+	for _, a := range pendingContest {
+		if a.ExecuteAt.Equal(legacyEndTime) {
+			t.Errorf("duplicate action scheduled under contest:settlement for legacy round: %s", a.ID)
+		}
+	}
+	// Clean up legacy round so round 1 remains target
+	rLegacy.Status = contest.StatusSettled
+	_ = contestRepo.SaveRound(ctx, rLegacy)
+	_ = vkClient.Do(ctx, vkClient.B().Del().Key("party2:scheduled:action:"+legacyActionID).Build())
+	_ = vkClient.Do(ctx, vkClient.B().Del().Key("party2:scheduled:actor:system").Build())
+	_ = vkClient.Do(ctx, vkClient.B().Zrem().Key("party2:scheduled:pending").Member(legacyActionID).Build())
 
 	// -------------------------------------------------------------
 	// 3. Processing State Protection: action being processed is NOT overwritten
@@ -647,5 +739,58 @@ func TestContestSettlement_RealValkey_StateTransitionsAndReconciliation_Integrat
 	}
 	if !strings.Contains(storedStrOld, string(core_scheduling.StateFailed)) {
 		t.Errorf("old act1 was corrupted/overwritten by reconciliation! Got: %s", storedStrOld)
+	}
+}
+
+func TestContestSettlement_AdminSettle_ScheduleFailureReturnsCommittedResult_Integration(t *testing.T) {
+	ctx := context.Background()
+	_, contestRepo, charRepo, txProvider := contestIntegrationDB(t)
+
+	now := time.Now().UTC().Truncate(time.Second)
+	schedRepo := newStatefulSchedRepo()
+	schedService := scheduling.NewService(schedRepo)
+
+	r1 := contest.ContestRound{
+		Round:     1,
+		Status:    contest.StatusPreparing,
+		StartTime: now.Add(-10 * 24 * time.Hour),
+		EndTime:   now,
+		CreatedAt: now.Add(-10 * 24 * time.Hour),
+		UpdatedAt: now.Add(-10 * 24 * time.Hour),
+	}
+	if err := contestRepo.SaveRound(ctx, r1); err != nil {
+		t.Fatalf("SaveRound failed: %v", err)
+	}
+
+	svc, err := contest.NewService(
+		charRepo,
+		contestRepo,
+		contest.WithTransactionProvider(txProvider),
+		contest.WithServiceScheduler(schedService),
+		contest.WithNowFunc(func() time.Time { return now }),
+	)
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
+	}
+
+	// Inject scheduling failure
+	schedRepo.failSched = true
+	schedRepo.scheduleErr = errors.New("queue unavailable")
+
+	result, settleErr := svc.SettleContest(ctx, true)
+	if settleErr == nil || !errors.Is(settleErr, contest.ErrScheduleFailed) {
+		t.Fatalf("expected ErrScheduleFailed from SettleContest on schedule error, got %v", settleErr)
+	}
+	if result.Round != 1 {
+		t.Errorf("expected result.Round = 1, got %d", result.Round)
+	}
+
+	// MariaDB verification: round was postponed/saved despite schedule error (SQL committed!)
+	r1After, err := contestRepo.GetRoundByNumber(ctx, 1)
+	if err != nil {
+		t.Fatalf("GetRoundByNumber failed: %v", err)
+	}
+	if r1After.EndTime.Equal(now) {
+		t.Errorf("round 1 EndTime was not updated, SQL failed to commit!")
 	}
 }

@@ -106,15 +106,9 @@ func (h *ContestSettlementHandler) Handle(ctx context.Context, action core_sched
 		}
 	}
 
-	result, err := h.service.SettleContest(ctx, false)
+	_, err := h.service.SettleContest(ctx, false)
 	if err != nil {
 		return err
-	}
-
-	if h.scheduler != nil && !result.NextRoundEndTime.IsZero() {
-		if err := h.service.ReconcileSettlementSchedule(ctx); err != nil {
-			return fmt.Errorf("%w: %v", ErrScheduleFailed, err)
-		}
 	}
 
 	return nil

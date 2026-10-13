@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	corecharacter "github.com/witchcraze/party2re/internal/core/character"
@@ -14,13 +15,14 @@ import (
 )
 
 type Service struct {
-	characters CharacterRepository
-	contests   ContestRepository
-	guilds     GuildService
-	news       NewsPublisher
-	scheduler  Scheduler
-	txProvider TransactionProvider
-	nowFunc    func() time.Time
+	characters  CharacterRepository
+	contests    ContestRepository
+	guilds      GuildService
+	news        NewsPublisher
+	scheduler   Scheduler
+	txProvider  TransactionProvider
+	nowFunc     func() time.Time
+	reconcileMu sync.Mutex
 }
 
 type Option func(*Service)
@@ -384,6 +386,9 @@ func (s *Service) ReconcileSettlementSchedule(ctx context.Context) error {
 		return nil
 	}
 
+	s.reconcileMu.Lock()
+	defer s.reconcileMu.Unlock()
+
 	var targetRound int
 	var targetEndTime time.Time
 
@@ -406,12 +411,16 @@ func (s *Service) ReconcileSettlementSchedule(ctx context.Context) error {
 		return nil
 	}
 
-	actions, err := s.scheduler.FindPendingByActorID(ctx, ContestSettlementActorID)
+	activeActions, err := s.scheduler.FindPendingByActorID(ctx, ContestSettlementActorID)
 	if err != nil {
 		return fmt.Errorf("discover contest settlement reservation: %w", err)
 	}
+	// Check legacy actor ID "system" for backward compatibility with pre-upgrade actions
+	if legacyActions, err := s.scheduler.FindPendingByActorID(ctx, "system"); err == nil {
+		activeActions = append(activeActions, legacyActions...)
+	}
 
-	for _, action := range actions {
+	for _, action := range activeActions {
 		if action.ActionType != ActionTypeContestSettlement {
 			continue
 		}

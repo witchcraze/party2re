@@ -91,6 +91,11 @@ type settleContestRequest struct {
 	Force bool `json:"force"`
 }
 
+type settleContestResponse struct {
+	contest.SettlementResult
+	Warning string `json:"warning,omitempty"`
+}
+
 func (h *Handler) handleGetContestVenue(w http.ResponseWriter, r *http.Request) {
 	if h.contest == nil {
 		writeError(w, http.StatusNotImplemented, errors.New("contest service not configured"))
@@ -185,6 +190,13 @@ func (h *Handler) handleSettleContest(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.contest.SettleContest(r.Context(), req.Force)
 	if err != nil {
+		if errors.Is(err, contest.ErrScheduleFailed) {
+			writeJSON(w, http.StatusAccepted, settleContestResponse{
+				SettlementResult: result,
+				Warning:          "contest settled, but settlement scheduling failed: " + err.Error(),
+			})
+			return
+		}
 		switch {
 		case errors.Is(err, contest.ErrContestNotFound):
 			writeError(w, http.StatusNotFound, err)
@@ -198,8 +210,7 @@ func (h *Handler) handleSettleContest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.contest.ReconcileSettlementSchedule(r.Context())
-	writeJSON(w, http.StatusOK, result)
+	writeJSON(w, http.StatusOK, settleContestResponse{SettlementResult: result})
 }
 
 func (h *Handler) handleGetCharacterPhotos(w http.ResponseWriter, r *http.Request) {

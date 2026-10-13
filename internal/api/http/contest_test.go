@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	apihttp "github.com/witchcraze/party2re/internal/api/http"
@@ -392,5 +393,62 @@ func TestSettleContestWithAdminKey(t *testing.T) {
 	resp, err := client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK with admin key, got %d (err: %v)", resp.StatusCode, err)
+	}
+}
+
+func TestSettleContest_ScheduleFailure_Returns202WithWarning(t *testing.T) {
+	adminKey := "test-admin-secret-key"
+	stub := &stubContestService{
+		settleContestFn: func(ctx context.Context, force bool) (contest.SettlementResult, error) {
+			return contest.SettlementResult{
+				Round:             1,
+				PrizesDistributed: true,
+				Message:           "Settled",
+			}, fmt.Errorf("%w: queue unavailable", contest.ErrScheduleFailed)
+		},
+	}
+
+	handler, err := apihttp.NewHandler(&stubPlayerService{}, &stubCharacterService{}, &stubAdventureService{}, &stubShopService{},
+		apihttp.WithAdminAPIKey(adminKey),
+		apihttp.WithContest(stub),
+	)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+	server := httptest.NewServer(handler.Router())
+	defer server.Close()
+
+	client := &http.Client{}
+	settleBody, _ := json.Marshal(map[string]bool{"force": true})
+
+	req, _ := http.NewRequest(http.MethodPost, server.URL+"/contest/settle", bytes.NewReader(settleBody))
+	req.Header.Set("X-Admin-Key", adminKey)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("expected 202 Accepted on schedule failure, got %d", resp.StatusCode)
+	}
+
+	var payload struct {
+		Round             int    `json:"round"`
+		PrizesDistributed bool   `json:"prizes_distributed"`
+		Warning           string `json:"warning"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response failed: %v", err)
+	}
+	if payload.Round != 1 {
+		t.Errorf("round = %d, want 1", payload.Round)
+	}
+	if !payload.PrizesDistributed {
+		t.Errorf("expected prizes_distributed = true")
+	}
+	if payload.Warning == "" || !strings.Contains(payload.Warning, "scheduling failed") {
+		t.Errorf("expected warning mentioning scheduling failure, got %q", payload.Warning)
 	}
 }
