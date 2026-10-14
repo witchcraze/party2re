@@ -20,7 +20,7 @@ func RunInTx(ctx context.Context, db *sql.DB, fn func(ctx context.Context) error
 		return fn(ctx)
 	}
 
-	tx, err := db.BeginTx(ctx, nil)
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return err
 	}

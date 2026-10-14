@@ -312,19 +312,26 @@ func TestDepotRepositoryConcurrentAdjacentSaveNoDeadlock(t *testing.T) {
 		tx1Ready := make(chan struct{})
 		tx2Ready := make(chan struct{})
 		startSave := make(chan struct{})
-		var once sync.Once
+		var onceStart sync.Once
+		notifyStart := func() { onceStart.Do(func() { close(startSave) }) }
+
+		var once1, once2 sync.Once
+		closeTx1 := func() { once1.Do(func() { close(tx1Ready) }) }
+		closeTx2 := func() { once2.Do(func() { close(tx2Ready) }) }
 
 		var wgRound sync.WaitGroup
 		wgRound.Add(2)
 
 		go func() {
 			defer wgRound.Done()
+			defer closeTx1()
+			defer notifyStart()
 			err := repo.RunInTx(ctx, func(txCtx context.Context) error {
 				dep, err := repo.FindByCharacterIDForUpdate(txCtx, char1.ID)
 				if err != nil {
 					return err
 				}
-				close(tx1Ready)
+				closeTx1()
 				<-startSave
 
 				// Add new non-stackable equipment and trim
@@ -345,12 +352,14 @@ func TestDepotRepositoryConcurrentAdjacentSaveNoDeadlock(t *testing.T) {
 
 		go func() {
 			defer wgRound.Done()
+			defer closeTx2()
+			defer notifyStart()
 			err := repo.RunInTx(ctx, func(txCtx context.Context) error {
 				dep, err := repo.FindByCharacterIDForUpdate(txCtx, char2.ID)
 				if err != nil {
 					return err
 				}
-				close(tx2Ready)
+				closeTx2()
 				<-startSave
 
 				// Add new non-stackable equipment and trim
@@ -371,7 +380,7 @@ func TestDepotRepositoryConcurrentAdjacentSaveNoDeadlock(t *testing.T) {
 
 		<-tx1Ready
 		<-tx2Ready
-		once.Do(func() { close(startSave) })
+		notifyStart()
 		wgRound.Wait()
 	}
 	close(errCh)
@@ -593,11 +602,11 @@ func TestDepotRepositoryFindByCharacterIDForUpdateReadsLatestCommittedData(t *te
 	}
 }
 
-// TestDepotRepositoryPriorNonLockingReadSnapshotBoundary verifies the MariaDB InnoDB REPEATABLE READ
-// behavior: if a transaction executes a non-locking SELECT before calling FindByCharacterIDForUpdate,
-// its MVCC snapshot is established at that prior point in time. It proves why application mutations
-// must follow Rank 2 (Character) and Rank 5 (CharacterDepots) locking reads before performing mutations.
-func TestDepotRepositoryPriorNonLockingReadSnapshotBoundary(t *testing.T) {
+// TestDepotRepositoryPriorNonLockingReadPreventsStaleSnapshotAndItemLoss verifies that under
+// READ COMMITTED with FOR UPDATE on depot_items, even if a transaction previously executed a non-locking
+// SELECT, FindByCharacterIDForUpdate always retrieves the latest committed items and subsequent Save
+// does not erase items added by concurrent transactions.
+func TestDepotRepositoryPriorNonLockingReadPreventsStaleSnapshotAndItemLoss(t *testing.T) {
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
@@ -614,7 +623,7 @@ func TestDepotRepositoryPriorNonLockingReadSnapshotBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	char, err := CreateTestCharacter(ctx, db, "Depot Snapshot Boundary")
+	char, err := CreateTestCharacter(ctx, db, "Depot Snapshot Guard")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -625,14 +634,15 @@ func TestDepotRepositoryPriorNonLockingReadSnapshotBoundary(t *testing.T) {
 	}
 
 	itemFromTx1, _ := item.NewInstance("armor-34", 1)
+	itemFromTx2, _ := item.NewInstance("weapon-40", 1)
 
 	tx2SnapshotEstablished := make(chan struct{})
 	tx1Done := make(chan struct{})
-	tx2ObservedStale := make(chan bool, 1)
+	tx2Done := make(chan error, 1)
 
-	// Tx 2 starts first and executes a non-locking SELECT on an InnoDB table, establishing an early MVCC Read View
+	// Tx 2 starts first and executes a non-locking SELECT on an InnoDB table
 	go func() {
-		_ = repo.RunInTx(ctx, func(tx2Ctx context.Context) error {
+		tx2Done <- repo.RunInTx(ctx, func(tx2Ctx context.Context) error {
 			var dummy string
 			if err := ExecutorFromContext(tx2Ctx, db).QueryRowContext(tx2Ctx, "SELECT id FROM characters WHERE id = ?", char.ID).Scan(&dummy); err != nil {
 				return err
@@ -640,14 +650,13 @@ func TestDepotRepositoryPriorNonLockingReadSnapshotBoundary(t *testing.T) {
 			close(tx2SnapshotEstablished)
 			<-tx1Done
 
-			// FindByCharacterIDForUpdate locks character_depots (Rank 5) with FOR UPDATE,
-			// while depot_items query uses non-locking SELECT to avoid gap-lock deadlocks on adjacent characters.
+			// Read depot under lock
 			dep2, err := repo.FindByCharacterIDForUpdate(tx2Ctx, char.ID)
 			if err != nil {
-				return err
+				return fmt.Errorf("FindByCharacterIDForUpdate failed: %w", err)
 			}
 
-			// In REPEATABLE READ, the non-locking SELECT on depot_items reads from Tx 2's early Read View.
+			// Must see itemFromTx1 committed by Tx 1
 			hasItem1 := false
 			for _, it := range dep2.Items {
 				if it.ID == itemFromTx1.ID {
@@ -655,8 +664,15 @@ func TestDepotRepositoryPriorNonLockingReadSnapshotBoundary(t *testing.T) {
 					break
 				}
 			}
-			tx2ObservedStale <- !hasItem1
-			return nil
+			if !hasItem1 {
+				return fmt.Errorf("stale read: dep2 missing newly committed itemFromTx1: %+v", dep2.Items)
+			}
+
+			// Tx 2 adds another item and saves
+			if err := dep2.AddItem(itemFromTx2); err != nil {
+				return err
+			}
+			return repo.Save(tx2Ctx, dep2)
 		})
 	}()
 
@@ -678,10 +694,16 @@ func TestDepotRepositoryPriorNonLockingReadSnapshotBoundary(t *testing.T) {
 	}
 	close(tx1Done)
 
-	observedStale := <-tx2ObservedStale
-	if !observedStale {
-		t.Log("Note: Tx 2 saw fresh items (Read View was refreshed or created late)")
-	} else {
-		t.Log("Confirmed: Prior non-locking SELECT establishes early MVCC Read View in REPEATABLE READ; serialized locking reads prevent this in application flows")
+	if err := <-tx2Done; err != nil {
+		t.Fatalf("Tx 2 failed with stale snapshot / item loss error: %v", err)
+	}
+
+	// Final verification: depot must contain all 3 items (initialItem, itemFromTx1, itemFromTx2)
+	finalDep, err := repo.FindByCharacterID(ctx, char.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(finalDep.Items) != 3 {
+		t.Fatalf("item loss detected: expected 3 items in depot, got %d: %+v", len(finalDep.Items), finalDep.Items)
 	}
 }
