@@ -2,35 +2,147 @@ package home_test
 
 import (
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"os"
 	"sync/atomic"
 	"testing"
 
+	"github.com/go-sql-driver/mysql"
 	coreinventory "github.com/witchcraze/party2re/internal/core/inventory"
 	coreitem "github.com/witchcraze/party2re/internal/core/item"
 	"github.com/witchcraze/party2re/internal/database"
 	"github.com/witchcraze/party2re/internal/depot"
 	"github.com/witchcraze/party2re/internal/economy"
 	"github.com/witchcraze/party2re/internal/home"
+	"github.com/witchcraze/party2re/internal/id"
 	"github.com/witchcraze/party2re/internal/inventory"
 	"github.com/witchcraze/party2re/internal/monster"
 	"github.com/witchcraze/party2re/internal/testutil"
 )
 
-func TestHomeServiceIntegration(t *testing.T) {
+// homeIsolatedDB creates a uniquely named database holding only copied table
+// definitions (no data). BuildHouse checks town capacity, so it cannot be
+// verified reliably beside unrelated houses in the shared DB. Cleanup drops
+// only this database; missing admin configuration fails rather than falling
+// back to the shared DB.
+func homeIsolatedDB(t *testing.T) *sql.DB {
+	t.Helper()
 	if os.Getenv("PARTY2_DB_DSN") == "" {
 		t.Skip("PARTY2_DB_DSN is not configured")
 	}
-
-	db, err := database.OpenFromEnvironment()
+	ctx := context.Background()
+	source, err := database.OpenFromEnvironment()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := source.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	adminDSN := os.Getenv("PARTY2_TEST_DB_ADMIN_DSN")
+	if adminDSN == "" {
+		t.Fatal("PARTY2_TEST_DB_ADMIN_DSN is required for isolated home tests")
+	}
+	cfg, err := mysql.ParseDSN(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := database.Open(adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := admin.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	name := "party2_home_test_" + id.New()
+	if _, err := admin.ExecContext(ctx, "CREATE DATABASE `"+name+"`"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.ExecContext(ctx, "DROP DATABASE `"+name+"`"); err != nil {
+			t.Error(err)
+		}
+	})
+	cfg.DBName = name
+	db, err := database.Open(cfg.FormatDSN())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	rows, err := source.QueryContext(ctx, "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tables []string
+	for rows.Next() {
+		var table string
+		if err := rows.Scan(&table); err != nil {
+			rows.Close()
+			t.Fatal(err)
+		}
+		tables = append(tables, table)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	rows.Close()
+	copyTableDefinitions(t, source, db, tables)
+	return db
+}
+
+// copyTableDefinitions copies DDL with FK checks disabled on one dedicated
+// connection so table order is irrelevant. FK checks are always re-enabled on
+// that connection before it returns to the pool; if that fails the connection
+// is discarded so a session with checks disabled is never reused.
+func copyTableDefinitions(t *testing.T, source, db *sql.DB, tables []string) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if _, err := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=1"); err != nil {
+			t.Errorf("restore foreign key checks: %v", err)
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn }) //lint:ignore error-swallow marks connection bad so the pool discards it
+		}
+		if err := conn.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	if _, err := conn.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS=0"); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range tables {
+		var tableName, ddl string
+		if err := source.QueryRowContext(ctx, "SHOW CREATE TABLE `"+table+"`").Scan(&tableName, &ddl); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := conn.ExecContext(ctx, ddl); err != nil {
+			t.Fatalf("copy %s: %v", table, err)
+		}
+	}
+}
+
+func TestHomeServiceIntegration(t *testing.T) {
+	db := homeIsolatedDB(t)
 
 	ctx := context.Background()
+
+	var fkChecks int
+	if err := db.QueryRowContext(ctx, "SELECT @@FOREIGN_KEY_CHECKS").Scan(&fkChecks); err != nil || fkChecks != 1 {
+		t.Fatalf("foreign key checks must be enabled in the test body: value=%d err=%v", fkChecks, err)
+	}
 
 	char1, err := database.CreateTestCharacter(ctx, db, "HomeIntegrationHero1")
 	if err != nil {
@@ -127,7 +239,6 @@ func TestHomeServiceIntegration(t *testing.T) {
 	}
 
 	// 5. Town House Estate (メケメケ村: 500G)
-	_, _ = db.ExecContext(ctx, "DELETE FROM character_homes WHERE town_id = 'town1'")
 	char1.Money = 1000
 	if err := charRepo.Update(ctx, char1); err != nil {
 		t.Fatal(err)
